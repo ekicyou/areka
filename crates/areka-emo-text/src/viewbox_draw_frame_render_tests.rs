@@ -11,7 +11,7 @@ use crate::state::TextItem;
 use crate::viewbox::{FramePlan, ScrollPlanner};
 use crate::writing::WritingMode;
 
-/// 観測可能な完了状態 1: content ありの初回フレーム → render `Ok(true)`・read_back に
+/// content ありの初回フレーム → render `Ok(true)`・read_back に
 /// content の非透明ピクセルが現れる（初回は全域ダーティ＝全行描画・blit=(0,0) ゆえ blits 増なし）。
 #[test]
 fn initial_frame_renders_content() {
@@ -51,7 +51,7 @@ fn initial_frame_renders_content() {
     );
 }
 
-/// 観測可能な完了状態 2: 同一 content・同一 window の再フレーム → plan=NoChange →
+/// 同一 content・同一 window の再フレーム → plan=NoChange →
 /// render `Ok(false)`・blit も描画も行レイアウト生成も発生しない（全カウンタ増分 0）。
 #[test]
 fn unchanged_frame_is_nochange_no_blit_no_draw() {
@@ -93,7 +93,7 @@ fn unchanged_frame_is_nochange_no_blit_no_draw() {
     );
 }
 
-/// 観測可能な完了状態 3: 可視窓のみ移動（content 不変）→ 保持ピクセルの面内 blit（1 回）と
+/// 可視窓のみ移動（content 不変）→ 保持ピクセルの面内 blit（1 回）と
 /// 露出帯の描画だけが発生し、確定行の再描画は起きない（行レイアウト再生成 0）。read_back は
 /// スクロールで内容が移動する。期待計画は独立な mirror planner（純粋層）で算出する。
 #[test]
@@ -115,7 +115,6 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     let (canvas, _auto_window) = build(&items, &region, mode, 10.0);
     let total_glyph_lines = canvas.residents.len();
 
-    // frame A: block_offset 0（スクロール前）。
     let window_a = VisibleWindow {
         first_visible_line: 0,
         block_offset: 0.0,
@@ -131,7 +130,6 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
         block_offset: -12.0,
     };
 
-    // mirror planner（純粋層）で期待計画を独立に算出する。
     let mut mirror = ScrollPlanner::new();
     let plan_a = mirror.plan(&canvas, &window_a, mode, &contract, size);
     mirror.commit(&canvas, &window_a, mode, &contract, &plan_a);
@@ -189,7 +187,7 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     );
 }
 
-/// R11.1/11.3: ダーティ矩形が 2 枚以上あるフレーム（追いつき＝新しい行が一挙に入りつつ
+/// ダーティ矩形が 2 枚以上あるフレーム（追いつき＝新しい行が一挙に入りつつ
 /// スクロールする）で、`DrawTextLayout` の増分が **矩形ごとの交差行数の和** に一致し、
 /// 「枚数 × 描画対象行数」の積にはならないこと。
 ///
@@ -218,11 +216,10 @@ fn catch_up_scroll_draws_sum_of_per_rect_lines_not_product() {
     let stats_a: DrawStats = exec.stats();
 
     // frame B: 2 行が一挙に入り（追いつき）、途中の行 3 の字も変わる＝下端の組（露出帯と新規行 2 本は
-    // 重なるので 1 枚にまとまる・再監査 R2-C1）＋ 行 3 の 1 枚のダーティ。
+    // 重なるので 1 枚にまとまる）＋ 行 3 の 1 枚のダーティ。
     let chars_b = ["あ", "い", "う", "ゑ", "お", "か", "き", "く", "け"];
     let (canvas_b, window_b) = build(&multiline_items(&chars_b), &region, mode, 10.0);
 
-    // mirror planner（純粋層）で期待計画を独立に算出する。
     let mut mirror = ScrollPlanner::new();
     let plan_a = mirror.plan(&canvas_a, &window_a, mode, &contract, size);
     mirror.commit(&canvas_a, &window_a, mode, &contract, &plan_a);
@@ -264,7 +261,7 @@ fn catch_up_scroll_draws_sum_of_per_rect_lines_not_product() {
     );
 }
 
-/// 観測可能な完了状態 4: typewriter 1 グリフ進行 → 描画は現在行（変化行）1 行に限られ、
+/// typewriter 1 グリフ進行 → 描画は現在行（変化行）1 行に限られ、
 /// 確定行は再描画も行レイアウト再生成もされない（blit=0）。
 #[test]
 fn typewriter_progress_draws_only_current_line() {
@@ -323,7 +320,7 @@ fn multiline_items(chars: &[&str]) -> Vec<TextItem> {
     items
 }
 
-/// 観測可能な完了状態（R4.3・指摘 17）: content 描画済み → `request_clear()` → 次フレームに
+/// content 描画済み → `request_clear` → 次フレームに
 /// 別の字があれば、そのフレームで全面を消して字を描く（透明のフラッシュを挟まない）＝描いた面が
 /// 全域再描画の見本と画素で一致し、`full_clears` はちょうど 1 増える。次の同じ入力は何も数えない。
 /// 見える行の無い消去は FullClear（全域透明・`full_clears` +1）。
@@ -383,7 +380,7 @@ fn request_clear_draws_same_frame_glyphs_and_counts_one_clear() {
     );
 }
 
-/// 台詞の切れ目（指摘 11）: `request_clear` がブラシの記憶を空にし、書体の台帳の台詞を進める。
+/// 台詞の切れ目: `request_clear` がブラシの記憶を空にし、書体の台帳の台詞を進める。
 #[test]
 fn request_clear_forgets_brushes_and_advances_the_talk() {
     let mut rig = Rig::new();
@@ -423,7 +420,7 @@ fn request_clear_forgets_brushes_and_advances_the_talk() {
     assert_eq!(exec.fonts.talk_epoch(), epoch + 1, "台帳の台詞が 1 進む");
 }
 
-/// 観測可能な完了状態（R3.5/Error Handling）: フォント（高さ）変更を注入すると format と行キャッシュが
+/// フォント（高さ）変更を注入すると format と行キャッシュが
 /// 組み直され、組み直しで前の行を忘れ、全域の道で描き直して全住人が再描画される
 ///（`draw_text_layout_calls` 増分＝全 GlyphRun 住人数・`line_layout_creations` 増分＝全住人数
 /// ＝キャッシュ破棄で全再生成・`full_clears` 不変＝透明フラッシュを起こす FullClear と区別・
@@ -496,7 +493,7 @@ fn font_change_forgets_prev_and_redraws_full_domain() {
     );
 }
 
-/// K1（要件 4.8・4.9）: 束縛書式の記憶の鍵は書式を決める値すべてを見る。同じ実行部で、先頭の
+/// 束縛書式の記憶の鍵は書式を決める値すべてを見る。同じ実行部で、先頭の
 /// 候補・大きさ・書字方向が同じで既定の見た目の太字・斜体だけが違うフォントを続けて描くと、
 /// 書式が組み直され、2 度目の束縛書式の太さ・斜体が新しい値（同じ経路で作った書式の値）になる。
 #[test]
@@ -555,7 +552,7 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
 
 /// 想定外不整合の検査関数（render の縮退経路が呼ぶ述語）が矛盾入力で理由を返し、整合入力で
 /// `None` を返す（範囲外 draw_lines・面寸超過 dirty・矩形の行が描画対象行の部分集合でない、の
-/// 3 トリガ・R Error Handling／R11.1）。
+/// 3 トリガ）。
 /// 縮退の判定（`degrade_if_needed`）からこの述語への結線は
 /// `degrade_full_domain_draws_only_rows_overlapping_surface` が確かめる。
 #[test]
@@ -630,19 +627,19 @@ fn plan_inconsistency_detects_out_of_range_and_oversize() {
         "面高を超える dirty を検知する"
     );
 
-    // 矩形の行が draw_lines に無い（Phase 1 が資源を組まない行を矩形が要求している）→ Some。
+    // 矩形の行が draw_lines に無い（描画資源を組まない行を矩形が要求している）→ Some。
     assert!(
         plan_inconsistency(&[dr(full, &[0, 1])], &[0], 2, size).is_some(),
         "矩形の行が描画対象行の部分集合でないことを検知する"
     );
 }
 
-/// G5: 描画中デバイス失敗の再試行安全を実描画で檻化する。EndDraw 後・flip/commit 前に失敗を
-/// 注入（test-only fault-injection）すると、その Update フレームは `Err` を返し、**front は不変**
+/// 描画中デバイス失敗の再試行安全を実描画で檻化する。EndDraw 後・flip/commit 前に失敗を
+/// 注入すると、その Update フレームは `Err` を返し、**front は不変**
 /// （flip されない＝前フレームの確定面を保持）・**planner は未 commit**（次フレームで同一計画を
 /// 再試行）になる。失敗解除後の再提示で正しい content が反映されることで「未 commit＝再試行安全」を
 /// 証明する（もし失敗フレームで誤って commit していたら、再試行が NoChange になり content が
-/// 反映されず本檻が落ちる）。純粋 ScrollPlanner の再試行檻（task 3.3）の COM 側 runtime 版。
+/// 反映されず本檻が落ちる）。純粋 ScrollPlanner の再試行檻の COM 側版。
 #[test]
 fn device_failure_mid_render_is_retry_safe_front_unchanged_no_commit() {
     let mut rig = Rig::new();
@@ -704,7 +701,7 @@ fn device_failure_mid_render_is_retry_safe_front_unchanged_no_commit() {
     );
 }
 
-/// 再監査 R2-D1: 書式を組み直したフレームが失敗しても、次のフレームは全域を描き直す（組み直しは
+/// 書式を組み直したフレームが失敗しても、次のフレームは全域を描き直す（組み直しは
 /// 済んでいて鍵が一致するので、計画が NoChange になって古い見た目の画素が残る、にしない）。
 /// 再試行の絵は、新しい書式で 1 度だけ描いた新しい描き手の絵とバイトで一致する。
 #[test]
@@ -759,7 +756,7 @@ fn a_failed_frame_after_a_format_rebuild_redraws_the_whole_surface_next() {
     );
 }
 
-/// 指摘 8: 選択肢の帯の超過分は既定の字の高さでなく、その行の丈（`run.size` の行送りの軸＝
+/// 選択肢の帯の超過分は既定の字の高さでなく、その行の丈（`run.size` の行送りの軸＝
 /// `resident_rect` と同じ）と比べる。既定 28・行の em 14・横書きの帯 15（寄せ 1）なら超過は 2
 /// （横書きの寄せは 0 以上・縦書きは帯 17（寄せ −1））。
 #[test]
@@ -775,7 +772,7 @@ fn choice_band_overflow_uses_row_extent_not_default_height() {
     assert_eq!(v.left, 1.0, "縦書き: 負の寄せの分だけ左へ");
 }
 
-/// 指摘 18・23: 描き手の全域の縮退（GPU 無し）。3 行（y 0・12・24・丈 10）を丈 20 の面で縮退させると、
+/// 描き手の全域の縮退（GPU 無し）。3 行（y 0・12・24・丈 10）を丈 20 の面で縮退させると、
 /// 面の下の行 2 は描かず、上のはみ出し 5 で面へ入れば描く。整合した計画・消去・変化なしはそのまま。
 #[test]
 fn degrade_full_domain_draws_only_rows_overlapping_surface() {

@@ -1,6 +1,4 @@
-//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（要件 10.4）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す
 //!
 //! 検体 `tests/fixtures/shell-balloon/surfaces.txt` を、読み手（`parse_boxes`・`parse`）→
 //! 畳み込み（`fold_boxes`）→ 文字の層（`TextLayerRuntime::set_box_layout`）へ通し、台本を
@@ -226,7 +224,7 @@ fn fixture_folds_three_box_kinds_and_their_placements() {
     assert_eq!(def("fuda"), ((160, 60), FontFollow::Balloon));
 }
 
-// ── 行き先と場所ごとの文字（要件 4.3・4.5・6.1〜6.5） ──
+// ── 行き先と場所ごとの文字 ──
 
 #[test]
 fn script_routes_text_to_default_and_named_boxes_across_surfaces() {
@@ -239,7 +237,7 @@ fn script_routes_text_to_default_and_named_boxes_across_surfaces() {
     );
     assert_eq!(text_at(&rt, "0", "tate"), "あい");
 
-    // `\b[名前]` で切り替えても前の箱の文字は残る（4.3・4.5）。
+    // `\b[名前]` で切り替えても前の箱の文字は残る。
     play(&mut rt, &[b("0", "yoko"), t("0", "うえ")]);
     assert_eq!(dest(&rt, "0"), place("0", "yoko").place);
     assert_eq!(text_at(&rt, "0", "yoko"), "うえ");
@@ -249,34 +247,34 @@ fn script_routes_text_to_default_and_named_boxes_across_surfaces() {
         "切り替える前の箱は消えない"
     );
 
-    // yoko の無い surface1: 既定の tate へ書き、yoko の文字は保持（6.2）。
-    // tate は surface1 にもあるので続きへ書く（6.1）。
+    // yoko の無い surface1: 既定の tate へ書き、yoko の文字は保持。
+    // tate は surface1 にもあるので続きへ書く。
     play(&mut rt, &[s("0", "1"), t("0", "お")]);
     assert_eq!(dest(&rt, "0"), place("0", "tate").place);
     assert_eq!(text_at(&rt, "0", "tate"), "あいお");
     assert_eq!(text_at(&rt, "0", "yoko"), "うえ", "表示をやめても保持");
 
-    // surface0 へ戻る: 行き先の tate は在るので保つ（6.1）。保持した yoko の文字は新しい
-    // サーフェスにも置き場所がある＝再び出る（6.3・6.5）。続きは同じ箱へ書く。
+    // surface0 へ戻る: 行き先の tate は在るので保つ。保持した yoko の文字は新しい
+    // サーフェスにも置き場所がある＝再び出る。続きは同じ箱へ書く。
     play(&mut rt, &[s("0", "0")]);
     assert_eq!(dest(&rt, "0"), place("0", "tate").place);
     play(&mut rt, &[b("0", "yoko"), t("0", "か")]);
     assert_eq!(text_at(&rt, "0", "yoko"), "うえか");
 
-    // 箱の無い surface2: 普通のバルーンへ書き、箱の文字は保持（6.4）。
+    // 箱の無い surface2: 普通のバルーンへ書き、箱の文字は保持。
     play(&mut rt, &[s("0", "2"), t("0", "き")]);
     assert_eq!(dest(&rt, "0"), TextPlace::Balloon);
     assert_eq!(text_at(&rt, "0", ""), "き");
     assert_eq!(text_at(&rt, "0", "tate"), "あいお");
     assert_eq!(text_at(&rt, "0", "yoko"), "うえか");
 
-    // 箱へ戻ると普通のバルーンの文字は保持され、箱の続きへ書く（6.9 の逆向き）。
+    // 箱へ戻ると普通のバルーンの文字は保持され、箱の続きへ書く。
     play(&mut rt, &[s("0", "1"), t("0", "く")]);
     assert_eq!(text_at(&rt, "0", "tate"), "あいおく");
     assert_eq!(text_at(&rt, "0", ""), "き");
 }
 
-// ── `\c` は今の行き先の箱だけ（要件 7.1・7.2・4.6） ──
+// ── `\c` は今の行き先の箱だけ ──
 
 #[test]
 fn clear_erases_only_the_destination_box() {
@@ -314,7 +312,7 @@ fn clear_erases_only_the_destination_box() {
     assert_eq!(text_at(&rt, "1", "tate"), "う", "他のスコープは消えない");
 }
 
-// ── 選択肢は今の行き先の箱へ（要件 8.1） ──
+// ── 選択肢は今の行き先の箱へ ──
 
 #[test]
 fn choice_lands_in_the_destination_box() {
@@ -361,11 +359,11 @@ fn choice_lands_in_the_destination_box() {
     assert!(!rt.choice_active(&ActorKey::from("0")));
 }
 
-// ── 3 種類の箱の見た目（要件 3.13〜3.17） ──
+// ── 3 種類の箱の見た目 ──
 
 #[test]
 fn scope_following_boxes_carry_the_spec_and_take_each_default() {
-    // tate（書かない）・yoko（scope）・普通のバルーンはスコープの指定を持ち回る（3.13・3.17）。
+    // tate（書かない）・yoko（scope）・普通のバルーンはスコープの指定を持ち回る。
     let mut rt = runtime();
     play(&mut rt, &[head(), s("0", "0"), t("0", "あ")]);
     assert_eq!(
@@ -408,18 +406,18 @@ fn balloon_following_box_keeps_its_own_spec_only() {
     );
     assert_eq!(look(&rt, "0", "tate"), (RED, 16.0));
 
-    // fuda へ入る: 他の場所の指定を当てない＝fuda の定義の既定だけ（3.14）。
+    // fuda へ入る: 他の場所の指定を当てない＝fuda の定義の既定だけ。
     play(&mut rt, &[s("0", "3"), t("0", "い")]);
     assert_eq!(dest(&rt, "0"), place("0", "fuda").place);
     assert_eq!(look(&rt, "0", "fuda"), FUDA);
-    // fuda の中の指定は fuda だけに持つ（3.14）。
+    // fuda の中の指定は fuda だけに持つ。
     play(
         &mut rt,
         &[f("0", &["color", "0", "255", "0"]), t("0", "う")],
     );
     assert_eq!(look(&rt, "0", "fuda"), (GREEN, 12.0));
 
-    // 出た先は fuda へ入る前のスコープの指定（3.16）。
+    // 出た先は fuda へ入る前のスコープの指定。
     play(&mut rt, &[s("0", "0"), t("0", "え")]);
     assert_eq!(look(&rt, "0", "tate"), (RED, 16.0));
     play(&mut rt, &[b("0", "yoko"), t("0", "お")]);
@@ -427,7 +425,7 @@ fn balloon_following_box_keeps_its_own_spec_only() {
     play(&mut rt, &[s("0", "2"), t("0", "か")]);
     assert_eq!(look(&rt, "0", ""), (RED, 12.0));
 
-    // 同じ台詞のあいだに fuda へ戻る: fuda の指定のまま続く（3.15）。
+    // 同じ台詞のあいだに fuda へ戻る: fuda の指定のまま続く。
     play(&mut rt, &[s("0", "3"), t("0", "き")]);
     assert_eq!(look(&rt, "0", "fuda"), (GREEN, 12.0));
     // fuda の中の `\f[default]` は fuda の指定だけを戻し、スコープの指定は残る。
@@ -439,7 +437,7 @@ fn balloon_following_box_keeps_its_own_spec_only() {
 
 #[test]
 fn spec_is_per_scope_and_unspecified_scope_keeps_defaults() {
-    // \0 の指定は \1 の箱へ及ばない（スコープごと・3.13）。
+    // \0 の指定は \1 の箱へ及ばない（スコープごと）。
     let mut rt = runtime();
     play(
         &mut rt,

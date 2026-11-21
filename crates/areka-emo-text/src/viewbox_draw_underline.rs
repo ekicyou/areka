@@ -1,9 +1,9 @@
-//! 下線の受け手（COM 層・areka-P0-balloon-text-bugs 件 3・要件 3.1／3.2／3.5／3.10）。
+//! 下線の受け手（COM 層）。
 //!
 //! 行の TextLayout の下線の区間について、DirectWrite が教える下線の幾何（`DWRITE_UNDERLINE`）と
 //! その区間の描画効果を集める。塗る矩形の決め方と面の内側への寄せは純粋層
 //! [`crate::underline`] が担い、本モジュールは値を写すだけ（太さ・幅・縦書きの位置・色は
-//! DirectWrite と D2D の決め方のまま＝要件 3.2）。
+//! DirectWrite と D2D の決め方のまま）。
 //!
 //! - 受け手は `#[implement(IDWriteTextRenderer1)]`（縦書きの行は `IDWriteTextRenderer1` を持たない
 //!   受け手を `DWRITE_E_TEXTRENDERERINCOMPATIBLE` で断るため）。`DrawUnderline` だけを記録し、

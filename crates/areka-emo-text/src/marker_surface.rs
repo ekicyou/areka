@@ -1,11 +1,9 @@
 //! # marker_surface — 印の面（スクロールの矢印）の装着・描画・当たりのマスク・読み戻し・片付け
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
-//!
-//! `actor.rs` の子（`#[path]`・balloon-scroll-arrows の MarkerSurface）。場所ごとに 1 枚、窓の直接の子
-//! として文字の面の**直前**（wintf の `Children` は先頭ほど手前＝文字より手前・バルーンの絵より手前）に挿す。
+//! `actor.rs` の子（`#[path]`）。場所ごとに 1 枚、窓の直接の子として文字の面の**直前**に挿す
+//! （wintf の `Children` は先頭ほど手前＝文字より手前・バルーンの絵より手前）。
 //! 供給面は文字の面（[`TextSurface::attach_window_child`]）と同じ作りを共有し、矢印の絵を拡大率どおりの
-//! 位置と大きさへ、バルーンの絵と同じ `D2D1_INTERPOLATION_MODE_LINEAR` で描く（要件 3.4）。
+//! 位置と大きさへ、バルーンの絵と同じ `D2D1_INTERPOLATION_MODE_LINEAR` で描く。
 //!
 //! 当たりは出ている矢印の絵の α ≥ 0.5 の画素だけ（[`marker_hit_mask`]）。マスクは面と同じ物理寸で、
 //! 矢印が無くても面の大きさの空のマスクを入れる（空のままだと wintf は矩形全体の判定へ縮退する）。
@@ -201,13 +199,13 @@ impl MarkerSurface {
         Ok(())
     }
 
-    /// 最後に描けた矢印と拡大率が `shown`・`k` と同じか（同じなら描き直さない・要件 3.8）。
+    /// 最後に描けた矢印と拡大率が `shown`・`k` と同じか（同じなら描き直さない）。
     pub fn is_drawn(&self, shown: &[PlacedMarker], k: f32) -> bool {
         self.mask.is_some() && self.scale == k && self.drawn == shown
     }
 
     /// 点（窓のクライアント物理 px）が最後に描けた矢印のどれかの矩形の中で、その画素が当たりの
-    /// マスク（矢印の絵の α ≥ 0.5）に入っていれば、その矢印の種類（要件 5.7）。
+    /// マスク（矢印の絵の α ≥ 0.5）に入っていれば、その矢印の種類。
     pub fn hit(&self, client_px: (f32, f32)) -> Option<MarkerKind> {
         let mask = self.mask.as_ref()?;
         let (x, y) = (client_px.0 - self.offset.0, client_px.1 - self.offset.1);

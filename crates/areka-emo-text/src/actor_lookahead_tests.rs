@@ -1,6 +1,4 @@
-//! # 本番と同じ経路を歩く検査（文節の折り返しで、表示済みの字が動かない・要件 1・2.5・5）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
+//! # 本番と同じ経路を歩く検査（文節の折り返しで、表示済みの字が動かない）
 //!
 //! 台本の文字列 → `areka_parsers::sakura::parse` → `areka_sakura::compile` → 刻印
 //! （`with_absolute_start_time`）→ `CuePlayer::from_sheet` → `register_sink`（本物の
@@ -79,7 +77,7 @@ pub(super) struct Stage {
 pub(super) enum Delivery {
     /// 本番どおり: 先渡しを通し、判定の時刻ごとに `tick` する。
     Staged,
-    /// 対照: `emit` だけを内側へ通す包み越し（先渡しが届かない＝修正前の届き方）。
+    /// 対照: `emit` だけを内側へ通す包み越し（先渡しが届かない）。
     WithoutPreview,
     /// 最後の判定の時刻へ 1 度だけ `tick` して全部を届け、各時刻の行の列を取る。
     AllAtOnce,
@@ -135,7 +133,6 @@ impl Rig {
             &areka_parsers::sakura::parse(script),
             &SystemVarSnapshot::default(),
         );
-        // 合図が届く時刻（相対）と、その合図が出終わる時刻を判定の時刻にする。
         let mut times: Vec<f64> = talk
             .sheet
             .cues()
@@ -337,7 +334,7 @@ pub(super) const EMO2_BOOT_FINAL: [&str; 2] = ["イイジャン！", "‥‥え�
 
 /// 検査 1: emo2 の初回起動トークの写し（エモ側）。「イイジャン！」「‥」「‥」「ええと、」が
 /// 待ちのタグで別々の合図になって届いても、表示済みの字は動かず、「‥」は最初から
-/// 出終わったときと同じ 2 行目の頭に出る（要件 1.1・1.2・1.4・2.5・5.1・5.2）。
+/// 出終わったときと同じ 2 行目の頭に出る。
 #[test]
 fn runtime_talk_reveals_without_moving_glyphs() {
     let stages = walk(EMO2_BOOT_TALK, "1", &budoux_model(), NINE_WIDE);
@@ -372,10 +369,9 @@ fn runtime_talk_reveals_without_moving_glyphs() {
     );
 }
 
-/// 検査 2（対照）: 検査 1 の台本を、先渡しを落とす包み越しに流す（修正前の届き方）。判定の関数が
-/// 「表示済みの字が動いた」と答えること（＝修正前の動きを赤と判定できること）、出終わった行の列が
-/// 検査 1 と同じこと、字が 1 つも欠けていないこと、warn が場所・区間につき 1 件であることを見る
-/// （要件 2.7・3.2・5.3・5.4）。
+/// 検査 2（対照）: 検査 1 の台本を、先渡しを落とす包み越しに流す。判定の関数が
+/// 「表示済みの字が動いた」と答えること、出終わった行の列が検査 1 と同じこと、
+/// 字が 1 つも欠けていないこと、warn が場所・区間につき 1 件であることを見る。
 #[test]
 fn dropping_the_preview_is_judged_as_moved_glyphs() {
     let (stages, events) = capture(|| {
@@ -416,7 +412,7 @@ fn dropping_the_preview_is_judged_as_moved_glyphs() {
 }
 
 /// 検査 3: 同じ字を待ちのタグなしで書いた台本（1 つの合図で届く）の出終わった行の列が検査 1 と
-/// 同じで、修正前の呼び方（先渡しを落とす＝届いた字で区切り → 配置）の結果とも同じ（要件 1.3・3.1）。
+/// 同じで、先渡しを落とす呼び方（届いた字で区切り → 配置）の結果とも同じ。
 #[test]
 fn one_cue_lays_out_like_the_staged_talk_and_the_old_call() {
     const ONE_CUE: &str = "\\1イイジャン！‥‥ええと、";
@@ -439,7 +435,7 @@ fn one_cue_lays_out_like_the_staged_talk_and_the_old_call() {
 }
 
 /// 検査 4: 1 度の `tick` で全部を届けてから取った行の列が、同じ時刻の検査 1 の行の列と同じ
-/// （同じ描画の回にまとめて届いても結果が変わらない・要件 1.5）。
+/// （同じ描画の回にまとめて届いても結果が変わらない）。
 #[test]
 fn delivering_everything_in_one_tick_matches_the_staged_talk() {
     let staged = walk(EMO2_BOOT_TALK, "1", &budoux_model(), NINE_WIDE);
@@ -492,7 +488,7 @@ const AFTER_CLEAR: &str = "イイジャン？\\_w[450]‥\\_w[150]‥\\_w[150]�
 /// 検査 5: 途中に `\c` のある台本。消去の前の段階は、消去の前の字だけの台本（検査 1 の台本）の
 /// 段階と 1 対 1 で同じ時刻・同じ行の列。消去の時刻から後の段階は、消去の後の字だけの台本の段階と
 /// 1 対 1 で同じ行の列（どちらの台本も各合図の発火時刻ちょうどで刻むので、番目で対応づける）。
-/// 消去の前の字は消去の後の区切りに効かない（要件 4.1・5.4）。
+/// 消去の前の字は消去の後の区切りに効かない。
 #[test]
 fn clear_splits_the_talk_into_independent_sections() {
     let script = format!("{EMO2_BOOT_TALK}{PAUSE_BEFORE_CLEAR}\\c{AFTER_CLEAR}");
@@ -551,8 +547,7 @@ const STRAY_AFTER_STAGE: usize = 1;
 const STRAY_TEXT: &str = "ね";
 
 /// 検査 6: 先渡しの後、台本に無い字の合図を同じ場所へ直接 1 つ流す。届いた字が行の列に全部あり、
-/// 修正前の呼び方（先渡しを落とした同じ流れ）の結果と全段階で同じで、warn が「食い違う」の 1 件
-/// （要件 2.7・5.4）。
+/// 先渡しを落とした同じ流れの結果と全段階で同じで、warn が「食い違う」の 1 件。
 #[test]
 fn a_stray_cue_falls_back_to_the_arrived_text_without_losing_glyphs() {
     let stray = || Some((STRAY_AFTER_STAGE, CueCommand::Text(STRAY_TEXT.to_string())));
@@ -598,9 +593,9 @@ fn a_stray_cue_falls_back_to_the_arrived_text_without_losing_glyphs() {
     );
 }
 
-/// 検査 7: `budoux_newline` の無いバルーンで検査 1 の台本。各段階で安定し、修正前の呼び方
-/// （先渡しを落とす＝届いた字で 1 字ずつの折り返し）と全段階で同じ。先渡しを落としても warn が 0 件
-/// （1 字ずつの折り返しは区間の全文に触れない・要件 3.3・3.4・5.4）。
+/// 検査 7: `budoux_newline` の無いバルーンで検査 1 の台本。各段階で安定し、先渡しを落とす呼び方
+/// （届いた字で 1 字ずつの折り返し）と全段階で同じ。先渡しを落としても warn が 0 件
+/// （1 字ずつの折り返しは区間の全文に触れない）。
 #[test]
 fn char_by_char_wrap_is_stable_and_never_consults_the_lookahead() {
     let (staged, staged_events) =
@@ -689,8 +684,7 @@ fn after_scroll_violations(
 
 /// 検査 8: 先渡しありの台本が 2 行だけ入る欄からあふれても、表示済みの字の行の割り当てが
 /// 変わらず、出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。先渡しなしの対照では
-/// あふれの後の段階で字が動く（台本の形の確かめ・spec `areka-P0-reflow-scroll-path-test` 要件 1.1〜1.7・
-/// 2.1〜2.4・3.1・3.2）。
+/// あふれの後の段階で字が動く（台本の形の確かめ）。
 #[test]
 fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
     let (stages, windows) = walk_with_windows(SCROLL_TALK, Delivery::Staged);
@@ -710,7 +704,6 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
             .collect::<Vec<_>>()
     };
 
-    // 前提（先渡しあり）。
     let last = stages.last().expect("段階がある");
     let last_window = windows.last().expect("見える行の範囲がある");
     assert_eq!(
@@ -739,7 +732,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
         trace(&old, &old_windows)
     );
 
-    // `areka-P0-reflow-scroll-path-test` 要件 2: 先渡しありの全段階で表示済みの字が動かない。
+    // 先渡しありの全段階で表示済みの字が動かない。
     let violations = reveal_violations(&stages);
     assert!(
         violations.is_empty(),
@@ -749,7 +742,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
         trace(&stages, &windows)
     );
 
-    // `areka-P0-reflow-scroll-path-test` 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
+    // 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
     let old_last = old.last().expect("段階がある");
     assert_eq!(
         Some(last_window),

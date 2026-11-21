@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -33,10 +31,10 @@ fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
     )
 }
 
-// ══ 実 pump 3 経路（R1.2/R1.3/R1.4/R1.5——観測可能な完了状態の前半） ══
+// ══ 実 pump 3 経路（観測可能な完了状態の前半） ══
 
-/// ケース1: 終了指示（`close()`）——実 pump 上で cue が UI ドレイン経由で状態機械へ
-/// 適用され（R1.2/R1.3）、Close 受領で drain が error ログなしにクリーン終了する（R1.4）。
+/// ケース1: 終了指示（`close`）——実 pump 上で cue が UI ドレイン経由で状態機械へ
+/// 適用され、Close 受領で drain が error ログなしにクリーン終了する。
 /// drain 終了は「handler クロージャ（runtime の Rc clone を捕捉）の drop」を
 /// `Rc::strong_count` で決定論観測する。
 #[test]
@@ -58,7 +56,6 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
 
         pump_until_idle();
 
-        // cue は UI ドレイン経由で状態機械へ適用済み（R1.2——描画状態の更新）。
         {
             let rt = runtime.borrow();
             let actor = ActorKey::from("0");
@@ -92,7 +89,7 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
 }
 
 /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を適用し切った
-/// 上で error ログなしにクリーン終了する（R1.4）。
+/// 上で error ログなしにクリーン終了する。
 #[test]
 fn dropping_all_sinks_terminates_drain_cleanly_after_applying_queued_cues() {
     let ((), _warns, errors) = with_log_cage(|| {
@@ -134,7 +131,7 @@ fn dropping_all_sinks_terminates_drain_cleanly_after_applying_queued_cues() {
 }
 
 /// ケース3: 個別失敗継続——runtime が借用中（UI スレッド上の別処理が保持）で cue 適用に
-/// 失敗しても panic せず error 1 件で drain は継続し（R1.5）、借用解放後の後続 cue は
+/// 失敗しても panic せず error 1 件で drain は継続し、借用解放後の後続 cue は
 /// 適用され、Close でクリーン終了する。
 #[test]
 fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
@@ -161,7 +158,6 @@ fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
         "個別失敗は終了経路ではない——drain は生き続ける"
     );
 
-    // 借用解放後の後続 cue は受理・適用され、Close でクリーン終了する。
     let ((), _warns, errors) = with_log_cage(|| {
         sink.emit(cue("0", 0.5, CueCommand::Text("後続".into())));
         sink.close();
@@ -190,8 +186,7 @@ fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
 // ══ フレーム提示: 未解決 actor の蓄積＋スキップ＋再試行（純粋・COM 不要） ══
 
 /// 未解決（binding 未登録）actor の cue は状態を蓄積し、present_frame は Ok のまま
-/// 描画をスキップして次フレームで再試行する（actor ごと初回のみ warn!・以降 debug!——
-/// design Error Handling）。
+/// 描画をスキップして次フレームで再試行する（actor ごと初回のみ warn!・以降 debug!）。
 #[test]
 fn present_frame_accumulates_and_skips_unresolved_actor_with_warn_once() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -243,7 +238,6 @@ fn present_frame_reports_device_error_without_panic_when_resources_missing() {
         "資源不在は Device エラー（log-first）: {err:?}"
     );
     assert!(errors >= 1, "失敗は真因文脈付き error ログを伴う");
-    // 状態は無傷＝次フレーム再試行可能。
     assert!(rt.state().actor_state(&ActorKey::from("0")).is_some());
     assert!(!rt.is_attached(&ActorKey::from("0")));
 }
@@ -253,7 +247,7 @@ fn present_frame_reports_device_error_without_panic_when_resources_missing() {
 /// 観測可能な完了状態（後半）: 登録後の present_frame が予約スロットへ装着し、
 /// 注入時刻フレームごとに可視グリフ（非透明ピクセル）が進行する。装着は初回のみで、
 /// 以降のグリフ更新は供給面の提示のみ（World の構造変更なし・GraphicsCommandList
-/// 不挿入＝バルーン surface 本体の再合成を要求しない・R9.3）。Clear 後は全透明へ戻る。
+/// 不挿入＝バルーン surface 本体の再合成を要求しない）。Clear 後は全透明へ戻る。
 #[test]
 fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     // 本番 UI スレッド（MTA）を再現（WucGraphicsResource::new は DQTAT_COM_NONE を使う
@@ -264,11 +258,9 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
 
-    // 未登録フレーム: 蓄積＋スキップ（COM 資源があっても binding 未解決なら触れない）。
     present_frame(&mut rt, &mut world, 0.0).expect("未解決 skip フレーム");
     assert!(!rt.is_attached(&actor));
 
-    // 登録→次フレームで再試行が成功し装着される。
     let image = (120u32, 60u32);
     let binding = TextSlotBinding::new(slot, window, 1.0, image, image);
     rt.register_actor(
@@ -279,7 +271,6 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム");
     assert!(rt.is_attached(&actor), "登録後の再試行で装着される");
 
-    // 装着の構造契約: 有効な VisualGraphics・GraphicsCommandList 不挿入（R9.3 構造）。
     let vg = world
         .get::<VisualGraphics>(slot)
         .expect("slot に VisualGraphics（emo 自前 brush）が装着される");
@@ -306,7 +297,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let n3 = read(&rt);
     assert!(n3 > n2, "t=0.11 で 3 グリフ目まで可視: {n2} -> {n3}");
 
-    // 配置の覚え（audit-emo-text-state-actor 指摘 8）: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
+    // 配置の覚え: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
     let place = crate::place::PlaceKey::balloon(&actor);
     let rebuilds = rt.frame_rebuilds(&place).expect("装着済みの描き手");
     assert_eq!(rebuilds, 3, "字が増えた 3 フレームで作り直す");
@@ -318,7 +309,6 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     );
     assert_eq!(read(&rt), n3, "覚えた答えで描いても画素は同じ");
 
-    // 装着済み actor の更新は Present のみで完結——World の構造は変わらない（R9.3）。
     assert_eq!(
         world.entities().len(),
         entities_after_attach,
@@ -329,13 +319,12 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
         "更新後も GraphicsCommandList は不挿入のまま"
     );
 
-    // Clear cue → 次フレームで全透明へ戻る（clear_cache 経路込み）。
     rt.apply_cue(&cue("0", 0.15, CueCommand::Clear));
     present_frame(&mut rt, &mut world, 0.2).expect("Clear 後フレーム");
     assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
 }
 
-/// 観測可能な完了状態（`areka-P0-emo-text-viewbox` R3.5/R10.3）: 登録済み actor に対して present_frame 後の
+/// 観測可能な完了状態: 登録済み actor に対して present_frame 後の
 /// 決定論観測統計を `TextLayerRuntime::draw_stats(actor)`（`surface(actor)` と同型の
 /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
 #[test]
@@ -345,7 +334,6 @@ fn draw_stats_readable_after_present_frame() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
 
-    // 未装着 actor は None（読み口の存在自体は装着に依存しない）。
     assert!(
         rt.draw_stats(&actor).is_none(),
         "未装着 actor の draw_stats は None"
@@ -360,7 +348,6 @@ fn draw_stats_readable_after_present_frame() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    // 装着＋初回描画フレーム（全域ダーティ）→ 統計が読み出せて描画が計上されている。
     present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム");
     let stats = rt
         .draw_stats(&actor)
@@ -375,7 +362,7 @@ fn draw_stats_readable_after_present_frame() {
     );
 
     // 後続フレームでリビールが進むと現在行を描き直し、累計が増える（累計は減らないので
-    // 「前以上」では次のフレームで何も描かなくても通る・audit-emo-text-state-actor 指摘 13）。
+    // 「前以上」では次のフレームで何も描かなくても通る）。
     present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
     let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
     assert!(
@@ -386,7 +373,7 @@ fn draw_stats_readable_after_present_frame() {
     );
 }
 
-/// 配線の存在チェック（`areka-P0-budoux-newline` R4.2/R9.1・[test-only-decision-branches]）:
+/// 配線の存在チェック:
 /// balloon model の `budoux_newline` が `ResolvedBalloonText.wrap` へ他の解決値
 /// （mode/region/font）と同じ一点解決経路で反映される。ON model（`budoux_newline,1`）
 /// → `BudouxWordWrap`・キー無し → `CharByChar`（既定）。`WrapMode::resolve` の受理語彙は
@@ -396,7 +383,6 @@ fn draw_stats_readable_after_present_frame() {
 #[test]
 fn resolve_wires_wrap_mode_from_balloon_model() {
     let image = (120u32, 60u32);
-    // ON: budoux_newline,1 を持つ model。
     let on_model = balloon_model_of(
         Origin::new(Some(0), Some(0)),
         ValidRect::new(None, None, None, None),
@@ -410,7 +396,6 @@ fn resolve_wires_wrap_mode_from_balloon_model() {
         WrapMode::BudouxWordWrap,
         "budoux_newline,1 の model は wrap=BudouxWordWrap を束ねる（他の解決値と同一経路）"
     );
-    // OFF: キー無し（geo_model）→ CharByChar（既定・ログなし正常系）。
     let resolved_off = ResolvedBalloonText::resolve(&geo_model(), image);
     assert_eq!(
         resolved_off.wrap,
@@ -419,7 +404,7 @@ fn resolve_wires_wrap_mode_from_balloon_model() {
     );
 }
 
-/// 観測可能な完了状態（`areka-P0-cue-playback-duration` R6.4/R7.4）: `ClearAll` は純粋状態の全スコープ消去に
+/// 観測可能な完了状態: `ClearAll` は純粋状態の全スコープ消去に
 /// 加え、**装着済み全 actor の描画実行部**へ全域クリアを伝え、既描画サーフェスに古い
 /// ピクセルを残さない（`Clear` は cue.actor スコープのみ）。2 actor を装着してインクを載せ、
 /// 一方の actor 名で発行した `ClearAll` が**両**供給面を全域透明へ戻すことを readback で固定する
@@ -433,7 +418,6 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
     let kero = ActorKey::from("1");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
 
-    // 2 actor へテキストを流し、各々の予約スロットへ装着する。
     rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
     rt.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())));
     let image = (120u32, 60u32);
@@ -448,17 +432,13 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    // 全リビール済み時刻で提示——両供給面にインクが載る。
     present_frame(&mut rt, &mut world, 10.0).expect("装着＋描画フレーム");
     let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize { opaque_count(&read_back(rt, a)) };
     assert!(read(&rt, &sakura) > 0, "actor 0 にインクが載る");
     assert!(read(&rt, &kero) > 0, "actor 1 にインクが載る");
-    // ClearAll 前の FullClear 累計（基準）——ここまで FullClear は発生していない。
     let sakura_fc0 = rt.draw_stats(&sakura).expect("draw_stats(0)").full_clears;
     let kero_fc0 = rt.draw_stats(&kero).expect("draw_stats(1)").full_clears;
 
-    // cue.actor="0" で ClearAll を発行——cue が名指ししない actor(1) を含む全スコープの
-    // 状態が消え、両描画実行部へ全域クリア（request_clear）が伝わる。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
     present_frame(&mut rt, &mut world, 12.0).expect("ClearAll 後フレーム");
     assert_eq!(

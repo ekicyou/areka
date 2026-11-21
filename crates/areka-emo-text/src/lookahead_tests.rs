@@ -1,4 +1,4 @@
-//! `TalkLookahead` の検査（design.md「純粋な部品の検査（`lookahead_tests.rs`）」）。
+//! `TalkLookahead` の検査。
 //!
 //! 本番の側は `note_cue` → `advance_state` の順に合図を流す（実行時の `apply_cue` と同じ並び）。
 //! 区間の全文は私有の欄を直接読んで、場所 × 区間の番号の表をまるごと比べる。
@@ -133,7 +133,7 @@ fn contents(look: &TalkLookahead) -> BTreeMap<(PlaceKey, u64), ActorTextState> {
         .collect()
 }
 
-/// 1. 行き先が本番と同じ（要件 2.2）: `\s`・名前の `\b` で箱へ行く列を、空回しと本番で流す。
+/// 行き先が本番と同じ: `\s`・名前の `\b` で箱へ行く列を、空回しと本番で流す。
 /// 空回しの控えた全文（場所 × 番号）が、本番の出終わった状態の字のある場所と過不足なく同じ。
 #[test]
 fn rehearsal_destinations_match_production() {
@@ -174,7 +174,7 @@ fn rehearsal_destinations_match_production() {
     assert_eq!(contents(&look), expected);
 }
 
-/// 2. 区間の番号（要件 4.1）: 頭の全消去と途中の `\c` で全文が分かれる。先渡しと頭の全消去の
+/// 区間の番号: 頭の全消去と途中の `\c` で全文が分かれる。先渡しと頭の全消去の
 /// 間に場所が作られても（バルーンの装着）、番号はずれない。
 #[test]
 fn section_numbers_split_on_clears_and_survive_place_creation() {
@@ -224,7 +224,7 @@ fn section_numbers_split_on_clears_and_survive_place_creation() {
     );
 }
 
-/// 3. 持ち越し（要件 2.6）: 何も足さない区間は残り、足した区間は置き換わり、
+/// 持ち越し: 何も足さない区間は残り、足した区間は置き換わり、
 /// 消された区間は次の `install` で消える。
 #[test]
 fn sections_carry_over_until_replaced_or_cleared() {
@@ -320,7 +320,7 @@ fn judge(talk: &[TalkCue], arrived: &ActorTextState) -> ([bool; 2], Vec<Captured
     (answers, warns(&events).into_iter().cloned().collect())
 }
 
-/// 4. 見分け（要件 2.7）: 字の列・字ごとの装飾番号・装飾の表の 3 つとも届いたぶんが全文の
+/// 見分け: 字の列・字ごとの装飾番号・装飾の表の 3 つとも届いたぶんが全文の
 /// 先頭と一致するときだけ全文。それぞれ 1 つだけが食い違う入力で「届いた字で」になり、
 /// warn は（場所, 区間）につき 1 度。字の無い場所は warn しない（印も使わない）。
 #[test]
@@ -462,7 +462,7 @@ fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
     );
 }
 
-/// 4（続き）. `install` の持ち越しと warn 済みの印: 何も足さない区間は全文と印をそのまま
+/// `install` の持ち越しと warn 済みの印: 何も足さない区間は全文と印をそのまま
 /// 持ち越す（同じ食い違いを 2 度記録しない）。空回しが番号 0 の全文を求め直した場所は、
 /// 全文と同じく印も空回しの側（印なし）を採る＝新しい全文との食い違いは改めて 1 度記録する。
 #[test]
@@ -503,7 +503,7 @@ fn install_carries_the_warned_mark_only_with_the_carried_section() {
     assert_eq!(count(&mut look, &state), 0);
 }
 
-/// 5. 空回しは無言（要件 2.8）: 状態の層が warn を出す 4 つ（選択肢の字が空・箱の無い
+/// 空回しは無言: 状態の層が warn を出す 4 つ（選択肢の字が空・箱の無い
 /// `\b[名前]`・適用できない `\f`・上下付きのまま字を足す）を含む列で、`install` の間の warn が
 /// 0 件。続く本番の適用の warn は、先渡し無しで同じ列を流したときと同じ。
 #[test]
@@ -579,7 +579,7 @@ fn rehearsal_is_silent_and_production_warns_are_unchanged() {
     );
 }
 
-/// 4（続き）. 箱の束の差し替え（`forget_boxes`）: 箱の場所の全文・`\c` の数え・warn 済みの印を
+/// 箱の束の差し替え（`forget_boxes`）: 箱の場所の全文・`\c` の数え・warn 済みの印を
 /// 捨て、普通のバルーンの全文と数えは残す。印は番号の変わらない箱（b）で見る。
 #[test]
 fn forget_boxes_drops_box_sections_and_counts_only() {
@@ -688,7 +688,7 @@ fn deliver_judging(
     (answers, warns(&events).len())
 }
 
-/// 6(a). やり直し（設計の討議 1）: 先渡しの後にバルーンの定義の見た目が差し込まれても、
+/// やり直し: 先渡しの後にバルーンの定義の見た目が差し込まれても、
 /// やり直せば `\f` を含む台本は最後まで全文で配置され、warn は 0 件。やり直さない対照は
 /// 装飾付きの字が届いた所で「届いた字で」になり、warn は 1 件。
 #[test]
@@ -722,7 +722,7 @@ fn reinstall_after_attaching_look_keeps_full_basis() {
     );
 }
 
-/// 6(b). 先渡しが箱の表と解決の閉包より先に届いても、それらを入れた後にやり直せば、
+/// 先渡しが箱の表と解決の閉包より先に届いても、それらを入れた後にやり直せば、
 /// `\s` で箱へ行く字は箱の場所の全文で配置される。やり直さない対照は全文が無い。
 #[test]
 fn reinstall_after_box_layout_rehearses_into_boxes() {
@@ -754,7 +754,7 @@ fn reinstall_after_box_layout_rehearses_into_boxes() {
     assert_ne!(table, expected);
 }
 
-/// 6(c). 途中まで届けてからやり直す: 数えは 0 に戻らず（途中の `\c` の後でも番号が合う）、
+/// 途中まで届けてからやり直す: 数えは 0 に戻らず（途中の `\c` の後でも番号が合う）、
 /// 今より前の区間の全文は残り、今の区間の全文の先頭は届いた内容と一致する。
 #[test]
 fn reinstall_midway_keeps_counts_and_earlier_sections() {
@@ -818,7 +818,7 @@ fn reinstall_midway_keeps_counts_and_earlier_sections() {
     );
 }
 
-/// 6(d). 残りの合図が何も足さない場所でも、やり直しの後は今の内容が今の区間の全文になる
+/// 残りの合図が何も足さない場所でも、やり直しの後は今の内容が今の区間の全文になる
 /// （見た目が載せ直された後の内容と合わせる）。
 #[test]
 fn reinstall_keeps_current_content_where_nothing_is_added() {
@@ -848,7 +848,7 @@ fn reinstall_keeps_current_content_where_nothing_is_added() {
     );
 }
 
-/// 6(e). 先渡しの列に無い合図が届くと列を捨て、以後のやり直しは何も変えない。
+/// 先渡しの列に無い合図が届くと列を捨て、以後のやり直しは何も変えない。
 /// 対照（列どおりに届く）では同じやり直しが全文を変える。
 #[test]
 fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
@@ -877,7 +877,7 @@ fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
     );
 }
 
-/// 7. 印の字も「内容を足した」合図に数える（指摘 13）: `\0\![*]\1かき` で、本体側の場所が
+/// 印の字も「内容を足した」合図に数える: `\0\![*]\1かき` で、本体側の場所が
 /// 足した側に入り、印の字を持つ全文が控えられる。
 #[test]
 fn marker_cue_counts_as_added_content() {

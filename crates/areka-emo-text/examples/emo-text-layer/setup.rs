@@ -105,8 +105,8 @@ const GPU_WAIT_SECS: f64 = 30.0;
 
 /// GPU 資源が届いたか（装着してよいフレームか）。
 ///
-/// 届かないまま [`GPU_WAIT_SECS`] を過ぎたら準備の失敗として `setup_abort` で打ち切る（`--hold`
-/// でも同じ・装置を作れないと装着の後の watchdog が走らず、例は何も出さずに止まらない）。
+/// 届かないまま [`GPU_WAIT_SECS`] を過ぎたら `setup_abort` で打ち切る（`--hold` でも同じ。
+/// 装着の後の watchdog は装置が無いと走らず、例が何も出さずに止まらなくなるため）。
 /// `waiting_since` は待ち始めた時刻で、呼び手が持つ。
 pub(super) fn gpu_ready(world: &World, waiting_since: &mut Option<std::time::Instant>) -> bool {
     let ready = world.get_resource::<GraphicsCore>().is_some()
@@ -143,8 +143,7 @@ pub(super) fn show_balloon(
     };
     presenter.attach_target(
         target, window, emo_world, atlas,
-        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
-        // 供給する（k は窓のモニタ DPI ÷ 96・100% で 1.0、200% で 2.0）。
+        // 作者基準 DPI は既定の 96。本番は boot が descript の実値を供給する（k = 窓のモニタ DPI ÷ 96）。
         96,
     );
     let (tx, rx) = reply_channel::<PresentOutcome>();

@@ -1,7 +1,4 @@
-//! 装飾の持ち運び（spec `areka-P0-shell-balloon` の design.md「装飾の持ち運び」・Testing Strategy の
-//! `state_decoration_carry_tests.rs` の場面・要件 3.13〜3.17・3.19・5.4・10.5）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 装飾の持ち運び。
 //!
 //! 箱の構成はテストの中の surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。`font.follow` も同じ畳み込みから引く:
@@ -180,7 +177,7 @@ fn shared(state: &TextLayerState, actor: &str) -> TextPlace {
     state.routes[&key(actor)].shared.clone()
 }
 
-// ---- スコープに従う場所どうし（要件 3.13・3.17）
+// ---- スコープに従う場所どうし
 
 #[test]
 fn follow_kind_comes_from_font_follow_and_unwritten_means_scope() {
@@ -192,7 +189,6 @@ fn follow_kind_comes_from_font_follow_and_unwritten_means_scope() {
 
 #[test]
 fn spec_survives_select_between_scope_boxes() {
-    // `font.follow,scope` の c → 書かない a（`\b[名前]`）。
     let mut state = state();
     show(&mut state, "0", 4);
     red(&mut state, "0");
@@ -208,16 +204,14 @@ fn spec_survives_surface_switch_in_three_directions() {
     let mut state = state();
     show(&mut state, "0", 0); // a
     red(&mut state, "0");
-    // 箱 → 別の箱（6.2）。
     show(&mut state, "0", 2);
     assert_eq!(state.destination(&key("0")), bx("c"));
     assert_eq!(now(&mut state, "0").color, RED);
     assert_eq!(shared(&state, "0"), bx("c"));
-    // 箱 → 普通のバルーン（6.4）。
     show(&mut state, "0", 3);
     assert_eq!(now(&mut state, "0").color, RED);
     assert_eq!(shared(&state, "0"), TextPlace::Balloon);
-    // 普通のバルーン → 箱（6.9）。普通のバルーンで足した指定も一緒に移る。
+    // 普通のバルーンで足した指定も一緒に移る。
     font(&mut state, "0", &["bold", "1"]);
     show(&mut state, "0", 0);
     let g = now(&mut state, "0");
@@ -297,7 +291,7 @@ fn spec_does_not_cross_scopes() {
     assert_eq!(shared(&state, "0"), bx("a"));
 }
 
-// ---- 箱に閉じる箱 x（要件 3.14〜3.16）
+// ---- 箱に閉じる箱 x
 
 #[test]
 fn closed_box_takes_nothing_in_and_leaks_nothing_out() {
@@ -379,7 +373,7 @@ fn talk_starting_in_closed_box_leaves_to_an_empty_spec() {
     assert_eq!(shared(&state, "0"), bx("c"));
 }
 
-// ---- 台詞の頭（要件 3.19・4.10）
+// ---- 台詞の頭
 
 #[test]
 fn clear_all_leaves_no_spec_anywhere() {
@@ -524,7 +518,7 @@ fn box_place_has_its_defaults_before_any_text() {
     assert_eq!(now(&mut state, "0").height, 40.0);
 }
 
-// ---- 箱の無い構成（要件 5.4・10.5）
+// ---- 箱の無い構成
 
 #[test]
 fn without_boxes_owner_never_leaves_balloon() {
@@ -548,9 +542,9 @@ fn without_boxes_owner_never_leaves_balloon() {
     );
 }
 
-// ---- 差分の写し（spec `emo-text-reveal-incremental` 件 2・要件 2.1／2.5／2.6）
+// ---- 差分の写し
 
-/// 同じ手順を `REPLAY_ALL`（前の作り）の偽／真で流し、（状態, 写しで当てた指定の数）を返す。
+/// 同じ手順を `REPLAY_ALL`（全部当て直す形）の偽／真で流し、（状態, 写しで当てた指定の数）を返す。
 ///
 /// 普通のバルーンで 2 件 → 箱 a へ写す → 普通のバルーンで所有外のキーと不正な指定を含む 3 件 →
 /// もう 1 度箱 a へ写す。

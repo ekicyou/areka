@@ -1,7 +1,7 @@
-//! `viewbox_draw_decoration.rs` の兄弟檻のうち、区間の顔（spec emo-text-dwrite-fidelity 檻 D1〜D3）と
+//! `viewbox_draw_decoration.rs` の兄弟檻のうち、区間の顔（檻 D1〜D3）と
 //! 区間の行と 1 字の計測の一致（檻 F3・F4 後半）。
 //!
-//! `viewbox_draw_decoration_tests.rs` が 1,000 行を超えるので兄弟のファイルへ分けた（中身は移しただけ）。
+//! `viewbox_draw_decoration_tests.rs` が 1,000 行を超えるので兄弟のファイルへ分けた。
 
 use super::decoration::{RANGE_CALLS, style_runs};
 use super::test_support::{geo_model, glyph, table_with};
@@ -12,7 +12,7 @@ use crate::look::{StyleId, StyleTable, TextLook};
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
 
-// ────────────────────────── 区間の顔（要件 3.2／4.1／4.3／4.6／4.10・檻 D1〜D3）
+// ────────────────────────── 区間の顔（檻 D1〜D3）
 //
 // 実 DirectWrite の TextLayout に偽の台帳（`FontCatalog::with_faces`）で焼き、範囲指定の結果を
 // TextLayout から読み戻す。家族名・太さ・幅は TextLayout が持つ値をそのまま返すので、機械の
@@ -113,7 +113,7 @@ fn default_named(names: &[&str]) -> TextLook {
     }
 }
 
-/// D1（3.2・4.6）: GDI の名前の区間は家族「Yu Gothic」・500。区間の外は束縛（ＭＳ ゴシック 400）のまま。
+/// D1: GDI の名前の区間は家族「Yu Gothic」・500。区間の外は束縛（ＭＳ ゴシック 400）のまま。
 #[test]
 fn a_gdi_named_run_draws_with_the_family_and_weight_of_its_face() {
     let fonts = FontCatalog::with_faces(&[], &[("Yu Gothic Medium", yu_gothic_medium())]);
@@ -136,7 +136,7 @@ fn a_gdi_named_run_draws_with_the_family_and_weight_of_its_face() {
     }
 }
 
-/// D2（4.3）: 束縛が中太・既定が太字の行で `\f[bold,0]` の区間は 500（Regular の 400 へ戻らない）。
+/// D2: 束縛が中太・既定が太字の行で `\f[bold,0]` の区間は 500（Regular の 400 へ戻らない）。
 /// 束縛が中太で区間が Regular の家族名なら 400（中太を受け継がない）。
 #[test]
 fn run_weights_follow_the_same_rule_as_the_bound_face() {
@@ -170,7 +170,7 @@ fn run_weights_follow_the_same_rule_as_the_bound_face() {
     );
 }
 
-/// D3（4.6・4.10）: 幅の違う GDI の顔は幅を焼く。全滅の区間名は束縛の顔のまま範囲指定 0 回。
+/// D3: 幅の違う GDI の顔は幅を焼く。全滅の区間名は束縛の顔のまま範囲指定 0 回。
 #[test]
 fn a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound() {
     let condensed = FontFace {
@@ -208,7 +208,7 @@ fn a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound() {
     assert_eq!(face_at(&layout, 1).0, DEFAULT_FONT_NAME);
 }
 
-// ────────────────────────── 区間の行と 1 字の計測の一致（spec emo-text-dwrite-fidelity 檻 F3・F4 後半・要件 4.1／4.10）
+// ────────────────────────── 区間の行と 1 字の計測の一致（檻 F3・F4 後半）
 //
 // 計測器と範囲指定に同じ台帳を渡し、束縛書式の行へ**本番の** `apply_font_ranges` で区間を焼いて、
 // 区間を含む行の cluster の幅と `DWriteMetrics::advance_styled` の 1 字ずつの計測を突き合わせる。
@@ -278,7 +278,7 @@ fn assert_line_matches_measurement(
     }
 }
 
-/// F3（4.1）: 束縛が ＭＳ ゴシック の行で、GDI の名前（「Yu Gothic Medium」＝中太）の区間の英字の
+/// F3: 束縛が ＭＳ ゴシック の行で、GDI の名前（「Yu Gothic Medium」＝中太）の区間の英字の
 /// cluster の幅が、同じ見た目の 1 字の計測と一致する。中太の英字は Regular と送り幅が違うので、
 /// 太さが計測か描画の片方だけに効くと赤（実測: 片方 400 だと "i" が 3.146 と 3.193 で割れる）。
 #[test]
@@ -305,7 +305,7 @@ fn f3_gdi_named_run_measures_the_same_latin_advances_as_the_line() {
     assert_line_matches_measurement(fonts, &font, "あWikipediaう", &looks);
 }
 
-/// F4 後半（4.10）: 束縛が中太（偽の GDI の表）の行で、候補が全滅した区間と、全滅かつ太字の区間を
+/// F4 後半: 束縛が中太（偽の GDI の表）の行で、候補が全滅した区間と、全滅かつ太字の区間を
 /// 含む行の cluster の幅が、同じ見た目の 1 字の計測と一致する（全滅は描画も計測も束縛の顔）。
 ///
 /// 較正（実測 2026-10-29・取り消し済み）: `apply_font_ranges` で太字の全滅の区間の顔を

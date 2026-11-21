@@ -1,6 +1,4 @@
-//! 手動の送りの公開の口の檻（design.md「公開の口（`actor_scroll_tests.rs`）」・要件 8.1〜8.3・8.5・8.8）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//! 手動の送りの公開の口の檻。
 //!
 //! 消去・隠した・面の切り替え・箱を外したで手動が捨てられること、場所ごとに別々なこと、
 //! 手動の位置で選択肢の当たりの写しが戻した分だけずれること（`committed` を通る）を固定する。
@@ -107,8 +105,8 @@ fn nothing_presented_cannot_scroll() {
     );
 }
 
-/// 手動の位置で選択肢の当たりの写しが、戻した 2 行の分だけ新しい側へずれる（要件 8.5）。
-/// 新しい側へ戻すと自動の位置へ帰り、写しも元に戻る（要件 5.4）。
+/// 手動の位置で選択肢の当たりの写しが、戻した 2 行の分だけ新しい側へずれる。
+/// 新しい側へ戻すと自動の位置へ帰り、写しも元に戻る。
 #[test]
 fn manual_position_shifts_choice_hit_rows_by_the_lines_scrolled_back() {
     let (mut world, window, slot) = com_world();
@@ -147,7 +145,7 @@ fn manual_position_shifts_choice_hit_rows_by_the_lines_scrolled_back() {
     assert_eq!(rt.choice_hit_rows(&actor), before.as_slice());
 }
 
-/// 消去（`\c`・台詞の頭）で手動を捨てる（要件 8.2）。
+/// 消去（`\c`・台詞の頭）で手動を捨てる。
 #[test]
 fn clear_and_clear_all_forget_manual() {
     let (mut world, window, slot) = com_world();
@@ -166,7 +164,7 @@ fn clear_and_clear_all_forget_manual() {
     assert!(!is_manual(&rt, &p1), "台詞の頭は全部の場所の手動を捨てる");
 }
 
-/// 見える字が増えたら、そのフレームで手動を捨てて自動の位置で描く（要件 8.1）。
+/// 見える字が増えたら、そのフレームで手動を捨てて自動の位置で描く。
 #[test]
 fn new_visible_text_forgets_manual_in_the_same_frame() {
     let (mut world, window, slot) = com_world();
@@ -183,7 +181,7 @@ fn new_visible_text_forgets_manual_in_the_same_frame() {
 }
 
 /// 隠した（`Hidden`）は場所ごと、面の切り替え（`FaceChanged`）はアクターの全部の場所の手動を捨てる。
-/// 別のアクターの場所は動かない（要件 8.3・8.6・8.8）。
+/// 別のアクターの場所は動かない。
 #[test]
 fn hidden_and_face_change_forget_per_place_and_per_actor() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());

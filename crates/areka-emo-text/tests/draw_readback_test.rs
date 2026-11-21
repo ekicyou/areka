@@ -1,16 +1,12 @@
 //! # draw_readback_test — UI スレッド上の描画・読み戻しの通し構造検証
 //!
-//! 出典 spec: `areka-P0-emo-text-layer`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
-//!
-//! design.md「Testing Strategy > Integration Tests #4（描画実行）」の正典述語を、
-//! **通し経路**（sink emit → UI ドレイン → `present_frame` → `read_back`）で檻化する
-//! （R7.3/R8.5/R9.1/R9.3）:
+//! 次の述語を**通し経路**（sink emit → UI ドレイン → `present_frame` → `read_back`）で檻化する。
 //!
 //! 1. **単調増加**: 可視グリフ数が増えるほど供給面の非透明ピクセルが単調に増加する。
 //! 2. **Clear 後の全域透明**: `Clear` cue の通し適用（sink 経由＝`clear_cache` 込み）後、
 //!    供給面は全域透明（premultiplied 全 0）へ戻る。
-//! 3. **有効領域（validrect）外に非透明ピクセルなし**: design の構造（COM 層「装着」正典:
-//!    物理寸＝`ceil(validrect 寸 × k)`・`Arrangement` offset＝validrect 原点 × k）により、
+//! 3. **有効領域（validrect）外に非透明ピクセルなし**: 供給面の
+//!    物理寸＝`ceil(validrect 寸 × k)`・`Arrangement` offset＝validrect 原点 × k により、
 //!    テキストのインクは合成結果上 validrect の外に存在し得ない。これを観測可能な構造
 //!    述語に落とす——(a) 供給面が validrect 寸**のみ**を覆う（`surface.size()`／readback
 //!    長）、(b) 提示位置が validrect 原点に一致（`Arrangement`）、(c) 面内のインクが
@@ -22,13 +18,13 @@
 //! テストが直結）で同種の述語を張るのに対し、本テストは結線層〜COM 層の**実配線**
 //! （`spawn_emo_text` の実 pump ドレイン・`present_frame` の装着/描画/提示）を通す。
 //!
-//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`）＝ attach_wiring_test
-//!   と同一方針。時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
-//! - R9.1: 横書きテストは実 `EmoPresenter` の公開経路（`text_slot_view` →
+//! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・attach_wiring_test と同じ）。時刻は
+//!   常に注入（`talk_time`）・実時間 sleep 不使用。
+//! - 横書きテストは実 `EmoPresenter` の公開経路（`text_slot_view` →
 //!   `register_actor_view`）で予約スロットへ到達する。
-//! - R9.3: グリフ更新フレームは供給面の Present のみで完結する（World の entity 数
+//! - グリフ更新フレームは供給面の Present のみで完結する（World の entity 数
 //!   不変・`GraphicsCommandList` 不挿入＝バルーン surface 本体の再合成を強要しない）。
-//! - R8.5: 今の実挙動はテキスト描画のみ＝グリフ未リビール時（可視 0）と Clear 後に
+//! - 今の実挙動はテキスト描画のみ＝グリフ未リビール時（可視 0）と Clear 後に
 //!   インク源が存在しない（Image/Surface シーム住人の inert は `src/canvas.rs` の檻が正典・
 //!   本テストはその通し側の帰結「テキスト以外のインク源なし」を assert する）。
 
@@ -66,13 +62,11 @@ const FONT_H: u32 = 12;
 const PITCH: u32 = 14;
 
 /// 非退化 validrect 付きのテスト用 BalloonModel。**origin は宣言しない**＝描画開始点は
-/// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路・`areka-P0-balloon-vertical-canon` 要件 3.11）。
+/// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路）。
 /// wordwrap 未指定＝折返し閾値は行末辺（横=right 156／縦=bottom 94）。
 ///
-/// かつては `Origin::new(Some(0), Some(0))` を宣言していたが、これは解決後 validrect
-/// (36,46)-(156,94) の外にあり、範囲外の宣言として書字開始角へ寄せられて
-/// いた。本檻の意図は書字開始角の縮退（そこから始まるインクの観測）なので、正典推奨形の
-/// 未宣言へ直してある（spec `areka-P0-balloon-vertical-canon` の DD5・要件 10.9）。
+/// 範囲外の宣言（validrect (36,46)-(156,94) の外）は書字開始角へ寄せられるだけなので、
+/// 本檻の意図（書字開始角の縮退の観測）には正典推奨形の未宣言を使う。
 fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
     support::geometry_model(
         (None, None),
@@ -90,7 +84,7 @@ fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
 /// （進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
 const REVEAL_INTERVAL: f64 = 0.05;
 
-/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
+/// テスト用 cue（共有の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     support::cue(actor, at, command, REVEAL_INTERVAL)
 }
@@ -110,7 +104,7 @@ fn ink_bounds(bytes: &[u8], width: u32) -> Option<(u32, u32, u32, u32)> {
     bounds
 }
 
-/// 供給面と提示位置の validrect 封じ込め構造（述語 3 の (a)(b)——design COM 層「装着」正典:
+/// 供給面と提示位置の validrect 封じ込め構造（述語 3 の (a)(b)・
 /// 物理寸＝ceil(validrect 寸 × k)・Arrangement offset＝validrect 原点 × k・k=1.0）。
 /// 供給面が validrect **のみ**を覆い validrect 原点へ提示される＝合成結果上、テキストの
 /// インクは validrect 外に存在し得ない（面外のインクは供給面クリップで消える）。
@@ -147,27 +141,25 @@ fn assert_validrect_containment(
     );
 }
 
-// ══ 横書き: 3 述語の通し檻（実 EmoPresenter 公開経路・R7.3/R8.5/R9.1/R9.3） ══════════════
+// ══ 横書き: 3 述語の通し檻（実 EmoPresenter 公開経路） ══════════════
 
 /// 観測可能な完了状態（横書き）: 実 sink→UI ドレイン→present_frame→read_back の
 /// 通し経路で、(1) 可視グリフ数増加に伴う非透明ピクセルの単調増加、(2) Clear 後の全域
 /// 透明化、(3) 有効領域（validrect）外に非透明ピクセルが無いこと（封じ込め構造＋面内
-/// 開始角）の 3 述語が green である。併せてスクロールの全域再描画（R7.3・残渣なし・
-/// 決定論）と Present 完結（R9.3・World 非再合成）を檻化する。
+/// 開始角）の 3 述語が green である。併せてスクロールの全域再描画（残渣なし・
+/// 決定論）と Present 完結（World 非再合成）を檻化する。
 #[test]
 fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     let mut world = make_world_with_gpu();
 
-    // ── R9.1: 実 EmoPresenter の公開経路（text_slot_view）で予約スロットへ到達する ──
-    // 窓 entity には `DPI` component を**明示的に**載せる（areka-P0-emo-dpi-scaling task 3.2）。
-    // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
-    // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
+    // ── 実 EmoPresenter の公開経路（text_slot_view）で予約スロットへ到達する ──
+    // 窓 entity には `DPI` component を明示的に載せる。不在だと `derive_scale` の縮退分岐
+    // （error! ＋ k=1.0）を通り、縮退が正常経路になりすまして観測できない。
     let window = world.spawn(DPI::from_dpi(96, 96)).id();
     let (emo_world, atlas) = build_target_assets(IMAGE.0, IMAGE.1, 0);
     let mut presenter = EmoPresenter::new();
     presenter
-        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
-        // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
+        // 作者基準 DPI は正典既定の 96（ukadoc）。本番は boot が descript の実値を供給する。
         .attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_surface(&mut presenter, &mut world, TargetId(0));
     let view = presenter
@@ -195,7 +187,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     pump_until_idle();
 
     // 装着フレーム（t=0.0 ＜ at=0.1 → 可視 0）: 装着は成立し、供給面は全域透明。
-    // R8.5 の通し側: 実配線のインク源はテキストのみ＝グリフ未リビールなら面は空。
+    // 実配線のインク源はテキストのみ＝グリフ未リビールなら面は空。
     {
         let mut rt = runtime.borrow_mut();
         present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム（可視 0）");
@@ -212,7 +204,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
             bytes.iter().all(|&b| b == 0),
             "可視 0 グリフの供給面は全域透明（テキスト以外のインク源が無い・R8.5 通し側）"
         );
-        // ── 述語 3（構造）: validrect 封じ込め＋装着契約（R9.1/R9.3） ──
+        // ── 述語 3（構造）: validrect 封じ込め＋装着契約 ──
         assert_validrect_containment(&rt, &actor, &world, slot);
         let vg = world
             .get::<VisualGraphics>(slot)
@@ -270,7 +262,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         opaque_count(&before) > counts[5],
         "追加行のインクが載る（あふれ前・3 行とも可視）"
     );
-    // 決定論: 同一注入時刻の再提示はバイト一致（全域再描画に差分累積なし・R7.3）。
+    // 決定論: 同一注入時刻の再提示はバイト一致（全域再描画に差分累積なし）。
     {
         let mut rt = runtime.borrow_mut();
         present_frame(&mut rt, &mut world, 5.0).expect("同一時刻の再提示フレーム");
@@ -282,7 +274,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         );
     }
 
-    // ── R7.3: 行 3 追加であふれ→スクロール＝validrect 寸キャンバスへの全域再描画 ──
+    // ── 行 3 追加であふれ→スクロール＝validrect 寸キャンバスへの全域再描画 ──
     sink.emit(cue("0", 6.0, CueCommand::NewLine { ratio: 1.0 }));
     sink.emit(cue("0", 6.0, CueCommand::Text("■".into())));
     pump_until_idle();
@@ -325,7 +317,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         );
     }
 
-    // ── R9.3: 装着後の全フレーム（進行・スクロール・Clear）は Present のみで完結 ──
+    // ── 装着後の全フレーム（進行・スクロール・Clear）は Present のみで完結 ──
     assert_eq!(
         world.entities().len(),
         entities_after_attach,
@@ -337,7 +329,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     );
 }
 
-// ══ 縦書き（vertical_rl）変種: 3 述語＋横方向スクロール（R6 系の軸切替を通し経路で） ══════
+// ══ 縦書き（vertical_rl）変種: 3 述語＋横方向スクロール（軸切替を通し経路で） ══════
 
 /// 観測可能な完了状態（縦書き変種）: 縦書き（vertical_rl）でも 3 述語が
 /// green である——(1) 単調増加、(2) Clear 後全域透明、(3) validrect 封じ込め（縦書きの
@@ -424,7 +416,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         );
     }
 
-    // ── R7.3×縦書き: 列 8 追加であふれ→横方向スクロール（先頭列＝■■ の消失） ──
+    // ── 縦書き: 列 8 追加であふれ→横方向スクロール（先頭列＝■■ の消失） ──
     sink.emit(cue("0", 11.0, CueCommand::NewLine { ratio: 1.0 }));
     sink.emit(cue("0", 11.0, CueCommand::Text("■".into())));
     pump_until_idle();

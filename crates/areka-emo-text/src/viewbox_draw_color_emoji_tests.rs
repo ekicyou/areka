@@ -16,7 +16,7 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_DRAW_TEXT_OPTIONS, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT, D2D1_DRAW_TEXT_OPTIONS_NONE,
 };
 
-// ════ 色つきの絵文字の読み戻し（要件 1.1・1.2・1.5・1.6・5.1・6.1・6.4・6.7・6.8） ════
+// ════ 色つきの絵文字の読み戻し ════
 //
 // 既定フォント（ＭＳ ゴシック）に無い絵文字は OS の代替フォント（Segoe UI Emoji）の色つきの
 // 字形で出る。各テストは先頭で代替フォントの実在を判定し、無ければ理由つきで失敗する
@@ -89,7 +89,7 @@ fn black() -> FontColor {
     FontColor::new(None, None, None)
 }
 
-/// 1.1・6.1: 「あ😀い」を既定の黒で描くと色つきの画素が出る。同じ台詞を別の描画器・別の面で
+/// 「あ😀い」を既定の黒で描くと色つきの画素が出る。同じ台詞を別の描画器・別の面で
 /// `NONE` にして描くと 0（描画オプションが効いている証拠）。両方の面に不透明画素がある
 /// （空の面同士の比較にしない）。3 方式。
 #[test]
@@ -122,7 +122,7 @@ fn emoji_draws_colored_pixels_and_none_option_draws_none() {
     }
 }
 
-/// 5.1・6.4: 絵文字を含まない「あiWa。漢！x」は、色つきの描画オプションと `NONE` とで
+/// 絵文字を含まない「あiWa。漢！x」は、色つきの描画オプションと `NONE` とで
 /// 読み戻しがバイト等価（描画器も面も別・同じ描画器での描き直しは使わない）。3 方式。
 #[test]
 fn non_emoji_text_is_byte_identical_with_and_without_color_font_option() {
@@ -153,7 +153,7 @@ fn non_emoji_text_is_byte_identical_with_and_without_color_font_option() {
     }
 }
 
-/// 1.2: 既定フォントが持つ記号「♥」（U+2665）は文字色に従う。赤（R=255）で描くと、
+/// 既定フォントが持つ記号「♥」（U+2665）は文字色に従う。赤（R=255）で描くと、
 /// premultiplied の赤は B＝G＝0 なので「α≠0 かつ（G>0 または B>0）」の画素が 0。3 方式。
 #[test]
 fn heart_symbol_follows_text_color() {
@@ -173,7 +173,7 @@ fn heart_symbol_follows_text_color() {
     }
 }
 
-/// 1.3・10.2: 色つきの字形は `\f[color]` の文字色に従わない。「😀」を黒と赤で描いた読み戻しが
+/// 色つきの字形は `\f[color]` の文字色に従わない。「😀」を黒と赤で描いた読み戻しが
 /// バイト等価（描画器も面も別）。色つきの画素が在ることも確かめる（単色同士の一致にしない）。3 方式。
 #[test]
 fn emoji_ignores_text_color() {
@@ -193,7 +193,7 @@ fn emoji_ignores_text_color() {
     }
 }
 
-/// 1.3・4.5・6.3: 選択肢「あ😀い」の全体をホバーして、塗り色と白の切替文字色で描いた
+/// 選択肢「あ😀い」の全体をホバーして、塗り色と白の切替文字色で描いた
 /// フレームと、ホバー無しのフレームを同じ描画器で描く（ホバーの序数は行の指紋に入るので
 /// 描き直される）。帯は本番と同じ実測の送り幅（`DWriteMetrics`）で組んだ配置から取る。
 /// 😀 は字形そのものに白（歯・目の光）を持つので「白が 0」は求めず、白の画素数が

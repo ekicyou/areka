@@ -20,7 +20,7 @@ use super::styled::glyph_style_advance;
 
 #[cfg(test)]
 thread_local! {
-    /// [`segment_advance_sum`] が見た項目の数（合計が全文の頭から数え直さないことの檻・指摘 9）。
+    /// [`segment_advance_sum`] が見た項目の数（合計が全文の頭から数え直さないことの檻）。
     pub(super) static SEGMENT_SUM_VISITS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
 }
@@ -31,9 +31,9 @@ thread_local! {
 /// 渡す）のグリフ送り幅を、通し番号昇順＝
 /// **左畳み込み順**で `start` へ足す。配置も行内位置へ同じ順で 1 字ずつ足すので、`start` に
 /// 塊を置く位置を渡せば浮動小数の丸めまで配置の遠端と一致する（0 から合計して残り行幅と
-/// 比べると、丸めの 1 ULP で先決と配置が食い違い塊が割れる・design Service Interface）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
-/// 番号）で引く（見た目の番号列は全文の頭から数える・指摘 9）。
-/// 渡された `items` の全部を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
+/// 比べると、丸めの 1 ULP で先決と配置が食い違い塊が割れる）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
+/// 番号）で引く（見た目の番号列は全文の頭から数える）。
+/// 渡された `items` の全部を走るため合計は `visible_count` に依存しない。
 /// 字は台本のタグとタグの間のひと続きごとに分かれて届くので、届いた字の列だけを渡すと塊の
 /// 後ろの字がまだ無く、字が届くたびに合計が変わりうる。分かち書きの折返しでは呼び手
 /// （`actor_present.rs` の `arrange_lines`）が、再生の前に知らされた台本の全部から作った区間の
@@ -57,7 +57,7 @@ pub(super) fn segment_advance_sum(
             if serial >= len {
                 break;
             }
-            // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
+            // 送り幅の決め方は配置ループと**同じ 1 か所**を通す——
             // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
             // 見た目込みの配置と食い違って折返し位置がずれる。
             let (_, advance, _) =
@@ -75,8 +75,8 @@ pub(super) fn segment_advance_sum(
 /// 本関数が足すのは戻り値の 3 形への振り分けだけで、**採る契約は次の 1 行に尽きる**:
 ///
 /// - `Ok(Some(px))`＝移動が成立 → [`note_out_of_range`] で範囲外なら DEBUG を 1 件残し
-///   （**位置は動かさない**＝内側へ寄せない・R2.6）、値をそのまま返す。
-/// - `Ok(None)`＝軸省略 → 当該軸不動・**無音**（正典の正常形・R5.5）。
+///   （**位置は動かさない**＝内側へ寄せない）、値をそのまま返す。
+/// - `Ok(None)`＝軸省略 → 当該軸不動・**無音**（正典の正常形）。
 /// - `Err(degrade)`＝縮退 → guard があれば [`warn_cursor_degrade`]（キャラクター・分岐ごと
 ///   初回 1 回）。guard 不在（[`LayoutEngine::layout`] 経路）は警告を抑止するだけで、
 ///   当該軸不動という**純挙動は同一**である。
@@ -92,7 +92,7 @@ pub(super) fn resolve_cursor_component(
 ) -> Option<f32> {
     match resolve_cursor_axis(coord, axis, basis) {
         Ok(Some(value)) => {
-            // 範囲外は記録するだけ（値は素通し）。戻り値を使って寄せてはならない（R2.6）。
+            // 範囲外は記録するだけ（値は素通し）。戻り値を使って寄せてはならない。
             note_out_of_range(axis, value, region);
             Some(value)
         }

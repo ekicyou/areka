@@ -2,7 +2,7 @@
 //!
 //! 本番の合図の適用（[`crate::actor::TextLayerRuntime::apply_cue`]）と、トークの先渡しを
 //! 空回しで流す側（[`TalkLookahead::install`]）は、どちらも [`advance_state`] を呼んで状態を
-//! 進める。行き先（`\s` の解決を含む）を求める規則を 2 つに分けて持たないためである（要件 2.2）。
+//! 進める。行き先（`\s` の解決を含む）を求める規則を 2 つに分けて持たないためである。
 //!
 //! [`TalkLookahead`] は空回しの結果を「場所 × 区間の番号 → 区間の全文」として覚える。区間の
 //! 番号は「先渡しを受け取ってからの全消去の回数（場所に状態があるかに関わらず）＋その場所の
@@ -30,8 +30,6 @@ pub(crate) fn advance_state(
     resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
     cue: &TalkCue,
 ) -> bool {
-    // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
-    // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
     if let CueCommand::Emote { key } = &cue.command {
         match resolve {
             Some(resolve) => state.route_surface(&cue.actor, resolve(key)),
@@ -82,7 +80,7 @@ pub(crate) enum Basis<'a> {
         content: &'a ActorTextState,
         plan: &'a SegmentPlan,
     },
-    /// 届いた字だけで配置する（修正前の動き）。
+    /// 届いた字だけで配置する。
     Arrived,
 }
 
@@ -94,7 +92,7 @@ fn begins_with(full: &ActorTextState, arrived: &ActorTextState) -> bool {
         && full.styles().starts_with(arrived.styles())
 }
 
-/// 先渡しの空回しで求めた区間の全文の持ち主（design.md「`TalkLookahead`」）。
+/// 先渡しの空回しで求めた区間の全文の持ち主。
 ///
 /// 正本ではない（届いた字の正本は `TextLayerState`）。本番の状態を書き換えない。
 #[derive(Default)]
@@ -112,7 +110,7 @@ pub(crate) struct TalkLookahead {
 }
 
 impl TalkLookahead {
-    /// 先渡しを受け取る: 今の状態の写しで空回しし、区間の全文を入れ替える（design.md の手順 1〜8）。
+    /// 先渡しを受け取る: 今の状態の写しで空回しし、区間の全文を入れ替える。
     /// 返すのは空回しが求めた区間の数（前のトークから持ち越した区間は数えない）。
     pub(crate) fn install(
         &mut self,
@@ -120,7 +118,7 @@ impl TalkLookahead {
         resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
         upcoming: &[TalkCue],
     ) -> usize {
-        // 1. 持ち越し: 場所ごとに今の区間の全文と warn 済みの印だけを取り置く。
+        // 持ち越し: 場所ごとに今の区間の全文と warn 済みの印だけを取り置く。
         let counts = std::mem::take(&mut self.counts);
         let carried: Vec<(PlaceKey, Section)> = std::mem::take(&mut self.sections)
             .into_iter()
@@ -132,7 +130,7 @@ impl TalkLookahead {
             .filter(|(place, n)| *n == counts.number(place))
             .map(|(place, _)| place)
             .collect();
-        // 2〜5. 数えは 0 から（上の take で戻した）、印つきの写しで空回しする。
+        // 空回しは自前の数えを 0 から振り、印つきの写しで流す（本番の数えは上の take で 0 に戻した）。
         self.rehearse(
             state.rehearsal_copy(),
             ClearCounts::default(),
@@ -141,10 +139,9 @@ impl TalkLookahead {
             upcoming,
         );
         let derived = self.sections.len();
-        // 6. 本番の数えはここから（1 の take で 0 に戻したまま。空回しは自前の数えで番号を振った）。
-        // 7. 持ち越しを番号 0 へ（空回しが番号 0 に控えた場所は空回しの側を採る）。warn 済みの
-        //    印も持ち越しの一部なので、空回しが全文を求め直した場所では空回しの側（印なし）を採る
-        //    ＝新しい全文との食い違いは改めて 1 度記録する（`reinstall` が印を消すのと同じ考え）。
+        // 持ち越しを番号 0 へ。空回しが番号 0 に控えた場所は空回しの側を採る。warn 済みの印も
+        // 持ち越しの一部だが、空回しが全文を求め直した場所では空回しの側（印なし）を採る
+        // ＝新しい全文との食い違いは改めて 1 度記録する。
         self.warned = warned
             .into_iter()
             .map(|place| (place, 0))
@@ -153,7 +150,7 @@ impl TalkLookahead {
         for (place, section) in carried {
             self.sections.entry((place, 0)).or_insert(section);
         }
-        // 8. やり直しのために列を覚える。
+        // やり直しのために列を覚える。
         self.upcoming = Some(upcoming.to_vec());
         self.delivered = 0;
         derived
@@ -175,31 +172,31 @@ impl TalkLookahead {
     }
 
     /// 空回しをやり直す: 今の状態の写しから、先渡しの列のまだ届いていない残りを流し、
-    /// 今の区間とそれより後の区間の全文を入れ替える（design.md の手順 1〜5）。
+    /// 今の区間とそれより後の区間の全文を入れ替える。
     /// 先渡しの列が無ければ何もしない。
     pub(crate) fn reinstall(
         &mut self,
         state: &TextLayerState,
         resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
     ) {
-        // 1. 列が無い（受け取っていない・捨てた）なら今ある全文のまま。
+        // 列が無い（受け取っていない・捨てた）なら今ある全文のまま。
         let Some(upcoming) = self.upcoming.take() else {
             return;
         };
-        // 2. 印は全部消し、全文は今の番号より前のものだけ残す（場所ごと）。
+        // 印は全部消し、全文は今の番号より前のものだけ残す（場所ごと）。
         self.warned.clear();
         let counts = &self.counts;
         self.sections
             .retain(|(place, n), _| *n < counts.number(place));
-        // 3〜4. 数えは今の値の写しから（本番の数えには触れない）。内容のある場所は全部「足した」
-        //       ことにして始める＝残りが何も足さない場所でも、今の内容がそのまま今の区間の全文になる。
+        // 数えは今の値の写しから始め（本番の数えには触れない）、内容のある場所は全部「足した」
+        // ことにする＝残りが何も足さない場所でも、今の内容がそのまま今の区間の全文になる。
         let copy = state.rehearsal_copy();
         let added = copy
             .places()
             .filter(|(_, content)| !content.is_empty())
             .map(|(key, _)| key.clone())
             .collect();
-        // 5. まだ届いていない残りを流して控える。
+        // まだ届いていない残りを流して控える。
         let rest = upcoming.get(self.delivered..).unwrap_or_default();
         debug!(
             delivered = self.delivered,
@@ -224,7 +221,7 @@ impl TalkLookahead {
         self.counts.number(place)
     }
 
-    /// 写し `copy` で合図の列を空回しし、区間の全文を控える（`install` の手順 4〜5）。番号は
+    /// 写し `copy` で合図の列を空回しし、区間の全文を控える。番号は
     /// `counts` で振る。`added` は始めから「この区間に足した」ことにする場所。
     fn rehearse(
         &mut self,

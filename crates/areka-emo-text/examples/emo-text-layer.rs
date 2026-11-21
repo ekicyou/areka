@@ -1,19 +1,17 @@
-//! # emo-text-layer — 注入時刻駆動の観測用専用 example（R11.1–11.5/11.7–11.9）
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//! emo-text-layer — 注入時刻駆動の観測用 example。
 //!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード
 //! cue 列を **注入時刻駆動**（`talk_time`＝フレーム時刻−talk 開始・実時間 sleep 不使用）
-//! で流して、以下の一連を **読み戻し（readback）述語**で自動判定し、最後に単一の
-//! PASS/FAIL を 1 行出力する（exit code 連動: PASS=0／FAIL=1）。
+//! で流して、以下を **読み戻し（readback）述語**で自動判定し、最後に PASS/FAIL を 1 行出力する
+//! （終了コード: PASS=0／FAIL=1）。
 //!
-//! 1. **typewriter 進行**（R11.2）: 可視ピクセル数の単調増加。
-//! 2. **改行**（R11.1）: `NewLine` cue で行送り軸方向へインク範囲が拡大する。
-//! 3. **あふれ→スクロール**（R11.3）: validrect あふれで先頭行が可視窓から消える
+//! 1. **typewriter 進行**: 可視ピクセル数の単調増加。
+//! 2. **改行**: `NewLine` cue で行送り軸方向へインク範囲が拡大する。
+//! 3. **あふれ→スクロール**: validrect あふれで先頭行が可視窓から消える
 //!    （先頭バンドの行内インク範囲が縮む）ことを readback で確認。
-//! 4. **全消去**（R11.5）: `Clear` cue でテキスト領域が全透明へ戻る。
-//! 5. **複数 actor の振り分け**（R11.8）: \0/\1 が各自のバルーン（別 target・別供給面）へ
+//! 4. **全消去**: `Clear` cue でテキスト領域が全透明へ戻る。
+//! 5. **複数 actor の振り分け**: \0/\1 が各自のバルーン（別 target・別供給面）へ
 //!    独立に描画され、\0 側の更新・Clear が \1 側の供給面バイト列へ波及しない。
 //!
 //! # 使い方
@@ -30,25 +28,21 @@
 //! 失敗は hold でも `FAIL (セットアップ失敗: …)` を出して終了コード 1 で終わり、watchdog の超過は
 //! 窓を閉じずに `error!` を 1 回だけ残す。
 //!
-//! # fixture（R11.4/R11.7）
+//! # fixture
 //!
-//! - **枠画像**: 共有 fixture `検体 emo2 の同梱バルーン emo2-kakukaku`
-//!   （emo-present example と同じく窓口 `sample-ghost-kit` から得る）。
-//!   **共有 fixture は改変しない**。
-//! - **balloon descript**: 通常起動は共有 fixture の `descript.txt`＋`balloons0s.txt`
-//!   （2 層マージ・マーカー無し既定 `horizontal_tb` の裏取り）。`--vertical` は parse 入力
-//!   だけを example ローカル変種 `examples/fixtures/emo2-vertical/`（`writing_mode,vertical_rl`
-//!   ＋有意な `wordwrappoint.y`・`balloons0s.txt` 上書き層）へ差し替える。縦書きでは
-//!   折返しが縦書き用閾値（`wordwrappoint.y` 軸）・スクロールが横方向へ切り替わることを
+//! - **枠画像**: 共有 fixture（検体 emo2 の同梱バルーン `emo2-kakukaku`）。emo-present example と
+//!   同じく窓口 `sample-ghost-kit` から得る。**共有 fixture は改変しない**。
+//! - **balloon descript**: 通常起動は共有 fixture の `descript.txt`＋`balloons0s.txt`（2 層マージ）。
+//!   `--vertical` は parse 入力だけを example ローカル変種 `examples/fixtures/emo2-vertical/`
+//!   （`writing_mode,vertical_rl`＋有意な `wordwrappoint.y`・`balloons0s.txt` 上書き層）へ差し替える。
+//!   縦書きでは折返しが縦書き用閾値（`wordwrappoint.y` 軸）・スクロールが横方向へ切り替わることを
 //!   同じ述語群（軸読み替え）で観測する。
-//! - 本 example は新規ファイルのみで完結し、既存の `crates/areka` 配下ファイルは一切
-//!   変更しない（R11.7）。
 //!
 //! # 自動判定を走らせるときの前提（k=1.0 への固定）
 //!
-//! readback 述語はどれも物理 1:1（合成スケール k=1.0）を前提に刻んである。k は
+//! readback 述語はどれも物理 1:1（合成スケール k=1.0）を前提にしている。k は
 //! 「窓のモニタ DPI ÷ 作者基準 DPI（96）」で決まるので、**拡大縮小 200%（dpi=192）の
-//! モニタでは k=2.0 になり、C3 以降の述語が前提を失って FAIL する**（実測 2026-09-06）。
+//! モニタでは k=2.0 になり、述語が前提を失って FAIL する**（実測）。
 //! 高 DPI 機で自動判定を走らせるときは、プロセスを DPI 非対応にして dpi=96 を読ませる:
 //!
 //! ```text
@@ -61,12 +55,11 @@
 //! 起動ログの `scale_k` が 1.0 であることを必ず確かめる——1.0 でなければ判定結果は無効である。
 //! （目視確認〔下記〕は逆に非 96 DPI で、`--hold` を付けて行う。）
 //!
-//! # 実 DPI（dpi≠96）の手動確認手順（R11.9）
+//! # 実 DPI（dpi≠96）の手動確認手順
 //!
 //! 起動時に各バルーン窓の実モニタ DPI と合成スケール k を `info!` でログする。
-//! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 前提）で決定論だが k≠1 では無効なので、
-//! **バルーン枠とテキストの整合は非 96 DPI 環境で実際に目視確認すること**
-//! （emo-present example の手順と同型）:
+//! PASS/FAIL の自動判定は k≠1 では無効なので、**バルーン枠とテキストの整合は非 96 DPI 環境で
+//! 実際に目視確認すること**（emo-present example の手順と同型）:
 //!
 //! 1. Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタのスケールを
 //!    150%（dpi=144）または 200%（dpi=192）に設定する（あるいは既にそのスケールで
@@ -79,8 +72,7 @@
 //!      （自動の判定は飛ばすので PASS/FAIL は出ない）。
 //! 4. 使用した DPI 値と (a)(b)(c) の結果を記録する。dpi=96 のみの確認は不十分である。
 //!
-//! 上流（emo-present/placement）は既に実モニタ DPI から k を供給している（200% で k=2.0）。
-//! k≠1 の経路は上の手順の目視で確かめる（design「観測」DPI 観測の Revalidation Trigger）。
+//! 上流（emo-present/placement）は実モニタ DPI から k を供給している（200% で k=2.0）。
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -124,10 +116,9 @@ use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_sakura::duration::text_playback_duration;
 
-// 責務単位のサブモジュール。`examples/` 直下に置くと Cargo が別のサンプルターゲットとして
-// 拾ってしまうため、サブディレクトリへ置いてパス属性で接続する（当該ディレクトリに `main.rs`
-// は作らない——作るとそれ自体が別ターゲットになる）。子は上の `use` 束縛を `use super::{…};`
-// で引くので、非 test ビルドでも全 import が消費され未使用インポートの抑止指示は要らない。
+// `examples/` 直下に置くと Cargo が別のサンプルターゲットとして拾うため、サブディレクトリへ置いて
+// パス属性で接続する（そのディレクトリに `main.rs` は作らない——別ターゲットになる）。
+// 子は上の `use` 束縛を `use super::{…};` で引く。
 #[path = "emo-text-layer/demo.rs"]
 mod demo;
 #[path = "emo-text-layer/drive.rs"]
@@ -142,7 +133,6 @@ mod setup;
 mod verdict;
 
 // 子モジュールの項目もここで束ね直す（子同士は `use super::{…};` でこの束縛を引く）。
-// 新しい公開モジュールパスは生えない——子はすべて私有 `mod` である。
 use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
 use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
@@ -179,14 +169,13 @@ fn main() -> windows::core::Result<()> {
         .world_mut()
         .insert_resource(Verdict::default());
 
-    // UI スレッドで「アセット構築＋窓生成＋Demo 挿入」を行う（WIC は COM 初期化済みスレッド）。
     world.borrow().spawn(move |tx| async move {
         let _ = tx.send(Box::new(move |world: &mut World| {
             build_and_spawn(world, vertical, hold);
         }));
     });
 
-    // 装着（GPU 資源到達で 1 回）＋シナリオ駆動（毎フレーム・注入時刻）を担う排他 system。
+    // 装着（GPU 資源到達で 1 回）とシナリオ駆動（毎フレーム・注入時刻）を担う排他 system。
     world
         .borrow_mut()
         .add_systems(FrameFinalize, drive_demo_system);
@@ -220,12 +209,11 @@ fn main() -> windows::core::Result<()> {
     mgr.run()
         .inspect_err(|e| error!(error = %e, "メッセージループが失敗で終わった"))?;
 
-    // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる（audit-emo-text-state-actor 指摘 18）。
+    // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる。
     if hold {
         return Ok(());
     }
 
-    // run() 復帰後に判定を回収して単一 pass/fail を出力する。
     let verdict = world.borrow_mut().world_mut().remove_resource::<Verdict>();
     match verdict {
         Some(v) if v.done && v.failures.is_empty() => {

@@ -1,5 +1,4 @@
-//! [`FontCatalog`]（`draw_catalog.rs`）の決定論テスト
-//! （タスク 6.2・要件 9.1／9.2／9.3／9.4／9.7／9.8／13.2）。
+//! [`FontCatalog`]（`draw_catalog.rs`）の決定論テスト。
 //!
 //! 実在するフォント名の問い合わせ先は**偽の集合**へ差し替えられるので、判定は実機の
 //! フォント構成に依存しない。本番経路（システムのフォント集合）が偽物になっていない
@@ -8,17 +7,17 @@
 //! 記録の件数は `log-capture-kit`（ワークスペース唯一の捕捉機構）で数える。件数 0 を
 //! 主張する試験には、同じ窓・同じ発行点で「出る側」を置いた対照を添えてある。
 //!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §1 | 記述順に最初の実在フォントを採る | 9.1, 9.2 |
-//! | §2 | フォントファイル名は読み飛ばして記録 1 件 | 9.3 |
-//! | §3 | 全滅は既定へ戻して記録 1 件 | 9.4, 13.2 |
-//! | §4 | 同じ候補列は引き直さない・記録も増えない | 9.7 |
-//! | §5 | バルーン定義の候補列にも同じ規則／本番経路の対照 | 9.8 |
-//! | §6 | 較正（鍵を連結する誤り・読み飛ばしと全滅の種別） | 13.5 |
-//! | §7 | 顔に太字・斜体の指定を重ねる規則（檻 U7） | 4.2〜4.5 |
-//! | §8 | GDI の名前での引き直し（偽の台帳・檻 U1〜U6） | 3.1〜3.7, 3.11, 6.2 |
-//! | §9 | 実際の書体の集まりでの中太（檻 R1）・空の候補は次へ（再監査 R2） | 3.5, 3.10, 6.3 |
+//! | § | 内容 |
+//! |---|---|
+//! | §1 | 記述順に最初の実在フォントを採る |
+//! | §2 | フォントファイル名は読み飛ばして記録 1 件 |
+//! | §3 | 全滅は既定へ戻して記録 1 件 |
+//! | §4 | 同じ候補列は引き直さない・記録も増えない |
+//! | §5 | バルーン定義の候補列にも同じ規則／本番経路の対照 |
+//! | §6 | 較正（鍵を連結する誤り・読み飛ばしと全滅の種別） |
+//! | §7 | 顔に太字・斜体の指定を重ねる規則（檻 U7） |
+//! | §8 | GDI の名前での引き直し（偽の台帳・檻 U1〜U6） |
+//! | §9 | 実際の書体の集まりでの中太（檻 R1）・空の候補は次へ |
 
 use areka_parsers::balloon::{Font, FontColor};
 use log_capture_kit::{CapturedEvent, capture};
@@ -57,7 +56,7 @@ fn catalog(installed: &[&str]) -> FontCatalog {
     FontCatalog::with_families(installed)
 }
 
-// ────────────────────────── §1 記述順に最初の実在フォント（R9.1／R9.2）
+// ────────────────────────── §1 記述順に最初の実在フォント
 
 /// 先頭が無い候補列では第 2 候補が選ばれる。
 #[test]
@@ -92,7 +91,7 @@ fn an_empty_candidate_list_resolves_to_nothing_without_a_record() {
     assert_eq!(events.len(), 0, "空列は失敗ではないので記録を残さない");
 }
 
-// ────────────────────────── §2 フォントファイル名の読み飛ばし（R9.3）
+// ────────────────────────── §2 フォントファイル名の読み飛ばし
 
 /// フォントファイル名の候補は読み込まずに次へ進み、記録は 1 件。
 #[test]
@@ -133,7 +132,7 @@ fn an_ordinary_family_name_is_not_mistaken_for_a_file() {
     assert_eq!(warns(&events, FONT_FILE), 0);
 }
 
-// ────────────────────────── §3 全滅は既定へ（R9.4／R13.2）
+// ────────────────────────── §3 全滅は既定へ
 
 /// 候補が全滅すると記録 1 件を残して解決せず、既定のフォントへ戻る。
 #[test]
@@ -179,7 +178,7 @@ fn the_record_of_an_all_missing_list_carries_the_candidates_it_tried() {
     );
 }
 
-// ────────────────────────── §4 同じ候補列は引き直さない（R9.7）
+// ────────────────────────── §4 同じ候補列は引き直さない
 
 /// 2 度目は問い合わせずに記憶から返し、記録も増えない。
 #[test]
@@ -217,7 +216,7 @@ fn an_all_missing_list_records_only_once_per_list() {
 }
 
 /// 台詞の切れ目（`forget_talk`）は台詞の番号を進め、候補列の記憶を空にする（次の台詞は引き直す）。
-/// 記録済みの鍵は残す——同じ全滅を次の台詞で引き直しても記録は増えない（指摘 11）。
+/// 記録済みの鍵は残す——同じ全滅を次の台詞で引き直しても記録は増えない。
 #[test]
 fn forget_talk_advances_the_talk_and_forgets_resolutions_but_not_records() {
     let cat = catalog(&[]);
@@ -236,7 +235,7 @@ fn forget_talk_advances_the_talk_and_forgets_resolutions_but_not_records() {
     );
 }
 
-// ────────────────────────── §5 バルーン定義の候補列／本番経路（R9.8）
+// ────────────────────────── §5 バルーン定義の候補列／本番経路
 
 /// バルーン定義のカンマ区切りにも同じ「記述順に最初の実在」規則が効く。
 #[test]
@@ -285,7 +284,7 @@ fn the_system_font_collection_is_the_real_source_in_production() {
 ///
 /// 引用符がカンマを守るので、候補 2 つの列と「カンマを含む候補 1 つ」の列はどちらも
 /// 到達する。カンマで連結すると同じ綴りになるので、鍵を連結すると片方の記録が
-/// 無記録で消える（要件 13.5 違反）。
+/// 無記録で消える。
 #[test]
 fn a_joined_spelling_would_collapse_two_different_failures_into_one_key() {
     let two = v(&["a", "b"]);
@@ -323,7 +322,7 @@ fn the_skip_record_and_the_all_missing_record_are_separate_kinds() {
     assert_eq!(warns(&events, ALL_MISSING), 1, "全滅の記録");
 }
 
-// ---- §7 顔に太字・斜体の指定を重ねる規則（檻 U7・要件 4.2〜4.5） ----
+// ---- §7 顔に太字・斜体の指定を重ねる規則（檻 U7） ----
 
 /// 太さと斜体だけを変えた顔（家族名・幅は規則に関わらない）。
 fn face(weight: DWRITE_FONT_WEIGHT, style: DWRITE_FONT_STYLE) -> FontFace {
@@ -334,7 +333,7 @@ fn face(weight: DWRITE_FONT_WEIGHT, style: DWRITE_FONT_STYLE) -> FontFace {
     }
 }
 
-/// 家族名で当たった候補の顔は Regular（太さ・幅・斜体とも NORMAL・要件 3.3）。
+/// 家族名で当たった候補の顔は Regular（太さ・幅・斜体とも NORMAL）。
 #[test]
 fn regular_face_keeps_the_family_and_is_normal_everywhere() {
     let f = FontFace::regular("Yu Gothic");
@@ -344,7 +343,7 @@ fn regular_face_keeps_the_family_and_is_normal_everywhere() {
     assert_eq!(f.style, DWRITE_FONT_STYLE_NORMAL);
 }
 
-/// 太字の指定は名前の太さと BOLD の大きい方、指定が無ければ名前の太さ（要件 4.2・4.3）。
+/// 太字の指定は名前の太さと BOLD の大きい方、指定が無ければ名前の太さ。
 #[test]
 fn bold_takes_the_heavier_of_the_named_weight_and_bold() {
     let table = [
@@ -367,7 +366,7 @@ fn bold_takes_the_heavier_of_the_named_weight_and_bold() {
     }
 }
 
-/// 斜体の指定は ITALIC、指定が無ければ名前の斜体（要件 4.4・4.5）。
+/// 斜体の指定は ITALIC、指定が無ければ名前の斜体。
 #[test]
 fn italic_overrides_and_absence_keeps_the_named_style() {
     let table = [
@@ -386,7 +385,7 @@ fn italic_overrides_and_absence_keeps_the_named_style() {
     }
 }
 
-// ---- §8 GDI の名前での引き直し（偽の台帳・檻 U1〜U6・要件 3.1〜3.7／3.11／6.2） ----
+// ---- §8 GDI の名前での引き直し（偽の台帳・檻 U1〜U6） ----
 
 /// 「Yu Gothic」家族の中太（偽の GDI の表が返す顔）。
 fn medium() -> FontFace {
@@ -401,7 +400,7 @@ fn gdi_catalog() -> FontCatalog {
     FontCatalog::with_faces(&["Meiryo"], &[("Yu Gothic Medium", medium())])
 }
 
-/// U1（3.3）: 家族名で当たる候補は Regular の顔（太さ・幅・斜体とも NORMAL）。
+/// U1: 家族名で当たる候補は Regular の顔（太さ・幅・斜体とも NORMAL）。
 #[test]
 fn u1_a_family_name_hit_is_the_regular_face() {
     let cat = gdi_catalog();
@@ -411,7 +410,7 @@ fn u1_a_family_name_hit_is_the_regular_face() {
     );
 }
 
-/// U2（3.1・3.2）: 家族名に無く GDI の名前で在る候補は、その名前が指す家族・太さの顔。
+/// U2: 家族名に無く GDI の名前で在る候補は、その名前が指す家族・太さの顔。
 #[test]
 fn u2_a_gdi_name_hit_is_the_face_the_name_points_to() {
     let cat = gdi_catalog();
@@ -431,7 +430,7 @@ fn u2_a_gdi_name_hit_is_the_face_the_name_points_to() {
     );
 }
 
-/// U3（3.4）: 書いた順に引き、家族名と GDI の名前のどちらも「入っている」扱い。
+/// U3: 書いた順に引き、家族名と GDI の名前のどちらも「入っている」扱い。
 #[test]
 fn u3_candidates_are_tried_in_written_order_across_both_lookups() {
     let cat = gdi_catalog();
@@ -456,7 +455,7 @@ fn u3_candidates_are_tried_in_written_order_across_both_lookups() {
     );
 }
 
-/// U4（3.5）: GDI の名前の照合は大小を問わない。
+/// U4: GDI の名前の照合は大小を問わない。
 #[test]
 fn u4_gdi_names_match_case_insensitively() {
     let cat = gdi_catalog();
@@ -465,7 +464,7 @@ fn u4_gdi_names_match_case_insensitively() {
     }
 }
 
-/// U5（3.6・3.7）: 全滅は None・記録 1 度・既定／渡した顔へ戻る。ファイル名と 31 単位を
+/// U5: 全滅は None・記録 1 度・既定／渡した顔へ戻る。ファイル名と 31 単位を
 /// 超える候補は GDI の表に同じ名前があっても引かない。GDI で見つからないだけでは記録しない。
 #[test]
 fn u5_all_missing_falls_back_and_files_and_long_names_are_not_looked_up() {
@@ -522,7 +521,7 @@ fn u5_all_missing_falls_back_and_files_and_long_names_are_not_looked_up() {
     );
 }
 
-/// U6（3.11）: 同じ候補列の 2 度目は問い合わせない（GDI で当たった列も同じ）。
+/// U6: 同じ候補列の 2 度目は問い合わせない（GDI で当たった列も同じ）。
 #[test]
 fn u6_a_gdi_resolved_list_is_not_looked_up_twice() {
     let cat = gdi_catalog();
@@ -538,7 +537,7 @@ fn u6_a_gdi_resolved_list_is_not_looked_up_twice() {
     );
 }
 
-/// U8（3.2・3.10）: ぱすたの候補列を束縛のフォントへ解決すると、名前は家族名・顔は中太。
+/// U8: ぱすたの候補列を束縛のフォントへ解決すると、名前は家族名・顔は中太。
 /// 組み立てたばかりの束縛は未解決の Regular の顔（先頭候補の名前）を持つ。
 #[test]
 fn u8_pick_puts_the_resolved_face_on_the_bound_font() {
@@ -557,9 +556,9 @@ fn u8_pick_puts_the_resolved_face_on_the_bound_font() {
     assert_eq!(picked.face.weight.0, 500);
 }
 
-// ---- §9 実際の書体の集まりでの中太（檻 R1・要件 3.5／3.10／6.3） ----
+// ---- §9 実際の書体の集まりでの中太（檻 R1） ----
 
-/// R1: 本番の台帳で「Yu Gothic Medium」ほかの GDI の名前が中太（500）の顔になり、
+/// 本番の台帳で「Yu Gothic Medium」ほかの GDI の名前が中太（500）の顔になり、
 /// その家族名は家族名として引き直せる。ぱすたの候補列も 500・無い名前だけの列は None。
 #[test]
 fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
@@ -605,7 +604,7 @@ fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
     assert_eq!(warns(&events, ALL_MISSING), 1, "対照: 全滅の記録は出ている");
 }
 
-/// 再監査 R2-C（調べ）: 本番の台帳で空の候補（`\f[name,,Meiryo]` の 2 番目）は何の顔にも当たらず、
+/// 調べ: 本番の台帳で空の候補（`\f[name,,Meiryo]` の 2 番目）は何の顔にも当たらず、
 /// 次の候補が採られる（DirectWrite が空の名前に既定の書体を返して空の候補が勝つ、にならない）。
 #[test]
 fn an_empty_candidate_on_the_real_collection_falls_through_to_the_next() {

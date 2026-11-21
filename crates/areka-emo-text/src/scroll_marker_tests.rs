@@ -1,6 +1,4 @@
-//! `PlaceScroll` の送りの規則の檻（spec `balloon-scroll-arrows` の design.md「純粋な判断（`scroll_marker_tests.rs`）」）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//! `PlaceScroll` の送りの規則の檻。
 //!
 //! 自動の先頭行 `auto_first` は本来 `window_for` が毎フレーム覚え直す。ここでは私有の欄を
 //! 直接置いて、送りの規則だけを固定する。
@@ -15,7 +13,7 @@ fn auto_at(auto_first: usize) -> PlaceScroll {
     }
 }
 
-// ---- 矢印の送り（要件 5.1〜5.4） ----
+// ---- 矢印の送り ----
 
 #[test]
 fn older_from_auto_starts_manual_two_lines_back() {
@@ -100,7 +98,7 @@ fn has_hidden_lines_when_pushed_out_or_manual() {
     assert!(s.has_hidden_lines());
 }
 
-// ---- ホイール（要件 6.3〜6.6） ----
+// ---- ホイール ----
 
 #[test]
 fn wheel_one_notch_with_lines_3_sends_three_lines() {
@@ -206,7 +204,7 @@ fn wheel_newer_clamps_to_auto_with_limits() {
     assert_eq!(s.manual, None);
 }
 
-// ---- 見える字の増減（要件 8.1） ----
+// ---- 見える字の増減 ----
 
 #[test]
 fn growing_visible_text_drops_manual_with_new_text() {
@@ -248,7 +246,7 @@ fn forget_drops_manual_and_remainder() {
     assert_eq!(s.forget(StopReason::Cleared), ScrollChange::Unchanged);
 }
 
-// ---- 見える範囲・出る条件・置き場（要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
+// ---- 見える範囲・出る条件・置き場 ----
 
 use crate::layout::test_support::{IMAGE, broken_lines, model_rect};
 use crate::layout::{FixedMetrics, WrapPlan};
@@ -313,7 +311,7 @@ fn marker_kind_up_sends_older_down_sends_newer() {
     assert_eq!(MarkerKind::Down.dir(), ScrollDir::Newer);
 }
 
-/// 出る条件は横書き・`vertical_rl`・`vertical_lr` とも同じ（要件 3.1〜3.3・4.1・7.2）。
+/// 出る条件は横書き・`vertical_rl`・`vertical_lr` とも同じ。
 #[test]
 fn visibility_follows_hidden_lines_in_every_writing_mode() {
     for mode in MODES {
@@ -467,7 +465,7 @@ fn manual_caught_up_by_auto_is_dropped() {
 }
 
 /// 拡大率の再追従（並べ直し）を挟んでも手動の位置は行の番号で残り、送りは並べ直した行から
-/// 作る（要件 8.7）。
+/// 作る。
 #[test]
 fn manual_line_survives_relayout_after_scale_refollow() {
     let mode = WritingMode::HorizontalTb;
@@ -486,7 +484,7 @@ fn manual_line_survives_relayout_after_scale_refollow() {
     );
 }
 
-// ---- 置き場（要件 3.4・3.7・4.2・7.1・7.7） ----
+// ---- 置き場 ----
 
 fn keys(arrow0: MarkerPoint, arrow1: MarkerPoint) -> ArrowKeys {
     ArrowKeys {
@@ -548,7 +546,7 @@ fn placement_without_coords_uses_the_ssp_measured_default() {
     );
 }
 
-/// audit-emo-text-state-actor 指摘 3: 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
+/// 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
 /// 既定の置き場（`幅 − 20`・`高さ − 15`）と右端・下端からの座標を広がりのまま解く。x だけ・y だけを
 /// 別々に大きくする（片方の軸を `as i32` に戻すと、その軸の case が落ちる）。
 #[test]

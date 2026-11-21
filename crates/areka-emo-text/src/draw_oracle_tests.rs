@@ -12,7 +12,7 @@ use crate::region::TextRegion;
 use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
-// ── task 6.3 R3.1/R7.3: DrawExecutor——可視窓の全域再描画を自前供給面へ焼き込む ──
+// ── DrawExecutor——可視窓の全域再描画を自前供給面へ焼き込む ──
 //
 // 観測可能な完了状態: 可視グリフ数が増えるほど自前供給面の読み戻し結果で非透明
 // ピクセルが単調に増加し、Clear 後は全域が透明に戻る。併せて構造契約を檻化する:
@@ -74,8 +74,8 @@ fn ink_min(bytes: &[u8], width: u32) -> Option<(u32, u32)> {
     min
 }
 
-/// 観測可能な完了状態（task 6.3）: 可視グリフ数が増えるほど自前供給面の読み戻しで
-/// 非透明ピクセルが単調に増加し（R3.1 typewriter 進行の描画側）、Clear（状態全消去＋
+/// 観測可能な完了状態: 可視グリフ数が増えるほど自前供給面の読み戻しで
+/// 非透明ピクセルが単調に増加し（typewriter 進行の描画側）、Clear（状態全消去＋
 /// 確定行キャッシュ全破棄）後は全域が透明に戻る。
 #[test]
 fn render_grows_opaque_pixels_monotonically_and_clear_restores_transparency() {
@@ -134,7 +134,7 @@ fn render_grows_opaque_pixels_monotonically_and_clear_restores_transparency() {
     );
 }
 
-/// 全域再描画の構造檻（R7.3）: 可視内容を減らした再描画で以前のインクが残らない
+/// 全域再描画の構造檻: 可視内容を減らした再描画で以前のインクが残らない
 /// （差分描画なら 5 グリフ分の残渣が出る）。同一入力の再描画はバイト一致（決定論）。
 #[test]
 fn render_is_full_redraw_without_residue() {
@@ -191,7 +191,7 @@ fn render_is_full_redraw_without_residue() {
     );
 }
 
-/// 確定行キャッシュの檻（task 6.3・design「確定行は再生成しない・Clear で全破棄」）:
+/// 確定行キャッシュの檻:
 /// 内容不変の行（確定行）は TextLayout を再生成せず、リビール中の行のみ都度更新。
 /// clear_cache（Clear 適用点）だけが全破棄する。
 #[test]
@@ -282,7 +282,7 @@ fn confirmed_line_layouts_regenerate_only_on_clear() {
     );
 }
 
-/// スケール一点適用の構造檻（task 6.3・DPI/スケール契約）: k=2 のインク開始位置は
+/// スケール一点適用の構造檻（DPI/スケール契約）: k=2 のインク開始位置は
 /// 画像座標 ×2 の近傍に現れる。二重適用（×4）でも未適用（×1）でもないことを
 /// 範囲判定で排除する（origin (20,20)・正解 ≈40〜・二重 80〜・未適用 ≈20）。
 #[test]
@@ -408,7 +408,7 @@ fn scroll_overflow_drops_oldest_line_via_full_redraw() {
     assert_eq!(after, again, "同一入力→同一ピクセル（全域再描画の決定論）");
 }
 
-/// R8.5: Image/Surface 住人は M1 型シーム——描画は warn!＋skip（インクなし・panic なし）。
+/// Image/Surface 住人は M1 型シーム——描画は warn!＋skip（インクなし・panic なし）。
 /// warn は executor ごと初回のみ（ログスパム抑制）。
 #[test]
 fn image_and_surface_seam_residents_warn_and_skip() {
@@ -460,7 +460,7 @@ fn image_and_surface_seam_residents_warn_and_skip() {
     );
 }
 
-/// 観測可能な完了状態（task 6.2）: LayoutEngine の外部注入点（&dyn GlyphMetrics）へ
+/// 観測可能な完了状態: LayoutEngine の外部注入点（&dyn GlyphMetrics）へ
 /// 実測値ベースの送り幅を提供でき、折返しが実測 advance で決まる——probe（計測）が
 /// 折返し決定より前＝鶏卵にならない順序で機能する単体確認。
 #[test]
@@ -498,18 +498,18 @@ fn layout_engine_wraps_using_measured_advances() {
     );
 }
 
-// ── task 6.4 R4.5/R6.1–6.3/R7.5: probe/描画行 TextLayout の送り幅一致 invariant ──
+// ── probe/描画行 TextLayout の送り幅一致 invariant ──
 //
-// design Testing Strategy Integration #5（正典）: 同一 TextFormat・同一テキストで
+// 同一 TextFormat・同一テキストで
 // probe layout（DWriteMetrics＝クラスタごとの計測）と描画行 TextLayout
 // （DrawExecutor の行の保持庫の line_layout＝render が DrawTextLayout へ渡す実物）の cluster
 // advance が**同値**であることを、等幅（ＭＳ ゴシック）＋プロポーショナル欧文混在
 // （ＭＳ Ｐゴシック）の両方で檻化する。
 //
 // 許容誤差: なし（f32 完全一致）。同一 factory・同一 create_text_format 経路・
-// 同一テキストに対する DirectWrite 計測は決定論であり、design の「同値」が正準
+// 同一テキストに対する DirectWrite 計測は決定論であり、「同値」が正準
 // ——epsilon を挟むとクラスタごとの probe と行文脈（カーニング等）の乖離
-// （6.2 申し送りの検出責務）を握りつぶすため導入しない。
+// を握りつぶすため導入しない。
 
 /// テキストごとの invariant 検証ケース（フォント名 None＝既定 ＭＳ ゴシック）。
 const INVARIANT_CASES: [(Option<&str>, &str); 2] = [
@@ -531,7 +531,7 @@ fn invariant_font(name: Option<&str>) -> ResolvedFont {
 
 /// 6 形（ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字）を前後の
 /// 普通の文字で挟んだ組（既定 ＭＳ ゴシック）。国旗だけは DirectWrite が 2 クラスタに
-/// 分ける（調査 R-1）ので、束ねる判定の分岐を実際に踏む。
+/// 分けるので、束ねる判定の分岐を実際に踏む。
 const CLUSTER_CASE: (Option<&str>, &str) = (
     None,
     concat!(
@@ -597,12 +597,12 @@ fn widths_per_cluster<'a>(text: &'a str, drawn: &[(u16, f32)]) -> Vec<(&'a str, 
     grouped
 }
 
-/// 観測可能な完了状態（task 6.4）: 同一フォント設定・同一テキストで、計測専用
+/// 観測可能な完了状態: 同一フォント設定・同一テキストで、計測専用
 /// probe のクラスタごとの advance と、描画行 TextLayout のクラスタを UTF-16 長で
 /// クラスタごとに束ねた幅の合計が完全一致し、束ねた数がクラスタ数と一致する
 /// （等幅＋プロポーショナル欧文混在＋6 形 × 3 方向）。プロポーショナルの行文脈調整
 /// （カーニング等）で probe と行計測が乖離するなら、本檻がそのクラスタで赤くなる
-/// （6.2 申し送りの検出責務・クリップでは隠れない metrics 述語）。
+/// （クリップでは隠れない metrics 述語）。
 #[test]
 fn probe_advances_match_drawn_line_advances_per_cluster() {
     let rig = Rig::new();
@@ -643,12 +643,12 @@ fn probe_advances_match_drawn_line_advances_per_cluster() {
     }
 }
 
-/// 乖離の検出形式（task 6.4「クリップで隠さない」）: probe 駆動で折返した各行に
+/// 乖離の検出形式: probe 駆動で折返した各行に
 /// ついて、描画行 TextLayout の送り終端（行内開始＋cluster advance の同順逐次加算
 /// ——LayoutEngine の inline_pos 累積と同じ f32 結合順）が行矩形の行内終端と完全
 /// 一致し、かつ折返し閾値を超えない。probe と実描画の送り幅が乖離すれば、行終端の
 /// 不一致＝**折返し位置のズレ**としてここで赤くなる（供給面クリップに依存しない
-/// metrics 述語——ピクセル述語は 9.2/10.2 の領分）。
+/// metrics 述語）。
 #[test]
 fn advance_divergence_would_surface_as_wrap_position_drift() {
     let rig = Rig::new();
@@ -729,7 +729,7 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
     }
 }
 
-/// 指摘 34: 見本も本番と同じく台帳（[`FontCatalog::pick`](super::FontCatalog::pick)）で
+/// 見本も本番と同じく台帳（[`FontCatalog::pick`](super::FontCatalog::pick)）で
 /// 書体を解いてから書式を作る。「Yu Gothic Medium」は GDI の名前で、解かずに作ると別の
 /// 書体へ落ちる。見本と viewbox が同じ顔で描けば、読み戻しは画素で一致する（実 GPU）。
 #[test]

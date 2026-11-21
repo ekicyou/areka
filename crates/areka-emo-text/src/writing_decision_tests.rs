@@ -4,19 +4,18 @@
 //! （[`WritingDirectionDecision`]）の、次の 4 つの振る舞いを逐語で固定する。
 //!
 //! 1. **正典キー `vertical` の分類 4 分岐**——未宣言／`0`／`1`／不正値。不正値
-//!    （`0`・`1` 以外および空文字列）は `Invalid` に分類される（本仕様 1.6／1.7）。
+//!    （`0`・`1` 以外および空文字列）は `Invalid` に分類される。
 //! 2. **2 キーの共存規則**——単独宣言 5 形・一致併記・不一致併記・未知値／不正値の
 //!    合流。採用結果（`mode`）だけでなく**採用出所**（`source`）と**矛盾併記の有無**
-//!    （`conflicting`）まで固定する（本仕様 2.2〜2.5・2.7・10.3）。
+//!    （`conflicting`）まで固定する。
 //! 3. **解決は記録しない**——値の破損の `warn!` も矛盾併記の `debug!` も、解決の中では
-//!    1 件も出さない（`emo-text-reveal-incremental` 要件 3.1）。記録は登録口が
+//!    1 件も出さない。記録は登録口が
 //!    `note_direction_declarations` で書き、その件数と文言は登録口を通す檻が固定する。
 //!    ここでは `warn` と `debug` を**別々に** 0 件と数える。
-//! 4. **`.vertical` の導出 3 値**——横書き `0`／`vertical_rl` `1`／`vertical_lr` `1`
-//!    （本仕様 7.1）。
+//! 4. **`.vertical` の導出 3 値**——横書き `0`／`vertical_rl` `1`／`vertical_lr` `1`。
 //!
 //! 既存 API [`WritingMode::resolve`] は本決定点の `mode()` をそのまま返す 1 行の委譲
-//! （本仕様 2.3）であり、同じ式を 2 度呼んで比べても赤にならないので檻を置かない。
+//! であり、同じ式を 2 度呼んで比べても赤にならないので檻を置かない。
 //! 純関数を 2 度呼んで比べる決定論の檻も同じ理由で置かない。
 //!
 //! ## 0 件主張の規律（恒真の禁止）
@@ -29,7 +28,7 @@
 //! ## 実行条件
 //!
 //! 実 DPI モニタ・実 GPU・実ゴースト・実窓を一切要さない純粋層の檻であり、同一入力に
-//! 対して戻り値もログ件数も常に同一である（本仕様 10.6）。`windows` 系 crate を
+//! 対して戻り値もログ件数も常に同一である。`windows` 系 crate を
 //! import しない（本ファイル自身が `lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` の走査対象に列挙されている）。
 
@@ -82,12 +81,12 @@ fn assert_capture_alive(counts: &LevelCounts) {
     );
 }
 
-// ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7・`0`／`1` は ⑵ の `vertical_alone_adopts_canon_key_without_records`・未宣言は ⑵ の `no_declaration_…` が見る） ──
+// ── ⑴ 正典キー `vertical` の分類 4 分岐（`0`／`1` は ⑵ の `vertical_alone_adopts_canon_key_without_records`・未宣言は ⑵ の `no_declaration_…` が見る） ──
 
 /// `0`／`1` 以外（`2`）と空文字列はいずれも `Invalid`（解決は記録しない）。
 ///
-/// 空文字列を別扱いしない（本仕様 1.7 は 1.6 と同一に扱うことを命じている）。
-/// 併記が無い単独宣言なので、縮退先は正典既定の横書きになる（Flow 1 の `DefH`）。
+/// 空文字列を別扱いしない。
+/// 併記が無い単独宣言なので、縮退先は正典既定の横書きになる。
 #[test]
 fn vertical_invalid_values_fall_back_to_canon_default_without_records() {
     for value in ["2", ""] {
@@ -119,9 +118,9 @@ fn vertical_invalid_values_fall_back_to_canon_default_without_records() {
     }
 }
 
-// ── ⑵ 2 キーの共存規則（本仕様 2.2〜2.5・2.7・10.3） ──
+// ── ⑵ 2 キーの共存規則 ──
 
-/// 両キーとも宣言なし——正典既定の横書き・記録 0 件（本仕様 1.3）。`vertical` の未宣言は
+/// 両キーとも宣言なし——正典既定の横書き・記録 0 件。`vertical` の未宣言は
 /// `Undeclared` のまま保つ——`0` の宣言へ潰さない（共存規則の判定に宣言の有無が要る）。
 #[test]
 fn no_declaration_uses_canon_default_without_records() {
@@ -139,7 +138,7 @@ fn no_declaration_uses_canon_default_without_records() {
     assert_eq!(counts.debug, 0);
 }
 
-/// `vertical` 単独 2 形——`0`→横書きの宣言・`1`→縦書きの宣言で `VerticalRl`（本仕様 1.6・2.2）・
+/// `vertical` 単独 2 形——`0`→横書きの宣言・`1`→縦書きの宣言で `VerticalRl`・
 /// 記録 0 件。`0` は未宣言とは別の分類として保つ。
 #[test]
 fn vertical_alone_adopts_canon_key_without_records() {
@@ -166,7 +165,7 @@ fn vertical_alone_adopts_canon_key_without_records() {
     }
 }
 
-/// `writing_mode` 単独 3 形——現行と 1 ビットも変わらない（本仕様 2.3）・記録 0 件。
+/// `writing_mode` 単独 3 形——現行と 1 ビットも変わらない・記録 0 件。
 #[test]
 fn writing_mode_alone_adopts_extension_key_without_records() {
     for (value, expected) in [
@@ -192,7 +191,7 @@ fn writing_mode_alone_adopts_extension_key_without_records() {
     }
 }
 
-/// 一致併記——その方向を採り、**記録は warn も debug も 0 件**（本仕様 2.4）。
+/// 一致併記——その方向を採り、**記録は warn も debug も 0 件**。
 ///
 /// 採用出所は方向が一致していても `ExtensionKey` である。優先順位は方向の一致・
 /// 不一致に依らず一定であり、一致・不一致は**記録の有無だけ**を変える。
@@ -225,8 +224,8 @@ fn agreeing_declarations_resolve_without_any_record() {
 
 /// 不一致併記——拡張キー `writing_mode` を採用し、`conflicting()` が真になる（解決は記録しない）。
 ///
-/// 3 組目 `vertical,1` ＋ `writing_mode,vertical_lr` も**異なる方向**である。本仕様 2.2 が
-/// `vertical,1` を `VerticalRl` へ逐語固定しており、`vertical_lr` はそれとは別の方向
+/// 3 組目 `vertical,1` ＋ `writing_mode,vertical_lr` も**異なる方向**である。`vertical,1` が
+/// `VerticalRl` へ逐語固定されており、`vertical_lr` はそれとは別の方向
 /// （列送りが左向き）だからである。「どちらも縦書きだから一致」とは扱わない。
 #[test]
 fn conflicting_declarations_adopt_extension_key_without_records() {
@@ -252,7 +251,7 @@ fn conflicting_declarations_adopt_extension_key_without_records() {
     }
 }
 
-/// `writing_mode` 未知値 ＋ `vertical` 宣言——`vertical` を採用（本仕様 2.7）。
+/// `writing_mode` 未知値 ＋ `vertical` 宣言——`vertical` を採用。
 ///
 /// 未知値は「指定なし」として合流するため、これは矛盾併記ではない。
 #[test]
@@ -280,7 +279,7 @@ fn unknown_writing_mode_falls_back_to_declared_vertical() {
     assert_eq!(counts.debug, 0, "解決は debug を出さない");
 }
 
-/// `vertical` 不正値 ＋ `writing_mode` 有効宣言——拡張キーを採用（設計 DD6 の合流）。
+/// `vertical` 不正値 ＋ `writing_mode` 有効宣言——拡張キーを採用（「指定なし」への合流）。
 ///
 /// 前項と対称の形である。壊れた `vertical` は「指定なし」として合流するので、
 /// これも矛盾併記ではない。
@@ -318,14 +317,13 @@ fn both_declarations_broken_fall_back_to_canon_default_without_records() {
     assert_eq!(counts.debug, 0);
 }
 
-// ── ⑶ `.vertical` の導出 3 値（本仕様 7.1・設計 DD7） ──
+// ── ⑶ `.vertical` の導出 3 値 ──
 
 /// `.vertical` は実際に適用されている書字方向から一意に定まる。
 ///
 /// **`vertical_lr`（areka 拡張の縦書き左送り）も `1`** である——正典 SSP の語彙は
 /// 縦横 2 値であり、列送りの向きを区別しないため、縦書き 2 モードは同じ `1` へ写る。
-/// 本仕様はこの値を publish しない（実導出は追跡 spec
-/// `currentghost-property-tree` が所有する）。
+/// この値は publish しない。
 #[test]
 fn vertical_property_value_maps_three_modes_to_two_canon_values() {
     for (writing_mode, expected_mode, expected_value) in [

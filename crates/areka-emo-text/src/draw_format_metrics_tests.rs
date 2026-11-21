@@ -21,7 +21,7 @@ use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 
-// ── R4.1/R4.2: フォント解決とフォールバック（純粋部・COM 不要） ──
+// ── フォント解決とフォールバック（純粋部・COM 不要） ──
 
 /// 観測可能な完了状態: フォント名/高さが欠落した balloon 定義に対しても
 /// 既定値でレイアウト生成に必要な設定一式が得られる（ukadoc 既定・正常系につき警告なし）。
@@ -86,7 +86,7 @@ fn comma_separated_names_split_into_first_and_rest_and_form_the_candidate_list()
     );
 }
 
-/// 宣言はあるが実質空の font.name は縮退（warn＋既定フォント・R4.2 log-first）。
+/// 宣言はあるが実質空の font.name は縮退（warn＋既定フォント・log-first）。
 #[test]
 fn empty_font_name_falls_back_to_default_with_warn() {
     for raw in ["", "  ", " , "] {
@@ -119,9 +119,9 @@ fn partial_color_channels_default_to_zero() {
     assert_eq!(warns, 0);
 }
 
-// ── 方向レシピ: writing_mode 解釈結果→DirectWrite 設定の一意導出（design 写像表） ──
+// ── 方向レシピ: writing_mode 解釈結果→DirectWrite 設定の一意導出 ──
 
-/// design.md 写像表どおりの一意導出:
+/// 写像表どおりの一意導出:
 /// HorizontalTb→Reading LTR＋Flow TTB／VerticalRl→Reading TTB＋Flow RTL／
 /// VerticalLr→Reading TTB＋Flow LTR。
 #[test]
@@ -144,7 +144,7 @@ fn direction_recipe_maps_three_modes_per_design_table() {
     assert_ne!(vrl, vlr);
 }
 
-/// いずれの方向も Alignment LEADING＋Paragraph NEAR（design 写像表の共通部）。
+/// いずれの方向も Alignment LEADING＋Paragraph NEAR（写像表の共通部）。
 #[test]
 fn all_direction_recipes_share_leading_near_alignment() {
     for mode in [
@@ -158,13 +158,12 @@ fn all_direction_recipes_share_leading_near_alignment() {
     }
 }
 
-// ── R4.4/R4.8/R16.4: 無効表示は実体・行単位の装飾は予約のまま ──
+// ── 無効表示は実体・行単位の装飾は予約のまま ──
 
 /// 無効表示の層が**実体化**し（色が背景との混色になる）、**行単位**の予約型
 /// （[`TextEffects`]）は今も 0 バイトのままであることを固定する
-/// （要件 4.1／4.2／4.4／4.8／16.4・design「既存テストの改訂」1）。
 ///
-/// 較正（要件 15.6）: 「無効表示の色を混色せず既定の色のままにする」誤りを入れると
+/// 較正: 「無効表示の色を混色せず既定の色のままにする」誤りを入れると
 /// 混色の断言と `assert_ne!` が、「背景を受け取らず常に白として混ぜる」誤りを
 /// 入れると黒背景の 2 つの断言が赤くなる。
 #[test]
@@ -185,7 +184,7 @@ fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
         plain.looks.disable.color, plain.looks.default.color,
         "無効表示の色が既定の文字色のまま＝混色していない"
     );
-    // 色以外は既定と同じ（正典「ほかは font. 定義群と同じ」・要件 4.5）。
+    // 色以外は既定と同じ（正典「ほかは font. 定義群と同じ」）。
     assert_eq!(plain.looks.disable.name, plain.looks.default.name);
     assert_eq!(plain.looks.disable.height, plain.looks.default.height);
     // 選択肢文字色は既存の選択肢表示の解決結果から取る——未指定バルーンは
@@ -285,7 +284,7 @@ fn text_format_honors_explicit_name_and_height() {
     }
 }
 
-/// 書式の作り失敗（指摘 35）: 既定の書体で作り直さず、`error!`＋`Device` を 1 件だけ出す
+/// 書式の作り失敗: 既定の書体で作り直さず、`error!`＋`Device` を 1 件だけ出す
 /// （panic しない）。大きさ 0 は DirectWrite が決定論的に断る（書体の在る無しは確かめない）。
 #[test]
 fn unusable_format_surfaces_one_device_error_without_retry() {
@@ -304,9 +303,9 @@ fn unusable_format_surfaces_one_device_error_without_retry() {
     assert_eq!((warns, errors), (0, 1), "記録は error! の 1 件だけ");
 }
 
-// ── task 6.2 R4.5: DWriteMetrics——計測専用 probe TextLayout（probe 規約） ──
+// ── DWriteMetrics——計測専用 probe TextLayout（probe 規約） ──
 //
-// probe 規約（design discussion #1 裁定）: 未折返し（折返し無効寸）の測定専用
+// probe 規約: 未折返し（折返し無効寸）の測定専用
 // TextLayout を、描画と同一の create_text_format 経路（フォント・サイズ・
 // writing_mode 写像設定込み）で折返し決定の前に生成し、cluster metrics から
 // advance を得る（鶏卵の構造的切断）。probe はキャッシュ可（確定内容の metrics 不変）。
@@ -333,7 +332,7 @@ fn manual_probe_advance(
         .sum()
 }
 
-/// 観測可能な完了状態（task 6.2）: 実測送り幅は、描画と同一の format 経路で
+/// 観測可能な完了状態: 実測送り幅は、描画と同一の format 経路で
 /// 生成した未折返し probe layout の cluster metrics と一致する。
 #[test]
 fn dwrite_metrics_advance_matches_manual_probe_layout() {
@@ -408,7 +407,7 @@ fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
     );
 }
 
-/// 決定論: 同一フォント・同一文字→同一送り幅（別インスタンスも完全一致・R2.5 系/R11.6 の
+/// 決定論: 同一フォント・同一文字→同一送り幅（別インスタンスも完全一致・
 /// COM 側檻）。同一インスタンスの再計測は記憶から返るので比べない（必ず同値で檻にならない・
 /// 記憶の経路は `dwrite_metrics_caches_probed_advances` が見る）。
 #[test]
@@ -539,34 +538,29 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
     );
 }
 
-// ── C5 フォント縦書き等価の構造檻（spec areka-P0-balloon-vertical-canon 要件 6.1〜6.4／6.6） ──
+// ── フォント縦書き等価の構造檻 ──
 //
-// **何を守っているか**（同 spec 裁定 4・design.md C5）: areka は SSP の
-// 「フォント名の頭に `@` を付けて縦書き異体を選び、異体が無ければ環境の標準ゴシックへ
-// 自動差し替える」機構を**模倣しない**。DirectWrite のネイティブ縦組みをそのまま用い、
-// バルーン定義の `font.name` は縦書きでも差し替えない。したがって要件 6.2／6.3 は
-// 「その経路が**存在しない**」という不在の主張であり、値を突き合わせる普通のテストでは
-// 書けない。以下は不在を本番ソース `draw.rs` の字面と構造で固定する檻である。要件 6.4
-// （計測と描画が同一の format 工場を通る）も「呼び手がここ以外に増えていない」という
-// 構造の主張なので同じ手段で固定する。
+// **何を守っているか**: areka は SSP の「フォント名の頭に `@` を付けて縦書き異体を選び、
+// 異体が無ければ環境の標準ゴシックへ自動差し替える」機構を**模倣しない**。DirectWrite の
+// ネイティブ縦組みをそのまま用い、バルーン定義の `font.name` は縦書きでも差し替えない。
+// したがって「その経路が**存在しない**」という不在の主張であり、値を突き合わせる普通の
+// テストでは書けない。以下は不在を本番ソース `draw.rs` の字面と構造で固定する檻である。
+// 計測と描画が同一の format 工場を通る（呼び手がここ以外に増えていない）ことも構造の
+// 主張なので同じ手段で固定する。
 //
-// **既存が固定済みのものは重ねない**: 要件 6.1／6.6（3 モードの reading／flow 写像）は
-// 本ファイルの `direction_recipe_maps_three_modes_per_design_table`（写像表そのもの・
-// 3 モード全て）と `all_direction_recipes_share_leading_near_alignment`（共通部）が既に
-// 固定している。COM 側の焼き込みも
-// `text_format_from_missing_definition_carries_defaults_and_recipe` が 3 モードで
-// TextFormat から読み戻して確認済み。よってここでは写像の再宣言を作らない。
+// **既存が固定済みのものは重ねない**: 3 モードの reading／flow 写像は本ファイルの
+// `direction_recipe_maps_three_modes_per_design_table`（写像表そのもの・3 モード全て）と
+// `all_direction_recipes_share_leading_near_alignment`（共通部）が既に固定している。
+// COM 側の焼き込みも `text_format_from_missing_definition_carries_defaults_and_recipe` が
+// 3 モードで TextFormat から読み戻して確認済み。よってここでは写像の再宣言を作らない。
 //
-// **空振りの危険と更新義務**（design.md C5 Risks の明示要求）: 字面検査はリファクタで
-// 名前や書式が変わると、赤くならないまま守備範囲だけが消える。この檻は `draw.rs` の
-// 次の名前と形に依存している——`create_text_format`／`try_create_format`／
-// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`（と `draw_metrics.rs` の `probe_format_for`）、および `cargo fmt` が保証する
+// **空振りの危険と更新義務**: 字面検査はリファクタで名前や書式が変わると、赤くならないまま
+// 守備範囲だけが消える。この檻は `draw.rs` の次の名前と形に依存している——
+// `create_text_format`／`try_create_format`／`DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`
+// （と `draw_metrics.rs` の `probe_format_for`）、および `cargo fmt` が保証する
 // トップレベル項目の列 0 閉じ括弧。**これらを改名・改形したときは、この檻も同時に
 // 更新すること。** 各檻は自分自身に陽性対照（既知の違反文字列を同じ検査関数へ通して
 // 検出できることの確認）を持たせてあり、検査関数が壊れたときは陽性対照が先に落ちる。
-//
-// 本節の要件番号はすべて spec `areka-P0-balloon-vertical-canon` のもの。`draw.rs` 本文の
-// `R4.2` 等は完了 spec `areka-P0-emo-text-layer` の番号であり別物。
 
 /// 本番ソース `draw.rs` の本文。`#[path]` で取り込まれる本テストファイルの本文は
 /// 含まれない（`include_str!` はディスク上の `draw.rs` 単体を読む）。
@@ -574,7 +568,7 @@ const DRAW_RS: &str = include_str!("draw.rs");
 
 /// ファサード `draw.rs` の**本番の子モジュール**の本文（ファイル名付き）。
 ///
-/// 分割（タスク 1.1）と実体化（タスク 6.2〜6.4）でファサードの本番コードは
+/// 分割と実体化でファサードの本番コードは
 /// 4 ファイルへ分かれた。`draw.rs` 単体だけを走査する檻は、分かれた先に同じ違反が
 /// 入っても赤くならない——`@` 前置の禁止はこの一覧の**全ファイル**を走査する。
 /// **ファサードへ本番の子を足したらここへも足すこと。**
@@ -585,8 +579,7 @@ const DRAW_FACADE_SOURCES: &[(&str, &str)] = &[
     ("draw_catalog.rs", include_str!("draw_catalog.rs")),
 ];
 
-/// 手保守の [`DRAW_FACADE_SOURCES`] が「新設したのに載せない」を塞げない穴を閉じる
-/// （タスク 9.4）。
+/// 手保守の [`DRAW_FACADE_SOURCES`] が「新設したのに載せない」を塞げない穴を閉じる。
 ///
 /// ファサード群の外延は機械で決まる——`src/draw*.rs` のうち兄弟テスト（`*_tests.rs`）と
 /// 支援（`*_test_support.rs`）を除いたものが本番ファイルである。実ファイル集合を実行時に
@@ -666,7 +659,7 @@ fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
 /// Rust の束縛パターン（`seam @ (..)`）は素の `@` なのでどちらにも当たらない＝誤検出しない。
 const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
 
-/// 家族名の 3 つ目の入口（区間ごとの `SetFontFamilyName`）を持つ本番ファイル（指摘 22）。
+/// 家族名の 3 つ目の入口（区間ごとの `SetFontFamilyName`）を持つ本番ファイル。
 /// ファサードの子ではないので [`DRAW_FACADE_SOURCES`] には足さない（足すと一致の檻が赤）。
 const DECORATION_SOURCES: &[(&str, &str)] = &[(
     "viewbox_draw_decoration.rs",
@@ -682,7 +675,7 @@ fn at_prefix_offenders<'a>(sources: &[(&'a str, &str)]) -> Vec<&'a str> {
         .collect()
 }
 
-/// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
+/// 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
 ///
 /// 走査面は `draw.rs` 単体ではなく、家族名が DirectWrite へ渡る**入口 3 つ**を持つ全ファイル
 /// ——`draw.rs` の `try_create_format`・`draw_metrics.rs` の `probe_format_for`
@@ -743,10 +736,10 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     );
 }
 
-/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前を台帳が
-/// 解いた顔」だけ——縦書き専用の差し替え先も、既定の書体での作り直し（指摘 35 で消した）も無い。
+/// DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前を台帳が
+/// 解いた顔」だけ——縦書き専用の差し替え先も、既定の書体での作り直しも無い。
 ///
-/// **家族名の入口は 3 つある**（タスク 6.4・指摘 22）。書式を作る 2 つをここで見る:
+/// **家族名の入口は 3 つある**。書式を作る 2 つをここで見る:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
 ///    束縛の顔（`FontCatalog::pick` の解決）を渡す。
@@ -785,7 +778,7 @@ fn font_family_reaches_directwrite_only_as_the_author_name() {
         !body.contains("DEFAULT_FONT_NAME"),
         "既定の書体での作り直しが戻った（指摘 35: 同じ大きさで作り直しても断られる）"
     );
-    // 既定フォント名は見た目の側の正典の別名だけ（指摘 26）——縦書き専用の差し替え先が
+    // 既定フォント名は見た目の側の正典の別名だけ——縦書き専用の差し替え先が
     // 別に埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
     // doc コメントの Yu Gothic UI 実測例も対象外＝誤検出しない。
     assert!(
@@ -834,7 +827,7 @@ fn font_family_reaches_directwrite_only_as_the_author_name() {
     );
 }
 
-/// 要件 6.2／6.3: `create_text_format` の中で書字方向が効くのは方向レシピの 1 行だけ
+/// `create_text_format` の中で書字方向が効くのは方向レシピの 1 行だけ
 /// ——フォント名の選択は writing_mode に一切依存しない。
 #[test]
 fn writing_mode_selects_only_the_direction_recipe_not_the_font_name() {
@@ -873,7 +866,7 @@ fn writing_mode_selects_only_the_direction_recipe_not_the_font_name() {
 }
 
 /// 方向レシピの工場の呼び手の内訳が「`draw.rs` に定義 1＋`create_text_format` の中の呼出 1、
-/// `draw_metrics.rs` に `probe_format_for` の中の呼出 1」のときだけ真（指摘 22 の檻の本体）。
+/// `draw_metrics.rs` に `probe_format_for` の中の呼出 1」のときだけ真。
 fn direction_recipe_sites_are_the_two_format_makers(draw: &str, metrics: &str) -> bool {
     let create = top_level_fn_source(draw, "pub fn create_text_format(");
     let probe = &metrics[metrics
@@ -891,7 +884,7 @@ fn direction_recipe_sites_are_the_two_format_makers(draw: &str, metrics: &str) -
         && count(probe, "for_mode") == 1
 }
 
-/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は書式を作る 2 か所——`draw.rs` の
+/// `DirectionRecipe::for_mode` の本番呼出は書式を作る 2 か所——`draw.rs` の
 /// `create_text_format`（束縛書式）と `draw_metrics.rs` の `probe_format_for`（計測鍵ごとの
 /// 試験用書式）——だけ。計測も描画も同じレシピを焼く構造の証跡で、呼び手が増えたら赤。
 ///
@@ -918,7 +911,7 @@ fn direction_recipe_factory_is_called_only_by_the_two_format_makers() {
     );
 }
 
-/// 要件 6.2／6.3 の観測面: バルーン定義の明示フォント名は 3 モードとも TextFormat へ
+/// 観測面: バルーン定義の明示フォント名は 3 モードとも TextFormat へ
 /// そのまま焼かれる——縦書きでも `@` は付かず、標準ゴシックへも差し替わらない。
 /// 字面檻がリファクタで空振りしても、この実 DirectWrite 読み戻しは挙動を捕まえる。
 #[test]

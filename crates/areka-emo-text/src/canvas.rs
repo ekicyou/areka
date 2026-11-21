@@ -15,24 +15,21 @@
 //! [`LayoutEngine`](crate::layout::LayoutEngine) の出力（image px 絶対座標）は
 //! [`ContentCanvas::from_layout`] が validrect 原点を差し引いて転写する。
 //!
-//! ## 住人モデル（R8.4——グリフ・画像・将来の SERIKO サーフェスを同格に）
+//! ## 住人モデル（グリフ・画像・将来の SERIKO サーフェスを同格に）
 //!
 //! 住人＝「キャンバスに置かれる変換行列付き矩形コンテンツ」。コンテンツはローカル座標
-//! （原点 0,0 の矩形）で保持し、[`RegionTransform`] がキャンバス上の位置を与える——
-//! emo-compose の surface 合成と同じ行列原則（element 配置＝D2D 変換行列・x,y 平行移動は
-//! その特例）の同型＝将来収束可能な統一形（R8.6・emo-compose は改変しない）。
+//! （原点 0,0 の矩形）で保持し、[`RegionTransform`] がキャンバス上の位置を与える。
 //! 実装のある住人はグリフ行（[`GlyphRunContent`]・1 行=1 住人）と選択肢行
-//! （[`ChoiceLineContent`]）の 2 つ・Image/Surface は型シーム（実挙動なし・R8.5——描画実行時の
+//! （[`ChoiceLineContent`]）の 2 つ・Image/Surface は型シーム（実挙動なし——描画実行時の
 //! `warn!`＋skip は COM 層 draw の領分）。
 //!
-//! ## 予約（記録のみ・実装しない・R8.3/R10.3）
+//! ## 予約（記録のみ・実装しない）
 //!
-//! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）で、
-//! 追跡先は `text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
-//! 事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が
-//! 正本。**下線は実装済み**——DirectWrite が教える下線の値から、areka が書字方向ごとに
+//! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）。
+//! 正典 2 ページで `valign` の写像が逆である事実（疑義 SC1）と areka が採る側の理由は
+//! `doc/COMPAT_ARCHITECTURE.md` の該当行が正本。**下線は実装済み**——DirectWrite が教える下線の値から、areka が書字方向ごとに
 //! 自分で線の矩形を決めて塗る（横書きは線の上端をベースラインに置き、縦書きは DirectWrite の
-//! 位置のまま回す・`underline.rs` が正本・spec `areka-P0-balloon-text-bugs` 件 3）。
+//! 位置のまま回す・`underline.rs` が正本）。
 //!
 //! 文字ごとの `\f` 装飾は per-run の見た目（[`TextLook`](crate::look::TextLook)）が担い、
 //! 行単位の [`TextEffects`] とは別の経路である。無効表示の層（`disable.font.*` の戻し先）も
@@ -41,36 +38,32 @@
 //!
 //! - [`RESERVED_EFFECT_MULTICOLOR`]／[`RESERVED_EFFECT_ROTATION`]——予約のまま
 //!   （所有仕様なし・実挙動を持たない）。
-//! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目の実体化は `text-align-shadow-canon`
-//!   が所有する。
+//! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目は未実装。
 //! - [`RESERVED_EFFECT_OUTLINE`]——白抜き。上下付き（`\f[sub]`／`\f[sup]`）とあわせて
-//!   `areka-P0-text-decoration-canon` が**語彙のみ**で受理する裁定を下した（6 値の解釈・
-//!   状態の保持・戻しへの参加までは行い、表示は変えない）。表示手段が見つかるまで予約
-//!   （追跡先＝`roadmap.md` の『予約』節の行）。
+//!   **語彙のみ**で受理する（6 値の解釈・状態の保持・戻しへの参加までは行い、表示は
+//!   変えない）。表示手段が見つかるまで予約。
 
 use crate::layout::{PositionedGlyph, PositionedLine};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
-/// 予約名: 白抜き `outline`（`areka-P0-text-decoration-canon` が語彙のみで受理する
-/// 裁定を下し、表示手段が見つかるまで予約に据え置いた・R8.3/R10.3）。
+/// 予約名: 白抜き `outline`（語彙のみで受理し、表示手段が見つかるまで予約に据え置く）。
 pub const RESERVED_EFFECT_OUTLINE: &str = "outline";
-/// 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし・R8.3/R10.3）。
+/// 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし）。
 pub const RESERVED_EFFECT_MULTICOLOR: &str = "multicolor";
-/// 予約名: シャドウ装飾 `shadow`（記録のみ・実体化の所有は
-/// `text-align-shadow-canon`・R8.3/R10.3）。
+/// 予約名: シャドウ装飾 `shadow`（記録のみ・実体化は未実装）。
 pub const RESERVED_EFFECT_SHADOW: &str = "shadow";
-/// 予約名: 回転 `rotation`（記録のみ・実装しない・R8.2/R8.3）。
+/// 予約名: 回転 `rotation`（記録のみ・実装しない）。
 pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
 
-/// 変換行列付き領域の行列（R8.1）——3x2 アフィン行列の自前表現（windows 非依存）。
+/// 変換行列付き領域の行列——3x2 アフィン行列の自前表現（windows 非依存）。
 ///
 /// 行列レイアウトは D2D `Matrix3x2` と同型の `[m11, m12, m21, m22, dx, dy]`
 /// （点の写像は `(x', y') = (m11·x + m21·y + dx, m12·x + m22·y + dy)`）。
 /// **M1 はコンストラクタが恒等（[`identity`](Self::identity)）と平行移動
-/// （[`translation`](Self::translation)）のみを生成する（R8.2）**——回転・拡縮の
+/// （[`translation`](Self::translation)）のみを生成する**——回転・拡縮の
 /// 生成口は持たない型シーム（予約名 [`RESERVED_EFFECT_ROTATION`]）。
-/// 合成・適用は一般アフィン積で計算する（emo-compose の行列原則と収束可能な統一形・R8.6）。
+/// 合成・適用は一般アフィン積で計算する。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionTransform {
     /// `[m11, m12, m21, m22, dx, dy]`（行優先・D2D Matrix3x2 同型）。
@@ -130,13 +123,13 @@ impl RegionTransform {
         self.m
     }
 
-    /// 線形成分が単位行列（＝恒等/平行移動のみ）か（M1 檻・R8.2）。
+    /// 線形成分が単位行列（＝恒等/平行移動のみ）か（M1 檻）。
     pub fn is_translation_only(&self) -> bool {
         self.m[0] == 1.0 && self.m[1] == 0.0 && self.m[2] == 0.0 && self.m[3] == 1.0
     }
 
     /// M1 不変条件の表明: 回転・拡縮成分ゼロ（コンストラクタが translation のみ生成
-    /// するため恒真——回転・拡縮の生成口を足した時に檻が破れないための `debug_assert`・R8.2）。
+    /// するため恒真——回転・拡縮の生成口を足した時に檻が破れないための `debug_assert`）。
     fn debug_assert_m1_translation_only(&self, context: &str) {
         debug_assert!(
             self.is_translation_only(),
@@ -146,10 +139,9 @@ impl RegionTransform {
     }
 }
 
-/// **行単位**の文字装飾の予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
+/// **行単位**の文字装飾の予約型シーム（実挙動なし・フィールド未使用）。
 ///
-/// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`text-align-shadow-canon`
-/// が所有）・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
+/// 予約対象: 白抜き（語彙のみ・上記）・多色・シャドウ・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
 /// [`TextLook`](crate::look::TextLook) が担うため本型には載らない。
 /// `#[non_exhaustive]` によりフィールドを足しても破壊的変更にならない。
 /// 今日は [`Default`] 生成のみ可能で、描画へ一切影響しない。
@@ -170,11 +162,11 @@ pub struct GlyphRunContent {
 }
 
 /// 選択肢住人の中身——グリフ行本体（[`GlyphRunContent`]）に選択肢セグメント・hover 状態・
-/// 解決済みハイライト塗りを付随させた住人（R1.1/R1.4）。
+/// 解決済みハイライト塗りを付随させた住人。
 ///
 /// **描画は GlyphRun と同格**: 非 hover（`highlight == None`）時は `run` を等価な
 /// [`GlyphRun`](ResidentContent::GlyphRun) 住人と**まったく同一の素描画経路**で描く
-/// （ピクセル同一・R9.5）。hover 中（`highlight == Some(..)`）は COM 層
+/// （ピクセル同一）。hover 中（`highlight == Some(..)`）は COM 層
 /// （`viewbox_draw_render.rs`）が hover セグメントへハイライト矩形を塗り、文字色を差し替える
 /// （本型はデータを保持するのみ）。
 #[derive(Clone, Debug, PartialEq)]
@@ -194,7 +186,7 @@ pub struct ChoiceLineContent {
     /// [`highlight_band_extent`](crate::choice::highlight_band_extent) が実 font metrics
     /// （`ascent + descent`）から決めた **descent 込みの帯丈**——`run.size` の em ボックス丈
     /// （`font_height`）ではない。em ボックス丈で塗ると和文フォントの descent インクが帯の外へ
-    /// 出る（実機不具合「文字の下が切れる」の真因・R3.3/4.2）。COM 層はこの単一値から
+    /// 出る（実機不具合「文字の下が切れる」の真因）。COM 層はこの単一値から
     /// ハイライト矩形とダーティ帯の両方を組み、純粋層の
     /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
     pub band_extent: f32,
@@ -206,7 +198,7 @@ pub struct ChoiceLineContent {
     /// `round(max(0, t) + max(0, 行ボックス丈 − band_extent) / 2)`（`t` は字の箱の上端の、行矩形の
     /// 上端からの量・`t = 0` のときは `highlight_band_offset` の式）で決めた値——帯を字の箱の
     /// **中央**へ置くための寄せである。近端へ揃えたままだと、行ボックス丈より短い帯が上に余りながら
-    /// 下でインクを切る（実機不具合「色反転位置が 2 ドット程上すぎる」の真因・R13.1）。
+    /// 下でインクを切る（実機不具合「色反転位置が 2 ドット程上すぎる」の真因）。
     /// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では 0 ＝ 従来と同一。
     /// COM 層はこの値をハイライト矩形の起点とダーティ帯の超過分の両方に用い、純粋層の
     /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
@@ -236,7 +228,7 @@ pub struct HighlightPaint {
     pub text: (u8, u8, u8),
 }
 
-/// `\_b` 画像住人の型シーム（実挙動なし・R8.5——fixture 実測で `\_b` 未使用）。
+/// `\_b` 画像住人の型シーム（実挙動なし——fixture 実測で `\_b` 未使用）。
 ///
 /// `#[non_exhaustive]`＝crate 外から構成不能（実挙動を持たせない構造保証）。
 /// 実装（画像読込・inline 形/x,y 形の配置・`--option=fixed` 固定層）は後続ユニットの領分。
@@ -244,48 +236,48 @@ pub struct HighlightPaint {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ImageSeam {}
 
-/// 将来の SERIKO サーフェス住人の型シーム（実挙動なし・R8.6）。
+/// 将来の SERIKO サーフェス住人の型シーム（実挙動なし）。
 ///
-/// シェル/バルーン compositor 融合・背景 SERIKO の住人化は後続 roadmap ユニットが実装する。
+/// シェル/バルーン compositor 融合・背景 SERIKO の住人化は後続の実装で扱う。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SurfaceSeam {}
 
-/// 住人コンテンツ——グリフ・画像・将来の SERIKO サーフェスを**同格**に扱う enum（R8.4）。
+/// 住人コンテンツ——グリフ・画像・将来の SERIKO サーフェスを**同格**に扱う enum。
 ///
 /// 実装のある住人は [`GlyphRun`](Self::GlyphRun) と [`Choice`](Self::Choice)。Image/Surface variant の描画実行は
-/// COM 層 draw が `warn!`＋skip する（R8.5）。`#[non_exhaustive]` により住人種の追加は
+/// COM 層 draw が `warn!`＋skip する。`#[non_exhaustive]` により住人種の追加は
 /// 破壊的変更にならない。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ResidentContent {
     /// 1 行分のグリフ列（[`PositionedLine`] 由来）。
     GlyphRun(GlyphRunContent),
-    /// 選択肢行（グリフ行本体＋選択肢セグメント・R1.1）。非 hover（`highlight == None`）時は
-    /// [`GlyphRun`](Self::GlyphRun) と**同一の素描画**（R9.5）——指紋・インク矩形・描画とも
+    /// 選択肢行（グリフ行本体＋選択肢セグメント）。非 hover（`highlight == None`）時は
+    /// [`GlyphRun`](Self::GlyphRun) と**同一の素描画**——指紋・インク矩形・描画とも
     /// 内包 `run` を GlyphRun と同格に扱う。hover 中はハイライトを塗り、指紋に hover を含める。
     Choice(ChoiceLineContent),
-    /// `\_b` 画像（型シームのみ・実挙動なし・R8.5）。
+    /// `\_b` 画像（型シームのみ・実挙動なし）。
     Image(ImageSeam),
-    /// 将来の SERIKO サーフェス（シェル/バルーン融合ユニットが実装・R8.6）。
+    /// 将来の SERIKO サーフェス（シェル/バルーン融合ユニットが実装）。
     Surface(SurfaceSeam),
 }
 
-/// 住人——キャンバスに置かれる変換行列付き矩形コンテンツ（R8.1/R8.4）。
+/// 住人——キャンバスに置かれる変換行列付き矩形コンテンツ。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Resident {
     /// コンテンツ本体（ローカル座標・原点 0,0 の矩形）。
     pub content: ResidentContent,
-    /// キャンバス上の配置変換（M1: 恒等/平行移動のみ・R8.2）。
+    /// キャンバス上の配置変換（M1: 恒等/平行移動のみ）。
     pub transform: RegionTransform,
-    /// 予約の**行単位**の文字装飾シーム（白抜き〔語彙のみ〕/多色/シャドウ/回転・R8.3）。
+    /// 予約の**行単位**の文字装飾シーム（白抜き〔語彙のみ〕/多色/シャドウ/回転）。
     pub effects: TextEffects,
 }
 
 /// バルーン内容キャンバス（validrect-local・image px 空間）。
 ///
 /// スクロール可視窓（[`VisibleWindow`](crate::layout::VisibleWindow)）は保持しない——
-/// canvas は全行を住人として持ち、可視窓の適用は COM 層 draw の領分（R7.4 の分離シーム）。
+/// canvas は全行を住人として持ち、可視窓の適用は COM 層 draw の領分（分離シーム）。
 /// 住人 index は [`LayoutEngine::layout`](crate::layout::LayoutEngine::layout) の
 /// 行 index と 1:1（`first_visible_line` がそのまま適用できる——空行も住人として保持）。
 #[derive(Clone, Debug, PartialEq)]
@@ -304,11 +296,11 @@ impl ContentCanvas {
     ///   渡されれば空のグリフ住人にする——ただし遅延意味論（newline-defer）では改行由来の
     ///   空行は layout から出力されないため実運用では現れない）。
     /// - 変換＝行矩形原点（左上）への平行移動（validrect-local へ validrect 原点を差引き・
-    ///   端数は量子化せず素通し）。恒等/平行移動のみで構成される（R8.2）。
+    /// 端数は量子化せず素通し）。恒等/平行移動のみで構成される。
     /// - グリフはローカル座標へ転写: `inline_pos` は行内開始（横書き＝rect.left・
     ///   縦書き＝rect.top）0 起点。
     ///
-    /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
+    /// 同一入力→同一出力。失敗経路なし（全入力で値を返す純関数）。
     pub fn from_layout(
         lines: &[PositionedLine],
         region: &TextRegion,
@@ -330,7 +322,7 @@ impl ContentCanvas {
                         text: g.text.clone(),
                         inline_pos: g.inline_pos - inline_origin,
                         advance: g.advance,
-                        // 装飾番号は行のグリフ列まで写す（R3.3 の配管 3 段目）。行ローカルへ
+                        // 装飾番号は行のグリフ列まで写す。行ローカルへ
                         // 移すのは行内位置だけで、番号と送り幅は配置時の値のまま。
                         style: g.style,
                     })
@@ -379,7 +371,7 @@ mod tests {
         }
     }
 
-    // ── R8.1/R8.2: RegionTransform——変換行列付き領域・M1 は恒等/平行移動のみ ──
+    // ── RegionTransform——変換行列付き領域・M1 は恒等/平行移動のみ ──
 
     /// 恒等変換: 点を変えない・平行移動成分ゼロ・行列は単位行列。
     #[test]
@@ -401,8 +393,7 @@ mod tests {
         assert_eq!(t.to_matrix(), [1.0, 0.0, 0.0, 1.0, 10.0, -4.5]);
     }
 
-    /// 合成: 平行移動同士の合成はオフセットの和・恒等は合成の単位元
-    /// （一般 3x2 アフィン積で計算する——emo-compose 行列原則と収束可能な統一形・R8.6）。
+    /// 合成: 平行移動同士の合成はオフセットの和・恒等は合成の単位元。
     #[test]
     fn region_transform_composition_accumulates_translations() {
         let a = RegionTransform::translation(3.0, 4.0);
@@ -415,7 +406,7 @@ mod tests {
         assert_eq!(RegionTransform::identity().then(&a), a);
     }
 
-    // ── R8.4/8.1: レイアウト結果→グリフ住人（1 行=1 住人・行 index 1:1・変換行列付き） ──
+    // ── レイアウト結果→グリフ住人（1 行=1 住人・行 index 1:1・変換行列付き） ──
 
     /// 横書き 2 行（折返し）: 行ごとに 1 グリフ住人が生成され、変換は行矩形原点への
     /// 平行移動・グリフは行ローカル 0 起点・effects は予約既定値。
@@ -440,7 +431,6 @@ mod tests {
         );
         assert_eq!(canvas.size, (400.0, 224.0), "canvas 寸 = validrect 寸");
 
-        // 行 0: 変換 = validrect-local の行矩形原点 (0,0)・グリフはローカル 0,10,…,40。
         let r0 = &canvas.residents[0];
         assert_eq!(r0.transform.offset(), (0.0, 0.0));
         assert_eq!(r0.effects, TextEffects::default());
@@ -454,7 +444,7 @@ mod tests {
                 .all(|g| &*g.text == "あ" && g.advance == 10.0)
         );
 
-        // 行 1: 変換 = (0, 12)（pitch 分の平行移動・font 10 + 行間 2）・ローカル 0 起点。
+        // 行送り＝font 10 + 行間 2。
         let r1 = &canvas.residents[1];
         assert_eq!(r1.transform.offset(), (0.0, 12.0));
         let run1 = glyph_run(r1);
@@ -536,9 +526,8 @@ mod tests {
         assert_eq!(glyph_run(&canvas.residents[0]).glyphs.len(), 1);
     }
 
-    /// canvas の写像自体は一般性を保つ（本番非改変の証）: 空グリフの [`PositionedLine`] を
-    /// 直接渡せば従来どおり空グリフ住人へ 1:1 で写す。遅延意味論では layout が空行を出さなく
-    /// なるだけで、写像側は空行を渡されれば空住人にする振る舞いを不変に保つ。
+    /// 空グリフの [`PositionedLine`] を直接渡せば空グリフ住人へ 1:1 で写す
+    /// （遅延意味論では layout が空行を出さないだけ）。
     #[test]
     fn from_layout_maps_empty_line_to_empty_resident() {
         let region = TextRegion::resolve(
@@ -589,13 +578,11 @@ mod tests {
     }
 
     /// ratio 付き改行の端数行送り（pitch 15 × 0.5 = 7.5）も平行移動へ端数のまま
-    /// 転写される（整数量子化しない・端数檻——tasks.md Implementation Notes）。
+    /// 転写される（整数量子化しない・端数檻）。
     ///
-    /// 行送りが `文字の大きさ + 行間 2` になったため、行送りが奇数になるのは
-    /// 文字の大きさが奇数のときだけで、そのときにしか半分の行送りに端数が出ない。
-    /// 従来の文字の大きさ 12 では行送り 14 となり `14 × 0.5 = 7.0` と整数になって、
-    /// このテストが主題にしている端数そのものが消える。そこで文字の大きさを
-    /// **13**（行送り `13 + 2 = 15`）へ導き直し、`15 × 0.5 = 7.5` の端数を保つ。
+    /// 行送りは `文字の大きさ + 行間 2` なので、半分の行送りに端数が出るのは文字の大きさが
+    /// 奇数のときだけ。12 では `14 × 0.5 = 7.0` と整数になるため、**13**（行送り 15）で
+    /// `15 × 0.5 = 7.5` の端数を保つ。
     #[test]
     fn fractional_line_feed_survives_in_translation() {
         let region = TextRegion::resolve(

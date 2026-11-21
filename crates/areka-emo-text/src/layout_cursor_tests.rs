@@ -7,7 +7,7 @@ use log_capture_kit::count_levels;
 
 // ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発） ──
 //
-// 両軸省略の完全 no-op（行を分けない）は `layout_cursor_wiring_tests.rs` の H6 が持つ。
+// 両軸省略の完全 no-op（行を分けない）は `layout_cursor_wiring_tests.rs` のテストが持つ。
 // 解決そのもの（基点＋値×係数・縮退の分類）の純関数テストは解決層の兄弟ファイル
 // （`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`）が持つ。本ファイルが見るのは
 // **配線**だけである——到着時の解決をどう保留し、いつ実体化し、行をどう分割するか。
@@ -15,7 +15,7 @@ use log_capture_kit::count_levels;
 // 共通前提は既存 layout テストと同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 12＝10 + 行間 2）。
 // origin(0,0)・wordwrappoint None ゆえ文字描画開始点は (0, 0)・折返し閾値＝画像右辺 400。
 
-/// 絶対 Px の `\_l` は現在行を確定し（`\_l` は行区切り・RN-3）、指定軸で次グリフの
+/// 絶対 Px の `\_l` は現在行を確定し（`\_l` は行区切り）、指定軸で次グリフの
 /// inline/block を上書きする。`[あ, あ, \_l[100px,50px], あ]` → 行 0=[0,10]・
 /// 3 個目が (inline 100, block 50) の行 1 頭へ載る。
 #[test]
@@ -100,7 +100,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
     );
 }
 
-/// 後続可視グリフの無い末尾 `\_l` は保留のまま蒸発する（完了仕様 `areka-P0-newline-defer` R5.2／5.3 と同一規則）。
+/// 後続可視グリフの無い末尾 `\_l` は保留のまま蒸発する（改行の遅延と同一規則）。
 /// `[あ, \_l[100,50]]` → 1 行 [あ@0]（`\_l` は行を開かず・位置も動かさない）。
 #[test]
 fn trailing_cursor_move_evaporates() {
@@ -183,7 +183,7 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
 }
 
 /// 保留改行なしの単軸 `\_l` は指定軸のみ上書きし、省略軸は走査中の実行位置のまま据え置く
-/// （軸別に独立・R1.2/1.6）。y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)の
+/// （軸別に独立）。y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)の
 /// まま（リセットされない）。x のみ `\_l[10px,]` の側は `layout_cursor_wiring_tests.rs` の
 /// `line_count_splits_only_when_a_move_succeeds` が同じ値で見る。
 #[test]
@@ -220,7 +220,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 }
 
 /// 保留改行と単軸 `\_l` が同一フラッシュに混在するとき、上書き軸はカーソル値・省略軸は改行進行値を
-/// 取る（all-or-nothing でなく per-axis 合成の証左・R1.2/1.6）。font 10・pitch 12:
+/// 取る（all-or-nothing でなく per-axis 合成の証左）。font 10・pitch 12:
 /// - x のみ `\_l[10px,]`＋`\n(1.0)`: inline=カーソル 10・block=改行進行 12。
 /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
 #[test]
@@ -293,16 +293,13 @@ fn cursor_and_pending_newline_compose_per_axis() {
     );
 }
 
-/// **正典値（4.1 の語彙解禁による）**: かつて両軸とも縮退していた形（負値絶対＋`%`）が、
-/// いまは両軸とも実導出される（縮退表「負値絶対＝実導出」「`%`＝実導出」の行・R5.2）。
+/// **正典値**: 負値絶対と `%` は両軸とも実導出される（縮退表「負値絶対＝実導出」「`%`＝実導出」の行）。
 ///
 /// `[あ, \_l[-1px, 50%], あ]`（origin (0,0)・font 10）:
 /// - x = 文字描画開始点(0) + (−1) = −1（文字描画範囲 0〜400 の左外＝字義どおり・寄せない）
 /// - y = 文字描画開始点(0) + 50 × (10/100) = 5
 ///
 /// 移動が成立するので `\_l` は行の分割点になり、行は 1 → 2 本へ増える。
-/// 書き換え前の現行値は「両軸とも縮退＝完全 no-op ゆえ 1 行 [あ@0, あ@10]」だった。
-/// **原点の切替（1.2）に由来する差分ではない**——横書きの原点は切替の前後とも (0, 0) である。
 #[test]
 fn cursor_negative_and_percent_axes_now_resolve_literally() {
     let region = zero_origin_region();
@@ -347,16 +344,15 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
     );
 }
 
-// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（guard つきの配置・R5.3） ──
+// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（guard つきの配置） ──
 
 /// `\_l` の 2 縮退分岐（解釈不能／中央指定の軸取り違え）はキャラクターごと・分岐ごとに
-/// 厳密 1 回だけ `warn!` する（R5.3）。同一キャラクターの再訪では追加警告なし、別キャラクターでは
+/// 厳密 1 回だけ `warn!` する。同一キャラクターの再訪では追加警告なし、別キャラクターでは
 /// 再び全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
 /// （Omitted は正常形で無音）とし、後続グリフで CursorMove を確実に処理させる。
 ///
-/// **分岐は 4 → 2 へ減り、のちに 3 になった**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退
-/// ではなく実導出へ移ったので、ここで見るのは「解釈不能」と「中央指定の軸取り違え」の 2 行
-/// （design.md 縮退表・R5.2）。3 つ目の「有限でない」は
+/// 縮退の分岐のうち、ここで見るのは「解釈不能」と「中央指定の軸取り違え」の 2 つ（負値絶対・`%`・`@` 相対は
+/// 縮退ではなく実導出）。3 つ目の「有限でない」は
 /// `layout_cursor_wiring_tests.rs` の `non_finite_cursor_resolution_keeps_lines_finite_with_one_warn` が見る。
 #[test]
 fn cursor_degrade_warns_once_per_actor_per_branch() {
@@ -421,7 +417,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
 }
 
 /// `Omitted`（軸省略）・実導出成功（Px・`%`・`@` 相対・正しい軸の centerx/centery）は縮退でなく
-/// 無音（warn しない・R5.5/5.2）。`\_l[5px, ]`・`\_l[50%,@5]`・`\_l[centerx,centery]`・
+/// 無音（warn しない）。`\_l[5px, ]`・`\_l[50%,@5]`・`\_l[centerx,centery]`・
 /// `\_l[,]`（両省略）はいずれも警告 0。
 #[test]
 fn cursor_omitted_and_valid_axes_do_not_warn() {
@@ -465,25 +461,24 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
     );
 }
 
-// ── 実効位置（`@` の基点）と保留の軸ごと合成（タスク 4.2・design 5 段手順の 1 段目/5 段目） ──
+// ── 実効位置（`@` の基点）と保留の軸ごと合成 ──
 
-/// **正典値（4.2 の軸ごと合成による）**: 文字を挟まずに連続する `\_l` の保留は
-/// **軸ごとに合成**され、後の指定が動かさなかった軸は先の値を保つ（検証表 H2）。
+/// **正典値**: 文字を挟まずに連続する `\_l` の保留は
+/// **軸ごとに合成**され、後の指定が動かさなかった軸は先の値を保つ。
 ///
 /// `[\_l[10,], \_l[,20], あ]`（origin (0,0)）: 先の指定が X=10 を保留し、後の指定は
 /// Y=20 だけを動かす（X は省略＝「移動しない」＝正典の正常形）。合成後の保留は
 /// (X=10, Y=20) で、次のグリフは (10, 20) へ載る。
 ///
-/// 書き換え前の現行値は X=0（＝行頭 `inline_start`）だった——後の `\_l` が保留を
-/// **丸ごと上書き**していたため、先の `\_l` が動かした X が失われていた。正典
-/// 「省略＝移動しない」は「先に保留された値を捨てる」ことまでは意味しない（R1.2/1.6/3.5）。
+/// 後の `\_l` が保留を**丸ごと上書き**すると先の `\_l` が動かした X が失われる。正典
+/// 「省略＝移動しない」は「先に保留された値を捨てる」ことまでは意味しない。
 ///
 /// 併せて、両軸とも移動が成立しない `\_l[,]` が**既存の保留を消さない**ことを固定する
-/// （R5.4/6.2・縮退表「両軸省略／両軸縮退＝完全無効果」は「保留を変えない」を含む）。
+/// （縮退表「両軸省略／両軸縮退＝完全無効果」は「保留を変えない」を含む）。
 #[test]
 fn consecutive_cursor_moves_compose_pending_per_axis() {
     let region = zero_origin_region();
-    // H2: `\\_l[10,]\\_l[,20]あ` → (10, 20)。
+    // `\\_l[10,]\\_l[,20]あ` → (10, 20)。
     let items = [
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
@@ -519,7 +514,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
     );
     assert_eq!(lines[0].rect.top, 20.0, "後の `\\_l` の Y=20 が保留へ入る");
 
-    // 両軸とも成立しない `\\_l[,]` は既存の保留を消さない（R5.4/6.2）。
+    // 両軸とも成立しない `\\_l[,]` は既存の保留を消さない。
     let kept = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -563,9 +558,9 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
     );
 }
 
-/// **正典値（4.2 の実効位置による）**: `@` 相対の基点は、走査位置に**保留中の改行と
+/// **正典値**: `@` 相対の基点は、走査位置に**保留中の改行と
 /// 保留中のカーソルをフラッシュと同じ順で仮適用した**「次の文字が置かれる位置」である
-/// （検証表 H3・R3.1/3.5）。仮適用は読み取りだけで、走査ローカル状態を書き換えない。
+/// 仮適用は読み取りだけで、走査ローカル状態を書き換えない。
 ///
 /// - `[あ, \_l[@0,@0], あ]`: 保留なし＝実効位置は走査位置そのもの (10, 0)。`@0` は
 ///   そこへ据え置く＝2 個目が 1 個目に続けて置かれる。

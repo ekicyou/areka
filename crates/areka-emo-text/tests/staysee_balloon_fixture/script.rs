@@ -1,47 +1,29 @@
 //! 選択肢と遅延座標指定の位置を固定する。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.6**・設計 **C2** の H 行・
-//! Data Models「Domain Model」）。
-//!
-//! ## ここで固定するもの
-//!
-//! 台本 `\_l[60,42]本文\n\q[はい,yes]\n\q[いいえ,no]` を、本番と同じ 4 段
-//! （`areka_parsers::sakura::parse` → `areka_sakura::compile` →
-//! [`TextLayerState::apply_cue`] → [`LayoutEngine::layout`]）で検体の描画範囲へ流し、
+//! 台本 `\_l[60,42]本文\n\q[はい,yes]\n\q[いいえ,no]` を、本番と同じ 4 段（`areka_parsers::sakura::parse` →
+//! `areka_sakura::compile` → [`TextLayerState::apply_cue`] → [`LayoutEngine::layout`]）で検体の描画範囲へ流し、
 //!
 //! - `\_l` の直後のグリフの左上が、描画開始点 (22,20) からの相対 (60,42) ＝ **(82,62)** に置かれること、
-//! - 選択肢 2 行のグリフ矩形と、hover の強調帯（[`highlight_band_extent`] が決める丈）が
-//!   すべて描画範囲 `[22,309]×[20,158]` の内側に収まること、
+//! - 選択肢 2 行のグリフ矩形と、hover の強調帯（[`highlight_band_extent`] が決める丈）がすべて描画範囲 `[22,309]×[20,158]` の内側に収まること、
 //! - 選択肢の見た目（[`ResolvedChoiceStyle`]）が検体の `cursor.*` の宣言から実際に導かれること
 //!
 //! を固定する。経路は既存の `kero_menu_capacity_test.rs` と同じで、検体だけが違う。
 //!
-//! ## 「選択肢の目印」は現状 hover の強調帯である
+//! areka が選択肢に与える目印は hover 時の帯（塗り色＋文字色）で、独立した目印の画像はまだ持たない（`choice-marker-styling` が受け持つ）。
+//! ゆえに「選択肢の目印が `validrect` の内側」は帯の矩形の内包として観測する。帯とクリックを受ける矩形は同じ 1 つの導出
+//! （[`line_bands`] → [`derive_hit_rows`]）から出るので、ここで測った矩形はそのまま描画される帯の矩形でもある。
 //!
-//! areka が選択肢に与える目印は hover 時の帯（塗り色＋文字色）であり、独立した目印の画像は
-//! まだ持たない（`choice-marker-styling` が受け持つ）。ゆえに要件 3.6 の
-//! 「選択肢の目印が `validrect` の内側」は、帯の矩形の内包として観測する。帯とクリックを
-//! 受ける矩形は同じ 1 つの導出（[`line_bands`] → [`derive_hit_rows`]）から出るので、
-//! ここで測った矩形はそのまま描画される帯の矩形でもある。
+//! 空振りで緑にならないための備え:
 //!
-//! ## 空振りで緑にならないための備え
+//! - 「すべて内側」はグリフが 0 個でも真になるので、行数・グリフ総数・選択肢の本数・帯の本数を先に固定してから内包を言う。
+//! - 帯の丈が 0 でも内包は真になるので、帯の丈と寄せ量を実寸で固定してから内包を言う。
+//! - 遅延座標指定の位置は、値の違う 2 本の台本を同じ経路へ流して指定どおりに動くことを対にして言う（[`CURSOR_CASES`]）。
+//!   1 本だけなら「常にこの位置へ置く実装」でも緑になる。
+//! - 選択肢の見た目は、`cursor.style` を別の値に宣言した定義で別の見た目が導かれることを対照として並べる
+//!   （[`choice_style_follows_the_cursor_style_declaration`]）。検体のファイルは読むだけで、差し替えるのは読み込んだ文字列の写し
+//!   （`wrapping.rs` の下辺の対照と同じ手法）。
 //!
-//! - 「すべて内側」はグリフが 0 個でも真になる。行数・グリフ総数・選択肢の本数・帯の本数を
-//!   **先に**固定してから内包を言う。
-//! - 帯の丈が 0 でも内包は真になる。帯の丈と寄せ量を**実寸で**固定してから内包を言う。
-//! - 遅延座標指定の位置は、値の違う 2 本の台本を同じ経路へ流して**指定どおりに動く**ことを
-//!   対にして言う（[`CURSOR_CASES`]）。1 本だけなら「常にこの位置へ置く実装」でも緑になる。
-//! - 選択肢の見た目は、`cursor.style` を別の値に宣言した定義で**別の見た目が導かれる**ことを
-//!   対照として並べる（[`choice_style_follows_the_cursor_style_declaration`]）。検体の
-//!   ファイルは読むだけで 1 バイトも変えず、差し替えるのは読み込んだ文字列の写しである
-//!   （要件 2.2・`wrapping.rs` の下辺の対照と同じ手法）。
-//!
-//! ## 決定論
-//!
-//! ファイル読み込み・純粋層の解決・DirectWrite の計測のみ。実 GPU・実窓・実ゴーストを
-//! 要さず、同一入力に対して常に同一の結果を返す。既定書体が無い環境では
+//! ファイル読み込み・純粋層の解決・DirectWrite の計測のみで、実 GPU・実窓・実ゴーストは要さない。既定書体が無い環境では
 //! [`super::region`] の寸法の門が先に赤で止まる。
 
 use areka_emo_text::actor::ResolvedBalloonText;
@@ -64,11 +46,11 @@ use crate::support::fixture::{
     self, assert_rect_inside, balloon_metrics, command_cues, glyph_count, lay_out,
 };
 
-// ── 流し込む台本（設計 C2 の H 行）──────────────────────────────────────────
+// ── 流し込む台本──────────────────────────────────────────
 
 /// 遅延座標指定の値だけが違う 2 本の台本と、その値。
 ///
-/// 1 本目が設計 H 行の台本そのもの。2 本目は指定の値を変えた対で、
+/// 1 本目が台本そのもの。2 本目は指定の値を変えた対で、
 /// 「指定どおりに動く」ことを言うために置く（1 本だけでは位置を決め打ちした実装でも緑になる）。
 const CURSOR_CASES: [(&str, f32, f32); 2] = [
     (
@@ -83,7 +65,7 @@ const CURSOR_CASES: [(&str, f32, f32); 2] = [
     ),
 ];
 
-/// 設計 H 行の台本（[`CURSOR_CASES`] の 1 本目）。
+/// [`CURSOR_CASES`] の 1 本目の台本。
 const SCRIPT: &str = CURSOR_CASES[0].0;
 
 /// 台本が載せる選択肢（配送順に `(ID, 表示文字列, 文字数)`）。
@@ -148,11 +130,11 @@ fn line_text(line: &PositionedLine) -> String {
     line.glyphs.iter().map(|g| &*g.text).collect()
 }
 
-// ── 遅延座標指定の着地（設計 C2 の H 行・要件 3.6）────────────────────────────
+// ── 遅延座標指定の着地────────────────────────────
 
 /// `\_l[x,y]` の直後のグリフの左上が、描画開始点からの相対 (x,y) に置かれる。
 ///
-/// 検体の描画開始点は (22,20) なので、設計 H 行の `\_l[60,42]` なら (82,62) である。
+/// 検体の描画開始点は (22,20) なので、`\_l[60,42]` なら (82,62) である。
 /// 値の違う 2 本目（`\_l[100,14]` → (122,34)）を同じ経路へ流し、**指定どおりに動く**ことを
 /// 対にして言う（1 本だけなら位置を決め打ちした実装でも緑になる）。
 #[test]
@@ -231,7 +213,7 @@ fn the_rows_after_the_cursor_tag_advance_by_the_canonical_line_pitch() {
     }
 }
 
-// ── 選択肢のグリフと強調帯の内包（設計 C2 の H 行・要件 3.6）──────────────────
+// ── 選択肢のグリフと強調帯の内包──────────────────
 
 /// 台本が載せた選択肢が、配送順・ID・表示文字列・文字数のとおりに記録される。
 ///
@@ -355,7 +337,6 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
 
     for (n, row) in rows.iter().enumerate() {
         let (_, label, len) = EXPECTED_CHOICES[n];
-        // 選択肢の行は本文の行の次から順に 1 行ずつ。
         let line = &placed.lines[n + 1];
         assert_eq!(
             line_text(line),
@@ -364,7 +345,6 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
             n + 2,
             line_text(line)
         );
-        // canvas 局所座標から絶対 image px へ戻す（原点は描画範囲の左上）。
         let abs = (
             row.rect.left + region.left(),
             row.rect.top + region.top(),
@@ -424,7 +404,7 @@ fn assert_containment(where_: &str, rect: (f32, f32, f32, f32), bottom: f32) {
     );
 }
 
-// ── 選択肢の見た目は宣言から導かれる（設計 C2 の H 行・要件 3.6）───────────────
+// ── 選択肢の見た目は宣言から導かれる───────────────
 
 /// 検体の `cursor.style,square` から、四角い塗りの見た目が**色ごと**導かれる。
 ///
@@ -459,7 +439,7 @@ fn the_choice_style_is_derived_from_the_cursor_declaration() {
 /// [`the_choice_style_is_derived_from_the_cursor_declaration`] の比較が
 /// 「どんな定義でも同じ既定を返す」実装でも緑になるものではないことの対照である。
 /// 検体の `descript.txt` は読むだけで、差し替えるのは読み込んだ**文字列の写し**であり、
-/// 差し替えが当たったことをその場で確かめる（要件 2.2）。
+/// 差し替えが当たったことをその場で確かめる。
 #[test]
 fn choice_style_follows_the_cursor_style_declaration() {
     const DECLARED: &str = "cursor.style,square";

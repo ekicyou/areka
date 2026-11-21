@@ -1,13 +1,7 @@
 //! # areka-emo-text — emo ⑥ render engine テキスト層
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-//!
-//! **crate↔spec 名マッピング**: 本 crate `areka-emo-text` の spec/feature 名は
-//! `areka-P0-emo-text-layer`（emo トラック第4の独立 crate・atlas/compose/present の
-//! 単一トークン命名に倣う）。
-//!
 //! sakura が発火する Balloon 向け `TalkCue`（Text/NewLine/Clear）を受け、emo-present が
-//! 予約したバルーン上のスロット（`emo-text-layer-slot`）に文字を実際に描く層である。
+//! 予約したバルーン上のスロットに文字を実際に描く層である。
 //!
 //! ## 層規律（一方向・レビューエラー基準）
 //!
@@ -22,24 +16,15 @@
 //!    触る唯一の場所。UI スレッド専有。
 //! 3. **結線層**（[`sink`]／[`actor`]）——sakura からの cue 受信と UI 配送・フレーム提示。
 //!
-//! 上の 3 つはいずれも**親ファイルの名前**であって、走査面ではない。親は `#[path]` で
-//! 子モジュールを抱えており（`draw` は `draw_metrics`／`draw_line_store`／`draw_catalog`、
-//! `layout` は `layout_line_ops`／`layout_styled`／`layout_scan`（その子 `layout_scan_glyph`）、
-//! `state` は `state_decoration`／`state_route`／`state_anchor`、`viewbox` は `viewbox_diff`、
-//! `viewbox_draw` は `viewbox_draw_plan`／`viewbox_draw_decoration`／`viewbox_draw_render`／
-//! `viewbox_draw_underline`、`surface` は `surface_window_child`、`actor` は
-//! `actor_decoration`／`actor_attach`／`actor_box`／`actor_present`／`actor_scroll`／
-//! `marker_surface`）、子は親と同じ層に属する（`marker_surface` は印の面を作るので
-//! `windows` も触る）。**層規律を実際に見張る走査面は
-//! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧**（本ファイル末尾の
-//! `#[cfg(test)] mod tests` 内）で、その和が `src/*.rs` の実ファイル集合と
-//! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
-//! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
-//! `PURE_SOURCES` には純粋層のほか、結線層のうち `windows` を触らないファイル
-//! （例: `actor_attach`／`actor_present`／`actor_scroll` と、`windows` を触らない兄弟テスト）も載る。
-//! 走査が禁じるのは `windows` 系 crate と `wintf::com`（DirectWrite・D2D・DXGI の包み・
-//! `use wintf::{com::…}` のまとめた形も字 `com::` で拾う）で、
-//! `wintf::ecs` の資源（`GraphicsCore`／`WucGraphicsResource` など）を取り込むのは許す。
+//! 上の 3 つは親ファイルの名前であって、走査面ではない。親は `#[path]` で子モジュールを
+//! 抱え（`layout` は `layout_line_ops`／`layout_styled`／`layout_scan` など）、子は親と同じ層に
+//! 属する（`marker_surface` は印の面を作るので `windows` も触る）。層規律を実際に見張る走査面は
+//! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧（`mod tests` 内）で、
+//! その和が `src/*.rs` の実ファイル集合と一致することを
+//! `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる。
+//! `PURE_SOURCES` には結線層のうち `windows` を触らないファイルも載る。
+//! 走査が禁じるのは `windows` 系 crate と `wintf::com`（`use wintf::{com::…}` の
+//! まとめた形も字 `com::` で拾う）で、`wintf::ecs` の資源を取り込むのは許す。
 //!
 //! ## 依存方向（強制）
 //!
@@ -78,10 +63,7 @@ pub mod viewbox_draw;
 pub mod wrap;
 pub mod writing;
 
-/// 本 crate の共通エラー型（design.md「Error Handling」正本）。
-///
-/// log-first 規律: 失敗は `tracing::error!`（真因文脈付き）＋本型の `Err` 戻り値で扱う。
-/// panic は用いない。縮退可能な失敗は `warn!`＋縮退継続。
+/// 本 crate の共通エラー型（失敗のログ規律はモジュール doc を参照）。
 #[derive(Debug, thiserror::Error)]
 pub enum TextLayerError {
     /// D2D/DXGI/DWrite などデバイス呼び出しの失敗
@@ -102,29 +84,23 @@ pub enum TextLayerError {
     },
 }
 
-/// budouy 依存導入の spike（`areka-P0-budoux-newline` Req 1.2/8.1）。
+/// budouy の実 API の形を固定する検査。
 ///
-/// budouy の**実 API 実形**をコンパイラで確定し、以降の `segment.rs` 本実装
-/// と Parser キャッシュ機構の判断根拠を回帰檻として固定する。
-/// 代表和文の実境界ピン（決定論・無損失）も兼ねる。
-///
-/// spike で確定した事実:
-/// - ローダ: `budouy::model::load_default_japanese_parser() -> budouy::Parser`（**infallible**・
-///   Result ではない・`vendored-models` 同梱データのロードのみ＝ネットワーク/ファイル I/O なし）。
-/// - セグメント呼び出し: `Parser::parse(&self, &str) -> Vec<String>`（**所有** String の
-///   チャンク列。docs.rs 表示および `areka-P0-budoux-newline` design.md の `Vec<&str>` 想定は誤り——実 API は owned
-///   String を返す。glyph-index 写像はこの owned チャンクのバイト長で `segment::assign_items_to_chunks`）。
-/// - `budouy::Parser` は `Sync + Send`（下の `assert_sync`/`assert_send` がコンパイルで証明）
-///   → キャッシュ機構は `static PARSER: OnceLock<budouy::Parser>` を採用可能
-///   （`thread_local!` への退避は不要）。
+/// - ローダ `budouy::model::load_default_japanese_parser()` は infallible で、
+///   `vendored-models` 同梱データのロードのみ（ネットワーク／ファイル I/O なし）。
+/// - `Parser::parse(&self, &str)` は所有 `String` のチャンク列を返す（docs.rs 表示の
+///   `Vec<&str>` は誤り）。glyph-index への写像はこのチャンクのバイト長で
+///   `segment::assign_items_to_chunks` が行う。
+/// - `budouy::Parser` は `Sync + Send` なので `static PARSER: OnceLock<budouy::Parser>` で
+///   キャッシュできる。
 #[cfg(test)]
 mod budouy_spike {
     /// コンパイル時 trait 証明: `Sync` なら `OnceLock<budouy::Parser>` static が組める。
     fn assert_sync<T: Sync>() {}
-    /// コンパイル時 trait 証明: `Send`（アクター跨ぎ／将来の move の余地）。
+    /// コンパイル時 trait 証明: `Send`（アクター跨ぎ）。
     fn assert_send<T: Send>() {}
 
-    /// budouy Parser は Sync + Send（→ `OnceLock` キャッシュ採用の根拠）。
+    /// budouy Parser は Sync + Send（`OnceLock` キャッシュの前提）。
     #[test]
     fn parser_is_sync_and_send() {
         assert_sync::<budouy::Parser>();
@@ -132,30 +108,26 @@ mod budouy_spike {
     }
 
     /// vendored-models の既定日本語 parser が I/O なしでロードでき、
-    /// 代表和文を無損失に 2 つ以上の塊へ分かち書きする（`areka-P0-budoux-newline` Req 8.1: オフライン）。
+    /// 代表和文を無損失に 2 つ以上の塊へ分かち書きする（オフライン）。
     #[test]
     fn default_japanese_parser_segments_losslessly() {
-        // infallible ロード（Result ではない・同梱データのロードのみ）。
         let parser = budouy::model::load_default_japanese_parser();
 
         let sentence = "今日はいい天気ですね";
 
-        // parse -> Vec<String>（**所有** String のチャンク列。docs.rs/design 想定の
-        // `Vec<&str>` は誤りで、実 API は owned String を返す——glyph-index の写像は
-        // この owned チャンクのバイト長で `segment::assign_items_to_chunks` が行う）。
         let first: Vec<String> = parser.parse(sentence);
 
-        // 無損失: チャンクの連結は原文字列と一致（segment.rs の写像不変条件の前提）。
+        // 無損失: チャンクの連結は原文字列と一致（segment.rs の写像の前提）。
         let joined: String = first.concat();
         assert_eq!(joined, sentence, "チャンク連結が原文と不一致（損失あり）");
 
-        // 実際に 2 つ以上の塊へ分かれる代表文であることをピン（`areka-P0-budoux-newline` のタスク 1: 分かち書きの境界が実際に出る）。
+        // 代表文が実際に 2 つ以上の塊へ分かれる。
         assert!(
             first.len() >= 2,
             "代表和文が単一塊に潰れている（分かち書きが機能していない）: {first:?}"
         );
 
-        // 各チャンクは非空（空 run/空塊を生まない前提）。
+        // 各チャンクは非空（空塊を生まない前提）。
         assert!(
             first.iter().all(|c| !c.is_empty()),
             "空チャンクが含まれる: {first:?}"
@@ -292,7 +264,6 @@ mod tests {
         ("viewbox_diff.rs", include_str!("viewbox_diff.rs")),
         ("wrap.rs", include_str!("wrap.rs")),
         // 装飾・先渡し・行の組み立て・描画の計画の純粋モジュールとその兄弟テスト／支援
-        // （areka-P0-text-decoration-canon ほか）
         // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
         ("color.rs", include_str!("color.rs")),
         ("color_tests.rs", include_str!("color_tests.rs")),
@@ -413,13 +384,13 @@ mod tests {
             "state_test_support.rs",
             include_str!("state_test_support.rs"),
         ),
-        // areka-P0-anchor-tag-canon のアンカーの範囲（記録とその檻）。
+        // アンカーの範囲（記録とその檻）。
         ("state_anchor.rs", include_str!("state_anchor.rs")),
         (
             "state_anchor_tests.rs",
             include_str!("state_anchor_tests.rs"),
         ),
-        // script-small-tags の印の目印の字を積む檻（純粋）。
+        // 印の目印の字を積む檻（純粋）。
         (
             "state_marker_tests.rs",
             include_str!("state_marker_tests.rs"),
@@ -428,35 +399,32 @@ mod tests {
             "choice_anchor_tests.rs",
             include_str!("choice_anchor_tests.rs"),
         ),
-        // areka-P0-balloon-text-bugs 件 3 の下線の幾何（純粋）。
+        // 下線の幾何（純粋）。
         ("underline.rs", include_str!("underline.rs")),
-        // script-small-tags の行の中の印の目印の字と形の計算（純粋）。
+        // 行の中の印の目印の字と形の計算（純粋）。
         ("inline_marker.rs", include_str!("inline_marker.rs")),
         (
             "inline_marker_tests.rs",
             include_str!("inline_marker_tests.rs"),
         ),
         ("underline_tests.rs", include_str!("underline_tests.rs")),
-        // balloon-scroll-arrows の手動の位置と送りの規則（純粋）。
+        // 手動の位置と送りの規則（純粋）。
         ("scroll_marker.rs", include_str!("scroll_marker.rs")),
         (
             "scroll_marker_tests.rs",
             include_str!("scroll_marker_tests.rs"),
         ),
-        // balloon-scroll-arrows の手動の送りの公開の口。
+        // 手動の送りの公開の口。
         ("actor_scroll.rs", include_str!("actor_scroll.rs")),
         (
             "actor_scroll_tests.rs",
             include_str!("actor_scroll_tests.rs"),
         ),
     ];
-    /// 純粋層の走査面へ**載せない**ファイルの明示。
-    ///
-    /// ここに載るのは COM 層・結線層のモジュールとその兄弟テスト／支援である。
-    /// ここへ置くことは「純粋層でない」の宣言ではなく「この検査では走査しない」の明示で、
-    /// この一覧は新設ファイルが黙って走査面から外れることを防ぐためにある
-    /// （[`every_source_file_is_either_scanned_or_explicitly_excluded`] が和を実ファイル
-    /// 集合と突き合わせるので、どちらかへの明示的な編集が必ず要る）。
+    /// 純粋層の走査面へ載せないファイルの明示（COM 層・結線層のモジュールとその兄弟テスト／支援）。
+    /// 「純粋層でない」の宣言ではなく「この検査では走査しない」の明示で、
+    /// [`every_source_file_is_either_scanned_or_explicitly_excluded`] が和を実ファイル集合と
+    /// 突き合わせるので、新設ファイルはどちらかの一覧への編集が必ず要る。
     const SOURCES_OUTSIDE_THE_PURE_SCAN: &[&str] = &[
         "actor.rs",
         "actor_box.rs",
@@ -524,13 +492,11 @@ mod tests {
         "viewbox_draw_vertical_band_scroll_tests.rs",
     ];
 
-    /// 層規律の構造檻: [`PURE_SOURCES`] のソースに `windows` 系 crate と `wintf::com` への
-    /// 依存（import／パス参照）が一切無いことを検証する（`wintf::ecs` の資源は許す）。
-    /// （design.md「依存方向（強制）」——純粋層に `windows` の import が現れたらレビューエラー）
+    /// [`PURE_SOURCES`] のソースに `windows` 系 crate と `wintf::com` への依存
+    /// （import／パス参照）が一切無いことを検証する（`wintf::ecs` の資源は許す）。
     #[test]
     fn pure_layer_modules_have_no_windows_imports() {
-        // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
-        // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
+        // 走査面が痩せても述語は緑のままなので、母数を固定して「黙って減る」経路を塞ぐ。
         assert_eq!(PURE_SOURCES.len(), 90, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
@@ -551,12 +517,9 @@ mod tests {
             }
         }
     }
-    /// 手保守の静的な列挙が「新設したのに載せない」を塞げない穴を閉じる。
-    ///
-    /// [`PURE_SOURCES`] も [`SOURCES_OUTSIDE_THE_PURE_SCAN`] も人が書く一覧なので、
-    /// 新しい兄弟ファイルを足しただけでは走査面が広がらず、層規律の字面検査は黙って
-    /// 素通りする（`PURE_SOURCES.len()` の母数固定は「黙って減る」しか塞げない）。
-    /// `src/*.rs` の**実ファイル集合**を実行時に読み、2 つの一覧の和と突き合わせる。
+    /// 新設ファイルが走査面から黙って外れないよう、`src/*.rs` の実ファイル集合を実行時に読み、
+    /// [`PURE_SOURCES`] と [`SOURCES_OUTSIDE_THE_PURE_SCAN`] の和と突き合わせる
+    /// （母数固定は「黙って減る」しか塞げない）。
     #[test]
     fn every_source_file_is_either_scanned_or_explicitly_excluded() {
         use std::collections::BTreeSet;

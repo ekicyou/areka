@@ -2,54 +2,42 @@
 //!
 //! 守っているもの——縦書きバルーンの座標解決が SSP 正典（2.8.83）と**既に一致している**
 //! という事実を、「たまたま合っている」から「検証された一致」へ変える。対象は
-//! [`TextRegion::resolve`] の 1 関数だけであり、**本番コードは 1 行も変えない**
-//! （本仕様 `areka-P0-balloon-vertical-canon` の設計 C4「コード変更は 0」）。
+//! [`TextRegion::resolve`] の 1 関数だけで、本番コードは変えない。
 //!
 //! 逐語で固定するのは次の 4 点である。
 //!
 //! 1. **`wordwrappoint.y` の既定＝`validrect.bottom`**——縦書きで `wordwrappoint.y` が
-//!    宣言されていないとき、折返し閾値は解決後の `validrect.bottom` と一致する
-//!    （本仕様の要件 3.4）。`wordwrappoint.x` が宣言されていても既定は変わらない。
+//!    宣言されていないとき、折返し閾値は解決後の `validrect.bottom` と一致する。
+//!    `wordwrappoint.x` が宣言されていても既定は変わらない。
 //! 2. **`wordwrappoint.y` の負値＝ベース画像の下辺基準**——負値は
 //!    `resolve_coord(v, extent) = extent + v` の既存規約（ukadoc 脚注 *1）で解決され、
-//!    その規約は横書きの `wordwrappoint.x` と同一である（本仕様の要件 3.4・3.7）。
-//! 3. **`wordwrappoint.x` は縦書きで参照されない**（本仕様の要件 3.5・C4 の主眼）——
-//!    縦書きの折返し軸選択は `wordwrappoint.y` のみを読む網羅 match であり、
-//!    `wordwrappoint.x` の**不参照は型で保証されている**。その保証は読んでも見えないため、
-//!    「同じバルーン定義から `wordwrappoint.x` だけを変えた複数のモデルが、縦書き 2 モードで
-//!    `TextRegion` の全成分において逐語一致する」という**差分不変の檻**へ翻訳する。
-//!    差分が本物であること（檻が恒真でないこと）は、同じ変化が横書きでは
-//!    `wrap_threshold` を実際に動かすことを対照として示す。
-//! 4. **`validrect` 4 辺の意味は横書きと同一**（本仕様の要件 3.6）——同一モデルに対し
-//!    `HorizontalTb`／`VerticalRl`／`VerticalLr` の 3 モードで `left`／`top`／`right`／
-//!    `bottom` が完全に一致する。負値宣言・未宣言（画像端フォールバック）・非負宣言の
-//!    各形について見る。`start` と `wrap_threshold` はモードで変わってよい——そこは
-//!    書字方向という別の関心事であり、本檻はそれを固定しない。
+//!    横書きの `wordwrappoint.x` と同一である。
+//! 3. **`wordwrappoint.x` は縦書きで参照されない**——縦書きの折返し軸選択は
+//!    `wordwrappoint.y` のみを読む網羅 match で、不参照は型で保証されている。その保証は
+//!    読んでも見えないので、「同じバルーン定義から `wordwrappoint.x` だけを変えた複数のモデルが、
+//!    縦書き 2 モードで `TextRegion` の全成分において逐語一致する」という**差分不変の檻**へ
+//!    翻訳する。檻が恒真でないことは、同じ変化が横書きでは `wrap_threshold` を実際に動かす
+//!    ことを対照として示す。
+//! 4. **`validrect` 4 辺の意味は横書きと同一**——同一モデルに対し `HorizontalTb`／
+//!    `VerticalRl`／`VerticalLr` の 3 モードで `left`／`top`／`right`／`bottom` が完全に一致する
+//!    （負値宣言・未宣言・非負宣言の各形）。`start` と `wrap_threshold` は書字方向という
+//!    別の関心事なのでモードで変わってよく、固定しない。
 //!
-//! ## SC5（列が並ぶ範囲の上限＝`validrect.left`）は既存の檻が守っている
-//!
-//! `vertical_rl` で列が左へ進める限界が `validrect.left` であることは**既存実装であり、
-//! 既に決定論テストで固定されている**。出所は
-//! `crates/areka-emo-text/src/layout_visible_window_tests.rs` の
-//! `vertical_rl_overflow_scrolls_content_rightward`（validrect `left,360`／`right,400` で
-//! 4 列目の左端 354 が 360 を下回った時点であふれが発火することを逐語固定する）。
-//! **本ファイルではこの件について新しい檻を作らない**（設計 C4「新規の檻は作らず、
-//! COMPAT §8 で『既に実装され固定されている挙動』として登記する」）。
+//! `vertical_rl` で列が左へ進める限界が `validrect.left` であることは、
+//! `layout_visible_window_tests.rs` の `vertical_rl_overflow_scrolls_content_rightward`
+//! （validrect `left,360`／`right,400` で 4 列目の左端 354 が 360 を下回った時点であふれが
+//! 発火する）が既に固定しているので、本ファイルでは新しい檻を作らない。
 //!
 //! ## origin の解決 4 分岐と「範囲から出た宣言だけが validrect に従う」規則
 //!
-//! 上の 4 点（要件 3.4〜3.6）を見る檻は `origin` の宣言を **validrect の内側**に置くか
-//! **未宣言**にするかのどちらかに限っている——そこは書字方向とは別の関心事であり、
-//! origin の規約が変わっても偽の赤を出さないためである。
-//!
-//! それとは別に、本ファイルは `origin` 解決そのものの判断分岐も固定する
-//! （本仕様の要件 3.11 と、これを上書きする spec
-//! `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.2・1.7・2.1）——
+//! 上の 4 点を見る檻は `origin` の宣言を **validrect の内側**に置くか**未宣言**にするかの
+//! どちらかに限る。origin の規約が変わっても偽の赤を出さないためである。それとは別に、
+//! 本ファイルは `origin` 解決そのものの判断分岐も固定する。
 //!
 //! 5. **validrect 内の宣言**＝宣言どおりの位置・記録 0 件。
 //! 6. **validrect 外の宣言**＝**書字開始角へ落ちる**・成分ごとに `debug!` ちょうど 1 件。
-//! 7. **未宣言**＝書字開始角へ縮退・成分ごとに `debug!` ちょうど 1 件（要件 3.11・不変）。
-//! 8. **負値宣言**＝反対端基準で絶対値化してから範囲の内外を判定する（要件 3.7）。
+//! 7. **未宣言**＝書字開始角へ縮退・成分ごとに `debug!` ちょうど 1 件。
+//! 8. **負値宣言**＝反対端基準で絶対値化してから範囲の内外を判定する。
 //! 9. **宣言が `validrect` に従うのは範囲から出たときだけ**——範囲に留まる宣言は
 //!    `validrect` を差し替えても動かず、範囲から出る矩形では書字開始角へ落ちる。
 //!    「常に宣言どおり」「常に書字開始角」のどちら片側へ退行しても 6. か 9. が赤になる。
@@ -58,15 +46,12 @@
 //!
 //! 「`debug` が 0 件」という主張は、捕捉窓が死んでいても成立してしまう。そこで記録件数を
 //! 見る檻は捕捉窓の**内側**で対照イベント（`error!` 1 件）を発行し、その 1 件が数えられて
-//! いることを件数主張と必ず同時に確認する（[`assert_capture_alive`]）。件数の集計は硬化
-//! 機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ね、`warn` と `debug` を
-//! **別々に**数える（`writing_decision_tests.rs` と同じ流儀）。
+//! いることを件数主張と同時に確認する（[`assert_capture_alive`]）。件数の集計は
+//! `log-capture-kit` の [`count_levels`] に委ね、`warn` と `debug` を**別々に**数える
+//! （`writing_decision_tests.rs` と同じ流儀）。
 //!
-//! ## 実行条件
-//!
-//! 実 DPI モニタ・実 GPU・実ゴースト・実窓を一切要さない純粋層の檻であり、同一入力に
-//! 対して常に同一の結果を返す（本仕様の要件 10.6）。`windows` 系 crate を import しない
-//! （本ファイル自身が `lib.rs` の構造檻 `pure_layer_modules_have_no_windows_imports` の
+//! 実 DPI モニタ・実 GPU・実ゴースト・実窓を要さない決定論の檻で、`windows` 系 crate を
+//! import しない（`lib.rs` の構造檻 `pure_layer_modules_have_no_windows_imports` の
 //! 走査対象に列挙されている）。
 
 use log_capture_kit::{LevelCounts, count_levels};
@@ -117,7 +102,7 @@ fn edges(region: &TextRegion) -> (f32, f32, f32, f32) {
     (region.left(), region.top(), region.right(), region.bottom())
 }
 
-// ── 要件 3.4: `wordwrappoint.y` の既定＝`validrect.bottom` ──
+// ── `wordwrappoint.y` の既定＝`validrect.bottom` ──
 
 /// 縦書きで `wordwrappoint.y` が未宣言なら、折返し閾値は解決後の `validrect.bottom`
 /// （＝168）である。`wordwrappoint.x` が宣言されていても既定は変わらない
@@ -166,7 +151,7 @@ fn horizontal_wordwrap_default_is_validrect_right_not_bottom() {
     assert_eq!(region.wrap_threshold(), RECT_RIGHT);
 }
 
-// ── 要件 3.4／3.7: `wordwrappoint.y` の負値＝ベース画像の下辺基準 ──
+// ── `wordwrappoint.y` の負値＝ベース画像の下辺基準 ──
 
 /// 縦書きの `wordwrappoint.y` の負値は、ベース画像の下辺（高さ 224）からの相対として
 /// 解決される（`resolve_coord(v, extent) = extent + v`・ukadoc 脚注 *1 の既存規約）。
@@ -201,7 +186,7 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
         assert_eq!(region.wrap_threshold(), 120.0, "{mode:?}: 非負値は素通し");
     }
     // 横書きの wordwrappoint.x も同一の規約（画像幅 400 基準）——負値解決は
-    // 書字方向で分岐しない（要件 3.7）。
+    // 書字方向で分岐しない。
     let horizontal = TextRegion::resolve(
         &model_full((None, None), (Some(-44), None), RECT),
         IMAGE,
@@ -210,7 +195,7 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
     assert_eq!(horizontal.wrap_threshold(), 356.0, "400 + (-44)");
 }
 
-// ── 要件 3.5: `wordwrappoint.x` 不参照の差分不変檻（C4 の主眼） ──
+// ── `wordwrappoint.x` 不参照の差分不変檻 ──
 
 /// **縦書きの `TextRegion` は `wordwrappoint.x` の値に一切依存しない。**
 ///
@@ -218,10 +203,10 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
 /// それぞれで `TextRegion` の全 6 成分（`left`／`top`／`right`／`bottom`／`start`／
 /// `wrap_threshold`）において逐語一致することを固定する。これは
 /// 「縦書きの折返し軸選択が `wordwrappoint.y` のみを読む網羅 match である」という
-/// **型による保証**を、人間が読める形へ翻訳したものである（設計 C4）。
+/// **型による保証**を、人間が読める形へ翻訳したものである。
 ///
-/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（範囲外に宣言された `origin` の扱いに
-/// 一切依存しない形で書かれており、その規則が変わっても本檻はそのまま成立する）。
+/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（範囲外の宣言の扱いが変わっても
+/// 本檻は成立する）。
 /// `wordwrappoint.y` も未宣言形と宣言形の両方で見る（既定経路と宣言経路の双方で不変）。
 #[test]
 fn vertical_region_is_invariant_to_wordwrappoint_x() {
@@ -272,7 +257,7 @@ fn horizontal_region_does_depend_on_wordwrappoint_x() {
     assert_eq!(seen, vec![356.0, 0.0, 100.0, 351.0, 390.0]);
 }
 
-// ── 要件 3.6: `validrect` 4 辺は横書きと同一に解決される ──
+// ── `validrect` 4 辺は横書きと同一に解決される ──
 
 /// `validrect` の 4 辺の意味は書字方向で変わらない。負値宣言・未宣言（画像端への
 /// フォールバック）・非負宣言・混在の各形について、3 モードで
@@ -309,8 +294,7 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
         let resolved: Vec<(f32, f32, f32, f32)> = ALL_MODES
             .iter()
             .map(|mode| {
-                // origin は未宣言（範囲外に宣言された origin の扱いに非依存・要件 3.11 の
-                // 縮退のみに触れる）。
+                // origin は未宣言（範囲外に宣言された origin の扱いに非依存で、縮退のみに触れる）。
                 edges(&TextRegion::resolve(
                     &model_full((None, None), (None, None), rect),
                     IMAGE,
@@ -333,7 +317,7 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
 
 /// 対照——4 辺が一致することは「モードが区別されていない」ことを意味しない。
 /// 同一モデルでも書字開始角は `HorizontalTb`／`VerticalLr`＝validrect 左上・
-/// `VerticalRl`＝validrect 右上へ分かれる（未宣言時の縮退・要件 3.11）。
+/// `VerticalRl`＝validrect 右上へ分かれる（未宣言時の縮退）。
 #[test]
 fn writing_mode_still_separates_start_corner_while_edges_agree() {
     let resolve =
@@ -404,7 +388,7 @@ fn assert_capture_alive(counts: &LevelCounts) {
 }
 
 /// 分岐 3——**未宣言**の成分は書字開始角へ縮退し、成分ごとに `debug!` ちょうど 1 件を
-/// 記録する（要件 3.11・範囲外に宣言された origin の扱いが変わっても完全に同一の挙動）。
+/// 記録する（範囲外に宣言された origin の扱いが変わっても完全に同一の挙動）。
 #[test]
 fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component() {
     // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
@@ -470,15 +454,14 @@ fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component()
 /// **宣言された `origin` が `validrect` に従うのは、範囲から出たときだけである**。
 ///
 /// 宣言が範囲に留まる矩形では `validrect` を差し替えても開始点は動かず、宣言が範囲外に
-/// なる矩形では書字開始角へ動く（spec `areka-P0-balloon-origin-outside-validrect` の
-/// 要件 1.1・2.1）。「常に宣言どおり」「常に書字開始角」のどちら片側へ退行しても、
+/// なる矩形では書字開始角へ動く。
+/// 「常に宣言どおり」「常に書字開始角」のどちら片側へ退行しても、
 /// どれかの矩形で赤になる。**宣言が在る場合のみの主張**であることに注意——未宣言のときは
 /// 書字開始角そのものが `validrect` から決まるため、下の対照テストのとおり当然に動く。
 ///
 /// 1 点の退化矩形（4 辺とも 10）の期待値は規則の自然な帰結として書いてあるだけで、本検査が
-/// 保証する対象ではない（退化した矩形への分岐は実装に無い）。かつてこの行は全 0 だったが、
-/// 右辺・下辺の 0 を画像の端と読むようになり全 0 は画像全体に解けるので、4 辺とも 10 へ
-/// 差し替えた——要件 6（requirements.md の正典の段）。
+/// 保証する対象ではない（退化した矩形への分岐は実装に無い）。全 0 は画像全体に解けるので
+/// 4 辺とも 10 を使う。
 #[test]
 fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
     // 宣言は固定。validrect だけを差し替える。第 3 要素は期待する開始点——
@@ -495,7 +478,7 @@ fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
         ),
         ("全未宣言（画像端へ縮退）", (None, None, None, None), None),
         // 4 辺とも 10 の退化矩形では範囲が 1 点に潰れるので、宣言は必ず範囲外になる
-        // （全 0 は要件 6 で画像全体に解けるので 10 を使う）。
+        // （全 0 は画像全体に解けるので 10 を使う）。
         (
             "4 辺とも 10（退化矩形）",
             (Some(10), Some(10), Some(10), Some(10)),
@@ -566,15 +549,15 @@ fn undeclared_origin_does_move_when_validrect_changes() {
 /// **`origin` 成分の解決を、3 書字方向 × 2 成分 × 11 場合の全数（66 行）で固定する。**
 ///
 /// モジュールの説明の 5.（内側の宣言）・6.（外の宣言）・8.（負値の宣言）は本表が持つ
-/// （7. の未宣言は上の別の檻）。場合を表に並べ、書字方向と成分は繰り返しで掛け合わせて全数を回す——代表を選ばないので、「この組み合わせだけ見て
-/// いなかった」が起こらない（本仕様の要件 5.1）。
+/// （7. の未宣言は上の別の檻）。場合を表に並べ、書字方向と成分は繰り返しで掛け合わせて全数を回す。
+/// 代表を選ばないので、「この組み合わせだけ見ていなかった」が起こらない。
 ///
 /// 場合は軸ごとに、近い辺の 1 つ外・近い辺ちょうど・内・遠い辺ちょうど・遠い辺の 1 つ外・
 /// 検体と同じ形（0）・負値の 5 通りの計 11 通り。基準の `validrect` は `RECT`（解決後
 /// `[36, 356] × [46, 168]`・画像 400×224）。
 ///
 /// 各行が見るのは 5 つ——⑴ 検査する成分の開始点（範囲内なら解決後の値・範囲外なら書字開始角）
-/// ⑵ 他方の成分の開始点が宣言値のまま（成分の独立・要件 1.2）⑶ 無視した宣言値の有無
+/// ⑵ 他方の成分の開始点が宣言値のまま（成分の独立）⑶ 無視した宣言値の有無
 /// （範囲外なら当該成分だけ解決後の値・範囲内なら両成分とも無し）⑷ `debug` の件数
 /// （範囲外 1 件・範囲内 0 件）⑸ `warn` 0 件。
 ///
@@ -585,7 +568,7 @@ fn undeclared_origin_does_move_when_validrect_changes() {
 /// 「近い辺ちょうど」のように宣言値と書字開始角が一致する行は、開始点だけでは内と外を
 /// 見分けられない——⑶ と ⑷ がその区別を担うので、全行でこの 2 つも必ず見る。
 ///
-/// 要件 1.7（最寄りの辺ではなく書字開始角）を担うのは「遠い辺の 1 つ外」の 2 行である。
+/// 最寄りの辺ではなく書字開始角へ落ちることを担うのは「遠い辺の 1 つ外」の 2 行である。
 /// 横書きの `origin.x,357` は左辺 36 へ落ちなければならず、最寄りの右辺 356 では赤になる。
 /// 縦書きの `origin.y,169` も同じく上辺 46 へ落ちる。
 #[test]

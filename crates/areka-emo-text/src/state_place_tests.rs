@@ -1,7 +1,4 @@
-//! 文字を場所ごとに持つ（spec `areka-P0-shell-balloon` の design.md「文字の行き先の決まり方」の「文字・改行・`\_l`・選択肢・`\f`・`\c` は、届いた時点の「今の行き先」の場所へ当てる」で始まる段落・要件 4.5・4.6・
-//! 6.7・7.1〜7.3・10.5）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 文字を場所ごとに持つ（文字・改行・`\_l`・選択肢・`\f`・`\c` は、届いた時点の「今の行き先」の場所へ当てる）。
 //!
 //! 箱の構成と組み立ての支援は `state_route_tests.rs` のものを使う（同じ文面の表）:
 //! - 0: a・b（既定は a） 1: b・a（既定は b） 2: c だけ 3: 箱なし
@@ -30,7 +27,7 @@ fn written() -> TextLayerState {
     state
 }
 
-// ---- 行き先を切り替えても前の場所の文字は残る（要件 4.5）
+// ---- 行き先を切り替えても前の場所の文字は残る
 
 #[test]
 fn switching_destination_keeps_text_of_previous_places() {
@@ -52,7 +49,7 @@ fn switching_destination_keeps_text_of_previous_places() {
     assert_eq!(place_items(&state, "0", boxed("a")), glyphs(&["あ", "う"]));
 }
 
-// ---- スコープと名前の組が場所の単位（要件 4.6）
+// ---- スコープと名前の組が場所の単位
 
 #[test]
 fn same_box_name_in_different_scopes_holds_separate_text() {
@@ -61,7 +58,7 @@ fn same_box_name_in_different_scopes_holds_separate_text() {
     assert_eq!(place_items(&state, "1", boxed("a")), glyphs(&["い"]));
 }
 
-// ---- `\c` は行き先の場所だけ（要件 7.1〜7.3）
+// ---- `\c` は行き先の場所だけ
 
 #[test]
 fn clear_empties_only_destination_box_and_returns_to_write_start() {
@@ -118,7 +115,7 @@ fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
     assert_eq!(place_items(&state, "0", boxed("b")), glyphs(&["び"]));
 }
 
-// ---- 台詞の頭は全部の場所（要件 6.7）
+// ---- 台詞の頭は全部の場所
 
 #[test]
 fn clear_all_empties_every_place_of_every_scope() {
@@ -141,7 +138,7 @@ fn clear_all_empties_every_place_of_every_scope() {
     assert_eq!(state.clear_count(&key("0")), 1);
 }
 
-// ---- 読み口: 全部の場所・1 つの場所・既存の普通のバルーンの形（要件 10.5）
+// ---- 読み口: 全部の場所・1 つの場所・既存の普通のバルーンの形
 
 #[test]
 fn places_iterates_every_place_in_key_order() {

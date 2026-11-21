@@ -36,7 +36,7 @@ use crate::look::{FontKey, TextLook};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 
-/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（R4.5・probe 規約）。
+/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（probe 規約）。
 ///
 /// 純粋層 `LayoutEngine` の外部注入点（`&dyn GlyphMetrics`）へ、DirectWrite の実測
 /// 送り幅を提供する。probe 規約（モジュール doc）:
@@ -45,15 +45,15 @@ use crate::writing::WritingMode;
 ///   writing_mode 方向レシピ込み）で**生成時に一度だけ**焼く。
 /// - 既定でない見た目は、その計測鍵（[`FontKey`]）ごとの試験用書式を
 ///   [`probe_format_for`](Self::probe_format_for) が**鍵ごとに 1 度だけ**焼く
-///   （顔は鍵の候補列の顔か、全滅なら束縛の顔のみ・R11.3）。
+///   （顔は鍵の候補列の顔か、全滅なら束縛の顔のみ）。
 /// - `advance` は対象文字（書記素クラスタ 1 つ）全体の**未折返し probe layout**
 ///   （行と同じ生成口 [`create_line_layout`]・行内軸 [`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT) 寸）を生成し
 ///   cluster metrics の width 合計を返す（折返し決定より
 ///   前の計測＝鶏卵なし。DirectWrite が 2 つに整形するクラスタ＝国旗などは合計が行の中で
 ///   占める幅になる）。
 /// - 計測値は「計測鍵 → 文字（クラスタ文字列）」の 2 段でキャッシュする（書式が鍵で定まる＝
-///   同じ組は同じ送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」・
-///   R11.1）。引くときは `&str` のまま引いて割り当てない。
+///   同じ組は同じ送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」）。
+///   引くときは `&str` のまま引いて割り当てない。
 ///
 /// UI スレッド専有（COM 層規律）。`line_pitch` は正典式
 /// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
@@ -77,14 +77,14 @@ pub struct DWriteMetrics {
     /// 縦書きに束縛した物と、測れなかった物は 0（字の箱の上端＝行矩形の上端）。
     horizontal_char_box_top_ratio: f32,
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（`None`＝測れなかった・
-    /// `error!` は 1 回で、台詞の切れ目まで試し直さない＝指摘 12）。既定の見た目は
+    /// `error!` は 1 回で、台詞の切れ目まで試し直さない）。既定の見た目は
     /// [`default_key`](Self::default_key) の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く
     /// （引くときに割り当てない）。既定の鍵以外と、既定の鍵の `None`・複数のスカラーの字（クラスタ）は
     /// 台詞の切れ目で捨てる（[`sync_talk`](Self::sync_talk)）。
     cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
-    /// 束縛書式の顔（`fonts.pick(font)` の解決）——全滅の計測鍵はこの顔で測る（要件 4.10）。
+    /// 束縛書式の顔（`fonts.pick(font)` の解決）——全滅の計測鍵はこの顔で測る。
     bound_face: FontFace,
     /// 束縛書式に焼いた見た目の計測鍵——この鍵の計測は束縛書式の経路をそのまま通る
     /// （装飾を使わない台本の計測値が束縛書式で測った値と 1 ビットも違わない構造的保証）。
@@ -92,14 +92,14 @@ pub struct DWriteMetrics {
     /// 書字方向（鍵ごとの試験用書式へ束縛書式と同じ方向レシピを焼くため）。
     mode: WritingMode,
     /// 計測鍵ごとの試験用書式（台詞のあいだ鍵ごとに 1 度だけ生成して持ち回す・`None`＝作れなかった
-    /// （`error!` は 1 回・指摘 12）・[`sync_talk`](Self::sync_talk) で空になる）。
+    /// （`error!` は 1 回）・[`sync_talk`](Self::sync_talk) で空になる）。
     probe_formats: RefCell<HashMap<FontKey, Option<IDWriteTextFormat>>>,
     /// 試験用書式を実際に**生成した回数**（記憶に無くて作った回数）。保持庫の要素数ではなく
     /// 生成回数を数える——同じ鍵で作り直しても要素数は増えないので、要素数では
     /// 「鍵ごとに 1 度だけ」を見張れない（実測 2026-09-12）。
     probe_format_creations: Cell<usize>,
     /// 表を最後に揃えた台詞の番号（[`FontCatalog::talk_epoch`]）。違えば台詞の寿命の表を空にする
-    /// （[`sync_talk`](Self::sync_talk)・指摘 11）。
+    /// （[`sync_talk`](Self::sync_talk)）。
     seen_epoch: Cell<u64>,
 }
 
@@ -114,7 +114,7 @@ impl DWriteMetrics {
     /// `FontCatalog::new` が `error!` で記録するので記録なしの失敗経路ではない。
     ///
     /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
-    /// が台帳を 1 つだけ作って描画器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
+    /// が台帳を 1 つだけ作って描画器と共有する）。本関数の本番の呼び手は 0 で、
     /// 自前の台帳で足りる決定論テスト（`src/` の `*_tests.rs` と `tests/` の統合試験）と
     /// example `examples/emo-text-layer/drive.rs` が呼ぶ委譲の入口である。
     pub fn new(
@@ -127,7 +127,7 @@ impl DWriteMetrics {
         DWriteMetrics::new_shared(factory, font, mode, config, fonts)
     }
 
-    /// 候補列の解決台帳を**共有して**計測用 metrics を生成する（要件 9.8）。
+    /// 候補列の解決台帳を**共有して**計測用 metrics を生成する。
     ///
     /// 束縛書式は `fonts.pick(font)` の複製——バルーン定義のカンマ区切り候補列も
     /// 「記述順に最初の実在フォント」で解決される。台帳を共有するのは、同じ候補列の
@@ -145,7 +145,7 @@ impl DWriteMetrics {
         // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
         // （format 側から辿るため取り違えが起きない）。取得失敗は
         // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
-        // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
+        // 頭打ちゆえ縮退値でも隣接行を侵さない）。
         let font_metrics = measure_font_metrics(factory, &format);
         let line_box_ratio = font_metrics
             .map(|m| (m.ascent as f32 + m.descent as f32) / m.designUnitsPerEm as f32)
@@ -223,7 +223,7 @@ impl DWriteMetrics {
     /// 描画側との共有はこの読み口を経由しない——`actor_decoration.rs::build_actor_render` が
     /// [`FontCatalog`] を 1 つだけ作り、[`DWriteMetrics::new_shared`] と
     /// [`ViewboxExecutor::new_shared`](crate::viewbox_draw::ViewboxExecutor::new_shared) の
-    /// **両方へ引数で渡す**形で共有が成立する（要件 9.8）。ゆえに本関数の本番の呼び手は 0 で、
+    /// **両方へ引数で渡す**形で共有が成立する。ゆえに本関数の本番の呼び手は 0 で、
     /// テストの観測と操作の口である——「渡した台帳がそのまま使われている」（`Rc` の同一性・
     /// `the_shared_catalog_constructor_measures_the_same_as_the_owning_one`）、実フォントの前提
     /// （`require_yu_gothic`）、台詞の境目（`forget_talk`）を確かめる檻が呼ぶ。
@@ -234,7 +234,7 @@ impl DWriteMetrics {
         &self.fonts
     }
 
-    /// `look.font_key() == self.default_key` と同じ答えを、字ごとに鍵（名前の列の複製）を作らずに欄で比べて出す（指摘 31）。
+    /// `look.font_key() == self.default_key` と同じ答えを、字ごとに鍵（名前の列の複製）を作らずに欄で比べて出す。
     fn is_default_look(&self, look: &TextLook) -> bool {
         // 欄を全部ほどく: FontKey に欄が増えたらここが通らず、比べの漏れを防ぐ。
         let FontKey {
@@ -249,13 +249,13 @@ impl DWriteMetrics {
             && look.name == *name
     }
 
-    /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える（指摘 11）。
+    /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える。
     ///
     /// 試験用書式を全部と、既定の鍵以外の字幅と、既定の鍵の測れなかった字（`None`）と、既定の鍵の
     /// 複数のスカラーの字（結合文字・ZWJ で繋いだクラスタ）を捨てる（覚えた失敗はここで試し直しに
     /// なる）。既定の鍵の 1 つのスカラーの成功した字幅は残す（Unicode のスカラーの数が元からある
     /// 頭打ちで、台詞ごとに測り直すと台詞の頭のフレームが重くなる）。クラスタは組み合わせに
-    /// 頭打ちが無いので台詞をまたいで残さない（再監査 R1-C1）。台詞のあいだの上限の数は置かない——
+    /// 頭打ちが無いので台詞をまたいで残さない。台詞のあいだの上限の数は置かない——
     /// 台詞が使う見た目と字の数が頭打ち。
     fn sync_talk(&self) {
         let epoch = self.fonts.talk_epoch();
@@ -274,12 +274,11 @@ impl DWriteMetrics {
     /// 計測鍵ごとの試験用書式（**鍵ごとに 1 度だけ**生成して持ち回す）。
     ///
     /// 顔は「鍵の候補列の顔、全滅なら束縛の顔」（[`FontCatalog::face_or`]）——描画の範囲指定
-    /// （`apply_font_ranges`）と同じ規則なので、全滅の区間も描画と同じ顔で測る（要件 4.10・
-    /// 完了 spec の「全滅は ＭＳ ゴシックで測る」を上書き）。書式は束縛書式と共用の
+    /// （`apply_font_ranges`）と同じ規則なので、全滅の区間も描画と同じ顔で測る。書式は束縛書式と共用の
     /// `draw.rs::try_create_format` に顔と鍵の太字／斜体／大きさを渡して作り、最後に同じ
-    /// [`DirectionRecipe`] を焼く（要件 4.1「計測と描画は同じ書式経路」・設定の写しを持たない）。
+    /// [`DirectionRecipe`] を焼く（設定の写しを持たない）。
     /// 計測鍵が顔を一意に決めるので、記憶の鍵は計測鍵のまま。作れなかった鍵も `None` で覚え
-    /// （`error!` は作れなかったときの 1 回だけ）、台詞の切れ目まで試し直さない（指摘 12）。
+    /// （`error!` は作れなかったときの 1 回だけ）、台詞の切れ目まで試し直さない。
     fn probe_format_for(&self, key: &FontKey) -> Option<IDWriteTextFormat> {
         if let Some(format) = self.probe_formats.borrow().get(key) {
             return format.clone();
@@ -316,7 +315,7 @@ impl DWriteMetrics {
     ///
     /// 記憶に無ければ probe layout を作って測り、結果を入れる（失敗は
     /// [`probe_advance`](Self::probe_advance) 内で `error!` 済みで `None` を覚える——縮退値は
-    /// 呼び手が決め、台詞の切れ目まで試し直さない＝指摘 12）。引くときは割り当てず、入れるときだけ鍵を作る。
+    /// 呼び手が決め、台詞の切れ目まで試し直さない）。引くときは割り当てず、入れるときだけ鍵を作る。
     fn measure(&self, text: &str, key: &FontKey, format: &IDWriteTextFormat) -> Option<f32> {
         let cached = self
             .cache
@@ -337,7 +336,7 @@ impl DWriteMetrics {
 
     /// 1 文字（クラスタ 1 つ）全体の未折返し probe layout を指定の書式で、行と同じ生成口
     /// （[`create_line_layout`]・縦書きは列のレシピ）で生成し、cluster metrics の width 合計を返す
-    /// （要件 2.4: 計測と行は同じ設定）。行送り軸の箱は書式の大きさ。
+    /// （計測と行は同じ設定）。行送り軸の箱は書式の大きさ。
     fn probe_advance(&self, text: &str, format: &IDWriteTextFormat) -> Result<f32, TextLayerError> {
         let block_extent = unsafe { format.GetFontSize() };
         let layout = create_line_layout(&self.factory, text, format, block_extent, self.mode)?;
@@ -386,7 +385,7 @@ impl GlyphMetrics for DWriteMetrics {
             .unwrap_or_else(|| degraded_advance(text, self.font_height))
     }
 
-    /// 見た目込みの実測送り幅（R7.10／R11.1）。
+    /// 見た目込みの実測送り幅。
     ///
     /// 既定の見た目（束縛書式に焼いた鍵と同値）は [`advance`](Self::advance) の
     /// **同じ経路**をそのまま通る——装飾を使わない台本の計測値は `advance` と同じ。
@@ -405,7 +404,7 @@ impl GlyphMetrics for DWriteMetrics {
     }
 
     /// 行送りピッチ＝正典式 `font_height + 行間`。式は [`TextLayerConfig::line_pitch`]
-    /// が唯一の定義点で、ここは委譲するだけ（自前の足し算を持たない・R3.5）。
+    /// が唯一の定義点で、ここは委譲するだけ（自前の足し算を持たない）。
     fn line_pitch(&self, font_height: f32) -> f32 {
         self.config.line_pitch(font_height)
     }
@@ -416,8 +415,7 @@ impl GlyphMetrics for DWriteMetrics {
     /// 実測例: Yu Gothic UI ＝ upem 2048・ascent 2210・descent 514 → 比 1.3301
     /// （28px で 37.24px＝em ボックス 28px より 9.24px 高い）／ＭＳ ゴシック ＝ upem 256・
     /// ascent 220・descent 36 → 比ちょうど 1.0（既定フォントでは em ボックスと一致するため
-    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——完了 spec
-    /// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」の記録）。
+    /// **既定フォントだけを見ていると descent はみ出しが観測されない**）。
     fn line_box_height(&self, font_height: f32) -> f32 {
         font_height * self.line_box_ratio
     }
@@ -427,13 +425,11 @@ impl GlyphMetrics for DWriteMetrics {
     /// どちらの向きでも em の箱を行の矩形の真ん中に置く）。横書きに束縛した物は既定の実装。
     ///
     /// 列のレシピ（行間 UNIFORM・基線は箱の幅の半分）の下の実測は Yu Gothic UI・ＭＳ ゴシック・
-    /// 游ゴシックの 2 方向とも 0。列のレシピの前の値（Yu Gothic UI ∓0.1650・游ゴシック −0.3013）は
-    /// spec `emo-text-dwrite-fidelity` research.md §10.3。
+    /// 列のレシピの前の値は Yu Gothic UI ∓0.1650・游ゴシック −0.3013。
     ///
     /// `None` の枝（横書きに束縛した物へ縦書きを問う）は**本番では通らない**: 本番の呼び手は
     /// `choice.rs::line_bands` だけで、`actor_present.rs` は計測器を作ったのと同じ `resolved.mode` を
-    /// 渡し、向きが変われば描画資源ごと計測器を作り直す（箱も同じ）。値は今の式のまま残す
-    /// （spec `emo-text-line-gap` research.md §2.2・design.md「設計の決め」7・要件 4.4）。
+    /// 渡し、向きが変われば描画資源ごと計測器を作り直す（箱も同じ）。値は今の式のまま残す。
     fn vertical_em_box_left(&self, font_height: f32, mode: WritingMode) -> f32 {
         match self.vertical_em_box_left_ratio {
             Some(ratio) if mode == self.mode => ratio * font_height,
@@ -510,7 +506,7 @@ pub(crate) fn measure_font_metrics(
 /// x は列の基線の行矩形の左辺からの位置で、本番の行と同じ書式・同じ生成口（[`create_line_layout`]・
 /// 列のレシピ）・同じ幅 h の仮名 1 字（「あ」）の TextLayout の
 /// `GetMetrics().left + GetLineMetrics()[0].baseline`（式 A）。列のレシピは基線を箱の幅の半分に
-/// 置くので、実測は書体によらず 0（research.md §10.3）。
+/// 置くので、実測は書体によらず 0。
 /// 失敗は失敗した所の名前を `Err` で返す（生成口の失敗は `error!` 済み・呼び手が `warn!` に載せて縮退）。
 fn measure_vertical_em_box_left_ratio(
     factory: &IDWriteFactory2,
@@ -543,7 +539,7 @@ fn measure_vertical_em_box_left_ratio(
 ///
 /// 基線は本番の行と同じ書式・同じ生成口（[`create_line_layout`]・横書き）・同じ箱の高さ h の
 /// 仮名 1 字（「あ」）の TextLayout の `GetLineMetrics()[0].baseline`。書体の行間を DirectWrite が
-/// 行の上に置く分だけ正になる（游ゴシック 20 で 6.2988・行間 0 の書体は 0・research.md §3）。
+/// 行の上に置く分だけ正になる（游ゴシック 20 で 6.2988・行間 0 の書体は 0）。
 /// 失敗は失敗した所の名前を `Err` で返す（生成口の失敗は `error!` 済み・呼び手が `warn!` に載せて縮退）。
 fn measure_horizontal_char_box_top_ratio(
     factory: &IDWriteFactory2,

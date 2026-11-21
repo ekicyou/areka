@@ -1,8 +1,4 @@
 //! 面の系列解決と、その間に出る記録を固定する。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.4**／**3.8**・設計 **C2** の C 行）。
 
 use areka_emo_present::balloon::{ChainTier, ResolvedFace};
 use log_capture_kit::CapturedEvent;
@@ -40,7 +36,7 @@ const EXPECTED_SCOPE1_FACES: [(u32, &str, &str, ChainTier); EXPECTED_FACE_COUNT]
 /// 相方側で本体側の系列へ縮退する面（`warn!` の欄 `surface_id`・`prefix`）。
 ///
 /// 本体側は縮退の概念を持たないので空、相方側はちょうどこの 2 件である。件数で固定する
-/// のは、保管フォルダの面が増減したらそれ自体が上流の取り直しの合図（要件 2.2）だからである。
+/// のは、保管フォルダの面が増減したらそれ自体が上流の取り直しの合図だからである。
 const EXPECTED_SCOPE1_FALLBACK: [(u32, &str); 2] = [(2, "balloons"), (3, "balloons")];
 
 /// 解決の 2 関数（`resolve_balloon_faces` と `load_scope_balloon_model`）だけを**同じ捕捉窓**で
@@ -82,7 +78,7 @@ fn assert_face_series(
     );
 }
 
-/// 本体側と相方側で面の系列が解決され、その間の記録が期待どおりである（要件 3.4・3.8）。
+/// 本体側と相方側で面の系列が解決され、その間の記録が期待どおりである。
 ///
 /// 相方側は枠を 2 枚しか持たないので面 2・3 が本体側の系列へ落ち、その 2 面についてだけ
 /// 縮退の記録が出る。本体側は落ちる先を持たないので記録は出ない。この非対称が、記録の

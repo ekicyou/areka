@@ -1,9 +1,7 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-
 use super::test_support::{cue, cue_dur, items_of, reveal_times_of};
 use super::*;
 
-// ── R3.1/R3.2/R3.3・`areka-P0-cue-playback-duration` R7.1: r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
+// ── r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
 
 /// reveal interval は配送 duration 由来（`interval = duration / N`）。Text("アヒル") へ
 /// `cue` ヘルパが焼き込む duration = 3 × 0.25 = 0.75 ゆえ interval = 0.75/3 = 0.25。
@@ -11,7 +9,6 @@ use super::*;
 fn reveal_times_follow_duration_derived_interval_from_chunk_start() {
     let mut state = TextLayerState::default();
     state.apply_cue(&cue("0", 1.0, CueCommand::Text("アヒル".into())));
-    // r_0 = at(chunk(0)) = 1.0・以降 prev + interval(=duration/N=0.25)。
     assert_eq!(reveal_times_of(&state, "0"), vec![1.0, 1.25, 1.5]);
 }
 
@@ -45,7 +42,7 @@ fn visible_glyphs_progress_with_duration_derived_interval() {
     assert_eq!(state.visible_glyphs(&actor, 1.11), 3); // r_2 ≈ 1.10
 }
 
-// ── R3.4: at は下限（それより早く可視化しない）・後続 chunk が未来なら待つ ──
+// ── at は下限（それより早く可視化しない）・後続 chunk が未来なら待つ ──
 
 #[test]
 fn glyphs_never_visible_before_chunk_start() {
@@ -63,7 +60,7 @@ fn glyphs_never_visible_before_chunk_start() {
     assert_eq!(state.visible_glyphs(&actor, 10.25), 4);
 }
 
-/// R3.4 後段: 直前 chunk が未リビールでも、リビールカーソルは配送 duration が定める
+/// 直前 chunk が未リビールでも、リビールカーソルは配送 duration が定める
 /// ペース（interval）でバッファ末尾を追う（at が過去でも max が prev+interval を選ぶ）。
 #[test]
 fn reveal_cursor_chases_tail_when_next_chunk_start_is_earlier() {
@@ -76,7 +73,7 @@ fn reveal_cursor_chases_tail_when_next_chunk_start_is_earlier() {
         reveal_times_of(&state, "0"),
         vec![0.0, 0.25, 0.5, 0.75, 1.0, 1.25]
     );
-    // items はリビール中の追記も即時に 6 グリフ（未リビール分も保持＝無損失・R3.6）。
+    // items はリビール中の追記も即時に 6 グリフ（未リビール分も保持＝無損失）。
     assert_eq!(items_of(&state, "0").len(), 6);
 
     let actor = ActorKey::from("0");
@@ -96,7 +93,7 @@ fn reveal_times_are_monotonic_non_decreasing() {
     assert!(times.windows(2).all(|w| w[0] <= w[1]), "times: {times:?}");
 }
 
-// ── R3.6: リビール中の後続 cue も後出し優先で即時反映 ──
+// ── リビール中の後続 cue も後出し優先で即時反映 ──
 
 /// 改行: LineBreak はリビール枠（時刻）を消費しない——schedule はグリフのみ対象。
 #[test]
@@ -163,9 +160,9 @@ fn visible_glyphs_are_independent_per_actor() {
     assert_eq!(state.visible_glyphs(&ActorKey::from("1"), 1.0), 1);
 }
 
-// ══ `areka-P0-cue-playback-duration` の服従契約の縮退（1.2/7.3）と honor no-op（2.2/7.5）══
+// ══ 服従契約の縮退と honor no-op ══
 
-/// 縮退（`areka-P0-cue-playback-duration` 1.2/7.3）: 配送 duration=0（瞬時／後方互換 cue）かつ N≥1 は interval=0 ゆえ
+/// 縮退: 配送 duration=0（瞬時／後方互換 cue）かつ N≥1 は interval=0 ゆえ
 /// 全グリフが `cue.at` で**同時**可視になる（決まった刻みで 1 グリフずつ出す実装では
 /// この同時可視は成立しない）。
 #[test]
@@ -184,7 +181,7 @@ fn zero_duration_reveals_all_glyphs_simultaneously_at_cue_at() {
     );
 }
 
-/// 縮退（`areka-P0-cue-playback-duration` の design.md の縮退 1.2/7.3）: N=0（空テキスト）は duration が非零でも追記せず、除算（duration/0）を
+/// 縮退: N=0（空テキスト）は duration が非零でも追記せず、除算（duration/0）を
 /// 行わない。`cue` ヘルパは空テキストへ duration=0 を焼くため、ここでは敵対的な
 /// 「空テキスト＋非零 duration」を [`cue_dur`] で直接与え、0 割り・追記なしを固定する。
 #[test]
@@ -201,7 +198,7 @@ fn empty_text_with_nonzero_duration_adds_nothing_and_never_divides() {
     assert_eq!(state.visible_glyphs(&actor, 100.0), 2);
 }
 
-/// honor no-op（`areka-P0-cue-playback-duration` 2.2/2.3/7.5）: 担当外の cue（Emote／Wait）は action を無視するのみで、
+/// honor no-op: 担当外の cue（Emote／Wait）は action を無視するのみで、
 /// その duration から**新たなローカル遅延を生じさせない**——後続の担当 Text cue の
 /// reveal は、担当外 cue を挟まない対照実行と**完全に一致**する（葉の否定的 no-op）。
 #[test]

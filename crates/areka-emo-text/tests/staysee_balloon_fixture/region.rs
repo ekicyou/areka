@@ -1,46 +1,25 @@
 //! 文字の領域解決と、既定書体の受け入れ口を固定する。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **1.3**／**3.3**／**3.5**・設計 **C2** の
-//! E 行と F 行・**DD4**）。
-//!
-//! ## ここで固定するもの
-//!
-//! 本番の描画入口（`present_frame` が通るのと同じ [`ResolvedBalloonText::resolve`]）で
-//! 検体の文字の領域を解き、両 scope について
+//! 本番の描画入口（`present_frame` が通るのと同じ [`ResolvedBalloonText::resolve`]）で検体の文字の領域を解き、両 scope について
 //!
 //! - 描画範囲の 4 辺・描画開始点・折返し基準・遠辺・画像の原寸、
 //! - 解決された書体の名前・高さ、
 //! - 実測の文字の寸法（半角と全角の送り幅・行ボックス・行送り）
 //!
-//! を逐語で固定する。検体は `font.name` も `wordwrappoint` も宣言していないので、前者は
-//! ukadoc の既定書体へ、後者は描画範囲の遠辺へ縮退する（要件 3.3）。
+//! を逐語で固定する。検体は `font.name` も `wordwrappoint` も宣言していないので、前者は ukadoc の既定書体へ、
+//! 後者は描画範囲の遠辺へ縮退する。
 //!
-//! ## 「縮退している」を空振りで主張しないための対照
+//! 「未宣言だから既定へ落ちた」「未宣言だから遠辺と同じ値になった」は、読み口が常に既定しか返さない実装でも真になる。
+//! そこで同じ読み口へ宣言を持つ別のバルーン定義（`examples/fixtures/emo2-vertical-canon`——`font.name,Yu Gothic UI` と
+//! `wordwrappoint` を宣言している）を通し、書体の名前が既定とは別の名前で返ること、折返し基準と遠辺が別々の値に分かれることを
+//! 対照として並べる（[`declared_balloon_returns_a_different_font_and_a_split_wrap_threshold`]）。
+//! 対照は検体と同じ原寸を渡して解くので、答えの違いはバルーン定義の違いだけから来る。
 //!
-//! 「未宣言だから既定へ落ちた」「未宣言だから遠辺と同じ値になった」は、読み口が**常に**
-//! 既定しか返さない実装でも真になってしまう。そこで、同じ読み口へ**宣言を持つ別の
-//! バルーン定義**（`examples/fixtures/emo2-vertical-canon`——`font.name,Yu Gothic UI` と
-//! `wordwrappoint` を宣言している）を通し、
+//! 文字の寸法の期待値は `ＭＳ ゴシック` の実測（半角 0.5em・全角 1em・行ボックス比 1.0）で、当該書体が無い環境では
+//! DirectWrite が別の書体へ落ちて前提が崩れる。緑のまま通さないよう、寸法そのものを門として先に確かめる
+//! （既存の `Yu Gothic UI` を前提にしたテストと同じ扱い）。
 //!
-//! - 書体の名前が既定とは**別の名前**で返ること、
-//! - 折返し基準と遠辺が**別々の値**に分かれること
-//!
-//! を対照として並べる（[`declared_balloon_returns_a_different_font_and_a_split_wrap_threshold`]）。
-//! 対照は検体と**同じ原寸**を渡して解くので、答えの違いはバルーン定義の違いだけから来る。
-//!
-//! ## 既定書体が無い環境では赤で止める
-//!
-//! 文字の寸法の期待値は `ＭＳ ゴシック` の実測（半角 0.5em・全角 1em・行ボックス比 1.0）で
-//! あり、当該書体が無い環境では DirectWrite が別の書体へ落ちて前提が崩れる。落ちたことを
-//! 緑のまま通さないよう、寸法そのものを門として先に確かめる（設計 Technology Stack・DD4 ⑶。
-//! 既存の `Yu Gothic UI` を前提にしたテストと同じ扱い）。
-//!
-//! ## 決定論
-//!
-//! ファイル読み込み・純粋層の解決・DirectWrite の計測のみ。実 GPU・実窓・実ゴーストを
-//! 要さず、同一入力に対して常に同一の結果を返す。
+//! ファイル読み込み・純粋層の解決・DirectWrite の計測のみで、実 GPU・実窓・実ゴーストは要さない。
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DEFAULT_FONT_NAME;
@@ -55,7 +34,7 @@ use super::test_support::{
 };
 use crate::support::fixture::{balloon_metrics, example_fixture_dir, merged_model};
 
-// ── 領域解決の期待値（設計 C2 の E 行）──────────────────────────────────────────
+// ── 領域解決の期待値──────────────────────────────────────────
 //
 // 4 辺は宣言からの計算結果であって実測から採った値ではない: `validrect.left,22`／`top,20`
 // （非負は素通し）・`right,-26`／`bottom,-47`（負値は反対辺基準）を、面 0 の原寸
@@ -65,7 +44,7 @@ use crate::support::fixture::{balloon_metrics, example_fixture_dir, merged_model
 /// 描画開始点（`origin` 未宣言 → 横書きの書字開始角＝描画範囲の左上・image px）。
 const EXPECTED_START: (f32, f32) = (EXPECTED_LEFT, EXPECTED_TOP);
 
-// ── 既定書体と文字の寸法の期待値（設計 C2 の F 行・DD4）──────────────────────────
+// ── 既定書体と文字の寸法の期待値──────────────────────────
 //
 // 書体の名前のリテラルは ukadoc の既定そのもので、`DEFAULT_FONT_NAME` とは別に綴る
 // ——両辺を同じ定数から引くと、定数が別の書体へ書き換わったときに気付けない。
@@ -77,7 +56,7 @@ const CANON_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 //
 // 検体ではなく**読み口が既定以外も返せること**を示すための対照である。検体の所在は
 // `test_support.rs` の `staysee_root()`（窓口 `sample-ghost-kit` から名前で引く）1 か所だけが持つ
-// 決まり（spec `areka-P0-default-balloon-nar-fold` 要件 4）なので、対照の所在はそれとは別に、
+// 決まりなので、対照の所在はそれとは別に、
 // 対照であることが分かる名前でここに置く。
 
 /// 対照のバルーン定義（`font.name` と `wordwrappoint` を宣言している既存の検体・
@@ -105,7 +84,7 @@ fn declared_model() -> BalloonModel {
     )
 }
 
-// ── 領域解決（設計 C2 の E 行・要件 3.3／3.5）────────────────────────────────
+// ── 領域解決────────────────────────────────
 
 /// 本番の描画入口で解いた文字の領域を、両 scope について成分ごとに逐語で固定する。
 ///
@@ -200,7 +179,7 @@ fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
     }
 }
 
-// ── 既定書体の門（設計 C2 の F 行・DD4・要件 1.3）────────────────────────────
+// ── 既定書体の門────────────────────────────
 
 /// `font.name` を宣言していないので、書体が ukadoc の既定へ縮退し、高さは宣言どおりになる。
 ///

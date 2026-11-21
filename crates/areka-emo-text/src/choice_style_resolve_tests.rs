@@ -1,11 +1,8 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
-
 // ── ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
 //
-// design.md「純粋層 / ChoicePure」Service Interface（ResolvedChoiceStyle enum + resolve/paint）・
 // 縮退表（cursor.style underline 系→SquareFill／cursor.blendmethod ROP 系→none 扱い／
-// cursor.* 全キー未指定→Invert）・正典確定（cursor.* マップ「既定 square」・fixture 実導出形＝
-// square 塗り(105,25,25)＋白文字／矩形反転縮退「塗り=既定 font.color・文字=各成分 255−c」）。
+// cursor.* 全キー未指定→Invert）・正典（cursor.* マップ「既定 square」・fixture 実導出形＝
+// square 塗り(105,25,25)＋白文字／矩形反転「塗り=既定 font.color・文字=各成分 255−c」）。
 
 use super::*;
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
@@ -29,7 +26,7 @@ fn cursor(
 
 // ── resolve: 未指定 → Invert（縮退ではない） ──
 
-/// cursor 不在（`None`）→ Invert（未指定バルーン判定・4.3/6.1）。
+/// cursor 不在（`None`）→ Invert（未指定バルーン判定）。
 #[test]
 fn resolve_none_cursor_is_invert() {
     assert_eq!(
@@ -38,7 +35,7 @@ fn resolve_none_cursor_is_invert() {
     );
 }
 
-/// cursor.* 全キー未指定（`BalloonCursor::default()`）→ Invert（4.3/6.1）。
+/// cursor.* 全キー未指定（`BalloonCursor::default`）→ Invert。
 #[test]
 fn resolve_all_unspecified_cursor_is_invert() {
     let c = BalloonCursor::default();
@@ -148,7 +145,7 @@ fn paint_no_marker_is_none() {
     assert_eq!(ResolvedChoiceStyle::NoMarker.paint((10, 20, 30)), None);
 }
 
-// ══ spec real-run-log-noise T6（要件 2.5・2.6・5.4）: resolve は記録を出さず、縮退の値は取り出し口が返す ══
+// ══ resolve は記録を出さず、縮退の値は取り出し口が返す ══
 
 /// 白抜きの fixture 色で `style`・`blendmethod` だけを替えた cursor。
 fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
@@ -161,7 +158,7 @@ fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
 }
 
 /// ROP 系・下線系のバルーンで resolve の返り値は今のまま（SquareFill）・記録は 0 件
-/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・`real-run-log-noise` 要件 2.5・2.7）。blendmethod は
+/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる）。blendmethod は
 /// ROP 系でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
 #[test]
 fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
@@ -241,7 +238,7 @@ fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
         styled(None, None),
         styled(Some("none"), None),
         styled(Some("SQUARE"), None),
-        // `none` も大小無視で正典（spec audit-emo-text-state-actor の 2 回目のかけ直し R2-12）。
+        // `none` も大小無視で正典。
         styled(Some("NONE"), None),
         BalloonCursor::default(),
     ] {
@@ -249,7 +246,7 @@ fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
     }
 }
 
-// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-4）: 正典の 4 つでない style は元の値を返す ══
+// ══ 正典の 4 つでない style は元の値を返す ══
 
 /// 正典の 4 つのどれでもない `style` は元の値を返す（描く形は既定の square）。綴り誤りの `squre` の
 /// ほか、`underline` を含むだけの `squareunderline`（`+` の抜け）・`underlined` も下線系に数えない。

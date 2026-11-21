@@ -4,14 +4,14 @@ use crate::canvas::{ContentCanvas, RegionTransform, Resident, ResidentContent, T
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
 
-// ── 5.3 R11.4/15.5: 行指紋の装飾番号列（styles）——装飾だけが違う行を再利用しない ──
+// ── 行指紋の装飾番号列（styles）——装飾だけが違う行を再利用しない ──
 //
 // 行の再利用（変化行検出）の唯一の根拠は `CommittedLine`。文字列・位置・行寸・hover 印だけを
 // 見ていた時代は「同じ文字列で装飾だけが違う行」が一致し、古い見た目のまま再利用された。
 // 番号列（`PositionedGlyph.style.0` の列）を指紋へ写すことで当該行だけが変化行になる。
 
 /// 同じ文字列・同じ位置・同じ行寸・同じ hover 印で**番号列だけ**が違う 2 行は、指紋が異なる
-/// （＝変化ありと判定される・R11.4）。文字列が本当に同じであることも述語に含め、「片方の文字列が
+/// （＝変化ありと判定される）。文字列が本当に同じであることも述語に含め、「片方の文字列が
 /// 違っていたのを装飾のせいと誤認する」経路を塞ぐ。
 /// 較正: `line_fingerprint` が番号列を写さない（`styles` を常に空にする）誤りを入れると、
 /// 他の 4 欄はすべて一致するので `assert_ne!` と番号列の比較が赤になる。
@@ -33,7 +33,6 @@ fn same_text_with_different_style_ids_is_a_changed_line() {
         fp_plain.text, fp_decorated.text,
         "2 行の文字列は同一（差は装飾番号だけ）"
     );
-    // 他の欄も同一であることを断言する（位置・行寸・hover 印が差の原因ではない）。
     assert_eq!(
         fp_plain.block_pos_bits, fp_decorated.block_pos_bits,
         "ブロック軸位置は同一"
@@ -44,14 +43,11 @@ fn same_text_with_different_style_ids_is_a_changed_line() {
         "hover 印は同一（どちらも非 Choice の 0）"
     );
 
-    // 本題: 差は番号列だけ＝この 1 欄が指紋に写っていなければ 2 行は一致してしまう。
-    // 上の 4 つの assert_eq! が「他の欄はすべて同一」を先に固定しているので、この assert_ne! が
-    // 真になれる根拠は番号列しかない。
+    // 差は番号列だけ＝この欄が指紋に写っていなければ 2 行は一致してしまう。
     assert_ne!(
         fp_plain, fp_decorated,
         "同じ文字列でも番号列が違えば変化ありと判定される（R11.4）"
     );
-    // 番号列は `PositionedGlyph.style.0` の列そのもの。
     assert_eq!(fp_plain.styles, vec![0, 0, 0, 0, 0], "既定だけの行の番号列");
     assert_eq!(
         fp_decorated.styles,
@@ -74,7 +70,7 @@ fn same_text_with_same_style_ids_is_an_unchanged_line() {
     );
 }
 
-/// Choice 住人も内包 `run` の番号列を写す（素描画が GlyphRun と同格ゆえ指紋も同格・R9.5）。
+/// Choice 住人も内包 `run` の番号列を写す（素描画が GlyphRun と同格ゆえ指紋も同格）。
 #[test]
 fn choice_line_carries_style_ids_in_its_fingerprint() {
     let mode = WritingMode::HorizontalTb;
@@ -91,7 +87,7 @@ fn choice_line_carries_style_ids_in_its_fingerprint() {
     );
 }
 
-/// 非グリフ住人（シーム）の番号列は空（M1 は `from_layout` で生成されないが、指紋は一様に作る）。
+/// 非グリフ住人（シーム）の番号列は空（`from_layout` では生成されないが、指紋は一様に作る）。
 #[test]
 fn non_glyph_resident_has_an_empty_style_id_list() {
     let mode = WritingMode::HorizontalTb;
@@ -107,7 +103,7 @@ fn non_glyph_resident_has_an_empty_style_id_list() {
 }
 
 /// 実経路（`committed_lines`→`derive_dirty`）で、装飾番号だけが変わった行が**その行だけ**
-/// ダーティになる（全域ダーティへ縮退しない・R11.4）。指紋レベルでなく変化行検出の出力を見る。
+/// ダーティになる（全域ダーティへ縮退しない）。指紋レベルでなく変化行検出の出力を見る。
 #[test]
 fn style_id_change_dirties_only_that_line_through_derive_dirty() {
     let mode = WritingMode::HorizontalTb;
@@ -127,7 +123,6 @@ fn style_id_change_dirties_only_that_line_through_derive_dirty() {
         glyph_resident("りぬるを", 26.0, &[0, 0, 0, 0]),
         glyph_resident("わかよた", 39.0, &[0, 0, 0, 0]),
     ];
-    // 文字列が本当に同じであることを先に確かめる（差分の原因を装飾に限定する）。
     for (b, a) in before.iter().zip(&after) {
         assert_eq!(
             line_fingerprint(b, mode).text,

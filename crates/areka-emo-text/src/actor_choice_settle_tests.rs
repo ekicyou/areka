@@ -1,6 +1,4 @@
-//! 選択肢の「済み」の境目の檻（areka-P0-balloon-text-bugs 件 1・要件 1.10〜1.13）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
+//! 選択肢の「済み」の境目の檻。
 //!
 //! 前半は GPU なしで、場所の状態（`ActorTextState`）の境目と層の状態
 //! （`TextLayerState`）の口だけを固定する: 境目の範囲・消去（`\c`・台詞の頭）で 0 に戻ること・
@@ -335,7 +333,7 @@ use crate::place::TextPlace;
 /// 全部の文字が見えている時刻。
 const LATE: f64 = 10.0;
 
-/// 済んだ行の通しの檻（要件 1.10〜1.12）。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
+/// 済んだ行の通しの檻。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
 ///
 /// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その行は当たり行から消える・
 /// 済み・提示で WARN 0 行／済む前と後で強調なしの読み戻しが同じ／済んだ行に強調を入れても強調なしと同じ。
@@ -404,7 +402,7 @@ fn settled_row_is_unpressable_and_unlit(
     );
 }
 
-/// 普通のバルーンの場所（要件 1.10〜1.12）。
+/// 普通のバルーンの場所。
 #[test]
 fn settled_balloon_row_is_unpressable_and_unlit_on_the_gpu() {
     let (mut world, window, slot) = com_world();
@@ -423,7 +421,7 @@ fn settled_balloon_row_is_unpressable_and_unlit_on_the_gpu() {
     assert!(!rt.choice_active(&actor), "場所の選択肢が全部済んだ");
 }
 
-/// 箱の場所（要件 1.13）。サーフェス 0 の箱 b に選択肢を出す。
+/// 箱の場所。サーフェス 0 の箱 b に選択肢を出す。
 #[test]
 fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
     let (mut world, window, slot) = com_world();
@@ -447,7 +445,7 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
 }
 
 /// 同じスコープの別の箱に済んでいない選択肢が残るあいだは、選択肢の問いは真のまま
-/// （バルーンの時間切れを止めたまま・要件 1.13・GPU なし）。
+/// （バルーンの時間切れを止めたまま・GPU なし）。
 #[test]
 fn a_live_choice_in_another_box_of_the_scope_keeps_choice_active() {
     let mut f = super::box_sync_tests::fixture();

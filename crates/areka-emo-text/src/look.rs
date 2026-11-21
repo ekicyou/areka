@@ -1,42 +1,41 @@
-//! 1 文字に効く「見た目」の値と、その 2 層・装飾の表（純粋層・要件 4.1／4.3／4.5／4.7）。
+//! 1 文字に効く「見た目」の値と、その 2 層・装飾の表（純粋層）。
 //!
 //! `\f[...]` の装飾は、純粋層を**文字ごとの番号**（[`StyleId`]）として流れ、COM 層が番号を
-//! 見た目（[`TextLook`]）へ引き直して DirectWrite の範囲指定に写す（design.md
-//! 「Components and Interfaces > emo-text 純粋層」）。本モジュールはその番号と見た目の
-//! 定義点で、`windows` 系 crate に一切依存しない（描画なしで決定論テストできる）。
+//! 見た目（[`TextLook`]）へ引き直して DirectWrite の範囲指定に写す。
+//! 本モジュールはその番号と見た目の定義点で、`windows` 系 crate に一切依存しない
+//! （描画なしで決定論テストできる）。
 //!
 //! ## 3 つの部品
 //!
 //! - [`TextLook`]——1 文字に効く見た目の全項目（候補列・大きさ・色・太字・斜体・下線・
 //!   打ち消し線・白抜き・上下付き）。値型で、等値なら畳み込める。送り幅に効く項目だけを
 //!   取り出した [`FontKey`] が計測と書式生成の鍵になる。
-//! - [`LookLayers`]——既定・無効表示・選択肢文字色の 2 層＋1 色（要件 4.1／4.4／4.5）。
+//! - [`LookLayers`]——既定・無効表示・選択肢文字色の 2 層＋1 色。
 //!   無効表示は**色だけ**が混色で、他の項目は既定と同じ。
 //! - [`StyleTable`]／[`StyleId`]／[`GlyphStyles`]——「既定と異なる見た目」だけを番号付きで
 //!   持つ追記専用の表。番号 0（[`StyleId::DEFAULT`]）は「そのスコープの既定の見た目」を指す
-//!   記号であって表の要素ではない（design.md D14）。既定だけの台本は番号がすべて 0 になり、
+//!   記号であって表の要素ではない。既定だけの台本は番号がすべて 0 になり、
 //!   COM 層は範囲指定を 1 度も呼ばない。
 //!
 //! ## 正典（ukadoc）
 //!
 //! 既定の見た目はバルーン定義から**いま読めている 5 キー**（`font.name`・`font.height`・
-//! `font.color.r/g/b`）と正典の既定（ＭＳ ゴシック・12・黒・装飾なし）から組む（要件 4.1）。
+//! `font.color.r/g/b`）と正典の既定（ＭＳ ゴシック・12・黒・装飾なし）から組む。
 //! `font.height` の単位は「ピクセル：ポイントではない」。
 //! <https://ssp.shillest.net/ukadoc/manual/descript_balloon.html>
 //!
 //! 無効表示の層は正典の「`disable.font.color` のみバルーンの画像色とミックスした色、ほかは
-//! `font.` 定義群と同じ」に従う（要件 4.5）。混色の式は 1 か所——[`crate::color::mix_disabled`]
+//! `font.` 定義群と同じ」に従う。混色の式は 1 か所——[`crate::color::mix_disabled`]
 //! だけが実装点で、本モジュールはそれを呼ぶ（式を写さない）。
 //!
-//! ## 残りのキーの「口」（要件 4.3／4.7）
+//! ## 残りのキーの「口」
 //!
-//! 飾り 5 本（`font.bold`〜`font.outline`）・影・`disable.font.*` の読み取りは
-//! `areka-P0-balloon-font-descript-keys` の所有で、影を除いて [`crate::balloon_overrides`] が配線済み
-//! （影の 4 キーは受け口が所有外のため渡さない）。口は [`LookLayers::from_balloon`] の
-//! `font_overrides`／`disable_overrides` の 2 引数で、1 件は `\f` と**同じ形のトークン列**——
-//! `font.bold,1` なら `["bold", "1"]`、`disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。キーごとに引数を増やさない。
-//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という状態を
-//! `look_tests.rs` §3 が明示的に固定している。
+//! 飾り 5 本（`font.bold`〜`font.outline`）・影・`disable.font.*` の読み取りは影を除いて
+//! [`crate::balloon_overrides`] が配線済み（影の 4 キーは受け口が所有外のため渡さない）。
+//! 口は [`LookLayers::from_balloon`] の `font_overrides`／`disable_overrides` の 2 引数で、
+//! 1 件は `\f` と**同じ形のトークン列**——`font.bold,1` なら `["bold", "1"]`、
+//! `disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。キーごとに引数を増やさない。
+//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のまま。
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -68,7 +67,7 @@ pub const UKADOC_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 pub const UKADOC_DEFAULT_FONT_HEIGHT: f32 = 12.0;
 
 /// フォント名の候補列（記述順）——複製は共有の参照を 1 つ増やすだけで、ハッシュは組んだときに
-/// 1 度だけ計算して持つ（再監査 R2-B1・字ごとに候補の数に比例する仕事をすると N² になる）。
+/// 1 度だけ計算して持つ（字ごとに候補の数に比例する仕事をすると N² になる）。
 /// 同値は中身の同値のまま、同じ参照どうしは要素を比べない（寄せるのは [`StyleTable::intern`]）。
 #[derive(Clone, Debug)]
 pub struct FontNames {
@@ -136,15 +135,15 @@ pub struct TextLook {
     pub underline: bool,
     /// 打ち消し線（`SetStrikethrough`）。
     pub strike: bool,
-    /// 白抜き——語彙のみ（表示に効かない・予約・要件 5.9）。
+    /// 白抜き——語彙のみ（表示に効かない・予約）。
     pub outline: bool,
-    /// 上下付き——語彙のみ（表示に効かない・要件 6.1）。
+    /// 上下付き——語彙のみ（表示に効かない）。
     pub script: Script,
 }
 
 /// `==` と同じ同値の鍵——大きさは `0.0` と `-0.0` を同じビットへ寄せる（`==` が等しいとみなす
 /// 2 値が別の鍵へ割れないため）。NaN は `==` が自分とも等しくないので、索引でも決して当たらず
-/// 旧来の線形走査と同じく毎回新しい番号になる（大きさは常に正の有限値なので本番には現れない）。
+/// 毎回新しい番号になる（大きさは常に正の有限値なので本番には現れない）。
 impl Hash for TextLook {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
@@ -168,7 +167,7 @@ impl Hash for TextLook {
 impl Eq for TextLook {}
 
 impl TextLook {
-    /// 正典の既定——ＭＳ ゴシック・12・黒・装飾はすべて無効（要件 4.1）。
+    /// 正典の既定——ＭＳ ゴシック・12・黒・装飾はすべて無効。
     pub fn ukadoc_default() -> TextLook {
         TextLook {
             name: vec![UKADOC_DEFAULT_FONT_NAME.to_owned()].into(),
@@ -213,7 +212,7 @@ pub struct FontKey {
     pub italic: bool,
 }
 
-/// 既定・無効表示・選択肢文字色（要件 4.1／4.4／4.5／4.7）。
+/// 既定・無効表示・選択肢文字色。
 ///
 /// `\f[default]`／`\f[キー,default]` の戻し先が [`LookLayers::default`]、
 /// `\f[disable]`／`\f[キー,disable]` の戻し先が [`LookLayers::disable`]、
@@ -230,7 +229,7 @@ pub struct LookLayers {
 }
 
 impl LookLayers {
-    /// バルーン定義から読めている値と正典の既定で 2 層を組む（要件 4.1／4.5）。
+    /// バルーン定義から読めている値と正典の既定で 2 層を組む。
     ///
     /// - `name_candidates` が空なら正典の既定名（[`UKADOC_DEFAULT_FONT_NAME`]）。
     /// - `height` が正の有限値でなければ正典の既定 12（下流の DirectWrite は em に正値を
@@ -239,13 +238,12 @@ impl LookLayers {
     ///   （[`resolve`](crate::draw::ResolvedFont::resolve) の実装本体）が `warn!` で
     ///   記録済みなので、ここでは二重に記録しない。
     /// - `background` はバルーンの背景色で、無効表示の色を導くためだけに使う
-    ///   （`disable.color = mix_disabled(default.color, background)`・要件 4.6）。
+    ///   （`disable.color = mix_disabled(default.color, background)`）。
     ///
-    /// - `font_overrides`／`disable_overrides` はバルーン定義の残りのキーを差し込む口
-    ///   （要件 4.3／4.7）。1 件は `\f` と**同じ形のトークン列**——`[0]` がキー、`[1..]` が
-    ///   値の列で、`disable.font.bold,1` なら `["bold", "1"]` を渡す。項目を 1 つも
-    ///   名指ししないので、読めるキーが 8 個でも 20 個でも本関数の形は変わらない
-    ///   （モジュールの説明「残りのキーの口」）。
+    /// - `font_overrides`／`disable_overrides` はバルーン定義の残りのキーを差し込む口。
+    ///   1 件は `\f` と**同じ形のトークン列**（`[0]` がキー、`[1..]` が値の列）で、
+    ///   `disable.font.bold,1` なら `["bold", "1"]`。項目を名指ししないので、読めるキーが
+    ///   増えても本関数の形は変わらない。
     pub fn from_balloon(
         name_candidates: Vec<String>,
         height: f32,
@@ -272,8 +270,7 @@ impl LookLayers {
         };
         apply_overrides(&mut default, cursor_text, "font.", font_overrides);
         // 無効表示は色だけが違う——項目を列挙せず既定層から複製するので、
-        // 後続仕様が TextLook へ項目を足しても「色以外は既定と同じ」が自動で保たれる
-        // （要件 4.5）。キーごとの違いは下の差し込みだけが作る（要件 4.7）。
+        // TextLook に項目が増えても「色以外は既定と同じ」が保たれる。
         let mut disable = TextLook {
             color: mix_disabled(default.color, background),
             ..default.clone()
@@ -295,7 +292,7 @@ impl LookLayers {
 /// バルーン定義のキーを 1 層へ差し込む（[`LookLayers::from_balloon`] の口の実体）。
 ///
 /// 台本の `\f` と同じ [`apply_font_tag`] を通すので、値の綴りの解釈（真偽値の別名・色名・
-/// 相対の大きさ）が台本側と 1 か所に揃い、項目を列挙しない（要件 4.3／4.7／10.4）。
+/// 相対の大きさ）が台本側と 1 か所に揃い、項目を列挙しない。
 ///
 /// `default`／`disable` の語（`\f[color,default]` の類）は**差し込みの前の層**を指す——
 /// バルーン定義に書かれた値どうしが互いを参照して順序に依存する事態を作らないためで、
@@ -352,7 +349,7 @@ impl Default for LookLayers {
 pub struct StyleId(pub u32);
 
 impl StyleId {
-    /// そのスコープの既定の見た目（表の要素ではない・design.md D14）。
+    /// そのスコープの既定の見た目（表の要素ではない）。
     pub const DEFAULT: StyleId = StyleId(0);
 }
 
@@ -366,7 +363,7 @@ pub struct StyleTable {
     /// `looks` の索引（見た目→番号）。[`StyleTable::clear`] で一緒に空にする。
     index: HashMap<TextLook, StyleId>,
     /// 届いた候補列（中身ごとに 1 つ）と、届いた参照の番地 → その 1 つ（参照を握るので番地は
-    /// 使い回されない）。別に組んだ同じ中身の列も、中身を比べるのは参照ごとに 1 度だけ（R2-B1）。
+    /// 使い回されない）。別に組んだ同じ中身の列も、中身を比べるのは参照ごとに 1 度だけ。
     names: HashSet<FontNames>,
     aliases: HashMap<usize, (Arc<[String]>, FontNames)>,
 }
@@ -438,7 +435,8 @@ impl StyleTable {
         self.looks.is_empty()
     }
 
-    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。別に組んだ表どうしの候補列は、中身を参照の組ごとに 1 度だけ比べる（R3-B-M1）。
+    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。
+    /// 別に組んだ表どうしの候補列は、中身を参照の組ごとに 1 度だけ比べる。
     pub fn starts_with(&self, prefix: &StyleTable) -> bool {
         let mut same = HashSet::new();
         prefix.looks.len() <= self.looks.len()
@@ -489,34 +487,31 @@ impl<'a> GlyphStyles<'a> {
 /// `\f` を 1 件適用した結果のうち、呼び手が記録に残すべき印（記録そのものは呼び手の担当）。
 ///
 /// 純粋層は `warn!`／`debug!` を出さない——同じキーと値の繰り返しを「1 台詞に 1 度」へ
-/// まとめるのは、台詞の区切りを知っている呼び手（`state_decoration`）の役目だからである
-/// （design.md「Error Handling」）。
+/// まとめるのは、台詞の区切りを知っている呼び手（`state_decoration`）の役目だからである。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Note {
-    /// 状態は更新したが**表示は変えない**——`sub`／`sup`（要件 6.1）と `outline`（要件 5.9）。
+    /// 状態は更新したが**表示は変えない**——`sub`／`sup`と `outline`。
     /// 呼び手は `warn!` を 1 台詞に 1 度残す。
     VocabularyOnly {
         /// どの項目か（`"sub"`／`"sup"`／`"outline"`）。
         key: &'static str,
     },
     /// スタイルシートの大きさキーワード（`xx-small`〜`xx-large`・`larger`・`smaller`）——
-    /// 語彙として受理するが**大きさは変えない**（要件 7.7・design §A 項目 3）。
+    /// 語彙として受理するが**大きさは変えない**。
     /// 呼び手は `warn!` を 1 台詞に 1 度残す。
     StylesheetKeyword,
     /// `\f[color,default.anchor]`／`default.anchornotselect`／`default.anchorvisited`——
-    /// アンカーの色定義がまだ無いので **`default` と同じ色**を適用した（要件 8.8・
-    /// design §A 項目 11）。呼び手は `warn!` を 1 台詞に 1 度残す。消費者（本物のアンカー色）は
-    /// `anchor-style-canon` がこの腕を差し替えて足す。
+    /// アンカーの色定義がまだ無いので **`default` と同じ色**を適用した。
+    /// 呼び手は `warn!` を 1 台詞に 1 度残す。本物のアンカー色を実装するときはこの腕を差し替える。
     AnchorColorAsDefault,
-    /// 本仕様が意味を与えないキー——見た目を変えない（要件 2.5）。値を捨てずに保つのと
+    /// このモジュールが意味を与えないキー——見た目を変えない。値を捨てずに保つのと
     /// `debug!` の記録は呼び手の担当。
     Unowned,
 }
 
 /// 適用できなかった `\f` 1 件（当該項目は変わらない・呼び手が `warn!` に載せる材料）。
 ///
-/// 呼び手は `warn!(actor, key, value, reason)` の構造化フィールドへそのまま載せる
-/// （design.md「Error Handling」の「キー＝値ごとに 1 台詞 1 度」）。
+/// 呼び手は `warn!(actor, key, value, reason)` の構造化フィールドへそのまま載せる。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FontTagIssue {
     /// 受け取ったキー（キーが無い形では空文字列）。
@@ -529,13 +524,12 @@ pub struct FontTagIssue {
 
 /// 適用できなかった `\f` が、キーの段で拒まれたか値の段で拒まれたか（[`FontTagIssue::failure`]）。
 ///
-/// 台本の検査（`areka-P0-mcp-author-tools` の `check_script`）は前の 2 つだけを「知らないタグ」
-/// として返し、値の誤りは診ない。
+/// 台本の検査（`check_script`）は前の 2 つだけを「知らないタグ」として返し、値の誤りは診ない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FontTagFailure {
-    /// 43 形のいずれでもないキー（要件 2.6）。
+    /// 43 形のいずれでもないキー。
     UnknownKey,
-    /// キーが無い——`\f`／`\f[]`／`\f[""]`（要件 2.6）。
+    /// キーが無い——`\f`／`\f[]`／`\f[""]`。
     NoKey,
     /// キーは知っているが値が受け付けられなかった（色の書式の誤りを含む）。
     BadValue,
@@ -564,7 +558,7 @@ pub enum FontClass {
 
 /// `\f` を使い捨ての見た目に適用し、受け取るだけのキーは `Ignored`、知らないキー・キーなしは
 /// `UnknownKey`。値の誤りと、他の `Ok`（`AnchorColorAsDefault` を含む）は診ない（None）。
-/// `check_script` と strict の再生が同じ物差しで引く（`mcp-strict-errors` 要件 2.7）。
+/// `check_script` と strict の再生が同じ物差しで引く。
 pub fn classify_font_tag(args: &[String]) -> Option<FontClass> {
     let layers = LookLayers::default();
     let mut look = layers.default.clone();
@@ -581,26 +575,24 @@ pub fn classify_font_tag(args: &[String]) -> Option<FontClass> {
     }
 }
 
-/// `\f`／`\f[]`／`\f[""]`——キーが無い（要件 2.6）。
+/// `\f`／`\f[]`／`\f[""]`——キーが無い。
 pub(crate) const REASON_NO_KEY: &str = "\\f にキーが無い";
-/// 43 形のいずれでもないキー（要件 2.6）。キーも小文字の完全一致のみ。
+/// 43 形のいずれでもないキー。キーも小文字の完全一致のみ。
 pub(crate) const REASON_UNKNOWN_KEY: &str = "未知の \\f のキー（キーは小文字のみ）";
 /// 値がちょうど 1 つでない——値なし（`\f[bold]`・`\f[height]`）と値が 2 つ以上
-/// （`\f[bold,1,0]`・`\f[height,15,20]`）の両方（要件 5.5・7.6）。
+/// （`\f[bold,1,0]`・`\f[height,15,20]`）の両方。
 pub(crate) const REASON_VALUE_COUNT: &str = "値がちょうど 1 つでない";
-/// 6 語のいずれでもない値（要件 5.5）。語は小文字の完全一致のみ。
+/// 6 語のいずれでもない値。語は小文字の完全一致のみ。
 pub(crate) const REASON_BAD_SWITCH: &str = "真偽値が 6 語のいずれでもない（語は小文字のみ）";
 /// 大きさの値が数値・相対（`+N`／`-N`）・百分率・`default`／`disable`・スタイルシートの語の
-/// いずれとしても読めない（要件 7.6 の「非数」）。
+/// いずれとしても読めない（「非数」を含む）。
 pub(crate) const REASON_BAD_HEIGHT: &str = "大きさの値が読めない";
-/// 大きさの結果が正の有限値にならない——`0` 以下・非有限・相対指定で 0 以下へ落ちた場合
-/// （要件 7.6）。
+/// 大きさの結果が正の有限値にならない——`0` 以下・非有限・相対指定で 0 以下へ落ちた場合。
 pub(crate) const REASON_HEIGHT_NOT_POSITIVE: &str = "大きさが正の有限値にならない";
-/// `\f[name]` に候補が 1 つも無い（値なし、または候補がすべて空文字列・要件 9.1）。
+/// `\f[name]` に候補が 1 つも無い（値なし、または候補がすべて空文字列）。
 pub(crate) const REASON_NO_CANDIDATE: &str = "フォント名の候補が無い";
 
-/// スタイルシートの大きさキーワード——**語彙として受理するだけ**で大きさを変えない
-/// （要件 7.7・design §A 項目 3）。
+/// スタイルシートの大きさキーワード——**語彙として受理するだけ**で大きさを変えない。
 ///
 /// CSS の絶対サイズ 7 語（`xx-small`〜`xx-large`）と相対サイズ 2 語（`larger`／`smaller`）。
 /// ukadoc は「スタイルシートのサイズ指定も可能」としか述べず、どの語が何ピクセルになるかを
@@ -614,7 +606,7 @@ pub(crate) const STYLESHEET_SIZE_KEYWORDS: [&str; 9] = [
 /// ukadoc は「パラメータに true または 1 を指定すると太字」「false または 0 を指定すると無効」
 /// 「default を指定するとバルーン設定の標準に戻る」「disable を指定すると無効表示と同じ設定に
 /// なる」と定める。大文字を畳み込んで受けることは正典が定めておらず、areka は
-/// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える（design §A 項目 12）。
+/// `doc/COMPAT_ARCHITECTURE.md` の「小文字の完全一致のみ」の先例に揃える。
 /// <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1>
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Switch {
@@ -664,14 +656,12 @@ fn script_of_key(key: &str) -> Option<Script> {
     }
 }
 
-/// 本仕様が意味を与えないキー（要件 2.5 の列挙——寄せ 2・影 2・`cursor…` 12・`anchor…` 19）。
-/// 一覧に無いキーは前方一致で拾わず不明のキーにする（書き損じを `warn!` で残す・要件 2.6）。
+/// このモジュールが意味を与えないキー（寄せ 2・影 2・`cursor…` 12・`anchor…` 19）。
+/// 一覧に無いキーは前方一致で拾わず不明のキーにする（書き損じを `warn!` で残す）。
 ///
 /// `cursor…` 12 と `anchor…` のうち 18 は ukadoc の「選択肢マーカー変更コマンド」の各項目の
 /// 見出しのキー（`cursorcolor` と `cursorbrushcolor` のように 1 項目に 2 つ並ぶものは両方）。
 /// `anchor…` の残り 1 は「文字変更コマンド」の `anchor.font.color`（18＋1＝19）。
-/// 所有仕様は `text-align-shadow-canon`（寄せ・影）・
-/// `choice-marker-styling`（`cursor…`）・`anchor-style-canon`（`anchor…`）。
 const UNOWNED_KEYS: [&str; 35] = [
     "align",
     "valign",
@@ -723,7 +713,7 @@ fn issue(key: &str, values: &[&str], reason: &'static str) -> FontTagIssue {
     }
 }
 
-/// 値をちょうど 1 つ取り出す（値なしと 2 つ以上はどちらも当該項目を変えない・要件 5.5・7.6）。
+/// 値をちょうど 1 つ取り出す（値なしと 2 つ以上はどちらも当該項目を変えない）。
 fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIssue> {
     match values {
         [one] => Ok(one),
@@ -739,15 +729,15 @@ fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIss
 ///
 /// # 持っている腕
 ///
-/// - 一括の戻し `\f[default]`／`\f[disable]`——見た目を**丸ごと置き換える**（要件 10.1／10.2）。
-///   項目を列挙しないので、後続仕様が [`TextLook`] へ項目を足せば自動で戻しに含まれる（要件 10.4）。
+/// - 一括の戻し `\f[default]`／`\f[disable]`——見た目を**丸ごと置き換える**。
+///   項目を列挙しないので、後続仕様が [`TextLook`] へ項目を足せば自動で戻しに含まれる。
 /// - 真偽 5 項目 `bold`／`italic`／`underline`／`strike`／`outline`——6 語で当該項目だけを
-///   動かす（要件 5.1〜5.4・5.8）。`outline` は状態だけ更新して表示は変えない（要件 5.9）。
-/// - 上下付き `sub`／`sup`——同じ 6 語で解釈し、後から指定した方が先を外す（要件 6.1／6.2）。
-/// - 値を持つ 3 キー——`height`（相対はそのとき効いている大きさ・百分率は既定の大きさが基準・
-///   要件 7.1〜7.7）・`color`（解析は [`crate::color::parse_color`]・要件 8.5〜8.8）・`name`（候補列は
-///   記述順のまま・要件 9.1／9.2／9.5／9.6）。いずれも**当該項目以外は触らない**。
-/// - 所有外のキー——見た目を変えず [`Note::Unowned`]（要件 2.5）。
+///   動かす。`outline` は状態だけ更新して表示は変えない。
+/// - 上下付き `sub`／`sup`——同じ 6 語で解釈し、後から指定した方が先を外す。
+/// - 値を持つ 3 キー——`height`（相対はそのとき効いている大きさ・百分率は既定の大きさが基準）・
+///   `color`（解析は [`crate::color::parse_color`]）・`name`（候補列は
+///   記述順のまま）。いずれも**当該項目以外は触らない**。
+/// - 所有外のキー——見た目を変えず [`Note::Unowned`]。
 ///
 /// # 事前条件・事後条件
 ///
@@ -763,9 +753,8 @@ pub fn apply_font_tag(
     };
     let values = &args[1..];
 
-    // 一括の戻し——見た目を丸ごと置き換える（項目を列挙しない・要件 10.4）。
-    // 正典の綴りは値を取らない `\f[default]`／`\f[disable]` で、意味はキーだけで決まる。
-    // 余った値（`\f[default,1]` のような綴り誤り）は戻しを妨げない。
+    // 一括の戻しは見た目を丸ごと置き換える（項目を列挙しない）。正典の綴りは値を取らず、
+    // 意味はキーだけで決まる。余った値（`\f[default,1]` のような綴り誤り）は戻しを妨げない。
     if key == "default" {
         *current = layers.default.clone();
         return Ok(None);
@@ -792,7 +781,7 @@ pub fn apply_font_tag(
     Err(issue(key, values, REASON_UNKNOWN_KEY))
 }
 
-/// 真偽 5 項目の 1 つを 6 語で動かす（当該項目以外は触らない・要件 5.1〜5.5）。
+/// 真偽 5 項目の 1 つを 6 語で動かす（当該項目以外は触らない）。
 fn apply_switch(
     current: &mut TextLook,
     layers: &LookLayers,
@@ -815,15 +804,14 @@ fn apply_switch(
         }
     };
     *slot(current) = next;
-    // 白抜きは状態だけ更新して表示は変えない（要件 5.9）。
     Ok((key == "outline").then_some(Note::VocabularyOnly { key: "outline" }))
 }
 
-/// 上下付きを 6 語で動かす（要件 6.1／6.2）。
+/// 上下付きを 6 語で動かす。
 ///
 /// 上下付きは 1 つの値（[`Script`]）なので、`sub` を立てれば `sup` は自動的に外れる
-/// ——後から指定した方が残る（要件 6.2）。外す側は「いま効いているのが当該の方のとき
-/// だけ」外す（`\f[sub,0]` が上付きを消してしまわない）。
+/// ——後から指定した方が残る。外す側は「いま効いているのが当該の方のときだけ」外す
+/// （`\f[sub,0]` が上付きを消してしまわない）。
 fn apply_script(
     current: &mut TextLook,
     layers: &LookLayers,
@@ -854,23 +842,23 @@ fn apply_script(
     }))
 }
 
-/// `\f[height,…]` の値の読み——**大きさをどう決めるか**の 6 通り（要件 7.1〜7.5・7.7）。
+/// `\f[height,…]` の値の読み——**大きさをどう決めるか**の 6 通り。
 ///
 /// 「基準は何か」を型で分けておくのが肝で、[`HeightSpec::Relative`] は**そのとき効いている
-/// 大きさ**、[`HeightSpec::Percent`] は**既定の見た目の大きさ**という別の基準を持つ
-/// （design §A 項目 1・2）。両者を同じ「数値」に潰すと基準の取り違えが型に映らない。
+/// 大きさ**、[`HeightSpec::Percent`] は**既定の見た目の大きさ**という別の基準を持つ。
+/// 両者を同じ「数値」に潰すと基準の取り違えが型に映らない。
 enum HeightSpec {
-    /// `N`——em を image px で直に指定（要件 7.1）。
+    /// `N`——em を image px で直に指定。
     Absolute(f32),
-    /// `+N`／`-N`——そのとき効いている大きさへの加減（符号込みの増分・要件 7.2）。
+    /// `+N`／`-N`——そのとき効いている大きさへの加減（符号込みの増分）。
     Relative(f32),
-    /// `N%`——既定の見た目の大きさに対する百分率（要件 7.3）。
+    /// `N%`——既定の見た目の大きさに対する百分率。
     Percent(f32),
-    /// `default`——大きさだけを既定層へ（要件 7.4）。
+    /// `default`——大きさだけを既定層へ。
     Default,
-    /// `disable`——大きさだけを無効表示層へ（要件 7.5）。
+    /// `disable`——大きさだけを無効表示層へ。
     Disable,
-    /// スタイルシートの大きさキーワード——語彙のみ（大きさを変えない・要件 7.7）。
+    /// スタイルシートの大きさキーワード——語彙のみ（大きさを変えない）。
     Keyword,
 }
 
@@ -878,7 +866,7 @@ enum HeightSpec {
 ///
 /// 見る順に意味がある——`default`／`disable`／スタイルシートの語を先に選り分けてから
 /// 書式を見る。百分率（末尾 `%`）と相対（先頭の符号）は数値より先で、残りが絶対指定。
-/// 語はいずれも**小文字の完全一致のみ**（6 語の規律と同じ・design §A 項目 12）。
+/// 語はいずれも**小文字の完全一致のみ**（6 語の規律と同じ）。
 fn parse_height(value: &str) -> Option<HeightSpec> {
     match value {
         "default" => return Some(HeightSpec::Default),
@@ -897,9 +885,9 @@ fn parse_height(value: &str) -> Option<HeightSpec> {
     value.parse().ok().map(HeightSpec::Absolute)
 }
 
-/// `\f[height,…]`——大きさだけを動かす（要件 7.1〜7.7）。
+/// `\f[height,…]`——大きさだけを動かす。
 ///
-/// 結果が正の有限値にならなければ**大きさを変えず**理由を返す（要件 7.6）。この検査は
+/// 結果が正の有限値にならなければ**大きさを変えず**理由を返す。この検査は
 /// 6 通りすべての出口に 1 つだけ置く——`0` の直指定も、相対指定で 0 以下へ落ちた場合も、
 /// `inf`／`NaN` も、同じ 1 か所で止まる。
 fn apply_height(
@@ -912,13 +900,12 @@ fn apply_height(
     let spec = parse_height(value).ok_or_else(|| issue(key, values, REASON_BAD_HEIGHT))?;
     let next = match spec {
         HeightSpec::Absolute(size) => size,
-        // 基準は「そのとき効いている大きさ」——重ねて効く（design §A 項目 1）。
+        // 基準は「そのとき効いている大きさ」——重ねて効く。
         HeightSpec::Relative(delta) => current.height + delta,
-        // 基準は「既定の見た目の大きさ」——重ねて効かない（design §A 項目 2）。
+        // 基準は「既定の見た目の大きさ」——重ねて効かない。
         HeightSpec::Percent(percent) => layers.default.height * percent / 100.0,
         HeightSpec::Default => layers.default.height,
         HeightSpec::Disable => layers.disable.height,
-        // 語彙として受理するだけ——大きさは変えない（呼び手が warn を 1 度残す・要件 7.7）。
         HeightSpec::Keyword => return Ok(Some(Note::StylesheetKeyword)),
     };
     if !next.is_finite() || next <= 0.0 {
@@ -928,11 +915,11 @@ fn apply_height(
     Ok(None)
 }
 
-/// `\f[color,…]`——文字色だけを動かす（要件 8.1〜8.9）。
+/// `\f[color,…]`——文字色だけを動かす。
 ///
-/// 書式の解析は [`crate::color::parse_color`] の唯一の担当（要件 8.10）で、ここが持つのは
+/// 書式の解析は [`crate::color::parse_color`] の唯一の担当で、ここが持つのは
 /// **語彙をどの層へ解決するか**だけ。アンカー 3 語はアンカーの色定義がまだ無いので既定層へ
-/// 落とし、呼び手が warn を残せるよう印を返す（要件 8.8・design §A 項目 11）。
+/// 落とし、呼び手が warn を残せるよう印を返す。
 fn apply_color(
     current: &mut TextLook,
     layers: &LookLayers,
@@ -955,10 +942,10 @@ fn apply_color(
     Ok(note)
 }
 
-/// `\f[name,…]`——フォント名の候補列だけを動かす（要件 9.1／9.2／9.5／9.6）。
+/// `\f[name,…]`——フォント名の候補列だけを動かす。
 ///
-/// 候補列は**記述順のまま**保つ。実在の判定・フォントファイル名の読み飛ばし（要件 9.3）・
-/// 全滅時の既定への差し戻し（要件 9.4）はいずれも描画層（`FontCatalog`）の担当で、
+/// 候補列は**記述順のまま**保つ。実在の判定・フォントファイル名の読み飛ばし・
+/// 全滅時の既定への差し戻しはいずれも描画層（`FontCatalog`）の担当で、
 /// 純粋層はここで候補を落としたり並べ替えたりしない。
 fn apply_name(
     current: &mut TextLook,
@@ -966,10 +953,8 @@ fn apply_name(
     key: &str,
     values: &[&str],
 ) -> Result<Option<Note>, FontTagIssue> {
-    // 候補が 1 つも無い（値なし・空文字列だけ）——[`TextLook::name`] は空にしない。
-    // 途中の空トークン（`\f[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
-    // 渡してくる（要件 2.2）ので、この層でも記述順を変えない。実在しない候補として
-    // 描画層の [`FontCatalog`] が読み飛ばす（要件 9.1・9.2）。
+    // [`TextLook::name`] は空にしない。途中の空トークン（`\f[name,a,,b]`）は落とさず
+    // 記述順のまま残す（実在しない候補として描画層の [`FontCatalog`] が読み飛ばす）。
     if values.iter().all(|candidate| candidate.is_empty()) {
         return Err(issue(key, values, REASON_NO_CANDIDATE));
     }

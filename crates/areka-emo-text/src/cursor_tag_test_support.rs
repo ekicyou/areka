@@ -1,22 +1,21 @@
-//! 解決層 `cursor_tag` のテストが共有する前提（design.md「Testing Strategy ／ Unit Tests」の
-//! 共通前提の**唯一の住処**）。
+//! 解決層 `cursor_tag` のテストが共有する前提の**唯一の住処**。
 //!
 //! テーマ別に分かれた 2 つのテストモジュール（`cursor_tag_tests.rs`＝記録の 2 口／
 //! `cursor_tag_resolve_tests.rs`＝解決表の全網羅）が同じ値を見るために集約している。
 //! 複製すると「共通前提」を名乗る値が黙って食い違う。
 //!
-//! 共通前提は design.md の逐語:
+//! 共通前提:
 //! `font_height = 10`・`line_pitch = 12`・`image_size = (400, 224)`・
 //! `origin`＝宣言例 `(50, 20)`・`current = (200, 30)`。
 //!
-//! 行送り 12 は `1lh`＝1em＋行間の既定 2（`areka-P0-emo-text-line-height-canon` の裁定）。
+//! 行送り 12 は `1lh`＝1em＋行間の既定 2。
 
 use super::CursorBasis;
 use crate::layout::test_support::model_rect;
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
-/// design.md「Unit Tests」共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
+/// 共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
 pub(super) const FONT_HEIGHT: f32 = 10.0;
 /// 同・行送り（正典 `1lh`＝1em＋行間。`10 + 2 = 12`）。
 pub(super) const LINE_PITCH: f32 = 12.0;
@@ -27,7 +26,7 @@ pub(super) const ORIGIN: (f32, f32) = (50.0, 20.0);
 /// 同・現在の文字描画位置（`@` 相対の基点）。
 pub(super) const CURRENT: (f32, f32) = (200.0, 30.0);
 
-/// design.md「Unit Tests」共通前提そのままの基点束。
+/// 共通前提そのままの基点束。
 pub(super) fn basis() -> CursorBasis {
     CursorBasis {
         origin: ORIGIN,

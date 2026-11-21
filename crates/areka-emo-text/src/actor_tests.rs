@@ -1,12 +1,10 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
-
 use super::TextSlotBinding;
 use bevy_ecs::prelude::World;
 
 /// image px 原寸は**導出せず透過する**。
 ///
-/// k と物理寸から image px 原寸を計算し直す変異（＝旧実装の復活）を殺す。k=1.25・物理
-/// (127, 94) に対し旧導出は (102, 75) を返したが、正しい原寸は**呼び手が渡した値**である。
+/// k と物理寸から image px 原寸を計算し直す変異を殺す。k=1.25・物理 (127, 94) から
+/// 再計算すると (102, 75) になるが、正しい原寸は**呼び手が渡した値**である。
 /// 端数を含む物理寸でも原寸は 1bit も動かない——これが「作者画像空間は k 不変」の意味。
 #[test]
 fn binding_passes_image_size_through_without_deriving_it() {
@@ -31,9 +29,9 @@ fn binding_passes_image_size_through_without_deriving_it() {
 /// k<1 の透過檻: k=4/5・物理 (114, 62)・原寸 (142, 77)。
 ///
 /// k<1 の順写像は**縮小写像＝単射でない**: `scale_len` は 142 も 143 も物理 114 へ、
-/// 77 も 78 も 62 へ潰す。潰れた情報は割り算では戻らず、旧導出 `round(物理 / k)` は
-/// この衝突対のどちらかで必ず 1px 間違える（実測では 114 から 143 を返すため 142 側が落ちる）。
-/// 透過にした今は k の大小に依らず厳密。
+/// 77 も 78 も 62 へ潰す。潰れた情報は割り算では戻らず、`round(物理 / k)` はこの衝突対の
+/// どちらかで必ず 1px 間違える（114 から 143 を返すため 142 側が落ちる）。
+/// 透過なので k の大小に依らず厳密。
 #[test]
 fn binding_passes_image_size_through_at_sub_unity_scale() {
     let mut world = World::new();
@@ -105,7 +103,7 @@ fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
     );
 }
 
-/// 先渡しの受け取り（要件 2.1・4.1）: 本物の受け口（[`spawn_emo_text`](super::spawn_emo_text)
+/// 先渡しの受け取り: 本物の受け口（[`spawn_emo_text`](super::spawn_emo_text)
 /// の取り出し）へ先渡しを積んで汲み出すと、実行時が空回しして区間の全文を持ち、受け取りの
 /// `debug!` がちょうど 1 行（合図の数・求めた区間の数）出る。続く本番の合図は、状態を進める前に
 /// 消去を数える（頭の全消去と途中の `\c` で、その場所の区間の番号が 1 つずつ進む）。

@@ -1,4 +1,4 @@
-//! # 縦書きの帯の実フォントの読み戻し（spec vertical-choice-hover-band・設計の R）
+//! # 縦書きの帯の実フォントの読み戻し
 //!
 //! 帯が乗せた列の字のインクを全幅で覆い、厚みが em × k、塗りの中心が書体から測った em の箱の
 //! 中心に在ることを、Yu Gothic UI とぱすたの縦書きのバルーンの `font.name` の候補列（本番と同じ
@@ -29,7 +29,7 @@ use windows::core::HSTRING;
 use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 
 /// 1 つの組（書体 × 大きさ × 向き × 拡大率）を本番と同じ道（配置 → 帯の決め → 塗りの住人へ
-/// 焼く → 描く）で読み戻し、赤になった確かめを返す。測った数は標準出力へ出す（`research.md` の材料）。
+/// 焼く → 描く）で読み戻し、赤になった確かめを返す。測った数は標準出力へ出す。
 fn vertical_band_case(
     rig: &mut Rig,
     factory: &IDWriteFactory2,
@@ -45,7 +45,7 @@ fn vertical_band_case(
     let font = ResolvedFont::resolve(&model);
     let picked = fonts.pick(&font);
     let tag = format!("[{} {size} {mode:?} k={k}]", picked.name);
-    // 5.3: 候補列が本番の解決で引けた書体の名前を固定する（5.1 で確かめた名前）。
+    // 候補列が本番の解決で引けた書体の名前を固定する。
     if picked.name != expect {
         red.push(format!(
             "{tag} 5.3: 書体 {name} が {} に引けた（{expect} のはず）",
@@ -194,7 +194,7 @@ fn vertical_band_case(
             "{tag} {word} に乗せた: 塗り x{}..{}・y{}..{}",
             fx.0, fx.1, fy.0, fy.1
         );
-        // 1.1・1.2: 乗せた列のインクが塗りの中に在る。
+        // 乗せた列のインクが塗りの中に在る。
         match ink[seg.line_index] {
             Some(i) if i.0 >= fx.0 && i.1 <= fx.1 => {}
             Some(i) => red.push(format!(
@@ -208,7 +208,7 @@ fn vertical_band_case(
             )),
             None => red.push(format!("{tag} {word}: 乗せていない面に列のインクが無い")),
         }
-        // 4.2: 塗りのブロック軸の幅が em × 拡大率。
+        // 塗りのブロック軸の幅が em × 拡大率。
         let width = fx.1 - fx.0 + 1;
         let want = (em * k).round() as u32;
         if width != want {
@@ -216,7 +216,7 @@ fn vertical_band_case(
                 "{tag} {word} 4.2: 塗りの幅 {width} が em × k ＝ {want} でない"
             ));
         }
-        // 1.4: 隣の列のインクと交わらない（"Ag" の列は記録だけ＝合否に入れない・設計の行き止まり）。
+        // 隣の列のインクと交わらない（"Ag" の列は記録だけ＝合否に入れない）。
         for j in [seg.line_index.wrapping_sub(1), seg.line_index + 1] {
             if let Some(Some(n)) = ink.get(j)
                 && n.0 <= fx.1
@@ -233,7 +233,7 @@ fn vertical_band_case(
                 }
             }
         }
-        // 1.3: 行内の範囲が選択肢の字の範囲。
+        // 行内の範囲が選択肢の字の範囲。
         let want_y = (
             ((seg.inline_range.0 - region.top()) * k).round() as u32,
             ((seg.inline_range.1 - region.top()) * k).round() as u32 - 1,
@@ -244,7 +244,7 @@ fn vertical_band_case(
                 fy.0, fy.1, want_y.0, want_y.1
             ));
         }
-        // 6.2: 当たりの四角が塗りと画素まで同じ（同じ帯の列 → derive_hit_rows → to_window_physical）。
+        // 当たりの四角が塗りと画素まで同じ（同じ帯の列 → derive_hit_rows → to_window_physical）。
         let row = hit_rows
             .iter()
             .find(|r| r.ordinal == seg.ordinal)
@@ -262,7 +262,7 @@ fn vertical_band_case(
                 painted.0, painted.2, painted.1, painted.3
             ));
         }
-        // 5.3（4.2）: 塗りの中心が、測った em の箱（行矩形の左辺 ＋ em の箱の左・厚み em）の中心から
+        // 塗りの中心が、測った em の箱（行矩形の左辺 ＋ em の箱の左・厚み em）の中心から
         // 1 物理画素以内。帯の寄せに依らない写像の足し分を当たりの四角から取る。
         let t = hit.left - k * (lines[seg.line_index].rect.left + bands[seg.line_index].offset);
         shift = Some(t);
@@ -291,7 +291,7 @@ fn vertical_band_case(
     red
 }
 
-/// R（6.1・6.2・6.3・1.1・1.2・1.3・1.4・3.2・4.2）: 縦書きの帯が、Yu Gothic UI（比 1.33）とぱすたの候補列
+/// 縦書きの帯が、Yu Gothic UI（比 1.33）とぱすたの候補列
 /// （游ゴシック）× 大きさ 20・28 × 右から左・左から右 × 拡大率 1・2 で、乗せた列の字のインクを全幅で覆い、
 /// 厚みが em × k、塗りの中心が測った em の箱の中心から 1 物理画素以内、隣の列のインクにかからず、
 /// 行内は字の範囲で、当たりの四角が塗りと画素まで同じ。候補列が引けた書体の名前も固定する。
@@ -302,7 +302,7 @@ fn vertical_band_case(
 fn vertical_band_covers_column_ink_readback() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let mut rig = Rig::new();
-    // 書体の台帳は 1 つを全部の組と描き手で使い回す（描くたびに作り直さない・指摘 31）。
+    // 書体の台帳は 1 つを全部の組と描き手で使い回す（描くたびに作り直さない）。
     let fonts = Rc::new(FontCatalog::new(&factory).expect("FontCatalog 生成"));
     let mut red = Vec::new();
     for font in R_FONTS {

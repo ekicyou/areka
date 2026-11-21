@@ -1,12 +1,10 @@
-//! 「色指定」の解析と無効表示の混色（純粋層・要件 8.1〜8.4／8.9／8.10・4.6）。
+//! 「色指定」の解析と無効表示の混色（純粋層）。
 //!
 //! ukadoc は `\f[color,色指定]` の値の書式を `\f` 直下の注（※）で 1 度だけ定め、影の色・
 //! 選択肢マーカーの色・アンカーの色はいずれも「指定方法については※下記参照」と同じ注を指す。
-//! したがって書式の解析も 1 か所であるべきで（要件 8.10）、本モジュールがその唯一の解析点である。
-//! 後続仕様（`text-align-shadow-canon`／`choice-marker-styling`／
-//! `anchor-style-canon`）は [`parse_color`] をそのまま呼ぶ。
+//! したがって書式の解析も 1 か所であるべきで、本モジュールがその唯一の解析点である。
 //!
-//! ## 正典（2026-09-11 取得・requirements.md 付録 A「色指定（※）」）
+//! ## 正典（2026-09-11 取得・ukadoc「色指定（※）」）
 //!
 //! - 「基本は HTML・CSS の色の表現と似ています。」
 //! - 「赤・緑・青の三原色の明度をそれぞれ 0〜255 の 10 進数値で表現し、カンマで区切る。」
@@ -19,14 +17,9 @@
 //!
 //! <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bcolor_2c_8272_6307_5b9a_5d:1>
 //!
-//! 正典が定める 3 成分の形は「3 成分とも 10 進」か「3 成分とも百分率」の 2 つだけなので、
-//! `100,50%,200` のように混ざった形はどちらでもなく、[`parse_color`] は受けない（要件 8.9）。
-//! 先頭の符号も同様に受けない——`+N` は本仕様では `\f[height,+3]` の「相対指定」という別の
-//! 意味を持つ語（要件 7.2）であり、色指定が黙って吸収してよい根拠がどこにも無い。
-//!
 //! 無効表示の色の式は shell 側 `menu.disable.font.color.r` の逐語「(background 画像の 0,0 の
-//! 色 + menu.background.font.color * 2 ) / 3」を輸入したもの（[`mix_disabled`]・要件 4.6・
-//! areka の裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に登記する）。
+//! 色 + menu.background.font.color * 2 ) / 3」を輸入したもの（[`mix_disabled`]・
+//! areka の裁量として `doc/COMPAT_ARCHITECTURE.md` に登記する）。
 //! <https://ssp.shillest.net/ukadoc/manual/descript_shell.html#menu.disable.font.color.r:1>
 //!
 //! ## 本モジュールが知らないこと
@@ -35,7 +28,7 @@
 //!   2 層（既定・無効表示・選択肢文字色）を持つ側の領分であり、ここでは [`ColorSpec`] の
 //!   語彙として返すに留める（`parse_cursor_coord` と同じ「語彙と解決の分離」）。
 //! - **記録**——解析の失敗は [`ColorParseError`] の理由として返すだけで、`warn!` を出すのは
-//!   キーと値を知っている呼び手（`\f` の状態機械）の担当（design.md「Error Handling」）。
+//!   キーと値を知っている呼び手（`\f` の状態機械）の担当。
 //!   本モジュールは全入力で値を返す全域関数で、panic も `error!` も持たない。
 
 /// 「色指定」の解析結果。実際の色（[`ColorSpec::Rgb`]）か、戻し先を表す語彙かのいずれか。
@@ -43,25 +36,25 @@
 pub enum ColorSpec {
     /// 具体的な色（10 進 3 成分・百分率 3 成分・16 進・色名のいずれかから解決済み）。
     Rgb(u8, u8, u8),
-    /// `default`——その文字の既定の色へ戻す（R8.5）。
+    /// `default`——その文字の既定の色へ戻す。
     Default,
-    /// `default.plain`——素の既定の色へ戻す（R8.5）。
+    /// `default.plain`——素の既定の色へ戻す。
     DefaultPlain,
-    /// `disable`——無効表示の色にする（R8.6）。
+    /// `disable`——無効表示の色にする。
     Disable,
-    /// `default.cursor`——選択中の選択肢の既定文字色（R8.7）。
+    /// `default.cursor`——選択中の選択肢の既定文字色。
     DefaultCursor,
-    /// `default.cursornotselect`——非選択の選択肢の既定文字色（R8.7）。
+    /// `default.cursornotselect`——非選択の選択肢の既定文字色。
     DefaultCursorNotSelect,
-    /// `default.anchor`——アンカーの既定文字色（R8.8・現状は `Default` として扱う）。
+    /// `default.anchor`——アンカーの既定文字色（現状は `Default` として扱う）。
     DefaultAnchor,
-    /// `default.anchornotselect`——非選択アンカーの既定文字色（R8.8・同上）。
+    /// `default.anchornotselect`——非選択アンカーの既定文字色（同上）。
     DefaultAnchorNotSelect,
-    /// `default.anchorvisited`——訪問済みアンカーの既定文字色（R8.8・同上）。
+    /// `default.anchorvisited`——訪問済みアンカーの既定文字色（同上）。
     DefaultAnchorVisited,
 }
 
-/// 解析の失敗。呼び手が `warn!(key, value, reason)` に載せるための理由だけを持つ（R8.9）。
+/// 解析の失敗。呼び手が `warn!(key, value, reason)` に載せるための理由だけを持つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ColorParseError {
     /// 何が受け付けられなかったか（記録用の短い日本語）。
@@ -89,12 +82,12 @@ const fn err(reason: &'static str) -> ColorParseError {
 ///
 /// 受ける形は 1 成分（`#RGB`／`#RRGGBB`／小文字の色名／戻し先の語彙）と
 /// 3 成分（`R,G,B` の 10 進 0〜255／`R%,G%,B%` の百分率 0〜100）。
-/// **3 成分は 10 進か百分率のどちらかに揃っていること**——正典が定めるのは R8.1 と R8.2 の
-/// 2 形だけで、`100,50%,200` のような混ざった形はどちらでもないので [`Err`]（R8.9）。
-/// 先頭の符号も受けない（`+3` は本仕様では `\f[height,+3]` の「相対指定」という別の意味を
-/// 持つ・R7.2）。先頭ゼロ（`0255`）は 10 進数値として読む。
+/// **3 成分は 10 進か百分率のどちらかに揃っていること**——正典が定めるのは
+/// 2 形だけで、`100,50%,200` のような混ざった形はどちらでもないので [`Err`]。
+/// 先頭の符号も受けない（`+3` は `\f[height,+3]` の「相対指定」という別の意味を
+/// 持つ語で、色指定が黙って吸収する根拠が無い）。先頭ゼロ（`0255`）は 10 進数値として読む。
 /// 百分率は `round(v * 255 / 100)` で 0〜255 へ写し、16 進 3 桁は各桁を 2 倍にする
-/// （`#f0a` → `#ff00aa`）。成分数不足・範囲外・非数・大文字の色名は [`Err`]（R8.9）。
+/// （`#f0a` → `#ff00aa`）。成分数不足・範囲外・非数・大文字の色名は [`Err`]。
 pub fn parse_color(args: &[&str]) -> Result<ColorSpec, ColorParseError> {
     match args {
         [single] => parse_single(single),
@@ -142,7 +135,7 @@ fn parse_single(token: &str) -> Result<ColorSpec, ColorParseError> {
 /// `#` の後ろ——3 桁は各桁を 2 倍、6 桁は 2 桁ずつ 1 成分。
 fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
     // 長さを先に見る——台本の長い字列を桁の列へ集めてから捨てない。16 進の字は 1 バイトなので
-    // バイト数で足りる（多バイトの字は長さか桁のどちらで落ちても理由は同じ R3-B-N1）。
+    // バイト数で足りる（多バイトの字は長さか桁のどちらで落ちても理由は同じ）。
     if !matches!(body.len(), 3 | 6) {
         return Err(err(REASON_BAD_HEX));
     }
@@ -164,10 +157,10 @@ fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
 /// `percent` が真なら `N%` を 0〜100 から 0〜255 へ写し、偽なら `N` を 0〜255 のまま読む。
 ///
 /// 成分は `u64` で読む——`u32` だと `4294967296` が桁あふれで「数でない」になり、`256` と同じ
-/// 「範囲外」にならない（指摘 32）。u64 も越える桁数は「数でない」のまま。
+/// 「範囲外」にならない。u64 も越える桁数は「数でない」のまま。
 ///
 /// 先頭の符号は受けない。整数の解析は `+5` を 5 として受けてしまうが、`-1` が落ちるのに
-/// `+1` が通る非対称は正典にも本仕様にも根拠が無い（`+N` は R7.2 で相対指定の意味を持つ）。
+/// `+1` が通る非対称は正典にも根拠が無い（`+N` は相対指定の意味を持つ）。
 fn parse_component(token: &str, percent: bool) -> Result<u8, ColorParseError> {
     if token.starts_with('+') {
         return Err(err(REASON_NOT_A_NUMBER));
@@ -199,7 +192,7 @@ fn lookup_color_name(name: &str) -> Option<(u8, u8, u8)> {
         .map(|index| CSS_COLOR_NAMES[index].1)
 }
 
-/// 無効表示の色——成分ごとに `(背景 + 文字色 × 2) / 3`（整数除算・要件 4.6）。
+/// 無効表示の色——成分ごとに `(背景 + 文字色 × 2) / 3`（整数除算）。
 ///
 /// 式はここ 1 か所にしか置かない（2 層を組む側も、この関数を呼ぶ）。
 pub fn mix_disabled(text: (u8, u8, u8), background: (u8, u8, u8)) -> (u8, u8, u8) {

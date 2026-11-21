@@ -1,9 +1,6 @@
-//! 毎フレームの箱の同期（要件 3.1〜3.3・3.5・3.9・6.1〜6.3・6.5・9.3）。
+//! 毎フレームの箱の同期。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 置き場所は結線が渡す「シェルの窓がいま表示している絵の番号」だけから導く（spec
-//! `areka-P0-shell-balloon-frame-align` 要件 1.1〜1.5）。台本の `\s` は文字の行き先だけを決める。
+//! 置き場所は結線が渡す「シェルの窓がいま表示している絵の番号」だけから導く。台本の `\s` は文字の行き先だけを決める。
 //!
 //! 面はここでは作らない（箱の面の提示は `actor_box_present_tests.rs`）ので、ここでは「登録の状態」（装着先・配置の入力・
 //! 置き場所）で見る。`World` は予約スロットの entity を得るためだけに使い、COM は使わない。
@@ -200,7 +197,7 @@ fn only_boxes_with_text_register_and_same_placement_is_a_no_op() {
     assert_eq!(f.registered(0, "a").map(|r| r.1), Some(site));
 }
 
-/// 配置の入力は普通のバルーンと同じ式で、箱の大きさを画像の大きさとし、背景は白（要件 3.1〜3.3）。
+/// 配置の入力は普通のバルーンと同じ式で、箱の大きさを画像の大きさとし、背景は白。
 /// `validrect`・`origin` の負の値は箱の反対側の端からの距離のまま通る。
 #[test]
 fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
@@ -235,7 +232,7 @@ fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
     );
 }
 
-/// 拡大率が変わると登録が作り直される（要件 3.5）。文字の進み具合は保たれる。
+/// 拡大率が変わると登録が作り直される。文字の進み具合は保たれる。
 #[test]
 fn scale_change_rebuilds_the_registration_and_keeps_text() {
     let mut f = fixture();
@@ -266,8 +263,8 @@ fn scale_change_rebuilds_the_registration_and_keeps_text() {
     );
 }
 
-/// 同じ名前の箱が新しい絵にあれば、その位置で登録し直す（要件 6.1）。置き場所を動かすのは
-/// 渡された絵の番号で、台本の `\s` の cue は要らない（`areka-P0-shell-balloon-frame-align` 要件 1.1）。
+/// 同じ名前の箱が新しい絵にあれば、その位置で登録し直す。置き場所を動かすのは
+/// 渡された絵の番号で、台本の `\s` の cue は要らない。
 #[test]
 fn same_name_on_the_next_surface_moves_the_registration() {
     let mut f = fixture();
@@ -283,7 +280,7 @@ fn same_name_on_the_next_surface_moves_the_registration() {
 }
 
 /// 台本の `\s` の cue だけでは登録は動かない。絵の番号が同じなら、受け取った番号が箱の無い面・
-/// 別の置き場所の面・非表示のどれでも、登録はそのまま（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.6）。
+/// 別の置き場所の面・非表示のどれでも、登録はそのまま。
 #[test]
 fn surface_cue_alone_does_not_move_the_registration() {
     let mut f = fixture();
@@ -308,7 +305,7 @@ fn surface_cue_alone_does_not_move_the_registration() {
     }
 }
 
-/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.2・1.4）。
+/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る。
 /// 文字の進み具合は保たれる。
 #[test]
 fn picture_number_alone_moves_unregisters_and_restores() {
@@ -341,7 +338,7 @@ fn picture_number_alone_moves_unregisters_and_restores() {
     assert_eq!(f.items(0, "b"), vec![TextItem::glyph("い")]);
 }
 
-/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（`areka-P0-shell-balloon-frame-align` 要件 1.3）。
+/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る。
 #[test]
 fn no_picture_number_unregisters_and_keeps_text() {
     let mut f = fixture();
@@ -361,8 +358,7 @@ fn no_picture_number_unregisters_and_keeps_text() {
     assert!(f.registered(0, "a").is_some(), "絵が出れば戻る");
 }
 
-/// 名前が外れた箱は登録が片付き文字は残り、戻ると登録し直されて文字の進み具合が保たれる
-/// （要件 6.2・6.3）。今の行き先ではない箱も、文字を持てば新しいサーフェスで登録される（要件 6.5）。
+/// 名前が外れた箱は登録が片付き文字は残り、戻ると登録し直されて文字の進み具合が保たれる。今の行き先ではない箱も、文字を持てば新しいサーフェスで登録される。
 #[test]
 fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     let mut f = fixture();
@@ -373,7 +369,7 @@ fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     f.sync(Some(1.0));
     assert!(f.registered(0, "a").is_some() && f.registered(0, "b").is_some());
 
-    // サーフェス 2 には b だけ: a は片付き、行き先でない b も登録されたまま（要件 6.5）。
+    // サーフェス 2 には b だけ: a は片付き、行き先でない b も登録されたまま。
     f.show("2");
     f.sync(Some(1.0));
     assert_eq!(f.registered(0, "a"), None, "名前が外れた箱は片付ける");
@@ -381,7 +377,7 @@ fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     let (_, b_site) = f.registered(2, "b").expect("b はサーフェス 2 にもある");
     assert_eq!((b_site.x, b_site.y), (0, 0));
 
-    // 箱の無い（表に無い）サーフェス 4 と非表示: どの箱も片付く（要件 6.4・6.6）。
+    // 箱の無い（表に無い）サーフェス 4 と非表示: どの箱も片付く。
     f.show("4");
     f.sync(Some(1.0));
     assert_eq!(f.registered(0, "b"), None);
@@ -421,7 +417,7 @@ fn hidden_scope_or_missing_shell_window_unregisters() {
     assert_eq!(f.registered(0, "a"), None, "渡されないスコープ");
 }
 
-/// 箱の束を差し替えると登録も片付く（要件 6.8）。
+/// 箱の束を差し替えると登録も片付く。
 #[test]
 fn replacing_the_bundle_drops_registrations() {
     let mut f = fixture();
@@ -567,7 +563,7 @@ fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Opt
         .collect()
 }
 
-/// 箱の定義の 2 つの警告は、名前の欄が `balloon.*`ブレスの名前で（要件 3.11）、箱の名前ごとに
+/// 箱の定義の 2 つの警告は、名前の欄が `balloon.*`ブレスの名前で、箱の名前ごとに
 /// 1 度だけ出る。登録し直し（拡大率の変化・置き場所の変化・名前が外れて戻る）では出さず、
 /// 箱の束を受け取り直す（読み込み直す）ともう一度出す。
 #[test]
@@ -620,7 +616,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
     );
 }
 
-// ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 箱の選択肢の飾りの警告は箱の名前ごとに 1 度 ══
+// ══ 箱の選択肢の飾りの警告は箱の名前ごとに 1 度 ══
 
 /// 選択肢の飾りに ROP 系の `cursor.blendmethod` を書いた箱 r。
 const ROP_BOX_SHELL: &str = "\
@@ -635,7 +631,7 @@ element1,balloon,r,0,0
 }
 ";
 
-/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
+/// ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
 /// 外して付け直しても 0 件、箱の束を差し替えた後の登録で 1 件。
 #[test]
 fn box_cursor_fallback_warns_once_per_box_name() {
@@ -688,7 +684,7 @@ fn box_cursor_fallback_warns_once_per_box_name() {
     );
 }
 
-// ══ audit-emo-text-state-actor 指摘 7: 箱の解決は表を入れたときに名前ごとに 1 度だけ ══
+// ══ 箱の解決は表を入れたときに名前ごとに 1 度だけ ══
 
 /// 書体の高さ 0 の箱 z を、サーフェス 0 と 1 の別の位置に置く。
 const ZERO_HEIGHT_BOX_SHELL: &str = "balloon.z
@@ -706,7 +702,7 @@ element1,balloon,z,10,10
 }
 ";
 
-/// audit-emo-text-state-actor 指摘 7（要件 2.1・4.5・4.6）: 書体の高さ 0 の箱は、表を入れたときに警告 1 件。隠して登録し直す・
+/// 書体の高さ 0 の箱は、表を入れたときに警告 1 件。隠して登録し直す・
 /// 拡大率を変える・サーフェスを切り替えるの 3 つの登録し直しの後も 1 件のまま。
 #[test]
 fn box_resolution_warns_once_at_table_set_not_per_registration() {

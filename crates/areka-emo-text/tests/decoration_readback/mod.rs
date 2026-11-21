@@ -1,9 +1,5 @@
 //! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**）。
-//!
 //! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]）が
 //! 共有する道具だけをここに置く。中身は 4 つ:
 //!
@@ -36,7 +32,7 @@ use std::sync::OnceLock;
 
 use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
 
-/// 実フォントの門は共有の部品（`support/fixture.rs`）が持つ。期待値の前提になる実フォント
+/// 実フォントの門は `support/fixture.rs` が持つ。期待値の前提になる実フォント
 /// `REAL_FONT` は、プロポーショナルで実物 `emo2-kakukaku` と同じ指定。
 pub(crate) use shared::fixture::{REAL_FONT, assert_real_font_present, font_is_installed};
 
@@ -76,7 +72,7 @@ pub(crate) const SAMPLE: &str = "あア亜Agほ";
 /// `line_pitch_readback_test.rs` と同じ閾値）。
 const INK_ALPHA_MIN: u8 = 128;
 
-/// 表示に効く 7 項目（要件 5.1・`\f[…]` のトークン列）。
+/// 表示に効く 7 項目（`\f[…]` のトークン列）。
 ///
 /// 横書き（入口）と縦書き（[`vertical`]）が**同じ表**を回す——片方だけ項目が抜けるのを防ぐ。
 /// 母数は入口（`decoration_readback_test.rs`）の `VISIBLE_KEYS.len() == 7` の const assert が
@@ -138,11 +134,10 @@ pub(crate) fn font_cue(tokens: &[&str]) -> TalkCue {
 
 /// 同じトークン列を**装飾ではない運搬名**で運ぶ cue（較正の対照）。
 ///
-/// `state_decoration.rs::font_tag_tokens` の自己選別は名前が合わない運搬を従来どおり
-/// 読み飛ばすので、装飾は 1 つも焼かれない（配置へ渡る番号列は全部 0・描画へ渡る装飾の表は
-/// 空＝`render_styled` が既定の呼出列に落ちる）。cue の本数・並び・再生時間は
-/// [`font_cue`] と 1 ビットも変わらないため、「画素が違う」という判定が**装飾を焼いたこと**
-/// に由来する（cue が 1 本増えたことや実行のばらつきに由来するのではない）ことを示せる。
+/// `state_decoration.rs::font_tag_tokens` の自己選別は名前が合わない運搬を読み飛ばすので、
+/// 装飾は 1 つも焼かれない。cue の本数・並び・再生時間は [`font_cue`] と同一なので、「画素が
+/// 違う」という判定が**装飾を焼いたこと**に由来する（cue が 1 本増えたことや実行のばらつきに
+/// 由来するのではない）ことを示せる。
 pub(crate) fn unbaked_cue(tokens: &[&str]) -> TalkCue {
     cue(CueCommand::command_carrier(
         "\\!",
@@ -183,7 +178,7 @@ impl Shot {
 ///
 /// **順序が効く**——装着（`register_actor`）を先に、台本の投入を後にする。装着はバルーン定義から
 /// 導いた 2 層（既定・無効表示）を表示状態へ差し込む唯一の点で、現在の見た目が既に既定から
-/// 動いていると新しい既定へ追随しない（要件 4.1・「装着時に 2 層を差し込む口」）。
+/// 動いていると新しい既定へ追随しない（「装着時に 2 層を差し込む口」）。
 /// 装着より前に `\f[bold,1]` を流すと、以後その actor の文字は**バルーン定義の 28 px ではなく
 /// 素の既定 12 px**で描かれる。本番の起動順（装着 → 発話）はこの向きで、
 /// `line_pitch_readback_test.rs` の組み立ても同じである。
@@ -254,7 +249,7 @@ pub(crate) fn plain_shot(writing_mode: Option<&str>) -> &'static Shot {
 /// 「素の台本」と「装飾を足した台本」の 2 枚を撮る（同じ書字方向・同じ本文）。
 ///
 /// 素の側は [`plain_shot`] の 1 枚を使い回す。装飾ありの側は `\f[トークン…]` を本文の**前**に
-/// 置く（要件 3.2——装飾は以降の文字に効く）。
+/// 置く（装飾は以降の文字に効く）。
 pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (&'static Shot, Shot) {
     let plain = plain_shot(writing_mode);
     let styled = run(writing_mode, &[font_cue(tokens), text_cue(SAMPLE)]);

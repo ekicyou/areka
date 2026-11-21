@@ -1,58 +1,30 @@
 //! # shipped_fixture_region_test — 出荷済み実ゴースト定義の開始点を逐語固定する檻
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-vertical-canon` のもの（別の spec のものはその場で名を書く）。
+//! 検体 emo2 の同梱バルーン `emo2-kakukaku` は実機サインオフと emo-present の実描画に効く実ゴースト定義だが、
+//! この檻ができるまでその文字開始点を固定するテストが 1 本も無く、座標解決規則を壊してもワークスペースは全緑のまま
+//! 出荷できる状態だった。本ファイルはその穴を塞ぐ。
 //!
-//! 出典 spec: `areka-P0-balloon-vertical-canon`（要件 **3.10**／**10.7**・設計 **DD5**／**C9**）。
-//!
-//! ## この檻が塞ぐ穴
-//!
-//! `検体 emo2 の同梱バルーン emo2-kakukaku` は**実機サインオフと
-//! emo-present の実描画に効く実ゴースト定義**でありながら、この檻ができるまで
-//! **その文字開始点を固定するテストが 1 本も存在しなかった**。すなわち座標解決規則を壊しても
-//! ワークスペースは全緑のまま出荷できる状態だった（設計 C9 の Risks「**全緑は十分性の証拠に
-//! ならない**」——本リポジトリで 3 度目の構図）。本ファイルはその唯一の穴を塞ぐ。
-//!
-//! ## 固定するもの
-//!
-//! 本番と同じ経路（`descript.txt` 基層＋面別上書き層の 2 層マージ →
-//! [`TextRegion::resolve`]）で解決した結果を、成分ごとに逐語で固定する:
+//! 本番と同じ経路（`descript.txt` 基層＋面別上書き層の 2 層マージ → [`TextRegion::resolve`]）で解決した結果を、
+//! 成分ごとに逐語で固定する:
 //!
 //! | scope | 面別上書き層 | 画像原寸 | left | top | right | bottom | start | wrap |
 //! |---|---|---|---|---|---|---|---|---|
 //! | 0（sakura） | `balloons0s.txt` | `balloons0.png` 400×224 | 36 | 46 | 356 | 168 | **(36, 46)** | 351 |
 //! | 1（kero） | `balloonk0s.txt` | `balloonk0.png` 288×203 | 24 | 40 | 240 | 133 | **(24, 40)** | 254 |
 //!
-//! 開始点だけでは壊れ方を見落とすため、`left`／`top`／`right`／`bottom`／`wrap_threshold`／
-//! [`WritingMode`] も併せて固定する。複製 fixture `emo2-kakukaku-wplimit` も同値であることを
-//! 同じ形で固定する（複製が原本から乖離したら赤くなる）。
+//! 開始点だけでは壊れ方を見落とすため、`left`／`top`／`right`／`bottom`／`wrap_threshold`／[`WritingMode`] も併せて固定する。
+//! 複製 fixture `emo2-kakukaku-wplimit` も同値であることを同じ形で固定する（複製が原本から乖離したら赤くなる）。
 //!
-//! ## 期待値は origin の宣言にもクランプにも依らない
+//! 期待値 (36,46)／(24,40) は、宣言 `origin(0,0)` が validrect 外ゆえクランプで書字開始角へ寄った結果でもあり、
+//! 宣言が無いので未宣言の縮退で書字開始角へ落ちた結果でもある同じ値である。したがって本檻は宣言の有無にもクランプの有無にも依存しない。
 //!
-//! 期待値 (36,46)／(24,40) は
+//! 禁則: 原本 `emo2-kakukaku` とその複製 `emo2-kakukaku-wplimit` を見る検査（檻 1〜4 の 5 本）では、
+//! `model.origin().x() == Some(0)` のような宣言された生値を assert してはならない。この 2 つは宣言を削除済みで、
+//! 期待値が宣言の有無に依らないことが檻の成立条件だからである。`origin` を今も宣言したままの検体
+//! `emo2-kakukaku-offsetdpi` を見る検査（ファイル末尾）には掛からない。そちらは宣言が在ること自体が前提で、
+//! 宣言が消えると「宣言されていないときの縮退」を測るだけの検査に静かにすり替わるので、前提として明示的に確かめる。
 //!
-//! - 「宣言 `origin(0,0)` が validrect 外ゆえ**クランプで書字開始角へ寄った**結果」でもあり、
-//! - 「宣言が無いので**未宣言の縮退で書字開始角へ落ちた**結果」でもある（要件 3.11 が不変を保証）
-//!
-//! という**同じ値**である。したがって本檻は宣言の有無にもクランプの有無にも依存しない。
-//!
-//! **禁則**: 本ファイルで `model.origin().x() == Some(0)` のような**宣言された生値**を assert
-//! してはならない。期待値が宣言の有無に依らないことがこの檻の成立条件である。
-//!
-//! **禁則の対象**: 上の禁則が掛かるのは**原本 `emo2-kakukaku` とその複製 `emo2-kakukaku-wplimit`
-//! を見る検査**（檻 1〜4 の 5 本）である。この 2 つは宣言を削除済みで、宣言の有無に依存しないことが
-//! 証跡の成立条件だからである。`origin` を今も宣言したままの検体 `emo2-kakukaku-offsetdpi` を
-//! 見る検査（ファイル末尾・出典 spec `areka-P0-balloon-origin-outside-validrect`）には掛からない
-//! ——そちらは**宣言が在ること自体が前提**であり、宣言が消えたら「宣言されていないときの縮退」を
-//! 測るだけの検査に静かにすり替わるので、前提として明示的に確かめる。
-//!
-//! ## 決定論（要件 10.6）
-//!
-//! 実 DPI モニタ・実 GPU・実ゴースト・実窓を要さない。ファイル読み込みと純粋層の解決のみで
-//! 完結し、同一入力に対して常に同一の結果を返す。
-//!
-//! ---
-//!
-//! 対象ファイルの棚卸しの記録の正本は `.kiro/specs/completed/areka-P0-balloon-vertical-canon/tasks.md` の付録 A。
+//! 実 DPI モニタ・実 GPU・実ゴースト・実窓は要さず、ファイル読み込みと純粋層の解決のみで完結する。
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -70,10 +42,8 @@ use support::fixture::{emo2_balloon_root, png_native_size};
 
 // ── 逐語固定する期待値（本ファイル冒頭の表と 1:1）────────────────────────────
 //
-// 画像原寸は**ハードコードしつつ実 PNG と突合する**（`native_sizes_match_shipped_png_headers`）。
-// 実ファイルから読むだけにしないのは、PNG が差し替わったときに期待値が黙って追従して
-// 「檻が自分で期待値を作る」形になるためである。ハードコードした値が実物と食い違えば
-// 突合テストが赤くなるので、二重帳簿にはならない。
+// 画像原寸はハードコードしつつ実 PNG と突合する（`native_sizes_match_shipped_png_headers`）。実ファイルから読むだけだと、
+// PNG が差し替わったときに期待値が黙って追従して檻が自分で期待値を作る形になる。
 
 /// `balloons0.png` の実測原寸（image px・IHDR 由来）。
 const SAKURA_IMAGE_SIZE: (u32, u32) = (400, 224);
@@ -99,20 +69,16 @@ const KERO_START: (f32, f32) = (24.0, 40.0);
 /// `wordwrappoint.x,-34` を継承 → 288−34＝254（2 層マージの継承がここに効く）。
 const KERO_WRAP: f32 = 254.0;
 
-/// scope 0（sakura）の面別上書き層。
-///
-/// scope → 採用面 → 上書きファイル名の対応は emo-present の面解決
-/// （`resolve_balloon_faces` → `ResolvedFace::override_file_name`）が決めており、本檻はその
-/// 結果を実ファイル名で直接指名する。
+/// scope 0（sakura）の面別上書き層。scope → 採用面 → 上書きファイル名の対応は emo-present の面解決
+/// （`resolve_balloon_faces` → `ResolvedFace::override_file_name`）が決めており、本檻はその結果を実ファイル名で直接指名する。
 const SAKURA_OVERLAY: &str = "balloons0s.txt";
 /// scope 1（kero）の面別上書き層。
 const KERO_OVERLAY: &str = "balloonk0s.txt";
 
 // ── fixture の所在（窓口 `sample-ghost-kit` が持つ・検体名で引く）───────────────────────
 //
-// 検体は段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。原本と複製は
-// 別々の検体として登記されているので、保持も 2 つになる（同じ木の複製ではない）。原本
-// （実ゴースト `emo2` の同梱バルーン）は共有の部品 `support::fixture::emo2_balloon_root` が持つ。
+// 検体は `Drop` が複製を消すので、一時値にせずプロセス寿命で保持する。原本と複製は別々の検体として登記されているので保持も 2 つになる。
+// 原本（実ゴースト `emo2` の同梱バルーン）は共有の部品 `support::fixture::emo2_balloon_root` が持つ。
 
 /// 複製の検体（`windowposition-limit` の実機サインオフ用・単体で登記されたバルーン）。
 static WPLIMIT: LazyLock<SampleRoot> = LazyLock::new(|| {
@@ -182,7 +148,7 @@ fn native_sizes_match_shipped_png_headers() {
     }
 }
 
-// ── 檻 2: 書字方向（要件 3.10 の前提）────────────────────────────────────
+// ── 檻 2: 書字方向────────────────────────────────────
 
 /// 出荷 fixture は `writing_mode`・`vertical` のいずれも宣言していないため横書きへ解決される。
 ///
@@ -202,13 +168,10 @@ fn shipped_fixture_resolves_to_horizontal_tb() {
     }
 }
 
-// ── 檻 3: 実ゴースト定義の開始点と領域（本ファイルの本題・要件 3.10／10.7）──────
+// ── 檻 3: 実ゴースト定義の開始点と領域（本ファイルの本題）──────
 
-/// scope 0（sakura）の解決結果を逐語固定する——**開始点 (36, 46)**。
-///
-/// この値は「宣言 `origin(0,0)` がクランプで書字開始角へ寄った結果」でもあり
-/// 「宣言が無く未宣言縮退で書字開始角へ落ちた結果」でもある同じ値なので、宣言の削除・クランプ撤去の
-/// いずれを経ても不変である（モジュール doc「期待値は origin の宣言にもクランプにも依らない」参照）。
+/// scope 0（sakura）の解決結果を逐語固定する——**開始点 (36, 46)**。宣言の削除・クランプ撤去のいずれを経ても不変である
+/// （モジュール doc の「宣言の有無にもクランプの有無にも依存しない」参照）。
 #[test]
 fn shipped_sakura_scope_region_is_pinned() {
     let (sakura, _) = resolve_both(&emo2_balloon_root());
@@ -239,12 +202,9 @@ fn shipped_kero_scope_region_is_pinned() {
 
 // ── 檻 4: 複製 fixture の乖離検出 ──────────────────
 
-/// 複製 fixture `emo2-kakukaku-wplimit` が原本と**同一の領域解決**を与える。
-///
-/// 同 fixture の原本との差分は面別上書き層の `windowposition.*` 3 行のみ（`readme.txt` 正典・
-/// 実測でも `descript.txt` と 2 枚の PNG は原本と 1 バイト差なし）。`windowposition` は
-/// [`TextRegion`] の入力ではないため領域解決は完全に同値になるはずで、複製が原本から乖離
-/// したらここで赤くなる。
+/// 複製 fixture `emo2-kakukaku-wplimit` が原本と同一の領域解決を与える。原本との差分は面別上書き層の `windowposition.*` 3 行のみ
+/// （`readme.txt` 正典・`descript.txt` と 2 枚の PNG は原本と 1 バイト差なし）。`windowposition` は [`TextRegion`] の入力ではないので、
+/// 乖離したらここで赤くなる。
 #[test]
 fn wplimit_copy_resolves_identically_to_shipped_original() {
     let (orig_sakura, orig_kero) = resolve_both(&emo2_balloon_root());
@@ -278,24 +238,19 @@ fn wplimit_copy_resolves_identically_to_shipped_original() {
 }
 
 // ── 檻 5: 範囲外の `origin` を宣言したままの検体 ───────────────────────────
-//
-// 出典 spec: `areka-P0-balloon-origin-outside-validrect`（要件 **1.6**／**2.3**／**5.5**）。
-// 上の 5 本は宣言を削除済みの原本と複製を見る檻であり、**宣言が範囲外に在るときの規則**は
-// どれも固定していない。それを固定するのがここである。
+// 上の 5 本は宣言を削除済みの原本と複製を見る檻であり、宣言が範囲外に在るときの規則はどれも固定していない。それを固定するのがここ。
 
 /// 範囲外の `origin` を宣言したままの検体（実機サインオフ用に原本から複製されたバルーン）。
 ///
-/// 原本・`wplimit` が宣言を削除した後も `origin.x,0`／`origin.y,0` を持ち続けている
-/// （面別上書き層の `validrect.left` は sakura 36／kero 24 なので、解決後の宣言値は範囲の
-/// 外に落ちる）。検体は書き換えない。`Drop` が複製を消すのでプロセス寿命で保持する。
+/// 範囲外の `origin` を宣言したままの検体（実機サインオフ用に原本から複製されたバルーン）。原本・`wplimit` が宣言を削除した後も
+/// `origin.x,0`／`origin.y,0` を持ち続ける（面別上書き層の `validrect.left` は sakura 36／kero 24 なので、解決後の宣言値は範囲の外に落ちる）。
+/// 検体は書き換えない。`Drop` が複製を消すのでプロセス寿命で保持する。
 static OFFSETDPI: LazyLock<SampleRoot> = LazyLock::new(|| {
     SampleRoot::acquire("emo2-kakukaku-offsetdpi")
         .expect("emo2-kakukaku-offsetdpi は登記済みの検体")
 });
 
-/// 範囲外宣言を持つ検体のバルーン定義ディレクトリ（自分でパスを継ぎ足さない）。
-///
-/// 窓口の登記ではバルーン種別なので、根は `balloon()` ではなく `folder()` で引く
+/// 範囲外宣言を持つ検体のバルーン定義ディレクトリ。窓口の登記ではバルーン種別なので、根は `balloon()` ではなく `folder()` で引く
 /// （既存の `wplimit_root()` と同形）。
 fn offsetdpi_root() -> PathBuf {
     OFFSETDPI.folder().to_path_buf()
@@ -303,14 +258,13 @@ fn offsetdpi_root() -> PathBuf {
 
 /// 範囲外に宣言された `origin` を持つ実物の検体が、書字開始角から書き始める。
 ///
-/// 期待値は原本と同じ定数をそのまま使う——この検体の 2 枚の PNG は原本と同寸で、面別上書き層の
-/// `validrect`／`wordwrappoint` も原本と同じだからである（原本との差分は `windowposition` と
-/// `origin` 宣言の有無のみ）。原本の領域とまるごと比べる形にはせず成分ごとに突合する。
+/// 期待値は原本と同じ定数を使う（この検体の 2 枚の PNG は原本と同寸で、`validrect`／`wordwrappoint` も原本と同じ。差分は
+/// `windowposition` と `origin` 宣言の有無のみ）。原本の領域とまるごと比べず成分ごとに突合する。
 ///
-/// 前提を 3 つ同じ検査の中で確かめる。いずれかが崩れると、この検査は規則ではなく別の何かを
-/// 測るものに静かにすり替わる: ⑴ マージ後のモデルが `origin` を**宣言している**こと
-/// （冒頭 doc「禁則の対象」参照）⑵ 2 枚の PNG の原寸が定数と一致すること（原寸が違えば範囲の
-/// 4 辺が別の値になる）⑶ 横書きへ解決されること（書字開始角がどの隅かは書字方向が決める）
+/// 前提を 3 つ同じ検査の中で確かめる。崩れると検査は規則ではなく別の何かを測るものに静かにすり替わる:
+/// ⑴ マージ後のモデルが `origin` を宣言していること（冒頭 doc の禁則の対象を参照）
+/// ⑵ 2 枚の PNG の原寸が定数と一致すること（違えば範囲の 4 辺が別の値になる）
+/// ⑶ 横書きへ解決されること（書字開始角がどの隅かは書字方向が決める）
 #[test]
 fn offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner() {
     let dir = offsetdpi_root();

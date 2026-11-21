@@ -4,9 +4,9 @@ use crate::canvas::ContentCanvas;
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
 
-// ── 3.3 R2.3/4.3: plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
+// ── plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
 //
-// 幾何は 3.2 と同一前提（font 10 → 行送り 12＝10 + 行間 2・全角 1 グリフ/行）。面寸 (400,100)。
+// 幾何は全テスト共通（font 10 → 行送り 12＝10 + 行間 2・全角 1 グリフ/行）。面寸 (400,100)。
 
 /// 3 行 canvas（横書き・validrect 100×400）——plan/commit 二相の共通母体。
 fn plan_canvas() -> ContentCanvas {
@@ -19,7 +19,7 @@ fn plan_canvas() -> ContentCanvas {
 }
 
 /// スクロール（block_offset 変化）→ plan が露出帯付き Update → commit で
-/// `scroll_state().committed` が目標へ追従する（M1 ステップスクロールの即時追従）。
+/// `scroll_state().committed` が目標へ追従する（ステップスクロールの即時追従）。
 #[test]
 fn commit_of_scroll_update_advances_committed() {
     let contract = ScaleContract::new(1.0, None);
@@ -122,7 +122,7 @@ fn empty_canvas() -> ContentCanvas {
     )
 }
 
-/// 消去と字が同じフレーム（指摘 17）——request_clear で位置/指紋が 0 化し、見える行のある次 plan は
+/// 消去と字が同じフレーム——request_clear で位置/指紋が 0 化し、見える行のある次 plan は
 /// 全域の Update（全面を消してから描く＝0 フレーム）。未 commit の反復は同じ計画（再試行安全）。
 /// その commit で要求が下り、次 plan は通常の差分（同じ入力なら NoChange）へ戻る。
 #[test]
@@ -285,8 +285,8 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
 // ── (a) 軸写像 3 方向の end-to-end 総括（resolve_position→blit_vector→露出帯の辺） ──
 
 /// 3 方向で resolve_position の確定位置・blit_vector の軸/符号・plan が返す露出帯の辺
-/// （横=下端・vertical_rl=左端・vertical_lr=右端）が正準表と 1:1 で一致する。3.1 の
-/// 軸写像単体檻を「量子化→軸写像→ダーティ帯」の一本の経路として束ねて総括する。
+/// （横=下端・vertical_rl=左端・vertical_lr=右端）が正準表と 1:1 で一致する。
+/// 軸写像単体の檻を「量子化→軸写像→ダーティ帯」の一本の経路として束ねて総括する。
 #[test]
 fn axis_mapping_end_to_end_across_three_writing_modes() {
     #[derive(Clone, Copy)]
@@ -354,7 +354,7 @@ fn axis_mapping_end_to_end_across_three_writing_modes() {
     }
 }
 
-// ── (b) 長スクロール列のドリフトなし（主眼）: plan→commit を数百回回す ──
+// ── (b) 長スクロール列のドリフトなし: plan→commit を数百回回す ──
 
 /// `plan`/`commit` を数百ステップ回すステートフルな長スクロール列で、確定位置が真位置
 /// からの**直接丸め**（`committed == round(block_offset × k)`）に保たれ、`|committed − pos|`
@@ -435,7 +435,7 @@ fn assert_long_scroll_is_drift_free(mode: WritingMode, k: f32, step_sign: f32, s
     }
 }
 
-/// 横書き・非整数スケール（k=1.25）の長スクロール列でドリフトが起きない（主眼）。
+/// 横書き・非整数スケール（k=1.25）の長スクロール列でドリフトが起きない。
 #[test]
 fn long_scroll_horizontal_nonunit_scale_is_drift_free() {
     assert_long_scroll_is_drift_free(WritingMode::HorizontalTb, 1.25, -1.0, 400);
@@ -596,7 +596,7 @@ fn plan_commit_two_phase_idempotent_across_commit_boundary() {
     );
 }
 
-/// 後方（un-reveal/un-scroll）縮退（D1 修正）: 内容が前回確定より減った（住人数が減った）とき、
+/// 後方（un-reveal/un-scroll）縮退: 内容が前回確定より減った（住人数が減った）とき、
 /// plan は差分（露出帯 ∪ 変化行）でなく**全域ダーティ Update**（blit=0・面全域・全住人）を返す。
 /// スクロールアウトした確定行の再露出は面内 blit で保持できないため（保持していない）、正しさ優先で
 /// 全域再描画へ縮退する（注入時刻の後方ジャンプ等の異常アクセスに対する堅牢化・byte 等価維持）。
@@ -632,7 +632,7 @@ fn plan_shrunk_content_degrades_to_full_domain() {
     }
 }
 
-/// 古い側への送り（内容は同じ・可視窓だけを戻す）は全域ダーティ Update へ縮退する（実機 8.2）。
+/// 古い側への送り（内容は同じ・可視窓だけを戻す）は全域ダーティ Update へ縮退する。
 /// 前回の面は可視窓より前の行を描かず原点の上の余白を空けたままなので、blit するとその余白が
 /// 新しく見える行の上へ写る。3 つの書字方向とも、前へ送った位置を確定した後に戻す計画は
 /// blit=0・面全域 1 枚。
@@ -670,7 +670,7 @@ fn scroll_back_toward_older_degrades_to_full_domain_across_modes() {
     }
 }
 
-// ── 指摘 3: 飽和した確定位置でも plan → commit → plan があふれない ──
+// ── 飽和した確定位置でも plan → commit → plan があふれない ──
 
 /// ±3e9 の位置（`i32` に収まらない＝確定位置が飽和する）で plan → commit → plan が panic せず、
 /// どちらのフレームも面全域を描き直す（1 つ目は面の寸で頭打ちにした送りの露出帯、2 つ目は古い側への
@@ -703,11 +703,11 @@ fn saturated_position_plan_commit_plan_redraws_full_surface() {
     assert!(dirty.contains(&full), "面全域を描き直す: {dirty:?}");
 }
 
-// ── 指摘 16: 「前の行が分からない」と「何も描いていない」を分ける ──
+// ── 「前の行が分からない」と「何も描いていない」を分ける ──
 
 /// 空の canvas を commit した次の plan は `NoChange`（空の列＝何も描いていないと分かっている）。
 /// 分からない（初め・消去の要求の後）ときだけ面全域 1 枚を描き直し、`FullClear` の確定も
-/// 「何も描いていない」と分かっている状態へ移る（設計の状態図）。
+/// 「何も描いていない」と分かっている状態へ移る。
 #[test]
 fn committing_empty_canvas_makes_next_plan_no_change() {
     let contract = ScaleContract::new(1.0, None);
@@ -746,7 +746,7 @@ fn committing_empty_canvas_makes_next_plan_no_change() {
     );
 }
 
-/// 再監査 R1-C2: 送りの前に上端が面の下端のすぐ内側（ε＝4）にあった最下行は、線を面の内側へ
+/// 送りの前に上端が面の下端のすぐ内側（ε＝4）にあった最下行は、線を面の内側へ
 /// 寄せて `[h − t, h]` に描いていた。1 行ぶん送ると、その線は `[h − t + by, h + by]` へ写り、
 /// 線の太さ t が ε とガードより大きいと今の行の矩形より上へ出る。描き直しの範囲は、太さが行の
 /// 丈（em 10）までの線の写り先を覆う（場面は font 10・pitch 12・面 400×100・9 行・by −12）。
@@ -787,7 +787,7 @@ fn pulled_bottom_row_dirty_covers_where_its_stroke_was_shifted() {
     );
 }
 
-/// 再監査 R2-C1: 同じ位置に重なる N 行が全部変わったフレーム（`\n[0]` や `\_l[0,0]` の繰り返し）でも、
+/// 同じ位置に重なる N 行が全部変わったフレーム（`\n[0]` や `\_l[0,0]` の繰り返し）でも、
 /// 矩形ごとの交差行の和は可視の行の数を超えない（N 枚 × N 行＝N² 回の描画にしない）。重なる
 /// 矩形は 1 枚にまとまり、その 1 枚が全行を 1 回ずつ持つ。
 #[test]
@@ -823,7 +823,7 @@ fn overlapping_changed_rows_draw_each_row_once() {
     assert_eq!(draw_lines, (0..n).collect::<Vec<_>>());
 }
 
-/// 再監査 R2-C1: 変わっていない背の高い行が、重ならない小さな変化行の矩形を何枚もまたぐときも、
+/// 変わっていない背の高い行が、重ならない小さな変化行の矩形を何枚もまたぐときも、
 /// その行は 1 回だけ描く（背の高い行が橋渡しする矩形は 1 枚にまとまる）。背の高い行 3 本・
 /// 小さな変化行 5 本なら描くのは 8 回（まとめないと 5 枚 × 4 行＝20 回）。
 #[test]

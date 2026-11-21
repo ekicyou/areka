@@ -91,8 +91,7 @@ fn actor() -> ActorKey {
     ActorKey::from("0")
 }
 /// デモ用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
-/// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる
-/// （全 cue at=0.0 なので reveal は連続的に累積）。
+/// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる。
 fn cue(at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
         CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * CHAR_WAIT,
@@ -142,7 +141,6 @@ fn main() -> windows::core::Result<()> {
         .world_mut()
         .insert_resource(QuitRequested::default());
 
-    // UI スレッドでアセット構築＋窓生成＋Demo 挿入。
     world.borrow().spawn(move |tx| async move {
         let _ = tx.send(Box::new(move |world: &mut World| {
             build_and_spawn(world);
@@ -181,7 +179,6 @@ fn build_and_spawn(world: &mut World) {
         win,
         assets: Some(assets),
         model,
-        // タイプ速度は配送 duration 由来（cue ヘルパが Text へ N×CHAR_WAIT を焼き込む）。
         // config は line_gap のみゆえ既定でよい。
         runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
@@ -202,7 +199,6 @@ fn on_balloon_pressed(
     _entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // 単クリック（double_click==None）は無視し、ダブルクリックのみで終了する。
     if ev.is_bubble() && ev.value().double_click == DoubleClick::Left {
         info!("emo-text-typewriter-demo: バルーンのダブルクリックを検出 — 終了します");
         if let Some(mut q) = world.get_resource_mut::<QuitRequested>() {
@@ -214,7 +210,6 @@ fn on_balloon_pressed(
 }
 
 fn drive_system(world: &mut World) {
-    // ダブルクリック終了要求を最優先で回収する。
     if world
         .get_resource::<QuitRequested>()
         .map(|q| q.0)
@@ -259,7 +254,6 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         .borrow_mut()
         .register_actor_view(actor(), &view, &demo.model);
 
-    // 実モニタ DPI と合成スケール k をログ（k は窓のモニタ DPI ÷ 96・200% で 2.0）。
     if let Some(handle) = world.get::<WindowHandle>(demo.win) {
         info!(
             dpi = handle.get_dpi(),
@@ -284,7 +278,6 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
         .unwrap_or(0.0);
     let t = now - demo.cycle_start;
 
-    // サイクル頭で挨拶 cue を一度だけ流す（全 at=0.0＝リビールは配送 duration で連続進行）。
     if !demo.fed {
         let mut rt = demo.runtime.borrow_mut();
         let [line1, line2, line3] = lines();
@@ -296,7 +289,6 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
         demo.fed = true;
     }
 
-    // 毎フレーム、フレーム経過時間 t を注入して提示（typewriter が実時間で animate）。
     {
         let mut rt = demo.runtime.borrow_mut();
         // 最初の 1 回は `error!`（例の失敗は `error!` を残す）・以後は毎フレーム繰り返しうるので `warn!`。
@@ -310,7 +302,6 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
         }
     }
 
-    // サイクル満了で全消去し、次サイクルへ（打ち直しループ）。
     if t > CYCLE_SECS {
         demo.runtime
             .borrow_mut()

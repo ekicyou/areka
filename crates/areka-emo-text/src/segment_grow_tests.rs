@@ -1,8 +1,8 @@
 //! # segment_grow_tests — 届いた字の区切りを後ろだけ伸ばす檻（純粋層・兄弟テスト）
 //!
-//! spec `emo-text-reveal-incremental` 件 1（要件 1.5／1.6）。数千字を 1 字ずつ届けて区切りに
-//! かけた字の数が字の数に比例すること、各時点の区切りが全部を区切った結果（`segment_plan`）と
-//! 一致すること、消した回数が変わったときの作り直しを確かめる。`budouy` の版を上げたら必ず回す。
+//! 数千字を 1 字ずつ届けて、区切りにかけた字の数が字の数に比例すること、各時点の区切りが
+//! 全部を区切った結果（`segment_plan`）と一致すること、消した回数が変わったときの作り直しを
+//! 確かめる。`budouy` の版を上げたら必ず回す。
 //!
 //! [`super`]（`segment.rs`）の子モジュールとして接続してある。
 
@@ -67,7 +67,7 @@ fn feed(items: &[TextItem], steps: &[usize], mut check: impl FnMut(&mut BreakMem
     }
 }
 
-// ── 要件 1.5: 区切りにかけた字の数は届いた字の数に比例する ──
+// ── 区切りにかけた字の数は届いた字の数に比例する ──
 
 fn assert_linear_total(steps: &[usize]) {
     let items = long_run();
@@ -100,7 +100,7 @@ fn four_thousand_glyphs_several_at_a_time_segment_linear_chars() {
     assert_linear_total(&[2, 5, 1, 7]);
 }
 
-// ── 要件 1.2・1.6: 各時点の区切りは全部を区切った結果と同じ ──
+// ── 各時点の区切りは全部を区切った結果と同じ ──
 
 /// 漢字・かな・カタカナ・英数・約物・結合文字・`\n`・`\n\n`・`\_l` を混ぜた台本。
 fn mixed_script() -> Vec<TextItem> {
@@ -197,7 +197,7 @@ fn short_runs_closed_one_after_another_match_segment_plan() {
     }
 }
 
-// ── 要件 1.3: 作り直し ──
+// ── 作り直し ──
 
 /// `\c` を模して消した回数を進め、項目を空から書き直すと、各時点で `segment_plan` と等しく、
 /// 計算の回数が増える。

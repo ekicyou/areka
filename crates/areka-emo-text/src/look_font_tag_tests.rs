@@ -1,29 +1,18 @@
 //! `\f` の値の状態機械（[`super::apply_font_tag`]）のうち、真偽値で切り替える 5 項目・
-//! 上下付き・一括の戻し・所有外キーの決定論テスト（タスク 3.3・要件 5.1〜5.5／5.8／5.9・
-//! 6.1／6.2／6.4・10.1／10.2／10.4・2.5・15.3）。
+//! 上下付き・一括の戻し・所有外キーの決定論テスト。
 //!
-//! ## 章立て
+//! 見た目の値・2 層・装飾の表のテストは兄弟の `look_tests.rs` にある。本ファイルを分けたのは
+//! 1 ファイル 1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の
+//! 射程に入らないようにするため。
 //!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §7 | 真偽 5 キー × 6 語（当該項目だけが動く・6 語以外と値なし） | 5.1〜5.5, 5.8, 5.9 |
-//! | §8 | 上付き・下付き（後勝ちの排他・語彙のみの印） | 6.1, 6.2 |
-//! | §9 | 一括の戻し（丸ごと置き換え・項目を列挙しない） | 10.1, 10.2, 10.4 |
-//! | §10 | 所有外キー・未知キー・キーなし | 2.5, 2.6 |
+//! **6 語は小文字の完全一致のみ**。大文字の語を受理する実装は「6 語以外」のテストで赤になる。
 //!
-//! §1〜§6（見た目の値・2 層・装飾の表）は兄弟の `look_tests.rs` にある。本ファイルを分けたのは
-//! `look_tests.rs` へ本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
-//! `crates/log-capture-kit/tests/file_length_guard_test.rs`）の射程に入るため。
-//!
-//! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §7 の
-//! 「6 語以外」のテストで赤になる。
-//!
-//! **母数を先に固定する**——真偽 5 キーの並び（§7 の先頭）・6 語以外として試す値・所有外の
+//! **母数を先に固定する**——真偽 5 キーの並び・6 語以外として試す値・所有外の
 //! キーの一覧は、いずれも件数を断言してから回す（表が痩せても緑にならないようにする）。
 
 use super::*;
 
-// ------------------------------------------------------------------ §7 真偽 5 キー
+// ------------------------------------------------------------------ 真偽 5 キー
 
 /// 真偽値で切り替える 5 項目——キーと、その項目を指す場所。
 ///
@@ -41,11 +30,8 @@ fn switch_keys() -> [(&'static str, fn(&mut TextLook) -> &mut bool); 5] {
 
 /// 真偽 5 項目が「既定層＝すべて真／無効表示層＝すべて偽」で割れた 2 層。
 ///
-/// [`LookLayers::from_balloon`] の差し込み（バルーン定義の読み取りと配線は
-/// `areka-P0-balloon-font-descript-keys`）を通すと、ここで見たい `apply_font_tag` の層の解決が
-/// 差し込みの順序と絡む。
-/// `default` と `disable` の行き先が取り違えられていないことを見るには層ごとに反対の値が
-/// 要るので、ここでは各フィールドを直に組む。
+/// `default` と `disable` の行き先の取り違えを見るには層ごとに反対の値が要る。
+/// [`LookLayers::from_balloon`] を通すと差し込みの順序が絡むので、各フィールドを直に組む。
 fn split_layers() -> LookLayers {
     let default = TextLook {
         name: vec!["Meiryo".to_owned()].into(),
@@ -101,12 +87,12 @@ fn all_switches_on(base: &TextLook) -> TextLook {
     look
 }
 
-/// 適用が成功したときに返るべき印——白抜きだけが「状態は更新するが表示は変えない」（R5.9）。
+/// 適用が成功したときに返るべき印——白抜きだけが「状態は更新するが表示は変えない」。
 fn expected_switch_note(key: &str) -> Option<Note> {
     (key == "outline").then_some(Note::VocabularyOnly { key: "outline" })
 }
 
-/// `true`／`1` は当該項目だけを付ける（R5.1・R5.9 の印つき）。
+/// `true`／`1` は当該項目だけを付ける（印つき）。
 #[test]
 fn true_and_one_turn_only_that_item_on() {
     let layers = split_layers();
@@ -127,7 +113,7 @@ fn true_and_one_turn_only_that_item_on() {
     }
 }
 
-/// `false`／`0` は当該項目だけを外す（R5.2）。
+/// `false`／`0` は当該項目だけを外す。
 #[test]
 fn false_and_zero_turn_only_that_item_off() {
     let layers = split_layers();
@@ -147,7 +133,7 @@ fn false_and_zero_turn_only_that_item_off() {
     }
 }
 
-/// `default`／`disable` は**当該項目だけ**をそれぞれの層の値へ合わせる（R5.3・R5.4）。
+/// `default`／`disable` は**当該項目だけ**をそれぞれの層の値へ合わせる。
 ///
 /// 大きさ・色・フォント名は層の値（20・(10,20,30)・Meiryo）だが、出発点の値のまま残る
 /// ことも同時に述べている（`expected` は出発点の複製で、当該項目だけを書き換えたもの）。
@@ -174,8 +160,8 @@ fn default_and_disable_take_only_that_item_from_the_matching_layer() {
     }
 }
 
-/// 6 語以外の値は当該項目を変えず、理由を返す（R5.5）。大文字は 6 語に**含まれない**
-/// （語は小文字の完全一致のみ・design §A 項目 12）。
+/// 6 語以外の値は当該項目を変えず、理由を返す。大文字は 6 語に**含まれない**
+/// （語は小文字の完全一致のみ）。
 #[test]
 fn a_word_outside_the_six_leaves_the_item_unchanged() {
     let layers = split_layers();
@@ -203,8 +189,7 @@ fn a_word_outside_the_six_leaves_the_item_unchanged() {
     }
 }
 
-/// 値が無い（`\f[bold]`）ときも当該項目を変えず理由を返す——「6 語以外」とは別の断言
-/// （R5.5 は「6 値のいずれでもない、**または値が無い**とき」の 2 つを定める）。
+/// 値が無い（`\f[bold]`）ときも当該項目を変えず理由を返す——「6 語以外」とは別の断言。
 #[test]
 fn a_switch_key_without_a_value_leaves_the_item_unchanged() {
     let layers = split_layers();
@@ -244,7 +229,7 @@ fn a_switch_key_with_more_than_one_value_leaves_the_item_unchanged() {
     );
 }
 
-/// 5 項目は同時に組み合わせられる（R5.8）。
+/// 5 項目は同時に組み合わせられる。
 #[test]
 fn the_five_items_combine_at_once() {
     let layers = split_layers();
@@ -261,9 +246,9 @@ fn the_five_items_combine_at_once() {
     assert_eq!(look, all_switches_on(&TextLook::ukadoc_default()));
 }
 
-// ------------------------------------------------------------------ §8 上付き・下付き
+// ------------------------------------------------------------------ 上付き・下付き
 
-/// 上下付きは後から指定した方を採り、先の方を外す（R6.2）。
+/// 上下付きは後から指定した方を採り、先の方を外す。
 #[test]
 fn sub_and_sup_keep_only_the_one_specified_last() {
     let layers = split_layers();
@@ -294,7 +279,7 @@ fn turning_off_the_inactive_script_leaves_the_active_one() {
     assert_eq!(look.script, Script::None);
 }
 
-/// 上下付きも 6 語で解釈する（R6.1）。`default`／`disable` は当該の層の上下付きの値を引く
+/// 上下付きも 6 語で解釈する。`default`／`disable` は当該の層の上下付きの値を引く
 /// ——ここでは既定層が上付き・無効表示層が下付き（[`split_layers`]）。
 #[test]
 fn sub_and_sup_read_the_same_six_words() {
@@ -322,7 +307,7 @@ fn sub_and_sup_read_the_same_six_words() {
     }
 }
 
-/// 上下付きは 6 語以外・値なしを当該項目を変えずに拒む（R5.5 と同じ規則・R6.1）。
+/// 上下付きは 6 語以外・値なしを当該項目を変えずに拒む。
 #[test]
 fn sub_and_sup_refuse_words_outside_the_six() {
     let layers = split_layers();
@@ -344,7 +329,7 @@ fn sub_and_sup_refuse_words_outside_the_six() {
     }
 }
 
-/// 上下付きと白抜きは「状態は更新するが表示は変えない」印を返す（R5.9・R6.1）。
+/// 上下付きと白抜きは「状態は更新するが表示は変えない」印を返す。
 /// 表示に効く 4 項目は印を返さない（零の側も明示する）。
 #[test]
 fn the_vocabulary_only_items_report_that_the_display_does_not_change() {
@@ -367,9 +352,9 @@ fn the_vocabulary_only_items_report_that_the_display_does_not_change() {
     }
 }
 
-// ------------------------------------------------------------------ §9 一括の戻し
+// ------------------------------------------------------------------ 一括の戻し
 
-/// `\f[default]` は見た目を既定層で丸ごと置き換える（R10.1）。
+/// `\f[default]` は見た目を既定層で丸ごと置き換える。
 #[test]
 fn the_bulk_default_replaces_the_whole_look_with_the_default_layer() {
     let layers = split_layers();
@@ -383,7 +368,7 @@ fn the_bulk_default_replaces_the_whole_look_with_the_default_layer() {
     assert_eq!(note, None);
 }
 
-/// `\f[disable]` は見た目を無効表示層で丸ごと置き換える（R10.2）。
+/// `\f[disable]` は見た目を無効表示層で丸ごと置き換える。
 #[test]
 fn the_bulk_disable_replaces_the_whole_look_with_the_disable_layer() {
     let layers = split_layers();
@@ -394,16 +379,14 @@ fn the_bulk_disable_replaces_the_whole_look_with_the_disable_layer() {
     assert_eq!(note, None);
 }
 
-/// 一括の戻しは**項目を列挙しない**（R10.4）。後続仕様が [`TextLook`] に項目を足したとき
-/// 戻しから漏れないのは「丸ごと置き換え」だからで、値の比較では今日の 9 項目しか見張れない。
-/// 置き換えの 1 行そのものを字面で固定する（`layout_cursor_overflow_tests.rs` と同じ作法）。
+/// 一括の戻しは**項目を列挙しない**。後から [`TextLook`] に項目が足されても戻しから漏れないのは
+/// 「丸ごと置き換え」だからで、値の比較では今日の 9 項目しか見張れない。
+/// そこで置き換えの 1 行そのものを字面で固定する（`layout_cursor_overflow_tests.rs` と同じ作法）。
 ///
-/// 本検査が見張る `apply_font_tag` の 2 腕は本番から届く——`crates/areka` の `check_script` と
-/// strict の再生が [`classify_font_tag`] を通してこの 2 腕を引く（腕を消すと正典の
-/// `\f[default]`／`\f[disable]` が知らないキーと報告される＝`classify_font_tag` の表が赤）。
-/// 台本の再生の戻しの実体（`state_decoration.rs::reset_look_to`）を見張るのは
-/// `state_decoration_reset_tests.rs::the_production_bulk_reset_replaces_the_look_as_a_whole`
-/// で、本検査はこの 2 腕の置き換えが丸ごとであり続けることを固定する。
+/// 見張る 2 腕は本番から届く——`check_script` と strict の再生が [`classify_font_tag`] を通して引くので、
+/// 腕を消すと正典の `\f[default]`／`\f[disable]` が知らないキーと報告される。
+/// 台本の再生の戻しの実体（`state_decoration.rs::reset_look_to`）は
+/// `state_decoration_reset_tests.rs` が見張る。
 #[test]
 fn the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items() {
     const LOOK_SRC: &str = include_str!("look.rs");
@@ -420,7 +403,7 @@ fn the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items() {
 }
 
 /// 一括の戻しの意味はキーだけで決まる——正典の綴りは値を取らないので、余った値
-/// （`\f[default,1]` のような綴り誤り）は戻しを妨げない（R10.1／R10.2）。
+/// （`\f[default,1]` のような綴り誤り）は戻しを妨げない。
 #[test]
 fn a_stray_value_does_not_stop_the_bulk_reset() {
     let layers = split_layers();
@@ -433,9 +416,9 @@ fn a_stray_value_does_not_stop_the_bulk_reset() {
     }
 }
 
-// ------------------------------------------------------------------ §10 所有外・未知・キーなし
+// ------------------------------------------------------------------ 所有外・未知・キーなし
 
-/// 本仕様が意味を与えないキーは見た目を変えず「所有外」の印を返す（R2.5）。
+/// `apply_font_tag` が意味を与えないキーは見た目を変えず「所有外」の印を返す。
 /// 値の保持は呼び手（`state_decoration`）の担当で、ここでは見た目が動かないことだけを述べる。
 #[test]
 fn the_keys_owned_by_later_specs_do_not_change_the_look() {
@@ -501,13 +484,13 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
     }
 }
 
-/// 43 形のいずれでもないキーは見た目を変えず理由を返す（R2.6）。キーも小文字の完全一致のみで、
+/// 43 形のいずれでもないキーは見た目を変えず理由を返す。キーも小文字の完全一致のみで、
 /// `Bold` は「太字」ではなく未知のキーである。
 #[test]
 fn an_unknown_key_leaves_the_look_unchanged() {
     let layers = split_layers();
-    // `cursorcolour`・`anchorx` は ukadoc の一覧に無い書き損じ（前方一致で「他の持ち物」に
-    // 紛れていた・指摘 21）。
+    // `cursorcolour`・`anchorx` は ukadoc の一覧に無い書き損じで、前方一致では「他の持ち物」に
+    // 紛れる。
     for key in [
         "Bold",
         "BOLD",
@@ -533,8 +516,7 @@ fn an_unknown_key_leaves_the_look_unchanged() {
     }
 }
 
-/// キーが無い 3 形（`\f`＝`[]`・`\f[]`＝`[]`・`\f[""]`＝`[""]`）は見た目を変えず理由を返す
-/// （R2.6・design の「`args.first()` が `None` または空文字列」）。
+/// キーが無い 3 形（`\f`＝`[]`・`\f[]`＝`[]`・`\f[""]`＝`[""]`）は見た目を変えず理由を返す。
 #[test]
 fn a_missing_key_leaves_the_look_unchanged() {
     let layers = split_layers();
@@ -551,7 +533,7 @@ fn a_missing_key_leaves_the_look_unchanged() {
 
 /// 適用できなかった `\f` の分類（[`FontTagIssue::failure`]）は、本物の `apply_font_tag` が返す
 /// `Err` から「知らないキー」「キーなし」「値の誤り」の 3 通りを見分ける
-/// （`areka-P0-mcp-author-tools` 要件 3.4・3.10。検査は前の 2 つだけを `unknown_tag` にする）。
+/// （検査は前の 2 つだけを `unknown_tag` にする）。
 /// 値の誤りは理由の定数ごとに 1 行以上（色の書式の誤りは `color.rs` の理由）を並べ、
 /// 「知らないキー・キーなし以外は全部値の誤り」が理由の追加で崩れないことを見る。
 #[test]
@@ -584,7 +566,7 @@ fn a_failed_font_tag_tells_unknown_key_missing_key_or_bad_value() {
 
 /// `\f` の分類（`check_script` と strict の再生が引く）: 受け取るだけ（語彙だけ・所有外・
 /// スタイルシートの語）は `Ignored`、知らないキー・キーなしは `UnknownKey`、値の誤りと
-/// それ以外の受理（`AnchorColorAsDefault` を含む）は診ない（`mcp-strict-errors` 要件 2.7）。
+/// それ以外の受理（`AnchorColorAsDefault` を含む）は診ない。
 #[test]
 fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
     let rows: [(&[&str], Option<FontClass>); 16] = [

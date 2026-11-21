@@ -40,12 +40,7 @@ pub(super) fn items_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [TextI
         .items()
 }
 
-// ══ typewriter リビール進行（注入時刻駆動・R3／R7 系） ══
-//
-// reveal ペースは配送 duration 由来（`interval = duration / N`）。FP 誤差を排するため、
-// 2 の冪で正確に表現できる間隔（0.25）を主に使い、Text cue へ `N × 0.25` の duration を
-// 焼き込む（[`cue`] ヘルパが自動で行う）。期待リビール時刻は実装と同一の `D/N` 算術で
-// 成立し、非 2 冪の間隔（≈0.05）は安全マージン付き時刻で観測する。
+// ══ typewriter リビール進行（注入時刻駆動） ══
 
 pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<f64> {
     state

@@ -1,19 +1,10 @@
 //! # layout_styled — 装飾入りの配置（純粋層・`layout.rs` の子）
 //!
-//! 配置の本体 [`LayoutEngine::layout_inner`] へ「グリフ序数 → 見た目」の読み口
-//! （[`GlyphStyles`]）を渡す**公開の入口** [`LayoutEngine::layout_styled`] と、その入口が
-//! 使う 3 つの決め方を持つ:
+//! 公開の入口 [`LayoutEngine::layout_styled`] と、その入口が使う 3 つの決め方を持つ:
+//! [`glyph_style_advance`]（1 文字ぶんの装飾番号・送り幅・em の大きさ）、
+//! [`LineHeights`]（行の丈の追跡）、[`line_pitch_of`]（行送り）。
 //!
-//! 1. [`glyph_style_advance`]——1 文字ぶんの「装飾番号・送り幅・em の大きさ」を決める
-//!    **唯一の点**。本体の配置ループと塊の合計（[`crate::layout::line_ops::segment_advance_sum`]）
-//!    が同じ関数を通ることで、「区間ごとの送り幅合計も同じ見た目で合計する」が
-//!    値の一致ではなく**構造**で保たれる（要件 11.2）。
-//! 2. [`LineHeights`]——行の丈（行内最大 em）の追跡（要件 7.9）。
-//! 3. [`line_pitch_of`]——行送り。計測器の `line_pitch` を呼ぶ綴りは配置層でここ 1 か所にしかなく、
-//!    その先は `TextLayerConfig::line_pitch` の 1 点である（要件 7.8）。装飾のための別の式も
-//!    係数もここには無い——引数が高さ 1 つだけであることがそれを型で示している。
-//!
-//! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
+//! 純粋層: `windows` 系 crate へ依存しない。
 
 use areka_sakura::contract::ActorKey;
 
@@ -26,11 +17,8 @@ use crate::writing::WritingMode;
 use super::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 
 impl LayoutEngine {
-    /// [`LayoutEngine::layout`] の全挙動＋`\_l` の縮退のキャラクターごとの初回の `warn!`＋文字ごとの見た目
-    /// （送り幅・行内最大 em・装飾番号の転写）。
-    ///
-    /// 装飾を持つ台本の唯一の入口である。番号列が既定だけなら出力は装飾導入前と一致する
-    /// （`layout_styled_tests.rs` の非回帰の檻）。
+    /// 装飾（グリフ序数 → 見た目）つきの配置。装飾を持つ台本の唯一の入口で、
+    /// 番号列が既定だけなら出力は [`LayoutEngine::layout`] と一致する。
     #[allow(clippy::too_many_arguments)]
     pub fn layout_styled(
         items: &[TextItem],
@@ -58,12 +46,11 @@ impl LayoutEngine {
     }
 }
 
-/// 1 文字ぶんの `(装飾番号, 送り幅, em の大きさ)`。
+/// 1 文字ぶんの `(装飾番号, 送り幅, em の大きさ)`。配置ループと塊の送り幅合計がこの関数だけを通る。
 ///
-/// 番号列が無い経路と既定の番号の文字は従来どおり `advance(text, font_height)` で測り、
-/// 高さも `font_height` を返す——既定の見た目の高さが `font_height` と食い違う登録前の
-/// 一瞬でも、装飾なしの出力を 1 ビットも動かさないためである（`layout_styled_tests.rs` の
-/// 「番号列を渡さない出力」「既定だけの番号列」の 2 本が字義の期待値で見張る）。
+/// 番号列が無い経路と既定の番号の文字は `advance(text, font_height)` で測り、高さも
+/// `font_height` を返す。既定の見た目の高さが `font_height` と食い違う登録前の一瞬でも、
+/// 装飾なしの出力を動かさないため。
 pub(super) fn glyph_style_advance(
     text: &str,
     ordinal: usize,
@@ -71,7 +58,7 @@ pub(super) fn glyph_style_advance(
     metrics: &dyn GlyphMetrics,
     styles: Option<&GlyphStyles<'_>>,
 ) -> (StyleId, f32, f32) {
-    // 目印の字は全角の空白として測る（描くときと同じ物差し・要件 5.5）。
+    // 目印の字は全角の空白として測る（描くときと同じ）。
     let text = crate::inline_marker::stand_in(text);
     let default = || {
         (
@@ -92,16 +79,13 @@ pub(super) fn glyph_style_advance(
     }
 }
 
-/// 行の丈（要件 7.9）——閉じる行に置かれた文字の em の最大値を追う。
+/// 行の丈——閉じる行に置かれた文字の em の最大値を追う。
 ///
-/// 3 つの答えを **1 つの優先順**で返す（[`LineHeights::close`]）:
+/// [`LineHeights::close`] は次の優先順で返す:
 ///
 /// 1. 閉じる行に文字が置かれていれば、その行の最大 em。
-/// 2. 文字の無い行（改行だけの行）は、そのとき効いている大きさ＝**後ろに置かれる文字**の大きさ
-///    （`\_l` の先行実体化と先読みも、届いた項目の後ろの字を呼び手が引いて渡す）。
-/// 3. 後ろに置かれる文字が無いときだけ `font_height`。後ろに字が無ければその後に置かれる字も
-///    無いので、この値は配置の結果に出ない（再監査 R2-A1: だからスコープの現在の見た目は
-///    ここへ渡さない）。
+/// 2. 文字の無い行（改行だけの行）は、後ろに置かれる文字の大きさ。
+/// 3. 後ろにも文字が無いときだけ `font_height`（配置の結果に出ない）。
 pub(super) struct LineHeights {
     /// 後ろに字が無いときの丈（`font_height`）。
     fallback: f32,
@@ -123,26 +107,21 @@ impl LineHeights {
         self.line_max = Some(self.line_max.map_or(height, |m| m.max(height)));
     }
 
-    /// 開いている行を閉じる——丈を返し、行内最大を空へ戻す。
-    /// `next` は「後ろに置かれる文字の大きさ」（後ろに文字が無ければ `None`）。
+    /// 開いている行を閉じて丈を返す。`next` は後ろに置かれる文字の大きさ（無ければ `None`）。
     pub(super) fn close(&mut self, next: Option<f32>) -> f32 {
         self.line_max.take().or(next).unwrap_or(self.fallback)
     }
 
-    /// いま閉じたとしたら返る丈を、**閉じずに**覗く（`\_l` の実効位置の先読み用）。
-    ///
-    /// [`LineHeights::close`] と同じ優先順・同じ `next` を取る。先読みが `close` と別の規則を
-    /// 持つと、`\_l` を挟んだ行だけ行送りが食い違う（`layout_styled_tests.rs` の
-    /// `the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch`・
-    /// `a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview`）。
+    /// いま閉じたとしたら返る丈を、閉じずに覗く（`\_l` の実効位置の先読み用）。
+    /// `close` と別の規則を持つと、`\_l` を挟んだ行だけ行送りが食い違う。
     pub(super) fn peek(&self, next: Option<f32>) -> f32 {
         self.line_max.or(next).unwrap_or(self.fallback)
     }
 }
 
-/// 行送り——配置層で `TextLayerConfig::line_pitch` へ届く**唯一の点**（要件 7.8）。
+/// 行送り——配置層で `TextLayerConfig::line_pitch` へ届く唯一の点。
 ///
-/// 装飾は「どの高さを渡すか」だけを変え、式そのものには触れない。
+/// 装飾は渡す高さだけを変え、式には触れない。
 pub(super) fn line_pitch_of(metrics: &dyn GlyphMetrics, height: f32) -> f32 {
     metrics.line_pitch(height)
 }

@@ -8,7 +8,7 @@ use crate::region::ScaleContract;
 use crate::state::{TextLayerConfig, TextLayerState};
 use areka_sakura::contract::ActorKey;
 
-// ════ 目視診断（PNG ダンプ・#[ignore]・開発者の「出力画像を見せて」要求への回答） ════
+// ════ 目視診断（PNG ダンプ・#[ignore]） ════
 //
 // 実 fixture（font 28px・validrect 320×122・実 DWriteMetrics・行1「おっはよー！」/行2
 // 「めっちゃええ朝やん！」/行3「今日もいくでー！」＋あふれ短行）を typewriter 前進で
@@ -29,7 +29,7 @@ fn diag_out_dir() -> String {
     out_dir
 }
 
-/// 既定の出力先がワークツリーの `target` の下（指摘 27）。
+/// 既定の出力先がワークツリーの `target` の下。
 #[test]
 fn diag_default_out_dir_is_under_worktree_target() {
     let dir = std::path::Path::new(DIAG_DEFAULT_OUT_DIR);
@@ -309,23 +309,22 @@ fn diag_dump_horizontal_pngs() {
     }
 }
 
-/// 目視診断（budoux ワードラップ・R9.2/9.3）: 実 fixture（emo2-kakukaku・Yu Gothic UI 28px・
+/// 目視診断（budoux ワードラップ）: 実 fixture（emo2-kakukaku・Yu Gothic UI 28px・
 /// 狭い validrect 320×122・`wordwrappoint.x=-49`）へ、(1) 通常文を **OFF（文字単位）** と
 /// **ON（分かち書き）** の両方、(2) budoux 境界を持たない長大塊を **ON** で描き、fully-revealed
 /// （全グリフ可視）で PNG を保存する。
 ///
 /// - **通常ケース（OFF/ON 並置）**: 狭いバルーンでは OFF が文節を行末で途中分割するが、ON は
-///   塊を丸ごと次行へ送る（R9.1）。`diag_budoux_normal_off.png` と `diag_budoux_normal_on.png`
+///   塊を丸ごと次行へ送る。`diag_budoux_normal_off.png` と `diag_budoux_normal_on.png`
 ///   を並べて改善を目視できる。
 /// - **長大塊ケース（ON）**: 行頭からでも 1 行に収まらない塊（budoux 境界のない連続カナ）は
-///   当該塊に限って文字単位縮退し、バルーン（validrect＝供給面寸）からはみ出さない（R9.2）。
+///   当該塊に限って文字単位縮退し、バルーン（validrect＝供給面寸）からはみ出さない。
 ///   `diag_budoux_longseg_on.png` を出す。最右インク列が供給面右端で張り付いていない（＝
 ///   はみ出しクリップでない）ことを `eprintln!` の数値でも補助確認する。
 ///
 /// byte 等価檻（`diag_line_boundary_dropout_vs_oracle` 等）は「viewbox==oracle」を保証するが、
 /// 「分かち書き折返しが読みやすく見えるか・長大塊がはみ出さないか」は人（AI vision）が画像を
-/// 見るしかない（既定フォントの byte 等価が緑でも実フォントの欠けを見逃した例は完了 spec
-/// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」）。全域再描画オラクル
+/// 見るしかない（既定フォントの byte 等価が緑でも実フォントの欠けを見逃した前例がある）。全域再描画オラクル
 /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
 /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
 /// （出力先は env `AREKA_DIAG_OUT`・無指定はワークツリーの `target/areka-diag`）。
@@ -420,7 +419,7 @@ fn diag_dump_budoux_wordwrap_pngs() {
     dump_case(&mut rig, "normal_on", normal, true);
 
     // ── 長大塊ケース: budoux 境界を持たない連続カナ（行頭からでも 1 行に収まらない）を ON で。 ──
-    // 前後に通常の和文を置き「長大塊のみ縮退し前後は分かち書き継続」を目視できる形にする（R3.3）。
+    // 前後に通常の和文を置き「長大塊のみ縮退し前後は分かち書き継続」を目視できる形にする。
     let longseg =
         "むかしむかしバアアアアアアアアアアアアアアアアアアアアアア山という所に住んでいました";
     eprintln!("[diag-budoux] === 長大塊ケース（ON: 縮退＋はみ出しなし） ===");

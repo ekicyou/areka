@@ -13,7 +13,7 @@ use crate::writing::WritingMode;
 
 /// canvas の GlyphRun 住人を、内包 run が等価な非 hover の Choice 住人へ写す
 /// （`segments` 空・`hovered=None`・`highlight=None`）。transform/effects は不変。
-/// 「Choice は GlyphRun と同格の素描画」（R1.4/R9.5）を検証するための等価変換。
+/// 「Choice は GlyphRun と同格の素描画」を検証するための等価変換。
 fn as_choice_canvas(canvas: &ContentCanvas) -> ContentCanvas {
     choice_canvas_from(canvas, |run| ChoiceLineContent {
         run: run.clone(),
@@ -26,7 +26,7 @@ fn as_choice_canvas(canvas: &ContentCanvas) -> ContentCanvas {
     })
 }
 
-/// R1.4/R9.5（ピクセル同一）: 非 hover（`highlight=None`）の Choice 住人は、内包 run が
+/// 非 hover（`highlight=None`）の Choice 住人は、内包 run が
 /// 等価な GlyphRun 住人と**readback バイト完全一致**で描画される。GlyphRun canvas と
 /// Choice canvas をそれぞれ独立の executor/供給面へ初回フレーム描画し、read_back を byte 比較する。
 /// （Choice アームが run を GlyphRun と別経路で描く・寸を取り違える等の変異はこの檻で赤くなる。）
@@ -61,7 +61,6 @@ fn choice_resident_renders_pixel_identical_to_glyph_run() {
         "住人数は等価"
     );
 
-    // GlyphRun canvas を独立 executor/供給面へ初回描画。
     let mut surface_glyph = rig.attach(image, 1.0);
     let mut exec_glyph = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
     exec_glyph
@@ -76,7 +75,6 @@ fn choice_resident_renders_pixel_identical_to_glyph_run() {
         .expect("GlyphRun render 失敗");
     let bytes_glyph = surface_glyph.read_back().expect("read_back 失敗");
 
-    // Choice canvas を別の独立 executor/供給面へ初回描画。
     let mut surface_choice = rig.attach(image, 1.0);
     let mut exec_choice = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
     exec_choice
@@ -101,11 +99,11 @@ fn choice_resident_renders_pixel_identical_to_glyph_run() {
     );
 }
 
-/// 観測可能な完了状態（ハイライト描画・R4.2/4.3/4.5/4.6）: hover 中の Choice 行を描画すると
+/// hover 中の Choice 行を描画すると
 /// hover セグメント矩形内は塗り色（fill）＋切替文字色（白）の画素になり、セグメント外は素描画
 /// （塗りなし）になる。さらに hover 解除フレーム（highlight=None・同一 executor＝キャッシュ
 /// TextLayout 再利用）は塗り画素ゼロ・文字色も既定へ戻る（DrawingEffect リセット正準列＝
-/// キャッシュ層 TextLayout を汚さない・4.5）。
+/// キャッシュ層 TextLayout を汚さない）。
 #[test]
 fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
     let mut rig = Rig::new();
@@ -192,7 +190,7 @@ fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
     let plain_px = surface.read_back().expect("read_back(hover 解除) 失敗");
 
     // 塗り画素は全域ゼロ（塗りが残らない）・白文字も全域ゼロ（効果が全範囲 None へリセット
-    // され既定黒へ戻る＝キャッシュ層 TextLayout を汚していない・4.5）。
+    // され既定黒へ戻る＝キャッシュ層 TextLayout を汚していない）。
     let all_fill = count_in_x_band(&plain_px, w, 0, w, |px| px == fill_bgra);
     let all_white = count_in_x_band(&plain_px, w, 0, w, |px| px == white_bgra);
     assert_eq!(all_fill, 0, "hover 解除フレームは塗り画素ゼロ（素描画）");
@@ -213,7 +211,7 @@ fn count_bgra_in_row(bytes: &[u8], w: u32, y: u32, x0: u32, x1: u32, target: [u8
     count_in_x_band(row, w, x0, x1, |px| px == target)
 }
 
-/// 観測可能な完了状態（R13.1/13.2/13.5）: `band_offset` を持つ Choice 行を描画すると、
+/// `band_offset` を持つ Choice 行を描画すると、
 /// ハイライトの塗りは行矩形の block 近端から**寄せの分だけ下がって**始まり、寄せの上の行には
 /// 1 画素も載らない。さらに hover 解除フレームで塗りが**消し残らない**——ダーティ帯の超過分は
 /// `band_offset + band_extent − 行の丈` で組まれるので、寄せを数えないと帯の下端側が
@@ -306,7 +304,7 @@ fn hover_band_offset_shifts_paint_and_leaves_no_residue_on_hover_off() {
     );
 }
 
-/// 縦書き（R13.7）: 同じ寄せをブロック軸（x）へ適用する。寄せ 0 と寄せ 3 を独立の
+/// 縦書き: 同じ寄せをブロック軸（x）へ適用する。寄せ 0 と寄せ 3 を独立の
 /// executor／供給面へ描き、読み戻した塗りの x 範囲が**寄せのぶんだけ右へ平行移動する**ことを
 /// 見る（幅は不変＝帯を広げていない）。`highlight_rect` の縦書きアームが寄せを無視すると
 /// 平行移動が 0 になって赤くなる。

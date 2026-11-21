@@ -1,11 +1,9 @@
 //! # surface_window_child — 文字の面の片付けと、箱の文字の面（シェルの窓の直接の子）の装着・当たりのマスク
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
-//!
 //! `surface.rs` の子（`#[path]`）。供給面の生成は親の `TextSurface::create` を共有し、ここは
-//! 「窓の子として挿す・消す」「表示されている字の矩形で当たりのマスクを焼く」（要件 9.4）と、
+//! 「窓の子として挿す・消す」「表示されている字の矩形で当たりのマスクを焼く」と、
 //! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`
-//! （`areka-P0-balloon-text-bugs` 要件 2.9）を持つ。
+//! を持つ。
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
@@ -19,8 +17,7 @@ use super::{TextSurface, physical_arrangement};
 use crate::TextLayerError;
 use crate::choice::HitRectPx;
 
-/// 字の矩形の集まり（面の左上を原点とする物理 px）を、面の大きさ `size` の当たりのマスクへ焼く
-/// （要件 9.4）。矩形 `[left, right) × [top, bottom)` を外側へ丸めた画素が内で、面の外は切る。
+/// 字の矩形の集まり（面の左上を原点とする物理 px）を、面の大きさ `size` の当たりのマスクへ焼く。矩形 `[left, right) × [top, bottom)` を外側へ丸めた画素が内で、面の外は切る。
 /// マスクは面と同じ物理寸なので、wintf の bounds 相対の比例写像は 1:1 になる。
 pub(crate) fn hit_cells_mask(size: (u32, u32), cells: &[HitRectPx]) -> AlphaMask {
     let mut px = Vec::new();
@@ -46,7 +43,7 @@ fn fill_hit_cells(px: &mut Vec<u8>, size: (u32, u32), cells: &[HitRectPx]) {
     }
 }
 
-/// 窓の子の当たりのマスクの覚え（audit-emo-text-state-actor 指摘 9）: 最後に焼いた字の矩形・画素の作業場・今のマスクと予備の
+/// 窓の子の当たりのマスクの覚え: 最後に焼いた字の矩形・画素の作業場・今のマスクと予備の
 /// 2 枚。矩形が変わるたびに、予備を単独で持てれば焼き直し、持てなければ新しく作る
 /// （`areka-emo-present` の `presenter/budget.rs` の 2 枚を入れ替える形）。
 #[derive(Default)]
@@ -98,7 +95,7 @@ impl HitMaskCache {
 }
 
 /// 箱の文字の面の entity が装着の時に持つ当たり判定: マスク判定で、字の矩形は 0 個（何も受けない）。
-/// マスクを空のまま（`AlphaMaskResource::new()`）にすると wintf は矩形全体の判定へ縮退するので、
+/// マスクを空のまま（`AlphaMaskResource::new`）にすると wintf は矩形全体の判定へ縮退するので、
 /// 必ず面の大きさの空のマスクを入れる。
 pub(crate) fn box_hit_components(size: (u32, u32)) -> (HitTest, AlphaMaskResource) {
     let mut mask = AlphaMaskResource::new();
@@ -106,7 +103,7 @@ pub(crate) fn box_hit_components(size: (u32, u32)) -> (HitTest, AlphaMaskResourc
     (HitTest::alpha_mask(), mask)
 }
 
-/// 箱の文字の面の entity の当たりのマスクを、字の矩形の集まりへ差し替える（要件 9.4）。
+/// 箱の文字の面の entity の当たりのマスクを、字の矩形の集まりへ差し替える。
 /// クリック透過の切り替えと窓のメッセージの振り分けは、どちらもこのマスクを読む。
 /// 製品の道は [`HitMaskCache`] を通る（覚えを持たないテストの口）。
 #[cfg(test)]
@@ -132,8 +129,8 @@ impl TextSurface {
     /// 超えれば末尾）。
     ///
     /// 当たり判定は表示されている字の矩形の集まりで、装着の時は 0 個（何も受けない）。提示が
-    /// [`Self::set_hit_cells`] で入れ替える。届くかどうかはシェルの絵とこの矩形で決まる（要件 9.4）。
-    /// 面は透明で始まり、背景の絵を描かない（要件 1.6）。作った entity は面が持ち、
+    /// [`Self::set_hit_cells`] で入れ替える。届くかどうかはシェルの絵とこの矩形で決まる。
+    /// 面は透明で始まり、背景の絵を描かない。作った entity は面が持ち、
     /// [`Self::despawn_window_child`] で消す。
     pub fn attach_window_child(
         world: &mut World,
@@ -190,7 +187,7 @@ impl TextSurface {
         }
     }
 
-    /// 面の片付け（`areka-P0-balloon-text-bugs` 要件 2.9・描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
+    /// 面の片付け（描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
     /// `slot` から文字の層の部品（`VisualGraphics`・`Arrangement`）を外す。`VisualGraphics` の外しで
     /// wintf が親の Visual から文字の絵を外し、差し込み口の entity と窓の `Children` の並びは残るので、
     /// 付け直しの装着で wintf の `visual_sync` が `Children` の順（差し込み口が枠の面より手前）に入れ直す。
@@ -213,7 +210,7 @@ impl TextSurface {
     }
 
     /// 箱の文字の面の当たり判定を、表示されている字の矩形の集まり（面の左上を原点とする物理 px）へ
-    /// 合わせる（要件 9.4）。前に焼いた集まりと同じなら何もしない。差し込み口へ装着した面（窓の子を
+    /// 合わせる。前に焼いた集まりと同じなら何もしない。差し込み口へ装着した面（窓の子を
     /// 持たない）は何もしない（普通のバルーンの窓の当たり判定は emo-present の領分）。
     pub fn set_hit_cells(&mut self, world: &mut World, cells: Vec<HitRectPx>) {
         if let Some(entity) = self.window_child {

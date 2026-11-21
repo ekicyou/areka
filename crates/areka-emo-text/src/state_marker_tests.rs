@@ -1,7 +1,5 @@
 //! 印の合図（`\![*]`・`%*` の汎用の `\!` の合図・名前 `*`）を目印の字として積む檻。
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `script-small-tags` のもの（別の spec のものはその場で名を書く）。
-//!
 //! 台本の読み手（`areka-parsers` の `sakura/decode.rs`）を通さず、読み手が出すのと同じ合図の列を
 //! 直接組む（`CueCommand::command_carrier("*", [])`）。
 
@@ -29,7 +27,7 @@ fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
         .collect()
 }
 
-/// `\![*]\q[晴れてる,X1]`: 目印の字が 1 つ、選択肢の範囲はその後ろ、選択肢は 1 つ（要件 4.1・5.7）。
+/// `\![*]\q[晴れてる,X1]`: 目印の字が 1 つ、選択肢の範囲はその後ろ、選択肢は 1 つ。
 #[test]
 fn marker_before_choice_is_one_glyph_and_the_choice_starts_after_it() {
     let state = applied(&[
@@ -55,7 +53,7 @@ fn marker_before_choice_is_one_glyph_and_the_choice_starts_after_it() {
     assert_eq!(spans[0].label, "晴れてる");
 }
 
-/// 続けた 2 つの印は 2 字（要件 4.5）。目印の字も本文の字と同じくリビールと見た目の番号を持つ。
+/// 続けた 2 つの印は 2 字。目印の字も本文の字と同じくリビールと見た目の番号を持つ。
 #[test]
 fn two_markers_are_two_glyphs_with_reveal_and_style() {
     let state = applied(&[marker("0"), marker("0"), text("0", "あ")]);
@@ -65,7 +63,7 @@ fn two_markers_are_two_glyphs_with_reveal_and_style() {
     assert_eq!(actor.glyph_styles().len(), 3);
 }
 
-/// `\c` で印も消える（要件 5.6）。
+/// `\c` で印も消える。
 #[test]
 fn clear_removes_the_marker() {
     let state = applied(&[marker("0"), cue("0", 0.0, CueCommand::Clear)]);
@@ -122,7 +120,7 @@ fn layout(state: &TextLayerState, region: &TextRegion, mode: WritingMode) -> Vec
     )
 }
 
-/// 印だけの 4 行目がスクロールの窓に入る（要件 5.6）。3 行ちょうどの領域（下端 34・
+/// 印だけの 4 行目がスクロールの窓に入る。3 行ちょうどの領域（下端 34・
 /// 行の送り 12）に「あ」3 行と印だけの行を足すと、1 行ぶん送られる。
 #[test]
 fn a_marker_only_line_scrolls_into_the_window() {
@@ -150,7 +148,7 @@ fn a_marker_only_line_scrolls_into_the_window() {
     );
 }
 
-/// 縦書きでは印は列の向きに 1 字分（要件 5.5）。
+/// 縦書きでは印は列の向きに 1 字分。
 #[test]
 fn vertical_marker_takes_one_glyph_along_the_column() {
     let state = applied(&[marker("0"), text("0", "あ")]);

@@ -1,5 +1,3 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-dpi-scaling` のもの（別の spec のものはその場で名を書く）。
-
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -17,7 +15,7 @@ use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
-// ══ 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
+// ══ 文字層 k 再追従シーム ══
 //
 // `TextSlotView` は emo-present の私有フィールド型で in-crate から構築できない
 // （公開コンストラクタなし・`text_slot_view` は実 GPU 表示確立が前提）。よって本檻は
@@ -29,13 +27,13 @@ use crate::state::TextLayerConfig;
 /// k=1.25: 400×1.25=500 / 224×1.25=280。k=2: 800 / 448。
 const NATIVE: (u32, u32) = (400, 224);
 
-/// `areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5（churn ガード）: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
+/// churn ガード: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
 /// slot・window ＋ 再解決した文字描画領域）の再追従要求は **false** を返し、routing／
 /// layout 入力を 1 バイトも動かさない（毎フレーム再結線の禁止）。
 ///
 /// 「k が同値」は no-op の**十分条件ではない**——寸／領域が変われば再構築する
 /// （`refresh_actor_binding_with_same_k_but_different_image_size_rebuilds` /
-/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`・`areka-P0-kero-balloon` R4.4）。
+/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`）。
 #[test]
 fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     let mut world = World::new();
@@ -72,9 +70,9 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     );
 }
 
-/// `areka-P0-kero-balloon` R4.4: **k が同値でも面実寸（`image_size`）が変われば再構築する**。
-/// 「k 同値なら常に no-op」という旧判定では、同 k のまま別寸のバルーン面へ切替えた
-/// （`\b` 等）ときに旧寸の文字層が残る——判定キーを binding 全体へ広げてこれを閉塞する。
+/// **k が同値でも面実寸（`image_size`）が変われば再構築する**。
+/// 「k 同値なら常に no-op」とすると、同 k のまま別寸のバルーン面へ切替えた
+/// （`\b` 等）ときに旧寸の文字層が残るので、判定キーは binding 全体とする。
 #[test]
 fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
     let mut world = World::new();
@@ -118,7 +116,7 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
     );
 }
 
-/// `areka-P0-kero-balloon` R4.4: **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
+/// **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
 /// （scope 別 `validrect` の差し替え等——判定キーの後半 `ResolvedBalloonText` 側）。
 #[test]
 fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
@@ -131,9 +129,8 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     // binding は 1 バイトも変えず、model の validrect だけが別 scope の値へ変わった状況。
-    // origin は宣言しない——本檻の関心は「validrect だけが変わったとき region が変わるか」で
-    // あり origin は付随物である（かつての `Origin::new(Some(0), Some(0))` は解決後
-    // validrect [24,360]×[16,200] の外にあり、範囲外の宣言の扱いに依存していた）。
+    // origin は宣言しない: 関心は「validrect だけが変わったとき region が変わるか」で、
+    // 範囲外の origin 宣言の扱いに依存させない。
     let narrowed = balloon_model_of(
         Origin::new(None, None),
         ValidRect::new(Some(16), Some(200), Some(24), Some(360)),
@@ -159,7 +156,7 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     );
 }
 
-/// R8.1/R8.2: k 変化で binding が新 k へ再構築され、**image px 空間は不変**
+/// k 変化で binding が新 k へ再構築され、**image px 空間は不変**
 /// （image_size／解決済み region が k に依らない＝作者画像空間）。物理寸が k 倍で
 /// 伸びるのはこの不変性が前提（`physical = ceil(region × k)`）。
 #[test]
@@ -201,7 +198,7 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
     );
 }
 
-/// R8.1/R8.2/R8.3（COM・headless）: 再追従は `ActorRender`（供給面・executor・metrics）を
+/// （COM・headless）再追従は `ActorRender`（供給面・executor・metrics）を
 /// 破棄し、次 `present_frame` が **新 k の物理寸**で再生成する。その間、純粋状態
 /// （リビール進行・確定行＝`TextLayerState`）は保存される（`Clear`/`ClearAll` と別物）。
 #[test]
@@ -246,7 +243,7 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         !rt.is_attached(&actor),
         "ActorRender は破棄される（次フレームが新 k で再生成する・R8.2）"
     );
-    // R8.3: リビール状態は破棄されない（Clear/ClearAll とは構造的に別物）。
+    // リビール状態は破棄されない（Clear/ClearAll とは構造的に別物）。
     assert_eq!(
         rt.state()
             .actor_state(&actor)
@@ -276,16 +273,12 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         "保存済み状態から新 k で再描画される（空表示へ落ちない・R8.4 の前提）"
     );
 
-    // ── R8.5（churn ガードの実効）: 同値 k の再要求は ActorRender を破棄しない ──
+    // ── churn ガードの実効: 同値 k の再要求は ActorRender を破棄しない ──
     // 装着済みの状態で「何もしない」ことを観測する（毎フレーム再結線＝供給面の作り直しと
     // 全再描画を毎フレーム走らせる変異は、ここで is_attached／統計が動くことで死ぬ）。
     //
-    // **キルの排他性（実測）**: 「判定キー全同値でも ActorRender を破棄する」
-    // 変異は本ケースが殺すが**排他キルではない**——統合檻
-    // `attach_wiring_test::scale_refresh_logs_k_transition_and_reattach_physical_size`
-    // （同値 k のフレームで装着 `info!` が再発火しないことを見る）も同時に落ちる＝**共倒れ 2 本**。
-    // 「churn ガードそのものを撤去する（全同値でも true を返して再構築する）」変異も
-    // 上の `refresh_actor_binding_with_all_keys_equal_is_noop_returning_false` と共倒れである。
+    // 統合檻 `attach_wiring_test::scale_refresh_logs_k_transition_and_reattach_physical_size`
+    // （同値 k のフレームで装着 `info!` が再発火しないことを見る）と共倒れになる。
     let stats_before = rt.draw_stats(&actor).expect("draw_stats");
     let noop = rt.refresh_actor_binding(
         &actor,
@@ -335,17 +328,16 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
     );
 }
 
-// ══ spec real-run-log-noise 要件 1.1・1.2・1.6・5.1・5.6: 入力が前と同じ再追従は解き直さない ══
+// ══ 入力が前と同じ再追従は解き直さない ══
 //
 // 「`debug` まで開けた記録」は捕捉した全水準のうち `TRACE` を除いたものとして数える
 // （`capture_under_filter` の機能 `env-filter` は wintf だけが引く決まり・log-capture-kit の doc）。
 
-/// spec real-run-log-noise の件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
+/// 未指定の origin 成分を書字開始角へ寄せる記録（`region.rs`・未指定の origin 成分ごとに 1 行）。
 const ORIGIN_TO_CORNER: &str = "未指定の origin 成分を書字開始角へ寄せる";
-/// 件 1 と同じ解決の中のもう 1 つの `debug!`（`real-run-log-noise` 要件 1.5）。
+/// 未指定の origin 成分の記録と同じ解決の中のもう 1 つの `debug!`。
 const DEFAULT_EDGE: &str = "未指定座標成分を既定辺へ縮退する";
-/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。文の中の R4.5 は `areka-P0-kero-balloon` の
-/// もの（本番の記録の文の写しなので文は書き換えない）。
+/// 何も変わらなかった再追従の記録（`actor_attach.rs`）。本番の記録の文の写しなので文は書き換えない。
 const NOTHING_CHANGED: &str = "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）";
 
 /// `origin`・`wordwrappoint`・`validrect` を書かないバルーン（解き直すたびに件 1 が成分ごとに出る）。
@@ -367,7 +359,7 @@ fn count_at_debug(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T1（`real-run-log-noise` 要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
+/// T1: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
 /// 既定辺へ縮退を 1 件も出さない。件 2 は `trace` で、1 回の再追従にちょうど 1 件出る。
 #[test]
 fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line() {
@@ -414,7 +406,7 @@ fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line(
     assert_eq!(traced[0].level, Level::TRACE, "件 2 の水準は TRACE");
 }
 
-/// T3（`real-run-log-noise` 要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
+/// T3: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
 ///
 /// ⑴ 文字の設定が変わる定義への付け替えは `true` ⑵ 文字の設定に効かないキー（`windowposition`）
 /// だけを替えた定義は解き直したうえで `false`、その後の同じ定義の再追従 3 回は解き直さない
@@ -496,7 +488,7 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
     );
 }
 
-/// T2（`real-run-log-noise` 要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
+/// T2: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
 /// （x・y の計 2 件）・返り値 `true`。その後の同じ再追従 3 回では 0 件（変わり目ごとに 1 件）。
 #[test]
 fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
@@ -541,7 +533,7 @@ fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T7（`real-run-log-noise` 要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
+/// T7: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
 /// 再追従 3 回で 0 件、拡大率の変わる再追従（＝解き直し）で 1 件。
 #[test]
 fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
@@ -583,7 +575,7 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
     );
 }
 
-/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` の変化の印を見た
+/// 装置の作り直し: `GraphicsCore` の変化の印を見た
 /// `present_frame` は描き手を全部捨てて差し込み口から外し、装置が有効なら同じ回に作り直す。
 /// 無効な装置では作らず、作り直した装置の回に作る。印が立たない回は作り直さない。
 #[test]
@@ -634,7 +626,7 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
 }
 
-/// audit-emo-text-state-actor 指摘 6: 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
+/// 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
 /// 先に回った層も後に回った層も描き手を作り直す（印が World に 1 つだと、後の層は先の層が控えた
 /// 印を読んで「変わっていない」とし、古い装置の描き手を使い続ける）。
 #[test]

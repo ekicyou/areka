@@ -1,7 +1,4 @@
-//! 文字の行き先の決まり方（spec `areka-P0-shell-balloon` の design.md「文字の行き先の決まり方」の表の 11 行・要件 4.1〜4.4・
-//! 4.7〜4.10・5.4・6.1・6.2・6.4・6.6・6.9・10.1）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 文字の行き先の決まり方。
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで取り出す（検体は読まない）。
@@ -105,11 +102,11 @@ pub(super) fn place_items(state: &TextLayerState, actor: &str, place: TextPlace)
         .map_or_else(Vec::new, |s| s.items().to_vec())
 }
 
-// ---- 表の行 1〜3: 解決できた `\s`（表示）
+// ---- 解決できた `\s`（表示）
 
 #[test]
 fn row1_same_name_box_on_new_surface_keeps_destination() {
-    // 要件 6.1: a に書いている途中で、a も持つサーフェス 1（既定は b）へ替えても a のまま。
+    // a に書いている途中で、a も持つサーフェス 1（既定は b）へ替えても a のまま。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     assert_eq!(state.destination(&key("0")), boxed("a"));
@@ -124,7 +121,7 @@ fn row1_same_name_box_on_new_surface_keeps_destination() {
 
 #[test]
 fn row2_other_boxes_only_moves_to_first_box() {
-    // 要件 6.2: a のサーフェス 0 から c だけのサーフェス 2 へ → 先頭の c。
+    // a のサーフェス 0 から c だけのサーフェス 2 へ → 先頭の c。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     show(&mut state, "0", 2);
@@ -134,7 +131,7 @@ fn row2_other_boxes_only_moves_to_first_box() {
 
 #[test]
 fn row2_from_balloon_to_surface_with_boxes_moves_to_first_box() {
-    // 要件 4.1・4.2・6.9: 普通のバルーンから箱のあるサーフェスへ → element番号が一番小さい箱。
+    // 普通のバルーンから箱のあるサーフェスへ → element番号が一番小さい箱。
     let mut state = state_with_boxes();
     assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
     show(&mut state, "0", 1);
@@ -147,7 +144,7 @@ fn row2_from_balloon_to_surface_with_boxes_moves_to_first_box() {
 
 #[test]
 fn row3_surface_without_boxes_moves_to_balloon() {
-    // 要件 6.4: 箱のサーフェスから箱の無いサーフェスへ → 普通のバルーン（番号は新しい番号）。
+    // 箱のサーフェスから箱の無いサーフェスへ → 普通のバルーン（番号は新しい番号）。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     show(&mut state, "0", 3);
@@ -155,11 +152,10 @@ fn row3_surface_without_boxes_moves_to_balloon() {
     assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
 }
 
-// ---- 表の行 4〜6: 非表示・解決できない
+// ---- 非表示・解決できない
 
 #[test]
 fn row4_hide_sets_hidden_and_balloon() {
-    // 要件 6.6.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     state.route_surface(&key("0"), SurfaceKeyOutcome::Hide);
@@ -191,11 +187,11 @@ fn row6_unresolved_on_an_unseen_scope_creates_nothing() {
     assert_eq!(state.destination(&key("1")), TextPlace::Balloon);
 }
 
-// ---- 表の行 7: シェルの切替
+// ---- シェルの切替
 
 #[test]
 fn row7_shell_switch_keeps_surface_and_redraws_default_and_drops_box_text() {
-    // 要件 6.8: 番号は保ち、行き先は新しい表での既定へ。箱の場所の文字は捨て、
+    // 番号は保ち、行き先は新しい表での既定へ。箱の場所の文字は捨て、
     // 普通のバルーンの場所の文字は残す。
     let mut state = state_with_boxes();
     state.apply_cue(&cue("0", 0.0, CueCommand::Text("前".into())));
@@ -220,11 +216,10 @@ fn row7_shell_switch_keeps_surface_and_redraws_default_and_drops_box_text() {
     assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
 }
 
-// ---- 表の行 8〜10: `\b`
+// ---- `\b`
 
 #[test]
 fn row8_named_box_on_current_surface_switches_without_warning() {
-    // 要件 4.3・4.9.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     let (_, events) = capture_checked(|| state.apply_cue(&select("0", "b")));
@@ -237,7 +232,7 @@ fn row8_named_box_on_current_surface_switches_without_warning() {
 
 #[test]
 fn row9_missing_name_warns_once_with_name_surface_scope_and_keeps_destination() {
-    // 要件 4.4・10.1: c はサーフェス 0 に無い。
+    // c はサーフェス 0 に無い。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     let (_, events) = capture(|| state.apply_cue(&select("0", "c")));
@@ -259,7 +254,7 @@ fn row9_missing_name_warns_once_with_name_surface_scope_and_keeps_destination() 
 
 #[test]
 fn row10_integer_balloon_surface_does_nothing() {
-    // 要件 4.8: `\b[2]`・`\b[-1]` は普通のバルーンへの指定（seriko の担当）。
+    // `\b[2]`・`\b[-1]` は普通のバルーンへの指定（seriko の担当）。
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
@@ -272,11 +267,10 @@ fn row10_integer_balloon_surface_does_nothing() {
     assert!(warns(&events).is_empty(), "{events:?}");
 }
 
-// ---- 表の行 11: 台詞の頭
+// ---- 台詞の頭
 
 #[test]
 fn row11_clear_all_resets_every_scope_to_default_and_keeps_surface() {
-    // 要件 4.10.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
@@ -344,7 +338,7 @@ fn content_cues_go_to_current_destination() {
     );
 }
 
-// ---- スコープごと（要件 4.7）と箱の無い構成（要件 5.4）
+// ---- スコープごとと箱の無い構成
 
 #[test]
 fn routes_are_per_scope() {
@@ -410,7 +404,7 @@ fn state_with_traits() -> TextLayerState {
     state
 }
 
-/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
+/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない）。
 /// 無言であることの判定は `lookahead_tests.rs` の検査 5 が受け持つ。
 #[test]
 fn rehearsal_copy_marks_only_the_copy() {
@@ -429,7 +423,7 @@ fn rehearsal_copy_marks_only_the_copy() {
     );
 }
 
-// ---- シェルの切替の戻り先（descript-window-keys 要件 3.2・3.5）
+// ---- シェルの切替の戻り先
 
 /// 新しいシェルの面の番号の集合と、スコープ "0" の候補の並び。
 fn fallback(surface_ids: &[u32], candidates: &[u32]) -> SurfaceFallback {

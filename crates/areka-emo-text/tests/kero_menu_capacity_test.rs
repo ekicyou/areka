@@ -1,47 +1,21 @@
 //! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-line-height-canon` のもの（別の spec のものはその場で名を書く）。
-//!
-//! 出典 spec: `areka-P0-emo-text-line-height-canon`（要件 **8.1**／**8.2**／**8.4 (a)(c)**／
-//! **8.7**／**5.1**〜**5.4**／**6.5**／**3.4**／**4.1**／**4.2**・design.md §4.1 正典表・§4.3）。
-//!
-//! ## この檻が塞ぐ穴
-//!
-//! 相方（エモ）側バルーンのダブルクリックメニューで**先頭の選択肢が描かれない**という実機症状は、
-//! 行送りが旧式の `ceil(font.height × 1.25)` ＝ 35 で 3 行目の下端（138）が文字描画範囲の下端（133）を
-//! 5px あふれ、あふれ判定が 1 行ぶんスクロールを返していたことによる。行送りを正典
-//! （`font.height + 行間` ＝ 30）へ直した後、**その症状が二度と起きないこと**を実物の資産で固定する。
-//!
-//! ## 実物の経路をそのまま通す（in-code の作り物を使わない）
-//!
-//! | 段 | 使うもの |
-//! |---|---|
-//! | バルーン記述 | 実 `emo2-kakukaku/descript.txt`（基層）＋`balloonk0s.txt`（面別上書き層）の 2 層マージ |
-//! | 領域解決 | `ResolvedBalloonText::resolve`（本番 `present_frame` と同じ入口）を 288×203 で |
-//! | 台本 | 実 `ghost/master/dic/menu.pasta` の選択肢 3 台本の本文（`＊メインメニュー選択肢`／
-//!   `＊おしゃべり頻度メニュー選択肢`／`＊エモの位置調整選択肢` の見出し直後の行） |
-//! | 台本 → cue | 実 `areka_parsers::sakura::parse` → 実 `areka_sakura::compile` |
-//! | cue → 状態 | 実 `TextLayerState::apply_cue` |
-//! | 配置 | 実 `LayoutEngine::layout`（送り幅は実フォント `Yu Gothic UI` の `DWriteMetrics`） |
-//! | あふれ判定 | 実 `LayoutEngine::visible_window` |
-//!
+//! 相方（エモ）側バルーンのダブルクリックメニューで先頭の選択肢が描かれない症状は、行送りが旧式の
+//! `ceil(font.height × 1.25)` ＝ 35 で 3 行目の下端 138 が文字描画範囲の下端 133 をあふれ、
+//! あふれ判定が 1 行ぶんスクロールを返していたことによる。正典の行送り（`font.height + 行間` ＝ 30）で
+//! その症状が二度と起きないことを、実物の資産と実経路（実 `descript.txt` ＋面別上書き層 →
+//! `ResolvedBalloonText::resolve` → 実 `menu.pasta` の選択肢 3 台本 → パーサー・`areka_sakura::compile` →
+//! `TextLayerState::apply_cue` → `LayoutEngine::layout`／`visible_window`）で固定する。
 //! GPU も実窓も要らない（DirectWrite の factory だけを使う）。
 //!
-//! ## 実物のジオメトリ（`shipped_fixture_region_test.rs` が別途固定している値）
-//!
-//! - 文字描画範囲 (24,40)-(240,133)＝幅 216・高さ 93（`balloonk0s.txt` の
-//!   `top,40`／`bottom,-70`／`left,24`／`right,-48` を 288×203 へ解決）。
-//! - 折返し基準（`wordwrappoint.x`）は基層の `-34` を継いで **254**——描画範囲の右端 **240** の
-//!   **外**である（バルーン定義側の粗さ・design §4.3）。ゆえに実効の折返し位置は 240。
-//! - フォントは `Yu Gothic UI`・`font.height,28` → 行送り **30**（28 ＋ 行間 2）。
-//!
-//! ## 行の高さの導出（本ファイルの期待値の根）
+//! 実物のジオメトリ（`shipped_fixture_region_test.rs` が別途固定）: 文字描画範囲 (24,40)-(240,133)。
+//! 折返し基準（`wordwrappoint.x`）は基層の `-34` を継いで 254 で、描画範囲の右端 240 の外にあるため
+//! 実効の折返し位置は 240。フォントは `Yu Gothic UI`・`font.height,28` → 行送り 30（28 ＋ 行間 2）。
 //!
 //! 行の矩形は「上端＝行送り軸の位置・下端＝上端＋`font.height`」（`layout_scan.rs` の `finish_line`）。
-//! 先頭行の上端は書字開始点の 40 ゆえ、行の上端は 40 → 70 → 100、下端は 68 → 98 → **128**。
-//! 3 行目の下端 128 は描画範囲の下端 133 の内にあり、あふれ判定は発火しない（先頭可視行 0）。
-//! 旧式（`ceil(28 × 1.25)` ＝ 35）だと 3 行目の上端は 40 ＋ 2 × 35 ＝ 110・下端 138 > 133 で
-//! あふれる——それが対照テスト（`legacy_pitch_metrics_reproduces_the_dropped_first_line`）である。
+//! 行の上端は 40 → 70 → 100、下端は 68 → 98 → 128 で、3 行目の下端 128 は 133 の内ゆえあふれない。
+//! 旧式の 35 だと 3 行目の上端は 110・下端 138 でありあふれる
+//! （対照テスト `legacy_pitch_metrics_reproduces_the_dropped_first_line`）。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -76,7 +50,7 @@ const KERO_BOTTOM: f32 = 133.0;
 const KERO_RIGHT: f32 = 240.0;
 /// 実物の `font.height`（image px）。
 const FONT_HEIGHT: f32 = 28.0;
-/// 正典の行送りピッチ（`font.height + 行間 2`・design §4.1）。
+/// 正典の行送りピッチ（`font.height + 行間 2`）。
 const PITCH: f32 = 30.0;
 /// 書字開始点（相方側・image px）。
 const KERO_START: (f32, f32) = (24.0, 40.0);
@@ -88,11 +62,8 @@ fn merged_model(overlay: &str) -> BalloonModel {
 
 // ══ 実台本（menu.pasta の 3 本の選択肢台本） ═════════════════════════════════════════════
 
-/// 実 `menu.pasta` の選択肢 3 台本を、**見出しの語**で指す（行番号で指さない）。
-///
-/// pasta の見出しは `＊<名前>` の行で、本文はその直後の
-/// `　　　エモ：＠通常　<さくらスクリプト>` 行である。話者接頭辞は最初の ASCII `\`
-/// （さくらスクリプトの開始）より前ゆえ、最初の `\` 以降が純さくらスクリプト断片になる。
+/// 実 `menu.pasta` の選択肢 3 台本を、見出しの語（`＊<名前>`）で指す（行番号で指さない）。
+/// 本文は直後の `　　　エモ：＠通常　<さくらスクリプト>` 行で、最初の ASCII `\` 以降が純さくらスクリプト断片になる。
 const MENU_HEADINGS: [&str; 3] = [
     "＊メインメニュー選択肢",
     "＊おしゃべり頻度メニュー選択肢",
@@ -101,11 +72,8 @@ const MENU_HEADINGS: [&str; 3] = [
 
 // ══ metrics（実フォント）と、実フォント不在の検出 ═══════════════════════════════════════
 
-/// 行送りだけを**旧式**（`ceil(font_height × 1.25)`）へ戻すテスト専用の metrics（要件 8.7 の対照）。
-///
-/// 送り幅・行ボックス丈は実測へそのまま委ねる——差し替えるのは行送りピッチ 1 点だけであり、
-/// 「先頭の選択肢が描かれない」症状が行送りの式だけから来ていたことを示す。
-/// 製品コードには旧式の口を残さない（design DD-11）。
+/// 行送りだけを旧式（`ceil(font_height × 1.25)`）へ戻すテスト専用の metrics。
+/// 送り幅・行ボックス丈は実測に委ね、行送りピッチ 1 点だけを差し替える。
 struct LegacyPitchMetrics<'a> {
     real: &'a DWriteMetrics,
 }
@@ -126,7 +94,7 @@ impl GlyphMetrics for LegacyPitchMetrics<'_> {
 
 // ══ 配置（実経路）と観測ヘルパ ═════════════════════════════════════════════════════════
 
-/// 折返し方式の 2 通り（要件 8.2）。
+/// 折返し方式の 2 通り。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WrapKind {
     /// 1 文字ずつ（`WrapPlan::CharByChar`）。
@@ -165,10 +133,8 @@ fn layout_script(
     LayoutEngine::layout(items, visible, region, mode, font_height, metrics, wrap)
 }
 
-/// 行列を「グリフ通し番号 → 行 index」へ写す。
-///
-/// 配置はグリフを追記順にそのまま並べる（可視 prefix を落とすだけで並べ替えない）ため、
-/// 行を跨いで数えた i 番目のグリフが、`ChoiceSpan::glyph_range` の序数 i に対応する。
+/// 行列を「グリフ通し番号 → 行 index」へ写す。配置はグリフを追記順に並べるので、
+/// 行を跨いで数えた i 番目のグリフが `ChoiceSpan::glyph_range` の序数 i に対応する。
 fn glyph_line_index(lines: &[PositionedLine]) -> Vec<usize> {
     let mut out = Vec::new();
     for (i, line) in lines.iter().enumerate() {
@@ -187,13 +153,13 @@ fn line_bottoms(lines: &[PositionedLine]) -> Vec<f32> {
     lines.iter().map(|l| l.rect.bottom).collect()
 }
 
-// ══ テスト 1: 3 台本 × 2 方式で全選択肢が収まる（8.1／8.2／5.1〜5.4） ══════════════════
+// ══ テスト 1: 3 台本 × 2 方式で全選択肢が収まる ══════════════════
 
 /// 実物の相方側バルーンで、実 `menu.pasta` の選択肢 3 台本すべてが
 /// (a) スクロールを起こさず（先頭可視行 0）、(b) どの選択肢の行も下端が描画範囲の下端 133 を
 /// 超えず、(c) 折返し方式 2 通りで同一の結果になることを固定する。
 ///
-/// 行の上端／下端の期待値（design §4.1 の行送り 30 からの導出）:
+/// 行の上端／下端の期待値（行送り 30 からの導出）:
 ///
 /// | 台本 | 行の上端 | 行の下端 | 備考 |
 /// |---|---|---|---|
@@ -207,9 +173,8 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
     let metrics = balloon_metrics(&resolved);
     assert_real_font_present();
 
-    // 前提の実物ジオメトリ（値が変われば以下の期待値の導出ごと崩れるので先に固定する）。
-    // 描画範囲 (24,40)-(240,133)・開始点・折返し基準 254 は `shipped_fixture_region_test.rs` の
-    // `shipped_kero_scope_region_is_pinned` が同じ検体で固定する。
+    // 前提の実物ジオメトリ。値が変われば以下の期待値の導出ごと崩れるので先に固定する
+    // （`shipped_fixture_region_test.rs` が同じ検体で固定している値）。
     assert_eq!(resolved.mode, WritingMode::HorizontalTb, "相方側は横書き");
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
@@ -226,7 +191,6 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
         "行送りは 28 + 2 = 30"
     );
 
-    // 台本ごとの期待（行の上端・選択肢の数）。
     let expected: [(&str, &[f32], usize); 3] = [
         (MENU_HEADINGS[0], &[40.0, 70.0, 100.0], 3),
         (MENU_HEADINGS[1], &[40.0, 70.0, 100.0, 100.0], 4),
@@ -256,7 +220,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
             );
             let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
 
-            // (a) スクロールしない（要件 5.1〜5.3・8.1）。
+            // (a) スクロールしない。
             assert_eq!(
                 window.first_visible_line,
                 0,
@@ -284,7 +248,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
                 "{heading}／{kind:?}: 行の下端（上端＋28）"
             );
 
-            // (b) すべての選択肢の行の下端が描画範囲の下端の内（要件 5.4）。
+            // (b) すべての選択肢の行の下端が描画範囲の下端の内。
             let index_of = glyph_line_index(&lines);
             for span in &choices {
                 assert!(
@@ -305,7 +269,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
             both.push(lines);
         }
 
-        // (c) 折返し方式 2 通りで結果が同一（要件 8.2）。
+        // (c) 折返し方式 2 通りで結果が同一。
         assert_eq!(
             both[0], both[1],
             "{heading}: 1 文字ずつ／分節の折返しで行の配置が食い違う"
@@ -313,15 +277,11 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
     }
 }
 
-// ══ テスト 2: `\_l[5em,2lh]` の着地（4.1／4.2） ═════════════════════════════════════════
+// ══ テスト 2: `\_l[5em,2lh]` の着地 ═════════════════════════════════════════
 
-/// 実台本の `\_l[5em,2lh]` で置いた選択肢が、
-/// (a) 行送り軸は「改行 2 回で送った段」と同じ高さ（40 ＋ 2 × 30 ＝ 100）に、
-/// (b) 行内軸は `font.height` の 5 倍（24 ＋ 5 × 28 ＝ 164）に着地することを、
-/// 同じ台本の実経路で確かめる。
-///
-/// (b) は `areka-P0-emo-text-line-height-canon` の前後で変わらない値である（`em` の係数は `font.height` のまま・要件 4.2）。
-/// (a) だけが新しい行送りへ追随する（要件 4.1）。
+/// 実台本の `\_l[5em,2lh]` で置いた選択肢が、(a) 行送り軸は改行 2 回で送った段と同じ高さ
+/// （40 ＋ 2 × 30 ＝ 100）に、(b) 行内軸は `font.height` の 5 倍（24 ＋ 5 × 28 ＝ 164）に着地することを確かめる。
+/// (b) の `em` の係数は `font.height` のままで、(a) だけが行送りに追随する。
 #[test]
 fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
     let model = merged_model(KERO_OVERLAY);
@@ -358,8 +318,7 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
         .clone();
     let close_line = &lines[index_of[close.glyph_range.start]];
 
-    // (a) 行送り軸: 改行 2 回で送った段と同じ高さ。改行 2 回ぶんの高さは
-    //     書字開始点 40 ＋ 2 × 行送り 30 ＝ 100（旧式 35 なら 110 で赤）。
+    // (a) 行送り軸: 改行 2 回で送った段と同じ高さ（40 ＋ 2 × 30 ＝ 100。旧式 35 なら 110 で赤）。
     let two_newlines_top = KERO_START.1 + 2.0 * metrics.line_pitch(FONT_HEIGHT);
     assert_eq!(
         close_line.rect.top, two_newlines_top,
@@ -383,22 +342,21 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
     );
 }
 
-// ══ テスト 3: 「閉じる」「もどる」が描画範囲の右端の内に収まる（8.4(a)／6.5／3.4） ═══════
+// ══ テスト 3: 「閉じる」「もどる」が描画範囲の右端の内に収まる ═══════
 
-/// 折返し基準（254）が描画範囲の右端（240）の**外**にある実物のバルーンで、
-/// `\_l[5em,…]`（x164 起点）に置かれた「閉じる」「もどる」の**全グリフの遠端**が
-/// 描画範囲の右端 240 の内に収まり、行が増えない（折り返されない）ことを固定する。
+/// 折返し基準（254）が描画範囲の右端（240）の外にある実物のバルーンで、`\_l[5em,…]`（x164 起点）に
+/// 置かれた「閉じる」「もどる」の全グリフの遠端が右端 240 の内に収まり、行が増えない（折り返されない）ことを固定する。
 ///
-/// brief の見込み「x164..248（1 文字 28px）」は**全角＝em という机上の仮定**による値だった。
-/// `Yu Gothic UI` はプロポーショナルで仮名の送りは em より狭い。実測（2026-09-06・本ファイル）:
+/// `Yu Gothic UI` はプロポーショナルで仮名の送りは em より狭い（全角＝em とした x164..248 は誤り）。
+/// 実測（2026-09-06）:
 ///
 /// | 選択肢 | 送りの内訳 | 3 文字の合計 | 遠端（起点 164） |
 /// |---|---|---|---|
 /// | 「閉じる」 | 閉 28.00 ＋ じ 19.88 ＋ る 21.34 | 69.22 | **233.22** ≤ 240 |
 /// | 「もどる」 | も 21.34 ＋ ど 20.22 ＋ る 21.34 | 62.90 | **226.90** ≤ 240 |
 ///
-/// 送りの実測値そのものは環境のフォント版で動きうるので、値を逐語で固定はせず、
-/// 収まり（240 の内）と「縮退した等幅値ではない」（200 より遠い）の 2 つの境で挟む。
+/// 送りの実測値は環境のフォント版で動きうるので逐語では固定せず、収まり（240 の内）と
+/// 「縮退した等幅値ではない」（200 より遠い）の 2 つの境で挟む。
 #[test]
 fn close_and_back_choices_stay_inside_the_drawing_range_without_wrapping() {
     let model = merged_model(KERO_OVERLAY);
@@ -471,19 +429,14 @@ fn first_glyph_of(lines: &[PositionedLine], index: usize) -> usize {
     lines[..index].iter().map(|l| l.glyphs.len()).sum()
 }
 
-// ══ テスト 4: 本体側の折返し位置は描画範囲の判定を持たない参照と一致する（8.4(c)／6.4） ══
+// ══ テスト 4: 本体側の折返し位置は描画範囲の判定を持たない参照と一致する ══
 
-/// 本体（さくら）側バルーン `balloons0s.txt` は折返し基準（351）を描画範囲の右端（356）の
-/// **内**に自ら上書きしている。この場合、行内軸の絶対上限（hard）の判定は一度も発火せず、
-/// 折返しの位置は「折返し基準だけを見る参照」と一致しなければならない（`areka-P0-emo-text-line-height-canon` の前後で
-/// 折返しの位置を変えない・要件 6.4）。
+/// 本体（さくら）側バルーン `balloons0s.txt` は折返し基準（351）を描画範囲の右端（356）の内に
+/// 自ら上書きしている。この場合、行内軸の絶対上限（hard）の判定は発火せず、折返しの位置は
+/// 「折返し基準だけを見る参照」（本ファイル内の素朴な実装: 送りを足し込み、基準を超えたら折る）と一致しなければならない。
 ///
-/// 参照は本ファイルの中に置いた素朴な実装（送りを足し込み、基準を超えたら折る）である。
-///
-/// この検査が空振りでないことの較正: 参照の基準を折返し基準
-/// 351 から描画範囲の右端 356 へ差し替えると、参照の折返し位置は [14, 28] になり実配置の
-/// [13, 26, 39] と食い違って**赤になる**。すなわち本検査は「折返しが基準 351 に従っている」ことを
-/// 実際に区別している（両者が同じ値になるような緩い比較ではない）。
+/// 空振りでないことの較正: 参照の基準を 351 から 356 へ替えると参照の折返し位置は [14, 28] になり、
+/// 実配置の [13, 26, 39] と食い違って赤になる。
 #[test]
 fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     let model = merged_model(SAKURA_OVERLAY);
@@ -545,7 +498,6 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
             count_in_line += 1;
         }
 
-        // 実配置の折返し位置（各行の先頭グリフの通し番号・先頭行を除く）。
         let mut got_breaks: Vec<usize> = Vec::new();
         let mut acc = 0usize;
         for line in &lines {
@@ -561,14 +513,11 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     }
 }
 
-// ══ テスト 5: 旧式の行送りへ戻すと症状が再現する（8.7 の対照） ═══════════════════════════
+// ══ テスト 5: 旧式の行送りへ戻すと症状が再現する ═══════════════════════════
 
-/// 判定が生きていることの対照。行送りだけを旧式（`ceil(28 × 1.25)` ＝ 35）へ戻すと、
-/// メインメニューの 3 行目（上端 40 ＋ 2 × 35 ＝ 110・下端 138）が描画範囲の下端 133 を
-/// 超え、あふれ判定が 1 行ぶんのスクロールを返す＝**先頭の選択肢が描かれなくなる**。
-///
-/// これが本ファイルの容量テストの赤くなり方であり、同じ入力・同じ経路で行送りの値 1 点だけが
-/// 違う。旧式の口は製品コードに残さない（テスト専用の metrics で注入する）。
+/// 判定が生きていることの対照。行送りだけを旧式（`ceil(28 × 1.25)` ＝ 35）へ戻すと、メインメニューの
+/// 3 行目（上端 110・下端 138）が描画範囲の下端 133 を超え、あふれ判定が 1 行ぶんのスクロールを返す
+/// ＝先頭の選択肢が描かれなくなる。旧式の口は製品コードに残さず、テスト専用の metrics で注入する。
 #[test]
 fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
     let model = merged_model(KERO_OVERLAY);

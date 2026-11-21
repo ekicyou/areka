@@ -1,7 +1,5 @@
 //! # surface — 自前 swapchain 供給面（COM 層）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
-//!
 //! `TextSurface`（自前 swapchain・text_slot Visual への brush 装着・提示・決定論検証用
 //! readback）を担う。装着後のグリフ更新は Present のみで完結し、バルーン surface 本体の
 //! 再合成（emo-compose 再駆動）を強要しない。
@@ -10,17 +8,15 @@
 //! 本モジュール（子の `surface_window_child` を含む）と draw・viewbox_draw（それぞれの子を含む）・
 //! 印の面の `marker_surface` だけ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
-//! # 構造（wintf の公開ヘルパで組む自前の swap chain 供給面）
+//! # 構造
 //!
-//! - 供給面 = `create_composition_swap_chain`（flip model・premultiplied・B8G8R8A8・
-//!   BufferCount=2）＋ `CompositorInteropExt::create_composition_surface_for_swap_chain`。
 //! - **描画面はダブルバッファ** `sources: [_; 2]`＋`front: usize`（ともに D3D11 DEFAULT・
 //!   RENDER_TARGET・生成時に全 0（premultiplied 透明）で初期化）。front＝最新確定面・back＝
 //!   次フレームの描き先。面内 blit（front→back の whole-pixel 平行移動）＋`flip`（役割交換）で
-//!   確定ピクセルを保持したままスクロールを表現する（viewbox 方式・`areka-P0-emo-text-viewbox` R1.2）。
+//!   確定ピクセルを保持したままスクロールを表現する（viewbox 方式）。
 //! - 提示・readback は常に **front** を対象にする（`CopyResource(backbuffer, front)`→`Present(0)`／
 //!   `CopyResource(staging, front)`→`Map(READ)`）。flip model の backbuffer は直接 Map 不可のため
-//!   front を読む（readback 経路の決めは spec `areka-P0-emo-text-layer` の design.md）。
+//!   readback は front を読む。
 
 use bevy_ecs::prelude::*;
 
@@ -204,7 +200,7 @@ impl PendingReadBack {
     /// `stride = 幅×4` の密 BGRA を返し、`Unmap` してから戻る。
     ///
     /// **記録を出さない**——「記録して `Err`」の決まりの例外。失敗は
-    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す（`areka-P0-mcp-dump-images-residue` 要件 1.5）。
+    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す。
     pub fn try_finish(&self) -> Result<Option<Vec<u8>>, TextLayerError> {
         let res: ID3D11Resource = self
             .staging
@@ -235,19 +231,19 @@ impl PendingReadBack {
 }
 
 /// `\_b --option=fixed` 固定層（スクロールに追従しない画像層）の差し込み点の**型シーム**
-/// （`areka-P0-emo-text-viewbox` R7・実挙動なし）。
+/// （実挙動なし）。
 ///
 /// 固定層はスクロール描画面（`sources`）に**描かない**——面内 blit の影響を受けない
 /// **別合成層**として、[`TextSurface::present`] の合成点（front→backbuffer コピーの直後・
-/// `Present` の直前）に将来重ねる（`areka-P0-emo-text-viewbox` R7.1/7.3）。`read_back` は `sources`（front）を読むため、
-/// 本予約は pixel golden に影響しない（`areka-P0-emo-text-viewbox` R7.4）。`#[non_exhaustive]`＋フィールドなし＝crate 外
+/// `Present` の直前）に将来重ねる。`read_back` は `sources`（front）を読むため、
+/// 本予約は pixel golden に影響しない。`#[non_exhaustive]`＋フィールドなし＝crate 外
 /// から意味を持たせられない構造保証で、今は型と合成点 doc のみ・実挙動（画像読込・固定層の
-/// 実描画）は後続の `\_b` 対応増分の領分（`areka-P0-emo-text-viewbox` R7.2）。
+/// 実描画）は後続の `\_b` 対応増分の領分。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FixedOverlaySeam {}
 
-/// 自前 swapchain 供給面＋text_slot への brush 装着＋readback（R9.1/R9.3）。
+/// 自前 swapchain 供給面＋text_slot への brush 装着＋readback。
 ///
 /// [`Self::attach`] が actor ごと**初回のみ**予約スロットへ brush として装着し、以降の
 /// グリフ更新は [`Self::present`]（供給面の提示のみ・World 不要）で完結する＝バルーン
@@ -261,21 +257,19 @@ pub struct TextSurface {
     swapchain: IDXGISwapChain1,
     /// 描画面ダブルバッファ（2 枚とも DEFAULT・B8G8R8A8・RENDER_TARGET・`size` と同寸・
     /// premultiplied 透明初期化）。`front` が最新確定面・`1 - front` が次フレームの描き先（back）。
-    /// 面寸は attach 時確定で変更 API を持たない（無限成長の構造的排除・`areka-P0-emo-text-viewbox` R1.3/R4.1）。
+    /// 面寸は attach 時確定で変更 API を持たない。
     sources: [ID3D11Texture2D; 2],
     /// `sources` の front インデックス（初期 0・`flip` で 0↔1 交換）。present/read_back は front を読む。
     front: usize,
     /// immediate context（転送 API の発行先・front 面と同一デバイス）。
     context: ID3D11DeviceContext,
-    /// slot へ装着した SpriteVisual（brush 保持者・外形追随（将来の resize 点）の操作口）。
-    /// COM 参照の生存は ECS 側 `VisualGraphics` と共有だが、装着物の所有を本型で明示する。
+    /// slot へ装着した SpriteVisual（brush 保持者）。COM 参照の生存は ECS 側 `VisualGraphics` と共有。
     #[allow(dead_code)]
     sprite: SpriteVisual,
     /// 現在の供給面サイズ（物理 px＝`ceil(validrect 寸 × k)`・論理 px 不在）。
     size: (u32, u32),
-    /// `\_b --option=fixed` 固定層差し込み点の型シーム（`areka-P0-emo-text-viewbox` R7・今は実挙動なし）。
-    /// [`present`](Self::present) の合成点を型で予約する（scroll 面 `sources` とは分離した
-    /// 別合成層——増設時に blit 構成を再構築せずに済む・`areka-P0-emo-text-viewbox` R7.3）。
+    /// `\_b --option=fixed` 固定層差し込み点の型シーム（今は実挙動なし）。
+    /// [`present`](Self::present) の合成点を型で予約する（`sources` とは分離した別合成層）。
     #[allow(dead_code)]
     fixed_overlay: FixedOverlaySeam,
     /// 箱の文字の面として窓の直接の子に作った entity（差し込み口へ装着した面は `None`）。
@@ -305,8 +299,7 @@ impl TextSurface {
     /// `SurfaceBrush` 装着済み SpriteVisual）＋`Arrangement`（物理 px 直接・
     /// offset＝validrect 原点×k）を insert する。
     ///
-    /// `GraphicsCommandList` は挿入しない＝wintf の widget 描画経路は発火せず、
-    /// バルーン surface 本体の再合成を要求しない（R9.3 構造）。
+    /// `GraphicsCommandList` は挿入しない＝wintf の widget 描画経路は発火しない。
     ///
     /// - `physical_size`: `ceil(validrect 寸 × k)`（`ScaleContract::physical_extent` の導出値）
     /// - `physical_offset`: validrect 原点 × k（窓クライアント原点基準の物理 px）
@@ -360,7 +353,6 @@ impl TextSurface {
             .ok_or_else(|| none_err("GraphicsCore::dxgi"))?
             .clone();
 
-        // 供給面の生成（swap chain interop は wintf pub ヘルパへ隔離済み・安全 wrapper のみ触る）。
         let swapchain = create_composition_swap_chain(&d3d, &dxgi, w, h)
             .map_err(device_err("create_composition_swap_chain"))?;
         let interop: ICompositorInterop = compositor
@@ -370,7 +362,6 @@ impl TextSurface {
             .create_composition_surface_for_swap_chain(&swapchain)
             .map_err(device_err("create_composition_surface_for_swap_chain"))?;
 
-        // 描画面ダブルバッファ（front/back 2 枚とも透明初期化・面寸は attach 時確定）。
         let sources = [
             create_transparent_source_tex(&d3d, w, h)?,
             create_transparent_source_tex(&d3d, w, h)?,
@@ -378,7 +369,6 @@ impl TextSurface {
         let context =
             unsafe { d3d.GetImmediateContext() }.map_err(device_err("GetImmediateContext"))?;
 
-        // SpriteVisual ＋ SurfaceBrush（SetSize は物理 px）。
         let sprite = compositor
             .CreateSpriteVisual()
             .map_err(device_err("CreateSpriteVisual"))?;
@@ -416,10 +406,9 @@ impl TextSurface {
 
     /// 描画済み内容の提示（`CopyResource(backbuffer, front)`→`Present(0)` のみ・
     /// World 不要）。装着後のグリフ更新はこれで完結し、バルーン surface 本体の再合成
-    /// （emo-compose 再駆動）を強要しない（R9.3）。転送元は常に front（最新確定面）。
+    /// （emo-compose 再駆動）を強要しない。転送元は常に front（最新確定面）。
     ///
-    /// 失敗は `error!`＋`Err`——当該フレームの提示を skip し次フレーム再試行（design
-    /// Error Handling）。
+    /// 失敗は `error!`＋`Err`——当該フレームの提示を skip し次フレーム再試行。
     pub fn present(&mut self) -> Result<(), TextLayerError> {
         let src_res: ID3D11Resource = self.sources[self.front]
             .cast()
@@ -434,10 +423,10 @@ impl TextSurface {
                 .map_err(device_err("backbuffer->Resource cast"))?;
             unsafe { self.context.CopyResource(&back_res, &src_res) };
 
-            // ── 固定層（`\_b --option=fixed`）の合成点（[`FixedOverlaySeam`]・`areka-P0-emo-text-viewbox` R7.1/7.3） ──
+            // ── 固定層（`\_b --option=fixed`）の合成点（[`FixedOverlaySeam`]） ──
             // scroll 面（`sources`）の複製直後・`Present` の直前が、スクロール blit の影響を
             // 受けない別合成層＝固定層を backbuffer へ重ねる位置。今は予約のみ（実描画なし）。
-            // read_back は front（`sources`）を読むため、この合成点は pixel golden の外（`areka-P0-emo-text-viewbox` R7.4）。
+            // read_back は front（`sources`）を読むため、この合成点は pixel golden の外。
             let _fixed_overlay_seam = self.fixed_overlay;
         }
 
@@ -486,7 +475,7 @@ impl TextSurface {
     /// （GPU の終わりを待たない）。積んだ後に front が描き替わっても、札が読むのは積んだ時点の front。
     ///
     /// **記録を出さない**——「記録して `Err`」の決まりの例外。失敗は
-    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す（`areka-P0-mcp-dump-images-residue` 要件 1.5）。
+    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す。
     pub fn begin_read_back(&self) -> Result<PendingReadBack, TextLayerError> {
         let (w, h) = self.size;
         let d3d = unsafe { self.context.GetDevice() }.map_err(quiet_err("GetDevice"))?;
@@ -521,7 +510,7 @@ impl TextSurface {
 
     /// back 面（`1 - front`）への crate 内アクセス——ViewboxExecutor が
     /// D2D ターゲット bitmap を巻く本番描画の書き込み先。front（確定面）を読み口に残したまま
-    /// back へ描き、`flip` で交換する（面内 blit ＋ ダーティ描画の描き先・`areka-P0-emo-text-viewbox` R1.2）。
+    /// back へ描き、`flip` で交換する（面内 blit ＋ ダーティ描画の描き先）。
     pub(crate) fn back_tex(&self) -> &ID3D11Texture2D {
         &self.sources[1 - self.front]
     }
@@ -533,7 +522,7 @@ impl TextSurface {
         &self.sources[self.front]
     }
 
-    /// 保持ピクセルの面内平行移動: front の残存域を `blit` ぶんずらして back へ写す（`areka-P0-emo-text-viewbox` R1.2）。
+    /// 保持ピクセルの面内平行移動: front の残存域を `blit` ぶんずらして back へ写す。
     ///
     /// - `blit == (0,0)`: `CopyResource(back, front)`（全面複製）。
     /// - `blit == (dx,dy) != (0,0)`: `CopySubresourceRegion` で front の残存域を back へずらして写す。
@@ -542,8 +531,7 @@ impl TextSurface {
     ///   right:min(W,W-dx), bottom:min(H,H-dy), front:0, back:1 }` を発行する。box 退化
     ///   （`right ≤ left` または `bottom ≤ top`＝全域スクロールアウト）なら copy を発行しない。
     ///
-    /// **src=front と dst=back は別テクスチャ**ゆえ重なり未定義動作はない（ダブルバッファの
-    /// 存在理由）。back の露出帯（非コピー域）は呼び手（ViewboxExecutor）がダーティ描画で埋める
+    /// **src=front と dst=back は別テクスチャ**ゆえ重なり未定義動作はない。back の露出帯（非コピー域）は呼び手（ViewboxExecutor）がダーティ描画で埋める
     /// 契約——本メソッドは平行移動のみを担う。immediate context（`self.context`）で発行する。
     pub(crate) fn copy_front_to_back_shifted(&mut self, blit: (i32, i32)) {
         let front = &self.sources[self.front];
@@ -562,14 +550,12 @@ impl TextSurface {
         }
 
         let (w, h) = (self.size.0 as i32, self.size.1 as i32);
-        // dst 原点＝ずらし先の正側・src box＝残存域（ずらしの逆側と面寸で挟んだ矩形）。
         let dstx = dx.max(0);
         let dsty = dy.max(0);
         let left = dx.saturating_neg().max(0);
         let top = dy.saturating_neg().max(0);
         let right = w.min(w.saturating_sub(dx));
         let bottom = h.min(h.saturating_sub(dy));
-        // box 退化＝全域スクロールアウト（写る残存域なし）——copy を発行しない（back は呼び手が埋める）。
         if right <= left || bottom <= top {
             return;
         }
@@ -614,13 +600,12 @@ mod tests {
 
     /// 装着・提示・読み戻しの檻:
     /// 供給面を装着したスロットに対して提示と読み戻しが行え、読み戻したバイト列から
-    /// 装着直後は空（透明＝全 0）であることを確認できる（R9.1/R9.3）。
+    /// 装着直後は空（透明＝全 0）であることを確認できる。
     ///
     /// 併せて装着の構造契約を assert する:
-    /// - slot entity へ有効な `VisualGraphics`（emo 自前 brush 装着済み SpriteVisual）が入る
+    /// - slot entity へ有効な `VisualGraphics` が入る
     /// - `Arrangement` は物理 px 直接（寸＝physical_size・offset＝physical_offset）
-    /// - `GraphicsCommandList` は挿入しない（wintf widget 描画経路を発火させない＝
-    ///   バルーン surface 本体の再合成を要求しない構造）
+    /// - `GraphicsCommandList` は挿入しない
     #[test]
     fn attach_then_present_and_readback_is_transparent() {
         let (_dq, compositor) = make_dispatcher_and_compositor();
@@ -636,7 +621,6 @@ mod tests {
             TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (2.0, 1.0))
                 .expect("TextSurface::attach 失敗");
 
-        // --- 装着の構造契約 ---
         let vg = world
             .get::<VisualGraphics>(slot)
             .expect("slot に VisualGraphics（emo 自前 brush）が装着される");
@@ -662,7 +646,6 @@ mod tests {
             "GraphicsCommandList は挿入しない（wintf 描画系と競合しない・R9.3 構造）"
         );
 
-        // --- 装着直後の読み戻し＝空（透明） ---
         let bytes = surface.read_back().expect("read_back（装着直後）失敗");
         assert_eq!(
             bytes.len(),
@@ -674,7 +657,6 @@ mod tests {
             "装着直後の供給面は空（premultiplied 透明＝全 0）"
         );
 
-        // --- 提示は World 不要で完結し、内容は変わらない（グリフ更新＝Present のみの構造） ---
         surface.present().expect("present（装着直後）失敗");
         let bytes = surface.read_back().expect("read_back（present 後）失敗");
         assert!(
@@ -794,14 +776,13 @@ mod tests {
     }
 
     /// 面内 blit と flip の往復檻:
-    /// front へ既知パターンを直書き→`copy_front_to_back_shifted(blit)`→`flip()`→`read_back()` で、
+    /// front へ既知パターンを直書き→`copy_front_to_back_shifted(blit)`→`flip`→`read_back` で、
     /// ずらし量 ゼロ・正・負（(0,0)・(0,+N)・(0,-N)・(+N,0)・(-N,0)）と桁があふれる `i32::MIN`
     /// （(MIN,0)・(0,MIN)＝全域が露出域）それぞれについて
     /// 元の内容が期待位置に byte 一致で現れ、露出域（非コピー域）が透明（全 0）であることを確認する
-    /// （`areka-P0-emo-text-viewbox` R1.2/R1.3——面内 whole-pixel blit ＋ ダブルバッファ flip の決定論）。
+    /// （面内 whole-pixel blit ＋ ダブルバッファ flip の決定論）。
     ///
-    /// 小さめ面寸（8×6）で端の off-by-one を検出できる形にし、各ケースを新規 surface で独立させて
-    /// back の透明初期化（attach 時の全 0）を担保することで byte 決定論を保つ。
+    /// 小さめ面寸（8×6）で端の off-by-one を検出する。各ケースは新規 surface で、back の透明初期化を担保する。
     #[test]
     fn copy_front_to_back_shifted_roundtrips_whole_pixel_blit() {
         let (_dq, compositor) = make_dispatcher_and_compositor();
@@ -818,7 +799,6 @@ mod tests {
                 TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))
                     .expect("TextSurface::attach 失敗");
 
-            // front（sources[front]・attach 直後は 0）へ既知パターンを直書きする。
             let pattern = premul_pattern(w, h);
             let src_res: ID3D11Resource = surface.front_tex().cast().expect("front->Resource cast");
             unsafe {
@@ -832,11 +812,9 @@ mod tests {
                 );
             }
 
-            // front の残存域を blit ぶんずらして back（透明）へ写し、front/back を交換する。
             surface.copy_front_to_back_shifted((dx, dy));
             surface.flip();
 
-            // flip 後の front（＝写し先 back）を読み戻し、期待位置に元内容・露出域は透明を確認。
             let bytes = surface.read_back().expect("read_back 失敗");
             let expected = expected_shift(&pattern, w as i32, h as i32, dx, dy);
             assert_eq!(
@@ -847,7 +825,7 @@ mod tests {
     }
 
     /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・描画へ
-    /// 影響し得ない構造保証・`areka-P0-emo-text-viewbox` R7.2）。他 crate 内シーム（`TextEffects`・予約）と
+    /// 影響し得ない構造保証）。他 crate 内シーム（`TextEffects`・予約）と
     /// 同じ zero-sized 規律。
     #[test]
     fn fixed_overlay_seam_is_type_only() {
@@ -855,7 +833,7 @@ mod tests {
         assert_eq!(FixedOverlaySeam::default(), FixedOverlaySeam::default());
     }
 
-    /// 固定層予約は読み戻し対象（front `sources`）に含まれない（`areka-P0-emo-text-viewbox` R7.4）: 型シームを持つ
+    /// 固定層予約は読み戻し対象（front `sources`）に含まれない: 型シームを持つ
     /// surface に既知パターンを front へ直書き→`present`（固定層合成点を通る）→`read_back` が
     /// パターンを一切変えずに返す＝予約が pixel golden に影響しないことを確認する。
     #[test]
@@ -884,7 +862,6 @@ mod tests {
             );
         }
 
-        // present は固定層合成点（front→backbuffer コピー直後）を通るが、今は実描画なし。
         surface.present().expect("present 失敗");
         let bytes = surface.read_back().expect("read_back 失敗");
         assert_eq!(
@@ -893,7 +870,7 @@ mod tests {
         );
     }
 
-    /// 「まだ」と失敗の分かれ目（`areka-P0-mcp-dump-images-residue` 1.5）: GPU がまだ使っているだけの `DXGI_ERROR_WAS_STILL_DRAWING`
+    /// 「まだ」と失敗の分かれ目: GPU がまだ使っているだけの `DXGI_ERROR_WAS_STILL_DRAWING`
     /// は「まだ」、それ以外（`E_FAIL`）は失敗。
     #[test]
     fn still_drawing_separates_not_yet_from_failure() {
@@ -905,7 +882,7 @@ mod tests {
         )));
     }
 
-    /// 待たない読み戻しの往復（`areka-P0-mcp-dump-images-residue` 1.3 の層の側）: front へ模様 P を直に書き、`begin_read_back` の後に
+    /// 待たない読み戻しの往復: front へ模様 P を直に書き、`begin_read_back` の後に
     /// front を模様 Q で描き替えても、`try_finish` が読めたときの中身は積んだ時点の P と全バイト一致。
     #[test]
     fn pending_read_back_returns_front_as_of_begin() {

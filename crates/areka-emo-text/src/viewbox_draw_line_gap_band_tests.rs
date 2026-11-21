@@ -1,11 +1,11 @@
-//! # 横書きの帯と書体の行間（spec emo-text-line-gap・設計の LineGapBandTests）
+//! # 横書きの帯と書体の行間
 //!
 //! 書体の行間を持つ書体（游ゴシック）の横書きで、選択肢の帯が字の箱の中央に在るかを測る。
 //! 縦書きの前例 `viewbox_draw_vertical_band_readback_tests.rs` と同じく、本番と同じ道
 //! （`FontCatalog::pick` → 配置 → `line_bands` → 描く → 読み戻す）で回す。
 //!
-//! 記号（design.md「Data Models」・image px・行矩形の上端 0）: `B` 字の箱の丈（`line_box_height`）・
-//! `t` 字の箱の上端（基線 − ascent）・`E` 帯の厚み・案 2 の寄せ `round(max(0, t) + max(0, B − E) / 2)`。
+//! 記号（image px・行矩形の上端 0）: `B` 字の箱の丈（`line_box_height`）・
+//! `t` 字の箱の上端（基線 − ascent）・`E` 帯の厚み・帯の寄せ `round(max(0, t) + max(0, B − E) / 2)`。
 
 use super::ViewboxExecutor;
 use super::test_support::{
@@ -86,14 +86,14 @@ impl GlyphMetrics for LineGapMetrics {
     }
 }
 
-/// 決定論のテスト（要件 2.1・2.2・2.3・2.5・3.1・3.3・6.1・GPU なし）: 書体の行間を持つ偽の
+/// 決定論のテスト（GPU なし）: 書体の行間を持つ偽の
 /// 計測器で、同じ大きさの横書き 2 行（1 行ずつ選択肢／アンカー）の帯を本番と同じ道
 /// （配置 → `choice_ranges`（`line_bands`・`derive_hit_rows`）→ `decorate_canvas`）で出し、
 /// (a) 帯の中心が字の箱 [t, t ＋ B] の中心から 1 image px 以内、(b) 厚みが em 以上・行送り以下、
 /// (c) 2 行の帯が接するだけで重ならない（境の点はたかだか 1 行に当たる）、(d) 当たりのブロック軸の
 /// 範囲と焼いた帯が数値まで同じ、(e) アンカーの範囲も選択肢と同じ帯、を確かめる。
 ///
-/// 較正（要件 6.3・research.md §4）: `line_bands` で t を読まないと (a) が赤（em 20 で中心差 −6.17）。
+/// 較正: `line_bands` で t を読まないと (a) が赤（em 20 で中心差 −6.17）。
 #[test]
 fn line_gap_metrics_centre_the_horizontal_band_on_the_char_box() {
     let mode = WritingMode::HorizontalTb;
@@ -176,7 +176,7 @@ fn line_gap_metrics_centre_the_horizontal_band_on_the_char_box() {
                     seg.line_index
                 );
             }
-            // 境の点（半開区間 `y >= top && y < bottom`）はたかだか 1 行に当たる（要件 3.3）。
+            // 境の点（半開区間 `y >= top && y < bottom`）はたかだか 1 行に当たる。
             let x = rows[0].rect.left;
             for y in [rows[0].rect.bottom, rows[0].rect.bottom - 0.5] {
                 let hits = rows
@@ -204,7 +204,7 @@ fn line_gap_metrics_centre_the_horizontal_band_on_the_char_box() {
 /// 実物の読み戻しの 1 組（書体 × 大きさ × 拡大率）。本番と同じ道（配置 → `line_bands` → 塗りの住人へ
 /// 焼く → 描く → 読み戻す）で横書きの選択肢 2 行を描き、赤になった確かめを返す。
 /// `expect` が `Some` の書体は書体の行間を持つ書体として (a)〜(f) を、`None` の書体は行間 0 の書体と
-/// して (g) を確かめる。測った数は標準出力へ出す（`research.md` §5 の材料）。
+/// して (g) を確かめる。測った数は標準出力へ出す。
 fn readback_case(
     rig: &mut Rig,
     factory: &IDWriteFactory2,
@@ -264,7 +264,7 @@ fn readback_case(
     println!("{tag} t {t:.4}・B {b:.3}・帯 {bands:?}");
 
     let Some(expect) = expect else {
-        // (g) 行間 0 の書体: 本番の寄せが t ＝ 0 の式の値と等しい（要件 5.1）。
+        // (g) 行間 0 の書体: 本番の寄せが t ＝ 0 の式の値と等しい。
         for (i, band) in bands.iter().enumerate() {
             let want = highlight_band_offset(b, band.extent);
             if band.offset != want {
@@ -410,7 +410,7 @@ fn readback_case(
     red
 }
 
-/// 実物の読み戻し（要件 2.1・2.2・3.2・5.1・6.2・6.4）: 游ゴシック（ぱすたの候補列・`R_FONTS` と
+/// 実物の読み戻し: 游ゴシック（ぱすたの候補列・`R_FONTS` と
 /// 同じ固定で `Yu Gothic` に引ける）20・28 × k ＝ 1・2 の横書きの選択肢 2 行で (a)〜(f) を、行間 0 の
 /// 書体（Yu Gothic UI・ＭＳ ゴシック）の同じ組で (g) を確かめる。
 ///
@@ -441,7 +441,7 @@ fn line_gap_band_covers_char_box_readback() {
     );
 }
 
-/// 決定論のテスト（要件 2.4・GPU なし）: 書体の行間を持つ偽の計測器で、既定の em 20 の字と
+/// 決定論のテスト（GPU なし）: 書体の行間を持つ偽の計測器で、既定の em 20 の字と
 /// `\f[height,40]` の字が混ざる横書きの 1 行の帯が、その行の最大の em（40）から厚みと寄せを決め、
 /// 帯の中心がその行の字の箱 [t(40), t(40) ＋ B(40)] の中心から 1 image px 以内に在るかを確かめる。
 #[test]

@@ -1,11 +1,9 @@
-//! actor の子: 手動の送りの公開の口（balloon-scroll-arrows・design.md「ActorScroll」）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//! actor の子: 手動の送りの公開の口。
 //!
 //! 場所（[`PlaceKey`]）ごとの手動の位置（[`PlaceScroll`]）の表を、矢印の押下・ホイール・消去・
 //! 箱の登録を外す・隠した・面の切り替えから動かす。描き直しはしない（次のフレームの
 //! `present_actor` が [`crate::scroll_marker::window_for`] の見える範囲で今の送りの描き直しを出す）。
-//! 手動の始まり・終わりは場所と理由を `debug!`（要件 9.2）、1 段ごとの送りは `trace!`（要件 9.3）。
+//! 手動の始まり・終わりは場所と理由を `debug!`、1 段ごとの送りは `trace!`。
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -25,7 +23,7 @@ use crate::surface::TextSurface;
 use super::{PlacedMarker, TextLayerRuntime};
 
 impl TextLayerRuntime {
-    /// スコープの普通のバルーンの矢印の絵を入れ替える（面の切り替えが入れる・要件 3.4・7.3）。
+    /// スコープの普通のバルーンの矢印の絵を入れ替える（面の切り替えが入れる）。
     /// 次の提示で出す矢印が前と違えば描き直す。
     pub fn set_balloon_markers(&mut self, actor: ActorKey, markers: MarkerPair) {
         debug!(
@@ -37,7 +35,7 @@ impl TextLayerRuntime {
         self.balloon_markers.insert(actor, markers);
     }
 
-    /// 箱の名前ごとの矢印の絵を入れ替える（シェルの箱の束と一緒に入れる・要件 7.3）。
+    /// 箱の名前ごとの矢印の絵を入れ替える（シェルの箱の束と一緒に入れる）。
     /// 足りない番号は、提示のときにそのスコープの普通のバルーンの絵で埋める。
     pub fn set_box_markers(&mut self, markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>) {
         debug!(boxes = markers.len(), "箱の矢印の絵を受け取った");
@@ -45,7 +43,7 @@ impl TextLayerRuntime {
     }
 
     /// 点（窓のクライアント物理 px・選択肢の行と同じ空間）が、最後に提示した矢印の矩形の中で、
-    /// その画素が矢印の絵の α ≥ 0.5 なら矢印の種類（要件 5.7）。押下の振り分けは送り手でなく
+    /// その画素が矢印の絵の α ≥ 0.5 なら矢印の種類。押下の振り分けは送り手でなく
     /// この点の答えで決める。
     pub fn marker_at_point(&self, place: &PlaceKey, client_px: (f32, f32)) -> Option<MarkerKind> {
         self.surfaces.get(place)?.markers.as_ref()?.hit(client_px)
@@ -57,7 +55,7 @@ impl TextLayerRuntime {
         Some(render.markers.as_ref()?.surface())
     }
 
-    /// 場所の手動の位置を `dir` の向きへ `lines` 行送る（矢印の押下・要件 5.1〜5.4）。
+    /// 場所の手動の位置を `dir` の向きへ `lines` 行送る（矢印の押下）。
     /// まだ一度も提示していない場所は送れない（`Unchanged`）。
     pub fn scroll_manual_at(
         &mut self,
@@ -73,7 +71,7 @@ impl TextLayerRuntime {
         change
     }
 
-    /// 場所をホイールの回転 `delta`（正＝向こう側＝古い側）で送る（要件 6.1〜6.6）。
+    /// 場所をホイールの回転 `delta`（正＝向こう側＝古い側）で送る。
     /// 「1 画面ずつ」は前のフレームの見えていた行の数を送る。
     pub fn wheel_at(
         &mut self,
@@ -90,21 +88,21 @@ impl TextLayerRuntime {
         change
     }
 
-    /// 場所に隠れた行（押し出された古い行か、手動の位置の先の新しい行）があるか（要件 7.5・7.6）。
+    /// 場所に隠れた行（押し出された古い行か、手動の位置の先の新しい行）があるか。
     pub fn has_hidden_lines_at(&self, place: &PlaceKey) -> bool {
         self.scrolls
             .get(place)
             .is_some_and(|scroll| scroll.has_hidden_lines())
     }
 
-    /// 場所の手動の位置を捨てる（消去・隠した・箱を外した・要件 8.2・8.3）。手動でなければ何もしない。
+    /// 場所の手動の位置を捨てる（消去・隠した・箱を外した）。手動でなければ何もしない。
     pub fn forget_manual_at(&mut self, place: &PlaceKey, reason: StopReason) {
         if let Some(scroll) = self.scrolls.get_mut(place) {
             record(place, scroll.forget(reason), "捨てる口");
         }
     }
 
-    /// アクターの普通のバルーンとその箱の全部の手動の位置を捨てる（面の切り替え・要件 8.6）。
+    /// アクターの普通のバルーンとその箱の全部の手動の位置を捨てる（面の切り替え）。
     pub fn forget_manual_of(&mut self, actor: &ActorKey, reason: StopReason) {
         for (place, scroll) in self.scrolls.iter_mut() {
             if place.actor == *actor {
@@ -113,7 +111,7 @@ impl TextLayerRuntime {
         }
     }
 
-    /// 消去（`ClearAll`）: 全部の場所の手動の位置を捨てる（要件 8.2）。
+    /// 消去（`ClearAll`）: 全部の場所の手動の位置を捨てる。
     pub(super) fn forget_all_manual(&mut self, reason: StopReason) {
         for (place, scroll) in self.scrolls.iter_mut() {
             record(place, scroll.forget(reason), "捨てる口");
@@ -148,7 +146,7 @@ pub(super) fn record(place: &PlaceKey, change: ScrollChange, via: &str) {
 }
 
 /// 出す矢印（[`MarkerShown`]）を絵と置き場に引き当てる。普通のバルーンはスコープの絵、箱は箱の名前の
-/// 絵で、箱の足りない番号はスコープの普通のバルーンの絵で埋める（要件 7.3）。絵の無い矢印は出さない。
+/// 絵で、箱の足りない番号はスコープの普通のバルーンの絵で埋める。絵の無い矢印は出さない。
 pub(super) fn placed_markers(
     balloon: &HashMap<ActorKey, MarkerPair>,
     boxes: &BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,

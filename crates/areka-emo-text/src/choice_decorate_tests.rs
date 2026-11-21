@@ -1,9 +1,6 @@
-// 断りの無い要件の番号と design.md の参照は spec `vertical-choice-hover-band` のもの（別の spec のものはその場で名を書く）。
-
 // ── canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
 //
-// `areka-P0-choice-render` design.md「純粋層 / ChoicePure」・`areka-P0-choice-render` 要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
-// SquareFill）/4.3（未指定→Invert 反転）。描画は焼き込み済みの純データからの一点写像で行う。
+// 描画は焼き込み済みの純データからの一点写像で行う（cursor.* 指定→SquareFill・未指定→Invert 反転）。
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
@@ -63,7 +60,7 @@ fn square_fill() -> ResolvedChoiceStyle {
 
 // ── 恒等（非退行）: セグメント空 → canvas 無変更 ──
 
-/// セグメント空 → 入力 canvas をまったく同一で返す（恒等・`areka-P0-choice-render` 要件 1.4）。
+/// セグメント空 → 入力 canvas をまったく同一で返す（恒等）。
 #[test]
 fn empty_segments_returns_canvas_unchanged() {
     let region = region(0, 0, 400, 224);
@@ -151,12 +148,12 @@ fn hover_none_still_records_segments_without_highlight() {
 
 // ── 座標系: 絶対 inline_range → resident-local（行内原点差引き） ──
 
-/// 横書き・行内 offset 100（rect.left ≠ region.left()）: 絶対 100..120 → local 0..20
-/// （resident 原点 = region.left() + offset.0 = 100 を差し引く）。
+/// 横書き・行内 offset 100（rect.left ≠ region.left）: 絶対 100..120 → local 0..20
+/// （resident 原点 = region.left + offset.0 = 100 を差し引く）。
 #[test]
 fn segment_inline_range_is_resident_local_subtracting_line_origin() {
     let region = region(0, 0, 400, 224);
-    // 住人の行内 offset は 100（rect.left = region.left()(0) + 100 = 100）。
+    // 住人の行内 offset は 100（rect.left = region.left(0) + 100 = 100）。
     let input = canvas(vec![glyph_resident((100.0, 0.0))]);
     let segments = [seg(0, 0, (100.0, 120.0))]; // 絶対 image px。
     let out = decorate_canvas(
@@ -177,7 +174,7 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
     );
 }
 
-/// Observable（`areka-P0-choice-render` R3.3 の帯単一化・`areka-P0-emo2-conformance-e2e` R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_extent`
+/// Observable（帯の丈と寄せの単一化）: 装飾は受け取った `band_extent`
 /// （em ボックス丈 10.0 ではなく 12.0）と `band_offset` を Choice 住人へそのまま焼き込む——COM 層の
 /// ハイライト矩形の起点とダーティ帯はこの値だけを読み、`derive_hit_rows` へ渡す値と同一にする
 /// ことで帯の丈と**位置**まで数値一致する。
@@ -214,7 +211,7 @@ fn decorate_bakes_band_extent_and_offset_into_choice_residents() {
 fn segment_inline_range_vertical_subtracts_top_origin() {
     let region = region(0, 0, 400, 224);
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
-        // 縦書きは inline 軸 = y。住人 offset.1 = 50（rect.top = region.top()(0) + 50）。
+        // 縦書きは inline 軸 = y。住人 offset.1 = 50（rect.top = region.top(0) + 50）。
         let input = canvas(vec![glyph_resident((377.0, 50.0))]);
         let segments = [seg(0, 0, (50.0, 70.0))]; // 絶対 y 範囲。
         let out = decorate_canvas(
@@ -375,11 +372,10 @@ fn lines_without_segments_stay_glyph_run() {
     );
 }
 
-// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（`areka-P0-choice-render` の不変条件 3・4.5/6.5） ──
+// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し ──
 
 /// hover=Some(99)（どのセグメントも持たない ordinal）→ 全住人 hovered/highlight None・
-/// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe 不変条件・
-/// Data Models §不変条件 3・`areka-P0-choice-render` 要件 4.5/6.5）。
+/// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe）。
 #[test]
 fn hover_stale_ordinal_yields_no_highlight() {
     let region = region(0, 0, 400, 224);
@@ -412,7 +408,7 @@ fn hover_stale_ordinal_yields_no_highlight() {
     }
 }
 
-// ── 縦書きの帯の純粋の検査（spec `vertical-choice-hover-band` タスク 3.1・設計 P1〜P3） ──
+// ── 縦書きの帯の純粋の検査 ──
 //
 // 配置（`LayoutEngine`・`FixedMetrics`＝行ボックス 1.33em）→ `line_bands` → `decorate_canvas`／
 // `derive_hit_rows` の本番と同じ道で、焼いた帯と当たりの帯をブロック軸（x）で突き合わせる。
@@ -444,7 +440,7 @@ fn two_choice_columns(mode: WritingMode) -> Columns {
     (region, lines, bands, segments)
 }
 
-/// P1（要件 2.1・6.2）: 右から左・左から右で、`decorate_canvas` が Choice 住人へ焼いた
+/// 右から左・左から右で、`decorate_canvas` が Choice 住人へ焼いた
 /// `band_extent`／`band_offset` から描画と同じ式（住人原点 ＋ 寄せ 〜 ＋ 厚み・`highlight_rect`）で
 /// 組んだ帯と、`derive_hit_rows` の当たりの四角のブロック軸の範囲が数値まで同じ。右から左の寄せは負。
 ///
@@ -494,7 +490,7 @@ fn vertical_baked_band_equals_hit_rect_block_range() {
     }
 }
 
-/// P2（要件 1.4・2.3）: 同じ大きさの隣り合う列の帯は重ならず、間は行間の分（行送り − em）。
+/// 同じ大きさの隣り合う列の帯は重ならず、間は行間の分（行送り − em）。
 /// 帯の境の点は、半開区間（`x >= left && x < right`）でたかだか 1 列に当たる。
 #[test]
 fn vertical_adjacent_same_size_column_bands_do_not_overlap() {
@@ -537,7 +533,7 @@ fn vertical_adjacent_same_size_column_bands_do_not_overlap() {
     }
 }
 
-/// P3（要件 1.6）: `\f[height,40]` の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの
+/// `\f[height,40]` の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの
 /// 量（正＝重なる幅・負＝間の幅、image px）を数で固定する。字のインクは隣と重ならないので列送りは
 /// 直さない——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
 #[test]
@@ -627,7 +623,7 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
     }
 }
 
-/// P5（要件 4.2）: `vertical_em_box_left` の既定の実装（`FixedMetrics` は上書きしない）は em の箱を
+/// `vertical_em_box_left` の既定の実装（`FixedMetrics` は上書きしない）は em の箱を
 /// 列の箱の真ん中に置く: 右から左 −s/2・左から右 ＋s/2・横書き 0（s ＝ 行の箱 − em）。比 1 の
 /// 書体（行の箱 ＝ em）では 0。
 #[test]
@@ -672,12 +668,11 @@ fn vertical_em_box_left_default_centres_the_em_box_in_the_column_box() {
     }
 }
 
-/// P6（要件 4.2）: `vertical_em_box_left` だけを真ん中から外した偽の metrics（行の箱は `FixedMetrics`
+/// `vertical_em_box_left` だけを真ん中から外した偽の metrics（行の箱は `FixedMetrics`
 /// と同じ）で、`line_bands` の縦書きの寄せがその値の丸め（−7.4 → −7・＋0.6 → 1）になる——行の箱の
 /// 比からは出ない（`FixedMetrics` の真ん中なら em 28 で −5／5）。横書きの出力は `FixedMetrics` と同じ。
 ///
-/// 較正: `line_bands` の縦書きの枝を Yu Gothic UI の割合の定数の式（spec `vertical-choice-hover-band` の
-/// design.md）へ戻すと −4／5 で赤。
+/// 較正: `line_bands` の縦書きの枝を Yu Gothic UI の割合の定数の式へ戻すと −4／5 で赤。
 #[test]
 fn vertical_line_bands_read_the_em_box_from_metrics() {
     use crate::layout::{FixedMetrics, GlyphMetrics};

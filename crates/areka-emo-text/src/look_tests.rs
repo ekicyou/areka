@@ -1,26 +1,13 @@
 //! 見た目の値型（[`super::TextLook`]）・2 層（[`super::LookLayers`]）・装飾の表
-//! （[`super::StyleTable`]／[`super::StyleId`]／[`super::GlyphStyles`]）の決定論テスト
-//! （タスク 3.2・要件 4.1／4.3／4.5／4.7・15.6）。
-//!
-//! ## 章立て
-//!
-//! | § | 内容 | 要件 |
-//! |---|---|---|
-//! | §1 | 正典の既定（全 9 項目を明示） | 4.1 |
-//! | §2 | 計測鍵——送り幅に効く 4 項目だけを取り出す | 4.1 |
-//! | §3 | 2 層の組み立て（バルーン定義の有無 × 各項目・無効表示は色だけ混色） | 4.1, 4.3, 4.5, 4.7 |
-//! | §4 | 装飾の表（既定は番号 0・同値の畳み込み・範囲外は既定・消去） | 4.1 |
-//! | §5 | グリフ序数からの読み口（範囲外は既定） | 4.1 |
-//! | §6 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.6 |
+//! （[`super::StyleTable`]／[`super::StyleId`]／[`super::GlyphStyles`]）の決定論テスト。
 //!
 //! **期待値は正典の式から書く**——実装が返した値を書き写さない。無効表示の色は
-//! 「(背景 + 文字色 × 2) / 3」（要件 4.6・[`crate::color::mix_disabled`] が唯一の実装点）なので、
+//! 「(背景 + 文字色 × 2) / 3」（[`crate::color::mix_disabled`] が唯一の実装点）なので、
 //! 期待値は黒文字 × 白背景＝`(255 + 0) / 3 = 85`、白文字 × 黒背景＝`(0 + 510) / 3 = 170` の
 //! ように手で解いた値を直に書く（`mix_disabled` を呼んで期待値を作ると恒真になる）。
 //!
-//! **「定義が無い側」も独立に断言する**——差し込みの列が空のとき（バルーン定義に宣言が無いとき）
-//! 太字・斜体・下線・打ち消し線・白抜き・上下付き ほかは「零のまま」であることが
-//! 要件（4.3 の口に何も渡されなければ値は既定）なので、零を明示的に述べる（§3）。
+//! **「定義が無い側」も独立に断言する**——差し込みの列が空のとき（バルーン定義に宣言が無いとき）、
+//! 太字・斜体・下線・打ち消し線・白抜き・上下付きは既定の零のままであることを明示的に述べる。
 
 use super::*;
 
@@ -59,9 +46,9 @@ fn bold_look(default: &TextLook) -> TextLook {
     }
 }
 
-// ------------------------------------------------------------------ §1 正典の既定
+// ------------------------------------------------------------------ 正典の既定
 
-/// 正典の既定は ＭＳ ゴシック・12・黒・装飾なし——9 項目すべてを明示して固定する（R4.1）。
+/// 正典の既定は ＭＳ ゴシック・12・黒・装飾なし——9 項目すべてを明示して固定する。
 ///
 /// 装飾 6 項目の「無効」は表に書かなければ述べたことにならないので、真偽値も明示的に断言する。
 #[test]
@@ -78,9 +65,9 @@ fn ukadoc_default_is_ms_gothic_twelve_black_without_decoration() {
     assert_eq!(look.script, Script::None, "既定は上下付きでない");
 }
 
-// ------------------------------------------------------------------ §2 計測鍵
+// ------------------------------------------------------------------ 計測鍵
 
-/// 計測鍵は送り幅に効く 4 項目（候補列・大きさ・太字・斜体）だけを持つ（R4.1）。
+/// 計測鍵は送り幅に効く 4 項目（候補列・大きさ・太字・斜体）だけを持つ。
 #[test]
 fn font_key_changes_with_each_item_that_moves_the_advance() {
     let base = TextLook::ukadoc_default();
@@ -117,7 +104,7 @@ fn font_key_changes_with_each_item_that_moves_the_advance() {
 }
 
 /// 送り幅に効かない項目（色・下線・打ち消し線・白抜き・上下付き）は計測鍵を変えない——
-/// 変えてしまうと同じ幅の文字が別の run と別の計測へ割れる（R4.1）。
+/// 変えてしまうと同じ幅の文字が別の run と別の計測へ割れる。
 #[test]
 fn font_key_ignores_the_items_that_do_not_move_the_advance() {
     let base = TextLook::ukadoc_default();
@@ -152,11 +139,11 @@ fn font_key_ignores_the_items_that_do_not_move_the_advance() {
     }
 }
 
-// ------------------------------------------------------------------ §3 2 層の組み立て
+// ------------------------------------------------------------------ 2 層の組み立て
 
-/// バルーン定義が無い側——2 層は正典の既定・背景は白・選択肢文字色は黒（R4.1）。
+/// バルーン定義が無い側——2 層は正典の既定・背景は白・選択肢文字色は黒。
 ///
-/// 無効表示の色は黒文字 × 白背景で `(255 + 0 × 2) / 3 = 85`（要件 4.6 の式を手で解いた値）。
+/// 無効表示の色は黒文字 × 白背景で `(255 + 0 × 2) / 3 = 85`（式を手で解いた値）。
 #[test]
 fn layers_without_a_balloon_definition_are_the_ukadoc_defaults() {
     let layers = LookLayers::default();
@@ -170,7 +157,7 @@ fn layers_without_a_balloon_definition_are_the_ukadoc_defaults() {
 }
 
 /// バルーン定義がある側——読めている 5 キー（名前・大きさ・色 r/g/b）と背景・選択肢文字色が
-/// そのまま既定層へ入る（R4.1・R4.3 の「口」が実際に効いていること）。
+/// そのまま既定層へ入る（「口」が実際に効いていること）。
 #[test]
 fn a_balloon_definition_fills_each_readable_item() {
     let layers = balloon_layers();
@@ -184,7 +171,7 @@ fn a_balloon_definition_fills_each_readable_item() {
     assert_eq!(layers.cursor_text, (7, 8, 9));
 }
 
-/// フォント名の定義が無い（候補列が空）ときは正典の既定名へ落ちる（R4.1）。
+/// フォント名の定義が無い（候補列が空）ときは正典の既定名へ落ちる。
 #[test]
 fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
     let layers = LookLayers::from_balloon(
@@ -204,7 +191,7 @@ fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
 }
 
 /// 大きさが正の有限値でないときは正典の既定 12 へ落ちる——DirectWrite の em は正値必須で、
-/// 2 層は「常に正の大きさ」を下流へ約束する（R4.1）。
+/// 2 層は「常に正の大きさ」を下流へ約束する。
 #[test]
 fn a_non_positive_font_height_falls_back_to_twelve() {
     for height in [0.0, -3.0, f32::NAN, f32::INFINITY] {
@@ -225,8 +212,8 @@ fn a_non_positive_font_height_falls_back_to_twelve() {
     }
 }
 
-/// 差し込みの列が空なら（バルーン定義に宣言が無ければ）飾りの項目は、両層とも正典の既定（＝零）のままである
-/// （R4.3・R4.7 の「口は空けるが値は既定」）。零は明示しなければ述べたことにならない。
+/// 差し込みの列が空なら（バルーン定義に宣言が無ければ）飾りの項目は両層とも正典の既定（＝零）のまま。
+/// 零は明示しなければ述べたことにならない。
 #[test]
 fn the_keys_not_yet_read_from_the_balloon_stay_at_the_ukadoc_default_in_both_layers() {
     let layers = balloon_layers();
@@ -240,7 +227,7 @@ fn the_keys_not_yet_read_from_the_balloon_stay_at_the_ukadoc_default_in_both_lay
     }
 }
 
-/// 無効表示の層は「色だけ混色・他の項目は既定と同じ」（R4.5）。
+/// 無効表示の層は「色だけ混色・他の項目は既定と同じ」。
 ///
 /// 期待値は正典の式を手で解いて書く: 文字色 (10,20,30)・背景 (200,210,220) なら
 /// r=(200+20)/3=73・g=(210+40)/3=83・b=(220+60)/3=93（いずれも整数除算）。
@@ -260,7 +247,7 @@ fn the_disable_layer_differs_from_the_default_layer_only_in_color() {
     assert_eq!(disable_with_default_color, layers.default);
 }
 
-/// 背景だけを変えると、変わるのは無効表示の色だけ——既定層も選択肢文字色も動かない（R4.5）。
+/// 背景だけを変えると、変わるのは無効表示の色だけ——既定層も選択肢文字色も動かない。
 #[test]
 fn the_background_moves_the_disable_color_and_nothing_else() {
     let on_white = LookLayers::from_balloon(
@@ -295,7 +282,7 @@ fn the_background_moves_the_disable_color_and_nothing_else() {
     );
 }
 
-/// 残りのキーの口——`font_overrides` が既定層へ差し込まれ、無効表示層へも複製で伝わる（R4.3）。
+/// 残りのキーの口——`font_overrides` が既定層へ差し込まれ、無効表示層へも複製で伝わる。
 ///
 /// 較正——`from_balloon` が `font_overrides` を無視する実装なら 4 本とも既定（偽・12）で赤。
 #[test]
@@ -318,9 +305,9 @@ fn font_overrides_fill_the_default_layer_and_carry_into_the_disable_layer() {
     assert!(layers.disable.underline);
 }
 
-/// 無効表示だけのキーごとの上書き——既定層は動かず、無効表示層だけが変わる（**R4.7 の口**）。
+/// 無効表示だけのキーごとの上書き——既定層は動かず、無効表示層だけが変わる（**口**）。
 ///
-/// 正典の `disable.font.(フォント定義)` に対応する。要件 4.5 の「色以外は既定と同じ」は
+/// 正典の `disable.font.(フォント定義)` に対応する。「色以外は既定と同じ」は
 /// **差し込みが無いときの既定の姿**であって、明示された項目はここで上書きできる。
 ///
 /// 較正——`disable_overrides` を無視する実装なら 2 本とも赤。差し込みを複製の**前**に
@@ -364,9 +351,9 @@ fn a_malformed_override_does_not_block_the_others() {
     assert!(layers.default.bold, "後続の差し込みは効く");
 }
 
-// ------------------------------------------------------------------ §4 装飾の表
+// ------------------------------------------------------------------ 装飾の表
 
-/// 既定と同じ見た目は番号 0 になり、表には積まれない（R4.1・D14 の記号）。
+/// 既定と同じ見た目は番号 0 になり、表には積まれない（記号）。
 #[test]
 fn the_default_look_is_style_zero_and_is_not_stored() {
     let default = TextLook::ukadoc_default();
@@ -410,7 +397,7 @@ fn equal_looks_fold_into_one_number() {
 }
 
 /// 番号 0 と範囲外の番号は既定へ落ちる（panic しない）。表に無い番号を引いても
-/// 別の見た目には決してならない（R4.1）。
+/// 別の見た目には決してならない。
 #[test]
 fn zero_and_out_of_range_numbers_resolve_to_the_default() {
     let default = TextLook::ukadoc_default();
@@ -435,8 +422,8 @@ fn clearing_the_table_drops_every_number() {
     assert_eq!(table.resolve(StyleId(1), &default), &default);
 }
 
-/// 1 万の色を登録しても番号が往復し、同じ見た目は同じ番号になる（指摘 10）。決まった入力の
-/// 列（重なりを含む）で、旧来の線形走査と同じ番号を付けることも確かめる（時間は比べない）。
+/// 1 万の色を登録しても番号が往復し、同じ見た目は同じ番号になる。決まった入力の
+/// 列（重なりを含む）で、線形走査の見本と同じ番号を付けることも確かめる（時間は比べない）。
 #[test]
 fn ten_thousand_colours_round_trip_and_match_the_linear_scan() {
     let default = TextLook::ukadoc_default();
@@ -462,7 +449,7 @@ fn ten_thousand_colours_round_trip_and_match_the_linear_scan() {
     }
     assert_eq!(table.len(), 10_000);
 
-    // 旧来の線形走査（`position`）を写した見本と、重なりを含む決まった列で番号を比べる。
+    // 線形走査（`position`）を写した見本と、重なりを含む決まった列で番号を比べる。
     let mut table = StyleTable::default();
     let mut model: Vec<TextLook> = Vec::new();
     let mut seed = 12345u32;
@@ -487,7 +474,7 @@ fn ten_thousand_colours_round_trip_and_match_the_linear_scan() {
     assert_eq!(table.len(), distinct.len());
 }
 
-/// 消去の後は索引も空になり、前の番号を引き直さず新しい番号を付ける（指摘 10）。
+/// 消去の後は索引も空になり、前の番号を引き直さず新しい番号を付ける。
 #[test]
 fn after_clearing_a_look_gets_a_new_number_not_the_stale_one() {
     let default = TextLook::ukadoc_default();
@@ -508,8 +495,8 @@ fn after_clearing_a_look_gets_a_new_number_not_the_stale_one() {
     assert_eq!(table.resolve(StyleId(2), &default), &bold);
 }
 
-/// 大きさの `0.0` と `-0.0` は旧来の `==` と同じく 1 つの番号へ畳み、NaN は旧来どおり毎回
-/// 新しい番号になる（索引の鍵が `==` と食い違わない・指摘 10）。
+/// 大きさの `0.0` と `-0.0` は `==` と同じく 1 つの番号へ畳み、NaN は毎回新しい番号になる
+/// （索引の鍵が `==` と食い違わない）。
 #[test]
 fn signed_zero_folds_and_nan_never_folds_like_the_old_equality() {
     let default = TextLook::ukadoc_default();
@@ -524,7 +511,7 @@ fn signed_zero_folds_and_nan_never_folds_like_the_old_equality() {
     assert_eq!(table.intern(&sized(f32::NAN), &default), StyleId(3));
 }
 
-/// 再監査 R2-B1: 同じ見た目を引き当てるたびに候補列を全部ハッシュし直す・比べ直すと、
+/// 同じ見た目を引き当てるたびに候補列を全部ハッシュし直す・比べ直すと、
 /// `\f[name,…]` の候補が N 個・字が N 個で N² の仕事になる。ハッシュに書く量は候補の数に
 /// よらず一定、同じ見た目の引き当ては候補列を 1 度も要素ごとに比べない、別に組んだ同じ
 /// 候補列は同じ番号——の 3 つを断言する。
@@ -593,8 +580,8 @@ fn interning_the_same_look_is_constant_work_in_the_candidate_count() {
 }
 
 /// 別に組んだ 2 つの表（先渡しの空回しと本番は同じ `\f[name,…]` を別々に解く）の先頭比べも、
-/// 候補列の中身を比べるのは参照の組ごとに 1 度だけ（再監査 R3-B-M1・字ごとの `basis` で
-/// 見た目の数 × 候補の数にしない）。一致・不一致の答えは変わらない。
+/// 候補列の中身を比べるのは参照の組ごとに 1 度だけ（見た目の数 × 候補の数にしない）。
+/// 一致・不一致の答えは変わらない。
 #[test]
 fn starts_with_compares_each_name_list_pair_once() {
     let default = TextLook::ukadoc_default();
@@ -644,9 +631,9 @@ fn with_name_of(look: &TextLook, base: &TextLook) -> TextLook {
     }
 }
 
-// ------------------------------------------------------------------ §5 グリフ序数の読み口
+// ------------------------------------------------------------------ グリフ序数の読み口
 
-/// グリフ序数から番号と見た目を引き、序数が番号列の外なら既定に落ちる（R4.1）。
+/// グリフ序数から番号と見た目を引き、序数が番号列の外なら既定に落ちる。
 #[test]
 fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
     let layers = balloon_layers();
@@ -669,9 +656,9 @@ fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
     assert_eq!(styles.look_of(9), &default);
 }
 
-// ------------------------------------------------------------------ §6 較正
+// ------------------------------------------------------------------ 較正
 
-/// 較正: 無効表示の層を「色以外の項目まで既定と変えてしまう」誤り（R4.5・R15.6）。
+/// 較正: 無効表示の層を「色以外の項目まで既定と変えてしまう」誤り。
 #[test]
 fn calibration_disable_layer_must_not_change_anything_but_color() {
     let layers = balloon_layers();
@@ -690,7 +677,7 @@ fn calibration_disable_layer_must_not_change_anything_but_color() {
     );
 }
 
-/// 較正: 同値の見た目を別番号に分けてしまう誤り（畳み込み漏れ・R15.6）。
+/// 較正: 同値の見た目を別番号に分けてしまう誤り（畳み込み漏れ）。
 /// 表が膨れるだけでなく、番号が違えば描画が別 run に割れる。
 #[test]
 fn calibration_equal_looks_must_not_take_separate_numbers() {
@@ -706,7 +693,7 @@ fn calibration_equal_looks_must_not_take_separate_numbers() {
     assert_eq!(second, first);
 }
 
-/// 較正: 範囲外の番号で別の見た目に落ちる（あるいは panic する）誤り（R15.6）。
+/// 較正: 範囲外の番号で別の見た目に落ちる（あるいは panic する）誤り。
 /// panic する実装ならこのテスト自体が落ちるので、両方の壊れ方を捕まえる。
 #[test]
 fn calibration_out_of_range_number_must_not_resolve_to_another_look() {
@@ -721,7 +708,7 @@ fn calibration_out_of_range_number_must_not_resolve_to_another_look() {
     );
 }
 
-/// 較正: 計測鍵に色を混ぜてしまう誤り（R15.6）——色だけ違う文字が別の計測・別の書式に
+/// 較正: 計測鍵に色を混ぜてしまう誤り——色だけ違う文字が別の計測・別の書式に
 /// 割れ、送り幅が同じはずの文字で表とキャッシュが無駄に膨れる。
 #[test]
 fn calibration_font_key_must_not_include_color() {

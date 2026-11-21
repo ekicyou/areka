@@ -1,7 +1,4 @@
-//! 場所ごとの提示と、箱の四角・選択肢の行の窓の座標での照会（要件 3.4・3.9・5.1・8.1・
-//! 8.2・9.3）。
-//!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//! 場所ごとの提示と、箱の四角・選択肢の行の窓の座標での照会。
 //!
 //! 写し（`shown_boxes`）の更新と外し方・普通のバルーンの窓の文字の数・場所を指す照会と強調は
 //! COM を使わずに見る。箱の面を実際に作って提示する通しの 1 本だけが COM を使う（描画の中身の
@@ -58,7 +55,7 @@ fn two_boxes_shown() -> Fixture {
     f
 }
 
-/// 文字が見えている箱の四角を、element番号の大きい順（手前から）に、窓の物理 px で並べる（要件 3.9）。
+/// 文字が見えている箱の四角を、element番号の大きい順（手前から）に、窓の物理 px で並べる。
 #[test]
 fn shown_boxes_lists_visible_boxes_front_to_back_in_window_physical_px() {
     let f = two_boxes_shown();
@@ -76,7 +73,7 @@ fn shown_boxes_lists_visible_boxes_front_to_back_in_window_physical_px() {
     );
 }
 
-/// 提示しなかった箱と、文字が 1 字も見えていない箱は載せない（要件 9.3）。
+/// 提示しなかった箱と、文字が 1 字も見えていない箱は載せない。
 #[test]
 fn unpresented_or_unrevealed_boxes_are_not_shown() {
     let mut f = two_boxes_shown();
@@ -94,7 +91,7 @@ fn unpresented_or_unrevealed_boxes_are_not_shown() {
     assert_eq!(shown(&f), vec![], "普通のバルーンの場所は箱ではない");
 }
 
-/// `\c` は今の行き先の箱だけを写しから外す。他の箱はそのまま（要件 7.1・7.2）。
+/// `\c` は今の行き先の箱だけを写しから外す。他の箱はそのまま。
 #[test]
 fn clear_drops_only_the_destination_box() {
     let mut f = two_boxes_shown();
@@ -106,9 +103,9 @@ fn clear_drops_only_the_destination_box() {
     );
 }
 
-/// `\b[名前]` で行き先だけが替わっても、前の箱の文字は出たまま（要件 4.5）なので外さない。
-/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・`areka-P0-shell-balloon-frame-align` 要件 1.6・2.1）。
-/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・`areka-P0-shell-balloon-frame-align` 要件 1.1〜1.3）。
+/// `\b[名前]` で行き先だけが替わっても、前の箱の文字は出たままなので外さない。
+/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない）。
+/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す。
 #[test]
 fn only_the_picture_number_drops_boxes_from_the_snapshot() {
     let mut f = two_boxes_shown();
@@ -133,7 +130,7 @@ fn only_the_picture_number_drops_boxes_from_the_snapshot() {
     assert_eq!(shown(&f), vec![], "絵の非表示");
 }
 
-/// 台詞の頭・箱を隠す印・箱の束の差し替えは、そのスコープの写しを空にする（要件 6.7・6.8・6.10）。
+/// 台詞の頭・箱を隠す印・箱の束の差し替えは、そのスコープの写しを空にする。
 #[test]
 fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
     let mut f = two_boxes_shown();
@@ -157,8 +154,8 @@ fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
 }
 
 /// 普通のバルーンの窓に今出ている文字の数: 表示している絵が箱を持つ面なら 0、そうでなければ普通の
-/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・`areka-P0-shell-balloon-frame-align` 要件 1.8）。台本の `\s` の
-/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（`areka-P0-shell-balloon-frame-align` 要件 4.5）。
+/// バルーンの場所の見えている文字の数。台本の `\s` の
+/// 受け取りには従わない。箱の表が空なら絵の番号に依らない。
 #[test]
 fn balloon_shown_glyphs_follows_the_shown_picture_number() {
     let mut f = fixture();
@@ -196,7 +193,7 @@ fn balloon_shown_glyphs_follows_the_shown_picture_number() {
     );
 
     // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず普通のバルーンの場所の
-    // 見えている文字の数（要件 5.4・`areka-P0-shell-balloon-frame-align` 要件 4.5）。
+    // 見えている文字の数。
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&text("0", "あい"));
     rt.apply_cue(&emote("0", "0"));
@@ -251,7 +248,7 @@ fn place_addressed_hit_rows_hover_and_origin() {
 }
 
 /// 通し（COM）: 箱に選択肢を出すと、普通のバルーンと同じ並べ方で、箱の位置を足した窓の物理 px の
-/// 当たり行が返る（要件 8.1・8.2）。箱の面はシェルの窓の差し込み口の直後の子になり、写しに載る。
+/// 当たり行が返る。箱の面はシェルの窓の差し込み口の直後の子になり、写しに載る。
 #[test]
 fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let (mut world, window, slot) = com_world();

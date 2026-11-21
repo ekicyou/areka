@@ -1,4 +1,4 @@
-//! 印の面（スクロールの矢印）の檻（balloon-scroll-arrows task 4.2・要件 3.4・3.5・5.7・11.1）。
+//! 印の面（スクロールの矢印）の檻。
 //!
 //! 実 GPU（`com_world` の `GraphicsCore`・WUC の Compositor）で面を作り、窓の `Children` の並び・
 //! 描いた画素の読み戻し・拡大率 1.5 の位置と大きさ・当たりのマスク・押下の届き方を見る。
@@ -393,7 +393,7 @@ fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     assert_eq!(build_bubble_path(&world, picture), vec![picture, window]);
 }
 
-/// audit-emo-text-state-actor 指摘 2: `i32` の上限の近くの矢印でも、描く矩形の右端・下端があふれず、当たりとマスクの矩形
+/// `i32` の上限の近くの矢印でも、描く矩形の右端・下端があふれず、当たりとマスクの矩形
 /// （`marker_span` の始まりの床〜終わりの天井）と一致する。右端・下端を別々に見る。
 #[test]
 fn draw_rect_near_i32_max_matches_the_hit_and_mask_rect() {

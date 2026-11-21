@@ -1,51 +1,36 @@
 //! # state — cue 駆動の純粋状態機械（純粋層）
 //!
-//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
-//!
 //! cue 列（Text／NewLine／Clear）を actor 別の行/グリフ状態へ純粋に遷移させる
 //! `TextLayerState`／`ActorTextState`／`RevealSchedule`（注入時刻駆動 typewriter）を担う。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
 //! 時刻は常に注入（`talk_time`）で受け取り、内部で実時間を読まない。
 //!
-//! ## 遷移規則（`areka-P0-emo-text-layer` design.md「TextLayerState / RevealSchedule」正本）
+//! ## 遷移規則
 //!
-//! - cue の `actor`（`ActorKey`・"0"=sakura／"1"=kero…）を鍵に、actor 別の
-//!   独立した [`ActorTextState`] へ振り分ける（`areka-P0-emo-text-layer` R1.6）。未知 actor の cue は状態を
-//!   lazily 生成して蓄積する（無損失・描画は binding 解決後）。
-//! - **後出し優先の即時適用**: `Text`＝追記（`areka-P0-emo-text-layer` R2.1）・`NewLine`＝改行マーカー追記
-//!   （`areka-P0-emo-text-layer` R2.2）・`Clear`＝未リビール分を含む全消去（`areka-P0-emo-text-layer` R2.3）。トーク上書きを抑止する
-//!   ガードは持たない——中断可否は上流（kanade の中断ファンネル）で決着済みの
-//!   前提で、届いた cue 列を忠実に適用するのみ（`areka-P0-emo-text-layer` R10.5）。
-//!   **役割分担（newline-defer）**: 本層は `NewLine` を `items` へ**即時**追記する
-//!   （追記正本の忠実記録＝後出し優先）に留まり、その改行を実際に**行送りとして
-//!   可視化するか否か**（保留・累算・実体化・蒸発）は下流 layout の**遅延解釈**に委ねる。
-//!   すなわち「追記は即時・行送りの可視化は layout が遅延解釈」（`areka-P0-newline-defer` R4.3）。
-//! - `Choice` は配送列に第一級で現れ（`areka-P0-sakura-dialogue-tags` R8.6）、本層で実消費する（`areka-P0-choice-render`）:
-//!   `text` のグリフを items へ Text cue と同一の追記＋リビール時刻式で載せつつ、`ChoiceSpan`
-//!   （配送順序数 `ordinal`・`\q` ID／表示 label／references の不透明転写・グリフ序数範囲）を
-//!   `choices` へ記録する（R1.1/R1.2）。空 `text` は `warn!`（actor 付き）＋空範囲スパン記録・
-//!   グリフ追記なし（R1.5 縮退）。`choices` は items と同一ライフサイクル（`Clear`/`ClearAll`
-//!   で同時初期化・R5.1/R5.3/R9.5）。
-//! - `AnchorBegin`／`AnchorEnd`（`\_a`）も本層で実消費する: 開きから閉じまでに開いた場所へ
-//!   追記された文字を、選択肢と同じ列 `choices` の 1 件（種類＝アンカー）として記録する。
-//!   開き・伸長・閉じの中身は子の `anchor`（`state_anchor.rs`）が持つ。
-//! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を
-//!   `CursorCoord` 語彙へ忠実転写し、`TextItem::CursorMove` を items へ追記する（改行マーカーと
-//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・`areka-P0-choice-render` R2.1）。
-//!   **単位の係数・基点・原点の解釈・軸取り違えの判定は解決層 [`crate::cursor_tag`] の責務**で、
-//!   その解決を軸ごとに呼ぶ配線が `layout` である（`areka-P0-cursor-tag-canon` の層分け）。
-//!   本層は軸の情報すら持たない——`centerx` が Y 軸に書かれた事実の判定も解決層が行う。
-//! - **typewriter リビール（`areka-P0-emo-text-layer` 要件 3・`areka-P0-cue-playback-duration` 要件 7）**: `Text` 追記時に per-glyph リビール時刻を
+//! - cue の `actor`（`ActorKey`）を鍵に、actor 別の独立した [`ActorTextState`] へ振り分ける。
+//!   未知 actor の cue は状態を lazily 生成して蓄積する（無損失・描画は binding 解決後）。
+//! - **後出し優先の即時適用**: `Text`＝追記・`NewLine`＝改行マーカー追記・`Clear`＝未リビール分を含む全消去。
+//!   トーク上書きのガードは持たない（中断可否は上流の中断ファンネルで決着済み）。
+//!   `NewLine` は `items` へ即時追記するだけで、改行を行送りとして可視化するか（保留・累算・実体化・蒸発）は
+//!   下流 layout の遅延解釈に委ねる。
+//! - `Choice` は本層で実消費する: `text` のグリフを Text cue と同一の追記＋リビール時刻式で `items` へ載せ、
+//!   `ChoiceSpan`（配送順序数 `ordinal`・`\q` ID／表示 label／references の不透明転写・グリフ序数範囲）を
+//!   `choices` へ記録する。空 `text` は `warn!`（actor 付き）＋空範囲スパン記録・グリフ追記なし。
+//!   `choices` は items と同一ライフサイクル（`Clear`/`ClearAll` で同時初期化）。
+//! - `AnchorBegin`／`AnchorEnd`（`\_a`）も本層で実消費する: 開きから閉じまでに開いた場所へ追記された文字を、
+//!   選択肢と同じ列 `choices` の 1 件（種類＝アンカー）として記録する。中身は子の `anchor`（`state_anchor.rs`）が持つ。
+//! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を `CursorCoord` 語彙へ
+//!   忠実転写し、`TextItem::CursorMove` を items へ追記する（非グリフアイテム＝reveal 対象外）。
+//!   単位の係数・基点・原点の解釈・軸取り違えの判定は解決層 [`crate::cursor_tag`] の責務で、
+//!   その解決を軸ごとに呼ぶ配線が `layout` である。
+//! - **typewriter リビール**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
-//!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
-//!   で導出する（自前の文字送り定数は持たない・服従＝再生時間の真実源に従う・`areka-P0-cue-playback-duration` R7.1/R7.2）。
+//!   `interval = duration / glyph_count` は配送された cue の再生時間から導出し、自前の文字送り定数は持たない。
 //!   可視数は `visible_glyphs(actor, t)`＝注入時刻 `t` で `r_i <= t` のグリフ数。
-//!   実時間 sleep／`Instant` 不使用（注入時刻駆動・`areka-P0-emo-text-layer` R3.3・`areka-P0-cue-playback-duration` R9.1）。
-//! - グリフ単位は書記素クラスタ（UAX #29 の拡張書記素クラスタ）。切り方は
-//!   [`areka_sakura::cluster::clusters`] だけを通す（再生時間の文字数と同じ切り方・
-//!   ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字が 1 アイテム・1 段になる）。
-//! - 同一 cue 列＋同一入力条件→同一状態（決定論・`areka-P0-emo-text-layer` R2.4/R2.5）。
+//! - グリフ単位は書記素クラスタ（UAX #29）。切り方は [`areka_sakura::cluster::clusters`] だけを通す
+//!   （再生時間の文字数と同じ切り方・ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字が 1 アイテム）。
+//! - 同一 cue 列＋同一入力条件→同一状態（決定論）。
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -61,21 +46,19 @@ use decoration::font_tag_tokens;
 pub use decoration::{BoxTraits, Decoration};
 pub use route::{SurfaceFallback, SurfaceKeyOutcome};
 
-/// テキスト層の調整値（`areka-P0-emo-text-layer` design.md「TextLayerRuntime」の config 正本）。
+/// テキスト層の調整値。
 ///
 /// 純粋層・結線層の双方が消費する共有設定であり、**行送りの式の唯一の定義点**
-/// （`line_pitch = font.height + 行間`・`areka-P0-emo-text-line-height-canon` design.md §4.1 正典表）。純粋層の
+/// （`line_pitch = font.height + 行間`）。純粋層の
 /// [`crate::layout::FixedMetrics`] も COM 層の `DWriteMetrics` も自前で足し算をせず
-/// [`TextLayerConfig::line_pitch`] を呼ぶ（`areka-P0-emo-text-line-height-canon` R3.5）。
+/// [`TextLayerConfig::line_pitch`] を呼ぶ。
 ///
-/// **文字送り間隔（旧 `char_wait`）は撤去済み**（`areka-P0-cue-playback-duration` R7.2）——reveal のペースは自前の定数で
-/// なく**配送された cue の再生時間**（`TalkCue::duration`）から `interval = duration / N`
-/// で導出する（服従＝再生時間の単一真実源に従う）。本 config は行送りの行間
-/// `line_gap` のみを保持する。
+/// reveal のペースは自前の定数でなく配送された cue の再生時間（`TalkCue::duration`）から
+/// `interval = duration / N` で導出する。本 config は行間 `line_gap` のみを保持する。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLayerConfig {
     /// 行間（image px・0 以上の有限の値で小数も通る）。`1lh = 1em + 行間` の「行間」にあたる量で、既定は 2
-    /// （裁定 2026-09-05・根拠は `doc/COMPAT_ARCHITECTURE.md` §8・`areka-P0-emo-text-line-height-canon` R1.2/R1.6）。
+    /// （裁定 2026-09-05・根拠は `doc/COMPAT_ARCHITECTURE.md`）。
     pub line_gap: f32,
 }
 
@@ -86,16 +69,16 @@ impl Default for TextLayerConfig {
 }
 
 impl TextLayerConfig {
-    /// 行送りピッチ＝`font_height + line_gap`（切り上げなし・両項とも 0 以上の有限の px で小数も通る・`areka-P0-emo-text-line-height-canon` R1.2/R3.1）。
+    /// 行送りピッチ＝`font_height + line_gap`（切り上げなし・両項とも 0 以上の有限の px で小数も通る）。
     ///
     /// 行送り・`\_l` の `lh` 係数・比率つき改行の送り量・選択肢の帯の上限は、いずれも
-    /// この 1 本の式を源にする（別々の係数を持たない・`areka-P0-emo-text-line-height-canon` R3.5）。書字方向が縦書きのときは
-    /// 同じ値を列送りとして読み替えるだけで、縦書き専用の係数は持たない（`areka-P0-emo-text-line-height-canon` R3.8）。
+    /// この 1 本の式を源にする（別々の係数を持たない）。書字方向が縦書きのときは
+    /// 同じ値を列送りとして読み替えるだけで、縦書き専用の係数は持たない。
     pub fn line_pitch(&self, font_height: f32) -> f32 {
         font_height + self.line_gap
     }
 
-    /// 非有限・負の `line_gap` を警告つきで 0 へ縮退した調整値を返す（log-first・`areka-P0-emo-text-line-height-canon` R1.6）。
+    /// 非有限・負の `line_gap` を警告つきで 0 へ縮退した調整値を返す（log-first）。
     ///
     /// 呼び手は構築直後に 1 度だけ通す規約（[`crate::actor::TextLayerRuntime::new`]）——
     /// 以降は正規化済みの値を配るため、縮退の警告は構築時の 1 件だけになる。
@@ -147,9 +130,9 @@ pub enum TextItem {
 impl TextItem {
     /// クラスタ 1 つからグリフのアイテムを作る（本番の cue の適用もテストの直書きもこれを通す）。
     ///
-    /// 前提「非空・ちょうど 1 クラスタ」はデバッグビルドの検査で確かめる（2 クラスタを 1 アイテムに
-    /// 詰める直書きの誤りを捕まえるため）。本番の経路は [`areka_sakura::cluster::clusters`] の
-    /// 各要素を渡すので前提が崩れず、失敗も記録もしない。
+    /// 前提「非空・ちょうど 1 クラスタ」はデバッグビルドの検査で確かめる（テストの直書きで
+    /// 2 クラスタを 1 アイテムに詰める誤りを捕まえる）。本番は [`areka_sakura::cluster::clusters`] の
+    /// 各要素を渡すので前提が崩れない。
     pub fn glyph(text: &str) -> TextItem {
         debug_assert!(
             areka_sakura::cluster::cluster_count(text) == 1,
@@ -164,39 +147,38 @@ impl TextItem {
 /// `\_l` 座標 1 軸の語彙（不透明文字列の全語彙を保持・`Copy`・state.rs 所有）。
 ///
 /// `Cursor` cue（`\_l[x,y]` の不透明転写）の各軸を、後段の解決層（`cursor_tag.rs`）が
-/// 解決表どおりに分岐できる語彙へ忠実転写する（`areka-P0-cursor-tag-canon` design.md
-/// 「語彙 `CursorCoord`」正本・`areka-P0-cursor-tag-canon` R1.1/4.1/4.2）。本層は**語彙の保持**のみを責務とし、
-/// 単位換算・基点の解釈・軸の判定は下流 `cursor_tag` の責務（面引数不透明転写規約）。
+/// 解決表どおりに分岐できる語彙へ忠実転写する。本層は**語彙の保持**のみを責務とし、
+/// 単位換算・基点の解釈・軸の判定は下流 `cursor_tag` の責務。
 ///
-/// **本層は軸の情報を持たない**——`centerx` が Y 軸に書かれた（軸取り違えの）事実は解決層が
-/// 判定する。語彙としては X 軸に書かれた `centerx` と同じ [`CursorCoord::CenterX`] を返す。
+/// 本層は軸の情報を持たない: `centerx` が Y 軸に書かれた（軸取り違えの）事実は解決層が
+/// 判定し、語彙としては X 軸の `centerx` と同じ [`CursorCoord::CenterX`] を返す。
 ///
-/// 縮退は 2 分岐だけである（`areka-P0-cursor-tag-canon` design.md 縮退表）: 解釈不能（[`CursorCoord::Invalid`]）と、
+/// 縮退は 2 分岐だけである: 解釈不能（[`CursorCoord::Invalid`]）と、
 /// 中央指定の軸取り違え。負値絶対・`%`・`@` 相対はいずれも解決層が「基点＋値×係数」の
 /// 式 1 本で**実導出**する形であって、縮退ではない。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CursorCoord {
-    /// 省略（空文字列）＝当該軸不動（正典・`areka-P0-cursor-tag-canon` R1.6/5.5）。
+    /// 省略（空文字列）＝当該軸不動（正典）。
     Omitted,
-    /// 絶対座標（負値・小数を含む忠実転写）。基点は解決後の文字描画開始点（`areka-P0-cursor-tag-canon` R2.1）。
+    /// 絶対座標（負値・小数を含む忠実転写）。基点は解決後の文字描画開始点。
     Absolute { value: f32, unit: CursorUnit },
-    /// 相対座標（`@` 接頭・負値・小数を含む）。基点は現在の文字描画位置（`areka-P0-cursor-tag-canon` R3.1）。
+    /// 相対座標（`@` 接頭・負値・小数を含む）。基点は現在の文字描画位置。
     Relative { value: f32, unit: CursorUnit },
-    /// `centerx`＝バルーン画像の幅の半分（`areka-P0-cursor-tag-canon` R4.1）。基準は文字描画開始点でも文字描画範囲でも
-    /// なくバルーン画像そのもの（正典 付録 A）。X 軸に書かれたときだけ解決層が実導出する。
+    /// `centerx`＝バルーン画像の幅の半分。基準は文字描画開始点でも文字描画範囲でも
+    /// なくバルーン画像そのもの。X 軸に書かれたときだけ解決層が実導出する。
     CenterX,
-    /// `centery`＝バルーン画像の高さの半分（`areka-P0-cursor-tag-canon` R4.2）。基準はバルーン画像そのもの
-    /// （正典 付録 A）。Y 軸に書かれたときだけ解決層が実導出する。
+    /// `centery`＝バルーン画像の高さの半分。基準はバルーン画像そのもの。
+    /// Y 軸に書かれたときだけ解決層が実導出する。
     CenterY,
-    /// パース不能・非有限（解決層が当該軸不動へ縮退・`areka-P0-cursor-tag-canon` R1.5/5.1）。
+    /// パース不能・非有限（解決層が当該軸不動へ縮退）。
     Invalid,
 }
 
-/// `\_l` 座標の単位（`areka-P0-cursor-tag-canon` design.md 解決表・正本）。
+/// `\_l` 座標の単位。
 ///
 /// 解決層が用いる係数は `Px`＝1（image px 恒等）・`Em`＝文字高さ・`Lh`＝行送り・
 /// `Percent`＝文字高さ / 100。単位は**軸に依らないスカラー**であり、書字方向や適用軸に
-/// 応じた再写像・拒否は行わない（`areka-P0-cursor-tag-canon` R1.4）。
+/// 応じた再写像・拒否は行わない。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CursorUnit {
     /// image px（裸数値・係数 1）。
@@ -212,13 +194,12 @@ pub enum CursorUnit {
 /// 不透明転写文字列 → `CursorCoord` 語彙（純粋・全入力で値を返す全域関数・state.rs 所有）。
 ///
 /// パニックせず `Result` も返さない（不透明文字列の全入力に対し値を返す・決定論）。
-/// 受理形式は `"" | centerx | centery | @?数値(em|lh|%)?` の 1 形式
-/// （`areka-P0-cursor-tag-canon` design.md「語彙 `CursorCoord`」）。文法:
+/// 受理形式は `"" | centerx | centery | @?数値(em|lh|%)?` の 1 形式。文法:
 /// - 空文字列 `""` → [`CursorCoord::Omitted`]（当該軸省略）。
 /// - 生文字列が `centerx`／`centery` に**小文字で完全一致**するとき →
 ///   [`CursorCoord::CenterX`]／[`CursorCoord::CenterY`]。判定は `@` 剥離の**前**に置くので
 ///   `@centerx` は該当せず、`@` を剥がした本体が数値でないため [`CursorCoord::Invalid`] に
-///   落ちる。大小文字の扱いは正典沈黙ゆえ `doc/COMPAT_ARCHITECTURE.md` §8 の
+///   落ちる。大小文字の扱いは正典沈黙ゆえ `doc/COMPAT_ARCHITECTURE.md` の
 ///   「小文字の完全一致のみ」の先例に揃える（`CENTERX` は [`CursorCoord::Invalid`]）。
 /// - `@` 接頭 → [`CursorCoord::Relative`]（残りを本体としてパース）。無ければ
 ///   [`CursorCoord::Absolute`]。
@@ -230,28 +211,22 @@ pub enum CursorUnit {
 /// 負値は Absolute/Relative へ**忠実転写**する（負値は解決層が原点から負方向へ実導出する
 /// 形であって、語彙層は Invalid へ写像しない）。
 pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
-    // 空文字列＝当該軸省略（正典 付録 A「(省略): 移動しない」・`areka-P0-cursor-tag-canon` R1.6/5.5）。
     if raw.is_empty() {
         return CursorCoord::Omitted;
     }
 
-    // 中央指定は `@` 剥離の**前**に、生文字列の小文字完全一致だけで判定する（正典は小文字で
-    // 記す・大小文字は正典沈黙ゆえ §8 の先例に揃える）。剥離後に判定すると `@centerx` が
-    // CenterX になってしまい、事後条件 `parse_cursor_coord("@centerx") == Invalid` を破る。
+    // `@` 剥離の前に判定する: 後だと `@centerx` が CenterX になり、`Invalid` の事後条件を破る。
     match raw {
         "centerx" => return CursorCoord::CenterX,
         "centery" => return CursorCoord::CenterY,
         _ => {}
     }
 
-    // `@` 接頭は相対（残りを本体としてパースし、成功時に Relative へ包む）。
     let (is_relative, body) = match raw.strip_prefix('@') {
         Some(rest) => (true, rest),
         None => (false, raw),
     };
 
-    // 末尾サフィックスで単位を決める（`%`／`em`／`lh`・無ければ裸数値＝Px）。
-    // `%` を先に剥がすことで "5%" 等を確実に Percent へ分類する。
     let (num_str, unit) = if let Some(n) = body.strip_suffix('%') {
         (n, CursorUnit::Percent)
     } else if let Some(n) = body.strip_suffix("em") {
@@ -263,7 +238,6 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
     };
 
     match num_str.parse::<f32>() {
-        // 非有限（NaN／inf）は解決を汚さぬよう Invalid へ縮退（防御・`areka-P0-cursor-tag-canon` R1.5）。
         Ok(value) if value.is_finite() => {
             if is_relative {
                 CursorCoord::Relative { value, unit }
@@ -271,22 +245,17 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
                 CursorCoord::Absolute { value, unit }
             }
         }
-        // 数値本体が空／非数値／未知サフィックス残り→パース不能（`areka-P0-cursor-tag-canon` R1.5 当該軸不動の源）。
         _ => CursorCoord::Invalid,
     }
 }
 
-/// per-glyph リビール時刻列（注入時刻駆動 typewriter・`areka-P0-emo-text-layer` R3.1–3.5・`areka-P0-cue-playback-duration` R7.1–7.3）。
+/// per-glyph リビール時刻列（注入時刻駆動 typewriter）。
 ///
-/// 時刻式（`areka-P0-emo-text-layer` design.md「typewriter リビール」正本・決定論の正準）:
-/// `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭グリフは `r_0 = at(chunk(0))`）。
-/// `interval`（1 グリフあたりの送り間隔）は**配送された cue の再生時間**から
-/// `interval = duration / glyph_count` で導出する（自前定数を持たない・`areka-P0-cue-playback-duration` R7.2）。
-/// 可視数は `visible(t) = |{ i : r_i <= t }|`。`at` は下限（それより早く可視化しない・
-/// `areka-P0-emo-text-layer` R3.4）であり、リビールカーソルは配送 duration が定めるペースでバッファ末尾を追う
-/// （長文時は遅延しうる・無損失）。時刻は常に注入（talk 起点相対秒）で、実時間
-/// （`Instant`／sleep）には依存しない（`areka-P0-emo-text-layer` R3.3）。`Clear` は schedule ごと初期化
-/// （未リビール分を含む破棄・`areka-P0-emo-text-layer` R2.3/R3.6）。
+/// 時刻式: `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭グリフは `r_0 = at(chunk(0))`）。
+/// `interval = duration / glyph_count` は配送された cue の再生時間から導出する。
+/// 可視数は `visible(t) = |{ i : r_i <= t }|`。`at` は下限（それより早く可視化しない）で、
+/// リビールは配送 duration が定めるペースでバッファ末尾を追う（長文時は遅延しうる・無損失）。
+/// 時刻は常に注入（talk 起点相対秒）で、実時間には依存しない。`Clear` は schedule ごと初期化する。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RevealSchedule {
     /// グリフ i のリビール時刻 `r_i`（talk 起点相対秒・単調非減少）。
@@ -304,7 +273,7 @@ impl RevealSchedule {
         self.times.is_empty()
     }
 
-    /// 注入時刻 `t` での可視グリフ数 `visible(t) = |{ i : r_i <= t }|`（`areka-P0-emo-text-layer` R3.5）。
+    /// 注入時刻 `t` での可視グリフ数 `visible(t) = |{ i : r_i <= t }|`。
     ///
     /// `times` は単調非減少（`extend_chunk` の max が保証）なので二分探索で数える。
     pub fn visible(&self, t: f64) -> usize {
@@ -313,14 +282,11 @@ impl RevealSchedule {
 
     /// chunk（Text cue 1 件分のグリフ列）のリビール時刻を時刻式で追記する。
     ///
-    /// `r_i = max(r_{i-1} + interval, chunk_start)`・先頭（schedule が空）のみ
-    /// `r_0 = chunk_start`。`interval` は当該 chunk の配送 duration から導出した 1 グリフ
-    /// あたりの送り間隔（`duration / glyph_count`・呼び出し側で算出）。改行マーカーは
-    /// グリフでないため本 schedule の対象外（interval を消費しない）。
+    /// `r_i = max(r_{i-1} + interval, chunk_start)`・先頭（schedule が空）のみ `r_0 = chunk_start`。
+    /// `interval`（`duration / glyph_count`）は呼び出し側で算出する。改行マーカーはグリフでないため対象外。
     ///
-    /// `interval` は dola ingress で有限・非負へ clamp 済みの duration 由来ゆえ非負であり
-    /// （duration=0 なら interval=0＝全グリフが `chunk_start` で同時可視）、`times` は
-    /// 単調非減少に保たれる（`visible` の二分探索前提）。
+    /// `interval` は dola ingress で有限・非負へ clamp 済みの duration 由来ゆえ非負で（duration=0 なら
+    /// 全グリフが `chunk_start` で同時可視）、`times` は単調非減少に保たれる（`visible` の二分探索前提）。
     fn extend_chunk(&mut self, glyph_count: usize, chunk_start: f64, interval: f64) {
         self.times.reserve(glyph_count);
         for _ in 0..glyph_count {
@@ -342,13 +308,12 @@ pub enum SpanKind {
     Anchor,
 }
 
-/// 押せる範囲の記録——選択肢とアンカーの共通の範囲（`ActorTextState` の一部・state.rs 所有）。
-/// 型の名前は選択肢だけだった頃のまま。
+/// 押せる範囲の記録——選択肢とアンカーの共通の範囲（`ActorTextState` の一部）。
 ///
-/// `Choice` cue 消費時に、追記したグリフ範囲＋不透明転写した `\q` 属性を 1 スパンとして記録する
-/// （R1.1/R1.2）。`ordinal` は配送順序数（hover／照会の主キー）で `choices.len()` を焼き込む。
-/// `glyph_range` は items のグリフ序数空間（`Glyph` のみを数える序数・改行／カーソル等の非グリフ
-/// アイテムを含めない・`visible_glyphs`／reveal と同一序数空間）で、空 `text` は空範囲（`start..start`）。
+/// `Choice` cue 消費時に、追記したグリフ範囲＋不透明転写した `\q` 属性を 1 スパンとして記録する。
+/// `ordinal` は配送順序数（hover／照会の主キー）で、記録時の `choices.len`。
+/// `glyph_range` は items のグリフ序数空間（`Glyph` のみを数える・`visible_glyphs`／reveal と同一）で、
+/// 空 `text` は空範囲（`start..start`）。
 ///
 /// 不変条件: `ordinal` は列の添字に等しく追記順に単調。**同じ種類の**範囲の `glyph_range` は
 /// 互いに素（各 Choice cue は自身が追記したグリフのみを範囲化するため構造的に成立）。
@@ -357,7 +322,7 @@ pub enum SpanKind {
 pub struct ChoiceSpan {
     /// 範囲の種類（選択肢／アンカー）。
     pub kind: SpanKind,
-    /// 配送順序数（hover／照会の主キー・記録時の `choices.len()`・選択肢とアンカーで共通の通し番号）。
+    /// 配送順序数（hover／照会の主キー・記録時の `choices.len`・選択肢とアンカーで共通の通し番号）。
     pub ordinal: usize,
     /// ID（`\q`／`\_a` の ID・不透明転写）。
     pub id: String,
@@ -377,19 +342,19 @@ pub struct ActorTextState {
     /// per-glyph リビール時刻列。
     reveal: RevealSchedule,
     /// 押せる範囲の列——選択肢とアンカーが同じ列に並ぶ（items と同一ライフサイクル＝
-    /// `Clear`/`ClearAll` で同時初期化・R5.1/R5.3）。欄の名前は選択肢だけだった頃のまま。
+    /// `Clear`/`ClearAll` で同時初期化）。
     choices: Vec<ChoiceSpan>,
     /// 開いているアンカーの範囲（`choices` の添字）。開いていなければ `None`。
     /// `choices` と一緒に消える（操作は [`anchor`]）。
     anchor_open: Option<usize>,
-    /// 済みの境目: この序数より前の選択肢は済み（`0..=choices.len()`・`choices` と同じ寿命で
-    /// 消去のとき 0 に戻る・アンカーは境目より前でも済まない・`areka-P0-balloon-text-bugs` 要件 1.10〜1.13）。
+    /// 済みの境目: この序数より前の選択肢は済み（`0..=choices.len`・`choices` と同じ寿命で
+    /// 消去のとき 0 に戻る・アンカーは境目より前でも済まない）。
     settled: usize,
-    /// グリフ序数と同じ序数空間の装飾番号列（操作は [`decoration`]・`areka-P0-text-decoration-canon` R3.3）。
+    /// グリフ序数と同じ序数空間の装飾番号列（操作は [`decoration`]）。
     glyph_styles: Vec<StyleId>,
     /// 装飾の表（番号 → 既定と異なる見た目・内容と同じライフサイクル）。
     styles: StyleTable,
-    /// スコープの装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値・`areka-P0-text-decoration-canon` R3.1）。
+    /// スコープの装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値）。
     decor: Decoration,
 }
 
@@ -404,7 +369,7 @@ impl ActorTextState {
         &self.reveal
     }
 
-    /// 押せる範囲の列（選択肢とアンカー・配送順・`areka-P0-anchor-tag-canon` R1.2／R1.3 照会の源）。
+    /// 押せる範囲の列（選択肢とアンカー・配送順・照会の源）。
     pub fn choices(&self) -> &[ChoiceSpan] {
         &self.choices
     }
@@ -419,7 +384,7 @@ impl ActorTextState {
         self.settled = self.choices.len();
     }
 
-    /// 済みの境目（この序数より前の選択肢は済み・配置の覚えの鍵・audit-emo-text-state-actor 指摘 8）。
+    /// 済みの境目（この序数より前の選択肢は済み・配置の覚えの鍵）。
     pub(crate) fn settled(&self) -> usize {
         self.settled
     }
@@ -437,7 +402,7 @@ impl ActorTextState {
     }
 }
 
-/// actor 別テキスト状態の集約（cue→行/グリフ状態の純粋遷移・`areka-P0-emo-text-layer` R1.6/R2.1–2.5/R10.5）。
+/// actor 別テキスト状態の集約（cue→行/グリフ状態の純粋遷移）。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextLayerState {
     /// `PlaceKey → ActorTextState`（スコープと文字の場所の組ごと・決定論的順序のため BTreeMap）。
@@ -448,7 +413,7 @@ pub struct TextLayerState {
     /// `balloon_visibility`）が単調増加を前提に `clear_count` の変化を見るので、消すと 0 へ戻って
     /// 変化を取り違える。箱の場所の回数は `set_box_index` が箱の場所と一緒に捨てる。
     clears: BTreeMap<PlaceKey, u64>,
-    /// スコープごとの今のサーフェス番号と文字の行き先（操作は [`route`]・`areka-P0-shell-balloon` 要件 4.7）。
+    /// スコープごとの今のサーフェス番号と文字の行き先（操作は [`route`]）。
     /// `set_box_index` でも消さない（わざと残す）: スコープの今のサーフェス番号はシェルの切替を
     /// またいで保つ状態なので、使ったスコープの数だけ残る（1 つにつき小さな構造体 1 つ）。
     routes: BTreeMap<ActorKey, route::ScopeRoute>,
@@ -458,7 +423,7 @@ pub struct TextLayerState {
     box_traits: BTreeMap<areka_emo_compose::BoxName, BoxTraits>,
     /// 「空回し」の印（既定は偽）。立てる口は [`TextLayerState::rehearsal_copy`] だけで、
     /// 本番の状態では決して立たない。立っている間は状態の層の warn 4 か所を出さない
-    /// （本番の適用が同じ warn を出すので、空回しが出すと 2 回になる・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
+    /// （本番の適用が同じ warn を出すので、空回しが出すと 2 回になる）。
     /// アンカーの開き・閉じの記録だけは `debug!` も出さない（`state_anchor.rs`）。
     rehearsal: bool,
 }
@@ -504,37 +469,27 @@ impl TextLayerState {
 
     /// cue の純粋適用（DirectWrite 非依存・決定論）。
     ///
-    /// 後出し優先の即時適用: `Text`＝追記・`NewLine`＝改行マーカー追記・
-    /// `Clear`＝未リビール分を含む全消去。トーク上書きガードは持たず、届いた
-    /// cue 列を到着順に忠実へ適用する（`areka-P0-emo-text-layer` R10.5）。未知 actor は lazily 生成する。
+    /// 後出し優先の即時適用（`Text`＝追記・`NewLine`＝改行マーカー追記・`Clear`＝未リビール分を含む全消去）。
+    /// トーク上書きガードは持たず、届いた cue 列を到着順に適用する。未知 actor は lazily 生成する。
     ///
-    /// `Text` は追記と同時に per-glyph リビール時刻を `cue.at`（chunk 開始時刻＝
-    /// リビール開始の下限・`areka-P0-emo-text-layer` R3.4）と**配送された cue の再生時間から導出した
-    /// `interval = duration / glyph_count`**の時刻式で確定する（`areka-P0-cue-playback-duration` R7.1/R7.3・服従＝
-    /// 自前定数を持たず再生時間の真実源に従う）。`glyph_count = 0`（空テキスト）は
-    /// 追記も除算も行わない（0 割り回避・`areka-P0-cue-playback-duration` R1.8）。`duration = 0`（瞬時／後方互換 cue）は
-    /// `interval = 0` ゆえ全グリフが `cue.at` で同時可視になる（`areka-P0-cue-playback-duration` R1.2/R7.3 の縮退）。
-    /// duration は dola ingress で有限・非負へ clamp 済みゆえ本層で再 clamp しない。
-    /// リビール中の後続 cue も即時適用される（`areka-P0-emo-text-layer` R3.6）——本層は cue の `at`／`duration` を
-    /// 読むだけで書き換えず、pacing が cue 時刻へ影響することはない（`areka-P0-emo-text-layer` R10.2）。
+    /// `Text` は追記と同時に per-glyph リビール時刻を `cue.at`（リビール開始の下限）と
+    /// `interval = duration / glyph_count` の時刻式で確定する。`glyph_count = 0`（空テキスト）は
+    /// 追記も除算も行わない。`duration = 0`（瞬時／後方互換 cue）は `interval = 0` ゆえ全グリフが
+    /// `cue.at` で同時可視になる。duration は dola ingress で有限・非負へ clamp 済みで、本層で再 clamp しない。
+    /// リビール中の後続 cue も即時適用される（本層は cue の `at`／`duration` を読むだけで書き換えない）。
     ///
     /// 戻り値は名前の形の `\b[名前]` の箱が無かった（空回しの写しでない）か（[`Self::route_select`]）。
     pub fn apply_cue(&mut self, cue: &TalkCue) -> bool {
-        // 文字・改行・`\_l`・選択肢・`\f`・`\c` の宛先＝届いた時点の今の行き先の場所（`areka-P0-shell-balloon` 要件 4.1・4.3）。
         let dest = PlaceKey {
             actor: cue.actor.clone(),
             place: self.destination(&cue.actor),
         };
-        // 空回しの写しでは warn を出さない（場所の状態へは真偽 1 つで渡す・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
         let quiet = self.rehearsal;
         let mut box_missing = false;
         match &cue.command {
             CueCommand::Text(text) => {
                 let glyph_units: Vec<&str> = clusters(text).collect();
                 let glyph_count = glyph_units.len();
-                // 服従（`areka-P0-cue-playback-duration` R7.1/R7.3）: reveal ペースは自前定数でなく配送 duration 由来。
-                // N=0 は除算しない（0 割り回避・`areka-P0-cue-playback-duration` R1.8）。N>0 かつ duration=0 は interval=0
-                // ＝全グリフが cue.at で同時可視（縮退・`areka-P0-cue-playback-duration` R1.2）。
                 let interval = if glyph_count > 0 {
                     cue.duration / glyph_count as f64
                 } else {
@@ -545,10 +500,8 @@ impl TextLayerState {
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
-                // 開いているアンカーの範囲があれば、追記した文字まで伸ばす。
                 state.extend_open_anchor(&glyph_units);
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
-                // 追記した文字にいま効いている見た目の番号を与える（`areka-P0-text-decoration-canon` R3.2/R3.3）。
                 state.push_current_style(&cue.actor, glyph_count, quiet);
             }
             CueCommand::NewLine { ratio } => {
@@ -558,33 +511,23 @@ impl TextLayerState {
             }
             CueCommand::Clear => {
                 tracing::debug!(actor = %cue.actor, "Clear cue 適用（未リビール分含む全消去・装飾は保持）");
-                // 内容だけを消す（未リビールの文字も含めて破棄＝後出し優先・`areka-P0-emo-text-layer` R2.3）。
-                // 装飾状態（現在の見た目・所有外キーの保持）は保つ——`\c` は装飾を戻さない
-                // （`areka-P0-text-decoration-canon` R3.7・`= ActorTextState::default()` に戻すと装飾まで消える）。
+                // `\c` は装飾を戻さない: `ActorTextState::default` へ戻すと装飾まで消える。
                 self.place_entry(&dest).clear_content();
                 *self.clears.entry(dest.clone()).or_default() += 1;
             }
             CueCommand::ClearAll => {
                 tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
-                // 対象スコープのみの `Clear` と峻別: 保持する**全** actor スコープの表示
-                // テキスト（未リビール分を含む）を消去する。上流は残存スコープを列挙
-                // できないため、全消しは本状態機械が自己完結して行う。
-                //
-                // 各スコープを初期状態へ**戻す**（`actors` から entry を除去しない）。
-                // 提示層（`present_frame`）は `actors()` の走査で再描画対象を決めるため、
-                // entry ごと消すと当該スコープが走査から外れ、既描画のテキストが画面に
-                // 残留する（＝消えない）。`Clear` と同じ「entry は残し中身を空にする」
-                // 流儀を守ることで、次フレームで空描画され実際に消える。
-                // 台本の先頭ゆえ、内容を消したうえで装飾も既定へ戻す（`areka-P0-text-decoration-canon` R3.8）——
-                // 装飾は台詞をまたいで残らない。記録済みの値も空にして、次の台詞では
-                // 同じ不正な指定がもう 1 度記録されるようにする（`areka-P0-text-decoration-canon` R13.4）。
+                // 上流は残存スコープを列挙できないため、全 actor スコープの消去は本状態機械が行う。
+                // entry は除去しない: 提示層（`present_frame`）は `actors` の走査で再描画対象を
+                // 決めるので、外すと既描画のテキストが画面に残留する。
+                // 台本の先頭ゆえ装飾も既定へ戻す（装飾は台詞をまたがない）。記録済みの値も空にして、
+                // 次の台詞では同じ不正な指定がもう 1 度記録されるようにする。
                 // 回数を進めるのは既にある scope だけ（状態の無い scope は 0 のまま）。
                 for (key, state) in self.actors.iter_mut() {
                     state.clear_content();
                     state.reset_for_new_talk();
                     *self.clears.entry(key.clone()).or_default() += 1;
                 }
-                // 全スコープの行き先を既定へ戻す（サーフェス番号は変えない・`areka-P0-shell-balloon` 要件 4.10）。
                 self.reset_routes();
             }
             CueCommand::Choice {
@@ -592,10 +535,6 @@ impl TextLayerState {
                 text,
                 references,
             } => {
-                // Choice cue の実消費（R1.1/R1.2）: `text` のグリフを Text cue と同一の追記＋
-                // リビール時刻式で載せ、追記したグリフ序数範囲＋不透明転写した `\q` 属性を
-                // 1 スパンとして `choices` へ記録する。空 `text` は warn!（actor 付き）＋空範囲
-                // スパン記録・グリフ追記なし（R1.5 縮退・design.md 縮退表 Choice text 空 row）。
                 let glyph_units: Vec<&str> = clusters(text).collect();
                 let glyph_count = glyph_units.len();
                 let interval = if glyph_count > 0 {
@@ -604,12 +543,10 @@ impl TextLayerState {
                     0.0
                 };
                 let state = self.place_entry(&dest);
-                // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
                 // 字を足す所はいつも同じ数で `extend_chunk` を呼ぶので、時刻の列の長さ＝字の数。
                 let start = state.reveal.times().len();
                 if glyph_count == 0 {
-                    // R1.5 縮退: 空範囲スパンのみ記録（グリフ追記・リビール拡張なし・行を生まない）。
-                    // 空回しの写しでは記録しない（本番の適用が記録する・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
+                    // 空回しの写しでは記録しない（本番の適用が記録する）。
                     if !quiet {
                         tracing::warn!(actor = %cue.actor, id = %id, "Choice cue の text が空——空範囲スパンを記録（グリフ追記なし・R1.5 縮退）");
                     }
@@ -618,10 +555,8 @@ impl TextLayerState {
                     state
                         .items
                         .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
-                    // アンカーが選択肢を包んでいれば、選択肢の文字もアンカーの範囲に入る。
                     state.extend_open_anchor(&glyph_units);
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
-                    // 選択肢の文字にもそのときの装飾状態を与える（`areka-P0-text-decoration-canon` R3.5）。
                     state.push_current_style(&cue.actor, glyph_count, quiet);
                 }
                 let ordinal = state.choices.len();
@@ -635,21 +570,15 @@ impl TextLayerState {
                 });
             }
             CueCommand::Cursor { x, y } => {
-                // カーソル位置指定（`\_l` の不透明転写）の実消費（R2.1）: 各軸を parse_cursor_coord で
-                // `CursorCoord` 語彙へ忠実転写し、非グリフアイテム `CursorMove` を items へ追記する。
-                // グリフ／リビール状態は不変（reveal 対象外）。単位の係数・基点・原点の解釈は
-                // 解決層 `cursor_tag`、その呼び出し（配線）は `layout` の責務。
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
                 let state = self.place_entry(&dest);
                 state.items.push(TextItem::CursorMove { x, y });
             }
-            // `\f` 文字装飾の汎用キャリア（`areka-P0-text-decoration-canon` R2.4）は**名前で自己選別**して消費する。
-            // 名前が合わない運搬（`\!` の他コマンド）と非正準 params は、下の腕と同じ
-            // 良性スキップ（従来どおり読み飛ばす）。
-            // 印の合図（`\![*]`・`%*`）は書式の見分けの前に見て、今の場所に目印の字を 1 つ積む
-            // （本文の字と同じ時刻と見た目・`script-small-tags` 要件 4.1・4.2・4.5・5.6・5.7）。
+            // `\f` 文字装飾の汎用キャリアは名前で自己選別して消費する。名前が合わない運搬
+            // （`\!` の他コマンド）と非正準 params は読み飛ばす。
+            // 印の合図（`\![*]`・`%*`）は書式の見分けの前に見て、今の場所に目印の字を 1 つ積む。
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5b_2a_5d:1
             CueCommand::Custom { .. } if is_marker_carrier(&cue.command) => {
                 tracing::debug!(actor = %cue.actor, at = cue.at, "印の cue 適用（目印の字を 1 つ追記）");
@@ -670,24 +599,18 @@ impl TextLayerState {
                     tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
                 }
             },
-            // 名前の形の `\b[名前]`（鍵が整数として読めない）は行き先の切り替え（`areka-P0-shell-balloon` 要件 4.3・4.4）。
-            // 整数の `\b[ID番号]` は普通のバルーンへの指定（seriko の担当）で、下の腕で読み飛ばす（`areka-P0-shell-balloon` 要件 4.8）。
+            // 名前の形の `\b[名前]`（鍵が整数として読めない）は行き先の切り替え。
+            // 整数の `\b[ID番号]` は普通のバルーンへの指定（seriko の担当）で、下の腕で読み飛ばす。
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
                 box_missing = self.route_select(&cue.actor, key);
             }
-            // アンカーの開き・閉じ（`\_a`）は文字の層の担当（cue_target_of が Balloon に分類）。
-            // 開きは今の行き先の場所に範囲を開き、閉じは宛先に関わらず開いている範囲を閉じる
-            // （範囲の記録と、あいだの文字で伸ばす所は [`anchor`]）。
+            // 閉じは宛先に関わらず開いている範囲を閉じる（[`anchor`]）。
             CueCommand::AnchorBegin { id, references } => self.open_anchor(&dest, id, references),
             CueCommand::AnchorEnd => self.close_anchor(&cue.actor),
-            // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
-            // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
-            // variant 追加時にコンパイラが再検討を強制する）。整数の `BalloonSurface` は表示系
-            // （seriko＝`cue_target_of` が Shell 分類）の消費対象＝文字状態機械へは動作させない防御面（`areka-P0-balloon-face-cue` R3.2）。
-            // `Wait` は action を持たない純粋な待ち（cue_target_of が `None` 分類）＝
-            // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
-            // duration が担い、上流が後続 cue の時刻へ焼き込み済みゆえ、ここで新たな
-            // ローカル遅延を生じさせてはならない（二重待ち禁止）。
+            // 文字状態機械が消費しない command は無視する。catch-all を置かないのは、dola の
+            // variant 追加時にコンパイラが再検討を強制するため。整数の `BalloonSurface` は
+            // seriko の担当。`Wait` の時間は envelope duration が担い上流が後続 cue の時刻へ
+            // 焼き込み済みなので、ここで遅延を足してはならない（二重待ち）。
             CueCommand::Emote { .. } | CueCommand::BalloonSurface { .. } | CueCommand::Wait => {
                 tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
             }
@@ -695,7 +618,7 @@ impl TextLayerState {
         box_missing
     }
 
-    /// 注入時刻 `t` での actor 別可視グリフ数（決定論・`areka-P0-emo-text-layer` R3.5）。
+    /// 注入時刻 `t` での actor 別可視グリフ数（決定論）。
     ///
     /// `visible(t) = |{ i : r_i <= t }|`（改行マーカーは数えない・グリフのみ）。
     /// 未生成の actor は 0。同一 cue 列＋同一注入時刻列→同一可視数（決定論檻）。
@@ -710,7 +633,7 @@ impl TextLayerState {
         self.clears_at(&PlaceKey::balloon(actor))
     }
 
-    /// その場所（箱の場所も）の内容が消された回数（配置の覚えの鍵・audit-emo-text-state-actor 指摘 8）。読むだけで状態を変えない。
+    /// その場所（箱の場所も）の内容が消された回数（配置の覚えの鍵）。読むだけで状態を変えない。
     pub(crate) fn clears_at(&self, place: &PlaceKey) -> u64 {
         self.clears.get(place).copied().unwrap_or(0)
     }

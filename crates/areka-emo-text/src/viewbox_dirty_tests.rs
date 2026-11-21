@@ -4,7 +4,7 @@ use crate::region::ScaleContract;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 
-// ── R2.2/3.2/5.1–5.3: 可視窓のみ移動 → dirty＝露出帯のみ（変化行ゼロ）・軸別の辺 ──
+// ── 可視窓のみ移動 → dirty＝露出帯のみ（変化行ゼロ）・軸別の辺 ──
 
 /// 横書きで可視窓のみ移動（content 不変）→ dirty は下端露出帯のみ・変化行ゼロ。
 /// 露出帯はガード余白（1 image px × k=1）で 1px 全辺拡張して面寸クランプされる。
@@ -44,7 +44,7 @@ fn visible_window_only_move_vertical_rl_dirties_left_band_only() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::VerticalRl);
-    // vertical_rl＝内容が右（正）・blit も +12（左端が露出）。
+    // vertical_rl＝内容が右・blit も +12（左端が露出）。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
         &window(1, 12.0),
@@ -83,7 +83,7 @@ fn visible_window_only_move_vertical_lr_dirties_right_band_only() {
     assert_eq!(dirty, vec![phys(87, 0, 13, 200)], "右端露出帯のみ");
 }
 
-// ── R3.3: typewriter 進行（現在行の text 伸長）→ dirty＝現在行のみ ──
+// ── typewriter 進行（現在行の text 伸長）→ dirty＝現在行のみ ──
 
 /// typewriter で現在行が 1 グリフ伸びる（blit なし）→ dirty は現在行の矩形のみ。
 #[test]
@@ -113,15 +113,14 @@ fn typewriter_single_glyph_dirties_current_line_only() {
         (400, 224),
         &prev,
     );
-    // 現在行 {0,0,20,10} をガード拡張＋クランプ → {0,0,21,11}（overhang 無し＝em ボックス丈・
-    // 実測はみ出しは COM 層 render が付与。本 pure 層檻は既定 0 の幾何を檻化）。露出帯なし（blit=0）。
+    // 現在行 {0,0,20,10} をガード拡張＋クランプ → {0,0,21,11}（overhang 無し＝em ボックス丈）。露出帯なし（blit=0）。
     assert_eq!(dirty, vec![phys(0, 0, 21, 11)], "現在行のみ");
     assert_eq!(draw, vec![0], "描画対象は現在行のみ");
 }
 
-// ── DD-9: 行内縮小の後方縮退（遅延化で到達可能・`plan` の guard 経路）──
+// ── 行内縮小の後方縮退（`plan` の guard 経路）──
 
-/// DD-9: 同一 index 行の extent が縮む（行内縮小・改行なし）と `plan` は全域ダーティ
+/// 同一 index 行の extent が縮む（行内縮小・改行なし）と `plan` は全域ダーティ
 /// （blit 0・面全域・全 GlyphRun 住人）へ縮退する——差分描画では退避インク（縮小の外側）を
 /// 取りこぼすため（後方時刻ジャンプ・un-reveal で確定行が縮む任意アクセスへの防御）。
 #[test]
@@ -170,7 +169,7 @@ fn within_line_shrink_falls_back_to_full_dirty() {
     }
 }
 
-/// DD-9: 前方伸長（extent 増加・block 不動）は縮退せず増分（変化行のみ dirty）を維持する
+/// 前方伸長（extent 増加・block 不動）は縮退せず増分（変化行のみ dirty）を維持する
 /// ——typewriter ホットパスが guard の過剰発火で全域再描画へ落ちないことの固定。
 #[test]
 fn forward_line_growth_stays_incremental() {
@@ -209,16 +208,15 @@ fn forward_line_growth_stays_incremental() {
     assert_eq!(dirty.len(), 1, "変化行 0 の矩形のみ（露出帯なし・blit 0）");
 }
 
-/// D2 の核: 実測インクはみ出し（[`LineOverhang`]）を渡すと変化行のダーティが em ボックスから
-/// はみ出し分だけ外側へ広がる（横書き＝top/bottom で Y・縦書き＝left/right で X）。overhang 無し
-/// （既定 0）は em ボックス丈——`GetOverhangMetrics` 実測を渡す COM 層経路（`ViewboxExecutor`）が
-/// em 下端はみ出しインクを取りこぼさない機構を pure 層で檻化する（実 fixture 被覆は viewbox_draw の
+/// 実測インクはみ出し（[`LineOverhang`]）を渡すと変化行のダーティが em ボックスからはみ出し分だけ
+/// 外側へ広がる（横書き＝top/bottom で Y・縦書き＝left/right で X）。overhang 無し（既定 0）は
+/// em ボックス丈。`GetOverhangMetrics` 実測を渡す COM 層経路（`ViewboxExecutor`）が em 下端
+/// はみ出しインクを取りこぼさない機構を pure 層で固定する（実 fixture の被覆は viewbox_draw の
 /// `yugothic_real_fixture_matches_oracle_byte_for_byte`）。
 #[test]
 fn overhang_extends_changed_line_dirty_beyond_em_box() {
     let contract = ScaleContract::new(1.0, None);
     let vr = (Some(0), Some(224), Some(0), Some(400));
-    // 現在行が 1→2 グリフへ伸長（横書き・1 行）。
     let prev_canvas = canvas_for(
         &[TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
@@ -430,7 +428,7 @@ fn confirmed_line_is_excluded_from_dirty_and_draw() {
     assert_eq!(draw, vec![1], "確定行 0 は draw から除外される");
 }
 
-// ── R3.3/4.2: catch-up 複数行・新規行追加 → 変化行の和 ──
+// ── catch-up 複数行・新規行追加 → 変化行の和 ──
 
 /// 2 行から 4 行へ一挙に伸びる（catch-up＋新規行）→ dirty は新規 2 行の和。
 #[test]
@@ -454,7 +452,7 @@ fn catchup_and_new_lines_union_of_changed_lines() {
     assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象");
 }
 
-// ── R4.2/3.3: 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
+// ── 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
 
 /// 全域の道（前の行が分からない・縮退）→ dirty＝面全域 1 枚・draw＝全住人。
 #[test]
@@ -478,7 +476,7 @@ fn unknown_prev_is_full_domain() {
     assert_eq!(draw, vec![0, 1, 2], "全 GlyphRun 住人");
 }
 
-/// 指摘 18: 全域の道でも描く行は面と重なる行だけ。行 0..3 は y 0・12・24・36（丈 10）で面の丈 30。
+/// 全域の道でも描く行は面と重なる行だけ。行 0..3 は y 0・12・24・36（丈 10）で面の丈 30。
 /// 行 3 は面の下（ガード込みで 35..）で外れ、上のはみ出し 6 で 29 まで上がると面へ入って残る。
 #[test]
 fn full_domain_draws_only_rows_overlapping_surface() {
@@ -506,7 +504,7 @@ fn full_domain_draws_only_rows_overlapping_surface() {
     );
 }
 
-/// 指摘 23: 後ろ向きの縮みの 2 つの枝——同じ番号の行の位置が動いた・行の丈だけが縮んだ。
+/// 後ろ向きの縮みの 2 つの枝——同じ番号の行の位置が動いた・行の丈だけが縮んだ。
 #[test]
 fn backward_shrink_detects_moved_row_and_shorter_extent() {
     let mode = WritingMode::HorizontalTb;
@@ -619,7 +617,7 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
     );
 }
 
-/// スクロールアウトした行の残滓（要件 7.4・R-2 の回帰檻）: 行送りが「字の丈 ＋ 行間 2px」に
+/// スクロールアウトした行の残滓: 行送りが「字の丈 ＋ 行間 2px」に
 /// なったため、行と行の隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント
 /// （Yu Gothic UI 28px は実測 3px）では、可視窓の外へ出た行の下端インクが blit 後の面内に残る。
 ///
@@ -710,16 +708,16 @@ fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
     items
 }
 
-/// 要件 11.1／11.3: ダーティ矩形は **その矩形と行送り軸で交差する行だけ** を持ち、描画対象行
+/// ダーティ矩形は **その矩形と行送り軸で交差する行だけ** を持ち、描画対象行
 /// （`draw_lines`）はその和集合である。矩形の枚数と描画対象行数の積では描かない。
 ///
 /// 場面（font 10・pitch 12・k=1.0・面 400×100・9 行を 1 行ぶん −12 スクロール）:
-/// 3 種のダーティ源を積み、行送りの軸で重なる矩形は 1 枚にまとまる（再監査 R2-C1）。
+/// 3 種のダーティ源を積み、行送りの軸で重なる矩形は 1 枚にまとまる。
 /// - スクロールアウトした行 0 の残滓（上端 y 0..2）: 交差するのは可視窓の先頭行（行 1・y 0..14）だけ。
 /// - 変化行 4（y 35..50）・変化行 5（y 47..62）: 重なるので 1 枚（y 35..62）にまとまり、上下の隣
 ///   （行 3・行 6）も巻き込む。まとめないと行 4 と行 5 が 2 枚の双方に現れて 2 回ずつ描かれる。
-/// - 露出帯（下端 y 87..100）と、送りの前に面の下端を越えていた最下行 8（送りの前 y 96..109・
-///   指摘 15）の今の位置の矩形（y 83..98）と寄せた線の写り先の帯（y 74..89・再監査 R1-C2）:
+/// - 露出帯（下端 y 87..100）と、送りの前に面の下端を越えていた最下行 8（送りの前 y 96..109）の
+///   今の位置の矩形（y 83..98）と寄せた線の写り先の帯（y 74..89）:
 ///   重なるので 1 枚（y 74..100・幅は露出帯の 400）にまとまり、行 7 と行 8 を持つ。
 ///
 /// 各行の物理矩形は「canvas-local 位置 + block_offset −12」「em ボックス丈 10」「下端はみ出し
@@ -788,7 +786,6 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         "変化行の組は上下の隣も巻き込む（はみ出し 3 ＋ ガード 1 が隣の行へ届く）"
     );
 
-    // 和集合＝描画対象行（昇順・重複なし）。
     assert_eq!(
         draw_lines,
         vec![1, 3, 4, 5, 6, 7, 8],
@@ -817,7 +814,7 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
     );
 }
 
-// ── 指摘 4: 描き直しの範囲を面へ切る足し引きはあふれない ──
+// ── 描き直しの範囲を面へ切る足し引きはあふれない ──
 
 /// 位置が ±1e30・±inf の行（f32→i64 の `as` は i64::MIN/MAX へ飽和する）でも、ガード余白の
 /// 足し引きが panic せず、範囲は面の中へ切られる（面に届かなければ無い）。
@@ -883,7 +880,7 @@ fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
     }
 }
 
-/// 7.3 の申し送り: 送りの前に行送りの遠い端を越えていた行の判定の縦書き 2 枝（純粋）。
+/// 送りの前に行送りの遠い端を越えていた行の判定の縦書き 2 枝（純粋）。
 /// 列は幅 10・送り 12（vertical_rl の 0 列は x 90〜100・vertical_lr の 0 列は x 0〜10）。
 /// 送りの前の位置は今の位置 − blit。遠い端は vertical_rl＝左（x 0）・vertical_lr＝右（x 100）。
 #[test]
@@ -924,7 +921,7 @@ fn shifted_far_edge_band_vertical_branches() {
             !hit(0, opposite),
             "{mode:?}: 逆の端をまたいでも遠い端ではない"
         );
-        // 寄せた線の写り先の帯（再監査 R1-C2）: 送った後の遠い端から列の幅 10 ぶん内側まで。
+        // 寄せた線の写り先の帯: 送った後の遠い端から列の幅 10 ぶん内側まで。
         let near = match mode {
             WritingMode::VerticalRl => (95.0, 105.0),
             _ => (-5.0, 5.0),
