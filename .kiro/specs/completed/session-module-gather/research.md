@@ -329,7 +329,7 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 ### 13.1 テストの名前の多重集合（比べる「前」・要件 10.2）
 
 - 取り方: `cargo test --workspace --no-fail-fast -- --list`（ビルドと一覧のみ・机なし）の `: test$` の行 **14,437 行**。名前の末尾＝行から `: test` を落とし、最後の `::` から後ろだけを残した（`::` が無い名前はそのまま）。`LC_ALL=C sort` した全行（重複を残す＝多重集合）。同じ名前の別のテストは別の行として数える。
-- 置き場（`.kiro/specs/session-module-gather/` の下に置くのは名前の一覧だけ）:
+- 置き場（`.kiro/specs/completed/session-module-gather/` の下に置くのは名前の一覧だけ）:
   - `baseline-test-names.txt` — 末尾の名前の多重集合（14,437 行・ソート済み・異なる名前 14,318）。完了のときに同じ式で作った一覧と `diff` で比べる（差は KindCalibration の 1 本だけのはず・10.3）。
   - 末尾を切る前の `: test$` の行（モジュールのパス付き・14,437 行）は重いのでコミットしない。差が出たときは、`cargo test --workspace --no-fail-fast -- --list | grep ': test$'`（13.1 の式から末尾を切る `sed` の段を除いたもの）で作り直して、どのモジュールから移ったかを引く。
 - 作り直しの式（完了のとき・同じ式）: `cargo test --workspace --no-fail-fast -- --list | grep ': test$' | tr -d '\r' | sed -E 's/: test$//; s/^.*:://' | LC_ALL=C sort`。
@@ -588,7 +588,7 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 ### 15.3 移動の検出（要件 1.1・10.5）
 
 - `git diff -M --stat main...HEAD`: 280 ファイル。`--name-status`: **R 88**（`crates/areka/src` 70・`readme` 11・`roots` 7）・M 181・A 11・D 0。
-- A の 11: spec の文書 7 本（`.kiro/specs/session-module-gather/`）と、`main.rs` から切り出した新しいファイル 4 本（`roots.rs`・`session/boot_request.rs`・`session/boot_seam.rs`・`session/session_mark.rs`）。移動ではなく新設で、rename に検出されないのは正しい。
+- A の 11: spec の文書 7 本（`.kiro/specs/completed/session-module-gather/`）と、`main.rs` から切り出した新しいファイル 4 本（`roots.rs`・`session/boot_request.rs`・`session/boot_seam.rs`・`session/session_mark.rs`）。移動ではなく新設で、rename に検出されないのは正しい。
 - 移動したファイルで rename に検出されなかったもの: **0**（D が 0 のため、消えて別名で現れたファイルは無い）。
 
 ### 15.4 全体テスト（要件 10.5）

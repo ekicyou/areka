@@ -6,7 +6,7 @@
 - **今の状態**: 起動・終了・切替の層（ゴーストを降ろして起こし直す単位・起動するゴーストとバルーンの判断・構成の入力・終わり方・切替と読み直し）は、本体で一番大きく残る塊なのに、`crates/areka/src/` の直下にばらばらに置かれ、`main.rs` の中にもその一部（`on_boot_ok`・`settle_session_mark`・`restore_merged_placements` ほか）がある。`ghost_session.rs` の `register_systems` は、本体だけのモジュールの系も登録している。本体は `main.rs` の出し直し `use areka_input as input_events;` で入力の呼び手を通したまま（`input-crate-split` の申し送り）。
 - **変えたいこと**: crate に出す前に、この層を本体の中の 1 つのモジュール `crates/areka/src/session/` に集める。テストも一緒に移す。`main.rs` は `fn main` と最上位の段取りだけにし、本体だけのモジュールの系の登録は `main.rs` から呼ぶ。出し直しを外して呼び手を `areka_input::…` へ書き換える。参照の向きを逆にすることと crate を作ることは、次の `session-crate-split` で行う。振る舞いは何も変えない。
 
-（出どころ: `.kiro/specs/session-module-gather/brief.md`〔`input-crate-split` からの申し送りと、最後の「2026-11-21 棚卸㊶の再測定」の節を含む〕。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C24 の行。）
+（出どころ: `.kiro/specs/completed/session-module-gather/brief.md`〔`input-crate-split` からの申し送りと、最後の「2026-11-21 棚卸㊶の再測定」の節を含む〕。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C24 の行。）
 
 ## Introduction
 
