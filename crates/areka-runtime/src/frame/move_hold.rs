@@ -12,7 +12,7 @@
 use std::collections::{BTreeSet, VecDeque};
 
 use areka_emo_compose::ScaleRatio;
-use areka_emo_present::EmoPresenter;
+use areka_emo_present::{EmoPresenter, NeverShown};
 use tracing::{debug, info};
 
 use areka_placement::spawn::GhostWindows;
@@ -28,13 +28,38 @@ use super::PositionCue;
 ///
 /// `None` は「まだ最初の面を表示していない」（または表示層に登録の無いスコープ）。
 // 公開の `run_move_drain_with` が名指すので開ける
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "never_shown と physical_size は判定が使い始めたら外す"
+    )
+)]
 pub trait ShownRatioSource {
     fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio>;
+
+    /// 表示しないまま決まった理由（まだ決まっていなければ `None`）。
+    fn never_shown(&self, _scope: u32) -> Option<NeverShown> {
+        None
+    }
+
+    /// 実際に表示した窓の物理寸（まだ表示していなければ `None`）。
+    fn physical_size(&self, _scope: u32) -> Option<(u32, u32)> {
+        None
+    }
 }
 
 impl ShownRatioSource for EmoPresenter {
     fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio> {
         self.applied_ratio(shell_target(scope))
+    }
+
+    fn never_shown(&self, scope: u32) -> Option<NeverShown> {
+        EmoPresenter::never_shown(self, shell_target(scope))
+    }
+
+    fn physical_size(&self, scope: u32) -> Option<(u32, u32)> {
+        self.target_physical_size(shell_target(scope))
     }
 }
 

@@ -22,7 +22,7 @@
   - _Requirements: 3.1, 3.4, 4.1, 5.6, 6.1_
 
 - [ ] 2. 読み口を広げ、直す前の赤を確かめる
-- [ ] 2.1 位置の預かりの読み口に、表示しないまま決まった理由と実表示寸を足す
+- [x] 2.1 位置の預かりの読み口に、表示しないまま決まった理由と実表示寸を足す
   - 読み口に既定の実装つきのメソッド 2 つ（理由は無し・実表示寸は無し を既定で答える）を足し、表示層の実装は 1 の照会とシェルの実表示寸をスコープの target について答える
   - 閉包の実装と `all_shown`・`shown_only` は変えずにそのまま通る
   - 実行の相の crate のテストが前と同じ合否で緑（振る舞いはまだ変わらない）
@@ -98,3 +98,9 @@
   - 表示層・実行の相・本体の crate のテストと clippy・整形が緑（赤が出たら赤のテストだけ回し直す）
   - _Dispatch: mechanical — 決まったコマンドで差分と緑を確かめる_
   - _Requirements: 1.6, 6.3, 6.4_
+
+## Implementation Notes
+
+- `cargo clippy -D warnings` は areka-parsers・dola・wintf などの既存の警告で止まる（この spec の差分の外）。clippy は `-D warnings` なしで回し、触ったファイルに警告が無いことを見る。
+- `ShownRatioSource` の trait に一時の `#[cfg_attr(not(test), expect(dead_code, ...))]` がある。判定が `never_shown`・`physical_size` を使い始めたタスクで外す（外し忘れは「満たされない expect」の警告で見える）。
+- 表示層の「面の指令を受けた」印は `Hide` でも立つ（未表示の `\s[-1]` を `Hidden` と読むため）。
