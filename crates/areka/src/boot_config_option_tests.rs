@@ -60,7 +60,7 @@ fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved
         .map(str::to_owned)
         .collect();
     resolve_boot_from(
-        crate::roots::single_env(tmp.path().to_path_buf()),
+        crate::session::roots::single_env(tmp.path().to_path_buf()),
         &args,
         &tmp.child("app-profile"),
         pick,
@@ -183,7 +183,7 @@ fn boot_with(
         .map(str::to_owned)
         .collect();
     resolve_boot_from(
-        crate::roots::single_env(tmp.path().to_path_buf()),
+        crate::session::roots::single_env(tmp.path().to_path_buf()),
         &args,
         &tmp.child("app-profile"),
         no_pick,

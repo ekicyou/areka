@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
-use crate::roots::{RootError, RootSkip, RootsOrigin};
+use crate::session::roots::{RootError, RootSkip, RootsOrigin};
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 
 // ---------------------------------------------------------------- 道具立て

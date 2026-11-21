@@ -66,7 +66,7 @@ fn world_with(
     let mut world = World::new();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: ghost.route == GhostRoute::Argv,
@@ -156,7 +156,7 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
     };
     rig.world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(rig.root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: app_dir(rig),
         helper_exe: PathBuf::from("main_session_mark_tests/使わない/helper.exe"),
         argv_session,
@@ -230,7 +230,7 @@ struct NextBoot {
 fn next_boot(rig: &mut SwitchRig) -> NextBoot {
     let app = app_dir(rig);
     let (_, ghost, _, found, _) = resolve_boot_from(
-        crate::roots::single_env(rig.root.dir().to_path_buf()),
+        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
@@ -737,7 +737,7 @@ fn default_ghost_fault_keeps_its_own_name() {
     let exited = rig.pump_until(SwitchRig::exit_requested);
     let settled = after_run_and_settle(&mut rig);
     let (_, next, _, found, _) = resolve_boot_from(
-        crate::roots::single_env(rig.root.dir().to_path_buf()),
+        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
@@ -802,7 +802,7 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
     let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
-        crate::roots::single_env(rig.root.dir().to_path_buf()),
+        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),

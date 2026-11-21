@@ -43,7 +43,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 移動と、設計が字面を与える文字列の書き換え_
   - _Requirements: 1.1, 1.2, 1.6, 6.1, 7.3_
 
-- [ ] 4. readme と roots の芯を集める（段 3）
+- [x] 4. readme と roots の芯を集める（段 3）
 - [x] 4.1 readme を移し、出所の名前を読む所をそろえる
   - `readme.rs`・`readme_tests.rs`・`readme/` の 11 本を `git mv` で `session/` へ移し、宣言と呼び手を直す
   - `RULES` の `areka::readme` を `areka::session::readme` へ、`doc/ssp-mcp/log-convention.md` の表の同じ行と、`log_history_tests.rs`・`log_history_convention_tests.rs` の `"areka::readme"`・`"areka::readme::opener"` を同じコミットで直す
@@ -52,7 +52,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 移動と、設計が字面を与える文字列の書き換え_
   - _Requirements: 1.1, 1.2, 3.2, 3.4, 6.1, 6.2, 7.1, 7.3_
 
-- [ ] 4.2 roots の芯を移し、残る 3 本の宣言を `roots.rs` に置く
+- [x] 4.2 roots の芯を移し、残る 3 本の宣言を `roots.rs` に置く
   - `roots/mod.rs`・`resolve.rs`・`report.rs`・`user_root.rs` とテスト 3 本を `git mv` で `session/roots/` へ移す。`session/roots/mod.rs` から `mod desk;`・`mod edit;`・`mod pick;` と `pub(crate) use desk::install;`・`pub(crate) use edit::*;` を外し、それを今の字面のまま新しい `src/roots.rs` に置く（新しい `src/roots/mod.rs` は作らない）
   - `roots/edit.rs` の `super::report`・`super::{ResolvedRoots, RootStatus, RootsOrigin, encode_memory}`・`super::user_root` を `crate::session::roots::…` へ。`desk.rs` の `super::add_root` はそのまま
   - 呼び手の `crate::roots::<名>` を、芯の項目なら `crate::session::roots::<名>` へ、残る 3 本の項目ならそのままにする
@@ -180,3 +180,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 1.1: 名前の多重集合は doctest の名前を `(line N)` 付きで持つ（66 件）。doctest のあるファイルの行がずれると、最後の比べで行番号の差として出る（テストが消えたのではない）。
 - 3.1: `"areka::alert"` の文字列（log_history の 2 本のテスト）は 3.1 で直し済み。3.3 では二度直さない。
 - 3.3: 宣言を移すとき、元に doc が無い宣言へ新しい doc を書くなら、モジュールの `//!` の 1 行目と同じにする（中身を言い換えると取り違える）。
+- 4.2: `update/worker.rs:40`・`:110` の doc の `roots::user_root::exe_dir()` はモジュール名だけの古い説明（6.9 で当たりにしない）。9.2 の申し送りに載せる。

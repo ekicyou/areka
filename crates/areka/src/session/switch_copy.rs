@@ -12,7 +12,7 @@ use areka_kanade::ChangeHandoff;
 use bevy_ecs::world::World;
 
 use super::ghost_switch::{SwitchInFlight, SwitchStage, switch_to};
-use crate::roots::user_root::{CopyPlan, copy_for_write, copy_unless_readonly, plan_copy};
+use crate::session::roots::user_root::{CopyPlan, copy_for_write, copy_unless_readonly, plan_copy};
 
 /// 写しの見込み（予約 [`SwitchInFlight`] に持たせる）。
 #[derive(Debug)]

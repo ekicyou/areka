@@ -261,7 +261,7 @@ fn boot(tmp: &TempPath, rest: &[&Path]) -> (BalloonRoute, PathBuf, Vec<CapturedE
     let app_dir = tmp.child("app-profile");
     let (got, events) = capture(|| {
         resolve_boot_from(
-            crate::roots::single_env(tmp.path().to_path_buf()),
+            crate::session::roots::single_env(tmp.path().to_path_buf()),
             &args,
             &app_dir,
             no_pick,

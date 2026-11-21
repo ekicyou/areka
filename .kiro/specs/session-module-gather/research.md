@@ -374,3 +374,9 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
   - `readme_tests.rs:383`・`session_end_deadline_tests.rs:450`・`tick_gate_config_producers_tests.rs:187`・`update/worker_tests.rs:887`（いずれも `src` の木の走査・ファイルを名で絞らない）。
   - `boot_shell_tests.rs:347`（`areka-emo-compose` のフィクスチャを `crate_path` で引く・本体のファイル名は含まない）・`placement_tests/measure_bake_count_tests.rs:159`・`file_drop_wiring_tests.rs:443`（`file_drop.rs`・残る）・`png_image_tests.rs:151`・`mcp/*`・`update/*` ほか。
 - 表に足す分: 0 件。実装の段（段 2 の `readonly_tests.rs`・段 5 の `session_end_deadline_tests.rs`・段 3 の `readme_tests.rs`・段 6 の `zorder_wiring_tests.rs`）で、その塊の移動と一緒に直す。
+
+### 13.5 roots の芯の出所（タスク 4.2）
+
+- 芯（`mod.rs`・`resolve.rs`・`report.rs`・`user_root.rs`）は `session/roots/` へ移り、出所は `areka::session::roots::{report,user_root,resolve}` になった。残る `edit`・`desk`・`pick` は `areka::roots::{edit,desk,pick}` のまま。
+- このため `RUST_LOG=areka::roots=debug` は、移した後は芯を開かない（`edit`・`desk`・`pick` だけを開く）。芯も開くには `areka::session::roots=debug` を足す。この指定は文書にもテストにも無く（5 章の 11・design.md の RootsSplit の Risks）、既定の動きには関わらない。
+- `RULES`・`log-convention.md`・ログのテストの文字列に `areka::roots` は 0 件（どちらの出所も決まりの表に当たらず、種別は前と同じ「残さない」）。`structure.md:418`・`:419` の `areka::roots::user_root` は 8.3 で直す。

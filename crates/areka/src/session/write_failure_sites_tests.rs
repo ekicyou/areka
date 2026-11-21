@@ -209,7 +209,7 @@ fn every_write_kind_reaches_the_desk() {
     let got = posted(world, &publisher, |w| on_notice(w, KanadeNotice::Steady));
     judged.push(("定常の印", PersistScope::App, PersistKey::LastRunning, got));
 
-    world.resource_mut::<BootContext>().roots_origin = crate::roots::RootsOrigin::Default;
+    world.resource_mut::<BootContext>().roots_origin = crate::session::roots::RootsOrigin::Default;
     let got = posted(world, &publisher, |w| {
         crate::roots::add_root(w, present_root.clone());
     });

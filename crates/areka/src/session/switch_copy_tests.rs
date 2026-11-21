@@ -77,7 +77,7 @@ impl Fixture {
         let a = self.bundled("A");
         world.insert_resource(BootContext {
             roots: self.roots(),
-            roots_origin: crate::roots::RootsOrigin::Default,
+            roots_origin: crate::session::roots::RootsOrigin::Default,
             app_profile_dir: self.user.join("profile"),
             helper_exe: self.exe.join("helper.exe"),
             argv_session: false,

@@ -3,15 +3,10 @@
 //! 決め方の判断は [`resolve`]（純粋・値の注入だけでテストする）。プロセスの環境変数と
 //! 起動前の記憶を読むのは、この下の薄い口だけ。
 
-pub(crate) mod desk;
-mod edit;
-pub(crate) mod pick;
 pub(crate) mod report;
 mod resolve;
 pub(crate) mod user_root;
 
-pub(crate) use desk::install;
-pub(crate) use edit::*;
 pub(crate) use resolve::*;
 
 use std::path::Path;

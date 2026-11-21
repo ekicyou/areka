@@ -247,7 +247,7 @@ fn boot_check_without_readonly_is_the_current_check() {
 /// 写すはずの並びでも、読み取りだけなら元を返し、記録が 1 件出て、写し先が作られない。
 #[test]
 fn copy_is_withheld_and_the_original_is_used() {
-    use crate::roots::user_root::{CopyPlan, copy_unless_readonly, plan_copy};
+    use crate::session::roots::user_root::{CopyPlan, copy_unless_readonly, plan_copy};
     use areka_ghost::{BasewareRoot, BasewareRoots, StoreKind};
 
     let tmp = temp_path_kit::TempPath::under_target("readonly-copy-withheld");

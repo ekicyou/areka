@@ -10,7 +10,7 @@ use temp_path_kit::TempPath;
 
 use super::tests::{children, item, label, wired_world_roots};
 use super::*;
-use crate::roots::RootsOrigin;
+use crate::session::roots::RootsOrigin;
 
 /// 先頭に一時の置き場 `t`、続いて覚える置き場 `rest` の並びで据えた World。
 fn world_with_temp(t: &PathBuf, rest: &[&PathBuf]) -> World {

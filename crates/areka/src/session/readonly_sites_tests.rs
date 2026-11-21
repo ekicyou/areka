@@ -254,14 +254,14 @@ fn every_write_kind_is_withheld_under_the_guard() {
         (kind, PersistScope::App, PersistKey::LastRunning, running),
     );
 
-    world.resource_mut::<BootContext>().roots_origin = crate::roots::RootsOrigin::Default;
+    world.resource_mut::<BootContext>().roots_origin = crate::session::roots::RootsOrigin::Default;
     let desk = reached_desk(world, Some(&publisher), |w| {
         crate::roots::add_root(w, present_root.clone());
     });
     let encoded = |w: &World| {
-        crate::roots::encode_memory(
+        crate::session::roots::encode_memory(
             &w.resource::<BootContext>().roots,
-            crate::roots::user_root::exe_dir().as_deref(),
+            crate::session::roots::user_root::exe_dir().as_deref(),
         )
     };
     let kind = "置き場の並び";

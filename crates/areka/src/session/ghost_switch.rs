@@ -383,7 +383,7 @@ pub(crate) fn accept_switch(
         boot_event = ?req.boot_event.as_ref().map(|(id, _)| *id),
         "切替の要求を kanade へ送った"
     );
-    let exe_dir = crate::roots::user_root::exe_dir();
+    let exe_dir = crate::session::roots::user_root::exe_dir();
     let copy = super::switch_copy::start(
         crate::session::readonly::of(world),
         &ctx.roots,
@@ -711,7 +711,7 @@ pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
         // 非常口は起こす前に同期で写す（写せなければ元のフォルダ）。
         areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| {
-            crate::roots::user_root::writable_copy(
+            crate::session::roots::user_root::writable_copy(
                 &ctx.roots,
                 areka_ghost::StoreKind::Ghost,
                 &e.dir,

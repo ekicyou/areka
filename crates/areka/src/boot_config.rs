@@ -1,7 +1,7 @@
 //! 起動時の構成入力解決と ghost 結線ヘルパ。
 //!
 //! 構成入力（根 → ゴースト → バルーン）の起動前の解決と、`GhostBootOptions` の組み立てを置く。
-//! 根の並びの決め方は `crate::roots`。
+//! 根の並びの決め方は `crate::session::roots`。
 //!
 //! 消費者は `main.rs`（`pub(crate) use` で crate 直下へ再輸出）と `runtime`
 //! （`crate::default_app_profile_dir` / `crate::is_benign_boot_error`）、および
@@ -166,7 +166,7 @@ pub(crate) type BootResolved = (
     crate::boot_resolve::GhostDecision,
     crate::boot_resolve::BalloonDecision,
     Option<String>,
-    crate::roots::ResolvedRoots,
+    crate::session::roots::ResolvedRoots,
 );
 
 /// 起動の文脈（プロセスに 1 つ）: 根の並びとその出どころ・記憶の置き場・helper のパス・argv で始まったプロセスか・今のゴースト。
@@ -176,7 +176,7 @@ pub(crate) type BootResolved = (
 pub(crate) struct BootContext {
     pub roots: areka_ghost::BasewareRoots,
     /// 並びの出どころ。読み手はメニューの置き場の項目と並びの変更（`roots::add_root`・`remove_root`）。
-    pub roots_origin: crate::roots::RootsOrigin,
+    pub roots_origin: crate::session::roots::RootsOrigin,
     pub app_profile_dir: std::path::PathBuf,
     pub helper_exe: std::path::PathBuf,
     /// argv でゴーストを指定して始まったプロセスか。`fn main` が据え付けで 1 度だけ詰め、
@@ -198,7 +198,7 @@ pub(crate) struct CurrentGhost {
 /// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
 #[cfg(test)]
 pub(crate) fn resolve_boot_from(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
     args: &[String],
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
@@ -228,7 +228,7 @@ pub(crate) fn resolve_boot_from(
 /// `call_ghost` は起こすゴーストのフォルダ名（起動の前に入れた道が決めたときだけ `Some`）。
 /// `GhostInputs` へ渡すだけで、記憶より先・起動中の印に関わらず目録から引かれる。
 pub(crate) fn resolve_boot_with(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
     request: &crate::cli::BootRequest,
     call_ghost: Option<&str>,
     app_profile_dir: &std::path::Path,
@@ -236,8 +236,8 @@ pub(crate) fn resolve_boot_with(
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<BootResolved, crate::session::alert::AlertScene> {
     use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
-    use crate::roots::report::{self, ReportOccasion};
     use crate::session::alert::AlertScene;
+    use crate::session::roots::report::{self, ReportOccasion};
     use areka_ghost::catalog;
 
     let mut resolved = resolved.map_err(|err| {
@@ -261,7 +261,7 @@ pub(crate) fn resolve_boot_with(
         resolved.roots = areka_ghost::BasewareRoots::new(roots);
         resolved.status.insert(
             0,
-            crate::roots::RootStatus {
+            crate::session::roots::RootStatus {
                 dir: dir.clone(),
                 found: true,
             },
@@ -515,7 +515,7 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
         app_profile_dir_for(
             readonly,
             std::env::var_os(areka_user_data::PROFILE_DIR_ENV).as_deref(),
-            crate::roots::user_root::layout(),
+            crate::session::roots::user_root::layout(),
             exe_location().and_then(std::path::Path::parent),
         )
     };

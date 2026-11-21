@@ -42,7 +42,7 @@ impl CatalogDestinations {
             temporary: temporary.iter().map(|r| r.dir().to_path_buf()).collect(),
             first,
             running: None,
-            exe_dir: crate::roots::user_root::exe_dir(),
+            exe_dir: crate::session::roots::user_root::exe_dir(),
         })
     }
 
@@ -97,7 +97,7 @@ impl CatalogDestinations {
             StoreKind::Ghost => find_ghost(&self.roots, folder)?.dir,
             StoreKind::Balloon => find_balloon(&self.roots, folder)?.dir,
         };
-        let used = crate::roots::user_root::copy_for_write(
+        let used = crate::session::roots::user_root::copy_for_write(
             &self.roots,
             self.exe_dir.as_deref(),
             kind,

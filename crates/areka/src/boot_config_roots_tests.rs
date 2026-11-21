@@ -9,8 +9,8 @@ use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
 use crate::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostDecision, GhostRoute, running_name,
 };
-use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use crate::session::alert::AlertScene;
+use crate::session::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};

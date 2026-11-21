@@ -3,7 +3,7 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
-use crate::roots::encode_memory;
+use crate::session::roots::encode_memory;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use std::path::PathBuf;
 use temp_path_kit::TempPath;

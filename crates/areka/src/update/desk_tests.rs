@@ -48,7 +48,7 @@ impl Rig {
         register(&mut world);
         world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: root.path().join("profile"),
             helper_exe: root.path().join("helper.exe"),
             argv_session: false,

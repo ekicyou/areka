@@ -214,7 +214,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
         order,
         kanade,
         roots,
-        exe_dir: crate::roots::user_root::exe_dir(),
+        exe_dir: crate::session::roots::user_root::exe_dir(),
     };
     desk::hand_over(world, job)
 }

@@ -259,7 +259,7 @@ impl UpdatePorts for KanadePorts {
             .iter_mut()
             .filter(|spec| spec.kind == TargetKind::Balloon && spec.descript_homeurl.is_some())
         {
-            spec.dir = crate::roots::user_root::copy_for_write(
+            spec.dir = crate::session::roots::user_root::copy_for_write(
                 &self.roots,
                 self.exe_dir.as_deref(),
                 StoreKind::Balloon,

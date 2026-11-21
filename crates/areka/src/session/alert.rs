@@ -35,7 +35,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{HRESULT, HSTRING, PCWSTR};
 
-use crate::roots::{RootError, RootsOrigin};
+use crate::session::roots::{RootError, RootsOrigin};
 
 /// 告知を抑える環境変数。設定されていれば抑える。
 /// ただし未設定・空・空白だけ・"0" は「設定されていない」と読む（`AREKA_TICK_GATE=0` と同じく 0 で切れる）。

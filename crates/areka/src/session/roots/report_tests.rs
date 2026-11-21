@@ -3,7 +3,7 @@
 //! 値だけを組んで渡し、ログの捕捉（`log-capture-kit`）で行を数える。fs は見ない。
 
 use super::*;
-use crate::roots::{EXE_TOKEN, RootStatus};
+use crate::session::roots::{EXE_TOKEN, RootStatus};
 use areka_ghost::{BasewareRoot, BasewareRoots, Hidden, StoreKind};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::PathBuf;

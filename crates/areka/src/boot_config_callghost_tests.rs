@@ -60,7 +60,7 @@ fn boot(
         .map(str::to_owned)
         .collect();
     resolve_boot_with(
-        crate::roots::single_env(tmp.path().to_path_buf()),
+        crate::session::roots::single_env(tmp.path().to_path_buf()),
         &crate::cli::parse::parse(&args).options.boot,
         call_ghost,
         &tmp.child("app-profile"),

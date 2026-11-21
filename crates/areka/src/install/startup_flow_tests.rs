@@ -91,7 +91,7 @@ fn root_with(label: &str, ghosts: &[&str], remember: Option<&str>) -> TempPath {
 
 /// 根 `root` の上で起動の前の道 → 起動の解決を 1 回走らせ、答えと記録を返す。
 fn boot(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
     profile: &Path,
     startup: &mut StartupInstall,
 ) -> (
@@ -141,7 +141,7 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![ghost_nar(&dir, "newbie")], false), None);
     let (got, events) = boot(
-        crate::roots::single_env(root.path().to_path_buf()),
+        crate::session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -165,7 +165,7 @@ fn callghost_wins_over_the_remembered_ghost() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![ghost_nar(&dir, "g2")], true), None);
     let (got, events) = boot(
-        crate::roots::single_env(root.path().to_path_buf()),
+        crate::session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -187,7 +187,7 @@ fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
         Some(exe.path().to_path_buf()),
     );
     let (got, events) = boot(
-        crate::roots::single_env(root.path().to_path_buf()),
+        crate::session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -211,9 +211,9 @@ fn root_missing_warns_once_and_installs_nothing() {
     let gone = profile.child("gone");
     let mut startup = StartupInstall::new_with(args(vec![archive.clone()], true), None);
     let (got, events) = boot(
-        Err(crate::roots::RootError::NoneFound {
+        Err(crate::session::roots::RootError::NoneFound {
             tried: vec![gone.clone()],
-            origin: crate::roots::RootsOrigin::EnvVar,
+            origin: crate::session::roots::RootsOrigin::EnvVar,
             skipped: Vec::new(),
             memory_fell_back: false,
         }),
@@ -241,7 +241,7 @@ fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![balloon_nar(&dir)], false), None);
     let (got, events) = boot(
-        crate::roots::single_env(root.path().to_path_buf()),
+        crate::session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );

@@ -239,7 +239,7 @@ fn argv_session_falling_back_neither_reads_writes_nor_clears_mark() {
     let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
-        crate::roots::single_env(rig.root.dir().to_path_buf()),
+        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),

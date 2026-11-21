@@ -44,7 +44,7 @@ mod boot {
         let given = root.child("not-a-ghost");
         std::fs::create_dir_all(&given).expect("フォルダを組む");
         let got = resolve_boot_from(
-            crate::roots::single_env(root.path().to_path_buf()),
+            crate::session::roots::single_env(root.path().to_path_buf()),
             &args(&[&given]),
             root.path(),
             no_pick,
@@ -80,7 +80,7 @@ mod boot {
         .expect("記憶");
         let (got, events) = capture(|| {
             resolve_boot_from(
-                crate::roots::single_env(root.path().to_path_buf()),
+                crate::session::roots::single_env(root.path().to_path_buf()),
                 &args(&[&ghost, &balloon]),
                 root.path(),
                 no_pick,
@@ -102,7 +102,7 @@ mod boot {
     fn no_argv_and_empty_root_is_ghost_missing_without_argv() {
         let root = TempPath::new("boot-empty-root");
         let got = resolve_boot_from(
-            crate::roots::single_env(root.path().to_path_buf()),
+            crate::session::roots::single_env(root.path().to_path_buf()),
             &args(&[]),
             root.path(),
             no_pick,
@@ -127,7 +127,7 @@ mod boot {
         let root = TempPath::under_target("boot-records");
         let (_, events) = capture(|| {
             resolve_boot_from(
-                crate::roots::single_env(root.path().to_path_buf()),
+                crate::session::roots::single_env(root.path().to_path_buf()),
                 &args(&[]),
                 root.path(),
                 no_pick,
@@ -141,7 +141,7 @@ mod boot {
         std::fs::create_dir_all(&given).expect("フォルダを組む");
         let (_, events) = capture(|| {
             resolve_boot_from(
-                crate::roots::single_env(root.path().to_path_buf()),
+                crate::session::roots::single_env(root.path().to_path_buf()),
                 &args(&[&given]),
                 root.path(),
                 no_pick,
@@ -273,7 +273,7 @@ mod switch_balloon {
             argv_balloon.display().to_string(),
         ];
         let (_, _, b, _, _) = resolve_boot_from(
-            crate::roots::single_env(tmp.path().to_path_buf()),
+            crate::session::roots::single_env(tmp.path().to_path_buf()),
             &args,
             tmp.path(),
             no_pick,
@@ -298,7 +298,7 @@ mod switch_balloon {
         put_companion(&ghost, "b1");
         let args = vec!["areka.exe".to_owned()];
         let (cfg, g, b, mark, _) = resolve_boot_from(
-            crate::roots::single_env(tmp.path().to_path_buf()),
+            crate::session::roots::single_env(tmp.path().to_path_buf()),
             &args,
             tmp.path(),
             no_pick,
@@ -348,7 +348,7 @@ mod switch_balloon {
         let args = vec!["areka.exe".to_owned()];
         let boot = || {
             let (_, g, _, mark, _) = resolve_boot_from(
-                crate::roots::single_env(tmp.path().to_path_buf()),
+                crate::session::roots::single_env(tmp.path().to_path_buf()),
                 &args,
                 &app_dir,
                 no_pick,
@@ -402,7 +402,7 @@ mod switch_balloon {
         let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
         let (got, events) = capture(|| {
             resolve_boot_from(
-                crate::roots::single_env(tmp.path().to_path_buf()),
+                crate::session::roots::single_env(tmp.path().to_path_buf()),
                 &args,
                 &app_dir,
                 no_pick,
@@ -429,7 +429,7 @@ mod switch_balloon {
         let tmp = TempPath::new("switch-balloon-context");
         let ghost = fixture(&tmp);
         let (cfg, g, b, _, _) = resolve_boot_from(
-            crate::roots::single_env(tmp.path().to_path_buf()),
+            crate::session::roots::single_env(tmp.path().to_path_buf()),
             &["areka.exe".to_owned()],
             tmp.path(),
             no_pick,
@@ -439,7 +439,7 @@ mod switch_balloon {
         let mut world = bevy_ecs::world::World::new();
         world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: tmp.path().to_path_buf(),
             helper_exe: tmp.child("shiori-host32-helper.exe"),
             argv_session: false,

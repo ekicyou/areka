@@ -63,7 +63,7 @@ fn installed_source_follows_module_policy_for_first_boot_and_switch() {
     for policy in [ModulePolicy::Load, ModulePolicy::Skip] {
         let ctx = boot_config::BootContext {
             roots: areka_ghost::BasewareRoots::single(base.clone()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: base.join("app-profile"),
             helper_exe: helper(),
             argv_session: false,

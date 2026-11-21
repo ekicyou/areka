@@ -76,7 +76,7 @@ pub(crate) struct CarriedInstall {
 impl StartupInstall {
     /// `main` から 1 度だけ（`--help`・`--offline-dump` の早い戻りの後・起動の解決の前）。
     pub(crate) fn new(args: InstallArgs) -> StartupInstall {
-        StartupInstall::new_with(args, crate::roots::user_root::exe_dir())
+        StartupInstall::new_with(args, crate::session::roots::user_root::exe_dir())
     }
 
     /// `new` の中身（テストは exe の隣の代わりに `target\` の下のフォルダを渡す）。areka はどこでも
@@ -235,13 +235,13 @@ pub(crate) fn resolve_boot(
         ),
     };
     resolve_boot_with_env(
-        crate::roots::resolve_roots(&app_profile_dir),
+        crate::session::roots::resolve_roots(&app_profile_dir),
         request,
         startup,
         before,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
-        crate::roots::user_root::writable_ghost,
+        crate::session::roots::user_root::writable_ghost,
     )
 }
 
@@ -249,7 +249,7 @@ pub(crate) fn resolve_boot(
 /// 入れる物を取り出して warn `root_missing` を 1 件残す。どちらの後も、`callghost` の相手を添えて
 /// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す）。
 pub(crate) fn resolve_boot_with_env(
-    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
     request: &BootRequest,
     startup: &mut StartupInstall,
     before: BeforeBootEnv,

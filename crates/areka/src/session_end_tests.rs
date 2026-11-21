@@ -71,7 +71,7 @@ fn bare_world(tmp: &TempPath) -> (World, mpsc::Sender<KanadeNotice>) {
     world.insert_non_send(KanadeNoticeRx(rx));
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: false,

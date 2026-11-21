@@ -423,7 +423,7 @@ impl SwitchRig {
         let inputs = (self.world.non_send::<GhostBootInputsSource>().0)(&cfg, BootOrigin::Plain);
         self.world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(self.root.dir().to_path_buf()),
-            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
             app_profile_dir: self.app_dir(),
             helper_exe: inputs.helper_exe.clone(),
             argv_session: false,

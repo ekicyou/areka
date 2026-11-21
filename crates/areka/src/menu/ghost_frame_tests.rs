@@ -43,7 +43,7 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 pub(crate) fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

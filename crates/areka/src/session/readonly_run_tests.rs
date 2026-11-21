@@ -32,10 +32,10 @@ use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::BootContext;
 use crate::ghost_session::GhostSlot;
 use crate::install::{InstallOrder, InstallOrigin};
-use crate::roots::user_root::copy_unless_readonly;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::readonly::ReadOnlyRun;
+use crate::session::roots::user_root::copy_unless_readonly;
 use crate::session::write_failure::check_boot;
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
 use crate::{MarkVerdict, Teardown, after_run, insert_persist_wiring, settle_session_mark};
@@ -203,13 +203,14 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         insert_persist_wiring(&mut rig.world, publisher.clone());
         persist_entries(&rig.world, char_pos_entries(0, PointPx { x: 10, y: 20 }));
         PropSetCueSink::new(publisher.clone()).emit(prop_set_cue(PersistKey::BootCount, "7"));
-        rig.world.resource_mut::<BootContext>().roots_origin = crate::roots::RootsOrigin::Default;
+        rig.world.resource_mut::<BootContext>().roots_origin =
+            crate::session::roots::RootsOrigin::Default;
         crate::roots::add_root(&mut rig.world, picked.clone());
         publisher.barrier().expect("記憶の書き手は生きている");
 
-        let roots_memory = crate::roots::encode_memory(
+        let roots_memory = crate::session::roots::encode_memory(
             &rig.world.resource::<BootContext>().roots,
-            crate::roots::user_root::exe_dir().as_deref(),
+            crate::session::roots::user_root::exe_dir().as_deref(),
         );
         let window_x = PersistKey::WindowPos {
             scope: 0,

@@ -325,7 +325,7 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
     register(&mut world);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.path("profile"),
         helper_exe: root.path("helper.exe"),
         argv_session: false,
