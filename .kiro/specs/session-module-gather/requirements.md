@@ -25,7 +25,7 @@
 ## Boundary Context
 
 - **In scope**:
-  - src 直下の候補（`ghost_session*`〔`_runtime`・`_scope_rect` を含む〕・`boot_resolve*`・`boot_config*`・`app_exit*`〔`app_exit_escape_tests.rs` を含む〕・`session_end*`・`exit_wait*`・`write_failure*`・`readonly*`・`alert*`・`log_history*`・`shell_balloon_switch_session_*`）の本番とテストを `session/` の下へ移すこと。
+  - src 直下の候補（`ghost_session*`〔`_runtime`・`_scope_rect` を含む〕・`boot_resolve*`・`boot_config*`・`app_exit*`〔`app_exit_escape_tests.rs` を含む〕・`session_end*`・`exit_wait*`・`write_failure*`・`readonly*`・`alert*`・`log_history*`・`shell_balloon_switch_session_*`・`ghost_session.rs` が `#[path]` で宣言する `boot_shell_tests.rs`）の本番とテストを `session/` の下へ移すこと。
   - `main.rs` の項目（`MarkInputs`・`Teardown`・`settle_session_mark`〔`session_mark_verdict`・`MarkVerdict` を含む〕・`restore_merged_placements`・`on_boot_ok`〔`insert_persist_wiring`・`record_last_used_at_boot` を含む〕・`record_last_used`・`boot_monitor_snapshot`）と、それを確かめる `main_*_tests.rs` を `session/` の下へ移すこと。`main.rs` の `pub(crate) use boot_config::{…}` の出し直しを外すこと。
   - roots の芯（`roots/` の `mod`・`resolve`・`report`・`user_root` とテスト）・readme（`readme.rs` と `readme/`）・cli の型 2 つ（`BootRequest`・`ModulePolicy`）を `session/` の下へ移すこと。
   - `register_systems` の本体だけのモジュールの系の登録を `main.rs` の呼び手へ移すこと。
@@ -54,7 +54,7 @@
 
 #### Acceptance Criteria
 
-1. The 集め直し作業 shall In scope に挙げた src 直下の候補の本番とテストのファイルを、git が移動として追える形（履歴を残す移動）で `crates/areka/src/session/` の下へ移す。
+1. The 集め直し作業 shall In scope に挙げた src 直下の候補の本番とテストのファイル（名前が候補に当たらなくても候補が `#[path]` で宣言するテスト＝`boot_shell_tests.rs` を含む）を、git が移動として追える形（履歴を残す移動）で `crates/areka/src/session/` の下へ移す。
 2. The 集め直し作業 shall 移したファイルの中身を書き換えず、パス（`mod` の宣言・`#[path]`・`use`・`crate::…` のパス・説明の中のパス）だけを直す。
 3. When 移動を終えたとき, the 本体の crate `areka` shall src 直下に、移した候補のファイルを持たない。
 4. The 集め直し作業 shall 移した項目の可視性を、呼び手から届くのに要る分だけ（`pub(crate)` まで）にし、`pub` を足さない。
@@ -103,9 +103,9 @@
 
 #### Acceptance Criteria
 
-1. The 集め直し作業 shall `crates/areka/src/main.rs` の `use areka_input as input_events;` と、その上の古くなった説明（今は 59〜60 行の 2 行）を外す。
+1. The 集め直し作業 shall `crates/areka/src/main.rs` の `use areka_input as input_events;` と、その上の古くなった説明（今は 59〜60 行の 2 行）を外し、出し直しを名指す `crates/areka/Cargo.toml:44` の説明を出し直しの無い形へ直す。
 2. The 集め直し作業 shall 本体の `crate::input_events::…` の呼び手（brief の再測定で 26 ファイル・`runtime_tests/` の 8 本と `menu/` を含む）を、`areka_input::…` へ書き換え、呼ぶ項目を変えない。
-3. When 書き換えを終えたとき, the 集め直し作業 shall `crates/areka/` の中に、モジュールのパスとしての `input_events`（`crate::input_events`・`input_events::`）が 0 件であることを grep の結果で示す。
+3. When 書き換えを終えたとき, the 集め直し作業 shall `crates/areka/` の中に、モジュールのパスとしての `input_events`（`crate::input_events`・`input_events::`）が 0 件であることを grep の結果で示す。説明の中で入力のモジュールを `input_events` の語で指す所（2026-11-21 の測りで `ghost_session.rs:276`・`menu/mod.rs:182`）は `areka_input` へ直す。もとから実在しないファイルを指す `app_exit_tests.rs:182` の `input_events_tests.rs` は直さず、要件 10.1 の申し送りに載せる。
 4. The 集め直し作業 shall 本体の `runtime_tests/mod.rs` を書き換えずに 5.2 を済ませる（要件 9.3）。
 
 ### Requirement 6: 集めるモジュールを名指すパスと受け持ちの書き換え
@@ -115,13 +115,13 @@
 #### Acceptance Criteria
 
 1. The 集め直し作業 shall 本体の中で集めるモジュールを名指すファイル（brief の再測定で 186 本・`runtime_tests/` の 26 本〔`mod.rs` を除く〕・`file_drop.rs`・`file_drop_wiring_tests.rs`・`menu/shortcut_tests.rs` を含む）のパスを、移した先へ書き換える。
-2. The 集め直し作業 shall ソースを読むテスト（`include_str!` と `CARGO_MANIFEST_DIR` で読むもの。`runtime_tests/zorder_wiring_tests.rs` の `../ghost_session.rs`・`../main.rs`、`readonly_tests.rs`・`session_end_sync_send_tests.rs` の `src/main.rs` ほか）を、移した先のパスと、移した後に項目がある所を読むように直し、前と同じ事実を確かめさせる。
-3. The 集め直し作業 shall 本体の外の crate の説明に残る本体のパス（`crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:57` の `boot_config.rs`・`crates/areka-kanade/src/schedule/script_log.rs:16` の `log_history.rs`・`crates/real-run-kit/` の説明・`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md` ほか）を、移した先のパスへ書き換え、動きを変えない。
+2. The 集め直し作業 shall ソースを読むテスト（`include_str!` と `CARGO_MANIFEST_DIR` で読むもの。`runtime_tests/zorder_wiring_tests.rs` の `../ghost_session.rs`・`../main.rs`、`readonly_tests.rs` の較正と絞り込み〔`:82`・`:92`・`:153`〕、`session_end_deadline_tests.rs` の表〔`"areka/ghost_session.rs"`・`"areka/session_end.rs"`〕、`readme_tests.rs:424` の `"areka/readme/os_port.rs"` ほか）を、移した先のパスと、移した後に項目がある所を読むように直し、前と同じ事実を確かめさせる。絞り込みが移した後に黙って空になる（赤にならずに確かめる力を失う）形を残さない。`main.rs` を読む較正の写し（`session_end_sync_send_tests.rs:437`・`:445`）は、`main.rs` が残るので直さない。
+3. The 集め直し作業 shall 本体の外の crate の説明に残る本体のパス（`crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:57` の `boot_config.rs`・`crates/areka-kanade/src/schedule/script_log.rs:16` の `log_history.rs`・`crates/real-run-kit/` の説明・`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md`・`crates/areka/tests/emo2_real_run.rs:58` の `default_helper_exe_path()` の置き場の説明ほか）を、移した先のパスへ書き換え、動きを変えない。
 4. The 集め直し作業 shall `tools/` の中の説明のパス（`tools/package.ps1` の目印の出どころ・`tools/perf/judge-perf.py`）を、移した先へ書き換え、道具が字面で読む文（ログの目印の本文ほか）は変えない。
-5. The 集め直し作業 shall 文書の中の集めるモジュールのパスを、移した先へ書き換える: `doc/COMPAT_ARCHITECTURE.md`（§8 の既にある行のパスだけ）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（2026-11-21 の測りで約 33 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`doc/README.md`・`doc/click-through.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`doc/ideas/` の下の文書。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
-6. The 集め直し作業 shall `.kiro/steering/structure.md` の本体の節（src 直下の起動と終了のファイル・`session/`・`roots/`・`cli/`・`readme`）と、`.kiro/steering/tech.md` の本体のパスを、移した先へ合わせる。
+5. The 集め直し作業 shall 文書の中の集めるモジュールのパスを、移した先へ書き換える: `doc/COMPAT_ARCHITECTURE.md`（§8 の既にある行のパスだけ）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（2026-11-21 の測りで約 33 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`doc/README.md`・`doc/click-through.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`doc/ideas/` の下の文書（`doc/ideas/novel-redesign-2026-11-20/` を含む）。残るファイル `main.rs` の名で移す項目を指す行（2026-11-21 の測りで `doc/COMPAT_ARCHITECTURE.md:189` の `restore_merged_placements`・`:318`・`:319` の `session_mark_verdict`）は、ファイル名の grep に当たらないので項目の名で引いて 1 件ずつ直す（同じ行の `after_run` ほか `main.rs` に残る項目は直さない）。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
+6. The 集め直し作業 shall `.kiro/steering/structure.md` の本体の節（src 直下の起動と終了のファイル・`session/`・`roots/`・`cli/`・`readme`）と、`.kiro/steering/tech.md`・`.kiro/steering/logging.md`（2026-11-21 の測りで `:103` の `log_history.rs`）の本体のパスを、移した先へ合わせる。
 7. The 集め直し作業 shall `audit-areka-app` と `audit-areka-install-update` の brief の「受け持つファイル」を、移した先のパスへ書き換える。（**仮定**: 受け持ちの持ち主は変えず、パスだけを書き換える＝roots の芯と readme は `audit-areka-install-update` のまま。OPEN QUESTION 3）
-8. When 書き換えを終えたとき, the 集め直し作業 shall 集めたモジュールの古いパス（`crates/areka/src/ghost_session.rs` ほか・`src/` を付けない書き方を含む）を、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す。除くのは、歴史の文書（`roadmap-history.md`・`.kiro/specs/completed/`）・新旧のパスの対応表を持つ `roadmap.md`・日付つきの写し・同じウェーブの約束で触らない所（`crates/areka-input/src/user_break.rs:201`〔`audit-areka-input-menu` がパスを書かない形に直す〕）だけで、除いた所は一覧で残す。
+8. When 書き換えを終えたとき, the 集め直し作業 shall 集めたモジュールのディレクトリを付けた古いパス（`crates/areka/src/ghost_session.rs`・`areka/src/ghost_session.rs`・`src/ghost_session.rs` の形ほか）を、`crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md`・`.kiro/steering/logging.md` で grep して 0 件であることを示す。ディレクトリを付けない素のファイル名（`ghost_session.rs` だけの書き方。2026-11-21 の測りで触れない crate に 9 か所・`areka-ghost`・`wintf` に 2 か所）は、6.9 のモジュールの名前と同じく移した後も読めるものとして当たりにせず、書き換えない。除くのは、歴史の文書（`roadmap-history.md`・`.kiro/specs/completed/`）・新旧のパスの対応表を持つ `roadmap.md`・日付つきの 1 枚の写し（`doc/roadmap-overview-2026-10-16.html` の形。`doc/ideas/novel-redesign-2026-11-20/` は当たらず書き換える側）・同じウェーブの約束で触らない所（`crates/areka-input/src/user_break.rs:201`〔`audit-areka-input-menu` がパスを書かない形に直す〕）だけで、除いた所は一覧で残す。
 9. The 集め直し作業 shall モジュールの名前だけで本体の層を指す説明（`crates/areka-runtime/src/lib.rs`・`crates/areka-placement/src/lib.rs` の「本体の `ghost_session`」・本体の `runtime_tests/mod.rs` の 25 行ほか）を、移した後も読めるものとして 6.8 の当たりにせず、書き換えない。
 
 ### Requirement 7: ログの出所の名前
@@ -170,7 +170,7 @@
 
 #### Acceptance Criteria
 
-1. The 集め直し作業 shall 起動・切替・読み直し・終了・OS のセッションの終了・告知・起動中の印・記憶の書き込み・ログの中身の振る舞いを変えない。直したくなった不具合と古い説明は直さず、範囲を受け持つ audit（`audit-areka-app`・`audit-areka-install-update`）へ申し送りとして記録する。
+1. The 集め直し作業 shall 起動・切替・読み直し・終了・OS のセッションの終了・告知・起動中の印・記憶の書き込み・ログの中身の振る舞いを変えない。直したくなった不具合と、この仕様の移動と関係なくもとから古い説明（2026-11-21 の測りで `doc/click-through.md:3`・`:136`・`tools/perf/invoke-perf-run.ps1:29`・`app_exit_tests.rs:182`）は直さず、範囲を受け持つ audit（`audit-areka-app`・`audit-areka-install-update`）へ申し送りとして記録する。
 2. When 着手のときと完了のとき, the 集め直し作業 shall `cargo test --workspace --no-fail-fast -- --list` を取り、`: test$` の行から名前の末尾（最後の `::` から後ろ）の多重集合を作り、前後で一致することを示す。
 3. If 前後の多重集合が一致しない場合, then the 集め直し作業 shall 名前を改めたテストと新しく足したテストを対応表で 1 件ずつ説明し、説明できない差を残さない。
 4. The 集め直し作業 shall `cargo check --workspace --all-targets` の警告を 0 件のまま保つ。
