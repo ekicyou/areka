@@ -38,7 +38,7 @@ use super::{BalloonWiring, HoverAction, hover_action};
 /// **借用規律・縮退はハンドラと同一**:
 /// - `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_runtime")`＋no-op
 ///   （donor presenter=None 同型）。runtime `Rc` は 1 度 clone し全 scope で共有する（同一資源）。
-/// - `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋skip。
+/// - `BalloonWiring` 不在は結線漏れ＝**構成異常**＝頭で 1 回 `error!(event = "balloon_wiring_missing")` を出して戻る。
 /// - runtime `try_borrow`（不変）で `hit_active` を控え、借用解放後に `try_borrow_mut` で
 ///   `inject_choice_hover`（`Inject` アームのみ・値は必ず `None`）。`RefCell` 借用失敗は
 ///   `error!(event = "balloon_runtime_borrow_failed")`＋skip（panic しない）。
@@ -65,36 +65,33 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     // 複数 entity が同一バルーン窓へ写る場合は scope で dedup（1 scope につき高々 1 回処理）。
     let mut scopes: Vec<usize> = Vec::new();
     for e in leaving {
-        if let Some(win) = find_owner_window(world, e) {
-            if let Some(scope) = world.get::<BalloonWindowMarker>(win).map(|m| m.scope) {
-                if !scopes.contains(&scope) {
-                    scopes.push(scope);
-                }
-            }
+        if let Some(win) = find_owner_window(world, e)
+            && let Some(scope) = world.get::<BalloonWindowMarker>(win).map(|m| m.scope)
+            && !scopes.contains(&scope)
+        {
+            scopes.push(scope);
         }
     }
     if scopes.is_empty() {
         return;
     }
 
-    // ── バルーン滞在の解除——選択肢機構より前 ────────────────
-    // 記録側（`on_balloon_pointer_moved` の借用規律 ②）と縮退方向を意図的に非対称にする: 記録は
-    // 上流 `RuntimeWiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
-    // （抑止を解く側は積極的）。滞在が真のまま残ると恒久抑止へ固着するため。
-    // BalloonWiring 不在は結線漏れ＝構成異常 error!＋no-op（silent failure 禁止）。
-    if world.get_non_send::<BalloonWiring>().is_some() {
-        // 滞在の集合は `BalloonWiring` と同じ時に置かれる runtime の型（不在は可視性の相が error! を 1 回出す）。
-        if let Some(mut balloon_hover) = world.get_non_send_mut::<BalloonHover>() {
-            for &scope in &scopes {
-                balloon_hover.clear_balloon_hover(scope);
-            }
-        }
-    } else {
+    if world.get_non_send::<BalloonWiring>().is_none() {
         tracing::error!(
             event = "balloon_wiring_missing",
             scopes = ?scopes,
-            "BalloonWiring 不在（結線漏れ）: バルーン滞在の解除を no-op 縮退"
+            "BalloonWiring 不在（結線漏れ）: バルーン離脱の後始末を no-op 縮退"
         );
+        return;
+    }
+
+    // 解除は RuntimeWiring の可否より前に行う（記録は RuntimeWiring が揃うときだけ）。滞在が真のまま
+    // 残ると抑止が恒久に固着するため、解く側は縮退に依らない。
+    // 滞在の集合は `BalloonWiring` と同じ時に置かれる runtime の型（不在は可視性の相が error! を 1 回出す）。
+    if let Some(mut balloon_hover) = world.get_non_send_mut::<BalloonHover>() {
+        for &scope in &scopes {
+            balloon_hover.clear_balloon_hover(scope);
+        }
     }
 
     // runtime は単一グローバル資源ゆえ 1 度 clone して全 scope で共有する。
@@ -113,18 +110,10 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     for scope in scopes {
         let actor = ActorKey::from(scope.to_string());
 
-        // BalloonWiring 不在は結線漏れ＝構成異常 error!＋skip。
-        let Some(last_injected) = world
+        let last_injected = world
             .get_non_send::<BalloonWiring>()
-            .map(|bw| bw.hover(scope))
-        else {
-            tracing::error!(
-                event = "balloon_wiring_missing",
-                scope,
-                "BalloonWiring 不在（結線漏れ）: バルーン離脱 hover 解除を no-op 縮退"
-            );
-            continue;
-        };
+            .expect("BalloonWiring は頭で存在確認済み")
+            .hover(scope);
 
         // 押せる範囲（選択肢かアンカー）があるかを見る——アンカーの強調もここで外す。
         // try_borrow 失敗（理論上不到達の構成異常）は error!＋skip（panic しない）。
@@ -146,7 +135,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
             HoverAction::ResetOwnState => {
                 let mut bw = world
                     .get_non_send_mut::<BalloonWiring>()
-                    .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
+                    .expect("BalloonWiring は頭で存在確認済み");
                 bw.set_hover(scope, None);
             }
             HoverAction::Inject(value) => {
@@ -163,7 +152,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
                 }
                 let mut bw = world
                     .get_non_send_mut::<BalloonWiring>()
-                    .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
+                    .expect("BalloonWiring は頭で存在確認済み");
                 bw.set_hover(scope, value);
                 // hover 遷移注入の marker（トラブルシュート用・info ではない）。
                 tracing::debug!(

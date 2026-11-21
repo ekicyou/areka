@@ -14,6 +14,7 @@ use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
+use areka_emo_text::state::SpanKind;
 use areka_kanade::KanadeMsg;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
@@ -23,7 +24,7 @@ use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_
 use wintf::ecs::{Point, Window};
 
 use super::super::test_support::{capture_logs, headless_runtime_wiring};
-use super::super::{BalloonWiring, ChoiceSelection};
+use super::super::{BalloonWiring, ChoiceSelection, dispatch_selection};
 use super::on_balloon_pointer_pressed;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use areka_placement::spawn::BalloonWindowMarker;
@@ -265,4 +266,38 @@ fn repeated_up_arrow_stops_at_line_zero() {
         rig.press(UP, DoubleClick::None);
     }
     assert_eq!(rig.older_by_one(), ScrollChange::Unchanged, "行 0 で止まる");
+}
+
+/// 受け口の無い送り出しは、選択肢でもアンカーでも ERROR を 1 行だけ出し、WARN を出さない。
+#[test]
+fn dispatch_selection_without_receiver_logs_one_error_and_no_warn() {
+    for (kind, failed) in [
+        (SpanKind::Choice, "choice_selection_send_failed"),
+        (SpanKind::Anchor, "anchor_selection_send_failed"),
+    ] {
+        let (tx, rx) = mpsc::channel();
+        drop(rx);
+        let wiring = BalloonWiring::new(tx);
+        let sel = ChoiceSelection {
+            kind,
+            id: "id".into(),
+            label: "label".into(),
+            scope: 0,
+            references: Vec::new(),
+        };
+        let mut sent = true;
+        let logs = capture_logs(|| {
+            sent = dispatch_selection(&wiring, None, &PlaceKey::balloon(&ActorKey::from("0")), sel)
+        });
+        assert!(!sent, "{kind:?}");
+        let errors = logs
+            .iter()
+            .filter(|l| l.contains("level=ERROR") && l.contains(failed))
+            .count();
+        assert_eq!(errors, 1, "{kind:?}: {logs:?}");
+        assert!(
+            !logs.iter().any(|l| l.contains("level=WARN")),
+            "{kind:?}: {logs:?}"
+        );
+    }
 }

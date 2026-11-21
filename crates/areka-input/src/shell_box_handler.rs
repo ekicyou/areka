@@ -30,8 +30,7 @@ use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
 use super::balloon::{
-    BalloonWiring, ChoiceSelection, HoverAction, finished_talking, hover_action, selection_events,
-    settle_after_selection,
+    BalloonWiring, ChoiceSelection, HoverAction, dispatch_selection, finished_talking, hover_action,
 };
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
@@ -313,17 +312,9 @@ pub(super) fn press_with_point(
     verdict != BoxPressVerdict::ShellOp
 }
 
-/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録・箱の印つき）。送れたら `true`。
-/// 記録の名前は種類で決まる（選択肢は `choice_selected`・アンカーは `anchor_selected`）。
+/// 選択の確定を送る。`BalloonWiring` が無ければ記録して `false`。
 fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
-    let (selected, send_failed) = selection_events(sel.kind);
-    let kind = sel.kind;
-    let (scope, id, label, references_len) = (
-        sel.scope,
-        sel.id.clone(),
-        sel.label.clone(),
-        sel.references.len(),
-    );
+    let scope = sel.scope;
     let Some(wiring) = world.get_non_send::<BalloonWiring>() else {
         tracing::error!(
             event = "balloon_wiring_missing",
@@ -332,30 +323,12 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         );
         return false;
     };
-    if wiring.send_selection(sel) {
-        // 送れた選択が選択肢なら、箱の選択肢を済みにする（アンカーは済まない）。
-        if let Some(runtime) = runtime_of(world) {
-            settle_after_selection(&runtime, &box_place(scope, &hit.name), kind);
-        }
-        tracing::info!(
-            event = selected,
-            scope,
-            id = %id,
-            label = %label,
-            references_len,
-            r#box = hit.name.as_str(),
-            "選択確定: ChoiceSelection を発行（箱）"
-        );
-        true
-    } else {
-        tracing::error!(
-            event = send_failed,
-            scope,
-            id = %id,
-            "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
-        );
-        false
-    }
+    dispatch_selection(
+        wiring,
+        runtime_of(world).as_ref(),
+        &box_place(scope, &hit.name),
+        sel,
+    )
 }
 
 /// シェルの窓から出たときの後始末（排他システム・`clear_balloon_hover_on_leave` の鏡写し）。

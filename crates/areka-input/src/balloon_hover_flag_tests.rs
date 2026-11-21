@@ -323,18 +323,20 @@ fn clear_balloon_hover_clears_that_scope_only_and_is_idempotent() {
     assert!(bw.is_balloon_hovered(0), "掃除後の再滞在は再び真");
 }
 
-/// log-first（結線漏れ）: `BalloonWiring` 不在のバルーン所有離脱は ERROR で報告し panic しない。
+/// log-first（結線漏れ）: `BalloonWiring` 不在のバルーン所有離脱は、スコープの数に依らず ERROR を
+/// 1 行だけ出して panic しない。
 #[test]
 fn leave_without_balloon_wiring_reports_error() {
     let mut world = World::new();
     spawn_balloon_leave_child(&mut world, 0);
-    // BalloonWiring も RuntimeWiring も挿入しない。
+    spawn_balloon_leave_child(&mut world, 1);
+    world.insert_non_send(headless_runtime_wiring(runtime_with_active_choice("0")));
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
-        "結線漏れは ERROR で報告する（silent failure 禁止）: {logs:?}"
-    );
+    let missing = logs
+        .iter()
+        .filter(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing"))
+        .count();
+    assert_eq!(missing, 1, "結線漏れは 1 巡に 1 行: {logs:?}");
 }

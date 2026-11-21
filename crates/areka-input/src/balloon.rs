@@ -23,7 +23,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use areka_emo_text::actor::{ChoiceHitRow, TextLayerRuntime};
-use areka_emo_text::place::PlaceKey;
+use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::SpanKind;
 #[cfg(test)]
 use areka_sakura::ActorKey;
@@ -113,6 +113,52 @@ pub(super) fn settle_after_selection(
     }
 }
 
+/// 選択を送り、送れたら場所の選択肢を済みにして記録する。送れたら `true`。
+pub(super) fn dispatch_selection(
+    wiring: &BalloonWiring,
+    runtime: Option<&Rc<RefCell<TextLayerRuntime>>>,
+    place: &PlaceKey,
+    sel: ChoiceSelection,
+) -> bool {
+    let (selected, send_failed) = selection_events(sel.kind);
+    let box_name = match &place.place {
+        TextPlace::Box(name) => Some(name.as_str()),
+        TextPlace::Balloon => None,
+    };
+    let kind = sel.kind;
+    let scope = sel.scope;
+    let id = sel.id.clone();
+    let label = sel.label.clone();
+    let references_len = sel.references.len();
+    if !wiring.send_selection(sel) {
+        tracing::error!(
+            event = send_failed,
+            scope,
+            id = %id,
+            "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
+        );
+        return false;
+    }
+    if let Some(runtime) = runtime {
+        settle_after_selection(runtime, place, kind);
+    }
+    let message = if box_name.is_some() {
+        "選択確定: ChoiceSelection を発行（箱）"
+    } else {
+        "選択確定: ChoiceSelection を発行"
+    };
+    tracing::info!(
+        event = selected,
+        scope,
+        id = %id,
+        label = %label,
+        references_len,
+        r#box = box_name,
+        "{message}"
+    );
+    true
+}
+
 /// バルーン選択肢対話の配線資源（NonSend）。
 ///
 /// UI スレッド所有の資源として `World` へ NonSend 挿入し（`insert_non_send`）、Input
@@ -145,22 +191,9 @@ impl BalloonWiring {
         }
     }
 
-    /// 選択確定 [`ChoiceSelection`] を発行シンクへ送る（一度きり発行）。
-    ///
-    /// [`ChoiceSelectionInbox`] の `Receiver` が生存する限り成功する。送出失敗（受け口消滅後の
-    /// [`Sender`] エラー）は warn＋no-op（`false` 返し）。
+    /// 発行シンクへ送る（記録はしない）。受け口が無ければ `false`。
     pub(crate) fn send_selection(&self, selection: ChoiceSelection) -> bool {
-        let scope = selection.scope;
-        let (_, send_failed) = selection_events(selection.kind);
-        if self.selection_tx.send(selection).is_err() {
-            tracing::warn!(
-                event = send_failed,
-                scope,
-                "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op で継続"
-            );
-            return false;
-        }
-        true
+        self.selection_tx.send(selection).is_ok()
     }
 
     /// scope の最後に注入した hover ordinal を回収する（未注入は `None`）。
