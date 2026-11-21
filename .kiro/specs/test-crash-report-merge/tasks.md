@@ -12,7 +12,7 @@
 ## Tasks
 
 - [ ] 1. 置き場の crate と依存の行
-- [ ] 1.1 `crash-report-kit` を作り、落ちの報告の本体を移す
+- [x] 1.1 `crash-report-kit` を作り、落ちの報告の本体を移す
   - 新しい crate の `Cargo.toml` を設計の KitManifest のとおりに置く（`publish = false # テストだけが使う道具`・`[dependencies]` は `windows = { workspace = true }` だけ・`[features]` と `[dev-dependencies]` は持たない）
   - `areka-runtime` の今の本文（受け手 2 つ・MTA・持ち手の表・報告の行・1 行の溜め）を `lib.rs` へ移し、設計の CrashReportKit の「変えるのは次だけ」の分だけを変える（頭の `//!` を 1 本の説明に・`RaiseException` の宣言の `#[cfg(test)]` を外す・較正の口 `crash_on_an_unnamed_thread` を足す・持ち手の表の説明を「使い手が許可を取る・返す所から」に言い換える）。行の語・並び・書く先・`LINE_BYTES`・`CUT_MARK`・`HOLDER_ROWS`・`NAME_BYTES` は変えない
   - 隣の `lib_tests.rs` に、この crate 自身の据え付けの静的変数・檻 4 本（据え付け・MTA・最初の受け手は AV だけ・1 行の溜め）・装置なしの較正 1 本（`#[ignore]`）を移す
