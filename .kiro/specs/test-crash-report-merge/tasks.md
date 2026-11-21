@@ -89,7 +89,7 @@
   - _Dispatch: standard — 44 行それぞれの今の置き場を調べて書く_
   - _Requirements: 6.2, 6.5, 6.6, 6.7_
 
-- [ ] 4. (P) steering の `structure.md` を実物に合わせる
+- [x] 4. (P) steering の `structure.md` を実物に合わせる
   - 「Temp Path Kit Crate」の節の後に、設計の SteeringDoc の 5 項目（Location・Purpose・Modules・Dependencies・Consumers）で `crash-report-kit` の節を足す
   - runtime の節の Dependencies の任意の依存の句に `crash-report-kit` を並べる
   - 終わった姿: `structure.md` に `crash-report-kit` の節があり、書いた依存と使い手が 1.2 の `Cargo.toml` と合う
