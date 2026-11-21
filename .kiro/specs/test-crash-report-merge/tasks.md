@@ -46,7 +46,7 @@
   - _Dispatch: mechanical — areka-input の既存のファイルと同じ形に替える_
   - _Requirements: 2.1, 3.2, 4.1, 4.5, 5.1_
 
-- [ ] 2.3 (P) areka-runtime の入口を同じ名の再公開に替える
+- [x] 2.3 (P) areka-runtime の入口を同じ名の再公開に替える
   - `crates/areka-runtime/src/crash_report_test_support.rs` を、設計の RuntimeEntry の形（`crash_report_kit` の `hold`・`install`・`installed`・`release` の再公開・`#[cfg(test)]` の据え付けの静的変数・据え付けの確かめ 1 本・装置ありの較正 1 本）だけにする。装置ありの較正は許可を取り `GraphicsCore` を作ってから `crash_report_kit::crash_on_an_unnamed_thread()` で落とす
   - `lib.rs` の `pub mod` の宣言・`spine_wait.rs`・説明で名を挙げる 4 ファイルは変えない
   - 終わった姿: `cargo test -p areka-runtime --lib crash_report_test_support` が緑（較正は ignored）。`cargo test -p areka-input --lib crash_report` と `cargo test -p areka --lib runtime_tests::crash_filter_is_installed_before_the_tests_start` が差分 0 のまま緑（定義が 1 つになったことの grep は 5.1 で記録する）
@@ -122,4 +122,4 @@
 
 ## Implementation Notes
 
-（実装の段で書く）
+- 2.3: `areka` には lib のターゲットが無い。本体のテストは `cargo test -p areka --bins <名>` で回す（`--lib` は「no library targets」で落ちる）。
