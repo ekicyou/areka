@@ -569,3 +569,29 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 ### 14.7 机なしで走らせた実機の統合テスト
 
 タスク 2 とタスク 5.2 の実装中に、実機で areka を起こす統合テスト（`crates/areka/tests/emo2_mcp_real_run.rs` の `#[ignore]` の無い 1 本など）を排他テストの机なしで走らせ、どちらも緑だった。本来は机が要るので、10.2 で机を取って 1 回ずつ確かめ直す。
+
+## 15. 完了のときの確かめ（タスク 10.1・要件 1.1・10.2〜10.5）
+
+- 確かめた木: HEAD `c22d94e2142b1e4f8cbdfee63c3dad805e389c32`（作業の木のコミット済みの差。`git diff -M main...HEAD`）。
+
+### 15.1 テストの名前の多重集合（要件 10.2・10.3）
+
+- 13.1 の式のとおりに作り直した（`cargo test --workspace --no-fail-fast -- --list`・終了 0・`: test$` の行 **14,438 行**＝着手のとき 14,437 行＋1）。
+- `baseline-test-names.txt` との `diff`: 差は **1 行だけ**＝追加 `moved_modules_keep_their_kinds_by_real_module_path`（タスク 9.1 の較正）。失われた名前は 0・名前の変わったものは 0。
+- doctest の名前の `(line N)` が行の移動でずれる件: 末尾（最後の `::` から後ろ）を比べた結果が上のとおりなので、読み替えの表に載せるものは無い。
+- 新しい名前の一覧はコミットしない（差が 1 本で足りるため）。
+
+### 15.2 警告（要件 10.4）
+
+- `cargo check --workspace --all-targets`: `^warning` **0 件**。`pilot` のマニフェストの警告 2 件は 13.2 のとおりテストのプロファイルの組み立てだけに出るもとからのもので、対象外。
+
+### 15.3 移動の検出（要件 1.1・10.5）
+
+- `git diff -M --stat main...HEAD`: 280 ファイル。`--name-status`: **R 88**（`crates/areka/src` 70・`readme` 11・`roots` 7）・M 181・A 11・D 0。
+- A の 11: spec の文書 7 本（`.kiro/specs/session-module-gather/`）と、`main.rs` から切り出した新しいファイル 4 本（`roots.rs`・`session/boot_request.rs`・`session/boot_seam.rs`・`session/session_mark.rs`）。移動ではなく新設で、rename に検出されないのは正しい。
+- 移動したファイルで rename に検出されなかったもの: **0**（D が 0 のため、消えて別名で現れたファイルは無い）。
+
+### 15.4 全体テスト（要件 10.5）
+
+- `pwsh -NoProfile -File tools/test-all.ps1`（排他テストの机の中で 1 回・約 10 分 23 秒）: **all steps green**（終了 0）。x64 の全体テスト 398 秒・テスト結果 176 行で 15,035 件 pass・失敗 0。整形・i686・各検査・perf loop selftest もすべて OK。
+- 出力にあった `sample-ghost-kit: cleanup failed (os error 5)` は `target\nar-samples\work` の前回の残りの木を片づけられなかった旨の記録で、手順は緑。この spec とは関係ない。
