@@ -130,8 +130,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     );
 }
 
-/// 完全 no-op（NoopInactive アーム）: 押せる範囲が無い・前回注入なし → 自前状態を触らず
-/// inject もしない。
+/// 完全 no-op（NoopInactive アーム）: 押せる範囲が無い・前回注入なし → inject しない。
 #[test]
 fn moved_inactive_no_prior_injection_is_full_noop() {
     let mut world = World::new();
@@ -150,11 +149,6 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
         );
     });
 
-    assert_eq!(
-        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-        None,
-        "NoopInactive は自前状態を触らない（未注入のまま None）"
-    );
     assert!(
         !logs.iter().any(|l| l.contains("choice_hover_inject")),
         "NoopInactive は inject しない: {logs:?}"
@@ -370,10 +364,8 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         // ── (2) 縮退時の対応ログレベル─────────────────────────────────
         match scenario {
             Degrade::Tunnel => assert!(
-                !logs
-                    .iter()
-                    .any(|l| l.contains("choice_hover_inject") || l.contains("level=ERROR")),
-                "Tunnel は短絡ゆえ inject も error も出さない: {logs:?}"
+                !logs.iter().any(|l| l.contains("level=ERROR")),
+                "Tunnel は短絡ゆえ error を出さない: {logs:?}"
             ),
             Degrade::RuntimeAbsent => {
                 assert!(
@@ -414,7 +406,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
 ///
 /// 戻り値 false と対応する記録（Tunnel=記録なし・RuntimeWiring 不在=DEBUG・BalloonWiring 不在=ERROR）で固定する。
 #[test]
-fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
+fn pressed_tunnel_and_resource_degrade_return_false() {
     for scenario in [
         Degrade::Tunnel,
         Degrade::RuntimeAbsent,
@@ -488,9 +480,11 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let _selection_rx = insert_wiring(&mut world);
     let (_flag_tx, flag_rx) = mpsc::channel();
-    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
-    let (kanade_tx, kanade_rx) = mpsc::channel();
-    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        mpsc::channel().0,
+        mpsc::channel().0,
+    ));
 
     let ev = Phase::Bubble(PointerState {
         client_point: Point { x: 10, y: 20 },
@@ -509,10 +503,6 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
         logs.iter()
             .any(|l| l.contains("level=TRACE") && l.contains("balloon_break_detected")),
         "押下ハンドラの末尾から中断の入口が呼ばれ、左ダブルクリックの検出が記録される: {logs:?}"
-    );
-    assert!(
-        lifecycle_rx.try_recv().is_err() && kanade_rx.try_recv().is_err(),
-        "バルーンが出ていないので、どちらの線へも送らない"
     );
 }
 

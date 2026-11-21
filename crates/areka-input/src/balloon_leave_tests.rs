@@ -156,7 +156,7 @@ fn leave_non_balloon_window_is_ignored() {
 }
 
 /// マーカー不在は完全 no-op: `PointerLeave` を一切持たない World では、結線が無くても
-/// 何も記録しない（結線漏れの ERROR は離脱のあるフレームだけ）。
+/// 何も記録しない（結線漏れの ERROR はバルーン窓の離脱のあるフレームだけ）。
 #[test]
 fn leave_no_marker_is_full_noop() {
     let mut world = World::new();

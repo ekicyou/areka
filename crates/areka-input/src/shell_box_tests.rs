@@ -464,18 +464,4 @@ fn fold_talking_follows_talk_start_and_end() {
         assert_eq!(fold_talking(talking, NoUserBreakSignal::Enter), talking);
         assert_eq!(fold_talking(talking, NoUserBreakSignal::Leave), talking);
     }
-    let seq = [
-        NoUserBreakSignal::TalkStarted,
-        NoUserBreakSignal::Enter,
-        NoUserBreakSignal::Leave,
-    ];
-    assert!(
-        seq.into_iter().fold(false, fold_talking),
-        "選択肢を待つあいだも最中"
-    );
-    assert!(
-        ![NoUserBreakSignal::TalkStarted, NoUserBreakSignal::TalkEnded]
-            .into_iter()
-            .fold(false, fold_talking)
-    );
 }

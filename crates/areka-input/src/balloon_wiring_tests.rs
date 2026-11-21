@@ -205,11 +205,6 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
         .get_non_send_mut::<BalloonWiring>()
         .expect("wire で BalloonWiring 挿入済み")
         .set_hover(0, Some(2));
-    assert_eq!(
-        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
-        Some(2),
-        "前提: hover[0]=Some(2)"
-    );
 
     // Input スケジュールを実行 → 登録済み clear_balloon_hover_on_leave が走り hover を解除する。
     world.run_schedule(Input);

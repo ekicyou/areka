@@ -299,30 +299,6 @@ fn click_hit_builds_selection_from_current_row() {
     );
 }
 
-/// 非ヒット→非発行: 表示中でも全矩形外の座標なら None。
-#[test]
-fn click_non_hit_returns_none() {
-    let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
-    assert_eq!(
-        click_selection(true, &rows, 5.0, 5.0, 0),
-        None,
-        "全矩形外の click は非構成（None）"
-    );
-}
-
-/// 非表示中は非発行: `active == false` は、たとえ矩形内座標でも None。
-/// hit 判定より前に短絡する（消滅時の stale／原子性ガード）。
-#[test]
-fn click_inactive_returns_none_even_inside_rect() {
-    let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
-    // (30, 30) は矩形内だが active=false ゆえ None。
-    assert_eq!(
-        click_selection(false, &rows, 30.0, 30.0, 0),
-        None,
-        "非表示中（active=false）は矩形内でも非構成（None）"
-    );
-}
-
 // -------------------------------------------------------------------------
 // 選択肢とアンカーが混ざった当たりの行
 //

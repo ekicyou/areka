@@ -144,7 +144,7 @@ impl Rig {
         });
 
         let mut world = World::new();
-        // `dispatch_drag_events` が引く資源（wintf の `EcsWorld::new` と同じ登録）。
+        // `dispatch_drag_events` が引く資源。
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
         world.insert_resource(MonitorSnapshot {

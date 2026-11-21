@@ -2,8 +2,8 @@
 //!
 //! 偽の窓（`Window`＋`CharWindowMarker`）の子に `PointerState` を載せ、注入の時計で系を回す。
 
-use super::super::pointer_test_support::drain_mouse;
-use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
+use super::super::pointer_test_support::{drain_mouse, world_with_wiring};
+use super::super::{MouseWiring, on_char_pointer_moved};
 use super::char_watch;
 use crate::balloon::test_support::{capture_logs, empty_runtime, headless_runtime_wiring};
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
@@ -55,15 +55,9 @@ struct Rig {
 fn rig() -> Rig {
     let serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     SWAPPED.with(|s| s.set(false));
-    let (tx, rx) = mpsc::channel();
     let clock = Rc::new(Cell::new(0));
     let c = clock.clone();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(mock),
-        Box::new(move || c.get()),
-    ));
+    let (world, rx) = world_with_wiring(mock, Box::new(move || c.get()));
     Rig {
         world,
         rx,

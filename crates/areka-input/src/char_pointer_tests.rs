@@ -54,10 +54,6 @@ fn move_and_double_click_send_failures_record_one_line_each() {
 fn wire_mouse_input_inserts_mouse_wiring_non_send() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
     let mut world = World::new();
-    assert!(
-        world.get_non_send::<MouseWiring>().is_none(),
-        "挿入前は MouseWiring 不在"
-    );
     wire_mouse_input(&mut world, tx);
     assert!(
         world.get_non_send::<MouseWiring>().is_some(),

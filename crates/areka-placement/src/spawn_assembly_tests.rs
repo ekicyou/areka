@@ -513,8 +513,8 @@ fn keep_directly_above_attached_to_every_balloon_window_pointing_at_its_char_win
 /// **ちょうど 1 本**出す（wintf 側レコードとの 2 段 grep の結合キー供給）。
 ///
 /// 本文は純関数 `zorder_pair_declared_line` の組立結果と一致させる（組立の二重実装を
-/// 許さない）。捕捉窓の中に確実に拾える記録が併置されているので、件数の主張は
-/// 「捕捉が働いていないから 0 本」では成立しない——2 本を名指しで突き合わせる。
+/// 許さない）。件数は 2 と等値で押さえるので、捕捉が働いていない 0 本では赤になる——
+/// 2 本を名指しで突き合わせる。
 #[test]
 fn spawn_emits_one_declared_record_per_scope_with_scope_and_both_entities() {
     let mut world = World::new();

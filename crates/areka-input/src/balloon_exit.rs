@@ -42,10 +42,6 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
         .query_filtered::<Entity, With<PointerLeave>>()
         .iter(world)
         .collect();
-    if leaving.is_empty() {
-        // マーカー不在フレームは完全 no-op（RuntimeWiring にも触れない）。
-        return;
-    }
 
     // 非バルーン窓（marker 不在）・所有窓不在の leave は無視する。
     // 複数 entity が同一バルーン窓へ写る場合は scope で dedup（1 scope につき高々 1 回処理）。

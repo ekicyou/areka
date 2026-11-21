@@ -267,12 +267,6 @@ mod tests {
             input.references, references,
             "references は記述順・全要素をバイト等価で転写（空要素除去・順序変更なし）"
         );
-        assert_eq!(
-            input.references.len(),
-            5,
-            "空文字要素・空白のみ要素も落とさない"
-        );
-        assert_eq!(input.references[1], "", "空文字要素はそのまま空文字で残る");
     }
 
     /// `scope` の型合わせ（用途限定は下流）: `usize`→`u32` へ値を保って写る。

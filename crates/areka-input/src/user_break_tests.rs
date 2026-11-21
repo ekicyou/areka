@@ -787,7 +787,6 @@ fn box_break_dispatches_the_same_as_the_balloon_double_click() {
 
     assert_eq!(lines.lifecycle(), balloon_lifecycle);
     let to_kanade = lines.kanade();
-    assert_eq!(to_kanade.len(), balloon_kanade.len());
     assert!(
         matches!(
             (&to_kanade[..], &balloon_kanade[..]),

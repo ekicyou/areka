@@ -229,7 +229,6 @@ fn box_choice_click_sends_one_selection_and_nothing_to_the_shell() {
     assert!(f.pressed(ROW, DoubleClick::None, on_a(true)), "処理した");
     let expected = click_selection(true, &on_a(true).rows, 50.0, 15.0, 0);
     assert_eq!(f.selections(), vec![expected.expect("行の上")]);
-    assert!(f.shell().is_empty(), "シェルへのクリックは 0 件");
 }
 
 /// 選択の確定に続くダブルクリックの 2 打目もシェルのダブルクリックにしない。
@@ -239,7 +238,6 @@ fn double_click_on_box_choice_is_not_a_shell_double_click() {
     assert!(f.pressed(ROW, DoubleClick::None, on_a(true)));
     // 2 打目は行の外（選択肢が消えた後を模す）・左ダブルクリック。
     assert!(f.pressed(BODY, DoubleClick::Left, on_a(false)));
-    assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
     assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
 }
 
@@ -259,7 +257,6 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
             talk_id: None
         }]
     ));
-    assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
 }
 
 /// 箱の中の行の上でない単押しはシェルへの操作のまま（何も送らない）。
@@ -295,13 +292,6 @@ fn press_outside_boxes_is_unchanged() {
         [KanadeMsg::Mouse(ref m)] if m.kind == MouseEventKind::DoubleClick { button: MouseButton::Left }
     ));
     assert!(f.break_rx.try_iter().next().is_none(), "中断しない");
-    // 写しで箱の外を渡しても素通り。
-    assert!(!press_with_point(
-        &mut f.world,
-        0,
-        &pointer(BODY, DoubleClick::Left),
-        BoxPoint::default()
-    ));
 }
 
 // ---------------------------------------------------------------- 移動
@@ -318,7 +308,6 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
     assert!(handled, "処理した");
     assert_eq!(f.hover(), (Some(box_name(TWO_BOX_SHELL, "a")), Some(0)));
     assert_eq!(hover_injections(&events), 1, "同値は注入しない: {events:?}");
-    assert!(f.shell().is_empty(), "シェルへの移動は 0 件");
 }
 
 /// 箱の中で行の上でない移動は滞在を記録してからシェルへ送る。行から外れたら
@@ -416,7 +405,6 @@ fn leaving_with_a_borrow_failure_still_clears_the_stay() {
     let failed = events_named(&events, "balloon_runtime_borrow_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::ERROR);
-    assert_eq!(hover_injections(&events), 0, "強調は外せない: {events:?}");
 }
 
 /// シェルの窓でない窓（同じスコープのバルーン窓）の離脱は、箱の滞在を消さない。
@@ -468,7 +456,6 @@ fn box_anchor_click_while_talking_selects_without_breaking() {
     assert_eq!(got[0].kind, SpanKind::Anchor);
     assert!(f.pressed(BODY, DoubleClick::Left, anchor_on_a()));
     assert!(f.selections().is_empty(), "範囲の外の 2 打目は知らせない");
-    assert!(f.shell().is_empty(), "シェルへは 0 件");
     assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
     assert!(f.lifecycle_rx.try_iter().next().is_none(), "隠しもしない");
 }

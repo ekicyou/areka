@@ -14,7 +14,8 @@ use wintf::ecs::cursor::{
 use wintf::ecs::pointer::PointerState;
 use wintf::ecs::{PhysicalPoint, Window};
 
-use super::super::super::{MouseWiring, RegionSource};
+use super::super::super::MouseWiring;
+use super::super::super::pointer_test_support::world_with_wiring;
 use super::super::char_watch;
 use super::{BUNDLED, CharCursors, register_char_cursor};
 use crate::hover_region::cursor_pick::Spot;
@@ -40,13 +41,7 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
 }
 
 fn wired_world(assets: Option<ShellCursorAssets>) -> World {
-    let (tx, _rx) = std::sync::mpsc::channel();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(mock),
-        Box::new(|| 0),
-    ));
+    let (mut world, _rx) = world_with_wiring(mock, Box::new(|| 0));
     if let Some(a) = assets {
         world.insert_non_send(a);
     }
@@ -279,5 +274,4 @@ fn shell_file_that_cannot_be_made_falls_back_to_the_descript_file() {
         .non_send::<ShellCursorAssets>()
         .cursor_for(1, cursor_size_for_dpi(96));
     assert_eq!(Some(shown), descript);
-    assert_ne!(shown, stock_cursor(IDC_HAND).unwrap());
 }

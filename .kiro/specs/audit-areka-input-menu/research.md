@@ -354,12 +354,15 @@
 | 2 | 0 | 15 | 7 | 5 | 18 件を直した。4 件は回 1 の直しが呼んだ連鎖（要件 9.8）で、直さずに Fable の総括へ回す |
 | 3 | 0 | 6 | 8 | 1 | 12 件を直した。2 件は前の回の直しが拾い残した連鎖（要件 9.8）で、直さずに Fable の総括へ回す（下の 12.4 の回 3） |
 | 4 | 0 | 16 | 11 | 1 | 21 件を直した。6 件は前の回の直しが拾い残した連鎖（要件 9.8）で、直さずに Fable の総括へ回す（下の 12.4 の回 4） |
+| 5 | 0 | 8 | 11 | 0 | 19 件を全部直した（連鎖の 5 件もこの回で直した・下の 12.4 の回 5）。要件 9.6 の条件（「必ず直す」0・本番の振る舞いに関わる指摘 0）を満たすので、ここで打ち切る（下の 12.6） |
 
 回 1 の芯は、落ちる力の無いテスト（Tunnel の押下の表明・`choice_active` 不変の表明・÷k の持ち上げの檻・`hover_arrives_before_move…`・`MouseWiring` を直に叩く 4 本）、重なったテストと支えの写し（GPU の組み立て・`pump_until_idle`・`TWO_BOX_SHELL`・預かりの取り出し・`drain_mouse`）、古い説明（`send_selection` の記録・`inject_choice_hover` の名・`hover_region` の「後から足すカーソル」・`spawn_assembly_tests.rs:352` の「本檻」・`collision-probe.rs` のテストのファイル名）。`HitTest::none()` の表明は持ち主の `areka-placement` の `spawn_assembly_tests.rs` へ移した。
 
 回 3 の芯は、落ちる力の足りないテスト（`on_left_press_asks_the_presenter…` が `RuntimeWiring` を置かず照会を通らない・取り消しのテストがドラッグした窓の保存を見ない）と、言えないことを言う説明（`fast_drag_in_one_dispatch…` の「開始の座標は動く前の窓から」・`MouseWiring` の「送出ヘルパはポインタハンドラ経由でのみ」・`wire_user_break…` の「登録は本体のゴースト起動の側」・`HoverAction` の「choice 非表示」・押下の戻り値の矢印の抜け）。ほかに `bubble_move` と `bubble_pointer` の写し・`plan_mouse_move` の同じ 2 つの返し・テストの名の「stock」・wintf の doc の crate の無い名指し。足した・強めた表明 2 本（`on_left_press…` と取り消しの保存）は、本番を一時だけ壊して赤を確かめてから戻した（照会を `.map(|_| true)` に・取り消しのときドラッグした窓の保存を飛ばす）。
 
 回 4 の芯は、落ちる力の無いテスト（`leave_no_marker_is_full_noop`・矢印の押下の `nothing_sent`・`box_selection_without_balloon_wiring…` の選択 0 件・`move_to_another_box_and_outside` が間引きで偽になる表明・ドラッグの包みのテストの「動かさないクリック」〔開始の無い終了は wintf の溜めが捨てるので受け手へ届かない〕）、危うい枝のテストの抜け（シェルの窓の離脱の借用の失敗とバルーン窓の離脱・箱の上のホイールの借用の失敗）、言えないことを言う説明（`wire_user_break` の呼び手・`collision-probe.rs` の終了の道・`drain_choice_selections` の結線の順・`BalloonWiring` の使い手・wintf の doc の `ex_style` だけの理由・ドラッグの土台の「本番と同じ順」）、既にある包みの写し（`SharedFakeIo`＝sylphya の `Arc` の `PersistIo`）。回 3 の総括が範囲の外として残した 2 つ（`wire_user_break` の doc・`collision-probe.rs`）は範囲の中のファイルなので、この回の指摘として直した。足した・強めた表明 6 本は、本番を一時だけ壊して赤を確かめてから戻した（離脱の系の結線の確かめを頭へ・箱の選択の送り口が結線漏れで真を返す・シェルの窓の離脱で借りられないと滞在を消さない・離脱の窓をシェルの窓に限らない・箱の外の移動で真を返す・箱の上のホイールの借用の失敗で真を返す）。
+
+回 5 の芯は、戻り値の表明から導ける表明（落ちる道の無い表明）の残り。`balloon_pressed.rs` の押下は送れたときだけ真を返し、`shell_box_handler_tests.rs` の `Fixture` は前段が真なら crate の根のハンドラを呼ばないので、「偽を確かめた後の送り 0 件」「真を確かめた後のシェルへ 0 件」は落ちない（`balloon_pointer_handler_tests.rs` の 2 本・`balloon_choice_settle_tests.rs`・`shell_box_handler_tests.rs` の 5 か所と離脱の借用の失敗の強調 0 件・`press_outside_boxes_is_unchanged` の写しの押下）。ほかに、重なった表明とテスト（`balloon_pure_core_tests.rs` の `click_non_hit…`・`click_inactive…`〔`click_selection_copies_the_kind_of_the_hit_row` が両方を持つ〕・`fold_talking` の畳み込み 2 つ・`choice_drain.rs` の参照列の等値の後の件数と空文字・`user_break_tests.rs` の件数・`cursor_answer_tests.rs` の `assert_ne!`・前提の再確認 2 つ）、写し（`char_watch_tests.rs`・`cursor_answer_tests.rs` の `MouseWiring::with_clock` の手組み＝`pointer_test_support::world_with_wiring`）、言えないことを言う説明（`drag_test_support.rs` の「`EcsWorld::new` と同じ登録」〔wndproc の控えは置かない〕・`spawn_assembly_tests.rs` の「捕捉窓の中に確実に拾える記録が併置」・テストの名の「side_effect_free」）。本番のコードは `balloon_exit.rs` の重なった早期復帰 1 つを消した（`leaving` が空なら `scopes` も空で、すぐ下の復帰と同じ。振る舞いは変わらない）。これで残る 1 つの復帰は `leave_no_marker_is_full_noop` が守る: その復帰を一時だけ外すと、結線の無いこのテストが `balloon_wiring_missing` の ERROR で赤になることを確かめてから戻した。
 
 回 2 の芯は、回 1 で見落とした同じ種類の古い説明と重なり（`attach_balloon…` が受け手を上書きしても落ちない表明・`throttle.rs` の per-scope の 1 本・`identity_scale…`・Tunnel の Ctrl+左が Shift 無しで落ちない表明・`ShellBoxHover::set` の強調の記録の分岐のテスト抜け）。
 
@@ -468,6 +471,18 @@
 - `drag_tests.rs` の `click_without_move_and_double_click_send_no_drag` の「動かさないクリック（開始の無い終了）」。開始の無い終了は wintf の溜めが捨てるので包みへ届かないが、このテストは wintf の本物の溜めと配りを通していて、捨てなくなれば終了の知らせが届いて赤になる（回 4 で消した保存の比べとは違い、落ちる道がある）。
 - 本体の `ghost_session.rs` のコメントの「`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入」。本体のファイルは触らない（要件 7.3）。完了の棚卸で `audit-areka-app` へ申し送る。
 
+#### 回 5 の連鎖（要件 9.8）
+
+| 番号 | 場所 | 中身 | 呼んだ前の回の直し |
+|---|---|---|---|
+| R5-A1 | `balloon_leave_tests.rs` の `leave_no_marker_is_full_noop` と `balloon_exit.rs` の 2 つの早期復帰 | 「バルーン窓の離脱が無ければ記録しない」を守る復帰が 2 つあり、テストは前の 1 つしか通らない（後ろを外しても緑）。doc の「離脱のあるフレームだけ」はキャラ窓だけの離脱でも ERROR を出さないことを言えていない | 回 4 でこのテストを書き直したとき |
+| R5-A2 | `balloon_pointer_handler_tests.rs` の `moved_inactive_no_prior_injection_is_full_noop` の「hover は None のまま」 | headless では当たりが常に `None` で、書かれうる値も `None` | R2-A7 の総括で headless の移動の表明を洗ったときに拾い残した |
+| R5-A3 | 同じファイルの `pressed_left_double_click_reaches_the_user_break_entry` の 2 本の線が空 | 中断を送る枝は真を返すので、偽の表明の後では落ちない | 同じく R2-A7 |
+| R5-A5 | 同じファイルの `pressed_tunnel_and_resource_degrade_are_side_effect_free` の名 | 戻り値と記録しか見ない | R4-A5 で doc と見出しから「副作用ゼロ」を消したとき |
+| R5-B2 | `shell_box_handler_tests.rs` の `leaving_with_a_borrow_failure_still_clears_the_stay` の強調 0 件 | 借用を握ったままなので注入の道へ入れない（入れば 2 行目の借用の失敗で既に赤） | 回 4 でこのテストを足したとき |
+
+打ち切りの回なので、この回の中で直した（Fable の総括は回さない）。直したのは: 前の早期復帰を消して残る 1 つをテストが守る形にし doc を「バルーン窓の離脱のあるフレームだけ」へ・A2 と A3 の表明を消す（A3 は使わなくなった線の受け端も）・名を `pressed_tunnel_and_resource_degrade_return_false` へ（ツリーで名指すのは完了済みの spec の記録だけ）・B2 の表明を消す。同じ種類（戻り値か組み立てから導ける「送らない」の表明）を範囲のテスト全部で grep して洗った: `try_recv().is_err()`・`try_iter().next().is_none()`・`shell().is_empty()`・`selections().is_empty()` の残りはどれも、戻り値と送りが本番で別々に決まる所（`on_char_pointer_pressed` の中ボタンなど・`balloon_wheel` の系・箱の単押しの 2 打目）で、送りを足す壊し方で落ちる。移動の側の「副作用ゼロ」は回 4 で残すと決めたとおり（注入と滞在の不変を表明している）。
+
 ### 12.5 既定のブランチとの差分（要件 9.5）
 
 `git diff --stat f6405e09`（`git merge-base HEAD origin/main`）の作業ツリーで数えた。
@@ -475,3 +490,12 @@
 - 本体（`crates/areka/`）・`Cargo.lock`・`crates/log-capture-kit/`・`vendors/`・`doc/`: 0 行。`doc/COMPAT_ARCHITECTURE.md:412` の 1 語は 4.3 で直していない（11.4 のとおり `session-module-gather` の着地を待つ）。
 - `areka-runtime`・`areka-placement`・wintf の差分は 12 ファイルで、どれも design.md「Modified Files（範囲の外）」の表に在る（`spawn.rs`・`spawn_assembly_tests.rs`・`spawn_zorder_pair_deferred_tests.rs`・`collision-probe.rs`・`collision-probe/setup.rs`・`balloon_hover.rs`・`balloon_hover_tests.rs`・`shell_box_hover.rs`・`shell_box_hover_tests.rs`・`shell_cursor_table.rs`・`shell_cursor_table_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。両方の `lib.rs`・`Cargo.toml` と `areka-input/Cargo.toml` は 0 行。
 - 外への約束: SHIORI へ送るイベントとカーソルの選び方は変えていない。`areka-input` の公開の項目の名と形は変えていない（本体のビルドとテストは全体テストが見る）。ログは、差分から消えた `event = "…"` の名（`choice_selected`・`choice_selection_send_failed`・`choice_hover_inject`・`box_choice_hover_inject`・`balloon_wiring_missing`・`balloon_runtime_borrow_failed`・`mouse_send_failed`・`choice_leave_no_runtime`・`choice_pressed_no_runtime`）が全部本番に残っていることを grep で確かめた。変わったのは議題 6 の送り失敗の WARN 1 行の削除・指摘 17 の離脱の `balloon_wiring_missing` の行数（1＋スコープの数 → 1）と、寄せで変わった出所（指摘 16・design.md の表）だけ。
+- 回 5 の直しの後に数え直した（2026-11-22）: 上の 0 行と 12 ファイルは変わらない。回 5 が触った範囲の外のファイルは `spawn_assembly_tests.rs` の doc の 2 行だけで、表の中。回 5 は記録の名・欄・行数を変えていない（消した早期復帰は記録を出さない枝）。
+
+### 12.6 かけ直しの締め（要件 9.6・9.7）
+
+- **5 回目で打ち切った・残りは直し済み。** 回 5 も 0 件には収まらなかった（19 件）が、「必ず直す」は 0 件で、本番の振る舞い（SHIORI へ送るもの・カーソル・ログの行・公開の面）に関わる指摘も 0 件なので、要件 9.6 のとおり回 5 の指摘を全部直したところで打ち切り、全体テストへ進む。開発者への一言は進行役が伝える。
+- **収まったか。** 件数（直したほうがよい＋できれば）は回 1 から 45・22・14・27・19 で、減り続けてはいない。中身はどの回も、テストの落ちる力（落ちる道の無い表明・重なった表明）と説明の言い過ぎ・言い残し・写しの 3 種類で、回を追って細かくなっている。
+- **「必ず直す」の数。** ギャップ分析から回 5 まで、どの回も 0 件（ギャップ分析で下請けが付けた 2 件も、振る舞いが正しくテストが弱いだけなので「直したほうがよい」とした）。同じ所から「必ず直す」が出続けてはいないので、要件 9.7 は当たらない。
+- **本番の振る舞いの変化。** かけ直しの 5 回で 0 件。本番のコードに入れた直しは説明の文と、振る舞いを変えない書き直し（回 3 の `plan_mouse_move` の同じ 2 つの返しを 1 つに・回 5 の `balloon_exit.rs` の重なった早期復帰の削除）だけ。外への約束の変化は、かけ直しの前の実装で決めた要件 7.7 の裁定の分（12.5）だけである。
+- **残る危うさ。** 6 回目をかければ、同じ 3 種類の小さな指摘がまだ出る見込みが高い（回 5 も新しい 14 件のうち多くは前の回が読んだ行から出た）。ただし、それらはテストを弱くも説明を誤りにもしうるが、本番の振る舞いを誤らせるものではない。本番の振る舞いの最後の網は全体テスト（`tools/test-all.ps1`）である。回 5 の連鎖 5 件は打ち切りの回なので Fable の総括に回さず、この回の中で直して同じ種類を grep で洗った（12.4 の回 5）。
