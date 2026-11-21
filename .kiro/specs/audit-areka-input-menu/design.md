@@ -19,8 +19,8 @@
 
 - 新しい機能・依存の追加・`Cargo.lock` の変更・clippy の機械的な直し。
 - 本体（`crates/areka/`）のファイルの変更（右クリックメニュー `menu/`・`file_drop*`・`app_exit_escape_tests.rs` を含む）。本体の説明の古びは申し送る（「並走の兄弟と申し送り」）。
-- `areka-runtime`・`areka-placement` の、要件 7.4 に挙げたほかのファイルの変更（両方の `lib.rs`・`Cargo.toml` を含む）。`shell_box_hover.rs:19` の `areka_input::shell_box::next_box_hover` の名指しなど、範囲の外の doc の古びは直さない（要件 7.6）。
-- `areka-emo-text` の公開の面を増やすこと（強調の注入の値を読む口は足さない・OPEN QUESTION 3）。
+- `areka-runtime`・`areka-placement`・wintf の、要件 7.4 に挙げたほかのファイルの変更（両方の `lib.rs`・`Cargo.toml` を含む）。挙げたファイルの中の古い doc（`shell_box_hover.rs:19` の `areka_input::shell_box::next_box_hover` の名指し）は、同じファイルを触るので一緒に直す。挙げたほかのファイルの古びは、見つけたら持ち主の brief へ申し送る（要件 7.6・7.11）。
+- `areka-emo-text` の公開の面を増やすこと（強調の注入の値を読む口は足さない・設計の討議の確定 5）。
 - `crash_report_tests.rs` の `install`・`installed` の使い方の変更（要件 7.12）。直すのは 7 行の説明の括弧だけ（指摘 42）。
 
 ## Boundary Commitments
@@ -30,13 +30,13 @@
 - `crates/areka-input/` の全部（`src/` の 49 ファイル・`Cargo.toml`・`cursor/README.md`）の、確定した指摘の直しと、そのためのテストの追加・直し・削除・名の変更。
 - 本番の 3 つの寄せ先: 選択の送り出し（`balloon.rs` の `dispatch_selection`）・強調の当て方（`balloon.rs` の `apply_hover`）・マウスの送出（`lib.rs` の `MouseWiring::send_mouse`）。どれも crate の中の私有の関数で、公開の面は増えない。
 - テストの支えの 3 ファイル（`balloon_test_support.rs`・`pointer_test_support.rs`・`drag_test_support.rs`）への寄せ。`pointer_test_support` に足す項目は `#[cfg(test)] pub(crate)` にし、本体が `*` で読む面を広げない（`test-support` だけの組み立てで使われない項目の警告も出さない）。
-- 範囲の外の、要件 7.4 に挙げたファイルだけ: `areka-runtime` の `examples/collision-probe.rs`（63・66 行）・`examples/collision-probe/setup.rs`（75〜76 行）・`src/balloon_hover.rs` と `src/shell_box_hover.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-placement` の `src/spawn.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル。
+- 範囲の外の、要件 7.4 に挙げたファイルだけ: `areka-runtime` の `examples/collision-probe.rs`（63・66 行）・`examples/collision-probe/setup.rs`（75〜76 行）・`src/balloon_hover.rs` と `src/shell_box_hover.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-placement` の `src/spawn.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-runtime` の `src/shell_cursor_table.rs` の `CursorRows::get` とそのテスト（指摘 74）、移すテストの名を doc コメントで指す 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。
 - 申し送りの書き足し: `.kiro/specs/audit-areka-app/brief.md`（本体の名指し 2 件）と、`session-module-gather` のセッションへの伝言（`doc/COMPAT_ARCHITECTURE.md:412` のパス）。
 
 ### Out of Boundary
 
 - 本体（`crates/areka/`）・`crates/real-run-kit/`・`crates/log-capture-kit/`・`vendors/`・`Cargo.lock`（要件 7.3・7.5・7.13）。
-- `areka-runtime`・`areka-placement` の上に挙げたほかのファイル（要件 7.4）。`BalloonHover`・`ShellBoxHover`・`settle_box_hover`・`spawn_ghost_windows`・`RuntimeWiring` の形は変えない。
+- `areka-runtime`・`areka-placement`・wintf の上に挙げたほかのファイル（要件 7.4）。`BalloonHover`・`ShellBoxHover`・`settle_box_hover`・`spawn_ghost_windows`・`RuntimeWiring`・`CursorRows` の公開の欄の形は変えない（`CursorRows` はメソッドを 1 つ足すだけ）。
 - `areka-emo-text`・`areka-sylphya`・`wintf` ほかの crate（読むだけ）。
 - `doc/COMPAT_ARCHITECTURE.md` の §8（`session-module-gather` が書き換える・要件 7.9）。向こうの着地の後なら 412 行のパスの 1 語だけをこちらで直す（「並走の兄弟と申し送り」）。
 - 記録の名と名前つきの欄、範囲の外に読み手のある 4 つの出所（`areka_input::user_break`・`areka_input::char_watch::cursor_answer`・`areka_input::hover_region::cursor_pick`・`areka_input::throttle`）（議題 5）。
@@ -192,7 +192,11 @@ crates/areka-placement/src/
 | `crates/areka-runtime/src/shell_box_hover.rs` | 末尾に `#[cfg(test)] #[path = "shell_box_hover_tests.rs"] mod tests;` の 3 行 | 指摘 33 |
 | `crates/areka-runtime/src/shell_box_hover_tests.rs`（新） | `settle_drops_vanished_box`・`hover_mark_does_not_survive_vanished_text_or_window_leave`（滞在は `ShellBoxHover::set` で直に置く形に書き直す）。箱の名前は `fold_boxes`＋`parse_boxes` で作る（`shell_box_assets_tests.rs` と同じ作法） | 指摘 33 |
 | `crates/areka-placement/src/spawn.rs` | 末尾の mod の並びに `#[cfg(test)] #[path = "spawn_assembly_tests.rs"] mod assembly_tests;` の 3 行 | 指摘 32 |
-| `crates/areka-placement/src/spawn_assembly_tests.rs`（新） | 13 本を移す。import は `super::…`・`super::test_support::…`・`crate::…` に。名は変えない。中の札と経緯の語は移すときに消す | 指摘 32・47 |
+| `crates/areka-placement/src/spawn_assembly_tests.rs`（新） | 13 本を移す。import は `super::…`・`super::test_support::…`・`crate::…` に。名の札 `t_i1_`〜`t_i3_` と中の札・経緯の語は移すときに消す | 指摘 32・47 |
+| `crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs` | 17・152 行の doc コメントのテストの名の 1 語 | 指摘 47・設計の討議の議題 4 |
+| `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` | 342 行の doc コメントのテストの名の 1 語 | 指摘 47・設計の討議の議題 4 |
+| `crates/areka-runtime/src/shell_cursor_table.rs` | `CursorRows::get`（借りた `&str` で引く）と私有の鍵の trait。公開の欄の型は変えない | 指摘 74・設計の討議の議題 3 |
+| `crates/areka-runtime/src/shell_cursor_table_tests.rs` | `get` のテスト 1 本 | 指摘 74 |
 | `.kiro/specs/audit-areka-app/brief.md` | 件を 2 つ書き足す（「並走の兄弟と申し送り」） | 要件 7.9〜7.11 |
 
 ### 1,000 行の見通し（要件 6.1）
@@ -243,9 +247,9 @@ sequenceDiagram
 |---|---|---|
 | 1.1・1.2・1.3・1.4・1.5・1.6・1.7 | audit の洗い出し・数え直し・行の当て直し | ギャップ分析で済み（research.md 1〜5 節）。設計は 1〜77 と件 1〜11 をそのまま入力にする（「指摘ごとの直し」） |
 | 2.1 | 確定した一覧を残す | requirements.md の確定の節（済み）。設計は全件を「指摘ごとの直し」に持つ |
-| 2.2・2.3 | 裁定を仰ぐ 3 種類・ukadoc で確かめる | 当たるものは 0 件（SSP 互換・SHIORI へ送るものはどれも変えない）。設計の段で見つかった判断は OPEN QUESTION へ |
+| 2.2・2.3 | 裁定を仰ぐ 3 種類・ukadoc で確かめる | 当たるものは 0 件（SSP 互換・SHIORI へ送るものはどれも変えない）。設計の段で見つかった判断は設計の討議で確定した（末尾の節） |
 | 2.4 | 当たらないものは直す | 全件を作業の組 G1〜G16 に割り当てた |
-| 2.5 | 残す裁定の記録 | 残す裁定は 0 件。OPEN QUESTION 4（指摘 74）の答えしだいで記録する |
+| 2.5 | 残す裁定の記録 | 残す裁定は 0 件（指摘 74 も直す＝設計の討議の確定 3） |
 | 2.6 | 20 タスクを越えるなら 2 本目 | 「タスクの見込み」16 前後 |
 | 3.1・3.2 | 3 つの組を全部直す | 「指摘ごとの直し」の 77 行 |
 | 3.3 | 使う所まで直し切る | File Structure Plan の 3 つの表・「消す・名を変えるときの照合」 |
@@ -273,7 +277,7 @@ sequenceDiagram
 | 7.4 | `areka-runtime`・`areka-placement` は挙げた所だけ | File Structure Plan の「範囲の外」の表 |
 | 7.5 | `Cargo.lock`・`log-capture-kit` | 0 行 |
 | 7.6 | 範囲の外は要る変更だけ | 範囲の外の古びは申し送り（直さない） |
-| 7.7・7.8 | 外への約束の変化は裁定の分だけ・読み手を直す | ログの行の変化は議題 6 の 1 件と指摘 17（OPEN QUESTION 2）。出所の変化の表（読み手 0） |
+| 7.7・7.8 | 外への約束の変化は裁定の分だけ・読み手を直す | ログの行の変化は議題 6 の 1 件と指摘 17（設計の討議の確定 2）。出所の変化の表（読み手 0） |
 | 7.9・7.10・7.11 | 申し送り | 「並走の兄弟と申し送り」 |
 | 7.12 | `crash_report_tests.rs` の使い方 | 7 行の説明の括弧だけ（指摘 42） |
 | 7.13 | `vendors/` | 0 行 |
@@ -315,7 +319,7 @@ impl BalloonWiring {
 - 事前: 呼び手が `BalloonWiring` を引き終えている（箱は引けなければ今どおり `balloon_wiring_missing` を出して `false`）。
 - 送れた: `runtime` が在れば `settle_after_selection(runtime, place, kind)`。INFO を 1 行（名は `selection_events(kind).0`・欄は `scope`・`id`・`label`・`references_len`、場所が箱なら続けて `box`）。
 - 送れない: ERROR を 1 行（名は `selection_events(kind).1`・欄は `scope`・`id`）。WARN は出さない。
-- `box` の欄は `Option<&str>`（`place.place` が `TextPlace::Box(name)` なら `Some(name.as_str())`）で書き、普通のバルーンでは欄が出ない（tracing は `None` の欄を書かない）。文は今の 2 つの字面を場所で選ぶ（OPEN QUESTION 1）。
+- `box` の欄は `Option<&str>`（`place.place` が `TextPlace::Box(name)` なら `Some(name.as_str())`）で書き、普通のバルーンでは欄が出ない（tracing は `None` の欄を書かない）。文は今の 2 つの字面を場所で選ぶ（設計の討議の確定 1）。
 - 普通のバルーンの呼び手は `Some(&runtime)` と `PlaceKey::balloon(&actor)`、箱の呼び手は `runtime_of(world).as_ref()` と `box_place(scope, &hit.name)` を渡す。
 
 ### `apply_hover`（指摘 15・3）
@@ -428,7 +432,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 | 44 | G14 | `crates\areka-input\cursor\` に | — |
 | 45 | G12 | 私有へのリンク 18 と解けないリンク 1 を名だけ（バッククォート）にするか doc を短く | `cargo doc -p areka-input --no-deps` の警告 0（G16 で確かめる） |
 | 46 | G12・G13 | 本番の分は G12、テストの分は G13（ほかの組が同じファイルを触るなら、その組で一緒に直す）。ログの文（`char_watch.rs:270`）も直す。テスト名 `keeps_its_return_value`・`…_old_immediate_path` を今の振る舞いの名に | — |
-| 47 | G12・G13 | 札と番号を消して文だけに。テスト名の `row01_`〜`row13_` を外す。`t_i1_`〜`t_i3_` は入力に残る 1 本だけ外す（移す 13 本は名を変えない＝OPEN QUESTION 8） | — |
+| 47 | G12・G13 | 札と番号を消して文だけに。テスト名の `row01_`〜`row13_` を外す。`t_i1_`〜`t_i3_` は、入力に残る 1 本も移す 13 本も外す。名指す範囲の外の doc コメント 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs` 17・152 行、wintf の `zorder_pair_maintain_always_on_top_tests.rs` 342 行）の名の 1 語も同じ変更で直す（設計の討議の議題 4） | — |
 | 48 | G13 | 役目で書く | — |
 | 49 | G12・G13 | `/comment-cleanup` の作法で理由だけを残す（÷k をしない理由・借用の順の理由・ログの非対称の理由・GPU の理由）。`pub` の項目の 1 行目と `//!` の 1 行目は残す | — |
 | 50 | G14 | 「（要件 6.2）」を消す | — |
@@ -455,7 +459,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 | 71 | G4 | 早い戻りを外し、trace を判定の後（`NotDoubleClick` でないとき）に。記録の順は今と同じ | 既存の `single_press_sends_nothing_and_is_not_recorded_as_detected` |
 | 72 | G4 | 戻り値を外し、テストは受け手の `try_recv` で数える | 既存の `forward_all_*` |
 | 73 | G4 | 巡回の前に `hover` を写す | 既存の `char_watch` のテスト |
-| 74 | G4 | 変えない（鍵が `areka-runtime` の型で要件 7.4 の外・WM_SETCURSOR ごとの 1 回の複製は想定の負荷で問題にならない） | —（OPEN QUESTION 4） |
+| 74 | G4 | `areka-runtime` の `CursorRows` に、借りた `&str` で引く `pub fn get(&self, scope: u32, region: &str, scene: CursorScene) -> Option<&Shape<F>>` を足し、`cursor_pick.rs:176` はそれで引く（複製 0）。公開の欄 `rows` の型 `BTreeMap<(u32, String, CursorScene), Shape<F>>` は変えない（本体の `switch_cursor_tests.rs` が欄を直に使い、`session-module-gather` がそのファイルを書き換えるため）。引き方は `dyn` の鍵の `Borrow`（`(u32, &str, CursorScene)` と `(u32, String, CursorScene)` が同じ順で比べられる私有の trait を `shell_cursor_table.rs` に置く） | `shell_cursor_table_tests.rs` の 1 本（`get` が `rows.get(&(.., String, ..))` と同じ行を返す・無い鍵は `None`）と既存の `cursor_pick` のテスト（設計の討議の議題 3） |
 | 75 | G4 | 自前の定義を残す（`windows` 0.62.2 に無いと確かめた・説明「windows クレートに無い」は正しい） | 指摘 62 の 1 本 |
 | 76 | G4 | `HoverSend { .. }` を直に書く | 既存の `hover_region` のテスト |
 | 77 | G8 | 指摘 20 で減らし、足すテストは新しいファイルへ（`balloon_gpu_hit_tests.rs`） | — |
@@ -470,7 +474,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 | `user_break_talk_id_tests`・`talk_id_tests` | `user_break.rs:406-408` | 同じ変更で消す |
 | `input_events_tests`・`input_events_menu_tests`・`input_events_char_clamp_tests` | `lib.rs:592,599,603`・旧 `input_events_menu_tests.rs:4`・旧 `input_events_tests.rs:155`・`collision-probe.rs:66`・本体 `app_exit_tests.rs:182`・`doc/COMPAT_ARCHITECTURE.md:412` | 範囲の中と `collision-probe.rs` は直す。本体と `COMPAT_ARCHITECTURE.md` は申し送り |
 | 消すテストの名（指摘 4・19・20・21・22・29・30・58・67） | `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` を本体 `app_exit_escape_tests.rs:73` が名指す | 申し送り（議題 4） |
-| 移す 13 本の名（`t_i2_no_window_has_ws_ex_topmost` ほか） | `areka-placement/src/spawn_zorder_pair_deferred_tests.rs:17`・`wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:342` | 名を変えないので触らない |
+| 移す 13 本の名（`t_i2_no_window_has_ws_ex_topmost` ほか） | `areka-placement/src/spawn_zorder_pair_deferred_tests.rs:17,152`・`wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:342` | 札を外した名へ、同じ変更で 3 行とも直す |
 | 名を変えるテスト（`row01_`〜・`keeps_its_return_value`・`…_old_immediate_path`・`t_i1_all_windows_…`） | 範囲の外の読み手 0（research.md 10.2） | 直す前に grep で 0 を確かめる |
 | `settle_box_hover` の再輸出 | `shell_box_tests.rs` の 2 本だけ | 2 本を移した後に消す |
 | `RegionSource::Mock` の `allow` | 本体のテストが `Mock` を構築する（`pub` の列挙の腕） | 腕は残し、`allow` と理由の 2 行だけ消す |
@@ -533,7 +537,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 ### 2. ログの行の数の変化（要件 7.7）
 
 - 選択の送り出しの失敗: 2 行（WARN＋ERROR・同じ名）→ ERROR 1 行。議題 6 の裁定（範囲の外の読み手 0）。
-- 離脱の結線漏れ: 1＋スコープの数 → 1 行（指摘 17・範囲の外の読み手 0＝本体 `ghost_session.rs:41` は名を説明に書くだけ）。確定した指摘の直しの結果で、議題 6 と同じ扱いで記録する（OPEN QUESTION 2）。
+- 離脱の結線漏れ: 1＋スコープの数 → 1 行（指摘 17・範囲の外の読み手 0＝本体 `ghost_session.rs:41` は名を説明に書くだけ）。確定した指摘の直しの結果で、議題 6 と同じ扱いで記録する（設計の討議の確定 2）。
 
 ### 3. そのほか
 
@@ -542,8 +546,8 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 3. **折り返しの 1 本の前提**: 「index と ordinal の食い違う行がある」をテストの中で表明してから移動する。
 4. **トークの番号の置き方**: `areka-runtime` を触らず、表示の線と可視性の相（test-support の `pub mod phase`）で置く（research.md 10.1）。
 5. **起こしの旗**: プロセス共有なので、`char_watch_tests.rs` の中の錠で溜めを作るテストを順に回す。期限を預けるのは crate の中でこのファイルのテストだけ。
-6. **新しい名**: `char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`（mod の名 `tests`・`menu_tests`・`char_clamp_tests` は変えない）（OPEN QUESTION 6）。
-7. **移すテスト**: 中身を変えない移動（import と札・経緯の語だけ直す）。名は変えない。`shell_box_tests.rs` の 2 本目だけは入力の関数を使わない形（滞在を `ShellBoxHover::set` で直に置く）に書き直す。移した先のテストが、持ち主の crate の既にあるテストと同じことを見ていれば、移した側を消す（G10 で照合）。
+6. **新しい名**: `char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`（mod の名 `tests`・`menu_tests`・`char_clamp_tests` は変えない）（設計の討議の確定 5）。
+7. **移すテスト**: 中身を変えない移動（import と札・経緯の語だけ直す）。名の札 `t_i1_`〜`t_i3_` は外し、名指す範囲の外の doc コメント 3 行も同じ変更で直す。`shell_box_tests.rs` の 2 本目だけは入力の関数を使わない形（滞在を `ShellBoxHover::set` で直に置く）に書き直す。移した先のテストが、持ち主の crate の既にあるテストと同じことを見ていれば、移した側を消す（G10 で照合）。
 8. **`WHEEL_PAGESCROLL`**: `windows` 0.62.2 に無い。自前の定義と説明を残す（指摘 75 は「確かめて今の形」で閉じる）。
 
 ## Error Handling
@@ -632,18 +636,21 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 
 ## 未解決の危うさ
 
-- `runtime_wiring_showing_talk` が装着前の `RuntimeWiring` で回らなければ、指摘 10 のテストが組めない（要件 7.4 の範囲では置く口を足せない）。そのときは議題に戻す（OPEN QUESTION 5）。
+- `runtime_wiring_showing_talk` が装着前の `RuntimeWiring` で回らなければ、指摘 10 のテストが組めない（要件 7.4 の範囲では置く口を足せない）。そのときは議題に戻す（設計の討議の確定 5）。
 - 実 GPU のテストの前提（拡大率 2.0 の原点・折り返しの幅）は字の大きさに依る。前提の表明で黙って空振りしない形にしてある。
 - 寄せで出所が変わる記録を、後から出所で絞る手順を作る人は表を読む必要がある（Revalidation Triggers）。
 
-## OPEN QUESTIONS（設計の討議へ）
+## 設計の討議で確定したこと（2026-11-21）
 
-1. **寄せた記録の文**（指摘 14・15）: 記録の名・名前つきの欄・水準は変えない。文（`message`）は欄に数えない前提で、選択の送り出しは今の 2 つの字面（普通のバルーン・箱）を場所で選んで保ち、強調の注入と借用の失敗の文は場所ごとに 1 つへそろえる（離脱の「窓外離脱で hover 解除を上流 runtime へ注入」は普通のバルーンの文に、借用の失敗の「（inject）」「（離脱 inject）」「（箱の強調）」は 1 つの文に）。文の読み手は完了した spec の記録だけ。**仮定**: そろえてよい。
-2. **離脱の結線漏れの行の数**（指摘 17）: 1＋スコープの数 → 1 行。外への約束（ログの行）の変化として、議題 6 と同じく要件 7.7 の裁定に記録する。**仮定**: 確定した指摘 17 の直しに含まれる（範囲の外の読み手 0）。
-3. **注入の到達の見方**（指摘 3）: 設計の検証の指摘 1 で解いた（自明な直し）。在しない ordinal の DEBUG は場所の取り違えを見分けられない（普通のバルーンと箱は同じ actor）ので、普通のバルーンにだけ ordinal 0 を持たせた runtime で場所ごとの DEBUG の行の数を見る形にした（Testing Strategy）。`areka-emo-text` に読み口は足さない。
-4. **指摘 74（`WM_SETCURSOR` ごとの文字列の複製）**: audit 自身が「今のままでよい」と書き、直すには `areka-runtime` の型（鍵）を変える必要がある（要件 7.4 の外）。**仮定**: 変えずに閉じ、理由を記録する。かけ直しで再び出たら、要件 2.5 の「残す」の裁定にする。
-5. **指摘 10 の組めないとき**: 可視性の相を装着前の結線状態で回して番号を置く道が組めなかった場合。**仮定**: 調べた範囲では組める（設計の検証でも、装着前に `TalkStarted` が `talk_id` を置き、期限を据えないことをコードで確かめた）。組めなければ実装を止めて議題に戻す（`areka-runtime` に置く口を足すなら要件 7.4 を広げる裁定が要る）。
-6. **テストのファイルの新しい名と `COMPAT_ARCHITECTURE.md:412`**（指摘 52）: 新しい名は `char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`。`doc/COMPAT_ARCHITECTURE.md:412` は `session-module-gather` が書き換える §8 の中なので、要件 7.9 で触らずに向こうへ伝え、向こうの着地の後ならこちらで 1 語直す。**仮定**: この名と扱いでよい。
-7. **本体 `app_exit_tests.rs:182` の古い説明**: 名の変更で古び、「`world_with_wiring` は私有」は既に誤り。本体は触れないので `audit-areka-app` の brief へ件として書き足す。**仮定**: 書き足す（要件 7.11）。
-8. **移すテストの名の札**（指摘 47）: `spawn_assembly_tests.rs` の 13 本は名を変えずに `areka-placement` へ移す（`t_i2_no_window_has_ws_ex_topmost` を範囲の外の 2 ファイル〔`areka-placement` の `spawn_zorder_pair_deferred_tests.rs:17`・wintf の `zorder_pair_maintain_always_on_top_tests.rs:342`〕が名で指し、そこは要件 7.4 の外）。入力に残る 1 本だけ `t_i1_` を外す。**仮定**: 名を変えない。
-9. **起こしの旗の確かめ方**（指摘 9）: 旗がプロセス共有なので、`char_watch_tests.rs` の中の錠で溜めを作るテストを順に回す。**仮定**: この錠を足してよい（本番は変えない）。
+開発者の答え: 「議題３：今かぶるセッションが無いなら全部直すべき。他は承認」。議題 3 は開発者の指定どおり、ほかの 4 件は推奨案で確定した。
+
+1. **寄せた記録の文**（指摘 14・15）: 記録の名・名前つきの欄・水準は変えない。選択の送り出しは今の 2 つの文（普通のバルーン・箱）を場所で選んで保ち、強調の注入と借用の失敗の文は場所ごとに 1 つへそろえる（文の読み手は完了した spec の記録だけ）。
+2. **離脱の結線漏れの行の数**（指摘 17）: 1＋スコープの数 → 1 行。外への約束（ログの行）の変化として、要件 7.7 の裁定に記録する（範囲の外の読み手 0）。
+3. **指摘 74（`WM_SETCURSOR` ごとの文字列の複製）**: 直す。`CursorRows::get`（借りた `&str` で引く）を `areka-runtime` の `shell_cursor_table.rs` に足し、`cursor_pick.rs` はそれで引く。公開の欄 `rows` の型は変えない（本体の `switch_cursor_tests.rs` が欄を直に使い、`session-module-gather` がそのファイルを書き換える）。触る 2 ファイルは C24 のどの兄弟の持ち場でもない（ロードマップの C24 の行）。`areka-runtime` を触る 2 本（`test-crash-report-merge`・`window-resetwindowpos-hold`）へ知らせた。
+4. **移すテストの名の札**（指摘 47）: 外す。名を doc コメントで指す範囲の外の 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs` 17・152 行、wintf の `zorder_pair_maintain_always_on_top_tests.rs` 342 行）も同じ変更で直す。`test-crash-report-merge`（wintf と `areka-placement` を触る）へ知らせた。
+5. **細かい確定**:
+   - 指摘 52 の新しい名は `char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`。`doc/COMPAT_ARCHITECTURE.md:412` は `session-module-gather` へ新しい名を伝え、向こうの着地の後ならこちらで 1 語直す。
+   - 本体 `app_exit_tests.rs:182` の古い説明は `audit-areka-app` の brief へ件として書き足す（要件 7.11）。
+   - 指摘 9 は `char_watch_tests.rs` の中の錠で溜めを作るテストを順に回す（本番は変えない）。
+   - 指摘 10 の番号の置き方（可視性の相を装着前に回す）が実装で組めなければ、実装を止めて議題に戻す（設計の検証でも組めるとコードで確かめた）。
+   - 指摘 3 の見方は設計の検証の指摘 1 で直した（場所を見分ける注入・Testing Strategy）。

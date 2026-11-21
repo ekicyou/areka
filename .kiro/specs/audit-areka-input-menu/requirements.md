@@ -156,6 +156,9 @@
 4. While C24 のあいだ, the 本 spec の直し shall `crates/areka-runtime/` と `crates/areka-placement/` に、次のほかは手を入れない（どちらの `lib.rs`・`Cargo.toml` にも手を入れない）
    1. 要件 5.6 の説明の文と、テストのファイル名を変えると古びる `collision-probe.rs` 66 行の 1 行（議題 7）
    2. 範囲の外の持ち物だけを試すテストの移し先（議題 3）: `crates/areka-runtime/src/balloon_hover.rs`・`shell_box_hover.rs` の末尾のテストの mod の行と、その兄弟の新しいテストのファイル、`crates/areka-placement/src/spawn.rs` の末尾のテストの mod の行と、その兄弟の新しいテストのファイル。移す前に、C24 のほかの 3 本のセッションと触るファイルを申し合わせる（要件 7.2）
+   3. 指摘 74 の直し（設計の討議の議題 3・2026-11-21 開発者「今かぶるセッションが無いなら全部直すべき。」）: `crates/areka-runtime/src/shell_cursor_table.rs` に `CursorRows` の借りた `&str` で引くメソッドを足すことと、`shell_cursor_table_tests.rs` のそのテスト。公開の欄の型は変えない
+   4. 移すテストの名の札を外すために、その名を doc コメントで指す 3 行（`crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs` 17・152 行、`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` 342 行）の名の 1 語（設計の討議の議題 4）。wintf のこのファイルは要件 7.6 の「直しのために要る変更」として触る
+   5. 1〜4 で触るファイルの中にある古い doc（`shell_box_hover.rs` 19 行の名指しなど）は、同じファイルを触るので一緒に直す
 5. While C24 のあいだ, the 本 spec の直し shall `Cargo.lock` と `crates/log-capture-kit/` に手を入れない
 6. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の持ち主の件として残す）
 7. If 確定した指摘が外への約束を変えずには直せないとき, then the 本 spec shall 約束を黙って破って直さず、要件の討議でその指摘を議題にし、扱い（約束を変えない直し方・読み手を同じ変更で全部直す・後の spec へ回す）を開発者の裁定で決める
