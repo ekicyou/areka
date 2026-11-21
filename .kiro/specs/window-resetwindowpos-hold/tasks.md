@@ -85,7 +85,7 @@
   - _Requirements: 7.6_
 
 - [ ] 5. 確かめ
-- [ ] 5.1 実機で、並べ直しが全部の窓の最初の面の後に当たることを確かめる
+- [x] 5.1 実機で、並べ直しが全部の窓の最初の面の後に当たることを確かめる
   - `vendors\sample_ghost\emo2.nar` の原本をワークツリーの `target\wrwh\root` へ写し、写しの `＊OnFirstBoot` のトークの先頭に `\![execute,resetwindowpos]` を足す。記憶は `AREKA_USER_ROOT=target\wrwh\user`（毎回空）
   - 排他テストの机を取り、`AREKA_NO_ALERT=1`・`RUST_LOG=info,areka::placement=debug`・絶対パス・有界の自動終了で 1 回起こす。ほかのぱすたがデバッグの口を持つときは `PASTA_DEBUG=0` をその起動の中だけで使う。終わったらすぐ机を返す
   - ログで `reset_window_pos_held` → 両方の窓の最初の面と窓寸の照合 → 同じ巡の `reset_window_pos`（スコープ 0 の置いた x が作業領域の右端 − 本当の幅）→ 起動の確定の動かす行が無い、を確かめ、2 窓の矩形から隙間 0 と右端のそろいを確かめる。`reset_window_pos_held` が出なければ記録して検体を見直す
@@ -110,3 +110,5 @@
 - 申し送り（test-crash-report-merge から・2026-11-21）: `frame_test_support.rs:886` の `window_move_lines` は placement の `test_support::window_move_lines` と同じ働きの写し。この spec は `frame_test_support.rs` を触らない約束なので付け替えていない。完了の棚卸で扱う（brief.md の末尾にも同じ申し送りが main 経由で入る）。
 - 預かりの指令には「前に線を取り出したときのトークの終わりの通し番号」（`move_talk_ends_seen`）を添える。今の番号を添えると、台本の最後の cue と自分の `TalkEnded` が同じフレームに届いたとき（同じ talk スレッドで move → lifecycle の順に送る）、次のトークが終わるまで詰まるため。`reset_window_pos_held` は届いた巡でなく「並べ直し 1 件につき 1 度」（`held_logged`）。塞がれて届いた並べ直しは自分が待ち始めた巡に出る。
 - 残る競り（完了の棚卸で扱う）: 割り込みでトーク A の `TalkEnded` と次のトーク B の時刻 0 の位置の指令が同じフレームに届くと、B の指令も「運んだトークが終わった」と読む（`PositionCue` と `TalkEnded { at }` がトークの識別を持たないため）。害は、B の時点で面の指令をまだ受けていない窓がある時だけ並べ直しが早く当たること（起動の確定が直す）。消すには指令と `TalkEnded` に `talk_id` を載せる要があり、この spec の境界（`frame_test_support.rs` の送り口を含む）の外。
+- 実機の確かめ（2026-11-21・HEAD 7395a72ee の debug・emo2 初回起動・`target\wrwh`）: 台本 `\p[0]\![execute,resetwindowpos]\s[1000]…\p[1]\s[笑顔]…`。51.532 スコープ 0 の最初の面（764×1094）→ 51.534 `reset_window_pos_held waiting=[1]`（1 行だけ）→ 54.268022 スコープ 1 の最初の面（672×800）→ 0.7 ms 後の同じ巡に `reset_window_pos scope=0 from_x=2064 to_x=2116`・`scope=1 from_x=1340 to_x=1444`。`chain_finalize` の行は 0。作業領域の右端 2880（ログの `default_char_x=2012`＋仮の幅 868 とも一致）: スコープ 0 は 2116〜2880（右端そろい）、スコープ 1 は 1444〜2116（隙間 0）。記憶はゴーストの写しの `profile` に書かれた（ワークツリーの `target` の下）。
+- `RUST_LOG=areka::placement=debug` は当てはまる出どころが無い（クレート名は `areka_placement`）。確かめに使った行は全部 info なので結果は変わらない。完了の棚卸で、要件・設計の綴りを `areka_placement=debug` に揃えるか決める。
