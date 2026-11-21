@@ -55,7 +55,7 @@
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.5, 7.2_
 
 - [ ] 3. areka-placement の預かりの件
-- [ ] 3.1 (P) `code_only` の定義を 1 つにする
+- [x] 3.1 (P) `code_only` の定義を 1 つにする
   - 定義を `areka-placement` の `test_support` の直下へ上げ、`zorder_pair_deferred` には同じ名の `pub use` を残す（placement の呼び手は差分 0）
   - `zorder_pair_deferred` の説明にある「`measure_template::code_only` とは中身が違うので寄せない」の注を、上げた定義の側へ移す（コメントだけ）
   - `areka-runtime` の `source_text_test_support` の定義を、placement の `test_support::code_only` の `pub use` に替える（runtime・本体の呼び手は差分 0）
@@ -123,3 +123,4 @@
 ## Implementation Notes
 
 - 2.3: `areka` には lib のターゲットが無い。本体のテストは `cargo test -p areka --bins <名>` で回す（`--lib` は「no library targets」で落ちる）。
+- 3.1: `test_support.rs` には別の働きの `measure_template::code_only` も残る（設計どおり）。「`fn code_only` が placement の 1 件」は `//` の行を落とす方の定義が 1 件、の意味で読む。
