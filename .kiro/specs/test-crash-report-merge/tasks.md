@@ -11,7 +11,7 @@
 
 ## Tasks
 
-- [ ] 1. 置き場の crate と依存の行
+- [x] 1. 置き場の crate と依存の行
 - [x] 1.1 `crash-report-kit` を作り、落ちの報告の本体を移す
   - 新しい crate の `Cargo.toml` を設計の KitManifest のとおりに置く（`publish = false # テストだけが使う道具`・`[dependencies]` は `windows = { workspace = true }` だけ・`[features]` と `[dev-dependencies]` は持たない）
   - `areka-runtime` の今の本文（受け手 2 つ・MTA・持ち手の表・報告の行・1 行の溜め）を `lib.rs` へ移し、設計の CrashReportKit の「変えるのは次だけ」の分だけを変える（頭の `//!` を 1 本の説明に・`RaiseException` の宣言の `#[cfg(test)]` を外す・較正の口 `crash_on_an_unnamed_thread` を足す・持ち手の表の説明を「使い手が許可を取る・返す所から」に言い換える）。行の語・並び・書く先・`LINE_BYTES`・`CUT_MARK`・`HOLDER_ROWS`・`NAME_BYTES` は変えない
@@ -30,7 +30,7 @@
   - _Dispatch: mechanical — マニフェストの行を前例どおりに足す_
   - _Requirements: 1.4, 1.7, 7.3_
 
-- [ ] 2. 使い手を 1 つの本体へ付け替える
+- [x] 2. 使い手を 1 つの本体へ付け替える
 - [x] 2.1 (P) wintf の据え付けを小さなファイルに替える
   - `crates/wintf/src/test_crash_report.rs` の中身を、`crates/areka-input/src/crash_report_tests.rs` と同じ形（`//!` 1 行・`crash_report_kit::install` を指す `.CRT$XCU` の静的変数・据え付けの確かめ 1 本）に替える。ファイルの名と `lib.rs` の `mod` の行は変えない
   - 「写しの相手」を挙げる説明を残さない
@@ -54,7 +54,7 @@
   - _Dispatch: mechanical — 設計が入口の中身を示している_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.5, 7.2_
 
-- [ ] 3. areka-placement の預かりの件
+- [x] 3. areka-placement の預かりの件
 - [x] 3.1 (P) `code_only` の定義を 1 つにする
   - 定義を `areka-placement` の `test_support` の直下へ上げ、`zorder_pair_deferred` には同じ名の `pub use` を残す（placement の呼び手は差分 0）
   - `zorder_pair_deferred` の説明にある「`measure_template::code_only` とは中身が違うので寄せない」の注を、上げた定義の側へ移す（コメントだけ）
@@ -98,7 +98,7 @@
   - _Dispatch: mechanical — 設計が節の中身を示している_
   - _Requirements: 4.6_
 
-- [ ] 5. 仕上げの確かめと記録
+- [x] 5. 仕上げの確かめと記録
 - [x] 5.1 静的な確かめを走らせて記録する
   - 設計の CompletionRecord の 5.6・6.7・6.8・7.1・7.2・7.4・7.5・8.2 の確かめを走らせ、結果を tasks.md の Implementation Notes に書く（`fn SetUnhandledExceptionFilter` が 1 件・`.CRT$XCU` が 6 件・約束のファイルの差分が空・`Cargo.lock` の差分の形・預かりの説明の直しがコメントの行だけ）
   - `frame_test_support.rs:886` の `window_move_lines` の写しは付け替えていない、と記録し、完了の未解決の棚卸の件として残す（寄せ先は placement の `test_support::window_move_lines`）。`carrier_cue` の残り（決定 5）と runtime の `INVARIANT_WARNING` の手写し（決定 6）も同じ棚卸の件として並べる
