@@ -22,7 +22,7 @@
   - _Dispatch: mechanical — 今ある本文を設計の示す差分だけで移す_
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 1.2 使い手 3 crate の依存の行を足す
+- [x] 1.2 使い手 3 crate の依存の行を足す
   - wintf・areka-placement の `[dev-dependencies]` に `crash-report-kit` を path で 1 行ずつ（注は「テストの実行ファイルの落ちの報告の本体。テスト専用の leaf で、`[dependencies]` へは置かない。」の趣旨・spec の名を書かない）
   - `areka-runtime` は `[dependencies]` に任意の依存として置き `test-support` の機能に `"dep:crash-report-kit"` を足し、`[dev-dependencies]` にも置く（`shiori-host32-host` と同じ並べ方・注は設計の ConsumerManifests の趣旨）
   - `cargo` に `Cargo.lock` を書かせる
