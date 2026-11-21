@@ -19,34 +19,19 @@ use super::{BalloonWiring, click_selection, dispatch_selection};
 
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行）。
 ///
-/// wintf `PointerEventHandler` 署名（移動ハンドラの鏡写し）。**Bubble 相のみ処理し Tunnel は伝播続行の
-/// ため即 `false`**。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、選択の確定は
-/// `double_click` フィールドを見ない（DBLCLK 2 打目も独立 press として扱う）。`double_click` は
-/// 末尾で利用者の中断の入口 `fn on_left_press`（`user_break.rs`）へ渡すだけである。右・中ボタン down は
-/// 確定でないため `false` 素通し（wheel/keyboard は未対応）。
+/// Tunnel は伝播続行のため即 `false`。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、
+/// 選択の確定は `double_click` を見ない（DBLCLK 2 打目も独立 press として扱う）。`double_click` は
+/// 末尾で利用者の中断の入口 `on_left_press` へ渡すだけである。右・中ボタン down は `false` 素通し。
+/// 単一クリックの二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が防ぎ、
+/// 本ハンドラは 1 dispatch＝高々 1 send を守る。
 ///
-/// 単一クリック二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が構造的に防止し、
-/// 本ハンドラは 1 dispatch＝高々 1 send を守る（`Some` 選択 1 つにつき送り出しを高々 1 回）。
-///
-/// **借用規律（移動ハンドラと固定同順）**:
-/// 1. `RuntimeWiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`RuntimeWiring` 不在（boot 前／失敗）は
-///    **正常縮退**＝`debug!(event = "choice_pressed_no_runtime")`＋no-op（donor presenter=None 同型）。
-/// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
-///    `error!(event = "balloon_wiring_missing")`＋no-op。
-/// 3. runtime `try_borrow`（不変）でスナップショット——`hit_active`（押せる範囲＝選択肢かアンカーが
-///    あるか）＋**現行** `choice_hit_rows` を純関数
-///    [`click_selection`]へ渡し `Option<ChoiceSelection>` を得る（現行 rows のみ読むことで
-///    stale 棄却が成立）。`try_borrow` 失敗は構成異常
-///    `error!(event = "balloon_runtime_borrow_failed")`＋no-op。
-/// 4. `None`（非表示 or 非ヒット）→ `debug!(event = "choice_click_rejected", reason)`＋`false`（非発行・
-///    reason は `!active` なら `"inactive"`／それ以外は `"no_hit"`）。`Some(sel)` →
-///    [`dispatch_selection`] で高々 1 回発行し、送れたら `true`。
-///
-/// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは kanade 側）。自前描画なし。
-/// `RefCell` は `try_borrow` のみ（panic しない）。座標は窓 client 物理 px を**無変換**で
-/// 照合する——行矩形が `to_window_physical` で既に実適用 k ×済みゆえ同一空間で一致する（k=1.0 だから
-/// ではない）。シェルの「点 ÷k」とは逆向きだが等価に正しく、本経路へ ÷k を足すと二重縮約になり正常
-/// 動作を壊す（詳細は [`hit_choice_row`] の座標契約 doc）。
+/// 借用の順は移動ハンドラと同じ（`RuntimeWiring` 共有借用で `Rc` を clone→world 側の借用を解放→runtime を
+/// 不変借用してスナップショット）。現行 rows のみを [`click_selection`] へ渡すことで stale 棄却が成立する。
+/// 棄却は `debug!(event = "choice_click_rejected", reason)`（`inactive`／`no_hit`）、選択は
+/// [`dispatch_selection`] で高々 1 回発行する。`RuntimeWiring` 不在は正常縮退（`debug!`＋no-op）、
+/// `BalloonWiring` 不在は結線漏れの `error!`＋no-op、`RefCell` の借用失敗も `error!`＋no-op（panic しない）。
+/// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは kanade 側）。
+/// 座標は窓 client 物理 px を**無変換**で照合する（理由は [`hit_choice_row`] の座標契約 doc）。
 ///
 /// **戻り値**: `ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
 /// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
@@ -63,7 +48,6 @@ pub(crate) fn on_balloon_pointer_pressed(
         Phase::Bubble(s) => s,
     };
 
-    // 左シングルクリック限定。選択の確定は double_click を見ない（DBLCLK 2 打目も独立 press 扱い）。
     if !state.left_down {
         return false;
     }

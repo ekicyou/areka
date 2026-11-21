@@ -37,7 +37,7 @@ const UNCAPTURED_BUTTONS: [ClickButton; 4] = [
 ];
 
 /// 見張りの系を `Input` の段の `dispatch_pointer_events` の前へ 1 回だけ登録する
-/// （呼び手は `ghost_session::register_systems`・プロセスに 1 回）。
+/// （本体の系の登録の口からプロセスに 1 回呼ぶ）。
 pub fn register_char_watch(world: &mut World) {
     world
         .resource_mut::<Schedules>()
@@ -251,7 +251,7 @@ pub fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() -> WheelL
 }
 
 /// 点（シェルの窓のクライアント物理 px）の下の箱に隠れた行があれば、その箱を回転 `delta` で送って
-/// `true`。箱が無い・隠れた行が無い・借りられないなら `false`（呼び手は今までどおり積む）。
+/// `true`。箱が無い・隠れた行が無い・借りられないなら `false`（呼び手はそのまま積む）。
 fn wheel_box(
     runtime: &RefCell<TextLayerRuntime>,
     scope: u32,
@@ -263,7 +263,7 @@ fn wheel_box(
         tracing::error!(
             event = "balloon_runtime_borrow_failed",
             scope,
-            "runtime try_borrow_mut 失敗（箱の上のホイール）: 今までどおり OnMouseWheel へ"
+            "runtime try_borrow_mut 失敗（箱の上のホイール）: OnMouseWheel へ回す"
         );
         return false;
     };

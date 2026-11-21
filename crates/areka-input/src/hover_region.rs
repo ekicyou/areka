@@ -36,7 +36,7 @@ pub(super) struct HoverSend {
     pub region: Option<String>,
 }
 
-/// 前の状態と今の見え方から、次の状態と送る出入り（送る順）を返す（7 行の表）。
+/// 前の状態と今の見え方から、次の状態と送る出入り（送る順）を返す。
 pub(super) fn plan_hover(
     prev: Option<&HoverState>,
     now: HoverSighting,

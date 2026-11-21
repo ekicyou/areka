@@ -1,7 +1,7 @@
 //! 箱の上のポインタの判断。
 //!
 //! シェルの窓に届いた操作を、箱の選択肢・箱での中断・シェルへの操作に振り分ける判断を
-//! 純関数で置く。ハンドラ（`mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed`）は
+//! 純関数で置く。ハンドラ（crate の根の `on_char_pointer_moved`・`on_char_pointer_pressed`）は
 //! 借用と送り出しだけを行い、判断はここへ書く。
 //!
 //! 座標はシェルの窓の物理 px のまま、`shown_boxes` の四角と `choice_hit_rows_at` の行

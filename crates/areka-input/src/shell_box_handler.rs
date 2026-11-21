@@ -1,6 +1,6 @@
 //! シェルの窓のハンドラの箱の前段。
 //!
-//! `mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
+//! crate の根の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
 //! 呼ばれ、「処理した」（`true`）なら呼び手は既存の道へ落とさない。判断は `shell_box.rs` の純関数に
 //! あり、ここは借用と送り出しだけを行う（借用の順は `balloon_pressed.rs` と同じ: `RuntimeWiring` から
 //! 文字の層の `Rc` を複製して world の借用を解く → 文字の層の不変借用で写しを取って解く →
@@ -369,8 +369,8 @@ pub(crate) fn clear_box_hover_on_leave(world: &mut World) {
     }
 }
 
-/// [`clear_box_hover_on_leave`] を入力の段（`dispatch_pointer_events` の後）へ登録する。
-/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+/// `clear_box_hover_on_leave` を入力の段（`dispatch_pointer_events` の後）へ登録する。
+/// 呼び手は本体の系の登録の口（プロセスに 1 回）。
 pub fn register_box_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

@@ -2,7 +2,7 @@
 //!
 //! キャラ窓の見張り（`char_watch`）と同じ `Input` の段・`dispatch_pointer_events` の前で、
 //! `PointerState` の持ち主から `BalloonWindowMarker` の窓を引き、縦の回転をそのスコープの
-//! バルーンの場所の手動の送り（`wheel_at`）へ渡す。`OnMouseWheel` は送らず、横の回転は読まない
+//! バルーンの場所の手動の送り（`wheel_at`）へ渡す。`OnMouseWheel` は送らず、横の回転は読まない。
 //! OS の「1 回にスクロールする行数」は回転を受けた時だけ読む（設定の変わり目は
 //! OS が知らせないので、受けた時に引く）。
 
@@ -26,7 +26,7 @@ const WHEEL_PAGESCROLL: u32 = u32::MAX;
 const DEFAULT_WHEEL_LINES: u32 = 3;
 
 /// バルーンの窓のホイールの系を `Input` の段の `dispatch_pointer_events` の前へ 1 回だけ登録する
-/// （呼び手は `ghost_session::register_systems`・プロセスに 1 回）。
+/// （本体の系の登録の口からプロセスに 1 回呼ぶ）。
 pub fn register_balloon_wheel(world: &mut World) {
     world
         .resource_mut::<Schedules>()

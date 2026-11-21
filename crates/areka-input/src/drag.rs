@@ -9,7 +9,7 @@
 //!   `KanadeMsg::Mouse` を送る。送らないと決めたときは理由を 1 件記録する。
 //!
 //! 受け手の付け方は親モジュールの [`super::attach_char_pointer_handlers`]（キャラクター窓だけ）。
-//! 「開始を送った」印は持たない（設計 D2）。2 相の呼び出しは Bubble だけを扱えば 1 回になる。
+//! 「開始を送った」印は持たない。2 相の呼び出しは Bubble だけを扱えば 1 回になる。
 
 use areka_kanade::{MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
@@ -48,14 +48,14 @@ pub(super) fn on_char_drag_start(
     false
 }
 
-/// 位置の保存を今までどおり行い、その後でドラッグの終了を kanade へ 1 回知らせる。
+/// 位置の保存を行い、その後でドラッグの終了を kanade へ 1 回知らせる。
 ///
 /// どの相でも先に [`on_char_drag_end`] を受けた引数のまま呼び、戻り値を控えて返す。保存は
 /// 知らせの結果に左右されない（送り先が無い・送出に失敗した・送らないと決めた、のどれでも
 /// 保存は済んでいる）。
 ///
 /// `ev.cancelled` は見ない（取り消しでも同じに送る）。座標は保存を呼んだ**後**の
-/// `WindowPos.position` から引く（設計 D1）: 取り消しでは保存が窓を開始の位置へ戻すので、
+/// `WindowPos.position` から引く: 取り消しでは保存が窓を開始の位置へ戻すので、
 /// 押した位置（開始と同じ値）になる。
 pub(super) fn on_char_drag_end_and_notify(
     world: &mut World,

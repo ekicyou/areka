@@ -78,7 +78,7 @@ fn shown_of(c: &WindowCursor) -> Shown {
     }
 }
 
-/// 前の状態と引き金から、次の状態と出す場面を決める（13 行の表）。resolve は当たり判定を引くとき
+/// 前の状態と引き金から、次の状態と出す場面を決める。resolve は当たり判定を引くとき
 /// （位置が変わった・初めて・押した・放した・ホイール・前の状態が無い）だけ呼ぶ。
 pub(crate) fn plan_cursor(
     prev: Option<&WindowCursor>,
