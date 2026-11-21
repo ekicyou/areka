@@ -369,6 +369,7 @@ mod tests {
     /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実 DWM の通知を測った」
     /// という記録に化ける。既存の手本（`crates/areka-runtime/src/placement_tests/transition_signoff_tests.rs`
     /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
+    // TODO: 判定の意味を保ったまま壁時計の期限が負荷で飢える問題を解き、門を外して既定の走行へ戻す。
     fn require_explicit_vblank_run() {
         assert!(
             std::env::var_os(VBLANK_DEADLINE_ENV).is_some(),

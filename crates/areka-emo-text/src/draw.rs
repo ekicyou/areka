@@ -38,8 +38,7 @@
 //! ## 計測専用 probe layout（probe 規約）
 //!
 //! [`DWriteMetrics`]: **未折返しの測定専用 probe TextLayout** の cluster metrics から
-//! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する
-//! :
+//! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する:
 //!
 //! - probe は**折返し決定より前**に生成する（計測→折返しの一方向＝鶏卵の構造的切断）。
 //! - probe の format は描画と**同一の [`create_text_format`] 経路**
@@ -167,7 +166,7 @@ pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;
 /// 単色は OS に任せる（フォントの差し替えの規則・代替の表・自前の描き手は持たない）。
 /// 色つきの字形を持たない文字の画素はこのオプションで変わらない。
 ///
-/// 影の複製はこの定数を使わず、単色の塗りで描く（`text-align-shadow-canon`）。
+/// 影を描くときは、複製にこの定数を使わず単色の塗りで描く。
 pub(crate) const TEXT_DRAW_OPTIONS: D2D1_DRAW_TEXT_OPTIONS =
     D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
 
@@ -242,10 +241,8 @@ impl ResolvedFont {
     ///
     /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、
     /// [`crate::balloon_overrides::overrides`] がトークン列へ写し、
-    /// [`LookLayers::from_balloon`] の 2 引数へ渡す（読み取りの所有は
-    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空になる。
-    /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）は渡さない——所有は
-    /// `text-align-shadow-canon`。
+    /// [`LookLayers::from_balloon`] の 2 引数へ渡す。宣言が無ければ列は空になる。
+    /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）はまだ渡さない。
     pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
         let font = model.font();
 

@@ -12,7 +12,7 @@
 //!
 //! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下。根は配られた複製の写しに、
 //! ゴーストの中のバルーン `pasta_tategaki` を根の `balloon\` へ写して作る（ゴーストの中のバルーンを
-//! 探すかどうかは `areka-P0-pasta-in-windows-verification` の持ち分なので、ここでは利用者が置いた形にする）。
+//! 探す仕組みには頼らず、利用者が置いた形にする）。
 //!
 //! 判定は 1 行ずつ `target\wl-signoff\judgments.txt` に書き、走りの記録は `run1.log`・`run2.log` へ写す。
 

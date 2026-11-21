@@ -267,8 +267,7 @@ where
 ///
 /// [`spawn_ticker`] の 2 系統（dispatcher 50ms／kanade 1000ms）とは独立した、
 /// SERIKO ループ評価専用の単発 tick レーン（[`spawn_loop_ticker`]）の運行構成。
-/// 16ms は 60Hz 近似で、`\w` 系の最小 wait（22ms）を 1 tick 以内で拾える解像度
-/// 。
+/// 16ms は 60Hz 近似で、`\w` 系の最小 wait（22ms）を 1 tick 以内で拾える解像度。
 pub struct LoopTickerConfig {
     /// ループ評価の基本周期（既定 16ms）。
     pub interval: Duration,

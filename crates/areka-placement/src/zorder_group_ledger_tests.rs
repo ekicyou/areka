@@ -58,8 +58,8 @@ fn t_zgp2_explicit_long_form_keeps_one_window_per_element() {
     assert_eq!(elements, vec![b(1), s(1), b(0), s(0)]);
 }
 
-/// 受理形③: 明示モードの省略形（`bN`／`sN`）。完全形と同じ意味に解釈される
-/// 。あわせて数値モードが明示モードの特例であること——3 形が同じ
+/// 受理形③: 明示モードの省略形（`bN`／`sN`）。完全形と同じ意味に解釈される。
+/// あわせて数値モードが明示モードの特例であること——3 形が同じ
 /// 要素列へ落ちること——を 1 か所で固定する。
 #[test]
 fn t_zgp3_explicit_short_form_equals_long_form_and_numeric_expansion() {
@@ -175,8 +175,8 @@ fn t_zgp8_reject_too_few_elements_counted_before_expansion() {
 // 拒否④: 解釈できないトークン
 // ---------------------------------------------------------------------------
 
-/// 解釈できないトークンが 1 つでもあれば、そのタグによる変更を一切行わない
-/// 。拒否理由は受け取ったトークンをそのまま（大文字小文字も）伴う。
+/// 解釈できないトークンが 1 つでもあれば、そのタグによる変更を一切行わない。
+/// 拒否理由は受け取ったトークンをそのまま（大文字小文字も）伴う。
 #[test]
 fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
     for (tokens, expected) in [

@@ -38,7 +38,7 @@
 //! # 明示実行へ隔離した 3 本
 //!
 //! 次の 3 本は `#[ignore]` と本体 1 行目の門（`require_explicit_real_window_run`）で
-//! 既定の走行から外してある。
+//! 既定の走行から外してある（戻す条件は `require_explicit_real_window_run` の TODO）。
 //!
 //! - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（帯の印だけを見る）
 //! - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`

@@ -264,8 +264,7 @@ fn an_unmarked_window_is_enqueued_with_sentinel_tag_fields() {
 ///
 /// `info` 水準・観測 target で出すので、既定 directive（`info`）でもサインオフ directive
 /// （`info,wintf::transition=debug`）でも**必ず**通る——「観測行が出ていないこと」を主張する
-/// テストが、実は捕捉そのものが死んでいて緑になっている、という空振りを塞ぐ唯一の手段である
-/// 。
+/// テストが、実は捕捉そのものが死んでいて緑になっている、という空振りを塞ぐ唯一の手段である。
 const CONTROL_LINE: &str = "[transition-probe] alive";
 
 /// 番兵の宛先（`diag_tests.rs` と同じ番兵。共有の `capture_under_filter` は `env-filter` の

@@ -1,7 +1,7 @@
 //! 1 ファイル 1,000 行の目安の機械的な番人。
 //!
-//! `.kiro/steering/structure.md` の Test Naming Conventions の項は「1 ファイル 1,000 行以下」を
-//! 目安に掲げているが、これまで誰も測っていなかった。本ファイルはその目安を実行テストにする。
+//! `.kiro/steering/structure.md` の Test Naming Conventions の項が掲げる「1 ファイル 1,000 行以下」の
+//! 目安を実行テストにする。
 //!
 //! # 何を見張るか
 //!

@@ -260,8 +260,7 @@ impl WritingDirectionDecision {
     /// 当該スコープに実際に適用されている書字方向（[`mode`](Self::mode)）から一意に定まる:
     /// 縦書きで `1`・横書きで `0`。**`vertical_lr`（areka 拡張の縦書き左送り）も `1`** である
     /// ——正典の語彙は縦横 2 値であり、列送りの向きを区別しない。
-    ///
-    /// この値の publish（語彙表登録・照会経路の新設）は本モジュールの範囲外。
+    // TODO: この値を正典プロパティとして照会できるようにする（語彙表への登録と照会の経路がまだ無い）。
     pub fn vertical_property_value(&self) -> u8 {
         match self.mode {
             WritingMode::HorizontalTb => 0,

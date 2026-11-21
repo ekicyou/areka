@@ -584,8 +584,8 @@ fn execute_actions(
 /// 送出前に送出イベント ID が**出所カテゴリごとの受理規則**を満たすことを検証する
 /// egress チョークポイントである。
 ///
-/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等、選択起源の `On` 非接頭
-///   ）: SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
+/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等、選択起源の `On` 非接頭）:
+///   SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
 ///   失敗語彙 `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（状態機械は
 ///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=

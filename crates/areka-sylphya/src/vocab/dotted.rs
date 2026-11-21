@@ -94,8 +94,8 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 /// 定めていない名前を登記している状態である（印が無く、族の頭の継承も無い＝areka の先取り）。
 /// この食い違いは記録するだけで解消していない。
 ///
-/// 正典に根拠のない作り（本表が末尾形で持たれ実キーと突き合わされないこと等）の記録と引受先は
-/// [`SOUND_PROP_NAMES`] の説明文を参照。
+/// 正典に根拠のない作り（本表が末尾形で持たれ実キーと突き合わされないこと等）の記録と是正の予定は
+/// [`SOUND_PROP_NAMES`] の説明文と直前の TODO を参照。
 pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     ("surface.num", SetSemantics::RuntimeCommand),
     ("animation.num", SetSemantics::RuntimeCommand),
@@ -159,9 +159,7 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
 /// 利用者から見える結果: 1 により、正典に無い名前（例 `myplugin.name`）への書き込みが、
 /// 自由な名前としての「保存して読み戻せる」から「受理して捨てる」へ変わり得る（葉の名前が
 /// 汎用名の表に載っているだけで扱いが切り替わる）。
-///
-/// 是正は、`\![set,property,...]` の経路を開通させてフルキーが初めて仕分けへ流れ込む
-/// ようになる作業で扱う。
+// TODO: `\![set,property,...]` の経路を開通させてフルキーを仕分けへ流すときに、上の 2 点を是正する。
 pub const SOUND_PROP_NAMES: &[&str] = &[
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#duration:1
     "duration",

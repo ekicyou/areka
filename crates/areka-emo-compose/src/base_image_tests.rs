@@ -253,8 +253,7 @@ fn append_to_unknown_id_still_warns_and_creates_nothing() {
 }
 
 /// 画像だけの面へ追記した後で同じ番号の波括弧が来たら、追記した定義へ波括弧の行を足す
-/// （areka-P0-shell-implicit-surface の「全置換」を areka-P0-emily-ghost-verification が上書き・
-/// 開発者の決め 2026-10-17「足し合わせる」）。定めた振る舞いなので `warn!` は出さない。
+/// （全置換ではなく足し合わせる）。定めた振る舞いなので `warn!` は出さない。
 #[test]
 fn brace_after_append_merges_into_the_image_only_face() {
     let shell = shell_mixed(

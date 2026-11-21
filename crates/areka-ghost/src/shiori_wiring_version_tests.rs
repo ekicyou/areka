@@ -60,8 +60,7 @@ fn decided_records_one_info_line_and_returns_the_version() {
     }
 }
 
-/// 決められなければ WARN を 1 行（理由・`assumed = "SHIORI/3.0"`）出し、3.0 を返す
-/// 。
+/// 決められなければ WARN を 1 行（理由・`assumed = "SHIORI/3.0"`）出し、3.0 を返す。
 #[test]
 fn undecided_records_one_warn_line_and_assumes_shiori3() {
     let mut got = None;

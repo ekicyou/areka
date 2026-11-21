@@ -3,7 +3,7 @@
 //! さくらスクリプトの 1 命令を表すフラットな単一 enum `Instruction` と、
 //! 付随する値型（`SurfaceArg` / `NewLineRatio` / `Choice` / `Anchor`）を定義する。
 //! これがクロスエンジン I/O 契約の片側であり、本パーサが生成者、
-//! 下流 `areka-P0-sakura-engine` が消費者となる（型の正本は本クレートが所有）。
+//! 下流 `areka-sakura` が消費者となる（型の正本は本クレートが所有）。
 //!
 //! - フラット表現（意味の入れ子／木は持たない）。
 //! - 派生は `Clone` / `Debug` / `PartialEq` のみ（`f32`/`Duration` を含むため
@@ -15,7 +15,7 @@ use std::time::Duration;
 
 /// さくらスクリプトの 1 命令（フラット・拡張に開く）。
 ///
-/// 下流 `areka-P0-sakura-engine` と共有する I/O 契約の片側。各 variant は
+/// 下流 `areka-sakura` と共有する I/O 契約の片側。各 variant は
 /// 値正規化済み（待ち時間 = `Duration`、改行 = 比率、Choice = disp/target 分離）であり、
 /// 下流は再パース不要。
 #[derive(Clone, Debug, PartialEq)]

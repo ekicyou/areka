@@ -495,7 +495,6 @@ const NO_WORDS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     animation0.pattern0,overlay,101,0,0,0\n\
     animation0.pattern1,overlay,-1,50,0,0\n}\n";
 /// 表に 3 語が無ければ、動く部品が見えて再生していても引き金の状態は生まれず、記録も増えない。同じ形で 3 語を書いた表では生まれる（陽性対照）。
-/// 。同じ形で 3 語を書いた表では生まれる（陽性対照）。
 #[test]
 fn table_without_the_three_words_never_arms_a_part() {
     let run = |text: &str| {

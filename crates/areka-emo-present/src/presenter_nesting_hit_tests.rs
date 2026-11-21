@@ -5,7 +5,7 @@
 //! 親の (90,50)〜(110,60) と (95,50)〜(105,60) へ持ち込まれる。転記のままの列（`SurfaceMaster.collisions`）
 //! で判定していれば、親 B ではどの点も `None` になる。
 //!
-//! 親 A（surface0）は Eye が親の Head の下に隠れるので点の確かめには使わない（tasks.md 5.2 の覚え書き）。
+//! 親 A（surface0）は Eye が親の Head の下に隠れるので点の確かめには使わない。
 //! 実 GPU の World で親 B を実際に表示して判定する。
 
 use super::super::test_support::{

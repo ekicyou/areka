@@ -144,8 +144,8 @@ fn shutdown_within_returns_no_cut_when_teardown_finishes_inside_the_limit() {
     assert_eq!(gate.unblock_calls.load(Ordering::SeqCst), 0);
 }
 
-/// `OnClose` の通知で固まった SHIORI を見張りが解き、残りの後始末を今日どおり走らせて戻る
-/// 。段の語は `on_close_notify`、解く手は 1 回。
+/// `OnClose` の通知で固まった SHIORI を見張りが解き、残りの後始末を今日どおり走らせて戻る。
+/// 段の語は `on_close_notify`、解く手は 1 回。
 #[test]
 fn shutdown_within_cuts_a_held_on_close_and_finishes_the_teardown() {
     let Booted {

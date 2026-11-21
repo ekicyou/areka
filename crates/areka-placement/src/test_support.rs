@@ -384,8 +384,7 @@ pub mod measure_template {
 pub mod zorder_pair_deferred {
     /// 先送り語彙（小文字）と、それが何の入口かの説明。
     ///
-    /// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
-    /// ままである。兄弟の wintf 側テスト（`crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`）
+    /// 最小化・タスクバーの扱いはまだ先送りのままである。兄弟の wintf 側テスト（`crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`）
     /// と同じ 2 つの表（この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、
     /// どちらの表へ足すときも両方のファイル（wintf の兄弟とこのファイル）へ足すこと。
     pub const DEFERRED_NEEDLES: [(&str, &str); 6] = [

@@ -353,8 +353,8 @@ fn panic_text(f: impl FnOnce()) -> String {
         .unwrap_or_else(|| "（文字列でない panic）".into())
 }
 
-/// 相手のスレッドの中の数えが増え続ける間は、`SPIN_WAIT` を何倍越えても `［止まった］` で打ち切らない
-/// 。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
+/// 相手のスレッドの中の数えが増え続ける間は、`SPIN_WAIT` を何倍越えても `［止まった］` で打ち切らない。
+/// 中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
 #[test]
 fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
     let inner = Cell::new(0u64);

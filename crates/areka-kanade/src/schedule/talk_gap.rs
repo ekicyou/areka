@@ -116,7 +116,7 @@ pub(super) fn marked_reply(state: &State, input: &Input) -> Option<MarkedReply> 
 
 /// 印の台詞を利用者が中断したか（[`super::on_talk_done`] が中断の帳簿を空にする前に呼ぶ）。
 ///
-/// 真なら、終了の予約があっても終了系列へ結ばない。。結果が決まった後の見張りには
+/// 真なら、終了の予約があっても終了系列へ結ばない。結果が決まった後の見張りには
 /// 効かせない（殻は決まった時点で見張りを取り出すので、例外を効かせる相手がもう居ない）。
 pub(super) fn is_marked_break(state: &State, done: &TalkDone) -> bool {
     matches!(

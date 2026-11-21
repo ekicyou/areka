@@ -1,6 +1,5 @@
 //! `map_get_outcome` 写像表の全行（純関数・COM 不要）＋実 DLL 越しの `inproc_connect`
-//! 往復（get/notify/status/unload）＋`inproc_connect` の `file: None` 即失敗
-//! 。
+//! 往復（get/notify/status/unload）＋`inproc_connect` の `file: None` 即失敗。
 
 use super::*;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShioriError};
@@ -133,7 +132,7 @@ fn map_error_hresult_is_parse_error() {
     );
 }
 
-// --- 実 DLL 越しの InProcBackend 往復（）------
+// --- 実 DLL 越しの InProcBackend 往復 ------
 
 /// `TempPath` の下に DLL を写したゴーストを `resolve` し、本番の [`inproc_connect`] で
 /// backend を組む（手で写した接続の道具は持たない・#34）。fixture は backend より長く生かすこと。
@@ -155,8 +154,8 @@ fn build_real_backend() -> (temp_path_kit::TempPath, Box<dyn ShioriBackend>) {
 fn adapter_roundtrips_through_real_ishiori() {
     let (_ghost, mut backend) = build_real_backend();
 
-    // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload
-    // 。envelope 全文ではなく Value 行 payload のみが
+    // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload。
+    // envelope 全文ではなく Value 行 payload のみが
     // 返ること（build_request→Get→parse→map の実証）。期待値は凍結スナップショットの Value 行から
     // 導出し、実採取差し替え時に自動追随させる（ハードコード giant literal を避ける）。
     let snapshot =

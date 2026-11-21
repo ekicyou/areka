@@ -89,6 +89,7 @@ const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
 /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
 /// 記録に化ける。既存の手本（`crates/areka-runtime/src/placement_tests/transition_signoff_tests.rs`
 /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
+// TODO: 実窓の重なり順を他プロセスの窓の割り込みに強い形で測るよう判定を作り直し、門を外して既定の走行へ戻す。
 pub(super) fn require_explicit_real_window_run() {
     assert!(
         std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),

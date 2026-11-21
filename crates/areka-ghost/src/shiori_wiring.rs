@@ -30,8 +30,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// `RUST_LOG` は **target 名**で指定する（`ghost-boot=debug`。モジュールパス名では点かない）。
 const LOG_TARGET: &str = "ghost-boot";
 
-/// 既定の文字コードを、ファイル層（`DefaultEncoding::to_encoding`）と同じ固定写像で決める
-/// 。
+/// 既定の文字コードを、ファイル層（`DefaultEncoding::to_encoding`）と同じ固定写像で決める。
 ///
 /// OS のロケール設定は読まない。ファイル層から橋渡しせず ghost 側に写像を置くのは、host-32 側の `Charset` へ
 /// 渡す際に「UTF-16 でない」ことを検査する失敗腕が要り、その腕が固定写像では到達不能＝記録のない

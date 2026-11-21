@@ -37,6 +37,7 @@ use areka_placement::scale_signed;
 ///
 /// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ。論理 px 系（BoxStyle）を経由しないことで
 /// 二重スケールを型で構造的に防ぐ。
+// TODO: 宣言された `point.basepos` を差す resolver を足す。
 pub trait BaseposResolver {
     /// 窓寸法（物理 px）に対する basepos（窓左上原点相対・物理 px）を返す。
     fn basepos(&self, window_size: SizeI) -> PointPx;

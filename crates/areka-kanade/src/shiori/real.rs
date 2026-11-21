@@ -2,8 +2,8 @@
 //! （`shiori-host32-host` の [`Shiori3Client`]）を専有スレッドで包む。
 //!
 //! **本ファイルは areka-kanade 内で host32 型（[`Shiori3Client`] / [`RequestError`] /
-//! [`ParentMessageWindow`] / [`HelperLifecycle`]）を import してよい唯一の場所である**
-//! 。呼出結果と区別失敗語彙は既存 API の戻り値をそのまま機械的に
+//! [`ParentMessageWindow`] / [`HelperLifecycle`]）を import してよい唯一の場所である**。
+//! 呼出結果と区別失敗語彙は既存 API の戻り値をそのまま機械的に
 //! 写像して [`ShioriOutcome`] へ載せる（status 判定・区別語彙の再実装をしない）。
 //!
 //! # 構造（backend 抽象）

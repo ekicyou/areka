@@ -85,6 +85,7 @@ pub(crate) const KERO_POPUPMENU_VISIBLE: &str = "kero.popupmenu.visible";
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
 // 「問い合わせない」ことの記録なので、本番に読み手は無い。読むのは上の兄弟テストだけである。
+// TODO: 3 人目以降の窓ができたら `char*.popupmenu.visible` を尋ねる側へ移す。
 #[allow(dead_code)]
 pub(crate) const UNQUERIED_POPUPMENU_RESOURCES: &[&str] = &[
     "char*.popupmenu.visible",

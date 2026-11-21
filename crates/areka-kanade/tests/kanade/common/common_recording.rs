@@ -44,8 +44,8 @@ pub struct RecordedCall {
     /// 送出時の `Status` 実行状態集合の wire 値（`None` ⇔ ヘッダ行なし・5.1）。
     ///
     /// `ExecutionStatus::render()` の結果を写す。これにより mock が記録した呼出と
-    /// [`expected_call`] 導出の期待値が Status ヘッダまで含めて突合される
-    /// 。Unload は Status を持たないため `None`。
+    /// [`expected_call`] 導出の期待値が Status ヘッダまで含めて突合される。
+    /// Unload は Status を持たないため `None`。
     pub status: Option<String>,
 }
 

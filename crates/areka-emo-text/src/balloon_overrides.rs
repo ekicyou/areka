@@ -10,6 +10,8 @@
 //! - 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`・無効表示の同名）は**渡さない**
 //!   ——語彙の形と `none` の扱いは本モジュールで決めない。
 
+// TODO: 影の描画が入ったら影の 4 キー（基底と無効表示）を写し、`look.rs` の `UNOWNED_KEYS` から外す。
+
 use areka_parsers::balloon::{BalloonModel, FontDecorationRaw};
 use tracing::warn;
 

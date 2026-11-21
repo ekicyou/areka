@@ -361,8 +361,7 @@ fn base_config() -> KanadeConfig {
 }
 
 /// step 1＋3（記録なし）: `areka.boot.count` 不在 → `first_boot=true` かつ
-/// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される
-/// 。
+/// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される。
 #[test]
 fn gate_absent_boot_record_marks_first_boot_and_injects_set_epilogue() {
     let (parts, asker) = spawn_reader_seeded(vec![]);

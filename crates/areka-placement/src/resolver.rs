@@ -257,6 +257,7 @@ pub fn keyword_balloon_pos(
 ///
 /// `scopes` 入力に `cfg.scopes` 未収載のスコープ番号が来た場合は
 /// `ScopeConfig::default()`（＝Bottom・オフセットなし）で配置する。
+// TODO: 作業領域が変わったとき、辺に吸着した窓を辺へ沿わせ直す。
 pub fn resolve_placement(
     cfg: &PlacementConfig,
     work_area: RectPx,

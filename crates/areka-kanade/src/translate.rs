@@ -1,8 +1,7 @@
 //! 翻訳（`OnTranslate`）のために外から渡す 2 つの関数の型。
 //!
-//! 運行は台詞の環境変数の値も MAKOTO の DLL も知らない。値の源（ghost）と MAKOTO の鎖
-//! は、それぞれ素のクロージャとして渡される
-//! （[`crate::resources::ResourceSink`] と同じ疎結合の口）。口の引数は文字列だけで、
+//! 運行は台詞の環境変数の値も MAKOTO の DLL も知らない。値の源（ghost）と MAKOTO の鎖は、
+//! それぞれ素のクロージャとして渡される（[`crate::resources::ResourceSink`] と同じ疎結合の口）。口の引数は文字列だけで、
 //! DLL・プロセス・文字コードの型を持たない。
 //!
 //! 運行表の側の翻訳（`schedule::translate`）とは別のモジュールで、`crate::change` と

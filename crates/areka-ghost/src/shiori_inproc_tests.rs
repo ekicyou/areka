@@ -68,8 +68,8 @@ fn relative_from_cwd(path: &Path) -> PathBuf {
     relative
 }
 
-/// 態様2（**DLL 欠落**・`DLL欠落`）: 実在しないパスは `LoadLibraryExW` が失敗し `Err`
-/// 。アーティファクト不要の決定論檻。
+/// 態様2（**DLL 欠落**・`DLL欠落`）: 実在しないパスは `LoadLibraryExW` が失敗し `Err`。
+/// アーティファクト不要の決定論檻。
 #[test]
 fn missing_dll_returns_err() {
     let result = InProcLibrary::load(Path::new(r"Z:\does\not\exist\nope.dll"));

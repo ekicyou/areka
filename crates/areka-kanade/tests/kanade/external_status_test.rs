@@ -122,8 +122,8 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
     );
 }
 
-/// 通信中の数を立てたまま kanade を起こすと最初のリクエスト（OnInitialize）から `online` が載り
-/// 、守り手を落とした後の次の Tick からは載らない。
+/// 通信中の数を立てたまま kanade を起こすと最初のリクエスト（OnInitialize）から `online` が載り、
+/// 守り手を落とした後の次の Tick からは載らない。
 ///
 /// 数は関数内の `static` を `KanadeConfig.online` で渡す（`online::PROCESS` には触れない）。
 #[test]
