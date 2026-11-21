@@ -37,7 +37,7 @@ pub(crate) struct UpdateJob {
     pub kanade: Sender<KanadeMsg>,
     /// 並び（バルーンの対象を写す判断に使う）。
     pub roots: BasewareRoots,
-    /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
+    /// 実行ファイルのフォルダ（本番は `session::roots::user_root::exe_dir()`・テストは差し替える）。
     pub exe_dir: Option<PathBuf>,
 }
 
@@ -107,7 +107,7 @@ pub(crate) struct KanadePorts {
     online_guard: Cell<Option<OnlineGuard>>,
     /// 並び（バルーンの対象を写す判断に使う）。
     roots: BasewareRoots,
-    /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
+    /// 実行ファイルのフォルダ（本番は `session::roots::user_root::exe_dir()`・テストは差し替える）。
     exe_dir: Option<PathBuf>,
 }
 
