@@ -2,7 +2,7 @@
 //!
 //! キャラ窓の見張り（`char_watch`）と同じ `Input` の段・`dispatch_pointer_events` の前で、
 //! `PointerState` の持ち主から `BalloonWindowMarker` の窓を引き、縦の回転をそのスコープの
-//! バルーンの場所の手動の送り（`wheel_at`）へ渡す。`OnMouseWheel` は送らず、横の回転は読まない
+//! バルーンの場所の手動の送り（`wheel_at`）へ渡す。`OnMouseWheel` は送らず、横の回転は読まない。
 //! OS の「1 回にスクロールする行数」は回転を受けた時だけ読む（設定の変わり目は
 //! OS が知らせないので、受けた時に引く）。
 
@@ -26,7 +26,7 @@ const WHEEL_PAGESCROLL: u32 = u32::MAX;
 const DEFAULT_WHEEL_LINES: u32 = 3;
 
 /// バルーンの窓のホイールの系を `Input` の段の `dispatch_pointer_events` の前へ 1 回だけ登録する
-/// （呼び手は `ghost_session::register_systems`・プロセスに 1 回）。
+/// （本体の系の登録の口からプロセスに 1 回呼ぶ）。
 pub fn register_balloon_wheel(world: &mut World) {
     world
         .resource_mut::<Schedules>()
@@ -38,7 +38,8 @@ pub(crate) fn balloon_wheel(world: &mut World) {
     balloon_wheel_with(world, os_wheel_lines);
 }
 
-/// 本体。`read_lines` は縦の回転を受けた tick に 1 回だけ呼ぶ（テストは数えて差し替える）。
+/// 系の中身。`read_lines` はバルーン窓が縦の回転を受け、`RuntimeWiring` がある tick に 1 回だけ呼ぶ
+/// （テストは数えて差し替える）。
 pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() -> WheelLines) {
     // 持ち主（1 窓に高々 1 つ）の縦の回転をバルーン窓のスコープへ写す。横は読まない。
     let owners: Vec<(Entity, i16)> = world
@@ -105,6 +106,11 @@ pub(super) fn os_wheel_lines() -> WheelLines {
         );
         return WheelLines::Lines(DEFAULT_WHEEL_LINES);
     }
+    wheel_lines_from(lines)
+}
+
+/// OS が返した行数を `WheelLines` へ写す（`WHEEL_PAGESCROLL` は 1 画面ずつ）。
+fn wheel_lines_from(lines: u32) -> WheelLines {
     if lines == WHEEL_PAGESCROLL {
         WheelLines::Page
     } else {

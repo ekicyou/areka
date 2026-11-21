@@ -14,8 +14,8 @@ use super::scale_change::AppliedScale;
 use crate::hit_shapes::HitMasks;
 
 use super::{
-    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
-    ScaleRatio, VisualMount,
+    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, NeverShown, PatternState,
+    ScalePolicy, ScaleRatio, VisualMount,
 };
 
 /// target の可視性を**誰が確定するか**。既定は [`Self::CommandDriven`]。
@@ -109,6 +109,10 @@ pub(super) struct PresentTarget {
     /// 成立していない間は `None` で、[`EmoPresenter::text_slot_view`] もその間は `None` を返す
     /// （「まだ何も適用していない」を 1.0 で塗り潰さない）。
     pub(super) applied: Option<ScaleRatio>,
+    /// 最初の面を表示しないまま決まった理由（表示が一度成り立てば `None`）。
+    pub(super) never_shown: Option<NeverShown>,
+    /// 面の指令（`ShowSurface`・表示を伴う置き換え）を一度でも受けた。保留・失敗でも立つ。
+    pub(super) surface_requested: bool,
     /// **装着ごとの起点**（最後に記録した（k・DPI））。
     ///
     /// 装着（`attach_target`）で `None` から始まり、差し替えでは引き継がない（`applied` は寸法の照合の

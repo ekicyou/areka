@@ -308,7 +308,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Contains**: `lib.rs`（宣言と結線 `wire_runtime`）・`frame/` と `frame_*.rs`（毎フレームの組み立て）・`spine*.rs`（起動〜終了・待ちの部品 `spine_wait.rs`）・`placement_tests/`（遷移の観測ログの判定器 `transition_judge*`・`transition_signoff*` ほか）・`examples/`（`collision-probe`）・`test-support` で開く支え（`*_test_support.rs`・本体のテストが引く私有の項目の口）
 **Features**: `test-support`（本体のテストだけが使う支えを開ける・本体は `[dev-dependencies]` でだけ付ける）
 **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`switch_cue`・`reload_cue`・`change_cue`・`user_break_cue`、本体に頼る受け口は持ち主の側に `install/install_cue.rs`・`update/update_cue.rs`・`readme/readme_cue.rs`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
-**Dependencies**: wintf, dola, areka-placement, areka 系のエンジン（`areka-actor`・`areka-parsers`・`areka-sylphya`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・emo 4 段）, bevy_ecs, thiserror, tracing, windows。`shiori-host32-host` は `test-support` のときだけ付く optional の依存
+**Dependencies**: wintf, dola, areka-placement, areka 系のエンジン（`areka-actor`・`areka-parsers`・`areka-sylphya`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・emo 4 段）, bevy_ecs, thiserror, tracing, windows。`shiori-host32-host`・`crash-report-kit` は `test-support` のときだけ付く optional の依存
 **本体を引かない約束**: **本番は本体（`areka`）に依存せず、本体の項目を引かない**。本体へ向かう呼び出しは口の束 `session_hooks`（本体が `session/hooks.rs` で据える）を通す。本体を引くテストは本体の `runtime_tests/` に置く
 **Consumers**: `areka`（本番と、`test-support` つきの `[dev-dependencies]`）・`areka-input`（本番と、`test-support` つきの `[dev-dependencies]`）
 
@@ -459,6 +459,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
 **Consumers**: `[dev-dependencies]` で引くのが `areka`・`areka-emo-present`・`areka-ghost`・`areka-impl-watch`・`areka-mcp-bridge`・`areka-parsers`・`areka-placement`・`areka-runtime`・`areka-sylphya`・`areka-user-data`・`surface-compare`、`[dependencies]` で引くのが `real-run-kit`（回の置き場を作る道具の crate）。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+
+### Crash Report Kit Crate（crash-report-kit）
+**Location**: `/crates/crash-report-kit/`
+**Purpose**: テストの実行ファイルが落ちたときの報告（受け手・プロセスの寿命の MTA・報告の行・許可の持ち手の表）を**ワークスペースで唯一定義する**テスト専用 leaf。据え付けの `.CRT$XCU` の静的変数は上流の rlib に置くとリンクに入らないので、使い手の各テストの実行ファイルの根の crate に 1 つずつ置く。
+**Modules**: `lib.rs`（本体と公開の入口 `install`・`installed`・`hold`・`release`・較正の口 `crash_on_an_unnamed_thread`）＋ `lib_tests.rs`（自分の据え付けと檻・装置なしの較正）
+**Dependencies**: `windows` だけ（ワークスペースの表）・ワークスペース内 crate への依存は 0・`publish = false`
+**Consumers**: `[dev-dependencies]` で `wintf`・`areka-placement`、`areka-runtime` は `test-support` の任意の依存と `[dev-dependencies]`。`areka-input` と本体は `areka_runtime::crash_report_test_support` を通る。報告の行（`AREKA-CRASH`）は `tools/load-flake.ps1` が字面で拾う。
 
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`

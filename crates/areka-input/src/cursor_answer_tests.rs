@@ -8,13 +8,14 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, IDC_ARROW, IDC_HAND, IDC_HELP};
 use wintf::ecs::cursor::{
-    CursorAsk, CursorQuery, CursorReply, CursorTrigger, OwnedCursor, read_cur_directory,
-    stock_cursor,
+    CursorAsk, CursorQuery, CursorReply, CursorTrigger, OwnedCursor, cursor_size_for_dpi,
+    read_cur_directory, stock_cursor,
 };
 use wintf::ecs::pointer::PointerState;
 use wintf::ecs::{PhysicalPoint, Window};
 
-use super::super::super::{MouseWiring, RegionSource};
+use super::super::super::MouseWiring;
+use super::super::super::pointer_test_support::world_with_wiring;
 use super::super::char_watch;
 use super::{BUNDLED, CharCursors, register_char_cursor};
 use crate::hover_region::cursor_pick::Spot;
@@ -40,13 +41,7 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
 }
 
 fn wired_world(assets: Option<ShellCursorAssets>) -> World {
-    let (tx, _rx) = std::sync::mpsc::channel();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(mock),
-        Box::new(|| 0),
-    ));
+    let (mut world, _rx) = world_with_wiring(mock, Box::new(|| 0));
     if let Some(a) = assets {
         world.insert_non_send(a);
     }
@@ -89,7 +84,7 @@ fn debugs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 #[test]
-fn char_window_gets_the_expected_stock_shapes() {
+fn char_window_gets_the_expected_shapes() {
     let mut assets = ShellCursorAssets::default();
     // スコープ 1 の Head だけ乗る形を help にする（スコープ 0 は既定のまま）。
     assets.rows.rows.insert(
@@ -103,9 +98,13 @@ fn char_window_gets_the_expected_stock_shapes() {
 
     assert_eq!(show(&world, w0, 60), finger, "Head の既定は指差し");
     assert_eq!(show(&world, w0, 200), stock_cursor(IDC_ARROW).unwrap());
-    // 当たり判定から当たり判定へ直に移ったその場で替わる。
     let hand = show(&world, w0, 10);
-    assert_ne!(hand, finger, "Bust は同梱の手を開いた形");
+    let bundled_hand = world
+        .get_non_send::<CharCursors>()
+        .expect("結線済み")
+        .bundled(0, BUNDLED[0].1, cursor_size_for_dpi(96));
+    assert_eq!(Some(hand), bundled_hand, "Bust は同梱の手を開いた形");
+    // 当たり判定から当たり判定へ直に移ったその場で替わる。
     assert_eq!(show(&world, w0, 60), finger);
     assert_eq!(show(&world, w1, 60), stock_cursor(IDC_HELP).unwrap());
     assert_eq!(show(&world, w0, 61), finger, "別の窓の形に引きずられない");
@@ -253,4 +252,26 @@ fn shell_file_that_cannot_be_made_falls_back_to_the_scene_default() {
     let mut world = wired_world(Some(assets));
     let w = char_window(&mut world, 0);
     assert_eq!(show(&world, w, 60), stock_cursor(IDC_HAND).unwrap());
+}
+
+/// ブレスのファイルが作れず descript の指差しのファイルが作れるなら、その場面は descript の
+/// ファイルの形（既定の指差しではない）。
+#[test]
+fn shell_file_that_cannot_be_made_falls_back_to_the_descript_file() {
+    use areka_runtime::shell_cursor_assets::CursorFile;
+    let mut assets = ShellCursorAssets::default();
+    assets.files.push(CursorFile::Cur(b"broken".to_vec()));
+    assets.files.push(CursorFile::Cur(BUNDLED[0].1.to_vec()));
+    assets
+        .rows
+        .rows
+        .insert((0, "Head".into(), CursorScene::Up), Shape::File(0));
+    assets.ghost.finger = Some(Shape::File(1));
+    let mut world = wired_world(Some(assets));
+    let w = char_window(&mut world, 0);
+    let shown = show(&world, w, 60);
+    let descript = world
+        .non_send::<ShellCursorAssets>()
+        .cursor_for(1, cursor_size_for_dpi(96));
+    assert_eq!(Some(shown), descript);
 }

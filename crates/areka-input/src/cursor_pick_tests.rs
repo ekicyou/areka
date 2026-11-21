@@ -53,10 +53,10 @@ fn plan(
     (next, s, called.get())
 }
 
-// ---- plan_cursor: 表の 13 行 ----
+// ---- plan_cursor ----
 
 #[test]
-fn row01_move_same_position_keeps_everything_without_resolving() {
+fn move_same_position_keeps_everything_without_resolving() {
     for prev in [
         wc(P, region("head"), Hold::Free),
         wc(P, region("head"), pressed(Down, "head")),
@@ -72,7 +72,7 @@ fn row01_move_same_position_keeps_everything_without_resolving() {
 }
 
 #[test]
-fn row02_move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
+fn move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Move, Q, true, Spot::Plain);
     assert!(called);
@@ -81,7 +81,7 @@ fn row02_move_while_pressed_and_button_down_keeps_pressed_scene_and_region() {
 }
 
 #[test]
-fn row03_move_while_pressed_without_button_returns_to_free() {
+fn move_while_pressed_without_button_returns_to_free() {
     // 解放を落としたとき（メニューが食べた・窓の外で放した）の戻り。
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Move, Q, false, region("bust"));
@@ -91,18 +91,18 @@ fn row03_move_while_pressed_without_button_returns_to_free() {
 }
 
 #[test]
-fn row04_move_from_free_or_resting_resolves_and_frees() {
+fn move_from_free_or_resting_resolves_and_frees() {
     for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
         let prev = wc(P, region("head"), hold);
         let (next, s, called) = plan(Some(&prev), Move, Q, false, region("head"));
         assert!(called);
         assert_eq!(next, wc(Q, region("head"), Hold::Free));
-        assert_eq!(s, shown(Up, "head"), "要件 4.4");
+        assert_eq!(s, shown(Up, "head"));
     }
 }
 
 #[test]
-fn row05_press_over_region_holds_down_or_right_down() {
+fn press_over_region_holds_down_or_right_down() {
     for (right, scene) in [(false, Down), (true, RightDown)] {
         for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
             let prev = wc(P, region("head"), hold);
@@ -115,7 +115,7 @@ fn row05_press_over_region_holds_down_or_right_down() {
 }
 
 #[test]
-fn row06_press_off_region_keeps_the_place_shape() {
+fn press_off_region_keeps_the_place_shape() {
     // 当たり判定の無い所で押しても形を変えない。
     let prev = wc(P, Spot::Plain, Hold::Free);
     let (next, s, called) = plan(Some(&prev), Press { right: false }, P, true, Spot::Plain);
@@ -134,7 +134,7 @@ fn row06_press_off_region_keeps_the_place_shape() {
 }
 
 #[test]
-fn row07_second_press_keeps_the_first() {
+fn second_press_keeps_the_first() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), Press { right: true }, Q, true, region("bust"));
     assert!(called);
@@ -143,7 +143,7 @@ fn row07_second_press_keeps_the_first() {
 }
 
 #[test]
-fn row08_release_resolves_and_frees_from_any_hold() {
+fn release_resolves_and_frees_from_any_hold() {
     for hold in [
         Hold::Free,
         pressed(Down, "head"),
@@ -154,7 +154,7 @@ fn row08_release_resolves_and_frees_from_any_hold() {
         let (next, s, called) = plan(Some(&prev), Release, P, false, region("bust"));
         assert!(called);
         assert_eq!(next, wc(P, region("bust"), Hold::Free));
-        assert_eq!(s, shown(Up, "bust"), "要件 3.4");
+        assert_eq!(s, shown(Up, "bust"));
     }
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (_, s, _) = plan(Some(&prev), Release, P, false, Spot::Plain);
@@ -162,7 +162,7 @@ fn row08_release_resolves_and_frees_from_any_hold() {
 }
 
 #[test]
-fn row09_hover_from_free_over_region_rests_without_resolving() {
+fn hover_from_free_over_region_rests_without_resolving() {
     let prev = wc(P, region("head"), Hold::Free);
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Hover, P, false, Spot::Plain);
     assert!(!called);
@@ -171,7 +171,7 @@ fn row09_hover_from_free_over_region_rests_without_resolving() {
 }
 
 #[test]
-fn row10_hover_is_ignored_when_resting_pressed_or_off_region() {
+fn hover_is_ignored_when_resting_pressed_or_off_region() {
     for prev in [
         // ホイールの形を止まったで上書きしない。
         wc(P, region("head"), Hold::Resting(Wheel)),
@@ -190,7 +190,7 @@ fn row10_hover_is_ignored_when_resting_pressed_or_off_region() {
 }
 
 #[test]
-fn row11_wheel_over_region_rests_with_wheel() {
+fn wheel_over_region_rests_with_wheel() {
     for hold in [Hold::Free, Hold::Resting(Hover), Hold::Resting(Wheel)] {
         let prev = wc(P, region("head"), hold);
         let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, false, region("head"));
@@ -201,12 +201,12 @@ fn row11_wheel_over_region_rests_with_wheel() {
 }
 
 #[test]
-fn row12_wheel_while_pressed_or_off_region_keeps_hold() {
+fn wheel_while_pressed_or_off_region_keeps_hold() {
     let prev = wc(P, region("head"), pressed(Down, "head"));
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, true, region("head"));
     assert!(called);
     assert_eq!(next, prev);
-    assert_eq!(s, shown(Down, "head"), "要件 4.5");
+    assert_eq!(s, shown(Down, "head"));
     let prev = wc(P, Spot::Plain, Hold::Free);
     let (next, s, called) = plan(Some(&prev), CursorTrigger::Wheel, P, false, Spot::Plain);
     assert!(called);
@@ -215,7 +215,7 @@ fn row12_wheel_while_pressed_or_off_region_keeps_hold() {
 }
 
 #[test]
-fn row13_refresh_keeps_state_and_resolves_only_without_prev() {
+fn refresh_keeps_state_and_resolves_only_without_prev() {
     for (prev, want) in [
         (wc(P, region("head"), Hold::Free), shown(Up, "head")),
         (
@@ -341,44 +341,35 @@ fn ghost_all() -> GhostCursorKeys<String> {
     }
 }
 
-fn pick(
-    scope: u32,
-    s: &Shown,
-    r: &CursorRows<String>,
-    g: &GhostCursorKeys<String>,
-) -> Option<(Shape<String>, Origin)> {
-    pick_shape(scope, s, r, g)
-}
-
 #[test]
 fn defaults_by_scene_and_bust_case_insensitive() {
     let r = rows(&[]);
     let g = no_ghost();
     for bust in ["bust", "Bust", "BUST"] {
         assert_eq!(
-            pick(0, &shown(Up, bust), &r, &g),
+            pick_shape(0, &shown(Up, bust), &r, &g),
             Some((sys(SystemCursor::Hand), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(Down, bust), &r, &g),
+            pick_shape(0, &shown(Down, bust), &r, &g),
             Some((sys(SystemCursor::Grip), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(RightDown, bust), &r, &g),
+            pick_shape(0, &shown(RightDown, bust), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
     for scene in [Up, Down, RightDown] {
         assert_eq!(
-            pick(0, &shown(scene, "head"), &r, &g),
+            pick_shape(0, &shown(scene, "head"), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
     assert_eq!(
-        pick(0, &Shown::Arrow, &r, &g),
+        pick_shape(0, &Shown::Arrow, &r, &g),
         Some((sys(SystemCursor::Arrow), Origin::Default))
     );
-    assert_eq!(pick(0, &Shown::Pass, &r, &g), None);
+    assert_eq!(pick_shape(0, &Shown::Pass, &r, &g), None);
 }
 
 #[test]
@@ -386,13 +377,19 @@ fn ghost_descript_replaces_defaults() {
     let r = rows(&[]);
     let g = ghost_all();
     let gd = |n: &str| Some((file(n), Origin::GhostDescript));
-    assert_eq!(pick(0, &shown(Up, "Bust"), &r, &g), gd("hand.cur"));
-    assert_eq!(pick(0, &shown(Down, "bust"), &r, &g), gd("grip.cur"));
-    assert_eq!(pick(0, &shown(RightDown, "bust"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &shown(Up, "head"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &shown(Down, "head"), &r, &g), gd("finger.cur"));
-    assert_eq!(pick(0, &Shown::Arrow, &r, &g), gd("arrow.cur"));
-    assert_eq!(pick(0, &Shown::Pass, &r, &g), None);
+    assert_eq!(pick_shape(0, &shown(Up, "Bust"), &r, &g), gd("hand.cur"));
+    assert_eq!(pick_shape(0, &shown(Down, "bust"), &r, &g), gd("grip.cur"));
+    assert_eq!(
+        pick_shape(0, &shown(RightDown, "bust"), &r, &g),
+        gd("finger.cur")
+    );
+    assert_eq!(pick_shape(0, &shown(Up, "head"), &r, &g), gd("finger.cur"));
+    assert_eq!(
+        pick_shape(0, &shown(Down, "head"), &r, &g),
+        gd("finger.cur")
+    );
+    assert_eq!(pick_shape(0, &Shown::Arrow, &r, &g), gd("arrow.cur"));
+    assert_eq!(pick_shape(0, &Shown::Pass, &r, &g), None);
 }
 
 #[test]
@@ -405,21 +402,21 @@ fn brace_row_beats_ghost_and_default() {
     ]);
     for g in [no_ghost(), ghost_all()] {
         assert_eq!(
-            pick(0, &shown(Up, "bust"), &r, &g),
+            pick_shape(0, &shown(Up, "bust"), &r, &g),
             Some((sys(SystemCursor::Help), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(Down, "bust"), &r, &g),
+            pick_shape(0, &shown(Down, "bust"), &r, &g),
             Some((file("d.cur"), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(RightDown, "head"), &r, &g),
+            pick_shape(0, &shown(RightDown, "head"), &r, &g),
             Some((sys(SystemCursor::No), Origin::Brace))
         );
     }
     // 行は綴りどおり（Bust の行は無い）なので既定へ落ちる。
     assert_eq!(
-        pick(0, &shown(Up, "Bust"), &r, &no_ghost()),
+        pick_shape(0, &shown(Up, "Bust"), &r, &no_ghost()),
         Some((sys(SystemCursor::Hand), Origin::Default))
     );
 }
@@ -433,28 +430,28 @@ fn hover_and_wheel_use_their_row_or_stay_on_the_up_shape() {
     ]);
     let g = no_ghost();
     assert_eq!(
-        pick(0, &shown(Hover, "head"), &r, &g),
+        pick_shape(0, &shown(Hover, "head"), &r, &g),
         Some((sys(SystemCursor::Help), Origin::Brace))
     );
     assert_eq!(
-        pick(0, &shown(Wheel, "head"), &r, &g),
+        pick_shape(0, &shown(Wheel, "head"), &r, &g),
         Some((sys(SystemCursor::Move), Origin::Brace))
     );
     for scene in [Hover, Wheel] {
         assert_eq!(
-            pick(0, &shown(scene, "face"), &r, &g),
+            pick_shape(0, &shown(scene, "face"), &r, &g),
             Some((sys(SystemCursor::Cross), Origin::Brace))
         );
         assert_eq!(
-            pick(0, &shown(scene, "bust"), &r, &g),
+            pick_shape(0, &shown(scene, "bust"), &r, &g),
             Some((sys(SystemCursor::Hand), Origin::Default))
         );
         assert_eq!(
-            pick(0, &shown(scene, "bust"), &r, &ghost_all()),
+            pick_shape(0, &shown(scene, "bust"), &r, &ghost_all()),
             Some((file("hand.cur"), Origin::GhostDescript))
         );
         assert_eq!(
-            pick(0, &shown(scene, "arm"), &r, &g),
+            pick_shape(0, &shown(scene, "arm"), &r, &g),
             Some((sys(SystemCursor::Finger), Origin::Default))
         );
     }
@@ -466,11 +463,11 @@ fn scopes_are_separate() {
     let r = rows(&[(0, "head", Up, sys(SystemCursor::Help))]);
     let g = no_ghost();
     assert_eq!(
-        pick(0, &shown(Up, "head"), &r, &g),
+        pick_shape(0, &shown(Up, "head"), &r, &g),
         Some((sys(SystemCursor::Help), Origin::Brace))
     );
     assert_eq!(
-        pick(1, &shown(Up, "head"), &r, &g),
+        pick_shape(1, &shown(Up, "head"), &r, &g),
         Some((sys(SystemCursor::Finger), Origin::Default))
     );
 }

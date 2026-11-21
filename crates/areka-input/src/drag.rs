@@ -9,9 +9,9 @@
 //!   `KanadeMsg::Mouse` を送る。送らないと決めたときは理由を 1 件記録する。
 //!
 //! 受け手の付け方は親モジュールの [`super::attach_char_pointer_handlers`]（キャラクター窓だけ）。
-//! 「開始を送った」印は持たない（設計 D2）。2 相の呼び出しは Bubble だけを扱えば 1 回になる。
+//! 「開始を送った」印は持たない。2 相の呼び出しは Bubble だけを扱えば 1 回になる。
 
-use areka_kanade::{KanadeMsg, MouseEventKind, MouseInput};
+use areka_kanade::{MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
 use wintf::ecs::WindowPos;
 use wintf::ecs::drag::{DragEndEvent, DragStartEvent};
@@ -42,19 +42,20 @@ pub(super) fn on_char_drag_start(
             ev.target,
             ev.position,
             MouseEventKind::DragStart,
+            "drag_start",
         );
     }
     false
 }
 
-/// 位置の保存を今までどおり行い、その後でドラッグの終了を kanade へ 1 回知らせる。
+/// 位置の保存を行い、その後でドラッグの終了を kanade へ 1 回知らせる。
 ///
 /// どの相でも先に [`on_char_drag_end`] を受けた引数のまま呼び、戻り値を控えて返す。保存は
 /// 知らせの結果に左右されない（送り先が無い・送出に失敗した・送らないと決めた、のどれでも
 /// 保存は済んでいる）。
 ///
 /// `ev.cancelled` は見ない（取り消しでも同じに送る）。座標は保存を呼んだ**後**の
-/// `WindowPos.position` から引く（設計 D1）: 取り消しでは保存が窓を開始の位置へ戻すので、
+/// `WindowPos.position` から引く: 取り消しでは保存が窓を開始の位置へ戻すので、
 /// 押した位置（開始と同じ値）になる。
 pub(super) fn on_char_drag_end_and_notify(
     world: &mut World,
@@ -70,6 +71,7 @@ pub(super) fn on_char_drag_end_and_notify(
             ev.target,
             ev.position,
             MouseEventKind::DragEnd,
+            "drag_end",
         );
     }
     handled
@@ -94,18 +96,8 @@ fn notify_drag(
     target: Entity,
     screen: PhysicalPoint,
     kind: MouseEventKind,
+    kind_name: &'static str,
 ) {
-    let kind_name = match kind {
-        MouseEventKind::DragStart => "drag_start",
-        MouseEventKind::DragEnd => "drag_end",
-        MouseEventKind::Move => "move",
-        MouseEventKind::DoubleClick { .. } => "double_click",
-        // ドラッグの 2 つしか来ない。
-        MouseEventKind::ButtonUp { .. }
-        | MouseEventKind::Wheel { .. }
-        | MouseEventKind::Hover(_) => "other",
-    };
-
     if target != entity {
         tracing::warn!(
             event = "mouse_drag_dropped",
@@ -149,27 +141,22 @@ fn notify_drag(
     let x = i64::from(screen.x) - i64::from(origin.x);
     let y = i64::from(screen.y) - i64::from(origin.y);
 
-    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る。
+    // presenter 借用を解いて解決結果を owned で取り出してから MouseWiring を取る。
     let hit = resolve_hit_owned(world, scope, x, y);
     let wiring = world
-        .get_non_send_mut::<MouseWiring>()
+        .get_non_send::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
     let (x, y) = hit.surface_point;
-    let msg = KanadeMsg::Mouse(MouseInput {
-        scope,
-        x,
-        y,
-        region: hit.region,
-        kind,
-    });
-    if wiring.sender.send(msg).is_err() {
-        tracing::warn!(
-            event = "mouse_send_failed",
+    wiring.send_mouse(
+        MouseInput {
             scope,
-            kind = kind_name,
-            "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
-        );
-    }
+            x,
+            y,
+            region: hit.region,
+            kind,
+        },
+        kind_name,
+    );
 }
 
 #[cfg(test)]

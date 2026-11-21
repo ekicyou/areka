@@ -1,0 +1,13 @@
+[package]
+name = "crash-report-kit"
+workspace = "../.."
+description = "テストのプロセスの落ちの報告（受け手・MTA・許可の持ち手の表・報告の行）をワークスペースで唯一定義するテスト専用の leaf crate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # テストだけが使う道具
+repository.workspace = true
+
+[dependencies]
+windows = { workspace = true }

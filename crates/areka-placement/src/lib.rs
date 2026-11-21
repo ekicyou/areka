@@ -111,7 +111,7 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// primary モニタ DPI を取得できないときに採る「96 相当」の DPI。
 ///
 /// この縮退は恒久的な情報損失ではない。窓生成後は窓の実 DPI が正であり、
-/// `Changed<DPI>` を観測する `runtime::frame::run_dpi_phase` と
+/// `Changed<DPI>` を観測する `areka_runtime::frame::dpi::run_dpi_phase` と
 /// 表示成立点の状態照合が k を自己補正する。
 const FALLBACK_PRIMARY_DPI: u32 = 96;
 
@@ -135,7 +135,7 @@ pub use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
 #[cfg(not(feature = "test-support"))]
 pub(crate) use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
 
-/// 作業領域源の実行時同期（`runtime::frame::work_area_sync`）の呼出点タグ。
+/// 作業領域源の実行時同期（`areka_runtime::frame::work_area_sync`）の呼出点タグ。
 ///
 /// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（`PREPARE_GHOST_WINDOWS_CONTEXT`）に
 /// 続く 3 つ目の出所。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を呼びタグだけを違えるので、
@@ -178,13 +178,13 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 ///
 /// 1. 採寸の k₀（[`build_measure_scaling`] → `measure_scope_sizes`）
 /// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → 本体の `ghost_session` →
-///    `runtime::wire_runtime` → `build_boot_assets` → `attach_target`）
+///    `areka_runtime::wire_runtime` → `build_boot_assets` → `attach_target`）
 ///
 /// 同じ宣言が 2 経路で食い違わないこと（＝読取が 1 度であること）が本型の存在理由。
 ///
 /// shell と balloon は別々のキー（`seriko.dpi`／`dpi`）で宣言され得るうえ、
 /// 素の `u16` 2 引数は取り違えてもコンパイルが通る。名前付きフィールドで束ね、
-/// 呼び手に「どちらの `u16` か」を選ばせない（`runtime::frame` の `AuthorDpis` と同じ防御）。
+/// 呼び手に「どちらの `u16` か」を選ばせない（`areka_runtime::frame::dpi` の `AuthorDpis` と同じ防御）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AuthorDpi {
     /// shell descript `seriko.dpi` 由来（縮退梯子適用済みの非ゼロ値）。

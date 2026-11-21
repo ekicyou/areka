@@ -68,6 +68,6 @@ pub mod shell_target;
 pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
-pub use presenter::{AppliedScale, ClientHit, EmoPresenter, ScaleChange, TextSlotView};
+pub use presenter::{AppliedScale, ClientHit, EmoPresenter, NeverShown, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 pub use shell_target::{ShellLoadError, ShellTarget, load_shell_target, load_shell_target_quiet};

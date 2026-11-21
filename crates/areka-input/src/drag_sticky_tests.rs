@@ -1,7 +1,7 @@
 //! ドラッグの受け手から組の連れ動きまでの結合の檻。
 //!
 //! 本番と同じ順に組んだ 2 スコープの窓（[`Rig`]・scope 1 をドラッグし scope 0 が組の相手）へ、
-//! 帳簿を 2.1 の `seed_sticky_descript` で直に据え、wintf の配り（`dispatch_drag_events`）で
+//! 帳簿を `seed_sticky_descript` で直に据え、wintf の配り（`dispatch_drag_events`）で
 //! 開始・途中・終わりを通す。台本で向きを変えた窓は `apply_script_alignment` と同じ部品
 //! （`Anchored`＋印つきの `AnchorSource`）を直に入れて作る。
 
@@ -10,30 +10,16 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DraggingState};
 
-use super::test_support::{Rig, ended, started};
+use super::test_support::{Rig, WORK_AREA, add, ended, started, sub};
 use areka_placement::follow::{AnchorSource, Anchored, MonitorSnapshot, sync_drag_writer};
 use areka_placement::persist::{char_pos_from_origin_x, char_pos_to_origin_x, project_restore};
-use areka_placement::resolver::{Anchor, PointPx, RectPx, SizePx};
+use areka_placement::resolver::{Anchor, PointPx, SizePx};
 use areka_placement::sticky_group_ledger::seed_sticky_descript;
 
 /// 押した位置の窓の中の物理 px。
 const PRESS_LOCAL: Point = Point { x: 20, y: 30 };
 /// カーソルの量（横にも縦にも動かす）。
 const MOVE_BY: Point = Point { x: 150, y: -80 };
-
-fn add(p: Point, by: Point) -> Point {
-    Point {
-        x: p.x + by.x,
-        y: p.y + by.y,
-    }
-}
-
-fn sub(a: Point, b: Point) -> Point {
-    Point {
-        x: a.x - b.x,
-        y: a.y - b.y,
-    }
-}
 
 /// 台本で向きを変えた窓にする（descript の向きは作ったときの下のまま）。
 fn script_anchor(world: &mut World, window: Entity, anchor: Anchor) {
@@ -53,13 +39,7 @@ fn group(rig: &mut Rig) {
 
 /// ドラッグを始める（`DraggingState.initial_window_pos` を窓の位置にする）。押した位置を返す。
 fn begin(rig: &mut Rig) -> Point {
-    let char_w = rig.char_w;
-    let start = rig.position_of(char_w);
-    let press = add(start, PRESS_LOCAL);
-    rig.put(started(char_w, press));
-    rig.tick();
-    rig.set_initial_window_pos(char_w, start);
-    press
+    rig.begin_drag(PRESS_LOCAL).1
 }
 
 /// 途中の 1 回の配り。
@@ -228,6 +208,7 @@ fn cancel_returns_the_partner_to_its_start() {
         saved_pos(&saved, 0),
         Some(bottom_form(&rig, partner, partner_start))
     );
+    assert_eq!(saved_pos(&saved, 1), Some(bottom_form(&rig, char_w, start)));
     rig.close();
 }
 
@@ -282,7 +263,7 @@ fn anchor_change_mid_drag_binds_by_the_start_anchor_and_reapplies_at_the_end() {
     end(&mut rig, add(press, later), false);
     assert_eq!(
         rig.position_of(char_w).y,
-        1200 - size.h,
+        WORK_AREA.bottom - size.h,
         "終わりに今の向き（下）で当て直す"
     );
     rig.close();
@@ -368,12 +349,7 @@ fn free_window_drag_restores_to_the_released_x_on_next_boot() {
 
     let saved = saved_pos(&rig.saved(), 1).expect("離した位置が書かれる");
     let snapshot = MonitorSnapshot {
-        work_areas: vec![RectPx {
-            left: 0,
-            top: 0,
-            right: 1920,
-            bottom: 1200,
-        }],
+        work_areas: vec![WORK_AREA],
     };
     let restored = project_restore(
         Anchor::Bottom,

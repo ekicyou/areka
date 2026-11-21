@@ -44,7 +44,7 @@
 //! 返し、警告の発行は呼び手の責務である。
 
 // 許可の属性は置かない。配置は lib の crate で、公開の項目の呼び手は追随相
-// （`runtime::…` の `balloon_offset_follow`）。結線が減って私有の項目が未使用になったら、
+// （`areka_runtime::…` の `balloon_offset_follow`）。結線が減って私有の項目が未使用になったら、
 // 属性を貼るのではなく減った理由を先に疑うこと。
 
 use areka_emo_compose::ScaleRatio;

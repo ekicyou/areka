@@ -1,13 +1,12 @@
 //! 選択確定通知の受信結線。
 //!
-//! UI スレッドの受信口 [`ChoiceSelectionInbox`]（`wire_balloon_choice` が挿入・所有は
-//! `balloon.rs`）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
+//! UI スレッドの受信口 `ChoiceSelectionInbox`（`wire_balloon_choice` が挿入・所有は
+//! `balloon` mod）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
 //! inbox 経由で kanade へ転送する薄い配線層。**判断・フィルタ・重複排除は一切行わない**——一回性の調停は
-//! kanade 側が単一真実源であり、上流 balloon 押下ハンドラは既に
+//! kanade 側が単一真実源であり、押下のハンドラ（普通のバルーン・箱）は既に
 //! 一度きり発行を保証している。本層は**到着順に全件を素通し**する。
 //!
-//! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点のみで、
-//! それと写像純関数 [`to_choice_input`] だけが檻の対象（ECS 結線は再テストしない）。
+//! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点と、下の種類の振り分けだけ。
 //!
 //! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `DispatcherMsg::Anchor` にして送る。
 //! 種類で伝言を選ぶこの 1 分岐のほかは選択肢と同じで、届いた
@@ -30,12 +29,12 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 
 use super::balloon::{ChoiceSelection, ChoiceSelectionInbox};
 
-/// dispatcher への投函端（NonSend・UI スレッド所有・donor `MouseWiring` 同型）。
+/// dispatcher への投函端（NonSend・UI スレッド所有）。
 ///
 /// `Sender<DispatcherMsg>` 単体は `Send` だが、受信口 [`ChoiceSelectionInbox`]（`Receiver` ゆえ
-/// `!Sync`）と対で UI スレッド固定運用ゆえ NonSend 資源として挿入する（`MouseWiring` 前例）。
+/// `!Sync`）と対で UI スレッド固定運用ゆえ NonSend 資源として挿入する（`MouseWiring` と同じ）。
 pub(crate) struct ChoiceForwarder {
-    /// `GhostRuntime::dispatcher()` クローン（`ghost_session::boot_ghost` 結線・std mpsc）。
+    /// `GhostRuntime::dispatcher()` クローン（ゴーストの起動時に結線・std mpsc）。
     dispatcher: Sender<DispatcherMsg>,
 }
 
@@ -47,14 +46,10 @@ pub(crate) struct ChoiceForwarder {
 ///
 /// `scope` は下流でも**検証・ログにのみ**用いられ Reference には載らない。
 /// 本関数は搬送するだけで用途判断を持たない。
-///
-/// 同一入力→同一出力（純粋・決定論・失敗経路なし）。
 fn to_choice_input(sel: ChoiceSelection) -> ChoiceInput {
     ChoiceInput {
-        // id / label / references は move で素通し（clone も加工もしない＝改変の余地を作らない）。
         id: sel.id,
         label: sel.label,
-        // 型合わせのみ（scope の実値は {0,1}）。用途限定の判断は下流。
         scope: sel.scope as u32,
         references: sel.references,
     }
@@ -75,24 +70,19 @@ fn to_anchor_input(sel: ChoiceSelection) -> AnchorInput {
 
 /// 受信口を `try_recv` で drain し、到着順に全件を dispatcher 経由で kanade へ転送する。
 ///
-/// ECS から切り離した純粋な形（`Receiver` と `Sender` のみを取る）——排他システム
-/// [`drain_choice_selections`] はこの関数へ委譲するだけの配線。
+/// ECS から切り離した純粋な形（`Receiver` と `Sender` のみを取る）。排他システム
+/// `drain_choice_selections` はこの関数へ委譲するだけ。
 ///
 /// - **判断・フィルタ・重複排除をしない**: 受領した通知は 1 件残らず送出を試みる。
 /// - **送出失敗で止まらない**: `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**
 ///   する（dispatcher 停止後は終了系で正常）。アンカーの知らせは同じ形の記録を
 ///   `anchor_forward_failed` の名前で残す。
 /// - **種類で伝言を選ぶ**: 選択肢は `DispatcherMsg::Choice`、アンカーは `DispatcherMsg::Anchor`。
-///
-/// 戻り値は送出に成功した件数（呼び手は使わないが檻の観測点）。
-fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) -> usize {
-    let mut forwarded = 0usize;
-    // try_recv ループ＝到着順に全件（滞留は 1 件も残さない）。
+fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) {
     while let Ok(sel) = inbox.try_recv() {
-        // scope と id は送出後に使えないため、ログ用へ先に控える（写像は所有権を消費する）。
+        // 写像は所有権を消費するので、ログ用の scope と id を先に控える。
         let scope = sel.scope;
         let id = sel.id.clone();
-        // 種類で伝言を選ぶ（本層の振り分けはここだけ）。送れなかったときの記録の名前も種類ごと。
         let (msg, forward_failed) = match sel.kind {
             SpanKind::Choice => (
                 DispatcherMsg::Choice(to_choice_input(sel)),
@@ -104,28 +94,25 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<Dispatcher
             ),
         };
         if dispatcher.send(msg).is_err() {
-            // dispatcher 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する。
+            // dispatcher 停止後は終了系で正常。無記録で打ち切らず、記録して次の件へ継続する。
             tracing::warn!(
                 event = forward_failed,
                 scope,
                 id = %id,
                 "dispatcher Sender 送出失敗（actor 停止後）: 記録して次の通知へ継続"
             );
-            continue;
         }
-        forwarded += 1;
     }
-    forwarded
 }
 
 /// 受信口 drain の排他システム（Input スケジュール）。
 ///
-/// NonSend の [`ChoiceSelectionInbox`]（`wire_balloon_choice` 挿入）と [`ChoiceForwarder`]
-/// （[`wire_choice_drain`] 挿入）をともに共有借用し（両方 `&World` 借用ゆえ両立・donor
-/// `resolve_region_owned` と同じ借用作法）、[`forward_all`] へ委譲する。
+/// NonSend の `ChoiceSelectionInbox`（`wire_balloon_choice` 挿入）と `ChoiceForwarder`
+/// （[`wire_choice_drain`] 挿入）をともに共有借用し（両方 `&World` 借用ゆえ両立）、
+/// `forward_all` へ委譲する。
 ///
-/// 資源不在は self-gating の no-op（`trace!`＋return・donor `mouse_moved_no_wiring` 同型）。
-/// [`wire_choice_drain`] は `wire_balloon_choice` の直後に呼ばれるため理論上不到達だが、
+/// 資源不在は self-gating の no-op（`trace!`＋return）。
+/// どちらも本体がゴーストの起動の結線で置くので、不在は結線の前と結線の無い起動のあいだである。
 /// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する。
 pub(crate) fn drain_choice_selections(world: &mut World) {
     let Some(inbox) = world.get_non_send::<ChoiceSelectionInbox>() else {
@@ -145,15 +132,13 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
     forward_all(&inbox.0, &forwarder.dispatcher);
 }
 
-/// dispatcher 投函端を NonSend 挿入する（donor `wire_mouse_input` 同型）。
+/// dispatcher 投函端を NonSend 挿入する。
 /// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
-/// `ghost_session_runtime::rewire_runtime_consumers` の末尾（`ghost_session::boot_ghost` の結線で
-/// `wire_balloon_choice` の直前）から `wire_mouse_input` と同型にゴーストごとに**同期**（schedule 実行外の World 変更）で呼ばれる（状態の載せ替え＝n 回。
-/// 系の登録は `ghost_session::register_systems` からプロセスに 1 回）。同期呼出ゆえ実行中
-/// スケジュールを触らない。
+/// 本体がゴーストの起動ごとに**同期**（schedule 実行外の World 変更）で呼ぶ（状態の載せ替え＝n 回。
+/// 系の登録は本体の系の登録の口からプロセスに 1 回）。同期呼出ゆえ実行中スケジュールを触らない。
 ///
-/// Precondition: drain の時点で `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在・挿入どうしは互いを読まない）。
+/// Precondition: drain の時点で `wire_balloon_choice` 済み（`ChoiceSelectionInbox` 存在・挿入どうしは互いを読まない）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
 pub fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
     world.insert_non_send(ChoiceForwarder { dispatcher });
@@ -162,10 +147,9 @@ pub fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
 /// 受信口の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
 /// ordering は `dispatch_pointer_events` の**後**——押下ハンドラが同一フレームで発行した
-/// [`ChoiceSelection`] をそのフレームのうちに転送する（1 フレーム遅延を作らない・
-/// `register_balloon_leave_system` と同じ ordering 作法）。
+/// [`ChoiceSelection`] をそのフレームのうちに転送する（1 フレーム遅延を作らない）。
 ///
-/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+/// 呼び手は本体の系の登録の口（プロセスに 1 回）。
 pub fn register_choice_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
@@ -176,7 +160,7 @@ pub fn register_choice_drain(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log_capture_kit::{LineFormat, capture_lines};
+    use crate::balloon::test_support::capture_logs;
     use std::sync::mpsc::{self, TryRecvError};
 
     /// 登録専用の関数は単独で呼べ、入力の段へ取り出しをちょうど 1 つ足し、持ち物は置かない。
@@ -198,7 +182,7 @@ mod tests {
         );
     }
 
-    /// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
+    /// 結線は持ち物を置くだけで、系は登録しない（登録は `register_choice_drain`）。
     #[test]
     fn wire_choice_drain_inserts_the_forwarder_without_registering() {
         let mut world = World::new();
@@ -237,25 +221,7 @@ mod tests {
         }
     }
 
-    // ── ログ発火を決定論的に観測するための捕捉（捕捉層は共有機構へ委譲）──
-    //
-    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
-    // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-    // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-    // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
-    // 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
-    // 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
-    // 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
-    // ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
-    // crate doc と同 crate の `src/probe.rs`）。
-
-    /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
-    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-        let ((), lines) = capture_lines(LineFormat::LevelFields, f);
-        lines
-    }
-
-    /// `DispatcherMsg` から `ChoiceInput` を取り出す（他 variant は檻失敗）。
+    /// `DispatcherMsg` から `ChoiceInput` を取り出す（他 variant はテスト失敗）。
     fn expect_choice(msg: DispatcherMsg) -> ChoiceInput {
         match msg {
             DispatcherMsg::Choice(c) => c,
@@ -264,7 +230,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // to_choice_input 純関数檻
+    // to_choice_input
     // -------------------------------------------------------------------------
 
     /// 不透明転写: `id`／`label` は受領した内容をそのまま——前後空白のトリムも
@@ -276,13 +242,10 @@ mod tests {
 
         let input = to_choice_input(sel);
 
-        assert_eq!(
-            input.id, id,
-            "id は改変せず転写（トリム・正規化なし・Req1.5）"
-        );
+        assert_eq!(input.id, id, "id は改変せず転写（トリム・正規化なし）");
         assert_eq!(
             input.label, label,
-            "label は改変せず転写（さくらスクリプト風・記号もそのまま・Req1.5）"
+            "label は改変せず転写（さくらスクリプト風・記号もそのまま）"
         );
     }
 
@@ -302,14 +265,8 @@ mod tests {
 
         assert_eq!(
             input.references, references,
-            "references は記述順・全要素をバイト等価で転写（空要素除去・順序変更なし・Req1.5）"
+            "references は記述順・全要素をバイト等価で転写（空要素除去・順序変更なし）"
         );
-        assert_eq!(
-            input.references.len(),
-            5,
-            "空文字要素・空白のみ要素も落とさない（Req1.5）"
-        );
-        assert_eq!(input.references[1], "", "空文字要素はそのまま空文字で残る");
     }
 
     /// `scope` の型合わせ（用途限定は下流）: `usize`→`u32` へ値を保って写る。
@@ -349,7 +306,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // forward_all 檻
+    // forward_all
     // -------------------------------------------------------------------------
 
     /// 全件・到着順・無判断: 滞留した通知は 1 件も捨てず到着順に転送される。
@@ -373,15 +330,11 @@ mod tests {
                 .expect("受信口は生存している");
         }
 
-        let forwarded = forward_all(&sel_rx, &dispatcher_tx);
-        assert_eq!(
-            forwarded, 4,
-            "滞留 4 件は全件送出される（暗黙に捨てない・Req1.2）"
-        );
+        forward_all(&sel_rx, &dispatcher_tx);
 
         for expected in arrivals {
             let got = expect_choice(dispatcher_rx.try_recv().expect("到着順に届く"));
-            assert_eq!(got.id, expected, "到着順そのまま（並べ替えなし・Req1.2）");
+            assert_eq!(got.id, expected, "到着順そのまま（並べ替えなし）");
             assert_eq!(got.label, format!("ラベル:{expected}"));
             assert_eq!(got.references, vec![expected.to_string()]);
         }
@@ -402,12 +355,11 @@ mod tests {
         let (_sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
         let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
 
-        assert_eq!(
-            forward_all(&sel_rx, &dispatcher_tx),
-            0,
-            "空 inbox は 0 件送出"
+        forward_all(&sel_rx, &dispatcher_tx);
+        assert!(
+            dispatcher_rx.try_recv().is_err(),
+            "空 inbox では何も届かない"
         );
-        assert!(dispatcher_rx.try_recv().is_err(), "何も届かない");
     }
 
     /// 転送失敗分岐: dispatcher 受信端が drop 済みでも **panic せず**、
@@ -431,16 +383,14 @@ mod tests {
                 .expect("受信口は生存している");
         }
 
-        let mut forwarded = 0usize;
         let logs = capture_logs(|| {
-            forwarded = forward_all(&sel_rx, &dispatcher_tx);
+            forward_all(&sel_rx, &dispatcher_tx);
         });
 
-        assert_eq!(forwarded, 0, "受信端 drop 後は 1 件も送出成功しない");
         assert_eq!(
             sel_rx.try_recv().unwrap_err(),
             TryRecvError::Empty,
-            "最初の失敗で打ち切らず全件 drain して継続する（Req1.6）"
+            "最初の失敗で打ち切らず全件 drain して継続する"
         );
 
         let failures: Vec<&String> = logs
@@ -450,12 +400,12 @@ mod tests {
         assert_eq!(
             failures.len(),
             3,
-            "失敗 3 件それぞれが記録される（無記録で打ち切らない・Req1.6）: {logs:?}"
+            "失敗 3 件それぞれが記録される（無記録で打ち切らない）: {logs:?}"
         );
         for line in failures {
             assert!(
                 line.contains("level=WARN"),
-                "choice_forward_failed は warn レベル（design ログ語彙表）: {line}"
+                "choice_forward_failed は warn レベル: {line}"
             );
         }
     }
@@ -488,7 +438,7 @@ mod tests {
             sel_tx.send(sel).expect("受信口は生存している");
         }
 
-        assert_eq!(forward_all(&sel_rx, &dispatcher_tx), 4, "4 件とも送る");
+        forward_all(&sel_rx, &dispatcher_tx);
 
         let src = dirty_selection();
         let anchor = AnchorInput {
@@ -499,6 +449,7 @@ mod tests {
         };
         let choice = to_choice_input(src);
         let got: Vec<DispatcherMsg> = dispatcher_rx.try_iter().collect();
+        assert_eq!(got.len(), 4, "4 件とも送る");
         assert!(
             matches!(
                 &got[..],
@@ -514,7 +465,7 @@ mod tests {
     }
 
     /// 送れなかったアンカーの知らせは、アンカーの名前で記録して次の件へ進む。選択肢の記録の名前は
-    /// 今までどおりで、種類が混ざらない。
+    /// 別で、種類が混ざらない。
     #[test]
     fn forward_all_records_a_failed_anchor_under_its_own_name() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();

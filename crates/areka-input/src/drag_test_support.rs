@@ -1,20 +1,20 @@
 //! ドラッグの知らせのテストの土台。
 //!
-//! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→ 偽の `WindowHandle` →
-//! [`attach_char_pointer_handlers`]。wintf のドラッグの資源・`MonitorSnapshot`・偽の記憶の書き手
-//! （`FakePersistIo`）を持つ `PersistWiring`・当たり判定の偽物（`RegionSource::Mock`）と止めた時計を
-//! 入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
-//! 付けない従来の組み方（[`Rig::without_wrapper`]）も持つ。
+//! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→
+//! [`attach_char_pointer_handlers`] → 偽の `WindowHandle`。wintf のドラッグの資源・`MonitorSnapshot`・
+//! 偽の記憶の書き手（`FakePersistIo`）で動く sylphya へ投函する `PersistWiring`・当たり判定の偽物
+//! （`RegionSource::Mock`）と止めた時計を入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
+//! 付けない組み方（[`Rig::without_wrapper`]）も持つ。
 //!
 //! 知らせは wndproc の代わりに wintf の運ぶ箱（`DragAccumulatorResource`）へ種を積み、
 //! `dispatch_drag_events` で配る（本番と同じ配りの経路で、Tunnel と Bubble の 2 回の呼び出しも通る）。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use areka_kanade::{KanadeMsg, MouseInput};
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
@@ -26,34 +26,36 @@ use wintf::ecs::drag::{
 };
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
+use super::super::pointer_test_support::{drain_mouse, fake_hit};
 use super::super::{MouseWiring, RegionSource, attach_char_pointer_handlers};
 use areka_placement::follow::{MonitorSnapshot, OffsetBase};
 use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
-use areka_runtime::hit_region::HitRegion;
+use areka_runtime::spine::{SPIN_WAIT, join_bounded};
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 pub(super) const SCOPE: usize = 1;
 /// work area（物理 px）。キャラ窓は下端 1200 へ接地する。
-const WORK_AREA: RectPx = RectPx {
+pub(super) const WORK_AREA: RectPx = RectPx {
     left: 0,
     top: 0,
     right: 1920,
     bottom: 1200,
 };
-/// 偽の当たり判定が `Head` を返す窓の中の x の上限（これ未満が当たり判定のある位置）。
-const HEAD_X_LIMIT: i64 = 100;
 
-/// 当たり判定の偽物: 渡された窓の中の位置 `(x, y)` から区別できる座標 `(2x, 3y)` を返し、
-/// `x < HEAD_X_LIMIT` なら `Head`・それ以外は当たり判定なし。受け口の値から、渡した位置が
-/// 正しいことを読み戻せる。
-pub(super) fn fake_hit(scope: u32, x: i64, y: i64) -> HitRegion {
-    HitRegion {
-        scope,
-        region: (x < HEAD_X_LIMIT).then(|| "Head".to_string()),
-        surface_point: (x * 2, y * 3),
+pub(super) fn add(p: Point, by: Point) -> Point {
+    Point {
+        x: p.x + by.x,
+        y: p.y + by.y,
+    }
+}
+
+pub(super) fn sub(a: Point, b: Point) -> Point {
+    Point {
+        x: a.x - b.x,
+        y: a.y - b.y,
     }
 }
 
@@ -100,17 +102,6 @@ fn fake_handle(raw: usize) -> WindowHandle {
     }
 }
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の記憶の書き手。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 本番の順で組んだ 2 スコープのゴースト窓と、マウスの知らせの受け口。
 pub(super) struct Rig {
     pub(super) world: World,
@@ -135,7 +126,7 @@ impl Rig {
         Self::build(true)
     }
 
-    /// 従来の付け方（`spawn_ghost_windows` だけ＝位置の保存の受け手を包まない）。
+    /// 包みを付けない付け方（`spawn_ghost_windows` だけ＝位置の保存の受け手を包まない）。
     pub(super) fn without_wrapper() -> Self {
         Self::build(false)
     }
@@ -148,12 +139,12 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(store.clone()),
             runtime_sink: None,
         });
 
         let mut world = World::new();
-        // `dispatch_drag_events` が引く資源（wintf の `EcsWorld::new` と同じ登録）。
+        // `dispatch_drag_events` が引く資源。
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
         world.insert_resource(MonitorSnapshot {
@@ -163,12 +154,15 @@ impl Rig {
             publisher: parts.publisher.clone(),
         });
 
-        // 本番の順: spawn → 偽の WindowHandle（`enqueue_window_set_pos` が位置を書ける条件）→ attach。
+        // 本番の順: spawn → attach → 偽の WindowHandle（`enqueue_window_set_pos` が位置を書ける条件）。
         let gw = spawn_ghost_windows(
             &mut world,
             &placements(),
             &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
         );
+        if attach {
+            attach_char_pointer_handlers(&mut world);
+        }
         let mut raw = 0x100usize;
         for scope in [0, 1] {
             for e in [
@@ -178,9 +172,6 @@ impl Rig {
                 world.entity_mut(e).insert(fake_handle(raw));
                 raw += 0x10;
             }
-        }
-        if attach {
-            attach_char_pointer_handlers(&mut world);
         }
 
         // 止めた時計（間引きの時間の窓は開かない）。
@@ -242,7 +233,7 @@ impl Rig {
     /// 開始の配りで入った `DraggingState.initial_window_pos` を窓の位置にする（製品と同じ意味の値）。
     ///
     /// 偽の HWND では wintf の開始の腕の枠の座標変換が失敗し、`None` のまま入る。
-    pub(super) fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
+    fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
         self.world
             .get_mut::<DraggingState>(entity)
             .expect("開始が配られて DraggingState があるはず")
@@ -258,29 +249,31 @@ impl Rig {
     pub(super) fn saved(&self) -> Vec<(PersistKey, String)> {
         self.parts
             .publisher
-            .barrier()
-            .expect("アクターが生きている間は barrier が返るはず");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.store.clone()),
-        )
+            .barrier_within(SPIN_WAIT)
+            .expect("アクターが生きている間は期限内に barrier が返るはず");
+        load_scope(PersistScope::Ghost, &self.roots, &*self.store)
     }
 
     /// 受け口に溜まったマウスの知らせを全部取り出す（マウス以外が来たら落とす）。
     pub(super) fn drain(&self) -> Vec<MouseInput> {
-        self.rx
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::Mouse(m) => m,
-                _ => panic!("マウス以外の知らせが届いた"),
-            })
-            .collect()
+        drain_mouse(&self.rx)
+    }
+
+    /// 相方の窓の中の点 `press_local` を押してドラッグを始め、`initial_window_pos` を開始時の
+    /// 窓の位置にする。開始時の窓の位置と押した位置を返す。
+    pub(super) fn begin_drag(&mut self, press_local: Point) -> (Point, Point) {
+        let start_win = self.position_of(self.char_w);
+        let press = add(start_win, press_local);
+        self.put(started(self.char_w, press));
+        self.tick();
+        self.set_initial_window_pos(self.char_w, start_win);
+        (start_win, press)
     }
 
     pub(super) fn close(self) {
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        join_bounded("drag rig の sylphya", self.parts.handle)
+            .expect("sylphya は panic せず期限内に終わるはず");
     }
 }
 

@@ -86,6 +86,17 @@ use crate::command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 use crate::mount::VisualMount;
 use crate::scale::{ScalePolicy, derive_scale};
 
+/// 最初の面を表示しないまま決まった理由。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeverShown {
+    /// 最初の面の前に隠した。
+    Hidden,
+    /// 最初の面を出せなかった。
+    Failed,
+    /// 面の指令を一度も受けていない（未登録の target を含む）。
+    NotRequested,
+}
+
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
@@ -135,6 +146,9 @@ mod hide_contract_tests;
 #[cfg(test)]
 #[path = "presenter_hit_test_support.rs"]
 mod hit_test_support;
+#[cfg(test)]
+#[path = "presenter_never_shown_tests.rs"]
+mod never_shown_tests;
 #[cfg(test)]
 #[path = "presenter_partial_recompose_gpu_tests.rs"]
 mod partial_recompose_gpu_tests;

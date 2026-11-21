@@ -30,8 +30,8 @@ use super::{
 /// - 随伴バルーン側の `WindowHandle` 未付与は `warn!` のみ（対象自身の移動は成立
 ///   しているため戻り値は `true`）
 ///
-/// 呼び手: `\![move]`（本体の `runtime::move_cue_place`）・連鎖の確定（本体の
-/// `runtime::frame::drain_resnap`）・連れ動き（`sticky_follow`）・位置の初期化（`reset_pos`）。
+/// 呼び手: `\![move]`（`areka_runtime::move_cue::place`）・連鎖の確定（
+/// `areka_runtime::frame::drain_resnap`）・連れ動き（`sticky_follow`）・位置の初期化（`reset_pos`）。
 /// 位置を書く道はほかにもある（[`resize_window_to`]・[`move_window_with_route`] ほか）。
 ///
 /// # 経路タグ
@@ -913,7 +913,7 @@ fn log_window_move(
 /// 本関門が読むのは上記の 6 つ（`BalloonLimit`／`BalloonWindowMarker`／
 /// `GhostWindows`／キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`）
 /// だけで、可視性を表す状態は**ひとつも含まない**（そもそもバルーンの可視性は
-/// `runtime::balloon_visibility` が表示層で所有し、placement の World には無い）。
+/// `areka_runtime::balloon_visibility` が表示層で所有し、placement の World には無い）。
 /// ゆえに非表示中の書込も可視中とまったく同一に補正され、「次に可視となった時点で
 /// 補正済み」が全書込の被覆から導かれる。檻
 /// `runtime_gate_result_is_identical_for_hidden_and_visible_balloons` が、World 上で
@@ -1102,7 +1102,7 @@ pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// - `WindowHandle` 未付与: [`enqueue_window_set_pos`] が `warn!`＋`false`
 ///   （判定を二重化せず委譲する）。
 ///
-/// 消費者: `runtime::frame` の DPI 追従フェーズ（`dpi::run_dpi_phase`／`scale_text::reconcile_reported_sizes`）。
+/// 消費者: `areka_runtime::frame` の DPI 追従フェーズ（`dpi::run_dpi_phase`／`scale_text::reconcile_reported_sizes`）。
 ///
 /// # 経路タグ
 ///

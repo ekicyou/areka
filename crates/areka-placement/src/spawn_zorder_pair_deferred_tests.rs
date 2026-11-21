@@ -14,7 +14,7 @@
 //! 1 つだけあり、どちらの片割れも自分の crate の実物で較正する。
 //!
 //! 窓の拡張スタイルを完全一致で押さえるのは
-//! `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
+//! `spawn_assembly_tests::no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
 //! 両方を等値で固定しているので、常時最前面・最小化・タスクバー露出のどのビットも
 //! 紛れ込む余地が無い）。本ファイルの窓側テストはそれを置き換えるものではなく、
 //! **禁じたビットを名前で読めるようにする**ためのものである
@@ -149,7 +149,7 @@ fn has_minimize_or_taskbar_exposure(style: &WindowStyle) -> bool {
 
 /// spawn 直後の全ゴースト窓は、常時最前面でも最小化可能でもなく、タスクバーにも出ない。
 ///
-/// `t_i2_no_window_has_ws_ex_topmost` が `style`／`ex_style` を等値で固定しているので
+/// `no_window_has_ws_ex_topmost` が `style`／`ex_style` を等値で固定しているので
 /// 値そのものは既に動かせない。本テストはその等値が**何を禁じているか**を名前で書き残す
 /// ——`WS_EX_APPWINDOW`（タスクバー露出）と最小化系のビットは、足せば違反である。
 ///

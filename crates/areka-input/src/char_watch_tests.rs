@@ -2,8 +2,10 @@
 //!
 //! 偽の窓（`Window`＋`CharWindowMarker`）の子に `PointerState` を載せ、注入の時計で系を回す。
 
-use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
+use super::super::pointer_test_support::{drain_mouse, world_with_wiring};
+use super::super::{MouseWiring, on_char_pointer_moved};
 use super::char_watch;
+use crate::balloon::test_support::{capture_logs, empty_runtime, headless_runtime_wiring};
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
@@ -11,8 +13,10 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::{Mutex, MutexGuard, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 use wintf::ecs::pointer::{Phase, PointerState, WheelDelta};
+use wintf::ecs::world::tick_wake;
 use wintf::ecs::{PhysicalPoint, Window};
 
 thread_local! {
@@ -38,24 +42,28 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
     }
 }
 
+/// 起こしの期限はプロセスに 1 つなので、溜めを作るこのファイルのテストを順に回す。
+static SERIAL: Mutex<()> = Mutex::new(());
+
 struct Rig {
     world: World,
     rx: mpsc::Receiver<KanadeMsg>,
     clock: Rc<Cell<u64>>,
+    _serial: MutexGuard<'static, ()>,
 }
 
 fn rig() -> Rig {
+    let serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     SWAPPED.with(|s| s.set(false));
-    let (tx, rx) = mpsc::channel();
     let clock = Rc::new(Cell::new(0));
     let c = clock.clone();
-    let mut world = World::new();
-    world.insert_non_send(MouseWiring::with_clock(
-        tx,
-        RegionSource::Mock(mock),
-        Box::new(move || c.get()),
-    ));
-    Rig { world, rx, clock }
+    let (world, rx) = world_with_wiring(mock, Box::new(move || c.get()));
+    Rig {
+        world,
+        rx,
+        clock,
+        _serial: serial,
+    }
 }
 
 impl Rig {
@@ -69,7 +77,7 @@ impl Rig {
         (win, child)
     }
 
-    /// `e` を持ち主にする（他の entity の `PointerState` は外す・ホイールは 0）。
+    /// `e` に `PointerState` を載せる（ホイールは 0）。
     fn point(&mut self, e: Entity, x: i32, y: i32) {
         self.point_wheel(e, x, y, 0, 0);
     }
@@ -104,13 +112,7 @@ impl Rig {
     }
 
     fn drain(&mut self) -> Vec<MouseInput> {
-        self.rx
-            .try_iter()
-            .map(|m| match m {
-                KanadeMsg::Mouse(i) => i,
-                _ => panic!("マウス以外の知らせ"),
-            })
-            .collect()
+        drain_mouse(&self.rx)
     }
 
     fn wiring(&self) -> &MouseWiring {
@@ -279,6 +281,31 @@ fn vertical_wheel_sends_horizontal_only_does_not() {
     assert_eq!(r.run(), vec![wheel(0, -120, (20, 10), Some("Head"))]);
 }
 
+/// 文字の層を借りられないと、箱の上の回転かを確かめられないので ERROR を 1 行残し、
+/// `OnMouseWheel` へ回す。
+#[test]
+fn wheel_with_a_runtime_borrow_failure_is_recorded_and_sent_as_mouse_wheel() {
+    let mut r = rig();
+    let runtime = empty_runtime();
+    r.world
+        .insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    let (_win, child) = r.window(0);
+    r.point(child, 10, 5);
+    r.run();
+    r.point_wheel(child, 10, 5, -120, 0);
+
+    let held = runtime.borrow_mut();
+    let mut sent = Vec::new();
+    let logs = capture_logs(|| sent = r.run());
+    drop(held);
+    assert_eq!(sent, vec![wheel(0, -120, (20, 10), Some("Head"))]);
+    let failed = logs
+        .iter()
+        .filter(|l| l.contains("level=ERROR") && l.contains("balloon_runtime_borrow_failed"))
+        .count();
+    assert_eq!(failed, 1, "{logs:?}");
+}
+
 /// 持ち主が窓の entity そのもの（絵の透けた所）ならホイールを送らない。
 #[test]
 fn wheel_over_transparent_area_is_not_sent() {
@@ -311,6 +338,23 @@ fn pending_wheel_is_flushed_on_a_later_run_after_the_clock_advances() {
     r.clock.set(100);
     assert_eq!(r.run(), vec![wheel(0, 360, (20, 10), Some("Head"))]);
     assert_eq!(r.run(), vec![]);
+}
+
+/// 溜めが残る回しは、残りの間隔の後に起こしの期限を預け直す。
+#[test]
+fn pending_wheel_arms_the_wake_deadline_for_the_rest_of_the_interval() {
+    let mut r = rig();
+    let (_win, child) = r.window(0);
+    r.point_wheel(child, 10, 5, 120, 0);
+    r.run();
+    tick_wake::take(Instant::now() + Duration::from_secs(3600));
+    r.clock.set(60);
+    r.point_wheel(child, 10, 5, 120, 0);
+    assert_eq!(r.run(), vec![]);
+    assert!(
+        tick_wake::take(Instant::now() + Duration::from_millis(40)).deadline_due,
+        "残り 40ms の後に起こす"
+    );
 }
 
 /// ホイールは窓ごとに別々に間引く: A の間隔の中でも B の初回はすぐ送り、A の溜めは A の期限で吐く。
@@ -353,26 +397,6 @@ fn wheel_is_throttled_per_window() {
     r.clock.set(140);
     assert_eq!(r.run(), vec![wheel(1, -240, (120, 10), Some("Face"))]);
     assert_eq!(r.run(), vec![]);
-}
-
-/// 出入りは同じ tick の `OnMouseMove` より先に届く。
-#[test]
-fn hover_arrives_before_move_of_the_same_tick() {
-    let mut r = rig();
-    let (win, child) = r.window(0);
-    r.point(child, 10, 5);
-    char_watch(&mut r.world);
-    let state = r.world.get::<PointerState>(child).unwrap().clone();
-    on_char_pointer_moved(&mut r.world, win, win, &Phase::Bubble(state));
-    let kinds: Vec<_> = r.drain().into_iter().map(|i| i.kind).collect();
-    assert_eq!(
-        kinds,
-        vec![
-            MouseEventKind::Hover(HoverEdge::EnterAll),
-            MouseEventKind::Hover(HoverEdge::Enter),
-            MouseEventKind::Move,
-        ]
-    );
 }
 
 /// 移動の間引きが閉じていても出入りは出る（系は移動の間引きの状態を読まない）。

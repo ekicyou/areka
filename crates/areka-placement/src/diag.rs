@@ -183,8 +183,8 @@ pub enum PlacementRoute {
     /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・[`Restore`](Self::Restore) と同族。
     /// 随伴バルーン側の書込は [`BalloonFollow`](Self::BalloonFollow) を持つ。
     // 名は `\![move]` から来たが、作る道は 2 つある。1 つは `follow::move_window_to` で、呼び手は
-    // 台本の `\![move]`（本体の `runtime::move_cue_place`）とその連れ動き（`follow_sticky_move`）・
-    // 起動の連鎖の確定（本体の `runtime::frame::drain_resnap` の `finalize_chain_once_with`）・
+    // 台本の `\![move]`（`areka_runtime::move_cue::place`）とその連れ動き（`follow_sticky_move`）・
+    // 起動の連鎖の確定（`areka_runtime::frame::drain_resnap` の `finalize_chain_once_with`）・
     // 位置の初期化（`reset_pos::reset_window_positions`＝台本・メニュー「シェル位置初期化」・近道）。
     // もう 1 つは今の大きさのまま当て直す `follow::resize_window_to` で、呼び手は台本の吸着の向きの
     // 変更（`script_alignment::apply_script_alignment`）とドラッグの終わりの当て直し
@@ -208,7 +208,7 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ。
     /// 混同すると「作業領域が動いたから移した」のか
     /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
-    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`。
+    // 発行者は `areka_runtime::frame::work_area_sync::resnap_for_work_area_change`。
     // 語彙をここに置くのは、判定器と単一の窓書込口の札が同じ語を見るためである。
     WorkAreaResnap,
     /// DPI 遷移後の連鎖（隣接ペア）再解決（`chain_realign::realign_chain_once_with`）。

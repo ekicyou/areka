@@ -10,8 +10,8 @@ use std::sync::mpsc::{self};
 use crate::session::ghost_session::{GhostSession, GhostSlot};
 use areka_runtime::move_cue::PositionCue;
 
-use super::run_move_drain_phase;
 use super::shared_test_support::{steady_harness, wiring};
+use areka_runtime::frame::{all_shown, run_move_drain_with};
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// 台本の `\![execute,resetwindowpos]` は並べ直しの手続きへ届くが、kanade へは何も送らない
@@ -33,7 +33,7 @@ fn a_script_reset_sends_nothing_to_kanade() {
         .expect("送出は成功する");
 
     let logs = capture_lines(LineFormat::LevelTargetFields, || {
-        run_move_drain_phase(&wiring, &mut harness.world)
+        run_move_drain_with(&wiring, &all_shown, &mut harness.world)
     })
     .1;
 

@@ -4,17 +4,16 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
-use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_emo_text::place::PlaceKey;
 use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
-use areka_kanade::KanadeMsg;
+use areka_emo_text::state::SpanKind;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
@@ -22,13 +21,15 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Point, Window};
 
-use super::super::test_support::{capture_logs, headless_runtime_wiring};
-use super::super::{BalloonWiring, ChoiceSelection};
+use super::super::test_support::{
+    capture_logs, headless_runtime_wiring, insert_wiring, left_press, newer_by_one,
+    runtime_with_active_choice,
+};
+use super::super::{BalloonWiring, ChoiceSelection, dispatch_selection};
 use super::on_balloon_pointer_pressed;
 use crate::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use areka_placement::spawn::BalloonWindowMarker;
 use areka_runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
-use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
@@ -58,10 +59,7 @@ struct Rig {
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// 印の面（窓の子）。押下の送り手にする。
     marker: Entity,
-    selections: Receiver<ChoiceSelection>,
     flag_tx: mpsc::Sender<NoUserBreakSignal>,
-    lifecycle: Receiver<TalkLifecycleSignal>,
-    kanade: Receiver<KanadeMsg>,
     /// GPU の装置の許可。World の装置より後に返すので欄の最後。
     _permit: areka_runtime::spine::GpuPermit,
 }
@@ -93,21 +91,18 @@ fn rig() -> Rig {
         OnPointerPressed(on_balloon_pointer_pressed),
     ));
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
-    let (tx, selections) = mpsc::channel();
-    world.insert_non_send(BalloonWiring::new(tx));
-    world.insert_non_send(BalloonHover::default());
+    insert_wiring(&mut world);
     let (flag_tx, flag_rx) = mpsc::channel();
-    let (lifecycle_tx, lifecycle) = mpsc::channel();
-    let (kanade_tx, kanade) = mpsc::channel();
-    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        mpsc::channel().0,
+        mpsc::channel().0,
+    ));
     Rig {
         world,
         runtime,
         marker,
-        selections,
         flag_tx,
-        lifecycle,
-        kanade,
         _permit: permit,
     }
 }
@@ -139,30 +134,14 @@ impl Rig {
             1,
         )
     }
-
-    /// 新しい側へ 1 行送ったときの変化（自動の 1 行上なら自動へ戻る `Stopped`）。
-    fn newer_by_one(&self) -> ScrollChange {
-        self.runtime.borrow_mut().scroll_manual_at(
-            &PlaceKey::balloon(&ActorKey::from("0")),
-            ScrollDir::Newer,
-            1,
-        )
-    }
-
-    /// 選択肢・中断のどこへも流れていない。
-    fn nothing_sent(&self) -> bool {
-        self.selections.try_recv().is_err()
-            && self.lifecycle.try_recv().is_err()
-            && self.kanade.try_recv().is_err()
-    }
 }
 
 /// 送りが効いていない（押下前の「自動の 1 行上」のまま）。
 fn unmoved(rig: &Rig) -> bool {
-    matches!(rig.newer_by_one(), ScrollChange::Stopped(_))
+    matches!(newer_by_one(&rig.runtime), ScrollChange::Stopped(_))
 }
 
-/// 話し終えた後、印の面の上の上の矢印の押下は窓の受け口へ届き、古い側へ 2 行送って消費する
+/// 話し終えた後、印の面の上の上の矢印の押下は窓の受け口へ届き、古い側へ 2 行送って消費する。
 /// 左ダブルクリックでも中断・選択肢の確定へ流さない。
 #[test]
 fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
@@ -178,10 +157,13 @@ fn finished_up_arrow_press_scrolls_older_and_is_consumed() {
             .any(|l| l.contains("choice_click_rejected") || l.contains("balloon_break_detected")),
         "選択肢・中断の判断へ流れない: {logs:?}"
     );
-    assert!(rig.nothing_sent());
     // 自動の 1 行上から 2 行古い側へ＝自動の 3 行上。新しい側へ 2 回戻しても手動のまま。
-    assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
-    assert_eq!(rig.newer_by_one(), ScrollChange::Moved);
+    assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
+    assert_eq!(newer_by_one(&rig.runtime), ScrollChange::Moved);
+    assert!(
+        matches!(newer_by_one(&rig.runtime), ScrollChange::Stopped(_)),
+        "送ったのはちょうど 2 行"
+    );
 }
 
 /// 話し終えた後の下の矢印の押下は新しい側へ送る（自動の 1 行上から自動へ戻る）。
@@ -193,15 +175,14 @@ fn finished_down_arrow_press_scrolls_newer() {
         logs.iter().any(|l| l.contains("balloon_arrow_pressed")),
         "{logs:?}"
     );
-    assert!(rig.nothing_sent());
     assert_eq!(
-        rig.newer_by_one(),
+        newer_by_one(&rig.runtime),
         ScrollChange::Unchanged,
         "自動へ戻っている"
     );
 }
 
-/// 話している最中の矢印の押下は今までどおりのクリック（中断の入口へ流れ、送らない）。
+/// 話している最中の矢印の押下は普通のクリック（中断の入口へ流れ、送らない）。
 #[test]
 fn talking_arrow_press_flows_to_the_usual_click() {
     let mut rig = rig();
@@ -218,7 +199,7 @@ fn talking_arrow_press_flows_to_the_usual_click() {
     assert!(unmoved(&rig), "送らない");
 }
 
-/// 矢印の絵の透けた画素と矢印の無い所は今までどおりのクリック。
+/// 矢印の絵の透けた画素と矢印の無い所は普通のクリック。
 #[test]
 fn transparent_pixel_and_no_arrow_flow_to_the_usual_click() {
     for point in [UP_TRANSPARENT, NO_ARROW] {
@@ -265,4 +246,69 @@ fn repeated_up_arrow_stops_at_line_zero() {
         rig.press(UP, DoubleClick::None);
     }
     assert_eq!(rig.older_by_one(), ScrollChange::Unchanged, "行 0 で止まる");
+}
+
+/// 受け口の無い送り出しは、選択肢でもアンカーでも ERROR を 1 行だけ出し、WARN を出さない。
+#[test]
+fn dispatch_selection_without_receiver_logs_one_error_and_no_warn() {
+    for (kind, failed) in [
+        (SpanKind::Choice, "choice_selection_send_failed"),
+        (SpanKind::Anchor, "anchor_selection_send_failed"),
+    ] {
+        let (tx, rx) = mpsc::channel();
+        drop(rx);
+        let wiring = BalloonWiring::new(tx);
+        let sel = ChoiceSelection {
+            kind,
+            id: "id".into(),
+            label: "label".into(),
+            scope: 0,
+            references: Vec::new(),
+        };
+        let mut sent = true;
+        let logs = capture_logs(|| {
+            sent = dispatch_selection(&wiring, None, &PlaceKey::balloon(&ActorKey::from("0")), sel)
+        });
+        assert!(!sent, "{kind:?}");
+        let errors = logs
+            .iter()
+            .filter(|l| l.contains("level=ERROR") && l.contains(failed))
+            .count();
+        assert_eq!(errors, 1, "{kind:?}: {logs:?}");
+        assert!(
+            !logs.iter().any(|l| l.contains("level=WARN")),
+            "{kind:?}: {logs:?}"
+        );
+    }
+}
+
+/// 文字の層を借りられないと、矢印の押下と選択の写しの借用の失敗を ERROR で 1 行ずつ残す
+/// （panic しない）。
+#[test]
+fn press_borrow_failure_is_recorded_for_the_arrow_and_the_snapshot() {
+    let mut world = World::new();
+    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+    let runtime = runtime_with_active_choice("0");
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
+    insert_wiring(&mut world);
+
+    let held = runtime.borrow_mut();
+    let mut pressed = true;
+    let logs = capture_logs(|| {
+        pressed = on_balloon_pointer_pressed(&mut world, e, e, &left_press(10, 20))
+    });
+    drop(held);
+
+    assert!(!pressed);
+    let failures = |what: &str| {
+        logs.iter()
+            .filter(|l| {
+                l.contains("level=ERROR")
+                    && l.contains("balloon_runtime_borrow_failed")
+                    && l.contains(what)
+            })
+            .count()
+    };
+    assert_eq!(failures("矢印の押下"), 1, "{logs:?}");
+    assert_eq!(failures("click スナップショット"), 1, "{logs:?}");
 }

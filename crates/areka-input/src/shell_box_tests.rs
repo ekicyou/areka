@@ -3,15 +3,12 @@
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで名前を取る（検体は読まない）。座標はシェルの窓の物理 px。
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
 use areka_emo_text::actor::{ChoiceHitRow, HitRectPx, ShownBox};
 use areka_emo_text::state::SpanKind;
-use areka_parsers::shell::{parse, parse_boxes};
 use wintf::ecs::pointer::DoubleClick;
 
 use super::*;
+use crate::balloon::test_support::{self, box_name};
 use crate::balloon::{ChoiceSelection, click_selection};
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 
@@ -32,18 +29,6 @@ element2,balloon,b,50,20
 }
 ";
 
-fn name(s: &str) -> BoxName {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-        .placements(0)
-        .iter()
-        .map(|p| p.name.clone())
-        .find(|n| n.as_str() == s)
-        .expect("文面にある箱の名前")
-}
-
 fn rect(left: f32, top: f32, right: f32, bottom: f32) -> HitRectPx {
     HitRectPx {
         left,
@@ -57,12 +42,12 @@ fn rect(left: f32, top: f32, right: f32, bottom: f32) -> HitRectPx {
 fn shown() -> Vec<ShownBox> {
     vec![
         ShownBox {
-            name: name("b"),
+            name: box_name(SHELL, "b"),
             element: 2,
             rect: rect(50.0, 20.0, 130.0, 60.0),
         },
         ShownBox {
-            name: name("a"),
+            name: box_name(SHELL, "a"),
             element: 1,
             rect: rect(0.0, 0.0, 100.0, 50.0),
         },
@@ -71,12 +56,8 @@ fn shown() -> Vec<ShownBox> {
 
 fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: format!("q{ordinal}"),
-        label: format!("label{ordinal}"),
         references: vec![format!("ref{ordinal}")],
-        rect: rect(left, top, right, bottom),
+        ..test_support::row(ordinal, left, top, right, bottom)
     }
 }
 
@@ -89,7 +70,7 @@ fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHi
 fn overlapping_boxes_pick_the_front_one() {
     let boxes = shown();
     let hit = box_under_point(&boxes, 70.0, 30.0).expect("重なりの中");
-    assert_eq!(hit.name, name("b"));
+    assert_eq!(hit.name, box_name(SHELL, "b"));
     assert_eq!(hit.element, 2);
 }
 
@@ -99,7 +80,7 @@ fn back_box_alone_is_picked() {
     let boxes = shown();
     assert_eq!(
         box_under_point(&boxes, 10.0, 10.0).map(|b| b.name.clone()),
-        Some(name("a"))
+        Some(box_name(SHELL, "a"))
     );
 }
 
@@ -118,10 +99,10 @@ fn outside_every_rect_is_none() {
 }
 
 // ---------------------------------------------------------------------------
-// judge_box_press（6 つの分岐）
+// judge_box_press
 // ---------------------------------------------------------------------------
 
-/// ⑴ この押下が選択の確定 → 処理した（シェルへは送らない）。単押しでも同じ。
+/// この押下が選択の確定 → 処理した（シェルへは送らない）。単押しでも同じ。
 #[test]
 fn press_selected_now_is_consumed() {
     for dc in [DoubleClick::None, DoubleClick::Left] {
@@ -132,7 +113,7 @@ fn press_selected_now_is_consumed() {
     }
 }
 
-/// ⑵ 左ダブルクリックでない → シェルへの操作。話している最中でも同じ。
+/// 左ダブルクリックでない → シェルへの操作。話している最中でも同じ。
 #[test]
 fn press_not_left_double_is_shell_op() {
     for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
@@ -143,7 +124,7 @@ fn press_not_left_double_is_shell_op() {
     }
 }
 
-/// ⑶ 直前の押下が選択の確定 → 処理した（続きのダブルクリックを中断にもシェルにもしない）。
+/// 直前の押下が選択の確定 → 処理した（続きのダブルクリックを中断にもシェルにもしない）。
 #[test]
 fn press_after_selection_is_consumed() {
     assert_eq!(
@@ -152,7 +133,7 @@ fn press_after_selection_is_consumed() {
     );
 }
 
-/// ⑷ 話していない → シェルへのダブルクリック。
+/// 話していない → シェルへのダブルクリック。
 #[test]
 fn press_not_talking_is_shell_op() {
     assert_eq!(
@@ -161,7 +142,7 @@ fn press_not_talking_is_shell_op() {
     );
 }
 
-/// ⑸ 中断を禁じる区間 → 止めず、シェルへも送らない。
+/// 中断を禁じる区間 → 止めず、シェルへも送らない。
 #[test]
 fn press_in_no_user_break_is_disabled() {
     assert_eq!(
@@ -170,7 +151,7 @@ fn press_in_no_user_break_is_disabled() {
     );
 }
 
-/// ⑹ それ以外 → 台詞を中断する。
+/// それ以外 → 台詞を中断する。
 #[test]
 fn press_while_talking_breaks() {
     assert_eq!(
@@ -200,7 +181,7 @@ fn move_over_choice_row() {
     assert_eq!(
         judge_box_move(hit, &rows, 5.0, 15.0),
         BoxMove::OverChoice {
-            name: name("a"),
+            name: box_name(SHELL, "a"),
             ordinal: 3
         }
     );
@@ -214,11 +195,15 @@ fn move_over_body() {
     let hit = box_under_point(&boxes, 30.0, 40.0);
     assert_eq!(
         judge_box_move(hit, &rows, 30.0, 40.0),
-        BoxMove::OverBody { name: name("a") }
+        BoxMove::OverBody {
+            name: box_name(SHELL, "a")
+        }
     );
     assert_eq!(
         judge_box_move(hit, &[], 30.0, 40.0),
-        BoxMove::OverBody { name: name("a") }
+        BoxMove::OverBody {
+            name: box_name(SHELL, "a")
+        }
     );
 }
 
@@ -237,15 +222,17 @@ fn overlap_looks_only_at_front_box_rows() {
     // 実際の当たりは手前の箱 b で、b の行には当たらない → 行の上でない。
     let front_rows = [row(1, 50.0, 40.0, 130.0, 50.0)];
     let hit = box_under_point(&boxes, 70.0, 30.0);
-    assert_eq!(hit.map(|b| b.name.clone()), Some(name("b")));
+    assert_eq!(hit.map(|b| b.name.clone()), Some(box_name(SHELL, "b")));
     assert_eq!(
         judge_box_move(hit, &front_rows, 70.0, 30.0),
-        BoxMove::OverBody { name: name("b") }
+        BoxMove::OverBody {
+            name: box_name(SHELL, "b")
+        }
     );
     assert_eq!(
         judge_box_move(hit, &front_rows, 70.0, 45.0),
         BoxMove::OverChoice {
-            name: name("b"),
+            name: box_name(SHELL, "b"),
             ordinal: 1
         }
     );
@@ -315,8 +302,8 @@ fn click_without_row_box_or_choices_is_none() {
 
 fn anchor_row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
-        kind: SpanKind::Anchor,
-        ..row(ordinal, left, top, right, bottom)
+        references: vec![format!("ref{ordinal}")],
+        ..test_support::anchor_row(ordinal, left, top, right, bottom)
     }
 }
 
@@ -367,7 +354,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
     assert_eq!(
         judge_box_move(hit, &rows, 5.0, 15.0),
         BoxMove::OverChoice {
-            name: name("a"),
+            name: box_name(SHELL, "a"),
             ordinal: 1
         },
         "アンカーだけの所"
@@ -375,7 +362,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
     assert_eq!(
         judge_box_move(hit, &rows, 5.0, 5.0),
         BoxMove::OverChoice {
-            name: name("a"),
+            name: box_name(SHELL, "a"),
             ordinal: 0
         },
         "重なる所は選択肢"
@@ -383,7 +370,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
     let kind = |y: f32| judge_box_click(hit, true, &rows, 5.0, y, 0).map(|s| s.kind);
     assert_eq!(kind(15.0), Some(SpanKind::Anchor));
     assert_eq!(kind(5.0), Some(SpanKind::Choice));
-    assert_eq!(kind(30.0), None, "範囲の外は今までどおり");
+    assert_eq!(kind(30.0), None, "範囲の外は無し");
 }
 
 // ---------------------------------------------------------------------------
@@ -393,7 +380,7 @@ fn anchor_in_box_is_hovered_and_choice_comes_first() {
 /// 外から箱へ入る: 記録は入った箱・外す強調は無し。
 #[test]
 fn hover_enter() {
-    let a = name("a");
+    let a = box_name(SHELL, "a");
     assert_eq!(
         next_box_hover(None, &BoxMove::OverBody { name: a.clone() }),
         (Some(a.clone()), None)
@@ -413,7 +400,7 @@ fn hover_enter() {
 /// 同じ箱の中で行から行へ動く: 記録はそのまま・外す強調は無し（新しい行は強調の側が付け替える）。
 #[test]
 fn hover_move_within_same_box() {
-    let a = name("a");
+    let a = box_name(SHELL, "a");
     assert_eq!(
         next_box_hover(
             Some(&a),
@@ -429,7 +416,7 @@ fn hover_move_within_same_box() {
 /// 同じ箱の中で行から行の外へ: 記録はそのまま・その箱の強調を外す。
 #[test]
 fn hover_leave_row_within_box_clears_highlight() {
-    let a = name("a");
+    let a = box_name(SHELL, "a");
     assert_eq!(
         next_box_hover(Some(&a), &BoxMove::OverBody { name: a.clone() }),
         (Some(a.clone()), Some(a))
@@ -439,7 +426,7 @@ fn hover_leave_row_within_box_clears_highlight() {
 /// 別の箱へ移る: 記録は移った先・前の箱の強調を外す。
 #[test]
 fn hover_move_to_another_box() {
-    let (a, b) = (name("a"), name("b"));
+    let (a, b) = (box_name(SHELL, "a"), box_name(SHELL, "b"));
     assert_eq!(
         next_box_hover(Some(&a), &BoxMove::OverBody { name: b.clone() }),
         (Some(b.clone()), Some(a.clone()))
@@ -459,53 +446,9 @@ fn hover_move_to_another_box() {
 /// 箱の外へ出る: 記録は無し・前の箱の強調を外す。もともと外なら何もしない。
 #[test]
 fn hover_leave_box() {
-    let a = name("a");
+    let a = box_name(SHELL, "a");
     assert_eq!(next_box_hover(Some(&a), &BoxMove::Outside), (None, Some(a)));
     assert_eq!(next_box_hover(None, &BoxMove::Outside), (None, None));
-}
-
-// ---------------------------------------------------------------------------
-// settle_box_hover・ShellBoxHover
-// ---------------------------------------------------------------------------
-
-/// 滞在している箱が `shown_boxes` から消えたら無し・残っていればそのまま・もともと無しなら無し。
-#[test]
-fn settle_drops_vanished_box() {
-    let boxes = shown();
-    let a = name("a");
-    assert_eq!(settle_box_hover(Some(&a), &boxes), Some(a.clone()));
-    assert_eq!(
-        settle_box_hover(Some(&a), &boxes[..1]),
-        None,
-        "a だけ消えた"
-    );
-    assert_eq!(settle_box_hover(Some(&a), &[]), None);
-    assert_eq!(settle_box_hover(None, &boxes), None);
-}
-
-/// 印が残らないことの通し: 箱へ入る → 箱の文字が消える → 整える の後、観測の滞在は偽。
-/// シェルの窓から出たときも偽。他のスコープの記録には触れない。
-#[test]
-fn hover_mark_does_not_survive_vanished_text_or_window_leave() {
-    let mut hover = ShellBoxHover::default();
-    let boxes = shown();
-
-    let mv = judge_box_move(box_under_point(&boxes, 10.0, 10.0), &[], 10.0, 10.0);
-    let (next, _) = next_box_hover(hover.get(0), &mv);
-    hover.set(0, next);
-    let mv = judge_box_move(box_under_point(&boxes, 120.0, 30.0), &[], 120.0, 30.0);
-    let (next, _) = next_box_hover(hover.get(1), &mv);
-    hover.set(1, next);
-    assert_eq!(hover.get(0), Some(&name("a")));
-    assert!(hover.get(1).is_some());
-
-    let settled = settle_box_hover(hover.get(0), &[]);
-    hover.set(0, settled);
-    assert!(hover.get(0).is_none(), "時間切れの観測の hover は偽");
-    assert_eq!(hover.get(1), Some(&name("b")), "他のスコープはそのまま");
-
-    hover.set(1, None);
-    assert!(hover.get(1).is_none());
 }
 
 // ---------------------------------------------------------------------------
@@ -521,18 +464,4 @@ fn fold_talking_follows_talk_start_and_end() {
         assert_eq!(fold_talking(talking, NoUserBreakSignal::Enter), talking);
         assert_eq!(fold_talking(talking, NoUserBreakSignal::Leave), talking);
     }
-    let seq = [
-        NoUserBreakSignal::TalkStarted,
-        NoUserBreakSignal::Enter,
-        NoUserBreakSignal::Leave,
-    ];
-    assert!(
-        seq.into_iter().fold(false, fold_talking),
-        "選択肢を待つあいだも最中"
-    );
-    assert!(
-        ![NoUserBreakSignal::TalkStarted, NoUserBreakSignal::TalkEnded]
-            .into_iter()
-            .fold(false, fold_talking)
-    );
 }
