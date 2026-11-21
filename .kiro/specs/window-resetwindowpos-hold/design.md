@@ -430,7 +430,7 @@ pub(super) fn release_ready<S: ShownRatioSource + ?Sized>(
 
 ### 実機の確かめ（7.4・7.5）
 - 検体: `vendors\sample_ghost\emo2.nar` の原本をワークツリーの `target\` の下（例 `target\wrwh\root`）へ写し、記憶は `AREKA_USER_ROOT=target\wrwh\user`（毎回空・初回起動）。写しの `dic\boot.pasta` の `＊OnFirstBoot` のトークの先頭に `\![execute,resetwindowpos]` を足す。
-- 起動: `AREKA_NO_ALERT=1`、ほかのぱすたがデバッグの口を持つときは `PASTA_DEBUG=0`（その起動の中だけ）、`RUST_LOG=info,areka::placement=debug`、有界の自動終了で 1 回。
+- 起動: `AREKA_NO_ALERT=1`、ほかのぱすたがデバッグの口を持つときは `PASTA_DEBUG=0`（その起動の中だけ）、`RUST_LOG=info,areka_placement=debug`、有界の自動終了で 1 回。
 - ログで見ること: `reset_window_pos_held`（並べ直しが最初の面の前に届いたことの印。出なければ同じ巡に届いた回で、この確かめにならないので記録して検体を見直す）→ 両方の窓の最初の面と窓寸の照合 → 同じ巡の `reset_window_pos`（スコープ 0 の `to_x` が作業領域の右端 − 本当の幅）→ `chain_finalize` の動かす行が無い。並べた後の 2 窓の矩形から隙間 0 と右端のそろいを確かめる。
 
 ## Implementation Notes（統合・順序）

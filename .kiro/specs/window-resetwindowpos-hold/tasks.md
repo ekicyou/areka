@@ -112,3 +112,6 @@
 - 残る競り（完了の棚卸で扱う）: 割り込みでトーク A の `TalkEnded` と次のトーク B の時刻 0 の位置の指令が同じフレームに届くと、B の指令も「運んだトークが終わった」と読む（`PositionCue` と `TalkEnded { at }` がトークの識別を持たないため）。害は、B の時点で面の指令をまだ受けていない窓がある時だけ並べ直しが早く当たること（起動の確定が直す）。消すには指令と `TalkEnded` に `talk_id` を載せる要があり、この spec の境界（`frame_test_support.rs` の送り口を含む）の外。
 - 実機の確かめ（2026-11-21・HEAD 7395a72ee の debug・emo2 初回起動・`target\wrwh`）: 台本 `\p[0]\![execute,resetwindowpos]\s[1000]…\p[1]\s[笑顔]…`。51.532 スコープ 0 の最初の面（764×1094）→ 51.534 `reset_window_pos_held waiting=[1]`（1 行だけ）→ 54.268022 スコープ 1 の最初の面（672×800）→ 0.7 ms 後の同じ巡に `reset_window_pos scope=0 from_x=2064 to_x=2116`・`scope=1 from_x=1340 to_x=1444`。`chain_finalize` の行は 0。作業領域の右端 2880（ログの `default_char_x=2012`＋仮の幅 868 とも一致）: スコープ 0 は 2116〜2880（右端そろい）、スコープ 1 は 1444〜2116（隙間 0）。記憶はゴーストの写しの `profile` に書かれた（ワークツリーの `target` の下）。
 - `RUST_LOG=areka::placement=debug` は当てはまる出どころが無い（クレート名は `areka_placement`）。確かめに使った行は全部 info なので結果は変わらない。完了の棚卸で、要件・設計の綴りを `areka_placement=debug` に揃えるか決める。
+- 完了時にその場で解決: `frame_test_support.rs` の `window_move_lines` を placement の `test_support::window_move_lines` へ付け替え、写しを消した（呼び手は同じ形のまま）。
+- 完了時にその場で解決: 設計の実機の確かめの `RUST_LOG` の綴りを `areka_placement=debug` に揃えた（上の 5.1 の記録は実際に打った綴りのまま残す）。
+- 完了時に申し送り: 割り込みの「残る競り」を `parallel-visual-script` の brief へ（トークの識別を出来事に持たせる spec）。clippy `-D warnings` の既存の警告は `clippy-199-lints` が持つので重ねない。
