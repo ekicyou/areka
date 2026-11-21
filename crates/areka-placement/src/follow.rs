@@ -151,7 +151,7 @@ pub(crate) use self::sticky_follow::sync_drag_writer;
 pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
 // ドラッグの始めの控え。呼び手は areka の `areka_input::drag`。
 pub use self::sticky_follow::{CharDragSession, begin_char_drag};
-// `\![move]` の連れ動き。呼び手は `areka_runtime::…` の `move_cue_place`。
+// `\![move]` の連れ動き。呼び手は `areka_runtime::move_cue::place`。
 pub use self::sticky_follow::{follow_sticky_move, log_sticky_ignored};
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard,
