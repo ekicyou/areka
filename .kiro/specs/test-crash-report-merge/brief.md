@@ -55,15 +55,6 @@
 - 依存を足すなら 1 ウェーブに 1 本だけの席（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）を使う。
 - ワークスペースの依存の向き（wintf は上位の crate に依存しない）を壊さない。
 
-## 2026-11-20 棚卸㊵の測り（main 67e0c70e）
-
-- 触るファイル: 上の Current State の 3 本と各 `lib.rs`・`areka-runtime` の使い手 4 ファイル・本体の `runtime_tests/mod.rs`・置き場の crate の `Cargo.toml` と新しいファイル（⑴ なら `crates/log-capture-kit/src/` の新しいファイルと `lib.rs`）・`Cargo.lock`（依存を足すとき）。
-- 規模: S（4〜8 タスクの見込み）。
-- 先に要るもの: 働きの依存は無い。`Cargo.lock` の席が空くウェーブ（見込みの C23 は `input-crate-split` が使う＝C24 以降）。
-- 優先度の区分: A（見直しの指摘の取り残し・開発者「指摘事項は全部直す」）。
-- 要件定義のモデル: Opus（前例＝`log-capture-kit` が leaf として wintf と上位の crate に同じ仕組みを配っている形）。
-- 議題: 置き場（⑴ か ⑵）・許可の持ち手の表の置き方・`carrier_cue` の残りを寄せるか。
-
 ## audit-emo2-boot-frame からの申し送り（2026-11-21）
 
 `audit-emo2-boot-frame` の範囲の外（`areka-placement` は C23 のあいだ触れない）で見つけた、古い注と写しの件（`.kiro/specs/completed/audit-emo2-boot-frame/research.md` の 6 節イ〜カと 12.5）。この spec が `areka-placement` に触るときにまとめて直す。
@@ -75,3 +66,16 @@
 - **カ**: `crates/areka-placement/src/follow_window_move_diag_tests.rs` の `window_move_lines` は、`areka-runtime` の `frame_test_support.rs` と同じ働き（上流の crate の `test_support` へ移せば両方が 1 つを使える）。
 - **移したテストの置き場の古い注**: `crates/areka-placement/src/chain_rule_tests.rs` の 5 行目が、移す前の置き場（本体の `frame_chain_rule_tests.rs`）を指している。今は `crates/areka-runtime/src/frame_chain_rule_tests.rs`。
 - **武装の説明の古い注**: `crates/areka-placement/src/chain_realign.rs` の 168〜170 行（`arm_chain_realign` の説明）の「寸変化を伴って書込を起こしたときに呼ぶ。判断（寸が変わったか・書込が起きたか）は呼び手が持つ」は、今の呼び手（`crates/areka-runtime/src/frame/dpi.rs`）が窓の種類と窓の寸の前後比べだけを見る形と合わない（`audit-emo2-boot-frame` のかけ直しで `wrote &&` を消した・research の 13.5 と 13.7）。
+
+## 2026-11-21 棚卸㊶の再測定（main `31ac3eaf`）
+- **前提の変化**: `input-crate-split` が `Cargo.lock` の席を使って着地し、C24 で席が空いた。`audit-emo2-boot-frame`（PR#484）の申し送り（上）で `areka-placement` の古い注と写しが範囲に入った。PR#488 で行が動いた＝`wintf/src/test_crash_report.rs` 487 行・`areka-placement/src/test_crash_report.rs` 490 行・`areka-runtime/src/crash_report_test_support.rs` 587 行（計 1,564 行）、`mod` の行は wintf `lib.rs:7`・placement `lib.rs:86`・runtime `lib.rs:70`。本体の `runtime_tests/mod.rs` は 12・17 行のまま。
+- **触るファイル**: 3 本と各 `lib.rs`・`areka-runtime` の `spine_wait.rs`（コード 24 行・説明 683 行）・`wire_tests.rs`・`assets_tests.rs`・`assets_shell_tests.rs`・`assets_markers_tests.rs`（どれも説明の中の名だけ）・本体の `runtime_tests/mod.rs`・置き場（⑴ なら `crates/log-capture-kit/src/` の新しいファイルと `lib.rs`・`Cargo.toml`）・`Cargo.lock`。申し送りの分＝`areka-placement` の `follow_window_move_hold_watch_tests.rs`・`config.rs`（107・109）・`follow/work_area.rs`（27・231）・`follow_visibility_balloon_wiring_tests.rs`（812・816）・`test_support.rs`・`follow_window_move_diag_tests.rs`・`chain_rule_tests.rs`（5）・`chain_realign.rs`（167〜168）。
+- **依存**: ⑴ でも `log-capture-kit` に `windows`（ワークスペースに在る）を任意の依存で足すので `Cargo.lock` の `log-capture-kit` の行が変わる＝1 本だけの席を使う。新しい外の crate は入らない（`THIRD-PARTY-NOTICES.md` は変わらない見込み）。`log-capture-kit/tests/file_length_guard_test.rs` には触らない。
+- **規模**: S〜M（6〜10 タスク・申し送りの分だけ増えた）。
+- **先に要るもの**: 無い。
+- **同じウェーブの相手との約束（C24）**: 申し送りのカ（`window_move_lines` を上流の `test_support` へ寄せる）は、`areka-runtime/src/frame_test_support.rs` に触らずに済む形（`areka-placement` の側だけ）にするか、次の機会へ回す（`window-resetwindowpos-hold` が同じ足場の周りを触る）。`session-module-gather` は `runtime_tests/mod.rs` に触らない（集めるモジュールを名指さない）＝0。`audit-areka-input-menu` とは 0（`areka-input` は落ちの報告を使わない）。
+- **優先度の区分**: A（見直しの指摘の取り残し・開発者「指摘事項は全部直す」）。
+- **要件定義のモデル**: Opus（前例＝`log-capture-kit` が leaf として wintf と上位の crate に同じ仕組みを配っている形）。
+- **議題**: 置き場（⑴ か ⑵）・許可の持ち手の表の置き方・`carrier_cue` の残りを寄せるか・申し送りのカの寄せ先。
+- **分割の案**: 無し。
+- **古くなった記述**: Current State の行数（494・494・591）と placement `lib.rs` 90・runtime `lib.rs` 71 行。申し送りのイ（`window_move.rs` の「見送りの 4 点」）は PR#488 でその文ごと消えた＝直すものは残っていない。
