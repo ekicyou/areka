@@ -347,7 +347,7 @@ pub(crate) struct GhostBootInputs {
     /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
     pub kanade_stop: Sender<KanadeNotice>,
     /// SHIORI の読み方の指定（結線ありの起動・倒れ先の両方がこの値で SHIORI を決める）。
-    pub modules: crate::cli::ModulePolicy,
+    pub modules: crate::session::boot_request::ModulePolicy,
 }
 
 impl GhostBootInputs {
@@ -359,7 +359,7 @@ impl GhostBootInputs {
         kanade_stop: Sender<KanadeNotice>,
         boot_origin: BootOrigin,
         app_profile_dir: Option<PathBuf>,
-        modules: crate::cli::ModulePolicy,
+        modules: crate::session::boot_request::ModulePolicy,
     ) -> Self {
         Self {
             wiring: areka_runtime::RuntimeInputs {

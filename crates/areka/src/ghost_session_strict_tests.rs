@@ -26,7 +26,7 @@ fn unwirable_inputs() -> GhostBootInputs {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::cli::ModulePolicy::Load,
+        modules: crate::session::boot_request::ModulePolicy::Load,
     }
 }
 
@@ -143,7 +143,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
             kanade_stop.clone(),
             origin,
             None,
-            crate::cli::ModulePolicy::Load,
+            crate::session::boot_request::ModulePolicy::Load,
         )
     }));
     let cfg = ConfigInputs {
@@ -228,7 +228,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::cli::ModulePolicy::Load,
+        modules: crate::session::boot_request::ModulePolicy::Load,
     };
     let fallen = boot_ghost(
         &mut rig.world,

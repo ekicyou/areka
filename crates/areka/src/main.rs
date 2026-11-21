@@ -144,7 +144,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{alert, exit_wait, log_history, readonly, write_failure};
+    use session::{alert, boot_request, exit_wait, log_history, readonly, write_failure};
     human_panic::setup_panic!();
 
     // RUST_LOG が未設定・非UTF-8・不正な構文なら "info" へフォールバックする（panic 経路なし）。
@@ -164,7 +164,7 @@ fn main() -> Result<()> {
     let mut startup_install = install::startup::StartupInstall::new(opts.install);
     // 読み取りだけかを 1 度だけ立てる（置き場の形と受け口が決まる前）。
     readonly::engage(opts.readonly);
-    if opts.modules == cli::ModulePolicy::Skip {
+    if opts.modules == boot_request::ModulePolicy::Skip {
         tracing::info!(
             event = "shiori_skipped",
             "[main] --option dontloadmodule により、SHIORI を読まずに起動する"
@@ -411,7 +411,7 @@ fn install_boot_context(
     world: &mut World,
     ctx: boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
-    modules: cli::ModulePolicy,
+    modules: session::boot_request::ModulePolicy,
 ) {
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値）。

@@ -10,7 +10,8 @@ use bevy_ecs::world::World;
 use super::before_boot_ports::BootPorts;
 use super::procedure::{ArchiveEnd, run_order};
 use super::{InstallOrder, InstallOrigin};
-use crate::cli::{BootRequest, InstallArgs};
+use crate::cli::InstallArgs;
+use crate::session::boot_request::BootRequest;
 
 /// exe の隣に置くと起動のたびに 1 回だけ入れる書庫の名前（大小を問わない）。
 pub(crate) const INITIAL_INSTALL_FILE: &str = "initial_install.nar";

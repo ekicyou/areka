@@ -46,6 +46,9 @@ pub(crate) mod readme;
 /// ベースウェアの根の並び。
 pub(crate) mod roots;
 
+/// 起動の求め（`BootRequest`）と SHIORI の読み方の指定（`ModulePolicy`）。
+pub(crate) mod boot_request;
+
 // 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台。
 #[cfg(test)]
 pub(crate) mod ghost_switch_test_support;

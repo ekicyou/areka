@@ -61,7 +61,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.4, 3.5, 6.1_
 
 - [ ] 5. 起動の構成を集める（段 4）
-- [ ] 5.1 cli の型 2 つを `session/boot_request.rs` へ移す
+- [x] 5.1 cli の型 2 つを `session/boot_request.rs` へ移す
   - `cli/mod.rs` 54〜74 行の `BootRequest`・`ModulePolicy` を、`derive`・欄・doc の字面のまま新しい `session/boot_request.rs` へ写し、可視性だけを `pub(crate)` に上げる
   - `cli/mod.rs` は私有の `use crate::session::boot_request::{BootRequest, ModulePolicy};` で引き、出し直さない。`crate::cli::{BootRequest, ModulePolicy}` の呼び手（13 ファイル・まだ src 直下にある `boot_config.rs` を含む）を `crate::session::boot_request::…` へ
   - `main.rs` の `cli::ModulePolicy::Skip`（184 行付近）と署名 `modules: cli::ModulePolicy`（431 行付近）も、この段で型の移動に合わせる（出し直さないので、ここで直さないとコンパイルが通らない）。本文は先頭の `use session::…` で、署名は `session::boot_request::…` の道で書く
@@ -181,3 +181,4 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 - 3.1: `"areka::alert"` の文字列（log_history の 2 本のテスト）は 3.1 で直し済み。3.3 では二度直さない。
 - 3.3: 宣言を移すとき、元に doc が無い宣言へ新しい doc を書くなら、モジュールの `//!` の 1 行目と同じにする（中身を言い換えると取り違える）。
 - 4.2: `update/worker.rs:40`・`:110` の doc の `roots::user_root::exe_dir()` はモジュール名だけの古い説明（6.9 で当たりにしない）。9.2 の申し送りに載せる。
+- 5.1: `main.rs` の本文で移した項目を使う所は、道を全部書かず `fn` の先頭の `use session::{…};` にモジュールを足して引く（署名と欄だけ `session::…` の道）。

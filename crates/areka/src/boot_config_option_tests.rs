@@ -1,4 +1,4 @@
-//! 起動の求め（`cli::BootRequest`）から起動の答えへ。
+//! 起動の求め（`session::boot_request::BootRequest`）から起動の答えへ。
 //!
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。

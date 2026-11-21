@@ -229,7 +229,7 @@ pub(crate) fn resolve_boot_from(
 /// `GhostInputs` へ渡すだけで、記憶より先・起動中の印に関わらず目録から引かれる。
 pub(crate) fn resolve_boot_with(
     resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
-    request: &crate::cli::BootRequest,
+    request: &crate::session::boot_request::BootRequest,
     call_ghost: Option<&str>,
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
@@ -570,7 +570,7 @@ pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
     app_profile_dir: Option<std::path::PathBuf>,
-    modules: crate::cli::ModulePolicy,
+    modules: crate::session::boot_request::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     crate::session::runtime_boot::runtime_boot_options(
         ghost_root,
@@ -588,12 +588,14 @@ pub(crate) fn ghost_boot_options(
 /// （`Helper { helper_exe }`）、「読まない」は何を聞かれても中身なしで答える差し替え口
 /// （`Custom(empty_connect())`）。倒れ先の [`ghost_boot_options`] と結線ありの起動の両方が使う。
 pub(crate) fn shiori_wiring_for(
-    modules: crate::cli::ModulePolicy,
+    modules: crate::session::boot_request::ModulePolicy,
     helper_exe: std::path::PathBuf,
 ) -> areka_ghost::ShioriWiring {
     match modules {
-        crate::cli::ModulePolicy::Load => areka_ghost::ShioriWiring::Helper { helper_exe },
-        crate::cli::ModulePolicy::Skip => {
+        crate::session::boot_request::ModulePolicy::Load => {
+            areka_ghost::ShioriWiring::Helper { helper_exe }
+        }
+        crate::session::boot_request::ModulePolicy::Skip => {
             areka_ghost::ShioriWiring::Custom(Box::new(areka_ghost::shiori_wiring::empty_connect()))
         }
     }

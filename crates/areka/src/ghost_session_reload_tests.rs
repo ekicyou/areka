@@ -91,7 +91,7 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
         wiring,
         helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
         kanade_stop: kanade_stop.clone(),
-        modules: crate::cli::ModulePolicy::Load,
+        modules: crate::session::boot_request::ModulePolicy::Load,
     };
     let mut session = boot_ghost(&mut world, inputs, &descript, &ghost, &balloon);
     let wired = !session.logsink_fallback() && session.sink_sources().is_some();
@@ -195,7 +195,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
             wiring,
             helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
             kanade_stop,
-            modules: crate::cli::ModulePolicy::Load,
+            modules: crate::session::boot_request::ModulePolicy::Load,
         },
         &StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,

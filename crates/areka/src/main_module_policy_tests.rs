@@ -1,9 +1,9 @@
-//! SHIORI の読み方の指定（`cli::ModulePolicy`）から結線を決める口と倒れ先の表。
+//! SHIORI の読み方の指定（`session::boot_request::ModulePolicy`）から結線を決める口と倒れ先の表。
 //!
 //! 指定は値として渡すだけなので、テストどうしは互いに影響しない。
 
 use super::*;
-use crate::cli::ModulePolicy;
+use crate::session::boot_request::ModulePolicy;
 use areka_ghost::ShioriWiring;
 use std::path::PathBuf;
 

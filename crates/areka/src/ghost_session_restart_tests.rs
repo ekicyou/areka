@@ -368,7 +368,7 @@ fn scripted_inputs(
         // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
         helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::cli::ModulePolicy::Load,
+        modules: crate::session::boot_request::ModulePolicy::Load,
     };
     (inputs, handle)
 }
