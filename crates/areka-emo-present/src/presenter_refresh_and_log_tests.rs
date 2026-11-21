@@ -648,7 +648,7 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     );
 }
 
-/// 装置の作り直し（audit-wintf-graphics-world 6 番）: `GraphicsCore` を入れ替えた後の
+/// 装置の作り直し: `GraphicsCore` を入れ替えた後の
 /// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
 /// 立たない回は何もしない（列はそのまま）。
 #[test]

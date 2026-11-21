@@ -75,7 +75,7 @@ pub enum CueTarget {
 pub enum BarrierKind {
     /// クリック/キー入力待ち（旧 WaitForClick を統合）。
     ///
-    /// `talk-fast-forward` の `\x` の受け皿。外からの解決
+    /// `\x` の受け皿。外からの解決
     /// （[`CuePlayer::resolve_click`](crate::cue::CuePlayer::resolve_click)）で解け、時間切れは持たない
     /// （ukadoc の `\x`・`\x[noclear]` に時間切れの引数が無い）。
     WaitForInput,

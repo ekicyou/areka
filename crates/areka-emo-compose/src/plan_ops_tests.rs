@@ -502,7 +502,7 @@ fn noncyclic_shared_child_expands_on_each_path() {
 //
 // コマの無い有効な純 `bind` は全部のコマを番号の順に重ねる。
 // `bind+random` はコマのあるときだけそのコマを描き、コマが無いあいだは何も積まない（良性 skip・DEBUG・
-// animated-surface-log-flood 件 26）。実機サインオフ#2（むらさきの目が常時閉じている）は、まばたきの
+// ログ洪水の件）。実機サインオフ#2（むらさきの目が常時閉じている）は、まばたきの
 // `bind+random`（emo2 1400）の閉じ目フレーム（surface 1412）が静的土台に積まれてベースの目を覆った件。
 
 /// pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
@@ -532,7 +532,7 @@ fn pattern0_less_pure_bind_draws_its_patterns() {
 }
 
 /// index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
-/// 静的に積まない（animated-surface-log-flood 件 26 の決めで期待を直した）。純 `bind` は全部のコマを
+/// 静的に積まない。純 `bind` は全部のコマを
 /// 番号の順に重ねる（SSP の測りどおり）。
 #[test]
 fn coexisting_patterns_bind_random_draws_none_pure_bind_draws_all() {

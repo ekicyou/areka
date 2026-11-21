@@ -22,7 +22,7 @@ fn new_reduces_to_canonical_form() {
     }
 }
 
-/// shell-scale-linkage 読む口は既約の分子・分母を返す（120/96 → (5, 4)）。
+/// 読む口は既約の分子・分母を返す（120/96 → (5, 4)）。
 #[test]
 fn parts_reads_reduced_numerator_and_denominator() {
     assert_eq!(ScaleRatio::new(120, AUTHOR_DPI).unwrap().parts(), (5, 4));

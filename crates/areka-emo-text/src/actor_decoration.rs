@@ -230,7 +230,7 @@ impl TextLayerRuntime {
         self.balloon_background.insert(actor, background);
     }
 
-    /// 行の中の印の絵を actor ごとに覚える（`None` は既定の丸へ戻す・`script-small-tags`）。
+    /// 行の中の印の絵を actor ごとに覚える（`None` は既定の丸へ戻す）。
     ///
     /// 値を覚えるだけで、今の場所の値（`layout_input`）には押し直さない
     /// （[`set_balloon_background`](Self::set_balloon_background) と同じ形）。次の再追従が、解いて

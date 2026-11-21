@@ -54,8 +54,8 @@
 //! # 語彙は大文字小文字を問わない・前後の空白は落とす
 //!
 //! `balloonN`／`surfaceN`／`bN`／`sN` は、1 度だけ小文字にしてから一致させる（`Balloon0` も
-//! `balloon0`。`windowposition::classify_x_vocab` と同じ決まり・`audit-placement-core` の裁定
-//! 2026-11-15）。タグと descript は同じこの解釈器を通るので、どちらも同じ決まりになる。
+//! `balloon0`。`windowposition::classify_x_vocab` と同じ決まり）。
+//! タグと descript は同じこの解釈器を通るので、どちらも同じ決まりになる。
 //! 解釈できないトークンは、作者が書いたままの綴りを拒否理由に載せて返す。
 //! トークン前後の空白はここの `trim` で落とす。shell descript の `seriko.zorder,1, 0` は、
 //! kv 層が値の両端しか削らず、起動の段（本体の `zorder_descript.rs`）がカンマで割るだけなので、

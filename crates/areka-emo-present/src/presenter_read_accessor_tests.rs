@@ -107,8 +107,7 @@ fn read_back_before_first_show_is_not_shown() {
     );
 }
 
-/// 表示した後に合成メモを捨てると、表示中の絵がメモから追い出されたことを面の番号つきで返す
-/// （`audit-emo-present` 指摘 2）。
+/// 表示した後に合成メモを捨てると、表示中の絵がメモから追い出されたことを面の番号つきで返す。
 #[test]
 fn read_back_after_invalidate_cache_is_entry_evicted() {
     let mut world = make_world_with_gpu();

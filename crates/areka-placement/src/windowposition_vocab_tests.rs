@@ -50,8 +50,8 @@ fn classify_x_vocab_accepts_lowercase_keywords() {
     );
 }
 
-/// 大文字小文字は問わない（descript の語は読む所で 1 度だけ小文字にする・`audit-placement-core` の
-/// 裁定 2026-11-15。`alignmenttodesktop` と同じ決まり）。
+/// 大文字小文字は問わない（descript の語は読む所で 1 度だけ小文字にする。
+/// `alignmenttodesktop` と同じ決まり）。
 #[test]
 fn classify_x_vocab_ignores_case() {
     for (raw, mode) in [

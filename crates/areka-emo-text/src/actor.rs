@@ -264,7 +264,7 @@ pub struct TextLayerRuntime {
     /// 普通のバルーン。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
     surface_resolver: Option<SurfaceKeyResolver>,
     /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト）。
-    /// 箱の束の受け取りが入れ、読み込む側（`balloon-font-file`）が読む。本番の呼び手はまだ無い継ぎ目。
+    /// 箱の束の受け取りが入れ、フォントファイルを読み込む側が読む。本番の呼び手はまだ無い継ぎ目。
     box_font_dirs: Vec<PathBuf>,
     /// 「箱を隠す印」の立っているスコープ（`actor_box.rs` の `hide_boxes`）。台詞の頭（`ClearAll`）で下ろす。
     hidden_boxes: BTreeSet<ActorKey>,

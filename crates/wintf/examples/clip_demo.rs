@@ -2,7 +2,7 @@
 
 //! # Clip Demo
 //!
-//! visual-clip 機能の検証デモ。3 種類の ClipShape バリアントを
+//! クリップ機能の検証デモ。3 種類の ClipShape バリアントを
 //! GPU 合成（Windows.UI.Composition＝WUC）パイプラインで表示し、クリッピングの動作を目視確認する。
 //!
 //! ## 構成

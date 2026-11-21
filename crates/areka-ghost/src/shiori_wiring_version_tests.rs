@@ -95,8 +95,8 @@ fn ghost_label_takes_the_folder_two_levels_above_master() {
     assert_eq!(ghost_label(Path::new("master")), "master");
 }
 
-/// helper の `load` へ渡すパスは絶対パス・`\` の区切り・末尾に `\` が 1 つ（
-/// `shiori4-api` の決定 6）。華和梨はこれにファイル名をそのままつなげて辞書を開く。
+/// helper の `load` へ渡すパスは絶対パス・`\` の区切り・末尾に `\` が 1 つ。
+/// 華和梨はこれにファイル名をそのままつなげて辞書を開く。
 #[test]
 fn helper_load_dir_is_absolute_backslashed_with_one_trailing_separator() {
     for input in [

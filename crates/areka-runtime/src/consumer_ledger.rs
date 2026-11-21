@@ -149,7 +149,7 @@ pub enum CommandConsumer {
     LifecycleSink,
     /// 読み直しのタグの担当消費者（[`ReloadCueSink`](super::reload_cue::ReloadCueSink)）。`reload` は
     /// 名前だけでは決まらず、第 1 引数が `ghost`・`shiori`・`shell`・`balloon`・`descript` の出現だけを
-    /// 担当する（`makoto` は makoto-reload-directives が後から足す余地・`aigraph` は担当なし）。
+    /// 担当する（`makoto` はまだ担当なし・`aigraph` は担当なし）。
     /// 旧い `reloadsurface` は選別子なしで担当する。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1
@@ -317,7 +317,7 @@ impl ConsumerLedger {
 /// `consumer_ledger_test_support.rs` の `samples` は、組の一致を `samples_cover_exactly_the_ledger_rows`
 /// が判定する）。
 ///
-/// `(reload, makoto)` は makoto-reload-directives が後から足す。
+/// TODO: `(reload, makoto)` の行を足す。
 const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
     use CommandConsumer::*;
     &[

@@ -30,7 +30,7 @@
 //! を持つ（シームの結線自体は本体の `ghost_session::prepare_ghost_windows`）。
 
 pub mod balloon_limit;
-/// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
+/// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手。
 pub mod balloon_lock;
 pub mod balloon_syncscale;
 pub mod chain_finalize;
@@ -39,7 +39,7 @@ pub mod chain_realign;
 /// 鎖の規則（起動の確定・隣り合いの印の保存・拡大率の後の詰め直しが同じ規則で組を作る）。
 pub mod chain_rule;
 pub mod config;
-/// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
+/// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び。
 pub mod descript_window_keys;
 pub use self::descript_window_keys::DefaultSurfaces;
 pub mod diag;

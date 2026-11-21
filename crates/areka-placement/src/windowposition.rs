@@ -70,8 +70,8 @@ pub(crate) enum LimitVocab {
 /// # 語彙の細則（areka 裁量）
 ///
 /// キーワードは、1 度だけ小文字にした値が `center`／`top`／`bottom` と**完全一致**するときだけ
-/// 受理する（`Center` も `center` と同じ語。`audit-placement-core` の裁定 2026-11-15 で
-/// `alignmenttodesktop` と同じ決まりにそろえた）。それ以外の綴りは [`XVocab::Invalid`] へ落ち、
+/// 受理する（`Center` も `center` と同じ語。
+/// `alignmenttodesktop` と同じ決まり）。それ以外の綴りは [`XVocab::Invalid`] へ落ち、
 /// 呼び出し側の警告で作者が綴りに気づける。`top` は `center` と同義（正典）。
 ///
 /// 前後空白の除去は上流 kv 層（`kv::parse_kv`）で既に済んでおり（`parse.rs` の転記層

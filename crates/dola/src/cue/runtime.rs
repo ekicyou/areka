@@ -237,7 +237,7 @@ impl CuePlayer {
 
     /// クリック/入力バリア（`WaitingForInput`）を外部解決して再開する。
     ///
-    /// `talk-fast-forward` の `\x` の受け皿（ukadoc の `\x` に時間切れの引数は無い）。
+    /// `\x` の受け皿（ukadoc の `\x` に時間切れの引数は無い）。
     ///
     /// 非待機状態（`Playing`/`WaitingForChoice`/`Completed`）では no-op。解決後に既に占有
     /// horizon へ達していれば `Completed` へ遷移する。

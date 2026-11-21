@@ -212,7 +212,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
 }
 
 /// 外形が上限を越える面（`ExtentTooLarge`・合成が error! 済み）も `EmptyComposition` と同じく隠す縮退＋
-/// reply Ok（申し合わせ 11-05・audit-emo-compose 指摘 23）。面 1000 は着せ替えの先 5000 を一辺の上限
+/// reply Ok（申し合わせ 11-05）。面 1000 は着せ替えの先 5000 を一辺の上限
 /// 16384 より遠い (20000, 0) に置く（外形は有効な着せ替えに依らないので、着せ替えなしでも越える）。
 #[test]
 fn extent_too_large_degrades_to_hidden_and_replies_ok() {
@@ -587,7 +587,7 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
 }
 
 /// 面の entity から当たりのマスクの資源が外れていると、同じ面の再表示は黙らず `warn!` を 1 件だけ
-/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない・`audit-emo-present` 指摘 18）。
+/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない）。
 #[test]
 fn reshow_without_alpha_mask_resource_leaves_one_warn() {
     let mut world = make_world_with_gpu();

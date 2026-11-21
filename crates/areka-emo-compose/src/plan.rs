@@ -330,7 +330,7 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
 ///    `binds` に含まれる animation を「有効 bind」とし、`always` と今のコマとともに
 ///    **2 段ソート順**で静的層の**後（＝上）**へ積む。コマの無い純 [`Interval::Bind`] は読み込みのときに
 ///    作った手順の全部のコマを描き、[`Interval::BindRandom`] はコマがあるとき
-///    だけそのコマを描く（`animated-surface-log-flood`）。
+///    だけそのコマを描く。
 ///    - **段1（animation-sort）**: [`EmoWorld::animation_sort`] が
 ///      [`SortOrder::Descend`]（既定）→ animation id **昇順**に描画（大 id が上）。[`SortOrder::Ascend`]
 ///      → id **降順**に描画（小 id が上）。これが画家のアルゴリズムの画素積層写像。

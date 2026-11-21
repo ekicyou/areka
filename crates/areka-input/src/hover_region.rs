@@ -1,7 +1,7 @@
 //! 窓ごとの当たり判定の出入りの状態と、出入りを決める純関数。
 //!
-//! 状態の置き場所は `MouseWiring.hover`（鍵＝窓の entity）。後の `shell-mouse-cursor`・`shell-tooltip`・
-//! `shell-hover-animation` は [`HoverState`] を読む口を足して使う。結線は `char_watch`。
+//! 状態の置き場所は `MouseWiring.hover`（鍵＝窓の entity）。後から足すマウスカーソル・ツールチップ・
+//! ホバーアニメーションは [`HoverState`] を読む口を足して使う。結線は `char_watch`。
 
 use areka_kanade::HoverEdge;
 

@@ -259,7 +259,6 @@ fn ghost_label(master_dir: &Path) -> String {
 }
 
 /// helper の `load` へ渡すフォルダのパス＝絶対パス・`\` の区切り・末尾に `\` が 1 つ
-/// （`shiori4-api` の決定 6 の helper の道の前倒し）。
 ///
 /// 華和梨などはこれにファイル名をそのままつなげて辞書を開くので、区切りの混在や末尾の
 /// 区切りなし（`…\ghost/master`）では読めない。同じプロセス内の道（`inproc_connect`）も

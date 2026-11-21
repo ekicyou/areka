@@ -379,7 +379,7 @@ fn same_child_in_several_places_has_one_clock_and_one_field() {
 /// 抽選の時計は残る。同じ刻みで隠れる場合は
 /// `parts_always_tests::blank_survives_when_a_part_hidden_in_the_same_tick_is_dropped` が受け持つ。
 ///
-/// コマの無い `bind+random` は手順を持たないので（audit-emo-compose 指摘 4）、pattern0 の先（ここでは 40）は
+/// コマの無い `bind+random` は手順を持たないので、pattern0 の先（ここでは 40）は
 /// 親のコマが 40 を指す間だけ見える。乱数の呼び出し回数をここで固定する。
 #[test]
 fn part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock() {

@@ -147,7 +147,7 @@ pub fn build_placement_config(
 /// シグナルではない。
 ///
 /// `char{n}.`（n≥2）接頭キーからは scope を足さない。3 人目以降の窓はまだ作らない——作ると入力とメニューの
-/// `debug_assert!(scope <= 1)` に当たる。絞りを外すのは `extra-character-windows`。
+/// `debug_assert!(scope <= 1)` に当たる。TODO: 3 人目以降の窓を作るときに絞りを外す。
 fn detect_scopes(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,

@@ -53,7 +53,7 @@ mod sample_test_support;
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
 
-/// 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。
+/// 本体に頼る切替・読み直し・起動・終わる相の層。
 mod session;
 
 /// UI→kanade のマウス入力配信配線。キャラ窓のポインタイベントを捉え、当たり判定名を resolver で
@@ -144,7 +144,7 @@ mod roots;
 /// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
 mod smoke_exit;
 
-/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口（readonly-mode）。
+/// 1 回の走りが読み取りだけかを 1 度だけ立てて配る口。
 mod readonly;
 
 /// 起動オプションの読み方。

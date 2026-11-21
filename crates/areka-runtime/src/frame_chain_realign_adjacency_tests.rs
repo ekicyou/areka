@@ -266,7 +266,7 @@ fn a_three_body_chain_uses_the_previous_result_as_the_next_base() {
 /// 3 体の鎖を半分にした後（x: 1100／775／550・幅 200／150／100）、作業領域の左端を 1000 に
 /// すると、scope1 を左に詰めた 950 は外へ出る。寄せは scope1 を本体の右の隣 1300 へ並べ替え、
 /// 本体は動かさない。scope2 は並べ替えた scope1 の左の隣 1200 へ詰まり、収まるので寄せない
-/// （本体と重なるのは許す・3 体以上の鎖は extra-character-windows の持ち場）。記録には場面
+/// （本体と重なるのは許す・3 体以上の鎖は TODO: 3 人目以降の窓を作るときに扱う）。記録には場面
 /// `dpi-realign` と `flipped` の寄せが scope1 に 1 行残る。
 #[test]
 fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
