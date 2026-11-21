@@ -141,7 +141,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — パスの書き換えで持ち主は変えない_
   - _Requirements: 6.6, 6.7_
 
-- [ ] 9. 較正と構造の証跡（段 8）
+- [x] 9. 較正と構造の証跡（段 8）
 - [x] 9.1 実のモジュールのパスで種別を引く較正を 1 本足す
   - `log_history_tests.rs` に 1 本（例 `moved_modules_keep_their_kinds_by_real_module_path`）を足す。行ごとに、移したモジュールの本番の項目 1 つ（型か総称でない関数）の `std::any::type_name`／`type_name_of_val` から最後の `::<項目名>` を落とした文字列を導き、期待の字面（`areka::session::alert` ほか）と `assert_eq!` で比べてから `classify(Level::INFO, …)` を引く
   - 期待: `boot_config`・`boot_resolve`・`ghost_session`・`ghost_session::ghost_session_runtime`・`readme`・`readme::opener` は status、`alert`・`app_exit`・`session_end`・`exit_wait`・`write_failure`・`readonly`・`roots::report`・`roots::user_root` は残さない
@@ -149,7 +149,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
   - _Dispatch: mechanical — 期待の値と取り方を設計が与えるテスト_
   - _Requirements: 7.1, 7.4, 10.3, 10.8_
 
-- [ ] 9.2 grep の式 1〜6・外への参照・触らない所・申し送りを記録する
+- [x] 9.2 grep の式 1〜6・外への参照・触らない所・申し送りを記録する
   - 設計の VerificationRecord の grep の式 1〜6 を集め終えた木に当て、結果と除いた所（理由つき）を `research.md` に書く。当たりが残れば直してから記録する
   - 直書きの出所の扱いの一覧（設計の表に、実装で触った所を足したもの）を `research.md` に置く
   - OutboundRefRecord の式で `session/` の本番が本体の外を参照する所を、ファイルと行と項目の一覧にし、テストだけの参照（`crate::BODY_SYSTEMS` を引く 5 か所・根の `after_run`・`boot_first_ghost` を引くテストほか）を別の表にする。向きは逆にしない。`session-crate-split` への申し送り（テストが本体の `BODY_SYSTEMS` を引けなくなる見込み）を書く

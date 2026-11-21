@@ -439,3 +439,133 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 - やったこと: `main.rs` の `BODY_SYSTEMS` の `menu_poll` と `after_input` の中身を入れ替え、`cargo test -p areka --bin areka --no-fail-fast` を 1 回だけ回した（統合テストは回していない）。直後に `main.rs` を元へ戻し、`git diff -- crates/areka/src/main.rs` が空であることを確かめた。コミットなし。
 - 結果: 1836 passed・0 failed・3 ignored。落ちたテストは 0 件。
 - 結論: 取り違えを止める守りは字面の見直しだけ。
+
+## 14. 検証の記録（実装の段・タスク 9.2・2026-11-21）
+
+測った木: 集め終えた作業の木（ブランチ `claude/kiro-start-session-module-gather-1375a8`）。式は設計の VerificationRecord の式 1〜6 をそのまま当てた。当たりが残って直した所は 0 件（このタスクで直したファイルは無い）。
+
+### 14.1 grep の式 1〜6 の結果
+
+| 式 | 内容 | 結果 |
+|---|---|---|
+| 1 | `git ls-files crates/areka/src` の src 直下に `ghost_session*`・`boot_resolve*`・`boot_config*`・`app_exit*`・`session_end*`・`exit_wait*`・`write_failure*`・`readonly*`・`alert*`・`log_history*`・`shell_balloon_switch_session_*`・`boot_shell_tests.rs`・`readme.rs`・`main_{config_input,ghost_wiring,module_policy,restore_seam,persist_wiring_seam,monitor_snapshot_seam}_tests.rs`・`roots/{resolve,report,user_root}*` | 0 件 |
+| 2 | `crate::input_events` と `input_events::` を `crates/areka` で | 0 件。語 `input_events` の当たりは `session/app_exit_tests.rs:182` の 1 件だけ（14.6 の申し送り） |
+| 3 | 古いパス（設計の式 3 の全体）を `crates/`・`tools/`・`doc/`・`.kiro/steering/{structure,tech,logging}.md` で | 1 件だけ: `crates/areka-input/src/user_break.rs:201`（`crates/areka/src/readme.rs`・触らない crate のため除く・14.6）。`cli::(BootRequest|ModulePolicy)` は 0 件 |
+| 4 | 古い出所（`git grep -P`・設計の式 4 の全体）を `crates/`・`tools/`・`doc/`・`.kiro/steering/{structure,tech}.md` で | 0 件 |
+| 5 | 外への参照 | 14.3 の表（本番 28 行・設計の見込みと同じ） |
+| 6 | `main.rs` の最上位（`fn` の外）の `use` | `bevy_ecs::prelude::*`・`windows::core::Result`・`wintf::*` の 3 行だけ。`use session`・`use crate::`・`use areka_input`・`pub(crate) use` は 0 件（`use session::{…};` は `fn` の本文の先頭にだけある: `main.rs:122`・`:415`・`:458`・`:517`） |
+
+除いた所（式 3・理由つき）:
+
+| 所 | 理由 |
+|---|---|
+| `.kiro/steering/roadmap-history.md`・`.kiro/specs/completed/`・`roadmap.md`・`doc/roadmap-overview-2026-10-16.html` | 履歴・過去の記録（設計どおり範囲の外・書き換えない） |
+| `crates/areka-input/src/user_break.rs:201` | 触らない crate（9.7）。14.6 で申し送る |
+| 素のファイル名だけの書き方・モジュール名だけの説明（`roots::user_root::exe_dir()` など） | 6.9 により当たりにしない（14.6 に古い説明として載せる） |
+| `.kiro/steering/product.md:81` の `crates/areka/src/boot_resolve.rs` | 式 3 の範囲（`structure`・`tech`・`logging` の 3 本）の外（14.6） |
+| `.kiro/specs/audit-areka-app/brief.md`・`audit-areka-install-update/brief.md` の所見の文に残る古いパス | 範囲の外（`.kiro/specs/` は式の範囲に無い・14.6） |
+
+`roots/mod.rs` を名指す行は式 3 に当たっていない（取り違えの確認は要らない）。
+
+### 14.2 直書きの出所の扱いの一覧（7.2・実装で触った所を足した形）
+
+モジュールのパスを写したもの＝`areka::session::<名>` へ直した所（現在の場所）:
+
+| 所 | 直したもの |
+|---|---|
+| `crates/areka/src/session/log_history.rs:124-127`・`:131` | `RULES` の 4 行（`boot_config`・`boot_resolve`・`ghost_session`・`readme`） |
+| `session/log_history_tests.rs:103-106`・`:110`・`:111`・`:120`・`:125`（`alert`）・`:168-171`・`:174`・`:197`・`:462`・`:658-707`（足した種別の較正の 1 本） | 直書きの出所・較正の期待の字面 |
+| `session/log_history_convention_tests.rs:152`・`:156`・`:185`・`:186`・`:191`・`:192` | 表と一致を確かめる直書き（`alert` の 3 つを含む） |
+| `crates/real-run-kit/src/launch.rs:372` | `RELIED_TARGETS`（`areka::session::app_exit`） |
+| `crates/real-run-kit/src/launch_tests.rs:76`・`:207`・`:237`・`:238` | `areka::session::app_exit` |
+| `crates/real-run-kit/src/launch_tests.rs:246`・`:247` | `compose_rust_log_table` の前方一致の行 `areka::session::app=debug`（何も足さないことを確かめる行・前は `areka::app=debug`） |
+| `crates/real-run-kit/src/launch_tests.rs:252`・`:253` | 似て非なる名 `areka::session::app_exits=debug`（前は `areka::app_exits`・`app_exit` に前方一致しない名として同じ意味のまま） |
+| `crates/real-run-kit/src/close_tests.rs:8`・`src/bin/real-run-fake-areka.rs:17`・`:58` | `areka::session::app_exit` |
+| `crates/areka/tests/emo2_mcp_real_run.rs:31`・`:32`（`BOOT_CONFIG_PREFIX`）・`:115`（`rust_log`）・`:256` | `areka::session::boot_config`・`areka::session::ghost_session` |
+| `doc/pasta-real-run.md:127`・`:141`・`doc/testing.md:47`・`doc/ssp-mcp/log-convention.md:53-55`・`:59`・`:135`・`.kiro/steering/structure.md:419`・`:420` | 散文・表の出所 |
+
+変えない所: `"areka::persist::*"`・`"areka::log::*"`・`"areka::perf"`（語彙）・`areka::session::ghost_switch`／`areka::session::reload`（既に `session/` にある・`reload_tests.rs:582`・`reload_skin_tests.rs:305` など）・`"areka"`（`RULES` の完全一致の行）・`areka::menu`・`areka::file_drop`・`areka::menu::shortcut`・`areka::install::install_cue`（集めないモジュール）・`areka::roots::{edit,desk,pick}`（残る）。本番の `target:` に、集めたモジュールの名前を写した直書きは 0 件。
+
+### 14.3 外への参照（OutboundRefRecord・式 5・本番）
+
+数え方: `session/` の下の本番ファイル（`*_tests.rs`・`*test_support*.rs`・`#[cfg(test)]` の塊を除く）で、式 5 の `crate::<項目>` と `menu::` の行。設計の見込み（28 行）と同じ。
+
+| ファイル:行 | 参照先 | 項目 |
+|---|---|---|
+| `session/alert.rs:286` | `smoke_exit` | `smoke_exit_ms` |
+| `session/ghost_session.rs:18` | `menu` | `use crate::menu` |
+| `session/ghost_session.rs:298` | `menu` | `attach_release_handlers` |
+| `session/ghost_session.rs:304` | `file_drop` | `attach_file_drop_receivers` |
+| `session/ghost_session.rs:307` | `menu::shortcut` | `attach_shortcut_receivers` |
+| `session/ghost_session_runtime.rs:16` | `menu` | `use crate::menu` |
+| `session/ghost_session_runtime.rs:34`・`:36`・`:38`・`:39`・`:41`・`:43`・`:45`・`:47`・`:49` | `menu` | `wire_menu`・`ghost_frame`／`shell_frame`／`balloon_frame`／`install_frame`／`roots_frame`／`update_frame`／`reset_pos_frame`／`reset_balloon_pos_frame` の `register` |
+| `session/ghost_session_runtime.rs:51` | `install::names` | `reseed` |
+| `session/ghost_switch.rs:504`・`:525` | `update::desk` | `on_switch_end` |
+| `session/ghost_switch.rs:513`・`:515` | `install::desk`・`update::desk` | `on_steady` |
+| `session/ghost_switch.rs:675` | `install::desk` | `run_overwrite_between` |
+| `session/reload.rs:309`・`:312` | `update::desk`・`install::desk` | `is_busy` |
+| `session/runtime_boot.rs:24`・`:26`・`:89`・`:90` | `install::install_cue`・`update::update_cue`・`install::desk`・`update::desk` | `InstallCueSink`・`UpdateCueSink`・`raw_sender` |
+| `session/shell_balloon_switch.rs:131` | `update::desk` | `is_busy` |
+
+- 計 28 行: `menu` 12（`ghost_session.rs` 2・`ghost_session_runtime.rs` 10）・`menu::shortcut` 1・`install` 6・`update` 7・`file_drop` 1・`smoke_exit` 1。`mcp` は 0（登録の 4 行は `main.rs` の `BODY_SYSTEMS` へ出て消えた）・`cli` は 0。
+- コードでない当たり 1 件: `session/app_exit.rs:268` の doc の `menu::request_close`（参照ではなく説明）。
+- 向きは逆にしていない（8.3）: 本体の外から `session/` を引く向きだけで、`session/` の項目を本体の外へ足していない。入口 `install::startup::resolve_boot` は本体の側から `session/` を引くので一覧に入らない。
+
+### 14.4 外への参照（テストだけ）
+
+| ファイル:行 | 参照先 |
+|---|---|
+| `session/boot_config.rs:209`（`#[cfg(test)]`） | `crate::cli::parse::parse` |
+| `session/boot_config_callghost_tests.rs:64` | `crate::cli::parse::parse` |
+| `session/boot_resolve_mark_text_tests.rs:121` | `crate::install::desk::remember_balloon` |
+| `session/app_exit_escape_tests.rs:140`・`ghost_session_reload_tests.rs:71`・`:179`・`ghost_session_restart_tests.rs:455`・`ghost_switch_test_support.rs:237` | `crate::BODY_SYSTEMS`（5 か所・`register_systems(&mut world, …, crate::BODY_SYSTEMS)` の第 3 引数） |
+| `session/ghost_session_restart_tests.rs:15`・`:468` | `crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring}`・`crate::menu::register` |
+| `session/ghost_session_scope_rect_boot_tests.rs:50`・`:85` | `crate::mcp::install`・`crate::mcp::drain` |
+| `session/ghost_session_scope_scale_boot_tests.rs:22`・`:69`・`:94` | `crate::shiori_host::ShioriHostSink`・`crate::mcp::install`・`crate::mcp::drain` |
+| `session/ghost_session_strict_tests.rs:6` | `crate::menu::MenuWiring` |
+| `session/ghost_session_switch_tests.rs:18` | `crate::menu::{Frame, MenuWiring}` |
+| `session/ghost_session_switch_fallback_tests.rs:106`・`ghost_session_switch_memory_tests.rs:15` | 根の `crate::after_run` |
+| `session/readonly_run_tests.rs:31`・`:32`・`:43`・`:210`・`:235`・`:243`・`:246`・`:252` | 根の `crate::after_run`・`crate::install::{…}`・`crate::update::{…}`・`crate::roots::add_root`・`crate::install::submit`・`crate::update::submit` |
+| `session/readonly_sites_tests.rs:26`・`:261`・`:345`・`:396`・`write_failure_sites_tests.rs:24`・`:216`・`:281`・`:318` | 根の `crate::boot_first_ghost`・`crate::roots::add_root`・`crate::install::desk::remember_balloon` |
+| `session/reload_tests.rs:22`・`:30` | `crate::install::desk::{InstallDesk, insert_busy_desk_for_test}`・`crate::update::desk::{UpdateDesk, insert_running_desk_for_test}` |
+| `session/shell_balloon_switch_session_tests.rs:113-116`・`:164`・`:167`・`:241`・`:244` | `crate::menu::{Frame, MenuAction, ItemBody, MenuContext, MenuWiring}` |
+| `session/shell_balloon_switch_session_update_tests.rs:23`・`:24` | `crate::update::desk::{ask_reload_for_test, resolve_targets}`・`crate::update::{RawUpdateRequest, TargetKind}` |
+| `session/shell_balloon_switch_tests.rs:39` | `crate::update::desk::{UpdateDesk, insert_running_desk_for_test}` |
+
+#### `session-crate-split` への申し送り
+
+`session/` を別の crate へ出すと、テストは本体の `BODY_SYSTEMS`（`main.rs` の定数）・`after_run`・`boot_first_ghost`・`menu`・`install`・`update`・`mcp` を `crate::` で引けなくなる。本番の参照 28 行（14.3）は、登録と同じく注入（関数ポインタ・受け口）へ置き換える必要がある。テスト側は、(1) `BODY_SYSTEMS` を引く 5 か所はテスト用の登録の組を各テストの支え（`ghost_switch_test_support.rs` ほか）に置くか本体側の結線のテストへ移す、(2) 根の `after_run`・`boot_first_ghost` を引くテストは結線の守りなので本体に残す、(3) `menu`・`install`・`update`・`mcp` の型を引くテストは、同じ crate に置けるかで分ける、の 3 つの扱いが要る。向きは「本体 → `session/`」（逆にしない）のまま保つ。
+
+### 14.5 触らない所の確認（9.1〜9.5）
+
+`git diff --name-only main...HEAD`（280 ファイル）と作業の木の差で数えた。
+
+| 触らない所 | 変更したファイル |
+|---|---|
+| `crates/areka-runtime/` | 1 ファイルだけ（`crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs`・8.1 のとおり） |
+| `crates/areka-placement/` | 0 |
+| `crates/areka-input/` | 0 |
+| `crates/log-capture-kit/` | 0 |
+| `crates/areka/src/runtime_tests/mod.rs` | 0 |
+| `Cargo.lock`・ルートの `Cargo.toml`・`THIRD-PARTY-NOTICES.md` | 0 |
+
+### 14.6 申し送り（9.7・10.1）
+
+持ち主の振り分け: `audit-areka-app` は `main.rs`・`menu/`・`mcp/` と本体の結線・終了・記録、`audit-areka-install-update` は `install/`・`update/`・`session/readme*`・`session/roots/`（`readme`・`roots` の芯は 6.7 のとおり持ち主を変えない）。
+
+| # | 所 | 内容 | 渡し先 |
+|---|---|---|---|
+| 1 | `crates/areka-input/src/user_break.rs:201` | 説明が `crates/areka/src/readme.rs` を名指す（今は `crates/areka/src/session/readme.rs`）。触らない crate | `audit-areka-input-menu`（か後の見直し） |
+| 2 | `doc/click-through.md:3`・`:136` | `crates/areka/src/main.rs` を実装の場所と書く（DComp オプトインと窓登録・`register_click_through_windows` システム相当）。もとから古い | `audit-areka-app` |
+| 3 | `tools/perf/invoke-perf-run.ps1:29` | `crates/areka/src/main.rs の SMOKE_EXIT_ENV` を名指す。もとから古い | `audit-areka-app` |
+| 4 | `crates/areka/src/session/app_exit_tests.rs:182` | doc が `input_events_tests.rs` を名指す（式 2 の語の唯一の当たり） | `audit-areka-app` |
+| 5 | `crates/areka/src/update/worker.rs:40`・`:110` | doc の `roots::user_root::exe_dir()` はモジュール名だけの古い説明（今は `session::roots::user_root::exe_dir()`・6.9 で当たりにしない） | `audit-areka-install-update` |
+| 6 | `crates/areka-placement/src/diag.rs:46`・`src/persist.rs:330`・`src/resolver.rs:97`・`src/resolver_resolve_balloon_tests.rs:123` | `main.rs` の `restore_merged_placements`・`boot_monitor_snapshot` を名指す（今は `session/boot_seam.rs`）。触らない crate | `audit-areka-app` |
+| 7 | `crates/areka/src/menu/mod.rs:223`・`:254`・`install/mod.rs:132`・`update/mod.rs:224`・`mcp/mod.rs:48` | 呼び手を `ghost_session::register_systems` と書く（関数ポインタ経由で今も正しい）。名目上の渡し手は `main.rs` の `BODY_SYSTEMS` | `menu`・`mcp` は `audit-areka-app`・`install`・`update` は `audit-areka-install-update` |
+| 8 | `doc/COMPAT_ARCHITECTURE.md:346`・`:348`・`:349`・`:350`・`:405` | HEAD の時点から無い `runtime_tests/shell_balloon_resolve_tests.rs` を 5 か所名指す（実体は `crates/areka-runtime/src/shell_balloon_resolve_tests.rs`・移動と関係ない古い参照） | `audit-areka-app` |
+| 9 | `.kiro/steering/product.md:81` | `crates/areka/src/boot_resolve.rs` を名指す（式 3 の範囲の外・今は `crates/areka/src/session/boot_resolve.rs`） | `/kiro-complete` の steering の同期で直してよい |
+| 10 | `.kiro/specs/audit-areka-app/brief.md:84`・`:101`・`:113`・`:122`・`:131`〜`:134`・`audit-areka-install-update/brief.md:86` の所見の文 | `boot_config.rs`・`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`session_end_sync_send_tests.rs`・`readonly_tests.rs` など移す前のパスが所見の文に残る（受け持つファイルの一覧は直し済み・持ち主は変えていない） | 各 audit の要件の段で現在のパス（`session/…`・`session/boot_seam_persist_wiring_tests.rs` ほか）へ読み替える |
+
+### 14.7 机なしで走らせた実機の統合テスト
+
+タスク 2 とタスク 5.2 の実装中に、実機で areka を起こす統合テスト（`crates/areka/tests/emo2_mcp_real_run.rs` の `#[ignore]` の無い 1 本など）を排他テストの机なしで走らせ、どちらも緑だった。本来は机が要るので、10.2 で机を取って 1 回ずつ確かめ直す。
