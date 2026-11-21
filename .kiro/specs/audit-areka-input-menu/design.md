@@ -384,7 +384,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 |---|---|---|---|
 | 1 | G5 | ÷k の檻 (b) と持ち上げの檻を消し、拡大率 2.0 で移動と押下のハンドラを通す 1 本を足す。`balloon.rs:208-211` の doc の「檻が固定する」を消す | `balloon_gpu_hit_tests.rs` の拡大率 2.0 の 1 本 |
 | 2 | G6 | `ghost_count` の表明を `!AppExit.is_requested()` に替え、説明を「枝へ入れば終わりの指示が立ち、`try_recv` も空になる」に | 差し替えた表明（`hooks::escape` の枝へ入れば赤） |
-| 3 | G2 | 4 か所の `try_borrow_mut().is_ok()` を消す。注入の到達は `apply_hover` の単体テストで見る（在しない ordinal を注入すると `areka_emo_text::actor` の DEBUG が 1 行出る＝呼び出しが文字の層へ届いた） | `apply_hover` の単体テスト（OPEN QUESTION 3） |
+| 3 | G2 | 4 か所の `try_borrow_mut().is_ok()` を消す。注入の到達と場所の取り違えは `apply_hover` の単体テストで見る（下の Testing Strategy の「場所を見分ける注入」） | `apply_hover` の単体テスト |
 | 4 | G8 | 独立のテスト（125〜152）を消す | — |
 | 5 | G5 | 長い選択肢を狭い画像で折り返させ、index と ordinal が食い違う行の上の移動で `hover(0) == Some(row.ordinal)` を見る | `balloon_gpu_hit_tests.rs` の折り返しの 1 本 |
 | 6 | G6 | `wire_inserts_both_non_sends` に `BalloonHover`・`ShellBoxHover` の在の表明を 2 行 | 表明（入れ忘れで赤） |
@@ -564,7 +564,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 | 折り返しの強調（index と ordinal の食い違う行） | `balloon_gpu_hit_tests.rs` | `balloon_moved.rs:120` の `.map(|i| rows[i].ordinal)` を `.map(|i| i)` に |
 | 1 回目の押下の INFO `choice_selected` | `balloon_choice_settle_tests.rs` | `dispatch_selection` の INFO の行 |
 | `dispatch_selection` の失敗の記録（ERROR 1・WARN 0・選択肢とアンカー） | `balloon_pressed_tests.rs` | ERROR の行・WARN を戻す |
-| `apply_hover` の注入の到達（在しない ordinal で文字の層の DEBUG） | `balloon_pure_core_tests.rs`（`hover_action` のテストの隣） | `inject_choice_hover_at` の呼び出し |
+| `apply_hover` の場所を見分ける注入（`runtime_with_active_choice` で普通のバルーンにだけ ordinal 0 を持たせ、ordinal 0 を注入する。普通のバルーンの場所では `areka_emo_text::actor` の DEBUG が 0 行、箱の場所では 1 行。target・水準・`ordinal` の欄で照合し、文では照合しない） | `balloon_pure_core_tests.rs`（`hover_action` のテストの隣） | `inject_choice_hover_at` の呼び出しを消す・渡す場所を取り違える（どちらの向きでも赤） |
 | 離脱の結線漏れが 1 行（2 スコープ） | `balloon_leave_tests.rs` | 頭の確かめを外して写しへ戻す |
 | `mouse_send_failed`（移動・ダブルクリック・ドラッグの始め） | `char_pointer_tests.rs`・`drag_tests.rs` | 各送出の失敗の枝 |
 | 起こしの預け直し | `char_watch_tests.rs` | `char_watch.rs:250-254` |
@@ -640,9 +640,9 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 
 1. **寄せた記録の文**（指摘 14・15）: 記録の名・名前つきの欄・水準は変えない。文（`message`）は欄に数えない前提で、選択の送り出しは今の 2 つの字面（普通のバルーン・箱）を場所で選んで保ち、強調の注入と借用の失敗の文は場所ごとに 1 つへそろえる（離脱の「窓外離脱で hover 解除を上流 runtime へ注入」は普通のバルーンの文に、借用の失敗の「（inject）」「（離脱 inject）」「（箱の強調）」は 1 つの文に）。文の読み手は完了した spec の記録だけ。**仮定**: そろえてよい。
 2. **離脱の結線漏れの行の数**（指摘 17）: 1＋スコープの数 → 1 行。外への約束（ログの行）の変化として、議題 6 と同じく要件 7.7 の裁定に記録する。**仮定**: 確定した指摘 17 の直しに含まれる（範囲の外の読み手 0）。
-3. **注入の到達の見方**（指摘 3）: `TextLayerRuntime` に注入の値を読む公開の口が無い。範囲の外を触らない案として、`apply_hover` の単体テストで在しない ordinal を注入し、`areka_emo_text::actor` の DEBUG が 1 行出ることで到達を見る。別の案は `areka-emo-text` に読み口を 1 つ足す（範囲の外の crate の公開の面を増やす）。**仮定**: 前者。
+3. **注入の到達の見方**（指摘 3）: 設計の検証の指摘 1 で解いた（自明な直し）。在しない ordinal の DEBUG は場所の取り違えを見分けられない（普通のバルーンと箱は同じ actor）ので、普通のバルーンにだけ ordinal 0 を持たせた runtime で場所ごとの DEBUG の行の数を見る形にした（Testing Strategy）。`areka-emo-text` に読み口は足さない。
 4. **指摘 74（`WM_SETCURSOR` ごとの文字列の複製）**: audit 自身が「今のままでよい」と書き、直すには `areka-runtime` の型（鍵）を変える必要がある（要件 7.4 の外）。**仮定**: 変えずに閉じ、理由を記録する。かけ直しで再び出たら、要件 2.5 の「残す」の裁定にする。
-5. **指摘 10 の組めないとき**: 可視性の相を装着前の結線状態で回して番号を置く道が組めなかった場合。**仮定**: 調べた範囲では組める。組めなければ実装を止めて議題に戻す（`areka-runtime` に置く口を足すなら要件 7.4 を広げる裁定が要る）。
+5. **指摘 10 の組めないとき**: 可視性の相を装着前の結線状態で回して番号を置く道が組めなかった場合。**仮定**: 調べた範囲では組める（設計の検証でも、装着前に `TalkStarted` が `talk_id` を置き、期限を据えないことをコードで確かめた）。組めなければ実装を止めて議題に戻す（`areka-runtime` に置く口を足すなら要件 7.4 を広げる裁定が要る）。
 6. **テストのファイルの新しい名と `COMPAT_ARCHITECTURE.md:412`**（指摘 52）: 新しい名は `char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`。`doc/COMPAT_ARCHITECTURE.md:412` は `session-module-gather` が書き換える §8 の中なので、要件 7.9 で触らずに向こうへ伝え、向こうの着地の後ならこちらで 1 語直す。**仮定**: この名と扱いでよい。
 7. **本体 `app_exit_tests.rs:182` の古い説明**: 名の変更で古び、「`world_with_wiring` は私有」は既に誤り。本体は触れないので `audit-areka-app` の brief へ件として書き足す。**仮定**: 書き足す（要件 7.11）。
 8. **移すテストの名の札**（指摘 47）: `spawn_assembly_tests.rs` の 13 本は名を変えずに `areka-placement` へ移す（`t_i2_no_window_has_ws_ex_topmost` を範囲の外の 2 ファイル〔`areka-placement` の `spawn_zorder_pair_deferred_tests.rs:17`・wintf の `zorder_pair_maintain_always_on_top_tests.rs:342`〕が名で指し、そこは要件 7.4 の外）。入力に残る 1 本だけ `t_i1_` を外す。**仮定**: 名を変えない。

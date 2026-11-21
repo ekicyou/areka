@@ -226,5 +226,5 @@
   - `spawn.rs` で向こうが触りうるのは 350 行の説明の 1 行だけ（向こうの議題の承認しだい）。こちらは末尾の mod の並びに足すので、行は離れている。
   - 向こうは `spawn_*_tests.rs` に触らない。落ちの報告の据え付けは crate の根に 1 つ置く形で、新しいテストのファイルに要るものは無い。
   - `balloon_hover.rs`・`shell_box_hover.rs` と新しいファイルは向こうの触る所と重ならない。
-- `window-resetwindowpos-hold`: 議題 3 で触るファイルを 2026-11-21 に知らせた。向こうが触るのは `areka-runtime` の `frame/`・`frame_*tests.rs` で、重なりは無い。困ることがあれば知らせてもらう約束で、返事は無かった。
+- `window-resetwindowpos-hold`: 議題 3 で触るファイルを 2026-11-21 に知らせた。向こうが触るのは `areka-runtime` の `frame/`・`frame_*tests.rs` で、重なりは無い。2026-11-21 に「重なり 0 で困らない」と返事を得た。
 - `session-module-gather`: C24 の約束 ⑵ で `crates/areka-placement/` に触らず、`crates/areka-runtime/` もコメント 1 か所（`transition_judge_offset_signoff_tests.rs`）だけなので、重なりは 0。
