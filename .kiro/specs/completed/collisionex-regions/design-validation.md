@@ -1,7 +1,7 @@
 # 設計の検証: collisionex-regions（2 回目・決め 7 の後の設計）
 
 - 対象: `.kiro/specs/completed/collisionex-regions/design.md`（2026-11-17・決め 7「形は ID で塗る」の後に作り直した版・未承認）
-- 照らした資料: `requirements.md`（承認済み・決め 7 まで）・`research.md`（9〜11 節）・`.kiro/specs/hit-id-pass/brief.md`（最後の節の申し送り）・前回の本書（初版の設計への 3 件の指摘）・steering（`product.md`・`tech.md`・`structure.md` のテストの命名と 1,000 行）
+- 照らした資料: `requirements.md`（承認済み・決め 7 まで）・`research.md`（9〜11 節）・`.kiro/specs/completed/hit-id-pass/brief.md`（最後の節の申し送り）・前回の本書（初版の設計への 3 件の指摘）・steering（`product.md`・`tech.md`・`structure.md` のテストの命名と 1,000 行）
 - 照らしたコード: `crates/areka-parsers/src/shell/{model,decode,parse,boxes,cursor}.rs` と檻・`crates/areka-emo-compose/src/{hit,hit_import,fold,world,plan_test_support}.rs` と `{fold_merge,row_budget,log_firing,base_image}_tests.rs`・`crates/areka-emo-present/src/{shell_target,presenter/hit,presenter_test_support,shell_target_test_support,shell_target_element_base_tests}.rs`・同梱の検体 `vendors/sample_ghost/*.nar` の `surfaces.txt`
 - 進め方: 対話なし（設計の討議へ渡す）
 
