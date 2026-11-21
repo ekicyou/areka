@@ -1,6 +1,5 @@
 //! **拡大率の往復**——遷移が元の水準へ戻ったとき、追従オフセットが基準から引き直されて
-//! bit 同一で戻ることの檻（areka-P0-balloon-offset-dpi・task 6.1 の是正・design D4／D16・
-//! 要件 3.3／7.8／9.4）。
+//! bit 同一で戻ることの檻。
 //!
 //! # ここが押さえる欠陥（2026-08-28 の実装時是正）
 //!
@@ -13,7 +12,7 @@
 //! ```text
 //! 144 で係留 → Anchored  offset=(-512,-48)  base=(-512,-48)@144
 //! 192 へ     → Rescaled  offset=(-683,-64)  base=(-512,-48)@144
-//! 144 へ戻る → Unchanged offset=(-683,-64)  ← 基準へ戻らない（要件 3.3 違反）
+//! 144 へ戻る → Unchanged offset=(-683,-64)  ← 基準へ戻らない（欠陥）
 //! ```
 //!
 //! となり、往復した利用者のバルーンが高 DPI 時の相対位置に取り残される。
@@ -35,18 +34,21 @@
 //!    本ファイルの [`the_display_dpi_round_trip_returns_the_offset_bit_identically`] と
 //!    [`the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain`] がその列を作る。
 //!
-//! 置き場所を兄弟ファイルにしたのは、行列側が 948 行で 1,000 行制限（要件 9.6）に
-//! 52 行しか残していないためである。
+//! 置き場所を兄弟ファイルにしたのは、行列側が 1,000 行制限に近いためである。
 
-use wintf::ecs::window::SetWindowPosCommand;
-use wintf::ecs::{DPI, Point, WindowPos};
+use wintf::ecs::{DPI, Point};
 
+use areka_placement::diag::WindowKind;
 use areka_placement::follow::{BalloonFollow, OffsetBase};
 use areka_placement::resolver::PointPx;
 use areka_placement::transition_diag::{OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED};
 
 use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_offset};
+use super::shared_test_support::{BASE_OFFSETS, HIGH_DPI, LOW_DPI};
 use super::test_support::{FakeReports, FrameHarness, capture_logs};
+use super::transition_test_support::{
+    offset_lines, offset_of, settle_at, transition_to, window_pos_of, writes_for,
+};
 use super::*;
 
 // ---------------------------------------------------------------------------
@@ -91,13 +93,8 @@ fn follow_at(world: &World, entity: Entity) -> BalloonFollow {
         .expect("キャラ窓に BalloonFollow がある")
 }
 
-/// `kind=offset` の観測行だけを取り出す。
-fn offset_lines(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("kind=offset")).collect()
-}
-
 /// **是正の本体**: 一度追随した後に元の表示 DPI へ戻ると、恒等比の腕は
-/// **基準から引き直して** bit 同一の値を Component へ書く（要件 3.3）。
+/// **基準から引き直して** bit 同一の値を Component へ書く。
 ///
 /// 判定語も同時に固定する——値が動いた戻りの遷移で `unchanged` を記録すると、語が嘘になる。
 #[test]
@@ -206,80 +203,8 @@ fn the_zero_dpi_arm_stays_an_unchanged_no_op() {
 // 2. 相の結合で往復させる（World の上で `Rescaled` の後に `Unchanged` を起こす）
 // ---------------------------------------------------------------------------
 
-/// 相の結合で使う低い水準（作者基準と等倍）。
-const LOW_DPI: u16 = 96;
-
-/// 相の結合で使う高い水準（比 2）。
-const HIGH_DPI: u16 = 192;
-
-/// 基準オフセット（`frame_test_support::resnap_placements` の fixture 値・scope 昇順）。
-const BASE_OFFSETS: [PointPx; 2] = [PointPx { x: -412, y: -25 }, PointPx { x: 285, y: -19 }];
-
-/// 当該スコープの追従オフセット（現在値）。
-fn offset_of(harness: &FrameHarness, scope: usize) -> PointPx {
-    harness
-        .world
-        .get::<BalloonFollow>(harness.char_window(scope))
-        .expect("キャラ窓に BalloonFollow がある")
-        .offset()
-}
-
-/// 窓の位置（`WindowPos.position`）。
-fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
-    harness
-        .world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.position)
-        .expect("窓に位置がある")
-}
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// 起動直後の整地——3 つの源と窓の拡大率を `level` へ揃え、初回全窓マッチを空回しで消費する。
-///
-/// この 1 巡で未係留の基準が `level` へ**係留**される（要件 5.2）。係留を自己検査するのは、
-/// 済んでいないと以降の遷移が係留の腕へ落ち、追随が起きないまま緑になるからである。
-fn settle_at(harness: &mut FrameHarness, source: &mut FakeReports, level: u16) {
-    harness.set_monitor_sources_for_dpi(level);
-    harness.set_monitor_table_for_dpi(level);
-    harness.set_window_dpi(level);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            harness
-                .world
-                .get::<BalloonFollow>(harness.char_window(scope))
-                .expect("キャラ窓に BalloonFollow がある")
-                .base(),
-            OffsetBase {
-                offset: BASE_OFFSETS[scope],
-                dpi: Some(dpi(level)),
-            },
-            "scope={scope}: 整地で基準対が「fixture 値 × 係留済み {level}」になっていない"
-        );
-    }
-}
-
-/// 表示 DPI を `level` へ動かして 1 フレーム回す（待ち札の付かない通常の遷移）。
-fn transition_to(harness: &mut FrameHarness, source: &mut FakeReports, level: u16) {
-    harness.set_monitor_table_for_dpi(level);
-    harness.set_window_dpi(level);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
 /// **戻りの遷移**（96 → 192 → 96）でオフセットが基準へ bit 同一で戻り、
-/// バルーンが実際に元の位置へ帰る（要件 3.3・design D4／D16）。
+/// バルーンが実際に元の位置へ帰る。
 #[test]
 fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
     let mut harness = FrameHarness::new();
@@ -294,7 +219,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
             (
                 scope,
                 offset_of(&harness, scope),
-                pos_of(&harness, harness.balloon_window(scope)),
+                window_pos_of(&harness, harness.balloon_window(scope)),
             )
         })
         .collect();
@@ -315,7 +240,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
     }
     let high_balloons: Vec<Point> = before
         .iter()
-        .map(|(scope, _, _)| pos_of(&harness, harness.balloon_window(*scope)))
+        .map(|(scope, _, _)| window_pos_of(&harness, harness.balloon_window(*scope)))
         .collect();
 
     // 戻り（192 → 96）——恒等比の腕。基準から引き直せば bit 同一で戻る。
@@ -338,11 +263,11 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
         );
         // バルーンが**実際に**元の位置へ帰る（値だけ直って窓が古いまま、を塞ぐ）。
         assert!(
-            !writes_for(&back_writes, scope32, "balloon").is_empty(),
+            !writes_for(&back_writes, scope32, WindowKind::Balloon).is_empty(),
             "scope={scope}: 戻りの遷移でバルーンへの窓書込が 1 件も無い: {back_writes:?}"
         );
         assert_eq!(
-            pos_of(&harness, harness.balloon_window(*scope)),
+            window_pos_of(&harness, harness.balloon_window(*scope)),
             *old_balloon,
             "scope={scope}: 往復したのにバルーン窓が元の位置へ帰っていない"
         );
@@ -364,7 +289,7 @@ fn the_display_dpi_round_trip_returns_the_offset_bit_identically() {
 }
 
 /// 表示 DPI の列 `96 → 120 → 192 → 120 → 96` を巡り、**同じ水準へ戻るたび**に
-/// 初回訪問と bit 同一（要件 3.3／7.8・誤差が往復で累積しない）。
+/// 初回訪問と bit 同一（誤差が往復で累積しない）。
 #[test]
 fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
     let mut harness = FrameHarness::new();
@@ -372,7 +297,6 @@ fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
     settle_at(&mut harness, &mut source, LOW_DPI);
 
     let mut first_seen: Vec<(u16, Vec<PointPx>)> = Vec::new();
-    let mut visits = 0usize;
     for level in [96u16, 120, 192, 120, 96] {
         transition_to(&mut harness, &mut source, level);
         let _writes = harness.drain_writes();
@@ -389,9 +313,7 @@ fn the_offset_is_bit_identical_at_every_revisit_of_a_dpi_chain() {
             ),
             None => first_seen.push((level, offsets)),
         }
-        visits += 1;
     }
-    assert_eq!(visits, 5, "列を最後まで巡っていない");
 
     // 逐語（比 2・比 5/4 の手計算）——列が緑でも値そのものが動いていないことを固定する。
     assert_eq!(

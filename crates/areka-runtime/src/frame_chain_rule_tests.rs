@@ -14,9 +14,9 @@ use wintf::ecs::drag::DraggingState;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::chain_finalize_align_tests::{
-    SPAWN, WA, sizes, spawn_resolved, spawn_resolved_scopes, x_of,
+    READ_ACROSS, SPAWN, WA, sizes, spawn_resolved, spawn_resolved_scopes, x_of,
 };
-use super::chain_finalize_persist_test_support::PersistStore;
+use super::persist_test_support::PersistStore;
 use super::test_support::PerTargetSizes;
 use super::*;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -122,26 +122,6 @@ fn a_remembered_defaultx_gap_pair_rejoins_after_200_to_100() {
         left_gap(&world, 0, 1),
         36,
         "詰め直しは defaultx の隙間へ戻す"
-    );
-}
-
-/// 覚えた印 `left` は、鎖の前の窓の左に descript の `defaultx` の隙間で付く（裁定 ⑶）。
-#[test]
-fn a_remembered_left_mark_joins_with_the_defaultx_gap() {
-    let shown = sizes(&[(500, 687), SPAWN[1]]);
-    let mut world = spawn_resolved(&[("kero.defaultx", "36")], &shown, 2);
-    {
-        let mut gw = world.resource_mut::<GhostWindows>();
-        assert!(gw.clear_default_char_pos(1));
-        gw.set_remembered_adjacency(1, Some(AdjacencyMark::Left));
-    }
-
-    finalize_chain_once_with(&shown, &mut world);
-
-    assert_eq!(
-        left_gap(&world, 0, 1),
-        36,
-        "印 left は defaultx の隙間で付く"
     );
 }
 
@@ -266,7 +246,8 @@ fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base
                 .clear_default_char_pos(1)
         );
     };
-    let rows: [(&str, Anchor, Option<&dyn Fn(&mut World)>); 4] = [
+    type Row<'a> = (&'a str, Anchor, Option<&'a dyn Fn(&mut World)>);
+    let rows: [Row; 4] = [
         ("T24 下端へ", Anchor::Bottom, None),
         ("T24 free へ", Anchor::Free, None),
         ("T25 台本が動かした", Anchor::Free, Some(&moved_by_script)),
@@ -425,7 +406,8 @@ fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
         world.entity_mut(window).insert(ScriptPlaced);
     };
     let sticky = |world: &mut World| seed_sticky_descript(world, Some("0,2"));
-    let rows: [(&str, Box<dyn FnOnce(&mut World)>); 4] = [
+    type Row = (&'static str, Box<dyn FnOnce(&mut World)>);
+    let rows: [Row; 4] = [
         ("辺のスコープがドラッグの最中", Box::new(drag(1))),
         ("付けた窓がドラッグの最中", Box::new(drag(2))),
         ("付けた窓を武装の後に台本が置いた", Box::new(script_placed)),
@@ -546,20 +528,17 @@ fn every_world_path_keeps_the_defaultx_gap() {
 }
 
 /// 表 T8・T21: 中のスコープが無い（0 と 2 だけ）とき、鎖の前の窓は下の一番近いスコープ。覚えた印を
-/// 「辺のスコープを飛ばした組として読む」記録は、本当に辺のスコープを飛ばしたときだけ出す。
+/// 「辺のスコープを飛ばした組として読む」記録は出さない（飛ばしたときに出ることは
+/// `chain_finalize_align_tests` の同じ組で見る）。
 #[test]
 fn a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope() {
-    const READ_ACROSS: &str = "左右の辺のスコープを飛ばした鎖の前の窓との組として読む";
-    let remember_scope_2 = |world: &mut World| {
+    let shown = PerTargetSizes::new([(0, Some((500, 687))), (2, Some(SPAWN[2]))]);
+    let mut world = spawn_resolved_scopes(&[], &shown, &[0, 2]);
+    {
         let mut gw = world.resource_mut::<GhostWindows>();
         assert!(gw.clear_default_char_pos(2));
         gw.set_remembered_adjacency(2, Some(AdjacencyMark::Left));
-    };
-
-    // 中のスコープが無い: 本体の隣へ付き、記録は出ない。
-    let shown = PerTargetSizes::new([(0, Some((500, 687))), (2, Some(SPAWN[2]))]);
-    let mut world = spawn_resolved_scopes(&[], &shown, &[0, 2]);
-    remember_scope_2(&mut world);
+    }
     let logs = capture_lines(LineFormat::LevelTargetFields, || {
         finalize_chain_once_with(&shown, &mut world)
     })
@@ -568,22 +547,5 @@ fn a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope() {
     assert!(
         !logs.iter().any(|line| line.contains(READ_ACROSS)),
         "辺のスコープを飛ばしていないのに記録が出た: {logs:?}"
-    );
-
-    // 辺の kero を飛ばした: 本体の隣へ付き、記録が 1 行出る。
-    let shown = sizes(&[(500, 687), SPAWN[1], SPAWN[2]]);
-    let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
-    remember_scope_2(&mut world);
-    let logs = capture_lines(LineFormat::LevelTargetFields, || {
-        finalize_chain_once_with(&shown, &mut world)
-    })
-    .1;
-    assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
-    assert_eq!(
-        logs.iter()
-            .filter(|line| line.contains(READ_ACROSS))
-            .count(),
-        1,
-        "辺のスコープを飛ばした組の記録が 1 行: {logs:?}"
     );
 }

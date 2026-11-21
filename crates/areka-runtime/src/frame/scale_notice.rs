@@ -1,4 +1,4 @@
-//! 倍率の変わりの相（shell-scale-linkage 要件 5.1〜5.9・design「ScaleNoticePhase」）。
+//! 倍率の変わりの相。
 //!
 //! 表示層が表示成立点で積んだ [`ScaleChange`] を取り出し、スコープの倍率の表を書き、変わった窓ごとに
 //! `OnShellScaling`／`OnBalloonScaling` を送る。判断は純粋な計画 [`plan_scale_notices`] にだけ置き、
@@ -26,7 +26,7 @@ pub struct ScaleEventSeam(pub Sender<KanadeMsg>);
 /// 倍率の変わりの相（毎フレームの並びの最後）。記録が無いフレームはすぐ戻る。
 ///
 /// 表を全部書いてから、イベントを計画の順に汎用の入口（`RaiseEvent`・GET）で送る。応答の台本の
-/// `\![get,property]` が変わった後の値を読むためである（要件 5.5）。送れないときも表は書いたまま。
+/// `\![get,property]` が変わった後の値を読むためである。送れないときも表は書いたまま。
 pub(super) fn run_scale_notice_phase(wiring: &mut RuntimeWiring, world: &World) {
     let changes = wiring.presenter.take_scale_changes();
     if changes.is_empty() {
@@ -91,7 +91,7 @@ pub(super) struct ScaleEvent {
     /// `"OnShellScaling"` か `"OnBalloonScaling"`。
     pub id: &'static str,
     pub scope: u32,
-    /// 後・前・後・前・スコープ番号の 5 つ（横と縦は同じ数・要件 5.3・5.4）。
+    /// 後・前・後・前・スコープ番号の 5 つ（横と縦は同じ数）。
     pub references: Vec<String>,
 }
 

@@ -1,10 +1,11 @@
-//! 装着の相が ghost の読み直しで控えた面を出し直す檻（areka-P0-mcp-reload 要件 3.8・12.1）。
+//! 装着の相が ghost の読み直しで控えた面を出し直す檻。
 //!
 //! 実 emo2 fixture＋実 GPU で本番 [`run_attach_phase`] を駆動し、置き場のゴーストの seriko（出力は捕まえる
 //! だけ）へ届いた `Show` を見る。
 //!
 //! ⑴ 控えあり: 在る面はそのまま、無くなった面は既定の面（scope 1 は 10）で出す
 //! ⑵ 控えなし（ふつうの起動・切替）: 装着の相はシェルの面を 1 つも出さない（defect #5 のまま）
+//! ⑶ 控えた着せ替えを着せ直し、名前の無いものは落とす
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

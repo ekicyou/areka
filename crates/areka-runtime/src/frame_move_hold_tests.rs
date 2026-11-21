@@ -7,55 +7,20 @@
 //! 表示の成立は GPU 無しでは作れないので、装着の前・装着の後の未表示は本物の表示層で、表示の後は
 //! 読み口（閉包）で与える。
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::mpsc::{self, Sender};
-
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{EmoWorld, ScaleRatio};
-use areka_emo_present::{EmoPresenter, PresentCommand};
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
+use areka_emo_present::EmoPresenter;
 use wintf::ecs::Point;
 
 use crate::move_cue::{MoveDirective, PositionCue, parse_move_directive};
-use crate::talk_lifecycle::TalkLifecycleSignal;
 use crate::target_map::shell_target;
-use crate::zorder_cue::ZOrderDirective;
-use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
+use super::shared_test_support::{steady_harness, wiring};
 use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_1, all_shown, capture_logs, pos_of, size_of,
-    synth_assets, zero_clock,
 };
-use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
-
-/// 位置の線の送り口と、それを受ける headless な結線（表示層は与えたもの）。
-fn wiring_with(presenter: EmoPresenter) -> (Sender<PositionCue>, RuntimeWiring) {
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        presenter,
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
-    (tx, wiring)
-}
-
-/// 起動の確定が済んだハーネス（連鎖の確定はこのフレームで何もしない）。
-fn steady_harness() -> FrameHarness {
-    let mut harness = FrameHarness::new();
-    harness.world.insert_resource(ChainFinalized);
-    harness.advance_frame();
-    harness
-}
+use super::{run_move_drain_phase, run_move_drain_with};
 
 fn directive(scope: u32, tokens: &[&str]) -> MoveDirective {
     let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
@@ -94,7 +59,7 @@ fn shown_only(scopes: &'static [u32]) -> impl Fn(u32) -> Option<ScaleRatio> {
 #[test]
 fn a_move_before_attach_is_held_and_applies_after_the_show() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let target = harness.char_window(1);
     let before = pos_of(&harness.world, target);
     tx.send(to_global(1, 10)).expect("送出は成功する");
@@ -125,7 +90,8 @@ fn a_move_after_attach_before_the_first_surface_is_held() {
             96,
         );
     }
-    let (tx, wiring) = wiring_with(presenter);
+    let (tx, mut wiring) = wiring();
+    wiring.presenter = presenter;
     let target = harness.char_window(1);
     let before = pos_of(&harness.world, target);
     tx.send(beside_scope0()).expect("送出は成功する");
@@ -145,7 +111,7 @@ fn a_move_after_attach_before_the_first_surface_is_held() {
 fn a_move_waits_for_both_the_target_and_the_base() {
     for shown in [&[0u32][..], &[1u32][..]] {
         let mut harness = steady_harness();
-        let (tx, wiring) = wiring_with(EmoPresenter::new());
+        let (tx, wiring) = wiring();
         let target = harness.char_window(1);
         let before = pos_of(&harness.world, target);
         tx.send(beside_scope0()).expect("送出は成功する");
@@ -165,7 +131,7 @@ fn a_move_waits_for_both_the_target_and_the_base() {
 #[test]
 fn a_held_move_applies_in_the_showing_frame_after_the_resnap() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let (base, target) = (harness.char_window(0), harness.char_window(1));
     tx.send(beside_scope0()).expect("送出は成功する");
 
@@ -198,7 +164,7 @@ fn a_held_move_applies_in_the_showing_frame_after_the_resnap() {
 #[test]
 fn a_later_move_to_a_held_window_does_not_overtake() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let target = harness.char_window(1);
     let before = pos_of(&harness.world, target);
     tx.send(beside_scope0()).expect("送出は成功する");
@@ -224,7 +190,7 @@ fn a_later_move_to_a_held_window_does_not_overtake() {
 #[test]
 fn a_move_to_an_unrelated_window_goes_first() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let scope1 = harness.char_window(1);
     let before1 = pos_of(&harness.world, scope1);
     tx.send(to_global(1, 10)).expect("送出は成功する");
@@ -266,7 +232,7 @@ fn groups_of(harness: &FrameHarness) -> Vec<Vec<u32>> {
 #[test]
 fn a_reset_after_a_move_to_a_never_shown_window_supersedes_it() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let scope1 = harness.char_window(1);
     let before1 = pos_of(&harness.world, scope1);
     tx.send(to_global(1, 10)).expect("送出は成功する");
@@ -303,7 +269,7 @@ fn a_reset_after_a_move_to_a_never_shown_window_supersedes_it() {
 fn a_sticky_group_unrelated_to_a_never_shown_window_goes_first() {
     let mut harness = steady_harness();
     harness.world.insert_resource(StickyGroupLedger::default());
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     tx.send(to_global(1, 10)).expect("送出は成功する");
     tx.send(set_sticky(&["0", "2"])).expect("送出は成功する");
     tx.send(to_global(0, 30)).expect("送出は成功する");
@@ -324,7 +290,7 @@ fn a_sticky_group_unrelated_to_a_never_shown_window_goes_first() {
 fn a_sticky_group_with_a_held_window_waits_and_keeps_the_order() {
     let mut harness = steady_harness();
     harness.world.insert_resource(StickyGroupLedger::default());
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let x0 = x_of(&harness, 0).expect("本体の位置");
     tx.send(to_global(1, 10)).expect("送出は成功する");
     tx.send(set_sticky(&["0", "1"])).expect("送出は成功する");
@@ -350,7 +316,7 @@ fn a_sticky_group_with_a_held_window_waits_and_keeps_the_order() {
 #[test]
 fn a_balloon_reset_after_a_move_to_a_never_shown_window_goes_first() {
     let mut harness = steady_harness();
-    let (tx, wiring) = wiring_with(EmoPresenter::new());
+    let (tx, wiring) = wiring();
     let scope1 = harness.char_window(1);
     let before1 = pos_of(&harness.world, scope1);
     tx.send(to_global(1, 10)).expect("送出は成功する");

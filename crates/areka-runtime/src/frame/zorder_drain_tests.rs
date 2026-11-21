@@ -11,6 +11,7 @@
 
 use super::test_support::*;
 use super::*;
+use crate::source_text_test_support::code_only;
 
 use areka_placement::zorder_group_ledger::GroupSource;
 
@@ -419,7 +420,7 @@ fn t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result() {
 // 記録の出口は 1 本（要件 9.5・task 2.1 が入口を閉じた理由）
 // ---------------------------------------------------------------------------
 
-/// この相のソースには `tracing` のマクロが 1 つも無い（記録は wintf の入口だけを通る）。
+/// この相のソース（`zorder_drain.rs`・`zorder_descript.rs`）には `tracing` のマクロが 1 つも無い（記録は wintf の入口だけを通る）。
 ///
 /// 対照として、同じ走査が実際にマクロを持つファイル（受け口の `zorder_cue.rs`）では
 /// 必ず何かを見つけることを併置する——走査そのものが空振りしていれば、不在の主張は
@@ -434,13 +435,16 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
         "error!(",
         "tracing::",
     ];
-    let here = code_only(include_str!("zorder_drain.rs"));
+    let phase_sources = [
+        code_only(include_str!("zorder_drain.rs")),
+        code_only(include_str!("zorder_descript.rs")),
+    ];
     let sibling = code_only(include_str!("../zorder_cue.rs"));
 
     for needle in MACRO_NEEDLES {
         assert!(
-            !here.contains(needle),
-            "この相に `{needle}` が現れた（サインオフの grep 対象が 2 本へ割れる）"
+            phase_sources.iter().all(|source| !source.contains(needle)),
+            "この相に `{needle}` が現れた（ここで呼ぶと出力先が `areka_runtime::…` になり、`wintf::ecs::window` の前方一致の絞り込みで debug の受理の行が点かない）"
         );
     }
     let found = MACRO_NEEDLES
@@ -452,21 +456,9 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
         "走査がマクロを持つ兄弟でも何も見つけない（走査そのものが壊れている疑い）"
     );
     assert!(
-        here.contains("fn run_zorder_drain_phase("),
+        phase_sources[0].contains("fn run_zorder_drain_phase("),
         "説明文を落とす処理が本文まで落としている"
     );
-}
-
-/// 註釈の行（`//` で始まる行）を落とした本文。説明文に書いてあるだけの綴りを
-/// 「在る」と数えないため（`tick_gate_config_producers_tests.rs` と同じ流儀）。
-///
-/// 削り過ぎの検出は**除去後の側**へ当てる（除去前へ当てると、doc に語があるだけで
-/// 真になり、コード行を全部落としても緑のまま通る＝3.1 の教訓）。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------

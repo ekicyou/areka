@@ -1,30 +1,14 @@
-use areka_emo_text::state::TextLayerConfig;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use wintf::ecs::Point;
 
 use crate::move_cue::MoveDirective;
-use crate::talk_lifecycle::TalkLifecycleSignal;
+use crate::talk_clock::{controllable_clock, set_now};
 
+use super::shared_test_support::wiring;
 use super::test_support::{
-    all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, synth_assets,
-    zero_clock,
+    all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, zero_clock,
 };
 use super::*;
-
-/// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、`TalkClock` の
-/// クロックがその時刻を返す（決定論・talk_clock.rs のテストと同型の注入クロック）。
-fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
-    let now = Arc::new(Mutex::new(0.0f64));
-    let now_for_clock = Arc::clone(&now);
-    let clock: Arc<dyn Fn() -> f64 + Send + Sync> =
-        Arc::new(move || *now_for_clock.lock().expect("test clock mutex poisoned"));
-    (now, TalkClock::new(clock))
-}
-
-/// 可制御クロックの「壁時刻」を書き換える。
-fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
-    *now.lock().expect("test clock mutex poisoned") = wall;
-}
 
 /// R2.2/DD-1 drain: attach 前は drain せず（保留＝取りこぼしなし）、attach 後に FIFO 到着順で
 /// **全件** `presenter.apply` へ適用し切る。
@@ -163,8 +147,8 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     );
 }
 
-/// 排他 system の疎通（DD-1/DD-4）: `frame_system` は NonSend `RuntimeWiring` を remove→3 フェーズ
-/// →insert で駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
+/// 排他 system の疎通: `frame_system` は NonSend `RuntimeWiring` を remove→各相→insert で
+/// 駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
 ///
 /// GPU/GhostWindows を持たない World ではゲート不成立で attach は起きず、drain は attach 前ゆえ
 /// 走らず、text は FrameTime 不在で skip する（＝実質 no-op）。それでも system が wiring を取り出して
@@ -176,7 +160,7 @@ fn frame_system_removes_runs_and_reinserts_wiring() {
     let mut world = World::new();
     world.insert_non_send(wiring);
 
-    // remove→attach/drain/text（いずれもゲート不成立の no-op）→ re-insert。panic しない。
+    // remove→各相（いずれもゲート不成立の no-op）→ re-insert。panic しない。
     frame_system(&mut world);
     assert!(
         world.get_non_send::<RuntimeWiring>().is_some(),
@@ -199,11 +183,11 @@ fn frame_system_removes_runs_and_reinserts_wiring() {
     );
 }
 
-// ── task 9.2: run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
+// ── run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
 //
-// 9.1 の channel 到達（`move_cue_sink_reaches_runtime_wiring_receiver`）と 7.4 の apply 単体
+// 送出端の到達（`move_cue_move_sink_tests.rs`）と apply 単体
 // （`move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs`）を frame 相 drain で接ぐ結線の存在チェック。full spine
-// （cue→CueSheet→dispatch→sink→channel→frame）は task 9.3 が所有する。
+// （cue→CueSheet→dispatch→sink→channel→frame）は本体の `runtime_tests/spine_move_cue_tests.rs` が持つ。
 
 /// fixture `\1\![move,-353,,,0,base,base]` の `MoveDirective`（scope1・base scope0）。
 fn fixture_move_directive() -> MoveDirective {
@@ -224,19 +208,7 @@ fn fixture_move_directive() -> MoveDirective {
 /// gate 閉で未消費の実証）。move はキャラ窓生成後に一括適用され OnFirstBoot 移動を取りこぼさない。
 #[test]
 fn run_move_drain_phase_buffers_until_ghost_windows_present() {
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する（受信端は wiring 保持）");
 
@@ -273,19 +245,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         "前提: 移動前の scope1 初期位置"
     );
 
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 
@@ -315,19 +275,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
 fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::ResetWindowPos)
         .expect("送出は成功する");
     tx.send(PositionCue::Move(fixture_move_directive()))
@@ -360,19 +308,7 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
 fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
-    let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel::<PresentCommand>().1,
-        rx,
-        mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        zero_clock(),
-        synth_assets(&[(0, 0)]),
-    );
+    let (tx, wiring) = wiring();
     tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する");
 

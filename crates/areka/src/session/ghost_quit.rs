@@ -113,7 +113,7 @@ pub(crate) fn ghost_quit_system(world: &mut World) {
 ///
 /// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_frame_system`](areka_runtime::register_frame_system) の
 /// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
-/// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
+/// World でも登録は通る（本体の `runtime_tests/frame_schedule_tests.rs` の 1 本がこの形を固定する）。
 pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
     world.insert_non_send(KanadeNoticeRx(rx));
     world

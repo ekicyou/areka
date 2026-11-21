@@ -1,5 +1,5 @@
 // =============================================================================
-// 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2・要件 4.1・4.2・5.1・5.5・5.7・7.3）
+// 倍率の変わりの相の同じフレームの檻
 //
 // 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `frame_system`）で、窓の DPI の替わりから
 // 表の書き込みとイベントの送出までが**同じ 1 回**の中で起きることを見る。相を後ろへ動かすと
@@ -11,16 +11,15 @@
 //   ⑶ 作者 DPI の違うシェルの差し替えの巡は知らせ 0 件（起点を引き継がない）。
 //   ⑷ 起動の途中（定常の前）は継ぎ目でなく本物の kanade へ届き、`raise_event_not_steady` で捨てられ、
 //      表は書かれている。
+//   ⑸ 継ぎ目も置き場のゴーストも無いときは送れず、表は書かれたまま警告が 1 件残る。
 //
-// 送り先は ⑴〜⑶ が継ぎ目（`ScaleEventSeam`）、⑷ が置き場のゴーストの本物の kanade。
+// 送り先は ⑴〜⑶ が継ぎ目（`ScaleEventSeam`）、⑷ が置き場のゴーストの本物の kanade、⑸ は送り先なし。
 // =============================================================================
-
-use std::time::Duration;
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_kanade::{KanadeConfig, KanadeMsg};
 
-use crate::ghost_session::ghost_session_scope_scale::scaling_text;
+use areka_runtime::scope_scale::scaling_text;
 use areka_runtime::target_map::{TargetWindow, shell_target};
 
 use super::super::scale_notice::ScaleEventSeam;
@@ -141,7 +140,7 @@ fn count_event(events: &[CapturedEvent], name: &str) -> usize {
 }
 
 /// ⑴ 窓の DPI を 144 → 192 に替えて 1 回回すと、その 1 回の中で表が `200,200` になり、
-/// `OnShellScaling` が 1 件届く（要件 4.1・5.1・5.5・7.3）。
+/// `OnShellScaling` が 1 件届く。
 #[test]
 fn dpi_change_writes_the_table_and_raises_one_notice_within_the_same_frame() {
     let mut cage = Cage::new(144);
@@ -171,7 +170,7 @@ fn dpi_change_writes_the_table_and_raises_one_notice_within_the_same_frame() {
     );
 }
 
-/// ⑵ 装着の最初のフレームは、倍率が初めて決まるだけなので知らせ 0 件（要件 5.7）。
+/// ⑵ 装着の最初のフレームは、倍率が初めて決まるだけなので知らせ 0 件。
 #[test]
 fn attach_frame_raises_no_notice() {
     let mut cage = Cage::new(144);
@@ -188,7 +187,7 @@ fn attach_frame_raises_no_notice() {
     assert_eq!(notices(&rx), vec![], "シェルの最初の表示も知らせない");
 }
 
-/// ⑶ 作者 DPI の違うシェルへの差し替えの巡は、起点を引き継がないので知らせ 0 件（要件 5.7）。
+/// ⑶ 作者 DPI の違うシェルへの差し替えの巡は、起点を引き継がないので知らせ 0 件。
 #[test]
 fn shell_replacement_with_another_author_dpi_raises_no_notice() {
     let mut cage = Cage::new(144);
@@ -223,13 +222,13 @@ fn shell_replacement_with_another_author_dpi_raises_no_notice() {
 }
 
 /// ⑷ 起動の途中（kanade が定常の前）の倍率の変わりは、継ぎ目が無ければ置き場のゴーストの本物の
-/// kanade へ届き、`raise_event_not_steady` で捨てられる。表は書かれている（設計 Flow 3）。
+/// kanade へ届き、`raise_event_not_steady` で捨てられる。表は書かれている。
 #[test]
 fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_written() {
     let mut cage = Cage::new(144);
     let ((), events) = capture(|| {
         // 捕捉の窓の中で起こすと、kanade のスレッドの記録も同じ窓に入る。
-        let (kanade, _handle) = areka_kanade::spawn_kanade(
+        let (kanade, handle) = areka_kanade::spawn_kanade(
             KanadeConfig::new("", ""),
             mpsc::channel().0,
             mpsc::channel().0,
@@ -245,14 +244,10 @@ fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_
         cage.boot_and_show_shell();
         cage.set_shell_dpi(192);
         cage.frame();
-        // 受け箱は順に処理するので、この問い合わせの返事が来たら上のイベントは処理済み。
-        let (reply, answered) = areka_actor::reply_channel();
-        kanade
-            .send(KanadeMsg::ResourceQuery { ids: vec![], reply })
-            .expect("kanade は生きている");
-        answered
-            .recv_timeout(Duration::from_secs(30))
-            .expect("kanade が返事をする");
+        // 受け箱は順に処理するので、Close で止まったら上のイベントは処理済み。
+        kanade.send(KanadeMsg::Close).expect("kanade は生きている");
+        areka_runtime::spine::join_bounded("kanade が受け箱を処理して止まる", handle)
+            .expect("kanade の body は panic しない");
     });
     assert_eq!(
         cage.shell_scaling().as_deref(),
@@ -273,7 +268,7 @@ fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_
 }
 
 /// ⑸ 継ぎ目も置き場のゴーストも無いときは送れず、表は書いたままイベントごとに警告を 1 件残す
-/// （設計 Error Handling・`scale_event_not_sent`）。
+/// （`scale_event_not_sent`）。
 #[test]
 fn notice_without_kanade_warns_once_and_keeps_the_table_written() {
     let mut cage = Cage::new(144);

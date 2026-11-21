@@ -501,12 +501,10 @@ fn reset_while_armed_records_each_returned_window_as_script_moved() {
     rig.finish();
 }
 
-/// balloon-flip-side-rules 要件 2.10: 並べ直しは本体（scope 0）を先に書くので、本体のバルーンは
-/// 相方（scope 1）がまだ元の位置にいるうちに右の外から左へ並べ替わる。相方がその映した先
-/// （1396〜1619 × 569〜727）に重なる位置へ戻った後、全スコープを書き終えたところで判定し直し、
-/// 本体のバルーンを押し込みの位置（作業領域の右端の内側）に書く。
+/// 並べ直したあとも、本体のバルーンは押し込みの位置（作業領域の右端の内側）のまま。判定し直したか
+/// どうかはここでは見ない（系の檻が見る）。
 #[test]
-fn reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target() {
+fn reset_keeps_the_balloon_at_the_push_position_after_relayout() {
     use wintf::ecs::Visual;
     let mut rig = Rig::with_balloon(PointPx { x: 301, y: 30 }, true);
     rig.world.insert_resource(MonitorSnapshot {
@@ -524,18 +522,14 @@ fn reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target() {
 
     assert!(reset_window_positions(&mut rig.world));
 
-    assert_eq!(
-        rig.char_pos(1),
-        EXPECTED[1],
-        "相方は映した先に重なる位置へ戻る"
-    );
+    assert_eq!(rig.char_pos(1), EXPECTED[1], "相方は元の位置へ戻る");
     assert_eq!(
         rig.balloon_pos(0),
         PointPx {
             x: 1920 - 223,
             y: EXPECTED[0].y + 30
         },
-        "本体のバルーンは押し込みの位置（並べ替えた位置 1396 のままにしない）"
+        "本体のバルーンは押し込みの位置"
     );
     rig.finish();
 }

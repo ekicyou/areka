@@ -1,18 +1,16 @@
-//! **拡大率遷移でのバルーン追従オフセットの追随**——相の結合の行列
-//! （areka-P0-balloon-offset-dpi・task 6.5・design「Testing Strategy > Integration Tests」
-//! 1／2 の後半／4／5／6・要件 3.2／3.5／4.2／7.1／7.3／9.8）。
+//! **拡大率遷移でのバルーン追従オフセットの追随**——相の結合の行列。
 //!
 //! # 本ファイルが持つもの／持たないもの
 //!
 //! 相の結合（`FrameHarness` で本番と同じ順に相を回す）で追随を見る檻は 3 ファイルに分かれる。
 //! 重複を作らないための分担は次のとおりで、本ファイルは**残りの 5 つ**を持つ。
 //!
-//! | design の項目 | 置き場所 |
+//! | 項目 | 置き場所 |
 //! |---|---|
 //! | 1. 遷移 × アンカーの行列 | **本ファイル**（[`the_transition_matrix_follows_the_display_dpi_ratio`]） |
-//! | 2. キーワードとの排他（素材が残る腕・受容残余の腕） | `frame_balloon_offset_keyword_gate_tests.rs`（task 6.3） |
+//! | 2. キーワードとの排他（素材が残る腕・受容残余の腕） | `frame_balloon_offset_keyword_gate_tests.rs` |
 //! | 2. 同（**素材消費後**の腕と揃えの残差） | **本ファイル**（[`the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_allowance`]） |
-//! | 3. べき等 skip の収束 | `frame_balloon_offset_converge_tests.rs`（task 6.2） |
+//! | 3. べき等 skip の収束 | `frame_balloon_offset_converge_tests.rs` |
 //! | 4. 待ち札との共存 | **本ファイル**（[`a_window_held_for_sync_regains_the_follow_after_the_hold_is_released`]） |
 //! | 5. 拡大率が変わらない寸法変化では触らない | **本ファイル**（面の切替／作業領域の再スナップの 2 本） |
 //! | 6. ドラッグ由来にも同一規則 | **本ファイル**（確立の事後条件と追随の 2 本） |
@@ -24,10 +22,10 @@
 //! 紙の上で適用したものであり、追随相を走らせて出た値を写していない——写すと「実装が何を
 //! 出しても緑になる」空虚な行列になる。各値の算術は同定数の doc に逐条で残す。
 //!
-//! # 空振り防止の証人（design Integration 1 が名指しする 3 つ）
+//! # 空振り防止の証人（3 つ）
 //!
 //! 行列の各組は次の 3 点を**主張の前に**固定する。1 つでも欠けると「追随が無くても緑になる
-//! 行列」になり、要件 7.1 の網羅が意味を失う。
+//! 行列」になり、網羅が意味を失う。
 //!
 //! 1. **比が 1 でない**——遷移の前後で表示 DPI が実際に違う。
 //! 2. **オフセットが非ゼロ**——0 は何倍しても 0 なので、追随の有無を区別できない。
@@ -36,34 +34,38 @@
 //! 加えて「旧値と期待値が違う」ことも毎組で主張する。追随が丸ごと無くても値が一致するなら、
 //! その組は探針として退化している。
 //!
-//! # 追随を無効化すると落ちる（是正前は失敗する側・要件 7.4）
+//! # 追随を無効化すると落ちる
 //!
 //! 追随の適用（`rescale_balloon_follow_offset` の中の `apply_rescaled` 呼出）を潰すと、
-//! 本ファイルの 7 本のうち**追随を主張する 4 本**が赤になる（実測 2026-08-28）——行列・
-//! 素材消費後の残差・待ち札の解除後・ドラッグ由来の追随。据置きを主張する 3 本（面の切替・
+//! 本ファイルのうち**追随を主張するテスト**が赤になる——行列・
+//! 素材消費後の残差・待ち札の解除後・ドラッグ由来の追随。据置きを主張するテスト（面の切替・
 //! 作業領域の再スナップ・ドラッグ確立の事後条件）は緑のまま残る。これらは追随が**走らない
 //! こと**を主張しているので、「全部が赤くなる」ことは正しさの条件ではない。
 //!
-//! ⚠ 相そのもの（関数の先頭で `Unchanged` を返す）を潰すと**7 本すべて**が赤になるが、
+//! ⚠ 相そのもの（関数の先頭で `Unchanged` を返す）を潰すと**すべて**が赤になるが、
 //! 落ちるのは [`settle_at`] の自己検査（基準の係留）であって主張の側ではない——係留も
 //! 同じ関数が担うためである。追随の是正対を確かめたいときは `apply_rescaled` の側を潰す
 //! こと。相ごと潰した結果を「行列が効いている」証拠に使うと帰属を取り違える。
 
 use wintf::ecs::drag::DragEvent;
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use areka_placement::config::BalloonXMode;
+use areka_placement::diag::WindowKind;
 use areka_placement::dpi_sync::DpiSyncHold;
 use areka_placement::follow::{Anchored, BalloonFollow, on_balloon_drag};
-use areka_placement::resolver::{Anchor, PointPx, SizePx, keyword_balloon_pos};
+use areka_placement::resolver::{Anchor, PointPx, SizePx};
 use areka_placement::spawn::BalloonKeywordBase;
 use areka_placement::transition_diag::{OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED};
 
+use super::shared_test_support::{BASE_OFFSETS, HIGH_DPI, LOW_DPI};
 use super::test_support::{
     FakeReports, FrameHarness, capture_logs, s2_monitors_with_work_area, s2_neighbor_work_area,
     s2_taskbar_hidden_work_area, s2_work_area_for_dpi,
+};
+use super::transition_test_support::{
+    attach_material, follow_of, keyword_alignment, offset_lines, offset_of, settle_at,
+    transition_to, window_pos_of, window_size_of, writes_for,
 };
 use super::*;
 
@@ -71,9 +73,9 @@ use super::*;
 // 行列の定義（3 遷移 × 5 アンカー × 2 スコープ＝30 組）
 // ---------------------------------------------------------------------------
 
-/// 表示 DPI 遷移の 3 組（design Integration 1 が名指しする組）。
+/// 表示 DPI 遷移の 3 組。
 ///
-/// `96→120` は比 5/4（96 の倍数でない DPI・要件 7.6）、`96→192` は比 2（丸めが 1 度も
+/// `96→120` は比 5/4（96 の倍数でない DPI）、`96→192` は比 2（丸めが 1 度も
 /// 起きない対照）、`120→192` は比 8/5（分母・分子とも 96 の倍数でない）。
 const TRANSITIONS: [(u16, u16); 3] = [(96, 120), (96, 192), (120, 192)];
 
@@ -85,7 +87,7 @@ const TRANSITIONS: [(u16, u16); 3] = [(96, 120), (96, 192), (120, 192)];
 /// 「同じ期待値が 5 腕すべてで成立する」は空虚な主張ではない。
 ///
 /// 配列は腕が増えてもコンパイルエラーにならないので、[`anchor_enumeration_is_exhaustive`]
-/// が `match` で網羅を構造的に保つ（「全アンカー」が黙って一部アンカーへ縮むのを防ぐ）。
+/// の `match` が新しい腕を足したときにコンパイルを落とす。
 const ANCHORS: [Anchor; 5] = [
     Anchor::Top,
     Anchor::Bottom,
@@ -104,12 +106,6 @@ const MATRIX_COMBINATIONS: usize = TRANSITIONS.len() * ANCHORS.len() * 2;
 /// ——可視性ガードが X を引き戻すのが正しい。3 遷移 × 1 アンカー × 1 スコープ＝3 組。
 /// 追随そのもの（offset の値）はこの 3 組でも通常どおり主張する。
 const MATRIX_CLAMPED_COMBINATIONS: usize = TRANSITIONS.len();
-
-/// 基準オフセット（`frame_test_support::resnap_placements` の fixture 値・scope 昇順）。
-///
-/// 追随の基準対は起動直後の整地で**値を変えずに**係留されるので（要件 5.2）、遷移の
-/// 入力はつねにこの 2 値である。両軸とも非ゼロ＝空振り防止の証人 2 を満たす。
-const BASE_OFFSETS: [PointPx; 2] = [PointPx { x: -412, y: -25 }, PointPx { x: 285, y: -19 }];
 
 /// **手計算の期待オフセット**（[`TRANSITIONS`] の順 × scope 昇順）。
 ///
@@ -134,65 +130,9 @@ const EXPECTED_OFFSETS: [[PointPx; 2]; 3] = [
     [PointPx { x: -659, y: -40 }, PointPx { x: 456, y: -30 }],
 ];
 
-/// 単発の腕で使う遷移前の水準（作者基準と等倍）。
-const LOW_DPI: u16 = 96;
-
-/// 単発の腕で使う遷移後の水準（比 2＝丸めが起きない）。
-const HIGH_DPI: u16 = 192;
-
 // ---------------------------------------------------------------------------
-// 駆動口（兄弟ファイルの `settle` と同型・基準の係留まで済ませる）
+// 駆動口
 // ---------------------------------------------------------------------------
-
-/// 当該スコープの追従 Component。
-fn follow_of(harness: &FrameHarness, scope: usize) -> BalloonFollow {
-    harness
-        .world
-        .get::<BalloonFollow>(harness.char_window(scope))
-        .copied()
-        .expect("キャラ窓に BalloonFollow がある")
-}
-
-/// 当該スコープの追従オフセット（現在値）。
-fn offset_of(harness: &FrameHarness, scope: usize) -> PointPx {
-    follow_of(harness, scope).offset()
-}
-
-/// 窓の位置（`WindowPos.position`）。
-fn pos_of(harness: &FrameHarness, entity: Entity) -> Point {
-    harness
-        .world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.position)
-        .expect("窓に位置がある")
-}
-
-/// 窓の現寸（`WindowPos.size`）。
-fn size_of(harness: &FrameHarness, entity: Entity) -> SizePx {
-    let size = harness
-        .world
-        .get::<WindowPos>(entity)
-        .and_then(|wp| wp.size)
-        .expect("窓に寸がある");
-    SizePx {
-        w: size.width,
-        h: size.height,
-    }
-}
-
-/// 指定スコープ・指定種別の窓書込だけを取り出す（兄弟 2 ファイルと同型）。
-fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<SetWindowPosCommand> {
-    writes
-        .iter()
-        .filter(|cmd| cmd.tag.scope == Some(scope) && cmd.tag.kind == kind)
-        .cloned()
-        .collect()
-}
-
-/// `kind=offset` の観測行だけを取り出す。
-fn offset_lines(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("kind=offset")).collect()
-}
 
 /// 追随後の相対位置が置くバルーン矩形が、**どれかの作業領域と交差するか**。
 ///
@@ -225,48 +165,8 @@ fn set_anchor(harness: &mut FrameHarness, anchor: Anchor) {
     }
 }
 
-/// 起動直後の整地——3 つの源と窓の拡大率を `dpi` へ揃え、拡大率の相の初回全窓マッチ
-/// （永続 `SystemState` の仕様）を空回しして消費する。
-///
-/// この 1 巡で未係留の基準（`OffsetBase::unpinned`）が `dpi` へ**係留**される（要件 5.2）。
-/// 係留の完了は自己検査する——済んでいないと次の遷移は係留の腕へ落ち、追随が起きないまま
-/// 「値が動かない」だけの空虚な緑になる。
-fn settle_at(harness: &mut FrameHarness, source: &mut FakeReports, dpi: u16) {
-    harness.set_monitor_sources_for_dpi(dpi);
-    harness.set_monitor_table_for_dpi(dpi);
-    harness.set_window_dpi(dpi);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-    for scope in harness.scopes().to_vec() {
-        assert_eq!(
-            follow_of(harness, scope).base(),
-            areka_placement::follow::OffsetBase {
-                offset: BASE_OFFSETS[scope],
-                dpi: Some(DPI::from_dpi(dpi, dpi)),
-            },
-            "scope={scope}: 整地で基準対が「fixture 値 × 係留済み {dpi}」になっていない（探針が退化している）"
-        );
-    }
-}
-
-/// [`LOW_DPI`] で整地する（単発の腕の共通前段）。
-fn settle(harness: &mut FrameHarness, source: &mut FakeReports) {
-    settle_at(harness, source, LOW_DPI);
-}
-
-/// 表示 DPI を `dpi` へ動かして 1 フレーム回す（モニタ表と窓の拡大率を同時に更新＝
-/// 待ち札の付かない通常の遷移）。
-fn transition_to(harness: &mut FrameHarness, source: &mut FakeReports, dpi: u16) {
-    harness.set_monitor_table_for_dpi(dpi);
-    harness.set_window_dpi(dpi);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
 // ---------------------------------------------------------------------------
-// 1. 遷移 × アンカー × スコープの行列（要件 3.1／7.1・design Integration 1）
+// 1. 遷移 × アンカー × スコープの行列
 // ---------------------------------------------------------------------------
 
 /// **完了条件の本体**: 表示 DPI 遷移 3 組 × 全アンカー 5 腕 × 全スコープ 2 つの
@@ -292,8 +192,8 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
             set_anchor(&mut harness, anchor);
             settle_at(&mut harness, &mut source, from);
 
-            // 書込**前**に読む（design Integration 1 の「書込前に読んだ値と突合」）。
-            let before: Vec<(usize, PointPx, Point, Point)> = harness
+            // 書込**前**に読む。
+            let before: Vec<(usize, PointPx, Point)> = harness
                 .scopes()
                 .to_vec()
                 .into_iter()
@@ -301,8 +201,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     (
                         scope,
                         offset_of(&harness, scope),
-                        pos_of(&harness, harness.char_window(scope)),
-                        pos_of(&harness, harness.balloon_window(scope)),
+                        window_pos_of(&harness, harness.balloon_window(scope)),
                     )
                 })
                 .collect();
@@ -310,7 +209,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
             transition_to(&mut harness, &mut source, to);
             let writes = harness.drain_writes();
 
-            for (scope, old_offset, _old_char, old_balloon) in before {
+            for (scope, old_offset, old_balloon) in before {
                 let scope_u32 = u32::try_from(scope).expect("scope は u32 域");
                 let expected = EXPECTED_OFFSETS[t][scope];
 
@@ -329,14 +228,14 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     "{anchor:?} {from}→{to} scope={scope}: 期待値が旧値と同じ（この組は追随を観測できない）"
                 );
 
-                // 主張そのもの（要件 3.1）——手計算の逐語値と bit 一致。
+                // 主張そのもの——手計算の逐語値と bit 一致。
                 assert_eq!(
                     offset_of(&harness, scope),
                     expected,
                     "{anchor:?} {from}→{to} scope={scope}: 追随後のオフセットが表示 DPI 比の手計算値でない"
                 );
 
-                // 基準対は追随で動かない（出力を入力へ戻さない＝往復無誤差の前提・要件 3.3）。
+                // 基準対は追随で動かない（出力を入力へ戻さない＝往復無誤差の前提）。
                 let base = follow_of(&harness, scope).base();
                 assert_eq!(
                     (base.offset, base.dpi),
@@ -347,18 +246,18 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                 // 空振り防止の証人 3: バルーンが実際に動いた。窓書込（指令）と ECS ミラーの
                 // 双方で確かめる——片方だけだと「指令は出たが位置は据置き」「位置は動いたが
                 // 単一ライターを通っていない」のどちらかを取りこぼす。
-                let balloon_writes = writes_for(&writes, scope_u32, "balloon");
+                let balloon_writes = writes_for(&writes, scope_u32, WindowKind::Balloon);
                 assert!(
                     !balloon_writes.is_empty(),
                     "{anchor:?} {from}→{to} scope={scope}: バルーンへの窓書込が 1 件も無い（追随が窓へ届いていない）: {writes:?}"
                 );
-                let new_balloon = pos_of(&harness, harness.balloon_window(scope));
+                let new_balloon = window_pos_of(&harness, harness.balloon_window(scope));
                 assert_ne!(
                     new_balloon, old_balloon,
                     "{anchor:?} {from}→{to} scope={scope}: バルーン窓の位置が 1px も動いていない"
                 );
                 // 落ち着き先は「確定済みキャラ窓位置 ＋ **新しい** offset」（窓相対の恒等式）。
-                let char_pos = pos_of(&harness, harness.char_window(scope));
+                let char_pos = window_pos_of(&harness, harness.char_window(scope));
                 let target = Point {
                     x: char_pos.x + expected.x,
                     y: char_pos.y + expected.y,
@@ -368,7 +267,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     new_balloon.y, target.y,
                     "{anchor:?} {from}→{to} scope={scope}: バルーンの Y が新しい offset の位置に無い（旧 offset の中間位置か）"
                 );
-                let balloon_size = size_of(&harness, harness.balloon_window(scope));
+                let balloon_size = window_size_of(&harness, harness.balloon_window(scope));
                 if follow_target_stays_visible(target, balloon_size, to) {
                     assert_eq!(
                         new_balloon.x, target.x,
@@ -376,7 +275,7 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
                     );
                 } else {
                     // 追随の行き先がどの作業領域とも交差しない組。可視性ガードが X を
-                    // 引き戻すのが正しい（本仕様の対象外・別の檻が所有）。
+                    // 引き戻すのが正しい（この檻の対象外・別の檻が所有）。
                     clamped += 1;
                     let wa = s2_work_area_for_dpi(to);
                     assert!(
@@ -405,20 +304,14 @@ fn the_transition_matrix_follows_the_display_dpi_ratio() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. キーワード素材の消費**後**の腕と揃えの残差（要件 4.2／7.3・design D8）
+// 2. キーワード素材の消費**後**の腕と揃えの残差
 // ---------------------------------------------------------------------------
 //
 // 素材が残る腕・受容残余の腕・自己回復は `frame_balloon_offset_keyword_gate_tests.rs`
-// （task 6.3）が持つ。ここが持つのは残る 1 腕——**素材が消費された後の遷移**では見送りが
-// 解けて追随だけが効き、その結果の中央揃えが D8 の許容量（1 軸 ≤3px）以内に収まること。
+// が持つ。ここが持つのは残る 1 腕——**素材が消費された後の遷移**では見送りが
+// 解けて追随だけが効き、その結果の中央揃えが許容量（1 軸 ≤3px）以内に収まること。
 
-/// キーワード素材の揃え種別（中央上・兄弟ファイルと同一）。
-const KEYWORD_MODE: BalloonXMode = BalloonXMode::CenterTop;
-
-/// キーワード素材の調整量（作者指定 0＝揃えの式だけを見る）。
-const KEYWORD_ADJUST: PointPx = PointPx { x: 0, y: 0 };
-
-/// D8 が定める揃えの残差の許容量（1 軸あたり・物理 px）。
+/// 揃えの残差の許容量（1 軸あたり・物理 px）。
 const ALIGNMENT_ALLOWANCE_PX: i32 = 3;
 
 /// 素材を消費させるための**拡大率不変**の寸法変化（scope 昇順・面の切替と同じ経路）。
@@ -432,33 +325,7 @@ const HIGH_CHAR_SIZES: [(u32, u32); 2] = [(880, 1400), (560, 720)];
 /// 同じ遷移で報告するバルーン窓の実表示寸（fixture の 223×158 の 2 倍）。
 const HIGH_BALLOON_SIZE: (u32, u32) = (446, 316);
 
-/// 全スコープのキャラ窓へキーワード素材を付ける（本番の spawn と同じ Component）。
-fn attach_material(harness: &mut FrameHarness) {
-    for scope in harness.scopes().to_vec() {
-        let char_window = harness.char_window(scope);
-        harness
-            .world
-            .entity_mut(char_window)
-            .insert(BalloonKeywordBase {
-                mode: KEYWORD_MODE,
-                adjust: KEYWORD_ADJUST,
-            });
-    }
-}
-
-/// 現在の実寸に対する「理想の中央揃え」オフセット（P5 と同じ式を同じ口から呼ぶ）。
-fn ideal_alignment(harness: &FrameHarness, scope: usize) -> PointPx {
-    keyword_balloon_pos(
-        KEYWORD_MODE,
-        PointPx { x: 0, y: 0 },
-        size_of(harness, harness.char_window(scope)),
-        size_of(harness, harness.balloon_window(scope)),
-        KEYWORD_ADJUST,
-    )
-    .expect("中央揃えのモードは基本位置を持つ")
-}
-
-/// **素材消費後の腕**（要件 4.2／7.3・design D8）: 素材が消えた後の遷移では追随だけが効き、
+/// **素材消費後の腕**: 素材が消えた後の遷移では追随だけが効き、
 /// 中央揃えの残差が許容量以内に収まる。
 ///
 /// 段取りは 3 つ。⑴ [`LOW_DPI`] で整地して素材を付ける。⑵ **拡大率を変えずに**キャラ窓の
@@ -467,13 +334,13 @@ fn ideal_alignment(harness: &FrameHarness, scope: usize) -> PointPx {
 /// に焼き直される。⑶ 96→192 の遷移を、キャラ窓とバルーン窓の**両方**が倍寸を報告する形で
 /// 起こす。素材はもう無いので見送りは解け、追随が基準から引き直す。
 ///
-/// 残差の出所は D8 の 3 つ（両寸の個別丸め・中点の整数除算・追随の丸め）だけであり、
+/// 残差の出所は 3 つ（両寸の個別丸め・中点の整数除算・追随の丸め）だけであり、
 /// 上限を主張するだけでなく**実値も逐語で固定**する（上限内での悪化を見逃さないため）。
 #[test]
 fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_allowance() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     attach_material(&mut harness);
 
     // ⑵ 拡大率不変の寸法変化で素材を消費させる。
@@ -500,7 +367,7 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
         assert_eq!(
             (base.offset, base.dpi),
             (
-                ideal_alignment(&harness, scope),
+                keyword_alignment(&harness, scope),
                 Some(DPI::from_dpi(LOW_DPI, LOW_DPI))
             ),
             "scope={scope}: 再導出が基準対を「理想の中央揃え × 現在の表示 DPI」へ焼き直していない"
@@ -559,8 +426,8 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
         // 報告寸が実際に着地している（残差の比較対象が本物であることの前提）。
         assert_eq!(
             (
-                size_of(&harness, harness.char_window(scope)),
-                size_of(&harness, harness.balloon_window(scope))
+                window_size_of(&harness, harness.char_window(scope)),
+                window_size_of(&harness, harness.balloon_window(scope))
             ),
             (
                 SizePx {
@@ -588,7 +455,7 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
         // y はいずれも −316。残差は x で 1px・y で 0px＝許容量 3px 以内。
         let ideal = [PointPx { x: 217, y: -316 }, PointPx { x: 57, y: -316 }][scope];
         assert_eq!(
-            ideal_alignment(&harness, scope),
+            keyword_alignment(&harness, scope),
             ideal,
             "scope={scope}: 理想の中央揃えが手計算と一致しない（許容量の判定基準が崩れる）"
         );
@@ -606,7 +473,7 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
 }
 
 // ---------------------------------------------------------------------------
-// 4. 待ち札との共存（design Integration 4・先行仕様 atom 設計 C5）
+// 4. 待ち札との共存
 // ---------------------------------------------------------------------------
 
 /// **見送られた窓は追随を失わない**: 拡大率通知が表更新より先に届いて整合待ちの札が付いた
@@ -619,7 +486,7 @@ fn the_transition_after_the_material_is_consumed_keeps_the_centering_within_the_
 fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<(usize, PointPx)> = harness
         .scopes()
@@ -653,7 +520,7 @@ fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
     let _waiting = harness.drain_writes();
 
     // 解除フレーム: 表が追いつく。`Changed<DPI>` はもう立たないが、札を持つ窓は対象集合へ
-    // 和集合で入る（設計 C5）——ここで追随が取り戻される。
+    // 和集合で入る——ここで追随が取り戻される。
     harness.set_monitor_table_for_dpi(HIGH_DPI);
     harness.advance_frame();
     harness.run_placement_phases(&mut source);
@@ -681,10 +548,10 @@ fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. 拡大率が変わらない寸法変化では 1 bit も動かさない（要件 3.2／9.8）
+// 5. 拡大率が変わらない寸法変化では 1 bit も動かさない
 // ---------------------------------------------------------------------------
 
-/// **面の切替**（要件 9.8）: 拡大率を変えずにキャラ窓の実表示寸だけが変わっても、
+/// **面の切替**: 拡大率を変えずにキャラ窓の実表示寸だけが変わっても、
 /// 追従オフセットは 1 bit も動かない。
 ///
 /// 発火条件が `Changed<DPI>` に閉じているので構造的に成立するはずの性質だが、寸法差を
@@ -694,7 +561,7 @@ fn a_window_held_for_sync_regains_the_follow_after_the_hold_is_released() {
 fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<(usize, BalloonFollow, SizePx)> = harness
         .scopes()
@@ -704,7 +571,7 @@ fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
             (
                 scope,
                 follow_of(&harness, scope),
-                size_of(&harness, harness.char_window(scope)),
+                window_size_of(&harness, harness.char_window(scope)),
             )
         })
         .collect();
@@ -721,13 +588,13 @@ fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
     for (scope, old, old_size) in before {
         let scope_u32 = u32::try_from(scope).expect("scope は u32 域");
         // 駆動が生きている: 寸が本当に変わり、キャラ窓が実際に書かれた。
-        let new_size = size_of(&harness, harness.char_window(scope));
+        let new_size = window_size_of(&harness, harness.char_window(scope));
         assert_ne!(
             new_size, old_size,
             "scope={scope}: 面の切替で寸が変わっていない（据置きの主張が空虚になる）"
         );
         assert_eq!(
-            writes_for(&writes, scope_u32, "char").len(),
+            writes_for(&writes, scope_u32, WindowKind::Char).len(),
             1,
             "scope={scope}: 面の切替でキャラ窓が書かれていない（駆動が死んでいる）: {writes:?}"
         );
@@ -740,16 +607,16 @@ fn a_surface_swap_at_a_constant_scale_does_not_move_the_offset() {
     }
 }
 
-/// **作業領域の再スナップ**（要件 3.2／9.7）: 拡大率を変えずに作業領域だけが動いても、
+/// **作業領域の再スナップ**: 拡大率を変えずに作業領域だけが動いても、
 /// 追従オフセットは 1 bit も動かない。
 ///
-/// 「随伴バルーンの追従オフセットは変わらない」という下流の期待のうち、**本仕様が上書き
-/// しない側**がこれである（拡大率遷移の側だけが要件 3.1 で反転した・要件 9.7）。
+/// 「随伴バルーンの追従オフセットは変わらない」という下流の期待は、拡大率遷移では成り立たず
+/// （追随が比で動かす）、作業領域の再スナップでは成り立つ。ここが固定するのは後者である。
 #[test]
 fn a_work_area_resnap_at_a_constant_scale_does_not_move_the_offset() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     let before: Vec<(usize, BalloonFollow, (i32, i32))> = harness
         .scopes()
@@ -801,7 +668,7 @@ fn a_work_area_resnap_at_a_constant_scale_does_not_move_the_offset() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. ドラッグ由来にも同一規則（要件 3.5・design Integration 6）
+// 6. ドラッグ由来にも同一規則
 // ---------------------------------------------------------------------------
 
 /// バルーン単独ドラッグで決める相対位置（キャラ窓左上相対・物理 px）。
@@ -813,7 +680,7 @@ const DRAG_OFFSET: PointPx = PointPx { x: -333, y: -77 };
 /// バルーン窓をキャラ窓相対 `offset` の位置へ置き、単独ドラッグのハンドラを本番と同じ
 /// 引数で呼ぶ（`wndproc` が実窓位置を書いた後の状態を模す）。
 fn drag_balloon_to(harness: &mut FrameHarness, scope: usize, offset: PointPx) {
-    let char_pos = pos_of(harness, harness.char_window(scope));
+    let char_pos = window_pos_of(harness, harness.char_window(scope));
     let balloon = harness.balloon_window(scope);
     let mut window_pos = harness
         .world
@@ -835,7 +702,7 @@ fn drag_balloon_to(harness: &mut FrameHarness, scope: usize, offset: PointPx) {
     );
 }
 
-/// **確立の事後条件**（要件 3.5・design D14）: バルーン単独ドラッグは相対位置を新しい
+/// **確立の事後条件**: バルーン単独ドラッグは相対位置を新しい
 /// **基準**として焼き直し、基準 DPI は**その時点の表示 DPI**になる。
 ///
 /// 基準 DPI を刻まない（未係留のまま残す）実装だと次の遷移が係留の腕へ落ち、値が動かない
@@ -844,7 +711,7 @@ fn drag_balloon_to(harness: &mut FrameHarness, scope: usize, offset: PointPx) {
 fn a_balloon_only_drag_establishes_the_base_at_the_current_display_dpi() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
 
     for scope in harness.scopes().to_vec() {
         assert_ne!(
@@ -870,18 +737,18 @@ fn a_balloon_only_drag_establishes_the_base_at_the_current_display_dpi() {
     }
 }
 
-/// **同一の追随規則**（要件 3.5）: ドラッグで決めた相対位置にも、作者指定由来と同じ
+/// **同一の追随規則**: ドラッグで決めた相対位置にも、作者指定由来と同じ
 /// 表示 DPI 比・同じ丸めが適用される。
 ///
 /// 期待値は手計算（比 5/4・`(2·len·5 + 4) ÷ 8`）:
 /// x は `(2·333·5+4)/8 = 3334/8 = 416.75 → 416`、y は `(2·77·5+4)/8 = 774/8 = 96.75 → 96`。
 /// 符号は基準から引き継ぐので `(−416, −96)` である。作者指定由来の値
-/// （[`EXPECTED_OFFSETS`] の 1 行目）と**同じ算術**で出ていることが要件 3.5 の主張である。
+/// （[`EXPECTED_OFFSETS`] の 1 行目）と**同じ算術**で出ていることがこのテストの主張である。
 #[test]
 fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one() {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();
-    settle(&mut harness, &mut source);
+    settle_at(&mut harness, &mut source, LOW_DPI);
     for scope in harness.scopes().to_vec() {
         drag_balloon_to(&mut harness, scope, DRAG_OFFSET);
     }
@@ -912,12 +779,12 @@ fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one
         );
         // バルーンが実際に新しい相対位置へ動いた。
         assert!(
-            !writes_for(&writes, scope_u32, "balloon").is_empty(),
+            !writes_for(&writes, scope_u32, WindowKind::Balloon).is_empty(),
             "scope={scope}: バルーンへの窓書込が 1 件も無い: {writes:?}"
         );
-        let char_pos = pos_of(&harness, harness.char_window(scope));
+        let char_pos = window_pos_of(&harness, harness.char_window(scope));
         assert_eq!(
-            pos_of(&harness, harness.balloon_window(scope)),
+            window_pos_of(&harness, harness.balloon_window(scope)),
             Point {
                 x: char_pos.x + expected.x,
                 y: char_pos.y + expected.y,
@@ -926,22 +793,27 @@ fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one
         );
     }
 }
-/// [`ANCHORS`] が `Anchor` の腕を 1 つも取りこぼしていないことを**構造で**保つ。
+
+/// [`ANCHORS`] に重なりが無く、並びが `match` の腕の添字と揃っていることを主張する。
 ///
-/// 配列は腕が増えても黙って通るため、行列の「全アンカー」が縮んでも誰も気づかない。
-/// `match` を非網羅にすればコンパイルが落ちるので、腕を足した者が必ずここへ来る。
+/// `Anchor` に腕を足すと `match` が非網羅になってコンパイルが落ちるので、足した者は腕に表の
+/// 添字を書くことになる（表を伸ばさずに新しい添字を書けば範囲の外でコンパイルが落ちる）。
 #[test]
 fn anchor_enumeration_is_exhaustive() {
     for anchor in ANCHORS {
-        // 腕を足すとこの `match` が非網羅になってコンパイルエラーになる。
-        // そのときは `ANCHORS` にも新しい腕を足すこと。
-        match anchor {
-            Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right | Anchor::Free => {}
-        }
+        let listed = match anchor {
+            Anchor::Top => ANCHORS[0],
+            Anchor::Bottom => ANCHORS[1],
+            Anchor::Left => ANCHORS[2],
+            Anchor::Right => ANCHORS[3],
+            Anchor::Free => ANCHORS[4],
+        };
+        assert_eq!(listed, anchor, "ANCHORS の並びが腕の添字と揃っていない");
     }
-    assert_eq!(
-        ANCHORS.len(),
-        5,
-        "ANCHORS の腕数が変わった——行列の期待値と MATRIX_COMBINATIONS を見直すこと"
-    );
+    for (i, a) in ANCHORS.iter().enumerate() {
+        assert!(
+            ANCHORS[i + 1..].iter().all(|b| b != a),
+            "ANCHORS に {a:?} が重なっている"
+        );
+    }
 }

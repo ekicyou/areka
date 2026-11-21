@@ -61,7 +61,7 @@ const HIDE_BOXES_MESSAGE: &str = "箱を隠す印を立てた（次の台詞の�
 /// `\s` 相当の表示で確立するので、`scopes` の分だけ面 0 の表示を送っておく（次のフレームの drain が適用する）。
 struct Cage {
     world: World,
-    wiring: RuntimeWiring,
+    wiring: Option<RuntimeWiring>,
     present_tx: mpsc::Sender<PresentCommand>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
@@ -104,7 +104,7 @@ impl Cage {
 
         let mut cage = Self {
             world,
-            wiring,
+            wiring: Some(wiring),
             present_tx,
             lifecycle_tx,
             reports,
@@ -117,7 +117,7 @@ impl Cage {
         cage.frame();
         for &scope in shell_scopes {
             assert!(
-                cage.wiring
+                cage.wiring()
                     .presenter
                     .text_slot_view(shell_target(scope))
                     .is_some(),
@@ -133,15 +133,19 @@ impl Cage {
 
     /// 本番の相順を 1 フレーム回し、その間のログを返す。
     fn frame(&mut self) -> Vec<CapturedEvent> {
-        let wiring = std::mem::replace(&mut self.wiring, placeholder_wiring());
+        let wiring = self.wiring.take().expect("結線は檻が持つ");
         let (wiring, events) = capture(|| advance_frame(&mut self.world, wiring));
-        self.wiring = wiring;
+        self.wiring = Some(wiring);
         events
+    }
+
+    fn wiring(&self) -> &RuntimeWiring {
+        self.wiring.as_ref().expect("結線は檻が持つ")
     }
 
     /// 本番の adapter が流すのと同じ形で、scope の文字の層へ cue を当てる（時刻 0 起点）。
     fn cue(&self, scope: u32, command: CueCommand) {
-        self.wiring.runtime().borrow_mut().apply_cue(&TalkCue {
+        self.wiring().runtime().borrow_mut().apply_cue(&TalkCue {
             at: 0.0,
             actor: ActorKey::from(scope.to_string()),
             command,
@@ -183,17 +187,19 @@ impl Cage {
 
     /// scope のシェルの窓に表示層が今表示している絵の番号（非表示なら `None`）。
     fn picture_id(&self, scope: u32) -> Option<u32> {
-        self.wiring
+        self.wiring()
             .presenter
             .current_surface_id(shell_target(scope))
     }
 
     fn window_visible(&self, scope: u32) -> Option<bool> {
-        self.wiring.presenter.target_visible(balloon_target(scope))
+        self.wiring()
+            .presenter
+            .target_visible(balloon_target(scope))
     }
 
     fn shown_boxes(&self, scope: u32) -> Vec<String> {
-        self.wiring
+        self.wiring()
             .runtime()
             .borrow()
             .shown_boxes(&ActorKey::from(scope.to_string()))
@@ -201,11 +207,6 @@ impl Cage {
             .map(|b| b.name.as_str().to_owned())
             .collect()
     }
-}
-
-/// `advance_frame` へ渡している間だけ `Cage::wiring` に置く空の結線（相は回さない）。
-fn placeholder_wiring() -> RuntimeWiring {
-    boot_wiring(mpsc::channel().1, mpsc::channel().1)
 }
 
 /// scope の普通のバルーンの窓を「出す」遷移の行の数（可視性の相が出す 1 行）。
@@ -302,9 +303,11 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
     assert_eq!(cage.window_visible(0), Some(true));
     assert_eq!(
-        cage.wiring.runtime().borrow().balloon_shown_glyphs(
+        cage.wiring().runtime().borrow().balloon_shown_glyphs(
             &ActorKey::from("0"),
-            cage.wiring.presenter().current_surface_id(shell_target(0)),
+            cage.wiring()
+                .presenter()
+                .current_surface_id(shell_target(0)),
             5.0,
         ),
         1,
