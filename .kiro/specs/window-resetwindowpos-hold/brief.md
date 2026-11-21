@@ -85,3 +85,9 @@
 - **要件定義のモデル**: Opus（今ある預かりの判定を並べ直しにも当てる形・新しい境目や並行の設計に当たらない）。
 - **分割の案**: 無し。
 - **古くなった記述**: Current State と Approach の行番号とパス（上の読み替え）。
+
+## test-crash-report-merge からの申し送り（2026-11-21）
+
+- **件 1（`window_move_lines` の写し）**: `crates/areka-runtime/src/frame_test_support.rs:886` の `pub fn window_move_lines(events: &[CapturedEvent])` は、`areka-placement` の `test_support::window_move_lines`（`crates/areka-placement/src/test_support.rs`・引数は記録の文の並び `impl IntoIterator<Item = &'a str>`・`log-capture-kit` を引かない）と同じ働きの写しのまま残っている。C24 の約束（`frame_test_support.rs` の差分 0）で `test-crash-report-merge` は付け替えなかった。
+  - 見直しが要る論点: このファイルを触るときに、runtime の写しを消して placement の方を使うか。付け替えるなら呼び手（10 か所ほど）は `window_move_lines(events.iter().map(|e| e.message()))` の形になり、`window_move_routes_of` の中の 1 か所も同じ形に替わる。抜き出しの働き（`WINDOW_MOVE_RECORD_TAG` で始まる記録だけを順に残す）は同じ。
+  - 参照先: `.kiro/specs/completed/test-crash-report-merge/design.md` の PlacementSupportMerge・同 tasks.md の Implementation Notes（5.1 の件 ア）。
