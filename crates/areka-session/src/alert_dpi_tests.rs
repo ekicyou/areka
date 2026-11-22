@@ -10,7 +10,7 @@
 //! 場合ごとに ASCII の `ALERT-DPI-PROBE ...` を 1 行出す。
 //!
 //! 測りが直に出すタスクダイアログ・タイマー・窓の読み取り・スレッドの局所の置き場の `unsafe` は
-//! このファイルに閉じ、`session/alert.rs` には置かない。
+//! このファイルに閉じ、`alert.rs` には置かない。
 
 use std::cell::{Cell, RefCell};
 

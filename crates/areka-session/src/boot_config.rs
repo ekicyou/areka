@@ -589,7 +589,7 @@ pub fn shiori_wiring_for(
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
-/// `pub(crate)`: 窓の在る起動（`session::runtime_boot::boot_runtime`）も boot 失敗（`GhostBootError`）を
+/// `pub(crate)`: 窓の在る起動（`areka_session::runtime_boot::boot_runtime`）も boot 失敗（`GhostBootError`）を
 /// 同じ方針（起点不在＝良性 `warn!`・他＝`error!`）で分類するため再利用する。
 pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {

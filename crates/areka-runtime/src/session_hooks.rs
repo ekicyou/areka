@@ -2,7 +2,7 @@
 //!
 //! `runtime` は本体の状態（置き場のゴースト・起動の文脈・切替と読み直しの予約）を名指さず、
 //! 本体が据えた関数のポインタの束を通して同期で読み書きする（前例 `wintf::ecs::cursor::CursorQuery`）。
-//! 中身と据え付けは `session::hooks` が持つ。
+//! 中身と据え付けは `areka_session::hooks` が持つ。
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
@@ -15,7 +15,7 @@ use bevy_ecs::world::World;
 use crate::shell_balloon_resolve::SkinCandidate;
 use crate::skin_switch::SkinKind;
 
-/// 本体の状態を同期で読み書きする口の束（`session::hooks::install` が据える）。
+/// 本体の状態を同期で読み書きする口の束（`areka_session::hooks::install` が据える）。
 #[derive(Resource, Clone, Copy)]
 pub struct SessionHooks {
     /// 置き場のゴーストの kanade への送り手（`GhostSession::kanade`）。

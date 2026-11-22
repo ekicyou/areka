@@ -55,7 +55,7 @@
 //!     $env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test -p areka --test emo2_real_run -- --nocapture
 //!
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
-//! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka/src/session/boot_config.rs`）は
+//! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka-session/src/boot_config.rs`）は
 //!   `current_exe()` 隣の `shiori-host32-helper.exe` を解決する。窓口が i686 の成果物を実バイナリ
 //!   隣へ揃えるので、先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で
 //!   建てておく。

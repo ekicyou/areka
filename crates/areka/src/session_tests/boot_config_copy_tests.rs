@@ -1,6 +1,6 @@
 //! 最初の起動のゴーストを写しから起こす口（`resolve_boot_from` の `prepare_ghost`）。
 //!
-//! 写す判断と写す中身は `session/roots/user_root_tests.rs` が固定する。ここで見るのは「起動の引数では口を
+//! 写す判断と写す中身は `areka-session` の `src/roots/user_root_tests.rs` が固定する。ここで見るのは「起動の引数では口を
 //! 呼ばない」「引数でなければ口の答えでバルーンと構成の入力が決まる」「前回きれいに終わらなかった
 //! ときの既定ゴーストも口を通る」「口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない）」。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。

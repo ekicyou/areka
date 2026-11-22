@@ -155,7 +155,7 @@
   - _Requirements: 5.12_
 
 - [ ] 6. 集めた層を名指すパスと受け持ちを書き換える
-- [ ] 6.1 (P) コードの説明に残る集めた層のパスを書き換える
+- [x] 6.1 (P) コードの説明に残る集めた層のパスを書き換える
   - 本体の外の crate の説明（`areka-runtime` の `talk_clock.rs:229`・`user_break_cue.rs:79`・`lib.rs:391`・`strict_judges.rs:5`・`placement_tests/transition_judge_offset_signoff_tests.rs:57`・`areka-kanade` の `schedule/script_log.rs:16`）を、コメントだけ設計の対応表どおりに書き換える（コードは変えない）
   - 本体の説明（`tests/emo2_real_run.rs:58`・`Cargo.toml:81`・`runtime_tests/spine_move_cue_tests.rs:11` ほか、grep で当たる本体の説明。4.3 の `log_history*`・`reload*_tests.rs` と 5.1 の `tests/emo2_mcp_real_run.rs` は除く）を移した先のパスへ書き換える。`areka-placement` の 4 か所は書き換えず、除外の一覧に載せる
   - 触った crate の型の確かめが警告 0 で、`areka-runtime`・`areka-kanade` の差分がコメントの行だけ

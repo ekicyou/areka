@@ -80,7 +80,7 @@ areka-emo-present = { path = "../areka-emo-present" }
 # 本体のテストが ShioriBackend トレイトの戻り値型（RequestError/ExitKind/ShutdownError/
 # HelperStatus）を名前で参照するために置く。使い手は背骨の足場（runtime_tests/spine.rs とその子・
 # spec: runtime-crate-split 設計 D4）と、台本の SHIORI で起動を組む本体のテスト
-# （session/ghost_switch_test_support.rs・session/script_security_e2e_tests.rs ほか）。台本の SHIORI
+# （areka-session の src/ghost_switch_test_support.rs・src/script_security_e2e_tests.rs ほか）。台本の SHIORI
 # そのもの（ScriptedShioriBackend）は areka-runtime の spine（test-support）にある。areka-kanade は
 # これら host32 型を re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で
 # 推移ビルド済み・x64・新規外部（crates.io）依存ではない）。

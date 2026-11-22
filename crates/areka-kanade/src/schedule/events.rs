@@ -23,7 +23,7 @@
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
-//! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka` の `session::reload` が渡す列のまま） |
+//! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka_session::reload` が渡す列のまま） |
 //! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし） |
 //! | `OnChoiceSelect` | GET | Ref0=選択肢 ID |
 //! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし） |

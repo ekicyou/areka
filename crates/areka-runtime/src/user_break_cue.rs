@@ -76,7 +76,7 @@ pub enum NoUserBreakSignal {
     TalkEnded,
 }
 
-/// 中断の無効化の合図を UI へ届ける受け口（`runtime_sinks`（`crates/areka/src/session/runtime_boot.rs`）が
+/// 中断の無効化の合図を UI へ届ける受け口（`runtime_sinks`（`crates/areka-session/src/runtime_boot.rs`）が
 /// `GhostBootOptions.sinks` に載せる受け口の 1 本）。
 pub struct NoUserBreakCueSink {
     /// UI スレッド（入力の段の取り出し）への送出端。全ての複製は単一の受信端へ配送する。
