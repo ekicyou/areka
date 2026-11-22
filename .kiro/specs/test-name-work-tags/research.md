@@ -1,0 +1,215 @@
+# ギャップ分析: test-name-work-tags
+
+- 測った木: `claude/kiro-start-test-name-work-tags-c34897` の HEAD `5088b891`（main `00877299` に spec の初期化のコミット 1 つを足したもの・コードは main と同じ）。測った日 2026-11-22。
+- 測り方: `git grep`（作業の木の中）と、名の一覧から新旧の名を作って比べる python の使い捨ての式（scratchpad に置いた・コミットしない）。テストは走らせていない。
+
+## 1. 分析の要約
+
+- 札つきのテストの名は要件どおり **28 ファイル・282 本**（`fn t_[a-z]+[0-9]+[a-z]?_`・本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本を除く）と、数字を持たない札の 2 本（`t_zbc_`・`t_zic_`）。札を外した後の名が同じファイルの中でぶつかる組は **0**、本番の関数や他の識別子とぶつかる名も **0**。別のモジュールで同じ名になる組は要件 1.3 の 4 組のほかに **2 組**ある（`t_zbc_`／`t_zic_` の 1 組と、`t_zcc09_` と札の無い既存のテストの 1 組）。
+- 名を文字列で並べるのは本体の `placement_tests/` の 2 ファイルの表だけで（68 の名・`check_table` が `"\n#[test]\nfn {name}("` の字面で照合）、`crate_source!` で他の crate のテストのファイルを読む。表が読む 10 ファイルの改名は、表の直しと同じコミットに入れる必要がある。tools/・.github/・nextest の設定・スキルに、テストを名で選ぶ所は無い。
+- 要件が挙げていない名指しが見つかった: **札だけの短い書き方**（`t_zgp20`・`t_zpd10`・`t_k5` ほか）が 24 行、`t_` の無い札（`zwi01／02` ほか）が 8 行、大文字の作業番号（`T-K5`・`T-R8`・`T-N10` ほか）が 70 行。要件 5.3 の検索（古い名の全体）はこれらを拾わない。
+- 実装の形は「改名表を 1 つ作り、それで全体の名を機械で置き換え、短い書き方だけを手で直す」形が最も少ない手数で漏れが無い。規模は S〜M、危険度は低い。
+- 要件の段で決めることは 8 件（本書 7 節）。中心は、短い書き方と大文字の作業番号をこの spec で直すかと、境界の外のファイルに残る名指しの扱い。
+
+## 2. 今の状態
+
+### 2.1 札つきの名の数え（要件 2・5.4 の「改める前の数え」）
+
+`git grep -cE "fn t_[a-z]+[0-9]+[a-z]?_" -- crates` ＝ **29 ファイル・284 本**（brief と同じ）。内訳は brief の Current State と 1 本も違わない。このうち本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本（`t_zwi05_…`・`t_zwi08_…`）は境界の外で、この spec が改めるのは 28 ファイル・282 本。
+
+数字を持たない札の形 `fn t_[a-z]+_`（数字を持つ形を除く）の当たりは 4 つ:
+
+| 場所 | 綴り | 扱い |
+|---|---|---|
+| `crates/areka/src/placement_tests/zorder_group_branch_coverage_tests.rs:377` | `t_zbc_the_table_covers_every_branch_with_executed_tests` | 改める（要件 1.5） |
+| `crates/areka/src/placement_tests/zorder_inversion_branch_coverage_tests.rs:391` | `t_zic_the_table_covers_every_branch_with_executed_tests` | 改める（要件 1.5） |
+| `crates/areka/src/placement_tests/zorder_branch_coverage_test_support.rs:79` | `t_only_in_a_comment`（文字列の中） | 改めない（検査の見本） |
+| 同 `:85` | `t_real_one`（文字列の中） | 改めない（検査の見本） |
+
+同じファイルの 105〜117 行には `"t_one"`・`"t_gone"` の文字列もある（`fn` が前に無いので上の式は当たらない・これも見本）。
+
+札の種類は 200 を越える（`c1`〜`c5`・`k1`〜`k9`・`r1`〜`r8`・`rs01`〜`rs11`・`zgp1`〜`zgp28`・`zdb01`〜`zdb18`・`zwo01`〜`zwo11` ほか）。`c1`・`c2`・`i4`・`r4`・`r8`・`v1` などは 1 つの札を複数のテストが持つ（例: `t_c2_` は 7 本）。
+
+### 2.2 札を外した名のぶつかり
+
+改名の表（282＋2 本）を作り、次を確かめた。
+
+- **同じファイルの中**: 札を外した名どうしの重なり 0。札を外した名と、同じファイルの他の `fn` の名（テストの道具・本番の関数）の重なり 0。`const`・`static`・`struct`・`enum`・`mod`・`type`・`let` の名との重なり 0。
+- **同じ crate の中の識別子**: 札を外した名が、同じ crate の `src/` のどこかに識別子として既に在るのは 1 つだけ（下の表の ⑹）。`use super::*` で取り込んだ本番の関数を、改名したテストの名が隠す形は 0。
+- **Rust の予約語**になる名・数字で始まる名: 0。いちばん短い新しい名も 12 字を越える（短いのは検査の見本の `t_real_one` → `one` だけで、これは改めない）。
+
+別のモジュールで同じ名になる組（コンパイルは通る・`cargo test <名>` の絞り込みで両方が走る）:
+
+| # | 新しい名 | ファイル（古い名の札） | 要件 1.3 に在るか |
+|---|---|---|---|
+| ⑴ | `executing_scope_does_not_change_the_directive` | `areka-runtime` の `window_state_cue_tests.rs`・`zorder_cue_tests.rs` | 在る |
+| ⑵ | `disconnected_receiver_is_recorded_and_does_not_panic` | 同上 | 在る |
+| ⑶ | `clone_reaches_the_same_receiver` | 同上 | 在る |
+| ⑷ | `version_moves_only_when_the_contents_move` | `areka-placement` の `zorder_group_ledger_state_tests.rs`（`t_zgl15`）・`zorder_group_ledger_rebase_tests.rs`（`t_zrb9`） | 在る |
+| ⑸ | `the_table_covers_every_branch_with_executed_tests` | 本体の `placement_tests/zorder_group_branch_coverage_tests.rs`（`t_zbc`）・`zorder_inversion_branch_coverage_tests.rs`（`t_zic`） | **無い** |
+| ⑹ | `unassigned_scopes_join_behind_every_group_in_ascending_scope_order` | `areka-placement` の `zorder_chain_compose_tests.rs`（`t_zcc09`・純関数の檻）と、札の無い既存の `zorder_chain_tail_order_tests.rs:167`（実窓のテスト）。両方とも `zorder_chain_compose.rs` の子のモジュール（兄弟） | **無い** |
+
+⑷ は名指しにも効く: `zorder_group_ledger_state_tests.rs:20` の doc コメントは `t_zgl15_…` を、本番の `zorder_group_ledger.rs:667` のコメントは `t_zrb9` を名指しし、今は札で 2 本を見分けている。札を外すと同じ名になるので、名指しの側でファイルを添えないと、どちらのテストかが読めない。
+
+⑹ は、同じ鎖の後ろの並びを「台帳と合成の純関数」と「実窓」の 2 段で確かめる兄弟で、中身が違う。同じ名にすると `cargo test unassigned_scopes_join…` で実窓のテスト（`zorder_chain_tail_order_tests.rs`）も走る。
+
+### 2.3 名を名指す所（古い名の全体で当たるもの）
+
+`git grep -nwF`（改める 284 本の古い名の全体・歴史の場所と本 spec の文書を除く・`fn` の定義の行を除く）の当たり:
+
+| 場所 | 行数 | 中身 |
+|---|---|---|
+| `crates/areka/src/placement_tests/zorder_group_branch_coverage_tests.rs` | 50 | 表（`COVERAGE`）の文字列 |
+| `crates/areka/src/placement_tests/zorder_inversion_branch_coverage_tests.rs` | 19 | 表の文字列 |
+| `crates/areka-placement/src/zorder_property_deferral_tests.rs` | 9 | doc コメントのリンク（6・20・23・25・27・29・77・123・126 行） |
+| `crates/areka-placement/src/spawn_assembly_tests.rs:154` | 1 | doc コメント |
+| `crates/areka-placement/src/resolver_balloon_keyword_tests.rs:54` | 1 | doc コメントのリンク |
+| `crates/areka-placement/src/zorder_group_ledger_state_tests.rs:20` | 1 | `//!` のリンク |
+| `crates/areka-placement/src/zorder_group_ledger_tests.rs:357` | 1 | doc コメントのリンク |
+| `crates/areka-runtime/src/frame/zorder_drain_projection_tests.rs:531` | 1 | リンクの定義行（`[`t_zdp10`]: t_zdp10_…`） |
+| `doc/COMPAT_ARCHITECTURE.md` | 3 | 226 行（`t_zdb13`〜`t_zdb17` の 5 本）・354 行（`t_rs01`・`t_rs02`・`t_rs05` の 3 本）・412 行（`t_c3`・`t_l2`・`t_rs01` の 3 本と「旧 `t_c3_char_n_prefix_adds_scope_n`」） |
+| `.kiro/specs/extra-character-windows/brief.md:133` | 1 | 3 本 |
+| `.kiro/specs/zorder-property/brief.md:94` | 1 | `t_zpd40_…` |
+
+要件と brief が挙げた所と一致する。ただし **`zorder-property/brief.md` は 94 行が古い名の全体を持つ**（要件 4.5 が挙げる 59・81 行は札だけの短い書き方・次の 2.4）。steering・`doc/` のほかのファイル・`tools/`・`.github/`・`.claude/` に当たりは無い。
+
+表の照合（`zorder_branch_coverage_test_support.rs` の `check_table`）は、表の名ごとに、`crate_source!` で読んだテストのファイルから注釈を落とした本文に `"\nfn {name}("` と `"\n#[test]\nfn {name}("` が在るかを見る。表が読む札つきのファイルは 10 本（`areka-placement` の `zorder_group_ledger_tests.rs`・`zorder_group_ledger_state_tests.rs`・`zorder_group_ledger_written_order_tests.rs`・`zorder_chain_compose_tests.rs`・`zorder_chain_compose_written_order_tests.rs`、`areka-runtime` の `zorder_cue_tests.rs`・`frame/zorder_descript_tests.rs`・`frame/zorder_drain_tests.rs`・`frame/zorder_drain_projection_tests.rs`・`frame/zorder_drain_written_order_tests.rs`）。表に在る札つきの名は 68。この 10 本のどれかを改めたコミットで表を直さないと、本体のテストが赤になる（要件 4.1 の「途中のコミットでも赤にならない」が実際に効く所）。
+
+### 2.4 要件が挙げていない名指し（札だけの短い書き方ほか）
+
+要件 5.3 の検索は「古い名の全体」で、次の 3 つの書き方を拾わない。札が名から消えると、これらは何も指さなくなる。
+
+**(a) 札だけの短い書き方 `t_<札>`（後ろに名が続かない）— 24 行**（`git grep -nP "\bt_[a-z]+[0-9]+[a-z]?(?!_[a-z])\b"`・`areka-sakura` の局所変数 `t_wait1`・`t_wait2` を除く）
+
+| 場所 | 行 | 札 |
+|---|---|---|
+| `crates/areka-placement/src/zorder_group_ledger.rs`（**本番のファイル**のコメント） | 667 | `t_zrb9` |
+| `crates/areka-placement/src/zorder_group_ledger_tests.rs` | 8・9・10・24・25・315・472 | `t_zgp1`〜`t_zgp14`・`t_zgp18`〜`t_zgp20`・`t_zgp22`〜`t_zgp25`・`t_zgp27`・`t_zgp28`（**範囲の書き方**）・`t_zgp20`・`t_zgp22`・`t_zgp28`・`t_zwo06`・`t_zwo11` |
+| `crates/areka-placement/src/zorder_group_ledger_written_order_tests.rs` | 167 | `t_zgp3` |
+| `crates/areka-placement/src/zorder_property_deferral_tests.rs` | 268・307・308・453・487 | `t_zpd12`・`t_zpd10`・`t_zpd30` |
+| `crates/areka-runtime/src/consumer_ledger_test_support.rs` | 28 | `t_zcs1／t_zcs2` |
+| `crates/areka-runtime/src/frame/zorder_drain_projection_tests.rs` | 522・531 | `t_zdp10`（リンクの見出し） |
+| `crates/areka-runtime/src/frame_schedule_tests.rs` | 14 | `t_zwi06` |
+| `crates/areka-runtime/src/window_state_cue_tests.rs` | 324 | `t_zcs14` |
+| `crates/areka-runtime/src/zorder_cue_tests.rs` | 148 | `t_zcs4` |
+| `crates/areka/src/runtime_tests/zorder_wiring_tests.rs`（**境界の外**） | 11 | `t_zwi06`（`areka-runtime` の改める側のテスト） |
+| `doc/COMPAT_ARCHITECTURE.md` | 196 | `t_k5` |
+| `.kiro/specs/zorder-property/brief.md` | 59・81 | `t_zpd40`（要件 4.5 が挙げる所） |
+
+短い書き方の札は、どれも 1 本のテストだけが持つ札（`c2` のような複数持ちの札は短い書き方で使われていない）なので、札 → 新しい名の全体は 1 対 1 に引ける。範囲の書き方（`t_zgp1`〜`t_zgp14` ほか）だけは名の全体へ置き換えられず、文を書き直す必要がある。
+
+**(b) `t_` の無い札 — 8 行**
+
+- `crates/areka-runtime/src/zorder_wiring_tests.rs` 7・8・11・18 行: `zwi01／02`・`zwi06／07`・`zwi09`（同じファイルの改める側）と `zwi05`・`zwi08`（本体の境界の外の 2 本）。
+- `crates/areka/src/runtime_tests/zorder_wiring_tests.rs`（**境界の外**）4・5・10・13 行: `zwi05`・`zwi08`（同じファイルの 2 本）と `zwi01／02`・`zwi06／07`・`zwi09`（`areka-runtime` の改める側）。
+
+**(c) 大文字の作業番号 `T-<札>` — 70 行**（`git grep -nE "\bT-[A-Z]{1,4}[0-9]{1,2}[a-z]?\b" -- crates`）
+
+| 場所 | 行数 |
+|---|---|
+| `crates/areka-placement/src/resolver_balloon_keyword_tests.rs` | 23（`T-K1`〜`T-K9`・`T-R8`。節の見出しのコメントと doc コメントの頭） |
+| `crates/areka-placement/src/resolver_resolve_tests.rs` | 22 |
+| `crates/areka-placement/src/resolver_resolve_balloon_tests.rs` | 10 |
+| `crates/areka-placement/src/resolver_resolve_free_tests.rs` | 8 |
+| `crates/areka-placement/src/resolver_union_tests.rs` | 4 |
+| `crates/areka-runtime/src/zorder_wiring_tests.rs:182` | 1（`T-N10`＝`frame_schedule_tests.rs` の `t_n10_…` 2 本を指す） |
+| `crates/areka-emo-present/src/presenter_dpi_scale_tests.rs:24`・`presenter_test_support.rs:229` | 2（`T-N3`・この spec の範囲の crate の外） |
+
+(c) は名ではなく、設計の作業文書のテストの番号を注釈に書いたもの。`CLAUDE.md` の `## Comments`（spec・要件・タスクの番号をコードに書かない）に同じ理由で当たる。札を名から外すと、`T-K5` と `fn k5_…` を結ぶ手がかりも消える（今は `T-K5` → `t_k5_…` と字面で結べる）。
+
+`doc/COMPAT_ARCHITECTURE.md:412` の「テスト T-C3」は、完了 spec の設計の番号を歴史として書く文で、テストの名の名指しではない（要件 4.8 の「旧 `t_c3_…`」と同じ扱いにできる）。
+
+### 2.5 名で選ぶ仕組み・名に依る作り
+
+- `tools/`（`load-flake.ps1` は `-Filter` を外から受け取るだけ）・`.github/workflows/`・`.claude/agents/`・`.claude/skills/` に、改める名やその札で絞り込む所は無い。nextest の設定ファイルは無い。
+- 改める 28＋2 ファイルに、テストの名から一時フォルダやログの名を作るもの（`module_path!`・`function_name`・`thread::current().name()`）は無い。`#[ignore]`・`#[should_panic]` も無い。マクロで名を作る所（`macro_rules!`・`concat!`・`stringify!`）も無い。スナップショットのファイル（`.snap`）も無い。
+- `config.rs` は本番のファイルで、311 行目までが本番、`#[cfg(test)] mod tests`（317 行〜）の中に札つきの 20 本がある。`mod limit_tests;`（314 行・`config_limit_tests.rs`）の宣言は名を変えない。
+- 改める前後の長さ: いちばん長い新しい名は 77 字。名が短くなるので 1,000 行を越えるファイルは出ない（いちばん長い `zorder_chain_compose_tests.rs` が 720 行）。ただし表の行は、名が短くなると `rustfmt` が複数行の組を 1 行へ畳むことがある（整形の段のため、改名の後に `cargo fmt` が要る・差分は行の畳みを含む）。
+
+### 2.6 前の spec の型（使い回せるもの）
+
+- テストの名の一覧の比べ方: `session-module-gather` の `baseline-test-names.txt`（`cargo test --workspace --no-fail-fast -- --list | grep ': test$' | tr -d '\r' | sed -E 's/: test$//; s/^.*:://' | LC_ALL=C sort`）と、`runtime-module-untangle` の `test-name-tails-before.txt`／`-after.txt`。この spec では、改める前の一覧を改名表で写したものと改めた後の一覧が一致することで、要件 3.2（本数が同じ）と「名だけが変わった」を同時に示せる。
+- 0 件の主張の較正（要件 5.4）: 同じ式を改める前の木（`00877299`）へ当てて 284 を出す形は、これまでの spec の「0 件を書く前に較正」の型と同じ。
+
+### 2.7 並走の相手との重なり（要件 6）
+
+- `session-crate-split`: 本体の `runtime_tests/zorder_wiring_tests.rs` を直す。この spec はそのファイルに触らない約束（要件 6.1）。ただしそのファイルの 4・5・10・11・13 行は、`areka-runtime` 側の改める名（`t_zwi06`・`zwi01／02`・`zwi06／07`・`zwi09`）を名指している（2.4 の (a)(b)）。触らないと、この spec の着地の後もそのファイルに古い札が残る。
+- `dola-cue-test-builder`: 触るファイルの中に `crates/areka-runtime/src/consumer_ledger_test_support.rs` がある（向こうは 126 行からの `carrier_cue`・`actor_carrier_cue`）。この spec が触りうるのは同じファイルの 28 行のコメント（`t_zcs1／t_zcs2`）だけで、約 100 行離れた別の塊。要件 6.2 はこのファイルを挙げていない。
+- `zorder-property`・`zorder-chain-residue`・`extra-character-windows`: 3 本とも今は brief だけで、作業の木も無い（要件 6.4 の「走っていれば後に回す」は今は当たらない・着手のときに見直す）。
+- `doc/COMPAT_ARCHITECTURE.md` §8: 名の行 226・354・412 に加え、短い書き方の 196 行（`t_k5`）がある。196 行が `session-crate-split` のパスの行と重なるかは、向こうの差分を見ないと分からない（向こうのパスの行は本体の `crates/areka/src/session/…` を指す行で、196 行は `crates/areka-placement/src/resolver.rs` を指す・重なる見込みは低い）。
+
+## 3. 要件と今の資産の対応
+
+| 要件 | 今の資産・状態 | 区分 |
+|---|---|---|
+| 1.1 札を外す | 機械で外せる（`t_` ＋英小文字と数字の続き＋`_`）。284 本の改名表は作れる | 足りている |
+| 1.2 同じモジュールでぶつかる | 0 組 | 足りている |
+| 1.3 別のモジュールで同じ名 | 要件の 4 組のほかに 2 組（2.2 の ⑸⑹） | **Constraint**（数え直しが要る・⑹ は兄弟のモジュール） |
+| 1.5 数字を持たない札 | 2 本。検査の見本の文字列と区別が要る | 足りている |
+| 1.6 札でない頭 | `spine_`・`real_`・`row1_` は札の式に当たらない（`row1_` は `t_` で始まらない） | 足りている |
+| 2.4 足された札の数え直し | 式は brief のとおり使える | 足りている |
+| 3.1〜3.4 振る舞いを変えない | 名に依る作りは無い（2.5）。`config.rs` は `mod tests` の中だけ | 足りている |
+| 3.2 本数が同じ | 前の spec の名の一覧の型が使える（2.6） | 足りている |
+| 3.5 整形を含む全体テスト | 表の行が畳まれる見込み（`cargo fmt` が要る） | Constraint |
+| 4.1 同じコミットで名指しを直す | 表が他の crate の 10 ファイルを読む（2.3）。コミットの切り方が縛られる | **Constraint** |
+| 4.2 コメントの名指し | 古い名の全体の 14 行は要件どおり。**札だけの短い書き方 24 行・`t_` の無い札 8 行・大文字の作業番号 70 行は要件に無い** | **Missing**（範囲の決めが要る） |
+| 4.4 COMPAT §8 | 226・354・412 行は要件どおり。**196 行の `t_k5` が要件に無い** | **Missing** |
+| 4.5 未完了の spec の文書 | `zorder-property/brief.md` は 94 行が名の全体、59・81 行が短い書き方。要件は 59・81 行だけを挙げる | **Missing**（行の取り違え） |
+| 4.8 「旧 `t_c3_…`」 | 412 行。同じ行の「T-C3」も歴史の書き方 | 足りている |
+| 5.1〜5.3 最後の確かめ | 式は作れる。5.3（古い名の全体）は短い書き方を拾わない | **Constraint**（式を足すか決める） |
+| 6.1 本体は `placement_tests/` だけ | 本体の `runtime_tests/zorder_wiring_tests.rs` に改める側の名指しが残る | **Constraint** |
+| 6.2 dola-cue の 3 ファイル | ほかに `consumer_ledger_test_support.rs:28` のコメントが向こうの持ち物 | **Constraint** |
+| 本番のファイル | `zorder_group_ledger.rs:667` のコメントが `t_zrb9` を名指す（要件 3.3 は本番の「関数・型・定数」を変えないとだけ書く） | **Unknown**（触ってよいかの決め） |
+
+## 4. 実装の形の案
+
+### 案 A: 改名表を作り、機械で全部を置き換える（スクリプト）
+
+- 中身: 改める前の木から改名表（ファイル・古い名・新しい名・札）を作る。その表で、テストのファイルの `fn` の行、表の文字列、コメント、`doc/`、brief の名の全体を、単語の境で 1 つずつ置き換える（`re.sub(r'\b' + 古い名 + r'\b', 新しい名)` を表の行ごとに）。改名表は実装の記録に残し、最後の確かめの「古い名」の名簿にも使う。
+- 良い所: 284 本の手の打ち間違いが 0。同じ表が置き換えと確かめの両方に使える。札を「外すだけ」なので表の作り方も 1 行の式で済む。
+- 悪い所: 短い書き方（札だけ・範囲・`t_` 無し・大文字）は表の名の全体と一致しないので拾えない。⑷ の名指しのように、札で 2 本を見分けていた所は文脈を読んで直す必要がある。
+- 書き込みの道具が逆斜線を化かす件（記憶の「書いたらバイトで確かめる」）は、置き換える名に逆斜線が無いので当たらない。表のファイルの他の文字列（`\![set,zorder]` ほか）を壊さないよう、行ごとの置き換えに限る。
+
+### 案 B: ファイルごとに手で直す（実装係がファイルを読んで直す）
+
+- 中身: ファイルを 1 本ずつ開き、名と名指しを直す。
+- 良い所: 文脈が要る名指し（範囲の書き方・⑷）も同じ手で直せる。
+- 悪い所: 284 本＋名指し 100 行余りを手で打つので、打ち間違い（綴りの 1 字の違い）を表の検査とコンパイルでしか拾えない。コメントの打ち間違いは何も拾わない。トークンの量も多い。
+
+### 案 C: 機械の置き換え＋短い書き方だけ手で（A と B の組み合わせ）
+
+- 中身: 名の全体（`fn` の行・表・コメント・文書の 2.3 の全部）は案 A の表で機械に置き換える。短い書き方（2.4 の (a)(b)、範囲に決めたなら (c)）は、札 → 新しい名の全体の対応を同じ表から引いて手で書き直す。範囲の書き方は文を書き直す。
+- 良い所: 打ち間違いの起きやすい所を機械に任せ、文脈の要る所だけ人の手にする。短い書き方の札はどれも 1 本だけが持つ札なので、表から 1 対 1 に引ける。
+- 悪い所: 2 段になる。手で直す所が範囲の決め（7 節の 1・2）で大きく変わる。
+
+### コミットとタスクの切り方の候補
+
+表の検査が他の crate のファイルを読むので、**表が読む 10 ファイルとその 2 つの表は同じコミット**に入れる必要がある（要件 4.1）。それ以外は自由に切れる。
+
+- 切り方 1（ファイルの群ごと・8〜10 タスク）: ① 改める前の名の一覧と改名表を取る ② 表が読む 10 ファイル（`areka-placement` の 5・`areka-runtime` の 5）と本体の 2 つの表（`t_zbc_`・`t_zic_` を含む）を 1 コミット ③ `areka-placement` の zorder の残り 2 ファイル（`zorder_group_ledger_rebase_tests.rs`・`zorder_property_deferral_tests.rs`）と `zorder-property/brief.md` ④ 配置の解決（`resolver_*` 5 ファイル）⑤ 設定と再配置（`config.rs`・`config_limit_tests.rs`・`reseed_tests.rs`・`balloon_limit_tests.rs`・`source_tests.rs`）と §8 の 354・412 行と `extra-character-windows/brief.md` ⑥ 窓の作成（`spawn_*` 3 ファイル）⑦ `areka-runtime` の残り（`window_state_cue_tests.rs`・`zorder_wiring_tests.rs`・`frame_schedule_tests.rs`）と §8 の 226 行 ⑧ 短い書き方の名指し ⑨ 最後の確かめと名の一覧の比べ。
+- 切り方 2（機械の置き換えを 1 コミットで・4〜5 タスク）: ① 改名表 ② 名の全体を全部のファイルで一度に置き換え（1 コミット）③ 短い書き方を手で ④ 最後の確かめ。手数は最少。ただしタスクが 1 つ大きくなり、レビューの単位が粗い。
+- どちらでも、各コミットで `cargo test -p areka --bin areka placement_tests::zorder` の表の検査と、改めた crate のテストを通す。`cargo fmt` は各コミットで当てる。
+
+## 5. 規模と危険度
+
+- **規模: S〜M**（284 本の名と 100 行余りの名指し。機械の置き換えなら 1〜3 日に収まる。手で直す範囲を (c) の 70 行まで広げると M の側）。
+- **危険度: 低**。名に依る作りが無く（2.5）、同じモジュールでのぶつかりも 0。危ないのは「表の検査が他の crate を読む」ことによる途中のコミットの赤と、短い書き方の取り残しだけで、どちらも検索で見える。
+
+## 6. 設計の段へ持ち越す調べ
+
+- **Research Needed**: 名の一覧の比べ（要件 3.2）を、名の末尾だけで比べるか、モジュールのパス付きで比べるか。2.2 の ⑴〜⑹ の同じ名があるので、末尾だけの多重集合では「同じ名の 2 本のどちらか」が入れ替わっても見えない。モジュールのパス付きの一覧（`cargo test --workspace -- --list` の `: test$` の行）に改名表を当てて比べる形なら見える。
+- **Research Needed**: `rustfmt` が表の行を畳む量（改名の後に `cargo fmt --check` の差分で数える）。1,000 行の上限には影響しないが、差分の読みやすさに効く。
+- **Research Needed**: 着手のときの数え直し（要件 2.4）で、C25 の相手の着地により札つきの名や名指しの行が動いていないか（特に `session-crate-split` が本体の `runtime_tests/zorder_wiring_tests.rs` のコメントを動かすか）。
+
+## 7. 要件の討議へ出す決めごと
+
+1. **札だけの短い書き方（2.4 の (a)・24 行）をこの spec で直すか。** 要件 4.5 は `zorder-property/brief.md` の `t_zpd40` だけを挙げるが、コードのコメントに同じ書き方が 20 行余りある。札が名から消えると何も指さなくなる。直すなら、範囲の書き方（`t_zgp1`〜`t_zgp14` ほか・`zorder_group_ledger_tests.rs` の 8〜10・24・25 行）を名の全体の並びにするか、文で言い直すかも決める。
+2. **大文字の作業番号（2.4 の (c)・`T-K1` ほか 70 行）と `t_` の無い札（(b)・`zwi01／02` ほか）を範囲に入れるか。** 同じ `## Comments` の理由に当たり、札を名から外すと `T-K5` ↔ `t_k5_…` の字面の結びも消える。入れると規模が M の側へ寄る。入れないなら、`/kiro-discovery` で別に起票するか、残す訳を記録するか。`areka-emo-present` の 2 行（`T-N3`）は範囲の crate の外。
+3. **別のモジュールで同じ名になる組を、要件 1.3 の 4 組から 6 組へ数え直すか、その 2 組を別の名にするか。** ⑸ `t_zbc_`／`t_zic_` の表の検査（同じ形のテストが 2 つの表に 1 本ずつ）と、⑹ `t_zcc09_` と札の無い実窓のテスト（兄弟のモジュール・中身が違う）。⑹ は `cargo test <名>` で実窓のテストも走る。
+4. **⑷ `version_moves_only_when_the_contents_move` の 2 本の名指しの書き方。** 今は札（`t_zgl15`・`t_zrb9`）で見分けている。名指しにファイルを添える（`zorder_group_ledger_rebase_tests.rs` の `version_moves_…`）か、どちらかの名に中身を表す語を足すか（要件 1.2 はぶつかる時だけ足すと書き、ここはぶつからない）。
+5. **境界の外のファイルに残る、改める側の名指しをどうするか。** 本体の `runtime_tests/zorder_wiring_tests.rs` の 4・5・10・11・13 行は `areka-runtime` の改める名（`t_zwi06`・`zwi01／02`・`zwi06／07`・`zwi09`）を名指す。要件 6.1 で触れない。案: (i) `audit-areka-app` の brief へ申し送り、向こうが 2 本の改名と同じコミットで直す (ii) `session-crate-split` の着地の後にこの spec が直す（約束の変更が要る）(iii) 要件 5.3 の確かめの例外として記録する。逆向きに、`areka-runtime` の `zorder_wiring_tests.rs:18` は本体の 2 本（`zwi05`・`zwi08`）を名指す（こちらは着地の後も本体の 2 本が札を持つので、今の書き方のままでも指せる）。
+6. **本番のファイルのコメント（`zorder_group_ledger.rs:667` の `t_zrb9`）を直してよいか。** 要件 3.3 は本番の関数・型・定数を変えないとだけ書き、コメントには沈黙。直さないと要件 5.3 を短い書き方まで広げたときに当たりが残る。
+7. **要件 4.5 の行の取り違えを直すか。** `zorder-property/brief.md` で名の全体を持つのは 94 行で、59・81 行は短い書き方。要件の Boundary Context と 4.5 は 59・81 行だけを挙げる。同じく `doc/COMPAT_ARCHITECTURE.md` 196 行の `t_k5` を要件 4.4 の行に足すか。
+8. **`dola-cue-test-builder` の持ち物 `consumer_ledger_test_support.rs:28` のコメントに触るか。** 向こうが直すのは 126 行からの別の塊で、行は重ならない（約 100 行離れる）。要件 6.2 の 3 ファイルのほかの接触として「許す重なり」に足すか、触らずに申し送るか。
+
+あわせて、要件 5.3 の確かめの式を、古い名の全体のほかに札だけの短い書き方（`\bt_[a-z]+[0-9]+[a-z]?\b`）まで広げるか（1・6 の決めに従う）。
