@@ -299,3 +299,9 @@
 - 短い書き方の取り残し → 群ごとに、その群の札の短い書き方を検索してから閉じ、最後に要件 5.5 の式で全体を数える。
 - 並走の相手と同じファイルを触る（`consumer_ledger_test_support.rs:28`・§8 の行） → 触る前に `dola-cue-test-builder` のセッションへ知らせる。§8 は名の行だけ。
 - `cargo test <名>` で別のモジュールの同じ名が一緒に走る（⑴〜⑹） → 要件 1.3 で許した。名指しの文ではファイルの名を添える（要件 4.11）。
+
+## 12. 設計の討議の決め（2026-11-22）
+
+設計の議題 4 件を推奨案で確定した（design.md の「設計の決めた事」）: ⑴ 群ごとのコミット（G0〜G8 の 9 タスク）⑵ 改名表だけをコミットし、名の一覧と置き換えの道具は `target/test-name-work-tags/` に置く ⑶ 式 4・5 の例外に、`extra-character-windows/brief.md:131` の歴史の文・`audit-areka-app/brief.md` の本体の 2 本の名・`roadmap.md` のこの spec の行・この spec の文書を訳つきで足す ⑷ `areka-runtime` の `zorder_wiring_tests.rs:18` の「（zwi05）」「（zwi08）」は番号だけを消す。
+
+あわせて、設計の検証（design-validation.md・GO）の 3 件は自明な直しとして design.md に入れた（§8 の隣り合う行の衝突の解き方・式 4・5 の `-I` と表の数の主張をやめること・群の閉じ方に式 4・5 を足すこと）。
