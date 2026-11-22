@@ -11,19 +11,17 @@
 //! 同じ表を使う `every_write_kind_reaches_the_desk` が判定する。プロセスに 1 つの旗は立てない
 //! （取っ手だけで控える・構造の試験が固める）。根はワークツリーの `target\` の下だけ。
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-
-use areka_ghost::prop_sink::PropSetCueSink;
+use areka_ghost::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use areka_kanade::{ChangeHandoff, KanadeNotice};
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use areka_sylphya::persist::FsPersistIo;
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_sakura::contract::CueSink;
 use areka_sylphya::persist::withhold::WithholdGuard;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use bevy_ecs::prelude::*;
 use temp_path_kit::TempPath;
 
-use super::sites_tests::{KINDS, drain_desk};
+use super::write_failure_sites_tests::KINDS;
+use super::{publisher_of, read_back, routes, tree};
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
 use areka_placement::AuthorDpi;
@@ -36,44 +34,13 @@ use areka_session::boot_resolve::{
     record_last_shell, running_name,
 };
 use areka_session::boot_seam::insert_persist_wiring;
-use areka_session::ghost_session::{GhostSlot, StartupDescriptValues};
+use areka_session::ghost_session::StartupDescriptValues;
 use areka_session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
+    SwitchInFlight, SwitchStage, WelcomeAttempt, on_notice, switch_to,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_session::session_mark::{MarkInputs, Teardown, settle_session_mark};
-
-/// 根の下の木（相対パス → ファイルの中身。フォルダは `None`）。
-fn tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
-    fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Option<Vec<u8>>>) {
-        for entry in std::fs::read_dir(dir).expect("木を歩く") {
-            let path = entry.expect("ディレクトリ項目").path();
-            let rel = path.strip_prefix(root).expect("根の下").to_path_buf();
-            if path.is_dir() {
-                out.insert(rel, None);
-                walk(root, &path, out);
-            } else {
-                out.insert(rel, Some(std::fs::read(&path).expect("ファイルを読む")));
-            }
-        }
-    }
-    let mut out = BTreeMap::new();
-    walk(root, root, &mut out);
-    assert!(!out.is_empty(), "走査が空振りした: {}", root.display());
-    out
-}
-
-/// 保存の口から 1 つの key を読み返す。
-fn read_back(app: &Path, ghost: &Path, scope: PersistScope, key: PersistKey) -> Option<String> {
-    let roots = ScopeRoots {
-        app: Some(app.to_path_buf()),
-        ghost: Some(ghost.to_path_buf()),
-        ..ScopeRoots::default()
-    };
-    load_scope(scope, &roots, &FsPersistIo)
-        .into_iter()
-        .find_map(|(k, v)| (k == key).then_some(v))
-}
+use areka_session::write_failure::drain_system;
 
 /// 書き込みの場所を呼び、記憶の書き手の反映の柵と机の汲み出しを 1 回回して、机に届いたか
 /// （最初の出所が在るか）を返す。
@@ -86,57 +53,16 @@ fn reached_desk(
     if let Some(publisher) = publisher {
         publisher.barrier().expect("記憶の書き手は生きている");
     }
-    drain_desk(world);
+    drain_system(world);
     world.contains_resource::<FirstExit>()
-}
-
-fn routes(world: &mut World, ghost: GhostRoute, balloon: BalloonRoute) {
-    let mut ctx = world.resource_mut::<BootContext>();
-    ctx.current.ghost.route = ghost;
-    ctx.current.balloon.route = balloon;
 }
 
 /// 切替の予約（切替先 B は実際に起こすので、根の下の本物のフォルダを指す）。
 fn reservation(rig: &SwitchRig, stage: SwitchStage) -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: rig.root.ghost_dir("A"),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
-}
-
-fn prop_set_cue(key: PersistKey, value: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("sakura"),
-        command: CueCommand::command_carrier(
-            areka_ghost::prop_sink::PROP_SET_CUE_NAME,
-            vec![key.to_canonical_key(), value.to_owned()],
-        ),
-        duration: 0.0,
-    }
-}
-
-fn publisher_of(world: &World) -> SylphyaPublisher {
-    world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("ゴーストの実行系が起きている")
-        .sylphya_publisher()
-        .clone()
+    let mut r = super::reservation(stage);
+    r.target.dir = rig.root.ghost_dir("B");
+    r.prev.dir = rig.root.ghost_dir("A");
+    r
 }
 
 /// 1 種の判定の記録（種類, 期待のスコープ, 期待の key, 期待の値）。
@@ -373,7 +299,10 @@ fn every_write_kind_is_withheld_under_the_guard() {
     );
 
     let desk = reached_desk(world, Some(&publisher), |_| {
-        PropSetCueSink::new(publisher.clone()).emit(prop_set_cue(PersistKey::BootCount, "7"));
+        PropSetCueSink::new(publisher.clone()).emit(carrier_cue(
+            PROP_SET_CUE_NAME,
+            &[&PersistKey::BootCount.to_canonical_key(), "7"],
+        ));
     });
     let kind = "ゴーストのプロパティ";
     judge(
@@ -390,7 +319,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
     // 降ろす（取っ手の下のまま）。
     assert!(rig.shutdown(), "A を降ろせる");
     let world = &mut rig.world;
-    drain_desk(world);
+    drain_system(world);
 
     // --- 直（UI スレッドが置き場へ直に書く）: アプリの記憶 ---
     let desk = reached_desk(world, None, |w| {
@@ -428,7 +357,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
     assert_eq!(ghost_after_drop.as_deref(), Some("B"), "印は切替先");
     assert!(rig.shutdown(), "B を降ろせる");
     let world = &mut rig.world;
-    drain_desk(world);
+    drain_system(world);
 
     // 印を消す: 後始末が失敗を返さない（告知を選ぶ口も Ok）。
     let (verdict, clear_failed) = settle_session_mark(
@@ -501,5 +430,5 @@ fn every_write_kind_is_withheld_under_the_guard() {
     judged.dedup();
     let mut table = KINDS.to_vec();
     table.sort_unstable();
-    assert_eq!(judged, table, "判定した種類が要件 1 の表と合わない");
+    assert_eq!(judged, table, "判定した種類が表と合わない");
 }

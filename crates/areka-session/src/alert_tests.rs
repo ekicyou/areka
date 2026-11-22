@@ -1,9 +1,10 @@
-//! 無いときの告知の決定論テスト。
+//! 利用者への告知の決定論テスト。
 //!
 //! 確かめること: 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）のそれぞれが
 //! 抑止ありで `error!` をちょうど 1 件残すこと・根なし／ゴーストなし／バルーンなしの本文を
 //! 複数の置き場を並べた形で丸ごと固定すること・
-//! 抑止の環境変数の値の読み方。
+//! 抑止の環境変数の値の読み方・SHIORI の場面の 5 種類×名の有無・はい／いいえと警告の抑止・
+//! 自動終了での抑止。
 //!
 //! 抑止なしの呼び出し（タスクダイアログ）はモーダルで止まるので決定論テストに入れず、実機確認に回す。
 //! ここでは `raise` を必ず `suppressed = true` で呼ぶ。
@@ -31,17 +32,9 @@ fn raise_suppressed(scene: &AlertScene) -> Vec<CapturedEvent> {
 
 /// 記録がちょうど 1 件の `error!(event = "alert")` であることを確かめ、その本文を返す。
 fn only_alert_body(events: &[CapturedEvent]) -> String {
-    assert_eq!(
-        events.len(),
-        1,
-        "告知の記録はちょうど 1 件（要件 6.7）: {events:?}"
-    );
+    assert_eq!(events.len(), 1, "告知の記録はちょうど 1 件: {events:?}");
     let ev = &events[0];
-    assert_eq!(
-        ev.level,
-        tracing::Level::ERROR,
-        "告知の記録は error!（要件 6.2）"
-    );
+    assert_eq!(ev.level, tracing::Level::ERROR, "告知の記録は error!");
     assert_eq!(ev.field_str("event"), Some("alert"));
     ev.field_str("body").expect("本文を載せる").to_owned()
 }
@@ -210,7 +203,7 @@ fn suppressed_from_reads_the_value() {
 
 // ---------------------------------------------------------------- SHIORI が動かなくなった
 
-/// 題名が起動失敗と別であることを、既存 4 場面の側からも確かめる。
+/// 題名が起動失敗と別であることを、起動を止める 4 場面の側からも確かめる。
 #[test]
 fn startup_scenes_keep_the_startup_title() {
     let scenes = [
@@ -371,4 +364,13 @@ fn warn_ok_suppressed_shows_nothing_and_logs_one_warn() {
     assert_eq!(ev.field_str("title"), Some("インストールの警告 - X"));
     assert_eq!(ev.field_str("body"), Some("書庫: x.nar\n本文"));
     assert_eq!(ev.field("suppressed"), Some("true"));
+}
+
+/// 告知の抑止は、抑止の環境変数と有界の自動終了のどちらか一方でも立てば真。
+#[test]
+fn with_smoke_suppresses_when_either_is_set() {
+    assert!(!with_smoke(false, None));
+    assert!(with_smoke(true, None));
+    assert!(with_smoke(false, Some(0)));
+    assert!(with_smoke(true, Some(1000)));
 }

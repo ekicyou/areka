@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// MCP の待受の計画。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) enum ListenPlan {
-    /// `--sstp-listen` が渡されていない（今までどおり `AREKA_MCP_PORT` か既定）。
+    /// `--sstp-listen` が渡されていない（`AREKA_MCP_PORT` か既定）。
     #[default]
     NotGiven,
     /// `none` か値なし。
@@ -22,7 +22,7 @@ pub(crate) enum ListenPlan {
 pub(crate) enum ListenNote {
     /// 書式の誤り。`reason` は `"port"`（番号が 1〜65535 でない・読めない）か `"format"`。
     Rejected { item: String, reason: &'static str },
-    /// 127.0.0.1 以外のアドレス。
+    /// 127.0.0.1・`localhost` 以外のアドレス（`[…]:p` の IPv6 は `[::1]` でも）。
     NotLoopback { item: String },
 }
 

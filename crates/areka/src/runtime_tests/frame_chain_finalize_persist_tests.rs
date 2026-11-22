@@ -301,7 +301,7 @@ fn partner_moved_only_vertically_by_shiori_before_finalize_is_not_written() {
     assert_eq!(
         (partner.x, partner.y),
         (start.x, start.y - 33),
-        "並べ直しは台本が置いた相方をそこから動かさない（areka-P0-scope-chain-gap 7.3）"
+        "並べ直しは台本が置いた相方をそこから動かさない"
     );
     let saved = store.load();
     assert_eq!(

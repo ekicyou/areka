@@ -92,7 +92,7 @@ fn slots(log: &[(&'static str, String)]) -> Vec<&'static str> {
     log.iter().map(|(slot, _)| *slot).collect()
 }
 
-/// 読み直しは更新 → インストールの順に問い、更新が忙しければインストールを問わない。
+/// MCP からの読み直しは更新 → インストールの順に問い、更新が忙しければインストールを問わない。
 /// シェル・バルーンの切替は更新だけを問う。
 #[test]
 fn busy_slots_are_asked_update_first() {

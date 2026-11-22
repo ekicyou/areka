@@ -164,15 +164,6 @@ fn switch_lap(argv_session: bool) -> (LapMemory, Vec<CapturedEvent>) {
     (lap, events)
 }
 
-/// `event` の記録の `field` の値の列。
-fn field_of(events: &[CapturedEvent], event: &str, field: &str) -> Vec<Option<String>> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.field_str(field).map(str::to_owned))
-        .collect()
-}
-
 fn some(s: &str) -> Option<String> {
     Some(s.to_owned())
 }

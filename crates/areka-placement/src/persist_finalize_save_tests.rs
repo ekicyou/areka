@@ -103,7 +103,10 @@ impl Store {
 
     pub(crate) fn finish(self) {
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.parts
+            .handle
+            .join()
+            .expect("保存の書き手のスレッドが panic した");
     }
 }
 

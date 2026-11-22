@@ -38,8 +38,8 @@ fn assert_kept_and_degraded(io: &FakePersistIo, content: &str, reason_needle: &s
     let PersistOutcome::Degraded(failure) = &outcome else {
         panic!("使えないファイルの上の保存は Degraded になる: {outcome:?}");
     };
-    let PersistFailureCause::Io(reason) = &failure.cause else {
-        panic!("理由は Io で運ぶ: {failure:?}");
+    let PersistFailureCause::Unusable(reason) = &failure.cause else {
+        panic!("理由は Unusable で運ぶ: {failure:?}");
     };
     assert!(
         reason.contains(reason_needle),

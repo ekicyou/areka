@@ -137,11 +137,13 @@ pub fn boot_runtime(
         Err(err) => {
             if crate::boot_config::is_benign_boot_error(&err) {
                 warn!(
+                    event = "runtime_boot_origin_missing",
                     error = %err,
                     "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );
             } else {
                 error!(
+                    event = "runtime_boot_failed",
                     error = %err,
                     "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );

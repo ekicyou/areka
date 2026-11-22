@@ -19,7 +19,7 @@ use areka_emo_text::place::TextPlace;
 use areka_ghost::BasewareRoot;
 use areka_kanade::{KanadeMsg, ShioriMethod};
 use areka_sakura::ActorKey;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, save_scope,
     spawn_sylphya,
@@ -37,6 +37,7 @@ use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
 };
+use areka_placement::test_support::SharedFakeIo;
 use areka_placement::zorder_group_ledger::GroupSource;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
@@ -54,17 +55,6 @@ use face_tests::new_balloon_definitions;
 use areka_runtime::frame::wiring::test_support::{last_drain_mut, zorder_ledger};
 
 // ---------------------------------------------------------------- 土台
-
-/// 共有の偽の置き場（アクターへ移しつつ、同じ置き場を別の口の `load_scope` で読む）。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
 
 struct Rig {
     world: World,
@@ -191,13 +181,13 @@ fn rig_on(mut world: World, kind: SkinKind, with_memory: bool, finish: SwapFinis
     save_scope(
         PersistScope::Ghost,
         &roots,
-        &SharedFakeIo(store.clone()),
+        &SharedFakeIo::new(store.clone()),
         old_memory(),
     );
     let sylphya = with_memory.then(|| {
         spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(SharedFakeIo::new(store.clone())),
             runtime_sink: None,
         })
     });
@@ -301,7 +291,7 @@ fn memory(rig: Rig) -> Vec<(PersistKey, String)> {
     load_scope(
         PersistScope::Ghost,
         &rig.roots,
-        &SharedFakeIo(rig.store.clone()),
+        &SharedFakeIo::new(rig.store.clone()),
     )
 }
 

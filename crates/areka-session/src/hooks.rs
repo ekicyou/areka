@@ -77,7 +77,7 @@ fn set_shell_dir(world: &mut World, dir: PathBuf) -> bool {
         .is_some_and(|mut slot| slot.0.as_mut().is_some_and(|s| s.set_shell_dir(dir)))
 }
 
-/// 記憶に書くので、これが次の起動の選び方になる（`BalloonRoute` に腕を足さない）。
+/// 記憶へは `record_last_skin` が書くので、経路は `Memory`（`BalloonRoute` に腕を足さない）。
 fn set_current_balloon(world: &mut World, target: &SkinCandidate) -> bool {
     let Some(mut ctx) = world.get_resource_mut::<BootContext>() else {
         return false;

@@ -57,4 +57,4 @@ fn png(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
 
 #[cfg(test)]
 #[path = "png_image_tests.rs"]
-mod tests;
+pub(crate) mod tests;

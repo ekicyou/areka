@@ -41,7 +41,7 @@ pub(crate) fn rewire_runtime_consumers(
     areka_input::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
     // 窓の矩形の読み手を新しい実行系へ登録する。
     super::ghost_session_scope_rect::wire(world, runtime);
-    // 倍率と DPI の読み手を毎フレームの配線の表で登録する。配線が無い（LogSink の起動）ときは空の表で登録する。
+    // 倍率と DPI の読み手を毎フレームの配線の表で登録する。
     let table = world
         .get_non_send::<RuntimeWiring>()
         .map(RuntimeWiring::scope_scale_table);

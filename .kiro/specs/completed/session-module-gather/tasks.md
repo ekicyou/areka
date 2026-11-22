@@ -135,7 +135,7 @@ design.md「Migration Strategy」の S0〜S9 の順に並べる。各段の終�
 
 - [x] 8.3 (P) steering 3 本と audit 2 本の brief を移した先へ合わせる
   - `.kiro/steering/structure.md` の本体の節（`session/`・`roots/`・`cli/`・`readme`・起動と終了の最上位のファイル・`log_history.rs`・`:281` の出し直し・`:319`・`:348`・`:418`・`:419`）・`.kiro/steering/tech.md:171`・`.kiro/steering/logging.md:103` を移した先と新しい出所へ
-  - `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md` の「受け持つファイル」のパスだけを書き換え、持ち主は変えない（roots の芯と readme は `audit-areka-install-update` のまま）
+  - `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md` の「受け持つファイル」のパスだけを書き換え、持ち主は変えない（roots の芯と readme は `audit-areka-install-update` のまま）
   - 完了の形: steering 3 本が `session/` の新しい形と `main.rs` の残る範囲を述べ、audit 2 本の brief の受け持つファイルが全部実在するパスを指す
   - _Boundary: steering・brief_
   - _Dispatch: mechanical — パスの書き換えで持ち主は変えない_

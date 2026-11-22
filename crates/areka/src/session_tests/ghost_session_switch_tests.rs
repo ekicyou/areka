@@ -5,39 +5,35 @@
 //! 版が kanade を `Fault` で止めること。後半は台本の `\![change,ghost,…]` から切替先の定常到達
 //! までを 1 周させる。判定は集めてから 1 回・降ろすのは必ず有界に行う。
 
-use std::sync::mpsc::TryRecvError;
+use std::path::PathBuf;
+use std::sync::mpsc::{Sender, TryRecvError};
 
-use areka_kanade::{KanadeStopCause, ShioriFaultKind};
+use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFaultKind};
+use areka_mcp::ToolOutcome;
+use areka_mcp::tools::get_property::Args;
+use areka_mcp::tools::{ToolCall, ToolRequest};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
+use sample_ghost_kit::SampleRoot;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use wintf::ecs::{FrameFinalize, Input, Update};
 
+use super::levels_of;
 use crate::menu::{Frame, MenuWiring};
+use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::switch_rig;
 use areka_input::user_break::UserBreakWiring;
-use areka_runtime::spine::RecordedCall;
+use areka_runtime::spine::{RecordedCall, ScriptedShioriHandle};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::ghost_quit::KanadeNoticeRx;
-use areka_session::ghost_session::GhostBootInputsSource;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
+use areka_session::ghost_session::{GhostBootInputs, GhostBootInputsSource};
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{
     CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
 };
 use areka_session::readme::ReadmeWiring;
-
-/// 呼出列を「種類 名前」の列へ写す（Reference は見ない）。
-fn kinds(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|c| match c {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            RecordedCall::Unload => "UNLOAD".to_owned(),
-        })
-        .collect()
-}
 
 /// `folder` を 1 回起こした記録に `basewareversion` まで届いたか（起動系列の終わり）。
 fn booted(rig: &SwitchRig, folder: &str) -> bool {
@@ -164,13 +160,13 @@ fn rig_connect_fail_stops_kanade_with_fault() {
 // ── 台本の切替命令から切替先の定常到達までの 1 周 ──
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替（`OnGhostChanging` を送らせる）を命じる。
-const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
+pub(super) const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
 /// A の `OnGhostChanging` が返す送り出しの台本（B の `OnGhostChanged` の Ref1 に載る）。
 const A_SEND_OFF: &str = "\\0Bへ交代します\\e";
 
 /// A の偽の SHIORI: 標準の台本（`OnBoot`＝`on_boot`）に `OnGhostChanging`＝送り出しの台本と
 /// `OnGhostChanged`＝`on_changed` を足したもの。
-fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShiori {
+pub(super) fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShiori {
     FakeShiori::Scripted(Box::new(move || {
         standard_script(on_boot)
             .get("OnGhostChanging", Ok(Some(A_SEND_OFF.to_owned())))
@@ -179,14 +175,14 @@ fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShior
 }
 
 /// B の偽の SHIORI: 標準の台本（`OnBoot` あり）に `OnGhostChanged` 204 を足したもの。
-fn ghost_b() -> FakeShiori {
+pub(super) fn ghost_b() -> FakeShiori {
     FakeShiori::Scripted(Box::new(|| {
         standard_script("\\0B\\e").get("OnGhostChanged", Ok(None))
     }))
 }
 
 /// A・B を据えた土台（窓の閉包の投函先つき・A は起動記録あり＝`OnBoot` の台本から始まる）。
-fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
+pub(super) fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
     let mut rig = switch_rig(vec![("A", a), ("B", b)]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
@@ -195,13 +191,65 @@ fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
 }
 
 /// `Input`／`Update`／`FrameFinalize` の各段に載っている系の数。
-fn systems_lens(world: &World) -> [usize; 3] {
+pub(super) fn systems_lens(world: &World) -> [usize; 3] {
     let schedules = world.resource::<Schedules>();
     [
         schedules.get(Input).map_or(0, |s| s.systems_len()),
         schedules.get(Update).map_or(0, |s| s.systems_len()),
         schedules.get(FrameFinalize).map_or(0, |s| s.systems_len()),
     ]
+}
+
+/// MCP の `get_property` を受け口へ送って汲み、その場の答え（ゴースト名と結果）を取る。
+pub(super) fn ask(
+    rig: &mut SwitchRig,
+    tx: &Sender<ToolRequest>,
+    name: &str,
+) -> Option<(String, ToolOutcome)> {
+    let (req, pending) = ToolRequest::new(ToolCall::GetProperty(Args {
+        property_name: name.to_owned(),
+        ghost_name: None,
+    }));
+    tx.send(req).ok()?;
+    crate::mcp::drain(&mut rig.world);
+    pending
+        .try_answer()
+        .ok()
+        .flatten()
+        .map(|a| (a.ghost, a.outcome))
+}
+
+/// emo2 の同梱バルーンのフォルダ。
+pub(super) fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
+    sample
+        .balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
+}
+
+/// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
+/// 台本は呼ぶたびに新しい。偽の SHIORI の観測口も返す（降ろしの待ちの目印＝呼び出しの数）。
+pub(super) fn scripted_inputs(
+    sample: &SampleRoot,
+    kanade_stop: Sender<KanadeNotice>,
+) -> (GhostBootInputs, ScriptedShioriHandle) {
+    let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
+    let inputs = GhostBootInputs {
+        wiring: areka_runtime::RuntimeInputs {
+            ghost_root: sample.folder().to_path_buf(),
+            balloon_root: emo2_balloon(sample),
+            shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
+                Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
+            })),
+            ticker: areka_ghost::TickerMode::Disabled,
+            app_profile_dir: None,
+            boot_origin: BootOrigin::Plain,
+        },
+        helper_exe: PathBuf::from("session_tests/使わない/helper.exe"),
+        kanade_stop,
+        modules: areka_session::boot_request::ModulePolicy::Load,
+    };
+    (inputs, handle)
 }
 
 /// 呼出列から `id` の GET の Reference を取る。
@@ -215,15 +263,6 @@ fn get_refs(calls: &[RecordedCall], id: &str) -> Option<Vec<String>> {
     })
 }
 
-/// `event` の記録の水準の列。
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
-
 /// フォルダの絶対パスの文字列（Ref3 の形）。
 fn abs(rig: &SwitchRig, folder: &str) -> String {
     std::path::absolute(rig.root.ghost_dir(folder))
@@ -235,7 +274,7 @@ fn abs(rig: &SwitchRig, folder: &str) -> String {
 /// 停止通知の受け口が生きた送出端につながっているか。土台の作り口が持つ送出端の写しを
 /// 先に落とすので、残る送出端は置き場のゴーストの kanade のものだけ（降ろしたゴーストの
 /// 送出端は降ろすときに落ちる）。未読の通知は読み捨て、最後が `Empty` なら生きている。
-fn notice_rx_live(world: &mut World) -> bool {
+pub(super) fn notice_rx_live(world: &mut World) -> bool {
     world.remove_non_send::<GhostBootInputsSource>();
     let rx = &world.non_send::<KanadeNoticeRx>().0;
     loop {
@@ -248,7 +287,7 @@ fn notice_rx_live(world: &mut World) -> bool {
 
 /// 切替で起きたゴーストの定常到達まで回す（`folder` の起動が `boots` 回に達し、予約が消えた
 /// 時点＝迎え入れの定常の通知を処理した時点。終了が指示されたら打ち切る）。
-fn pump_to_welcomed(rig: &mut SwitchRig, folder: &str, boots: usize) -> bool {
+pub(super) fn pump_to_welcomed(rig: &mut SwitchRig, folder: &str, boots: usize) -> bool {
     rig.pump_talking_until(|rig| {
         rig.exit_requested()
             || (rig.calls(folder).len() >= boots
@@ -518,6 +557,14 @@ fn switch_to_self_takes_down_and_reboots_a() {
          A の呼出列・2 度目の OnGhostChanged の Ref2・B を起こした回数・終了の指示・予約が残っている・\
          降ろせた）"
     );
+}
+
+/// `event` の記録の `field` の値の列。
+fn field_of(events: &[CapturedEvent], event: &str, field: &str) -> Vec<Option<String>> {
+    super::events_named(events, event)
+        .into_iter()
+        .map(|e| e.field_str(field).map(str::to_owned))
+        .collect()
 }
 
 // 失敗方向（既定へ戻す・致命・孤児の窓 0）は子のファイルへ分ける（1 ファイルの行数を抑える）。

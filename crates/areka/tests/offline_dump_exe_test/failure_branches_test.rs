@@ -275,3 +275,36 @@ fn a_missing_shell_folder_writes_no_png_and_exits_two() {
     assert_eq!(code, 2, "{stderr}");
     assert!(!out.exists(), "PNG を書かない");
 }
+
+/// 下地の幅だけが一辺の上限を越えるシェルは、どの面の PNG も書かず、Error 1 行で 2。
+#[test]
+fn a_canvas_wider_than_the_limit_writes_no_png_and_exits_two() {
+    let surfaces = [
+        "surface0",
+        "{",
+        "element0,overlay,base.png,0,0",
+        "}",
+        "surface1",
+        "{",
+        "element0,overlay,base.png,20000,0",
+        "}",
+    ];
+    let root = build_ghost("offline-exe-too-wide", &["name,g"], &surfaces, &[BASE]);
+    let (out, csv) = (root.child("out"), root.child("errors.csv"));
+    let (code, stderr) = dump(
+        &root,
+        &[
+            "--dump-surface-list",
+            "0-1",
+            "--dump-output-dir",
+            &out.display().to_string(),
+            "--dump-error-log",
+            &csv.display().to_string(),
+        ],
+    );
+    assert_eq!(code, 2, "{stderr}");
+    assert!(!out.exists(), "PNG を書かない");
+    let rows = csv_rows(&csv);
+    assert_eq!(rows.len(), 1, "下地が大きすぎる 1 行");
+    assert_eq!(rows[0].level, "Error");
+}

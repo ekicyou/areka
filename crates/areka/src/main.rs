@@ -2,41 +2,26 @@
 
 //! areka 本番アプリ骨格
 //!
-//! wintf を使ったデスクトップマスコット「ぱすたさん」の本番アプリ。骨格は「アプリ起動の器」に徹する:
-//! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
-//! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
-//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）・SHIORI 実走デモの env-gate 呼び口
-//! - 起動窓シーム（`ghost_session::open_ghost_windows`・本物のゴースト窓を開く。準備が通らなければ
-//!   「起動窓を開けない」の告知の上で終了コード 1 で終える）
-//! - `main` 自身が所有するメッセージループ（`app.run()`）と終了の指示（`app_exit::quit_app`）での正常終了
-//!
-//! 座標・配置ロジックは `placement` モジュールが所有し、骨格自身は座標を一切持たない。
-//!
-//! `main` は `WinApp` 構築／`ghost_session::open_ghost_windows` の後で `ghost_session::boot_ghost` を呼び、
-//! 実 sink boot（`wired=true`）／`LogSink`×2 フォールバック boot（`wired=false`）の呼び分けはそこが行う。
-//! `run()` 復帰後は `GhostSession::shutdown(CloseReason::User { scope: 0 })`（loop ticker → 終了統括 →
-//! seriko join）で終了を総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない。
+//! 起動と終了の中身は `areka-session` にあり、`main` は次の順につなぐ「アプリ起動の器」に徹する。
+//! 座標・配置は `areka-placement` が持ち、骨格自身は座標を一切持たない。
+//! - ログ初期化（`RUST_LOG` が使えなければ info）・パニックハンドラ・起動オプションの読み取り
+//! - 起動前の解決（根 → ゴースト → バルーン → 構成入力）と書けるかの確かめ。決まらなければ告知して終了コード 1
+//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`・失敗は `error!` に残す）
+//! - 系の登録（`BODY_SYSTEMS` で本体だけの系を渡す）と起動の文脈の据え付け
+//! - 起動窓シーム（`ghost_session::open_ghost_windows`）と最初のゴーストの起動（`ghost_session::boot_ghost`）。
+//!   窓を開けない・起動中の印を書けないときは告知して終了コード 1。実 sink の結線が成立しなければ
+//!   `LogSink` へ倒れて続ける
+//! - `main` 自身が所有するメッセージループ（`app.run()`）。戻るのは `app_exit::quit_app` の終了の指示のとき
+//! - `run()` 復帰後の後始末（`finish_after_run`）: 降ろす（loop ticker → 終了統括 → seriko join）→ 起動中の印の始末
+//!   → 書いている最中の背景の仕事を待つ → 告知 → CPU 報告の最後の 1 枚。終了コードは最後に決める
 
 use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::*;
 
-/// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
-/// 脳（`IShiori` 実装）が `Load` で受け取る sink を areka 側で実装する。
+/// 試験用の `IShioriHost` 実装。使い手は `mcp/get_property_tests.rs` のテストだけ。
+#[cfg(test)]
 mod shiori_host;
-
-/// in-proc アクティベーション経路とリクエスト利用規律（単一 in-flight・遅延完了タイムアウト）。
-/// in-proc の `IShiori`（脳）へ到達し `Load` で sink を渡す最小経路と、単一 in-flight・
-/// `Unload` 保留取消・設定可能タイムアウトの利用規律を所有する。
-mod shiori_session;
-
-/// 製品コード（非テスト）のリファレンス脳＋ファクトリ＋C 入口。`#[implement(IShiori)]`/
-/// `#[implement(IShioriFactory)]` 実装＋純粋C コンストラクタ `shiori_factory` を所有する正解見本。
-mod reference_brain;
-
-/// 実走デモドライバ。`shiori_factory`→`ShioriSession` で activate→数往復 get→
-/// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
-mod shiori_demo;
 
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く。
 #[cfg(test)]
@@ -68,25 +53,6 @@ mod thread_roles;
 /// target `areka::perf` が点いているときだけ報告スレッドを起こし、名簿を舐めた
 /// `perf(thread)` 行と `perf(process)` 行を周期＋終了直前に出す。消灯時は費用 0。
 mod perf_thread_report;
-
-/// 遅延応答と push 経路の end-to-end 結合テスト。
-/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
-/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
-#[cfg(test)]
-mod shiori_e2e_tests;
-
-/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト。
-/// 新 ABI の生成〜利用〜teardown（factory create→get→drop teardown・「未ロード状態」は存在しない）と、
-/// `Deferred` 保留中の drop 取消→再 activate 後の正常動作を通しシナリオで実証する。
-#[cfg(test)]
-mod shiori_lifecycle_e2e_tests;
-
-/// 製品 `ReferenceFactory`/`ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト。
-/// `shiori_factory` で取得した本物の製品 factory/brain を `ShioriSession` 越しに駆動し、
-/// load_dir/shiori_name の貫通（D1）・即時→遅延+complete→raise→notify の数往復・単一 in-flight 拒否・
-/// 決定的タイムアウト・stale complete 拒否・drop teardown を実時間 sleep に依存せず検証する。
-#[cfg(test)]
-mod shiori_reference_e2e_tests;
 
 /// `.nar` を入れる手続き。
 mod install;
@@ -193,7 +159,9 @@ fn main() -> Result<()> {
     // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）。実 sink 結線
     // （`wire_runtime`）は UI 基盤の後なので、`WinApp` 構築はすべての boot より前に置く。
     // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る。
-    let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
+    let app = WinApp::with_exit_policy(ExitPolicy::Explicit).inspect_err(|e| {
+        tracing::error!(event = "winapp_init_failed", error = %e, "[main] UI の基盤を初期化できませんでした")
+    })?;
 
     // 系の登録（プロセスに 1 回・ここ 1 か所）。停止通知の channel は 1 本だけ作り、受信端をここで
     // 受け口へ据え、送出端の写しを下の起動の 2 経路へ渡す。main 自身の送出端は起動の分岐の後で落とす。
@@ -231,12 +199,6 @@ fn main() -> Result<()> {
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
 
-    // リファレンス脳の実走デモ。`AREKA_SHIORI_DEMO` が有効なときのみ main スレッドで同期駆動する
-    // （既定 OFF）。診断目的なので失敗しても起動を中断せず、`app.run()` より前に完走させる。
-    if let Err(e) = shiori_demo::run_demo_if_enabled() {
-        tracing::error!(error = %e, "[main] shiori reference demo failed");
-    }
-
     // 起動窓シーム: ゴースト定義から本物のゴースト窓（キャラ窓＋バルーン窓）を配置・生成する。
     // 準備が通らなければ（モニタ 0 台・起動中の削除等）「起動窓を開けない」を告知して終了コード 1 で
     // 終える（窓 0 で居座る経路は作らない。配置の失敗と作業プールの欠落は同じ告知）。戻り値は配置準備が
@@ -261,7 +223,7 @@ fn main() -> Result<()> {
 
     areka_session::smoke_exit::arm(&app);
 
-    // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink`×2 の
+    // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink` 1 本と `DiscardSink` 1 本の
     // fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・loop ticker）は `GhostSession` に束ねて置き場
     // （`GhostSlot`）へ入れる（切替が入れ替え、`run()` の後にここへ取り出して降ろす）。印の値が在れば
     // 由来は「前回落ちた」。起こす前に起動中の印を書く（argv で始まったプロセスは書かない）。
@@ -275,15 +237,13 @@ fn main() -> Result<()> {
     )
     .map_err(write_failure::stop_boot)?;
 
-    // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路と起動入力の作り口が持つ写しだけ）。
     drop(kanade_stop_tx);
 
     // `main` 所有のブロッキングメッセージループ。窓が 0 になっても戻らず、`app_exit::quit_app` の
     // 終了の指示で `run()` が戻る。失敗でも後始末は通すので `?` で抜けない。
     let run = app.run();
-    // MCP の受け口を外す（溜まった要求は即座に "shutting down"・`begin_close` より前）。
+    // 溜まった要求を即座に "shutting down" で返すため、`begin_close` より前に外す。
     mcp::close(app.world().borrow_mut().world_mut());
-    // `run` は下で `finish_after_run` へ渡すので、成否をここで控える。
     let run_ok = run.is_ok();
     // 終了を始める: 背景の仕事の門を閉じ、待っている依頼を捨てる。書いている最中の仕事は、降ろして
     // 印の始末を済ませた後・告知の前に、ここから数えて上限まで待つ。
@@ -305,7 +265,7 @@ fn main() -> Result<()> {
     // 降ろす途中の書き込みの失敗の受け手（OS のセッションの終了で処理済みなら `None`）。
     let late = write_failure::take_receiver(app.world().borrow_mut().world_mut());
 
-    // 後始末（降ろす → 印の始末 → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、終了コードは最後に
+    // 後始末（降ろす → 印の始末 → 書いている最中の仕事を待つ → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、終了コードは最後に
     // 決める。告知は降ろした後。① で loop ticker は止まっており、降ろす結果は告知の後で返すので ②③ が
     // 失敗しても告知は出る。利用者が閉じたらそのまま進む。
     finish_after_run(run, fault, move || {
@@ -372,14 +332,12 @@ pub(crate) const BODY_SYSTEMS: areka_session::body_systems::BodySystems =
         cue_sinks: body_cue_sinks,
     };
 
-/// `install::register` → `update::register` → `mcp::register` の順。
 fn register_body_after_input(world: &mut World) {
     install::register(world);
     update::register(world);
     mcp::register(world);
 }
 
-/// `file_drop::attach_file_drop_receivers` → `menu::shortcut::attach_shortcut_receivers` の順。
 fn attach_body_receivers(world: &mut World) {
     // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す。起こし直しもこの閉包を通るので、
     // 回数によらず新しい窓に差さる。
@@ -389,30 +347,22 @@ fn attach_body_receivers(world: &mut World) {
     menu::shortcut::attach_shortcut_receivers(world);
 }
 
-/// `menu::wire_menu` → 枠の登記 8 本 → `install::names::reseed` の順。
 fn wire_body_after_runtime(world: &mut World, runtime: &areka_ghost::GhostRuntime) {
     // 右クリックメニューの結線: 終了の項目が先に済んだ入力の結線（`wire_mouse_input`）を使う。
     menu::wire_menu(world, runtime.kanade().clone());
-    // 「ゴースト」枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
+    // 枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
     menu::ghost_frame::register(world);
-    // 「シェル」「バルーン」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::shell_frame::register(world);
     menu::balloon_frame::register(world);
-    // 「インストール」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::install_frame::register(world);
-    // 「置き場を追加…」「置き場を外す」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::roots_frame::register(world);
-    // 「ネットワーク更新」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::update_frame::register(world);
-    // 「シェル位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::reset_pos_frame::register(world);
-    // 「バルーン位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
     menu::reset_balloon_pos_frame::register(world);
     // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
     install::names::reseed(world, runtime);
 }
 
-/// `install::desk::on_steady` → `update::desk::on_steady` の順。
 fn tell_desks_steady(world: &mut World) {
     // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
     install::desk::on_steady(world);
@@ -512,14 +462,14 @@ fn boot_first_ghost(
     balloon: &areka_session::boot_resolve::BalloonDecision,
 ) -> std::result::Result<(), areka_sylphya::PersistFailure> {
     use areka_session::{boot_config, boot_resolve, ghost_session};
-    let argv_session = world
-        .get_resource::<boot_config::BootContext>()
-        .is_some_and(|ctx| ctx.argv_session);
-    match world.get_resource::<boot_config::BootContext>() {
-        Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
-            &ctx.app_profile_dir,
-            &boot_resolve::running_name(ghost),
-        )?, // 書けなければゴーストを起こさない（`main` が起動を止める）
+    let (argv_session, app_profile_dir) = match world.get_resource::<boot_config::BootContext>() {
+        Some(ctx) => (ctx.argv_session, Some(ctx.app_profile_dir.clone())),
+        None => (false, None),
+    };
+    match app_profile_dir {
+        Some(dir) if !argv_session => {
+            boot_resolve::write_session_mark(&dir, &boot_resolve::running_name(ghost))?
+        } // 書けなければゴーストを起こさない（`main` が起動を止める）
         Some(_) => tracing::debug!(
             event = "session_mark_untouched_argv",
             "[main] argv で始まったプロセスなので起動中の印を書きません"
@@ -674,6 +624,8 @@ mod finish_after_run_tests;
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]
 mod session_mark_tests;
+
+/// UI の基盤の初期化の失敗が記録に残ることの本文の確かめ。
 #[cfg(test)]
-#[path = "main_session_mark_write_tests.rs"]
-mod session_mark_write_tests;
+#[path = "main_winapp_log_tests.rs"]
+mod main_winapp_log_tests;

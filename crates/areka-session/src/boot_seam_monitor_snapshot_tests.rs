@@ -129,19 +129,18 @@ fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
     );
 }
 
-/// シームは観測を足すだけで、権威 Resource の中身（placement の全判断が読む値）を
-/// 一切変えない。
+/// シームが返す権威 Resource（placement の全判断が読む値）は `MonitorSources::from_monitors` と同じ中身。
 ///
 /// 起動時が作るのは作業領域源と**モニタ別拡大率表**の 2 源であり、実行時の同期段
 /// （`areka_runtime::frame::work_area_sync`）と**同一の構築関数**を通る——起動時だけが別の作り方を
 /// すると、同期が入った後も起動時の値だけが違う形になり得る。
 #[test]
-fn boot_snapshot_returns_the_same_authority_resource_as_before() {
+fn boot_snapshot_returns_the_sources_built_from_the_same_monitors() {
     let monitors = synthetic_monitors();
     assert_eq!(
         boot_monitor_snapshot(&monitors),
         MonitorSources::from_monitors(&monitors),
-        "観測増設が権威 Resource の中身を変えている"
+        "構築点の戻りが `MonitorSources::from_monitors` と違う"
     );
 }
 

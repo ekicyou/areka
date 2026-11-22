@@ -27,7 +27,7 @@
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
 //! source→config→measure→resolver を束ねる配置準備の合成ルート [`prepare_ghost_windows`]
-//! を持つ（シームの結線自体は本体の `ghost_session::prepare_ghost_windows`）。
+//! を持つ（シームの結線自体は `areka-session` の `ghost_session::prepare_ghost_windows`）。
 
 pub mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手。

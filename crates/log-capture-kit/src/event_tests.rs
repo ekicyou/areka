@@ -15,7 +15,7 @@
 //!   `crates/areka-emo-atlas/src/log_capture.rs`・`crates/areka-emo-compose/src/log_capture.rs`
 //!   の同型。
 //! - 宛先を含まない形: `crates/areka-input/src/choice_drain.rs` の `capture_logs` と
-//!   `crates/areka-input/src/balloon_test_support.rs`・`crates/areka/src/shiori_demo.rs`・
+//!   `crates/areka-input/src/balloon_test_support.rs`・
 //!   `crates/wintf/src/ecs/window_proc/dpi_helpers_tests.rs` の同型。
 
 use std::collections::BTreeMap;

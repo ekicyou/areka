@@ -20,7 +20,7 @@ pub(super) const BUST_RECT: (i64, i64, i64, i64) = (133, 270, 229, 326);
 /// 全透明になる（狙える絵が出ない）。
 pub(super) const REAL_BIND_IDS: [u32; 5] = [1101, 1206, 1302, 1502, 1800];
 
-/// smoke 自動 close の env ゲート名（main.rs／他 example と同名）。
+/// smoke 自動 close の env ゲート名（`areka-session` の `smoke_exit.rs`／他 example と同名）。
 pub(super) const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
 /// 期待 k ゲートの env 名（値は `"5/4"` 等の分数か `"2"` 等の整数）。

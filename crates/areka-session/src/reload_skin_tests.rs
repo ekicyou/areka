@@ -3,25 +3,18 @@
 //! 置き場のゴーストは kanade の送出端と seriko の送り手だけを持つテスト用の組み立て（実行系が無いので
 //! 今のシェルは分からず、シェルの段は始められない）。差し替えの相の合図（`skin_applied`・
 //! `skin_phase_ended`）はここから直に呼ぶ（本番の呼び手は `areka-runtime` の `frame/switch.rs` で、
-//! 口の束（`hooks.rs`）を通って届く）。名前と readme とシェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
+//! 口の束（`areka-runtime` の `session_hooks.rs`。中身は `hooks.rs` が据える）を通って届く）。名前と readme とシェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
 //! 判定は集めてから 1 回。
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_emo_compose::BindSet;
-use areka_emo_present::EmoPresenter;
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::BasewareRoot;
 use areka_kanade::KanadeMsg;
 use areka_seriko::{
-    AnimationTable, BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
-    spawn_seriko,
+    BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver, spawn_seriko,
 };
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -31,14 +24,12 @@ use tracing::Level;
 
 use super::*;
 use crate::boot_config::BootContext;
+use crate::boot_resolve::boot_resolve_tests::{count_event, events_named};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute};
 use crate::ghost_session::GhostSession;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::readme::ReadmeWiring;
-use areka_runtime::assets::{BootAssets, LoopTables};
-use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::reload_args::DescriptParts;
-use areka_runtime::talk_clock::TalkClock;
 
 struct Rig {
     world: World,
@@ -46,36 +37,6 @@ struct Rig {
     root: BasewareRoot,
     ghost: String,
     _temp: TempPath,
-}
-
-/// 窓も GPU も持たない結線（入口は有無だけを見る）。
-fn headless_wiring() -> RuntimeWiring {
-    RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        BootAssets {
-            shells: Vec::new(),
-            balloons: Vec::new(),
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
-            bind_resolver: BindResolver::empty(),
-            loop_tables: LoopTables {
-                shell: AnimationTable::empty(),
-                balloon: BTreeMap::new(),
-            },
-            shell_author_dpi: 96,
-            balloon_author_dpi: 96,
-            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
-        },
-    )
 }
 
 /// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`）・置き場・結線・窓口の登録をそろえた World。
@@ -97,7 +58,7 @@ fn rig(label: &str) -> Rig {
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(Some(tx), root.ghost_dir("A")).with_seriko_sink(seriko),
     )));
-    world.insert_non_send(headless_wiring());
+    world.insert_non_send(areka_runtime::frame::shared_test_support::wiring().1);
     register(&mut world);
     let ghost = std::path::absolute(root.ghost_dir("A"))
         .unwrap()
@@ -291,9 +252,8 @@ fn applied_phase_end_with_empty_queue_is_done() {
     assert_eq!(
         (
             ends(&events),
-            events
-                .iter()
-                .find(|e| e.field_str("event") == Some("reload_done"))
+            events_named(&events, "reload_done")
+                .first()
                 .and_then(|e| e.field("target").map(str::to_owned)),
             events.iter().filter(|e| e.level <= Level::WARN).count(),
             rig.world.get_non_send::<ReloadInFlight>().is_none(),
@@ -429,9 +389,8 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
 fn names_step_read_failure_keeps_going_and_no_runtime_fails() {
     let mut rig = rig("areka-reload-skin-names");
     let (_, unread) = capture(|| request_reload(&mut rig.world, req(parts(true, false, false))));
-    let read_failed: Vec<_> = unread
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_descript_read_failed"))
+    let read_failed: Vec<_> = events_named(&unread, "reload_descript_read_failed")
+        .into_iter()
         .map(|e| {
             (
                 e.level,
@@ -608,10 +567,7 @@ fn reload_requests_after_kanade_died_fail_once_and_leave_no_mark() {
         got.push((failed, rig.world.get_non_send::<ReloadInFlight>().is_some()));
     }
     let (_, events) = capture(|| request_reload(&mut rig.world, req(ReloadTarget::Shiori)));
-    let fourth_refused = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_refused"))
-        .count();
+    let fourth_refused = count_event(&events, "reload_refused");
     assert_eq!(
         (got, fourth_refused),
         (

@@ -51,6 +51,33 @@ fn kanade_answers(kanade: &std::sync::mpsc::Sender<KanadeMsg>) -> bool {
             .is_ok()
 }
 
+/// 実行系を外すと単位の送出端も外れ、2 度目に外すものは無い。外した実行系と単位はどちらも降ろせる。
+///
+/// # 非空虚性
+/// 外しても送出端を残すと 2 つ目で、外した実行系を単位に残すと 3 つ目で赤。
+#[test]
+fn split_runtime_drops_the_sender_and_a_second_split_is_none() {
+    let mut rig = running_a();
+    let (first, sender_gone, second_none) = {
+        let mut slot = rig.world.non_send_mut::<GhostSlot>();
+        let session = slot.0.as_mut().expect("A が置き場に在る");
+        let first = session.split_runtime();
+        (
+            first,
+            session.kanade().is_none(),
+            session.split_runtime().is_none(),
+        )
+    };
+    let old_down = first.map(|old| old.shutdown(CloseReason::System).is_ok());
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (old_down, sender_gone, second_none, down),
+        (Some(true), true, true, true),
+        "(外した実行系を降ろせた・送出端なし・2 度目は None・単位を降ろすと join が戻る)"
+    );
+}
+
 /// 組み直せた: 同じ単位に新しい実行系が付き、窓の側は残り、単位の送出端の先に生きた
 /// kanade が居る。新しい SHIORI は `OnInitialize` の Ref0＝`reload` で起き（由来 `Reloaded{Shiori}`）、
 /// 台詞を求める GET（`OnBoot` ほか）を受けない。

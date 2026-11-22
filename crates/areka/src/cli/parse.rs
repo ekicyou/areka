@@ -38,7 +38,7 @@ enum Kind {
     DumpPending,
     /// `--install`（値は入れる書庫）。
     Install,
-    /// 正典に載っているが areka が扱わない。
+    /// areka が扱わない名前（表の中のものと、表に無い `--dump-*`）。
     Unsupported,
 }
 
@@ -202,11 +202,11 @@ fn read_name(arg: &str) -> Option<(String, Arity, Kind, Option<String>)> {
 pub(crate) enum ParseNote {
     /// 知らない名前。warn
     Unknown { arg: String },
-    /// 扱わない名前。warn
+    /// 扱わない名前（表の `Kind::Unsupported` と、表に無い `--dump-*`）。warn
     Unsupported { name: String },
     /// 値を取る名前の値が無く、意味も定まっていない。`--offline-dump` があるときの `--dump-*` の 7 つ。warn
     MissingValue { name: String },
-    /// `--option`・`--ghost` 以外の重ね。warn
+    /// `--random`・`--sstp-listen`・`--help`・`--offline-dump`・値を取る `--dump-*` の 7 つ（`--dump-shell`・`--dump-scope`・`--dump-surface-list`・`--dump-output-dir`・`--dump-output-prefix`・`--dump-error-log`・`--dump-bind`）の重ね（`--option`・`--ghost`・`--install` は値を足すので出ない）。warn
     Repeated { name: String },
     /// 値を取らない名前の `=` の値（使わない）。warn
     ValueIgnored { name: String },

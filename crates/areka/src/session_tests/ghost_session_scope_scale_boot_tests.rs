@@ -1,30 +1,24 @@
 //! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト。
 //!
 //! 起動の後に毎フレームの配線（`RuntimeWiring`）の表へ手で書き、MCP の `get_property`（受け口から汲む）と
-//! ゴーストの道（`ShioriHostSink` の `GetProperty`）の答えを見る。実の窓・実の画面は使わない。
+//! ゴーストの道（本番の `\![get,property]` の受け口 `PropGetCueSink` が kanade へ頼む返し）の答えを見る。実の窓・実の画面は使わない。
 
 use std::sync::mpsc::{self, Sender};
 
+use areka_ghost::prop_get_sink::PropGetCueSink;
 use areka_ghost::sylphya_wiring::ghost_asker_id;
+use areka_kanade::KanadeMsg;
 use areka_mcp::ToolOutcome;
-use areka_mcp::tools::get_property::Args;
-use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
-use shiori_abi::error::ShioriError;
-use shiori_abi::interface::IShioriHost;
-use windows::core::HSTRING;
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
+use areka_mcp::tools::{ToolRequest, outcome};
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_sakura::contract::CueSink;
 
-use crate::sample_test_support::switch_rig;
-use crate::shiori_host::ShioriHostSink;
+use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig, pump_to_welcomed};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::TargetWindow;
 use areka_session::ghost_session::ghost_session_scope_scale::test_support::applied;
 use areka_session::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
-use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-
-/// A の `OnBoot`: 台詞の途中で B への切替を命じる。
-const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 
 const NAMES: [&str; 5] = [
     "currentghost.scope(0).scaling",
@@ -43,29 +37,9 @@ const AT_150: [Option<&str>; 5] = [
     None,
 ];
 
-fn ghost_a(on_boot: &'static str) -> FakeShiori {
-    FakeShiori::Scripted(Box::new(move || {
-        standard_script(on_boot)
-            .get(
-                "OnGhostChanging",
-                Ok(Some("\\0Bへ交代します\\e".to_owned())),
-            )
-            .get("OnGhostChanged", Ok(None))
-    }))
-}
-
-fn ghost_b() -> FakeShiori {
-    FakeShiori::Scripted(Box::new(|| {
-        standard_script("\\0B\\e").get("OnGhostChanged", Ok(None))
-    }))
-}
-
 /// A・B を据えた試験台と MCP の受け口（A は起動記録あり）を作り、A を起こして定常に着かせる。
 fn booted_rig(a: FakeShiori) -> (SwitchRig, Sender<ToolRequest>) {
-    let mut rig = switch_rig(vec![("A", a), ("B", ghost_b())]);
-    // 切替先の窓の閉包の投函先（取り出しの系は無いので走らない）。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
+    let mut rig = lap_rig(a, ghost_b());
     let (tx, rx) = mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     rig.boot("A");
@@ -85,47 +59,38 @@ fn write_scope0(rig: &SwitchRig, num: u32, dpi: u16) {
     t.set(0, TargetWindow::Balloon, applied(num, 96, Some(dpi)));
 }
 
-/// MCP の `get_property` を受け口へ送って汲み、その場の答え（ゴースト名と結果）を取る。
-fn ask(rig: &mut SwitchRig, tx: &Sender<ToolRequest>, name: &str) -> Option<(String, ToolOutcome)> {
-    let (req, pending) = ToolRequest::new(ToolCall::GetProperty(Args {
-        property_name: name.to_owned(),
-        ghost_name: None,
-    }));
-    tx.send(req).ok()?;
-    crate::mcp::drain(&mut rig.world);
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .map(|a| (a.ghost, a.outcome))
-}
-
 fn ask_all(rig: &mut SwitchRig, tx: &Sender<ToolRequest>) -> Vec<Option<(String, ToolOutcome)>> {
     NAMES.iter().map(|n| ask(rig, tx, n)).collect()
 }
 
-/// 今の実行系の読み口から作ったゴーストの道で `NAMES` を読む。
-fn ghost_path(rig: &SwitchRig) -> Vec<Result<String, String>> {
-    let sink = {
-        let runtime = rig
-            .world
-            .get_non_send::<GhostSlot>()
-            .and_then(|slot| slot.0.as_ref())
-            .and_then(|session| session.runtime())
-            .expect("置き場に実行系がある");
-        ShioriHostSink::with_sylphya(
-            runtime.sylphya_reader().clone(),
-            runtime.sylphya_publisher().clone(),
-            ghost_asker_id(&runtime.mount().shiori.dir),
-        )
-    };
-    let host: IShioriHost = sink.into();
-    NAMES
-        .iter()
-        .map(|n| match host.get_property(&HSTRING::from(*n)) {
-            Ok(v) => Ok(v.to_string()),
-            Err(ShioriError::PropertyNotFound) => Err("PropertyNotFound".to_string()),
-            Err(e) => Err(format!("{e:?}")),
+/// ゴーストが自分で書く自由な名前（問い手ごとの区画にだけ在る）。
+const OWN_KEY: &str = "probe.owner";
+
+/// 今の実行系の読み口と問い手で組んだ本番の受け口へ `NAMES` と [`OWN_KEY`] を問う合図を 1 つ流し、
+/// kanade へ頼んだ返しを取る。倍率の名前は問い手に依らないので、問い手の取り違えは [`OWN_KEY`] で見る。
+fn ghost_path(rig: &SwitchRig) -> Vec<(String, Vec<String>)> {
+    let runtime = rig
+        .world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.runtime())
+        .expect("置き場に実行系がある");
+    let asker = ghost_asker_id(&runtime.mount().shiori.dir);
+    let publisher = runtime.sylphya_publisher();
+    publisher.set(asker.clone(), OWN_KEY.to_owned(), "A".to_owned());
+    publisher.barrier().expect("sylphya が生きている");
+    let (tx, rx) = mpsc::channel();
+    let mut sink = PropGetCueSink::new(runtime.sylphya_reader().clone(), asker, tx);
+    let tokens: Vec<&str> = ["property", "OnScaleProbe"]
+        .into_iter()
+        .chain(NAMES)
+        .chain([OWN_KEY])
+        .collect();
+    sink.emit(carrier_cue("get", &tokens));
+    rx.try_iter()
+        .map(|m| match m {
+            KanadeMsg::PropertyEvent { id, references } => (id, references),
+            _ => panic!("PropertyEvent 以外が届いた"),
         })
         .collect()
 }
@@ -144,27 +109,34 @@ fn answers(ghost: &str, values: [Option<&str>; 5]) -> Vec<Option<(String, ToolOu
         .collect()
 }
 
-/// 同じ時点に MCP とゴーストの道が同じ名前に同じ文字・同じ値なしを返す。
+/// 同じ時点に MCP とゴーストの道が同じ名前に同じ文字を返し、MCP の値なしはゴーストの道では空になる。
+/// ゴーストの道は自分で書いた [`OWN_KEY`] も読める。
 ///
 /// # 非空虚性
-/// `rewire_runtime_consumers` の `wire` を外すと両方の道が全部「無い名前」で赤。
+/// `rewire_runtime_consumers` の `wire` を外すと両方の道が全部値なしで赤。
 /// `wire` へ配線の表でなく空の表を渡すと、書いた値が読めずに赤。
+/// 受け口の問い手を `ghost_asker_id` から別の問い手に替えると、[`OWN_KEY`] が空で赤。
 #[test]
 fn mcp_and_ghost_paths_answer_the_same_scale() {
-    let (mut rig, tx) = booted_rig(ghost_a("\\0A\\e"));
+    let (mut rig, tx) = booted_rig(ghost_a("\\0A\\e", None));
     write_scope0(&rig, 144, 144);
     let mcp = ask_all(&mut rig, &tx);
-    let shiori = ghost_path(&rig);
+    let ghost = ghost_path(&rig);
     let down = rig.shutdown();
 
-    let expected_shiori: Vec<Result<String, String>> = AT_150
-        .iter()
-        .map(|v| v.map(str::to_owned).ok_or("PropertyNotFound".to_owned()))
-        .collect();
+    let expected_ghost = vec![(
+        "OnScaleProbe".to_owned(),
+        AT_150
+            .iter()
+            .map(|v| v.unwrap_or(""))
+            .chain(["A"])
+            .map(str::to_owned)
+            .collect(),
+    )];
     assert_eq!(
-        (mcp, shiori, down),
-        (answers("A", AT_150), expected_shiori, true),
-        "（{NAMES:?} への MCP の答え・ゴーストの道の答え・降ろせた）"
+        (mcp, ghost, down),
+        (answers("A", AT_150), expected_ghost, true),
+        "（{NAMES:?} への MCP の答え・ゴーストの道の返し・降ろせた）"
     );
 }
 
@@ -175,7 +147,7 @@ fn mcp_and_ghost_paths_answer_the_same_scale() {
 /// 読み直しで `wire` へ新しい空の表を渡すと、読み直しの後の答えが値なしで赤。
 #[test]
 fn shiori_reload_reads_the_same_table() {
-    let (mut rig, tx) = booted_rig(ghost_a("\\0A\\e"));
+    let (mut rig, tx) = booted_rig(ghost_a("\\0A\\e", None));
     write_scope0(&rig, 144, 144);
     let before = ask_all(&mut rig, &tx);
     let rebuilt = rebuild_runtime_in_place(&mut rig.world, "A");
@@ -210,13 +182,10 @@ fn shiori_reload_reads_the_same_table() {
 /// 表をプロセスで 1 つ持つか、切替で前の配線の表を使い回すと、替えた後も `150,150` を答えて赤。
 #[test]
 fn switching_to_another_ghost_drops_the_previous_scale() {
-    let (mut rig, tx) = booted_rig(ghost_a(A_TO_B));
+    let (mut rig, tx) = booted_rig(ghost_a(A_TO_B, None));
     write_scope0(&rig, 144, 144);
     let booted = ask_all(&mut rig, &tx);
-    let welcomed = rig.pump_talking_until(|rig| {
-        rig.exit_requested()
-            || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
-    });
+    let welcomed = pump_to_welcomed(&mut rig, "B", 1);
     let switched = ask_all(&mut rig, &tx);
     let down = rig.shutdown();
 

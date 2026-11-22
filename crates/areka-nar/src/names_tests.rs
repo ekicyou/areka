@@ -136,7 +136,7 @@ fn a_flagged_name_is_decoded_as_utf8() {
 }
 
 /// 印なしの名前は Shift_JIS として復号される。日本語のフォルダ名とファイル名が
-/// そのまま戻る（段 ③ の検体はこの経路だけを通る）。
+/// そのまま戻る（`target\` の下へ写す検体はこの経路だけを通る）。
 #[test]
 fn an_unflagged_name_is_decoded_as_shift_jis() {
     let names = accepted(

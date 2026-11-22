@@ -1,0 +1,311 @@
+# 実装計画: audit-areka-app
+
+- 各タスクの直しの中身は design.md「指摘ごとの直し」の表（指摘 1〜97）・「預かった件の片づけ」（5.1〜5.22）・「兄弟から受けた件」（S1〜S8）・File Structure Plan の 3 つの表が正本。ここでは番号で引く。大タスクは design.md「タスクの見込み」の組 G1〜G22 の順（G20 は同じファイルを触る 3.3 に入れた）。
+- 同じファイルを触る組が多いので、組は番号の順に回す。`(P)` は前の小タスクと触るファイルが重ならないものにだけ付けた。説明の直し（指摘 53〜74）は、先の組がそのファイルを触るときに一緒に直してよい。残った分を 15〜17 が拾う。
+- 足したテストと強めたテストは、design.md「壊れたら落ちるテスト」の表の本番の行を 1 度壊して赤を見てから戻し、壊し方と赤になったテストの名を控える（要件 4.2）。控えは 20 で research.md に残す。
+- 消す・名を変える前には、ツリー全体で `git grep -n`（`vendors/` を除く）をかけ、当たりが design.md「消す・名を変えるときの照合」の既知のものだけであることを確かめ、結果を控える（要件 3.4）。
+- C26 の約束: 兄弟の持ち物（design.md「Out of Boundary」）は差分 0 行。例外は申し合わせの分だけで、こちらから兄弟のファイルには触らない。`Cargo.toml`・`Cargo.lock` の席はこの spec だけ。`doc/COMPAT_ARCHITECTURE.md` §8 は既にある行（301・318・319・403〜405）のパスと名だけ。`crates/dola/`・`crates/wintf*`・`vendors/` は 0 行。新しい依存が要る、外への約束を確定の外で変える、と分かったら、その指摘だけを当てずに止めて議題にする（要件 2.2・6.7）。
+- 1 ファイル 1,000 行（design.md「1,000 行の見通し」）: 越えそうなら足すテストを新しい兄弟のファイルへ置く。番人の上限越えの表には足さない。
+- 確かめは組のテストに絞る（`cargo test -p <crate> <モジュール>`）。実画面と smoke のテストは 21.2 の全体テストの段で確かめる（要件 8.3）。2 回目からは赤のテストだけ回す（要件 8.4）。
+
+- [x] 1. 記憶のファイルが使えないときの知らせの直し方を、効く向きの一文にする（G1・指摘 1・5.1）
+  - `PersistFailureCause` に腕 `Unusable(String)` を足す。作るのは既にあるファイルが使えない枝（`persist/mod.rs:451`）だけで、錠の失敗と書き込みの失敗は `Io` のまま。291 行の doc も合わせる
+  - 告知の `MemoryWrite` の行で、`Unusable` のときだけ直し方を `MEMORY_FILE_FIX`（設計の討議の議題 8 の字面）にする。`MEMORY_WRITE_FIX` の字面と、行の数（5 行）は変えない
+  - 書けなかった記録の `match` に `Unusable(reason)` の腕を足す（理由の文をそのまま・記録の名と欄は変えない）
+  - `persist_unreadable_tests.rs:41` の期待を `Unusable` に。告知のテストに、`Unusable` で `MEMORY_FILE_FIX` が出て `MEMORY_WRITE_FIX` が出ないこと、`Io`・`NoRoot` は今の行のままであることを見る表明を足す
+  - 完了の姿: 足した表明が緑で、出し分けの腕を外すと赤・451 行を `Io` に戻すと赤（較正）。`PersistFailureCause` を `match` する呼び手が網羅の腕を持ち、`cargo test -p areka-sylphya -p areka-session` が緑
+  - _Dispatch: mechanical — 型の腕・定数・テストの期待を設計が与える_
+  - _Requirements: 2.7, 3.1, 4.1, 4.2, 5.1, 6.2, 6.10, 7.1, 7.8_
+
+- [x] 2. (P) `--offline-dump` の下地に一辺の上限を入れる（G2・指摘 2）
+  - 下地に一辺の上限 16,384（合成の上限と同じ値・合成の側は crate の外へ出していない、の 1 行の説明）と、上限を越えたかの判定を足す
+  - 面の段で、面の一覧を解いた直後に越えていれば `error!(event = "offline_dump_canvas_too_large", ..)` を 1 行残し、どの面も確保せず全部の面を失敗として返す。面の指定が無い走りは今のまま。面積の上限は当てない（設計の討議の議題 10）
+  - 幅だけが上限を越える検体（element を x＝20,000 に）で、終了コード 2・面 0 枚・ERROR 1 行・PNG 無しを見るテストを 1 本足す
+  - 完了の姿: 足したテストが緑で、上限の確かめを外すと赤（直す前は終了コード 0 で PNG が書ける）。既存の offline_dump のテストも緑
+  - _Boundary: offline_dump_
+  - _Dispatch: standard — 面の段に新しい枝と記録を足す_
+  - _Requirements: 2.3, 3.1, 4.1, 4.2, 4.5, 6.2_
+
+- [x] 3. 本番の小さな直し（G3・G20）
+- [x] 3.1 UI の基盤の初期化の失敗に記録を付ける（指摘 3）
+  - `main.rs:196` の初期化の呼び出しに `inspect_err` で `error!(event = "winapp_init_failed", ..)` を付ける
+  - 新しいテストのファイル `main_winapp_log_tests.rs` を `main.rs` から `#[cfg(test)]` の子として引き、`main.rs` の本文を `code_only` で読んで、初期化の呼び出しの直後に `inspect_err` と `winapp_init_failed` があることを見る
+  - 完了の姿: テストが緑で、`inspect_err` を外すと赤（較正）
+  - _Dispatch: mechanical — 記録の行と本文の確かめを設計が与え、手本（`readonly_body_tests.rs` の本文の確かめ）がある_
+  - _Requirements: 3.1, 4.1, 4.2, 6.2_
+- [x] 3.2 `areka-session` のテストの exe の申告を本体の申告ファイルから読み、`areka-emo-present` を省ける依存にする（指摘 12・78・5.18）
+  - `build.rs` の読み先と `rerun-if-changed` を `../areka/areka.manifest` に替え、冒頭の説明を合わせる。`areka-session/tests.manifest` を消す。`areka.manifest` の 2 行目を「areka.exe と areka-session のテストの exe が使う申告」に
+  - `areka-emo-present` を `optional = true` にし、`test-support` の機能で `dep:areka-emo-present` を開き、dev にも置く
+  - 完了の姿: `cargo test -p areka-session` が緑（申告を誤ると `0xc0000139` で落ちる）、`cargo build -p areka-session` と `cargo build -p areka` が通る。`git grep -n "tests.manifest"` の当たりが `.kiro/specs/` の記録だけ
+  - _Dispatch: mechanical — 読み先と依存の行の形を設計が与える_
+  - _Requirements: 3.1, 3.3, 3.4, 5.18, 7.5_
+- [x] 3.3 `BodySystems::of`・記録の歴史・自動終了・tick の門の小さな直し（指摘 77・82・83・87・5.15・5.17）
+  - `BodySystems::of` を `pub fn` 1 つにし `installed_or_none` を消す。`body_systems.rs:60` の「（窓口が無いときの答えと同じ）」を消す。差を書き足すなら、兄弟の着地後の形（本体の側は窓口が無いと `install_cue_send_failed` の warn で終わり、URL も取りに行かない・`NO_BODY` は黙って捨て、束が無いことは error で残る）に合わせる（`NO_BODY` の受け口はそろえない＝5.17。`UNKEPT_TARGETS`・`reload_test_support.rs` の該当は直さない）
+  - `log_history.rs:579` を `mod capture_tests;` に。`smoke_exit.rs:52-54` の早い戻りを 1 行に
+  - tick の門の設定を `TickGateSetting::Set(enabled)` で直に据え、`tick_gate_from_env_value` と試験の 4 行を消す
+  - 完了の姿: 既存の `body_systems_tests`・`smoke_exit_tests`・門の試験が同じ表明のまま緑で、`git grep -n "installed_or_none\|tick_gate_from_env_value"` が 0 件
+  - _Dispatch: mechanical — 形を設計が与え、振る舞いは変えない_
+  - _Requirements: 3.1, 3.4, 5.15, 5.17, 7.1_
+
+- [x] 4. ログの文の頭と倒れ先の記録の `event` 欄を直す（G4・指摘 4・95）
+  - `session_mark.rs:113` の文の頭を `[session_mark]`、`boot_seam.rs:90`・`:113` を `[boot_seam]` に（event 名・本文・水準は変えない）
+  - 倒れ先の起動の 3 つの記録（`ghost_session.rs:717`・`:726-734`）に `event` 欄 `fallback_boot_wired_off`（info）・`fallback_boot_origin_missing`（warn）・`fallback_boot_failed`（error）を足す
+  - strict テストの `fallback_attempts` を、本文の部分一致から `event` 欄の 3 つの名で数える形に替える
+  - 完了の姿: strict テストが緑で、記録の `event` 欄を外すと赤（較正）。`git grep -n "\[main\]" -- crates/areka-session` の当たりが範囲の 3 行から消えている
+  - _Dispatch: mechanical — 文の頭と欄の名を設計が与える_
+  - _Requirements: 2.7, 3.1, 4.1, 4.2, 7.8, 7.9_
+
+- [x] 5. 兄弟から受けた本番の件（G5・S2・S3・S4・S8）
+- [x] 5.1 告知を抑える決まりを 1 か所の公開の関数にする（S2・S3）
+  - `alert.rs` に `pub fn alerts_suppressed() -> bool` と私有の純関数 `with_smoke(suppressed, smoke_exit_ms)` を足し、`raise` もそれを使う（呼び手と引数は変えない）
+  - `ExeLocationUnavailable` の腕（150 行）を欄を読まない形（`{ .. }`・試した場所は空・出どころは既定）にする。値は今と同じ
+  - `alert_tests.rs` に `with_smoke` の 4 通り（抑止なし・`AREKA_NO_ALERT`・自動終了・両方）を足す。51-56 行の構築の 2 行（`tried`・`origin`）は兄弟が列挙の欄を減らすコミットで消すので、こちらは触らない（設計の討議の議題 3）
+  - 完了の姿: 4 通りのテストが緑で、`with_smoke` の `||` を `&&` にすると赤（較正）。既存の告知のテストも緑
+  - _Dispatch: mechanical — 関数の形と 4 通りの期待を設計が与える_
+  - _Requirements: 3.1, 4.1, 4.2, 7.2_
+- [x] 5.2 記録の歴史の写し取りで、深い複製を排他の外へ出す（S4）
+  - 記録の列を `VecDeque<Arc<Record>>` にし、`rows()` は `&Record` を返し続ける。`snapshot` は排他の中で私有の口から `Vec<Arc<Record>>` を取り、排他の外で `Record::clone` する
+  - 公開の `fn snapshot(Kind) -> Vec<Record>` の形と、記録の数の上限・押し出しの順は変えない
+  - 完了の姿: `log_history_tests.rs`・`log_history_capture_tests.rs` が同じ表明のまま緑で、`snapshot` の公開の形の差分が 0 行
+  - _Dispatch: standard — 排他の中で何を写すかの形は設計が与えるが、列の持ち方の書き換えが要る_
+  - _Requirements: 3.1, 6.2, 7.1_
+- [x] 5.3 更新中・インストール中の読み直しの断りを MCP からの要求だけに当てる（S8）
+  - 先に `session_tests/reload_tests.rs` へ、更新中に台本からの読み直しが通り、MCP からの読み直しが `Updating` で断られる 1 本を足し、赤を見る
+  - `reload.rs` の重なりの判定で、`RefusedReason::Updating`・`Installing` を `ReloadOrigin::Mcp` の要求だけに当て、`ReloadOrigin::Script` は通す。重なり（`ReloadInFlight`・`SwitchInFlight`・`SkinSwitchInFlight`）と `NoContext` の断りは今のまま
+  - 完了の姿: 足したテストが緑（直す前は赤）、既存の読み直しのテストも緑
+  - _Dispatch: standard — 断りの判定に要求の出どころの枝を足す_
+  - _Requirements: 3.1, 4.1, 4.2, 6.9, 7.2_
+
+- [x] 6. SHIORI の試験用の脳を消す（G6・指摘 5・6・7・14・5.20）
+- [x] 6.1 ゴーストの道のテストを本番の受け口で組み直す（指摘 14）
+  - `ghost_session_scope_scale_boot_tests.rs` の `ghost_path` を `PropGetCueSink::new(reader, ghost_asker_id(..), tx)` で組み、`carrier_cue("get", &["property", "OnScaleProbe", NAMES..])` を 1 つ流して `KanadeMsg::PropertyEvent` の references を読む形にする（無い値は `""`）。4 行の説明も合わせる
+  - 試験台と小道具は `ghost_session_switch_tests.rs` の `pub(super)` を使う
+  - 完了の姿: テストが緑で、`ShioriHostSink` を使わず、問い手を `ghost_asker_id` から別の問い手に替えると赤（較正）
+  - _Dispatch: standard — 本番の受け口で組み直す新しい流れ（手本は設計が名指す）_
+  - _Requirements: 3.1, 4.1, 4.2, 4.7, 5.20_
+- [x] 6.2 脳の 8 ファイルとデモの入口を消し、脳を名指す説明を直す（指摘 5・6・7・5.20）
+  - 枝を `main` の頭に合わせてから `git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` を見る（脳の 8 本の中は除く）。兄弟の `mcp/get_property_tests.rs` の当たりが 0 件なら全部消す。当たりがあれば design.md「設計の段で決めた事項」3 の 3 のとおり、`shiori_host.rs` と `shiori_host_case_fold_tests.rs` だけを `#[cfg(test)]` で残し、`shiori-abi`・`windows-core` を dev へ移す
+  - 消すもの: 脳の 8 ファイル・`main.rs` の mod 7 つと 234-238 のデモの呼び出しと `//!` の 8 行目・`AREKA_SHIORI_DEMO`・`session_tests/mod.rs:3` の名指し。`embedded_icon_test.rs` の use を `windows::core` に替えてから、本体の `Cargo.toml` の `windows-core`・`shiori-abi` の行を消す
+  - `.kiro/steering/structure.md:276` の脳の記述と、範囲の外の脳を指す説明（File Structure Plan「範囲の外」の表の 8 行）を、今在るもの（`InProcHost`・`shiori4-testdll`）で書き直すか消す
+  - 完了の姿: `git grep` の当たりが照合の表の既知のもの（経緯の文書と、残した場合の 2 ファイル）だけで、`cargo build -p areka` と `cargo test -p areka --no-run` が通る。残した場合は残した理由と申し送り先を控える
+  - _Depends: 6.1_
+  - _Dispatch: standard — 兄弟の着地しだいで 2 通りに分かれる削除_
+  - _Requirements: 3.1, 3.3, 3.4, 5.20, 7.1, 7.2, 7.5, 7.7_
+
+- [x] 7. 本体の依存の行と README を直す（G7・指摘 8〜11・13・88・89・5.19）
+  - `async-io` の行を消し、`areka-user-data`・`tracing-subscriber` を dev へ。各行の説明を「今の使い手とその依存が要るわけ」の 1 行にし、spec 名・要件の番号・経緯の語を消す。104-107 の連鎖で開く `test-support` の 2 行と 14-16 の `[[bin]]` を消す
+  - `README.md` の版の行と 10-02 の一覧を消し、根の README へ案内する（crates.io の 0.0.1 が名の確保だけ、の 1 文は残す）
+  - `Cargo.lock` は本体の依存の列だけが変わる
+  - 完了の姿: `cargo build -p areka`・`cargo test -p areka --no-run`・本体の例 3 本の組み立てが通り、`Cargo.lock` の差分が本体の依存の列だけ
+  - _Dispatch: mechanical — 消す・移す行を設計が名指す_
+  - _Requirements: 3.1, 5.19, 6.6, 7.5_
+
+- [x] 8. 本体の落ちる力の無いテストを強める（G8）
+- [x] 8.1 旗の生産者の見張りが歩く根を広げる（指摘 15・33・5.6）
+  - `tick_gate_config_producers_tests.rs` の自前の `code_only` を消し `areka_runtime::source_text_test_support::code_only` を use する
+  - `walk_roots` に `areka-session`・`areka-placement` を足し、184・236 の説明を歩く根の名を並べた文に。足した根で見つかる生産者は表に載せる
+  - 完了の姿: 見張りが緑で、`areka-session` に表に無い `tick_wake::mark` を足すと赤（較正）
+  - _Dispatch: standard — 根を足して見つかる生産者を表に載せる判断が要る_
+  - _Requirements: 3.1, 4.1, 4.2, 5.6_
+- [x] 8.2 読み直し・本体の系・起動の設定・立ち上げ直しのテストの表明を立て直す（指摘 16〜19・22・23・93・5.16）
+  - `reload_tests.rs` の `rig()` に本体の系を据え、142・199 を消す。377-382 の 1 回目の `drain` を `capture` で包み、記録 0 件と `ReloadInFlight` が無いことを見る
+  - `body_systems_tests.rs` の `len()` の要素を外し、名を `missing_body_systems_logs_and_answers_idle` に、38 行の説明を合わせる
+  - 読み返すだけの 2 本（`config_inputs_holds_resolved_roots`・`boot_context_holds_the_resolved_current_ghost`）を消す。`let _ = write_session_mark(..)` を `.expect("印を書く")` に（Some を期待する所も）
+  - `ghost_session_restart_tests.rs` の 156 を `with_threads(1)` に、481-491 と use を消し、説明を「12 枠」「2 周目の登記が置き換えを 1 件も残さない」に
+  - 完了の姿: 直したテストが緑で、1 回目の `drain` で記録を出す写し・準備が窓のタスクを投げる写しで赤（較正）。消したテストの名の `git grep` が 0 件
+  - _Dispatch: mechanical — 表明と足場の形を設計が与える_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.7, 5.16_
+
+- [x] 9. `areka-session` の記憶の書き手まわりのテスト（G9）
+- [x] 9.1 最後に使った物の記録のテストを分け、待ちを有界にし、書かない守りを足す（指摘 28・29・32・62・5.5・5.7）
+  - `boot_resolve_tests.rs` の `mod last_used`（405-873）を新しい兄弟 `boot_resolve_last_used_tests.rs` へ移し、残りの `//!` を今の中身に
+  - 移した先の `SharedFakeIo` の写しを消して `areka_placement::test_support::SharedFakeIo` を使い、4 か所の `let _ = parts.handle.join();` を `join_bounded("sylphya", parts.handle).expect(..)` に
+  - 記憶を書かない守りの 2 本を足す（フォルダが無いと warn 1 件で何も書かれない・`C:\` で error 1 件で何も書かれない）
+  - 完了の姿: 2 本が緑で、`boot_resolve.rs:729-737`・`boot_seam.rs:108-116` の `return` を消すと赤（較正）。書き手を panic させる写しで `expect` が落ちる。2 つのファイルとも 1,000 行を越えない
+  - _Dispatch: standard — 守りの新しいテスト 2 本と、移しと有界の待ち_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 5.5, 5.7, 6.1, 6.3_
+- [x] 9.2 戻しの継ぎ目・窓の矩形・写しのテストの写しと待ちを直す（指摘 29・32・41・51・52・84・85・86）
+  - `boot_seam_persist_wiring_tests.rs` の `SharedFakeIo` の写しを消し、80・123 を `join_bounded` に、44 の「C4/C5」を消す
+  - `boot_seam_restore_tests.rs` の説明を「`load_restored_state` が読むゴーストの descript だけを置く」に、`shell/master` の配置を消し、212 のはみ出す向きを「左の辺を 20px はみ出し、0 へ寄せられる」に。`unique_temp_dir` と後始末の 4 行を消し `TempPath::new("restore-seam-…")` を直に
+  - 窓の矩形のテストの `fake_handle` の写しを消して `areka_placement::test_support::fake_handle` を、442-443・450・476-477 を同じ mod の `frame()`・`plant()` で。`unsafe` に `// SAFETY:` を 1 行
+  - `switch_copy_tests.rs` の 173・285 の `recv()` を `recv_timeout(Duration::from_secs(30))` に
+  - 完了の姿: 直したテストが同じ表明のまま緑で、戻しのテストはシェルを置かずに緑。`git grep -n "unique_temp_dir"` が 0 件
+  - _Dispatch: mechanical — 寄せ先と置き換えの形を設計が与える_
+  - _Requirements: 3.1, 4.3, 4.5, 5.4, 5.5, 5.7, 6.11_
+
+- [x] 10. 実画面と exe のテスト（G10）
+- [x] 10.1 (P) 実画面の 2 本の補助を 1 か所にまとめ、`unsafe` に前提を書く（指摘 45・73 の分）
+  - 新しい `tests/real_screen/common.rs` に補助（per_monitor・mouse・copy_dir・lines_with・wait_new・json・Notes）を置き、`stay_on_top_real_run.rs`・`window_link_real_run.rs`・`startup_install_real_run.rs` から `#[path]` で引く（`copy_dir` は startup の形）
+  - 各 `unsafe` に `// SAFETY:` を 1 行。判定名の札（`8.1a`〜`8.4`・`R-bg`・`R1`〜`R3`）を外す
+  - 完了の姿: 3 本の写しの定義が消え、`cargo test -p areka --tests --no-run` が通り、`stay_on_top_real_run.rs` が 1,000 行を越えない
+  - _Boundary: areka tests 実画面_
+  - _Dispatch: mechanical — 補助を寄せる先と名を設計が与える_
+  - _Requirements: 3.1, 6.1, 6.11_
+- [x] 10.2 実画面のテストの決め打ちの眠りを記録の待ちに替え、組の判定を欄の値で見る（指摘 24・25）
+  - 決め打ちの眠り 15 か所を、今の `RUST_LOG` で開けてある記録の行を `wait_new` で待つ形に替える（どの行を待つかは 1 か所ずつ決める）
+  - `window_link_real_run.rs:473-479` を `groups=` の欄の値に `{0, 1}` が入るかを見る純関数 `has_group(line, &[0, 1])` に替え、`[{2, 3}]` の行で偽になる単体のテストを 1 本足す
+  - 完了の姿: 単体のテストが緑で、元の判定に戻すと赤（較正）。実画面の 2 本は 21.2 の全体テストの段で緑
+  - _Dispatch: standard — 待つ記録の行を 1 か所ずつ選ぶ_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 8.3_
+- [x] 10.3 smoke と exe のテストの待ちと根を有界にし、開発者へ渡すコマンドを絶対パスにする（指摘 26・27・60・96）
+  - `smoke_boot_loop_exit.rs` の `smoke()` に `.deadline(Duration::from_secs(120))`、130・242・52-53 の説明を「`areka_session::alert` の非公開の定数と同じ綴りを写す」ほか今の事実に
+  - `offline_dump_exe_test/common/mod.rs` で `.envs(envs)` の前に `AREKA_APP_SMOKE_EXIT_MS` と、`cwd` の下を指す `AREKA_ROOT`・`AREKA_PROFILE_DIR`・`AREKA_USER_ROOT`・`LOCALAPPDATA` を既定で置く（呼び手が上書きできる順）。組んだ `Command` の `get_envs()` を見るテストを 1 本足す
+  - emo2 の実走の 3 ファイルで、開発者へ渡すコマンドを `--manifest-path <絶対パス>\Cargo.toml` の形に。`common.rs` の 9-10 を今の理由だけに
+  - 完了の姿: 足した環境変数のテストが緑で、既定を外すと赤（較正）。smoke は 21.2 の段で緑
+  - _Dispatch: mechanical — 期限・環境変数・コマンドの形を設計が与える_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.5, 8.3, 8.6_
+
+- [x] 11. ワークスペース全体を歩く見張りを `log-capture-kit` へ移す（G11）
+- [x] 11.1 同期の送信の許可表の見張りを移す（指摘 43・5.2）
+  - `session_end_sync_send_tests.rs` の静的な後半（221-499）を新しい `crates/log-capture-kit/tests/sync_send_guard_test.rs` へ移し、共有の走査器 `workspace_scan` を使う形にする。許可表（5 項）の値・`#[cfg(test)] mod` の中かの欄・較正（表から 1 件落とすと赤・全項目に当たり・走査語を逐語で書かない）を持たせる。前半の再現は残す
+  - `session_end.rs:53` の名指しと `crate_source_test_support.rs:6-7` の例外の列を新しいファイルに合わせ、§8 の 319 行のパスと名を直す。226・230・253 の経緯の語は移す側で消す
+  - 完了の姿: `cargo test -p log-capture-kit --test sync_send_guard_test` が緑で、許可表から 1 件落とすとその件だけが違反になる（較正）。`cargo test -p areka-session` も緑
+  - _Dispatch: standard — 自前の走査器を共有の走査器へ載せ替える_
+  - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.4, 5.2, 7.6_
+- [x] 11.2 `withhold_everything` の呼び手の見張りを移す（指摘 20・21・5.2）
+  - `readonly_body_tests.rs` の `withhold_everything_is_called_only_from_readonly`（115-154）と `files_calling` を消し、新しい `crates/log-capture-kit/tests/readonly_withhold_guard_test.rs` に、`crates/**` 全部を歩いて当たりが許可表（`readonly.rs`・`persist/withhold.rs`）の外に 0 件・全項目に当たり・同じ較正、の見張りを置く。`engage` の 2 本は残す
+  - `session_end_deadline_body_tests.rs` の説明を「呼び手の側の 4 crate を歩く（`areka-ghost` の実装の中は数えない）」に、経緯の語を消す
+  - `.kiro/steering/structure.md:460` の見張りの列に 2 本を足す。§8 の既にある行の名を直す
+  - 完了の姿: 新しい見張りが緑で、許可表から 1 件落とすと赤（較正）。`git grep -n "withhold_everything_is_called_only_from_readonly"` の当たりが経緯の文書だけ
+  - _Dispatch: mechanical — 11.1 と同じ形を写す_
+  - _Requirements: 3.1, 3.4, 4.1, 4.2, 4.4, 5.2, 7.6_
+
+- [x] 12. 本体の部品を使わないテストを `areka-session` へ移す（G12）
+- [x] 12.1 起動の文脈の補助に名の引数を足し、走っている印の判定のテストを移す（S1・指摘 30・44・80）
+  - 先に `reload_test_support.rs` に `pub fn boot_context_named(temp, root, ghost, balloon) -> BootContext` を足し、`boot_context` を `boot_context_named(temp, root, "A", "kaku")` の 1 行にする（S1・置き場・補助・根の出どころ・経路は今のまま。兄弟と `menu/` のテストも呼ぶ公開のテストの支え）
+  - `main_session_mark_tests.rs` の 393-637（判定の表・判定の当て方）と `main_session_mark_write_tests.rs` の 259-297 を新しい `areka-session/src/session_mark_tests.rs` へ移し、`session_mark.rs` から `#[cfg(test)]` の子として引く。`BootContext` は `boot_context_named` で組む
+  - fallback の `count_event` を親へ上げて 3 か所で使う。`main_session_mark_write_tests.rs` の `world_with` の写し（23-53）を消し、親の子モジュールにして呼ぶ。3-5 行の説明を合わせる
+  - §8 の既にある行のパスと名を直す
+  - 完了の姿: `cargo test -p areka-session session_mark` で移した 3 本が同じ表明のまま緑、本体の残りのテストも緑で、`main_session_mark_tests.rs` が約 715 行
+  - _Dispatch: mechanical — 移す範囲と置き先を設計が与える_
+  - _Requirements: 3.1, 3.3, 4.4, 5.9, 6.1, 7.2, 7.6_
+- [x] 12.2 起動の設定・終了・読み直しのテストのうち本体の部品を使わない分を移す（指摘 46・91）
+  - 本体の `session_tests/` の 22 本を、呼ぶ関数を定義するモジュールの `areka-session` のテスト（`boot_config_*_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_resolve_tests.rs`・新しい `session_end_tests.rs`＝本体の `session_end_tests.rs:204-343` の 4 本）へ移す。写しは移した先の支えを使う
+  - `ghost_session_reload_tests.rs` だけが見ていた 2 面（split の後は送出端なし・2 度目の split は `None`）を `ghost_session_runtime_tests.rs` に足し、本体の重なる 1 本（72-170）を消す
+  - §8 の既にある行のパスと名を直す
+  - 完了の姿: 移した 22 本と足した 2 面が `cargo test -p areka-session` で緑、本体の側の該当の名の `git grep` が 0 件
+  - _Dispatch: standard — 22 本の置き先を 1 本ずつ決める_
+  - _Requirements: 3.1, 3.3, 3.4, 4.4, 6.1, 7.6_
+
+- [x] 13. 本体の `session_tests` の写しを 1 つずつにする（G13）
+- [x] 13.1 行列と記憶の補助を `session_tests/mod.rs` に置き、合図の組み立てを共通の口へ寄せる（指摘 34・37・38・90・5.13）
+  - `session_tests/mod.rs` に写しの補助（`tree`・`read_back`・記憶の書き手の取り出し・`unwritable`／`writable`・`routes`・送り出しの段の予約・`put_memory`・`save_scope`・`put_ghost`・`no_pick`）を `pub(crate)` で 1 つずつ置き、各テストの写しを消す。54-55 を `mod write_failure_sites_tests;` に
+  - `readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` の `prop_set_cue` の写し 3 つを `carrier_cue(PROP_SET_CUE_NAME, &[&key.to_canonical_key(), value])` に。`drain_desk` を消し `drain_system` を直に。413 の `kinds.len() == 13` と 504・412 の要件の表を消す
+  - 完了の姿: 既存の行列のテストが同じ表明のまま緑で、`git grep -n "fn prop_set_cue\|fn drain_desk"` が 0 件
+  - _Dispatch: mechanical — 寄せ先と置き換えを設計が名指す_
+  - _Requirements: 3.1, 5.13, 6.11_
+- [x] 13.2 ゴーストの起動のテストの試験台と小道具を切り替えのテストへ寄せる（指摘 39・92・94）
+  - `ghost_session_scope_rect_boot_tests.rs`・`ghost_session_restart_tests.rs`・`ghost_session_reload_tests.rs` の試験台・小道具の写し（`A_TO_B`・`ghost_a`・`ghost_b`・`lap_rig`・`ask`・`systems_lens`・停止通知の受け口の loop・`emo2_balloon`・`scripted_*`）を `ghost_session_switch_tests.rs` の `pub(super)` に寄せ、`kinds` は公開のものを use
+  - restart の 223-225・288 の名を `boot_windows_with_descript_line` に、446-447・479-491 の説明を消す。reload の 69-70 を「降ろしの最初の段（loop ticker の停止）で」に
+  - 完了の姿: 4 本のファイルのテストが同じ表明のまま緑で、寄せた名の自前の定義が `switch_tests` の外に 0 件
+  - _Dispatch: mechanical — 寄せ先を設計が名指す_
+  - _Requirements: 3.1, 6.11_
+
+- [x] 14. ほかのテストの写しを上流の支えへ寄せる（G14）
+- [x] 14.1 起動の文脈の補助と本体の結線のテストの写しを上流へ寄せる（S1・指摘 35・36・5.5・5.8・5.9）
+  - 12.1 で足した `boot_context_named` を使い、`menu/ghost_frame_tests.rs:43` の写しの本体を `boot_context_named(root.dir(), root, current, "StayseeBalloon")` の 1 行に
+  - `runtime_tests/spine.rs` の `capture_logs` を上流の use に、`make_world_with_gpu` を `gpu_on` の後に `AppExit` を据える 3 行に、119 行の理由を消す。`runtime_tests/frame/switch_finish_tests.rs:60-61` の `SharedFakeIo` の写しを上流へ
+  - 完了の姿: `menu/`・`runtime_tests/` の既存のテスト（GPU は実 GPU）が同じ表明のまま緑で、`cargo test -p areka-session` も緑
+  - _Dispatch: mechanical — 関数の形と寄せ先を設計が与える_
+  - _Requirements: 3.1, 4.6, 5.5, 5.8, 5.9, 7.1, 7.2_
+- [x] 14.2 読み直しの結線・png の一時フォルダ・記録の種別のテストを寄せる（指摘 40・42・S5・S6）
+  - `reload_skin_tests.rs` の `headless_wiring`（52-79）を `areka_runtime::frame::shared_test_support::wiring().1` を据える 1 行に
+  - `png_image_tests.rs` の自前の `TargetTemp` を `TempPath::new("png-wic")` に、`wic_decode_rgba` を `pub(crate)` に、`png_image.rs` の mod 行を `#[cfg(test)] pub(crate) mod tests;` に、219 行の要件の番号を消す
+  - `log_history_tests.rs` に、kanade の script の記録が下書きで script 種別になることを見る 1 本を足し、643 のテスト名を中身の名に
+  - 完了の姿: 3 つのテストのファイルが緑で、足した 1 本は `log_history::draft` の script の判定を外すと赤（較正）。`git grep -n "fn headless_wiring" -- crates/areka-session` が 0 件
+  - _Dispatch: mechanical — 寄せ先と足す 1 本の中身を設計が与える_
+  - _Requirements: 3.1, 4.1, 4.2, 4.5, 7.2_
+
+- [x] 15. `areka-session` の古い説明を今の事実にする（G15）
+- [x] 15.1 `GhostSession` の `impl` を別のファイルへ移し、ゴーストのセッションと戻しの継ぎ目の説明を直す（指摘 47・48・53・79・5.3）
+  - `ghost_session.rs` の `impl GhostSession`（430-659）を新しい `ghost_session_handle.rs` へ移し `mod handle;` を足す（中身と可視性は変えない）
+  - 213-214 と `boot_seam.rs` の 7・136・156 の戻しの流れを「`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` → `restored_scope_marks`」・呼び手を `prepare_ghost_windows` に。821-822 を 4 つ（`BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover`）に。87・147-149・283-285・640-643 の古い説明と 228・354 の spec 名。`boot_seam.rs:51` の切れ端。指摘 53 の列挙のうちこの 2 ファイルにある分
+  - 完了の姿: 既存のテストが緑で、`ghost_session.rs` が約 640 行・`ghost_session_handle.rs` が約 235 行
+  - _Dispatch: mechanical — 移す範囲と説明の字面を設計が与える_
+  - _Requirements: 3.1, 5.3, 6.1, 6.11_
+- [x] 15.2 `areka-session` の残りの古い説明を直す（指摘 49・50・53・55〜59・5.10）
+  - `app_exit_escape_tests.rs` の 73 行の消えたテストの名を役目で、70 行を「非退避操作のいずれも」に。182-183 の括弧の文を消す。65-67 の bevy の版と行番号を外す
+  - `lib.rs` の 212 を消し 311-312 を依存の向きで、174 はパスを消す。「どの背景の仕事も」「背景の仕事の書き終わりを待つ上限」「停止の通知を消化した」。`log_history_capture_tests.rs:3` の doc のリンクを `[hold]` に。`boot_config.rs:193-194` を今の口 `hooks::set_current_balloon` に。指摘 53 の列挙の 15 か所のうち `ghost_session.rs`・`boot_seam.rs` の外のもの（その 2 ファイルの分は 15.1）
+  - 完了の姿: `cargo doc -p areka-session --no-deps` の警告が増えず（指摘 59 の 1 件が消える）、テストが緑
+  - _Dispatch: mechanical — 説明の字面を設計が与える_
+  - _Requirements: 3.1, 5.10, 6.11_
+
+- [x] 16. 本体の古い説明を今の事実にする（G16・指摘 54・61・64・65・74・81・5.11）
+  - `main.rs` の `//!` を今の事実に。言い直すだけの doc（375・382・392・415）と 278・284 の重なりを消し、398-410 を 1 行に。515-531 の `BootContext` を 1 度だけ引いて `(argv_session, app_profile_dir)` を取る
+  - `cli/parse.rs`・`cli/listen.rs` の doc（`Repeated`・`Kind::Unsupported`）を今のふるまいに（読み方は変えない）
+  - `session_tests/` の説明を今の中身に（module_policy は 2 回とも `Plain`）。`menu/mod.rs` の 221-223・254 の呼び手の説明を「本体の `wire_body_after_runtime`（`BODY_SYSTEMS.after_runtime_wired`）から、起動と読み直しのたびに」「`BODY_SYSTEMS.menu_poll` として `register_systems` から」に（説明の文だけ）
+  - 完了の姿: 既存の印のテストと CLI のテストが緑で、`cargo doc -p areka --no-deps` の警告が増えない
+  - _Dispatch: mechanical — 説明の字面と 1 度だけ引く形を設計が与える_
+  - _Requirements: 3.1, 5.11, 6.11_
+
+- [x] 17. コメントの決まりに合わせ、札・経緯の語・テスト名を直す（G17・指摘 66〜73・5.12）
+  - `runtime_tests/zorder_wiring_tests.rs` の 29・74 の名から札を外し、冒頭 4・5・10・11・13 行を改名表の名へ（5.12）
+  - `alert_dpi_tests.rs` の `d1_`〜`d5_` と「D1〜D5」、テスト名（`research_10_4_…` → `named_binds_on_scope_zero_cases`・`spot_checks_against_the_design_table`・`quit_as_today` → `quit_without_reservation`・`without_options_the_answer_is_as_today`・`boot_check_without_readonly_is_the_current_check` ほか）を中身の名に。§8 の既にある行の名を直す
+  - 範囲の各ファイルに残る要件の番号・spec 名・比べる語・経緯の語（指摘 69〜72 の列）を消し、残る `unsafe` に `// SAFETY:` を 1 行（`embedded_icon_test.rs` が手本）
+  - 完了の姿: `git grep -n "t_zwi0" -- . ':!vendors' ':!.kiro'` が 0 件、改めた古い名の `git grep` が経緯の文書だけ、テストが緑
+  - _Dispatch: mechanical — 改名と消す語を設計が名指す_
+  - _Requirements: 3.1, 3.4, 5.12, 6.11, 7.6_
+
+- [x] 18. 要らない例・絵を消し、例の写しの式を本番の式に替える（G18・指摘 31・63・75・76・97・5.21）
+  - `examples/emo-present/balloon.rs` の `read_balloon_offset` の写しの式を消し、公開の `areka_placement::config::build_placement_config(..).scopes[&0].balloon_offset` を呼ぶ形に、44 行の文を消す。emo-present の例の古い説明と札（`emo-present.rs:4-5,16-22,93`・`state.rs:19`・`window.rs:8,24-26`・`systems.rs:12`・`reconcile.rs`・`fixture.rs:24`・`clickthrough_two_rects.rs:89`）
+  - `examples/mock-shell.rs` を消し、`.kiro/specs/menu-thumbnail-preview/brief.md:19` の手本を「git の履歴の `crates/areka/examples/mock-shell.rs`」に（`completed/` でないことを確かめる）
+  - `shell/` の `base.png`・`org/2.zip` 以外の 77 個を消し、`doc/pasta-profile.md:20-49` に絵の置き場を 1 行足して消す絵の名と「システムトレイ等」を消す。`icon/README.md` の 29・34 行を設計の字面に
+  - 完了の姿: 本体の例が組め、`areka-nar` の `crc32_tests` と `clickthrough_two_rects` の例が通り、消した名の `git grep` が照合の表の既知のものだけ
+  - _Dispatch: mechanical — 消すものと書き替えの字面を設計が与える_
+  - _Requirements: 3.1, 3.3, 3.4, 5.21, 7.7, 7.11_
+
+- [x] 19. 範囲の外の持ち主のいない古い説明を直す（G19・確定の議題 17・5.21）
+  - File Structure Plan「範囲の外」の表の「持ち主のいない古い説明」の行と `placement_tests/measure_template_tests.rs:64-65` を、今の置き場の名・役目で書き直す（「段 ③」は「検体を `target\` の下へ写す段」に）。説明の文だけで、コードは変えない
+  - `areka-placement/src/persist_finalize_save_tests.rs:106` の `join` と `areka-emo-present/src/shell_target.rs:494` のログの語は直さず、20 の覚え書きへ回す
+  - 完了の姿: 表の各行の差分がコメントだけで、触った crate の `cargo build --tests` が通る
+  - _Dispatch: mechanical — 直す行と方向を設計が名指す_
+  - _Requirements: 5.21, 7.7, 7.10_
+
+- [x] 20. 件の記録と申し送りを残す（G21・5.14・5.22・S7）
+  - `research.md` に新しい節を足し、預かった件 5.1〜5.22 と S1〜S8 の件ごとの出どころと直した所、`pub` 6 項目を残す理由（5.14）、較正の控え（壊し方と赤になったテストの名）、照合の控え、脳の削除がどちらの道になったかを書く
+  - S7 を `audit-areka-install-update` へ返す件として、`audit-emo2-boot-switch` への 5 件（`headless_wiring` は指摘 40 と同じ直し方を添える）、覚え書き 2 件、`InProcHost` の `GetProperty` の件（完了のときの `/kiro-discovery` の候補）を書く。脳の削除で残したものがあれば、`audit-areka-install-update` の brief へ渡す文を用意する
+  - ギャップ分析と討議で済んだ要件 1・2 の記録（指摘の一覧・数え直し・行の当て直し・確定の一覧・残す裁定 0 件・1 本のまま）が research.md と requirements.md にあることを確かめ、無いものがあれば足す
+  - 完了の姿: research.md の新しい節に 22＋8 件の行がそろい、申し送りの各件に宛先がある
+  - _Dispatch: mechanical — 書く件と宛先を設計が与える_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.4, 2.5, 2.6, 5.14, 5.22, 7.10, 7.11, 7.12_
+
+- [x] 21. 確かめの段（G22・要件 9）
+- [x] 21.1 同じ範囲へ audit をかけ直し、新しい指摘を直し切る
+  - `cargo doc -p areka-session --no-deps` と `cargo doc -p areka --no-deps` の警告が増えていないことを確かめる
+  - 同じ範囲へ同じ作法（上限なし・全部読む）で `/ponytail:ponytail-audit` をかけ直す。新しい指摘が出たら直してかけ直し、回ごとの組ごとの件数と判定を research.md の新しい節へ。打ち切りは要件 9.6〜9.8 のとおり
+  - 完了の姿: 最後の回の新しい指摘が 0 件（または要件 9.6〜9.8 の打ち切りの条件）で、回ごとの記録が research.md にある
+  - _Dispatch: standard, effort high — 範囲全体を読み直して直しの連鎖を閉じる_
+  - かけ直しでは、確定の指摘が全部直っていること・直しがいちばん小さい完全な変更であること・1 フレーム遅らせる直しと文字化けに当たる直しが無いこと・依存を足していないことも見る
+  - _Requirements: 3.2, 3.5, 6.1, 6.4, 6.5, 6.6, 6.7, 6.8, 9.1, 9.2, 9.3, 9.4, 9.6, 9.7, 9.8_
+- [x] 21.2 差分の境界を確かめ、全体テストを 1 回回す
+  - 既定のブランチとの差分で、兄弟の持ち物（申し合わせの分を除く）・`crates/dola/`・`crates/wintf*`・`vendors/` が 0 行、範囲の外の差分が File Structure Plan の「範囲の外」の表のファイルだけであることを確かめ、research.md に記録する
+  - `pwsh -NoProfile -File tools/test-all.ps1 -License` を 1 回裏で回す（`THIRD-PARTY-NOTICES.md` の作り直しの差 0 も見る）。赤なら赤のテストだけを短く回し直す。smoke の揺れが出ても `load-flake.ps1` は回さず記録して知らせる
+  - 実機の確かめと SSP の MCP での測りは行わない（どの直しも決定論のテストで筋まで確かめる）
+  - 完了の姿: 全体テストが緑で、境界の確かめと通知の差の結果が research.md にある
+  - _Dispatch: mechanical — 決まった確かめを回して記録する_
+  - _Requirements: 4.4, 4.6, 7.3, 7.4, 7.5, 7.13, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.5_
+
+## Implementation Notes
+
+- 4: strict テストの `fallback_attempts` で縛れるのは到達できる `fallback_boot_origin_missing` の記録だけ。`fallback_boot_wired_off`・`fallback_boot_failed` の event 欄はどのテストでも縛られていない（入力を別に組むテストが要る・21.1 で見る）
+- 5.2: `log_history::snapshot` が古い順に返すことを固定するテストは無い（逆順にしても crate 全体が緑）
+- 6.1: 倍率の名は問い手に関わらず同じ値なので、問い手の取り違えを赤にするために問い手ごとの名 `probe.owner` を 1 つ足して問う
+- 6.2: 兄弟の `mcp/get_property_tests.rs` に当たりが残るので残す道。`shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `#[cfg(test)] mod shiori_host`・dev の `shiori-abi`／`windows-core` は `audit-areka-install-update` の着地の後に向こうの PR で消す（20 で申し送る）。`shiori_inproc.rs:246-247` を消したので `InProcHost` の件は行番号でなく名で指す
+- 8.1: `placement_tests/zorder_branch_coverage_test_support.rs:16` に自前の `code_only` の写しが残る（範囲の表に無い・21.1 で見る）
+- 8.2: 1 回目の `drain` は本番が `trace!(reload_drain_no_wiring)` を 1 件出すので「warn 以上 0 件」で見る（この枝に info/debug を足す壊し方は緑のまま）。`let _ = write_session_mark` は設計の一覧の外（areka-session の 3 ファイル・`main_session_mark_*`・`ghost_session_switch_memory_tests.rs`）に 9 件残る。兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す（20 で申し送る）
+- 9.2: `unique_temp_dir` は areka-session から消えた。同名の別の補助が `areka-ghost/src/config.rs`・`areka-parsers/src/package/resolve_tests.rs`・`areka-placement/src/source_tests.rs` に残る（照合の表の「定義のファイルの中だけ」の扱い）。`boot_seam_restore_tests.rs` の assert の文に spec 名 `areka-P0-scope-chain-gap 7.3` が残る（17 で拾う）。本体の `ghost_session_scope_rect_boot_tests.rs` も `areka_placement::test_support::fake_handle` を引く
+- 10.2: 実画面の 2 本の決め打ちの眠りは記録の待ちか窓の状態の待ち（`wait_rects`・`snap_settled`・`snap_behind`＝100ms あけた 2 回の読みが同じになるまで・上限 2 秒）に替えた。判定の前に残る決め打ちは `window_link` の辞書の付け直しを待つ 3 秒と、`stay_on_top` の s4 の前の 500ms（手前のまま変わらないことを見るので待てる変化が無い）だけ。実画面での緑は 21.2 で見る
+- 11.2: `readonly_body_tests.rs` の `files_calling`・`all_sources` は残す `engage` の 2 本が使うので残した
+- 兄弟 `audit-emo2-boot-switch` から 11-23 に受けた範囲の外の件（21.1 で見る）: ウ＝`SharedFakeIo` の写しは 9.1・9.2 で 2 つ消し、`runtime_tests/frame/switch_finish_tests.rs` は 14.1 で寄せる／カ＝本体 `ghost_session_switch_tests.rs` の `kinds` は `areka-session` の `shell_balloon_switch_session_lap_test_support::kinds` と同じ（13.2 で use）／キ＝`ghost_session_runtime.rs` の降ろしの計時と記録（`ghost_switch_down_failed`・`ghost_switch_down_ms`）が `ghost_switch.rs` の `take_down` の写し／ク＝`runtime_boot.rs` が `ChangeRequestRaw` を `ghost_switch` の出し直しから、`SkinRequestRaw` を runtime から直に引く（片方にそろえれば `ghost_switch.rs` の `pub(crate) use` が消える）／ケ＝`reload_test_support.rs` と本体 `reload_tests.rs` が同じ型を 2 つの道で引く（兄弟は `reload_test_support.rs` の use の道を替え済み・70bb10c2a）／シ＝件数を数える関数の写し 5 つ（`boot_resolve_readonly_tests.rs`・`boot_resolve_tests.rs`・`boot_shell_tests.rs`・`switch_copy_tests.rs`・`write_failure_late_tests.rs`）／ス＝本体 `runtime_tests/frame_visibility_integration_tests.rs` の読まれない `BalloonWiring::new` の据え付けと `visibility_lines` の 3 つ目の写し／セ＝14.2／ソ＝8.1 で済み／タ＝8.2 で済み。兄弟は use の道を 4 か所替えた（`reload_test_support.rs`・`runtime_tests/frame/switch_tests.rs` の 2 か所・`switch_finish_tests.rs`）。use の行がぶつかったら後から着地する側が合わせる
+- 12.2: §8 の 403 行が名指す `record_non_argv_writes_all_three` は実体が `boot_resolve_last_used_tests.rs` にある（21.1 で見る）
+- 13.2: `readonly_run_tests.rs:49` に共有と同じ `const A_TO_B` の写しが残る。`boot_windows_with_descript_line` の doc の 1 行目が `seriko.sticky-window` だけを書く（`kero.balloon.dontmove` にも使う）。restart の 479-491 の why の注釈も消えた（21.1 で見る）
+- 14.1: 設計が上流に挙げた `areka_runtime::frame::test_support::capture_logs` は `cfg(test)` だけで立つので、本体の `runtime_tests/spine.rs` は `log_capture_kit::capture_lines` に載せた 3 行の写しを理由の注釈つきで残す（依存は足さない）
+- 15.2: `boot_resolve_tests.rs:3`・`:141` に「ゴースト 6 分岐」が残る（今は 9 通り・指摘 62 の残り・21.1 で見る）
+- 16: 15.1 の `impl GhostSession` の移しで本体の `session_end_deadline_body_tests.rs` の許可表が古いパスを指し 2 本が赤だった（16 で `ghost_session_handle.rs` に直した）。15.1 のレビューは areka-session しか回さなかった。`boot_config_option_tests.rs:58` の doc は「印が無ければ記憶」側をテストが見ていない
+- 17: `boot_shell_tests.rs` の `（R6.1）` は本番のログの文（`areka-emo-present/src/shell_target.rs:494`）と字面で突き合わせる期待値なので残す。指摘の列に無い本体の `runtime_tests/frame_shell_box_align_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`・`menu/captions_tests.rs` に要件番号が残る（21.1 で見る）。`boot_resolve_option_tests.rs:6` の「は`last_ghost_not_found`」の空白の抜け
+- 18: `examples/emo-present/balloon.rs` は `.scopes.get(&0).and_then(..)`（設計は `[&0]`・スコープ 0 は必ずあるので振る舞いは同じ）
+- 19: `log-capture-kit` のテストに要件番号が残る（`sample_path_guard_test.rs:708`・`:817`、`probe_tests.rs:73`、`capture_calibration_test.rs:181`、`file_length_guard_test.rs:65/69/109/115`、`temp_path_guard_test.rs:142/191`・範囲の表の外）
+- 兄弟 `audit-emo2-boot-switch` は areka-session の `body_systems_tests.rs` に 2 つ差分を入れた（4cb2d09e5＝`busy_slots`・`body_slots_follow_the_boot_and_switch_order` の期待に `"update_busy"` を足し doc を合わせた／7ddc891d2＝`request_skin_switch_with` の呼び出しを `request_skin_switch` へ）。こちらも同じファイルの 95 行の doc を直した（7f3b4b014）。ぶつかったら後から着地する側が合わせる
+- 21.1（かけ直し 4 回目）: 範囲の外に同じ型が残る（直さない・申し送り）。記憶の書き手の戻りを捨てる＝`crates/areka/src/install/startup_flow_tests.rs:79`（兄弟 `audit-areka-install-update`）・`runtime_tests/frame/switch_finish_tests.rs:182`（見直さない所）。記録を event 名で引く写し＝areka-session の `ghost_switch_*_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`、本体の `install/`・`update/`・`mcp/`・`roots/`・`menu/`・`runtime_tests/`・`session_tests/shell_balloon_switch*`
+- 21.1（かけ直し 5 回目の後）: 範囲の中の `crates/areka/src/main_session_mark_fallback_tests.rs:128`・`:196`・`:201` に、記録を `event` 欄で引く手書きの絞り込みが 3 か所残る（5 回目の audit は数えず・9.6 の打ち切りの後に見つけた・後の直しの候補）
+- 完了時の棚卸: その場で解決 2 件＝`areka-placement/src/persist_finalize_save_tests.rs` の `finish` が書き手のスレッドの終わりを捨てていた（`expect` で確かめる）・`areka-emo-present/src/shell_target.rs` のログの文の「（R6.1）」（字面で突き合わせるテスト 2 本も合わせた）。申し送り 3 件＝`audit-areka-install-update` の brief へ件 1〜3（根の項目の決まりの置き場・試験用の脳の残り・`alert_tests.rs` の欄）、同 brief の旧テスト名は今の名へ直した。起票 0 件＝`InProcHost` が sylphya を見ない件は `shiori4-api` の brief が既に持つ（`IShioriHost` の実装ごと消す）。`audit-emo2-boot-switch` 宛ての E1〜E4 は main で済んでいた。

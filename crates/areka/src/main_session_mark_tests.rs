@@ -1,18 +1,17 @@
 //! `fn main` の据え付けと後始末・起動中の印のテスト。
 //!
 //! `main` は生きた `WinApp` を要するので、据え付け（[`install_boot_context`]・[`boot_first_ghost`]）と
-//! `run()` の後に置き場と文脈から組むもの（[`after_run`]）と、降ろした後の印の始末
-//! （[`settle_session_mark`]）を関数に括り出し、ここで踏む。起動中の印は、偽の SHIORI の土台で
-//! 実際に起こして落とした一周と、判定の表の両方で見る。降ろすのは必ず有界に行う。
+//! `run()` の後に置き場と文脈から組むもの（[`after_run`]）を関数に括り出し、ここで踏む。
+//! 起動中の印は、areka-session の `settle_session_mark` を本体の側から呼び、偽の SHIORI の土台で
+//! 実際に起こして落とした一周で見る（判定の表は areka-session の `session_mark_tests.rs`）。
+//! 降ろすのは必ず有界に行う。
 //! 強制終了は「後始末（印の始末）を通さずに降ろす」で見立てる（印が残ることは消す経路を
 //! 通らないことと同じ・実物の強制終了は実機サインオフ）。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 
-use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFault, ShioriFaultKind};
-use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFaultKind};
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -21,7 +20,7 @@ use super::finish_after_run;
 use super::{AfterRun, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{levels_of, resolve_boot_from, save_scope};
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;
 use areka_session::alert::AlertScene;
@@ -36,21 +35,18 @@ use areka_session::ghost_session::{
     GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues,
 };
 use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use areka_session::session_end::test_support::fault;
 use areka_session::session_mark::{
-    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
+    MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
 };
 
-fn fault(kind: ShioriFaultKind) -> ShioriFault {
-    ShioriFault {
-        kind,
-        reason: "テストの失敗".to_owned(),
+/// 降ろした結果の組（メッセージループの成否・降ろす処理の成否・上限の打ち切りの有無）。
+fn end(run_ok: bool, down_ok: bool, shiori_cut: bool) -> Teardown {
+    Teardown {
+        run_ok,
+        down_ok,
+        shiori_cut,
     }
-}
-
-fn kanade_fault() -> ExitOrigin {
-    ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(
-        ShioriFaultKind::ConnectFailed,
-    )))
 }
 
 fn decision(route: GhostRoute, folder: Option<&str>) -> GhostDecision {
@@ -135,19 +131,6 @@ fn name_of(rig: &SwitchRig, folder: &str) -> String {
     .find(|e| e.identity.folder == folder)
     .and_then(|e| e.identity.name)
     .unwrap_or_else(|| folder.to_owned())
-}
-
-/// 最後に使ったゴーストの記憶を書く（本番では初回の起動の直後に実行系の書き手が書く）。
-fn plant_last_ghost(app_dir: &Path, folder: &str) {
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(app_dir.to_path_buf()),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, folder.to_owned())],
-    );
 }
 
 /// `fn main` と同じ形で起動の文脈を据え（argv の旗も）、初回の起動として起こす。
@@ -387,256 +370,6 @@ fn first_boot_origin_follows_session_mark() {
 }
 
 // ---------------------------------------------------------------------------
-// きれいな終わりの判定の表
-// ---------------------------------------------------------------------------
-
-/// 降ろした結果の組（メッセージループの成否・降ろす処理の成否・上限の打ち切りの有無）。
-fn end(run_ok: bool, down_ok: bool, shiori_cut: bool) -> Teardown {
-    Teardown {
-        run_ok,
-        down_ok,
-        shiori_cut,
-    }
-}
-
-/// 時系列で最初の理由を採る。上から順に: argv のセッションは触らない → LogSink へ倒れた →
-/// 出所なし → 失敗の出所 → `run()` の失敗 → 上限の打ち切り → 降ろす処理の失敗 → それ以外は消す。
-/// 判定は名前を見ないので、倒れたのが既定ゴースト自身でも同じ行で印が残る。
-#[test]
-fn session_mark_verdict_table() {
-    use KanadeStopCause::{CloseSilent, DeadlineExceeded, Forced, Quit};
-    let fatal = ExitOrigin::GhostFallbackFailed(fault(ShioriFaultKind::Internal));
-    let clean = [
-        ExitOrigin::KanadeStopped(Quit),
-        ExitOrigin::KanadeStopped(Forced),
-        ExitOrigin::KanadeStopped(CloseSilent),
-        ExitOrigin::KanadeStopped(DeadlineExceeded),
-        ExitOrigin::Escape,
-        ExitOrigin::Smoke,
-        ExitOrigin::OsClose,
-        ExitOrigin::SessionEnd,
-        // 記憶を書けなかった終わりも降ろす手順は正規の道を通る＝消す側。
-        ExitOrigin::MemoryWriteFailed(areka_sylphya::PersistFailure {
-            scope: PersistScope::App,
-            dir: None,
-            keys: vec![PersistKey::LastRunning],
-            cause: areka_sylphya::PersistFailureCause::NoRoot,
-        }),
-    ];
-    let quit = ExitOrigin::KanadeStopped(Quit);
-    let session_end = ExitOrigin::SessionEnd;
-    let ok = end(true, true, false);
-    let v = session_mark_verdict;
-
-    // 倒れていない・打ち切りなし。
-    let mut got: Vec<MarkVerdict> = clean.iter().map(|o| v(Some(o), false, false, ok)).collect();
-    let mut want = vec![MarkVerdict::Clear; clean.len()];
-    let existing = [
-        (
-            v(Some(&kanade_fault()), false, false, ok),
-            MarkVerdict::Keep("fault"),
-        ),
-        (
-            v(Some(&fatal), false, false, ok),
-            MarkVerdict::Keep("switch_fatal"),
-        ),
-        (
-            v(None, false, false, ok),
-            MarkVerdict::Keep("no_exit_origin"),
-        ),
-        (
-            v(Some(&quit), false, false, end(false, true, false)),
-            MarkVerdict::Keep("run_failed"),
-        ),
-        (
-            v(Some(&quit), false, false, end(true, false, false)),
-            MarkVerdict::Keep("down_failed"),
-        ),
-        // 失敗の出所は run() と降ろす処理の失敗より先に理由になる。
-        (
-            v(
-                Some(&kanade_fault()),
-                false,
-                false,
-                end(false, false, false),
-            ),
-            MarkVerdict::Keep("fault"),
-        ),
-        // argv で始まったプロセスは出所・成否によらず触らない（切替の後の致命も）。
-        (v(Some(&quit), true, false, ok), MarkVerdict::Untouched),
-        (v(Some(&fatal), true, false, ok), MarkVerdict::Untouched),
-        (
-            v(None, true, false, end(false, false, false)),
-            MarkVerdict::Untouched,
-        ),
-    ];
-
-    // LogSink へ倒れた × きれいな出所 × 成否（打ち切りの有無も）: 常に倒れた語で残す。
-    let outcomes: Vec<Teardown> = [false, true]
-        .into_iter()
-        .flat_map(|r| [false, true].into_iter().map(move |d| (r, d)))
-        .flat_map(|(r, d)| [false, true].into_iter().map(move |c| end(r, d, c)))
-        .collect();
-    let mut fallback_clean = Vec::new();
-    for o in &clean {
-        for e in &outcomes {
-            fallback_clean.push((
-                v(Some(o), false, true, *e),
-                MarkVerdict::Keep("logsink_fallback"),
-            ));
-        }
-    }
-    // LogSink へ倒れた × 他の理由: 倒れたのが時系列で最初なので倒れた語が勝つ。
-    let fallback_other = [
-        (
-            v(Some(&kanade_fault()), false, true, ok),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        (
-            v(Some(&fatal), false, true, ok),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        (
-            v(None, false, true, ok),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        (
-            v(Some(&quit), false, true, end(false, true, false)),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        (
-            v(Some(&quit), false, true, end(true, false, false)),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        (
-            v(Some(&session_end), false, true, end(true, true, true)),
-            MarkVerdict::Keep("logsink_fallback"),
-        ),
-        // LogSink へ倒れた × argv: argv の上書きが先に効き、触らない。
-        (v(Some(&quit), true, true, ok), MarkVerdict::Untouched),
-        (
-            v(Some(&kanade_fault()), true, true, ok),
-            MarkVerdict::Untouched,
-        ),
-        (
-            v(None, true, true, end(false, false, true)),
-            MarkVerdict::Untouched,
-        ),
-    ];
-    // 上限の打ち切り × 各組み合わせ。
-    let cut = [
-        (
-            v(Some(&session_end), false, false, end(true, true, true)),
-            MarkVerdict::Keep("session_end_deadline"),
-        ),
-        // 打ち切りは降ろす処理の失敗より先（打ち切りが原因で降ろす処理が失敗しても語は上限）。
-        (
-            v(Some(&session_end), false, false, end(true, false, true)),
-            MarkVerdict::Keep("session_end_deadline"),
-        ),
-        // 失敗の出所・出所なし・run() の失敗は打ち切りより先に起きている。
-        (
-            v(Some(&kanade_fault()), false, false, end(true, true, true)),
-            MarkVerdict::Keep("fault"),
-        ),
-        (
-            v(Some(&fatal), false, false, end(true, true, true)),
-            MarkVerdict::Keep("switch_fatal"),
-        ),
-        (
-            v(None, false, false, end(true, true, true)),
-            MarkVerdict::Keep("no_exit_origin"),
-        ),
-        (
-            v(Some(&session_end), false, false, end(false, true, true)),
-            MarkVerdict::Keep("run_failed"),
-        ),
-        // 打ち切り × argv: 触らない。
-        (
-            v(Some(&session_end), true, false, end(true, true, true)),
-            MarkVerdict::Untouched,
-        ),
-        // 打ち切りが無ければ OS のセッションの終了は消す／降ろす処理の失敗で残す。
-        (v(Some(&session_end), false, false, ok), MarkVerdict::Clear),
-        (
-            v(Some(&session_end), false, false, end(true, false, false)),
-            MarkVerdict::Keep("down_failed"),
-        ),
-    ];
-    for (g, w) in existing
-        .into_iter()
-        .chain(fallback_clean)
-        .chain(fallback_other)
-        .chain(cut)
-    {
-        got.push(g);
-        want.push(w);
-    }
-    assert_eq!(got, want);
-}
-
-/// 判定の始末: 消すなら印が消え、残すなら理由つきの `info!(session_mark_kept)`、触らないなら
-/// `debug!(session_mark_untouched_argv)`。どれも記憶の置き場の印をそれ以外に変えない。
-#[test]
-fn settle_session_mark_applies_the_verdict() {
-    let tmp = TempPath::new("mark-settle");
-    let mut outcomes = Vec::new();
-    for (argv_session, first, level, event) in [
-        (
-            false,
-            Some(ExitOrigin::Smoke),
-            tracing::Level::INFO,
-            "session_mark_cleared",
-        ),
-        (
-            false,
-            Some(kanade_fault()),
-            tracing::Level::INFO,
-            "session_mark_kept",
-        ),
-        (
-            true,
-            Some(ExitOrigin::Smoke),
-            tracing::Level::DEBUG,
-            "session_mark_untouched_argv",
-        ),
-    ] {
-        let app_profile_dir = tmp.child(event);
-        let _ = write_session_mark(&app_profile_dir, "A");
-        let mark = MarkInputs {
-            app_profile_dir: app_profile_dir.clone(),
-            argv_session,
-            first,
-            logsink_fallback: false,
-        };
-        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)).0);
-        let logged = events
-            .iter()
-            .filter(|e| e.level == level && e.field_str("event") == Some(event))
-            .count();
-        let reason = events
-            .iter()
-            .find(|e| e.field_str("event") == Some("session_mark_kept"))
-            .and_then(|e| e.field_str("reason").map(str::to_owned));
-        outcomes.push((verdict, logged, reason, read_session_mark(&app_profile_dir)));
-    }
-    assert_eq!(
-        outcomes,
-        vec![
-            (MarkVerdict::Clear, 1, None, None),
-            (
-                MarkVerdict::Keep("fault"),
-                1,
-                Some("fault".to_owned()),
-                Some("A".to_owned())
-            ),
-            (MarkVerdict::Untouched, 1, None, Some("A".to_owned())),
-        ],
-        "判定の始末が崩れた（判定・記録の件数・残す理由・印）"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // 印の一周（偽の SHIORI の土台で実際に起こして落とす）
 // ---------------------------------------------------------------------------
 
@@ -664,7 +397,7 @@ fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
         .as_ref()
         .map(|mark| settle_session_mark(mark, end(true, down_a, false)).0);
     let mark_kept = read_session_mark(&app);
-    plant_last_ghost(&app, "A");
+    save_scope(&app, "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -708,7 +441,7 @@ fn fault_after_steady_keeps_mark() {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected))),
     );
     let settled = after_run_and_settle(&mut rig);
-    plant_last_ghost(&app_dir(&rig), "A");
+    save_scope(&app_dir(&rig), "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -727,7 +460,7 @@ fn dropped_without_cleanup_keeps_mark() {
     let reached = rig.pump_until(|rig| booted(rig, "A"));
     // 印の始末を通さずに降ろすだけ（強制終了では後始末が走らない）。
     let down_a = rig.shutdown();
-    plant_last_ghost(&app_dir(&rig), "A");
+    save_scope(&app_dir(&rig), "A");
     let next = next_boot(&mut rig);
 
     assert_eq!((reached, down_a), (true, true), "届いた・降ろせた");
@@ -783,7 +516,7 @@ fn clean_exit_clears_mark_and_next_boot_follows_memory() {
     let settled = after_run_and_settle(&mut rig);
     let app = app_dir(&rig);
     let mark_after_exit = read_session_mark(&app);
-    plant_last_ghost(&app, "A");
+    save_scope(&app, "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -853,6 +586,8 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
 
 #[path = "main_session_mark_fallback_tests.rs"]
 mod fallback;
+#[path = "main_session_mark_write_tests.rs"]
+mod write;
 
 // ---------------------------------------------------------------------------
 // 告知と終了コード（切替の途中の致命・失敗でない終了）

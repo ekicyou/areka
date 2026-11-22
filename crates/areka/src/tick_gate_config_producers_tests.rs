@@ -11,13 +11,14 @@
 //! 「立っていないはず」は**主張しない**。旗はプロセスで 1 組しか無く、本番経路が同じ
 //! 旗を立てるため、そちらの主張は他の検査の巻き添えで揺れる。
 
+use areka_runtime::source_text_test_support::code_only;
 use areka_session::crate_source;
 
 /// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
 /// 見出しは `crates/` からの相対（crate の名前＋その `src/` の中のパス）である（読み先は読み口
-/// `crate_source!` で引く）。木の走査は本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩くので、見出しに
-/// crate の名前を付けて 3 つの木の間で取り違えないようにする。
+/// `crate_source!` で引く）。木の走査は本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の
+/// `src` を歩くので、見出しに crate の名前を付けて木の間で取り違えないようにする。
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
@@ -63,14 +64,6 @@ const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
         "ZORDER",
     ),
 ];
-
-/// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため。
-fn code_only(src: &str) -> String {
-    src.lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 #[test]
 fn every_areka_producer_marks_the_tick_wake() {
@@ -181,8 +174,8 @@ mark(ZORDER);",
     );
 }
 
-/// 本体・`areka-runtime`・`areka-input` の 3 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲）。
-fn walk_roots() -> [(&'static str, PathBuf); 3] {
+/// 本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の `src` を歩く。
+fn walk_roots() -> [(&'static str, PathBuf); 5] {
     [
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
         (
@@ -192,6 +185,14 @@ fn walk_roots() -> [(&'static str, PathBuf); 3] {
         (
             "areka-input",
             areka_session::crate_source_test_support::crate_path("areka-input", "src"),
+        ),
+        (
+            "areka-session",
+            areka_session::crate_source_test_support::crate_path("areka-session", "src"),
+        ),
+        (
+            "areka-placement",
+            areka_session::crate_source_test_support::crate_path("areka-placement", "src"),
         ),
     ]
 }
@@ -233,8 +234,8 @@ fn files_marking(flag: &str) -> Vec<String> {
     found
 }
 
-/// 本体と `areka-runtime` の木の中で旗を立てている本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に
-/// 載っている。
+/// 本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の木の中で旗を立てている
+/// 本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に載っている。
 ///
 /// 逆向きも同時に見る——表の行が現物のどのファイルにも当たらなければ、走査が壊れて
 /// 0 件を返している（そのときは何を消しても緑になる）。両側から挟んでおく。

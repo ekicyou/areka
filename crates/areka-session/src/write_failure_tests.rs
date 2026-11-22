@@ -7,9 +7,10 @@ use wintf::AppExit;
 
 use super::*;
 use crate::app_exit::FirstExit;
+use crate::boot_resolve::boot_resolve_tests::events_named;
 use log_capture_kit::{CapturedEvent, capture};
 
-fn failure(key: PersistKey, reason: &str) -> PersistFailure {
+pub(super) fn failure(key: PersistKey, reason: &str) -> PersistFailure {
     PersistFailure {
         scope: PersistScope::App,
         dir: Some(PathBuf::from(r"C:\areka\profile\areka")),
@@ -19,7 +20,7 @@ fn failure(key: PersistKey, reason: &str) -> PersistFailure {
 }
 
 /// 据え付け済みの World（`Schedules` と終了の受け口つき）。
-fn installed_world() -> World {
+pub(super) fn installed_world() -> World {
     let mut world = World::new();
     world.insert_resource(Schedules::default());
     world.insert_non_send(AppExit::new());
@@ -28,10 +29,7 @@ fn installed_world() -> World {
 }
 
 fn memory_write_failed(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("memory_write_failed"))
-        .collect()
+    events_named(events, "memory_write_failed")
 }
 
 /// 失敗 1 件の汲み出し: 最初の出所が `MemoryWriteFailed`・`memory_write_failed` が 1 件
@@ -107,10 +105,7 @@ fn drain_without_install_does_nothing() {
 // 起動を止める口・後始末の口
 
 fn alerts(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("alert"))
-        .collect()
+    events_named(events, "alert")
 }
 
 /// 抑止でも失敗が返り、`alert` の記録が 1 件（`suppressed=true`・題名「areka を起動できません」）・

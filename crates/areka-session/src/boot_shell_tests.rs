@@ -16,11 +16,12 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{BootShellChoice, GhostSlot, prepare_ghost_windows};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch::SwitchInFlight;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -41,7 +42,7 @@ fn rig_a() -> SwitchRig {
     rig
 }
 
-/// 今日の規則のシェル（名前なしの解決）のフォルダ。
+/// 規則どおりのシェル（名前なしの解決）のフォルダ。
 fn default_shell_dir(ghost_dir: &Path) -> PathBuf {
     resolve_with_shell(ghost_dir, DefaultEncoding::Ansi, None)
         .expect("検体の既定のシェルは解決できる")
@@ -84,14 +85,19 @@ fn add_hidden_shell_from(src: &Path, ghost_dir: &Path, folder: &str, name: &str)
 
 /// ゴーストの Ghost スコープへ「最後のシェル」を直接書く（起動が読む置き場と同じ）。
 fn remember_shell(ghost_dir: &Path, folder: &str) {
-    save_scope(
-        PersistScope::Ghost,
-        &ScopeRoots {
-            ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastShell, folder.to_owned())],
+    assert_eq!(
+        save_scope(
+            PersistScope::Ghost,
+            &ScopeRoots {
+                ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
+                ..ScopeRoots::default()
+            },
+            &FsPersistIo,
+            vec![(PersistKey::LastShell, folder.to_owned())],
+        ),
+        PersistOutcome::Saved,
+        "記憶のシェルを書けない: {}",
+        ghost_dir.display()
     );
 }
 
@@ -103,14 +109,6 @@ fn loaded_shell_dirs(events: &[CapturedEvent]) -> Vec<PathBuf> {
         .filter(|e| e.field("recognized").is_some())
         .filter_map(|e| e.field("shell_dir").map(PathBuf::from))
         .collect()
-}
-
-/// `event` の記録の件数。
-fn count_event(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
 }
 
 /// 置き場のゴーストのマウントのシェル。
@@ -187,11 +185,7 @@ fn load_lines(events: &[CapturedEvent]) -> LoadLines {
     const BALLOON: &str = "areka_emo_present::balloon";
     const ALPHA_MSG: &str = "self_alpha: 透過の扱いを決めた";
     LoadLines {
-        shell_list: count(
-            SHELL,
-            "shell: シェルの面の画像の一覧が終わった（R6.1）",
-            None,
-        ),
+        shell_list: count(SHELL, "shell: シェルの面の画像の一覧が終わった", None),
         shell_alpha: count(ALPHA, ALPHA_MSG, Some("shell")),
         balloon_alpha: count(ALPHA, ALPHA_MSG, Some("balloon")),
         series: per_scope(BALLOON, "balloon: scope 別バルーン系列の解決が完了"),
@@ -320,7 +314,7 @@ fn boot_a_in_production_order(rig: &mut SwitchRig) -> (bool, Vec<CapturedEvent>)
 }
 
 /// emo2 の写しを本番の順で起こすと、シェルの一覧・シェルとバルーンの透過の宣言が 1 行ずつ、
-/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行（今のまま）出る。
+/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行出る。
 ///
 /// # 非空虚性
 /// 採寸か windowposition の読みを記録を出す入口へ戻すと、一覧か系列の解決が 2 行になって赤。

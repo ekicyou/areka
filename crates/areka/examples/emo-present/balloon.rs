@@ -1,4 +1,6 @@
 use super::emo2;
+use areka_placement::config::build_placement_config;
+use std::collections::BTreeMap;
 
 // ---------------------------------------------------------------------------
 // Balloon anchor offset
@@ -37,11 +39,9 @@ pub(super) fn compute_balloon_pos(shell_x: i32, shell_y: i32, balloon_w: u32) ->
     }
 }
 
-/// shell descript（`shell/master/descript.txt`）から `sakura.balloon.offsetx/offsety` を読む。
+/// shell descript（`shell/master/descript.txt`）の `sakura.balloon.offsetx/offsety` を配置の crate の式で読む。
 ///
-/// 読取失敗・両キー欠如・整数化不能はいずれも `None`（既定整列へフォールバック）で返す。
-/// emo2 fixture は両キーとも持たないため通常は `None` が返る。
-/// 部分指定（片方のみ）は安全側で `None` とする。
+/// 読取失敗・両キー欠如はいずれも `None`（既定整列へフォールバック）。片方だけの指定は書かれない軸を 0 とする。
 fn read_balloon_offset() -> Option<(i32, i32)> {
     let path = emo2("shell/master/descript.txt");
     let text = match std::fs::read_to_string(&path) {
@@ -56,16 +56,9 @@ fn read_balloon_offset() -> Option<(i32, i32)> {
         }
     };
 
-    let kv = areka_parsers::kv::parse_kv(&text);
-    let ox = kv
-        .get("sakura.balloon.offsetx")
-        .and_then(|s| s.parse::<i32>().ok());
-    let oy = kv
-        .get("sakura.balloon.offsety")
-        .and_then(|s| s.parse::<i32>().ok());
-
-    match (ox, oy) {
-        (Some(x), Some(y)) => Some((x, y)),
-        _ => None,
-    }
+    let shell_kv = areka_parsers::kv::parse_kv(&text);
+    build_placement_config(&BTreeMap::new(), &shell_kv)
+        .scopes
+        .get(&0)
+        .and_then(|scope| scope.balloon_offset)
 }

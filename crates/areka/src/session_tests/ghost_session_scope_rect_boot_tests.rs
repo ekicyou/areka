@@ -6,50 +6,24 @@
 use std::sync::mpsc::{self, Sender};
 
 use areka_mcp::ToolOutcome;
-use areka_mcp::tools::get_property::Args;
-use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
+use areka_mcp::tools::{ToolRequest, outcome};
 
-use crate::sample_test_support::switch_rig;
+use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig, pump_to_welcomed};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
+use areka_placement::test_support::fake_handle;
 use areka_session::ghost_session::ghost_session_scope_rect::test_support::LEFT_SCREEN;
-use areka_session::ghost_session::ghost_session_scope_rect::test_support::{
-    fake_handle, placement,
-};
+use areka_session::ghost_session::ghost_session_scope_rect::test_support::placement;
 use areka_session::ghost_session::ghost_session_scope_rect::*;
-use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 use std::sync::Arc;
 
-/// A の `OnBoot`: 台詞の途中で B への切替を命じる。
-const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
 const CHAR: &str = "currentghost.scope(0).rect";
 const BALLOON: &str = "currentghost.balloon.scope(0).rect";
 
-fn ghost_a(on_boot: &'static str) -> FakeShiori {
-    FakeShiori::Scripted(Box::new(move || {
-        standard_script(on_boot)
-            .get(
-                "OnGhostChanging",
-                Ok(Some("\\0Bへ交代します\\e".to_owned())),
-            )
-            .get("OnGhostChanged", Ok(None))
-    }))
-}
-
-fn ghost_b() -> FakeShiori {
-    FakeShiori::Scripted(Box::new(|| {
-        standard_script("\\0B\\e").get("OnGhostChanged", Ok(None))
-    }))
-}
-
 /// A・B を据えた試験台と MCP の受け口（A は起動記録あり）。
 fn rig(a: FakeShiori) -> (SwitchRig, Sender<ToolRequest>) {
-    let mut rig = switch_rig(vec![("A", a), ("B", ghost_b())]);
-    // 切替先の窓の閉包の投函先（取り出しの系は無いので走らない）。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
+    let mut rig = lap_rig(a, ghost_b());
     let (tx, rx) = mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     (rig, tx)
@@ -79,21 +53,6 @@ fn install_windows(rig: &mut SwitchRig) {
         .insert(fake_handle(0x20));
 }
 
-/// MCP の `get_property` を受け口へ送って汲み、その場の答え（ゴースト名と結果）を取る。
-fn ask(rig: &mut SwitchRig, tx: &Sender<ToolRequest>, name: &str) -> Option<(String, ToolOutcome)> {
-    let (req, pending) = ToolRequest::new(ToolCall::GetProperty(Args {
-        property_name: name.to_owned(),
-        ghost_name: None,
-    }));
-    tx.send(req).ok()?;
-    crate::mcp::drain(&mut rig.world);
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .map(|a| (a.ghost, a.outcome))
-}
-
 fn both(rig: &mut SwitchRig, tx: &Sender<ToolRequest>) -> [Option<(String, ToolOutcome)>; 2] {
     [ask(rig, tx, CHAR), ask(rig, tx, BALLOON)]
 }
@@ -114,16 +73,13 @@ fn not_found() -> ToolOutcome {
 /// `wire` が前の表を使い回すと、替えた後も A の窓の矩形を答えて赤。
 #[test]
 fn switching_to_another_ghost_drops_the_previous_window_rects() {
-    let (mut rig, tx) = rig(ghost_a(A_TO_B));
+    let (mut rig, tx) = rig(ghost_a(A_TO_B, None));
     install_fake_os(&mut rig);
     install_windows(&mut rig);
     rig.boot("A");
     let booted = both(&mut rig, &tx);
     let steady = rig.wait_steady();
-    let welcomed = rig.pump_talking_until(|rig| {
-        rig.exit_requested()
-            || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
-    });
+    let welcomed = pump_to_welcomed(&mut rig, "B", 1);
     let switched = both(&mut rig, &tx);
     let down = rig.shutdown();
 
@@ -151,7 +107,7 @@ fn switching_to_another_ghost_drops_the_previous_window_rects() {
 /// `wire` が表をプロセスで 1 つ持つと、2 度目も前の窓の矩形を答えて赤。
 #[test]
 fn restarting_with_a_new_world_does_not_carry_the_table() {
-    let (mut first, tx) = rig(ghost_a("\\0A\\e"));
+    let (mut first, tx) = rig(ghost_a("\\0A\\e", None));
     install_fake_os(&mut first);
     install_windows(&mut first);
     first.boot("A");
@@ -159,7 +115,7 @@ fn restarting_with_a_new_world_does_not_carry_the_table() {
     let first_down = first.shutdown();
     drop(first);
 
-    let (mut second, tx) = rig(ghost_a("\\0A\\e"));
+    let (mut second, tx) = rig(ghost_a("\\0A\\e", None));
     install_fake_os(&mut second);
     second.boot("A");
     let after = both(&mut second, &tx);

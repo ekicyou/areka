@@ -42,7 +42,7 @@
   - 指摘 51・62・8・19・42 の、本体の呼び手（`crates/areka/src/main.rs`・`runtime/switch_assets.rs`・`runtime/frame/drain_resnap.rs` と本体のテスト）。
   - 指摘 47 の根の `Cargo.toml` の `[workspace.dependencies]` と `crates/areka/Cargo.toml`・`crates/wintf/Cargo.toml` の `async-io` の行。
   - 指摘 67・73 の wintf（`ecs/window/zorder_chain.rs` の `ChainPlan.absent`・`log_chain_absent`）と、本体の `runtime/frame/zorder_drain.rs`。
-- 申し送りの書き足し: `.kiro/specs/window-snap/brief.md`（議題 1）・`.kiro/specs/runtime-crate-split/brief.md`（要件 2.9）・`.kiro/specs/clippy-199-lints/brief.md`（要件 4.4）・`.kiro/specs/audit-areka-app/brief.md`（指摘 42 で古くなる `collision-probe.rs` の doc）。
+- 申し送りの書き足し: `.kiro/specs/window-snap/brief.md`（議題 1）・`.kiro/specs/runtime-crate-split/brief.md`（要件 2.9）・`.kiro/specs/clippy-199-lints/brief.md`（要件 4.4）・`.kiro/specs/completed/audit-areka-app/brief.md`（指摘 42 で古くなる `collision-probe.rs` の doc）。
 - 振る舞いが変わる指摘 1・17 の文書: `doc/ukadoc-coverage/ledger/assets.toml`（`seriko.alignmenttodesktop` の 8 項目）・`ledger/sakura-script.toml`（`\![execute,resetballoonpos]`）・`doc/COMPAT_ARCHITECTURE.md` の 8 章。
 
 ### Out of Boundary

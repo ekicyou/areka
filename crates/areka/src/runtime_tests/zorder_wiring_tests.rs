@@ -1,16 +1,16 @@
 // =============================================================================
 // タグ入口の結線と、shell 設定由来の基底の起動時結線の決定論テスト（本体の側）
 //
-// 測るのは結線の字面そのもの（zwi05＝受け渡し口・入口の登録・受け渡し構造、
-// zwi08＝設定の値を起動の段まで運ぶ経路）だけ。配線の欠けは挙動に現れにくく、
+// 測るのは結線の字面そのもの（`the_boot_wires_the_channel_the_sink_and_the_handoff`＝受け渡し口・入口の登録・受け渡し構造、
+// `the_entry_point_carries_the_shell_setting_into_the_wiring`＝設定の値を起動の段まで運ぶ経路）だけ。配線の欠けは挙動に現れにくく、
 // 設定の値を運ぶ経路は途中の 1 行を落としても「設定を書いていないゴースト」と同じ挙動になる。
 // 据えた値が実際に効くことは `areka-runtime` の `frame/zorder_descript_tests.rs` が挙動で受け持つ。
 //
 // 字面の走査は説明文を落とした本文へ当てる。素の全文には本ファイルと相手ファイルの
-// 説明の語も入り、検査が恒真になる（zwi08 の末尾に両方向の対照がある）。
-// zwi05 が読む `areka-runtime` の `src/lib.rs` の対照は、`areka-runtime` の `zorder_wiring_tests.rs` の `t_zwi06` の末尾にある。
+// 説明の語も入り、検査が恒真になる（`the_entry_point_carries_the_shell_setting_into_the_wiring` の末尾に両方向の対照がある）。
+// `the_boot_wires_the_channel_the_sink_and_the_handoff` が読む `areka-runtime` の `src/lib.rs` の対照は、`areka-runtime` の `zorder_wiring_tests.rs` の `the_frame_system_is_ordered_before_the_chain_apply` の末尾にある。
 //
-// 到達性（zwi01／02）・相順と相の呼出（zwi06／07）・基底を据える順（zwi09）は、`areka-runtime` の
+// 到達性（`a_script_tag_reaches_the_ledger_through_the_wired_channel`・`a_script_without_the_tag_leaves_the_mechanism_absent`）・相順と相の呼出（`the_frame_system_is_ordered_before_the_chain_apply`・`the_frame_calls_the_zorder_drain_after_the_size_reconcile`）・基底を据える順（`the_boot_seats_the_descript_base_before_inserting_the_wiring`）は、`areka-runtime` の
 // 同じ名前のファイルにある。
 // =============================================================================
 
@@ -26,7 +26,7 @@ use areka_session::crate_source;
 /// 受け口と入口の登録は実行系の側の起動（`runtime_boot.rs`）にあるので、そこは
 /// `runtime_boot.rs` の字面で押さえる（窓の側の送出端は束で渡る）。
 #[test]
-fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
+fn the_boot_wires_the_channel_the_sink_and_the_handoff() {
     let raw = crate_source!("areka-runtime", "src/lib.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
@@ -71,7 +71,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
 ///
 /// 落としても挙動が変わらないので、運ぶ側の字面をここが唯一押さえる。
 #[test]
-fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
+fn the_entry_point_carries_the_shell_setting_into_the_wiring() {
     // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
     // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る。
     let session_raw = crate_source!("areka-session", "src/ghost_session.rs");

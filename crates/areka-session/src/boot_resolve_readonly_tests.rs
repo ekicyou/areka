@@ -3,35 +3,13 @@
 //! プロセスに 1 つの状態は `withhold_everything` を呼ばず、試験ごとの根に立てた
 //! `WithholdGuard` だけで控える。根はワークツリーの `target\` の下だけ。
 
-use std::path::Path;
-
 use areka_sylphya::persist::withhold::WithholdGuard;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
+use super::boot_resolve_tests::{count_event, events_named};
 use super::*;
-
-/// `event` の記録の件数（`event` 欄で引く）。
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
-
-/// 置き場の木（相対パスと中身）。
-fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for e in entries {
-            let p = e.expect("置き場の項目").path();
-            let content = std::fs::read(&p).unwrap_or_default();
-            out.push((p.strip_prefix(dir).unwrap().to_path_buf(), content));
-        }
-    }
-    out.sort();
-    out
-}
+use crate::readonly::tests::tree;
 
 /// 根の取っ手の下で、印の 3 関数は成功を返し、書いたときの記録を出さず、控えたときの記録を出し、
 /// 置き場に何も作らない。
@@ -61,7 +39,7 @@ fn three_mark_writers_withhold_under_the_guard() {
         "session_mark_clear_withheld",
     ]
     .into_iter()
-    .map(|e| (e, count(&events, e)))
+    .map(|e| (e, count_event(&events, e)))
     .collect();
     assert_eq!(
         counts,
@@ -107,10 +85,7 @@ fn keep_mark_says_readonly_without_foretelling() {
     write_session_mark(&app, "動いている子").expect("控える");
 
     let ((), events) = capture(|| keep_session_mark(&app, "run_failed", None));
-    let kept: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("session_mark_kept"))
-        .collect();
+    let kept = events_named(&events, "session_mark_kept");
     assert_eq!(kept.len(), 1, "{events:?}");
     assert_eq!(kept[0].field("readonly"), Some("true"));
     let text = kept[0].message();

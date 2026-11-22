@@ -5,7 +5,7 @@
 //! 書く前の段に居た仕事は待たずに記録を残し、書いている最中の仕事だけを
 //! [`ClosingWaits::wait`] が予算の残りの時間だけ待つ。
 //!
-//! この部品は `install` も `update` も知らない。どちらの背景の仕事も同じ口で待ち、
+//! この部品は `install` も `update` も知らない。どの背景の仕事も同じ口で待ち、
 //! 書きかけの場所は門の `label`（書庫 → 根／更新先 → 対象）が運ぶ。
 
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use areka_kanade::WaitBudget;
 use bevy_ecs::prelude::*;
 
-/// 展開の終わりを待つ上限。
+/// 背景の仕事の書き終わりを待つ上限。
 pub const EXIT_WAIT_LIMIT: Duration = Duration::from_secs(3);
 
 /// 門の状態。3 つを 1 つの鍵の下で持つので、終了が始まった後に書く段へ入ることはない。
@@ -159,8 +159,8 @@ impl ClosingWaits {
     /// 合わせて上限を超えない。
     pub fn wait(self, budget: WaitBudget) {
         let deadline = budget.started + budget.limit;
-        let waited_from = Instant::now();
         for work in self.0 {
+            let waited_from = Instant::now();
             let mut s = work.gate.lock();
             while s.writing {
                 let left = deadline.saturating_duration_since(Instant::now());

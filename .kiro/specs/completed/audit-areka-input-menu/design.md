@@ -31,7 +31,7 @@
 - 本番の 3 つの寄せ先: 選択の送り出し（`balloon.rs` の `dispatch_selection`）・強調の当て方（`balloon.rs` の `apply_hover`）・マウスの送出（`lib.rs` の `MouseWiring::send_mouse`）。どれも crate の中の私有の関数で、公開の面は増えない。
 - テストの支えの 3 ファイル（`balloon_test_support.rs`・`pointer_test_support.rs`・`drag_test_support.rs`）への寄せ。`pointer_test_support` に足す項目は `#[cfg(test)] pub(crate)` にし、本体が `*` で読む面を広げない（`test-support` だけの組み立てで使われない項目の警告も出さない）。
 - 範囲の外の、要件 7.4 に挙げたファイルだけ: `areka-runtime` の `examples/collision-probe.rs`（62・63・65・66 行と 232 行の `println!`）・`examples/collision-probe/setup.rs`（75〜76 行）・`src/balloon_hover.rs` と `src/shell_box_hover.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-placement` の `src/spawn.rs` の末尾のテストの mod の行と兄弟の新しいテストのファイル、`areka-runtime` の `src/shell_cursor_table.rs` の `CursorRows::get` とそのテスト（指摘 74）、移すテストの名を doc コメントで指す 3 行（`areka-placement` の `spawn_zorder_pair_deferred_tests.rs`・wintf の `zorder_pair_maintain_always_on_top_tests.rs`）。
-- 申し送りの書き足し: `.kiro/specs/audit-areka-app/brief.md`（本体の名指し 2 件）と、`session-module-gather` のセッションへの伝言（`doc/COMPAT_ARCHITECTURE.md:412` のパス）。
+- 申し送りの書き足し: `.kiro/specs/completed/audit-areka-app/brief.md`（本体の名指し 2 件）と、`session-module-gather` のセッションへの伝言（`doc/COMPAT_ARCHITECTURE.md:412` のパス）。
 
 ### Out of Boundary
 
@@ -197,7 +197,7 @@ crates/areka-placement/src/
 | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` | 342 行の doc コメントのテストの名の 1 語 | 指摘 47・設計の討議の議題 4 |
 | `crates/areka-runtime/src/shell_cursor_table.rs` | `CursorRows::get`（借りた `&str` で引く）と私有の鍵の trait。公開の欄の型は変えない | 指摘 74・設計の討議の議題 3 |
 | `crates/areka-runtime/src/shell_cursor_table_tests.rs` | `get` のテスト 1 本 | 指摘 74 |
-| `.kiro/specs/audit-areka-app/brief.md` | 件を 2 つ書き足す（「並走の兄弟と申し送り」） | 要件 7.9〜7.11 |
+| `.kiro/specs/completed/audit-areka-app/brief.md` | 件を 2 つ書き足す（「並走の兄弟と申し送り」） | 要件 7.9〜7.11 |
 
 ### 1,000 行の見通し（要件 6.1）
 
@@ -628,7 +628,7 @@ pub(crate) fn drain_mouse(rx: &mpsc::Receiver<KanadeMsg>) -> Vec<MouseInput>;
 | G12 | 本番の説明（35〜38・45・46〜49 の本番の分・件 1・2・7・9） | 本番の各ファイル |
 | G13 | テストの説明（39・40・42・43・46〜49 のテストの分・件 4・5） | テストの各ファイル |
 | G14 | ファイル名と範囲の外の説明・README（41・44・50・52・件 6） | 3 ファイルの名・`lib.rs`・`collision-probe*`・`cursor/README.md` |
-| G15 | 預かりの記録と申し送り（件 8・12・30 と本体の名指しの申し送り） | `research.md`・`.kiro/specs/audit-areka-app/brief.md` |
+| G15 | 預かりの記録と申し送り（件 8・12・30 と本体の名指しの申し送り） | `research.md`・`.kiro/specs/completed/audit-areka-app/brief.md` |
 | G16 | `cargo doc`・かけ直しの audit・差分の確かめ・全体テスト（要件 9） | `research.md` |
 
 - **順**: 本番の寄せ（G1→G2→G3→G4）と G11 を先に、テストの強め（G5〜G7）、テストの削り（G8・G9）、移し（G10）、説明（G12・G13）、名の変更（G14）、記録（G15）、確かめ（G16）。同じファイルを触る組が多いので、組は順に回す（並べない）。G12・G13 の説明の直しは、先の組がそのファイルを触るときに一緒に直してよい（残った分を G12・G13 が拾う）。

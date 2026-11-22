@@ -1,6 +1,6 @@
-//! SHIORI の読み方の指定（`areka_session::boot_request::ModulePolicy`）から結線を決める口と倒れ先の表。
+//! 据え付けた作り口が SHIORI の読み方の指定（`areka_session::boot_request::ModulePolicy`）どおりの結線を組むこと。
 //!
-//! 指定は値として渡すだけなので、テストどうしは互いに影響しない。
+//! 指定は値として渡すだけなので、テストどうしは互いに影響しない。口そのものの表は `areka-session` の `boot_config_ghost_wiring_tests.rs`。
 
 use crate::install_boot_context;
 use areka_ghost::ShioriWiring;
@@ -39,25 +39,10 @@ fn assert_wiring(policy: ModulePolicy, wiring: ShioriWiring) {
     }
 }
 
-#[test]
-fn shiori_wiring_for_follows_module_policy() {
-    for policy in [ModulePolicy::Load, ModulePolicy::Skip] {
-        assert_wiring(policy, boot_config::shiori_wiring_for(policy, helper()));
-    }
-}
-
-#[test]
-fn fallback_boot_options_follow_module_policy() {
-    for policy in [ModulePolicy::Load, ModulePolicy::Skip] {
-        let options = ghost_boot_options(PathBuf::from("C:/custom/ghost"), helper(), None, policy);
-        assert_wiring(policy, options.shiori);
-    }
-}
-
-/// 据え付けた作り口が指定どおりの結線を組む: 初回の起動（`Plain`）と切替の先（別の根）の両方で、
+/// 据え付けた作り口が指定どおりの結線を組む: 由来が `Plain` の 2 回（別の根の「A」「B」）の両方で、
 /// 「読まない」なら差し替え口、「読む」なら helper の結線。
 #[test]
-fn installed_source_follows_module_policy_for_first_boot_and_switch() {
+fn installed_source_follows_module_policy_for_each_root() {
     use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     let base = PathBuf::from("C:/custom/root");
     let cfg = |name: &str| ConfigInputs {

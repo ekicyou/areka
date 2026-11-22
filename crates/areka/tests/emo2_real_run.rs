@@ -1,15 +1,15 @@
 //! 実 pasta 実走テスト＋人間サインオフ手順。
 //!
-//! 「emo2 が起動して喋る」最終統合（M-boot）を、**実 pasta.dll・実表示・実 DPI**で
+//! 「emo2 が起動して喋る」最終統合を、**実 pasta.dll・実表示・実 DPI**で
 //! 任意に追験するための env-gate opt-in ハーネス。観測の二段（決定論 spine ＋ 本 env-gate 実走）の
 //! うち後者に相当し、決定論 spine（`crates/areka-runtime/src/spine.rs`）が headless GPU で
 //! 押さえ切れない「実表示・実 helper・実 DPI」の最終確認を人間判断に委ねる。
 //!
-//! ## 既定 OFF（DoD 非前提）
+//! ## 既定 OFF
 //! 環境変数 [`REAL_RUN_ENV`]（`AREKA_EMO2_REAL_RUN`）が **未設定／空／空白のみ／非 UTF-8** のときは
-//! 子を起こさず即座に `return`（skip）する。ゆえに常設スイート（`cargo test --workspace`・外部 CI なし・
-//! ローカル DoD ゲート）では**実 helper／実表示に一切依存せず自明に緑**を保つ。この skip 経路こそが
-//! 常設スイートでの観測可能な完了条件であり、実走そのものは DoD の前提にしない（人間 opt-in の追験）。
+//! 子を起こさず即座に `return`（skip）する。ゆえに常設スイート（`cargo test --workspace`・外部 CI なし）では
+//! **実 helper／実表示に一切依存せず自明に緑**を保つ。この skip 経路こそが
+//! 常設スイートでの観測可能な完了条件であり、実走そのものは常設スイートの前提にしない（人間 opt-in の追験）。
 //!
 //! ## 実走（env セット時）
 //! 1 回の走りは共通の手続き（`emo2_real_run/common.rs` の `spawn_emo2`＋`boot_and_close`）に任せる。
@@ -47,17 +47,17 @@
 //! ## 回し方
 //! 排他テストの机を借りてから（`doc/impl-watch.md`）:
 //!
-//!     $env:AREKA_EMO2_REAL_RUN="1"; cargo test -p areka --test emo2_real_run -- --nocapture
+//!     $env:AREKA_EMO2_REAL_RUN="1"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_real_run -- --nocapture
 //!
 //! 100% 相当で回すときは、子にだけ `__COMPAT_LAYER` を渡す `AREKA_EMO2_COMPAT_LAYER` に互換モードの値を置く
 //! （まず `DPIUNAWARE`、効かなければ `GDIDPISCALING DPIUNAWARE`）。時間の 1 行の `primary_dpi=96` で効いたことを見る:
 //!
-//!     $env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test -p areka --test emo2_real_run -- --nocapture
+//!     $env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_real_run -- --nocapture
 //!
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
 //! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka-session/src/boot_config.rs`）は
 //!   `current_exe()` 隣の `shiori-host32-helper.exe` を解決する。窓口が i686 の成果物を実バイナリ
-//!   隣へ揃えるので、先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で
+//!   隣へ揃えるので、先に `cargo build --manifest-path <絶対パス>\Cargo.toml -p shiori-host32-helper --target i686-pc-windows-msvc` で
 //!   建てておく。
 //! - **実表示**: attach 完了マーカーは `GhostWindows`＋GPU 資源ゲート成立フレームで
 //!   初めて発火する。モニタ 0 台の headless 環境では「起動窓を開けません」の `error!` を残して
@@ -69,14 +69,14 @@
 #[path = "emo2_real_run/common.rs"]
 mod common;
 
-/// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・DoD 非前提）。
+/// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip）。
 const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 
 // ===========================================================================
 // 実 DPI 人間サインオフ手順
 // ===========================================================================
 //
-// **マイルストーン（M-boot）完了は、この人間サインオフを経てのみ宣言される。AI 単独では宣言しない**。
+// **この最終統合の完了は、この人間サインオフを経てのみ宣言される。AI 単独では宣言しない**。
 // 本ファイルの自動の確かめ（印 3 つ・利用者と同じ閉じ方での終了コード 0）は自動部を押さえるに過ぎず、
 // 以下の目視確認（実 DPI・実発話・実ドラッグ）は人間が実機で行う。
 //
@@ -89,8 +89,7 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 //      （不可視のまま・座標破綻・画面外沈み込みが無い）。
 //   2. **typewriter 進行**: OnBoot 応答トークがバルーンへ typewriter 進行で流れる（一括表示でなく
 //      1 文字ずつ）。
-//   3. **ドラッグ追従**: マスコットをドラッグするとサーフェスがポインタへ追従する（window-placement
-//      のドラッグ機構）。
+//   3. **ドラッグ追従**: マスコットをドラッグするとサーフェスがポインタへ追従する。
 //   4. **close→静かな終了**: 窓を閉じると別れの台詞（OnClose 応答）を経てから全エンジンが静かに正常終了する
 //      （会話が途中で切れず・後片付けが行われる）。
 //
@@ -107,10 +106,10 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 //   **寛大な有界自動終了**（`180000`＝3 分）を付けて実バイナリを直接起動する:
 //
 //       $env:RUST_LOG="info,kanade=trace"; $env:AREKA_APP_SMOKE_EXIT_MS="180000"; `
-//         target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
+//         <絶対パス>\target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
 //
 //   （`<emo2 ghost_root>`／`<emo2 balloon_root>` の絶対パスは
-//     `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
+//     `cargo run --manifest-path <絶対パス>\Cargo.toml -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
 //     `folder=`／`balloon.emo2-kakukaku=` の行から得る）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
 //     閉じて別れの台詞を見て、4（静かな終了）を確認する。閉じずに放置しても 3 分で有界に終わる。
 //   ※ `180000` は**この人間 opt-in の直接起動専用**であり、締切を持たない。本ファイルの `#[test]` の
@@ -128,7 +127,7 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 /// 実ドラッグの目視サインオフは本ファイル上部の「実 DPI 人間サインオフ手順」に従い人間が行う。
 #[test]
 fn emo2_real_run_boots_talks_and_exits_zero() {
-    // 既定 OFF ゲート（DoD 非前提）: 未設定／空／空白のみ／非 UTF-8 は全て skip 扱いで即 return。
+    // 既定 OFF ゲート: 未設定／空／空白のみ／非 UTF-8 は全て skip 扱いで即 return。
     match std::env::var(REAL_RUN_ENV) {
         Ok(v) if !v.trim().is_empty() => { /* env セット済み → 実走へ進む */ }
         _ => {

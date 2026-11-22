@@ -2,25 +2,22 @@
 //!
 //! 受け手は窓の手続きの中で同期に後始末まで済ませるので、偽の SHIORI の土台（`SwitchRig`）で
 //! 起こした A に直接呼んで、呼出列（`OnClose` の Ref0＝`system`）・最初の出所・終了の指示・置き場・
-//! 起動中の印を見る。実行系の要らない場面（予約・先に届いた失敗）は置き場に実行系の無い単位を
-//! 入れた素の World で見る。
+//! 起動中の印を見る。未処理の失敗の通知と `run()` の後の後始末は置き場に実行系の無い単位を
+//! 入れた素の World で見る（予約と先に指示した失敗の場面は `areka-session` の `session_end_tests.rs`）。
 
 use std::sync::mpsc;
 use std::time::Duration;
 
-use areka_kanade::{
-    CancelReason, ChangeHandoff, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault,
-    ShioriFaultKind,
-};
+use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFaultKind};
 use bevy_ecs::prelude::*;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
+use super::levels_of;
 use crate::sample_test_support::switch_rig;
 use crate::{after_run, finish_after_run};
-use areka_runtime::spine::RecordedCall;
-use areka_session::app_exit::{ExitOrigin, FirstExit, quit_app};
+use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::ConfigInputs;
 use areka_session::boot_config::{BootContext, CurrentGhost};
 use areka_session::boot_resolve::{
@@ -28,38 +25,9 @@ use areka_session::boot_resolve::{
 };
 use areka_session::ghost_quit::KanadeNoticeRx;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::session_end::test_support::{fault, on_close_ref0};
 use areka_session::session_end::{SessionEnded, end_session_within, on_os_session_end};
-
-fn fault() -> ShioriFault {
-    ShioriFault {
-        kind: ShioriFaultKind::Disconnected,
-        reason: "テストの失敗".to_owned(),
-    }
-}
-
-/// `event` の記録の水準（届いた順）。
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
-
-/// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
-fn on_close_ref0(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .filter_map(|c| match c {
-            RecordedCall::Notify { id, references } if id == "OnClose" => {
-                Some(references.first().cloned().unwrap_or_default())
-            }
-            _ => None,
-        })
-        .collect()
-}
 
 /// 実行系の無い単位を置き場に持つ素の World（記憶の置き場は `tmp` の下・印＝A を書いておく）。
 /// 戻りの送出端から運行の通知を受け口へ積める。
@@ -94,7 +62,7 @@ fn bare_world(tmp: &TempPath) -> (World, mpsc::Sender<KanadeNotice>) {
         },
     });
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, ghost_dir))));
-    let _ = write_session_mark(&tmp.child("app-profile"), "A");
+    write_session_mark(&tmp.child("app-profile"), "A").expect("印を書く");
     (world, tx)
 }
 
@@ -121,7 +89,7 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
     rig.plant_boot_record("A");
     rig.boot("A");
     let app = rig.world.resource::<BootContext>().app_profile_dir.clone();
-    let _ = write_session_mark(&app, "A");
+    write_session_mark(&app, "A").expect("印を書く");
     let steady = rig.wait_steady();
 
     let ((), first_events) =
@@ -138,9 +106,8 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
         levels_of(&first_events, "os_session_end_begin"),
         levels_of(&first_events, "session_mark_cleared"),
         levels_of(&first_events, "os_session_end_done"),
-        first_events
-            .iter()
-            .find(|e| e.field_str("event") == Some("os_session_end_done"))
+        super::events_named(&first_events, "os_session_end_done")
+            .first()
             .map(|e| (e.field("ms").is_some(), e.field("shiori_cut"))),
     );
 
@@ -179,169 +146,6 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
     );
 }
 
-/// 送り出しの段の切替の予約（A → B）。
-fn send_off_reservation() -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
-}
-
-/// 切替の予約が在る World → 予約が消え `info!(ghost_switch_cancelled, reason=session_end)` 1 件・
-/// 最初の出所はセッションの終了・印が消える。
-#[test]
-fn session_end_drops_switch_reservation() {
-    let tmp = TempPath::new("session-end-reservation");
-    let (mut world, _tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
-
-    let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-    let cancelled_reason = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("ghost_switch_cancelled"))
-        .and_then(|e| e.field_str("reason").map(str::to_owned));
-
-    assert_eq!(
-        (
-            world.get_non_send::<SwitchInFlight>().is_some(),
-            levels_of(&events, "ghost_switch_cancelled"),
-            cancelled_reason,
-            first_exit(&world),
-            slot_empty(&world),
-            read_session_mark(&tmp.child("app-profile")),
-        ),
-        (
-            false,
-            vec![tracing::Level::INFO],
-            Some("session_end".to_owned()),
-            Some(ExitOrigin::SessionEnd),
-            true,
-            None,
-        ),
-        "予約が下りない（予約・記録・理由・最初の出所・置き場・印）: {events:?}"
-    );
-}
-
-/// 予約（送り出し）の下で、切替の握手を終えた停止（中身あり）が未処理のまま受け口に在る → 予約を
-/// 先に下ろしてから捌くので、停止は今日どおり終了（最初の出所は `KanadeStopped(Quit)`）になり、
-/// 切替の経路（降ろす・切替先を起こす）へは入らない。
-///
-/// # 非空虚性
-/// 捌くのを予約を下ろすより先にすると、停止は切替として捌かれ、置き場のゴーストを降ろして
-/// 切替先を起こそうとする（`ghost_switch_down_ms` が 1 件・起こす文脈が無いので `ghost_switch_no_context`）。
-#[test]
-fn pending_switch_stop_is_quit_not_switch() {
-    let tmp = TempPath::new("session-end-pending-switch-stop");
-    let (mut world, tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
-    tx.send(KanadeNotice::Stopped(KanadeStopped {
-        cause: KanadeStopCause::Quit,
-        handoff: Some(ChangeHandoff { script: None }),
-    }))
-    .expect("停止通知を積める");
-
-    let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-    let switch_path: Vec<usize> = [
-        "ghost_switch_down_ms",
-        "ghost_switch_booted",
-        "ghost_switch_boot_failed",
-        "ghost_switch_no_context",
-    ]
-    .iter()
-    .map(|event| levels_of(&events, event).len())
-    .collect();
-
-    assert_eq!(
-        (
-            first_exit(&world),
-            switch_path,
-            world.get_non_send::<SwitchInFlight>().is_some(),
-            levels_of(&events, "ghost_quit"),
-            slot_empty(&world),
-        ),
-        (
-            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Quit)),
-            vec![0, 0, 0, 0],
-            false,
-            vec![tracing::Level::INFO],
-            true,
-        ),
-        "未処理の切替の停止が切替として捌かれた（最初の出所・切替の経路の記録 [降ろした・起こした・起こせない・文脈なし]・予約・今日の終了・置き場）: {events:?}"
-    );
-}
-
-/// 予約を下ろした後に届いていた切替の中止の通知は、セッションの終了の中では警告にしない
-/// （`debug!`・予約は既にセッションの終了で下ろした）。
-#[test]
-fn pending_change_cancelled_is_quiet_during_session_end() {
-    let tmp = TempPath::new("session-end-pending-cancel");
-    let (mut world, tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
-    tx.send(KanadeNotice::ChangeCancelled {
-        reason: CancelReason::CloseRequest,
-    })
-    .expect("中止の通知を積める");
-
-    let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-
-    assert_eq!(
-        (
-            levels_of(&events, "ghost_switch_cancelled"),
-            first_exit(&world),
-        ),
-        (
-            vec![tracing::Level::INFO, tracing::Level::DEBUG],
-            Some(ExitOrigin::SessionEnd),
-        ),
-        "中止の通知の記録（予約を下ろした info・遅れた中止の debug）・最初の出所: {events:?}"
-    );
-}
-
-/// 先に SHIORI の失敗で終了を指示した World → 最初の出所は失敗のまま・印が残る（`Keep("fault")`）。
-#[test]
-fn session_end_after_fault_exit_keeps_mark() {
-    let tmp = TempPath::new("session-end-after-fault");
-    let (mut world, _tx) = bare_world(&tmp);
-    let fault_origin = ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault()));
-    quit_app(&mut world, fault_origin.clone());
-
-    let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-    let kept_reason = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("session_mark_kept"))
-        .and_then(|e| e.field_str("reason").map(str::to_owned));
-
-    assert_eq!(
-        (
-            first_exit(&world),
-            slot_empty(&world),
-            read_session_mark(&tmp.child("app-profile")),
-            kept_reason,
-            levels_of(&events, "os_session_end_done"),
-        ),
-        (
-            Some(fault_origin),
-            true,
-            Some("A".to_owned()),
-            Some("fault".to_owned()),
-            vec![tracing::Level::INFO],
-        ),
-        "失敗が先の終了で印が消えた（最初の出所・置き場・印・残す理由・所要）: {events:?}"
-    );
-}
-
 /// 受け口に未処理の SHIORI の失敗の停止通知が積まれた World → 受け手が先に捌くので最初の出所は
 /// 失敗・印が残る・`run()` の後の後始末は告知の場面を組まず、終了コードの材料は失敗（1）。
 ///
@@ -353,7 +157,7 @@ fn pending_fault_notice_wins_over_session_end() {
     let tmp = TempPath::new("session-end-pending-fault");
     let (mut world, tx) = bare_world(&tmp);
     tx.send(KanadeNotice::Stopped(KanadeStopped {
-        cause: KanadeStopCause::Fault(fault()),
+        cause: KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected)),
         handoff: None,
     }))
     .expect("停止通知を積める");
@@ -374,7 +178,9 @@ fn pending_fault_notice_wins_over_session_end() {
             levels_of(&after_events, "session_end_already_handled"),
         ),
         (
-            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault()))),
+            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(
+                ShioriFaultKind::Disconnected
+            )))),
             Some("A".to_owned()),
             true,
             true,

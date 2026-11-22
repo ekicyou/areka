@@ -10,7 +10,7 @@ use areka_parsers::package::MountError;
 /// 配置準備パイプライン（resolve→descript 読込→採寸→解決）の観測可能な失敗。
 ///
 /// 安易な panic 禁止・失敗は `error!`＋`Err`。
-/// 本番の呼び手は本体の `ghost_session::prepare_ghost_windows`（`prepare_ghost_windows_for_shell`
+/// 本番の呼び手は `areka-session` の `ghost_session::prepare_ghost_windows`（`prepare_ghost_windows_for_shell`
 /// を呼ぶ）で、失敗はそこで包まれて返る。初回の起動（`main`）では「起動窓を開けない」の告知と
 /// 終了コード 1 になり、ゴーストの切り替え（`reopen_ghost_windows`）では切り替えの失敗として
 /// 扱われて終了はしない（log-first）。

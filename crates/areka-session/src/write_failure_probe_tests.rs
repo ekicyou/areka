@@ -8,17 +8,7 @@ use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
 use super::*;
-
-/// フォルダの下の物の数（ファイルとフォルダ・下の階層まで全部）。
-fn entries(dir: &Path) -> usize {
-    std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| {
-            let path = e.unwrap().path();
-            1 + if path.is_dir() { entries(&path) } else { 0 }
-        })
-        .sum()
-}
+use crate::readonly::tests::{tree, unwritable_places};
 
 /// `<root>\ghost\master` まで作ったゴーストのフォルダ。
 fn ghost_root(base: &TempPath, name: &str) -> PathBuf {
@@ -40,13 +30,13 @@ fn probe_leaves_nothing_behind() {
     let tmp = TempPath::under_target("write-failure-probe-nothing");
     std::fs::create_dir_all(tmp.child("a")).unwrap();
     std::fs::write(tmp.child("a").join("keep.txt"), "x").unwrap();
-    let before = entries(tmp.path());
+    let before = tree(tmp.path());
 
     probe_dir(&tmp.child("a")).expect("在るフォルダは書ける");
     let absent = tmp.child("a").join("profile").join("areka");
     probe_dir(&absent).expect("在らない下のフォルダは親で確かめる");
 
-    assert_eq!(entries(tmp.path()), before, "確かめで物が増えた");
+    assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
     assert!(!absent.exists(), "確かめがフォルダを作った");
 }
 
@@ -65,15 +55,8 @@ fn probe_under_a_regular_file_is_unwritable() {
 #[test]
 fn app_place_unwritable_is_scope_app() {
     let tmp = TempPath::under_target("write-failure-probe-app");
-    let app = tmp.child("app-profile");
-    std::fs::write(&app, "x").unwrap();
-    let root = ghost_root(&tmp, "ghost-a");
-    // ゴーストも書けなくして、アプリが先に確かめられることも見る。
-    std::fs::write(root.join("ghost").join("master").join("profile"), "x").unwrap();
-    let cfg = ConfigInputs {
-        ghost_root: root,
-        balloon_root: tmp.child("balloon"),
-    };
+    // ゴーストも書けない置き場なので、アプリが先に確かめられることも見る。
+    let (cfg, app) = unwritable_places(&tmp);
 
     let failure = check_boot_dirs(&cfg, &app).expect_err("アプリの置き場は書けない");
 
