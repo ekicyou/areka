@@ -432,3 +432,174 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 - **`audit-emo2-boot-switch` へ**: 議題 8 で直すなら 13 の `switch_to` の段の分け方の申し合わせ／33 の `spawn_windows` に `dpi` を取らせ `pump_messages` と一緒に `pub` にすること／R6 で要るときの 25 の読み手の直し／`ghost_switch.rs` が `update_busy` を見ない件（範囲の外の件）／`reload::test_support::boot_context` が写しの寄せ先に使えること（`ghost_switch_tests.rs` の写しの寄せ先の選びに）。
 - **`link-context-copy`・`balloon-link-hover` の brief へ**: 議題 11 の古いパスの直し。
 - **持ち主を設計で確かめる**: `areka-runtime/src/consumer_ledger.rs:77` の古い説明。
+
+## 10. 設計の段の調べ（2026-11-22・kiro-spec-design）
+
+- **やり方**: 軽い調べ（既にある crate の直し・新しい依存なし）。外の資料は読んでいない。範囲の外のコードは、読むだけの下請け 3 本と、この書き手が読んだ。下請けは次の 3 本。
+  - R2・R10・6・60・69。
+  - R3・R6・R12・93・99。
+  - R7・R8・R11・2・12・68。
+  - この書き手は 13 の `switch_to`・`overwrite.rs`・R5 を読んだ。
+
+  テストもコンパイルも回していない。
+- **使った作法**: kiro-spec-design の rules（discovery-light・synthesis・review-gate・principles）、ponytail（いちばん小さな完全な変更）、CLAUDE.md の「## Comments」。
+- **兄弟からの知らせ**（`audit-emo2-boot-switch` の設計の承認 `6a0823440`）:
+  - 13 の `switch_to` の分け方は、この spec が入れる。向こうは `switch_to`・`take_down`・`boot_into` に触らず、`ghost_switch.rs` の 40〜44・66〜90・111・250〜333・423・522 行だけを直す。先に着地した側の後で、もう片方が `main` を取り込む。
+  - 33: 向こうが `spawn_windows(rig, dpi: u16)` と `pump_messages` を `pub` にする。
+  - 向こうは `SwitchVerdict::Updating` を足す。`install/overwrite.rs:118-130` の網羅の照合に、この名が要る。
+
+### 10.1 Research Needed の答え
+
+**R2: 1 の期限と決定論の試し方**
+- 根拠: `areka-sylphya/src/actor.rs:556-581・615`・`areka-actor/src/reply.rs:86-93`・`areka-session/src/exit_wait.rs:18`・`areka-runtime/src/lib.rs:64-65`・`areka-ghost/src/sylphya_wiring.rs:123-130`。
+- **期限**: `areka_session::exit_wait::EXIT_WAIT_LIMIT`（3 秒）を使う。`pub` で cfg が無く、本体の `install/worker.rs:27` が既に `exit_wait` を引いている。
+  - `areka_runtime::spine::SPIN_WAIT`（30 秒）は `test-support` の中だけにあり、本番からは引けない。
+  - `barrier_within` の本番の呼び手は今 0 件。テストの外の呼び手は `areka-input/src/drag_test_support.rs:252` の `SPIN_WAIT` だけ。
+- **期限切れのとき**: `barrier_within` は `ReplyError::Timeout` と `error!`（「sylphya barrier timed out」）を出す。書き手が居なければ、`post_barrier` が warn と `Dropped` を出す。
+- **試し方**: 今のゴーストの書き手へ偽の IO を差す公開の口は無い（`spawn_ghost_sylphya` は `FsPersistIo` の決め打ち）。
+  - ただし `areka_sylphya::spawn_sylphya(init)` と `PersistIo` は公開である。テストは門で止める偽の IO で単独の書き手を起こせる。
+  - 待ちを `settle_record(publisher)` に切り出し、別のスレッドで呼んで `join_thread_bounded` で待つ。今の `barrier()` なら止まるので赤になる。
+  - `install_record_unsettled` を見るテストは今 0 本。
+- **37 の行**: 期限の無い `publisher.barrier()` は今 `mcp/get_property_tests.rs:103・318` にある（4 節の 153・368 は古い）。
+
+**R3: 名の違いが結果に効くか**
+- 根拠: `areka-session/src/reload_test_support.rs:17-41`・`reload.rs:749-751`・`crates/areka/Cargo.toml:111`・`boot_config.rs:19-21・176-195`。
+- **11**（`install/desk_tests.rs:730`）: 効かない。
+  - 呼び手は 8 か所（`desk_exit_tests.rs:101・143` を含む）で、どれも `"A"`。
+  - 本番のインストールが読むのは `roots`・`current.ghost.dir`・`folder` だけで、バルーンとプロファイルは読まない。
+- **45**（`roots/` の 3 つ）: 本番は名を読まない（`apply` は `current` に触らない）。
+  - `edit_tests.rs` の 330・443・447 行の表明は `ga` を名指すので、呼ぶ前の `current` との比べに直す。
+  - 上書きが要る欄は 2 つ。`roots_origin: Default`（既にある補助は `EnvVar` で、置き場の変更を全部断る）と、`app_profile_dir`（`edit_write_failure_tests.rs:78` が比べる）。
+- **58**: 効かない（`submit` は `BootContext.roots` だけを読む）。
+- **27**（`update/` の 4 つ）: 効く（`update/desk.rs:339・605`・`update/mod.rs:196` が名を読む）。
+  - 違うのは名だけで、ほかの欄は既にある補助と同じ。
+  - `write_descript` の写しは 2 つの形に分かれている。charset の頭と末尾の改行を付けるものと、付けないもの。
+- **上書きの形**: `BootContext`・`CurrentGhost`・`ConfigInputs` の欄はどれも `pub` で、本体の dev 依存は `areka-session` の `test-support` を開けている。
+- **向こうの `ghost_switch_test_support::boot_context(root, current)`**: ファイルは在り、本体から届く。ただし呼び手が `CurrentGhost` を丸ごと組むので、`update/` の写しは減らない。よって使わない。
+
+**R4（済み）**: 2 節のとおり。
+
+**R5: `switch_to` を分けたとき**
+- 根拠: `areka-session/src/ghost_switch.rs:597-708・756-858`・`switch_copy.rs:87-125`・`session_end.rs:1-8`・`install/overwrite.rs:143-193`。
+- **⑴ kanade の保留**: 変わらない。流れは、切替の受理 → kanade が台詞の終わりを待つ → 停止の通知と中身 → `switch_to` のまま。
+- **⑵ 窓もゴーストも無いフレーム**: 置き場 `GhostSlot` を読む本番の系は、どれも `get_non_send::<GhostSlot>()?` と `.0.as_ref()?` の `Option` で受ける。当たるのは本体の `install/`・`mcp/`・`update/`・`menu/`・`roots/`・`file_drop.rs` と、`areka-session` の `ghost_session_runtime.rs`。
+  - 窓口の `drain` は毎 tick に汲むので、tick が回れば背景の答えは届く。
+  - 窓 0 の間も tick が回るかは、確かめ切れていない（OPEN QUESTION 3）。
+- **⑶ 終了**: 展開は背景のスレッドが `enter_write` の中で行うので、`begin_close` は上限まで待つ。待ちの材料は捨て、起こさない（今の写し待ちと同じ）。
+  - OS のセッションの終了は窓の手続きで受けるので、窓 0 の間は受けられない。これは今の同期の展開と同じ（窓 0 で、汲み上げも止まる）。
+- **⑷ 失敗**: 起こす後半（`boot_into` → 既定へ戻す → 致命）は同じ関数 `boot_target` が通るので、今のまま。
+- **⑸ 変わる行**: `ghost_switch.rs` の `switch_to`（597〜708 行）の後半と、末尾の mod の行だけ。
+  - `take_down`・`boot_into`・`SwitchStage`・`on_ghost_stopped` は変えない。
+  - 待ちは新しい NonSend `BetweenHold` で表す。
+  - `BodySystems::overwrite_between` の形（`fn(&mut World)`）は変えない。`body_systems.rs`・`main.rs` には触らない。
+  - 前例は写し待ち（`switch_copy::boot_dir`・`poll`）。
+
+**R6: 25 の改名と向こうのテスト**
+- 根拠: `log-capture-kit/src/capture.rs:166-172`・`shell_balloon_switch_session_update_tests.rs:125・217-262`。
+- **答え**: 1 件のままで、向こうのファイルの直しは要らない。
+  - `shell_balloon_switch_session_update_tests.rs:217-262` は背景のスレッドを回さず、`ask_reload_for_test`（`update/desk.rs:554`）で窓口へ直に頼む。
+  - `capture` が取るのは、呼んだスレッドと窓の中で起こしたアクターだけ（大域の受け手ではない）。
+  - 数えは `event` の欄だけで絞る。
+  - よって数えるのは窓口の側（`update/desk.rs:206`・Accepted の info）。
+- **範囲の中の読み手**:
+  - `desk_reload_tests.rs:224・320・386・548`: 窓口の側なので、そのまま。
+  - `procedure_reload_tests.rs:88・175`: 背景の側なので、新しい語へ。
+  - `worker_path_tests.rs:200-206`: 出所の絞りを外す。
+  - `worker_path_tests.rs:323`: 無いことの列に新しい語を足す。
+- **範囲の外の読み手**: 台帳 `shiori.toml:7188` だけ。`tools/` に読み手は無い。
+
+**R7: 3 のテストの置き場**
+- 根拠: `areka-emo-present/src/presenter/{target,show,snapshot,refresh}.rs`・`command.rs:65`・`areka-runtime/src/frame/wiring.rs:289-291`。
+- 控え `last_show: Option<(u32, BindSet, PatternState)>` は、surface・着せ替え・アニメーションの段を全部持つ（`target.rs:144`・`show.rs:447`）。そのため `compose_last_shown` は `compose_alone`（`snapshot.rs:72-87`）と同じ形で書ける。
+- 単体のテストは `snapshot_tests.rs` に置く。手本は 215 行の `last_shown_after_invalidate_cache_keeps_id_without_picture`。`invalidate_ok` は crate の中から使える。
+- 本体の側は、`PresentCommand::InvalidateCache { target, reply: None }`（公開）を `RuntimeWiring::apply_present`（`test-support`）で送れば、隠した target の控えを捨てた状態を作れる。
+- `dump_surface.rs:280` は `None` と `Some((_, None))` を 1 つの `_` で受けているので、腕を分ける。
+
+**R8: 4・28 の短命のスレッド**
+- 根拠: `roots/edit.rs:258・293-312`・`mcp/get_expression_table.rs:104-121`・`log-capture-kit/src/capture.rs:139`・`areka-actor/src/spawn.rs:115-121`。
+- **4**: 記録だけの段は、`status`（根ごとの `is_dir`）・`survey(&roots).hidden`・`log_roots`・`log_hidden`。`roots` は手元の値なので、そのままスレッドへ移せる。
+  - `capture` はスレッドに閉じる。テストの記録の表明（`edit_tests.rs:346-353・457`）は、スレッドに dispatcher を持たせたうえで、JoinHandle を待った後へ移す。
+- **28**: 前例は `dump_surface.rs:209-234` の `encode_elsewhere`。`thread::Builder` の名前つきで、起こせなければ `error!` と `NG:` を返す。
+  - テストは `#[cfg(test)]` の `WaitAnswer::wait_answer`（`dump_surface.rs:405-430`）で待てる。
+- どちらも終了の門に乗せない。失うのは記録の行と、相手が居ない答えだけ。
+
+**R9: 54 の `allow` を外した後の警告**
+- 根拠: 4 節の 54。
+- コンパイルでは確かめていない。
+- 当たる項目は 2 種類。`pub mod readme` の下の `pub` の項目（`WindowsShell`・`init_com_for_shell`）と、`pub` の型の trait の実装から使われる私有の項目。本体の `cli/help.rs:49-51` が呼ぶ。
+- 実装の段で `cargo clippy -p areka-session --tests` を回し、警告 0 を確かめる（タスクの確かめに入れた）。
+
+**R10: 5・23 の panic のテスト**
+- 根拠: `crash-report-kit/src/lib.rs:227-252`・`areka-actor/src/spawn.rs:107-172`・`install/worker.rs:67-87`・`update/worker.rs:70-96`・`update/desk.rs:417-425`。
+- human-panic のフックを入れるのは `main.rs:124` だけで、テストでは入らない。
+- crash-report-kit の初回の受け手は ACCESS_VIOLATION だけを書くので、std のスレッドの panic では動かない。
+- `spawn_actor`・`run_inbox` に `catch_unwind` は無い。前例は `areka-runtime/src/spine_wait_tests.rs:315`（アクターの panic → `join_bounded` が `Panicked`）。
+- **落とし穴**: 倒れた道で素の `OrderDone` を送ると、次の依頼が黙って消える。死にかけのスレッドの受信端がまだ生きている間に、窓口が次の依頼を送るためである。よって倒れた知らせは別の腕 `WorkerPanicked` にし、窓口は `worker = None` にする。
+- **守り手の置き場**: `update` は依頼ごとに `ports` を作るので、守り手を `ports` より先に作る。`install` は `ports` がスレッドに 1 つなので、順は効かない。
+
+**R11: 102 の値なしの表れ方**
+- 根拠: `areka-ghost/src/prop_get_sink.rs`・`mcp/get_property_tests.rs:236-300`・`areka-runtime/src/consumer_ledger_test_support.rs:126`。
+- `PropGetCueSink` は、見つからない値（`DottedResolution::NotFound`）を空の文字列にして、`KanadeMsg::PropertyEvent` の references に載せる。値なしと空の値は区別できない（`prop_get_sink_tests.rs:71-94`）。
+- 今のゴーストの道の期待 `Err("PropertyNotFound")`（`currentghost.balloon.scope(2).rect`）は、空の文字列に書き直す。
+- 合図は `areka_runtime::consumer_ledger::test_support::carrier_cue` で組める。本体が既に `install/install_cue_tests.rs:18` で使っており、dola には触らない。
+
+**R12: 103 で選ぶ画面を寄せるか**
+- 根拠: `areka-session/src/alert.rs:267-290・324-358`・`crates/real-run-kit/src/launch.rs:232-239`。
+- 選ぶ画面は `install/desk.rs:177` だけ。`worker.rs:192`（利用条件の `ask_yes_no`）と `worker.rs:243`（`warn_ok`）は箱である。どれも `alert::suppressed()` を見る（`AREKA_NO_ALERT` だけ）。
+- 自動終了の走行の使われ方:
+  - real-run-kit（`launch.rs:232-239`）・`tools/package.ps1`（694〜695 行）・`doc/v0.1.0-gate-real-run.md` は、必ず `AREKA_NO_ALERT` と組む。
+  - `tools/perf` はインストールしない。
+  - `AREKA_NO_ALERT` を外すのは、`doc/pasta-real-run.md:128` の人が見る 60 分の走行だけ。メニューのインストールは使わないと 147 行が書く。
+- **結論**: 寄せても今の使われ方は変わらない。ただし、自動終了の走行で箱が出なくなる振る舞いの変化はある。指摘 103 の的は起動の前の写しだけなので、寄せない（OPEN QUESTION 4）。
+
+### 10.2 設計の段で新しく分かったこと
+
+- **6 と 60 は同じ欄を使う**:
+  - 背景のスレッドの `DeskPorts` は `roots` を既に持ち（`worker.rs:94`）、`run_order` は記録の前に必ず素性を聞く。前例は `before_boot_ports.rs:111-126`（背景で `catalog_spelling` を済ませる）。
+  - 隠れの判定には今のゴーストの `dir` が要る。ところが `GhostFacts.running_dir` は、根の下のゴーストのときだけ `Some` である。そのため `GhostFacts` に常に在る `dir` を足す。60 も、窓口が `dir` だけを答える形で同じ欄を使う。
+  - 残る差: 根と今のゴーストは「素性を聞いた時点」の値になる。手続きの途中の置き場の変更や切替は映らない。
+- **69 の欄の読み手**: テストだけ（`worker_tests.rs:344・350-355・405`。`desk_tests.rs:262・279` は作るだけ）。`ends` の記録は `run_order` の戻り値から出せるので、欄は要らない。
+- **60 の呼び手**:
+  - `sakura_name`: `install/desk.rs:498`・`areka-session/src/ghost_switch.rs:355`・`same_folder_pin.rs:33`。
+  - `install_accept`: `install/desk.rs:499` だけ。
+  - 前例: `standard_balloon_keys` → `StandardBalloonKeys`（`catalog.rs:284-300`）。
+- **12 の置き場**: `RawInstallRequest` の使い手は `install/` の中だけで、`main.rs` は `raw_sender` の戻りを名指さない。
+  - URL を窓口の生の要求として運べば、窓口が待ち行列を持てる。`main.rs` と字面の檻（`zorder_wiring_tests.rs:56`）は変わらない。
+  - その結果、窓口が無いときの `url` の腕は取りに行かなくなる。件 8 の事実の 1 つが変わる（OPEN QUESTION 2）。
+- **68 の守り**: `path` の腕も出どころが `Script` である。そのため消すのは、出どころが `Script` で、かつ `download_dir()` の下にある書庫だけ。テストのために置き場を引数で渡す（`remove_downloaded(order, dir)`）。
+- **`SwitchVerdict::Updating`**: `install/overwrite.rs:118-139` の照合は、`Accepted`／`Busy`／`NotFound | NoContext` の 3 つの腕で網羅している。
+  - `Updating` が入るのは 129 行の `NotFound | NoContext` の腕（書庫を返してよそへ回す warn）で正しい。
+  - この spec の頼みは出どころが `ChangeOrigin::Automatic` である。`Updating` が断るのはメニューの出どころだけなので、この腕は通らない。
+- **`consumer_ledger.rs:77` の持ち主**: C26 の 3 本の受け持ちに無い。`audit-emo2-boot-switch` の `areka-runtime` の受け持ちは `switch_assets*`・`balloon_visibility*` ほかである。
+- **1,000 行**: `install/desk_tests.rs`（788）・`ghost_switch_tests.rs`（982）・`update/worker_tests.rs`（967）には足さず、新しいテストのファイルへ置く（design.md の表）。
+
+### 10.3 合成（synthesis）
+
+- **一般化**:
+  - 背景のスレッドの倒れ方（5・23）は、同じ形の守り手 1 つにした。窓口の腕も同じ `WorkerPanicked` にした。
+  - 「UI スレッドで遅い I/O を待つ」所（1・4・6・13・28・60）は、どれも既にある形のどちらかへ寄せた。期限つきの待ちは 1。背景のスレッドへ出すのは 4・6・13・28・60。
+  - 写しの寄せは、テストの支えのファイルを crate とモジュールごとに 1 つにした（`update/`・`mcp/`・`roots/`・`readme/`）。
+- **採るか作るか**:
+  - 採ったもの:
+    - 待ちの上限: `barrier_within`・`EXIT_WAIT_LIMIT`・`join_bounded`・`join_thread_bounded`・`wait_recv`。
+    - 門: `exit_wait::register_gate`。
+    - 名前つきのスレッド: `encode_elsewhere` の形。
+    - 切替の待ち: 写し待ち（`switch_copy`）の形。
+  - 新しく作るもの:
+    - `BetweenHold`。
+    - 取得の待ち行列。
+    - 守り手。
+    - 公開の関数 2 つ（`compose_last_shown`・descript の 1 回読み）。
+- **削り**:
+  - `SwitchStage` に腕を足さない。
+  - `BodySystems` の口の形を変えない。
+  - 1 の期限を引数にしない。
+  - 4 に試験用の止めの口を作らない。
+  - 103 で選ぶ画面を寄せない。
+
+### 10.4 危うさ
+
+- 13 の待ちの間、窓 0 で tick が回るか（OPEN QUESTION 3）。回らなければ、背景の頼みで wintf の公開の起こしの口を叩く形を足す。
+- 13 の待ちの材料（`WindowsClosed`・`ShellCarry`）を NonSend に置けるか。どちらも借用を持たない値に見えるが、実装の最初に確かめる。
+- 12 で件 8 の事実の 1 つが変わる（OPEN QUESTION 2）。これは `audit-areka-app` の `NO_BODY` の doc の直しの文に効く。
+- 1 のテストは、期限（3 秒）のぶんだけ待つ。
