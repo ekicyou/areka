@@ -1202,7 +1202,7 @@ RED: 該当なし（数えるだけ）。
 - `cargo check --workspace --all-targets`: 警告 0・エラー 0。
 - 基点は `git merge-base main HEAD` = `7cb95c3e8`（`main` の先頭は後続の着地で進んでいる。比べは枝が持つ範囲）。`git diff --stat 7cb95c3e8 HEAD -- <場所>`:
   - `crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`: 差分なし（空）。
-  - 本体の `crates/areka/src/placement_tests/`: 4 ファイル・各 1 行の import の書き換え（**裁定待ち**・直していない）。4.2 で集めた層の支え（`crate_source_test_support`）の出し先が替わったための付け替えで、触らない約束の「空」とは合わない:
+  - 本体の `crates/areka/src/placement_tests/`: 4 ファイル・各 1 行の import の書き換え（開発者の裁定で約束の例外とした・2026-11-22）。4.2 で集めた層の支え（`crate_source_test_support`）の出し先が替わったための付け替えで、design.md の約束の文と確かめの表に例外として書き足した:
     - `measure_bake_count_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
     - `measure_template_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
     - `zorder_group_branch_coverage_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
@@ -1417,3 +1417,131 @@ RED: 該当なし（数えるだけ）。
 - 新しい出所の名前で行を拾えたことは、テストの表明そのものが示す。`BOOT_CONFIG_PREFIX = "areka_session::boot_config: "` と、`rust_log` の `areka_session::boot_config=info` ほかで、標準出力の行を拾えなければこのテストは赤になる。
 - 拾った行の数の比べ: 移す前（着手のとき）にこのテストの行の数を記録していなかったので、数どうしは比べられない。テストは拾う行を `ghost_resolved` の 1 行と出どころの記録に絞って表明しているので、緑であることは同じ行を拾えたことを意味する。
 - 走らせ終えてすぐ机を返した。
+
+### 7.5
+
+#### 走り（8.7・2.5）
+
+- 手順は 1.2 と同じ `target\session-crate-split\real\six-paths.ps1`（1.2 の節に写した中身から 1 バイトも変えていない。走らせる前に写しとバイトで一致することを確かめた）。違いは `-OutDir` を `<作業の木>\target\session-crate-split\real-after` にしたことだけ。ビルドはコミット `bb68918d3` で `cargo build -p areka -p sample-ghost-kit --bin areka --bin nar-sample-path`・i686 の helper（`helper is i686`）。
+- 2026-11-22 08:31:52〜08:34:06 UTC（約 2 分 15 秒）、排他テストの机を取り、開発者の SendInput の許しの下で 1 回取った。終了コードは 1 回目の走り（起動〜メニューの終了）・2 回目の走り（煙の自動終了）・手順そのものとも 0。
+- この前に 1 回（08:27:57〜08:28:22 UTC）、点を探す途中で外からカーソルが動かされ（`mouse-input.ps1` の読み戻しが狙い (2522,1157) に対して (2564,1191)）、手順が自分で止まった。起動の段までで止まり、記録は捨てて `real-after` を消してから、開発者がマウスから手を離した状態でこの 1 回を取った。手順も areka も変えていない。
+- 押した所は 1.2 と同じ: 当たる点 (2446,1157)・メニューの「ゴースト」(2622,609)・子の `emo2-switch-target` (2264,653)・投げ込みは (567,344) → (2446,1157)・「終了」(2622,1132)。メニューの並び（上の段 15 項目・子 2 つ）も同じ。エクスプローラーの窓は 40,40〜1240,840 で 1.2（40,40〜940,640）より大きく開いたが、項目の位置は同じで、キャラ窓とも重ならなかった。
+- 記録（`target/session-crate-split/real-after/`）: `boot.log` 120 行・`switch.log` 128 行・`reload.log` 91 行・`nar-drop.log` 38 行・`menu-quit.log` 39 行（`run1.full.log` 416 行を段の始まりで切ったもの）・`smoke-exit.log` 132 行・`steps.txt`。
+- 道ごとの節目: 切替は `menu_selected scope=0` → `ghost_switch_done ghost=Some("emo2b")`、読み直しは `reload_done target=Ghost` → `ghost_switch_done ghost=Some("emo2b")`、投げ込みは `file_drop_received scope=0` → `install_done`、メニューの終了は `menu_selected`（`frame=Close`）→ `app_exit origin=KanadeStopped(Quit)`、煙の自動終了は `app_exit origin=Smoke`。値は 1.2 と同じ。
+
+#### 比べ方
+
+`target\session-crate-split\real\compare.py`（使い捨て・`tools/` には足さない）で、道ごとの 6 つの記録と、切れ目の揺れを分けるために `run1.full.log` の全体も比べた。走らせ方は `python <作業の木>\target\session-crate-split\real\compare.py <作業の木>\target\session-crate-split\real-before <作業の木>\target\session-crate-split\real-after stable events`（`PYTHONIOENCODING=utf-8`）。結果は `target/session-crate-split/compare-7.5.txt` に残した。自分どうし（`real-before` と `real-before`）で比べると、どの道もどの見方でも差が 0 になることを先に確かめた。
+
+- 行ごとに、先頭の時刻を落とし、`a::b::c: ` の形の出所の名前を落とす（これが「出所の名前を除く」）。走りごとに変わる値（pid・待受の番号・窓の番号 `0x…`・entity `69v0`・時間・`id=`・`talk_id=`・`since_id=`）を伏せる。
+- 見方は 3 つ。`all` は全部の行、`stable` は乱数と壁時計で決まる 3 つの組（下の「伏せた組」）を除いた行、`events` は `event="…"` の名前だけを順に並べたもの。
+- 出所の名前の付け替えは 1 対 1 で、数も同じだった（`run1.full.log` と `smoke-exit.log` の合計）: `areka::session::app_exit` 4 → `areka_session::app_exit` 4・`boot_config` 4・`boot_resolve` 10・`ghost_quit` 1・`ghost_session` 12・`ghost_switch` 10・`reload` 2・`roots::report` 2・`areka::smoke_exit` 3 → `areka_session::smoke_exit` 3。ほかの出所の名前は前後で同じ。
+
+伏せた組（`stable` で除く行）:
+
+- `seriko`: SERIKO の再生（`actor{actor=seriko}`）・ループの刻み（`actor{actor=loop-ticker}` の追いつき）・乱数の種の行。抽選は走りごとに実の entropy で、追いつきは壁時計で決まる。
+- `talk-text`: 台本そのもの（`\p[`・`\s[` を含む行）。emo2 は台詞と `\![bind,…]` を乱数で選ぶ（例: 起動の挨拶で前は `\![bind,腕,伸び,1]`、後は `\![bind,腕,組み,1]`。読み直しの後の台詞は前が「紅葉の季節！」、後が「今日のお昼、」）。
+- `balloon-timeout`: バルーンのタイムアウトの計り（`[balloon-visibility] タイムアウト計測…`・`抑止が解けた…`）。秒の小数と、「止まった時刻」と「会話の占有終端」のどちらが先に来たか（`origin="stopped_at"`／`"display_end"`）が壁時計で決まる。
+
+#### 比べた結果の表
+
+| 道 | 行（前/後） | `stable` の行（前/後） | `events`（前/後） | `all` の差 | `stable` の差 | `events` の差 | 本当の差 |
+|---|---|---|---|---|---|---|---|
+| 起動 | 111/120 | 80/80 | 18/18 | 21 | 2 | 2 | 0 |
+| メニューからの切替 | 136/128 | 86/87 | 29/29 | 32 | 1 | 0 | 0 |
+| MCP の `reload` | 97/91 | 81/79 | 29/29 | 28 | 6 | 0 | 0 |
+| `.nar` の投げ込み | 45/38 | 30/27 | 19/19 | 19 | 5 | 0 | 0 |
+| メニューの終了 | 37/39 | 28/28 | 13/13 | 12 | 0 | 0 | 0 |
+| 煙の自動終了 | 148/132 | 99/92 | 25/22 | 40 | 9 | 3 | 0 |
+| （1 回目の全体 `run1.full.log`） | 426/416 | 305/301 | 108/108 | 138 | 16 | 2 | 0 |
+
+`all` の差は全部、伏せた組の 3 つの行（行の数の差もこの組の数の差: `seriko` は前後で 29/38・45/36・14/10・8/6・6/8・44/38）と、下の `stable` の差で説明がつく。
+
+`stable` と `events` に残った差の 1 件ずつの中身（行番号は各記録のもの）:
+
+- 起動（`stable` 2・`events` 2）: kanade の `event="boot_start"` の行が、前は 33 行目（本体の `実 sink 結線が成立`・`boot_resolve` の 2 行の間）、後は 29 行目（`ghost boot sequence completed` の直後）に出た。kanade の actor のスレッドと本体のスレッドが同じ 0.3 ms のうちに書いた行の並びで、どちらの側の行の中身と順も変わっていない。`run1.full.log` の `events` の差 2 もこの 1 件。
+- 切替（`stable` 1）: 後に `apply(ShowSurface) target_id=TargetId(0) surface_id=1000 cache_hit=false` が 1 行多い（後の 88 行目）。台本の `\![bind,…]` の選び（乱数）が変えた面の組み直しの数で、切替の節目（`menu_selected`→ゴーストを降ろす→`ghost_switch_done`→`steady_talk_done`）の中身と順は同じ。
+- 読み直し（`stable` 6）: ⑴ helper の標準エラーの行（`shiori-host32` `[helper] SHIORI 初期化の入口: loadu event="helper_stderr"`）が、前は 61 行目、後は 57 行目に出た。別のプロセス（32bit の helper）の標準エラーを中継した行で、本体の行との前後はプロセスの間で決まらない。⑵ `テキスト供給面を予約スロットへ装着した` と `apply(ShowSurface) … surface_id=1000` の 2 行の前後が入れ替わり、`ShowSurface` は前が 1 行多い。描画の側の並びと、読み直しの後の台詞（乱数・前の台詞は bind を 2 回替える）による組み直しの数。`reload_started`→`reload_done`→`ghost_switch_done`→`steady_talk_done` の中身と順は同じ。
+- 投げ込み（`stable` 5）: 前だけに `[balloon-visibility] バルーンの可視状態が遷移した scope=1 trigger="clear"`・`scope=1 trigger="content"` と `apply(ShowSurface) target_id=TargetId(3) surface_id=0 cache_hit=true` があり、`scope=0 trigger="clear"` の位置が違う。投げ込みの時点では前後とも両方のバルーンが開いていた（読み直しの台詞の後に `scope=0`・`scope=1` の `trigger="content" visible=true` が出て、投げ込みまで閉じの行が無い。`run1.full.log` の前は 324・329 行目＝04:48:49.115・04:48:51.469、後は 326・331 行目＝08:32:58.280・08:33:00.384）。`OnInstallBegin` の台詞（`\p[1]` の「荷物が来たよ。」）の再生の始まり（前 04:49:04.328、後 08:33:11.560）から数えて、前は台詞の始まりの消去（`scope=1 trigger="clear"`・+30 ms）と相方のバルーンへの中身（`scope=1 trigger="content"`・+42 ms）が別のフレームに入ったので相方の遷移の行が 2 行出た。後は同じフレームに入ったので相方のバルーンの可視は変わらず、遷移の行は 0 行で、`scope=0 trigger="clear"`（+17 ms）だけが出た。どちらになるかはフレームの巡りで決まり、移したコードの外である（`areka-runtime` はこの仕様でコメントだけの変更）。`file_drop_received`→`OnInstallBegin`→`install_done`→`OnInstallComplete` の台詞→`steady_talk_done` の中身と順は同じ（`events` の差 0）。
+- メニューの終了: 差 0。`app_exit origin=KanadeStopped(Quit) closed=4` も 1.2 と同じ。
+- 煙の自動終了（`stable` 9・`events` 3）: ⑴ 前だけに、待つ間の随時のトーク 1 回（`steady_talk origin="OnSecondChange"`・`translate_reply`・`steady_talk_done` とその台詞・面とバルーンの行）がある。`OnSecondChange` に台本を返すかは emo2 の乱数なので、40 秒の間に来るかは走りによる。これが `events` の差 3。⑵ 後だけに wintf の `[WinApp::run] exit requested while windows remained open — destroying them before returning` が 1 行ある。煙の自動終了は tick の外の非同期の仕事から窓を閉じるので、`run()` が返る前に窓の片付け（reconcile）が回ったかどうかで出る行である（wintf の `runtime/mod.rs` の残った窓を壊す所の説明のとおり）。移す前の本体でも出ていた: 別の作業の木の `target\package\check-210911-logs\run.log`（2026-11-17・出所が `areka::smoke_exit`・`areka::app_exit` の頃）の 88 行目に同じ行がある。`app_exit origin=Smoke closed=4` → `ゴースト窓を despawn しました count=4` → `force_quit` → `ghost shutdown sequence completed` の中身と順は同じ。
+- 1 回目の全体（`run1.full.log`）: 全体の記録には段の切れ目が無いので、切れ目の揺れはここに入らない。`stable` の差 16 は、上の起動・切替・読み直し・投げ込みで挙げたのと同じ行である。読み直しの所だけ、差を並べる側（difflib）の対応の取り方が段の比べと違い、テキスト供給面の行と `ShowSurface` の行の入れ替わりが 2 行多く数えられた。`events` は 108/108 で、差は起動の `boot_start` の 1 件だけ。
+
+本当の差（乱数・壁時計・スレッドとプロセスの間の並びのどれでも説明できない、行の有無と順の違い）は 6 つの道のどれにも無く、0 である。
+
+#### 実機で回したもの（8.8・8.9）
+
+- OS のセッションの終わり（`WM_ENDSESSION`）は実機では起こせないので、決定論のテストで足りるとした（8.8）。受け持つテストは `crates/areka-session/src/session_end_deadline_tests.rs`（8 本）・`session_end_sync_send_tests.rs`（4 本）で、7.1 の全体テストで緑である。
+- この仕様で実機を使ったのは、ログの出所を名前で読む実機テスト（7.4・8.6）と、この 6 つの道（1.2 と 7.5・8.7）だけである（8.9）。ほかは構造の証跡（テストの名前の一覧の比べ・警告・全体テスト・grep・決定論のテスト）で足りる。
+
+#### 比べの手順 `target\session-crate-split\real\compare.py`
+
+```python
+"""Throwaway (session-crate-split 7.5): compare the six path records of real-before and real-after.
+
+Per line: drop the timestamp, drop module-path targets (`a::b::c: `, the source names the move renames),
+mask values that differ run to run (pids, ports, hwnds, entities, ids, durations).
+Three views per path (and for the whole run1.full.log):
+  all     every normalized line
+  stable  without the classes driven by randomness or wall-clock timing (NOISE below)
+  events  only the `event="..."` names, in order
+Usage: python compare.py <before dir> <after dir>
+"""
+import difflib
+import re
+import sys
+
+PATHS = ['boot', 'switch', 'reload', 'nar-drop', 'menu-quit', 'smoke-exit', 'run1.full']
+RULES = [
+    (re.compile(r'^\d{4}-\d\d-\d\dT[\d:.]+Z\s+'), ''),
+    (re.compile(r'\b[a-z][a-z0-9_]*(?:::[a-z0-9_]+)+: '), ''),
+    (re.compile(r'0x[0-9A-Fa-f]+'), '0x#'),
+    (re.compile(r'\b\d+v\d+\b'), '#v#'),
+    (re.compile(r'\d+(?:\.\d+)?(?:ms|µs|ns|s)\b'), '#t'),
+    (re.compile(r'\b(pid|port|elapsed_ms|ms|took_ms|since_id|id|talk_id|frame_no|tick)=\d+'), r'\1=#'),
+    (re.compile(r'127\.0\.0\.1:\d+'), '127.0.0.1:#'),
+]
+BS = chr(92)
+NOISE = {
+    # SERIKO animation and its ticker: random draws and wall-clock catch-up.
+    'seriko': lambda l: 'actor{actor=seriko}' in l or 'actor{actor=loop-ticker}' in l or 'SERIKO ループ乱数 seed' in l,
+    # The ghost's talk text: emo2 picks lines and \![bind,...] at random.
+    'talk-text': lambda l: (BS + 'p[') in l or (BS + 's[') in l,
+    # Balloon timeout bookkeeping: float clock values and which of two moments came first.
+    'balloon-timeout': lambda l: '[balloon-visibility] タイムアウト計測' in l or '[balloon-visibility] 抑止が解けた' in l,
+}
+EVENT = re.compile(r'event="([a-z_]+)"')
+
+
+def norm(line):
+    for rx, to in RULES:
+        line = rx.sub(to, line)
+    return line
+
+
+def diff(a, b):
+    d = [x for x in difflib.unified_diff(a, b, n=0, lineterm='') if not x.startswith(('---', '+++'))]
+    return d, sum(1 for x in d if x[:1] in '+-')
+
+
+def main(before, after, show):
+    for name in PATHS:
+        a = [norm(l) for l in open(f'{before}/{name}.log', encoding='utf-8').read().splitlines()]
+        b = [norm(l) for l in open(f'{after}/{name}.log', encoding='utf-8').read().splitlines()]
+        sa = [l for l in a if not any(f(l) for f in NOISE.values())]
+        sb = [l for l in b if not any(f(l) for f in NOISE.values())]
+        ea = [m.group(1) for l in a for m in [EVENT.search(l)] if m]
+        eb = [m.group(1) for l in b for m in [EVENT.search(l)] if m]
+        counts = {k: (sum(map(f, a)), sum(map(f, b))) for k, f in NOISE.items()}
+        views = {'all': diff(a, b), 'stable': diff(sa, sb), 'events': diff(ea, eb)}
+        print(f'{name}: lines {len(a)}/{len(b)} stable {len(sa)}/{len(sb)} events {len(ea)}/{len(eb)} '
+              + ' '.join(f'{v}={n}' for v, (_, n) in views.items())
+              + ' noise ' + ' '.join(f'{k}={x}/{y}' for k, (x, y) in counts.items()))
+        for v in show:
+            for x in views[v][0]:
+                print(f'  [{v}] {x[:240]}')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1], sys.argv[2], sys.argv[3:])
+```
