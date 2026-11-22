@@ -624,6 +624,10 @@
 | `THIRD-PARTY-NOTICES.md` | 差分に無い（作り直しの差 0 は全体テストの `-License` の段で確かめる） |
 | 範囲の中 | `.kiro/specs/audit-areka-app/`（`design-validation.md` を含めて 6 ファイル）・`crates/areka/`（`src/`・`tests/`・`examples/`・`README.md`・`areka.manifest`・`icon/`・`Cargo.toml`・消した絵 77 個）・`crates/areka-session/`（`src/`・`Cargo.toml`・`build.rs`・消した `tests.manifest`）・`Cargo.lock`（`async-io` の 1 行だけが消えた） |
 
+設計の「新しいファイル」の表に無い新しいファイルが 3 本ある。`areka-session/src/session_end_test_support.rs` はかけ直し 1 回目（358c14d21）で、本体と areka-session に分かれていたテストの支え（予約・`OnClose` の Reference0・SHIORI の失敗・記憶の置き方）の写しを 1 か所へ寄せた先。`areka-session/src/boot_config_balloon_tests.rs`・`boot_config_roots_tests.rs` は、本体の `session_tests/boot_config_*` から、判断の持ち主の crate へ移した先。寄せ先の `session_end::test_support`（`pub fn` 4 つ）は areka-session の公開の面に足した口になるが、`#[cfg(any(test, feature = "test-support"))]` の下だけで組まれ、本番のビルドには現れない。既にある項目の名と形は変えていない（要件 7.3）。design.md が約束した公開の面の追加（S1・S2 の 2 つ）は本番の面の数で、この口はそれに数えない。
+
+あわせて、移しで古くなった `doc/COMPAT_ARCHITECTURE.md` の参照 2 か所（`record_non_argv_writes_all_three`・`decide_boot_shell_follows_memory_only_when_descript_exists` の在りか）を `boot_resolve_last_used_tests.rs` に直した（最後の検証で見つけた・要件 7.6）。同じ表のほかの古い参照（`areka-kanade`・`areka-emo-compose`・`areka-nar`・`shiori-host32-host`・`ssp-mcp`）は範囲の外の crate で、この spec の差分が生んだものではない。
+
 ### 14.2 範囲の外の差分の分類（Modified Files（範囲の外）の表との突き合わせ）
 
 | ファイル | 分類 |
