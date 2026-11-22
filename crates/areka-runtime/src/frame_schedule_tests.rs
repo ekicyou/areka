@@ -11,7 +11,7 @@
 // ゆえに本番の登録の関数 [`register_frame_system`](crate::register_frame_system) を空の World の
 // `Schedules` へ直に呼び、当の相が `Update` に載り末尾の段には載らないという**構造**
 // （GPU も窓も要らない）を見る。対照として、登録の前は `Update` に無い。
-// 登録の字面と段の並びは `zorder_wiring_tests.rs` の `t_zwi06` が受け持つ。
+// 登録の字面と段の並びは `zorder_wiring_tests.rs` の `the_frame_system_is_ordered_before_the_chain_apply` が受け持つ。
 // =============================================================================
 
 use bevy_ecs::prelude::*;
@@ -61,7 +61,7 @@ fn world_with_the_chain_apply_wired() -> World {
 /// 末尾の段は空ではない（適用系ほか 4 本が先に載っている）ので、「載らない」の主張は
 /// 「段そのものが無い」で成り立っているのではない。
 #[test]
-fn t_n10_the_registration_lands_the_frame_system_in_update_only() {
+fn the_registration_lands_the_frame_system_in_update_only() {
     let mut world = world_with_the_chain_apply_wired();
 
     crate::register_frame_system(&mut world);
@@ -98,7 +98,7 @@ fn t_n10_the_registration_lands_the_frame_system_in_update_only() {
 ///
 /// これが無いと上の檻は「何をしても載っていると言う」形と区別が付かない。
 #[test]
-fn t_n10_before_the_registration_the_update_stage_holds_nothing() {
+fn before_the_registration_the_update_stage_holds_nothing() {
     let world = world_with_the_chain_apply_wired();
 
     assert!(

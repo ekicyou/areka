@@ -41,7 +41,7 @@ const OFF: WindowStateDirective = WindowStateDirective::StayOnTop { on: false };
 
 /// 小文字ちょうどの `stayontop`／`!stayontop` がオン／オフになる。
 #[test]
-fn t_wsc1_lowercase_spellings_decide_on_and_off() {
+fn lowercase_spellings_decide_on_and_off() {
     assert_eq!(
         parse_window_state("set", &["windowstate", "stayontop"]),
         ParsedWindowState::Directive {
@@ -60,7 +60,7 @@ fn t_wsc1_lowercase_spellings_decide_on_and_off() {
 
 /// 大文字の混じり・`minimize`・空・無いは読めない値（値をそのまま返す）。
 #[test]
-fn t_wsc2_other_values_are_unrecognized_with_the_value_kept() {
+fn other_values_are_unrecognized_with_the_value_kept() {
     for value in [
         "StayOnTop",
         "STAYONTOP",
@@ -84,7 +84,7 @@ fn t_wsc2_other_values_are_unrecognized_with_the_value_kept() {
 
 /// 第 3 引数以降は第 2 引数で決めた上で余りとして返す。
 #[test]
-fn t_wsc3_trailing_arguments_become_extra_after_the_decision() {
+fn trailing_arguments_become_extra_after_the_decision() {
     assert_eq!(
         parse_window_state("set", &["windowstate", "stayontop", "x", "1"]),
         ParsedWindowState::Directive {
@@ -110,7 +110,7 @@ fn t_wsc3_trailing_arguments_become_extra_after_the_decision() {
 
 /// `\v` は引数の有無に関わらず手前へ出す（引数は全部余り）。
 #[test]
-fn t_wsc4_raise_carrier_always_raises() {
+fn raise_carrier_always_raises() {
     assert_eq!(
         parse_window_state(RAISE_TAG_CARRIER, &[]),
         ParsedWindowState::Directive {
@@ -129,7 +129,7 @@ fn t_wsc4_raise_carrier_always_raises() {
 
 /// 他人宛は自分宛でない（惜しい組を含む）。
 #[test]
-fn t_wsc5_other_addresses_are_not_mine() {
+fn other_addresses_are_not_mine() {
     let cases: &[(&str, &[&str])] = &[
         ("set", &["zorder", "1", "0"]),
         ("change", &["ghost", "x"]),
@@ -153,7 +153,7 @@ fn t_wsc5_other_addresses_are_not_mine() {
 
 /// オン・オフ・手前へ出すはそれぞれ指令 1 本を送り、警告を出さない。
 #[test]
-fn t_wsc6_directives_are_sent_one_each() {
+fn directives_are_sent_one_each() {
     let cases = [
         (
             actor_carrier_cue("0", "set", &["windowstate", "stayontop"]),
@@ -177,7 +177,7 @@ fn t_wsc6_directives_are_sent_one_each() {
 
 /// 書いたスコープは読まない: `\1\v` も `\0\v` と同じ指令。コードに演者の欄の綴りも無い。
 #[test]
-fn t_wsc7_executing_scope_does_not_change_the_directive() {
+fn executing_scope_does_not_change_the_directive() {
     for actor in ["0", "1", "2"] {
         assert_eq!(
             run(actor_carrier_cue(actor, RAISE_TAG_CARRIER, &[])).0,
@@ -201,7 +201,7 @@ fn t_wsc7_executing_scope_does_not_change_the_directive() {
 
 /// 読めない値は送らず、値を欄に載せた警告 1 本を残す。
 #[test]
-fn t_wsc8_unrecognized_value_warns_with_the_value_and_sends_nothing() {
+fn unrecognized_value_warns_with_the_value_and_sends_nothing() {
     for value in ["minimize", "StayOnTop", ""] {
         let (got, logs) = run(actor_carrier_cue("0", "set", &["windowstate", value]));
         assert!(got.is_empty(), "読めない値 {value:?} は送らない");
@@ -224,7 +224,7 @@ fn t_wsc8_unrecognized_value_warns_with_the_value_and_sends_nothing() {
 
 /// 余りは指令を送った上で `debug!` に欄つきで残す（警告にしない）。
 #[test]
-fn t_wsc9_extra_arguments_are_recorded_and_the_directive_is_sent() {
+fn extra_arguments_are_recorded_and_the_directive_is_sent() {
     let (got, logs) = run(actor_carrier_cue(
         "0",
         "set",
@@ -257,7 +257,7 @@ fn t_wsc9_extra_arguments_are_recorded_and_the_directive_is_sent() {
 /// `debug!` で必ず残す。`\v` を運ぶ荷物が開けないときは、運搬名の持ち主は本 sink だけなので
 /// 送らずに `warn!` を 1 件残す。
 #[test]
-fn t_wsc10_skips_send_nothing_and_leave_a_debug_record() {
+fn skips_send_nothing_and_leave_a_debug_record() {
     let skipped = vec![
         actor_carrier_cue("0", "set", &["zorder", "1", "0"]),
         actor_carrier_cue("0", "change", &["ghost", "x"]),
@@ -305,7 +305,7 @@ fn t_wsc10_skips_send_nothing_and_leave_a_debug_record() {
 
 /// 受信端が閉じていても台本を殺さない——警告を残して続ける。
 #[test]
-fn t_wsc11_disconnected_receiver_is_recorded_and_does_not_panic() {
+fn disconnected_receiver_is_recorded_and_does_not_panic() {
     let (tx, rx) = channel::<WindowStateDirective>();
     drop(rx);
     let mut sink = WindowStateCueSink::new(tx);
@@ -323,7 +323,7 @@ fn t_wsc11_disconnected_receiver_is_recorded_and_does_not_panic() {
 /// 重なりの仕事の旗は送り出しの後に 1 か所で立てる（旗はプロセス共有で動的に読むと揺れる
 /// ので、`zorder_cue_tests.rs` の `the_zorder_wake_is_marked_after_the_self_selection` と同じくソースの前後関係で押さえる）。
 #[test]
-fn t_wsc12_zorder_wake_is_marked_once_after_the_send() {
+fn zorder_wake_is_marked_once_after_the_send() {
     let code = code_only(include_str!("window_state_cue.rs"));
     assert_eq!(code.matches("tick_wake::mark(").count(), 1);
     let mark_at = index_of(&code, "tick_wake::mark(tick_wake::ZORDER)");
@@ -336,7 +336,7 @@ fn t_wsc12_zorder_wake_is_marked_once_after_the_send() {
 
 /// 受け口は複製でき、複製から送っても同じ受信端へ届く（配送は台本ごとに複製する）。
 #[test]
-fn t_wsc13_clone_reaches_the_same_receiver() {
+fn clone_reaches_the_same_receiver() {
     let (tx, rx) = channel::<WindowStateDirective>();
     let sink = WindowStateCueSink::new(tx);
     let mut cloned = sink.clone();
