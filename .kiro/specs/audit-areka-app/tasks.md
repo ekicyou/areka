@@ -117,7 +117,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.7, 5.16_
 
 - [ ] 9. `areka-session` の記憶の書き手まわりのテスト（G9）
-- [ ] 9.1 最後に使った物の記録のテストを分け、待ちを有界にし、書かない守りを足す（指摘 28・29・32・62・5.5・5.7）
+- [x] 9.1 最後に使った物の記録のテストを分け、待ちを有界にし、書かない守りを足す（指摘 28・29・32・62・5.5・5.7）
   - `boot_resolve_tests.rs` の `mod last_used`（405-873）を新しい兄弟 `boot_resolve_last_used_tests.rs` へ移し、残りの `//!` を今の中身に
   - 移した先の `SharedFakeIo` の写しを消して `areka_placement::test_support::SharedFakeIo` を使い、4 か所の `let _ = parts.handle.join();` を `join_bounded("sylphya", parts.handle).expect(..)` に
   - 記憶を書かない守りの 2 本を足す（フォルダが無いと warn 1 件で何も書かれない・`C:\` で error 1 件で何も書かれない）

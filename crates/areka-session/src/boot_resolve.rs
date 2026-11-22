@@ -753,3 +753,7 @@ mod boot_resolve_balloon_tests;
 #[cfg(test)]
 #[path = "boot_resolve_readonly_tests.rs"]
 mod boot_resolve_readonly_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_last_used_tests.rs"]
+mod boot_resolve_last_used_tests;
