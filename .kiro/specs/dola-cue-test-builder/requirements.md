@@ -27,20 +27,25 @@
 
 調べた時点は main `00877299`（brief の最後の再測定 `d4db9eb0` の後に入ったのは roadmap の文書だけ）。`dola` には今 `impl TalkCue` の組み立てが 1 つも無く、本番のコードは発火時刻 0・長さ 0 の `TalkCue` を直に組まない（本番の合図は `CueSheet` の正準の変換で組まれる）。
 
-**仮定のしるし**: 【仮定 A1】〜【仮定 A4】は brief と roadmap で決まらず、要件の討議で開発者の裁定を仰ぐ点。仮定のとおりに書いた。
+**要件の討議の決め（2026-11-22・全議題を推奨案で確定）**: 【決め 1】〜【決め 4】は、brief と roadmap で決まらず要件の討議で開発者が決めた点。
+
+- 【決め 1】置き場は `dola` の `test-support` 機能の下（brief の ⑵）。常に公開する形（⑴）は、本番に使い手が無いのに crates.io の利用者へ瞬時の合図の意味を約束することになるので取らない。⑶ はウェーブ C25 の約束で取らない。
+- 【決め 2】呼び手の名（runtime の `carrier_cue`・`actor_carrier_cue`、seriko の `carrier_cue`）は 1 行の取り次ぎとして残す。`dola` の組み立ては演者を必ず受け取り、既定を持たない。演者 `"0"` は呼び手の名の側が渡す。
+- 【決め 3】本体の session のテスト 3 本の `prop_set_cue` はこの spec の範囲の外。本体のテストの残りを受け持つ `audit-areka-app`（C26）へ申し送り、完了の棚卸でその brief に書く（`session-crate-split` が同じフォルダを移している最中のため）。
+- 【決め 4】名のある組み立ての関数を通さず `TalkCue { at: 0.0, … }` を直に書くテスト（`dola` の外に 77 ファイル）は付け替えず、起票もしない。大半は時刻や中身の違うその場の合図で、写しの関数ではない。
 
 ## Boundary Context
 
 - **In scope**:
   - `dola` に置く正準のキャリアの合図の組み立て 1 つ（置き場と名・`crates/dola/src/cue/command.rs` か `crates/dola/src/cue/` の中の新しいファイル）と、その働きを固定する `dola` のテスト。
-  - `dola` の `Cargo.toml` の機能の行と、`dola` の公開の文書（README と機能の行の説明）。【仮定 A1】
+  - `dola` の `Cargo.toml` の機能の行と、`dola` の公開の文書（README と機能の行の説明）。【決め 1】
   - 5 つの写しの本文を消し、`dola` の組み立てを通す形にすること。
   - 使い手 3 crate の `Cargo.toml` の、`dola` の機能を有効にする行。
 - **Out of scope**:
   - 合図の型そのもの（`TalkCue` のフィールド・`CueCommand` の変種）と、`command_carrier`・`as_command_carrier` の意味を変えること。
   - 正準でない合図の組み立て（seriko の `noncanonical_custom_cue`・runtime の `broken_custom_cue`）と、`TalkCue` の他の組み立ての整理（`crates/areka-ghost/src/sink.rs` の `sample_cue`・`crates/areka-runtime/src/shell_carry.rs` の `cue` ほか）。
-  - 本体の session のテスト 3 本（`readonly_run_tests.rs:94`・`readonly_sites_tests.rs:118`・`write_failure_sites_tests.rs:139`）の `prop_set_cue`。【仮定 A3】
-  - 名のある組み立ての関数を通さず `TalkCue { at: 0.0, … }` を直に書くテスト（`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` ほか）。【仮定 A4】
+  - 本体の session のテスト 3 本（`readonly_run_tests.rs:94`・`readonly_sites_tests.rs:118`・`write_failure_sites_tests.rs:139`）の `prop_set_cue`（`audit-areka-app` へ申し送る）。【決め 3】
+  - 名のある組み立ての関数を通さず `TalkCue { at: 0.0, … }` を直に書くテスト（`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` ほか）。【決め 4】
   - 呼び手の 22 ファイルの付け替え（名を残すので触らない）。
   - 新しい crate（brief の ⑶）・ワークスペースの外の新しい依存・`Cargo.lock` の変更。
   - `crates/areka-sakura/src/compile_sheet_tests.rs`（テストの名に語が入るだけで写しではない）。
@@ -61,7 +66,7 @@
 1. The `dola` shall 正準のキャリアの合図（発火時刻 0・長さ 0・演者は呼び手が渡したもの・コマンドは `CueCommand::command_carrier` で組んだもの）を組む組み立てを 1 つだけ持つ
 2. When 組み立てが名とトークンの並びを受け取ったとき, the `dola` shall トークンを並びの順のまま変えずに載せ、空のトークン（省略の枠）と `--key=value` のトークンもそのまま保つ
 3. When 組み立てで組んだ合図を `as_command_carrier` で開いたとき, the `dola` shall 渡した名と同じ名と、渡したトークンの並びと同じ並びを返す
-4. The `dola` shall 組み立ての演者を呼び手に必ず渡させ、演者の既定（`"0"` など）を組み立ての側に持たない【仮定 A2】
+4. The `dola` shall 組み立ての演者を呼び手に必ず渡させ、演者の既定（`"0"` など）を組み立ての側に持たない【決め 2】
 5. The `dola` shall 1〜3 の働き（発火時刻 0・長さ 0・演者・トークンの順と空のトークン・開いたときの往復）を `dola` 自身のテストで固定する
 
 ### Requirement 2: `dola` の公開の面を増やさない
@@ -70,8 +75,8 @@
 
 #### Acceptance Criteria
 
-1. Where `dola` の `test-support` 機能を有効にしたとき, the `dola` shall 組み立てを使い手の crate から呼べるようにする【仮定 A1】
-2. While `test-support` 機能が無効のとき（既定）, the `dola` shall 組み立てを公開の面に出さず、既定の公開の面を今と同じに保つ【仮定 A1】
+1. Where `dola` の `test-support` 機能を有効にしたとき, the `dola` shall 組み立てを使い手の crate から呼べるようにする【決め 1】
+2. While `test-support` 機能が無効のとき（既定）, the `dola` shall 組み立てを公開の面に出さず、既定の公開の面を今と同じに保つ【決め 1】
 3. The 使い手の crate（areka-ghost・areka-seriko・areka-runtime） shall `dola` の `test-support` 機能を、テストのビルドのとき（runtime は自身の `test-support` 機能のときも）だけ有効にし、本番のビルド（本体 `areka` の配布物）に組み立てを入れない
 4. When 公開前の確認（`tools/crates-io.ps1` の梱包の確かめ）を回したとき, the `dola` shall 通る
 5. The `dola` shall `test-support` 機能の働き（テストだけが使う組み立てを開けること・本番では付けないこと）を README に書く（`cargo package` は `Cargo.toml` のコメントを落とすので、crates.io の利用者への説明は README が担う）
@@ -109,6 +114,6 @@
 1. The この spec の差分 shall `crates/dola/src/cue/` の中（組み立てとそのテスト）・`crates/dola/Cargo.toml`・`crates/dola/README.md`・写しの 5 ファイル・使い手 3 crate の `Cargo.toml` の `dola` の行と機能の行だけに留まる
 2. The この spec の差分 shall 本体 `crates/areka/` のファイル・根の `Cargo.toml`・`Cargo.lock` に入らない
 3. The この spec shall 新しい crate を足さない
-4. The この spec shall 本体の session のテスト 3 本の `prop_set_cue` を寄せない（`session-crate-split` が本体の `session/` を移し、`audit-areka-app` が本体のテストの残りを受け持つ）【仮定 A3】
-5. The この spec shall 名のある組み立ての関数を通さず `TalkCue { at: 0.0, … }` を直に書くテストを付け替えない【仮定 A4】
+4. The この spec shall 本体の session のテスト 3 本の `prop_set_cue` を寄せず、完了の棚卸で `audit-areka-app` の brief に申し送りを書く（`session-crate-split` が本体の `session/` を移し、`audit-areka-app` が本体のテストの残りを受け持つ）【決め 3】
+5. The この spec shall 名のある組み立ての関数を通さず `TalkCue { at: 0.0, … }` を直に書くテストを付け替えない【決め 4】
 6. The この spec の差分のコードのコメント shall `.kiro` の spec・要件の番号・タスクの番号を名指さない（`CLAUDE.md` の `## Comments`）

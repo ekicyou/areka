@@ -87,7 +87,7 @@
 
 ## 4. 実現の案
 
-### 案 A: 既存を延ばす ― `dola` に `test-support` 機能を足し、機能の下に自由関数を置く（要件の【仮定 A1】の形・brief の ⑵）
+### 案 A: 既存を延ばす ― `dola` に `test-support` 機能を足し、機能の下に自由関数を置く（要件の【決め 1】の形・brief の ⑵）
 
 - 置き場: `crates/dola/src/cue/mod.rs` に `#[cfg(any(test, feature = "test-support"))] #[path = "test_support.rs"] pub mod test_support;`、中身は新しい `crates/dola/src/cue/test_support.rs` に関数 1 つ（例 `pub fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue`）。檻は兄弟の `test_support_tests.rs`（または `command_tests.rs` へ足す）。
 - `Cargo.toml`: `dola` に `test-support = []`。ghost の dev の `dola` の行に `features = ["test-support"]`。seriko の `[dev-dependencies]` に `dola = { path = "../dola", features = ["test-support"] }` を足す（本番の表の同じ依存に機能を足すだけ・placement の前例）。runtime は `test-support` に `"dola/test-support"` を足し、`[dev-dependencies]` に `dola` の行を足す（自身の `cargo test -p areka-runtime` は自分の `test-support` を開けないので dev の行が要る）。
@@ -103,7 +103,7 @@
 - 置き場: `crates/dola/src/cue/command.rs` の `TalkCue` の下に `impl TalkCue { pub fn command_carrier(actor: impl Into<ActorKey>, name: …, tokens: …) -> Self }` のような付属関数。機能の行は要らない。
 - ✅ 触る `Cargo.toml` が 0（`dola` も使い手も）。差分が最も小さい。
 - ✅ 本番のコードも使える（ただし今は本番に使い手が無い）。
-- ❌ 要件 2.1〜2.3・2.5（【仮定 A1】）と食い違う。公開の API が本番で使わない口のぶん増え、crates.io の利用者に向けて「at 0・長さ 0」の意味（瞬時の合図）を約束することになる。
+- ❌ 要件 2.1〜2.3・2.5（【決め 1】）と食い違う。公開の API が本番で使わない口のぶん増え、crates.io の利用者に向けて「at 0・長さ 0」の意味（瞬時の合図）を約束することになる。
 - ❌ 一度公開すると消すのは破壊的な変更になる（`dola` は 0.x なので許されはするが、版の段で扱う手間が増える）。
 
 ### 案 C: 混ぜる ― 機能の下に置くが、名は `TalkCue` の付属関数にする
@@ -128,9 +128,9 @@
 
 ### 6.1 決めること（要件の討議の議題の種）
 
-1. **置き場**: 案 A（機能の下の自由関数）・案 B（常に公開）・案 C（機能の下の付属関数）のどれにするか。要件は【仮定 A1】で A か C を前提にしている。
+1. **置き場**: 要件の討議の【決め 1】で案 B（常に公開）は外れた。案 A（機能の下の自由関数）と案 C（機能の下の付属関数）のどちらにするかを設計で決める。
 2. **組み立ての名と引数の形**: 名（`carrier_cue`・`command_carrier_cue`・`TalkCue::carrier` ほか）と、引数を `(&str, &str, &[&str])` に固定するか、`impl Into<ActorKey>`・`impl Into<String>`・`IntoIterator` に広げるか。5 つの写しは全部 `(&str, &str, &[&str])` なので、固定の形で 1 行の委譲が成り立つ。
-3. **演者の既定**: 【仮定 A2】のとおり `dola` は既定を持たず、runtime の `carrier_cue` と ghost の `carrier` が `"0"` を渡す形でよいか。
+3. **演者の既定**: 要件の討議の【決め 2】で確定済み（`dola` は既定を持たず、runtime の `carrier_cue` と ghost の `carrier` が `"0"` を渡す）。設計で決めることは無い。
 4. **docs.rs の表**: `[package.metadata.docs.rs] features` に `test-support` を足すか（足すと docs.rs に組み立てが載る＝公開の文書の面が増える。足さなければ docs.rs は今と同じ）。
 5. **README の書き方**: README（英語）に `test-support` の節を足すときの置き場と言い方（`toml` の説明の型に合わせて、「テストだけが使う組み立てを開ける・本番では付けない」を書く）。Cargo.toml のコメントは包むと消えるので、公開の説明は README が担う。
 6. **同じファイルの中だけの写し 3 つ（要件 3.6）**: ghost の `prop_sink.rs` の `carrier_cue`・`prop_get_sink_tests.rs` の `carrier`、runtime の `frame_window_link_drain_tests.rs` の `carrier` を、1 行の名で残すか、呼び手が `dola` の組み立てを直に呼ぶ形にするか。1 行で残すほうが差分が小さく、直に呼ぶほうが名の層が 1 つ減る（`prop_get_sink_tests.rs` は呼び手ごとに `"0"` を書き足すことになる）。
