@@ -1,7 +1,7 @@
 // MoveCueSink の severity 宛名規律のログ捕捉テスト。
 //
 // 非正準 Custom params の枝は、宛名（`Custom{command}`）で severity を分岐する
-// （自分宛 move＝WARN／他人宛・未知＝DEBUG）。
+// （自分宛（move・lock・unlock）＝WARN／他人宛・未知＝DEBUG）。
 //
 // 捕捉は `log-capture-kit` の捕捉窓へ委譲する。`with_default` はスレッドローカルだが、
 // callsite の interest キャッシュはプロセス全体で 1 つなので、捕捉窓なしで先に踏まれると
@@ -14,7 +14,7 @@ use dola::cue::CueSink;
 use std::sync::mpsc::{TryRecvError, channel};
 
 #[test]
-fn broken_move_addressed_custom_warns_once() {
+fn broken_custom_addressed_to_this_sink_warns_once() {
     for command in ["move", "lock", "unlock"] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
@@ -24,6 +24,11 @@ fn broken_move_addressed_custom_warns_once() {
             count_level(&logs, "WARN"),
             1,
             "自分宛（{command}）の非正準 Custom は WARN=1（自分宛の壊れ物）: {logs:?}"
+        );
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=WARN") && l.contains("move_cue_unopenable")),
+            "{logs:?}"
         );
         assert_eq!(
             count_level(&logs, "DEBUG"),

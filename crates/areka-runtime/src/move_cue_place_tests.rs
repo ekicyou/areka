@@ -10,8 +10,9 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
-use crate::move_cue::apply_move_tests::{BALLOON_OFFSET, events_named, persisted_after, placement};
-use crate::move_cue::{MoveDirective, parse_move_directive};
+use crate::move_cue::apply_move_tests::{
+    BALLOON_OFFSET, directive_for_scope1, events_named, persisted_after, placement,
+};
 use areka_placement::diag::PlacementRoute;
 use areka_placement::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, apply_char_shift, resize_window_to,
@@ -68,11 +69,6 @@ fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
         world.spawn(m);
     }
     (world, gw)
-}
-
-fn args(items: &[&str]) -> MoveDirective {
-    let tokens: Vec<String> = items.iter().map(|s| s.to_string()).collect();
-    parse_move_directive(1, &tokens).directive
 }
 
 fn pos(world: &World, e: Entity) -> PointPx {
@@ -173,8 +169,9 @@ fn every_base_resolves_to_its_frame() {
         let (mut world, gw) = world_with(Anchor::Free);
         let target = gw.char_window(1).unwrap();
         place(&mut world, target, bx, by);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(moved, "{name}: 動く（非スコープの基準でも動く）");
         assert_eq!(pos(&world, target), PointPx { x: ax, y: ay }, "{name}");
         assert_eq!(
@@ -207,8 +204,9 @@ fn substitutions_are_logged_one_by_one() {
     ];
     for &(script, want) in cases {
         let (mut world, _gw) = world_with(Anchor::Free);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(moved, "{script:?}");
         let subs = events_named(&events, "move_frame_substituted");
         assert_eq!(subs.len(), want.len(), "{script:?}: {events:?}");
@@ -240,7 +238,7 @@ fn bottom_anchor_ignores_script_y_and_free_keeps_it() {
         let target = gw.char_window(1).unwrap();
         assert!(apply_move_directive(
             &mut world,
-            &args(EMO2_ADJUST),
+            &directive_for_scope1(EMO2_ADJUST),
             ScaleRatio::ONE
         ));
         assert_eq!(
@@ -261,7 +259,7 @@ fn resize_after_move_keeps_bottom_and_center() {
     let target = gw.char_window(1).unwrap();
     assert!(apply_move_directive(
         &mut world,
-        &args(EMO2_ADJUST),
+        &directive_for_scope1(EMO2_ADJUST),
         ScaleRatio::ONE
     ));
     let before = pos(&world, target);
@@ -297,7 +295,7 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
 
         assert!(apply_move_directive(
             world,
-            &args(&["--base=global", "--X=5000", "--Y=-3000"]),
+            &directive_for_scope1(&["--base=global", "--X=5000", "--Y=-3000"]),
             ScaleRatio::ONE
         ));
 
@@ -330,8 +328,13 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
 #[test]
 fn move_applied_records_base_and_ref_points() {
     let (mut world, _gw) = world_with(Anchor::Bottom);
-    let (_, events) =
-        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+    let (_, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(EMO2_ADJUST),
+            ScaleRatio::ONE,
+        )
+    });
     let applied = events_named(&events, "move_applied");
     assert_eq!(applied.len(), 1, "{events:?}");
     let ev = &applied[0];
@@ -403,8 +406,9 @@ fn missing_material_skips_with_warn() {
         let target = gw.char_window(1).unwrap();
         strip(&mut world);
         let before = world.get::<WindowPos>(target).and_then(|w| w.position);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(!moved, "{reason}: 動かさない");
         let skips = events_named(&events, "move_skipped");
         assert_eq!(skips.len(), 1, "{reason}: {events:?}");
@@ -419,14 +423,45 @@ fn missing_material_skips_with_warn() {
     }
 }
 
+/// 置き換えの後に動かせなくなっても、それまでの置き換えは `move_skipped` の前に記録する。
+#[test]
+fn substitution_before_skip_is_still_logged() {
+    let (mut world, _gw) = world_with(Anchor::Free);
+    world.remove_resource::<MonitorSnapshot>();
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["--base=5", "--X=1"]),
+            ScaleRatio::ONE,
+        )
+    });
+    assert!(!moved);
+    let subs = events_named(&events, "move_frame_substituted");
+    assert_eq!(subs.len(), 1, "{events:?}");
+    assert!(
+        subs[0]
+            .field("note")
+            .is_some_and(|n| n.starts_with("MissingBaseScope")),
+        "{events:?}"
+    );
+    let skips = events_named(&events, "move_skipped");
+    assert_eq!(skips.len(), 1, "{events:?}");
+    assert_eq!(skips[0].field_str("reason"), Some("no_work_area"));
+}
+
 /// `Anchored` が無ければ `move_anchor_missing` の `warn!` のうえで当て直さずに書く。
 #[test]
 fn missing_anchored_writes_script_position_with_warn() {
     let (mut world, gw) = world_with(Anchor::Bottom);
     let target = gw.char_window(1).unwrap();
     world.entity_mut(target).remove::<Anchored>();
-    let (moved, events) =
-        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(EMO2_ADJUST),
+            ScaleRatio::ONE,
+        )
+    });
     assert!(moved);
     let missing = events_named(&events, "move_anchor_missing");
     assert_eq!(missing.len(), 1, "{events:?}");
@@ -457,7 +492,7 @@ fn absolute_move_rebases_the_pattern_shift_per_axis() {
     // X だけ絶対（screen の左端から 50）・Y は fix。
     assert!(apply_move_directive(
         &mut world,
-        &args(&["--X=50"]),
+        &directive_for_scope1(&["--X=50"]),
         ScaleRatio::ONE
     ));
     assert_eq!(pos(&world, target), PointPx { x: 60, y: 520 });
@@ -491,8 +526,13 @@ fn absolute_move_with_shift_moves_the_partner_by_the_final_amount() {
     ));
     let (target_before, partner_before) = (pos(&world, target), pos(&world, partner));
 
-    let (moved, events) =
-        capture(|| apply_move_directive(&mut world, &args(&["--X=50"]), ScaleRatio::ONE));
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["--X=50"]),
+            ScaleRatio::ONE,
+        )
+    });
     assert!(moved);
 
     let target_now = pos(&world, target);
@@ -529,7 +569,7 @@ fn relative_move_keeps_the_pattern_shift() {
 
         assert!(apply_move_directive(
             &mut world,
-            &args(&["--X=5", "--Y=5", base]),
+            &directive_for_scope1(&["--X=5", "--Y=5", base]),
             ScaleRatio::ONE
         ));
         assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 }, "{base}");

@@ -9,7 +9,9 @@ use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::{Entity, World};
 use wintf::ecs::{Point, WindowHandle};
 
-use super::apply_move_tests::{events_named, move_world, persisted_after, pos_of};
+use super::apply_move_tests::{
+    directive_for_scope1, events_named, move_world, persisted_after, pos_of,
+};
 use super::*;
 use areka_placement::follow::{Anchored, BalloonFollow};
 use areka_placement::resolver::Anchor;
@@ -26,12 +28,7 @@ fn group(world: &mut World, members: &[&str]) {
     assert!(apply_set_sticky(world, &tokens));
 }
 
-/// スコープ 1 を動かす `\![move]`（x・y の両方が動く。基準はスコープ 0 の窓）。
-fn directive(tokens: &[&str]) -> MoveDirective {
-    let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-    parse_move_directive(1, &tokens).directive
-}
-
+/// x・y の両方が動く。基準はスコープ 0 の窓。
 const MOVE_XY: [&str; 6] = ["-353", "40", "", "0", "base", "base"];
 
 fn set_anchor(world: &mut World, gw: &GhostWindows, scope: usize, anchor: Anchor) {
@@ -72,8 +69,9 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
     let (target_before, partner_before) = (pos_of(&world, p.target), pos_of(&world, p.partner));
     let offset = world.get::<BalloonFollow>(p.partner).unwrap().offset();
 
-    let (applied, events) =
-        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+    let (applied, events) = capture(|| {
+        apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+    });
     assert!(applied);
 
     let moved = diff(pos_of(&world, p.target), target_before);
@@ -108,7 +106,7 @@ fn bottom_partner_takes_only_the_horizontal_amount() {
 
     assert!(apply_move_directive(
         &mut world,
-        &directive(&MOVE_XY),
+        &directive_for_scope1(&MOVE_XY),
         ScaleRatio::ONE
     ));
 
@@ -134,7 +132,7 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let p = pair(&gw);
     let partner_before = pos_of(&world, p.partner);
 
-    let ignore = directive(&[
+    let ignore = directive_for_scope1(&[
         "--x=-353",
         "--y=40",
         "--base=0",
@@ -164,7 +162,7 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let relation = diff(pos_of(&world, p.target), pos_of(&world, p.partner));
     assert!(apply_move_directive(
         &mut world,
-        &directive(&["-100", "-60", "", "0", "base", "base"]),
+        &directive_for_scope1(&["-100", "-60", "", "0", "base", "base"]),
         ScaleRatio::ONE
     ));
     assert_ne!(
@@ -190,7 +188,7 @@ fn partner_position_is_not_persisted() {
 
         assert!(apply_move_directive(
             world,
-            &directive(&MOVE_XY),
+            &directive_for_scope1(&MOVE_XY),
             ScaleRatio::ONE
         ));
         assert_ne!(
@@ -217,7 +215,7 @@ fn timed_move_places_the_partner_at_once() {
     let p = pair(&gw);
     let (target_before, partner_before) = (pos_of(&world, p.target), pos_of(&world, p.partner));
 
-    let timed = directive(&["-353", "40", "500", "0", "base", "base"]);
+    let timed = directive_for_scope1(&["-353", "40", "500", "0", "base", "base"]);
     assert!(apply_move_directive(&mut world, &timed, ScaleRatio::ONE));
 
     let moved = diff(pos_of(&world, p.target), target_before);
@@ -237,8 +235,9 @@ fn ungrouped_window_moves_alone_as_before() {
         let p = pair(&gw);
         let partner_before = pos_of(&world, p.partner);
 
-        let (applied, events) =
-            capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+        let (applied, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+        });
         assert!(applied);
         assert_eq!(pos_of(&world, p.partner), partner_before, "seed={seed}");
         for name in [
@@ -263,8 +262,9 @@ fn absent_member_is_logged_and_left_out() {
     let p = pair(&gw);
     let partner_before = pos_of(&world, p.partner);
 
-    let (applied, events) =
-        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+    let (applied, events) = capture(|| {
+        apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+    });
     assert!(applied);
     assert_ne!(pos_of(&world, p.partner), partner_before);
     let absent = events_named(&events, "sticky_member_absent");
@@ -288,7 +288,11 @@ fn refused_write_or_zero_amount_moves_no_partner() {
     // 量が 0: x・y を省いた（今の位置のまま）指令。
     let partner_before = pos_of(&world, p.partner);
     let (applied, events) = capture(|| {
-        apply_move_directive(&mut world, &directive(&["", "", "", "0"]), ScaleRatio::ONE)
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["", "", "", "0"]),
+            ScaleRatio::ONE,
+        )
     });
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before);
@@ -302,7 +306,7 @@ fn refused_write_or_zero_amount_moves_no_partner() {
     let (applied, events) = capture(|| {
         apply_move_directive(
             &mut world,
-            &directive(&["-100", "-60", "", "0", "base", "base"]),
+            &directive_for_scope1(&["-100", "-60", "", "0", "base", "base"]),
             ScaleRatio::ONE,
         )
     });

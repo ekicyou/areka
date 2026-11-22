@@ -263,6 +263,36 @@ fn area_base_substitution_is_per_axis() {
     );
 }
 
+/// 置き換えた参照点を読まない `Fix` の軸は記録しない（位置は置き換えの有無で変わらない）。
+#[test]
+fn substitution_on_fixed_axis_is_not_recorded() {
+    let target = rect(1440, 852, 2112, 1652);
+    let base_base = RefPoint {
+        x: RefX::Base,
+        y: RefY::Base,
+    };
+    let area = BaseFrame::Area(rect(0, 0, 2880, 1704));
+    let d = directive(
+        AxisSpec::Px(0),
+        AxisSpec::Fix,
+        base_base,
+        RefPoint::LEFT_TOP,
+    );
+    let got = compute_move_target(&area, target, pt(336, 800), &d, K1);
+    assert_eq!(got.position, pt(1440, 852));
+    assert_eq!(
+        got.notes,
+        vec![FrameNote::AreaBaseToCenter { axis: Axis::X }]
+    );
+
+    let d = directive(AxisSpec::Fix, AxisSpec::Fix, base_base, RefPoint::LEFT_TOP);
+    for frame in [area, BaseFrame::Origin] {
+        let got = compute_move_target(&frame, target, pt(336, 800), &d, K1);
+        assert_eq!(got.position, pt(1440, 852), "{frame:?}");
+        assert!(got.notes.is_empty(), "{frame:?}: {:?}", got.notes);
+    }
+}
+
 /// 原点の基準の参照点が `left.top` 以外なら原点そのもの・記録 1 件。
 /// `left.top` なら記録しない。動かす窓の参照点は効く。
 #[test]

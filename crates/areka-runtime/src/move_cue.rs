@@ -238,6 +238,7 @@ impl dola::cue::CueSink for MoveCueSink {
                     if matches!(command.as_str(), "move" | "lock" | "unlock") =>
                 {
                     warn!(
+                        event = "move_cue_unopenable",
                         command = ?cue.command,
                         "MoveCueSink: 自分宛の非正準 Custom params を良性スキップ"
                     );
@@ -329,8 +330,10 @@ fn actor_scope(cue: &TalkCue, tag: &str) -> Option<u32> {
     let scope = cue.actor.as_str().parse::<u32>().ok();
     if scope.is_none() {
         warn!(
+            event = "move_cue_bad_actor",
             actor = cue.actor.as_str(),
-            tag, "MoveCueSink: cue.actor が非数値 scope のため指令をスキップ"
+            tag,
+            "MoveCueSink: cue.actor が非数値 scope のため指令をスキップ"
         );
     }
     scope
@@ -341,7 +344,10 @@ impl MoveCueSink {
     fn send(&self, cue: PositionCue) {
         if self.tx.send(cue).is_err() {
             // 受信端（RuntimeWiring）切断は talk を殺さない（log-first・非 panic）。
-            warn!("MoveCueSink: PositionCue の送出に失敗（受信端切断）");
+            warn!(
+                event = "move_cue_send_failed",
+                "MoveCueSink: PositionCue の送出に失敗（受信端切断）"
+            );
         }
         // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある。送出の後に立てる理由は
         // `PresentBridge::send` と同じ。

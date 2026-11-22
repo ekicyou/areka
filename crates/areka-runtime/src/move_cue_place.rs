@@ -83,6 +83,17 @@ fn resolve_frame(
     }
 }
 
+fn log_substitutions(scope: u32, notes: &[FrameNote]) {
+    for note in notes {
+        warn!(
+            event = "move_frame_substituted",
+            scope,
+            ?note,
+            "\\![move] の基準を置き換えて動かす"
+        );
+    }
+}
+
 /// `\![move]` の [`MoveDirective`] を UI スレッドで窓へ書く。書いたら `true`。
 ///
 /// 動かせなかったときは `warn!` のうえ `false`（トークは止めない）。`k` は対象のスコープの
@@ -113,7 +124,10 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     let mut notes = Vec::new();
     let frame = match resolve_frame(world, directive, target_rect, &mut notes) {
         Ok(frame) => frame,
-        Err(reason) => return skipped(reason),
+        Err(reason) => {
+            log_substitutions(scope, &notes);
+            return skipped(reason);
+        }
     };
 
     let computed = compute_move_target(
@@ -124,14 +138,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         k,
     );
     notes.extend(computed.notes);
-    for note in &notes {
-        warn!(
-            event = "move_frame_substituted",
-            scope,
-            ?note,
-            "\\![move] の基準を置き換えて動かす"
-        );
-    }
+    log_substitutions(scope, &notes);
 
     // 吸い付きの当て直し。`Anchored` が無ければ当て直さない（Free と同じ）。
     let script = computed.position;

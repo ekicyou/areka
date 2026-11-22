@@ -266,5 +266,9 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
         .filter(|e| e.level == tracing::Level::WARN)
         .collect();
     assert_eq!(warns.len(), 1, "{events:?}");
-    assert!(warns[0].message().contains("送出に失敗"), "{events:?}");
+    assert_eq!(
+        warns[0].field_str("event"),
+        Some("move_cue_send_failed"),
+        "{events:?}"
+    );
 }
