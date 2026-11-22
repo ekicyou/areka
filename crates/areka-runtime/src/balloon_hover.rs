@@ -1,6 +1,6 @@
 //! バルーンの上の滞在の集合（`BalloonHover`・UI スレッドの NonSend）。
 //!
-//! 可視性の相（`balloon_visibility_phase`）が読み、入力の側（`areka_input::balloon` の移動・離脱）が書く。
+//! 可視性の相（`balloon_visibility_phase`）が読み、非表示への遷移で掃除し、入力の側（`areka_input::balloon` の移動・離脱）が書く。
 //! `BalloonWiring` ごと下ろすと選択の送り口まで連れて来るため、集合だけを runtime の型にしてある。
 //! 置くのは `BalloonWiring` と同じ所・同じ時（本番は `areka_input::balloon::wire_balloon_choice`）。
 

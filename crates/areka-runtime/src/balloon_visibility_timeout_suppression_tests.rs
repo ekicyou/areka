@@ -7,8 +7,8 @@
 // # 時刻の書き方
 //
 // 表の時刻は**すべて占有終端 [`ANCHOR`] からの相対**で書く。満了予定の初期確立式は
-// `満了予定 = 占有終端 + 待ち時間` であって「計測が成り立った最初のフレームの現在時刻 +
-// 待ち時間」ではないため、
+// `満了予定 = 実効の表示終了 + 待ち時間`（本表では止まった時刻＝占有終端なので占有終端）で
+// あって「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではないため、
 // 計測が成り立つ最初の観測は各行で占有終端から [`LATE`] 秒だけ遅れて訪れるようにしてある。
 // 現在時刻を起点に取り違えた実装では満了予定が [`LATE`] 秒ぶん後ろへずれ、
 // `ANCHOR + TIMEOUT` の行が満了しなくなって表が赤くなる。
@@ -37,29 +37,29 @@
 // - 占有終端が現在時刻より未来へ動いたときの計測破棄
 //   → `display_end_raised_into_the_future_discards_the_deadline`
 // - 可視バルーンが無くなったときの計測破棄 → `clearing_every_balloon_discards_the_measurement`
-// - 表示終了信号が届かない間の保持 → `no_measurement_starts_while_the_end_of_talk_signal_is_absent`
+// - 表示終了信号が届かない間の保持 → `no_measurement_starts_while_the_display_end_signal_is_absent`
 // - 占有終端・現在時刻が数でない場合の端の値
 //   → `a_negative_display_end_is_rounded_up_to_zero_before_anchoring` ほか 2 本
 //
 // # 本表が新たに押さえる分岐
 //
-// ⑴ 占有終端は既知の最大より後退しない（重複・後退した信号は計測を動かさない）
-// ⑵ 占有終端の引き上げが現在時刻を越えないときは計測を破棄しない（破棄の反対側の枝）
+// ⑴ 約束に反して後退した占有終端が届いても、計測の起点は既知の最大から動かない
+// ⑵ 約束に反して届いた占有終端の引き上げが現在時刻を越えないときは計測を破棄しない（破棄の反対側の枝）
 // ⑶ 会話が変わると表示終了信号の欠落の記録が武装し直る（会話につき 1 回の再武装）
 // ⑷ 満了予定に達する**前**の抑止は見送りの記録を出さない
 // ⑸ 抑止が二度成立すれば記録も二度出る（1 回の抑止につき 1 件の再武装）
 // ⑹ 抑止が解けても計測が成り立たなければ取り直さない（解除エッジの反対側の枝）
 // ⑺ 複数の抑止条件が同時に成立したら 1 件の記録へ全種別が載る
 // ⑻ 抑止条件の一部だけが観測不能でも、残りの条件は抑止として効く
+// ⑼ 本フレームに表示した scope への滞在は抑止になる
+// ⑽ 本フレームに全消去で消した scope への滞在は抑止にならない
+// ⑾ 現在時刻が分からないフレームでは抑止の持ち越しを書き換えない（解けたと読まない）。
+//    時刻が戻ったフレームで解除エッジが改めて立つ
+// ⑿ 満了の対象が本フレーム表示分しか無いときは見送り、満了予定を残して次フレームで消す
+// ⒀ 満了で消した scope の持ち越し可視が偽になる
 //
 // 抑止はドラッグ中と可視のバルーンへの滞在の 2 つで、選択肢の表示中は数えない。
 // 選択肢つきのトークの起点は `balloon_visibility_choice_wait_tests.rs`。
-// ⑼ 本フレームに表示した scope への滞在は抑止になる
-// ⑽ 本フレームに全消去で消した scope への滞在は抑止にならない
-// ⑾ 現在時刻が分からないフレームは抑止の持ち越しを止めず、時刻が戻ったフレームで解除
-//    エッジが改めて立つ
-// ⑿ 満了の対象が本フレーム表示分しか無いときは見送り、満了予定を残して次フレームで消す
-// ⒀ 満了で消した scope の持ち越し可視が偽になる
 // =============================================================================
 
 use super::test_support::*;
@@ -75,9 +75,11 @@ use super::*;
 /// ためである。
 const ANCHOR: f64 = 12.0;
 
-/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く（同じ数値を
-/// 複数箇所へ散らさない）。各フレームへは [`Frame::timeout`] で明示に渡す。
-const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
+/// タイムアウト時間（秒）。各フレームへは [`Frame::timeout`] で渡す。
+///
+/// 既定と違う値にしてあるのは、`decide` が引数の待ち時間を読まずに既定で測ったときに表が
+/// 赤くなるようにするためである。
+const TIMEOUT: f64 = 20.0;
 
 /// 計測が成り立つ最初の観測が占有終端から遅れて訪れる量（秒）。
 ///
@@ -208,7 +210,7 @@ struct Case {
 /// 期待記述から、そのフレームの行動列とログ列を組み立てる。
 ///
 /// ログは記述の並びをそのまま採る（＝表に書いた並びが期待そのもの）。行動は `decide` の
-/// 規約どおり「全消去の非表示 → 表示 → 満了の非表示」へ並べ替える。相対秒はここで
+/// 規約どおり「全消去の非表示 → 表示 → 満了の非表示」へ並べ替える（本表は中断を扱わない）。相対秒はここで
 /// [`ANCHOR`] を足して絶対時刻へ直す。
 fn expand(expect: &[Expect]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent>) {
     let mut cleared: Vec<VisibilityAction> = Vec::new();
@@ -391,7 +393,7 @@ fn timeout_and_suppression_branches_hold_for_every_case() {
 }
 
 /// 較正: 期待記述が行動列・ログ列へ展開される規則そのものを、既知の 1 件で押さえる。
-/// ここが壊れると表の全行が「何も比べない」空虚な行になる。
+/// ここが壊れると、表の期待そのものが `decide` の規約から外れる（同じ誤りを持つ実装を緑にする）。
 #[test]
 fn expectation_expansion_follows_both_ordering_rules() {
     let (actions, logs) = expand(&[
@@ -461,30 +463,53 @@ fn expectation_times_are_anchored_on_the_display_end() {
         LATE, 0.0,
         "最初の観測が遅れて訪れないと起点の取り違えを検出できない"
     );
+    assert_ne!(
+        TIMEOUT, DEFAULT_BALLOON_TIMEOUT_SECS,
+        "既定と同じだと引数の待ち時間を読まない実装が緑になる"
+    );
 }
 
 /// 較正: 走査が実際に突き合わせていること——期待と異なる結果を与えたら、行動・ログ・状態の
-/// 3 つ全てで食い違いが積まれる。これが 0 件なら表は緑を返すだけの飾りである。
+/// 全てで食い違いが積まれ、状態の検査はどの腕（満了予定あり・なし・持ち越し可視・生えていない
+/// scope）も食い違いを拾う。これが 0 件なら表は緑を返すだけの飾りである。
 #[test]
 fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
     let calibration = Case {
         name: "較正",
-        rows: &[Row {
-            signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
-            scopes: &[(0, 3, false, Watch::Off)],
-            dragging: false,
-            now: Now::At(-5.0),
-            // 実際には表示が起き、満了予定は立たない。
-            expect: &[],
-            after: &[After::Deadline(TIMEOUT)],
-        }],
+        rows: &[
+            Row {
+                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                scopes: &[(0, 3, false, Watch::Off)],
+                dragging: false,
+                now: Now::At(-5.0),
+                // 実際には表示が起き、満了予定は立たない。
+                expect: &[],
+                after: &[After::Deadline(TIMEOUT)],
+            },
+            Row {
+                signals: &[Signal::Ended(0.0)],
+                scopes: &[(0, 3, true, Watch::Off)],
+                dragging: false,
+                now: Now::At(1.0),
+                expect: &[Expect::Started {
+                    display_end: 0.0,
+                    deadline: TIMEOUT,
+                }],
+                // 実際には満了予定が立ち、scope 0 は見えていて、scope 9 は一度も観測していない。
+                after: &[
+                    After::NoDeadline,
+                    After::PrevVisible(0, false),
+                    After::PrevVisible(9, false),
+                ],
+            },
+        ],
     };
 
     let mut failures = Vec::new();
     run(&calibration, &mut failures);
     assert_eq!(
         failures.len(),
-        3,
-        "表示が起きるフレームへ「何も起きない」を期待させたのに食い違いが積まれない: {failures:?}"
+        6,
+        "期待と異なる結果を与えたのに食い違いが積まれない: {failures:?}"
     );
 }

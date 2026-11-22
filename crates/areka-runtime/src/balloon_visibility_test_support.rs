@@ -1,7 +1,8 @@
 // =============================================================================
 // 判断中核テストの共有ヘルパ（観測スナップショットの組立て）
-// 観測は「scope → (可視グリフ数, 現に可視か)」の表でしかないため、ここに置くのは
-// その表を組む最小の道具だけにする。実時間の待機・スリープは一切用いない。
+// 観測は「scope → 観測値（ScopeObservation）」の表でしかないため、ここに置くのは
+// その表を組む最小の道具と、箱の名前を取る surfaces.txt の畳み込み（`shell_box_hover` の
+// テストと共有する）だけにする。実時間の待機・スリープは一切用いない。
 // =============================================================================
 
 use std::collections::BTreeMap;
@@ -12,12 +13,18 @@ use super::{
     BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
     TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
+#[cfg(test)]
+use super::{VisibilityAction, VisibilityLogEvent, VisibilityTrigger};
+
+/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
+#[cfg(test)]
+pub(super) const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
-/// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
+/// 消去の回数は 0 で一定。
 pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: Some(GlyphObservation {
@@ -31,7 +38,8 @@ pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
 }
 
 /// グリフ数の観測が取れなかった scope（本番では文字層ランタイムの借用失敗）。
-pub fn unobserved(visible: bool) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn unobserved(visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: None,
         visible,
@@ -41,15 +49,73 @@ pub fn unobserved(visible: bool) -> ScopeObservation {
 }
 
 /// ポインタが滞在している scope にする。
-pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn hovered(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: Some(true),
         ..observation
     }
 }
 
+/// 箱に文字が出ている scope にする。
+#[cfg(test)]
+pub(super) fn boxed(observation: ScopeObservation) -> ScopeObservation {
+    ScopeObservation {
+        box_showing: true,
+        ..observation
+    }
+}
+
+/// テストの中に持つ surfaces.txt の文面を畳んだ箱の配置。箱の名前は公開の構築口を持たないので
+/// ここから取る（検体は読まない）。
+#[cfg(test)]
+pub(crate) fn box_layout(source: &str) -> areka_emo_compose::BoxLayout {
+    use areka_parsers::shell::{parse, parse_boxes};
+    let world = areka_emo_compose::EmoWorld::build(&parse(source));
+    let (layout, report) =
+        areka_emo_compose::fold_boxes(&parse_boxes(source), &BTreeMap::new(), &world);
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    layout
+}
+
+/// 期待する表示行動。
+#[cfg(test)]
+pub(super) fn show(scope: u32) -> VisibilityAction {
+    VisibilityAction::Show { scope }
+}
+
+/// 期待する表示ログ。
+#[cfg(test)]
+pub(super) fn shown_log(scope: u32) -> VisibilityLogEvent {
+    VisibilityLogEvent::Transition {
+        scope,
+        trigger: VisibilityTrigger::Content,
+        visible: true,
+    }
+}
+
+/// 期待する非表示行動。
+#[cfg(test)]
+pub(super) fn hide(scopes: &[u32], trigger: VisibilityTrigger) -> VisibilityAction {
+    VisibilityAction::HideScopes {
+        scopes: scopes.to_vec(),
+        trigger,
+    }
+}
+
+/// 期待する非表示ログ。
+#[cfg(test)]
+pub(super) fn hidden_log(scope: u32, trigger: VisibilityTrigger) -> VisibilityLogEvent {
+    VisibilityLogEvent::Transition {
+        scope,
+        trigger,
+        visible: false,
+    }
+}
+
 /// 抑止条件の観測が 1 つも取れなかった scope にする。
-pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: None,
         ..observation
@@ -57,7 +123,7 @@ pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation
 }
 
 /// 観測スナップショットを組む。引数の並び順は結果に影響しない（走査は scope 昇順）。
-pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
+pub(super) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
     VisibilityObservations {
         scopes: entries.iter().copied().collect::<BTreeMap<_, _>>(),
         ..VisibilityObservations::default()
@@ -69,7 +135,8 @@ pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservatio
 /// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
 /// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
 /// テストのどれかが必ず落ちる。
-pub fn step(
+#[cfg(test)]
+pub(super) fn step(
     state: &mut BalloonVisibilityState,
     entries: &[(u32, ScopeObservation)],
 ) -> VisibilityDecision {
@@ -139,13 +206,15 @@ impl Frame {
     }
 
     /// 任意の合図を本フレームに届ける（到着順に積む）。
-    pub fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
+    #[cfg(test)]
+    pub(super) fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
         self.obs.lifecycle.push(signal);
         self
     }
 
     /// いずれかのバルーン窓がドラッグ中である状態にする。
-    pub fn dragging(mut self) -> Self {
+    #[cfg(test)]
+    pub(super) fn dragging(mut self) -> Self {
         self.obs.dragging = true;
         self
     }
@@ -154,27 +223,4 @@ impl Frame {
     pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
         decide(state, &self.obs, self.now, self.timeout_secs)
     }
-}
-
-// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない）。
-#[cfg(feature = "test-support")]
-use super::ScopeVisibility;
-
-/// [`BalloonVisibilityState`] の scope ごとの前フレームの状態（`per_scope`）。
-#[cfg(feature = "test-support")]
-pub fn per_scope(state: &mut BalloonVisibilityState) -> &mut BTreeMap<u32, ScopeVisibility> {
-    &mut state.per_scope
-}
-
-/// [`BalloonVisibilityState`] の表示の占有の終わり（`display_end`）。
-#[cfg(feature = "test-support")]
-pub fn display_end(state: &BalloonVisibilityState) -> Option<f64> {
-    state.display_end
-}
-
-/// [`BalloonVisibilityState`] が実行系の借用の失敗を記録したか（`observation_failure_logged.runtime`）。
-#[cfg(feature = "test-support")]
-pub fn observation_failure_logged_runtime(state: &BalloonVisibilityState) -> bool {
-    state.observation_failure_logged.runtime
 }

@@ -1,15 +1,12 @@
 //! `shell_box_hover.rs` の兄弟テスト。
 //!
-//! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
-//! `parse_boxes` → `fold_boxes` で畳んで名前を取る（検体は読まない）。
+//! 箱の名前はテストの中に持つ surfaces.txt の文面を畳んで取る（`box_layout`）。
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
+use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{HitRectPx, ShownBox};
-use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ShellBoxHover, settle_box_hover};
+use crate::balloon_visibility::test_support::box_layout;
 
 /// サーフェス 0 に箱 a（element1）と箱 b（element2・手前）。
 const SHELL: &str = "\
@@ -29,10 +26,7 @@ element2,balloon,b,50,20
 ";
 
 fn box_name(name: &str) -> BoxName {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
+    box_layout(SHELL)
         .placements(0)
         .iter()
         .find(|p| p.name.as_str() == name)

@@ -151,7 +151,10 @@ impl Drop for PersistStore {
     fn drop(&mut self) {
         self.publisher.close();
         if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
+            let joined = crate::spine::join_bounded("sylphya", handle);
+            if !std::thread::panicking() {
+                joined.expect("sylphya が終わる");
+            }
         }
     }
 }

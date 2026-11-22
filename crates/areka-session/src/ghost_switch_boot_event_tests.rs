@@ -1,17 +1,17 @@
 //! 切替の要求の起動の知らせ（`SwitchRequest.boot_event`）の兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、切替の入口・kanade・偽の SHIORI を本物の経路で通す。
-//! 確かめること: 欄付きの自分自身への切替で起き直したゴーストの最初の知らせが渡したイベントと
-//! Reference で、`OnGhostChanged`・`OnBoot` は 0 件（204 でも）／欄が空なら `OnGhostChanged`／
-//! 切替先が起動に失敗して既定へ戻ると、既定は `OnBoot`（Reference6＝`halt`）で起き知らせは届かない。
 
 use areka_kanade::ChangeOrigin;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::reload::ReloadInFlight;
 use areka_runtime::spine::RecordedCall;
 
 /// 渡す起動の知らせの Reference（読み直しの `OnUpdateComplete` の形）。
@@ -19,18 +19,6 @@ fn update_refs() -> Vec<String> {
     ["changed", "descript.txt,ghost/master/yaya.dll"]
         .map(str::to_owned)
         .to_vec()
-}
-
-/// 呼び出しを「GET 名」「NOTIFY 名」の列にする。
-fn ids(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            other => format!("{other:?}"),
-        })
-        .collect()
 }
 
 /// `id` の GET の Reference（最初の 1 件）。
@@ -41,15 +29,8 @@ fn get_refs(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
     })
 }
 
-fn named(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
-}
-
 /// `scripts` の土台で A を起こして定常に着かせる（起動記録は全員に置く＝`OnFirstBoot` を飛ばす）。
-fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
+pub(super) fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     let folders: Vec<String> = scripts.iter().map(|(f, _)| (*f).to_owned()).collect();
     let mut rig = SwitchRig::new(scripts);
     // 起こし直すときの窓の準備が閉包を投函する先。
@@ -62,13 +43,12 @@ fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     rig
 }
 
-/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event` 付きで頼み、`done` まで回す。
-fn switch_to_a(
+/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event`（無しも可）を渡して頼む。
+pub(super) fn request_switch_to_a(
     rig: &mut SwitchRig,
     boot_event: Option<(&'static str, Vec<String>)>,
-    done: impl FnMut(&SwitchRig) -> bool,
-) -> (SwitchVerdict, bool) {
-    let verdict = request_ghost_switch(
+) -> SwitchVerdict {
+    request_ghost_switch(
         &mut rig.world,
         SwitchRequest {
             ghost: GhostSpec::Folder("A".to_owned()),
@@ -76,14 +56,33 @@ fn switch_to_a(
             origin: ChangeOrigin::Automatic,
             boot_event,
         },
-    );
+    )
+}
+
+/// [`request_switch_to_a`] で頼み、`done` まで回す。
+fn switch_to_a(
+    rig: &mut SwitchRig,
+    boot_event: Option<(&'static str, Vec<String>)>,
+    done: impl FnMut(&SwitchRig) -> bool,
+) -> (SwitchVerdict, bool) {
+    let verdict = request_switch_to_a(rig, boot_event);
     (verdict, rig.pump_talking_until(done))
 }
 
-/// A の 2 回目の起動が済み、切替の予約が下りた（定常到達）。
-fn a_rebooted(rig: &SwitchRig) -> bool {
+/// A の 2 回目の起動が済み、切替の予約と読み直しの印が下りた（定常到達）。
+pub(super) fn a_rebooted(rig: &SwitchRig) -> bool {
     rig.exit_requested()
-        || (rig.calls("A").len() == 2 && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        || (rig.calls("A").len() == 2
+            && rig.world.get_non_send::<SwitchInFlight>().is_none()
+            && rig.world.get_non_send::<ReloadInFlight>().is_none())
+}
+
+/// 既定のゴーストが 1 回起き、切替の予約と読み直しの印が下りた（定常到達）。
+pub(super) fn default_rebooted(rig: &SwitchRig) -> bool {
+    rig.exit_requested()
+        || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
+            && rig.world.get_non_send::<SwitchInFlight>().is_none()
+            && rig.world.get_non_send::<ReloadInFlight>().is_none())
 }
 
 /// 欄付きの切替で起き直した A の最初の知らせは渡したイベントと Reference の GET で、204 でも
@@ -113,7 +112,7 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
     assert!(!exited, "終了しない: {events:?}");
     assert_eq!(calls.len(), 2, "A を 1 回起こし直す: {calls:?}");
     assert_eq!(
-        ids(&calls[1]),
+        kinds(&calls[1]),
         [
             "NOTIFY OnInitialize",
             "GET username",
@@ -127,7 +126,11 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
         Some(update_refs()),
         "渡した Reference のまま"
     );
-    assert_eq!(named(&events, "ghost_switch_requested"), 1, "{events:?}");
+    assert_eq!(
+        count_event(&events, "ghost_switch_requested"),
+        1,
+        "{events:?}"
+    );
     let requested = events
         .iter()
         .find(|e| e.field_str("event") == Some("ghost_switch_requested"))
@@ -138,7 +141,7 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
 /// 欄が空の切替: 起き直した A の根は `OnGhostChanged`（台本で応える＝`OnBoot` へ続かない）で、
 /// 知らせのイベントは届かない。
 #[test]
-fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today() {
+fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed() {
     let a = FakeShiori::Scripted(Box::new(|| {
         standard_script(r"\0A\e")
             .get("OnGhostChanged", Ok(Some(r"\0A\e".to_owned())))
@@ -148,11 +151,12 @@ fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today
 
     let (flow, events) = capture(|| switch_to_a(&mut rig, None, a_rebooted));
     let calls = rig.calls("A");
+    assert!(!rig.exit_requested(), "終了しない: {events:?}");
     assert!(rig.shutdown());
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert_eq!(calls.len(), 2, "{calls:?}");
-    let second = ids(&calls[1]);
+    let second = kinds(&calls[1]);
     assert!(
         second.iter().any(|c| c == "GET OnGhostChanged"),
         "{second:?}"
@@ -177,11 +181,11 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
     let mut rig = running_a(vec![("A", a), (DEFAULT_GHOST_FOLDER, default)]);
 
     let (flow, events) = capture(|| {
-        switch_to_a(&mut rig, Some(("OnUpdateComplete", update_refs())), |rig| {
-            rig.exit_requested()
-                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
-                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
-        })
+        switch_to_a(
+            &mut rig,
+            Some(("OnUpdateComplete", update_refs())),
+            default_rebooted,
+        )
     });
     let defaults = rig.calls(DEFAULT_GHOST_FOLDER);
     let exited = rig.exit_requested();
@@ -189,7 +193,11 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert!(!exited, "既定へ戻って続く: {events:?}");
-    assert_eq!(named(&events, "ghost_switch_target_fault"), 1, "{events:?}");
+    assert_eq!(
+        count_event(&events, "ghost_switch_target_fault"),
+        1,
+        "{events:?}"
+    );
     assert_eq!(defaults.len(), 1, "{defaults:?}");
     let on_boot = get_refs(&defaults[0], "OnBoot").expect("既定は OnBoot で起きる");
     assert_eq!(
@@ -200,7 +208,7 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
         (Some("halt"), Some("A")),
         "{on_boot:?}"
     );
-    let ids = ids(&defaults[0]);
+    let ids = kinds(&defaults[0]);
     assert!(ids.iter().all(|c| c != "GET OnUpdateComplete"), "{ids:?}");
     assert!(ids.iter().all(|c| c != "GET OnGhostChanged"), "{ids:?}");
 }

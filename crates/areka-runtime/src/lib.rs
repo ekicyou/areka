@@ -18,7 +18,7 @@ pub mod change_cue;
 pub mod consumer_ledger;
 pub mod frame;
 pub mod hit_region;
-pub mod hover_inject;
+pub(crate) mod hover_inject;
 pub mod move_cue;
 pub mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口。

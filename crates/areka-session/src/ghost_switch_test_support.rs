@@ -16,19 +16,23 @@ use std::collections::HashMap;
 use std::panic::Location;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::sync::mpsc;
+#[cfg(test)]
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{
-    BootOrigin, CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock,
-};
+use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
+#[cfg(test)]
+use areka_kanade::{ShioriBackend, ShioriUnblock};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 #[cfg(test)]
 use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use shiori_host32_host::ExitKind;
+#[cfg(test)]
+use shiori_host32_host::{HelperStatus, RequestError, ShutdownError};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::Input;
@@ -78,11 +82,13 @@ pub enum FakeShiori {
     BalloonMissing,
     /// 台本どおりに答えるが、[`Stall`] の GET に入ったところで解かれるまで止まる。解いた後は台本どおりに
     /// 答える（`hold_at` と違って失敗を返さない＝呼び出しの並びは止めない場合と同じになる）。
+    #[cfg(test)]
     ScriptedStalled(Box<dyn Fn() -> ScriptedShioriBackendBuilder>, Stall),
 }
 
 /// 偽の SHIORI を 1 つの GET の入口で止める栓（相手が進めない状態を、時間でなく固まりで作る）。
 /// 解く手 [`Stall::release`] は一度呼べば下ろさない（以後の同じ GET は止まらない）。
+#[cfg(test)]
 #[derive(Clone)]
 pub struct Stall {
     at: &'static str,
@@ -90,9 +96,10 @@ pub struct Stall {
     state: Arc<(Mutex<(bool, bool)>, Condvar)>,
 }
 
+#[cfg(test)]
 impl Stall {
     /// `id` の GET で止まる栓。
-    pub fn at(id: &'static str) -> Self {
+    pub(crate) fn at(id: &'static str) -> Self {
         Self {
             at: id,
             state: Arc::default(),
@@ -100,12 +107,12 @@ impl Stall {
     }
 
     /// 止まる GET に一度でも入ったか（後戻りしない観測）。
-    pub fn entered(&self) -> bool {
+    pub(crate) fn entered(&self) -> bool {
         self.state.0.lock().expect("stall poisoned").0
     }
 
     /// 解く（止まっている GET を通し、以後は止めない）。
-    pub fn release(&self) {
+    pub(crate) fn release(&self) {
         self.state.0.lock().expect("stall poisoned").1 = true;
         self.state.1.notify_all();
     }
@@ -125,11 +132,13 @@ impl Stall {
 }
 
 /// [`Stall`] を前に置いた台本の偽の SHIORI（止まるのは GET の入口だけ・ほかは台本へそのまま渡す）。
+#[cfg(test)]
 struct StalledBackend {
     inner: ScriptedShioriBackend,
     stall: Stall,
 }
 
+#[cfg(test)]
 impl ShioriBackend for StalledBackend {
     fn get(
         &mut self,
@@ -209,7 +218,7 @@ pub struct RigSample {
     pub root: PathBuf,
     pub ghost: PathBuf,
     pub bundled_balloon: PathBuf,
-    #[allow(dead_code)] // 読まず、捨てると木が消える寿命だけを持つ
+    /// 読まず、捨てると木が消える寿命だけを持つ。
     pub keep: Box<dyn std::any::Any>,
 }
 
@@ -240,7 +249,7 @@ impl SwitchRig {
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
     pub fn with(sample: RigSample, body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> Self {
-        // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+        // SAFETY: 引数は有効な定数で、S_FALSE（既初期化）も RPC_E_CHANGED_MODE も戻り値ごと捨てる。呼んだスレッドの COM の状態以外に触れない。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
@@ -248,7 +257,6 @@ impl SwitchRig {
         // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る）。根へは写し、A／B の複製へは
         // 持ち込まない。移す（rename）・消す（remove_dir）は
         // 写した直後の木を他のプロセスが握っていると拒まれるので使わない。
-        // 元の `ghost\emo2\balloon\` は残るが、emo2 は今のゴーストにならないので誰も読まない。
         copy_tree(&sample.bundled_balloon, &root.balloon_dir(BALLOON), None);
         let inner = sample.ghost.join("balloon");
         for folder in ["A", "B"] {
@@ -297,6 +305,7 @@ impl SwitchRig {
                             Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
                         }))
                     }
+                    #[cfg(test)]
                     Some(FakeShiori::ScriptedStalled(script, stall)) => {
                         let (backend, handle) = script().build();
                         ledger.borrow_mut().push((folder, handle));
@@ -351,19 +360,7 @@ impl SwitchRig {
 
     /// `folder` に起動記録（`[boot] count`）を先に書く（次の起動は `OnFirstBoot` を飛ばす）。
     pub fn plant_boot_record(&self, folder: &str) {
-        let dir = self
-            .root
-            .ghost_dir(folder)
-            .join("ghost")
-            .join("master")
-            .join("profile")
-            .join("areka");
-        std::fs::create_dir_all(&dir).expect("profile/areka を組む");
-        std::fs::write(
-            dir.join("sylphya.toml"),
-            "format-version = 1\n[boot]\ncount = \"1\"\n",
-        )
-        .expect("起動記録を書く");
+        self.write_boot_record(folder, "");
     }
 
     /// 起動の文脈に据える App スコープの記憶の置き場（最後に使ったゴースト・起動中の印）。
@@ -380,7 +377,8 @@ impl SwitchRig {
 
     /// 根に既定のバルーンの複製 `balloon/<folder>` を足し、その descript.txt の `name` を `name` に
     /// 書き換える（2 つ目のバルーン）。
-    pub fn add_balloon_copy(&self, folder: &str, name: &str) {
+    #[cfg(test)]
+    pub(crate) fn add_balloon_copy(&self, folder: &str, name: &str) {
         self.copy_balloon_to(&self.root.balloon_dir(folder), name);
     }
 
@@ -394,21 +392,26 @@ impl SwitchRig {
 
     /// `ghost` に起動記録とバルーンの記憶（`[last] balloon`＝フォルダ名）を書く（[`SwitchRig::plant_boot_record`]
     /// を置き換える）。
-    pub fn plant_last_balloon(&self, ghost: &str, folder: &str) {
-        self.plant_boot_record(ghost);
-        let file = self
+    #[cfg(test)]
+    pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
+        self.write_boot_record(ghost, &format!("[last]\nballoon = \"{folder}\"\n"));
+    }
+
+    /// `ghost` の `profile/areka/sylphya.toml` に起動記録と `rest` を書く。
+    fn write_boot_record(&self, ghost: &str, rest: &str) {
+        let dir = self
             .root
             .ghost_dir(ghost)
             .join("ghost")
             .join("master")
             .join("profile")
-            .join("areka")
-            .join("sylphya.toml");
+            .join("areka");
+        std::fs::create_dir_all(&dir).expect("profile/areka を組む");
         std::fs::write(
-            file,
-            format!("format-version = 1\n[boot]\ncount = \"1\"\n[last]\nballoon = \"{folder}\"\n"),
+            dir.join("sylphya.toml"),
+            format!("format-version = 1\n[boot]\ncount = \"1\"\n{rest}"),
         )
-        .expect("バルーンの記憶を書く");
+        .expect("起動記録を書く");
     }
 
     fn copy_balloon_to(&self, to: &Path, name: &str) {
@@ -534,7 +537,7 @@ impl SwitchRig {
         )
     }
 
-    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・足場の待ちの檻が短い上限で呼ぶ）。
+    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・足場の待ちの檻が偽の時計で呼ぶ）。
     #[track_caller]
     fn pump_until_with(
         &mut self,
@@ -570,7 +573,7 @@ impl SwitchRig {
         reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                 last_tick = Some(Instant::now());
-                rig.inject_talk_tick();
+                rig.inject_talk_tick(TICK_STEP_MS);
             }
             run_ghost_quit_phase(&mut rig.world);
             rig.world.run_schedule(Input);
@@ -578,7 +581,7 @@ impl SwitchRig {
         }))
     }
 
-    /// 足場の時刻の注入の唯一の口: 台詞の時計を [`TICK_STEP_MS`] 進め、置き場のゴーストの dispatcher へ
+    /// 足場の時刻の注入の唯一の口: 台詞の時計を `step_ms` 進め、置き場のゴーストの dispatcher へ
     /// `DispatcherMsg::Tick` を 1 つ送る。kanade へは送らない（足場は `TickerMode::Disabled` で
     /// 起こすので、足場の kanade は Tick を 1 つも受け取らない）。
     ///
@@ -588,8 +591,8 @@ impl SwitchRig {
     /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
     /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
     /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
-    fn inject_talk_tick(&mut self) {
-        self.talk_clock_ms += TICK_STEP_MS;
+    pub(crate) fn inject_talk_tick(&mut self, step_ms: u64) {
+        self.talk_clock_ms += step_ms;
         let now = MonotonicMs(self.talk_clock_ms);
         if let Some(dispatcher) = self
             .world
@@ -687,6 +690,34 @@ fn reported(result: Result<(), WaitFailure>) -> bool {
     }
 }
 
+/// 今のゴーストを `current` のフォルダとする起動の文脈（置き場と helper は根の直下・バルーンは
+/// `StayseeBalloon`）。
+pub fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
+    BootContext {
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        app_profile_dir: root.dir().join("profile"),
+        helper_exe: root.dir().join("helper.exe"),
+        argv_session: false,
+        current: CurrentGhost {
+            cfg: ConfigInputs {
+                ghost_root: root.ghost_dir(current),
+                balloon_root: root.balloon_dir("StayseeBalloon"),
+            },
+            ghost: GhostDecision {
+                route: GhostRoute::Default,
+                dir: root.ghost_dir(current),
+                folder: Some(current.to_owned()),
+            },
+            balloon: BalloonDecision {
+                route: BalloonRoute::Default,
+                dir: root.balloon_dir("StayseeBalloon"),
+                folder: Some("StayseeBalloon".to_owned()),
+            },
+        },
+    }
+}
+
 fn app_dir_of(root: &Path) -> PathBuf {
     root.join("profile")
 }
@@ -717,7 +748,7 @@ fn copy_ghost(from: &Path, to: &Path, folder: &str, skip: &Path) {
 }
 
 /// フォルダ `from` を `to` へ再帰で複製する（`skip` のフォルダは中ごと写さない）。
-fn copy_tree(from: &Path, to: &Path, skip: Option<&Path>) {
+pub fn copy_tree(from: &Path, to: &Path, skip: Option<&Path>) {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
@@ -742,12 +773,10 @@ fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
     std::fs::write(path, rewritten.join("\r\n")).expect("テキストを書き換える");
 }
 
-// 足場の待ちの檻。
 #[cfg(test)]
 #[path = "ghost_switch_rig_wait_tests.rs"]
 mod rig_wait_tests;
 
-// 時計の先行の檻。
 #[cfg(test)]
 #[path = "ghost_switch_talk_clock_tests.rs"]
 mod talk_clock_tests;

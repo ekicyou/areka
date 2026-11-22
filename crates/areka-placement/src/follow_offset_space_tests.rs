@@ -185,19 +185,17 @@ fn supply_identity_ratio_passes_raw_through_in_canonical_form() {
     }
 }
 
-/// 供給側の恒等の**唯一の例外**＝`i32::MIN`（正の側に対応する値が i32 に無い）。
+/// 供給側の恒等比は `i32` の全域で素通しし、飽和を報告しない。
 ///
-/// 大きさ `2_147_483_648` は `i32` へ収まらないため `±i32::MAX` へ飽和し、飽和した事実を
-/// 値として返す（回り込まない）。`i32::MIN` は窓寸の未確定センチネル
-/// （`CW_USEDEFAULT`）と同じビット列であり、正当なオフセットとしては供給されない。
-/// ここで固定するのは「恒等でも黙って回り込まない」ことである。
+/// `i32::MIN` の大きさ `2_147_483_648` は `i32` へ収まらないが、符号を戻した答えは
+/// 収まるので飽和ではない（値と飽和の判定が同じ答えを見る）。
 #[test]
-fn supply_identity_saturates_only_at_i32_min() {
-    let (x, y) = scale_author_offset((i32::MIN, 0), ScaleRatio::ONE);
-    assert_eq!(x.value, -i32::MAX);
-    assert!(x.saturated);
-    assert_eq!(y.value, 0);
-    assert!(!y.saturated);
+fn supply_identity_passes_through_the_whole_range() {
+    for v in [i32::MIN, i32::MIN + 1, i32::MAX] {
+        let (x, y) = scale_author_offset((v, 0), ScaleRatio::ONE);
+        assert_eq!((x.value, y.value), (v, 0), "v={v}");
+        assert!(!x.saturated && !y.saturated, "v={v}");
+    }
 }
 
 // -------------------------------------------------------------------------
