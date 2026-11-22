@@ -5,24 +5,17 @@
 //! （Ref1 の実物は `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。
 //! 目録は一時フォルダに実物の `descript.txt` を置いて読む。判定は集めてから 1 回。
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
-use areka_emo_present::EmoPresenter;
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::BasewareRoot;
 use areka_kanade::{GapRaise, KanadeMsg, ShioriMethod};
 use areka_seriko::{
-    AnimationTable, BindResolver, MockSurfaceOutput, SerikoLoopConfig, SerikoSink, SurfaceResolver,
-    spawn_seriko,
+    BindResolver, MockSurfaceOutput, SerikoLoopConfig, SerikoSink, SurfaceResolver, spawn_seriko,
 };
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -32,10 +25,12 @@ use tracing::Level;
 use wintf::ecs::Input;
 
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
-use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::frame::shared_test_support::wiring;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
-use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::skin_switch::{
+    SkinRequestRaw, SkinSwitchInFlight, SkinSwitchStage, skin_ref_name, skin_ref_path,
+};
 use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
@@ -53,7 +48,7 @@ struct Rig {
     _temp: TempPath,
 }
 
-fn write_descript(dir: &Path, body: &str) {
+pub(super) fn write_descript(dir: &Path, body: &str) {
     fs::create_dir_all(dir).unwrap();
     fs::write(
         dir.join("descript.txt"),
@@ -72,36 +67,6 @@ fn test_seriko_sink() -> SerikoSink {
         MockSurfaceOutput::new(),
     )
     .0
-}
-
-/// 窓も GPU も持たない結線（入口は有無だけを見る）。
-fn headless_wiring() -> RuntimeWiring {
-    RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        BootAssets {
-            shells: Vec::new(),
-            balloons: Vec::new(),
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
-            bind_resolver: BindResolver::empty(),
-            loop_tables: LoopTables {
-                shell: AnimationTable::empty(),
-                balloon: BTreeMap::new(),
-            },
-            shell_author_dpi: 96,
-            balloon_author_dpi: 96,
-            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
-        },
-    )
 }
 
 /// 置き場のゴースト（kanade の送出端と seriko の送り手を持つかを選ぶ）。
@@ -129,6 +94,7 @@ fn rig(label: &str) -> Rig {
 
     let mut world = World::new();
     world.init_resource::<Schedules>();
+    world.insert_resource(crate::BODY_SYSTEMS);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
         roots_origin: areka_session::roots::RootsOrigin::EnvVar,
@@ -154,7 +120,7 @@ fn rig(label: &str) -> Rig {
     });
     let (tx, kanade) = mpsc::channel();
     world.insert_non_send(session(&root, Some(tx), true));
-    world.insert_non_send(headless_wiring());
+    world.insert_non_send(wiring().1);
     Rig {
         world,
         kanade,
@@ -192,7 +158,7 @@ fn sent(rx: &Receiver<KanadeMsg>) -> Vec<Option<Option<GapRaise>>> {
         .collect()
 }
 
-fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
+pub(super) fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event) && e.level == level)
@@ -203,7 +169,7 @@ fn level_count(events: &[CapturedEvent], level: Level) -> usize {
     events.iter().filter(|e| e.level == level).count()
 }
 
-fn absolute(path: &Path) -> String {
+pub(super) fn absolute(path: &Path) -> String {
     std::path::absolute(path)
         .expect("絶対パスにする")
         .display()
@@ -285,7 +251,6 @@ fn refuse(rig: &mut Rig, request: SkinRequest, event: &str) -> (SkinVerdict, usi
 #[test]
 fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     let mut rig = rig("areka-skin-entry-refusals");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     plant_marker(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     insert_running_desk_for_test(&mut rig.world);
@@ -300,7 +265,7 @@ fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     got.push(refuse(&mut rig, unknown(), "skin_switch_updating"));
     rig.world.remove_non_send::<UpdateDesk>();
     got.push(refuse(&mut rig, unknown(), "skin_switch_no_context"));
-    rig.world.insert_non_send(headless_wiring());
+    rig.world.insert_non_send(wiring().1);
     got.push(refuse(&mut rig, unknown(), "skin_switch_unknown"));
     let marker_before_accept = marker_folder(&rig.world);
     let accepted = request_skin_switch(&mut rig.world, req(SkinKind::Shell, name("夏服"), PLAIN));
@@ -404,7 +369,6 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
     let mut want = Vec::new();
     for (request, marked, to) in cases {
         let mut rig = rig("areka-skin-entry-accept");
-        rig.world.insert_resource(crate::BODY_SYSTEMS);
         let summer = rig.root.ghost_dir("A").join("shell").join("summer");
         let raise = marked.then(|| changing("夏服", "", &summer));
         let kind = request.kind;
@@ -430,7 +394,8 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
 }
 
 /// バルーンの切替の候補は今のゴーストの中も引く。同じ `name` はゴーストの中が当たり、印の切替先は
-/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる。
+/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる。フォルダ名は大文字小文字を
+/// 区別しない（`INNER` で `inner` に当たる）。
 #[test]
 fn balloon_switch_targets_the_ghost_inner_balloon() {
     let cases = [
@@ -460,7 +425,6 @@ fn balloon_switch_targets_the_ghost_inner_balloon() {
 #[test]
 fn send_failure_leaves_one_error_and_no_marker() {
     let mut rig = rig("areka-skin-entry-send-failed");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     let (_, dead) = mpsc::channel();
     drop(std::mem::replace(&mut rig.kanade, dead));
     let (verdict, events) =

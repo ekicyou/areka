@@ -19,7 +19,7 @@ use areka_placement::spawn::spawn_ghost_windows;
 /// 1 スコープぶんの合成配置（値は互いに重ならない程度に散らしただけで、意味を持たない）。
 ///
 /// この相は窓を動かさないので、位置も寸法も判定に一切関与しない。
-pub(super) fn placement(scope: usize) -> ScopePlacement {
+pub(crate) fn placement(scope: usize) -> ScopePlacement {
     let base = 100 * (scope as i32 + 1);
     ScopePlacement {
         scope,
@@ -52,7 +52,7 @@ pub(in crate::frame) fn world_with_scopes(scopes: &[usize]) -> World {
 ///
 /// `spawn_ghost_windows` は正本ごと差し替えるので、`scopes` は**その時点で在る窓の全体**
 /// である。後から 1 スコープ増やす検証は「前の一覧＋新しいスコープ」を渡して呼ぶ。
-pub(super) fn spawn_scopes(world: &mut World, scopes: &[usize]) {
+pub(crate) fn spawn_scopes(world: &mut World, scopes: &[usize]) {
     let placements: Vec<ScopePlacement> = scopes.iter().map(|s| placement(*s)).collect();
     let titles = GhostTitles::from_scope_titles(
         scopes
@@ -86,7 +86,7 @@ pub(in crate::frame) fn char_of(world: &World, scope: usize) -> Entity {
 }
 
 /// `\![set,zorder,tokens...]` 相当の指令。
-pub(super) fn set_directive(tokens: &[&str]) -> ZOrderDirective {
+pub(crate) fn set_directive(tokens: &[&str]) -> ZOrderDirective {
     ZOrderDirective::Set {
         tokens: tokens.iter().map(|t| (*t).to_string()).collect(),
     }

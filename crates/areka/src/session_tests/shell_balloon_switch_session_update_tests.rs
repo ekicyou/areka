@@ -9,22 +9,25 @@
 //! 差し替えは本番の台本の命令（`\![change,shell,…]` → `OnShellChanged` の台詞の
 //! `\![change,balloon,…]`）で起こし、差し替えの後の状態は本番の後始末が作る。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
+use tracing::Level;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::shell_balloon_switch_tests::count;
 use crate::sample_test_support::switch_rig;
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_session::boot_config::BootContext;
-use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
-    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
+    LapRig, SECOND, UNBOUNDED, calls_a, current_shell, got, idle, kinds, lap_rig_on,
 };
 use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use areka_session::ghost_switch_test_support::{
+    BALLOON, FakeShiori, SwitchRig, copy_tree, standard_script,
+};
 
 /// 2 つ目のバルーン（検体 `StayseeBalloon` の複製・フォルダ名）。
 const STAYSEE: &str = "StayseeBalloon";
@@ -47,30 +50,21 @@ fn script() -> ScriptedShioriBackendBuilder {
 /// 検体 `StayseeBalloon` を根の `balloon/StayseeBalloon` へ複製する。
 fn add_staysee(rig: &SwitchRig) {
     let staysee = sample_ghost_kit::SampleRoot::acquire(STAYSEE).expect("登記済みの検体");
-    copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE));
-}
-
-/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `folder`（`name` も `folder`）に
-/// 写し、それを A の `shell/<folder>` へ複製する。
-// 集めた層の `shell_balloon_switch_session_lap_tests.rs` にも同じ形がある: 検体の窓口は `test-support` に入れられない。
-fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
-    let rpost =
-        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
-    rpost
-        .add_shell_copy("master", folder, folder)
-        .expect("2 つ目のシェルを写す");
-    copy_tree(
-        &rpost.folder().join("shell").join(folder),
-        &ghost_dir.join("shell").join(folder),
-    );
+    copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE), None);
 }
 
 /// 土台を組み、A が定常に着くのを待つ（差し替えはまだ始まっていない）。
 fn steady_rig() -> (LapRig, bool) {
+    // 検体の窓口は `test-support` に入れられないので、写す元のシェルは呼び手が作る。
+    let rpost =
+        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    rpost
+        .add_shell_copy("master", SECOND, SECOND)
+        .expect("2 つ目のシェルを写す");
     let lap = lap_rig_on(
         switch_rig(vec![("A", FakeShiori::Scripted(Box::new(script)))]),
+        &rpost.folder().join("shell"),
         &[SECOND],
-        add_rpost_shell,
     );
     add_staysee(&lap.rig);
     let steady = lap.rig.wait_steady();
@@ -109,24 +103,12 @@ fn expected(rig: &SwitchRig, shell: &str, balloon: &str) -> Vec<(TargetKind, Pat
 
 /// 置き場のゴーストの今のシェルのフォルダ名と、起動の文脈の今のバルーン（選び方・フォルダ名）。
 fn current(rig: &SwitchRig) -> (Option<String>, Option<(String, Option<String>)>) {
-    let shell = rig
-        .world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.current_shell_folder());
     let balloon = rig
         .world
         .get_resource::<BootContext>()
         .map(|ctx| &ctx.current.balloon)
         .map(|b| (format!("{:?}", b.route), b.folder.clone()));
-    (shell, balloon)
-}
-
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
+    (current_shell(rig), balloon)
 }
 
 /// 差し替えの後の対象の解決（`resolve_targets_reads_the_slot_and_the_boot_context` の
@@ -144,7 +126,7 @@ fn update_targets_follow_the_swapped_shell_and_balloon() {
     let before = targets(&lap.rig);
     let (swapped, events) = capture(|| swap_both(&mut lap));
     let ((after, now), skipped) = capture(|| (targets(&lap.rig), current(&lap.rig)));
-    let calls = kinds(&lap.rig.calls("A").into_iter().next().unwrap_or_default());
+    let calls = kinds(&calls_a(&lap.rig));
     let expect_before = expected(&lap.rig, "master", BALLOON);
     let expect_after = expected(&lap.rig, SECOND, STAYSEE);
     let shutdown_ok = lap.rig.shutdown();
@@ -153,10 +135,10 @@ fn update_targets_follow_the_swapped_shell_and_balloon() {
         (
             (steady, swapped),
             calls,
-            count(&events, "skin_switch_done"),
+            count(&events, "skin_switch_done", Level::INFO),
             (before, after),
             now,
-            count(&skipped, "update_target_skipped"),
+            count(&skipped, "update_target_skipped", Level::WARN),
             shutdown_ok,
         ),
         (
@@ -192,8 +174,8 @@ fn reloaded(rig: &SwitchRig) -> bool {
         .is_some_and(|calls| kinds(calls).iter().any(|c| c == "GET OnUpdateResult"))
 }
 
-/// 差し替えの後の読み直し（`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_
-/// sends_the_rest_after_the_switch` の兄弟）: シェルを `second`・バルーンを `StayseeBalloon` へ差し替えた
+/// 差し替えの後の読み直し（`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_after_the_switch` の兄弟）:
+/// シェルを `second`・バルーンを `StayseeBalloon` へ差し替えた
 /// 後、更新の窓口の読み直し（同じフォルダ・知らせなしのゴースト切替）で A を起こし直すと、記憶
 /// （`LastShell`・`LastBalloon`）から同じシェル・バルーンで起きる: 実行系のマウントが `second`・
 /// 起動の文脈のバルーンが記憶の選び方で `StayseeBalloon`・更新の対象の解決も同じ 2 つを指す。記憶の先が
@@ -240,11 +222,14 @@ fn a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon() {
     assert_eq!(
         (
             (steady, swapped, finished),
-            (count(&events, "update_reload_requested"), boots.len()),
+            (
+                count(&events, "update_reload_requested", Level::INFO),
+                boots.len()
+            ),
             boots.get(1).cloned(),
             now,
             after,
-            count(&events, "boot_shell_missing"),
+            count(&events, "boot_shell_missing", Level::WARN),
             (exit_requested, shutdown_ok),
         ),
         (

@@ -19,9 +19,9 @@
 // - 全消去に連動する全非表示と、その直後の再出現
 //   → `descent_to_zero_hides_every_visible_scope`／`descent_to_zero_on_an_invisible_scope_is_silent`／
 //     `content_after_a_hide_shows_again_by_the_same_rule`
-// - 同一の観測列が同一の遷移列を返すこと → `identical_observation_sequences_yield_identical_decisions`
+// - 観測の与え順に依らず並びが scope 昇順であること → `output_order_is_scope_ascending_regardless_of_input_order`
 //
-// 本表が新たに押さえるのは次の 4 点である:
+// 本表が新たに押さえるのは次の 5 点である:
 //
 // ⑴ 明示指令との相互作用のうち**判断中核が表現できる側**——外因の可視性変化は、観測の
 //    `visible` が本制御の記憶と食い違うフレームとしてしか現れない。`\b[-1]` で消えたあとの
@@ -35,6 +35,8 @@
 // ⑶ 同一フレームに全消去と表示が同居したときの並び——行動は「全消去の非表示 → 表示」、
 //    ログは scope 昇順であり、両者は別の規約である（`decide` の並びの定義）。
 // ⑷ 内容を一度も置いていない可視 scope を全消去の対象に含めないこと（他 scope の全消去へ連動させない）。
+// ⑸ 隠れた scope の文字の数が全消去をはさんで同じでも、消去の回数が進んでいれば消去の後の文字として
+//    数えて表示すること（`a_clear_between_frames_shows_the_same_glyph_count_again`・表の外の 1 本）。
 // =============================================================================
 
 use super::test_support::*;
@@ -71,35 +73,20 @@ fn expand(expect: &[Expected]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent
     let actions = expect
         .iter()
         .map(|&entry| match entry {
-            Expected::Shown(scope) => VisibilityAction::Show { scope },
-            Expected::Cleared(scopes) => VisibilityAction::HideScopes {
-                scopes: scopes.to_vec(),
-                trigger: VisibilityTrigger::Clear,
-            },
+            Expected::Shown(scope) => show(scope),
+            Expected::Cleared(scopes) => hide(scopes, VisibilityTrigger::Clear),
         })
         .collect();
 
     let mut logs: Vec<(u32, VisibilityLogEvent)> = Vec::new();
     for &entry in expect {
         match entry {
-            Expected::Shown(scope) => logs.push((
-                scope,
-                VisibilityLogEvent::Transition {
-                    scope,
-                    trigger: VisibilityTrigger::Content,
-                    visible: true,
-                },
-            )),
-            Expected::Cleared(scopes) => logs.extend(scopes.iter().map(|&scope| {
-                (
-                    scope,
-                    VisibilityLogEvent::Transition {
-                        scope,
-                        trigger: VisibilityTrigger::Clear,
-                        visible: false,
-                    },
-                )
-            })),
+            Expected::Shown(scope) => logs.push((scope, shown_log(scope))),
+            Expected::Cleared(scopes) => logs.extend(
+                scopes
+                    .iter()
+                    .map(|&scope| (scope, hidden_log(scope, VisibilityTrigger::Clear))),
+            ),
         }
     }
     logs.sort_by_key(|&(scope, _)| scope);
@@ -352,4 +339,38 @@ fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
         2,
         "表示が起きるフレームへ「何も起きない」を期待させたのに食い違いが積まれない: {failures:?}"
     );
+}
+
+/// 隠れた scope に文字が残ったまま、次の台詞の全消去と同じ数の文字が同じフレームに届くと、文字の
+/// 数は変わらない。消去の回数が進んでいれば消去の後の文字として数え、表示する。
+#[test]
+fn a_clear_between_frames_shows_the_same_glyph_count_again() {
+    let after = |clear_count| ScopeObservation {
+        visible_glyphs: Some(GlyphObservation {
+            count: 3,
+            clear_count,
+        }),
+        ..seen(3, false)
+    };
+    let hidden_with_glyphs = || {
+        let mut state = BalloonVisibilityState::default();
+        assert_eq!(
+            step(&mut state, &[(0, seen(3, false))]).actions,
+            vec![show(0)]
+        );
+        step(&mut state, &[(0, seen(3, false))]);
+        assert!(!state.per_scope[&0].prev_visible, "前提: 外から隠れている");
+        state
+    };
+
+    let mut state = hidden_with_glyphs();
+    let d = step(&mut state, &[(0, after(1))]);
+    assert_eq!(d.actions, vec![show(0)]);
+    assert_eq!(d.logs, vec![shown_log(0)]);
+
+    // 対照: 消去の回数が変わらなければ、同じ数の文字は増加ではない。
+    let mut state = hidden_with_glyphs();
+    let d = step(&mut state, &[(0, after(0))]);
+    assert!(d.actions.is_empty(), "増えていない文字で表示した");
+    assert!(d.logs.is_empty());
 }

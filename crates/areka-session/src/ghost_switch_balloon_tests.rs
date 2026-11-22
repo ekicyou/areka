@@ -6,8 +6,8 @@
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, read_last_balloon};
@@ -23,19 +23,13 @@ fn running_a() -> SwitchRig {
     let b = FakeShiori::Scripted(Box::new(|| {
         standard_script(r"\0B\e").get("OnGhostChanged", Ok(Some(r"\0B\e".to_owned())))
     }));
-    let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
-    // 切替先を起こすときの窓の準備が閉包を投函する先。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
-    rig.plant_boot_record("B");
+    let rig = super::boot_event_tests::running_a(vec![("A", a), ("B", b)]);
     rig.add_balloon_copy(SECOND, SECOND_NAME);
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("B")),
         None,
         "切替先 B に記憶のバルーンが無い"
     );
-    rig.boot("A");
-    assert!(rig.wait_steady(), "A が定常に着く");
     rig
 }
 
@@ -105,15 +99,7 @@ fn assert_one_record(events: &[CapturedEvent], rig: &SwitchRig, route: &str) {
 #[test]
 fn switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_descript_route() {
     let rig = running_a();
-    let descript = rig
-        .root
-        .ghost_dir("B")
-        .join("ghost")
-        .join("master")
-        .join("descript.txt");
-    let text = std::fs::read_to_string(&descript).expect("B の descript.txt");
-    std::fs::write(&descript, format!("{text}\r\nballoon,{SECOND_NAME}\r\n"))
-        .expect("B の descript.txt に balloon を足す");
+    name_balloon_in_b(&rig, SECOND_NAME);
 
     let (balloon, events, rig) = switch_to_b(rig);
 
@@ -176,13 +162,6 @@ fn name_balloon_in_b(rig: &SwitchRig, name: &str) {
         .expect("B の descript.txt に balloon を足す");
 }
 
-fn count(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
-}
-
 /// 切替先 B の中のバルーンを descript が指すと、それに決まり、記憶にはフォルダ名だけが書かれ、
 /// 次の切替の決め方（`resolve_balloon_for_ghost`）は記憶の段から同じ場所を出す。
 ///
@@ -233,19 +212,18 @@ fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
     assert_ne!(balloon.route, BalloonRoute::Descript, "{events:?}");
     assert!(!balloon.dir.starts_with(&a_dir), "{balloon:?}");
     assert_eq!(
-        count(&events, "descript_balloon_not_found"),
+        count_event(&events, "descript_balloon_not_found"),
         1,
         "{events:?}"
     );
 }
 
-/// ゴーストの中のバルーンを持たない旧い形の記憶（`[last] balloon = "<フォルダ名>"`）がそのまま読め、ゴーストの中のバルーンに
-/// 記憶の段で当たる。
+/// フォルダ名だけの記憶（`[last] balloon = "<フォルダ名>"`）が、記憶の段でゴーストの中のバルーンに当たる。
 ///
 /// # 非空虚性
 /// 記憶の段の候補にゴーストの中が入らないと記憶が当たらず `last_balloon_not_found` で赤。
 #[test]
-fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
+fn a_folder_name_only_memory_finds_the_ghost_inner_balloon() {
     let rig = running_a();
     let inner = rig.add_ghost_balloon_copy("B", B_INNER, B_INNER_NAME);
     rig.plant_last_balloon("B", B_INNER);
@@ -257,7 +235,11 @@ fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
         (BalloonRoute::Memory, Some(B_INNER), &inner),
         "{events:?}"
     );
-    assert_eq!(count(&events, "last_balloon_not_found"), 0, "{events:?}");
+    assert_eq!(
+        count_event(&events, "last_balloon_not_found"),
+        0,
+        "{events:?}"
+    );
 }
 
 /// 記憶のバルーンがゴーストの中から消えたら `last_balloon_not_found` を 1 件残して次の段

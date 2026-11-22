@@ -1,9 +1,7 @@
 // `\![move]` の移動先の計算の決定論テスト。
 
 use super::*;
-use crate::move_cue::{
-    Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY, parse_move_directive,
-};
+use crate::move_cue::{MoveBase, parse_move_directive};
 use wintf::ecs::SizeI;
 
 const K1: ScaleRatio = ScaleRatio::ONE;
@@ -265,6 +263,36 @@ fn area_base_substitution_is_per_axis() {
     );
 }
 
+/// 置き換えた参照点を読まない `Fix` の軸は記録しない（位置は置き換えの有無で変わらない）。
+#[test]
+fn substitution_on_fixed_axis_is_not_recorded() {
+    let target = rect(1440, 852, 2112, 1652);
+    let base_base = RefPoint {
+        x: RefX::Base,
+        y: RefY::Base,
+    };
+    let area = BaseFrame::Area(rect(0, 0, 2880, 1704));
+    let d = directive(
+        AxisSpec::Px(0),
+        AxisSpec::Fix,
+        base_base,
+        RefPoint::LEFT_TOP,
+    );
+    let got = compute_move_target(&area, target, pt(336, 800), &d, K1);
+    assert_eq!(got.position, pt(1440, 852));
+    assert_eq!(
+        got.notes,
+        vec![FrameNote::AreaBaseToCenter { axis: Axis::X }]
+    );
+
+    let d = directive(AxisSpec::Fix, AxisSpec::Fix, base_base, RefPoint::LEFT_TOP);
+    for frame in [area, BaseFrame::Origin] {
+        let got = compute_move_target(&frame, target, pt(336, 800), &d, K1);
+        assert_eq!(got.position, pt(1440, 852), "{frame:?}");
+        assert!(got.notes.is_empty(), "{frame:?}: {:?}", got.notes);
+    }
+}
+
 /// 原点の基準の参照点が `left.top` 以外なら原点そのもの・記録 1 件。
 /// `left.top` なら記録しない。動かす窓の参照点は効く。
 #[test]
@@ -309,20 +337,16 @@ const WORK: RectPx = RectPx {
     bottom: 1704,
 };
 
-fn canon(r: RectPx) -> PointPx {
-    CanonDefaultBasepos.basepos(SizeI::new(r.right - r.left, r.bottom - r.top))
-}
-
 /// 実測の机で基準の枠を選ぶ（適用の側が World から選ぶものの代わり）。
 fn ssp_frame(base: &MoveBase, before: RectPx) -> BaseFrame {
     match base {
         MoveBase::Scope(0) => BaseFrame::Window {
             rect: SCOPE0,
-            basepos: canon(SCOPE0),
+            basepos: canon_basepos(SCOPE0),
         },
         MoveBase::Me => BaseFrame::Window {
             rect: before,
-            basepos: canon(before),
+            basepos: canon_basepos(before),
         },
         MoveBase::Screen | MoveBase::PrimaryScreen => BaseFrame::Area(WORK),
         MoveBase::Global => BaseFrame::Origin,
@@ -340,7 +364,6 @@ type SspRow = (
 
 #[test]
 fn ssp_measurement_table_positions_match() {
-    // (番号, 台本の引数, 前の `\1` の矩形, 後の左上)。`\1` は 672×800。
     let rows: &[SspRow] = &[
         (
             "M1-c",
@@ -472,7 +495,7 @@ fn ssp_measurement_table_positions_match() {
         let d = parse(args);
         let before = rect(bx, by, bx + 672, by + 800);
         let frame = ssp_frame(&d.base, before);
-        let got = compute_move_target(&frame, before, canon(before), &d, K1);
+        let got = compute_move_target(&frame, before, canon_basepos(before), &d, K1);
         assert_eq!(got.position, pt(ax, ay), "{id}");
     }
 }
@@ -496,9 +519,9 @@ fn emo2_adjust_aligns_bottom_right_to_bottom_left() {
     for k in [K1, k2()] {
         let frame = BaseFrame::Window {
             rect: frame_rect,
-            basepos: canon(frame_rect),
+            basepos: canon_basepos(frame_rect),
         };
-        let got = compute_move_target(&frame, target, canon(target), &d, k);
+        let got = compute_move_target(&frame, target, canon_basepos(target), &d, k);
         assert_eq!(got.position, pt(x0 - w1, y0 + h0 - h1), "k={k:?}");
         assert!(got.notes.is_empty());
     }
@@ -543,9 +566,9 @@ fn legacy_emo2_lands_where_it_did_before() {
     for (base, target, k, want) in rows {
         let frame = BaseFrame::Window {
             rect: base,
-            basepos: canon(base),
+            basepos: canon_basepos(base),
         };
-        let got = compute_move_target(&frame, target, canon(target), &d, k);
+        let got = compute_move_target(&frame, target, canon_basepos(target), &d, k);
         assert_eq!(got.position, want, "k={k:?}");
         assert!(got.notes.is_empty());
     }
@@ -560,11 +583,11 @@ fn legacy_base_base_scales_both_axes_with_sign() {
     let target = rect(1200, 800, 1500, 1234);
     let frame = BaseFrame::Window {
         rect: base,
-        basepos: canon(base),
+        basepos: canon_basepos(base),
     };
     // x' = 1000 + 200 + 200 − 150 = 1250・y' = 500 + 687 + 100 − 434 = 853
     assert_eq!(
-        compute_move_target(&frame, target, canon(target), &d, k2()).position,
+        compute_move_target(&frame, target, canon_basepos(target), &d, k2()).position,
         pt(1250, 853)
     );
 }
@@ -602,7 +625,7 @@ fn odd_sizes_and_negative_coords_round_down() {
     let win_rect = rect(-435, -100, 0, 0);
     let frame = BaseFrame::Window {
         rect: win_rect,
-        basepos: canon(win_rect),
+        basepos: canon_basepos(win_rect),
     };
     let d = directive(
         AxisSpec::Px(0),
@@ -636,5 +659,5 @@ fn extreme_values_saturate_without_panic() {
         &d,
         k2(),
     );
-    assert_eq!(got.position.x, i32::MAX);
+    assert_eq!(got.position, pt(i32::MAX, 0));
 }

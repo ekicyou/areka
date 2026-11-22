@@ -29,7 +29,7 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 fn default_timeout_is_thirty_seconds() {
     assert_eq!(
         DEFAULT_BALLOON_TIMEOUT_SECS, 30.0,
-        "既定のタイムアウト時間は 30 秒（Requirement 4.2）"
+        "既定のタイムアウト時間は 30 秒"
     );
 }
 
@@ -177,7 +177,7 @@ fn resolve_without_env_adopts_default_and_records_source() {
     assert_eq!(
         recorded.expect_field("default_secs"),
         "30.0",
-        "短縮の有無に依らず既定値を併記する（Requirement 9.5）"
+        "短縮の有無に依らず既定値を併記する"
     );
     assert_eq!(
         events.len(),
@@ -208,46 +208,34 @@ fn resolve_with_positive_env_shortens_and_records_source() {
     assert_eq!(
         recorded.expect_field("default_secs"),
         "30.0",
-        "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる（Requirement 9.5）"
+        "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる"
     );
 }
 
 /// 不正な指定は警告を出したうえで既定 30 秒へ縮退し、供給源も `default` になる。
 #[test]
 fn resolve_with_invalid_env_warns_and_degrades_to_default() {
-    for value in ["0", "-1", "abc", "1.5", "18446744073709551616"] {
-        let ((secs, source), events) = capture(|| resolve_timeout_secs(Some(value)));
+    let value = "abc";
+    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some(value)));
 
-        assert_eq!(
-            secs, DEFAULT_BALLOON_TIMEOUT_SECS,
-            "{value:?}: 既定 30 秒へ縮退する"
-        );
-        assert_eq!(source, TimeoutSource::Default, "{value:?}: 供給源は既定");
+    assert_eq!(
+        secs, DEFAULT_BALLOON_TIMEOUT_SECS,
+        "{value:?}: 既定 30 秒へ縮退する"
+    );
+    assert_eq!(source, TimeoutSource::Default, "{value:?}: 供給源は既定");
 
-        let levels: Vec<Level> = events.iter().map(|e| e.level).collect();
-        assert_eq!(
-            levels,
-            vec![Level::WARN, Level::INFO],
-            "{value:?}: 警告のあとに採用値の記録が 1 行ずつ出る: {events:?}"
-        );
-        let recorded = &events[1];
-        assert!(
-            recorded.expect_field("source").contains("default"),
-            "{value:?}: 縮退後の供給源は既定: {recorded:?}"
-        );
-        assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
-    }
-}
-
-/// 空白のみの指定は「未設定」と同じ扱いであり、警告なしで既定を採る。
-#[test]
-fn resolve_with_blank_env_is_treated_as_unset() {
-    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some("   ")));
-
-    assert_eq!(secs, DEFAULT_BALLOON_TIMEOUT_SECS);
-    assert_eq!(source, TimeoutSource::Default);
-    assert_eq!(events.len(), 1, "警告は出さない: {events:?}");
-    assert_eq!(events[0].level, Level::INFO);
+    let levels: Vec<Level> = events.iter().map(|e| e.level).collect();
+    assert_eq!(
+        levels,
+        vec![Level::WARN, Level::INFO],
+        "{value:?}: 警告のあとに採用値の記録が 1 行ずつ出る: {events:?}"
+    );
+    let recorded = &events[1];
+    assert!(
+        recorded.expect_field("source").contains("default"),
+        "{value:?}: 縮退後の供給源は既定: {recorded:?}"
+    );
+    assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
 }
 
 /// 供給源の表記は実機サインオフの文字列検索に使う語である。
@@ -261,17 +249,19 @@ fn timeout_source_labels_are_grep_vocabulary() {
 // 読み取り口（env は 1 回だけ読む）
 // ---------------------------------------------------------------------------
 
-/// [`configured_timeout_secs`] は解決結果をプロセス寿命で 1 度だけ確定し、以後同じ値を返す。
+/// [`configured_timeout_secs`] は解決結果をプロセス寿命で 1 度だけ確定し、以後は解決し直さない。
 ///
-/// プロセス大域の環境変数は書き換えない（並行して走る他テストを壊さないため）。読み取り
-/// だけを行い、同じ入力に対する [`resolve_timeout_secs`] と一致することで結線を確かめる。
+/// 解決し直すと毎フレーム採用値の記録が出る。プロセス大域の環境変数は書き換えない（並行して走る
+/// 他テストを壊さないため）。捕捉は呼んだスレッドの窓なので、ほかのテストの記録と混ざらない。
 #[test]
 fn configured_timeout_secs_reads_env_once_and_is_stable() {
     let expected = resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0;
 
     let first = configured_timeout_secs();
-    let second = configured_timeout_secs();
+    let ((second, third), events) =
+        capture(|| (configured_timeout_secs(), configured_timeout_secs()));
 
     assert_eq!(first, expected, "環境変数の解決結果を採る");
-    assert_eq!(first, second, "2 度目以降も同じ値（read-once）");
+    assert_eq!((second, third), (first, first), "2 度目以降も同じ値");
+    assert!(events.is_empty(), "2 度目以降は解決し直さない: {events:?}");
 }

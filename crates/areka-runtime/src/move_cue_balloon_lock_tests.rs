@@ -64,12 +64,17 @@ fn extra_args_are_accepted_unread() {
     );
 }
 
-/// 実行者が数でない lock は捨てる（`actor_scope` の扱い）。
+/// 実行者が数でない lock は `warn!` 1 件で捨てる（`actor_scope` の扱い）。
 #[test]
 fn non_numeric_actor_sends_nothing() {
-    assert_eq!(
-        emit_one(actor_carrier_cue("x", "lock", &["balloonmove"])),
-        vec![],
-        "数でない実行者の lock は送らない"
-    );
+    let (sent, events) =
+        log_capture_kit::capture(|| emit_one(actor_carrier_cue("x", "lock", &["balloonmove"])));
+    assert_eq!(sent, vec![], "数でない実行者の lock は送らない");
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert_eq!(warns[0].field_str("event"), Some("move_cue_bad_actor"));
+    assert_eq!(warns[0].field_str("tag"), Some("lock,balloonmove"));
 }

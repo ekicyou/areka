@@ -126,11 +126,11 @@ pub(crate) fn classify_limit_vocab(limit_raw: Option<&str>) -> LimitVocab {
 ///
 /// `i32::MIN` は [`i32::unsigned_abs`] で絶対値を取るためパニックしない。`scale_len` は
 /// `u32::MAX` へ飽和するのみゆえ、物理 px 通貨（i32）への収め直しは本層の責務であり
-/// `±i32::MAX` へ飽和させる（ラップアラウンドしない）。
+/// 収まらないときだけ `±i32::MAX` へ飽和させる（ラップアラウンドしない）。
 pub fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
-    let scaled = k.scale_len(v.unsigned_abs());
-    let magnitude = i32::try_from(scaled).unwrap_or(i32::MAX);
-    if v < 0 { -magnitude } else { magnitude }
+    let magnitude = i64::from(k.scale_len(v.unsigned_abs()));
+    let signed = if v < 0 { -magnitude } else { magnitude };
+    i32::try_from(signed).unwrap_or(if v < 0 { -i32::MAX } else { i32::MAX })
 }
 
 /// windowposition 生値（作者空間・model 由来）→ 画面座標の調整量（物理 px）。
@@ -311,7 +311,8 @@ mod tests {
     }
 
     /// i32 域の飽和（`scale_len` は u32::MAX へ飽和するのみゆえ i32 検査は本層の責務）。
-    /// 負側も `-i32::MAX` へ飽和し、`i32::MIN` の絶対値取得でパニックしない。
+    /// 収まらない負側は `-i32::MAX` へ飽和し、`i32::MIN` の絶対値取得でパニックしない。
+    /// 恒等比は全域で素通しする。
     #[test]
     fn to_screen_adjust_saturates_into_i32_without_panic() {
         let double = k(192, 96);
@@ -325,12 +326,18 @@ mod tests {
         );
         assert_eq!(
             to_screen_adjust(Some(i32::MIN), Some(i32::MIN), k(1, 1)),
-            Some((-i32::MAX, -i32::MAX))
+            Some((i32::MIN, i32::MIN))
         );
         assert_eq!(
             to_screen_adjust(Some(i32::MAX), Some(i32::MIN), k(1, 1)),
-            Some((i32::MAX, -i32::MAX))
+            Some((i32::MAX, i32::MIN))
         );
+    }
+
+    /// 恒等比は `i32::MIN` も素通しにする（収まる答えは飽和させない）。
+    #[test]
+    fn scale_signed_identity_passes_i32_min_through() {
+        assert_eq!(super::scale_signed(i32::MIN, k(1, 1)), i32::MIN);
     }
 
     /// 調整量なし＋既存 descript offset あり → 既存値をそのまま温存する。

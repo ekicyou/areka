@@ -87,7 +87,7 @@ pub enum SwapBuilt {
     Balloon { assets: BalloonAssets },
 }
 
-/// 背景の資産づくりの失敗（`BootWiringError`／`PlacementError` の写し）。
+/// 背景の資産づくり・配置の値の読み・シェルの絵の復号の失敗。
 #[derive(Debug, thiserror::Error)]
 pub enum SwitchBuildError {
     /// 資産づくり（読めない・解釈できない・復号できない）の失敗。

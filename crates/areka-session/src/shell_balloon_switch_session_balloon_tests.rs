@@ -12,13 +12,15 @@ use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
 use wintf::ecs::Arrangement;
 
-use super::GhostSlot;
+use super::shell_balloon_switch_session_lap_test_support::{
+    CREEP, calls_a, got, idle, kinds, refs_of,
+};
 use super::shell_balloon_switch_session_lap_tests::{
-    CREEP, LookLog, abs, calls_a, done_marks, got, idle, kinds, lap_rig, look_of, refs_of,
+    LookLog, abs, done_marks, fence, lap_rig, look_of,
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
-use crate::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
+use crate::ghost_switch_test_support::{BALLOON, SwitchRig, copy_tree, standard_script};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::balloon_target;
 
@@ -30,7 +32,7 @@ const BOOT_TO_STAYSEE: &str = r"\0\s[0]\1\s[10]\0A\![change,balloon,StayseeBallo
 /// 1 度目の `OnBalloonChange` の台詞: 新しいバルーンで話し、既定のバルーンへ戻る切替を命じる。
 ///
 /// 1 文字の台詞が切替の後の最初のフレームで現れることは
-/// `runtime_tests/balloon_visibility_phase_reappear_tests.rs` が決定論で確かめる。
+/// `crates/areka-runtime/src/balloon_visibility_phase_reappear_tests.rs` が決定論で確かめる。
 const CHANGE_1: &str = r"\0新しい\![change,balloon,emo2-kakukaku]\e";
 /// 2 度目の `OnBalloonChange` の台詞（戻った既定のバルーンで話す）。
 const CHANGE_2: &str = r"\0戻った\e";
@@ -38,10 +40,7 @@ const CHANGE_2: &str = r"\0戻った\e";
 /// 検体 `StayseeBalloon` を根の `balloon/StayseeBalloon` へ複製する。
 fn add_staysee(rig: &SwitchRig) {
     let staysee = SampleRoot::acquire(STAYSEE).expect("登記済みの検体");
-    super::shell_balloon_switch_session_lap_tests::copy_tree(
-        staysee.folder(),
-        &rig.root.balloon_dir(STAYSEE),
-    );
+    copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE), None);
 }
 
 /// scope 0 のバルーンの 1 フレームの見え方。
@@ -154,23 +153,19 @@ fn recorded_balloons(events: &[CapturedEvent]) -> Vec<Option<String>> {
         .collect()
 }
 
-/// 可視性の制御が「本制御が発行していない可視状態の変化」を記録した件数。
+/// 可視性の制御が自分の発行していない可視状態の変化を記録した件数（欄 `trigger=explicit`）。
+///
+/// 同じ欄で 1 件以上数える陽性の対は `areka-runtime` の `external_hide_is_logged_as_explicit_and_clears_hover`。
 fn external_transitions(events: &[CapturedEvent]) -> usize {
     events
         .iter()
-        .filter(|e| e.message().contains("本制御が発行していない可視状態の変化"))
+        .filter(|e| e.field_str("trigger") == Some("explicit"))
         .count()
 }
 
 /// 置き場のゴーストの記憶の書き手へ柵を掛けてから、A の `LastBalloon` を実 fs から読む。
 fn last_balloon(rig: &SwitchRig) -> Option<String> {
-    let fenced = rig
-        .world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.runtime())
-        .is_some_and(|runtime| runtime.sylphya_publisher().barrier().is_ok());
-    assert!(fenced, "記憶の書き手へ柵を掛けられない");
+    fence(rig);
     read_last_balloon(&rig.root.ghost_dir("A"))
 }
 

@@ -44,13 +44,12 @@ use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::shell_box_assets::ShellBoxAssets;
 use areka_runtime::shell_cursor_assets::ShellCursorAssets;
+use areka_runtime::skin_switch::{SkinSwitchInFlight, SkinSwitchStage, SwapFinish};
 use areka_runtime::switch_assets::{SwapPayload, SwapSlot};
 use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::shell_balloon_switch::{
-    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
-};
+use areka_session::shell_balloon_switch::SkinKind;
 use face_tests::new_balloon_definitions;
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::wiring::test_support::{last_drain_mut, zorder_ledger};

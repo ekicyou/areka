@@ -3,9 +3,9 @@
 //! 切替要求は台本（受け口 `switch_cue.rs` の `SwitchCueSink` → 受信端 [`SwitchRx`] → 入力の段の
 //! 取り出しの系 [`drain_switch_requests`]）とメニューの「シェル」「バルーン」枠の 2 つの出どころから、
 //! ここの [`request_skin_switch`] 1 本だけを通る。入口は kanade へ何か送る前に
-//! 進行中・ゴースト切替中・更新中・文脈・切替先を判定し、受理したら背景の資産づくりを起こして
-//! kanade へ台詞の切れ目の待ちを頼み、進行中の印 [`SkinSwitchInFlight`] を置く。
-//! 名前の解決とインストールの控えは隣の `shell_balloon_resolve.rs`。印の見極めと差し替えは
+//! 進行中・ゴースト切替中・更新中・インストール中・文脈・切替先を判定し、受理したら kanade へ台詞の
+//! 切れ目の待ちを頼み、頼めたら背景の資産づくりを起こして進行中の印 [`SkinSwitchInFlight`] を置く。
+//! 名前の解決とインストールの控えは`areka_runtime::shell_balloon_resolve`。印の見極めと差し替えは
 //! 差し替えの相（`frame/switch.rs`）が受け持つ。
 //!
 //! Reference の組み立ての規則（名前は `descript.txt` の `name`、無ければフォルダ名・パスは
@@ -32,22 +32,22 @@ use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,
 };
-use areka_runtime::switch_assets::{SwitchBuildRequest, spawn_switch_build};
-
-pub use areka_runtime::skin_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinRequestRaw, SkinSpec, SkinSwitchInFlight,
-    SkinSwitchStage, SkinVerdict, skin_ref_name, skin_ref_path,
+use areka_runtime::switch_assets::{
+    SwapBuilt, SwitchBuildError, SwitchBuildRequest, spawn_switch_build,
 };
-// 本番で引く呼び手は無い（差し替えの相は skin_switch を直に引く）・テストの道のためだけに出し直す。
-#[cfg(any(test, feature = "test-support"))]
-pub use areka_runtime::skin_switch::SwapFinish;
+
+pub use areka_runtime::skin_switch::{SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict};
+use areka_runtime::skin_switch::{
+    SkinRequestRaw, SkinSwitchInFlight, SkinSwitchStage, skin_ref_name, skin_ref_path,
+};
 
 /// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
 pub struct SwitchRx(Receiver<SkinRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_switch_drain`]）。
 ///
-/// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
+/// 呼び手は実行系の起動の後の `runtime_boot::install_lines`。前のゴーストの受信端は置き換わって
+/// 落ちる。
 pub fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
     world.insert_non_send(SwitchRx(rx));
 }
@@ -71,7 +71,16 @@ pub fn register_switch_drain(world: &mut World) {
 /// 溜まった台本の切替要求を全件取り出し、1 件ごとに入口へ「台本」の出どころで渡す（Input の系）。
 ///
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受信端の借用を切ってから入口を呼ぶ。
-pub(crate) fn drain_switch_requests(world: &mut World) {
+fn drain_switch_requests(world: &mut World) {
+    drain_switch_requests_with(world, skin_candidates, spawn_switch_build);
+}
+
+/// 取り出しの中身。候補の読み方と組み立ての起こし方を外から受ける（決定論テスト用）。
+fn drain_switch_requests_with(
+    world: &mut World,
+    mut read: impl FnMut(SkinKind, &SwitchContext) -> Vec<SkinCandidate>,
+    mut spawn: impl FnMut(SwitchBuildRequest) -> Receiver<Result<SwapBuilt, SwitchBuildError>>,
+) {
     let Some(rx) = world.get_non_send::<SwitchRx>() else {
         tracing::trace!(
             event = "skin_switch_drain_no_wiring",
@@ -80,8 +89,9 @@ pub(crate) fn drain_switch_requests(world: &mut World) {
         return;
     };
     let pending: Vec<SkinRequestRaw> = rx.0.try_iter().collect();
+    let mut catalog = [None, None];
     for raw in pending {
-        request_skin_switch(
+        request_skin_switch_with(
             world,
             SkinRequest {
                 kind: raw.kind,
@@ -90,26 +100,49 @@ pub(crate) fn drain_switch_requests(world: &mut World) {
                     raise_event: raw.raise_event,
                 },
             },
+            pick_index,
+            &mut catalog,
+            &mut read,
+            &mut spawn,
         );
     }
 }
 
 /// 切替要求の唯一の入口。乱数は本番の `pick_index`。
 pub fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVerdict {
-    request_skin_switch_with(world, req, pick_index)
+    request_skin_switch_with(
+        world,
+        req,
+        pick_index,
+        &mut [None, None],
+        &mut skin_candidates,
+        &mut spawn_switch_build,
+    )
 }
 
-/// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_skin_switch`]）。
+fn skin_candidates(kind: SkinKind, ctx: &SwitchContext) -> Vec<SkinCandidate> {
+    match kind {
+        SkinKind::Shell => shell_candidates(&ctx.ghost_dir),
+        SkinKind::Balloon => balloon_candidates(&ctx.roots, &ctx.ghost_dir),
+    }
+}
+
+/// 入口の中身。乱数・候補の読み方・組み立ての起こし方を外から受ける（決定論テスト用）。`catalog` は種別ごとに
+/// 候補を 1 度だけ埋める置き場で、取り出しの系が 1 回の取り出しの間だけ共用する。
 ///
-/// 判定は 進行中 → ゴースト切替中 → 更新中 → 文脈なし（置き場・根・結線・kanade の送出端・
-/// seriko の送り手）→ 該当なし の順で、断りはどれも `warn!` を 1 件残し kanade へ何も送らない。受理したら `info!(skin_switch_requested)` → 背景の資産づくり →
-/// 待ちの依頼（メニューのシェルと `raise-event` 付きの台本のシェルだけ `OnShellChanging` の印つき）→
+/// 判定は 進行中 → ゴースト切替中 → 更新中 → インストール中（メニューの要求だけ）→ 文脈なし（置き場・根・
+/// 結線・kanade の送出端・seriko の送り手）→ 該当なし の順で、断りはどれも `warn!` を 1 件残し kanade へ
+/// 何も送らない。受理したら `info!(skin_switch_requested)` → 待ちの依頼（メニューのシェルと
+/// `raise-event` 付きの台本のシェルだけ `OnShellChanging` の印つき）→ 背景の資産づくり →
 /// 進行中の印、の順。送れなければ `error!(skin_switch_send_failed)` で印を置かない。
 /// 定常でない kanade での無視は、待ちの返事で差し替えの相が判定する。
-pub(crate) fn request_skin_switch_with(
+fn request_skin_switch_with(
     world: &mut World,
     req: SkinRequest,
     pick: impl FnOnce(usize) -> usize,
+    catalog: &mut [Option<Vec<SkinCandidate>>; 2],
+    read: &mut impl FnMut(SkinKind, &SwitchContext) -> Vec<SkinCandidate>,
+    spawn: &mut impl FnMut(SwitchBuildRequest) -> Receiver<Result<SwapBuilt, SwitchBuildError>>,
 ) -> SkinVerdict {
     if world.get_non_send::<SkinSwitchInFlight>().is_some() {
         tracing::warn!(
@@ -138,20 +171,27 @@ pub(crate) fn request_skin_switch_with(
         );
         return SkinVerdict::Updating;
     }
+    if req.origin == SkinOrigin::Menu && (BodySystems::of(world).install_busy)(world) {
+        tracing::warn!(
+            event = "skin_switch_installing",
+            kind = ?req.kind,
+            spec = ?req.target,
+            "インストールの作業の途中にメニューからシェル・バルーンの切替要求が届いた——無視する"
+        );
+        return SkinVerdict::Installing;
+    }
 
     let Some(ctx) = SwitchContext::read(world) else {
         return SkinVerdict::NoContext;
     };
-    let (candidates, current) = match req.kind {
-        SkinKind::Shell => (shell_candidates(&ctx.ghost_dir), ctx.current_shell.clone()),
-        SkinKind::Balloon => (
-            balloon_candidates(&ctx.roots, &ctx.ghost_dir),
-            ctx.current_balloon.clone(),
-        ),
+    let (current, slot) = match req.kind {
+        SkinKind::Shell => (ctx.current_shell.clone(), 0),
+        SkinKind::Balloon => (ctx.current_balloon.clone(), 1),
     };
+    let candidates = &*catalog[slot].get_or_insert_with(|| read(req.kind, &ctx));
     let installed = installed_for(world, req.kind, &ctx.ghost_dir);
     let target = match resolve_skin_target(
-        &candidates,
+        candidates,
         &req.target,
         current.as_deref(),
         installed.as_deref().map_err(|e| *e),
@@ -200,13 +240,18 @@ pub(crate) fn request_skin_switch_with(
             method: ShioriMethod::Get,
         }
     });
-    accept_skin(world, &ctx, req.kind, target, raise)
+    // 受理の後の要求は進行中の印が候補より先に退けるので、捨てるのは備え: 印が同じ取り出しの中で
+    // 下りても、差し替える前のゴーストから読んだ候補を使わせない。
+    *catalog = [None, None];
+    accept_skin_with(world, &ctx, req.kind, target, raise, spawn)
 }
 
-/// 受理の後半: 背景の資産づくり → kanade へ台詞の切れ目の待ち（`raise` の印つき）→ 進行中の印、の順。
-/// 送れなければ `error!(skin_switch_send_failed)` で印を置かない。判定はしない（呼び手が済ませる）。
+/// 受理の後半: kanade へ台詞の切れ目の待ち（`raise` の印つき）→ 背景の資産づくり → 進行中の印、の順。
+/// 送れなければ `error!(skin_switch_send_failed)` で資産づくりを起こさず印も置かない。
+/// 判定はしない（呼び手が済ませる）。
 ///
-/// 呼び手は入口 [`request_skin_switch_with`] と読み直しの窓口（`reload.rs`・`raise` は無し）。
+/// 呼び手は読み直しの窓口（`reload.rs`・`raise` は無し）。入口 [`request_skin_switch_with`] は
+/// 組み立ての起こし方を受けて [`accept_skin_with`] を呼ぶ。
 pub(crate) fn accept_skin(
     world: &mut World,
     ctx: &SwitchContext,
@@ -214,16 +259,18 @@ pub(crate) fn accept_skin(
     target: SkinCandidate,
     raise: Option<GapRaise>,
 ) -> SkinVerdict {
-    let build = spawn_switch_build(match kind {
-        SkinKind::Shell => SwitchBuildRequest::Shell {
-            ghost_root: ctx.ghost_dir.clone(),
-            folder: target.folder.clone(),
-            balloon_dir: ctx.balloon_dir.clone(),
-        },
-        SkinKind::Balloon => SwitchBuildRequest::Balloon {
-            dir: target.dir.clone(),
-        },
-    });
+    accept_skin_with(world, ctx, kind, target, raise, spawn_switch_build)
+}
+
+/// [`accept_skin`] の中身。組み立ての起こし方を外から受ける（決定論テスト用）。
+fn accept_skin_with(
+    world: &mut World,
+    ctx: &SwitchContext,
+    kind: SkinKind,
+    target: SkinCandidate,
+    raise: Option<GapRaise>,
+    spawn: impl FnOnce(SwitchBuildRequest) -> Receiver<Result<SwapBuilt, SwitchBuildError>>,
+) -> SkinVerdict {
     let (reply, gap) = reply_channel();
     if ctx
         .kanade
@@ -238,6 +285,16 @@ pub(crate) fn accept_skin(
         );
         return SkinVerdict::NoContext;
     }
+    let build = spawn(match kind {
+        SkinKind::Shell => SwitchBuildRequest::Shell {
+            ghost_root: ctx.ghost_dir.clone(),
+            folder: target.folder.clone(),
+            balloon_dir: ctx.balloon_dir.clone(),
+        },
+        SkinKind::Balloon => SwitchBuildRequest::Balloon {
+            dir: target.dir.clone(),
+        },
+    });
     world.insert_non_send(SkinSwitchInFlight {
         kind,
         target,
@@ -323,3 +380,7 @@ pub fn discard_for_exit(world: &mut World) {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_tests.rs"]
+mod tests;

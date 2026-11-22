@@ -10,7 +10,7 @@ use super::{
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
 ///
 /// 判定は 4 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始・占有
-/// 終端・待ち時間の指定・トークの終わり・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
+/// 終端・待ち時間の指定・選択肢の表示・トークの終わり・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
 /// ⑷ タイムアウトの計測・抑止・満了。⑵ が ⑶ より前にあるのは、中断で隠した scope を ⑶ 以降が
 /// 不可視として扱うためである。⑷ が最後にあるのは、満了で消す対象が「本フレームの発行を
 /// 反映したあとに可視である scope」だからである。
@@ -18,7 +18,7 @@ use super::{
 /// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
 /// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
 /// 名乗ると、表示を失う側へ倒れるためである。
-pub fn decide(
+pub(super) fn decide(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
     now_talk_time: Option<f64>,
@@ -148,8 +148,8 @@ fn apply_lifecycle_signals(
                 }
                 state.display_end = Some(end);
 
-                // 占有終端が現在時刻より未来へ動いたなら、立っている満了予定はもう根拠を失う
-                // （選択肢のバリア解除後に cue が届いた形）。破棄して立て直させる。
+                // 満了予定はトークの終わりの後にしか立たず、`talk_lifecycle.rs` の約束では終わりの後に
+                // 占有終端は届かない。約束に反して届いたときに黙って延ばさず、破棄して立て直させる。
                 if let Some(now) = now_talk_time
                     && end > now
                     && let Some(deadline) = state.deadline.take()
@@ -180,7 +180,8 @@ fn apply_lifecycle_signals(
 /// 利用者の中断で非表示にする scope を返す。
 ///
 /// 対象は**現に出ているバルーンすべて**で、中断の合図が起きた scope だけではない。窓が
-/// 見えている scope に加え、箱に文字が出ている scope も載せる。どちらも出ていない scope は載せない（隠す指示を重ねて出さない）。
+/// 見えている scope に加え、隠す発行が箱に届く巡（[`hide_reaches_boxes`]）なら箱に文字が出ている scope も載せる。
+/// 窓が隠れていて箱にも届かない scope は載せない（隠す指示を重ねて出さない）。
 /// 抑止（ドラッグ・ポインタの滞在）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
 /// バルーンの上に居るためである。
 fn decide_user_break(
@@ -195,7 +196,10 @@ fn decide_user_break(
 
     let mut hidden: Vec<u32> = Vec::new();
     for (&scope, observed) in &obs.scopes {
-        if !observed.visible && !observed.box_showing {
+        if !observed.visible
+            && !(observed.box_showing
+                && hide_reaches_boxes(VisibilityTrigger::UserBreak, state.break_latch))
+        {
             continue;
         }
         // 初見の scope でも遷移は成立する（装着直後に外から出ているバルーンを隠す形）。

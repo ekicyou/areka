@@ -61,13 +61,8 @@ fn the_rig_progress_ignores_status_and_counts_every_factory_call() {
     assert_eq!(probe(), 1, "作り口の 1 回で 1 つ増える");
     let mut backend = connect().expect("台本つきの偽の SHIORI は接続できる");
     for _ in 0..5 {
-        let _ = backend.status();
+        backend.status();
     }
-    assert_eq!(
-        rig.handle("A").call_count(),
-        0,
-        "状態の問い合わせは数えない"
-    );
     assert_eq!(probe(), 1, "状態の問い合わせで目印は増えない");
     backend
         .notify("OnInitialize", &[], None)

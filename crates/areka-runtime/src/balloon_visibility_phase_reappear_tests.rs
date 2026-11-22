@@ -16,14 +16,10 @@
 // 実時間の待機は使わない。前の台詞は scope 0 に 5 文字を残す。
 // =============================================================================
 
-use areka_input::balloon::BalloonWiring;
-use areka_runtime::balloon_hover::BalloonHover;
-use std::sync::mpsc;
-
-use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
 
-use super::test_support::attach_headless;
+use super::super::test_support::{hidden_log, hide, show, shown_log};
+use super::test_support::{attach_headless, runtime};
 use super::*;
 
 /// 待ち時間（秒）。短い固定値を引数で渡す（環境変数・既定値に依らない）。
@@ -56,16 +52,13 @@ impl Rig {
     fn new(scopes: &[u32]) -> Rig {
         let mut presenter = EmoPresenter::new();
         let mut world = World::new();
-        world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
         world.insert_non_send(BalloonHover::default());
         for &scope in scopes {
             attach_headless(&mut presenter, &mut world, scope);
         }
         Rig {
             presenter,
-            runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
-                TextLayerConfig::default(),
-            ))),
+            runtime: runtime(),
             world,
             state: BalloonVisibilityState::default(),
             scopes: scopes.to_vec(),
@@ -194,30 +187,16 @@ fn quiet() -> FrameOutcome {
 
 /// 表示が 1 件・その記録が 1 件のフレーム。
 fn shown(scope: u32) -> FrameOutcome {
-    (
-        vec![VisibilityAction::Show { scope }],
-        vec![VisibilityLogEvent::Transition {
-            scope,
-            trigger: VisibilityTrigger::Content,
-            visible: true,
-        }],
-    )
+    (vec![show(scope)], vec![shown_log(scope)])
 }
 
 /// 非表示が 1 件・scope ごとの記録のフレーム。
 fn hidden(scopes: &[u32], trigger: VisibilityTrigger) -> FrameOutcome {
     (
-        vec![VisibilityAction::HideScopes {
-            scopes: scopes.to_vec(),
-            trigger,
-        }],
+        vec![hide(scopes, trigger)],
         scopes
             .iter()
-            .map(|&scope| VisibilityLogEvent::Transition {
-                scope,
-                trigger,
-                visible: false,
-            })
+            .map(|&scope| hidden_log(scope, trigger))
             .collect(),
     )
 }

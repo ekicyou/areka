@@ -3,7 +3,8 @@
 //! 基準を World から解いて [`BaseFrame`] にし、純粋な計算（[`compute_move_target`]）で吸い付きの
 //! 前の位置を求め、対象の窓の [`Anchored`] で吸い付きの射影（[`project_anchor`]）に通してから
 //! [`move_window_to`] で書く。位置の記憶・`Anchored`・既定の位置・バルーンのずらしは変えない
-//! （書く口は `move_window_to` だけ・バルーンは今のずらしで付いて動く）。
+//! （バルーンは今のずらしで付いて動く）。ほかに、窓へ `ScriptPlaced` を付け、組の相手を連れ動かし、
+//! 絶対の位置へ書いた軸の面の `move` のずれを当て直す。
 //!
 //! どの失敗も panic せずトークを止めない: 動かせないときは `move_skipped`、基準を置き換えたときは
 //! `move_frame_substituted`、`Anchored` が無いときは `move_anchor_missing` の `warn!` を残す。
@@ -15,8 +16,8 @@ use wintf::ecs::window::monitor::Monitor;
 
 use areka_emo_compose::ScaleRatio;
 
-use super::geometry::{BaseFrame, FrameNote, compute_move_target};
-use super::{AxisSpec, BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
+use super::geometry::{BaseFrame, FrameNote, canon_basepos, compute_move_target};
+use super::{AxisSpec, MoveBase, MoveDirective};
 use areka_placement::chain_finalize::ScriptPlaced;
 use areka_placement::follow::{
     Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
@@ -37,14 +38,6 @@ fn window_rect(world: &World, scope: u32) -> Option<RectPx> {
         right: p.x.saturating_add(s.width),
         bottom: p.y.saturating_add(s.height),
     })
-}
-
-/// 窓の矩形の基準位置（既定＝幅÷2・下端）を左上からのずれで返す。
-fn canon_basepos(rect: RectPx) -> PointPx {
-    CanonDefaultBasepos.basepos(wintf::ecs::SizeI::new(
-        rect.right - rect.left,
-        rect.bottom - rect.top,
-    ))
 }
 
 fn window_frame(rect: RectPx) -> BaseFrame {
@@ -75,7 +68,9 @@ fn resolve_frame(
             Some(rect) => Ok(window_frame(rect)),
             None => {
                 // 基準の窓が無い → screen へ倒す。
-                notes.push(FrameNote::MissingBaseScope { scope: n });
+                if directive.x != AxisSpec::Fix || directive.y != AxisSpec::Fix {
+                    notes.push(FrameNote::MissingBaseScope { scope: n });
+                }
                 screen_frame(world, target)
             }
         },
@@ -87,6 +82,17 @@ fn resolve_frame(
             Ok(BaseFrame::Area(work_area_px(primary)))
         }
         MoveBase::Global => Ok(BaseFrame::Origin),
+    }
+}
+
+fn log_substitutions(scope: u32, notes: &[FrameNote]) {
+    for note in notes {
+        warn!(
+            event = "move_frame_substituted",
+            scope,
+            ?note,
+            "\\![move] の基準を置き換えた"
+        );
     }
 }
 
@@ -120,7 +126,10 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     let mut notes = Vec::new();
     let frame = match resolve_frame(world, directive, target_rect, &mut notes) {
         Ok(frame) => frame,
-        Err(reason) => return skipped(reason),
+        Err(reason) => {
+            log_substitutions(scope, &notes);
+            return skipped(reason);
+        }
     };
 
     let computed = compute_move_target(
@@ -131,14 +140,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         k,
     );
     notes.extend(computed.notes);
-    for note in &notes {
-        warn!(
-            event = "move_frame_substituted",
-            scope,
-            ?note,
-            "\\![move] の基準を置き換えて動かす"
-        );
-    }
+    log_substitutions(scope, &notes);
 
     // 吸い付きの当て直し。`Anchored` が無ければ当て直さない（Free と同じ）。
     let script = computed.position;
@@ -168,6 +170,16 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     }
     // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも付ける）。
     world.entity_mut(target).insert(ScriptPlaced);
+    // 絶対の位置へ書いた軸は、書いた位置が面の `move` のずれの新しい元の位置。
+    let relative =
+        matches!(directive.base, MoveBase::Me) || directive.base == MoveBase::Scope(scope);
+    let absolute = |axis: AxisSpec| !relative && matches!(axis, AxisSpec::Px(_));
+    rebase_shift_axes(world, target, absolute(directive.x), absolute(directive.y));
+    // 連れ動きと記録は、ずれを当て直した後の位置で数える。
+    let to = window_rect(world, scope).map_or(to, |r| PointPx {
+        x: r.left,
+        y: r.top,
+    });
     let base_rect = match frame {
         BaseFrame::Window { rect, .. } | BaseFrame::Area(rect) => rect,
         BaseFrame::Origin => RectPx {
@@ -184,7 +196,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         base_offset = ?computed.base_offset_used,
         move_offset = ?directive.move_offset,
         ?anchor,
-        // MoveMeasure の測り: 当てた拡大率と動かす窓の今の大きさ。
+        // 拡大率の取り違えを後で測るための欄: 当てた拡大率と動かす窓の今の大きさ。
         k = ?k,
         target_w = target_rect.right - target_rect.left,
         target_h = target_rect.bottom - target_rect.top,
@@ -210,11 +222,6 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
     } else {
         follow_sticky_move(world, scope, delta);
     }
-    // 絶対の位置へ書いた軸は、書いた位置が面の `move` のずれの新しい元の位置。
-    let relative =
-        matches!(directive.base, MoveBase::Me) || directive.base == MoveBase::Scope(scope);
-    let absolute = |axis: AxisSpec| !relative && matches!(axis, AxisSpec::Px(_));
-    rebase_shift_axes(world, target, absolute(directive.x), absolute(directive.y));
     true
 }
 
