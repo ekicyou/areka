@@ -94,7 +94,7 @@ pub struct ScopePlacement {
     ///
     /// **resolver 自身はクランプしない**——work area 外へ素直にはみ出した値を返す。
     /// `windowposition.limit` による作業領域内への補正は下流の関門が所有する
-    /// （起動時＝`session/boot_seam.rs` の `restore_merged_placements` が呼ぶ
+    /// （起動時＝`crates/areka-session/src/boot_seam.rs` の `restore_merged_placements` が呼ぶ
     /// `balloon_limit::apply_balloon_limit`／実行時＝
     /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグの
     /// 解放時＝`follow::balloon_drag::on_balloon_drag_end`）。

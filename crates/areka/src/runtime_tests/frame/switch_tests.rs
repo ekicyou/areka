@@ -24,9 +24,6 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
-use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
@@ -35,6 +32,9 @@ use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::spine::Progress;
 use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 
 // ---------------------------------------------------------------- 土台
 
@@ -68,7 +68,7 @@ fn rig(kind: SkinKind) -> Rig {
     );
     let (kanade_tx, kanade) = mpsc::channel();
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(Some(kanade_tx), PathBuf::from("ghost/A")).with_seriko_sink(sink),
     )));
@@ -204,7 +204,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
 }
 
@@ -835,7 +835,7 @@ fn shell_split_builds_the_seriko_fallback_from_the_same_values_as_the_box_bundle
     let areka_seriko::SerikoReplace::Shell { fallback, .. } = replace else {
         unreachable!("シェルの差し替えの命令")
     };
-    let crate::session::shell_balloon_switch::SwapFinish::Shell { boxes, .. } = finish else {
+    let areka_session::shell_balloon_switch::SwapFinish::Shell { boxes, .. } = finish else {
         unreachable!("シェルの後始末")
     };
     assert_eq!(

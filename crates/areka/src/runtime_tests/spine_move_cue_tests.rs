@@ -8,7 +8,7 @@ use super::{
 // move channel→frame 相 drain→apply→実窓移動）。
 //
 // throwaway の `(_move_tx, move_rx)` でなく実 `MoveCueSink`（`SpineHarness::boot_with` の
-// sinks 第 3 要素）を登録した形（本番の sink の列＝`session/runtime_boot.rs` の `runtime_sinks` のうち先頭 4 本だけを同じ順で渡す——move は本番と
+// sinks 第 3 要素）を登録した形（本番の sink の列＝`areka-session` の `src/runtime_boot.rs` の `runtime_sinks` のうち先頭 4 本だけを同じ順で渡す——move は本番と
 // 同じ第 3 要素）の上で、
 // `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
 // frame 相 drain（`run_move_drain_phase`）で対象窓が fixture 検算位置へ即時移動することを

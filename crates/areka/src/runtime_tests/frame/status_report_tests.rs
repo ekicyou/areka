@@ -19,7 +19,7 @@ use areka_emo_text::state::TextLayerConfig;
 
 use super::test_support::{binding, obs, obs_box};
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::{last_sent, runtime_busy_logged};
@@ -35,7 +35,7 @@ fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> 
 fn world_with_ghost() -> (World, Receiver<KanadeMsg>) {
     let (tx, rx) = mpsc::channel();
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
         PathBuf::from("ghost/test"),
@@ -92,7 +92,7 @@ fn nothing_visible_from_the_start_sends_nothing() {
 #[test]
 fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(None));
     let mut ledger = BalloonStatusLedger::default();
 

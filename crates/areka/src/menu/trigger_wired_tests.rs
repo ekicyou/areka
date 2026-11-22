@@ -48,8 +48,8 @@ fn a_right_click_on_the_wired_menu_ends_in_one_close_request() {
     world.insert_non_send(MouseWiring::new(mouse_tx, RegionSource::Mock(no_region)));
     // 説明書のファイルは置かない（「説明書」は無効で出る）。
     let dir = TempPath::new("menu-wired-flow");
-    let (_readme_tx, readme_rx) = channel::<crate::session::readme::ReadmeRequest>();
-    crate::session::readme::wire_readme(&mut world, dir.child("readme.txt"), readme_rx);
+    let (_readme_tx, readme_rx) = channel::<areka_session::readme::ReadmeRequest>();
+    areka_session::readme::wire_readme(&mut world, dir.child("readme.txt"), readme_rx);
     // 本番と同じ順: 結線の時点で窓はまだ無く、窓を作った直後に解放ハンドラを付ける。
     crate::menu::wire_menu_with(
         &mut world,
@@ -164,8 +164,8 @@ fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
     world.init_resource::<Schedules>();
     world.insert_non_send(MouseWiring::new(mouse_tx, RegionSource::Mock(no_region)));
     let dir = TempPath::new("menu-wired-emily-shaped");
-    let (_readme_tx, readme_rx) = channel::<crate::session::readme::ReadmeRequest>();
-    crate::session::readme::wire_readme(&mut world, dir.child("readme.txt"), readme_rx);
+    let (_readme_tx, readme_rx) = channel::<areka_session::readme::ReadmeRequest>();
+    areka_session::readme::wire_readme(&mut world, dir.child("readme.txt"), readme_rx);
     crate::menu::wire_menu_with(
         &mut world,
         MenuWiring::with_to_screen(menu_tx, shifted_to_screen),

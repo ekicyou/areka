@@ -234,7 +234,7 @@
 - 台帳の鍵は（名前, 第 1 引数）。同じ名前で、第 1 引数つきと無しは同居できない。`play` の行は無い（`crates/areka-runtime/src/consumer_ledger.rs:258-310`・`:340-399`）。
 - kanade の `[ResolveChoice, Start]` の形と、話している最中の置き換え（`crates/areka-kanade/src/schedule/steady.rs:399-415`・`:805-820`）。
 - `begin_talk` が受けるのは、番号と出どころだけ（`crates/areka-ghost/src/sink.rs:35-45`）。バルーンの寿命の受け口は、最初の `emit` と `Drop` を、トークの始まりと終わりにする（`crates/areka-runtime/src/talk_lifecycle.rs:253-279`）。
-- **SHIORI だけの読み直しは、実行系（kanade・dispatcher）だけを組み直す。窓・seriko・束は残る**（`crates/areka/src/session/ghost_session_runtime.rs:88-95`・`:123-147`）。`01` の仮定 8 と `02` の仮定 6（dispatcher は作り直される）は成り立つ。`03` の「空になる」と `05` の「舞台を閉じる」は、自動では起きない。
+- **SHIORI だけの読み直しは、実行系（kanade・dispatcher）だけを組み直す。窓・seriko・束は残る**（`crates/areka-session/src/ghost_session_runtime.rs:88-95`・`:123-147`）。`01` の仮定 8 と `02` の仮定 6（dispatcher は作り直される）は成り立つ。`03` の「空になる」と `05` の「舞台を閉じる」は、自動では起きない。
 - `talk-anchor-interrupt-ticks`・`dola-interrupt-ticks`・`sakura-raise-directive` の brief（刻みの周期・刻みを絶対の時刻にするかは未決・Scope）。
 
 **読んだだけの物（裏を取っていない）**

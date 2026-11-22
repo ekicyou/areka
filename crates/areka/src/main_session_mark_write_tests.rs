@@ -9,13 +9,13 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{after_run, finish_after_run};
-use crate::session::alert::{AlertScene, WriteMoment};
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_config::{BootContext, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::session_mark::{
+use areka_session::alert::{AlertScene, WriteMoment};
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::boot_config::ConfigInputs;
+use areka_session::boot_config::{BootContext, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::session_mark::{
     MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
 };
 
@@ -26,7 +26,7 @@ fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
     let mut world = World::new();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: false,
@@ -124,9 +124,9 @@ fn slot_empty(world: &World) -> bool {
 }
 
 fn reservation(
-    stage: crate::session::ghost_switch::SwitchStage,
-) -> crate::session::ghost_switch::SwitchInFlight {
-    use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
+    stage: areka_session::ghost_switch::SwitchStage,
+) -> areka_session::ghost_switch::SwitchInFlight {
+    use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
     SwitchInFlight {
         target: SwitchTarget {
             dir: "ghost/B".into(),
@@ -141,7 +141,7 @@ fn reservation(
         },
         stage,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     }
 }
 
@@ -170,7 +170,7 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
             )
         };
         unwritable(&app);
-        let descript = crate::session::ghost_session::StartupDescriptValues {
+        let descript = areka_session::ghost_session::StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
             default_surfaces: areka_placement::DefaultSurfaces::builtin(),
@@ -194,12 +194,13 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
 /// 切替の降ろした直後に書けない → 切替先を起こさず同じ。
 #[test]
 fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
-    use crate::session::ghost_switch::{
+    use crate::sample_test_support::switch_rig;
+    use areka_session::ghost_switch::{
         SwitchInFlight, SwitchStage, WelcomeAttempt, on_notice, switch_to,
     };
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);
@@ -277,7 +278,7 @@ fn clear_mark_unwritable_tells_running_once() {
     assert_eq!(verdict, MarkVerdict::Clear);
     let failed = failed.expect("印を消せない失敗が返る");
     let (told, events) = log_capture_kit::capture(|| {
-        crate::session::write_failure::tell_at_close(None, Some(failed), None, true)
+        areka_session::write_failure::tell_at_close(None, Some(failed), None, true)
     });
     let alerts: Vec<_> = events
         .iter()

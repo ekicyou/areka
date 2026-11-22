@@ -3287,7 +3287,7 @@ note = """
 実装済み。areka-parsers の package::resolve がこの欄を読み、マウントの readme として持つ。右クリックのメニューの「説明書」と \\![open,readme] が、その名前をゴーストの置き場に継ぎ足したファイルを既定の関連付けで開く。欄が無いときは readme.txt を使う。
 壊れ方: 無い。欄が指すファイルが実在しないときは、メニューの「説明書」の項目を灰色で出す（枠は消さない）。
 ログ: ファイルが無いときは debug! を、開けなかったときはパスと符号を添えた error! を残す。
-根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka/src/session/readme.rs。
+根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka-session/src/readme.rs。
 列挙の読み手: areka-ghost の catalog::list_ghosts もこの欄を読み（無ければ readme.txt）、ゴーストのフォルダ最上位に実在するときだけその所在を Identity の readme として持つ（所在の解決のみで開かない・areka-P0-baseware-root-layout 要件 2.4）。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
 束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_shell の name,シェル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
@@ -3515,7 +3515,7 @@ note = """
 壊れ方: 該当なし。記録: charset_initial（情報）・charset_label_unresolved（警告）。
 areka はこの欄を SHIORI との通信に使う文字コードの宣言として読む。areka-parsers の package::resolve が descript から SHIORI マウントの一部として生の文字列のまま転記し（整形も解決もしない）、areka-ghost の shiori_wiring::initial_charset が解決して通信の初期値に使う。優先順は shiori.forceencoding ＞ この欄 ＞ 起動時に渡される既定（本番は Shift_JIS）で、決めた文字コードで最初の要求から送る。
 解決できない綴りを書いたときは、この欄を飛ばして次の優先順へ下がる。そのとき ghost-boot の charset_label_unresolved が警告 1 行を残す——キー名・書かれた綴り・退けた理由・実際に採用した後退先が付くので、黙って落ちることはない。理由の欄は 2 つを区別する。unknown は Encoding Standard に無い綴り、not_encodable は UTF-16 系や replacement のように「符号化した出力が名乗ったラベルと一致しない」ため通信では使えない既知の限界である。決まった初期値は同じ target の charset_initial が正規名と決定の根拠（forceencoding／encoding／default のいずれか）を添えて 1 行残す。
-根拠の場所: crates/areka-parsers/src/package/resolve.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。解決と記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、文字コードの値と綴りの解決は crates/shiori-host32-host/src/charset.rs の Charset::for_label。
+根拠の場所: crates/areka-parsers/src/package/resolve_shell.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。解決と記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、文字コードの値と綴りの解決は crates/shiori-host32-host/src/charset.rs の Charset::for_label。
 同じページの charset,文字コード は descript そのものを読む文字コードで、この欄とは別の経路である。descript の charset を SHIORI 通信の初期値に使う箇所は無い（逆向きも同じ）。
 担当 spec は areka-P0-charset-canon。
 束: 栞の呼び出しの設定・読む経路が通った（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3549,7 +3549,7 @@ note = """
 壊れ方: 該当なし。記録: charset_initial（情報）・charset_label_unresolved（警告）・charset_forced_ignores_header（詳細）。
 areka はこの欄を「栞が応答で名乗る文字コードより、書かれた宣言を優先させる」指定として読む。areka-parsers の package::resolve が descript から SHIORI マウントの一部として生の文字列のまま転記し、areka-ghost の shiori_wiring::initial_charset が最優先で解決する（shiori.encoding よりも先に見る）。解決できたときは強制が効き、そのつながりの間は応答の Charset ヘッダを復号にも採用にも使わない。
 解決できない綴りを書いたときは、この欄を飛ばして次の優先順（shiori.encoding ＞ 既定）へ下がり、そのとき強制の効力も失う——以後は応答の Charset ヘッダに従う。後退は ghost-boot の charset_label_unresolved が警告 1 行（キー名・書かれた綴り・退けた理由・実際に採用した後退先）で残すので、黙って効かないことはない。強制が効いている間に応答が違う文字コードを名乗ったときは、shiori-charset の charset_forced_ignores_header が初回だけ詳細で 1 行出る（無視したことは分かるが、繰り返しては言わない）。
-根拠の場所: crates/areka-parsers/src/package/resolve.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。優先順と後退の記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、強制の保持と無視は crates/shiori-host32-host/src/charset.rs の CharsetNegotiator（policy／note_response）。
+根拠の場所: crates/areka-parsers/src/package/resolve_shell.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。優先順と後退の記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、強制の保持と無視は crates/shiori-host32-host/src/charset.rs の CharsetNegotiator（policy／note_response）。
 担当 spec は areka-P0-charset-canon。
 束: 栞の呼び出しの設定・読む経路が通った（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """

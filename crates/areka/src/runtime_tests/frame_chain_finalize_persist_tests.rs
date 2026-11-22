@@ -13,13 +13,13 @@ use areka_runtime::frame::persist_test_support::{
 
 use std::collections::HashMap;
 
-use crate::session::app_exit::close_windows_for_restart;
 use areka_emo_compose::ScaleRatio;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::{Anchored, move_window_to};
 use areka_placement::persist::persist_entries;
 use areka_placement::resolver::{Anchor, ScopePlacement};
 use areka_runtime::move_cue::{apply_move_directive, parse_move_directive};
+use areka_session::app_exit::close_windows_for_restart;
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::SizeI;
 use wintf::ecs::window::drain_window_pos_commands;
@@ -31,7 +31,7 @@ use wintf::ecs::window::drain_window_pos_commands;
 fn support_wired_world_delivers_positions_to_store() {
     let ghost = MinimalGhost::plant("support-check");
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),
@@ -68,7 +68,7 @@ fn support_wired_world_delivers_positions_to_store() {
     }
     store.finish();
     // 実物のファイルは、起動の準備の関数が読む置き場と同じ（再起動のテストの前提）。
-    let (_, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (_, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),
@@ -97,9 +97,9 @@ fn booted(store: &PersistStore, shown: &PerTargetSizes) -> (World, GhostWindows,
     (world, gw, ghost)
 }
 
-/// 起動の準備の関数（`crate::session::boot_seam::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
+/// 起動の準備の関数（`areka_session::boot_seam::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
 fn unremembered_placements(ghost: &MinimalGhost) -> Vec<ScopePlacement> {
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),

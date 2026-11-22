@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::install::judge::{FailureWord, InstalledItem};
-use crate::session::boot_request::BootRequest;
+use areka_session::boot_request::BootRequest;
 
 fn item(kind: &'static str, place: &str) -> InstalledItem {
     InstalledItem {

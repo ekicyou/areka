@@ -230,7 +230,7 @@ fn run_demo_if_enabled_with(
 pub fn run_demo_if_enabled() -> Result<(), DemoError> {
     run_demo_if_enabled_with(
         demo_enabled(),
-        Some(crate::session::boot_config::default_app_profile_dir()),
+        Some(areka_session::boot_config::default_app_profile_dir()),
     )
 }
 

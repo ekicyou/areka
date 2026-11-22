@@ -20,11 +20,11 @@ use temp_path_kit::TempPath;
 
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
 use crate::update::{self as update, desk};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -66,7 +66,7 @@ fn desk_world() -> (World, TempPath) {
     update::register(&mut world);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.path().join("profile"),
         helper_exe: tmp.path().join("helper.exe"),
         argv_session: false,

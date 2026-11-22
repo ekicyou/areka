@@ -8,7 +8,7 @@
 //! 結び直し・輪の確かめ）にまたがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。
 
 use super::zorder_branch_coverage_test_support::check_table;
-use crate::crate_source_test_support::crate_source;
+use areka_session::crate_source;
 
 /// 10 分岐と、結び直しの 5 通り・外し損ねの巡の輪の確かめ。
 const BRANCHES: [&str; 16] = [

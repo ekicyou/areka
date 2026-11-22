@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use bevy_ecs::world::World;
 
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 const ROOT: &str = r"C:\ssp\ghost\emily4";
 

@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self};
 
-use crate::session::ghost_session::{GhostSession, GhostSlot};
 use areka_runtime::move_cue::PositionCue;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 use super::shared_test_support::{steady_harness, wiring};
 use areka_runtime::frame::{all_shown, run_move_drain_with};
@@ -20,7 +20,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 #[test]
 fn a_script_reset_sends_nothing_to_kanade() {
     let mut harness = steady_harness();
-    crate::session::hooks::install(&mut harness.world);
+    areka_session::hooks::install(&mut harness.world);
     let (kanade_tx, kanade_rx) = mpsc::channel();
     harness
         .world

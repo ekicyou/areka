@@ -18,7 +18,7 @@ use tracing::Level;
 
 use super::super::test_support::{Frame, TALK_ID, seen};
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 待ち時間（秒）と前の台詞の占有終端（talk 相対秒）。
@@ -28,7 +28,7 @@ const END: f64 = 1.0;
 /// 置き場にゴースト（kanade への送出端を持つか持たないか）を据えた World。
 fn world_with_ghost(kanade: Option<Sender<KanadeMsg>>) -> World {
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         kanade,
         PathBuf::from("balloon_visibility_phase_notice_tests"),
@@ -122,9 +122,9 @@ fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
 #[test]
 fn notice_without_a_ghost_in_the_slot_is_not_sent_and_logged() {
     let mut no_slot = World::new();
-    crate::session::hooks::install(&mut no_slot);
+    areka_session::hooks::install(&mut no_slot);
     let mut empty_slot = World::new();
-    crate::session::hooks::install(&mut empty_slot);
+    areka_session::hooks::install(&mut empty_slot);
     empty_slot.insert_non_send(GhostSlot(None));
     let no_kanade = world_with_ghost(None);
 

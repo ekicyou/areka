@@ -15,7 +15,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::session::log_history::TARGET_ERROR;
+use areka_session::log_history::TARGET_ERROR;
 
 fn ghost() -> ActiveGhost {
     ActiveGhost {
@@ -148,8 +148,8 @@ fn desk_refusal_answers_cannot_reload_now() {
 fn closing_drops_the_reply() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    crate::session::reload::register(&mut world);
-    let _ = crate::session::exit_wait::begin_close(&mut world);
+    areka_session::reload::register(&mut world);
+    let _ = areka_session::exit_wait::begin_close(&mut world);
 
     let (pending, events) = call(&mut world, "shell");
 
@@ -189,7 +189,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
     let refused = answer(
         "ghost",
         &ghost(),
-        |_| ReloadVerdict::Refused(crate::session::reload::RefusedReason::GhostSwitching),
+        |_| ReloadVerdict::Refused(areka_session::reload::RefusedReason::GhostSwitching),
         || panic!("断りでは番号を読まない"),
     );
     let closing = answer(

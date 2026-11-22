@@ -3,8 +3,8 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
-use crate::session::roots::{EXE_TOKEN, encode_memory};
 use areka_ghost::{BasewareRoot, BasewareRoots};
+use areka_session::roots::{EXE_TOKEN, encode_memory};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
@@ -259,9 +259,9 @@ fn user_root_mark_survives_add_remove_front() {
 
 mod apply {
     use super::*;
-    use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-    use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-    use crate::session::roots::{decode_memory, read_memory};
+    use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+    use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use areka_session::roots::{decode_memory, read_memory};
     use bevy_ecs::world::World;
     use log_capture_kit::{CapturedEvent, capture};
 
@@ -335,7 +335,7 @@ mod apply {
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, skipped) = decode_memory(
             &value,
-            crate::session::roots::user_root::exe_dir().as_deref(),
+            areka_session::roots::user_root::exe_dir().as_deref(),
         );
         assert_eq!(decoded, vec![a.clone(), b.clone()]);
         assert!(skipped.is_empty());
@@ -387,7 +387,7 @@ mod apply {
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, _) = decode_memory(
             &value,
-            crate::session::roots::user_root::exe_dir().as_deref(),
+            areka_session::roots::user_root::exe_dir().as_deref(),
         );
         assert_eq!(decoded, vec![a.clone()]);
         assert!(b.is_dir(), "フォルダは消さない（要件 7.2）");
@@ -448,7 +448,7 @@ mod apply {
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, _) = decode_memory(
             &value,
-            crate::session::roots::user_root::exe_dir().as_deref(),
+            areka_session::roots::user_root::exe_dir().as_deref(),
         );
         assert_eq!(decoded, vec![b.clone(), a.clone()]);
         let moved = named(&events, "roots_moved_to_front");

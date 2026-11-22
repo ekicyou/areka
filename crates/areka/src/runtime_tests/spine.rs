@@ -31,7 +31,7 @@
 //! # なぜ in-crate テストか
 //!
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で、外部 `tests/` から bin 内部項目
-//! （`crate::session::{hooks, runtime_boot, ghost_quit}`）へ到達できない。
+//! （`areka_session::{hooks, runtime_boot, ghost_quit}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`areka_runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
@@ -71,7 +71,6 @@ use areka_placement::spawn::test_support::{titles, two_scope_placements};
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use areka_placement::test_support::give_fake_handles;
 
-use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_runtime::adapter::PresentBridge;
 use areka_runtime::assets::{
     BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets,
@@ -85,6 +84,7 @@ use areka_runtime::move_cue::{MoveCueSink, PositionCue};
 use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::target_map::{balloon_target, shell_target};
+use areka_session::ghost_quit::KanadeNoticeRx;
 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU）。
 ///
@@ -305,7 +305,7 @@ impl SpineHarness {
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
         // 本体の口を据える（本番の `ghost_session::register_systems` と同じ口）。
-        crate::session::hooks::install(&mut world);
+        areka_session::hooks::install(&mut world);
 
         // ── 構築入力（実 emo2 検体・COM はプロセスの寿命の MTA（runtime_tests/mod.rs）） ──
         // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので、同じ
@@ -426,7 +426,7 @@ impl SpineHarness {
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番の `runtime_sinks` のうち先頭 4 本だけを同じ順で・残りは渡さない）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
-        let options = crate::session::runtime_boot::runtime_boot_options(
+        let options = areka_session::runtime_boot::runtime_boot_options(
             sample.folder().to_path_buf(),
             ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)

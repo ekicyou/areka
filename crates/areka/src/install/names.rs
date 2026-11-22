@@ -12,7 +12,7 @@ use areka_sylphya::{AskerId, SylphyaPublisher};
 use bevy_ecs::resource::Resource;
 use bevy_ecs::world::World;
 
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// 置換語 2 つの値（プロセスで 1 つ・入れるまでは World に無い）。
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]

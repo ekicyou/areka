@@ -1,12 +1,12 @@
 //! script 種別のログが `get_log` で読めることの決定論テスト。
 //!
 //! kanade の公開の出し口 [`areka_kanade::script_log::emit`] を 3 つの表示の語で呼び、捕まえた出来事を
-//! ログの履歴の下書き（[`crate::session::log_history::draft`]）に通して、種別・名・表示の語・本文が取れることを見る。
+//! ログの履歴の下書き（[`areka_session::log_history::draft`]）に通して、種別・名・表示の語・本文が取れることを見る。
 
 use areka_kanade::script_log::{PLAIN_LABEL, SSTP_SEND_LABEL, emit, event_label};
 use log_capture_kit::{CapturedEvent, capture};
 
-use crate::session::log_history::{Draft, FieldText, Kind, draft};
+use areka_session::log_history::{Draft, FieldText, Kind, draft};
 
 /// 捕捉した出来事を欄の 2 つの形へ写して下書きに通す。
 fn draft_of(ev: &CapturedEvent) -> Option<Draft> {

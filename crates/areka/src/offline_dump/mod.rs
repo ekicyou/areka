@@ -20,8 +20,8 @@ use areka_seriko::{AnimationTable, BindResolver, DefaultBinds, ScopeStates};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use crate::cli::OfflineDumpRequest;
-use crate::session::log_history;
 use areka_runtime::shell_balloon_resolve::{find_by_name_or_folder, shell_candidates};
+use areka_session::log_history;
 
 /// `--dump-bind` の読みと、スコープの着せ替えへの当て方。
 mod bind_spec;

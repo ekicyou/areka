@@ -6,7 +6,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost, CANNOT_FIND, Omitted};
-use crate::session::log_history::{self, Kind, Record};
+use areka_session::log_history::{self, Kind, Record};
 
 /// 未知・空の `log_type` の理由（SSP と同じ本文）。
 pub(crate) const UNKNOWN_LOG_TYPE: &str =

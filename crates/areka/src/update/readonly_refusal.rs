@@ -8,7 +8,7 @@ use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_RESULT, ON_UPDATE_RESULT_EX, readonly_summary_refs};
 use super::{RawUpdateRequest, SummaryKind, UpdateReason, desk};
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// 対象を解き、置き場のゴーストへ Ex → Result を返事なしで 1 件ずつ送り（対象が 0 なら送らない）、
 /// `info!(readonly_refused)` を 1 件残す（送れたかを添える）。

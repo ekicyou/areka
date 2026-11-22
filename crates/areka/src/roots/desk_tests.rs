@@ -15,10 +15,10 @@ use tracing::Level;
 use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::roots::RootsOrigin;
 use areka_ghost::{BasewareRoot, BasewareRoots};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::roots::RootsOrigin;
 
 /// 選ぶ口の代わりが止まっている間の待ちの上限（固まったときに赤で止めるためだけの値）。
 const BOUND: Duration = Duration::from_secs(10);

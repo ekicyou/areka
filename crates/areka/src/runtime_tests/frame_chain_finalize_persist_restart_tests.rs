@@ -38,7 +38,7 @@ const DRAG_DX: i32 = 300;
 /// 時間が経った」ことを決定論で置き換えるもので、UI の側の閉じる処理の代わりではない。
 fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),
@@ -102,7 +102,7 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
 /// 記憶が同じことももここで確かめる。
 fn second_run(ghost: &MinimalGhost) -> [Point; 2] {
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),

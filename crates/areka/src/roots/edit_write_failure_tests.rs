@@ -10,9 +10,9 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::boot_config::{ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::boot_config::{ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 fn world(root: &Path, app_profile_dir: PathBuf) -> World {
     let mut world = World::new();

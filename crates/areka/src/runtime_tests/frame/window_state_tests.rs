@@ -16,8 +16,8 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::super::RuntimeWiring;
 use super::*;
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 
 use super::test_support::{
     OFF, ON, marked, queue_in, queue_text, state_with_channel, world_with_windows,
@@ -32,7 +32,7 @@ fn boot_context() -> BootContext {
     let root = BasewareRoot::new(PathBuf::from("skins"));
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: PathBuf::from("skins/profile"),
         helper_exe: PathBuf::from("skins/helper.exe"),
         argv_session: false,
@@ -68,7 +68,7 @@ fn despawned_registry_window_is_skipped_with_a_debug_record() {
     let (mut state, tx) = state_with_channel();
     let (mut world, all) = world_with_windows();
     world.insert_resource(boot_context());
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     // 印の除去の掛け金は正本からスコープごと落とすので、古い写しを据え直して
     // 「正本に載るが World に居ない」形を作る（対の片割れだけが先に消えた間と同じ）。
     let stale = world.resource::<GhostWindows>().clone();
@@ -103,7 +103,7 @@ fn log_fields_for_change_unchanged_and_raise() {
     let (mut state, tx) = state_with_channel();
     let (mut world, _) = world_with_windows();
     world.insert_resource(boot_context());
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     tx.send(ON).unwrap();
     tx.send(ON).unwrap();
     tx.send(Raise).unwrap();
@@ -148,7 +148,7 @@ fn log_fields_for_change_unchanged_and_raise() {
 fn world_with_wiring(on: bool) -> World {
     let mut world = World::new();
     world.insert_resource(boot_context());
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     let mut wiring = super::super::test_support::headless_wiring_with(
         channel().1,
         super::super::test_support::zero_clock(),

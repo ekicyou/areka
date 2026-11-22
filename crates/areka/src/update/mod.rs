@@ -11,10 +11,10 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::session::boot_config::BootContext;
-use crate::session::exit_wait::{self, WorkGate};
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::SwitchInFlight;
+use areka_session::boot_config::BootContext;
+use areka_session::exit_wait::{self, WorkGate};
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::SwitchInFlight;
 
 pub(crate) mod desk;
 mod procedure;
@@ -159,7 +159,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
     if desk.gate.is_closing() {
         return SubmitVerdict::Closing;
     }
-    if crate::session::readonly::of(world) {
+    if areka_session::readonly::of(world) {
         readonly_refusal::refuse(world, &raw, reason);
         return SubmitVerdict::ReadOnly;
     }
@@ -214,7 +214,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
         order,
         kanade,
         roots,
-        exe_dir: crate::session::roots::user_root::exe_dir(),
+        exe_dir: areka_session::roots::user_root::exe_dir(),
     };
     desk::hand_over(world, job)
 }

@@ -14,9 +14,9 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{LogLevel, ScheduleBuildSettings, Schedules};
 use wintf::ecs::Update;
 
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::ghost_quit::{ghost_quit_system, wire_kanade_stop};
 use areka_runtime::frame::frame_system;
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::ghost_quit::{ghost_quit_system, wire_kanade_stop};
 use std::any::TypeId;
 
 /// 毎フレームの相を登録しない World（順序の相手が居ない形）でも、`wire_kanade_stop` の登録は

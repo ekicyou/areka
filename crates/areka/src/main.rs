@@ -38,8 +38,6 @@ mod reference_brain;
 /// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
-#[cfg(test)]
-mod crate_source_test_support;
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く。
 #[cfg(test)]
 mod placement_tests;
@@ -49,12 +47,12 @@ mod runtime_tests;
 /// 本体のテストへ emo2 検体を配る入口（crate ごとに 1 つ）。
 #[cfg(test)]
 mod sample_test_support;
+/// 集めた層は本体を使えないので、本体の部品も使う session のテストはここに置く。
+#[cfg(test)]
+mod session_tests;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
-
-/// 本体に頼る切替・読み直し・起動・終わる相の層。
-mod session;
 
 mod mcp;
 mod menu;
@@ -101,9 +99,6 @@ mod file_drop;
 /// ベースウェアの根の並びの決め方。
 mod roots;
 
-/// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
-mod smoke_exit;
-
 /// 起動オプションの読み方。
 mod cli;
 
@@ -119,7 +114,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{
+    use areka_session::{
         alert,
         boot_config::{self, default_app_profile_dir, default_helper_exe_path},
         boot_request, boot_resolve, exit_wait, ghost_session, log_history, readonly,
@@ -264,7 +259,7 @@ fn main() -> Result<()> {
         }
     };
 
-    smoke_exit::arm(&app);
+    areka_session::smoke_exit::arm(&app);
 
     // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink`×2 の
     // fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・loop ticker）は `GhostSession` に束ねて置き場
@@ -362,10 +357,19 @@ fn main() -> Result<()> {
 }
 
 /// 本体だけのモジュールの系の登録（`register_systems` へ渡す）。
-pub(crate) const BODY_SYSTEMS: session::ghost_session::BodySystems =
-    session::ghost_session::BodySystems {
+pub(crate) const BODY_SYSTEMS: areka_session::body_systems::BodySystems =
+    areka_session::body_systems::BodySystems {
         menu_poll: menu::register_menu_poll,
         after_input: register_body_after_input,
+        after_char_pointer: menu::attach_release_handlers,
+        after_balloon_pointer: attach_body_receivers,
+        after_runtime_wired: wire_body_after_runtime,
+        on_switch_end: update::desk::on_switch_end,
+        on_steady: tell_desks_steady,
+        overwrite_between: install::desk::run_overwrite_between,
+        update_busy: update::desk::is_busy,
+        install_busy: install::desk::is_busy,
+        cue_sinks: body_cue_sinks,
     };
 
 /// `install::register` → `update::register` → `mcp::register` の順。
@@ -373,6 +377,58 @@ fn register_body_after_input(world: &mut World) {
     install::register(world);
     update::register(world);
     mcp::register(world);
+}
+
+/// `file_drop::attach_file_drop_receivers` → `menu::shortcut::attach_shortcut_receivers` の順。
+fn attach_body_receivers(world: &mut World) {
+    // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す。起こし直しもこの閉包を通るので、
+    // 回数によらず新しい窓に差さる。
+    file_drop::attach_file_drop_receivers(world);
+    // 位置初期化の近道の受け手も同じ窓へ差す。
+    // 窓がキーの入力先のときだけ届くので、ほかのアプリの同じキーは横取りしない。
+    menu::shortcut::attach_shortcut_receivers(world);
+}
+
+/// `menu::wire_menu` → 枠の登記 8 本 → `install::names::reseed` の順。
+fn wire_body_after_runtime(world: &mut World, runtime: &areka_ghost::GhostRuntime) {
+    // 右クリックメニューの結線: 終了の項目が先に済んだ入力の結線（`wire_mouse_input`）を使う。
+    menu::wire_menu(world, runtime.kanade().clone());
+    // 「ゴースト」枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
+    menu::ghost_frame::register(world);
+    // 「シェル」「バルーン」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::shell_frame::register(world);
+    menu::balloon_frame::register(world);
+    // 「インストール」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::install_frame::register(world);
+    // 「置き場を追加…」「置き場を外す」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::roots_frame::register(world);
+    // 「ネットワーク更新」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::update_frame::register(world);
+    // 「シェル位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::reset_pos_frame::register(world);
+    // 「バルーン位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::reset_balloon_pos_frame::register(world);
+    // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
+    install::names::reseed(world, runtime);
+}
+
+/// `install::desk::on_steady` → `update::desk::on_steady` の順。
+fn tell_desks_steady(world: &mut World) {
+    // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
+    install::desk::on_steady(world);
+    // 更新の窓口へ（`homeurl` の写しを消して照会し直す）。
+    update::desk::on_steady(world);
+}
+
+/// 受け口の列の 9・10 番目（インストール → 更新の順）。
+fn body_cue_sinks(world: &World) -> [Box<dyn areka_ghost::sink::BootCueSink>; 2] {
+    use install::install_cue::InstallCueSink;
+    use update::update_cue::UpdateCueSink;
+    // 送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
+    [
+        Box::new(InstallCueSink::new(install::desk::raw_sender(world))),
+        Box::new(UpdateCueSink::new(update::desk::raw_sender(world))),
+    ]
 }
 
 /// `run()` の結果を受けて後始末へ進む判断。
@@ -404,15 +460,15 @@ fn finish_after_run(
 // ---------------------------------------------------------------------------
 
 /// 起動の文脈と起動入力の作り口（本番版）を World へ据える（系の登録の直後に 1 回）。
-/// 作り口は本番の入力の組み立て（[`session::ghost_session::GhostBootInputs::production`]）を文脈の helper の
+/// 作り口は本番の入力の組み立て（[`areka_session::ghost_session::GhostBootInputs::production`]）を文脈の helper の
 /// パスと停止通知の送出端の写しと文脈の記憶の置き場で閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
 fn install_boot_context(
     world: &mut World,
-    ctx: session::boot_config::BootContext,
+    ctx: areka_session::boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
-    modules: session::boot_request::ModulePolicy,
+    modules: areka_session::boot_request::ModulePolicy,
 ) {
-    use session::ghost_session;
+    use areka_session::ghost_session;
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値）。
     let app_profile_dir = ctx.app_profile_dir.clone();
@@ -449,13 +505,13 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// ので、2 つの書き手が同時に書くと片方が消えうる）。
 fn boot_first_ghost(
     world: &mut World,
-    cfg: &session::boot_config::ConfigInputs,
+    cfg: &areka_session::boot_config::ConfigInputs,
     origin: areka_kanade::BootOrigin,
-    descript: &session::ghost_session::StartupDescriptValues,
-    ghost: &session::boot_resolve::GhostDecision,
-    balloon: &session::boot_resolve::BalloonDecision,
+    descript: &areka_session::ghost_session::StartupDescriptValues,
+    ghost: &areka_session::boot_resolve::GhostDecision,
+    balloon: &areka_session::boot_resolve::BalloonDecision,
 ) -> std::result::Result<(), areka_sylphya::PersistFailure> {
-    use session::{boot_config, boot_resolve, ghost_session};
+    use areka_session::{boot_config, boot_resolve, ghost_session};
     let argv_session = world
         .get_resource::<boot_config::BootContext>()
         .is_some_and(|ctx| ctx.argv_session);
@@ -497,12 +553,12 @@ fn boot_first_ghost(
 /// `run()` の後に置き場と起動の文脈から組むもの。
 struct AfterRun {
     /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
-    session: Option<session::ghost_session::GhostSession>,
+    session: Option<areka_session::ghost_session::GhostSession>,
     /// 告知の場面（最初の出所が Fault か記憶を書けなかったもので、OS のセッションの終了を処理していないときだけ）。
-    scene: Option<session::alert::AlertScene>,
+    scene: Option<areka_session::alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
-    mark: Option<session::session_mark::MarkInputs>,
+    mark: Option<areka_session::session_mark::MarkInputs>,
     /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`／`write_failure_of`・告知の場面の有無とは独立）。
     fault: bool,
 }
@@ -514,7 +570,7 @@ struct AfterRun {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
-    use session::{
+    use areka_session::{
         alert, app_exit, boot_config, boot_resolve, ghost_session, session_end,
         session_mark::MarkInputs,
     };

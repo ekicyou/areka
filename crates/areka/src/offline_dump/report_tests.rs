@@ -5,7 +5,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::{csv_bytes, exit_code, worst, write_csv};
-use crate::session::log_history::{CapturedRecord, Hms};
+use areka_session::log_history::{CapturedRecord, Hms};
 
 fn rec(hour: u8, minute: u8, second: u8, level: Level, body: &str) -> CapturedRecord {
     CapturedRecord {

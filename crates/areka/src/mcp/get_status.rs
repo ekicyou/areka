@@ -11,7 +11,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// 置き場に問い合わせ先（kanade の送り口）が無いときの本文（areka 独自・本番では起きない）。
 const UNAVAILABLE: &str = "Status is not available";

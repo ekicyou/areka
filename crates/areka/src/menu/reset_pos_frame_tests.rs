@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 use super::{
     PendingResetRaise, ResetDecision, decide_reset, poll_reset_raise, raise_reset_window_pos,
 };
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
 
 fn count(events: &[CapturedEvent], event: &str) -> usize {

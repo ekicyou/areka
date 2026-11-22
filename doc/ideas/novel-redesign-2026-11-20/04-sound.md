@@ -66,8 +66,8 @@ areka は、音について「曲」「効果音」「声」を見分けない�
 - **受け口は 1 本ごとに複製される**: dispatcher が `clone_box` し、`begin_talk(talk_id, origin)` を呼んでから渡す（`crates/areka-ghost/src/sink.rs:35-45`・`crates/areka-ghost/src/dispatcher.rs:335-344`）。`origin` は送り手の種類と信用度だけである（`crates/areka-talk/src/origin.rs:121-125`）。実行したゴーストの置き場は、まだ載らない（`talk-script-metadata` が足す）。
 - **主の流れの枠は 1 つ**: 新しい 1 本が始まる前に、前の 1 本は閉じられる（`dispatcher.rs:325-330`）。受け口の複製は捨てられる。音を受け口の中に持つと、置き換えで消える。
 - **解けの伝言の前例**: `ResolveChoice{talk_id, id}` は、今の枠の 1 本にだけ届き、番号が合わなければ捨てる（`dispatcher.rs:189-222`）。台本のスレッドの伝言は `Start`・`Tick`・`Close`・`ResolveChoice`（`crates/areka-sakura/src/contract.rs:24`〜・`crates/areka-sakura/src/drive.rs:208-213`）。
-- **受け口の並びと送り手の束**: 並びは `runtime_sinks`（`crates/areka/src/session/runtime_boot.rs:61-93`）。送り手の束 `CueSinkSources` は、ゴーストを起こすたびに `wire_runtime` の中で組まれる（`crates/areka-runtime/src/lib.rs:147-162`・`599`）。
-- **ゴーストを降ろす所**: `take_down` が `session.shutdown` を同期で待つ（`crates/areka/src/session/ghost_switch.rs:760-782`）。切り替えとゴーストの読み直しの両方が、ここを通る（同 `640-650`）。
+- **受け口の並びと送り手の束**: 並びは `runtime_sinks`（`crates/areka-session/src/runtime_boot.rs:61-93`）。送り手の束 `CueSinkSources` は、ゴーストを起こすたびに `wire_runtime` の中で組まれる（`crates/areka-runtime/src/lib.rs:147-162`・`599`）。
+- **ゴーストを降ろす所**: `take_down` が `session.shutdown` を同期で待つ（`crates/areka-session/src/ghost_switch.rs:760-782`）。切り替えとゴーストの読み直しの両方が、ここを通る（同 `640-650`）。
 - **イベントを頼む口**: `KanadeMsg::RaiseEvent{id, references, method, reply}` が在る。許可の表 `ALLOWED_EVENT_IDS` に在る名前だけを、定常の間だけ送る（`crates/areka-kanade/src/msg.rs:269-281`・`crates/areka-kanade/src/schedule/events.rs:126`）。
 - **プロパティ**: 音の葉は、名前だけの表 `SOUND_PROP_NAMES`（`duration`・`error`・`id`・`loop`・`name`・`path`・`preload`・`pause`・`playing`・`position` と `meta.*` の 8 葉・`crates/areka-sylphya/src/vocab/dotted.rs:170`〜）。値の導出は無い。
 - **刻み**: 台本のスレッドの刻みは 50ms・時刻源は `GetTickCount64`（`crates/areka-ghost/src/ticker.rs:66-80`）。

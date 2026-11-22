@@ -13,8 +13,9 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::sample_test_support::switch_rig;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {
@@ -251,7 +252,7 @@ fn rig_answering(on_boot: &'static str, on_changed: Option<&'static str>) -> Swi
             standard_script(on_boot).get("OnGhostChanged", Ok(on_changed.map(str::to_owned)))
         }))
     };
-    let mut rig = SwitchRig::new(vec![
+    let mut rig = switch_rig(vec![
         ("A", fake(on_boot, on_changed)),
         ("B", fake(r"\0B\e", None)),
     ]);

@@ -806,7 +806,7 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnBalloonChange:1" },
 ]
 note = """
-壊れ方: 該当なし。SwitchCueSink（crates/areka-runtime/src/switch_cue.rs）が名前と第 1 引数の組（change・balloon）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/session/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口がベースウェアの根のバルーンの目録と突き合わせ、命令を運んだ台詞の終わりを待ってバルーンの絵と文字の層を差し替え、OnBalloonChange を送り、記憶 LastBalloon を書く。該当が無ければ何もせず warn! を残す。--option=raise-event はバルーンには無いので warn! を残して読み飛ばす（切替は行う）。
+壊れ方: 該当なし。SwitchCueSink（crates/areka-runtime/src/switch_cue.rs）が名前と第 1 引数の組（change・balloon）で自分を選び、切替の要求を UI 側の入口（crates/areka-session/src/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口がベースウェアの根のバルーンの目録と突き合わせ、命令を運んだ台詞の終わりを待ってバルーンの絵と文字の層を差し替え、OnBalloonChange を送り、記憶 LastBalloon を書く。該当が無ければ何もせず warn! を残す。--option=raise-event はバルーンには無いので warn! を残して読み飛ばす（切替は行う）。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の取りやめは info!、途中の失敗は error!）。
 名前の解決: 切替先の名前は根の balloon/ の下のバルーンの descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のバルーン自身を指したときも作り直す。random は今のバルーンを除いて 1 つ選ぶ（候補が無ければ今のバルーン）。lastinstalled はこのプロセスの中で最後に入れたバルーンへ切り替える。sequential は正典がバルーンに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: バルーンの見た目と切り替え]
@@ -844,7 +844,7 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnShellChanging:1" },
 ]
 note = """
-壊れ方: 該当なし。SwitchCueSink（crates/areka-runtime/src/switch_cue.rs）が名前と第 1 引数の組（change・shell）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/session/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口が今のゴーストのシェルの目録と突き合わせ、命令を運んだ台詞の終わり（--option=raise-event があれば OnShellChanging の台詞の終わり）を待って、SHIORI を降ろさずに絵を差し替え、OnShellChanged を送り、記憶 LastShell を書く。該当が無ければ何もせず warn! を残す。
+壊れ方: 該当なし。SwitchCueSink（crates/areka-runtime/src/switch_cue.rs）が名前と第 1 引数の組（change・shell）で自分を選び、切替の要求を UI 側の入口（crates/areka-session/src/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口が今のゴーストのシェルの目録と突き合わせ、命令を運んだ台詞の終わり（--option=raise-event があれば OnShellChanging の台詞の終わり）を待って、SHIORI を降ろさずに絵を差し替え、OnShellChanged を送り、記憶 LastShell を書く。該当が無ければ何もせず warn! を残す。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の中止・取りやめは info!、途中の失敗は error!）。
 名前の解決: 切替先の名前は今のゴーストの shell/ の下のシェル（menu,hidden のものも名指しなら可）の descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のシェル自身を指したときも作り直す。random は隠しシェルと今のシェルを除いて 1 つ選ぶ（候補が無ければ今のシェル）。lastinstalled は、原文の「最後にインストールしたゴーストに切り替え」を誤記と読み（ukadoc で lastinstalled を受ける他の項目はどれも命令と同じ種類を指す）、このプロセスの中で最後に入れたシェル（今のゴーストのもの）へ切り替える。ゴースト切替は起こさない。sequential は正典がシェルに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: ゴーストの切り替え]
@@ -1972,8 +1972,8 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify（行き先の規則）と crates/areka-session/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka-session/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","browser") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2172,8 +2172,8 @@ ghost/master から探す）。表示行は常に無視する（ukadoc の「エ
 無い・空で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
 〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
 〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify（行き先の規則）と crates/areka-session/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka-session/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","editor") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2216,8 +2216,8 @@ ghost・balloon・shell は、descript.txt の name かフォルダ名で名指�
 headline・plugin・知らない種類で warn! 1 行〔open_external_rejected〕、行き先が無い・名前に当たらない・目録を引く
 根が無い・OS が断ったときに error! 1 行〔open_external_failed の reason=not_found／no_match／no_baseware_root／os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
-の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify（行き先の規則）と crates/areka-session/src/readme/opener.rs
+の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka-session/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","explorer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2242,9 +2242,9 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行〔open_external_failed の
 reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
-の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/session/readme/os_port.rs。受け口は
-crates/areka/src/session/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify（行き先の規則）と crates/areka-session/src/readme/opener.rs
+の execute（開く処理の 1 か所）、関連付けの確認は crates/areka-session/src/readme/os_port.rs。受け口は
+crates/areka-session/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","file") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2345,8 +2345,8 @@ note = """
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify（行き先の規則）と crates/areka/src/session/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/session/readme/readme_cue.rs で、正準台帳
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify（行き先の規則）と crates/areka-session/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka-session/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","mailer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2475,7 +2475,7 @@ readme が指すファイルを既定の関連付けで開く。
 ログ: 出る（引数付きを受けたときの警告 1 行、送り先が閉じているときの警告 1 行、開けなかったときの
 エラー 1 行）。
 根拠の場所: crates/areka-runtime/src/consumer_ledger.rs の CommandConsumer::ReadmeSink
-（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/session/readme/readme_cue.rs。
+（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka-session/src/readme/readme_cue.rs。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: SSP の管理窓とビューア]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -3912,7 +3912,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
 ]
 note = """
-壊れ方: 該当なし。decode_bare の \"+\" の腕が \\![change,ghost,random] と同じ受け皿（汎用のキャリアの change・ghost・random）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/session/ghost_switch.rs の resolve_special_name）が random を目録のフォルダ名へ解く——今のゴーストを除いた候補から一様に 1 体を選び、目録が今のゴーストだけなら今のゴーストを起こし直す。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+壊れ方: 該当なし。decode_bare の \"+\" の腕が \\![change,ghost,random] と同じ受け皿（汎用のキャリアの change・ghost・random）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka-session/src/ghost_switch.rs の resolve_special_name）が random を目録のフォルダ名へ解く——今のゴーストを除いた候補から一様に 1 体を選び、目録が今のゴーストだけなら今のゴーストを起こし直す。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
 ログ: 出る（解けたときは何を何へ解いたかを info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=random_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
@@ -3964,7 +3964,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
 ]
 note = """
-壊れ方: 該当なし。decode_bare の \"_+\" の腕が \\![change,ghost,sequential] と同じ受け皿（汎用のキャリアの change・ghost・sequential）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/session/ghost_switch.rs の resolve_special_name）が sequential を目録のフォルダ名へ解く——目録の並び（フォルダ名の昇順）で今のゴーストの次の 1 体（末尾なら先頭・今のゴーストが目録に無ければ先頭・目録に今のゴーストだけなら今のゴーストを起こし直す）。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+壊れ方: 該当なし。decode_bare の \"_+\" の腕が \\![change,ghost,sequential] と同じ受け皿（汎用のキャリアの change・ghost・sequential）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka-session/src/ghost_switch.rs の resolve_special_name）が sequential を目録のフォルダ名へ解く——目録の並び（フォルダ名の昇順）で今のゴーストの次の 1 体（末尾なら先頭・今のゴーストが目録に無ければ先頭・目録に今のゴーストだけなら今のゴーストを起こし直す）。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
 ログ: 出る（解けたときは何を何へ解いたかと今の位置を info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=sequential_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
@@ -5287,9 +5287,9 @@ note = """
 ID・残りが空の file:/// で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
 〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
 〔open_external_dropped〕）。
-根拠の場所: crates/areka/src/session/readme/destination.rs の classify_jump（行き先の規則）と crates/areka/src/session/readme/opener.rs
+根拠の場所: crates/areka-session/src/readme/destination.rs の classify_jump（行き先の規則）と crates/areka-session/src/readme/opener.rs
 の execute（開く処理の 1 か所）。タグは汎用の運び手（JUMP_TAG_CARRIER）に載り、受け口は
-crates/areka/src/session/readme/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
+crates/areka-session/src/readme/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
 CommandConsumer::ReadmeSink で登記する。
 [群: 外部を開く・別窓]
 [頻度: 里々 3 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\j。綴りが短く別の語の一部にも当たるぶん過大に出る）]

@@ -16,12 +16,12 @@ use areka_runtime::frame::persist_test_support::{
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
-use crate::session::app_exit::{ExitOrigin, close_windows_for_restart, quit_app};
 use areka_placement::chain_finalize::AdjacencyMark;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::move_window_to;
 use areka_placement::persist::{adjacency_entry, char_pos_entries, persist_entries};
 use areka_placement::resolver::{PointPx, RectPx};
+use areka_session::app_exit::{ExitOrigin, close_windows_for_restart, quit_app};
 
 /// 記憶にスコープ 0・1 の位置（x・y）がそろっていること（比べる前の中身の確かめ）。
 fn assert_positions_saved(store: &PersistStore) {
@@ -42,7 +42,7 @@ fn boot_from_memory(
     world: &mut World,
     ghost: &MinimalGhost,
 ) -> (GhostWindows, Vec<areka_placement::resolver::ScopePlacement>) {
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),
@@ -70,7 +70,7 @@ fn boot_from_memory(
 fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     let ghost = MinimalGhost::plant("nowrite");
     let store = PersistStore::real(&ghost.ghost_master());
-    let (placements, restored, _) = crate::session::boot_seam::restore_merged_placements(
+    let (placements, restored, _) = areka_session::boot_seam::restore_merged_placements(
         ghost.root(),
         prep_placements(),
         &work_area_snapshot(),

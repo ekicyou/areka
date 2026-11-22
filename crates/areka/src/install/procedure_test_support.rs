@@ -17,7 +17,7 @@ use super::{InstallPorts, InstalledRecord, Overwritten, Raised};
 use crate::install::judge::GhostFacts;
 use crate::install::terms::TermsNotice;
 use crate::install::{InstallOrder, InstallOrigin};
-use crate::session::alert::YesNo;
+use areka_session::alert::YesNo;
 
 /// 起動中のゴーストのフォルダ名。
 pub(super) const RUNNING: &str = "running";

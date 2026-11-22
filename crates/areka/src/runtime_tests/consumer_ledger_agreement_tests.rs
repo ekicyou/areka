@@ -28,9 +28,9 @@ use super::super::zorder_cue::ZOrderCueSink;
 use super::test_support::{carrier_cue, ledger_keys, samples};
 use super::{CommandConsumer, ConsumerLedger};
 use crate::install::install_cue::{InstallCueSink, StartFetch};
-use crate::session::readme::readme_cue::ReadmeCueSink;
 use crate::update::update_cue::UpdateCueSink;
 use areka_runtime::switch_cue::SwitchCueSink;
+use areka_session::readme::readme_cue::ReadmeCueSink;
 
 // ---------------------------------------------------------------- 道具立て
 

@@ -10,10 +10,10 @@
 //! 走査器は 2 つの片割れが共に使う `areka_placement::test_support::measure_template` に 1 つだけ
 //! あり、ここでは本体の実物で較正する。
 
-use crate::crate_source_test_support::crate_source;
 use areka_placement::test_support::measure_template::{
     SHELL_PARSE, assert_no_blind_spot_literals, code_only,
 };
+use areka_session::crate_source;
 
 /// 較正（当たり）: 本文の中の実際の呼び出しを [`code_only`] が落とさない。
 ///

@@ -160,7 +160,7 @@ pub struct CueSinkSources {
     pub window_state_tx: Sender<WindowStateDirective>,
 }
 
-/// 実行系の側の起動（本番は `session::runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
+/// 実行系の側の起動（本番は `areka_session::runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
 /// 同期の関数のポインタで受け、`wire_runtime` を総称にしない（字面 `pub fn wire_runtime(` を照合するテストのため）。
 /// `Err` は `areka_ghost::boot_with_origin` の失敗そのもの（分類した記録は起動の関数が残す）。
 pub type BootRuntimeFn = fn(
@@ -388,7 +388,7 @@ const _: fn() = || {
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提）。
-/// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入・`ClockedTextSink::new` は本体の `session/runtime_boot.rs` が組む）。
+/// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入・`ClockedTextSink::new` は`areka-session` の `src/runtime_boot.rs` が組む）。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
 ///    `RuntimeWiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
 ///    **SurfaceResolver 突き合わせ**: `resolver`（非 Clone）は `spawn_seriko_clocked`
@@ -399,7 +399,7 @@ const _: fn() = || {
 ///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は
 ///    本体の `is_benign_boot_error` で分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
-///    作らない・受け口の据え付けは 本体の `session::ghost_quit::wire_kanade_stop`）。
+///    作らない・受け口の据え付けは `areka_session::ghost_quit::wire_kanade_stop`）。
 /// 6. [`RuntimeWiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値）NonSend 挿入（毎フレームの相の
 ///    `Update` への登録は [`register_frame_system`] が `ghost_session::register_systems` から
@@ -589,7 +589,7 @@ pub fn wire_runtime(
     // 受信端が窓の側に無い線（readme・中断・ghost の切替・shell/balloon の切替・読み直し）の
     // 据え付けは向こうが持ち、Err のとき World は変わっていない。停止通知の送出端は引数
     // `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（受け口の据え付けは
-    // 本体の `session::ghost_quit::wire_kanade_stop`）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
+    // `areka_session::ghost_quit::wire_kanade_stop`）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
     let Ok(ghost_runtime) = boot_runtime(world, inputs, &sources, kanade_stop, shell) else {
         // spawn 済み seriko の後始末: tick 用 clone（tick_sink）・セッションへ返す複製（session_sink）・
         // 束（sources）が inbox を生かし続けるため、ここで明示 drop する。全 Sender が消えると inbox

@@ -12,7 +12,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言）。
 pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";
@@ -30,7 +30,7 @@ pub(super) fn strict_note(since_id: u64) -> String {
 
 /// strict 真のときだけ、送る前の最後の通し番号を読む（後に読むとその台本の記録より後になりうる）。
 pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
-    (strict == Some(true)).then(crate::session::log_history::last_id)
+    (strict == Some(true)).then(areka_session::log_history::last_id)
 }
 
 /// 宛先の kanade の送り口と、答える前に降りたときの文言。

@@ -26,9 +26,9 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::fetch_url_test_support::FakeFetch;
-use crate::session::exit_wait::{ClosingWaits, begin_close, register_gate};
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
+use areka_session::exit_wait::{ClosingWaits, begin_close, register_gate};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -888,11 +888,11 @@ fn winhttp_is_spelled_only_in_two_production_files() {
         ),
         (
             "areka-runtime",
-            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
         ),
         (
             "areka-input",
-            crate::crate_source_test_support::crate_path("areka-input", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ] {
         let mut stack = vec![src.clone()];

@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/` の `install*`・`update*`・`mcp*`・`roots*`（`roots.rs`・`roots/`・`session/roots/`）・`session/readme.rs`・`session/readme/`・`session/readme_tests.rs`（フォルダとファイル）。
+- 受け持つファイル: `crates/areka/src/` の `install*`・`update*`・`mcp*`・`roots.rs`・`roots/`・`session_tests/readme_body_tests.rs` と、`crates/areka-session/src/` の `roots/`・`readme.rs`・`readme/`・`readme_tests.rs`（フォルダとファイル）。
 - 大きさ: 107 ファイル・コード 8,922 行・テスト 21,355 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -103,3 +103,10 @@
 - **件 1（所見の文のパス）**: この brief の所見の文（2026-11-13 の申し送りの節ほか）の移す前のパスは、要件の段で `session/…` へ読み替える。
 - **件 2（呼び手の説明）**: `crates/areka/src/install/mod.rs:132`・`crates/areka/src/update/mod.rs:224` の doc は呼び手を `ghost_session::register_systems` と書く。関数ポインタ経由で今も正しいが、名目上の渡し手は `main.rs` の `BODY_SYSTEMS`。直すかどうかを見直しで決める。
 - 完了の時にその場で直したもの: `crates/areka/src/update/worker.rs:40`・`:110` の `exe_dir()` のパス。
+
+## 申し送り（session-crate-split より）
+
+全件と根拠は `.kiro/specs/completed/session-crate-split/verification.md` の「申し送り（7.6）」。
+
+- **`NO_BODY` の受け口と、本体が「窓口が無い」ときに使う受け口の差**: `NO_BODY`（`crates/areka-session/src/body_systems.rs`）の `cue_sinks` は `areka_ghost::sink::DiscardSink` を 2 つ返す。本体の窓口の無いときの受け口は、受信端の無い送出端を持つ `InstallCueSink` で、`url` の腕で取得のスレッドを起こすかが違う（`DiscardSink` は起こさない）。`NO_BODY` を通るのは結線の誤り（`body_systems_missing` の `error!` が出る）と集めた層のテスト（`SwitchRig::new`）だけで、本番の道では起こらない。本体の `session_tests/body_systems_tests.rs` の `missing_body_systems_logs_and_answers_like_no_desk` が口の無い World の答えを固定している。2 つをそろえるかを見る。
+- `crates/areka-session/src/roots/user_root.rs` の `writable_ghost` の doc は、集めた層から見えない `resolve_boot_from`（本体の `session_tests/mod.rs` へ移った）を名指していたので、完了のときに本番の渡し手（本体の `install::startup`）を平文で書く形へ直した。

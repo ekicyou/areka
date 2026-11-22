@@ -1,6 +1,6 @@
 # ログの履歴の取り決め（`get_log` の 5 つの種別）
 
-areka は、ログ（`tracing` のマクロで出す行）のうち意味のある出来事をアプリの中に残し、MCP のツール `get_log` で読めるようにしている。本書は**ログを出す側**のための取り決めで、どう出せばどの種別に残るかを書く。履歴のコード（`crates/areka/src/session/log_history.rs`）を読まずに正しい行を書けることを目指す。
+areka は、ログ（`tracing` のマクロで出す行）のうち意味のある出来事をアプリの中に残し、MCP のツール `get_log` で読めるようにしている。本書は**ログを出す側**のための取り決めで、どう出せばどの種別に残るかを書く。履歴のコード（`crates/areka-session/src/log_history.rs`）を読まずに正しい行を書けることを目指す。
 
 - **出来事**: `tracing::info!` や `tracing::warn!` などで 1 回出した行。出来事は「レベル」（error・warn・info・debug・trace）と「target」（行の出どころの名前。書かなければモジュールのパス、`target: "…"` で明示もできる）を持つ。
 - **記録**: 履歴に残った出来事 1 件。通し番号・時刻・種別・名・表示の語・本文を持つ。
@@ -36,7 +36,7 @@ target の照合は 2 通りある。
 
 ## 2. 規則の表
 
-取り決めの target の 2 行と、info の行を振り分ける 14 行。判定の順に並べた（`network` の行は `update` の行より先に当てる）。この表はテスト（`crates/areka/src/session/log_history_convention_tests.rs`）が読み、実装の規則と 1 行でも食い違うと赤になる。表を変えるときは実装（`log_history.rs` の `RULES`・`TARGET_SCRIPT`・`TARGET_ERROR`）も同時に変える。
+取り決めの target の 2 行と、info の行を振り分ける 14 行。判定の順に並べた（`network` の行は `update` の行より先に当てる）。この表はテスト（`crates/areka-session/src/log_history_convention_tests.rs`）が読み、実装の規則と 1 行でも食い違うと赤になる。表を変えるときは実装（`log_history.rs` の `RULES`・`TARGET_SCRIPT`・`TARGET_ERROR`）も同時に変える。
 
 <!-- log-rules:begin -->
 | 種別 | target | 照合 |
@@ -50,13 +50,13 @@ target の照合は 2 通りある。
 | update | `areka::update` | 下も含む |
 | update | `areka::install` | 下も含む |
 | status | `areka` | 完全一致 |
-| status | `areka::session::boot_config` | 下も含む |
-| status | `areka::session::boot_resolve` | 下も含む |
-| status | `areka::session::ghost_session` | 下も含む |
-| status | `areka::session::ghost_switch` | 下も含む |
+| status | `areka_session::boot_config` | 下も含む |
+| status | `areka_session::boot_resolve` | 下も含む |
+| status | `areka_session::ghost_session` | 下も含む |
+| status | `areka_session::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |
 | status | `ghost-shutdown` | 下も含む |
-| status | `areka::session::readme` | 下も含む |
+| status | `areka_session::readme` | 下も含む |
 <!-- log-rules:end -->
 
 - `ghost-boot`・`ghost-shutdown` は `crates/areka-ghost/src/runtime.rs` が `target: "…"` で明示している target で、ゴースト自体の起動と終了の節目。
@@ -132,7 +132,7 @@ tracing::warn!(
 ## 7. 履歴に届かないもの
 
 - debug・trace の出来事（取り決めの target でも）。
-- 規則の表のどの target にも当たらない info の出来事（例: `areka::session::alert` の問いかけの行、`areka_runtime` の info）。
+- 規則の表のどの target にも当たらない info の出来事（例: `areka_session::alert` の問いかけの行、`areka_runtime` の info）。
 - `areka::install::install_cue` の info の出来事（規則の表の `areka::install` には当てない）。
 - `tracing` も `log` クレートも通らない出力（`println!`・`eprintln!`・パニックの報告）。
 - `log` クレートで出した info 以下の行。`log` クレートの warn 以上は `error` に残る（target は `log` として届くが、warn 以上はどの target でも `error` なので変わらない）。
@@ -140,7 +140,7 @@ tracing::warn!(
 
 ## 8. 「最後に振った番号」の口
 
-areka の中の処理は `crate::session::log_history::last_id()` で、いま最後に振った通し番号（1 件も無ければ 0）を読める。
+areka の中の処理は `areka_session::log_history::last_id()` で、いま最後に振った通し番号（1 件も無ければ 0）を読める。
 
 1. 確かめたい操作（台本を流す・イベントを送るなど）の**前に** `last_id()` を読む。
 2. 操作をする。

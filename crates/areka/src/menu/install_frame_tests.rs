@@ -16,7 +16,7 @@ use log_capture_kit::capture;
 
 use super::*;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
-use crate::session::exit_wait::begin_close;
+use areka_session::exit_wait::begin_close;
 
 /// メニューを結線し「インストール」枠を登記した World（`desk` が真なら窓口も据える）。
 fn wired_world(desk: bool) -> World {
@@ -109,13 +109,13 @@ fn rewiring_gives_a_fresh_registration_with_the_install_frame() {
     );
 }
 
-/// 読み取りだけの走り（World に [`crate::session::readonly::ReadOnlyRun`]）では、窓口が在っても灰色。
+/// 読み取りだけの走り（World に [`areka_session::readonly::ReadOnlyRun`]）では、窓口が在っても灰色。
 /// 対照: 印が無ければ今どおり選べる。
 #[test]
 fn item_is_greyed_in_a_readonly_run() {
     let plain = wired_world(true);
     let mut readonly = wired_world(true);
-    readonly.insert_resource(crate::session::readonly::ReadOnlyRun);
+    readonly.insert_resource(areka_session::readonly::ReadOnlyRun);
     assert_eq!(
         (
             install_item(&plain).map(|i| i.enabled),

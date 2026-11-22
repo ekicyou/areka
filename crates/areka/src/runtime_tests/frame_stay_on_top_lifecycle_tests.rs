@@ -12,13 +12,14 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
-use crate::session::ghost_switch::{
-    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
-};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
+use crate::sample_test_support::switch_rig;
 use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
 use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
+use areka_session::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::window_state::test_support::{on, on_mut};
 use areka_runtime::frame::wiring::test_support::{
@@ -38,7 +39,7 @@ fn script(name: &'static str) -> FakeShiori {
 
 /// A（と切替先の B）を組み、A を起こして定常に着かせ、常に手前をオンにして台本の組を 1 本載せる。
 fn running_a_on() -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", script("A")), ("B", script("B"))]);
+    let mut rig = switch_rig(vec![("A", script("A")), ("B", script("B"))]);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");
@@ -106,7 +107,7 @@ fn reload(rig: &mut SwitchRig, target: ReloadTarget) -> Vec<CapturedEvent> {
     });
     assert_eq!(
         flow,
-        (crate::session::reload::ReloadVerdict::Accepted, true),
+        (areka_session::reload::ReloadVerdict::Accepted, true),
         "{events:?}"
     );
     assert!(!rig.exit_requested(), "終了しない: {events:?}");

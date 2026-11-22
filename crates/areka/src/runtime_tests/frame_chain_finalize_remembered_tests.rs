@@ -20,12 +20,12 @@ use super::shared_test_support::{
     gap, low_sizes, lower_the_scale, pair_gap, remembered_placements, seat_remembered_pair,
 };
 use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, pos_of};
-use crate::session::app_exit::close_windows_for_restart;
 use areka_placement::chain_finalize::{AdjacencyMark, ChainFinalized};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::{PointPx, ScopePlacement};
 use areka_placement::spawn::GhostWindows;
 use areka_runtime::frame::persist_test_support::{PersistStore, WORK_AREA, persist_world};
+use areka_session::app_exit::close_windows_for_restart;
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// 窓の一式を作り、全スコープを記憶から戻した形にして（既定の位置を外し、相方に `mark` を据える）、

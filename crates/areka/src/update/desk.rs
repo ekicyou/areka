@@ -26,10 +26,10 @@ use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
 use crate::menu::captions::{QueryReply, send_query};
-use crate::session::boot_config::BootContext;
-use crate::session::exit_wait::WorkGate;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::{
+use areka_session::boot_config::BootContext;
+use areka_session::exit_wait::WorkGate;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
 

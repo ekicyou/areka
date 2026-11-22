@@ -19,13 +19,13 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::exit_wait::begin_close;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::readonly::ReadOnlyRun;
 use crate::update::desk::{self, Stage, UpdateDesk};
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::exit_wait::begin_close;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::readonly::ReadOnlyRun;
 
 const GHOST_NAME: &str = "窓際のぱすたさんDRESSTEST";
 const BALLOON_NAME: &str = "にゃんばるーん";
@@ -55,7 +55,7 @@ impl Rig {
         register(&mut world);
         world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
             app_profile_dir: root.path().join("profile"),
             helper_exe: root.path().join("helper.exe"),
             argv_session: false,

@@ -23,8 +23,8 @@ use super::{
     CloseReason, Entity, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness,
     wait_until, wait_until_paced,
 };
-use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::spawn::GhostWindowMarker;
+use areka_session::ghost_quit::run_ghost_quit_phase;
 
 /// 終了挨拶（`OnClose` の応答）。実物と同じく **`\-`（終了指令）で終わる**。
 ///

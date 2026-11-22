@@ -44,12 +44,13 @@ use wintf::com::wic::{
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
 
 use crate::mcp::resolve;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::sample_test_support::switch_rig;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::spawn_ghost_windows;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 
 /// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
 const WORK_AREA: RectPx = RectPx {
@@ -79,7 +80,7 @@ impl GpuRig {
     /// 窓の `DPI` を `dpi`（96 で拡大率 1）にして起こす。フレームはまだ回さない（装着の前）。
     pub(in crate::mcp) fn new(on_boot: &str, dpi: u16) -> Self {
         let on_boot = on_boot.to_owned();
-        let mut rig = SwitchRig::new(vec![(
+        let mut rig = switch_rig(vec![(
             "A",
             FakeShiori::Scripted(Box::new(move || {
                 // 関所の印の応答（[`GpuRig::flush_to_shiori`] 1 回で 1 件使う・2 回ぶん）。

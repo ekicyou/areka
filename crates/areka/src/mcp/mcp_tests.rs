@@ -317,9 +317,10 @@ fn drain_without_inbox_is_a_no_op() {
 /// `get_active_ghost_list` を送り、`Input` の段を 1 回回すと descript の `name` で答える。
 #[test]
 fn real_unit_answers_get_active_ghost_list_in_one_frame() {
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::sample_test_support::switch_rig;
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);
@@ -350,10 +351,11 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
 /// LogSink へ倒れた単位（バルーンの根だけが無い＝倒れた先は実行系つきで起きる）も起動中として読める。
 #[test]
 fn logsink_fallen_unit_is_active() {
-    use crate::session::ghost_session::GhostSlot;
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig};
+    use crate::sample_test_support::switch_rig;
+    use areka_session::ghost_session::GhostSlot;
+    use areka_session::ghost_switch_test_support::FakeShiori;
 
-    let mut rig = SwitchRig::new(vec![("A", FakeShiori::BalloonMissing)]);
+    let mut rig = switch_rig(vec![("A", FakeShiori::BalloonMissing)]);
     rig.boot("A");
     let fallen = rig
         .world
@@ -375,10 +377,11 @@ fn logsink_fallen_unit_is_active() {
 /// 純粋なテストでは見えない配線の唯一の檻。
 #[test]
 fn real_unit_resolves_by_sakura_name_and_ascii_case() {
-    use crate::session::ghost_session::GhostSlot;
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::sample_test_support::switch_rig;
+    use areka_session::ghost_session::GhostSlot;
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);

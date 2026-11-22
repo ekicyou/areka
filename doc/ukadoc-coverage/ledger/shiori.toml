@@ -1647,7 +1647,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 Ref6/7: Ref6＝halt・Ref7＝落ちたゴーストの名前は、切替先の失敗で既定ゴーストへ戻したときと、前回
 きれいに終わらなかった（起動中の印が残っていた）次の起動で載る（areka-P0-ghost-shell-balloon-switch・
 crates/areka-kanade/src/change.rs の BootOrigin::Halted、crates/areka/src/main.rs の first_boot_origin と
-crates/areka/src/session/ghost_switch.rs の switch_to_default が渡す）。
+crates/areka-session/src/ghost_switch.rs の switch_to_default が渡す）。
 無いと失うもの: 立ち上げたときの第一声が無く、居るのに黙ったままになる。
 """
 
@@ -1866,7 +1866,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の on_close（通常の握手・GET）と on_close_notify（強制終了時の通知・NOTIFY）。
 OS のセッションの終了: OS のシャットダウン・再起動・ログオフでは、ゴースト窓の手続きの中で Ref0＝system の
 通知（NOTIFY）を送ってから SHIORI を降ろす。別れの台詞は流さない（areka-P0-ghost-shell-balloon-switch・
-crates/areka/src/session/session_end.rs の on_os_session_end から crates/areka-kanade/src/schedule/mod.rs の
+crates/areka-session/src/session_end.rs の on_os_session_end から crates/areka-kanade/src/schedule/mod.rs の
 force_quit を通る）。
 無いと失うもの: 終わらせるときの別れの一言が無く、黙って消える。
 """
@@ -3165,7 +3165,7 @@ note = """
 answer=accept）と、送るたびに info のログ（install_event）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
 送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
-の定数 ON_GHOST_TERMS_ACCEPT。画面は crates/areka/src/session/alert.rs の ask_yes_no、本文は
+の定数 ON_GHOST_TERMS_ACCEPT。画面は crates/areka-session/src/alert.rs の ask_yes_no、本文は
 crates/areka/src/install/terms.rs の find_terms。
 テーマの直し: 名前の頭 OnGhost の既定は記憶だが、利用条件のダイアログで受諾が押された出来事は、覚え
 て渡すことでも他のゴーストとの関わりでもない。無いと利用者がゴーストの何を失うかを 1 文で言えないの
@@ -5929,7 +5929,7 @@ info のログ（skin_switch_cancelled・skin_switch_dropped）に残る。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っている。
 送出は台詞の切れ目の口（crates/areka-kanade/src/schedule/talk_gap.rs の begin）が汎用の入口と同じ
 照合 allowed_static と構築関数 raise を呼んで組み立てる。依頼は
-crates/areka/src/session/shell_balloon_switch.rs の request_skin_switch_with が出す。
+crates/areka-session/src/shell_balloon_switch.rs の request_skin_switch_with が出す。
 """
 
 [entry."ukadoc:list_shiori_event:OnShellScaling:1"]
@@ -12162,7 +12162,7 @@ note = """
 実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「バルーン」の項目名
 に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
 「バルーン」枠へ項目を登記するのは本仕様（crates/areka/src/menu/balloon_frame.rs の register を、
-ゴーストを起こすたびに crates/areka/src/session/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は
+ゴーストを起こすたびに crates/areka-session/src/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は
 今は「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の 7 枠（メニューの並び順）である。
 子の項目はベースウェアの根の balloon/ の下のバルーンで、今のバルーンに印が付く。選ぶとそのバルーンへ
 切り替える。
@@ -13012,7 +13012,7 @@ note = """
 実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「インストール…」の
 項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
 「インストール」枠へ項目を登記するのは areka-P0-ghost-install（crates/areka/src/menu/install_frame.rs
-の register を、ゴーストを起こすたびに crates/areka/src/session/ghost_session.rs の boot_wired が呼ぶ）。
+の register を、ゴーストを起こすたびに crates/areka-session/src/ghost_session.rs の boot_wired が呼ぶ）。
 項目を選ぶとファイルを選ぶ画面が出て、選んだ書庫をインストールの手続きへ渡す。
 壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「インストール…」に落ち、メニューはそのまま
 出る。
@@ -13037,7 +13037,7 @@ note = """
 実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「ゴースト」の項目名
 に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
 「ゴースト」枠へ項目を登記するのは areka-P0-ghost-shell-balloon-switch（crates/areka/src/menu/ghost_frame.rs
-の register を、ゴーストを起こすたびに crates/areka/src/session/ghost_session.rs の boot_wired が呼ぶ）。登記して
+の register を、ゴーストを起こすたびに crates/areka-session/src/ghost_session.rs の boot_wired が呼ぶ）。登記して
 ある枠は今は「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の
 7 枠（メニューの並び順）である。
 子の項目はベースウェアの根の ghost/ の下のゴーストで、今のゴーストに印が付く。選ぶとそのゴーストへ
@@ -14594,7 +14594,7 @@ note = """
 実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「シェル」の項目名に
 使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、「シェル」
 枠へ項目を登記するのは本仕様（crates/areka/src/menu/shell_frame.rs の register を、ゴーストを起こす
-たびに crates/areka/src/session/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は今は
+たびに crates/areka-session/src/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は今は
 「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の 7 枠（メニューの並び順）である。
 子の項目は今のゴーストの shell/ の下のシェル（menu,hidden のものは除く）で、今のシェルに印が付く。
 選ぶとそのシェルへ切り替える（切り替える前に OnShellChanging を送る）。
@@ -15299,7 +15299,7 @@ note = """
 実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「ネットワーク更新」の
 項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
 「ネットワーク更新」枠へ項目を登記するのは areka-P0-network-update（crates/areka/src/menu/update_frame.rs
-の register を、ゴーストを起こすたびに crates/areka/src/session/ghost_session.rs の boot_wired が呼ぶ）。
+の register を、ゴーストを起こすたびに crates/areka-session/src/ghost_session.rs の boot_wired が呼ぶ）。
 項目を選ぶと今のゴースト・シェル・バルーンを対象に更新を始める。3 つのどれにも更新先が無いときと、
 更新が走っている間は選べない（灰色）。
 壊れ方: 無い。空・値なし・失敗のときは古い名前 updatebuttoncaption の値に落ち、それも引けないときと

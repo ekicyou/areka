@@ -26,10 +26,11 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
-use crate::session::exit_wait::{begin_close, register_gate};
-use crate::session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::sample_test_support::switch_rig;
 use areka_runtime::spine::RecordedCall;
+use areka_session::exit_wait::{begin_close, register_gate};
+use areka_session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -461,7 +462,7 @@ fn overwrite_ran_releases_the_gate() {
 fn install_through_production_path(
     complete_ex: Option<&'static str>,
 ) -> (Vec<String>, bool, Option<String>) {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(move || {
             standard_script(r"\0A\e")

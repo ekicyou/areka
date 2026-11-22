@@ -60,7 +60,7 @@
 | `\![set,zorder,…]` は、番号を引数に持ち、合図の欄を読まない | `crates/areka-runtime/src/zorder_cue.rs:14-22` | ✔ |
 | 再生機は、1 回の `tick` で、時刻の来た合図を全部、全部の受け口へ順に配る。区切り（`WaitForInput`・`WaitForChoice`）に着くと、手前まで配って止まる | `crates/dola/src/cue/runtime.rs:179-232`・`crates/dola/src/cue/command.rs:81` | ✔ |
 | 受け口の口は `emit`・`emit_with`・`preview`・`choice_wait_began` の 4 つ。先渡しに区切りは入らない | `crates/dola/src/cue/sink.rs:27-54` | ✔ |
-| 受け口は 13 個を 1 か所で並べ、トークごとに複製して `begin_talk` を呼ぶ。台本を合図に直すのは、その後のトークのスレッドの 1 か所 | `crates/areka/src/session/runtime_boot.rs:80-93`・`crates/areka-ghost/src/dispatcher.rs:326-363`・`crates/areka-sakura/src/drive.rs:82`・`250` | ✔ |
+| 受け口は 13 個を 1 か所で並べ、トークごとに複製して `begin_talk` を呼ぶ。台本を合図に直すのは、その後のトークのスレッドの 1 か所 | `crates/areka-session/src/runtime_boot.rs:80-93`・`crates/areka-ghost/src/dispatcher.rs:326-363`・`crates/areka-sakura/src/drive.rs:82`・`250` | ✔ |
 | `areka-ghost` と `areka-sakura` は `areka-runtime` を見られない（逆向きに依存） | `crates/areka-ghost/Cargo.toml`・`crates/areka-runtime/Cargo.toml:26`・`29` | ✔ |
 | 「1 つの命令に担当は 1 つ」の表とテスト | `crates/areka-runtime/src/consumer_ledger.rs:30-54` | ✔ |
 | 表示対象の番号は `2*scope`・`2*scope+1`。鍵は数の文字列で、上限は `i32::MAX` | `crates/areka-runtime/src/target_map.rs:20-45` | ✔ |
@@ -68,7 +68,7 @@
 | seriko は、サーフェスの名前を解く表・着せ替えの名前を解く表・シェルの動きの表を 1 つずつ持つ。バルーンの動きの表は、もうスコープごと | `crates/areka-seriko/src/actor.rs:349-356`・`crates/areka-runtime/src/assets.rs:99-115` | ✔ |
 | 文字の層は、箱の表・箱の種類の表が 1 つずつ。字の場所の鍵は「スコープと場所」 | `crates/areka-emo-text/src/state.rs:455-458`・`place.rs:22-25` | ✔ |
 | 置き場のまだ無い字は、貯めて次のフレームで試し直す | `crates/areka-emo-text/src/actor_present.rs:115-130` | ✔ |
-| ゴーストの窓の閉じる要求は、メニューの「終了」と同じ終了要求になる。別れの台詞の待ちの上限は 30 秒 | `crates/areka/src/session/app_exit.rs:270-301`・`crates/areka-kanade/src/msg.rs:594` | ✔ |
+| ゴーストの窓の閉じる要求は、メニューの「終了」と同じ終了要求になる。別れの台詞の待ちの上限は 30 秒 | `crates/areka-session/src/app_exit.rs:270-301`・`crates/areka-kanade/src/msg.rs:594` | ✔ |
 | 値を時間で変える土台は dola に在る（始める・終わりの値にする・捨てる） | `crates/dola/src/runtime/facade.rs:31`・`229`・`crates/wintf/src/ecs/dola/mod.rs:75` | ✔ |
 | 絵の Entity の offset は 0 でなければならない。拡大率は「アプリの倍率」の席から導く | `crates/areka-emo-present/src/mount.rs:64-69`・`presenter/hub.rs:57-97` | 引 |
 | seriko のアクターを 1 人足す・外す口は無い（差し替えは全スコープ一度に） | `crates/areka-seriko/src/actor.rs:96-106`・`362-380` | 引 |

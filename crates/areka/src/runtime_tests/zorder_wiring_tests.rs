@@ -15,7 +15,7 @@
 // =============================================================================
 
 use super::source_text_test_support::{code_only, squeeze};
-use crate::crate_source_test_support::crate_source;
+use areka_session::crate_source;
 
 // ---------------------------------------------------------------------------
 // ⑴ 結線の字面——削っても挙動に現れない所を名指しで塞ぐ
@@ -30,7 +30,10 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     let raw = crate_source!("areka-runtime", "src/lib.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
-    let runtime_squeezed = squeeze(&code_only(include_str!("../session/runtime_boot.rs")));
+    let runtime_squeezed = squeeze(&code_only(crate_source!(
+        "areka-session",
+        "src/runtime_boot.rs"
+    )));
 
     assert!(
         squeezed.contains(
@@ -44,9 +47,15 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     );
     assert!(
         runtime_squeezed.contains(
-            "vec![ Box::new(surface), Box::new(ClockedTextSink::new(text, clock.clone())), Box::new(MoveCueSink::new(move_tx)), Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)), Box::new(ZOrderCueSink::new(zorder_tx)), Box::new(ReadmeCueSink::new(readme_tx)), Box::new(NoUserBreakCueSink::new(no_user_break_tx)), Box::new(ChangeCueSink::new(change_tx)), Box::new(InstallCueSink::new(crate::install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))), Box::new(SwitchCueSink::new(switch_tx)), Box::new(ReloadCueSink::new(reload_tx)), Box::new(WindowStateCueSink::new(window_state_tx)), ];"
+            "vec![ Box::new(surface), Box::new(ClockedTextSink::new(text, clock.clone())), Box::new(MoveCueSink::new(move_tx)), Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)), Box::new(ZOrderCueSink::new(zorder_tx)), Box::new(ReadmeCueSink::new(readme_tx)), Box::new(NoUserBreakCueSink::new(no_user_break_tx)), Box::new(ChangeCueSink::new(change_tx)), install_sink, update_sink, Box::new(SwitchCueSink::new(switch_tx)), Box::new(ReloadCueSink::new(reload_tx)), Box::new(WindowStateCueSink::new(window_state_tx)), ];"
         ),
         "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口＋切替の受け口＋インストールの受け口＋更新の受け口＋シェル・バルーンの切替の受け口＋読み直しの受け口＋常に手前の受け口の形になっていない"
+    );
+    assert!(
+        squeeze(&code_only(include_str!("../main.rs"))).contains(
+            "[ Box::new(InstallCueSink::new(install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(update::desk::raw_sender(world))), ]"
+        ),
+        "本体の受け口の 2 つ（列の 9・10 番目）がインストールの受け口＋更新の受け口の順になっていない"
     );
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),
@@ -65,7 +74,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
 fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
     // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る。
-    let session_raw = include_str!("../session/ghost_session.rs");
+    let session_raw = crate_source!("areka-session", "src/ghost_session.rs");
     let session_code = code_only(session_raw);
     let session = squeeze(&session_code);
     let main_raw = include_str!("../main.rs");
@@ -96,7 +105,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        session_code.contains("pub(crate) fn open_ghost_windows("),
+        session_code.contains("pub fn open_ghost_windows("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(

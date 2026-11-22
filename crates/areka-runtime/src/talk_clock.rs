@@ -226,7 +226,7 @@ mod tests {
 
     /// boot の型境界（`dola::cue::CueSink + Clone + Send + 'static`）を `ClockedTextSink<T>` が
     /// 保つことをコンパイル時に固定する。型の境界だけを汎用の Send な `CueSink` 実装で確かめる
-    /// （具体の `EmoTextSink` との結線は `crates/areka/src/session/runtime_boot.rs` にある）。
+    /// （具体の `EmoTextSink` との結線は `crates/areka-session/src/runtime_boot.rs` にある）。
     fn assert_send_clone_static<T: dola::cue::CueSink + Clone + Send + 'static>() {
         fn require<X: Send + Clone + 'static>() {}
         require::<ClockedTextSink<T>>();

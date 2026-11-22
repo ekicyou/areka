@@ -11,7 +11,7 @@ use areka_parsers::shell::{SurfaceTable, parse_surfacetable};
 use bevy_ecs::world::World;
 
 use super::resolve::ActiveGhost;
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// 既定の名前（SSP の日本語の表と同じ 15 件・ID の昇順）。言語の設定は読まない。
 const DEFAULT_NAMES: [(u32, &str); 15] = [

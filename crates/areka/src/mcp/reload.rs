@@ -6,9 +6,9 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost};
-use crate::session::log_history::{self, TARGET_ERROR};
-use crate::session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 use areka_runtime::reload_args::{DescriptNotes, McpTarget, ReloadTarget};
+use areka_session::log_history::{self, TARGET_ERROR};
+use areka_session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 
 /// 知らない `target` の理由（SSP の実測の文）。
 const UNKNOWN_TARGET: &str =

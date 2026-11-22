@@ -35,11 +35,11 @@ use super::procedure::InstalledRecord;
 use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
-use crate::session::boot_config::BootContext;
-use crate::session::exit_wait::WorkGate;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::{SwitchInFlight, record_last_installed};
 use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
+use areka_session::boot_config::BootContext;
+use areka_session::exit_wait::WorkGate;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::{SwitchInFlight, record_last_installed};
 
 /// 手元に置いたイベントの頼み（送る条件がそろうまで待つ）。
 struct HeldRaise {
@@ -174,7 +174,7 @@ pub(crate) fn can_pick(world: &World) -> bool {
 pub(crate) fn pick_and_submit(world: &mut World) {
     start_pick(
         world,
-        crate::session::alert::suppressed(),
+        areka_session::alert::suppressed(),
         pick::pick_archive,
     );
 }
