@@ -24,7 +24,7 @@
   - _Dispatch: mechanical — 文面を設計が与えている_
   - _Requirements: 2.5_
 
-- [ ] 2. 使い手 3 crate の写しを `dola` の組み立てへ付け替える
+- [x] 2. 使い手 3 crate の写しを `dola` の組み立てへ付け替える
   - 2.1〜2.3 の編集は並走してよいが、各 crate の `cargo test` は同じ `target\` を使うので 1 本ずつ順に回す
 - [x] 2.1 (P) areka-ghost の写し 2 つを付け替える
   - dev の依存の `dola` の行に `test-support` 機能を足し、上のコメントをキャリアの合図の組み立ても引くと読める文に直す（本番のコードは `dola` を直に引かない、の趣旨は残す）
@@ -46,7 +46,7 @@
   - _Dispatch: mechanical — 撤去の後の形を設計の表が与えている_
   - _Requirements: 2.3, 3.1, 3.2, 3.5, 4.1, 4.3_
 
-- [ ] 2.3 (P) areka-runtime の写し 2 つを付け替え、機能を前送りする
+- [x] 2.3 (P) areka-runtime の写し 2 つを付け替え、機能を前送りする
   - dev の依存に `test-support` 機能付きの `dola` の行を足し（`areka-placement` の dev の行と同じ書き方・1 行のコメント）、自身の `test-support` 機能に `dola` の `test-support` を前送りする
   - `consumer_ledger_test_support.rs` の `actor_carrier_cue` を `dola` の組み立ての別名の再輸出にし、`carrier_cue(name, args)` の演者 `"0"` の 1 行と `broken_custom_cue` は変えない
   - `frame_window_link_drain_tests.rs` の `carrier` を消して `dola` の組み立てを `carrier` の名で取り込み、使われなくなる取り込みを外す
