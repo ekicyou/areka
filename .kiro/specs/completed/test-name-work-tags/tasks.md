@@ -56,7 +56,7 @@
 - [x] 7. `areka-runtime` の残りを改め、本体の残りを申し送る（G6）
   - G6 の 3 ファイルの行を機械で置き換え、`frame_schedule_tests.rs:14` の名指しを新しい名へ直す
   - `areka-runtime` の `zorder_wiring_tests.rs` の `t_` の無い札（`zwi01／02` ほか）と `T-N10` を消して中身の言葉を残し、18 行の「（zwi05）」「（zwi08）」は番号だけを消す。差分は `fn` の行とコメントだけ
-  - `.kiro/specs/audit-areka-app/brief.md` の「棚卸㊷からの申し送り」の節に 1 項目を足す: 本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本の改名と同じコミットで、4・5・10・11・13 行の名指しを改名表の新しい名へ直し、番号の札を消すこと。日付つきの経緯と開発者の言葉の引用は書かず、既にある 159 行の項目は変えない
+  - `.kiro/specs/completed/audit-areka-app/brief.md` の「棚卸㊷からの申し送り」の節に 1 項目を足す: 本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本の改名と同じコミットで、4・5・10・11・13 行の名指しを改名表の新しい名へ直し、番号の札を消すこと。日付つきの経緯と開発者の言葉の引用は書かず、既にある 159 行の項目は変えない
   - 完了の状態: 閉じ方の ⑴〜⑷ が通り（`cargo test -p areka-runtime`）、brief に申し送りの 1 項目が入ったコミットになっている
   - _Dispatch: mechanical — 改名表どおりの置き換えと、design の示す中身の申し送り_
   - _Requirements: 2.1, 3.1, 4.1, 4.2, 4.6, 4.7, 4.10, 6.2, 6.6_

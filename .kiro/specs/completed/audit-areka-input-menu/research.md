@@ -336,7 +336,7 @@
 | `audit-areka-app` | 本体 `crates/areka/src/app_exit_tests.rs:182` の説明が「`input_events_tests.rs` の `world_with_wiring` は私有」と古い名で指している。ファイルは 4.3（`5757e6f7f`）で `char_pointer_tests.rs` へ名を変えた。「私有」の言い方も既に事実でない | `audit-areka-app` の brief に件として書き足した。grep で 182 行の名指しを確かめた。設計の 2 件のうちの 2 件目 |
 | `session-module-gather` | `doc/COMPAT_ARCHITECTURE.md:412` が旧名 `input_events_char_clamp_tests.rs`（と `input_events_` 始まりの旧名）を指している | 4.3 では直していない（11-21 時点で向こうが main に未着地で、そのセッションが §8 を書き換える途中）。新しいテストのファイル名（`char_pointer_tests.rs`・`char_pointer_menu_tests.rs`・`char_clamp_tests.rs`）は向こうのセッションへ知らせた。412 行の 1 語は、向こうの着地の後に向こうか持ち主が直す |
 
-`audit-areka-app` の brief は `completed/` の下でなく、`.kiro/specs/audit-areka-app/brief.md` に在ることを確かめてから書き足した（要件 7.10）。
+`audit-areka-app` の brief は `completed/` の下でなく、`.kiro/specs/completed/audit-areka-app/brief.md` に在ることを確かめてから書き足した（要件 7.10）。
 
 ## 12. かけ直しの audit と差分の確かめ（要件 9・実装の記録・2026-11-22）
 

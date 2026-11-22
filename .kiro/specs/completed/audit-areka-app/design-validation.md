@@ -1,6 +1,6 @@
 # 設計の検証: audit-areka-app
 
-- 対象: `.kiro/specs/audit-areka-app/design.md`（2026-11-22・`a2032eb7a`）
+- 対象: `.kiro/specs/completed/audit-areka-app/design.md`（2026-11-22・`a2032eb7a`）
 - 入力: `requirements.md`（「要件の討議で確定したこと」は確定として扱った）・`research.md`・`spec.json`（language `ja`）・steering（`structure.md` の設計が名指す行だけ。`product.md`・`tech.md` は通して読んでいない）
 - 進め方: `kiro-validate-design` の REVIEW（Analysis → Critical Issues → Strengths → GO/NO-GO）。開発者には問わずに判定した（非対話）
 

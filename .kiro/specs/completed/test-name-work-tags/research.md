@@ -255,7 +255,7 @@
 | `doc/COMPAT_ARCHITECTURE.md:412` | 「旧 `t_c3_char_n_prefix_adds_scope_n`」・「テスト T-C3」 | 要件 5.5 の例外（歴史の文・要件 4.8） |
 | `crates/areka-sakura/` の局所変数 | `t_wait1`・`t_wait2` | 要件 5.5 の例外（テストの名でない） |
 | `.kiro/specs/extra-character-windows/brief.md:131` | 「完了 `window-placement` の設計 DD6・テスト T-C3」 | **要件 5.5 に挙げられていない**。412 行と同じ歴史の文（完了 spec の設計の番号を書く） |
-| `.kiro/specs/audit-areka-app/brief.md:159` | `t_zwi05_…`・`t_zwi08_…` | **要件 5.5 に挙げられていない**。札をまだ持つ本体の 2 本を正しく指す申し送り |
+| `.kiro/specs/completed/audit-areka-app/brief.md:159` | `t_zwi05_…`・`t_zwi08_…` | **要件 5.5 に挙げられていない**。札をまだ持つ本体の 2 本を正しく指す申し送り |
 | `.kiro/steering/roadmap.md` 514・2033・2039 行 | `t_i4_`・`t_c3_`・`t_l2_`・`t_rs01_` | **要件 5.5 に挙げられていない**。この spec の行の説明で、札の例を書くもの（テストの名指しではない） |
 | この spec の文書（`.kiro/specs/test-name-work-tags/`） | 多数 | 要件 5.3 と同じく除く（要件 5.5 は書いていない） |
 
@@ -398,7 +398,7 @@ HEAD `122c4140a` の当たり。式 4 の 12 行の内訳は `zorder_wiring_test
 | 同 `:412`（`テスト T-C3` が 2 か所） | 5 | 同上 | 完了 spec の設計の番号を歴史として書く文 |
 | `crates/areka-sakura/src/compile_sheet_tests.rs` の 60・62・71・79（`t_wait1`・`t_wait2`） | 4 | 要件 5.5 の例外（局所変数） | テストの名ではない。時刻を持つ `let` の変数名 |
 | `.kiro/specs/extra-character-windows/brief.md:131`（`テスト T-C3`） | 5 | 決めた事 3 で足した例外 | `COMPAT_ARCHITECTURE.md:412` と同じ歴史の文（完了 `window-placement` の設計の番号）。書き換えない |
-| `.kiro/specs/audit-areka-app/brief.md:159`（`t_zwi05_…`・`t_zwi08_…`） | 4 | 決めた事 3 で足した例外 | まだ札つきで在る本体の 2 本を正しく指す申し送り（既にある 159 行の項目。この spec が足した 1 項目は札の字面を持たず当たらない） |
+| `.kiro/specs/completed/audit-areka-app/brief.md:159`（`t_zwi05_…`・`t_zwi08_…`） | 4 | 決めた事 3 で足した例外 | まだ札つきで在る本体の 2 本を正しく指す申し送り（既にある 159 行の項目。この spec が足した 1 項目は札の字面を持たず当たらない） |
 | `.kiro/steering/roadmap.md` の 389・1790・1796 行（`t_i4_`・`t_c3_`・`t_l2_`・`t_rs01_`） | 4 | 決めた事 3 で足した例外 | この spec の行と出どころの説明で、札の例を書くもの。テストの名指しではない（行番号は main の #497 で §8.4 の 514・2033・2039 から 390・1791・1797 へ、#498 でさらに 1 行ずつ上へ動いた） |
 | `.kiro/specs/test-name-work-tags/`（HEAD で式 4 が 365 行・式 5 が 34 行） | 4・5 | 決めた事 3 で足した例外 | 要件 5.3 と同じく、この spec の文書は古い名・札を説明のために書く |
 
@@ -419,7 +419,7 @@ HEAD `122c4140a` の当たり。式 4 の 12 行の内訳は `zorder_wiring_test
 - この spec の文書 7（`design-validation.md`・`design.md`・`rename-table.tsv`・`requirements.md`・`research.md`・`spec.json`・`tasks.md`）。
 - `crates/areka-placement/src/` の 22 ファイル・`crates/areka-runtime/src/` の 9 ファイル・`crates/areka-emo-present/src/` の 2 ファイル（G1〜G7 の範囲）。
 - 本体 `crates/areka/` は `src/placement_tests/zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs` の **2 ファイルだけ**。`crates/areka/src/runtime_tests/` の差分は **0**。
-- 文書: `CLAUDE.md`（1 行の差分）・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/audit-areka-app/brief.md`（申し送り）・`extra-character-windows/brief.md`・`zorder-property/brief.md`。
+- 文書: `CLAUDE.md`（1 行の差分）・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/completed/audit-areka-app/brief.md`（申し送り）・`extra-character-windows/brief.md`・`zorder-property/brief.md`。
 - 歴史の場所（`.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md`）の差分は **0**。
 - 本番のファイルの差分: `zorder_group_ledger.rs` はコメントの 1 行（667 行・`t_zrb9` を新しい名へ）だけ。`config.rs` は 317 行の `mod tests` の中（336 行以降・40 行）だけ。ほかの `crates/` の差分は `_tests.rs`・`_test_support.rs` のファイルだけ。
 - #498 と重なったファイル: `consumer_ledger_test_support.rs` は 28 行目の名指しが改めた名（`set_zorder_becomes_a_set_directive_carrying_the_element_tokens`・`reset_zorder_becomes_a_reset_directive`＝`zorder_cue_tests.rs` の 65・78 行に在る）のまま残り、#498 の直し（127 行あたりの再輸出）と並ぶ。`window_state_cue_tests.rs` は #498 が触らず、改名表の 13 行がどれも新しい名の `fn` 1 つ・古い名 0。
