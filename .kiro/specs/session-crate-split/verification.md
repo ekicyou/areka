@@ -862,3 +862,86 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 
 - `cargo test -p areka --bin areka` 1843 passed・0 failed・3 ignored（1841 + 2）。2 本は `-- --test-threads 1` でも緑。
 - `cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。
+
+## 段 3
+
+### 4.1
+
+#### 移したもの（`git mv`・行の単位の書き換えだけ）
+
+- `crates/areka/src/session/` の 89 ファイル（`mod.rs` → `crates/areka-session/src/lib.rs`・`readme/` 11・`roots/` 7 は同じ並び）と本体の `crate_source_test_support.rs` を `crates/areka-session/src/` へ。`crates/areka/src/session/` は無くなった。
+- 新しく足したのは `Cargo.toml` と `src/crash_report_tests.rs` の 2 つだけ。`git diff --cached -M --name-status` は A 2・R 106（R100 34・R099 18・R098 20・ほか R086〜R097）。一番低い類似度は `reload_test_support.rs`（R086・小さいファイルで `#[cfg]` の条件と `crate::session::` の行を替えた）。
+- `git log --follow`（コミット前の木を `git commit-tree` で一時のコミットにして見た・枝は動かしていない）:
+  - `crates/areka-session/src/ghost_switch.rs` → `3bea60ed8`（2.2）・`d4db9eb08`（session-module-gather #494）・`cc1c263fa`（#488）
+  - `crates/areka-session/src/lib.rs` → `42aca0c28`（2.3）・`4bf30123b`（2.1）
+  - `crates/areka-session/src/crate_source_test_support.rs` → `cc1c263fa`（#488）・`972d18abf`（#476）
+
+#### 本番の依存（19 個＋optional 1 つ）
+
+| 依存 | 理由（本番のコードが名指す所） |
+|---|---|
+| wintf | 窓・ECS の土台（11 ファイル） |
+| dola | 説明書の台詞の受け口 `readme/readme_cue.rs` の `CueSink` |
+| areka-ghost・areka-kanade・areka-sylphya・areka-parsers・areka-seriko・areka-actor | 起動と切替が名指す型（19・15・13・6・2・3 ファイル） |
+| areka-user-data | 根の並び・切替の写し（4 ファイル） |
+| areka-emo-present | 本番のコードは名指さない。`test-support` で立つ `ghost_session_scope_scale_test_support.rs` が `AppliedScale`・`ScaleRatio` を名指す。runtime が本番で既に引くので出荷の閉包は増えない（設計の 20 個のとおり残す） |
+| areka-placement・areka-runtime・areka-input | 下の層（4・13・4 ファイル） |
+| bevy_ecs・thiserror・tracing・tracing-subscriber・async-io | ワークスペースの表から（`thiserror` は `ghost_session.rs`・`async-io` は `smoke_exit.rs`・`tracing-subscriber` は `log_history.rs`） |
+| windows | ワークスペースの表＋crate の側で `Win32_System_Registry` を上乗せ（`readme/os_port.rs` の `ShellExecuteExW`・`SHELLEXECUTEINFOW` がこの機能の下にある。本体ではほかの crate の機能の合わせで付いていた）。根の表は変えない |
+| shiori-host32-host（optional） | `test-support` で付く（切替の足場の偽の SHIORI の戻り値の型） |
+
+- 設計との違い: `areka-update` を外した。集めた層のコードが名指すのは `log_history.rs` の決まりの文字列（`"areka_update::winhttp"` ほか）だけで、型も関数も使わない（3.6「今の集めた層が本番で使う crate に収め」）。
+- 番人の 3 crate（log-capture-kit・sample-ghost-kit・temp-path-kit）は本番の表に無い（開発用だけ）。`cargo tree -p areka-session -e normal` に `areka`・番人の 3 crate は出ない。
+- `test-support = ["dep:shiori-host32-host", "areka-runtime/test-support"]`（設計のとおり）。
+
+#### 開発用の依存
+
+log-capture-kit・temp-path-kit・sample-ghost-kit（番人の注を写す）・shiori-host32-host・areka-emo-text・areka-emo-compose・areka-sakura（テストの World の型）・areka-runtime／areka-placement／areka-input（`test-support`）。設計の見込みの `areka-emo-atlas`・`image` は集めた層のテストが使わないので足していない。`cargo check -p areka-session --tests` が組めることで足りていることを確かめた。
+
+#### `Cargo.lock`
+
+差分は `areka-session` の 1 項目（33 行の追加）だけ。
+
+#### `lib.rs` の宣言
+
+- `pub mod body_systems;`・`pub mod smoke_exit;`（`pub(crate)` から）
+- `#[cfg(any(test, feature = "test-support"))] pub mod ghost_switch_test_support;`（`#[cfg(test)] pub(crate)` から）
+- `#[cfg(any(test, feature = "test-support"))] pub mod crate_source_test_support;`（新しい宣言）
+- `#[cfg(test)] mod crash_report_tests;`（新しい宣言・前例 `areka-input` と同じ中身で `areka_runtime::crash_report_test_support::install` を `.CRT$XCU` に置き、`crash_filter_is_installed_before_the_tests_start` 1 本）
+- ほかのモジュールの宣言は今のまま（`pub(crate) mod`・可視性は 4.2 の公開面で決める）。
+
+#### 中の支えの宣言（本体のテストが使うもの）
+
+| 支え | 置き場 | 条件 | 本体の使い手 |
+|---|---|---|---|
+| `reload::test_support`（`reload_test_support.rs`） | `reload.rs` | `#[cfg(any(test, feature = "test-support"))] pub mod`（`#[cfg(test)] pub(crate)` から） | `session_tests/reload_tests.rs` |
+| `ghost_session_scope_rect::test_support` | `ghost_session_scope_rect.rs` | 同上 | `session_tests/ghost_session_scope_rect_boot_tests.rs` |
+| `ghost_session_scope_scale::test_support` | `ghost_session_scope_scale.rs` | 同上。`use super::*` を `use areka_emo_present::{AppliedScale, ScaleRatio};` に替え、親の `#[cfg(test)]` の同じ `use` を外した（親のテストはこの `use` を使っていなかった） | `session_tests/ghost_session_scope_scale_boot_tests.rs` |
+| `ghost_session::shell_balloon_switch_session_lap_tests` | `ghost_session.rs` | `#[cfg(test)]` のまま | `session_tests/shell_balloon_switch_session_update_tests.rs`（`lap_rig_on` ほか） |
+
+- lap_tests を `test-support` に出せない理由: ファイルが `log_capture_kit`・`sample_ghost_kit` を使い、本体が使う `lap_rig_on` も `add_rpost_shell` で `SampleRoot::acquire("R_POST_and_KOMAINU")` を呼ぶ（設計 D8 ⑵ の後者・番人の crate は `test-support` に入れられない）。4.2 で本体の `shell_balloon_switch_session_update_tests.rs` の小道具の置き場を決める（申し送り）。
+
+#### `test-support` で組むための書き換え
+
+- `ghost_switch_test_support.rs`: `use sample_ghost_kit::SampleRoot;`・`RigSample::of`・`SwitchRig::new`・`use crate::body_systems::NO_BODY`（`new` だけが使う）・子のテストのモジュール 2 つ（`rig_wait_tests`・`talk_clock_tests`）に `#[cfg(test)]` を付けた。親が `#[cfg(test)]` だった間は要らなかった。
+- `RigSample::of` が `#[cfg(test)]` になったので、本体の `sample_test_support.rs` の `switch_rig` は 4.2 で `RigSample { root, ghost, bundled_balloon, keep }` を欄で組む（Implementation Notes 3.1 の「`test-support` が sample-ghost-kit を引けないなら `#[cfg(test)]`」の枝）。
+- `GhostSession::dispatcher` を `#[cfg(test)]` から `#[cfg(any(test, feature = "test-support"))]` へ（足場が使う・可視性 `pub(crate)` は 4.2）。
+
+#### パスの書き換え
+
+- `crate::session::` → `crate::`（68 ファイル）。`pub(in crate::session)` は 0 件。`"areka::session::…"` の文字列は 4.3 が持つので触っていない。
+- `runtime_boot_tests.rs` の `use crate::sample_test_support::acquire_emo2;` を外し、`acquire_emo2()` の 3 か所（`runtime_boot_tests.rs`・子の `script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`。子は `use super::*` で引いていた）を `SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体")` へ。設計は「1 行」と書くが、`use super::*` の子 2 本も同じ関数を呼んでいた。
+- `crate_source_test_support.rs`: `crate_source!` に `#[macro_export]`・`pub(crate) use crate_source;` を外す・`crate_path` を `pub use`・`mod tests` に `#[cfg(test)]`。
+
+#### 赤（移した直後）
+
+- `cargo check -p areka-session --lib`: `readme\os_port.rs: error[E0432]: unresolved imports windows::Win32::UI::Shell::SHELLEXECUTEINFOW, ShellExecuteExW` → `windows` に `Win32_System_Registry` を上乗せして解いた。
+- `cargo check -p areka-session --lib --features test-support`: 7 件（`sample_ghost_kit` の E0432・子のテストの `log_capture_kit` の E0432・`ScaleRatio`／`AppliedScale` の E0425／E0433／E0422・`GhostSession::dispatcher` の E0599）→ 上の書き換えで解いた。
+
+#### 確かめ
+
+- `cargo check -p areka-session --lib`・`--lib --features test-support`・`--tests`: エラー 0。
+- 警告: `--lib` 439・`--lib --features test-support` 466・`--tests` 32。どれも死んだコード（`… is never used`／`never constructed`）で、`--tests` の 1 件だけ `shell_balloon_switch.rs` の `pub(crate) use areka_runtime::skin_switch::SwapFinish` の使われない `use`（設計の PublicSurface の 8 つの 1 つ・本体のテストだけが使う）。本体が名指す項目が `pub(crate)` のまま lib になったためで、公開面（4.2）を決めるまで 0 にならない。
+- 門: 4.1 の門は「エラー 0」とし、警告 0 の門は 4.2（本体のコンパイラの指摘で公開面を決める段）へ移した（tasks.md の Implementation Notes に記録）。
+- `cargo fmt -p areka-session -- --check` 差分なし（`crate::session::` を外して並びが変わった `use` を `cargo fmt -p areka-session` で整えた）。
+- テストは走らせていない（4.4）。本体の crate はこの時点で組めない（4.2 でつなぎ替える）。

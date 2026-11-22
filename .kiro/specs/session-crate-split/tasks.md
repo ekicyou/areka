@@ -107,7 +107,7 @@
   - _Requirements: 1.11, 2.1, 2.2, 5.1_
 
 - [ ] 4. 新しい crate を作って移す
-- [ ] 4.1 crate の骨組みを作り、集めた層を移して単独で組めて走るようにする
+- [x] 4.1 crate の骨組みを作り、集めた層を移して単独で組めて走るようにする
   - `crates/areka-session/Cargo.toml` を設計の SessionCrate の形で作る（lib・`publish = false` と理由を同じ行に・ワークスペースの値の継承・`test-support = ["dep:shiori-host32-host", "areka-runtime/test-support"]`・本番の依存は設計の 20 個と optional の 1 つ・開発用の依存は設計の一覧から始めてコンパイラの指摘で足す・各行に理由の注。番人の 3 crate は本番の表に書かない）
   - 残る `session/` の全部（`mod.rs` は `lib.rs` へ・`readme/`・`roots/` は同じ並び）と、本体の `crate_source_test_support.rs` を履歴を残す移動で移し、`lib.rs` に設計の宣言（`body_systems`・`smoke_exit`・`test-support` の条件の `crate_source_test_support` と `ghost_switch_test_support`・`#[cfg(test)]` の `crash_report_tests`）を置く。本体のテストが使う `ghost_session_scope_{rect,scale}_test_support`（3.5）も `ghost_switch_test_support` と同じ `#[cfg(any(test, feature = "test-support"))] pub mod` で宣言する（`write_failure` の `sites_tests` は 3.4 で 2 本とも本体へ移るので宣言を持たない）。`crate_source!` は `#[macro_export]`、その中の `mod tests` は `#[cfg(test)]`
   - 集めた層の中の `crate::session::` を `crate::` へ、`pub(in crate::session)` を `pub(crate)` の字面へ替える。`runtime_boot_tests.rs` の `acquire_emo2` を `SampleRoot::acquire("emo2")` へ替える
@@ -223,3 +223,4 @@
 - 3.1: `RigSample::of(SampleRoot)` は設計に無い小道具（集めた層と本体の両方で 4 欄の初期化を写さないため）。段 3 で `test-support` が sample-ghost-kit を引けないなら `#[cfg(test)]` にするか本体の側へ移す。
 - 3.2: 本体へ移す `shell_balloon_switch_session_update_tests.rs` は集めた層の `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_on` ほかを使う。3.4 で移すときと 4.2 の公開面で、その小道具を `test-support` の条件で開ける（または小道具の置き場を決める）。
 - 3.4: 集めた層に残る `reload_skin_tests.rs` のために `session/reload_test_support.rs`（`boot_context`・`plant_skin_switch`、今は `#[cfg(test)] pub(crate) mod test_support`）を足した。4.1 の `lib.rs` で `ghost_switch_test_support` と同じ `test-support` の条件で宣言するかを決める。lap_tests の小道具（`lap_rig_on` ほか）も同じく 4.1・4.2 で置き場を決める。
+- 4.1: crate の lib として組むと、本体が使う `pub(crate)` の項目が死んだコードの警告になる（`--lib` 439・`--features test-support` 466・`--tests` 32）。公開面は 4.2 が本体のコンパイラの指摘から決めるので、4.1 の門は「エラー 0」とし、3 つの確かめの警告 0 は 4.2 の門へ移した（タスクの並びの直し・設計の中身は変えない）。`areka-update` は集めた層のコードが使わないので本番の依存から外した（要件 3.6）。

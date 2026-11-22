@@ -1,0 +1,72 @@
+[package]
+name = "areka-session"
+workspace = "../.."
+description = "areka session: boots, switches, reloads and ends a ghost on the UI thread"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
+repository.workspace = true
+
+[features]
+# 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける。
+# 切替の足場が runtime の台本の SHIORI（spine）と偽の SHIORI の戻り値の型を使う。番人の crate は連鎖させない。
+test-support = ["dep:shiori-host32-host", "areka-runtime/test-support"]
+
+[dependencies]
+# 窓・ECS の土台と描画の型（集めた層の系と窓の結線が名指す）。
+wintf = { path = "../wintf" }
+# 説明書の台詞を流す受け口の型（`readme_cue`）。
+dola = { path = "../dola" }
+# ゴースト・kanade・プロパティ・設定の読みの型を起動と切替が名指す（どれもワークスペースの中）。
+areka-ghost = { path = "../areka-ghost" }
+areka-kanade = { path = "../areka-kanade" }
+areka-sylphya = { path = "../areka-sylphya" }
+areka-parsers = { path = "../areka-parsers" }
+areka-seriko = { path = "../areka-seriko" }
+areka-actor = { path = "../areka-actor" }
+# 書ける根の判断と写し（根の並び・切替の写し）。
+areka-user-data = { path = "../areka-user-data" }
+# 表示層の倍率の型（倍率と DPI の読み手のテストの支えが名指す・runtime が既に引く）。
+areka-emo-present = { path = "../areka-emo-present" }
+# 集めた層は配置・実行系・入力の上に乗り、本体（areka）には依存しない。
+areka-placement = { path = "../areka-placement" }
+areka-runtime = { path = "../areka-runtime" }
+areka-input = { path = "../areka-input" }
+# 偽の SHIORI の戻り値の型（test-support でだけ付く・切替の足場が使う）。
+shiori-host32-host = { path = "../shiori-host32-host", optional = true }
+bevy_ecs = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+# ログの履歴の購読者（`env-filter` はワークスペースの表が持つ）。
+tracing-subscriber = { workspace = true }
+# 煙の自動終了の計時（本体・wintf と同じくワークスペースの表から引く）。
+async-io = { workspace = true }
+# 説明書を開く ShellExecuteExW の機能は本クレートで上乗せし、根の [workspace.dependencies.windows] は変えない。
+windows = { workspace = true, features = ["Win32_System_Registry"] }
+
+[dev-dependencies]
+# ログ捕捉テストの硬化機構の唯一の定義元。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元。
+# 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
+# [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }
+# 検体ゴースト／バルーンを名前で引く唯一の窓口。
+# テストが検体の在処を自前で綴らないための leaf・テスト専用であり、
+# log-capture-kit と同じく [dependencies] へは決して置かない。
+sample-ghost-kit = { path = "../sample-ghost-kit" }
+# 集めた層のテストが偽の SHIORI の戻り値の型を名前で引く（本番の表では optional・テストでは常に付ける）。
+shiori-host32-host = { path = "../shiori-host32-host" }
+# テストの World に置く文字層・合成・さくらスクリプトの型（本番の表には要らない・ワークスペースの中）。
+areka-emo-text = { path = "../areka-emo-text" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-sakura = { path = "../areka-sakura" }
+# runtime・配置・入力のテストの支えを集めた層のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
+areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
+areka-placement = { path = "../areka-placement", features = ["test-support"] }
+areka-input = { path = "../areka-input", features = ["test-support"] }

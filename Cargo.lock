@@ -425,6 +425,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "areka-session"
+version = "0.1.0"
+dependencies = [
+ "areka-actor",
+ "areka-emo-compose",
+ "areka-emo-present",
+ "areka-emo-text",
+ "areka-ghost",
+ "areka-input",
+ "areka-kanade",
+ "areka-parsers",
+ "areka-placement",
+ "areka-runtime",
+ "areka-sakura",
+ "areka-seriko",
+ "areka-sylphya",
+ "areka-user-data",
+ "async-io",
+ "bevy_ecs",
+ "dola",
+ "log-capture-kit",
+ "sample-ghost-kit",
+ "shiori-host32-host",
+ "temp-path-kit",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+ "windows",
+ "wintf",
+]
+
+[[package]]
 name = "areka-sylphya"
 version = "0.1.0"
 dependencies = [
