@@ -147,7 +147,7 @@
   - _Boundary: LogTargets（real-run-kit・実機テスト）_
   - _Dispatch: mechanical — 書き換える文字列を設計が与える_
   - _Requirements: 6.3_
-- [ ] 5.2 (P) 揺れの繰り返しの道具に新しい crate の lib を足す
+- [x] 5.2 (P) 揺れの繰り返しの道具に新しい crate の lib を足す
   - `tools/load-flake.ps1` の `-Binary` に `areka-session-lib`（`-p areka-session --lib`）を、選べる値・切り替え・自分の検査の表 `$want` と説明の列挙に足す
   - `pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` が緑
   - _Boundary: ToolUpdate_
