@@ -261,17 +261,19 @@ fn timeout_source_labels_are_grep_vocabulary() {
 // 読み取り口（env は 1 回だけ読む）
 // ---------------------------------------------------------------------------
 
-/// [`configured_timeout_secs`] は解決結果をプロセス寿命で 1 度だけ確定し、以後同じ値を返す。
+/// [`configured_timeout_secs`] は解決結果をプロセス寿命で 1 度だけ確定し、以後は解決し直さない。
 ///
-/// プロセス大域の環境変数は書き換えない（並行して走る他テストを壊さないため）。読み取り
-/// だけを行い、同じ入力に対する [`resolve_timeout_secs`] と一致することで結線を確かめる。
+/// 解決し直すと毎フレーム採用値の記録が出る。プロセス大域の環境変数は書き換えない（並行して走る
+/// 他テストを壊さないため）。捕捉は呼んだスレッドの窓なので、ほかのテストの記録と混ざらない。
 #[test]
 fn configured_timeout_secs_reads_env_once_and_is_stable() {
     let expected = resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0;
 
     let first = configured_timeout_secs();
-    let second = configured_timeout_secs();
+    let ((second, third), events) =
+        capture(|| (configured_timeout_secs(), configured_timeout_secs()));
 
     assert_eq!(first, expected, "環境変数の解決結果を採る");
-    assert_eq!(first, second, "2 度目以降も同じ値（read-once）");
+    assert_eq!((second, third), (first, first), "2 度目以降も同じ値");
+    assert!(events.is_empty(), "2 度目以降は解決し直さない: {events:?}");
 }

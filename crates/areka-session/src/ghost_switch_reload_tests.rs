@@ -120,6 +120,7 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
     }
     assert_eq!(count_event(&events, "reload_done"), 1, "{events:?}");
     assert_eq!(count_event(&events, "reload_failed"), 0, "{events:?}");
+    assert!(ticker_closed(&events) >= 1, "単位を降ろす: {events:?}");
 }
 
 /// 印が無い自分自身への切替は `OnGhostChanged` で起きる。
@@ -215,6 +216,8 @@ fn reload_shiori(rig: &mut SwitchRig) -> ReloadVerdict {
 }
 
 /// 単位を降ろした印（`GhostSession::shutdown` の ① だけが残す・seriko の join と組）。
+///
+/// 文面で数えるので、陽性の対を ghost の読み直しのテストに置く。
 fn ticker_closed(events: &[CapturedEvent]) -> usize {
     events
         .iter()

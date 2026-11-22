@@ -36,14 +36,6 @@ const DISPLAY_END: f64 = 2.0;
 /// 選択の待ちが解けて受け口が落ちた時刻（talk 相対秒）。
 const STOPPED: f64 = 60.0;
 
-/// 箱に文字が出ている scope にする。
-fn boxed(observation: ScopeObservation) -> ScopeObservation {
-    ScopeObservation {
-        box_showing: true,
-        ..observation
-    }
-}
-
 /// 選択肢つきのトークを始め、バルーンを出したところまで進めた状態を返す。
 fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
@@ -77,13 +69,6 @@ fn started(origin: MeasurementOrigin, display_end: f64, deadline: f64) -> Visibi
         origin,
         display_end,
         deadline,
-    }
-}
-
-fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
-    VisibilityAction::HideScopes {
-        scopes: scopes.to_vec(),
-        trigger: VisibilityTrigger::Timeout,
     }
 }
 

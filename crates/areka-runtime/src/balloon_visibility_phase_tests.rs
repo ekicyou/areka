@@ -329,7 +329,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 
     let explicit: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
-        .filter(|e| e.field("trigger") == Some("\"explicit\""))
+        .filter(|e| e.field_str("trigger") == Some("explicit"))
         .collect();
     assert_eq!(
         explicit.len(),

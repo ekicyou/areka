@@ -4,34 +4,13 @@
 //
 // 箱（シェル内バルーン）にだけ文字が出ている scope が、利用者の中断と時間切れの対象になること、
 // 隠す発行が箱に届くかの振り分け（`hide_reaches_boxes`）を固定する。
-// 箱に文字が出ていない入力（`box_showing` が偽）の期待値は既存のテスト群が持つ。
 
 use super::decision::hide_reaches_boxes;
 use super::test_support::*;
 use super::*;
 
-/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く。
+/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
 const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
-
-/// 箱に文字が出ている scope にする。
-fn boxed(observation: ScopeObservation) -> ScopeObservation {
-    ScopeObservation {
-        box_showing: true,
-        ..observation
-    }
-}
-
-/// 表示の合図の線へ任意の信号を混ぜて 1 巡進める（並びは線の上の到着順）。
-fn run_with_signals(
-    state: &mut BalloonVisibilityState,
-    entries: &[(u32, ScopeObservation)],
-    signals: &[TalkLifecycleSignal],
-    now: Option<f64>,
-) -> VisibilityDecision {
-    let mut obs = observations(entries);
-    obs.lifecycle.extend_from_slice(signals);
-    decide(state, &obs, now, TIMEOUT)
-}
 
 fn hide(scopes: &[u32], trigger: VisibilityTrigger) -> VisibilityAction {
     VisibilityAction::HideScopes {
@@ -62,12 +41,9 @@ fn user_break_targets_scopes_showing_only_boxes() {
         (2, seen(0, false)),
     ];
     let mut state = BalloonVisibilityState::default();
-    let broke = run_with_signals(
-        &mut state,
-        &entries,
-        &[TalkLifecycleSignal::UserBreak],
-        None,
-    );
+    let broke = Frame::new(&entries)
+        .signal(TalkLifecycleSignal::UserBreak)
+        .run(&mut state);
     assert_eq!(
         broke.actions,
         vec![hide(&[0, 1], VisibilityTrigger::UserBreak)]
@@ -77,14 +53,11 @@ fn user_break_targets_scopes_showing_only_boxes() {
         state.break_latch
     ));
 
-    // 対照: 箱に文字が出ていなければ、箱を足す前と同じく窓の見えている scope だけ。
+    // 対照: 箱に文字が出ていなければ、窓の見えている scope だけ。
     let mut state = BalloonVisibilityState::default();
-    let plain = run_with_signals(
-        &mut state,
-        &[(0, seen(3, true)), (1, seen(0, false)), (2, seen(0, false))],
-        &[TalkLifecycleSignal::UserBreak],
-        None,
-    );
+    let plain = Frame::new(&[(0, seen(3, true)), (1, seen(0, false)), (2, seen(0, false))])
+        .signal(TalkLifecycleSignal::UserBreak)
+        .run(&mut state);
     assert_eq!(
         plain.actions,
         vec![hide(&[0], VisibilityTrigger::UserBreak)]
@@ -96,15 +69,10 @@ fn user_break_targets_scopes_showing_only_boxes() {
 #[test]
 fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
     let mut state = BalloonVisibilityState::default();
-    let decision = run_with_signals(
-        &mut state,
-        &[(1, boxed(seen(0, false)))],
-        &[
-            TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-        ],
-        None,
-    );
+    let decision = Frame::new(&[(1, boxed(seen(0, false)))])
+        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .run(&mut state);
     assert_eq!(
         decision.actions,
         vec![hide(&[1], VisibilityTrigger::UserBreak)]
@@ -123,7 +91,6 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
         .at(0.0)
         .talk_started()
         .ended_at(0.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert!(armed.actions.is_empty(), "箱だけの scope で窓が出た");
     assert_eq!(
@@ -137,7 +104,6 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
 
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(TIMEOUT)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -151,7 +117,6 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
             .at(now)
             .talk_started()
             .ended_at(0.0)
-            .timeout(TIMEOUT)
             .run(&mut state);
         assert!(plain.actions.is_empty());
         assert!(plain.logs.is_empty());
@@ -166,12 +131,10 @@ fn hover_on_a_box_holds_the_expired_deadline() {
         .at(0.0)
         .talk_started()
         .ended_at(0.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
 
     let held = Frame::new(&[(0, hovered(boxed(seen(0, false))))])
         .at(TIMEOUT)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert!(held.actions.is_empty(), "箱の上の滞在で満了が保留されない");
     assert_eq!(
@@ -195,12 +158,10 @@ fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
         .at(0.0)
         .talk_started()
         .ended_at(0.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
 
     let cleared = Frame::new(&[(0, boxed(seen(0, true)))])
         .at(2.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
     assert_eq!(
@@ -211,7 +172,6 @@ fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
 
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(TIMEOUT)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -228,15 +188,12 @@ fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
         .at(0.0)
         .talk_started()
         .ended_at(0.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
 
-    let broke = run_with_signals(
-        &mut state,
-        &[(0, boxed(seen(0, false)))],
-        &[TalkLifecycleSignal::UserBreak],
-        Some(TIMEOUT),
-    );
+    let broke = Frame::new(&[(0, boxed(seen(0, false)))])
+        .signal(TalkLifecycleSignal::UserBreak)
+        .at(TIMEOUT)
+        .run(&mut state);
     assert_eq!(
         broke.actions,
         vec![hide(&[0], VisibilityTrigger::UserBreak)]
@@ -255,17 +212,12 @@ fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
 #[test]
 fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
     let mut state = BalloonVisibilityState::default();
-    let decision = run_with_signals(
-        &mut state,
-        &[(1, boxed(seen(0, false)))],
-        &[
-            TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(0.0),
-            TalkLifecycleSignal::TalkEnded { at: Some(0.0) },
-        ],
-        Some(0.0),
-    );
+    let decision = Frame::new(&[(1, boxed(seen(0, false)))])
+        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .ended_at(0.0)
+        .at(0.0)
+        .run(&mut state);
     assert_eq!(
         decision.actions,
         vec![hide(&[1], VisibilityTrigger::UserBreak)]

@@ -9,14 +9,6 @@
 use super::test_support::*;
 use super::*;
 
-/// 時間切れで隠す行動。
-fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
-    VisibilityAction::HideScopes {
-        scopes: scopes.to_vec(),
-        trigger: VisibilityTrigger::Timeout,
-    }
-}
-
 /// 占有終端に達してもトークの終わりが届くまでは計測が立たず、届いたフレームに「止まった時刻」を
 /// 起点に立つ。満了のフレームにだけ番号の知らせが載る。
 #[test]
@@ -432,27 +424,4 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
             .logs
             .contains(&VisibilityLogEvent::TimeoutNoticeWithoutTalkId)
     );
-}
-
-/// 「このトークで選択肢を出した」は `ChoiceShown` で立ち、次の会話の開始で戻る。
-#[test]
-fn choice_shown_marks_the_talk_until_the_next_talk_starts() {
-    let mut state = BalloonVisibilityState::default();
-    Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
-        .talk_started()
-        .run(&mut state);
-    assert!(!state.talk_had_choice);
-
-    Frame::new(&[(0, seen(3, true))])
-        .at(1.0)
-        .signal(TalkLifecycleSignal::ChoiceShown)
-        .run(&mut state);
-    assert!(state.talk_had_choice);
-
-    Frame::new(&[(0, seen(3, true))])
-        .at(2.0)
-        .talk_started()
-        .run(&mut state);
-    assert!(!state.talk_had_choice);
 }

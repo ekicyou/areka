@@ -12,12 +12,14 @@ use super::{
     BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
     TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
+#[cfg(test)]
+use super::{VisibilityAction, VisibilityLogEvent, VisibilityTrigger};
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
-/// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
+/// 消去の回数は 0 で一定。
 pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: Some(GlyphObservation {
@@ -47,6 +49,40 @@ pub(super) fn hovered(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: Some(true),
         ..observation
+    }
+}
+
+/// 箱に文字が出ている scope にする。
+#[cfg(test)]
+pub(super) fn boxed(observation: ScopeObservation) -> ScopeObservation {
+    ScopeObservation {
+        box_showing: true,
+        ..observation
+    }
+}
+
+/// 期待する表示行動。
+#[cfg(test)]
+pub(super) fn show(scope: u32) -> VisibilityAction {
+    VisibilityAction::Show { scope }
+}
+
+/// 期待する表示ログ。
+#[cfg(test)]
+pub(super) fn shown_log(scope: u32) -> VisibilityLogEvent {
+    VisibilityLogEvent::Transition {
+        scope,
+        trigger: VisibilityTrigger::Content,
+        visible: true,
+    }
+}
+
+/// 期待する非表示行動（タイムアウトが契機）。
+#[cfg(test)]
+pub(super) fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
+    VisibilityAction::HideScopes {
+        scopes: scopes.to_vec(),
+        trigger: VisibilityTrigger::Timeout,
     }
 }
 

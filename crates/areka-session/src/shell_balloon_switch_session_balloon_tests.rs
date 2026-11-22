@@ -151,11 +151,13 @@ fn recorded_balloons(events: &[CapturedEvent]) -> Vec<Option<String>> {
         .collect()
 }
 
-/// 可視性の制御が「本制御が発行していない可視状態の変化」を記録した件数。
+/// 可視性の制御が自分の発行していない可視状態の変化を記録した件数（欄 `trigger=explicit`）。
+///
+/// 同じ欄で 1 件以上数える陽性の対は `areka-runtime` の `external_hide_is_logged_as_explicit_and_clears_hover`。
 fn external_transitions(events: &[CapturedEvent]) -> usize {
     events
         .iter()
-        .filter(|e| e.message().contains("本制御が発行していない可視状態の変化"))
+        .filter(|e| e.field_str("trigger") == Some("explicit"))
         .count()
 }
 
