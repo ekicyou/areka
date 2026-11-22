@@ -9,11 +9,12 @@
 //! 入口での解決の分岐（切替先へ解ける・解けない理由の語・`lastinstalled` の記録・
 //! 予約中・メニューのフォルダ名）は実 fs の目録で確かめる。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
-use areka_ghost::{BasewareRoot, GhostEntry, Identity};
+use areka_ghost::{BasewareRoot, GhostEntry};
 use areka_kanade::{ChangeOrigin, ChangeRequest, ChangeTarget, KanadeMsg};
+use areka_runtime::special_name::catalog_entry;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -25,19 +26,6 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch_test_support::boot_context;
 
 // ---------------------------------------------------------------- 道具立て
-
-/// 目録の 1 項目（fs を見ない突き合わせ用）。
-fn entry(folder: &str, name: Option<&str>) -> GhostEntry {
-    GhostEntry {
-        dir: PathBuf::from(format!(r"C:\ghost-switch-tests\ghost\{folder}")),
-        root: PathBuf::from(r"C:\ghost-switch-tests"),
-        identity: Identity {
-            folder: folder.to_owned(),
-            name: name.map(str::to_owned),
-            ..Identity::default()
-        },
-    }
-}
 
 pub(super) fn resolved_folder(entries: &[GhostEntry], spec: GhostSpec) -> Option<String> {
     resolve_switch_target(entries, &spec).map(|t| t.folder)
@@ -125,7 +113,10 @@ fn absolute(path: &Path) -> String {
 #[test]
 fn name_matches_before_folder_name() {
     // 先頭の `Beta` はフォルダ名が Beta、2 番目の `alpha` は `name` が Beta。
-    let entries = [entry("Beta", Some("Gamma")), entry("alpha", Some("Beta"))];
+    let entries = [
+        catalog_entry("Beta", Some("Gamma")),
+        catalog_entry("alpha", Some("Beta")),
+    ];
     assert_eq!(
         (
             resolved_folder(&entries, name("Beta")),
@@ -144,7 +135,7 @@ fn name_matches_before_folder_name() {
 /// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない。
 #[test]
 fn name_is_case_sensitive_folder_name_is_not() {
-    let entries = [entry("Alpha", Some("Emily"))];
+    let entries = [catalog_entry("Alpha", Some("Emily"))];
     assert_eq!(
         (
             resolved_folder(&entries, name("emily")),
@@ -166,7 +157,7 @@ fn name_is_case_sensitive_folder_name_is_not() {
 /// メニューの指し方（フォルダ名）は `name` と突き合わせない。
 #[test]
 fn folder_spec_matches_folder_name_only() {
-    let entries = [entry("alpha", Some("Beta"))];
+    let entries = [catalog_entry("alpha", Some("Beta"))];
     assert_eq!(
         (
             resolved_folder(&entries, folder("Beta")),
@@ -179,7 +170,10 @@ fn folder_spec_matches_folder_name_only() {
 /// 切替先の名前は `name`（無ければフォルダ名）。`sakura.name` は突き合わせでは読まない。
 #[test]
 fn target_name_falls_back_to_folder_name() {
-    let entries = [entry("alpha", Some("Beta")), entry("gamma", None)];
+    let entries = [
+        catalog_entry("alpha", Some("Beta")),
+        catalog_entry("gamma", None),
+    ];
     let beta = resolve_switch_target(&entries, &name("Beta")).expect("在る");
     let gamma = resolve_switch_target(&entries, &folder("gamma")).expect("在る");
     assert_eq!(
@@ -305,22 +299,7 @@ fn unknown_names_warn_once_and_send_nothing() {
             request(name("Nobody"), true, ChangeOrigin::Automatic),
         )
     });
-    assert_eq!(
-        (
-            verdict,
-            sent_changes(&rx).len(),
-            world.get_non_send::<SwitchInFlight>().is_some(),
-            count_event(&events, "ghost_switch_requested"),
-        ),
-        (SwitchVerdict::NotFound, 0, false, 0),
-        "{events:?}"
-    );
-    assert_one_event(&events, "ghost_switch_unknown", tracing::Level::WARN);
-    let unknown = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("ghost_switch_unknown"))
-        .expect("該当なしの記録");
-    assert_eq!(unknown.field_str("reason"), Some("name"), "{events:?}");
+    assert_ignored((&world, &rx), (verdict, &events), "name");
 }
 
 /// 二重要求: 予約が在る間の 2 件目は `warn!` 1 件で捨てる（送出は 1 件目の 1 件だけ）。
@@ -347,6 +326,50 @@ fn second_request_while_reserved_warns_once() {
             SwitchVerdict::Accepted,
             SwitchVerdict::Busy,
             1,
+            Some("A".to_owned()),
+        ),
+        "{events:?}"
+    );
+    assert_one_event(&events, "ghost_switch_busy", tracing::Level::WARN);
+}
+
+/// 入口を通らない受理（読み直しの窓口が直に呼ぶ）でも、予約が在れば `warn!(ghost_switch_busy)`
+/// 1 件で退ける: 送出 0 件・予約は 1 件目のまま。
+#[test]
+fn accept_while_reserved_is_busy_and_keeps_the_reservation() {
+    let tmp = TempPath::new("ghost-switch-accept-busy");
+    let root = fixture_root(&tmp);
+    let (mut world, rx) = world_with_slot(&root);
+    let first = request_ghost_switch(
+        &mut world,
+        request(name("Alice"), true, ChangeOrigin::Automatic),
+    );
+    let first_sent = sent_changes(&rx).len();
+    let target = SwitchTarget {
+        dir: root.ghost_dir("B"),
+        folder: "B".to_owned(),
+        name: "B".to_owned(),
+        sakura_name: None,
+    };
+
+    let (second, events) = capture(|| {
+        accept_switch(
+            &mut world,
+            target,
+            request(folder("B"), false, ChangeOrigin::Automatic),
+        )
+    });
+
+    let reserved = world
+        .get_non_send::<SwitchInFlight>()
+        .map(|r| r.target.folder.clone());
+    assert_eq!(
+        (first, first_sent, second, sent_changes(&rx).len(), reserved),
+        (
+            SwitchVerdict::Accepted,
+            1,
+            SwitchVerdict::Busy,
+            0,
             Some("A".to_owned()),
         ),
         "{events:?}"

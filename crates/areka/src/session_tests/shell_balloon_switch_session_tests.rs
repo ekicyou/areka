@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use super::shell_balloon_switch_tests::{absolute, write_descript};
 use crate::sample_test_support::switch_rig;
 use areka_runtime::skin_switch::SkinSwitchInFlight;
 use areka_runtime::spine::RecordedCall;
@@ -13,11 +14,6 @@ use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
-
-fn write_second_descript(dir: &std::path::Path) {
-    std::fs::create_dir_all(dir).unwrap();
-    std::fs::write(dir.join("descript.txt"), "charset,UTF-8\r\nname,二つ目\r\n").unwrap();
-}
 
 /// 入口の受理の記録 `skin_switch_requested` の（kind・to・origin）の列。
 fn requested(
@@ -35,7 +31,7 @@ fn requested(
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、
 /// 持ったセッションを降ろしても seriko の join が止まらずに戻る。複製を降ろす最初の
-/// 段で落とさないと、③ の join が残った送り手を待ち続けて待ちの上限で赤になる。
+/// 段で落とさないと、降ろす処理の seriko の join が残った送り手を待ち続けて待ちの上限で赤になる。
 #[test]
 fn session_holding_seriko_sink_shuts_down_within_bound() {
     let mut rig = switch_rig(vec![(
@@ -76,7 +72,7 @@ fn menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1() 
     )]);
     let shell = rig.root.ghost_dir("A").join("shell");
     let second = shell.join("second");
-    write_second_descript(&second);
+    write_descript(&second, "name,二つ目");
     let current_name = areka_ghost::catalog::list_all_shells(&rig.root.ghost_dir("A"))
         .into_iter()
         .find(|e| e.identity.folder == "master")
@@ -108,7 +104,7 @@ fn menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1() 
     let got = changing();
     let shutdown_ok = rig.shutdown();
 
-    let want_path = std::path::absolute(&second).unwrap().display().to_string();
+    let want_path = absolute(&second);
     assert_eq!(
         (steady, verdict, arrived, got, shutdown_ok),
         (
@@ -162,7 +158,7 @@ fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
         })),
     )]);
     let second = rig.root.ghost_dir("A").join("shell").join("second");
-    write_second_descript(&second);
+    write_descript(&second, "name,二つ目");
     let master_name = areka_ghost::catalog::list_shells(&rig.root.ghost_dir("A"))
         .into_iter()
         .find(|e| e.identity.folder == "master")
@@ -221,7 +217,7 @@ fn menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch(
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);
     let second = rig.root.balloon_dir("second");
-    write_second_descript(&second);
+    write_descript(&second, "name,二つ目");
     let current_label = areka_ghost::catalog_roots::list_balloons(
         &areka_ghost::catalog_roots::BasewareRoots::single(rig.root.dir().to_path_buf()),
     )

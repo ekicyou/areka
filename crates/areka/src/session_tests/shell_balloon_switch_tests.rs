@@ -48,7 +48,7 @@ struct Rig {
     _temp: TempPath,
 }
 
-fn write_descript(dir: &Path, body: &str) {
+pub(super) fn write_descript(dir: &Path, body: &str) {
     fs::create_dir_all(dir).unwrap();
     fs::write(
         dir.join("descript.txt"),
@@ -158,7 +158,7 @@ fn sent(rx: &Receiver<KanadeMsg>) -> Vec<Option<Option<GapRaise>>> {
         .collect()
 }
 
-fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
+pub(super) fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event) && e.level == level)
@@ -169,7 +169,7 @@ fn level_count(events: &[CapturedEvent], level: Level) -> usize {
     events.iter().filter(|e| e.level == level).count()
 }
 
-fn absolute(path: &Path) -> String {
+pub(super) fn absolute(path: &Path) -> String {
     std::path::absolute(path)
         .expect("絶対パスにする")
         .display()
@@ -394,7 +394,8 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
 }
 
 /// バルーンの切替の候補は今のゴーストの中も引く。同じ `name` はゴーストの中が当たり、印の切替先は
-/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる。
+/// ゴーストの中の場所とそのフォルダ名（完了の相が記憶へ書く値）になる。フォルダ名は大文字小文字を
+/// 区別しない（`INNER` で `inner` に当たる）。
 #[test]
 fn balloon_switch_targets_the_ghost_inner_balloon() {
     let cases = [

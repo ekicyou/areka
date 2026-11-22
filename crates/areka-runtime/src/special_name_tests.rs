@@ -2,28 +2,13 @@
 //!
 //! 偽の目録と固定の乱数で、解決の純粋な関数だけを確かめる。
 
-use std::path::PathBuf;
-
-use areka_ghost::{GhostEntry, Identity};
+use areka_ghost::GhostEntry;
 
 use super::*;
 
-/// 目録の 1 項目（fs を見ない突き合わせ用）。
-fn entry(folder: &str, name: Option<&str>) -> GhostEntry {
-    GhostEntry {
-        dir: PathBuf::from(format!(r"C:\ghost-switch-tests\ghost\{folder}")),
-        root: PathBuf::from(r"C:\ghost-switch-tests"),
-        identity: Identity {
-            folder: folder.to_owned(),
-            name: name.map(str::to_owned),
-            ..Identity::default()
-        },
-    }
-}
-
 /// 名前の要らない目録（フォルダ名だけ・並びは渡した順）。
 fn catalog(folders: &[&str]) -> Vec<GhostEntry> {
-    folders.iter().map(|f| entry(f, None)).collect()
+    folders.iter().map(|f| catalog_entry(f, None)).collect()
 }
 
 fn resolved(folder: &str, position: Option<usize>) -> NameResolution {
@@ -165,7 +150,10 @@ fn lastinstalled_looks_up_the_record_by_folder_name() {
 /// 名指ししない）。
 #[test]
 fn special_name_wins_over_a_ghost_with_the_same_name() {
-    let entries = [entry("B", None), entry("random", Some("random"))];
+    let entries = [
+        catalog_entry("B", None),
+        catalog_entry("random", Some("random")),
+    ];
     assert_eq!(
         resolve_special_name(
             "random",

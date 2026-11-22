@@ -92,7 +92,8 @@ pub struct Stall {
 
 impl Stall {
     /// `id` の GET で止まる栓。
-    pub fn at(id: &'static str) -> Self {
+    #[cfg(test)]
+    pub(crate) fn at(id: &'static str) -> Self {
         Self {
             at: id,
             state: Arc::default(),
@@ -100,12 +101,14 @@ impl Stall {
     }
 
     /// 止まる GET に一度でも入ったか（後戻りしない観測）。
-    pub fn entered(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn entered(&self) -> bool {
         self.state.0.lock().expect("stall poisoned").0
     }
 
     /// 解く（止まっている GET を通し、以後は止めない）。
-    pub fn release(&self) {
+    #[cfg(test)]
+    pub(crate) fn release(&self) {
         self.state.0.lock().expect("stall poisoned").1 = true;
         self.state.1.notify_all();
     }

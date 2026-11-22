@@ -11,17 +11,18 @@
 
 use std::path::PathBuf;
 
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
+use tracing::Level;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::shell_balloon_switch_tests::count;
 use crate::sample_test_support::switch_rig;
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_session::boot_config::BootContext;
-use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
-    LapRig, SECOND, UNBOUNDED, got, idle, kinds, lap_rig_on,
+    LapRig, SECOND, UNBOUNDED, current_shell, got, idle, kinds, lap_rig_on,
 };
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{
@@ -102,24 +103,12 @@ fn expected(rig: &SwitchRig, shell: &str, balloon: &str) -> Vec<(TargetKind, Pat
 
 /// 置き場のゴーストの今のシェルのフォルダ名と、起動の文脈の今のバルーン（選び方・フォルダ名）。
 fn current(rig: &SwitchRig) -> (Option<String>, Option<(String, Option<String>)>) {
-    let shell = rig
-        .world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.current_shell_folder());
     let balloon = rig
         .world
         .get_resource::<BootContext>()
         .map(|ctx| &ctx.current.balloon)
         .map(|b| (format!("{:?}", b.route), b.folder.clone()));
-    (shell, balloon)
-}
-
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
+    (current_shell(rig), balloon)
 }
 
 /// 差し替えの後の対象の解決（`resolve_targets_reads_the_slot_and_the_boot_context` の
@@ -146,10 +135,10 @@ fn update_targets_follow_the_swapped_shell_and_balloon() {
         (
             (steady, swapped),
             calls,
-            count(&events, "skin_switch_done"),
+            count(&events, "skin_switch_done", Level::INFO),
             (before, after),
             now,
-            count(&skipped, "update_target_skipped"),
+            count(&skipped, "update_target_skipped", Level::WARN),
             shutdown_ok,
         ),
         (
@@ -233,11 +222,14 @@ fn a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon() {
     assert_eq!(
         (
             (steady, swapped, finished),
-            (count(&events, "update_reload_requested"), boots.len()),
+            (
+                count(&events, "update_reload_requested", Level::INFO),
+                boots.len()
+            ),
             boots.get(1).cloned(),
             now,
             after,
-            count(&events, "boot_shell_missing"),
+            count(&events, "boot_shell_missing", Level::WARN),
             (exit_requested, shutdown_ok),
         ),
         (

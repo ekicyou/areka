@@ -43,7 +43,8 @@ pub struct Ticks {
 }
 
 /// Tick を注入しない（台詞の時計を止めたまま回す）。
-pub const NO_TICKS: Ticks = Ticks { step_ms: 0, max: 0 };
+#[cfg(test)]
+pub(crate) const NO_TICKS: Ticks = Ticks { step_ms: 0, max: 0 };
 /// 100 ms ずつ・上限なし（進み方を問わない場面）。
 pub const UNBOUNDED: Ticks = Ticks {
     step_ms: 100,
@@ -52,13 +53,15 @@ pub const UNBOUNDED: Ticks = Ticks {
 /// 1 ms ずつ・上限なし（台詞の始まりを見るまで。台詞の開始は kanade から中継を経て dispatcher へ
 /// 届くので Tick より遅れうる。始まる前の Tick は捨てられ、始まった後に溜まった Tick も 1 回 1 ms
 /// しか進めない）。
-pub const CREEP: Ticks = Ticks {
+#[cfg(test)]
+pub(crate) const CREEP: Ticks = Ticks {
     step_ms: 1,
     max: usize::MAX,
 };
 /// 台詞の始まりを見た後、受理までに注入する Tick（100 ms × 20 回＝台詞の時計で高々 2,000 ms。
 /// 命令の位置〔台本の頭から数十 ms〕には届き、命令の後の待ち 5,000 ms は食い切らない）。
-pub const ACCEPT: Ticks = Ticks {
+#[cfg(test)]
+pub(crate) const ACCEPT: Ticks = Ticks {
     step_ms: 100,
     max: 20,
 };
@@ -288,7 +291,7 @@ pub fn kinds(calls: &[RecordedCall]) -> Vec<String> {
 }
 
 /// 呼出列から `id` の GET の Reference を順に取る。
-pub fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
+pub(crate) fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
     calls
         .iter()
         .filter_map(|c| match c {
@@ -302,13 +305,21 @@ pub fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
 }
 
 /// A の最初の起動の呼出列。
-pub fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
+pub(crate) fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
     rig.calls("A").into_iter().next().unwrap_or_default()
 }
 
 /// `id` の GET が `n` 件以上届いたか。
 pub fn got(rig: &SwitchRig, id: &str, n: usize) -> bool {
     refs_of(&calls_a(rig), id).len() >= n
+}
+
+/// 置き場のゴーストの今のシェルのフォルダ名。
+pub fn current_shell(rig: &SwitchRig) -> Option<String> {
+    rig.world
+        .get_non_send::<crate::ghost_session::GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.current_shell_folder())
 }
 
 /// 切替の進行中の印が無い。

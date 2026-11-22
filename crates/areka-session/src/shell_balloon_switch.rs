@@ -46,7 +46,8 @@ pub struct SwitchRx(Receiver<SkinRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_switch_drain`]）。
 ///
-/// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
+/// 呼び手は実行系の起動の後の `runtime_boot::install_lines`。前のゴーストの受信端は置き換わって
+/// 落ちる。
 pub fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
     world.insert_non_send(SwitchRx(rx));
 }
@@ -235,7 +236,8 @@ fn request_skin_switch_with(
             method: ShioriMethod::Get,
         }
     });
-    // 候補は今のゴーストから読むので、受理の後に使い回さない。
+    // 受理の後の要求は進行中の印が候補より先に退けるので、捨てるのは備え: 印が同じ取り出しの中で
+    // 下りても、差し替える前のゴーストから読んだ候補を使わせない。
     *catalog = [None, None];
     accept_skin(world, &ctx, req.kind, target, raise)
 }

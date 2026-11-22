@@ -48,15 +48,14 @@ pub(crate) struct ChangeRx(Receiver<ChangeRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_change_drain`]）。
 ///
-/// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
+/// 呼び手は `runtime_boot::install_lines`。前のゴーストの受信端は置き換わって落ちる。
 pub(crate) fn wire_change_rx(world: &mut World, rx: Receiver<ChangeRequestRaw>) {
     world.insert_non_send(ChangeRx(rx));
 }
 
 /// 取り出しの系を入力の段へ登録する（プロセスに 1 回・持ち物は置かない）。
 ///
-/// 並びは説明書の取り出しと同じく `dispatch_pointer_events` の後。呼び手は
-/// `ghost_session::register_systems`。
+/// 並びは説明書の取り出しと同じく `dispatch_pointer_events` の後。呼び手は `ghost_session::register_systems`。
 pub(crate) fn register_change_drain(world: &mut World) {
     world
         .resource_mut::<Schedules>()
@@ -257,13 +256,9 @@ pub fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerd
 }
 
 /// 入口の中身。乱数と目録の読み方を外から受ける（決定論テスト用）。`catalog` は目録を 1 度だけ埋める置き場で、
-/// 取り出しの系が 1 回の取り出しの間だけ共用する。
-///
-/// 予約が在れば `warn!(ghost_switch_busy)`、更新の実行中のメニューの要求は `warn!(ghost_switch_updating)`。
-/// 名前の要求は特別な名前を解いてから目録と突き合わせ
-/// （解けたら `info!(ghost_switch_resolved)`）、切替先が決まらない（該当なし・特別な名前が解けない）
-/// ときは `warn!(ghost_switch_unknown)` を `reason` つきで 1 件（降ろさず kanade へ何も送らない）。
-/// 決まったら [`accept_switch`] へ。
+/// 取り出しの系が 1 回の取り出しの間だけ共用する。予約が在れば `warn!(ghost_switch_busy)`、更新の実行中のメニューの要求は `warn!(ghost_switch_updating)`。
+/// 名前の要求は特別な名前を解いてから目録と突き合わせ（解けたら `info!(ghost_switch_resolved)`）、切替先が決まらない（該当なし・特別な名前が解けない）
+/// ときは `warn!(ghost_switch_unknown)` を `reason` つきで 1 件（降ろさず kanade へ何も送らない）。決まったら [`accept_switch`] へ。
 fn request_ghost_switch_with(
     world: &mut World,
     req: SwitchRequest,
@@ -271,12 +266,7 @@ fn request_ghost_switch_with(
     catalog: &mut Option<Vec<GhostEntry>>,
     read: &mut impl FnMut(&BasewareRoots) -> Vec<GhostEntry>,
 ) -> SwitchVerdict {
-    if world.get_non_send::<SwitchInFlight>().is_some() {
-        tracing::warn!(
-            event = "ghost_switch_busy",
-            spec = ?req.ghost,
-            "切替の途中に新しい切替要求が届いた——重ねずに無視する"
-        );
+    if reserved(world, &req.ghost) {
         return SwitchVerdict::Busy;
     }
     if req.origin == ChangeOrigin::Manual && (BodySystems::of(world).update_busy)(world) {
@@ -334,9 +324,22 @@ fn request_ghost_switch_with(
         return SwitchVerdict::NotFound;
     };
     let target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
-    // 受理の後の目録は切替で変わりうるので使い回さない。
+    // 受理の後の要求は予約が先に退けるので備え: 予約が同じ取り出しの中で下りても、切替の前に読んだ目録を使わせない。
     *catalog = None;
     accept_switch(world, target, req)
+}
+
+/// 予約が在れば `warn!(ghost_switch_busy)` を残して `true`（入口と受理の後半が共有する）。
+fn reserved(world: &World, spec: &GhostSpec) -> bool {
+    let reserved = world.get_non_send::<SwitchInFlight>().is_some();
+    if reserved {
+        tracing::warn!(
+            event = "ghost_switch_busy",
+            spec = ?spec,
+            "切替の途中に新しい切替要求が届いた——重ねずに無視する"
+        );
+    }
+    reserved
 }
 
 fn no_boot_context() -> SwitchVerdict {
@@ -348,14 +351,17 @@ fn no_boot_context() -> SwitchVerdict {
     SwitchVerdict::NoContext
 }
 
-/// 受理の後半: kanade へ切替の要求を送って予約 [`SwitchInFlight`] を立てる。文脈・置き場の送出端が
-/// 無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら `error!(ghost_switch_send_failed)` で
-/// 予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
+/// 受理の後半: kanade へ切替の要求を送って予約 [`SwitchInFlight`] を立てる。予約が既に在れば
+/// `warn!(ghost_switch_busy)` で退ける（読み直しの窓口は入口を通らずここを呼ぶ）。文脈・置き場の送出端が無ければ `warn!(ghost_switch_no_context)`、
+/// 送出に失敗したら `error!(ghost_switch_send_failed)` で予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
 pub(crate) fn accept_switch(
     world: &mut World,
     mut target: SwitchTarget,
     req: SwitchRequest,
 ) -> SwitchVerdict {
+    if reserved(world, &req.ghost) {
+        return SwitchVerdict::Busy;
+    }
     let Some(ctx) = world.get_resource::<BootContext>() else {
         return no_boot_context();
     };
@@ -436,8 +442,8 @@ pub(crate) fn accept_switch(
 /// （告知・終了コード 1）で終了（戻す試みは 1 回だけ）。記録は既定ゴーストの失敗を表す
 /// `error!(ghost_switch_default_fault)`（切替先の失敗 `ghost_switch_target_fault` とは別の語）。
 /// 迎え入れ＋失敗以外 → `info!(ghost_switch_target_quit)`・予約を下ろして終了。
-/// 予約が無ければ終了（呼び手は予約が在るときだけ呼ぶ）。エラー応答は停止通知を
-/// 生まないので、ここに判断は無い。
+/// 呼び手は予約が在るときだけ呼ぶ。無ければ `error!(ghost_switch_no_reservation)` の上で終了相 `ghost_quit` と
+/// 同じ出所で終了する。エラー応答は停止通知を生まないので、ここに判断は無い。
 pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     let Some((stage, target_name, target_is_default)) =
         world.get_non_send::<SwitchInFlight>().map(|f| {
@@ -445,10 +451,10 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
             (f.stage, f.target.name.clone(), is_default)
         })
     else {
-        tracing::debug!(
+        tracing::error!(
             event = "ghost_switch_no_reservation",
             cause = ?stopped.cause,
-            "切替の予約が無い停止通知——そのまま終了する"
+            "切替の予約が無いのに停止通知を切替の段で捌く指示が来た——そのまま終了する"
         );
         quit_app(world, ExitOrigin::KanadeStopped(stopped.cause));
         return;
@@ -460,7 +466,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
             tracing::warn!(
                 event = "ghost_switch_not_accepted",
                 cause = ?cause,
-                "kanade が切替の要求を受理しないまま止まった（終了要求と競合）——切替をやめて今日どおり終了する"
+                "kanade が切替の要求を受理しないまま止まった（終了要求と競合）——切替をやめてそのまま終了する"
             );
             end_switch(world, SwitchEnd::NotAccepted);
             quit_app(world, ExitOrigin::KanadeStopped(cause));
@@ -481,7 +487,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     ghost = %DEFAULT_GHOST_FOLDER,
                     attempt = ?attempt,
                     reason = %fault.reason,
-                    "既定ゴーストの SHIORI が失敗した（戻す試みは済んだ／切替先が既定）——今日の失敗の経路で終了する"
+                    "既定ゴーストの SHIORI が失敗した（戻す試みは済んだ／切替先が既定）——失敗の経路（告知・終了コード 1）で終了する"
                 );
                 end_switch(world, SwitchEnd::DefaultFault);
                 quit_app(
@@ -494,7 +500,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     event = "ghost_switch_target_quit",
                     attempt = ?attempt,
                     cause = ?cause,
-                    "迎え入れたゴーストが失敗以外で止まった——今日どおり終了する"
+                    "迎え入れたゴーストが失敗以外で止まった——そのまま終了する"
                 );
                 end_switch(world, SwitchEnd::TargetQuit);
                 quit_app(world, ExitOrigin::KanadeStopped(cause));
@@ -507,7 +513,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
 ///
 /// 定常到達: 迎え入れの予約を下ろし `info!(ghost_switch_done)`。送り出しの段の予約は残す（まだ
 /// 握手の途中）。予約が無ければ `debug!`（初回起動・切替の外）。切替の中止: 予約を下ろし
-/// `info!(ghost_switch_cancelled)`。予約が無ければ `warn!`。停止は [`on_ghost_stopped`] へ。
+/// `info!(ghost_switch_cancelled)`。予約が無ければ `warn!`。停止は終了相 `ghost_quit` が捌く（ここへ来たら [`on_ghost_stopped`] へ）。
 pub fn on_notice(world: &mut World, notice: KanadeNotice) {
     let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
     match notice {
@@ -627,10 +633,8 @@ fn record_steady_memory(world: &World) {
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
 ///
 /// shiori の読み直し（窓口自身の予約・[`super::reload::wants_runtime_only`]）だけは降ろさず・窓を閉じず・
-/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す。
-/// 組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
-/// 書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ
-/// [`switch_to_default`]。
+/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す。組み直せたら段を「迎え入れ（切替先）」に。
+/// 降ろした直後の記憶を書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ [`switch_to_default`]。
 pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some((target, prev, boot_event)) = world
         .get_non_send::<SwitchInFlight>()
@@ -891,9 +895,9 @@ fn set_stage(world: &mut World, attempt: WelcomeAttempt) {
         .and_then(|c| c.current.ghost.folder.clone());
     match world.get_non_send_mut::<SwitchInFlight>() {
         Some(mut flight) => flight.stage = SwitchStage::Welcoming { attempt },
-        None => tracing::warn!(
+        None => tracing::error!(
             event = "ghost_switch_no_reservation",
-            "切替の予約が無い——段は記録しない"
+            "切替の予約が無いのに段を進める指示が来た——段は記録しない"
         ),
     }
     tracing::info!(

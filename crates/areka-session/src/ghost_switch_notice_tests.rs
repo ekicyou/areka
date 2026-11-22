@@ -245,7 +245,7 @@ fn default_as_target_fault_quits_without_retry() {
 
 /// 迎え入れで失敗以外の停止（切替先が終了を望んだ）→ `info!` の上で予約を下ろして終了。
 #[test]
-fn welcoming_non_fault_stop_quits_as_today() {
+fn welcoming_non_fault_stop_quits() {
     let tmp = TempPath::new("ghost-switch-target-quit");
     let root = root_with(&tmp, &["A", "B"]);
     let mut world = switching_world(&root, "B");
@@ -271,6 +271,33 @@ fn welcoming_non_fault_stop_quits_as_today() {
             vec![tracing::Level::INFO]
         ),
         "(最初の出所・予約・記録): {events:?}"
+    );
+}
+
+/// 予約が無いのに停止通知が切替の段へ来た → `error!(ghost_switch_no_reservation)` 1 件の上で
+/// 終了相と同じ出所で終了する（kanade は止まっているので、何もしなければ終われない）。
+#[test]
+fn stop_without_reservation_logs_error_and_quits() {
+    let tmp = TempPath::new("ghost-switch-stop-no-reservation");
+    let root = root_with(&tmp, &["A", "B"]);
+    let mut world = switching_world(&root, "B");
+    world.remove_non_send::<SwitchInFlight>();
+
+    let ((), events) =
+        capture(|| on_ghost_stopped(&mut world, stopped(KanadeStopCause::Quit, None)));
+
+    assert_eq!(
+        (
+            level_of(&events, "ghost_switch_no_reservation"),
+            world.non_send::<AppExit>().is_requested(),
+            world.get_resource::<FirstExit>().map(|f| f.0.clone()),
+        ),
+        (
+            vec![tracing::Level::ERROR],
+            true,
+            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Quit)),
+        ),
+        "(記録・終了の指示・最初の出所): {events:?}"
     );
 }
 

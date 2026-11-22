@@ -125,7 +125,7 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
 /// 欄が空の切替: 起き直した A の根は `OnGhostChanged`（台本で応える＝`OnBoot` へ続かない）で、
 /// 知らせのイベントは届かない。
 #[test]
-fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today() {
+fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed() {
     let a = FakeShiori::Scripted(Box::new(|| {
         standard_script(r"\0A\e")
             .get("OnGhostChanged", Ok(Some(r"\0A\e".to_owned())))

@@ -163,7 +163,7 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
 
 /// 印が無い自分自身への切替は `OnGhostChanged` で起きる。
 #[test]
-fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
+fn a_switch_without_the_mark_boots_with_on_ghost_changed() {
     let mut rig = running_a();
 
     let (flow, events) = capture(|| {
@@ -186,7 +186,7 @@ fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
 /// 印があっても進行中の予約が他人のもの（鍵が違う）なら由来は上書きされず `OnGhostChanged` で起き、
 /// 印は `reload_failed(overtaken)` を残して下りる。
 #[test]
-fn a_foreign_switch_under_a_reload_mark_boots_as_before_and_drops_the_mark_as_overtaken() {
+fn a_foreign_switch_under_a_reload_mark_boots_and_drops_the_mark_as_overtaken() {
     let mut rig = running_a();
     rig.world.insert_non_send(ReloadInFlight {
         target: ReloadTarget::Ghost,

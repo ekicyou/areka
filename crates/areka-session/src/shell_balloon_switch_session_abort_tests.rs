@@ -11,12 +11,11 @@ use tracing::Level;
 use wintf::ecs::pointer::DoubleClick;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::GhostSlot;
 use super::shell_balloon_switch_session_balloon_tests::scope0_text;
 use super::shell_balloon_switch_session_lap_tests::{
     ACCEPT, BOOT_TO_SECOND, BOOT_TO_SECOND_PLAIN, CREEP, LapRig, LookLog, NO_TICKS, SECOND,
-    UNBOUNDED, calls_a, done_marks, got, idle, kinds, lap_rig_of, last_shell, look_of,
-    recorded_shells,
+    UNBOUNDED, calls_a, current_shell, done_marks, got, idle, kinds, lap_rig_of, last_shell,
+    look_of, recorded_shells,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
 use crate::boot_resolve::read_last_shell;
@@ -47,11 +46,11 @@ fn count(events: &[CapturedEvent], event: &str) -> usize {
         .count()
 }
 
-/// 取りやめ（`skin_switch_dropped`）の理由の並び。
+/// `info!` の取りやめ（`skin_switch_dropped`）の理由の並び（ほかのレベルの取りやめは数えない）。
 fn dropped_reasons(events: &[CapturedEvent]) -> Vec<Option<String>> {
     events
         .iter()
-        .filter(|e| e.field_str("event") == Some("skin_switch_dropped"))
+        .filter(|e| e.field_str("event") == Some("skin_switch_dropped") && e.level == Level::INFO)
         .map(|e| e.field_str("reason").map(str::to_owned))
         .collect()
 }
@@ -87,14 +86,6 @@ fn balloon0_visible(rig: &SwitchRig) -> Option<bool> {
         .and_then(|w| w.presenter().target_visible(balloon_target(0)))
 }
 
-/// 置き場のゴーストの今のシェルのフォルダ名。
-fn current_shell(rig: &SwitchRig) -> Option<String> {
-    rig.world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.current_shell_folder())
-}
-
 // ---------------------------------------------------------------- 中止
 
 /// `\-` 入りの `OnShellChanging` の台詞（待ちの間に中断する）。
@@ -102,11 +93,11 @@ const CHANGING_WITH_QUIT: &str = r"\0着替えます\_w[5000]\-\e";
 
 /// `OnShellChanging` の台詞の中断: `\-` 入りの印の台詞をバルーンの左
 /// ダブルクリックで止めると、切替は中止（`skin_switch_cancelled` 1 件）で、差し替え・
-/// `OnShellChanged`・記憶は 0、終了へ結ばれず（`OnClose` も終了の指示も無い）、バルーンは今日の
-/// 規則で隠れる。直後の新しい切替要求は受け付けられ（kanade は定常のまま）、最後まで通る。
+/// `OnShellChanged`・記憶は 0、終了へ結ばれず（`OnClose` も終了の指示も無い）、バルーンは印の台詞の
+/// 中断の規則で隠れる。直後の新しい切替要求は受け付けられ（kanade は定常のまま）、最後まで通る。
 ///
 /// # 非空虚性
-/// 印の台詞の中断を見分けず今日どおり `\-` の予約で終了系列へ結ぶと（kanade の印の台詞の中断の
+/// 印の台詞の中断を見分けず `\-` の予約どおり終了系列へ結ぶと（kanade の印の台詞の中断の
 /// 判定を外す）、中止の記録が出ず SHIORI が降ろされ（`UNLOAD`）終了が指示されて赤。中止を差し替えへ
 /// 進めると完了の記録と `OnShellChanged` が出て赤。
 #[test]
@@ -276,14 +267,14 @@ fn undecodable_shell_keeps_the_old_mount_and_records_one_error() {
 
 /// 待ちの間の閉鎖要求: `raise-event` 無しの切替を受理し、命令を運んだ台本の
 /// 終わりを待つ間に、キャラ窓への OS の閉鎖要求（メニューの「終了」と同じ終了要求）が届くと、
-/// 切替は取りやめ（`closing`）で差し替え・イベント・記憶は 0。台本が終わると今日の終了経路
-/// （`GET OnClose` → kanade の停止 → 全窓を閉じて終了の指示）で終わる。
+/// 切替は取りやめ（`closing`）で差し替え・イベント・記憶は 0。台本が終わると通常の終了
+/// 経路（`GET OnClose` → kanade の停止 → 全窓を閉じて終了の指示）で終わる。
 ///
 /// # 非空虚性
 /// 待ちの見張りが終了の保留を見ないと（kanade の見極めの終了の保留の段を外す）、台詞の時計を止めた
 /// 間に取りやめが届かず、取りやめの記録も出ないまま終わって赤。
 #[test]
-fn close_request_while_waiting_drops_the_switch_and_exits_as_today() {
+fn close_request_while_waiting_drops_the_switch_and_exits_through_on_close() {
     let mut lap = rig_a(|| standard_script(BOOT_TO_SECOND_PLAIN).get("OnClose", Ok(None)));
     let steady = lap.rig.wait_steady();
     let mut log = LookLog::default();
@@ -455,8 +446,7 @@ fn ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind() {
         ),
         "((定常, 台詞が始まった, 受理, (切替前の見え方の数, 子の欠けたフレーム)), (ゴースト切替の判定, \
          B が迎え入れられシェル切替の印も無い), [完了, 中止, 失敗, 取りやめ], 取りやめの理由, \
-         LastShell の投函, A の呼出列, (B の起動の回数, A の実 fs の LastShell), (終了の指示, 降ろせた)) \
-        "
+         LastShell の投函, A の呼出列, (B の起動の回数, A の実 fs の LastShell), (終了の指示, 降ろせた))"
     );
 }
 
