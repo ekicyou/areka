@@ -217,7 +217,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 4.5, 7.2_
 
 - [ ] 15. `areka-session` の古い説明を今の事実にする（G15）
-- [ ] 15.1 `GhostSession` の `impl` を別のファイルへ移し、ゴーストのセッションと戻しの継ぎ目の説明を直す（指摘 47・48・53・79・5.3）
+- [x] 15.1 `GhostSession` の `impl` を別のファイルへ移し、ゴーストのセッションと戻しの継ぎ目の説明を直す（指摘 47・48・53・79・5.3）
   - `ghost_session.rs` の `impl GhostSession`（430-659）を新しい `ghost_session_handle.rs` へ移し `mod handle;` を足す（中身と可視性は変えない）
   - 213-214 と `boot_seam.rs` の 7・136・156 の戻しの流れを「`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` → `restored_scope_marks`」・呼び手を `prepare_ghost_windows` に。821-822 を 4 つ（`BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover`）に。87・147-149・283-285・640-643 の古い説明と 228・354 の spec 名。`boot_seam.rs:51` の切れ端。指摘 53 の列挙のうちこの 2 ファイルにある分
   - 完了の姿: 既存のテストが緑で、`ghost_session.rs` が約 640 行・`ghost_session_handle.rs` が約 235 行

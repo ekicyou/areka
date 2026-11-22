@@ -4,11 +4,12 @@ use bevy_ecs::prelude::World;
 
 /// 復元マージのシーム。
 ///
-/// `ghost_session::open_ghost_windows` が `spawn_ghost_windows` へ渡す placements を、起動時に
-/// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。`open_ghost_windows` は
-/// 実モニタの列挙と作業プール（`WintfTaskPool`）を要してテスト困難なので、純粋シーム（load→apply）を
+/// `ghost_session::prepare_ghost_windows` が窓を作る閉包へ渡す placements を、起動時に先読みした
+/// 永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。`prepare_ghost_windows` は
+/// 実モニタの列挙と作業プール（`WintfTaskPool`）を要してテスト困難なので、復元の流れ
+/// （`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` → `restored_scope_marks`）を
 /// 本ヘルパへ抽出して単体で檻に入れる（IO は [`areka_placement::persist::load_restored_state`] の
-/// 1 点のみ・merge は純関数）。
+/// 1 点のみ・残りは純関数）。
 pub fn restore_merged_placements(
     ghost_root: &std::path::Path,
     placements: Vec<areka_placement::resolver::ScopePlacement>,
@@ -48,7 +49,6 @@ pub fn restore_merged_placements(
 /// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`）では挿入しない＝永続結線なし
 /// （`persist_entries` は `PersistWiring` 不在で debug!＋no-op へ縮退）。挿入は純粋な World 変異ゆえ
 /// headless 単体テスト可能。
-/// を薄く包み `#[cfg(test)]` の檻に入れる）。
 pub fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
     world.insert_non_send(areka_placement::persist::PersistWiring { publisher });
 }
@@ -133,7 +133,7 @@ pub(crate) fn record_last_used(
 /// 同じヘルパを別タグで呼ぶため、語彙は共有したままログ上で出所を弁別でき、両者の食い違いは
 /// grep 突合で検出できる。
 ///
-/// 観測を足すだけで snapshot の中身は変えない。実モニタを列挙する `ghost_session::open_ghost_windows`
+/// 観測を足すだけで snapshot の中身は変えない。実モニタを列挙する `ghost_session::prepare_ghost_windows`
 /// から切り出したシームゆえ、合成モニタで headless 檻に入る。
 ///
 /// # 2 源を同じ構築関数で作る
@@ -153,7 +153,8 @@ pub(crate) fn boot_monitor_snapshot(
 
 /// 復元マージシームの headless 単体テスト。
 ///
-/// `restore_merged_placements`（`load_restored_state`→`apply_restored_placements`）を檻に入れ、
+/// `restore_merged_placements`（`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` →
+/// `restored_scope_marks`）を檻に入れ、
 /// 植えた sylphya.toml の保存位置が既定位置に優先して merge 済み placements の char_pos へ載ること／
 /// 永続不在なら既定 placement に恒等であることを証明する（＝spawn される窓の初期位置が保存位置に
 /// なる結線の証明）。
