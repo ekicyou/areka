@@ -696,6 +696,33 @@
 
 ---
 
+## 11. 並走の spec から受け取った申し送り（2026-11-22・要件の討議の確定の後）
+
+`audit-areka-app` のギャップ分析が、範囲の外（＝この spec の範囲）に見つけた件。4 件のうち 2 件は既にある指摘と同じ所で、2 件を新しい指摘 74・75 として足した（どちらも直したほうがよいの組・要件 2.1 のとおり直す対象）。
+
+| 受け取った件 | 扱い |
+|---|---|
+| `move_cue_apply_move_sticky_tests.rs:200`・`:255`、`move_cue_place_tests.rs:321`・`:386` の `SharedFakeIo` の写しと `let _ = …handle.join()` | 27 番・15 番と同じ（件 5・件 7） |
+| 本体 `session_tests/shell_balloon_switch_tests.rs:78` の `headless_wiring` が `areka-session/src/reload_skin_tests.rs:52-79` と 1 字違わない | 26 番と同じ所。寄せ先は `synth_assets(&[])` のほかに、相手が自分の側で使う `areka_runtime::frame::shared_test_support::wiring().1` もある（設計で選ぶ・相手の側は相手が直す） |
+| `ghost_switch.rs:522` の記録の文の「今日どおり」 | 新しい指摘 75 |
+| `shell_balloon_switch.rs` の `accept_skin` が送れたかを確かめる前に組み立てを起こす | 新しい指摘 74 |
+
+#### 74. `accept_skin` が、kanade へ頼めたかを確かめる前に資産の組み立てを起こす
+- 場所: `crates/areka-session/src/shell_balloon_switch.rs:L210-L240`（L217 `spawn_switch_build(..)` の後に L228 の `send(KanadeMsg::AwaitTalkGap ..)`）
+- 種類: 負荷・危ない所
+- 問題（具体的な場合）: kanade が止まっていて送りが失敗すると、`NoContext` で断るのに、背景では資産の組み立て（descript と画像の読み）が既に走っていて、結果は誰も受け取らずに捨てられる。
+- 直し方: 送りを先にし、送れたときだけ `spawn_switch_build` を起こす。送りの失敗の回に組み立てが起きないことをテストで縛る。
+- 規模: S
+
+#### 75. 記録の文に経緯の語「今日どおり」が残る〔約束 c〕
+- 場所: `crates/areka-session/src/ghost_switch.rs:L423`（「切替の予約が無い停止通知——今日どおり終了する」）・`L522`（「…終了要求が勝っていれば今日どおり終わる」）
+- 種類: 決まりの違反（経緯の語）
+- 問題（具体的な場合）: 「今日どおり」は、変える前と比べた言い方で、読む人には何と同じなのかが分からない。
+- 直し方: 「そのまま終了する」「通常どおり終わる」の形にする。語・target・欄は変えない。`crates/`・`tools/`・`doc/`・`.claude/skills/` の grep で、この 2 つの文を字面で読む所は 0 件（同じ語は範囲の外にもあるが、そちらは持ち主の範囲）。
+- 規模: S
+
+---
+
 ## 付録 A: 束の読み手の番号との対応
 
 | 番号 | 束の番号 |
