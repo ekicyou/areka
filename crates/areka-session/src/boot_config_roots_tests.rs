@@ -10,7 +10,7 @@ use super::balloon_tests::put_memory;
 use crate::alert::AlertScene;
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_with};
 use crate::boot_request::BootRequest;
-use crate::boot_resolve::boot_resolve_tests::no_pick;
+use crate::boot_resolve::boot_resolve_tests::{no_pick, put_ghost};
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostRoute};
 use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use areka_ghost::{BasewareRoot, BasewareRoots};
@@ -47,18 +47,6 @@ fn resolved(roots: &BasewareRoots) -> ResolvedRoots {
         skipped: Vec::new(),
         memory_fell_back: false,
     }
-}
-
-fn put_ghost(root: &Path, folder: &str, descript: &str) -> PathBuf {
-    let dir = root.join("ghost").join(folder);
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(
-        master.join("descript.txt"),
-        format!("charset,UTF-8\n{descript}"),
-    )
-    .expect("descript");
-    dir
 }
 
 fn put_balloon(root: &Path, folder: &str) -> PathBuf {

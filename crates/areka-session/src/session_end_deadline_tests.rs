@@ -28,7 +28,7 @@
 //!   （打ち切り 0 件・印の判定は応答のとおり）。
 //!
 //! 終了の観測の段は UNLOAD で固まる形で代表する（`request_clean_shutdown` の中で分けられない。
-//! 補助プロセスが終わった後の観測は host32 の既存の短絡のテストが固定する）。
+//! 補助プロセスが終わった後の観測は host32 の短絡のテストが固定する）。
 //! 呼び出しの外（`idle`）の段は見張り部品のテスト（`areka-kanade` の `probe_tests.rs`）が見る。
 
 use std::thread::{self, JoinHandle};

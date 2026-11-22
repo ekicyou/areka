@@ -495,7 +495,7 @@ fn keep_mark_foretells_ref6_7_only_when_mark_exists() {
 }
 
 /// 根の `ghost\<folder>` に descript.txt を置き、ゴーストのフォルダを返す。
-fn put_ghost(root: &Path, folder: &str, descript: &str) -> PathBuf {
+pub(crate) fn put_ghost(root: &Path, folder: &str, descript: &str) -> PathBuf {
     let dir = root.join("ghost").join(folder);
     let master = dir.join("ghost").join("master");
     std::fs::create_dir_all(&master).expect("フォルダを組む");
@@ -511,7 +511,7 @@ fn put_ghost(root: &Path, folder: &str, descript: &str) -> PathBuf {
 /// 同じフォルダ名が上の根にも在っても、決まった下の根のゴーストの名前を書く。
 #[test]
 fn running_name_reads_the_decided_location_not_the_union() {
-    let tmp = TempPath::under_target("cfg-roots-running-name");
+    let tmp = TempPath::under_target("boot-resolve-running-name-decided");
     let (top, low) = (tmp.child("top"), tmp.child("low"));
     put_ghost(&top, "g", "name,上の子\n");
     let lower = put_ghost(&low, "g", "name,下の子\n");

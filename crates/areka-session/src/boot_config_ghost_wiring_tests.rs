@@ -22,14 +22,13 @@ fn default_helper_exe_path_ends_with_expected_filename() {
 #[test]
 fn ghost_boot_options_wires_expected_fields() {
     let ghost_root = PathBuf::from("C:/custom/ghost");
-    let helper_exe = PathBuf::from("C:/custom/exe-dir/shiori-host32-helper.exe");
 
     // 置き場は書かない固定のパスを渡す（本物の環境で置き場を決めない）。
     let app_profile_dir = PathBuf::from("C:/custom/profile/areka");
 
     let options = ghost_boot_options(
         ghost_root.clone(),
-        helper_exe.clone(),
+        helper(),
         Some(app_profile_dir.clone()),
         ModulePolicy::Load,
     );

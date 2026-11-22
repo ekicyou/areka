@@ -61,11 +61,12 @@ pub enum ExitOrigin {
 #[derive(Resource)]
 pub struct FirstExit(pub ExitOrigin);
 
-/// 告知するか・終了コードを 1 にするかの判定。
+/// SHIORI の失敗の告知を出すか・その失敗の中身。
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
 /// （告知の場面はどちらも SHIORI の失敗）。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
+/// 記憶を書けなかった出所もここでは `None` で、告知と終了コードは [`write_failure_of`] が決める。
 pub fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))

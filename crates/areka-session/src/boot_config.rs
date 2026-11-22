@@ -186,7 +186,7 @@ pub struct BootContext {
 pub struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
-    /// バルーンの差し替えの完了で `hooks::set_current_balloon` が書き換える（記憶に書くので次の起動の選び方になる）。
+    /// バルーンの差し替えの完了で `hooks::set_current_balloon` が書き換える（経路は `Memory`＝記憶へは `record_last_skin` が書く）。
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 

@@ -176,7 +176,7 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
 /// - `balloon_offset`（論理相対位置＝保存値・作者指定の系譜）は**生値のまま**残り、
 /// - `[balloon-limit] Clamp` が当該 scope で記録される。
 ///
-/// 補正が `balloon_offset` へ焼き付いていたら 3 番目の assert が赤になる。
+/// 補正が `balloon_offset` へ焼き付いていたら `balloon_offset` の表明が赤になる。
 #[test]
 fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     let temp = TempPath::new("restore-seam-balloon-limit-gate");
