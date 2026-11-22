@@ -101,7 +101,7 @@
   - _Requirements: 3.1, 5.19, 6.6, 7.5_
 
 - [ ] 8. 本体の落ちる力の無いテストを強める（G8）
-- [ ] 8.1 旗の生産者の見張りが歩く根を広げる（指摘 15・33・5.6）
+- [x] 8.1 旗の生産者の見張りが歩く根を広げる（指摘 15・33・5.6）
   - `tick_gate_config_producers_tests.rs` の自前の `code_only` を消し `areka_runtime::source_text_test_support::code_only` を use する
   - `walk_roots` に `areka-session`・`areka-placement` を足し、184・236 の説明を歩く根の名を並べた文に。足した根で見つかる生産者は表に載せる
   - 完了の姿: 見張りが緑で、`areka-session` に表に無い `tick_wake::mark` を足すと赤（較正）
@@ -291,3 +291,4 @@
 - 5.2: `log_history::snapshot` が古い順に返すことを固定するテストは無い（逆順にしても crate 全体が緑）
 - 6.1: 倍率の名は問い手に関わらず同じ値なので、問い手の取り違えを赤にするために問い手ごとの名 `probe.owner` を 1 つ足して問う
 - 6.2: 兄弟の `mcp/get_property_tests.rs` に当たりが残るので残す道。`shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `#[cfg(test)] mod shiori_host`・dev の `shiori-abi`／`windows-core` は `audit-areka-install-update` の着地の後に向こうの PR で消す（20 で申し送る）。`shiori_inproc.rs:246-247` を消したので `InProcHost` の件は行番号でなく名で指す
+- 8.1: `placement_tests/zorder_branch_coverage_test_support.rs:16` に自前の `code_only` の写しが残る（範囲の表に無い・21.1 で見る）
