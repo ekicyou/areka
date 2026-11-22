@@ -1393,3 +1393,12 @@ RED: 該当なし（数えるだけ）。
 
 - 前からあった 1 行（`reload_tests.rs` の `refusals_in_order_leave_one_record_each`・`shell_balloon_switch_tests.rs` の `refusals_in_order_leave_one_warning_each_and_send_nothing`）と合わせ、本体で 1 行を持つテストは 5 本。
 
+
+### 7.2 THIRD-PARTY-NOTICES.md の再生成（要件 8.11）
+
+- 実行: `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（`tools/test-all.ps1` の `-License` の段と同じ呼び出し・cargo-about 0.9.3）。手では編集していない。
+- 差分: `git diff --stat` は 1 file, 2 insertions(+), 1 deletion(-)。中身は 2 か所だけ。
+  - `- MIT License (265 crate)` → `- MIT License (266 crate)`
+  - MIT 節の末尾に `- areka-session 0.1.0` を 1 行追加
+- 版のずれなどそのほかの差分は 0 件。
+- `cargo deny check`: advisories ok, bans ok, licenses ok, sources ok。
