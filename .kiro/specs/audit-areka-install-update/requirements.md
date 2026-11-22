@@ -157,7 +157,7 @@
 #### Acceptance Criteria
 
 1. When 直しで関数や型の形を変えたとき, the 本 spec の直し shall ツリー全体で呼び出し元を探して、全部直す
-2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall 相手が走っているあいだはそのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）。相手の spec が `completed/` へ移った後なら、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す。この spec の実装の終わりまでに相手が着地せず相手も直さなかった分は、写しや古い形を残したまま理由を記録し、相手の brief へ件として書き足す（要件 7.9）。相手の進め方を変える大きい直し（起動中のゴーストへの展開を外へ出すための `switch_to` の段の分け方）は、相手のセッションと先に申し合わせる（どちらが入れるか・どちらが先に着地するか）3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）
+2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall 相手が走っているあいだはそのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）。相手の spec が `completed/` へ移った後なら、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す。この spec の実装の終わりまでに相手が着地せず相手も直さなかった分は、写しや古い形を残したまま理由を記録し、相手の brief へ件として書き足す（要件 7.9）。相手の進め方を変える大きい直し（起動中のゴーストへの展開を外へ出すための `switch_to` の段の分け方）は、相手のセッションと先に申し合わせる（どちらが入れるか・どちらが先に着地するか）3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）。例外は要件 7.13 の (c) だけ
 4. The 本 spec の直し shall `doc/COMPAT_ARCHITECTURE.md` の §8 には既にある別々の行のほかに手を入れず、範囲の中のコードが名指す文書の名とパス（`install/judge.rs` が名指す `doc/COMPAT_ARCHITECTURE.md` を含む）を変えない（C26 の約束 ⑶・`doc-compat-architecture-rename` が同じウェーブに置けない理由）
 5. The 本 spec の直し shall `crates/dola/` と `crates/wintf/` に手を入れない（C26 の約束 ⑷）
 6. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の持ち主の件として残す）
@@ -167,6 +167,7 @@
 10. The 本 spec shall ギャップ分析で範囲の外に見つけた件を、その範囲の持ち主の brief に件として書き足し、回した件と回し先を記録に残す。持ち主が C26 のほかの 2 本のときは、相手のセッションへも知らせる
 11. The 本 spec の直し shall `vendors/` の下に手を入れない
 12. Where 直しの順に逆向きの縛りがあるところでは（`mcp/get_property_tests.rs` のゴーストの道を本番の受け口 `PropGetCueSink` へ移す直し＝`audit-areka-app` の試験用の SHIORI の脳の削除より前か同時）, the 本 spec shall その直しを引き受け、間に合わなければ向こうが `shiori_host.rs` だけを残してこの spec の着地の後に消す形を取る
+13. The 本 spec shall 要件 7.2・7.3 の例外として、設計の討議で確定した次の 3 つだけを認め、ほかに例外を作らない: (a) `audit-emo2-boot-switch` が `SwitchVerdict::Updating` を足す同じ変更で、この spec の `install/overwrite.rs` の網羅の match の腕に名を 1 つ足す (b) この spec が `ExeLocationUnavailable` の欄を減らす同じコミットで、`audit-areka-app` の `alert_tests.rs` の構築の 2 行（`tried`・`origin`）を消す (c) `audit-areka-app` が先に着地したときは、向こうが残した試験用の SHIORI の脳の残り（`shiori_host.rs`・`shiori_host_case_fold_tests.rs`）と本体の `Cargo.toml` の dev の 2 行（`shiori-abi`・`windows-core`）を、要件 7.12 の直しの後にこの spec の PR で消す（向こうの着地で `Cargo.toml` の席は空く）。要件 9.5 の差分の確かめは、この 3 つを数えから外す
 
 ### Requirement 8: 副作用の大きい操作をウェーブの中で回さない
 
@@ -202,7 +203,7 @@
 | 扱い | 指摘の番号 | 件数 |
 |---|---|---|
 | 直す（必ず直す） | 1〜4 | 4 |
-| 直す（直したほうがよい） | 5〜58・102・103 | 56 |
+| 直す（直したほうがよい） | 5〜58・102・103・104 | 57 |
 | 直す（できれば） | 59〜101 のうち 91 を除く全部 | 42 |
 | 裁定で残す（要件 2.2 の 1 種類目・要件 9 の数から外す） | 91（`roots_memory_write_failed` の `error!`。完了した spec が名前を変えないと決めた・2 行は致命の道でだけ出る） | 1 |
 

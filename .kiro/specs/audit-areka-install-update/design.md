@@ -506,7 +506,10 @@ pub fn resume_between(world: &mut World);
   - `gate.begin(url)` が偽なら、`warn!(install_fetch_closing)` を残して抜ける。
   - 真なら、今の `fetch_and_send` で落とし、`RawInstallRequest::Path { origin: Script }` と取得の終わりの知らせを送る。
   - どの道で抜けても `gate.end()` を行う。
-- 起こせなければ、今と同じく `error!(install_fetch_failed)` を残し、その URL を捨てる。
+- 取得の終わりの知らせ: 窓口へ `FetchDone` を運ぶ腕を足す（`RawInstallRequest` とは別の窓口への頼み）。取得のスレッドは URL ごとに守り手（欄は `gate: Arc<WorkGate>` と窓口への送出端）を作り、取得の成功・失敗・panic のどの道で抜けても Drop で `gate.end()` と `FetchDone` を送る。panic のときは先に `error!(install_fetch_panicked)` を残し、スレッドは抜ける（窓口が次の URL で起こし直す）。
+- 窓口は `FetchDone` を受けると `fetching = false` にし、待ち行列に残りがあれば次の 1 件を渡す。`fetch_tx.send` が失敗したとき（スレッドが居ない）は `fetch_tx = None` にして起こし直し、同じ URL を渡す。起こし直しも失敗したら、今と同じく `error!(install_fetch_failed)` を残してその URL を捨て、`fetching = false` に戻して次へ進む。
+- テストを 2 本足す: 取得の口が Err を返すとき・panic するとき、どちらも次の URL が取りに行かれる（`fetching` が戻る）。
+- 起こせなければ、今と同じく `error!(install_fetch_failed)` を残し、その URL を捨てる（`fetching` は立てない）。
 - 門は `install::register` が `register_gate(world, "install-fetch", gate, |_| {})` で登記する。積んだ残りは窓口の `discard_for_exit` が記録する。
 - `MakeFetch` は 1 回ずつの `FnOnce` から、作り口 `Arc<dyn Fn() -> Result<Box<dyn Fetch>, ..>>` にする（長く生きるスレッドが URL ごとに作るため）。テストは偽の作り口を差す。
 
@@ -793,7 +796,9 @@ impl EmoPresenter {
 | `audit-areka-app` | 85 `sakurascript_log_tests.rs` の中身を `log_history` のテストへ | 申し送り。着地の後にこちらを消す |
 | `audit-areka-app` | 94 `ExeLocationUnavailable` の欄を消すと `alert.rs:150`・`alert_tests.rs:51` が要る | 申し送り。向こうが `completed/` へ移った後なら、こちらで 3 ファイルを同じ変更で直す。それまでは欄を残して記録する |
 | `audit-areka-app` | 件 2・件 3・件 8・議題 1 の決め | 決めを伝える。件 8 には、12 の直しで本体の「窓口が無い」の `url` の腕も取りに行かなくなること（OPEN QUESTION 2）を添える |
-| `audit-areka-app`（brief へ書き足し） | `log_history.rs:335` の `snapshot` の排他・`menu/roots_frame.rs` にしかない決まり | 件として書き足す |
+| `audit-areka-app` | `log_history.rs:335` の `snapshot` の排他・`wic_decode_rgba` の共有・台本のログのテストの移し | 向こうが直すと答えた（向こうの設計で確定）。書き足しは要らない |
+| `audit-areka-app` | `menu/roots_frame.rs` にしかない置き場の決まり | 向こうは `menu/` に触らないと返した。この spec が判断の関数の側に置く（指摘 104・G16） |
+| `audit-areka-app` | 102 の後の脳の残りの削除（向こうが先に着地したとき） | 並走の約束の例外 (c)（要件 7.13）。この spec の PR で消す |
 | `link-context-copy`・`balloon-link-hover`（brief へ書き足し） | 古いパスの直し（議題 11） | 件として書き足す（`completed/` でないことを確かめる） |
 | 持ち主の無い件 | `areka-runtime/src/consumer_ledger.rs:77` の「本体の `readme::readme_cue::ReadmeCueSink`」 | C26 の 3 本の受け持ちに `consumer_ledger.rs` は無く、前の持ち主の見直しは完了している。**推す扱い（OPEN QUESTION 6）**: 名指す先がこの spec のモジュールなので、この spec が 1 語だけ直す |
 
@@ -818,7 +823,7 @@ impl EmoPresenter {
 | G13 | MCP の小さな本番（35・39・82・83・88） | `resolve.rs`・`get_status.rs`・`check_script_judge.rs`・`get_log.rs`・`reload.rs` |
 | G14 | MCP のテストの写しと削り（29・32・34・38・79・80・84・86・87） | `mcp/` のテスト・`kanade_fake_test_support.rs` |
 | G15 | MCP の本番の道のテスト（36・102） | `check_script_tests.rs`・`get_property_tests.rs` |
-| G16 | 根の本番（4・40〜43・89・90・92） | `roots/edit.rs`・`roots/desk.rs`・`roots.rs`・`install/desk.rs` |
+| G16 | 根の本番（4・40〜43・89・90・92・104） | `roots/edit.rs`・`roots/desk.rs`・`roots.rs`・`install/desk.rs` |
 | G17 | 根の芯（46〜48・95・96） | `areka-session/src/roots/` |
 | G18 | 根のテスト（44・45・93） | `roots_test_support.rs`・`roots/` のテスト |
 | G19 | 説明書の本番（49〜55・97） | `areka-session/src/readme*` |
@@ -840,7 +845,15 @@ impl EmoPresenter {
 
 ## Open Questions / Risks
 
-設計の討議で決める問いと、仮に置いた答え（下書きはこの答えで書いた）。
+**設計の討議（2026-11-22）で、下の 1〜7 と検証の重大な指摘 2 件・並走の例外・置き場の決まりを、全部推奨案で確定した。**
+
+- 1: `EXIT_WAIT_LIMIT`（3 秒）で確定。2: そのまま変わってよいと確定（`audit-areka-app` へ `NO_BODY` の doc の文をこの事実に合わせてもらう）。3: 検証で閉じた。4: 寄せないと確定。5・並走の例外: 下の「並走の約束の例外」のとおり。6: この spec が 1 語直すと確定。7: 下の「記録の段のテスト」の形に替えた（JoinHandle の控えはやめた）。
+- **取得のスレッドの戻し方**（検証の重大な指摘 1）: 「取得の待ち行列」の `FetchDone` と守り手の形で確定。
+- **記録の段のテスト**（検証の重大な指摘 2・指摘 4・28）: `log_capture_kit::capture` は呼んだスレッドの記録だけを取る。これを使い、指摘 4 は `apply` を呼んだスレッドの記録に `root_listed`・`roots_hidden_*` が 0 件であること、指摘 28 は `handle` を呼んだスレッドの記録に表の読みと解析の記録（読めないときの warn ほか）が 0 件であることを見る（読めないシェルのフォルダを差して、warn がスレッドの外でだけ出る形にする）。走る順や JoinHandle に頼らない。本番の NonSend に JoinHandle を控えない。
+- **並走の約束の例外**（要件 7.13）: (a) `audit-emo2-boot-switch` が `SwitchVerdict::Updating` を足す同じ変更で `install/overwrite.rs:129` の腕に名を 1 つ足す。(b) 指摘 94 の直しで、`audit-areka-app` の `alert_tests.rs:51-56` の構築の 2 行（`tried`・`origin`）をこの spec の同じコミットで消す（向こうが先に `alert.rs:150` を欄を読まない形にした後）。(c) `audit-areka-app` が先に着地したときは、向こうが残した `shiori_host.rs`・`shiori_host_case_fold_tests.rs` と本体の `Cargo.toml` の dev の 2 行（`shiori-abi`・`windows-core`）を、指摘 102 の直しの後にこの spec の PR で消す（向こうの brief の件・向こうの着地で `Cargo.toml` の席は空く）。
+- **置き場の決まり（指摘 104）**: 「書ける根の印の項目は外せない」「印があるとき実行ファイルの隣は先頭へ動かせない」を `roots/edit.rs` の `decide_remove`・`decide_front` にも置き、断りの腕とテストを足す。`menu/roots_frame.rs` には触らない（メニューの先の確かめはそのまま）。組は G16。
+
+以下は討議の前の問いと仮の答え（記録として残す）。
 
 1. **1 の期限の値**: 仮に `EXIT_WAIT_LIMIT`（3 秒）とした。UI を止めてよい長さとして既にある値で、新しい数を作らない。短くするなら、新しい定数を 1 つ `install/desk.rs` に置く。
 2. **12 の直しで、本体の「窓口が無い」の `url` の腕が取りに行かなくなること**（件 8 の事実が 1 つ変わる）: 仮に、そのまま変わってよいとした。どちらも本番で通らず、記録も残る（`install_cue_send_failed`）。要件 5.8 の「そろえない」は、そろえる仕事をしないという決めで、ほかの直しのついでに近づくことは妨げないと読んだ。`audit-areka-app` の `NO_BODY` の doc の直しの文は、この事実に合わせてもらう。
