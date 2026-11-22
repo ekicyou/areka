@@ -83,124 +83,12 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 | Wave | 完了日 | ユニット（PR） | 一行要約 |
 |---|---|---|---|
-| 耐力壁 | 07-01 | `pilot-shiori-host-32` | x64→32bit pasta.dll 駆動 GO |
-| M-boot | 07-13 | `emo2-boot` 23/23 | 起動→表示→talk→close の可視一周 |
-| W1〜W4 | 〜07-29 | idle-talk／collision-geometry／sakura-dialogue-tags／input-events／mayuna-compose／sylphya／seriko-loop／choice-render／position-persist／choice-interact／emo-dpi-scaling 他 | 増分ウェーブ全完走・DPI 追従 k 着地 |
-| W5 | 08-01 | `choice-select-events`・`kero-balloon`（PR#97）・`dpi-window-vanish`（PR#98） | M-dialogue 完走 |
-| W6 | 08-10 | `file-slimming`（PR#103） | 1,000 行超 54→0 |
-| W7 | 08-13 | `collision-dpi-hittest`（PR#100）・`balloon-visibility`（PR#106）・`bindoption-exclusivity`（PR#105）・`ghost-window-zorder`（PR#107）・`scope-chain-gap`（PR#108） | 5/5 |
-| W8 | 08-15 | `recompose-budget`（PR#112）・`scale-exact-rational`（PR#110）・`windowposition-limit`（PR#111） | 1 コマ 22,210→1,240µs |
-| W9 | 08-22 | `dpi-transition-atomicity`（PR#114） | 書込散らばり ms→µs |
-| W10 | 08-27 | `draw-load-parity`（PR#118）・`test-cage-determinism`（PR#119） | 門の手がかり→`tick-gate-adoption`／log-capture-kit |
-| W11 | 09-02 | `present-write-coherence`（PR#123）・`balloon-vertical-canon`（PR#124）・`balloon-offset-dpi`（PR#125）・`scope-zorder-pinning`（PR#126） | 4/4 |
-| ⓪ | 09-03 | `sakura-bare-tag-lexer`（PR#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
-| W12 | 09-05〜09-11 | `cursor-tag-canon`（PR#137）・`emo-text-line-height-canon`（PR#142）・`emo2-conformance-e2e`（PR#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（PR#136）・`-property`（PR#138）・`-shiori`（PR#139）・`-sakura-script`（PR#140）・`-assets`（PR#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
-| W13 | 09-12〜09-17 | `present-gpu-transform-scale`（PR#145）・`charset-canon`（PR#146）・`ukadoc-coverage-roadmap`（PR#147）・`text-decoration-canon`（PR#148）・`kanade-boot-talkdone-drop`（PR#149）・`sakura-tag-word-boundary`（PR#150）・`sylphya-set-ledger`（PR#151）・`host32-window-thread-pump`（PR#153）・`balloon-font-descript-keys`（PR#154） | 9/9・1 コマ 41〜78→2.65 ms・任意 charset・67 束の網羅ロードマップ・文字装飾 3 書字方向 |
-| A0（α） | 09-19 | `nar-install`（PR#158）・`default-balloon-bundle`（PR#157）・`popup-menu-minimal`（PR#159）・`balloon-origin-outside-validrect`（PR#161） | `.nar` の読取と安全な展開・既定バルーン（Staysee・CC0）・Win32 標準の右クリックメニュー |
-| A1（α） | 09-20〜09-24 | `shell-implicit-surface`（PR#162）・`balloon-break`（PR#164）・`app-lifetime-separation`（PR#169）・`shiori-loadu`（PR#170）・`default-balloon-nar-fold`（PR#171）・`wintf-drag-state-rest-contract`（PR#172）・`nar-install-hardening`（PR#174）・`keycolor-clickthrough-coverage`（PR#175）・`update-engine`（PR#176）・`baseware-root-layout`（PR#177） | 里々のテンプレートが絵を出せる・抜き色・根 `ghost/`・`balloon/` と列挙・寿命を窓の数から分離・更新のエンジン |
-| B1〜B2（α） | 09-24〜09-26 | `pilot-balloon-asset-swap`（PR#182）・`shiori-fault-notice`（PR#183）・`ghost-restart-unit`（PR#184） | SHIORI の失敗の告知・同じプロセスでゴーストを起こし直す形 |
-| B3〜B4（α） | 09-26〜09-28 | `alpha-package`（PR#190）・`pilot-dropfiles-on-wuc-window`（PR#191）・`ghost-shell-balloon-switch`（PR#192）・`ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195） | ゴースト切替・汎用の通知の入口 `KanadeMsg::RaiseEvent`・起動中の印（きれいに終わらなければ次は emo2 が `halt` を伝える）・配布 zip |
-| B5〜B6（α） | 09-28〜09-30 | `frame-phases-after-exit`（PR#197）・`ghost-install`（PR#198）・`file-drop`（PR#201）・`balloon-color-emoji`（PR#202） | メニューと台本と投げ込みからのインストール・カラー絵文字と書記素クラスタ |
-| B7〜B9（α） | 09-30〜10-02 | `network-update`（PR#203）・`shell-balloon-switch`（PR#205）・`balloon-reappear-short-talk`（PR#206）・`alpha-release-signoff`（PR#210・**α 完成宣言**） | ネットワーク更新・シェルとバルーンの切替・実機一周 13 項目 |
-| C1 | 10-03〜 | `restart-chain-finalize-stall`（PR#214）・`choice-timeout-directive`（PR#215）・`drag-click-without-move`（PR#216）・`emo-text-file-split`（PR#217）・`release-package-versioned`（PR#218）・`mcp-server-core`（PR#219） | 初期配置の確定の見送りはゴースト待ち〔窓が無い・まだ一度も表示されていない〕を数えず、areka 自身の待ちだけを数える（起こし直しの後の `deferrals=600` の空鳴りを止めた）・`\![set,choicetimeout,時間]` を compile が読んで選択待ちへ渡す（`0`・負の値で時間切れなし・最後の指定が勝つ・読めない値は既定＋WARN）。再生層 dola は選択待ちの区切りを値で飛ばしも解きもしない・動かさないクリックで窓の位置を保存しない（wintf の累積器が開始を積んでいない終了を捨て、知らせの種を積んだ順の待ち行列で運ぶ。速いドラッグも開始 → 終了の順に届き、キャラクターは行き先へ置いてから保存）・文字とバルーンの 6 本と `region.rs` を振る舞いを変えずに役割で分けた（最大 571 行・新しい子 12 本＋`region_tests.rs`・`layout_inner` を分岐の種類ごとの関数へ・前後のテスト 9,371 本が名前も結果も一致・実機で 4 つの振る舞いを確認）・配布 zip を版入りの固定の名前（`areka-{版}-{x64\|arm64}.zip`）と隣の `.sha256` で x64・arm64 とも作る（`tools/package.ps1`＝旧名から改名・完成品は全段が緑のときだけ現れる・`-Check` の展開先は `target\package` の下で合格なら片付ける）・winget のリンク経由で起動しても exe の本当の場所から根・補助 exe・記憶の置き場を引く（`boot_config.rs` の `exe_location`・手元のマニフェストで実機確認）・新クレート `areka-mcp`（rmcp 3.5.0・無状態・JSON 単発・ツール 0 本・登録口・help・`Origin`／`Host` の検査）を `fn main()` の 1 行で立てる。既定の待受は 9801 → 9821 を SSP と早い者勝ち・使用中なら隣 +1〜+9（開発者裁定）。実機で Claude Code 2.1.283 が無状態版で `tools/list` を拒んだのを `ttlMs`／`cacheScope` で直した・SSP との差の一覧 18 行（直した 1）
-| C2 | 10-03〜 | `mcp-tool-entrances`（PR#223）・`release-ci-workflow`（PR#224）・`crates-io-publish`（PR#225）・`translate-pipeline`（PR#226）・`shell-balloon`（PR#227）・`install-companion-canon`（PR#221・実施せず 3 本へ分解）・README の書き直し（PR#222） | MCP のツール 10 本を SSP 2.9.05 と同じ定義・同じ並びで出し（名前・必須の欄・型の誤りは `-32602`）、`ghost_name` を SSP と同じ文言で解決して UI スレッドの World へ届ける橋を立てた。 |
-| C3 | 10-04〜 | `mcp-get-property`（10-04）・`install-companion-reading`（10-04）・`mcp-expression-table`（10-04）・`host32-testdll-marker-race`（10-04）・`animated-image-decode`（10-05）・`mcp-log-history`（10-05）・`shell-balloon-frame-align`（10-05）・`drag-cancel-borrow-miss`（10-05）・`surface-element-nesting`（10-05）・`mouse-drag-events`（10-05）・`mcp-dump-images`（10-05） | MCP の `get_property` が宛先のゴーストの記憶（sylphya）をそのゴースト自身の問い手で読み、値は素のまま（空の値も成功）・値の無い名前は SSP と同じ `NG:Cannot find such property name.` で答える（実行系の読み口 `GhostRuntime::sylphya_reader()` を 1 本足しただけ・名前は手直ししない）／書庫を入れるときの同梱のバルーンを ukadoc の探索の順（無印 → `balloon0` → `balloon1` …・`*.directory` の行の有無で数え、最初の欠番で打ち切る・先頭に 0 を付けた番号は引かない）で読み、`*.source.directory` を階層付きの相対パス（`\` と `/` のどちらでも・`..` と空の段は手前を打ち消さずに取り除いて記録・段が残らなければ断る）として読んで、段の数だけ剥がして置く。 |
-| C4 | 10-05〜 | `element-base-method`（10-05）・`mcp-get-status`（10-06）・`open-external-tags`（10-06）・`self-alpha-declaration`（10-06）・`budoux-reveal-reflow`（10-06）・`mcp-dump-images-residue`（10-06）・`mcp-ghost-name-match`（10-06）・`tools-utf8-child-output`（10-06・バグの席）・`ghost-standard-balloon`（10-07）・`choice-script-prefix`（10-07）・`animated-image-playback`（10-07）・`char-position-save-on-exit`（10-08）・`mcp-author-tools`（10-08）・`balloon-lifecycle-events`（10-08）・`wintf-tooltip`（10-08）・`ghost-session-test-load-flake`（10-10） | element定義の描画メソッド `base` を `overlay` と同じに描く（読み手の語の集合を `is_image_element_method` の 1 関数で `overlay`・`base` の 2 語にしただけで、`Element` に欄は足していない・element番号・`surface.append*`ブレス・数字だけの欄・複数の番号の見出しでも同じ）。 |
-| C5 の前（単独） | 10-10 | `farewell-talk-status`（10-10・バグ） | `farewell-talk-status`: 終了の挨拶・切り替えの送り出しの台詞・切り替えの別れの台詞の再生中に、実行の状態へ `talking`（中断の無効化モードなら `nouserbreak` も）を載せる。 |
-| C5（⑥） | 10-10 | `ssp-bts-salvage`（10-10・文書だけ） | `ssp-bts-salvage`: SSP の課題管理（BTS・https://bts.shillest.net/ ）の全 808 件を通読し、深刻度「要望」187 件と、要望・質問・挙動の説明と読めた 47 件を、234 行の台帳にした（`.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md`・13 主題）。 |
-| C5（⑧） | 10-10 | `winget-manifest-submission`（10-10・配布と公開） | `winget-manifest-submission`: winget の名乗り `Areka.Areka.Portable` の版 0.0.2 のマニフェストの雛形を `dist/winget/0.0.2/` に置いた（zip＋portable・x64 と arm64・`ArchiveBinariesDependOnPath: true`・`InstallationNotes` に注意書き）。 |
-| C5（①） | 10-10 | `anchor-tag-canon`（10-10・文字とバルーン） | `anchor-tag-canon`: アンカー `\_a[ID]…\_a` の**働き**を作った（それまでは押しても何も起きなかった）。 |
-| C5（②） | 10-10 | `seriko-trigger-intervals`（10-10・シェルの element） | `seriko-trigger-intervals`: interval の 3 語 `talk,数値`・`runonce`・`periodic,数値` を動かした（それまでは名前を控えるだけで、口パクが動かなかった）。 |
-| C5 の外（単独・開発の道具） | 10-10 | `impl-watch`（10-10・新しいクレート） | `impl-watch`: 机の貸し出し（マージの机＝リポジトリごと・負荷テストの机＝マシンに 1 つ・停止要請と再開）を行うコンソールアプリ `areka-impl-watch`（`crates/areka-impl-watch`・bin・`publish = false`）を作った。 |
-| C5（⑦） | 10-11 | `mcp-stdio-bridge`（10-11・新しいクレート） | `mcp-stdio-bridge`: Claude Desktop 用の中継 `areka-mcp-bridge.exe`（`crates/areka-mcp-bridge`・bin・`publish = false`・SSP の `mcp.exe` 相当）を作った。 |
-| C6 の前（単独・配布と公開） | 10-11 | `release-notes-highlights`（10-11・リリース CI と道具） | `release-notes-highlights`: GitHub Release の本文を、GitHub に作らせた PR の題名の一覧から、その版の見どころ（数件・日本語・Claudia の口調）に替えた。 |
-| C6 の前（単独・配布と公開） | 10-15 | `release-cycle`（リリースの手順） | `release-cycle`: 繰り返し spec として `v0.0.2` を出したリリースの手順を、スキル `/release`（`.claude/skills/release/` の `SKILL.md`・`procedure.md`）へ移して完了にした。 |
-| 版に縛らない（単独・道具と手入れ） | 10-16 | `roadmap-overview-html`（ロードマップの俯瞰図と doc の整理） | `roadmap-overview-html`: roadmap.md から版の段ごとの俯瞰の HTML（帯・組・カードの開閉・テーマの絞り込み・完了の場所・外の物を読まない 1 枚）を作る道具 `tools/roadmap-overview.ps1`（文言のファイル・ひな形・見本つき・`-SelfTest` を全体テストの段 `roadmap overview check` に足した）を作り、今の roadmap.md から `doc/roadmap-overview-2026-10-15.html` を 1 枚作った。 |
-| C7（④・版に縛らない） | 10-16 | `reflow-scroll-path-test`（文字の層の経路の検査） | `reflow-scroll-path-test`: 2 行だけ入る欄で 3 行へあふれる台本を流し、区間の全文で配置する枝（先渡しあり）とあふれのスクロール（`visible_window`）を組み合わせて踏む経路の検査 `full_text_path_keeps_glyph_rows_through_overflow_scroll` を `crates/areka-emo-text/src/actor_lookahead_tests.rs` の末尾に足した（+131／−0・本番のコードは無変更）。 |
-| C7（⑦・版に縛らない） | 10-16 | `impl-watch-skills`（机の段のスキルと置き方の道具） | `impl-watch-skills`: 机の貸し出しのアプリ `areka-impl-watch.exe` を置く道具 `tools/impl-watch-install.ps1` を足した（組み立て → `.new.exe` → 今のものを `.old-<UTC>.exe` へ改名して入れ替え・失敗したら戻す → 古いものの掃除 → `--help` で確かめる・端末へは ASCII だけ）。 |
-| C7（⑧・版に縛らない） | 10-16 | `impl-watch-residue`（机の貸し出しのアプリの拾い残し） | `impl-watch-residue`: `crates/areka-impl-watch` の拾い残しを片づけた。 |
-| C7（③・v0.0.3） | 10-16 | `app-icon`（アプリと通知領域のアイコン） | `app-icon`: areka の顔のアイコンを 2 組（組 1＝アプリ・組 2＝通知領域）作り、`areka.exe` に埋めた。 |
-| C7（⑤・版に縛らない） | 10-16 | `perf-tools-console-encoding`（性能改善ループの道具の文字コード） | `perf-tools-console-encoding`: `tools/perf/` の子 pwsh が端末の文字コードを書き替えず、子の出力は読む側で UTF-8 として受け取る。道具が端末へ出す文は英語だけ。判定器 `encoding check` が `tools/perf/` も見る。完了時の棚卸＝その場の解決 2 件・起票 0 件 |
-| C7（⑥・版に縛らない） | 10-16 | `dev-helper-x64-clobber`（開発時の helper の置き場の罠） | `dev-helper-x64-clobber`: 全体テストの最後の段 `i686 helper beside areka.exe` が `target\debug\` の隣の helper を i686 版へ揃え（道具 `tools/sync-i686-helper.ps1`・自己検査の段 `i686 helper sync check`）、helper を起こす入口が向きを見て x64 版なら `helper_not_i686` の 1 行を出す。 |
-| C7（①・v0.0.3） | 10-16 | `baseware-root-list`（ゴーストとバルーンの置き場の並び） | `baseware-root-list`: ゴーストとバルーンを置く根を「`c:\areka` → `c:\ssp`」のように並びで持ち、上から探して同じフォルダ名は上を使う（下は隠れて記録に残る）。 |
-| C7（②・v0.0.3） | 10-16 | `balloon-text-bugs`（文字の層のバグ 3 件） | `balloon-text-bugs`: 件 1＝選択肢つきのトークのバルーンの時間切れを、選択の待ちが解けた時刻（トークの終わり）から測る（可視性の線の `ChoiceShown`・選択肢の抑止を外した・完了 `balloon-visibility` 5.4 を改めた）。 |
-| C8（⑦・版に縛らない） | 10-16 | `mcp-stdio-bridge-residue`（中継の拾い残し） | `mcp-stdio-bridge-residue`: 中継 `crates/areka-mcp-bridge` の拾い残しを片づけた。 |
-| C8（①・v0.0.3） | 10-17 | `user-data-root`（利用者の物の置き場） | `user-data-root`: winget で入れた形と、`areka.exe` のフォルダに書けない形（`Program Files` の下など）では、利用者ごとの書ける根（`%LOCALAPPDATA%\areka`・`AREKA_USER_ROOT` で替えられる）を置き場の並びの先頭に入れ、exe のフォルダの中へは何も書かない。 |
-| C8（②・v0.0.3） | 10-17 | `write-failure-notice`（書けないときの伝え方） | `write-failure-notice`: areka の記憶を書けないと、起動の前・動いている途中・終わるときのどこでも、告知を 1 つだけ出して終了コード 1 で終わる（題名は起動の前が「areka を起動できません」、その後が「areka の記憶を書けません」・`AREKA_NO_ALERT` は画面だけを抑え、終わり方は同じ）。 |
-| C8 の外（単独・v0.0.3） | 10-18 | `emily-ghost-verification`（えみりの `.nar` が入らない件） | `emily-ghost-verification`: えみり（`emily4.nar`）が入るようになった。 |
-| C8 の外（単独・v0.0.3） | 10-18 | `move-canon`（名前付きの `\![move]` で窓が動かない件） | `move-canon`: `\![move]` の名前付きの形と旧い位置の形を同じ 1 つの指令へ読む。 |
-| C9（⑧・v0.1.0） | 10-18 | `mcp-receiver-bugs`（PR#335・MCP の受け口のバグ 2 件） | `mcp-receiver-bugs`: 件 1＝MCP の受け口が、形の合わない `params` の `tools/call`・`initialize`・`completion/complete` に `-32601` でなく `-32602`（文は `invalid params for <メソッド名>`・`data` なし）で答える。 |
-| C9（③・v0.1.0） | 10-19 | `mcp-kanade-tools`（MCP の `sakurascript`・`raise_event`） | `mcp-kanade-tools`: MCP の `sakurascript` と `raise_event` が `NG:not implemented yet` でなく本物の答えを返す。 |
-| C9（⑥・v0.1.0） | 10-19 | `real-run-mcp-kit`（実機の走行のテストの共通の道具） | `real-run-mcp-kit`: 実機の走行のテストの共通の道具を、テスト専用の新しいクレート `crates/real-run-kit/` に置いた。 |
-| C9（②・v0.1.0） | 10-19 | `startup-options-core`（SSP の起動オプションの読み取りの土台） | `startup-options-core`: areka が SSP と同じ書き方の起動オプション（`--x 値`・`--x=値`・`/x`・`-x`・`--option a,b`）を読む。 |
-| C9（①・v0.1.0） | 10-19 | `impl-watch-test-desk`（机の貸し出しのアプリを 3 種類の机へ） | `impl-watch-test-desk`: 机の貸し出しのアプリ `areka-impl-watch.exe` の机を、開発者の模型の 3 種類に組み直した＝**実装の机**（マシンに 1 つ・何人でも乗れ、負荷テストがひとり占めできる）・**排他テストの机**（マシンに 1 つ・全体テストと実機の UI テストを 1 度に 1 人・停止要請を出さないので、ほかの実装は止まらない）・**マージの机**（リポジトリに 1 つ）。 |
-| C9（⑦・v0.1.0） | 10-19 | `zorder-scope-inversion`（キャラの窓を自分のバルーンより手前に置く重なりの順） | `zorder-scope-inversion`: 明示の `\![set,zorder,…]` を書かれた順のまま採り（逆転・非隣接とも）、片方だけ名指しのスコープに相棒を補う。 |
-| C9（⑤・v0.1.0） | 10-19 | `sample-url-fetch`（検体を URL の行で取り寄せる） | `sample-url-fetch`: 検体の登記表の行に在処の種類（`SampleSource`＝リポジトリの書庫か URL の行か）を足し、9 本目の検体「窓際のぱすたさん」（`pasta-in-windows`）を最初の URL の行として登記した（GitHub Pages の公開の URL・隣の `.sha256` で照合・いつも最新を追う・登記に大きさもハッシュも書かない）。 |
-| C9（④・v0.1.0） | 10-22 | `mcp-reload`（MCP の `reload` と台本の `\![reload,…]`） | `mcp-reload`: ghost・shiori・shell・balloon・descript の読み直しを、MCP の `reload` と台本の `\![reload,…]` の 1 つの入口 `request_reload` で受ける（読み直しの重なりは断る・語を記録に残す・`reload_started`／`reload_done`／`reload_failed`）。 |
-| C10（⑧・v0.1.0） | 10-23 | `emo2-real-run-stability`（emo2 を実機で起こす走行の赤 2 件） | `emo2-real-run-stability`: 件 1＝`emo2_real_run` が `wrap=BudouxWordWrap` を時間で待たず、実走の道具（`real-run-kit`）の MCP の呼び出しで台詞の印（wrap まで）を見てから閉じる形に直した（共通の手順は `crates/areka/tests/emo2_real_run/common.rs`）。 |
-| C10（④・v0.1.0） | 10-23 | `property-name-case-fold`（プロパティの名前の英字の大小） | `property-name-case-fold`: プロパティの名前の半角英字だけを小文字へ畳む形にした（sylphya の `parse_seg` の 1 か所・全角・かな・前後の空白・値は畳まない）。 |
-| C10（⑥・v0.1.0） | 10-23 | `dot-sakura-specimen`（検体「．さくら」と実機の 1 回） | `dot-sakura-specimen`: 開発者のゴースト「．さくら」（`dot_sakura.nar`・SHIORI は華和梨 7.4）を検体に加えた（書庫は受け取ったバイト列のまま `vendors/sample_ghost/` に置き、登記表 `SAMPLES` に `dot_sakura`〔同梱バルーン `bottle`〕を足して 10 行）。 |
-| C10（②・v0.1.0） | 10-23 | `window-link-directives`（窓どうしの連携と吸着の向き） | `window-link-directives`: 台本の `\![set,alignmenttodesktop,方向]` で窓の吸着の辺を変える形を受けた。 |
-| C10（①・v0.1.0） | 10-23 | `script-security-level`（台本とイベントの出どころとセキュリティレベル） | `script-security-level`: 台本とイベントに出どころ（ゴースト自身・MCP の `sakurascript`・MCP の `raise_event`）を付けて再生の終わりまで運ぶ形にした。 |
-| C10（③・v0.1.0） | 10-23 | `ghost-inner-balloon`（ゴーストのフォルダの中のバルーン） | `ghost-inner-balloon`: ゴーストのフォルダの中の `balloon\<名>\` をそのゴーストにだけ見える候補にし（起動・切替・メニュー・タグ・記憶・読み直し・更新・開く・インストールの後の表示名）、同じフォルダ名は根の置き場のものを隠す。 |
-| C10（⑤・v0.1.0） | 10-23 | `offline-surface-dump`（窓も GPU も使わない面の書き出し） | `offline-surface-dump`: `--offline-dump` とその仲間で、窓も GPU も使わずに面を PNG に書き出してすぐ終わる（SSP の書き出しと同じ時点・同じ着せ替え・CSV と終了コード 0/1/2）＋比べる道具 `surface-compare`。 |
-| C10（⑦・v0.1.0） | 10-23 | `pasta-in-windows-verification`（検体「窓際のぱすたさん」が SSP と同じに動くかの確かめ） | `pasta-in-windows-verification`: 検体「窓際のぱすたさん」を SSP 2.9.18 と並べて測り、崩れた所の表に持ち主を付け、areka の側で直せるものを直し、残りを v0.1.0 の申し送り 6 本と既存の brief へ渡した。 |
-| C11（④・v0.1.0） | 10-23 | `mcp-scope-rect-property`（外から窓とバルーンの位置を読むプロパティ） | `mcp-scope-rect-property`: sylphya に読まれた時に一次情報源を見に行く口を足し、`currentghost.scope(ID).rect` と `currentghost.balloon.scope(ID).rect` を MCP の `get_property` とゴーストのプロパティの道で、OS が持つ今の窓の矩形「左,上,右,下」で答える。 |
-| C11（⑧・v0.1.0） | 10-24 | `shiori2-protocol`（SHIORI/2.x の口だけを持つゴーストが話す） | `shiori2-protocol`: 読み込みの直後に `GET Version SHIORI/2.6` で SHIORI の版を確かめ、2.x の相手には要求を組み替え（翻訳＝`TRANSLATE Sentence` 2.6・資源＝`GET String` 2.5・ほか＝`GET Sentence` 2.2・`basewareversion` は送らない）、答えの `Sentence`／`String` を 3.0 の値へ戻して、どっとさくら（華和梨）が話すようにした。 |
-| C11（①・v0.1.0） | 10-24 | `descript-window-keys`（descript の窓の鍵） | `descript-window-keys`: ゴーストの descript の `sakura.`／`kero.`／`char<n>.seriko.defaultsurface` を 1 回だけ読み、窓の採寸・起動の最初の面・読み直しとシェルの切り替えで戻る面に使い（seriko と文字の層が同じに決める）、バルーンの「動かさない」をシェルのスコープごとの `*.balloon.dontmove` ＞ ゴーストの `balloon.dontmove` と台本の `lock`／`unlock` の `balloonmove` で決め、ぱすたの窓を面 1000 で測って下端を作業領域の中に収めた。 |
-| C11（⑤・v0.1.0） | 10-24 | `vertical-choice-hover-band`（縦書きの選択肢の反転の帯） | `vertical-choice-hover-band`: 縦書きのバルーンで選択肢とアンカーに乗せたときの反転の帯を、書体ごとに DirectWrite で測った縦書きの基線に em の箱を中央で重ねる所に塗り、当たりの範囲も同じ所にした（横書きは変えない）。 |
-| C11（⑥・v0.1.0） | 10-24 | `dpi-realign-remembered-chain`（拡大率が変わったあとの隣り合いの詰め直し） | `dpi-realign-remembered-chain`: 拡大率の後と起動の並べ直しを隣り合いで決め、記憶に隣り合いの印 `[window-adjacent]` を持たせ、位置を覚えているキャラクターどうしも隣り合ったままに見えるようにした。 |
-| C11（③・v0.1.0） | 10-24 | `readonly-mode`（利用者の環境へ何も書かない起動） | `readonly-mode`: `--option readonly` で利用者の環境へ何も書かずに起動する（areka とゴーストの記憶・起動中の印・置き場の並び・利用者ごとの置き場の作成と写し・書けるかの確かめで作る物を、保存の口の控えに入れて走る間だけ持つ。インストール・URL からの取り込み・ネットワーク更新を断り、更新の断りは SSP の測りに合わせて OnUpdateResultEx→OnUpdateResult の総括 2 件だけを送る。右クリックメニューのインストールとネットワーク更新を灰色に、フォルダ選びは最近使った所に足さない）。 |
-| C11（②・v0.1.0） | 10-24 | `mouse-click-wheel-events`（クリック・ホイール・出入りのイベント） | `mouse-click-wheel-events`: 左右・中・拡張ボタンの解放を OnMouseUp(Ex)→OnMouseClick(Ex) の段の列で送り（台本で止まり、送信の失敗は 204 と同じ）、右クリックは解放の知らせ→メニューの順、縦のホイールを窓ごとに 100 ms で間引いて OnMouseWheel、窓ごとの OnMouseEnter/Leave/EnterAll/LeaveAll を送る。ぱすたの × が赤くなりボールでトークが出ることを実機で確かめた。 |
-| C12（⑥・v0.1.0） | 10-30 | `default-balloon-selfmade`（areka 自前の既定バルーン） | `default-balloon-selfmade`: 「ボトル（でふぉ改）」の寸法と設定値を引き継いだ自前の既定バルーン `areka-balloon`（面と動かない印は α 付きの PNG・オンラインの印は動く WebP 1 枚・descript は UTF-8・絵はコードで描く道具で作り直せる）を検体に登記し、起動の解決の既定と配布の道具を `StayseeBalloon` から差し替えた。 |
-| C12（②・v0.1.0） | 10-30 | `shell-mouse-cursor`（シェルのマウスカーソル） | `shell-mouse-cursor`: シェルの `sakura.cursor`／`kero.cursor`／`char*.cursor` ブレス（`mouseup`・`mousedown`・`mouserightdown`・`mousehover`・`mousewheel` × 当たりの名前 × `system:*` か `.cur`／`.ani`）とゴーストの descript の `mousecursor`（`cursor`）・`.arrow`・`.hand`・`.grip` で、キャラの窓の上のマウスカーソルを替える。開いた手と握った手の `.cur` の絵を areka に同梱し（fal の Ideogram で描いた）、wintf が `WM_SETCURSOR` に答え、ボタンを離したとき・ホイール・クリックの透過で出し直す。起動とシェル／ゴーストの切り替えで新しい表へ渡す（台帳 21 行）。 |
-| C12（④・v0.1.0） | 10-30 | `real-run-log-noise`（実機のログの量） | `real-run-log-noise`: 再追従で入力が前と同じなら解き直さない（文字の層の `debug!` 2 種類が装着と入力の変わり目だけになる）。選択肢の飾りの警告を置き場ごとに値が決まったときの 1 件にする（どっとさくらの `bottle` の ROP 系 20,764 行 → 2 行）。同梱 emo2 の着せ替えの「無し」の絵 `null.png` の `WARN` を `debug` へ。validrect の右辺・下辺の 0 を画像の右端・下端と読む（`bottle` で文字が描ける）。 |
-| C12（①・v0.1.0） | 10-30 | `mcp-strict-errors`（strict の記録） | `mcp-strict-errors`: `sakurascript`／`raise_event` の `strict` が真の台本に再生まで印を付けて運び、不在の面・バルーン・アニメ、知らない字、`\!` と `\&` の誤り、`\f` の引数など 16 の検出点で見つけた誤りを、再生の順に talk スレッドでエラーログへ書き（ゴーストの名前と検出点つき・答えの `since_id` で `get_log` から読める）、`params` の形だけが誤る要求には rmcp の 415 の後に rmcp の公開の型で -32602（2026-07-28 以降の版は HTTP 400）を返す（rmcp は改造しない＝10-30 の裁定）。中継も同じ答えを返し、`INSTRUCTIONS` から「not implemented yet」を外した。 |
-| C12（⑤・v0.1.0） | 10-30 | `startup-install-option`（起動時のインストール） | `startup-install-option`: SSP と同じく `areka.exe --install a.nar b.nar` で、最初の定常に着いた後に並べた順に投げ込みと同じ道で入れ、`--option deletesource` で入った書庫を消し、`--option callghost` で入れた後にそのゴーストを呼ぶ。exe の隣の `initial_install.nar` も同じ道で入れ、入ったら消す。読み取りだけの起動（`--option readonly`）ではどれも行わない。実機の試験 `crates/areka/tests/startup_install_real_run.rs` で `--install` から起動中までを確かめた。起動の解決の前に入れる形は `install-before-boot` へ（要件 10.2）。 |
-| C12（⑦・v0.1.0） | 10-30 | `window-work-area-clamp`（キャラクターの窓を作業領域の外へ出さない） | `window-work-area-clamp`: 起動の並べ直し・拡大率の後の詰め直し・大きい面への切り替え・記憶から戻す組の窓を作業領域の中へ寄せ（組は同じ量だけ動かす）、起動のトークの位置の指令を対象と基準の窓が最初の面を表示するまで預け（SSP と並べた測りで見込み H1）、バルーンだけが横にはみ出すときは反対の側へ並べ替える（2026-10-30 の裁定・完了 `areka-P0-windowposition-limit` の押し込みの決まりを改めた）。完了時の棚卸で `real-run-kit` が起こす子へ `PASTA_DEBUG=0` を渡し、`balloon-flip-side-rules`・`window-resetwindowpos-hold` を起票した。 |
-| C12（⑧・v0.1.0） | 10-30 | `bridge-store-user-root`（Store 版の Claude Desktop が起こした中継の置き場） | `bridge-store-user-root`: Store 版の Claude Desktop が起こした中継が、箱の中に areka の置き場を作り記憶を写していた件を直した（中継は置き場を決めるだけにし、作る・写すは areka 本体へ。箱へ回されることは記録の行で伝える）。 |
-| C13（v0.1.0） | 10-31 | `seriko-pattern-calls`（pattern定義でアニメーションを呼ぶ語と `move`） | `seriko-pattern-calls`: SERIKO の pattern定義でアニメーションを呼ぶ 7 語（start・stop・insert・alternativestart／alternativestop・parallelstart／parallelstop）を重ね方でなく再生の働きとして受け、`never` と純 `bind` は呼ばれたときだけ再生する。`move` は窓ごとキャラクターをずらす（倍率をかける・作業領域へ寄せる・ドラッグの終わりと位置の初期化と絶対位置の `\![move]` で元の位置を取り直す）。「．さくら」の実機で 8 語の WARN 0 件。 |
-| C13（v0.1.0） | 10-31 | `balloon-scroll-arrows`（バルーンのスクロールの矢印と手動の送り） | `balloon-scroll-arrows`: 押し出された行があるとき、バルーンの `arrow0`・`arrow1` の矢印を descript の座標（マイナスは右端・下端から・`--数値` はマイナスそのもの）と `arrow.filename` の名前で出し、矢印のクリック（2 行）とホイール（OS の行数）で手動に戻して読めるようにした（横書き・縦書き・シェル内バルーンの箱で同じ規則・`\b[ID]` の面の設定ファイルを重ねる）。実機で既定のバルーン・ぱすたの縦書き（SSP と同じ座標）・箱を確かめた。 |
-| C13（v0.1.0） | 10-31 | `stay-on-top-directives`（常に手前と手前へ出す指令） | `stay-on-top-directives`: `\v` はゴーストの窓の全部を 1 回手前へ出す（SSP 2.9.26 の働き・帯の外は HWND_TOPMOST→HWND_NOTOPMOST の案 A）。`\![set,windowstate,stayontop]`／`!stayontop` の常に手前はゴーストが終わるまで続き、wintf に WindowBand（確定段の帯の系・SWP_NOOWNERZORDER）を足した。シェルの切り替えの後も台本の zorder の組を保ち（件 1）、consumer_ledger に 2 行（`set,windowstate` と `\v` の運搬名）を足した。 |
-| C13（v0.1.0） | 10-31 | `animated-surface-log-flood`（動く絵のコマ送りの記録の量） | `animated-surface-log-flood`: 動く面のコマ送りの表示の行は DEBUG に下げた（初めての表示・面の切り替え・倍率・大きさ・出し直しは INFO のまま）。コマの変わり目は前の絵の上に変わった矩形だけを合成し直し、同じ原因の装置の失敗の繰り返しは 1 行にまとめた。件 26（`bind+random` の pattern0 で目を閉じたまま止まる）も直した。何もしない 6 分の記録は約 5,330 行から約 200 行になった。release 版の面 1002 の何もしていないあいだの CPU は 15.9%→15.4%（SSP 2.9.26 は 5.6%・残りは `wintf-visual-damage-redraw` の件 1 へ＝2026-11-14 の同 spec の完了の棚卸で `pasta-idle-surface-cost-measure` へ移した）。 |
-| C14（④・割り込み） | 10-31 | `emo-atlas-palette-alpha`（パレットの PNG の透明度） | `emo-atlas-palette-alpha`: パレットの PNG の `tRNS`（と 8 ビット以下のグレーの `tRNS`・GIF の透明色）を持つ絵を、emo-atlas の WIC の腕と wintf の `load_bitmap_source` が α を持つ絵として読む（番号つきの形式でだけパレットの `HasAlpha` を見る）。 |
-| C14（⑤・割り込み） | 10-31 | `choice-ranges-one-function`（選択肢の範囲を出す関数 1 つ） | `choice-ranges-one-function`: 選択肢とアンカーの強調とクリックの当たりを、行の列から出す本番の関数 `choice_ranges`／`ChoiceRanges::hit_rows`（`actor_present.rs`）1 つにまとめ、本番の提示と検査 2 か所が同じ関数を呼ぶ。帯の共有の検査を 1 本足し、並びを崩す変異 V1〜V7 が全部赤になることを確かめた。字・色・帯・当たりは変えていない。 |
-| C14（⑦・割り込み） | 10-31 | `popup-menu-residue`（メニューと説明書の道の残件） | `popup-menu-residue`: メニューの組み立ての失敗を表示の失敗と分けて記録する（`menu_build_failed`）。説明書の受け口の記録 7 行に `[readme]` と `event=` を付け、台本の `\![open,readme]` から偽の OS までの通しのテストを 2 本足した。kanade の SHIORI の往復の失敗の文から事実と合わない「終了」を外し、終了のスコープが OnClose の References まで届くことを通しのテストで確かめた。網羅台帳の語彙だけの 4 行に引受先（`extra-character-windows`）と裁定（省略した形のメニューを作り分けない）を書き、`owner_count` を 10→6 にした。件 11・12 は `popup-menu-shell-look` へ写し、件 13 は `popup-menu-extra-resources` として起票した。 |
-| C14（⑥・割り込み） | 10-31 | `actor-thread-log-capture`（背景のアクターの記録をテストの捕捉へ） | `actor-thread-log-capture`: `spawn_actor` が、親のスレッドで記録の捕捉の窓が開いているときだけ、その窓（Dispatch）を子のアクターのスレッドへ引き継ぐ（印の型 `CaptureWindowMarker` を `downcast_raw` で問う・窓が閉じたら答えない）。本番の記録は変えない。log-capture-kit の `capture` は `WindowSubscriber` で包み、閉じた後の記録を窓へ入れない。窓に背景のアクターの記録が入るようになったので、水準ごとの 0 件の主張を宛先で絞ったテストが 2 本ある（`update/worker_path_tests.rs`・`emo2_boot/update_cue_tests.rs`）。 |
-| C14（③・v0.1.0） | 10-31 | `placement-measure-bake-once`（起動の採寸で動く絵の全コマを読まない） | `placement-measure-bake-once`: 採寸の道だけ動く絵を 1 枚目で読む読み手 `FirstFrameDecoder` で包み、シェル・バルーンの読み込みの記録を出さない入口（`LoadRecords`・`_quiet`）で採寸と `windowposition` の読みを黙らせ、記録は資産の組み立ての 1 回だけ。焼く回数（シェル 2・バルーン scope ごと 2）と全コマ読み 1 度・記録の行の数を決定論の檻で固定。release の測り直しで動く絵 1 つのシェル 2,427→1,298 ms・4 つで 9,184→4,691 ms（採寸の分は約 100 ms）。実機（ぱすた・emo2・200%）で窓の大きさ・位置は前後同じ。完了時の棚卸で `emo-bake-log-overlap` を起票。 |
-| C14（②・v0.1.0） | 10-31 | `install-before-boot`（`--install` と `initial_install.nar` を起動の前に入れる） | `install-before-boot`: 起動の解決の前に、ゴーストも窓口も無い口 `BootPorts` で書庫を入れ（イベントは送らない・利用条件の画面の前に DPI の扱いを 1 回だけ立てる）、入れた後の置き場でゴーストを選ぶ。`callghost` は選び方の段（`--random` の後・記憶の前）になり、空の置き場からも起きる。定常の後に入れて切り替える道は外した。入れた物の控えは起動の後の受け皿・置換語へ引き継ぐ |
-| C14（①・v0.1.0） | 10-31 | `script-small-tags`（`\_u`・`\_m`・`\![bind-noevent]`・`\![*]`） | `script-small-tags`: `\_u[0x…]`・`\_m[0x…]` を字にする（出せない番号は警告 1 行で捨て、strict・`check_script` は「読めない引数」）・サロゲートの組を 1 字に／`\![bind-noevent,…]` を `bind` と同じ当て方で受け、記録の `name` で分ける・トグル形とカテゴリ単位形を当てる／`\![*]` と `%*` を行の中の印にし（既定の丸＝字の大きさの半分・面ごとの `marker.filename` の絵）、`\q` と畳まない・受け手の表は 42 件。完了時にその場で解決 1 件（出ている箱も面の切り替えで変わった印を使う）・起票 0 件 |
-| C15（⑥・割り込み） | 11-01 | `popup-menu-extra-resources`（古いゴーストのメニューの資源の古い名前） | `popup-menu-extra-resources`: 「ネットワーク更新」の項目で古い名前 `updatebuttoncaption` も新しい名前 `updatebutton.caption` の直前に 1 回だけ問い、新しい名前が空・値なし・失敗のときは古い名前の値を項目名にする（kanade の許可表は 15 名）。「．さくら」で areka と SSP がどちらも「気まぐれ更新(U)」になることを確かめた。⑵（消滅通告・おすすめ・ポータルの項目）は windows-reactor 待ちの段へ渡した |
-| C15（②・割り込み） | 11-01 | `emo-text-line-gap`（行間を持つ書体の横書きの帯） | `emo-text-line-gap`: 計測器に横書きの字の箱の上端を返す口を足し（本番は生成のときに「あ」の行の基線と ascent から 1 度だけ測る）、横書きの選択肢・アンカーの帯を字の箱の中央に置く（`round(max(0,t) + max(0,B−E)/2)`）。游ゴシックの帯の中心のずれは 20 で −6.17→−0.17、28 で −8.84→+0.16 image px。行間 0 の書体（Yu Gothic UI・ＭＳ ゴシック）と縦書きは 1 ビットも変わらない。大きさの違う行の帯の重なりは裁定で範囲外 |
-| C15（⑤・割り込み） | 11-01 | `emo-bake-log-overlap`（起動の準備で焼く段・畳み込みの記録が 2 行ずつ出る残り） | `emo-bake-log-overlap`: 案 1。emo-atlas に `bake_quiet`、emo-compose に `build_with_images_quiet` を足し（各クレートの private な `Records { Emit, Quiet }`・分岐と結果は変えず記録の行だけ止める）、emo-present のシェルの読み込みとバルーンの組み立てに記録を出さない入口を通し、採寸（`placement/measure.rs`）をそちらへ替えた。組み直し（`build_world`）は常に黙る。起動の準備 1 回の行の数の檻を新しく作った。例外 1（全透明の動く絵）は消えた。例外 2（バルーンの 2 層マージ）は `emo-balloon-merge-log-overlap` へ起票 |
-| C15（①・v0.1.0） | 11-01 | `shell-scale-linkage`（ぱすたの倍率の連動） | `shell-scale-linkage`: `\![get,property,イベント名,…]` の受け手を立てて聞いた値を指定のイベントの Reference で返し、`currentghost.scope(ID).scaling`・`currentghost.balloon.scope(ID).scaling`・`currentghost.scope(ID).currentmonitor.dpi` を MCP の `get_property` とゴーストの道で読めるようにし、窓ごとの描画の倍率が変わったフレームに `OnShellScaling`／`OnBalloonScaling` を送り、descript の `balloon.syncscale` を読む。実機の段 1〜3 は合格・段 4（本体とバルーンを DPI の違う画面に分ける）は開発者の裁定で閉じ、`balloon-script-offset-align` へ渡した。 |
-
-- 2026-10-23 に、この表の 4 欄目（一行要約）は最初の 1 文だけを残した（俯瞰の道具が読むのは表のユニットの欄と一言）。行の全文は history「2026-10-23 完了済みの退避」。
-- 完了 spec 直下エントリ＝**324**（`.kiro/specs/completed/` 直下・2026-11-01 `shell-scale-linkage` の完了後に実数えして一致＝フォルダ 323＋`graphics-rendering-stability.md` 1・その前に着地した `test-roots-under-target` の 1 本を含む）。その前の 322＝2026-11-01 `emo-bake-log-overlap` の完了後（フォルダ 321＋`graphics-rendering-stability.md` 1）。その前の 321＝2026-11-01 `emo-text-line-gap` の完了後（フォルダ 320＋`graphics-rendering-stability.md` 1）。その前の 320＝2026-11-01 `popup-menu-extra-resources` の完了後（フォルダ 319＋`graphics-rendering-stability.md` 1）。その前の 319＝2026-10-31 `script-small-tags` の完了後（フォルダ 318＋`graphics-rendering-stability.md` 1）。その前の 318＝2026-10-31 `install-before-boot` の完了後（フォルダ 317＋`graphics-rendering-stability.md` 1）。その前の 317＝2026-10-31 `placement-measure-bake-once` の完了後（フォルダ 316＋`graphics-rendering-stability.md` 1）。その前の 316＝2026-10-31 `actor-thread-log-capture` の完了後（フォルダ 315＋`graphics-rendering-stability.md` 1）。その前の 315＝2026-10-31 `popup-menu-residue` の完了後（フォルダ 314＋`graphics-rendering-stability.md` 1）。その前の 314＝2026-10-31 `choice-ranges-one-function` の完了後（フォルダ 313＋`graphics-rendering-stability.md` 1）。その前の 313＝2026-10-31 `emo-atlas-palette-alpha` の完了後（フォルダ 312＋`graphics-rendering-stability.md` 1）。その前の 312＝2026-10-31 `animated-surface-log-flood` の完了後（フォルダ 311＋`graphics-rendering-stability.md` 1）。その前の 311＝2026-10-31 `stay-on-top-directives` の完了後（フォルダ 310＋`graphics-rendering-stability.md` 1）。その前の 310＝2026-10-31 `balloon-scroll-arrows` の完了後（フォルダ 309＋`graphics-rendering-stability.md` 1）。その前の 309＝2026-10-31 `seriko-pattern-calls` の完了後（フォルダ 308＋`graphics-rendering-stability.md` 1）。その前の 308＝2026-10-30 `bridge-store-user-root` の完了後（フォルダ 307＋`graphics-rendering-stability.md` 1）。その前の 307＝2026-10-30 `window-work-area-clamp` の完了後（フォルダ 306＋`graphics-rendering-stability.md` 1）。その前の 306＝2026-10-30 `emo-text-dwrite-fidelity` の完了後（フォルダ 305＋`graphics-rendering-stability.md` 1）。その前の 305＝2026-10-30 `startup-install-option` の完了後（フォルダ 304＋`graphics-rendering-stability.md` 1）。その前の 304＝2026-10-30 `mcp-strict-errors` の完了後（フォルダ 303＋`graphics-rendering-stability.md` 1）。その前の 303＝2026-10-30 `real-run-log-noise` の完了後（フォルダ 302＋`graphics-rendering-stability.md` 1）。その前の 302＝2026-10-30 `shell-mouse-cursor` の完了後（フォルダ 301＋`graphics-rendering-stability.md` 1）。その前の 301＝2026-10-30 `default-balloon-selfmade` の完了後（フォルダ 300＋`graphics-rendering-stability.md` 1）。その前の 300＝2026-10-24 `mouse-click-wheel-events` の完了後（フォルダ 299＋`graphics-rendering-stability.md` 1）。その前の 299＝2026-10-24 `readonly-mode` の完了後（フォルダ 298＋`graphics-rendering-stability.md` 1。2026-10-24 `dpi-realign-remembered-chain` の完了〔+1・この行と上の表の行は書き足されていなかった＝この完了で表の行も足した〕も含む）。その前の 297＝2026-10-24 `vertical-choice-hover-band` の完了後（フォルダ 296＋`graphics-rendering-stability.md` 1）。その前の 296＝2026-10-24 `descript-window-keys` の完了後（フォルダ 295＋`graphics-rendering-stability.md` 1）。その前の 295＝2026-10-24 `shiori2-protocol` の完了後（フォルダ 294＋`graphics-rendering-stability.md` 1）。その前の 294＝2026-10-23 `mcp-scope-rect-property` の完了後（フォルダ 293＋`graphics-rendering-stability.md` 1）。その前の 293＝2026-10-23 `pasta-in-windows-verification` の完了後（フォルダ 292＋`graphics-rendering-stability.md` 1）。その前の 292＝2026-10-23 `offline-surface-dump` の完了後（フォルダ 291＋`graphics-rendering-stability.md` 1）。その前の 291＝2026-10-23 `ghost-inner-balloon` の完了後（フォルダ 290＋`graphics-rendering-stability.md` 1）。その前の 290＝2026-10-23 の steering の同期で実数えして一致・2026-10-23 `script-security-level` の完了後（フォルダ 289＋`graphics-rendering-stability.md` 1）。その前の 289＝2026-10-23 `window-link-directives` の完了後（フォルダ 288＋`graphics-rendering-stability.md` 1。2026-10-23 `dot-sakura-specimen` の完了〔+1・この行は書き足されていなかった〕も含む）。それより前の数えの経緯は history「2026-10-23 完了済みの退避」。⚠ **引き算で導かず毎回実数えする**。
-- M1 の持ち越しのうち残るのは `dpi-transition-two-tick-bounce`（開発者が許容）と `zorder-chain-residue` A-2（据え置き）だけ。M-dual は退役。
-- 個々の完了行の全文（種別・議題・完了時の所見）は history「2026-10-02 棚卸⑳退避」。
-
-### リリース
-
-| 版 | 日付 | GitHub Release | winget-pkgs の PR | 赤で起票した spec |
-|---|---|---|---|---|
-| v0.0.2 | 2026-10-06 | https://github.com/ekicyou/areka/releases/tag/v0.0.2 | https://github.com/microsoft/winget-pkgs/pull/450070 （初回の手提出・2026-10-10・自動の検査は通過・人の承認待ち＝まだ取り込まれていない） | — |
-
-`v0.0.3` からは、この表に行を足さない（2026-10-11 開発者の決定・リリースの記録は GitHub の Release の頁）。上の行は歴史として残す。
+| — | — | — | 完了した spec は `.kiro/specs/completed/`。ウェーブごとの完了の表は history「2026-11-22 steering の同期の退避」 |
 
 ### 次のリリースへの申し送り
 
 スキル `/release` が段 1 で読む（`.claude/skills/release/procedure.md` の 1.4）。「次の版上げのときに」と申し送る事は、ここへ 1 項目で足す。項目の頭に、書いたときの最新の版を「`v{その版}` の後」の形で書く（その版より後のリリースが済んだら、済んだ物として読み飛ばされる。消すのは、次に roadmap を触る PR）。版上げの 5 つのファイル（根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt`・その版の見どころ）の外を触る仕事は、ここへ書かずに、リリースの前に別の PR で片づける（残っていると `/release` は段 1 で止まる）。
 
-（`v0.0.2` の後の 8 項目は、2026-10-18 の `v0.0.3` の公開で済んだので、棚卸㉗で消した＝全文は history「2026-10-18 棚卸㉗退避」。中継の arm64 の確かめだけは持ち主が居ないので、覚え書きの「道具と試験」へ移した。）
-
-- **`v0.0.2` の後**・`user-data-root`（2026-10-17）: 動きが変わる点＝winget で入れた形と、`areka.exe` のフォルダに書けない形では、利用者の物（後から入れたゴーストとバルーン・areka とゴーストの記憶・中継の控え）を `%LOCALAPPDATA%\areka\` に置く（環境変数 `AREKA_USER_ROOT` で替えられる・`dist/README.txt` の「■ 置き場」「■ 記憶の置き場」）。0.0.2 を winget で入れた人は、最初の上げ直しで、0.0.2 のフォルダの中に後から入れたゴースト・バルーンとゴーストの記憶が消える（実測 6・areka の記憶は引き継ぐ・説明書に注意の行）。右クリックメニューに「置き場を先頭へ」が増えた。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）。winget-pkgs へ次の版を出すのは `winget-release-automation`（雛形の注意書き `InstallationNotes` を外してよい条件は、同 spec の brief の「user-data-root からの申し送り」）。
-- **`v0.0.2` の後**・`write-failure-notice`（2026-10-17）: 動きが変わる点＝areka の記憶を書けないとき、黙って続けずに告知を 1 つ出して終わる（終了コード 1）。書けない場所へのゴーストのインストールの失敗は「ファイルが壊れてる」ではなく `fileio` の語でゴーストへ渡る（emo2 の台詞は辞書の持ち主の対応待ち）。
-- **`v0.0.2` の後**・`emily-ghost-verification`（2026-10-18）: 動きが変わる点＝`emily4.nar` のように、同梱のバルーンの取り出し元が書庫に無い `.nar` も入る（そのバルーンだけ飛ばし、警告のダイアログを 1 つ出す）。`char2` 以降の鍵を持つゴーストで落ちない（3 人目からの窓はまだ出さない）。同じ番号の surface ブレスが複数あるシェルの絵が消えない。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）。
-- **`v0.0.2` の後**・`move-canon`（2026-10-18）: 動きが変わる点＝名前付きの `\![move,--X=…,--base-offset=…,--move-offset=…]` で窓が動く（emo2 の 10-17 版のメニュー「エモの位置調整」が効く）。参照点と基準 `screen`／`primaryscreen`／`global`／`me` を正典どおりに解く。右クリックのメニューに「シェル位置初期化」が増え、`\![execute,resetwindowpos]` も窓を既定の位置へ並べ直す。`--time` つきの移動は今は瞬時に動く（時間の部分は dola の改造の後）。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）。
-- **`v0.0.3` の後**・`mcp-receiver-bugs`（2026-10-18）: 動きが変わる点＝MCP の受け口が、形の合わない `params` の `tools/call`・`initialize`・`completion/complete` に `-32601` でなく `-32602`（文は `invalid params for <メソッド名>`）で答える（中継 `areka-mcp-bridge.exe` の経由でも同じ）。ほかの知らないメソッドは今のまま `-32601`。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）。
-- **`v0.0.3` の後**・`mcp-kanade-tools`（2026-10-19）: 動きが変わる点＝MCP の `sakurascript` が `NG:not implemented yet` でなく台本を再生して `OK` を返す（再生中や選択肢の最中に送ると今のトークを中断して新しい台本を再生する）。`raise_event` は任意の名前のイベントでゴーストを呼び、返った台本を再生して答えに `Script: <台本>` を載せる（台本が無ければ `OK:the ghost returned no script.`）。`get_log` の `script` に、MCP から流した台本とゴーストの自発の会話の台本が出る。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）。
-- **`v0.0.3` の後**・`startup-options-core`（2026-10-19）: 動きが変わる点＝`areka.exe` が SSP と同じ書き方の起動オプションを読む（`--ghost`〔名前か絶対パス〕・`--random`・`--option nobootcheck`・`--option dontloadmodule`・`--sstp-listen`〔MCP の待受〕・`--help`〔説明書を開いて終わる〕）。今までは `--` で始まる引数もゴーストのフォルダの位置に読まれ「ゴーストが見つからない」で止まったが、知らない起動オプションは記録に残して起動を続ける。引数を並べる今の起動はそのまま。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）・`dist/README.txt` の「■ 起動オプション」。
 - **`v0.1.0` の後**・`audit-dola`・`dola-yaml-backend`（2026-11-13）: 変わる点＝crates.io の `dola` の機能（`v0.1.0` と比べた正味の差）。⑴ 機能 `json`（既定で有効だった）と既定の機能が無くなった（壊れる変更）。⑵ 機能 `yaml` と任意の依存 `serde_yaml` が無くなった（壊れる変更・`Cargo.toml` の `dola` の機能の指定から `yaml` を消せば直る）。⑶ 機能 `toml` は続けて指定できる。引く `toml` の版は 0.8 から 1 に上がり、機能 `toml` の下で `dola` が TOML の読み書きの入口 `DolaDocument::from_toml_str`／`to_toml_string`（誤りは `dola::TomlReadError`／`TomlWriteError`）を持つ＝利用者は自分で `toml` を依存に書かなくてよい。版の番号の上げ方は `/release` で決める。
 - **`v0.1.0` の後**・`wintf-visual-tree`・`wintf-d2d-composite-rules`（2026-11-06〜11-13）: 変わる点＝crates.io の `wintf` の公開面（壊れる変更）。⑴ 描く中身の型 `VisualDrawContent` の置き場が `wintf::ecs::visual::draw_content` から `wintf::ecs::graphics::visual` の下へ移った ⑵ その欄 `composite_mode: D2D1_COMPOSITE_MODE` が `mix_mode: MixMode` に替わり、作り口 `new_blend` が増えた ⑶ 新しい公開の型 `SurfaceReadback`・`PixelRead`・`SurfaceImage`（`readback.rs`）と列挙の腕 `NanOpacity`（`world_visual.rs`）が増えた。版の番号の上げ方は `/release` で決める（2026-11-14 棚卸㊲で足した）。
 - **`v0.1.0` の後**・`runtime-module-untangle`・`audit-shiori-host32`（2026-11-13〜11-14）: 動きが変わる点＝⑴ 記録の的 `areka::emo2_boot::*` が `areka::runtime::*`・`areka::session::*` に替わった（`RUST_LOG` で絞っている人は書き直す） ⑵ 32bit の SHIORI の中継が DLL を `LoadLibraryExW`（DLL の置き場と既定の場所だけを探す）で読むようになり、`PATH` にだけ在る依存の DLL は読めなくなった。中継は `PASTA_DEBUG=0` を必ず立て、中継の標準エラーを記録へ流す。材料: 見どころ（`doc/release-notes/README.md` の「動きが変わる点」）（2026-11-14 棚卸㊲で足した）。
@@ -214,17 +102,8 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 > 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸㉞までの実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 5 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の**別々の行**・説明書 `dist/README.txt` の**別々の行**。文書だけの段は置かない。
 > **並び順の決まり（2026-10-07 開発者・10-05 の 3 段を改めた）**: 依存の木（働きの依存＋同じソースファイルを触る spec＋直列の列の順）の**先頭**だけを候補にし、**① ぶら下がる未完了の spec が多い ② 区分が高い（A ＞ B ＞ C ＞ D）③ 起票が古い**の順に並べ、上から互いに触るファイルが重ならないものを**最大 8 本**取る。据え置き・保留・取り下げ予定は木に入れない。**測ることが本体の spec はウェーブに並べない**（ほかの仕事を汚し、汚される）。区分 A でぶら下がる数が同じものは、開発者が「高」「早めに」と言ったものを先にした（棚卸㉓の読み＝違えば直す）。
-> **版の段が最上位の物差し（2026-10-15 開発者・`/kiro-discovery`「版の段」・2026-10-16 改め）**: **今の版（まだ公開していない最も若い版）が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者「ゴールが近いので他の版の割り込みは避けて」）。空いた席に入れてよいのは「版に縛らない」列のうち、今の版の着地までのウェーブ数を増やさないものだけ（同日・開発者「版に含めてもよいが、その場合、0.0.3 の着地（ウェーブ数）が増えることのないように」）＝先頭で、今の版の spec と触るファイルが重ならず、今の版が使う 1 本だけの席を取らず、見立ての上限がそのウェーブで一番大きい今の版の spec の下限以下で、人や外の待ちも、静かな机も、前後の全体テストの比べも要らないもの（判定の正本は `/kiro-next` のスキルの「Version gate」）。迷ったら席は空けておく。今の版の中は上の並び順の決まりで並べ、先頭を全部取ってから、空いた席を版に縛らない列の先頭（同じ並び順）で埋める。版に縛らない列の後続は待つ相手が着地してから・v0.2.0 の間は改造に触れないものだけ（「版の段」の注意）。棚卸㉕（C7）からこの形で組んだ。C9〜C12 は今の版 v0.1.0 の先頭だけで 8 席が埋まった。C14 は v0.1.0 の先頭が 3 本だけなので、空いた 5 席のうち 4 席を割り込みで埋めた（初めて）。C15 は v0.1.0 の先頭が `shell-scale-linkage` の 1 本だけなので、空いた 7 席のうち 5 席を割り込みで埋めた（うち 3 本は範囲を絞る約束つき）。C16 は棚卸㉝で v0.1.0 の `balloon-communicatebox`＋割り込み 3 本で組んだが、同じ日に開発者が ① と `popup-menu-shell-look` を windows-reactor 待ちへ移し、ウェーブも見直した（2026-11-01 開発者「ウェーブ自体が怪しい」）＝v0.1.0 に残るのは測ることが本体の `areka-test-binary-stability` と外の待ちの `winget-release-automation` だけになり、どちらも静かな机かほかの仕事の無い時に 1 本で回すもの＝割り込みを並べるとかえって v0.1.0 の着地が遅れる。そこで C16 は `areka-test-binary-stability` の 1 本だけにした（割り込みは入れない）。 **C17（棚卸㉞）は v0.1.0 の公開（11-04）の後の最初のウェーブ**: 今の版 v0.2.0 の 26 本のうち、待つ相手の無い先頭は `doc-tree-tidy` の 1 本だけ（ほかの 25 本はどれも、見直しか本体の crate 分けか v0.2.0 の中の前の spec を待つ＝棚卸㉞で 26 本の触るファイルを見直しの受け持つファイルと突き合わせ直した）。そこで版の段の「v0.1.0 の後の隙間」の取り方 ⑵ ⑶ どおり、空いた 7 席を v0.2.0 が待つ見直しで埋めた（v0.2.0 の着地のウェーブ数が増えることは開発者が受け入れている）。 **C18（棚卸㉟）**: C17 の 8 本が全部着地した（11-06）ので、前の棚卸の見込みどおり C18 を 8 本で組んだ（今の版 v0.2.0 の待つ相手の無い先頭は `wintf-visual-tree` の 1 本だけ・ほかの 7 席は v0.2.0 が待つ crate 分けの頭と見直し）。 **C19（棚卸㊱）**: C18 の 8 本が全部着地した（11-13）ので、見込みの C19 を測り直して 8 本で組んだ（配置の見直し 2 本を `runtime-module-untangle` と分けて C20 へ下げ、空いた 2 席に見直しの列の先頭 2 本を入れた・v0.2.0 の待つ相手の無い先頭は `wintf-d2d-composite-rules`・`dola-yaml-backend`）。
+> **版の段が最上位の物差し（2026-10-15 開発者・`/kiro-discovery`「版の段」・2026-10-16 改め）**: **今の版（まだ公開していない最も若い版）が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者「ゴールが近いので他の版の割り込みは避けて」）。空いた席に入れてよいのは「版に縛らない」列のうち、今の版の着地までのウェーブ数を増やさないものだけ（同日・開発者「版に含めてもよいが、その場合、0.0.3 の着地（ウェーブ数）が増えることのないように」）＝先頭で、今の版の spec と触るファイルが重ならず、今の版が使う 1 本だけの席を取らず、見立ての上限がそのウェーブで一番大きい今の版の spec の下限以下で、人や外の待ちも、静かな机も、前後の全体テストの比べも要らないもの（判定の正本は `/kiro-next` のスキルの「Version gate」）。迷ったら席は空けておく。今の版の中は上の並び順の決まりで並べ、先頭を全部取ってから、空いた席を版に縛らない列の先頭（同じ並び順）で埋める。版に縛らない列の後続は待つ相手が着地してから・v0.2.0 の間は改造に触れないものだけ（「版の段」の注意）。
 > **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C25 は `session-crate-split`（クレート `areka-session` を足す・外の新しい crate は無い見込み）・見込みの C26〜C28 は空き ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行）＝C25〜C27 は空き（`balloon-text-visual-tree` は C28 の見込み）。
-> **C16（2026-11-01 棚卸㉝・1 本）**: `areka-test-binary-stability` が 11-02 に着地し、`doc/pasta-real-run.md` の実機の確かめの後、11-04 に `/release 0.1.0` で v0.1.0 を公開した（PR#421）。C16 の行の全文と棚卸㉝の裁定は history「2026-11-04 棚卸㉞退避」。C15 より前は、そこから辿る。
-> **C17（2026-11-04 棚卸㉞・8 本）**: `doc-tree-tidy` が 11-05、見直し 7 本が 11-06 に全部着地した（PR#424〜PR#431）。C17 の行の全文と棚卸㉞の裁定は history「2026-11-06 棚卸㉟退避」。
-> **C18（2026-11-06 棚卸㉟・8 本）**: 11-06〜11-13 に全部着地した（PR#433〜PR#440）。C18 の行の全文と棚卸㉟の裁定は history「2026-11-13 棚卸㊱退避」。
-> **C19（2026-11-13 棚卸㊱・8 本）**: 11-13〜11-14 に全部着地した（PR#443〜PR#451・PR#446 は別の試験の直し）。C19 の行の全文・開始コマンド・その先の見込み（C20〜C22）と棚卸㊱の裁定は history「2026-11-14 棚卸㊲退避」。
-> **C20（2026-11-14 棚卸㊲・8 本）**: 11-14〜11-15 に全部着地した（PR#458〜PR#464・PR#466）。C20 の行の全文・開始コマンド・その先の見込み（C21〜C23）と棚卸㊲の裁定は history「2026-11-16 棚卸㊳退避」。
-> **C21（2026-11-16 棚卸㊳・5 本）**: 11-17 に全部着地した（PR#468〜PR#472）。C21 の行の全文・開始コマンド・その先の見込み（C22〜C24）と棚卸㊳の裁定は history「2026-11-17 棚卸㊴退避」。
-> **C22（2026-11-17 棚卸㊴・6 本）**: 11-17〜11-19 に全部着地した（PR#474・PR#476〜PR#478・PR#480・`audit-placement-follow-residue` は PR 番号の無いコミット `2888d7df`）。C22 の行の全文・開始コマンド・その先の見込み（C23〜C25）と棚卸㊴の裁定は history「2026-11-20 棚卸㊵退避」。
-> **C23（2026-11-20 棚卸㊵・4 本）**: 11-21 に全部着地した（PR#484〜PR#487）。C23 の行の全文・開始コマンド・その先の見込み（C24〜C26）と棚卸㊵の裁定は history「2026-11-21 棚卸㊶退避」。
-> **C24（2026-11-21 棚卸㊶・4 本）**: 11-21〜11-22 に全部着地した（PR#491〜PR#494）。C24 の行の全文・開始コマンド・その先の見込み（C25〜C27）と棚卸㊶の裁定は history「2026-11-22 棚卸㊷退避」。
 
 | Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
 |---|---|---|---|
@@ -818,22 +697,6 @@ Opus
 - [x] areka-P0-crates-io-publish -- `wintf`・`dola` だけを crates.io へ（Trusted Publishing・自分の workflow `crates-io.yml`）。Dependencies: areka-P0-release-package-versioned, areka-P0-mcp-server-core（C2・`release-ci-workflow` と並走）
 - [ ] release-code-signing -- SignPath Foundation への申請と CI での署名（任意）。Dependencies: areka-P0-release-ci-workflow
 
-### mouse-drag-events の持ち越し（2026-10-05 `/kiro-discovery` で起票）
-
-> 出どころは `mouse-drag-events` の実機（4.2・クローディア）と完了時の棚卸（`completed/areka-P0-mouse-drag-events/tasks.md` の Implementation Notes・`verification/real-machine.md` 4 章）。開発者の方針（2026-10-05）「実機で areka が未対応だったためにうまくいかなかった件はすべて起票」。
-
-- **分け方**: 4 本にした。`base` と `collisionex` はどちらも `shell/decode.rs` を触るが、描画（合成器）と当たり判定（`hit.rs`）で直す先が分かれるので別にした（同じ列で直列）。位置の保存は `placement/`、テストの AV はテストの土台で、触る所が重ならない。
-- **負荷のときの赤**（`install` の desk の上書き・`session_end` の `sync_send`・`emo2_boot::ghost_switch` の `boot_event_tests`）は新しく起票せず、`ghost-session-test-load-flake` の brief の Current State へ観測を足した。
-
-#### Specs (dependency order)
-
-- [x] areka-P0-element-base-method -- element定義の描画メソッド `base` を読んで描き、他の未対応の描画メソッドの行は記録を出す（バグ）。Dependencies: areka-P0-surface-element-nesting
-- [x] collisionex-regions -- `collisionex` の 4 つの形を読んで当たり判定に使い、Reference4 に名前を載せる。Dependencies: areka-P0-element-base-method
-- [x] areka-P0-mcp-dump-images-residue -- `dump_balloon` の文字の面の読み戻しを UI スレッドから外し、`dump` の 2 本の後始末 5 件を片付ける。Dependencies: areka-P0-mcp-dump-images, areka-P0-mcp-kanade-tools（後始末の ⑥ だけ）
-- [x] areka-P0-char-position-save-on-exit -- 起動の最後に並べ終えた時点で、記憶に位置が無いキャラクター窓の位置を書き、再起動で前回の並びに立つ（バグ・書く時機は 2026-10-05 の要件ディスカッションで「正常な終了」から改めた）。Dependencies: なし
-- [x] dpi-realign-remembered-chain -- （2026-10-24 に完了）拡大率が変わったあと、位置を覚えているキャラクターどうしも隣り合ったままに見えるよう詰め直す（バグ）。Dependencies: areka-P0-char-position-save-on-exit
-- [→] areka-P0-areka-test-threads-av -- （2026-10-11 `areka-test-binary-stability` の件 1 に吸収・brief は同 spec に写した）`--test-threads=4` の `STATUS_ACCESS_VIOLATION` の組を特定して直す（バグ）。Dependencies: なし
-
 ### バルーンのリンクと OS の連携（2026-10-05 `/kiro-discovery` で起票）
 
 > 開発者の問い（2026-10-05）「さくらスクリプトで、リンク（選択肢）をクリックしたらファイルを開いたりできるか？ また、リンクを右クリックしたらリンクに登録されている文字列（URL とか）をコピペできたりしますか？ バルーンからアプリを開く用途は結構あると思う。SHIORI でもできなくはないけど、あったらうれしい機能だと思う。ukadoc を調べて、既に存在するタグなのかどうかも確認せよ」。
@@ -901,15 +764,6 @@ Opus
 #### Specs (dependency order)
 
 - [ ] draw-methods-canon -- 残りの描画メソッドを element定義・pattern定義で描く（pattern定義の `base` を含む・D2D が支える全部へ・wintf も含めて）。Dependencies: areka-P0-element-base-method
-
-### budoux-reveal-reflow の持ち越し（2026-10-06 完了時の棚卸で `/kiro-discovery` で起票）
-
-> 出どころは `budoux-reveal-reflow` の最終確認の点検と完了時の棚卸（`completed/areka-P0-budoux-reveal-reflow/tasks.md` の Implementation Notes）。調停役 areka棚卸 の指示で 2 本を起票した。どちらもバグではなく檻の穴。
-
-#### Specs (dependency order)
-
-- [x] choice-ranges-one-function -- （2026-10-31 に完了）選択肢の範囲を出す本番の手順を関数 1 つにまとめ、検査はそれを呼ぶ（優先）。Dependencies: areka-P0-budoux-reveal-reflow
-- [x] areka-P0-reflow-scroll-path-test -- （2026-10-16 に完了）区間の全文で配置する枝とあふれのスクロールを組み合わせて踏む経路の検査（優先）。Dependencies: areka-P0-budoux-reveal-reflow
 
 ### ghost-standard-balloon の持ち越し（2026-10-07 完了時の棚卸で `/kiro-discovery` で起票）
 
@@ -1560,18 +1414,6 @@ Opus
 
 - [ ] helper-first-load-refusal -- 32 ビットの補助プログラムの SHIORI の読み込みが時々 `last_error: 203` で断られる件を再現して切り分け、直すか記録して閉じる（バグ・区分 B・版に縛らない）。Dependencies: none
 
-### vertical-choice-hover-band の持ち越し（2026-10-24 完了時の棚卸で `/kiro-discovery` で起票）
-
-> 出どころは `vertical-choice-hover-band` の `research.md` の 16.4 節・17.6 節（行の箱の比）と、タスク 4.2 の Implementation Notes（実機の撮った物で「今日の」に横線と × が重なる）。新しい spec は 1 本。起票の条件: `emo-text-line-gap` は直し方の裁定と実物の書体の読み戻しが要る（手順 3 の 1 つ目と 4 つ目）。× の件は `window-work-area-clamp` と触る場所が同じ（同 2 つ目）で、実機と SSP の測りが要る（同 4 つ目）ので件 4 として足した。
-
-#### Existing Spec Updates
-
-- [x] window-work-area-clamp -- （2026-10-30 に完了）件 4 を足した: バルーンだけが作業領域へ寄せられ（実機の記録で y 980 → 804 物理画素）、ぱすたの本体のシェルの `canvas.png` が持つ × と横線（バルーンより手前）が縦書きの 1 列目にかぶる（SSP にはかぶらない）
-
-#### Specs (dependency order)
-
-- [x] emo-text-line-gap -- 行間を持つ書体で行の箱の比が DirectWrite の行の箱より狭い件を測り、横書きの帯を字に合わせる（直し方は裁定）。バグ・区分 B・版に縛らない。Dependencies: none（✅ vertical-choice-hover-band）
-
 ### 縦書きの括弧とフォント名（2026-10-24 `/kiro-discovery` で起票）
 
 > 出どころ（2026-10-24 開発者・チャット）: ぱすたさんの縦書きの画面を見て「「と、」に、不自然な空白が入ってませんか？DWriteの縦書きに関する設定が何か抜けているのでは。」（「と、」は括弧の`「`と`」`のこと）。フォント名は「もしくは、フォント検索処理をより高度にする？GDI名でもマッチするように」。
@@ -1607,87 +1449,6 @@ Opus
 - [ ] balloon-inline-image -- バルーンの文中に画像を置く `\_b[…,inline]`。いつか・区分 C。Dependencies: none（下流 range-choice-tag）
 - [ ] ghost-alias-file -- シェルのフォルダの `alias.txt` を読み、キャラごとの別名で面を引き当てる。v0.2.0・区分 B。Dependencies: none（実機の確かめは ✅ shiori2-protocol の後）
 - [ ] seriko-missing-surface-default -- 台本の `\s[n]` が無い面を指したときに既定の面を出すか（ukadoc）出さないか（SSP 2.9 の実測）を決めて入れる。いつか・区分 C。Dependencies: descript-window-keys
-
-### 棚卸㉚の分割と起票（2026-10-24 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 16 本の「2026-10-24 棚卸㉚の再測定」の節だけ。
-
-### 棚卸㉛の分割と起票（2026-10-31 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 13 本の「2026-10-31 棚卸㉛の再測定」の節と、完了 spec の残り物 2 件の書き足し（`talk-fast-forward` の件 A・`seriko-trigger-lottery-gaps` の件 5）だけ。
-
-- **Existing Spec Updates**: `seriko-legacy-pattern-format`＝spec 台帳に行を足し、いつかの列に置いた（10-30 の起票のときは roadmap に載せていなかった）。`install-before-boot`＝v0.1.0 の版の門に数える。`balloon-communicatebox`・`seriko-interval-combinations`＝要件定義のモデルを Opus に改めた。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㉜の分割と起票（2026-10-31 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 14 本の「2026-10-31 棚卸㉜の再測定」の節だけ。
-
-- **Existing Spec Updates**: `dressup-change-events`＝版に縛らない列に置いた（10-31 の起票のときは版の置き場を決めていなかった）。`shell-scale-linkage`＝規模を 11〜16 に改めた。`emo-bake-log-overlap`＝規模を案 1 で 6〜9 に改めた。`talk-fast-forward`＝規模を 19〜24 に改めた（切り方は要件の段のまま）。C15 に入れた ③⑤⑥ は範囲を絞る約束つき（「ウェーブ編成」の表）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㉝の分割と起票（2026-11-01 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 11 本の「2026-11-01 棚卸㉝の再測定」の節だけ。
-
-- **Existing Spec Updates**: `balloon-script-offset-align`＝v0.2.0 に置いた（11-01 の起票のときは版の置き場を決めていなかった・`balloon-flip-side-rules` の後）。`balloon-communicatebox`・`popup-menu-shell-look`＝報告の後の開発者の決めで v0.1.0 から windows-reactor 待ちへ移した。`inputbox-user-input`・`menu-thumbnail-preview`・`shell-tooltip`・`balloon-link-hover`＝続けての決めで windows-reactor 待ちへ。`audit-areka-input-menu`・`audit-wintf-input`＝範囲を絞った。`script-impact-tiers`＝同意の窓だけ windows-reactor 待ち。`areka-test-binary-stability`＝測っているあいだ着地させない相手に `temp-path-exceptions-to-target` を足した。C16 の ①〜④ は触るファイルの約束つき（「ウェーブ編成」の表）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㉞の分割と起票（2026-11-04 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 28 本の「2026-11-04 棚卸㉞の再測定」の節だけ。
-
-- **Existing Spec Updates**: v0.2.0 の 26 本と `placement-crate-split`・`runtime-module-untangle`＝見直しと crate 分けの待ちを突き合わせ直した（「棚卸㉞の裁定」の 3）。`shiori4-api`＝要件の段で 3 本に切る案を brief に書いた（起票はしない＝台帳の「要件で切る」）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㉟の分割と起票（2026-11-06 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 8 本の「2026-11-06 棚卸㉟の再測定」の節と、完了した見直しの申し送り 3 件（`audit-wintf-window`・`seriko-talk-clock-fidelity`・`balloon-element-order` の brief の末尾）だけ。
-
-- **Existing Spec Updates**: C18 の 8 本＝同じウェーブでの約束と待ちを突き合わせ直した（「棚卸㉟の裁定」の 4）。`audit-wintf-window`・`seriko-talk-clock-fidelity`・`balloon-element-order`＝完了した見直しの申し送りを足した（「直接修正候補」）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㊱の分割と起票（2026-11-13 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 8 本の「2026-11-13 棚卸㊱の再測定」の節と、完了した spec の申し送りで拾われていなかった 3 件（`audit-test-kits`・`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks` の brief の末尾）、`emo-text-reveal-incremental` の行数の直しだけ。
-
-- **Existing Spec Updates**: 見込みの C19 の 8 本＝同じウェーブでの約束と待ちを突き合わせ直した（「棚卸㊱の裁定」の 4・5）。`audit-test-kits`・`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`＝申し送りを足した（「直接修正候補」）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㊲の分割と起票（2026-11-14 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 5 本の「2026-11-14 棚卸㊲の再測定」の節と、`runtime-crate-split` の末尾の申し送り（本体の外の古い名前 `emo2_boot`）だけ。
-
-- **Existing Spec Updates**: `wintf-winmsg-executor-import`・`pilot-windows-rs-next`＝版に縛らない列から v0.2.0 へ移した（開発者の指示）。見込みの C20 の 8 本と `audit-tools-scripts`・`pilot-windows-rs-next`＝同じウェーブでの約束と待ちを突き合わせ直した（「棚卸㊲の裁定」の 5〜7）。`runtime-crate-split`＝申し送りを足した（「直接修正候補」）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㊳の分割と起票（2026-11-16 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 7 本と割り込みの候補のうち 3 本の「2026-11-16 棚卸㊳の再測定」の節と、`audit-tools-scripts` の「件 2」だけ。
-
-- **Existing Spec Updates**: 見込みの C21 の 5 本の待ちと約束を突き合わせ直し（「棚卸㊳の裁定」の 3）、`balloon-text-visual-tree`・`audit-placement-follow-residue` を C22 へ入れて C23・C24 を組み直した（5）。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㊴の分割と起票（2026-11-17 `/kiro-next`）
-
-なし（分割 0 本・起票 0 本）。brief へ足したのは、測り直した 10 本の「棚卸㊴の再測定」の節と、`audit-areka-input-menu` の「棚卸㊴の申し送り」の節（`collisionex-regions` から説明の 1 行）。
-
-- **Existing Spec Updates**: 見込みの C22 の 5 本と、上がりうる 5 本・新しい `balloon-flip-ssp-review` の待ちと約束を突き合わせ直し（「棚卸㊴の裁定」）。シェルの element の列で `collisionex-regions` を `animated-image-import` の前へ。
-- **Specs (dependency order)**: 新しい spec は無し。
-
-### 棚卸㊵の分割と起票（2026-11-20 `/kiro-next`）
-
-分割 0 本・起票 1 本。brief へ足したのは、測り直した 12 本の「棚卸㊵の再測定」の節（`audit-emo2-boot-frame` には `audit-areka-app` の brief にだけ在った範囲の件の指し先も）。
-
-- **Existing Spec Updates**: 見込みの C23〜C25 の待ちと約束を突き合わせ直し、`hit-id-pass` を C23 へ、`window-resetwindowpos-hold` を C24 へ上げ、`balloon-text-visual-tree`・`balloon-script-offset-align` を見直しの後へ下げた（「棚卸㊵の裁定」）。
-- **Specs (dependency order)**: `test-crash-report-merge`（区分 A・S・v0.1.0 の後の隙間・テストの落ちの報告の写し 3 本を 1 か所にまとめる・働きの依存なし・`Cargo.lock` の席が空く見込みの C24）。
-
-### 棚卸㊶の分割と起票（2026-11-21 `/kiro-next`）
-
-分割 0 本・起票 0 本。brief へ足したのは、測り直した 8 本の「棚卸㊶の再測定」の節（`audit-areka-app` と `audit-areka-input-menu` には持ち主の寄せ直しも）。
-
-- **Existing Spec Updates**: 見込みの C24 の条件 2 つ（`audit-areka-input-menu` の範囲・`session-module-gather` と本体の `runtime_tests/mod.rs`）を確かめて C24 を見込みどおりに組み、`audit-areka-app` の申し送りの持ち主を寄せ直して C26 の 3 本の重なりを 0 に戻した（「棚卸㊶の裁定」）。
-- **Specs (dependency order)**: なし。
 
 ### 棚卸㊷の分割と起票（2026-11-22 `/kiro-next`）
 
