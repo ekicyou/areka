@@ -47,7 +47,7 @@
   - _Dispatch: mechanical — 改名表どおりの置き換えと、design の示す行の直し_
   - _Requirements: 2.1, 3.1, 3.3, 4.1, 4.4, 4.5, 4.6, 4.7, 4.8, 6.3_
 
-- [ ] 6. 窓の作成のテストを改める（G5）
+- [x] 6. 窓の作成のテストを改める（G5）
   - G5 の 3 ファイルの行を機械で置き換え、`spawn_assembly_tests.rs:154` の名指しを新しい名へ直す
   - 完了の状態: 閉じ方の ⑴〜⑷ が通り（`cargo test -p areka-placement`）、1 つのコミットになっている
   - _Dispatch: mechanical — 改名表どおりの置き換え_

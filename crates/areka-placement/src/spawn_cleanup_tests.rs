@@ -52,7 +52,7 @@ fn scope_state(world: &World, gw: &GhostWindows, scope: usize) -> ScopeState {
 /// 呼出点結合なしで拾えること（＝`world.despawn` を素で叩くだけで発火すること）が
 /// 核心ゆえ、掃除関数を明示的に呼ぶ経路は檻に持ち込まない。
 #[test]
-fn t_v1_despawn_char_window_removes_scope_entry() {
+fn despawn_char_window_removes_scope_entry() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -69,7 +69,7 @@ fn t_v1_despawn_char_window_removes_scope_entry() {
 
 /// バルーン窓側の despawn でも同じ scope エントリが消える（片割れ対称性）。
 #[test]
-fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
+fn despawn_balloon_window_removes_same_scope_entry() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -87,7 +87,7 @@ fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
 ///
 /// `remove_entry_of` の全域性を直接叩いて固定する（hook はこの関数しか呼ばない）。
 #[test]
-fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
+fn remove_entry_of_unregistered_entity_is_noop() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -132,7 +132,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
 /// 何も検出できない）。②「レジストリに scope 1 が残っている」も同時に主張する
 /// （＝除去が広すぎる変異——例えば scope 粒度でなく全消し——を捕まえる）。
 #[test]
-fn t_v1_surviving_scope_state_unchanged_by_cleanup() {
+fn surviving_scope_state_unchanged_by_cleanup() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -166,7 +166,7 @@ fn t_v1_surviving_scope_state_unchanged_by_cleanup() {
 /// `GhostWindows` Resource 未挿入の World で despawn しても no-op（hook が
 /// Resource 不在で panic しない）。
 #[test]
-fn t_v1_despawn_without_registry_resource_is_noop() {
+fn despawn_without_registry_resource_is_noop() {
     let mut world = World::new();
     let e = world.spawn(GhostWindowMarker).id();
 
@@ -179,7 +179,7 @@ fn t_v1_despawn_without_registry_resource_is_noop() {
 /// ことをログ側からも固定する。除去成立・no-op のいずれも
 /// `debug!` 止まりで、warn 以上を出さない（静穏性）。
 #[test]
-fn t_v1_cleanup_logs_are_debug_only_and_name_the_scope() {
+fn cleanup_logs_are_debug_only_and_name_the_scope() {
     let (_, events) = log_capture_kit::capture(|| {
         let mut world = World::new();
         let placements = two_scope_placements();
