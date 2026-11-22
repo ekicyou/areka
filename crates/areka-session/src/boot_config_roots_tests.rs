@@ -6,6 +6,7 @@
 //! 起動の入口の既定ゴーストと既定バルーンの採用・0 体の失敗が各根の格納フォルダを持つこと。
 //! 根は `TempPath::under_target`。
 
+use super::balloon_tests::named;
 use crate::alert::AlertScene;
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_with};
 use crate::boot_request::BootRequest;
@@ -14,7 +15,7 @@ use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostRoute};
 use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use crate::session_end::test_support::put_memory;
 use areka_ghost::{BasewareRoot, BasewareRoots};
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
@@ -54,13 +55,6 @@ fn put_balloon(root: &Path, folder: &str) -> PathBuf {
     std::fs::create_dir_all(&dir).expect("フォルダを組む");
     std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
     dir
-}
-
-fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
 }
 
 /// 同梱のバルーンが下の根にだけ在る → 同梱の段で下の根の項目。

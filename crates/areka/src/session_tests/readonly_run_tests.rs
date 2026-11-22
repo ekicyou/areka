@@ -235,12 +235,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         &format!("OnUpdate* が総括の 2 件でない: {updates:?}"),
     );
 
-    let count = |name: &str| {
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some(name))
-            .count()
-    };
+    let count = |name: &str| super::levels_of(&events, name).len();
     for (name, want) in [
         ("user_root_withheld", 1),
         ("readonly_boot_check_skipped", 1),

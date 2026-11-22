@@ -7,16 +7,9 @@ use areka_sylphya::persist::withhold::WithholdGuard;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
+use super::boot_resolve_tests::count_event;
 use super::*;
 use crate::readonly::tests::tree;
-
-/// `event` の記録の件数（`event` 欄で引く）。
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
 
 /// 根の取っ手の下で、印の 3 関数は成功を返し、書いたときの記録を出さず、控えたときの記録を出し、
 /// 置き場に何も作らない。
@@ -46,7 +39,7 @@ fn three_mark_writers_withhold_under_the_guard() {
         "session_mark_clear_withheld",
     ]
     .into_iter()
-    .map(|e| (e, count(&events, e)))
+    .map(|e| (e, count_event(&events, e)))
     .collect();
     assert_eq!(
         counts,

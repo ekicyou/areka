@@ -61,7 +61,7 @@ fn resolve_dir(tmp: &TempPath, ghost: &Path) -> ((BalloonRoute, PathBuf), Vec<Ca
     ((got.route, got.dir), events)
 }
 
-fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
+pub(super) fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))

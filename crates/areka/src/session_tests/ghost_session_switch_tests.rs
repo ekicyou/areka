@@ -559,6 +559,15 @@ fn switch_to_self_takes_down_and_reboots_a() {
     );
 }
 
+/// `event` の記録の `field` の値の列。
+fn field_of(events: &[CapturedEvent], event: &str, field: &str) -> Vec<Option<String>> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(event))
+        .map(|e| e.field_str(field).map(str::to_owned))
+        .collect()
+}
+
 // 失敗方向（既定へ戻す・致命・孤児の窓 0）は子のファイルへ分ける（1 ファイルの行数を抑える）。
 #[path = "ghost_session_switch_fallback_tests.rs"]
 mod fallback_tests;

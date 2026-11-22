@@ -264,13 +264,7 @@ mod switch_balloon {
         write_session_mark(&app_dir, "落ちた子").expect("印を書く");
         let (first, events) = capture(boot);
         let second = boot();
-        let found = events
-            .iter()
-            .filter(|e| {
-                e.level == tracing::Level::INFO
-                    && e.field_str("event") == Some("session_mark_found")
-            })
-            .count();
+        let found = crate::session_tests::levels_of(&events, "session_mark_found");
         let with_mark = (
             GhostRoute::Default,
             Some(DEFAULT_GHOST_FOLDER.to_owned()),
@@ -288,10 +282,10 @@ mod switch_balloon {
                 (GhostRoute::Memory, Some("g1".to_owned()), None),
                 with_mark.clone(),
                 with_mark,
-                1,
+                vec![tracing::Level::INFO],
                 Some("落ちた子".to_owned())
             ),
-            "印の読みが崩れた（印なし・印あり 1 度目・2 度目・session_mark_found の件数・印は残る）"
+            "印の読みが崩れた（印なし・印あり 1 度目・2 度目・session_mark_found の水準の並び・印は残る）"
         );
     }
 
@@ -314,10 +308,7 @@ mod switch_balloon {
             .expect("argv で決まる")
             .3
         });
-        let found = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("session_mark_found"))
-            .count();
+        let found = crate::session_tests::levels_of(&events, "session_mark_found").len();
         assert_eq!(
             (got, found, read_session_mark(&app_dir)),
             (None, 0, Some("落ちた子".to_owned())),

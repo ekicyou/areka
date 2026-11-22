@@ -278,17 +278,17 @@ fn other_options_with_offline_not_applied() {
         "pos2",
     ]);
     assert_eq!(parsed.options.offline, Some(ghost("G")));
-    let got = split(&parsed).0;
+    let (got, (effective, _, ignored)) = split(&parsed);
     assert!(
         got.contains(&ParseNote::WordPending { word: s("kiosk") }),
         "{got:?}"
     );
-    let ignored: Vec<&ParseNote> = got
+    let offline_notes: Vec<&ParseNote> = got
         .iter()
         .filter(|n| matches!(n, ParseNote::OfflineIgnored { .. }))
         .collect();
     assert_eq!(
-        ignored,
+        offline_notes,
         [
             &not_applied("positional"),
             &not_applied("ghost"),
@@ -298,7 +298,6 @@ fn other_options_with_offline_not_applied() {
         ]
     );
     // まとめでは無視の側
-    let (_, (effective, _, ignored)) = split(&parsed);
     assert_eq!(effective, [s("offline-dump")]);
     for n in ["ghost", "random", "sstp-listen"] {
         assert!(ignored.contains(&s(n)), "{n} {ignored:?}");
@@ -326,8 +325,9 @@ fn dump_without_offline_noted_each() {
     ]);
     assert_eq!(parsed.options.offline, None);
     assert!(parsed.options.boot.random);
+    let (notes, (effective, _, ignored)) = split(&parsed);
     assert_eq!(
-        split(&parsed).0,
+        notes,
         &[
             repeated("dump-scope"),
             without_offline("dump-shell"),
@@ -335,7 +335,6 @@ fn dump_without_offline_noted_each() {
             without_offline("dump-animation"),
         ]
     );
-    let (_, (effective, _, ignored)) = split(&parsed);
     assert_eq!(effective, [s("random")]);
     assert_eq!(
         ignored,

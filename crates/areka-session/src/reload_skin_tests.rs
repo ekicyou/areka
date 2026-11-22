@@ -3,7 +3,7 @@
 //! 置き場のゴーストは kanade の送出端と seriko の送り手だけを持つテスト用の組み立て（実行系が無いので
 //! 今のシェルは分からず、シェルの段は始められない）。差し替えの相の合図（`skin_applied`・
 //! `skin_phase_ended`）はここから直に呼ぶ（本番の呼び手は `areka-runtime` の `frame/switch.rs` で、
-//! 口の束（`hooks.rs`）を通って届く）。名前と readme とシェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
+//! 口の束（`areka-runtime` の `session_hooks.rs`。中身は `hooks.rs` が据える）を通って届く）。名前と readme とシェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
 //! 判定は集めてから 1 回。
 
 use std::collections::BTreeMap;

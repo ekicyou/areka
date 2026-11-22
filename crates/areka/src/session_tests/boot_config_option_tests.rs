@@ -129,13 +129,10 @@ fn positional_ghost_with_random_logs_unused_random() {
     let argv = g1(&tmp);
     let (got, events) = capture(|| answer(&boot(&tmp, &[&argv, "--random"], no_pick)));
     assert_eq!(got, (GhostRoute::Argv, PathBuf::from(&argv), None));
-    let unused = events
-        .iter()
-        .filter(|e| {
-            e.level == tracing::Level::INFO && e.field_str("event") == Some("random_unused")
-        })
-        .count();
-    assert_eq!(unused, 1);
+    assert_eq!(
+        super::levels_of(&events, "random_unused"),
+        vec![tracing::Level::INFO]
+    );
 }
 
 /// 位置のバルーンは `--ghost` の有無に関わらず通常の道で使う。
@@ -179,13 +176,6 @@ fn put_named_ghost(dir: &Path, name: &str) {
     .expect("descript");
 }
 
-fn count(events: &[log_capture_kit::CapturedEvent], level: tracing::Level, event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == level && e.field_str("event") == Some(event))
-        .count()
-}
-
 /// 絶対パスで置き場の外のゴーストを指すと、親が一時の置き場として並びと状態の先頭に足され、
 /// そのフォルダが `Pointed` で起きる。info `temporary_root_added` が 1 件。
 #[test]
@@ -211,8 +201,8 @@ fn absolute_path_adds_temporary_root_at_head() {
         (tmp.child("ext").as_path(), true)
     );
     assert_eq!(
-        count(&events, tracing::Level::INFO, "temporary_root_added"),
-        1
+        super::levels_of(&events, "temporary_root_added"),
+        vec![tracing::Level::INFO]
     );
 }
 
@@ -229,8 +219,8 @@ fn absolute_path_under_root_ghost_store_adds_no_temporary_root() {
     assert_eq!(got.4.roots.roots().len(), 1);
     assert!(!got.4.roots.roots()[0].is_temporary());
     assert_eq!(
-        count(&events, tracing::Level::INFO, "temporary_root_added"),
-        0
+        super::levels_of(&events, "temporary_root_added"),
+        Vec::<tracing::Level>::new()
     );
 }
 
@@ -262,8 +252,8 @@ fn absolute_path_not_a_ghost_folder_falls_back_to_usual() {
     );
     assert_eq!(got.4.roots.roots().len(), 1);
     assert_eq!(
-        count(&events, tracing::Level::WARN, "ghost_option_not_ghost_dir"),
-        1
+        super::levels_of(&events, "ghost_option_not_ghost_dir"),
+        vec![tracing::Level::WARN]
     );
 }
 
@@ -277,8 +267,8 @@ fn next_boot_does_not_find_the_temporary_ghost_in_memory() {
     assert_eq!(got.1.route, GhostRoute::Default);
     assert_eq!(got.4.roots.roots().len(), 1, "一時の置き場は残らない");
     assert_eq!(
-        count(&events, tracing::Level::WARN, "last_ghost_not_found"),
-        1
+        super::levels_of(&events, "last_ghost_not_found"),
+        vec![tracing::Level::WARN]
     );
 }
 
@@ -317,8 +307,8 @@ fn name_not_found_falls_back_to_usual() {
         (GhostRoute::Memory, Some("g1"))
     );
     assert_eq!(
-        count(&events, tracing::Level::WARN, "ghost_option_not_found"),
-        1
+        super::levels_of(&events, "ghost_option_not_found"),
+        vec![tracing::Level::WARN]
     );
 }
 
@@ -370,5 +360,8 @@ fn pointed_ghost_with_random_logs_unused_random() {
         (got.1.route, got.1.folder.as_deref()),
         (GhostRoute::Pointed, Some("g1"))
     );
-    assert_eq!(count(&events, tracing::Level::INFO, "random_unused"), 1);
+    assert_eq!(
+        super::levels_of(&events, "random_unused"),
+        vec![tracing::Level::INFO]
+    );
 }

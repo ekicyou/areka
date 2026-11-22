@@ -6,7 +6,7 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_runtime::spine::RecordedCall;
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 
 use crate::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 
@@ -32,14 +32,19 @@ pub fn reservation(stage: SwitchStage) -> SwitchInFlight {
 
 /// ゴースト `ghost` の記憶に最後のバルーンを書く（Ghost スコープ・boot が据える場所と同じ）。
 pub fn put_memory(ghost: &Path, folder: &str) {
-    save_scope(
-        PersistScope::Ghost,
-        &ScopeRoots {
-            ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastBalloon, folder.to_owned())],
+    assert_eq!(
+        save_scope(
+            PersistScope::Ghost,
+            &ScopeRoots {
+                ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
+                ..ScopeRoots::default()
+            },
+            &FsPersistIo,
+            vec![(PersistKey::LastBalloon, folder.to_owned())],
+        ),
+        PersistOutcome::Saved,
+        "記憶を書けない: {}",
+        ghost.display()
     );
 }
 

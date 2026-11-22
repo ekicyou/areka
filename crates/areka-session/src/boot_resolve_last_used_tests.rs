@@ -278,7 +278,7 @@ fn switch_drop_writes_default_and_mark_at_once() {
     let _ = write_session_mark(&argv_dir, "前からの印");
 
     let (_, events) = capture(|| write_switch_drop(&app_dir, Some("切替先")));
-    let _ = write_switch_drop(&argv_dir, None);
+    write_switch_drop(&argv_dir, None).expect("argv の降ろした直後を書く");
 
     assert_eq!(
         (

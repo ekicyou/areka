@@ -360,7 +360,7 @@ pub struct GhostBootInputs {
 }
 
 impl GhostBootInputs {
-    /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・根は構成入力のもの・起動の由来と
+    /// 本番の値: SHIORI は `shiori_wiring_for(modules, …)`（読むなら `Helper { helper_exe }`）・時計は `Real` 既定・根は構成入力のもの・起動の由来と
     /// 記憶の置き場は呼び手が渡したもの（本番は起動の文脈の置き場・テストは本物の環境で置き場を決めない）。
     pub fn production(
         cfg: &ConfigInputs,

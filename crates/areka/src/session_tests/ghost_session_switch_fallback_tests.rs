@@ -433,11 +433,7 @@ fn sync_target_boot_failure_leaves_only_default_windows() {
 
     let titles = window_titles(&mut rig.world);
     let one_bundle = one_bundle_covers_all(&mut rig.world);
-    let boot_failed_stages: Vec<Option<String>> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("ghost_switch_boot_failed"))
-        .map(|e| e.field_str("stage").map(str::to_owned))
-        .collect();
+    let boot_failed_stages = field_of(&events, "ghost_switch_boot_failed", "stage");
     let on_boot_tail = default_on_boot_tail(&rig);
     let exit_requested = rig.exit_requested();
     let shutdown_ok = rig.shutdown();
