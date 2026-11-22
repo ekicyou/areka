@@ -10,10 +10,14 @@
 //! 写しは `target\test-roots` の下に、利用条件の無いゴーストの書庫（`konnoyayame.nar`）を写したもの
 //! （窓口の既定 `AREKA_NO_ALERT=1` では利用条件つきの書庫は拒否になるため）。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[path = "real_screen/common.rs"]
+mod common;
+
+use common::copy_dir;
 use real_run_kit::{EndedBy, Launch, RealRun};
 use sample_ghost_kit::SampleRoot;
 use temp_path_kit::TempPath;
@@ -26,21 +30,6 @@ const FOLDER: &str = "konnoyayame";
 const GHOST_NAME: &str = "はろーYAYAわーるど";
 /// 根に置く既定のバルーン（配布物の `balloon\` と同じ名前の検体）。
 const BALLOON: &str = "areka-balloon";
-
-/// `from` の中身を `to` へ再帰で写す（写せなければ場所と理由で落とす）。
-fn copy_dir(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap_or_else(|e| panic!("{} を作れません: {e}", to.display()));
-    for entry in std::fs::read_dir(from).unwrap_or_else(|e| panic!("{}: {e}", from.display())) {
-        let path = entry.unwrap().path();
-        let dest = to.join(path.file_name().unwrap());
-        if path.is_dir() {
-            copy_dir(&path, &dest);
-        } else {
-            std::fs::copy(&path, &dest)
-                .unwrap_or_else(|e| panic!("{} を写せません: {e}", path.display()));
-        }
-    }
-}
 
 /// `target\` の下に書庫の写しを作る（写しの置き場の取っ手と写しの道）。
 fn archive_copy(dir: &str) -> (TempPath, PathBuf) {

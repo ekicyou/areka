@@ -134,7 +134,7 @@
   - _Requirements: 3.1, 4.3, 4.5, 5.4, 5.5, 5.7, 6.11_
 
 - [ ] 10. 実画面と exe のテスト（G10）
-- [ ] 10.1 (P) 実画面の 2 本の補助を 1 か所にまとめ、`unsafe` に前提を書く（指摘 45・73 の分）
+- [x] 10.1 (P) 実画面の 2 本の補助を 1 か所にまとめ、`unsafe` に前提を書く（指摘 45・73 の分）
   - 新しい `tests/real_screen/common.rs` に補助（per_monitor・mouse・copy_dir・lines_with・wait_new・json・Notes）を置き、`stay_on_top_real_run.rs`・`window_link_real_run.rs`・`startup_install_real_run.rs` から `#[path]` で引く（`copy_dir` は startup の形）
   - 各 `unsafe` に `// SAFETY:` を 1 行。判定名の札（`8.1a`〜`8.4`・`R-bg`・`R1`〜`R3`）を外す
   - 完了の姿: 3 本の写しの定義が消え、`cargo test -p areka --tests --no-run` が通り、`stay_on_top_real_run.rs` が 1,000 行を越えない

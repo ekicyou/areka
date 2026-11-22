@@ -16,31 +16,30 @@
 //!
 //! 判定は 1 行ずつ `target\wl-signoff\judgments.txt` に書き、走りの記録は `run1.log`・`run2.log` へ写す。
 
+#[path = "real_screen/common.rs"]
+mod common;
+
+use common::{Notes, copy_dir, json, lines_with, mouse, per_monitor, wait_new};
 use real_run_kit::{Launch, RealRun, Run};
 use sample_ghost_kit::SampleRoot;
 use std::collections::HashMap;
-use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromPoint,
 };
-use windows::Win32::UI::HiDpi::{
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, SetThreadDpiAwarenessContext,
-};
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
-    MOUSE_EVENT_FLAGS, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-    MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_CONTROL,
-    VK_F10, VK_F12, VK_SHIFT,
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
+    MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, SendInput, VIRTUAL_KEY,
+    VK_CONTROL, VK_F10, VK_F12, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GA_ROOT, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor, GetCursorPos, GetForegroundWindow,
-    GetSystemMetrics, GetWindow, GetWindowLongPtrW, GetWindowRect, GetWindowTextW,
-    GetWindowThreadProcessId, HWND_TOP, IsWindowVisible, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+    GetWindow, GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
+    HWND_TOP, IsWindowVisible, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
     WS_EX_TRANSPARENT, WindowFromPoint,
 };
 use windows::core::BOOL;
@@ -60,34 +59,35 @@ struct Win {
     dpi: u32,
 }
 
-fn per_monitor() {
-    unsafe {
-        SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    }
-}
-
 fn windows_of(pid: u32) -> Vec<Win> {
     per_monitor();
     unsafe extern "system" fn each(h: HWND, l: LPARAM) -> BOOL {
+        // SAFETY: l は下の EnumWindows が渡した &mut state を同じ型 (u32, Vec<Win>) へ戻したもので、state は同期の列挙が返るまで生き、ほかからは触られない。
         let state: &mut (u32, Vec<Win>) = unsafe { &mut *(l.0 as *mut (u32, Vec<Win>)) };
         let (pid, out) = (state.0, &mut state.1);
         let mut p = 0u32;
+        // SAFETY: p は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。
         unsafe { GetWindowThreadProcessId(h, Some(&mut p)) };
+        // SAFETY: 値だけを返す照会でポインタを渡さない。
         if p == pid && unsafe { IsWindowVisible(h) }.as_bool() {
             let mut buf = [0u16; 256];
+            // SAFETY: buf は呼び出しのあいだ生きるローカルの配列で、長さはスライスから渡る。
             let n = unsafe { GetWindowTextW(h, &mut buf) } as usize;
             let mut r = RECT::default();
+            // SAFETY: r は呼び出しのあいだ生きるローカルの RECT で、そこへ書くだけ。
             let _ = unsafe { GetWindowRect(h, &mut r) };
             out.push(Win {
                 hwnd: h.0 as isize,
                 title: String::from_utf16_lossy(&buf[..n]),
                 rect: [r.left, r.top, r.right, r.bottom],
+                // SAFETY: 値だけを返す照会でポインタを渡さない。
                 dpi: unsafe { GetDpiForWindow(h) },
             });
         }
         BOOL(1)
     }
     let mut state: (u32, Vec<Win>) = (pid, Vec::new());
+    // SAFETY: state は同期の列挙が返るまで生き、each は LPARAM を同じ型 (u32, Vec<Win>) へ戻して使う。
     let _ = unsafe { EnumWindows(Some(each), LPARAM(&mut state as *mut _ as isize)) };
     // 画面の外に退避している窓（-32000 など）は数えない。
     state
@@ -98,32 +98,6 @@ fn windows_of(pid: u32) -> Vec<Win> {
 
 fn area(w: &Win) -> i64 {
     (w.rect[2] - w.rect[0]) as i64 * (w.rect[3] - w.rect[1]) as i64
-}
-
-fn mouse(flags: MOUSE_EVENT_FLAGS, x: i32, y: i32) -> u32 {
-    per_monitor();
-    let (vx, vy, vw, vh) = unsafe {
-        (
-            GetSystemMetrics(SM_XVIRTUALSCREEN),
-            GetSystemMetrics(SM_YVIRTUALSCREEN),
-            GetSystemMetrics(SM_CXVIRTUALSCREEN),
-            GetSystemMetrics(SM_CYVIRTUALSCREEN),
-        )
-    };
-    let input = INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: ((x - vx) as i64 * 65535 / (vw - 1) as i64) as i32,
-                dy: ((y - vy) as i64 * 65535 / (vh - 1) as i64) as i32,
-                mouseData: 0,
-                dwFlags: flags | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    };
-    unsafe { SendInput(&[input], size_of::<INPUT>() as i32) }
 }
 
 fn key(vk: VIRTUAL_KEY, up: bool) -> INPUT {
@@ -155,82 +129,17 @@ fn chord(vk: VIRTUAL_KEY) -> u32 {
         key(VK_SHIFT, true),
         key(VK_CONTROL, true),
     ];
+    // SAFETY: 初期化済みの INPUT の配列と INPUT の大きさを渡す。
     unsafe { SendInput(&seq, size_of::<INPUT>() as i32) }
 }
 
-/// 判定と手順の控え。
-struct Notes {
-    base: PathBuf,
-    steps: String,
-    judgments: Vec<(String, bool, String)>,
-}
-
 impl Notes {
-    fn note(&mut self, s: impl AsRef<str>) {
-        eprintln!("[wl] {}", s.as_ref());
-        let _ = writeln!(self.steps, "{} {}", stamp(), s.as_ref());
-    }
-    fn judge(&mut self, name: &str, ok: bool, detail: impl Into<String>) {
-        let detail = detail.into();
-        self.note(format!(
-            "JUDGE {} {name}: {detail}",
-            if ok { "PASS" } else { "FAIL" }
-        ));
-        self.judgments.push((name.to_string(), ok, detail));
-    }
     fn snapshot(&mut self, label: &str, wins: &[Win]) {
         for w in wins {
             self.note(format!(
                 "rect {label} hwnd={:#x} title={} rect={:?} dpi={}",
                 w.hwnd, w.title, w.rect, w.dpi
             ));
-        }
-    }
-    fn save(&self) {
-        let _ = std::fs::write(self.base.join("steps.txt"), &self.steps);
-        let mut j = String::new();
-        for (n, ok, d) in &self.judgments {
-            let _ = writeln!(j, "{} {n}: {d}", if *ok { "PASS" } else { "FAIL" });
-        }
-        let _ = std::fs::write(self.base.join("judgments.txt"), j);
-    }
-}
-
-fn stamp() -> String {
-    format!("{:?}", std::time::SystemTime::now())
-}
-
-/// 記録の中の `needle` の行（標準出力＋標準エラー）。
-fn lines_with(run: &Run, needle: &str) -> Vec<String> {
-    run.output()
-        .lines()
-        .filter(|l| l.contains(needle))
-        .map(str::to_string)
-        .collect()
-}
-
-/// `needle` を含む行が `count` 本を超えるまで待つ（新しく出た行を返す）。
-fn wait_new(run: &Run, needle: &str, count: usize, secs: u64) -> Option<String> {
-    let until = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < until {
-        let ls = lines_with(run, needle);
-        if ls.len() > count {
-            return ls.get(count).cloned();
-        }
-        sleep(Duration::from_millis(100));
-    }
-    None
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for e in std::fs::read_dir(from).unwrap() {
-        let e = e.unwrap();
-        let dst = to.join(e.file_name());
-        if e.file_type().unwrap().is_dir() {
-            copy_dir(&e.path(), &dst);
-        } else {
-            std::fs::copy(e.path(), dst).unwrap();
         }
     }
 }
@@ -279,12 +188,15 @@ fn body_point(s: &Win) -> (i32, i32) {
 fn hit_at(x: i32, y: i32) -> (isize, Option<[i32; 4]>) {
     per_monitor();
     let pt = POINT { x, y };
+    // SAFETY: POINT を値で渡す照会でポインタを渡さない。
     let hwnd = unsafe { WindowFromPoint(pt) }.0 as isize;
+    // SAFETY: 値だけを渡す照会でポインタを渡さない。
     let monitor = unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONULL) };
     let mut info = MONITORINFO {
         cbSize: size_of::<MONITORINFO>() as u32,
         ..Default::default()
     };
+    // SAFETY: info は呼び出しのあいだ生きるローカルで、cbSize を設定済み。monitor は無効でないことを先に確かめている。
     let work = (!monitor.is_invalid() && unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool())
         .then(|| {
             let r = info.rcWork;
@@ -295,11 +207,13 @@ fn hit_at(x: i32, y: i32) -> (isize, Option<[i32; 4]>) {
 
 /// 点の下の窓の根（`GetAncestor(.., GA_ROOT)`）。
 fn root_of(hwnd: isize) -> isize {
+    // SAFETY: 値だけを返す照会でポインタを渡さない。無効な HWND では null を返すだけ。
     unsafe { GetAncestor(HWND(hwnd as _), GA_ROOT) }.0 as isize
 }
 
 fn pid_of(hwnd: isize) -> u32 {
     let mut pid = 0u32;
+    // SAFETY: pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。無効な HWND では 0 を返すだけ。
     unsafe { GetWindowThreadProcessId(HWND(hwnd as _), Some(&mut pid)) };
     pid
 }
@@ -311,6 +225,7 @@ fn covered_by(sakura: isize, hit: isize) -> bool {
         return false;
     }
     let mut h = HWND(sakura as _);
+    // SAFETY: 値だけを返す照会でポインタを渡さない。前が無ければ Err を返すだけ。
     while let Ok(prev) = unsafe { GetWindow(h, GW_HWNDPREV) } {
         if prev.is_invalid() {
             break;
@@ -335,6 +250,7 @@ fn verified_body_point(s: &Win, n: &mut Notes) -> Result<(i32, i32), String> {
         pid_of(hit0)
     ));
     // 動かすのは areka 自身の窓の重ね順だけ（持ち主の付いたバルーンは一緒に上がる）。
+    // SAFETY: 窓の重ね順だけを動かす。HWND が無効でも失敗を返すだけで、ポインタを渡さない。
     if let Err(e) = unsafe {
         SetWindowPos(
             HWND(s.hwnd as _),
@@ -359,7 +275,9 @@ fn verified_body_point(s: &Win, n: &mut Notes) -> Result<(i32, i32), String> {
         }
         if Instant::now() >= until {
             let mut cursor = POINT::default();
+            // SAFETY: cursor は呼び出しのあいだ生きるローカルの POINT で、そこへ書くだけ。
             let cursor = unsafe { GetCursorPos(&mut cursor) }.map(|_| (cursor.x, cursor.y));
+            // SAFETY: 値だけを返す照会でポインタを渡さない。無効な HWND では 0 を返すだけ。
             let ex = unsafe { GetWindowLongPtrW(HWND(s.hwnd as _), GWL_EXSTYLE) };
             return Err(format!(
                 "点 {x},{y}: 下の窓={hit:#x} pid={}（ぱすた={:#x}）作業領域={work:?} cursor={cursor:?} \
@@ -454,11 +372,7 @@ fn window_link_directives_on_pasta_in_windows() {
     drop(sample);
     std::fs::create_dir_all(&profile).unwrap();
     let exe = env!("CARGO_BIN_EXE_areka");
-    let mut n = Notes {
-        base: base.clone(),
-        steps: String::new(),
-        judgments: Vec::new(),
-    };
+    let mut n = Notes::new("wl", base.clone());
     n.note(format!(
         "root={} profile={} rust_log={RUST_LOG}",
         root.display(),
@@ -694,8 +608,10 @@ fn window_link_directives_on_pasta_in_windows() {
         mouse(MOUSEEVENTF_LEFTUP, x, y);
         sleep(Duration::from_millis(600));
     }
+    // SAFETY: 引数もポインタも無い照会。
     let fg = unsafe { GetForegroundWindow() };
     let mut fg_pid = 0u32;
+    // SAFETY: fg_pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。入力先が無くても 0 を返すだけ。
     unsafe { GetWindowThreadProcessId(fg, Some(&mut fg_pid)) };
     n.note(format!(
         "click={clicked:?} foreground hwnd={:#x} pid={fg_pid} (areka pid={})",
@@ -760,9 +676,4 @@ fn window_link_directives_on_pasta_in_windows() {
         "赤の判定: {failed:?}（{}）",
         base.join("judgments.txt").display()
     );
-}
-
-/// JSON の文字列にする（逆斜線と引用符だけを逃がす）。
-fn json(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }

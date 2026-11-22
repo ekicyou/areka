@@ -17,6 +17,10 @@
 //! （名 `copy`）と、ゴーストの写し `ghost\emo2b`（名 `emo2b`・切り替えの先）を足して作る。
 //! 判定は `judgments.txt`、手順と重なりの控えは `steps.txt`、走りの記録は `run.log`。
 
+#[path = "real_screen/common.rs"]
+mod common;
+
+use common::{Notes, copy_dir, json, lines_with, mouse, per_monitor, wait_new};
 use real_run_kit::{Launch, RealRun, Run};
 use sample_ghost_kit::SampleRoot;
 use std::collections::HashMap;
@@ -24,22 +28,17 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::HiDpi::{
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
-};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_MOUSE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN,
-    MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEINPUT, SendInput,
+    MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GW_HWNDNEXT, GW_OWNER, GWL_EXSTYLE,
-    GetForegroundWindow, GetMessageW, GetSystemMetrics, GetTopWindow, GetWindow, GetWindowLongPtrW,
-    GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOP,
-    HWND_TOPMOST, IsWindowVisible, MSG, RegisterClassW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SPI_GETSCREENSAVERRUNNING, SWP_NOACTIVATE, SWP_NOMOVE,
+    GetForegroundWindow, GetMessageW, GetTopWindow, GetWindow, GetWindowLongPtrW, GetWindowRect,
+    GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST,
+    IsWindowVisible, MSG, RegisterClassW, SPI_GETSCREENSAVERRUNNING, SWP_NOACTIVATE, SWP_NOMOVE,
     SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetWindowPos, SystemParametersInfoW,
     TranslateMessage, WINDOW_EX_STYLE, WNDCLASSW, WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
     WindowFromPoint,
@@ -148,27 +147,27 @@ fn same_relative_order(a: &[isize], b: &[isize]) -> bool {
     !fa.is_empty() && fa == fb
 }
 
-fn per_monitor() {
-    unsafe {
-        SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    }
-}
-
 fn zinfo(h: HWND, rank: usize) -> Z {
     let mut pid = 0u32;
+    // SAFETY: pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。無効な HWND では 0 を返すだけ。
     unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
+    // SAFETY: 値だけを返す照会でポインタを渡さない。無効な HWND では 0 を返すだけ。
     let ex = unsafe { GetWindowLongPtrW(h, GWL_EXSTYLE) } as u32;
     let mut buf = [0u16; 256];
+    // SAFETY: buf は呼び出しのあいだ生きるローカルの配列で、長さはスライスから渡る。
     let n = unsafe { GetWindowTextW(h, &mut buf) } as usize;
     let mut r = Default::default();
+    // SAFETY: r は呼び出しのあいだ生きるローカルの RECT で、そこへ書くだけ。
     let _ = unsafe { GetWindowRect(h, &mut r) };
     let r: windows::Win32::Foundation::RECT = r;
     Z {
         hwnd: h.0 as isize,
         rank,
         pid,
+        // SAFETY: 値だけを返す照会でポインタを渡さない。
         visible: unsafe { IsWindowVisible(h) }.as_bool(),
         topmost: ex & WS_EX_TOPMOST.0 != 0,
+        // SAFETY: 値だけを返す照会でポインタを渡さない。持ち主が無ければ Err を返すだけ。
         owner: unsafe { GetWindow(h, GW_OWNER) }.map_or(0, |o| o.0 as isize),
         title: String::from_utf16_lossy(&buf[..n]),
         rect: [r.left, r.top, r.right, r.bottom],
@@ -179,12 +178,14 @@ fn zinfo(h: HWND, rank: usize) -> Z {
 fn zorder() -> Vec<Z> {
     per_monitor();
     let mut out = Vec::new();
+    // SAFETY: 引数もポインタも無い照会。
     let mut h = unsafe { GetTopWindow(None) }.ok();
     while let Some(cur) = h.filter(|h| !h.is_invalid()) {
         out.push(zinfo(cur, out.len()));
         if out.len() >= 4096 {
             break;
         }
+        // SAFETY: 値だけを返す照会でポインタを渡さない。次が無ければ Err を返すだけ。
         h = unsafe { GetWindow(cur, GW_HWNDNEXT) }.ok();
     }
     out
@@ -228,30 +229,7 @@ fn snap(run: &Run, other: isize) -> Snap {
     }
 }
 
-/// 判定と手順の控え。
-struct Notes {
-    steps: String,
-    judgments: Vec<(String, bool, String)>,
-}
-
 impl Notes {
-    fn note(&mut self, s: impl AsRef<str>) {
-        eprintln!("[sot] {}", s.as_ref());
-        let _ = writeln!(
-            self.steps,
-            "{:?} {}",
-            std::time::SystemTime::now(),
-            s.as_ref()
-        );
-    }
-    fn judge(&mut self, name: &str, ok: bool, detail: impl Into<String>) {
-        let detail = detail.into();
-        self.note(format!(
-            "JUDGE {} {name}: {detail}",
-            if ok { "PASS" } else { "FAIL" }
-        ));
-        self.judgments.push((name.to_string(), ok, detail));
-    }
     /// 的と他のアプリの窓の順位・帯の印を控える。
     fn record(&mut self, label: &str, s: &Snap) {
         let mut rows: Vec<&Z> = s.targets();
@@ -273,31 +251,6 @@ impl Notes {
             ));
         }
     }
-}
-
-fn lines_with(run: &Run, needle: &str) -> Vec<String> {
-    run.output()
-        .lines()
-        .filter(|l| l.contains(needle))
-        .map(str::to_string)
-        .collect()
-}
-
-/// `needle` を含む行が `count` 本を超えるまで待つ（新しく出た最初の行を返す）。
-fn wait_new(run: &Run, needle: &str, count: usize, secs: u64) -> Option<String> {
-    let until = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < until {
-        let ls = lines_with(run, needle);
-        if ls.len() > count {
-            return ls.get(count).cloned();
-        }
-        sleep(Duration::from_millis(100));
-    }
-    None
-}
-
-fn json(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// 台本を送る。話している最中で断られたら 1 秒ごとに送り直す（最大 15 回）。
@@ -331,8 +284,10 @@ fn spawn_other_window(rect: [i32; 4]) -> isize {
     std::thread::spawn(move || {
         per_monitor();
         unsafe extern "system" fn proc_(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+            // SAFETY: 窓手続きが受けた引数をそのまま既定の処理へ渡す。
             unsafe { DefWindowProcW(h, m, w, l) }
         }
+        // SAFETY: 自分のモジュールを引くだけで、ポインタを渡さない。
         let inst = unsafe { GetModuleHandleW(None) }.unwrap();
         let class = WNDCLASSW {
             lpfnWndProc: Some(proc_),
@@ -340,7 +295,9 @@ fn spawn_other_window(rect: [i32; 4]) -> isize {
             lpszClassName: w!("areka_sot_other_app"),
             ..Default::default()
         };
+        // SAFETY: class は呼び出しのあいだ生き、クラス名は 'static の w! 文字列。
         unsafe { RegisterClassW(&class) };
+        // SAFETY: クラス名・題は 'static の w! 文字列で、親・メニュー・作成引数は渡さない。この窓はこのスレッドが持ち、下のループで回す。
         let h = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
@@ -360,7 +317,9 @@ fn spawn_other_window(rect: [i32; 4]) -> isize {
         .unwrap();
         tx.send(h.0 as isize).unwrap();
         let mut msg = MSG::default();
+        // SAFETY: msg は呼び出しのあいだ生きる自分のローカル変数。
         while unsafe { GetMessageW(&mut msg, None, 0, 0) }.as_bool() {
+            // SAFETY: msg は GetMessageW が埋めた値で、呼び出しのあいだ生きる。
             unsafe {
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
@@ -372,6 +331,7 @@ fn spawn_other_window(rect: [i32; 4]) -> isize {
 
 /// 窓を（入力先を変えずに）その帯の最上へ。
 fn place(h: isize, after: HWND) -> Result<(), String> {
+    // SAFETY: 窓の重ね順だけを動かす。HWND が無効でも失敗を返すだけで、ポインタを渡さない。
     unsafe {
         SetWindowPos(
             HWND(h as _),
@@ -384,32 +344,6 @@ fn place(h: isize, after: HWND) -> Result<(), String> {
         )
     }
     .map_err(|e| format!("{e:?}"))
-}
-
-fn mouse(flags: MOUSE_EVENT_FLAGS, x: i32, y: i32) -> u32 {
-    per_monitor();
-    let (vx, vy, vw, vh) = unsafe {
-        (
-            GetSystemMetrics(SM_XVIRTUALSCREEN),
-            GetSystemMetrics(SM_YVIRTUALSCREEN),
-            GetSystemMetrics(SM_CXVIRTUALSCREEN),
-            GetSystemMetrics(SM_CYVIRTUALSCREEN),
-        )
-    };
-    let input = INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: ((x - vx) as i64 * 65535 / (vw - 1) as i64) as i32,
-                dy: ((y - vy) as i64 * 65535 / (vh - 1) as i64) as i32,
-                mouseData: 0,
-                dwFlags: flags | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    };
-    unsafe { SendInput(&[input], size_of::<INPUT>() as i32) }
 }
 
 /// キャラクターの窓の上で、点の下がその窓になる点（中心に近い順に 9×9 の格子から）。
@@ -425,6 +359,7 @@ fn hit_point(c: &Z) -> Option<(i32, i32)> {
     pts.into_iter().find(|(x, y)| {
         mouse(MOUSE_EVENT_FLAGS(0), *x, *y);
         sleep(Duration::from_millis(300));
+        // SAFETY: POINT を値で渡す照会でポインタを渡さない。
         unsafe { WindowFromPoint(POINT { x: *x, y: *y }) }.0 as isize == c.hwnd
     })
 }
@@ -443,7 +378,7 @@ fn balloon_counts(run: &Run, trigger: &str, visible: bool) -> [usize; 2] {
 
 /// 持ち主だけを帯へ上げたときの測り: `root` だけへ `HWND_TOPMOST` を当て、`root` から持たれる鎖の全部の帯の印を読み、
 /// 鎖の全部を `HWND_NOTOPMOST` で戻す。答えは合否でない。
-fn measure_r1(n: &mut Notes, label: &str, root: isize) {
+fn measure_owned_chain(n: &mut Notes, label: &str, root: isize) {
     let all = zorder();
     let mut chain = vec![root];
     // 持ち主が鎖に入っている窓を鎖へ足す（鎖は短いので素朴にくり返す）。
@@ -464,7 +399,7 @@ fn measure_r1(n: &mut Notes, label: &str, root: isize) {
     };
     let owned_up = chain.len() > 1 && chain[1..].iter().all(|h| top(*h).is_some_and(|t| t.0));
     n.note(format!(
-        "MEASURE R1 {label}: 当てた窓 {root:#x}（持ち主 {:#x}）set={r:?} 持たれる窓も上がる={owned_up} 鎖={:?}",
+        "MEASURE owned-chain {label}: 当てた窓 {root:#x}（持ち主 {:#x}）set={r:?} 持たれる窓も上がる={owned_up} 鎖={:?}",
         all.iter().find(|z| z.hwnd == root).map_or(0, |z| z.owner),
         chain.iter().map(|h| (format!("{h:#x}"), top(*h))).collect::<Vec<_>>()
     ));
@@ -479,6 +414,7 @@ fn measure_r1(n: &mut Notes, label: &str, root: isize) {
 /// 入力先の窓が無いので、今はそれで拾う。拾えない形が出たら足す。
 fn screen_unavailable() -> Option<String> {
     let mut running = BOOL(0);
+    // SAFETY: running は呼び出しのあいだ生きる BOOL で、SPI_GETSCREENSAVERRUNNING はそれへ書く。
     let r = unsafe {
         SystemParametersInfoW(
             SPI_GETSCREENSAVERRUNNING,
@@ -492,6 +428,7 @@ fn screen_unavailable() -> Option<String> {
             "スクリーンセーバーが動いている（読みの返り {r:?}）"
         ));
     }
+    // SAFETY: 引数もポインタも無い照会。
     if unsafe { GetForegroundWindow() }.0.is_null() {
         return Some("入力先の窓が無い（画面のロック中など）".into());
     }
@@ -500,21 +437,9 @@ fn screen_unavailable() -> Option<String> {
 
 fn foreground_pid() -> u32 {
     let mut pid = 0u32;
+    // SAFETY: pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。入力先が無くても 0 を返すだけ。
     unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
     pid
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for e in std::fs::read_dir(from).unwrap() {
-        let e = e.unwrap();
-        let dst = to.join(e.file_name());
-        if e.file_type().unwrap().is_dir() {
-            copy_dir(&e.path(), &dst);
-        } else {
-            std::fs::copy(e.path(), dst).unwrap();
-        }
-    }
 }
 
 /// `descript.txt`（UTF-8）の `name,` の行を差し替える。
@@ -569,10 +494,7 @@ fn stay_on_top_directives_on_emo2() {
     std::fs::create_dir_all(&profile).unwrap();
     let _ = std::fs::remove_dir_all(root.join(".nar-work"));
 
-    let mut n = Notes {
-        steps: String::new(),
-        judgments: Vec::new(),
-    };
+    let mut n = Notes::new("sot", base.clone());
     n.note(format!(
         "root={} profile={} rust_log={RUST_LOG}",
         root.display(),
@@ -615,6 +537,7 @@ fn stay_on_top_directives_on_emo2() {
         let r = place(other, HWND_TOP);
         per_monitor();
         let (x, y) = click_at;
+        // SAFETY: POINT を値で渡す照会でポインタを渡さない。
         let hit = unsafe { WindowFromPoint(POINT { x, y }) }.0 as isize;
         if hit == other {
             mouse(MOUSEEVENTF_LEFTDOWN, x, y);
@@ -649,7 +572,7 @@ fn stay_on_top_directives_on_emo2() {
     let s1 = snap(&run, other);
     n.record("s1_v_off", &s1);
     n.judge(
-        "8.1a オフの \\v で並びを保って他のアプリの窓の手前へ 1 回出る（帯の印なし）",
+        "オフの \\v で並びを保って他のアプリの窓の手前へ 1 回出る（帯の印なし）",
         s1.vs_other(true) && s1.all_topmost(false) && same_relative_order(&s0.order(), &s1.order()),
         format!(
             "line={line:?} 送る前の入力先 pid={fg}（areka={}） order0={:x?} order1={:x?}",
@@ -660,7 +583,7 @@ fn stay_on_top_directives_on_emo2() {
     );
     let fg_after = foreground_pid();
     n.judge(
-        "R-bg 裏のプロセスから手前へ出す指令で入力先の窓の手前へ出る・入力先は変わらない",
+        "裏のプロセスから手前へ出す指令で入力先の窓の手前へ出る・入力先は変わらない",
         fg != run.pid() && s1.vs_other(true) && fg_after == fg,
         format!("入力先 pid 前={fg} 後={fg_after} areka pid={}", run.pid()),
     );
@@ -668,7 +591,7 @@ fn stay_on_top_directives_on_emo2() {
     let s2 = snap(&run, other);
     n.record("s2_other_again", &s2);
     n.judge(
-        "8.1b その後に他のアプリを前に出すと後ろへ回る",
+        "その後に他のアプリを前に出すと後ろへ回る",
         s2.vs_other(false),
         String::new(),
     );
@@ -678,7 +601,7 @@ fn stay_on_top_directives_on_emo2() {
         let _ = std::fs::write(base.join("run.log"), run.output());
         let _ = std::fs::write(base.join("steps.txt"), &n.steps);
         panic!(
-            "無効な走り: オンの前に他のアプリの窓がゴーストの窓より手前に来ない（8.1b）。画面のロックと\
+            "無効な走り: オンの前に他のアプリの窓がゴーストの窓より手前に来ない。画面のロックと\
              スクリーンセーバーを確かめて回し直す（{}）",
             base.join("steps.txt").display()
         );
@@ -702,12 +625,12 @@ fn stay_on_top_directives_on_emo2() {
     let s3 = snap(&run, other);
     n.record("s3_on", &s3);
     n.judge(
-        "8.1c オンの後にキャラクターとバルーンの窓が手前（全部の窓に帯の印・隠れた窓も）",
+        "オンの後にキャラクターとバルーンの窓が手前（全部の窓に帯の印・隠れた窓も）",
         line.is_some() && s3.all_topmost(true) && s3.vs_other(true),
         format!("line={line:?}"),
     );
     n.judge(
-        "R3 奥から順に当てて並びが保たれる（オンの前後）",
+        "奥から順に当てて並びが保たれる（オンの前後）",
         same_relative_order(&s2.order(), &s3.order()),
         format!("before={:x?} after={:x?}", s2.order(), s3.order()),
     );
@@ -715,7 +638,7 @@ fn stay_on_top_directives_on_emo2() {
     let s4 = snap(&run, other);
     n.record("s4_on_other_raised", &s4);
     n.judge(
-        "8.1d オンのあいだは他のアプリを前に出しても手前のまま",
+        "オンのあいだは他のアプリを前に出しても手前のまま",
         s4.vs_other(true) && s4.all_topmost(true),
         String::new(),
     );
@@ -759,7 +682,7 @@ fn stay_on_top_directives_on_emo2() {
         .collect();
     let other_rank = s5.other.as_ref().map_or(0, |o| o.rank);
     n.judge(
-        "8.1e 後から出たバルーンの窓も手前（帯の印・他のアプリより手前）",
+        "後から出たバルーンの窓も手前（帯の印・他のアプリより手前）",
         !later.is_empty() && later.iter().all(|z| z.topmost && z.rank < other_rank),
         format!(
             "オンの後に開いたバルーン={:x?}",
@@ -767,11 +690,7 @@ fn stay_on_top_directives_on_emo2() {
         ),
     );
     let (ok, d) = s5.balloons_just_in_front();
-    n.judge(
-        "8.2a オンのあいだバルーンが自分のキャラクターのすぐ手前",
-        ok,
-        d,
-    );
+    n.judge("オンのあいだバルーンが自分のキャラクターのすぐ手前", ok, d);
 
     // ---- \![set,zorder] の組の並び ----
     send(&mut run, &mut n, r"\![set,zorder,1,0]\e");
@@ -783,7 +702,7 @@ fn stay_on_top_directives_on_emo2() {
         _ => None,
     };
     n.judge(
-        "8.2b オンのあいだ \\![set,zorder,1,0] の並び（\\1 が \\0 より手前）が保たれ、帯から落ちない",
+        "オンのあいだ \\![set,zorder,1,0] の並び（\\1 が \\0 より手前）が保たれ、帯から落ちない",
         kero_front(&s6) == Some(true) && s6.all_topmost(true),
         format!("kero_front={:?}", kero_front(&s6)),
     );
@@ -796,7 +715,7 @@ fn stay_on_top_directives_on_emo2() {
     let s7 = snap(&run, other);
     n.record("s7_shell_switched", &s7);
     n.judge(
-        "8.4 シェルの切り替えの後に組（\\1 が手前）と常に手前の状態が残る（R2）",
+        "シェルの切り替えの後に組（\\1 が手前）と常に手前の状態が残る",
         line.is_some()
             && kero_front(&s7) == Some(true)
             && s7.all_topmost(true)
@@ -812,7 +731,7 @@ fn stay_on_top_directives_on_emo2() {
     let s8 = snap(&run, other);
     n.record("s8_zorder_0_1", &s8);
     n.judge(
-        "R2a オンのあいだの組み替えで帯から落ちない（\\0 が手前に替わる）",
+        "オンのあいだの組み替えで帯から落ちない（\\0 が手前に替わる）",
         kero_front(&s8) == Some(false) && s8.all_topmost(true),
         format!("kero_front={:?}", kero_front(&s8)),
     );
@@ -837,13 +756,13 @@ fn stay_on_top_directives_on_emo2() {
             let moved =
                 s9.char_titled(SAKURA).map(|z| z.rect) != s8.char_titled(SAKURA).map(|z| z.rect);
             n.judge(
-                "R2b オンのあいだのドラッグで帯から落ちない",
+                "オンのあいだのドラッグで帯から落ちない",
                 moved && s9.all_topmost(true) && s9.vs_other(true),
                 format!("moved={moved}"),
             );
         }
         None => n.judge(
-            "R2b オンのあいだのドラッグで帯から落ちない",
+            "オンのあいだのドラッグで帯から落ちない",
             false,
             "押せる点が無い（点の下がキャラクターの窓にならない）",
         ),
@@ -856,7 +775,7 @@ fn stay_on_top_directives_on_emo2() {
     let s10 = snap(&run, other);
     n.record("s10_v_on", &s10);
     n.judge(
-        "8.1f オンのあいだの \\v は帯の中で並びを保つ（帯の印は付いたまま）",
+        "オンのあいだの \\v は帯の中で並びを保つ（帯の印は付いたまま）",
         s10.all_topmost(true) && same_relative_order(&before.order(), &s10.order()),
         format!("before={:x?} after={:x?}", before.order(), s10.order()),
     );
@@ -869,7 +788,7 @@ fn stay_on_top_directives_on_emo2() {
     let s12 = snap(&run, other);
     n.record("s12_off_other_raised", &s12);
     n.judge(
-        "8.1g オフの後に帯の印が外れ、他のアプリを前に出すと後ろへ回る",
+        "オフの後に帯の印が外れ、他のアプリを前に出すと後ろへ回る",
         line.is_some() && s11.all_topmost(false) && s12.vs_other(false),
         format!(
             "line={line:?} オフ直後の並び保持={}",
@@ -891,17 +810,19 @@ fn stay_on_top_directives_on_emo2() {
         .find(|z| z.owner != 0)
         .map(|z| z.hwnd);
     match root {
-        Some(h) => measure_r1(&mut n, "chain-root", h),
-        None => n.note("MEASURE R1 chain-root 測れない: 持ち主の無いキャラクターの窓が無い"),
+        Some(h) => measure_owned_chain(&mut n, "chain-root", h),
+        None => {
+            n.note("MEASURE owned-chain chain-root 測れない: 持ち主の無いキャラクターの窓が無い")
+        }
     }
     match middle {
-        Some(h) => measure_r1(&mut n, "chain-middle", h),
-        None => n.note("MEASURE R1 chain-middle 測れない: 持たれるキャラクターの窓が無い"),
+        Some(h) => measure_owned_chain(&mut n, "chain-middle", h),
+        None => n.note("MEASURE owned-chain chain-middle 測れない: 持たれるキャラクターの窓が無い"),
     }
     let back = snap(&run, other);
-    n.record("s12b_r1_restored", &back);
+    n.record("s12b_owned_chain_restored", &back);
     n.note(format!(
-        "R1 restored all_topmost(false)={}",
+        "owned-chain restored all_topmost(false)={}",
         back.all_topmost(false)
     ));
 
@@ -923,7 +844,7 @@ fn stay_on_top_directives_on_emo2() {
     let s15 = snap(&run, other);
     n.record("s15_switched_other_raised", &s15);
     n.judge(
-        "8.1h ゴーストの切り替えの後に帯の印が無く、他のアプリの後ろへ回る",
+        "ゴーストの切り替えの後に帯の印が無く、他のアプリの後ろへ回る",
         line.is_some()
             && s13.all_topmost(true)
             && done.is_some()
@@ -938,7 +859,7 @@ fn stay_on_top_directives_on_emo2() {
         .filter(|l| l.contains("WARN"))
         .collect();
     n.judge(
-        "R2c 帯の働きの warn（帯を変えなかった窓・測れなかった窓）が無い",
+        "帯の働きの warn（帯を変えなかった窓・測れなかった窓）が無い",
         warns.is_empty(),
         format!("{} 行 {:?}", warns.len(), warns.first()),
     );
@@ -951,12 +872,7 @@ fn stay_on_top_directives_on_emo2() {
     let _ = std::fs::write(base.join("run.log"), run.output());
     drop(run);
 
-    let _ = std::fs::write(base.join("steps.txt"), &n.steps);
-    let mut j = String::new();
-    for (name, ok, d) in &n.judgments {
-        let _ = writeln!(j, "{} {name}: {d}", if *ok { "PASS" } else { "FAIL" });
-    }
-    let _ = std::fs::write(base.join("judgments.txt"), j);
+    n.save();
     let failed: Vec<_> = n.judgments.iter().filter(|j| !j.1).map(|j| &j.0).collect();
     assert!(
         failed.is_empty(),
