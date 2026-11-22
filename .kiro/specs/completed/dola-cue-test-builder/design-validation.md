@@ -1,6 +1,6 @@
 # 設計の検証: dola-cue-test-builder
 
-- 対象: `.kiro/specs/dola-cue-test-builder/design.md`（コミット `1287f1206`）
+- 対象: `.kiro/specs/completed/dola-cue-test-builder/design.md`（コミット `1287f1206`）
 - 照らした文書: `requirements.md`・`research.md`・`spec.json`（`language: ja`・`phase: design-generated`）・steering（`product.md`・`tech.md`・`structure.md`）
 - 進め方: `kiro-validate-design`（Analysis → Critical Issues → Strengths → GO/NO-GO）。対話は行わず、議題は設計の討議へ渡す。
 
