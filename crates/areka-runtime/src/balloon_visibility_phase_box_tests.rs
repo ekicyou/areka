@@ -60,6 +60,31 @@ fn shell_window_drag_counts_for_scopes_with_box_text() {
     assert!(observe_shell_dragging(&mut world, &[0]));
 }
 
+/// 窓の scope の上限を越えるシェルの窓は、`as u32` で 0 へ切り捨てられて scope 0 のドラッグに
+/// 化けてはならない。読み飛ばして `warn!` を 1 行だけ残す。
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn a_dragged_shell_window_past_the_scope_limit_does_not_hold_scope_zero() {
+    let mut world = World::new();
+    world.spawn((
+        CharWindowMarker {
+            scope: 1usize << 32,
+        },
+        WindowDragging,
+    ));
+
+    let (dragging, counts) =
+        log_capture_kit::count_levels(|| observe_shell_dragging(&mut world, &[0]));
+    assert!(!dragging, "上限越えの窓のドラッグで scope 0 の抑止が立った");
+    assert_eq!(
+        counts,
+        log_capture_kit::LevelCounts {
+            warn: 1,
+            ..Default::default()
+        }
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 発行
 // ---------------------------------------------------------------------------

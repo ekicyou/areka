@@ -22,7 +22,7 @@
   - _Dispatch: mechanical — 判断の形とテストの期待値を設計が与える_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.7, 5.13, 6.4_
 
-- [ ] 1.2 ドラッグ中のシェルの窓の scope を、窓の scope の上限で比べる（T2・2 番・件 6）
+- [x] 1.2 ドラッグ中のシェルの窓の scope を、窓の scope の上限で比べる（T2・2 番・件 6）
   - 観測の比べを `as u32` の切り捨てから `window_scope` を通す形に替える。上限越えは `window_scope` が `warn!` を 1 行残して読み飛ばす（記録の抑えは足さない）
   - 64 bit だけで回る縛るテスト `a_dragged_shell_window_past_the_scope_limit_does_not_hold_scope_zero` を、直しの前に「scope 0 の抑止が立つ」で赤になるのを見てから立てる
   - 完了: 縛るテストが緑で、上限越えの窓は抑止を立てず `warn!` が 1 行だけ出ることを表明している

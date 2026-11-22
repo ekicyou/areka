@@ -44,7 +44,7 @@ use crate::shell_box_hover::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{RuntimeWiring, resolve_talk_time};
-use super::super::target_map::{balloon_target, shell_target};
+use super::super::target_map::{balloon_target, shell_target, window_scope};
 use super::{
     BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
     TalkLifecycleSignal, VisibilityAction, VisibilityLogEvent, VisibilityObservations,
@@ -468,7 +468,7 @@ fn observe_shell_dragging(world: &mut World, box_scopes: &[u32]) -> bool {
         && world
             .query_filtered::<&CharWindowMarker, With<WindowDragging>>()
             .iter(world)
-            .any(|marker| box_scopes.contains(&(marker.scope as u32)))
+            .any(|marker| window_scope(marker.scope).is_some_and(|s| box_scopes.contains(&s)))
 }
 
 // ---------------------------------------------------------------------------
