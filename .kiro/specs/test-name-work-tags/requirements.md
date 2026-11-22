@@ -23,7 +23,7 @@
 - **In scope**:
   - `crates/areka-placement/src/` の 20 ファイルと `crates/areka-runtime/src/` の 8 ファイル（`window_state_cue_tests.rs`・`zorder_cue_tests.rs`・`zorder_wiring_tests.rs`・`frame_schedule_tests.rs`・`frame/zorder_descript_tests.rs`・`frame/zorder_drain_tests.rs`・`frame/zorder_drain_projection_tests.rs`・`frame/zorder_drain_written_order_tests.rs`）の札つきのテストの名（一覧の正本は brief の Current State）。
   - 本体の `crates/areka/src/placement_tests/zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs`＝テストの名を文字列で並べる表と、両ファイルの札つきのテスト各 1 本（`t_zbc_…`・`t_zic_…`）。
-  - 名指しの直し: コードのコメント（doc コメントの中のリンクを含む。棚卸㊷で見つけた所＝`spawn_assembly_tests.rs:154`・`resolver_balloon_keyword_tests.rs:54`・`zorder_group_ledger_state_tests.rs:20`・`zorder_group_ledger_tests.rs:357`・`zorder_property_deferral_tests.rs` の 6・20〜29・77・123・126 行・`crates/areka-runtime/src/frame/zorder_drain_projection_tests.rs:531`）、`doc/COMPAT_ARCHITECTURE.md` §8 の 226・354・412 行、未完了の spec の文書（`.kiro/specs/extra-character-windows/brief.md:133`・`.kiro/specs/zorder-property/brief.md` の 59・81 行）、steering（今は該当なし・着手のときに数え直す）。
+  - 名指しの直し: コードのコメント（doc コメントの中のリンクを含む。棚卸㊷で見つけた所＝`spawn_assembly_tests.rs:154`・`resolver_balloon_keyword_tests.rs:54`・`zorder_group_ledger_state_tests.rs:20`・`zorder_group_ledger_tests.rs:357`・`zorder_property_deferral_tests.rs` の 6・20〜29・77・123・126 行・`crates/areka-runtime/src/frame/zorder_drain_projection_tests.rs:531`）、`doc/COMPAT_ARCHITECTURE.md` §8 の 226・354・412 行、未完了の spec の文書（`.kiro/specs/extra-character-windows/brief.md:133`・`.kiro/specs/zorder-property/brief.md` の 94 行＝名の全体・59・81 行＝札だけの短い書き方）、steering（今は該当なし・着手のときに数え直す）。
   - 最後の確かめの検索（要件 5）。
 - **Out of scope**:
   - テストの本文・期待値・置き場の直し、テストのファイル名の変更。
@@ -33,7 +33,7 @@
   - 歴史の場所（`.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md`）の書き換え。
   - 札をまた足さない仕組み（照合のテストや決まりの文）（仮定・未決の 2）。
   - `doc/COMPAT_ARCHITECTURE.md` のファイルの改名（`doc-compat-architecture-rename` の持ち物）。
-  - 名指しの行に在る、名のほかの古い記述（例: `zorder-property/brief.md` の 59・81 行が書くファイルの古い道 `crates/areka/src/placement/…`）。
+  - 名指しの行に在る、名のほかの古い記述（例: `zorder-property/brief.md` の 59・81・94 行が書くファイルの古い道 `crates/areka/src/placement/…`）。
 - **Adjacent expectations**:
   - `session-crate-split`（同じウェーブ）は本体の `runtime_tests/zorder_wiring_tests.rs` を直し、`crates/areka-placement/`・`crates/areka-runtime/`（パスの名指しのコメントのほか）・本体の `placement_tests/` に触らない。`doc/COMPAT_ARCHITECTURE.md` §8 では向こうがパスの行、こちらが名の行（別々の既にある行＝許す重なり）を直す。
   - `dola-cue-test-builder`（同じウェーブ）は、呼び手の名（runtime の `carrier_cue`・`actor_carrier_cue` ほか）を残す形を取り、`crates/areka-runtime/src/{window_state_cue_tests,zorder_cue_tests,zorder_wiring_tests}.rs` に触らない。名も消す形が選ばれたときは向こうが C25 から外れる。
@@ -50,7 +50,7 @@
 
 1. The 改名 shall テストの関数の名の頭の札（`t_` と、英小文字と数字の続きと、その後ろの `_`）を外し、残りの綴りをそのまま新しい名とする（例: `t_c3_char_n_prefix_does_not_add_scope_n` → `char_n_prefix_does_not_add_scope_n`）
 2. If 札を外した名が、同じモジュールの中の別のテストや関数の名とぶつかる, then the 改名 shall 名の後ろにそのテストの中身を表す語を足して、ぶつからない名にする（2026-11-22 の数えでは、ぶつかる組は 0）
-3. If 札を外した名が、別のファイル（別のモジュール）のテストの名と同じになる, then the 改名 shall その同じ名をそのまま許す（仮定・未決の 3。2026-11-22 の数えでは 4 組＝`window_state_cue_tests.rs` と `zorder_cue_tests.rs` の 3 組、`zorder_group_ledger_rebase_tests.rs` と `zorder_group_ledger_state_tests.rs` の 1 組）
+3. If 札を外した名が、別のファイル（別のモジュール）のテストの名と同じになる, then the 改名 shall その同じ名をそのまま許す（仮定・未決の 3。2026-11-22 の数えでは 6 組＝`window_state_cue_tests.rs` と `zorder_cue_tests.rs` の 3 組、`zorder_group_ledger_rebase_tests.rs` と `zorder_group_ledger_state_tests.rs` の 1 組、本体の `placement_tests/` の `t_zbc_`・`t_zic_` の 1 組、`zorder_chain_compose_tests.rs` の `t_zcc09_…` と札の無い既存の `zorder_chain_tail_order_tests.rs` のテストの 1 組・research.md 2.2）
 4. The 改名 shall 札の外の語の綴りを変えない（言い回しの直しをこの spec で行わない）
 5. Where 札が数字を持たない形（本体の `placement_tests/` の `t_zbc_`・`t_zic_`）, the 改名 shall 同じ規則で外す（仮定・未決の 1）
 6. The 改名 shall 札でない意味のある頭（`spine_`・`real_`・`row1_` など）を持つ名を変えない
