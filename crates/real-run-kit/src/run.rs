@@ -18,7 +18,7 @@ use crate::output::{self, ChildExited, WaitEnd};
 pub(crate) struct Limits {
     /// 各待ちの始まりから数える締切。
     pub deadline: Duration,
-    /// 子の起動から数える保険の自動終了（締切より短い＝窓口が止めるより先に子が自分で終わる）。
+    /// 最初の窓の準備が通ってから数える保険の自動終了（締切より短い＝窓口が止めるより先に子が自分で終わる）。
     pub safety_exit: Duration,
     /// 出力・子の状態を読み直す間隔。
     pub poll: Duration,

@@ -254,7 +254,7 @@
   - _Dispatch: mechanical — 消すものと書き替えの字面を設計が与える_
   - _Requirements: 3.1, 3.3, 3.4, 5.21, 7.7, 7.11_
 
-- [ ] 19. 範囲の外の持ち主のいない古い説明を直す（G19・確定の議題 17・5.21）
+- [x] 19. 範囲の外の持ち主のいない古い説明を直す（G19・確定の議題 17・5.21）
   - File Structure Plan「範囲の外」の表の「持ち主のいない古い説明」の行と `placement_tests/measure_template_tests.rs:64-65` を、今の置き場の名・役目で書き直す（「段 ③」は「検体を `target\` の下へ写す段」に）。説明の文だけで、コードは変えない
   - `areka-placement/src/persist_finalize_save_tests.rs:106` の `join` と `areka-emo-present/src/shell_target.rs:494` のログの語は直さず、20 の覚え書きへ回す
   - 完了の姿: 表の各行の差分がコメントだけで、触った crate の `cargo build --tests` が通る
@@ -304,3 +304,4 @@
 - 16: 15.1 の `impl GhostSession` の移しで本体の `session_end_deadline_body_tests.rs` の許可表が古いパスを指し 2 本が赤だった（16 で `ghost_session_handle.rs` に直した）。15.1 のレビューは areka-session しか回さなかった。`boot_config_option_tests.rs:58` の doc は「印が無ければ記憶」側をテストが見ていない
 - 17: `boot_shell_tests.rs` の `（R6.1）` は本番のログの文（`areka-emo-present/src/shell_target.rs:494`）と字面で突き合わせる期待値なので残す。指摘の列に無い本体の `runtime_tests/frame_shell_box_align_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`・`menu/captions_tests.rs` に要件番号が残る（21.1 で見る）。`boot_resolve_option_tests.rs:6` の「は`last_ghost_not_found`」の空白の抜け
 - 18: `examples/emo-present/balloon.rs` は `.scopes.get(&0).and_then(..)`（設計は `[&0]`・スコープ 0 は必ずあるので振る舞いは同じ）
+- 19: `log-capture-kit` のテストに要件番号が残る（`sample_path_guard_test.rs:708`・`:817`、`probe_tests.rs:73`、`capture_calibration_test.rs:181`、`file_length_guard_test.rs:65/69/109/115`、`temp_path_guard_test.rs:142/191`・範囲の表の外）

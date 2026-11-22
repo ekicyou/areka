@@ -74,8 +74,8 @@ fn materialize_file(from: &Path, to: &Path) {
 
 /// emo2 実物 shell 資産のアンカー（検体の窓口から得る）。
 ///
-/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。段 ③ で `Drop` が
-/// 展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
+/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。`Drop` が
+/// `target\` の下へ写した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
 fn emo2_shell_master_src() -> PathBuf {
     use std::sync::LazyLock;
 
