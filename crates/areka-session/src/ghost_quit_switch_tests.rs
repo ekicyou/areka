@@ -169,7 +169,7 @@ fn stop_with_handoff_under_reservation_switches_without_exit() {
             1,
             true,
         ),
-        "(A の定常・受理・再生の完了を届けた・予約が消えた・終了の指示・降ろした記録・今日の終了・切替の完了・\
+        "(A の定常・受理・再生の完了を届けた・予約が消えた・終了の指示・降ろした記録・終了の記録・切替の完了・\
          B を起こした回数・降ろせた): {events:?}"
     );
 }
@@ -196,7 +196,7 @@ fn stop_with_handoff_without_reservation_quits() {
             levels_of(&events, "ghost_quit"),
         ),
         (true, true, vec![tracing::Level::INFO]),
-        "(消化・終了の指示・今日の終了の記録): {events:?}"
+        "(消化・終了の指示・終了の記録): {events:?}"
     );
 }
 
@@ -282,6 +282,6 @@ fn cancel_notice_before_stop_clears_reservation_without_warning() {
             vec![tracing::Level::INFO],
             false,
         ),
-        "(消化・終了の指示・最初の出所・受理されなかった記録・中止の記録・今日の終了・予約): {events:?}"
+        "(消化・終了の指示・最初の出所・受理されなかった記録・中止の記録・終了の記録・予約): {events:?}"
     );
 }

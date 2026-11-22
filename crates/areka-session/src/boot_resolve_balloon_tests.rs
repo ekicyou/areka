@@ -448,7 +448,7 @@ fn balloon_name_prefers_name_then_first_in_listing() {
 
 /// 大文字と小文字だけ違う: フォルダ名の突き合わせは大文字小文字を区別しないので当たり、
 /// 決まるフォルダ名は項目の綴り。`name` の
-/// 突き合わせは今のまま区別する（`DUP` は `name` の `dup` に当たらず、同じフォルダ名も無いので警告 1 件）。
+/// 突き合わせは大文字小文字を区別する（`DUP` は `name` の `dup` に当たらず、同じフォルダ名も無いので警告 1 件）。
 #[test]
 fn descript_folder_match_ignores_case_but_name_match_does_not() {
     let root = root();

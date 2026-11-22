@@ -83,7 +83,7 @@ fn restore_seam_prefers_saved_position_over_default() {
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
-        "保存位置を採用した scope が復元済みとして報告される（areka-P0-scope-chain-gap 7.3）"
+        "保存位置を採用した scope が復元済みとして報告される"
     );
     assert_eq!(
         out[0].char_pos,
@@ -97,7 +97,7 @@ fn restore_seam_prefers_saved_position_over_default() {
 }
 
 /// 永続不在（sylphya.toml を植えない）→ merge は既定 placement に完全恒等
-/// （保存位置が無ければ従来の既定位置解決のまま）。
+/// （保存位置が無ければ既定の位置解決のまま）。
 #[test]
 fn restore_seam_without_persist_is_identity_default() {
     let temp = TempPath::new("restore-seam-no-persist-default");
@@ -124,7 +124,7 @@ fn restore_seam_without_persist_is_identity_default() {
     );
     assert!(
         restored.is_empty(),
-        "永続不在なら復元済み scope は無い＝全 scope が既定配置のまま（areka-P0-scope-chain-gap 7.3）"
+        "永続不在なら復元済み scope は無い＝全 scope が既定配置のまま"
     );
 }
 
@@ -216,17 +216,17 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     assert_eq!(
         out[0].char_pos,
         PointPx { x: 30, y: 300 },
-        "保存値が既定(900,200)に優先する＝合流順序は不変（要件 4.7）"
+        "保存値が既定(900,200)に優先する＝合流順序は不変"
     );
     assert_eq!(
         out[0].balloon_pos,
         PointPx { x: 0, y: 310 },
-        "バルーン表示位置は作業領域の左辺へ補正される（要件 2.2・起動時関門の結線）"
+        "バルーン表示位置は作業領域の左辺へ補正される（起動時関門の結線）"
     );
     assert_eq!(
         out[0].balloon_offset,
         PointPx { x: -50, y: 10 },
-        "論理相対位置は生値のまま＝補正を焼き付けない（DD6・要件 3.1(d)）"
+        "論理相対位置は生値のまま＝補正を焼き付けない"
     );
     // キャラ窓は limit 補正で動かない。
     assert_eq!(out[0].char_size, CSZ);
@@ -234,11 +234,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     assert_eq!(out[0].anchor, Anchor::Free);
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
-    assert_eq!(
-        hit.expect_field("scope"),
-        "0",
-        "補正した scope を記録する（要件 6.1）"
-    );
+    assert_eq!(hit.expect_field("scope"), "0", "補正した scope を記録する");
 }
 
 /// 2 つ目の戻り値は「記憶に位置があるスコープ → 覚えた印」の一覧。印の鍵はあれば

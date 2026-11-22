@@ -6,7 +6,7 @@
 use real_run_kit::{Ended, EndedBy, Launch, McpError, RealRun, Run, ToolReply};
 use std::time::{Duration, Instant};
 
-/// 保険の自動終了。測った最大 33.3 秒（wrap 8.7 秒＋閉じるまで 24.6 秒）より長く、締切より短い。
+/// 保険の自動終了。閉じ方の測りの最大より長く、締切より短い 45 秒。
 pub const SAFETY_EXIT: Duration = Duration::from_secs(45);
 /// 締切（待ちごと）。
 pub const DEADLINE: Duration = Duration::from_secs(120);

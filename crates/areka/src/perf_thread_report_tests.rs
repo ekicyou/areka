@@ -69,7 +69,7 @@ fn all_roles_is_the_fixed_eight_vocabulary() {
             "perf_report",
             "unregistered_rest",
         ],
-        "役割語彙が動いた（報告行の読み手＝perf-rank.py と設計 C14 の表も直すこと）"
+        "役割語彙が動いた（報告行の読み手＝perf-rank.py も直すこと）"
     );
 }
 

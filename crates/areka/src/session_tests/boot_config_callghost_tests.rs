@@ -67,11 +67,11 @@ fn call_ghost_comes_before_the_remembered_ghost() {
     assert_eq!(
         answer(boot(&tmp, &[], None)).0,
         GhostRoute::Memory,
-        "相手が無ければ今のとおり記憶"
+        "相手が無ければ記憶"
     );
 }
 
-/// 前回がきれいに終わらなかった（起動中の印がある）起動でも相手が選ばれ、印の値は今のとおり返る。
+/// 前回がきれいに終わらなかった（起動中の印がある）起動でも相手が選ばれ、印の値が返る。
 #[test]
 fn call_ghost_is_chosen_even_with_the_session_mark() {
     let tmp = installed("cfg-callghost-mark");
@@ -104,7 +104,7 @@ fn explicit_ghost_wins_over_call_ghost() {
     );
 }
 
-/// 入れた後もゴーストが 0 体なら、今と同じ「ゴーストなし」の告知の場面で止まる。
+/// 入れた後もゴーストが 0 体なら、「ゴーストなし」の告知の場面で止まる。
 #[test]
 fn no_ghost_after_install_stops_with_ghost_missing() {
     let tmp = fixture("cfg-callghost-none", &[]);

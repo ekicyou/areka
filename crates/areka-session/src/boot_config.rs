@@ -69,7 +69,7 @@ pub(crate) const EXE_LINK_MAX_HOPS: usize = 32;
 /// - `Unreadable(r)` → `Unreadable { link, reason: r }`。
 ///
 /// I/O は `probe` だけ（`absolute` は文字列の操作）。`canonicalize` は使わない。
-/// 戻りの第 2 要素が `Some` のときは第 1 要素は `exe` そのもの（今のふるまいへ戻る）。
+/// 戻りの第 2 要素が `Some` のときは第 1 要素は `exe` そのもの（リンクを辿らずに使う）。
 pub(crate) fn follow_exe_links(
     exe: &std::path::Path,
     probe: &mut dyn FnMut(&std::path::Path) -> LinkProbe,
@@ -423,7 +423,7 @@ fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
 /// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は
 /// `balloons_for`（ゴーストのフォルダの中の `balloon\` が先・根の和が後・同じフォルダ名の根は外す）。
 /// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ）。
-/// 「当たらなかった」の記録の置き場は今どおり根の列だけ。
+/// 「当たらなかった」の記録の置き場は根の列だけ。
 pub fn resolve_balloon_for_ghost(
     roots: &areka_ghost::BasewareRoots,
     ghost_dir: &std::path::Path,

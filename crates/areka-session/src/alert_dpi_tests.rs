@@ -1,8 +1,8 @@
 //! 画面を出す間だけスレッドを v2 に囲む部品のテスト。
 //!
-//! 決定論のテスト D1〜D5（画面は出さない・`TaskDialogIndirect` は呼ばない）: 偽の切り替えで
-//! 囲んで戻す順と替えられなかったときの記録（D1〜D3）、本物の切り替えでの前と後（D4・新しいスレッド）、
-//! はい／いいえの答えの読み方（D5）。記録は `log-capture-kit` で見る。
+//! 決定論のテスト（画面は出さない・`TaskDialogIndirect` は呼ばない）: 偽の切り替えで
+//! 囲んで戻す順と替えられなかったときの記録、本物の切り替えでの前と後（新しいスレッド）、
+//! はい／いいえの答えの読み方。記録は `log-capture-kit` で見る。
 //!
 //! 実機の測り（`#[ignore]`・排他テストの机を取ってから走らせる）: タスクダイアログを出し、その窓の
 //! DPI の扱いを areka のコードの中から読む。画面が出ている間に同じスレッドのタイマーの呼び戻しで、
@@ -33,7 +33,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, HSTRING, PCWSTR};
 
-// ---------------------------------------------------------------- 決定論のテスト D1〜D5（画面なし）
+// ---------------------------------------------------------------- 決定論のテスト（画面なし）
 
 /// 偽の切り替えと処理が呼ばれた順の 1 歩。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,9 +64,9 @@ fn wrap_with_fake<T>(
     (out, steps.into_inner(), events)
 }
 
-/// D1: 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
+/// 前の扱いが有効なら「v2」「処理」「前の扱い」の順で、処理の戻り値がそのまま返り、記録は 0 件。
 #[test]
-fn d1_wraps_and_restores_previous_context_in_order() {
+fn wraps_and_restores_previous_context_in_order() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || 42);
     assert_eq!(out, 42);
     assert_eq!(
@@ -80,9 +80,9 @@ fn d1_wraps_and_restores_previous_context_in_order() {
     assert!(events.is_empty(), "記録は 0 件: {events:?}");
 }
 
-/// D2: 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
+/// 替えられなかったら戻さずに今の扱いのまま 1 回出し、warn を欄 `dialog` 付きで 1 件残す。
 #[test]
-fn d2_unchanged_context_shows_once_without_restore_and_warns() {
+fn unchanged_context_shows_once_without_restore_and_warns() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT::default(), || 7);
     assert_eq!(out, 7);
     assert_eq!(
@@ -99,9 +99,9 @@ fn d2_unchanged_context_shows_once_without_restore_and_warns() {
     assert_eq!(ev.field_str("dialog"), Some("ask"));
 }
 
-/// D3: 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
+/// 処理が失敗を返しても前の扱いへ戻し、失敗をそのまま返す。
 #[test]
-fn d3_restores_context_even_when_show_fails() {
+fn restores_context_even_when_show_fails() {
     let (out, steps, events) = wrap_with_fake(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, || {
         windows::core::Result::<MESSAGEBOX_RESULT>::Err(E_FAIL.into())
     });
@@ -123,7 +123,7 @@ fn thread_is(context: DPI_AWARENESS_CONTEXT) -> bool {
     unsafe { AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), context) }.as_bool()
 }
 
-/// D4 の本体: 新しいスレッドで扱いを `start` にしてから本物の切り替えで囲み、
+/// 新しいスレッドで扱いを `start` にしてから本物の切り替えで囲み、
 /// 処理の中は v2・戻った後は `start`・記録は 0 件であることを確かめる。
 fn real_switch_wraps_and_restores(start: DPI_AWARENESS_CONTEXT) {
     // 扱いの値は窓のハンドルと同じくスレッドをまたいで送れないので、整数にして渡す。
@@ -142,24 +142,24 @@ fn real_switch_wraps_and_restores(start: DPI_AWARENESS_CONTEXT) {
         assert!(events.is_empty(), "替えられたので記録は 0 件: {events:?}");
     })
     .join()
-    .expect("D4 のスレッドが panic した");
+    .expect("検査のスレッドが panic した");
 }
 
-/// D4: 非対応のスレッドから本物の切り替えで囲む。
+/// 非対応のスレッドから本物の切り替えで囲む。
 #[test]
-fn d4_real_switch_from_unaware_thread() {
+fn real_switch_from_unaware_thread() {
     real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_UNAWARE);
 }
 
-/// D4: v2 のスレッドから本物の切り替えで囲む。
+/// v2 のスレッドから本物の切り替えで囲む。
 #[test]
-fn d4_real_switch_from_v2_thread() {
+fn real_switch_from_v2_thread() {
     real_switch_wraps_and_restores(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 }
 
-/// D5: 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
+/// 「はい」と読むのは `IDYES` だけで、閉じたと失敗は「出せなかった」。
 #[test]
-fn d5_yes_no_answer_mapping() {
+fn yes_no_answer_mapping() {
     use super::{YesNo, yes_no_answer};
     assert_eq!(yes_no_answer(&Ok(IDYES)), YesNo::Yes);
     assert_eq!(yes_no_answer(&Ok(IDNO)), YesNo::No);

@@ -64,7 +64,7 @@ pub struct FirstExit(pub ExitOrigin);
 /// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
-/// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
+/// （告知の場面はどちらも SHIORI の失敗）。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
 pub fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {

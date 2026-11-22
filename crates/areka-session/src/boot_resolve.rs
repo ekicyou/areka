@@ -128,7 +128,7 @@ pub(crate) struct BalloonInputs<'a> {
     pub stores: &'a [PathBuf],
 }
 
-/// 格納フォルダの列を記録の値へ（`; ` でつなぐ・根 1 つなら今と同じ綴り）。
+/// 格納フォルダの列を記録の値へ（`; ` でつなぐ・根 1 つならその綴りそのまま）。
 fn joined(stores: &[PathBuf]) -> String {
     stores
         .iter()

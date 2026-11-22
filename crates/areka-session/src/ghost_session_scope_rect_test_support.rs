@@ -4,7 +4,7 @@ use super::*;
 use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 
-/// 主の画面より左上の画面の矩形（SSP の段 1 の値）。
+/// 主の画面より左上の画面の矩形。
 pub const LEFT_SCREEN: ScreenRect = ScreenRect {
     left: -782,
     top: 201,

@@ -238,7 +238,7 @@
   - _Dispatch: mechanical — 説明の字面と 1 度だけ引く形を設計が与える_
   - _Requirements: 3.1, 5.11, 6.11_
 
-- [ ] 17. コメントの決まりに合わせ、札・経緯の語・テスト名を直す（G17・指摘 66〜73・5.12）
+- [x] 17. コメントの決まりに合わせ、札・経緯の語・テスト名を直す（G17・指摘 66〜73・5.12）
   - `runtime_tests/zorder_wiring_tests.rs` の 29・74 の名から札を外し、冒頭 4・5・10・11・13 行を改名表の名へ（5.12）
   - `alert_dpi_tests.rs` の `d1_`〜`d5_` と「D1〜D5」、テスト名（`research_10_4_…` → `named_binds_on_scope_zero_cases`・`spot_checks_against_the_design_table`・`quit_as_today` → `quit_without_reservation`・`without_options_the_answer_is_as_today`・`boot_check_without_readonly_is_the_current_check` ほか）を中身の名に。§8 の既にある行の名を直す
   - 範囲の各ファイルに残る要件の番号・spec 名・比べる語・経緯の語（指摘 69〜72 の列）を消し、残る `unsafe` に `// SAFETY:` を 1 行（`embedded_icon_test.rs` が手本）
@@ -302,3 +302,4 @@
 - 14.1: 設計が上流に挙げた `areka_runtime::frame::test_support::capture_logs` は `cfg(test)` だけで立つので、本体の `runtime_tests/spine.rs` は `log_capture_kit::capture_lines` に載せた 3 行の写しを理由の注釈つきで残す（依存は足さない）
 - 15.2: `boot_resolve_tests.rs:3`・`:141` に「ゴースト 6 分岐」が残る（今は 9 通り・指摘 62 の残り・21.1 で見る）
 - 16: 15.1 の `impl GhostSession` の移しで本体の `session_end_deadline_body_tests.rs` の許可表が古いパスを指し 2 本が赤だった（16 で `ghost_session_handle.rs` に直した）。15.1 のレビューは areka-session しか回さなかった。`boot_config_option_tests.rs:58` の doc は「印が無ければ記憶」側をテストが見ていない
+- 17: `boot_shell_tests.rs` の `（R6.1）` は本番のログの文（`areka-emo-present/src/shell_target.rs:494`）と字面で突き合わせる期待値なので残す。指摘の列に無い本体の `runtime_tests/frame_shell_box_align_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`・`menu/captions_tests.rs` に要件番号が残る（21.1 で見る）。`boot_resolve_option_tests.rs:6` の「は`last_ghost_not_found`」の空白の抜け

@@ -826,7 +826,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
 }
 
 /// シェルの面の持ち越しは、自分の予約の ghost の読み直しのときだけ真。shiori の読み直し・
-/// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しは今までどおり）。
+/// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しには効かない）。
 #[test]
 fn shell_state_is_carried_only_by_its_own_ghost_reload() {
     let mut rig = rig("areka-reload-carry");

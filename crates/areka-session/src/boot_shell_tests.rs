@@ -41,7 +41,7 @@ fn rig_a() -> SwitchRig {
     rig
 }
 
-/// 今日の規則のシェル（名前なしの解決）のフォルダ。
+/// 規則どおりのシェル（名前なしの解決）のフォルダ。
 fn default_shell_dir(ghost_dir: &Path) -> PathBuf {
     resolve_with_shell(ghost_dir, DefaultEncoding::Ansi, None)
         .expect("検体の既定のシェルは解決できる")
@@ -320,7 +320,7 @@ fn boot_a_in_production_order(rig: &mut SwitchRig) -> (bool, Vec<CapturedEvent>)
 }
 
 /// emo2 の写しを本番の順で起こすと、シェルの一覧・シェルとバルーンの透過の宣言が 1 行ずつ、
-/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行（今のまま）出る。
+/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行出る。
 ///
 /// # 非空虚性
 /// 採寸か windowposition の読みを記録を出す入口へ戻すと、一覧か系列の解決が 2 行になって赤。

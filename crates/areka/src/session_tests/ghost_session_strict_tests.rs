@@ -76,7 +76,7 @@ fn fallback_attempts(events: &[log_capture_kit::CapturedEvent]) -> usize {
 
 /// 厳格な入口: 結線が成立しなければ `Err` を返し、fallback の骨格を起こさない。
 ///
-/// 対照として同じ入力を今日どおりの入口（[`boot_ghost`]）へ通すと fallback の腕へ倒れ、
+/// 対照として同じ入力を通常の入口（[`boot_ghost`]）へ通すと fallback の腕へ倒れ、
 /// LogSink の起動を試みた記録が 1 件残る——厳格な入口ではそれが 0 件で、結線ありの腕が挿す
 /// 窓ごとの状態（マウス・メニュー）も World に無い。判定は集めてから 1 回。
 #[test]

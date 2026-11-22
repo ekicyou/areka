@@ -86,11 +86,8 @@ fn one_notification_closes_every_ghost_window_and_logs_once() {
     });
 
     assert!(consumed, "停止の通知を消化した");
-    assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる（R15.4）");
-    assert!(
-        exit_requested(&world),
-        "窓を閉じた上で終了を指示する（要件 3.1）"
-    );
+    assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる");
+    assert!(exit_requested(&world), "窓を閉じた上で終了を指示する");
     let quit_lines = event_lines(&logs, "ghost_quit");
     assert_eq!(
         quit_lines.len(),
@@ -188,10 +185,7 @@ fn a_notification_with_no_windows_left_is_cut_off_as_a_normal_case() {
     });
 
     assert!(consumed, "通知は消化する（窓の有無に依らない）");
-    assert!(
-        exit_requested(&world),
-        "閉じる窓が 0 でも終了を指示する（要件 3.2）"
-    );
+    assert!(exit_requested(&world), "閉じる窓が 0 でも終了を指示する");
     assert_eq!(
         logs.iter()
             .filter(|l| l.contains("ghost_quit_no_windows"))

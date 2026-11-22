@@ -84,7 +84,7 @@ const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
 /// 動いている途中で記憶を書けなくなった場面の題名（起動の時点は [`TITLE`]）。
 const MEMORY_WRITE_TITLE: &str = "areka の記憶を書けません";
 /// 記憶を書けない場面の直し方（環境変数の名前と既定の置き場の場所は書かない）。
-/// 説明書の節の名前は user-data-root の `dist/README.txt` に合わせる。
+/// 説明書の節の名前は `dist/README.txt` の見出しに合わせる。
 const MEMORY_WRITE_FIX: &str = "直し方: この置き場を書ける状態にしてください。置き場の変え方は、説明書（README.txt）の「■ 記憶の置き場」にあります。";
 /// 記憶のファイルが使えない場面の直し方。
 const MEMORY_FILE_FIX: &str = "直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
@@ -299,7 +299,7 @@ fn with_smoke(suppressed: bool, smoke_exit_ms: Option<u64>) -> bool {
 /// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽ならエラーの画面を出す
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
 /// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
-/// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
+/// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない。
 pub fn raise(scene: &AlertScene, suppressed: bool) {
     let suppressed = with_smoke(suppressed, crate::smoke_exit::smoke_exit_ms());
     let (title, body) = alert_text(scene);
@@ -370,7 +370,7 @@ fn yes_no_answer(shown: &windows::core::Result<MESSAGEBOX_RESULT>) -> YesNo {
     }
 }
 
-/// OK だけの警告の画面を出す（インストールの警告・2026-10-17 開発者の例外）。
+/// OK だけの警告の画面を出す（インストールの警告・開発者の例外）。
 /// `warn!(event = "install_warning_dialog")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。
 /// 出せなかったら `error!(event = "warning_box_failed")` を 1 件足す。持ち主の窓は渡さない。
 pub fn warn_ok(title: &str, body: &str, suppressed: bool) {

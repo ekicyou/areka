@@ -246,7 +246,7 @@ mod switch_balloon {
 
     /// 印が在れば: `info!(session_mark_found)` の上で最後のゴーストの記憶を読まずに
     /// 既定の段で決まり、印の値が 4 つ目に載る。読むだけで消さない（2 度目も同じ）。
-    /// 印が無ければ今日どおり記憶の経路。
+    /// 印が無ければ記憶の経路。
     #[test]
     fn session_mark_is_returned_and_last_ghost_is_not_read() {
         let tmp = TempPath::new("switch-balloon-mark");

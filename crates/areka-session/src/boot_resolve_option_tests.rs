@@ -3,7 +3,7 @@
 //! 確かめること: 指し先は記憶・列挙・既定より先で経路 `Pointed`・フォルダ名つき。
 //! `--random` は記憶・唯一・既定を飛ばし、0 体＝ゴーストなし・1 体＝その 1 体・2 体以上＝注入した
 //! 添字で選び、選んだものと候補の数を info `ghost_random_requested` で 1 件残す。
-//! 一時の置き場が消えた次の起動（記憶が列挙に無い）は今の `last_ghost_not_found` で次の段へ。
+//! 一時の置き場が消えた次の起動（記憶が列挙に無い）は`last_ghost_not_found` で次の段へ。
 //! callghost の相手は記憶より先で経路 `CallGhost`、
 //! 目録に無ければ warn `callghost_target_not_found` で記憶へ、位置引数・指し先・`--random` が先。
 //! プロセス・fs・乱数には触れない。
@@ -129,7 +129,7 @@ fn pointed_needs_no_listing() {
     assert_eq!(got.map(|g| g.route), Ok(GhostRoute::Pointed));
 }
 
-/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、今の warn で次の段（既定）へ。
+/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、warn で次の段（既定）へ。
 #[test]
 fn next_boot_memory_of_temporary_ghost_falls_through() {
     let root = root();
@@ -175,7 +175,7 @@ fn random_one_is_that_one() {
     assert_random_info(&events, "solo", "1");
 }
 
-/// 0 体: ゴーストなし（今の知らせと終了）。記録は出さない。
+/// 0 体: ゴーストなし（知らせと終了）。記録は出さない。
 #[test]
 fn random_zero_is_no_ghost() {
     let root = root();

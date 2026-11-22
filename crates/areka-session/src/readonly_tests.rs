@@ -82,9 +82,9 @@ fn boot_check_passes_readonly_without_touching_the_tree() {
     assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
 }
 
-/// 読み取りだけでなければ、今の確かめと同じ失敗を返し、飛ばした記録は出ない。
+/// 読み取りだけでなければ、通常の確かめと同じ失敗を返し、飛ばした記録は出ない。
 #[test]
-fn boot_check_without_readonly_is_the_current_check() {
+fn boot_check_without_readonly_fails_as_the_plain_check_does() {
     let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-normal");
     let (cfg, app) = unwritable_places(&tmp);
 
@@ -92,7 +92,7 @@ fn boot_check_without_readonly_is_the_current_check() {
     let (result, events) =
         log_capture_kit::capture(|| crate::write_failure::check_boot(false, &cfg, &app));
 
-    assert_eq!(result.expect_err("今の確かめと同じく止まる"), expected);
+    assert_eq!(result.expect_err("通常の確かめと同じく止まる"), expected);
     assert!(
         events
             .iter()

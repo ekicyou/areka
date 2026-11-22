@@ -57,7 +57,7 @@ fn nar_and_zip_are_application_zip() {
 }
 
 #[test]
-fn spot_checks_against_the_design_table() {
+fn known_extensions_map_to_their_mime_types() {
     for (f, m) in [
         ("a.PNG", "image/png"),
         ("a.Png", "image/png"),

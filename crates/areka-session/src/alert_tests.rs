@@ -31,17 +31,9 @@ fn raise_suppressed(scene: &AlertScene) -> Vec<CapturedEvent> {
 
 /// 記録がちょうど 1 件の `error!(event = "alert")` であることを確かめ、その本文を返す。
 fn only_alert_body(events: &[CapturedEvent]) -> String {
-    assert_eq!(
-        events.len(),
-        1,
-        "告知の記録はちょうど 1 件（要件 6.7）: {events:?}"
-    );
+    assert_eq!(events.len(), 1, "告知の記録はちょうど 1 件: {events:?}");
     let ev = &events[0];
-    assert_eq!(
-        ev.level,
-        tracing::Level::ERROR,
-        "告知の記録は error!（要件 6.2）"
-    );
+    assert_eq!(ev.level, tracing::Level::ERROR, "告知の記録は error!");
     assert_eq!(ev.field_str("event"), Some("alert"));
     ev.field_str("body").expect("本文を載せる").to_owned()
 }

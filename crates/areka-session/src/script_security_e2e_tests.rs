@@ -3,7 +3,7 @@
 //! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・束から組む受け口）で
 //! 起こし、`OnBoot` の台本 `\![enter,nouserbreakmode]…` の応答に `SecurityLevel` を添える。
 //! kanade → 台本の起動 → 配送 → 中断を禁じる受け口の運ぶ道が既定の値に落ちていなければ、
-//! `external` では線に `Enter` が出ず、`local`／無しでは今どおり出る。
+//! `external` では線に `Enter` が出ず、`local`／無しでは出る。
 
 use super::*;
 use crate::ghost_switch_test_support::standard_script;
@@ -106,7 +106,7 @@ fn external_on_boot_reply_keeps_enter_off_the_line() {
     );
 }
 
-/// `local` または応答のレベル無しでは今どおり `Enter` が出る。
+/// `local` または応答のレベル無しでは `Enter` が出る。
 #[test]
 fn local_or_absent_on_boot_reply_lets_enter_through() {
     for level in [Some("local"), None] {

@@ -253,6 +253,7 @@ pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect> {
     use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
     let mut r = RECT::default();
+    // SAFETY: Win32 境界。`r` はこの関数の局所変数で書き込み先として有効であり、呼んだスレッドの DPI の扱いは読み終えたら前の値へ戻す。
     let read = unsafe {
         let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let read = GetWindowRect(HWND(key.0 as *mut _), &mut r);

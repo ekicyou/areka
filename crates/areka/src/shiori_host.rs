@@ -558,7 +558,7 @@ mod tests {
     ///
     /// `#[implement]` が生成する `AsImpl<ShioriHostSink>` で実体参照を借りる（テスト専用の観測）。
     fn host_inner(host: &IShioriHost) -> &ShioriHostSink {
-        // Safety: `host` は本テストで `ShioriHostSink` から構築した COM ポインタであり、
+        // SAFETY: `host` は本テストで `ShioriHostSink` から構築した COM ポインタであり、
         // 実装実体が `ShioriHostSink` であることが保証される。
         unsafe { AsImpl::<ShioriHostSink>::as_impl(host) }
     }

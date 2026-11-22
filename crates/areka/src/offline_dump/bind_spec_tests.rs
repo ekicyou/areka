@@ -100,7 +100,7 @@ fn pair(c: &str, p: &str) -> (String, String) {
 
 /// 13 通り（指定 → スコープ 0 の着ているもの・無い名前の warn）。
 #[test]
-fn research_10_4_thirteen_cases() {
+fn named_binds_on_scope_zero_cases() {
     let ghost = g_bind("offline-bind-spec");
     let none = Vec::new;
     type Case = (&'static str, Vec<u32>, Vec<(String, String)>);

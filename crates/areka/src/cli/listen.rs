@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// MCP の待受の計画。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) enum ListenPlan {
-    /// `--sstp-listen` が渡されていない（今までどおり `AREKA_MCP_PORT` か既定）。
+    /// `--sstp-listen` が渡されていない（`AREKA_MCP_PORT` か既定）。
     #[default]
     NotGiven,
     /// `none` か値なし。

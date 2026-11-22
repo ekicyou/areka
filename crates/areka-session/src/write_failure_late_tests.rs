@@ -72,7 +72,7 @@ fn a_failure_after_another_origin_is_told_at_close() {
     );
 }
 
-/// 最初の出所が書けない失敗なら、続く失敗は今までどおり汲み出して 1 件ずつ記録する。
+/// 最初の出所が書けない失敗なら、続く失敗は汲み出して 1 件ずつ記録する。
 #[test]
 fn a_failure_after_a_write_failure_is_still_drained() {
     let mut world = installed_world();
@@ -85,7 +85,7 @@ fn a_failure_after_a_write_failure_is_still_drained() {
     assert!(take_receiver(&mut world).unwrap().try_recv().is_err());
 }
 
-/// OS のセッションの終了の後は告げないので、今までどおり汲み出して記録する。
+/// OS のセッションの終了の後は告げないので、汲み出して記録する。
 #[test]
 fn a_failure_after_os_session_end_is_drained_and_logged() {
     let mut world = installed_world();

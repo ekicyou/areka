@@ -55,9 +55,9 @@ fn answer(got: &BootResolved) -> (GhostRoute, PathBuf, Option<String>) {
     (got.1.route, got.1.dir.clone(), got.3.clone())
 }
 
-/// オプションなしは今と同じ答え: 引数なしは印が無ければ記憶・印が在れば既定、位置の引数は `Argv` で印を読まない。
+/// オプションなしの答え: 引数なしは印が無ければ記憶・印が在れば既定、位置の引数は `Argv` で印を読まない。
 #[test]
-fn without_options_the_answer_is_as_today() {
+fn without_options_the_answer_follows_the_session_mark() {
     let tmp = fixture("cfg-opt-none");
     write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
@@ -128,7 +128,7 @@ fn positional_ghost_with_random_logs_unused_random() {
     assert_eq!(unused, 1);
 }
 
-/// 位置のバルーンは `--ghost` の有無に関わらず今の道で使う。
+/// 位置のバルーンは `--ghost` の有無に関わらず通常の道で使う。
 #[test]
 fn positional_balloon_is_used_with_or_without_ghost_option() {
     let tmp = fixture("cfg-opt-positional-balloon");
