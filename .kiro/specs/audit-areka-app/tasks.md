@@ -171,7 +171,7 @@
   - _Requirements: 3.1, 3.4, 4.1, 4.2, 4.4, 5.2, 7.6_
 
 - [ ] 12. 本体の部品を使わないテストを `areka-session` へ移す（G12）
-- [ ] 12.1 起動の文脈の補助に名の引数を足し、走っている印の判定のテストを移す（S1・指摘 30・44・80）
+- [x] 12.1 起動の文脈の補助に名の引数を足し、走っている印の判定のテストを移す（S1・指摘 30・44・80）
   - 先に `reload_test_support.rs` に `pub fn boot_context_named(temp, root, ghost, balloon) -> BootContext` を足し、`boot_context` を `boot_context_named(temp, root, "A", "kaku")` の 1 行にする（S1・置き場・補助・根の出どころ・経路は今のまま。兄弟と `menu/` のテストも呼ぶ公開のテストの支え）
   - `main_session_mark_tests.rs` の 393-637（判定の表・判定の当て方）と `main_session_mark_write_tests.rs` の 259-297 を新しい `areka-session/src/session_mark_tests.rs` へ移し、`session_mark.rs` から `#[cfg(test)]` の子として引く。`BootContext` は `boot_context_named` で組む
   - fallback の `count_event` を親へ上げて 3 か所で使う。`main_session_mark_write_tests.rs` の `world_with` の写し（23-53）を消し、親の子モジュールにして呼ぶ。3-5 行の説明を合わせる

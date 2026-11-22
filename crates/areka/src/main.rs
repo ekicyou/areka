@@ -638,9 +638,6 @@ mod finish_after_run_tests;
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]
 mod session_mark_tests;
-#[cfg(test)]
-#[path = "main_session_mark_write_tests.rs"]
-mod session_mark_write_tests;
 
 /// UI の基盤の初期化の失敗が記録に残ることの本文の確かめ。
 #[cfg(test)]

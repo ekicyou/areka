@@ -117,3 +117,7 @@ pub fn settle_session_mark(
     };
     (verdict, failed)
 }
+
+#[cfg(test)]
+#[path = "session_mark_tests.rs"]
+mod tests;

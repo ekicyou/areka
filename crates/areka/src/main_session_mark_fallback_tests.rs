@@ -19,15 +19,7 @@ fn first_boot_falling_back_pins_mark_with_one_warn() {
     type Row = (usize, usize, Option<bool>, Option<(bool, bool)>, bool);
     fn boot_and_read(rig: &mut SwitchRig, ghost: GhostDecision, argv: bool) -> Row {
         let ((), events) = capture(|| first_boot(rig, ghost, BootOrigin::Plain, argv));
-        let count = |level| {
-            events
-                .iter()
-                .filter(|e| {
-                    e.level == level
-                        && e.field_str("event") == Some("session_mark_pinned_by_fallback")
-                })
-                .count()
-        };
+        let count = |level| count_event(&events, level, "session_mark_pinned_by_fallback");
         let slot_flag = rig
             .world
             .non_send::<GhostSlot>()
@@ -80,18 +72,6 @@ fn first_boot_falling_back_pins_mark_with_one_warn() {
         "LogSink へ倒れた初回の起動の記録か旗が崩れた（行: 倒れた・argv で倒れた・結線が成立した／\
          列: warn の件数・debug の件数・置き場の単位の旗・印の材料 (argv, 旗)・降ろせた）"
     );
-}
-
-/// `events` のうち `level` の `event` の件数。
-fn count_event(
-    events: &[log_capture_kit::CapturedEvent],
-    level: tracing::Level,
-    event: &str,
-) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == level && e.field_str("event") == Some(event))
-        .count()
 }
 
 /// LogSink へ倒れた回の 1 周で観測したもの（次の起動を除く）。

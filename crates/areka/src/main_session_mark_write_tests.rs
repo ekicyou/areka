@@ -1,8 +1,7 @@
-//! 記憶を書けないときの起動中の印と終わり方の
-//! テスト。`main` は生きた `WinApp` を要するので、`run()` の後に組むもの（[`after_run`]）と
-//! 終了コードの判断（[`finish_after_run`]）を踏む。
-
-use std::path::PathBuf;
+//! 記憶を書けないときの起動中の印と終わり方のテスト。
+//!
+//! `main_session_mark_tests.rs` の子モジュール。World の組み方（`world_with`）は親のものを使い、
+//! `run()` の後に組むもの（[`after_run`]）と終了コードの判断（[`finish_after_run`]）を踏む。
 
 use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
 use bevy_ecs::world::World;
@@ -11,45 +10,16 @@ use temp_path_kit::TempPath;
 use super::{after_run, finish_after_run};
 use areka_session::alert::{AlertScene, WriteMoment};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
-use areka_session::boot_config::ConfigInputs;
-use areka_session::boot_config::{BootContext, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::GhostRoute;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::session_mark::{
-    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
-};
+use areka_session::session_mark::{MarkVerdict, Teardown, session_mark_verdict};
 
-/// 根 `tmp`・ゴースト A・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
+/// 根 `tmp`・ゴースト A（記憶の経路）・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
 fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
-    let ghost_dir = PathBuf::from("root").join("ghost").join("A");
-    let balloon_dir = tmp.child("balloon").join("b");
-    let mut world = World::new();
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: tmp.child("app-profile"),
-        helper_exe: tmp.child("shiori-host32-helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: ghost_dir.clone(),
-                balloon_root: balloon_dir.clone(),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Memory,
-                dir: ghost_dir.clone(),
-                folder: Some("A".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: balloon_dir,
-                folder: Some("b".to_owned()),
-            },
-        },
-    });
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, ghost_dir))));
-    world.insert_resource(FirstExit(first));
-    world
+    let ghost = super::decision(GhostRoute::Memory, Some("A"));
+    let session = GhostSession::for_test(None, ghost.dir.clone());
+    super::world_with(tmp, ghost, Some(session), Some(first))
 }
 
 /// 記憶を書けなかった終わり（出所 `MemoryWriteFailed`）: 途中の「記憶を書けない」
@@ -253,45 +223,5 @@ fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
         ),
         (true, false, true),
         "降ろした直後: (出所・予約・置き場が空＝切替先を起こさない)"
-    );
-}
-
-/// ⑷ 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`。
-#[test]
-fn clear_mark_unwritable_tells_running_once() {
-    let tmp = TempPath::under_target("mark-write-clear");
-    let app = tmp.child("app-profile");
-    unwritable(&app);
-    let (verdict, failed) = settle_session_mark(
-        &MarkInputs {
-            app_profile_dir: app,
-            argv_session: false,
-            first: Some(ExitOrigin::Escape),
-            logsink_fallback: false,
-        },
-        Teardown {
-            run_ok: true,
-            down_ok: true,
-            shiori_cut: false,
-        },
-    );
-    assert_eq!(verdict, MarkVerdict::Clear);
-    let failed = failed.expect("印を消せない失敗が返る");
-    let (told, events) = log_capture_kit::capture(|| {
-        areka_session::write_failure::tell_at_close(None, Some(failed), None, true)
-    });
-    let alerts: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("alert"))
-        .collect();
-    assert_eq!(
-        (told.is_err(), alerts.len()),
-        (true, 1),
-        "(終了コード 1・告知の数): {events:?}"
-    );
-    let scene = alerts[0].field("scene").unwrap_or_default();
-    assert!(
-        scene.contains("Running") && scene.contains("LastRunning"),
-        "途中の告知で、起動中の印: {scene}"
     );
 }
