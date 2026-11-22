@@ -248,6 +248,16 @@ session の本番が名指す crate: `tracing`・`areka_ghost`・`areka_runtime`
 8. **`areka-session` の本番の依存表の確定**（2.10）と、`cargo check -p areka-session --lib --features test-support` の警告。
 9. **数の取り直し**（要件の申し送り 1）: 本体で `session::` を引くファイルは 117 と一致した（根 9・`install/` 20・`mcp/` 20・`menu/` 19・`update/` 11・`runtime_tests/` 24・`roots/` 6・`cli/` 4・`offline_dump/` 4）。`tests/` は `emo2_mcp_real_run.rs` が `session::` を引き、`smoke_boot_loop_exit.rs` は説明の中の `ghost_session::` だけ。
 
+## 10b. 設計の段で決めること（要件の討議で設計へ回した）
+
+1. 口の束を 1 つ（案 A）にするか 2 つ（案 B）にするか（どちらも関数のポインタの束を World の資源として据える）。
+2. C1 の欄を 2 つに分け、入力の 2 件との交互の順を保つ形（要件 2.1）。
+3. 口が据わっていないときの倒れ方: `error!` を 1 行残し、窓口が無いときと同じ答え（何もしない／偽／受信端の無い送出端）を返す。`cfg(not(test))` の絞りが本体のテストのビルドで効かない件の扱い（2.3・2.6）。
+4. C5 の口が無いときの受け口の列を 13 個に保つ形（捨てる受け口）と、`t_zwi05` の新しい字面（要件 5.14）。
+5. 本体に残すテストの置き場のモジュールの名前（例 `crates/areka/src/session_tests/`）と、一部だけ本体を要るファイル（`reload_tests.rs`・`shell_balloon_switch_tests.rs`）の分け方。本体に残すテストが引く私有の項目の開け方（要件 4.5 の記録）。
+6. `crate_source!` を `#[macro_export]` で開くか、各 crate がマクロを持つか。`log_history::capture_tests::hold` を開くか。
+7. 10 の Research Needed 1〜9。
+
 ## 11. 議題の候補（要件の討議へ）
 
 1. **口の形**（要件 1.8・未決 1）: 案 A（`BodySystems` を広げて資源にする）か案 B（登録の束と資源の束を分ける）か。どちらも World の資源として据えるのは同じ。案 C（trait）・案 D（知らせ・資源）は前例と「1 フレーム遅らせない」から外れる。
