@@ -62,7 +62,7 @@
   - _Dispatch: standard — 赤のテストの原因を見て 1 行を足すかを決める_
   - _Requirements: 1.10, 1.11, 2.4_
 
-- [ ] 3. 本体の中でテストを分ける（まだ crate を作らない）
+- [x] 3. 本体の中でテストを分ける（まだ crate を作らない）
 - [x] 3.1 切替の足場が検体と系の登録の組を呼び手から受ける形にする
   - `ghost_switch_test_support.rs` に `RigSample`（根・ゴーストのフォルダ・同梱バルーンの道・寿命を持つ値）と `SwitchRig::with(sample, body, scripts)` を足し、欄の `SampleRoot` を `RigSample` に、検体を読む 4 か所を欄の読みに、`register_systems` へ渡す組を `body` に替える
   - 集めた層の `#[cfg(test)] SwitchRig::new(scripts)` は `SampleRoot::acquire("emo2")` を直に呼んで `with` へ渡す数行にする。この段ではまだ本物の組（`crate::BODY_SYSTEMS`）を渡す
@@ -99,7 +99,7 @@
   - 本体の bin のテストが緑で、分けたファイルの両側のテストの名前の末尾を足すと分ける前と同じ
   - _Dispatch: mechanical — 分けるテストと小道具の扱いを設計が与える_
   - _Requirements: 5.1, 5.3, 5.13_
-- [ ] 3.6 本体の側で口が据わることと登録の順を確かめ、段 2 を締める
+- [x] 3.6 本体の側で口が据わることと登録の順を確かめ、段 2 を締める
   - 本体の `session_tests/body_systems_tests.rs` に `register_systems_installs_body_systems`（`register_systems(…, crate::BODY_SYSTEMS)` の後に資源が在る）と `after_input_registers_install_update_mcp_in_order`（`Input` の段の系が install → update → mcp の汲み出しの順。読めなければ系の数で代える）を足す
   - 集めた層の下のテストのファイルが本体の項目（`crate::BODY_SYSTEMS`・根の関数・`crate::cli`・`crate::menu`・`crate::install`・`crate::update`・`crate::mcp`・`crate::shiori_host`・`crate::runtime_tests`）を名指す数を grep で数え、0 件を示す（`crate_source_test_support`・`sample_test_support` は 4.1 で解く）
   - 2 本が緑、本体の bin のテストが緑で、grep の結果が検証の記録に在る

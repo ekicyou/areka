@@ -840,3 +840,25 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 
 - 赤: 分けただけでは壊れず（`use` は本体の側に持たせて組めた）、`cargo check` は元の側の未使用の `use` 2 件の警告だけが出て外した。RED は該当なし（振る舞いを変えない移動で、名前の末尾の比べが最初の網）。
 - 緑: `cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored。`cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。
+
+### 3.6
+
+#### 追加したテスト（本体の `session_tests/body_systems_tests.rs`・`session_tests/mod.rs` に宣言）
+
+- `register_systems_installs_body_systems`: `register_systems(…, crate::BODY_SYSTEMS)` の後に `BodySystems` の資源が在る。
+- `after_input_registers_install_update_mcp_in_order`: 同じ登録の後、`Input` の段の系のうち `install::desk::drain`・`update::desk::drain`・`mcp::drain` を `system_type()` で引いて、この順に 1 つずつ並ぶ（系の名は bevy の `debug` の機能が無いと読めないので型で引く）。スレッドの局所の状態は使わない（`--test-threads 1` でも緑）。
+
+#### 赤（一時の変異・戻して未コミット）
+
+- `register_systems` の `world.insert_resource(body);` を消す → `register_systems_installs_body_systems` が赤（`BodySystems の資源が無い`）。
+- `main.rs` の `register_body_after_input` の `update::register`・`mcp::register` を入れ替える → `after_input_registers_install_update_mcp_in_order` が赤。
+
+#### 集めた層が本体の項目を名指す数
+
+- コマンド: `grep -rnE "crate::(BODY_SYSTEMS|register_body_after_input|attach_body_receivers|wire_body_after_runtime|tell_desks_steady|body_cue_sinks|finish_after_run|install_boot_context|first_boot_origin|boot_first_ghost|after_run|main|cli|menu|install|update|mcp|shiori_host|runtime_tests)\b" crates/areka/src/session | wc -l`（`main.rs` の根の関数は上の名前で網羅）
+- 結果: 0 件（`crate_source_test_support`・`sample_test_support` は 4.1 で解く）。
+
+#### 確かめ
+
+- `cargo test -p areka --bin areka` 1843 passed・0 failed・3 ignored（1841 + 2）。2 本は `-- --test-threads 1` でも緑。
+- `cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。

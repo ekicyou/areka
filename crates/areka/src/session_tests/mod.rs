@@ -25,6 +25,7 @@ pub(crate) fn resolve_boot_from(
     )
 }
 
+mod body_systems_tests;
 mod boot_config_balloon_tests;
 mod boot_config_callghost_tests;
 mod boot_config_copy_tests;
