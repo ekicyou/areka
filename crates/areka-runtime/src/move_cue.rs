@@ -25,7 +25,6 @@ pub use args::parse_move_directive;
 
 #[path = "move_cue_geometry.rs"]
 mod geometry;
-use geometry::{BaseposResolver, CanonDefaultBasepos};
 
 #[path = "move_cue_place.rs"]
 mod place;
@@ -184,9 +183,8 @@ pub enum Axis {
 /// talk スレッド側消費 sink。
 ///
 /// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）であり自らの
-/// コマンド名リテラルを運ぶものを名前自己選別して解釈し、[`PositionCue`]（`move` は [`parse_move_directive`] の結果を包んだ
-/// `Move`・`execute,resetwindowpos` は残りの引数を読まない `ResetWindowPos`）を mpsc で UI スレッド（frame 相の
-/// `apply_move_directive`）へ送出する。それ以外
+/// コマンド名リテラルを運ぶものを名前自己選別して解釈し、[`PositionCue`] を mpsc で UI スレッド（frame 相の
+/// move drain）へ送出する。それ以外
 /// （非キャリア・担当外コマンド名・非数値 scope）は**記録付き良性スキップ**へ
 /// 縮退する——無音破棄でも panic でもない（log-first）。
 ///
@@ -224,7 +222,7 @@ impl MoveCueSink {
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`GhostBootOptions.sinks` の
 /// broadcast 登録先が要求する形）。broadcast 下では担当外 cue（`Text`／`Emote`／
 /// 他コマンド名のキャリア等）も本 sink へ届くが、名前選別で `"move"` 以外は記録付き良性スキップへ
-/// 縮退する（duration honor には触れない）。
+/// 縮退する。
 impl dola::cue::CueSink for MoveCueSink {
     fn emit(&mut self, cue: TalkCue) {
         // キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
@@ -251,12 +249,9 @@ impl dola::cue::CueSink for MoveCueSink {
             return;
         };
 
-        // 名前自己選別（消費者自身のコマンド名リテラル）。
-        //    dola は名前語彙を持たず、一意性（1 名前=高々 1 消費者）は areka 消費者台帳
-        //    が保証する——本 sink は中央権威表に依存せず自らの名前で自己選別する。
-        //    並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象）。
-        //    窓の組・吸着・バルーン位置・バルーンを動かさない指定も同じ線で選び、台本の並びを保つ。
-        //    組と初期化は実行者を読まない。吸着だけは実行者のスコープへ当てる（`move` と同じ読み）。
+        // 並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象）。
+        // 窓の組・吸着・バルーン位置・バルーンを動かさない指定も同じ線で選び、台本の並びを保つ。
+        // 組と初期化は実行者を読まない。吸着だけは実行者のスコープへ当てる（`move` と同じ読み）。
         match (name, tokens.first().copied()) {
             ("execute", Some("resetwindowpos")) => {
                 self.send(PositionCue::ResetWindowPos);
@@ -338,7 +333,7 @@ fn actor_scope(cue: &TalkCue, tag: &str) -> Option<u32> {
 }
 
 impl MoveCueSink {
-    /// 線へ 1 件送り、次の画面更新を起こす。envelope の `duration` には触れない。
+    /// 線へ 1 件送り、次の画面更新を起こす。
     fn send(&self, cue: PositionCue) {
         if self.tx.send(cue).is_err() {
             // 受信端（RuntimeWiring）切断は talk を殺さない（log-first・非 panic）。

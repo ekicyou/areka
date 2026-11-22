@@ -62,47 +62,6 @@ fn broken_other_addressed_custom_debug_not_warn() {
     }
 }
 
-/// WARN が blanket でないことの確認: 同一の非正準 params 形で宛名だけを
-/// `move`↔`noexist` に振り替えると、severity が WARN↔DEBUG に分岐する（level だけが変わる）。
-#[test]
-fn addressee_discriminates_warn_vs_debug_for_same_broken_shape() {
-    // 自分宛（move）: WARN=1・DEBUG=0。
-    let move_logs = capture_logs(|| {
-        let (tx, _rx) = channel::<PositionCue>();
-        let mut sink = MoveCueSink::new(tx);
-        sink.emit(broken_custom_cue("0", "move"));
-    });
-    // 他人宛（noexist）: 全く同じ params 形（Null）で宛名だけ差し替え。
-    let other_logs = capture_logs(|| {
-        let (tx, _rx) = channel::<PositionCue>();
-        let mut sink = MoveCueSink::new(tx);
-        sink.emit(broken_custom_cue("0", "noexist"));
-    });
-
-    assert_eq!(
-        (
-            count_level(&move_logs, "WARN"),
-            count_level(&move_logs, "DEBUG")
-        ),
-        (1, 0),
-        "自分宛 move は WARN=1/DEBUG=0: {move_logs:?}"
-    );
-    assert_eq!(
-        (
-            count_level(&other_logs, "WARN"),
-            count_level(&other_logs, "DEBUG")
-        ),
-        (0, 1),
-        "他人宛 noexist は WARN=0/DEBUG=1: {other_logs:?}"
-    );
-    // 対比の要: 入力の params 形は同一・宛名のみ相違で severity が分岐する（blanket warn でない）。
-    assert_ne!(
-        count_level(&move_logs, "WARN"),
-        count_level(&other_logs, "WARN"),
-        "同一壊れ形でも宛名で WARN 件数が分岐する（宛名規律の非空虚化）"
-    );
-}
-
 /// 名前ゲート: 正準キャリアだが `name != "move"`（担当外）→ DEBUG 良性 skip・送出なし。
 /// （params は正準ゆえ `as_command_carrier()` は Some で開封成功——分岐は名前ゲート側。）
 #[test]
@@ -165,13 +124,19 @@ fn broken_execute_addressed_custom_is_debug_not_warn() {
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 }
 
-/// `\![execute,resetwindowpos]` は読みの記録を持たない＝WARN 0 で並べ直しを送る。
+/// `\![execute,resetwindowpos]` は「並べ直し」を 1 件送る。残りの引数は読まず、WARN を出さない。
 #[test]
 fn execute_resetwindowpos_sends_without_warn() {
-    let (tx, rx) = channel::<PositionCue>();
-    let mut sink = MoveCueSink::new(tx);
-    let cue = actor_carrier_cue("0", "execute", &["resetwindowpos"]);
-    let logs = capture_logs(|| sink.emit(cue));
-    assert_eq!(count_level(&logs, "WARN"), 0, "{logs:?}");
-    assert_eq!(rx.try_recv(), Ok(PositionCue::ResetWindowPos));
+    for tokens in [
+        &["resetwindowpos"][..],
+        &["resetwindowpos", "junk", "1"][..],
+    ] {
+        let (tx, rx) = channel::<PositionCue>();
+        let mut sink = MoveCueSink::new(tx);
+        let cue = actor_carrier_cue("0", "execute", tokens);
+        let logs = capture_logs(|| sink.emit(cue));
+        assert_eq!(count_level(&logs, "WARN"), 0, "{tokens:?}: {logs:?}");
+        assert_eq!(rx.try_recv(), Ok(PositionCue::ResetWindowPos), "{tokens:?}");
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
+    }
 }

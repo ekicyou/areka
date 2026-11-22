@@ -33,22 +33,6 @@ fn move_carrier_sends_directive() {
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
 }
 
-/// 担当外キャリア（`bind`/`raise`/未知名）は良性スキップ＝何も送出しない
-/// （自らの名前リテラル `"move"` で自己選別する。一意性は areka 消費者台帳が保証）。
-#[test]
-fn non_move_carrier_is_benign_skip() {
-    for name in ["bind", "raise", "unknownfoo"] {
-        let (tx, rx) = channel::<PositionCue>();
-        let mut sink = MoveCueSink::new(tx);
-        sink.emit(actor_carrier_cue("0", name, &["1", "2"]));
-        assert_eq!(
-            rx.try_recv(),
-            Err(TryRecvError::Empty),
-            "担当外キャリア {name} は何も送出しない（良性スキップ）"
-        );
-    }
-}
-
 /// 非キャリア cue（`Text` 等の担当外 broadcast）は良性スキップ＝何も送出しない。
 #[test]
 fn non_carrier_cue_is_benign_skip() {
@@ -127,7 +111,6 @@ fn clone_reaches_same_receiver() {
     ));
     let d = as_move(rx.try_recv().expect("clone からの送出も同一受信端へ届く"));
     assert_eq!(d.x, AxisSpec::Px(10));
-    drop(sink); // 元 sink 生存の確認（Clone は独立ハンドル）。
 }
 
 /// boot 型境界（`dola::cue::CueSink + Clone + Send + 'static`）をコンパイル時に固定する。
@@ -135,21 +118,6 @@ fn clone_reaches_same_receiver() {
 fn satisfies_boot_sink_bounds() {
     fn require<T: dola::cue::CueSink + Clone + Send + 'static>() {}
     require::<MoveCueSink>();
-}
-
-/// `\![execute,resetwindowpos]` は「並べ直し」として送る。残りの引数は読まない。
-#[test]
-fn execute_resetwindowpos_sends_reset() {
-    for tokens in [
-        &["resetwindowpos"][..],
-        &["resetwindowpos", "junk", "1"][..],
-    ] {
-        let (tx, rx) = channel::<PositionCue>();
-        let mut sink = MoveCueSink::new(tx);
-        sink.emit(actor_carrier_cue("0", "execute", tokens));
-        assert_eq!(rx.try_recv(), Ok(PositionCue::ResetWindowPos), "{tokens:?}");
-        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
-    }
 }
 
 /// `\![execute,install,…]`・引数の無い `execute`・`\![set,position,…]`・`\![reset,position]` は

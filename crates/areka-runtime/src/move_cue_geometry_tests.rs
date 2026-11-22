@@ -309,20 +309,16 @@ const WORK: RectPx = RectPx {
     bottom: 1704,
 };
 
-fn canon(r: RectPx) -> PointPx {
-    CanonDefaultBasepos.basepos(SizeI::new(r.right - r.left, r.bottom - r.top))
-}
-
 /// 実測の机で基準の枠を選ぶ（適用の側が World から選ぶものの代わり）。
 fn ssp_frame(base: &MoveBase, before: RectPx) -> BaseFrame {
     match base {
         MoveBase::Scope(0) => BaseFrame::Window {
             rect: SCOPE0,
-            basepos: canon(SCOPE0),
+            basepos: canon_basepos(SCOPE0),
         },
         MoveBase::Me => BaseFrame::Window {
             rect: before,
-            basepos: canon(before),
+            basepos: canon_basepos(before),
         },
         MoveBase::Screen | MoveBase::PrimaryScreen => BaseFrame::Area(WORK),
         MoveBase::Global => BaseFrame::Origin,
@@ -340,7 +336,6 @@ type SspRow = (
 
 #[test]
 fn ssp_measurement_table_positions_match() {
-    // (番号, 台本の引数, 前の `\1` の矩形, 後の左上)。`\1` は 672×800。
     let rows: &[SspRow] = &[
         (
             "M1-c",
@@ -472,7 +467,7 @@ fn ssp_measurement_table_positions_match() {
         let d = parse(args);
         let before = rect(bx, by, bx + 672, by + 800);
         let frame = ssp_frame(&d.base, before);
-        let got = compute_move_target(&frame, before, canon(before), &d, K1);
+        let got = compute_move_target(&frame, before, canon_basepos(before), &d, K1);
         assert_eq!(got.position, pt(ax, ay), "{id}");
     }
 }
@@ -496,9 +491,9 @@ fn emo2_adjust_aligns_bottom_right_to_bottom_left() {
     for k in [K1, k2()] {
         let frame = BaseFrame::Window {
             rect: frame_rect,
-            basepos: canon(frame_rect),
+            basepos: canon_basepos(frame_rect),
         };
-        let got = compute_move_target(&frame, target, canon(target), &d, k);
+        let got = compute_move_target(&frame, target, canon_basepos(target), &d, k);
         assert_eq!(got.position, pt(x0 - w1, y0 + h0 - h1), "k={k:?}");
         assert!(got.notes.is_empty());
     }
@@ -543,9 +538,9 @@ fn legacy_emo2_lands_where_it_did_before() {
     for (base, target, k, want) in rows {
         let frame = BaseFrame::Window {
             rect: base,
-            basepos: canon(base),
+            basepos: canon_basepos(base),
         };
-        let got = compute_move_target(&frame, target, canon(target), &d, k);
+        let got = compute_move_target(&frame, target, canon_basepos(target), &d, k);
         assert_eq!(got.position, want, "k={k:?}");
         assert!(got.notes.is_empty());
     }
@@ -560,11 +555,11 @@ fn legacy_base_base_scales_both_axes_with_sign() {
     let target = rect(1200, 800, 1500, 1234);
     let frame = BaseFrame::Window {
         rect: base,
-        basepos: canon(base),
+        basepos: canon_basepos(base),
     };
     // x' = 1000 + 200 + 200 − 150 = 1250・y' = 500 + 687 + 100 − 434 = 853
     assert_eq!(
-        compute_move_target(&frame, target, canon(target), &d, k2()).position,
+        compute_move_target(&frame, target, canon_basepos(target), &d, k2()).position,
         pt(1250, 853)
     );
 }
@@ -602,7 +597,7 @@ fn odd_sizes_and_negative_coords_round_down() {
     let win_rect = rect(-435, -100, 0, 0);
     let frame = BaseFrame::Window {
         rect: win_rect,
-        basepos: canon(win_rect),
+        basepos: canon_basepos(win_rect),
     };
     let d = directive(
         AxisSpec::Px(0),
@@ -636,5 +631,5 @@ fn extreme_values_saturate_without_panic() {
         &d,
         k2(),
     );
-    assert_eq!(got.position.x, i32::MAX);
+    assert_eq!(got.position, pt(i32::MAX, 0));
 }

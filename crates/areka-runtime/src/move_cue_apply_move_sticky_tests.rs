@@ -12,10 +12,9 @@ use areka_emo_compose::ScaleRatio;
 use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::{Entity, World};
-use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{Point, WindowHandle};
 
-use super::apply_move_tests::{move_world, pos_of};
+use super::apply_move_tests::{events_named, move_world, pos_of};
 use super::*;
 use areka_placement::follow::{Anchored, BalloonFollow};
 use areka_placement::persist::PersistWiring;
@@ -25,7 +24,7 @@ use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
 use areka_placement::test_support::SharedFakeIo;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
 /// 帳簿を据え、台本の組 `members` を作る。
 fn group(world: &mut World, members: &[&str]) {
@@ -52,18 +51,6 @@ fn diff(after: Point, before: Point) -> Point {
         x: after.x - before.x,
         y: after.y - before.y,
     }
-}
-
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
-fn finish(world: World) {
-    drop(world);
-    let _residue = drain_window_pos_commands();
 }
 
 struct Pair {
@@ -107,15 +94,14 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
         "相手のバルーンが今のずらしで付いて動く"
     );
 
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_named(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
-    let e = logged[0];
+    let e = &logged[0];
     assert_eq!(e.field_str("trigger"), Some("move"));
     assert_eq!(e.field("scope"), Some("1"));
     assert_eq!(e.field("partners"), Some("[0]"));
     assert_eq!(e.field("dx"), Some(moved.x.to_string().as_str()));
     assert_eq!(e.field("dy"), Some(moved.y.to_string().as_str()));
-    finish(world);
 }
 
 /// 下に吸着した相手は横にだけ動く（吸着の軸の量は乗らない）。
@@ -142,7 +128,6 @@ fn bottom_partner_takes_only_the_horizontal_amount() {
             y: partner_before.y
         }
     );
-    finish(world);
 }
 
 /// `ignore-sticky-window` では相手が動かず組は残り、記録が出る。その後の
@@ -168,11 +153,14 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let (applied, events) = capture(|| apply_move_directive(&mut world, &ignore, ScaleRatio::ONE));
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before, "相手は動かない");
-    let ignored = events_of(&events, "sticky_follow_ignored");
+    let ignored = events_named(&events, "sticky_follow_ignored");
     assert_eq!(ignored.len(), 1, "{events:?}");
     assert_eq!(ignored[0].field("scope"), Some("1"));
     assert_eq!(ignored[0].field("partners"), Some("[0]"));
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
     assert_eq!(
         world.resource::<StickyGroupLedger>().partners_of(1),
         vec![0],
@@ -195,7 +183,6 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
         diff(pos_of(&world, p.target), pos_of(&world, p.partner)),
         relation
     );
-    finish(world);
 }
 
 /// 連れ動いた相手の位置を記憶に書かない。
@@ -247,7 +234,6 @@ fn partner_position_is_not_persisted() {
     );
     parts.publisher.close();
     crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
-    finish(world);
 }
 
 /// 時間つきの `\![move]` でも相手は最終の位置へすぐ置かれる。
@@ -266,7 +252,6 @@ fn timed_move_places_the_partner_at_once() {
     let moved = diff(pos_of(&world, p.target), target_before);
     assert_ne!(moved, Point { x: 0, y: 0 });
     assert_eq!(diff(pos_of(&world, p.partner), partner_before), moved);
-    finish(world);
 }
 
 /// 組に入っていない窓への `\![move]` は今のまま（ほかの窓は動かず、連れ動きの記録も無い）。
@@ -291,11 +276,10 @@ fn ungrouped_window_moves_alone_as_before() {
             "sticky_member_absent",
         ] {
             assert!(
-                events_of(&events, name).is_empty(),
+                events_named(&events, name).is_empty(),
                 "seed={seed}: {events:?}"
             );
         }
-        finish(world);
     }
 }
 
@@ -312,14 +296,13 @@ fn absent_member_is_logged_and_left_out() {
         capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
     assert!(applied);
     assert_ne!(pos_of(&world, p.partner), partner_before);
-    let absent = events_of(&events, "sticky_member_absent");
+    let absent = events_named(&events, "sticky_member_absent");
     assert_eq!(absent.len(), 1, "{events:?}");
     assert_eq!(absent[0].field("scope"), Some("5"));
     assert_eq!(absent[0].field_str("when"), Some("move"));
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_named(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
     assert_eq!(logged[0].field("partners"), Some("[0]"));
-    finish(world);
 }
 
 /// 動かす窓を書けなかったときは相手を動かさない。量が 0 のときも何もしない。
@@ -338,7 +321,10 @@ fn refused_write_or_zero_amount_moves_no_partner() {
     });
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before);
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
 
     // 書けない: 動かす窓の窓ハンドルを外す。
     world.entity_mut(p.target).remove::<WindowHandle>();
@@ -351,6 +337,8 @@ fn refused_write_or_zero_amount_moves_no_partner() {
     });
     assert!(!applied);
     assert_eq!(pos_of(&world, p.partner), partner_before);
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
-    finish(world);
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
 }

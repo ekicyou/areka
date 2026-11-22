@@ -58,6 +58,11 @@ impl BaseposResolver for CanonDefaultBasepos {
     }
 }
 
+/// 窓の矩形の基準位置（既定＝幅÷2・下端）を左上からのずれで返す。
+pub(super) fn canon_basepos(rect: RectPx) -> PointPx {
+    CanonDefaultBasepos.basepos(SizeI::new(rect.right - rect.left, rect.bottom - rect.top))
+}
+
 // =============================================================================
 // 基準の枠と移動先の計算
 // =============================================================================

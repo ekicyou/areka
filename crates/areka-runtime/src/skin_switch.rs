@@ -76,7 +76,7 @@ pub enum SkinVerdict {
     Installing,
     /// 切替先が決まらない。
     NotFound,
-    /// 起動の文脈・置き場のゴースト・結線・seriko の送り手のどれかが無い（kanade へ送れないときも）。
+    /// 起動の文脈・置き場のゴースト・結線・kanade の送出端・seriko の送り手のどれかが無い（kanade へ送れないときも）。
     NoContext,
 }
 

@@ -11,34 +11,58 @@ use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx}
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use areka_placement::test_support::give_fake_handles;
+use log_capture_kit::CapturedEvent;
 use wintf::ecs::{Point, WindowPos};
 
+pub(super) const BALLOON_OFFSET: PointPx = PointPx { x: 285, y: -19 };
+
 /// 既知位置・寸法の解決済み配置（balloon_offset は char 窓へ BalloonFollow.offset として転写）。
-fn placement(scope: usize, cx: i32, cy: i32, cw: i32, ch: i32, boff: PointPx) -> ScopePlacement {
+pub(super) fn placement(
+    scope: usize,
+    pos: PointPx,
+    size: SizePx,
+    anchor: Anchor,
+    balloon_limit: bool,
+) -> ScopePlacement {
     ScopePlacement {
         scope,
-        char_pos: PointPx { x: cx, y: cy },
-        char_size: SizePx { w: cw, h: ch },
+        char_pos: pos,
+        char_size: size,
         balloon_pos: PointPx {
-            x: cx + boff.x,
-            y: cy + boff.y,
+            x: pos.x + BALLOON_OFFSET.x,
+            y: pos.y + BALLOON_OFFSET.y,
         },
         balloon_size: SizePx { w: 200, h: 150 },
-        balloon_offset: boff,
-        balloon_offset_base: OffsetBase::unpinned(boff),
-        // 正典既定（有効）。limit の判定はここでは対象外。
-        balloon_limit: true,
-        anchor: Anchor::Bottom,
+        balloon_offset: BALLOON_OFFSET,
+        balloon_offset_base: OffsetBase::unpinned(BALLOON_OFFSET),
+        balloon_limit,
+        anchor,
         balloon_keyword_base: None,
     }
 }
+
+pub(super) fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .cloned()
+        .collect()
+}
+
+const S0: (PointPx, SizePx) = (PointPx { x: 1000, y: 500 }, SizePx { w: 400, h: 687 });
 
 /// base=scope0 (1000,500,400,687)・target=scope1 (1200,800,300,434) の headless World＋
 /// GhostWindows（全窓に偽 WindowHandle 付与済み）。
 pub(super) fn move_world() -> (World, GhostWindows) {
     let placements = vec![
-        placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 }),
-        placement(1, 1200, 800, 300, 434, PointPx { x: 285, y: -19 }),
+        placement(0, S0.0, S0.1, Anchor::Bottom, true),
+        placement(
+            1,
+            PointPx { x: 1200, y: 800 },
+            SizePx { w: 300, h: 434 },
+            Anchor::Bottom,
+            true,
+        ),
     ];
     let mut world = World::new();
     let gw = spawn_ghost_windows(
@@ -183,14 +207,7 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
 #[test]
 fn pipeline_target_absent_warns_false_no_mutation() {
     // GhostWindows に scope0（基準）のみ。fixture の対象 scope1 は不在。
-    let placements = vec![placement(
-        0,
-        1000,
-        500,
-        400,
-        687,
-        PointPx { x: 285, y: -19 },
-    )];
+    let placements = vec![placement(0, S0.0, S0.1, Anchor::Bottom, true)];
     let mut world = World::new();
     let gw = spawn_ghost_windows(
         &mut world,
@@ -223,6 +240,6 @@ fn pipeline_target_absent_warns_false_no_mutation() {
     assert_eq!(
         world.get::<Anchored>(base).copied(),
         Some(base_anchored_before),
-        "適用不成立で Anchored も不変（永続確定系へ触れない・R6/9.5）"
+        "適用不成立で Anchored も不変（永続確定系へ触れない）"
     );
 }

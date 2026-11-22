@@ -423,10 +423,3 @@ fn emo2_scripts_read_without_notes() {
         }
     );
 }
-
-/// 同じ入力には同じ出力（決定論）。
-#[test]
-fn parse_is_deterministic() {
-    let items = ["--X=1", "--bogus=2", "--X=3", "--base-offset=zz"];
-    assert_eq!(parse(0, &items), parse(0, &items));
-}

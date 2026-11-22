@@ -9,6 +9,7 @@
 use std::sync::mpsc::RecvError;
 
 use log_capture_kit::{LineFormat, capture_lines};
+use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
@@ -16,6 +17,16 @@ use crate::sample_test_support::emo2_balloon_root;
 
 /// 失敗の記録の目印（`event = "switch_assets_failed"`）。
 const FAILED_MARK: &str = "switch_assets_failed";
+
+/// bake の WIC デコードに要る COM（MTA）へこのテストのスレッドを入れる。
+fn enter_mta() {
+    // SAFETY: 予約の引数は None。初期化は解かずにスレッドの終わりまで持つ。
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    assert!(
+        hr.is_ok() || hr == RPC_E_CHANGED_MODE,
+        "COM の初期化に失敗: {hr:?}"
+    );
+}
 
 /// 送れること: 背景のスレッドから UI へ渡す結果と、
 /// seriko のスレッドの橋渡しが取り出す荷物・置き場が、線を越えて送れる形であることを
@@ -118,10 +129,7 @@ fn shell_build_runs_on_worker_and_returns_named_shell() {
 /// `windowposition`・作者の DPI）が等しい。
 #[test]
 fn default_basis_from_boot_equals_the_one_from_shell_switch() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    enter_mta();
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
     let work_area = areka_placement::resolver::RectPx {
@@ -228,10 +236,7 @@ fn missing_shell_folder_fails_with_one_error() {
 /// 復号できない画像（バルーンの面 0 が画像でない）: 失敗の型が返り、`switch_assets_failed` が 1 件。
 #[test]
 fn undecodable_balloon_image_fails_with_one_error() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    enter_mta();
     // 壊れたバルーンは検体の複製の中に置く（複製と一緒に消える・`C:\` 直下に作らない）。
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
@@ -266,10 +271,7 @@ fn undecodable_balloon_image_fails_with_one_error() {
 /// 切替では差し替えの前の失敗として返し、`switch_assets_failed` が 1 件。
 #[test]
 fn undecodable_shell_image_fails_with_one_error() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    enter_mta();
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
     rpost
