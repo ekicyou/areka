@@ -41,7 +41,8 @@
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 4.7, 6.2, 6.3, 6.4, 6.13, 7.1, 7.7, 7.8, 8.1_
 
 - [ ] 1.5 `switch_to` を「降ろした」と「起こす」の間で待てるように分ける（G7・指摘 13 の `areka-session` の側）
-  - 触る前に `audit-emo2-boot-switch` の着地の有無を確かめ、着地していれば `main` を取り込んでから直す。触るのは `ghost_switch.rs` の `switch_to`（597〜708 行の当たり）と末尾の mod の行と、新しい `ghost_switch_between.rs`・`ghost_switch_between_tests.rs` だけ（`take_down`・`boot_into` の中身と向こうの行は変えない）。
+  - 触る前に `audit-emo2-boot-switch` の着地の有無を確かめ、着地していれば `main` を取り込んでから直す。触るのは `ghost_switch.rs` の `switch_to`（597〜708 行の当たり）と末尾の mod の行と、新しい `ghost_switch_between.rs`・`ghost_switch_between_tests.rs` だけ（`take_down`・`boot_into` の中身と向こうの行は変えない。ただし次の 1 か所だけは例外）。
+  - `take_down` で `session.shutdown` が失敗したときも `info!(ghost_switch_down_ms, "ゴーストを降ろした")` が出て、1 回の失敗で ERROR 2 行と「降ろした」の INFO が並ぶ（`audit-emo2-boot-switch` のかけ直しの audit が見つけた件。向こうは直さない）。info を成功のときだけ出す。失敗の検査は、shutdown が Err のときにこの INFO が 0 件であることを数える 1 本。
   - 最初に、待ちの間の材料（`WindowsClosed`・`ShellCarry`）が借用を持たない値で NonSend に置けることを確かめる。置けなければ止めて設計へ戻す。
   - 起こす後半を `boot_target` に寄せ、`hold_between`・`resume_between` と NonSend `BetweenHold` を置く。`switch_to` は上書きの口を呼ぶ前に古い印を消し、呼んだ後に印があれば待って戻る。`resume_between` は待ちが無ければ warn を 1 件残す（design.md「`BetweenHold`」）。`SwitchStage` と `BodySystems::overwrite_between` の形は変えない。
   - `ghost_switch_between_tests.rs` の 4 本（待つ・続けて起こす・呼ばなければ待たない・起こせなければ既定へ戻す）が緑で、`ghost_switch_tests.rs` の既存のテストも緑。
