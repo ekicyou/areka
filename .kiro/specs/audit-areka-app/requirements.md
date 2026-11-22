@@ -91,7 +91,7 @@
 3. When 3 種類目に当たるかを判断するとき, the 本 spec shall ukadoc の該当箇所（URL と原文の引用）で確かめてから議題にする。ukadoc で読めない点は、開発者の許しを得て SSP の MCP で測ってから議題にする（要件 8.2）
 4. If 指摘の直しが 3 種類のどれにも当たらないとき, then the 本 spec shall その指摘を残すことを議題にせず直す
 5. When 開発者が指摘を残すと裁定したとき, the 本 spec shall 裁定とその理由をこの文書に残し、要件 9 の「新しい指摘 0 件」の数から外す
-6. If 確定した指摘と預かった件の直しが 20 タスクを越えそうなとき, then the 本 spec shall 要件の討議で、指摘の組ごとに同じ範囲の 2 本目の spec として切ることを議題にする（見込みは 22〜34 タスク＝棚卸㊸。仮定 8）
+6. The 本 spec shall 確定した指摘と預かった件の直しが 20 タスクを越えても、2 本目の spec に切らずに 1 本のまま進める（見込みは 24〜30 タスク＝ギャップ分析。仮定 8・討議の議題 3）
 7. When 直しが外への約束のうち 3 種類目に当たらないもの（環境変数・知らせの文・走っている印・ログの行）を変えるとき, the 本 spec shall 変える所と読み手を議題に挙げて、開発者の確定を得てから直す
 
 ### Requirement 3: 確定した指摘を全部直し切る
@@ -128,7 +128,7 @@
 
 #### Acceptance Criteria
 
-1. When 記憶の置き場は書けるのに中身が使えない（TOML として壊れている・`format-version` が違う・読めない）ために保存をやめた知らせを出すとき, the areka shall 直し方の一文を「置き場を書ける状態にする」でなく「ファイルを直すか、別の名前に変える」向きの文で出し、置き場が書けないときの今の一文は変えない（`areka-session/src/alert.rs:88` の `MEMORY_WRITE_FIX`・2026-11-06 開発者の承認・`audit-sylphya-actor` の設計の討議 議題 1。文の字面は設計で決める＝仮定 9）
+1. When 記憶の置き場は書けるのに中身が使えない（TOML として壊れている・`format-version` が違う・読めない）ために保存をやめた知らせを出すとき, the areka shall 直し方の一文を「置き場を書ける状態にする」でなく「ファイルを直すか、別の名前に変える」向きの文で出し、置き場が書けないときの今の一文は変えない（`areka-session/src/alert.rs:88` の `MEMORY_WRITE_FIX`・2026-11-06 開発者の承認・`audit-sylphya-actor` の設計の討議 議題 1。文の字面は設計で決める＝仮定 9）。理由の見分けは `areka-sylphya` の `PersistFailureCause` に種類を 1 つ足して行い、理由の文字列の中身では見分けない（討議の議題 6）
 2. The 本 spec の直し shall ワークスペース全体を歩く見張り（`areka-session/src/session_end_sync_send_tests.rs`・本体の `session_tests/readonly_body_tests.rs`）を、ワークスペース全体の見張りの置き場 `crates/log-capture-kit/tests/` へ移し、走査は `workspace_scan/mod.rs` を使う（`placement-crate-split` の件 1。見張りが見る中身は変えない）
 3. The 本 spec の直し shall `areka-session/src/ghost_session.rs:213-214` と `boot_seam.rs:7`・`:136`・`:156` の説明が名指す記憶からの戻しの継ぎ目（`load_restored_state` → `apply_restored_placements`）を、今の継ぎ目の名に直す（`audit-placement-core` の件 5。今の名はギャップ分析で確かめる）
 4. The 本 spec の直し shall `areka-session/src/boot_seam_restore_tests.rs:24`（同じ古さが `:11`・`:34`・`:118` にもある）の `plant_minimal_ghost` の説明（消えた関数と「同型」・「`resolve` が成功する」）を、今の事実に合う文に直す（同 件 8）
@@ -136,18 +136,18 @@
 6. The 本 spec の直し shall 本体の `tick_gate_config_producers_tests.rs:68` の `code_only` を `source_text_test_support::code_only` を使う形に寄せる（`audit-emo2-boot-spine` のオ・`audit-emo2-boot-frame` のオ）
 7. The 本 spec の直し shall 記憶の書き手の待ち `let _ = parts.handle.join();` の 6 か所（`areka-session/src/boot_resolve_tests.rs` の 482・575・756・804 行、`boot_seam_persist_wiring_tests.rs` の 80・123 行）を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（`audit-emo2-boot-frame` のコ）
 8. The 本 spec の直し shall 本体の `runtime_tests/spine.rs:123` の `capture_logs` の写しと GPU の World の写しを、上流の共通の補助（`areka-runtime` の `frame_test_support::gpu_on` ほか）を使う形に寄せる。共通の補助が本体から読めないときは、その理由を一行で残して写しを残す（同 サ）
-9. The 本 spec の直し shall 本体の `menu/ghost_frame_tests.rs:43` の起動の文脈 `BootContext` を組む補助の写しを、共通の補助（`areka-session/src/reload_test_support.rs:17` の `boot_context` ほか）へ寄せる。ほかの 2 本の持ち物の写しは触らない（同 シ・棚卸㊸「シの写しをまとめるのは 3 本の着地の後」・仮定 6）
+9. The 本 spec の直し shall 本体の `menu/ghost_frame_tests.rs:43` の起動の文脈 `BootContext` を組む補助の写しを、共通の補助（`areka-session/src/reload_test_support.rs:17` の `boot_context`）へ寄せず、形が合わない（今のゴースト・バルーン・置き場の決め打ちが違う）ことを理由として 1 行残す。ほかの 2 本の持ち物の写しは触らず、5 か所のまとめ直しは C26 の 3 本の着地の後に回す（同 シ・棚卸㊸・仮定 6・討議の議題 13）
 10. The 本 spec の直し shall `areka-session/src/app_exit_escape_tests.rs:73` の説明が消したテストの名で指す所を、役目（入力の crate の送出のテスト）で指す形に直し、`ghost_session.rs:821` の結線の説明が挙げる資源を、今の結線が挿す 4 つ（`BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover`）に合わせる（`audit-areka-input-menu` の件 1・件 3）
 11. The 本 spec の直し shall 本体の `menu/mod.rs:221-223`・`:254` の説明が呼び手を `ghost_session::register_systems` と書く所を、直すか残すかを見直しで決め、直すなら説明の文だけを直す（`session-module-gather` の件 2。同じ件の `mcp/mod.rs:48` は `audit-areka-install-update` の持ち物なので触らない・仮定 2）
 12. The 本 spec の直し shall 本体の `runtime_tests/zorder_wiring_tests.rs` の作業番号の札つきのテスト 2 本（29 行 `t_zwi05_…`・74 行 `t_zwi08_…`）の名から札だけを外し（`the_boot_wires_the_channel_the_sink_and_the_handoff`・`the_entry_point_carries_the_shell_setting_into_the_wiring`）、同じコミットで冒頭の説明（4・5・10・11・13 行）の名指しを `test-name-work-tags` の改名表の新しい名へ直して番号の札を消す（棚卸㊷の申し送り）
 13. The 本 spec の直し shall 本体の `session_tests/readonly_run_tests.rs:95`・`readonly_sites_tests.rs:119`・`write_failure_sites_tests.rs:142` の `prop_set_cue` の写しを、`areka-runtime` の `consumer_ledger_test_support::carrier_cue` へ寄せるかを見直しで決め、寄せられるものは寄せる（`dola-cue-test-builder` の申し送り。`areka-runtime`・seriko の側の包みは範囲の外）
-14. The 本 spec の直し shall `session-crate-split` が条件なしの `pub` にした項目（`GhostSession::{seriko, loop_ticker}`・`PreparedWindows::spawn`・`reload::drain`・`write_failure::drain_system`・`boot_seam::insert_persist_wiring`）ごとに、範囲の外に本番の使い手があるかを確かめ、テストだけが使う項目は `#[cfg(any(test, feature = "test-support"))]` の下へ戻すか公開の面を絞る。本番の使い手がある項目は狭めない（`session-crate-split` の申し送り・仮定 5）
-15. The 本 spec の直し shall 使われなくなった `pub(crate)` の項目を消し、条件ごとに 2 つある `BodySystems::of` の定義を 1 つの形にできるかを見直しで決める（同）
+14. The 本 spec shall `session-crate-split` が条件なしの `pub` にした項目（`GhostSession::{seriko, loop_ticker}`・`PreparedWindows::spawn`・`reload::drain`・`write_failure::drain_system`・`boot_seam::insert_persist_wiring`）を `pub` のまま残し、残す理由（どれも範囲の外の使い手は本体のテストだけだが、crate の中の本番が使うので `#[cfg]` で消せず、狭めると条件ごとの 2 つの定義か包みが要って行が増える）を記録に残す（`session-crate-split` の申し送り・要件 2.5 の裁定・討議の議題 9）
+15. The 本 spec の直し shall 使われなくなった `pub(crate)` の項目を消し（ギャップ分析の時点で 0 件）、条件ごとに 2 つある `BodySystems::of` の定義を `pub fn` 1 つにまとめて私有の `installed_or_none` を消す（同・討議の議題 9）
 16. The 本 spec の直し shall 本体の `session_tests/reload_tests.rs` の 2 本に足した `world.insert_resource(crate::BODY_SYSTEMS);` を、共通の足場へ寄せるかを見直しで決める。ほかの 2 本の持ち物の 6 本（`install/desk_tests.rs`・`update/desk_resolve_tests.rs`・`session_tests/shell_balloon_switch_tests.rs`）は触らない（同・約束 ⑴）
 17. When `audit-areka-install-update` が `NO_BODY` の受け口の差をそろえると決めたとき, the 本 spec の直し shall その決めに従って `areka-session/src/body_systems.rs`・本体の `session_tests/body_systems_tests.rs`・`areka-session/src/reload_test_support.rs` を直し、向こうが `info!` を足すときは `areka-session/src/log_history.rs` の `UNKEPT_TARGETS` を直す（約束 ⑴・仮定 7）
-18. The 本 spec の直し shall `areka-session/tests.manifest` と本体の `areka.manifest` の同じ申告の写しが、片方だけ直されて食い違うことの無い形にする（写しを 1 つの源から作る、または食い違いで落ちる見張りを置く。`session-crate-split` の申し送り）
+18. The 本 spec の直し shall `areka-session/build.rs` が本体の `areka.manifest` を読む形にして `areka-session/tests.manifest` を消し、同じ申告の写しを無くす（`session-crate-split` の申し送り・討議の議題 10）
 19. The 本 spec の直し shall 本体の `Cargo.toml` の依存の行を、`use` を経ない使い方（マクロ・型の出し直し）まで含めて本体の本番とテストで数え直し、本体が使わなくなった依存の行は外し、残す行の説明（62・66・75 行ほか、使い手が `areka-runtime` へ移って古くなったもの）を今の使い手に合わせる（`runtime-crate-split` の申し送り・約束 ⑵）
-20. The 本 spec shall ギャップ分析が要件 1.8 で数えた材料をもとに、SHIORI の試験用の脳を消すか残すかを要件の討議の議題にする（仮定 4）
+20. The 本 spec の直し shall SHIORI の試験用の脳（`shiori_host*`・`shiori_session.rs`・`shiori_demo.rs`・`reference_brain.rs`・`shiori_*_e2e_tests.rs` の 8 ファイル）と、`main.rs` の該当箇所・`AREKA_SHIORI_DEMO`・使い手の無くなる依存 `windows-core` を消し、`.kiro/steering/structure.md` の該当の記述を同じ変更で直す。消す前に、受け口を外から使うテスト（範囲の中の `session_tests/ghost_session_scope_scale_boot_tests.rs` と、範囲の外の `mcp/get_property_tests.rs`）を本番の受け口（`PropGetCueSink`）を通る形に直す。範囲の外の分は `audit-areka-install-update` のセッションと申し合わせて直してもらい、受けられないときは `shiori_host.rs` だけを残して、向こうの着地の後に消す件として申し送る（仮定 4・討議の議題 5。`AREKA_SHIORI_DEMO` が消えるのは要件 2.7 の確定として扱う＝読み手 0 件）
 21. The ギャップ分析 shall brief の古い節に書かれ、棚卸㊸の再測定の「残る件」「済んだ件」のどちらにも載らない件（`audit-placement-core` の件 1〔`examples/emo-present/balloon.rs:45` の `read_balloon_offset` が片方だけの `balloon.offsetx`／`offsety` を捨てる〕・件 2・件 3・件 4・件 7・件 8 の `collision-probe/fixture.rs:23`・件 9、`audit-emo2-boot-spine` のキ〔`is_benign_boot_error` の説明〕・ク〔`examples/emo-present/setup.rs:88` の「本番（`build_boot_assets`）」〕）を今の `main` で当て直し、範囲の中にあるものはこの spec で直す。範囲の外にあるものは要件 7.10 で扱う（仮定 10）
 22. The 本 spec shall 要件 5.1〜5.21 の片づけを、預かった件の出どころ（brief の節の名）と一緒に記録に残す
 
@@ -217,9 +217,36 @@
 7. If かけ直しのたびに同じ所から「必ず直す」が出続けるとき, then the 本 spec shall 打ち切らずに、その所の直しを Fable で総括し直し、その結果を議題として開発者へ出す（2026-11-15 `audit-placement-core` の決め）
 8. If かけ直しの指摘が、前の回の直しが呼んだ連鎖（直しが次の指摘を生んだもの）であるとき, then the 本 spec shall 関連する指摘を Fable でまとめて、回をまたいで矛盾の無い形に直す。前の回と関わらない単なる追加の指摘は普通に直して閉じる（2026-11-17 開発者の決め）
 
-## 仮定と要件の討議への持ち越し
+## 要件の討議で確定したこと（2026-11-22・推奨どおり一括承認）
 
-brief で決まらなかった点は、次の仮定で書いた。どれも要件の討議の議題にする（本文の「仮定 N」）。
+確定した指摘の一覧（要件 2.1）は、ギャップ分析（`research.md`）の 4 節の 97 件（必ず直す 2・直したほうがよい 74・できれば 21）全部を直す対象とする。開発者が残すと裁定した指摘は 0 件。下の議題の答えは、指摘の直し方の向きを決める。
+
+| 議題 | 確定 |
+|---|---|
+| 1 範囲の縁 | 本体の `examples/`・`README.md`・`areka.manifest`・`shell/`・`icon/` を範囲に入れる（仮定 1 のとおり） |
+| 2 見直さない所 | 本体の `runtime_tests/`・`placement_tests/`・`menu/`（`menu/shortcut.rs` を含む）は見直さず、要件 5 の件の行だけを触る（仮定 2 のとおり） |
+| 3 規模 | 2 本目に切らず 1 本で進める（要件 2.6） |
+| 4 直し方 | 今あるファイルの中で直すのを基本にし、移すのは全体を歩く見張り（議題 11）・本体の部品を使わないテスト（議題 12）・番人に迫るファイルだけ（ギャップ分析の案 C） |
+| 5 SHIORI の試験用の脳 | 消す（要件 5.20）。`areka-ghost` の `InProcHost` が `GetProperty` を sylphya に委ねない件は範囲の外として起票の候補に回す |
+| 6 記憶のファイルが使えない場面の一文 | `PersistFailureCause` に種類を 1 つ足して出し分ける（要件 5.1）。`areka-sylphya` への変更は直しに要る範囲の外の変更として扱う（要件 7.7） |
+| 7 `--offline-dump` の巨大な下地（指摘 2） | 本体の `offline_dump` の側で、下地の幅か高さが合成と同じ上限を越えたら `error!` を出して全部の面を失敗として返す。`areka-emo-compose` の `shell_bounds` には上限を入れない。終了コードは設計で ukadoc に当てる |
+| 8 ログの語（指摘 4・95） | 変える（`areka-session` の行の `[main]` を `[session_mark]`・`[boot_seam]` に、起動の倒れ先の記録に `event` 欄を足す）。読み手は要件 7.9 のとおり同じ変更で直す（要件 2.7 の確定） |
+| 9 開けた `pub` 6 項目・`BodySystems::of` | `pub` のまま残す・`BodySystems::of` は `pub fn` 1 つ（要件 5.14・5.15） |
+| 10 マニフェストの写し | `areka-session/build.rs` が本体の `areka.manifest` を読み、`tests.manifest` を消す（要件 5.18） |
+| 11 全体を歩く見張り | `crates/log-capture-kit/tests/` へ移して `workspace_scan` を使う。歩く範囲は `crates/**` に広がるが、今の当たりの増えは 0 件なので要件 5.2 の「見る中身は変えない」の中とする。`readonly_body_tests.rs` の全体を歩かないテストは本体に残す |
+| 12 本体の部品を使わないテスト（指摘 30・46・91） | `areka-session` の同じ口のテストへ移す |
+| 13 `BootContext` の補助の写し | 寄せずに理由を 1 行残す（要件 5.9） |
+| 14 `NO_BODY` の受け口 | 仮定 7 のとおり、`audit-areka-install-update` の決めを伝言で受けてから直す。決まるまで、落ちる力の無い表明（指摘 17）は消すだけにする |
+| 15 使われない絵 77 個（指摘 76） | 消す。`shell/base.png` と `shell/org/2.zip` は残す。説明の文（`icon/README.md`・`doc/pasta-profile.md`）は指摘 97 で合わせる |
+| 16 `examples/mock-shell.rs`（指摘 75） | 消す。手本として名指す `menu-thumbnail-preview` の brief へ、git の履歴の場所を申し送る |
+| 17 持ち主のいない範囲の外の古い説明（ギャップ分析の 7 節） | コメント・doc の文だけのものは、この spec がその場で直す（要件 5.21・7.10）。コードの直し（`areka-placement/src/persist_finalize_save_tests.rs:106` の `join`）とログの語（`areka-emo-present/src/shell_target.rs:494`）は直さずに覚え書きとして回す。C26 のほかの 2 本の分は相手のセッションへ申し送る |
+| 18 先送りの印 | `perf_thread_report.rs:224` の `delta` と `offline_dump/render.rs:47-50` の `RenderError::Write` の中身は先送りの印として残す（要件 2.2 の 2 種類目）。事実と違う `DemoError::Timeout` の印は議題 5 で消える |
+
+仮定 1〜12 は、上の確定に合わせて全部そのまま確定した（仮定 4 は「消す」、仮定 5 は議題 9 の「`pub` のまま残す」、仮定 8 は「1 本で進める」に決まった）。
+
+## 仮定（2026-11-22 の要件の討議で確定）
+
+brief で決まらなかった点は、次の仮定で書いた（本文の「仮定 N」）。どれも要件の討議で確定した（上の表）。
 
 1. **範囲の縁（本体の examples ほか）**: brief は「`crates/areka/` と `crates/areka-session/` のうち、ほかの見直しの持ち物でないもの全部」と書くが、棚卸㊸の 94 ファイルの数には本体の `examples/`（11 本）・`README.md`・`areka.manifest`・`icon/`・`shell/` が入っていない。ほかに持ち主の見直しは見当たらない（`audit-emo2-boot-spine` が持ったのは `areka-runtime` の `examples/`）。仮定＝範囲に入れる（13 ファイル・2,334 行が足される）。`shell/`（brief が名指す）・`icon/` の絵は中身を読まず、置き場・名前・使われ方を見る。
 2. **本体の `runtime_tests/`・`placement_tests/`・`menu/`**: 94 ファイルに入らず、完了した見直しの持ち物か、2026-11-01 の開発者の決めで見直しから外した所（`menu/`）。仮定＝見直さない。要件 5 に挙げた件（`runtime_tests/zorder_wiring_tests.rs`・`runtime_tests/spine.rs`・`runtime_tests/frame/switch_finish_tests.rs`・`menu/ghost_frame_tests.rs`・`menu/mod.rs` の説明）だけを触る。棚卸㊸の裁定 8 ⑸「本体の `menu/shortcut.rs` を見直しの範囲に入れるか（推す＝入れない）」も、この仮定（入れない）で書いた。
