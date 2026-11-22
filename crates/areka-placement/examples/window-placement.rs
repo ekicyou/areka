@@ -34,7 +34,7 @@
 //! - **Ctrl+C**（コンソールから起動した場合）。窓のダブルクリックでは終わらない（ダブルクリックを
 //!   受けるのは本体の `areka_input` の結線で、この example は付けない）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
-//!   env ゲート（本体の `crates/areka/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
+//!   env ゲート（`crates/areka-session/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
 //!
 //! # 手動観測プロトコル
@@ -106,7 +106,7 @@ use areka_placement::spawn::{
 // Constants / fixture paths
 // ---------------------------------------------------------------------------
 
-/// smoke 自動 close の env ゲート名（本体の `smoke_exit.rs` と同名・`AREKA_` 冠規約）。
+/// smoke 自動 close の env ゲート名（`areka-session` の `smoke_exit.rs` と同名・`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
 /// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
@@ -410,7 +410,7 @@ fn boot_present_system(world: &mut World) {
 // Smoke auto close（env ゲート・hands-off のビルド/起動確認用）
 // ---------------------------------------------------------------------------
 
-/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（ゲートを OFF にする値は本体の
+/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（ゲートを OFF にする値は `areka-session` の
 /// `smoke_exit::smoke_exit_ms` と同じ: 未設定・空・非数値・負値。書かれているのに読めない値に
 /// `warn!` を残すのはこの example だけ）。
 fn smoke_exit_ms() -> Option<u64> {
@@ -433,7 +433,7 @@ fn smoke_exit_ms() -> Option<u64> {
     }
 }
 
-/// env ゲート付き smoke 自動 close を結線する（本体の `smoke_exit::arm` と同作法:
+/// env ゲート付き smoke 自動 close を結線する（`areka-session` の `smoke_exit::arm` と同作法:
 /// `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
 /// 全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
 fn install_smoke_exit(app: &WinApp) {

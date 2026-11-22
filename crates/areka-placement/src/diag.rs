@@ -43,7 +43,7 @@
 
 // 本番の呼び手:
 // - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
-//   `monitor_record_line`・`log_monitor_snapshot`）: `areka` の `session/boot_seam.rs`（`boot_monitor_snapshot`・
+//   `monitor_record_line`・`log_monitor_snapshot`）: `crates/areka-session/src/boot_seam.rs`（`boot_monitor_snapshot`・
 //   正典出力点）・`crates/areka-runtime/src/frame/work_area_sync.rs`（作業領域の同期）と
 //   `prepare_ghost_windows_for_shell` の列挙点が呼ぶ。
 // - 窓移動レコード側（`WindowKind`・`WindowMoveRecord`・`window_move_record_line`・

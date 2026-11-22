@@ -327,7 +327,7 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// balloon 導出（`balloon_pos`/`balloon_offset`）のみ。永続状態には触れない。
 ///
 /// `balloon_offset ≡ balloon_pos − char_pos` が成立するのは**本関数の出力時点**までである。
-/// `session/boot_seam.rs` の `restore_merged_placements` は本関数と同じ配置を返す
+/// `crates/areka-session/src/boot_seam.rs` の `restore_merged_placements` は本関数と同じ配置を返す
 /// [`restore_and_judge`] の直後に起動時関門
 /// [`super::balloon_limit::apply_balloon_limit`] を通し、`balloon_limit` が真の scope の
 /// `balloon_pos` だけを作業領域内へ補正する（`balloon_offset` は生値のまま＝補正を
