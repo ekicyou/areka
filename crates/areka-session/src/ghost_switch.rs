@@ -37,7 +37,8 @@ use crate::ghost_session::{
     rebuild_runtime_in_place, reopen_ghost_windows,
 };
 use areka_runtime::frame::{DiscardReason, log_stay_on_top_discard};
-pub use areka_runtime::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
+pub use areka_runtime::special_name::LastInstalledGhost;
+use areka_runtime::special_name::{NameResolution, resolve_special_name};
 
 pub(crate) use areka_runtime::change_cue::ChangeRequestRaw;
 
@@ -187,7 +188,7 @@ pub enum SwitchEnd {
 
 /// 予約を下ろす唯一の口（OS のセッションの終了の 1 か所 `session_end` を除く）。
 /// 読み直しの窓口へ終わりを告げてから下ろす（窓口は予約の鍵を照合する）。
-pub(crate) fn end_switch(world: &mut World, end: SwitchEnd) {
+fn end_switch(world: &mut World, end: SwitchEnd) {
     super::reload::on_switch_end(world, end);
     world.remove_non_send::<SwitchInFlight>();
 }
@@ -248,7 +249,7 @@ pub fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerd
 /// （解けたら `info!(ghost_switch_resolved)`）、切替先が決まらない（該当なし・特別な名前が解けない）
 /// ときは `warn!(ghost_switch_unknown)` を `reason` つきで 1 件（降ろさず kanade へ何も送らない）。
 /// 決まったら [`accept_switch`] へ。
-pub(crate) fn request_ghost_switch_with(
+fn request_ghost_switch_with(
     world: &mut World,
     req: SwitchRequest,
     pick: impl FnOnce(usize) -> usize,
@@ -716,7 +717,7 @@ pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
 ///
 /// 既定が目録に無ければ致命。在れば置き場のゴースト（切替先）が残っていれば降ろして全窓を閉じ、
 /// [`boot_into`]（由来＝前回落ちた・経路＝既定）。成功なら段を「迎え入れ（既定）」に。
-pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
+fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
         // 非常口は起こす前に同期で写す（写せなければ元のフォルダ）。
         areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| {

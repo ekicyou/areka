@@ -36,13 +36,10 @@ use areka_runtime::switch_assets::{
     SwapBuilt, SwitchBuildError, SwitchBuildRequest, spawn_switch_build,
 };
 
-pub use areka_runtime::skin_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinRequestRaw, SkinSpec, SkinSwitchInFlight,
-    SkinSwitchStage, SkinVerdict, skin_ref_name, skin_ref_path,
+pub use areka_runtime::skin_switch::{SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict};
+use areka_runtime::skin_switch::{
+    SkinRequestRaw, SkinSwitchInFlight, SkinSwitchStage, skin_ref_name, skin_ref_path,
 };
-// 本番で引く呼び手は無い（差し替えの相は skin_switch を直に引く）・テストの道のためだけに出し直す。
-#[cfg(any(test, feature = "test-support"))]
-pub use areka_runtime::skin_switch::SwapFinish;
 
 /// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
 pub struct SwitchRx(Receiver<SkinRequestRaw>);
@@ -73,7 +70,7 @@ pub fn register_switch_drain(world: &mut World) {
 /// 溜まった台本の切替要求を全件取り出し、1 件ごとに入口へ「台本」の出どころで渡す（Input の系）。
 ///
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受信端の借用を切ってから入口を呼ぶ。
-pub(crate) fn drain_switch_requests(world: &mut World) {
+fn drain_switch_requests(world: &mut World) {
     let Some(rx) = world.get_non_send::<SwitchRx>() else {
         tracing::trace!(
             event = "skin_switch_drain_no_wiring",

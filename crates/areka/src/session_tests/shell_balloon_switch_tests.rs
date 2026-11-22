@@ -35,6 +35,9 @@ use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::skin_switch::{
+    SkinRequestRaw, SkinSwitchInFlight, SkinSwitchStage, skin_ref_name, skin_ref_path,
+};
 use areka_runtime::talk_clock::TalkClock;
 use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};

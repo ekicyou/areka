@@ -380,7 +380,8 @@ impl SwitchRig {
 
     /// 根に既定のバルーンの複製 `balloon/<folder>` を足し、その descript.txt の `name` を `name` に
     /// 書き換える（2 つ目のバルーン）。
-    pub fn add_balloon_copy(&self, folder: &str, name: &str) {
+    #[cfg(test)]
+    pub(crate) fn add_balloon_copy(&self, folder: &str, name: &str) {
         self.copy_balloon_to(&self.root.balloon_dir(folder), name);
     }
 
@@ -394,7 +395,8 @@ impl SwitchRig {
 
     /// `ghost` に起動記録とバルーンの記憶（`[last] balloon`＝フォルダ名）を書く（[`SwitchRig::plant_boot_record`]
     /// を置き換える）。
-    pub fn plant_last_balloon(&self, ghost: &str, folder: &str) {
+    #[cfg(test)]
+    pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
         self.plant_boot_record(ghost);
         let file = self
             .root

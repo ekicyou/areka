@@ -6,12 +6,12 @@
 use std::path::PathBuf;
 
 use crate::sample_test_support::switch_rig;
+use areka_runtime::skin_switch::SkinSwitchInFlight;
 use areka_runtime::spine::RecordedCall;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_session::shell_balloon_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,
-    request_skin_switch,
+    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、

@@ -61,7 +61,7 @@
 
 - [ ] 3. 公開の面を絞り、本体の可視性のテストを `areka-runtime` へ戻す
 
-- [ ] 3.1 `areka-session` の切り替えの公開の面を絞る（T5・4・5・6・38・39 番・件 1・件 2）
+- [x] 3.1 `areka-session` の切り替えの公開の面を絞る（T5・4・5・6・38・39 番・件 1・件 2）
   - シェル・バルーンの切り替えの出し直しを設計の 5 型だけに絞り、残り 5 項目は私有の取り込みにする。範囲の中のテストは `areka_runtime::skin_switch` から直に引く
   - `SwapFinish` の出し直しを消し、名の解決の 2 項目を私有の取り込みにする。範囲の外で使い手の無い足場の 2 関数（`add_balloon_copy`・`plant_last_balloon`）を `pub(crate)` にし、`areka-session` の 4 項目を狭める。`LastInstalledGhost` は今のまま
   - `audit-areka-app` の持ち物 4 か所（`reload_test_support.rs:14`・本体 `runtime_tests/frame/switch_tests.rs:37`・`:838`・`switch_finish_tests.rs:50-52`）は申し合わせのとおり use の道だけを替える。use の行がぶつかったら後から着地する側が合わせる

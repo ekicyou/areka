@@ -1,7 +1,7 @@
 //! シェル・バルーンの切替の型。
 //!
 //! 本体を引かない型と Reference の組み立ての規則（[`skin_ref_name`]・[`skin_ref_path`]）を置く。
-//! `runtime` の中はここを直に引き、要求の入口（`shell_balloon_switch.rs`）は呼び手のために出し直す。
+//! 要求の入口（`areka_session::shell_balloon_switch`）が出し直すのは要求と判定の 5 型だけで、ほかはここを直に引く。
 
 use std::path::Path;
 use std::sync::mpsc::Receiver;

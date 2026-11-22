@@ -22,12 +22,12 @@ pub(crate) use super::shell_balloon_switch_session_lap_test_support::*;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shell_balloon_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
-    request_skin_switch,
+    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
 use areka_input::user_break::UserBreakWiring;
 use areka_placement::spawn::GhostWindows;
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::skin_switch::{SkinSwitchInFlight, SkinSwitchStage};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_runtime::target_map::shell_target;
 

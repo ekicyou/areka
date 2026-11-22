@@ -18,11 +18,11 @@ use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucG
 use super::GhostSlot;
 use crate::ghost_switch::SwitchInFlight;
 use crate::ghost_switch_test_support::{BALLOON, SwitchRig};
-use crate::shell_balloon_switch::SkinSwitchInFlight;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::skin_switch::SkinSwitchInFlight;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 
 /// 2 つ目のシェルのフォルダ名（`descript.txt` の `name` も同じ）。
