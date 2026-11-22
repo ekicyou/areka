@@ -71,7 +71,8 @@
 - 本番から使う既存の口:
   - `SylphyaPublisher::barrier_within`
   - `areka_session::exit_wait::{register_gate, WorkGate, EXIT_WAIT_LIMIT}`
-  - `areka_session::alert::suppressed`
+  - `areka_session::alert::suppressed`（`audit-areka-app` の着地の後は `alerts_suppressed`）
+  - テストから: `audit-areka-app` の着地の後は `areka_session::reload::test_support::boot_context_named`
   - `areka_ghost::prop_get_sink::PropGetCueSink`（テストの組み立てに使う）
 - 依存の向きは変えない。本体 → `areka-session` → `areka-runtime`・`areka-ghost`・`areka-emo-present` の向きのままで、`areka-session` から本体の型は引かない（指摘 13 の口は `areka-session` の側の型だけで組む）。
 
@@ -355,7 +356,8 @@ sequenceDiagram
   - 展開の答え（`DeskAsk::Extracted`）。
   - 背景のスレッドが倒れた知らせ（5 の守り手）。
   - 「降ろした」の返信が送れなかった（背景が既に居ない）ときは、待ちを立てずにその場で続けて起こす。
-  - 終了: 窓口の `discard_for_exit` が待ちを解かずに捨てる。プロセスは終わるので起こさない。今の写し待ち（`CopyWait`）と同じ扱いである。
+  - 終了: 窓口の `discard_for_exit` が待ちを解かずに捨てる。プロセスは終わるので起こさない（写し待ち `CopyWait` は `take_down` より前の段で前のゴーストが生きている点が違う。似ているのは「終了で待ちを捨てて起こさない」ことだけ）。
+- **窓の無い間のフレーム**: 窓とゴーストが 0 の間も tick は回る。`main.rs:196` が `ExitPolicy::Explicit` で最後の窓が閉じても終了せず、tick は別のスレッドの `DwmFlush` で回る（`tick_bridge.rs:283`）ので、アプリの窓に依らない（設計の検証で確かめた）。wintf の起こしの口を足す代わりの形は要らない。窓 0 の間に OS のセッションの終了の知らせを受けられないのは、今の同期の展開と同じで悪くならない。
 - **段の語**: `SwitchStage` に新しい腕を足さない。待ちの間は予約の段が `SendOff` のまま残り、`BetweenHold` の有無が待ちを表す。kanade は降ろし終えているので、停止の通知は来ない。この形にすると、向こうの持ち物の `on_ghost_stopped` の照合（423 行の当たり）に触れずに済む。
 - **展開の成否**: 今と同じく、成否によらず切替を続ける。展開の失敗は背景のスレッドが記録し、手続きの失敗の道（`fail_nar`）へ進む。
 - **終了が展開の最中に始まったとき**: 背景のスレッドは `enter_write` の中に居るので、`begin_close` は書き終えるまで `EXIT_WAIT_LIMIT` の上限まで待つ（今の `exit_wait` の意味のまま）。
@@ -476,7 +478,7 @@ pub fn resume_between(world: &mut World);
   - 続けて起こす。
   - 呼ばなければ待たない。
   - 起こせなければ既定へ戻す。
-- 危うさ: 待ちの間は、窓とゴーストの無いフレームが回る。置き場を読む系はどれも `Option` で受ける（research.md 10.1 の R5）。tick が窓の無い間も回ることは、実装の最初に確かめる（OPEN QUESTION 3）。
+- 危うさ: 待ちの間は、窓とゴーストの無いフレームが回る（System Flows の「窓の無い間のフレーム」）。置き場を読む系はどれも `Option` で受ける（research.md 10.1 の R5）。窓 0 の間に窓口の `drain` が回ることは、`ghost_switch_between_tests.rs` か本体の上書きのテストで 1 回確かめる。
 
 ### 上書きの 2 往復（指摘 13・本体）
 
@@ -517,6 +519,7 @@ pub fn resume_between(world: &mut World);
 - 窓口は `WorkerPanicked` を受けると、次を行う。
   - `busy = false`・`worker = None` にする（次の依頼で起こし直す）。
   - 上書きの段が `Extracting` なら `resume_between` を呼ぶ。
+- 窓口の `drain` は、閉じた後の頼みを捨てる腕（`install/desk.rs:300` の当たり）より前で `WorkerPanicked` を拾う（終了の後に倒れても `busy`・`worker` を戻す）。
 - 倒れたときに素の `OrderDone` を送らないのは、死にかけのスレッドの受信端がまだ生きている間に次の依頼を送ると、依頼が黙って消えるためである（research.md 10.1 の R10）。`install_worker_gone` の腕でも `worker = None` にする。
 - `update`: 依頼ごとに守り手を `ports` より先に作る（落ちる順は逆なので、`ports` が先に落ちて通信中の数が戻る）。守り手は Drop で `error!(update_worker_panicked)` → `gate.end()` → `DeskAsk::WorkerPanicked` の順に行う。窓口は今の `WorkerGone` の腕と同じく `worker = None` にし、段を `Idle` に戻す（`OrderDone` と同じ後始末）。92 行の `ask_desk(OrderDone)` は、倒れない道でだけ送る。
 
@@ -784,8 +787,8 @@ impl EmoPresenter {
 | `audit-emo2-boot-switch` | R6（`update_reload_requested` の読み手） | 答え: 向こうの `shell_balloon_switch_session_update_tests.rs:243` は窓口の側（`update/desk.rs:206`・Accepted の info）を数える。背景のスレッドは回らない（`ask_reload_for_test` が窓口へ直に送る）。改名の後も 1 件のままで、向こうのファイルの直しは要らない。この答えを伝える |
 | `audit-emo2-boot-switch`（brief へ書き足し） | `ghost_switch.rs` の切替の入口が `update_busy` を見ない（範囲の外の件） | 件として書き足し、セッションへも知らせる |
 | `audit-areka-app` | 102（脳の削除より前か同時） | この spec が直す。G15 を先の組に置く。間に合わなければ向こうは `shiori_host.rs` だけを残す |
-| `audit-areka-app` | 103 の関数（例 `alerts_suppressed_in_this_run()` を `alert.rs` に） | 向こうの答え待ち。**足す**なら G23 で写しを消す。**足さない**なら写しを残し、理由を記録して向こうの brief へ件として書く。選ぶ画面の 3 か所は寄せない（OPEN QUESTION 4） |
-| `audit-areka-app` | 件 6 の 4 引数の `boot_context(temp, root, ghost, balloon)` | 向こうの答え待ち。**足す**なら `update_test_support.rs` の補助を消す。**足さない**なら補助を残して記録する |
+| `audit-areka-app` | 103 の関数 | 向こうが受けた（向こうの設計で確定）: `areka-session` の `alert.rs` に公開の `alerts_suppressed()`（中身 `suppressed() \|\| smoke_exit_ms().is_some()`）を置く。向こうの着地の後に G23 で `before_boot_alert_suppressed` と表明を消してそれを呼ぶ。向こうが着地しないまま終わるときは写しを残し、理由を記録する。選ぶ画面の 3 か所は寄せない（OPEN QUESTION 4） |
+| `audit-areka-app` | 件 6 の名を取る `boot_context` | 向こうが受けた: `reload_test_support` に `boot_context_named(temp, root, ghost, balloon)` を足す。向こうの着地の後に、`update_test_support.rs` の `boot_context` を消してそれを使う（`write_descript` ほかの補助は残る）。着地しないまま終わるときは補助を残して記録する |
 | `audit-areka-app` | 31 `png_image_tests.rs` の `wic_decode_rgba` を `pub(crate)` に | 申し送り。着地の後に写しを消す |
 | `audit-areka-app` | 85 `sakurascript_log_tests.rs` の中身を `log_history` のテストへ | 申し送り。着地の後にこちらを消す |
 | `audit-areka-app` | 94 `ExeLocationUnavailable` の欄を消すと `alert.rs:150`・`alert_tests.rs:51` が要る | 申し送り。向こうが `completed/` へ移った後なら、こちらで 3 ファイルを同じ変更で直す。それまでは欄を残して記録する |
@@ -841,7 +844,7 @@ impl EmoPresenter {
 
 1. **1 の期限の値**: 仮に `EXIT_WAIT_LIMIT`（3 秒）とした。UI を止めてよい長さとして既にある値で、新しい数を作らない。短くするなら、新しい定数を 1 つ `install/desk.rs` に置く。
 2. **12 の直しで、本体の「窓口が無い」の `url` の腕が取りに行かなくなること**（件 8 の事実が 1 つ変わる）: 仮に、そのまま変わってよいとした。どちらも本番で通らず、記録も残る（`install_cue_send_failed`）。要件 5.8 の「そろえない」は、そろえる仕事をしないという決めで、ほかの直しのついでに近づくことは妨げないと読んだ。`audit-areka-app` の `NO_BODY` の doc の直しの文は、この事実に合わせてもらう。
-3. **13 の待ちの間に tick が回るか**（窓とゴーストが 0 のフレーム）: 仮に回るとした。置き場を読む系はどれも `Option` で受ける（R5）。実装の最初に、窓 0 の間に窓口の `drain` が回ることをテストで確かめる。回らなければ、背景の `Extracted` の頼みで wintf の公開の起こしの口を叩く形を足す（wintf は触らない）。あわせて、窓 0 の間は OS の終了の知らせ（`WM_ENDSESSION` は窓の手続きで受ける）を受けられない。これは今の同期の展開（窓 0・汲み上げも止まる）と同じで、悪くはならない。
+3. **13 の待ちの間に tick が回るか**: 設計の検証がコードで確かめて閉じた（回る・System Flows の「窓の無い間のフレーム」）。
 4. **103 で選ぶ画面の 3 か所も同じ決まりへ寄せるか**（R12）: 仮に寄せないとした。今の使われ方で困る走行は無い（real-run-kit は自動終了の走行で必ず `AREKA_NO_ALERT` を立てる）。ただし寄せると、自動終了の走行で選ぶ画面・利用条件・警告の箱が出なくなり、振る舞いが変わる。指摘 103 の的は起動の前の写しだけである。
 5. **`SwitchVerdict::Updating` の腕を誰が足すか**: 推す答えは、向こうが列挙を足す同じ変更で、`install/overwrite.rs:129` の腕に名を足すこと（ビルドを緑に保つ）。代わりの形は、この spec が先に着地して、向こうが取り込んだ後で向こうが足すこと（結果は同じ）。
 6. **`areka-runtime/src/consumer_ledger.rs:77` の古い説明**: 仮に、この spec が 1 語だけ直すとした。生きた持ち主が居ない。
