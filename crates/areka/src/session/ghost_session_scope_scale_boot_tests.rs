@@ -16,6 +16,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::*;
 use super::applied;
+use crate::sample_test_support::switch_rig;
 use crate::session::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -61,7 +62,7 @@ fn ghost_b() -> FakeShiori {
 
 /// A・B を据えた試験台と MCP の受け口（A は起動記録あり）を作り、A を起こして定常に着かせる。
 fn booted_rig(a: FakeShiori) -> (SwitchRig, Sender<ToolRequest>) {
-    let mut rig = SwitchRig::new(vec![("A", a), ("B", ghost_b())]);
+    let mut rig = switch_rig(vec![("A", a), ("B", ghost_b())]);
     // 切替先の窓の閉包の投函先（取り出しの系は無いので走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");

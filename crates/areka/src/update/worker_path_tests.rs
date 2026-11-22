@@ -22,6 +22,7 @@ use super::desk::{Stage, UpdateDesk, raw_sender};
 use super::{RawUpdateRequest, TargetKind};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
+use crate::sample_test_support::switch_rig;
 use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -61,7 +62,7 @@ fn ghost_a() -> FakeShiori {
 /// A の `descript.txt` に更新先を書き、`local` があれば手元のファイルを置いてから A を起こし、定常に
 /// 着いた土台。窓口の取得口の作り方は、`FILE` を 1 件だけ持つ定義ファイルを配る偽物へ差し替える。
 fn running_a(local: Option<&[u8]>) -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", ghost_a()), ("B", ghost_a())]);
+    let mut rig = switch_rig(vec![("A", ghost_a()), ("B", ghost_a())]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     let a_dir = rig.root.ghost_dir("A");

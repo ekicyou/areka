@@ -18,6 +18,7 @@ use wintf::ecs::Input;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::UpdateDesk;
+use crate::sample_test_support::switch_rig;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use crate::session::exit_wait::begin_close;
@@ -69,7 +70,7 @@ fn plant_committed(ghost_dir: &Path, run: &str) -> PathBuf {
 
 /// A を起こして定常に着いた土台（B は切替で起こせるが、起こされないことを数える）。
 fn running_a() -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", reloading("A")), ("B", reloading("B"))]);
+    let mut rig = switch_rig(vec![("A", reloading("A")), ("B", reloading("B"))]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
@@ -519,7 +520,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
             .get("OnUpdateComplete", Ok(None))
             .get("OnUpdateResult", Ok(None))
     }));
-    let mut rig = SwitchRig::new(vec![("A", a_script), (DEFAULT_GHOST_FOLDER, default)]);
+    let mut rig = switch_rig(vec![("A", a_script), (DEFAULT_GHOST_FOLDER, default)]);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record(DEFAULT_GHOST_FOLDER);

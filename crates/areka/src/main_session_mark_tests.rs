@@ -20,6 +20,7 @@ use temp_path_kit::TempPath;
 use super::finish_after_run;
 use super::{AfterRun, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context};
+use crate::sample_test_support::switch_rig;
 use crate::session::alert::AlertScene;
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
@@ -282,7 +283,7 @@ fn expected_halted_next(rig: &SwitchRig, fallen: &str) -> NextBoot {
 
 /// A と既定ゴーストの 2 体の土台（既定は起動記録つき＝次の起動で `OnBoot` を直接送る）。
 fn rig_with(a: FakeShiori) -> SwitchRig {
-    let rig = SwitchRig::new(vec![
+    let rig = switch_rig(vec![
         ("A", a),
         (
             DEFAULT_GHOST_FOLDER,
@@ -735,7 +736,7 @@ fn dropped_without_cleanup_keeps_mark() {
 /// 既定ゴースト自身の失敗: 印＝既定の名前が残り、次も既定で落ちた名前は既定の名前。
 #[test]
 fn default_ghost_fault_keeps_its_own_name() {
-    let mut rig = SwitchRig::new(vec![(DEFAULT_GHOST_FOLDER, FakeShiori::ConnectFail)]);
+    let mut rig = switch_rig(vec![(DEFAULT_GHOST_FOLDER, FakeShiori::ConnectFail)]);
     let app = app_dir(&rig);
     let default_name = name_of(&rig, DEFAULT_GHOST_FOLDER);
     let ghost = GhostDecision {

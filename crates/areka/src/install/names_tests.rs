@@ -15,7 +15,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::sample_test_support::switch_rig;
+use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// 値を本物の記憶の書き手へ載せ、台詞の開始の表で 2 語を展開する（`%lastghostname`, `%lastobjectname`）。
 fn resolved(names: &LastInstallNames) -> (ResolvedVar, ResolvedVar) {
@@ -130,7 +131,7 @@ fn several_installs_leave_the_last() {
 /// 書き手（そのゴーストの問い合わせ元）へ値を載せ直す（`boot_wired` の 1 行）。
 #[test]
 fn reboot_reseeds_the_values_into_the_new_ghost() {
-    let mut rig = SwitchRig::new(vec![
+    let mut rig = switch_rig(vec![
         (
             "A",
             FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),

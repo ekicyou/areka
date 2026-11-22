@@ -16,6 +16,7 @@ use wintf::ecs::{FrameFinalize, Input, Update};
 
 use super::GhostBootInputsSource;
 use crate::menu::{Frame, MenuWiring};
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session::ghost_switch::SwitchInFlight;
@@ -52,7 +53,7 @@ fn booted(rig: &SwitchRig, folder: &str) -> bool {
 /// 定常到達の通知を通知の相が受けても終了は指示されない。
 #[test]
 fn rig_boots_a_and_records_its_boot_sequence() {
-    let mut rig = SwitchRig::new(vec![
+    let mut rig = switch_rig(vec![
         (
             "A",
             FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
@@ -107,7 +108,7 @@ fn rig_boots_a_and_records_its_boot_sequence() {
 /// 先に起動記録を書いた B を起こすと `OnFirstBoot` を飛ばして `OnBoot` から起きる。
 #[test]
 fn rig_boot_record_skips_first_boot() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "B",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0B\\e"))),
     )]);
@@ -138,7 +139,7 @@ fn rig_boot_record_skips_first_boot() {
 /// 今は通知の相が終了を指示する。台本は作られない。
 #[test]
 fn rig_connect_fail_stops_kanade_with_fault() {
-    let mut rig = SwitchRig::new(vec![("B", FakeShiori::ConnectFail)]);
+    let mut rig = switch_rig(vec![("B", FakeShiori::ConnectFail)]);
     rig.boot("B");
     let reached = rig.pump_until(SwitchRig::exit_requested);
     let fault = rig
@@ -186,7 +187,7 @@ fn ghost_b() -> FakeShiori {
 
 /// A・B を据えた土台（窓の閉包の投函先つき・A は起動記録あり＝`OnBoot` の台本から始まる）。
 fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
+    let mut rig = switch_rig(vec![("A", a), ("B", b)]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");

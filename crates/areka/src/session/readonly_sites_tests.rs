@@ -24,6 +24,7 @@ use bevy_ecs::prelude::*;
 use temp_path_kit::TempPath;
 
 use crate::boot_first_ghost;
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
@@ -144,7 +145,7 @@ type Expect = (&'static str, PersistScope, PersistKey, String);
 #[test]
 fn every_write_kind_is_withheld_under_the_guard() {
     let script = || FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e")));
-    let mut rig = SwitchRig::new(vec![("A", script()), ("B", script())]);
+    let mut rig = switch_rig(vec![("A", script()), ("B", script())]);
     rig.wire_app_memory();
     // 切替先 B の窓の準備が閉包を投函する先（取り出しの系は回さないので走らない）。
     rig.world

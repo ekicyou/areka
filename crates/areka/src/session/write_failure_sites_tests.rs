@@ -22,6 +22,7 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::boot_first_ghost;
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
@@ -32,7 +33,7 @@ use crate::session::ghost_session::{GhostSlot, StartupDescriptValues};
 use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
@@ -150,7 +151,7 @@ fn prop_set_cue(key: PersistKey, value: &str) -> TalkCue {
 
 #[test]
 fn every_write_kind_reaches_the_desk() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);

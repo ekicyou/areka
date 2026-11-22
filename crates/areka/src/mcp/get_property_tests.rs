@@ -70,9 +70,10 @@ fn answers_unavailable_and_warns_once_without_a_runtime() {
 
 #[test]
 fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::sample_test_support::switch_rig;
+    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);
@@ -151,6 +152,7 @@ mod scope_rect {
     use wintf::ecs::WindowHandle;
 
     use super::*;
+    use crate::sample_test_support::switch_rig;
     use crate::session::ghost_session::ghost_session_scope_rect::{
         ScopeRectReadSeam, ScreenRect, WindowKey,
     };
@@ -197,7 +199,7 @@ mod scope_rect {
     /// 起動の前に偽の OS と、スコープ 0・1 の窓の一式（キャラクター 0x10・0x11、バルーン 0x20・0x21）を
     /// 窓なしで入れた A の試験台を起こし、定常に着かせる。
     fn booted_rig() -> SwitchRig {
-        let mut rig = SwitchRig::new(vec![(
+        let mut rig = switch_rig(vec![(
             "A",
             FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
         )]);

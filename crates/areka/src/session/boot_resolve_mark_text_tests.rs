@@ -19,10 +19,11 @@ use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, Update};
 
 use super::*;
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
 use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// `event` の記録（`event` 欄で引く）。
 fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
@@ -76,7 +77,7 @@ fn post_and_drain(
 /// `memory_write_failed` が出る。
 #[test]
 fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);

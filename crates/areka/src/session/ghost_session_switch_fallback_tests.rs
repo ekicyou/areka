@@ -62,7 +62,7 @@ pub(super) fn fallback_rig(a: FakeShiori, b: FakeShiori, default: Option<FakeShi
     let with_default = default.is_some();
     let mut scripts = vec![("A", a), ("B", b)];
     scripts.extend(default.map(|d| (DEFAULT_GHOST_FOLDER, d)));
-    let mut rig = SwitchRig::new(scripts);
+    let mut rig = switch_rig(scripts);
     rig.world.insert_resource(WintfTaskPool::new());
     rig.plant_boot_record("A");
     if with_default {

@@ -33,7 +33,7 @@ use wintf::AppExit;
 use wintf::ecs::Input;
 
 use super::ghost_switch::drain_change_requests;
-use crate::sample_test_support::acquire_emo2;
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
@@ -198,33 +198,62 @@ pub(crate) struct SwitchRig {
     /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
     talk_clock_ms: u64,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
-    sample: SampleRoot,
+    sample: RigSample,
+}
+
+/// 切替の足場へ渡す検体（根・ゴーストのフォルダ・同梱バルーンの道と、木の寿命を持つ値）。
+pub(crate) struct RigSample {
+    pub(crate) root: PathBuf,
+    pub(crate) ghost: PathBuf,
+    pub(crate) bundled_balloon: PathBuf,
+    #[allow(dead_code)] // 読まず、捨てると木が消える寿命だけを持つ
+    pub(crate) keep: Box<dyn std::any::Any>,
+}
+
+impl RigSample {
+    /// 窓口の検体の道を写し、検体そのものを寿命の欄に預ける。
+    pub(crate) fn of(sample: SampleRoot) -> Self {
+        Self {
+            root: sample.root().to_path_buf(),
+            ghost: sample.folder().to_path_buf(),
+            bundled_balloon: sample
+                .balloon(BALLOON)
+                .expect("emo2 の同梱バルーン")
+                .to_path_buf(),
+            keep: Box::new(sample),
+        }
+    }
 }
 
 impl SwitchRig {
+    /// emo2 の検体と本物の系の登録の組で足場を組む。
+    pub(crate) fn new(scripts: Vec<(&str, FakeShiori)>) -> Self {
+        let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+        Self::with(RigSample::of(sample), crate::BODY_SYSTEMS, scripts)
+    }
+
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
-    pub(crate) fn new(scripts: Vec<(&str, FakeShiori)>) -> Self {
+    pub(crate) fn with(
+        sample: RigSample,
+        body: BodySystems,
+        scripts: Vec<(&str, FakeShiori)>,
+    ) -> Self {
         // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
-        let sample = acquire_emo2();
-        let root = BasewareRoot::new(sample.root().to_path_buf());
+        let root = BasewareRoot::new(sample.root.clone());
         // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る）。根へは写し、A／B の複製へは
         // 持ち込まない。移す（rename）・消す（remove_dir）は
         // 写した直後の木を他のプロセスが握っていると拒まれるので使わない。
         // 元の `ghost\emo2\balloon\` は残るが、emo2 は今のゴーストにならないので誰も読まない。
-        copy_tree(
-            sample.balloon(BALLOON).expect("emo2 の同梱バルーン"),
-            &root.balloon_dir(BALLOON),
-            None,
-        );
-        let inner = sample.folder().join("balloon");
+        copy_tree(&sample.bundled_balloon, &root.balloon_dir(BALLOON), None);
+        let inner = sample.ghost.join("balloon");
         for folder in ["A", "B"] {
             copy_ghost(
-                sample.folder(),
-                &sample.root().join("ghost").join(folder),
+                &sample.ghost,
+                &sample.root.join("ghost").join(folder),
                 folder,
                 &inner,
             );
@@ -234,7 +263,7 @@ impl SwitchRig {
         world.init_resource::<Schedules>();
         world.insert_non_send(AppExit::new());
         let (notice_tx, notice_rx) = mpsc::channel::<KanadeNotice>();
-        register_systems(&mut world, notice_rx, crate::BODY_SYSTEMS);
+        register_systems(&mut world, notice_rx, body);
 
         let boots: BootLedger = Rc::default();
         let scripts: HashMap<String, FakeShiori> = scripts
@@ -245,7 +274,7 @@ impl SwitchRig {
         let factory_calls = Rc::new(Cell::new(0u64));
         let calls = Rc::clone(&factory_calls);
         let app_memory = Rc::new(Cell::new(false));
-        let app_dir = app_dir_of(sample.root());
+        let app_dir = app_dir_of(&sample.root);
         let wired_app = Rc::clone(&app_memory);
         world.insert_non_send(GhostBootInputsSource(Box::new(
             move |cfg: &ConfigInputs, origin: BootOrigin| {
@@ -338,7 +367,7 @@ impl SwitchRig {
 
     /// 起動の文脈に据える App スコープの記憶の置き場（最後に使ったゴースト・起動中の印）。
     pub(crate) fn app_dir(&self) -> PathBuf {
-        app_dir_of(self.sample.root())
+        app_dir_of(&self.sample.root)
     }
 
     /// 以後に起こす実行系へ App スコープの置き場（[`SwitchRig::app_dir`]＝起動の文脈と同じ場所）を

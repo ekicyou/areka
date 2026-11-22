@@ -18,6 +18,8 @@ use std::sync::LazyLock;
 
 use sample_ghost_kit::SampleRoot;
 
+use crate::session::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig};
+
 static EMO2: LazyLock<SampleRoot> = LazyLock::new(acquire_emo2);
 
 /// emo2 検体の**使い捨ての複製**を 1 つ取得する（起動を伴うテスト向け）。
@@ -35,4 +37,9 @@ pub(crate) fn emo2_balloon_root() -> PathBuf {
     EMO2.balloon("emo2-kakukaku")
         .expect("emo2 の同梱バルーン")
         .to_path_buf()
+}
+
+/// emo2 の使い捨ての複製と本体の系の登録の組で、切替の足場を組む。
+pub(crate) fn switch_rig(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
+    SwitchRig::with(RigSample::of(acquire_emo2()), crate::BODY_SYSTEMS, scripts)
 }

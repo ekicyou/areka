@@ -12,6 +12,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
+use crate::sample_test_support::switch_rig;
 use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
@@ -38,7 +39,7 @@ fn script(name: &'static str) -> FakeShiori {
 
 /// A（と切替先の B）を組み、A を起こして定常に着かせ、常に手前をオンにして台本の組を 1 本載せる。
 fn running_a_on() -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", script("A")), ("B", script("B"))]);
+    let mut rig = switch_rig(vec![("A", script("A")), ("B", script("B"))]);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");

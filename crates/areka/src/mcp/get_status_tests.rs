@@ -239,9 +239,10 @@ fn body(outcome: &ToolOutcome) -> String {
 /// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない。
 #[test]
 fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::sample_test_support::switch_rig;
+    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);

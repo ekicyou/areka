@@ -6,7 +6,8 @@
 use std::path::PathBuf;
 
 use super::{GhostSession, GhostSlot};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::sample_test_support::switch_rig;
+use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,
     request_skin_switch,
@@ -18,7 +19,7 @@ use areka_runtime::spine::RecordedCall;
 /// 段で落とさないと、③ の join が残った送り手を待ち続けて期限（20 秒）で赤になる。
 #[test]
 fn session_holding_seriko_sink_shuts_down_within_bound() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);
@@ -48,7 +49,7 @@ fn session_holding_seriko_sink_shuts_down_within_bound() {
 /// （印のイベントは資産づくりを待たずに送られる）。
 #[test]
 fn menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| {
             standard_script("\\0A\\e").get("OnShellChanging", Ok(None))
@@ -140,7 +141,7 @@ fn menu_children(
 /// （`OnShellChanging` が届く）、切替の印が 2 つ目を指す。
 #[test]
 fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| {
             standard_script("\\0A\\e").get("OnShellChanging", Ok(None))
@@ -217,7 +218,7 @@ fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
 /// 2 つ目を指す。
 #[test]
 fn menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);

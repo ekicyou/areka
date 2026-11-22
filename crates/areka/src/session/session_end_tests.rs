@@ -18,6 +18,7 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::{SessionEnded, end_session_within, on_os_session_end};
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost};
@@ -27,7 +28,7 @@ use crate::session::boot_resolve::{
 use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use crate::{after_run, finish_after_run};
 use areka_runtime::spine::RecordedCall;
 
@@ -113,7 +114,7 @@ fn slot_empty(world: &World) -> bool {
 /// 2 回目（守りの判定）は呼出列が増えず `debug!(os_session_end_again)` 1 件だけ。
 #[test]
 fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);

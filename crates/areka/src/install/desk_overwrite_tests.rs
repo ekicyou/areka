@@ -29,6 +29,7 @@ use super::InstallDesk;
 use super::overwrite::take;
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
@@ -86,7 +87,7 @@ fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
 /// 起動中のゴースト A（`directory,A` の `ghost`）へ、ファイルを 1 つ足す書庫を本番の道筋で入れる。
 #[test]
 fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| {
             standard_script(r"\0A\e")
@@ -227,7 +228,7 @@ fn installing(folder: &'static str) -> FakeShiori {
 fn running(folder: &'static str, others: &[&'static str]) -> SwitchRig {
     let mut scripts = vec![(folder, installing(folder))];
     scripts.extend(others.iter().map(|other| (*other, installing(other))));
-    let mut rig = SwitchRig::new(scripts);
+    let mut rig = switch_rig(scripts);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     for name in std::iter::once(&folder).chain(others) {
         rig.plant_boot_record(name);

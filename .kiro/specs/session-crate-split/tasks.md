@@ -63,7 +63,7 @@
   - _Requirements: 1.10, 1.11, 2.4_
 
 - [ ] 3. 本体の中でテストを分ける（まだ crate を作らない）
-- [ ] 3.1 切替の足場が検体と系の登録の組を呼び手から受ける形にする
+- [x] 3.1 切替の足場が検体と系の登録の組を呼び手から受ける形にする
   - `ghost_switch_test_support.rs` に `RigSample`（根・ゴーストのフォルダ・同梱バルーンの道・寿命を持つ値）と `SwitchRig::with(sample, body, scripts)` を足し、欄の `SampleRoot` を `RigSample` に、検体を読む 4 か所を欄の読みに、`register_systems` へ渡す組を `body` に替える
   - 集めた層の `#[cfg(test)] SwitchRig::new(scripts)` は `SampleRoot::acquire("emo2")` を直に呼んで `with` へ渡す数行にする。この段ではまだ本物の組（`crate::BODY_SYSTEMS`）を渡す
   - 本体の `sample_test_support.rs` に `switch_rig(scripts)`（`acquire_emo2()` と `crate::BODY_SYSTEMS` を渡す数行）を足し、本体の 22 か所と、TestPlacement の表で本体へ移す `session/` のテストのファイル 11 本の 17 か所の `SwitchRig::new(` を `switch_rig(` へ書き換える（本体の部品を見るテストが、3.2 で `SwitchRig::new` が偽物の組になっても本物の組で走り続けるため）

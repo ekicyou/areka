@@ -606,3 +606,29 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 | `shell_balloon_switch_tests.rs` | 2 | `crate::update::desk`・※ `crate::BODY_SYSTEMS`（2.5 で足した行） |
 | `write_failure_sites_tests.rs` | 4 | `crate::boot_first_ghost`・`crate::roots::add_root`・`crate::install::desk::remember_balloon` |
 | `boot_config.rs`（`#[cfg(test)] resolve_boot_from` の中） | 1 | `crate::cli::parse::parse` |
+
+## 段 2
+
+### 3.1
+
+- `ghost_switch_test_support.rs` に `RigSample`（`root`・`ghost`・`bundled_balloon`・寿命を持つ `keep`）と `RigSample::of(SampleRoot)`・`SwitchRig::with(sample, body, scripts)` を足した。欄 `sample` は `RigSample`、検体を読む所は欄の読み、`register_systems` へは `body` を渡す。
+- 集めた層の `SwitchRig::new(scripts)` は `SampleRoot::acquire("emo2")` → `RigSample::of` → `with(…, crate::BODY_SYSTEMS, …)` の数行（偽物の組へ替えるのは 3.2）。足場は `crate::sample_test_support::acquire_emo2` を引かなくなった。
+- 本体の `sample_test_support.rs` に `switch_rig(scripts)`（`acquire_emo2()` と `crate::BODY_SYSTEMS`）を足した。
+
+#### `git grep -c "SwitchRig::new("` の数
+
+| | 本体 | `session/` の本体へ移すファイル | `session/` の集めた層に残すファイル | 計 |
+|---|---|---|---|---|
+| 前（`64a434f46`） | 22（16 ファイル） | 17（11 ファイル） | 18（13 ファイル） | 57 |
+| 後 | 0 | 0 | 18（13 ファイル） | 18 |
+
+定義（`pub(crate) fn new(scripts`）は字面が `SwitchRig::new(` でないので数に入らない。
+
+- `switch_rig(` へ替えた本体の 16 ファイル（22 か所）: `install/desk_overwrite_tests.rs` 2・`install/desk_record_tests.rs` 1・`install/names_tests.rs` 1・`install/worker_tests.rs` 1・`main_session_mark_tests.rs` 2・`main_session_mark_write_tests.rs` 1・`mcp/check_script_tests.rs` 1・`mcp/dump_surface_gpu_test_support.rs` 1・`mcp/dump_surface_tests.rs` 1・`mcp/get_expression_table_tests.rs` 1・`mcp/get_property_tests.rs` 2・`mcp/get_status_tests.rs` 1・`mcp/mcp_tests.rs` 3・`runtime_tests/frame_stay_on_top_lifecycle_tests.rs` 1・`update/desk_reload_tests.rs` 2・`update/worker_path_tests.rs` 1
+- `switch_rig(` へ替えた `session/` の 11 ファイル（17 か所・TestPlacement の表で本体へ移すもの）: `session_end_tests.rs` 1・`ghost_session_switch_fallback_tests.rs` 1・`readonly_run_tests.rs` 1・`readonly_sites_tests.rs` 1・`write_failure_sites_tests.rs` 1・`ghost_session_strict_tests.rs` 1・`ghost_session_switch_tests.rs` 4・`shell_balloon_switch_session_tests.rs` 4・`ghost_session_scope_rect_boot_tests.rs` 1・`ghost_session_scope_scale_boot_tests.rs` 1・`boot_resolve_mark_text_tests.rs` 1
+- `SwitchRig::new(` が残る集めた層の 13 ファイル（18 か所）: `boot_shell_tests.rs` 2・`ghost_quit_switch_tests.rs` 1・`ghost_session_runtime_tests.rs` 1・`ghost_session_switch_translate_tests.rs` 1・`ghost_switch_balloon_tests.rs` 1・`ghost_switch_boot_event_tests.rs` 1・`ghost_switch_reload_tests.rs` 4・`ghost_switch_rig_wait_tests.rs` 2・`ghost_switch_talk_clock_tests.rs` 1・`reload_skin_tests.rs` 1・`session_end_deadline_tests.rs` 1（集めた層に残す `boot_a`）・`session_end_sync_send_tests.rs` 1・`shell_balloon_switch_session_lap_tests.rs` 1
+
+#### 確かめ
+
+- 赤: 呼び出しを `switch_rig(` へ替え、`switch_rig` を足す前の `cargo check -p areka --bin areka --tests` が `error[E0432]: unresolved import crate::sample_test_support::switch_rig` 29 件で止まる。
+- 緑: `cargo test -p areka --bin areka` 1840 passed・0 failed・3 ignored（2.5 の終わりと同じ）。`cargo check -p areka --bin areka --tests` 0 warnings。`cargo fmt --all -- --check` 差分なし。

@@ -30,6 +30,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::after_run;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::BootContext;
 use crate::session::boot_seam::insert_persist_wiring;
@@ -132,7 +133,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
             .get("OnUpdateResultEx", Ok(None))
             .get("OnUpdateResult", Ok(None))
     }));
-    let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
+    let mut rig = switch_rig(vec![("A", a), ("B", b)]);
     // 切替先の窓の準備が閉包を投函する先（取り出しの系は回さないので走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");

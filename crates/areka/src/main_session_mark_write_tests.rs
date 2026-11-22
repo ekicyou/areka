@@ -194,12 +194,13 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
 /// 切替の降ろした直後に書けない → 切替先を起こさず同じ。
 #[test]
 fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
+    use crate::sample_test_support::switch_rig;
     use crate::session::ghost_switch::{
         SwitchInFlight, SwitchStage, WelcomeAttempt, on_notice, switch_to,
     };
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 
-    let mut rig = SwitchRig::new(vec![(
+    let mut rig = switch_rig(vec![(
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);

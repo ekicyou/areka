@@ -185,8 +185,9 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 /// 既定の置き場（`default_app_profile_dir`）へ書かれ、読み返しが `None` で赤。
 #[test]
 fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
+    use crate::sample_test_support::switch_rig;
     use crate::session::boot_resolve::read_last_ghost;
-    use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
+    use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori};
 
     let (descript, ghost, balloon) = decisions();
 
@@ -202,7 +203,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     let failed_flag = (failed.logsink_fallback(), failed.runtime().is_some());
 
     // 倒れた先が成功する形（バルーンの根だけが無い）。
-    let mut rig = SwitchRig::new(vec![("A", FakeShiori::ConnectFail)]);
+    let mut rig = switch_rig(vec![("A", FakeShiori::ConnectFail)]);
     let app = rig.root.dir().join("fallback-app-profile");
     let ghost_a = GhostDecision {
         route: GhostRoute::Memory,
