@@ -35,58 +35,15 @@ use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 use super::issue_show;
 use super::test_support::attach_headless;
 use crate::frame::run_zorder_drain_phase;
+use crate::frame::zorder_test_support::{set_directive, spawn_scopes};
 use crate::source_text_test_support::code_only;
 use crate::target_map::balloon_target;
 use crate::zorder_cue::ZOrderDirective;
-use areka_placement::follow::OffsetBase;
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
-use areka_placement::spawn::spawn_ghost_windows;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
 // 檻の組み立て
 // ---------------------------------------------------------------------------
-
-/// 1 スコープぶんの合成配置（値は散らしただけで判定に関与しない——この相も鎖の相も
-/// 窓を 1 mm も動かさない）。
-fn placement(scope: usize) -> ScopePlacement {
-    let base = 100 * (scope as i32 + 1);
-    ScopePlacement {
-        scope,
-        char_pos: PointPx { x: base, y: base },
-        char_size: SizePx { w: 200, h: 300 },
-        balloon_pos: PointPx {
-            x: base + 220,
-            y: base,
-        },
-        balloon_size: SizePx { w: 180, h: 120 },
-        balloon_offset: PointPx { x: 220, y: 0 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
-        balloon_limit: false,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    }
-}
-
-/// 既存の World へスコープ一式を（正本ごと作り直して）載せる。
-fn spawn_scopes(world: &mut World, scopes: &[usize]) {
-    let placements: Vec<ScopePlacement> = scopes.iter().map(|s| placement(*s)).collect();
-    let titles = GhostTitles::from_scope_titles(
-        scopes
-            .iter()
-            .map(|s| (*s, format!("scope-{s}")))
-            .collect::<Vec<_>>(),
-    );
-    spawn_ghost_windows(world, &placements, &titles);
-}
-
-/// `\![set,zorder,tokens...]` 相当の指令。
-fn set_directive(tokens: &[&str]) -> ZOrderDirective {
-    ZOrderDirective::Set {
-        tokens: tokens.iter().map(|t| (*t).to_string()).collect(),
-    }
-}
 
 /// 公開されている鎖の計画（受け口が無ければ `None`）。
 fn chain(world: &World) -> Option<ChainPlan> {

@@ -834,9 +834,11 @@
 | 4 | 13 | 0 | 中断が箱へ届かないとき、窓の隠れた scope へ重ねて隠す指示と遷移の記録を出さない・置き換えの記録の文を「置き換えた」にする・どの軸も動かないときは基準の窓が無い記録を残さない | `7aaa4ff65`・`78c2d89cc` |
 | 5 | 9 | 0 | なし（説明・テストの名・テストの補助だけ） | `41f75b9cc`（8 件） |
 
-- 5 回目は「必ず直す」0 件・本番の振る舞いに関わる指摘 0 件なので、要件 9.6 のとおりここで打ち切った。残りの 9 件のうち 8 件は直した。直さずに残すのは 1 件:
-  - `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs` の `placement`・`spawn_scopes`・`set_directive` は `crates/areka-runtime/src/frame/zorder_drain_test_support.rs` の写し。寄せるには範囲の外の `frame/zorder_drain.rs` の支えの mod を開く必要があり、範囲の外なので触らない。
-- 範囲の外で見つけて直さなかったもの: `crates/areka-runtime/src/talk_lifecycle.rs:211` のコメントが送出の後に印を立てる理由を `PresentBridge::send` と名指すが、理由は `PresentBridge::deliver` にある（範囲の中の `move_cue.rs` の同じ名指しは直した）。`take_down` の中の記録の並び（失敗の `error!` の後に「降ろした」の `info!`）は `audit-areka-install-update` へ申し送った（2026-11-23）。
+- 5 回目は「必ず直す」0 件・本番の振る舞いに関わる指摘 0 件なので、要件 9.6 のとおりここで打ち切った。打ち切ったことは 2026-11-23 の実装の報告で開発者へ一言知らせた。残りの 9 件はすべて直した。直さずに残す指摘は 0 件:
+  - `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs` の `placement`・`spawn_scopes`・`set_directive` は `crates/areka-runtime/src/frame/zorder_drain_test_support.rs` の写しだった。写しを消し、`frame/zorder_drain.rs` の支えの mod と 3 つの関数を `pub(crate)`（`cfg(test)` のまま）へ開いて寄せた。持ち主の spec は完了済みで並走が無いので、境界を広げて直した。
+  - `crates/areka-runtime/src/talk_lifecycle.rs` のコメントが送出の後に印を立てる理由を `PresentBridge::send` と名指していたのを、理由のある `PresentBridge::deliver` へ直した（同じ変更）。
+- かけ直しの本番の直しは、どれも直す前に縛るテストの赤を実装係が捕まえてから直した（回ごとの赤の出力は各組の実装係の報告にある・テストと直しは同じコミット）。
+- 範囲の外で見つけて直さなかったもの: `take_down` の中の記録の並び（失敗の `error!` の後に「降ろした」の `info!`）は `audit-areka-install-update` へ申し送った（2026-11-23）。
 - かけ直しで決めたこと（推奨案で確定・audit 系の扱いのとおり）:
   - `DisplayEndAt` が `TalkEnded` の後に届いたら計測を捨てる枝（`DisplayEndAdvanced`）は、送り手の約束の外の順への守りとして残し、説明をその理由に直した。
   - `LapRig.windows` は `pub` のまま（`pub(crate)` にすると `test-support` の組み立てで未使用の警告が出る。読み手は `cfg(test)` の中だけ）。
@@ -869,6 +871,7 @@
 - 本体の `runtime_tests/` の 3 本（`frame_balloon_timeout_notice_e2e_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`）は、可視性の相のテストを `areka-runtime` へ移したことで古くなった**コメントのファイル名の指し先**の書き換えだけ（コードの行は 0）。
 - `areka-session/src/body_systems_tests.rs` は `audit-areka-app` の持ち物（相手の brief の `src/body_systems*`）。`4cb2d09e5` で期待の並びに `"update_busy"` と説明の 1 句を足し、`7ddc891d2` で `request_skin_switch_with` から `request_skin_switch` へ呼び替えた。どちらも要件 7.7 の読み手の直し（2.2 の入口の並びと 5.1 の私有化に追う）。申し合わせた use の道の 4 か所の外なので、2026-11-23 に `audit-areka-app` のセッションへこの 2 つを知らせた（15.1・13.3）。`body_systems.rs` 本体は触っていない。
 - 範囲の中: `balloon_hover.rs`・`shell_box_hover.rs`・`shell_box_hover_tests.rs`・`hover_inject.rs`・`change_cue.rs`・`skin_switch.rs`・`switch_assets*`・`move_cue*`・`balloon_visibility*`・`ghost_switch*`・`shell_balloon_switch*` と、本体の `session_tests/shell_balloon_switch*`・`runtime_tests/balloon_visibility*`（移して消した 2 本を含む）。
+- `areka-runtime/src/frame.rs`・`frame/zorder_drain.rs`・`frame/zorder_drain_test_support.rs`（`audit-emo2-boot-switch` の範囲の外・持ち主の spec は完了済みで並走が無い）: テストの写しを寄せるために支えの mod と 3 つの関数を `pub(crate)`（`cfg(test)`）へ開いた。`areka-runtime/src/talk_lifecycle.rs`: コメントの名指し 1 語を `PresentBridge::deliver` へ直しただけ（コードの行は 0）。
 - `.kiro/specs/audit-emo2-boot-switch/` の 6 ファイルは spec の文書。
 - 説明のつかない差分: なし。
 
