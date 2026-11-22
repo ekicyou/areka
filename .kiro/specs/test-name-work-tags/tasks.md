@@ -23,7 +23,7 @@
   - _Dispatch: mechanical — 改名表どおりの置き換えと、design の示す形の手の直し_
   - _Requirements: 2.1, 2.2, 3.1, 4.1, 4.2, 4.3, 4.4, 4.6, 4.7, 4.9, 4.11, 6.2, 6.3, 6.5_
 
-- [ ] 3. `areka-placement` の zorder の残りを改める（G2）
+- [x] 3. `areka-placement` の zorder の残りを改める（G2）
   - G2 の行を機械で置き換え、`zorder_property_deferral_tests.rs` の doc コメントのリンクの見出しと短い書き方を新しい名の全体へ直す
   - 本番のファイル `zorder_group_ledger.rs:667` はコメントの名指しだけを直し、同じ名なのでファイルを添える
   - `.kiro/specs/zorder-property/brief.md` の 59・81・94 行の名だけを直す（同じ行の古い道は直さない）
@@ -83,3 +83,4 @@
 - 使い捨ての式は `target/test-name-work-tags/rename.py`（build・apply・refs）。G1〜G6 はこれの apply と refs で置き換えと確かめをする
 - `tests-before.txt` は改名のある 3 crate（areka・areka-placement・areka-runtime）の `cargo test -p ... -- --list` で取った。タスク 9 の `tests-after.txt` も同じ 3 crate の同じコマンドで取る
 - `zorder_cue_tests.rs:148` の `t_zcs4` は design の見込みに無かった名指しで、G1 で直す
+- 文の中で札だけで 1 本ずつ名指す書き方（範囲でないもの）は消さずに新しい名の全体へ直す。消すのは範囲の書き方の番号だけ（G1 のレビューで差し戻し）

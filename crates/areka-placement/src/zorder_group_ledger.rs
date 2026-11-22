@@ -664,7 +664,7 @@ impl ZOrderGroupLedger {
     ///
     /// 版そのものは台帳の一部であり、状態遷移のテスト
     /// （`zorder_group_ledger_state_tests.rs`）と基底の取り替えのテスト
-    /// （`zorder_group_ledger_rebase_tests.rs` の t_zrb9）が「いつ進み、いつ進まないか」を
+    /// （`zorder_group_ledger_rebase_tests.rs` の version_moves_only_when_the_contents_move）が「いつ進み、いつ進まないか」を
     /// 押さえている。読み口を消すとその不変条件を主張する手段が無くなるので、
     /// 呼ぶのは検査（テスト）だけで、公開の項目として残す。
     pub fn version(&self) -> u64 {
