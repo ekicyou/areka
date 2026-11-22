@@ -25,7 +25,8 @@ header h1 { margin: 0 0 4px; font-size: 20px; }
 .legend button[aria-pressed="true"] { outline: 2px solid var(--fg); }
 .legend .clear { border-style: dashed; }
 .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
-.bands { display: flex; gap: 12px; padding: 0 16px 16px; overflow-x: auto; align-items: flex-start; }
+/* The page scrolls sideways, not .bands: a box as tall as its longest column hides its own scrollbar below the screen. */
+.bands { display: flex; gap: 12px; padding: 0 16px 16px; width: max-content; align-items: flex-start; }
 .band { flex: 0 0 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .band h2 { margin: 0; font-size: 16px; }
 .band .goal { color: var(--muted); margin: 2px 0; }
