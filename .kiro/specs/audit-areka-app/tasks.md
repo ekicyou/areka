@@ -230,7 +230,7 @@
   - _Dispatch: mechanical — 説明の字面を設計が与える_
   - _Requirements: 3.1, 5.10, 6.11_
 
-- [ ] 16. 本体の古い説明を今の事実にする（G16・指摘 54・61・64・65・74・81・5.11）
+- [x] 16. 本体の古い説明を今の事実にする（G16・指摘 54・61・64・65・74・81・5.11）
   - `main.rs` の `//!` を今の事実に。言い直すだけの doc（375・382・392・415）と 278・284 の重なりを消し、398-410 を 1 行に。515-531 の `BootContext` を 1 度だけ引いて `(argv_session, app_profile_dir)` を取る
   - `cli/parse.rs`・`cli/listen.rs` の doc（`Repeated`・`Kind::Unsupported`）を今のふるまいに（読み方は変えない）
   - `session_tests/` の説明を今の中身に（module_policy は 2 回とも `Plain`）。`menu/mod.rs` の 221-223・254 の呼び手の説明を「本体の `wire_body_after_runtime`（`BODY_SYSTEMS.after_runtime_wired`）から、起動と読み直しのたびに」「`BODY_SYSTEMS.menu_poll` として `register_systems` から」に（説明の文だけ）
@@ -301,3 +301,4 @@
 - 13.2: `readonly_run_tests.rs:49` に共有と同じ `const A_TO_B` の写しが残る。`boot_windows_with_descript_line` の doc の 1 行目が `seriko.sticky-window` だけを書く（`kero.balloon.dontmove` にも使う）。restart の 479-491 の why の注釈も消えた（21.1 で見る）
 - 14.1: 設計が上流に挙げた `areka_runtime::frame::test_support::capture_logs` は `cfg(test)` だけで立つので、本体の `runtime_tests/spine.rs` は `log_capture_kit::capture_lines` に載せた 3 行の写しを理由の注釈つきで残す（依存は足さない）
 - 15.2: `boot_resolve_tests.rs:3`・`:141` に「ゴースト 6 分岐」が残る（今は 9 通り・指摘 62 の残り・21.1 で見る）
+- 16: 15.1 の `impl GhostSession` の移しで本体の `session_end_deadline_body_tests.rs` の許可表が古いパスを指し 2 本が赤だった（16 で `ghost_session_handle.rs` に直した）。15.1 のレビューは areka-session しか回さなかった。`boot_config_option_tests.rs:58` の doc は「印が無ければ記憶」側をテストが見ていない

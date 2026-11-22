@@ -12,7 +12,7 @@ const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_sess
 /// OS のセッションの終了の受け手が定数を渡す 1 行・受け手の降ろし・`GhostSession` の委譲の 3 行だけ。
 const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     (
-        "areka-session/ghost_session.rs",
+        "areka-session/ghost_session_handle.rs",
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (

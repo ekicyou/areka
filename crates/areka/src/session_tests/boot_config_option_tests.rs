@@ -55,7 +55,7 @@ fn answer(got: &BootResolved) -> (GhostRoute, PathBuf, Option<String>) {
     (got.1.route, got.1.dir.clone(), got.3.clone())
 }
 
-/// オプションなしは今と同じ答え: 引数なしは記憶、位置の引数は `Argv` で印を読まない。
+/// オプションなしは今と同じ答え: 引数なしは印が無ければ記憶・印が在れば既定、位置の引数は `Argv` で印を読まない。
 #[test]
 fn without_options_the_answer_is_as_today() {
     let tmp = fixture("cfg-opt-none");

@@ -218,9 +218,9 @@ impl MenuWiring {
     }
 }
 
-/// メニューを起動に結ぶ。boot 成功後に `ghost_session::boot_ghost` からゴーストごとに呼ぶ
-/// （入力の結線の直後・状態の載せ替え＝n 回。系の登録は [`register_menu_poll`] を
-/// `ghost_session::register_systems` からプロセスに 1 回）。
+/// メニューを起動に結ぶ。本体の `wire_body_after_runtime`（`BODY_SYSTEMS.after_runtime_wired`）から、
+/// 起動と読み直しのたびに呼ぶ（入力の結線の直後・状態の載せ替え＝n 回。系の登録は [`register_menu_poll`] を
+/// `register_systems` からプロセスに 1 回）。
 ///
 /// 行うのは結線状態の挿入・組込 2 項目の登記までで、**窓には触れない**（返事の取り出しの
 /// 登録は [`register_menu_poll`]）。呼ばれるのは窓を作るクロージャが動くより前（1 度目は
@@ -251,7 +251,7 @@ fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
 /// 並びは `dispatch_pointer_events` の後——解放ハンドラが同じ tick に預けた返事待ちを、
 /// その tick のうちに 1 度覗けるようにする。
 ///
-/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+/// `BODY_SYSTEMS.menu_poll` として `register_systems` から呼ぶ（プロセスに 1 回）。
 pub(crate) fn register_menu_poll(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

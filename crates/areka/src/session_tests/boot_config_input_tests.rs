@@ -2,7 +2,7 @@
 // 起動前の解決の判断
 // ---------------------------------------------------------------------------
 // `resolve_boot_from` へ根と argv を注入して、argv の有無で分かれる判断だけを踏む
-// （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
+// （ゴーストの 9 通り・バルーンの 8 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
 
 mod boot {
     use crate::session_tests::{no_pick, resolve_boot_from};

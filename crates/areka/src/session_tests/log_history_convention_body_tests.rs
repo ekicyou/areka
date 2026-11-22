@@ -1,4 +1,4 @@
-//! 決まりの表の出所が本体の `src` に在ることを確かめる構造の試験。
+//! 決まりの表が名指す target が本体・`areka-session`・`areka-update` の `src`（とゴーストの実行時）に在ることを確かめる構造の試験。
 
 use areka_session::log_history::RULES;
 
