@@ -147,7 +147,7 @@ graph TB
 | D6 | `SwitchRig` の作り口（5.4） | `SwitchRig::with(sample: RigSample, body: BodySystems, scripts)` を `test-support` で開く。`RigSample` は検体の根・ゴーストのフォルダ・同梱バルーンの道と、寿命を持つ値（`Box<dyn Any>`）の 4 欄。集めた層は `#[cfg(test)]` の `SwitchRig::new(scripts)`（`SampleRoot::acquire("emo2")` と `NO_BODY` を渡す数行）を持ち、35 か所の呼び出しを変えない。本体は `sample_test_support.rs` に `switch_rig(scripts)`（`acquire_emo2()` と `crate::BODY_SYSTEMS` を渡す数行）を足し、22 か所の `SwitchRig::new(` を `switch_rig(` へ書き換える | 本体も `SwitchRig::new` の名で呼べるよう拡張の trait を置く（前例が無い・型が増える） |
 | D7 | 本体に残すテストの置き場（5.1〜5.3） | `crates/areka/src/session_tests/`（新設・`main.rs` の `#[cfg(test)] mod session_tests;`）。前例の `placement_tests/`・`runtime_tests/` にならう。移すファイルは名前を変えず、`#[path]` の親子の形（`ghost_session_switch_tests.rs` の子 2 本ほか）を同じ並びで写す。`use super::*` は `use areka_session::<元の親のモジュール>::*` に替え、足りない私有の項目はコンパイラのエラーで 1 つずつ開く（4.5 の記録） | `crates/areka/src/session/` の名を残す（3.3 に反する） |
 | D8 | 一部だけ本体を要るファイルの分け方（5.3） | 本体を要るテストだけを、元のファイルの名前に `_body` を足したファイルへ移す（例 `readonly_body_tests.rs`）。テストの名前と中身は変えない。小道具の扱いは 2 通り: ⑴ 本体へ移すテストだけが使う小道具は一緒に移す ⑵ 集めた層のテストと分け合う小道具は、番人の crate（log-capture-kit・temp-path-kit・sample-ghost-kit）に頼らなければ、元のファイルから兄弟の `<元の親>_test_support.rs`（`cfg(any(test, feature = "test-support"))`・`#[test]` を持たない）へ移して両方から使い、番人の crate に頼るなら分けずにファイルごと本体へ移す（`test-support` には番人の crate を入れられず、分けると小道具の写しが要る）。2026-11-22 の測りで ⑵ の後者は `reload_tests.rs`・`shell_balloon_switch_tests.rs`（足場が `TempPath`・`capture` に頼る）。対象は TestPlacement の表 | テストの中身を偽物の口に替えて集めた層に残す（5.2 に反する）／小道具を本体へ写す（写しが増える） |
-| D9 | テストの置き場の表 | 下の「部品と口」の TestPlacement の表。偽物の組（`NO_BODY`）で走らせて赤になった集めた層のテストは、中身を変えずに本体へ移し、表に足す（Research Needed 1 の測り方） | ― |
+| D9 | テストの置き場の表 | 下の「部品と口」の TestPlacement の表。段 2 で、`SwitchRig` を通る集めた層の 30 ファイルを本物の組（`BODY_SYSTEMS`）と偽物の組（`NO_BODY`）の両方で走らせ、合否と、テストごとの記録（`SwitchRig` の記録と、口の欄が呼ばれた回数）を比べる。赤になったテストと、緑でも記録が違うテストを 1 本ずつ見て、置き場（本体へ中身を変えずに移すか、集めた層に残すか）と理由を表に載せる（緑のまま守りを黙って失うテストを残さない・5.1・5.2・5.4） | 偽物の組で赤になったものだけを移す（緑のまま守りを失うテストを見逃す） |
 | D10 | `crate_source_test_support` の置き場（5.6・5.13） | `git mv` で `crates/areka-session/src/crate_source_test_support.rs` へ。`lib.rs` で `#[cfg(any(test, feature = "test-support"))] pub mod crate_source_test_support;`、マクロは `#[macro_export]`（`areka_session::crate_source!`。中の `env!("CARGO_MANIFEST_DIR")` は呼び手の側で解けるので、本体のテストからも本体の置き場から読む）。本体は `areka_session::{crate_source, crate_source_test_support::crate_path}` を使う。ファイルの中の `mod tests` には `#[cfg(test)]` を付ける（`test-support` で開いたとき、使われない import の警告を出さない・8.4） | 各 crate がマクロを持つ（写しが増える・5.6 に反する） |
 | D11 | 写しの窓の排他 `log_history::capture_tests::hold`（2.8 の下書き） | `WINDOW` と `hold` の 2 項目を `log_history_capture_tests.rs` から `log_history.rs` へ移し、`#[cfg(any(test, feature = "test-support"))] pub` にする。テストのモジュールは `cfg(test)` のまま（`test-support` で開くとテストが本体の実行ファイルにも入り、名前の多重集合が増える） | テストのモジュールごと `test-support` で開く（テストが二重になる） |
 | D12 | `resolve_boot_from`（5.3） | `boot_config.rs` の `#[cfg(test)]` の口を `crates/areka/src/session_tests/mod.rs` へ移す（`areka_session::boot_config::resolve_boot_with` を `crate::cli::parse::parse` で呼ぶ 15 行）。使う本体の 2 本（`main_session_mark{,_fallback}_tests.rs`）と、本体へ移す 6 本はそこから使う | ― |
@@ -275,7 +275,7 @@ flowchart TB
 |---|---|---|
 | 0 | 枝の先頭で `cargo test --workspace --no-fail-fast -- --list` を取り `target/session-crate-split/tests-before.txt` に残す。D15 の手順で実機の 6 つの道を 1 回取り、記録を `target/session-crate-split/real-before/` に残す | （取るだけ） |
 | 1 | まだ本体の中で: `session/body_systems.rs` を作り `BodySystems` を移す・欄を足す・`register_systems` で据える。28 行を口へ通す（`use crate::menu;` 2 行・`use crate::install::…`・`use crate::update::…` を外す）。`main.rs` の `BODY_SYSTEMS` に欄を足す。`smoke_exit.rs`＋テストを `session/` へ `git mv` し、`alert.rs:286`・`main.rs`・`install/startup.rs` を `crate::session::smoke_exit` へ。`t_zwi05` の字面。集めた層の `session/body_systems_tests.rs`（OrderTests の 1〜4）。D13 の 1 行（効き目が無くなって赤になったテスト） | `cargo test -p areka --bin areka`（赤が出たら赤のテストだけ回し直す）・1.10 の grep が本番 0 行・テストだけに残る参照の一覧 |
-| 2 | まだ本体の中で: `crates/areka/src/session_tests/` を作り、TestPlacement の表の「本体」の行を `git mv`、「分ける」の行を D8 のとおり分ける。`SwitchRig::with`・`RigSample`（D6）・集めた層の `SwitchRig::new` を `NO_BODY` へ・本体の `switch_rig`・`resolve_boot_from` の移動（D12）。本体の `session_tests/body_systems_tests.rs`（OrderTests の 5・7）。偽物の組で赤になった集めた層のテストを本体へ移し、表に足す（D9） | `cargo test -p areka --bin areka`・集めた層の下のテストのファイルが `crate::BODY_SYSTEMS`・`crate::after_run` ほか根の関数・`crate::cli`・`crate::menu`・`crate::install`・`crate::update`・`crate::mcp`・`crate::shiori_host`・`crate::runtime_tests` を名指さない（grep 0 件。`crate_source_test_support`・`sample_test_support` は段 3 で解く） |
+| 2 | まだ本体の中で: `crates/areka/src/session_tests/` を作り、TestPlacement の表の「本体」の行を `git mv`、「分ける」の行を D8 のとおり分ける。`SwitchRig::with`・`RigSample`（D6）・集めた層の `SwitchRig::new` を `NO_BODY` へ・本体の `switch_rig`・`resolve_boot_from` の移動（D12）。本体の `session_tests/body_systems_tests.rs`（OrderTests の 5・7）。本物の組と偽物の組の両方で `SwitchRig` を通る 30 ファイルを回し、合否か記録が違うテストを 1 本ずつ決めて表に足す（D9） | `cargo test -p areka --bin areka`・集めた層の下のテストのファイルが `crate::BODY_SYSTEMS`・`crate::after_run` ほか根の関数・`crate::cli`・`crate::menu`・`crate::install`・`crate::update`・`crate::mcp`・`crate::shiori_host`・`crate::runtime_tests` を名指さない（grep 0 件。`crate_source_test_support`・`sample_test_support` は段 3 で解く） |
 | 3 | `crates/areka-session/Cargo.toml` を作り、残る `session/` を `git mv`（`mod.rs` → `lib.rs`）、`smoke_exit*`・`crate_source_test_support.rs` を `git mv`（D10）。集めた層の中の `crate::session::` → `crate::`。本体の `session::` → `areka_session::`・`Cargo.toml` の 2 行・`main.rs` の宣言。コンパイラのエラー（E0603・E0616・E0624・E0364・`private_interfaces`・死んだコードの警告）を 1 件ずつ見て `pub` か `test-support` にし、4.5 の連れて開く型を記録する。`hold` の移動（D11）。OrderTests の 6（口が無いときの記録は、集めた層が本体のテストのビルドで `cfg(test)` でなくなるこの段から出る）。`runtime_boot_tests.rs` の `crate::sample_test_support::acquire_emo2` → `SampleRoot::acquire("emo2")`。落ちの報告。D13 の 1 行（記録が増えて赤になったテスト） | `cargo check --workspace --all-targets` 警告 0・`cargo check -p areka-session --lib --features test-support`・`cargo test -p areka-session`・`cargo test -p areka --bin areka`（赤のテストだけ回し直す）・4.7 の grep 0 件 |
 | 4 | 出所の名前の直書き（6.2）・名前で読む所（6.3）・`tools/load-flake.ps1`（5.12）・見張りの根（5.13） | `cargo test -p areka-session -- log_history`・`cargo test -p areka --bin areka -- log_history session_tests::`・`cargo test -p real-run-kit`・`pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` |
 | 5 | コメント・文書・台帳・`structure.md`・`tech.md`・2 本の audit の brief（7.1〜7.6）・網羅の報告の作り直しと `ukadoc-survey -- check` | 6.6・7.7 の grep が 0 件（除いた所の一覧つき）・`cargo run -p ukadoc-survey -- check` |
@@ -697,7 +697,7 @@ pub(crate) fn switch_rig(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig; // Swit
 | `runtime_boot_tests.rs` | 集めた層 | 口の無い World で 13 個（D4）。`acquire_emo2` を `SampleRoot::acquire("emo2")` へ |
 | `boot_shell_tests.rs`・ほか `SwitchRig` を通る集めた層の 30 本と残りの全部 | 集めた層 | 本体の項目を名指さない。`SwitchRig::new` が `NO_BODY` を渡す |
 
-- 偽物の組で赤になった集めた層のテストは、中身を変えずに本体へ移し、この表に足す（D9）。静かに読んだ見込み（走らせていない）: 本体の `update::register` が据える `UpdateDesk` は定常のたびに `homeurl` の照会を偽の SHIORI へ送るが、`SwitchRig` の記録はもともとこの照会を除いて見る（`ghost_switch_test_support.rs:446〜458`）。進みの目印（`progress_probe`）は照会も数えるので、待ちの打ち切りの時点が変わりうる。`exit_wait` の門（install・update）も据わらなくなる。この 2 つに当たるテストが赤になるかは段 2 で走らせて決める。
+- 本物の組と偽物の組で合否か記録が違う集めた層のテストは、1 本ずつ置き場と理由を決めてこの表に足す（D9）。静かに読んだ見込み（走らせていない）: 本体の `update::register` が据える `UpdateDesk` は定常のたびに `homeurl` の照会を偽の SHIORI へ送るが、`SwitchRig` の記録はもともとこの照会を除いて見る（`ghost_switch_test_support.rs:446〜458`）。進みの目印（`progress_probe`）は照会も数えるので、待ちの打ち切りの時点が変わりうる。`exit_wait` の門（install・update）も据わらなくなる。この 2 つに当たるテストが赤になるかは段 2 で走らせて決める。
 - 分けたファイルのテストは、名前と中身を変えない。小道具は D8 の 2 通りで扱い、写しを作らない。`test-support` へ移した小道具は 4.5 の記録に入れる。
 - この表を検証の記録に写す（5.1）。
 
@@ -819,20 +819,21 @@ pub(crate) fn switch_rig(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig; // Swit
 
 ## 申し送りと危うさ
 
-- **危うさ 1（中）**: 偽物の組で走らせたときに、どの集めた層のテストが本物の系（`UpdateDesk` の照会・`exit_wait` の門）に頼っていたかは走らせるまで分からない。対策: 段 2 で集めた層のテストを全部回し、赤のテストだけを中身を変えずに本体へ移す（D9）。移した数を記録する。
+- **危うさ 1（中）**: 偽物の組で走らせたときに、どの集めた層のテストが本物の系（`UpdateDesk` の照会・`exit_wait` の門）に頼っていたかは走らせるまで分からない。対策: 段 2 で `SwitchRig` を通る 30 ファイルを本物の組と偽物の組の両方で回し、合否か記録が違うテストを 1 本ずつ決める（D9）。移した数と残した理由を記録する。
 - **危うさ 2（中）**: 段 3 で、口を据えずに口の道を通る本体のテストが `body_systems_missing` の記録で赤になりうる（warn 以上を数えるテスト）。2026-11-22 の測りで、そうした道を通ると見込むのは `boot_ghost` を `register_systems` 無しで呼ぶ `ghost_session_strict_tests.rs`（記録は本文で絞るので当たらない見込み）だけで、error の 0 件を確かめるテスト（`install/procedure_tests.rs:483`・`install/worker_tests.rs:158・170`）は口の道を通らない（静かに読んだ見込み）。対策: D13 の 1 行。
 - **危うさ 3（低）**: `NO_BODY` の C5 は `DiscardSink` で、今の「窓口が無い」受け口と `url` の腕の振る舞いが違う（口が無いのは結線の誤りのときだけ）。
 - **危うさ 4（低）**: 公開面の取りこぼし。対策: コンパイラが E0603 ほかで出す（段 3）。`cargo check -p areka-session --lib --features test-support` で機能だけが立つビルドの警告も見る。
 - **危うさ 5（低）**: `main_session_mark_tests.rs`（957 行）は `use` の書き換えで行が折れると増えうる。対策: 段 3 の終わりに `file_length_guard_test` を回す。
 - 申し送り: Handover のとおり。
 
-## 設計の討議への議題（仮の決めつき）
+## 設計の討議の決め（開発者が全議題を推奨案で一括承認）
 
-1. **束の数（D1）**: 仮の決め＝1 つ（今の `BodySystems` に 9 欄を足して資源として据える）。代案＝登録の束と口の束を分ける。
-2. **口が無いときの記録の絞り（D3）**: 仮の決め＝前例 `SessionHooks` と同じく `#[cfg(not(test))]` で絞り、記録の確かめは本体のテスト（6 番）で行う。代案＝前例 `InputHooks` と同じく絞らない（集めた層のテストで口を据えずに通る道の記録が増える）。
-3. **C5 の口が無いときの受け口（D4・危うさ 3）**: 仮の決め＝`DiscardSink` 2 つで 13 個を保つ。代案＝口が無いとき 11 個にする（`runtime_boot_tests.rs` の中身が変わる）。
-4. **本体に残すテストの置き場と分け方（D7・D8・D9）**: 仮の決め＝`crates/areka/src/session_tests/`・分けたファイルは元の名前に `_body` を足す・偽物の組で赤になったテストは本体へ移す。分け合う小道具が番人の crate に頼る `reload_tests.rs`（859 行）・`shell_balloon_switch_tests.rs`（596 行）は分けずにファイルごと本体へ移す（集めた層だけのテストも本体の実行ファイルで走る）。代案＝本体を要る 1 本ずつだけを分け、足場（`rig`・`refuse` ほか約 100〜150 行）を本体の側へ写す。
-5. **呼ぶ順の確かめの形（D14）**: 仮の決め＝記録する偽物の組（集めた層）＋C1 と入力の交互の順は字面＋`register_systems` の中の順は `Input` の段の系の名。系の名が読めなければ系の数で代える。
-6. **`SwitchRig` の作り口（D6）**: 仮の決め＝`SwitchRig::with(RigSample, BodySystems, scripts)`・集めた層の `#[cfg(test)] SwitchRig::new`・本体の `switch_rig`（22 か所を書き換える）。
-7. **口を据えずに口の道を通る本体のテスト（D13）**: 仮の決め＝赤になったものだけ `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足して記録する。
-8. **実機の 6 つの道の取り方（D15）**: 仮の決め＝作業の木の `target\session-crate-split\real\` の使い捨ての手順で、`.nar` の投げ込みはエクスプローラーの窓からのドラッグ（`tools/mouse-input.ps1 -Action drag`）。排他テストの机と開発者の SendInput の許しの下で行う。
+1. **束の数（D1）**: 1 つ。今の `BodySystems` に 9 欄を足して World の資源として据える。
+2. **口が無いときの記録の絞り（D3）**: 前例 `SessionHooks` と同じく `#[cfg(not(test))]` で絞り、記録が出ることは本体のテスト（OrderTests 6）で確かめる。
+3. **C5 の口が無いときの受け口（D4）**: `DiscardSink` 2 つで 13 個を保つ。
+4. **本体に残すテストの置き場と分け方（D7・D8）**: `crates/areka/src/session_tests/`。分けたファイルは元の名前に `_body` を足す。`reload_tests.rs`・`shell_balloon_switch_tests.rs` はファイルごと本体へ移す。
+5. **偽物の組で緑のまま守りを失うテスト（D9）**: 段 2 で本物の組と偽物の組の両方で回し、合否か記録が違うテストを 1 本ずつ決めて表に載せる。
+6. **呼ぶ順の確かめの形（D14）**: 記録する偽物の組・C1 と入力の交互の順は字面・`register_systems` の中の順は系の名（読めなければ系の数）。OrderTests 1 は窓を作る道を通るかを先に確かめる。
+7. **`SwitchRig` の作り口（D6）**: `SwitchRig::with(RigSample, BodySystems, scripts)`・集めた層の `#[cfg(test)] SwitchRig::new`・本体の `switch_rig`。
+8. **口を据えずに口の道を通る本体のテスト（D13）**: 赤になったものだけ `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足して記録する。
+9. **実機の 6 つの道（D15）**: 作業の木の `target\session-crate-split\real\` の使い捨ての手順を段 0 と段 6 で回す。排他テストの机を取り、SendInput で行う。`tools/` には足さない。
