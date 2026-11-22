@@ -31,7 +31,15 @@ impl Canvas {
             height: span(bounds.top, bounds.bottom),
         }
     }
+
+    /// 幅か高さが一辺の上限を越えるか。
+    pub(crate) fn exceeds_limit(&self) -> bool {
+        self.width > MAX_CANVAS_SIDE || self.height > MAX_CANVAS_SIDE
+    }
 }
+
+/// 下地の一辺の上限。合成の外形の上限と同じ値（合成の crate はこの定数を外へ出していない）。
+pub(crate) const MAX_CANVAS_SIDE: u32 = 16_384;
 
 /// 頭の文字列の既定（`--dump-output-prefix` が無いとき）。
 pub(crate) const DEFAULT_PREFIX: &str = "surface";
