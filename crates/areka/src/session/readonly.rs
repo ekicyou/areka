@@ -49,11 +49,3 @@ pub(crate) fn of(world: &World) -> bool {
 #[cfg(test)]
 #[path = "readonly_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "readonly_sites_tests.rs"]
-mod sites_tests;
-
-#[cfg(test)]
-#[path = "readonly_run_tests.rs"]
-mod run_tests;

@@ -84,7 +84,7 @@ fn rig(label: &str) -> Rig {
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(super::tests::boot_context(&temp, &root));
+    world.insert_resource(super::test_support::boot_context(temp.path(), &root));
     let (tx, kanade) = mpsc::channel();
     let seriko = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
@@ -397,7 +397,7 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
         true,
         (SkinKind::Shell, kaku.clone()),
     );
-    super::tests::plant_skin_switch(&mut rig.world, SkinKind::Balloon, &other);
+    super::test_support::plant_skin_switch(&mut rig.world, SkinKind::Balloon, &other);
     let (_, between) = capture(|| skin_phase_ended(&mut rig.world, SkinKind::Shell, &kaku));
 
     assert_eq!(

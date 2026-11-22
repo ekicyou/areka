@@ -195,25 +195,6 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::session::boot_resolve::BalloonDecision,
 }
 
-/// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
-#[cfg(test)]
-pub(crate) fn resolve_boot_from(
-    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
-    args: &[String],
-    app_profile_dir: &std::path::Path,
-    pick: fn(usize) -> usize,
-    prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
-) -> Result<BootResolved, crate::session::alert::AlertScene> {
-    resolve_boot_with(
-        resolved,
-        &crate::cli::parse::parse(args).options.boot,
-        None,
-        app_profile_dir,
-        pick,
-        prepare_ghost,
-    )
-}
-
 /// 根の並び → ゴースト → バルーン → `ConfigInputs`。決まらなければ告知の場面を返す。
 /// 並びは決まっても決まらなくても先に記録を残す。
 ///
@@ -627,32 +608,8 @@ pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
 mod exe_link_tests;
 
 #[cfg(test)]
-#[path = "boot_config_balloon_tests.rs"]
-mod balloon_tests;
-
-#[cfg(test)]
-#[path = "boot_config_roots_tests.rs"]
-mod roots_tests;
-
-#[cfg(test)]
-#[path = "boot_config_copy_tests.rs"]
-mod copy_tests;
-
-#[cfg(test)]
-#[path = "boot_config_option_tests.rs"]
-mod option_tests;
-
-#[cfg(test)]
 #[path = "boot_config_readonly_tests.rs"]
 mod readonly_tests;
-
-#[cfg(test)]
-#[path = "boot_config_callghost_tests.rs"]
-mod callghost_tests;
-
-#[cfg(test)]
-#[path = "boot_config_input_tests.rs"]
-mod config_input_tests;
 
 /// ghost 結線ヘルパの headless 単体テスト。
 ///
@@ -663,8 +620,3 @@ mod config_input_tests;
 #[cfg(test)]
 #[path = "boot_config_ghost_wiring_tests.rs"]
 mod ghost_wiring_tests;
-
-/// SHIORI の読み方の指定から結線を決める口と倒れ先の表。
-#[cfg(test)]
-#[path = "boot_config_module_policy_tests.rs"]
-mod module_policy_tests;

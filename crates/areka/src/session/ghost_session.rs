@@ -164,7 +164,7 @@ pub(crate) struct PreparedWindows {
     /// 準備が descript から 1 度だけ読んだ値（ゴーストごとの結線へ渡す）。
     pub(crate) descript: StartupDescriptValues,
     /// 窓の生成と受け口の装着を行う閉包（`Input` 段で World に適用される）。
-    spawn: BoxedCommand,
+    pub(crate) spawn: BoxedCommand,
 }
 
 /// 窓の準備（同期）: 作業プールの有無 → 配置の準備 → 監視の 2 源 → 復元 → 窓を作る閉包を組む。
@@ -409,8 +409,8 @@ pub(crate) struct BootWiringFailed;
 /// （`Drop` は終了の理由を持てないので実装しない）。
 pub(crate) struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
-    seriko: Option<areka_actor::ActorHandle>,
-    loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    pub(crate) seriko: Option<areka_actor::ActorHandle>,
+    pub(crate) loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
     /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
     /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす。
     seriko_sink: Option<areka_seriko::SerikoSink>,
@@ -844,28 +844,12 @@ fn boot_wired(
 }
 
 #[cfg(test)]
-#[path = "ghost_session_restart_tests.rs"]
-mod restart_tests;
-
-#[cfg(test)]
-#[path = "ghost_session_strict_tests.rs"]
-mod strict_tests;
-
-#[cfg(test)]
-#[path = "ghost_session_switch_tests.rs"]
-mod switch_tests;
-
-#[cfg(test)]
 #[path = "boot_shell_tests.rs"]
 mod boot_shell_tests;
 
 #[cfg(test)]
-#[path = "shell_balloon_switch_session_tests.rs"]
-mod shell_balloon_switch_session_tests;
-
-#[cfg(test)]
 #[path = "shell_balloon_switch_session_lap_tests.rs"]
-mod shell_balloon_switch_session_lap_tests;
+pub(crate) mod shell_balloon_switch_session_lap_tests;
 
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_balloon_tests.rs"]
@@ -876,13 +860,5 @@ mod shell_balloon_switch_session_balloon_tests;
 mod shell_balloon_switch_session_abort_tests;
 
 #[cfg(test)]
-#[path = "shell_balloon_switch_session_update_tests.rs"]
-mod shell_balloon_switch_session_update_tests;
-
-#[cfg(test)]
 #[path = "ghost_session_switch_translate_tests.rs"]
 mod switch_translate_tests;
-
-#[cfg(test)]
-#[path = "ghost_session_reload_tests.rs"]
-mod reload_tests;

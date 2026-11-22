@@ -11,17 +11,30 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::{Input, Update};
 
-use super::*;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
+use crate::session::app_exit;
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_resolve::BalloonDecision;
+use crate::session::boot_resolve::GhostDecision;
 use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::session::ghost_quit::KanadeNoticeRx;
+use crate::session::ghost_session::*;
 use crate::session::readme::ReadmeWiring;
 use areka_input::user_break::UserBreakWiring;
+use areka_kanade::KanadeNotice;
 use areka_placement::spawn::GhostWindowMarker;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching, wait_until};
+use bevy_ecs::schedule::Schedules;
+use bevy_ecs::world::World;
 use log_capture_kit::capture;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use wintf::ecs::FrameFinalize;
+use wintf::ecs::widget::bitmap_source::CommandSender;
+use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 /// 作業プール（`WintfTaskPool`）の無い素の World では、窓を作る関数は配置の準備に入らず
 /// `TaskPoolMissing` で失敗し、`task_pool_missing` を error で残す。閉じた証を受ける `reopen_ghost_windows` も

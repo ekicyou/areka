@@ -753,3 +753,60 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 
 - 赤（一時の摂動・コミットしない）: `ghost_switch.rs` の `(BodySystems::of(world).overwrite_between)(world);` をコメントに替えると、このテストが `assertion left == right failed` で赤（窓の外の欄から `overwrite_between` が消え、窓の欄の位置の確かめが `false`）。`git checkout crates/areka/src/session/ghost_switch.rs` で戻し、`git status` で差が `body_systems_tests.rs` だけであることを見た。
 - 緑: `cargo test -p areka --bin areka body_systems -- --test-threads 1` 4 passed。`cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。`cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored。`body_systems_tests.rs` は 358 行。
+
+### 3.4
+
+#### 移したファイル（`git mv`・名前は変えない・24 本）
+
+`crates/areka/src/session/` → `crates/areka/src/session_tests/`: `session_end_tests.rs`・`ghost_session_switch_tests.rs`（子の `ghost_session_switch_fallback_tests.rs`・`ghost_session_switch_memory_tests.rs` は `#[path]` の親子のまま）・`ghost_session_restart_tests.rs`・`ghost_session_reload_tests.rs`・`ghost_session_strict_tests.rs`・`ghost_session_scope_rect_boot_tests.rs`・`ghost_session_scope_scale_boot_tests.rs`・`shell_balloon_switch_session_tests.rs`・`shell_balloon_switch_session_update_tests.rs`（3.2 で本体と決めた行）・`boot_resolve_mark_text_tests.rs`・`readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs`（`session_tests/mod.rs` で `#[path]` つきの `sites_tests` の名で宣言・`readonly_sites_tests.rs` は `super::sites_tests` から引く）・`boot_config_module_policy_tests.rs`・`boot_config_{balloon,copy,input,option,roots,callghost}_tests.rs`・`reload_tests.rs`・`shell_balloon_switch_tests.rs`。
+
+- `main.rs` に `#[cfg(test)] mod session_tests;`。`session_tests/mod.rs` は宣言の並びと `resolve_boot_from`（`boot_config.rs` の `#[cfg(test)]` の口を移した。使い手は `boot_config_{balloon,copy,input,option,roots}_tests.rs` と `main_session_mark_tests.rs`〔子の `main_session_mark_fallback_tests.rs` は `use super::*` で引く〕）。
+- 集めた層の親（`session_end.rs`・`readonly.rs`・`write_failure.rs`・`boot_config.rs`・`ghost_session.rs`・`ghost_session_scope_rect_tests.rs`・`ghost_session_scope_scale_tests.rs`・`boot_resolve.rs`・`reload.rs`・`shell_balloon_switch.rs`）から移したテストの宣言を外した。
+- `use super::*`（`ghost_session_scope_*_boot_tests.rs` は `use super::super::*`）を元の親のモジュールの glob（`use crate::session::<元の親>::*;`）に替え、親の `use` の行のうち子が使う名だけを写した。名を指す `use super::X` は `crate::session::<元の親>::X` へ。
+- `git status` で 24 本とも `R`（移動）。`git diff HEAD -M --summary` の rename が 24。中の書き換えは `use` の行だけ（最大は `reload_tests.rs` の 65 行で、大半は下の小道具の切り出し）。
+- 3.2 で本体と決めた `shell_balloon_switch_session_update_tests.rs` には `SwitchRig::new(` の字面が無い（3.2 で `lap_rig_on(switch_rig(…))` に替え済み）。`git grep -n "SwitchRig::new(" -- crates/areka/src/session_tests/` は 0 件。
+
+#### `use super::*` で引いていた私有の項目の数
+
+移した後の最初の `cargo check -p areka --bin areka --tests`（宣言と `use` を直す前・赤）が 186 件のエラーで止まった（`target/session-crate-split/3.4-red.txt`）。エラーをファイルと名で数えた:
+
+| 移したファイル | 親が定める私有の項目 | 親の `use` から借りていた名 |
+|---|---|---|
+| `ghost_session_reload_tests.rs` | 欄 `GhostSession::seriko`・`GhostSession::loop_ticker` | 11（`BalloonDecision`・`BootOrigin`・`GhostDecision`・`GhostNames`・`KanadeMsg`・`KanadeNotice`・`PathBuf`・`Schedules`・`Sender`・`World`・`mpsc`） |
+| `ghost_session_restart_tests.rs` | 欄 `PreparedWindows::spawn` | 13（`BalloonDecision`・`CommandSender`・`ConfigInputs`・`FrameFinalize`・`GhostDecision`・`KanadeNotice`・`PathBuf`・`Schedules`・`Sender`・`WintfTaskPool`・`World`・`app_exit`・`mpsc`） |
+| `ghost_session_strict_tests.rs` | ― | 7（`BalloonDecision`・`ConfigInputs`・`GhostDecision`・`KanadeNotice`・`PathBuf`・`World`・`mpsc`） |
+| `reload_tests.rs` | 関数 `reload::drain` | 7（`DescriptNotes`・`GhostSlot`・`ReloadTarget`・`ScriptReload`・`SkinSwitchInFlight`・`SwitchInFlight`・`TARGET_ERROR`） |
+| `write_failure_sites_tests.rs` | 関数 `write_failure::drain_system` | 3（`ExitOrigin`・`PersistFailure`・`World`〔`bevy_ecs::prelude::*`〕） |
+| `shell_balloon_switch_tests.rs` | ― | 1（`SkinCandidate`） |
+| `ghost_session_scope_rect_boot_tests.rs` | 親のテストのモジュール `tests` とその `LEFT_SCREEN`・`wiring::{fake_handle, placement}` | 1（`Arc`） |
+| `ghost_session_scope_scale_boot_tests.rs` | 親のテストのモジュール `tests` とその `applied` | 1（`TargetWindow`） |
+| `shell_balloon_switch_session_update_tests.rs` | 兄弟のテストのモジュール `shell_balloon_switch_session_lap_tests` とその小道具 | 0 |
+| ほかの 15 本 | ― | 0（名を指す `use` だけ・`boot_config_*` は `resolve_boot_from` の置き場の書き換えだけ） |
+
+- 親が定める私有の項目（`use super::*` の glob と親のモジュールの中の見え方で引いていたもの）は 5（関数 2・欄 3）。親の `use` から借りていた名はのべ 44 で、どれも親と同じ行を子に写した（私有の項目ではないので開けていない）。テストのモジュールの小道具は下の表。
+
+#### `pub(crate)` で開けた項目と使う本体のテスト（段 3 で `test-support` の条件へ替える）
+
+| 開けた項目（集めた層） | 前 | 使う本体のテストのファイル |
+|---|---|---|
+| `ghost_session.rs` の `GhostSession::seriko`・`GhostSession::loop_ticker`（欄） | 私有 | `ghost_session_reload_tests.rs` |
+| `ghost_session.rs` の `PreparedWindows::spawn`（欄） | 私有 | `ghost_session_restart_tests.rs` |
+| `reload.rs` の `drain` | 私有 | `reload_tests.rs` |
+| `write_failure.rs` の `drain_system` | 私有 | `write_failure_sites_tests.rs` |
+| `ghost_session_scope_rect.rs` の `mod tests`・`ghost_session_scope_rect_tests.rs` の `LEFT_SCREEN`・`mod wiring`・`wiring::fake_handle`・`wiring::placement` | 私有・`pub(super)` | `ghost_session_scope_rect_boot_tests.rs`（3.5 で `ghost_session_scope_rect_test_support.rs` へ移す） |
+| `ghost_session_scope_scale.rs` の `mod tests`・`ghost_session_scope_scale_tests.rs` の `applied` | 私有 | `ghost_session_scope_scale_boot_tests.rs`（3.5 で `ghost_session_scope_scale_test_support.rs` へ移す） |
+| `ghost_session.rs` の `mod shell_balloon_switch_session_lap_tests`・その `SECOND`・`UNBOUNDED`・`Ticks`・`LapRig`・`LapRig::rig`（欄）・`LapRig::frames_until`・`lap_rig_on`・`copy_tree`・`kinds`・`got`・`idle` | 私有・`pub(super)` | `shell_balloon_switch_session_update_tests.rs` |
+| `reload.rs` の `#[cfg(test)] pub(crate) mod test_support`（新設 `reload_test_support.rs`・`boot_context`・`plant_skin_switch`） | `reload_tests.rs` の `pub(super)` | `reload_tests.rs`（集めた層の `reload_skin_tests.rs` も使う） |
+
+- `reload_test_support.rs`（設計に無い・申し送り）: 集めた層に残す `reload_skin_tests.rs` が、本体へ移す `reload_tests.rs` の小道具 `boot_context`・`plant_skin_switch` を `super::tests::` で引いていた（TestPlacement の表の D8 ⑵ は本体へ移すファイルの足場が番人の crate に頼ることだけを見ていて、逆向きの使い手を数えていなかった）。2 つは番人の crate に頼らないので、D8 ⑵ の前者のとおり集めた層の兄弟 `reload_test_support.rs`（`#[test]` を持たない）へ写しを作らずに移し、両方から使う。`boot_context` の 1 つ目の引数は `&TempPath` から `&Path` に替え（中で使っていたのは `temp.path()` だけ）、呼び手 2 か所を `temp.path()` を渡す形にした（`test-support` には `temp-path-kit` を入れられないため）。4.1 で `lib.rs` に `ghost_session_scope_{rect,scale}_test_support` と同じ `#[cfg(any(test, feature = "test-support"))] pub mod` で宣言する対象に足す。
+- `shell_balloon_switch_session_lap_tests.rs` の小道具（3.2 の申し送り）は、この段ではテストのモジュールのまま `pub(crate)` で開けた。4.2 の公開面で、集めた層の `#[cfg(test)]` のモジュールは本体から見えなくなるので、置き場（`test-support` の兄弟へ移すか）を決める。足場の `LapRig` は `GpuPermit`（runtime の `test-support`）と `SwitchRig` に頼り、番人の crate に頼るか（`TempPath`・`capture`）はそのとき確かめる。
+
+#### 名前の末尾の比べ
+
+- コマンド: `cargo test -p areka --bin areka -- --list`（移す前 `target/session-crate-split/3.4-list-before.txt`・移した後 `3.4-list-after.txt`）。`: test` の行の最後の `::` の後を多重集合にして比べた（`3.4-tails-compare.txt`）。
+- 結果: 前 1844 行・後 1844 行。全体の末尾の多重集合は等しい（差 0）。道が変わったテストは 128 本で、前後の末尾の多重集合は等しい（例: `session::boot_config::option_tests::…` 17 本 → `session_tests::boot_config_option_tests::…` 17 本・`session::write_failure::sites_tests::…` 1 本 → `session_tests::sites_tests::…` 1 本）。
+
+#### 確かめ
+
+- 赤: 移して宣言を外しただけの `cargo check -p areka --bin areka --tests` が 186 件のエラー（上）。
+- 緑: `cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored（3.3 の終わりと同じ）。`cargo check -p areka --bin areka --tests` と `cargo check -p areka --bin areka` が警告 0。`cargo fmt --all -- --check` 差分なし。`git grep "SwitchRig::new(" -- crates/areka/src/session_tests/` 0 件。

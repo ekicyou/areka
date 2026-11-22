@@ -24,7 +24,7 @@ use crate::sample_test_support::switch_rig;
 use crate::session::alert::AlertScene;
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_config::{BootContext, CurrentGhost, resolve_boot_from};
+use crate::session::boot_config::{BootContext, CurrentGhost};
 use crate::session::boot_resolve::{
     BalloonDecision, BalloonRoute, DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute,
     read_last_ghost, read_session_mark, write_session_mark,
@@ -36,6 +36,7 @@ use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, 
 use crate::session::session_mark::{
     MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
 };
+use crate::session_tests::resolve_boot_from;
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;
 

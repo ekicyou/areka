@@ -48,7 +48,7 @@ use areka_runtime::spine::{
 use areka_runtime::target_map::shell_target;
 
 /// 2 つ目のシェルのフォルダ名（`descript.txt` の `name` も同じ）。
-pub(super) const SECOND: &str = "second";
+pub(crate) const SECOND: &str = "second";
 /// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
 const WORK_AREA: RectPx = RectPx {
     left: 0,
@@ -64,7 +64,7 @@ const TICK_EVERY: Duration = Duration::from_millis(1);
 /// 投函した Tick は talk スレッドが遅れると溜まり、後から一度に消化される。台詞の時計を観測より
 /// 先へ進めてはならない場面では、幅と回数で 1 回の待ちの進み幅を抑える。
 #[derive(Clone, Copy)]
-pub(super) struct Ticks {
+pub(crate) struct Ticks {
     step_ms: u64,
     max: usize,
 }
@@ -72,7 +72,7 @@ pub(super) struct Ticks {
 /// Tick を注入しない（台詞の時計を止めたまま回す）。
 pub(super) const NO_TICKS: Ticks = Ticks { step_ms: 0, max: 0 };
 /// 100 ms ずつ・上限なし（進み方を問わない場面）。
-pub(super) const UNBOUNDED: Ticks = Ticks {
+pub(crate) const UNBOUNDED: Ticks = Ticks {
     step_ms: 100,
     max: usize::MAX,
 };
@@ -97,8 +97,8 @@ const SECOND_SIZES: [(i32, i32); 2] = [(236, 462), (140, 160)];
 // ---------------------------------------------------------------- 土台
 
 /// 窓・GPU つきの往復の土台。
-pub(super) struct LapRig {
-    pub(super) rig: SwitchRig,
+pub(crate) struct LapRig {
+    pub(crate) rig: SwitchRig,
     pub(super) windows: GhostWindows,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
@@ -127,7 +127,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
 }
 
 /// [`lap_rig_of`] の土台を呼び手が組んで渡す形。
-pub(super) fn lap_rig_on(mut rig: SwitchRig, shells: &[&str]) -> LapRig {
+pub(crate) fn lap_rig_on(mut rig: SwitchRig, shells: &[&str]) -> LapRig {
     rig.plant_boot_record("A");
     for shell in shells {
         add_rpost_shell(&rig.root.ghost_dir("A"), shell);
@@ -226,7 +226,7 @@ fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
 }
 
 /// フォルダ `from` を `to` へ再帰で複製する（検体の複製の中だけで使う）。
-pub(super) fn copy_tree(from: &Path, to: &Path) {
+pub(crate) fn copy_tree(from: &Path, to: &Path) {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
@@ -292,7 +292,7 @@ impl LapRig {
     /// （`ui_moves`・巡を回した後に読む）。台詞の起動・表示・取りやめ・定常の知らせのように SHIORI を
     /// 呼ばずに進む仕事も進みに数え、負荷で遅いだけでは `［止まった］` で打ち切らない。
     #[track_caller]
-    pub(super) fn frames_until(
+    pub(crate) fn frames_until(
         &mut self,
         ticks: Ticks,
         mut done: impl FnMut(&SwitchRig) -> bool,
@@ -441,7 +441,7 @@ fn sizes(of: [(i32, i32); 2]) -> Vec<Option<(i32, i32)>> {
 }
 
 /// 呼出列の種別（`GET OnBoot` の形）。
-pub(super) fn kinds(calls: &[RecordedCall]) -> Vec<String> {
+pub(crate) fn kinds(calls: &[RecordedCall]) -> Vec<String> {
     calls
         .iter()
         .map(|c| match c {
@@ -472,7 +472,7 @@ pub(super) fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
 }
 
 /// `id` の GET が `n` 件以上届いたか。
-pub(super) fn got(rig: &SwitchRig, id: &str, n: usize) -> bool {
+pub(crate) fn got(rig: &SwitchRig, id: &str, n: usize) -> bool {
     refs_of(&calls_a(rig), id).len() >= n
 }
 
@@ -507,7 +507,7 @@ pub(super) fn done_marks(events: &[CapturedEvent]) -> Vec<Option<String>> {
 }
 
 /// 切替の進行中の印が無い。
-pub(super) fn idle(rig: &SwitchRig) -> bool {
+pub(crate) fn idle(rig: &SwitchRig) -> bool {
     rig.world.get_non_send::<SkinSwitchInFlight>().is_none()
 }
 

@@ -84,7 +84,7 @@
   - _Depends: 2.4_
   - _Dispatch: standard — 足場の道の確かめと表明を新しく書く_
   - _Requirements: 2.1, 2.2, 2.4, 5.5_
-- [ ] 3.4 本体に残すテストの置き場を作り、ファイルごと移す
+- [x] 3.4 本体に残すテストの置き場を作り、ファイルごと移す
   - 移す前に、本体へ移すテストが `use super::*` で引く私有の項目を数えて記録する
   - 本体に `session_tests/`（`main.rs` の `#[cfg(test)] mod session_tests;`）を作り、TestPlacement の表の「本体」の行と 3.2 で本体と決めた行のファイルを、名前を変えずに履歴を残す移動で移す（`#[path]` の親子の形は同じ並びで写す・`write_failure_sites_tests.rs` は `sites_tests` の名のまま宣言する）
   - 集めた層の親のファイルから移したテストの宣言を外し、`use super::*` を元の親のモジュールの `use` に替える。足りない私有の項目は 1 つずつ `pub(crate)` で開け、使う本体のテストのファイルの名と一緒に記録する（段 3 で `test-support` の条件へ替える）
@@ -222,3 +222,4 @@
 
 - 3.1: `RigSample::of(SampleRoot)` は設計に無い小道具（集めた層と本体の両方で 4 欄の初期化を写さないため）。段 3 で `test-support` が sample-ghost-kit を引けないなら `#[cfg(test)]` にするか本体の側へ移す。
 - 3.2: 本体へ移す `shell_balloon_switch_session_update_tests.rs` は集めた層の `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_on` ほかを使う。3.4 で移すときと 4.2 の公開面で、その小道具を `test-support` の条件で開ける（または小道具の置き場を決める）。
+- 3.4: 集めた層に残る `reload_skin_tests.rs` のために `session/reload_test_support.rs`（`boot_context`・`plant_skin_switch`、今は `#[cfg(test)] pub(crate) mod test_support`）を足した。4.1 の `lib.rs` で `ghost_switch_test_support` と同じ `test-support` の条件で宣言するかを決める。lap_tests の小道具（`lap_rig_on` ほか）も同じく 4.1・4.2 で置き場を決める。

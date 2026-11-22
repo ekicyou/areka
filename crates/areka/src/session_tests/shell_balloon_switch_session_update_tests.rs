@@ -14,12 +14,12 @@ use std::path::PathBuf;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::GhostSlot;
-use super::shell_balloon_switch_session_lap_tests::{
-    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
-};
 use crate::sample_test_support::switch_rig;
 use crate::session::boot_config::BootContext;
+use crate::session::ghost_session::GhostSlot;
+use crate::session::ghost_session::shell_balloon_switch_session_lap_tests::{
+    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
+};
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::update::desk::{ask_reload_for_test, resolve_targets};

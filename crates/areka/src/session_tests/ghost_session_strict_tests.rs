@@ -2,11 +2,18 @@
 
 use areka_kanade::{BootOrigin, ChangedFrom};
 
-use super::*;
 use crate::menu::MenuWiring;
+use crate::session::boot_config::ConfigInputs;
+use crate::session::boot_resolve::BalloonDecision;
+use crate::session::boot_resolve::GhostDecision;
 use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
+use crate::session::ghost_session::*;
 use areka_input::MouseWiring;
+use areka_kanade::KanadeNotice;
+use bevy_ecs::world::World;
 use log_capture_kit::capture;
+use std::path::PathBuf;
+use std::sync::mpsc;
 
 /// 結線が成立しない入力（ゴーストの根もバルーンの根も実在しない）。`wire_runtime` は資産の
 /// 組立で失敗し World に触れない。fallback の腕へ倒れれば LogSink の起動が試みられ、その起点

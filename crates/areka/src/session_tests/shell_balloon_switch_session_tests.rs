@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
-use super::{GhostSession, GhostSlot};
 use crate::sample_test_support::switch_rig;
+use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,

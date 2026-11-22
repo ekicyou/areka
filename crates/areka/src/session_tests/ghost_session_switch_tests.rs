@@ -14,11 +14,11 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use wintf::ecs::{FrameFinalize, Input, Update};
 
-use super::GhostBootInputsSource;
 use crate::menu::{Frame, MenuWiring};
 use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit};
 use crate::session::ghost_quit::KanadeNoticeRx;
+use crate::session::ghost_session::GhostBootInputsSource;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{
     CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
@@ -305,8 +305,12 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
     // 切替先の新しい単位は LogSink へ倒れた旗を持たない（倒れた理由を引き継がない）。
     let fallback = rig
         .world
-        .get_non_send::<super::GhostSlot>()
-        .and_then(|slot| slot.0.as_ref().map(super::GhostSession::logsink_fallback));
+        .get_non_send::<crate::session::ghost_session::GhostSlot>()
+        .and_then(|slot| {
+            slot.0
+                .as_ref()
+                .map(crate::session::ghost_session::GhostSession::logsink_fallback)
+        });
     let expected_changing = Some(vec![
         "Bのさくら".to_owned(),
         "automatic".to_owned(),

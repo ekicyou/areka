@@ -20,9 +20,9 @@ use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use temp_path_kit::TempPath;
 
-use super::*;
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
+use crate::session::app_exit::ExitOrigin;
 use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{
@@ -35,9 +35,12 @@ use crate::session::ghost_switch::{
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
+use crate::session::write_failure::*;
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
+use areka_sylphya::PersistFailure;
+use bevy_ecs::prelude::*;
 
 /// 13 種（アプリの記憶 6 種＋ゴーストごとの記憶 7 種）。
 /// 読み取りだけの行列（`readonly_sites_tests.rs`）も同じ表を読む。

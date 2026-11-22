@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::ReplySender;
-use areka_actor::reply_channel;
 use areka_ghost::BasewareRoot;
 use areka_kanade::{
     BootOrigin, GapLeft, GapRaise, KanadeMsg, RaiseOutcome, ReloadScope, ShioriMethod, TalkGap,
@@ -18,18 +17,24 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 use tracing::Level;
 
-use super::*;
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session::boot_config::BootContext;
 use crate::session::ghost_session::GhostSession;
+use crate::session::ghost_session::GhostSlot;
+use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch::{
     PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
 };
-use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchStage};
+use crate::session::log_history::TARGET_ERROR;
+use crate::session::reload::test_support::{boot_context, plant_skin_switch};
+use crate::session::reload::*;
+use crate::session::shell_balloon_switch::SkinKind;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
+use areka_runtime::reload_args::DescriptNotes;
 use areka_runtime::reload_args::DescriptParts;
-use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::reload_args::ReloadTarget;
+use areka_runtime::reload_args::ScriptReload;
+use areka_runtime::skin_switch::SkinSwitchInFlight;
 
 struct Rig {
     world: World,
@@ -44,7 +49,7 @@ fn rig(label: &str) -> Rig {
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(boot_context(&temp, &root));
+    world.insert_resource(boot_context(temp.path(), &root));
     let (tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
@@ -60,33 +65,6 @@ fn rig(label: &str) -> Rig {
         kanade,
         ghost,
         _temp: temp,
-    }
-}
-
-/// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`・根は `temp`）。`skin_tests` も使う。
-pub(super) fn boot_context(temp: &TempPath, root: &BasewareRoot) -> BootContext {
-    BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: temp.path().join("profile"),
-        helper_exe: temp.path().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("A"),
-                balloon_root: root.balloon_dir("kaku"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir("A"),
-                folder: Some("A".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("kaku"),
-                folder: Some("kaku".to_owned()),
-            },
-        },
     }
 }
 
@@ -125,25 +103,6 @@ fn plant_ghost_switch(world: &mut World) {
         stage: SwitchStage::SendOff,
         boot_event: None,
         copy: crate::session::switch_copy::SwitchCopy::None,
-    });
-}
-
-/// 他人のシェル／バルーンの切替の予約を直に置く（利用者の `\![change,shell,…]` の代わり）。`skin_tests` も使う。
-pub(super) fn plant_skin_switch(world: &mut World, kind: SkinKind, dir: &Path) {
-    world.insert_non_send(SkinSwitchInFlight {
-        kind,
-        target: SkinCandidate {
-            dir: dir.to_path_buf(),
-            folder: "planted".to_owned(),
-            name: None,
-            hidden: false,
-        },
-        stage: SkinSwitchStage::Waiting {
-            gap: Some(reply_channel().1),
-            gap_result: None,
-            build: mpsc::channel().1,
-            built: None,
-        },
     });
 }
 

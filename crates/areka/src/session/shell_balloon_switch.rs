@@ -323,7 +323,3 @@ pub(crate) fn discard_for_exit(world: &mut World) {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "shell_balloon_switch_tests.rs"]
-mod tests;

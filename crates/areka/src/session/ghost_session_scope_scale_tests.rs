@@ -20,7 +20,7 @@ fn ratio(num: u32, den: u32) -> ScaleRatio {
     ScaleRatio::new(num, den).unwrap()
 }
 
-fn applied(num: u32, den: u32, dpi_x: Option<u16>) -> AppliedScale {
+pub(crate) fn applied(num: u32, den: u32, dpi_x: Option<u16>) -> AppliedScale {
     AppliedScale {
         ratio: ratio(num, den),
         dpi_x,
@@ -217,6 +217,3 @@ fn wire_without_table_answers_nothing() {
         assert_eq!(resolve(&r, &name(shape, "0")), None, "{shape}");
     }
 }
-
-#[path = "ghost_session_scope_scale_boot_tests.rs"]
-mod boot;

@@ -49,6 +49,9 @@ mod runtime_tests;
 /// 本体のテストへ emo2 検体を配る入口（crate ごとに 1 つ）。
 #[cfg(test)]
 mod sample_test_support;
+/// 集めた層は本体を使えないので、本体の部品も使う session のテストはここに置く。
+#[cfg(test)]
+mod session_tests;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;

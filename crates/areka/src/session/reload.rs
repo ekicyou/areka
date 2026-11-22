@@ -146,7 +146,7 @@ pub(crate) fn register(world: &mut World) {
 /// shiori の切れ目の返事を覗く（[`poll_destroy`]・Input の系）。
 ///
 /// 受信端が無ければ取り出しは無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
-fn drain(world: &mut World) {
+pub(crate) fn drain(world: &mut World) {
     let pending: Vec<ScriptReload> = match world.get_non_send::<ReloadRx>() {
         Some(rx) => rx.try_iter().collect(),
         None => {
@@ -747,8 +747,8 @@ fn ghost_dir(world: &World) -> String {
 }
 
 #[cfg(test)]
-#[path = "reload_tests.rs"]
-mod tests;
+#[path = "reload_test_support.rs"]
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "reload_skin_tests.rs"]

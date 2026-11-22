@@ -18,10 +18,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, Update};
 
-use super::*;
 use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::FirstExit;
 use crate::session::boot_config::BootContext;
+use crate::session::boot_resolve::*;
 use crate::session::ghost_session::GhostSlot;
 use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 

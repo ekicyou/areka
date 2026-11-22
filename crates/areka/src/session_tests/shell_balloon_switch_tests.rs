@@ -31,14 +31,15 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 use wintf::ecs::Input;
 
-use super::*;
 use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use crate::session::shell_balloon_switch::*;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::talk_clock::TalkClock;
 
 // ---------------------------------------------------------------- 土台

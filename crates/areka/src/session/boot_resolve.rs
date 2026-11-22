@@ -758,9 +758,5 @@ mod boot_resolve_option_tests;
 mod boot_resolve_balloon_tests;
 
 #[cfg(test)]
-#[path = "boot_resolve_mark_text_tests.rs"]
-mod boot_resolve_mark_text_tests;
-
-#[cfg(test)]
 #[path = "boot_resolve_readonly_tests.rs"]
 mod boot_resolve_readonly_tests;

@@ -3,10 +3,11 @@
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session::boot_config::{BootResolved, resolve_boot_from};
+use crate::session::boot_config::BootResolved;
 use crate::session::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
 };
+use crate::session_tests::resolve_boot_from;
 use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;

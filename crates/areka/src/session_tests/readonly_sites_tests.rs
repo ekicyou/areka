@@ -23,6 +23,7 @@ use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load
 use bevy_ecs::prelude::*;
 use temp_path_kit::TempPath;
 
+use super::sites_tests::{KINDS, drain_desk};
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit};
@@ -38,7 +39,6 @@ use crate::session::ghost_switch::{
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
-use crate::session::write_failure::sites_tests::{KINDS, drain_desk};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;

@@ -76,7 +76,7 @@ fn log_failure(failure: &PersistFailure, moment: WriteMoment) {
 /// 別の出所で終わり始めた後（OS のセッションの終了を除く）は取り出さずに受け手へ残す。
 /// [`fatal`] へ渡しても最初の出所が勝って告知が出ないので、後始末の [`tell_at_close`] が
 /// 降ろす途中の失敗として告げる。
-fn drain_system(world: &mut World) {
+pub(crate) fn drain_system(world: &mut World) {
     let Some(rx) = world.get_non_send::<WriteFailureRx>() else {
         return;
     };
@@ -233,10 +233,6 @@ pub(crate) fn tell_at_close(
 #[cfg(test)]
 #[path = "write_failure_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "write_failure_sites_tests.rs"]
-pub(crate) mod sites_tests;
 
 #[cfg(test)]
 #[path = "write_failure_probe_tests.rs"]

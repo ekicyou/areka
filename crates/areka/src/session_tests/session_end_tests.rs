@@ -17,7 +17,6 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
-use super::{SessionEnded, end_session_within, on_os_session_end};
 use crate::sample_test_support::switch_rig;
 use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::session::boot_config::ConfigInputs;
@@ -29,6 +28,7 @@ use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::session::ghost_session::{GhostSession, GhostSlot};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+use crate::session::session_end::{SessionEnded, end_session_within, on_os_session_end};
 use crate::{after_run, finish_after_run};
 use areka_runtime::spine::RecordedCall;
 

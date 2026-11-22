@@ -1,4 +1,4 @@
-use super::ConfigInputs;
+use crate::session::boot_config::ConfigInputs;
 use std::path::PathBuf;
 
 /// `ConfigInputs` は解決済みルートパスを保持する（型の存在確認）。
@@ -20,8 +20,8 @@ fn config_inputs_holds_resolved_roots() {
 
 mod boot {
     use crate::session::alert::AlertScene;
-    use crate::session::boot_config::resolve_boot_from;
     use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
+    use crate::session_tests::resolve_boot_from;
     use log_capture_kit::capture;
     use std::path::Path;
     use temp_path_kit::TempPath;
@@ -160,11 +160,12 @@ mod boot {
 // それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
 
 mod switch_balloon {
-    use crate::session::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
+    use crate::session::boot_config::resolve_balloon_for_ghost;
     use crate::session::boot_resolve::{
         BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark,
         write_session_mark,
     };
+    use crate::session_tests::resolve_boot_from;
     use log_capture_kit::capture;
     use std::path::{Path, PathBuf};
     use temp_path_kit::TempPath;

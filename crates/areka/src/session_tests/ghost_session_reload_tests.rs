@@ -7,12 +7,23 @@ use sample_ghost_kit::SampleRoot;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 
-use super::*;
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
+use crate::session::boot_resolve::BalloonDecision;
+use crate::session::boot_resolve::GhostDecision;
 use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
+use crate::session::ghost_session::*;
 use crate::session::runtime_boot;
+use areka_kanade::BootOrigin;
+use areka_kanade::KanadeMsg;
+use areka_kanade::KanadeNotice;
+use areka_parsers::package::GhostNames;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
+use bevy_ecs::schedule::Schedules;
+use bevy_ecs::world::World;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 
 fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
     sample

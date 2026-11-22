@@ -5,8 +5,8 @@
 //! ときの既定ゴーストも口を通る」「口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない）」。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session::boot_config::resolve_boot_from;
 use crate::session::boot_resolve::{BalloonRoute, GhostRoute, write_session_mark};
+use crate::session_tests::resolve_boot_from;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;

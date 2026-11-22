@@ -4,7 +4,7 @@ use super::*;
 use areka_sylphya::parse_dotted;
 
 /// 主の画面より左上の画面の矩形（SSP の段 1 の値）。
-const LEFT_SCREEN: ScreenRect = ScreenRect {
+pub(crate) const LEFT_SCREEN: ScreenRect = ScreenRect {
     left: -782,
     top: 201,
     right: 49,
@@ -339,7 +339,7 @@ fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
 
 // ---- 表の出し方（結線と系）----
 
-mod wiring {
+pub(crate) mod wiring {
     use super::super::*;
     use super::{LEFT_SCREEN, keys, rect_of};
     use areka_placement::follow::OffsetBase;
@@ -355,13 +355,13 @@ mod wiring {
     use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
     use wintf::ecs::{Point, WindowPos, WindowStyle};
 
-    pub(super) fn fake_handle(raw: usize) -> WindowHandle {
+    pub(crate) fn fake_handle(raw: usize) -> WindowHandle {
         WindowHandle {
             hwnd: HWND(raw as *mut _),
         }
     }
 
-    pub(super) fn placement() -> ScopePlacement {
+    pub(crate) fn placement() -> ScopePlacement {
         ScopePlacement {
             scope: 0,
             char_pos: PointPx { x: 1483, y: 733 },
@@ -637,7 +637,3 @@ mod wiring {
         assert_eq!(updated(&lines), 1, "{lines:?}");
     }
 }
-
-// 本物の起動（切替の試験台）を通す結合テスト（切替・起動し直し）。
-#[path = "ghost_session_scope_rect_boot_tests.rs"]
-mod boot;
