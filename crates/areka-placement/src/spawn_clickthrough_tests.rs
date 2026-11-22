@@ -48,7 +48,7 @@ fn register_schedule() -> Schedule {
 /// 登録呼び出しが発生し、(Entity, HWND) が正値・再実行で重複登録しない・
 /// 後から HWND が付いた窓も追加で 1 回だけ登録される。
 #[test]
-fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
+fn register_system_registers_ghost_windows_on_added_window_handle_once() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -83,7 +83,7 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
 /// `GhostWindowMarker` を持たない窓は `WindowHandle` が付いても
 /// 登録されない（標的は placement 生成窓のみ）。
 #[test]
-fn t_i4_register_system_ignores_non_ghost_windows() {
+fn register_system_ignores_non_ghost_windows() {
     let mut world = World::new();
     world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
@@ -97,7 +97,7 @@ fn t_i4_register_system_ignores_non_ghost_windows() {
 /// 登録の口が無い World で新しい窓に `WindowHandle` が付くと、取りこぼしを
 /// `warn!` 1 行で残す（Added は 1 度きりなので黙ると見えなくなる）。
 #[test]
-fn t_i4_missing_registrar_warns_once_for_a_new_window() {
+fn missing_registrar_warns_once_for_a_new_window() {
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
     let char0 = gw.char_window(0).unwrap();

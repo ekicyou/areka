@@ -89,7 +89,7 @@ fn window_position(world: &World, e: Entity) -> Point {
 /// `spawn_ghost_windows` の `BalloonFollow.offset` が `resolve_placement`
 /// の `balloon_offset` と一致する（実パイプライン・左右両変種）。
 #[test]
-fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
+fn follow_offset_matches_resolver_output_through_real_pipeline() {
     let (world, gw, placements) = real_pipeline_world();
 
     assert_eq!(
@@ -166,7 +166,7 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
 /// spawn 済み entity への `move_window_to` で、バルーンが resolver 由来
 /// offset を保って追従する（複数回移動でも offset 静的・他スコープ不干渉）。
 #[test]
-fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
+fn move_window_to_keeps_balloon_offset_across_multiple_moves() {
     let (mut world, gw, placements) = real_pipeline_world();
     give_fake_handles(&mut world, &gw);
 
@@ -224,7 +224,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
 /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の
 /// `on_balloon_drag`）を呼んで検証する＝結線の檻を兼ねる。
 #[test]
-fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
+fn char_move_follows_adjusted_offset_after_balloon_solo_drag() {
     let (mut world, gw, placements) = real_pipeline_world();
     give_fake_handles(&mut world, &gw);
     let p = &placements[0];

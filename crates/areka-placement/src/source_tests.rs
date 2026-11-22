@@ -38,7 +38,7 @@ pub(crate) fn write_minimal_ghost_descript(root: &Path) {
 /// emo2 fixture から `load_descript_source` を呼び、`shell_kv` に
 /// 実測キー（`seriko.alignmenttodesktop=bottom` 等）が含まれる。
 #[test]
-fn t_i5_emo2_fixture_loads_descript_source() {
+fn emo2_fixture_loads_descript_source() {
     let src =
         load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
 
@@ -87,7 +87,7 @@ fn t_i5_emo2_fixture_loads_descript_source() {
 /// emo2 の `GhostTitles` は `sakura.name`/`kero.name` を写像し、
 /// 未定義スコープは既定 `"areka"` を返す（パニックしない）。
 #[test]
-fn t_i5_emo2_titles_from_names() {
+fn emo2_titles_from_names() {
     let src =
         load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
 

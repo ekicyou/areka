@@ -157,6 +157,7 @@
 ## 棚卸㊷からの申し送り（2026-11-22）
 
 - 本体の `crates/areka/src/runtime_tests/zorder_wiring_tests.rs` の作業番号の札つきのテスト 2 本（`t_zwi05_…`・`t_zwi08_…`）の名から札を外す（`test-name-work-tags` の受け持ちだったが、同じウェーブ C25 の `session-crate-split` がこのファイルの `include_str!` のパスを直すので、本体の残りを受け持つこの見直しへ寄せた）。外し方は `test-name-work-tags` と同じ＝札だけを外し、ぶつかるときだけ中身を表す語を足す。名指し（`doc/COMPAT_ARCHITECTURE.md` §8 ほか）も同じコミットで直す。
+- 同じ 2 本の改名と同じコミットで、本体の `runtime_tests/zorder_wiring_tests.rs` の冒頭の説明コメントの名指しを改名表（`.kiro/specs/completed/test-name-work-tags/rename-table.tsv`）の新しい名へ直し、番号の札を消す。11 行の `areka-runtime` の側の 1 本は `the_frame_system_is_ordered_before_the_chain_apply` に当たる。13 行の到達性は `a_script_tag_reaches_the_ledger_through_the_wired_channel`・`a_script_without_the_tag_leaves_the_mechanism_absent`、相順と相の呼出は `the_frame_system_is_ordered_before_the_chain_apply`・`the_frame_calls_the_zorder_drain_after_the_size_reconcile`、基底を据える順は `the_boot_seats_the_descript_base_before_inserting_the_wiring` に当たる。4・5・10 行は本体の 2 本を指すので、2 本の改名に合わせて番号を消し、中身の言葉の説明を残す（2 本の新しい名は札を外した `the_boot_wires_the_channel_the_sink_and_the_handoff`・`the_entry_point_carries_the_shell_setting_into_the_wiring`）。`areka-runtime` の `zorder_wiring_tests.rs` の冒頭は、番号の札を消して中身の言葉の説明を残す形にしてある。
 
 ## 申し送り（dola-cue-test-builder より）
 

@@ -112,7 +112,7 @@ fn final_owner_violations(plan: &ChainPlan, scopes: &[u32]) -> Vec<String> {
 /// `s0,b0,b1,s1`（ぱすたの `s0,b0,s1` の補い後）の繋ぎは `s0←b0`・`b0←b1` の 2 本だけ。
 /// `b1,s1` は連続する組なので組の結び目が受け持つ。
 #[test]
-fn t_zcw01_inverted_scope_zero_joins_only_two_edges() {
+fn inverted_scope_zero_joins_only_two_edges() {
     let groups = [tag_group(1, &["s0", "b0", "b1", "s1"])];
     let plan = compose_full(&groups, &[0, 1]);
 
@@ -134,7 +134,7 @@ fn t_zcw01_inverted_scope_zero_joins_only_two_edges() {
 /// `b1,s0,s1,b0`（両スコープとも非隣接・スコープ 0 は逆転も）の繋ぎは 3 本
 /// （`b1←s0`・`s0←s1`・`s1←b0`）。連続する組が無いので除く連続も無い。
 #[test]
-fn t_zcw02_split_scopes_join_every_consecutive_pair() {
+fn split_scopes_join_every_consecutive_pair() {
     let groups = [tag_group(1, &["b1", "s0", "s1", "b0"])];
     let plan = compose_full(&groups, &[0, 1]);
 
@@ -154,7 +154,7 @@ fn t_zcw02_split_scopes_join_every_consecutive_pair() {
 /// かたまりとして後ろへ連なり、その組は繋がない。グループの末尾から後ろへの
 /// 渡りは手前側（グループ）の区間で記録される。
 #[test]
-fn t_zcw03_tail_participation_is_unchanged_behind_an_inverted_group() {
+fn tail_participation_is_unchanged_behind_an_inverted_group() {
     let groups = [tag_group(1, &["s0", "b0", "b1", "s1"])];
     let scopes = [3, 0, 2, 1];
     let plan = compose_full(&groups, &scopes);
@@ -195,7 +195,7 @@ fn permutations(items: &mut Vec<GroupElement>, k: usize, out: &mut Vec<Vec<Group
 /// 全順列を指定にする。後ろ側の参加も混ぜるため在庫には常にスコープ 3 を足す。
 /// どの指定でも最後の持ち主の関係は連続する 2 枚の全部と一致し、一直線になる。
 #[test]
-fn t_zcw04_every_written_order_yields_one_straight_line() {
+fn every_written_order_yields_one_straight_line() {
     let scopes = [0, 1, 2, 3];
     let mut checked = 0usize;
     let mut seen_inverted = false;
@@ -253,7 +253,7 @@ fn t_zcw04_every_written_order_yields_one_straight_line() {
 /// 檻の較正: 同一スコープ対の除外を外した繋ぎ（連続対の全部）を当てると、全数の検査器は
 /// 組の結び目との二重書きを赤で掴む。
 #[test]
-fn t_zcw05_the_checker_catches_a_pair_edge_written_by_the_chain() {
+fn the_checker_catches_a_pair_edge_written_by_the_chain() {
     let groups = [tag_group(1, &["s0", "b0", "b1", "s1"])];
     let mut plan = compose_full(&groups, &[0, 1]);
     plan.cross_edges = all_consecutive_edges(&plan.members, ChainSegment::Group(1));

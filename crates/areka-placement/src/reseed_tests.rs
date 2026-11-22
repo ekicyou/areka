@@ -54,7 +54,7 @@ fn char_window_count(world: &mut World) -> usize {
 /// バルーン窓は新しいずらしで 1 度置き直される。`char2.` のキーがあっても設定にスコープ 2 は
 /// 現れないので、読み飛ばしの記録は 0 件。
 #[test]
-fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
+fn new_offset_and_alignment_reach_the_char_window_parts() {
     let (mut world, windows) = booted_world(96);
     let before = char_positions(&world, &windows);
 
@@ -117,7 +117,7 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
 
 /// 保存済みのバルーンのずらしは新しいシェルの値より優先して保たれる（起動と同じ規則）。
 #[test]
-fn t_rs02_saved_balloon_offset_survives_the_reseed() {
+fn saved_balloon_offset_survives_the_reseed() {
     let (mut world, windows) = booted_world(96);
 
     apply_shell_descript(
@@ -150,7 +150,7 @@ fn t_rs02_saved_balloon_offset_survives_the_reseed() {
 
 /// 作者の空間のずらしは、起動と同じく窓の DPI ÷ 作者の DPI で物理 px へ換算する。
 #[test]
-fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
+fn author_offset_is_scaled_by_the_window_dpi() {
     let (mut world, windows) = booted_world(192);
 
     apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]);
@@ -186,7 +186,7 @@ fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
 /// 同じ作業領域でも窓の DPI が違うスコープは、それぞれの DPI で解く（同じ作業領域と DPI の窓
 /// だけを 1 度にまとめる）。拡大率の移り変わりの途中で、スコープ 0 が 96・スコープ 1 が 192 の形。
 #[test]
-fn t_rs03b_scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
+fn scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
     let (mut world, windows) = booted_world(96);
     let dpi192 = DPI::from_dpi(192, 192);
     for window in [windows.char_window(1), windows.balloon_window(1)] {
@@ -222,7 +222,7 @@ fn t_rs03b_scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
 
 /// 窓が無いスコープは `warn!` を 1 件残して読み飛ばし、残りのスコープは続ける。
 #[test]
-fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
+fn a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
     let (mut world, windows) = booted_world(96);
     world.despawn(windows.char_window(1).unwrap());
 
@@ -247,7 +247,7 @@ fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
 
 /// バルーン窓が無いスコープと、バルーン窓の大きさが読めないスコープは別の理由で読み飛ばす。
 #[test]
-fn t_rs04c_balloon_window_gone_and_size_unknown_have_their_own_reasons() {
+fn balloon_window_gone_and_size_unknown_have_their_own_reasons() {
     type Break = fn(&mut World, Entity);
     let cases: [(&str, Break); 2] = [
         ("balloon_window_gone", |world, balloon| {
@@ -283,7 +283,7 @@ fn t_rs04c_balloon_window_gone_and_size_unknown_have_their_own_reasons() {
 /// の相方の側を「連鎖した仮の X の中心」で決めさせる（連鎖なら中央より左＝右側、スコープ単独で
 /// 解けば右端＝左側になって起動と割れる）。作業領域は起動と同じ `WA`。
 #[test]
-fn t_rs05_reseed_matches_boot_for_the_same_inputs() {
+fn reseed_matches_boot_for_the_same_inputs() {
     with_com_initialized(|| {
         let root = TempDir::new();
         let (kw_ghost, kw_balloon) =
@@ -375,7 +375,7 @@ fn anchor_of(world: &World, windows: &GhostWindows, scope: usize) -> (Anchor, An
 /// （`top`）になる。どの窓も `AnchorSource.descript` は新しい値。向きが変わった窓だけ
 /// `alignment_changed`（shell_switch）が出て、`move_window` は書き手どおり（組なし・`free` だけ真）。
 #[test]
-fn t_rs06_script_alignment_survives_and_unmarked_scopes_take_the_new_shell() {
+fn script_alignment_survives_and_unmarked_scopes_take_the_new_shell() {
     let (mut world, windows) = booted_world(96);
     let c0 = windows.char_window(0).unwrap();
     world.entity_mut(c0).insert((
@@ -440,7 +440,7 @@ fn t_rs06_script_alignment_survives_and_unmarked_scopes_take_the_new_shell() {
 /// `move_window` は書き手（帳簿と向き）から付け直す: 組 `{0,1}` の窓は、新しい
 /// シェルが `free` でも wintf に動かさせない。
 #[test]
-fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
+fn move_window_follows_the_drag_writer_for_grouped_windows() {
     let (mut world, windows) = booted_world(96);
     crate::sticky_group_ledger::seed_sticky_descript(&mut world, Some("0,1"));
 
@@ -457,7 +457,7 @@ fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
 /// 知らない `alignmenttodesktop` の値の警告は、走っているスコープの数によらずスコープごとに 1 行
 /// （同じ作業領域と DPI の窓は 1 度だけ解く）。
 #[test]
-fn t_rs08_unknown_alignment_warns_once_per_scope() {
+fn unknown_alignment_warns_once_per_scope() {
     let (mut world, windows) = booted_world(96);
 
     let ((), events) = capture(|| {
@@ -484,7 +484,7 @@ fn t_rs08_unknown_alignment_warns_once_per_scope() {
 
 /// 作業領域を引けないスコープは `warn!`（`reseed_work_area_missing`）を残してから窓の矩形で代える。
 #[test]
-fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {
+fn missing_work_area_warns_before_substituting_the_window_rect() {
     let (mut world, windows) = booted_world(96);
     world.remove_resource::<MonitorSnapshot>();
 
@@ -502,7 +502,7 @@ fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {
 /// 走っているバルーンの `windowposition.limit,0` は、シェルの切り替えでそのスコープのバルーン窓の
 /// `BalloonLimit` へ入る（起動の値 `true` のまま残さない）。
 #[test]
-fn t_rs09_balloon_limit_is_reinstalled_from_the_new_placement() {
+fn balloon_limit_is_reinstalled_from_the_new_placement() {
     let (mut world, windows) = booted_world(96);
     let limit = |world: &World, scope| {
         world
@@ -553,7 +553,7 @@ fn reanchor_to_top(
 /// 見送り（位置は前のまま・`reseed_held` の `debug!`）、札の無い窓は新しい揃え方へ動かす。
 /// 見送りを外すと札のある窓への書込が窓書込の口の `debug_assert!`（`route=Some(AnchorChange)`）で落ちる。
 #[test]
-fn t_rs10_reanchor_holds_a_window_with_the_dpi_sync_tag() {
+fn reanchor_holds_a_window_with_the_dpi_sync_tag() {
     let (before_world, before_windows) = booted_world(96);
     let before = char_positions(&before_world, &before_windows);
 
@@ -573,7 +573,7 @@ fn t_rs10_reanchor_holds_a_window_with_the_dpi_sync_tag() {
 /// 札を外して拡大率の相の書込（`DpiReproject`）を通すと、見送った窓は入れ直した
 /// 揃え方の位置（札が無かったときの置き直しと同じ位置）に置かれる。
 #[test]
-fn t_rs11_held_window_takes_the_new_alignment_once_the_tag_is_removed() {
+fn held_window_takes_the_new_alignment_once_the_tag_is_removed() {
     let (untagged_world, untagged_windows, _) = reanchor_to_top(None);
     let want = char_positions(&untagged_world, &untagged_windows)[0];
     let (boot_world, boot_windows) = booted_world(96);

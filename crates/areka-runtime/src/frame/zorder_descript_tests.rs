@@ -66,7 +66,7 @@ fn window_of(world: &World, scope: usize, kind: GroupWindowKind) -> Entity {
 /// 記録も併せて確かめる——出所が `Descript` であることが、起動由来とタグ由来を弁別する
 /// 唯一の欄だからである。
 #[test]
-fn t_zdb01_a_numeric_setting_seats_exactly_one_descript_base() {
+fn a_numeric_setting_seats_exactly_one_descript_base() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("1,0")));
@@ -108,7 +108,7 @@ fn t_zdb01_a_numeric_setting_seats_exactly_one_descript_base() {
 ///
 /// 上の檻だけでは「何を渡しても 1 本据わる」形と区別が付かない。
 #[test]
-fn t_zdb02_no_setting_leaves_the_ledger_and_the_log_untouched() {
+fn no_setting_leaves_the_ledger_and_the_log_untouched() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let logs = capture_logs(|| apply_descript_base(&mut ledger, None));
@@ -137,7 +137,7 @@ fn t_zdb02_no_setting_leaves_the_ledger_and_the_log_untouched() {
 /// 混ぜてあるのは、この錨を自足させるためである。隣り合いの並びだけを与えると
 /// 「バルーン先頭へ寄せ直す」型の第 2 解釈器が素通りする。
 #[test]
-fn t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses() {
+fn the_setting_is_read_by_the_very_function_the_tag_uses() {
     for raw in [
         "1,0",
         "balloon1,surface1,balloon0,surface0",
@@ -162,7 +162,7 @@ fn t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses() {
 
 /// 同一スコープ内の逆転も、タグと同じ解釈で書かれた順のまま据わり、逆転が記録に載る（起動の経路でも同じ）。
 #[test]
-fn t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded() {
+fn an_inverted_setting_is_seated_in_written_order_and_recorded() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("s1,b1,s0,b0")));
@@ -189,7 +189,7 @@ fn t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded() {
 
 /// 解釈できない値は**グループを 1 本も載せず**、受け取った値と理由を warn で残す。
 #[test]
-fn t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason() {
+fn an_unreadable_setting_seats_nothing_and_records_value_and_reason() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("balloon1,Surface0x")));
@@ -232,7 +232,7 @@ fn t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason() {
 /// 3 種類の落ち方を 1 本に並べるのは、**どの経路でも記録が出る**ことが
 /// 主張だからである。
 #[test]
-fn t_zdb06_short_and_empty_settings_are_rejected_with_a_reason() {
+fn short_and_empty_settings_are_rejected_with_a_reason() {
     for (raw, reason) in [
         ("0", "reason=TooFewElements(1)"),
         ("", "reason=UnparsableToken()"),
@@ -264,7 +264,7 @@ fn t_zdb06_short_and_empty_settings_are_rejected_with_a_reason() {
 /// 上の 2 本は「載らない」を主張するが、それだけでは「据わっていたものを消してから
 /// 載せ損ねる」形と区別が付かない。
 #[test]
-fn t_zdb07_a_rejected_setting_does_not_disturb_a_seated_base() {
+fn a_rejected_setting_does_not_disturb_a_seated_base() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
     let seated = base_of(&ledger)
@@ -289,7 +289,7 @@ fn t_zdb07_a_rejected_setting_does_not_disturb_a_seated_base() {
 /// これが起動時適用の完了状態である（「タグの実行を待たない」）。
 /// 1 つの設定は 1 つのグループとして扱われるので、鎖の並びは設定の要素順そのものになる。
 #[test]
-fn t_zdb08_the_seated_base_projects_on_the_first_pass_without_any_tag() {
+fn the_seated_base_projects_on_the_first_pass_without_any_tag() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
     assert_eq!(
@@ -327,7 +327,7 @@ fn t_zdb08_the_seated_base_projects_on_the_first_pass_without_any_tag() {
 
 /// 逆側——設定が無ければ、同じ巡で受け口の Resource すら作られない。
 #[test]
-fn t_zdb09_without_a_setting_the_first_pass_creates_no_receiver() {
+fn without_a_setting_the_first_pass_creates_no_receiver() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, None);
 
@@ -345,7 +345,7 @@ fn t_zdb09_without_a_setting_the_first_pass_creates_no_receiver() {
 ///
 /// 台帳に本当に載っていることの、射影とは独立した証拠である。
 #[test]
-fn t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal() {
+fn the_seated_base_takes_part_in_the_redesignation_refusal() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
 
@@ -384,7 +384,7 @@ fn t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal() {
 /// 起動の結線（`wire_runtime`）が触れるのはこの口だけなので、ここが台帳へ届かなければ
 /// 設定は本番で一切効かない。逆側（設定なし）も同じ口で確かめる。
 #[test]
-fn t_zdb11_the_boot_entry_point_seats_the_base_in_the_wired_ledger() {
+fn the_boot_entry_point_seats_the_base_in_the_wired_ledger() {
     let mut wiring = headless_wiring_with(channel().1, zero_clock());
     assert!(
         wiring.zorder_ledger.groups().is_empty(),
@@ -404,7 +404,7 @@ fn t_zdb11_the_boot_entry_point_seats_the_base_in_the_wired_ledger() {
 
 /// 逆側——設定が無ければ結線状態の台帳は既定のままである。
 #[test]
-fn t_zdb12_the_boot_entry_point_leaves_the_ledger_default_without_a_setting() {
+fn the_boot_entry_point_leaves_the_ledger_default_without_a_setting() {
     let mut wiring = headless_wiring_with(channel().1, zero_clock());
 
     wiring.seed_zorder_descript_base(None);
@@ -443,7 +443,7 @@ fn tag_members(ledger: &ZOrderGroupLedger) -> Vec<String> {
 
 /// 新しいシェルの値は基底として先頭に据わり、台本の組は残る。記録は保った組と旧→新の 1 行。
 #[test]
-fn t_zdb13_rebase_keeps_the_script_group_and_replaces_the_base() {
+fn rebase_keeps_the_script_group_and_replaces_the_base() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("0,1")));
@@ -483,7 +483,7 @@ fn t_zdb13_rebase_keeps_the_script_group_and_replaces_the_base() {
 
 /// 新しいシェルに設定が無ければ基底なしで取り替え、台本の組は残る。記録は保った組と旧→`-`。
 #[test]
-fn t_zdb14_rebase_without_a_setting_drops_only_the_base() {
+fn rebase_without_a_setting_drops_only_the_base() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, None));
@@ -509,7 +509,7 @@ fn t_zdb14_rebase_without_a_setting_drops_only_the_base() {
 
 /// 逆側——保つものも取り替えるものも無い切り替えでは台帳も記録も動かない。
 #[test]
-fn t_zdb14b_rebase_with_nothing_to_keep_or_replace_records_nothing() {
+fn rebase_with_nothing_to_keep_or_replace_records_nothing() {
     let mut ledger = ZOrderGroupLedger::default();
     let before = ledger.version();
 
@@ -522,7 +522,7 @@ fn t_zdb14b_rebase_with_nothing_to_keep_or_replace_records_nothing() {
 
 /// 解釈できない値も基底なしで取り替え、拒否は起動と同じ記録で 1 本残す。台本の組は残る。
 #[test]
-fn t_zdb15_rebase_with_an_unreadable_setting_drops_the_base_and_records_the_rejection() {
+fn rebase_with_an_unreadable_setting_drops_the_base_and_records_the_rejection() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("1,x")));
@@ -555,7 +555,7 @@ fn t_zdb15_rebase_with_an_unreadable_setting_drops_the_base_and_records_the_reje
 
 /// 台本の組と重なる新しい基底は据えず、重なったスコープと値を拒否として残す。
 #[test]
-fn t_zdb16_rebase_refuses_a_base_overlapping_the_script_group() {
+fn rebase_refuses_a_base_overlapping_the_script_group() {
     let mut ledger = ledger_with_base_and_tag();
 
     let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("3,0")));
@@ -594,7 +594,7 @@ fn t_zdb16_rebase_refuses_a_base_overlapping_the_script_group() {
 
 /// 切り替えの後の `\![reset,zorder]` で台本の組が落ち、据え損ねた新しい基底へ戻る。
 #[test]
-fn t_zdb17_reset_after_rebase_returns_to_the_new_shell_base() {
+fn reset_after_rebase_returns_to_the_new_shell_base() {
     let mut ledger = ledger_with_base_and_tag();
     apply_descript_rebase(&mut ledger, Some("3,0"));
     assert!(
@@ -631,7 +631,7 @@ fn t_zdb17_reset_after_rebase_returns_to_the_new_shell_base() {
 
 /// 重なりの無い切り替えの後の reset も、取り替えた新しい基底へ戻る。
 #[test]
-fn t_zdb18_reset_after_a_clean_rebase_keeps_the_new_base() {
+fn reset_after_a_clean_rebase_keeps_the_new_base() {
     let mut ledger = ledger_with_base_and_tag();
     apply_descript_rebase(&mut ledger, Some("0,1"));
 

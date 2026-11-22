@@ -4,18 +4,18 @@
 // ここで確かめるのは判断ではなく**配線**である。受け口も台帳も相の本体も既に在って
 // 兄弟のテストが判断を全部押さえているので、ここで測るのは次の 3 点だけになる。
 //
-// 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性・zwi01／02）。
-// 2. 相順と相の呼出の字面（zwi06／07）。呼出を丸ごと削っても判断のテストは 1 本も赤くならず
+// 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性）。
+// 2. 相順と相の呼出の字面。呼出を丸ごと削っても判断のテストは 1 本も赤くならず
 //    （実際に削って確かめてある）、相順に至っては「是正が 1 心拍ぶん遅れる」だけなので、
 //    実窓を持たない檻には**原理的に**映らない。
-// 3. shell 設定由来の基底を据える側（`lib.rs`）の字面（zwi09）。据える行を落としても
+// 3. shell 設定由来の基底を据える側（`lib.rs`）の字面。据える行を落としても
 //    「設定を書いていないゴースト」と全く同じ挙動になるので、挙動を見る檻には映らない。
 //
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
 // （各檻の末尾に両方向の対照を置いてある）。
 //
-// 起動の結線の字面（zwi05）と、設定の値を `main` から結線へ運ぶ行の字面（zwi08）は、
+// 起動の結線の字面と、設定の値を `main` から結線へ運ぶ行の字面は、
 // `areka` の `runtime_tests/` の同じ名前のファイルにある。
 // =============================================================================
 
@@ -90,7 +90,7 @@ fn world_with_scopes(scopes: &[usize]) -> World {
 /// 台本には他人宛の演出も文字も流れるので、同じ受け口へまとめて浴びせる。届いてよいのは
 /// 1 本だけであり、他の cue は台帳にも受け口にも痕跡を残さない。
 #[test]
-fn t_zwi01_a_script_tag_reaches_the_ledger_through_the_wired_channel() {
+fn a_script_tag_reaches_the_ledger_through_the_wired_channel() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     let mut ledger = ZOrderGroupLedger::default();
@@ -145,7 +145,7 @@ fn t_zwi01_a_script_tag_reaches_the_ledger_through_the_wired_channel() {
 ///
 /// 上の檻だけでは「何を浴びせても 1 本載る」形と区別が付かない。
 #[test]
-fn t_zwi02_a_script_without_the_tag_leaves_the_mechanism_absent() {
+fn a_script_without_the_tag_leaves_the_mechanism_absent() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     let mut ledger = ZOrderGroupLedger::default();
@@ -179,9 +179,9 @@ fn t_zwi02_a_script_without_the_tag_leaves_the_mechanism_absent() {
 /// 同じなので、挙動を見る檻には映らない——ここは 2 点を名指しで押さえる。本番の登録先が
 /// `Update` であること（旧い `.before` の形が残っていないこと）・その段が 1 巡で末尾の段
 /// より前に回ること。登録先そのものの構造の檻は
-/// `frame_schedule_tests.rs`（T-N10）が受け持つ。
+/// `frame_schedule_tests.rs`（`before_the_registration_the_update_stage_holds_nothing`・`the_registration_lands_the_frame_system_in_update_only`）が受け持つ。
 #[test]
-fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
+fn the_frame_system_is_ordered_before_the_chain_apply() {
     let raw = include_str!("lib.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
@@ -230,7 +230,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
 /// 呼出を丸ごと削っても判断の檻は 1 本も赤くならない（実際に削って確かめてある）。
 /// ここが唯一その削除を捕まえる。
 #[test]
-fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
+fn the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
     let raw = include_str!("frame.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
@@ -279,7 +279,7 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
 /// ここが押さえるのは**呼出が 1 つだけ在ること**と**載せるより手前に在ること**である。
 /// 呼出を丸ごと削っても、設定を書いていないゴーストと同じ挙動になるだけで誰も気づかない。
 #[test]
-fn t_zwi09_the_boot_seats_the_descript_base_before_inserting_the_wiring() {
+fn the_boot_seats_the_descript_base_before_inserting_the_wiring() {
     let raw = include_str!("lib.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);

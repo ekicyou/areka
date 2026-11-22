@@ -25,7 +25,7 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         ("move", None, vec!["-353", "", "", "0", "base", "base"]),
         // areka-seriko の actor_bind_loop_tests.rs
         ("bind", None, vec!["腕", "伸び", "1"]),
-        // zorder_cue_tests.rs の t_zcs1／t_zcs2
+        // zorder_cue_tests.rs の set_zorder_becomes_a_set_directive_carrying_the_element_tokens／reset_zorder_becomes_a_reset_directive
         ("set", Some("zorder"), vec!["zorder", "1", "0"]),
         ("reset", Some("zorder"), vec!["zorder"]),
         // readme_cue_tests.rs の bare_open_readme_sends_exactly_one_request
