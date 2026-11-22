@@ -273,7 +273,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: M1 完成（2026-09-11）・α（M2）完成（2026-10-02）。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `areka-session` の `boot_config.rs`・本番 env は `AREKA_` 冠）。SSP と同じ書き方の起動オプション（`--ghost`・`--random`・`--option`・`--sstp-listen`・`--help`）も読む（`areka-P0-startup-options-core` 2026-10-19）。SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）も同居  
+**Status**: M1 完成（2026-09-11）・α（M2）完成（2026-10-02）。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `areka-session` の `boot_config.rs`・本番 env は `AREKA_` 冠）。SSP と同じ書き方の起動オプション（`--ghost`・`--random`・`--option`・`--sstp-listen`・`--help`）も読む（`areka-P0-startup-options-core` 2026-10-19）。  
 **Modules（役割のパターン）**:
 - `runtime_tests/` - テスト専用（`main.rs` が `#[cfg(test)]` の下で宣言）。**本体を引く runtime のテストの置き場**（`runtime-crate-split` 2026-11）。runtime の木（`frame/`・`spine*`・`assets*` ほか）を写した形で、本番のコードは無い（親のファイルは `use areka_runtime::…::*;` と子の宣言だけを持つ「代わりの親」）。実行系の本番は crate `areka-runtime`（下の「Runtime Crate」）へ移った。上の層へ向かう呼び出しは `areka_runtime::session_hooks` の口の束を通し、中身は `areka-session` の `hooks.rs` が据える
 - `session_tests/` - テスト専用（`main.rs` が `#[cfg(test)]` の下で宣言）。本体の本物どうしをつなぐ切替・読み直し・起動・終わる相のテストの置き場。切替・読み直し・起動・終わる相の層そのものは crate `areka-session`（下の「Session Crate」）で、本体は出し直さず、使う側が `areka_session` を直に引く
@@ -359,7 +359,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `actor.rs` - `SylphyaMsg` envelope・**純関数中核 `SylphyaCore::apply`**（判断分岐を集約・受信ループは薄い配線）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
 - `persist/` - 層別スコープ（App/Ghost/Shell/Balloon）×TOML（`format-version`）×原子的書込（temp→rename）×寛容読取 3 段×4 key 族
 **Dependencies**: **std・thiserror・tracing・toml・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
-**Consumers**: `areka-ghost`（結線・静的構成 publish・provider `SystemVarWiring::FromSylphya`）／`crates/areka` bin（`ShioriHostSink` 委譲）。`areka-kanade` は **sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）
+**Consumers**: `areka-ghost`（結線・静的構成 publish・provider `SystemVarWiring::FromSylphya`）／`crates/areka` bin。`areka-kanade` は **sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）
 
 ### Actor Convention Crate（areka-actor）
 **Location**: `/crates/areka-actor/`

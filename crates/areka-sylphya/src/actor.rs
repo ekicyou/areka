@@ -122,7 +122,7 @@ pub trait RuntimeCommandSink: Send {
 pub enum SetClass {
     /// SET 有効群の正準語彙（[`SET_EFFECTIVE`] 登録）→ 運行コマンド書込（M1 未配線・warn＋記録のみ）。
     RuntimeCommand,
-    /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映（`ShioriHostSink` SetProperty の受け皿）。
+    /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映。
     StoreWrite,
     /// SET 無効な正準語彙 → 書込なし・呼出は Ok（正典沈黙の areka 裁量・対応表記録）。
     NotSettable,

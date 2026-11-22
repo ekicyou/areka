@@ -143,7 +143,7 @@ pub enum LineFormat {
     /// `level={level}` から始める形（宛先を載せない）。
     ///
     /// 出所: `areka-input/src/{choice_drain.rs, balloon_test_support.rs}`・
-    /// `areka/src/shiori_demo.rs`・`wintf/src/ecs/window_proc/dpi_helpers_tests.rs`。
+    /// `wintf/src/ecs/window_proc/dpi_helpers_tests.rs`。
     LevelFields,
 }
 

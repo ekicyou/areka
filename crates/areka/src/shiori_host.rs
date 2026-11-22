@@ -170,38 +170,6 @@ impl ShioriHostSink {
     }
 }
 
-/// App スコープのみの sylphya アクターを起動し、その reader/publisher と与えた session `AskerId` で
-/// sink を構築する（sink 組立各所〔shiori_session 系〕共通の App-root-only spawn）。
-///
-/// - App root は呼び手が渡す（本番の demo は bin の [`areka_session::boot_config::default_app_profile_dir`]・テストは
-///   `None`＝本物の環境で置き場を決めない）。ghost/shell/balloon root は付けない
-///   （bin の serving surface は App スコープのみを据える・ghost/shell スコープは ghost boot 系列が
-///   `<shiori.dir>`／`<shell.dir>` から導く）。
-/// - 本番 IO は [`areka_sylphya::persist::FsPersistIo`]、運行 sink は未配線（M1・`None`）。
-///
-/// 返る [`areka_actor::ActorHandle`] は **非 RAII（drop で detach・areka-actor 規約）**。アクター
-/// スレッドは inbox の送信端（sink が内包する publisher）が生存する限り生き続けるため、返した
-/// sink が生きている間はアクターも生存する（publisher の投函は失敗しない）。呼び出し側は join して
-/// panic を観測したい場合のみ handle を保持すればよく、本経路（in-proc serving surface）は join を
-/// 要さないため handle を drop（detach）してよい。
-pub(crate) fn spawn_app_sylphya_sink(
-    asker: AskerId,
-    app: Option<std::path::PathBuf>,
-) -> (ShioriHostSink, areka_actor::ActorHandle) {
-    let parts = areka_sylphya::spawn_sylphya(areka_sylphya::SylphyaInit {
-        roots: areka_sylphya::ScopeRoots {
-            app,
-            ghost: None,
-            shell: None,
-            balloon: None,
-        },
-        io: Box::new(areka_sylphya::persist::FsPersistIo),
-        runtime_sink: None,
-    });
-    let sink = ShioriHostSink::with_sylphya(parts.reader, parts.publisher, asker);
-    (sink, parts.handle)
-}
-
 // `[in]` HSTRING（`&HSTRING`）は呼び出し中のみ有効な借用なので、投函/保持する内容は clone して所有する
 // （`shiori_abi::interface` の HSTRING 所有権規約）。
 //
@@ -261,14 +229,14 @@ impl shiori_abi::interface::IShioriHost_Impl for ShioriHostSink_Impl {
 /// テスト専用: 偽 IO（[`areka_sylphya::persist::FakePersistIo`]・実 FS/実時計/実 SHIORI なし）で
 /// sylphya アクターを起動し、既知 asker で sink を組む共通ヘルパ。
 ///
-/// 本 crate の各 `#[cfg(test)]` モジュール（`shiori_host`／`reference_brain`／`shiori_*_e2e_tests`）が
+/// 本 crate の `#[cfg(test)]` モジュール（`shiori_host` とその兄弟のテスト）が
 /// `ShioriHostSink` を hermetic かつ決定論的に構築するために共有する（実 profile ディレクトリに触れ
 /// ない偽境界）。返り値は `sink` に加え、同一 asker/同一 inbox の [`SylphyaPublisher`]・[`AskerId`]・
 /// join ハンドルも渡す——別スレッド set＋`barrier()` の檻（`sink` 実体は `!Sync` のため共有せず、
 /// `Clone + Send` の publisher を跨がせる）や `set → barrier → get` の決定論列を組める。
 ///
 /// アクタースレッドは `sink` が内包する publisher が生存する限り生き続けるため、返した
-/// `handle`（非 RAII・drop で detach）は保持不要なら drop してよい（`spawn_app_sylphya_sink` と同規約）。
+/// `handle`（非 RAII・drop で detach）は保持不要なら drop してよい。
 #[cfg(test)]
 pub(crate) struct TestSylphyaSink {
     /// sylphya 委譲済みの被試験 sink。

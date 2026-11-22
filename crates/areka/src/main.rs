@@ -5,7 +5,7 @@
 //! wintf を使ったデスクトップマスコット「ぱすたさん」の本番アプリ。骨格は「アプリ起動の器」に徹する:
 //! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
 //! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
-//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）・SHIORI 実走デモの env-gate 呼び口
+//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）
 //! - 起動窓シーム（`ghost_session::open_ghost_windows`・本物のゴースト窓を開く。準備が通らなければ
 //!   「起動窓を開けない」の告知の上で終了コード 1 で終える）
 //! - `main` 自身が所有するメッセージループ（`app.run()`）と終了の指示（`app_exit::quit_app`）での正常終了
@@ -21,22 +21,9 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::*;
 
-/// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
-/// 脳（`IShiori` 実装）が `Load` で受け取る sink を areka 側で実装する。
+/// 試験用の `IShioriHost` 実装。使い手は `mcp/get_property_tests.rs` のテストだけ。
+#[cfg(test)]
 mod shiori_host;
-
-/// in-proc アクティベーション経路とリクエスト利用規律（単一 in-flight・遅延完了タイムアウト）。
-/// in-proc の `IShiori`（脳）へ到達し `Load` で sink を渡す最小経路と、単一 in-flight・
-/// `Unload` 保留取消・設定可能タイムアウトの利用規律を所有する。
-mod shiori_session;
-
-/// 製品コード（非テスト）のリファレンス脳＋ファクトリ＋C 入口。`#[implement(IShiori)]`/
-/// `#[implement(IShioriFactory)]` 実装＋純粋C コンストラクタ `shiori_factory` を所有する正解見本。
-mod reference_brain;
-
-/// 実走デモドライバ。`shiori_factory`→`ShioriSession` で activate→数往復 get→
-/// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
-mod shiori_demo;
 
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く。
 #[cfg(test)]
@@ -68,25 +55,6 @@ mod thread_roles;
 /// target `areka::perf` が点いているときだけ報告スレッドを起こし、名簿を舐めた
 /// `perf(thread)` 行と `perf(process)` 行を周期＋終了直前に出す。消灯時は費用 0。
 mod perf_thread_report;
-
-/// 遅延応答と push 経路の end-to-end 結合テスト。
-/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
-/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
-#[cfg(test)]
-mod shiori_e2e_tests;
-
-/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト。
-/// 新 ABI の生成〜利用〜teardown（factory create→get→drop teardown・「未ロード状態」は存在しない）と、
-/// `Deferred` 保留中の drop 取消→再 activate 後の正常動作を通しシナリオで実証する。
-#[cfg(test)]
-mod shiori_lifecycle_e2e_tests;
-
-/// 製品 `ReferenceFactory`/`ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト。
-/// `shiori_factory` で取得した本物の製品 factory/brain を `ShioriSession` 越しに駆動し、
-/// load_dir/shiori_name の貫通（D1）・即時→遅延+complete→raise→notify の数往復・単一 in-flight 拒否・
-/// 決定的タイムアウト・stale complete 拒否・drop teardown を実時間 sleep に依存せず検証する。
-#[cfg(test)]
-mod shiori_reference_e2e_tests;
 
 /// `.nar` を入れる手続き。
 mod install;
@@ -232,12 +200,6 @@ fn main() -> Result<()> {
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
-
-    // リファレンス脳の実走デモ。`AREKA_SHIORI_DEMO` が有効なときのみ main スレッドで同期駆動する
-    // （既定 OFF）。診断目的なので失敗しても起動を中断せず、`app.run()` より前に完走させる。
-    if let Err(e) = shiori_demo::run_demo_if_enabled() {
-        tracing::error!(error = %e, "[main] shiori reference demo failed");
-    }
 
     // 起動窓シーム: ゴースト定義から本物のゴースト窓（キャラ窓＋バルーン窓）を配置・生成する。
     // 準備が通らなければ（モニタ 0 台・起動中の削除等）「起動窓を開けない」を告知して終了コード 1 で

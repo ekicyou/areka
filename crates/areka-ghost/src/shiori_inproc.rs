@@ -243,9 +243,6 @@ impl Drop for InProcLibrary {
 /// - `SetProperty` / `GetProperty`: 内部 `HashMap` を往復する。欠落 key は暗黙の空値で続行せず
 ///   `Err(SHIORI_E_PROPERTY_NOT_FOUND)`（out_value 未書込）にする。
 ///
-/// areka bin の `ShioriHostSink`（メールボックス・突合枠つき）は能力集合が異なる別物であり移設しない。
-/// native 消費時に host 注入シームごと再設計する。
-///
 /// `RefCell`＋COM 参照ゆえ `!Send`。shiori アクタースレッド常駐で用いる。
 #[implement(IShioriHost)]
 pub(crate) struct InProcHost {

@@ -76,14 +76,14 @@
   - _Dispatch: standard — 断りの判定に要求の出どころの枝を足す_
   - _Requirements: 3.1, 4.1, 4.2, 6.9, 7.2_
 
-- [ ] 6. SHIORI の試験用の脳を消す（G6・指摘 5・6・7・14・5.20）
+- [x] 6. SHIORI の試験用の脳を消す（G6・指摘 5・6・7・14・5.20）
 - [x] 6.1 ゴーストの道のテストを本番の受け口で組み直す（指摘 14）
   - `ghost_session_scope_scale_boot_tests.rs` の `ghost_path` を `PropGetCueSink::new(reader, ghost_asker_id(..), tx)` で組み、`carrier_cue("get", &["property", "OnScaleProbe", NAMES..])` を 1 つ流して `KanadeMsg::PropertyEvent` の references を読む形にする（無い値は `""`）。4 行の説明も合わせる
   - 試験台と小道具は `ghost_session_switch_tests.rs` の `pub(super)` を使う
   - 完了の姿: テストが緑で、`ShioriHostSink` を使わず、問い手を `ghost_asker_id` から別の問い手に替えると赤（較正）
   - _Dispatch: standard — 本番の受け口で組み直す新しい流れ（手本は設計が名指す）_
   - _Requirements: 3.1, 4.1, 4.2, 4.7, 5.20_
-- [ ] 6.2 脳の 8 ファイルとデモの入口を消し、脳を名指す説明を直す（指摘 5・6・7・5.20）
+- [x] 6.2 脳の 8 ファイルとデモの入口を消し、脳を名指す説明を直す（指摘 5・6・7・5.20）
   - 枝を `main` の頭に合わせてから `git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` を見る（脳の 8 本の中は除く）。兄弟の `mcp/get_property_tests.rs` の当たりが 0 件なら全部消す。当たりがあれば design.md「設計の段で決めた事項」3 の 3 のとおり、`shiori_host.rs` と `shiori_host_case_fold_tests.rs` だけを `#[cfg(test)]` で残し、`shiori-abi`・`windows-core` を dev へ移す
   - 消すもの: 脳の 8 ファイル・`main.rs` の mod 7 つと 234-238 のデモの呼び出しと `//!` の 8 行目・`AREKA_SHIORI_DEMO`・`session_tests/mod.rs:3` の名指し。`embedded_icon_test.rs` の use を `windows::core` に替えてから、本体の `Cargo.toml` の `windows-core`・`shiori-abi` の行を消す
   - `.kiro/steering/structure.md:276` の脳の記述と、範囲の外の脳を指す説明（File Structure Plan「範囲の外」の表の 8 行）を、今在るもの（`InProcHost`・`shiori4-testdll`）で書き直すか消す
@@ -290,3 +290,4 @@
 - 4: strict テストの `fallback_attempts` で縛れるのは到達できる `fallback_boot_origin_missing` の記録だけ。`fallback_boot_wired_off`・`fallback_boot_failed` の event 欄はどのテストでも縛られていない（入力を別に組むテストが要る・21.1 で見る）
 - 5.2: `log_history::snapshot` が古い順に返すことを固定するテストは無い（逆順にしても crate 全体が緑）
 - 6.1: 倍率の名は問い手に関わらず同じ値なので、問い手の取り違えを赤にするために問い手ごとの名 `probe.owner` を 1 つ足して問う
+- 6.2: 兄弟の `mcp/get_property_tests.rs` に当たりが残るので残す道。`shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `#[cfg(test)] mod shiori_host`・dev の `shiori-abi`／`windows-core` は `audit-areka-install-update` の着地の後に向こうの PR で消す（20 で申し送る）。`shiori_inproc.rs:246-247` を消したので `InProcHost` の件は行番号でなく名で指す

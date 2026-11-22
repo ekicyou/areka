@@ -1,6 +1,6 @@
 //! 集めた層のテストのうち、本体の部品も使うものの置き場。
 //!
-//! 集めた層は本体を使えないので、本体の根の関数・`cli`・menu・install・update・mcp・`shiori_host` の本物を
+//! 集めた層は本体を使えないので、本体の根の関数・`cli`・menu・install・update・mcp の本物を
 //! 見るテストはここに置く。各ファイルは元の親のモジュールの `use` を自分で持つ。本番のコードは置かない。
 
 use areka_session::alert::AlertScene;
