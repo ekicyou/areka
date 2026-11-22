@@ -10,7 +10,7 @@
 
 まだ audit をかけていない。
 
-着手のときの測り直し（2026-11-22・`main` `1b3ede54`・brief と同じく `_tests.rs`・`_test_support.rs`・本体の `runtime_tests/`・`session_tests/` をテストに数えた・`wc -l`）: 68 ファイル・計 22,708 行・うち本番の名前のファイル 5,931 行・テスト 16,777 行。brief の棚卸㊸の実測（68 ファイル・約 22,700 行）と合う。brief の「Current State」の「50 ファイル・5,672・12,687」は古い。1,000 行を越えるファイルは無く、受け持つファイルは 1,000 行の番人の上限越えの表に 1 本も載っていない。上限に近いのは `crates/areka-session/src/ghost_switch_tests.rs` 982・`crates/areka-runtime/src/balloon_visibility_tests.rs` 960・`crates/areka-session/src/ghost_switch.rs` 927。数え直しはギャップ分析の報告でもう一度行う（要件 1.2）。
+着手のときの測り直し（2026-11-22・`main` `1b3ede54`・brief と同じく `_tests.rs`・`_test_support.rs`・本体の `runtime_tests/`・`session_tests/` をテストに数えた・`wc -l`）: 68 ファイル・計 22,708 行・うち本番の名前のファイル 5,931 行・テスト 16,777 行。brief の棚卸㊸の実測（68 ファイル・約 22,700 行）と合う。brief の「Current State」の「50 ファイル・5,672・12,687」は古い。ギャップ分析は、名前が本番の型でも `#[path]` でテストに取り込まれる表 `balloon_visibility_timeout_suppression_cases.rs`（605 行）をテストに数え、本番 16 ファイル・5,326 行・テスト 52 ファイル・17,382 行とした。1,000 行を越えるファイルは無く、受け持つファイルは 1,000 行の番人の上限越えの表に 1 本も載っていない。上限に近いのは `crates/areka-session/src/ghost_switch_tests.rs` 982・`crates/areka-runtime/src/balloon_visibility_tests.rs` 960・`crates/areka-session/src/ghost_switch.rs` 927。数え直しはギャップ分析の報告でもう一度行う（要件 1.2）。
 
 直した後の姿: 受け持つ範囲に audit をかけて出た指摘が、3 つの組（必ず直す・直したほうがよい・できれば）とも全部直っている（開発者「とにかく指摘事項は全部直す方針」）。直した後に同じ範囲へもう一度 audit をかけて、新しい指摘が 0 件（直しが生んだ指摘も直す）。全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`）が緑で、直したバグ・危ない所には、それが壊れたら落ちるテストが 1 本ずつある。あわせて、brief に預かった件（`runtime-module-untangle`・`runtime-crate-split`・`audit-emo2-boot-frame`・`session-crate-split` の申し送りと、棚卸㊶・㊸でこの範囲へ寄せた件）を片づける。
 
@@ -81,7 +81,7 @@
 3. If 指摘が ⑶ に当たるかもしれないとき, then the 要件の討議 shall ukadoc で正典を確かめた結果（出どころの URL と引用）を添えて議題にし、ukadoc で読めない点は SSP の MCP で測った結果を添える（測りは要件 8.2 に従う）
 4. If 指摘の直しが開発者の裁定を覆すとき, then the 本 spec shall その指摘を直さず、議題にする
 5. The 本 spec shall 直さずに残すと裁定された指摘ごとに、当たる種類と開発者の裁定を記録に残す
-6. The 本 spec shall 規模の見立て（棚卸㊸の見込み 15〜24 タスク）が 20 を越えても 1 本のまま進め、分けず・削らず、見立ては事実として記録だけする（仮定・問い 1）
+6. The 本 spec shall 規模の見立て（棚卸㊸の見込み 15〜24 タスク・ギャップ分析の見立て 17〜22 タスク）が 20 を越えても 1 本のまま進め、分けず・削らず、見立ては事実として記録だけする（仮定・問い 1）
 
 ### Requirement 3: 確定した指摘を全部直し切る
 
@@ -116,9 +116,9 @@
 
 #### Acceptance Criteria
 
-1. The 本 spec の直し shall `crates/areka-session/src/shell_balloon_switch.rs` 37〜39 行の `areka_runtime::skin_switch` の出し直しを、設計の 5 型（`SkinKind`・`SkinOrigin`・`SkinRequest`・`SkinSpec`・`SkinVerdict`）だけに絞り、残りの 5 項目（`SkinRequestRaw`・`SkinSwitchInFlight`・`SkinSwitchStage`・`skin_ref_name`・`skin_ref_path`）を引くテストと呼び手を `areka_runtime::skin_switch` から直に引く形に直す（件 1＝`runtime-module-untangle` の申し送り。5 項目のうち本番の呼び手が出し直しの道を使うものがあれば、その項目は残し、理由を記録する）
+1. The 本 spec の直し shall `crates/areka-session/src/shell_balloon_switch.rs` 37〜40 行の `areka_runtime::skin_switch` の出し直しを、設計の 5 型（`SkinKind`・`SkinOrigin`・`SkinRequest`・`SkinSpec`・`SkinVerdict`）だけに絞り、残りの 5 項目（`SkinRequestRaw`・`SkinSwitchInFlight`・`SkinSwitchStage`・`skin_ref_name`・`skin_ref_path`）を引くテストと呼び手を `areka_runtime::skin_switch` から直に引く形に直す（件 1＝`runtime-module-untangle` の申し送り。5 項目のうち本番の呼び手が出し直しの道を使うものがあれば、その項目は残し、理由を記録する）
 2. The 本 spec の直し shall `session-crate-split` が条件つきで開けた項目（同じファイル 43 行の `#[cfg(any(test, feature = "test-support"))]` の `SwapFinish` の出し直しと、モジュールごと開けた `ghost_switch_test_support`）ごとに、今の使い手を確かめ、使い手の無い開け方は閉じ、要る開け方は今の事実に合う理由の文で残す（件 2・仮定・問い 6）
-3. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目のうちこの範囲の分（brief の申し送り ⑶ の 2.5 の 26 件・4.2 ⑴〜⑷ の項目と渡し口・宣言の印の切り替え）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す。本体のテストだけが使う項目は使い手に数える（件 3・仮定・問い 2）
+3. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目のうちこの範囲の分（brief の申し送り ⑶ の 2.5 の 26 件〔`switch_assets.rs` は brief の 4 件に、分ける前に `pub(crate)` だった `SwapPayload`・`SwapSlot` を足した 6 件を数える〕・4.2 ⑴〜⑷ の項目と渡し口・宣言の印の切り替え）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す。本体のテストだけが使う項目は使い手に数える（件 3・仮定・問い 2）
 4. The 本 spec の直し shall 本体の `crates/areka/src/runtime_tests/balloon_visibility_phase_tests.rs` のテスト関数 2 本（`audit-emo2-boot-spine` の申し送りウの 2 本）を、補助ごと `areka-runtime` の側へ戻し、146 行の `world_at` の写しをやめて `crates/areka-runtime/src/balloon_visibility_phase_test_support.rs` 38 行の `world_at` を使う形に寄せる。依存は足さない（件 4＝`runtime-crate-split` の申し送り ⑶ と `audit-emo2-boot-spine` の申し送りウ）
 5. The 本 spec の直し shall 移動の cue のテストの偽の HWND の輪の写し（`crates/areka-runtime/src/move_cue_apply_move_tests.rs` 44 行の `attach_fake_handles`・`move_cue_place_tests.rs` の同じ形）を、`areka_placement::test_support::give_fake_handles` を使う形に寄せ、偽の記憶の書き手の写し `SharedFakeIo`（`move_cue_apply_move_sticky_tests.rs` 200 行・`move_cue_place_tests.rs` 321 行）を 1 つにする（件 5＝`audit-emo2-boot-frame` の申し送りキと棚卸㊸の件 10）
 6. If `crates/areka-runtime/src/balloon_visibility_phase.rs` 464 行で窓の側から来る scope が窓の scope の上限（`crates/areka-runtime/src/target_map.rs` の `window_scope` が置く `i32::MAX`）を越えるとき, then the 本 spec の直し shall その番号をあふれさせず、`warn!` を残して読み飛ばす（`window_scope` を使う形にそろえる）。直す前にあふれで赤になるテストを立てる（件 6＝`audit-emo2-boot-frame` の申し送りク）
