@@ -196,7 +196,7 @@
   - 差分が `areka-session` の行の追加だけである
   - _Dispatch: mechanical — 決まった道具を回すだけ_
   - _Requirements: 8.11_
-- [ ] 7.3 全体テストを回す
+- [x] 7.3 全体テストを回す
   - `pwsh -NoProfile -File tools/test-all.ps1` を直さずに 1 回回し（裏で走らせる）、緑を示す。1,000 行の番人・番人の決まり（`with_default_guard_test`・`sample_path_guard_test`・`temp_path_guard_test`）・`areka-session` の lib のテストの実行ファイルが含まれていることを出力で確かめる。赤のテストだけ回し直す
   - 全体テストが緑で、その要約が検証の記録に在る
   - _Dispatch: mechanical — 決まった道具を回すだけ_

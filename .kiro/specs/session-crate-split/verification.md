@@ -1402,3 +1402,10 @@ RED: 該当なし（数えるだけ）。
   - MIT 節の末尾に `- areka-session 0.1.0` を 1 行追加
 - 版のずれなどそのほかの差分は 0 件。
 - `cargo deny check`: advisories ok, bans ok, licenses ok, sources ok。
+
+### 7.3
+
+- 排他テストの机を取り、`pwsh -NoProfile -File tools/test-all.ps1` を直さずに 1 回回した（コミット `f467358e6`）。出力は `target/session-crate-split/7.3-test-all.log`。
+- 要約は `all steps green`。21 の段がすべて OK（fmt --check 6 s・x64 workspace tests 410 s・dola toml feature tests・i686 tests (host-32)・crates.io pre-publish check・encoding check・load flake check・perf loop selftest ほか）。`test result: ok` の行は 180。
+- 含まれていることを出力で確かめたもの: `areka_session` の lib のテストの実行ファイル（`Running unittests src\lib.rs (… areka_session-….exe)`）・1,000 行の番人 `file_length_guard_test`・番人の決まり `with_default_guard_test`・`sample_path_guard_test`・`temp_path_guard_test`。
+- 赤は無く、回し直しはしていない。走らせ終えてすぐ机を返した。
