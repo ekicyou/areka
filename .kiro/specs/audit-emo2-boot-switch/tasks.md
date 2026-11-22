@@ -156,7 +156,7 @@
   - _Dispatch: standard — 目録の共用の口と数えるテストを組む_
   - _Requirements: 3.1, 4.1, 4.2, 6.1_
 
-- [ ] 5.2 本番の説明を事実に合わせる（T15・8・9・11・12・58〜62・66・67・72・73・75 番）
+- [x] 5.2 本番の説明を事実に合わせる（T15・8・9・11・12・58〜62・66・67・72・73・75 番）
   - 設計の表のとおり、記録の語彙の括弧・最後の 1 文・2 行を消し、位置の数値を作者基準 px に、窓の位置の指令の 1 行目を全体に、crate の道と呼び手の場所と `// SAFETY:` の条件と失敗の並びを直す
   - 「今日どおり」を「そのまま終了する」「通常どおり終わる」の形にする（ログの語・target・欄は変えない）
   - 完了: 直した説明の字面を読むテストと道具が 0 件であることを grep で確かめ、ワークスペースが組め、触った crate のテストが緑
@@ -207,3 +207,4 @@
 - 3.3: 署名の鎖で開いていた可視性の型（`VisibilityAction`・`VisibilityLogEvent` ほか）も、外の使い手が 0 なので私有・`pub(crate)` へ戻した。外に使い手があって `pub` に残したのは `BalloonVisibilityState`・`VisibilityDecision` と `timeout_notice`・`ScopeObservation` の型・`Frame` の 7 つの口と `TALK_ID`・`seen`・`notify_timeout`・`configured_timeout_secs`・`phase::run_balloon_visibility_phase`。
 - 2.2 は ghost_switch の filter だけで通し、同じ crate の口の束の順のテストを赤にしていた（`4cb2d09e5` で直した）。触った crate は lib 全体を回してから閉じる。
 - 4.6: 13 番でテストの名を替えたので、`doc/COMPAT_ARCHITECTURE.md` の 405 行（HEAD・main と同じ番号）の名指しも同じ変更で替えた（要件 7.7 の読み手の直し・行は足していない）。仕上げの COMPAT の差分の確かめでは 134・177・407 行に加えてこの 1 行を例外として数える。
+- 5.2: 75 番は research の 2 か所だけを直した。`ghost_switch.rs` の別の 2 つの記録の文（「今日どおり終了する」）と `doc/COMPAT_ARCHITECTURE.md:303` は 75 番の場所に無いので残した。かけ直しの audit で拾われたらそこで扱う。

@@ -65,6 +65,7 @@ pub(crate) fn register_change_drain(world: &mut World) {
 
 /// 溜まった台本の切替要求を全件取り出し、1 件ごとに入口へ「自動」の出どころで渡す（Input の系）。
 ///
+/// 先頭で `switch_copy::poll` を呼び、写しが終わっていれば `switch_to` でゴーストを降ろして起こす。
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受け口の借用を切ってから入口を呼ぶ。
 pub(crate) fn drain_change_requests(world: &mut World) {
     drain_change_requests_with(world, list_ghosts);
@@ -120,7 +121,7 @@ pub enum GhostSpec {
     Folder(String),
 }
 
-/// 入口の判定（記録の語彙・呼び手は分岐しない）。
+/// 入口の判定。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchVerdict {
     Accepted,
@@ -447,7 +448,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
         tracing::debug!(
             event = "ghost_switch_no_reservation",
             cause = ?stopped.cause,
-            "切替の予約が無い停止通知——今日どおり終了する"
+            "切替の予約が無い停止通知——そのまま終了する"
         );
         quit_app(world, ExitOrigin::KanadeStopped(stopped.cause));
         return;
@@ -546,7 +547,7 @@ pub fn on_notice(world: &mut World, notice: KanadeNotice) {
                 tracing::info!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,
-                    "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
+                    "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば通常どおり終わる）"
                 );
                 (BodySystems::of(world).on_switch_end)(world, false);
             } else if world.contains_resource::<crate::session_end::SessionEnded>() {

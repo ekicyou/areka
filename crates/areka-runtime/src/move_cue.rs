@@ -62,7 +62,7 @@ pub enum PositionCue {
 pub struct MoveDirective {
     /// 移動対象スコープ（cue.actor 由来・`\0`=0／`\1`=1）。
     pub scope: u32,
-    /// X 軸指定（省略/"fix"＝現状維持・数値＝物理 px）。
+    /// X 軸指定（省略/"fix"＝現状維持・数値＝作者基準 px（[`AxisSpec::Px`]））。
     pub x: AxisSpec,
     /// Y 軸指定（同上）。
     pub y: AxisSpec,
@@ -177,14 +177,14 @@ pub enum Axis {
 }
 
 // =============================================================================
-// MoveCueSink（talk スレッド純粋解釈）— `\![move]` 名前選別消費の最初の実消費者
+// MoveCueSink（talk スレッド純粋解釈）— `\![move]` 名前選別消費
 // =============================================================================
 
-/// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の talk スレッド側消費 sink。
+/// 窓の位置の指令（`\![move]`・並べ直し・窓の組・吸着・バルーン位置・バルーンを動かさない指定）の
+/// talk スレッド側消費 sink。
 ///
 /// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）であり自らの
-/// コマンド名リテラル `"move"`、または `"execute"` で第 1 引数が `resetwindowpos` を運ぶもの**だけ**を
-/// 名前自己選別して解釈し、[`PositionCue`]（`move` は [`parse_move_directive`] の結果を包んだ
+/// コマンド名リテラルを運ぶものを名前自己選別して解釈し、[`PositionCue`]（`move` は [`parse_move_directive`] の結果を包んだ
 /// `Move`・`execute,resetwindowpos` は残りの引数を読まない `ResetWindowPos`）を mpsc で UI スレッド（frame 相の
 /// `apply_move_directive`）へ送出する。それ以外
 /// （非キャリア・担当外コマンド名・非数値 scope）は**記録付き良性スキップ**へ
@@ -227,7 +227,7 @@ impl MoveCueSink {
 /// 縮退する（duration honor には触れない）。
 impl dola::cue::CueSink for MoveCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // 1) キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
+        // キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
         //    Custom なのに非正準 params のときの severity は**宛名規律**で分ける:
         //    宛名（`Custom{command}` フィールド・params 非正準でも読める）が "move"＝自分宛の
         //    壊れ物ゆえ warn・他人宛/未知名＝担当外ゆえ debug（報告責任は宛名の担当者）。
@@ -251,11 +251,11 @@ impl dola::cue::CueSink for MoveCueSink {
             return;
         };
 
-        // 2) 名前自己選別（消費者自身のコマンド名リテラル）。"move" と (execute,resetwindowpos) のみ。
+        // 名前自己選別（消費者自身のコマンド名リテラル）。
         //    dola は名前語彙を持たず、一意性（1 名前=高々 1 消費者）は areka 消費者台帳
         //    が保証する——本 sink は中央権威表に依存せず自らの名前で自己選別する。
         //    並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象）。
-        //    窓の組・吸着・バルーン位置初期化の 5 組もここで選ぶ（1 本の線で台本の並びを保つ）。
+        //    窓の組・吸着・バルーン位置・バルーンを動かさない指定も同じ線で選び、台本の並びを保つ。
         //    組と初期化は実行者を読まない。吸着だけは実行者のスコープへ当てる（`move` と同じ読み）。
         match (name, tokens.first().copied()) {
             ("execute", Some("resetwindowpos")) => {
@@ -304,12 +304,12 @@ impl dola::cue::CueSink for MoveCueSink {
             return;
         }
 
-        // 3) scope は cue.actor（"0"/"1"）の u32 parse。非数値は warn＋スキップ。
+        // scope は cue.actor（"0"/"1"）の u32 parse。非数値は warn＋スキップ。
         let Some(scope) = actor_scope(&cue, "move") else {
             return;
         };
 
-        // 4) 純粋な読み（決定論・no I/O）。常に指令を返し、置き換えは 1 件ずつ記録する。
+        // 純粋な読み（決定論・no I/O）。常に指令を返し、置き換えは 1 件ずつ記録する。
         let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
         let parsed = parse_move_directive(scope, &tokens);
         for note in &parsed.notes {

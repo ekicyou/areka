@@ -240,7 +240,7 @@ impl SwitchRig {
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
     pub fn with(sample: RigSample, body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> Self {
-        // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+        // SAFETY: 引数は有効な定数で、既初期化（S_FALSE）などの失敗は戻り値ごと捨てる。呼んだスレッドの COM の状態以外に触れない。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
@@ -248,7 +248,6 @@ impl SwitchRig {
         // 既定のバルーンは根の `balloon\` に置く（同梱はゴーストの中へ入る）。根へは写し、A／B の複製へは
         // 持ち込まない。移す（rename）・消す（remove_dir）は
         // 写した直後の木を他のプロセスが握っていると拒まれるので使わない。
-        // 元の `ghost\emo2\balloon\` は残るが、emo2 は今のゴーストにならないので誰も読まない。
         copy_tree(&sample.bundled_balloon, &root.balloon_dir(BALLOON), None);
         let inner = sample.ghost.join("balloon");
         for folder in ["A", "B"] {
@@ -764,12 +763,10 @@ fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
     std::fs::write(path, rewritten.join("\r\n")).expect("テキストを書き換える");
 }
 
-// 足場の待ちの檻。
 #[cfg(test)]
 #[path = "ghost_switch_rig_wait_tests.rs"]
 mod rig_wait_tests;
 
-// 時計の先行の檻。
 #[cfg(test)]
 #[path = "ghost_switch_talk_clock_tests.rs"]
 mod talk_clock_tests;

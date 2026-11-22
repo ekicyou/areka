@@ -5,7 +5,7 @@
 //! ここの [`request_skin_switch`] 1 本だけを通る。入口は kanade へ何か送る前に
 //! 進行中・ゴースト切替中・更新中・インストール中・文脈・切替先を判定し、受理したら kanade へ台詞の
 //! 切れ目の待ちを頼み、頼めたら背景の資産づくりを起こして進行中の印 [`SkinSwitchInFlight`] を置く。
-//! 名前の解決とインストールの控えは隣の `shell_balloon_resolve.rs`。印の見極めと差し替えは
+//! 名前の解決とインストールの控えは`areka_runtime::shell_balloon_resolve`。印の見極めと差し替えは
 //! 差し替えの相（`frame/switch.rs`）が受け持つ。
 //!
 //! Reference の組み立ての規則（名前は `descript.txt` の `name`、無ければフォルダ名・パスは

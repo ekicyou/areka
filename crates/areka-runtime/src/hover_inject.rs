@@ -8,7 +8,7 @@
 //!
 //! 本導線はライブラリ公開 API（[`TextLayerRuntime::inject_choice_hover`]／[`TextLayerRuntime::choice_active`]／
 //! [`TextLayerRuntime::choice_hit_rows`]）の一消費者に過ぎず、emo-text 本体・本番描画経路・決定論資産に
-//! 変更を加えない。frame.rs の text phase から present_frame の**後**に駆動され
+//! 変更を加えない。`frame/scale_text.rs` の `run_text_phase` から present_frame の**後**に駆動され
 //! （`choice_active`／`choice_hit_rows` が当該フレームを反映する）、env 無効ならば存在が消える。
 //!
 //! # 純関数分割（決定論単体テスト）
@@ -16,7 +16,7 @@
 //! - [`cycle_ordinal`]: (frame_time, period_secs, ordinal_count) → `Option<usize>`（純関数・時刻商で巡回）。
 //! - [`run_hover_inject_with`]: config＋actor スナップショット＋注入クロージャ→巡回駆動（runtime 非依存）。
 //!
-//! [`drive`]（frame.rs 結線口）は env を一度だけ読んで cache した config で [`run_hover_inject`] を呼ぶ。
+//! [`drive`]（`frame/scale_text.rs` の結線口）は env を一度だけ読んで cache した config で [`run_hover_inject`] を呼ぶ。
 
 use std::sync::OnceLock;
 
@@ -175,7 +175,7 @@ fn config() -> &'static HoverInjectConfig {
     CONFIG.get_or_init(|| parse_hover_inject(std::env::var(ENV_KEY).ok().as_deref()))
 }
 
-/// frame.rs の text phase（present_frame の後）から駆動する結線口。
+/// `frame/scale_text.rs` の `run_text_phase`（present_frame の後）から駆動する結線口。
 ///
 /// env 未設定/無効なら [`run_hover_inject`] は [`HoverInjectConfig::Disabled`] で完全 no-op
 /// （`inject_choice_hover` を一度も呼ばない・本番既定）。`frame_time` は text phase が解決した
