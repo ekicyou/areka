@@ -156,7 +156,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.5, 8.3, 8.6_
 
 - [ ] 11. ワークスペース全体を歩く見張りを `log-capture-kit` へ移す（G11）
-- [ ] 11.1 同期の送信の許可表の見張りを移す（指摘 43・5.2）
+- [x] 11.1 同期の送信の許可表の見張りを移す（指摘 43・5.2）
   - `session_end_sync_send_tests.rs` の静的な後半（221-499）を新しい `crates/log-capture-kit/tests/sync_send_guard_test.rs` へ移し、共有の走査器 `workspace_scan` を使う形にする。許可表（5 項）の値・`#[cfg(test)] mod` の中かの欄・較正（表から 1 件落とすと赤・全項目に当たり・走査語を逐語で書かない）を持たせる。前半の再現は残す
   - `session_end.rs:53` の名指しと `crate_source_test_support.rs:6-7` の例外の列を新しいファイルに合わせ、§8 の 319 行のパスと名を直す。226・230・253 の経緯の語は移す側で消す
   - 完了の姿: `cargo test -p log-capture-kit --test sync_send_guard_test` が緑で、許可表から 1 件落とすとその件だけが違反になる（較正）。`cargo test -p areka-session` も緑

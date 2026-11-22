@@ -50,7 +50,8 @@ pub struct SessionEnded;
 ///   メッセージで取り次がれない。したがって join が待つ相手は、UI スレッドを待たない。
 /// - 外から UI の窓へ同期に送る相手（IME・シェル・他のアプリ）は送り手の側が待つだけで、join は
 ///   それに依らないので輪にならない。その送信は後始末から戻った後に返る
-///   （`session_end_sync_send_tests.rs` が固定する）。
+///   （`session_end_sync_send_tests.rs` が固定する）。本番ソースの同期の送信の在りかは
+///   `log-capture-kit` の `tests/sync_send_guard_test.rs` の許可表が固定する。
 /// - 理屈の上で残る唯一の輪は、補助プロセスの中の SHIORI・SAORI が `OnClose` の処理中などに
 ///   areka の窓へ同期に送る形（UI スレッドの join → kanade → shiori のスレッドの往復 → 補助
 ///   プロセスの中の送信 → UI スレッド）。この輪は [`SESSION_END_SHIORI_LIMIT`] に達した時点で
