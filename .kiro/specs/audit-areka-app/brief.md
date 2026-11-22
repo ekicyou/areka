@@ -164,3 +164,16 @@
 - 正準のキャリアの合図（`\![name,tokens...]`・発火時刻 0・長さ 0）を組むテスト用の口が `dola::cue::test_support::carrier_cue(actor, name, tokens)` の 1 か所になった（`dola` の `test-support` 機能の下）。本体のテストは `areka-runtime` の `consumer_ledger_test_support::carrier_cue(name, args)`（演者 `"0"`）と `actor_carrier_cue(actor, name, args)` で引ける（`areka-runtime` の `test-support` 機能が `dola/test-support` を前送りする）。
 - 本体の session のテスト 3 本の `prop_set_cue`（`readonly_run_tests.rs:94`・`readonly_sites_tests.rs:118`・`write_failure_sites_tests.rs:139`。行は 2026-11-22 の main）は、同じ合図を自分の本文で組む写しのまま残っている。上の口へ寄せるかを、この spec の範囲で見る（`session-crate-split` が `session/` を移した後の場所で読み替える）。
 - 観測: `crates/areka/tests/smoke_boot_loop_exit.rs` が、機械が混んでいた `cargo test -p areka` の 1 回で 60 秒の待ちを越えて落ちた（単独の回し直しと全体テスト 2 回は緑）。揺れが続くようなら `tools/load-flake.ps1` で測る。
+
+## 申し送り（session-crate-split より）
+
+切替・読み直し・起動・終わる相の層は crate `areka-session`（`crates/areka-session/`）へ移り、本体に残ったテストは `crates/areka/src/session_tests/` にある。全件と根拠は `.kiro/specs/completed/session-crate-split/verification.md` の「申し送り（7.6）」。
+
+- **素の `pub` にした項目**（設計の方針「本番の公開面に中の関数を出さない」と違い、条件で切り替えていない）: `GhostSession::{seriko, loop_ticker}`・`PreparedWindows::spawn`・`reload::drain`・`write_failure::drain_system`（集めた層の本番のコードも使う）・`boot_seam::insert_persist_wiring`（本体の `session_tests/` の 3 本が使う）。`#[cfg(any(test, feature = "test-support"))]` へ戻せるか、公開面を絞るかを見直す。
+- **使われなくなった `pub(crate)`** は消していない。
+- **`BodySystems::of` の定義が条件ごとに 2 つ**（`test-support` のときは `pub`・それ以外は `pub(crate)`）。
+- **`world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足した本体のテスト 8 本**（表明は変えていない）: `install::desk::tests` の 2 本・`update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time`・`session_tests::reload_tests` の 2 本・`session_tests::shell_balloon_switch_tests` の 3 本（全部の名は元の文書）。口を据えずに口の道を通るテストを足すと `body_systems_missing` の記録が増えて赤になる。共通の足場へ寄せるかを見る。
+- **`add_rpost_shell` の 9 行の写しが 2 か所**（`crates/areka-session/src/shell_balloon_switch_session_lap_tests.rs` と本体の `session_tests/` のテスト）。`test-support` に `sample-ghost-kit` を入れられないため。
+- **`crates/areka-session/build.rs`・`tests.manifest`**: lib のテストの exe が comctl32 の版 6 の申告なしで `0xc0000139` で落ちるため足した（MSVC のときだけ `/MANIFEST:EMBED`・`/MANIFESTINPUT`）。`tests.manifest` は `crates/areka/areka.manifest` と同じ申告の写しで、片方だけ直すと食い違う。
+- **移したコードに前からある clippy の指摘**が `crates/areka-session` に残る（`type_complexity` 33・`collapsible_if` 19 ほか）。
+- **前からある文書の食い違いで残したもの**（テストが消え、文書の主張がそれに頼る）: `doc/COMPAT_ARCHITECTURE.md` の `change_tests.rs` の `without_raise_event_unloads_silently_without_events`・`events_tests.rs` の `on_translate_reference1_is_the_wire_absent_marker`・`manifest_companion_tests.rs` の `refuses_a_companion_directory_that_is_not_a_one_level_name`。`doc/ukadoc-coverage/briefing-assets.md`（205・222・253・262・289・537 行）は消えた `crates/areka-parsers/src/package/resolve.rs` の行番号を指す（中身は `resolve_bind.rs`・`resolve_shell.rs` へ分かれた）。`doc/ideas/novel-redesign-2026-11-20/05-stage.md:55` は消えた `crates/areka-emo-compose/src/hit.rs` を指す。
