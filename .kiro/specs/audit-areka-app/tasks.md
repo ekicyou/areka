@@ -26,7 +26,7 @@
   - _Dispatch: standard — 面の段に新しい枝と記録を足す_
   - _Requirements: 2.3, 3.1, 4.1, 4.2, 4.5, 6.2_
 
-- [ ] 3. 本番の小さな直し（G3・G20）
+- [x] 3. 本番の小さな直し（G3・G20）
 - [x] 3.1 UI の基盤の初期化の失敗に記録を付ける（指摘 3）
   - `main.rs:196` の初期化の呼び出しに `inspect_err` で `error!(event = "winapp_init_failed", ..)` を付ける
   - 新しいテストのファイル `main_winapp_log_tests.rs` を `main.rs` から `#[cfg(test)]` の子として引き、`main.rs` の本文を `code_only` で読んで、初期化の呼び出しの直後に `inspect_err` と `winapp_init_failed` があることを見る
@@ -39,7 +39,7 @@
   - 完了の姿: `cargo test -p areka-session` が緑（申告を誤ると `0xc0000139` で落ちる）、`cargo build -p areka-session` と `cargo build -p areka` が通る。`git grep -n "tests.manifest"` の当たりが `.kiro/specs/` の記録だけ
   - _Dispatch: mechanical — 読み先と依存の行の形を設計が与える_
   - _Requirements: 3.1, 3.3, 3.4, 5.18, 7.5_
-- [ ] 3.3 `BodySystems::of`・記録の歴史・自動終了・tick の門の小さな直し（指摘 77・82・83・87・5.15・5.17）
+- [x] 3.3 `BodySystems::of`・記録の歴史・自動終了・tick の門の小さな直し（指摘 77・82・83・87・5.15・5.17）
   - `BodySystems::of` を `pub fn` 1 つにし `installed_or_none` を消す。`body_systems.rs:60` の「（窓口が無いときの答えと同じ）」を消す。差を書き足すなら、兄弟の着地後の形（本体の側は窓口が無いと `install_cue_send_failed` の warn で終わり、URL も取りに行かない・`NO_BODY` は黙って捨て、束が無いことは error で残る）に合わせる（`NO_BODY` の受け口はそろえない＝5.17。`UNKEPT_TARGETS`・`reload_test_support.rs` の該当は直さない）
   - `log_history.rs:579` を `mod capture_tests;` に。`smoke_exit.rs:52-54` の早い戻りを 1 行に
   - tick の門の設定を `TickGateSetting::Set(enabled)` で直に据え、`tick_gate_from_env_value` と試験の 4 行を消す

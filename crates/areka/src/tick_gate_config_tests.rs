@@ -14,7 +14,6 @@ fn truthy_spellings_turn_the_gate_on() {
             TickGateSetting::Set(true),
             "`{value}` は門を有効にする綴りであるべき"
         );
-        assert_eq!(tick_gate_from_env_value(Some(value)), Some(true));
     }
 }
 
@@ -27,7 +26,6 @@ fn falsy_spellings_turn_the_gate_off() {
             TickGateSetting::Set(false),
             "`{value}` は門を無効にする綴りであるべき"
         );
-        assert_eq!(tick_gate_from_env_value(Some(value)), Some(false));
     }
 }
 
@@ -40,7 +38,6 @@ fn unset_or_blank_leaves_the_default_alone() {
             TickGateSetting::Unset,
             "{value:?} は指定なしとして扱うべき"
         );
-        assert_eq!(tick_gate_from_env_value(value), None);
     }
 }
 
@@ -53,7 +50,6 @@ fn unknown_spellings_are_reported_and_leave_the_default_alone() {
             TickGateSetting::Unknown,
             "`{value}` は表に無い綴りとして報告されるべき"
         );
-        assert_eq!(tick_gate_from_env_value(Some(value)), None);
     }
 }
 

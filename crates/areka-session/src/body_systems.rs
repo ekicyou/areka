@@ -34,17 +34,7 @@ pub struct BodySystems {
 
 impl BodySystems {
     /// 据えられた束。本番で無ければ `error!(body_systems_missing)` を出して [`NO_BODY`] を返す。
-    #[cfg(any(test, feature = "test-support"))]
     pub fn of(world: &World) -> Self {
-        Self::installed_or_none(world)
-    }
-
-    #[cfg(not(any(test, feature = "test-support")))]
-    pub(crate) fn of(world: &World) -> Self {
-        Self::installed_or_none(world)
-    }
-
-    fn installed_or_none(world: &World) -> Self {
         if let Some(body) = world.get_resource::<BodySystems>() {
             return *body;
         }
@@ -57,7 +47,7 @@ impl BodySystems {
     }
 }
 
-/// 本体が無いときの答え: 何もしない・偽・捨てる受け口 2 つ（窓口が無いときの答えと同じ）。
+/// 本体が無いときの答え: 何もしない・偽・捨てる受け口 2 つ。
 pub(crate) const NO_BODY: BodySystems = BodySystems {
     menu_poll: |_| {},
     after_input: |_| {},

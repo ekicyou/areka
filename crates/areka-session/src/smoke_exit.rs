@@ -48,11 +48,7 @@ const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 /// `u64::from_str` は負号・小数点・非数字を弾き、範囲外を `Err` にするため、負値・溢れは
 /// 自然に `None` へ落ちる（不正入力はゲート OFF に倒す）。
 fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
-    let trimmed = value.map(str::trim)?;
-    if trimmed.is_empty() {
-        return None;
-    }
-    trimmed.parse::<u64>().ok()
+    value?.trim().parse::<u64>().ok()
 }
 
 /// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。

@@ -576,4 +576,4 @@ mod convention_tests;
 
 #[cfg(test)]
 #[path = "log_history_capture_tests.rs"]
-pub(crate) mod capture_tests;
+mod capture_tests;
