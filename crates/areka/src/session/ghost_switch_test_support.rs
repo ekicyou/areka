@@ -33,7 +33,7 @@ use wintf::AppExit;
 use wintf::ecs::Input;
 
 use super::ghost_switch::drain_change_requests;
-use crate::session::body_systems::BodySystems;
+use crate::session::body_systems::{BodySystems, NO_BODY};
 use crate::session::boot_config::ConfigInputs;
 use crate::session::boot_config::{BootContext, CurrentGhost};
 use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
@@ -226,10 +226,10 @@ impl RigSample {
 }
 
 impl SwitchRig {
-    /// emo2 の検体と本物の系の登録の組で足場を組む。
+    /// emo2 の検体と本体の無い系の登録の組で足場を組む。
     pub(crate) fn new(scripts: Vec<(&str, FakeShiori)>) -> Self {
         let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-        Self::with(RigSample::of(sample), crate::BODY_SYSTEMS, scripts)
+        Self::with(RigSample::of(sample), NO_BODY, scripts)
     }
 
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。

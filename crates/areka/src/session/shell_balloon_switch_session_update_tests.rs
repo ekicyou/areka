@@ -3,8 +3,9 @@
 //! 更新の対象の解決（`desk_resolve_tests.rs` の
 //! `resolve_targets_reads_the_slot_and_the_boot_context`）と読み直し（`desk_reload_tests.rs` の
 //! `a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_after_the_switch`）の兄弟。
-//! 土台は [`lap_rig`]（偽の SHIORI のゴースト A・2 つ目のシェル `second`・窓の一式・GPU 資源・
-//! 本番の `Input`・`Update` の段）に、2 つ目のバルーン `StayseeBalloon` を足したもの。
+//! 土台は本体の切替の足場（`switch_rig`）を渡した [`lap_rig_on`]（偽の SHIORI のゴースト A・
+//! 2 つ目のシェル `second`・窓の一式・GPU 資源・本番の `Input`・`Update` の段）に、2 つ目の
+//! バルーン `StayseeBalloon` を足したもの。
 //! 差し替えは本番の台本の命令（`\![change,shell,…]` → `OnShellChanged` の台詞の
 //! `\![change,balloon,…]`）で起こし、差し替えの後の状態は本番の後始末が作る。
 
@@ -15,11 +16,12 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::GhostSlot;
 use super::shell_balloon_switch_session_lap_tests::{
-    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig,
+    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
 };
+use crate::sample_test_support::switch_rig;
 use crate::session::boot_config::BootContext;
 use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
@@ -50,7 +52,10 @@ fn add_staysee(rig: &SwitchRig) {
 
 /// 土台を組み、A が定常に着くのを待つ（差し替えはまだ始まっていない）。
 fn steady_rig() -> (LapRig, bool) {
-    let lap = lap_rig(script);
+    let lap = lap_rig_on(
+        switch_rig(vec![("A", FakeShiori::Scripted(Box::new(script)))]),
+        &[SECOND],
+    );
     add_staysee(&lap.rig);
     let steady = lap.rig.wait_steady();
     (lap, steady)

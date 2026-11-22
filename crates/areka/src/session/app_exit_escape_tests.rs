@@ -137,7 +137,7 @@ fn register_systems_installs_the_escape_hook() {
     crate::session::ghost_session::register_systems(
         &mut world,
         kanade_stop_rx,
-        crate::BODY_SYSTEMS,
+        crate::session::body_systems::NO_BODY,
     );
     assert!(
         world.contains_resource::<areka_input::hooks::InputHooks>(),

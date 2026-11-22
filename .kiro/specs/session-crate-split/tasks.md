@@ -70,7 +70,7 @@
   - 本体の bin のテストが緑で、`SwitchRig` を通るテストの合否が 2.5 の終わりと同じ。`SwitchRig::new(` が残るのは、集めた層に残す `session/` のテストのファイルの 18 か所だけ
   - _Dispatch: standard — 足場の型を替え、2 つの作り口を書く_
   - _Requirements: 5.4, 5.6_
-- [ ] 3.2 本物の組と偽物の組で切替の足場を通るテストを比べ、置き場を決める
+- [x] 3.2 本物の組と偽物の組で切替の足場を通るテストを比べ、置き場を決める
   - 集めた層の `SwitchRig::new` が `NO_BODY` を渡す形と本物の組を渡す形で、`SwitchRig` を通る集めた層の 30 ファイルを 1 回ずつ回し、テストごとの合否・`SwitchRig` の記録・口の欄が呼ばれた回数を比べる（比べるための一時の仕掛けはコミットしない）
   - 赤になったテストと、緑でも記録が違うテストを 1 本ずつ見て、本体へ中身を変えずに移すか集めた層に残すかと理由を、設計の TestPlacement の表に足して検証の記録に写す（`UpdateDesk` の照会・`exit_wait` の門に当たるものを含む）
   - 集めた層の `SwitchRig::new` を `NO_BODY` を渡す形に確定し、`app_exit_escape_tests.rs` の `crate::BODY_SYSTEMS` の 1 行を `NO_BODY` へ替える（表明は変えない）。2.5 で印を付けた `session/` の下の 1 行も、本体へ移すと決めるか、`NO_BODY` に替えて理由を記録する
@@ -217,3 +217,8 @@
   - 申し送りの一覧が検証の記録に在り、どの項目にも受け手が書かれている
   - _Dispatch: mechanical — まとめる項目を設計が与える_
   - _Requirements: 8.1, 7.3_
+
+## Implementation Notes
+
+- 3.1: `RigSample::of(SampleRoot)` は設計に無い小道具（集めた層と本体の両方で 4 欄の初期化を写さないため）。段 3 で `test-support` が sample-ghost-kit を引けないなら `#[cfg(test)]` にするか本体の側へ移す。
+- 3.2: 本体へ移す `shell_balloon_switch_session_update_tests.rs` は集めた層の `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_on` ほかを使う。3.4 で移すときと 4.2 の公開面で、その小道具を `test-support` の条件で開ける（または小道具の置き場を決める）。

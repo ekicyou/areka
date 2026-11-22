@@ -123,7 +123,11 @@ pub(super) fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'stati
 /// `R_POST_and_KOMAINU` のシェルを `shells` の各名前（フォルダ名・`name` とも）で写してから、
 /// 窓の一式と GPU 資源つきで A を起こす。
 pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> LapRig {
-    let mut rig = SwitchRig::new(ghosts);
+    lap_rig_on(SwitchRig::new(ghosts), shells)
+}
+
+/// [`lap_rig_of`] の土台を呼び手が組んで渡す形。
+pub(super) fn lap_rig_on(mut rig: SwitchRig, shells: &[&str]) -> LapRig {
     rig.plant_boot_record("A");
     for shell in shells {
         add_rpost_shell(&rig.root.ghost_dir("A"), shell);
