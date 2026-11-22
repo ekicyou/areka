@@ -12,6 +12,8 @@ This crate is usable, but it is still an early release. The API is not stable ye
 
 **dola** is a platform-independent declarative animation framework inspired by Windows Animation Manager. It provides a data model for defining animations (variables, transitions, keyframes, storyboards) that can be serialized with serde (the optional `toml` feature reads and writes TOML via `DolaDocument::from_toml_str` / `to_toml_string`; any other format can be handled through the serde derives with a crate of your choice).
 
+The optional `test-support` feature exposes `dola::cue::test_support`, a helper that builds a canonical command-carrier `TalkCue` for tests. Enable it only from `[dev-dependencies]`; it is not part of the stable API and is not meant for production builds.
+
 Key features:
 - Declarative animation definitions (variables, transitions, storyboards)
 - Serde-serializable data model (TOML via the optional `toml` feature; other formats through the serde derives with a crate of your choice)

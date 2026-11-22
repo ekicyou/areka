@@ -127,15 +127,7 @@ pub fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
     actor_carrier_cue("0", name, args)
 }
 
-/// `\![name,args...]` の汎用キャリア cue を演者 `actor` で組む（正準形＝`Custom` の String 配列）。
-pub fn actor_carrier_cue(actor: &str, name: &str, args: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
+pub use dola::cue::test_support::carrier_cue as actor_carrier_cue;
 
 /// 開けない `Custom`（`params` が String 配列でない）を宛名 `command` と演者 `actor` で組む。
 ///

@@ -16,12 +16,7 @@ const ASKER: &str = "ghost/a";
 
 /// `\![name,tokens...]` の汎用キャリア cue（正準形）。
 fn carrier(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
+    dola::cue::test_support::carrier_cue("0", name, tokens)
 }
 
 /// 点付きの値 2 つ（`baseware.name`・`currentghost.scope.scaling`）を持つ読み口と、受け口と受信端。
