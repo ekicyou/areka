@@ -61,3 +61,7 @@ pub(crate) const NO_BODY: BodySystems = BodySystems {
     install_busy: |_| false,
     cue_sinks: |_| [Box::new(DiscardSink::new()), Box::new(DiscardSink::new())],
 };
+
+#[cfg(test)]
+#[path = "body_systems_tests.rs"]
+mod tests;

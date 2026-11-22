@@ -47,7 +47,7 @@
   - 2.2 と同じ `main.rs` を触るので並べずに続けて行う
   - _Dispatch: mechanical — 移すファイルと書き換える行を設計が与える_
   - _Requirements: 1.1, 1.7_
-- [ ] 2.4 記録する偽物の組で、机の問いの順・登録の順・窓の直後の順を確かめるテストを足す
+- [x] 2.4 記録する偽物の組で、机の問いの順・登録の順・窓の直後の順を確かめるテストを足す
   - 集めた層の `session/body_systems_tests.rs`（`#[cfg(test)]`）に、各欄が名前と World の印をスレッドの記録へ足す偽物の組 `RECORDING` を作る
   - `busy_slots_are_asked_update_first`（読み直しは `update_busy` が真なら `Updating` で断り `install_busy` を問わない・偽なら問う。シェル・バルーンの切替は `update_busy` だけ）を足す
   - `menu_poll_and_after_input_sit_in_the_registration_order`（`register_systems` に偽物を渡し、2 欄が 1 回ずつこの順に呼ばれ、そのときの `Input` の段の系に `user_break` の汲み出しが在り `balloon` の離脱が無い・`balloon_wheel` が在る。系の名が読めなければ系の数で代える）を足す
