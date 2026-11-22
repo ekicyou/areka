@@ -45,7 +45,7 @@
 ### この仕様が持たないもの
 
 - 振る舞い（8.1）。見つけた不具合・古い説明は申し送る。理由の文が移した後に事実でなくなる `#[allow(...)]` は、2026-11-22 の測りで集めた層に 0 件（`#[allow]` は `clippy::too_many_arguments`・`clippy::type_complexity` の 2 つだけで、どちらも理由の文を持たない）。0 件を申し送りに明記する。
-- 同じウェーブの約束 ⑶ で触らない所: `crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`・本体の `crates/areka/src/placement_tests/`。`crates/areka-runtime/`・`crates/areka-kanade/` はパスを名指すコメントだけ。
+- 同じウェーブの約束 ⑶ で触らない所: `crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`・本体の `crates/areka/src/placement_tests/`。ただし本体の `placement_tests/` のうち `crate_source!`・`crate_path` を引く 4 本（`measure_bake_count_tests.rs`・`measure_template_tests.rs`・`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs`）の読み口の `use` の 1 行ずつは、D10 で小道具が `areka-session` へ移るので `areka_session` から引く形へ替える（例外）。`crates/areka-runtime/`・`crates/areka-kanade/` はパスを名指すコメントだけ。
 - `areka-placement` の 4 か所のコメント（`diag.rs:46`・`persist.rs:330`・`resolver.rs:97`・`resolver_resolve_balloon_tests.rs:123`）の書き換え（除外の一覧に載せて `audit-areka-app` へ・7.3）。
 - `log-capture-kit/tests/file_length_guard_test.rs`・`temp_path_guard_test.rs` ほか番人の表（集めた層を指す項目は 2026-11-22 の測りで 0 件・変えない）。
 - 集めた層に触れると書いているほかの brief の書き換え・歴史の文書・日付つきの写し（Out of scope）。
@@ -792,7 +792,7 @@ pub(crate) fn switch_rig(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig; // Swit
 | 8.8・8.9 | `WM_ENDSESSION` は `session_end_tests.rs` ほかの決定論のテストで。実機は 8.6・8.7 だけ | ほかは構造の証跡 |
 | 6.6・7.7 | `git grep` で `crates/areka/src/session/`・`src/` を付けない `session/<名>.rs`（本体の集めた層を指すもの）・`areka::session`（`areka::session::`・`areka::session=`・行末）を 6.6・7.7 の範囲で数える | 0 件。除いた所（`roadmap-history.md`・`.kiro/specs/completed/`・`roadmap.md`・`doc/roadmap-overview-2026-10-16.html`・`areka-placement` の 4 か所）を一覧で残す |
 | 8.11 | `cargo about generate`（今の呼び方） | `areka-session 0.1.0` の 1 行が増える見込み・手で書かない |
-| 同じウェーブ | `git diff --stat main...HEAD -- crates/areka-placement crates/dola crates/areka-ghost crates/areka-seriko crates/areka/src/placement_tests` | 空。`crates/areka-runtime`・`crates/areka-kanade` はコメントの行だけ |
+| 同じウェーブ | `git diff --stat main...HEAD -- crates/areka-placement crates/dola crates/areka-ghost crates/areka-seriko crates/areka/src/placement_tests` | 空。ただし本体の `placement_tests/` は D10 の例外の 4 本の `use` の 1 行ずつだけ。`crates/areka-runtime`・`crates/areka-kanade` はコメントの行だけ |
 
 ## 失敗の扱い
 

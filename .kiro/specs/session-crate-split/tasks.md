@@ -1,7 +1,7 @@
 # 実装の計画
 
 - 段の順（設計の「段の並び」の 0〜6）がそのままタスクの順。各段の終わりに設計の表の「段の終わりに緑であるもの」を確かめてからコミットする。PR は 1 本。`git mv` のコミットの中の書き換えは行の単位に留める（git が移動として追える類似度を保つ）。
-- どのタスクも、同じウェーブの約束で触らない所（`crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`・本体の `crates/areka/src/placement_tests/`）を変えない。`crates/areka-runtime/`・`crates/areka-kanade/` はパスを名指すコメントだけ（6.1）。本体の `runtime_tests/zorder_wiring_tests.rs` は `include_str!` の 2 行と `t_zwi05` の受け口の列の字面だけを変え、テストの名前は変えない。
+- どのタスクも、同じウェーブの約束で触らない所（`crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`・本体の `crates/areka/src/placement_tests/`）を変えない。本体の `placement_tests/` のうち `crate_source!`・`crate_path` を引く 4 本の読み口の `use` の 1 行ずつだけは、小道具が `areka-session` へ移るので替える（例外）。`crates/areka-runtime/`・`crates/areka-kanade/` はパスを名指すコメントだけ（6.1）。本体の `runtime_tests/zorder_wiring_tests.rs` は `include_str!` の 2 行と `t_zwi05` の受け口の列の字面だけを変え、テストの名前は変えない。
 - 足す・変えるコードのコメントは `CLAUDE.md` の Comments 節に従う（spec・要件・タスクの番号を書かない）。移すファイルの既にあるコメントの中身は、パスの書き換えのほか変えない。
 - 振る舞いを変えない。作業の途中で見つけた不具合・古い説明は直さず、検証の記録の申し送りの一覧に足す（7.6）。
 - 設計の段の表との違い（どれもタスクの並びの直しで、設計の中身は変えない）: 起動と切替の道の口の順の確かめ（OrderTests 1）は `SwitchRig::with` を要るので段 2 の 3.3 へ。ソースを読むテストの根の付け替えとログの出所の直書きの書き換えは、ファイルを移した時点で赤（`include_str!` は組めなくなる）になるので段 3 の 4.2〜4.4 へ。`SwitchRig::new(` の数は、作業の木 `582ccc85` で集めた層 35 か所のうち 17 か所（11 ファイル）が本体へ移すテストのファイルにあり、本体の作り口へ替えるのは 22＋17＝39 か所、集めた層に残るのは 18 か所（3.1）。
@@ -185,7 +185,7 @@
   - _Requirements: 6.6, 7.3, 7.7_
 
 - [ ] 7. 振る舞いが変わらないことを確かめる
-- [ ] 7.1 構造の証跡を取る
+- [x] 7.1 構造の証跡を取る
   - 完了のときのテストの一覧を取り、1.1 の多重集合と比べ、差（見込み +8: 呼ぶ順の確かめの 7 本・落ちの報告の確かめ 1 本）を対応表で 1 件ずつ説明する。説明できない差を残さない
   - `cargo check --workspace --all-targets` の警告が 0、`git diff --stat main...HEAD` で触らない約束の所が空で `areka-runtime`・`areka-kanade` がコメントの行だけ、`cargo tree -p areka-session -e normal` に `areka` と番人の 3 crate が出ない、4.7 の式が 0 件
   - テストの置き場の表（3.2 で足した行を含む）・開けた項目の一覧・1 行を足したテストの一覧を検証の記録に写す
