@@ -196,7 +196,7 @@ pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) 
     )
 }
 
-/// `resolve_boot_from` へ渡す口（ゴースト用）。
+/// 起動の解決へ渡す本番の口（ゴースト用・本体の `install::startup` が渡す）。
 pub fn writable_ghost(roots: &BasewareRoots, dir: &Path) -> PathBuf {
     writable_copy(roots, StoreKind::Ghost, dir)
 }
