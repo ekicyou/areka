@@ -18,7 +18,7 @@ use super::shell_balloon_switch_session_lap_tests::{
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
-use crate::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
+use crate::ghost_switch_test_support::{BALLOON, SwitchRig, copy_tree, standard_script};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::balloon_target;
 
@@ -38,10 +38,7 @@ const CHANGE_2: &str = r"\0戻った\e";
 /// 検体 `StayseeBalloon` を根の `balloon/StayseeBalloon` へ複製する。
 fn add_staysee(rig: &SwitchRig) {
     let staysee = SampleRoot::acquire(STAYSEE).expect("登記済みの検体");
-    super::shell_balloon_switch_session_lap_tests::copy_tree(
-        staysee.folder(),
-        &rig.root.balloon_dir(STAYSEE),
-    );
+    copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE), None);
 }
 
 /// scope 0 のバルーンの 1 フレームの見え方。

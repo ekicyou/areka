@@ -100,7 +100,7 @@
   - _Dispatch: mechanical — 寄せ先と消すテストを設計の表が与える_
   - _Requirements: 3.1, 4.1, 4.7, 5.5, 5.7, 6.3_
 
-- [ ] 4.2 `areka-session` の切り替えの足場を寄せる（T10・28・29・31・32・52・53・54 番・件 8・件 9）
+- [x] 4.2 `areka-session` の切り替えの足場を寄せる（T10・28・29・31・32・52・53・54 番・件 8・件 9）
   - 足場に `boot_context(root, current)` を置き、`ghost_switch_tests.rs` の写しを消す。範囲の外の写しには触らない
   - `add_rpost_shell` の写し 2 つを、周回の足場が写す元のシェルの道を受ける形と std だけの `copy_tree` の 1 か所にまとめる。検体を取る約 4 行と残す理由の 1 行は呼び手 2 か所に置く（本体 `session_update_tests.rs` を含む）
   - 事象を数える補助を `fallback_tests` の 1 つに、`kinds` を引く形に、周回のテストの時刻と道の補助を足場の 1 つに寄せる

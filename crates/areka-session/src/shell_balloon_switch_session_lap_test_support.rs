@@ -4,10 +4,8 @@ use std::cell::Cell;
 use std::panic::Location;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::MonotonicMs;
 use bevy_ecs::world::World;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -15,9 +13,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
 
-use super::GhostSlot;
 use crate::ghost_switch::SwitchInFlight;
-use crate::ghost_switch_test_support::{BALLOON, SwitchRig};
+use crate::ghost_switch_test_support::{BALLOON, SwitchRig, TICK_EVERY, copy_tree};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
@@ -35,9 +32,6 @@ const WORK_AREA: RectPx = RectPx {
     right: 3840,
     bottom: 2100,
 };
-/// Tick を注入する実時間の最小間隔（反復ごとに投函して受信箱を溢れさせない）。
-const TICK_EVERY: Duration = Duration::from_millis(1);
-
 /// 1 回の待ちの中で注入する Tick（1 回で台詞の時計を進める幅と、注入の回数の上限）。
 ///
 /// 投函した Tick は talk スレッドが遅れると溜まり、後から一度に消化される。台詞の時計を観測より
@@ -73,8 +67,6 @@ pub const ACCEPT: Ticks = Ticks {
 pub struct LapRig {
     pub rig: SwitchRig,
     pub windows: GhostWindows,
-    /// 注入した Tick の合成の時刻（単調増加）。
-    clock_ms: u64,
     /// UI の側の要約が巡をまたいで変わった回数（[`LapRig::frames_until`] の進みの目印の片方）。
     ui_moves: Rc<Cell<u64>>,
     /// 前の巡に見た UI の側の要約。
@@ -83,13 +75,18 @@ pub struct LapRig {
     _gpu: GpuPermit,
 }
 
-/// 呼び手が組んだ土台に、2 つ目のシェルを `add_shell` で足し、窓の一式と GPU 資源つきで A を起こす。
-pub fn lap_rig_on(mut rig: SwitchRig, shells: &[&str], add_shell: fn(&Path, &str)) -> LapRig {
+/// 呼び手が組んだ土台の A に、`shells_from` の下の `shells` の各フォルダを `shell/<フォルダ>` へ写し、
+/// 窓の一式と GPU 資源つきで A を起こす。
+pub fn lap_rig_on(mut rig: SwitchRig, shells_from: &Path, shells: &[&str]) -> LapRig {
     rig.plant_boot_record("A");
     for shell in shells {
-        add_shell(&rig.root.ghost_dir("A"), shell);
+        copy_tree(
+            &shells_from.join(shell),
+            &rig.root.ghost_dir("A").join("shell").join(shell),
+            None,
+        );
     }
-    let windows = spawn_windows(&mut rig);
+    let windows = spawn_windows(&mut rig, 96);
     let gpu = GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
@@ -103,7 +100,6 @@ pub fn lap_rig_on(mut rig: SwitchRig, shells: &[&str], add_shell: fn(&Path, &str
     LapRig {
         rig,
         windows,
-        clock_ms: 0,
         ui_moves: Rc::default(),
         ui_seen,
         _gpu: gpu,
@@ -169,26 +165,9 @@ impl UiSeen {
     }
 }
 
-/// フォルダ `from` を `to` へ再帰で複製する（検体の複製の中だけで使う）。
-pub fn copy_tree(from: &Path, to: &Path) {
-    let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
-    while let Some((src, dst)) = stack.pop() {
-        std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
-        for entry in std::fs::read_dir(&src).expect("写したシェルを走査する") {
-            let entry = entry.expect("要素");
-            let target = dst.join(entry.file_name());
-            if entry.file_type().expect("要素の種別").is_dir() {
-                stack.push((entry.path(), target));
-            } else {
-                std::fs::copy(entry.path(), &target).expect("ファイルを写す");
-            }
-        }
-    }
-}
-
-/// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と DPI 96 を
+/// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と `dpi` を
 /// 持たせる（`WindowPos` への書込の口が通る・実窓には触れない）。
-fn spawn_windows(rig: &mut SwitchRig) -> GhostWindows {
+pub fn spawn_windows(rig: &mut SwitchRig, dpi: u16) -> GhostWindows {
     let prepared = areka_placement::prepare_ghost_windows_with_work_area(
         &rig.root.ghost_dir("A"),
         &rig.root.balloon_dir(BALLOON),
@@ -216,7 +195,7 @@ fn spawn_windows(rig: &mut SwitchRig) -> GhostWindows {
         for window in [windows.char_window(scope), windows.balloon_window(scope)] {
             world
                 .entity_mut(window.unwrap())
-                .insert(DPI::from_dpi(96, 96));
+                .insert(DPI::from_dpi(dpi, dpi));
         }
     }
     windows
@@ -239,7 +218,6 @@ impl LapRig {
     pub fn frames_until(&mut self, ticks: Ticks, mut done: impl FnMut(&SwitchRig) -> bool) -> bool {
         let Self {
             rig,
-            clock_ms,
             ui_moves,
             ui_seen,
             ..
@@ -256,17 +234,7 @@ impl LapRig {
                 if sent < ticks.max && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                     sent += 1;
                     last_tick = Some(Instant::now());
-                    *clock_ms += ticks.step_ms;
-                    if let Some(dispatcher) = rig
-                        .world
-                        .get_non_send::<GhostSlot>()
-                        .and_then(|slot| slot.0.as_ref())
-                        .and_then(|session| session.dispatcher())
-                    {
-                        let _ = dispatcher.send(DispatcherMsg::Tick {
-                            now: MonotonicMs(*clock_ms),
-                        });
-                    }
+                    rig.inject_talk_tick(ticks.step_ms);
                 }
                 // 台詞の文字の現れとバルーンの表示を UI が決める時刻（`TalkClock` と同じ dola の時計）。
                 rig.world
@@ -291,7 +259,7 @@ const PUMP_MAX: usize = 1024;
 /// 今のスレッドのキューに溜まったメッセージを配る（本番のメッセージループの 1 巡ぶん）。文字の層の
 /// cue の適用（`spawn_ui` の受け手）は executor の窓へのメッセージで走るので、配らないと台詞の文字が
 /// 文字の層へ載らず、バルーンも現れない。
-fn pump_messages() {
+pub fn pump_messages() {
     let mut msg = MSG::default();
     for _ in 0..PUMP_MAX {
         // SAFETY: 今のスレッドのキューから 1 件取り出して配るだけ（待たない）。

@@ -51,20 +51,18 @@ pub(super) fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'stati
 /// `R_POST_and_KOMAINU` のシェルを `shells` の各名前（フォルダ名・`name` とも）で写してから、
 /// 窓の一式と GPU 資源つきで A を起こす。
 pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> LapRig {
-    lap_rig_on(SwitchRig::new(ghosts), shells, add_rpost_shell)
-}
-
-/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `folder`（`name` も `folder`）に
-/// 写し、それを A の `shell/<folder>` へ複製する。
-fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
+    // 検体の窓口は `test-support` に入れられないので、写す元のシェルは呼び手が作る。
     let rpost = SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
-    rpost
-        .add_shell_copy("master", folder, folder)
-        .expect("2 つ目のシェルを写す");
-    copy_tree(
-        &rpost.folder().join("shell").join(folder),
-        &ghost_dir.join("shell").join(folder),
-    );
+    for shell in shells {
+        rpost
+            .add_shell_copy("master", shell, shell)
+            .expect("2 つ目のシェルを写す");
+    }
+    lap_rig_on(
+        SwitchRig::new(ghosts),
+        &rpost.folder().join("shell"),
+        shells,
+    )
 }
 
 /// キャラ窓ごとの見え方。

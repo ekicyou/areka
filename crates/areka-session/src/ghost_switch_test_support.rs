@@ -351,19 +351,7 @@ impl SwitchRig {
 
     /// `folder` に起動記録（`[boot] count`）を先に書く（次の起動は `OnFirstBoot` を飛ばす）。
     pub fn plant_boot_record(&self, folder: &str) {
-        let dir = self
-            .root
-            .ghost_dir(folder)
-            .join("ghost")
-            .join("master")
-            .join("profile")
-            .join("areka");
-        std::fs::create_dir_all(&dir).expect("profile/areka を組む");
-        std::fs::write(
-            dir.join("sylphya.toml"),
-            "format-version = 1\n[boot]\ncount = \"1\"\n",
-        )
-        .expect("起動記録を書く");
+        self.write_boot_record(folder, "");
     }
 
     /// 起動の文脈に据える App スコープの記憶の置き場（最後に使ったゴースト・起動中の印）。
@@ -397,20 +385,24 @@ impl SwitchRig {
     /// を置き換える）。
     #[cfg(test)]
     pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
-        self.plant_boot_record(ghost);
-        let file = self
+        self.write_boot_record(ghost, &format!("[last]\nballoon = \"{folder}\"\n"));
+    }
+
+    /// `ghost` の `profile/areka/sylphya.toml` に起動記録と `rest` を書く。
+    fn write_boot_record(&self, ghost: &str, rest: &str) {
+        let dir = self
             .root
             .ghost_dir(ghost)
             .join("ghost")
             .join("master")
             .join("profile")
-            .join("areka")
-            .join("sylphya.toml");
+            .join("areka");
+        std::fs::create_dir_all(&dir).expect("profile/areka を組む");
         std::fs::write(
-            file,
-            format!("format-version = 1\n[boot]\ncount = \"1\"\n[last]\nballoon = \"{folder}\"\n"),
+            dir.join("sylphya.toml"),
+            format!("format-version = 1\n[boot]\ncount = \"1\"\n{rest}"),
         )
-        .expect("バルーンの記憶を書く");
+        .expect("起動記録を書く");
     }
 
     fn copy_balloon_to(&self, to: &Path, name: &str) {
@@ -572,7 +564,7 @@ impl SwitchRig {
         reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                 last_tick = Some(Instant::now());
-                rig.inject_talk_tick();
+                rig.inject_talk_tick(TICK_STEP_MS);
             }
             run_ghost_quit_phase(&mut rig.world);
             rig.world.run_schedule(Input);
@@ -580,7 +572,7 @@ impl SwitchRig {
         }))
     }
 
-    /// 足場の時刻の注入の唯一の口: 台詞の時計を [`TICK_STEP_MS`] 進め、置き場のゴーストの dispatcher へ
+    /// 足場の時刻の注入の唯一の口: 台詞の時計を `step_ms` 進め、置き場のゴーストの dispatcher へ
     /// `DispatcherMsg::Tick` を 1 つ送る。kanade へは送らない（足場は `TickerMode::Disabled` で
     /// 起こすので、足場の kanade は Tick を 1 つも受け取らない）。
     ///
@@ -590,8 +582,8 @@ impl SwitchRig {
     /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
     /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
     /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
-    fn inject_talk_tick(&mut self) {
-        self.talk_clock_ms += TICK_STEP_MS;
+    pub(crate) fn inject_talk_tick(&mut self, step_ms: u64) {
+        self.talk_clock_ms += step_ms;
         let now = MonotonicMs(self.talk_clock_ms);
         if let Some(dispatcher) = self
             .world
@@ -689,6 +681,34 @@ fn reported(result: Result<(), WaitFailure>) -> bool {
     }
 }
 
+/// 今のゴーストを `current` のフォルダとする起動の文脈（置き場と helper は根の直下・バルーンは
+/// `StayseeBalloon`）。
+pub fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
+    BootContext {
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
+        app_profile_dir: root.dir().join("profile"),
+        helper_exe: root.dir().join("helper.exe"),
+        argv_session: false,
+        current: CurrentGhost {
+            cfg: ConfigInputs {
+                ghost_root: root.ghost_dir(current),
+                balloon_root: root.balloon_dir("StayseeBalloon"),
+            },
+            ghost: GhostDecision {
+                route: GhostRoute::Default,
+                dir: root.ghost_dir(current),
+                folder: Some(current.to_owned()),
+            },
+            balloon: BalloonDecision {
+                route: BalloonRoute::Default,
+                dir: root.balloon_dir("StayseeBalloon"),
+                folder: Some("StayseeBalloon".to_owned()),
+            },
+        },
+    }
+}
+
 fn app_dir_of(root: &Path) -> PathBuf {
     root.join("profile")
 }
@@ -719,7 +739,7 @@ fn copy_ghost(from: &Path, to: &Path, folder: &str, skip: &Path) {
 }
 
 /// フォルダ `from` を `to` へ再帰で複製する（`skip` のフォルダは中ごと写さない）。
-fn copy_tree(from: &Path, to: &Path, skip: Option<&Path>) {
+pub fn copy_tree(from: &Path, to: &Path, skip: Option<&Path>) {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");

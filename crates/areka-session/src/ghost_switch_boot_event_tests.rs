@@ -6,11 +6,13 @@
 //! 切替先が起動に失敗して既定へ戻ると、既定は `OnBoot`（Reference6＝`halt`）で起き知らせは届かない。
 
 use areka_kanade::ChangeOrigin;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::RecordedCall;
 
@@ -21,31 +23,12 @@ fn update_refs() -> Vec<String> {
         .to_vec()
 }
 
-/// 呼び出しを「GET 名」「NOTIFY 名」の列にする。
-fn ids(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            other => format!("{other:?}"),
-        })
-        .collect()
-}
-
 /// `id` の GET の Reference（最初の 1 件）。
 fn get_refs(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
     calls.iter().find_map(|call| match call {
         RecordedCall::Get { id, references } if id == want => Some(references.clone()),
         _ => None,
     })
-}
-
-fn named(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
 }
 
 /// `scripts` の土台で A を起こして定常に着かせる（起動記録は全員に置く＝`OnFirstBoot` を飛ばす）。
@@ -113,7 +96,7 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
     assert!(!exited, "終了しない: {events:?}");
     assert_eq!(calls.len(), 2, "A を 1 回起こし直す: {calls:?}");
     assert_eq!(
-        ids(&calls[1]),
+        kinds(&calls[1]),
         [
             "NOTIFY OnInitialize",
             "GET username",
@@ -127,7 +110,11 @@ fn a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_change
         Some(update_refs()),
         "渡した Reference のまま"
     );
-    assert_eq!(named(&events, "ghost_switch_requested"), 1, "{events:?}");
+    assert_eq!(
+        count_event(&events, "ghost_switch_requested"),
+        1,
+        "{events:?}"
+    );
     let requested = events
         .iter()
         .find(|e| e.field_str("event") == Some("ghost_switch_requested"))
@@ -152,7 +139,7 @@ fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert_eq!(calls.len(), 2, "{calls:?}");
-    let second = ids(&calls[1]);
+    let second = kinds(&calls[1]);
     assert!(
         second.iter().any(|c| c == "GET OnGhostChanged"),
         "{second:?}"
@@ -189,7 +176,11 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert!(!exited, "既定へ戻って続く: {events:?}");
-    assert_eq!(named(&events, "ghost_switch_target_fault"), 1, "{events:?}");
+    assert_eq!(
+        count_event(&events, "ghost_switch_target_fault"),
+        1,
+        "{events:?}"
+    );
     assert_eq!(defaults.len(), 1, "{defaults:?}");
     let on_boot = get_refs(&defaults[0], "OnBoot").expect("既定は OnBoot で起きる");
     assert_eq!(
@@ -200,7 +191,7 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
         (Some("halt"), Some("A")),
         "{on_boot:?}"
     );
-    let ids = ids(&defaults[0]);
+    let ids = kinds(&defaults[0]);
     assert!(ids.iter().all(|c| c != "GET OnUpdateComplete"), "{ids:?}");
     assert!(ids.iter().all(|c| c != "GET OnGhostChanged"), "{ids:?}");
 }

@@ -18,11 +18,11 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
+use super::fallback_tests::count_event;
 use super::*;
 use crate::body_systems::NO_BODY;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::ghost_switch_test_support::boot_context;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -51,13 +51,6 @@ fn folder(s: &str) -> GhostSpec {
     GhostSpec::Folder(s.to_owned())
 }
 
-fn count_event(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
-
 /// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
 fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
     let hits: Vec<_> = events
@@ -79,33 +72,6 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
     put("A", "charset,UTF-8\nname,Alice\nsakura.name,さくら\n");
     put("B", "charset,UTF-8\n");
     BasewareRoot::new(tmp.path().to_path_buf())
-}
-
-/// 今のゴーストを `current` のフォルダとする起動の文脈。
-fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
-    BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.dir().join("profile"),
-        helper_exe: root.dir().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir(current),
-                balloon_root: root.balloon_dir("StayseeBalloon"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir(current),
-                folder: Some(current.to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("StayseeBalloon"),
-                folder: Some("StayseeBalloon".to_owned()),
-            },
-        },
-    }
 }
 
 /// 文脈と置き場（kanade の送出端だけを持つ中身）を据えた World と、kanade の受信端。

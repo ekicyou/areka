@@ -110,7 +110,7 @@ fn lap(stall: Option<Stall>, advance_ms: u64) -> Lap {
             Some(stall) => {
                 let stalled = rig.pump_talking_until(|rig| rig.exit_requested() || stall.entered());
                 for _ in 0..advance_ms / TICK_STEP_MS {
-                    rig.inject_talk_tick();
+                    rig.inject_talk_tick(TICK_STEP_MS);
                 }
                 stall.release();
                 (Some(stalled), Some(drained_then_unloaded(&rig)))

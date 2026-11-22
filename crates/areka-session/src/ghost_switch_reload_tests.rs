@@ -9,32 +9,15 @@ use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
+use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::reload::{
     ReloadInFlight, ReloadOrigin, ReloadRequest, ReloadStage, ReloadVerdict, request_reload,
 };
 use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
 use areka_runtime::spine::RecordedCall;
-
-/// 呼び出しを「GET 名」「NOTIFY 名」の列にする。
-fn ids(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            other => format!("{other:?}"),
-        })
-        .collect()
-}
-
-fn named(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
-}
 
 /// A の台本（`OnGhostChanged` には台本で応える＝`OnBoot` へ続かない）。
 fn a_script() -> FakeShiori {
@@ -106,14 +89,14 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
     assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
     assert!(!exited, "終了しない: {events:?}");
     assert_eq!(calls.len(), 2, "A を 1 回起こし直す: {calls:?}");
-    let old = ids(&calls[0]);
+    let old = kinds(&calls[0]);
     for absent in ["GET OnGhostChanging", "NOTIFY OnClose", "GET OnClose"] {
         assert!(
             old.iter().all(|c| c != absent),
             "降ろす側に {absent}: {old:?}"
         );
     }
-    let new = ids(&calls[1]);
+    let new = kinds(&calls[1]);
     for absent in ["GET OnBoot", "GET OnGhostChanged", "GET OnFirstBoot"] {
         assert!(
             new.iter().all(|c| c != absent),
@@ -135,8 +118,8 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
             "起こす側に {present}: {new:?}"
         );
     }
-    assert_eq!(named(&events, "reload_done"), 1, "{events:?}");
-    assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
+    assert_eq!(count_event(&events, "reload_done"), 1, "{events:?}");
+    assert_eq!(count_event(&events, "reload_failed"), 0, "{events:?}");
 }
 
 /// 印が無い自分自身への切替は `OnGhostChanged` で起きる。
@@ -155,9 +138,9 @@ fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert_eq!(calls.len(), 2, "{calls:?}");
-    let new = ids(&calls[1]);
+    let new = kinds(&calls[1]);
     assert!(new.iter().any(|c| c == "GET OnGhostChanged"), "{new:?}");
-    assert_eq!(named(&events, "reload_done"), 0, "{events:?}");
+    assert_eq!(count_event(&events, "reload_done"), 0, "{events:?}");
 }
 
 /// 印があっても進行中の予約が他人のもの（鍵が違う）なら由来は上書きされず `OnGhostChanged` で起き、
@@ -185,7 +168,7 @@ fn a_foreign_switch_under_a_reload_mark_boots_as_before_and_drops_the_mark_as_ov
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert_eq!(calls.len(), 2, "{calls:?}");
-    let new = ids(&calls[1]);
+    let new = kinds(&calls[1]);
     assert!(new.iter().any(|c| c == "GET OnGhostChanged"), "{new:?}");
     let reasons: Vec<_> = events
         .iter()
@@ -278,7 +261,7 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
         matches!((destroy, unload), (Some(d), Some(u)) if d < u),
         "古い SHIORI は OnDestroy(reload) の後に unload: {old:?}"
     );
-    let old = ids(old);
+    let old = kinds(old);
     for absent in ["GET OnGhostChanging", "NOTIFY OnClose", "GET OnClose"] {
         assert!(
             old.iter().all(|c| c != absent),
@@ -294,14 +277,14 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
         )),
         "新しい SHIORI は OnInitialize(Ref0=reload): {new:?}"
     );
-    let new = ids(new);
+    let new = kinds(new);
     assert!(
         new.iter()
             .all(|c| !c.starts_with("GET ") || c == "GET username"),
         "台詞を求める GET が 0 件: {new:?}"
     );
-    assert_eq!(named(&events, "reload_done"), 1, "{events:?}");
-    assert_eq!(named(&events, "reload_failed"), 0, "{events:?}");
+    assert_eq!(count_event(&events, "reload_done"), 1, "{events:?}");
+    assert_eq!(count_event(&events, "reload_failed"), 0, "{events:?}");
 }
 
 /// shiori の読み直しは窓の組の帳簿と吸着の出どころを残す:
@@ -452,7 +435,7 @@ fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
     // 作り口は入力を作るたびに偽の SHIORI を 1 つ組む: 最初の起動と組み直しの 2 回（既定へ戻す 3 回目が無い）。
     assert_eq!(loads, 2, "既定へ戻す 2 度目の試みが無い: {events:?}");
     assert_eq!(in_flight, (false, false), "予約と印は下りる: {events:?}");
-    assert_eq!(named(&events, "ghost_switch_fatal"), 1, "{events:?}");
+    assert_eq!(count_event(&events, "ghost_switch_fatal"), 1, "{events:?}");
     let reasons: Vec<_> = events
         .iter()
         .filter(|e| e.field_str("event") == Some("reload_failed"))
@@ -503,9 +486,9 @@ fn a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal() {
     assert_eq!(in_flight, (false, false), "予約と印は下りる: {events:?}");
     assert_eq!(
         (
-            named(&events, "switch_drop_record_degraded"),
-            named(&events, "windows_closed_for_restart"),
-            named(&events, "ghost_switch_fatal"),
+            count_event(&events, "switch_drop_record_degraded"),
+            count_event(&events, "windows_closed_for_restart"),
+            count_event(&events, "ghost_switch_fatal"),
         ),
         (1, 0, 0),
         "(書けない記録・窓を閉じた・切替の致命): {events:?}"
@@ -521,7 +504,8 @@ fn carry_handed_over(rig: &SwitchRig) -> Option<bool> {
 
 /// 控えを取った記録（取れた・取れなかった）の件数。
 fn carry_records(events: &[CapturedEvent]) -> usize {
-    named(events, "reload_shell_captured") + named(events, "reload_shell_carry_unavailable")
+    count_event(events, "reload_shell_captured")
+        + count_event(events, "reload_shell_carry_unavailable")
 }
 
 /// ghost の読み直しは窓を閉じる前に表示中の面を控え、起こし直した新しい結線へ渡す。
@@ -692,5 +676,9 @@ fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
         ),
         "{events:?}"
     );
-    assert_eq!(named(&events, "last_balloon_not_found"), 0, "{events:?}");
+    assert_eq!(
+        count_event(&events, "last_balloon_not_found"),
+        0,
+        "{events:?}"
+    );
 }

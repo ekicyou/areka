@@ -8,6 +8,7 @@ use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, read_last_balloon};
@@ -176,13 +177,6 @@ fn name_balloon_in_b(rig: &SwitchRig, name: &str) {
         .expect("B の descript.txt に balloon を足す");
 }
 
-fn count(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
-}
-
 /// 切替先 B の中のバルーンを descript が指すと、それに決まり、記憶にはフォルダ名だけが書かれ、
 /// 次の切替の決め方（`resolve_balloon_for_ghost`）は記憶の段から同じ場所を出す。
 ///
@@ -233,7 +227,7 @@ fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
     assert_ne!(balloon.route, BalloonRoute::Descript, "{events:?}");
     assert!(!balloon.dir.starts_with(&a_dir), "{balloon:?}");
     assert_eq!(
-        count(&events, "descript_balloon_not_found"),
+        count_event(&events, "descript_balloon_not_found"),
         1,
         "{events:?}"
     );
@@ -257,7 +251,11 @@ fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
         (BalloonRoute::Memory, Some(B_INNER), &inner),
         "{events:?}"
     );
-    assert_eq!(count(&events, "last_balloon_not_found"), 0, "{events:?}");
+    assert_eq!(
+        count_event(&events, "last_balloon_not_found"),
+        0,
+        "{events:?}"
+    );
 }
 
 /// 記憶のバルーンがゴーストの中から消えたら `last_balloon_not_found` を 1 件残して次の段

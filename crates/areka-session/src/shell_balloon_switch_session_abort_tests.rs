@@ -39,6 +39,7 @@ fn rig_a(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig 
 }
 
 /// `event` の記録の数。
+// `ghost_switch` の `fallback_tests::count_event` は `ghost_session` の木の下から見えない。
 fn count(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
