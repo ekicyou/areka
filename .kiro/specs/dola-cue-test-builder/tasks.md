@@ -56,8 +56,8 @@
   - _Dispatch: mechanical — 撤去の後の形と manifest の行を設計が与えている_
   - _Requirements: 2.3, 3.1, 3.2, 3.3, 3.5, 3.6, 4.1, 4.3_
 
-- [ ] 3. 付け替えの確かめ
-- [ ] 3.1 各 crate の単独のテストで、前と同じテストが全部緑であることを確かめる
+- [x] 3. 付け替えの確かめ
+- [x] 3.1 各 crate の単独のテストで、前と同じテストが全部緑であることを確かめる
   - `dola`（`--features toml` の段も）・areka-ghost・areka-seriko・areka-runtime・本体 `areka` を 1 回ずつ単独で回す（`--workspace` で機能が合わさって書き忘れが隠れないように）
   - 1.1 の控えと `-- --list` の数を比べ、`dola` が檻の 2 本だけ増え、他の 4 crate は同じ数で、無視されたテストの数が増えていない
   - 本体のテストは本体の `Cargo.toml` を変えずに runtime の `carrier_cue`・`actor_carrier_cue` を引いて緑
@@ -65,7 +65,7 @@
   - _Dispatch: mechanical — 決まったコマンドを回して数を比べるだけ_
   - _Requirements: 2.1, 3.3, 3.4, 4.2_
 
-- [ ] 3.2 本番・公開・差分の範囲を確かめる
+- [x] 3.2 本番・公開・差分の範囲を確かめる
   - `cargo tree -p areka -e normal,features -i dola` の出力に `test-support` が出ない
   - `pwsh -NoProfile -File tools/crates-io.ps1` が通り、`git diff --exit-code Cargo.lock` が 0
   - `git diff --name-only main...HEAD` が設計の File Structure Plan の 13 ファイルと spec の文書だけで、本体 `crates/areka/`・根の `Cargo.toml`・`command.rs`・呼び手の 22 ファイル・本体の session の `prop_set_cue`・`TalkCue { at: 0.0, … }` の直書きのテストが入っていない
@@ -74,3 +74,9 @@
   - _Depends: 3.1_
   - _Dispatch: mechanical — 決まったコマンドと grep を回すだけ_
   - _Requirements: 2.3, 2.4, 2.6, 3.1, 3.5, 4.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+
+## Implementation Notes
+
+- 付け替えの前と後の数（`-- --list`）: dola 603→605（無視 1）・areka-ghost 282・areka-seriko 572・areka-runtime 1050（無視 3）・areka 1898（無視 3）。控えはワークツリーの `target/dola-cue-test-builder/` の下。
+- 範囲の外: `cargo clippy -p dola --all-targets -- -D warnings` が触っていない `compile/resolve.rs:369` と `runtime/timeline_manager/mod.rs:231` の `collapsible_if` で赤（`tools/test-all.ps1` に clippy の段は無い）。
+- 範囲の外: 本体 `areka` の `smoke_boot_loop_exit` が機械の混む時に 60 秒で 1 回落ち、単独の回し直しで緑（この差分はこのテストの使う所に触れていない）。完了の全体テストで見る。
