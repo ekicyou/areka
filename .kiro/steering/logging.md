@@ -100,7 +100,7 @@ fn main() {
 }
 ```
 
-areka は `log_history::init()`（`crates/areka/src/session/log_history.rs`）がこれに履歴の層（`get_log` が読む・`RUST_LOG` と独立）を `.with(...)` で足す。
+areka は `log_history::init()`（`crates/areka-session/src/log_history.rs`）がこれに履歴の層（`get_log` が読む・`RUST_LOG` と独立）を `.with(...)` で足す。
 
 ## 環境変数によるフィルタリング
 

@@ -169,7 +169,7 @@
   - _Boundary: PathRewrite（文書と道具）_
   - _Dispatch: mechanical — 書き換えを対応表が与え、報告は道具が作る_
   - _Requirements: 7.4, 6.3_
-- [ ] 6.3 (P) steering の構成と技術の文書と、2 本の見直しの brief の受け持つファイルを書き換える
+- [x] 6.3 (P) steering の構成と技術の文書と、2 本の見直しの brief の受け持つファイルを書き換える
   - `structure.md` に `areka-session` の節（役・依存の向き・`BodySystems`・`test-support`・テストの置き場）を `areka-input` の節の後に足し、本体の節の `session/` の記述を「集めた層は `areka-session`・本体の本物どうしをつなぐテストは `session_tests/`」へ合わせ、`log-capture-kit` ほか使い手の crate の数に数え入れる。出所の名前 2 か所も替える
   - `tech.md` の集めた層のパス 1 か所を移した先へ替える
   - `audit-areka-app`・`audit-areka-install-update` の brief の「受け持つファイル」を `crates/areka-session/` の該当するファイルと本体の `session_tests/`・`main.rs` の `BODY_SYSTEMS` へ書き換える（所見の文の中の古いパスは変えない）

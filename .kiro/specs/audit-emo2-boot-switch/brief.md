@@ -9,7 +9,7 @@
 ## Current State
 
 - 受け持つファイル（2026-11-17 `runtime-crate-split` で書き換えた＝前は 2026-11-13 `runtime-module-untangle` の `crates/areka/src/runtime/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs`。名前の型を `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方に当てる。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
-  - `crates/areka/src/session/` の `ghost_switch*`・`shell_balloon_switch*`。
+  - `crates/areka-session/src/` の `ghost_switch*`・`shell_balloon_switch*`、および `crates/areka/src/session_tests/` の `shell_balloon_switch*`。
   - `crates/areka-runtime/src/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs`、および `crates/areka/src/runtime_tests/` の `balloon_visibility*`（代わりの親 2 と、本体の項目を引くテストの 5 本）。
 - 大きさ: 50 ファイル・コード 5,672 行・テスト 12,687 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。

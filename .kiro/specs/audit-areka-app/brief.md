@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/` のうち、上の 7 本の持ち物でないもの全部（`src/cli/`・`src/main.rs`・`src/session/boot_*`・`src/session/ghost_session*`・`src/shiori_host*`・`src/session/app_exit*` ほか・`tests/`・`Cargo.toml`・`build.rs`・`shell/`）。
+- 受け持つファイル: `crates/areka/` と `crates/areka-session/` のうち、上の 7 本の持ち物でないもの全部。本体（`crates/areka/`）は `src/cli/`・`src/main.rs`（`BODY_SYSTEMS` を含む）・`src/session_tests/`（`readme_body_tests.rs`・`shell_balloon_switch*` を除く）・`src/shiori_host*` ほか・`tests/`・`Cargo.toml`・`build.rs`・`shell/`。集めた層（`crates/areka-session/`）は `src/readme.rs`・`src/readme/`・`src/readme_tests.rs`・`src/roots/`・`src/ghost_switch*`・`src/shell_balloon_switch*` を除く全部（`src/lib.rs`・`src/boot_*`・`src/ghost_session*`・`src/app_exit*`・`src/body_systems*`・`src/smoke_exit*`・`src/session_end*`・`src/session_mark.rs`・`src/write_failure*`・`src/alert*`・`src/exit_wait*`・`src/readonly*`・`src/ghost_quit*`・`src/reload*`・`src/runtime_boot*`・`src/readme_script_e2e_tests.rs`・`src/switch_copy*`・`src/same_folder_pin*`・`src/hooks.rs`・`src/log_history*`・`src/crate_source_test_support.rs`・`src/crash_report_tests.rs`・`src/script_security_e2e_tests.rs`・`Cargo.toml`・`build.rs`・`tests.manifest`）。
 - 大きさ: 211 ファイル・コード 12,594 行・テスト 18,655 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 

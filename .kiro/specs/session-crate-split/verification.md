@@ -1075,3 +1075,80 @@ RED は n/a（文字列の target の書き換えのみ。期待値の側も同�
 - `cargo test -p log-capture-kit --test file_length_guard_test`: 7 緑（例外表は変えていない）。
 - `cargo check --workspace --all-targets`: 警告 0。`cargo fmt --all -- --check`: 差分なし。
 - `cargo clippy -p areka-session --all-targets`・`-p areka --bin areka --tests`: 触った所（`body_systems.rs`・`build.rs`・足したテスト）に指摘なし（残る指摘は移したコードに前からある形）。
+
+### 5.2
+
+- 変更: `tools/load-flake.ps1` の `-Binary` に `areka-session-lib`（`-p areka-session --lib`）を足した。足した場所は ValidateSet・`Get-CargoTestTarget` の switch・自分の検査の表 `$want`・説明の列挙（コメントと `.DESCRIPTION` 側の 2 か所）。`areka-input-lib` と同じ書き方。
+- RED: 該当なし（mechanical。値の足しだけで、新しい分岐の判断は無い）。
+- 他の .ps1 がこの道具の出力の文を字面で読んでいないか: 足した文字列は `areka-input-lib` と同じ並びで、出力する文は変えていない。
+- `pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest`: 5 本とも ok（`cargo args` を含む）。-SelfTest は cargo も負荷の走行も起こさない（約 1 秒の偽の親と負荷の子 1 本のみ）。
+
+### 5.1
+
+- 変更: 実走の道具と実機テストの log target を `areka::session::…` から `areka_session::…` へ替えた。対象は `crates/real-run-kit/src/launch.rs`（`RELIED_TARGETS`）・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs` と `crates/areka/tests/emo2_mcp_real_run.rs`（`rust_log`・`BOOT_CONFIG_PREFIX`・コメント）。`launch_tests.rs` の「似て非なる」出所は `areka_session::app` と `areka_session::app_exits` で、前方一致の境界は同じ。runbook の文書は触っていない。
+- RED: 該当なし（文字列の付け替えのみ。既存テストは付け替えと同時に新しい名前で緑）。
+- `git grep -n "areka::session" -- crates/real-run-kit crates/areka/tests/emo2_mcp_real_run.rs`: 0 件。
+- `cargo test -p real-run-kit`: 全緑。`cargo check -p areka --tests`: 警告 0。`cargo fmt --all -- --check`: 差分なし。
+
+### 6.2
+
+- 変更: 古い `crates/areka/src/session/<名>.rs` を移した先へ、出所 `areka::session…` を `areka_session…` へ書き換えた。移した先は `git ls-files` で実在を確かめて決めた（`crates/areka-session/src/<名>.rs`、本体に残ったテストは `crates/areka/src/session_tests/<名>.rs`）。実在しない名は 0 件。`ukadoc: https://…` の行は触っていない。
+- 触ったファイル: `doc/COMPAT_ARCHITECTURE.md`（パスの行のみ。§8 の名の行は触らない）・`doc/ukadoc-coverage/ledger/{sakura-script,property,shiori,assets}.toml`・`doc/ukadoc-coverage/briefing-assets.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`（表の外）・`doc/pasta-real-run.md`（127・141 行の `RUST_LOG`）・`doc/ideas/novel-redesign-2026-11-20/` の 8 ファイル・`tools/package.ps1`（3 か所）・`tools/perf/judge-perf.py`（1 か所）。`crate::session::…` の 3 か所（COMPAT の `pick_index`・log-convention の `last_id`・ideas 03 の `session/runtime_boot.rs`）も新しい場所へ替えた。
+- 台帳の変えた行数: 38 行（sakura-script 18・property 10・shiori 9・assets 1。行数は別々の行の置き換えで増減なし）。
+- 網羅の報告: `ukadoc-survey report` と `report-summary` で作り直した（手では直していない）。
+- RED: 該当なし（mechanical。`check` は書き換えの後に回し、書き換え前の赤は測っていない）。
+- `cargo run -p ukadoc-survey -- check`: 食い違い 0 件（緑）。
+- 道具の出力の文: `tools/package.ps1`・`judge-perf.py` は注釈・説明の中のパスだけで、出力する文字列は変えていない。
+- `git grep -E "crates/areka/src/session/|areka::session|crate::session"`（`doc`・`tools`、除外は `roadmap*`・overview html・`report/`）: 0 件。
+- レビューの差し戻しの直し:
+  - `doc/COMPAT_ARCHITECTURE.md` の OS のセッションの終了の行: `only_session_end_calls_the_bounded_shutdown`・`deadline_call_scan_turns_red_on_one_line_removed_or_added` は本体の `crates/areka/src/session_tests/session_end_deadline_body_tests.rs` へ移ったので、その 2 つの前にこのファイルの名を入れて分けた（残りの 8 つは `crates/areka-session/src/session_end_deadline_tests.rs` のまま）。§8 の名の行は触っていない。
+  - `doc/ideas/novel-redesign-2026-11-20/92-validation-code.md:173`: `crates/` の付かない `areka/src/session/runtime_boot.rs` を `areka-session/src/runtime_boot.rs` へ（この文書の書き方に合わせて `crates/` は付けない）。
+  - 本体の `src/` 直下から移した `smoke_exit.rs`（D5）の古いパス `crates/areka/src/smoke_exit.rs` を `crates/areka-session/src/smoke_exit.rs` へ: `tools/package.ps1`（148・152・694 行の注釈）・`tools/perf/invoke-perf-run.ps1`（29 行の説明）。どちらも注釈・説明の中で、出力する文字列や照合の字面は変えていない。
+- 広げた形の掃き出し（`doc`・`tools`、除外は `roadmap*`・`doc/roadmap-overview-2026-10-16.html`・`doc/ukadoc-coverage/report/`）:
+  - `git grep -nE "areka/src/session/|src/session/|areka::session::|crate::session::|\bsession::[a-z_]"`: 0 件。
+  - `git grep -nE "session/[a-z_0-9]+(\.rs|/)|session_tests/"` から `crates/areka/src/session_tests/` と `areka-session/` を除いたもの: 0 件。
+  - `crates/areka-session/src/` の各ファイルで、本体に同名が無いものについて `areka/src/<名>` と `crates/areka/src/<名>` を `git grep -F`: 直した後 0 件（直す前は `smoke_exit.rs` の 4 件）。
+  - `git grep -nE "smoke_exit|crate_source_test_support|sample_test_support|areka::session"` で古い場所を指すもの: 0 件（残るのは `invoke-perf-run.ps1` の変数名 3 件で、パスではない）。
+  - 文書が「`<テストのファイル>` の `<名>`・…」の形で挙げるテストの名を、そのファイルに実在するかで全部照らした（使い捨ての python。`*_body_tests.rs` へ移った名を含む）: 集めた層と `session_tests/` の名の食い違いは上の 1 行の 2 件だけで、直した後 0 件。集めた層の名で残る 2 件（`app_exit_tests.rs` の `fault_of_returns_the_fault_only_for_kanade_stopped_fault`・`ghost_switch_tests.rs` の `matching_is_case_sensitive`）は `main` の `crates/` にも無く、移動の前からの食い違いなので触っていない。
+  - 台帳は変えていないので報告は作り直していない。`cargo run -p ukadoc-survey -- check`: 食い違い 0 件（緑・直しの後に回し直し）。
+
+### 6.3
+
+- `.kiro/steering/structure.md`: 「Session Crate（areka-session）」の節を `areka-input` の節の後（`Parser Crate` の前）に足した（役・出所の名前・`BodySystems`・`test-support`・テストの置き場・依存の向き・使い手）。本体の節の `session/` は「集めた層は `areka-session`・本体の本物どうしをつなぐテストは `session_tests/`」へ替え、`session/<名>.rs`・`crates/areka/src/session/…` の言及を `areka-session` の相当へ付け替えた。出所の名前 2 か所（`areka::session::roots::user_root`・`…::layout()`）は `areka_session::…`。`areka-session` を、本体の依存の一覧・配置と実行系と入力の使い手・`log-capture-kit`（22 → 23 crate）・`temp-path-kit`・クラッシュ報告の支えの使い手へ数え入れた。
+- `.kiro/steering/tech.md`: 集めた層のパス 1 か所（`readme/os_port.rs`）を `crates/areka-session/src/` へ替えた。
+- `audit-areka-app`・`audit-areka-install-update` の brief: 「受け持つファイル」の 1 行だけを、`crates/areka-session/` の該当ファイル・本体の `session_tests/`・`main.rs` の `BODY_SYSTEMS` へ書き換えた。所見の文の古いパスは触っていない。
+- レビューの差し戻しで、パスを替えた文の周りが事実と合わなくなった所を直した:
+  - `structure.md` の入力の節の Tests: 強制退避の枝のテストは「集めた層を引くテストだけは `areka-session` に置く」へ（このテストは `areka_input` の支えを引き、`areka-session` の `app_exit.rs` の子）。
+  - `structure.md` の実行系の節の約束と本体の `runtime_tests/` の行: `session_hooks` の向き先は「上の層」、据えるのは「`areka-session` が `hooks.rs` で」（`crates/areka-session/src/hooks.rs` の `install`）。
+  - `structure.md` の Session の節の Purpose と本体の `session_tests/` の行: 「本体に頼る」を外した（`areka-session` は本体に依存しない）。
+  - `tech.md`: `ShellExecute` を綴るのは `crates/areka/src`・`crates/areka-session/src` で `readme/os_port.rs` だけ（`git grep -l ShellExecute -- crates/areka/src crates/areka-session/src` が `crates/areka-session/src/readme/os_port.rs` の 1 件）。
+  - `audit-areka-app` の brief: 受け持つファイルを本体（`crates/areka/`）と集めた層（`crates/areka-session/`）の 2 組に分け、重なりを無くした。集めた層は `src/readme*`・`src/readme/`・`src/roots/`（`audit-areka-install-update` の持ち物）を除く全部で、`src/lib.rs`・`Cargo.toml`・`build.rs`・`tests.manifest` を含む。本体の `session_tests/` は `readme_body_tests.rs` を除く。`git ls-files crates/areka-session crates/areka/src/session_tests` の全ファイルがどちらか 1 本の brief に入ることを見た。
+  - `audit-areka-install-update` の brief: 本体の `crates/areka/src/` の分と `crates/areka-session/src/` の分を 2 つに分けて書いた。
+  - `structure.md` の実行系の節の cue の受け口: 「本体に頼る受け口」を「上の層に頼る受け口」へ替え、`readme/readme_cue.rs` は `areka-session` の側（`crates/areka-session/src/readme/readme_cue.rs`）、`install_cue.rs`・`update_cue.rs` は本体の側と書き分けた。
+  - 直した文の周り（Session の節の依存・Features・使い手、`log-capture-kit` の 23 crate、`areka-user-data` の依存の向き）を `Cargo.toml` と `git grep` で突き合わせ、合っていることを見た。
+- 2 回目の差し戻しで直した所:
+  - `audit-areka-app` の brief: 集めた層から `src/ghost_switch*`・`src/shell_balloon_switch*`（`audit-emo2-boot-switch` の持ち物）を除き、本体の `session_tests/` からも `shell_balloon_switch*` を除いた。
+  - `audit-emo2-boot-switch` の brief: 「受け持つファイル」の行の `crates/areka/src/session/` を `crates/areka-session/src/` の `ghost_switch*`・`shell_balloon_switch*` と本体の `crates/areka/src/session_tests/` の `shell_balloon_switch*` へ替えた。所見の文・申し送りの節の古いパスは触っていない。
+  - `crates/areka-session/src/readme_script_e2e_tests.rs` は、移す前のどの brief の「受け持つファイル」にも名が無く（`audit-areka-install-update` が挙げていたのは `readme.rs`・`readme/`・`readme_tests.rs` だけ）、本体の残りを受け持つ `audit-areka-app` の持ち物だった。`runtime_boot_tests.rs` の子でもあるので `audit-areka-app` に置き、`audit-areka-install-update` の行から外した。これに合わせ、`audit-areka-app` の除く所は `src/readme*` でなく `src/readme.rs`・`src/readme/`・`src/readme_tests.rs`・`src/roots/` と書いた。
+  - 3 本の brief の突き合わせ: `git ls-files crates/areka-session crates/areka/src/session_tests` の 141 ファイルを 3 本の brief の書き方で振り分け、どれも 1 本だけに入ることを見た（`audit-areka-app` 100・`audit-areka-install-update` 21・`audit-emo2-boot-switch` 20・どこにも入らない／2 本に入るもの 0）。`audit-areka-app` の集めた層の分は、括弧の中の名の並びだけで 100 件を覆う。
+  - steering の残り: `logging.md` の `log_history.rs`・`product.md` の `boot_resolve.rs`（定数 `DEFAULT_BALLOON_FOLDER`）を `crates/areka-session/src/` へ替えた（どちらも移した先に在ることを見た）。`git grep -E "crates/areka/src/session/|areka::session|session/<名>.rs" -- .kiro/steering/` は `roadmap.md`・`roadmap-history.md`（除外の 2 本）を除いて 0 件。
+  - `structure.md` の Session の節の `BodySystems`: 据える所を「`register_systems` が系を登録する前に 1 回据える」へ（`ghost_session.rs` の `register_systems` は `hooks::install`・`install_input_hooks` の後、系を足す前に `insert_resource(body)` する）。
+- RED: 該当なし（文書のみ）。`git grep -E "crates/areka/src/session/|areka::session|session/<名>.rs" -- structure.md tech.md`: 0 件。
+
+### 6.1
+
+コードの説明（コメント）だけを移した先のパスへ書き換えた。コードは変えていない（`areka-runtime`・`areka-kanade` の差分はコメントの行だけ）。
+
+書き換えた所:
+- `areka-runtime`: `talk_clock.rs`・`user_break_cue.rs`・`lib.rs`（`runtime_boot.rs` の 3 か所と `areka_session::ghost_quit::wire_kanade_stop` の 2 か所）・`strict_judges.rs`・`placement_tests/transition_judge_offset_signoff_tests.rs`・`session_hooks.rs`（`areka_session::hooks`）・`skin_switch.rs`（`areka_session::shell_balloon_switch`）
+- `areka-kanade`: `schedule/script_log.rs`・`schedule/events.rs`（`areka_session::reload`）
+- 本体: `tests/emo2_real_run.rs`・`Cargo.toml`（81 行付近）・`runtime_tests/spine_move_cue_tests.rs`・`session_tests/boot_config_copy_tests.rs`
+- `areka-session` の中: `alert_dpi_tests.rs`・`boot_config.rs`（`session::runtime_boot` の字面）
+
+除外した所（書き換えていない）:
+- 4.3 の持ち分: `log_history*`・`reload*_tests.rs`／5.1 の持ち分: `tests/emo2_mcp_real_run.rs`
+- `areka-placement` の 4 か所（古い字面のまま）: `diag.rs:46`・`persist.rs:330`・`resolver.rs:97`・`resolver_resolve_balloon_tests.rs:123`（いずれも `session/boot_seam.rs`）
+- `crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66`（過去の書き換えの記録の引用）
+- 触らない約束の `crates/areka/src/placement_tests/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`
+
+確かめ: `cargo check -p areka-runtime -p areka-kanade -p areka -p areka-session --all-targets` 警告 0・`cargo fmt --all -- --check` 差分なし。

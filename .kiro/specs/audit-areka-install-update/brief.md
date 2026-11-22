@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/` の `install*`・`update*`・`mcp*`・`roots*`（`roots.rs`・`roots/`・`session/roots/`）・`session/readme.rs`・`session/readme/`・`session/readme_tests.rs`（フォルダとファイル）。
+- 受け持つファイル: `crates/areka/src/` の `install*`・`update*`・`mcp*`・`roots.rs`・`roots/`・`session_tests/readme_body_tests.rs` と、`crates/areka-session/src/` の `roots/`・`readme.rs`・`readme/`・`readme_tests.rs`（フォルダとファイル）。
 - 大きさ: 107 ファイル・コード 8,922 行・テスト 21,355 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
