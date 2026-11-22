@@ -149,10 +149,10 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     let lines: Vec<String> = match scene {
         AlertScene::RootMissing(error) => {
             let (what, tried, origin) = match error {
-                RootError::ExeLocationUnavailable { tried, origin, .. } => (
+                RootError::ExeLocationUnavailable { .. } => (
                     "置き場が決まりません: 実行ファイルの場所が取れません。",
-                    tried.as_slice(),
-                    *origin,
+                    &[][..],
+                    RootsOrigin::Default,
                 ),
                 RootError::EnvAllEmpty { .. } => (
                     "置き場が決まりません: 環境変数 AREKA_ROOT が空です。",
@@ -286,12 +286,22 @@ pub fn suppressed() -> bool {
     }
 }
 
+/// 告知を抑えるかの決まり（抑止の環境変数か、有界の自動終了のどちらかが立てば真）。
+pub fn alerts_suppressed() -> bool {
+    with_smoke(suppressed(), crate::smoke_exit::smoke_exit_ms())
+}
+
+/// 抑止に有界の自動終了を足す純粋な口。
+fn with_smoke(suppressed: bool, smoke_exit_ms: Option<u64>) -> bool {
+    suppressed || smoke_exit_ms.is_some()
+}
+
 /// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽ならエラーの画面を出す
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
 /// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
 /// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
 pub fn raise(scene: &AlertScene, suppressed: bool) {
-    let suppressed = suppressed || crate::smoke_exit::smoke_exit_ms().is_some();
+    let suppressed = with_smoke(suppressed, crate::smoke_exit::smoke_exit_ms());
     let (title, body) = alert_text(scene);
     tracing::error!(
         event = "alert",

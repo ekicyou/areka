@@ -372,3 +372,12 @@ fn warn_ok_suppressed_shows_nothing_and_logs_one_warn() {
     assert_eq!(ev.field_str("body"), Some("書庫: x.nar\n本文"));
     assert_eq!(ev.field("suppressed"), Some("true"));
 }
+
+/// 告知の抑止は、抑止の環境変数と有界の自動終了のどちらか一方でも立てば真。
+#[test]
+fn with_smoke_suppresses_when_either_is_set() {
+    assert!(!with_smoke(false, None));
+    assert!(with_smoke(true, None));
+    assert!(with_smoke(false, Some(0)));
+    assert!(with_smoke(true, Some(1000)));
+}

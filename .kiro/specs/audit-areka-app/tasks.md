@@ -56,7 +56,7 @@
   - _Requirements: 2.7, 3.1, 4.1, 4.2, 7.8, 7.9_
 
 - [ ] 5. 兄弟から受けた本番の件（G5・S2・S3・S4・S8）
-- [ ] 5.1 告知を抑える決まりを 1 か所の公開の関数にする（S2・S3）
+- [x] 5.1 告知を抑える決まりを 1 か所の公開の関数にする（S2・S3）
   - `alert.rs` に `pub fn alerts_suppressed() -> bool` と私有の純関数 `with_smoke(suppressed, smoke_exit_ms)` を足し、`raise` もそれを使う（呼び手と引数は変えない）
   - `ExeLocationUnavailable` の腕（150 行）を欄を読まない形（`{ .. }`・試した場所は空・出どころは既定）にする。値は今と同じ
   - `alert_tests.rs` に `with_smoke` の 4 通り（抑止なし・`AREKA_NO_ALERT`・自動終了・両方）を足す。51-56 行の構築の 2 行（`tried`・`origin`）は兄弟が列挙の欄を減らすコミットで消すので、こちらは触らない（設計の討議の議題 3）
