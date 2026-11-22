@@ -96,7 +96,7 @@
 
 全件と根拠は `.kiro/specs/completed/session-crate-split/verification.md` の「申し送り（7.6）」。
 
-- **`NO_BODY` の受け口と、本体が「窓口が無い」ときに使う受け口の差**: `NO_BODY`（`crates/areka-session/src/body_systems.rs`）の `cue_sinks` は `areka_ghost::sink::DiscardSink` を 2 つ返す。本体の窓口の無いときの受け口は、受信端の無い送出端を持つ `InstallCueSink` で、`url` の腕で取得のスレッドを起こすかが違う（`DiscardSink` は起こさない）。`NO_BODY` を通るのは結線の誤り（`body_systems_missing` の `error!` が出る）と集めた層のテスト（`SwitchRig::new`）だけで、本番の道では起こらない。本体の `session_tests/body_systems_tests.rs` の `missing_body_systems_logs_and_answers_like_no_desk` が口の無い World の答えを固定している。2 つをそろえるかを見る。
+- **`NO_BODY` の受け口と、本体が「窓口が無い」ときに使う受け口の差**: `NO_BODY`（`crates/areka-session/src/body_systems.rs`）の `cue_sinks` は `areka_ghost::sink::DiscardSink` を 2 つ返す。本体の窓口の無いときの受け口は、受信端の無い送出端を持つ `InstallCueSink` で、`url` の腕で取得のスレッドを起こすかが違う（`DiscardSink` は起こさない）。`NO_BODY` を通るのは結線の誤り（`body_systems_missing` の `error!` が出る）と集めた層のテスト（`SwitchRig::new`）だけで、本番の道では起こらない。本体の `session_tests/body_systems_tests.rs` の `missing_body_systems_logs_and_answers_idle` が口の無い World の答えを固定している。2 つをそろえるかを見る。
 - `crates/areka-session/src/roots/user_root.rs` の `writable_ghost` の doc は、集めた層から見えない `resolve_boot_from`（本体の `session_tests/mod.rs` へ移った）を名指していたので、完了のときに本番の渡し手（本体の `install::startup`）を平文で書く形へ直した。
 
 ## 2026-11-22 棚卸㊸の再測定（main `312a2f18`）
@@ -110,3 +110,11 @@
 - **同じウェーブに置けない相手**: `doc-compat-architecture-rename`（`install/judge.rs:90` が文書を名指す）・`balloon-text-visual-tree`（待つ側）・`dola-interrupt-ticks`（`install_cue*`・`update_cue*`・`readme_cue*`・`mcp/dump_*_gpu_*` が dola の時刻と合図を使う）。
 - **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。要件定義のモデル: Opus（見直しの型どおり）。分割の案: 無し。
 - **古くなった記述**: Upstream の「`mcp-reload`（v0.1.0・2026-10-19 に着手中）」は着地済み。Current State の大きさ（107 ファイル）は起票のときの数え。
+
+## 申し送り（audit-areka-app より）
+
+全件と根拠は `.kiro/specs/completed/audit-areka-app/research.md` の 12.6。
+
+- **件 1（根の項目の決まりの置き場）**: 「書ける根の印の項目は外せない」「印があるとき実行ファイルの隣は先頭へ動かせない」の決まりが `crates/areka/src/menu/roots_frame.rs`（73-75・109 行）にしか無く、判断の `roots/edit.rs` の `decide_remove`・`decide_front` は受け付ける。決まりを `roots/edit.rs` に置くかをこの spec で決める。
+- **件 2（SHIORI の試験用の脳の残り）**: `audit-areka-app` は脳を「残す道」で消した（`mcp/get_property_tests.rs` の `ShioriHostSink` の当たりが残っていたため）。この spec で、先に `mcp/get_property_tests.rs:144-300` を `areka_ghost::prop_get_sink::PropGetCueSink` の形に直し、`git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` の当たりが次の 3 つだけになるのを確かめてから、それらを消す: ⑴ `crates/areka/src/shiori_host.rs` と `shiori_host_case_fold_tests.rs` ⑵ `crates/areka/src/main.rs` の `#[cfg(test)] mod shiori_host;` ⑶ `crates/areka/Cargo.toml` の dev の `shiori-abi`・`windows-core` の行（`tests/embedded_icon_test.rs` は `windows::core::{HSTRING, PCWSTR}` を引くので `windows-core` は要らない）。`Cargo.lock` と `THIRD-PARTY-NOTICES.md`（`tools/test-all.ps1 -License`）の差も同じ変更で直す。
+- **件 3（`alert_tests.rs` の欄）**: `alert_tests.rs` の `ExeLocationUnavailable` の構築の `tried`・`origin` の 2 行は、列挙の欄を減らす変更で一緒に消す。
