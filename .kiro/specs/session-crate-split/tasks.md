@@ -225,3 +225,11 @@
 - 3.4: 集めた層に残る `reload_skin_tests.rs` のために `session/reload_test_support.rs`（`boot_context`・`plant_skin_switch`、今は `#[cfg(test)] pub(crate) mod test_support`）を足した。4.1 の `lib.rs` で `ghost_switch_test_support` と同じ `test-support` の条件で宣言するかを決める。lap_tests の小道具（`lap_rig_on` ほか）も同じく 4.1・4.2 で置き場を決める。
 - 4.1: crate の lib として組むと、本体が使う `pub(crate)` の項目が死んだコードの警告になる（`--lib` 439・`--features test-support` 466・`--tests` 32）。公開面は 4.2 が本体のコンパイラの指摘から決めるので、4.1 の門は「エラー 0」とし、3 つの確かめの警告 0 は 4.2 の門へ移した（タスクの並びの直し・設計の中身は変えない）。`areka-update` は集めた層のコードが使わないので本番の依存から外した（要件 3.6）。
 - 6.2: `crates/areka-placement/examples/window-placement.rs:37` が古い `crates/areka/src/smoke_exit.rs` を名指す（areka-placement は約束で触らない・7.6 の申し送りへ）。前からある文書の食い違い（COMPAT の `fault_of_returns_the_fault_only_for_kanade_stopped_fault`・`matching_is_case_sensitive`、`briefing-assets.md:262` の実在しない `crates/areka-parsers/src/package/resolve.rs` ほか約 12 件）は、この spec では直さず 7.6 の申し送りへ。
+- 完了時にその場で解決: `crates/areka-placement` のコメント 4 か所（`diag.rs`・`persist.rs`・`resolver.rs`・`resolver_resolve_balloon_tests.rs`）の古い `session/boot_seam.rs` を `crates/areka-session/src/boot_seam.rs` へ（`ec5b4bf49`）。
+- 完了時にその場で解決: `crates/areka-placement/examples/window-placement.rs` の古い `smoke_exit` のパスと「本体の」を `areka-session` へ（4 か所・`ec5b4bf49`）。
+- 完了時にその場で解決: `crates/areka-session/src/smoke_exit.rs` の `//!` から `main.rs` の行数の上限の文を除いた（`b681f548d`）。
+- 完了時にその場で解決: `crates/areka-session/src/crate_source_test_support.rs` の `//!` の主語と例外 3 本の名を今の形へ（`e4c97b1b4`）。
+- 完了時にその場で解決: `crates/areka-session/src/roots/user_root.rs` の `writable_ghost` の doc が集めた層に無い `resolve_boot_from` を名指さない形へ（`bfbe37059`）。
+- 完了時にその場で解決: `.kiro/steering/structure.md` の Session Crate の依存に `test-support` だけの `shiori-host32-host` を足した（`0eeafd052`）。
+- 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md` のテストの名 3 つ（`fault_of_returns_the_fault_only_for_fault_origins`・`name_is_case_sensitive_folder_name_is_not`〔行の主張もフォルダ名は区別しないへ〕・`value_replaces_active_talk_except_second_change_and_scaling` の 2 行）と `first_boot_origin` の定義点（本体の `main.rs`）を直した（`7cae321e7`）。
+- 完了時にその場で解決: `doc/ukadoc-coverage/ledger/assets.toml` の 2 行の消えた `package/resolve.rs` を `resolve_shell.rs` へ（報告は作り直して差分なし・`check` 緑・`7cae321e7`）。
