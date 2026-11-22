@@ -183,21 +183,6 @@ mod switch_balloon {
         .expect("install.txt");
     }
 
-    /// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
-    fn put_memory(ghost: &Path, folder: &str) {
-        let dir = ghost
-            .join("ghost")
-            .join("master")
-            .join("profile")
-            .join("areka");
-        std::fs::create_dir_all(&dir).expect("フォルダを組む");
-        std::fs::write(
-            dir.join("sylphya.toml"),
-            format!("format-version = 1\n[last]\nballoon = \"{folder}\"\n"),
-        )
-        .expect("記憶");
-    }
-
     fn resolve(tmp: &TempPath, ghost: &Path) -> (BalloonRoute, Option<String>) {
         let root = areka_ghost::BasewareRoots::single(tmp.path().to_path_buf());
         let got = resolve_balloon_for_ghost(&root, ghost, no_pick).expect("決まる");
@@ -206,45 +191,6 @@ mod switch_balloon {
             tmp.child("balloon").join(got.folder.as_deref().unwrap())
         );
         (got.route, got.folder)
-    }
-
-    /// 同梱バルーンがあればそれ（記憶が無いとき）。
-    #[test]
-    fn companion_is_used_when_no_memory() {
-        let tmp = TempPath::new("switch-balloon-companion");
-        let ghost = fixture(&tmp);
-        put_companion(&ghost, "b1");
-        assert_eq!(
-            resolve(&tmp, &ghost),
-            (BalloonRoute::Companion, Some("b1".to_owned()))
-        );
-    }
-
-    /// そのゴーストの最後のバルーンの記憶があれば、同梱より先にそれ（起動解決と同じ順）。
-    #[test]
-    fn memory_of_that_ghost_is_used() {
-        let tmp = TempPath::new("switch-balloon-memory");
-        let ghost = fixture(&tmp);
-        put_companion(&ghost, "b1");
-        put_memory(&ghost, "b2");
-        assert_eq!(
-            resolve(&tmp, &ghost),
-            (BalloonRoute::Memory, Some("b2".to_owned()))
-        );
-    }
-
-    /// 同梱も記憶も無ければ既定のバルーン。
-    #[test]
-    fn default_when_neither_companion_nor_memory() {
-        let tmp = TempPath::new("switch-balloon-default");
-        let ghost = fixture(&tmp);
-        assert_eq!(
-            resolve(&tmp, &ghost),
-            (
-                BalloonRoute::Default,
-                Some(DEFAULT_BALLOON_FOLDER.to_owned())
-            )
-        );
     }
 
     /// 初回起動の argv の第 2 引数は、1 ゴースト分の解決には効かない:

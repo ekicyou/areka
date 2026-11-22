@@ -608,6 +608,14 @@ mod exe_link_tests;
 #[path = "boot_config_readonly_tests.rs"]
 mod readonly_tests;
 
+#[cfg(test)]
+#[path = "boot_config_balloon_tests.rs"]
+mod balloon_tests;
+
+#[cfg(test)]
+#[path = "boot_config_roots_tests.rs"]
+mod roots_tests;
+
 /// ghost 結線ヘルパの headless 単体テスト。
 ///
 /// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、

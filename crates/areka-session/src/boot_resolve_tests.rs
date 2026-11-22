@@ -6,12 +6,14 @@
 //! 注入し、選ばれたものが列挙に含まれることと経路が `Random` であることを見る。既定の分岐は
 //! `listed` に `"emo2"`／[`DEFAULT_BALLOON_FOLDER`] を並べるだけ（検体の登記に依存しない）。
 //! 本番の `pick_index` が候補の範囲に収まることを見る 1 本のほかは、プロセス・fs・乱数に触れない。
+//! 例外は起動中の印の文の 2 本と印に書く名前の 1 本で、`target\` の下の根で fs を踏む。
 //! 記憶の書き手と直読みは兄弟の `boot_resolve_last_used_tests.rs` にある。
 
 use std::path::{Path, PathBuf};
 
 use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
+use temp_path_kit::TempPath;
 
 use super::*;
 
@@ -394,6 +396,132 @@ fn balloon_companion_not_listed_warns_then_default() {
     );
     assert_one_event(&events, "companion_balloon_not_found", tracing::Level::WARN);
     assert_eq!(count_event(&events, "last_balloon_not_found"), 0);
+}
+
+// ---------------------------------------------------------------- 記憶の印の文と印の名前
+
+/// `event` の記録（`event` 欄で引く）。
+fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(event))
+        .collect()
+}
+
+/// `event` の記録がちょうど 1 件あり、その文を返す。
+fn one_message(events: &[CapturedEvent], event: &str) -> String {
+    let hits = events_named(events, event);
+    assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
+    hits[0].message().to_owned()
+}
+
+/// 置き場を普通のファイルに替える（書けない）。
+fn unwritable(dir: &Path) {
+    if dir.is_dir() {
+        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
+    }
+    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
+}
+
+/// 印の書き手が書いた記憶のファイル（置き場にただ 1 つ在るファイル）。
+fn mark_file(app_dir: &Path) -> std::path::PathBuf {
+    let files: Vec<_> = std::fs::read_dir(app_dir)
+        .expect("置き場を読む")
+        .map(|e| e.expect("置き場の項目").path())
+        .filter(|p| p.is_file())
+        .collect();
+    assert_eq!(files.len(), 1, "置き場の記憶のファイル: {files:?}");
+    files[0].clone()
+}
+
+/// 印を消せない文は、記憶に印が残るときだけ「前回落ちたとして」を含む。
+#[test]
+fn clear_degraded_foretells_crash_only_when_mark_remains() {
+    let tmp = TempPath::under_target("mark-text-clear");
+
+    // 印が残る: 印を書いた後、書き換えの一時ファイルの位置にフォルダを置いて置き換えを失敗させる
+    // （本体は読めるまま）。
+    let kept = tmp.child("kept");
+    write_session_mark(&kept, "動いている子").expect("印を書く");
+    let file = mark_file(&kept);
+    let mut temp = file.clone().into_os_string();
+    temp.push(".tmp");
+    std::fs::create_dir_all(&temp).expect("一時ファイルの位置にフォルダを置く");
+    let (cleared, kept_events) = capture(|| clear_session_mark(&kept));
+    assert!(cleared.is_err(), "印を消せないはず");
+    assert_eq!(read_session_mark(&kept), Some("動いている子".to_owned()));
+    let kept_text = one_message(&kept_events, "session_mark_clear_degraded");
+
+    // 印が無い: 置き場が普通のファイル（読めず書けない）。
+    let gone = tmp.child("gone");
+    unwritable(&gone);
+    let (cleared, gone_events) = capture(|| clear_session_mark(&gone));
+    assert!(cleared.is_err(), "印を消せないはず");
+    assert_eq!(read_session_mark(&gone), None);
+    let gone_text = one_message(&gone_events, "session_mark_clear_degraded");
+
+    assert_eq!(
+        (
+            kept_text.contains("前回落ちたとして"),
+            gone_text.contains("前回落ちたとして"),
+        ),
+        (true, false),
+        "印が残る・無いの文: {kept_text} / {gone_text}"
+    );
+}
+
+/// 印を残す文は、記憶に印が在るときだけ「Ref6/7 付き」を含む。
+#[test]
+fn keep_mark_foretells_ref6_7_only_when_mark_exists() {
+    let tmp = TempPath::under_target("mark-text-keep");
+
+    let marked = tmp.child("marked");
+    write_session_mark(&marked, "動いている子").expect("印を書く");
+    let ((), marked_events) = capture(|| keep_session_mark(&marked, "run_failed", None));
+    let marked_text = one_message(&marked_events, "session_mark_kept");
+
+    let empty = tmp.child("empty");
+    std::fs::create_dir_all(&empty).unwrap();
+    let ((), empty_events) = capture(|| keep_session_mark(&empty, "run_failed", None));
+    let empty_text = one_message(&empty_events, "session_mark_kept");
+
+    assert_eq!(
+        (
+            marked_text.contains("Ref6/7 付き"),
+            empty_text.contains("Ref6/7 付き"),
+        ),
+        (true, false),
+        "印が在る・無いの文: {marked_text} / {empty_text}"
+    );
+}
+
+/// 根の `ghost\<folder>` に descript.txt を置き、ゴーストのフォルダを返す。
+fn put_ghost(root: &Path, folder: &str, descript: &str) -> PathBuf {
+    let dir = root.join("ghost").join(folder);
+    let master = dir.join("ghost").join("master");
+    std::fs::create_dir_all(&master).expect("フォルダを組む");
+    std::fs::write(
+        master.join("descript.txt"),
+        format!("charset,UTF-8\n{descript}"),
+    )
+    .expect("descript");
+    dir
+}
+
+/// 起動中の印に書く名前は和を引かず、決まったゴーストの場所の descript から。
+/// 同じフォルダ名が上の根にも在っても、決まった下の根のゴーストの名前を書く。
+#[test]
+fn running_name_reads_the_decided_location_not_the_union() {
+    let tmp = TempPath::under_target("cfg-roots-running-name");
+    let (top, low) = (tmp.child("top"), tmp.child("low"));
+    put_ghost(&top, "g", "name,上の子\n");
+    let lower = put_ghost(&low, "g", "name,下の子\n");
+    let ghost = GhostDecision {
+        route: GhostRoute::Memory,
+        dir: lower,
+        folder: Some("g".to_owned()),
+    };
+    assert_eq!(running_name(&ghost), "下の子");
 }
 
 // ---------------------------------------------------------------- 本番の添字

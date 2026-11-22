@@ -182,3 +182,7 @@ mod deadline_tests;
 #[cfg(test)]
 #[path = "session_end_sync_send_tests.rs"]
 mod sync_send_tests;
+
+#[cfg(test)]
+#[path = "session_end_tests.rs"]
+mod tests;

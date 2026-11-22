@@ -170,7 +170,7 @@
   - _Dispatch: mechanical — 11.1 と同じ形を写す_
   - _Requirements: 3.1, 3.4, 4.1, 4.2, 4.4, 5.2, 7.6_
 
-- [ ] 12. 本体の部品を使わないテストを `areka-session` へ移す（G12）
+- [x] 12. 本体の部品を使わないテストを `areka-session` へ移す（G12）
 - [x] 12.1 起動の文脈の補助に名の引数を足し、走っている印の判定のテストを移す（S1・指摘 30・44・80）
   - 先に `reload_test_support.rs` に `pub fn boot_context_named(temp, root, ghost, balloon) -> BootContext` を足し、`boot_context` を `boot_context_named(temp, root, "A", "kaku")` の 1 行にする（S1・置き場・補助・根の出どころ・経路は今のまま。兄弟と `menu/` のテストも呼ぶ公開のテストの支え）
   - `main_session_mark_tests.rs` の 393-637（判定の表・判定の当て方）と `main_session_mark_write_tests.rs` の 259-297 を新しい `areka-session/src/session_mark_tests.rs` へ移し、`session_mark.rs` から `#[cfg(test)]` の子として引く。`BootContext` は `boot_context_named` で組む
@@ -179,7 +179,7 @@
   - 完了の姿: `cargo test -p areka-session session_mark` で移した 3 本が同じ表明のまま緑、本体の残りのテストも緑で、`main_session_mark_tests.rs` が約 715 行
   - _Dispatch: mechanical — 移す範囲と置き先を設計が与える_
   - _Requirements: 3.1, 3.3, 4.4, 5.9, 6.1, 7.2, 7.6_
-- [ ] 12.2 起動の設定・終了・読み直しのテストのうち本体の部品を使わない分を移す（指摘 46・91）
+- [x] 12.2 起動の設定・終了・読み直しのテストのうち本体の部品を使わない分を移す（指摘 46・91）
   - 本体の `session_tests/` の 22 本を、呼ぶ関数を定義するモジュールの `areka-session` のテスト（`boot_config_*_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_resolve_tests.rs`・新しい `session_end_tests.rs`＝本体の `session_end_tests.rs:204-343` の 4 本）へ移す。写しは移した先の支えを使う
   - `ghost_session_reload_tests.rs` だけが見ていた 2 面（split の後は送出端なし・2 度目の split は `None`）を `ghost_session_runtime_tests.rs` に足し、本体の重なる 1 本（72-170）を消す
   - §8 の既にある行のパスと名を直す
@@ -296,3 +296,5 @@
 - 9.2: `unique_temp_dir` は areka-session から消えた。同名の別の補助が `areka-ghost/src/config.rs`・`areka-parsers/src/package/resolve_tests.rs`・`areka-placement/src/source_tests.rs` に残る（照合の表の「定義のファイルの中だけ」の扱い）。`boot_seam_restore_tests.rs` の assert の文に spec 名 `areka-P0-scope-chain-gap 7.3` が残る（17 で拾う）。本体の `ghost_session_scope_rect_boot_tests.rs` も `areka_placement::test_support::fake_handle` を引く
 - 10.2: 実画面の 2 本は眠り 16 か所のうち 15 か所を記録の待ちか窓の矩形の待ち（`wait_rects`＝100ms あけた 2 回の読みが同じになるまで・上限 2 秒）に替え、辞書の付け直しを待つ 3 秒だけ残した。実画面での緑は 21.2 で見る
 - 11.2: `readonly_body_tests.rs` の `files_calling`・`all_sources` は残す `engage` の 2 本が使うので残した
+- 兄弟 `audit-emo2-boot-switch` から 11-23 に受けた範囲の外の件（21.1 で見る）: ウ＝`SharedFakeIo` の写しは 9.1・9.2 で 2 つ消し、`runtime_tests/frame/switch_finish_tests.rs` は 14.1 で寄せる／カ＝本体 `ghost_session_switch_tests.rs` の `kinds` は `areka-session` の `shell_balloon_switch_session_lap_test_support::kinds` と同じ（13.2 で use）／キ＝`ghost_session_runtime.rs` の降ろしの計時と記録（`ghost_switch_down_failed`・`ghost_switch_down_ms`）が `ghost_switch.rs` の `take_down` の写し／ク＝`runtime_boot.rs` が `ChangeRequestRaw` を `ghost_switch` の出し直しから、`SkinRequestRaw` を runtime から直に引く（片方にそろえれば `ghost_switch.rs` の `pub(crate) use` が消える）／ケ＝`reload_test_support.rs` と本体 `reload_tests.rs` が同じ型を 2 つの道で引く（兄弟は `reload_test_support.rs` の use の道を替え済み・70bb10c2a）／シ＝件数を数える関数の写し 5 つ（`boot_resolve_readonly_tests.rs`・`boot_resolve_tests.rs`・`boot_shell_tests.rs`・`switch_copy_tests.rs`・`write_failure_late_tests.rs`）／ス＝本体 `runtime_tests/frame_visibility_integration_tests.rs` の読まれない `BalloonWiring::new` の据え付けと `visibility_lines` の 3 つ目の写し／セ＝14.2／ソ＝8.1 で済み／タ＝8.2 で済み。兄弟は use の道を 4 か所替えた（`reload_test_support.rs`・`runtime_tests/frame/switch_tests.rs` の 2 か所・`switch_finish_tests.rs`）。use の行がぶつかったら後から着地する側が合わせる
+- 12.2: §8 の 403 行が名指す `record_non_argv_writes_all_three` は実体が `boot_resolve_last_used_tests.rs` にある（21.1 で見る）

@@ -1,6 +1,4 @@
-//! 実行系だけを外して付け直す口の決定論テスト。
-
-use std::time::Duration;
+//! 名前の差し替えの口の決定論テスト（本体の系を登記した World で起こす）。
 
 use areka_kanade::CloseReason;
 use sample_ghost_kit::SampleRoot;
@@ -10,7 +8,6 @@ use wintf::AppExit;
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
 use areka_kanade::BootOrigin;
-use areka_kanade::KanadeMsg;
 use areka_kanade::KanadeNotice;
 use areka_parsers::package::GhostNames;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
@@ -18,12 +15,10 @@ use areka_session::boot_resolve::BalloonDecision;
 use areka_session::boot_resolve::GhostDecision;
 use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
 use areka_session::ghost_session::*;
-use areka_session::runtime_boot;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
 
 fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
     sample
@@ -48,125 +43,10 @@ fn scripted_wiring(sample: &SampleRoot) -> (areka_runtime::RuntimeInputs, Script
     (wiring, handle)
 }
 
-/// 送出端の先に生きた kanade が居るか（空の照会を投げ、返事が来れば真）。
-fn kanade_answers(kanade: &Sender<KanadeMsg>) -> bool {
-    let (reply, receiver) = areka_actor::reply_channel();
-    kanade
-        .send(KanadeMsg::ResourceQuery { ids: vec![], reply })
-        .is_ok()
-        && receiver.recv_timeout(Duration::from_secs(30)).is_ok()
-}
-
 /// 有界に走らせる（偽の SHIORI の呼び出しの数を進みの目印にする）。
 fn bounded(what: &str, shiori: &ScriptedShioriHandle, f: impl FnOnce() + Send + 'static) {
     let calls = || shiori.call_count();
     run_bounded_watching(what, Progress::Count(&calls), f);
-}
-
-/// 外して付け直す: 結線ありで起こした単位から実行系だけを外すと、
-/// seriko・loop ticker・seriko の送り手・束は単位に残り、kanade の送出端は外れる（2 度目は `None`）。
-/// 外した実行系を降ろし、束から起こした新しい実行系を付けると、単位の送出端の先に生きた kanade
-/// が居る（古い送出端の先は死んでいる＝写ったのは新しい方）。最後に単位を降ろすと seriko の join
-/// が戻る（束を ① で落とさないと、束の seriko の送り手が inbox を生かし続けて戻らない）。
-/// 判定は集めてから 1 回。
-#[test]
-fn split_keeps_window_side_and_attach_copies_new_kanade() {
-    // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    world.insert_non_send(AppExit::new());
-    let (kanade_stop, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
-    register_systems(&mut world, kanade_stop_rx, crate::BODY_SYSTEMS);
-
-    let sample = acquire_emo2();
-    let descript = StartupDescriptValues {
-        author_dpi: areka_placement::AuthorDpi::DEFAULT,
-        zorder_raw: None,
-        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
-    };
-    let ghost = GhostDecision {
-        route: GhostRoute::Argv,
-        dir: sample.folder().to_path_buf(),
-        folder: None,
-    };
-    let balloon = BalloonDecision {
-        route: BalloonRoute::Argv,
-        dir: emo2_balloon(&sample),
-        folder: None,
-    };
-    let (wiring, shiori1) = scripted_wiring(&sample);
-    let inputs = GhostBootInputs {
-        wiring,
-        helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
-        kanade_stop: kanade_stop.clone(),
-        modules: areka_session::boot_request::ModulePolicy::Load,
-    };
-    let mut session = boot_ghost(&mut world, inputs, &descript, &ghost, &balloon);
-    let wired = !session.logsink_fallback() && session.sink_sources().is_some();
-    let shell = session.current_shell_folder();
-    let old_kanade = session.kanade().cloned();
-
-    // ── 外す ──
-    let old = session.split_runtime();
-    let after_split = (
-        old.is_some(),
-        session.kanade().is_none(),
-        session.runtime().is_none(),
-        session.seriko.is_some(),
-        session.loop_ticker.is_some(),
-        session.seriko_sink().is_some(),
-        session.sink_sources().is_some(),
-        session.split_runtime().is_none(),
-    );
-    if let Some(old) = old {
-        bounded("外した実行系を降ろす", &shiori1, move || {
-            old.shutdown(CloseReason::System)
-                .expect("降ろすのは成功する");
-        });
-    }
-    let old_dead = old_kanade.is_some_and(|k| !kanade_answers(&k));
-
-    // ── 束から起こして付け直す ──
-    let (wiring2, shiori2) = scripted_wiring(&sample);
-    let sources = session.sink_sources().cloned().expect("束が残っている");
-    let new = runtime_boot::boot_runtime(
-        &mut world,
-        wiring2,
-        &sources,
-        kanade_stop.clone(),
-        shell.as_deref(),
-    )
-    .expect("束から新しい実行系が起きる");
-    drop(sources);
-    session.attach_runtime(new);
-    let attached = (
-        session.runtime().is_some(),
-        session.kanade().is_some_and(kanade_answers),
-    );
-
-    // ── 降ろす（join が戻る） ──
-    bounded("付け直した単位を降ろす", &shiori2, move || {
-        session
-            .shutdown(CloseReason::User { scope: 0 })
-            .expect("降ろすのは成功する");
-    });
-    drop(kanade_stop);
-
-    assert_eq!(
-        (wired, after_split, old_dead, attached),
-        (
-            true,
-            (true, true, true, true, true, true, true, true),
-            true,
-            (true, true)
-        ),
-        "外して付け直す口が設計どおりでない（結線ありで起きた・外した後 (外した実行系・送出端なし・\
-         実行系なし・seriko・ticker・seriko の送り手・束・2 度目は None)・古い送出端の先が死んだ・\
-         付け直した後 (実行系・送出端の先に生きた kanade)）"
-    );
 }
 
 /// 名前の差し替え: 実行系があれば委ねて真を返し、`names()` が新しい名前を読む。
