@@ -1545,3 +1545,54 @@ def main(before, after, show):
 if __name__ == '__main__':
     main(sys.argv[1], sys.argv[2], sys.argv[3:])
 ```
+
+## 申し送り（7.6）
+
+この spec では直さず、受け手へ渡す項目の一覧。どの項目にも受け手を書いた。
+
+### 受け手: `audit-areka-app`
+
+1. 古いパス（コメント・触らない約束の crate）
+   - `crates/areka-placement/src/diag.rs:46`・`persist.rs:330`・`resolver.rs:97`・`resolver_resolve_balloon_tests.rs:123`: 古い `session/boot_seam.rs` を名指す（移した先は `crates/areka-session/src/boot_seam.rs`）。
+   - `crates/areka-placement/examples/window-placement.rs:37`: 古い `crates/areka/src/smoke_exit.rs` を名指す（移した先は `crates/areka-session/src/smoke_exit.rs`）。
+   - 6.4 の数えで除いた `crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66` は過去の書き換えの記録の引用で、直す必要は無い。
+2. 開けた項目の一覧（4.2・全件は `target/session-crate-split/4.2-surface.txt`・P＝本番の本体も使う・T＝本体のテストだけ）
+   - 本体のテストだけが使う `#[cfg(any(test, feature = "test-support"))] pub`: `GhostSession::{for_test, with_memory_publisher, with_seriko_sink, dispatcher}`・`roots::single_env`・`shell_balloon_switch::SwapFinish` の出し直し・`log_history::hold`・`ghost_switch_test_support`（モジュールと中の項目）・`ReadmeWiring::path`・`ghost_session::shell_balloon_switch_session_lap_test_support`（新設）・`reload::test_support`・`ghost_session_scope_{rect,scale}::test_support`・`crate_source_test_support`・`BodySystems::of`（4.4。それ以外では `pub(crate)`。定義が条件ごとに 2 つある）。
+   - 設計の方針（本番の公開面に中の関数を出さない）と違い、条件で切り替えず素の `pub` にした項目: `GhostSession::{seriko, loop_ticker}`・`PreparedWindows::spawn`・`reload::drain`・`write_failure::drain_system`（集めた層の本番のコードも使うため）・`boot_seam::insert_persist_wiring`（本体の `session_tests/` の 3 本が使う）。ほかは 4.2 の一覧の T の行（`boot_resolve::{read_session_mark, clear_session_mark, keep_session_mark, …}`・`reload::{ReloadInFlight, ReloadStage, register, …}` ほか）と、連れて開けた型（`private_interfaces`・4.2 の「連れて開けた型」）。
+   - 使われなくなった `pub(crate)` は消していない。公開面を絞る・素の `pub` を条件つきへ戻せるかは `audit-areka-app` の判断。
+3. `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足した本体のテスト（表明は変えていない・8 本: 2.5 の 5 本・4.4 の 3 本）
+   - 2.5: `install::desk::tests::resend_goes_at_once_when_steady_arrived_since_the_last_send`・`install::desk::tests::a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady`・`update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time`・`session::reload::tests::refusals_in_order_leave_one_record_each`・`session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing`（後ろ 2 本は 3.4 で本体の `session_tests/` へ移った）。
+   - 4.4（D13）でさらに次の 3 本に足した（口を据えずに口の道を通り `body_systems_missing` の記録が増えて赤になった）。合わせて 8 本: `session_tests::reload_tests::missing_ghost_or_kanade_is_no_context`・`session_tests::shell_balloon_switch_tests::acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells`・`session_tests::shell_balloon_switch_tests::send_failure_leaves_one_error_and_no_marker`。
+   - 今後、口を据えずに口の道を通るテストを足すと同じ赤になる。
+4. `crates/areka-session/src/smoke_exit.rs` の `//!`: 「`main.rs` の 1,000 行の上限のため外へ出した」は、集めた層へ移った後は古い（2.3）。
+5. 理由の文が古くなる `#[allow]` は 0 件。`crates/areka-session` の `#[allow]` は 3 つ（`boot_resolve_option_tests.rs:41` の `clippy::too_many_arguments`・`ghost_switch_test_support.rs:212` の `dead_code`〔理由「読まず、捨てると木が消える寿命だけを持つ」〕・`shell_balloon_switch_session_lap_tests.rs:112` の `clippy::type_complexity`）、本体の `session_tests/` は 0 件で、どれも理由の文がパスや本体の項目を名指さず、移した後も合っている。
+6. 作業の途中で見つけた不具合・古い説明（この spec では直していない）
+   - `crates/areka-session/src/crate_source_test_support.rs` の `//!`: 「本体と `areka-runtime` のテストが…」「本体が依存する crate」「本体自身のファイルは…」は、この支えが `areka-session` の中に在る今は主語が合わない。4.1 のレビューで見つけた。
+   - `crates/areka-session/src/roots/user_root.rs:199` の doc `resolve_boot_from` へ渡す口: `resolve_boot_from` は 3.4 で本体の `session_tests/mod.rs` へ移ったので、集めた層から見ると指す先が無い（`roots/` は `audit-areka-install-update` の持ち物でもあるので、同じ項目をそちらにも書いた）。
+   - `add_rpost_shell` の 9 行は 2 か所の写し（集めた層の `shell_balloon_switch_session_lap_tests.rs` と本体の `session_tests/` のテストのファイル）。`test-support` に `sample-ghost-kit`（番人）を入れられないため。1 つに束ねるかは `audit-areka-app` の判断。
+   - `crates/areka-session/Cargo.toml` の設計との違い: `areka-update` を本番の依存から外した（集めた層は決まりの文字列 `"areka_update::winhttp"` ほかを持つだけ・4.1）。`areka-emo-present` は本番のコードが名指さず、`test-support` で立つ `ghost_session_scope_scale_test_support.rs` だけが使う（runtime が本番で既に引くので出荷の閉包は増えない・4.1）。`windows` に `Win32_System_Registry` を crate の側で上乗せしている（`readme/os_port.rs` の `ShellExecuteExW`）。
+   - `crates/areka-session/build.rs`・`tests.manifest`（設計に無い・4.4）: lib のテストの exe に comctl32 の版 6 の申告が無く `0xc0000139` で落ちたため足した。MSVC のときだけ `/MANIFEST:EMBED`・`/MANIFESTINPUT` を出す。`tests.manifest` は `crates/areka/areka.manifest` と同じ申告の写しで、片方だけ直すと食い違う。
+   - `crates/areka-session` の clippy には、移したコードに前からある形の指摘（`type_complexity` 33・`collapsible_if` 19 ほか）が残る（4.2・4.4）。
+   - 前からある文書の食い違い（6.2・この spec では直していない）: `doc/COMPAT_ARCHITECTURE.md` の `fault_of_returns_the_fault_only_for_kanade_stopped_fault`（`app_exit_tests.rs`）・`matching_is_case_sensitive`（`ghost_switch_tests.rs`）は `main` の `crates/` にも無い名。`doc/ukadoc-coverage/briefing-assets.md:262` の実在しない `crates/areka-parsers/src/package/resolve.rs` ほか約 12 件。
+
+### 受け手: `audit-areka-install-update`
+
+1. `NO_BODY` の受け口と、本体が今まで使っていた「窓口が無い」ときの受け口の差（設計の危うさ 3）
+   - `NO_BODY`（`crates/areka-session/src/body_systems.rs`）の `cue_sinks` は `areka_ghost::sink::DiscardSink` を 2 つ返す。
+   - 本体が窓口の無いときに使う受け口は、受信端の無い送出端を持つ `InstallCueSink`。`url` の腕で取得のスレッドを起こすかが違う（`DiscardSink` は起こさない）。
+   - `NO_BODY` を通るのは結線の誤りのとき（`body_systems_missing` の `error!` が出る）と、集めた層のテスト（`SwitchRig::new` が `NO_BODY` を渡す）だけで、本番の道では起こらない。振る舞いの変化には数えていない。
+   - 本体の `session_tests/body_systems_tests.rs` の `missing_body_systems_logs_and_answers_like_no_desk` が、口の無い World の答え（`error!` 1 つ・`update_busy`・`install_busy` は偽・`cue_sinks` は 2 つ）を固定している。
+2. `crates/areka-session/src/roots/user_root.rs:199` の doc が指す `resolve_boot_from` は本体の `session_tests/` へ移った（`audit-areka-app` の 6 と同じ項目・`roots/` はこの受け手の持ち物）。
+
+### 受け手: 棚卸のセッション
+
+C25 の行の「触るファイル」に無く、この spec で足したファイル。兄弟 2 本（`test-name-work-tags`・`dola-cue-test-builder`）の触るファイルとは、`doc/COMPAT_ARCHITECTURE.md` §8 のパスの行（設計が許した重なり）と `.kiro/specs/audit-areka-app/brief.md` の 2 件を除いて重ならない（着手のとき・1.1）。
+
+1. 道具: `tools/package.ps1`（3 か所・注釈）・`tools/perf/judge-perf.py`（1 か所）・`tools/perf/invoke-perf-run.ps1`（29 行の説明）・`tools/load-flake.ps1`（`areka-session-lib` を足した・5.2）
+2. 文書: `doc/ukadoc-coverage/`（`briefing-assets.md`・`ledger/{sakura-script,property,shiori,assets}.toml`・作り直した `report/`）・`doc/ideas/novel-redesign-2026-11-20/` の 8 ファイル・`doc/COMPAT_ARCHITECTURE.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`THIRD-PARTY-NOTICES.md`（`areka-session` の 1 行・7.2）
+3. steering: `.kiro/steering/structure.md`・`tech.md`・`logging.md`・`product.md`
+4. 兄弟の brief: `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/audit-emo2-boot-switch/brief.md`（3 本目）。いずれも「受け持つファイル」の行の書き換え。`audit-areka-app` の brief は `test-name-work-tags` も 1 項目を足すので、後から着地する側が両方を残して解く。
+5. 新しい crate と本体: `crates/areka-session/`（`Cargo.toml`・`build.rs`・`tests.manifest`・`src/crash_report_tests.rs`・`src/body_systems.rs`・`src/shell_balloon_switch_session_lap_test_support.rs`・`src/reload_test_support.rs`・`src/ghost_session_scope_{rect,scale}_test_support.rs`）・本体の `crates/areka/src/session_tests/`（新設）・`crates/areka/src/sample_test_support.rs`・`crates/areka/src/install/startup.rs`・`crates/areka/Cargo.toml`・`Cargo.lock`
+6. 実機の道具: `crates/real-run-kit/`（`launch.rs`・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`）・`crates/areka/tests/emo2_mcp_real_run.rs`（5.1・ログの出所の名前）
+7. コメントだけの書き換え: `crates/areka-runtime/src/`（`lib.rs`・`strict_judges.rs`・`talk_clock.rs`・`user_break_cue.rs`・`session_hooks.rs`・`skin_switch.rs`・`placement_tests/transition_judge_offset_signoff_tests.rs`）・`crates/areka-kanade/src/schedule/`（`script_log.rs`・`events.rs`）
+8. 約束の例外（開発者の裁定・2026-11-22）: 本体の `crates/areka/src/placement_tests/` の 4 ファイル（`measure_bake_count_tests.rs`・`measure_template_tests.rs`・`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs`）の読み口の import 1 行ずつ。`crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/` の差分は 0。
