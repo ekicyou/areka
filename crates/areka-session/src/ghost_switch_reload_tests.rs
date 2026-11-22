@@ -5,7 +5,7 @@
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::boot_event_tests::{self, a_rebooted, request_switch_to_a};
+use super::boot_event_tests::{self, a_rebooted, default_rebooted, request_switch_to_a};
 use super::fallback_tests::count_event;
 use super::{SwitchInFlight, SwitchVerdict};
 use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
@@ -339,13 +339,7 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
 
     let (flow, events) = capture(|| {
         let verdict = reload(&mut rig, ReloadTarget::Shiori);
-        let done = rig.pump_talking_until(|rig| {
-            rig.exit_requested()
-                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
-                    && rig.world.get_non_send::<SwitchInFlight>().is_none()
-                    && rig.world.get_non_send::<ReloadInFlight>().is_none())
-        });
-        (verdict, done)
+        (verdict, rig.pump_talking_until(default_rebooted))
     });
     let exited = rig.exit_requested();
     assert!(rig.shutdown());
@@ -516,13 +510,7 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
 
     let (flow, events) = capture(|| {
         let verdict = reload(&mut rig, ReloadTarget::Ghost);
-        let done = rig.pump_talking_until(|rig| {
-            rig.exit_requested()
-                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
-                    && rig.world.get_non_send::<SwitchInFlight>().is_none()
-                    && rig.world.get_non_send::<ReloadInFlight>().is_none())
-        });
-        (verdict, done)
+        (verdict, rig.pump_talking_until(default_rebooted))
     });
     let exited = rig.exit_requested();
     let carried = carry_handed_over(&rig);

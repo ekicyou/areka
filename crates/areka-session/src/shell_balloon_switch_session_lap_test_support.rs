@@ -212,7 +212,7 @@ impl LapRig {
     ///
     /// 条件の中で足場を書き換えるので、World を借りない進みの目印（`progress_probe`）を先に取ってから
     /// 芯の待ちへ渡す。打ち切りは目印で決め、打ち切ったら呼び出しの場所を添えた文言を標準エラーへ
-    /// 1 行出して `false`。時刻の送り先は dispatcher の `DispatcherMsg::Tick` だけ。
+    /// 1 行出して `false`。合成の時刻の送り先は dispatcher の `DispatcherMsg::Tick` だけ。
     ///
     /// 目印は SHIORI の側の数（`SwitchRig::progress_probe`）＋UI の側の要約が変わった回数
     /// （`ui_moves`・巡を回した後に読む）。台詞の起動・表示・取りやめ・定常の知らせのように SHIORI を
@@ -305,7 +305,7 @@ pub(crate) fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
 }
 
 /// A の最初の起動の呼出列。
-pub(crate) fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
+pub fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
     rig.calls("A").into_iter().next().unwrap_or_default()
 }
 

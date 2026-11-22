@@ -22,7 +22,7 @@ use crate::update::{RawUpdateRequest, TargetKind};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_session::boot_config::BootContext;
 use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
-    LapRig, SECOND, UNBOUNDED, current_shell, got, idle, kinds, lap_rig_on,
+    LapRig, SECOND, UNBOUNDED, calls_a, current_shell, got, idle, kinds, lap_rig_on,
 };
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{
@@ -126,7 +126,7 @@ fn update_targets_follow_the_swapped_shell_and_balloon() {
     let before = targets(&lap.rig);
     let (swapped, events) = capture(|| swap_both(&mut lap));
     let ((after, now), skipped) = capture(|| (targets(&lap.rig), current(&lap.rig)));
-    let calls = kinds(&lap.rig.calls("A").into_iter().next().unwrap_or_default());
+    let calls = kinds(&calls_a(&lap.rig));
     let expect_before = expected(&lap.rig, "master", BALLOON);
     let expect_after = expected(&lap.rig, SECOND, STAYSEE);
     let shutdown_ok = lap.rig.shutdown();
@@ -174,8 +174,8 @@ fn reloaded(rig: &SwitchRig) -> bool {
         .is_some_and(|calls| kinds(calls).iter().any(|c| c == "GET OnUpdateResult"))
 }
 
-/// 差し替えの後の読み直し（`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_
-/// sends_the_rest_after_the_switch` の兄弟）: シェルを `second`・バルーンを `StayseeBalloon` へ差し替えた
+/// 差し替えの後の読み直し（`a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_after_the_switch` の兄弟）:
+/// シェルを `second`・バルーンを `StayseeBalloon` へ差し替えた
 /// 後、更新の窓口の読み直し（同じフォルダ・知らせなしのゴースト切替）で A を起こし直すと、記憶
 /// （`LastShell`・`LastBalloon`）から同じシェル・バルーンで起きる: 実行系のマウントが `second`・
 /// 起動の文脈のバルーンが記憶の選び方で `StayseeBalloon`・更新の対象の解決も同じ 2 つを指す。記憶の先が

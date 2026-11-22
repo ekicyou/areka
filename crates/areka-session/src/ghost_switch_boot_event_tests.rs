@@ -1,9 +1,6 @@
 //! 切替の要求の起動の知らせ（`SwitchRequest.boot_event`）の兄弟テスト。
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、切替の入口・kanade・偽の SHIORI を本物の経路で通す。
-//! 確かめること: 欄付きの自分自身への切替で起き直したゴーストの最初の知らせが渡したイベントと
-//! Reference で、`OnGhostChanged`・`OnBoot` は 0 件（204 でも）／欄が空なら `OnGhostChanged`／
-//! 切替先が起動に失敗して既定へ戻ると、既定は `OnBoot`（Reference6＝`halt`）で起き知らせは届かない。
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::capture;
@@ -46,7 +43,7 @@ pub(super) fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     rig
 }
 
-/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event` 付きで頼む。
+/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event`（無しも可）を渡して頼む。
 pub(super) fn request_switch_to_a(
     rig: &mut SwitchRig,
     boot_event: Option<(&'static str, Vec<String>)>,
@@ -76,6 +73,14 @@ fn switch_to_a(
 pub(super) fn a_rebooted(rig: &SwitchRig) -> bool {
     rig.exit_requested()
         || (rig.calls("A").len() == 2
+            && rig.world.get_non_send::<SwitchInFlight>().is_none()
+            && rig.world.get_non_send::<ReloadInFlight>().is_none())
+}
+
+/// 既定のゴーストが 1 回起き、切替の予約と読み直しの印が下りた（定常到達）。
+pub(super) fn default_rebooted(rig: &SwitchRig) -> bool {
+    rig.exit_requested()
+        || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
             && rig.world.get_non_send::<SwitchInFlight>().is_none()
             && rig.world.get_non_send::<ReloadInFlight>().is_none())
 }
@@ -176,11 +181,11 @@ fn a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails() {
     let mut rig = running_a(vec![("A", a), (DEFAULT_GHOST_FOLDER, default)]);
 
     let (flow, events) = capture(|| {
-        switch_to_a(&mut rig, Some(("OnUpdateComplete", update_refs())), |rig| {
-            rig.exit_requested()
-                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
-                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
-        })
+        switch_to_a(
+            &mut rig,
+            Some(("OnUpdateComplete", update_refs())),
+            default_rebooted,
+        )
     });
     let defaults = rig.calls(DEFAULT_GHOST_FOLDER);
     let exited = rig.exit_requested();

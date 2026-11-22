@@ -531,7 +531,7 @@ pub fn on_notice(world: &mut World, notice: KanadeNotice) {
                         attempt = ?attempt,
                         "切替で起こしたゴーストが定常に入った——切替を終える"
                     );
-                    // 更新の窓口へ（本体の `update::desk::on_switch_end`。読み直しなら古い SHIORI は降りている＝残りを消し、後送りの列の残りを新しいゴーストへ送る・既定へ戻ったなら捨てる）。
+                    // 本体の `update::desk::on_switch_end`。
                     (BodySystems::of(world).on_switch_end)(
                         world,
                         attempt == WelcomeAttempt::Target,
@@ -543,8 +543,7 @@ pub fn on_notice(world: &mut World, notice: KanadeNotice) {
                     "迎え入れの予約の外の定常到達——予約は触らない"
                 ),
             }
-            // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）、続けて更新の窓口へ
-            // （`homeurl` の写しを消して照会し直す）。本体の `tell_desks_steady`。
+            // 本体の `tell_desks_steady`。
             (BodySystems::of(world).on_steady)(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {

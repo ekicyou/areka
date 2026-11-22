@@ -31,11 +31,11 @@ pub(super) fn resolved_folder(entries: &[GhostEntry], spec: GhostSpec) -> Option
     resolve_switch_target(entries, &spec).map(|t| t.folder)
 }
 
-fn name(s: &str) -> GhostSpec {
+pub(super) fn name(s: &str) -> GhostSpec {
     GhostSpec::Name(s.to_owned())
 }
 
-fn folder(s: &str) -> GhostSpec {
+pub(super) fn folder(s: &str) -> GhostSpec {
     GhostSpec::Folder(s.to_owned())
 }
 

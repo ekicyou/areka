@@ -383,11 +383,11 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
     });
     let built = lap.frames_until(NO_TICKS, |rig| matches!(stage(rig), Some("built") | None));
     let mut frames = 0;
-    lap.frames_until(NO_TICKS, |_| {
+    let waited = lap.frames_until(NO_TICKS, |_| {
         frames += 1;
         frames >= 20
     });
-    let held = (stage(&lap.rig), got(&lap.rig, "OnShellChanged", 1));
+    let held = (waited, stage(&lap.rig), got(&lap.rig, "OnShellChanged", 1));
     let (done, events) = capture(|| {
         lap.frames_until(UNBOUNDED, |rig| {
             log.record(look_of(rig, &windows));
@@ -410,7 +410,7 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
             shutdown_ok,
         ),
         (
-            (true, true, true, true, (Some("built"), false), true),
+            (true, true, true, true, (true, Some("built"), false), true),
             vec![
                 "NOTIFY OnInitialize".to_owned(),
                 "GET username".to_owned(),

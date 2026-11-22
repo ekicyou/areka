@@ -8,7 +8,7 @@ use areka_ghost::catalog_roots::list_ghosts;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use temp_path_kit::TempPath;
 
-use super::tests::resolved_folder;
+use super::tests::{folder, name, resolved_folder};
 use super::*;
 
 /// 根 1 に `Alpha`（name＝Alice）、根 2 に `beta`（name＝Bob）と隠れる `ALPHA` を組んだ和。
@@ -36,8 +36,6 @@ fn two_root_union(tmp: &TempPath) -> Vec<GhostEntry> {
 fn change_ghost_matches_name_and_folder_across_two_roots() {
     let tmp = TempPath::under_target("ghost-switch-two-roots");
     let entries = two_root_union(&tmp);
-    let name = |s: &str| GhostSpec::Name(s.to_owned());
-    let folder = |s: &str| GhostSpec::Folder(s.to_owned());
     assert_eq!(
         [
             resolved_folder(&entries, name("Bob")),
