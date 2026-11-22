@@ -369,6 +369,12 @@ pub(crate) const BODY_SYSTEMS: session::body_systems::BodySystems =
         after_char_pointer: menu::attach_release_handlers,
         after_balloon_pointer: attach_body_receivers,
         after_runtime_wired: wire_body_after_runtime,
+        on_switch_end: update::desk::on_switch_end,
+        on_steady: tell_desks_steady,
+        overwrite_between: install::desk::run_overwrite_between,
+        update_busy: update::desk::is_busy,
+        install_busy: install::desk::is_busy,
+        cue_sinks: body_cue_sinks,
     };
 
 /// `install::register` → `update::register` → `mcp::register` の順。
@@ -409,6 +415,25 @@ fn wire_body_after_runtime(world: &mut World, runtime: &areka_ghost::GhostRuntim
     menu::reset_balloon_pos_frame::register(world);
     // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
     install::names::reseed(world, runtime);
+}
+
+/// `install::desk::on_steady` → `update::desk::on_steady` の順。
+fn tell_desks_steady(world: &mut World) {
+    // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
+    install::desk::on_steady(world);
+    // 更新の窓口へ（`homeurl` の写しを消して照会し直す）。
+    update::desk::on_steady(world);
+}
+
+/// 受け口の列の 9・10 番目（インストール → 更新の順）。
+fn body_cue_sinks(world: &World) -> [Box<dyn areka_ghost::sink::BootCueSink>; 2] {
+    use install::install_cue::InstallCueSink;
+    use update::update_cue::UpdateCueSink;
+    // 送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
+    [
+        Box::new(InstallCueSink::new(install::desk::raw_sender(world))),
+        Box::new(UpdateCueSink::new(update::desk::raw_sender(world))),
+    ]
 }
 
 /// `run()` の結果を受けて後始末へ進む判断。

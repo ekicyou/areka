@@ -23,6 +23,7 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use super::ghost_switch::SwitchInFlight;
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::pick_index;
 use crate::session::exit_wait::{self, WorkGate};
@@ -128,7 +129,7 @@ pub(crate) fn request_skin_switch_with(
         );
         return SkinVerdict::GhostSwitching;
     }
-    if crate::update::desk::is_busy(world) {
+    if (BodySystems::of(world).update_busy)(world) {
         tracing::warn!(
             event = "skin_switch_updating",
             kind = ?req.kind,

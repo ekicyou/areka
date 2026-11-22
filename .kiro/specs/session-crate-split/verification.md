@@ -478,3 +478,48 @@ Note 'done'
 | `ghost_session.rs:288・289・295・296` | 本体の `menu::attach_release_handlers`・`menu::wire_menu`・`file_drop::attach_file_drop_receivers`・`menu::shortcut::attach_shortcut_receivers` | 説明の地の文（リンクでない） |
 
 `ghost_session_runtime.rs` は 0 件。
+
+### 2.2
+
+- 束に `on_switch_end`・`on_steady`・`overwrite_between`・`update_busy`・`install_busy`・`cue_sinks` の 6 欄を足し、`NO_BODY` に同じ欄（何もしない 3 つ・偽 2 つ・`areka_ghost::sink::DiscardSink` を 2 つ）を足した。
+- C3: `ghost_switch.rs` の `on_switch_end` 2 件（定常到達の `attempt == WelcomeAttempt::Target`・中止の `false`、引数は前のまま）・`on_steady` の 1 行（前の install → update の 2 行）・`overwrite_between`（`close_windows_for_restart` の直後・`boot_origin_override` の前のまま）。
+- C4: `reload.rs` の `overlap_or_context` の先で `let body = BodySystems::of(world);`、`update_busy` → `install_busy` の順（`Updating` → `Installing`）は前のまま。`shell_balloon_switch.rs` は `update_busy` だけ。
+- C5: `runtime_boot.rs` は列を作る前に `let [install_sink, update_sink] = (BodySystems::of(world).cue_sinks)(world);`、列の 9・10 番目に `install_sink, update_sink,`。`use` の 2 行（`InstallCueSink`・`UpdateCueSink`）を外した。
+- 本体の `BODY_SYSTEMS` に 6 欄と `tell_desks_steady`（`install::desk::on_steady` → `update::desk::on_steady`）・`body_cue_sinks`（`InstallCueSink(install::desk::raw_sender)` → `UpdateCueSink(update::desk::raw_sender)`）を足した。説明の行は前の集めた層の行を写した。
+- 節目のログ（`ghost_switch_done`・`ghost_switch_cancelled`・`reload_refused`・`skin_switch_updating` ほか）の本文と順は触っていない（呼び出しの行だけを替えた）。
+- `t_zwi05` は受け口の列の字面の 9・10 番目を `install_sink, update_sink,` に替え、`main.rs` の字面に `[ Box::new(InstallCueSink::new(install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(update::desk::raw_sender(world))), ]` が在ることを同じテストに足した（名前は変えていない）。
+
+`BODY_SYSTEMS` の 11 行と設計の BodySlots の照らし（同じ型の欄は取り違えても型で止まらないので 1 行ずつ）:
+
+| 欄 | 型 | 本体の中身 | 設計の BodySlots | 一致 |
+|---|---|---|---|---|
+| `menu_poll` | `fn(&mut World)` | `menu::register_menu_poll` | `menu::register_menu_poll` | ○ |
+| `after_input` | `fn(&mut World)` | `register_body_after_input` | `register_body_after_input` | ○ |
+| `after_char_pointer` | `fn(&mut World)` | `menu::attach_release_handlers` | `menu::attach_release_handlers` | ○ |
+| `after_balloon_pointer` | `fn(&mut World)` | `attach_body_receivers`（file_drop → menu::shortcut） | 同じ | ○ |
+| `after_runtime_wired` | `fn(&mut World, &GhostRuntime)` | `wire_body_after_runtime` | 同じ | ○ |
+| `on_switch_end` | `fn(&mut World, bool)` | `update::desk::on_switch_end` | 同じ | ○ |
+| `on_steady` | `fn(&mut World)` | `tell_desks_steady`（install::desk::on_steady → update::desk::on_steady） | 同じ | ○ |
+| `overwrite_between` | `fn(&mut World)` | `install::desk::run_overwrite_between` | 同じ | ○ |
+| `update_busy` | `fn(&World) -> bool` | `update::desk::is_busy` | 同じ | ○ |
+| `install_busy` | `fn(&World) -> bool` | `install::desk::is_busy` | 同じ | ○ |
+| `cue_sinks` | `fn(&World) -> [Box<dyn BootCueSink>; 2]` | `body_cue_sinks`（InstallCueSink → UpdateCueSink） | 同じ | ○ |
+
+確かめ（2026-11-22）:
+
+- RED: `t_zwi05` の字面を先に替えた時点で `cargo test -p areka --bin areka t_zwi05` が赤（受け口の列の字面が無い・1 failed）。
+- `cargo check -p areka --bin areka`: 警告 0。
+- `cargo test -p areka --bin areka`: 1832 passed・5 failed・3 ignored。赤の 5 本は、`BodySystems::of` の倒れ方を一時に `crate::BODY_SYSTEMS` へ替えて回すと 5 本とも緑（書き換えは戻した）＝本体の効き目を失った赤。`runtime_boot_tests.rs` は中身を変えずに緑（`sinks_are_thirteen_with_reload_then_window_state_last` ほか）。`t_zwi05` は緑。
+- `cargo fmt --all -- --check`: 差分なし。
+
+本体の効き目を失って赤になったテスト（2.1 の一覧に足して 2.5 へ渡す・`session/` の下は ※）:
+
+| テスト | ファイル |
+|---|---|
+| `install::desk::tests::resend_goes_at_once_when_steady_arrived_since_the_last_send` | `crates/areka/src/install/desk_tests.rs` |
+| `install::desk::tests::a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady` | `crates/areka/src/install/desk_tests.rs` |
+| `update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time` | `crates/areka/src/update/desk_resolve_tests.rs` |
+| ※ `session::reload::tests::refusals_in_order_leave_one_record_each` | `crates/areka/src/session/reload_tests.rs` |
+| ※ `session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing` | `crates/areka/src/session/shell_balloon_switch_tests.rs` |
+
+`git grep -n -E "(install|update)::|InstallCueSink|UpdateCueSink" -- ghost_switch.rs reload.rs shell_balloon_switch.rs runtime_boot.rs`（`crates/areka/src/session/` の下）: 本体のモジュールを名指すコードは 0 件。残りは説明の地の文 2 行（`ghost_switch.rs:504` の `update::desk::on_switch_end`・`:677` の `install::desk::run_overwrite_between`、リンクでない）。`install`・`update` の語だけで grep すると、ほかに束の欄の名（`update_busy`・`install_busy`・`cue_sinks` の受け手の局所名 `install_sink`・`update_sink`）・集めた層の名（`record_last_installed`・`last_installed_recorded`・`lastinstalled`・`RefusedReason::Installing`・`installed_for`・`install_lines`）が当たる。

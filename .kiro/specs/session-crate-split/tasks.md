@@ -31,7 +31,7 @@
   - 本体の bin の型の確かめが警告 0 で通り、本体の bin のテストが、本体の効き目を失って赤になったテスト（名前を一覧に書いて 2.5 へ渡す）を除いて緑（赤が出たら赤のテストだけ回し直す）。`ghost_session.rs`・`ghost_session_runtime.rs` に `menu`・`file_drop`・`install` を名指すコードが grep で 0 件
   - _Dispatch: standard — 口の型は設計が与えるが、据え付けと倒れ方と呼び手の差し替えを書く_
   - _Requirements: 1.1, 1.2, 1.3, 1.8, 1.9, 1.11, 2.1, 2.3, 3.8_
-- [ ] 2.2 切替の節目・机の問い・受け口の列の呼び出しを口へ通す
+- [x] 2.2 切替の節目・机の問い・受け口の列の呼び出しを口へ通す
   - 束に切替の節目の 3 欄（`on_switch_end`・`on_steady`・`overwrite_between`）・机の問いの 2 欄（`update_busy`・`install_busy`）・受け口の 1 欄（`cue_sinks`）を足し、`NO_BODY` に同じ欄（何もしない・偽・`areka_ghost::sink::DiscardSink` を 2 つ）を足す
   - 切替の系の C3 の 5 件・読み直しとシェル・バルーンの切替の C4 の 3 件・実行系の起動の C5 の 2 件を口の呼び出しへ替え、`use` の 2 行を外す。節目・引数・問う順（読み直しは update → install）・受け口の列の 9・10 番目の位置は今のまま。逆にした道の節目のログは本文も順も変えない
   - 本体の `BODY_SYSTEMS` に 6 欄の中身と本体の関数 2 つ（`tell_desks_steady`・`body_cue_sinks`）を足す。`BODY_SYSTEMS` の 11 行を 1 行ずつ設計の BodySlots と照らす（同じ型の欄の取り違えは型で止まらない）

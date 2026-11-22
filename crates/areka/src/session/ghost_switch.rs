@@ -26,6 +26,7 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::session::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::{
     BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost,
 };
@@ -500,8 +501,11 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                         attempt = ?attempt,
                         "切替で起こしたゴーストが定常に入った——切替を終える"
                     );
-                    // 更新の窓口へ（読み直しなら古い SHIORI は降りている＝残りを消し、後送りの列の残りを新しいゴーストへ送る・既定へ戻ったなら捨てる）。
-                    crate::update::desk::on_switch_end(world, attempt == WelcomeAttempt::Target);
+                    // 更新の窓口へ（本体の `update::desk::on_switch_end`。読み直しなら古い SHIORI は降りている＝残りを消し、後送りの列の残りを新しいゴーストへ送る・既定へ戻ったなら捨てる）。
+                    (BodySystems::of(world).on_switch_end)(
+                        world,
+                        attempt == WelcomeAttempt::Target,
+                    );
                 }
                 stage => tracing::debug!(
                     event = "ghost_switch_done",
@@ -509,10 +513,9 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     "迎え入れの予約の外の定常到達——予約は触らない"
                 ),
             }
-            // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
-            crate::install::desk::on_steady(world);
-            // 更新の窓口へ（`homeurl` の写しを消して照会し直す）。
-            crate::update::desk::on_steady(world);
+            // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）、続けて更新の窓口へ
+            // （`homeurl` の写しを消して照会し直す）。本体の `tell_desks_steady`。
+            (BodySystems::of(world).on_steady)(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {
             if world.get_non_send::<SwitchInFlight>().is_some() {
@@ -522,7 +525,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     reason = ?reason,
                     "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
-                crate::update::desk::on_switch_end(world, false);
+                (BodySystems::of(world).on_switch_end)(world, false);
             } else if world.contains_resource::<crate::session::session_end::SessionEnded>() {
                 tracing::debug!(
                     event = "ghost_switch_cancelled",
@@ -671,8 +674,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         ),
     }
     let closed = close_windows_for_restart(world);
-    // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
-    crate::install::desk::run_overwrite_between(world);
+    // 起動中のゴーストへ入れる一周（本体の `install::desk::run_overwrite_between`。預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
+    (BodySystems::of(world).overwrite_between)(world);
     // 読み直しの窓口自身の予約なら読み直しの由来。それ以外は、起動の知らせが在れば
     // （ネットワーク更新の読み直し）それを根に、無ければ「切替で来た」。
     let origin = super::reload::boot_origin_override(world).unwrap_or_else(|| match boot_event {

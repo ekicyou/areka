@@ -29,6 +29,7 @@ use super::ghost_switch::{
 };
 use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::BootContext;
 use crate::session::exit_wait::{self, WorkGate};
 use crate::session::ghost_session::GhostSlot;
@@ -297,6 +298,7 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
 
 /// 重なりと文脈の判定。判定の順はここの並びのとおり。
 fn overlap_or_context(world: &World) -> Option<RefusedReason> {
+    let body = BodySystems::of(world);
     if world.get_non_send::<ReloadInFlight>().is_some() {
         return Some(RefusedReason::ReloadInFlight);
     }
@@ -306,10 +308,10 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if world.get_non_send::<SkinSwitchInFlight>().is_some() {
         return Some(RefusedReason::SkinSwitching);
     }
-    if crate::update::desk::is_busy(world) {
+    if (body.update_busy)(world) {
         return Some(RefusedReason::Updating);
     }
-    if crate::install::desk::is_busy(world) {
+    if (body.install_busy)(world) {
         return Some(RefusedReason::Installing);
     }
     let has_kanade = hooks::session(world).is_some_and(|session| session.kanade().is_some());

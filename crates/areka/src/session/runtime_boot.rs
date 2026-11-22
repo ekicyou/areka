@@ -21,9 +21,8 @@ use tracing::{error, warn};
 
 use super::ghost_switch::{self, ChangeRequestRaw};
 use super::shell_balloon_switch;
-use crate::install::install_cue::InstallCueSink;
+use crate::session::body_systems::BodySystems;
 use crate::session::readme::readme_cue::ReadmeCueSink;
-use crate::update::update_cue::UpdateCueSink;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::change_cue::ChangeCueSink;
 use areka_runtime::move_cue::MoveCueSink;
@@ -57,7 +56,7 @@ struct RuntimeLines {
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
 /// 11. シェル／バルーンの切替 12. 読み直し 13. 常に手前。重なりから後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
-/// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
+/// インストールと更新の受け口は本体の `body_cue_sinks` から受ける（送出端はプロセスに 1 つの窓口から借り、窓口が無ければ受信端の無い送出端）。
 fn runtime_sinks(
     world: &World,
     sources: &CueSinkSources,
@@ -77,6 +76,7 @@ fn runtime_sinks(
     let (switch_tx, switch_rx) = std::sync::mpsc::channel();
     let (reload_tx, reload_rx) = std::sync::mpsc::channel();
     let user_break_lifecycle_tx = lifecycle_tx.clone();
+    let [install_sink, update_sink] = (BodySystems::of(world).cue_sinks)(world);
     let sinks: Vec<Box<dyn BootCueSink>> = vec![
         Box::new(surface),
         Box::new(ClockedTextSink::new(text, clock.clone())),
@@ -86,8 +86,8 @@ fn runtime_sinks(
         Box::new(ReadmeCueSink::new(readme_tx)),
         Box::new(NoUserBreakCueSink::new(no_user_break_tx)),
         Box::new(ChangeCueSink::new(change_tx)),
-        Box::new(InstallCueSink::new(crate::install::desk::raw_sender(world))),
-        Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))),
+        install_sink,
+        update_sink,
         Box::new(SwitchCueSink::new(switch_tx)),
         Box::new(ReloadCueSink::new(reload_tx)),
         Box::new(WindowStateCueSink::new(window_state_tx)),

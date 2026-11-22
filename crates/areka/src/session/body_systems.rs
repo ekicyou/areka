@@ -1,6 +1,7 @@
 //! 本体だけのモジュールの系の登録と、集めた層から本体へ向かう口の束。
 
 use areka_ghost::GhostRuntime;
+use areka_ghost::sink::{BootCueSink, DiscardSink};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
@@ -17,6 +18,18 @@ pub(crate) struct BodySystems {
     pub(crate) after_balloon_pointer: fn(&mut World),
     /// 入力の結線の後・起動成功の記憶の前で呼ぶ（メニューの結線・枠の登記 8 本・置換語の載せ直し）。
     pub(crate) after_runtime_wired: fn(&mut World, &GhostRuntime),
+    /// 切替を終えたとき（真は切替先が定常に入った）に更新の窓口へ知らせる。
+    pub(crate) on_switch_end: fn(&mut World, bool),
+    /// 定常に届いたとき、インストール → 更新の順に窓口へ知らせる。
+    pub(crate) on_steady: fn(&mut World),
+    /// 降ろして全窓を閉じた直後・起こす前に、起動中のゴーストへ入れる一周を回す。
+    pub(crate) overwrite_between: fn(&mut World),
+    /// 更新の窓口が忙しいか。
+    pub(crate) update_busy: fn(&World) -> bool,
+    /// インストールの窓口が忙しいか。
+    pub(crate) install_busy: fn(&World) -> bool,
+    /// 受け口の列の 9・10 番目（インストール・更新の順）。
+    pub(crate) cue_sinks: fn(&World) -> [Box<dyn BootCueSink>; 2],
 }
 
 impl BodySystems {
@@ -34,11 +47,17 @@ impl BodySystems {
     }
 }
 
-/// 本体が無いときの答え: 何もしない（窓口が無いときの答えと同じ）。
+/// 本体が無いときの答え: 何もしない・偽・捨てる受け口 2 つ（窓口が無いときの答えと同じ）。
 pub(crate) const NO_BODY: BodySystems = BodySystems {
     menu_poll: |_| {},
     after_input: |_| {},
     after_char_pointer: |_| {},
     after_balloon_pointer: |_| {},
     after_runtime_wired: |_, _| {},
+    on_switch_end: |_, _| {},
+    on_steady: |_| {},
+    overwrite_between: |_| {},
+    update_busy: |_| false,
+    install_busy: |_| false,
+    cue_sinks: |_| [Box::new(DiscardSink::new()), Box::new(DiscardSink::new())],
 };
