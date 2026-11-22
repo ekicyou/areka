@@ -528,7 +528,74 @@ fn drain_passes_each_request_to_the_entry_as_automatic() {
     );
 }
 
+/// 1 回の取り出しで同じ解けない名 3 件・解ける名・解けない名を渡すと、該当なしは 3 行・進行中は 1 行で、
+/// 目録は 1 度だけ読む。受理の後は埋めた目録を捨て、次の要求で 1 度だけ読み直す。
+#[test]
+fn unresolved_names_in_one_drain_read_the_catalog_once() {
+    let tmp = TempPath::new("ghost-switch-drain-catalog");
+    let root = fixture_root(&tmp);
+    let (mut world, _kanade_rx) = world_with_slot(&root);
+    let (tx, rx) = mpsc::channel();
+    wire_change_rx(&mut world, rx);
+    for name in ["Nobody", "Nobody", "Nobody", "Alice", "Nobody"] {
+        tx.send(ChangeRequestRaw {
+            name: name.to_owned(),
+            raise_event: false,
+        })
+        .expect("送れる");
+    }
+    let reads = std::cell::Cell::new(0);
+    let mut read = |roots: &areka_ghost::BasewareRoots| {
+        reads.set(reads.get() + 1);
+        list_ghosts(roots)
+    };
+
+    let ((), events) = capture(|| drain_change_requests_with(&mut world, &mut read));
+    let drained = (
+        count_event(&events, "ghost_switch_unknown"),
+        count_event(&events, "ghost_switch_busy"),
+        reads.get(),
+    );
+    world.remove_non_send::<SwitchInFlight>();
+    let mut catalog = None;
+    let accepted = request_ghost_switch_with(
+        &mut world,
+        request(name("Alice"), false, ChangeOrigin::Automatic),
+        no_pick,
+        &mut catalog,
+        &mut read,
+    );
+    world.remove_non_send::<SwitchInFlight>();
+    let after = request_ghost_switch_with(
+        &mut world,
+        request(name("Nobody"), false, ChangeOrigin::Automatic),
+        no_pick,
+        &mut catalog,
+        &mut read,
+    );
+
+    assert_eq!(
+        (drained, accepted, after, reads.get()),
+        (
+            (3, 1, 1),
+            SwitchVerdict::Accepted,
+            SwitchVerdict::NotFound,
+            3
+        ),
+        "((取り出しの該当なし, 進行中, 読んだ回数), 受理, 受理の後, 読んだ回数の合計): {events:?}"
+    );
+}
+
 // ---------------------------------------------------------------- 入口での特別な名前の解決
+
+/// 乱数だけを外から渡す入口（目録は毎回読む）。
+fn entry_with(
+    world: &mut World,
+    req: SwitchRequest,
+    pick: impl FnOnce(usize) -> usize,
+) -> SwitchVerdict {
+    request_ghost_switch_with(world, req, pick, &mut None, &mut list_ghosts)
+}
 
 /// `fixture_root` の `A`／`B` へ切り替える kanade への要求。
 fn change_to(
@@ -635,7 +702,7 @@ fn random_and_sequential_resolve_to_a_target_at_the_entry() {
         ] {
             let (mut world, rx) = world_at(&root, current);
             let (verdict, events) = capture(|| {
-                request_ghost_switch_with(&mut world, request(name(special), raise, origin), |n| {
+                entry_with(&mut world, request(name(special), raise, origin), |n| {
                     assert_eq!(
                         (special, n),
                         ("random", 1),
@@ -666,7 +733,7 @@ fn special_names_on_an_empty_catalog_are_ignored() {
     ] {
         let (mut world, rx) = world_at(&root, "A");
         let (verdict, events) = capture(|| {
-            request_ghost_switch_with(
+            entry_with(
                 &mut world,
                 request(name(special), true, ChangeOrigin::Automatic),
                 no_pick,
@@ -694,7 +761,7 @@ fn lastinstalled_switches_to_the_last_recorded_ghost() {
             for r in records {
                 record_last_installed(&mut world, (*r).to_owned());
             }
-            request_ghost_switch_with(
+            entry_with(
                 &mut world,
                 request(name("lastinstalled"), raise, ChangeOrigin::Automatic),
                 no_pick,
@@ -734,7 +801,7 @@ fn special_name_while_reserved_is_busy_without_resolving() {
         request(name("Alice"), true, ChangeOrigin::Automatic),
     );
     let (second, events) = capture(|| {
-        request_ghost_switch_with(
+        entry_with(
             &mut world,
             request(name("random"), true, ChangeOrigin::Automatic),
             no_pick,
@@ -761,7 +828,7 @@ fn menu_folder_named_random_is_not_resolved() {
     let root = fixture_root(&tmp);
     let (mut world, rx) = world_with_slot(&root);
     let (verdict, events) = capture(|| {
-        request_ghost_switch_with(
+        entry_with(
             &mut world,
             request(folder("random"), false, ChangeOrigin::Manual),
             no_pick,

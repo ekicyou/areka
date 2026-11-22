@@ -1,13 +1,19 @@
 //! シェル・バルーンの切替の入口の断りと、受理の送りの順の決定論テスト（GPU なし）。
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
+use areka_emo_compose::BindSet;
+use areka_seriko::{
+    BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver, spawn_seriko,
+};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::*;
 use crate::body_systems::NO_BODY;
+use crate::ghost_session::GhostSession;
 
 fn menu_or_script(origin: SkinOrigin) -> SkinRequest {
     SkinRequest {
@@ -32,13 +38,12 @@ fn installing_refuses_menu_requests_only() {
     });
 
     let (menu, menu_logs) = capture_lines(LineFormat::LevelTargetFields, || {
-        request_skin_switch_with(&mut world, menu_or_script(SkinOrigin::Menu), |_| 0)
+        request_skin_switch(&mut world, menu_or_script(SkinOrigin::Menu))
     });
     let (script, script_logs) = capture_lines(LineFormat::LevelTargetFields, || {
-        request_skin_switch_with(
+        request_skin_switch(
             &mut world,
             menu_or_script(SkinOrigin::Script { raise_event: false }),
-            |_| 0,
         )
     });
 
@@ -113,5 +118,88 @@ fn a_failed_gap_request_starts_no_build() {
             (SkinVerdict::Accepted, 0, 1, true),
         ),
         "(判定, 送れなかった行, 組み立ての回数, 印) が 送れない・送れる の順で違う"
+    );
+}
+
+/// 起動の文脈・置き場（kanade の送出端と seriko の送り手）・結線をそろえた World と、kanade の受信端。
+fn world_with_context() -> (World, mpsc::Receiver<KanadeMsg>) {
+    let root = areka_ghost::BasewareRoot::new(PathBuf::from("root"));
+    let (tx, kanade) = mpsc::channel();
+    let seriko = spawn_seriko(
+        SurfaceResolver::new(BTreeMap::new()),
+        areka_seriko::DefaultBinds::uniform(BindSet::default()),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        MockSurfaceOutput::new(),
+    )
+    .0;
+    let mut world = World::new();
+    world.insert_resource(crate::ghost_switch_test_support::boot_context(&root, "A"));
+    world.insert_non_send(GhostSlot(Some(
+        GhostSession::for_test(Some(tx), root.ghost_dir("A")).with_seriko_sink(seriko),
+    )));
+    world.insert_non_send(areka_runtime::frame::shared_test_support::wiring().1);
+    (world, kanade)
+}
+
+fn balloon_named(name: &str) -> SkinRequest {
+    SkinRequest {
+        kind: SkinKind::Balloon,
+        target: SkinSpec::Name(name.to_owned()),
+        origin: SkinOrigin::Script { raise_event: false },
+    }
+}
+
+/// 1 回の取り出しで同じ解けない名 3 件・解ける名・解けない名を渡すと、該当なしは 3 行・進行中は 1 行で、
+/// 候補は 1 度だけ読む。受理の後は埋めた候補を捨て、次の要求で 1 度だけ読み直す。
+#[test]
+fn unresolved_names_in_one_drain_read_the_catalog_once() {
+    let (mut world, _kanade) = world_with_context();
+    let (tx, rx) = mpsc::channel();
+    wire_switch_rx(&mut world, rx);
+    for name in ["Nobody", "Nobody", "Nobody", "balloon2", "Nobody"] {
+        tx.send(SkinRequestRaw {
+            kind: SkinKind::Balloon,
+            name: name.to_owned(),
+            raise_event: false,
+        })
+        .expect("送れる");
+    }
+    let reads = Cell::new(0);
+    let mut read = |_: SkinKind, _: &SwitchContext| {
+        reads.set(reads.get() + 1);
+        vec![candidate()]
+    };
+
+    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
+        drain_switch_requests_with(&mut world, &mut read)
+    });
+    let drained = (
+        lines_with(&logs, "skin_switch_unknown"),
+        lines_with(&logs, "skin_switch_busy"),
+        reads.get(),
+    );
+    world.remove_non_send::<SkinSwitchInFlight>();
+    let mut catalog = [None, None];
+    let accepted = request_skin_switch_with(
+        &mut world,
+        balloon_named("balloon2"),
+        |_| 0,
+        &mut catalog,
+        &mut read,
+    );
+    world.remove_non_send::<SkinSwitchInFlight>();
+    let after = request_skin_switch_with(
+        &mut world,
+        balloon_named("Nobody"),
+        |_| 0,
+        &mut catalog,
+        &mut read,
+    );
+
+    assert_eq!(
+        (drained, accepted, after, reads.get()),
+        ((3, 1, 1), SkinVerdict::Accepted, SkinVerdict::NotFound, 3),
+        "((取り出しの該当なし, 進行中, 読んだ回数), 受理, 受理の後, 読んだ回数の合計): {logs:?}"
     );
 }

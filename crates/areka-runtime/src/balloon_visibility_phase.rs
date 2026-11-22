@@ -255,7 +255,11 @@ fn collect_observations(
     // 箱の観測（文字が出ているか・その上の滞在）。滞在は観測の直前に毎フレーム整える。
     // ドラッグ中の観測と記録の書き戻しは world の可変借用を要するため、ポインタ配線の共有借用
     // より先に済ませる。
-    let boxes = observe_boxes(world, runtime.as_deref(), scopes, state);
+    let actors: Vec<ActorKey> = scopes
+        .iter()
+        .map(|scope| ActorKey::from(scope.to_string()))
+        .collect();
+    let boxes = observe_boxes(world, runtime.as_deref(), scopes, &actors, state);
     let box_scopes: Vec<u32> = scopes
         .iter()
         .zip(&boxes)
@@ -266,7 +270,7 @@ fn collect_observations(
     let hover_wiring = observe_hover_wiring(world, state);
 
     let mut observed = BTreeMap::new();
-    for (&scope, &(box_showing, box_hovered)) in scopes.iter().zip(&boxes) {
+    for ((&scope, &(box_showing, box_hovered)), actor) in scopes.iter().zip(&boxes).zip(&actors) {
         let target = balloon_target(scope);
         let Some(visible) = presenter.target_visible(target) else {
             // 判断の真実源が引けない scope（表示層に target が無い）。第 2 の帳簿で代用せず、
@@ -290,7 +294,6 @@ fn collect_observations(
             .unattached_scopes
             .remove(&scope);
 
-        let actor = ActorKey::from(scope.to_string());
         observed.insert(
             scope,
             ScopeObservation {
@@ -308,11 +311,11 @@ fn collect_observations(
                 visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
                     GlyphObservation {
                         count: rt.balloon_shown_glyphs(
-                            &actor,
+                            actor,
                             presenter.current_surface_id(shell_target(scope)),
                             t,
                         ),
-                        clear_count: rt.state().clear_count(&actor),
+                        clear_count: rt.state().clear_count(actor),
                     }
                 }),
                 visible,
@@ -377,7 +380,7 @@ fn observe_hover_wiring<'w>(
 }
 
 /// scope ごとの箱の観測 `(箱に文字が出ているか, 文字の出ている箱の上に滞在しているか)` を
-/// `scopes` と同じ並びで返す。
+/// `scopes` と同じ並びで返す。`actors` は `scopes` と同じ並びの鍵。
 ///
 /// 文字層ランタイムを借りられなかったフレームは写しが読めないので、どちらも偽（抑止しない側）
 /// とし、滞在の記録も整えない（借用の失敗は [`borrow_runtime`] が記録済み）。
@@ -385,6 +388,7 @@ fn observe_boxes(
     world: &mut World,
     runtime: Option<&TextLayerRuntime>,
     scopes: &[u32],
+    actors: &[ActorKey],
     state: &mut BalloonVisibilityState,
 ) -> Vec<(bool, bool)> {
     let Some(runtime) = runtime else {
@@ -393,10 +397,10 @@ fn observe_boxes(
     let mut hover = world.get_non_send_mut::<ShellBoxHover>();
     scopes
         .iter()
-        .map(|&scope| {
-            let shown = runtime.shown_boxes(&ActorKey::from(scope.to_string()));
+        .zip(actors)
+        .map(|(&scope, actor)| {
             observe_scope_boxes(
-                shown,
+                runtime.shown_boxes(actor),
                 hover.as_deref_mut(),
                 scope,
                 &mut state.observation_failure_logged.box_hover,

@@ -27,7 +27,7 @@ use crate::ghost_switch::{
 use crate::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig};
 use crate::reload::{RefusedReason, ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 use crate::shell_balloon_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch_with,
+    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
 
 thread_local! {
@@ -110,14 +110,13 @@ fn busy_slots_are_asked_update_first() {
         )
     };
     let skin = |world: &mut World| {
-        request_skin_switch_with(
+        request_skin_switch(
             world,
             SkinRequest {
                 kind: SkinKind::Shell,
                 target: SkinSpec::Name("planted".to_owned()),
                 origin: SkinOrigin::Script { raise_event: false },
             },
-            |_| 0,
         )
     };
 

@@ -14,7 +14,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use areka_ghost::{GhostEntry, same_folder_name};
+use areka_ghost::catalog_roots::list_ghosts;
+use areka_ghost::{BasewareRoots, GhostEntry, same_folder_name};
 use areka_kanade::{
     BootOrigin, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, CloseReason,
     KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
@@ -66,6 +67,14 @@ pub(crate) fn register_change_drain(world: &mut World) {
 ///
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受け口の借用を切ってから入口を呼ぶ。
 pub(crate) fn drain_change_requests(world: &mut World) {
+    drain_change_requests_with(world, list_ghosts);
+}
+
+/// 取り出しの中身。目録の読み方を外から受ける（決定論テスト用）。
+fn drain_change_requests_with(
+    world: &mut World,
+    mut read: impl FnMut(&BasewareRoots) -> Vec<GhostEntry>,
+) {
     super::switch_copy::poll(world);
     let Some(rx) = world.get_non_send::<ChangeRx>() else {
         tracing::trace!(
@@ -75,8 +84,9 @@ pub(crate) fn drain_change_requests(world: &mut World) {
         return;
     };
     let pending: Vec<ChangeRequestRaw> = rx.0.try_iter().collect();
+    let mut catalog = None;
     for raw in pending {
-        request_ghost_switch(
+        request_ghost_switch_with(
             world,
             SwitchRequest {
                 ghost: GhostSpec::Name(raw.name),
@@ -84,6 +94,9 @@ pub(crate) fn drain_change_requests(world: &mut World) {
                 origin: ChangeOrigin::Automatic,
                 boot_event: None,
             },
+            pick_index,
+            &mut catalog,
+            &mut read,
         );
     }
 }
@@ -239,10 +252,11 @@ pub fn record_last_installed(world: &mut World, folder: String) {
 
 /// 切替要求の唯一の入口。乱数は本番の `pick_index`。
 pub fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
-    request_ghost_switch_with(world, req, pick_index)
+    request_ghost_switch_with(world, req, pick_index, &mut None, &mut list_ghosts)
 }
 
-/// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_ghost_switch`] が `pick_index` を渡す）。
+/// 入口の中身。乱数と目録の読み方を外から受ける（決定論テスト用）。`catalog` は目録を 1 度だけ埋める置き場で、
+/// 取り出しの系が 1 回の取り出しの間だけ共用する。
 ///
 /// 予約が在れば `warn!(ghost_switch_busy)`、更新の実行中のメニューの要求は `warn!(ghost_switch_updating)`。
 /// 名前の要求は特別な名前を解いてから目録と突き合わせ
@@ -253,6 +267,8 @@ fn request_ghost_switch_with(
     world: &mut World,
     req: SwitchRequest,
     pick: impl FnOnce(usize) -> usize,
+    catalog: &mut Option<Vec<GhostEntry>>,
+    read: &mut impl FnMut(&BasewareRoots) -> Vec<GhostEntry>,
 ) -> SwitchVerdict {
     if world.get_non_send::<SwitchInFlight>().is_some() {
         tracing::warn!(
@@ -273,7 +289,7 @@ fn request_ghost_switch_with(
     let Some(ctx) = world.get_resource::<BootContext>() else {
         return no_boot_context();
     };
-    let entries = areka_ghost::catalog_roots::list_ghosts(&ctx.roots);
+    let entries = &*catalog.get_or_insert_with(|| read(&ctx.roots));
     let current_folder = ctx.current.ghost.folder.clone();
     // 特別な名前は同名のゴーストより先に解く。メニューのフォルダの名指しは素通し。記録は読むだけ。
     let spec = match &req.ghost {
@@ -281,7 +297,7 @@ fn request_ghost_switch_with(
             let last = world
                 .get_resource::<LastInstalledGhost>()
                 .map(|r| r.0.as_str());
-            match resolve_special_name(name, &entries, current_folder.as_deref(), last, pick) {
+            match resolve_special_name(name, entries, current_folder.as_deref(), last, pick) {
                 NameResolution::Plain => req.ghost.clone(),
                 NameResolution::Resolved { folder, position } => {
                     tracing::info!(
@@ -307,7 +323,7 @@ fn request_ghost_switch_with(
         }
         GhostSpec::Folder(_) => req.ghost.clone(),
     };
-    let Some(target) = resolve_switch_target(&entries, &spec) else {
+    let Some(target) = resolve_switch_target(entries, &spec) else {
         tracing::warn!(
             event = "ghost_switch_unknown",
             reason = "name",
@@ -317,6 +333,8 @@ fn request_ghost_switch_with(
         return SwitchVerdict::NotFound;
     };
     let target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
+    // 受理の後の目録は切替で変わりうるので使い回さない。
+    *catalog = None;
     accept_switch(world, target, req)
 }
 
