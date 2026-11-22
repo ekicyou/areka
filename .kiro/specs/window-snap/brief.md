@@ -130,3 +130,18 @@
   - **2026-11-14 追記（`audit-placement-core` の要件の討議・議題 1）**: 件 1 のうち「起動で窓を最初に置く位置を 4 つの辺それぞれで解く」は、`audit-placement-core` が指摘 1 として直す（今は `crates/areka-placement/src/resolver.rs` の `resolve_placement`。並べ直し〔`reset_pos.rs`〕でも同じく下端に置かれ、記憶から戻す所や `project_anchor` が上端へ直すので経路ごとに位置が割れる・正典どおりの値にも呼ぶたびに警告が出る、を audit で見つけた）。この件に残るのは「作業領域が変わったときに 4 つの辺で沿わせ直す」（本体の `runtime` の側）と、網羅台帳の 8 行を `implemented` にして持ち主を書くこと。`audit-placement-core` の着地のときに、この行の数え方を見直す。
   - **2026-11-14 追記（`audit-placement-core` の実装・指摘 1）**: 最初の位置（`resolve_placement`）は `audit-placement-core` で 4 つの辺で解く形に直した（`top` は上端・`left`／`right` はその辺に下から上へ連ねる・正典の値では警告を出さない）。作業領域が変わったときに辺へ沿わせ直す所はこの件に残る（網羅台帳の 8 行は `degraded` のまま）。
 - 本文 Current State の「`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・… は網羅台帳で absent」は古い。完了 `window-link-directives`（2026-10-23）がこの 2 つを実装した（網羅台帳 `sakura-script.toml` は `implemented`）。本文 議題 1 の「どれも未実装」も、残るのは時間をかける `\![move]`／`\![moveasync]` だけ。
+
+## 正典のお座り
+
+- **版**: v0.4.0・区分 A。
+- **正典**（ukadoc MCP で引いた）: SSP 2.9.33 で `\![set,alignmenttodesktop,osuwari,オプション,…]` が入った。ukadoc の説明は「ゴーストのウインドウを、他のウインドウの隅や縁に『座らせる』『貼り付ける』『ぶら下げる』」（`list_sakura_script` の「`\![set,alignmenttodesktop,osuwari]`について」・ukiya 氏の SAORI「Osuwari.dll」と同じ処理の内蔵）。本文 Problem の「正典の吸着は…相手はデスクトップの端に限られる」と Current State の「無いもの: ほかのアプリの窓を相手にする吸着」は古い。
+  - 台本: `\![set,alignmenttodesktop,osuwari,…]`。オプション＝`--target=`（`active` 前面の窓・`fix` 画面に固定・`@文字列` 題名・`#数値` 窓の番号）・`--origin=`／`--target-origin=`（2.9.34・`左右.上下` の点や `tl` などの 2 文字・`base`・`osuwari`）・`--x=`／`--y=`・`--interval=`（既定 100 ミリ秒）・`--xmove`／`--ymove`（動かせる範囲の中の比率で覚える）・`--noclip`・`--area=`・`--side=`・`--margin=`（座れないとき・見切れのときの基準の矩形）・`--zorder=`（`front`／`back`＝対象のすぐ奥から覗く）。
+  - descript: ゴースト・シェルの `seriko.alignmenttodesktop`（`sakura.`・`kero.`・`char*.` つきも）の値に `osuwari,--…` を書ける（起動とシェルの切替で追尾を始める・`default` で descript の設定へ戻す・読めないオプションはエラーログに警告して無視）。
+  - surfaces.txt: surface*ブレスの `point.osuwaripos.x`／`.y`（2.9.34・既定は `point.basepos.x`／`.y` と同じ）。
+  - 座れない窓（最小化・非表示・別の仮想デスクトップ・所有された窓・SSP 自身・`--target=active` のときのシェルの窓）・見た目の枠で測る（見えない枠を含まない）・座っている間の位置は立ち位置として保存しない・sticky-window の子には効かない・`\0` と `\1` は別に指定できる、なども正典に書かれている。
+  - 互換モジュール: SSP は SAORI の `osuwari` も内蔵した（`spec_saori_ex` の「互換モジュール」・2.9.33）。
+- **推す形の改め**: 「推す形」の 1〜3 段と 5 段（覗き）は、正典のお座りでほぼ書ける。最初の段は**正典どおりのお座り**（台本・descript・`point.osuwaripos`）にし、正典に無い所（吸着の状態をコンテキストとしてシェルへ渡す・落下と慣性・積み重なり）は後ろの段に残す。議題 1（土台の持ち主）・議題 4〜7 は正典の答えで多くが決まる＝要件の段で読み直す。
+- **見張り方の議題**: 正典の `--interval=` は「位置を調べる間隔」。採らない方向の「ポーリングで見張らない」と食い違う。OS の通知（WinEvent）で受けつつ、正典の間隔の意味（いつまでに追い付くか）を満たす形にするかを要件の段で決める。
+- **ほかの spec との関わり**: `point.osuwaripos` の既定は `point.basepos` に従う＝`surfaces-basepos`（いつか・宣言の読み）との順を要件の段で確かめる。網羅台帳と ukadoc の写しに、2.9.33・2.9.34 の項目がまだ無い見込み（リポジトリの中で `osuwari` を名指すのは完了 spec の研究の記録 1 つだけ）＝`ukadoc-catalog-refresh` で写しを取り直してから台帳の行を足す。
+- **規模**: 正典のお座りだけで M〜L の見込み（オプション 13・descript の 4 段の優先・見張り・見切れ・ドラッグの比率・前後の順）。20 を超えるなら要件の段で切る（夢の段の後ろの段は先に起票しない）。
+
