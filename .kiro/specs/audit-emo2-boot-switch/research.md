@@ -778,6 +778,49 @@
 
 ---
 
+## 13. 実装の段の記録（預かった件の片づけと申し送り・2026-11-23）
+
+### 13.1 預かった件 1〜10・12 の片づけ（要件 5.1〜5.12）
+
+| 件 | 要件 | 出どころ | 指摘 | タスク | コミット | 片づいた形 |
+|---|---|---|---|---|---|---|
+| 1 | 5.1 | `runtime-module-untangle` | 4 | 3.1 | `70bb10c2a` | シェル・バルーンの切り替えの出し直しを 5 型だけに絞り、残り 5 項目は私有の取り込みへ |
+| 2 | 5.2 | `session-crate-split` | 5・39 | 3.1 | `70bb10c2a` | `SwapFinish` の出し直しを消し、範囲の外で使い手の無い足場の 2 関数を `pub(crate)` へ |
+| 3 | 5.3 | `runtime-crate-split` ⑶ | 7・36・38 | 3.3（38 は 3.1 も） | `be4259528`・`70bb10c2a` | テストを戻した後の使い手で数え直し、公開を狭めた（箱の上の滞在の確定・ホバーの注入の mod・移動の cue の出し直しほか） |
+| 4 | 5.4 | `runtime-crate-split` ⑶・`audit-emo2-boot-spine` ウ | 24 ほか（25・26・40・64・65・68・69） | 3.2 | `ff4a59133` | 本体の可視性の相のテスト 29 本を `areka-runtime` へ戻した |
+| 5 | 5.5 | `audit-emo2-boot-frame` キ・棚卸㊸ 件 10 | 27 | 4.1 | `df16079cc` | 偽の HWND の輪と偽の記憶の書き手の写しを `areka_placement::test_support` の 2 つに寄せた |
+| 6 | 5.6 | `audit-emo2-boot-frame` ク | 2 | 1.2 | `c723cea95` | ドラッグ中のシェルの窓の scope を `window_scope` の上限で比べる形にした |
+| 7 | 5.7 | `audit-emo2-boot-frame` コ | 15 | 4.1 | `df16079cc` | 記憶の書き手の後始末の 2 か所を `join_bounded` で待つ形にした |
+| 8 | 5.8 | 棚卸㊶ シ | 28 | 4.2 | `f1a631316` | `boot_context(root, current)` を足場に置き、`ghost_switch_tests.rs` の写しを消した |
+| 9 | 5.9 | `session-crate-split` | 29・52 | 4.2 | `f1a631316` | `add_rpost_shell` の写し 2 つを、元のシェルの道を受ける形と std だけの `copy_tree` の 1 か所にまとめた |
+| 10 | 5.10 | `session-crate-split` D13 | 30 | 4.3 | `a8902f5bf` | 足場 `rig` で本体の組を 1 回据え、`error!(body_systems_missing)` が出なくなった |
+| 12 | 5.12 | `audit-emo2-boot-spine` オ | — | （直しなし） | — | 済んだまま。`balloon_visibility_phase_zorder_chain_tests.rs` は `source_text_test_support::code_only` を使い、ファイルに写しは無い |
+
+- 件 11 は要件 5.11 の扱い: 申し送りの記録（13.3・13.4）。
+- 範囲の外の 6 節 イ・エ・オ（持ち主の無い 3 件・要件の確定 10）とア（要件の確定 6）は、この spec で直した（ア＝`COMPAT_ARCHITECTURE.md` の 134 行・5.3、イ＝記憶の書き手の後始末・5.3 ㋐、エ＝`scale_signed` の飽和・5.3 ㋑、オ＝コメントの削除・5.3 ㋒。コミット `fba7c4f7e`）。サ（`Cargo.toml` を要るので寄せない）とチ（`sample-ghost-kit` を `test-support` に入れない決めの帰結）は事実の記録だけで、申し送りは要らない。
+
+### 13.2 規模と、直さずに残す指摘
+
+- 規模: 見立ての 17〜22 タスクのうち、20 タスク（T1〜T20）で組んだ。
+- 直さずに残す番号つきの指摘は 0 件（要件 2.5・3 番の続きの `reload.rs` の件は 13.4）。5 節の候補 ⑴〜⑶（候補 1・3・37・40 と件 9 の形）は、要件の討議の確定（2＝候補 1・要件 5.13、3＝候補 3・要件 5.16、5＝件 9 の ⓐ・要件 5.9）と要件 2.1・5.3・5.4（37・40・タスク 3.3・3.2）で直す側に回り、設計の確定 1 で候補 3 をメニューの要求だけに絞った。⑶ は候補 0 件。76 件すべてを直す対象とした。
+
+### 13.3 並走の spec への申し送り（要件 7.3・7.8・7.9）
+
+送った日: 2026-11-23。書く前に、相手の spec が `.kiro/specs/` にあり `completed/` に無いこと（origin/main）を確かめた。
+
+| 相手 | 申し送った件（6 節） | 中身 |
+|---|---|---|
+| `audit-areka-app` | ウ・カ（本体 `ghost_session_switch_tests.rs` の `kinds`）・キ・ク・ケ・シ・ス・セ・ソ・タ（`reload_tests` の 2 本） | 持ち物の写し・出し直しのそろえ・据え付けの削り。加えて、この spec が相手の持ち物に触ったのは申し合わせた use の道の 4 か所だけという知らせ |
+| `audit-areka-install-update` | カ（`refs_of` の 3 つ・`worker_path_tests.rs` の `kinds`）・コ・タ（`install`・`update` の 3 本） | 持ち物の写しと `BODY_SYSTEMS` を手で足す所。加えて着地の知らせ: `SwitchVerdict::Updating` と腕の名 1 つを `install/overwrite.rs:129` へ（`68c8e1069`・相手の開発者の確定 `537109983`・相手の要件 7.13 (a)）、`spawn_windows`・`pump_messages` を `pub` に（`f1a631316`） |
+
+### 13.4 並走の spec の答えと決まりごと
+
+- 3 番の続き（`reload.rs` の読み直しの入口が台本の `\![reload,…]` も断る件）: `audit-areka-app` が設計で「MCP からの読み直しだけを断る」と決めて片づいた。この spec は記録だけで、`reload.rs` には触れない。
+- `update_reload_requested` の語の替えは窓口の側（`update/desk.rs:206` の記録）に及ばない。範囲の中の読み手 `shell_balloon_switch_session_update_tests.rs:243` は窓口の側の記録を数えるので、直しは要らない（`audit-areka-install-update` が確かめた）。
+- 実装の段の例外: `doc/COMPAT_ARCHITECTURE.md` の 405 行は、4.6 のテストの名の替えに合わせて名指しを替えた（134・177・407 行のほかの 1 行・行は足していない）。75 番は 5.2 で research の 2 か所だけを直し、`ghost_switch.rs` の別の 2 つの文（「今日どおり終了する」）と `COMPAT_ARCHITECTURE.md:303` は 75 番の場所に無いので残した。かけ直しの audit で拾われたらそこで扱う。
+
+---
+
 ## 付録 A: 束の読み手の番号との対応
 
 | 番号 | 束の番号 |
