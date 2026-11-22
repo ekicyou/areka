@@ -649,6 +649,7 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 - **`update_reload_requested` の語の替え（同じ相手）**: 範囲の中の読み手 `session_tests/shell_balloon_switch_session_update_tests.rs:243`。相手の知らせを待って同じ変更で追う（T18 で確かめる）。
 - **`SwitchVerdict::Updating` の腕（同じ相手）**: `install/overwrite.rs` の網羅の `match` に名を 1 つ足す（T4）。
 - **`audit-areka-app`**: 4・5 番の use の道（T5）・26 番の寄せ先をそろえる（`wiring().1`）・3 番の続きの申し送り（T18）。
+  - 申し合わせ済み（2026-11-22・相手のセッションの答え）: 4 か所（`reload_test_support.rs:14`・本体 `runtime_tests/frame/switch_tests.rs:37`・`:838`・`switch_finish_tests.rs:50-52`）の use の道はこの spec が替える（中身は変えない）。相手も近くを触る（`reload_test_support.rs` の `boot_context` の引数を足す見込み・`switch_finish_tests.rs:60-61` の `SharedFakeIo` を `areka_placement::test_support` へ寄せる）。use の行がぶつかったら、後から着地する側が合わせる。3 番の続き（`reload.rs` の `install_busy`）は相手の設計の議題に入った。
 
 ## 設計の討議で確定したこと（2026-11-22・開発者が全議題を推奨案で承認）
 
