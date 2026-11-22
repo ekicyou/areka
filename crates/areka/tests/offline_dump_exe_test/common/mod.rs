@@ -122,12 +122,7 @@ pub fn run_areka(cwd: &Path, args: &[&str]) -> (i32, String) {
 
 /// [`run_areka`] に環境変数 `envs` を足して回す。
 pub fn run_areka_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &OsStr)]) -> (i32, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_areka"))
-        .args(args)
-        .envs(envs.iter().copied())
-        .current_dir(cwd)
-        .env("AREKA_NO_ALERT", "1")
-        .env("NO_COLOR", "1")
+    let out = areka_command(cwd, args, envs)
         .output()
         .expect("areka.exe を起動できる");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
@@ -136,6 +131,53 @@ pub fn run_areka_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &OsStr)]) ->
         .code()
         .unwrap_or_else(|| panic!("終了コードが無い: {stderr}"));
     (code, stderr)
+}
+
+/// 回す `Command` を組む。開発者の環境を受け継いで本物の根へ書かないよう、書ける根・記憶の置き場・
+/// `LOCALAPPDATA` は `cwd` の下を指す既定にし、万一 UI へ進んでも終わるよう保険の自動終了を置く。
+/// `envs` は既定より後に積むので、呼び手が上書きできる。
+fn areka_command(cwd: &Path, args: &[&str], envs: &[(&str, &OsStr)]) -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_areka"));
+    cmd.args(args)
+        .current_dir(cwd)
+        .env("AREKA_APP_SMOKE_EXIT_MS", "30000")
+        .env("AREKA_ROOT", cwd.join("areka_root"))
+        .env("AREKA_PROFILE_DIR", cwd.join("areka_profile"))
+        .env("AREKA_USER_ROOT", cwd.join("areka_user_root"))
+        .env("LOCALAPPDATA", cwd.join("local_app_data"))
+        .envs(envs.iter().copied())
+        .env("AREKA_NO_ALERT", "1")
+        .env("NO_COLOR", "1");
+    cmd
+}
+
+#[test]
+fn areka_command_defaults_sit_under_cwd_and_callers_override() {
+    let cwd = Path::new("cwd_dir");
+    let get = |cmd: &Command, key: &str| {
+        cmd.get_envs()
+            .find(|(k, _)| *k == OsStr::new(key))
+            .and_then(|(_, v)| v.map(|v| v.to_owned()))
+    };
+    let plain = areka_command(cwd, &[], &[]);
+    assert_eq!(
+        get(&plain, "AREKA_APP_SMOKE_EXIT_MS").as_deref(),
+        Some(OsStr::new("30000"))
+    );
+    for key in [
+        "AREKA_ROOT",
+        "AREKA_PROFILE_DIR",
+        "AREKA_USER_ROOT",
+        "LOCALAPPDATA",
+    ] {
+        let v = get(&plain, key).unwrap_or_else(|| panic!("{key} が既定で置かれる"));
+        assert!(Path::new(&v).starts_with(cwd), "{key} は cwd の下: {v:?}");
+    }
+    let over = areka_command(cwd, &[], &[("AREKA_ROOT", OsStr::new("elsewhere"))]);
+    assert_eq!(
+        get(&over, "AREKA_ROOT").as_deref(),
+        Some(OsStr::new("elsewhere"))
+    );
 }
 
 /// PNG の幅と高さ。

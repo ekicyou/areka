@@ -133,7 +133,7 @@
   - _Dispatch: mechanical — 寄せ先と置き換えの形を設計が与える_
   - _Requirements: 3.1, 4.3, 4.5, 5.4, 5.5, 5.7, 6.11_
 
-- [ ] 10. 実画面と exe のテスト（G10）
+- [x] 10. 実画面と exe のテスト（G10）
 - [x] 10.1 (P) 実画面の 2 本の補助を 1 か所にまとめ、`unsafe` に前提を書く（指摘 45・73 の分）
   - 新しい `tests/real_screen/common.rs` に補助（per_monitor・mouse・copy_dir・lines_with・wait_new・json・Notes）を置き、`stay_on_top_real_run.rs`・`window_link_real_run.rs`・`startup_install_real_run.rs` から `#[path]` で引く（`copy_dir` は startup の形）
   - 各 `unsafe` に `// SAFETY:` を 1 行。判定名の札（`8.1a`〜`8.4`・`R-bg`・`R1`〜`R3`）を外す
@@ -147,7 +147,7 @@
   - 完了の姿: 単体のテストが緑で、元の判定に戻すと赤（較正）。実画面の 2 本は 21.2 の全体テストの段で緑
   - _Dispatch: standard — 待つ記録の行を 1 か所ずつ選ぶ_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 8.3_
-- [ ] 10.3 smoke と exe のテストの待ちと根を有界にし、開発者へ渡すコマンドを絶対パスにする（指摘 26・27・60・96）
+- [x] 10.3 smoke と exe のテストの待ちと根を有界にし、開発者へ渡すコマンドを絶対パスにする（指摘 26・27・60・96）
   - `smoke_boot_loop_exit.rs` の `smoke()` に `.deadline(Duration::from_secs(120))`、130・242・52-53 の説明を「`areka_session::alert` の非公開の定数と同じ綴りを写す」ほか今の事実に
   - `offline_dump_exe_test/common/mod.rs` で `.envs(envs)` の前に `AREKA_APP_SMOKE_EXIT_MS` と、`cwd` の下を指す `AREKA_ROOT`・`AREKA_PROFILE_DIR`・`AREKA_USER_ROOT`・`LOCALAPPDATA` を既定で置く（呼び手が上書きできる順）。組んだ `Command` の `get_envs()` を見るテストを 1 本足す
   - emo2 の実走の 3 ファイルで、開発者へ渡すコマンドを `--manifest-path <絶対パス>\Cargo.toml` の形に。`common.rs` の 9-10 を今の理由だけに

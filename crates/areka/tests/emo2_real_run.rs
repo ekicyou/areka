@@ -47,12 +47,12 @@
 //! ## 回し方
 //! 排他テストの机を借りてから（`doc/impl-watch.md`）:
 //!
-//!     $env:AREKA_EMO2_REAL_RUN="1"; cargo test -p areka --test emo2_real_run -- --nocapture
+//!     $env:AREKA_EMO2_REAL_RUN="1"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_real_run -- --nocapture
 //!
 //! 100% 相当で回すときは、子にだけ `__COMPAT_LAYER` を渡す `AREKA_EMO2_COMPAT_LAYER` に互換モードの値を置く
 //! （まず `DPIUNAWARE`、効かなければ `GDIDPISCALING DPIUNAWARE`）。時間の 1 行の `primary_dpi=96` で効いたことを見る:
 //!
-//!     $env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test -p areka --test emo2_real_run -- --nocapture
+//!     $env:AREKA_EMO2_REAL_RUN="1"; $env:AREKA_EMO2_COMPAT_LAYER="DPIUNAWARE"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_real_run -- --nocapture
 //!
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
 //! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka-session/src/boot_config.rs`）は

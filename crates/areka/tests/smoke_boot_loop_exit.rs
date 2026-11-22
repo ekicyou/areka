@@ -49,8 +49,7 @@ const WIRED: &str = "runtime: 実 sink 結線が成立しました（wire 成立
 /// 本物のゴースト窓を開いたマーカー（`areka_session::ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
 
-/// SHIORI の失敗の告知の題名（`alert.rs` の `SHIORI_FAULT_TITLE` と同じ綴り・bin crate の定数は
-/// テストから参照できないので写す）。これを含む行の数で「SHIORI の失敗で終わったか」を見る。
+/// SHIORI の失敗の告知の題名（`areka_session::alert` の非公開の定数 `SHIORI_FAULT_TITLE` と同じ綴りを写す）。これを含む行の数で「SHIORI の失敗で終わったか」を見る。
 const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
 
 /// SHIORI の失敗で終わっていないこと＝告知の題名を含む行が 0 件（①② 共通）。
@@ -122,12 +121,14 @@ fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
     );
 }
 
-/// 保険の自動終了を既定（500 ms）にした起動の指定。
+/// 保険の自動終了を既定（500 ms）・待ちの締切を 120 秒にした起動の指定。
 fn smoke() -> RealRun {
-    RealRun::new(env!("CARGO_BIN_EXE_areka")).safety_exit(SMOKE_EXIT)
+    RealRun::new(env!("CARGO_BIN_EXE_areka"))
+        .safety_exit(SMOKE_EXIT)
+        .deadline(Duration::from_secs(120))
 }
 
-/// 起こして、子が自分で終わるのを待ち（窓口の締切 60 秒）、終わり方と出力の全文を返す。
+/// 起こして、子が自分で終わるのを待ち（窓口の締切 120 秒）、終わり方と出力の全文を返す。
 fn run_to_exit(spec: RealRun) -> (Ended, String) {
     let mut run = spec.spawn();
     let ended = run.wait_exit();
@@ -239,7 +240,7 @@ fn fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert() {
             );
         })
         .env("HOST32_TESTDLL_LOADU_FAIL", "1")
-        // 失敗（数秒）を自動終了より先に起こす。窓口の締切 60 秒の内側。
+        // 失敗（数秒）を自動終了より先に起こす。窓口の締切 120 秒の内側。
         .safety_exit(Duration::from_secs(20));
     let (ended, all) = run_to_exit(spec);
     let status = ended.status;
