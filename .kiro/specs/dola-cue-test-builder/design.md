@@ -52,7 +52,7 @@
 ### Revalidation Triggers
 
 - `TalkCue` のフィールドや `CueCommand::command_carrier` の署名が変わる（C27 の `dola-interrupt-ticks` が `crates/dola/` の全体に触る）＝直すのは `dola::cue::test_support::carrier_cue` の本文 1 か所。
-- `carrier_cue` の署名を変える＝写しの取り次ぎ 5 か所（再輸出 3・1 行の関数 1・`use` 1）が組めなくなる。呼び手 22 ファイルへは波及しない（名の層が吸う）。
+- `carrier_cue` の署名を変える＝写しの取り次ぎ 5 か所（再輸出 2・`use` 2・1 行の関数 1）が組めなくなる。呼び手 22 ファイルへは波及しない（名の層が吸う）。
 - `test-support` 機能の名や開き方を変える＝使い手 3 crate の `Cargo.toml` と runtime の機能の行。
 - runtime の `consumer_ledger::test_support` の開き方（`cfg(any(test, feature = "test-support"))`）が変わる＝runtime の dev の行と機能の前送りの両方が要るかを見直す。
 
@@ -237,6 +237,7 @@ mod tests;
 **Implementation Notes**
 - 本文は今の写しと同じ 1 式（`TalkCue { at: 0.0, actor: ActorKey::from(actor), command: CueCommand::command_carrier(name, tokens.iter().map(|t| t.to_string()).collect()), duration: 0.0 }`）。
 - `//!` と `///` の 1 行目は日本語（`CLAUDE.md` の `## Comments`）。spec 名・要件番号は書かない。
+- `///` に doc テストの例を付けない（rustdoc の doc テストは `test-support` 機能無しで組むので、例は組まれないか赤になる。働きは檻が固定する）。
 
 ### dola: 檻 `test_support_tests.rs`
 
@@ -259,7 +260,7 @@ mod tests;
 - `Cargo.toml`: `test-support = []`（依存を持たない空の機能）。docs.rs の表は `["toml"]` のまま。
 - README の段落の下書き（About の段落の直後・英語・議題 5）:
 
-  > The optional `test-support` feature exposes `dola::cue::test_support`, helpers that build cues for tests (for example a canonical command-carrier `TalkCue`). Enable it only from `[dev-dependencies]`; it is not part of the stable API and is not meant for production builds.
+  > The optional `test-support` feature exposes `dola::cue::test_support`, a helper that builds a canonical command-carrier `TalkCue` for tests. Enable it only from `[dev-dependencies]`; it is not part of the stable API and is not meant for production builds.
 
 ### 使い手: 写しの取り次ぎ 5 つ
 
