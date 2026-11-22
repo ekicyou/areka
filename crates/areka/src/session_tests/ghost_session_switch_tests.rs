@@ -164,13 +164,13 @@ fn rig_connect_fail_stops_kanade_with_fault() {
 // ── 台本の切替命令から切替先の定常到達までの 1 周 ──
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替（`OnGhostChanging` を送らせる）を命じる。
-const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
+pub(super) const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
 /// A の `OnGhostChanging` が返す送り出しの台本（B の `OnGhostChanged` の Ref1 に載る）。
 const A_SEND_OFF: &str = "\\0Bへ交代します\\e";
 
 /// A の偽の SHIORI: 標準の台本（`OnBoot`＝`on_boot`）に `OnGhostChanging`＝送り出しの台本と
 /// `OnGhostChanged`＝`on_changed` を足したもの。
-fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShiori {
+pub(super) fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShiori {
     FakeShiori::Scripted(Box::new(move || {
         standard_script(on_boot)
             .get("OnGhostChanging", Ok(Some(A_SEND_OFF.to_owned())))
@@ -179,14 +179,14 @@ fn ghost_a(on_boot: &'static str, on_changed: Option<&'static str>) -> FakeShior
 }
 
 /// B の偽の SHIORI: 標準の台本（`OnBoot` あり）に `OnGhostChanged` 204 を足したもの。
-fn ghost_b() -> FakeShiori {
+pub(super) fn ghost_b() -> FakeShiori {
     FakeShiori::Scripted(Box::new(|| {
         standard_script("\\0B\\e").get("OnGhostChanged", Ok(None))
     }))
 }
 
 /// A・B を据えた土台（窓の閉包の投函先つき・A は起動記録あり＝`OnBoot` の台本から始まる）。
-fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
+pub(super) fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
     let mut rig = switch_rig(vec![("A", a), ("B", b)]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));

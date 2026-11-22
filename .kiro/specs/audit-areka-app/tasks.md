@@ -77,7 +77,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 6.9, 7.2_
 
 - [ ] 6. SHIORI の試験用の脳を消す（G6・指摘 5・6・7・14・5.20）
-- [ ] 6.1 ゴーストの道のテストを本番の受け口で組み直す（指摘 14）
+- [x] 6.1 ゴーストの道のテストを本番の受け口で組み直す（指摘 14）
   - `ghost_session_scope_scale_boot_tests.rs` の `ghost_path` を `PropGetCueSink::new(reader, ghost_asker_id(..), tx)` で組み、`carrier_cue("get", &["property", "OnScaleProbe", NAMES..])` を 1 つ流して `KanadeMsg::PropertyEvent` の references を読む形にする（無い値は `""`）。4 行の説明も合わせる
   - 試験台と小道具は `ghost_session_switch_tests.rs` の `pub(super)` を使う
   - 完了の姿: テストが緑で、`ShioriHostSink` を使わず、問い手を `ghost_asker_id` から別の問い手に替えると赤（較正）
@@ -289,3 +289,4 @@
 
 - 4: strict テストの `fallback_attempts` で縛れるのは到達できる `fallback_boot_origin_missing` の記録だけ。`fallback_boot_wired_off`・`fallback_boot_failed` の event 欄はどのテストでも縛られていない（入力を別に組むテストが要る・21.1 で見る）
 - 5.2: `log_history::snapshot` が古い順に返すことを固定するテストは無い（逆順にしても crate 全体が緑）
+- 6.1: 倍率の名は問い手に関わらず同じ値なので、問い手の取り違えを赤にするために問い手ごとの名 `probe.owner` を 1 つ足して問う
