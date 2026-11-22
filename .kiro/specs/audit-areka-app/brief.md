@@ -153,3 +153,7 @@
 - **件 1（所見の文のパス）**: この brief の所見の文（2026-11-06〜11-21 の申し送りの節）に、移す前のパス（`boot_config.rs`・`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`session_end_sync_send_tests.rs`・`readonly_tests.rs` など）が残る。要件の段で `session/…`（`main_persist_wiring_seam_tests.rs` は `session/boot_seam_persist_wiring_tests.rs`）へ読み替える。
 - **件 2（呼び手の説明）**: `crates/areka/src/menu/mod.rs:223`・`:254`・`crates/areka/src/mcp/mod.rs:48` の doc は呼び手を `ghost_session::register_systems` と書く。関数ポインタ経由で今も正しいが、名目上の渡し手は `main.rs` の `BODY_SYSTEMS`。直すかどうかを見直しで決める。
 - 完了の時にその場で直したもの（この brief の件ではなくなった）: `doc/click-through.md:3`・`:136`、`tools/perf/invoke-perf-run.ps1:29`、`session/app_exit_tests.rs:182`、`areka-placement` の 4 か所、`doc/COMPAT_ARCHITECTURE.md` の `shell_balloon_resolve_tests.rs` の 4 か所。
+
+## 棚卸㊷からの申し送り（2026-11-22）
+
+- 本体の `crates/areka/src/runtime_tests/zorder_wiring_tests.rs` の作業番号の札つきのテスト 2 本（`t_zwi05_…`・`t_zwi08_…`）の名から札を外す（`test-name-work-tags` の受け持ちだったが、同じウェーブ C25 の `session-crate-split` がこのファイルの `include_str!` のパスを直すので、本体の残りを受け持つこの見直しへ寄せた）。外し方は `test-name-work-tags` と同じ＝札だけを外し、ぶつかるときだけ中身を表す語を足す。名指し（`doc/COMPAT_ARCHITECTURE.md` §8 ほか）も同じコミットで直す。

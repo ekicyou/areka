@@ -50,3 +50,14 @@
 - 振る舞いは変えない（名だけ）。1 つのファイルが 1,000 行を越えないのは今のまま。
 - 名の変更は機械的なので、実装は sonnet の初回で足りる見込み。
 - **優先度の区分**: A（ponytail の見直しの指摘＝開発者「とにかく指摘事項は全部直す方針です」）。版の段は v0.1.0 の後の隙間。規模は M（ファイルの数で決まる・8〜12 タスクの見込み）。
+
+## 2026-11-22 棚卸㊷の再測定（main `d4db9eb0`）
+- **前提の変化**: 無し（`fn t_…` は 29 ファイル・284 本のまま）。`session-module-gather` は本体の `runtime_tests/zorder_wiring_tests.rs` を動かしていない。
+- **触るファイル（穴）**: テストの名を文字列で並べる本体の 2 ファイルが起票の一覧に無かった＝`crates/areka/src/placement_tests/zorder_group_branch_coverage_tests.rs`（379 行・50 行が名を持つ）・`zorder_inversion_branch_coverage_tests.rs`（393 行・19 行）。名を変えたら同じコミットで直す。コメントの名指しは `spawn_assembly_tests.rs:154` のほかに `resolver_balloon_keyword_tests.rs:54`・`zorder_group_ledger_state_tests.rs:20`・`zorder_group_ledger_tests.rs:357`・`zorder_property_deferral_tests.rs`（6・20〜29・77・123・126 行）・`crates/areka-runtime/src/frame/zorder_drain_projection_tests.rs:531`。`doc/COMPAT_ARCHITECTURE.md` は 226・354・412 行（§8 の別々の行＝許す重なり）。
+- **規模**: 8〜12 タスク（前のまま）。
+- **先に要るもの**: 無い。
+- **同じウェーブに置けない相手**: `session-crate-split`（本体の `runtime_tests/zorder_wiring_tests.rs`＝向こうは `include_str!` のパスを直し、こちらは 2 本の名を変える）。`dola-cue-test-builder`（向こうが runtime の呼び手まで付け替えるときだけ `crates/areka-runtime/src/{window_state_cue_tests,zorder_cue_tests,zorder_wiring_tests}.rs`）。`dola-interrupt-ticks`（同じ 3 ファイルが `TalkCue` を組む）。C26 の見直し 3 本とは、`runtime_tests/zorder_wiring_tests.rs` が `audit-areka-app` の受け持つ範囲（本体の残り）に入るほかは 0。
+- **優先度の区分**: A（見直しの指摘＝開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（機械的な名の変更・実装は sonnet の初回で足りる見込み）。
+- **分割の案**: 無し。本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本を外して後の spec に渡すかは、ウェーブを組むときの決め。
+- **棚卸㊷の決め**: 本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本は範囲から外し、`audit-areka-app` へ渡した（同じウェーブ C25 の `session-crate-split` がこのファイルを直すため）。本体で触るのは `placement_tests/` の 2 ファイルだけ。

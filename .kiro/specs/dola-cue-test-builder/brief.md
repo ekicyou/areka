@@ -58,3 +58,16 @@ runtime の `carrier_cue(name, args)`（演者 `"0"` の既定）を残すか、
 - **要件定義のモデル**: Opus（置き場の裁定 1 つと機械的な付け替え）。
 - **議題**: 置き場（⑴〜⑶）・演者の既定を残すか。
 - **分割の案**: 無し。
+
+## 2026-11-22 棚卸㊷の再測定（main `d4db9eb0`）
+- **前提の変化**: 無し（`dola` の `cue/` は起票の後に動いていない）。
+- **見つけた穴（写しの数）**: 同じ本文の写しは 3 つでなく 5 つ。足りなかったのは `crates/areka-ghost/src/prop_get_sink_tests.rs:18` の `carrier(name, tokens)`（演者 `"0"`）と `crates/areka-runtime/src/frame_window_link_drain_tests.rs:31` の `carrier(actor, name, tokens)`。ほかに本体の session のテスト 3 本（`readonly_run_tests.rs:94`・`readonly_sites_tests.rs:118`・`write_failure_sites_tests.rs:139`）が `prop_set_cue`（演者 `"sakura"`・`PROP_SET_CUE_NAME` 固定）を同じ形で写している。`TalkCue { at: 0.0, … }` を直に書くテストは別に多い（`areka-ghost/tests/ghost/inproc_e2e_test.rs` ほか）＝範囲は名のある組み立ての関数だけにするかを要件の段で決める。
+- **見つけた穴（呼び手）**: runtime の `carrier_cue`・`actor_carrier_cue` の呼び手は 10 ファイルほどでなく 12（`window_state_cue_tests.rs`・`zorder_cue_tests.rs`・`zorder_wiring_tests.rs`・`move_cue_move_sink_tests.rs`・`move_cue_balloon_lock_tests.rs`・`user_break_cue_tests.rs`・`talk_lifecycle_signals_tests.rs`・`change_cue_tests.rs`・`reload_cue_tests.rs`・`switch_cue_tests.rs`・`user_break_cue_origin_tests.rs`・`script_restriction_tests.rs`）。本体にも 5 ファイル（`install/install_cue_tests.rs`・`update/update_cue_tests.rs`・`session/readme/readme_cue_tests.rs`・`session/runtime_boot_tests.rs`・`runtime_tests/consumer_ledger_agreement_tests.rs`）。seriko の `carrier_cue` の呼び手は 5 ファイル（`actor_bind_loop_tests.rs` ほか）。`crates/areka-sakura/src/compile_sheet_tests.rs` はテストの名に語が入るだけで写しではない。
+- **触るファイル**: `crates/dola/src/cue/command.rs`（または置き場の新しいファイル）・`crates/dola/Cargo.toml`（⑵ なら）・写しの 5 ファイル（`areka-ghost` の `prop_sink.rs`・`prop_get_sink_tests.rs`、`areka-seriko` の `actor_test_support.rs`、`areka-runtime` の `consumer_ledger_test_support.rs`・`frame_window_link_drain_tests.rs`）・使い手の `Cargo.toml`（⑵・⑶ なら）。呼び手の名（runtime の `carrier_cue`・`actor_carrier_cue`、seriko の `carrier_cue`）を、`dola` の組み立てを呼ぶだけの 1 行として残せば、呼び手のファイルには触らない。名を消すなら上の呼び手 22 ファイルにも触る。
+- **規模**: S（4〜6 タスク・写しが 5 つに増えた分）。
+- **先に要るもの**: 無い。
+- **同じウェーブに置けない相手**: `dola-interrupt-ticks`（`crates/dola/` の全体と使い手のテスト・こちらを先に入れると向こうが直す `TalkCue` の書き下しが減る）。呼び手まで付け替えるときだけ、`session-crate-split`（本体の 4 ファイル）・`test-name-work-tags`（runtime の 3 ファイル）・`audit-emo2-boot-switch`（`move_cue_*`・`change_cue_tests.rs`）・`audit-areka-install-update`（`install/`・`update/`・`session/readme/` の 3 ファイル）・`audit-areka-app`（`session/runtime_boot_tests.rs`・`runtime_tests/consumer_ledger_agreement_tests.rs`・`prop_set_cue` を寄せるなら session の 3 ファイル）。名を残す形なら、これらとはどれも 0。⑶ は `Cargo.lock` の席を取るので、`session-crate-split` と同じウェーブには置けない。
+- **優先度の区分**: A（見直しの指摘の取り残し・開発者「指摘事項は全部直す」）。
+- **要件定義のモデル**: Opus（置き場の裁定 1 つと機械的な付け替え。ワークスペースの `test-support` 機能の前例がある）。
+- **分割の案**: 無し。
+- **棚卸㊷の決め**: C25 に入れる条件＝呼び手の名（runtime の `carrier_cue`・`actor_carrier_cue`、seriko の `carrier_cue`）を `dola` の組み立てを呼ぶだけの 1 行として残し、呼び手の 22 ファイルに触らない。新しい crate（⑶）は取らない（`Cargo.lock` の席は `session-crate-split`）。名も消す形を選ぶなら、C26 の後・`dola-interrupt-ticks` の前へ下げる（開発者の決め）。
