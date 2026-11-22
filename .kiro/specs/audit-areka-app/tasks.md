@@ -63,7 +63,7 @@
   - 完了の姿: 4 通りのテストが緑で、`with_smoke` の `||` を `&&` にすると赤（較正）。既存の告知のテストも緑
   - _Dispatch: mechanical — 関数の形と 4 通りの期待を設計が与える_
   - _Requirements: 3.1, 4.1, 4.2, 7.2_
-- [ ] 5.2 記録の歴史の写し取りで、深い複製を排他の外へ出す（S4）
+- [x] 5.2 記録の歴史の写し取りで、深い複製を排他の外へ出す（S4）
   - 記録の列を `VecDeque<Arc<Record>>` にし、`rows()` は `&Record` を返し続ける。`snapshot` は排他の中で私有の口から `Vec<Arc<Record>>` を取り、排他の外で `Record::clone` する
   - 公開の `fn snapshot(Kind) -> Vec<Record>` の形と、記録の数の上限・押し出しの順は変えない
   - 完了の姿: `log_history_tests.rs`・`log_history_capture_tests.rs` が同じ表明のまま緑で、`snapshot` の公開の形の差分が 0 行
@@ -288,3 +288,4 @@
 ## Implementation Notes
 
 - 4: strict テストの `fallback_attempts` で縛れるのは到達できる `fallback_boot_origin_missing` の記録だけ。`fallback_boot_wired_off`・`fallback_boot_failed` の event 欄はどのテストでも縛られていない（入力を別に組むテストが要る・21.1 で見る）
+- 5.2: `log_history::snapshot` が古い順に返すことを固定するテストは無い（逆順にしても crate 全体が緑）

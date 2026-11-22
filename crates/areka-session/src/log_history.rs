@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 use std::fmt;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::ThreadId;
 
 use tracing::field::{Field, Visit};
@@ -268,7 +268,7 @@ pub(crate) const PER_KIND_CAP: usize = 1000;
 pub struct History {
     last_id: u64,
     /// 添え字は `Kind` の宣言順。
-    rows: [VecDeque<Record>; 5],
+    rows: [VecDeque<Arc<Record>>; 5],
 }
 
 impl History {
@@ -286,14 +286,14 @@ impl History {
         if row.len() >= PER_KIND_CAP {
             row.pop_front();
         }
-        row.push_back(Record {
+        row.push_back(Arc::new(Record {
             id: self.last_id,
             at,
             kind: draft.kind,
             label: draft.label,
             name: draft.name,
             body: draft.body,
-        });
+        }));
         self.last_id
     }
 
@@ -304,7 +304,11 @@ impl History {
 
     /// その種別の記録（古い順）。
     pub fn rows(&self, kind: Kind) -> impl Iterator<Item = &Record> {
-        self.rows[kind as usize].iter()
+        self.rows[kind as usize].iter().map(|r| &**r)
+    }
+
+    fn rows_shared(&self, kind: Kind) -> Vec<Arc<Record>> {
+        self.rows[kind as usize].iter().cloned().collect()
     }
 }
 
@@ -331,9 +335,10 @@ pub fn last_id() -> u64 {
 }
 
 /// その種別の記録を写して返す（古い順・最大 [`PER_KIND_CAP`] 件）。
-/// 排他を握るのは写す間だけで、呼び手は排他の外で絞って整形する。
+/// 排他の中では共有の参照を写すだけで、深い複製は排他の外で行う。
 pub fn snapshot(kind: Kind) -> Vec<Record> {
-    lock(&STORE).rows(kind).cloned().collect()
+    let shared = lock(&STORE).rows_shared(kind);
+    shared.iter().map(|r| Record::clone(r)).collect()
 }
 
 /// 現地時刻（`GetLocalTime`・分まで）。
