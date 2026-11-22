@@ -256,7 +256,7 @@ fn silent() -> FakeShiori {
 
 /// A を窓ごと起こして定常にし、B へ切り替えて B の窓と定常まで回す。窓を開くたびに
 /// `after_char_pointer` → `after_balloon_pointer`、起こすたびに `cue_sinks` → `after_runtime_wired`、
-/// `overwrite_between` は B の `cue_sinks` より前、B の定常で `on_switch_end(true)` → `on_steady`。
+/// メニューからの切替要求は `update_busy` を 1 回読み、`overwrite_between` は B の `cue_sinks` より前、B の定常で `on_switch_end(true)` → `on_steady`。
 #[test]
 fn body_slots_follow_the_boot_and_switch_order() {
     reset();
@@ -337,6 +337,7 @@ fn body_slots_follow_the_boot_and_switch_order() {
                 "cue_sinks",
                 "after_runtime_wired",
                 "on_steady",
+                "update_busy",
                 "overwrite_between",
                 "cue_sinks",
                 "after_runtime_wired",
