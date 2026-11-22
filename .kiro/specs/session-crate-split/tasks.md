@@ -162,7 +162,7 @@
   - _Boundary: PathRewrite（コード）_
   - _Dispatch: mechanical — 書き換えを対応表が与える_
   - _Requirements: 7.1, 7.2, 7.3_
-- [ ] 6.2 (P) 文書・網羅台帳・道具の説明のパスを書き換え、網羅の報告を作り直す
+- [x] 6.2 (P) 文書・網羅台帳・道具の説明のパスを書き換え、網羅の報告を作り直す
   - `doc/COMPAT_ARCHITECTURE.md` のパスの行だけ（§8 を含む）・網羅台帳 `doc/ukadoc-coverage/ledger/{sakura-script,property,shiori,assets}.toml` の別々の行・`doc/ukadoc-coverage/briefing-assets.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`doc/ideas/` の 8 ファイル・`tools/package.ps1`（3 か所）・`tools/perf/judge-perf.py`（1 か所）のパスを移した先へ書き換える。`doc/pasta-real-run.md`（127・141 行の `RUST_LOG`）・`doc/ssp-mcp/log-convention.md`（決まりの表の外の例とパス。表の行は 4.3 が持つ）・`doc/testing.md` の出所の名前もここで替える。§8 の名の行は触らない（`test-name-work-tags` の行の隣で競合しうる）
   - `doc/ukadoc-coverage/report/` は手で直さず `ukadoc-survey` で作り直す
   - `cargo run -p ukadoc-survey -- check` が緑
@@ -224,3 +224,4 @@
 - 3.2: 本体へ移す `shell_balloon_switch_session_update_tests.rs` は集めた層の `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_on` ほかを使う。3.4 で移すときと 4.2 の公開面で、その小道具を `test-support` の条件で開ける（または小道具の置き場を決める）。
 - 3.4: 集めた層に残る `reload_skin_tests.rs` のために `session/reload_test_support.rs`（`boot_context`・`plant_skin_switch`、今は `#[cfg(test)] pub(crate) mod test_support`）を足した。4.1 の `lib.rs` で `ghost_switch_test_support` と同じ `test-support` の条件で宣言するかを決める。lap_tests の小道具（`lap_rig_on` ほか）も同じく 4.1・4.2 で置き場を決める。
 - 4.1: crate の lib として組むと、本体が使う `pub(crate)` の項目が死んだコードの警告になる（`--lib` 439・`--features test-support` 466・`--tests` 32）。公開面は 4.2 が本体のコンパイラの指摘から決めるので、4.1 の門は「エラー 0」とし、3 つの確かめの警告 0 は 4.2 の門へ移した（タスクの並びの直し・設計の中身は変えない）。`areka-update` は集めた層のコードが使わないので本番の依存から外した（要件 3.6）。
+- 6.2: `crates/areka-placement/examples/window-placement.rs:37` が古い `crates/areka/src/smoke_exit.rs` を名指す（areka-placement は約束で触らない・7.6 の申し送りへ）。前からある文書の食い違い（COMPAT の `fault_of_returns_the_fault_only_for_kanade_stopped_fault`・`matching_is_case_sensitive`、`briefing-assets.md:262` の実在しない `crates/areka-parsers/src/package/resolve.rs` ほか約 12 件）は、この spec では直さず 7.6 の申し送りへ。

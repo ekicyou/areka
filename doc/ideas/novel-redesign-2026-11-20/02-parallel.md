@@ -90,7 +90,7 @@ areka は、流れどうしを裁かない。主の流れの命令も、並走�
 
 ### 受け口
 
-- 並びは 13 個（`crates/areka/src/session/runtime_boot.rs:80-94`）。約束は `BootCueSink: CueSink + Send`（`crates/areka-ghost/src/sink.rs:35-45`。`clone_box` と `begin_talk`）。
+- 並びは 13 個（`crates/areka-session/src/runtime_boot.rs:80-94`）。約束は `BootCueSink: CueSink + Send`（`crates/areka-ghost/src/sink.rs:35-45`。`clone_box` と `begin_talk`）。
 - **複製の寿命を、主のトークの始まりと終わりとして数える受け口が 2 つ在る。** `BalloonLifecycleSink` は、複製の最初の `emit`（cue の種類を問わない）で `TalkStarted` を送り（`crates/areka-runtime/src/talk_lifecycle.rs:270-279`）、落ちる時に `TalkEnded` を送る（`:253-267`）。`NoUserBreakCueSink` も同じ形（`crates/areka-runtime/src/user_break_cue.rs:146-167`）。
 - seriko は、届いた cue ごとにトークの起点を見積もり直す（`crates/areka-seriko/src/actor.rs:601`・`looper.rs:378`）。
 - 「どの命令を、どの受け口が拾うか」の表は `crates/areka-runtime/src/consumer_ledger.rs:340-` の `CANONICAL_ROWS`。コンパイルが読む命令の担当 `ScriptCompile` が在る（`:143-148`）。strict の判定はこの表を引く（`strict_judges.rs:30-32`）。

@@ -26,7 +26,7 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   SMOKE_EXIT_MS_SHORT   = 420000  短時間水準（7 分）の有界自動終了ミリ秒
   SMOKE_EXIT_MS_LONG    = 1500000 長時間水準（25 分＝20 分超）の有界自動終了ミリ秒
   SMOKE_EXIT_ENV_NAME             有界自動終了を有効化する環境変数名
-                                  （実装: crates/areka/src/smoke_exit.rs の SMOKE_EXIT_ENV）
+                                  （実装: crates/areka-session/src/smoke_exit.rs の SMOKE_EXIT_ENV）
   RUST_LOG_VALUE                  実走時のログフィルタ（段階別計時ログを debug で出す）
   NO_COLOR_VALUE                  実行ログの色付けを止める（run.log を人が grep できる形で残す）
   CPU_SAMPLE_INTERVAL_SEC = 15    CPU 時系列の採取間隔（秒）

@@ -19,7 +19,7 @@
 
 - どこ: `01` の 5.6（`\x`）・5.7（続きを示すキューコマンド）。`05` の要件 17・5.10「SHIORI が答えなくても、遊ぶ人は必ず出られる」。骨組みの 5 章。
 - 何: kanade は、話の最中の終了の指示を控えるだけで、`TalkDone` を待つ（`crates/areka-kanade/src/schedule/steady.rs:881-884`）。控えを消化するのは、話していない時の刻み（`:697-701`）と `TalkDone`（`:858-860`）だけである。そのうえ、控えている間は、マウスの GET を出さない（終了は `:79-87`、切り替えは `:88-95`）。
-- なぜ困る: `\x` にも続きにも、時間切れが無い（続きは、引数に書いた時だけ）。メニューで「終了」を選んでも、舞台の窓の × を押しても、吹き出しを押すまで終わらない。`05` が頼る 30 秒の上限は、`OnClose` を投げた後の別れの台詞の待ちの物で、控えている間には効かない。絵のクリック → 並走の早送りの道（決め A）は、GET が出ないので閉じる。字の無い 1 本や、画面の全体を領域にした透明なアクターで進める演劇では、押せる吹き出しが無く、抜けられない。演劇では、どの行も末尾でクリック待ちになるので、これがふつうの状態である。Alt+F4 も、メニューの「終了」と同じ要求になる（`crates/areka/src/session/app_exit.rs:262-301`）。今ある抜け道は、キャラ窓の Ctrl+Shift+左ダブルクリックの強制退避だけである（`crates/areka-input/src/lib.rs:504-506`）。舞台の窓は、入口が別なので、それも通らない。`01` の 5.7「kanade がイベントを送れない時は `ResolveNext` だけを送る」は、解けた後の話で、解く手が無い場合を覆わない。
+- なぜ困る: `\x` にも続きにも、時間切れが無い（続きは、引数に書いた時だけ）。メニューで「終了」を選んでも、舞台の窓の × を押しても、吹き出しを押すまで終わらない。`05` が頼る 30 秒の上限は、`OnClose` を投げた後の別れの台詞の待ちの物で、控えている間には効かない。絵のクリック → 並走の早送りの道（決め A）は、GET が出ないので閉じる。字の無い 1 本や、画面の全体を領域にした透明なアクターで進める演劇では、押せる吹き出しが無く、抜けられない。演劇では、どの行も末尾でクリック待ちになるので、これがふつうの状態である。Alt+F4 も、メニューの「終了」と同じ要求になる（`crates/areka-session/src/app_exit.rs:262-301`）。今ある抜け道は、キャラ窓の Ctrl+Shift+左ダブルクリックの強制退避だけである（`crates/areka-input/src/lib.rs:504-506`）。舞台の窓は、入口が別なので、それも通らない。`01` の 5.7「kanade がイベントを送れない時は `ResolveNext` だけを送る」は、解けた後の話で、解く手が無い場合を覆わない。
 - 直す向き: 「終了・切り替えを控えた時に、主の流れがクリック待ち（`\x`・続き）なら、その 1 本を閉じる」を決めて書く（選択待ちの `CancelChoice` と同じ、Close の道。`crates/areka-ghost/src/dispatcher.rs:240-260`）。kanade は、クリック待ちに入った事を知らないので、`ChoiceWaiting` と同じ形の知らせが要る（`crates/areka-sakura/src/drive.rs:426-469`）。
 - 直すのは: 単位の文書（`01`・`05`）。骨組みの 5 章に 1 行。開発者に諮る（4 章の 2）。
 
@@ -170,7 +170,7 @@
   - areka-sakura: `compile.rs`（120〜330・400〜500）・`drive.rs`（225〜638）。areka-ghost: `dispatcher.rs`（40〜450）・`ticker.rs`（50〜72・195〜226）・`sink.rs`（25〜60）。areka-talk: `lib.rs`（72〜92）。
   - areka-kanade: `actor.rs`（1〜30 と `Action` の包み）・`schedule/mod.rs`（96〜155・360〜380・560〜590・652〜680）・`steady.rs`（60〜96・384〜416・600〜626・684〜712・728〜920）・`mouse_events.rs`（150〜222）・`translate.rs`（180〜215）・`events.rs`（304〜314）。
   - areka-runtime: `balloon_visibility_decision.rs`（90〜309）・`balloon_visibility_wait.rs`（84〜253）・`talk_lifecycle.rs`（60〜284）・`talk_clock.rs`（1〜130）・`user_break_cue.rs`（140〜170）・`consumer_ledger.rs`（138〜150・228〜286・336〜368）・`frame.rs`（222〜232・290〜330）・`lib.rs`（684〜712）・`move_cue.rs`（205〜216・340〜354）。
-  - ほか: `areka-seriko/src/talk.rs`（全部）・`actor.rs`（596〜604）・`looper.rs`（374〜380）・`bind.rs`（297〜309）・`areka-emo-text/src/state.rs`（300〜335・530〜553）・`areka-input/src/shell_box.rs`（138〜150）・`areka/src/session/runtime_boot.rs`（70〜100）・`wintf/src/ecs/dola/mod.rs`（70〜215）・`wintf/src/ecs/world/mod.rs`（568〜584）・`areka-parsers/src/sakura/decode.rs`（474〜510）・`doc/COMPAT_ARCHITECTURE.md`（131 行）。
+  - ほか: `areka-seriko/src/talk.rs`（全部）・`actor.rs`（596〜604）・`looper.rs`（374〜380）・`bind.rs`（297〜309）・`areka-emo-text/src/state.rs`（300〜335・530〜553）・`areka-input/src/shell_box.rs`（138〜150）・`areka-session/src/runtime_boot.rs`（70〜100）・`wintf/src/ecs/dola/mod.rs`（70〜215）・`wintf/src/ecs/world/mod.rs`（568〜584）・`areka-parsers/src/sakura/decode.rs`（474〜510）・`doc/COMPAT_ARCHITECTURE.md`（131 行）。
   - grep で確かめた物: `fastforward|fastmode|quicksection` が 0 件・`resolve_click` の呼び手・`tick_dola_animators|DolaAnimator` の在る所・`start_talk(` と `Action::StartTalk` の在る所・`fn begin_talk` の実装 3 つ・`pending_close` の在る所。
 - **読んだだけの物（裏を取っていない）**:
   - 時刻の土台が、どういう形で着地するか（brief を読んだだけ。設計は無い）。見つけた事の 3・4・5 は、brief の字面からの読みである。

@@ -58,9 +58,9 @@
 - トークの番号は、1 から始まる増える一方の番号（`crates/areka-kanade/src/schedule/types.rs:266-272`）。
 - 字の合図は、字のかたまり（タグとタグの間）ごとに 1 つ。合図の `actor` は、その時のスコープの番号の文字列（`crates/areka-sakura/src/compile.rs:187-191`・`:484-493`）。サーフェス `\s[…]` は `Emote{key}` で、同じく `actor` にスコープが載る（同 `:193-202`）。`%username` などは、展開した字で届く（同 `:313-320`）。
 - 出どころ `ScriptOrigin` は、`SenderType` の語・SSTP の種類・実効のレベルの組。レベルは下げるだけ（`crates/areka-talk/src/origin.rs:119-125`・`:170-181`）。
-- 台本のスレッドの受け口から UI へ知らせる前例: `BalloonLifecycleSink`（`crates/areka-runtime/src/talk_lifecycle.rs:154-168`・複製で状態を戻す `:238-247`・落ちる時に送る `:253-267`）。受け口の並びは `crates/areka/src/session/runtime_boot.rs:61-104` で組む（「名前で自分宛だけを拾う物は、末尾に足して構わない」同 `:53-59`）。
+- 台本のスレッドの受け口から UI へ知らせる前例: `BalloonLifecycleSink`（`crates/areka-runtime/src/talk_lifecycle.rs:154-168`・複製で状態を戻す `:238-247`・落ちる時に送る `:253-267`）。受け口の並びは `crates/areka-session/src/runtime_boot.rs:61-104` で組む（「名前で自分宛だけを拾う物は、末尾に足して構わない」同 `:53-59`）。
 - 台本のスレッドの受け口から kanade へ頼む前例: `PropGetCueSink`（`crates/areka-ghost/src/prop_get_sink.rs:118-124`）。
-- プロセスに 1 つの、上限つきで鍵（`Mutex`）つきの記録の置き場の前例: ログの履歴（`crates/areka/src/session/log_history.rs:6-7`・`:13`）。これは MCP の `get_log` の物で、バックログではない（再生した台本の原文を `script` の種別に残す・同 `:81-82`）。
+- プロセスに 1 つの、上限つきで鍵（`Mutex`）つきの記録の置き場の前例: ログの履歴（`crates/areka-session/src/log_history.rs:6-7`・`:13`）。これは MCP の `get_log` の物で、バックログではない（再生した台本の原文を `script` の種別に残す・同 `:81-82`）。
 
 ### 4.2 イベントを投げる道
 
@@ -100,7 +100,7 @@ ukadoc（URL は `https://ukatech.shillest.net/ukadoc-spec/`）:
 |----|--------|----------------|
 | `areka-parsers`（`sakura/decode.rs`・`model.rs`） | `\__v[…]` と裸の `\__v` を、運搬名つきの汎用コマンドにする腕（`\v`・`\j` と同じ流儀＝`decode.rs:294-297`・`:364-367`） | ㋐ |
 | `areka-runtime` | `backlog.rs`（置き場と模型。純粋）・`backlog_cue.rs`（受け口 `BacklogCueSink`）・表の行 | ㋐ ㋑ |
-| `areka`（`session/runtime_boot.rs`） | 置き場を作り、受け口を並びの末尾に足し、置き場の手元を World に据える | ㋐ |
+| `areka-session`（`runtime_boot.rs`） | 置き場を作り、受け口を並びの末尾に足し、置き場の手元を World に据える | ㋐ |
 | `areka-kanade`・`areka-ghost` | `KanadeMsg::MarkSelect` と運行表の腕（`schedule/anchor.rs` の隣）。UI から kanade へ渡す道は、アンカーと同じ（`crates/areka-ghost/src/dispatcher.rs:55`・`:150`） | ㋑ |
 | `areka-runtime`（`consumer_ledger.rs`） | 1 つの命令に受け口を並べる直し（5.9） | ㋑ か、先に要る単位 |
 | 一覧の窓 | 描く所。windows-reactor を待つ（5.8） | ㋒ |
@@ -309,7 +309,7 @@ areka が持つ状態と、それを入れる物:
 - `crates/areka-parsers/src/sakura/decode.rs`・`model.rs`: 再生の制御（`\_q`・`\x`）・並走。
 - `crates/areka-runtime/src/consumer_ledger.rs` と一致のテスト・見本: `play` の行を足す単位の全部と、`sakura-raise-directive`。
 - `crates/areka-kanade/src/msg.rs`・`request_origin.rs`・`schedule/`: 再生の制御・`sakura-raise-directive`・`key-press-event`。
-- `crates/areka/src/session/runtime_boot.rs`（受け口の並び）: 受け口を足す単位の全部。
+- `crates/areka-session/src/runtime_boot.rs`（受け口の並び）: 受け口を足す単位の全部。
 
 順番: ㋐（正典だけ）は、待つ物が無い。㋑ は、取り決めの名前・`sakura-raise-directive`・表の直しの後。㋒ は、windows-reactor の後。
 
@@ -332,7 +332,7 @@ areka が持つ状態と、それを入れる物:
 
 ### 置いた仮定
 
-1. バックログの寿命は、ゴーストの実行系の寿命。切り替え・終了・読み直しで、実行系を作り直す時に空になる（作り直しの道は `crates/areka/src/session/ghost_session_runtime.rs:95`・`crates/areka/src/session/reload.rs:327` に在る。中は読んでいない）。
+1. バックログの寿命は、ゴーストの実行系の寿命。切り替え・終了・読み直しで、実行系を作り直す時に空になる（作り直しの道は `crates/areka-session/src/ghost_session_runtime.rs:95`・`crates/areka-session/src/reload.rs:327` に在る。中は読んでいない）。
 2. 上限は 1000 項目。メモリだけ。ファイルに残さない。
 3. 貯めるのは、配られた字。途中で置き換えられた 1 本は、配られた分まで。
 4. 選択肢は、表示の文を貯め、選んだ答えは貯めない。

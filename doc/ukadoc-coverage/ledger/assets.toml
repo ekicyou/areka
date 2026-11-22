@@ -3287,7 +3287,7 @@ note = """
 実装済み。areka-parsers の package::resolve がこの欄を読み、マウントの readme として持つ。右クリックのメニューの「説明書」と \\![open,readme] が、その名前をゴーストの置き場に継ぎ足したファイルを既定の関連付けで開く。欄が無いときは readme.txt を使う。
 壊れ方: 無い。欄が指すファイルが実在しないときは、メニューの「説明書」の項目を灰色で出す（枠は消さない）。
 ログ: ファイルが無いときは debug! を、開けなかったときはパスと符号を添えた error! を残す。
-根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka/src/session/readme.rs。
+根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka-session/src/readme.rs。
 列挙の読み手: areka-ghost の catalog::list_ghosts もこの欄を読み（無ければ readme.txt）、ゴーストのフォルダ最上位に実在するときだけその所在を Identity の readme として持つ（所在の解決のみで開かない・areka-P0-baseware-root-layout 要件 2.4）。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
 束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_shell の name,シェル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。

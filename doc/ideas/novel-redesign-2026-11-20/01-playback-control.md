@@ -14,7 +14,7 @@
   - pasta（読むだけ）: `final-model-2026-11-19.md` の 8 章と追記・取り決めの brief の「決定（最終形）」と 2026-11-20 の節。
   - コード: `crates/dola/src/cue/{schedule,runtime,command,sheet,sink}.rs`（全部）・`crates/areka-sakura/src/compile.rs`（100〜549）・`drive.rs`（230〜末尾）・`contract.rs`（全部）・`crates/areka-ghost/src/dispatcher.rs`（1〜445）・`crates/areka-kanade/src/actor.rs`（頭）・`schedule/mod.rs`（60〜250・360〜703）・`schedule/steady.rs`（670〜884）・`schedule/balloon_events.rs`（頭〜140）・`crates/areka-runtime/src/balloon_visibility_wait.rs`（頭〜250）・`balloon_visibility_decision.rs`（全部）・`talk_clock.rs`（頭〜125）・`crates/areka-emo-text/src/sink.rs`（60〜175）・`state.rs`（300〜345・505〜553）・`crates/areka-talk/src/lib.rs`（40〜116）・`crates/areka-input/src/shell_box.rs` の判定 2 つ。
   - ukadoc（MCP）: `\_q`・`\![quicksection,true]`・`\![quicksection,false]`・`\x`・`\x[noclear]`・`\![enter,nouserbreakmode]`。
-- 読んでいない物: steering の 3 本・roadmap・`status.rs`・`crates/areka/src/session/reload.rs`（頭の 60 行だけ）・文字の層の印の描き方・UI の押下の入口（前の検証が読んだ事実を使う）。
+- 読んでいない物: steering の 3 本・roadmap・`status.rs`・`crates/areka-session/src/reload.rs`（頭の 60 行だけ）・文字の層の印の描き方・UI の押下の入口（前の検証が読んだ事実を使う）。
 
 ## 2. この単位は何か
 
