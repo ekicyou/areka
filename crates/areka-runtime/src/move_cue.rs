@@ -25,7 +25,7 @@ pub use args::parse_move_directive;
 
 #[path = "move_cue_geometry.rs"]
 mod geometry;
-pub use geometry::{BaseposResolver, CanonDefaultBasepos};
+use geometry::{BaseposResolver, CanonDefaultBasepos};
 
 #[path = "move_cue_place.rs"]
 mod place;

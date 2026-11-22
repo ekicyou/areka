@@ -18,7 +18,7 @@ use super::{
 /// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
 /// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
 /// 名乗ると、表示を失う側へ倒れるためである。
-pub fn decide(
+pub(super) fn decide(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
     now_talk_time: Option<f64>,

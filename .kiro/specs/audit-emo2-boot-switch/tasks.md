@@ -80,7 +80,7 @@
   - _Dispatch: standard — 29 本の移しと据え付けの削りを組めるように直す_
   - _Requirements: 3.1, 3.3, 4.4, 4.6, 4.7, 5.4, 6.1, 6.6, 6.7_
 
-- [ ] 3.3 `areka-runtime` の公開を、テストを戻した後の使い手で数え直す（T7・7・36・37・38 番・件 3）
+- [x] 3.3 `areka-runtime` の公開を、テストを戻した後の使い手で数え直す（T7・7・36・37・38 番・件 3）
   - 箱の上の滞在の確定を `pub(crate)` に、ホバーの注入の mod を `pub(crate)` に、移動の cue の出し直しを私有の取り込みにする（型シームは残す）
   - 3.2 で使い手を失った渡し口・テストの開け口・支えの項目と、`areka-runtime` の 9 つ（私有 8・`pub(super)` 1）を狭める。`areka-runtime` の外に使い手があるかを項目ごとに grep で確かめる
   - 完了: ワークスペースが組め、狭めた項目の外の使い手が 0 件であることを grep で確かめ、`areka-runtime` と本体のテストが緑
@@ -202,3 +202,7 @@
   - _Depends: 7.1_
   - _Dispatch: mechanical — 回すコマンドと確かめる差分を設計が与える_
   - _Requirements: 4.4, 4.5, 6.5, 6.6, 6.7, 6.8, 7.2, 7.3, 7.4, 7.5, 7.10, 8.1, 8.2, 8.3, 8.4, 8.5, 9.4, 9.5_
+
+## Implementation Notes
+- 3.3: 署名の鎖で開いていた可視性の型（`VisibilityAction`・`VisibilityLogEvent` ほか）も、外の使い手が 0 なので私有・`pub(crate)` へ戻した。外に使い手があって `pub` に残したのは `BalloonVisibilityState`・`VisibilityDecision` と `timeout_notice`・`ScopeObservation` の型・`Frame` の 7 つの口と `TALK_ID`・`seen`・`notify_timeout`・`configured_timeout_secs`・`phase::run_balloon_visibility_phase`。
+- 2.2 は ghost_switch の filter だけで通し、同じ crate の口の束の順のテストを赤にしていた（`4cb2d09e5` で直した）。触った crate は lib 全体を回してから閉じる。

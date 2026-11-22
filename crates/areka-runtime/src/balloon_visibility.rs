@@ -85,7 +85,7 @@ mod decision;
 #[path = "balloon_visibility_wait.rs"]
 mod wait;
 
-pub use decision::decide;
+use decision::decide;
 use decision::hide_reaches_boxes;
 pub use wait::configured_timeout_secs;
 #[cfg(test)]
@@ -95,7 +95,7 @@ use wait::{parse_timeout_ms, resolve_timeout_secs};
 /// （同じ数値を複数箇所へ散らさない）。
 ///
 /// 30 秒は正典が沈黙する領域の areka 裁量であり、互換対応表へ記録する対象である。
-pub(crate) const DEFAULT_BALLOON_TIMEOUT_SECS: f64 = 30.0;
+const DEFAULT_BALLOON_TIMEOUT_SECS: f64 = 30.0;
 
 /// 既定の待ち時間を短縮するための環境変数名。
 ///
@@ -105,7 +105,7 @@ const TIMEOUT_ENV_KEY: &str = "AREKA_BALLOON_TIMEOUT_MS";
 
 /// 採用した待ち時間がどこから来たか（ログの `source` フィールド）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TimeoutSource {
+enum TimeoutSource {
     /// [`DEFAULT_BALLOON_TIMEOUT_SECS`]（環境変数が未設定、または不正で縮退した場合）。
     Default,
     /// 環境変数 [`TIMEOUT_ENV_KEY`] による短縮指定。
@@ -128,7 +128,7 @@ impl TimeoutSource {
 /// [`VisibilityTrigger::Explicit`] 以外は判断中核が導き、`Explicit` だけは配線層が前フレームとの
 /// 差分から導く（判断中核は自分が発行していない遷移を知らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisibilityTrigger {
+enum VisibilityTrigger {
     /// 可視コンテンツの配置（可視グリフ数の増加）。
     Content,
     /// 内容の全消去（可視グリフ数のゼロへの下降）。
@@ -147,7 +147,7 @@ pub enum VisibilityTrigger {
 
 impl VisibilityTrigger {
     /// ログの `trigger` フィールドへ書く語（実機サインオフの検索語）。
-    pub(crate) fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             VisibilityTrigger::Content => "content",
             VisibilityTrigger::Clear => "clear",
@@ -164,13 +164,12 @@ impl VisibilityTrigger {
 ///
 /// 「選択肢の表示中」は抑止に数えない。選択を待つ間はトークの終わりが届かないので
 /// 計測の手前で止まり、待ちが解けた後に残る選択肢の行は時間切れを止める理由にならない。
-// 公開の `VisibilityLogEvent::TimeoutSuppressed` が名指すので開ける
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct SuppressionKinds {
+struct SuppressionKinds {
     /// いずれかのバルーン窓がドラッグ中。
-    pub dragging: bool,
+    dragging: bool,
     /// いずれかの**可視**バルーンの上にポインタが滞在中。
-    pub hover: bool,
+    hover: bool,
 }
 
 impl SuppressionKinds {
@@ -181,9 +180,8 @@ impl SuppressionKinds {
 }
 
 /// タイムアウト計測を破棄した理由（ログ用）。
-// 公開の `VisibilityLogEvent::MeasurementDiscarded` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MeasurementDiscardReason {
+enum MeasurementDiscardReason {
     /// 次の会話が始まった。
     TalkStarted,
     /// 占有終端が現在時刻より未来へ更新された（選択肢バリア解除後の cue 到着）。
@@ -194,7 +192,7 @@ pub enum MeasurementDiscardReason {
 
 impl MeasurementDiscardReason {
     /// ログの `reason` フィールドへ書く語（実機サインオフの検索語）。
-    pub(crate) fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             MeasurementDiscardReason::TalkStarted => "talk_started",
             MeasurementDiscardReason::DisplayEndAdvanced => "display_end_advanced",
@@ -212,7 +210,7 @@ impl MeasurementDiscardReason {
 /// ここでは扱わない——その記録は失敗の検出点である配線層の `error!` が担い、判断中核は
 /// 「観測が無い」を入力の一形態として受け取るだけである。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VisibilityLogEvent {
+enum VisibilityLogEvent {
     /// 可視状態が遷移した（契機・対象 scope・遷移後の可視状態）。
     Transition {
         scope: u32,
@@ -249,7 +247,7 @@ pub enum VisibilityLogEvent {
 ///
 /// 記録の語に「中断」は使わない——最後まで流れたトークでも止まった時刻が終端より早く読まれうる。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum MeasurementOrigin {
+enum MeasurementOrigin {
     /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（talk 相対秒）を採った。
     StoppedAt(f64),
     /// 占有区間の終端を採った（止まった時刻が終端以後）。
@@ -266,7 +264,7 @@ pub enum MeasurementOrigin {
 
 impl MeasurementOrigin {
     /// ログの `origin` フィールドへ書く語。
-    pub(crate) fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             MeasurementOrigin::StoppedAt(_) => "stopped_at",
             MeasurementOrigin::DisplayEnd => "display_end",
@@ -279,7 +277,7 @@ impl MeasurementOrigin {
 
 /// 表示の側が知るトークの終わり。
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub(crate) enum TalkEnd {
+enum TalkEnd {
     /// まだ届いていない（時間切れの計測を始めない）。
     #[default]
     NotYet,
@@ -291,7 +289,7 @@ pub(crate) enum TalkEnd {
 
 /// 判断中核が配線層へ依頼する行動。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VisibilityAction {
+enum VisibilityAction {
     /// 当該 scope のバルーンを可視化する。
     Show { scope: u32 },
     /// 列挙した scope のバルーンをまとめて不可視にする（`scopes` は scope 昇順）。
@@ -302,15 +300,15 @@ pub enum VisibilityAction {
 }
 
 /// [`decide`] の返り値。行動とログを分けて返し、発行もログ出力も配線層に委ねる。
-// 公開の `decide` が名指すので開ける
+// 公開の `test_support::Frame::run` が返すので開ける
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct VisibilityDecision {
     /// 発行する行動。並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で、
     /// 各行動の中の scope は昇順で固定する。
-    pub actions: Vec<VisibilityAction>,
+    actions: Vec<VisibilityAction>,
     /// ログ用の事象。並びは「信号の畳み込み → 中断の非表示（scope 昇順）→ 可視コンテンツ駆動の
     /// 遷移（scope 昇順）→ 計測と満了」で固定する。
-    pub logs: Vec<VisibilityLogEvent>,
+    logs: Vec<VisibilityLogEvent>,
     /// 時間切れで隠したフレームにだけ立つ、いま出ている台詞のトークの番号。
     /// 利用者の中断・内容の消去・外からの非表示・抑止の間は立たない。
     pub timeout_notice: Option<TalkId>,
@@ -320,13 +318,12 @@ pub struct VisibilityDecision {
 ///
 /// 数と回数を組として型で縛るのは、片方だけが更新される記憶（回数だけ進み数が古いまま）を
 /// 作れなくするため。
-// 公開の `ScopeObservation::visible_glyphs` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GlyphObservation {
+struct GlyphObservation {
     /// リビール済みの可視グリフ数（`TextLayerState::visible_glyphs`）。
-    pub count: usize,
+    count: usize,
     /// その scope の内容が消された回数（`TextLayerState::clear_count`）。
-    pub clear_count: u64,
+    clear_count: u64,
 }
 
 /// ある scope について本フレームに観測した値。
@@ -338,21 +335,21 @@ pub struct ScopeObservation {
     /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗・注入時刻なし）。
     /// その場合は増加も下降も判定せず、直前に観測できた値を次フレームの比較相手として
     /// 保持する——観測できないフレームを「ゼロへ下降した」と読んで消してしまわないため。
-    pub visible_glyphs: Option<GlyphObservation>,
+    visible_glyphs: Option<GlyphObservation>,
     /// 現に可視か（本番では `EmoPresenter::target_visible`）。判断の真実源。
-    pub visible: bool,
+    visible: bool,
     /// この scope のバルーンの上にポインタが滞在しているか（本番では
     /// `BalloonHover::is_balloon_hovered`）。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番ではポインタ配線そのものの不在）。
     /// その場合は抑止しない側として扱う（消えないまま固着する側へ倒さない）。
-    pub hover: Option<bool>,
+    hover: Option<bool>,
     /// この scope の箱（シェル内バルーン）のどれかに文字が出ているか。
     /// 既定は偽で、偽なら判断は箱を足す前と同じになる。
     ///
     /// 中断と時間切れの対象は「窓が見えている、または箱に文字が出ている」scope である。
     /// 窓を出す判断（`decide_content`）はこの欄を読まない。
-    pub box_showing: bool,
+    box_showing: bool,
 }
 
 /// 本フレームの観測スナップショット。
@@ -360,30 +357,30 @@ pub struct ScopeObservation {
 /// `scopes` の母集合は装着済みのバルーン scope（本番では装着済みバルーン資産のキー）。
 /// 空（装着前）のときは [`decide`] が自然に何もしない。
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct VisibilityObservations {
+struct VisibilityObservations {
     /// scope 番号 → 観測値。
-    pub scopes: BTreeMap<u32, ScopeObservation>,
+    scopes: BTreeMap<u32, ScopeObservation>,
     /// 本フレームに受け取った表示ライフサイクル信号（到着順＝FIFO）。
     ///
     /// 本番では `RuntimeWiring` の受信端を配線層が全件取り出して渡す。受け取りは配線層の仕事だが、
     /// 受け取った信号が計測へ及ぼす作用（会話開始での破棄・占有終端の更新）は判断であり、
     /// ここで扱う。
-    pub lifecycle: Vec<TalkLifecycleSignal>,
+    lifecycle: Vec<TalkLifecycleSignal>,
     /// いずれかのバルーン窓がドラッグ中か。
     ///
     /// 本番の観測は world の問い合わせ（ドラッグ標識つきバルーン窓の有無）であり、失敗しうる
     /// 借用や不在の資源を経由しないため、`hover` と違って「観測できない」
     /// 状態を持たない。
-    pub dragging: bool,
+    dragging: bool,
 }
 
 /// scope ごとの前フレーム状態（エッジ検出のための記憶）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScopeVisibility {
+struct ScopeVisibility {
     /// 直近に**観測できた**可視グリフ数。観測が取れなかったフレームでは更新しない。
-    pub last_glyphs: usize,
+    last_glyphs: usize,
     /// 直近に観測できた消去の回数（`last_glyphs` と同じフレームでだけ更新する）。
-    pub last_clear_count: u64,
+    last_clear_count: u64,
     /// 前フレーム終了時点の可視状態（本判断が同フレームで発行した遷移を反映した値）。
     ///
     /// 用途は**自分が発行していない可視性遷移の検出**（`trigger=explicit` のログと、非表示へ
@@ -398,7 +395,7 @@ pub struct ScopeVisibility {
     /// 外因遷移の検出が偽の `trigger=explicit` を出して不要なポインタ滞在の掃除まで走る。配線層はこれを避けるため、表示が可視に至らなかった
     /// scope についてこの値を発行前の観測値へ戻す（`roll_back_show`）。相関数は本モジュールの
     /// 子モジュールにあるため、この非公開フィールドへ直接書き戻せる。
-    pub prev_visible: bool,
+    prev_visible: bool,
 }
 
 /// 観測が取れなかったことを既に 1 回記録したか（配線層専用・ログ抑制）。
@@ -469,7 +466,7 @@ impl BalloonVisibilityState {
     /// （消えた古いバルーンを「外から隠された」と読まない）。見えるバルーンが無くなるので計測も
     /// 止める。文字の数の記憶は保つ——消すと、表示の済んだ文字が次のフレームで増加の縁に化け、
     /// 新しいバルーンが台詞の外で出てしまう（次の台詞で現れるのが正しい）。
-    pub fn forget_scope(&mut self, scope: u32) {
+    pub(crate) fn forget_scope(&mut self, scope: u32) {
         if let Some(previous) = self.per_scope.get_mut(&scope) {
             previous.prev_visible = false;
         }

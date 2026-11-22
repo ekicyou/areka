@@ -152,7 +152,7 @@ const MAX_WAIT_SECS: f64 = 3600.0;
 
 /// 待ち時間の起こし方（[`visibility_wake`] の答え）。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum VisibilityWake {
+enum VisibilityWake {
     /// まだ待ち時間が残っている——この長さだけ後に起こす。
     After(Duration),
     /// 期限は既に来ていて抑止も無い——次の画面更新で見直す。
@@ -169,7 +169,7 @@ pub(crate) enum VisibilityWake {
 /// 引き算が数にならない期限（非有限）も預けない。そういう期限は満了の比較そのものが成立せず
 /// （表示を保持したまま動かない）、起こしても判断が変わらないからである。素通ししても心拍が
 /// 定期的に見に来る。
-pub(crate) fn visibility_wake(
+fn visibility_wake(
     now_talk_time: Option<f64>,
     deadline: Option<f64>,
     suppressed: bool,
@@ -511,89 +511,79 @@ fn log_external_transitions(
 // ⑸ 行動の発行
 // ---------------------------------------------------------------------------
 
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は相関数が使う（道と名前は同じ）。
-#[cfg(feature = "test-support")]
-pub use test_open::{IssueOutcome, clear_hover_residency, issue_actions};
-#[cfg(not(feature = "test-support"))]
-use test_open::{clear_hover_residency, issue_actions};
+/// 発行の結果（後段のログと掃除が要る分だけ）。
+struct IssueOutcome {
+    /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
+    hidden: Vec<u32>,
+    /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
+    not_shown: Vec<u32>,
+}
 
-mod test_open {
-    use super::*;
-
-    /// 発行の結果（後段のログと掃除が要る分だけ）。
-    pub struct IssueOutcome {
-        /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
-        pub hidden: Vec<u32>,
-        /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
-        pub not_shown: Vec<u32>,
-    }
-
-    /// 判断が返した行動を表示層へ発行する。
-    ///
-    /// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
-    /// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない）。
-    /// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
-    /// キャラクター窓には触れない。
-    ///
-    /// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
-    /// 同じ scope の箱を隠す印も立てる。窓の非表示は今までどおり
-    /// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
-    pub fn issue_actions(
-        presenter: &mut EmoPresenter,
-        world: &mut World,
-        runtime: &Rc<RefCell<TextLayerRuntime>>,
-        state: &mut BalloonVisibilityState,
-        observations: &VisibilityObservations,
-        actions: &[VisibilityAction],
-    ) -> IssueOutcome {
-        let mut hidden = Vec::new();
-        let mut not_shown = Vec::new();
-        for action in actions {
-            match action {
-                VisibilityAction::Show { scope } => {
-                    if !issue_show(presenter, world, *scope) {
-                        roll_back_show(state, observations, *scope);
-                        not_shown.push(*scope);
-                    }
-                }
-                VisibilityAction::HideScopes { scopes, trigger } => {
-                    for &scope in scopes {
-                        presenter.apply(
-                            world,
-                            PresentCommand::Hide {
-                                target: balloon_target(scope),
-                                reply: None,
-                            },
-                        );
-                        hidden.push(scope);
-                    }
-                    let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
-                    hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
+/// 判断が返した行動を表示層へ発行する。
+///
+/// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
+/// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない）。
+/// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
+/// キャラクター窓には触れない。
+///
+/// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
+/// 同じ scope の箱を隠す印も立てる。窓の非表示は今までどおり
+/// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
+fn issue_actions(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    runtime: &Rc<RefCell<TextLayerRuntime>>,
+    state: &mut BalloonVisibilityState,
+    observations: &VisibilityObservations,
+    actions: &[VisibilityAction],
+) -> IssueOutcome {
+    let mut hidden = Vec::new();
+    let mut not_shown = Vec::new();
+    for action in actions {
+        match action {
+            VisibilityAction::Show { scope } => {
+                if !issue_show(presenter, world, *scope) {
+                    roll_back_show(state, observations, *scope);
+                    not_shown.push(*scope);
                 }
             }
+            VisibilityAction::HideScopes { scopes, trigger } => {
+                for &scope in scopes {
+                    presenter.apply(
+                        world,
+                        PresentCommand::Hide {
+                            target: balloon_target(scope),
+                            reply: None,
+                        },
+                    );
+                    hidden.push(scope);
+                }
+                let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
+                hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
+            }
         }
-        IssueOutcome { hidden, not_shown }
     }
+    IssueOutcome { hidden, not_shown }
+}
 
-    // ---------------------------------------------------------------------------
-    // ⑺ ポインタ滞在記録の掃除
-    // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ⑺ ポインタ滞在記録の掃除
+// ---------------------------------------------------------------------------
 
-    /// 不可視へ落ちた scope のポインタ滞在の記録を落とす。
-    ///
-    /// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
-    /// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
-    /// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
-    pub fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
-        if scopes.is_empty() {
-            return;
-        }
-        let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
-            return;
-        };
-        for &scope in scopes {
-            wiring.clear_balloon_hover(scope as usize);
-        }
+/// 不可視へ落ちた scope のポインタ滞在の記録を落とす。
+///
+/// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
+/// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
+/// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
+fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
+    if scopes.is_empty() {
+        return;
+    }
+    let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
+        return;
+    };
+    for &scope in scopes {
+        wiring.clear_balloon_hover(scope as usize);
     }
 }
 

@@ -8,7 +8,7 @@ use areka_emo_compose::BoxName;
 use areka_emo_text::actor::ShownBox;
 
 /// 毎フレームの整え: 滞在している箱が `shown_boxes` に無ければ `None` へ戻す。
-pub fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<BoxName> {
+pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<BoxName> {
     prev.filter(|p| shown.iter().any(|b| &b.name == *p))
         .cloned()
 }

@@ -31,7 +31,8 @@ pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
 }
 
 /// グリフ数の観測が取れなかった scope（本番では文字層ランタイムの借用失敗）。
-pub fn unobserved(visible: bool) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn unobserved(visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: None,
         visible,
@@ -41,7 +42,8 @@ pub fn unobserved(visible: bool) -> ScopeObservation {
 }
 
 /// ポインタが滞在している scope にする。
-pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn hovered(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: Some(true),
         ..observation
@@ -49,7 +51,8 @@ pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
 }
 
 /// 抑止条件の観測が 1 つも取れなかった scope にする。
-pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
+#[cfg(test)]
+pub(super) fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: None,
         ..observation
@@ -57,7 +60,7 @@ pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation
 }
 
 /// 観測スナップショットを組む。引数の並び順は結果に影響しない（走査は scope 昇順）。
-pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
+pub(super) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
     VisibilityObservations {
         scopes: entries.iter().copied().collect::<BTreeMap<_, _>>(),
         ..VisibilityObservations::default()
@@ -69,7 +72,8 @@ pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservatio
 /// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
 /// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
 /// テストのどれかが必ず落ちる。
-pub fn step(
+#[cfg(test)]
+pub(super) fn step(
     state: &mut BalloonVisibilityState,
     entries: &[(u32, ScopeObservation)],
 ) -> VisibilityDecision {
@@ -139,13 +143,15 @@ impl Frame {
     }
 
     /// 任意の合図を本フレームに届ける（到着順に積む）。
-    pub fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
+    #[cfg(test)]
+    pub(super) fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
         self.obs.lifecycle.push(signal);
         self
     }
 
     /// いずれかのバルーン窓がドラッグ中である状態にする。
-    pub fn dragging(mut self) -> Self {
+    #[cfg(test)]
+    pub(super) fn dragging(mut self) -> Self {
         self.obs.dragging = true;
         self
     }
@@ -154,27 +160,4 @@ impl Frame {
     pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
         decide(state, &self.obs, self.now, self.timeout_secs)
     }
-}
-
-// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
-// 本番の可視性は変えない）。
-#[cfg(feature = "test-support")]
-use super::ScopeVisibility;
-
-/// [`BalloonVisibilityState`] の scope ごとの前フレームの状態（`per_scope`）。
-#[cfg(feature = "test-support")]
-pub fn per_scope(state: &mut BalloonVisibilityState) -> &mut BTreeMap<u32, ScopeVisibility> {
-    &mut state.per_scope
-}
-
-/// [`BalloonVisibilityState`] の表示の占有の終わり（`display_end`）。
-#[cfg(feature = "test-support")]
-pub fn display_end(state: &BalloonVisibilityState) -> Option<f64> {
-    state.display_end
-}
-
-/// [`BalloonVisibilityState`] が実行系の借用の失敗を記録したか（`observation_failure_logged.runtime`）。
-#[cfg(feature = "test-support")]
-pub fn observation_failure_logged_runtime(state: &BalloonVisibilityState) -> bool {
-    state.observation_failure_logged.runtime
 }

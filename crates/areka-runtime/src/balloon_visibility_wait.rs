@@ -23,7 +23,7 @@ use super::{
 /// `0` を受理しないのは、会話の表示終了と同時にバルーンが消えてしまい、実機サインオフで
 /// 「既定時間の経過で消える」ことを観測できなくなるためである。`u64::from_str` が負号・小数点・非数字・範囲超過をいずれも `Err`
 /// にするため、それらは自然に不正側へ落ちる。
-pub(crate) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
+pub(super) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
     let trimmed = value.map(str::trim)?;
     if trimmed.is_empty() {
         return None;
