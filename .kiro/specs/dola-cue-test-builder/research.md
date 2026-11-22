@@ -146,3 +146,58 @@
 
 - 分析の型: 既存の前例（`test-support` 機能 3 crate）と 5 つの写しの引数の照合を中心に、`crates-io.ps1`・`test-all.ps1`・`package.ps1`・見張りのテストを読んだ。外のクレートの調べは要らなかった（新しい依存は無い）。
 - 次: 要件の討議（`/kiro-requirements-discussion dola-cue-test-builder`）で 6.1 の議題を決め、その後 `/kiro-design dola-cue-test-builder`。
+
+---
+
+# 設計の段の記録（2026-11-22・`/kiro-spec-design -y`）
+
+> 調べた時点: ブランチ `claude/kiro-start-dola-cue-test-builder-294439`（`716b279d`）。main は `20cbb202` へ進んだが、間に入ったのは roadmap の文書だけで、この spec が触るファイルは動いていない。
+
+## 8. 要約
+
+- **発見の型**: 軽い発見（Extension）。新しい外の依存は無く、外の調べ（WebSearch）は要らない。前例（ワークスペースの `test-support` 機能 3 crate）と 5 つの写しの今の字面を読み直して、ギャップ分析の事実を確かめた。
+- **確かめた事実**:
+  - 5 つの写しの本文と取り込みは §2.2 のとおり。写しを消して使われなくなる取り込みは runtime `frame_window_link_drain_tests.rs:7` の `ActorKey`・`CueCommand` だけ（同じファイルの他の行に出ない）。ghost の 2 ファイルは `ActorKey`・`CueCommand` を `CueCommand::Text` の合図でまだ使う。
+  - seriko の写しの呼び手 5 ファイルは `use super::test_support::*;`（`actor.rs:813` の `#[cfg(test)] #[path = "actor_test_support.rs"] mod test_support;`）のグロブで引く。グロブは再輸出（`pub(super) use`）も拾うので、写しの本文を再輸出 1 行に替えても呼び手は変わらない。
+  - runtime の呼び手は `use crate::consumer_ledger::test_support::{carrier_cue, …}`・`actor_carrier_cue` を名で引き、本体の 5 ファイルは `areka_runtime::consumer_ledger::test_support::carrier_cue` を名で引く。名が残れば、本文が関数でも再輸出でも呼び手は変わらない。
+  - `dola` の `cue/mod.rs` は `command` を私有のモジュールに置き、型を `pub use` で出す。組み立てのモジュールは `cue/` の中に新しいファイルで足せ、`crates/dola/src/lib.rs`（`ukadoc-survey` の見張りが名指す）に触らない。
+  - `crates/dola/README.md` は英語で、`toml` 機能の説明が About の段落と Key features の箇条に 1 つずつ在る。
+  - 全体テストの段（`tools/test-all.ps1`）は `cargo test --workspace`・`cargo test -p dola --features toml`・`tools/crates-io.ps1` の 3 つがこの spec に響く。どれも足す段は要らない。
+  - 本番の配布物は `tools/package.ps1` の `cargo build --locked --release -p areka -p areka-mcp-bridge` で組む。dev の依存の機能は本番の組み立てに入らない（runtime の `test-support` と同じ理屈）。
+
+## 9. 設計で決めたこと（§6.1 の議題への答え・設計の討議で確かめる）
+
+| 議題（§6.1） | 決めた形 | 理由 |
+|---|---|---|
+| 1 置き場 | 案 A＝`dola::cue::test_support` モジュール（`#[cfg(any(test, feature = "test-support"))] pub mod test_support;`）の自由関数 | ワークスペースの前例（placement・input・runtime）と同じ形で、`test_support` の字面で grep すれば開く口が見つかる。案 C（`cfg` 付きの `impl TalkCue`）は前例と形が違い、将来の本番の組み立てと名がぶつかりうる |
+| 2 名と引数 | `pub fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue` | 5 つの写しが全部この形。`impl Into<…>` へ広げても使い手が 0 で、型推論の曖昧さだけが増える（Simplification）。名は写し 3 つ（ghost `prop_sink.rs`・seriko・runtime）と同じ `carrier_cue` |
+| 3 演者の既定 | 要件の【決め 2】のまま（`dola` は既定を持たない） | ― |
+| 4 docs.rs の表 | `[package.metadata.docs.rs] features` は `["toml"]` のまま（`test-support` を足さない） | 足すと docs.rs の文書の面がテスト専用の口のぶん増え、要件 2.2 の「既定の公開の面を今と同じに」と向きが逆になる。機能の存在は README が伝える |
+| 5 README | About の段落の後に `test-support` の短い段落を 1 つ足す（英語・`toml` の説明と同じ調子） | Key features の箇条は利用者向けの能力の一覧で、テスト専用の口は載せる類でない |
+| 6 同じファイルの中だけの写し | 引数の形が `dola` と同じもの（ghost `prop_sink.rs` の `carrier_cue`・runtime `frame_window_link_drain_tests.rs` の `carrier`）は関数を消して `use` 1 行で名を受ける（後者は `as carrier`）。演者を取らない ghost `prop_get_sink_tests.rs` の `carrier(name, tokens)` は `"0"` を渡す 1 行の関数で残す | 呼び手の行を 1 つも変えずに本文が消える。`prop_get_sink_tests.rs` を直に呼ぶ形にすると呼び手 10 行ほどに `"0"` を書き足すことになる |
+| 2 と 6 の続き（呼び手の名の取り次ぎ） | 引数の形が同じ名（seriko の `carrier_cue`・runtime の `actor_carrier_cue`）は再輸出 1 行（`pub(super) use …;`・`pub use … as actor_carrier_cue;`）。runtime の `carrier_cue(name, args)` は今の本文 `actor_carrier_cue("0", name, args)` のまま | 再輸出は本文を持たない 1 行で、名と引数の形がそのまま残る（要件 3.2）。関数で包むと同じ署名を 2 か所に書くことになる |
+| 7 檻の置き場 | 新しい兄弟 `crates/dola/src/cue/test_support_tests.rs`（`test_support.rs` から `#[cfg(test)] #[path = "test_support_tests.rs"] mod tests;`） | `structure.md` の兄弟の規則（`foo.rs` → `foo_tests.rs`）どおり。`command_tests.rs` は `command` の檻で、組み立ての檻を混ぜると持ち主がぼやける |
+
+## 10. 合成（design-synthesis）の結果
+
+- **一般化**: 写しの 5 つは「演者・名・トークンから正準のキャリアの合図を組む」1 つの働きの変種で、違いは演者 `"0"` を固定で渡すか否かだけ。働きは `dola` の 1 関数、演者の既定は呼び手の名の側（【決め 2】）に置けば全部が包める。正準でない合図（`noncanonical_custom_cue`・`broken_custom_cue`）や時刻の違う合図へ広げる一般化は、要件の外なので取らない。
+- **作るか借りるか**: 借りるものは無い（外の crate の話ではない）。中身は既存の `CueCommand::command_carrier` に委ね、`TalkCue` の 4 つのフィールドを埋めるだけ。
+- **削ったもの**: 引数の総称化（`impl Into`）・演者の既定を持つ 2 つめの関数・`TalkCue` の付属関数・docs.rs への掲載・`cue/mod.rs` の型の表への行の追加（表は「提供する型」の一覧で、機能の裏の関数 1 つは載せる類でない）・新しい段の `test-all.ps1` への追加（`cargo test --workspace` と各 crate の単独の確かめで足りる）。
+
+## 11. 危うさと手当て
+
+| 危うさ | 手当て |
+|---|---|
+| runtime の dev の `dola` の行を書き忘れると `cargo test -p areka-runtime` 単独だけが赤（`--workspace` では機能が合わさって隠れる） | 実装の確かめで `-p dola`・`-p areka-ghost`・`-p areka-seriko`・`-p areka-runtime`・`-p areka` を単独で回す |
+| runtime の `test-support` に `"dola/test-support"` を書き忘れると、本体のテストが `areka_runtime::consumer_ledger::test_support` を組めない | `cargo test -p areka` を単独で回す |
+| 本番の組み立てに `dola/test-support` が入る | `cargo tree -p areka -e normal,features -i dola` の出力に `test-support` が無いことを確かめる |
+| `Cargo.lock` が動く | `git diff --exit-code Cargo.lock`（機能と、既に在る依存への dev の行だけなので動かない見込み） |
+| 写しを消した後の使われない取り込み | ビルドの警告を 0 にする（runtime `frame_window_link_drain_tests.rs` の `ActorKey`・`CueCommand` が当たる） |
+| テストの数が変わる | 付け替えの前と後で各 crate の `cargo test -- --list` の数を比べる（`dola` だけ檻のぶん増える） |
+
+## 12. 参照した規則とスキル
+
+- `.claude/skills/kiro-spec-design/rules/design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`
+- `.kiro/steering/structure.md` の Unit Tests の兄弟の規則（`foo.rs` → `foo_tests.rs`）・グロブと明示 import の解決順（E0659 の注意）・`areka-runtime` の Features の節
+- `CLAUDE.md` の `## Comments`（コードと `Cargo.toml` のコメントに spec・要件・タスクの番号を書かない・`pub` の項目の doc の 1 行目は日本語）
+- 外のスキル（設計・アクセシビリティ・UX）は、画面を持たないテストの支えの整理なので当たらない
