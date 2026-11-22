@@ -4268,3 +4268,105 @@ Fable
 - **Existing Spec Updates**: 見込みの C24 の条件 2 つ（`audit-areka-input-menu` の範囲・`session-module-gather` と本体の `runtime_tests/mod.rs`）を確かめて C24 を見込みどおりに組み、`audit-areka-app` の申し送りの持ち主を寄せ直して C26 の 3 本の重なりを 0 に戻した（「棚卸㊶の裁定」）。
 - **Specs (dependency order)**: なし。
 
+
+## 2026-11-22 棚卸㊸退避（`roadmap.md` から逐語で移した・main `312a2f18`）
+
+### 旧「ウェーブ編成」の節（表・開始コマンド・その先のウェーブ）
+
+## ウェーブ編成（着手順の正本・2026-11-22 棚卸㊷）
+
+> 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸㉞までの実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 5 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の**別々の行**・説明書 `dist/README.txt` の**別々の行**。文書だけの段は置かない。
+> **並び順の決まり（2026-10-07 開発者・10-05 の 3 段を改めた）**: 依存の木（働きの依存＋同じソースファイルを触る spec＋直列の列の順）の**先頭**だけを候補にし、**① ぶら下がる未完了の spec が多い ② 区分が高い（A ＞ B ＞ C ＞ D）③ 起票が古い**の順に並べ、上から互いに触るファイルが重ならないものを**最大 8 本**取る。据え置き・保留・取り下げ予定は木に入れない。**測ることが本体の spec はウェーブに並べない**（ほかの仕事を汚し、汚される）。区分 A でぶら下がる数が同じものは、開発者が「高」「早めに」と言ったものを先にした（棚卸㉓の読み＝違えば直す）。
+> **版の段が最上位の物差し（2026-10-15 開発者・`/kiro-discovery`「版の段」・2026-10-16 改め）**: **今の版（まだ公開していない最も若い版）が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者「ゴールが近いので他の版の割り込みは避けて」）。空いた席に入れてよいのは「版に縛らない」列のうち、今の版の着地までのウェーブ数を増やさないものだけ（同日・開発者「版に含めてもよいが、その場合、0.0.3 の着地（ウェーブ数）が増えることのないように」）＝先頭で、今の版の spec と触るファイルが重ならず、今の版が使う 1 本だけの席を取らず、見立ての上限がそのウェーブで一番大きい今の版の spec の下限以下で、人や外の待ちも、静かな机も、前後の全体テストの比べも要らないもの（判定の正本は `/kiro-next` のスキルの「Version gate」）。迷ったら席は空けておく。今の版の中は上の並び順の決まりで並べ、先頭を全部取ってから、空いた席を版に縛らない列の先頭（同じ並び順）で埋める。版に縛らない列の後続は待つ相手が着地してから・v0.2.0 の間は改造に触れないものだけ（「版の段」の注意）。
+> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C25 は `session-crate-split`（クレート `areka-session` を足す・外の新しい crate は無い見込み）・見込みの C26〜C28 は空き ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行）＝C25〜C27 は空き（`balloon-text-visual-tree` は C28 の見込み）。
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **C25**（3 本・v0.2.0 の前に済ませる crate 分けと見直し 3 本・Fable 0・Opus 3） | ① ✅ `session-crate-split`（11-22 着地・A・13〜16・本体の crate 分けの直列の最後・ぶら下がる数がいちばん多い＝本体の見直し 3 本と、その先の v0.2.0 の大半）② ✅ `test-name-work-tags`（11-22 着地・A・8〜12・テストの名の作業番号の札 29 ファイル 284 本）③ ✅ `dola-cue-test-builder`（11-22 着地・A・S 4〜6・合図の組み立てのテスト用の写し 5 つを `dola` の 1 つに） | 下の塊 | 触るファイル＝① 本体の `crates/areka/src/session/` の 122 ファイルを新しい `crates/areka-session/` へ移す・`session::` を使う本体の 117 ファイル（根の 9・`install/` 20・`mcp/` 20・`menu/` 19・`update/` 11・`runtime_tests/` 24・`roots/` 6・`cli/` 4・`offline_dump/` 4）・`runtime_tests/zorder_wiring_tests.rs` の `include_str!` の 2 行・`tests/emo2_mcp_real_run.rs`・`tests/smoke_boot_loop_exit.rs`・本体と根の `Cargo.toml`・`Cargo.lock`・real-run-kit の `launch.rs`・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`・パスを名指すコメント（`crates/areka-runtime/src/talk_clock.rs:229`・`user_break_cue.rs:79`・`placement_tests/transition_judge_offset_signoff_tests.rs:57`・`crates/areka-kanade/src/schedule/script_log.rs:16`・`crates/areka/tests/emo2_real_run.rs:58`）・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・§8 のパスの行 ② `crates/areka-placement/` のテスト 20 ファイル・`crates/areka-runtime/` のテスト 8 ファイル（`window_state_cue_tests.rs`・`zorder_cue_tests.rs`・`zorder_wiring_tests.rs`・`frame/zorder_*_tests.rs`・`frame_schedule_tests.rs`）・本体の `placement_tests/zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs`（名を文字列で並べる）・名指すコメント・§8 の名の行（226・354・412 行） ③ `crates/dola/src/cue/command.rs`（か置き場の新しいファイル）・`crates/dola/Cargo.toml`・写しの 5 ファイル（`crates/areka-ghost/src/prop_sink.rs`・`prop_get_sink_tests.rs`、`crates/areka-seriko/src/actor_test_support.rs`、`crates/areka-runtime/src/consumer_ledger_test_support.rs`・`frame_window_link_drain_tests.rs`）・使い手の `Cargo.toml`（機能の行）。**同じウェーブの約束**: ⑴ `test-name-work-tags` は本体の `runtime_tests/zorder_wiring_tests.rs` に触らない（札つきの 2 本は本体の残りを受け持つ `audit-areka-app` へ渡した・両方の brief に書いた）。本体で触るのは `placement_tests/` の 2 ファイルだけ。 ⑵ `dola-cue-test-builder` は呼び手の名（runtime の `carrier_cue`・`actor_carrier_cue`、seriko の `carrier_cue`）を `dola` の組み立てを呼ぶだけの 1 行として残し、呼び手の 22 ファイル（本体 5・runtime 12・seriko 5）に触らない。新しい crate を足す形（brief の ⑶）は取らない。名も消す形を選ぶなら C25 から外し、C26 の後・`dola-interrupt-ticks` の前へ下げる（要件の段の開発者の決め）。 ⑶ `session-crate-split` は `crates/areka-runtime/`・`crates/areka-kanade/` にパスの名指しのコメントのほか触らず、`crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/` と本体の `placement_tests/` に触らない。 ⑷ `doc/COMPAT_ARCHITECTURE.md` §8 は ① のパスの行と ② の名の行（別々の既にある行・許す重なり）。 ⑸ `Cargo.lock` の席は ①（③ の機能の行は `Cargo.toml` だけ）。 |
+| **次のウェーブの候補**（次の棚卸で組む） | **今の版は v0.2.0**（18 本・まだ公開していない）。C25 の後の見込みは下の「その先のウェーブ」（C26〜C28）。windows-rs の移行の本体（6〜8 本の見込み）は、まだ開発者の判定（先進坑の一次記録 `crates/pilot/examples/pilot-windows-rs-next/README.md` の判定の欄と、git 版とリリースの兼ね合いの案 A／案 B）を待つ＝今の見込みに数えていない（覚え書き「windows-rs の移行の本体」）。移行の本体を数えない v0.2.0 の着地は**約 5 ウェーブ（C25〜C29 の見込み・席と重なりで C30 に溢れうる）**で、前の見込み（C24〜C29）と同じ終わり（新しく起票された見直しの取り残し 2 本は C25 の空き席に入った）。一番長い道は、本体の crate 分けの最後（`session-crate-split` C25）→ 本体の見直し（`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch` C26）→ `dola-interrupt-ticks`（1 本だけで C27）→ `draw-methods-canon`・`sylphya-sqlite-kvs`・`balloon-text-visual-tree` ほか（C28）→ `balloon-script-offset-align`・`talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property` ほか（C29）。版の外の spec を待つ v0.2.0 は 3 本のまま（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`・決めはまだ開発者から返っていない＝「棚卸㊷の裁定」の 8）。v0.2.0 で待つ相手の無い先頭は 0 本（`balloon-text-visual-tree` は `audit-areka-install-update` の `mcp/dump_balloon.rs` と `session-crate-split` の `runtime_tests/frame_attach_carry_tests.rs` を待つ）。待ちの突き合わせは各 brief の最新の「再測定」の節と history「2026-11-22 棚卸㊷退避」 | — | — |
+| **ウェーブの外** | 測ることが本体（静かな机で 1 本ずつ）＝`present-emit-tail-latency`・`install-live-target-hazards`・`real-run-input-guard-observations`・`helper-first-load-refusal`・`pasta-idle-surface-cost-measure`（2026-11-14 `wintf-visual-damage-redraw` の完了の棚卸で起票・同 spec の着地の後）／外の待ち＝`winget-release-automation`（winget-pkgs の手提出 PR 450070〔v0.0.2〕が取り込まれたら席の空きに挟む）／余力の枠＝`multi-ghost-runtime` → `ghost-call`（v0.1.0 は公開した＝行き先は開発者の決め・history「2026-11-06 棚卸㉟退避」の旧「棚卸㉞の裁定」の 9） | — | 机の空きを開発者が決めたときに 1 本ずつ挟む。重い走行は赤が出たテストに絞り、全体の負荷の走行は最後の 1 回だけ（1 回 約 50 分） |
+| **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
+
+**C25 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊をコピーのボタンつきで出す・`/kiro-wave` はこの塊と spec 台帳の Fable の列を読む）:
+
+```
+Wave C25 3本（見直しと crate 分け 3本）
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start session-crate-split
+/kiro-start test-name-work-tags
+/kiro-start dola-cue-test-builder
+```
+
+### その先のウェーブ（2026-11-22 の見込み）
+
+見込みは次の棚卸で測り直す（C25 が全部着地したと置いて組んだ・v0.2.0 の spec と、v0.2.0 が待つ見直しと crate 分けだけで組んだ＝割り込みはその棚卸で選ぶ。windows-rs の移行の本体はまだ起票していないので入れていない）。前の見込みからの動き: C25 に起票したての見直しの取り残し 2 本（`test-name-work-tags`・`dola-cue-test-builder`）を約束つきで入れた。C26・C27 は前の見込みどおり。C28 は前の見込みの文の 7 本を表にした（棚卸㊵より前の測りのまま運んだ＝C28 が近づいたら測り直す）。
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C26（見込み・3 本） | `audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch` | C25 の全部の着地（3 本とも `session-crate-split` を待つ・範囲の大半が crate 分けで動く）。`audit-areka-app` は `test-name-work-tags` から本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本を受け取る。3 本の重なりは、ほかの 2 本の持ち物を指す申し送りを持ち主が直す約束で 0（棚卸㊶）。`dola-cue-test-builder` が呼び手の名を残した形で着地していること（消す形なら呼び手の 22 ファイルがこの 3 本の範囲と重なる） | どれも Opus |
+| C27（見込み・1 本） | `dola-interrupt-ticks` | C26 の全部の着地と `dola-cue-test-builder` の着地（`crates/dola/` の全体と使い手のテストに触る・6 つの crate に触るので 1 本だけで） | Fable（dola の時刻の型＝前例の無い公開の口） |
+| C28（見込み・7 本） | `draw-methods-canon`・`sylphya-sqlite-kvs`・`balloon-text-visual-tree`・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata`・`instant-to-interrupt-ticks` | C27 の全部の着地（時刻の型の使い手の追従の後）。`balloon-text-visual-tree` は `audit-areka-install-update`（C26）の後。7 本の重なりは C28 が近づいた棚卸で測り直す | `draw-methods-canon`・`sylphya-sqlite-kvs` は Fable、ほかは Opus |
+
+C28 の後も v0.2.0 は約 1 ウェーブ（C29 の見込み）と windows-rs の移行の本体（起票の後に数え直す）が残る＝C29 `balloon-script-offset-align`・`talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property`・`ghost-alias-file`・`draw-methods-blend`・`compose-f16-precision`・`seriko-talk-clock-fidelity`（席と重なりで C30 に溢れうる）。`doc-compat-architecture-rename` は crate 分けと名指す見直しの 3 本が着地した後の 1 ウェーブ（C27 以降）。
+
+```
+Wave C26（見込み）3本（見直しと crate 分け 3本）
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start audit-areka-app
+/kiro-start audit-areka-install-update
+/kiro-start audit-emo2-boot-switch
+```
+
+```
+Wave C27（見込み）1本（v0.2.0 1本）
+【本来の次の版 v0.2.0】
+Fable
+/kiro-start dola-interrupt-ticks
+```
+
+```
+Wave C28（見込み）7本（v0.2.0 7本）
+【本来の次の版 v0.2.0】
+Fable
+/kiro-start draw-methods-canon
+/kiro-start sylphya-sqlite-kvs
+Opus
+/kiro-start balloon-text-visual-tree
+/kiro-start ghost-switch-balloon-fallback
+/kiro-start talk-thread-count-growth
+/kiro-start talk-script-metadata
+/kiro-start instant-to-interrupt-ticks
+```
+
+
+### 覚え書き「`image-webp` の取り込みを外す作業」の確かめの並び
+
+**2026-10-22 棚卸㉘の確認: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない**。 **2026-10-23 棚卸㉙の確認**: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない。 **2026-11-06 棚卸㉟の確認**: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない。 **2026-11-13 棚卸㊱の確認**: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない。 **2026-11-20 棚卸㊵の確認**: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない。 **2026-11-21 棚卸㊶の確認**: crates.io の最新は 0.2.4 のまま＝まだ外せない。 **2026-11-22 棚卸㊷の確認**: crates.io の最新は 0.2.4（2025-08-27）のまま＝まだ外せない。
+
+### 旧「直接修正候補」の冒頭の注
+
+
+> **2026-11-22 棚卸㊷で直した**（どれも動きを変えない・説明と数だけ）: ⑴ 「版の段」の「v0.1.0 の後の隙間」の行の中身を今の 6 本へ（着地した `audit-areka-input-menu` が残りに数えられ、起票した `test-name-work-tags` が載っていなかった）。⑵ 覚え書きの `image-webp` に今回の確かめ（0.2.4 のまま）。⑶ C25 で重なる 2 か所の持ち主の寄せ（`test-name-work-tags` の本体の 1 ファイルを `audit-areka-app` へ・`dola-cue-test-builder` の入る条件）を 3 本の brief に書いた。
+>
+> **直さずに各 spec へ渡したもの**: 測り直した 3 本の brief の古い記述と穴（`session-crate-split` の「35 のテストのファイル」と逆にする件の行・本体の `BODY_SYSTEMS` を引くテスト 5 か所と `SwitchRig` の支え・`alert.rs:286` の `smoke_exit_ms`／`test-name-work-tags` の名を文字列で並べる本体の 2 ファイル／`dola-cue-test-builder` の写しは 5 つ・呼び手は 22 ファイル）は各 brief の「棚卸㊷の再測定」の節。
+>
+> **2026-11-21 棚卸㊶で直したもの・渡したもの**の全文は history「2026-11-22 棚卸㊷退避」の旧「直接修正候補」節。2026-11-20 棚卸㊵のぶんは history「2026-11-21 棚卸㊶退避」。それより前は、そこから辿る。
+
+
+### 旧「棚卸㊷の裁定」の節
+
+## 棚卸㊷の裁定（2026-11-22・main `d4db9eb0`・開発者指示＝`/kiro-next` の定めどおり）
+
+> 棚卸㊶（11-21・main `31ac3eaf`）の後、C24 の 4 本が 11-21〜11-22 に全部着地した（PR#491〜PR#494）。ほかに main へ入ったものは無い（PR を通さないコミットも 0）。新しい起票は着地した 2 本の完了の棚卸の 2 本（`dola-cue-test-builder`・`test-name-work-tags`・どちらも「v0.1.0 の後の隙間」の見直しの取り残し）。動いている spec は 0 本（`element-animation-easing`・`shell-balloon-scale-setting` の枝は古い起票だけの枝）。今の版は v0.2.0（まだ公開していない・18 本）。
+
+1. **測り直した範囲**: 速い道（C24 が全部着地・前の棚卸が C25〜C27 を見込んでいた）に、完了の棚卸で起票された 2 本を足した。見込みの C25 の `session-crate-split` と、待つ相手の無い 2 本（`test-name-work-tags`・`dola-cue-test-builder`）の計 3 本を 1 つのサブエージェントで測り直した（3 本とも brief に「2026-11-22 棚卸㊷の再測定」の節）。v0.2.0 の残りと C26 の見直し 3 本は前の測りのまま運んだ（`session-module-gather` の着地で 3 本の受け持つファイルのパスは同 spec が直し済み）。
+2. **残り物の仕分け**: 道具（`leftovers.py`）の出力は 290 行で、進行役が読んだ。着地した 4 本の申し送りはどれも完了のときにその場で直したか、持ち主の brief に在るか（`audit-areka-app`・`audit-areka-install-update`・`clippy-199-lints`・`parallel-visual-script`・`session-crate-split`）、起票された（上の 2 本）。新しく起票の要るものは 0。着地した 4 本の古い `.kiro/specs/<名前>/` のパスの名指しは 0。steering・`README.md`・`dist/README.txt` に古い記述は無かった。`image-webp` は crates.io の版が 0.2.4 のまま。
+3. **分割 0 本・起票 0 本**（3 本とも 20 タスクに届かない・`session-crate-split` は 13〜16 へ上がった）。
+4. **ウェーブ C25 を 3 本で組んだ**（Fable 0・Opus 3）: `session-crate-split`（`Cargo.lock` の席・ぶら下がる数がいちばん多い先頭）＋ `test-name-work-tags` ＋ `dola-cue-test-builder`。3 本とも待つ相手は無い。そのままでは 3 組とも触るファイルが重なる（`session-crate-split` と `test-name-work-tags` は本体の `runtime_tests/zorder_wiring_tests.rs`・`dola-cue-test-builder` が呼び手を付け替えると本体の 4 ファイルと runtime の 3 ファイル）ので、約束 2 つで 0 にした（表の約束 ⑴ ⑵）。⑴ は本体の残りを受け持つ `audit-areka-app`（C26）が 2 本の名を直す＝持ち主どおりの寄せ。⑵ は各 crate の呼び手の名（演者の既定ほかの形が crate ごとに違う）を薄い 1 行として残す形。`dola-cue-test-builder` を C25 に入れないと、`dola-interrupt-ticks`（C27）の前に 1 ウェーブ足りなくなる。
+5. **空き 5 席は空けたまま**（版に縛らない割り込みの条件を満たすものが無い）: 割り込みの上限は C25 で一番大きい `session-crate-split` の下限の 13 タスク（C24 の 10 から上がった）。棚卸㊴〜㊶で外した理由（静かな机か実機が要る・頭でない・上限を越える・v0.2.0 の作り直しの場所・本体に触る＝`session-crate-split` と重なる）は、この差分（着地した 4 本）で動いていない。
+6. **その先の C26〜C28 を組み直した**（「その先のウェーブ」）: C26＝`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`／C27＝`dola-interrupt-ticks`（Fable・1 本だけで）／C28＝`draw-methods-canon`（Fable）・`sylphya-sqlite-kvs`（Fable）ほか 5 本（前の測りのまま）。v0.2.0 の着地は移行の本体を数えずに約 5 ウェーブ（C25〜C29・前の見込みと同じ終わり・席と重なりで C30 に溢れうる）。
+7. **モデル**: Fable は 0 本。次に Fable に近いのは `session-crate-split`（新しい crate と本体への戻りの口）だが、前例 `SessionHooks`（`crates/areka-runtime/src/session_hooks.rs`）・`InputHooks`（`crates/areka-input/src/hooks.rs`）と、`session-module-gather` が作った `BodySystems`（関数の欄を持つ値）に倣う内向きの口なので Opus。`dola-cue-test-builder` の公開の面はワークスペースの `test-support` 機能の前例に倣うので Opus。
+8. **開発者に決めてほしいこと**（どれも C25 の着手を止めない）: ⑴ 先進坑 `pilot-windows-rs-next` の判定と、git 版と v0.2.0 の公開＝案 A か案 B か（推す＝案 A・棚卸㊴から持ち越し）。決まれば windows-rs の移行の本体を `/kiro-discovery` で起票する。 ⑵ 版の外の spec を待つ v0.2.0 の 3 本（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`）の決め（推す＝`seriko-trigger-lottery-gaps`・`extent-element-offset`・`animated-image-import` を v0.2.0 へ入れる・持ち越し）。 ⑶ `crates-io.yml` に `timeout-minutes` を足すか（覚え書き・持ち越し）。 ⑷ 根の `scratch_expect.bak` を消すか（推す＝消す・持ち越し）。 ⑸ 本体の `menu/shortcut.rs` を見直しの範囲に入れるか（推す＝入れない・持ち越し）。 ⑹ `balloon-text-visual-tree` を `audit-areka-install-update` の後まで待たせるか（推す＝待たせる・持ち越し）。 ⑺ `dola-cue-test-builder` の呼び手の名を残す形（推す＝残す・C25 に入れる条件）。消すなら C26 の後へ下げ、v0.2.0 の着地が 1 ウェーブ延びうる（要件の段の議題）。
+

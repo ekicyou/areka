@@ -57,7 +57,10 @@ def main():
         if not os.path.isfile(p):
             continue
         r = subprocess.run(["git", "show", f"HEAD:{p}"], capture_output=True)
-        why = endings(open(p, "rb").read(), r.stdout if r.returncode == 0 else None, autocrlf)
+        # .gitattributes の eol=lf は core.autocrlf より勝つ＝取り出しも LF。
+        eol = subprocess.run(["git", "check-attr", "eol", "--", p], capture_output=True, text=True).stdout
+        why = endings(open(p, "rb").read(), r.stdout if r.returncode == 0 else None,
+                      autocrlf and not eol.rstrip().endswith(": lf"))
         if why:
             bad.append(f"{p}: {why}")
     print(f"line endings: {len(changed)} file(s), " + ("ok" if not bad else "FAIL " + "; ".join(bad)))

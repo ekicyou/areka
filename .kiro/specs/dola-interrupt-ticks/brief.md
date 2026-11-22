@@ -80,18 +80,6 @@ dola は「同じ台本を、別々の表示役（別のプロセスでもよい
 - 規模の見込み: L（14〜20 タスク。dola の中の付け替え 6〜8・使い手の追従 5〜8・時計の差し替えと文書 3〜4）。20 を超えるなら、要件の段で storyboard の層を後ろへ切る。
 - 要件定義のモデル: Fable（時刻の型の設計・丸めの決まり・公開の形の変更）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- 前提の変化: dola の時刻は今も `f64` の秒で、時計は `dola::runtime::clock::now`（`crates/dola/src/runtime/clock.rs`・121 行）の 1 つ。起票から dola の中を変えた着地は 2 本だけで、時刻の形は動いていない。11-01 から着地した `areka-test-binary-stability` は時刻の形に触れていない（テストの待ちの部品を足しただけ）。
-- 古くなった記述: Current State の「今を読む本番の 2 か所」は、実際に `clock::now` を呼ぶのが wintf の `crates/wintf/src/ecs/world/mod.rs`（`FrameTime` を置く所・944 行＝上限の近く）と本体の `crates/areka/src/emo2_boot/mod.rs`（`TalkClock` へつなぐ所・833 行）で、`graphics/core.rs`・`talk_clock.rs` は型の持ち主。Scope の「`tech.md` の dola の依存の行（今 `windows` が書かれていない）」は、今は書かれている（`tech.md` の dola の節）＝機能の名前を足すだけ。
-- 触るファイル: `crates/dola/` の全体（`Cargo.toml` を含む）、wintf の `world/mod.rs`・`graphics/core.rs`・`widget/text/typewriter_draw.rs`・`ecs/dola/mod.rs`・テストと例、使い手のテスト（emo-text 約 38・本体の emo2_boot 約 46・seriko 16・sakura 11・ghost 5・本体の `input_events` 3・`mcp` 2 ほか）。
-- 規模: L（14〜20）のまま。20 を超えるなら storyboard の層を後ろへ切る（起票の案のまま）。
-- 先に要るもの（見直しと crate 分け）: ロードマップの `audit-dola`・`audit-wintf-graphics-world`・`audit-emo2-boot-spine` は今も重なる。使い手の追従で、**新しく** `audit-parsers-sakura`・`audit-seriko`・`audit-emo-text-layout-draw`・`audit-emo-text-state-actor`・`audit-ghost-catalog`・`audit-wintf-layout-widget`・`audit-wintf-runtime`・`audit-emo2-boot-frame`・`audit-emo2-boot-switch`・`audit-areka-input-menu`・`audit-areka-install-update`・`audit-areka-app` とも重なる（kanade は説明の 1 行だけで重ならない）。本体の emo2_boot と直下のファイルを移す本体の crate 分け 6 本も先に要る。
-- 働きの前提: 無し。同じ時に走らせない相手は `dola-yaml-backend`（`Cargo.toml`・直列化の往復のテスト）・`element-animation-easing`（`easing.rs`）・`seriko-talk-clock-fidelity`・`talk-fast-forward`・`sakura-embed-directive`（`talk_clock.rs`）・`tick-gate-adoption`（`world/mod.rs`）。使い手のテストが広いので、ほかの spec が無い時に 1 本で回す（起票のまま）。
-- 優先度の区分: D（開発者「低優先度」・据え置き）。
-- 要件定義のモデル: Fable（前例の無い公開の口＝dola の時刻の型を作り、6 つの crate と直列化の形がそれに乗る）。
-- 分割の案: 起票のまま（20 を超えたら storyboard の層を後ろへ）。
-
 ## 2026-11-13 棚卸㊱で拾った申し送り（audit-dola から）
 - `audit-dola` は 11-13 に着地した（PR#440）＝上の 89 行目の「`audit-dola` は今も重なる」は済み。
 - **潜んでいる穴**: `crates/dola/src/runtime/instance_manager/mod.rs` の `transition(gid, Playing)` は、止めた（Paused）状態から戻すときに `pause_start` を残したまま。本番の呼び手は `facade.rs` 180 行目の開始だけ（再開ではない）なので今は表に出ない。時刻を割り込みの刻みへ移すこの spec で、止めた時間の数え方と一緒に直す。区分 B（潜在）。
@@ -109,3 +97,14 @@ dola は「同じ台本を、別々の表示役（別のプロセスでもよい
 ## 申し送り（dola-cue-test-builder より）
 
 - `crates/dola/src/cue/test_support.rs` の `carrier_cue` が、テストで使う正準のキャリアの合図の唯一の組み立てになった（`test-support` 機能の下・使い手は areka-ghost・areka-seriko・areka-runtime の dev の依存）。`TalkCue` のフィールドや `CueCommand::command_carrier` の署名を変えるときは、この本文 1 か所を直せば使い手の 22 ファイルへは波及しない（名の層が吸う）。参照: `.kiro/specs/completed/dola-cue-test-builder/design.md` の Revalidation Triggers。
+
+## 2026-11-22 棚卸㊸の再測定（main `312a2f18`）
+- **前提の変化**: dola の時刻は今も `f64` の秒で、時計は `dola::runtime::clock::now`（`crates/dola/src/runtime/clock.rs`・74 行）の 1 つ。`dola-cue-test-builder`（PR#498）が正準のキャリアの合図の組み立てを `crates/dola/src/cue/test_support.rs` の 1 か所にした＝その合図の分は、型を替えても使い手へ波及しない。本体の crate 分けで、使い手の crate は 6 から 9 になった（sakura・seriko・emo-text・wintf・ghost・`areka-runtime`・`areka-session`・`areka-input`・本体）。
+- **「今」を読む本番の所**: wintf の `ecs/world/mod.rs:114`・`:563`（`FrameTime` を置く・670 行）と `areka-runtime/src/lib.rs:465`（`TalkClock` へつなぐ）。型の持ち主は wintf の `graphics/core.rs` と `areka-runtime/src/talk_clock.rs`。`tech.md` の dola の行（55 行）は `windows` を書いてある＝機能の名前を足すだけ。
+- **触るファイル**: `crates/dola/` の全体（112 ファイル・`Cargo.toml` を含む）、wintf の `world/mod.rs`・`graphics/core.rs`・`widget/text/typewriter_draw.rs`・`ecs/dola/mod.rs`、使い手（`dola::` か合図を組むファイル＝`areka-runtime` 38・emo-text 32・本体 22・seriko 16・sakura 12・ghost 5・`areka-session` 4・`areka-input` 2）。
+- **規模**: 18〜26 の見込み（起票の L 14〜20 に、ノベルの作り直しの 5 つと、増えた使い手の crate が乗る）。
+- **先に要るもの**: `dola-cue-test-builder` は着地。C26 の見直し 3 本とは使い手のテストで重なる（`audit-areka-app`＝`areka-session/src/runtime_boot_tests.rs`・本体の `runtime_tests/spine.rs`・`session_tests/` の 4 本、`audit-areka-install-update`＝`install_cue*`・`update_cue*`・`readme_cue*`・`mcp/dump_*_gpu_*`、`audit-emo2-boot-switch`＝`move_cue*`・`change_cue*`・`balloon_visibility*`・`shell_balloon_switch_session_lap_test_support.rs`）＝C26 の全部の着地の後に 1 本だけで回す（見込み C27 のまま・確かめた）。同じ時に走らせない相手は `element-animation-easing`（`easing.rs`）・`seriko-talk-clock-fidelity`・`talk-fast-forward`・`sakura-embed-directive`（`talk_clock.rs`）・`tick-gate-adoption`（`world/mod.rs`）。
+- **優先度の区分**: D（開発者「低優先度」・据え置き。版の段は v0.2.0＝ノベルの作り直しの承認で時刻の土台を v0.2.0 の要件の段に入れた）。
+- **要件定義のモデル**: Fable（前例の無い公開の口＝ワークスペースに時刻と長さの型は無く〔wintf の `api.rs` の CPU 時間の素の `u64` の欄と、`areka-session` のテストの `Ticks` だけ〕、dola の時刻の型に 9 つの crate と `Cue` の直列化の形が乗る。ノベルの 5 つ〔起点を過去へも前へも動かす・絶対の発火時刻〕は時刻の順の保証を新しく決める）。
+- **分割の案**: 20 を越えたら、型と時計と直列化の付け替え（振る舞いを変えない・使い手の追従まで）と、ノベルの 5 つのうち起点と発火時刻の働き（1〜4）の 2 本に分ける。起票の「storyboard の層を後ろへ切る」は、5 つ目の「後ろへ切らない」と食い違うので使えない。
+- **見つけた穴・古くなった記述**: 2026-11-13 の潜んでいる穴（`instance_manager/mod.rs` の `transition(gid, Playing)` が `pause_start` を残す）は今もある（本番の呼び手は `facade.rs:167` の開始だけ）。ノベルの申し送りの 1 の `crates/areka-emo-text/src/talk_clock.rs:38-57` は無いファイル＝今は `crates/areka-runtime/src/talk_clock.rs:30〜40`、4 の `dispatcher.rs:392-399` は今は `:365〜373`。Adjacent の `dola-yaml-backend` は着地済み。Current State の「`dola::` の参照」の数と「今を読む本番の 2 か所」の場所（`emo2_boot`）は起票のときのもの。
