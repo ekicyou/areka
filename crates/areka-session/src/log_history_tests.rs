@@ -100,15 +100,15 @@ fn update_rows_match_self_or_children_only() {
 fn status_rows_and_areka_is_exact_only() {
     for target in [
         "areka",
-        "areka::session::boot_config",
-        "areka::session::boot_resolve",
-        "areka::session::ghost_session",
-        "areka::session::ghost_switch",
+        "areka_session::boot_config",
+        "areka_session::boot_resolve",
+        "areka_session::ghost_session",
+        "areka_session::ghost_switch",
         "ghost-boot",
         "ghost-shutdown",
         // 外のものを開いた記録。
-        "areka::session::readme",
-        "areka::session::readme::opener",
+        "areka_session::readme",
+        "areka_session::readme::opener",
     ] {
         assert_eq!(
             classify(Level::INFO, target),
@@ -117,12 +117,12 @@ fn status_rows_and_areka_is_exact_only() {
         );
     }
     assert_eq!(
-        classify(Level::INFO, "areka::session::ghost_switch::x"),
+        classify(Level::INFO, "areka_session::ghost_switch::x"),
         Some(Kind::Status)
     );
     // `areka` は完全一致だけ。下のモジュールの info は外れる。
     assert_eq!(classify(Level::INFO, "areka_runtime"), None);
-    assert_eq!(classify(Level::INFO, "areka::session::alert"), None);
+    assert_eq!(classify(Level::INFO, "areka_session::alert"), None);
     assert_eq!(classify(Level::INFO, "areka::menu"), None);
     assert_eq!(classify(Level::INFO, "ghost-boots"), None);
 }
@@ -165,13 +165,13 @@ fn rules_table_is_the_designed_fourteen_rows_in_order() {
             ("areka::update", Kind::Update, false),
             ("areka::install", Kind::Update, false),
             ("areka", Kind::Status, true),
-            ("areka::session::boot_config", Kind::Status, false),
-            ("areka::session::boot_resolve", Kind::Status, false),
-            ("areka::session::ghost_session", Kind::Status, false),
-            ("areka::session::ghost_switch", Kind::Status, false),
+            ("areka_session::boot_config", Kind::Status, false),
+            ("areka_session::boot_resolve", Kind::Status, false),
+            ("areka_session::ghost_session", Kind::Status, false),
+            ("areka_session::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
             ("ghost-shutdown", Kind::Status, false),
-            ("areka::session::readme", Kind::Status, false),
+            ("areka_session::readme", Kind::Status, false),
         ]
     );
 }
@@ -194,7 +194,7 @@ fn rule_matches_self_or_double_colon_child() {
         exact: true,
     };
     assert!(exact.matches("areka"));
-    assert!(!exact.matches("areka::session::boot_config"));
+    assert!(!exact.matches("areka_session::boot_config"));
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +459,7 @@ fn defaults_follow_the_kind_for_all_five_kinds() {
 fn ghost_and_label_on_other_rows_stay_in_the_body() {
     let got = draft(
         Level::INFO,
-        "areka::session::ghost_session",
+        "areka_session::ghost_session",
         [msg("起動した"), s("ghost", "emo2", "\"emo2\"")],
     )
     .unwrap();
@@ -655,56 +655,56 @@ fn moved_modules_keep_their_kinds_by_real_module_path() {
     let rows: [(&str, &str, Option<Kind>); 14] = [
         (
             module_of::<ConfigInputs>(),
-            "areka::session::boot_config",
+            "areka_session::boot_config",
             Some(Kind::Status),
         ),
         (
             module_of::<GhostDecision>(),
-            "areka::session::boot_resolve",
+            "areka_session::boot_resolve",
             Some(Kind::Status),
         ),
         (
             module_of::<GhostSlot>(),
-            "areka::session::ghost_session",
+            "areka_session::ghost_session",
             Some(Kind::Status),
         ),
         (
             module_of::<RuntimeRebuild>(),
-            "areka::session::ghost_session::ghost_session_runtime",
+            "areka_session::ghost_session::ghost_session_runtime",
             Some(Kind::Status),
         ),
         (
             module_of::<ReadmeRequest>(),
-            "areka::session::readme",
+            "areka_session::readme",
             Some(Kind::Status),
         ),
         (
             module_of::<Opener>(),
-            "areka::session::readme::opener",
+            "areka_session::readme::opener",
             Some(Kind::Status),
         ),
-        (module_of::<AlertScene>(), "areka::session::alert", None),
-        (module_of::<ExitOrigin>(), "areka::session::app_exit", None),
+        (module_of::<AlertScene>(), "areka_session::alert", None),
+        (module_of::<ExitOrigin>(), "areka_session::app_exit", None),
         (
             module_of::<SessionEnded>(),
-            "areka::session::session_end",
+            "areka_session::session_end",
             None,
         ),
-        (module_of::<WorkGate>(), "areka::session::exit_wait", None),
+        (module_of::<WorkGate>(), "areka_session::exit_wait", None),
         (
             module_of::<WriteFailureTx>(),
-            "areka::session::write_failure",
+            "areka_session::write_failure",
             None,
         ),
-        (module_of::<ReadOnlyRun>(), "areka::session::readonly", None),
+        (module_of::<ReadOnlyRun>(), "areka_session::readonly", None),
         (
             module_of::<ReportOccasion>(),
-            "areka::session::roots::report",
+            "areka_session::roots::report",
             None,
         ),
         (
             module_of::<CopyPlan>(),
-            "areka::session::roots::user_root",
+            "areka_session::roots::user_root",
             None,
         ),
     ];

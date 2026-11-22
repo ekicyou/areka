@@ -539,7 +539,7 @@ fn switch_end_leaves_one_end_record_and_drops_the_mark() {
             (
                 vec![(
                     Level::INFO,
-                    "areka::session::reload".to_owned(),
+                    "areka_session::reload".to_owned(),
                     Some("reload_done".to_owned()),
                     None,
                     ghost.clone(),

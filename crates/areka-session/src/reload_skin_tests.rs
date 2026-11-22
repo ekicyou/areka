@@ -302,7 +302,7 @@ fn applied_phase_end_with_empty_queue_is_done() {
             vec![(
                 "reload_done".to_owned(),
                 Level::INFO,
-                "areka::session::reload".to_owned(),
+                "areka_session::reload".to_owned(),
                 None,
                 Some(rig.ghost.clone()),
             )],

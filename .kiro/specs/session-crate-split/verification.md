@@ -1015,3 +1015,12 @@ log-capture-kit・temp-path-kit・sample-ghost-kit（番人の注を写す）・
 - `Cargo.lock`（`main` との差）: `areka-session` の 1 項目と本体の依存の 1 行だけ（33 行の追加）。
 - `cargo fmt --all -- --check`: 差分なし。
 - `cargo clippy -p areka-session --all-targets`: 警告は移したコードに前からある形の指摘（`type_complexity` 33・`collapsible_if` 19 ほか）で、新しく足した `shell_balloon_switch_session_lap_test_support.rs`・`log_history::hold` には無い。
+
+### 4.3
+
+RED は n/a（文字列の target の書き換えのみ。期待値の側も同時に直した）。
+
+- `log_history.rs` の規則 5 行（boot_config, boot_resolve, ghost_session, ghost_switch, readme）を `areka_session::…` へ。種別・照合は据え置き。
+- 期待値: `log_history_tests.rs`, `log_history_convention_tests.rs`, `reload_skin_tests.rs`（crate）、`session_tests/reload_tests.rs`（本体）。
+- `doc/ssp-mcp/log-convention.md` の規則表 5 行。
+- `git grep -n '"areka::session' -- crates/` の残りは 5.1 の持ち物の 3 件のみ（`emo2_mcp_real_run.rs`, `real-run-kit/src/launch.rs`, `real-run-kit/src/bin/real-run-fake-areka.rs`）。real-run-kit と `emo2_mcp_real_run.rs` は引用符つき・なしとも 5.1 に任せる。`cargo check -p areka-session --tests` / `cargo check -p areka --bin areka --tests` は警告 0、fmt 差分なし。

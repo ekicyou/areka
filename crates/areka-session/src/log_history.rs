@@ -121,14 +121,14 @@ pub const RULES: &[Rule] = &[
     rule("areka::install", Kind::Update, false),
     // 下のモジュールまで含めるとアプリ本体の info が全部 status になるので完全一致だけ。
     rule("areka", Kind::Status, true),
-    rule("areka::session::boot_config", Kind::Status, false),
-    rule("areka::session::boot_resolve", Kind::Status, false),
-    rule("areka::session::ghost_session", Kind::Status, false),
-    rule("areka::session::ghost_switch", Kind::Status, false),
+    rule("areka_session::boot_config", Kind::Status, false),
+    rule("areka_session::boot_resolve", Kind::Status, false),
+    rule("areka_session::ghost_session", Kind::Status, false),
+    rule("areka_session::ghost_switch", Kind::Status, false),
     rule("ghost-boot", Kind::Status, false),
     rule("ghost-shutdown", Kind::Status, false),
     // 外のもの（説明書・ファイル・URL・フォルダ・メール）を開いた記録。
-    rule("areka::session::readme", Kind::Status, false),
+    rule("areka_session::readme", Kind::Status, false),
 ];
 
 /// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`areka::install` の下にあっても

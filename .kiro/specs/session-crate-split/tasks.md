@@ -124,7 +124,7 @@
   - `cargo check --workspace --all-targets` が警告 0、`cargo check -p areka-session --lib --features test-support` が警告 0、`cargo doc -p areka-session --no-deps` の解けないリンクの警告に本体の名が無い、設計の 4.7 の式が 0 件、`Cargo.lock` の差分が新しい crate の 1 項目と本体の依存の 1 行だけ
   - _Dispatch: standard — 公開面をコンパイラの指摘から 1 件ずつ決める_
   - _Requirements: 3.3, 3.5, 4.1, 4.2, 4.4, 4.5, 4.6, 4.7, 5.8, 1.7_
-- [ ] 4.3 直書きの出所と `get_log` の分け方の決まりを新しい名前へ替える
+- [x] 4.3 直書きの出所と `get_log` の分け方の決まりを新しい名前へ替える
   - `log_history.rs` の決まりの 5 行（`boot_config`・`boot_resolve`・`ghost_session`・`ghost_switch`・`readme`）と、`log_history_tests.rs`・`log_history_convention_tests.rs`・`reload_tests.rs`・`reload_skin_tests.rs` の `"areka::session::…"` を `"areka_session::…"` へ替える。種別は今のまま、語彙の直書きと本体に残るモジュールの出所は変えない。ログの本文は変えない
   - `log_history_tests.rs` の既にあるテストの期待の行を書き換えるだけにし、テストの名前は増やさない
   - 決まりと文書の表が等しいことを見るテストが集めた層に残るので、`doc/ssp-mcp/log-convention.md` の `<!-- log-rules:begin/end -->` の間の表の 5 行もここで替える（同じ文書の残りは 6.2）
