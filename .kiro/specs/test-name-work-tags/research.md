@@ -363,3 +363,76 @@ crate ごと: `areka-placement` 194・`areka-runtime` 88・`areka` 2。design.md
 - design.md の「名指しの見込み」に無かった当たりは `zorder_cue_tests.rs:148` の `t_zcs4`（G1 のファイルの中・2.4 には在る）の 1 行。G1 で直す。
 - steering（`roadmap.md` を含む）・ほかの未完了の spec の文書の当たりは 0（`roadmap.md` の `t_i4_` ほかは複数のテストが持つ札の例で、名指しの式に当たらない・決めた事 3）。
 - 式 4（札だけの短い書き方）の当たりは 24 行、式 5（大文字の作業番号）の当たりは `crates/` に 70 行で、2.4 の数えと同じ。
+
+## 14. 最後の確かめの記録（G8・2026-11-22）
+
+- 測った木: 枝 `claude/kiro-start-test-name-work-tags-c34897` の HEAD `122c4140a`＝G0〜G7 の `0f2a4d9fa` に `origin/main` の `c7b705aff`（#498 `dola-cue-test-builder`）を取り込んだマージ（merge-base は `c7b705aff`。`audit-areka-app/brief.md` の競合は両方の項目を残して解いた）。取り込む前の `0f2a4d9fa` でも同じ測りをした（14.7）。較正の木は `00877299`（改める前・§13 の測りと同じ名の一覧の元）。
+- 式 3 の名簿: 改名表の `old` の 284 行（`target/test-name-work-tags/` の外の使い捨てファイル）。式 4・5 の範囲は `crates/`・`doc/`・`.kiro/steering/`・`.kiro/specs/`（歴史の場所 `.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md` を除く）。
+- 数は「行」（`git grep -n` の行数）と「当たり」（`git grep -o` の数・1 行に 2 つ在れば 2）を分けて書く。
+
+### 14.1 式 1〜5 と数（改めた後の木 HEAD `122c4140a` ／ 改める前の木 `00877299`）
+
+| 式 | 当てたもの | 改めた後（HEAD） | 改める前（較正） | 期待 |
+|---|---|---|---|---|
+| 1（5.1） | `git grep -nE "fn t_[a-z]+[0-9]+[a-z]?_" -- crates` | **2 行**（本体の `runtime_tests/zorder_wiring_tests.rs` の 29 行目 `t_zwi05_…`・65 行目 `t_zwi08_…`） | 284 行・29 ファイル（うち本体の `runtime_tests/` が 2） | 284／本体の 2 本だけ |
+| 2（5.2） | `git grep -nE "fn t_[a-z]+_" -- crates` から式 1 の当たりを除く | **2 行**（`placement_tests/zorder_branch_coverage_test_support.rs` の 79 行 `t_only_in_a_comment`・85 行 `t_real_one`＝検査の見本の文字列） | 4 行（上の 2 行と `zorder_group_branch_coverage_tests.rs:377`・`zorder_inversion_branch_coverage_tests.rs:391`） | 4／見本だけ |
+| 3（5.3） | 名簿を `git grep -nwF -f` で歴史の場所と本 spec の文書を除く全体へ | **0 行** | 372 行（`fn` の定義 284＋名指し 88。名指し 88 は §2.3 の 50・19・9・1・1・1・1・1・3・1・1 と同じ内訳） | 0／284＋名指し |
+| 4（5.5） | `git grep -nIP "\bt_[a-z]+[0-9]+[a-z]?"`（`t_wait1`・`t_wait2` を含む） | この spec の文書を除き **12 行・5 ファイル・17 当たり**（下の 14.2） | 式 1 の 284 行を除き 119 行。うち札だけの短い書き方（`(?!_[a-z])\b` の形・`t_wait` を除く）は **24 行** | §2.4 の 24 行 |
+| 5（5.5） | `git grep -nIP "\bT-[A-Z]{1,4}[0-9]{1,2}[a-z]?\b"` | この spec の文書を除き **2 行・2 ファイル・3 当たり**（`COMPAT_ARCHITECTURE.md:412` に `T-C3` が 2 つ・下の 14.2） | 72 行（`crates/` が **70** 行＋`doc/COMPAT_ARCHITECTURE.md:412`・`extra-character-windows/brief.md:131`） | §2.4 の 70 行 |
+
+- この spec の文書（`.kiro/specs/test-name-work-tags/`）の当たりは HEAD で数えて、式 4 が 365 行・式 5 が 34 行。
+
+- 式 3 の改める前の 372 行は、`git grep` が `00877299` の木へ当てた数。歴史の場所（`.kiro/specs/completed/` の 30 ファイル・`doc/archive/` と `roadmap-history.md` は当たり 0）の当たりは、除いたうえでの数。除いた当たりは書き換えない（要件 5.3）。
+- 式 4 の「札だけの短い書き方」を改めた後の木へ当てると、当たりは本体の `runtime_tests/zorder_wiring_tests.rs:11` の 1 行だけ（24 行 → 1 行。残りの 23 行は G1・G2・G6 で直した）。
+- 札の無い札（`zwi01`〜`zwi09`）は式の外。改めた後の `crates/` の当たりは本体の `runtime_tests/zorder_wiring_tests.rs` の 4・5・10・11・13 行だけで、`audit-areka-app/brief.md` の申し送りの持ち物。`T-N3`・`T-N10` の当たりは 0。
+
+### 14.2 式 4・5 の当たりと例外の表の突き合わせ（この spec の文書を除く）
+
+HEAD `122c4140a` の当たり。式 4 の 12 行の内訳は `zorder_wiring_tests.rs` 3 行（3 当たり）・`compile_sheet_tests.rs` 4 行（4）・`COMPAT_ARCHITECTURE.md` 1 行（1）・`audit-areka-app/brief.md` 1 行（2）・`roadmap.md` 3 行（7）。
+
+| 当たり | 式 | 例外の表の項 | 訳 |
+|---|---|---|---|
+| `crates/areka/src/runtime_tests/zorder_wiring_tests.rs:11`（`t_zwi06`） | 4 | 要件 5.5 の例外（本体の申し送った行） | 本体のこのファイルは境界の外（要件 2.3）。指す先は `areka-runtime` の `zorder_wiring_tests.rs` の改めたテストで、`audit-areka-app/brief.md` の申し送りで本体の 2 本の改名と同じコミットで直す |
+| 同 `:29`・`:65`（`fn t_zwi05_…`・`fn t_zwi08_…`） | 4 | 要件 5.1 の例外（札つきの 2 本） | `audit-areka-app` の持ち物。名の全体が式 1 の当たり 2 行と同じ |
+| `doc/COMPAT_ARCHITECTURE.md:412`（`旧 t_c3_char_n_prefix_adds_scope_n`） | 4 | 要件 5.5 の例外（歴史の文・要件 4.8） | 「旧」と書く過去の名。今のテストの名指しではない |
+| 同 `:412`（`テスト T-C3` が 2 か所） | 5 | 同上 | 完了 spec の設計の番号を歴史として書く文 |
+| `crates/areka-sakura/src/compile_sheet_tests.rs` の 60・62・71・79（`t_wait1`・`t_wait2`） | 4 | 要件 5.5 の例外（局所変数） | テストの名ではない。時刻を持つ `let` の変数名 |
+| `.kiro/specs/extra-character-windows/brief.md:131`（`テスト T-C3`） | 5 | 決めた事 3 で足した例外 | `COMPAT_ARCHITECTURE.md:412` と同じ歴史の文（完了 `window-placement` の設計の番号）。書き換えない |
+| `.kiro/specs/audit-areka-app/brief.md:159`（`t_zwi05_…`・`t_zwi08_…`） | 4 | 決めた事 3 で足した例外 | まだ札つきで在る本体の 2 本を正しく指す申し送り（既にある 159 行の項目。この spec が足した 1 項目は札の字面を持たず当たらない） |
+| `.kiro/steering/roadmap.md` の 389・1790・1796 行（`t_i4_`・`t_c3_`・`t_l2_`・`t_rs01_`） | 4 | 決めた事 3 で足した例外 | この spec の行と出どころの説明で、札の例を書くもの。テストの名指しではない（行番号は main の #497 で §8.4 の 514・2033・2039 から 390・1791・1797 へ、#498 でさらに 1 行ずつ上へ動いた） |
+| `.kiro/specs/test-name-work-tags/`（HEAD で式 4 が 365 行・式 5 が 34 行） | 4・5 | 決めた事 3 で足した例外 | 要件 5.3 と同じく、この spec の文書は古い名・札を説明のために書く |
+
+当たりのうち例外の表に無いものは 0。`.kiro/specs/zorder-property/brief.md` の 59・81・94 行は G2 で直り、当たりは 0。#498 が足した文（`audit-areka-app/brief.md` の 6 行・`dola-interrupt-ticks/brief.md` の 4 行・`roadmap.md`・`crates/` の 15 ファイル）に新しい当たりは 0。`dola-cue-test-builder` の文書は `.kiro/specs/completed/` へ移り、歴史の場所として除く。
+
+### 14.3 名の一覧の比べ（要件 3.1・3.2・1.3）
+
+- 取り方: 改める前と同じ `cargo test -p areka-placement -p areka-runtime -p areka --no-fail-fast -- --list`（標準出力と標準エラーを 1 本に）を HEAD `122c4140a` で走らせ、`target/test-name-work-tags/mklist.py` で整えた（束・モジュールのパスつき・並べ直し）。`tests-after.txt`（コミットしない）。`mklist.py` を改める前の生の出力へ当て直すと `tests-before.txt` とバイトで同じ（取り方が再現する）。
+- 比べ: `tests-before.txt` の各行の最後の名を改名表の `new` で写し（写した行は 284）、並べ直した `tests-before-mapped.txt` と `tests-after.txt` を `diff` した。**違う行 0・両方に片方だけ在る行 0**。
+- #498 との突き合わせ: `git diff 7cb95c3e8 c7b705aff` が 3 crate で触ったのは `areka-runtime` の `consumer_ledger_test_support.rs`（手伝いの `actor_carrier_cue` を `dola::cue::test_support::carrier_cue` の再輸出へ）・`frame_window_link_drain_tests.rs`（手伝いの `carrier` を消して同じ再輸出を使う）・`Cargo.toml` だけで、`#[test]` の足し・消し・改名は 0。足したテストは `dola` の `cue/test_support_tests.rs` で、名の一覧の 3 crate の外。違う行 0 はこれと合う。
+- crate ごとの本数（前＝後）: `areka` 1,898・`areka-placement` 1,019・`areka-runtime` 1,050・計 3,967。一覧の中の重複行は前も後も 0。
+- 改めた後の一覧に改名表の `old` の名は 0。改名表の `new` は 284 行で、異なる名は 279（別のファイルで同じ名になる組のため 5 つの名が 2 行ずつ・要件 1.3）。改名した 284 行は一覧に 1 行ずつ在る。一覧で `new` の名を持つ行は 286 で、多い 2 行は改める前から同じ名で在った札の無いテスト＝`zorder_chain_tail_order_tests` の `unassigned_scopes_join_behind_every_group_in_ascending_scope_order` と本体の `readme_cue_tests` の `clone_reaches_the_same_receiver`（§13.3）。
+
+### 14.4 触らない所（要件 2.3・3.3・6.1）
+
+`git diff --name-only origin/main...HEAD`（`origin/main`＝merge-base＝`c7b705aff`）は 47 ファイルで、取り込む前（merge-base `7cb95c3e8`）と同じ並び。
+
+- この spec の文書 7（`design-validation.md`・`design.md`・`rename-table.tsv`・`requirements.md`・`research.md`・`spec.json`・`tasks.md`）。
+- `crates/areka-placement/src/` の 22 ファイル・`crates/areka-runtime/src/` の 9 ファイル・`crates/areka-emo-present/src/` の 2 ファイル（G1〜G7 の範囲）。
+- 本体 `crates/areka/` は `src/placement_tests/zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs` の **2 ファイルだけ**。`crates/areka/src/runtime_tests/` の差分は **0**。
+- 文書: `CLAUDE.md`（1 行の差分）・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/audit-areka-app/brief.md`（申し送り）・`extra-character-windows/brief.md`・`zorder-property/brief.md`。
+- 歴史の場所（`.kiro/specs/completed/`・`doc/archive/`・`.kiro/steering/roadmap-history.md`）の差分は **0**。
+- 本番のファイルの差分: `zorder_group_ledger.rs` はコメントの 1 行（667 行・`t_zrb9` を新しい名へ）だけ。`config.rs` は 317 行の `mod tests` の中（336 行以降・40 行）だけ。ほかの `crates/` の差分は `_tests.rs`・`_test_support.rs` のファイルだけ。
+- #498 と重なったファイル: `consumer_ledger_test_support.rs` は 28 行目の名指しが改めた名（`set_zorder_becomes_a_set_directive_carrying_the_element_tokens`・`reset_zorder_becomes_a_reset_directive`＝`zorder_cue_tests.rs` の 65・78 行に在る）のまま残り、#498 の直し（127 行あたりの再輸出）と並ぶ。`window_state_cue_tests.rs` は #498 が触らず、改名表の 13 行がどれも新しい名の `fn` 1 つ・古い名 0。
+
+### 14.5 行数（要件 3.4）
+
+触ったファイルの行数の最大は HEAD で `crates/areka-emo-present/src/presenter_test_support.rs` の 909 行。次いで `zorder_group_ledger.rs` 729・`zorder_chain_compose_tests.rs` 720・`config.rs` 711。どのファイルも 1,000 行以下（`.kiro/steering/roadmap.md` は今回の差分に入っていない）。
+
+### 14.6 全体テスト（要件 3.5）
+
+- `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を、取り込む前の `0f2a4d9fa` で排他テストの机を持った回に 1 度回し、終了コード 0・「all steps green」（2026-11-22）。
+- #498 を取り込んだ後の HEAD の全体テストは、最後の確かめ（`/kiro-validate-impl`）で回し直す。
+
+### 14.7 取り込む前の測り（`0f2a4d9fa`）
+
+式 1〜3 は HEAD と同じ数（2・2・0 行）。式 4 はこの spec の文書を除き 12 行・17 当たりで、違いは `roadmap.md` の行番号（390・1791・1797）だけ。式 5 は 2 行・3 当たり。名の一覧（`target/test-name-work-tags/tests-after-0f2a4d9fa.txt`）は HEAD の `tests-after.txt` とバイトで同じ。触ったファイルは同じ 47。
