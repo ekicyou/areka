@@ -1,13 +1,11 @@
 //! `perf_thread_report` の決定論テスト。
 //!
-//! 実時間の閾値も `sleep` も 1 つも使わない——行の組み立て・差分の計算・
-//! 名簿外の残りの算出・周期の読み取りはいずれも純関数であり、スレッドも Win32 も
-//! 通さずに固定できる。点灯していない場（テスト既定）で報告スレッドが起きないことも
-//! ここで押さえる。
+//! 実時間の閾値も `sleep` も合否に使わない——行の組み立て・差分の計算・
+//! 名簿外の残りの算出・周期の読み取りはいずれも純関数であり、Win32 を通さずに固定できる。
+//! スレッドを 1 本起こすのは終わり際のテストだけ（待ちの上限 `FINAL_WAIT` は合否に使わない）。
+//! 点灯していない場（テスト既定）で報告スレッドが起きないこともここで押さえる。
 
 use super::*;
-
-use wintf::ecs::world::thread_registry::ROLE_UNREGISTERED_REST;
 
 /// 行を空白で切り、`名前=値` の**名前**だけを順に取り出す。
 /// 判定スクリプト `tools/perf/judge-perf.py` の `parse_fields` と同じ切り方
@@ -355,6 +353,25 @@ fn a_panicked_report_thread_is_recorded_as_a_panic_not_a_timeout() {
         let _ = stop_rx.recv();
         std::panic::resume_unwind(Box::new("テストの panic"));
     });
+    let handle = ReportHandle { stop, done, join };
+    let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
+    let levels: Vec<_> = events.iter().map(|e| e.level).collect();
+    assert_eq!(levels, [tracing::Level::ERROR], "{events:?}");
+}
+
+/// 停止を送る前に報告スレッドが panic していた → 記録は同じく panic の error 1 件だけ。
+#[test]
+fn a_report_thread_that_panicked_before_the_stop_is_recorded_as_a_panic() {
+    let (stop, stop_rx) = mpsc::channel::<()>();
+    let (done_tx, done) = mpsc::channel::<()>();
+    let (gone_tx, gone) = mpsc::channel::<()>();
+    let join = thread::spawn(move || {
+        let _done = done_tx;
+        drop(stop_rx);
+        let _ = gone_tx.send(());
+        std::panic::resume_unwind(Box::new("テストの panic"));
+    });
+    gone.recv().expect("停止の受け口が落ちた合図");
     let handle = ReportHandle { stop, done, join };
     let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
     let levels: Vec<_> = events.iter().map(|e| e.level).collect();

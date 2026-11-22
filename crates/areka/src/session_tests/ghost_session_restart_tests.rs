@@ -55,19 +55,14 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
         (opened, reopened)
     });
 
-    let missing_errors = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
-        })
-        .count();
+    let missing = super::levels_of(&events, "task_pool_missing");
     assert_eq!(
         (
             matches!(opened, Err(OpenWindowsError::TaskPoolMissing)),
             matches!(reopened, Err(OpenWindowsError::TaskPoolMissing)),
-            missing_errors,
+            missing,
         ),
-        (true, true, 2),
+        (true, true, vec![tracing::Level::ERROR; 2]),
         "作業プールの欠落を最初に確かめて失敗していない: opened={:?} reopened={:?} events={events:?}",
         opened.as_ref().err(),
         reopened.as_ref().err(),
@@ -314,18 +309,13 @@ fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
 
     let (mut world, events) = boot_windows_with_descript_line("seriko.sticky-window,0");
 
-    let rejected = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("sticky_group_rejected") && e.level == tracing::Level::WARN
-        })
-        .count();
+    let rejected = super::levels_of(&events, "sticky_group_rejected");
     let groups = world
         .get_resource::<StickyGroupLedger>()
         .map(|ledger| ledger.groups().len());
     assert_eq!(
         (rejected, groups, ghost_window_count(&mut world)),
-        (1, Some(0), 4),
+        (vec![tracing::Level::WARN], Some(0), 4),
         "(拒否の記録, 帳簿の組の数, 窓の数): {events:?}"
     );
 }
@@ -344,14 +334,9 @@ fn commit_without_task_pool_logs_error() {
         spawn: Box::new(|_: &mut World| {}),
     };
     let ((), events) = capture(|| commit_ghost_windows(&mut world, prepared));
-    let missing_errors = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
-        })
-        .count();
     assert_eq!(
-        missing_errors, 1,
+        super::levels_of(&events, "task_pool_missing"),
+        [tracing::Level::ERROR],
         "作業プールの欠落が記録されない: {events:?}"
     );
 }

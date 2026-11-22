@@ -1,7 +1,7 @@
 //! 書き出しの走り（`offline_dump::run`）の分岐の試験と、その試験が使う検体の部品
 //! （`offline_dump_test_support`）の確かめ。
 //!
-//! 部品で組んだゴーストを、書き出しの走りが使うのと同じ今のシェルの読み込み
+//! 部品で組んだゴーストを、書き出しの走りが使うのと同じシェルの読み込み
 //! （`load_shell_target`）で、窓を出さずに読む。
 
 use areka_emo_atlas::WicDecoderArm;
@@ -22,10 +22,10 @@ fn com_init() {
     }
 }
 
-/// 全部の面の形を 1 つのシェルに持つ検体が、今のシェルの読み込みで窓なしに読める。
+/// 全部の面の形を 1 つのシェルに持つ検体が、シェルの読み込みで窓なしに読める。
 /// 絵の欠けの面はほかの層で組め、中身の無い面は読み込みに残って合成だけが error 1 行で失敗する。
 #[test]
-fn the_variety_ghost_loads_with_the_current_shell_loader_without_a_window() {
+fn the_variety_ghost_loads_with_the_shell_loader_without_a_window() {
     com_init();
     let root = fixture::build_ghost(
         "offline-variety",

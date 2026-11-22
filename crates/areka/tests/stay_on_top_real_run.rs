@@ -233,6 +233,28 @@ fn snap(run: &Run, other: isize) -> Snap {
     }
 }
 
+/// `key` が 100ms あけた続けて 2 回の読みで同じ `Some` になるまで読み直し（2 秒まで）、最後の読みを返す。
+/// 切れたときの合否は呼び手の判定に落とさせる。
+fn snap_settled<K: PartialEq>(run: &Run, other: isize, key: impl Fn(&Snap) -> Option<K>) -> Snap {
+    let end = Instant::now() + Duration::from_secs(2);
+    let mut prev = None;
+    loop {
+        let s = snap(run, other);
+        let now = key(&s);
+        if (now.is_some() && now == prev) || Instant::now() >= end {
+            return s;
+        }
+        prev = now;
+        sleep(Duration::from_millis(100));
+    }
+}
+
+/// 他のアプリの窓を前に出した後の読み。前に出たことを知らせる記録の行は無いので、的が奥と読めて
+/// 並びが落ち着くまで読み直す。
+fn snap_behind(run: &Run, other: isize) -> Snap {
+    snap_settled(run, other, |s| s.vs_other(false).then(|| s.order()))
+}
+
 impl Notes {
     /// 的と他のアプリの窓の順位・帯の印を控える。
     fn record(&mut self, label: &str, s: &Snap) {
@@ -549,14 +571,13 @@ fn stay_on_top_directives_on_emo2() {
             mouse(MOUSEEVENTF_LEFTDOWN, x, y);
             mouse(MOUSEEVENTF_LEFTUP, x, y);
         }
-        sleep(Duration::from_millis(500));
         n.note(format!(
             "raise other app ({label}) => {r:?} click=({x},{y}) clicked={} hit={hit:#x}",
             hit == other
         ));
     };
     raise_other(&mut n, "start");
-    let s0 = snap(&run, other);
+    let s0 = snap_behind(&run, other);
     n.record("s0_other_front", &s0);
     n.note(format!(
         "foreground pid={} areka pid={}",
@@ -595,7 +616,7 @@ fn stay_on_top_directives_on_emo2() {
         format!("入力先 pid 前={fg} 後={fg_after} areka pid={}", run.pid()),
     );
     raise_other(&mut n, "after v");
-    let s2 = snap(&run, other);
+    let s2 = snap_behind(&run, other);
     n.record("s2_other_again", &s2);
     n.judge(
         "その後に他のアプリを前に出すと後ろへ回る",
@@ -603,7 +624,7 @@ fn stay_on_top_directives_on_emo2() {
         String::new(),
     );
     if !s2.vs_other(false) {
-        // 直したことは、オンが他のアプリの奥から始まるときだけ示せる。
+        // オンで手前へ出たことは、オンが他のアプリの奥から始まる走りでしか示せない。
         let _ = run.close();
         let _ = std::fs::write(base.join("run.log"), run.output());
         let _ = std::fs::write(base.join("steps.txt"), &n.steps);
@@ -642,6 +663,8 @@ fn stay_on_top_directives_on_emo2() {
         format!("before={:x?} after={:x?}", s2.order(), s3.order()),
     );
     raise_other(&mut n, "while on");
+    // 手前のまま変わらないことを見るので、待てる変化が無い。クリックが届くまでの間だけ空ける。
+    sleep(Duration::from_millis(500));
     let s4 = snap(&run, other);
     n.record("s4_on_other_raised", &s4);
     n.judge(
@@ -696,26 +719,12 @@ fn stay_on_top_directives_on_emo2() {
         !later.is_empty() && later.iter().all(|z| z.topmost && z.rank < other_rank)
     };
     // 開いた行は OS の窓の並びを書き出す前の tick に出る。オンで帯に入った窓は書き出しの前の読みでも
-    // 他のアプリより手前なので、1 回の真では書き出しの後を見たことにならない。100ms あけた続けて 2 回の
-    // 読みが同じになるまで読み直し（2 秒まで）、切れたら最後の読みを判定に落とさせる。
-    let end = Instant::now() + Duration::from_secs(2);
-    let mut prev = None;
-    let s5 = loop {
-        let s = snap(&run, other);
-        let later = later_of(&s);
-        let other_rank = s.other.as_ref().map_or(0, |o| o.rank);
-        let settled = in_front(&s, &later).then(|| {
-            later
-                .iter()
-                .map(|z| (z.hwnd, z.topmost, z.rank < other_rank))
-                .collect::<Vec<_>>()
-        });
-        if (settled.is_some() && settled == prev) || Instant::now() >= end {
-            break s;
-        }
-        prev = settled;
-        sleep(Duration::from_millis(100));
-    };
+    // 他のアプリより手前なので、1 回の真では書き出しの後を見たことにならない。続けて 2 回、同じ窓が
+    // 手前と読めるまで待つ。
+    let s5 = snap_settled(&run, other, |s| {
+        let later = later_of(s);
+        in_front(s, &later).then(|| later.iter().map(|z| z.hwnd).collect::<Vec<_>>())
+    });
     n.record("s5_later_balloon", &s5);
     let later = later_of(&s5);
     n.judge(
@@ -825,7 +834,7 @@ fn stay_on_top_directives_on_emo2() {
     let s11 = snap(&run, other);
     n.record("s11_off", &s11);
     raise_other(&mut n, "after off");
-    let s12 = snap(&run, other);
+    let s12 = snap_behind(&run, other);
     n.record("s12_off_other_raised", &s12);
     n.judge(
         "オフの後に帯の印が外れ、他のアプリを前に出すと後ろへ回る",
@@ -880,7 +889,7 @@ fn stay_on_top_directives_on_emo2() {
     let s14 = snap(&run, other);
     n.record("s14_ghost_switched", &s14);
     raise_other(&mut n, "after ghost switch");
-    let s15 = snap(&run, other);
+    let s15 = snap_behind(&run, other);
     n.record("s15_switched_other_raised", &s15);
     n.judge(
         "ゴーストの切り替えの後に帯の印が無く、他のアプリの後ろへ回る",

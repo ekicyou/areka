@@ -42,11 +42,7 @@ fn missing_body_systems_logs_and_answers_idle() {
 
     let (body, events) = capture(|| BodySystems::of(&world));
 
-    let missing: Vec<Level> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("body_systems_missing"))
-        .map(|e| e.level)
-        .collect();
+    let missing = super::levels_of(&events, "body_systems_missing");
     assert_eq!(
         (
             missing,

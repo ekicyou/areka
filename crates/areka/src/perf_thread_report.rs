@@ -284,14 +284,8 @@ impl ReportHandle {
     /// 待ちきれなかったときは `warn!` を残してスレッドを切り離す（プロセスは直後に
     /// 終わるので、置き去りのスレッドは OS が回収する）。
     pub fn stop_and_report_final(self) {
-        if self.stop.send(()).is_err() {
-            // 受け手が既に居ない＝報告スレッドは終わっている。最後の 1 枚は出ない。
-            warn!(
-                target: PERF_TARGET,
-                "[perf_thread_report] 報告スレッドは既に終端していた（終了直前のスナップショットは出ない）"
-            );
-            return;
-        }
+        // 送れないのは報告スレッドが先に終わっていたときだけで、そのときは下の待ちがすぐ切断で返る。
+        let _ = self.stop.send(());
         match self.done.recv_timeout(FINAL_WAIT) {
             // 送出端が落ちた＝報告スレッドは終わっている（panic を含む）ので、畳んで結果を見る。
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {

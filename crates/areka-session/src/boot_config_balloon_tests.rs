@@ -7,9 +7,7 @@
 use crate::boot_config::resolve_balloon_for_ghost;
 use crate::boot_resolve::boot_resolve_tests::no_pick;
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
-use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+use crate::session_end::test_support::put_memory;
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -43,19 +41,6 @@ fn put_balloon(dir: &Path, name: &str) {
 fn put_install(ghost: &Path, body: &str) {
     std::fs::write(ghost.join("install.txt"), format!("charset,UTF-8\n{body}"))
         .expect("install.txt");
-}
-
-/// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
-pub(super) fn put_memory(ghost: &Path, folder: &str) {
-    save_scope(
-        PersistScope::Ghost,
-        &ScopeRoots {
-            ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastBalloon, folder.to_owned())],
-    );
 }
 
 /// 入力を集める口を呼び、(段, フォルダ名) と記録を返す。決まったバルーンの場所が

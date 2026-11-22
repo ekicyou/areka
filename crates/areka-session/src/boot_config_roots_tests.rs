@@ -6,13 +6,13 @@
 //! 起動の入口の既定ゴーストと既定バルーンの採用・0 体の失敗が各根の格納フォルダを持つこと。
 //! 根は `TempPath::under_target`。
 
-use super::balloon_tests::put_memory;
 use crate::alert::AlertScene;
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_with};
 use crate::boot_request::BootRequest;
 use crate::boot_resolve::boot_resolve_tests::{no_pick, put_ghost};
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostRoute};
 use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
+use crate::session_end::test_support::put_memory;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};

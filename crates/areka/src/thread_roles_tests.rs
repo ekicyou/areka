@@ -13,9 +13,7 @@ use areka_ghost::ticker::{
     LoopTickerConfig, Tick, TickerConfig, TickerMsg, spawn_loop_ticker, spawn_ticker,
 };
 use areka_kanade::KanadeMsg;
-use wintf::ecs::world::thread_registry::{
-    self, ROLE_TICKER_DISPATCHER_KANADE, ROLE_TICKER_LOOP, is_known_role, role_actor,
-};
+use wintf::ecs::world::thread_registry::is_known_role;
 
 /// テスト中にティッカーが 1 度も発火しないよう十分長く取った周期。
 /// 停止は `TickerMsg::Close` で行うので、待たされることはない。

@@ -9,8 +9,8 @@
 //!   途中の物は最初の出所が `MemoryWriteFailed`、起動の時点は起動を止める口、後始末は告知を選ぶ口が
 //!   失敗を返すことを判定する。
 //!
-//! 置き場の並びは、ゴーストが居る（投函）と居ない（直）の両方を踏む。判定した種類の並びが
-//! 13 種と等しいことも判定する。根・検体はワークツリーの `target\` の下だけ。
+//! 置き場の並びは、ゴーストが居る（投函）と居ない（直）の両方を踏む。判定した種類の集まりが
+//! 表の 13 種と等しいことも判定する。根・検体はワークツリーの `target\` の下だけ。
 
 use areka_ghost::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use areka_kanade::{ChangeHandoff, KanadeNotice};

@@ -202,10 +202,8 @@ fn relative_paths_carried_raw() {
 #[test]
 fn help_with_offline_stays_effective() {
     let parsed = run(&["--offline-dump", "G", "--help"]);
-    let Some(ParseNote::Summary { effective, .. }) = parsed.notes.last() else {
-        panic!("まとめが最後");
-    };
-    assert_eq!(effective, &vec![s("offline-dump"), s("help")]);
+    let (_, (effective, _, _)) = split(&parsed);
+    assert_eq!(effective, [s("offline-dump"), s("help")]);
 }
 
 /// `--help` と一緒なら両方が立つ（どちらを行うかは main が決める）。
@@ -258,14 +256,9 @@ fn summary_lists_offline_names() {
         "1",
         "--dump-animation",
     ]);
-    let Some(ParseNote::Summary {
-        effective, ignored, ..
-    }) = parsed.notes.last()
-    else {
-        panic!("まとめが最後");
-    };
-    assert_eq!(effective, &vec![s("offline-dump"), s("dump-scope")]);
-    assert_eq!(ignored, &vec![s("dump-animation")]);
+    let (_, (effective, _, ignored)) = split(&parsed);
+    assert_eq!(effective, [s("offline-dump"), s("dump-scope")]);
+    assert_eq!(ignored, [s("dump-animation")]);
 }
 
 /// `--offline-dump` と一緒の起動オプションは効かせなかった記録を 1 件ずつ。`--option` の語の記録はそのまま。
@@ -305,13 +298,8 @@ fn other_options_with_offline_not_applied() {
         ]
     );
     // まとめでは無視の側
-    let Some(ParseNote::Summary {
-        effective, ignored, ..
-    }) = parsed.notes.last()
-    else {
-        panic!("まとめが最後");
-    };
-    assert_eq!(effective, &vec![s("offline-dump")]);
+    let (_, (effective, _, ignored)) = split(&parsed);
+    assert_eq!(effective, [s("offline-dump")]);
     for n in ["ghost", "random", "sstp-listen"] {
         assert!(ignored.contains(&s(n)), "{n} {ignored:?}");
     }
@@ -347,15 +335,10 @@ fn dump_without_offline_noted_each() {
             without_offline("dump-animation"),
         ]
     );
-    let Some(ParseNote::Summary {
-        effective, ignored, ..
-    }) = parsed.notes.last()
-    else {
-        panic!("まとめが最後");
-    };
-    assert_eq!(effective, &vec![s("random")]);
+    let (_, (effective, _, ignored)) = split(&parsed);
+    assert_eq!(effective, [s("random")]);
     assert_eq!(
         ignored,
-        &vec![s("dump-animation"), s("dump-shell"), s("dump-scope")]
+        [s("dump-animation"), s("dump-shell"), s("dump-scope")]
     );
 }

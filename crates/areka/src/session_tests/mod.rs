@@ -11,7 +11,7 @@ use areka_session::boot_config::{BootContext, BootResolved, resolve_boot_with};
 use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::roots::{ResolvedRoots, RootError};
-pub(crate) use areka_session::session_end::test_support::reservation;
+pub(crate) use areka_session::session_end::test_support::{put_memory, reservation};
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 use bevy_ecs::prelude::World;
@@ -56,20 +56,6 @@ pub(crate) fn save_scope(app_dir: &Path, ghost_folder: &str) {
         },
         &FsPersistIo,
         vec![(PersistKey::LastGhost, ghost_folder.to_owned())],
-    );
-}
-
-/// ゴースト `ghost` の記憶に最後のバルーンを書く（Ghost スコープ・boot が据える場所と同じ）。
-pub(crate) fn put_memory(ghost: &Path, folder: &str) {
-    let master = ghost.join("ghost").join("master");
-    areka_sylphya::save_scope(
-        PersistScope::Ghost,
-        &ScopeRoots {
-            ghost: Some(areka_ghost::sylphya_wiring::profile_areka_root(&master)),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastBalloon, folder.to_owned())],
     );
 }
 

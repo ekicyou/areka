@@ -36,6 +36,16 @@ fn g1(tmp: &TempPath) -> String {
 }
 
 fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved {
+    boot_with(tmp, rest, pick, |_, dir| dir.to_path_buf())
+}
+
+/// 選び手と写しの口を選んで起動を決める。
+fn boot_with(
+    tmp: &TempPath,
+    rest: &[&str],
+    pick: fn(usize) -> usize,
+    prepare: fn(&areka_ghost::BasewareRoots, &Path) -> PathBuf,
+) -> BootResolved {
     let args: Vec<String> = std::iter::once("areka.exe")
         .chain(rest.iter().copied())
         .map(str::to_owned)
@@ -45,7 +55,7 @@ fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved
         &args,
         &tmp.child("app-profile"),
         pick,
-        |_, dir| dir.to_path_buf(),
+        prepare,
     )
     .expect("決まる")
 }
@@ -153,26 +163,6 @@ fn positional_balloon_is_used_with_or_without_ghost_option() {
 // `--ghost` の指し先
 // ---------------------------------------------------------------------------
 
-/// `boot` と同じだが写しの口を選べる。
-fn boot_with(
-    tmp: &TempPath,
-    rest: &[&str],
-    prepare: fn(&areka_ghost::BasewareRoots, &Path) -> PathBuf,
-) -> BootResolved {
-    let args: Vec<String> = std::iter::once("areka.exe")
-        .chain(rest.iter().copied())
-        .map(str::to_owned)
-        .collect();
-    resolve_boot_from(
-        areka_session::roots::single_env(tmp.path().to_path_buf()),
-        &args,
-        &tmp.child("app-profile"),
-        no_pick,
-        prepare,
-    )
-    .expect("決まる")
-}
-
 /// 写しの口が呼ばれたら分かるように、フォルダの下の `copied` を返す。
 fn mark_copy(_: &areka_ghost::BasewareRoots, dir: &Path) -> PathBuf {
     dir.join("copied")
@@ -251,7 +241,7 @@ fn absolute_path_boots_the_pointed_folder_itself() {
     let ext_g1 = tmp.child("ext").join("g1");
     put_ghost(&ext_g1);
     let s = ext_g1.display().to_string();
-    let got = boot_with(&tmp, &["--ghost", &s], mark_copy);
+    let got = boot_with(&tmp, &["--ghost", &s], no_pick, mark_copy);
     assert_eq!(
         (got.1.route, &got.1.dir, got.1.folder.as_deref()),
         (GhostRoute::Pointed, &ext_g1, Some("g1"))
@@ -299,7 +289,7 @@ fn name_matches_descript_name_before_folder_name() {
     // フォルダ名 `Alpha` のゴーストと、`name,Alpha` のフォルダ `named`。
     put_named_ghost(&tmp.child("ghost").join("Alpha"), "Other");
     put_named_ghost(&tmp.child("ghost").join("named"), "Alpha");
-    let got = boot_with(&tmp, &["--ghost", "Alpha"], mark_copy);
+    let got = boot_with(&tmp, &["--ghost", "Alpha"], no_pick, mark_copy);
     assert_eq!(
         (got.1.route, &got.1.dir, got.1.folder.as_deref()),
         (

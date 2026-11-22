@@ -1,7 +1,12 @@
-//! 終了と切替のテストが共有する値の組み立てと記録の読み。
+//! 終了・切替・起動のテストが共有する値の組み立てと記録の読み。
 
+use std::path::Path;
+
+use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_runtime::spine::RecordedCall;
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
 
 use crate::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 
@@ -23,6 +28,19 @@ pub fn reservation(stage: SwitchStage) -> SwitchInFlight {
         boot_event: None,
         copy: crate::switch_copy::SwitchCopy::None,
     }
+}
+
+/// ゴースト `ghost` の記憶に最後のバルーンを書く（Ghost スコープ・boot が据える場所と同じ）。
+pub fn put_memory(ghost: &Path, folder: &str) {
+    save_scope(
+        PersistScope::Ghost,
+        &ScopeRoots {
+            ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
+            ..ScopeRoots::default()
+        },
+        &FsPersistIo,
+        vec![(PersistKey::LastBalloon, folder.to_owned())],
+    );
 }
 
 /// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
