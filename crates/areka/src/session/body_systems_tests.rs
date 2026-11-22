@@ -5,17 +5,26 @@ use std::sync::mpsc;
 
 use areka_ghost::GhostRuntime;
 use areka_input::user_break::drain_no_user_break_signals;
-use areka_kanade::KanadeNotice;
+use areka_kanade::{ChangeOrigin, KanadeNotice};
 use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
 use areka_runtime::source_text_test_support::{code_only, index_of, squeeze};
+use areka_runtime::spine::ScriptedShioriBackend;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::system::{IntoSystem, System};
 use bevy_ecs::world::World;
+use sample_ghost_kit::SampleRoot;
+use shiori_host32_host::ExitKind;
 use wintf::AppExit;
 use wintf::ecs::Input;
+use wintf::ecs::widget::bitmap_source::WintfTaskPool;
+use wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands;
 
 use super::*;
-use crate::session::ghost_session::register_systems;
+use crate::session::ghost_session::{open_ghost_windows, register_systems};
+use crate::session::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
+use crate::session::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig};
 use crate::session::reload::{
     RefusedReason, ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload,
 };
@@ -227,5 +236,123 @@ fn window_slots_sit_between_the_input_attachments() {
     assert!(
         at.is_sorted(),
         "窓を作るクロージャの中の差し込みと口の順が違う（位置: {at:?}）"
+    );
+}
+
+fn count(slot: &str) -> usize {
+    LOG.with(|log| log.borrow().iter().filter(|(s, _)| *s == slot).count())
+}
+
+/// 台詞を返さない台本（起動記録を植えたゴースト用・どの起動の事象も 204）。
+fn silent() -> FakeShiori {
+    FakeShiori::Scripted(Box::new(|| {
+        ScriptedShioriBackend::builder()
+            .notify("OnInitialize", Ok(()))
+            .get("OnGhostChanged", Ok(None))
+            .get("OnBoot", Ok(None))
+            .notify("basewareversion", Ok(()))
+            .notify("OnClose", Ok(()))
+            .unload(Ok(ExitKind::Clean))
+    }))
+}
+
+/// A を窓ごと起こして定常にし、B へ切り替えて B の窓と定常まで回す。窓を開くたびに
+/// `after_char_pointer` → `after_balloon_pointer`、起こすたびに `cue_sinks` → `after_runtime_wired`、
+/// `overwrite_between` は B の `cue_sinks` より前、B の定常で `on_switch_end(true)` → `on_steady`。
+#[test]
+fn body_slots_follow_the_boot_and_switch_order() {
+    reset();
+    let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let mut rig = SwitchRig::with(
+        RigSample::of(sample),
+        RECORDING,
+        vec![("A", silent()), ("B", silent())],
+    );
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
+    rig.world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, drain_task_pool_commands);
+    rig.plant_boot_record("A");
+    rig.plant_boot_record("B");
+
+    let cfg_a = rig.cfg("A");
+    let a_opened = open_ghost_windows(&mut rig.world, &cfg_a).is_ok();
+    rig.boot("A");
+    let a_ready =
+        rig.pump_input_until(|_| count("on_steady") == 1 && count("after_balloon_pointer") == 1);
+    let verdict = request_ghost_switch(
+        &mut rig.world,
+        SwitchRequest {
+            ghost: GhostSpec::Folder("B".to_owned()),
+            raise_event: false,
+            origin: ChangeOrigin::Manual,
+            boot_event: None,
+        },
+    );
+    let b_ready = rig.pump_input_until(|rig| {
+        count("on_steady") == 2
+            && count("after_balloon_pointer") == 2
+            && rig.world.get_non_send::<SwitchInFlight>().is_none()
+    });
+    let log = slots(&take_log());
+    let shutdown_ok = rig.shutdown();
+
+    let window = |slot: &&str| slot.starts_with("after_") && slot.ends_with("_pointer");
+    let positions = |slot: &str| -> Vec<usize> {
+        log.iter()
+            .enumerate()
+            .filter(|(_, s)| **s == slot)
+            .map(|(at, _)| at)
+            .collect()
+    };
+    let (wired, char_pointer) = (
+        positions("after_runtime_wired"),
+        positions("after_char_pointer"),
+    );
+    // B の窓の閉包と B の定常の知らせはどちらが先に着くかが決まらないので、全体の並びでなく
+    // 窓の欄とそれ以外の欄を別々に比べ、窓の欄の位置は起こした回の結線の後かで見る。
+    let windows_after_wiring = [
+        wired.first(),
+        char_pointer.first(),
+        positions("overwrite_between").first(),
+        wired.get(1),
+        char_pointer.get(1),
+    ]
+    .into_iter()
+    .collect::<Option<Vec<_>>>()
+    .is_some_and(|at| at.is_sorted());
+    assert_eq!(
+        (
+            (a_opened, a_ready, verdict, b_ready, shutdown_ok),
+            log.iter()
+                .copied()
+                .filter(|s| !window(s))
+                .collect::<Vec<_>>(),
+            log.iter().copied().filter(window).collect::<Vec<_>>(),
+            windows_after_wiring,
+        ),
+        (
+            (true, true, SwitchVerdict::Accepted, true, true),
+            vec![
+                "menu_poll",
+                "after_input",
+                "cue_sinks",
+                "after_runtime_wired",
+                "on_steady",
+                "overwrite_between",
+                "cue_sinks",
+                "after_runtime_wired",
+                "on_switch_end(true)",
+                "on_steady",
+            ],
+            vec![
+                "after_char_pointer",
+                "after_balloon_pointer",
+                "after_char_pointer",
+                "after_balloon_pointer",
+            ],
+            true,
+        ),
+        "((A の窓の準備, A の窓と定常, 受理, B の窓と定常, 降ろせた), 窓の外の欄, 窓の欄, 窓が結線の後): {log:?}"
     );
 }

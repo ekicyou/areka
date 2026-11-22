@@ -77,7 +77,7 @@
   - 比べた結果の表（ファイル・テスト・合否・記録の差・決めた置き場）が検証の記録に在り、集めた層に残すと決めたテストが偽物の組で緑
   - _Dispatch: standard, effort high — 記録の差を 1 本ずつ読んで守りを失うテストを見逃さない_
   - _Requirements: 5.1, 5.2, 5.4_
-- [ ] 3.3 記録する偽物の組で、起動と切替の道の口の順と回数を確かめるテストを足す
+- [x] 3.3 記録する偽物の組で、起動と切替の道の口の順と回数を確かめるテストを足す
   - 先に、`SwitchRig` の起動と切替の道が窓を作るクロージャを通り、作業プール（`WintfTaskPool::with_threads(1)`）へ投函された閉包がこの World に当たるかを確かめる。当たらなければ C1 の 2 欄をこの表明から外し、窓を作るクロージャの呼び手の数を字面で確かめる形に替えて記録する
   - `body_slots_follow_the_boot_and_switch_order` を `session/body_systems_tests.rs` に足す: `SwitchRig::with(…, RECORDING, …)` で A を起こし B へ切り替えて定常まで回し、窓を開くたびに `after_char_pointer` → `after_balloon_pointer`、起こすたびに `cue_sinks` → `after_runtime_wired`、`overwrite_between` が次の `cue_sinks` より前、定常で `on_switch_end(true)` → `on_steady` の並びと回数であること
   - テストが緑で、起こし直しのたびに口を通る回数が記録の中で数えられている

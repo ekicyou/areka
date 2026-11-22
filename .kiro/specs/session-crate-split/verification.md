@@ -723,3 +723,33 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 - 赤（比べそのもの）: 偽物の組で `a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon` が 2 回とも赤（上）。
 - 緑: `cargo test -p areka --bin areka` 1840 passed・0 failed・3 ignored（`SwitchRig::new` が `NO_BODY` を渡す形で）。`cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。
 - 一時の仕掛けが残っていない: `git diff` の差は `ghost_switch_test_support.rs`（`NO_BODY` の 3 行）・`app_exit_escape_tests.rs`（1 行）・`shell_balloon_switch_session_lap_tests.rs`（`lap_rig_on`）・`shell_balloon_switch_session_update_tests.rs`（`steady_rig`・`use`・`//!` の文）だけ。
+
+### 3.3
+
+#### 足場の道の確かめ（どちらの枝を取ったか）
+
+- 取った枝: **C1 の 2 欄（`after_char_pointer`・`after_balloon_pointer`）を表明に含める**（字面で呼び手の数を数える形へは替えない）。
+- 理由: `SwitchRig::boot` は `boot_ghost` だけで窓を開かないが、切替の道（`ghost_switch.rs` の起こし直し）は `reopen_ghost_windows` → `boot_ghost_strict` → `commit_ghost_windows` で窓を作るクロージャを作業プールへ投函する。足場に `WintfTaskPool::with_threads(1)` を据え、`Input` の段に `drain_task_pool_commands` を足すと、`pump_input_until` が回す `Input` の段で投函された閉包がこの World に当たる（既にある `ghost_session_switch_fallback_tests.rs` の `windows_rig` と同じ形）。A の窓は `fn main` と同じく `open_ghost_windows` を `boot` の前に呼んで開く。走らせて、窓を開くたびに 2 欄が 1 回ずつ呼ばれることを記録で見た。
+
+#### 足したテスト
+
+- `session/body_systems_tests.rs` に `body_slots_follow_the_boot_and_switch_order`。`SwitchRig::with(RigSample::of(SampleRoot::acquire("emo2")), RECORDING, …)` に台詞を返さない A・B（起動記録を植える）を渡し、A を窓ごと起こして定常、B へ切り替えて B の窓と定常まで回す。先頭で `reset()`。
+- B の窓の閉包と B の定常の知らせはどちらが先に着くかが決まらないので、全体の並びは比べず、窓の欄の並び・窓の外の欄の並び・窓の欄の位置（起こした回の `after_runtime_wired` の後・A の窓は `overwrite_between` の前）を比べる。
+
+#### 記録の中で数えた回数（1 回の走りの記録）
+
+`["menu_poll", "after_input", "cue_sinks", "after_runtime_wired", "after_char_pointer", "after_balloon_pointer", "on_steady", "overwrite_between", "cue_sinks", "after_runtime_wired", "after_char_pointer", "after_balloon_pointer", "on_switch_end(true)", "on_steady"]`
+
+| 欄 | 登録 | A の起動（窓を開く） | B への切替（起こし直し） | 計 |
+|---|---|---|---|---|
+| `menu_poll`・`after_input` | 1・1 | 0 | 0 | 1・1 |
+| `cue_sinks` → `after_runtime_wired` | 0 | 1 → 1 | 1 → 1 | 2・2 |
+| `after_char_pointer` → `after_balloon_pointer` | 0 | 1 → 1 | 1 → 1 | 2・2 |
+| `overwrite_between` | 0 | 0 | 1（B の `cue_sinks` より前） | 1 |
+| `on_switch_end(true)` → `on_steady` | 0 | `on_steady` だけ 1（予約の外の定常） | 1 → 1 | 1・2 |
+| `update_busy`・`install_busy`・`on_switch_end(false)` | 0 | 0 | 0 | 0 |
+
+#### 確かめ
+
+- 赤（一時の摂動・コミットしない）: `ghost_switch.rs` の `(BodySystems::of(world).overwrite_between)(world);` をコメントに替えると、このテストが `assertion left == right failed` で赤（窓の外の欄から `overwrite_between` が消え、窓の欄の位置の確かめが `false`）。`git checkout crates/areka/src/session/ghost_switch.rs` で戻し、`git status` で差が `body_systems_tests.rs` だけであることを見た。
+- 緑: `cargo test -p areka --bin areka body_systems -- --test-threads 1` 4 passed。`cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。`cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored。`body_systems_tests.rs` は 358 行。
