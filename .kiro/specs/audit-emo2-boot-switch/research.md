@@ -810,14 +810,14 @@
 
 | 相手 | 申し送った件（6 節） | 中身 |
 |---|---|---|
-| `audit-areka-app` | ウ・カ（本体 `ghost_session_switch_tests.rs` の `kinds`）・キ・ク・ケ・シ・ス・セ・ソ・タ（`reload_tests` の 2 本） | 持ち物の写し・出し直しのそろえ・据え付けの削り。加えて、この spec が相手の持ち物に触ったのは申し合わせた use の道の 4 か所だけという知らせ |
+| `audit-areka-app` | ウ・カ（本体 `ghost_session_switch_tests.rs` の `kinds`）・キ・ク・ケ・シ・ス・セ・ソ・タ（`reload_tests` の 2 本） | 持ち物の写し・出し直しのそろえ・据え付けの削り。加えて、この spec が相手の持ち物に触ったのは申し合わせた use の道の 4 か所だけという知らせ。実際にはほかに `areka-session/src/body_systems_tests.rs`（相手の brief の `src/body_systems*`）を 2 つ直していて、この知らせから漏れていた。仕上げの確かめで拾い、2026-11-23 に別に知らせた（15.1・15.2） |
 | `audit-areka-install-update` | カ（`refs_of` の 3 つ・`worker_path_tests.rs` の `kinds`）・コ・タ（`install`・`update` の 3 本） | 持ち物の写しと `BODY_SYSTEMS` を手で足す所。加えて着地の知らせ: `SwitchVerdict::Updating` と腕の名 1 つを `install/overwrite.rs:129` へ（`68c8e1069`・相手の開発者の確定 `537109983`・相手の要件 7.13 (a)）、`spawn_windows`・`pump_messages` を `pub` に（`f1a631316`） |
 
 ### 13.4 並走の spec の答えと決まりごと
 
 - 3 番の続き（`reload.rs` の読み直しの入口が台本の `\![reload,…]` も断る件）: `audit-areka-app` が設計で「MCP からの読み直しだけを断る」と決めて片づいた。この spec は記録だけで、`reload.rs` には触れない。
 - `update_reload_requested` の語の替えは窓口の側（`update/desk.rs:206` の記録）に及ばない。範囲の中の読み手 `shell_balloon_switch_session_update_tests.rs:243` は窓口の側の記録を数えるので、直しは要らない（`audit-areka-install-update` が確かめた）。
-- 実装の段の例外: `doc/COMPAT_ARCHITECTURE.md` の 405 行は、4.6 のテストの名の替えに合わせて名指しを替えた（134・177・407 行のほかの 1 行・行は足していない）。75 番は 5.2 で research の 2 か所だけを直し、`ghost_switch.rs` の別の 2 つの文（「今日どおり終了する」）と `COMPAT_ARCHITECTURE.md:303` は 75 番の場所に無いので残した。かけ直しの audit で拾われたらそこで扱う。
+- 実装の段の例外: `doc/COMPAT_ARCHITECTURE.md` の 405 行は、4.6 のテストの名の替えに合わせて名指しを替えた（134・177・407 行のほかの 1 行・行は足していない）。75 番は 5.2 で research の 2 か所だけを直し、`ghost_switch.rs` の別の 2 つの文（「今日どおり終了する」）と `COMPAT_ARCHITECTURE.md:303` は 75 番の場所に無いので残した。かけ直しの audit で拾われたらそこで扱う。`ghost_switch.rs` の 2 つの文は、かけ直し 1 回目（`3ad5647f6`）で「そのまま終了する」の形へ直した（14 節・15.3）。
 
 ---
 
@@ -841,6 +841,97 @@
   - `DisplayEndAt` が `TalkEnded` の後に届いたら計測を捨てる枝（`DisplayEndAdvanced`）は、送り手の約束の外の順への守りとして残し、説明をその理由に直した。
   - `LapRig.windows` は `pub` のまま（`pub(crate)` にすると `test-support` の組み立てで未使用の警告が出る。読み手は `cfg(test)` の中だけ）。
   - `ghost_switch.rs` の `switch_to`・`take_down`・`boot_into` の中身の中のコメントには触れなかった（範囲の外の持ち物）。
+
+## 15. 仕上げの確かめ（全体テストと差分・2026-11-23）
+
+### 15.1 差分の確かめ（要件 9.5・設計「仕上げの確かめ」4）
+
+比べる先は `origin/main`（`1b3ede541`）。作業ブランチの分かれ目も同じ `1b3ede541` で、main は進んでいない。
+
+| 確かめ | コマンド | 結果 |
+|---|---|---|
+| 触らないファイルの差分が空 | `git diff --stat origin/main...HEAD -- Cargo.toml Cargo.lock 'crates/*/Cargo.toml' crates/dola/ crates/wintf/ vendors/ crates/log-capture-kit/tests/file_length_guard_test.rs crates/sample-ghost-kit/ crates/areka-session/src/body_systems.rs crates/areka/src/main.rs crates/areka-session/src/reload.rs crates/areka/src/update/` | 出力なし（差分 0） |
+| 依存・フォーク・`[patch]`・`vendors/` | `git diff --stat origin/main...HEAD -- '*.toml' Cargo.lock vendors .cargo` | 出力なし（差分 0） |
+| `COMPAT_ARCHITECTURE.md` | `git diff -U0 origin/main...HEAD -- doc/COMPAT_ARCHITECTURE.md` | 134・177・405・407 行の 1 行ずつの置き換えだけ（4 行追加・4 行削除・行数は変わらない）。405 行は 4.6 のテストの名の替えに合わせた記録済みの例外（13.4） |
+| C26 のほかの 2 本の持ち物 | `git diff -U0 origin/main...HEAD -- crates/areka/src/install/overwrite.rs crates/areka-session/src/reload_test_support.rs crates/areka/src/runtime_tests/frame/` | `overwrite.rs` は腕の名 `SwitchVerdict::Updating` を 1 つ足しただけ（`audit-areka-install-update` の開発者確定・13.3）。`reload_test_support.rs`・`frame/switch_tests.rs`・`frame/switch_finish_tests.rs` は use の道（`areka_runtime::skin_switch::…`）と、`SwapFinish::Shell` の道の 1 か所だけ（`audit-areka-app` と申し合わせ済み） |
+| 申し合わせの外で触った持ち物 | `git diff origin/main...HEAD -- crates/areka-session/src/body_systems_tests.rs` | `audit-areka-app` の持ち物（相手の brief の `src/body_systems*`）。`4cb2d09e5`（口の束の順のテストの期待の並びに `"update_busy"` を 1 つ足し、説明に「メニューからの切替要求は `update_busy` を 1 回読み」を足す）と `7ddc891d2`（`request_skin_switch_with(…, \|_\| 0)` を `request_skin_switch(…)` へ呼び替え、取り込みも替える）の 2 つ。理由は要件 7.7（形を変えた所の読み手を同じ変更で直す）: 前者は 2.2 で入口が `update_busy` を読むようになった並び、後者は 5.1 で `request_skin_switch_with` を私有にした形に追う。申し合わせの 4 か所に入っていなかったので、2026-11-23 に `audit-areka-app` のセッションへこの 2 つの直しを知らせた（13.3） |
+| 範囲の外の差分 | `git diff --name-status -M origin/main...HEAD` を範囲の名の型と突き合わせ | 下の 15.2 |
+| 外への約束の変化 | 本番コードの追加行の `warn!`・`error!`・`info!` と公開の面の差分 | 下の 15.3 |
+| 端末へ出す文 | 追加行の `println!`・`eprintln!`・`print!`・`dbg!` を grep | 0 件 |
+| テストの根 | 追加行の `C:\`・`temp_dir`・`/tmp` を grep | 1 か所だけ: `special_name.rs` の `catalog_entry` の偽の目録の道 `C:\ghost-switch-tests\…`。移す前の `ghost_switch_tests.rs` にあった同じ文字列の移し替えで、fs を見ない（開かない・書かない）。テストの根は今までどおり `temp-path-kit`・`sample-ghost-kit` の `target\` の下 |
+
+### 15.2 範囲の外のファイル（設計「範囲の外（持たないもの）」との突き合わせ）
+
+範囲の外で差分のあるファイルは次のとおり。
+
+- 一覧どおり: `areka-runtime/src/special_name.rs`（`catalog_entry` と兄弟のテストの宣言）・`special_name_tests.rs`（新）・`lib.rs`・`frame_persist_test_support.rs`・`shell_balloon_resolve.rs`、`areka-placement/src/` の 4 本（`windowposition.rs`・`follow/offset_space.rs`・`balloon_offset_supply_tests.rs`・`follow_offset_space_tests.rs`）と `lib.rs`（`i32::MIN` の素通しに合わせた doc の書き換えだけ）、`doc/COMPAT_ARCHITECTURE.md`、C26 の 2 本の持ち物（15.1）。
+- 記録済みの判断による: `install/overwrite.rs`（腕の名・13.3）。
+- 本体の `runtime_tests/` の 3 本（`frame_balloon_timeout_notice_e2e_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`）は、可視性の相のテストを `areka-runtime` へ移したことで古くなった**コメントのファイル名の指し先**の書き換えだけ（コードの行は 0）。
+- `areka-session/src/body_systems_tests.rs` は `audit-areka-app` の持ち物（相手の brief の `src/body_systems*`）。`4cb2d09e5` で期待の並びに `"update_busy"` と説明の 1 句を足し、`7ddc891d2` で `request_skin_switch_with` から `request_skin_switch` へ呼び替えた。どちらも要件 7.7 の読み手の直し（2.2 の入口の並びと 5.1 の私有化に追う）。申し合わせた use の道の 4 か所の外なので、2026-11-23 に `audit-areka-app` のセッションへこの 2 つを知らせた（15.1・13.3）。`body_systems.rs` 本体は触っていない。
+- 範囲の中: `balloon_hover.rs`・`shell_box_hover.rs`・`shell_box_hover_tests.rs`・`hover_inject.rs`・`change_cue.rs`・`skin_switch.rs`・`switch_assets*`・`move_cue*`・`balloon_visibility*`・`ghost_switch*`・`shell_balloon_switch*` と、本体の `session_tests/shell_balloon_switch*`・`runtime_tests/balloon_visibility*`（移して消した 2 本を含む）。
+- `.kiro/specs/audit-emo2-boot-switch/` の 6 ファイルは spec の文書。
+- 説明のつかない差分: なし。
+
+### 15.3 外への約束の変化（要件 7.6・7.7・設計「見直しが要る変化」）
+
+比べたのは `git diff origin/main...HEAD` の本番コード（`*tests*`・`*test_support*` を除く `crates/**/*.rs`）。出どころは、設計・タスクで決めたもの（タスク番号）と、かけ直しの回で直したもの（14 節の回と直しのコミット）に分けた。読み手は `git grep -F <語> -- crates tools doc .claude/skills` で数えた。
+
+**ログの水準と文の変化**
+
+| 変化 | 出どころ | 読み手 |
+|---|---|---|
+| `ghost_switch_no_reservation` を `on_ghost_stopped` で `debug!` → `error!`、`set_stage` で `warn!` → `error!`。文は「切替の予約が無い停止通知——今日どおり終了する」→「切替の予約が無いのに停止通知を切替の段で捌く指示が来た——そのまま終了する」、「切替の予約が無い——段は記録しない」→「切替の予約が無いのに段を進める指示が来た——段は記録しない」 | かけ直し 1 回目（`3ad5647f6`） | 語は `ghost_switch.rs` 4・`ghost_switch_notice_tests.rs` 2（水準を `error` と読む表明・同じ変更で直した）。古い 2 つの文はどこにも残っていない（0 件） |
+| `ghost_switch_not_accepted` の文の「今日どおり終了する」→「そのまま終了する」 | かけ直し 1 回目（`3ad5647f6`） | 文の読み手 0 件（語は変えていない） |
+| `move_frame_substituted` の文「`\![move]` の基準を置き換えて動かす」→「`\![move]` の基準を置き換えた」。止める（`skipped`）前にも出す。動かない軸（`Fix`）の置き換えは記録しない | 文はかけ直し 4 回目（`78c2d89cc`）、止める前の記録と動かない軸はかけ直し 3 回目（`6a5684a22`）と 4 回目（`78c2d89cc`・どの軸も動かないときの基準の窓が無い記録） | 古い文 0 件・新しい文は `move_cue_place.rs` 2 だけ。語は `move_cue_geometry.rs` 1・`move_cue_place.rs` 2・`move_cue_place_tests.rs` 3・`doc/COMPAT_ARCHITECTURE.md` 1・`doc/ukadoc-coverage/ledger/sakura-script.toml` 1（どちらも語と振る舞いを書くだけで文を読まない） |
+| `MoveCueSink` の 3 つの `warn!` に `event` を足した: `move_cue_unopenable`（自分宛の非正準の荷物・`lock`／`unlock` の壊れた荷物の warn を新しく足した）・`move_cue_bad_actor`・`move_cue_send_failed`。文から要件の番号（「D8④」「R5.5」）を消した | `event` はかけ直し 3 回目（`6a5684a22`）、`lock`／`unlock` の warn はかけ直し 2 回目（`19c415fba`） | `move_cue_unopenable` は `move_cue.rs` 1・`move_cue_move_severity_log_tests.rs` 1、`move_cue_bad_actor` は `move_cue.rs` 1・`move_cue_balloon_lock_tests.rs` 1、`move_cue_send_failed` は `move_cue.rs` 1・`move_cue_move_sink_tests.rs` 1（範囲の中のテストだけ）。古い文「MoveCueSink: 自分宛（move）」は 0 件 |
+| 新しい `warn!`: `ghost_switch_updating`（更新中のメニューの切替要求）と `skin_switch_installing`（インストール中のメニューのシェル・バルーンの切替要求） | 2.2（`68c8e1069`）と 1.3（`e67a74b40`） | `ghost_switch.rs` 2・`ghost_switch_tests.rs` 1、`shell_balloon_switch.rs` 1・`shell_balloon_switch_tests.rs` 2 |
+| `ghost_switch_busy`・`ghost_switch_no_context` は判定の場所を寄せた（予約の判定の `reserved`・文脈の無い記録の `no_boot_context`）だけで、語と文は変わらない。予約が在る間は読み直しの窓口から直に受理を呼ばれても断る | かけ直し 1 回目（`3ad5647f6`） | 語は変わらないので読み手の直しは要らない |
+
+**可視性の振る舞いの変化**
+
+- 満了の後の抑止の間は起床を預けない（1.1・`9750cd79d`）。
+- `ScopeVisibility::forget_scope` はバルーンの差し替えで期限（`deadline`）を消さない（かけ直し 1 回目・`03230f27e`）。`pub(crate)` に狭めた（3.3・`be4259528`）。
+- 文字の観測が取れなかったフレーム（どれかの scope の `visible_glyphs` が `None`）は計測に触れない（かけ直し 2 回目・`f6b5c90b4`）。
+- 抑止が解けたときに期限がまだ無ければ測り直さず、初めの成立を下の確立の枝に任せる（同じフレームなら測り始めとして記録する・かけ直し 2 回目・`f6b5c90b4`）。
+- 利用者の中断が箱へ届かない巡では、窓の隠れた・箱だけに文字が出ている scope を隠す対象にしない（かけ直し 4 回目・`78c2d89cc`）。
+- `hover_inject` の注入の `info!` は actor ごとに番号が変わったフレームだけ（かけ直し 1 回目・`03230f27e`）。
+- 可視性の相のテスト 29 本が本体から `areka-runtime` へ移った（3.2・`ff4a59133`）。
+
+**移動の振る舞いの変化**
+
+- 組の相手の移動量と `move_applied` の `to` を、面の `move` のずれを当て直した後の窓の位置から取る（かけ直し 1 回目・`210d3ce14`）。
+
+**配置の変化**
+
+- `scale_signed(i32::MIN, k)` は `i32` に収まる答えを素通しで返す（恒等比なら `i32::MIN`）。収まらない答えの飽和（`±i32::MAX`）は変えない（5.3・`fba7c4f7e`）。
+
+**狭めた公開の面**（どれも 3.1・3.3・5.1 の設計どおり。外の使い手は下の grep で 0 件）
+
+- `areka-runtime`（3.3・`be4259528`）: `balloon_visibility` の `decide` の出し直しを消し `decide` を `pub(super)` に。`VisibilityTrigger`・`SuppressionKinds`・`MeasurementDiscardReason`・`VisibilityLogEvent`・`MeasurementOrigin`・`VisibilityAction`・`GlyphObservation`・`VisibilityObservations`・`ScopeVisibility` と、`ScopeObservation`・`VisibilityDecision` の欄を私有・`pub(crate)` に。`balloon_visibility::phase` の `test_open` の出し直し（`IssueOutcome`・`issue_actions`・`clear_hover_residency`）を消した。`move_cue` の `BaseposResolver`・`CanonDefaultBasepos` の出し直しを私有の取り込みに（型シームは残す）。`hover_inject` を `pub(crate) mod` に、`shell_box_hover::settle_box_hover` を `pub(crate)` に。
+- `areka-session`（3.1・`70bb10c2a`）: `ghost_switch` の `NameResolution`・`resolve_special_name` の出し直しを私有に（`LastInstalledGhost` は残す）。`shell_balloon_switch` の `areka_runtime::skin_switch` の出し直しを 5 型に、`SwapFinish` の出し直しを消した。`request_ghost_switch_with`・`end_switch`・`switch_to_default`・`drain_switch_requests` を `pub(crate)` から私有に。
+- `areka-session`（5.1・`7ddc891d2`）: `request_skin_switch_with` を `pub(crate)` から私有に（読み手の `body_systems_tests.rs` は 15.2）。
+- 外の使い手の grep（定義の crate の外の `crates`・`tools`）: 上の型と関数はどれも 0 件。名の一致は `CanonDefaultBasepos` の本体 `spine_move_cue_tests.rs` のコメント 3・`areka-update` の別の型 `FetchError::NameResolution`・`reload_tests.rs:507` のコメントの `end_switch`・本体 `switch_finish_tests.rs:46` の `areka_runtime::skin_switch::SwapFinish`（申し合わせた use の道）だけで、どれも狭めた項目を使っていない。`hover_inject` を `areka_runtime::hover_inject` か `crate::hover_inject` で引く所は `areka-runtime` の外に 0 件。
+
+**足した項目**
+
+- `SkinVerdict::Installing`（1.3・`e67a74b40`・`areka-runtime/src/skin_switch.rs`）と `SwitchVerdict::Updating`（2.2・`68c8e1069`・腕の名を `install/overwrite.rs` に 1 つ・13.3）。入口の断りの並びは 進行中 → ゴースト切替中 → 更新中 → インストール中 → 文脈。
+- `special_name::catalog_entry`（`#[cfg(any(test, feature = "test-support"))]` の `pub fn`・fs を見ない偽の目録の 1 項目）。かけ直し 1 回目（`3ad5647f6`）で `special_name_tests.rs` と `ghost_switch_tests.rs` の写しを寄せた先。読み手はこの 2 本だけ（`ukadoc-survey` の同じ名は別の関数）。
+
+**設計が確かめを求めた 2 つ**
+
+- `balloon_visibility::phase::test_support`（`balloon_visibility_phase_test_support.rs`）で `pub` なのは `notify_timeout` だけ。ほかは `attach_headless`・`runtime` が `pub(in crate::balloon_visibility)`、`world_at`・`visibility_lines` が `pub(super)`。`areka-runtime` の外の使い手は本体 `runtime_tests/balloon_visibility_phase.rs:4` の `notify_timeout` の 1 か所だけ。
+- 配置の後の段は `i32::MIN` を受けても回り込まない（`git grep saturating_` で確かめた・数は本番のファイルの中の出現）: `areka-placement/src/follow/move_shift.rs` 8（ずれの差し引き）・`windowposition.rs` の `apply_windowposition`（`saturating_add`）・`resolver.rs` 27（P5 の加算と `keyword_balloon_pos` の `saturating_add`）・`persist.rs` 10（`char_pos + balloon_offset`）・`areka-runtime/src/move_cue_geometry.rs` 11。`areka-placement/src/lib.rs` の `apply_author_balloon_offset_scale` は換算した値を `balloon_offset` に入れるだけで加算をしない（飽和の記録は `warn_if_saturated`）。
+
+**ほか**
+
+- 本番コードの追加行に、上のどれにも当たらない新しい公開の面・環境変数・ファイル・端末への出力はない。
+
+### 15.4 全体テスト（要件 9.4・4.4・4.5）
+
+- コマンド: `pwsh -NoProfile -File tools/test-all.ps1`（コミット `3d10ec039`・開始時の未コミットの変更は `research.md` の 1 件だけ）。1 回だけ回し、終了コード 0・`all steps green`。赤の段は 0 なので、回し直しはしていない。
+- 21 段すべて OK（秒）: sample fetch 3・add i686 target 0・build i686 artifacts 1・fmt --check 15・x64 workspace tests 684・dola toml feature tests 34・i686 tests (host-32) 42・crates.io pre-publish check (package only) 4・encoding check 25・release notes check 9・roadmap overview check 11・i686 helper sync check 14・sample fetch check 3・package check 14・exe install check 5・load flake check 9・mouse input check 2・app icon check 6・cursor art check 44・perf loop selftest 130・i686 helper beside areka.exe 1。
+- 件数: x64 workspace tests と i686 tests の出力にある `test result:` の行を合算した。`test result: ok` が 180 行、失敗（failed）は全行で 0、合算は passed 15,061・ignored 82。
+- emo2・pasta の実走は全体テストの中だけで回った。SSP の測りと画面の操作は回していない。
 
 ## 付録 A: 束の読み手の番号との対応
 
