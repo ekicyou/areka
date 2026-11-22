@@ -163,3 +163,24 @@ fn remembered_text_uses_scope_word_when_keys_are_empty() {
         assert_eq!(remembered_text(&f), word, "{scope:?}");
     }
 }
+
+#[test]
+fn unusable_file_gets_the_file_fix_line_and_the_others_keep_the_write_fix() {
+    const FILE_FIX_LINE: &str = "直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
+    let body_of = |cause| alert_text(&scene(failure(vec![], cause), WriteMoment::Boot)).1;
+
+    let unusable = body_of(PersistFailureCause::Unusable("壊れている".to_owned()));
+    assert_eq!(unusable.lines().count(), 5);
+    assert!(unusable.contains("理由: 壊れている"), "{unusable}");
+    assert_eq!(unusable.lines().last(), Some(FILE_FIX_LINE));
+    assert!(!unusable.contains(FIX_LINE), "{unusable}");
+
+    for cause in [
+        PersistFailureCause::Io("x".to_owned()),
+        PersistFailureCause::NoRoot,
+    ] {
+        let body = body_of(cause);
+        assert_eq!(body.lines().last(), Some(FIX_LINE));
+        assert!(!body.contains(FILE_FIX_LINE), "{body}");
+    }
+}

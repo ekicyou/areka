@@ -86,6 +86,8 @@ const MEMORY_WRITE_TITLE: &str = "areka の記憶を書けません";
 /// 記憶を書けない場面の直し方（環境変数の名前と既定の置き場の場所は書かない）。
 /// 説明書の節の名前は user-data-root の `dist/README.txt` に合わせる。
 const MEMORY_WRITE_FIX: &str = "直し方: この置き場を書ける状態にしてください。置き場の変え方は、説明書（README.txt）の「■ 記憶の置き場」にあります。";
+/// 記憶のファイルが使えない場面の直し方。
+const MEMORY_FILE_FIX: &str = "直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
 
 /// 置き場の場面の文面（利用者向けの語は「置き場」）。
 const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォルダを持つフォルダ";
@@ -218,10 +220,16 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
                 None => "置き場: 決まっていません".to_owned(),
             },
             match &failure.cause {
-                PersistFailureCause::Io(reason) => format!("理由: {reason}"),
+                PersistFailureCause::Io(reason) | PersistFailureCause::Unusable(reason) => {
+                    format!("理由: {reason}")
+                }
                 PersistFailureCause::NoRoot => "理由: 記憶の置き場が決まっていません".to_owned(),
             },
-            MEMORY_WRITE_FIX.to_owned(),
+            match failure.cause {
+                PersistFailureCause::Unusable(_) => MEMORY_FILE_FIX,
+                _ => MEMORY_WRITE_FIX,
+            }
+            .to_owned(),
         ],
     };
     let title = match scene {

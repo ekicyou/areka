@@ -53,7 +53,7 @@ pub fn fatal(world: &mut World, failure: PersistFailure) {
 /// 記録 `memory_write_failed`（`error!`・欄 scope・what・dir・reason・moment）を 1 件残す。
 fn log_failure(failure: &PersistFailure, moment: WriteMoment) {
     let reason = match &failure.cause {
-        PersistFailureCause::Io(reason) => reason.as_str(),
+        PersistFailureCause::Io(reason) | PersistFailureCause::Unusable(reason) => reason.as_str(),
         PersistFailureCause::NoRoot => "no root",
     };
     let moment = match moment {

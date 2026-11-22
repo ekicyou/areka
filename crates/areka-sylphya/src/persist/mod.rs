@@ -209,6 +209,8 @@ pub enum PersistFailureCause {
     NoRoot,
     /// OS の理由（`std::io::Error` の表示。例「アクセスが拒否されました。 (os error 5)」）。
     Io(String),
+    /// 既にある記憶のファイルが使えない（TOML として壊れている・版が違う・読めない）ので上書きしなかった。
+    Unusable(String),
 }
 
 /// 永続保存の結果。
@@ -288,7 +290,7 @@ fn save_gate() -> std::sync::MutexGuard<'static, ()> {
 /// - 読む前にプロセスの中の門と [`PersistIo::lock_for_update`] の錠を取り、書いた後に放す。錠が
 ///   取れない → 書かずに error! `persist_lock_failed` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
 /// - 既存が無い・空 → 空の土台に重ねる。既存が読めない・壊れている・版が違う → 書かずに
-///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。ただし控える
+///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Unusable(理由)`）。ただし控える
 ///   範囲の中は何も書かないので、warn! を出して空の土台で続ける。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
 ///   ゆえ無傷。鏡像更新はアクターの領分——ここは結果のみ報告）。
@@ -448,7 +450,7 @@ fn update_scope(
                 scope,
                 dir: roots.root_of(scope).cloned(),
                 keys,
-                cause: PersistFailureCause::Io(reason),
+                cause: PersistFailureCause::Unusable(reason),
             });
         }
     };
