@@ -187,14 +187,14 @@
   - _Dispatch: standard — 22 本の置き先を 1 本ずつ決める_
   - _Requirements: 3.1, 3.3, 3.4, 4.4, 6.1, 7.6_
 
-- [ ] 13. 本体の `session_tests` の写しを 1 つずつにする（G13）
+- [x] 13. 本体の `session_tests` の写しを 1 つずつにする（G13）
 - [x] 13.1 行列と記憶の補助を `session_tests/mod.rs` に置き、合図の組み立てを共通の口へ寄せる（指摘 34・37・38・90・5.13）
   - `session_tests/mod.rs` に写しの補助（`tree`・`read_back`・記憶の書き手の取り出し・`unwritable`／`writable`・`routes`・送り出しの段の予約・`put_memory`・`save_scope`・`put_ghost`・`no_pick`）を `pub(crate)` で 1 つずつ置き、各テストの写しを消す。54-55 を `mod write_failure_sites_tests;` に
   - `readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` の `prop_set_cue` の写し 3 つを `carrier_cue(PROP_SET_CUE_NAME, &[&key.to_canonical_key(), value])` に。`drain_desk` を消し `drain_system` を直に。413 の `kinds.len() == 13` と 504・412 の要件の表を消す
   - 完了の姿: 既存の行列のテストが同じ表明のまま緑で、`git grep -n "fn prop_set_cue\|fn drain_desk"` が 0 件
   - _Dispatch: mechanical — 寄せ先と置き換えを設計が名指す_
   - _Requirements: 3.1, 5.13, 6.11_
-- [ ] 13.2 ゴーストの起動のテストの試験台と小道具を切り替えのテストへ寄せる（指摘 39・92・94）
+- [x] 13.2 ゴーストの起動のテストの試験台と小道具を切り替えのテストへ寄せる（指摘 39・92・94）
   - `ghost_session_scope_rect_boot_tests.rs`・`ghost_session_restart_tests.rs`・`ghost_session_reload_tests.rs` の試験台・小道具の写し（`A_TO_B`・`ghost_a`・`ghost_b`・`lap_rig`・`ask`・`systems_lens`・停止通知の受け口の loop・`emo2_balloon`・`scripted_*`）を `ghost_session_switch_tests.rs` の `pub(super)` に寄せ、`kinds` は公開のものを use
   - restart の 223-225・288 の名を `boot_windows_with_descript_line` に、446-447・479-491 の説明を消す。reload の 69-70 を「降ろしの最初の段（loop ticker の停止）で」に
   - 完了の姿: 4 本のファイルのテストが同じ表明のまま緑で、寄せた名の自前の定義が `switch_tests` の外に 0 件
@@ -298,3 +298,4 @@
 - 11.2: `readonly_body_tests.rs` の `files_calling`・`all_sources` は残す `engage` の 2 本が使うので残した
 - 兄弟 `audit-emo2-boot-switch` から 11-23 に受けた範囲の外の件（21.1 で見る）: ウ＝`SharedFakeIo` の写しは 9.1・9.2 で 2 つ消し、`runtime_tests/frame/switch_finish_tests.rs` は 14.1 で寄せる／カ＝本体 `ghost_session_switch_tests.rs` の `kinds` は `areka-session` の `shell_balloon_switch_session_lap_test_support::kinds` と同じ（13.2 で use）／キ＝`ghost_session_runtime.rs` の降ろしの計時と記録（`ghost_switch_down_failed`・`ghost_switch_down_ms`）が `ghost_switch.rs` の `take_down` の写し／ク＝`runtime_boot.rs` が `ChangeRequestRaw` を `ghost_switch` の出し直しから、`SkinRequestRaw` を runtime から直に引く（片方にそろえれば `ghost_switch.rs` の `pub(crate) use` が消える）／ケ＝`reload_test_support.rs` と本体 `reload_tests.rs` が同じ型を 2 つの道で引く（兄弟は `reload_test_support.rs` の use の道を替え済み・70bb10c2a）／シ＝件数を数える関数の写し 5 つ（`boot_resolve_readonly_tests.rs`・`boot_resolve_tests.rs`・`boot_shell_tests.rs`・`switch_copy_tests.rs`・`write_failure_late_tests.rs`）／ス＝本体 `runtime_tests/frame_visibility_integration_tests.rs` の読まれない `BalloonWiring::new` の据え付けと `visibility_lines` の 3 つ目の写し／セ＝14.2／ソ＝8.1 で済み／タ＝8.2 で済み。兄弟は use の道を 4 か所替えた（`reload_test_support.rs`・`runtime_tests/frame/switch_tests.rs` の 2 か所・`switch_finish_tests.rs`）。use の行がぶつかったら後から着地する側が合わせる
 - 12.2: §8 の 403 行が名指す `record_non_argv_writes_all_three` は実体が `boot_resolve_last_used_tests.rs` にある（21.1 で見る）
+- 13.2: `readonly_run_tests.rs:49` に共有と同じ `const A_TO_B` の写しが残る。`boot_windows_with_descript_line` の doc の 1 行目が `seriko.sticky-window` だけを書く（`kero.balloon.dontmove` にも使う）。restart の 479-491 の why の注釈も消えた（21.1 で見る）

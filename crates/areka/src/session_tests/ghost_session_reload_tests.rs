@@ -1,13 +1,11 @@
 //! 名前の差し替えの口の決定論テスト（本体の系を登記した World で起こす）。
 
 use areka_kanade::CloseReason;
-use sample_ghost_kit::SampleRoot;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 
-use crate::runtime_tests::spine::SpineHarness;
+use super::ghost_session_switch_tests::{emo2_balloon, scripted_inputs};
 use crate::sample_test_support::acquire_emo2;
-use areka_kanade::BootOrigin;
 use areka_kanade::KanadeNotice;
 use areka_parsers::package::GhostNames;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
@@ -19,29 +17,6 @@ use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use std::path::PathBuf;
 use std::sync::mpsc;
-
-fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
-    sample
-        .balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-/// 偽の SHIORI（標準の台本）・時計なし・記憶の置き場なしの起動の結線の入力。
-fn scripted_wiring(sample: &SampleRoot) -> (areka_runtime::RuntimeInputs, ScriptedShioriHandle) {
-    let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
-    let wiring = areka_runtime::RuntimeInputs {
-        ghost_root: sample.folder().to_path_buf(),
-        balloon_root: emo2_balloon(sample),
-        shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
-            Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
-        })),
-        ticker: areka_ghost::TickerMode::Disabled,
-        app_profile_dir: None,
-        boot_origin: BootOrigin::Plain,
-    };
-    (wiring, handle)
-}
 
 /// 有界に走らせる（偽の SHIORI の呼び出しの数を進みの目印にする）。
 fn bounded(what: &str, shiori: &ScriptedShioriHandle, f: impl FnOnce() + Send + 'static) {
@@ -69,7 +44,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
     let (kanade_stop, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
     register_systems(&mut world, kanade_stop_rx, crate::BODY_SYSTEMS);
     let sample = acquire_emo2();
-    let (wiring, shiori) = scripted_wiring(&sample);
+    let (inputs, shiori) = scripted_inputs(&sample, kanade_stop);
     let ghost = GhostDecision {
         route: GhostRoute::Argv,
         dir: sample.folder().to_path_buf(),
@@ -82,12 +57,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
     };
     let mut session = boot_ghost(
         &mut world,
-        GhostBootInputs {
-            wiring,
-            helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
-            kanade_stop,
-            modules: areka_session::boot_request::ModulePolicy::Load,
-        },
+        inputs,
         &StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,

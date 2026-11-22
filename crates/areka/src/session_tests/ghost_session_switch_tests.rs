@@ -5,39 +5,34 @@
 //! 版が kanade を `Fault` で止めること。後半は台本の `\![change,ghost,…]` から切替先の定常到達
 //! までを 1 周させる。判定は集めてから 1 回・降ろすのは必ず有界に行う。
 
-use std::sync::mpsc::TryRecvError;
+use std::path::PathBuf;
+use std::sync::mpsc::{Sender, TryRecvError};
 
-use areka_kanade::{KanadeStopCause, ShioriFaultKind};
+use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFaultKind};
+use areka_mcp::ToolOutcome;
+use areka_mcp::tools::get_property::Args;
+use areka_mcp::tools::{ToolCall, ToolRequest};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
+use sample_ghost_kit::SampleRoot;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use wintf::ecs::{FrameFinalize, Input, Update};
 
 use crate::menu::{Frame, MenuWiring};
+use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::switch_rig;
 use areka_input::user_break::UserBreakWiring;
-use areka_runtime::spine::RecordedCall;
+use areka_runtime::spine::{RecordedCall, ScriptedShioriHandle};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::ghost_quit::KanadeNoticeRx;
-use areka_session::ghost_session::GhostBootInputsSource;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
+use areka_session::ghost_session::{GhostBootInputs, GhostBootInputsSource};
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{
     CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
 };
 use areka_session::readme::ReadmeWiring;
-
-/// 呼出列を「種類 名前」の列へ写す（Reference は見ない）。
-fn kinds(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|c| match c {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            RecordedCall::Unload => "UNLOAD".to_owned(),
-        })
-        .collect()
-}
 
 /// `folder` を 1 回起こした記録に `basewareversion` まで届いたか（起動系列の終わり）。
 fn booted(rig: &SwitchRig, folder: &str) -> bool {
@@ -195,13 +190,65 @@ pub(super) fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
 }
 
 /// `Input`／`Update`／`FrameFinalize` の各段に載っている系の数。
-fn systems_lens(world: &World) -> [usize; 3] {
+pub(super) fn systems_lens(world: &World) -> [usize; 3] {
     let schedules = world.resource::<Schedules>();
     [
         schedules.get(Input).map_or(0, |s| s.systems_len()),
         schedules.get(Update).map_or(0, |s| s.systems_len()),
         schedules.get(FrameFinalize).map_or(0, |s| s.systems_len()),
     ]
+}
+
+/// MCP の `get_property` を受け口へ送って汲み、その場の答え（ゴースト名と結果）を取る。
+pub(super) fn ask(
+    rig: &mut SwitchRig,
+    tx: &Sender<ToolRequest>,
+    name: &str,
+) -> Option<(String, ToolOutcome)> {
+    let (req, pending) = ToolRequest::new(ToolCall::GetProperty(Args {
+        property_name: name.to_owned(),
+        ghost_name: None,
+    }));
+    tx.send(req).ok()?;
+    crate::mcp::drain(&mut rig.world);
+    pending
+        .try_answer()
+        .ok()
+        .flatten()
+        .map(|a| (a.ghost, a.outcome))
+}
+
+/// emo2 の同梱バルーンのフォルダ。
+pub(super) fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
+    sample
+        .balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
+}
+
+/// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
+/// 台本は呼ぶたびに新しい。偽の SHIORI の観測口も返す（降ろしの待ちの目印＝呼び出しの数）。
+pub(super) fn scripted_inputs(
+    sample: &SampleRoot,
+    kanade_stop: Sender<KanadeNotice>,
+) -> (GhostBootInputs, ScriptedShioriHandle) {
+    let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
+    let inputs = GhostBootInputs {
+        wiring: areka_runtime::RuntimeInputs {
+            ghost_root: sample.folder().to_path_buf(),
+            balloon_root: emo2_balloon(sample),
+            shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
+                Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
+            })),
+            ticker: areka_ghost::TickerMode::Disabled,
+            app_profile_dir: None,
+            boot_origin: BootOrigin::Plain,
+        },
+        helper_exe: PathBuf::from("session_tests/使わない/helper.exe"),
+        kanade_stop,
+        modules: areka_session::boot_request::ModulePolicy::Load,
+    };
+    (inputs, handle)
 }
 
 /// 呼出列から `id` の GET の Reference を取る。
@@ -235,7 +282,7 @@ fn abs(rig: &SwitchRig, folder: &str) -> String {
 /// 停止通知の受け口が生きた送出端につながっているか。土台の作り口が持つ送出端の写しを
 /// 先に落とすので、残る送出端は置き場のゴーストの kanade のものだけ（降ろしたゴーストの
 /// 送出端は降ろすときに落ちる）。未読の通知は読み捨て、最後が `Empty` なら生きている。
-fn notice_rx_live(world: &mut World) -> bool {
+pub(super) fn notice_rx_live(world: &mut World) -> bool {
     world.remove_non_send::<GhostBootInputsSource>();
     let rx = &world.non_send::<KanadeNoticeRx>().0;
     loop {

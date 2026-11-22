@@ -9,12 +9,11 @@ use areka_ghost::prop_get_sink::PropGetCueSink;
 use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_kanade::KanadeMsg;
 use areka_mcp::ToolOutcome;
-use areka_mcp::tools::get_property::Args;
-use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
+use areka_mcp::tools::{ToolRequest, outcome};
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_sakura::contract::CueSink;
 
-use super::ghost_session_switch_tests::{A_TO_B, ghost_a, ghost_b, lap_rig};
+use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::TargetWindow;
 use areka_session::ghost_session::ghost_session_scope_scale::test_support::applied;
@@ -59,21 +58,6 @@ fn write_scope0(rig: &SwitchRig, num: u32, dpi: u16) {
     let mut t = table.write().unwrap();
     t.set(0, TargetWindow::Shell, applied(num, 96, Some(dpi)));
     t.set(0, TargetWindow::Balloon, applied(num, 96, Some(dpi)));
-}
-
-/// MCP の `get_property` を受け口へ送って汲み、その場の答え（ゴースト名と結果）を取る。
-fn ask(rig: &mut SwitchRig, tx: &Sender<ToolRequest>, name: &str) -> Option<(String, ToolOutcome)> {
-    let (req, pending) = ToolRequest::new(ToolCall::GetProperty(Args {
-        property_name: name.to_owned(),
-        ghost_name: None,
-    }));
-    tx.send(req).ok()?;
-    crate::mcp::drain(&mut rig.world);
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .map(|a| (a.ghost, a.outcome))
 }
 
 fn ask_all(rig: &mut SwitchRig, tx: &Sender<ToolRequest>) -> Vec<Option<(String, ToolOutcome)>> {
