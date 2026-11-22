@@ -17,7 +17,7 @@
 //! # 「動かない」主張は両側から挟む
 //!
 //! 版（[`ZOrderGroupLedger::version`]）は「増えない」側だけを見ると、そもそも一度も
-//! 増えない実装が素通りする。[`t_zgl15_version_moves_only_when_the_contents_move`] は
+//! 増えない実装が素通りする。`zorder_group_ledger_state_tests.rs` の `version_moves_only_when_the_contents_move` は
 //! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む。
 
 use super::*;
@@ -86,7 +86,7 @@ fn members_of(ledger: &ZOrderGroupLedger) -> Vec<Vec<GroupElement>> {
 
 /// 何も指定されていない台帳は空である（既定状態＝グループ 0 本）。
 #[test]
-fn t_zgl1_fresh_ledger_is_empty() {
+fn fresh_ledger_is_empty() {
     let ledger = ZOrderGroupLedger::default();
 
     assert!(
@@ -103,7 +103,7 @@ fn t_zgl1_fresh_ledger_is_empty() {
 /// 既存のどのグループとも重複しないスコープだけを含むタグは、既存グループを保った
 /// まま新しいグループとして加わる。
 #[test]
-fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
+fn non_overlapping_tags_accumulate_as_separate_groups() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let first = expect_added(&mut ledger, &["1", "0"]);
@@ -129,7 +129,7 @@ fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
 /// 2 枚とも並びに居る（補い済み）という不変条件⑶は、解釈の側で既に成立している
 /// ものを台帳が壊さない、という形で保たれる。
 #[test]
-fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
+fn the_ledger_stores_the_normalized_element_list_verbatim() {
     let mut ledger = ZOrderGroupLedger::default();
 
     // 逆転かつ非隣接（`s1 … b1`）と片方だけの指名（`b2`）を含む指定。解釈は書かれた順を
@@ -155,7 +155,7 @@ fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
 /// 既にいずれかのグループに属しているスコープを含むタグは、タグ全体を採用せず、
 /// 既存グループを一切変更しない。
 #[test]
-fn t_zgl4_redesignating_a_scope_rejects_the_whole_tag() {
+fn redesignating_a_scope_rejects_the_whole_tag() {
     let mut ledger = ZOrderGroupLedger::default();
     expect_added(&mut ledger, &["1", "0"]);
 
@@ -171,7 +171,7 @@ fn t_zgl4_redesignating_a_scope_rejects_the_whole_tag() {
 /// 解釈（`parse_zorder_tokens`）から台帳まで通しで見る。モードの区別は解釈の時点で
 /// 要素へ畳まれているので、両方向とも同じ結論に落ちなければならない。
 #[test]
-fn t_zgl5_numeric_and_explicit_modes_denote_the_same_scope() {
+fn numeric_and_explicit_modes_denote_the_same_scope() {
     // 数値モードで押さえたスコープを、明示モードで取りに行く。
     let mut numeric_first = ZOrderGroupLedger::default();
     expect_added(&mut numeric_first, &["1", "0"]);
@@ -208,7 +208,7 @@ fn t_zgl5_numeric_and_explicit_modes_denote_the_same_scope() {
 
 /// 拒否は衝突した**全ての**スコープを、要素列に現れた順で 1 度ずつ伴う。
 #[test]
-fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
+fn rejection_names_every_colliding_scope_once_in_order() {
     let mut ledger = ZOrderGroupLedger::default();
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["b2", "s2"]);
@@ -227,7 +227,7 @@ fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
 /// 一部だけが衝突するタグも全体を採用しない。
 /// 衝突していなかった側のスコープは台帳に載らず、**空いたまま**である。
 #[test]
-fn t_zgl7_a_partially_overlapping_tag_is_rejected_in_full() {
+fn a_partially_overlapping_tag_is_rejected_in_full() {
     let mut ledger = ZOrderGroupLedger::default();
     expect_added(&mut ledger, &["1", "0"]);
 
@@ -249,7 +249,7 @@ fn t_zgl7_a_partially_overlapping_tag_is_rejected_in_full() {
 /// descript 由来の基底は高々 1 つである（不変条件⑷）。据え直すと
 /// 前の基底は残らない。
 #[test]
-fn t_zgl8_at_most_one_descript_base_is_kept() {
+fn at_most_one_descript_base_is_kept() {
     let mut ledger = ZOrderGroupLedger::default();
 
     set_base(&mut ledger, &["1", "0"]);
@@ -272,7 +272,7 @@ fn t_zgl8_at_most_one_descript_base_is_kept() {
 
 /// descript 由来のグループも、タグの再指定の拒否判定に参加する。
 #[test]
-fn t_zgl9_the_descript_base_participates_in_the_redesignation_check() {
+fn the_descript_base_participates_in_the_redesignation_check() {
     let mut ledger = ZOrderGroupLedger::default();
     set_base(&mut ledger, &["1", "0"]);
 
@@ -295,7 +295,7 @@ fn t_zgl9_the_descript_base_participates_in_the_redesignation_check() {
 /// 採れない。ここでは終状態を [`ZOrderGroupLedger::reset_to_descript`] と一致させる
 /// ——「基底へ戻った状態」は解除が既に定義している唯一の形だからである。
 #[test]
-fn t_zgl10_setting_the_base_re_establishes_the_ledger_at_that_base() {
+fn setting_the_base_re_establishes_the_ledger_at_that_base() {
     let mut ledger = ZOrderGroupLedger::default();
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["3", "2"]);
@@ -326,7 +326,7 @@ fn t_zgl10_setting_the_base_re_establishes_the_ledger_at_that_base() {
 /// 解除の「基底が無ければ既定状態へ戻る」が「0 要素の基底へ戻る」に化けて
 /// 意味が変わる——載せない側へ倒す。
 #[test]
-fn t_zgl11_an_empty_base_means_no_base_at_all() {
+fn an_empty_base_means_no_base_at_all() {
     let mut ledger = ZOrderGroupLedger::default();
     set_base(&mut ledger, &["1", "0"]);
 
@@ -347,7 +347,7 @@ fn t_zgl11_an_empty_base_means_no_base_at_all() {
 /// 解除はタグ由来のグループを全て落とし、descript 基底へ戻す。
 /// 基底は ID ごと生き残る＝落とすのはタグ由来だけである。
 #[test]
-fn t_zgl12_reset_drops_tag_groups_and_returns_to_the_descript_base() {
+fn reset_drops_tag_groups_and_returns_to_the_descript_base() {
     let mut ledger = ZOrderGroupLedger::default();
     set_base(&mut ledger, &["1", "0"]);
     let base_id = ledger.groups()[0].id;
@@ -365,7 +365,7 @@ fn t_zgl12_reset_drops_tag_groups_and_returns_to_the_descript_base() {
 
 /// descript の指定が無ければ、解除は既定状態（グループ 0 本）へ戻す。
 #[test]
-fn t_zgl13_reset_without_a_base_returns_to_the_default_state() {
+fn reset_without_a_base_returns_to_the_default_state() {
     let mut ledger = ZOrderGroupLedger::default();
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["3", "2"]);
@@ -379,7 +379,7 @@ fn t_zgl13_reset_without_a_base_returns_to_the_default_state() {
 /// 新しい組み合わせとして受け付ける。基底が押さえたスコープは
 /// 解除で解放されない——両側から挟む。
 #[test]
-fn t_zgl14_reset_frees_tag_scopes_but_not_base_scopes() {
+fn reset_frees_tag_scopes_but_not_base_scopes() {
     let mut ledger = ZOrderGroupLedger::default();
     set_base(&mut ledger, &["7", "6"]);
     expect_added(&mut ledger, &["1", "0"]);
@@ -407,7 +407,7 @@ fn t_zgl14_reset_frees_tag_scopes_but_not_base_scopes() {
 /// 「進まない」側だけを見ると一度も進まない実装が素通りするので、進む 3 経路と
 /// 進まない 3 経路を同じ 1 本で挟む。
 #[test]
-fn t_zgl15_version_moves_only_when_the_contents_move() {
+fn version_moves_only_when_the_contents_move() {
     let mut ledger = ZOrderGroupLedger::default();
     let start = ledger.version();
 
@@ -452,7 +452,7 @@ fn t_zgl15_version_moves_only_when_the_contents_move() {
 
 /// グループ ID はセッション内で単調増加し、解除で空いても再利用しない。
 #[test]
-fn t_zgl16_group_ids_increase_and_are_never_reused() {
+fn group_ids_increase_and_are_never_reused() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let first = expect_added(&mut ledger, &["1", "0"]);
@@ -474,7 +474,7 @@ fn t_zgl16_group_ids_increase_and_are_never_reused() {
 
 /// グループ数にも要素数にも上限検査を設けない。
 #[test]
-fn t_zgl17_no_upper_bound_on_group_or_member_count() {
+fn no_upper_bound_on_group_or_member_count() {
     let mut ledger = ZOrderGroupLedger::default();
 
     // グループ数: 重ならないスコープ対を 64 本。
@@ -499,7 +499,7 @@ fn t_zgl17_no_upper_bound_on_group_or_member_count() {
 /// 型の形でも押さえる: 本体には `Entity` も `HWND` も現れない——実機・実ディスプレイ
 /// 無しで全分岐を検査できる根拠がこれである。
 #[test]
-fn t_zgl18_the_ledger_never_learns_whether_a_window_exists() {
+fn the_ledger_never_learns_whether_a_window_exists() {
     let mut ledger = ZOrderGroupLedger::default();
 
     // 窓が 1 枚も無いスコープ番号でも、そのまま載って残る。
@@ -528,7 +528,7 @@ fn t_zgl18_the_ledger_never_learns_whether_a_window_exists() {
 /// 台帳は保存の仕組みに接続しない。ゴーストの終了で消えることは
 /// 「何もしない」ことで成立するので、**接続していないこと**を本文の走査で守る。
 #[test]
-fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
+fn the_ledger_is_not_connected_to_persistence() {
     let code = code_only(include_str!("zorder_group_ledger.rs"));
 
     assert!(
@@ -558,7 +558,7 @@ fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
 /// 再指定の拒否を起こす（空の台帳では再指定の拒否が起きないので前状態に入れない）。`assert_ledger_unchanged` はグループ列だけでなく
 /// 「次に配る ID」と版も比べるので、拒否の途中で ID を 1 つ消費する形も赤になる。
 #[test]
-fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
+fn every_rejected_call_leaves_the_ledger_completely_identical() {
     // 前状態①: タグ 1 本。
     let mut only_tag = ZOrderGroupLedger::default();
     expect_added(&mut only_tag, &["1", "0"]);
@@ -604,7 +604,7 @@ fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
 /// グループ列の並びは「基底が先頭・以降はタグの追加順」で決まる。この並びがそのまま鎖の
 /// 連結順になる（先に登記されたグループほど手前・基底が最前）。
 #[test]
-fn t_zgl21_groups_are_listed_base_first_then_in_addition_order() {
+fn groups_are_listed_base_first_then_in_addition_order() {
     let mut ledger = ZOrderGroupLedger::default();
 
     // 先にタグを載せても、基底を据えるとタグ由来は落ちる（`set_descript_base` の終状態は

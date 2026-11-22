@@ -94,7 +94,7 @@ Skills are located in `.claude/skills/*/SKILL.md` (mostly `kiro-*`)
 
 - Default to no comments. Write one only when names, types, asserts, or tests cannot express the *why*: an external constraint, a workaround, or a rejected alternative that looks better than it is.
 - Do not restate what the code does, narrate steps, or record change history ("fixed", "changed from", "now uses"). Change history belongs in the commit message.
-- Do not reference `.kiro` specs, requirement IDs, or task numbers in code. They are working documents and will drift. Stable external specifications (ukadoc, SHIORI) may be referenced.
+- Do not reference `.kiro` specs, requirement IDs, or task numbers in code, test names included. They are working documents and will drift. Stable external specifications (ukadoc, SHIORI) may be referenced.
 - Exceptions, always kept:
   - Every `unsafe` block has a `// SAFETY:` comment stating the invariants it relies on.
   - Public API doc comments (`///`, `//!`) are out of scope for this rule. Keep them accurate and concise.

@@ -45,7 +45,7 @@ fn seeded(
 /// なので、スコープ 0 の entity も新しくなる）。見ているのは「宣言順のどこに
 /// 収まるか」であって entity の同一性ではない。
 #[test]
-fn t_zdp01_absent_scope_still_yields_the_declared_order_among_existing_windows() {
+fn absent_scope_still_yields_the_declared_order_among_existing_windows() {
     // scope 1 の窓はまだ無い。`\![set,zorder,1,0]` は b1,s1,b0,s0 を宣言する。
     let (mut world, mut ledger, _tx, rx) = seeded(&[0], &["1", "0"]);
 
@@ -81,7 +81,7 @@ fn t_zdp01_absent_scope_still_yields_the_declared_order_among_existing_windows()
 /// 窓は scope 0 → scope 1 の順に生まれるが、宣言は `1,0`＝scope 1 が手前である。
 /// entity の生成順や識別子の大小で並べ替える実装は、この檻で必ず赤くなる。
 #[test]
-fn t_zdp02_projection_preserves_the_declared_front_to_back_order() {
+fn projection_preserves_the_declared_front_to_back_order() {
     let (world, _ledger, _tx, _rx) = seeded(&[0, 1], &["1", "0"]);
 
     let expected = vec![
@@ -114,7 +114,7 @@ fn t_zdp02_projection_preserves_the_declared_front_to_back_order() {
 /// 窓 4 枚の鎖の連続対は 3 つあり、そのうち 2 つが同一スコープの対である。繋ぎが 1 本に
 /// 絞られていなければ、同じ窓へ 2 つの機構が所有関係を書き合うことになる。
 #[test]
-fn t_zdp13_only_the_cross_scope_pair_becomes_an_edge() {
+fn only_the_cross_scope_pair_becomes_an_edge() {
     let (world, _ledger, _tx, _rx) = seeded(&[0, 1], &["1", "0"]);
 
     assert_eq!(
@@ -134,7 +134,7 @@ fn t_zdp13_only_the_cross_scope_pair_becomes_an_edge() {
 /// `on_ghost_window_marker_remove`）。よって破棄後の鎖に残るのは無事なスコープの
 /// 2 枚であり、その相対順は宣言のままである。
 #[test]
-fn t_zdp04_destroyed_scope_leaves_the_chain_without_dragging_others_with_it() {
+fn destroyed_scope_leaves_the_chain_without_dragging_others_with_it() {
     let (mut world, mut ledger, _tx, rx) = seeded(&[0, 1], &["1", "0"]);
     let survivors = vec![balloon_of(&world, 0), char_of(&world, 0)];
     let gone = balloon_of(&world, 1);
@@ -161,7 +161,7 @@ fn t_zdp04_destroyed_scope_leaves_the_chain_without_dragging_others_with_it() {
 /// 自分で確かめるのは、受け口へ死んだハンドルを渡さないためである——確かめずに渡すと、
 /// 適用系がそのハンドルを解決できずに毎巡失敗を数え続ける。
 #[test]
-fn t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept() {
+fn a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept() {
     let (mut world, mut ledger, _tx, rx) = seeded(&[0, 1], &["1", "0"]);
     let registry = ghost_windows(&world);
     let dead = registry
@@ -195,7 +195,7 @@ fn t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept(
 
 /// グループが 1 つも無ければ受け口を作らない。1 つでも在れば作って印を立てる。
 #[test]
-fn t_zdp05_no_group_means_no_receiver_while_one_group_creates_it() {
+fn no_group_means_no_receiver_while_one_group_creates_it() {
     // グループ 0 本（指令も無い）。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
@@ -226,7 +226,7 @@ fn t_zdp05_no_group_means_no_receiver_while_one_group_creates_it() {
 ///
 /// 「動いた」の契機は台帳だけではない——**窓の出現**もここで自然に検出される。
 #[test]
-fn t_zdp06_publishing_happens_only_when_the_content_actually_differs() {
+fn publishing_happens_only_when_the_content_actually_differs() {
     let (mut world, mut ledger, _tx, rx) = seeded(&[0], &["1", "0"]);
     assert_eq!(dirty(&world), Some(true), "下ごしらえで印が立っていない");
 
@@ -254,7 +254,7 @@ fn t_zdp06_publishing_happens_only_when_the_content_actually_differs() {
 /// 未指定スコープは後方へ、スコープ ID の昇順で参加する。指定した
 /// スコープだけを見る実装はここで赤くなる——印が立たず、鎖の長さも伸びない。
 #[test]
-fn t_zdp14_an_unnamed_scope_appearing_and_leaving_is_detected_too() {
+fn an_unnamed_scope_appearing_and_leaving_is_detected_too() {
     let (mut world, mut ledger, _tx, rx) = seeded(&[0, 1], &["1", "0"]);
     assert_eq!(
         chain_members(&world).map(|m| m.len()),
@@ -311,7 +311,7 @@ fn t_zdp14_an_unnamed_scope_appearing_and_leaving_is_detected_too() {
 /// 受け口そのものは残る（一度出来たものを消すと、適用系が撤去の指示を受け取れない）。
 /// 消えるのは**中身**であり、`None`＝既定状態が公開されて印が立つ。
 #[test]
-fn t_zdp15_resetting_every_group_returns_the_plan_to_the_default_state() {
+fn resetting_every_group_returns_the_plan_to_the_default_state() {
     let (mut world, mut ledger, tx, rx) = seeded(&[0, 1, 2], &["1", "0"]);
     assert_eq!(
         chain_members(&world).map(|m| m.len()),
@@ -354,7 +354,7 @@ fn t_zdp15_resetting_every_group_returns_the_plan_to_the_default_state() {
 
 /// 解除の後に同じスコープを指定し直せる。計画も新しい並びで立ち直る。
 #[test]
-fn t_zdp16_a_group_can_be_declared_again_after_a_reset() {
+fn a_group_can_be_declared_again_after_a_reset() {
     let (mut world, mut ledger, tx, rx) = seeded(&[0, 1], &["1", "0"]);
     tx.send(ZOrderDirective::Reset).unwrap();
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
@@ -390,7 +390,7 @@ fn t_zdp16_a_group_can_be_declared_again_after_a_reset() {
 /// （鎖が空になる）である。「対応する窓が一度も現れないまま推移する」のは後者なので、
 /// 前者だけを踏む檻は肝心の場合を素通りさせる。両方をここで踏む。
 #[test]
-fn t_zdp07_absent_elements_are_recorded_and_complete_groups_are_not() {
+fn absent_elements_are_recorded_and_complete_groups_are_not() {
     // 欠けている（scope 1 の窓がまだ無い）。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
@@ -449,7 +449,7 @@ fn t_zdp07_absent_elements_are_recorded_and_complete_groups_are_not() {
 ///
 /// 誰も名前を挙げていない窓を「無い」と報せると、記録が本物の書き間違いを埋める。
 #[test]
-fn t_zdp17_unnamed_scopes_never_appear_in_the_absence_record() {
+fn unnamed_scopes_never_appear_in_the_absence_record() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1, 2]);
@@ -488,7 +488,7 @@ fn t_zdp17_unnamed_scopes_never_appear_in_the_absence_record() {
 /// 埋める。かといって一度きりにすると、後から欠けが増減した事実が読めなくなる。
 /// 両側から挟む——2 巡目は無音、解決できた枚数が変わった巡は再び出る。
 #[test]
-fn t_zdp10_the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again() {
+fn the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[9]);
@@ -519,7 +519,7 @@ fn t_zdp10_the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again(
 
 /// 一度**完全**へ戻ったグループが再び壊れたら、また報される。
 ///
-/// [`t_zdp10`] の兄弟であり、あちらが歩かない遷移——「不完全 → **完全** → また不完全」
+/// [`the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again`] の兄弟であり、あちらが歩かない遷移——「不完全 → **完全** → また不完全」
 /// ——を歩く。控えを毎巡**まるごと組み直す**のはこの遷移のためである: 揃った時点で控えが
 /// 空になるからこそ、後で壊れたときが「新しい事実」として報される。控えへ足すだけ
 /// （累積）にすると古い記憶が残り続け、本物の新しい欠落を黙って飲み込む
@@ -527,10 +527,8 @@ fn t_zdp10_the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again(
 ///
 /// 3 つの巡を数で挟む: 2 本 → 0 本 → 2 本。真ん中の 0 本が無いと「毎巡出す」実装が、
 /// 最後の 2 本が無いと「累積する」実装が、それぞれ素通りする。
-///
-/// [`t_zdp10`]: t_zdp10_the_same_absence_is_not_repeated_but_a_changed_one_is_reported_again
 #[test]
-fn t_zdp11_a_group_that_became_complete_is_reported_again_when_it_breaks_again() {
+fn a_group_that_became_complete_is_reported_again_when_it_breaks_again() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0]);

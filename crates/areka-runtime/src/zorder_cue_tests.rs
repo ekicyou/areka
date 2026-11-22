@@ -62,7 +62,7 @@ fn accepted_set() -> ZOrderDirective {
 
 /// `\![set,zorder,1,0]` は重なり指定の指令になり、第 1 引数より後ろのトークンだけを運ぶ。
 #[test]
-fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
+fn set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
@@ -75,7 +75,7 @@ fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
 
 /// `\![reset,zorder]` は重なり解除の指令になる。
 #[test]
-fn t_zcs2_reset_zorder_becomes_a_reset_directive() {
+fn reset_zorder_becomes_a_reset_directive() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     sink.emit(actor_carrier_cue("0", "reset", &["zorder"]));
@@ -85,7 +85,7 @@ fn t_zcs2_reset_zorder_becomes_a_reset_directive() {
 /// この層はトークンを解釈しない——明示記法も省略記法も解釈できない綴りも空文字も、
 /// 書かれたまま同じ並びで運ばれる（解釈は台帳の状態が要るので後段の担当）。
 #[test]
-fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
+fn tokens_are_forwarded_verbatim_without_interpretation() {
     let raw = ["balloon1", "s1", "Surface0", "", "xyz", "0"];
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
@@ -109,7 +109,7 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
 /// タグを実行したスコープを読まない。実行スコープの値を変えても、
 /// 送り出される指令は 1 バイトも変わらない（`MoveCueSink` との意図的な差はここ）。
 #[test]
-fn t_zcs4_executing_scope_does_not_change_the_directive() {
+fn executing_scope_does_not_change_the_directive() {
     // 本体側・相方側・追加キャラ・数値ですらない演者名・空——実際に届き得る値を並べる。
     let actors = ["0", "1", "2", "9", "sakura", ""];
 
@@ -145,7 +145,7 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
 
 /// 実行スコープを読まないことを字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
 ///
-/// 振る舞いの檻（`t_zcs4`）だけでは足りない。`let _executing_scope = cue.actor.as_str();`
+/// 振る舞いの檻（`executing_scope_does_not_change_the_directive`）だけでは足りない。`let _executing_scope = cue.actor.as_str();`
 /// のように**振る舞いを 1 つも変えない**読み取りを足すと、振る舞い側の檻は全て緑のまま
 /// 通ってしまう。読んでいないこと自体をここで固定する。
 ///
@@ -153,7 +153,7 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
 /// 主張しないと、`code_only` がコード行まで削り落としたときに「綴りが無い」が自動的に真に
 /// なり、檻が何も守らないまま緑になる（註釈側の綴りを数えるだけでは対照にならない）。
 #[test]
-fn t_zcs5_production_code_never_reads_the_executing_scope() {
+fn production_code_never_reads_the_executing_scope() {
     let src = include_str!("zorder_cue.rs");
     let code = code_only(src);
     assert!(
@@ -175,7 +175,7 @@ fn t_zcs5_production_code_never_reads_the_executing_scope() {
 /// 名前が合っていても選別子が違えば担当外——1 本も送らず、
 /// 受け口の中身は先に流した 1 本のままである（＝重なりの状態を変えていない）。
 #[test]
-fn t_zcs6_near_miss_selectors_send_nothing() {
+fn near_miss_selectors_send_nothing() {
     let near_misses: [(&str, &[&str]); 8] = [
         ("set", &["surface", "1", "0"]), // \![set,他]
         ("set", &["balloon", "1"]),      // 同上
@@ -206,7 +206,7 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
 /// 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
 /// （`\![move,zorder,…]` のような綴りを横取りしない）。
 #[test]
-fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
+fn other_command_names_send_nothing_even_with_the_zorder_selector() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
@@ -224,7 +224,7 @@ fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
 
 /// キャリアでない cue（文字・演技・待ち）は担当外——1 本も送らない。
 #[test]
-fn t_zcs8_non_carrier_cues_send_nothing() {
+fn non_carrier_cues_send_nothing() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
@@ -248,7 +248,7 @@ fn t_zcs8_non_carrier_cues_send_nothing() {
 /// 他の受け口も持つが、開けない形の `set`／`reset` を警告する持ち主は本 sink だけであり、
 /// 壊れ物を報せる責任はこちらにある。
 #[test]
-fn t_zcs9_broken_own_address_warns_once() {
+fn broken_own_address_warns_once() {
     for command in ["set", "reset"] {
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
@@ -275,7 +275,7 @@ fn t_zcs9_broken_own_address_warns_once() {
 /// 宛名規律: 同じ壊れ方でも**他人宛**なら警告を出さず、良性の読み飛ばしとして記録する
 /// （報せる責任は宛名の担当者の側にある）。
 #[test]
-fn t_zcs10_broken_other_address_records_without_warning() {
+fn broken_other_address_records_without_warning() {
     for command in ["move", "bind", "noexist"] {
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
@@ -298,7 +298,7 @@ fn t_zcs10_broken_other_address_records_without_warning() {
 /// 宛名規律が空虚でない証: **同じ壊れ方**のまま宛名だけを入れ替えると、水準が
 /// 警告と良性の読み飛ばしの間で入れ替わる（「壊れ物は一律で警告」への退行を捕まえる）。
 #[test]
-fn t_zcs11_addressee_alone_decides_the_severity() {
+fn addressee_alone_decides_the_severity() {
     let own = capture_logs(|| {
         let (tx, _rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
@@ -326,7 +326,7 @@ fn t_zcs11_addressee_alone_decides_the_severity() {
 
 /// 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
 #[test]
-fn t_zcs12_every_skip_leaves_a_record() {
+fn every_skip_leaves_a_record() {
     let mut skipped: Vec<TalkCue> = vec![
         actor_carrier_cue("0", "set", &["surface", "1"]),
         actor_carrier_cue("0", "reset", &["balloon"]),
@@ -349,7 +349,7 @@ fn t_zcs12_every_skip_leaves_a_record() {
 /// 解除に余分なトークンが付いていても解除として受理し、運ばなかったことを記録する
 /// （正典の `\![reset,zorder]` は引数を取らない）。
 #[test]
-fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
+fn reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     let logs = capture_logs(|| sink.emit(actor_carrier_cue("0", "reset", &["zorder", "1", "0"])));
@@ -375,7 +375,7 @@ fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
 /// 省く門を実質無効にする。それでいて送り出しの振る舞いは 1 つも変わらないので、他の檻は
 /// 全て緑のまま通ってしまう。
 #[test]
-fn t_zcs14_the_zorder_wake_is_marked_after_the_self_selection() {
+fn the_zorder_wake_is_marked_after_the_self_selection() {
     let code = code_only(include_str!("zorder_cue.rs"));
 
     // 呼出はちょうど 1 つ——後ろに残したまま先頭でも叩く形を塞ぐ。
@@ -404,7 +404,7 @@ fn t_zcs14_the_zorder_wake_is_marked_after_the_self_selection() {
 
 /// 受け口は複製できる（配送側は台本ごとに複製する）。複製から送っても同じ受け口へ届く。
 #[test]
-fn t_zcs15_clone_reaches_the_same_receiver() {
+fn clone_reaches_the_same_receiver() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let sink = ZOrderCueSink::new(tx);
     let mut cloned = sink.clone();
@@ -414,7 +414,7 @@ fn t_zcs15_clone_reaches_the_same_receiver() {
 
 /// 受け口が閉じていても台本を殺さない——記録を残して継続する（非 panic）。
 #[test]
-fn t_zcs16_disconnected_receiver_is_recorded_and_does_not_panic() {
+fn disconnected_receiver_is_recorded_and_does_not_panic() {
     let (tx, rx) = channel::<ZOrderDirective>();
     drop(rx);
     let mut sink = ZOrderCueSink::new(tx);

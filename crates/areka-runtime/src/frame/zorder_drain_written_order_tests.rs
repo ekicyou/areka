@@ -40,7 +40,7 @@ fn accept_once(tokens: &[&str], scopes: &[usize]) -> (String, World, ZOrderGroup
 ///
 /// 「採らなかった」の旧語 `true` が `normalized=` 欄に 1 つも出ないことも併せて見る。
 #[test]
-fn t_zdw01_inverted_with_implied_partner_line_is_verbatim() {
+fn inverted_with_implied_partner_line_is_verbatim() {
     let (line, _, _) = accept_once(&["s0", "b0", "s1"], &[0, 1]);
 
     assert!(
@@ -67,7 +67,7 @@ fn t_zdw01_inverted_with_implied_partner_line_is_verbatim() {
 /// 非隣接 `b1,s0,s1,b0` の受理の行は `1:split,0:inverted-split`（スコープの初出順）
 /// で、補いの綴りは付かない。
 #[test]
-fn t_zdw02_split_line_names_both_split_shapes() {
+fn split_line_names_both_split_shapes() {
     let (line, _, _) = accept_once(&["b1", "s0", "s1", "b0"], &[0, 1]);
 
     assert!(
@@ -82,7 +82,7 @@ fn t_zdw02_split_line_names_both_split_shapes() {
 /// `b1` だけ → `+s1`（キャラクターを補う）、`s0` だけ → `+b0`（バルーンを補う）の
 /// 両方向を 1 行で踏む。
 #[test]
-fn t_zdw03_existing_spellings_false_and_partner_are_kept() {
+fn existing_spellings_false_and_partner_are_kept() {
     let (line, _, _) = accept_once(&["b1", "s0"], &[0, 1]);
 
     assert!(
@@ -99,7 +99,7 @@ fn t_zdw03_existing_spellings_false_and_partner_are_kept() {
 ///
 /// 後の巡を待たない。窓が揃っていれば「次の相」は要らない。
 #[test]
-fn t_zdw04_acceptance_and_publication_happen_in_the_same_phase() {
+fn acceptance_and_publication_happen_in_the_same_phase() {
     let (_, world, _) = accept_once(&["s0", "b0", "s1"], &[0, 1]);
 
     assert_eq!(
@@ -125,7 +125,7 @@ fn t_zdw04_acceptance_and_publication_happen_in_the_same_phase() {
 /// 突き合わせの相手はタグの経路の実際の行である——片方だけを期待値と比べると、
 /// 両方が同じ向きに崩れた日に気づけない。
 #[test]
-fn t_zdw05_descript_inversion_goes_through_the_tag_interpretation() {
+fn descript_inversion_goes_through_the_tag_interpretation() {
     let (tag_line, _, _) = accept_once(&["s0", "b0", "s1"], &[0, 1]);
 
     let mut ledger = ZOrderGroupLedger::default();
@@ -172,7 +172,7 @@ fn t_zdw05_descript_inversion_goes_through_the_tag_interpretation() {
 /// `\![reset,zorder]` で逆転のタグが解け、計画は既定（鎖なし）へ戻る。
 /// 印が立つので、適用系は同じ相の後で組を結び直せる。
 #[test]
-fn t_zdw06_reset_returns_the_plan_to_pairs() {
+fn reset_returns_the_plan_to_pairs() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
@@ -191,7 +191,7 @@ fn t_zdw06_reset_returns_the_plan_to_pairs() {
 /// descript の基底が逆転を書いていれば、解除でそのスコープは descript の並びへ戻り、
 /// タグで逆転させたスコープは組（バルーンがキャラクターのすぐ手前）へ戻る。
 #[test]
-fn t_zdw07_reset_keeps_the_descript_inversion_and_pairs_the_rest() {
+fn reset_keeps_the_descript_inversion_and_pairs_the_rest() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("s2,b2"));
@@ -223,7 +223,7 @@ fn t_zdw07_reset_keeps_the_descript_inversion_and_pairs_the_rest() {
 ///
 /// 切り替えそのものは台本の組を保つので、台本の組と重なる新しい基底は reset で据わる。
 #[test]
-fn t_zdw08_descript_reload_returns_the_plan_to_pairs() {
+fn descript_reload_returns_the_plan_to_pairs() {
     // 新しいシェルが数字だけの記法を書いている → 組の並び。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();

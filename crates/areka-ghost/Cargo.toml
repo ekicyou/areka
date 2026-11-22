@@ -36,9 +36,10 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 # LogSink の command_kind テストで CueCommand::Custom { params: DynamicValue } を
-# 組み立てるためだけの workspace path dep（本体 import は areka_sakura::contract
-# 経由・dola への直接依存は本体コードに持ち込まない）。
-dola = { path = "../dola" }
+# 組み立てるのと、テスト用のキャリア cue の組み立て（dola の test-support）を引くための
+# workspace path dep（本体 import は areka_sakura::contract 経由・dola への直接依存は
+# 本体コードに持ち込まない）。
+dola = { path = "../dola", features = ["test-support"] }
 # task 2.1（InProcLibrary happy-path 単体テスト）: 契約定数 DLL_FILE_NAME を参照し、
 # かつ `cargo test --workspace` が cdylib を deps へ uplift する build-order edge を張るための
 # workspace path dep（本体コードには持ち込まない・テスト限定）。

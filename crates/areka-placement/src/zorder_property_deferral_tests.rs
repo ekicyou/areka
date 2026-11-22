@@ -3,7 +3,7 @@
 //! 対する現行どおりの応答になること、⑶その試みが窓の重なりの状態を動かさないこと、
 //! の 3 つを固定するテスト。⑶は書込が何も蓄えず、生む効果が
 //! 「書けない」の知らせ `NotSettable` 1 つだけであることで成り立つので、
-//! [`t_zpd30_writing_the_deferred_property_is_dropped`] が受け持つ。
+//! [`writing_the_deferred_property_is_dropped`] が受け持つ。
 //!
 //! # なぜ Z 順の機能の側に置くか
 //!
@@ -17,16 +17,16 @@
 //! 「一覧に無い」「見つからない」の類は、一覧が空でも・読み口が壊れていても真になる。
 //! そこで各テストは**同じ道具で既知の実在物を必ず 1 つ見つける**対照を同居させる:
 //!
-//! - 語彙表の走査（[`t_zpd10_no_vocabulary_table_carries_the_deferred_name`]）には、
+//! - 語彙表の走査（[`no_vocabulary_table_carries_the_deferred_name`]）には、
 //!   同じ述語が `seriko.` で必ず当たることと、表 6 本それぞれが空でないことを添える。
 //! - 走査対象の名簿そのものが実物からずれないことは
-//!   [`t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が受け持つ
+//!   [`every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が受け持つ
 //!   （名簿倒れ＝「名簿から漏れた表へ登録しても緑のまま」を機械で閉じる）。
-//! - 参照の応答（[`t_zpd20_reading_the_deferred_property_is_not_found`]）には、
+//! - 参照の応答（[`reading_the_deferred_property_is_not_found`]）には、
 //!   同じ鏡像・同じ読み口で提供済みの名前が値を返すことを添える。
-//! - 書込の応答（[`t_zpd30_writing_the_deferred_property_is_dropped`]）には、
+//! - 書込の応答（[`writing_the_deferred_property_is_dropped`]）には、
 //!   同じ分類器が別の名前を別の分岐へ落とすことを添える。
-//! - ソース走査（[`t_zpd40_the_property_system_sources_never_mention_the_name`]）には、
+//! - ソース走査（[`the_property_system_sources_never_mention_the_name`]）には、
 //!   同じ走査が既知の語を必ず拾うことと、走査したファイル数の下限を添える。
 //!
 //! # 期待値はテストの側の literal
@@ -74,7 +74,7 @@ fn asker_ctx() -> AskerContext {
 /// 走査対象＝**プロパティ名を要素として載せる表**の名簿（const 名だけ）。
 ///
 /// [`vocabulary_tables`] が実際に読む表と一致していることは
-/// [`t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が見張る。
+/// [`every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が見張る。
 const SCANNED_VOCAB_TABLES: [&str; 6] = [
     "FLAT_VOCAB",
     "SHIORI_RESOURCE_IDS",
@@ -120,10 +120,10 @@ fn const_ident(qualified: &str) -> &str {
 /// そこで 2 段で閉じている:
 ///
 /// ⑴名簿と実物のずれは
-///   [`t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が
+///   [`every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が
 ///   公開 const をソースから抜き出して両方向で見張る。
 /// ⑵名簿外の表へ名前が先行登録されること自体は
-///   [`t_zpd40_the_property_system_sources_never_mention_the_name`] の全ソース走査が
+///   [`the_property_system_sources_never_mention_the_name`] の全ソース走査が
 ///   受け持つ（走査対象を 6 本へ絞ったことで守りに穴は開かない）。
 fn vocabulary_tables() -> Vec<(&'static str, Vec<&'static str>)> {
     vec![
@@ -253,7 +253,7 @@ fn set_effects(key: &str, value: &str) -> Vec<Effect> {
 
 /// 語彙表 6 本のどれにも先送りした名前が載っていない。
 #[test]
-fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
+fn no_vocabulary_table_carries_the_deferred_name() {
     let hits = vocabulary_entries_containing(DEFERRED_NEEDLE);
     assert!(
         hits.is_empty(),
@@ -264,8 +264,8 @@ fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
 
 /// 走査した語彙表 6 本が実在し・空でなく・同じ述語が既知の名前を必ず拾う（恒真回避）。
 #[test]
-fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
-    // 表の本数は t_zpd12 が名簿と突き合わせ、6 本の実在は下の名指しが確かめる。
+fn the_scanned_vocabulary_tables_are_live() {
+    // 表の本数は every_public_vocab_const_is_scanned_or_excluded_on_purpose が名簿と突き合わせ、6 本の実在は下の名指しが確かめる。
     let tables = vocabulary_tables();
     for (table, names) in &tables {
         assert!(!names.is_empty(), "語彙表 {table} が空（走査が空振りする）");
@@ -304,8 +304,8 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
 
 /// 走査対象の名簿が実物からずれない（名簿倒れを機械で閉じる）。
 ///
-/// `t_zpd10` は**名簿に載っている表だけ**を読む。名簿から漏れた表へ名前を足しても
-/// `t_zpd10` は緑のままなので、名簿が実物へ追随していることを別に主張する必要がある
+/// `no_vocabulary_table_carries_the_deferred_name` は**名簿に載っている表だけ**を読む。名簿から漏れた表へ名前を足しても
+/// `no_vocabulary_table_carries_the_deferred_name` は緑のままなので、名簿が実物へ追随していることを別に主張する必要がある
 /// （
 /// `spawn_zorder_pair_deferred_tests::the_scanned_roster_covers_every_zorder_production_source_in_this_crate`
 /// と同じ形）。
@@ -319,7 +319,7 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
 /// **ちょうど 1 回**現れることを主張する——新しい表が生えたら「どちらへ入れるか決めろ」
 /// と赤くなり、除外するなら理由を書かせる形になる。
 #[test]
-fn t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose() {
+fn every_public_vocab_const_is_scanned_or_excluded_on_purpose() {
     let declared = vocab_public_consts();
 
     // ⓪ 抜き出しの較正: 件数の下限と、両名簿の側から既知の正例が 1 つずつ挙がること。
@@ -402,7 +402,7 @@ fn t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose() {
 
 /// 参照は未提供のプロパティに対する現行どおりの応答＝`NotFound` を返す。
 #[test]
-fn t_zpd20_reading_the_deferred_property_is_not_found() {
+fn reading_the_deferred_property_is_not_found() {
     let reader = reader_with_one_provided_property();
     assert_eq!(
         reader.resolve_dotted_str(&asker_ctx(), DEFERRED_PROPERTY),
@@ -418,7 +418,7 @@ fn t_zpd20_reading_the_deferred_property_is_not_found() {
 
 /// 対照: 同じ鏡像・同じ読み口で、提供済みのプロパティは値を返す。
 #[test]
-fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
+fn a_provided_property_still_resolves_to_its_value() {
     let reader = reader_with_one_provided_property();
     assert_eq!(
         reader.resolve_dotted_str(&asker_ctx(), "currentghost.name"),
@@ -430,7 +430,7 @@ fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
 /// 書込は現行どおり「SET 無効な正準語彙」として落ち、書けないの知らせ `NotSettable` を 1 つだけ
 /// 生み、値を書く効果は生まない。
 #[test]
-fn t_zpd30_writing_the_deferred_property_is_dropped() {
+fn writing_the_deferred_property_is_dropped() {
     assert_eq!(
         classify_set(DEFERRED_PROPERTY),
         SetClass::NotSettable,
@@ -450,9 +450,9 @@ fn t_zpd30_writing_the_deferred_property_is_dropped() {
 /// 対照: 同じ分類器・同じ入口が、別の名前は別の分岐へ落とす（分類が生きている）。
 ///
 /// `NotSettable` が「何を入れてもこうなる既定」ではなく、名前に応じた判断であることを
-/// 示す。ここが崩れると `t_zpd30` は「分類器が常に NotSettable を返す」だけで緑になる。
+/// 示す。ここが崩れると `writing_the_deferred_property_is_dropped` は「分類器が常に NotSettable を返す」だけで緑になる。
 #[test]
-fn t_zpd31_other_property_names_take_different_write_paths() {
+fn other_property_names_take_different_write_paths() {
     assert_eq!(
         classify_set("surface.num"),
         SetClass::RuntimeCommand,
@@ -484,10 +484,10 @@ fn t_zpd31_other_property_names_take_different_write_paths() {
 
 /// プロパティシステムのソースが先送りした名前を 1 度も書いていない。
 ///
-/// 語彙表の走査（`t_zpd10`）は**表に載る名前**しか見ないので、表を経ない実装
+/// 語彙表の走査（`no_vocabulary_table_carries_the_deferred_name`）は**表に載る名前**しか見ないので、表を経ない実装
 /// （読み口や分類器の中の名前ごとの特別扱い）を拾えない。ソース全走査がその裏を取る。
 #[test]
-fn t_zpd40_the_property_system_sources_never_mention_the_name() {
+fn the_property_system_sources_never_mention_the_name() {
     let files = sylphya_source_files();
     assert!(
         files.len() >= 15,

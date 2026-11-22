@@ -22,7 +22,7 @@ fn sources(ledger: &ZOrderGroupLedger) -> Vec<GroupSource> {
 
 /// 台本の組を保ち、古い基底を外し、新しい基底を先頭に新しい ID で据える。
 #[test]
-fn t_zrb1_rebase_keeps_tag_groups_and_seats_the_new_base_first() {
+fn rebase_keeps_tag_groups_and_seats_the_new_base_first() {
     let (mut ledger, old_base, tag_id) = ledger_with_base_and_tag();
     let tag_members = ledger.groups()[1].members.clone();
 
@@ -54,7 +54,7 @@ fn t_zrb1_rebase_keeps_tag_groups_and_seats_the_new_base_first() {
 
 /// 基底が無かった台帳でも新しい基底は先頭に入る（台本の組の前）。
 #[test]
-fn t_zrb2_rebase_without_an_old_base_inserts_the_base_ahead_of_tags() {
+fn rebase_without_an_old_base_inserts_the_base_ahead_of_tags() {
     let mut ledger = ZOrderGroupLedger::default();
     let first = expect_added(&mut ledger, &["2", "3"]);
     let second = expect_added(&mut ledger, &["4", "5"]);
@@ -72,7 +72,7 @@ fn t_zrb2_rebase_without_an_old_base_inserts_the_base_ahead_of_tags() {
 
 /// 台本の組とスコープが重なる基底は据えず、重なったスコープを返し、据え損ねた基底として持つ。
 #[test]
-fn t_zrb3_a_base_overlapping_a_tag_group_is_not_seated() {
+fn a_base_overlapping_a_tag_group_is_not_seated() {
     let (mut ledger, old_base, tag_id) = ledger_with_base_and_tag();
 
     let outcome = ledger.rebase_descript(accept(&["3", "6", "2"]));
@@ -92,7 +92,7 @@ fn t_zrb3_a_base_overlapping_a_tag_group_is_not_seated() {
 
 /// 古い基底のスコープは重なりに数えない（取り替えられる側だから）。
 #[test]
-fn t_zrb4_the_old_base_does_not_collide_with_its_replacement() {
+fn the_old_base_does_not_collide_with_its_replacement() {
     let (mut ledger, _, _) = ledger_with_base_and_tag();
 
     let outcome = ledger.rebase_descript(accept(&["1", "0"]));
@@ -103,7 +103,7 @@ fn t_zrb4_the_old_base_does_not_collide_with_its_replacement() {
 
 /// 空の列は基底なし。台本の組は残る。
 #[test]
-fn t_zrb5_an_empty_list_means_no_base() {
+fn an_empty_list_means_no_base() {
     let (mut ledger, old_base, tag_id) = ledger_with_base_and_tag();
 
     let outcome = ledger.rebase_descript(Vec::new());
@@ -123,7 +123,7 @@ fn t_zrb5_an_empty_list_means_no_base() {
 
 /// 切り替えの後の `\![reset,zorder]` は台本の組を落とし、据え損ねた基底を先頭に据える。
 #[test]
-fn t_zrb6_reset_seats_the_pending_base() {
+fn reset_seats_the_pending_base() {
     let (mut ledger, _, tag_id) = ledger_with_base_and_tag();
     ledger.rebase_descript(accept(&["2", "6"]));
     let next_tag = expect_added(&mut ledger, &["7", "8"]);
@@ -148,7 +148,7 @@ fn t_zrb6_reset_seats_the_pending_base() {
 
 /// 起動の基底の口は据え損ねた基底を消してから始める。
 #[test]
-fn t_zrb7_the_startup_base_clears_the_pending_base() {
+fn the_startup_base_clears_the_pending_base() {
     let (mut ledger, _, _) = ledger_with_base_and_tag();
     ledger.rebase_descript(accept(&["2", "6"]));
     assert!(ledger.pending_base.is_some());
@@ -165,7 +165,7 @@ fn t_zrb7_the_startup_base_clears_the_pending_base() {
 
 /// 切り替えの口も据え損ねた基底を消してから始める（前の切り替えの残りを持ち越さない）。
 #[test]
-fn t_zrb8_a_later_rebase_clears_the_pending_base() {
+fn a_later_rebase_clears_the_pending_base() {
     let (mut ledger, _, _) = ledger_with_base_and_tag();
     ledger.rebase_descript(accept(&["2", "6"]));
 
@@ -179,7 +179,7 @@ fn t_zrb8_a_later_rebase_clears_the_pending_base() {
 
 /// 版は内容が動いたときだけ進む。進む経路と進まない経路を同じ 1 本で挟む。
 #[test]
-fn t_zrb9_version_moves_only_when_the_contents_move() {
+fn version_moves_only_when_the_contents_move() {
     // 進む: 基底の取り替え・基底を外すだけ・基底を据えるだけ・reset で据え損ねた基底が据わる。
     let (mut ledger, _, _) = ledger_with_base_and_tag();
     let v = ledger.version();

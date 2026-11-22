@@ -25,7 +25,7 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         ("move", None, vec!["-353", "", "", "0", "base", "base"]),
         // areka-seriko の actor_bind_loop_tests.rs
         ("bind", None, vec!["腕", "伸び", "1"]),
-        // zorder_cue_tests.rs の t_zcs1／t_zcs2
+        // zorder_cue_tests.rs の set_zorder_becomes_a_set_directive_carrying_the_element_tokens／reset_zorder_becomes_a_reset_directive
         ("set", Some("zorder"), vec!["zorder", "1", "0"]),
         ("reset", Some("zorder"), vec!["zorder"]),
         // readme_cue_tests.rs の bare_open_readme_sends_exactly_one_request
@@ -127,15 +127,7 @@ pub fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
     actor_carrier_cue("0", name, args)
 }
 
-/// `\![name,args...]` の汎用キャリア cue を演者 `actor` で組む（正準形＝`Custom` の String 配列）。
-pub fn actor_carrier_cue(actor: &str, name: &str, args: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
+pub use dola::cue::test_support::carrier_cue as actor_carrier_cue;
 
 /// 開けない `Custom`（`params` が String 配列でない）を宛名 `command` と演者 `actor` で組む。
 ///

@@ -151,7 +151,7 @@ fn window_titles_come_from_ghost_titles() {
 /// キャラ窓は `BalloonFollow`（balloon 引き当て＋offset 転写）と
 /// `OnDrag`（追従）を持ち、バルーン窓は `OnDrag`（相対位置記憶）を
 /// 持つが `BalloonFollow` は持たない。バルーン側ハンドラの実挙動は
-/// `t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag` が見る。
+/// `char_move_follows_adjusted_offset_after_balloon_solo_drag` が見る。
 #[test]
 fn char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
     let mut world = World::new();

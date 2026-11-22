@@ -128,11 +128,11 @@ const MAINTAIN: &str = "wintf/zorder_pair_maintain_release_tests.rs";
 /// 分岐 → それを覆うテスト（分岐・テストファイルの見出し・テスト関数の名前）。
 const COVERAGE: [(&str, &str, &str); 52] = [
     // ── 逆転
-    ("逆転", LEDGER, "t_zwo03_adjacent_inversion_is_kept"),
+    ("逆転", LEDGER, "adjacent_inversion_is_kept"),
     (
         "逆転",
         COMPOSE_WO,
-        "t_zcw01_inverted_scope_zero_joins_only_two_edges",
+        "inverted_scope_zero_joins_only_two_edges",
     ),
     ("逆転", RELEASE, "an_inverted_pair_is_released"),
     (
@@ -149,18 +149,14 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "非隣接",
         LEDGER,
-        "t_zwo02_split_order_is_kept_verbatim_and_classified",
+        "split_order_is_kept_verbatim_and_classified",
     ),
     (
         "非隣接",
         COMPOSE_WO,
-        "t_zcw02_split_scopes_join_every_consecutive_pair",
+        "split_scopes_join_every_consecutive_pair",
     ),
-    (
-        "非隣接",
-        DRAIN_WO,
-        "t_zdw02_split_line_names_both_split_shapes",
-    ),
+    ("非隣接", DRAIN_WO, "split_line_names_both_split_shapes"),
     ("非隣接", RELEASE, "a_split_pair_is_released"),
     (
         "非隣接",
@@ -171,17 +167,17 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "逆転と補いの組み合わせ（`s0,b0,s1`）",
         LEDGER,
-        "t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1",
+        "pasta_inversion_keeps_written_order_and_fills_b1_before_s1",
     ),
     (
         "逆転と補いの組み合わせ（`s0,b0,s1`）",
         LEDGER,
-        "t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char",
+        "partner_is_filled_right_behind_a_balloon_and_right_before_a_char",
     ),
     (
         "逆転と補いの組み合わせ（`s0,b0,s1`）",
         DRAIN_WO,
-        "t_zdw01_inverted_with_implied_partner_line_is_verbatim",
+        "inverted_with_implied_partner_line_is_verbatim",
     ),
     (
         "逆転と補いの組み合わせ（`s0,b0,s1`）",
@@ -192,12 +188,12 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "逆転の無い明示の記法",
         LEDGER,
-        "t_zwo04_balloon_then_char_stays_adjacent",
+        "balloon_then_char_stays_adjacent",
     ),
     (
         "逆転の無い明示の記法",
         DRAIN_WO,
-        "t_zdw03_existing_spellings_false_and_partner_are_kept",
+        "existing_spellings_false_and_partner_are_kept",
     ),
     ("逆転の無い明示の記法", RELEASE, "a_contiguous_pair_is_kept"),
     (
@@ -209,28 +205,28 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "数字だけの記法",
         LEDGER,
-        "t_zwo10_numeric_mode_expands_as_before_with_no_record",
+        "numeric_mode_expands_as_before_with_no_record",
     ),
     (
         "数字だけの記法",
         COMPOSE,
-        "t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block",
+        "numeric_mode_puts_left_scope_in_front_as_a_block",
     ),
     // ── 解除で組の重なりへ戻ること
     (
         "解除で組の重なりへ戻ること",
         DRAIN_WO,
-        "t_zdw06_reset_returns_the_plan_to_pairs",
+        "reset_returns_the_plan_to_pairs",
     ),
     (
         "解除で組の重なりへ戻ること",
         DRAIN_WO,
-        "t_zdw07_reset_keeps_the_descript_inversion_and_pairs_the_rest",
+        "reset_keeps_the_descript_inversion_and_pairs_the_rest",
     ),
     (
         "解除で組の重なりへ戻ること",
         DRAIN_WO,
-        "t_zdw08_descript_reload_returns_the_plan_to_pairs",
+        "descript_reload_returns_the_plan_to_pairs",
     ),
     (
         "解除で組の重なりへ戻ること",
@@ -256,12 +252,12 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "descript の逆転",
         DRAIN_WO,
-        "t_zdw05_descript_inversion_goes_through_the_tag_interpretation",
+        "descript_inversion_goes_through_the_tag_interpretation",
     ),
     (
         "descript の逆転",
         DESCRIPT,
-        "t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded",
+        "an_inverted_setting_is_seated_in_written_order_and_recorded",
     ),
     (
         "descript の逆転",
@@ -299,12 +295,12 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     (
         "逆転や非隣接を含む並びが枝分かれの無い一直線の並びの鎖になること",
         COMPOSE_WO,
-        "t_zcw04_every_written_order_yields_one_straight_line",
+        "every_written_order_yields_one_straight_line",
     ),
     (
         "逆転や非隣接を含む並びが枝分かれの無い一直線の並びの鎖になること",
         COMPOSE_WO,
-        "t_zcw05_the_checker_catches_a_pair_edge_written_by_the_chain",
+        "the_checker_catches_a_pair_edge_written_by_the_chain",
     ),
     (
         "逆転や非隣接を含む並びが枝分かれの無い一直線の並びの鎖になること",
@@ -388,6 +384,6 @@ const COVERAGE: [(&str, &str, &str); 52] = [
 /// 表に載る分岐名は知っている名前だけで、どの分岐も覆われ、錨は実在して実行され、
 /// テストファイルはそれぞれの crate へ組み込まれている（検査は `check_table`）。
 #[test]
-fn t_zic_the_table_covers_every_branch_with_executed_tests() {
+fn the_table_covers_every_branch_with_executed_tests() {
     check_table(&BRANCHES, &TEST_FILES, &COVERAGE);
 }

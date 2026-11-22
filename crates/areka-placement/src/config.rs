@@ -333,7 +333,7 @@ mod tests {
     /// 層マーカーには未知値（→ `Alignment::Seam`）を使い、勝者の層をそのまま観測する。
     /// 全層欠落時は既定 `Bottom`。
     #[test]
-    fn t_c1_alignment_four_layer_cascade_all_patterns() {
+    fn alignment_four_layer_cascade_all_patterns() {
         for mask in 0u32..16 {
             let mut ghost = BTreeMap::new();
             let mut shell = BTreeMap::new();
@@ -375,7 +375,7 @@ mod tests {
 
     /// 実値（`bottom`/`free`）でも後勝ちが成立する（shell スコープ別が最強）。
     #[test]
-    fn t_c1_alignment_real_values_later_layer_wins() {
+    fn alignment_real_values_later_layer_wins() {
         // ghost 全体 free ＜ shell スコープ別 bottom → Bottom
         let ghost = kv(&[("seriko.alignmenttodesktop", "free")]);
         let shell = kv(&[("sakura.seriko.alignmenttodesktop", "bottom")]);
@@ -392,7 +392,7 @@ mod tests {
     /// `default_x` はスコープ別キーのみの 2 層カスケード（ghost ＜ shell）。
     /// 存在有無 2^2=4 全パターン。
     #[test]
-    fn t_c1_default_x_two_layer_cascade_all_patterns() {
+    fn default_x_two_layer_cascade_all_patterns() {
         for mask in 0u32..4 {
             let mut ghost = BTreeMap::new();
             let mut shell = BTreeMap::new();
@@ -416,7 +416,7 @@ mod tests {
 
     /// `balloon.alignment` も 2 層カスケード（shell が ghost に勝つ）。
     #[test]
-    fn t_c1_balloon_alignment_two_layer_cascade() {
+    fn balloon_alignment_two_layer_cascade() {
         let ghost = kv(&[("sakura.balloon.alignment", "left")]);
         let shell = kv(&[("sakura.balloon.alignment", "right")]);
         let cfg = build_placement_config(&ghost, &shell);
@@ -439,7 +439,7 @@ mod tests {
     /// `balloon.alignment` の値は大文字小文字を区別しない（`Right`・`NONE`・`LEFT`）。
     /// 知らない値の警告は書かれたままの値を載せる。
     #[test]
-    fn t_c1_balloon_alignment_ignores_case() {
+    fn balloon_alignment_ignores_case() {
         for (raw, expected) in [
             ("Right", BalloonSide::Right),
             ("NONE", BalloonSide::Auto),
@@ -463,7 +463,7 @@ mod tests {
 
     /// `defaultleft` 単独は X スロットへ、`defaulttop` 単独は Y スロットへ受理する。
     #[test]
-    fn t_c2_variant_notation_alone_is_accepted() {
+    fn variant_notation_alone_is_accepted() {
         let shell = kv(&[("sakura.defaultleft", "42"), ("sakura.defaulttop", "24")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes[&0].default_x, Some(42));
@@ -472,7 +472,7 @@ mod tests {
 
     /// 同層競合時は `defaultx` が `defaultleft` に勝つ。
     #[test]
-    fn t_c2_defaultx_wins_over_defaultleft_same_layer() {
+    fn defaultx_wins_over_defaultleft_same_layer() {
         let shell = kv(&[("sakura.defaultx", "1"), ("sakura.defaultleft", "2")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes[&0].default_x, Some(1));
@@ -480,7 +480,7 @@ mod tests {
 
     /// 同層競合時は `defaulty` が `defaulttop` に勝つ。
     #[test]
-    fn t_c2_defaulty_wins_over_defaulttop_same_layer() {
+    fn defaulty_wins_over_defaulttop_same_layer() {
         let shell = kv(&[("sakura.defaulty", "3"), ("sakura.defaulttop", "4")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes[&0].default_y, Some(3));
@@ -488,7 +488,7 @@ mod tests {
 
     /// 層が違えば表記より層が勝つ（shell の `defaultleft` ＞ ghost の `defaultx`）。
     #[test]
-    fn t_c2_layer_beats_notation() {
+    fn layer_beats_notation() {
         let ghost = kv(&[("sakura.defaultx", "5")]);
         let shell = kv(&[("sakura.defaultleft", "7")]);
         let cfg = build_placement_config(&ghost, &shell);
@@ -497,7 +497,7 @@ mod tests {
 
     /// 別綴 `alignmentondesktop` を寛容受理し、同層に正典綴があれば正典側が勝つ。
     #[test]
-    fn t_c2_alignmentondesktop_spelling_variant() {
+    fn alignmentondesktop_spelling_variant() {
         let shell = kv(&[("seriko.alignmentondesktop", "free")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes[&0].alignment, Alignment::Free);
@@ -513,7 +513,7 @@ mod tests {
     /// `char0.`/`char1.` は `sakura.`/`kero.` の de-facto 別名として同スロットへ
     /// 寛容受理し、正典キーと衝突時は正典側が優先される。
     #[test]
-    fn t_c2_char0_char1_prefix_aliases() {
+    fn char0_char1_prefix_aliases() {
         // char0.defaultx 単独 → scope0 の X へ
         let shell = kv(&[("char0.defaultx", "11"), ("kero.defaultx", "0")]);
         let cfg = build_placement_config(&empty(), &shell);
@@ -542,7 +542,7 @@ mod tests {
     /// 読めない値（未知の `balloon.alignment`・数値でない `defaultx`／`defaulty`）は
     /// パニックせず、1 つにつき `warn!` を 1 件ずつ出し、値は既定（Left・None）になる。
     #[test]
-    fn t_c2_unreadable_values_warn_once_each_and_fall_back() {
+    fn unreadable_values_warn_once_each_and_fall_back() {
         let shell = kv(&[
             ("sakura.balloon.alignment", "center"),
             ("sakura.defaultx", "abc"),
@@ -568,14 +568,14 @@ mod tests {
 
     /// 信号なしでは scope0 のみ常設。
     #[test]
-    fn t_c3_no_signal_yields_scope0_only() {
+    fn no_signal_yields_scope0_only() {
         let cfg = build_placement_config(&empty(), &empty());
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0]);
     }
 
     /// ghost `kero.name` で scope1 が生える。
     #[test]
-    fn t_c3_ghost_kero_name_adds_scope1() {
+    fn ghost_kero_name_adds_scope1() {
         let ghost = kv(&[("kero.name", "エモ")]);
         let cfg = build_placement_config(&ghost, &empty());
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
@@ -583,7 +583,7 @@ mod tests {
 
     /// shell の `kero.` 接頭キー存在でも scope1 が生える。
     #[test]
-    fn t_c3_shell_kero_prefix_adds_scope1() {
+    fn shell_kero_prefix_adds_scope1() {
         let shell = kv(&[("kero.balloon.alignment", "right")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
@@ -592,7 +592,7 @@ mod tests {
     /// `char{n}.`（n≥2）キーは ghost/shell どちら側でも scope を足さない。
     /// scope 3 の設定は無い。
     #[test]
-    fn t_c3_char_n_prefix_does_not_add_scope_n() {
+    fn char_n_prefix_does_not_add_scope_n() {
         let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
         let shell = kv(&[("char3.defaultx", "0")]);
         let cfg = build_placement_config(&ghost, &shell);
@@ -602,7 +602,7 @@ mod tests {
     /// `charset` キーは `char{n}.` 検出に誤マッチしない。
     /// `char0.`/`char1.`（別名）はスコープ検出シグナルではない（kero 信号のみ）。
     #[test]
-    fn t_c3_detection_rejects_non_signals() {
+    fn detection_rejects_non_signals() {
         let shell = kv(&[("charset", "UTF-8"), ("char1.defaultx", "0")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0]);
@@ -618,7 +618,7 @@ mod tests {
     /// スロットにも現れないことを固定する（本モジュールは KV の純粋転記であり、
     /// 入力に無い数値は出力に出現し得ない）。
     #[test]
-    fn t_c4_emo2_actual_kv_pins_canonical_result() {
+    fn emo2_actual_kv_pins_canonical_result() {
         // emo2 ghost/master/descript.txt の配置関連部分（実測・配置系キーなし＋kero.name）
         let ghost_kv = areka_parsers::kv::parse_kv(
             "charset,UTF-8\n\
@@ -669,7 +669,7 @@ mod tests {
     /// shell の `seriko.zorder`／`seriko.sticky-window` を
     /// 生文字列のまま転記する（解釈は転記の先が行う）。値中のカンマも保持。
     #[test]
-    fn t_c5_seam_fields_raw_transcription() {
+    fn seam_fields_raw_transcription() {
         let shell_kv = areka_parsers::kv::parse_kv(
             "seriko.zorder,1,0\n\
              seriko.sticky-window,0,1\n",
@@ -681,7 +681,7 @@ mod tests {
 
     /// 未指定なら None。ghost 側の同名キーは転記対象でない（所在は shell descript）。
     #[test]
-    fn t_c5_seam_fields_absent_and_shell_only() {
+    fn seam_fields_absent_and_shell_only() {
         let ghost = kv(&[("seriko.zorder", "1"), ("seriko.sticky-window", "0,1")]);
         let cfg = build_placement_config(&ghost, &empty());
         assert_eq!(cfg.zorder_raw, None);

@@ -19,7 +19,7 @@ use crate::zorder_test_support::{b, expect_accept, expect_reject, implied, s, wr
 /// ぱすたと同じ指定 `s0,b0,s1`: 並びは書かれた順のまま、`s1` の手前に `b1` が補われる。
 /// スコープ 0 は逆転、スコープ 1 は補った隣り合い。
 #[test]
-fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
+fn pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
     let (elements, records) = expect_accept(&["s0", "b0", "s1"]);
 
     assert_eq!(
@@ -39,7 +39,7 @@ fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
 /// 非隣接 `b1,s0,s1,b0`: 4 枚とも書かれた順のまま。スコープ 1 は非隣接、
 /// スコープ 0 は逆転かつ非隣接。記録はスコープの初出順。
 #[test]
-fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
+fn split_order_is_kept_verbatim_and_classified() {
     let (elements, records) = expect_accept(&["b1", "s0", "s1", "b0"]);
 
     assert_eq!(elements, vec![b(1), s(0), s(1), b(0)], "書かれた順のまま");
@@ -54,7 +54,7 @@ fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
 
 /// 隣り合った逆転 `s1,b1` はそのまま採る。
 #[test]
-fn t_zwo03_adjacent_inversion_is_kept() {
+fn adjacent_inversion_is_kept() {
     let (elements, records) = expect_accept(&["s1", "b1"]);
 
     assert_eq!(elements, vec![s(1), b(1)]);
@@ -63,7 +63,7 @@ fn t_zwo03_adjacent_inversion_is_kept() {
 
 /// バルーンのすぐ奥にキャラクターを書いたスコープは隣り合い。
 #[test]
-fn t_zwo04_balloon_then_char_stays_adjacent() {
+fn balloon_then_char_stays_adjacent() {
     let (elements, records) = expect_accept(&["b0", "s0", "b1", "s1"]);
 
     assert_eq!(elements, vec![b(0), s(0), b(1), s(1)]);
@@ -78,7 +78,7 @@ fn t_zwo04_balloon_then_char_stays_adjacent() {
 
 /// 記録の語は 4 通り。隣り合いは既存の読み手のために `false` のまま。
 #[test]
-fn t_zwo05_written_order_words() {
+fn written_order_words() {
     assert_eq!(WrittenOrder::Adjacent.as_str(), "false");
     assert_eq!(WrittenOrder::Inverted.as_str(), "inverted");
     assert_eq!(WrittenOrder::Split.as_str(), "split");
@@ -91,7 +91,7 @@ fn t_zwo05_written_order_words() {
 
 /// 補いの 2 つの位置: `bN` だけならすぐ奥に `sN`、`sN` だけならすぐ手前に `bN`。補いは他の窓の順に触れない。
 #[test]
-fn t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
+fn partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
     let (elements, records) = expect_accept(&["b1", "s0"]);
     assert_eq!(elements, vec![b(1), s(1), b(0), s(0)]);
     assert_eq!(
@@ -117,7 +117,7 @@ fn t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
 
 /// 2 枚とも書けば補わない。窓の枚数は書いた数のまま。
 #[test]
-fn t_zwo07_both_windows_written_means_no_fill() {
+fn both_windows_written_means_no_fill() {
     for tokens in [
         ["s0", "b0"].as_slice(),
         ["b0", "s0"].as_slice(),
@@ -134,7 +134,7 @@ fn t_zwo07_both_windows_written_means_no_fill() {
 
 /// 補いの記録は常に隣り合い（`Some(_)` なら `Adjacent`）。記録はスコープごとに初出順で 1 件。
 #[test]
-fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
+fn every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
     for tokens in [
         ["s0", "b0", "s1"].as_slice(),
         ["b1", "s0", "s1", "b0"].as_slice(),
@@ -164,12 +164,12 @@ fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
 }
 
 // ---------------------------------------------------------------------------
-// 数字だけの記法・拒否（完全形と省略形の同義は兄弟の `t_zgp3` が受け持つ）
+// 数字だけの記法・拒否（完全形と省略形の同義は兄弟の `zorder_group_ledger_tests.rs` の `explicit_short_form_equals_long_form_and_numeric_expansion` が受け持つ）
 // ---------------------------------------------------------------------------
 
 /// 数字だけの記法は `[バルーン, キャラ]` へ展開し、記録は空。
 #[test]
-fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
+fn numeric_mode_expands_as_before_with_no_record() {
     let (elements, records) = expect_accept(&["1", "0"]);
     assert_eq!(elements, vec![b(1), s(1), b(0), s(0)]);
     assert!(records.is_empty(), "{records:?}");
@@ -178,7 +178,7 @@ fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
 /// 拒否 5 種。解釈の 4 種に加え、台帳の再指定の拒否も
 /// 逆転の並びで変わらない。
 #[test]
-fn t_zwo11_the_five_rejections_are_unchanged() {
+fn the_five_rejections_are_unchanged() {
     assert_eq!(
         expect_reject(&["s0", "xyz"]),
         ZOrderReject::UnparsableToken {
