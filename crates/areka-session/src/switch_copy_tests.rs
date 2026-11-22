@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::sync::mpsc;
+use std::time::Duration;
 
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_kanade::{ChangeHandoff, ChangeOrigin};
@@ -170,7 +171,10 @@ fn start_copies_on_a_background_thread() {
     let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
-    assert_eq!(rx.recv().unwrap(), f.copied("B"));
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(30)).unwrap(),
+        f.copied("B")
+    );
     assert!(
         f.copied("B")
             .join("ghost")
@@ -282,7 +286,7 @@ fn copy_failure_boots_from_the_original() {
     let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
-    let answer = rx.recv().unwrap();
+    let answer = rx.recv_timeout(Duration::from_secs(30)).unwrap();
 
     let (tx, rx) = mpsc::channel();
     let mut world = f.world(SwitchCopy::Running(rx));

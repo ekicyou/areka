@@ -8,22 +8,12 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 use std::path::Path;
 use temp_path_kit::TempPath;
 
-/// 復元テスト共通寸法（persist.rs の merge テストと同流儀）。
+/// 復元テスト共通寸法。
 const CSZ: SizePx = SizePx { w: 400, h: 600 };
 const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("main-restore-seam-{tag}"))
-}
-
-/// `resolve` が成功する最小ゴーストパッケージ（persist.rs の `plant_minimal_ghost` と同型）。
+/// `load_restored_state` が読むゴーストの descript だけを置く。
 fn plant_minimal_ghost(root: &Path) {
-    let _ = std::fs::remove_dir_all(root);
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
     std::fs::write(
@@ -31,7 +21,6 @@ fn plant_minimal_ghost(root: &Path) {
         "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
     )
     .expect("write ghost descript");
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
 }
 
 /// scope 0 の合成 placement（resolver 出力を模す。`balloon_pos ≡ char_pos + balloon_offset`
@@ -61,7 +50,7 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
 /// saved 窓を完全に覆う work area ゆえ `project_restore` は恒等＝保存値素通し。
 #[test]
 fn restore_seam_prefers_saved_position_over_default() {
-    let temp = unique_temp_dir("prefers-saved");
+    let temp = TempPath::new("restore-seam-prefers-saved");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
@@ -105,17 +94,15 @@ fn restore_seam_prefers_saved_position_over_default() {
     assert_eq!(out[0].char_size, CSZ);
     assert_eq!(out[0].balloon_size, BSZ);
     assert_eq!(out[0].anchor, Anchor::Free);
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// 永続不在（sylphya.toml を植えない）→ merge は既定 placement に完全恒等
 /// （保存位置が無ければ従来の既定位置解決のまま）。
 #[test]
 fn restore_seam_without_persist_is_identity_default() {
-    let temp = unique_temp_dir("no-persist-default");
+    let temp = TempPath::new("restore-seam-no-persist-default");
     let root = temp.path().to_path_buf();
-    plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない。
+    plant_minimal_ghost(&root); // sylphya.toml は植えない。
 
     let default_char_pos = PointPx { x: 100, y: 100 };
     let placements = vec![synthetic_placement(default_char_pos)];
@@ -139,15 +126,13 @@ fn restore_seam_without_persist_is_identity_default() {
         restored.is_empty(),
         "永続不在なら復元済み scope は無い＝全 scope が既定配置のまま（areka-P0-scope-chain-gap 7.3）"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// 記憶の位置が既定の位置と**同じ値**でも、そのスコープは「記憶から戻した」集合に入る
 /// （値の違いでなく記憶の有無で決める）。値の比較で決めていたら集合は空になり赤になる。
 #[test]
 fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
-    let temp = unique_temp_dir("saved-equals-default");
+    let temp = TempPath::new("restore-seam-saved-equals-default");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     let profile = profile_areka_root(&root.join("ghost").join("master"));
@@ -194,12 +179,12 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
 /// 補正が `balloon_offset` へ焼き付いていたら 3 番目の assert が赤になる。
 #[test]
 fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
-    let temp = unique_temp_dir("balloon-limit-gate");
+    let temp = TempPath::new("restore-seam-balloon-limit-gate");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     let profile = profile_areka_root(&root.join("ghost").join("master"));
     std::fs::create_dir_all(&profile).expect("create profile/areka");
-    // 保存位置は作業領域の左端近く。balloon_offset(-50) を足すと左辺を 20px はみ出す。
+    // 保存位置は作業領域の左端近く。balloon_offset(-50) を足すと左の辺を 20px はみ出し、0 へ寄せられる。
     std::fs::write(
         profile.join("sylphya.toml"),
         "format-version = 1\n[window.0]\nx = \"30\"\ny = \"300\"\n".as_bytes(),
@@ -254,8 +239,6 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
         "0",
         "補正した scope を記録する（要件 6.1）"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// 2 つ目の戻り値は「記憶に位置があるスコープ → 覚えた印」の一覧。印の鍵はあれば
@@ -263,7 +246,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
 #[test]
 fn restore_seam_returns_remembered_adjacency_marks_per_restored_scope() {
     use areka_placement::chain_finalize::AdjacencyMark;
-    let temp = unique_temp_dir("adjacency-marks");
+    let temp = TempPath::new("restore-seam-adjacency-marks");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     let profile = profile_areka_root(&root.join("ghost").join("master"));

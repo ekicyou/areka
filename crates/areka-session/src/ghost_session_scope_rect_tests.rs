@@ -253,9 +253,12 @@ fn reads_after_the_window_moved_answer_the_new_rect() {
 #[test]
 fn os_window_rect_invalid_handle_is_none_and_restores_dpi_context() {
     use windows::Win32::UI::HiDpi::{AreDpiAwarenessContextsEqual, GetThreadDpiAwarenessContext};
+    // SAFETY: スレッドの DPI の扱いを読むだけの Win32 呼び出しで、渡す引数は無い。
     let before = unsafe { GetThreadDpiAwarenessContext() };
     assert_eq!(os_window_rect(WindowKey(0)), None);
+    // SAFETY: 同じく読むだけの呼び出し。
     let after = unsafe { GetThreadDpiAwarenessContext() };
+    // SAFETY: 手前で読んだ 2 つの値を比べるだけで、ポインターは扱わない。
     assert!(unsafe { AreDpiAwarenessContextsEqual(before, after) }.as_bool());
 }
 
@@ -335,9 +338,10 @@ fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
 mod wiring {
     use super::super::*;
     use super::{LEFT_SCREEN, keys, rect_of};
-    use crate::ghost_session::ghost_session_scope_rect::test_support::{fake_handle, placement};
+    use crate::ghost_session::ghost_session_scope_rect::test_support::placement;
     use areka_placement::source::GhostTitles;
     use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+    use areka_placement::test_support::fake_handle;
     use areka_sylphya::{AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror};
     use bevy_ecs::schedule::Schedule;
     use bevy_ecs::schedule::SingleThreadedExecutor;
@@ -439,15 +443,14 @@ mod wiring {
     fn sync_rebuilds_only_when_handles_or_windows_change() {
         let (mut world, gw) = world_with_character_handle();
         wire_reader(&mut world, &reader());
-        let mut schedule = Schedule::default();
-        schedule.add_systems(sync_scope_window_table);
+        let mut schedule = frame();
         // 1 回目は結線の前に付いた印の Added で起きるが、中身は同じ。
         schedule.run(&mut world);
         assert_eq!(table(&world).0.get(&0), Some(&keys(Some(0x10), None)));
 
         // 変わらないフレームでは組み直さない（置き場へ置いた目印が残る）。
         let marker = ScopeWindowTable(BTreeMap::from([(9, keys(Some(9), Some(9)))]));
-        *world.resource::<ScopeRectWiring>().table.write().unwrap() = marker.clone();
+        plant(&world, &marker);
         schedule.run(&mut world);
         assert_eq!(table(&world), marker);
 
@@ -473,8 +476,7 @@ mod wiring {
     #[test]
     fn sync_without_wiring_does_nothing() {
         let (mut world, _) = world_with_character_handle();
-        let mut schedule = Schedule::default();
-        schedule.add_systems(sync_scope_window_table);
+        let mut schedule = frame();
         schedule.run(&mut world);
         assert!(!world.contains_resource::<ScopeRectWiring>());
     }

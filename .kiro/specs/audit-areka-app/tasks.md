@@ -116,7 +116,7 @@
   - _Dispatch: mechanical — 表明と足場の形を設計が与える_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.7, 5.16_
 
-- [ ] 9. `areka-session` の記憶の書き手まわりのテスト（G9）
+- [x] 9. `areka-session` の記憶の書き手まわりのテスト（G9）
 - [x] 9.1 最後に使った物の記録のテストを分け、待ちを有界にし、書かない守りを足す（指摘 28・29・32・62・5.5・5.7）
   - `boot_resolve_tests.rs` の `mod last_used`（405-873）を新しい兄弟 `boot_resolve_last_used_tests.rs` へ移し、残りの `//!` を今の中身に
   - 移した先の `SharedFakeIo` の写しを消して `areka_placement::test_support::SharedFakeIo` を使い、4 か所の `let _ = parts.handle.join();` を `join_bounded("sylphya", parts.handle).expect(..)` に
@@ -124,7 +124,7 @@
   - 完了の姿: 2 本が緑で、`boot_resolve.rs:729-737`・`boot_seam.rs:108-116` の `return` を消すと赤（較正）。書き手を panic させる写しで `expect` が落ちる。2 つのファイルとも 1,000 行を越えない
   - _Dispatch: standard — 守りの新しいテスト 2 本と、移しと有界の待ち_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 5.5, 5.7, 6.1, 6.3_
-- [ ] 9.2 戻しの継ぎ目・窓の矩形・写しのテストの写しと待ちを直す（指摘 29・32・41・51・52・84・85・86）
+- [x] 9.2 戻しの継ぎ目・窓の矩形・写しのテストの写しと待ちを直す（指摘 29・32・41・51・52・84・85・86）
   - `boot_seam_persist_wiring_tests.rs` の `SharedFakeIo` の写しを消し、80・123 を `join_bounded` に、44 の「C4/C5」を消す
   - `boot_seam_restore_tests.rs` の説明を「`load_restored_state` が読むゴーストの descript だけを置く」に、`shell/master` の配置を消し、212 のはみ出す向きを「左の辺を 20px はみ出し、0 へ寄せられる」に。`unique_temp_dir` と後始末の 4 行を消し `TempPath::new("restore-seam-…")` を直に
   - 窓の矩形のテストの `fake_handle` の写しを消して `areka_placement::test_support::fake_handle` を、442-443・450・476-477 を同じ mod の `frame()`・`plant()` で。`unsafe` に `// SAFETY:` を 1 行
@@ -293,3 +293,4 @@
 - 6.2: 兄弟の `mcp/get_property_tests.rs` に当たりが残るので残す道。`shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `#[cfg(test)] mod shiori_host`・dev の `shiori-abi`／`windows-core` は `audit-areka-install-update` の着地の後に向こうの PR で消す（20 で申し送る）。`shiori_inproc.rs:246-247` を消したので `InProcHost` の件は行番号でなく名で指す
 - 8.1: `placement_tests/zorder_branch_coverage_test_support.rs:16` に自前の `code_only` の写しが残る（範囲の表に無い・21.1 で見る）
 - 8.2: 1 回目の `drain` は本番が `trace!(reload_drain_no_wiring)` を 1 件出すので「warn 以上 0 件」で見る（この枝に info/debug を足す壊し方は緑のまま）。`let _ = write_session_mark` は設計の一覧の外（areka-session の 3 ファイル・`main_session_mark_*`・`ghost_session_switch_memory_tests.rs`）に 9 件残る。兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す（20 で申し送る）
+- 9.2: `unique_temp_dir` は areka-session から消えた。同名の別の補助が `areka-ghost/src/config.rs`・`areka-parsers/src/package/resolve_tests.rs`・`areka-placement/src/source_tests.rs` に残る（照合の表の「定義のファイルの中だけ」の扱い）。`boot_seam_restore_tests.rs` の assert の文に spec 名 `areka-P0-scope-chain-gap 7.3` が残る（17 で拾う）。本体の `ghost_session_scope_rect_boot_tests.rs` も `areka_placement::test_support::fake_handle` を引く
