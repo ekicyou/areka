@@ -455,11 +455,11 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | 24 | G10 | `groups=` の欄の値で見る | 組が `[{2, 3}]` の行で赤（純関数にして単体で確かめる） |
 | 25 | G10 | 記録の行を `wait_new` で待つ | 全体テストの実画面の段（要件 8.3） |
 | 26 | G10 | `.deadline(Duration::from_secs(120))`・説明 | 全体テストの段 |
-| 27 | G10 | 既定の環境変数（File Structure Plan） | 既存の exe のテスト（開発者の根を読まない） |
+| 27 | G10 | 既定の環境変数（File Structure Plan） | 組んだ `Command` の `get_envs()` に `AREKA_APP_SMOKE_EXIT_MS` と `cwd` の下の根が入り、呼び手の値が上書きすることを見るテストを 1 本足す（既定を外すと赤） |
 | 28 | G9 | 守りの 2 本 | 新しい 2 本（`return` を消すと赤） |
 | 29 | G9 | `join_bounded(..).expect(..)` | 書き手の panic が `expect` で落ちる |
 | 30 | G12 | 3 本を `session_mark_tests.rs` へ | 移した 3 本（`cargo test -p areka-session` で判定の退行が赤） |
-| 31 | G18 | 配置の crate と同じ式・44 行の文を消す | 例はテストが走らない。本番の式は `areka-placement` の既存のテスト |
+| 31 | G18 | 写しの式を消し、公開の `areka_placement::config::build_placement_config(..).scopes[&0].balloon_offset` を呼ぶ形にする・44 行の文を消す | 本番の式を直に使うので、`areka-placement/src/config.rs:696` の既存のテスト `balloon_offset_axes_are_independent` が落ちるテストになる（例はテストが走らない） |
 | 32 | G9 | 写しを消し上流の `SharedFakeIo` | — |
 | 33 | G14 | 写しを消して use | — |
 | 34 | G13 | `carrier_cue` に寄せる | 既存の行列のテスト |
@@ -610,7 +610,7 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 ### 3. 脳の削除の順（要件 5.20・7.2）
 
 1. 範囲の中の `ghost_session_scope_scale_boot_tests.rs` を `PropGetCueSink` の形に直す（G6 の頭）。
-2. 枝を `main` の頭に合わせてから `git grep -n "shiori_host" -- crates/areka/src/mcp` を見る。0 件（兄弟の直しが着地済み）なら 8 ファイルを全部消し、`shiori-abi`・`windows-core` の行も消す。
+2. 枝を `main` の頭に合わせてから `git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` を見る（脳の 8 本の中の当たりは除いて数える）。0 件（兄弟の直しが着地済み）なら 8 ファイルを全部消し、`shiori-abi`・`windows-core` の行も消す。
 3. 当たりがあり、兄弟が同時に着地する申し合わせなら、兄弟の直しと同じ時点で消す（着地の順は兄弟と申し合わせる）。間に合わないと分かったら、`shiori_host.rs` と `shiori_host_case_fold_tests.rs` だけを `#[cfg(test)] mod shiori_host;` として残し（使い手がテストだけになる）、`shiori-abi`・`windows-core` を dev へ移し、向こうの着地の後に消す件として申し送る（要件 5.20 のとおり）。
 
 ### 4. そのほか
