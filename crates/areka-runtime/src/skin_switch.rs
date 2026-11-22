@@ -72,6 +72,8 @@ pub enum SkinVerdict {
     GhostSwitching,
     /// ネットワーク更新の実行中。
     Updating,
+    /// インストールの作業の途中（メニューからの要求だけを断る）。
+    Installing,
     /// 切替先が決まらない。
     NotFound,
     /// 起動の文脈・置き場のゴースト・結線・seriko の送り手のどれかが無い（kanade へ送れないときも）。
