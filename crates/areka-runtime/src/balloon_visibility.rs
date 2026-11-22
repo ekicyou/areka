@@ -18,8 +18,10 @@
 //!   非表示にする。会話がどの scope から始まるかを先読みしない。
 //!
 //! 改行・カーソル移動・待機・内容消去はいずれも可視グリフ数を増やさないため、表示の契機に
-//! ならない。この一致は偶然ではなく、観測量に `TextLayerState::visible_glyphs`
-//! （`areka-emo-text` の `state.rs`）を採ったことの帰結である——同関数はリビール済みのグリフのみを数える。
+//! ならない。この一致は偶然ではなく、観測量に `TextLayerRuntime::balloon_shown_glyphs`
+//! （`areka-emo-text` の `actor_box.rs`）を採ったことの帰結である——同関数はリビール済みのグリフのみを
+//! 数える。シェルの窓が箱を持つ面へ替わると同関数は 0 を返すので、面の切り替えでも
+//! ゼロへの下降（`trigger=clear`）と、箱の無い面へ戻ったときの増加（`trigger=content`）が起きる。
 //!
 //! # 会話終了後のタイムアウト
 //!
@@ -131,7 +133,7 @@ impl TimeoutSource {
 enum VisibilityTrigger {
     /// 可視コンテンツの配置（可視グリフ数の増加）。
     Content,
-    /// 内容の全消去（可視グリフ数のゼロへの下降）。
+    /// 可視グリフ数のゼロへの下降（内容の全消去、または箱を持つ面への切り替え）。
     Clear,
     /// 会話の表示終了から既定時間が過ぎたこと。
     Timeout,
@@ -320,7 +322,7 @@ pub struct VisibilityDecision {
 /// 作れなくするため。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GlyphObservation {
-    /// リビール済みの可視グリフ数（`TextLayerState::visible_glyphs`）。
+    /// 普通のバルーンの窓に出ているリビール済みのグリフ数（`TextLayerRuntime::balloon_shown_glyphs`）。
     count: usize,
     /// その scope の内容が消された回数（`TextLayerState::clear_count`）。
     clear_count: u64,
@@ -330,7 +332,7 @@ struct GlyphObservation {
 // 公開の `test_support::seen` ほか が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeObservation {
-    /// 本フレームのリビール済み可視グリフ数と消去の回数の組。
+    /// 本フレームの窓のリビール済み可視グリフ数と消去の回数の組。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗・注入時刻なし）。
     /// その場合は増加も下降も判定せず、直前に観測できた値を次フレームの比較相手として
@@ -345,7 +347,7 @@ pub struct ScopeObservation {
     /// その場合は抑止しない側として扱う（消えないまま固着する側へ倒さない）。
     hover: Option<bool>,
     /// この scope の箱（シェル内バルーン）のどれかに文字が出ているか。
-    /// 既定は偽で、偽なら判断は箱を足す前と同じになる。
+    /// 既定は偽。偽なら窓だけで判断する。
     ///
     /// 中断と時間切れの対象は「窓が見えている、または箱に文字が出ている」scope である。
     /// 窓を出す判断（`decide_content`）はこの欄を読まない。
@@ -460,17 +462,18 @@ pub struct BalloonVisibilityState {
 }
 
 impl BalloonVisibilityState {
-    /// バルーンの差し替えで、その scope の可視の記憶を消し、計測を止める。
+    /// バルーンの差し替えで、その scope の可視の記憶を消す。
     ///
     /// 古い装着は消え、新しいバルーンは外部所有のまま隠れているので、可視の記憶を偽へ倒す
-    /// （消えた古いバルーンを「外から隠された」と読まない）。見えるバルーンが無くなるので計測も
-    /// 止める。文字の数の記憶は保つ——消すと、表示の済んだ文字が次のフレームで増加の縁に化け、
-    /// 新しいバルーンが台詞の外で出てしまう（次の台詞で現れるのが正しい）。
+    /// （消えた古いバルーンを「外から隠された」と読まない）。計測には触れない——箱に文字が
+    /// 出ていれば箱は時間切れを待ち続け、見えるものが無ければ次のフレームの判断が計測を破棄する。
+    /// ここで満了予定を消すと、抑止の解けた縁で測り直した満了予定が実効の表示終了からの初期値へ
+    /// 戻り、箱がその場で隠れてしまう。文字の数の記憶は保つ——消すと、表示の済んだ文字が次の
+    /// フレームで増加の縁に化け、新しいバルーンが台詞の外で出てしまう（次の台詞で現れるのが正しい）。
     pub(crate) fn forget_scope(&mut self, scope: u32) {
         if let Some(previous) = self.per_scope.get_mut(&scope) {
             previous.prev_visible = false;
         }
-        self.deadline = None;
     }
 
     /// いまバルーンに出ている台詞のトークの番号（読み口・利用者の中断が kanade へ運ぶ）。

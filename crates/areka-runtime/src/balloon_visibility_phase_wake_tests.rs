@@ -1,7 +1,7 @@
 //! 待ち時間の預け方（[`visibility_wake`]）の決定論テスト。
 //!
-//! 見るのは引き算だけの純判断 1 つで、時計にも表示層にも触れない。相の側の配線
-//! （どこで呼ぶか）は親の `balloon_visibility_phase_tests.rs` と字面検査が受け持つ。
+//! 見るのは引き算だけの純判断 1 つで、時計にも表示層にも触れない。相から預ける呼出が在ることは
+//! `crates/areka/src/tick_gate_config_producers_tests.rs` の `balloon_visibility_phase_arms_the_deadline` が見る。
 
 use super::super::BalloonVisibilityState;
 use super::super::test_support::{Frame, hovered, seen};
@@ -105,7 +105,7 @@ fn overdue_while_suppressed_arms_nothing() {
     assert_eq!(
         visibility_wake(Some(9.0), Some(4.0), false),
         VisibilityWake::Now,
-        "抑止が無い超過は今までどおり"
+        "抑止が無い超過"
     );
     assert_eq!(
         visibility_wake(Some(1.0), Some(4.0), true),

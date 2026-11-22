@@ -3,9 +3,12 @@
 //
 // 判断そのものの網羅表は親の `balloon_visibility_tests.rs`（判断中核 `decide`）が所有する。
 // ここが押さえるのは**配線**だけである:
-//   ⑴ 観測の収集（可視状態・可視グリフ数・ポインタ滞在・ドラッグ中・信号）
-//   ⑵ 判断が返した行動の発行（表示は専用入口・非表示は既存漏斗）と失敗時の縮退
-//   ⑶ 自分が発行していない可視性変化の検出（`trigger=explicit`）と滞在記録の掃除
+//   ⑴ 観測の収集（ドラッグ中・観測が得られない scope の見送り）
+//   ⑵ 表示の発行が失敗したときの縮退
+//   ⑶ 自分が発行していない可視性の変化（`trigger=explicit`）と滞在記録の掃除
+//   ⑷ 表示ライフサイクル信号の取り出しと、グリフ数・ポインタ滞在の観測
+//   ⑸ 非表示の発行（既存漏斗）
+//   ⑹ ログの水準とフィールド
 //
 // GPU も実時間の待機も用いない。時刻は `FrameTime` 資源と `TalkClock` の epoch で注入する。
 // 表示層は実 `EmoPresenter` を headless に用いる——`attach_target`
@@ -18,41 +21,14 @@ use std::sync::mpsc::{self, Sender};
 
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::EmoWorld;
-use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use tracing::Level;
 
 use super::super::ScopeVisibility;
-use super::test_support::{attach_headless, world_at};
+use super::test_support::{attach_headless, runtime, world_at};
 use super::*;
 use crate::talk_clock::TalkClock;
-
-/// ドラッグ中の観測はバルーン窓の標識とドラッグ標識の**連言**で成立する。
-#[test]
-fn dragging_requires_both_balloon_window_and_drag_marker() {
-    let mut world = World::new();
-    assert!(!observe_dragging(&mut world), "標識が無ければ成立しない");
-
-    let balloon = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    assert!(
-        !observe_dragging(&mut world),
-        "バルーン窓だけではドラッグ中ではない"
-    );
-
-    let other = world.spawn(WindowDragging).id();
-    assert!(
-        !observe_dragging(&mut world),
-        "バルーン窓でない窓のドラッグは対象外"
-    );
-
-    world.entity_mut(balloon).insert(WindowDragging);
-    assert!(observe_dragging(&mut world), "両方揃えば成立する");
-
-    world.entity_mut(balloon).remove::<WindowDragging>();
-    world.despawn(other);
-    assert!(!observe_dragging(&mut world), "ドラッグ終了で戻る");
-}
 
 // ---------------------------------------------------------------------------
 // 檻の組み立て
@@ -81,9 +57,7 @@ impl Harness {
             mpsc::channel().1,
             lifecycle_rx,
             mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-            Rc::new(RefCell::new(TextLayerRuntime::new(
-                TextLayerConfig::default(),
-            ))),
+            runtime(),
             TalkClock::new(Arc::new(|| 0.0)),
             crate::frame::test_support::synth_assets(&[]),
         );
@@ -154,7 +128,7 @@ fn calibrate() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑴ 観測が得られない場合は理由を記録して当該 scope のみ見送る
+// ⑴ 観測の収集（ドラッグ中・観測が得られない scope の見送り）
 // ---------------------------------------------------------------------------
 
 /// 装着済みバルーンが 1 つも無いフレームは完全に無音である。
@@ -241,6 +215,32 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         harness.wiring.balloon_visibility.per_scope[&0].prev_visible,
         "見送った scope の記憶は触られない（観測が無いのだから更新の根拠も無い）"
     );
+}
+
+/// ドラッグ中の観測はバルーン窓の標識とドラッグ標識の**連言**で成立する。
+#[test]
+fn dragging_requires_both_balloon_window_and_drag_marker() {
+    let mut world = World::new();
+    assert!(!observe_dragging(&mut world), "標識が無ければ成立しない");
+
+    let balloon = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+    assert!(
+        !observe_dragging(&mut world),
+        "バルーン窓だけではドラッグ中ではない"
+    );
+
+    let other = world.spawn(WindowDragging).id();
+    assert!(
+        !observe_dragging(&mut world),
+        "バルーン窓でない窓のドラッグは対象外"
+    );
+
+    world.entity_mut(balloon).insert(WindowDragging);
+    assert!(observe_dragging(&mut world), "両方揃えば成立する");
+
+    world.entity_mut(balloon).remove::<WindowDragging>();
+    world.despawn(other);
+    assert!(!observe_dragging(&mut world), "ドラッグ終了で戻る");
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑷ 表示ライフサイクル信号の取り出し
+// ⑷ 表示ライフサイクル信号の取り出しと、グリフ数・ポインタ滞在の観測
 // ---------------------------------------------------------------------------
 
 /// 信号は毎フレーム**全件**取り出し、占有終端の畳み込みへ渡す。
@@ -595,9 +595,7 @@ fn hide_touches_only_the_balloon_target() {
         issue_actions(
             &mut presenter,
             &mut world,
-            &Rc::new(RefCell::new(TextLayerRuntime::new(
-                TextLayerConfig::default(),
-            ))),
+            &runtime(),
             &mut state,
             &observations,
             &[VisibilityAction::HideScopes {

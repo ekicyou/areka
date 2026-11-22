@@ -531,8 +531,8 @@ struct IssueOutcome {
 /// キャラクター窓には触れない。
 ///
 /// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
-/// 同じ scope の箱を隠す印も立てる。窓の非表示は今までどおり
-/// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
+/// 同じ scope の箱を隠す印も立てる。窓の非表示は列挙した scope すべてへ
+/// 発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
 fn issue_actions(
     presenter: &mut EmoPresenter,
     world: &mut World,
@@ -832,7 +832,7 @@ mod reappear_tests;
 mod wake_tests;
 
 // 再表示は重なりへ作用しない。その不作用と、
-// 退役した追随トリガの痕跡が残っていないことを見る決定論テスト。
+// 配線層が重なりの機構を名指さないことを見る決定論テスト。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
 mod zorder_chain_tests;

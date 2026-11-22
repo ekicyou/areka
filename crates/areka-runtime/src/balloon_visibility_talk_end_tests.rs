@@ -50,7 +50,10 @@ fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -167,7 +170,7 @@ fn origin_is_the_stop_time_only_when_it_precedes_the_display_end() {
             .run(&mut state);
         assert_eq!(
             expired.actions,
-            vec![hide_timed_out(&[0])],
+            vec![hide(&[0], VisibilityTrigger::Timeout)],
             "止まった時刻 {stopped}"
         );
         assert_eq!(expired.timeout_notice, Some(TALK_ID));
@@ -204,7 +207,10 @@ fn missing_stop_time_falls_back_to_the_display_end_and_is_recorded() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -233,7 +239,10 @@ fn positive_talk_timeout_hides_exactly_at_its_own_deadline() {
     let before = Frame::new(&both(true)).at(7.999).run(&mut state);
     assert_eq!((before.actions, before.timeout_notice), (vec![], None));
     let expired = Frame::new(&both(true)).at(8.0).run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0, 1])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0, 1], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 
     let after = Frame::new(&both(false)).at(8.001).run(&mut state);
@@ -315,7 +324,10 @@ fn restart_after_suppression_uses_the_talk_timeout() {
     let before = Frame::new(&[(0, seen(3, true))]).at(11.999).run(&mut state);
     assert_eq!((before.actions, before.timeout_notice), (vec![], None));
     let expired = Frame::new(&[(0, seen(3, true))]).at(12.0).run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -387,7 +399,10 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, None);
     assert_eq!(
         expired.logs,
@@ -417,7 +432,7 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     let next = Frame::new(&[(0, seen(4, true))])
         .at(next_deadline)
         .run(&mut state);
-    assert_eq!(next.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(next.actions, vec![hide(&[0], VisibilityTrigger::Timeout)]);
     assert_eq!(next.timeout_notice, Some(next_id));
     assert!(
         !next

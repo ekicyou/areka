@@ -4,12 +4,12 @@
 //! `AREKA_CHOICE_HOVER_INJECT` が **未設定/空/不正なら完全 no-op（本番既定）**。`cycle`＝既定周期
 //! 700ms・`cycle:<ms>`＝指定周期。text phase の frame clock（`TalkClock::talk_time` と同じ時刻源）で
 //! 駆動し、注入時刻の商（time÷period の整数商）で `None→0→1→…→None→…` を巡回する——**実時間 sleep を
-//! 使わず**決定論的な ordinal 系列を再現する。各注入は `info!`（`RUST_LOG` grep サインオフ材料）。
+//! 使わず**決定論的な ordinal 系列を再現する。actor ごとに注入の番号が変わったフレームでだけ `info!`
+//! （`RUST_LOG` grep サインオフ材料）。
 //!
-//! 本導線はライブラリ公開 API（[`TextLayerRuntime::inject_choice_hover`]／[`TextLayerRuntime::choice_active`]／
-//! [`TextLayerRuntime::choice_hit_rows`]）の一消費者に過ぎず、emo-text 本体・本番描画経路・決定論資産に
-//! 変更を加えない。`frame/scale_text.rs` の `run_text_phase` から present_frame の**後**に駆動され
-//! （`choice_active`／`choice_hit_rows` が当該フレームを反映する）、env 無効ならば存在が消える。
+//! 使う口は [`TextLayerRuntime::inject_choice_hover`]／[`TextLayerRuntime::choice_active`]／
+//! [`TextLayerRuntime::choice_hit_rows`] だけ。`frame/scale_text.rs` の `run_text_phase` から present_frame の
+//! **後**に駆動され（`choice_active`／`choice_hit_rows` が当該フレームを反映する）、env が無効なら何もしない。
 //!
 //! # 純関数分割（決定論単体テスト）
 //! - [`parse_hover_inject`]: env 文字列（`Option<&str>`）→ [`HoverInjectConfig`]（env 非依存）。
@@ -18,6 +18,8 @@
 //!
 //! [`drive`]（`frame/scale_text.rs` の結線口）は env を一度だけ読んで cache した config で [`run_hover_inject`] を呼ぶ。
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use areka_emo_text::actor::TextLayerRuntime;
@@ -112,11 +114,12 @@ pub fn cycle_ordinal(frame_time: f64, period_secs: f64, ordinal_count: usize) ->
 ///
 /// [`HoverInjectConfig::Disabled`] は即 return し **`inject` を一度も呼ばない**（本番既定 no-op）。
 /// [`HoverInjectConfig::Cycle`] は `active` な各 actor について [`cycle_ordinal`] の結果を `inject` へ渡し
-/// `info!` する（非 active はスキップ）。
+/// （非 active はスキップ）、`logged` に覚えた前の番号と違うときだけ `info!` する。
 pub fn run_hover_inject_with(
     config: &HoverInjectConfig,
     frame_time: f64,
     actors: &[(ActorKey, bool, usize)],
+    logged: &mut BTreeMap<ActorKey, Option<usize>>,
     mut inject: impl FnMut(&ActorKey, Option<usize>),
 ) {
     let HoverInjectConfig::Cycle { period_ms } = config else {
@@ -131,6 +134,9 @@ pub fn run_hover_inject_with(
         }
         let ordinal = cycle_ordinal(frame_time, period_secs, *hit_rows);
         inject(actor, ordinal);
+        if logged.insert(actor.clone(), ordinal) == Some(ordinal) {
+            continue;
+        }
         info!(
             actor = %actor.as_str(),
             frame_time,
@@ -151,6 +157,7 @@ pub fn run_hover_inject(
     config: &HoverInjectConfig,
     runtime: &mut TextLayerRuntime,
     frame_time: f64,
+    logged: &mut BTreeMap<ActorKey, Option<usize>>,
 ) {
     if matches!(config, HoverInjectConfig::Disabled) {
         return;
@@ -164,7 +171,7 @@ pub fn run_hover_inject(
             (actor.clone(), active, hit_rows)
         })
         .collect();
-    run_hover_inject_with(config, frame_time, &snapshot, |actor, ordinal| {
+    run_hover_inject_with(config, frame_time, &snapshot, logged, |actor, ordinal| {
         runtime.inject_choice_hover(actor, ordinal);
     });
 }
@@ -187,7 +194,10 @@ pub fn drive(runtime: &mut TextLayerRuntime, frame_time: f64) {
     if !matches!(config, HoverInjectConfig::Disabled) {
         tick_wake::mark(tick_wake::REARM);
     }
-    run_hover_inject(config, runtime, frame_time);
+    thread_local! {
+        static LOGGED: RefCell<BTreeMap<ActorKey, Option<usize>>> = RefCell::default();
+    }
+    LOGGED.with_borrow_mut(|logged| run_hover_inject(config, runtime, frame_time, logged));
 }
 
 #[cfg(test)]
@@ -354,7 +364,7 @@ mod tests {
 
     // ── run_hover_inject_with（driver・disabled は注入ゼロ／cycle は active のみ）──────
 
-    /// **観測可能な完了条件**: Disabled では active な actor があっても `inject` が一度も呼ばれない。
+    /// Disabled では active な actor があっても `inject` が一度も呼ばれない。
     #[test]
     fn driver_disabled_never_injects() {
         let calls = Cell::new(0usize);
@@ -366,6 +376,7 @@ mod tests {
             &HoverInjectConfig::Disabled,
             1.5,
             &actors,
+            &mut BTreeMap::new(),
             |_actor, _ord| {
                 calls.set(calls.get() + 1);
             },
@@ -392,6 +403,7 @@ mod tests {
             &HoverInjectConfig::Cycle { period_ms: 1000 },
             1.5,
             &actors,
+            &mut BTreeMap::new(),
             |actor, ord| {
                 recorded
                     .borrow_mut()
@@ -416,12 +428,36 @@ mod tests {
             &HoverInjectConfig::Cycle { period_ms: 700 },
             0.35,
             &actors,
+            &mut BTreeMap::new(),
             |_actor, ord| recorded.borrow_mut().push(ord),
         );
         assert_eq!(
             recorded.into_inner(),
             vec![None],
             "商0 は None 注入（巡回の先頭）"
+        );
+    }
+
+    /// 記録は actor ごとに注入の番号が変わったフレームでだけ出す（毎フレームの同じ番号は記録しない）。
+    #[test]
+    fn driver_logs_only_when_the_ordinal_changes() {
+        let actors = vec![(ActorKey::from("0"), true, 3)];
+        let config = HoverInjectConfig::Cycle { period_ms: 1000 };
+        let mut logged = BTreeMap::new();
+        let ((), events) = log_capture_kit::capture(|| {
+            for t in [1.1, 1.5, 1.9, 2.1] {
+                run_hover_inject_with(&config, t, &actors, &mut logged, |_, _| {});
+            }
+        });
+        let ordinals: Vec<_> = events
+            .iter()
+            .filter(|e| e.message().starts_with("choice hover inject"))
+            .map(|e| e.field("ordinal").map(str::to_owned))
+            .collect();
+        assert_eq!(
+            ordinals,
+            vec![Some("Some(0)".to_owned()), Some("Some(1)".to_owned())],
+            "番号の変わった 2 回だけ"
         );
     }
 }

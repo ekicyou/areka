@@ -8,26 +8,6 @@
 use super::test_support::*;
 use super::*;
 
-/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
-const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
-
-/// 期待する非表示行動（利用者の中断が契機）。
-fn hide_broken(scopes: &[u32]) -> VisibilityAction {
-    VisibilityAction::HideScopes {
-        scopes: scopes.to_vec(),
-        trigger: VisibilityTrigger::UserBreak,
-    }
-}
-
-/// 期待する非表示ログ（利用者の中断が契機）。
-fn broken_log(scope: u32) -> VisibilityLogEvent {
-    VisibilityLogEvent::Transition {
-        scope,
-        trigger: VisibilityTrigger::UserBreak,
-        visible: false,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // 隠す側
 // ---------------------------------------------------------------------------
@@ -54,8 +34,17 @@ fn a_user_break_hides_every_visible_scope_in_one_action() {
     let broken = Frame::new(&[(0, seen(3, true)), (1, seen(2, true)), (2, seen(0, false))])
         .signal(TalkLifecycleSignal::UserBreak)
         .run(&mut state);
-    assert_eq!(broken.actions, vec![hide_broken(&[0, 1])]);
-    assert_eq!(broken.logs, vec![broken_log(0), broken_log(1)]);
+    assert_eq!(
+        broken.actions,
+        vec![hide(&[0, 1], VisibilityTrigger::UserBreak)]
+    );
+    assert_eq!(
+        broken.logs,
+        vec![
+            hidden_log(0, VisibilityTrigger::UserBreak),
+            hidden_log(1, VisibilityTrigger::UserBreak)
+        ]
+    );
 }
 
 /// 中断で隠した scope は、以後の判断でも不可視として扱う（次の巡で「外から表示された」と
@@ -94,7 +83,7 @@ fn glyphs_growing_after_a_user_break_show_again_only_once_the_next_talk_starts()
             .signal(TalkLifecycleSignal::UserBreak)
             .run(&mut state)
             .actions,
-        vec![hide_broken(&[0])],
+        vec![hide(&[0], VisibilityTrigger::UserBreak)],
         "前提: 中断で隠れていない"
     );
 
@@ -129,8 +118,14 @@ fn a_user_break_and_the_next_talk_in_the_same_round_hide_then_show() {
         .signal(TalkLifecycleSignal::UserBreak)
         .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
         .run(&mut state);
-    assert_eq!(d.actions, vec![hide_broken(&[0]), show(0)]);
-    assert_eq!(d.logs, vec![broken_log(0), shown_log(0)]);
+    assert_eq!(
+        d.actions,
+        vec![hide(&[0], VisibilityTrigger::UserBreak), show(0)]
+    );
+    assert_eq!(
+        d.logs,
+        vec![hidden_log(0, VisibilityTrigger::UserBreak), shown_log(0)]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -158,11 +153,14 @@ fn a_deadline_reached_after_a_user_break_produces_no_action() {
         .signal(TalkLifecycleSignal::UserBreak)
         .at(1.0)
         .run(&mut state);
-    assert_eq!(broken.actions, vec![hide_broken(&[0])]);
+    assert_eq!(
+        broken.actions,
+        vec![hide(&[0], VisibilityTrigger::UserBreak)]
+    );
     assert_eq!(
         broken.logs,
         vec![
-            broken_log(0),
+            hidden_log(0, VisibilityTrigger::UserBreak),
             VisibilityLogEvent::MeasurementDiscarded {
                 reason: MeasurementDiscardReason::NoVisibleScope,
                 deadline: TIMEOUT,
@@ -193,6 +191,12 @@ fn suppression_does_not_hold_back_a_user_break() {
         .at(1.0)
         .dragging()
         .run(&mut state);
-    assert_eq!(broken.actions, vec![hide_broken(&[0])]);
-    assert_eq!(broken.logs, vec![broken_log(0)]);
+    assert_eq!(
+        broken.actions,
+        vec![hide(&[0], VisibilityTrigger::UserBreak)]
+    );
+    assert_eq!(
+        broken.logs,
+        vec![hidden_log(0, VisibilityTrigger::UserBreak)]
+    );
 }

@@ -9,16 +9,6 @@ use super::decision::hide_reaches_boxes;
 use super::test_support::*;
 use super::*;
 
-/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
-const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
-
-fn hide(scopes: &[u32], trigger: VisibilityTrigger) -> VisibilityAction {
-    VisibilityAction::HideScopes {
-        scopes: scopes.to_vec(),
-        trigger,
-    }
-}
-
 /// 隠す発行が箱に届くのは、時間切れと、掛け金が掛かったままの利用者の中断だけ。文字が 0 に
 /// 落ちたことによる非表示は窓だけ（箱のあるサーフェスへ切り替えた後も箱の文字は残す）。
 #[test]

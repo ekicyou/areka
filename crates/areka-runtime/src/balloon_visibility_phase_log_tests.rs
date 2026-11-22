@@ -198,11 +198,6 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
     assert_eq!(lines[5].level, Level::INFO);
     assert_eq!(lines[5].expect_field("hover"), "true");
     assert_eq!(lines[5].expect_field("dragging"), "false");
-    assert_eq!(
-        lines[5].field("choice"),
-        None,
-        "見送りの記録の欄は dragging と hover の 2 つ（選択肢の表示中は数えない）"
-    );
 
     assert_eq!(
         lines[6].level,

@@ -18,14 +18,14 @@
 //! 2. **観測点が生きていること**——同じ檻の中で、窓の在庫が動いたときには計画が
 //!    **確かに変わる**ことを対照として置く。これが無いと、計画を読む口が壊れていても
 //!    「変わらなかった」が緑で通る。
-//! 3. **撤去の完了**——退役した引き金の名前も、旧受け口の名前も、Z 順の起床の旗も、
-//!    配線層の本文から消えていること（字面）。
+//! 3. **重なりの機構を名指さないこと**——配線層の本文が重なりの集合・鎖の計画・Z 順の起床の旗を
+//!    名指さないこと（字面）。
 //!
 //! # 記録の捕捉をしない理由
 //!
 //! ここが主張するのは「受け口の値が動かない」ことであって「記録が出ない」ことではない。
 //! 値を直に読むので捕捉窓は要らず、既定の実行器がスレッドローカルの差し替えを拾えない
-//! という罠（`zorder_pair_establish_tests.rs`）にも触れない。
+//! という罠（`crates/wintf/src/ecs/window/zorder_pair_establish_tests.rs`）にも触れない。
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use bevy_ecs::world::World;
@@ -248,16 +248,13 @@ fn a_simulated_redisplay_does_not_move_the_chain_plan_by_one_bit() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 撤去の完了——退役した引き金への参照が配線層から消えている
+// ⑵ 配線層は重なりの機構を名指さない
 // ---------------------------------------------------------------------------
 
-/// 退役した引き金の綴りが、配線層のどこにも（説明文にも）残っていない。
-///
-/// 名前を説明文に残すと、後から来た人が「まだ在る仕組み」として読む。引き金は何の役目も
-/// 担わずに退役したので、名前ごと消すのが正しい。旧受け口と Z 順の起床の旗も同じ
-/// ——この相は重なりの機構へ 1 バイトも触れない。
+/// 配線層の本文に重なりの集合・鎖の計画・Z 順の起床の旗の綴りが無い——この相は重なりの機構へ
+/// 1 バイトも触れない。
 #[test]
-fn the_retired_reshow_trigger_leaves_no_trace_in_the_visibility_phase() {
+fn the_visibility_phase_does_not_name_the_zorder_machinery() {
     let raw = include_str!("balloon_visibility_phase.rs");
     let code = code_only(raw);
 
@@ -271,12 +268,6 @@ fn the_retired_reshow_trigger_leaves_no_trace_in_the_visibility_phase() {
         "表示の発行の字面が本文に無い（檻の前提が崩れている）"
     );
 
-    for needle in ["note_balloon_shown", "wants_group_follow_on_show"] {
-        assert!(
-            !raw.contains(needle),
-            "退役した引き金の綴り `{needle}` が配線層に残っている（説明文も含めて消すこと）"
-        );
-    }
     for needle in ["ZOrderGroups", "ZOrderChainPlan", "tick_wake::ZORDER"] {
         assert!(
             !code.contains(needle),

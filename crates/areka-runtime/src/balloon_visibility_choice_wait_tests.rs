@@ -27,9 +27,6 @@ use super::*;
 use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::BalloonLifecycleSink;
 
-/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く。
-const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
-
 /// 占有区間の終端（選択肢を出した所・talk 相対秒）。
 const DISPLAY_END: f64 = 2.0;
 
@@ -124,7 +121,8 @@ fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
         let expired = Frame::new(&[(0, seen(3, true))])
             .at(STOPPED + TIMEOUT)
             .run(&mut state);
-        if expired.actions != vec![hide_timed_out(&[0])] || expired.timeout_notice != Some(TALK_ID)
+        if expired.actions != vec![hide(&[0], VisibilityTrigger::Timeout)]
+            || expired.timeout_notice != Some(TALK_ID)
         {
             failures.push(format!("{name}: 90.0 で {expired:?}"));
         }
@@ -171,7 +169,10 @@ fn hover_holds_and_the_measurement_restarts_from_leaving() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(left_at + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -225,7 +226,10 @@ fn per_talk_wait_setting_applies_to_choice_talks() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED + 5.0)
         .run(&mut millis);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
 
     let mut never = choice_talk_shown(seen(3, false));
     for now in [STOPPED, STOPPED + TIMEOUT, 10_000.0] {
@@ -274,7 +278,10 @@ fn timeless_end_starts_from_the_first_measurable_frame() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(first + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
 }
 
 /// ⑺ 箱にだけ文字が出ている scope でも、待ちの間は隠さず、止まった時刻から測る。
@@ -305,7 +312,10 @@ fn box_only_scope_follows_the_same_rule() {
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(STOPPED + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -380,6 +390,9 @@ fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }

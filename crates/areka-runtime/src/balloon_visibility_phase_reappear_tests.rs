@@ -16,10 +16,9 @@
 // 実時間の待機は使わない。前の台詞は scope 0 に 5 文字を残す。
 // =============================================================================
 
-use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
 
-use super::test_support::attach_headless;
+use super::test_support::{attach_headless, runtime};
 use super::*;
 
 /// 待ち時間（秒）。短い固定値を引数で渡す（環境変数・既定値に依らない）。
@@ -58,9 +57,7 @@ impl Rig {
         }
         Rig {
             presenter,
-            runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
-                TextLayerConfig::default(),
-            ))),
+            runtime: runtime(),
             world,
             state: BalloonVisibilityState::default(),
             scopes: scopes.to_vec(),

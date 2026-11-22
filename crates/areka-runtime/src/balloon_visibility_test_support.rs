@@ -1,7 +1,8 @@
 // =============================================================================
 // 判断中核テストの共有ヘルパ（観測スナップショットの組立て）
-// 観測は「scope → (可視グリフ数, 現に可視か)」の表でしかないため、ここに置くのは
-// その表を組む最小の道具だけにする。実時間の待機・スリープは一切用いない。
+// 観測は「scope → 観測値（ScopeObservation）」の表でしかないため、ここに置くのは
+// その表を組む最小の道具と、箱の名前を取る surfaces.txt の畳み込み（`shell_box_hover` の
+// テストと共有する）だけにする。実時間の待機・スリープは一切用いない。
 // =============================================================================
 
 use std::collections::BTreeMap;
@@ -14,6 +15,10 @@ use super::{
 };
 #[cfg(test)]
 use super::{VisibilityAction, VisibilityLogEvent, VisibilityTrigger};
+
+/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
+#[cfg(test)]
+pub(super) const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
@@ -61,6 +66,18 @@ pub(super) fn boxed(observation: ScopeObservation) -> ScopeObservation {
     }
 }
 
+/// テストの中に持つ surfaces.txt の文面を畳んだ箱の配置。箱の名前は公開の構築口を持たないので
+/// ここから取る（検体は読まない）。
+#[cfg(test)]
+pub(crate) fn box_layout(source: &str) -> areka_emo_compose::BoxLayout {
+    use areka_parsers::shell::{parse, parse_boxes};
+    let world = areka_emo_compose::EmoWorld::build(&parse(source));
+    let (layout, report) =
+        areka_emo_compose::fold_boxes(&parse_boxes(source), &BTreeMap::new(), &world);
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    layout
+}
+
 /// 期待する表示行動。
 #[cfg(test)]
 pub(super) fn show(scope: u32) -> VisibilityAction {
@@ -77,12 +94,22 @@ pub(super) fn shown_log(scope: u32) -> VisibilityLogEvent {
     }
 }
 
-/// 期待する非表示行動（タイムアウトが契機）。
+/// 期待する非表示行動。
 #[cfg(test)]
-pub(super) fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
+pub(super) fn hide(scopes: &[u32], trigger: VisibilityTrigger) -> VisibilityAction {
     VisibilityAction::HideScopes {
         scopes: scopes.to_vec(),
-        trigger: VisibilityTrigger::Timeout,
+        trigger,
+    }
+}
+
+/// 期待する非表示ログ。
+#[cfg(test)]
+pub(super) fn hidden_log(scope: u32, trigger: VisibilityTrigger) -> VisibilityLogEvent {
+    VisibilityLogEvent::Transition {
+        scope,
+        trigger,
+        visible: false,
     }
 }
 

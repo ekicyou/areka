@@ -51,15 +51,15 @@
 // ⑹ 抑止が解けても計測が成り立たなければ取り直さない（解除エッジの反対側の枝）
 // ⑺ 複数の抑止条件が同時に成立したら 1 件の記録へ全種別が載る
 // ⑻ 抑止条件の一部だけが観測不能でも、残りの条件は抑止として効く
+// ⑼ 本フレームに表示した scope への滞在は抑止になる
+// ⑽ 本フレームに全消去で消した scope への滞在は抑止にならない
+// ⑾ 現在時刻が分からないフレームでは抑止の持ち越しを書き換えない（解けたと読まない）。
+//    時刻が戻ったフレームで解除エッジが改めて立つ
+// ⑿ 満了の対象が本フレーム表示分しか無いときは見送り、満了予定を残して次フレームで消す
+// ⒀ 満了で消した scope の持ち越し可視が偽になる
 //
 // 抑止はドラッグ中と可視のバルーンへの滞在の 2 つで、選択肢の表示中は数えない。
 // 選択肢つきのトークの起点は `balloon_visibility_choice_wait_tests.rs`。
-// ⑼ 本フレームに表示した scope への滞在は抑止になる
-// ⑽ 本フレームに全消去で消した scope への滞在は抑止にならない
-// ⑾ 現在時刻が分からないフレームは抑止の持ち越しを止めず、時刻が戻ったフレームで解除
-//    エッジが改めて立つ
-// ⑿ 満了の対象が本フレーム表示分しか無いときは見送り、満了予定を残して次フレームで消す
-// ⒀ 満了で消した scope の持ち越し可視が偽になる
 // =============================================================================
 
 use super::test_support::*;
@@ -466,27 +466,46 @@ fn expectation_times_are_anchored_on_the_display_end() {
 }
 
 /// 較正: 走査が実際に突き合わせていること——期待と異なる結果を与えたら、行動・ログ・状態の
-/// 3 つ全てで食い違いが積まれる。これが 0 件なら表は緑を返すだけの飾りである。
+/// 全てで食い違いが積まれ、状態の検査はどの腕（満了予定あり・なし・持ち越し可視・生えていない
+/// scope）も食い違いを拾う。これが 0 件なら表は緑を返すだけの飾りである。
 #[test]
 fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
     let calibration = Case {
         name: "較正",
-        rows: &[Row {
-            signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
-            scopes: &[(0, 3, false, Watch::Off)],
-            dragging: false,
-            now: Now::At(-5.0),
-            // 実際には表示が起き、満了予定は立たない。
-            expect: &[],
-            after: &[After::Deadline(TIMEOUT)],
-        }],
+        rows: &[
+            Row {
+                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                scopes: &[(0, 3, false, Watch::Off)],
+                dragging: false,
+                now: Now::At(-5.0),
+                // 実際には表示が起き、満了予定は立たない。
+                expect: &[],
+                after: &[After::Deadline(TIMEOUT)],
+            },
+            Row {
+                signals: &[Signal::Ended(0.0)],
+                scopes: &[(0, 3, true, Watch::Off)],
+                dragging: false,
+                now: Now::At(1.0),
+                expect: &[Expect::Started {
+                    display_end: 0.0,
+                    deadline: TIMEOUT,
+                }],
+                // 実際には満了予定が立ち、scope 0 は見えていて、scope 9 は一度も観測していない。
+                after: &[
+                    After::NoDeadline,
+                    After::PrevVisible(0, false),
+                    After::PrevVisible(9, false),
+                ],
+            },
+        ],
     };
 
     let mut failures = Vec::new();
     run(&calibration, &mut failures);
     assert_eq!(
         failures.len(),
-        3,
-        "表示が起きるフレームへ「何も起きない」を期待させたのに食い違いが積まれない: {failures:?}"
+        6,
+        "期待と異なる結果を与えたのに食い違いが積まれない: {failures:?}"
     );
 }

@@ -11,15 +11,13 @@
 // 作った写しを渡して確かめ、相の観測の収集は写しが空の形で通す。
 // =============================================================================
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxLayout, BoxName, EmoWorld, fold_boxes};
+use areka_emo_compose::BoxName;
 use areka_emo_present::EmoPresenter;
 use areka_emo_text::actor::{HitRectPx, ShownBox};
-use areka_parsers::shell::{parse, parse_boxes};
 use tracing::Level;
 
 use super::super::BalloonVisibilityState;
+use super::super::test_support::box_layout;
 use super::test_support::attach_headless;
 use super::test_support::{runtime, world_at};
 use super::*;
@@ -42,15 +40,8 @@ element1,balloon,a,0,0
 }
 ";
 
-fn layout() -> BoxLayout {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
 fn box_a() -> BoxName {
-    layout().placements(0)[0].name.clone()
+    box_layout(SHELL).placements(0)[0].name.clone()
 }
 
 fn shown_a() -> Vec<ShownBox> {
@@ -308,7 +299,7 @@ fn issue_hide(trigger: VisibilityTrigger, latch: bool) -> (Vec<u32>, Vec<String>
         events
             .iter()
             .any(|e| e.message().contains("apply(Hide): 非表示へ")),
-        "窓の非表示は今までどおり発行される: {events:?}"
+        "窓の非表示が発行される: {events:?}"
     );
     let marked = events
         .iter()
