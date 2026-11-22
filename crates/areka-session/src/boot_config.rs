@@ -3,9 +3,9 @@
 //! 構成入力（根 → ゴースト → バルーン）の起動前の解決と、`GhostBootOptions` の組み立てを置く。
 //! 根の並びの決め方は `crate::roots`。
 //!
-//! 消費者は `main.rs` と `runtime`（`crate::boot_config::default_app_profile_dir` /
+//! 消費者は `main.rs` と `runtime_boot`（`crate::boot_config::default_app_profile_dir` /
 //! `crate::boot_config::is_benign_boot_error`）、および
-//! 檻 `boot_config_input_tests.rs` / `boot_config_ghost_wiring_tests.rs`。
+//! 檻 `boot_config_ghost_wiring_tests.rs`。
 
 // ---------------------------------------------------------------------------
 // Config Inputs
@@ -190,8 +190,8 @@ pub struct BootContext {
 pub struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
-    /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、後続の
-    /// `shell-balloon-switch`（今のバルーンを入れ替える口）。
+    /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、`hooks::set_current_balloon`
+    /// （今のバルーンを入れ替える口）。
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
@@ -422,7 +422,6 @@ fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
 /// 記憶・descript の 2 鍵・同梱・並びの和の一覧は、段が当たるかどうかに関わらず先にまとめて読み、
 /// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は
 /// `balloons_for`（ゴーストのフォルダの中の `balloon\` が先・根の和が後・同じフォルダ名の根は外す）。
-/// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ・
 /// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ）。
 /// 「当たらなかった」の記録の置き場は今どおり根の列だけ。
 pub fn resolve_balloon_for_ghost(
@@ -465,7 +464,7 @@ pub fn resolve_balloon_for_ghost(
 // Ghost Wiring
 // ---------------------------------------------------------------------------
 
-/// 実行ファイル隣接の 32bit SHIORI helper 実行ファイルパスを解決する（純粋）。
+/// 実行ファイル隣接の 32bit SHIORI helper 実行ファイルパスを解決する。
 ///
 /// 起動した exe の本当の場所（`exe_location`）の親ディレクトリへ `shiori-host32-helper.exe` を結合する。
 /// `current_exe()` が失敗した場合は `"."` を親ディレクトリ扱いにフォールバックする——`boot` 呼び出し
@@ -585,7 +584,7 @@ pub fn shiori_wiring_for(
 ///
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
-/// 限られる。分類は窓の無い起動（`ghost_session`）が使う。読取不能
+/// 限られる。分類は `ghost_session` の起動が使う。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
@@ -621,7 +620,7 @@ mod roots_tests;
 /// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、
 /// ここでは純粋な組み立て・分類ロジック（`default_helper_exe_path`／`ghost_boot_options`／
 /// `is_benign_boot_error`）だけを headless に検証する。実際の boot→shutdown 一巡は
-/// 既存の実プロセス smoke テスト（`tests/smoke_boot_loop_exit.rs`）が証明する。
+/// 既存の実プロセス smoke テスト（`crates/areka/tests/smoke_boot_loop_exit.rs`）が証明する。
 #[cfg(test)]
 #[path = "boot_config_ghost_wiring_tests.rs"]
 mod ghost_wiring_tests;

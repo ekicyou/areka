@@ -62,8 +62,7 @@ fn despawn_app_windows_empty_world_is_noop() {
 ///
 /// # 「警告ゼロ」を tracing 捕捉だけで主張してはならない（本檻の対照アームの理由）
 ///
-/// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`bevy_ecs-0.18.1` の
-/// `src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は同 :1462-1469 で
+/// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`World::despawn` は
 /// 失敗時に `warn!("{error}")`＋`false`）。本番プロセスでこの行が
 /// `WARN bevy_ecs::world: Could not despawn entity` として見えるのは
 /// `tracing_subscriber` が `log`→`tracing` ブリッジを張るからであって、
@@ -179,8 +178,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 /// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
 /// 対照アーム: 送り口の無い World（kanade 未結線の起動）では窓を閉じて終了を指示する。
 ///
-/// 送り口は `pub(crate)` の構築関数でここに直接組む（`runtime_tests/frame/window_state_tests.rs` の
-/// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
+/// 当たり判定は受け手が読まないので代役で足りる。
 #[test]
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
     use areka_input::{MouseWiring, RegionSource};

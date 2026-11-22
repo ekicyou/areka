@@ -216,14 +216,14 @@
   - _Dispatch: mechanical — 寄せ先と足す 1 本の中身を設計が与える_
   - _Requirements: 3.1, 4.1, 4.2, 4.5, 7.2_
 
-- [ ] 15. `areka-session` の古い説明を今の事実にする（G15）
+- [x] 15. `areka-session` の古い説明を今の事実にする（G15）
 - [x] 15.1 `GhostSession` の `impl` を別のファイルへ移し、ゴーストのセッションと戻しの継ぎ目の説明を直す（指摘 47・48・53・79・5.3）
   - `ghost_session.rs` の `impl GhostSession`（430-659）を新しい `ghost_session_handle.rs` へ移し `mod handle;` を足す（中身と可視性は変えない）
   - 213-214 と `boot_seam.rs` の 7・136・156 の戻しの流れを「`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` → `restored_scope_marks`」・呼び手を `prepare_ghost_windows` に。821-822 を 4 つ（`BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover`）に。87・147-149・283-285・640-643 の古い説明と 228・354 の spec 名。`boot_seam.rs:51` の切れ端。指摘 53 の列挙のうちこの 2 ファイルにある分
   - 完了の姿: 既存のテストが緑で、`ghost_session.rs` が約 640 行・`ghost_session_handle.rs` が約 235 行
   - _Dispatch: mechanical — 移す範囲と説明の字面を設計が与える_
   - _Requirements: 3.1, 5.3, 6.1, 6.11_
-- [ ] 15.2 `areka-session` の残りの古い説明を直す（指摘 49・50・53・55〜59・5.10）
+- [x] 15.2 `areka-session` の残りの古い説明を直す（指摘 49・50・53・55〜59・5.10）
   - `app_exit_escape_tests.rs` の 73 行の消えたテストの名を役目で、70 行を「非退避操作のいずれも」に。182-183 の括弧の文を消す。65-67 の bevy の版と行番号を外す
   - `lib.rs` の 212 を消し 311-312 を依存の向きで、174 はパスを消す。「どの背景の仕事も」「背景の仕事の書き終わりを待つ上限」「停止の通知を消化した」。`log_history_capture_tests.rs:3` の doc のリンクを `[hold]` に。`boot_config.rs:193-194` を今の口 `hooks::set_current_balloon` に。指摘 53 の列挙の 15 か所のうち `ghost_session.rs`・`boot_seam.rs` の外のもの（その 2 ファイルの分は 15.1）
   - 完了の姿: `cargo doc -p areka-session --no-deps` の警告が増えず（指摘 59 の 1 件が消える）、テストが緑
@@ -300,3 +300,4 @@
 - 12.2: §8 の 403 行が名指す `record_non_argv_writes_all_three` は実体が `boot_resolve_last_used_tests.rs` にある（21.1 で見る）
 - 13.2: `readonly_run_tests.rs:49` に共有と同じ `const A_TO_B` の写しが残る。`boot_windows_with_descript_line` の doc の 1 行目が `seriko.sticky-window` だけを書く（`kero.balloon.dontmove` にも使う）。restart の 479-491 の why の注釈も消えた（21.1 で見る）
 - 14.1: 設計が上流に挙げた `areka_runtime::frame::test_support::capture_logs` は `cfg(test)` だけで立つので、本体の `runtime_tests/spine.rs` は `log_capture_kit::capture_lines` に載せた 3 行の写しを理由の注釈つきで残す（依存は足さない）
+- 15.2: `boot_resolve_tests.rs:3`・`:141` に「ゴースト 6 分岐」が残る（今は 9 通り・指摘 62 の残り・21.1 で見る）

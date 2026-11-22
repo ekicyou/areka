@@ -85,7 +85,7 @@ fn one_notification_closes_every_ghost_window_and_logs_once() {
         run_ghost_quit_phase(&mut world)
     });
 
-    assert!(consumed, "通知を消化したフレームは以後の相を飛ばす");
+    assert!(consumed, "停止の通知を消化した");
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる（R15.4）");
     assert!(
         exit_requested(&world),

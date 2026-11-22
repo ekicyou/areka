@@ -67,11 +67,10 @@ fn escape_works_without_mouse_wiring() {
 }
 
 /// 「強制退避操作でのみ全窓終了が起きる」統合檻:
-/// Ctrl+左ダブルクリックの**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
+/// 非退避操作の**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
 /// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
-/// pass/fail で固定する（plain-left 単独の
-/// `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` に対し、非退避操作
-/// 全集合の否定＋退避の肯定を 1 檻へ集約する）。
+/// pass/fail で固定する（左右のダブルクリックの送出は入力の crate のテストが受け持ち、ここは
+/// 非退避操作全集合の否定＋退避の肯定を 1 檻へ集約する）。
 #[test]
 fn only_escape_terminates_ghost_windows() {
     let (mut world, _rx) = world_with_wiring(
