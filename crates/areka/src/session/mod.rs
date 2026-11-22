@@ -70,6 +70,9 @@ pub(crate) mod session_mark;
 /// 起こし直しの単位。系の登録の入口 `register_systems` を持つ。
 pub(crate) mod ghost_session;
 
+/// 本体だけのモジュールの系の登録と、本体へ向かう口の束。
+pub(crate) mod body_systems;
+
 /// 起動窓と起動の直後の結線のシーム。
 pub(crate) mod boot_seam;
 

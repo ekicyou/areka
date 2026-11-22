@@ -13,7 +13,7 @@ use areka_sylphya::PersistFailure;
 use bevy_ecs::world::World;
 
 use super::{GhostBootInputsSource, GhostSlot};
-use crate::menu;
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::BootContext;
 use crate::session::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
 use crate::session::runtime_boot;
@@ -30,25 +30,8 @@ pub(crate) fn rewire_runtime_consumers(
     // RuntimeWiring 挿入済みなので、presenter 経由の region 解決が成立する。
     let sender = runtime.kanade().clone();
     areka_input::wire_mouse_input(world, sender);
-    // 右クリックメニューの結線: 終了の項目が上の入力の結線を使う。
-    menu::wire_menu(world, runtime.kanade().clone());
-    // 「ゴースト」枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
-    menu::ghost_frame::register(world);
-    // 「シェル」「バルーン」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::shell_frame::register(world);
-    menu::balloon_frame::register(world);
-    // 「インストール」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::install_frame::register(world);
-    // 「置き場を追加…」「置き場を外す」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::roots_frame::register(world);
-    // 「ネットワーク更新」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::update_frame::register(world);
-    // 「シェル位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::reset_pos_frame::register(world);
-    // 「バルーン位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
-    menu::reset_balloon_pos_frame::register(world);
-    // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
-    crate::install::names::reseed(world, runtime);
+    // 右クリックメニューの結線・枠の登記 8 本・置換語の載せ直し（本体の `wire_body_after_runtime`）。
+    (BodySystems::of(world).after_runtime_wired)(world, runtime);
     // 位置永続の World 結線: ゴースト窓を保持する同一 World へ sylphya publisher clone を持つ PersistWiring
     // （NonSend）を差し、DragEnd→persist_entries の write-through 導管を確立する。続けて起動成功時の記憶を書く。
     crate::session::boot_seam::on_boot_ok(world, runtime, ghost, balloon);

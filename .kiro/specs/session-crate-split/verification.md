@@ -448,3 +448,33 @@ finally {
 }
 Note 'done'
 ```
+
+## 段 1
+
+### 2.1
+
+- 口の束 `BodySystems` を `crates/areka/src/session/body_systems.rs` へ移し（`Resource`・`Clone`・`Copy`）、`after_char_pointer`・`after_balloon_pointer`・`after_runtime_wired` を足した。`of`（無ければ `#[cfg(not(test))]` で `error!(event = "body_systems_missing")`）と `NO_BODY`（3 欄とも何もしない）を置いた。
+- `register_systems` は `install_input_hooks` の直後で `world.insert_resource(body)` を 1 回据える。`menu_poll`・`after_input` の呼び方と登録の順は変えていない。
+- C1 の 3 件は窓を作るクロージャの中で `attach_char_pointer_handlers` → `after_char_pointer` → `attach_balloon_pointer_handlers` → `after_balloon_pointer` の順。C2 の 10 件は `wire_mouse_input` の後・`on_boot_ok` の前の `after_runtime_wired` の 1 行。本体の `BODY_SYSTEMS` に 3 欄と `attach_body_receivers`・`wire_body_after_runtime` を足した（呼ぶ順・引数・説明の行は前の集めた層の行のまま。`wire_menu` の説明の「上の入力の結線」だけ、置き場が変わって「上」が指せないので「先に済んだ入力の結線（`wire_mouse_input`）」とした）。
+- 型を移したので、`log_history_tests.rs` の `moved_modules_keep_their_kinds_by_real_module_path` が `ghost_session` の出所の見本に使っていた `BodySystems` を、同じモジュールに残る `GhostSlot` へ替えた（期待の出所 `areka::session::ghost_session` と種別は変えていない）。
+
+確かめ（2026-11-22）:
+
+- RED: `BODY_SYSTEMS` を書き換える前の `cargo check -p areka --bin areka` が `E0063 missing fields after_balloon_pointer, after_char_pointer and after_runtime_wired`・`E0603`（旧パス）で組めない。
+- `cargo check -p areka --bin areka`: 警告 0。
+- `cargo test -p areka --bin areka`: 1837 passed・0 failed・3 ignored。
+- `cargo fmt --all -- --check`: 差分なし。
+
+本体の効き目を失って赤になったテスト（2.5 へ渡す一覧）: **0 件**（上の 1837 本がすべて緑）。
+
+`git grep -n -e menu -e file_drop -e install -- crates/areka/src/session/ghost_session.rs crates/areka/src/session/ghost_session_runtime.rs` の残り（本体のモジュールを名指すコードは 0 件）:
+
+| 行 | 中身 | 種類 |
+|---|---|---|
+| `ghost_session.rs:47` | `crate::session::hooks::install(world);` | 集めた層の関数名（install のモジュールではない） |
+| `ghost_session.rs:48` | `crate::session::app_exit::install_input_hooks(world);` | 同上 |
+| `ghost_session.rs:54` | `crate::session::write_failure::install(world);` | 同上 |
+| `ghost_session.rs:61` | `(body.menu_poll)(world);` | 束の欄の名 |
+| `ghost_session.rs:288・289・295・296` | 本体の `menu::attach_release_handlers`・`menu::wire_menu`・`file_drop::attach_file_drop_receivers`・`menu::shortcut::attach_shortcut_receivers` | 説明の地の文（リンクでない） |
+
+`ghost_session_runtime.rs` は 0 件。

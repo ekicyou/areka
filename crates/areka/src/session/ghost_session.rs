@@ -15,8 +15,8 @@ use bevy_ecs::world::World;
 use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPool};
 
-use crate::menu;
 use crate::session::app_exit::{self, WindowsClosed};
+use crate::session::body_systems::BodySystems;
 use crate::session::boot_config::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 use crate::session::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::session::readme;
@@ -30,15 +30,6 @@ pub(crate) mod ghost_session_scope_scale;
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;
 pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
-
-/// 本体だけのモジュールの系の登録（`main.rs` が渡す）。
-#[derive(Clone, Copy)]
-pub(crate) struct BodySystems {
-    /// 入力の取り出しの系の間（`user_break` の後・`balloon` の前）で呼ぶ。
-    pub(crate) menu_poll: fn(&mut World),
-    /// 入力の系の後・`FrameFinalize` への足し込みの前で呼ぶ。
-    pub(crate) after_input: fn(&mut World),
-}
 
 /// 系の登録をプロセスに 1 回・1 か所から行う。
 ///
@@ -55,6 +46,7 @@ pub(crate) fn register_systems(
 ) {
     crate::session::hooks::install(world);
     crate::session::app_exit::install_input_hooks(world);
+    world.insert_resource(body);
     areka_runtime::register_frame_system(world);
     // 受け口 `KanadeNoticeRx` はプロセスに 1 つなので、分割せずそのまま呼ぶ。
     crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
@@ -293,18 +285,17 @@ pub(crate) fn prepare_ghost_windows(
         // example の `#[path]` include で成立させるため）。spawn 直後の同一クロージャ内で同期実行する
         // ので、キャラ窓は既に在り async race はない。
         areka_input::attach_char_pointer_handlers(world);
-        // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
-        // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
-        menu::attach_release_handlers(world);
+        // 右クリックメニューの解放ハンドラ（本体の `menu::attach_release_handlers`）も同じ場所で付ける。
+        // このクロージャが動くのは `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では
+        // 解放を無視するだけ。
+        (BodySystems::of(world).after_char_pointer)(world);
         // バルーン窓へもポインタハンドラを装着する（標的は `BalloonWindowMarker` 窓のみ・キャラ窓配線は
         // 不変）。タイミング契約はキャラ窓ハンドラ装着と同じ。
         areka_input::balloon::attach_balloon_pointer_handlers(world);
-        // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す。起こし直しもこの閉包を通るので、
-        // 回数によらず新しい窓に差さる。
-        crate::file_drop::attach_file_drop_receivers(world);
-        // 位置初期化の近道の受け手も同じ窓へ差す。
-        // 窓がキーの入力先のときだけ届くので、ほかのアプリの同じキーは横取りしない。
-        crate::menu::shortcut::attach_shortcut_receivers(world);
+        // 投げ込みの受け手（本体の `file_drop::attach_file_drop_receivers`）と位置初期化の近道の受け手
+        // （本体の `menu::shortcut::attach_shortcut_receivers`）をゴースト窓（キャラ窓・バルーン窓）へ差す。
+        // 起こし直しもこの閉包を通るので、回数によらず新しい窓に差さる。
+        (BodySystems::of(world).after_balloon_pointer)(world);
         let scopes: Vec<usize> = windows.scopes().collect();
         tracing::info!(
             ?scopes,

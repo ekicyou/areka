@@ -362,10 +362,13 @@ fn main() -> Result<()> {
 }
 
 /// 本体だけのモジュールの系の登録（`register_systems` へ渡す）。
-pub(crate) const BODY_SYSTEMS: session::ghost_session::BodySystems =
-    session::ghost_session::BodySystems {
+pub(crate) const BODY_SYSTEMS: session::body_systems::BodySystems =
+    session::body_systems::BodySystems {
         menu_poll: menu::register_menu_poll,
         after_input: register_body_after_input,
+        after_char_pointer: menu::attach_release_handlers,
+        after_balloon_pointer: attach_body_receivers,
+        after_runtime_wired: wire_body_after_runtime,
     };
 
 /// `install::register` → `update::register` → `mcp::register` の順。
@@ -373,6 +376,39 @@ fn register_body_after_input(world: &mut World) {
     install::register(world);
     update::register(world);
     mcp::register(world);
+}
+
+/// `file_drop::attach_file_drop_receivers` → `menu::shortcut::attach_shortcut_receivers` の順。
+fn attach_body_receivers(world: &mut World) {
+    // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す。起こし直しもこの閉包を通るので、
+    // 回数によらず新しい窓に差さる。
+    file_drop::attach_file_drop_receivers(world);
+    // 位置初期化の近道の受け手も同じ窓へ差す。
+    // 窓がキーの入力先のときだけ届くので、ほかのアプリの同じキーは横取りしない。
+    menu::shortcut::attach_shortcut_receivers(world);
+}
+
+/// `menu::wire_menu` → 枠の登記 8 本 → `install::names::reseed` の順。
+fn wire_body_after_runtime(world: &mut World, runtime: &areka_ghost::GhostRuntime) {
+    // 右クリックメニューの結線: 終了の項目が先に済んだ入力の結線（`wire_mouse_input`）を使う。
+    menu::wire_menu(world, runtime.kanade().clone());
+    // 「ゴースト」枠の登記: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
+    menu::ghost_frame::register(world);
+    // 「シェル」「バルーン」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::shell_frame::register(world);
+    menu::balloon_frame::register(world);
+    // 「インストール」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::install_frame::register(world);
+    // 「置き場を追加…」「置き場を外す」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::roots_frame::register(world);
+    // 「ネットワーク更新」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::update_frame::register(world);
+    // 「シェル位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::reset_pos_frame::register(world);
+    // 「バルーン位置初期化」枠の登記: 同じ理由で起こすたびにやり直す。
+    menu::reset_balloon_pos_frame::register(world);
+    // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
+    install::names::reseed(world, runtime);
 }
 
 /// `run()` の結果を受けて後始末へ進む判断。

@@ -23,7 +23,7 @@
   - _Requirements: 8.7, 2.5_
 
 - [ ] 2. 本体の中で呼び出しの向きを逆にする（まだ crate を作らない）
-- [ ] 2.1 口の束を新しいファイルへ出し、据え付けと倒れ方を作り、窓の直後と実行系の後の呼び出しを口へ通す
+- [x] 2.1 口の束を新しいファイルへ出し、据え付けと倒れ方を作り、窓の直後と実行系の後の呼び出しを口へ通す
   - `BodySystems` を集めた層の新しいファイル `body_systems.rs` へ移して `Resource`・`Clone`・`Copy` にし、窓の直後の 2 欄（`after_char_pointer`・`after_balloon_pointer`）と実行系の後の 1 欄（`after_runtime_wired`）を足す。`of`（無ければ `#[cfg(not(test))]` で `error!(event = "body_systems_missing")`）と `NO_BODY` を設計の形で作る
   - `register_systems` の先頭の口の据え付け 2 行の直後で束を World の資源として 1 回据える。`menu_poll`・`after_input` の呼び方と登録の順は変えない
   - 窓を作るクロージャの中の C1 の 3 件を 2 欄の呼び出しへ、実行系の結線の C2 の 10 件を 1 欄の呼び出しへ替える。入力の差し込みとの交互の順・`wire_mouse_input` の後・`on_boot_ok` の前は今のまま。`use crate::menu;` の 2 行を外し、説明は本体の関数の名を地の文で残す

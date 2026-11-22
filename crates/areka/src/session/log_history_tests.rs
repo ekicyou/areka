@@ -647,7 +647,7 @@ fn moved_modules_keep_their_kinds_by_real_module_path() {
     }
     use crate::session::{
         alert::AlertScene, app_exit::ExitOrigin, boot_config::ConfigInputs,
-        boot_resolve::GhostDecision, exit_wait::WorkGate, ghost_session::BodySystems,
+        boot_resolve::GhostDecision, exit_wait::WorkGate, ghost_session::GhostSlot,
         ghost_session::RuntimeRebuild, readme::Opener, readme::ReadmeRequest,
         readonly::ReadOnlyRun, roots::report::ReportOccasion, roots::user_root::CopyPlan,
         session_end::SessionEnded, write_failure::WriteFailureTx,
@@ -664,7 +664,7 @@ fn moved_modules_keep_their_kinds_by_real_module_path() {
             Some(Kind::Status),
         ),
         (
-            module_of::<BodySystems>(),
+            module_of::<GhostSlot>(),
             "areka::session::ghost_session",
             Some(Kind::Status),
         ),
