@@ -155,14 +155,14 @@
   - _Dispatch: mechanical — 期限・環境変数・コマンドの形を設計が与える_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.5, 8.3, 8.6_
 
-- [ ] 11. ワークスペース全体を歩く見張りを `log-capture-kit` へ移す（G11）
+- [x] 11. ワークスペース全体を歩く見張りを `log-capture-kit` へ移す（G11）
 - [x] 11.1 同期の送信の許可表の見張りを移す（指摘 43・5.2）
   - `session_end_sync_send_tests.rs` の静的な後半（221-499）を新しい `crates/log-capture-kit/tests/sync_send_guard_test.rs` へ移し、共有の走査器 `workspace_scan` を使う形にする。許可表（5 項）の値・`#[cfg(test)] mod` の中かの欄・較正（表から 1 件落とすと赤・全項目に当たり・走査語を逐語で書かない）を持たせる。前半の再現は残す
   - `session_end.rs:53` の名指しと `crate_source_test_support.rs:6-7` の例外の列を新しいファイルに合わせ、§8 の 319 行のパスと名を直す。226・230・253 の経緯の語は移す側で消す
   - 完了の姿: `cargo test -p log-capture-kit --test sync_send_guard_test` が緑で、許可表から 1 件落とすとその件だけが違反になる（較正）。`cargo test -p areka-session` も緑
   - _Dispatch: standard — 自前の走査器を共有の走査器へ載せ替える_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.4, 5.2, 7.6_
-- [ ] 11.2 `withhold_everything` の呼び手の見張りを移す（指摘 20・21・5.2）
+- [x] 11.2 `withhold_everything` の呼び手の見張りを移す（指摘 20・21・5.2）
   - `readonly_body_tests.rs` の `withhold_everything_is_called_only_from_readonly`（115-154）と `files_calling` を消し、新しい `crates/log-capture-kit/tests/readonly_withhold_guard_test.rs` に、`crates/**` 全部を歩いて当たりが許可表（`readonly.rs`・`persist/withhold.rs`）の外に 0 件・全項目に当たり・同じ較正、の見張りを置く。`engage` の 2 本は残す
   - `session_end_deadline_body_tests.rs` の説明を「呼び手の側の 4 crate を歩く（`areka-ghost` の実装の中は数えない）」に、経緯の語を消す
   - `.kiro/steering/structure.md:460` の見張りの列に 2 本を足す。§8 の既にある行の名を直す
@@ -295,3 +295,4 @@
 - 8.2: 1 回目の `drain` は本番が `trace!(reload_drain_no_wiring)` を 1 件出すので「warn 以上 0 件」で見る（この枝に info/debug を足す壊し方は緑のまま）。`let _ = write_session_mark` は設計の一覧の外（areka-session の 3 ファイル・`main_session_mark_*`・`ghost_session_switch_memory_tests.rs`）に 9 件残る。兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す（20 で申し送る）
 - 9.2: `unique_temp_dir` は areka-session から消えた。同名の別の補助が `areka-ghost/src/config.rs`・`areka-parsers/src/package/resolve_tests.rs`・`areka-placement/src/source_tests.rs` に残る（照合の表の「定義のファイルの中だけ」の扱い）。`boot_seam_restore_tests.rs` の assert の文に spec 名 `areka-P0-scope-chain-gap 7.3` が残る（17 で拾う）。本体の `ghost_session_scope_rect_boot_tests.rs` も `areka_placement::test_support::fake_handle` を引く
 - 10.2: 実画面の 2 本は眠り 16 か所のうち 15 か所を記録の待ちか窓の矩形の待ち（`wait_rects`＝100ms あけた 2 回の読みが同じになるまで・上限 2 秒）に替え、辞書の付け直しを待つ 3 秒だけ残した。実画面での緑は 21.2 で見る
+- 11.2: `readonly_body_tests.rs` の `files_calling`・`all_sources` は残す `engage` の 2 本が使うので残した
