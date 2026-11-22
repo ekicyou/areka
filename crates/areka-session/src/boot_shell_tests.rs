@@ -185,11 +185,7 @@ fn load_lines(events: &[CapturedEvent]) -> LoadLines {
     const BALLOON: &str = "areka_emo_present::balloon";
     const ALPHA_MSG: &str = "self_alpha: 透過の扱いを決めた";
     LoadLines {
-        shell_list: count(
-            SHELL,
-            "shell: シェルの面の画像の一覧が終わった（R6.1）",
-            None,
-        ),
+        shell_list: count(SHELL, "shell: シェルの面の画像の一覧が終わった", None),
         shell_alpha: count(ALPHA, ALPHA_MSG, Some("shell")),
         balloon_alpha: count(ALPHA, ALPHA_MSG, Some("balloon")),
         series: per_scope(BALLOON, "balloon: scope 別バルーン系列の解決が完了"),
