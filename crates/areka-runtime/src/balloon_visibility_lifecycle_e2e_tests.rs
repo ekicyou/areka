@@ -13,58 +13,35 @@
 // 再生は注入時刻のみで駆動し、実時間の待機は用いない。
 //
 // 時間切れで隠し、受け口の番号の知らせが kanade へ届くまでは、バルーンを可視にできる
-// 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ。
+// 実 GPU の檻 `crates/areka/src/runtime_tests/frame_balloon_timeout_notice_e2e_tests.rs` が持つ。
 // =============================================================================
 
-use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc;
 
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::EmoWorld;
 use areka_emo_present::EmoPresenter;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 use areka_sakura::ActorKey;
 use areka_sakura::sysvar::SystemVarSnapshot;
-use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::world::World;
 use dola::cue::{CueCommand, CuePlayer, TalkCue};
 use wintf::ecs::FrameTime;
 
-use areka_input::balloon::BalloonWiring;
-use areka_runtime::assets::{BootAssets, LoopTables};
-use areka_runtime::frame::RuntimeWiring;
-use areka_runtime::move_cue::PositionCue;
-use areka_runtime::talk_clock::TalkClock;
-use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use areka_runtime::target_map::balloon_target;
+use crate::balloon_hover::BalloonHover;
+use crate::frame::RuntimeWiring;
+use crate::frame::test_support::synth_assets;
+use crate::move_cue::PositionCue;
+use crate::talk_clock::TalkClock;
+use crate::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use crate::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
-use super::{configured_timeout_secs, run_balloon_visibility_phase};
-// 私有の欄は渡し口から読み書きする。
-use areka_runtime::balloon_visibility::test_support::display_end;
-
-/// 表示資産を 1 つも持たない `BootAssets`（相は資産を読まない——読むのは `balloon_models` だけ）。
-fn empty_assets() -> BootAssets {
-    BootAssets {
-        shells: Vec::new(),
-        balloons: Vec::new(),
-        resolver: SurfaceResolver::new(BTreeMap::new()),
-        static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
-        bind_resolver: BindResolver::empty(),
-        loop_tables: LoopTables {
-            shell: AnimationTable::empty(),
-            balloon: BTreeMap::new(),
-        },
-        shell_author_dpi: 96,
-        balloon_author_dpi: 96,
-        boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
-        cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
-    }
-}
+use super::configured_timeout_secs;
+use super::phase::run_balloon_visibility_phase;
 
 /// 台本の占有終端が判断中核の計測起点になる。
 ///
@@ -82,7 +59,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // 紛れ込む。どのテストが先に走るかは並行実行の都合で決まるため、捕捉窓の外で先に確定させる。
     let timeout_secs = configured_timeout_secs();
 
-    // ── 本番 `wire_runtime` 手順 4/5 と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
+    // ── 本番 `wire_runtime` と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
@@ -98,10 +75,10 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         mpsc::channel().1,
         mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
-        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),
         clock,
-        empty_assets(),
+        synth_assets(&[]),
     );
     wiring
         .balloon_models
@@ -109,7 +86,6 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     // ── 表示層は headless（`attach_target` は GPU 資源を要さず、可視状態の照会はそのまま通る） ──
     let mut world = World::new();
-    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     world.insert_non_send(BalloonHover::default());
     let window = world.spawn_empty().id();
     wiring.presenter.attach_target(
@@ -170,7 +146,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     let (_, events) = capture(|| run_balloon_visibility_phase(&mut wiring, &mut world));
 
     assert_eq!(
-        display_end(&wiring.balloon_visibility),
+        wiring.balloon_visibility.display_end,
         Some(horizon),
         "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み・Requirement 4.1）"
     );

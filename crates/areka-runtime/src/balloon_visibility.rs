@@ -547,3 +547,9 @@ mod talk_end_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_choice_wait_tests.rs"]
 mod choice_wait_tests;
+
+// 会話終了観測から判断中核までの端から端。実台本の再生から、受け口が落ちてトークの
+// 終わりが届き、占有終端（止まった時刻と同じ）が計測起点になるところまでを 1 本で通す。
+#[cfg(test)]
+#[path = "balloon_visibility_lifecycle_e2e_tests.rs"]
+mod lifecycle_e2e_tests;

@@ -6,7 +6,7 @@
 // 檻はその受け端を直に読む。
 //
 // headless の表示層は表示が一度も確立しないので、相そのものでは時間切れに至らない
-// （`balloon_visibility_phase_reappear_tests.rs` と同じ事情）。可視は観測表に書き込む。
+// （`crates/areka-runtime/src/balloon_visibility_phase_reappear_tests.rs` と同じ事情）。可視は観測表に書き込む。
 // =============================================================================
 
 use std::path::PathBuf;

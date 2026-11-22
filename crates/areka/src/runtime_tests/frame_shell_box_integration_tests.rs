@@ -6,8 +6,8 @@
 // 可視性の相・文字の層の拡大率の相（`sync_boxes`）・提示（`shown_boxes` の写し）・`Status` の届けが
 // 本番の相順でつながっていることを確かめる。
 //
-// 写し（`shown_boxes`）は提示（GPU）でしか埋まらないので、相の単体の檻（`balloon_visibility_phase_box_tests.rs`）
-// は写しを作って渡していた。ここではそれを本物の提示で埋め、次のフレームの可視性の相が読む。
+// 写し（`shown_boxes`）は提示（GPU）でしか埋まらないので、相の単体の檻
+// （`crates/areka-runtime/src/balloon_visibility_phase_box_tests.rs`）は写しを作って渡していた。ここではそれを本物の提示で埋め、次のフレームの可視性の相が読む。
 //
 // 場面:
 //   ⑴ 箱のあるサーフェスでは普通のバルーンの窓を出す発行が 0 件、箱の無いサーフェスへ移ると出る。

@@ -826,6 +826,12 @@ pub mod test_support;
 #[path = "balloon_visibility_phase_tests.rs"]
 mod tests;
 
+// 隠れたバルーンが次の台詞の最初の文字とともに現れること。
+// 本物の文字の層と本物の観測の収集を通し、場面ごとの各フレームの行動と記録を見る決定論テスト。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_reappear_tests.rs"]
+mod reappear_tests;
+
 // 待ち時間の預け方（純判断）だけを見る決定論テスト。配線の檻とは相手が違うので分けてある。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_wake_tests.rs"]
