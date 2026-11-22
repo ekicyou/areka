@@ -185,7 +185,7 @@ fn composed(groups: &[ZOrderGroup], inventory: &Inventory) -> ChainPlan {
 /// 数値モードは、並びの左のスコープほど手前で、各スコープが 2 枚のかたまりになる。
 /// 張る繋ぎはスコープの継ぎ目 1 本だけである。
 #[test]
-fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
+fn numeric_mode_puts_left_scope_in_front_as_a_block() {
     let groups = [tag_group(1, &["1", "0"])];
     let inventory = Inventory::full(&[0, 1]);
 
@@ -198,7 +198,7 @@ fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
 
 /// 明示モードで 4 枚を書いた指定は、数値モードの同じ並びと同一の鎖になる。
 #[test]
-fn t_zcc02_explicit_mode_matches_the_numeric_shape() {
+fn explicit_mode_matches_the_numeric_shape() {
     let inventory = Inventory::full(&[0, 1]);
 
     let explicit = composed(&[tag_group(1, &["b1", "s1", "b0", "s0"])], &inventory);
@@ -211,7 +211,7 @@ fn t_zcc02_explicit_mode_matches_the_numeric_shape() {
 /// 片方だけ指名された明示モード（畳み込み）でも、鎖はスコープ 2 枚の
 /// かたまりで並ぶ。相棒窓は台帳が補っているので、合成は特別扱いを持たない。
 #[test]
-fn t_zcc03_folded_partial_specification_yields_full_scope_blocks() {
+fn folded_partial_specification_yields_full_scope_blocks() {
     let groups = [tag_group(1, &["b1", "s0"])];
     let inventory = Inventory::full(&[0, 1]);
 
@@ -228,7 +228,7 @@ fn t_zcc03_folded_partial_specification_yields_full_scope_blocks() {
 /// 窓が 1 枚も無いスコープは、グループから取り除かれず「窓が無かった要素」として返る。
 /// 残った窓だけで指定順の相対順が成立する。
 #[test]
-fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
+fn absent_scope_is_reported_and_never_dropped_from_the_group() {
     let groups = [tag_group(1, &["0", "1"])];
     let present = Inventory::full(&[0]);
 
@@ -255,7 +255,7 @@ fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
 /// スコープの片割れだけが実在するときは、その 1 枚が鎖に入り、
 /// 欠けた 1 枚だけが不在要素として並ぶ（宣言順のまま）。
 #[test]
-fn t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain() {
+fn partially_present_scope_keeps_the_surviving_window_in_the_chain() {
     let groups = [tag_group(1, &["0", "1"])];
     let inventory = Inventory::of(&[b(0), s(0), b(1)]);
 
@@ -269,7 +269,7 @@ fn t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain() {
 /// 1 枚も実在しないときも計画そのものは組まれる（指定は生きている）。
 /// 鎖は空で、繋ぎも 0 本、不在要素だけが宣言順に並ぶ。
 #[test]
-fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_elements() {
+fn group_with_no_existing_window_still_yields_a_plan_with_absent_elements() {
     let groups = [tag_group(1, &["0", "1"])];
     let inventory = Inventory::default();
 
@@ -290,7 +290,7 @@ fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_element
 /// グループが 1 つも無ければ計画そのものを作らない——窓が何枚在っても、
 /// どのスコープの前後も規定しない。
 #[test]
-fn t_zcc07_no_group_means_no_plan_at_all() {
+fn no_group_means_no_plan_at_all() {
     let inventory = Inventory::full(&[0, 1, 2]);
 
     assert!(
@@ -309,7 +309,7 @@ fn t_zcc07_no_group_means_no_plan_at_all() {
 /// グループどうしは登記の順で 1 本に連なる。shell 設定由来の基底が最前で、
 /// 以降はタグの登記順（先に登記されたほど手前）である。
 #[test]
-fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_in_front() {
+fn groups_are_concatenated_in_registration_order_with_the_descript_base_in_front() {
     let mut ledger = ZOrderGroupLedger::default();
     ledger.set_descript_base(parse_zorder_tokens(&["3", "2"]).expect("受理される").0);
     ledger
@@ -373,7 +373,7 @@ fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_
 /// どのグループにも属さないスコープは、全グループの後ろへ、スコープ ID の昇順で、
 /// 2 枚のかたまりとして連なる。渡された在庫の並びには依らない。
 #[test]
-fn t_zcc09_unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
+fn unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
     let groups = [tag_group(1, &["b1", "s1"])];
     let inventory = Inventory::full(&[0, 1, 2, 3]);
 
@@ -401,7 +401,7 @@ fn t_zcc09_unassigned_scopes_join_behind_every_group_in_ascending_scope_order() 
 /// 後方参加のスコープも、片割れしか実在しなければその 1 枚だけが鎖に入る。
 /// 未指定スコープは宣言要素ではないので、欠けた窓は不在要素に載らない。
 #[test]
-fn t_zcc10_partially_present_tail_scope_contributes_only_the_existing_window() {
+fn partially_present_tail_scope_contributes_only_the_existing_window() {
     let groups = [tag_group(1, &["b0", "s0"])];
     let inventory = Inventory::of(&[b(0), s(0), s(2)]);
 
@@ -419,7 +419,7 @@ fn t_zcc10_partially_present_tail_scope_contributes_only_the_existing_window() {
 /// グループに名前の挙がったスコープは、在庫にも居るからといって後方へ二重参加しない
 /// （不変条件④の要）。
 #[test]
-fn t_zcc11_a_scope_named_by_a_group_never_joins_the_tail_as_well() {
+fn a_scope_named_by_a_group_never_joins_the_tail_as_well() {
     let groups = [tag_group(1, &["0", "1"])];
     let inventory = Inventory::full(&[0, 1, 2]);
 
@@ -434,7 +434,7 @@ fn t_zcc11_a_scope_named_by_a_group_never_joins_the_tail_as_well() {
 
 /// 在庫のスコープが重複して渡されても、鎖には 1 度しか現れない（不変条件④）。
 #[test]
-fn t_zcc12_duplicated_inventory_scopes_do_not_duplicate_chain_members() {
+fn duplicated_inventory_scopes_do_not_duplicate_chain_members() {
     let groups = [tag_group(1, &["b0", "s0"])];
     let inventory = Inventory::full(&[0, 1]);
 
@@ -453,7 +453,7 @@ fn t_zcc12_duplicated_inventory_scopes_do_not_duplicate_chain_members() {
 /// （台帳は要素 2 個未満のタグを受理しないので正典の経路では現れないが、
 /// 合成は台帳の受理規則を前提にせず、渡された要素列をそのまま連ねる。）
 #[test]
-fn t_zcc13_groups_with_one_or_zero_elements_still_concatenate() {
+fn groups_with_one_or_zero_elements_still_concatenate() {
     let groups = [
         raw_group(1, &[b(0)]),
         raw_group(2, &[]),
@@ -479,7 +479,7 @@ fn t_zcc13_groups_with_one_or_zero_elements_still_concatenate() {
 /// 要素 0 個のグループしか無く、在庫も空なら、鎖は空だが計画は `Some` である
 /// ——「グループが 1 つも無い」（`None`）とは別の状態である。
 #[test]
-fn t_zcc14_an_empty_group_is_not_the_same_state_as_having_no_group() {
+fn an_empty_group_is_not_the_same_state_as_having_no_group() {
     let empty_inventory = Inventory::default();
 
     let plan = compose(&[raw_group(1, &[])], &empty_inventory).expect("グループは 1 本ある");
@@ -496,7 +496,7 @@ fn t_zcc14_an_empty_group_is_not_the_same_state_as_having_no_group() {
 
 /// 分岐表のすべての形について、4 つの不変条件が同時に成り立つ。
 #[test]
-fn t_zcc15_every_branch_satisfies_all_four_chain_invariants() {
+fn every_branch_satisfies_all_four_chain_invariants() {
     let cases: Vec<(&str, Vec<ZOrderGroup>, Inventory)> = vec![
         (
             "数値モード 1 グループ",
@@ -676,7 +676,7 @@ fn the_invariant_checker_catches_every_broken_shape() {
 /// 読めること。出口が
 /// `log_chain_absent` へ渡す呼び出しは `zorder_drain.rs` と wintf のテストが通す。
 #[test]
-fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary() {
+fn absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary() {
     let groups = [tag_group(1, &["0", "1"]), tag_group(2, &["4", "5"])];
     let plan = composed(&groups, &Inventory::full(&[0, 4]));
 
@@ -695,7 +695,7 @@ fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary
 /// 摂動⑴——「同一スコープ対の除外」を経路から外すと、出力は連続対を 1 つも除かない形
 /// になる。その形は本番の出力と一致せず、`pair_edges_written` が赤で掴む。
 #[test]
-fn t_zcc16_dropping_the_same_scope_pair_exclusion_is_caught() {
+fn dropping_the_same_scope_pair_exclusion_is_caught() {
     let groups = [tag_group(1, &["0", "1"])];
     let inventory = Inventory::full(&[0, 1]);
     let scopes = inventory.scopes();

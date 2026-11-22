@@ -24,7 +24,7 @@ use areka_placement::zorder_group_ledger::GroupSource;
 /// 「残っている」ことを受信端から直に確かめる——台帳が空であることだけでは
 /// 「取り出して捨てた」と区別が付かない（起動直後の指令が黙って消える形がまさにそれ）。
 #[test]
-fn t_zdr01_holds_directives_while_the_window_registry_is_absent() {
+fn holds_directives_while_the_window_registry_is_absent() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = World::new();
@@ -56,7 +56,7 @@ fn t_zdr01_holds_directives_while_the_window_registry_is_absent() {
 /// 上の檻の反対側である。ここが緑にならなければ、保留は「取りこぼさない」ではなく
 /// 「永久に効かない」を意味してしまう。
 #[test]
-fn t_zdr02_applies_held_directives_in_arrival_order_once_windows_exist() {
+fn applies_held_directives_in_arrival_order_once_windows_exist() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = World::new();
@@ -89,7 +89,7 @@ fn t_zdr02_applies_held_directives_in_arrival_order_once_windows_exist() {
 
 /// 受理は `[zorder-group] applied` で、台帳に載った内容とともに残る。
 #[test]
-fn t_zdr03_accepted_tag_is_recorded_with_the_ledger_content() {
+fn accepted_tag_is_recorded_with_the_ledger_content() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
@@ -132,7 +132,7 @@ fn t_zdr03_accepted_tag_is_recorded_with_the_ledger_content() {
 /// 対照として数値モードを並べる——あちらは作者が窓単位で書いた並びではないので番兵になる。
 /// 片側だけだと「常に番兵」でも「常に何か載る」でも通ってしまう。
 #[test]
-fn t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode() {
+fn the_written_order_shape_is_surfaced_only_for_the_explicit_mode() {
     // 逆転（s1 が b1 より前）＝書かれた順のまま採り、逆転と記録する。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
@@ -173,7 +173,7 @@ fn t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode() {
 ///    読めてしまう（窓 2 枚を黙って足しておきながら「調整していない」と言う行）。
 /// ⑵ 2 窓そろって書かれたスコープは補いの欄を持たず、並びの形の語だけが載る。
 #[test]
-fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
+fn an_implied_partner_window_is_named_in_the_accepted_record() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
@@ -217,7 +217,7 @@ fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
 
 /// 解釈できない指定は台帳を一切変えず、理由と**受け取ったトークン列**を warn で残す。
 #[test]
-fn t_zdr05_unparsable_tag_leaves_the_ledger_untouched_and_is_recorded() {
+fn unparsable_tag_leaves_the_ledger_untouched_and_is_recorded() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
@@ -261,7 +261,7 @@ fn t_zdr05_unparsable_tag_leaves_the_ledger_untouched_and_is_recorded() {
 /// 台帳の段で落ちる拒否（既に他グループが押さえているスコープ）も同じ形で残り、
 /// 既存グループは 1 つも変わらない。
 #[test]
-fn t_zdr06_cross_group_redesignation_is_rejected_whole_and_recorded() {
+fn cross_group_redesignation_is_rejected_whole_and_recorded() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1, 2]);
@@ -291,7 +291,7 @@ fn t_zdr06_cross_group_redesignation_is_rejected_whole_and_recorded() {
 
 /// 1 件の拒否は、同じ巡でその後ろに並んでいる指令を止めない（log-first・非 panic）。
 #[test]
-fn t_zdr07_one_rejected_directive_does_not_stop_the_ones_behind_it() {
+fn one_rejected_directive_does_not_stop_the_ones_behind_it() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1, 2, 3]);
@@ -336,7 +336,7 @@ fn t_zdr07_one_rejected_directive_does_not_stop_the_ones_behind_it() {
 /// 基底が在る場合と無い場合を並べる——片方だけだと「常に空へ戻す」実装も
 /// 「常に何も落とさない」実装も素通りする。
 #[test]
-fn t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result() {
+fn reset_falls_back_to_the_descript_base_and_records_the_result() {
     // 基底あり: タグ由来だけが落ちる。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
@@ -424,7 +424,7 @@ fn t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result() {
 /// 必ず何かを見つけることを併置する——走査そのものが空振りしていれば、不在の主張は
 /// 恒真になる。
 #[test]
-fn t_zdr09_this_phase_emits_no_records_of_its_own() {
+fn this_phase_emits_no_records_of_its_own() {
     const MACRO_NEEDLES: [&str; 6] = [
         "trace!(",
         "debug!(",
@@ -465,7 +465,7 @@ fn t_zdr09_this_phase_emits_no_records_of_its_own() {
 
 /// 指令が 1 件も無い巡は、記録も台帳の変化も起こさない。
 #[test]
-fn t_zdr10_an_empty_pass_is_silent() {
+fn an_empty_pass_is_silent() {
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);

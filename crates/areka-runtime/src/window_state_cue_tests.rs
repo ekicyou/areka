@@ -321,7 +321,7 @@ fn t_wsc11_disconnected_receiver_is_recorded_and_does_not_panic() {
 }
 
 /// 重なりの仕事の旗は送り出しの後に 1 か所で立てる（旗はプロセス共有で動的に読むと揺れる
-/// ので、`zorder_cue_tests.rs` の t_zcs14 と同じくソースの前後関係で押さえる）。
+/// ので、`zorder_cue_tests.rs` の `the_zorder_wake_is_marked_after_the_self_selection` と同じくソースの前後関係で押さえる）。
 #[test]
 fn t_wsc12_zorder_wake_is_marked_once_after_the_send() {
     let code = code_only(include_str!("window_state_cue.rs"));
