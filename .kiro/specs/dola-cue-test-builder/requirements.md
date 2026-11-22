@@ -74,7 +74,7 @@
 2. While `test-support` 機能が無効のとき（既定）, the `dola` shall 組み立てを公開の面に出さず、既定の公開の面を今と同じに保つ【仮定 A1】
 3. The 使い手の crate（areka-ghost・areka-seriko・areka-runtime） shall `dola` の `test-support` 機能を、テストのビルドのとき（runtime は自身の `test-support` 機能のときも）だけ有効にし、本番のビルド（本体 `areka` の配布物）に組み立てを入れない
 4. When 公開前の確認（`tools/crates-io.ps1` の梱包の確かめ）を回したとき, the `dola` shall 通る
-5. The `dola` shall `test-support` 機能の働き（テストだけが使う組み立てを開けること）を、`Cargo.toml` の機能の行の説明と README に書く
+5. The `dola` shall `test-support` 機能の働き（テストだけが使う組み立てを開けること・本番では付けないこと）を README に書く（`cargo package` は `Cargo.toml` のコメントを落とすので、crates.io の利用者への説明は README が担う）
 6. The `dola` shall ワークスペースの外の crate を新しく足さず、`Cargo.lock` を変えない
 
 ### Requirement 3: 5 つの写しの本文を消す
