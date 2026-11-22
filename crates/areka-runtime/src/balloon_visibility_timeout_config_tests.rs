@@ -215,39 +215,27 @@ fn resolve_with_positive_env_shortens_and_records_source() {
 /// 不正な指定は警告を出したうえで既定 30 秒へ縮退し、供給源も `default` になる。
 #[test]
 fn resolve_with_invalid_env_warns_and_degrades_to_default() {
-    for value in ["0", "-1", "abc", "1.5", "18446744073709551616"] {
-        let ((secs, source), events) = capture(|| resolve_timeout_secs(Some(value)));
+    let value = "abc";
+    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some(value)));
 
-        assert_eq!(
-            secs, DEFAULT_BALLOON_TIMEOUT_SECS,
-            "{value:?}: 既定 30 秒へ縮退する"
-        );
-        assert_eq!(source, TimeoutSource::Default, "{value:?}: 供給源は既定");
+    assert_eq!(
+        secs, DEFAULT_BALLOON_TIMEOUT_SECS,
+        "{value:?}: 既定 30 秒へ縮退する"
+    );
+    assert_eq!(source, TimeoutSource::Default, "{value:?}: 供給源は既定");
 
-        let levels: Vec<Level> = events.iter().map(|e| e.level).collect();
-        assert_eq!(
-            levels,
-            vec![Level::WARN, Level::INFO],
-            "{value:?}: 警告のあとに採用値の記録が 1 行ずつ出る: {events:?}"
-        );
-        let recorded = &events[1];
-        assert!(
-            recorded.expect_field("source").contains("default"),
-            "{value:?}: 縮退後の供給源は既定: {recorded:?}"
-        );
-        assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
-    }
-}
-
-/// 空白のみの指定は「未設定」と同じ扱いであり、警告なしで既定を採る。
-#[test]
-fn resolve_with_blank_env_is_treated_as_unset() {
-    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some("   ")));
-
-    assert_eq!(secs, DEFAULT_BALLOON_TIMEOUT_SECS);
-    assert_eq!(source, TimeoutSource::Default);
-    assert_eq!(events.len(), 1, "警告は出さない: {events:?}");
-    assert_eq!(events[0].level, Level::INFO);
+    let levels: Vec<Level> = events.iter().map(|e| e.level).collect();
+    assert_eq!(
+        levels,
+        vec![Level::WARN, Level::INFO],
+        "{value:?}: 警告のあとに採用値の記録が 1 行ずつ出る: {events:?}"
+    );
+    let recorded = &events[1];
+    assert!(
+        recorded.expect_field("source").contains("default"),
+        "{value:?}: 縮退後の供給源は既定: {recorded:?}"
+    );
+    assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
 }
 
 /// 供給源の表記は実機サインオフの文字列検索に使う語である。

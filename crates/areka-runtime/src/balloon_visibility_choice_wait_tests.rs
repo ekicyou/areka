@@ -6,7 +6,7 @@
 // 待ち時間を使い切った形になり、待ちが解けた途端に消える。
 //
 //   ⑴ 待ちの間（トークの終わりが未着）は、時間がどれだけ進んでも隠さず知らせも作らない
-//   ⑵ 占有終端 2.0・止まった時刻 60.0 → 満了予定 90.0。選んだ・選択肢の時間切れ・中断の 3 つは
+//   ⑵ 占有終端 2.0・止まった時刻 60.0 → 満了予定は止まった時刻＋待ち時間。選んだ・選択肢の時間切れ・中断の 3 つは
 //      どれも同じ合図の形（止まった時刻つきの終わり）で届く＝名前つきの 3 行
 //   ⑶ 終わりの後の滞在は保留し、離れた時刻から既定の長さで測り直す
 //   ⑷ 次の会話の開始で選択肢つきでないトークの規則へ戻る
@@ -78,7 +78,7 @@ fn no_hide_while_the_choice_wait_is_alive_however_long() {
     }
 }
 
-/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に 90.0 で隠して
+/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に待ち時間が過ぎたら隠して
 /// 知らせを返す。終わりを観測したフレームの遅れ（`observed_at`）は満了に効かない。
 #[test]
 fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
@@ -111,7 +111,7 @@ fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
             .at(STOPPED + TIMEOUT - 0.25)
             .run(&mut state);
         if !before.actions.is_empty() || before.timeout_notice.is_some() {
-            failures.push(format!("{name}: 90.0 の直前で {before:?}"));
+            failures.push(format!("{name}: 止まった時刻＋待ち時間の直前で {before:?}"));
         }
 
         let expired = Frame::new(&[(0, seen(3, true))])
@@ -120,7 +120,7 @@ fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
         if expired.actions != vec![hide(&[0], VisibilityTrigger::Timeout)]
             || expired.timeout_notice != Some(TALK_ID)
         {
-            failures.push(format!("{name}: 90.0 で {expired:?}"));
+            failures.push(format!("{name}: 止まった時刻＋待ち時間で {expired:?}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -316,7 +316,7 @@ fn box_only_scope_follows_the_same_rule() {
 }
 
 /// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60.0 で落とし、届いた合図の列を
-/// そのまま判断に通すと 90.0 で隠れる。
+/// そのまま判断に通すと止まった時刻＋待ち時間で隠れる。
 #[test]
 fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     let wall = Arc::new(Mutex::new(0.0_f64));

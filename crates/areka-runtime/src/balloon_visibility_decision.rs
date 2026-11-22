@@ -148,8 +148,8 @@ fn apply_lifecycle_signals(
                 }
                 state.display_end = Some(end);
 
-                // 占有終端が現在時刻より未来へ動いたなら、立っている満了予定はもう根拠を失う
-                // （選択肢のバリア解除後に cue が届いた形）。破棄して立て直させる。
+                // 満了予定はトークの終わりの後にしか立たず、`talk_lifecycle.rs` の約束では終わりの後に
+                // 占有終端は届かない。約束に反して届いたときに黙って延ばさず、破棄して立て直させる。
                 if let Some(now) = now_talk_time
                     && end > now
                     && let Some(deadline) = state.deadline.take()

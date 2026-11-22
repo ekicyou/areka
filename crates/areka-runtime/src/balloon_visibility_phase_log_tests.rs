@@ -8,16 +8,9 @@
 use tracing::Level;
 
 use super::super::{MeasurementDiscardReason, SuppressionKinds};
+use super::test_support::visibility_lines;
 use super::*;
-use log_capture_kit::{CapturedEvent, ExpectField, capture};
-
-/// 可視性の相が書いた行だけを拾う。
-fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains("[balloon-visibility]"))
-        .collect()
-}
+use log_capture_kit::{ExpectField, capture};
 
 /// 選択肢つきでないトークの起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
 /// 止まった時刻が届かなかったことは警告で残す。

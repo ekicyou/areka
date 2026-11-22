@@ -26,7 +26,7 @@ use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use tracing::Level;
 
 use super::super::ScopeVisibility;
-use super::test_support::{attach_headless, runtime, world_at};
+use super::test_support::{attach_headless, runtime, visibility_lines, world_at};
 use super::*;
 use crate::talk_clock::TalkClock;
 
@@ -109,14 +109,6 @@ fn reveal_text(harness: &Harness, scope: u32, text: &str) {
         command: CueCommand::Text(text.into()),
         duration: text.chars().count() as f64 * 0.25,
     });
-}
-
-/// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは配線の関心事ではない）。
-fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains("[balloon-visibility]"))
-        .collect()
 }
 
 /// 表示層に target を持たない scope（非表示の適用点が「未装着」側の腕を通る）。
@@ -598,10 +590,10 @@ fn hide_touches_only_the_balloon_target() {
             &runtime(),
             &mut state,
             &observations,
-            &[VisibilityAction::HideScopes {
-                scopes: vec![0, UNATTACHED_SCOPE],
-                trigger: VisibilityTrigger::Timeout,
-            }],
+            &[super::super::test_support::hide(
+                &[0, UNATTACHED_SCOPE],
+                VisibilityTrigger::Timeout,
+            )],
         )
     });
 

@@ -25,8 +25,8 @@ fn shown_and_measuring() -> BalloonVisibilityState {
 }
 
 /// scope 0 だけを忘れる: scope 0 は可視の記憶が偽・文字の数は保つ、scope 1 は不変、満了予定は
-/// そのまま。次のフレームに新しいバルーンが隠れたまま同じ文字の数を見せても表示は 0 で、見える
-/// バルーンが無くなったので計測の破棄の記録が 1 件だけ出る。
+/// そのまま。次のフレームに新しいバルーンが隠れたまま同じ文字の数を見せても、scope 1 が見えて
+/// いる限り判断は何も起こさず、満了予定も動かない。
 #[test]
 fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
     let mut state = shown_and_measuring();
@@ -34,9 +34,10 @@ fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
 
     state.forget_scope(0);
     let after = (state.per_scope.clone(), state.deadline);
-    let next = Frame::new(&[(0, seen(5, false)), (1, seen(3, false))])
+    let next = Frame::new(&[(0, seen(5, false)), (1, seen(3, true))])
         .at(2.5)
         .run(&mut state);
+    let next = (next, state.deadline);
 
     let kept = |last_glyphs, prev_visible| ScopeVisibility {
         last_glyphs,
@@ -47,16 +48,13 @@ fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
         (before, after, next),
         (
             ([(0, kept(5, true)), (1, kept(3, true))].into(), true),
-            ([(0, kept(5, false)), (1, kept(3, true))].into(), Some(31.0)),
-            VisibilityDecision {
-                logs: vec![VisibilityLogEvent::MeasurementDiscarded {
-                    reason: MeasurementDiscardReason::NoVisibleScope,
-                    deadline: 31.0,
-                }],
-                ..VisibilityDecision::default()
-            },
+            (
+                [(0, kept(5, false)), (1, kept(3, true))].into(),
+                Some(1.0 + TIMEOUT)
+            ),
+            (VisibilityDecision::default(), Some(1.0 + TIMEOUT)),
         ),
-        "(忘れる前 (scope の記憶, 計測中), 忘れた後 (scope の記憶, 満了予定), 次のフレームの判断)"
+        "(忘れる前 (scope の記憶, 計測中), 忘れた後 (scope の記憶, 満了予定), 次のフレーム (判断, 満了予定))"
     );
 }
 
@@ -70,7 +68,7 @@ fn forget_scope_keeps_the_restarted_deadline_while_a_box_is_showing() {
         .at(0.0)
         .run(&mut state);
     Frame::new(&[(0, hovered(boxed(seen(5, true))))])
-        .at(40.0)
+        .at(TIMEOUT + 10.0)
         .run(&mut state);
     Frame::new(&[(0, boxed(seen(5, true)))])
         .at(100.0)
@@ -83,7 +81,7 @@ fn forget_scope_keeps_the_restarted_deadline_while_a_box_is_showing() {
 
     assert_eq!(
         (next, state.deadline),
-        (VisibilityDecision::default(), Some(130.0)),
+        (VisibilityDecision::default(), Some(100.0 + TIMEOUT)),
         "(差し替えの次のフレームの判断, 満了予定)"
     );
 }

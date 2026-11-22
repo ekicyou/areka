@@ -51,6 +51,17 @@ pub(in crate::balloon_visibility) fn runtime() -> Rc<RefCell<TextLayerRuntime>> 
     )))
 }
 
+/// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは配線の関心事ではない）。
+#[cfg(test)]
+pub(super) fn visibility_lines(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.message().contains("[balloon-visibility]"))
+        .collect()
+}
+
 /// [`super::notify_timeout`] へそのまま渡す（本体のテストが使う）。
 #[cfg(feature = "test-support")]
 pub fn notify_timeout(world: &World, notice: Option<areka_sakura::TalkId>) {

@@ -463,6 +463,10 @@ fn expectation_times_are_anchored_on_the_display_end() {
         LATE, 0.0,
         "最初の観測が遅れて訪れないと起点の取り違えを検出できない"
     );
+    assert_ne!(
+        TIMEOUT, DEFAULT_BALLOON_TIMEOUT_SECS,
+        "既定と同じだと引数の待ち時間を読まない実装が緑になる"
+    );
 }
 
 /// 較正: 走査が実際に突き合わせていること——期待と異なる結果を与えたら、行動・ログ・状態の

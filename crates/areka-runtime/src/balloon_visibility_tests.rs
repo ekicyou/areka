@@ -94,8 +94,7 @@ fn additional_content_on_a_visible_scope_does_not_reissue_show() {
 // 可視コンテンツ判定
 // ---------------------------------------------------------------------------
 
-/// 可視グリフ数が据え置きのフレームは表示の契機にならない。改行・カーソル移動・待機・
-/// 内容消去だけの観測列は可視グリフ数を動かさない。
+/// 可視グリフ数が据え置きのフレームは表示の契機にならない。
 #[test]
 fn flat_glyph_count_is_never_a_show_trigger() {
     let mut state = BalloonVisibilityState::default();
@@ -254,7 +253,7 @@ fn prev_visible_reflects_the_transitions_this_frame_issued() {
 /// 会話単位の状態は、時刻を与えないフレームでは静止したまま（タイムアウトの評価が
 /// 現在時刻の不明なフレームで動き出さない）。
 #[test]
-fn conversation_scoped_state_is_untouched_by_content_decisions() {
+fn conversation_scoped_state_is_untouched_by_frames_without_time() {
     let mut state = BalloonVisibilityState::default();
     step(&mut state, &[(0, seen(3, false))]);
     step(&mut state, &[(0, seen(0, true))]);
@@ -622,8 +621,10 @@ fn talk_started_discards_the_measurement_and_keeps_the_glyph_history() {
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
 }
 
-/// 占有終端が現在時刻より未来へ更新されたら満了予定を破棄し、新しい占有終端を起点に立て直す
-/// （選択肢のバリア解除後に cue が届く経路）。
+/// 占有終端が現在時刻より未来へ更新されたら満了予定を破棄し、新しい占有終端を起点に立て直す。
+///
+/// 信号の約束（`TalkEnded` の後に `DisplayEndAt` は届かない）に反した順をわざと流し、
+/// 約束破りへの備えが黙って延ばさず破棄することを確かめる。
 #[test]
 fn display_end_raised_into_the_future_discards_the_deadline() {
     let mut state = armed_state();

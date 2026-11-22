@@ -7,8 +7,8 @@
 //! 使わず**決定論的な ordinal 系列を再現する。actor ごとに注入の番号が変わったフレームでだけ `info!`
 //! （`RUST_LOG` grep サインオフ材料）。
 //!
-//! 使う口は [`TextLayerRuntime::inject_choice_hover`]／[`TextLayerRuntime::choice_active`]／
-//! [`TextLayerRuntime::choice_hit_rows`] だけ。`frame/scale_text.rs` の `run_text_phase` から present_frame の
+//! 使う口は actor の列挙（`runtime.state().actors()`）と [`TextLayerRuntime::inject_choice_hover`]／
+//! [`TextLayerRuntime::choice_active`]／[`TextLayerRuntime::choice_hit_rows`] だけ。`frame/scale_text.rs` の `run_text_phase` から present_frame の
 //! **後**に駆動され（`choice_active`／`choice_hit_rows` が当該フレームを反映する）、env が無効なら何もしない。
 //!
 //! # 純関数分割（決定論単体テスト）

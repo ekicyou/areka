@@ -127,7 +127,6 @@ impl TimeoutSource {
 
 /// 表示・非表示が起きた契機の種別（ログの `trigger` フィールド）。
 ///
-/// `content` / `clear` / `timeout` / `explicit` の 4 種に、利用者の中断 `user_break` を足した 5 種を持つ。
 /// [`VisibilityTrigger::Explicit`] 以外は判断中核が導き、`Explicit` だけは配線層が前フレームとの
 /// 差分から導く（判断中核は自分が発行していない遷移を知らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,9 +168,9 @@ impl VisibilityTrigger {
 /// 計測の手前で止まり、待ちが解けた後に残る選択肢の行は時間切れを止める理由にならない。
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SuppressionKinds {
-    /// いずれかのバルーン窓がドラッグ中。
+    /// いずれかのバルーン窓、または箱に文字が出ている scope のシェル窓がドラッグ中。
     dragging: bool,
-    /// いずれかの**可視**バルーンの上にポインタが滞在中。
+    /// いずれかの**可視**バルーンの窓の上、または出ている箱の上にポインタが滞在中。
     hover: bool,
 }
 
@@ -187,7 +186,7 @@ impl SuppressionKinds {
 enum MeasurementDiscardReason {
     /// 次の会話が始まった。
     TalkStarted,
-    /// 占有終端が現在時刻より未来へ更新された（選択肢バリア解除後の cue 到着）。
+    /// 占有終端が現在時刻より未来へ更新された（トークの終わりの後に占有終端が届く、信号の約束に反した順への備え）。
     DisplayEndAdvanced,
     /// 可視のバルーンが 1 つも無くなった（消す対象が無い）。
     NoVisibleScope,
@@ -341,8 +340,8 @@ pub struct ScopeObservation {
     visible_glyphs: Option<GlyphObservation>,
     /// 現に可視か（本番では `EmoPresenter::target_visible`）。判断の真実源。
     visible: bool,
-    /// この scope のバルーンの上にポインタが滞在しているか（本番では
-    /// `BalloonHover::is_balloon_hovered`）。
+    /// この scope のバルーンの窓の上、または出ている箱の上にポインタが滞在しているか（本番では
+    /// `BalloonHover::is_balloon_hovered` と箱の上の滞在を合わせたもの）。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番ではポインタ配線そのものの不在）。
     /// その場合は抑止しない側として扱う（消えないまま固着する側へ倒さない）。
@@ -369,9 +368,9 @@ struct VisibilityObservations {
     /// 受け取った信号が計測へ及ぼす作用（会話開始での破棄・占有終端の更新）は判断であり、
     /// ここで扱う。
     lifecycle: Vec<TalkLifecycleSignal>,
-    /// いずれかのバルーン窓がドラッグ中か。
+    /// いずれかのバルーン窓、または箱に文字が出ている scope のシェル窓がドラッグ中か。
     ///
-    /// 本番の観測は world の問い合わせ（ドラッグ標識つきバルーン窓の有無）であり、失敗しうる
+    /// 本番の観測は world の問い合わせ（ドラッグ標識つきの窓の有無）であり、失敗しうる
     /// 借用や不在の資源を経由しないため、`hover` と違って「観測できない」
     /// 状態を持たない。
     dragging: bool,

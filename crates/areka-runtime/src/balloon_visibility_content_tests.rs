@@ -359,7 +359,7 @@ fn a_clear_between_frames_shows_the_same_glyph_count_again() {
             vec![show(0)]
         );
         step(&mut state, &[(0, seen(3, false))]);
-        assert!(!state.per_scope[&0].prev_visible, "前提: 隠れていない");
+        assert!(!state.per_scope[&0].prev_visible, "前提: 外から隠れている");
         state
     };
 

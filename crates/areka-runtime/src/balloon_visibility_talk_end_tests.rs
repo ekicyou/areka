@@ -286,7 +286,7 @@ fn never_given_last_keeps_the_balloon_and_raises_no_notice() {
     }
 }
 
-/// 抑止が解けた後の計り直しは、そのトークで差し替えた待ち時間を使う（既定の 30 秒ではない）。
+/// 抑止が解けた後の計り直しは、そのトークで差し替えた待ち時間を使う（既定の待ち時間ではない）。
 /// 抑止の間は知らせが立たず、解けて隠れたフレームに立つ。
 #[test]
 fn restart_after_suppression_uses_the_talk_timeout() {
@@ -398,11 +398,7 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     assert_eq!(
         expired.logs,
         vec![
-            VisibilityLogEvent::Transition {
-                scope: 0,
-                trigger: VisibilityTrigger::Timeout,
-                visible: false,
-            },
+            hidden_log(0, VisibilityTrigger::Timeout),
             VisibilityLogEvent::TimeoutNoticeWithoutTalkId,
         ]
     );
