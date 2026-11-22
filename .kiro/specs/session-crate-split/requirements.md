@@ -18,7 +18,7 @@
 
 受益者は areka の開発者であり、この仕様での「目に見える成果」は次のとおり開発者の側から定める。
 
-- 集めた層の本番とテストが新しい crate にあり、本体はそれを依存として使っている。集めた層のテストは本体と別の実行ファイルで走る。
+- 集めた層の本番とテストが新しい crate にあり、本体はそれを依存として使っている。`areka-session` に置くテストは本体と別の実行ファイルで走る（本体の本物どうしをつなぐテストは要件 5 のとおり本体に残る）。
 - `areka-session` は本体を参照しない。終えた後の依存の向きは `areka`（bin）→ `areka-session` → `areka-input` → `areka-runtime` → `areka-placement` の一方向。
 - 動く ukagaka のアプリとしての振る舞い（起動・切替・読み直し・終わり方・メニュー・投げ込み・インストールと更新の机・告知・ログの中身〔出所の名前を除く〕・MCP の `get_log` の分け方）が前と同じである。呼ぶ順も、1 フレームの中での呼ぶ時も変わらない。
 - テストの数・警告・全体テスト・実機テストが、移す前と同じ合否を示す。
@@ -120,7 +120,7 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall 本体だけの項目を引く集めた層のテストのファイル（2026-11-22 の測りで 21 本＝research.md 14.4 の 19 本と、根の関数を引く `session_end_tests.rs`・`boot_config_module_policy_tests.rs`。加えて `boot_config.rs` の `#[cfg(test)]` の口 `resolve_boot_from` が `crate::cli::parse::parse` を引く）を 1 本ずつ、`areka-session` に置くか本体に残すかを決め、どちらにしたかとその理由を記録する。
+1. The 分割作業 shall 本体だけの項目を引く集めた層のテストのファイル（2026-11-22 の測りで 21 本＝research.md 14.4 の 19 本と、根の関数を引く `session_end_tests.rs`・`boot_config_module_policy_tests.rs`。加えて `boot_config.rs` の `#[cfg(test)]` の口 `resolve_boot_from` が `crate::cli::parse::parse` を引き、それを使う session のテスト 6 本＝`boot_config_{balloon,copy,input,option,roots,callghost}_tests.rs`）を 1 本ずつ、`areka-session` に置くか本体に残すかを決め、どちらにしたかとその理由を記録する。
 2. The 分割作業 shall 本体の部品の振る舞いを確かめているテスト（menu・install・update・mcp の本物の結果を見るもの）を、本体の部品を偽物に替えて中身を変えることはせず、本体に残す。
 3. The 分割作業 shall 根の関数（`after_run`・`finish_after_run`・`boot_first_ghost`・`install_boot_context`）を引くテスト 7 本（`session_end_tests.rs`・`ghost_session_switch_fallback_tests.rs`・`ghost_session_switch_memory_tests.rs`・`readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs`・`boot_config_module_policy_tests.rs`）を、結線の守りとして本体に残す。
 4. Where 集めた層のテストが `crate::BODY_SYSTEMS` を渡している場合（5 か所＝`app_exit_escape_tests.rs:140`・`ghost_session_reload_tests.rs:71・179`・`ghost_session_restart_tests.rs:455`・`ghost_switch_test_support.rs:237`）, the 分割作業 shall `ghost_switch_test_support.rs` の `SwitchRig` を通るテスト（2026-11-22 の測りで、session の 32 ファイルと本体の install・mcp・update・`runtime_tests/`・`main_session_mark*` の 17 ファイル）が、前と同じ系の登録で走るようにする。（**仮定**: `SwitchRig` は系の登録の組を呼び手から受け、session の中のテストは逆にした口の偽物の組を、本体のテストは本物の `BODY_SYSTEMS` を渡す形を推す。どのテストが本物の組を要るかは 1 本ずつ決め、5.1 の記録に入れる。）
@@ -132,7 +132,7 @@
 10. The `areka-session` クレートのテストの実行ファイル shall テストを走らせる前にプロセスの寿命の MTA を立て、テストの途中で落ちたときに、本体と同じ形の落ちの報告を標準エラーへ出す。落ちの報告は `crash-report-kit` を使い、新しい写しを作らない。
 11. The `areka-session` クレートのテストの実行ファイル shall テストの数え方（`cargo test --workspace -- --list`）で拾われ、全体テストの道具 `tools/test-all.ps1` を直さずに走る。
 12. The 分割作業 shall 揺れるテストを繰り返す道具 `tools/load-flake.ps1` の `-Binary` に `areka-session-lib`（`-p areka-session --lib`）を足し（選べる値の一覧・切り替え・自分の検査の表と説明）、道具の自分の検査を緑のまま保つ。（**仮定**: `input-crate-split` の要件の討議 議題 3 の前例にそろえる。brief の Scope には書かれていないので、足すかは要件の討議で確かめる。）
-13. The 分割作業 shall ソースを読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`・`crate_path`・`crate_source!` で読むもの。`runtime_tests/zorder_wiring_tests.rs` の 33・68 行・`readonly_tests.rs`・`session_end_deadline_tests.rs`・`session_end_sync_send_tests.rs`・`readme_tests.rs`・`log_history_convention_tests.rs`・`boot_shell_tests.rs` ほか）を、移した後も前と同じファイルの集まりを読む形に付け替え、見る範囲を狭めない。
+13. The 分割作業 shall ソースを読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`・`crate_path`・`crate_source!` で読むもの。`runtime_tests/zorder_wiring_tests.rs` の 33・68 行・`readonly_tests.rs`・`session_end_deadline_tests.rs`・`session_end_sync_send_tests.rs`・`readme_tests.rs`・`log_history_convention_tests.rs`・`boot_shell_tests.rs` ほか）を、移した後も前と同じファイルの集まりを読む形に付け替え、見る範囲を狭めない。ソースを読むテストは依存の向きで自分より下の crate だけを読む（`crate_source_test_support` の決まり）ので、本体のソース（`main.rs` ほか）を読む見張りは本体に置き、歩く根の並びに `areka-session` を足す。
 14. When 受け口の列の書き方が向きの逆転で変わるとき, the 分割作業 shall `runtime_tests/zorder_wiring_tests.rs` の `t_zwi05` が押さえる受け口の列の字面を新しい書き方に合わせ、13 個の受け口が前と同じ順に並ぶことを押さえ続ける。
 
 ### Requirement 6: ログの出所の名前
