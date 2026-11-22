@@ -201,14 +201,14 @@
   - _Dispatch: mechanical — 寄せ先を設計が名指す_
   - _Requirements: 3.1, 6.11_
 
-- [ ] 14. ほかのテストの写しを上流の支えへ寄せる（G14）
+- [x] 14. ほかのテストの写しを上流の支えへ寄せる（G14）
 - [x] 14.1 起動の文脈の補助と本体の結線のテストの写しを上流へ寄せる（S1・指摘 35・36・5.5・5.8・5.9）
   - 12.1 で足した `boot_context_named` を使い、`menu/ghost_frame_tests.rs:43` の写しの本体を `boot_context_named(root.dir(), root, current, "StayseeBalloon")` の 1 行に
   - `runtime_tests/spine.rs` の `capture_logs` を上流の use に、`make_world_with_gpu` を `gpu_on` の後に `AppExit` を据える 3 行に、119 行の理由を消す。`runtime_tests/frame/switch_finish_tests.rs:60-61` の `SharedFakeIo` の写しを上流へ
   - 完了の姿: `menu/`・`runtime_tests/` の既存のテスト（GPU は実 GPU）が同じ表明のまま緑で、`cargo test -p areka-session` も緑
   - _Dispatch: mechanical — 関数の形と寄せ先を設計が与える_
   - _Requirements: 3.1, 4.6, 5.5, 5.8, 5.9, 7.1, 7.2_
-- [ ] 14.2 読み直しの結線・png の一時フォルダ・記録の種別のテストを寄せる（指摘 40・42・S5・S6）
+- [x] 14.2 読み直しの結線・png の一時フォルダ・記録の種別のテストを寄せる（指摘 40・42・S5・S6）
   - `reload_skin_tests.rs` の `headless_wiring`（52-79）を `areka_runtime::frame::shared_test_support::wiring().1` を据える 1 行に
   - `png_image_tests.rs` の自前の `TargetTemp` を `TempPath::new("png-wic")` に、`wic_decode_rgba` を `pub(crate)` に、`png_image.rs` の mod 行を `#[cfg(test)] pub(crate) mod tests;` に、219 行の要件の番号を消す
   - `log_history_tests.rs` に、kanade の script の記録が下書きで script 種別になることを見る 1 本を足し、643 のテスト名を中身の名に

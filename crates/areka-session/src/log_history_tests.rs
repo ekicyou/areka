@@ -331,6 +331,46 @@ fn unclassified_event_has_no_draft() {
 }
 
 #[test]
+fn kanade_emit_with_three_labels_drafts_as_script_records() {
+    use areka_kanade::script_log::{PLAIN_LABEL, SSTP_SEND_LABEL, emit, event_label};
+    let ghost = "Emily/Phase4.5";
+    let on_boot = event_label("OnBoot");
+    let cases = [
+        (SSTP_SEND_LABEL, r"\0\s[0]hello\e"),
+        (on_boot.as_str(), r"\0おはよう\e"),
+        (PLAIN_LABEL, r"\1選んだ\e"),
+    ];
+    let ((), events) = log_capture_kit::capture(|| {
+        for (label, script) in cases {
+            emit(ghost, label, script);
+        }
+    });
+    let drafts: Vec<Draft> = events
+        .iter()
+        .map(|ev| {
+            let fields = ev.fields.iter().map(|(name, v)| FieldText {
+                name,
+                debug: &v.debug,
+                raw: v.str_raw.as_deref(),
+            });
+            draft(ev.level, &ev.target, fields)
+                .unwrap_or_else(|| panic!("種別に当たらない: {ev:?}"))
+        })
+        .collect();
+    assert_eq!(drafts.len(), cases.len(), "捕捉した出来事: {events:?}");
+    assert_eq!(
+        cases.map(|(l, _)| l),
+        ["SSTP(Local,Auth)", "Ghost:OnBoot", "Ghost"]
+    );
+    for (d, (label, script)) in drafts.iter().zip(cases) {
+        assert_eq!(
+            (d.kind, d.name.as_str(), d.label.as_str(), d.body.as_str()),
+            (Kind::Script, ghost, label, script)
+        );
+    }
+}
+
+#[test]
 fn convention_rows_read_ghost_and_label_four_ways() {
     for target in [TARGET_SCRIPT, TARGET_ERROR] {
         let kind = classify(Level::INFO, target).unwrap();
@@ -640,7 +680,7 @@ fn unclassified_event_does_not_advance_the_id() {
 }
 
 #[test]
-fn moved_modules_keep_their_kinds_by_real_module_path() {
+fn module_paths_of_session_types_classify_to_expected_kinds() {
     fn module_of<T>() -> &'static str {
         let name = std::any::type_name::<T>();
         &name[..name.rfind("::").unwrap()]

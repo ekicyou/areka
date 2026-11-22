@@ -6,22 +6,15 @@
 //! 口の束（`hooks.rs`）を通って届く）。名前と readme とシェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
 //! 判定は集めてから 1 回。
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_emo_compose::BindSet;
-use areka_emo_present::EmoPresenter;
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::BasewareRoot;
 use areka_kanade::KanadeMsg;
 use areka_seriko::{
-    AnimationTable, BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
-    spawn_seriko,
+    BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver, spawn_seriko,
 };
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -35,10 +28,7 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute};
 use crate::ghost_session::GhostSession;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::readme::ReadmeWiring;
-use areka_runtime::assets::{BootAssets, LoopTables};
-use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::reload_args::DescriptParts;
-use areka_runtime::talk_clock::TalkClock;
 
 struct Rig {
     world: World,
@@ -46,36 +36,6 @@ struct Rig {
     root: BasewareRoot,
     ghost: String,
     _temp: TempPath,
-}
-
-/// 窓も GPU も持たない結線（入口は有無だけを見る）。
-fn headless_wiring() -> RuntimeWiring {
-    RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        mpsc::channel().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        TalkClock::new(Arc::new(|| 0.0)),
-        BootAssets {
-            shells: Vec::new(),
-            balloons: Vec::new(),
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            static_binds: areka_seriko::DefaultBinds::uniform(BindSet::default()),
-            bind_resolver: BindResolver::empty(),
-            loop_tables: LoopTables {
-                shell: AnimationTable::empty(),
-                balloon: BTreeMap::new(),
-            },
-            shell_author_dpi: 96,
-            balloon_author_dpi: 96,
-            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
-        },
-    )
 }
 
 /// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`）・置き場・結線・窓口の登録をそろえた World。
@@ -97,7 +57,7 @@ fn rig(label: &str) -> Rig {
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(Some(tx), root.ghost_dir("A")).with_seriko_sink(seriko),
     )));
-    world.insert_non_send(headless_wiring());
+    world.insert_non_send(areka_runtime::frame::shared_test_support::wiring().1);
     register(&mut world);
     let ghost = std::path::absolute(root.ghost_dir("A"))
         .unwrap()
