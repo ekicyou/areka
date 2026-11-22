@@ -247,10 +247,11 @@ pub fn scale_author_offset(raw: (i32, i32), k: ScaleRatio) -> (ScaledAxis, Scale
 ///
 /// 値は [`scale_signed`]（既存の単一権威）が出す。飽和の判定だけを本層が足す——
 /// `scale_len` は `u32` 域で答えるので、物理 px 通貨（`i32`）へ収まらなかったことは
-/// 同じ権威の出力を `i32` の上限と比べて判る。**新しい丸めは 1 つも導入しない。**
+/// 同じ権威の出力に符号を戻した答えが `i32` へ収まるかで判る。**新しい丸めは 1 つも導入しない。**
 fn scale_axis(v: i32, k: ScaleRatio) -> ScaledAxis {
+    let m = i64::from(k.scale_len(v.unsigned_abs()));
     ScaledAxis {
         value: scale_signed(v, k),
-        saturated: k.scale_len(v.unsigned_abs()) > i32::MAX as u32,
+        saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),
     }
 }

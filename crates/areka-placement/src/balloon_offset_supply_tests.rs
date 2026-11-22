@@ -79,32 +79,21 @@ fn identity_scale_is_byte_identical_to_the_raw_value() {
     }
 }
 
-/// **拡大率 1 では生値が素通しになる、という原則の唯一の例外**。
+/// 拡大率 1 では `i32` の全域（`i32::MIN` も）が生値のまま素通しになる。
 ///
-/// 恒等比でも `i32::MIN` だけは生値が素通しにならず `-i32::MAX` へ飽和する。出所は
-/// 既存の単一丸め権威 `scale_signed`（`v.unsigned_abs()` が `2^31` になり `i32` へ
-/// 収まらない）であり、`windowposition` 由来の調整量は**今日すでに同じ挙動**である。
-/// 回り込みは起きず、飽和は値としても警告としても報告されるため製品欠陥ではない。
-///
-/// ゆえに作者が書ける生値の実質的な受理範囲は `i32::MIN + 1 ..= i32::MAX` である
-/// ——この 1 点が黙って別の値（回り込み等）へ変わらないよう本檻が固定する。
-/// 純関数側の対は `follow_offset_space_tests.rs` の
-/// `supply_identity_saturates_only_at_i32_min`。
+/// `i32::MIN` の大きさ `2^31` は `i32` へ収まらないが、符号を戻した答えは収まるので
+/// 飽和しない。純関数側の対は `follow_offset_space_tests.rs` の
+/// `supply_identity_passes_through_the_whole_range`。
 #[test]
-fn identity_scale_saturates_only_at_i32_min() {
-    assert_eq!(
-        scaled(Some((i32::MIN, 5)), ScaleRatio::ONE),
-        Some((-i32::MAX, 5))
-    );
-    assert_eq!(
-        scaled(Some((5, i32::MIN)), ScaleRatio::ONE),
-        Some((5, -i32::MAX))
-    );
-    // 隣の値（`i32::MIN + 1`）は素通しする＝例外はちょうど 1 点だけである。
-    assert_eq!(
-        scaled(Some((i32::MIN + 1, 0)), ScaleRatio::ONE),
-        Some((i32::MIN + 1, 0))
-    );
+fn identity_scale_passes_through_the_whole_range() {
+    for raw in [
+        (i32::MIN, 5),
+        (5, i32::MIN),
+        (i32::MIN + 1, 0),
+        (i32::MIN, i32::MAX),
+    ] {
+        assert_eq!(scaled(Some(raw), ScaleRatio::ONE), Some(raw), "raw={raw:?}");
+    }
 }
 
 // -------------------------------------------------------------------------
