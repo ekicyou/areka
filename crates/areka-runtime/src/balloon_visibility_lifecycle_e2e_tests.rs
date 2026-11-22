@@ -27,9 +27,8 @@ use dola::cue::{CueCommand, CuePlayer, TalkCue};
 use wintf::ecs::FrameTime;
 
 use crate::balloon_hover::BalloonHover;
-use crate::frame::RuntimeWiring;
+use crate::frame::shared_test_support::wiring_with;
 use crate::frame::test_support::synth_assets;
-use crate::move_cue::PositionCue;
 use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
@@ -63,16 +62,9 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         let wall = std::sync::Arc::clone(&wall);
         std::sync::Arc::new(move || *wall.lock().expect("時計の錠"))
     });
-    let mut wiring = RuntimeWiring::new(
-        EmoPresenter::new(),
-        mpsc::channel().1,
-        mpsc::channel::<PositionCue>().1,
-        lifecycle_rx,
-        mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-        Rc::clone(&runtime),
-        clock,
-        synth_assets(&[]),
-    );
+    let mut wiring = wiring_with(synth_assets(&[]), Rc::clone(&runtime), EmoPresenter::new());
+    wiring.lifecycle_rx = lifecycle_rx;
+    wiring.clock = clock;
     wiring
         .balloon_models
         .insert(0, areka_parsers::balloon::parse_str("", None));

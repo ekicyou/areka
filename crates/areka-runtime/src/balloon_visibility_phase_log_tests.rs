@@ -164,12 +164,30 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
             deadline: 34.0,
         },
         VisibilityLogEvent::DisplayEndSignalMissing,
+        VisibilityLogEvent::Transition {
+            scope: 0,
+            trigger: VisibilityTrigger::Timeout,
+            visible: false,
+        },
+        VisibilityLogEvent::Transition {
+            scope: 1,
+            trigger: VisibilityTrigger::UserBreak,
+            visible: false,
+        },
+        VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::DisplayEndAdvanced,
+            deadline: 34.0,
+        },
+        VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::NoVisibleScope,
+            deadline: 34.0,
+        },
     ];
 
     let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
 
     let lines = visibility_lines(&events);
-    assert_eq!(lines.len(), 7, "事象 1 件につき 1 行: {events:?}");
+    assert_eq!(lines.len(), 11, "事象 1 件につき 1 行: {events:?}");
 
     assert_eq!(lines[0].level, Level::INFO);
     assert_eq!(lines[0].expect_field("scope"), "1");
@@ -197,6 +215,11 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
         Level::WARN,
         "表示終了信号の欠落は縮退（表示は保持する）"
     );
+
+    assert_eq!(lines[7].expect_field("trigger"), "\"timeout\"");
+    assert_eq!(lines[8].expect_field("trigger"), "\"user_break\"");
+    assert_eq!(lines[9].expect_field("reason"), "\"display_end_advanced\"");
+    assert_eq!(lines[10].expect_field("reason"), "\"no_visible_scope\"");
 }
 
 /// 発行が実らなかった scope の「表示へ遷移した」は名乗らない（起きていない遷移を記録しない）。

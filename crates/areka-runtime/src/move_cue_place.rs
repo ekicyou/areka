@@ -68,7 +68,9 @@ fn resolve_frame(
             Some(rect) => Ok(window_frame(rect)),
             None => {
                 // 基準の窓が無い → screen へ倒す。
-                notes.push(FrameNote::MissingBaseScope { scope: n });
+                if directive.x != AxisSpec::Fix || directive.y != AxisSpec::Fix {
+                    notes.push(FrameNote::MissingBaseScope { scope: n });
+                }
                 screen_frame(world, target)
             }
         },
@@ -89,7 +91,7 @@ fn log_substitutions(scope: u32, notes: &[FrameNote]) {
             event = "move_frame_substituted",
             scope,
             ?note,
-            "\\![move] の基準を置き換えて動かす"
+            "\\![move] の基準を置き換えた"
         );
     }
 }

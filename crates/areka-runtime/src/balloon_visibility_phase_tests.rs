@@ -16,7 +16,6 @@
 // そのまま通る。
 // =============================================================================
 
-use std::sync::Arc;
 use std::sync::mpsc::{self, Sender};
 
 use areka_emo_atlas::AtlasTable;
@@ -28,7 +27,8 @@ use tracing::Level;
 use super::super::ScopeVisibility;
 use super::test_support::{attach_headless, runtime, visibility_lines, world_at};
 use super::*;
-use crate::talk_clock::TalkClock;
+use crate::frame::shared_test_support::wiring_with;
+use crate::frame::test_support::synth_assets;
 
 // ---------------------------------------------------------------------------
 // 檻の組み立て
@@ -51,16 +51,8 @@ impl Harness {
         // 決まるため、檻の組み立て時＝捕捉窓の外で先に確定させておく。
         let _ = super::super::configured_timeout_secs();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-        let wiring = RuntimeWiring::new(
-            EmoPresenter::new(),
-            mpsc::channel().1,
-            mpsc::channel().1,
-            lifecycle_rx,
-            mpsc::channel::<crate::zorder_cue::ZOrderDirective>().1,
-            runtime(),
-            TalkClock::new(Arc::new(|| 0.0)),
-            crate::frame::test_support::synth_assets(&[]),
-        );
+        let mut wiring = wiring_with(synth_assets(&[]), runtime(), EmoPresenter::new());
+        wiring.lifecycle_rx = lifecycle_rx;
         Harness {
             wiring,
             lifecycle_tx: Some(lifecycle_tx),
@@ -101,7 +93,7 @@ impl Harness {
     }
 }
 
-/// scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻 `t` で `len` 文字が可視になる）。
+/// scope へ可視グリフを流し込む（`at=0.0` から 1 文字 0.25 秒で `text` を見せる）。
 fn reveal_text(harness: &Harness, scope: u32, text: &str) {
     harness.wiring.runtime().borrow_mut().apply_cue(&TalkCue {
         at: 0.0,

@@ -311,13 +311,14 @@ mod tests {
             Some(2), // 商7
         ];
         for (q, want) in expected.iter().enumerate() {
-            // 周期内の任意点で同一（商が同じ）: 中央 +0.5 でも境界と同じ結果になることも確認。
-            let t = q as f64 + 0.5;
-            assert_eq!(
-                cycle_ordinal(t, period, count),
-                *want,
-                "frame_time={t} 商={q} の注入 ordinal"
-            );
+            // 周期内の任意点で同一（商が同じ）: 境界と中央 +0.5 の両方で確かめる。
+            for t in [q as f64, q as f64 + 0.5] {
+                assert_eq!(
+                    cycle_ordinal(t, period, count),
+                    *want,
+                    "frame_time={t} 商={q} の注入 ordinal"
+                );
+            }
         }
     }
 

@@ -137,14 +137,7 @@ fn apply_non_scope_base_moves() {
         }],
     });
     let target = gw.char_window(1).unwrap();
-    let directive = parse_move_directive(
-        1,
-        &["-353", "", "", "screen", "base", "base"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>(),
-    )
-    .directive;
+    let directive = directive_for_scope1(&["-353", "", "", "screen", "base", "base"]);
     assert_eq!(directive.base, MoveBase::Screen);
 
     assert!(

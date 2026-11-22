@@ -250,19 +250,18 @@ fn prev_visible_reflects_the_transitions_this_frame_issued() {
     );
 }
 
-/// 会話単位の状態は、時刻を与えないフレームでは静止したまま（タイムアウトの評価が
-/// 現在時刻の不明なフレームで動き出さない）。
+/// 時刻を与えないフレームでは、トークの終わりが届いて見えているバルーンがあっても計測は
+/// 立たない（タイムアウトの評価が現在時刻の不明なフレームで動き出さない）。
 #[test]
 fn conversation_scoped_state_is_untouched_by_frames_without_time() {
     let mut state = BalloonVisibilityState::default();
-    step(&mut state, &[(0, seen(3, false))]);
-    step(&mut state, &[(0, seen(0, true))]);
+    Frame::new(&[(0, seen(3, false))])
+        .talk_started()
+        .ended_at(0.0)
+        .run(&mut state);
+    step(&mut state, &[(0, seen(3, true))]);
 
-    assert_eq!(state.display_end, None);
     assert_eq!(state.deadline, None);
-    assert!(!state.prev_suppressed);
-    assert!(!state.suppress_logged);
-    assert!(!state.signal_gap_warned);
 }
 
 // ---------------------------------------------------------------------------

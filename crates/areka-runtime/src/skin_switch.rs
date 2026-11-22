@@ -62,7 +62,7 @@ pub struct SkinRequest {
     pub origin: SkinOrigin,
 }
 
-/// 入口の判定（受理以外はどれも `warn!` を 1 件残して何もしない）。
+/// 入口の判定（受理以外は記録を 1 件残して何もしない（送れなかった回だけ `error!`、ほかは `warn!`））。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkinVerdict {
     Accepted,

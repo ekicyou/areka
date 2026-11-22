@@ -201,6 +201,7 @@ fn substitutions_are_logged_one_by_one() {
             &["GlobalOffsetIgnored"],
         ),
         (&["--base=0", "--X=10", "--Y=20"], &[]),
+        (&["--base=5"], &[]),
     ];
     for &(script, want) in cases {
         let (mut world, _gw) = world_with(Anchor::Free);

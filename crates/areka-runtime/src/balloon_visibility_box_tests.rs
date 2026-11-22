@@ -55,7 +55,7 @@ fn user_break_targets_scopes_showing_only_boxes() {
 }
 
 /// 中断と次の台詞の始まりが同じ巡に届いたら、掛け金は解けているので箱へは届かない
-/// （箱の文字は新しい台詞のもの）。
+/// （箱の文字は新しい台詞のもの）。窓の隠れている箱だけの scope は、隠すものが無いので載せない。
 #[test]
 fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
     let mut state = BalloonVisibilityState::default();
@@ -63,10 +63,8 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
         .signal(TalkLifecycleSignal::UserBreak)
         .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
         .run(&mut state);
-    assert_eq!(
-        decision.actions,
-        vec![hide(&[1], VisibilityTrigger::UserBreak)]
-    );
+    assert!(decision.actions.is_empty(), "{:?}", decision.actions);
+    assert!(decision.logs.is_empty(), "{:?}", decision.logs);
     assert!(!hide_reaches_boxes(
         VisibilityTrigger::UserBreak,
         state.break_latch
@@ -208,10 +206,7 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
         .ended_at(0.0)
         .at(0.0)
         .run(&mut state);
-    assert_eq!(
-        decision.actions,
-        vec![hide(&[1], VisibilityTrigger::UserBreak)]
-    );
+    assert!(decision.actions.is_empty(), "{:?}", decision.actions);
     assert!(
         decision
             .logs
