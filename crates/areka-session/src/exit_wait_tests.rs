@@ -13,9 +13,10 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
 use super::*;
+use crate::boot_resolve::boot_resolve_tests::events_named;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -36,13 +37,6 @@ fn spent_budget() -> WaitBudget {
         started: Instant::now() - EXIT_WAIT_LIMIT,
         limit: EXIT_WAIT_LIMIT,
     }
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 // ---------------------------------------------------------------- 書いていない仕事

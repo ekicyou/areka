@@ -207,25 +207,10 @@ fn session_mark_verdict_table() {
 fn settle_session_mark_applies_the_verdict() {
     let tmp = TempPath::new("mark-settle");
     let mut outcomes = Vec::new();
-    for (argv_session, first, level, event) in [
-        (
-            false,
-            Some(ExitOrigin::Smoke),
-            tracing::Level::INFO,
-            "session_mark_cleared",
-        ),
-        (
-            false,
-            Some(kanade_fault()),
-            tracing::Level::INFO,
-            "session_mark_kept",
-        ),
-        (
-            true,
-            Some(ExitOrigin::Smoke),
-            tracing::Level::DEBUG,
-            "session_mark_untouched_argv",
-        ),
+    for (argv_session, first, event) in [
+        (false, Some(ExitOrigin::Smoke), "session_mark_cleared"),
+        (false, Some(kanade_fault()), "session_mark_kept"),
+        (true, Some(ExitOrigin::Smoke), "session_mark_untouched_argv"),
     ] {
         let app_profile_dir = tmp.child(event);
         let _ = write_session_mark(&app_profile_dir, "A");
@@ -236,10 +221,7 @@ fn settle_session_mark_applies_the_verdict() {
             logsink_fallback: false,
         };
         let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)).0);
-        let logged = events
-            .iter()
-            .filter(|e| e.level == level && e.field_str("event") == Some(event))
-            .count();
+        let logged = crate::session_end::test_support::levels_of(&events, event);
         let reason = events
             .iter()
             .find(|e| e.field_str("event") == Some("session_mark_kept"))
@@ -249,16 +231,21 @@ fn settle_session_mark_applies_the_verdict() {
     assert_eq!(
         outcomes,
         vec![
-            (MarkVerdict::Clear, 1, None, None),
+            (MarkVerdict::Clear, vec![tracing::Level::INFO], None, None),
             (
                 MarkVerdict::Keep("fault"),
-                1,
+                vec![tracing::Level::INFO],
                 Some("fault".to_owned()),
                 Some("A".to_owned())
             ),
-            (MarkVerdict::Untouched, 1, None, Some("A".to_owned())),
+            (
+                MarkVerdict::Untouched,
+                vec![tracing::Level::DEBUG],
+                None,
+                Some("A".to_owned())
+            ),
         ],
-        "判定の始末が崩れた（判定・記録の件数・残す理由・印）"
+        "判定の始末が崩れた（判定・記録の水準の並び・残す理由・印）"
     );
 }
 
@@ -286,10 +273,7 @@ fn clear_mark_unwritable_tells_running_once() {
     let (told, events) = log_capture_kit::capture(|| {
         crate::write_failure::tell_at_close(None, Some(failed), None, true)
     });
-    let alerts: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("alert"))
-        .collect();
+    let alerts = crate::boot_resolve::boot_resolve_tests::events_named(&events, "alert");
     assert_eq!(
         (told.is_err(), alerts.len()),
         (true, 1),

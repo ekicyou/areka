@@ -689,7 +689,7 @@ fn notes_log_one_event_each_with_cli_prefix() {
     }
 }
 
-/// 実走の 3 本と同じ形（絶対パス 2 つ）は位置の引数だけになり、記録の材料はまとめ 1 件だけ。
+/// 実機の走行のテストが渡す形（絶対パス 2 つ）は位置の引数だけになり、記録の材料はまとめ 1 件だけ。
 #[test]
 fn real_run_shape_is_positional_only() {
     let ghost = r"C:\g\emo2";

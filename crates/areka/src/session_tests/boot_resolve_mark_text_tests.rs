@@ -13,20 +13,12 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::{FrameTime, Update};
 
-use super::{publisher_of, routes, unwritable, writable};
+use super::{events_named, publisher_of, routes, unwritable, writable};
 use crate::sample_test_support::switch_rig;
 use areka_session::app_exit::FirstExit;
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::*;
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
-
-/// `event` の記録（`event` 欄で引く）。
-fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
 
 /// `event` の記録がちょうど 1 件あり、その文を返す。
 fn one_message(events: &[CapturedEvent], event: &str) -> String {

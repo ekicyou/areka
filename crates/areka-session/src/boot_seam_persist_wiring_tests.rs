@@ -123,11 +123,7 @@ fn last_used_is_deferred_only_for_the_switch_route() {
         );
         parts.publisher.close();
         join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
-        let deferred = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("last_used_deferred"))
-            .map(|e| e.level)
-            .collect::<Vec<_>>();
+        let deferred = crate::session_end::test_support::levels_of(&events, "last_used_deferred");
         (
             app.contains(&(PersistKey::LastGhost, "B".to_owned())),
             ghost_scope.contains(&(PersistKey::LastShell, "master".to_owned())),

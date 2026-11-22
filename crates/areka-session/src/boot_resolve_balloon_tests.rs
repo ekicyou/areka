@@ -11,7 +11,7 @@ use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{BalloonEntry, Identity};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::boot_resolve_tests::no_pick;
+use super::boot_resolve_tests::{events_named, no_pick};
 use super::*;
 
 // ---------------------------------------------------------------- 道具立て
@@ -72,17 +72,10 @@ fn at(root: &BasewareRoot, route: BalloonRoute, folder: &str) -> BalloonDecision
     }
 }
 
-fn hits<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 /// `descript_balloon_not_found` の (key, value) の列（出た順）。どれも warn で置き場を載せる。
 fn descript_misses(root: &BasewareRoot, events: &[CapturedEvent]) -> Vec<(String, String)> {
     let store = root.balloon_store().display().to_string();
-    hits(events, "descript_balloon_not_found")
+    events_named(events, "descript_balloon_not_found")
         .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::WARN, "{e:?}");
@@ -213,7 +206,7 @@ fn memory_missing_falls_to_descript() {
     };
     let (got, events) = chain(&root, given, &all_hit(&root), no_pick);
     assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "by_name")));
-    let memory = hits(&events, "last_balloon_not_found");
+    let memory = events_named(&events, "last_balloon_not_found");
     assert_eq!(memory.len(), 1, "{events:?}");
     assert_eq!(memory[0].level, tracing::Level::WARN);
     assert_eq!(memory[0].field_str("memory"), Some("gone"));
@@ -274,7 +267,7 @@ fn companion_first_missing_goes_to_default_not_second() {
         got,
         Ok(at(&root, BalloonRoute::Default, DEFAULT_BALLOON_FOLDER))
     );
-    let companion = hits(&events, "companion_balloon_not_found");
+    let companion = events_named(&events, "companion_balloon_not_found");
     assert_eq!(companion.len(), 1, "{events:?}");
     assert_eq!(companion[0].field_str("companion"), Some("claudia"));
     assert_eq!(events.len(), 1, "{events:?}");
@@ -304,7 +297,7 @@ fn companion_with_separator_is_not_rewritten() {
             got,
             Ok(at(&root, BalloonRoute::Default, DEFAULT_BALLOON_FOLDER))
         );
-        let companion = hits(&events, "companion_balloon_not_found");
+        let companion = events_named(&events, "companion_balloon_not_found");
         assert_eq!(companion.len(), 1, "{events:?}");
         assert_eq!(companion[0].field_str("companion"), Some(value));
         assert_eq!(events.len(), 1, "{events:?}");

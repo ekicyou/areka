@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use super::*;
+use crate::boot_resolve::boot_resolve_tests::count_event;
 
 #[test]
 fn flag_is_off_and_install_adds_nothing_in_the_test_process() {
@@ -74,10 +75,7 @@ fn boot_check_passes_readonly_without_touching_the_tree() {
         log_capture_kit::capture(|| crate::write_failure::check_boot(true, &cfg, &app));
 
     assert!(result.is_ok(), "{result:?}");
-    let skipped = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_boot_check_skipped"))
-        .count();
+    let skipped = count_event(&events, "readonly_boot_check_skipped");
     assert_eq!(skipped, 1, "{events:?}");
     assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
 }
@@ -130,10 +128,7 @@ fn copy_is_withheld_and_the_original_is_used() {
     });
 
     assert_eq!(got, bundled, "元のフォルダを返す");
-    let withheld = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("user_data_copy_withheld"))
-        .count();
+    let withheld = count_event(&events, "user_data_copy_withheld");
     assert_eq!(withheld, 1, "{events:?}");
     assert!(!user.join("ghost").exists(), "写し先が作られた");
     assert_eq!(tree(tmp.path()), before, "木が変わった");

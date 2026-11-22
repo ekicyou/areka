@@ -13,7 +13,7 @@ use areka_kanade::{
 };
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
@@ -90,20 +90,13 @@ fn plant_ghost_switch(world: &mut World) {
     world.insert_non_send(super::reservation(SwitchStage::SendOff));
 }
 
-fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 /// 1 件の要求を記録つきで出し、(判定, `reload_refused` の (水準, 理由, ゴースト) の並び, warn 以上の総数)。
 fn refuse(
     rig: &mut Rig,
     request: ReloadRequest,
 ) -> (ReloadVerdict, Vec<(Level, String, String)>, usize) {
     let (verdict, events) = capture(|| request_reload(&mut rig.world, request));
-    let refused = named(&events, "reload_refused")
+    let refused = super::events_named(&events, "reload_refused")
         .into_iter()
         .map(|e| {
             (
@@ -231,7 +224,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
     plant_reload(&mut rig.world);
     let (_, events) = capture(|| areka_session::exit_wait::begin_close(&mut rig.world));
-    let dropped = named(&events, "reload_dropped")
+    let dropped = super::events_named(&events, "reload_dropped")
         .into_iter()
         .map(|e| {
             (
@@ -245,7 +238,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
 
     plant_ghost_switch(&mut rig.world);
     let (verdict, events) = capture(|| request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)));
-    let closing = named(&events, "reload_refused")
+    let closing = super::events_named(&events, "reload_refused")
         .into_iter()
         .map(|e| (e.level, e.field_str("reason").map(str::to_owned)))
         .collect::<Vec<_>>();
@@ -287,7 +280,7 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
     let words = |event: &str| {
-        named(&events, event)
+        super::events_named(&events, event)
             .into_iter()
             .map(|e| (e.level, e.field("word").map(str::to_owned)))
             .collect::<Vec<_>>()
@@ -298,8 +291,8 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
             words("reload_descript_unsupported"),
             words("reload_descript_unknown"),
             words("reload_descript_no_words"),
-            named(&events, "reload_refused").len(),
-            named(&events, "reload_started").len(),
+            super::events_named(&events, "reload_refused").len(),
+            super::events_named(&events, "reload_started").len(),
         ),
         (
             ReloadVerdict::Refused(RefusedReason::NoWords),
@@ -330,7 +323,7 @@ fn accepted_leaves_one_started_record() {
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
-    let started = named(&events, "reload_started")
+    let started = super::events_named(&events, "reload_started")
         .into_iter()
         .map(|e| {
             (
@@ -350,8 +343,8 @@ fn accepted_leaves_one_started_record() {
         (
             verdict,
             started,
-            named(&events, "reload_descript_unknown").len(),
-            named(&events, "reload_failed")
+            super::events_named(&events, "reload_descript_unknown").len(),
+            super::events_named(&events, "reload_failed")
                 .iter()
                 .map(|e| (
                     e.level,
@@ -404,7 +397,7 @@ fn drain_hands_script_requests_to_the_desk() {
         .unwrap();
     }
     let ((), events) = capture(|| drain(&mut rig.world));
-    let started = named(&events, "reload_started")
+    let started = super::events_named(&events, "reload_started")
         .into_iter()
         .map(|e| {
             (
@@ -474,7 +467,7 @@ fn ghost_reload_reserves_the_current_ghost() {
                 .get_non_send::<SwitchInFlight>()
                 .map(|f| f.target.dir.clone()),
             reserved,
-            named(&events, "reload_failed").len(),
+            super::events_named(&events, "reload_failed").len(),
             boot_origin_override(&rig.world),
             wants_runtime_only(&rig.world),
         ),
@@ -715,7 +708,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
                 .get_non_send::<SwitchInFlight>()
                 .map(|f| f.target.dir.clone()),
             reserved,
-            named(&events, "reload_failed").len(),
+            super::events_named(&events, "reload_failed").len(),
             wants_runtime_only(&rig.world),
             boot_origin_override(&rig.world),
         ),
@@ -763,7 +756,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
             None => drop(reply),
         }
         let ((), events) = capture(|| drain(&mut rig.world));
-        let ends = named(&events, "reload_failed")
+        let ends = super::events_named(&events, "reload_failed")
             .into_iter()
             .map(|e| {
                 (

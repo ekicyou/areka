@@ -9,14 +9,8 @@ use areka_sylphya::PersistKey;
 use super::tests::{failure, installed_world};
 use super::*;
 use crate::app_exit::FirstExit;
-use log_capture_kit::{CapturedEvent, capture};
-
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
+use crate::boot_resolve::boot_resolve_tests::{count_event, events_named};
+use log_capture_kit::capture;
 
 /// `Escape` で終わり始めた後の失敗: 汲み出しは記録も出所の差し替えもせず受け手に残す。
 /// 後始末で取り出すと、告知 1 件（「記憶を書けません」）・記録 1 件・`Err(E_FAIL)`。
@@ -31,7 +25,11 @@ fn a_failure_after_another_origin_is_told_at_close() {
 
     let (_, drained) = capture(|| drain_system(&mut world));
 
-    assert_eq!(count(&drained, "memory_write_failed"), 0, "{drained:?}");
+    assert_eq!(
+        count_event(&drained, "memory_write_failed"),
+        0,
+        "{drained:?}"
+    );
     assert_eq!(
         world.get_resource::<FirstExit>().map(|f| f.0.clone()),
         Some(ExitOrigin::Escape),
@@ -44,11 +42,8 @@ fn a_failure_after_another_origin_is_told_at_close() {
         told.expect_err("告げたので失敗").code(),
         windows::Win32::Foundation::E_FAIL
     );
-    assert_eq!(count(&events, "memory_write_failed"), 1, "{events:?}");
-    let alerts: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("alert"))
-        .collect();
+    assert_eq!(count_event(&events, "memory_write_failed"), 1, "{events:?}");
+    let alerts = events_named(&events, "alert");
     assert_eq!(alerts.len(), 1, "{events:?}");
     assert_eq!(
         alerts[0].field_str("title"),
@@ -71,7 +66,7 @@ fn a_failure_after_a_write_failure_is_still_drained() {
 
     let (_, events) = capture(|| drain_system(&mut world));
 
-    assert_eq!(count(&events, "memory_write_failed"), 1, "{events:?}");
+    assert_eq!(count_event(&events, "memory_write_failed"), 1, "{events:?}");
     assert!(take_receiver(&mut world).unwrap().try_recv().is_err());
 }
 
@@ -88,7 +83,7 @@ fn a_failure_after_os_session_end_is_drained_and_logged() {
 
     let (_, events) = capture(|| drain_system(&mut world));
 
-    assert_eq!(count(&events, "memory_write_failed"), 1, "{events:?}");
+    assert_eq!(count_event(&events, "memory_write_failed"), 1, "{events:?}");
     assert_eq!(
         world.get_resource::<FirstExit>().map(|f| f.0.clone()),
         Some(ExitOrigin::SessionEnd),

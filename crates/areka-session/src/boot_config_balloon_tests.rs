@@ -5,7 +5,7 @@
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
 use crate::boot_config::resolve_balloon_for_ghost;
-use crate::boot_resolve::boot_resolve_tests::no_pick;
+use crate::boot_resolve::boot_resolve_tests::{events_named, no_pick};
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use crate::session_end::test_support::put_memory;
 use log_capture_kit::{CapturedEvent, capture};
@@ -59,13 +59,6 @@ fn resolve_dir(tmp: &TempPath, ghost: &Path) -> ((BalloonRoute, PathBuf), Vec<Ca
     let got = got.expect("決まる");
     assert!(got.folder.is_some(), "引数以外はフォルダ名が在る");
     ((got.route, got.dir), events)
-}
-
-pub(super) fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
 }
 
 fn warnings(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
@@ -205,7 +198,7 @@ fn ghost_balloon_hides_root_once_per_hidden_entry() {
         put_balloon(&ghost.join("balloon").join(folder), folder);
     }
     let (_, events) = resolve_dir(&tmp, &ghost);
-    let mut got: Vec<_> = named(&events, "ghost_balloon_hides_root")
+    let mut got: Vec<_> = events_named(&events, "ghost_balloon_hides_root")
         .iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::INFO);

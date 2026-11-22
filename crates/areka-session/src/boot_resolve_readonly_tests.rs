@@ -4,10 +4,10 @@
 //! `WithholdGuard` だけで控える。根はワークツリーの `target\` の下だけ。
 
 use areka_sylphya::persist::withhold::WithholdGuard;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
-use super::boot_resolve_tests::count_event;
+use super::boot_resolve_tests::{count_event, events_named};
 use super::*;
 use crate::readonly::tests::tree;
 
@@ -85,10 +85,7 @@ fn keep_mark_says_readonly_without_foretelling() {
     write_session_mark(&app, "動いている子").expect("控える");
 
     let ((), events) = capture(|| keep_session_mark(&app, "run_failed", None));
-    let kept: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("session_mark_kept"))
-        .collect();
+    let kept = events_named(&events, "session_mark_kept");
     assert_eq!(kept.len(), 1, "{events:?}");
     assert_eq!(kept[0].field("readonly"), Some("true"));
     let text = kept[0].message();

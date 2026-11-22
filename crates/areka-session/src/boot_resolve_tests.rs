@@ -39,7 +39,7 @@ pub(crate) fn last(n: usize) -> usize {
 }
 
 /// 記録の中から `event` が一致するものを数える。
-pub(super) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
+pub(crate) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -48,10 +48,7 @@ pub(super) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
 
 /// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
 pub(super) fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect();
+    let hits = events_named(events, event);
     assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
     assert_eq!(hits[0].level, level, "{event} のレベル");
 }
@@ -400,7 +397,7 @@ fn balloon_companion_not_listed_warns_then_default() {
 // ---------------------------------------------------------------- 記憶の印の文と印の名前
 
 /// `event` の記録（`event` 欄で引く）。
-fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
+pub(crate) fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))

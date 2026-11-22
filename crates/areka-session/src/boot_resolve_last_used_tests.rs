@@ -56,7 +56,11 @@ fn write_and_load(
         ..ScopeRoots::default()
     };
     if !seed.is_empty() {
-        save_scope(PersistScope::Ghost, &roots, &io, seed);
+        assert_eq!(
+            save_scope(PersistScope::Ghost, &roots, &io, seed),
+            PersistOutcome::Saved,
+            "記憶の種を書けない"
+        );
     }
     let seeded = io.commit_count();
     let parts = spawn_sylphya(SylphyaInit {

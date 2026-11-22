@@ -15,11 +15,16 @@ use super::*;
 /// 1 行目が同じ捕捉で `warn!` 1 件を数えるので、3 行目の 0 件は捕捉の盲点ではない。
 #[test]
 fn first_boot_falling_back_pins_mark_with_one_warn() {
-    /// （`warn!` の件数・`debug!` の件数・置き場の単位の旗・印の材料の (argv, 旗)・降ろせた）。
-    type Row = (usize, usize, Option<bool>, Option<(bool, bool)>, bool);
+    /// （倒れた記録の水準の並び・置き場の単位の旗・印の材料の (argv, 旗)・降ろせた）。
+    type Row = (
+        Vec<tracing::Level>,
+        Option<bool>,
+        Option<(bool, bool)>,
+        bool,
+    );
     fn boot_and_read(rig: &mut SwitchRig, ghost: GhostDecision, argv: bool) -> Row {
         let ((), events) = capture(|| first_boot(rig, ghost, BootOrigin::Plain, argv));
-        let count = |level| count_event(&events, level, "session_mark_pinned_by_fallback");
+        let pinned = levels_of(&events, "session_mark_pinned_by_fallback");
         let slot_flag = rig
             .world
             .non_send::<GhostSlot>()
@@ -32,13 +37,7 @@ fn first_boot_falling_back_pins_mark_with_one_warn() {
             .as_ref()
             .map(|m| (m.argv_session, m.logsink_fallback));
         let down_ok = down(rig, &mut after);
-        (
-            count(tracing::Level::WARN),
-            count(tracing::Level::DEBUG),
-            slot_flag,
-            mark,
-            down_ok,
-        )
+        (pinned, slot_flag, mark, down_ok)
     }
 
     fn memory_a(rig: &SwitchRig) -> GhostDecision {
@@ -65,20 +64,30 @@ fn first_boot_falling_back_pins_mark_with_one_warn() {
     assert_eq!(
         vec![fallen_plain, fallen_argv, wired_plain],
         vec![
-            (1, 0, Some(true), Some((false, true)), true),
-            (0, 1, Some(true), Some((true, true)), true),
-            (0, 0, Some(false), Some((false, false)), true),
+            (
+                vec![tracing::Level::WARN],
+                Some(true),
+                Some((false, true)),
+                true,
+            ),
+            (
+                vec![tracing::Level::DEBUG],
+                Some(true),
+                Some((true, true)),
+                true,
+            ),
+            (vec![], Some(false), Some((false, false)), true),
         ],
         "LogSink へ倒れた初回の起動の記録か旗が崩れた（行: 倒れた・argv で倒れた・結線が成立した／\
-         列: warn の件数・debug の件数・置き場の単位の旗・印の材料 (argv, 旗)・降ろせた）"
+         列: 倒れた記録の水準の並び・置き場の単位の旗・印の材料 (argv, 旗)・降ろせた）"
     );
 }
 
 /// LogSink へ倒れた回の 1 周で観測したもの（次の起動を除く）。
 #[derive(Debug, PartialEq, Eq)]
 struct FallenLap {
-    /// 初回の起動の `warn!(session_mark_pinned_by_fallback)` の件数。
-    pinned_warns: usize,
+    /// 初回の起動の `session_mark_pinned_by_fallback` の水準の並び。
+    pinned: Vec<tracing::Level>,
     /// 置き場の単位に実行系が在るか（倒れた先の成否）。
     runtime: bool,
     /// 置き場の単位の倒れた旗。
@@ -109,11 +118,7 @@ fn fallen_lap(fake: FakeShiori) -> (FallenLap, NextBoot, NextBoot) {
     let (settled, settle_events) = capture(|| after_run_and_settle(&mut rig));
     let app = app_dir(&rig);
     let lap = FallenLap {
-        pinned_warns: count_event(
-            &boot_events,
-            tracing::Level::WARN,
-            "session_mark_pinned_by_fallback",
-        ),
+        pinned: levels_of(&boot_events, "session_mark_pinned_by_fallback"),
         runtime,
         flag,
         settled,
@@ -127,7 +132,7 @@ fn fallen_lap(fake: FakeShiori) -> (FallenLap, NextBoot, NextBoot) {
         mark: read_session_mark(&app),
     };
     // 最後に使ったゴーストの記憶が A でも、印が在る次の起動はそれを読まない。
-    plant_last_ghost(&app, "A");
+    save_scope(&app, "A");
     let next = next_boot(&mut rig);
     let expected = expected_halted_next(&rig, "A");
     (lap, next, expected)
@@ -136,7 +141,7 @@ fn fallen_lap(fake: FakeShiori) -> (FallenLap, NextBoot, NextBoot) {
 /// 倒れた回の 1 周の期待（倒れた先の実行系の有無だけが形で違う）。
 fn expected_fallen_lap(runtime: bool) -> FallenLap {
     FallenLap {
-        pinned_warns: 1,
+        pinned: vec![tracing::Level::WARN],
         runtime,
         flag: true,
         settled: (true, Some(MarkVerdict::Keep("logsink_fallback"))),
@@ -245,29 +250,26 @@ fn argv_session_falling_back_neither_reads_writes_nor_clears_mark() {
     let mark_at_boot = read_session_mark(&app);
     quit_app(&mut rig.world, ExitOrigin::OsClose);
     let (settled, settle_events) = capture(|| after_run_and_settle(&mut rig));
-    let pinned = "session_mark_pinned_by_fallback";
 
     assert_eq!(
         (
             found,
-            count_event(&boot_events, tracing::Level::WARN, pinned),
-            count_event(&boot_events, tracing::Level::DEBUG, pinned),
+            levels_of(&boot_events, "session_mark_pinned_by_fallback"),
             flag,
             mark_at_boot,
             settled,
-            count_event(&settle_events, tracing::Level::INFO, "session_mark_kept"),
+            levels_of(&settle_events, "session_mark_kept"),
             read_session_mark(&app),
         ),
         (
             None,
-            0,
-            1,
+            vec![tracing::Level::DEBUG],
             Some(true),
             Some("前の印".to_owned()),
             (true, Some(MarkVerdict::Untouched)),
-            0,
+            vec![],
             Some("前の印".to_owned()),
         ),
-        "argv で倒れた回が印に触れたか倒れた warn を出した（解決の戻り・warn・debug・旗・起こした直後・降ろせた＋判定・残した記録・後始末の後）"
+        "argv で倒れた回が印に触れたか倒れた warn を出した（解決の戻り・倒れた記録の水準の並び・旗・起こした直後・降ろせた＋判定・残した記録・後始末の後）"
     );
 }

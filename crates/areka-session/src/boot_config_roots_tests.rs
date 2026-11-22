@@ -6,11 +6,10 @@
 //! 起動の入口の既定ゴーストと既定バルーンの採用・0 体の失敗が各根の格納フォルダを持つこと。
 //! 根は `TempPath::under_target`。
 
-use super::balloon_tests::named;
 use crate::alert::AlertScene;
 use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_with};
 use crate::boot_request::BootRequest;
-use crate::boot_resolve::boot_resolve_tests::{no_pick, put_ghost};
+use crate::boot_resolve::boot_resolve_tests::{events_named, no_pick, put_ghost};
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostRoute};
 use crate::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use crate::session_end::test_support::put_memory;
@@ -76,7 +75,7 @@ fn companion_balloon_is_found_in_the_lower_root() {
         (got.route, got.dir, got.folder.as_deref()),
         (BalloonRoute::Companion, bundled, Some("bundled"))
     );
-    assert!(named(&events, "companion_balloon_not_found").is_empty());
+    assert!(events_named(&events, "companion_balloon_not_found").is_empty());
 }
 
 /// 記憶のフォルダ名が大文字小文字だけ違っても下の根の項目に当たり、フォルダ名は項目の綴り。
@@ -94,7 +93,7 @@ fn memory_folder_name_hits_by_the_one_rule_across_roots() {
         (got.route, got.dir, got.folder.as_deref()),
         (BalloonRoute::Memory, mine, Some("mine"))
     );
-    assert!(named(&events, "last_balloon_not_found").is_empty());
+    assert!(events_named(&events, "last_balloon_not_found").is_empty());
 }
 
 /// どの根にも無い記憶 → warn `last_balloon_not_found` 1 件（`balloon_store` は各根の `balloon\` を
@@ -113,7 +112,7 @@ fn memory_in_no_root_warns_with_store_list_and_falls_through() {
         (got.route, got.dir),
         (BalloonRoute::Default, default_balloon)
     );
-    let warned = named(&events, "last_balloon_not_found");
+    let warned = events_named(&events, "last_balloon_not_found");
     assert_eq!(warned.len(), 1, "{events:?}");
     let stores = format!(
         "{}; {}",

@@ -568,10 +568,8 @@ fn reload_requests_after_kanade_died_fail_once_and_leave_no_mark() {
         got.push((failed, rig.world.get_non_send::<ReloadInFlight>().is_some()));
     }
     let (_, events) = capture(|| request_reload(&mut rig.world, req(ReloadTarget::Shiori)));
-    let fourth_refused = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_refused"))
-        .count();
+    let fourth_refused =
+        crate::boot_resolve::boot_resolve_tests::count_event(&events, "reload_refused");
     assert_eq!(
         (got, fourth_refused),
         (

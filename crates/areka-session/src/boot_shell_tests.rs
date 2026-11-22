@@ -16,11 +16,12 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{BootShellChoice, GhostSlot, prepare_ghost_windows};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch::SwitchInFlight;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -84,14 +85,19 @@ fn add_hidden_shell_from(src: &Path, ghost_dir: &Path, folder: &str, name: &str)
 
 /// ゴーストの Ghost スコープへ「最後のシェル」を直接書く（起動が読む置き場と同じ）。
 fn remember_shell(ghost_dir: &Path, folder: &str) {
-    save_scope(
-        PersistScope::Ghost,
-        &ScopeRoots {
-            ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastShell, folder.to_owned())],
+    assert_eq!(
+        save_scope(
+            PersistScope::Ghost,
+            &ScopeRoots {
+                ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
+                ..ScopeRoots::default()
+            },
+            &FsPersistIo,
+            vec![(PersistKey::LastShell, folder.to_owned())],
+        ),
+        PersistOutcome::Saved,
+        "記憶のシェルを書けない: {}",
+        ghost_dir.display()
     );
 }
 
@@ -103,14 +109,6 @@ fn loaded_shell_dirs(events: &[CapturedEvent]) -> Vec<PathBuf> {
         .filter(|e| e.field("recognized").is_some())
         .filter_map(|e| e.field("shell_dir").map(PathBuf::from))
         .collect()
-}
-
-/// `event` の記録の件数。
-fn count_event(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
 }
 
 /// 置き場のゴーストのマウントのシェル。

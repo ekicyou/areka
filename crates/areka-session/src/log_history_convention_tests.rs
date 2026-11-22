@@ -5,6 +5,7 @@
 
 use std::sync::Mutex;
 
+use super::tests::draft_of;
 use super::*;
 
 fn stamp() -> Stamp {
@@ -14,15 +15,6 @@ fn stamp() -> Stamp {
         day: 5,
         hour: 3,
         minute: 7,
-    }
-}
-
-fn draft_of(kind: Kind, body: &str) -> Draft {
-    Draft {
-        kind,
-        label: kind.default_label().to_string(),
-        name: kind.default_name().to_string(),
-        body: body.to_string(),
     }
 }
 

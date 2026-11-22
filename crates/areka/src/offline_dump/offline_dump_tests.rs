@@ -13,6 +13,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use super::offline_dump_test_support::{self as fixture, ShellSpec};
 use super::{read_scope, run};
 use crate::cli::OfflineDumpRequest;
+use crate::session_tests::events_named;
 use areka_session::log_history::hold;
 
 fn com_init() {
@@ -146,13 +147,6 @@ fn request(ghost_dir: &std::path::Path, error_log: &std::path::Path) -> OfflineD
         error_log: Some(error_log.display().to_string()),
         ..OfflineDumpRequest::default()
     }
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 読んだシェルのフォルダ（読み込みまで進んだ走りの info から）。

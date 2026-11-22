@@ -4,7 +4,7 @@
 //! 「引数なしの起動で記録が 1 件」「引数の腕は読まないこと」「引数のゴーストの中の `balloon\` も数えること」だけ。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::{no_pick, put_memory, resolve_boot_from};
+use crate::session_tests::{events_named, no_pick, put_memory, resolve_boot_from};
 use areka_session::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
@@ -39,13 +39,6 @@ fn put_balloon(dir: &Path, name: &str) {
 fn put_install(ghost: &Path, body: &str) {
     std::fs::write(ghost.join("install.txt"), format!("charset,UTF-8\n{body}"))
         .expect("install.txt");
-}
-
-fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
 }
 
 fn warnings(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
@@ -89,7 +82,7 @@ fn boot_without_argv_records_descript_route_once() {
         (route, dir),
         (BalloonRoute::Descript, tmp.child("balloon").join("b2"))
     );
-    let resolved = named(&events, "balloon_resolved");
+    let resolved = events_named(&events, "balloon_resolved");
     assert_eq!(resolved.len(), 1, "{events:?}");
     assert_eq!(resolved[0].field("route"), Some("Descript"));
 }
@@ -138,10 +131,14 @@ fn boot_with_argv_balloon_reads_no_ghost_balloon_keys() {
         "companion_balloon_not_found",
     ]
     .iter()
-    .flat_map(|event| named(&events, event))
+    .flat_map(|event| events_named(&events, event))
     .collect();
     assert!(missed.is_empty(), "引数の腕が読んだ痕跡: {missed:?}");
-    assert_eq!(named(&events, "balloon_resolved").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "balloon_resolved").len(),
+        1,
+        "{events:?}"
+    );
 }
 
 /// 引数で渡したゴースト（位置の引数・`--ghost`）でも、そのゴーストのフォルダの中のバルーンを数える。

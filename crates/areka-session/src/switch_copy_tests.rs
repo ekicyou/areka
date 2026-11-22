@@ -17,6 +17,7 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
@@ -107,13 +108,6 @@ fn handoff() -> ChangeHandoff {
     ChangeHandoff { script: None }
 }
 
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
-
 /// 最初に起こそうとしたフォルダ（`ghost_switch_boot_failed` の 1 件目の `dir` 欄）。
 fn first_boot_dir(events: &[CapturedEvent]) -> Option<String> {
     events
@@ -181,7 +175,7 @@ fn no_copy_boots_from_the_target() {
         shown(&f.bundled("B")),
         "{events:?}"
     );
-    assert_eq!(count(&events, "ghost_switch_copy_wait"), 0);
+    assert_eq!(count_event(&events, "ghost_switch_copy_wait"), 0);
 }
 
 /// 止まる前に写し終えた: 取り出しの系の先頭の受け取りで `Done` になり、止まった時点でそのまま
@@ -203,7 +197,7 @@ fn copied_before_stop_boots_from_the_copy() {
     assert!(received, "受け取りで写し終えたになる");
     assert_eq!(
         (
-            count(&events, "ghost_switch_copy_wait"),
+            count_event(&events, "ghost_switch_copy_wait"),
             first_boot_dir(&events)
         ),
         (0, shown(&f.copied("B"))),
@@ -222,8 +216,8 @@ fn copied_after_stop_waits_then_boots_from_the_copy() {
     let ((), stopped) = capture(|| switch_to(&mut world, handoff()));
     let waiting = (
         stage(&world),
-        count(&stopped, "ghost_switch_copy_wait"),
-        count(&stopped, "ghost_switch_down_ms"),
+        count_event(&stopped, "ghost_switch_copy_wait"),
+        count_event(&stopped, "ghost_switch_down_ms"),
         world
             .get_non_send::<GhostSlot>()
             .is_some_and(|s| s.0.is_some()),
@@ -251,7 +245,7 @@ fn copied_after_stop_waits_then_boots_from_the_copy() {
     assert_eq!(verdict, SwitchVerdict::Busy, "写し待ちの間の要求は退ける");
     assert_eq!(
         (
-            count(&resumed, "ghost_switch_down_ms"),
+            count_event(&resumed, "ghost_switch_down_ms"),
             first_boot_dir(&resumed)
         ),
         (1, shown(&f.copied("B"))),
@@ -290,7 +284,7 @@ fn copy_failure_boots_from_the_original() {
     );
     assert_eq!(
         (
-            count(&lost, "ghost_switch_copy_lost"),
+            count_event(&lost, "ghost_switch_copy_lost"),
             first_boot_dir(&lost)
         ),
         (1, shown(&f.bundled("B"))),
@@ -315,15 +309,15 @@ fn readonly_start_withholds_the_copy_and_boots_from_the_original() {
     assert!(user_tree.is_empty(), "書ける根は空のまま: {user_tree:?}");
     assert_eq!(
         (
-            count(&events, "user_data_copy_withheld"),
-            count(&events, "user_data_copied")
+            count_event(&events, "user_data_copy_withheld"),
+            count_event(&events, "user_data_copied")
         ),
         (1, 0),
         "(控えた・写した): {events:?}"
     );
     assert_eq!(
         (
-            count(&switched, "ghost_switch_copy_wait"),
+            count_event(&switched, "ghost_switch_copy_wait"),
             first_boot_dir(&switched)
         ),
         (0, shown(&f.bundled("B"))),

@@ -422,10 +422,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     let sample2 = acquire_emo2();
     let ((session2, shiori2), round2_events) =
         capture(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
-    let round2_replaced = round2_events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("menu_registration_replaced"))
-        .count();
+    let round2_replaced = super::events_named(&round2_events, "menu_registration_replaced").len();
     // テストの写しを落とさないと、2 周目の kanade がつながらなくても受け口は生きて見える。
     drop(kanade_stop_tx);
 

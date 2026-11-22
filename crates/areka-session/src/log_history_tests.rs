@@ -564,7 +564,7 @@ const AT: Stamp = Stamp {
 };
 
 /// その種別の下書き（本文だけ変える）。
-fn draft_of(kind: Kind, body: &str) -> Draft {
+pub(super) fn draft_of(kind: Kind, body: &str) -> Draft {
     Draft {
         kind,
         label: kind.default_label().to_string(),

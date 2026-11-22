@@ -48,14 +48,19 @@ pub(crate) fn put_ghost(dir: &Path) {
 
 /// アプリの記憶に最後のゴーストを書く。
 pub(crate) fn save_scope(app_dir: &Path, ghost_folder: &str) {
-    areka_sylphya::save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(app_dir.to_path_buf()),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, ghost_folder.to_owned())],
+    assert_eq!(
+        areka_sylphya::save_scope(
+            PersistScope::App,
+            &ScopeRoots {
+                app: Some(app_dir.to_path_buf()),
+                ..ScopeRoots::default()
+            },
+            &FsPersistIo,
+            vec![(PersistKey::LastGhost, ghost_folder.to_owned())],
+        ),
+        areka_sylphya::PersistOutcome::Saved,
+        "記憶を書けない: {}",
+        app_dir.display()
     );
 }
 
@@ -133,6 +138,17 @@ pub(crate) fn levels_of(
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .map(|e| e.level)
+        .collect()
+}
+
+/// `event` の記録（`event` 欄で引く）。
+pub(crate) fn events_named<'a>(
+    events: &'a [log_capture_kit::CapturedEvent],
+    event: &str,
+) -> Vec<&'a log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(event))
         .collect()
 }
 

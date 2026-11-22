@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::boot_resolve_tests::{last, no_pick};
+use super::boot_resolve_tests::{count_event, events_named, last, no_pick};
 use super::*;
 
 fn root() -> BasewareRoot {
@@ -75,10 +75,7 @@ fn at(root: &BasewareRoot, route: GhostRoute, folder: &str) -> GhostDecision {
 
 /// `ghost_random_requested` の 1 件（info・選んだフォルダ名と候補の数）。
 fn assert_random_info(events: &[CapturedEvent], folder: &str, candidates: &str) {
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("ghost_random_requested"))
-        .collect();
+    let hits = events_named(events, "ghost_random_requested");
     assert_eq!(hits.len(), 1, "ちょうど 1 件: {events:?}");
     assert_eq!(hits[0].level, tracing::Level::INFO);
     assert_eq!(hits[0].field_str("folder"), Some(folder));
@@ -135,10 +132,7 @@ fn next_boot_memory_of_temporary_ghost_falls_through() {
         no_pick,
     );
     assert_eq!(got, Ok(at(&root, GhostRoute::Default, "emo2")));
-    let warns = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("last_ghost_not_found"))
-        .count();
+    let warns = count_event(&events, "last_ghost_not_found");
     assert_eq!(warns, 1, "{events:?}");
 }
 
@@ -234,10 +228,7 @@ fn call_ghost_not_listed_warns_and_falls_to_memory() {
         no_pick,
     );
     assert_eq!(got, Ok(at(&root, GhostRoute::Memory, "a")));
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("callghost_target_not_found"))
-        .collect();
+    let hits = events_named(&events, "callghost_target_not_found");
     assert_eq!(hits.len(), 1, "{events:?}");
     assert_eq!(hits[0].level, tracing::Level::WARN);
     assert_eq!(hits[0].field_str("folder"), Some("gone"));

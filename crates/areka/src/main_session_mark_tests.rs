@@ -8,12 +8,10 @@
 //! 強制終了は「後始末（印の始末）を通さずに降ろす」で見立てる（印が残ることは消す経路を
 //! 通らないことと同じ・実物の強制終了は実機サインオフ）。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 
 use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFaultKind};
-use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -22,7 +20,7 @@ use super::finish_after_run;
 use super::{AfterRun, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{levels_of, resolve_boot_from, save_scope};
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;
 use areka_session::alert::AlertScene;
@@ -133,19 +131,6 @@ fn name_of(rig: &SwitchRig, folder: &str) -> String {
     .find(|e| e.identity.folder == folder)
     .and_then(|e| e.identity.name)
     .unwrap_or_else(|| folder.to_owned())
-}
-
-/// 最後に使ったゴーストの記憶を書く（本番では初回の起動の直後に実行系の書き手が書く）。
-fn plant_last_ghost(app_dir: &Path, folder: &str) {
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(app_dir.to_path_buf()),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, folder.to_owned())],
-    );
 }
 
 /// `fn main` と同じ形で起動の文脈を据え（argv の旗も）、初回の起動として起こす。
@@ -412,7 +397,7 @@ fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
         .as_ref()
         .map(|mark| settle_session_mark(mark, end(true, down_a, false)).0);
     let mark_kept = read_session_mark(&app);
-    plant_last_ghost(&app, "A");
+    save_scope(&app, "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -456,7 +441,7 @@ fn fault_after_steady_keeps_mark() {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected))),
     );
     let settled = after_run_and_settle(&mut rig);
-    plant_last_ghost(&app_dir(&rig), "A");
+    save_scope(&app_dir(&rig), "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -475,7 +460,7 @@ fn dropped_without_cleanup_keeps_mark() {
     let reached = rig.pump_until(|rig| booted(rig, "A"));
     // 印の始末を通さずに降ろすだけ（強制終了では後始末が走らない）。
     let down_a = rig.shutdown();
-    plant_last_ghost(&app_dir(&rig), "A");
+    save_scope(&app_dir(&rig), "A");
     let next = next_boot(&mut rig);
 
     assert_eq!((reached, down_a), (true, true), "届いた・降ろせた");
@@ -531,7 +516,7 @@ fn clean_exit_clears_mark_and_next_boot_follows_memory() {
     let settled = after_run_and_settle(&mut rig);
     let app = app_dir(&rig);
     let mark_after_exit = read_session_mark(&app);
-    plant_last_ghost(&app, "A");
+    save_scope(&app, "A");
     let next = next_boot(&mut rig);
 
     assert_eq!(
@@ -597,18 +582,6 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
         ),
         "argv の起動が印に触れた（解決の戻り・起こした直後・終了の指示・降ろせた＋判定・後始末の後）"
     );
-}
-
-/// `events` のうち `level` の `event` の件数。
-fn count_event(
-    events: &[log_capture_kit::CapturedEvent],
-    level: tracing::Level,
-    event: &str,
-) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == level && e.field_str("event") == Some(event))
-        .count()
 }
 
 #[path = "main_session_mark_fallback_tests.rs"]
