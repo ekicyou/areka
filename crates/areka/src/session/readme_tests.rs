@@ -368,65 +368,6 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
 }
 
 // -------------------------------------------------------------------------
-// 見張り
-// -------------------------------------------------------------------------
-
-/// 本体（`crates/areka/src`）・`crates/areka-runtime/src`・`crates/areka-input/src` の 3 つの木の下で OS の「開く」関数
-/// （Shell と Execute を繋いだ名）を綴るのは OS の境界のファイルだけ（分ける前に本体の `src` が
-/// 覆っていた範囲を歩く）。
-///
-/// 針は連結で組み、このファイルには繋いだ綴りを書かない（見張り自身を数えないように）。
-#[test]
-fn only_the_os_port_spells_shell_execute() {
-    let needle = ["Shell", "Execute"].concat();
-    let roots = [
-        ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
-        (
-            "areka-runtime",
-            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
-        ),
-        (
-            "areka-input",
-            crate::crate_source_test_support::crate_path("areka-input", "src"),
-        ),
-    ];
-    let mut hits = Vec::new();
-    for (krate, src) in roots {
-        let mut stack = vec![src.clone()];
-        let mut read = 0;
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).expect("src を読める") {
-                let path = entry.expect("項目を読める").path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if path.extension().is_some_and(|e| e == "rs") {
-                    read += 1;
-                    if std::fs::read_to_string(&path)
-                        .expect("ソースを読める")
-                        .contains(&needle)
-                    {
-                        let rel = path.strip_prefix(&src).expect("src の下");
-                        hits.push(format!(
-                            "{krate}/{}",
-                            rel.to_string_lossy().replace('\\', "/")
-                        ));
-                    }
-                }
-            }
-        }
-        assert!(
-            read > 0,
-            "{krate} の src を 1 つも読んでいない（走査が空振りしている）"
-        );
-    }
-    assert_eq!(
-        hits,
-        vec!["areka/session/readme/os_port.rs".to_owned()],
-        "綴るのは本体の session/readme/os_port.rs だけ"
-    );
-}
-
-// -------------------------------------------------------------------------
 // set_path（descript の読み直しで替える値）
 // -------------------------------------------------------------------------
 

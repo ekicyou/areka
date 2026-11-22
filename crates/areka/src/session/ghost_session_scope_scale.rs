@@ -111,5 +111,9 @@ pub(crate) fn wire(reader: &SylphyaReader, table: Option<SharedScopeScaleTable>)
 }
 
 #[cfg(test)]
+#[path = "ghost_session_scope_scale_test_support.rs"]
+pub(crate) mod test_support;
+
+#[cfg(test)]
 #[path = "ghost_session_scope_scale_tests.rs"]
-pub(crate) mod tests;
+mod tests;

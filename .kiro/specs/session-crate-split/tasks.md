@@ -93,7 +93,7 @@
   - 本体の bin のテストが緑で、移したテストの名前の末尾が移す前と同じ。`crates/areka/src/session_tests/` の下に `SwitchRig::new(` が grep で 0 件
   - _Dispatch: standard — 移す先の宣言と私有の項目の開け方をコンパイラの指摘から決める_
   - _Requirements: 5.1, 5.2, 5.3, 4.5_
-- [ ] 3.5 一部だけ本体を要るファイルを分ける
+- [x] 3.5 一部だけ本体を要るファイルを分ける
   - `readonly_tests.rs`・`readme_tests.rs`・`session_end_deadline_tests.rs`・`log_history_convention_tests.rs` から、本体の `src` を読むテスト（TestPlacement の表の行）と、それだけが使う小道具を、元の名前に `_body` を足した本体の `session_tests/` のファイルへ移す。テストの名前と中身は変えない
   - `ghost_session_scope_{rect,scale}_tests.rs` の小道具のうち、本体へ移した `*_boot_tests.rs` が使うものを、写しを作らずに集めた層の兄弟 `ghost_session_scope_{rect,scale}_test_support.rs`（`#[test]` を持たない）へ移し、両方から使う
   - 本体の bin のテストが緑で、分けたファイルの両側のテストの名前の末尾を足すと分ける前と同じ

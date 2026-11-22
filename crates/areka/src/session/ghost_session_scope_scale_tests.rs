@@ -1,5 +1,6 @@
 //! 倍率と DPI の読み手の決定論テスト（偽の読み口と手で書いた表）。
 
+use super::test_support::{applied, ratio};
 use super::*;
 use areka_sylphya::{
     AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror, parse_dotted,
@@ -14,17 +15,6 @@ const SHAPES: [&str; 4] = [
 
 fn name(shape: &str, sel: &str) -> String {
     shape.replace("{}", sel)
-}
-
-fn ratio(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).unwrap()
-}
-
-pub(crate) fn applied(num: u32, den: u32, dpi_x: Option<u16>) -> AppliedScale {
-    AppliedScale {
-        ratio: ratio(num, den),
-        dpi_x,
-    }
 }
 
 fn reader() -> SylphyaReader {

@@ -1,15 +1,8 @@
 //! 窓の矩形の読み手の決定論テスト（数の形と選択子の読み）。
 
+use super::test_support::LEFT_SCREEN;
 use super::*;
 use areka_sylphya::parse_dotted;
-
-/// 主の画面より左上の画面の矩形（SSP の段 1 の値）。
-pub(crate) const LEFT_SCREEN: ScreenRect = ScreenRect {
-    left: -782,
-    top: 201,
-    right: 49,
-    bottom: 1227,
-};
 
 fn keys(character: Option<isize>, balloon: Option<isize>) -> ScopeWindowKeys {
     ScopeWindowKeys {
@@ -339,11 +332,12 @@ fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
 
 // ---- 表の出し方（結線と系）----
 
-pub(crate) mod wiring {
+mod wiring {
     use super::super::*;
     use super::{LEFT_SCREEN, keys, rect_of};
-    use areka_placement::follow::OffsetBase;
-    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use crate::session::ghost_session::ghost_session_scope_rect::test_support::{
+        fake_handle, placement,
+    };
     use areka_placement::source::GhostTitles;
     use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
     use areka_sylphya::{AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror};
@@ -351,30 +345,8 @@ pub(crate) mod wiring {
     use bevy_ecs::schedule::SingleThreadedExecutor;
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::Mutex;
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
     use wintf::ecs::{Point, WindowPos, WindowStyle};
-
-    pub(crate) fn fake_handle(raw: usize) -> WindowHandle {
-        WindowHandle {
-            hwnd: HWND(raw as *mut _),
-        }
-    }
-
-    pub(crate) fn placement() -> ScopePlacement {
-        ScopePlacement {
-            scope: 0,
-            char_pos: PointPx { x: 1483, y: 733 },
-            char_size: SizePx { w: 434, h: 687 },
-            balloon_pos: PointPx { x: 1071, y: 708 },
-            balloon_size: SizePx { w: 223, h: 158 },
-            balloon_offset: PointPx { x: -412, y: -25 },
-            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
-            balloon_limit: true,
-            anchor: Anchor::Bottom,
-            balloon_keyword_base: None,
-        }
-    }
 
     /// スコープ 0 の窓の一式だけ（印なし）を組んだ World。
     fn world_without_handles() -> (World, GhostWindows) {

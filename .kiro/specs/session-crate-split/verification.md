@@ -810,3 +810,33 @@ git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|s
 
 - 赤: 移して宣言を外しただけの `cargo check -p areka --bin areka --tests` が 186 件のエラー（上）。
 - 緑: `cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored（3.3 の終わりと同じ）。`cargo check -p areka --bin areka --tests` と `cargo check -p areka --bin areka` が警告 0。`cargo fmt --all -- --check` 差分なし。`git grep "SwitchRig::new(" -- crates/areka/src/session_tests/` 0 件。
+
+### 3.5
+
+#### 本体へ分けたテストと小道具（名前と中身は変えない・`session_tests/` に宣言）
+
+| 元（集めた層・`session/`） | 本体の新ファイル | 移したテスト | 一緒に移した小道具 | 元に残った数 → 分けた後の数 |
+|---|---|---|---|---|
+| `readonly_tests.rs`（`session::readonly::tests`） | `readonly_body_tests.rs` | `engage_is_called_only_from_main`・`main_calls_engage_exactly_once_before_resolve_boot`・`withhold_everything_is_called_only_from_readonly` | `all_sources`・`files_calling`（D8 ⑴・残るテストは使わない） | 8 → 5 + 3 |
+| `readme_tests.rs`（`session::readme::readme_tests`） | `readme_body_tests.rs` | `only_the_os_port_spells_shell_execute` | なし | 17 → 16 + 1 |
+| `session_end_deadline_tests.rs`（`session::session_end::deadline_tests`） | `session_end_deadline_body_tests.rs` | `only_session_end_calls_the_bounded_shutdown`・`deadline_call_scan_turns_red_on_one_line_removed_or_added` | `DEADLINE_CALL_TOKENS`・`ALLOWED_DEADLINE_CALLS`・`production_sources`・`deadline_call_sites`・`deadline_call_mismatch` | 10 → 8 + 2 |
+| `log_history_convention_tests.rs`（`session::log_history::convention_tests`） | `log_history_convention_body_tests.rs` | `every_rule_target_names_a_module_or_literal_that_exists`・`locate_turns_red_for_missing_and_underivable_targets` | `crate_of`・`locate`（`RULES` は `crate::session::log_history::RULES` から引く） | 11 → 9 + 2 |
+
+- 切り出しは行の範囲の移動だけ。移した側の頭に `//!` の 1 行と必要な `use` を足し、元の側は使われなくなった `use`（`session_end_deadline_tests.rs` の `BTreeSet`・`Path`）を外した。本体のファイルの中の根の並び・鍵（`areka/session/…`）は今のまま（4.4 で替える）。
+
+#### 集めた層の兄弟へ移した小道具（写しなし・両側から使う）
+
+- `session/ghost_session_scope_rect_test_support.rs`（新設・`#[test]` なし）: `LEFT_SCREEN`・`fake_handle`・`placement`（元は `ghost_session_scope_rect_tests.rs` の定数と `wiring` の中の 2 関数）。
+- `session/ghost_session_scope_scale_test_support.rs`（新設・`#[test]` なし）: `ratio`・`applied`（`applied` が引く `ratio` も、`ratio` を他のテストが使うので一緒に移して両側が引く）。
+- 親（`ghost_session_scope_{rect,scale}.rs`）は `#[cfg(test)] #[path = "…_test_support.rs"] pub(crate) mod test_support;` を足し、3.4 で `pub(crate)` に開けた `mod tests` を私有へ戻した。`ghost_session_scope_rect_tests.rs` の `wiring` も私有へ戻し、`LEFT_SCREEN` の `pub(crate)` は小道具の側に在る。本体の `*_boot_tests.rs` は `…::test_support::{LEFT_SCREEN, fake_handle, placement}`・`…::test_support::applied` を引く。ほかに `tests` を開けたままにする使い手は無い。
+- 4.1 の `lib.rs` で `reload_test_support` と同じく `test-support` の条件で宣言する対象に、この 2 つの `test_support` を足す（tasks.md 4.1 に既に記載）。
+
+#### 名前の末尾の比べ
+
+- コマンド: `cargo test -p areka --bin areka -- --list`（前 `target/session-crate-split/3.5-list-before.txt`・後 `3.5-list-after.txt`）。`: test` の行の最後の `::` の後を多重集合にして比べた（`3.5-tails-before.txt`・`3.5-tails-after.txt`）。
+- 結果: 前 1844 行・後 1844 行・末尾の多重集合は等しい（差 0）。分けた 4 ファイルの両側の合計は上の表のとおり前と同じ（8・17・10・11）。
+
+#### 確かめ
+
+- 赤: 分けただけでは壊れず（`use` は本体の側に持たせて組めた）、`cargo check` は元の側の未使用の `use` 2 件の警告だけが出て外した。RED は該当なし（振る舞いを変えない移動で、名前の末尾の比べが最初の網）。
+- 緑: `cargo test -p areka --bin areka` 1841 passed・0 failed・3 ignored。`cargo check -p areka --bin areka --tests` 警告 0。`cargo fmt --all -- --check` 差分なし。

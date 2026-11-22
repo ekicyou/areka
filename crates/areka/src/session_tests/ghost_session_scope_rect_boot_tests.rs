@@ -11,8 +11,8 @@ use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_session::ghost_session_scope_rect::tests::LEFT_SCREEN;
-use crate::session::ghost_session::ghost_session_scope_rect::tests::wiring::{
+use crate::session::ghost_session::ghost_session_scope_rect::test_support::LEFT_SCREEN;
+use crate::session::ghost_session::ghost_session_scope_rect::test_support::{
     fake_handle, placement,
 };
 use crate::session::ghost_session::ghost_session_scope_rect::*;

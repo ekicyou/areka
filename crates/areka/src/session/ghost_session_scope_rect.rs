@@ -275,5 +275,9 @@ pub(crate) fn os_window_rect(key: WindowKey) -> Option<ScreenRect> {
 }
 
 #[cfg(test)]
+#[path = "ghost_session_scope_rect_test_support.rs"]
+pub(crate) mod test_support;
+
+#[cfg(test)]
 #[path = "ghost_session_scope_rect_tests.rs"]
-pub(crate) mod tests;
+mod tests;
