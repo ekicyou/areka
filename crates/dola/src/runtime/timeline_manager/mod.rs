@@ -228,11 +228,11 @@ impl TimelineManager {
 
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
-                if entry.group_id == group_id {
-                    if let Some(active_seg) = find_active_segment(&entry.segments, effective_time) {
-                        let val = entry.value_at(active_seg, 1.0, &mut self.intern_pool);
-                        result.insert(var_name.clone(), val);
-                    }
+                if entry.group_id == group_id
+                    && let Some(active_seg) = find_active_segment(&entry.segments, effective_time)
+                {
+                    let val = entry.value_at(active_seg, 1.0, &mut self.intern_pool);
+                    result.insert(var_name.clone(), val);
                 }
             }
         }
