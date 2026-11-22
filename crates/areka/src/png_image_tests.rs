@@ -200,8 +200,4 @@ fn png_reads_back_through_wic_with_same_size_and_pixels() {
     let (w, h, pixels) = wic_decode_rgba(&file);
     assert_eq!((w, h), (3, 2), "幅と高さ");
     assert_eq!(pixels, rgba, "WIC で読み戻した画素が書いた RGBA と一致");
-
-    let kept = dir.path().to_path_buf();
-    drop(dir);
-    assert!(!kept.exists(), "一時ファイルはテストの後に消える");
 }

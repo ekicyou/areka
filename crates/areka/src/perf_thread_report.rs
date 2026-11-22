@@ -293,7 +293,8 @@ impl ReportHandle {
             return;
         }
         match self.done.recv_timeout(FINAL_WAIT) {
-            Ok(()) => {
+            // 送出端が落ちた＝報告スレッドは終わっている（panic を含む）ので、畳んで結果を見る。
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => {
                 if self.join.join().is_err() {
                     error!(
                         target: PERF_TARGET,
@@ -301,7 +302,7 @@ impl ReportHandle {
                     );
                 }
             }
-            Err(_) => warn!(
+            Err(RecvTimeoutError::Timeout) => warn!(
                 target: PERF_TARGET,
                 wait_ms = FINAL_WAIT.as_millis() as u64,
                 "[perf_thread_report] 終了直前のスナップショットを待ちきれなかった（切り離して先へ進む）"

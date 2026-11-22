@@ -357,7 +357,7 @@ fn commit_without_task_pool_logs_error() {
 }
 
 /// 1 周分の結線（argv で決まった体の決定を合成する）。
-fn boot_round(
+pub(super) fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
     kanade_stop: Sender<KanadeNotice>,
@@ -384,7 +384,7 @@ fn boot_round(
 
 /// 降ろすのを有界に行う（seriko の join を含む）。偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの
 /// 目印にして待ち、30 秒進まなければ［止まった］で赤（spine の shutdown_bounded と同じ形）。
-fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHandle) {
+pub(super) fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHandle) {
     let calls = || shiori.call_count();
     run_bounded_watching(what, Progress::Count(&calls), move || {
         session
@@ -441,6 +441,7 @@ fn boots_twice_in_one_process_without_double_registration() {
         .iter()
         .filter(|e| e.field_str("event") == Some("menu_registration_replaced"))
         .count();
+    // テストの写しを落とさないと、2 周目の kanade がつながらなくても受け口は生きて見える。
     drop(kanade_stop_tx);
 
     // ── 判定（集めてから 1 回） ──

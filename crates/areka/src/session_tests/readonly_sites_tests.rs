@@ -36,7 +36,7 @@ use areka_session::boot_resolve::{
 use areka_session::boot_seam::insert_persist_wiring;
 use areka_session::ghost_session::StartupDescriptValues;
 use areka_session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
+    SwitchInFlight, SwitchStage, WelcomeAttempt, on_notice, switch_to,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_session::session_mark::{MarkInputs, Teardown, settle_session_mark};
@@ -59,22 +59,10 @@ fn reached_desk(
 
 /// 切替の予約（切替先 B は実際に起こすので、根の下の本物のフォルダを指す）。
 fn reservation(rig: &SwitchRig, stage: SwitchStage) -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: rig.root.ghost_dir("A"),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
+    let mut r = super::reservation(stage);
+    r.target.dir = rig.root.ghost_dir("B");
+    r.prev.dir = rig.root.ghost_dir("A");
+    r
 }
 
 /// 1 種の判定の記録（種類, 期待のスコープ, 期待の key, 期待の値）。

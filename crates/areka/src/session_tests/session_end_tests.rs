@@ -8,15 +8,15 @@
 use std::sync::mpsc;
 use std::time::Duration;
 
-use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind};
+use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFaultKind};
 use bevy_ecs::prelude::*;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
+use super::levels_of;
 use crate::sample_test_support::switch_rig;
 use crate::{after_run, finish_after_run};
-use areka_runtime::spine::RecordedCall;
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::ConfigInputs;
 use areka_session::boot_config::{BootContext, CurrentGhost};
@@ -26,36 +26,8 @@ use areka_session::boot_resolve::{
 use areka_session::ghost_quit::KanadeNoticeRx;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::session_end::test_support::{fault, on_close_ref0};
 use areka_session::session_end::{SessionEnded, end_session_within, on_os_session_end};
-
-fn fault() -> ShioriFault {
-    ShioriFault {
-        kind: ShioriFaultKind::Disconnected,
-        reason: "テストの失敗".to_owned(),
-    }
-}
-
-/// `event` の記録の水準（届いた順）。
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
-
-/// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
-fn on_close_ref0(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .filter_map(|c| match c {
-            RecordedCall::Notify { id, references } if id == "OnClose" => {
-                Some(references.first().cloned().unwrap_or_default())
-            }
-            _ => None,
-        })
-        .collect()
-}
 
 /// 実行系の無い単位を置き場に持つ素の World（記憶の置き場は `tmp` の下・印＝A を書いておく）。
 /// 戻りの送出端から運行の通知を受け口へ積める。
@@ -186,7 +158,7 @@ fn pending_fault_notice_wins_over_session_end() {
     let tmp = TempPath::new("session-end-pending-fault");
     let (mut world, tx) = bare_world(&tmp);
     tx.send(KanadeNotice::Stopped(KanadeStopped {
-        cause: KanadeStopCause::Fault(fault()),
+        cause: KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected)),
         handoff: None,
     }))
     .expect("停止通知を積める");
@@ -207,7 +179,9 @@ fn pending_fault_notice_wins_over_session_end() {
             levels_of(&after_events, "session_end_already_handled"),
         ),
         (
-            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault()))),
+            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(
+                ShioriFaultKind::Disconnected
+            )))),
             Some("A".to_owned()),
             true,
             true,

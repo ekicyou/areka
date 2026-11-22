@@ -42,7 +42,7 @@ fn assert_wiring(policy: ModulePolicy, wiring: ShioriWiring) {
 /// 据え付けた作り口が指定どおりの結線を組む: 由来が `Plain` の 2 回（別の根の「A」「B」）の両方で、
 /// 「読まない」なら差し替え口、「読む」なら helper の結線。
 #[test]
-fn installed_source_follows_module_policy_for_first_boot_and_switch() {
+fn installed_source_follows_module_policy_for_each_root() {
     use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     let base = PathBuf::from("C:/custom/root");
     let cfg = |name: &str| ConfigInputs {

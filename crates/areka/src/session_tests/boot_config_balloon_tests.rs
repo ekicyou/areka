@@ -4,7 +4,7 @@
 //! 「引数なしの起動で記録が 1 件」「引数の腕は読まないこと」「引数のゴーストの中の `balloon\` も数えること」だけ。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::{no_pick, resolve_boot_from};
+use crate::session_tests::{no_pick, put_memory, resolve_boot_from};
 use areka_session::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
@@ -39,21 +39,6 @@ fn put_balloon(dir: &Path, name: &str) {
 fn put_install(ghost: &Path, body: &str) {
     std::fs::write(ghost.join("install.txt"), format!("charset,UTF-8\n{body}"))
         .expect("install.txt");
-}
-
-/// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
-fn put_memory(ghost: &Path, folder: &str) {
-    let dir = ghost
-        .join("ghost")
-        .join("master")
-        .join("profile")
-        .join("areka");
-    std::fs::create_dir_all(&dir).expect("フォルダを組む");
-    std::fs::write(
-        dir.join("sylphya.toml"),
-        format!("format-version = 1\n[last]\nballoon = \"{folder}\"\n"),
-    )
-    .expect("記憶");
 }
 
 fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {

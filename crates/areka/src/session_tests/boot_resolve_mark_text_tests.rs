@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::{FrameTime, Update};
 
-use super::{publisher_of, unwritable, writable};
+use super::{publisher_of, routes, unwritable, writable};
 use crate::sample_test_support::switch_rig;
 use areka_session::app_exit::FirstExit;
 use areka_session::boot_config::BootContext;
@@ -72,12 +72,8 @@ fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
         .join("areka");
     let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
-    {
-        // argv でない決め方（最後に使ったものを 3 つとも書く）。
-        let mut ctx = rig.world.resource_mut::<BootContext>();
-        ctx.current.ghost.route = GhostRoute::Memory;
-        ctx.current.balloon.route = BalloonRoute::Memory;
-    }
+    // argv でない決め方（最後に使ったものを 3 つとも書く）。
+    routes(&mut rig.world, GhostRoute::Memory, BalloonRoute::Memory);
 
     let record_all = |w: &mut World| {
         let ctx = w.resource::<BootContext>();

@@ -9,16 +9,33 @@ use areka_session::boot_request::{BootRequest, ModulePolicy};
 use std::path::PathBuf;
 
 /// `args[0]` に exe を足して読む。
-fn run(args: &[&str]) -> Parsed {
+pub(super) fn run(args: &[&str]) -> Parsed {
     let mut all = vec!["areka".to_owned()];
     all.extend(args.iter().map(|a| (*a).to_owned()));
     parse(&all)
 }
 
+/// 最後のまとめの (効く・何もしない・無視)。
+pub(super) type Summary<'a> = (&'a [String], &'a [String], &'a [String]);
+
+/// まとめの前の材料と、最後のまとめ。
+pub(super) fn split(parsed: &Parsed) -> (&[ParseNote], Summary<'_>) {
+    match parsed.notes.split_last() {
+        Some((
+            ParseNote::Summary {
+                effective,
+                noop,
+                ignored,
+            },
+            rest,
+        )) => (rest, (effective, noop, ignored)),
+        other => panic!("最後はまとめ: {other:?}"),
+    }
+}
+
 /// まとめが最後に 1 件だけあることを確かめ、まとめの前の材料を返す。
 fn notes_before_summary(parsed: &Parsed) -> &[ParseNote] {
-    let (last, rest) = parsed.notes.split_last().expect("まとめが 1 件はある");
-    assert!(matches!(last, ParseNote::Summary { .. }), "最後はまとめ");
+    let (rest, _) = split(parsed);
     assert!(
         !rest.iter().any(|n| matches!(n, ParseNote::Summary { .. })),
         "まとめは 1 件だけ"
@@ -26,7 +43,7 @@ fn notes_before_summary(parsed: &Parsed) -> &[ParseNote] {
     rest
 }
 
-fn s(v: &str) -> String {
+pub(super) fn s(v: &str) -> String {
     v.to_owned()
 }
 
@@ -628,6 +645,25 @@ fn notes_log_one_event_each_with_cli_prefix() {
             "help_value_ignored",
         ),
         (
+            ParseNote::OfflineIgnored { name: s("ghost") },
+            Level::WARN,
+            "offline_option_ignored",
+        ),
+        (
+            ParseNote::DumpPending {
+                name: s("dump-animation"),
+            },
+            Level::WARN,
+            "dump_option_pending",
+        ),
+        (
+            ParseNote::DumpWithoutOffline {
+                name: s("dump-scope"),
+            },
+            Level::WARN,
+            "dump_option_without_offline",
+        ),
+        (
             ParseNote::Listen(ListenNote::NotLoopback {
                 item: s("0.0.0.0:1"),
             }),
@@ -656,8 +692,8 @@ fn notes_log_one_event_each_with_cli_prefix() {
 /// 実走の 3 本と同じ形（絶対パス 2 つ）は位置の引数だけになり、記録の材料はまとめ 1 件だけ。
 #[test]
 fn real_run_shape_is_positional_only() {
-    let ghost = r"C:\home\maz\git\areka\target\emo2_real_run\ghost\emo2";
-    let balloon = r"C:\home\maz\git\areka\target\emo2_real_run\balloon\emo2";
+    let ghost = r"C:\g\emo2";
+    let balloon = r"C:\b\emo2";
     let parsed = run(&[ghost, balloon]);
     assert_eq!(
         parsed.options.boot,

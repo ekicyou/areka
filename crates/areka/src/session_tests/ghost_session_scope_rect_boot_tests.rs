@@ -8,14 +8,13 @@ use std::sync::mpsc::{self, Sender};
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolRequest, outcome};
 
-use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig};
+use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig, pump_to_welcomed};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
 use areka_placement::test_support::fake_handle;
 use areka_session::ghost_session::ghost_session_scope_rect::test_support::LEFT_SCREEN;
 use areka_session::ghost_session::ghost_session_scope_rect::test_support::placement;
 use areka_session::ghost_session::ghost_session_scope_rect::*;
-use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 use std::sync::Arc;
 
@@ -80,10 +79,7 @@ fn switching_to_another_ghost_drops_the_previous_window_rects() {
     rig.boot("A");
     let booted = both(&mut rig, &tx);
     let steady = rig.wait_steady();
-    let welcomed = rig.pump_talking_until(|rig| {
-        rig.exit_requested()
-            || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
-    });
+    let welcomed = pump_to_welcomed(&mut rig, "B", 1);
     let switched = both(&mut rig, &tx);
     let down = rig.shutdown();
 

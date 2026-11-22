@@ -13,12 +13,11 @@ use areka_mcp::tools::{ToolRequest, outcome};
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_sakura::contract::CueSink;
 
-use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig};
+use super::ghost_session_switch_tests::{A_TO_B, ask, ghost_a, ghost_b, lap_rig, pump_to_welcomed};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::target_map::TargetWindow;
 use areka_session::ghost_session::ghost_session_scope_scale::test_support::applied;
 use areka_session::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
-use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 
 const NAMES: [&str; 5] = [
@@ -186,10 +185,7 @@ fn switching_to_another_ghost_drops_the_previous_scale() {
     let (mut rig, tx) = booted_rig(ghost_a(A_TO_B, None));
     write_scope0(&rig, 144, 144);
     let booted = ask_all(&mut rig, &tx);
-    let welcomed = rig.pump_talking_until(|rig| {
-        rig.exit_requested()
-            || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
-    });
+    let welcomed = pump_to_welcomed(&mut rig, "B", 1);
     let switched = ask_all(&mut rig, &tx);
     let down = rig.shutdown();
 

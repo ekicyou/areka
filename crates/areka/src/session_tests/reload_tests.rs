@@ -28,9 +28,7 @@ use areka_session::boot_config::BootContext;
 use areka_session::ghost_session::GhostSession;
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch::{
-    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
-};
+use areka_session::ghost_switch::{SwitchEnd, SwitchStage, WelcomeAttempt};
 use areka_session::log_history::TARGET_ERROR;
 use areka_session::reload::test_support::{boot_context, plant_skin_switch};
 use areka_session::reload::*;
@@ -89,22 +87,7 @@ fn plant_reload(world: &mut World) {
 }
 
 fn plant_ghost_switch(world: &mut World) {
-    world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: PathBuf::from("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: PathBuf::from("A"),
-            name: None,
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    world.insert_non_send(super::reservation(SwitchStage::SendOff));
 }
 
 fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {

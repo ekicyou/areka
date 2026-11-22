@@ -10,8 +10,8 @@ use areka_session::alert::AlertScene;
 use areka_session::boot_config::{BootContext, BootResolved, resolve_boot_with};
 use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
 use areka_session::ghost_session::GhostSlot;
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use areka_session::roots::{ResolvedRoots, RootError};
+pub(crate) use areka_session::session_end::test_support::reservation;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 use bevy_ecs::prelude::World;
@@ -56,6 +56,20 @@ pub(crate) fn save_scope(app_dir: &Path, ghost_folder: &str) {
         },
         &FsPersistIo,
         vec![(PersistKey::LastGhost, ghost_folder.to_owned())],
+    );
+}
+
+/// ゴースト `ghost` の記憶に最後のバルーンを書く（Ghost スコープ・boot が据える場所と同じ）。
+pub(crate) fn put_memory(ghost: &Path, folder: &str) {
+    let master = ghost.join("ghost").join("master");
+    areka_sylphya::save_scope(
+        PersistScope::Ghost,
+        &ScopeRoots {
+            ghost: Some(areka_ghost::sylphya_wiring::profile_areka_root(&master)),
+            ..ScopeRoots::default()
+        },
+        &FsPersistIo,
+        vec![(PersistKey::LastBalloon, folder.to_owned())],
     );
 }
 
@@ -124,6 +138,18 @@ pub(crate) fn writable(dir: &Path) {
     std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
 }
 
+/// `event` の記録の水準（届いた順）。
+pub(crate) fn levels_of(
+    events: &[log_capture_kit::CapturedEvent],
+    event: &str,
+) -> Vec<tracing::Level> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(event))
+        .map(|e| e.level)
+        .collect()
+}
+
 /// 今のゴースト・バルーンの決め方を書き換える（argv で決まった側は最後に使ったものを書かない）。
 pub(crate) fn routes(world: &mut World, ghost: GhostRoute, balloon: BalloonRoute) {
     let mut ctx = world.resource_mut::<BootContext>();
@@ -138,7 +164,6 @@ mod boot_config_copy_tests;
 mod boot_config_input_tests;
 mod boot_config_module_policy_tests;
 mod boot_config_option_tests;
-mod boot_config_roots_tests;
 mod boot_resolve_mark_text_tests;
 mod ghost_session_reload_tests;
 mod ghost_session_restart_tests;
@@ -158,23 +183,3 @@ mod shell_balloon_switch_session_tests;
 mod shell_balloon_switch_session_update_tests;
 mod shell_balloon_switch_tests;
 mod write_failure_sites_tests;
-
-/// 切り替えの予約（B へ・前は A・段は `stage`）。
-pub(crate) fn reservation(stage: SwitchStage) -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
-}

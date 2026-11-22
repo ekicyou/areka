@@ -21,13 +21,13 @@ areka-kanade = { path = "../areka-kanade" }
 areka-parsers = { path = "../areka-parsers" }
 # プロパティの読み書き（MCP の GetProperty・名前の公開）と記憶の保存（起動・インストール・根の編集）。
 areka-sylphya = { path = "../areka-sylphya" }
-# `.nar` の読み取り・検査・展開（ドロップとメニューからのインストール）と CRC-32（png_image.rs）。
+# `.nar` の読み取り・検査・展開（ドロップ・メニュー・起動の `--install` のインストール）と CRC-32（png_image.rs）。
 areka-nar = { path = "../areka-nar" }
 # ネットワーク更新のエンジンと HTTP の取得（更新の手続き・インストールの URL 取得）。
 areka-update = { path = "../areka-update" }
 # MCP サーバの受け口（rmcp・tokio・hyper は areka-mcp 側に閉じる）。
 areka-mcp = { path = "../areka-mcp" }
-# 窓配置（窓の印・ゴーストの窓の表・バルーン位置の戻し。ドロップ・メニュー・MCP の check_script）。
+# 窓配置（窓の印・ゴーストの窓の表・バルーン位置の戻し。ドロップ・メニュー・MCP の check_script・examples/emo-present）。
 areka-placement = { path = "../areka-placement" }
 # 実行系（描画の結線・台帳・シェルとバルーンの解決・読み直しの引数。インストールの机・MCP・書き出し）。
 areka-runtime = { path = "../areka-runtime" }

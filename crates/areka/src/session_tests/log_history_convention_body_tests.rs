@@ -7,7 +7,7 @@ use areka_session::log_history::RULES;
 // ---------------------------------------------------------------------------
 
 /// target の先頭のクレート名から（クレートの `src`・根のファイル）を引く。知らないクレートは None。
-/// 本体は相対で、下の crate は読み口で引く。
+/// 本体は自分の `CARGO_MANIFEST_DIR` から、下の crate は読み口で引く。
 fn crate_of(name: &str) -> Option<(std::path::PathBuf, &'static str)> {
     match name {
         "areka" => Some((

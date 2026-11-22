@@ -336,7 +336,7 @@ fn every_write_kind_reaches_the_desk() {
         .collect();
     assert!(missed.is_empty(), "机に届かなかった書き込み: {missed:#?}");
 
-    // 判定した種類の数が13 種と等しい（置き場の並びは居る・居ないの 2 回で 1 種）。
+    // 判定した種類の集まりが表の 13 種と等しい（置き場の並びは居る・居ないの 2 回で 1 種）。
     let mut kinds: Vec<&str> = judged.iter().map(|(kind, ..)| *kind).collect();
     kinds.sort_unstable();
     kinds.dedup();

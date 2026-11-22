@@ -24,12 +24,11 @@ use areka_sylphya::persist::withhold::WithholdGuard;
 use areka_sylphya::{PersistKey, PersistScope};
 use areka_user_data::{Signals, Writability, establish_readonly_from, readonly_app_profile_dir};
 use log_capture_kit::capture;
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::ghost_session_switch_tests::{A_TO_B, ghost_a, lap_rig, pump_to_welcomed};
 use super::{publisher_of, read_back, tree};
 use crate::after_run;
 use crate::install::{InstallOrder, InstallOrigin};
-use crate::sample_test_support::switch_rig;
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
@@ -38,15 +37,11 @@ use areka_session::app_exit::{ExitOrigin, FirstExit, quit_app};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_seam::insert_persist_wiring;
 use areka_session::ghost_session::GhostSlot;
-use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_session::readonly::ReadOnlyRun;
 use areka_session::roots::user_root::copy_unless_readonly;
 use areka_session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
 use areka_session::write_failure::check_boot;
-
-/// A の `OnBoot` の台本: 台詞の途中で B への切替を命じる。
-const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
 
 /// 呼出列の id（GET と NOTIFY）。
 fn ids(calls: &[Vec<RecordedCall>]) -> Vec<String> {
@@ -62,14 +57,6 @@ fn ids(calls: &[Vec<RecordedCall>]) -> Vec<String> {
 
 #[test]
 fn readonly_run_leaves_the_tree_as_it_was() {
-    let a = FakeShiori::Scripted(Box::new(|| {
-        standard_script(A_TO_B)
-            .get(
-                "OnGhostChanging",
-                Ok(Some("\\0Bへ交代します\\e".to_owned())),
-            )
-            .get("OnGhostChanged", Ok(None))
-    }));
     let b = FakeShiori::Scripted(Box::new(|| {
         // 断った更新の総括（返事なし）に 204 で答える。A には台本が無い＝A へ届けば偽の SHIORI が落ちる。
         standard_script("\\0B\\e")
@@ -77,10 +64,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
             .get("OnUpdateResultEx", Ok(None))
             .get("OnUpdateResult", Ok(None))
     }));
-    let mut rig = switch_rig(vec![("A", a), ("B", b)]);
-    // 切替先の窓の準備が閉包を投函する先（取り出しの系は回さないので走らない）。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
+    let mut rig = lap_rig(ghost_a(A_TO_B, None), b);
     rig.plant_boot_record("B");
     rig.wire_app_memory();
     rig.world.insert_resource(ReadOnlyRun);
@@ -139,11 +123,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         // --- 取っ手と印の下の走り ---
         rig.boot("A");
         check(rig.wait_steady(), "A が定常に届かない");
-        let welcomed = rig.pump_talking_until(|rig| {
-            rig.exit_requested()
-                || (!rig.calls("B").is_empty()
-                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
-        });
+        let welcomed = pump_to_welcomed(&mut rig, "B", 1);
         check(welcomed && !rig.exit_requested(), "B への切替が済まない");
 
         let publisher = publisher_of(&rig.world);

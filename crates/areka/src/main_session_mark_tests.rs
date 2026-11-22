@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
-use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFault, ShioriFaultKind};
+use areka_kanade::{BootOrigin, KanadeNotice, KanadeStopCause, ShioriFaultKind};
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
@@ -37,16 +37,10 @@ use areka_session::ghost_session::{
     GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues,
 };
 use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use areka_session::session_end::test_support::fault;
 use areka_session::session_mark::{
     MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
 };
-
-fn fault(kind: ShioriFaultKind) -> ShioriFault {
-    ShioriFault {
-        kind,
-        reason: "テストの失敗".to_owned(),
-    }
-}
 
 /// 降ろした結果の組（メッセージループの成否・降ろす処理の成否・上限の打ち切りの有無）。
 fn end(run_ok: bool, down_ok: bool, shiori_cut: bool) -> Teardown {

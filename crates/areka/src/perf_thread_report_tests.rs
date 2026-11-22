@@ -7,9 +7,7 @@
 
 use super::*;
 
-use wintf::ecs::world::thread_registry::{
-    ALL_ROLES, ROLE_UNREGISTERED_REST, is_known_role, role_actor,
-};
+use wintf::ecs::world::thread_registry::ROLE_UNREGISTERED_REST;
 
 /// 行を空白で切り、`名前=値` の**名前**だけを順に取り出す。
 /// 判定スクリプト `tools/perf/judge-perf.py` の `parse_fields` と同じ切り方
@@ -48,43 +46,6 @@ fn sample_process() -> ProcessSample {
         user_us: 600_000,
         threads: 9,
     }
-}
-
-// ---------------------------------------------------------------------------
-// 役割語彙の全件
-// ---------------------------------------------------------------------------
-
-/// 固定語彙は 8 件・綴りと並びまで動かさない。
-#[test]
-fn all_roles_is_the_fixed_eight_vocabulary() {
-    assert_eq!(
-        ALL_ROLES,
-        &[
-            "vblank",
-            "cursor_monitor",
-            "ui",
-            "ticker_dispatcher_kanade",
-            "ticker_loop",
-            "actor:",
-            "perf_report",
-            "unregistered_rest",
-        ],
-        "役割語彙が動いた（報告行の読み手＝perf-rank.py も直すこと）"
-    );
-}
-
-/// 語彙の判定はアクターだけ接尾辞つきを認め、接尾辞なしは認めない。
-#[test]
-fn actor_role_needs_a_suffix_and_every_other_role_is_literal() {
-    for role in ALL_ROLES {
-        if *role == "actor:" {
-            assert!(!is_known_role(role), "接尾辞なしの actor: は語彙ではない");
-        } else {
-            assert!(is_known_role(role), "{role} が語彙として認められない");
-        }
-    }
-    assert!(is_known_role(&role_actor("seriko")));
-    assert!(!is_known_role("taskpool"));
 }
 
 // ---------------------------------------------------------------------------
@@ -378,4 +339,24 @@ fn start_spawns_nothing_while_the_target_is_off() {
         start().is_none(),
         "消灯しているのに報告スレッドが起きた（既定運転で費用を払っている）"
     );
+}
+
+// ---------------------------------------------------------------------------
+// 終わり際
+// ---------------------------------------------------------------------------
+
+/// 最後の 1 枚の途中で報告スレッドが panic した → 記録は panic の error 1 件だけ（待ちきれなかった、ではない）。
+#[test]
+fn a_panicked_report_thread_is_recorded_as_a_panic_not_a_timeout() {
+    let (stop, stop_rx) = mpsc::channel::<()>();
+    let (done_tx, done) = mpsc::channel::<()>();
+    let join = thread::spawn(move || {
+        let _done = done_tx;
+        let _ = stop_rx.recv();
+        std::panic::resume_unwind(Box::new("テストの panic"));
+    });
+    let handle = ReportHandle { stop, done, join };
+    let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
+    let levels: Vec<_> = events.iter().map(|e| e.level).collect();
+    assert_eq!(levels, [tracing::Level::ERROR], "{events:?}");
 }

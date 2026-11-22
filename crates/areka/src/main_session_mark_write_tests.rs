@@ -8,7 +8,7 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{after_run, finish_after_run};
-use crate::session_tests::reservation;
+use crate::session_tests::{publisher_of, reservation, unwritable, writable};
 use areka_session::alert::{AlertScene, WriteMoment};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::BootContext;
@@ -44,7 +44,7 @@ fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
     let verdict = after
         .mark
         .as_ref()
-        .map(|m| session_mark_verdict(m.first.as_ref(), m.argv_session, false, end));
+        .map(|m| session_mark_verdict(m.first.as_ref(), m.argv_session, m.logsink_fallback, end));
     let code_nonzero = finish_after_run(Ok(()), after.fault, || Ok(())).is_err();
     assert_eq!(
         (after.scene, verdict, code_nonzero),
@@ -61,23 +61,7 @@ fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
 }
 
 // ---------------------------------------------------------------------------
-// 印の 4 つの形。置き場は普通のファイルにして書けなくする。
-
-/// 置き場の位置に普通のファイルを置く（書けない）。
-fn unwritable(dir: &std::path::Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
-/// 置き場をフォルダへ戻す（書ける）。
-fn writable(dir: &std::path::Path) {
-    if dir.is_file() {
-        std::fs::remove_file(dir).expect("置き場の位置のファイルを外す");
-    }
-    std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
-}
+// 印の 4 つの形（⑷ は areka-session の `session_mark_tests.rs`）。置き場は普通のファイルにして書けなくする。
 
 /// 最初の出所が `MemoryWriteFailed` か。
 fn first_is_write_failed(world: &World) -> bool {
@@ -156,15 +140,7 @@ fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
     rig.wire_app_memory();
     rig.boot("A");
     let app = rig.app_dir();
-    let publisher = rig
-        .world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("A の実行系が起きている")
-        .sylphya_publisher()
-        .clone();
+    let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
 
     // 定常の印（投函）: 机へ届くまでは終わらせず、汲み出しで終わる。

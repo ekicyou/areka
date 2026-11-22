@@ -1,25 +1,8 @@
 //! オフラインの書き出しの欄。
 
+use super::parse_tests::{run, s, split};
 use super::*;
 use crate::cli::OfflineDumpRequest;
-
-/// `args[0]` に exe を足して読む。
-fn run(args: &[&str]) -> Parsed {
-    let mut all = vec!["areka".to_owned()];
-    all.extend(args.iter().map(|a| (*a).to_owned()));
-    parse(&all)
-}
-
-/// まとめの前の材料。
-fn notes(parsed: &Parsed) -> &[ParseNote] {
-    let (last, rest) = parsed.notes.split_last().expect("まとめが 1 件はある");
-    assert!(matches!(last, ParseNote::Summary { .. }), "最後はまとめ");
-    rest
-}
-
-fn s(v: &str) -> String {
-    v.to_owned()
-}
 
 fn missing(name: &str) -> ParseNote {
     ParseNote::MissingValue { name: s(name) }
@@ -72,7 +55,7 @@ fn offline_dump_present_with_or_without_value() {
     for (args, want) in cases {
         let parsed = run(&args);
         assert_eq!(parsed.options.offline, Some(want), "{args:?}");
-        assert_eq!(notes(&parsed), NONE, "{args:?}");
+        assert_eq!(split(&parsed).0, NONE, "{args:?}");
         assert_eq!(parsed.options.boot.positional_ghost, None, "{args:?}");
     }
 }
@@ -117,7 +100,7 @@ fn seven_dump_values_both_forms() {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let parsed = run(&args);
         assert_eq!(parsed.options.offline.as_ref(), Some(&want), "{args:?}");
-        assert_eq!(notes(&parsed), NONE, "{args:?}");
+        assert_eq!(split(&parsed).0, NONE, "{args:?}");
     }
 }
 
@@ -132,7 +115,7 @@ fn empty_dump_value_is_missing() {
     ] {
         let parsed = run(&args);
         assert_eq!(parsed.options.offline, Some(ghost("G")), "{args:?}");
-        assert_eq!(notes(&parsed), &[missing("dump-scope")], "{args:?}");
+        assert_eq!(split(&parsed).0, &[missing("dump-scope")], "{args:?}");
     }
     // 7 つ全部が値なしなら 7 件
     let parsed = run(&[
@@ -147,7 +130,7 @@ fn empty_dump_value_is_missing() {
     ]);
     assert_eq!(parsed.options.offline, Some(OfflineDumpRequest::default()));
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[
             missing("dump-shell"),
             missing("dump-scope"),
@@ -160,7 +143,7 @@ fn empty_dump_value_is_missing() {
     );
     // `--offline-dump` が無ければ値なしの記録は出さず、効かない記録だけ
     assert_eq!(
-        notes(&run(&["--dump-scope"])),
+        split(&run(&["--dump-scope"])).0,
         &[without_offline("dump-scope")]
     );
 }
@@ -170,15 +153,15 @@ fn empty_dump_value_is_missing() {
 fn repeated_dump_values_last_wins() {
     let parsed = run(&["--offline-dump", "a", "--offline-dump", "b"]);
     assert_eq!(parsed.options.offline, Some(ghost("b")));
-    assert_eq!(notes(&parsed), &[repeated("offline-dump")]);
+    assert_eq!(split(&parsed).0, &[repeated("offline-dump")]);
 
     let parsed = run(&["--offline-dump", "G", "--dump-scope", "1", "--dump-scope=2"]);
-    assert_eq!(notes(&parsed), &[repeated("dump-scope")]);
+    assert_eq!(split(&parsed).0, &[repeated("dump-scope")]);
     assert_eq!(parsed.options.offline.unwrap().scope, Some(s("2")));
 
     let parsed = run(&["--offline-dump", "G", "--dump-scope", "1", "--dump-scope"]);
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[repeated("dump-scope"), missing("dump-scope")]
     );
     assert_eq!(parsed.options.offline.unwrap().scope, None);
@@ -190,7 +173,7 @@ fn dump_scope_negative_reads_as_name() {
     let parsed = run(&["--offline-dump", "G", "--dump-scope", "-1"]);
     assert_eq!(parsed.options.offline, Some(ghost("G")));
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[ParseNote::Unknown { arg: s("-1") }, missing("dump-scope")]
     );
     // `=` の形なら値になる（解釈は走りが行う）
@@ -252,13 +235,13 @@ fn dump_pending_and_other_dump_names() {
     assert_eq!(parsed.options.boot.positional_ghost, None);
     // 1 件ずつ・扱わない名前の記録にはしない
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[pending("dump-surface-option"), pending("dump-animation")]
     );
 
     let parsed = run(&["--offline-dump", "G", "--dump-surface", "d"]);
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[ParseNote::Unsupported {
             name: s("dump-surface")
         }]
@@ -302,7 +285,7 @@ fn other_options_with_offline_not_applied() {
         "pos2",
     ]);
     assert_eq!(parsed.options.offline, Some(ghost("G")));
-    let got = notes(&parsed);
+    let got = split(&parsed).0;
     assert!(
         got.contains(&ParseNote::WordPending { word: s("kiosk") }),
         "{got:?}"
@@ -334,7 +317,8 @@ fn other_options_with_offline_not_applied() {
     }
     // `--offline-dump` が無ければ記録しない
     assert!(
-        !notes(&run(&["--random", "--option", "kiosk"]))
+        !split(&run(&["--random", "--option", "kiosk"]))
+            .0
             .iter()
             .any(|n| matches!(n, ParseNote::OfflineIgnored { .. }))
     );
@@ -355,7 +339,7 @@ fn dump_without_offline_noted_each() {
     assert_eq!(parsed.options.offline, None);
     assert!(parsed.options.boot.random);
     assert_eq!(
-        notes(&parsed),
+        split(&parsed).0,
         &[
             repeated("dump-scope"),
             without_offline("dump-shell"),

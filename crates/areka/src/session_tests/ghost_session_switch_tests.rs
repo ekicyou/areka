@@ -19,6 +19,7 @@ use sample_ghost_kit::SampleRoot;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use wintf::ecs::{FrameFinalize, Input, Update};
 
+use super::levels_of;
 use crate::menu::{Frame, MenuWiring};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::switch_rig;
@@ -262,15 +263,6 @@ fn get_refs(calls: &[RecordedCall], id: &str) -> Option<Vec<String>> {
     })
 }
 
-/// `event` の記録の水準の列。
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
-
 /// フォルダの絶対パスの文字列（Ref3 の形）。
 fn abs(rig: &SwitchRig, folder: &str) -> String {
     std::path::absolute(rig.root.ghost_dir(folder))
@@ -295,7 +287,7 @@ pub(super) fn notice_rx_live(world: &mut World) -> bool {
 
 /// 切替で起きたゴーストの定常到達まで回す（`folder` の起動が `boots` 回に達し、予約が消えた
 /// 時点＝迎え入れの定常の通知を処理した時点。終了が指示されたら打ち切る）。
-fn pump_to_welcomed(rig: &mut SwitchRig, folder: &str, boots: usize) -> bool {
+pub(super) fn pump_to_welcomed(rig: &mut SwitchRig, folder: &str, boots: usize) -> bool {
     rig.pump_talking_until(|rig| {
         rig.exit_requested()
             || (rig.calls(folder).len() >= boots
