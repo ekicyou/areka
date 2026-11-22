@@ -612,3 +612,53 @@
 - 判定: 5 回目で打ち切った・残りは直し済み（要件 9.6）。5 回目の 8 件はどれも「できれば」で、本番の振る舞い（起動オプション・SHIORI へ送るもの・知らせの文・走っている印・ログの行・公開の面）に触れるものは 0 件。9.7（同じ所から必ず直すが出続ける）には当たらない。9.8 により連鎖の直しは Fable でまとめて直した。
 - かけ直しの中で振る舞いが変わった直し: `exit_wait_done` の `ms` を門ごとに数える（1 回目）／`runtime_boot` の起動の失敗の記録に event 欄 `runtime_boot_origin_missing`・`runtime_boot_failed` を足す（1 回目・文と水準は同じ）／性能の報告スレッドが panic したとき、待ちきれなかった warn でなく panic の error を残す（1 回目・停止の後／2 回目・停止の前。「既に終端していた」の warn は出なくなった）。どれも赤を先に見た。
 - 範囲の外に残る同じ型（申し送り・tasks.md の Implementation Notes）: 記憶の書き手の戻りを捨てる `install/startup_flow_tests.rs:79`・`runtime_tests/frame/switch_finish_tests.rs:182`、記録を event 名で引く写し（兄弟の `ghost_switch_*`・`shell_balloon_switch*`・`roots/`・本体の `install/`・`update/`・`mcp/`・`menu/`・`runtime_tests/`）、「`LogSink`×2」の言い回し（`crates/areka-runtime/src/lib.rs` の 5 か所）。
+
+## 14. 差分の境界と全体テスト（21.2）
+
+### 14.1 差分の境界（`git fetch` の後・`git diff origin/main...HEAD`・274 ファイル）
+
+| 確かめ | 結果 |
+|---|---|
+| `crates/dola/`・`crates/wintf*`・`vendors/` | 0 ファイル・0 行 |
+| 兄弟の持ち物（`install*`・`update*`・`mcp*`・`roots*`・`readme*`・`ghost_switch*`・`shell_balloon_switch*`・`balloon_visibility*` の名の差分） | 0 ファイル（申し合わせの `alert_tests.rs` の構築の 2 行は兄弟の側の変更で、この差分には出ない） |
+| `THIRD-PARTY-NOTICES.md` | 差分に無い（作り直しの差 0 は全体テストの `-License` の段で確かめる） |
+| 範囲の中 | `.kiro/specs/audit-areka-app/`（6 ファイル＋`design-validation.md`）・`crates/areka/`（`src/`・`tests/`・`examples/`・`README.md`・`areka.manifest`・`icon/`・`Cargo.toml`・消した絵 77 個）・`crates/areka-session/`（`src/`・`Cargo.toml`・`build.rs`・消した `tests.manifest`）・`Cargo.lock`（`async-io` の 1 行だけが消えた） |
+
+### 14.2 範囲の外の差分の分類（Modified Files（範囲の外）の表との突き合わせ）
+
+| ファイル | 分類 |
+|---|---|
+| `crates/areka-sylphya/src/persist/mod.rs`・`persist/persist_unreadable_tests.rs` | 表の行（指摘 1・`Unusable`） |
+| `crates/areka-sylphya/src/actor.rs` | 表の行（脳を指す説明） |
+| `crates/log-capture-kit/tests/sync_send_guard_test.rs`・`readonly_withhold_guard_test.rs`（新） | 表の行（指摘 43・20） |
+| `crates/log-capture-kit/tests/sample_path_guard_test.rs`・`src/event.rs`・`src/event_tests.rs` | 表の行（古い説明・脳を指す説明） |
+| `crates/areka-ghost/Cargo.toml`・`src/shiori_inproc.rs`・`tests/ghost/inproc_fixture.rs` | 表の行（説明の文だけ） |
+| `crates/shiori-abi/src/interface.rs`・`crates/shiori4-testdll/src/lib.rs`・`crates/real-run-kit/src/run.rs` | 表の行（説明の文だけ） |
+| `crates/areka-runtime/src/lib.rs`・`examples/collision-probe/fixture.rs` | 表の行（古い説明） |
+| `crates/areka-placement/src/lib.rs`・`error.rs`・`follow/work_area.rs`・`sample_test_support.rs`・`examples/window-placement.rs` | 表の行（古い説明・「段 ③」の札） |
+| `crates/areka-emo-compose/src/sample_test_support.rs`・`crates/areka-nar/src/names_tests.rs`・`crates/areka-user-data/Cargo.toml` | 表の行（古い説明・`description` の spec 名） |
+| `doc/COMPAT_ARCHITECTURE.md` | 約束 ⑶ のとおり既にある行 301 付近の 318・319・403〜405 だけ（差分の hunk は 318-319 と 403-405 の 2 つ） |
+| `doc/pasta-profile.md` | 表の行（指摘 76・97） |
+| `.kiro/steering/structure.md` | 表の行（276・362・460 行の 3 hunk。362 行は脳を指す `ShioriHostSink` の説明を消す連動） |
+| `.kiro/specs/menu-thumbnail-preview/brief.md` | 表の行（手本の申し送り） |
+| `crates/areka/src/runtime_tests/`・`menu/`・`placement_tests/measure_template_tests.rs` | 本体の中だが表で「範囲の外（見直さない所）」に挙がった行のみ（`zorder_wiring_tests.rs`・`spine.rs`・`frame/switch_finish_tests.rs`・`menu/ghost_frame_tests.rs`・`menu/mod.rs`・`measure_template_tests.rs`） |
+| `crates/areka/src/runtime_tests/frame_chain_finalize_persist_tests.rs`（2 行） | 本体の中の範囲（要件 5 の件の行） |
+
+表に無い範囲の外のファイルは 0（上の突き合わせで全部が表の行に当たる）。
+
+### 14.3 外への約束の差
+
+| 項目 | 差 | 決めの根拠 |
+|---|---|---|
+| 環境変数 | 消えたのは `AREKA_SHIORI_DEMO`（`DEMO_ENV`）だけ。足したものは 0。`git grep AREKA_SHIORI_DEMO`（`vendors/`・`.kiro/` 除く）は 0 件 | 指摘 5・14（脳の削除） |
+| 知らせの文 | `MEMORY_FILE_FIX` の一文（`PersistFailureCause::Unusable` のときだけ） | 指摘 1 |
+| ログの文の頭 | `[session_mark] argv で始まったプロセスなので起動中の印に触れません`・`[boot_seam] 切替で起こしたゴーストの記憶は定常到達まで書きません`・`[boot_seam] シェルのフォルダ名が取れないので記憶を書きません`（頭の `[main]` から変えた分）。`[main] UI の基盤を初期化できませんでした` には `event = "winapp_init_failed"` を足した | 指摘 4・95（design.md の記録の表）・指摘 5 |
+| 倒れ先の `event` 欄 | `fallback_boot_wired_off`・`fallback_boot_origin_missing`・`fallback_boot_failed` | 指摘 4（確定の 3 つ） |
+| かけ直しで足した `event` 欄 | `runtime_boot_origin_missing`・`runtime_boot_failed`（`areka-session` の起動の失敗の記録）・`offline_dump_canvas_too_large`（書き出しの失敗の記録） | 13 の「かけ直しの中で振る舞いが変わった直し」・design.md（`offline_dump_canvas_too_large`） |
+| 起動中の印（running mark）の中身・置き場・起動オプション・SHIORI へ送るもの | 差分の本番の行に変更なし（`session_mark.rs` は文の頭と `#[cfg(test)] mod` の追加だけ） | 要件 7.3 |
+
+決めに無い外への約束の変化は見つからなかった。
+
+### 14.4 全体テスト
+
+`tools/test-all.ps1 -License` の段は 1 回目をまだ回していない（排他テストの机を持つ進行役が回す）。結果は進行役が下に追記する。
