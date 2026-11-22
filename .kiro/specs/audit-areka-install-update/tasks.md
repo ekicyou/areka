@@ -171,6 +171,7 @@
 
 - [ ] 3.3 `update/` のテストの写しを支えのファイルへ寄せる（G11・指摘 27・72・74・75・件 6 の `update/`）
   - 新しい `update/update_test_support.rs` に、名を取る `boot_context(temp, root, ghost, balloon)`・`write_descript`（charset の頭と末尾の改行の形に統一）・イベント名で絞る補助・`run`・`ids`・`refs_of` を置き、`update/` の 4 つの写しと補助の写しを寄せる（27・74。`desk_resolve_tests.rs` の呼び手は頭を外す）。
+  - `refs_of` の写し 3 つ（`install/desk_overwrite_tests.rs`・`update/desk_reload_tests.rs`・`update/worker_path_tests.rs`）と `worker_path_tests.rs` の `kinds` は、`areka-session` の `shell_balloon_switch_session_lap_test_support::kinds`（pub）と中身が同じ。本体のテストから引けるならそれを呼び、引けなければ支えのファイルの 1 つへ寄せる。
   - `desk_reload_tests.rs` は `super::ask_reload_for_test` を呼ぶ（72）。`update_tests.rs` と mod の行を消す（75）。
   - `update/` の中の `boot_context` の写しが支えの 1 つだけになり、テストが全部緑。`desk_resolve_tests.rs` 558 行の `BODY_SYSTEMS` の 1 行は残す（件 7）。
   - _Dispatch: mechanical — 置く補助の形を design が与えている_
