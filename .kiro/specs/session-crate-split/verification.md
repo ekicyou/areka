@@ -1171,3 +1171,225 @@ RED は n/a（文字列の target の書き換えのみ。期待値の側も同�
 除外のほかに当たった所: 0 件。
 
 RED: 該当なし（数えるだけ）。
+
+## 段 6
+
+### 7.1
+
+構造の証跡（RED 該当なし）。2026-11-22 に取った。
+
+#### テストの名前の末尾の多重集合（8.2・8.3）
+
+- コマンド: `cargo test --workspace --no-fail-fast -- --list`（標準出力を `target/session-crate-split/tests-after.txt` に残した・終了コード 0）。`: test$` の行から `: test` と先頭の `パス::` を落として並べ（段 0 の `tests-before.txt` と同じ手順）、`diff` で比べた。
+- `: test$` の行: 前 14443 → 後 14451（差 +8）。
+- 枝の基点は `ba887213c`。作業の枝は `main` を取り込んでいない（`git log --merges ba887213c..HEAD` は 0 件）。`main` は着地済みの兄弟（`test-name-work-tags`・`dola-cue-test-builder`）で進んでいるが、枝には入っていないので、この差に混ざらない。
+
+| 増えた末尾 | 件数 | 説明 |
+|---|---|---|
+| `busy_slots_are_asked_update_first` | +1 | OrderTests（集めた層の `body_systems_tests.rs`） |
+| `menu_poll_and_after_input_sit_in_the_registration_order` | +1 | OrderTests（集めた層の `body_systems_tests.rs`） |
+| `window_slots_sit_between_the_input_attachments` | +1 | OrderTests（集めた層の `body_systems_tests.rs`） |
+| `body_slots_follow_the_boot_and_switch_order` | +1 | OrderTests（集めた層の `body_systems_tests.rs`） |
+| `register_systems_installs_body_systems` | +1 | OrderTests（本体の `session_tests/body_systems_tests.rs`） |
+| `after_input_registers_install_update_mcp_in_order` | +1 | OrderTests（本体の `session_tests/body_systems_tests.rs`） |
+| `missing_body_systems_logs_and_answers_like_no_desk` | +1 | OrderTests（本体の `session_tests/body_systems_tests.rs`） |
+| `crash_filter_is_installed_before_the_tests_start` | +1 | 集めた層の `crash_report_tests.rs`（新しいテスト exe の TestBinaryGuard）（同名は本体・runtime・input にも在る） |
+
+- 減った末尾: 0。移した・分けたテストは名前を変えていないので差に出ない。説明のつかない差は 0。見込み（+8）と一致した。
+
+#### 警告と触らない約束（8.4・3.7）
+
+- `cargo check --workspace --all-targets`: 警告 0・エラー 0。
+- 基点は `git merge-base main HEAD` = `7cb95c3e8`（`main` の先頭は後続の着地で進んでいる。比べは枝が持つ範囲）。`git diff --stat 7cb95c3e8 HEAD -- <場所>`:
+  - `crates/areka-placement/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`: 差分なし（空）。
+  - 本体の `crates/areka/src/placement_tests/`: 4 ファイル・各 1 行の import の書き換え（**裁定待ち**・直していない）。4.2 で集めた層の支え（`crate_source_test_support`）の出し先が替わったための付け替えで、触らない約束の「空」とは合わない:
+    - `measure_bake_count_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
+    - `measure_template_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
+    - `zorder_group_branch_coverage_tests.rs`: `-use crate::crate_source_test_support::crate_source;` → `+use areka_session::crate_source;`
+    - `zorder_inversion_branch_coverage_tests.rs`: `-    let fixture = crate::crate_source_test_support::crate_path(` → `+    let fixture = areka_session::crate_source_test_support::crate_path(`
+  - `crates/areka-runtime`・`crates/areka-kanade`: 9 ファイル・13 行ずつの入れ替え。差分の `+`／`-` の行をすべて取り出し、`//` で始まる行以外を数えると 0 行（コメントだけ）。
+
+#### 本体を引かないこと（3.4・4.7）
+
+- `cargo tree -p areka-session -e normal`: `areka v` の行 0 件。`log-capture-kit`・`temp-path-kit`・`sample-ghost-kit` の行 0 件（本番の依存は下の crate だけ）。
+- 4.7 の式: ⑴ `crates/areka-session/Cargo.toml` に `areka =` の行 0 件。⑵ `cargo tree -p areka-session -e normal,dev` に `areka v` の行 0 件（番人の 3 crate は `[dev-dependencies]` にだけ現れる・5.9 の決まりどおり）。⑶ `crates/areka-session/src` の `areka::` の字面は 46 行（`log_history.rs`・`log_history_tests.rs`・`log_history_convention_tests.rs`）だが、すべて `"areka::install"` などの本体が持つ出所の名前の文字列で、設計が「語彙の直書きは変えない」とした所。引用符の外の Rust のパス・`//` を除いたコードの行の `areka::` は 0 件。
+
+#### テストの置き場の表（5.1・設計の TestPlacement）
+
+| テストのファイル（旧 `session/`） | 置き場 | 理由 |
+|---|---|---|
+| `session_end_tests.rs`・`ghost_session_switch_fallback_tests.rs`・`ghost_session_switch_memory_tests.rs`・`readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs`・`boot_config_module_policy_tests.rs` | 本体 | 根の関数（`after_run`・`finish_after_run`・`boot_first_ghost`・`install_boot_context`）を引く（5.3） |
+| `boot_config_{balloon,copy,input,option,roots,callghost}_tests.rs` | 本体 | `resolve_boot_from` を通して `cli::parse` を引く（5.3・D12） |
+| `ghost_session_restart_tests.rs`・`ghost_session_reload_tests.rs` | 本体 | `SpineHarness`・`BODY_SYSTEMS`・menu を引く（5.6） |
+| `ghost_session_strict_tests.rs`・`ghost_session_switch_tests.rs`・`shell_balloon_switch_session_tests.rs` | 本体 | menu の本物（`MenuWiring` ほか）を見る（5.2） |
+| `ghost_session_scope_rect_boot_tests.rs`・`ghost_session_scope_scale_boot_tests.rs` | 本体 | mcp・`shiori_host` の本物を見る（5.2） |
+| `boot_resolve_mark_text_tests.rs`・`shell_balloon_switch_session_update_tests.rs` | 本体 | install・update の本物を見る（5.2） |
+| `reload_tests.rs`（ファイルごと） | 本体 | `refusals_in_order_leave_one_record_each` が本物の `InstallDesk`・`UpdateDesk` を据えて断りの順を見る。足場（`rig`・`refuse`）が `TempPath`・`capture` に頼るので分けない（D8 ⑵） |
+| `shell_balloon_switch_tests.rs`（ファイルごと） | 本体 | `refusals_in_order_leave_one_warning_each_and_send_nothing` が本物の `UpdateDesk` を据える。同じ理由で分けない |
+| `readonly_tests.rs` の `engage_is_called_only_from_main`・`main_calls_engage_exactly_once_before_resolve_boot`・`withhold_everything_is_called_only_from_readonly`（小道具 `all_sources`・`files_calling` も） | 分ける → 本体 `readonly_body_tests.rs` | 本体の `main.rs`・`src` を読む（5.13）。3 本目は同じ小道具でワークスペースを歩くので一緒に移す |
+| `readme_tests.rs` の `only_the_os_port_spells_shell_execute` | 分ける → 本体 `readme_body_tests.rs` | 本体の `src` を歩く（5.13） |
+| `session_end_deadline_tests.rs` の `only_session_end_calls_the_bounded_shutdown`・`deadline_call_scan_turns_red_on_one_line_removed_or_added` | 分ける → 本体 `session_end_deadline_body_tests.rs` | 本体の `src` を歩く（5.13） |
+| `log_history_convention_tests.rs` の `every_rule_target_names_a_module_or_literal_that_exists`・`locate_turns_red_for_missing_and_underivable_targets` | 分ける → 本体 `log_history_convention_body_tests.rs` | 決まりの出所（`areka::install` ほか本体のもの）の在りかを本体の `src` で確かめる（5.13） |
+| `app_exit_escape_tests.rs` | 集めた層 | 見るのは集めた層の `quit_app` と `InputHooks` だけ。`crate::BODY_SYSTEMS` の 1 行を `NO_BODY` へ（中身の表明は変えない） |
+| `runtime_boot_tests.rs` | 集めた層 | 口の無い World で 13 個（D4）。`acquire_emo2` を `SampleRoot::acquire("emo2")` へ |
+| `boot_shell_tests.rs`・ほか `SwitchRig` を通る集めた層の 30 本と残りの全部 | 集めた層 | 本体の項目を名指さない。`SwitchRig::new` が `NO_BODY` を渡す |
+| `shell_balloon_switch_session_update_tests.rs`（D9 の比べ） | 本体 | 偽物の組で `a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon` が赤（更新の窓口が据わらず、`update/desk.rs` が無い非 Send の資源を読んで panic）。足場を集めた層の `lap_rig` → `SwitchRig::new` から受けていたので、`SwitchRig::new(` の字面を数えた書き換えから漏れていた。`lap_rig_of` の後半を `lap_rig_on(rig, shells)` に分け、このファイルは本体の `switch_rig` で組んだ足場を渡す。もう 1 本（`update_targets_follow_the_swapped_shell_and_balloon`）は差なしだが、足場 `steady_rig` を分け合うのでファイルごと移す |
+| 偽物の組で `homeurl` の照会だけが減る 24 本（`ghost_switch_reload_tests.rs` 9・`ghost_switch_balloon_tests.rs` 6・`ghost_switch_boot_event_tests.rs` 3・`shell_balloon_switch_session_abort_tests.rs` 2・`ghost_quit_switch_tests.rs`・`boot_shell_tests.rs`・`ghost_session_switch_translate_tests.rs`・`ghost_switch_talk_clock_tests.rs` 各 1） | 集めた層 | 本物の組では定常の知らせで本体の更新の窓口が `homeurl` の照会を 1 回送る。`SwitchRig::calls` はこの照会をもともと除くので、表明が見る列は同じ。照会が増やすのは進みの目印の 1 だけで、偽物の組でも待ちは打ち切られない（2 回とも緑）。照会そのものは本体の `update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time` が見る |
+| `boot_shell_tests.rs` の `animated_hidden_shell_boot_emits_each_load_record_once`・`remembered_hidden_shell_reaches_all_resolutions_decided_once` | 集めた層 | 違うのは `on_steady` の回数（本物の組 0・偽物の組 1。後者は本物の組でも回により 0／1）。1 回起こすだけのテストは定常の知らせを汲む前後で終わるので回による。表明は読み込みの記録の数だけを見て、`on_steady` の先の本体の窓口を見ない |
+| 終わりの道で `exit_wait` の門を通る集めた層のテスト（`session_end_deadline_tests.rs` 7・`session_end_sync_send_tests.rs` 1・`shell_balloon_switch_session_abort_tests.rs` の `close_request_while_waiting_drops_the_switch_and_exits_as_today`） | 集めた層 | 偽物の組では install・update の門が据わらないが、本物の組でも門は空で待たない（記録・口の回数とも差なし）。仕事のある門の待ちは本体の `install/worker_tests.rs`・`install/desk_exit_tests.rs`・`update/worker_tests.rs` ほかが見る |
+| `reload_tests.rs`・`shell_balloon_switch_tests.rs` の `insert_resource(crate::BODY_SYSTEMS)` の 1 行（D13） | 本体 | 上の行のとおりファイルごと本体へ移すので、1 行はそのまま移す。`update_busy`・`install_busy` の照会が真のときの断りを見るのはこの 2 本で、偽物の組の照会は常に偽 |
+
+- 本物の組と偽物の組で合否か記録が違う集めた層のテストは、1 本ずつ置き場と理由を決めてこの表に足す（D9）。静かに読んだ見込み（走らせていない）: 本体の `update::register` が据える `UpdateDesk` は定常のたびに `homeurl` の照会を偽の SHIORI へ送るが、`SwitchRig` の記録はもともとこの照会を除いて見る（`ghost_switch_test_support.rs:446〜458`）。進みの目印（`progress_probe`）は照会も数えるので、待ちの打ち切りの時点が変わりうる。`exit_wait` の門（install・update）も据わらなくなる。この 2 つに当たるテストが赤になるかは段 2 で走らせて決める。走らせた結果（2026-11-22・本物の組と偽物の組を 2 回ずつ）: `SwitchRig::new` に届く集めた層のテストは 16 ファイル 52 本で、赤は 1 本（上の `shell_balloon_switch_session_update_tests.rs` の行）。緑で記録が違うのは `homeurl` の照会 24 本と `on_steady` の回数 2 本で、上の行のとおり集めた層に残す。比べた表は検証の記録の 3.2。
+- 分けたファイルのテストは、名前と中身を変えない。小道具は D8 の 2 通りで扱い、写しを作らない。`test-support` へ移した小道具は 4.5 の記録に入れる。
+- この表を検証の記録に写す（5.1）。
+
+#### 比べた結果の表（3.2・本物の組と偽物の組・SwitchRig を通る 52 本）
+
+
+合否は「本物の組／偽物の組」。記録の差は「本物の組 → 偽物の組」で、2 回が違うときは回ごとに書く。差の無い欄は書かない。
+
+| ファイル（旧 `session/`） | テスト | 合否 | 記録の差 | 決めた置き場 |
+|---|---|---|---|---|
+| `ghost_quit_switch_tests.rs` | `stop_with_handoff_under_reservation_switches_without_exit` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `boot_shell_tests.rs` | `animated_hidden_shell_boot_emits_each_load_record_once` | 緑／緑 | `on_steady` 0→1 | 集めた層（乙） |
+| `boot_shell_tests.rs` | `each_switch_adds_one_more_set_of_load_records` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `boot_shell_tests.rs` | `missing_remembered_shell_boots_default_and_rewrites_memory` | 緑／緑 | なし | 集めた層（丙） |
+| `boot_shell_tests.rs` | `production_boot_emits_each_load_record_once` | 緑／緑 | なし | 集めた層（丙） |
+| `boot_shell_tests.rs` | `remembered_hidden_shell_reaches_all_resolutions_decided_once` | 緑／緑 | 1 回目 `homeurl` 1→0／2 回目 `on_steady` 0→1 | 集めた層（乙） |
+| `ghost_session_runtime_tests.rs` | `boot_failure_returns_the_unit_without_runtime_to_the_slot` | 緑／緑 | なし | 集めた層（丙） |
+| `ghost_session_runtime_tests.rs` | `rebuilt_runtime_is_attached_to_the_same_unit` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_abort_tests.rs` | `close_request_while_waiting_drops_the_switch_and_exits_as_today` | 緑／緑 | なし | 集めた層（丙・門） |
+| `shell_balloon_switch_session_abort_tests.rs` | `ghost_switch_after_a_shell_swap_unloads_the_session` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `shell_balloon_switch_session_abort_tests.rs` | `ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `shell_balloon_switch_session_abort_tests.rs` | `marked_talk_break_cancels_the_shell_switch_without_quitting` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_abort_tests.rs` | `undecodable_shell_keeps_the_old_mount_and_records_one_error` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_balloon_tests.rs` | `script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_lap_tests.rs` | `menu_switch_to_the_current_shell_rebuilds_and_raises_both_events` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_lap_tests.rs` | `plain_script_shell_switch_skips_changing_and_waits_for_the_script_end` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_lap_tests.rs` | `script_shell_switch_round_trips_with_raise_event` | 緑／緑 | なし | 集めた層（丙） |
+| `shell_balloon_switch_session_update_tests.rs` | `a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon` | 緑／赤 | 作り口 2→1・`after_runtime_wired` 2→1・`on_switch_end` 1→0・`on_steady` 1→0・`overwrite_between` 1→0・`cue_sinks` 2→1・`calls` の列が違う・`homeurl` 1→0 | 本体（ファイルごと） |
+| `shell_balloon_switch_session_update_tests.rs` | `update_targets_follow_the_swapped_shell_and_balloon` | 緑／緑 | なし | 本体（ファイルごと） |
+| `ghost_session_switch_translate_tests.rs` | `switch_sends_each_on_translate_to_its_own_ghost` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `a_memory_written_before_this_spec_finds_the_ghost_inner_balloon` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `a_remembered_ghost_inner_balloon_that_is_gone_moves_on_to_the_next_route` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `switching_does_not_see_the_balloon_inside_the_previous_ghost` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_descript_route` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `switching_to_a_ghost_with_its_own_balloon_uses_and_remembers_it_by_folder_name` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_balloon_tests.rs` | `switching_to_a_ghost_with_numbered_companions_uses_the_first_and_records_the_companion_route` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_boot_event_tests.rs` | `a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_boot_event_tests.rs` | `a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_changed_or_boot` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_boot_event_tests.rs` | `a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_failed_ghost_reload_hands_no_carry_to_the_default_ghost` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_failed_shiori_rebuild_falls_back_to_the_default_ghost` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_failed_shiori_rebuild_of_the_default_ghost_is_fatal` | 緑／緑 | なし | 集めた層（丙） |
+| `ghost_switch_reload_tests.rs` | `a_foreign_switch_under_a_reload_mark_boots_as_before_and_drops_the_mark_as_overtaken` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_not` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal` | 緑／緑 | なし | 集めた層（丙） |
+| `ghost_switch_reload_tests.rs` | `a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_reload_tests.rs` | `a_switch_without_the_mark_boots_with_on_ghost_changed_as_before` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `ghost_switch_rig_wait_tests.rs` | `a_rig_wait_that_never_arrives_names_the_callers_place` | 緑／緑 | なし | 集めた層（丙） |
+| `ghost_switch_rig_wait_tests.rs` | `the_rig_progress_ignores_status_and_counts_every_factory_call` | 緑／緑 | なし | 集めた層（丙） |
+| `ghost_switch_talk_clock_tests.rs` | `a_rig_clock_far_ahead_of_a_stalled_handshake_leaves_the_switch_unchanged` | 緑／緑 | `homeurl` 1→0 | 集めた層（甲） |
+| `reload_skin_tests.rs` | `descript_ghost_replaces_names_and_readme_then_reserves_the_current_shell` | 緑／緑 | なし | 集めた層（丙） |
+| `session_end_deadline_tests.rs` | `answered_within_limit_is_not_cut` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `cut_while_in_flight_get_is_held` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `cut_while_on_close_notify_is_held` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `cut_while_unload_is_held` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `deadline_fires_without_manual_cut` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `self_timeout_shorter_than_limit_is_not_cut` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_deadline_tests.rs` | `unbounded_shutdown_never_cuts` | 緑／緑 | なし | 集めた層（丙・門） |
+| `session_end_sync_send_tests.rs` | `teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window` | 緑／緑 | なし | 集めた層（丙・門） |
+理由:
+
+- 甲（`homeurl` の照会だけが減る・24 本）: 本物の組では定常の知らせで本体の `tell_desks_steady` → 更新の窓口が `homeurl` の照会を偽の SHIORI へ 1 回送る。`SwitchRig::calls` はこの照会をもともと除くので、表明が見る列は同じ。照会が増やすのは進みの目印（`progress_probe`）の 1 だけで、偽物の組でも待ちは打ち切られていない（2 回とも緑）。照会そのものは本体の `update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time` が見るので、集めた層に残しても守りは失わない。
+- 乙（`on_steady` の回数・2 本）: 定常の知らせを汲んだ回数で、1 回起こすだけのテストは汲む前後で終わるので回による（`remembered_hidden_shell_…` は本物の組でも 1 回目 1・2 回目 0）。表明は読み込みの記録の数だけを見て、`on_steady` の先の本体の窓口を見ない。
+- 丙（差なし・24 本）: 呼出列・照会・欄の回数・作り口の回数が同じ。
+- 門（`exit_wait` の門を通るもの）: `session_end_deadline_tests.rs` の 7 本・`session_end_sync_send_tests.rs` の 1 本（`end_session`／`end_session_within`）と `close_request_while_waiting_drops_the_switch_and_exits_as_today`（`on_ghost_os_close`）。偽物の組では本体の install・update の門が据わらないが、本物の組でも門は空で待たず、記録も欄の回数も差が無い（`update_busy`・`install_busy` はどちらの組でも 0 回）。仕事のある門の待ちは本体の `install/worker_tests.rs`・`install/desk_exit_tests.rs`・`update/worker_tests.rs` ほかが見る。集めた層の `reload`・`shell_balloon_switch` の門は集めた層の登録で据わるので組によらない。
+- `UpdateDesk` の照会（`update_busy`）が呼ばれたのは `_update` の赤の 1 本（どちらの組でも 2 回）だけ。照会が真のときの断りを見るのは `reload_tests.rs`・`shell_balloon_switch_tests.rs`（下の ※）で、どちらも本体へ移す。
+- 本体（`shell_balloon_switch_session_update_tests.rs`・ファイルごと）: 赤の 1 本は更新の窓口の読み直し（`ask_reload_for_test`）を通すので本体の窓口が要る。足場を集めた層の `lap_rig` → `SwitchRig::new` から受けていて、3.1 の `SwitchRig::new(` の字面の数えに入らなかった。もう 1 本は差なしだが足場 `steady_rig` を分け合う。表の既にある行（install・update の本物を見る）のとおりファイルごと移す。
+
+
+#### 開けた項目の一覧
+
+##### 3.4 で `pub(crate)` にした項目と使う本体のテスト
+
+| 開けた項目（集めた層） | 前 | 使う本体のテストのファイル |
+|---|---|---|
+| `ghost_session.rs` の `GhostSession::seriko`・`GhostSession::loop_ticker`（欄） | 私有 | `ghost_session_reload_tests.rs` |
+| `ghost_session.rs` の `PreparedWindows::spawn`（欄） | 私有 | `ghost_session_restart_tests.rs` |
+| `reload.rs` の `drain` | 私有 | `reload_tests.rs` |
+| `write_failure.rs` の `drain_system` | 私有 | `write_failure_sites_tests.rs` |
+| `ghost_session_scope_rect.rs` の `mod tests`・`ghost_session_scope_rect_tests.rs` の `LEFT_SCREEN`・`mod wiring`・`wiring::fake_handle`・`wiring::placement` | 私有・`pub(super)` | `ghost_session_scope_rect_boot_tests.rs`（3.5 で `ghost_session_scope_rect_test_support.rs` へ移す） |
+| `ghost_session_scope_scale.rs` の `mod tests`・`ghost_session_scope_scale_tests.rs` の `applied` | 私有 | `ghost_session_scope_scale_boot_tests.rs`（3.5 で `ghost_session_scope_scale_test_support.rs` へ移す） |
+| `ghost_session.rs` の `mod shell_balloon_switch_session_lap_tests`・その `SECOND`・`UNBOUNDED`・`Ticks`・`LapRig`・`LapRig::rig`（欄）・`LapRig::frames_until`・`lap_rig_on`・`copy_tree`・`kinds`・`got`・`idle` | 私有・`pub(super)` | `shell_balloon_switch_session_update_tests.rs` |
+| `reload.rs` の `#[cfg(test)] pub(crate) mod test_support`（新設 `reload_test_support.rs`・`boot_context`・`plant_skin_switch`） | `reload_tests.rs` の `pub(super)` | `reload_tests.rs`（集めた層の `reload_skin_tests.rs` も使う） |
+
+- `reload_test_support.rs`（設計に無い・申し送り）: 集めた層に残す `reload_skin_tests.rs` が、本体へ移す `reload_tests.rs` の小道具 `boot_context`・`plant_skin_switch` を `super::tests::` で引いていた（TestPlacement の表の D8 ⑵ は本体へ移すファイルの足場が番人の crate に頼ることだけを見ていて、逆向きの使い手を数えていなかった）。2 つは番人の crate に頼らないので、D8 ⑵ の前者のとおり集めた層の兄弟 `reload_test_support.rs`（`#[test]` を持たない）へ写しを作らずに移し、両方から使う。`boot_context` の 1 つ目の引数は `&TempPath` から `&Path` に替え（中で使っていたのは `temp.path()` だけ）、呼び手 2 か所を `temp.path()` を渡す形にした（`test-support` には `temp-path-kit` を入れられないため）。4.1 で `lib.rs` に `ghost_session_scope_{rect,scale}_test_support` と同じ `#[cfg(any(test, feature = "test-support"))] pub mod` で宣言する対象に足す。
+- `shell_balloon_switch_session_lap_tests.rs` の小道具（3.2 の申し送り）は、この段ではテストのモジュールのまま `pub(crate)` で開けた。4.2 の公開面で、集めた層の `#[cfg(test)]` のモジュールは本体から見えなくなるので、置き場（`test-support` の兄弟へ移すか）を決める。足場の `LapRig` は `GpuPermit`（runtime の `test-support`）と `SwitchRig` に頼り、番人の crate に頼るか（`TempPath`・`capture`）はそのとき確かめる。
+
+
+##### 4.2 で `test-support` の条件つきで `pub` にした項目
+
+#### 本体のテストだけが使う `#[cfg(test)]` の項目（`#[cfg(any(test, feature = "test-support"))] pub`）
+
+| 項目 | 前 | 使う本体のテスト |
+|---|---|---|
+| `GhostSession::{for_test, with_memory_publisher, with_seriko_sink}` | `#[cfg(test)] pub(crate)` | `session_tests/`・`runtime_tests/`・`install`・`update`・`mcp` のテスト |
+| `GhostSession::dispatcher` | `#[cfg(any(test, feature = "test-support"))] pub(crate)`（4.1） | 同上 |
+| `GhostSession` の欄 `memory_publisher_for_test` とその読み・組み立て 4 か所 | `#[cfg(test)]`（欄は私有のまま） | `with_memory_publisher` が立てる |
+| `roots::single_env` | `#[cfg(test)] pub(crate)` | 本体のテスト 23 か所 |
+| `shell_balloon_switch::SwapFinish` の出し直し | `#[cfg(test)] pub(crate) use` | `runtime_tests/frame/switch_finish_tests.rs` |
+| `log_history::hold` | `log_history_capture_tests.rs` の `pub(crate) fn hold`＋`static WINDOW` | `offline_dump/offline_dump_tests.rs`（`use` を `areka_session::log_history::hold` へ） |
+| `ghost_switch_test_support`（モジュールは 4.1） | 中の項目が `pub(crate)` | 本体の 17 ファイル＋`session_tests/`（中の項目を `pub` に） |
+| `ReadmeWiring::path`（設計の 8 つの外） | `#[cfg(test)] pub(crate)` | `session_tests/ghost_session_restart_tests.rs`・`ghost_session_switch_tests.rs` |
+| `ghost_session::shell_balloon_switch_session_lap_test_support`（新設・下） | ― | `session_tests/shell_balloon_switch_session_update_tests.rs` |
+
+- `hold` の `static WINDOW` は `log_history.rs` の写しの窓そのものの `static WINDOW`（`Mutex<Window>`）と名がぶつかるので、`hold` の関数の中に置いた（名と中身は前のまま）。テストのモジュール `capture_tests` は `#[cfg(test)]` のまま。使われなくなった `use std::sync::Mutex;` を外した。
+- `ghost_switch_test_support` の中で集めた層のテストだけが使う `Stall::{at, entered, release}`・`SwitchRig::{add_balloon_copy, plant_last_balloon}` は、`--lib --features test-support` で死んだコードの警告になるので `pub` にした（モジュールが `test-support` の条件の下にある）。
+
+#### 本番の項目のうち本体のテストだけが使うもの（素の `pub`）
+
+- 3.4 で開けた私有の項目（`GhostSession::seriko`・`GhostSession::loop_ticker`・`PreparedWindows::spawn` の欄、`reload::drain`、`write_failure::drain_system`）は、集めた層の本番のコードも使う欄と関数で、可視性だけを機能で切り替えると項目を 2 つ書くことになる。`#[cfg(any(test, feature = "test-support"))] pub` にできないので素の `pub` にした（設計の「本番の公開面に中の関数を出さない」との違い・申し送り）。
+- `boot_seam::insert_persist_wiring` は `#[cfg(test)]` ではない本番の関数で、本体の `session_tests/readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` が使う（設計の「本体が使わない（0 件）」は 3.4 で 3 本が本体へ移る前の数）。素の `pub`。
+- ほかは一覧の T の行（`boot_resolve::{read_session_mark, clear_session_mark, keep_session_mark, …}`・`reload::{ReloadInFlight, ReloadStage, register, …}` ほか）。
+
+#### 連れて開けた型（`private_interfaces`）
+
+- 本番の本体の段: `boot_resolve::BalloonRoute`・`exit_wait::ClosingWaits`・`ghost_session::OpenWindowsError`・`ghost_switch::{SwitchTarget, PrevGhost, SwitchStage, WelcomeAttempt}`・`switch_copy::SwitchCopy`・`log_history::{Stamp, Hms}`・`reload::RefusedReason`・`roots::RootSkip`・`session_mark::MarkVerdict`。
+- 本体のテストの段: `ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}`（`ghost_session.rs` の `pub(crate) use` を `pub use` にした E0364・E0365）・`reload::SkinStep`・`log_history::Rule`・`readme::destination::{Destination, Target, Store}`・`boot_resolve::NoBalloon`・`app_exit::WindowsClosed`・`ghost_session::BootWiringFailed`・`ghost_switch_test_support::Stall`。
+- 出し直しの広げ: `shell_balloon_switch.rs` の `areka_runtime::skin_switch::{SkinKind, …}`・`ghost_switch.rs` の `areka_runtime::special_name::{LastInstalledGhost, …}` を `pub(crate) use` → `pub use`。
+
+#### lap_tests の小道具の置き場
+
+- 本体の `shell_balloon_switch_session_update_tests.rs` が使う `lap_rig_on`・`SECOND`・`UNBOUNDED`・`Ticks`・`LapRig`・`LapRig::frames_until`・`copy_tree`・`kinds`・`got`・`idle` は、集めた層の `shell_balloon_switch_session_lap_tests.rs` の中と兄弟の `_abort_tests.rs`・`_balloon_tests.rs` も使う（両側の使い手）。番人の crate に頼るのは `add_rpost_shell`（`SampleRoot::acquire("R_POST_and_KOMAINU")`）だけで、残りは頼らない。
+- 決め（D8 ⑵ の前者）: 番人に頼らない小道具を、行の範囲の移動で兄弟の `shell_balloon_switch_session_lap_test_support.rs`（`#[cfg(any(test, feature = "test-support"))] pub mod`・`ghost_session.rs` で宣言・`#[test]` を持たない）へ移した。移したのは上の 10 個と、それが引く `NO_TICKS`・`CREEP`・`ACCEPT`（`Ticks` の私有の欄を組むので一緒に）・`WORK_AREA`・`TICK_EVERY`・`UiMarks`・`UiSeen`（`ui_seen_counts_only_ui_side_progress` が使うので `pub(crate)`）・`spawn_windows`・`PUMP_MAX`・`pump_messages`・`refs_of`・`calls_a`。lap_tests は `pub(crate) use super::shell_balloon_switch_session_lap_test_support::*;` で引き、兄弟 2 本の `use super::shell_balloon_switch_session_lap_tests::{…}` は変えていない。テストの名前と中身は変えていない。
+- 番人に頼る `add_rpost_shell` は分けられないので、`lap_rig_on` は 2 つ目のシェルを足す関数を 3 つ目の引数 `add_shell: fn(&Path, &str)` で受ける形にした。集めた層の `lap_rig_of` は lap_tests の `add_rpost_shell` を、本体の `steady_rig` は本体のテストのファイルに置いた `add_rpost_shell`（同じ 9 行・理由の注つき）を渡す。この 9 行は両側の写し（`test-support` に `sample-ghost-kit` を入れられないため・申し送り）。ほかの写しは無い。
+
+
+##### 4.4 で据えた `insert_resource(crate::BODY_SYSTEMS)` の 1 行を足したテスト
+
+2.5 で足した 5 本のうち、移した先でも 1 行を持つのは本体の `reload_tests.rs`・`shell_balloon_switch_tests.rs` の 2 本で、4.4 で 3 本が増えた（本体で 1 行を持つのは計 5 本）。
+
+足したテスト（`session/` の下は ※。集めた層は最後に `crate::BODY_SYSTEMS` を名指せないので、3.2・3.4 で本体へ移すか、`NO_BODY` に替えて理由を記録する）:
+
+| テスト | ファイル:足した行 |
+|---|---|
+| `install::desk::tests::resend_goes_at_once_when_steady_arrived_since_the_last_send` | `crates/areka/src/install/desk_tests.rs:385` |
+| `install::desk::tests::a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady` | `crates/areka/src/install/desk_tests.rs:554` |
+| `update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time` | `crates/areka/src/update/desk_resolve_tests.rs:558` |
+| ※ `session::reload::tests::refusals_in_order_leave_one_record_each` | `crates/areka/src/session/reload_tests.rs:183` |
+| ※ `session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing` | `crates/areka/src/session/shell_balloon_switch_tests.rs:287` |
+
+#### `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足したテスト（D13・表明は変えていない）
+
+| テスト | 赤の形 |
+|---|---|
+| `session_tests::reload_tests::missing_ghost_or_kanade_is_no_context` | warn 以上の総数 2（期待 1） |
+| `session_tests::shell_balloon_switch_tests::acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells` | warn＋error の数 1（期待 0）・5 件とも |
+| `session_tests::shell_balloon_switch_tests::send_failure_leaves_one_error_and_no_marker` | error の総数 2（期待 1） |
+
+- 前からあった 1 行（`reload_tests.rs` の `refusals_in_order_leave_one_record_each`・`shell_balloon_switch_tests.rs` の `refusals_in_order_leave_one_warning_each_and_send_nothing`）と合わせ、本体で 1 行を持つテストは 5 本。
+
