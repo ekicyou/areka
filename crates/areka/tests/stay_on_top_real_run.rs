@@ -11,7 +11,7 @@
 //! 有効にするのは環境変数 `AREKA_STAY_ON_TOP_REAL_RUN`（空でない値）。未設定なら即 return する。
 //! 画面が使えない（スクリーンセーバー・入力先の窓が無い）ときは areka を起こす前に、オンの前に他のアプリの
 //! 窓がゴーストの窓より手前に来ないときはその場で、無効な走りとして止める。
-//! 先に要るもの: 32bit の仲介 `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`。
+//! 先に要るもの: 32bit の仲介 `cargo build --manifest-path <絶対パス>\Cargo.toml -p shiori-host32-helper --target i686-pc-windows-msvc`。
 //!
 //! 根・記憶の置き場・記録はすべて `target\sot-signoff\` の下。根は emo2 の複製に、シェルの写し `copy`
 //! （名 `copy`）と、ゴーストの写し `ghost\emo2b`（名 `emo2b`・切り替えの先）を足して作る。
@@ -28,7 +28,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -667,9 +667,6 @@ fn stay_on_top_directives_on_emo2() {
         );
         n.note(format!("balloon shown after on scope={sc} line={l:?}"));
     }
-    sleep(Duration::from_millis(500));
-    let s5 = snap(&run, other);
-    n.record("s5_later_balloon", &s5);
     // 後から出たバルーン＝オンの行より後に `content visible=true` の行が出た scope のバルーン。
     // areka が閉じたバルーンの窓も IsWindowVisible は真なので、窓の可視では見分けない。
     let out = run.output();
@@ -677,20 +674,53 @@ fn stay_on_top_directives_on_emo2() {
         .as_deref()
         .and_then(|l| out.split_once(l))
         .map_or("", |(_, rest)| rest);
-    let later: Vec<&Z> = [(0, SAKURA), (1, KERO)]
+    let later_titles: Vec<&str> = [(0, SAKURA), (1, KERO)]
         .into_iter()
         .filter(|(sc, _)| after_on.contains(&balloon_line(*sc, "content", true)))
-        .filter_map(|(_, title)| {
-            s5.balloons
-                .keys()
-                .filter_map(|b| s5.get(*b))
-                .find(|z| z.title == title)
-        })
+        .map(|(_, title)| title)
         .collect();
-    let other_rank = s5.other.as_ref().map_or(0, |o| o.rank);
+    let later_of = |s: &'_ Snap| -> Vec<Z> {
+        later_titles
+            .iter()
+            .filter_map(|title| {
+                s.balloons
+                    .keys()
+                    .filter_map(|b| s.get(*b))
+                    .find(|z| z.title == *title)
+                    .cloned()
+            })
+            .collect()
+    };
+    let in_front = |s: &Snap, later: &[Z]| {
+        let other_rank = s.other.as_ref().map_or(0, |o| o.rank);
+        !later.is_empty() && later.iter().all(|z| z.topmost && z.rank < other_rank)
+    };
+    // 開いた行は OS の窓の並びを書き出す前の tick に出る。オンで帯に入った窓は書き出しの前の読みでも
+    // 他のアプリより手前なので、1 回の真では書き出しの後を見たことにならない。100ms あけた続けて 2 回の
+    // 読みが同じになるまで読み直し（2 秒まで）、切れたら最後の読みを判定に落とさせる。
+    let end = Instant::now() + Duration::from_secs(2);
+    let mut prev = None;
+    let s5 = loop {
+        let s = snap(&run, other);
+        let later = later_of(&s);
+        let other_rank = s.other.as_ref().map_or(0, |o| o.rank);
+        let settled = in_front(&s, &later).then(|| {
+            later
+                .iter()
+                .map(|z| (z.hwnd, z.topmost, z.rank < other_rank))
+                .collect::<Vec<_>>()
+        });
+        if (settled.is_some() && settled == prev) || Instant::now() >= end {
+            break s;
+        }
+        prev = settled;
+        sleep(Duration::from_millis(100));
+    };
+    n.record("s5_later_balloon", &s5);
+    let later = later_of(&s5);
     n.judge(
         "後から出たバルーンの窓も手前（帯の印・他のアプリより手前）",
-        !later.is_empty() && later.iter().all(|z| z.topmost && z.rank < other_rank),
+        in_front(&s5, &later),
         format!(
             "オンの後に開いたバルーン={:x?}",
             later.iter().map(|z| (z.hwnd, &z.title)).collect::<Vec<_>>()

@@ -21,9 +21,9 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example clickthrough_two_rects
+//! cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example clickthrough_two_rects
 //! # 反応領域を十字カーソルで可視化する場合（wintf の診断フラグ・既定 OFF）:
-//! $env:WINTF_CROSSHAIR = "1"; cargo run -p areka --example clickthrough_two_rects
+//! $env:WINTF_CROSSHAIR = "1"; cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example clickthrough_two_rects
 //! ```
 //! 背面に別アプリ（ブラウザ・エディタ等）を置き、透明余白のクリックが背面へ抜けるか、
 //! 矩形上のクリックが本窓に入るか（十字カーソル＝反応領域）を目視で確認する。

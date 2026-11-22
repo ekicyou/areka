@@ -6,9 +6,9 @@
 //! 無いときだけ回す。確かめの間は拡大率を変えない。
 //!
 //! 有効にするのは環境変数 `AREKA_WINDOW_LINK_REAL_RUN`（空でない値）。未設定なら即 return する。
-//! 先に要るもの: `tools/sample-fetch.ps1` で検体の書庫を取り寄せておく（検体は
+//! 先に要るもの: `pwsh -NoProfile -File <絶対パス>\tools\sample-fetch.ps1` で検体の書庫を取り寄せておく（検体は
 //! `sample_ghost_kit::SampleRoot::acquire` が名前で引いて、使い捨ての複製を配る）。
-//! 32bit の仲介 `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` も建てておく。
+//! 32bit の仲介 `cargo build --manifest-path <絶対パス>\Cargo.toml -p shiori-host32-helper --target i686-pc-windows-msvc` も建てておく。
 //!
 //! 根・記憶の置き場・記録はすべて `target\wl-signoff\` の下。根は配られた複製の写しに、
 //! ゴーストの中のバルーン `pasta_tategaki` を根の `balloon\` へ写して作る（ゴーストの中のバルーンを
@@ -652,13 +652,20 @@ fn window_link_directives_on_pasta_in_windows() {
         mouse(MOUSEEVENTF_LEFTDOWN, x, y);
         sleep(Duration::from_millis(80));
         mouse(MOUSEEVENTF_LEFTUP, x, y);
-        sleep(Duration::from_millis(600));
     }
-    // SAFETY: 引数もポインタも無い照会。
-    let fg = unsafe { GetForegroundWindow() };
-    let mut fg_pid = 0u32;
-    // SAFETY: fg_pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。入力先が無くても 0 を返すだけ。
-    unsafe { GetWindowThreadProcessId(fg, Some(&mut fg_pid)) };
+    // 入力先が替わったことを知らせる記録の行は無いので、OS の入力先を読み直して待つ（2 秒まで）。
+    let end = Instant::now() + Duration::from_secs(2);
+    let (fg, fg_pid) = loop {
+        // SAFETY: 引数もポインタも無い照会。
+        let fg = unsafe { GetForegroundWindow() };
+        let mut fg_pid = 0u32;
+        // SAFETY: fg_pid は呼び出しのあいだ生きるローカルの u32 で、そこへ書くだけ。入力先が無くても 0 を返すだけ。
+        unsafe { GetWindowThreadProcessId(fg, Some(&mut fg_pid)) };
+        if clicked.is_err() || fg_pid == run.pid() || Instant::now() >= end {
+            break (fg, fg_pid);
+        }
+        sleep(Duration::from_millis(100));
+    };
     n.note(format!(
         "click={clicked:?} foreground hwnd={:#x} pid={fg_pid} (areka pid={})",
         fg.0 as isize,
@@ -689,7 +696,6 @@ fn window_link_directives_on_pasta_in_windows() {
                 lines_with(&run, "position_shortcut_ignored")
             ),
         );
-        sleep(Duration::from_secs(1));
         let r0 = lines_with(&run, "reset_pos_menu_outcome").len();
         let w0 = lines_with(&run, "event=\"reset_window_pos\"").len();
         let sent = chord(VK_F12);

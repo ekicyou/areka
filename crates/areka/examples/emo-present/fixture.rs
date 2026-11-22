@@ -16,8 +16,8 @@ pub(super) const CYCLE_INTERVAL_SECS: f64 = 2.5;
 /// 本 example が両 target へ与える**作者基準 DPI**（ukadoc 正典既定の 96）。
 ///
 /// 本番アプリは descript の実値（shell `seriko.dpi`／balloon `dpi`）を `attach_target` へ渡すが、
-/// 本 example は fixture を直接読むため正典既定を固定で与える。`assert_startup_golden` が golden へ
-/// 掛ける k を導出する際の**分母も同じ値**でなければならないため、両者を 1 つの定数に束ねる
+/// 本 example は fixture を直接読むため正典既定を固定で与える。`assert_startup_golden` が物理寸の
+/// 照合に使う k を導出する際の**分母も同じ値**でなければならないため、両者を 1 つの定数に束ねる
 /// （`attach_target` 側だけ変えて golden 側が古い分母のまま残る、という食い違いを構造的に潰す）。
 pub(super) const AUTHOR_DPI: u16 = 96;
 

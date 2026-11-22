@@ -5,9 +5,8 @@
 //! 透過 ex-style）・クリック透過機構への窓登録（`register_click_through_windows`・`Added<WindowHandle>`）・
 //! アプリ起動骨格を持ち、表示内容は `EmoPresenter`（合成した原寸バイトをコマンドリストへ記録し、
 //! 拡大は D2D の変換行列が掛ける経路）が供給する。
-//! `main.rs`（本番アプリ骨格）は変更しない。
 //!
-//! - **シェル窓**（target 0）: emo2 `surface0`（`surface0.png` 単一 element）。
+//! - **シェル窓**（target 0）: emo2 `surface0` を照合のために 1 度出した後、`surface1000` の表情（下のまばたきの巡回）。
 //! - **バルーン窓**（target 1）: `balloons0.png`（`areka_emo_present::build_balloon_target` 経由）。
 //!
 //! 観測できること:
@@ -31,7 +30,7 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example emo-present
+//! cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example emo-present
 //! ```
 //! シェルをダブルクリックすると全窓を閉じて終了する。
 //!
@@ -63,7 +62,7 @@
 //!    **起動後にモニタ跨ぎで窓を移動してはならない** — 本 example は `refresh_scale` を
 //!    呼ばないため、移動後は「`apply_show` が毎回窓 DPI から k を再導出するシェルだけが追従し、
 //!    再表示の無いバルーンは据え置き」という**非対称**になる。
-//! 2. **起動する**: `cargo run -p areka --example emo-present` を実行する。
+//! 2. **起動する**: `cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example emo-present` を実行する。
 //! 3. **観測する**（3 点を確認する）:
 //!    - (a) **k 追従表示**: シェル surface とバルーン枠が **k 倍された物理 px**（150% なら 3/2 倍・
 //!      200% なら 2 倍）で描かれる。`apply(ShowSurface): 表示・マスクを更新` ログの `k_ratio`／

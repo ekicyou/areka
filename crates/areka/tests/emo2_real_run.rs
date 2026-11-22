@@ -7,8 +7,8 @@
 //!
 //! ## 既定 OFF
 //! 環境変数 [`REAL_RUN_ENV`]（`AREKA_EMO2_REAL_RUN`）が **未設定／空／空白のみ／非 UTF-8** のときは
-//! 子を起こさず即座に `return`（skip）する。ゆえに常設スイート（`cargo test --workspace`・外部 CI なし・
-//! ローカル DoD ゲート）では**実 helper／実表示に一切依存せず自明に緑**を保つ。この skip 経路こそが
+//! 子を起こさず即座に `return`（skip）する。ゆえに常設スイート（`cargo test --workspace`・外部 CI なし）では
+//! **実 helper／実表示に一切依存せず自明に緑**を保つ。この skip 経路こそが
 //! 常設スイートでの観測可能な完了条件であり、実走そのものは常設スイートの前提にしない（人間 opt-in の追験）。
 //!
 //! ## 実走（env セット時）
@@ -57,7 +57,7 @@
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
 //! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka-session/src/boot_config.rs`）は
 //!   `current_exe()` 隣の `shiori-host32-helper.exe` を解決する。窓口が i686 の成果物を実バイナリ
-//!   隣へ揃えるので、先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で
+//!   隣へ揃えるので、先に `cargo build --manifest-path <絶対パス>\Cargo.toml -p shiori-host32-helper --target i686-pc-windows-msvc` で
 //!   建てておく。
 //! - **実表示**: attach 完了マーカーは `GhostWindows`＋GPU 資源ゲート成立フレームで
 //!   初めて発火する。モニタ 0 台の headless 環境では「起動窓を開けません」の `error!` を残して
@@ -106,10 +106,10 @@ const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 //   **寛大な有界自動終了**（`180000`＝3 分）を付けて実バイナリを直接起動する:
 //
 //       $env:RUST_LOG="info,kanade=trace"; $env:AREKA_APP_SMOKE_EXIT_MS="180000"; `
-//         target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
+//         <絶対パス>\target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
 //
 //   （`<emo2 ghost_root>`／`<emo2 balloon_root>` の絶対パスは
-//     `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
+//     `cargo run --manifest-path <絶対パス>\Cargo.toml -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
 //     `folder=`／`balloon.emo2-kakukaku=` の行から得る）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
 //     閉じて別れの台詞を見て、4（静かな終了）を確認する。閉じずに放置しても 3 分で有界に終わる。
 //   ※ `180000` は**この人間 opt-in の直接起動専用**であり、締切を持たない。本ファイルの `#[test]` の
