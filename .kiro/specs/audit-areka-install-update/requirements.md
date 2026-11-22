@@ -157,7 +157,8 @@
 #### Acceptance Criteria
 
 1. When 直しで関数や型の形を変えたとき, the 本 spec の直し shall ツリー全体で呼び出し元を探して、全部直す
-2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall 相手が走っているあいだはそのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）。相手の spec が `completed/` へ移った後なら、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す。この spec の実装の終わりまでに相手が着地せず相手も直さなかった分は、写しや古い形を残したまま理由を記録し、相手の brief へ件として書き足す（要件 7.9）。相手の進め方を変える大きい直し（起動中のゴーストへの展開を外へ出すための `switch_to` の段の分け方）は、相手のセッションと先に申し合わせる（どちらが入れるか・どちらが先に着地するか）3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）。例外は要件 7.13 の (c) だけ
+2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall 相手が走っているあいだはそのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）。相手の spec が `completed/` へ移った後なら、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す。この spec の実装の終わりまでに相手が着地せず相手も直さなかった分は、写しや古い形を残したまま理由を記録し、相手の brief へ件として書き足す（要件 7.9）。相手の進め方を変える大きい直し（起動中のゴーストへの展開を外へ出すための `switch_to` の段の分け方）は、相手のセッションと先に申し合わせる（どちらが入れるか・どちらが先に着地するか）
+3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）。例外は要件 7.13 の (c) だけ
 4. The 本 spec の直し shall `doc/COMPAT_ARCHITECTURE.md` の §8 には既にある別々の行のほかに手を入れず、範囲の中のコードが名指す文書の名とパス（`install/judge.rs` が名指す `doc/COMPAT_ARCHITECTURE.md` を含む）を変えない（C26 の約束 ⑶・`doc-compat-architecture-rename` が同じウェーブに置けない理由）
 5. The 本 spec の直し shall `crates/dola/` と `crates/wintf/` に手を入れない（C26 の約束 ⑷）
 6. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の持ち主の件として残す）
