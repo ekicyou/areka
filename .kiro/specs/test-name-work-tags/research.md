@@ -213,3 +213,89 @@
 8. **`dola-cue-test-builder` の持ち物 `consumer_ledger_test_support.rs:28` のコメントに触るか。** 向こうが直すのは 126 行からの別の塊で、行は重ならない（約 100 行離れる）。要件 6.2 の 3 ファイルのほかの接触として「許す重なり」に足すか、触らずに申し送るか。
 
 あわせて、要件 5.3 の確かめの式を、古い名の全体のほかに札だけの短い書き方（`\bt_[a-z]+[0-9]+[a-z]?\b`）まで広げるか（1・6 の決めに従う）。
+
+## 8. 設計の段の調べ（2026-11-22・`/kiro-spec-design`）
+
+- 調べの型: **軽い調べ**（既にあるテストの名を変えるだけ・新しい依存・新しい本番のコードは無い）。外の資料は引いていない。下の調べ物は手元の `git grep` と、scratchpad の使い捨ての写しへ当てた `rustfmt` だけ。
+- 使ったスキル: `kiro-spec-design`（手順と規則）だけ。設計・画面・アクセシビリティの領域のスキルは当たらない（テストの名と注釈と文書の直しだけ）。
+- 測った木: `claude/kiro-start-test-name-work-tags-c34897` の HEAD `1fb7f500`（main `00877299` に spec の文書のコミット 4 つ・コードは main と同じ）。
+
+### 8.1 数えの確かめ
+
+- `git grep -cE "fn t_[a-z]+[0-9]+[a-z]?_" -- crates` ＝ 29 ファイル・284 本（ギャップ分析と同じ）。
+- 古い名の全体（`fn t_…` の 284 本）に重なりは無い（`sort | uniq -d` が 0）。古い名を 1 つ決めれば、どのファイルのどのテストかが 1 つに決まる＝名の一覧の比べでは、名の末尾を改名表で写すだけで前後が対応する。
+- 名指しの札の持ち主（改める群を決めるのに使った）: `zcs1`・`zcs2`・`zcs4`・`zcs14`＝`areka-runtime` の `zorder_cue_tests.rs`（`window_state_cue_tests.rs:324` と `consumer_ledger_test_support.rs:28` が名指す）・`i4`＝`spawn_clickthrough_tests.rs` と `spawn_follow_pipeline_tests.rs`・`rs01`・`rs02`・`rs05`＝`reseed_tests.rs`・`c3`＝`config.rs`・`l2`＝`config_limit_tests.rs`・`k5`＝`resolver_balloon_keyword_tests.rs`・`zgl15`＝`zorder_group_ledger_state_tests.rs`・`zrb9`＝`zorder_group_ledger_rebase_tests.rs`・`zdb13`〜`zdb17`＝`frame/zorder_descript_tests.rs`・`n10`＝`frame_schedule_tests.rs`・`zwi06`＝`areka-runtime` の `zorder_wiring_tests.rs`・`zpd*`＝`zorder_property_deferral_tests.rs`・`zdp10`＝`frame/zorder_drain_projection_tests.rs`。
+- `crates/areka-emo-present/` の `T-N3`（2 行）が指すのは `display_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel`（丸めの一致を表で固定するテスト・札は無い）。
+- CLAUDE.md の決まりの行は 97 行目の英語の 1 行（`Do not reference `.kiro` specs, requirement IDs, or task numbers in code. …`）。要件 7.1 の「`.kiro` の spec・要件・タスクの番号をコードに書かない」はこの行の意味を書いたもの。
+- steering（`roadmap.md`・`roadmap-history.md` を除く）・`doc/`（`COMPAT_ARCHITECTURE.md` を除く）・`tools/`・`.github/`・`.claude/` に改める名の名指しは無い（ギャップ分析と同じ）。
+
+### 8.2 `rustfmt` が表の行を畳む量（6 節の 2 つ目の調べ）
+
+本体の 2 つの表のファイルを scratchpad へ写し、札を外して `rustfmt --edition 2024` を当てた（コミットしない）。
+
+| ファイル | 前 | 後 |
+|---|---|---|
+| `zorder_group_branch_coverage_tests.rs` | 379 行 | 379 行（畳み 0） |
+| `zorder_inversion_branch_coverage_tests.rs` | 393 行 | 389 行（組 1 つ前後が 1 行へ畳まれる） |
+
+畳みは小さく、差分は読める。`fn` の行は短くなるだけで折り返しは生まれない。各コミットで `cargo fmt --all` を当てればよい。
+
+### 8.3 名の一覧の比べ方（6 節の 1 つ目の調べ）
+
+`cargo test --workspace --no-fail-fast -- --list` の `: test$` の行を、**モジュールのパスつき**で取る。改める前の一覧の各行の最後の名を改名表で写し（古い名は全体で重ならないので 1 対 1）、並べ直したものが改めた後の一覧と 1 行も違わないことで、要件 3.2（crate ごとの本数）と「名だけが変わった」を一度に示す。名の末尾だけの多重集合で比べると、別のモジュールで同じ名になる 6 組（2.2）の入れ替わりが見えないので取らない。
+
+### 8.4 要件 5.5 の式が範囲の中で当てる所（例外の記録の下書き）
+
+`\bt_[a-z]+[0-9]+[a-z]?` と `\bT-[A-Z]{1,4}[0-9]{1,2}[a-z]?\b` を、`crates/`・`doc/`・steering・未完了の spec の文書（歴史の場所を除く）へ当てた今の当たりのうち、改めた後も残るもの:
+
+| 場所 | 当たり | 扱い（設計の仮定・議題 3） |
+|---|---|---|
+| 本体の `runtime_tests/zorder_wiring_tests.rs` 11 行 | `t_zwi06` | 要件 5.5 の例外（申し送った行） |
+| 同ファイルの `fn t_zwi05_…`・`fn t_zwi08_…` | 2 本 | 要件 5.1 の例外（`audit-areka-app` の持ち物） |
+| `doc/COMPAT_ARCHITECTURE.md:412` | 「旧 `t_c3_char_n_prefix_adds_scope_n`」・「テスト T-C3」 | 要件 5.5 の例外（歴史の文・要件 4.8） |
+| `crates/areka-sakura/` の局所変数 | `t_wait1`・`t_wait2` | 要件 5.5 の例外（テストの名でない） |
+| `.kiro/specs/extra-character-windows/brief.md:131` | 「完了 `window-placement` の設計 DD6・テスト T-C3」 | **要件 5.5 に挙げられていない**。412 行と同じ歴史の文（完了 spec の設計の番号を書く） |
+| `.kiro/specs/audit-areka-app/brief.md:159` | `t_zwi05_…`・`t_zwi08_…` | **要件 5.5 に挙げられていない**。札をまだ持つ本体の 2 本を正しく指す申し送り |
+| `.kiro/steering/roadmap.md` 514・2033・2039 行 | `t_i4_`・`t_c3_`・`t_l2_`・`t_rs01_` | **要件 5.5 に挙げられていない**。この spec の行の説明で、札の例を書くもの（テストの名指しではない） |
+| この spec の文書（`.kiro/specs/test-name-work-tags/`） | 多数 | 要件 5.3 と同じく除く（要件 5.5 は書いていない） |
+
+## 9. 設計の決め（2026-11-22）
+
+### 決め 1: 改名表を 1 つ作り、名の全体は機械で、短い書き方は手で（ギャップ分析の案 C）
+
+- **Context**: 284 本の名と、名の全体の名指し 69＋20 行余り、短い書き方・`t_` の無い札・大文字の作業番号 100 行余り（要件 1・4）。
+- **Alternatives**: 案 A（全部を機械で）＝短い書き方を拾えない。案 B（全部を手で）＝打ち間違いをコメントでは何も拾わない。IDE の名の変更（rust-analyzer の rename）＝文字列の表・文書・コメントを直さず、1 本ずつの手の操作になる。
+- **Selected**: 案 C。改名表（ファイル・古い名・新しい名・札）を着手のときに木から作り、表の行ごとに単語の境で置き換える。短い書き方は同じ表の札から 1 対 1 に引いて手で書き直す。範囲の書き方と大文字の作業番号は文を手で直す。
+- **Rationale**: 打ち間違いの起きやすい所を機械に任せ、文脈の要る所だけを手にする。同じ表が置き換えと最後の確かめ（要件 5.3 の古い名の名簿）の両方に使える。
+- **Follow-up**: 置き換えはバイトで行い（文字コードと改行を保つ）、書いた後にバイトで確かめる（逆斜線を含む表の他の文字列を壊さない）。
+
+### 決め 2: コミットは「改める群」ごと・群の名指しは場所を問わず同じコミット
+
+- **Context**: 要件 4.1（あるファイルの名を改めるコミットで、その名指しを全部直す）と、本体の表が他の crate の 10 ファイルを読むこと（2.3）。
+- **Selected**: 改める 28＋2 ファイルを 6 つの群に分け、1 群 1 コミットにする。群の名指しは、どのファイルに在っても（他の群のファイル・本番のファイルのコメント・`doc/`・brief）同じコミットで直す。表が読む 10 ファイルと本体の 2 つの表は同じ群（G1）。
+- **Alternatives**: 全部を 1 コミット（ギャップ分析の切り方 2）＝手数は最少だが、レビューの単位が 284 本で粗く、brief の見込み（8〜12 タスク）にも合わない。議題 1。
+- **Trade-offs**: `doc/COMPAT_ARCHITECTURE.md` の 412 行のように、1 行が 2 つの群の名を持つ所は 2 つのコミットで少しずつ直る（どのコミットでも、その時点で在る名を指す）。
+
+### 決め 3: 記録の置き場
+
+- 改名表は spec の文書の隣に `rename-table.tsv` として残す（完了でアーカイブへ移る・後の spec が古い名から新しい名を引ける）。
+- 名の一覧の前後・置き換えの使い捨ての式は作業の木の `target/test-name-work-tags/` に置き、コミットしない。比べの結果（行数・差の 0）と式は `research.md` の新しい節へ書く。議題 2。
+
+### 決め 4: 注釈の作業番号の直し方
+
+- 節の見出しや doc コメントの頭の `T-K1:` ほかは、番号だけを消して説明の文を残す。
+- 他のテストを指す働きを持つもの（`frame_schedule_tests.rs`（T-N10）・`display_tests.rs` の T-N3・「`resolver_resolve_balloon_tests.rs` の T-R8 群」）は、ファイルとテストの新しい名で書き直す。いくつものテストを番号でまとめて指す所（T-R8 群・`t_zgp1`〜`t_zgp14`）は、名を並べず、中身の言葉で言い直す（要件 4.9）。
+- `areka-runtime` の `zorder_wiring_tests.rs:18` が本体の 2 本を指す「（zwi05）」「（zwi08）」は、番号を消し、すでに在る中身の言葉とファイルの道で指す形を残す（本体の 2 本はこの spec の着地の後も札を持つので、新しい名が無い）。議題 4。
+
+## 10. 合成（design-synthesis）の結果
+
+- **一般化**: 要件 4 の名指しの直し（コメント・表・`doc/`・brief）は、どれも「改名表の 1 行の古い名 → 新しい名」の同じ置き換えで、場所の違いは除く場所（歴史の場所・この spec の文書）だけ。短い書き方も「札 → 改名表の 1 行」の同じ引きになる。1 つの表と 1 つの決まり（群の名指しは同じコミット）で全部を覆う。
+- **作るか使うか**: `git grep`（数えと確かめ）・python の正規表現（バイトの置き換え）・`cargo fmt`・`cargo test -- --list` を使う。新しい道具は作らない。IDE の rename は文字列と文書を直さないので取らない。
+- **削ったもの**: 置き換えの式のコミット（使い捨て）・札を見張る照合のテスト（要件 7.2）・名に言い回しの直しを足すこと（要件 1.4）。
+
+## 11. 危険と手当て
+
+- 表が読む 10 ファイルの改名と表の直しが別のコミットに分かれると本体のテストが赤 → G1 を 1 コミットにし、そのコミットで本体の表の検査を通す。
+- 短い書き方の取り残し → 群ごとに、その群の札の短い書き方を検索してから閉じ、最後に要件 5.5 の式で全体を数える。
+- 並走の相手と同じファイルを触る（`consumer_ledger_test_support.rs:28`・§8 の行） → 触る前に `dola-cue-test-builder` のセッションへ知らせる。§8 は名の行だけ。
+- `cargo test <名>` で別のモジュールの同じ名が一緒に走る（⑴〜⑹） → 要件 1.3 で許した。名指しの文ではファイルの名を添える（要件 4.11）。
