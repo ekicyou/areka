@@ -49,6 +49,8 @@ const RUST_LOG: &str = "info,kanade=debug,areka_placement=debug,areka_input=debu
 areka::menu=debug,wintf::ecs::window_proc::keyboard=debug,wintf::ecs::clickthrough=debug,wintf::ecs::drag::dispatch=debug";
 const SAKURA: &str = "ぱすた";
 const KERO: &str = "窓";
+const TALK_DONE: &str = "event=\"steady_talk_done\"";
+const DRAG_FOLLOW: &str = "event=\"sticky_follow\" trigger=\"drag\"";
 
 /// 見えている窓 1 つ（物理画素の矩形 左,上,右,下）。
 #[derive(Clone, Debug)]
@@ -94,6 +96,33 @@ fn windows_of(pid: u32) -> Vec<Win> {
         .1
         .retain(|w| w.rect[0] > -30000 && w.rect[2] > w.rect[0]);
     state.1
+}
+
+/// `done` が真で、100ms あけた続けて 2 回の読みで窓の矩形が同じになるまで読み直す（2 秒まで）。切れたら最後の読みを返し、判定に落とさせる。
+/// 待つ記録の行は ECS の位置を書いた時点で出て、OS の窓が動くのは次の tick の書き出しなので、1 回の読みでは書き出しの前の矩形を掴みうる。
+/// 行を見てから 100ms（tick の数回ぶん）あけた 2 回目の読みは、その書き出しの後になる。
+fn wait_rects(pid: u32, done: impl Fn(&[Win]) -> bool) -> Vec<Win> {
+    let end = Instant::now() + Duration::from_secs(2);
+    let mut prev = None;
+    loop {
+        let now = windows_of(pid);
+        // 列挙は手前からの順なので、重なりの順だけが変わった読みを「動いた」と数えないよう hwnd で並べる。
+        let settled = done(&now).then(|| {
+            let mut rects: Vec<(isize, [i32; 4])> = now.iter().map(|w| (w.hwnd, w.rect)).collect();
+            rects.sort_unstable();
+            rects
+        });
+        if (settled.is_some() && settled == prev) || Instant::now() >= end {
+            return now;
+        }
+        prev = settled;
+        sleep(Duration::from_millis(100));
+    }
+}
+
+/// `title` のキャラクターの窓の矩形が `prev` のときと違うか。
+fn char_moved(prev: &[Win], now: &[Win], title: &str) -> bool {
+    char_win(prev, title).map(|w| w.rect) != char_win(now, title).map(|w| w.rect)
 }
 
 fn area(w: &Win) -> i64 {
@@ -327,6 +356,22 @@ fn char_entity(run: &Run, hwnd: isize) -> Option<String> {
         .map(str::to_string)
 }
 
+/// `sticky_groups` の行の `groups=` の欄に `ids` の組（`{0, 1}` の綴り）があるか。
+fn has_group(line: &str, ids: &[u32]) -> bool {
+    let ids: Vec<String> = ids.iter().map(u32::to_string).collect();
+    let group = format!("{{{}}}", ids.join(", "));
+    line.split_once("groups=")
+        .is_some_and(|(_, field)| field.contains(&group))
+}
+
+#[test]
+fn has_group_reads_only_the_groups_field() {
+    let seed = "2026-11-20T23:29:46.756830Z  INFO areka_placement::sticky_group_ledger: sticky: 窓の組の一覧 event=\"sticky_groups\" action=\"descript_seed\" groups=[StickyGroup { members: {0, 1}, source: Descript }]";
+    assert!(has_group(seed, &[0, 1]));
+    let other = "2026-11-20T23:29:46.756830Z  INFO areka_placement::sticky_group_ledger: sticky: 窓の組の一覧 event=\"sticky_groups\" action=\"descript_seed\" groups=[{2, 3}]";
+    assert!(!has_group(other, &[0, 1]));
+}
+
 fn spawn(exe: &str, root: &Path, profile: &Path, exit: Duration) -> Run {
     RealRun::new(exe)
         .launch(Launch::Root(root.to_path_buf()))
@@ -388,11 +433,11 @@ fn window_link_directives_on_pasta_in_windows() {
         "1 起動で sticky_groups（descript_seed・{0,1}）",
         groups
             .as_deref()
-            .is_some_and(|l| l.contains("descript_seed") && l.contains('0') && l.contains('1')),
+            .is_some_and(|l| l.contains("descript_seed") && has_group(l, &[0, 1])),
         groups.clone().unwrap_or_else(|| "行なし".into()),
     );
     let _ = wait_new(&run, "sticky_follow_ignored", 0, 30);
-    sleep(Duration::from_secs(4));
+    let _ = wait_new(&run, TALK_DONE, 0, 40);
     let boot = windows_of(run.pid());
     n.snapshot("run1_boot", &boot);
     let boot_ignored = lines_with(&run, "sticky_follow_ignored");
@@ -421,7 +466,7 @@ fn window_link_directives_on_pasta_in_windows() {
         (Ok((x, y)), Some(s), Some(k)) => {
             let entity = char_entity(&run, s.hwnd);
             let starts = lines_with(&run, "[DragStartEvent] Dispatching").len();
-            let follow_before = lines_with(&run, "sticky_follow").len();
+            let follow_before = lines_with(&run, DRAG_FOLLOW).len();
             let balloon1 = lines_with(&run, "route=BalloonFollow").len();
             n.note(format!("drag at {x},{y} sakura_entity={entity:?}"));
             mouse(MOUSEEVENTF_LEFTDOWN, x, y);
@@ -438,8 +483,19 @@ fn window_link_directives_on_pasta_in_windows() {
             }
             sleep(Duration::from_millis(300));
             mouse(MOUSEEVENTF_LEFTUP, x + sx * 20, y + sy * 20);
-            sleep(Duration::from_millis(800));
-            let after = windows_of(run.pid());
+            // 両キャラクターの窓だけが同じ 0 でない量動いたか（バルーンは作業領域の端で止まるので別に見る）。
+            let chars = [s.hwnd, k.hwnd];
+            let same = |ds: &[(String, isize, i32, i32)]| {
+                let cs: Vec<_> = ds.iter().filter(|d| chars.contains(&d.1)).collect();
+                cs.len() == 2
+                    && (cs[0].2 != 0 || cs[0].3 != 0)
+                    && cs[0].2 == cs[1].2
+                    && cs[0].3 == cs[1].3
+            };
+            let follow = wait_new(&run, DRAG_FOLLOW, follow_before, 5);
+            // 相手はドラッグの途中から同じ量で付いて動くので、離した直後の 1 回目の読みでもう揃って見える。
+            // ドラッグの終わりの書き込みが OS へ出た後の矩形で見るため、揃ったまま 2 回続けて同じになるまで待つ。
+            let after = wait_rects(run.pid(), |w| same(&deltas(&before, w)));
             n.snapshot("run1_before_drag", &before);
             n.snapshot("run1_mid_drag", &mid);
             n.snapshot("run1_after_drag", &after);
@@ -453,15 +509,6 @@ fn window_link_directives_on_pasta_in_windows() {
                 }),
                 format!("entity={entity:?} line={start:?}"),
             );
-            // 両キャラクターの窓だけが同じ 0 でない量動いたか（バルーンは作業領域の端で止まるので別に見る）。
-            let chars = [s.hwnd, k.hwnd];
-            let same = |ds: &[(String, isize, i32, i32)]| {
-                let cs: Vec<_> = ds.iter().filter(|d| chars.contains(&d.1)).collect();
-                cs.len() == 2
-                    && (cs[0].2 != 0 || cs[0].3 != 0)
-                    && cs[0].2 == cs[1].2
-                    && cs[0].3 == cs[1].3
-            };
             let d_mid = deltas(&before, &mid);
             let d_end = deltas(&before, &after);
             n.judge(
@@ -488,7 +535,6 @@ fn window_link_directives_on_pasta_in_windows() {
                     balloon_follow.first()
                 ),
             );
-            let follow = wait_new(&run, "sticky_follow", follow_before, 5);
             let drag_line = lines_with(&run, "trigger=\"drag\"")
                 .into_iter()
                 .chain(lines_with(&run, "trigger=drag"))
@@ -511,15 +557,16 @@ fn window_link_directives_on_pasta_in_windows() {
     }
 
     // ignore-sticky-window: 窓（\1）だけを右へずらし、次に辞書の窓あわせと同じ台本で戻す。
-    sleep(Duration::from_secs(3)); // ドラッグの終わりの付け直し（辞書の OnSecondChange）が済むのを待つ
+    // ドラッグの終わりの付け直し（辞書の黙っている秒の OnSecondChange）は話の長さしだいで出ない回もあり、
+    // 待つ行が決まらないので時間で待つ。
+    sleep(Duration::from_secs(3));
     let ign0 = lines_with(&run, "sticky_follow_ignored").len();
     let before = windows_of(run.pid());
     let shift = r"\1\![move,--X=200,--Y=0,--time=0,--base=0,--base-offset=left.top,--move-offset=left.top,--option=ignore-sticky-window]\e";
     let reply = run.call("sakurascript", &format!("{{\"script\":{}}}", json(shift)));
     n.note(format!("sakurascript shift reply={reply:?}"));
     let ign = wait_new(&run, "sticky_follow_ignored", ign0, 10);
-    sleep(Duration::from_millis(800));
-    let shifted = windows_of(run.pid());
+    let shifted = wait_rects(run.pid(), |w| char_moved(&before, w, KERO));
     n.snapshot("run1_after_shift", &shifted);
     let d = deltas(&before, &shifted);
     let only_kero = d.iter().all(|x| {
@@ -545,8 +592,7 @@ fn window_link_directives_on_pasta_in_windows() {
     let reply = run.call("sakurascript", &format!("{{\"script\":{}}}", json(awase)));
     n.note(format!("sakurascript awase reply={reply:?}"));
     let ign = wait_new(&run, "sticky_follow_ignored", ign1, 10);
-    sleep(Duration::from_millis(800));
-    let aligned = windows_of(run.pid());
+    let aligned = wait_rects(run.pid(), |w| char_moved(&shifted, w, KERO));
     n.snapshot("run1_after_awase", &aligned);
     let d = deltas(&shifted, &aligned);
     n.judge(
@@ -576,7 +622,7 @@ fn window_link_directives_on_pasta_in_windows() {
     let mut run = spawn(exe, &root, &profile, Duration::from_secs(90));
     n.note(format!("run2 pid={} port={}", run.pid(), run.mcp_port()));
     let _ = wait_new(&run, "sticky_groups", 0, 60);
-    sleep(Duration::from_secs(6));
+    let _ = wait_new(&run, TALK_DONE, 0, 40);
     let reboot = windows_of(run.pid());
     n.snapshot("run2_boot", &reboot);
     n.judge(
@@ -645,8 +691,11 @@ fn window_link_directives_on_pasta_in_windows() {
         );
         sleep(Duration::from_secs(1));
         let r0 = lines_with(&run, "reset_pos_menu_outcome").len();
+        let w0 = lines_with(&run, "event=\"reset_window_pos\"").len();
         let sent = chord(VK_F12);
         let line = wait_new(&run, "reset_pos_menu_outcome", r0, 10);
+        // 辞書が答えたときは並べ直しの行が出ないので、待ちが切れても進む。
+        let _ = wait_new(&run, "event=\"reset_window_pos\"", w0, 5);
         n.judge(
             "5b Ctrl+Shift+F12 で reset_pos_menu_outcome",
             line.is_some(),
@@ -656,7 +705,6 @@ fn window_link_directives_on_pasta_in_windows() {
             ),
         );
     }
-    sleep(Duration::from_secs(2));
     n.snapshot("run2_after_shortcuts", &windows_of(run.pid()));
     n.note(format!("key lines={:?}", lines_with(&run, "key_down")));
     let ended = run.close();

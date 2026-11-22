@@ -54,6 +54,10 @@ areka_runtime::frame::switch=debug,wintf::ecs::window=debug";
 const SAKURA: &str = "むらさき";
 const KERO: &str = "エモ";
 const STATE_CHANGED: &str = "[window_state] 常に手前の状態が変わった";
+const BAND_APPLIED: &str = "[window_band] applied";
+const BAND_RAISED: &str = "[window_band] applied op=Raise";
+const CHAIN_SETTLED: &str = "[zorder-chain] settled";
+const CLEARED: &str = "trigger=\"clear\" visible=false";
 
 /// 重なりの順の 1 枚（順位 0 が最も手前）。
 #[derive(Clone, Debug)]
@@ -271,9 +275,10 @@ fn send(run: &mut Run, n: &mut Notes, script: &str) {
 /// 状態の変わった行を待って送る（オン・オフ）。
 fn send_state(run: &mut Run, n: &mut Notes, script: &str) -> Option<String> {
     let c = lines_with(run, STATE_CHANGED).len();
+    let b = lines_with(run, BAND_APPLIED).len();
     send(run, n, script);
     let line = wait_new(run, STATE_CHANGED, c, 10);
-    sleep(Duration::from_millis(800));
+    let _ = wait_new(run, BAND_APPLIED, b, 10);
     line
 }
 
@@ -511,8 +516,9 @@ fn stay_on_top_directives_on_emo2() {
     let done = wait_new(&run, "event=\"steady_talk_done\"", 0, 60);
     n.note(format!("steady_talk_done={done:?}"));
     // 起動の挨拶のバルーンを閉じ、面を既定へ（後から出るバルーンを見分けるため）。
+    let cleared = lines_with(&run, CLEARED).len();
     send(&mut run, &mut n, r"\0\s[0]\1\s[10]\e");
-    sleep(Duration::from_secs(3));
+    let _ = wait_new(&run, CLEARED, cleared, 10);
 
     // ---- 他のアプリの窓を前に出す ----
     let s = snap(&run, 0);
@@ -566,9 +572,10 @@ fn stay_on_top_directives_on_emo2() {
     // ---- オフのあいだの \v（areka は裏のプロセス） ----
     let fg = foreground_pid();
     let c = lines_with(&run, "ゴーストの窓を今いる帯の最上へ出す").len();
+    let raised = lines_with(&run, BAND_RAISED).len();
     send(&mut run, &mut n, r"\v\e");
     let line = wait_new(&run, "ゴーストの窓を今いる帯の最上へ出す", c, 10);
-    sleep(Duration::from_millis(800));
+    let _ = wait_new(&run, BAND_RAISED, raised, 10);
     let s1 = snap(&run, other);
     n.record("s1_v_off", &s1);
     n.judge(
@@ -693,8 +700,9 @@ fn stay_on_top_directives_on_emo2() {
     n.judge("オンのあいだバルーンが自分のキャラクターのすぐ手前", ok, d);
 
     // ---- \![set,zorder] の組の並び ----
+    let settled = lines_with(&run, CHAIN_SETTLED).len();
     send(&mut run, &mut n, r"\![set,zorder,1,0]\e");
-    sleep(Duration::from_secs(1));
+    let _ = wait_new(&run, CHAIN_SETTLED, settled, 10);
     let s6 = snap(&run, other);
     n.record("s6_zorder_1_0", &s6);
     let kero_front = |s: &Snap| match (s.char_titled(KERO), s.char_titled(SAKURA)) {
@@ -711,7 +719,6 @@ fn stay_on_top_directives_on_emo2() {
     let c = lines_with(&run, "skin_switch_done").len();
     send(&mut run, &mut n, r"\![change,shell,copy]\e");
     let line = wait_new(&run, "skin_switch_done", c, 30);
-    sleep(Duration::from_secs(2));
     let s7 = snap(&run, other);
     n.record("s7_shell_switched", &s7);
     n.judge(
@@ -726,8 +733,9 @@ fn stay_on_top_directives_on_emo2() {
     n.note(format!("shell switched balloons_just_in_front ok={ok} {d}"));
 
     // ---- 組み替え ----
+    let settled = lines_with(&run, CHAIN_SETTLED).len();
     send(&mut run, &mut n, r"\![reset,zorder]\![set,zorder,0,1]\e");
-    sleep(Duration::from_secs(1));
+    let _ = wait_new(&run, CHAIN_SETTLED, settled, 10);
     let s8 = snap(&run, other);
     n.record("s8_zorder_0_1", &s8);
     n.judge(
@@ -740,6 +748,7 @@ fn stay_on_top_directives_on_emo2() {
     match s8.char_titled(SAKURA).and_then(hit_point) {
         Some((x, y)) => {
             n.note(format!("drag from {x},{y}"));
+            let ended = lines_with(&run, "char DragEnd 保存").len();
             mouse(MOUSE_EVENT_FLAGS(0), x, y);
             sleep(Duration::from_millis(300));
             mouse(MOUSEEVENTF_LEFTDOWN, x, y);
@@ -750,7 +759,7 @@ fn stay_on_top_directives_on_emo2() {
             }
             sleep(Duration::from_millis(300));
             mouse(MOUSEEVENTF_LEFTUP, x + 120, y - 60);
-            sleep(Duration::from_secs(1));
+            let _ = wait_new(&run, "char DragEnd 保存", ended, 10);
             let s9 = snap(&run, other);
             n.record("s9_dragged", &s9);
             let moved =
@@ -770,8 +779,9 @@ fn stay_on_top_directives_on_emo2() {
 
     // ---- オンのあいだの \v ----
     let before = snap(&run, other);
+    let raised = lines_with(&run, BAND_RAISED).len();
     send(&mut run, &mut n, r"\v\e");
-    sleep(Duration::from_secs(1));
+    let _ = wait_new(&run, BAND_RAISED, raised, 10);
     let s10 = snap(&run, other);
     n.record("s10_v_on", &s10);
     n.judge(
@@ -837,7 +847,6 @@ fn stay_on_top_directives_on_emo2() {
     let done = wait_new(&run, "ghost_switch_done", switched, 60);
     let disc = wait_new(&run, "常に手前のまま降ろした", discard, 5);
     let _ = wait_new(&run, "event=\"steady_talk_done\"", talks, 60);
-    sleep(Duration::from_secs(2));
     let s14 = snap(&run, other);
     n.record("s14_ghost_switched", &s14);
     raise_other(&mut n, "after ghost switch");

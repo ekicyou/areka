@@ -141,7 +141,7 @@
   - _Boundary: areka tests 実画面_
   - _Dispatch: mechanical — 補助を寄せる先と名を設計が与える_
   - _Requirements: 3.1, 6.1, 6.11_
-- [ ] 10.2 実画面のテストの決め打ちの眠りを記録の待ちに替え、組の判定を欄の値で見る（指摘 24・25）
+- [x] 10.2 実画面のテストの決め打ちの眠りを記録の待ちに替え、組の判定を欄の値で見る（指摘 24・25）
   - 決め打ちの眠り 15 か所を、今の `RUST_LOG` で開けてある記録の行を `wait_new` で待つ形に替える（どの行を待つかは 1 か所ずつ決める）
   - `window_link_real_run.rs:473-479` を `groups=` の欄の値に `{0, 1}` が入るかを見る純関数 `has_group(line, &[0, 1])` に替え、`[{2, 3}]` の行で偽になる単体のテストを 1 本足す
   - 完了の姿: 単体のテストが緑で、元の判定に戻すと赤（較正）。実画面の 2 本は 21.2 の全体テストの段で緑
@@ -294,3 +294,4 @@
 - 8.1: `placement_tests/zorder_branch_coverage_test_support.rs:16` に自前の `code_only` の写しが残る（範囲の表に無い・21.1 で見る）
 - 8.2: 1 回目の `drain` は本番が `trace!(reload_drain_no_wiring)` を 1 件出すので「warn 以上 0 件」で見る（この枝に info/debug を足す壊し方は緑のまま）。`let _ = write_session_mark` は設計の一覧の外（areka-session の 3 ファイル・`main_session_mark_*`・`ghost_session_switch_memory_tests.rs`）に 9 件残る。兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す（20 で申し送る）
 - 9.2: `unique_temp_dir` は areka-session から消えた。同名の別の補助が `areka-ghost/src/config.rs`・`areka-parsers/src/package/resolve_tests.rs`・`areka-placement/src/source_tests.rs` に残る（照合の表の「定義のファイルの中だけ」の扱い）。`boot_seam_restore_tests.rs` の assert の文に spec 名 `areka-P0-scope-chain-gap 7.3` が残る（17 で拾う）。本体の `ghost_session_scope_rect_boot_tests.rs` も `areka_placement::test_support::fake_handle` を引く
+- 10.2: 実画面の 2 本は眠り 16 か所のうち 15 か所を記録の待ちか窓の矩形の待ち（`wait_rects`＝100ms あけた 2 回の読みが同じになるまで・上限 2 秒）に替え、辞書の付け直しを待つ 3 秒だけ残した。実画面での緑は 21.2 で見る
