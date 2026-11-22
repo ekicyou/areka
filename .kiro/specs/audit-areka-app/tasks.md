@@ -202,7 +202,7 @@
   - _Requirements: 3.1, 6.11_
 
 - [ ] 14. ほかのテストの写しを上流の支えへ寄せる（G14）
-- [ ] 14.1 起動の文脈の補助と本体の結線のテストの写しを上流へ寄せる（S1・指摘 35・36・5.5・5.8・5.9）
+- [x] 14.1 起動の文脈の補助と本体の結線のテストの写しを上流へ寄せる（S1・指摘 35・36・5.5・5.8・5.9）
   - 12.1 で足した `boot_context_named` を使い、`menu/ghost_frame_tests.rs:43` の写しの本体を `boot_context_named(root.dir(), root, current, "StayseeBalloon")` の 1 行に
   - `runtime_tests/spine.rs` の `capture_logs` を上流の use に、`make_world_with_gpu` を `gpu_on` の後に `AppExit` を据える 3 行に、119 行の理由を消す。`runtime_tests/frame/switch_finish_tests.rs:60-61` の `SharedFakeIo` の写しを上流へ
   - 完了の姿: `menu/`・`runtime_tests/` の既存のテスト（GPU は実 GPU）が同じ表明のまま緑で、`cargo test -p areka-session` も緑
@@ -299,3 +299,4 @@
 - 兄弟 `audit-emo2-boot-switch` から 11-23 に受けた範囲の外の件（21.1 で見る）: ウ＝`SharedFakeIo` の写しは 9.1・9.2 で 2 つ消し、`runtime_tests/frame/switch_finish_tests.rs` は 14.1 で寄せる／カ＝本体 `ghost_session_switch_tests.rs` の `kinds` は `areka-session` の `shell_balloon_switch_session_lap_test_support::kinds` と同じ（13.2 で use）／キ＝`ghost_session_runtime.rs` の降ろしの計時と記録（`ghost_switch_down_failed`・`ghost_switch_down_ms`）が `ghost_switch.rs` の `take_down` の写し／ク＝`runtime_boot.rs` が `ChangeRequestRaw` を `ghost_switch` の出し直しから、`SkinRequestRaw` を runtime から直に引く（片方にそろえれば `ghost_switch.rs` の `pub(crate) use` が消える）／ケ＝`reload_test_support.rs` と本体 `reload_tests.rs` が同じ型を 2 つの道で引く（兄弟は `reload_test_support.rs` の use の道を替え済み・70bb10c2a）／シ＝件数を数える関数の写し 5 つ（`boot_resolve_readonly_tests.rs`・`boot_resolve_tests.rs`・`boot_shell_tests.rs`・`switch_copy_tests.rs`・`write_failure_late_tests.rs`）／ス＝本体 `runtime_tests/frame_visibility_integration_tests.rs` の読まれない `BalloonWiring::new` の据え付けと `visibility_lines` の 3 つ目の写し／セ＝14.2／ソ＝8.1 で済み／タ＝8.2 で済み。兄弟は use の道を 4 か所替えた（`reload_test_support.rs`・`runtime_tests/frame/switch_tests.rs` の 2 か所・`switch_finish_tests.rs`）。use の行がぶつかったら後から着地する側が合わせる
 - 12.2: §8 の 403 行が名指す `record_non_argv_writes_all_three` は実体が `boot_resolve_last_used_tests.rs` にある（21.1 で見る）
 - 13.2: `readonly_run_tests.rs:49` に共有と同じ `const A_TO_B` の写しが残る。`boot_windows_with_descript_line` の doc の 1 行目が `seriko.sticky-window` だけを書く（`kero.balloon.dontmove` にも使う）。restart の 479-491 の why の注釈も消えた（21.1 で見る）
+- 14.1: 設計が上流に挙げた `areka_runtime::frame::test_support::capture_logs` は `cfg(test)` だけで立つので、本体の `runtime_tests/spine.rs` は `log_capture_kit::capture_lines` に載せた 3 行の写しを理由の注釈つきで残す（依存は足さない）
