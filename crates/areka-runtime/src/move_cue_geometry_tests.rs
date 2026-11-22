@@ -1,9 +1,7 @@
 // `\![move]` の移動先の計算の決定論テスト。
 
 use super::*;
-use crate::move_cue::{
-    Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY, parse_move_directive,
-};
+use crate::move_cue::{MoveBase, parse_move_directive};
 use wintf::ecs::SizeI;
 
 const K1: ScaleRatio = ScaleRatio::ONE;

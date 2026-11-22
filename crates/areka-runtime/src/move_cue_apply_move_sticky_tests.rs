@@ -4,26 +4,19 @@
 //! `move_world`）、帳簿は `seed_sticky_descript`／`apply_set_sticky` で据える。
 //! 動かすのはスコープ 1（基準はスコープ 0 の窓）、組の相手はスコープ 0。
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::{Entity, World};
 use wintf::ecs::{Point, WindowHandle};
 
-use super::apply_move_tests::{events_named, move_world, pos_of};
+use super::apply_move_tests::{events_named, move_world, persisted_after, pos_of};
 use super::*;
 use areka_placement::follow::{Anchored, BalloonFollow};
-use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::Anchor;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
-use areka_placement::test_support::SharedFakeIo;
 use log_capture_kit::capture;
 
 /// 帳簿を据え、台本の組 `members` を作る。
@@ -188,52 +181,30 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
 /// 連れ動いた相手の位置を記憶に書かない。
 #[test]
 fn partner_position_is_not_persisted() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo::new(shared.clone())),
-        runtime_sink: None,
-    });
     let (mut world, gw) = move_world();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
+    let loaded = persisted_after(&mut world, |world| {
+        set_anchor(world, &gw, 0, Anchor::Free);
+        group(world, &["0", "1"]);
+        let p = pair(&gw);
+        let partner_before = pos_of(world, p.partner);
+
+        assert!(apply_move_directive(
+            world,
+            &directive(&MOVE_XY),
+            ScaleRatio::ONE
+        ));
+        assert_ne!(
+            pos_of(world, p.partner),
+            partner_before,
+            "前提: 相手が動いた"
+        );
     });
-    set_anchor(&mut world, &gw, 0, Anchor::Free);
-    group(&mut world, &["0", "1"]);
-    let p = pair(&gw);
-    let partner_before = pos_of(&world, p.partner);
-
-    assert!(apply_move_directive(
-        &mut world,
-        &directive(&MOVE_XY),
-        ScaleRatio::ONE
-    ));
-    assert_ne!(
-        pos_of(&world, p.partner),
-        partner_before,
-        "前提: 相手が動いた"
-    );
-
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> = load_scope(
-        PersistScope::Ghost,
-        &roots,
-        &SharedFakeIo::new(shared.clone()),
-    )
-    .into_iter()
-    .collect();
     assert!(
         !loaded
-            .keys()
-            .any(|k| matches!(k, PersistKey::WindowPos { .. })),
+            .iter()
+            .any(|(k, _)| matches!(k, PersistKey::WindowPos { .. })),
         "窓の位置を記憶に書かない: {loaded:?}"
     );
-    parts.publisher.close();
-    crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
 }
 
 /// 時間つきの `\![move]` でも相手は最終の位置へすぐ置かれる。

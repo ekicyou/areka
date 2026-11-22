@@ -1,7 +1,6 @@
 // `\![move]` の引数の読みの決定論テスト。
 
 use super::*;
-use crate::move_cue::{Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY};
 
 fn toks(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()

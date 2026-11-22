@@ -183,16 +183,18 @@ pub enum Axis {
 /// talk スレッド側消費 sink。
 ///
 /// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）であり自らの
-/// コマンド名リテラルを運ぶものを名前自己選別して解釈し、[`PositionCue`] を mpsc で UI スレッド（frame 相の
+/// 担当の組を運ぶものを自己選別して解釈し、[`PositionCue`] を mpsc で UI スレッド（frame 相の
 /// move drain）へ送出する。それ以外
 /// （非キャリア・担当外コマンド名・非数値 scope）は**記録付き良性スキップ**へ
 /// 縮退する——無音破棄でも panic でもない（log-first）。
 ///
 /// # 名前自己選別（高々 1 消費者）
 ///
-/// 担当判定は本 sink が自らのコマンド名リテラル `name == "move"` で行う——dola はコマンド名の
-/// 語彙も名前写像 API も持たず、`MoveCueSink` は中央権威表に依存せず `"move"` を自己選別する。
-/// 「1 名前=高々 1 消費者」の一意性は結線層（areka）の消費者台帳が保証する
+/// 担当判定は本 sink が自らの（コマンド名, 第 1 引数）の組のリテラルで行う——`move` は名前だけで、
+/// ほかは `(execute, resetwindowpos)`・`(execute, resetballoonpos)`・`(set|reset, sticky-window)`・
+/// `(set, alignmenttodesktop|alignmentondesktop)`・`(lock|unlock, balloonmove)` の組で選ぶ。dola は
+/// コマンド名の語彙も名前写像 API も持たず、`MoveCueSink` は中央権威表に依存せず自己選別する。
+/// 「1 コマンド出現に高々 1 担当」の一意性は結線層（areka）の消費者台帳が保証する
 /// （dola の権威表ではない）。
 ///
 /// # duration honor 不変
@@ -221,22 +223,25 @@ impl MoveCueSink {
 
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`GhostBootOptions.sinks` の
 /// broadcast 登録先が要求する形）。broadcast 下では担当外 cue（`Text`／`Emote`／
-/// 他コマンド名のキャリア等）も本 sink へ届くが、名前選別で `"move"` 以外は記録付き良性スキップへ
-/// 縮退する。
+/// 他コマンド名のキャリア等）も本 sink へ届くが、担当の組以外は記録付き良性スキップへ縮退する。
 impl dola::cue::CueSink for MoveCueSink {
     fn emit(&mut self, cue: TalkCue) {
-        // キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
-        //    Custom なのに非正準 params のときの severity は**宛名規律**で分ける:
-        //    宛名（`Custom{command}` フィールド・params 非正準でも読める）が "move"＝自分宛の
-        //    壊れ物ゆえ warn・他人宛/未知名＝担当外ゆえ debug（報告責任は宛名の担当者）。
-        //    "execute" 宛も debug——第 1 引数が読めず resetwindowpos か分からないうえ、execute 宛の
-        //    壊れ物の warn は InstallCueSink が持つ（同じ荷物に warn を 2 行出さない）。
+        // Custom なのに非正準 params のときの severity は**宛名規律**で分ける:
+        // 宛名（`Custom{command}` フィールド・params 非正準でも読める）が "move"・"lock"・"unlock"
+        // （どれも担当は本 sink だけ）＝自分宛の壊れ物ゆえ warn・他人宛/未知名＝担当外ゆえ debug
+        // （報告責任は宛名の担当者）。"set"／"reset" は他の sink と分け合う名前ゆえ debug。
+        // "execute" 宛も debug——第 1 引数が読めず resetwindowpos か分からないうえ、execute 宛の
+        // 壊れ物の warn は InstallCueSink が持つ（同じ荷物に warn を 2 行出さない）。
         let Some((name, tokens)) = cue.command.as_command_carrier() else {
             match &cue.command {
-                CueCommand::Custom { command, .. } if command == "move" => warn!(
-                    command = ?cue.command,
-                    "MoveCueSink: 自分宛（move）の非正準 Custom params を良性スキップ"
-                ),
+                CueCommand::Custom { command, .. }
+                    if matches!(command.as_str(), "move" | "lock" | "unlock") =>
+                {
+                    warn!(
+                        command = ?cue.command,
+                        "MoveCueSink: 自分宛の非正準 Custom params を良性スキップ"
+                    );
+                }
                 CueCommand::Custom { .. } => debug!(
                     command = ?cue.command,
                     "MoveCueSink: 他人宛/未知名の非正準 Custom params を良性スキップ（担当外）"
@@ -251,7 +256,8 @@ impl dola::cue::CueSink for MoveCueSink {
 
         // 並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象）。
         // 窓の組・吸着・バルーン位置・バルーンを動かさない指定も同じ線で選び、台本の並びを保つ。
-        // 組と初期化は実行者を読まない。吸着だけは実行者のスコープへ当てる（`move` と同じ読み）。
+        // 組と初期化は実行者を読まない。吸着とバルーンを動かさない指定は実行者のスコープへ当てる
+        // （`move` と同じ読み）。
         match (name, tokens.first().copied()) {
             ("execute", Some("resetwindowpos")) => {
                 self.send(PositionCue::ResetWindowPos);
@@ -279,7 +285,7 @@ impl dola::cue::CueSink for MoveCueSink {
             }
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5block_2cballoonmove_5d:1
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bunlock_2cballoonmove_5d:1
-            // 動かせない指定は実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。
+            // 余分な引数は読まない（SSP 2.9 も誤りにしない）。
             (cmd @ ("lock" | "unlock"), Some("balloonmove")) => {
                 if let Some(scope) = actor_scope(&cue, &format!("{cmd},balloonmove")) {
                     self.send(PositionCue::BalloonMoveLock {
@@ -299,12 +305,10 @@ impl dola::cue::CueSink for MoveCueSink {
             return;
         }
 
-        // scope は cue.actor（"0"/"1"）の u32 parse。非数値は warn＋スキップ。
         let Some(scope) = actor_scope(&cue, "move") else {
             return;
         };
 
-        // 純粋な読み（決定論・no I/O）。常に指令を返し、置き換えは 1 件ずつ記録する。
         let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
         let parsed = parse_move_directive(scope, &tokens);
         for note in &parsed.notes {

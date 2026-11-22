@@ -15,25 +15,27 @@ use std::sync::mpsc::{TryRecvError, channel};
 
 #[test]
 fn broken_move_addressed_custom_warns_once() {
-    let (tx, rx) = channel::<PositionCue>();
-    let mut sink = MoveCueSink::new(tx);
-    let logs = capture_logs(|| sink.emit(broken_custom_cue("0", "move")));
+    for command in ["move", "lock", "unlock"] {
+        let (tx, rx) = channel::<PositionCue>();
+        let mut sink = MoveCueSink::new(tx);
+        let logs = capture_logs(|| sink.emit(broken_custom_cue("0", command)));
 
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "自分宛（move）の非正準 Custom は WARN=1（自分宛の壊れ物）: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "DEBUG"),
-        0,
-        "自分宛の壊れ物は DEBUG 良性 skip ではない（WARN 一択）: {logs:?}"
-    );
-    assert_eq!(
-        rx.try_recv(),
-        Err(TryRecvError::Empty),
-        "壊れ Custom は MoveDirective を送出しない（skip）"
-    );
+        assert_eq!(
+            count_level(&logs, "WARN"),
+            1,
+            "自分宛（{command}）の非正準 Custom は WARN=1（自分宛の壊れ物）: {logs:?}"
+        );
+        assert_eq!(
+            count_level(&logs, "DEBUG"),
+            0,
+            "自分宛（{command}）の壊れ物は DEBUG 良性 skip ではない（WARN 一択）: {logs:?}"
+        );
+        assert_eq!(
+            rx.try_recv(),
+            Err(TryRecvError::Empty),
+            "壊れ Custom（{command}）は指令を送出しない（skip）"
+        );
+    }
 }
 
 /// 宛名が他人/未知で params 非正準（担当外）→ WARN=0 かつ DEBUG 良性 skip・送出なし。

@@ -3,30 +3,24 @@
 // 偽の窓（`spawn_ghost_windows`＋偽の `WindowHandle`）・主と副の偽の `Monitor`・その写しの
 // `MonitorSnapshot` を置いた headless World で `apply_move_directive` を駆動する。
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
-use crate::move_cue::apply_move_tests::{BALLOON_OFFSET, events_named, placement};
+use crate::move_cue::apply_move_tests::{BALLOON_OFFSET, events_named, persisted_after, placement};
 use crate::move_cue::{MoveDirective, parse_move_directive};
 use areka_placement::diag::PlacementRoute;
 use areka_placement::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, apply_char_shift, resize_window_to,
 };
-use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
-use areka_placement::test_support::{SharedFakeIo, give_fake_handles};
+use areka_placement::test_support::give_fake_handles;
 use log_capture_kit::capture;
 
 /// 主モニタの作業領域（下にタスクバー）。
@@ -293,61 +287,41 @@ fn resize_after_move_keeps_bottom_and_center() {
 /// `Anchored` とバルーンのずらしはビット同一。
 #[test]
 fn move_keeps_balloon_offset_and_writes_nothing_else() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo::new(shared.clone())),
-        runtime_sink: None,
-    });
     let (mut world, gw) = world_with(Anchor::Free);
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
+    let stored = persisted_after(&mut world, |world| {
+        let target = gw.char_window(1).unwrap();
+        let balloon = gw.balloon_window(1).unwrap();
+        let anchored = *world.get::<Anchored>(target).unwrap();
+        let follow = *world.get::<BalloonFollow>(target).unwrap();
+        let default_pos = gw.default_char_pos(1);
+
+        assert!(apply_move_directive(
+            world,
+            &args(&["--base=global", "--X=5000", "--Y=-3000"]),
+            ScaleRatio::ONE
+        ));
+
+        assert_eq!(
+            pos(world, target),
+            PointPx { x: 5000, y: -3000 },
+            "画面の外でも寄せない"
+        );
+        assert_eq!(
+            pos(world, balloon),
+            PointPx {
+                x: 5000 + BALLOON_OFFSET.x,
+                y: -3000 + BALLOON_OFFSET.y
+            },
+            "バルーンは今のずらしで付いて動く"
+        );
+        assert_eq!(*world.get::<Anchored>(target).unwrap(), anchored);
+        assert_eq!(*world.get::<BalloonFollow>(target).unwrap(), follow);
+        assert_eq!(
+            world.resource::<GhostWindows>().default_char_pos(1),
+            default_pos
+        );
     });
-    let target = gw.char_window(1).unwrap();
-    let balloon = gw.balloon_window(1).unwrap();
-    let anchored = *world.get::<Anchored>(target).unwrap();
-    let follow = *world.get::<BalloonFollow>(target).unwrap();
-    let default_pos = gw.default_char_pos(1);
-
-    assert!(apply_move_directive(
-        &mut world,
-        &args(&["--base=global", "--X=5000", "--Y=-3000"]),
-        ScaleRatio::ONE
-    ));
-
-    assert_eq!(
-        pos(&world, target),
-        PointPx { x: 5000, y: -3000 },
-        "画面の外でも寄せない"
-    );
-    assert_eq!(
-        pos(&world, balloon),
-        PointPx {
-            x: 5000 + BALLOON_OFFSET.x,
-            y: -3000 + BALLOON_OFFSET.y
-        },
-        "バルーンは今のずらしで付いて動く"
-    );
-    assert_eq!(*world.get::<Anchored>(target).unwrap(), anchored);
-    assert_eq!(*world.get::<BalloonFollow>(target).unwrap(), follow);
-    assert_eq!(
-        world.resource::<GhostWindows>().default_char_pos(1),
-        default_pos
-    );
-
-    parts.publisher.barrier().expect("barrier が返る");
-    let stored = load_scope(
-        PersistScope::Ghost,
-        &roots,
-        &SharedFakeIo::new(shared.clone()),
-    );
     assert!(stored.is_empty(), "記憶に何も送られない: {stored:?}");
-    parts.publisher.close();
-    crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
 }
 
 // 記録

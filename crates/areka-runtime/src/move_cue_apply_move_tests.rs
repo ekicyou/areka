@@ -7,11 +7,17 @@ use areka_placement::follow::OffsetBase;
 use bevy_ecs::prelude::{Entity, World};
 
 use areka_placement::follow::{Anchored, BalloonFollow, MonitorSnapshot};
+use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::test_support::SharedFakeIo;
 use areka_placement::test_support::give_fake_handles;
+use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use log_capture_kit::CapturedEvent;
+use std::path::PathBuf;
+use std::sync::Arc;
 use wintf::ecs::{Point, WindowPos};
 
 pub(super) const BALLOON_OFFSET: PointPx = PointPx { x: 285, y: -19 };
@@ -72,6 +78,32 @@ pub(super) fn move_world() -> (World, GhostWindows) {
     );
     give_fake_handles(&mut world, &gw);
     (world, gw)
+}
+
+/// 記憶の線（偽の I/O の sylphya）を `world` へ結んで `act` を走らせ、ghost の記憶に届いた中身を返す。
+pub(super) fn persisted_after(
+    world: &mut World,
+    act: impl FnOnce(&mut World),
+) -> Vec<(PersistKey, String)> {
+    let shared = Arc::new(FakePersistIo::new());
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    let parts = spawn_sylphya(SylphyaInit {
+        roots: roots.clone(),
+        io: Box::new(SharedFakeIo::new(shared.clone())),
+        runtime_sink: None,
+    });
+    world.insert_non_send(PersistWiring {
+        publisher: parts.publisher.clone(),
+    });
+    act(world);
+    parts.publisher.barrier().expect("barrier が返る");
+    let stored = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo::new(shared));
+    parts.publisher.close();
+    crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
+    stored
 }
 
 pub(super) fn pos_of(world: &World, e: Entity) -> Point {
@@ -205,7 +237,7 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
 /// 対象 scope 不在の move キャリアを sink→channel→apply に通しても、apply は warn＋`false` を返し
 /// World は不変。sink 段は正常に directive を送出し、縮退は apply 段でのみ起きる。
 #[test]
-fn pipeline_target_absent_warns_false_no_mutation() {
+fn pipeline_target_absent_returns_false_no_mutation() {
     // GhostWindows に scope0（基準）のみ。fixture の対象 scope1 は不在。
     let placements = vec![placement(0, S0.0, S0.1, Anchor::Bottom, true)];
     let mut world = World::new();
