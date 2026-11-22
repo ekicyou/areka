@@ -36,7 +36,7 @@
   - _Dispatch: mechanical — 撤去の後の形を設計の表が与えている_
   - _Requirements: 2.3, 3.1, 3.4, 3.6, 4.1, 4.3_
 
-- [ ] 2.2 (P) areka-seriko の写しを再輸出に付け替える
+- [x] 2.2 (P) areka-seriko の写しを再輸出に付け替える
   - dev の依存に `test-support` 機能付きの `dola` の行を 1 行のコメントとともに足す
   - `actor_test_support.rs` の `carrier_cue` の本文を消し、同じ位置で `dola` の組み立てを同じ名で再輸出する。正準でない合図の組み立てと他の取り込みは変えない
   - 呼び手の 5 ファイルが無変更のまま組める

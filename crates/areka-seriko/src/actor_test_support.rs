@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 // テストの道具は層をまたぐ受け口の 1 か所の定義。
 pub(super) use crate::test_support::{capture_text, clear_all, cue, fresh_states, text};
+pub(super) use dola::cue::test_support::carrier_cue;
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
 pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
@@ -118,12 +119,6 @@ impl ClockRig {
     pub(super) fn all(&self) -> Vec<DisplayCommand> {
         self.records.lock().unwrap().clone()
     }
-}
-
-/// `\![name,tokens...]` の正準キャリアの合図（`Custom` の String Array・at 0・長さ 0）。
-pub(super) fn carrier_cue(scope: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    let toks = tokens.iter().map(|t| t.to_string()).collect();
-    cue(0.0, scope, CueCommand::command_carrier(name, toks), 0.0)
 }
 
 /// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
