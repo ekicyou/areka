@@ -61,7 +61,7 @@
   - _Dispatch: mechanical — 改名表どおりの置き換えと、design の示す中身の申し送り_
   - _Requirements: 2.1, 3.1, 4.1, 4.2, 4.6, 4.7, 4.10, 6.2, 6.6_
 
-- [ ] 8. emo-present の作業番号を消し、決まりの 1 行を足す（G7）
+- [x] 8. emo-present の作業番号を消し、決まりの 1 行を足す（G7）
   - `crates/areka-emo-present/` の 2 行（`presenter_dpi_scale_tests.rs:24`・`presenter_test_support.rs:229`）の `T-N3` を消し、`display_tests.rs` の既にある名 `surface_size_matches_scaled_extent_within_one_pixel` で指す形に直す（`display_tests.rs` は改めない）
   - CLAUDE.md の `## Comments` の「`.kiro` の spec・要件・タスクの番号をコードに書かない」の行の `in code` の後に、テストの名を含むことを足す（同じ行の後ろの文と他の行は変えない）。照合のテストは足さない
   - 完了の状態: 閉じ方の ⑴〜⑷ が通り（⑴ は 2 ファイルへの式 5 の当たりが 0、⑷ は `cargo test -p areka-emo-present`）、CLAUDE.md の差分が 1 行だけのコミットになっている

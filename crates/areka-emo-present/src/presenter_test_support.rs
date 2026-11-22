@@ -226,7 +226,7 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
 ///
 /// 両方を 1 つの値で読むのは、片方だけを見ると「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と
 /// 区別できないためである。物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段
-/// （`PostLayout`）が導くので、丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
+/// （`PostLayout`）が導くので、丸めの一致は `display_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
 pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
     let arr = world
         .get::<Arrangement>(surface_entity)

@@ -21,7 +21,7 @@ use super::test_support::{
 // `Arrangement.scale`＝k で掛ける。ゆえに本ファイルの期待値は「配置の寸＝原寸・配置の係数＝k・
 // 照会値＝丸め権威 `scaled_extent`」の 3 点で書く。物理寸そのもの（`GlobalArrangement.bounds`）は
 // wintf の伝播段（`PostLayout`）が導くため
-// 本ファイルでは走らせず、丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
+// 本ファイルでは走らせず、丸めの一致は `display_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
 
 /// 窓ごとの k 基底: `attach_target` は target ごとに拡大政策を
 /// 保持し、**別窓・別 author_dpi の 2 target が互いの政策を汚さない**。同一の窓 DPI（192）を与えて
