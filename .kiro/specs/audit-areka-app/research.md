@@ -620,9 +620,9 @@
 | 確かめ | 結果 |
 |---|---|
 | `crates/dola/`・`crates/wintf*`・`vendors/` | 0 ファイル・0 行 |
-| 兄弟の持ち物（`install*`・`update*`・`mcp*`・`roots*`・`readme*`・`ghost_switch*`・`shell_balloon_switch*`・`balloon_visibility*` の名の差分） | 0 ファイル（申し合わせの `alert_tests.rs` の構築の 2 行は兄弟の側の変更で、この差分には出ない） |
+| 兄弟の持ち物（`install*`・`update*`・`mcp*`・`roots*`・`readme*`・`ghost_switch*`・`shell_balloon_switch*`・`balloon_visibility*` の名の差分） | 兄弟の持ち物は 0 ファイル。名の型に当たるのは 6 ファイルで、どれもこの spec の持ち物：`areka-session/src/boot_config_roots_tests.rs`（本体の `session_tests/boot_config_*` から移した先・design.md 191 行）・`crates/areka/src/cli/parse_install_tests.rs`（design.md 197 行）・`crates/areka/tests/startup_install_real_run.rs`（design.md 199 行）・`crates/areka/tests/emo2_mcp_real_run.rs`（要件の Boundary Context の本体 `tests/`（16 本）の 1 本）と、`readme*` の型に当たる `crates/areka/README.md`・`icon/README.md`（範囲の縁・仮定 1・design.md 157・159 行）。申し合わせの `alert_tests.rs` の構築の 2 行は兄弟の側の変更で、この差分には出ない |
 | `THIRD-PARTY-NOTICES.md` | 差分に無い（作り直しの差 0 は全体テストの `-License` の段で確かめる） |
-| 範囲の中 | `.kiro/specs/audit-areka-app/`（6 ファイル＋`design-validation.md`）・`crates/areka/`（`src/`・`tests/`・`examples/`・`README.md`・`areka.manifest`・`icon/`・`Cargo.toml`・消した絵 77 個）・`crates/areka-session/`（`src/`・`Cargo.toml`・`build.rs`・消した `tests.manifest`）・`Cargo.lock`（`async-io` の 1 行だけが消えた） |
+| 範囲の中 | `.kiro/specs/audit-areka-app/`（`design-validation.md` を含めて 6 ファイル）・`crates/areka/`（`src/`・`tests/`・`examples/`・`README.md`・`areka.manifest`・`icon/`・`Cargo.toml`・消した絵 77 個）・`crates/areka-session/`（`src/`・`Cargo.toml`・`build.rs`・消した `tests.manifest`）・`Cargo.lock`（`async-io` の 1 行だけが消えた） |
 
 ### 14.2 範囲の外の差分の分類（Modified Files（範囲の外）の表との突き合わせ）
 
@@ -642,9 +642,9 @@
 | `.kiro/steering/structure.md` | 表の行（276・362・460 行の 3 hunk。362 行は脳を指す `ShioriHostSink` の説明を消す連動） |
 | `.kiro/specs/menu-thumbnail-preview/brief.md` | 表の行（手本の申し送り） |
 | `crates/areka/src/runtime_tests/`・`menu/`・`placement_tests/measure_template_tests.rs` | 本体の中だが表で「範囲の外（見直さない所）」に挙がった行のみ（`zorder_wiring_tests.rs`・`spine.rs`・`frame/switch_finish_tests.rs`・`menu/ghost_frame_tests.rs`・`menu/mod.rs`・`measure_template_tests.rs`） |
-| `crates/areka/src/runtime_tests/frame_chain_finalize_persist_tests.rs`（2 行） | 本体の中の範囲（要件 5 の件の行） |
+| `crates/areka/src/runtime_tests/frame_chain_finalize_persist_tests.rs`（1 行の置き換え） | 見直さない所（`runtime_tests/`・要件 51・227・262 行）にあり、要件 5 の名指しにも design.md の範囲の外の表にも無い。差分は assert の文から spec 名 `（areka-P0-scope-chain-gap 7.3）` を外す 1 行だけ（コミット 6fa97a0e8）。理由＝預かった件 5.21 件 2（brief 93 行が `runtime/frame_chain_finalize_{persist,restart}_tests.rs` を名指しし、`src/` から spec 名を外す）。文字列だけで振る舞いは変わらない |
 
-表に無い範囲の外のファイルは 0（上の突き合わせで全部が表の行に当たる）。
+表に無い範囲の外は、理由を書いたこの 1 ファイル（`frame_chain_finalize_persist_tests.rs`）だけ。ほかは全部が表の行に当たる。
 
 ### 14.3 外への約束の差
 
@@ -655,10 +655,42 @@
 | ログの文の頭 | `[session_mark] argv で始まったプロセスなので起動中の印に触れません`・`[boot_seam] 切替で起こしたゴーストの記憶は定常到達まで書きません`・`[boot_seam] シェルのフォルダ名が取れないので記憶を書きません`（頭の `[main]` から変えた分）。`[main] UI の基盤を初期化できませんでした` には `event = "winapp_init_failed"` を足した | 指摘 4・95（design.md の記録の表）・指摘 5 |
 | 倒れ先の `event` 欄 | `fallback_boot_wired_off`・`fallback_boot_origin_missing`・`fallback_boot_failed` | 指摘 4（確定の 3 つ） |
 | かけ直しで足した `event` 欄 | `runtime_boot_origin_missing`・`runtime_boot_failed`（`areka-session` の起動の失敗の記録）・`offline_dump_canvas_too_large`（書き出しの失敗の記録） | 13 の「かけ直しの中で振る舞いが変わった直し」・design.md（`offline_dump_canvas_too_large`） |
+| 性能の報告スレッドの終わりの warn | `報告スレッドは既に終端していた（終了直前のスナップショットは出ない）` の warn は出なくなり、スレッドが panic したときは panic の error を残す。この文を読む道具は `tools/`・`doc/`・`dist/` に 0 件（`git grep` で確かめた） | 13 の「かけ直しの中で振る舞いが変わった直し」・要件 9.6 |
+| `exit_wait_done` の `ms` | 全体の待ち時間でなく門ごとに数える。この event を名で読むのは `crates/areka/src/update/worker_tests.rs:375,434`（件の有無を見るだけで `ms` は読まない）と `areka-session/src/exit_wait_tests.rs` | 13 の「かけ直しの中で振る舞いが変わった直し」・要件 9.6 |
 | 起動中の印（running mark）の中身・置き場・起動オプション・SHIORI へ送るもの | 差分の本番の行に変更なし（`session_mark.rs` は文の頭と `#[cfg(test)] mod` の追加だけ） | 要件 7.3 |
 
 決めに無い外への約束の変化は見つからなかった。
 
 ### 14.4 全体テスト
 
-`tools/test-all.ps1 -License` の段は 1 回目をまだ回していない（排他テストの机を持つ進行役が回す）。結果は進行役が下に追記する。
+`pwsh -NoProfile -File tools/test-all.ps1 -License` を 1 回回した。検査したコミットは 2ceb96451、始めた時点の未コミットの変更は 0 件。終了コード 0・「all steps green」。
+
+| 段 | 結果 | 所要（秒） |
+|---|---|---|
+| sample fetch | OK | 3 |
+| add i686 target | OK | 0 |
+| build i686 artifacts | OK | 1 |
+| fmt --check | OK | 9 |
+| x64 workspace tests | OK | 621 |
+| dola toml feature tests | OK | 7 |
+| i686 tests (host-32) | OK | 42 |
+| crates.io pre-publish check (package only) | OK | 3 |
+| encoding check | OK | 21 |
+| release notes check | OK | 1 |
+| roadmap overview check | OK | 2 |
+| i686 helper sync check | OK | 5 |
+| sample fetch check | OK | 2 |
+| package check | OK | 3 |
+| exe install check | OK | 1 |
+| load flake check | OK | 3 |
+| mouse input check | OK | 1 |
+| app icon check | OK | 2 |
+| cursor art check | OK | 13 |
+| perf loop selftest | OK | 64 |
+| cargo deny check | OK | 16 |
+| cargo about generate | OK | 42 |
+| i686 helper beside areka.exe | OK | 1 |
+
+- 赤のテスト 0 件（全 23 段が緑）。smoke の揺れは出ず、回し直しもしていない（`load-flake.ps1` も回していない）。
+- `THIRD-PARTY-NOTICES.md` の作り直しの差は 0（`git diff --quiet` が 0。作業木の行末が CRLF になるだけで、正規化すると差は無い）。
+- 実機の確かめ（`--ignored`）と SSP の MCP での測りは行っていない（要件 8 のとおり、どの直しも決定論のテストで筋まで確かめる）。
