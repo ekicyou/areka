@@ -17,7 +17,7 @@
   - _Dispatch: mechanical — 本文・署名・檻の期待値を設計が与えている_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 5.6_
 
-- [ ] 1.3 (P) `dola` の README に `test-support` 機能の段落を足す
+- [x] 1.3 (P) `dola` の README に `test-support` 機能の段落を足す
   - About の段落の直後に、設計の下書きどおりの英語の段落を 1 つ置く（Key features の箇条には足さない）
   - README に機能の働き（テストだけが使う組み立てを開く・dev の依存でだけ付ける・本番に付けない）が読める
   - _Boundary: dola README_
