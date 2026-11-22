@@ -39,7 +39,7 @@
   - 本体の bin のテストが、本体の効き目を失って赤になったテスト（2.1 の一覧に足して 2.5 へ渡す）を除いて緑で、`ghost_switch.rs`・`reload.rs`・`shell_balloon_switch.rs`・`runtime_boot.rs` に `install`・`update` を名指すコードが grep で 0 件。`runtime_boot_tests.rs` の 13 個の受け口の確かめが中身を変えずに緑
   - _Dispatch: standard — 欄と呼び先の対応は設計が与えるが、5 つのファイルの呼び手と字面の確かめを書く_
   - _Requirements: 1.1, 1.4, 1.5, 1.6, 1.8, 2.1, 2.3, 2.5, 5.14, 6.7_
-- [ ] 2.3 煙の自動終了をテストごと集めた層へ移す
+- [x] 2.3 煙の自動終了をテストごと集めた層へ移す
   - 本体の `smoke_exit.rs` とそのテストを、履歴を残す移動で `session/` の兄弟へ移し、`session` の根に宣言を足し、本体の根の宣言を外す
   - 中身は `app_exit` を指すパスと可視性（`arm`・`smoke_exit_ms`）だけを変える。`//!` の古くなる文は直さず、申し送りの一覧に足す
   - 告知の判断（`alert.rs`）・本体の `main.rs`・`install/startup.rs` の呼び出しを移した先へ向ける

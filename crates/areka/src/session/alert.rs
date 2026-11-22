@@ -283,7 +283,7 @@ pub(crate) fn suppressed() -> bool {
 /// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
 /// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
 pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
-    let suppressed = suppressed || crate::smoke_exit::smoke_exit_ms().is_some();
+    let suppressed = suppressed || crate::session::smoke_exit::smoke_exit_ms().is_some();
     let (title, body) = alert_text(scene);
     tracing::error!(
         event = "alert",

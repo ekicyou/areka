@@ -101,9 +101,6 @@ mod file_drop;
 /// ベースウェアの根の並びの決め方。
 mod roots;
 
-/// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
-mod smoke_exit;
-
 /// 起動オプションの読み方。
 mod cli;
 
@@ -264,7 +261,7 @@ fn main() -> Result<()> {
         }
     };
 
-    smoke_exit::arm(&app);
+    session::smoke_exit::arm(&app);
 
     // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink`×2 の
     // fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・loop ticker）は `GhostSession` に束ねて置き場

@@ -523,3 +523,10 @@ Note 'done'
 | ※ `session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing` | `crates/areka/src/session/shell_balloon_switch_tests.rs` |
 
 `git grep -n -E "(install|update)::|InstallCueSink|UpdateCueSink" -- ghost_switch.rs reload.rs shell_balloon_switch.rs runtime_boot.rs`（`crates/areka/src/session/` の下）: 本体のモジュールを名指すコードは 0 件。残りは説明の地の文 2 行（`ghost_switch.rs:504` の `update::desk::on_switch_end`・`:677` の `install::desk::run_overwrite_between`、リンクでない）。`install`・`update` の語だけで grep すると、ほかに束の欄の名（`update_busy`・`install_busy`・`cue_sinks` の受け手の局所名 `install_sink`・`update_sink`）・集めた層の名（`record_last_installed`・`last_installed_recorded`・`lastinstalled`・`RefusedReason::Installing`・`installed_for`・`install_lines`）が当たる。
+
+### 2.3
+
+- `crates/areka/src/smoke_exit.rs` と `smoke_exit_tests.rs` を `git mv` で `crates/areka/src/session/` の兄弟へ移した。`session/mod.rs` に `pub(crate) mod smoke_exit;` を足し、本体の `main.rs` の宣言を外した。
+- 中身の書き換えは `use crate::session::app_exit;` → `use super::app_exit;` の 1 行だけ。`arm`・`smoke_exit_ms` は元から `pub(crate)` で、可視性は変えていない。
+- 呼び出しの向き先: `main.rs` の `session::smoke_exit::arm`、`session/alert.rs` と `install/startup.rs` の `crate::session::smoke_exit::smoke_exit_ms`。
+- 申し送り: 7.6 へ。移した `smoke_exit.rs` の `//!` の「`main.rs` の 1,000 行の上限のため外へ出した」は、集めた層に移った後は古くなる（直していない）。

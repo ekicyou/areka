@@ -232,7 +232,7 @@ pub(crate) fn resolve_boot(
         readonly: crate::session::readonly::is_on(),
         alert_suppressed: before_boot_alert_suppressed(
             crate::session::alert::suppressed(),
-            crate::smoke_exit::smoke_exit_ms(),
+            crate::session::smoke_exit::smoke_exit_ms(),
         ),
     };
     resolve_boot_with_env(

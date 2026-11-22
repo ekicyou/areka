@@ -61,6 +61,9 @@ pub(crate) mod boot_resolve;
 /// 終了の統合操作。全窓を閉じてから終了を指示する `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 pub(crate) mod app_exit;
 
+/// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
+pub(crate) mod smoke_exit;
+
 /// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
 pub(crate) mod session_end;
 
