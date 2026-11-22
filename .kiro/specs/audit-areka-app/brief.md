@@ -157,3 +157,9 @@
 ## 棚卸㊷からの申し送り（2026-11-22）
 
 - 本体の `crates/areka/src/runtime_tests/zorder_wiring_tests.rs` の作業番号の札つきのテスト 2 本（`t_zwi05_…`・`t_zwi08_…`）の名から札を外す（`test-name-work-tags` の受け持ちだったが、同じウェーブ C25 の `session-crate-split` がこのファイルの `include_str!` のパスを直すので、本体の残りを受け持つこの見直しへ寄せた）。外し方は `test-name-work-tags` と同じ＝札だけを外し、ぶつかるときだけ中身を表す語を足す。名指し（`doc/COMPAT_ARCHITECTURE.md` §8 ほか）も同じコミットで直す。
+
+## 申し送り（dola-cue-test-builder より）
+
+- 正準のキャリアの合図（`\![name,tokens...]`・発火時刻 0・長さ 0）を組むテスト用の口が `dola::cue::test_support::carrier_cue(actor, name, tokens)` の 1 か所になった（`dola` の `test-support` 機能の下）。本体のテストは `areka-runtime` の `consumer_ledger_test_support::carrier_cue(name, args)`（演者 `"0"`）と `actor_carrier_cue(actor, name, args)` で引ける（`areka-runtime` の `test-support` 機能が `dola/test-support` を前送りする）。
+- 本体の session のテスト 3 本の `prop_set_cue`（`readonly_run_tests.rs:94`・`readonly_sites_tests.rs:118`・`write_failure_sites_tests.rs:139`。行は 2026-11-22 の main）は、同じ合図を自分の本文で組む写しのまま残っている。上の口へ寄せるかを、この spec の範囲で見る（`session-crate-split` が `session/` を移した後の場所で読み替える）。
+- 観測: `crates/areka/tests/smoke_boot_loop_exit.rs` が、機械が混んでいた `cargo test -p areka` の 1 回で 60 秒の待ちを越えて落ちた（単独の回し直しと全体テスト 2 回は緑）。揺れが続くようなら `tools/load-flake.ps1` で測る。

@@ -80,3 +80,5 @@
 - 付け替えの前と後の数（`-- --list`）: dola 603→605（無視 1）・areka-ghost 282・areka-seriko 572・areka-runtime 1050（無視 3）・areka 1898（無視 3）。控えはワークツリーの `target/dola-cue-test-builder/` の下。
 - 範囲の外: `cargo clippy -p dola --all-targets -- -D warnings` が触っていない `compile/resolve.rs:369` と `runtime/timeline_manager/mod.rs:231` の `collapsible_if` で赤（`tools/test-all.ps1` に clippy の段は無い）。
 - 範囲の外: 本体 `areka` の `smoke_boot_loop_exit` が機械の混む時に 60 秒で 1 回落ち、単独の回し直しで緑（この差分はこのテストの使う所に触れていない）。完了の全体テストで見る。
+- 完了時にその場で解決: 上の clippy の `collapsible_if` 2 か所をまとめた（振る舞いは変わらない）。
+- 完了時に申し送り: 本体の session のテスト 3 本の `prop_set_cue` と `smoke_boot_loop_exit` の観測を `audit-areka-app` の brief へ、`carrier_cue` の直し所を `dola-interrupt-ticks` の brief へ。
