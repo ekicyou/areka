@@ -83,7 +83,7 @@
 3. When 3 種類目に当たるかを判断するとき, the 本 spec shall ukadoc の該当箇所（URL と原文の引用）で確かめてから議題にする。ukadoc で読めない点は、開発者の許しを得て SSP の MCP で測ってから議題にする（要件 8.2）
 4. If 指摘の直しが 3 種類のどれにも当たらないとき, then the 本 spec shall その指摘を残すことを議題にせず直す
 5. When 開発者が指摘を残すと裁定したとき, the 本 spec shall 裁定とその理由をこの文書に残し、要件 9 の「新しい指摘 0 件」の数から外す
-6. The 本 spec shall 確定した指摘の直しのタスクの数が 20 を越える見込みになっても、規模だけを理由に 2 本目の spec へ切る案を推さない（見込みは 18〜28 タスク＝棚卸㊸）【仮置き（議題 6）: brief の「20 タスクを越えそうなら切ってよい」と、後の開発者の決め「20 タスクは discovery の分け方の目安で spec の上限ではない」（2026-11-16）が食い違うので、後の決めに従って 1 本のまま進める形で書いた】
+6. The 本 spec shall 確定した指摘の直しのタスクの数が 20 を越える見込みになっても、規模だけを理由に 2 本目の spec へ切る案を推さない（見込みは 22〜26 タスク＝ギャップ分析の 8 節。20 タスクは discovery の分け方の目安で spec の上限ではない）
 
 ### Requirement 3: 確定した指摘を全部直し切る
 
@@ -121,13 +121,13 @@
 #### Acceptance Criteria
 
 1. The 本 spec の直し shall `crates/areka/src/install/desk.rs` 381 行の `sylphya_publisher().barrier()`（期限の無い待ちを UI スレッドから呼ぶ）を、期限つきの待ち（`areka-sylphya` の `barrier_within`）に乗り換え、期限が切れたときは記録を残して続ける形に直す（件 1＝`audit-sylphya-actor` の audit #4・2026-11-06 開発者の承認）
-2. When 直しで `update_cue`（出所 `areka::update…`）か `readme_cue`（出所 `areka_session::readme…`）に `info!` の記録を足すとき, the 本 spec shall その記録を残すか残さないか（`UNKEPT_TARGETS` へ足すか）を決め、`log_history.rs` の本文の直しは持ち主の `audit-areka-app` へ申し送る（件 2＝`runtime-module-untangle` の申し送り・棚卸㊸で出所を `areka_session::readme` に読み替え）【仮置き（議題 2）: 決めが無いあいだは、今と同じ記録の分け方を保つ（足した `info!` の出所を `UNKEPT_TARGETS` へ足す）形で書いた】
-3. The 本 spec の直し shall `crates/areka/src/install/mod.rs` 132 行・`crates/areka/src/update/mod.rs` 224 行・`crates/areka/src/mcp/mod.rs` 48 行の、呼び手を `ghost_session::register_systems` と書く説明を、今の事実（名目上の渡し手は本体の `main.rs` の `BODY_SYSTEMS`）に合う文に直すか、呼び手を書かない形に直す（件 3＝`session-module-gather` の申し送りの件 2。`mcp/mod.rs` 48 行は `audit-areka-app` の brief の件 2 に挙がるが、ファイルの持ち主はこの spec）【仮置き（議題 7）: 持ち主のこの spec が直し、`audit-areka-app` のセッションへ直したことを知らせる形で書いた】
+2. The 本 spec の直し shall `update_cue`（出所 `areka::update…`）と `readme_cue`（出所 `areka_session::readme…`）に `info!` の記録を足さない（確定した指摘のどの直しも足さない）。`UNKEPT_TARGETS` へ足す物が無いことを記録に残し、持ち主の `audit-areka-app` へ伝える。後の直しで足すことになったときは、足した出所を `UNKEPT_TARGETS` へ足すことを `audit-areka-app` へ申し送る（件 2＝`runtime-module-untangle` の申し送り・棚卸㊸で出所を `areka_session::readme` に読み替え）
+3. The 本 spec の直し shall `crates/areka/src/install/mod.rs` 132 行・`crates/areka/src/update/mod.rs` 224 行・`crates/areka/src/mcp/mod.rs` 48 行の、呼び手を `ghost_session::register_systems` と書く説明と、同じ種類の `install/names.rs`・`areka-session/src/readme.rs` の説明を、今の事実（名目上の渡し手は本体の `main.rs` の `BODY_SYSTEMS` の `after_input`・`after_runtime_wired`、説明書は `runtime_boot::install_lines`）に合う文に直す。`mcp/mod.rs` 48 行は `audit-areka-app` の brief の件 2 にも挙がるが、ファイルの持ち主のこの spec が直し、直したことを `audit-areka-app` のセッションへ知らせる（件 3＝`session-module-gather` の申し送りの件 2）
 4. The 本 spec の直し shall `crates/areka/src/install/names_tests.rs` 29 行の `let _ = parts.handle.join();` を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（件 4＝棚卸㊶でほかの brief から寄せられた件）
 5. The 本 spec の直し shall `crates/areka-session/src/readme/readme_cue_tests.rs` 24 行の私有の `capture_logs` の写しを、範囲の中か上流にある共通の捕捉の補助を使う形に寄せる（件 5＝同）
-6. The 本 spec の直し shall `crates/areka/src/install/desk_tests.rs` 730 行と `crates/areka-session/src/readme/opener_submit_tests.rs` 31 行の `boot_context` の写しを、持ち主の違うファイル（`areka-session/src/reload_test_support.rs`・`reload.rs`・`lib.rs`・`Cargo.toml`）に手を入れずに減らせる所まで減らし、残る写しと寄せ先の候補（`reload_test_support.rs` 17 行）を記録に残す（件 6＝同。1 か所へまとめるのは C26 の 3 本の着地の後）【仮置き（議題 4）: 3 本の着地の後にまとめる仕事の持ち主が決まっていないので、この spec は記録に残すまでとし、持ち主（既にある spec の brief への書き足しか、`/kiro-discovery` での起票か）は討議で決める形で書いた】
-7. The 本 spec の直し shall `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足した 3 本のテスト（`install/desk_tests.rs` 385 行・554 行、`update/desk_resolve_tests.rs` 558 行）について、共通の足場へ寄せるかを決め、寄せるなら寄せる（件 7＝`session-crate-split` の申し送り・C26 の約束 ⑴ で持ち主のこの spec へ寄せた）【仮置き（議題 5）: 寄せ先の足場が範囲の中にあれば寄せ、範囲の外（持ち主の違う足場）にしか無ければ 1 行を残して理由を記録する形で書いた】
-8. The 本 spec shall `NO_BODY`（`areka-session/src/body_systems.rs`）の受け口と、本体が「窓口が無い」ときに使う受け口（受信端の無い送出端を持つ `InstallCueSink`・`url` の腕で取得のスレッドを起こす）の差について、そろえるか・どちらへそろえるかを要件の討議で決め、直す本文（`areka-session/src/body_systems.rs`・本体の `session_tests/body_systems_tests.rs`）は持ち主の `audit-areka-app` へ申し送る（件 8＝`session-crate-split` の申し送り・C26 の約束 ⑴）【仮置き（議題 1）: ギャップ分析がこの差を読み、そろえるか否かと向きを推奨つきで議題に出す形で書いた。本番の道ではこの差を通らない（結線の誤りとテストの足場だけ）】
+6. The 本 spec の直し shall 範囲の中の `boot_context` の写し 9 つ（件 6 の `crates/areka/src/install/desk_tests.rs` 730 行・`crates/areka-session/src/readme/opener_submit_tests.rs` 31 行と、同じ種類の `update/` の 4 つ・`roots/` の 3 つ）を、持ち主の違うファイル（`areka-session/src/reload_test_support.rs`・`reload.rs`・`lib.rs`・`Cargo.toml`）に手を入れずに 0〜1 へ減らす。ゴーストやバルーンの名がテストの結果に効かない写しは既にある `areka_session::reload::test_support::boot_context` と上の段の欄の上書きで消し、名が効く `update/` の写しは名を引数に取る補助を範囲の中に 1 つ置いて寄せる。既にある補助に名の引数を足して 1 か所へまとめることは、持ち主の `audit-areka-app` へ申し送る（向こうが足せばこの spec はそれを使って範囲の中の補助も消す。足さなければ範囲の中の補助を残し、理由を記録して次の棚卸で拾う）（件 6＝同）
+7. The 本 spec の直し shall `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足した 3 本のテスト（`install/desk_tests.rs` 385 行・554 行、`update/desk_resolve_tests.rs` 558 行）の 1 行を共通の足場へ寄せずに残し、「本体の口を通る道を試す前提を名指す 1 行で、寄せると同じ足場を使うほかのテストの前提が黙って変わる」という理由を記録に残す（件 7＝`session-crate-split` の申し送り・C26 の約束 ⑴ で持ち主のこの spec へ寄せた）
+8. The 本 spec shall `NO_BODY`（`areka-session/src/body_systems.rs`）の受け口と、本体が「窓口が無い」ときに使う受け口（受信端の無い送出端を持つ `InstallCueSink`・`url` の腕で取得のスレッドを起こす）の振る舞いをそろえない（どちらも本番の道で通らず、どちらも記録が残る）。`NO_BODY` の doc の「（窓口が無いときの答えと同じ）」が事実と違うことの直しは、持ち主の `audit-areka-app` へ申し送り、この決めを向こうのセッションへ伝える（件 8＝`session-crate-split` の申し送り・C26 の約束 ⑴）
 9. The 本 spec shall 件 1〜8 を片づけたことを、預かった件の出どころ（`audit-sylphya-actor`・`runtime-module-untangle`・`session-module-gather`・`session-crate-split`・棚卸㊶㊸）と、申し送った相手と一緒に記録に残す
 
 ### Requirement 6: 直しの中でも守る決まり
@@ -157,8 +157,7 @@
 #### Acceptance Criteria
 
 1. When 直しで関数や型の形を変えたとき, the 本 spec の直し shall ツリー全体で呼び出し元を探して、全部直す
-2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall そのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）【仮置き（議題 3）: 相手の spec が先に着地して走っていないときは、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す形で書いた】
-3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）
+2. If 直しが C26 のほかの 2 本（`audit-areka-app`・`audit-emo2-boot-switch`）の持ち物のファイルに及ぶとき, then the 本 spec shall 相手が走っているあいだはそのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す（C26 の約束 ⑴）。相手の spec が `completed/` へ移った後なら、`main` を取り込んだうえでこの spec が自分で直し、直したことを記録に残す。この spec の実装の終わりまでに相手が着地せず相手も直さなかった分は、写しや古い形を残したまま理由を記録し、相手の brief へ件として書き足す（要件 7.9）。相手の進め方を変える大きい直し（起動中のゴーストへの展開を外へ出すための `switch_to` の段の分け方）は、相手のセッションと先に申し合わせる（どちらが入れるか・どちらが先に着地するか）3. The 本 spec の直し shall `Cargo.toml`（本体・`areka-session` を含むどの crate のものも）と `Cargo.lock` に手を入れない（C26 の約束 ⑵）
 4. The 本 spec の直し shall `doc/COMPAT_ARCHITECTURE.md` の §8 には既にある別々の行のほかに手を入れず、範囲の中のコードが名指す文書の名とパス（`install/judge.rs` が名指す `doc/COMPAT_ARCHITECTURE.md` を含む）を変えない（C26 の約束 ⑶・`doc-compat-architecture-rename` が同じウェーブに置けない理由）
 5. The 本 spec の直し shall `crates/dola/` と `crates/wintf/` に手を入れない（C26 の約束 ⑷）
 6. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の持ち主の件として残す）
@@ -167,6 +166,7 @@
 9. If 指摘の直しを後の spec へ回すと裁定されたとき, then the 本 spec shall 受け持つ spec が実在する（`completed/` でない）ことを確かめ、その spec の brief に件として書き足し、回した指摘と回し先を記録に残す
 10. The 本 spec shall ギャップ分析で範囲の外に見つけた件を、その範囲の持ち主の brief に件として書き足し、回した件と回し先を記録に残す。持ち主が C26 のほかの 2 本のときは、相手のセッションへも知らせる
 11. The 本 spec の直し shall `vendors/` の下に手を入れない
+12. Where 直しの順に逆向きの縛りがあるところでは（`mcp/get_property_tests.rs` のゴーストの道を本番の受け口 `PropGetCueSink` へ移す直し＝`audit-areka-app` の試験用の SHIORI の脳の削除より前か同時）, the 本 spec shall その直しを引き受け、間に合わなければ向こうが `shiori_host.rs` だけを残してこの spec の着地の後に消す形を取る
 
 ### Requirement 8: 副作用の大きい操作をウェーブの中で回さない
 
@@ -190,19 +190,35 @@
 2. When もう一度かけた audit が指摘を出したとき, the 本 spec の直し shall 直しが生んだ指摘も含めて直し、新しい指摘が 0 件になるまで繰り返す（要件 2 で残すと裁定された指摘と、要件 7.7・7.9 で後へ回すと裁定された指摘は数えない。打ち切りは 9.6）
 3. The 検証 shall かけ直した audit の結果（回ごとの組ごとの件数と、0 件または打ち切りの判定）を記録に残す
 4. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
-5. When 直しを全部終えたとき, the 検証 shall 要件 7.2〜7.5 と 6.9 の約束が守られている（C26 のほかの 2 本の持ち物のファイルの差分が要件 7.2 の仮置きの分だけ・`Cargo.toml` と `Cargo.lock` に差分が無い・`crates/dola/` と `crates/wintf/` に差分が無い・名指しの文書の名が変わっていない）ことと、外への約束の変わった所が要件 7.7 の裁定の分だけであることを、既定のブランチとの差分で確かめて記録に残す
+5. When 直しを全部終えたとき, the 検証 shall 要件 7.2〜7.5 と 6.9 の約束が守られている（C26 のほかの 2 本の持ち物のファイルの差分が要件 7.2 で相手の完了の後に直した分だけ・`Cargo.toml` と `Cargo.lock` に差分が無い・`crates/dola/` と `crates/wintf/` に差分が無い・名指しの文書の名が変わっていない）ことと、外への約束の変わった所が要件 7.7 の裁定の分だけであることを、既定のブランチとの差分で確かめて記録に残す
 6. If かけ直しが 5 回目になっても 0 件に収まらず、5 回目の指摘に「必ず直す」と本番の振る舞い（SHIORI へ送るもの・インストールや更新の結果・MCP の答え・置き場のファイル・ログの行・公開の面）に関わるものが 1 件も無いとき, then the 本 spec shall 開発者に一言知らせたうえで、5 回目の指摘を直したところで打ち切り、検証の記録に「5 回目で打ち切った・残りは直し済み」と書いて全体テストへ進む（2026-11-06 開発者の決め・`audit-seriko` と同じ形）
 7. If かけ直しのたびに同じ所から「必ず直す」が出続けるとき, then the 本 spec shall 打ち切らずに、その所の直しを Fable で総括し直し、その結果を議題として開発者へ出す（2026-11-15 `audit-placement-core` の決め）
 8. If かけ直しの指摘が、前の回の直しが呼んだ連鎖（直しが次の指摘を生んだもの）であるとき, then the 本 spec shall 関連する指摘を Fable でまとめて、回をまたいで矛盾の無い形に直す。前の回と関わらない単なる追加の指摘は普通に直して閉じる（2026-11-17 開発者の決め）
 
-## 要件の討議へ持ち越す点（仮置き）
+## 確定した指摘の一覧（要件 2.1）
 
-本文の【仮置き（議題 N）】の印と対応する。どれも、決めが変わればその要件の文を書き換える。
+指摘の中身・場所・直し方は `research.md` の 4 節が正本（audit の通し番号 1〜103）。要件の討議で次のとおり確定した。
 
-1. `NO_BODY` と本体の「窓口が無い」ときの受け口の差を、そろえるか・どちらへそろえるか（要件 5.8）。
-2. `update_cue`・`readme_cue` に `info!` を足すときに、記録を残すか（`UNKEPT_TARGETS` へ足すか）（要件 5.2）。
-3. 申し送る相手の spec が先に着地したとき、この spec が自分で直してよいか（要件 7.2）。
-4. `boot_context` の写しを 1 か所へまとめる仕事（C26 の 3 本の着地の後）の持ち主（要件 5.6）。
-5. `BODY_SYSTEMS` の 1 行を足した 3 本のテストの寄せ先（要件 5.7）。
-6. 20 タスクを越える見込みのときに 2 本目へ切るか（brief の文と 2026-11-16 の決めの食い違い・要件 2.6）。
-7. `audit-areka-app` の brief に挙がる `mcp/mod.rs` 48 行の説明を、ファイルの持ち主のこの spec が直すこと（要件 5.3）。
+| 扱い | 指摘の番号 | 件数 |
+|---|---|---|
+| 直す（必ず直す） | 1〜4 | 4 |
+| 直す（直したほうがよい） | 5〜58・102・103 | 56 |
+| 直す（できれば） | 59〜101 のうち 91 を除く全部 | 42 |
+| 裁定で残す（要件 2.2 の 1 種類目・要件 9 の数から外す） | 91（`roots_memory_write_failed` の `error!`。完了した spec が名前を変えないと決めた・2 行は致命の道でだけ出る） | 1 |
+
+直し方の裁定（`research.md` の 9 節の議題 1〜11）:
+
+- **起動中のゴーストへの展開（13）**: 完了した `areka-P0-ghost-install` の設計の決め 3（UI スレッドで同期に展開）を改め、展開を背景のスレッドへ出す。`switch_to` を「降ろした」と「起こす」の間で展開の答えを待つ段に分け、終了がその段で始まったら書く段として門で上限まで待つ。`switch_to` の側は要件 7.2 の順で入れる。
+- **URL から落とした書庫（68）**: 完了した `areka-P0-network-update` の要件 6.6（その場では消さない）を改め、インストールし終えた書庫をその場で消す。7 日の掃除は落としかけと消せなかった物のために残す。`doc/COMPAT_ARCHITECTURE.md` §8 の既にある行と台帳の文を同じ変更で直す。
+- **外への約束を変える直し（要件 7.7・7.8）**: 次を変え、読み手を同じ変更で直す。
+  - 14: 書いた後に締めの知らせが閉じても `install_abandoned` を出さない（終わり方は入れ終えた形）。
+  - 66: `install_fetch_swept` は消した数が 0 のときに出さない。
+  - 25: 背景のスレッドの側の語 `update_reload_requested` を `update_reload_asked` に改める。
+  - 40: 告知の抑止の記録を info にそろえ、両方に `reason = "no_alert"` の欄を持たせる。語（`install_pick_suppressed`・`roots_pick_cancelled`）は変えない。
+  - 42: `roots_removed`（外した置き場の `path`）の info を足す。
+  - 88: MCP の `reload` の断りの文に install を足す（完了した `areka-P0-mcp-reload` の要件 3 の字を改める）。
+  - 12: URL からの取得を長く生きるスレッド 1 本で順に落とす。§8 の行の「短命のスレッド」の文を直す。
+  - 65: 大文字のスキーム（`HTTPS://`）の URL も受ける（正典はスキームに触れず、§8 の行が areka 裁量と書く決まり＝要件 2.2 の 3 種類目に当たらない）。
+- **わざと置いた先送りの印（要件 2.2 の 2 種類目）**: `areka-session/src/readme/destination.rs` の `link_destinations` の `#[cfg_attr(not(test), allow(dead_code))]` は残し、要件 9 のかけ直しの数から外す。追う 2 本（`link-context-copy`・`balloon-link-hover`）の brief の古いパスを今のパスへ直す件を、2 本の brief へ書き足す（要件 7.10）。
+- **件 8（`NO_BODY`）・件 2（`UNKEPT_TARGETS`）・件 6・件 7・件 3**: 要件 5.2・5.3・5.6・5.7・5.8 の文のとおり。
+- **並走の 2 本に及ぶ直しの順**: 要件 7.2・7.12 の文のとおり。

@@ -350,6 +350,8 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 
 ### 議題（答えで作業が変わるもの）
 
+**2026-11-22 の要件の討議で、議題 1〜11 を全部推奨案で確定した**（確定の中身は `requirements.md` の「確定した指摘の一覧」と要件 5・7）。
+
 1. **`NO_BODY` と本体の「窓口が無い」受け口の差**（要件 5.8・件 8）
    - 推す＝**そろえない**。`NO_BODY` の doc の「（窓口が無いときの答えと同じ）」を「本体の窓口の無いときとは `url` の腕が違う（本体は取りに行ってから送れずに warn・こちらは取りに行かない）」に直すか括弧を消すことを、持ち主の `audit-areka-app` へ申し送る（`session_tests/body_systems_tests.rs` は今のまま）。`audit-areka-app` は、この決めを伝言で受け取れば `areka-session/src/body_systems.rs`・本体の `session_tests/body_systems_tests.rs`・`reload_test_support.rs` を自分で直すと申し出ている＝決まったら向こうのセッションへ決めを伝えるだけで、この spec はそれらのファイルに触らない。
    - 理由: ⑴ 両方とも本番の道では通らない ⑵ 両方とも記録が残る（`body_systems_missing` の error／`install_cue_send_failed`・`install_fetch_send_failed` の warn）＝黙った失敗ではない ⑶ `NO_BODY` を本体へ寄せるのは依存の向きでできない ⑷ 本体を `NO_BODY` へ寄せると `raw_sender` の形と `main.rs` の `body_cue_sinks`・字面の檻を変えるが、本番の振る舞いは 1 つも変わらない。audit も、この差に新しい指摘を出さなかった（S1・S2 が確かめた）。
