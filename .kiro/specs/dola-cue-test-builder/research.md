@@ -201,3 +201,7 @@
 - `.kiro/steering/structure.md` の Unit Tests の兄弟の規則（`foo.rs` → `foo_tests.rs`）・グロブと明示 import の解決順（E0659 の注意）・`areka-runtime` の Features の節
 - `CLAUDE.md` の `## Comments`（コードと `Cargo.toml` のコメントに spec・要件・タスクの番号を書かない・`pub` の項目の doc の 1 行目は日本語）
 - 外のスキル（設計・アクセシビリティ・UX）は、画面を持たないテストの支えの整理なので当たらない
+
+## 13. 設計の討議の結果
+
+- design.md の「設計の決め」の 8 件（再輸出の 1 行・`dola::cue::test_support::carrier_cue` の自由関数・引数は `(&str, &str, &[&str])` に固定・docs.rs の表に足さない・README は About の後の英語の段落 1 つ・同じファイルだけの写しは `use` 2 と 1 行の関数 1・檻は兄弟の `test_support_tests.rs` に 2 本・steering は完了の段で 1 行）は、すべて推奨案で確定した。根拠は design.md の各項と §8〜§12 のとおり。

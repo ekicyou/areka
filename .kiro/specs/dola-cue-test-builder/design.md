@@ -41,7 +41,7 @@
 - 本体 `crates/areka/` の全部（`Cargo.toml` を含む）・根の `Cargo.toml`・`Cargo.lock`。
 - `crates/dola/src/lib.rs`・`crates/dola/src/cue/mod.rs` の型の表（`//!` の「提供する型」）。
 - `prop_set_cue`（本体の session の 3 本）は完了の棚卸で `audit-areka-app` の brief へ申し送るだけで、コードは触らない（要件 5.4）。
-- steering（`structure.md` の dola の節）への記載は、完了の段（`/kiro-complete`）の文書の更新が受け持つ（議題 8）。
+- steering（`structure.md` の dola の節）への記載は、完了の段（`/kiro-complete`）の文書の更新が受け持つ（設計の決め 8）。
 
 ### Allowed Dependencies
 
@@ -128,12 +128,12 @@ crates/dola/
 
 ### Modified Files
 
-- `crates/dola/Cargo.toml` — `[features]` に `test-support = []`。行の上のコメントは「テストだけが使う合図の組み立てを開ける・使い手は `[dev-dependencies]` でだけ付ける」の 1 行（spec 名・要件番号は書かない）。`[package.metadata.docs.rs] features = ["toml"]` は変えない（議題 4）。
+- `crates/dola/Cargo.toml` — `[features]` に `test-support = []`。行の上のコメントは「テストだけが使う合図の組み立てを開ける・使い手は `[dev-dependencies]` でだけ付ける」の 1 行（spec 名・要件番号は書かない）。`[package.metadata.docs.rs] features = ["toml"]` は変えない（設計の決め 4）。
 - `crates/dola/README.md` — About の段落の直後に、`test-support` 機能の短い段落（英語）を 1 つ。下書きは「Components and Interfaces」の README の項。
 - `crates/dola/src/cue/mod.rs` — `pub mod sheet;` の並びに `#[cfg(any(test, feature = "test-support"))] pub mod test_support;` を足す（モジュールの doc は `test_support.rs` の `//!` が持つ）。`//!` の型の表は変えない。
 - `crates/areka-ghost/Cargo.toml` — `[dev-dependencies]` の `dola = { path = "../dola" }` を `dola = { path = "../dola", features = ["test-support"] }` にする。上のコメント（「…組み立てるためだけの…」）を、キャリアの合図の組み立ても引くことが読める文に直す（本番のコードは `dola` を直に引かない、の趣旨は残す）。
 - `crates/areka-ghost/src/prop_sink.rs` — `#[cfg(test)] mod tests` の中の `fn carrier_cue`（doc コメントごと）を消し、`use dola::cue::test_support::carrier_cue;` を足す。同じモジュールの呼び手 5 か所は変えない。取り込みの `ActorKey`・`CueCommand` は他のテストが使うので残る。
-- `crates/areka-ghost/src/prop_get_sink_tests.rs` — `carrier(name, tokens)` の本文を `dola::cue::test_support::carrier_cue("0", name, tokens)` の 1 行にする（名と引数は残す・議題 6）。取り込みは `CueCommand::Text` の合図が使うので残る。
+- `crates/areka-ghost/src/prop_get_sink_tests.rs` — `carrier(name, tokens)` の本文を `dola::cue::test_support::carrier_cue("0", name, tokens)` の 1 行にする（名と引数は残す・設計の決め 6）。取り込みは `CueCommand::Text` の合図が使うので残る。
 - `crates/areka-seriko/Cargo.toml` — `[dev-dependencies]` に `dola = { path = "../dola", features = ["test-support"] }` を足す（本番の表の同じ依存に機能を足すだけ、の 1 行のコメント）。
 - `crates/areka-seriko/src/actor_test_support.rs` — `pub(super) fn carrier_cue` を消し、`pub(super) use dola::cue::test_support::carrier_cue;` を置く（同じ位置・doc コメントは消す）。呼び手 5 ファイルは `use super::test_support::*;` のグロブで同じ名を引く。`cue`・`CueCommand` は他の組み立てが使うので残る。
 - `crates/areka-runtime/Cargo.toml` — `[features] test-support` の並びに `"dola/test-support"` を足す。`[dev-dependencies]` に `dola = { path = "../dola", features = ["test-support"] }` を足す（`areka-placement` の dev の行と同じ書き方・コメント 1 行）。
@@ -179,7 +179,7 @@ graph TD
 | 3.3 | runtime の `carrier_cue` は演者 `"0"` | 既存の本文 `actor_carrier_cue("0", …)` を残す | runtime・本体の既存のテスト |
 | 3.4 | ghost の `carrier` は演者 `"0"` | `carrier_cue("0", name, tokens)` の 1 行 | ghost の既存のテスト |
 | 3.5 | 呼び手 22 ファイルは差分に入らない | 名の層が残る | `git diff --name-only` |
-| 3.6 | 同じファイルだけの写しの形を設計で決める | ghost `prop_sink.rs`＝`use`・runtime `frame_window_link_drain_tests.rs`＝`use … as carrier`・ghost `prop_get_sink_tests.rs`＝1 行の関数 | 議題 6 |
+| 3.6 | 同じファイルだけの写しの形を設計で決める | ghost `prop_sink.rs`＝`use`・runtime `frame_window_link_drain_tests.rs`＝`use … as carrier`・ghost `prop_get_sink_tests.rs`＝1 行の関数 | 設計の決め 6 |
 | 4.1 | 合図の型と判定を変えない | `command.rs` に触らない | `git diff --name-only` |
 | 4.2 | 前と同じテストが全部緑・消えた／無視されたテストが無い | テストの関数に触らない | 各 crate の `cargo test -- --list` の数の比較と単独のテスト |
 | 4.3 | 正準でない組み立てを変えない | `noncanonical_custom_cue`・`broken_custom_cue` に触らない | 差分の目視 |
@@ -258,7 +258,7 @@ mod tests;
 | Requirements | 2.1, 2.2, 2.4, 2.5, 2.6 |
 
 - `Cargo.toml`: `test-support = []`（依存を持たない空の機能）。docs.rs の表は `["toml"]` のまま。
-- README の段落の下書き（About の段落の直後・英語・議題 5）:
+- README の段落の下書き（About の段落の直後・英語・設計の決め 5）:
 
   > The optional `test-support` feature exposes `dola::cue::test_support`, a helper that builds a canonical command-carrier `TalkCue` for tests. Enable it only from `[dev-dependencies]`; it is not part of the stable API and is not meant for production builds.
 
@@ -273,7 +273,7 @@ mod tests;
 | runtime `consumer_ledger_test_support.rs` の `pub fn carrier_cue(name, args)` | 変えない（本文は今も `actor_carrier_cue("0", name, args)` の 1 行） | 同上 |
 | runtime `frame_window_link_drain_tests.rs` の `carrier(actor, name, tokens)` | `use dola::cue::test_support::carrier_cue as carrier;` | 同じファイル（無変更） |
 
-- 再輸出と `use` は本文を持たない 1 行で、名と引数の形が今のまま残る（要件 3.2）。関数で包む形は同じ署名を 2 か所に書くので取らない（議題 1）。
+- 再輸出と `use` は本文を持たない 1 行で、名と引数の形が今のまま残る（要件 3.2）。関数で包む形は同じ署名を 2 か所に書くので取らない（設計の決め 1）。
 - seriko のグロブ（`use super::test_support::*;`）と `use super::*;` の両方から同じ名が来ないこと（E0659）は、`actor.rs` に `carrier_cue` が無いので起きない。
 - runtime の `consumer_ledger_test_support.rs` の `//!`（「cue の作り手…もここに置く。受け口ごとに写しを持たない」）は、名がここに残るので正しいまま。
 
@@ -316,15 +316,15 @@ mod tests;
 
 - 完了の段（`/kiro-complete`）の全体テスト 1 回（`tools/test-all.ps1`）で、`x64 workspace tests`・`dola toml feature tests`・`crates.io pre-publish check (package only)` を含む全段が緑。高負荷のテストを繰り返さない（単独のテストは各 1 回）。
 
-## 前提と議題（設計の討議で確かめる）
+## 設計の決め（設計の討議で全議題を推奨案で確定）
 
-設計の段は開発者に問わずに書いた。次の 8 件は推奨の形で下書きし、設計の討議で確かめる。
+次の 8 件は設計の討議で推奨案のとおりに確定した。
 
-1. **取り次ぎの形**: 引数の形が `dola` と同じ名（seriko の `carrier_cue`・runtime の `actor_carrier_cue`）は、関数で包まず再輸出 1 行（`pub(super) use …;`・`pub use … as actor_carrier_cue;`）にする、と置いた。要件 3.2 の「`dola` の組み立てを呼ぶだけの 1 行」を、再輸出も満たすと読んだ。
-2. **置き場と名**: 案 A＝`dola::cue::test_support` モジュールの自由関数 `carrier_cue`、と置いた（案 C の `cfg` 付き `impl TalkCue` は取らない）。
-3. **引数の形**: `(actor: &str, name: &str, tokens: &[&str])` に固定し、`impl Into<ActorKey>` などへ広げない、と置いた（5 つの写しが全部この形）。
-4. **docs.rs の表**: `[package.metadata.docs.rs] features` に `test-support` を足さない、と置いた（docs.rs の文書の面を今と同じに保つ）。
-5. **README の言い方**: About の段落の直後に英語の段落を 1 つ（下書きは上の README の項）、と置いた。Key features の箇条には足さない。
-6. **同じファイルの中だけの写し（要件 3.6）**: ghost `prop_sink.rs` の `carrier_cue` と runtime `frame_window_link_drain_tests.rs` の `carrier` は関数を消して `use`（後者は `as carrier`）で名を受け、ghost `prop_get_sink_tests.rs` の `carrier(name, tokens)` は `"0"` を渡す 1 行の関数で残す、と置いた（呼び手の行を変えない）。
-7. **檻の置き場**: 新しい兄弟 `crates/dola/src/cue/test_support_tests.rs` に 2 本、と置いた（`command_tests.rs` へは足さない）。
-8. **steering への記載**: `structure.md` の dola の節に `test-support` 機能のことを書くのは、この spec のコードの差分でなく完了の段（`/kiro-complete`）の文書の更新が受け持つ、と置いた。
+1. **取り次ぎの形**: 引数の形が `dola` と同じ名（seriko の `carrier_cue`・runtime の `actor_carrier_cue`）は、関数で包まず再輸出 1 行（`pub(super) use …;`・`pub use … as actor_carrier_cue;`）にする、とする。要件 3.2 の「`dola` の組み立てを呼ぶだけの 1 行」を、再輸出も満たすと読んだ。
+2. **置き場と名**: 案 A＝`dola::cue::test_support` モジュールの自由関数 `carrier_cue`、とする（案 C の `cfg` 付き `impl TalkCue` は取らない）。
+3. **引数の形**: `(actor: &str, name: &str, tokens: &[&str])` に固定し、`impl Into<ActorKey>` などへ広げない（5 つの写しが全部この形）。
+4. **docs.rs の表**: `[package.metadata.docs.rs] features` に `test-support` を足さない（docs.rs の文書の面を今と同じに保つ）。
+5. **README の言い方**: About の段落の直後に英語の段落を 1 つ（下書きは上の README の項）、とする。Key features の箇条には足さない。
+6. **同じファイルの中だけの写し（要件 3.6）**: ghost `prop_sink.rs` の `carrier_cue` と runtime `frame_window_link_drain_tests.rs` の `carrier` は関数を消して `use`（後者は `as carrier`）で名を受け、ghost `prop_get_sink_tests.rs` の `carrier(name, tokens)` は `"0"` を渡す 1 行の関数で残す（呼び手の行を変えない）。
+7. **檻の置き場**: 新しい兄弟 `crates/dola/src/cue/test_support_tests.rs` に 2 本（`command_tests.rs` へは足さない）。
+8. **steering への記載**: `structure.md` の dola の節に `test-support` 機能のことを書くのは、この spec のコードの差分でなく完了の段（`/kiro-complete`）の文書の更新が受け持つ。
