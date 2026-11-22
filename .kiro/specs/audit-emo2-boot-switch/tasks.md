@@ -49,7 +49,7 @@
   - _Dispatch: mechanical — 移すテストと置き場を設計が与える_
   - _Requirements: 3.1, 3.3, 5.14, 6.1_
 
-- [ ] 2.2 メニューからのゴーストの切り替えを、ネットワーク更新の実行中は断る（T4・76・55 番）
+- [x] 2.2 メニューからのゴーストの切り替えを、ネットワーク更新の実行中は断る（T4・76・55 番）
   - 着手の前に、`audit-areka-install-update` からの知らせ（新しい腕の名を `install/overwrite.rs` の網羅の `match` にこちらが足してよいかの開発者の確定）を確かめる。確定していれば新しい判定 `Updating` を足し、同じ変更で相手のファイルの `NotFound | NoContext` の腕に名を 1 つだけ足す。確定しなければ腕を足さず既にある `Busy` を返す
   - 入口の「進行中」の次で、出どころがメニュー（`Manual`）の要求だけを `warn!(ghost_switch_updating)` 1 行で断り、kanade へ何も送らない。台本と手続きの要求、`reload.rs` から直に呼ばれる受理には当てない
   - 縛るテスト `updating_refuses_menu_requests_only` を、直しの前は「メニューも受理」で赤になるのを見てから立てる。置き場は 2.1 で軽くなった `ghost_switch_tests.rs`

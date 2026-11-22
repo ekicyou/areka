@@ -113,6 +113,8 @@ pub enum SwitchVerdict {
     Busy,
     NotFound,
     NoContext,
+    /// メニューからの要求をネットワーク更新の実行中に断った。
+    Updating,
 }
 
 /// 切替先（`OnGhostChanging` の Ref0〜3 の材料）。
@@ -241,7 +243,8 @@ pub fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerd
 
 /// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_ghost_switch`] が `pick_index` を渡す）。
 ///
-/// 予約が在れば `warn!(ghost_switch_busy)`。名前の要求は特別な名前を解いてから目録と突き合わせ
+/// 予約が在れば `warn!(ghost_switch_busy)`、更新の実行中のメニューの要求は `warn!(ghost_switch_updating)`。
+/// 名前の要求は特別な名前を解いてから目録と突き合わせ
 /// （解けたら `info!(ghost_switch_resolved)`）、切替先が決まらない（該当なし・特別な名前が解けない）
 /// ときは `warn!(ghost_switch_unknown)` を `reason` つきで 1 件（降ろさず kanade へ何も送らない）。
 /// 決まったら [`accept_switch`] へ。
@@ -258,13 +261,16 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::Busy;
     }
-    let Some(ctx) = world.get_resource::<BootContext>() else {
+    if req.origin == ChangeOrigin::Manual && (BodySystems::of(world).update_busy)(world) {
         tracing::warn!(
-            event = "ghost_switch_no_context",
-            reason = "boot_context",
-            "起動の文脈が無いので切替要求を無視する"
+            event = "ghost_switch_updating",
+            spec = ?req.ghost,
+            "ネットワーク更新の実行中にメニューからゴーストの切替要求が届いた——無視する"
         );
-        return SwitchVerdict::NoContext;
+        return SwitchVerdict::Updating;
+    }
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        return no_boot_context();
     };
     let entries = areka_ghost::catalog_roots::list_ghosts(&ctx.roots);
     let current_folder = ctx.current.ghost.folder.clone();
@@ -313,6 +319,15 @@ pub(crate) fn request_ghost_switch_with(
     accept_switch(world, target, req)
 }
 
+fn no_boot_context() -> SwitchVerdict {
+    tracing::warn!(
+        event = "ghost_switch_no_context",
+        reason = "boot_context",
+        "起動の文脈が無いので切替要求を無視する"
+    );
+    SwitchVerdict::NoContext
+}
+
 /// 受理の後半: kanade へ切替の要求を送って予約 [`SwitchInFlight`] を立てる。文脈・置き場の送出端が
 /// 無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら `error!(ghost_switch_send_failed)` で
 /// 予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
@@ -322,12 +337,7 @@ pub(crate) fn accept_switch(
     req: SwitchRequest,
 ) -> SwitchVerdict {
     let Some(ctx) = world.get_resource::<BootContext>() else {
-        tracing::warn!(
-            event = "ghost_switch_no_context",
-            reason = "boot_context",
-            "起動の文脈が無いので切替要求を無視する"
-        );
-        return SwitchVerdict::NoContext;
+        return no_boot_context();
     };
     let current_folder = ctx.current.ghost.folder.clone();
     let session = world

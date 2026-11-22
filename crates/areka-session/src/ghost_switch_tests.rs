@@ -19,6 +19,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::body_systems::NO_BODY;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
@@ -801,4 +802,49 @@ fn menu_folder_named_random_is_not_resolved() {
         )
     });
     assert_ignored((&world, &rx), (verdict, &events), "name");
+}
+
+/// 更新の実行中はメニューの要求だけを `Updating` で断り（送出 0 件）、台本（名前で指す）と
+/// 手続き（フォルダで指す）の要求は受理する。
+#[test]
+fn updating_refuses_menu_requests_only() {
+    let tmp = TempPath::new("ghost-switch-updating");
+    let root = fixture_root(&tmp);
+    for (spec, origin, want, sent) in [
+        (
+            folder("B"),
+            ChangeOrigin::Manual,
+            SwitchVerdict::Updating,
+            0,
+        ),
+        (
+            name("Alice"),
+            ChangeOrigin::Automatic,
+            SwitchVerdict::Accepted,
+            1,
+        ),
+        (
+            folder("B"),
+            ChangeOrigin::Automatic,
+            SwitchVerdict::Accepted,
+            1,
+        ),
+    ] {
+        let (mut world, rx) = world_with_slot(&root);
+        world.insert_resource(BodySystems {
+            update_busy: |_| true,
+            ..NO_BODY
+        });
+        let (verdict, events) =
+            capture(|| request_ghost_switch(&mut world, request(spec.clone(), false, origin)));
+        assert_eq!(
+            (
+                verdict,
+                sent_changes(&rx).len(),
+                count_event(&events, "ghost_switch_updating")
+            ),
+            (want, sent, 1 - sent),
+            "{spec:?} {origin:?}: {events:?}"
+        );
+    }
 }
