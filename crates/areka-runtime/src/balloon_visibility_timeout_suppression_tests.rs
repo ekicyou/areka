@@ -7,8 +7,8 @@
 // # 時刻の書き方
 //
 // 表の時刻は**すべて占有終端 [`ANCHOR`] からの相対**で書く。満了予定の初期確立式は
-// `満了予定 = 占有終端 + 待ち時間` であって「計測が成り立った最初のフレームの現在時刻 +
-// 待ち時間」ではないため、
+// `満了予定 = 実効の表示終了 + 待ち時間`（本表では止まった時刻＝占有終端なので占有終端）で
+// あって「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではないため、
 // 計測が成り立つ最初の観測は各行で占有終端から [`LATE`] 秒だけ遅れて訪れるようにしてある。
 // 現在時刻を起点に取り違えた実装では満了予定が [`LATE`] 秒ぶん後ろへずれ、
 // `ANCHOR + TIMEOUT` の行が満了しなくなって表が赤くなる。
@@ -37,7 +37,7 @@
 // - 占有終端が現在時刻より未来へ動いたときの計測破棄
 //   → `display_end_raised_into_the_future_discards_the_deadline`
 // - 可視バルーンが無くなったときの計測破棄 → `clearing_every_balloon_discards_the_measurement`
-// - 表示終了信号が届かない間の保持 → `no_measurement_starts_while_the_end_of_talk_signal_is_absent`
+// - 表示終了信号が届かない間の保持 → `no_measurement_starts_while_the_display_end_signal_is_absent`
 // - 占有終端・現在時刻が数でない場合の端の値
 //   → `a_negative_display_end_is_rounded_up_to_zero_before_anchoring` ほか 2 本
 //
@@ -210,7 +210,7 @@ struct Case {
 /// 期待記述から、そのフレームの行動列とログ列を組み立てる。
 ///
 /// ログは記述の並びをそのまま採る（＝表に書いた並びが期待そのもの）。行動は `decide` の
-/// 規約どおり「全消去の非表示 → 表示 → 満了の非表示」へ並べ替える。相対秒はここで
+/// 規約どおり「全消去の非表示 → 表示 → 満了の非表示」へ並べ替える（本表は中断を扱わない）。相対秒はここで
 /// [`ANCHOR`] を足して絶対時刻へ直す。
 fn expand(expect: &[Expect]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent>) {
     let mut cleared: Vec<VisibilityAction> = Vec::new();
@@ -393,7 +393,7 @@ fn timeout_and_suppression_branches_hold_for_every_case() {
 }
 
 /// 較正: 期待記述が行動列・ログ列へ展開される規則そのものを、既知の 1 件で押さえる。
-/// ここが壊れると表の全行が「何も比べない」空虚な行になる。
+/// ここが壊れると、表の期待そのものが `decide` の規約から外れる（同じ誤りを持つ実装を緑にする）。
 #[test]
 fn expectation_expansion_follows_both_ordering_rules() {
     let (actions, logs) = expand(&[

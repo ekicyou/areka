@@ -16,15 +16,10 @@
 // 実 GPU の檻 `crates/areka/src/runtime_tests/frame_balloon_timeout_notice_e2e_tests.rs` が持つ。
 // =============================================================================
 
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
 
-use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::EmoWorld;
 use areka_emo_present::EmoPresenter;
-use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
 use areka_sakura::ActorKey;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::world::World;
@@ -37,11 +32,11 @@ use crate::frame::test_support::synth_assets;
 use crate::move_cue::PositionCue;
 use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use crate::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::configured_timeout_secs;
 use super::phase::run_balloon_visibility_phase;
+use super::phase::test_support::{attach_headless, runtime};
 
 /// 台本の占有終端が判断中核の計測起点になる。
 ///
@@ -61,9 +56,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     // ── 本番 `wire_runtime` と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
+    let runtime = runtime();
     // 時刻源は手で進める（受け口が落ちる瞬間に止まった時刻を読むため）。
     let wall = std::sync::Arc::new(std::sync::Mutex::new(0.0_f64));
     let clock = TalkClock::new({
@@ -87,14 +80,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // ── 表示層は headless（`attach_target` は GPU 資源を要さず、可視状態の照会はそのまま通る） ──
     let mut world = World::new();
     world.insert_non_send(BalloonHover::default());
-    let window = world.spawn_empty().id();
-    wiring.presenter.attach_target(
-        balloon_target(0),
-        window,
-        EmoWorld::build(&areka_parsers::shell::parse("")),
-        AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-        96,
-    );
+    attach_headless(&mut wiring.presenter, &mut world, 0);
 
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());

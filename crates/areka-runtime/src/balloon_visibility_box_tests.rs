@@ -224,3 +224,37 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
         decision.logs
     );
 }
+
+/// 文字の観測が取れなかったフレームは計測に触れない。窓が隠れて箱にだけ文字が出ている scope は、
+/// そのフレームに箱の観測も失うので、見えるものが無いと読むと測り直した満了予定を捨ててしまう。
+#[test]
+fn an_unobserved_frame_keeps_the_restarted_deadline_while_a_box_is_showing() {
+    let mut state = BalloonVisibilityState::default();
+    Frame::new(&[(0, boxed(seen(0, false)))])
+        .ended_at(0.0)
+        .at(0.0)
+        .run(&mut state);
+    Frame::new(&[(0, hovered(boxed(seen(0, false))))])
+        .at(TIMEOUT + 5.0)
+        .run(&mut state);
+    Frame::new(&[(0, boxed(seen(0, false)))])
+        .at(50.0)
+        .run(&mut state);
+
+    let blind = Frame::new(&[(0, unobserved(false))])
+        .at(60.0)
+        .run(&mut state);
+    let next = Frame::new(&[(0, boxed(seen(0, false)))])
+        .at(61.0)
+        .run(&mut state);
+
+    assert_eq!(
+        (blind, next, state.deadline),
+        (
+            VisibilityDecision::default(),
+            VisibilityDecision::default(),
+            Some(50.0 + TIMEOUT)
+        ),
+        "(観測の取れなかったフレームの判断, 次のフレームの判断, 満了予定)"
+    );
+}

@@ -47,11 +47,7 @@ fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
         "較正: 選択肢つきのトークになっている"
     );
     if !scope.box_showing {
-        assert_eq!(
-            shown.actions,
-            vec![VisibilityAction::Show { scope: 0 }],
-            "較正: 窓が出ている"
-        );
+        assert_eq!(shown.actions, vec![show(0)], "較正: 窓が出ている");
     }
     state
 }

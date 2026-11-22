@@ -19,7 +19,7 @@ use {
 ///
 /// `attach_target` は GPU 資源を要さないため、実 `EmoPresenter` のまま装着できる。
 #[cfg(test)]
-pub(super) fn attach_headless(
+pub(in crate::balloon_visibility) fn attach_headless(
     presenter: &mut EmoPresenter,
     world: &mut World,
     scope: u32,
@@ -45,7 +45,7 @@ pub(super) fn world_at(frame_now: f64) -> World {
 
 /// 既定の設定の文字の層。
 #[cfg(test)]
-pub(super) fn runtime() -> Rc<RefCell<TextLayerRuntime>> {
+pub(in crate::balloon_visibility) fn runtime() -> Rc<RefCell<TextLayerRuntime>> {
     Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )))

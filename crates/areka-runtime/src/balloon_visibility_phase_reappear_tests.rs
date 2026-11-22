@@ -18,6 +18,7 @@
 
 use dola::cue::{CueCommand, TalkCue};
 
+use super::super::test_support::{hidden_log, hide, show, shown_log};
 use super::test_support::{attach_headless, runtime};
 use super::*;
 
@@ -186,30 +187,16 @@ fn quiet() -> FrameOutcome {
 
 /// 表示が 1 件・その記録が 1 件のフレーム。
 fn shown(scope: u32) -> FrameOutcome {
-    (
-        vec![VisibilityAction::Show { scope }],
-        vec![VisibilityLogEvent::Transition {
-            scope,
-            trigger: VisibilityTrigger::Content,
-            visible: true,
-        }],
-    )
+    (vec![show(scope)], vec![shown_log(scope)])
 }
 
 /// 非表示が 1 件・scope ごとの記録のフレーム。
 fn hidden(scopes: &[u32], trigger: VisibilityTrigger) -> FrameOutcome {
     (
-        vec![VisibilityAction::HideScopes {
-            scopes: scopes.to_vec(),
-            trigger,
-        }],
+        vec![hide(scopes, trigger)],
         scopes
             .iter()
-            .map(|&scope| VisibilityLogEvent::Transition {
-                scope,
-                trigger,
-                visible: false,
-            })
+            .map(|&scope| hidden_log(scope, trigger))
             .collect(),
     )
 }

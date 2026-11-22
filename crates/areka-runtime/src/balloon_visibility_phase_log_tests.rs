@@ -19,7 +19,7 @@ fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
+/// 選択肢つきでないトークの起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
 /// 止まった時刻が届かなかったことは警告で残す。
 #[test]
 fn measurement_origin_is_written_with_its_level_and_fields() {
@@ -136,7 +136,7 @@ fn timeout_notice_without_talk_id_is_written_as_a_warning() {
     assert_eq!(lines[0].expect_field("reason"), "\"no_talk_id\"");
 }
 
-/// 判断が返した事象は 水準と語彙で 1 行ずつ出る。
+/// 判断が返した事象は水準と語彙で 1 行ずつ出る。
 #[test]
 fn decision_events_are_written_with_the_agreed_level_and_fields() {
     let logs = vec![

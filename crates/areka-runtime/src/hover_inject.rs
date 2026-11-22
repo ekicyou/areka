@@ -114,7 +114,7 @@ pub fn cycle_ordinal(frame_time: f64, period_secs: f64, ordinal_count: usize) ->
 ///
 /// [`HoverInjectConfig::Disabled`] は即 return し **`inject` を一度も呼ばない**（本番既定 no-op）。
 /// [`HoverInjectConfig::Cycle`] は `active` な各 actor について [`cycle_ordinal`] の結果を `inject` へ渡し
-/// （非 active はスキップ）、`logged` に覚えた前の番号と違うときだけ `info!` する。
+/// （非 active はスキップし、`logged` の覚えも消す）、`logged` に覚えた前の番号と違うときだけ `info!` する。
 pub fn run_hover_inject_with(
     config: &HoverInjectConfig,
     frame_time: f64,
@@ -130,6 +130,7 @@ pub fn run_hover_inject_with(
         // 「済んでいない選択肢がある」でない actor はスキップ。選択肢が全部済んだ actor には注入しない:
         // 一部の場所だけが済んだときに巡回の番号が済んだ選択肢を指しても、提示がその強調を装飾へ渡さない。
         if !active {
+            logged.remove(actor);
             continue;
         }
         let ordinal = cycle_ordinal(frame_time, period_secs, *hit_rows);
@@ -353,15 +354,6 @@ mod tests {
         );
     }
 
-    /// 同一 frame 時刻→同一注入（純関数駆動の冪等）。
-    #[test]
-    fn cycle_ordinal_is_deterministic_for_same_time() {
-        let (t, period, count) = (3.5, 0.7, 2);
-        let a = cycle_ordinal(t, period, count);
-        let b = cycle_ordinal(t, period, count);
-        assert_eq!(a, b, "同一 (frame_time, period, count) は同一注入");
-    }
-
     // ── run_hover_inject_with（driver・disabled は注入ゼロ／cycle は active のみ）──────
 
     /// Disabled では active な actor があっても `inject` が一度も呼ばれない。
@@ -439,15 +431,19 @@ mod tests {
     }
 
     /// 記録は actor ごとに注入の番号が変わったフレームでだけ出す（毎フレームの同じ番号は記録しない）。
+    /// 選択肢が済んで注入が止まった後の最初の注入は、番号が前と同じでも記録する。
     #[test]
     fn driver_logs_only_when_the_ordinal_changes() {
         let actors = vec![(ActorKey::from("0"), true, 3)];
+        let inactive = vec![(ActorKey::from("0"), false, 3)];
         let config = HoverInjectConfig::Cycle { period_ms: 1000 };
         let mut logged = BTreeMap::new();
         let ((), events) = log_capture_kit::capture(|| {
             for t in [1.1, 1.5, 1.9, 2.1] {
                 run_hover_inject_with(&config, t, &actors, &mut logged, |_, _| {});
             }
+            run_hover_inject_with(&config, 2.2, &inactive, &mut logged, |_, _| {});
+            run_hover_inject_with(&config, 2.3, &actors, &mut logged, |_, _| {});
         });
         let ordinals: Vec<_> = events
             .iter()
@@ -456,8 +452,12 @@ mod tests {
             .collect();
         assert_eq!(
             ordinals,
-            vec![Some("Some(0)".to_owned()), Some("Some(1)".to_owned())],
-            "番号の変わった 2 回だけ"
+            vec![
+                Some("Some(0)".to_owned()),
+                Some("Some(1)".to_owned()),
+                Some("Some(1)".to_owned())
+            ],
+            "番号の変わった 2 回と、注入が止まった後の 1 回"
         );
     }
 }

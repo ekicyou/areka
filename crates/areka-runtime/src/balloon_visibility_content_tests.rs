@@ -73,35 +73,20 @@ fn expand(expect: &[Expected]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent
     let actions = expect
         .iter()
         .map(|&entry| match entry {
-            Expected::Shown(scope) => VisibilityAction::Show { scope },
-            Expected::Cleared(scopes) => VisibilityAction::HideScopes {
-                scopes: scopes.to_vec(),
-                trigger: VisibilityTrigger::Clear,
-            },
+            Expected::Shown(scope) => show(scope),
+            Expected::Cleared(scopes) => hide(scopes, VisibilityTrigger::Clear),
         })
         .collect();
 
     let mut logs: Vec<(u32, VisibilityLogEvent)> = Vec::new();
     for &entry in expect {
         match entry {
-            Expected::Shown(scope) => logs.push((
-                scope,
-                VisibilityLogEvent::Transition {
-                    scope,
-                    trigger: VisibilityTrigger::Content,
-                    visible: true,
-                },
-            )),
-            Expected::Cleared(scopes) => logs.extend(scopes.iter().map(|&scope| {
-                (
-                    scope,
-                    VisibilityLogEvent::Transition {
-                        scope,
-                        trigger: VisibilityTrigger::Clear,
-                        visible: false,
-                    },
-                )
-            })),
+            Expected::Shown(scope) => logs.push((scope, shown_log(scope))),
+            Expected::Cleared(scopes) => logs.extend(
+                scopes
+                    .iter()
+                    .map(|&scope| (scope, hidden_log(scope, VisibilityTrigger::Clear))),
+            ),
         }
     }
     logs.sort_by_key(|&(scope, _)| scope);

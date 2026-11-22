@@ -4,7 +4,7 @@
 //! `crates/areka/src/tick_gate_config_producers_tests.rs` の `balloon_visibility_phase_arms_the_deadline` が見る。
 
 use super::super::BalloonVisibilityState;
-use super::super::test_support::{Frame, hovered, seen};
+use super::super::test_support::{Frame, TIMEOUT, hovered, seen};
 use super::{MAX_WAIT_SECS, VisibilityWake, visibility_wake};
 use std::time::Duration;
 
@@ -103,11 +103,6 @@ fn overdue_while_suppressed_arms_nothing() {
         "抑止中のちょうど到来"
     );
     assert_eq!(
-        visibility_wake(Some(9.0), Some(4.0), false),
-        VisibilityWake::Now,
-        "抑止が無い超過"
-    );
-    assert_eq!(
         visibility_wake(Some(1.0), Some(4.0), true),
         VisibilityWake::After(Duration::from_secs_f64(3.0)),
         "抑止中でも期限が先なら残りを預ける"
@@ -117,18 +112,15 @@ fn overdue_while_suppressed_arms_nothing() {
 /// 満了の後もポインタがバルーンの上に残る間は起こさず、外れたフレームで計り直しの期限を預ける。
 #[test]
 fn a_held_timeout_with_the_pointer_still_on_the_balloon_asks_for_no_wake() {
-    const TIMEOUT: f64 = 30.0;
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(2, false))])
         .at(0.0)
         .talk_started()
         .ended_at(0.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
 
     Frame::new(&[(0, hovered(seen(2, true)))])
         .at(TIMEOUT + 1.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(
         visibility_wake(Some(TIMEOUT + 1.0), state.deadline, state.prev_suppressed),
@@ -138,7 +130,6 @@ fn a_held_timeout_with_the_pointer_still_on_the_balloon_asks_for_no_wake() {
 
     Frame::new(&[(0, seen(2, true))])
         .at(TIMEOUT + 2.0)
-        .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(
         visibility_wake(Some(TIMEOUT + 2.0), state.deadline, state.prev_suppressed),

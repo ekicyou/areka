@@ -1,7 +1,7 @@
 // =============================================================================
 // バルーン可視性の配線層（相関数）の決定論テスト
 //
-// 判断そのものの網羅表は親の `balloon_visibility_tests.rs`（判断中核 `decide`）が所有する。
+// 判断そのものの網羅表は親の `balloon_visibility_*_tests.rs` 群（判断中核 `decide`）が所有する。
 // ここが押さえるのは**配線**だけである:
 //   ⑴ 観測の収集（ドラッグ中・観測が得られない scope の見送り）
 //   ⑵ 表示の発行が失敗したときの縮退
@@ -199,7 +199,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
 
     let explicit: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
-        .filter(|e| e.field("trigger") == Some("\"explicit\""))
+        .filter(|e| e.field_str("trigger") == Some("explicit"))
         .collect();
     assert_eq!(
         explicit.len(),

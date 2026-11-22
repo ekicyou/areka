@@ -126,6 +126,13 @@ pub(super) fn decide_timeout(
     let Some(now) = now_talk_time else {
         return (Vec::new(), None);
     };
+    // 文字の観測が取れなかったフレームも同じく触れない。そのフレームは箱の観測も失っていて
+    // （配線は同じ借用から両方を読む）、箱にだけ文字が出ている scope が見えないものに数えられる。
+    // そのまま進むと「消す対象が無い」で満了予定を捨て、次のフレームに実効の表示終了から
+    // 立て直すので、抑止の解けた縁で測り直した分だけ早く隠れる。
+    if obs.scopes.values().any(|o| o.visible_glyphs.is_none()) {
+        return (Vec::new(), None);
+    }
 
     // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
     // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。表示は最後の行動なので、
@@ -190,15 +197,19 @@ pub(super) fn decide_timeout(
     state.prev_suppressed = suppressed;
 
     if released {
-        // 抑止が全て解けた。ここからはこのトークの待ち時間を**現在時刻起点で改めて**計り直す
-        // 抑止前の残り時間は再開しない。
+        // 抑止が全て解けた。計測が立っていれば、このトークの待ち時間を**現在時刻起点で改めて**
+        // 計り直す（抑止前の残り時間は再開しない）。まだ立っていなければ測り直す相手が無いので、
+        // 下の初期確立に任せる。
         state.suppress_logged = false;
-        if let Some((_, _, _, wait)) = eligible {
+        if let Some((_, _, _, wait)) = eligible
+            && state.deadline.is_some()
+        {
             let deadline = now + wait;
             state.deadline = Some(deadline);
             logs.push(VisibilityLogEvent::MeasurementRestarted { now, deadline });
         }
-    } else if let Some((display_end, effective, origin, wait)) = eligible
+    }
+    if let Some((display_end, effective, origin, wait)) = eligible
         && state.deadline.is_none()
     {
         // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
