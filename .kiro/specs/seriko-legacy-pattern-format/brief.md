@@ -80,3 +80,7 @@
 - **なぜこの spec へ**: 触る場所が同じ＝`animation*.pattern*` の欄の読み（`shell/decode.rs`・`model.rs`）。旧書式の行もウェイトの欄を持つので、同じ読みに乗る。ただし本文の Scope の Out（下流は区別しない）と違い、この件は再生の側（`crates/areka-seriko/src/` のパターンの待ちを読む所＝`timeline.rs`・`table.rs` など）にも触れる＝In を広げる。乱数は抽選と同じ出どころを使い、決定論のテストでは種を固定する。
 - **規模**: +2〜3 タスク（S 5〜8 → 7〜11）。範囲の両端の大小が逆・片方が数でない、の扱いは要件の段で ukadoc を引き、読めない点は SSP の MCP で測る。
 - **同じウェーブに置かない相手**: 本文のとおり＋`crates/areka-seriko/src/` のパターンの再生を触る spec（`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`）。
+
+## 版
+
+- v0.4.0（アニメーションの版）。
