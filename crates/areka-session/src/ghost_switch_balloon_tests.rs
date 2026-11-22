@@ -6,7 +6,6 @@
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
@@ -24,19 +23,13 @@ fn running_a() -> SwitchRig {
     let b = FakeShiori::Scripted(Box::new(|| {
         standard_script(r"\0B\e").get("OnGhostChanged", Ok(Some(r"\0B\e".to_owned())))
     }));
-    let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
-    // 切替先を起こすときの窓の準備が閉包を投函する先。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
-    rig.plant_boot_record("B");
+    let rig = super::boot_event_tests::running_a(vec![("A", a), ("B", b)]);
     rig.add_balloon_copy(SECOND, SECOND_NAME);
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("B")),
         None,
         "切替先 B に記憶のバルーンが無い"
     );
-    rig.boot("A");
-    assert!(rig.wait_steady(), "A が定常に着く");
     rig
 }
 
@@ -225,8 +218,7 @@ fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
     );
 }
 
-/// ゴーストの中のバルーンを持たない旧い形の記憶（`[last] balloon = "<フォルダ名>"`）がそのまま読め、ゴーストの中のバルーンに
-/// 記憶の段で当たる。
+/// フォルダ名だけの記憶（`[last] balloon = "<フォルダ名>"`）が、記憶の段でゴーストの中のバルーンに当たる。
 ///
 /// # 非空虚性
 /// 記憶の段の候補にゴーストの中が入らないと記憶が当たらず `last_balloon_not_found` で赤。

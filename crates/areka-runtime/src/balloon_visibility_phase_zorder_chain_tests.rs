@@ -25,7 +25,7 @@
 //!
 //! ここが主張するのは「受け口の値が動かない」ことであって「記録が出ない」ことではない。
 //! 値を直に読むので捕捉窓は要らず、既定の実行器がスレッドローカルの差し替えを拾えない
-//! という罠（`crates/wintf/src/ecs/window/zorder_pair_establish_tests.rs`）にも触れない。
+//! という罠（`crates/wintf/src/ecs/window/zorder_chain_tests.rs`）にも触れない。
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use bevy_ecs::world::World;

@@ -253,7 +253,7 @@ fn prev_visible_reflects_the_transitions_this_frame_issued() {
 /// 時刻を与えないフレームでは、トークの終わりが届いて見えているバルーンがあっても計測は
 /// 立たない（タイムアウトの評価が現在時刻の不明なフレームで動き出さない）。
 #[test]
-fn conversation_scoped_state_is_untouched_by_frames_without_time() {
+fn no_measurement_starts_in_frames_without_time() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
         .talk_started()

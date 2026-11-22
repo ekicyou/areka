@@ -1,6 +1,6 @@
 //! 箱の上の滞在（`ShellBoxHover`）と毎フレームの整え（`settle_box_hover`）。
 //!
-//! 可視性の相（`balloon_visibility_phase`）が読み、入力の側が書く。
+//! 可視性の相（`balloon_visibility_phase`）が毎フレーム整えて書き戻し、入力の側が書く。
 
 use std::collections::HashMap;
 

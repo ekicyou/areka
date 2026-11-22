@@ -350,7 +350,7 @@ impl MoveCueSink {
             );
         }
         // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある。送出の後に立てる理由は
-        // `PresentBridge::send` と同じ。
+        // `PresentBridge::deliver` と同じ。
         tick_wake::mark(tick_wake::PRESENT);
     }
 }

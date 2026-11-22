@@ -11,7 +11,7 @@ use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
 use crate::move_cue::apply_move_tests::{
-    BALLOON_OFFSET, directive_for_scope1, events_named, persisted_after, placement,
+    BALLOON_OFFSET, directive_for_scope1, events_named, persisted_after, placement, pos_of,
 };
 use areka_placement::diag::PlacementRoute;
 use areka_placement::follow::{
@@ -72,7 +72,7 @@ fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
 }
 
 fn pos(world: &World, e: Entity) -> PointPx {
-    let p = world.get::<WindowPos>(e).unwrap().position.unwrap();
+    let p = pos_of(world, e);
     PointPx { x: p.x, y: p.y }
 }
 

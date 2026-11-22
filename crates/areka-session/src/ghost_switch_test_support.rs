@@ -537,7 +537,7 @@ impl SwitchRig {
         )
     }
 
-    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・足場の待ちの檻が短い上限で呼ぶ）。
+    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・足場の待ちの檻が偽の時計で呼ぶ）。
     #[track_caller]
     fn pump_until_with(
         &mut self,
