@@ -1,10 +1,10 @@
-//! 本体と `areka-runtime` のテストが別の crate のファイルを読むときの読み口は `areka-runtime` の `crate_path` 1 つ。
+//! テストが別の crate のファイルを読むときの読み口（`areka-session` と本体のテストが使う・中身は `areka-runtime` の `crate_path` 1 つ）。
 //!
-//! 読んでよいのは、本体が依存する crate（依存の向きに下の crate）だけ。`krate` は `crates/` の下の
-//! フォルダ名（`wintf`・`areka-placement` など）で書く。本体自身のファイルはここを通さず、相対の
+//! 読んでよいのは、読む側の crate が依存する crate（依存の向きに下の crate）だけ。`krate` は `crates/` の下の
+//! フォルダ名（`wintf`・`areka-placement` など）で書く。読む側の crate 自身のファイルはここを通さず、相対の
 //! `include_str!`／`CARGO_MANIFEST_DIR` で読む（規則は「自分の crate は相対・別の crate は読み口」の 1 つ）。
-//! 例外は名前を付けたワークスペース全体を歩く見張りの 3 本（`session_end_sync_send_tests.rs`・
-//! `areka-runtime` の `src/frame_attach_tests.rs`・`readonly_tests.rs`）だけ。
+//! 例外は名前を付けたワークスペース全体を歩く見張りの 3 本（`areka-session` の `session_end_sync_send_tests.rs`・
+//! `areka-runtime` の `src/frame_attach_tests.rs`・本体の `session_tests/readonly_body_tests.rs`）だけ。
 //!
 //! どちらの口も読み先が無ければ黙って通らない: `crate_source!` はコンパイルが止まり、
 //! `crate_path` は panic する。
@@ -23,7 +23,7 @@ macro_rules! crate_source {
     };
 }
 
-/// 読み口の本体は `areka-runtime` の `crate_path`（本体と `areka-runtime` のテストで 1 つ）。
+/// 読み口の中身は `areka-runtime` の `crate_path`（ワークスペースのテストで 1 つ）。
 pub use areka_runtime::source_text_test_support::crate_path;
 
 #[cfg(test)]
