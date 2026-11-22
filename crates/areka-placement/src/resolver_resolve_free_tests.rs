@@ -1,4 +1,4 @@
-//! `resolve_placement` の檻: free 配置（T-R4・P3）。
+//! `resolve_placement` の檻: free 配置（P3）。
 //!
 //! `resolver_resolve_tests.rs` からの分割（1,000 行規約）。
 
@@ -9,14 +9,14 @@ use crate::config::Alignment;
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// T-R4: free 配置（P3）
+// free 配置（P3）
 // ------------------------------------------------------------------
 
-/// T-R4: free で `defaultleft`/`defaulttop` 両指定 → work area **左上**原点で
+/// free で `defaultleft`/`defaulttop` 両指定 → work area **左上**原点で
 /// `char_x = left + dx`・`char_y = top + dy`。原点非 (0,0) の work area
 /// で left/top 依存を固定する（bottom の right 基準と混同しない檻）。
 #[test]
-fn t_r4_free_applies_default_left_top_from_work_area_origin() {
+fn free_applies_default_left_top_from_work_area_origin() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -36,10 +36,10 @@ fn t_r4_free_applies_default_left_top_from_work_area_origin() {
     }
 }
 
-/// T-R4: free で Y 未指定 → Y のみ bottom 相当（`bottom − h`）へフォールバック。
+/// free で Y 未指定 → Y のみ bottom 相当（`bottom − h`）へフォールバック。
 /// X は左上原点適用のまま。
 #[test]
-fn t_r4_free_unspecified_y_falls_back_to_bottom() {
+fn free_unspecified_y_falls_back_to_bottom() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -59,10 +59,10 @@ fn t_r4_free_unspecified_y_falls_back_to_bottom() {
     }
 }
 
-/// T-R4: free で X 未指定 → X のみ bottom 相当（P2 連鎖値＝scope0 は右端密着）へ
+/// free で X 未指定 → X のみ bottom 相当（P2 連鎖値＝scope0 は右端密着）へ
 /// フォールバック。Y は左上原点適用のまま。
 #[test]
-fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
+fn free_unspecified_x_falls_back_to_bottom_chain() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -82,12 +82,12 @@ fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
     }
 }
 
-/// T-R4 補: free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
+/// free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
 /// 完全同一。ただし `anchor` だけは alignment 由来で相違する
 /// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着＝`Anchor::Free`。
 /// 構造体全体の一致でなく、幾何の一致＋anchor の相違で確かめる）。
 #[test]
-fn t_r4_free_both_unspecified_equals_bottom() {
+fn free_both_unspecified_equals_bottom() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let inputs = [
@@ -131,10 +131,10 @@ fn t_r4_free_both_unspecified_equals_bottom() {
     }
 }
 
-/// T-R4 補: free もキャラ窓クランプ（P4）の対象（過大 offset は
+/// free もキャラ窓クランプ（P4）の対象（過大 offset は
 /// work area 右下で停止＝画面内出現の安全弁は alignment を選ばない）。
 #[test]
-fn t_r4_free_is_clamped_into_work_area() {
+fn free_is_clamped_into_work_area() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -157,10 +157,10 @@ fn t_r4_free_is_clamped_into_work_area() {
     }
 }
 
-/// T-R4 補: free で配置した scope0 の実位置が後続の P2 連鎖基準になる
+/// free で配置した scope0 の実位置が後続の P2 連鎖基準になる
 /// （連鎖は alignment を選ばず「前スコープの実配置の左隣」）。
 #[test]
-fn t_r4_free_position_feeds_scope_chain() {
+fn free_position_feeds_scope_chain() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w0, h0) = (px(400, dpi), px(600, dpi));

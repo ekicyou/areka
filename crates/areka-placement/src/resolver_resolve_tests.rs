@@ -1,4 +1,4 @@
-//! `resolve_placement` の檻: bottom アンカー・スコープ連鎖・クランプ（T-R1/R2/R3/R5/R6）。
+//! `resolve_placement` の檻: bottom アンカー・スコープ連鎖・クランプ。
 //!
 //! 他の 3 主題は `resolver_resolve_{free,balloon,contract}_tests.rs`。
 
@@ -11,13 +11,13 @@ use crate::shared_test_support::MEASURE_DPI;
 use log_capture_kit::capture;
 
 // ------------------------------------------------------------------
-// T-R1: bottom 右下基準（P1＋P2 の scope0 項）
+// bottom 右下基準（P1＋P2 の scope0 項）
 // ------------------------------------------------------------------
 
-/// T-R1: `char_y = bottom − h`・`char_x(0) = right − w0 − defaultx`。
+/// `char_y = bottom − h`・`char_x(0) = right − w0 − defaultx`。
 /// dpi 全 4 水準で成立する（純物理式・隠れたスケールなし）。
 #[test]
-fn t_r1_bottom_anchors_bottom_right() {
+fn bottom_anchors_bottom_right() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h, dx) = (px(400, dpi), px(600, dpi), px(40, dpi));
@@ -39,10 +39,10 @@ fn t_r1_bottom_anchors_bottom_right() {
     }
 }
 
-/// T-R1 補: 原点が (0,0) でない work area でも右下基準式が成立する
+/// 原点が (0,0) でない work area でも右下基準式が成立する
 /// （`right`/`bottom` 由来であり `width`/`height` 由来ではない）。
 #[test]
-fn t_r1_bottom_holds_on_offset_work_area() {
+fn bottom_holds_on_offset_work_area() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -61,11 +61,11 @@ fn t_r1_bottom_holds_on_offset_work_area() {
     }
 }
 
-/// T-R1 補: `defaultx` 未指定（None）は 0 扱い＝右端密着。
+/// `defaultx` 未指定（None）は 0 扱い＝右端密着。
 /// `cfg.scopes` 未収載スコープも `ScopeConfig::default()`（Bottom・オフセット
 /// なし）で同一に配置される（doc 記載の決定の檻）。
 #[test]
-fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
+fn missing_scope_config_defaults_to_bottom_flush() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -85,14 +85,14 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
 }
 
 // ------------------------------------------------------------------
-// T-R2: スコープ連鎖（P2）
+// スコープ連鎖（P2）
 // ------------------------------------------------------------------
 
-/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0）。
+/// `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0）。
 /// `kero.defaultx=0` は基準密着であって右端に戻らない。
 /// 3 スコープで一般連鎖と、隣接ペアの隙間が 0 であることを固定する。
 #[test]
-fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
+fn scope_chain_defaultx_zero_stays_adjacent() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w0, h0) = (px(400, dpi), px(600, dpi));
@@ -130,7 +130,7 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     }
 }
 
-/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0）。
+/// 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0）。
 ///
 /// 確定規則（SSP 実測）は `char_x(0) = right − w(0)`・
 /// `char_x(n≥1) = char_x(n−1) − w(n)`。引くのは**自スコープの幅**ゆえ、隣接ペアの
@@ -142,7 +142,7 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
 /// （偶然一致する定数では「同一式で配置されている」ことを主張できない）。
 /// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する。
 #[test]
-fn t_r2_unequal_widths_leave_no_gap() {
+fn unequal_widths_leave_no_gap() {
     /// 幅列を確定規則で検定する**唯一の検定路**（不等幅・等幅で分岐しない）。
     /// 検定するのは P2（キャラ窓 X の連鎖）のみで、P5（バルーン）は混ぜない。
     fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) {
@@ -189,10 +189,10 @@ fn t_r2_unequal_widths_leave_no_gap() {
     }
 }
 
-/// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
+/// 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
 /// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」。
 #[test]
-fn t_r2_chain_defaultx_offsets_leftward_from_base() {
+fn chain_defaultx_offsets_leftward_from_base() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w0, h0) = (px(400, dpi), px(600, dpi));
@@ -216,12 +216,12 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
 }
 
 // ------------------------------------------------------------------
-// T-R3: defaulttop 無視（P1）
+// defaulttop 無視（P1）
 // ------------------------------------------------------------------
 
-/// T-R3: bottom 時に `default_y` を与えても出力は不変。
+/// bottom 時に `default_y` を与えても出力は不変。
 #[test]
-fn t_r3_default_y_ignored_under_bottom() {
+fn default_y_ignored_under_bottom() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h, dx) = (px(400, dpi), px(600, dpi), px(40, dpi));
@@ -244,10 +244,10 @@ fn t_r3_default_y_ignored_under_bottom() {
 }
 
 // ------------------------------------------------------------------
-// T-R5: 上・左・右の辺で最初の位置を解く・知らない値は bottom
+// 上・左・右の辺で最初の位置を解く・知らない値は bottom
 // ------------------------------------------------------------------
 
-/// T-R5 の 2 スコープ（スコープ 0 だけ `defaultx`・`defaulty` を持つ。左右の辺はどちらも使わず、
+/// 辺ごとのテストが共有する 2 スコープ（スコープ 0 だけ `defaultx`・`defaulty` を持つ。左右の辺はどちらも使わず、
 /// 上の辺は `defaulty` を使わないので、位置に出れば暴ける）を 1 つの値で組む。
 fn seam_cfg(value: &str, dx: i32) -> PlacementConfig {
     cfg_of(vec![
@@ -262,13 +262,13 @@ fn seam_cfg(value: &str, dx: i32) -> PlacementConfig {
     ])
 }
 
-/// T-R5: `top` は y が作業領域の上端・x は Bottom と同じ連なり、`left` は x が左端・
+/// `top` は y が作業領域の上端・x は Bottom と同じ連なり、`left` は x が左端・
 /// `right` は x が右端 − w で、左右の辺は下から上へ連ねる（スコープ 1 の y＝スコープ 0
 /// の y − h1・`defaultx` は使わない）。どの辺も `anchor` は同じ辺で、解いた位置は
 /// `project_anchor` を通しても動かない（並べ直し・起動・記憶の戻し・ドラッグで同じ位置）。
 /// 左上が原点でない作業領域で `left`／`top` への依存を暴く。
 #[test]
-fn t_r5_top_left_right_resolve_on_their_own_edge() {
+fn top_left_right_resolve_on_their_own_edge() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let snapshot = MonitorSnapshot {
@@ -345,12 +345,12 @@ fn t_r5_top_left_right_resolve_on_their_own_edge() {
     }
 }
 
-/// T-R5: 辺がスコープごとに違うとき、左右の辺の縦の連なりは辺ごとに別で、左右の辺の
+/// 辺がスコープごとに違うとき、左右の辺の縦の連なりは辺ごとに別で、左右の辺の
 /// スコープは横の連なり（P2）を進めない。`[right, left, bottom, right]` で、スコープ 1（左）は
 /// スコープ 0（右）の上に積まれず下端から、スコープ 2（下）は右下から始まり、スコープ 3（右）は
 /// スコープ 0 の上に積もうとして作業領域の上端で止まる。
 #[test]
-fn t_r5_mixed_edges_chain_per_edge() {
+fn mixed_edges_chain_per_edge() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w0, h0) = (px(400, dpi), px(600, dpi));
@@ -401,9 +401,9 @@ fn t_r5_mixed_edges_chain_per_edge() {
     }
 }
 
-/// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom。
+/// 知らない値は Bottom と同じ幾何・`anchor` も Bottom。
 #[test]
-fn t_r5_unknown_seam_value_resolves_like_bottom() {
+fn unknown_seam_value_resolves_like_bottom() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let dx = px(40, dpi);
@@ -424,11 +424,11 @@ fn t_r5_unknown_seam_value_resolves_like_bottom() {
     }
 }
 
-/// T-R5: 知らない値の警告は呼び出し 1 回につき 1 行、正典の値（`top`・`left`・`right`）
+/// 知らない値の警告は呼び出し 1 回につき 1 行、正典の値（`top`・`left`・`right`）
 /// では 0 行（並べ直しのたびに出ていた警告の 2 乗を止める）。警告はどのスコープの値かを
 /// `scope` に載せる（知らない値はスコープ 1 に置き、0 の決め打ちを暴く）。
 #[test]
-fn t_r5_warns_once_per_call_only_for_unknown_value() {
+fn warns_once_per_call_only_for_unknown_value() {
     let wa = work_area(96);
     let inputs = [input(0, 400, 600), input(1, 320, 480)];
     let warns = |cfg: &PlacementConfig| {
@@ -463,13 +463,13 @@ fn t_r5_warns_once_per_call_only_for_unknown_value() {
 }
 
 // ------------------------------------------------------------------
-// T-R6: クランプ（P4）
+// クランプ（P4）
 // ------------------------------------------------------------------
 
-/// T-R6: 過大 `defaultx` で `x = work_area.left` に止まる（左端クランプ）。
+/// 過大 `defaultx` で `x = work_area.left` に止まる（左端クランプ）。
 /// 原点非 (0,0) の work area で `left` 依存を固定する。
 #[test]
-fn t_r6_oversized_defaultx_clamps_to_left_edge() {
+fn oversized_defaultx_clamps_to_left_edge() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -485,9 +485,9 @@ fn t_r6_oversized_defaultx_clamps_to_left_edge() {
     }
 }
 
-/// T-R6 補: 負の過大 `defaultx`（右方向へのはみ出し）は `right − w` に止まる。
+/// 負の過大 `defaultx`（右方向へのはみ出し）は `right − w` に止まる。
 #[test]
-fn t_r6_negative_defaultx_clamps_to_right_edge() {
+fn negative_defaultx_clamps_to_right_edge() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -502,10 +502,10 @@ fn t_r6_negative_defaultx_clamps_to_right_edge() {
     }
 }
 
-/// T-R6 補: work area より大きい surface 寸では区間が逆転するため
+/// work area より大きい surface 寸では区間が逆転するため
 /// left／top 側を優先し、少なくとも左上は work area 内に収まる。
 #[test]
-fn t_r6_oversized_surface_pins_to_top_left() {
+fn oversized_surface_pins_to_top_left() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         // 幅・高さとも work area を超過
@@ -525,14 +525,14 @@ fn t_r6_oversized_surface_pins_to_top_left() {
     }
 }
 
-/// T-R6 補: クランプはキャラ窓の連鎖にも波及する（後続スコープは
+/// クランプはキャラ窓の連鎖にも波及する（後続スコープは
 /// クランプ後の実配置の左隣＝P2 連鎖は実位置基準）。
 ///
 /// 左端クランプの区間（前段）は両スコープとも左端へ潰れるため、
 /// 「クランプ前とクランプ後のどちらを連鎖基準にしたか」を判別できない。
 /// 判別には後段の右端クランプ区間が要る（そちらが実効的な檻）。
 #[test]
-fn t_r6_chain_uses_clamped_previous_position() {
+fn chain_uses_clamped_previous_position() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w0, h0) = (px(400, dpi), px(600, dpi));

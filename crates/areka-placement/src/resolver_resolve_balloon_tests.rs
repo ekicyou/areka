@@ -1,4 +1,4 @@
-//! `resolve_placement` の檻: バルーン暫定 offset（T-R8・P5）。
+//! `resolve_placement` の檻: バルーン暫定 offset（P5）。
 //!
 //! `resolver_resolve_tests.rs` からの分割（1,000 行規約）。
 
@@ -9,10 +9,10 @@ use crate::config::{Alignment, BalloonSide, ScopeConfig};
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// T-R8: バルーン暫定 offset（P5）
+// バルーン暫定 offset（P5）
 // ------------------------------------------------------------------
 
-/// バルーン構成つき ScopeConfig（T-R8 用）。
+/// バルーン構成つき ScopeConfig。
 fn scope_cfg_balloon(
     default_x: Option<i32>,
     balloon_alignment: BalloonSide,
@@ -28,10 +28,10 @@ fn scope_cfg_balloon(
     }
 }
 
-/// T-R8: `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
+/// `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
 /// `balloon_y = char_y`（上端揃え）。
 #[test]
-fn t_r8_balloon_left_places_left_of_char() {
+fn balloon_left_places_left_of_char() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -56,12 +56,12 @@ fn t_r8_balloon_left_places_left_of_char() {
     }
 }
 
-/// T-R8: `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣）。
+/// `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣）。
 /// scope0 右端密着では `balloon_x = work_area.right`＝work area 外だが、
 /// **resolver はバルーンをクランプしない**（P5）＝そのままの幾何値を返す。
 /// `windowposition.limit` による作業領域内への補正は下流の関門の所有であり、本檻は関門より上流＝配置式の出力だけを見る。
 #[test]
-fn t_r8_balloon_right_places_right_of_char_without_clamp() {
+fn balloon_right_places_right_of_char_without_clamp() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -85,9 +85,9 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
     }
 }
 
-/// T-R8: `balloon.offsetx/offsety` は alignment 由来の幾何値へ加算。
+/// `balloon.offsetx/offsety` は alignment 由来の幾何値へ加算。
 #[test]
-fn t_r8_balloon_offsetx_offsety_added() {
+fn balloon_offsetx_offsety_added() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -113,7 +113,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
     }
 }
 
-/// T-R8 補: **配置式（P5）はバルーンをクランプしない**＝キャラが左端クランプされた
+/// **配置式（P5）はバルーンをクランプしない**＝キャラが左端クランプされた
 /// 状態の left バルーンは work area 左外（負方向）へ素直にはみ出したまま返る。
 ///
 /// # 前提
@@ -126,13 +126,13 @@ fn t_r8_balloon_offsetx_offsety_added() {
 /// 配置式ではない、という分業を固定するのが本檻である。無クランプは
 /// `resolve_placement` の契約としていまも真であり、この assert は反転しない。
 #[test]
-fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
+fn resolver_does_not_clamp_balloon_outside_work_area() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
         let inp = input(0, w, h);
         let bw = inp.balloon_size.w;
-        // キャラを左端クランプへ追い込む（T-R6 と同型）
+        // キャラを左端クランプへ追い込む（`resolver_resolve_tests.rs` の `oversized_defaultx_clamps_to_left_edge` と同型）
         let cfg = cfg_of(vec![(
             0,
             scope_cfg_balloon(Some(px(40000, dpi)), BalloonSide::Left, None),
@@ -149,10 +149,10 @@ fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
     }
 }
 
-/// T-R8: `balloon.alignment=none`（自動調整） → キャラ窓の中心が作業領域の中央より左なら
+/// `balloon.alignment=none`（自動調整） → キャラ窓の中心が作業領域の中央より左なら
 /// 右隣、それ以外は左隣（ukadoc「バルーンの位置情報」）。左右の両方を踏ませる。
 #[test]
-fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
+fn balloon_none_picks_the_side_facing_the_area_center() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -187,10 +187,10 @@ fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
     }
 }
 
-/// T-R8: `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
+/// `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
 /// ときは左側に付く（「中央より左なら右側」の境は左側＝`<` を `<=` に変えると赤）。
 #[test]
-fn t_r8_balloon_none_at_exact_center_goes_left() {
+fn balloon_none_at_exact_center_goes_left() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let w = px(400, dpi);
