@@ -5,7 +5,7 @@ use super::*;
 /// 本物の `quit_app` の `info` の行（`tracing-subscriber` の `fmt`・着色なし）の形。
 fn exit_line(origin: &str) -> String {
     format!(
-        "2026-10-18T00:00:00.000000Z  INFO areka::session::app_exit: [quit_app] 全窓を閉じ、終了を指示した event=\"app_exit\" origin={origin} closed=2\n"
+        "2026-10-18T00:00:00.000000Z  INFO areka_session::app_exit: [quit_app] 全窓を閉じ、終了を指示した event=\"app_exit\" origin={origin} closed=2\n"
     )
 }
 

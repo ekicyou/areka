@@ -139,8 +139,8 @@
   - _Dispatch: standard — 見張りの根を替え、赤のテストの原因を見て 1 行を足すかを決める_
   - _Requirements: 5.13, 1.11, 3.8, 8.10_
 
-- [ ] 5. ログの出所を読む所と道具を追従させる
-- [ ] 5.1 (P) ログの出所を名前で読む道具と実機テストを替える
+- [x] 5. ログの出所を読む所と道具を追従させる
+- [x] 5.1 (P) ログの出所を名前で読む道具と実機テストを替える
   - real-run-kit の `launch.rs` の `RELIED_TARGETS`・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs` の出所を新しい名前へ替え、`launch_tests.rs` の「似ているが違う」出所は `areka_session::app`・`areka_session::app_exits` にして同じ境目を確かめる
   - `crates/areka/tests/emo2_mcp_real_run.rs` の `rust_log`・`BOOT_CONFIG_PREFIX`・説明の出所の名前を替える（手順書の出所の名前は 6.2 が持つ）
   - `cargo test -p real-run-kit` が緑で、`cargo check -p areka --tests` が警告 0
