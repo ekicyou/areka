@@ -21,7 +21,7 @@ pub(super) const CYCLE_INTERVAL_SECS: f64 = 2.5;
 /// （`attach_target` 側だけ変えて golden 側が古い分母のまま残る、という食い違いを構造的に潰す）。
 pub(super) const AUTHOR_DPI: u16 = 96;
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+/// emo2 検体。検体を `target\` の下へ写した複製を `Drop` が消すため、一時値にせずプロセス寿命で保持する。
 static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 

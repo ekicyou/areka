@@ -245,7 +245,7 @@ pub(super) fn assert_startup_golden(
     let applied_physical = presenter.target_physical_size(target).unwrap_or_else(|| {
         panic!(
             "起動時 golden 検証不能 [{label} / {target:?}]: 合成面は在る（read_back 成功）のに \
-             target_physical_size が None — 表示成立点へ到達していない（R6.2 観測失敗）"
+             target_physical_size が None — 表示成立点へ到達していない（観測失敗）"
         )
     });
     assert_eq!(
@@ -253,7 +253,7 @@ pub(super) fn assert_startup_golden(
         applied_physical,
         "起動時 golden 不一致 [{label} / {target:?}]: 導出 k={:?}（窓 DPI {:?} ÷ author {AUTHOR_DPI}）を \
          丸め権威に通した物理寸 {scaled_w}x{scaled_h}（native {native_w}x{native_h}）が presenter の実適用物理寸 {:?} と不一致 \
-         — 推定 k が実適用 k と食い違う（R6.2 観測失敗）",
+         — 推定 k が実適用 k と食い違う（観測失敗）",
         scale,
         window_dpi,
         applied_physical,
@@ -274,7 +274,7 @@ pub(super) fn assert_startup_golden(
         actual.len(),
         native_len,
         "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が native 原寸長 {native_len} \
-         （{native_w}x{native_h}×4）と不一致 — k={:?} の拡大が読み戻しへ漏れている（要件 6.2 観測失敗）",
+         （{native_w}x{native_h}×4）と不一致 — k={:?} の拡大が読み戻しへ漏れている（観測失敗）",
         actual.len(),
         scale,
     );
@@ -282,7 +282,7 @@ pub(super) fn assert_startup_golden(
         actual.len(),
         expected.len(),
         "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が golden バイト長 {} と不一致 \
-         — golden は native {native_w}x{native_h}。読み戻しが合成結果と食い違う（R6.2/R8.2 観測失敗）",
+         — golden は native {native_w}x{native_h}。読み戻しが合成結果と食い違う（観測失敗）",
         actual.len(),
         expected.len(),
     );
@@ -291,7 +291,7 @@ pub(super) fn assert_startup_golden(
         panic!(
             "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) \
              — golden は native {native_w}x{native_h}（k={:?} は GPU 変換側ゆえ読み戻しに掛からない）。読み戻しが \
-             合成結果とバイト不一致（R6.2/R8.2/R8.3 観測失敗）",
+             合成結果とバイト不一致（観測失敗）",
             actual[idx],
             expected[idx],
             actual.len(),

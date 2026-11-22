@@ -246,7 +246,7 @@
   - _Dispatch: mechanical — 改名と消す語を設計が名指す_
   - _Requirements: 3.1, 3.4, 5.12, 6.11, 7.6_
 
-- [ ] 18. 要らない例・絵を消し、例の写しの式を本番の式に替える（G18・指摘 31・63・75・76・97・5.21）
+- [x] 18. 要らない例・絵を消し、例の写しの式を本番の式に替える（G18・指摘 31・63・75・76・97・5.21）
   - `examples/emo-present/balloon.rs` の `read_balloon_offset` の写しの式を消し、公開の `areka_placement::config::build_placement_config(..).scopes[&0].balloon_offset` を呼ぶ形に、44 行の文を消す。emo-present の例の古い説明と札（`emo-present.rs:4-5,16-22,93`・`state.rs:19`・`window.rs:8,24-26`・`systems.rs:12`・`reconcile.rs`・`fixture.rs:24`・`clickthrough_two_rects.rs:89`）
   - `examples/mock-shell.rs` を消し、`.kiro/specs/menu-thumbnail-preview/brief.md:19` の手本を「git の履歴の `crates/areka/examples/mock-shell.rs`」に（`completed/` でないことを確かめる）
   - `shell/` の `base.png`・`org/2.zip` 以外の 77 個を消し、`doc/pasta-profile.md:20-49` に絵の置き場を 1 行足して消す絵の名と「システムトレイ等」を消す。`icon/README.md` の 29・34 行を設計の字面に
@@ -303,3 +303,4 @@
 - 15.2: `boot_resolve_tests.rs:3`・`:141` に「ゴースト 6 分岐」が残る（今は 9 通り・指摘 62 の残り・21.1 で見る）
 - 16: 15.1 の `impl GhostSession` の移しで本体の `session_end_deadline_body_tests.rs` の許可表が古いパスを指し 2 本が赤だった（16 で `ghost_session_handle.rs` に直した）。15.1 のレビューは areka-session しか回さなかった。`boot_config_option_tests.rs:58` の doc は「印が無ければ記憶」側をテストが見ていない
 - 17: `boot_shell_tests.rs` の `（R6.1）` は本番のログの文（`areka-emo-present/src/shell_target.rs:494`）と字面で突き合わせる期待値なので残す。指摘の列に無い本体の `runtime_tests/frame_shell_box_align_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_visibility_integration_tests.rs`・`menu/captions_tests.rs` に要件番号が残る（21.1 で見る）。`boot_resolve_option_tests.rs:6` の「は`last_ghost_not_found`」の空白の抜け
+- 18: `examples/emo-present/balloon.rs` は `.scopes.get(&0).and_then(..)`（設計は `[&0]`・スコープ 0 は必ずあるので振る舞いは同じ）

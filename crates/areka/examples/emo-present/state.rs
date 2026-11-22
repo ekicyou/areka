@@ -16,7 +16,7 @@ pub struct ShellWindowMarker;
 pub struct BalloonWindowMarker;
 
 // ---------------------------------------------------------------------------
-// Surface cycle（surface0 ⇄ surface1000[binds] ⇄ Hide）
+// Surface cycle（surface1000 のまばたき bind の出し入れ）
 // ---------------------------------------------------------------------------
 
 /// シェル target のまばたき巡回状態（[`CYCLE_INTERVAL_SECS`] 周期で開閉し、各遷移で `apply` を 1 回発行）。
