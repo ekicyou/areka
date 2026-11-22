@@ -16,19 +16,23 @@ use std::collections::HashMap;
 use std::panic::Location;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::sync::mpsc;
+#[cfg(test)]
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{
-    BootOrigin, CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock,
-};
+use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
+#[cfg(test)]
+use areka_kanade::{ShioriBackend, ShioriUnblock};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 #[cfg(test)]
 use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use shiori_host32_host::ExitKind;
+#[cfg(test)]
+use shiori_host32_host::{HelperStatus, RequestError, ShutdownError};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::Input;
@@ -78,11 +82,13 @@ pub enum FakeShiori {
     BalloonMissing,
     /// 台本どおりに答えるが、[`Stall`] の GET に入ったところで解かれるまで止まる。解いた後は台本どおりに
     /// 答える（`hold_at` と違って失敗を返さない＝呼び出しの並びは止めない場合と同じになる）。
+    #[cfg(test)]
     ScriptedStalled(Box<dyn Fn() -> ScriptedShioriBackendBuilder>, Stall),
 }
 
 /// 偽の SHIORI を 1 つの GET の入口で止める栓（相手が進めない状態を、時間でなく固まりで作る）。
 /// 解く手 [`Stall::release`] は一度呼べば下ろさない（以後の同じ GET は止まらない）。
+#[cfg(test)]
 #[derive(Clone)]
 pub struct Stall {
     at: &'static str,
@@ -90,9 +96,9 @@ pub struct Stall {
     state: Arc<(Mutex<(bool, bool)>, Condvar)>,
 }
 
+#[cfg(test)]
 impl Stall {
     /// `id` の GET で止まる栓。
-    #[cfg(test)]
     pub(crate) fn at(id: &'static str) -> Self {
         Self {
             at: id,
@@ -101,13 +107,11 @@ impl Stall {
     }
 
     /// 止まる GET に一度でも入ったか（後戻りしない観測）。
-    #[cfg(test)]
     pub(crate) fn entered(&self) -> bool {
         self.state.0.lock().expect("stall poisoned").0
     }
 
     /// 解く（止まっている GET を通し、以後は止めない）。
-    #[cfg(test)]
     pub(crate) fn release(&self) {
         self.state.0.lock().expect("stall poisoned").1 = true;
         self.state.1.notify_all();
@@ -128,11 +132,13 @@ impl Stall {
 }
 
 /// [`Stall`] を前に置いた台本の偽の SHIORI（止まるのは GET の入口だけ・ほかは台本へそのまま渡す）。
+#[cfg(test)]
 struct StalledBackend {
     inner: ScriptedShioriBackend,
     stall: Stall,
 }
 
+#[cfg(test)]
 impl ShioriBackend for StalledBackend {
     fn get(
         &mut self,
@@ -212,7 +218,7 @@ pub struct RigSample {
     pub root: PathBuf,
     pub ghost: PathBuf,
     pub bundled_balloon: PathBuf,
-    #[allow(dead_code)] // 読まず、捨てると木が消える寿命だけを持つ
+    /// 読まず、捨てると木が消える寿命だけを持つ。
     pub keep: Box<dyn std::any::Any>,
 }
 
@@ -243,7 +249,7 @@ impl SwitchRig {
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
     pub fn with(sample: RigSample, body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> Self {
-        // SAFETY: 引数は有効な定数で、既初期化（S_FALSE）などの失敗は戻り値ごと捨てる。呼んだスレッドの COM の状態以外に触れない。
+        // SAFETY: 引数は有効な定数で、S_FALSE（既初期化）も RPC_E_CHANGED_MODE も戻り値ごと捨てる。呼んだスレッドの COM の状態以外に触れない。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
@@ -299,6 +305,7 @@ impl SwitchRig {
                             Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
                         }))
                     }
+                    #[cfg(test)]
                     Some(FakeShiori::ScriptedStalled(script, stall)) => {
                         let (backend, handle) = script().build();
                         ledger.borrow_mut().push((folder, handle));

@@ -72,13 +72,14 @@ pub fn register_switch_drain(world: &mut World) {
 ///
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受信端の借用を切ってから入口を呼ぶ。
 fn drain_switch_requests(world: &mut World) {
-    drain_switch_requests_with(world, skin_candidates);
+    drain_switch_requests_with(world, skin_candidates, spawn_switch_build);
 }
 
-/// 取り出しの中身。候補の読み方を外から受ける（決定論テスト用）。
+/// 取り出しの中身。候補の読み方と組み立ての起こし方を外から受ける（決定論テスト用）。
 fn drain_switch_requests_with(
     world: &mut World,
     mut read: impl FnMut(SkinKind, &SwitchContext) -> Vec<SkinCandidate>,
+    mut spawn: impl FnMut(SwitchBuildRequest) -> Receiver<Result<SwapBuilt, SwitchBuildError>>,
 ) {
     let Some(rx) = world.get_non_send::<SwitchRx>() else {
         tracing::trace!(
@@ -102,6 +103,7 @@ fn drain_switch_requests_with(
             pick_index,
             &mut catalog,
             &mut read,
+            &mut spawn,
         );
     }
 }
@@ -114,6 +116,7 @@ pub fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVerdict {
         pick_index,
         &mut [None, None],
         &mut skin_candidates,
+        &mut spawn_switch_build,
     )
 }
 
@@ -124,7 +127,7 @@ fn skin_candidates(kind: SkinKind, ctx: &SwitchContext) -> Vec<SkinCandidate> {
     }
 }
 
-/// 入口の中身。乱数と候補の読み方を外から受ける（決定論テスト用）。`catalog` は種別ごとに
+/// 入口の中身。乱数・候補の読み方・組み立ての起こし方を外から受ける（決定論テスト用）。`catalog` は種別ごとに
 /// 候補を 1 度だけ埋める置き場で、取り出しの系が 1 回の取り出しの間だけ共用する。
 ///
 /// 判定は 進行中 → ゴースト切替中 → 更新中 → インストール中（メニューの要求だけ）→ 文脈なし（置き場・根・
@@ -139,6 +142,7 @@ fn request_skin_switch_with(
     pick: impl FnOnce(usize) -> usize,
     catalog: &mut [Option<Vec<SkinCandidate>>; 2],
     read: &mut impl FnMut(SkinKind, &SwitchContext) -> Vec<SkinCandidate>,
+    spawn: &mut impl FnMut(SwitchBuildRequest) -> Receiver<Result<SwapBuilt, SwitchBuildError>>,
 ) -> SkinVerdict {
     if world.get_non_send::<SkinSwitchInFlight>().is_some() {
         tracing::warn!(
@@ -239,14 +243,15 @@ fn request_skin_switch_with(
     // 受理の後の要求は進行中の印が候補より先に退けるので、捨てるのは備え: 印が同じ取り出しの中で
     // 下りても、差し替える前のゴーストから読んだ候補を使わせない。
     *catalog = [None, None];
-    accept_skin(world, &ctx, req.kind, target, raise)
+    accept_skin_with(world, &ctx, req.kind, target, raise, spawn)
 }
 
 /// 受理の後半: kanade へ台詞の切れ目の待ち（`raise` の印つき）→ 背景の資産づくり → 進行中の印、の順。
 /// 送れなければ `error!(skin_switch_send_failed)` で資産づくりを起こさず印も置かない。
 /// 判定はしない（呼び手が済ませる）。
 ///
-/// 呼び手は入口 [`request_skin_switch_with`] と読み直しの窓口（`reload.rs`・`raise` は無し）。
+/// 呼び手は読み直しの窓口（`reload.rs`・`raise` は無し）。入口 [`request_skin_switch_with`] は
+/// 組み立ての起こし方を受けて [`accept_skin_with`] を呼ぶ。
 pub(crate) fn accept_skin(
     world: &mut World,
     ctx: &SwitchContext,

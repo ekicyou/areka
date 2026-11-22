@@ -18,7 +18,7 @@ use sample_ghost_kit::SampleRoot;
 use wintf::ecs::WindowPos;
 
 use super::GhostSlot;
-pub(crate) use super::shell_balloon_switch_session_lap_test_support::*;
+use super::shell_balloon_switch_session_lap_test_support::*;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shell_balloon_switch::{

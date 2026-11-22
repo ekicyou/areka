@@ -12,8 +12,11 @@ use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
 use wintf::ecs::Arrangement;
 
+use super::shell_balloon_switch_session_lap_test_support::{
+    CREEP, calls_a, got, idle, kinds, refs_of,
+};
 use super::shell_balloon_switch_session_lap_tests::{
-    CREEP, LookLog, abs, calls_a, done_marks, fence, got, idle, kinds, lap_rig, look_of, refs_of,
+    LookLog, abs, done_marks, fence, lap_rig, look_of,
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;

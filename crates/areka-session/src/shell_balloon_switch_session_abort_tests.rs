@@ -12,10 +12,12 @@ use wintf::ecs::pointer::DoubleClick;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::shell_balloon_switch_session_balloon_tests::scope0_text;
+use super::shell_balloon_switch_session_lap_test_support::{
+    ACCEPT, CREEP, LapRig, NO_TICKS, SECOND, UNBOUNDED, calls_a, current_shell, got, idle, kinds,
+};
 use super::shell_balloon_switch_session_lap_tests::{
-    ACCEPT, BOOT_TO_SECOND, BOOT_TO_SECOND_PLAIN, CREEP, LapRig, LookLog, NO_TICKS, SECOND,
-    UNBOUNDED, calls_a, current_shell, done_marks, got, idle, kinds, lap_rig_of, last_shell,
-    look_of, recorded_shells,
+    BOOT_TO_SECOND, BOOT_TO_SECOND_PLAIN, LookLog, done_marks, lap_rig_of, last_shell, look_of,
+    recorded_shells,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
 use crate::boot_resolve::read_last_shell;

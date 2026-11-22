@@ -1,10 +1,6 @@
 //! 切替先を起こす・既定へ戻す・致命で終える判断の決定論テスト。
 //!
-//! 確かめること: 既定ゴーストが目録に無い根で既定へ戻すと、終了が指示され最初の出所が
-//! 「既定ゴーストへ戻せなかった」になり告知（`event="alert"`）は出ず予約が消える／
-//! 起動入力の作り口が無い World で切替先を起こすと `error!(ghost_switch_no_context)` 1 件と
-//! `error!(ghost_switch_boot_failed)` の上で既定へ戻す経路に入る（切替先が既定でない）か、
-//! 切替先が既定なら既定へ戻さず致命で終える。実ゴーストは起こさない。
+//! 実ゴーストは起こさない。
 
 use areka_ghost::BasewareRoot;
 use areka_kanade::{ChangeHandoff, ShioriFaultKind};

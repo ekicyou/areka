@@ -18,6 +18,7 @@ use tracing::Level;
 
 use super::super::test_support::{Frame, TALK_ID, seen};
 use super::*;
+use areka_runtime::frame::shared_test_support::wiring;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
@@ -189,10 +190,15 @@ fn frame_without_a_notice_is_silent() {
 /// ゴーストの切替の直後のフレームに、前のゴーストのトークの番号の知らせが新しいゴーストの
 /// kanade へ届かない（トークの番号はゴーストごとに 1 から数え直すので、届くと偶然に合いうる）。
 ///
-/// 切替は置き場の中身と、ゴーストごとの結線（`RuntimeWiring::new` が可視性の状態を既定で組む）を
-/// 一緒に入れ替える。新しいゴーストの状態は自分のトークの合図からしか番号を持たないので、前の
+/// 切替は置き場の中身とゴーストごとの結線を一緒に入れ替える。ここでは入れ替えを手で行い、新しい
+/// ゴーストの可視性の状態には本番の作り口 `RuntimeWiring::new` が組んだ結線の欄を使う（切替が結線を
+/// 入れ替えること自体は確かめない）。その状態は自分のトークの合図からしか番号を持たないので、前の
 /// ゴーストの満了の時刻を過ぎても知らせは立たず、新しいゴーストが同じ番号 1 のトークを終えて
 /// 時間切れになったときだけ、その kanade へ 1 通届く。
+///
+/// # 非空虚性
+/// 新しいゴーストの状態が前のゴーストのトークの番号を持っていると、較正（前のゴーストの状態）と同じ
+/// 満了のフレームで番号 1 が新しいゴーストへ届いて赤。
 #[test]
 fn notice_of_the_previous_ghost_does_not_reach_the_new_ghost_after_a_switch() {
     let (old_tx, old_rx) = mpsc::channel();
@@ -200,13 +206,13 @@ fn notice_of_the_previous_ghost_does_not_reach_the_new_ghost_after_a_switch() {
     let mut old_state = BalloonVisibilityState::default();
     talk_until_just_before_timeout(&mut old_state, &world);
 
-    // 切替: 置き場は新しいゴーストへ、可視性の状態は新品へ。
+    // 切替: 置き場は新しいゴーストへ、可視性の状態は新しい結線のものへ。
     let (new_tx, new_rx) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(new_tx),
         PathBuf::from("balloon_visibility_phase_notice_tests/new"),
     ))));
-    let mut new_state = BalloonVisibilityState::default();
+    let new_state = &mut wiring().1.balloon_visibility;
 
     // 較正: 前のゴーストの状態のままなら、このフレームで番号 1 の知らせが立つ（判断だけ・送らない）。
     assert_eq!(
@@ -218,9 +224,9 @@ fn notice_of_the_previous_ghost_does_not_reach_the_new_ghost_after_a_switch() {
         "較正: 切替が無ければ満了のフレーム"
     );
 
-    frame(&mut new_state, &world, expiry_frame());
+    frame(new_state, &world, expiry_frame());
     frame(
-        &mut new_state,
+        new_state,
         &world,
         Frame::new(&[(0, seen(3, true))]).at(END + WAIT + 5.0),
     );
@@ -236,7 +242,7 @@ fn notice_of_the_previous_ghost_does_not_reach_the_new_ghost_after_a_switch() {
     );
 
     // 新しいゴーストが自分のトーク（番号 1）を終えて時間切れになれば、その kanade へ 1 通。
-    talk_until_just_before_timeout(&mut new_state, &world);
-    frame(&mut new_state, &world, expiry_frame());
+    talk_until_just_before_timeout(new_state, &world);
+    frame(new_state, &world, expiry_frame());
     assert_eq!(received(&new_rx), vec![TALK_ID]);
 }

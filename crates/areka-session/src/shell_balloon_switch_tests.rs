@@ -171,8 +171,14 @@ fn unresolved_names_in_one_drain_read_the_catalog_once() {
         vec![candidate()]
     };
 
+    let spawned = Cell::new(0);
+    let mut spawn = |_| {
+        spawned.set(spawned.get() + 1);
+        mpsc::channel().1
+    };
+
     let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
-        drain_switch_requests_with(&mut world, &mut read)
+        drain_switch_requests_with(&mut world, &mut read, &mut spawn)
     });
     let drained = (
         lines_with(&logs, "skin_switch_unknown"),
@@ -187,6 +193,7 @@ fn unresolved_names_in_one_drain_read_the_catalog_once() {
         |_| 0,
         &mut catalog,
         &mut read,
+        &mut spawn,
     );
     world.remove_non_send::<SkinSwitchInFlight>();
     let after = request_skin_switch_with(
@@ -195,11 +202,18 @@ fn unresolved_names_in_one_drain_read_the_catalog_once() {
         |_| 0,
         &mut catalog,
         &mut read,
+        &mut spawn,
     );
 
     assert_eq!(
-        (drained, accepted, after, reads.get()),
-        ((3, 1, 1), SkinVerdict::Accepted, SkinVerdict::NotFound, 3),
-        "((取り出しの該当なし, 進行中, 読んだ回数), 受理, 受理の後, 読んだ回数の合計): {logs:?}"
+        (drained, accepted, after, reads.get(), spawned.get()),
+        (
+            (3, 1, 1),
+            SkinVerdict::Accepted,
+            SkinVerdict::NotFound,
+            3,
+            2
+        ),
+        "((取り出しの該当なし, 進行中, 読んだ回数), 受理, 受理の後, 読んだ回数の合計, 組み立ての回数): {logs:?}"
     );
 }

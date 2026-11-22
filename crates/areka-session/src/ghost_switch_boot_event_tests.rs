@@ -14,6 +14,7 @@ use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_gho
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::reload::ReloadInFlight;
 use areka_runtime::spine::RecordedCall;
 
 /// 渡す起動の知らせの Reference（読み直しの `OnUpdateComplete` の形）。
@@ -32,7 +33,7 @@ fn get_refs(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
 }
 
 /// `scripts` の土台で A を起こして定常に着かせる（起動記録は全員に置く＝`OnFirstBoot` を飛ばす）。
-fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
+pub(super) fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     let folders: Vec<String> = scripts.iter().map(|(f, _)| (*f).to_owned()).collect();
     let mut rig = SwitchRig::new(scripts);
     // 起こし直すときの窓の準備が閉包を投函する先。
@@ -45,13 +46,12 @@ fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     rig
 }
 
-/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event` 付きで頼み、`done` まで回す。
-fn switch_to_a(
+/// A 自身への知らせなしの切替（出どころ「自動」）を `boot_event` 付きで頼む。
+pub(super) fn request_switch_to_a(
     rig: &mut SwitchRig,
     boot_event: Option<(&'static str, Vec<String>)>,
-    done: impl FnMut(&SwitchRig) -> bool,
-) -> (SwitchVerdict, bool) {
-    let verdict = request_ghost_switch(
+) -> SwitchVerdict {
+    request_ghost_switch(
         &mut rig.world,
         SwitchRequest {
             ghost: GhostSpec::Folder("A".to_owned()),
@@ -59,14 +59,25 @@ fn switch_to_a(
             origin: ChangeOrigin::Automatic,
             boot_event,
         },
-    );
+    )
+}
+
+/// [`request_switch_to_a`] で頼み、`done` まで回す。
+fn switch_to_a(
+    rig: &mut SwitchRig,
+    boot_event: Option<(&'static str, Vec<String>)>,
+    done: impl FnMut(&SwitchRig) -> bool,
+) -> (SwitchVerdict, bool) {
+    let verdict = request_switch_to_a(rig, boot_event);
     (verdict, rig.pump_talking_until(done))
 }
 
-/// A の 2 回目の起動が済み、切替の予約が下りた（定常到達）。
-fn a_rebooted(rig: &SwitchRig) -> bool {
+/// A の 2 回目の起動が済み、切替の予約と読み直しの印が下りた（定常到達）。
+pub(super) fn a_rebooted(rig: &SwitchRig) -> bool {
     rig.exit_requested()
-        || (rig.calls("A").len() == 2 && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        || (rig.calls("A").len() == 2
+            && rig.world.get_non_send::<SwitchInFlight>().is_none()
+            && rig.world.get_non_send::<ReloadInFlight>().is_none())
 }
 
 /// 欄付きの切替で起き直した A の最初の知らせは渡したイベントと Reference の GET で、204 でも
