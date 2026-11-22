@@ -106,9 +106,8 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
         levels_of(&first_events, "os_session_end_begin"),
         levels_of(&first_events, "session_mark_cleared"),
         levels_of(&first_events, "os_session_end_done"),
-        first_events
-            .iter()
-            .find(|e| e.field_str("event") == Some("os_session_end_done"))
+        super::events_named(&first_events, "os_session_end_done")
+            .first()
             .map(|e| (e.field("ms").is_some(), e.field("shiori_cut"))),
     );
 

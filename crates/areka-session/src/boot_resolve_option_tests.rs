@@ -145,10 +145,9 @@ fn random_two_or_more_picks_ignoring_memory_and_default() {
     let (got, events) = ghost(&root, None, true, Some("emo2"), &["a", "emo2", "z"], last);
     assert_eq!(got, Ok(at(&root, GhostRoute::Random, "z")));
     assert_random_info(&events, "z", "3");
-    assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("ghost_picked_randomly")),
+    assert_eq!(
+        count_event(&events, "ghost_picked_randomly"),
+        0,
         "いつもの無作為の段の記録は出ない: {events:?}"
     );
 }

@@ -15,7 +15,7 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::on_os_session_end;
-use super::test_support::{fault, levels_of, reservation};
+use super::test_support::{event_field, fault, levels_of, reservation};
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_resolve::{read_session_mark, write_session_mark};
 use crate::ghost_quit::KanadeNoticeRx;
@@ -62,10 +62,7 @@ fn session_end_drops_switch_reservation() {
     world.insert_non_send(reservation(SwitchStage::SendOff));
 
     let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-    let cancelled_reason = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("ghost_switch_cancelled"))
-        .and_then(|e| e.field_str("reason").map(str::to_owned));
+    let cancelled_reason = event_field(&events, "ghost_switch_cancelled", "reason");
 
     assert_eq!(
         (
@@ -173,10 +170,7 @@ fn session_end_after_fault_exit_keeps_mark() {
     quit_app(&mut world, fault_origin.clone());
 
     let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
-    let kept_reason = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("session_mark_kept"))
-        .and_then(|e| e.field_str("reason").map(str::to_owned));
+    let kept_reason = event_field(&events, "session_mark_kept", "reason");
 
     assert_eq!(
         (

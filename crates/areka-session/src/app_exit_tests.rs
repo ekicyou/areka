@@ -334,7 +334,8 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
         first,
         "2 度目の出所で上書きしない"
     );
-    let again = crate::boot_resolve::boot_resolve_tests::events_named(&events, "app_exit_again");
+    let events_named = crate::boot_resolve::boot_resolve_tests::events_named;
+    let again = events_named(&events, "app_exit_again");
     assert_eq!(again.len(), 1, "app_exit_again はちょうど 1 件: {events:?}");
     assert_eq!(again[0].level, tracing::Level::DEBUG);
     assert!(
@@ -344,9 +345,8 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
         "app_exit_again は 2 度目の出所を名乗る: {:?}",
         again[0]
     );
-    let exit = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("app_exit"))
+    let exit = *events_named(&events, "app_exit")
+        .first()
         .expect("app_exit の記録");
     let origin = exit.field("origin").expect("origin 欄");
     assert!(
@@ -386,13 +386,11 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
         .query_filtered::<Entity, With<GhostWindowMarker>>()
         .iter(&world)
         .count();
-    let restart_logged_at_info = events.iter().any(|e| {
-        e.field_str("event") == Some("windows_closed_for_restart")
-            && e.level == tracing::Level::INFO
-    });
-    let app_exit_logged = events
-        .iter()
-        .any(|e| e.field_str("event") == Some("app_exit"));
+    let restart_logged_at_info =
+        crate::session_end::test_support::levels_of(&events, "windows_closed_for_restart")
+            == [tracing::Level::INFO];
+    let app_exit_logged =
+        crate::boot_resolve::boot_resolve_tests::count_event(&events, "app_exit") > 0;
     assert_eq!(
         (
             windows_left,

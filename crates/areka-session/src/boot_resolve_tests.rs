@@ -38,12 +38,17 @@ pub(crate) fn last(n: usize) -> usize {
     n - 1
 }
 
-/// 記録の中から `event` が一致するものを数える。
-pub(crate) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
+/// `event` の記録（`event` 欄で引く）。
+pub(crate) fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
-        .count()
+        .collect()
+}
+
+/// 記録の中から `event` が一致するものを数える。
+pub(crate) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
+    events_named(events, event).len()
 }
 
 /// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
@@ -395,14 +400,6 @@ fn balloon_companion_not_listed_warns_then_default() {
 }
 
 // ---------------------------------------------------------------- 記憶の印の文と印の名前
-
-/// `event` の記録（`event` 欄で引く）。
-pub(crate) fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
 
 /// `event` の記録がちょうど 1 件あり、その文を返す。
 fn one_message(events: &[CapturedEvent], event: &str) -> String {

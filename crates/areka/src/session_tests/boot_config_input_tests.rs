@@ -99,7 +99,7 @@ mod boot {
     #[test]
     fn boot_lists_roots_and_counts_hidden_only_without_argv() {
         let has = |events: &[log_capture_kit::CapturedEvent], name: &str| {
-            events.iter().any(|e| e.field_str("event") == Some(name))
+            !crate::session_tests::events_named(events, name).is_empty()
         };
         let root = TempPath::under_target("boot-records");
         let (_, events) = capture(|| {

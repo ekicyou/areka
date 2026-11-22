@@ -223,7 +223,7 @@ fn main() -> Result<()> {
 
     areka_session::smoke_exit::arm(&app);
 
-    // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink`×2 の
+    // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink` 1 本と `DiscardSink` 1 本の
     // fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・loop ticker）は `GhostSession` に束ねて置き場
     // （`GhostSlot`）へ入れる（切替が入れ替え、`run()` の後にここへ取り出して降ろす）。印の値が在れば
     // 由来は「前回落ちた」。起こす前に起動中の印を書く（argv で始まったプロセスは書かない）。

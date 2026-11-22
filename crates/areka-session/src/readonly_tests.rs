@@ -91,10 +91,9 @@ fn boot_check_without_readonly_fails_as_the_plain_check_does() {
         log_capture_kit::capture(|| crate::write_failure::check_boot(false, &cfg, &app));
 
     assert_eq!(result.expect_err("通常の確かめと同じく止まる"), expected);
-    assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("readonly_boot_check_skipped")),
+    assert_eq!(
+        count_event(&events, "readonly_boot_check_skipped"),
+        0,
         "{events:?}"
     );
 }

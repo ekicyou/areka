@@ -222,10 +222,8 @@ fn settle_session_mark_applies_the_verdict() {
         };
         let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)).0);
         let logged = crate::session_end::test_support::levels_of(&events, event);
-        let reason = events
-            .iter()
-            .find(|e| e.field_str("event") == Some("session_mark_kept"))
-            .and_then(|e| e.field_str("reason").map(str::to_owned));
+        let reason =
+            crate::session_end::test_support::event_field(&events, "session_mark_kept", "reason");
         outcomes.push((verdict, logged, reason, read_session_mark(&app_profile_dir)));
     }
     assert_eq!(

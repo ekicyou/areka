@@ -561,9 +561,8 @@ fn switch_to_self_takes_down_and_reboots_a() {
 
 /// `event` の記録の `field` の値の列。
 fn field_of(events: &[CapturedEvent], event: &str, field: &str) -> Vec<Option<String>> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
+    super::events_named(events, event)
+        .into_iter()
         .map(|e| e.field_str(field).map(str::to_owned))
         .collect()
 }

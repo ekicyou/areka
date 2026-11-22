@@ -17,7 +17,7 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::boot_resolve::boot_resolve_tests::count_event;
+use crate::boot_resolve::boot_resolve_tests::{count_event, events_named};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
@@ -110,9 +110,8 @@ fn handoff() -> ChangeHandoff {
 
 /// 最初に起こそうとしたフォルダ（`ghost_switch_boot_failed` の 1 件目の `dir` 欄）。
 fn first_boot_dir(events: &[CapturedEvent]) -> Option<String> {
-    events
-        .iter()
-        .find(|e| e.field_str("event") == Some("ghost_switch_boot_failed"))
+    events_named(events, "ghost_switch_boot_failed")
+        .first()
         .and_then(|e| e.field("dir").map(str::to_owned))
 }
 

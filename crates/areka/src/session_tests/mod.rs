@@ -134,9 +134,8 @@ pub(crate) fn levels_of(
     events: &[log_capture_kit::CapturedEvent],
     event: &str,
 ) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
+    events_named(events, event)
+        .into_iter()
         .map(|e| e.level)
         .collect()
 }

@@ -432,7 +432,7 @@ pub struct GhostSession {
 
 /// ゴーストごとの結線と状態の載せ替え。
 ///
-/// 起動の結線が成立すれば結線ありの腕（[`boot_wired`]）を、成立しなければ `LogSink`×2 の
+/// 起動の結線が成立すれば結線ありの腕（[`boot_wired`]）を、成立しなければ `LogSink` 1 本と `DiscardSink` 1 本の
 /// fallback の腕を通す（初回起動の非致命）。各状態は `insert_non_send` で置き換わるので n 回
 /// 呼べる（呼び手は先に [`GhostSession::shutdown`] で前のゴーストを降ろしておくこと）。証は
 /// 取らない（証は [`reopen_ghost_windows`] が消費する）。
@@ -456,7 +456,7 @@ pub fn boot_ghost(
     // 起動のシェルは結線ありの腕と倒れ先で同じ値を使う（取り出すのはここの 1 回だけ）。
     let shell = take_boot_shell(world, &ghost_root);
 
-    // 結線が成立しなければ（asset 組立失敗・boot 失敗等）`LogSink`×2 の fallback boot へ倒し、非致命の
+    // 結線が成立しなければ（asset 組立失敗・boot 失敗等）`LogSink` 1 本と `DiscardSink` 1 本の fallback boot へ倒し、非致命の
     // boot 意味論を保つ。
     if let Ok(session) = boot_wired(
         world,
@@ -470,7 +470,7 @@ pub fn boot_ghost(
         return session;
     }
 
-    // fallback: `LogSink`×2 の boot。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
+    // fallback: `LogSink` 1 本と `DiscardSink` 1 本の boot。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ、
     // `warn!` の上で `None` として骨格起動を継続する。それ以外の予期しない失敗（読取不能・shell 不在等）は
     // `error!`（分類は `is_benign_boot_error`）。

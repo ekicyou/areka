@@ -75,9 +75,8 @@ pub(crate) fn levels_of(
     events: &[log_capture_kit::CapturedEvent],
     event: &str,
 ) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
+    crate::boot_resolve::boot_resolve_tests::events_named(events, event)
+        .into_iter()
         .map(|e| e.level)
         .collect()
 }
@@ -89,9 +88,8 @@ pub(crate) fn event_field(
     event: &str,
     name: &str,
 ) -> Option<String> {
-    events
-        .iter()
-        .find(|e| e.field_str("event") == Some(event))
+    crate::boot_resolve::boot_resolve_tests::events_named(events, event)
+        .first()
         .and_then(|e| e.field_str(name).or_else(|| e.field(name)))
         .map(str::to_owned)
 }

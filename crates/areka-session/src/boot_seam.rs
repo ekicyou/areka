@@ -40,7 +40,7 @@ pub fn restore_merged_placements(
 
 /// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム。
 ///
-/// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた ghost
+/// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink` 1 本と `DiscardSink` 1 本）の**両方**が、生きた ghost
 /// runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の NonSend
 /// リソースとして挿入する。以降、follow.rs の DragEnd 観測点が
 /// [`areka_placement::persist::persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を

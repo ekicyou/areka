@@ -270,7 +270,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.4, 2.5, 2.6, 5.14, 5.22, 7.10, 7.11, 7.12_
 
 - [ ] 21. 確かめの段（G22・要件 9）
-- [ ] 21.1 同じ範囲へ audit をかけ直し、新しい指摘を直し切る
+- [x] 21.1 同じ範囲へ audit をかけ直し、新しい指摘を直し切る
   - `cargo doc -p areka-session --no-deps` と `cargo doc -p areka --no-deps` の警告が増えていないことを確かめる
   - 同じ範囲へ同じ作法（上限なし・全部読む）で `/ponytail:ponytail-audit` をかけ直す。新しい指摘が出たら直してかけ直し、回ごとの組ごとの件数と判定を research.md の新しい節へ。打ち切りは要件 9.6〜9.8 のとおり
   - 完了の姿: 最後の回の新しい指摘が 0 件（または要件 9.6〜9.8 の打ち切りの条件）で、回ごとの記録が research.md にある
@@ -307,3 +307,4 @@
 - 19: `log-capture-kit` のテストに要件番号が残る（`sample_path_guard_test.rs:708`・`:817`、`probe_tests.rs:73`、`capture_calibration_test.rs:181`、`file_length_guard_test.rs:65/69/109/115`、`temp_path_guard_test.rs:142/191`・範囲の表の外）
 - 兄弟 `audit-emo2-boot-switch` は areka-session の `body_systems_tests.rs` に 2 つ差分を入れた（4cb2d09e5＝`busy_slots`・`body_slots_follow_the_boot_and_switch_order` の期待に `"update_busy"` を足し doc を合わせた／7ddc891d2＝`request_skin_switch_with` の呼び出しを `request_skin_switch` へ）。こちらも同じファイルの 95 行の doc を直した（7f3b4b014）。ぶつかったら後から着地する側が合わせる
 - 21.1（かけ直し 4 回目）: 範囲の外に同じ型が残る（直さない・申し送り）。記憶の書き手の戻りを捨てる＝`crates/areka/src/install/startup_flow_tests.rs:79`（兄弟 `audit-areka-install-update`）・`runtime_tests/frame/switch_finish_tests.rs:182`（見直さない所）。記録を event 名で引く写し＝areka-session の `ghost_switch_*_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`、本体の `install/`・`update/`・`mcp/`・`roots/`・`menu/`・`runtime_tests/`・`session_tests/shell_balloon_switch*`
+- 21.1（かけ直し 5 回目の後）: 範囲の中の `crates/areka/src/main_session_mark_fallback_tests.rs:128`・`:196`・`:201` に、記録を `event` 欄で引く手書きの絞り込みが 3 か所残る（5 回目の audit は数えず・9.6 の打ち切りの後に見つけた・後の直しの候補）

@@ -24,6 +24,7 @@ use tracing::Level;
 
 use super::*;
 use crate::boot_config::BootContext;
+use crate::boot_resolve::boot_resolve_tests::{count_event, events_named};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute};
 use crate::ghost_session::GhostSession;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -251,9 +252,8 @@ fn applied_phase_end_with_empty_queue_is_done() {
     assert_eq!(
         (
             ends(&events),
-            events
-                .iter()
-                .find(|e| e.field_str("event") == Some("reload_done"))
+            events_named(&events, "reload_done")
+                .first()
                 .and_then(|e| e.field("target").map(str::to_owned)),
             events.iter().filter(|e| e.level <= Level::WARN).count(),
             rig.world.get_non_send::<ReloadInFlight>().is_none(),
@@ -389,9 +389,8 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
 fn names_step_read_failure_keeps_going_and_no_runtime_fails() {
     let mut rig = rig("areka-reload-skin-names");
     let (_, unread) = capture(|| request_reload(&mut rig.world, req(parts(true, false, false))));
-    let read_failed: Vec<_> = unread
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_descript_read_failed"))
+    let read_failed: Vec<_> = events_named(&unread, "reload_descript_read_failed")
+        .into_iter()
         .map(|e| {
             (
                 e.level,
@@ -568,8 +567,7 @@ fn reload_requests_after_kanade_died_fail_once_and_leave_no_mark() {
         got.push((failed, rig.world.get_non_send::<ReloadInFlight>().is_some()));
     }
     let (_, events) = capture(|| request_reload(&mut rig.world, req(ReloadTarget::Shiori)));
-    let fourth_refused =
-        crate::boot_resolve::boot_resolve_tests::count_event(&events, "reload_refused");
+    let fourth_refused = count_event(&events, "reload_refused");
     assert_eq!(
         (got, fourth_refused),
         (
