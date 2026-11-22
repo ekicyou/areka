@@ -383,3 +383,50 @@
 - 指摘 26: 120 秒が足りるか（測らない・emo2 のテストと同じ値にそろえる根拠だけ）。
 - 指摘 43・20: 3 本目の例外（`emo2_boot/frame_attach_tests.rs`）が前の spec で済んでいるか（`crate_source_test_support.rs:6-7` の列の直し方）。
 - 議題 1: `mcp/get_property_tests.rs` の直しを `audit-areka-install-update` のセッションが受けられるか（申し合わせ）。
+
+## 10. 設計の段の調べ（2026-11-22・`/kiro-spec-design`）
+
+**Discovery の型**: light（既にあるコードの直し・新しい依存も外の API も無い）。読んだもの: `kiro-spec-design` の規則（design-principles・discovery-light・synthesis・review-gate）・設計の雛形・完了した見直しの設計 2 本（`audit-areka-input-menu`・`audit-emo2-boot-spine`）・ukadoc の MCP（SSP の説明書）・並走の兄弟 `audit-areka-install-update` の research.md（4 節の「範囲の外への及び」・9 節の「申し送りの見込み」・読むだけ）。cargo は回していない（読みと `git grep` だけ）。
+
+### 10.1 Research Needed の答え
+
+| 項目 | 答え | 根拠 |
+|---|---|---|
+| 指摘 2 の終了コード | 下地が上限を越えたら `error!` を 1 行出す。写しの窓の中なので `report::exit_code` が **2** を返す（新しい決まりは要らない） | SSP の説明書「起動オプション一覧」の `--dump-error-log` の終了コードの表「2：Errorあり（Criticalなし）」（https://ukatech.shillest.net/ukadoc-ssp/functions/option/ ）。`offline_dump/mod.rs` の `dump` は `capture_begin` → `surface_stage` → `capture_finish` → `report::exit_code` の順（`mod.rs:84-90`） |
+| 指摘 2 の上限の値 | 合成の上限 `MAX_EXTENT`（16,384）は `areka-emo-compose/src/plan_extent.rs:17` の `pub(crate)` で、本体から名指せない。本体の `offline_dump/render.rs` に同じ値の定数を 1 つ置く（理由を 1 行）。面積の上限（`MAX_AREA`＝2^25）は当てない（議題 7 の確定は「幅か高さ」。シェル全体の外形は面の和なので、まともなシェルでも面ごとの面積の上限を越えうる） | `plan.rs:48` の `pub(crate) use extent::{MAX_AREA, MAX_EXTENT, ..}`。`areka-emo-atlas/src/decode.rs:39` も同じ値を `pub(crate)` で自前に持つ（前例） |
+| 指摘 2 の赤のテスト | 10 万の位置の検体では、直す前のテストがプロセスごと落ちる（abort）。赤を先に立てるのは、幅だけが上限を越え面積は小さい検体（例 x＝20,000・高さ数十）で行う。直す前は PNG が書けて終了コード 0、直した後は 2 で PNG 無し | 読みからの判断 |
+| 指摘 3 | `log_history::init()` は `main.rs:126`（`fn main` の 2 行目）で、`WinApp::with_exit_policy`（196 行）より前。`error!` は出口に届く | `main.rs:116-127` |
+| 指摘 4 の読み手 | `[main]` の頭を字面で読む所は `tools/`・`doc/`・`.claude/skills/`・`crates/real-run-kit`・本体の `tests/` で 0 件（`git grep -F "[main]"` の当たりは `tools/crates-io.ps1:235` の YAML の `branches: [main]` だけ）。event 名は変えない | `git grep` |
+| 指摘 95 の読み手 | 本文で数えるのは範囲の中の `session_tests/ghost_session_strict_tests.rs:66` だけ（直しで event の欄で数える形へ）。`doc/ssp-mcp/log-convention.md:55` は target `areka_session::ghost_session` を status として名で読むだけで、本文も event も読まない。欄を足しても変わらない | `git grep` |
+| 指摘 8〜10 の依存 | 外の crate が依存の木から消えることは無い。`async-io` は `areka-session`・`areka-placement`・`areka-runtime`、`windows-core` は `areka-ghost`・`areka-emo-text`・`pilot`、`tracing-subscriber` は `areka-session`（本番）ほか、`areka-user-data` は `areka-session`・`areka-mcp-bridge` が引く。`Cargo.lock` は本体の `[[package]]` の依存の列だけが変わる。`THIRD-PARTY-NOTICES.md` は `tools/test-all.ps1 -License` の `cargo about generate` で作り直し、差が 0 であることを確かめる（手で直さない） | 各 `Cargo.toml` の `git grep` |
+| 指摘 5 の `windows-core` | **脳の外にも使い手が 1 つある**。`crates/areka/tests/embedded_icon_test.rs:24` の `use windows_core::{HSTRING, PCWSTR};`。依存の行を消すなら、ここを `windows::core::{HSTRING, PCWSTR}` へ替える（`windows` は本体の依存に既にある・`main.rs:20` と同じ綴り） | `git grep -w windows_core -- crates/areka` |
+| 指摘 5 の `shiori-abi` | 脳の外の使い手は `session_tests/ghost_session_scope_scale_boot_tests.rs:12-13`（指摘 14 で外れる）と範囲の外の `mcp/get_property_tests.rs:148-149`（`audit-areka-install-update` が外す）だけ。両方が外れれば本体の依存の行を消せる | 同上 |
+| 指摘 23 | `WintfTaskPool::with_threads(1)` は `bevy_tasks` の `TaskPoolBuilder::num_threads(1)`（`wintf/src/ecs/widget/bitmap_source/task_pool.rs:48-49`）。`bevy_tasks` 0.19.1 は `async-executor` 1.14.0 の上にあり、外から投げたタスクは 1 本の待ち行列に投げた順に積まれ、働き手 1 本が順に走らせる。窓のタスクが最初の `await` より前に `CommandSender` へ送るなら、目印より先に送られる。`areka-session` の 10 本の試験台が同じ形（`with_threads(1)`）で既に順に頼っている | `Cargo.lock` の版・`git grep with_threads` |
+| 指摘 26 | 値は測らない（仮定 11）。同じ子を立てる emo2 のテストの締切 120 秒（`tests/emo2_real_run/common.rs:13`）にそろえる根拠だけを書く | — |
+| 指摘 20・43 の 3 本目の例外 | `areka-runtime/src/frame_attach_tests.rs:603-612` は今も `crates/` を自前で歩く（前の spec で済んでいない）。移した後の `crate_source_test_support.rs:6-7` の列は 3 本 → 1 本（`areka-runtime` の `frame_attach_tests.rs` だけ） | 読み |
+| 指摘 20・43 の走査の範囲 | 同期の送信の見張りは「本番の源」だけを見る約束（今は `crates/<x>/src/**` から `_tests.rs`・`_test_support.rs` を除く）。`walk_workspace_sources` は `tests/`・`examples/`・兄弟のテストも返すので、そのまま使うとテストのファイルの当たりが増える（`parent_window_tests.rs` ほか 8 本）。移した見張りは列挙の結果を今と同じ条件（`crates/<x>/src/` の下・`_tests.rs`／`_test_support.rs` でない）で絞る。見る中身は変わらない。`withhold_everything` の見張りは議題 11 の確定どおり `crates/**` 全部を歩き、許可表は `areka-session/src/readonly.rs`（呼び出し）と `areka-sylphya/src/persist/withhold.rs`（定義の行。`scan_tokens` は `fn ` の後ろも当てる）の 2 つ | `git grep` の当たりの数え |
+| 指摘 20・43 の走査語 | `log-capture-kit/tests/` の見張りは自分の走査語を逐語で書かない約束（`temp_path_guard_test.rs` の冒頭）。移す見張りも `concat!` で 2 片から組み、`files_that_must_not_spell_the_tokens` で自分を縛る | `workspace_scan/mod.rs:682-694` |
+| 議題 1 の申し合わせ | 10.3 のとおり（向こうが先か同時に着地・遅れたら `shiori_host.rs` だけ残す） | 兄弟の伝言 |
+
+### 10.2 設計の段で見つけた事実
+
+- `doc/COMPAT_ARCHITECTURE.md` §8 の既にある行が、移す・名を変えるテストを名で指す。301 行（`main_session_mark_write_tests.rs`）・318 行（`main_session_mark_tests.rs` の `session_mark_verdict_table`・`settle_session_mark_applies_the_verdict`、`session_tests/boot_config_input_tests.rs`）・319 行（`session_end_sync_send_tests.rs` の `production_sync_sends_match_the_allowed_table`）・403〜405 行（`session_tests/boot_config_balloon_tests.rs`）。移した同じ変更で、その行のパスと名だけを直す（約束 ⑶）。
+- `.kiro/steering/structure.md:460` が `log-capture-kit/tests/` の見張りを並べる。移した見張り 2 本を同じ変更で足す。
+- 脳を消すと古くなる範囲の外の説明（どれも見直しの済んだ crate・C26 の 2 本の持ち物でない）: `areka-ghost/Cargo.toml:31`・`areka-ghost/src/shiori_inproc.rs:246`・`areka-sylphya/src/actor.rs:125`・`log-capture-kit/src/event.rs:146`・`event_tests.rs:18`・`shiori-abi/src/interface.rs:45`・`shiori4-testdll/src/lib.rs`（15・22・70・118・134・156・182・273 行）。説明の文だけを同じ変更で直す（要件 3.3・7.7）。
+- 「段 ③」の札は 7 節の列のほかに `areka-nar/src/names_tests.rs:139`・`log-capture-kit/tests/sample_path_guard_test.rs`（12・85・229・236・324 行）にもある。議題 17 の確定（説明の文だけなら直す）に入れる。
+- `placement_tests/measure_template_tests.rs:64-65` の「examples 3 本（本体の 2 本）」は、`load_shell_target` を呼ぶ例が本体 1 本（`emo-present`）・実行系 1 本（`collision-probe`）・配置 1 本（`window-placement`）なので「本体の 1 本と実行系の 1 本」が今の事実（`mock-shell.rs` は呼ばない）。
+- 指摘 31 の例の読み手は、配置の crate の読み（`areka-placement/src/config.rs:261-275`）と同じ式に直す。例のテストは走らない（指摘 75）ので、本番の式は `areka-placement` の既存のテストが縛る。
+
+### 10.3 並走の兄弟（`audit-areka-install-update`）からの伝言（2026-11-22・向こうの要件は承認済み `43031a5fc`）
+
+- **`NO_BODY`（要件 5.17）は決まった**: 受け口はそろえない。`body_systems.rs:60` の「（窓口が無いときの答えと同じ）」だけが事実と違うので消す（本体の窓口が無いときは URL の腕で取りに行ってから送れずに warn する。`NO_BODY` は取りに行かない）。`UNKEPT_TARGETS` に足す物は無い（向こうは `info!` を足さない）。`reload_test_support.rs` は 5.17 としては直さない。
+- **`mcp/get_property_tests.rs:144-300`** は向こうが `PropGetCueSink` を通す形に直し、こちらの脳の削除より先か同時に着地する。遅れたら `shiori_host.rs` だけを残し、向こうの着地の後に消す。
+- **向こうの依頼 A**: `reload_test_support::boot_context` に、ゴーストの名とバルーンの名を引数で取る形を足す（向こうの写し 4 つを寄せる）。足すと、こちらの `menu/ghost_frame_tests.rs:43` の写しも `boot_context_named(root.dir(), root, current, "StayseeBalloon")` と同じ値になる（`temp` に `root.dir()` を渡すと置き場 `root/profile`・補助 `root/helper.exe` が一致）。議題 13（寄せない）の前提が変わるので、設計の討議の議題にする。
+- **向こうの依頼 B**: `alert.rs` に「この走りで告知を抑えるか」（`suppressed() || smoke_exit::smoke_exit_ms().is_some()`）を答える公開の関数を 1 つ置く（向こうは `install/startup.rs:217-222` の写しを消してそれを呼ぶ）。
+- **向こうから回ってきた件（こちらのファイルの中）**: ⑴ `png_image_tests.rs:166` の `wic_decode_rgba` を `pub(crate)` で共有（向こうの `mcp/dump_surface_gpu_test_support.rs:410-439` の写しを消すため） ⑵ `mcp/sakurascript_log_tests.rs`（本体のコードを通らない）の中身を `log_history` のテストへ ⑶ `alert.rs:150`・`alert_tests.rs:51` が、向こうが欄を減らす `RootError::ExeLocationUnavailable`（`tried`・`origin` はいつも空と既定）を読む ⑷ `log_history.rs:335` の `snapshot` が、最大 1,000 件×4,096 字をプロセスで 1 つの排他を握ったまま写す ⑸ 「書ける根の印の項目は外せない」「印があるとき実行ファイルの隣は先頭へ動かせない」の決まりが `menu/roots_frame.rs:73-75・109` にしかなく、判断の `roots/edit.rs` の `decide_remove`・`decide_front` は受け付ける（`menu/` は議題 2 で見直さない所・`roots/` は向こうの持ち物）。
+
+### 10.4 Synthesis
+
+- **一般化**: 写しの指摘（32〜45・5.5〜5.9・5.13）は「上流の test-support にもう在る補助へ寄せる」か「同じ crate の支え（`session_tests/mod.rs`・`reload_test_support.rs`・`tests/real_screen/common.rs`）に 1 つ置く」かの 2 つの形にまとめた。新しい補助の crate や trait は作らない。
+- **Build vs Adopt**: 見張りの走査は自作をやめ `log-capture-kit/tests/workspace_scan` を使う（5.2）。ほかに外のものを入れる所は無い。依存は足さない。
+- **簡素化**: 消すもの＝SHIORI の試験用の脳 8 ファイル・`mock-shell.rs`・絵 77 個・落ちる力の無いテスト・使い手の無い依存の行。`ghost_session.rs`（862 行）の `impl GhostSession` は兄弟のファイルへ移すだけ（形は変えない）。指摘 2 の上限は本体の 1 か所（合成の crate を変えない）。`snapshot` の排他は、記録を `Arc` で持って深い複製を排他の外へ出す（公開の形 `fn snapshot(Kind) -> Vec<Record>` は変えない。向こうの `mcp/get_log.rs:24` に触らない）。
