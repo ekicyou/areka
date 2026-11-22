@@ -237,7 +237,7 @@ pub fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
         );
         return ReloadVerdict::Closing;
     }
-    if let Some(reason) = overlap_or_context(world) {
+    if let Some(reason) = overlap_or_context(world, req.origin) {
         tracing::warn!(
             target: TARGET_ERROR,
             ghost = %ghost,
@@ -296,8 +296,9 @@ pub fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
     ReloadVerdict::Accepted
 }
 
-/// 重なりと文脈の判定。判定の順はここの並びのとおり。
-fn overlap_or_context(world: &World) -> Option<RefusedReason> {
+/// 重なりと文脈の判定。判定の順はここの並びのとおり。更新中・インストール中は MCP からの要求だけを断り、
+/// ゴーストの台本からの要求は止めない（インストール完了の応えの台本の読み直しを時刻の偶然で止めない）。
+fn overlap_or_context(world: &World, origin: ReloadOrigin) -> Option<RefusedReason> {
     let body = BodySystems::of(world);
     if world.get_non_send::<ReloadInFlight>().is_some() {
         return Some(RefusedReason::ReloadInFlight);
@@ -308,11 +309,13 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if world.get_non_send::<SkinSwitchInFlight>().is_some() {
         return Some(RefusedReason::SkinSwitching);
     }
-    if (body.update_busy)(world) {
-        return Some(RefusedReason::Updating);
-    }
-    if (body.install_busy)(world) {
-        return Some(RefusedReason::Installing);
+    if origin == ReloadOrigin::Mcp {
+        if (body.update_busy)(world) {
+            return Some(RefusedReason::Updating);
+        }
+        if (body.install_busy)(world) {
+            return Some(RefusedReason::Installing);
+        }
     }
     let has_kanade = hooks::session(world).is_some_and(|session| session.kanade().is_some());
     if !has_kanade || world.get_resource::<BootContext>().is_none() {

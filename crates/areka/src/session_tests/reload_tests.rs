@@ -192,6 +192,31 @@ fn refusals_in_order_leave_one_record_each() {
     );
 }
 
+/// 更新中・インストール中の断りは MCP からの要求だけ。台本からの要求は止めない。
+#[test]
+fn updating_and_installing_refuse_only_mcp_requests() {
+    let mut rig = rig("areka-reload-busy-origin");
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
+    insert_running_desk_for_test(&mut rig.world);
+    insert_busy_desk_for_test(&mut rig.world);
+    let from_mcp = request_reload(&mut rig.world, mcp(ReloadTarget::Shell));
+    let from_script = request_reload(
+        &mut rig.world,
+        ReloadRequest {
+            target: ReloadTarget::Shell,
+            origin: ReloadOrigin::Script,
+            notes: DescriptNotes::default(),
+        },
+    );
+    assert_eq!(
+        (from_mcp, from_script),
+        (
+            ReloadVerdict::Refused(RefusedReason::Updating),
+            ReloadVerdict::Accepted
+        )
+    );
+}
+
 /// 文脈なし: 置き場のゴーストが無い・kanade の送出端が無いときも `no_context` で断る。
 #[test]
 fn missing_ghost_or_kanade_is_no_context() {

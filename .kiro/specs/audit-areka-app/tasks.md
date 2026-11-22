@@ -55,7 +55,7 @@
   - _Dispatch: mechanical — 文の頭と欄の名を設計が与える_
   - _Requirements: 2.7, 3.1, 4.1, 4.2, 7.8, 7.9_
 
-- [ ] 5. 兄弟から受けた本番の件（G5・S2・S3・S4・S8）
+- [x] 5. 兄弟から受けた本番の件（G5・S2・S3・S4・S8）
 - [x] 5.1 告知を抑える決まりを 1 か所の公開の関数にする（S2・S3）
   - `alert.rs` に `pub fn alerts_suppressed() -> bool` と私有の純関数 `with_smoke(suppressed, smoke_exit_ms)` を足し、`raise` もそれを使う（呼び手と引数は変えない）
   - `ExeLocationUnavailable` の腕（150 行）を欄を読まない形（`{ .. }`・試した場所は空・出どころは既定）にする。値は今と同じ
@@ -69,7 +69,7 @@
   - 完了の姿: `log_history_tests.rs`・`log_history_capture_tests.rs` が同じ表明のまま緑で、`snapshot` の公開の形の差分が 0 行
   - _Dispatch: standard — 排他の中で何を写すかの形は設計が与えるが、列の持ち方の書き換えが要る_
   - _Requirements: 3.1, 6.2, 7.1_
-- [ ] 5.3 更新中・インストール中の読み直しの断りを MCP からの要求だけに当てる（S8）
+- [x] 5.3 更新中・インストール中の読み直しの断りを MCP からの要求だけに当てる（S8）
   - 先に `session_tests/reload_tests.rs` へ、更新中に台本からの読み直しが通り、MCP からの読み直しが `Updating` で断られる 1 本を足し、赤を見る
   - `reload.rs` の重なりの判定で、`RefusedReason::Updating`・`Installing` を `ReloadOrigin::Mcp` の要求だけに当て、`ReloadOrigin::Script` は通す。重なり（`ReloadInFlight`・`SwitchInFlight`・`SkinSwitchInFlight`）と `NoContext` の断りは今のまま
   - 完了の姿: 足したテストが緑（直す前は赤）、既存の読み直しのテストも緑
