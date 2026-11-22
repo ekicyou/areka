@@ -5,7 +5,7 @@
 ## 0. 要約
 
 - 受け持つ **68 ファイル・22,708 行**を全部、全行読んだ。内訳は本番 16 本・5,326 行、テスト 52 本・17,382 行。要件の「本番の名前のファイル 5,931 行」は、名前が本番の型でもテストの表である `balloon_visibility_timeout_suppression_cases.rs`（605 行・`#[path]` でテストに取り込まれる）を本番に数えた値（1.1 節）。
-- **指摘は 73 件**。組ごとの数は、必ず直す 1・直したほうがよい 32・できれば 40。要件の討議の後に、並走の `audit-areka-app` から受け取った 2 件（74・75・直したほうがよい）を 11 節に足し、計 75 件。
+- **指摘は 73 件**。組ごとの数は、必ず直す 1・直したほうがよい 32・できれば 40。要件の討議の後に、並走の `audit-areka-app` から受け取った 2 件（74・75・直したほうがよい）を 11 節に足し、設計の段で `audit-areka-install-update` の申し送りから 76（直したほうがよい・2.2 節の 3 番の隣）を足して、計 76 件。
 - 必ず直すのは 1 件だけ。
   - 1: バルーンの時間切れの満了の後もポインタがバルーン（か文字の出ている箱）の上に残っていると、相が毎画面更新を予約し続ける（`balloon_visibility_phase.rs:L119-L123`・`L172-L185`）。席を離れたままなら何時間も 60fps 前後で回る。完了した `areka-P0-draw-load-parity` の tasks.md L280 が「候補メモ」として持ち越した所で、決めではない。
 - 本番のコードで次に重いのは次の 3 件（直したほうがよい）。
@@ -137,6 +137,19 @@
 - 直し方: `install_busy` も問い、`warn!(event = "skin_switch_installing")` で断る（`SkinVerdict` に腕を 1 つ足すか、`Updating` と同じ腕にまとめる）。テストを 1 本足す。
 - Research Needed: インストールの完了の後の自動切替（同設計 L39「インストール直後の自動切替」）が、`install_busy` がまだ真の間に入口を呼んでいないか。呼んでいるなら、断ると自動切替が止まる。
 - 〔約束 c〕: 新しい warn の行が 1 つ増える（既にある行の語は変わらない）。
+- 規模: S
+- 設計の段の調べ（12 節の 12.1）: areka にはインストール直後の自動切替が無い（完了 `ghost-install` の裁定）。ただしゴーストが `OnInstallComplete(Ex)` の応えの台本で出す `\![change,shell/balloon,…]` は、`install_busy` が真の間に入口へ届く。
+
+#### 76. ゴースト切替の入口が「更新中」を断らない〔約束 c〕（設計の段で足した・`audit-areka-install-update` の申し送り）
+- 場所: `crates/areka-session/src/ghost_switch.rs:L250-L320`（`request_ghost_switch_with` は進行中・文脈なし・該当なしだけを問う）。比べる相手は `shell_balloon_switch.rs:L132`（`update_busy` で断る）と `reload.rs:L311`（`update_busy`・`install_busy` で断る）。
+- 種類: 危ない所（同じ規則が 3 か所で違う）
+- 何をする所か: ゴーストの切替の要求を受け、降ろして起こす。
+- 問題（具体的な場合）: ネットワーク更新がゴーストのフォルダを書き換えている最中に、メニューか台本の `\![change,ghost,<同じゴースト>]` で同じゴーストへの切替が届くと、入口は受け、書きかけのフォルダから SHIORI を起こしうる。
+- 区別の要: 更新の手続き自身の読み直し（`crates/areka/src/update/desk.rs:L173-L215` の `reload`）も同じ入口を通る。背景のスレッドは `DeskAsk::Reload` を `DeskAsk::OrderDone` より先に頼む（`update/worker.rs:L243-L251`・`L92`）ので、その時は `Stage::Running`＝`update::desk::is_busy` が真（`desk.rs:L537-L541`）。入口が `update_busy` だけで断ると、更新が自分の読み直しを断られる。
+- 見分け方（コードで確かめた）: 入口の呼び手は 4 つ。メニュー（`menu/ghost_frame.rs:L51`・`ChangeOrigin::Manual`・`GhostSpec::Folder`）、台本の取り出し（`ghost_switch.rs:L80`・`Automatic`・`GhostSpec::Name`）、更新の読み直し（`update/desk.rs:L192`・`Automatic`・`Folder`）、上書きのインストール（`install/overwrite.rs:L109`・`Automatic`・`Folder`）。メニューと台本は「`Manual` か `Name`」で、更新とインストールの手続きは「`Automatic` かつ `Folder`」で見分けられる。
+- 直し方: 入口で、要求が「`Manual` か `Name`」で `update_busy` が真なら、`warn!(event = "ghost_switch_updating")` を 1 行残して `SwitchVerdict::Updating`（腕を 1 つ足す）で断る。手続きの要求（`Automatic` かつ `Folder`）には当てない。テストを 1 本足す。
+- `SwitchVerdict` の腕を足すと、`install/overwrite.rs:L118-L130` の `match` が網羅でなくなる（`audit-areka-install-update` の持ち物）。手続きの要求には `Updating` を返さないので、相手の側は `NotFound | NoContext` の腕に `Updating` を足すだけでよい（申し合わせる）。
+- 〔約束 c〕: 新しい warn の行が 1 つ増える。
 - 規模: S
 
 #### 公開の面と出し直し
@@ -720,6 +733,48 @@
 - 問題（具体的な場合）: 「今日どおり」は、変える前と比べた言い方で、読む人には何と同じなのかが分からない。
 - 直し方: 「そのまま終了する」「通常どおり終わる」の形にする。語・target・欄は変えない。`crates/`・`tools/`・`doc/`・`.claude/skills/` の grep で、この 2 つの文を字面で読む所は 0 件（同じ語は範囲の外にもあるが、そちらは持ち主の範囲）。
 - 規模: S
+
+---
+
+## 12. 設計の段の調べと決め（2026-11-22・`/kiro-spec-design -y`）
+
+- 発見の型: 拡張（既にある系の直し）なので軽い発見（`design-discovery-light.md`）。外の調べ（Web）は要らない（新しい依存・新しい技術は 0）。読んだのはコードと grep だけで、cargo は回していない。
+- 使った物差し: `kiro-spec-design` の `design-principles.md`・`design-synthesis.md`・`design-review-gate.md`。前例の設計は `completed/audit-emo2-boot-frame/design.md`・`completed/audit-emo2-boot-spine/design.md`（指摘ごとの表・束・1,000 行の表・要件の対応の形）。
+
+### 12.1 Research Needed の答え（9 節の持ち越し）
+
+| 項目 | 答え | 根拠 |
+|---|---|---|
+| 3 番: インストール直後の自動切替が `install_busy` の真の間に入口を呼ぶか | **ベースウェアの自動切替は 0**（完了 `ghost-install` の裁定「インストールと切り替えは別イベント・areka は入れた後の切替を主導しない」・完了 `areka-P0-shell-balloon-switch` の requirements.md L59・design.md L39 の Non-Goals）。入口の呼び手はメニュー（`menu/shell_frame.rs:L70`）と台本の取り出し（`shell_balloon_switch.rs:L84`）の 2 つだけ。**ただしゴースト側の「入れた後の切替」は届く**: 背景のスレッドは `OnInstallComplete(Ex)` を依頼の中で送り（`install/procedure.rs:L271-L285`）、kanade は最初の往復の結果で返事をし（`areka-kanade/src/change.rs:L120-L135`）、台本の再生はその後に UI で進む。`busy` が偽になるのは `DeskAsk::OrderDone`（`install/desk.rs:L297-L299`）で、`run_order` が返った後（飛ばした同梱の警告の後）。待っている依頼（`queue`）か上書き（`overwrite`）があれば `is_busy` はその間ずっと真（`desk.rs:L151-L155`）。だから応えの台本の頭の `\![change,balloon,…]`・複数の書庫の投入・警告の出ている間は、`install_busy` が真のまま入口に届く | 左の各行 |
+| 1 番: 抑止の解け方がどれも自前の起床を持つか | 持つ。抑止は「ドラッグ（バルーン窓・箱に文字の出ている scope のシェルの窓）」と「滞在（可視バルーン・文字の出ている箱）」の 2 つだけ（`balloon_visibility.rs:L169-L181`・`balloon_visibility_wait.rs:L155-L156`）。ポインタの離脱・移動・ボタンは `POINTER`、移動とサイズの終わりは `WM_GEOMETRY`（`wintf/src/ecs/world/tick_wake.rs:L282-L320`）。バルーンが隠れる・箱の文字が消えるのは cue の配信か隠す発行で、そのフレームは cue が起こす。解けた縁は同じフレームの `decide` が `now + wait` を立て直し（`balloon_visibility_wait.rs:L189-L198`）、同じフレームの `visibility_wake` が `After(wait)` を預ける。選択肢は抑止の種類ではない（起点の採り方だけ・`effective_display_end`） | 左の各行 |
+| 1 番: 相の中で抑止の答えを読めるか | 読める。相は `balloon_visibility` の子のモジュール（`balloon_visibility.rs:L502-L507`）なので私有の欄 `prev_suppressed`（L450）が見える。`decide` の後なら今のフレームの抑止の答えに等しい（`balloon_visibility_wait.rs:L190`） | — |
+| 1 番: 決定論の赤 | `tick_wake` はプロセス共有の 1 つ（`tick_wake.rs:L256` の `static GLOBAL`）で、相の後に `take` で見るテストは同じバイナリのほかのテストと混ざる。だから赤は純判断 `visibility_wake` と、`decide` の後の状態から答えを引く形で立てる（設計の 1 番） | — |
+| 40 番: 27 本が `areka-runtime` の dev-dependencies だけで組めるか | 組める見込み（字面で確かめた）。27 本の `use` は `areka_emo_atlas`・`areka_emo_compose`・`areka_emo_present`・`areka_emo_text`・`areka_sakura`・`areka_seriko`・`areka_parsers`・`areka_placement`・`bevy_ecs`・`dola`・`wintf`・`tracing`・`log_capture_kit` と `areka_runtime` の項目で、どれも `areka-runtime` の `[dependencies]`/`[dev-dependencies]` にある。外の crate は `areka_input::balloon::{BalloonWiring, ChoiceSelection}`（25 番で消す）と `areka_input::shell_box::ShellBoxHover`（`areka_runtime::shell_box_hover::ShellBoxHover` の出し直し＝`areka-input/src/shell_box.rs:L17`）だけ。本体の項目（`crate::…`）を引く行は 0。組めるかは実装で `cargo test -p areka-runtime --no-run` で確かめる | grep |
+| 40 番: 戻した後も開いたままが要る項目 | 本体に残る `notice_tests`（5 本）が `notify_timeout`（渡し口）・`Frame`・`TALK_ID`・`seen`・`BalloonVisibilityState` を使う。本体の `frame_*` の 2 本が `configured_timeout_secs`、`areka-input` の支えが `phase::run_balloon_visibility_phase` と `balloon_hover::BalloonHover` を使う（grep）。ほかの「40 番の後に使い手を失う」（3 節の件 3）は、移した後にツリー全体 grep で 0 件を確かめて狭める。公開の型の欄・署名に出るもの（`private_interfaces`）は残して名と理由を記録する | grep |
+| 16 番: 陽性の対 | 可視性の行は欄 `trigger = "explicit"`（`VisibilityTrigger::Explicit.as_str()`・`balloon_visibility_phase.rs:L490-L495`）を持つので、文面でなく欄で数えられる（本番は変えない）。単位の行（`ghost_session.rs:L600`・`audit-areka-app` の持ち物）には `event` の欄が無いので、文面のまま陽性の対を同じファイルに置く。UI のスレッドの捕捉の窓に出るかは実装で確かめる（仮定） | — |
+| 48 番: 暗黙の MTA を見分けられるか | 見分けられる。`CoGetApartmentType` は暗黙の MTA で `APTTYPE_MTA` と `APTTYPEQUALIFIER_IMPLICIT_MTA` を返す（Win32 の文書どおり）。`spawn_build_worker`（`switch_assets.rs:L135`・私有）は閉包を受けるので、子のテストから注入できる。`windows` の機能は `Win32_System_Com` で足りる見込み（`CoInitializeEx` を既に使う）。足りなければ機能を足さずに議題（要件 6.7） | — |
+| `RigSample::keep` の `#[allow(dead_code)]` | 指摘ではない（1.3 節）。かけ直しの audit のときに、許可を外して `cargo check -p areka-session --tests` と `--features test-support` の警告で効いているかを見る（効いていなければ消す・効いていれば今の理由のまま） | — |
+| 41 番 ⑵: 表の `TIMEOUT` を既定でない値にしたとき | 表の各行が `TIMEOUT` からの足し引きで書かれているかは実装で 1 行ずつ確かめる（仮定: 20.0 で全行が成り立つ。成り立たない行は期待を `TIMEOUT` から出す形へ直す・要件 4.7） | — |
+
+### 12.2 設計の段で見つけたこと
+
+- **5.15 ㋑（`scale_signed`）は、完了 spec がわざと固定した例外を変える**: `crates/areka-placement/src/balloon_offset_supply_tests.rs:L82-L108` の `identity_scale_saturates_only_at_i32_min`（「拡大率 1 では生値が素通しになる、という原則の唯一の例外」「製品欠陥ではない」「本檻が固定する」）と `follow_offset_space_tests.rs:L195` の `supply_identity_saturates_only_at_i32_min` が `-i32::MAX` と `saturated == true` を表明する。入れたのは `areka-P0-balloon-offset-dpi`（#125 `9ac408757`・design.md L739「負値・`i32::MIN` 近傍・飽和の各腕を逐語で固定」）。要件ではなく設計とテストの決めなので要件 2.4 の「裁定」には当たらないと読むが、直すと檻 2 本の期待と `follow/offset_space.rs:L251-L256` の飽和の判定が変わる。設計の議題にする。
+- **`SwitchVerdict` の腕を足す（76 番）と、範囲の外の網羅の `match` が 1 つ組めなくなる**: `install/overwrite.rs:L118-L130`。手続きの要求には `Updating` を返さないので、相手の腕に名を 1 つ足すだけ。`SkinVerdict` の腕を足す（3 番）ほうは、範囲の外の網羅の `match` が 0（grep・`reload.rs:L576` は `!= Accepted`）。
+
+### 12.3 並走の spec からの申し送り（2026-11-22・設計の段・`audit-areka-install-update` `43031a5fc`）
+
+| 件 | 中身 | 扱い |
+|---|---|---|
+| ⑴ | 起動中のゴーストへの上書きのインストールの展開を UI のスレッドの外へ出す。`ghost_switch.rs` の `switch_to` を「降ろした」と「起こす」の間で展開の答えを待つ段に分ける要がある | この spec の直しは `switch_to`（`ghost_switch.rs:L606-L710`）に触らない（直す所は L40-L44・L66-L90・L111・L250-L333・L423・L522）。継ぎ目として設計に書き、どちらが分けるか・着地の順を議題にする |
+| ⑵ | `shell_balloon_switch_session_lap_test_support.rs` の `spawn_windows` に `dpi: u16` を受けさせ、それと `pump_messages` を `pub` にしてほしい（本体の `mcp/dump_surface_gpu_test_support.rs:L323`・`L357` の写しを消すため） | 写しの寄せ（6 節のコ・53 番と同じ型）。受けるのを推す（議題） |
+| ⑶ | 更新の背景のスレッドの記録の語 `update_reload_requested` を `update_reload_asked` に替える | 範囲の中の読み手 `crates/areka/src/session_tests/shell_balloon_switch_session_update_tests.rs:L243`（`count(&events, "update_reload_requested")` が 1）。相手が確かめて知らせる。替わったら同じ変更で追う（要件 7.7） |
+| ⑷ | ゴースト切替の入口が `update_busy` を問わない | 新しい指摘 76（2.2 節）。コードで確かめ、更新の自分の読み直しを断らない形を設計した |
+
+### 12.4 合成（`design-synthesis.md`）
+
+- **まとめ（一般化）**: 3 番と 76 番は同じ問題（「入口の断りの集合が 3 つの入口でそろっていない」）の 2 つの場合。断りは入口の判定の並び（進行中 → ゴースト切替中 → 更新中 → インストール中 → 文脈）に 1 段ずつ足す形にそろえ、どちらも「手続き自身の要求を断らない」ことを出どころで見分ける。新しい仕組み（待たせる列・モード）は足さない。
+- **既にあるものを使う（自作しない）**: scope の上限は `target_map::window_scope`（`audit-emo2-boot-frame` の正本）、アクターの待ちは `spine::join_bounded`、偽の HWND と偽の記憶の書き手は `areka_placement::test_support::{give_fake_handles, SharedFakeIo}`、空の資産は `frame::test_support::synth_assets(&[])` か `frame::shared_test_support::wiring()`、観測の組み立ては `balloon_visibility::test_support::Frame`、記録の件数は `fallback_tests::count_event`、呼出列は `lap_test_support::kinds`。
+- **減らす**: 足す継ぎ目は 2 つだけ（74 番の `accept_skin_with` の作り口の注入・34 番の目録を 1 回だけ読む引数）。どちらも私有で、公開の面は増やさない。`SkinVerdict::Installing`・`SwitchVerdict::Updating` の腕は、断りの理由を呼び手へ返すための最小の足し。
 
 ---
 
