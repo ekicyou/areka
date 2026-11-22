@@ -37,8 +37,6 @@ use crate::ghost_session::{
     rebuild_runtime_in_place, reopen_ghost_windows,
 };
 use areka_runtime::frame::{DiscardReason, log_stay_on_top_discard};
-#[cfg(test)]
-use areka_runtime::special_name::UnresolvedReason;
 pub use areka_runtime::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
 
 pub(crate) use areka_runtime::change_cue::ChangeRequestRaw;

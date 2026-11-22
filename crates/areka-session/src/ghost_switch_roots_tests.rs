@@ -8,6 +8,7 @@ use areka_ghost::catalog_roots::list_ghosts;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use temp_path_kit::TempPath;
 
+use super::tests::resolved_folder;
 use super::*;
 
 /// 根 1 に `Alpha`（name＝Alice）、根 2 に `beta`（name＝Bob）と隠れる `ALPHA` を組んだ和。
@@ -31,10 +32,6 @@ fn two_root_union(tmp: &TempPath) -> Vec<GhostEntry> {
     ]))
 }
 
-fn folder_of(entries: &[GhostEntry], spec: GhostSpec) -> Option<String> {
-    resolve_switch_target(entries, &spec).map(|t| t.folder)
-}
-
 #[test]
 fn change_ghost_matches_name_and_folder_across_two_roots() {
     let tmp = TempPath::under_target("ghost-switch-two-roots");
@@ -43,12 +40,12 @@ fn change_ghost_matches_name_and_folder_across_two_roots() {
     let folder = |s: &str| GhostSpec::Folder(s.to_owned());
     assert_eq!(
         [
-            folder_of(&entries, name("Bob")),
-            folder_of(&entries, name("Alice")),
-            folder_of(&entries, name("BETA")),
-            folder_of(&entries, folder("alpha")),
-            folder_of(&entries, name("bob")),
-            folder_of(&entries, name("Hidden")),
+            resolved_folder(&entries, name("Bob")),
+            resolved_folder(&entries, name("Alice")),
+            resolved_folder(&entries, name("BETA")),
+            resolved_folder(&entries, folder("alpha")),
+            resolved_folder(&entries, name("bob")),
+            resolved_folder(&entries, name("Hidden")),
         ],
         [
             Some("beta".to_owned()),

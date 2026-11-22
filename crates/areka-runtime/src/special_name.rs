@@ -114,3 +114,7 @@ pub fn resolve_special_name(
 /// 入口は読むだけで、切替に使っても消さない。
 #[derive(Resource)]
 pub struct LastInstalledGhost(pub String);
+
+#[cfg(test)]
+#[path = "special_name_tests.rs"]
+mod tests;
