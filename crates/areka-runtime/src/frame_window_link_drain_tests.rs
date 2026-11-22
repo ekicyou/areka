@@ -4,7 +4,8 @@
 //! 1 本の線なので、同じ台本の `\![set,sticky-window,0,1]` の後の `\![move]` は届いた順に当たる。
 
 use bevy_ecs::world::World;
-use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::cue::test_support::carrier_cue as carrier;
+use dola::cue::{CueSink, TalkCue};
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowPos};
 
@@ -25,16 +26,6 @@ use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
 fn sink_and_wiring() -> (MoveCueSink, RuntimeWiring) {
     let (tx, wiring) = wiring();
     (MoveCueSink::new(tx), wiring)
-}
-
-/// `\N![name,tokens...]`（`N` は実行者）の cue。
-fn carrier(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
 }
 
 /// スコープ 1 を基準スコープ 0 から動かす `\1\![move,-353,40,,0,base,base]`。

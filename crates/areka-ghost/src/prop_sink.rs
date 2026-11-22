@@ -114,16 +114,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    /// `\![name,tokens...]` 汎用キャリア cue（正準形）。
-    fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
-        let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-        TalkCue {
-            at: 0.0,
-            actor: ActorKey::from(actor),
-            command: CueCommand::command_carrier(name, toks),
-            duration: 0.0,
-        }
-    }
+    use dola::cue::test_support::carrier_cue;
 
     /// ghost root 付きの共有 FakeIo の sylphya（書込を別ハンドルで観測する）。
     fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, Arc<FakePersistIo>) {

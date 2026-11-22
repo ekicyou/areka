@@ -24,6 +24,8 @@ pub mod runtime;
 pub mod schedule;
 pub mod sheet;
 mod sink;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 pub use command::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, TalkCue};
 pub use runtime::{CuePlayer, CuePlayerState, PendingChoice};

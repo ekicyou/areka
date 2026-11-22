@@ -366,10 +366,10 @@ pub(super) fn resolve_to_value(
     trans_def: &TransitionDef,
     from_value: &TransitionValue,
 ) -> TransitionValue {
-    if let Some(ref relative_to) = trans_def.relative_to {
-        if let TransitionValue::Scalar(from_val) = from_value {
-            return TransitionValue::Scalar(from_val + relative_to);
-        }
+    if let Some(ref relative_to) = trans_def.relative_to
+        && let TransitionValue::Scalar(from_val) = from_value
+    {
+        return TransitionValue::Scalar(from_val + relative_to);
     }
 
     if let Some(ref to) = trans_def.to {

@@ -105,3 +105,7 @@ dola は「同じ台本を、別々の表示役（別のプロセスでもよい
 3. 合図が、絶対の発火時刻を持つ事。時刻の表が、項目を取り出した時の起点で決める（同じ刻みの中で起点が動いても、後ろの変化の長さが狂わない）。
 4. トークのスレッドへ送る刻みが、絶対の時刻である事（今は相対の秒＝`crates/areka-ghost/src/dispatcher.rs:392-399`。並走の流れと主の流れを、同じ時刻で進めるため）。
 5. 連続値の側（storyboard の層）を、後ろへ切らない事（値を時間で変える仕組みは dola が持つ、と開発者が決めた＝「イージングはdolaの仕事」）。
+
+## 申し送り（dola-cue-test-builder より）
+
+- `crates/dola/src/cue/test_support.rs` の `carrier_cue` が、テストで使う正準のキャリアの合図の唯一の組み立てになった（`test-support` 機能の下・使い手は areka-ghost・areka-seriko・areka-runtime の dev の依存）。`TalkCue` のフィールドや `CueCommand::command_carrier` の署名を変えるときは、この本文 1 か所を直せば使い手の 22 ファイルへは波及しない（名の層が吸う）。参照: `.kiro/specs/completed/dola-cue-test-builder/design.md` の Revalidation Triggers。
