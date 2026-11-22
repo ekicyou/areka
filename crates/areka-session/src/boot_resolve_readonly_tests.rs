@@ -3,13 +3,12 @@
 //! プロセスに 1 つの状態は `withhold_everything` を呼ばず、試験ごとの根に立てた
 //! `WithholdGuard` だけで控える。根はワークツリーの `target\` の下だけ。
 
-use std::path::Path;
-
 use areka_sylphya::persist::withhold::WithholdGuard;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::readonly::tests::tree;
 
 /// `event` の記録の件数（`event` 欄で引く）。
 fn count(events: &[CapturedEvent], event: &str) -> usize {
@@ -17,20 +16,6 @@ fn count(events: &[CapturedEvent], event: &str) -> usize {
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .count()
-}
-
-/// 置き場の木（相対パスと中身）。
-fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for e in entries {
-            let p = e.expect("置き場の項目").path();
-            let content = std::fs::read(&p).unwrap_or_default();
-            out.push((p.strip_prefix(dir).unwrap().to_path_buf(), content));
-        }
-    }
-    out.sort();
-    out
 }
 
 /// 根の取っ手の下で、印の 3 関数は成功を返し、書いたときの記録を出さず、控えたときの記録を出し、

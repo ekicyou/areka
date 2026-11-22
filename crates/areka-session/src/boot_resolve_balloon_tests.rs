@@ -11,6 +11,7 @@ use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{BalloonEntry, Identity};
 use log_capture_kit::{CapturedEvent, capture};
 
+use super::boot_resolve_tests::no_pick;
 use super::*;
 
 // ---------------------------------------------------------------- 道具立て
@@ -61,11 +62,6 @@ fn chain(
         stores: &[root.balloon_store()],
     };
     capture(|| resolve_balloon(&inputs, pick))
-}
-
-/// 呼ばれてはならない添字（無作為の段に届かない場面で使う）。
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段に届いてはならない（候補数 {n}）")
 }
 
 fn at(root: &BasewareRoot, route: BalloonRoute, folder: &str) -> BalloonDecision {

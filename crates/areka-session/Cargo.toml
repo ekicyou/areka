@@ -12,6 +12,7 @@ repository.workspace = true
 [features]
 # 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける。
 # 切替の足場が runtime の台本の SHIORI（spine）と偽の SHIORI の戻り値の型を使う。番人の crate は連鎖させない。
+# 倍率の読み手の支えが表示層の型を使う。
 test-support = ["dep:shiori-host32-host", "dep:areka-emo-present", "areka-runtime/test-support"]
 
 [dependencies]
@@ -41,7 +42,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 # ログの履歴の購読者（`env-filter` はワークスペースの表が持つ）。
 tracing-subscriber = { workspace = true }
-# 煙の自動終了の計時（本体・wintf と同じくワークスペースの表から引く）。
+# 煙の自動終了の計時（wintf と同じくワークスペースの表から引く）。
 async-io = { workspace = true }
 # 説明書を開く ShellExecuteExW の機能は本クレートで上乗せし、根の [workspace.dependencies.windows] は変えない。
 windows = { workspace = true, features = ["Win32_System_Registry"] }

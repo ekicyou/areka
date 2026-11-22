@@ -2,10 +2,6 @@
 //!
 //! 構成入力（根 → ゴースト → バルーン）の起動前の解決と、`GhostBootOptions` の組み立てを置く。
 //! 根の並びの決め方は `crate::roots`。
-//!
-//! 消費者は `main.rs` と `runtime_boot`（`crate::boot_config::default_app_profile_dir` /
-//! `crate::boot_config::is_benign_boot_error`）、および
-//! 檻 `boot_config_ghost_wiring_tests.rs`。
 
 // ---------------------------------------------------------------------------
 // Config Inputs
@@ -190,8 +186,7 @@ pub struct BootContext {
 pub struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
-    /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、`hooks::set_current_balloon`
-    /// （今のバルーンを入れ替える口）。
+    /// バルーンの差し替えの完了で `hooks::set_current_balloon` が書き換える（記憶に書くので次の起動の選び方になる）。
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 

@@ -123,7 +123,6 @@ impl GhostSession {
             kanade,
             ghost_dir,
             logsink_fallback: false,
-            #[cfg(any(test, feature = "test-support"))]
             memory_publisher_for_test: None,
         }
     }
@@ -214,8 +213,9 @@ impl GhostSession {
 
         // ③ seriko アクターの join。seriko inbox への送信端は 4 本ある: (a) ghost 側の `SerikoSink`（② の
         // `shutdown` が drop）、(b) loop ticker closure の `tick_sink`（① の Close で drop）、(c) セッションの
-        // 複製（`seriko_sink`・① で drop）、(d) 受け口の送出端の束 `sinks` の送り手（① で drop）。①② で全端が drop されて inbox が切断され seriko worker は自然終了
-        // するので、この join は速やかに戻る（① で ticker を先に Close し複製を落とすのが hang 回避の要）。
+        // 複製（`seriko_sink`・① で drop）、(d) 受け口の送出端の束 `sinks` の送り手（① で drop）。
+        // ①② で全端が drop されて inbox が切断され seriko worker は自然終了するので、この join は
+        // 速やかに戻る（① で ticker を先に Close し複製を落とすのが hang 回避の要）。
         // join 失敗（worker panic）は握り潰さず `error!`＋`Err` を伝播する。
         if let Some(seriko) = self.seriko {
             if let Err(err) = seriko.join() {

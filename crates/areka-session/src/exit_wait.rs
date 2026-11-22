@@ -159,8 +159,8 @@ impl ClosingWaits {
     /// 合わせて上限を超えない。
     pub fn wait(self, budget: WaitBudget) {
         let deadline = budget.started + budget.limit;
-        let waited_from = Instant::now();
         for work in self.0 {
+            let waited_from = Instant::now();
             let mut s = work.gate.lock();
             while s.writing {
                 let left = deadline.saturating_duration_since(Instant::now());

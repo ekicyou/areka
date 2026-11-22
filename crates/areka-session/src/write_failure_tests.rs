@@ -9,7 +9,7 @@ use super::*;
 use crate::app_exit::FirstExit;
 use log_capture_kit::{CapturedEvent, capture};
 
-fn failure(key: PersistKey, reason: &str) -> PersistFailure {
+pub(super) fn failure(key: PersistKey, reason: &str) -> PersistFailure {
     PersistFailure {
         scope: PersistScope::App,
         dir: Some(PathBuf::from(r"C:\areka\profile\areka")),
@@ -19,7 +19,7 @@ fn failure(key: PersistKey, reason: &str) -> PersistFailure {
 }
 
 /// 据え付け済みの World（`Schedules` と終了の受け口つき）。
-fn installed_world() -> World {
+pub(super) fn installed_world() -> World {
     let mut world = World::new();
     world.insert_resource(Schedules::default());
     world.insert_non_send(AppExit::new());

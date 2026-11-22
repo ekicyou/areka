@@ -4,7 +4,8 @@
 //! 残り 0 の予算では直ちに戻って `warn!(exit_wait_timeout)` が 1 件・前の段と同じ出発点から数える・
 //! 閉じた門は「始める」「書く段へ入る」を断る・登記した片付けが `begin_close` で呼ばれる。
 //!
-//! 実時間の待ちに依らない: 書き終わりは別スレッドが合図で知らせ、上限は出発点を過去に置いて使い切る。
+//! 時間の運に依らない: 書き終わりは別スレッドが合図で知らせ（寝て待つスレッドと競わない）、
+//! 上限は出発点を過去に置いて使い切る。実時間を待つのは短い予算を期限まで待つ所だけ。
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -124,6 +125,44 @@ fn writing_work_returns_when_write_ends() {
     assert_eq!(done[0].level, tracing::Level::INFO);
     assert!(done[0].field("ms").is_some(), "待った時間を載せる");
     assert!(events_named(&events, "exit_wait_timeout").is_empty());
+}
+
+/// `ms` は門ごとに数える: 先の門を上限まで待っても、書き終えていた後の門にその待ちを足さない。
+#[test]
+fn done_ms_is_counted_per_gate() {
+    let mut world = World::new();
+    let slow = Arc::new(WorkGate::default());
+    let fast = Arc::new(WorkGate::default());
+    register_gate(&mut world, "slow", slow.clone(), |_| {});
+    register_gate(&mut world, "fast", fast.clone(), |_| {});
+    assert!(slow.enter_write());
+    assert!(fast.enter_write());
+    let waits = begin_close(&mut world);
+    fast.leave_write();
+
+    let budget = WaitBudget {
+        started: Instant::now(),
+        limit: Duration::from_millis(200),
+    };
+    let ((), events) = capture(|| waits.wait(budget));
+    let since_deadline = (budget.started + budget.limit).elapsed();
+
+    let timeout = events_named(&events, "exit_wait_timeout");
+    assert_eq!(timeout.len(), 1, "先の門は上限まで待つ: {events:?}");
+    assert_eq!(timeout[0].field_str("name"), Some("slow"));
+    let done = events_named(&events, "exit_wait_done");
+    assert_eq!(done.len(), 1, "後の門は間に合った: {events:?}");
+    assert_eq!(done[0].field_str("name"), Some("fast"));
+    let ms: u64 = done[0]
+        .field("ms")
+        .and_then(|ms| ms.parse().ok())
+        .unwrap_or_else(|| panic!("fast の記録に ms が無い: {events:?}"));
+    // 後の門の番は先の門が期限まで待った後に始まるので、門ごとに数えた `ms` は期限から
+    // 今までの時間を越えない（スレッドがどこで止まっても成り立つ）。先の門の待ちを足すと越える。
+    assert!(
+        Duration::from_millis(ms) <= since_deadline,
+        "待たなかった門に先の門の待ちが足されている（期限から {since_deadline:?}）: {events:?}"
+    );
 }
 
 /// 残り 0 の予算では待たずに戻り、`warn!(exit_wait_timeout)` を 1 件残す。本文は門に

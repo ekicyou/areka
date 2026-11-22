@@ -61,13 +61,13 @@ fn escape_works_without_mouse_wiring() {
     let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(
         on_char_pointer_pressed(&mut world, w, w, &ev),
-        "wiring 不在でも暫定退避は機能する"
+        "wiring 不在でも強制退避は機能する"
     );
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓 despawn");
 }
 
 /// 「強制退避操作でのみ全窓終了が起きる」統合檻:
-/// 非退避操作の**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
+/// 非退避操作の**いずれも** `GhostWindowMarker` 窓を despawn しない。
 /// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
 /// pass/fail で固定する（左右のダブルクリックの送出は入力の crate のテストが受け持ち、ここは
 /// 非退避操作全集合の否定＋退避の肯定を 1 檻へ集約する）。

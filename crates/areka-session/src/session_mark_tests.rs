@@ -5,16 +5,10 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::app_exit::ExitOrigin;
 use crate::boot_resolve::{read_session_mark, write_session_mark};
-use areka_kanade::{KanadeStopCause, ShioriFault, ShioriFaultKind};
+use crate::session_end::test_support::fault;
+use areka_kanade::{KanadeStopCause, ShioriFaultKind};
 use areka_sylphya::{PersistKey, PersistScope};
 use log_capture_kit::capture;
-
-fn fault(kind: ShioriFaultKind) -> ShioriFault {
-    ShioriFault {
-        kind,
-        reason: "テストの失敗".to_owned(),
-    }
-}
 
 fn kanade_fault() -> ExitOrigin {
     ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(
@@ -63,7 +57,7 @@ fn session_mark_verdict_table() {
     // 倒れていない・打ち切りなし。
     let mut got: Vec<MarkVerdict> = clean.iter().map(|o| v(Some(o), false, false, ok)).collect();
     let mut want = vec![MarkVerdict::Clear; clean.len()];
-    let existing = [
+    let others = [
         (
             v(Some(&kanade_fault()), false, false, ok),
             MarkVerdict::Keep("fault"),
@@ -195,7 +189,7 @@ fn session_mark_verdict_table() {
             MarkVerdict::Keep("down_failed"),
         ),
     ];
-    for (g, w) in existing
+    for (g, w) in others
         .into_iter()
         .chain(fallback_clean)
         .chain(fallback_other)
@@ -268,7 +262,7 @@ fn settle_session_mark_applies_the_verdict() {
     );
 }
 
-/// ⑷ 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`。
+/// 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`。
 #[test]
 fn clear_mark_unwritable_tells_running_once() {
     let tmp = TempPath::under_target("mark-write-clear");

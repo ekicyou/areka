@@ -28,7 +28,7 @@ fn of_follows_the_resource() {
 }
 
 /// 置き場の木（下の階層まで、相対パスと中身）。
-fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+pub(crate) fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
         for e in std::fs::read_dir(dir).expect("木が読めない") {
             let p = e.expect("木の項目").path();
@@ -48,7 +48,7 @@ fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 }
 
 /// アプリもゴーストも書けない置き場（フォルダの在るべき所に普通のファイル）。根は `target\` の下。
-fn unwritable_places(
+pub(crate) fn unwritable_places(
     tmp: &temp_path_kit::TempPath,
 ) -> (crate::boot_config::ConfigInputs, std::path::PathBuf) {
     let app = tmp.child("app-profile");

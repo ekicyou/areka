@@ -2,7 +2,7 @@
 //!
 //! 確かめること: ゴースト 6 分岐（argv／記憶／唯一／既定／無作為／0 体）・バルーン 7 分岐
 //! （argv／記憶／同梱／唯一／既定／無作為／0）と、記憶の指す先が無い 2 通り・同梱の指す先が
-//! 無い 1 通り・古い既定の記憶が新しい既定に負けないこと。無作為は固定の添字（`|n| n - 1`）を
+//! 無い 1 通り・記憶が並んだ既定より先なこと。無作為は固定の添字（`|n| n - 1`）を
 //! 注入し、選ばれたものが列挙に含まれることと経路が `Random` であることを見る。既定の分岐は
 //! `listed` に `"emo2"`／[`DEFAULT_BALLOON_FOLDER`] を並べるだけ（検体の登記に依存しない）。
 //! 本番の `pick_index` が候補の範囲に収まることを見る 1 本のほかは、プロセス・fs・乱数に触れない。
@@ -29,12 +29,12 @@ fn names(v: &[&str]) -> Vec<String> {
 }
 
 /// 呼ばれてはならない添字（無作為の段に届かない分岐で使う）。
-fn no_pick(n: usize) -> usize {
+pub(crate) fn no_pick(n: usize) -> usize {
     panic!("無作為の段に届いてはならない（候補数 {n}）")
 }
 
 /// 最後の候補を選ぶ固定の添字（先頭を選ぶ実装と区別するため末尾）。
-fn last(n: usize) -> usize {
+pub(crate) fn last(n: usize) -> usize {
     n - 1
 }
 
@@ -324,10 +324,9 @@ fn balloon_default_areka_balloon_when_listed_among_many() {
     );
 }
 
-/// 既定を替えた後も、記憶が `StayseeBalloon`（2026-10 までの既定）の利用者は記憶の段で
-/// `StayseeBalloon` に決まり、新しい既定へ移らない（記録 0 件）。
+/// 記憶のバルーン `StayseeBalloon` は、既定のバルーンが並んでいても記憶の段で決まる（記録 0 件）。
 #[test]
-fn balloon_memory_of_old_default_wins_over_new_default() {
+fn balloon_memory_wins_over_listed_default() {
     let root = root();
     let listed = names(&[DEFAULT_BALLOON_FOLDER, "StayseeBalloon"]);
     let (got, events) = balloon(&root, None, Some("StayseeBalloon"), None, &listed, no_pick);

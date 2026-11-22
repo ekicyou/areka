@@ -5,15 +5,14 @@
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
 use crate::boot_config::resolve_balloon_for_ghost;
+use crate::boot_resolve::boot_resolve_tests::no_pick;
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
+use areka_ghost::sylphya_wiring::profile_areka_root;
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-/// 呼ばれない添字（候補に既定のバルーンを置くので無作為の段へ届かない）。
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 /// 根にゴースト `g1`（descript.txt に `extra` を足す）と、バルーン（フォルダ名と `name`）を組む。
 /// 既定のバルーン（[`DEFAULT_BALLOON_FOLDER`]）はいつも置く。ゴーストのフォルダを返す。
@@ -47,18 +46,16 @@ fn put_install(ghost: &Path, body: &str) {
 }
 
 /// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
-fn put_memory(ghost: &Path, folder: &str) {
-    let dir = ghost
-        .join("ghost")
-        .join("master")
-        .join("profile")
-        .join("areka");
-    std::fs::create_dir_all(&dir).expect("フォルダを組む");
-    std::fs::write(
-        dir.join("sylphya.toml"),
-        format!("format-version = 1\n[last]\nballoon = \"{folder}\"\n"),
-    )
-    .expect("記憶");
+pub(super) fn put_memory(ghost: &Path, folder: &str) {
+    save_scope(
+        PersistScope::Ghost,
+        &ScopeRoots {
+            ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
+            ..ScopeRoots::default()
+        },
+        &FsPersistIo,
+        vec![(PersistKey::LastBalloon, folder.to_owned())],
+    );
 }
 
 /// 入力を集める口を呼び、(段, フォルダ名) と記録を返す。決まったバルーンの場所が
@@ -143,7 +140,7 @@ fn default_balloon_path_hits_ghost_inner_balloon() {
 
 /// `balloon/plain` は `<ゴースト>\balloon\plain` が在っても当たらない（フォルダ名の突き合わせ）。
 /// 名前は検体と無関係にしてある（検体の在処を綴るのは窓口 `sample_ghost_kit::SampleRoot` だけ）。
-/// `descript_balloon_not_found` が今の欄（`balloon_store` は根の置き場だけ）で 1 件。
+/// `descript_balloon_not_found` が 1 件（`balloon_store` は根の置き場だけ）。
 #[test]
 fn balloon_prefixed_path_misses_even_with_ghost_inner_folder() {
     let tmp = TempPath::under_target("cfg-balloon-inner-prefixed");

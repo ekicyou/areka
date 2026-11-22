@@ -13,18 +13,11 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
 
+use super::boot_resolve_tests::{last, no_pick};
 use super::*;
 
 fn root() -> BasewareRoot {
     BasewareRoot::new(PathBuf::from(r"C:\areka-boot-resolve-option-tests"))
-}
-
-fn no_pick(n: usize) -> usize {
-    panic!("添字を選んではならない（候補数 {n}）")
-}
-
-fn last(n: usize) -> usize {
-    n - 1
 }
 
 fn ghost(

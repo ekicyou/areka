@@ -740,7 +740,7 @@ fn remembered<'a>(
 
 #[cfg(test)]
 #[path = "boot_resolve_tests.rs"]
-mod boot_resolve_tests;
+pub(crate) mod boot_resolve_tests;
 
 #[cfg(test)]
 #[path = "boot_resolve_option_tests.rs"]

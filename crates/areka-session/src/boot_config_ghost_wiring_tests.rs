@@ -17,9 +17,8 @@ fn default_helper_exe_path_ends_with_expected_filename() {
     );
 }
 
-/// `ghost_boot_options` は渡された `ghost_root`／`helper_exe`／置き場をそのまま
-/// `GhostBootOptions` へ写し、`ShioriWiring::Helper`・`DefaultEncoding::Ansi`・
-/// `TickerMode::Real` を選ぶ。
+/// `ghost_boot_options` は渡された `ghost_root`／置き場をそのまま `GhostBootOptions` へ写し、
+/// `DefaultEncoding::Ansi`・`TickerMode::Real` を選ぶ。
 #[test]
 fn ghost_boot_options_wires_expected_fields() {
     let ghost_root = PathBuf::from("C:/custom/ghost");
@@ -32,7 +31,7 @@ fn ghost_boot_options_wires_expected_fields() {
         ghost_root.clone(),
         helper_exe.clone(),
         Some(app_profile_dir.clone()),
-        crate::boot_request::ModulePolicy::Load,
+        ModulePolicy::Load,
     );
 
     assert_eq!(options.ghost_root, ghost_root);
@@ -40,14 +39,6 @@ fn ghost_boot_options_wires_expected_fields() {
     assert_eq!(options.default_encoding, DefaultEncoding::Ansi);
     // 窓の無いゴーストにも strict の判定を入れる（無いと strict の記録が無言で 0 件）。
     assert!(options.strict_judges.is_some(), "strict の判定が入っている");
-    match options.shiori {
-        ShioriWiring::Helper {
-            helper_exe: actual, ..
-        } => assert_eq!(actual, helper_exe),
-        ShioriWiring::Custom(_) => panic!("expected ShioriWiring::Helper, got Custom"),
-        // `InProc` は本番 main では選ばれない（本番結線は emo2＝Helper 経路のまま）。網羅性のためのみ列挙する。
-        ShioriWiring::InProc => panic!("expected ShioriWiring::Helper, got InProc"),
-    }
     match options.ticker {
         TickerMode::Real(cfg) => {
             assert_eq!(cfg.base_interval, std::time::Duration::from_millis(50));

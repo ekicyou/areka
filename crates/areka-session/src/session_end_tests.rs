@@ -7,37 +7,21 @@ use std::sync::mpsc;
 
 use areka_ghost::BasewareRoot;
 use areka_kanade::{
-    CancelReason, ChangeHandoff, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault,
-    ShioriFaultKind,
+    CancelReason, ChangeHandoff, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFaultKind,
 };
 use bevy_ecs::prelude::*;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::on_os_session_end;
+use super::test_support::{fault, levels_of, reservation};
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_resolve::{read_session_mark, write_session_mark};
 use crate::ghost_quit::KanadeNoticeRx;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use crate::ghost_switch::{SwitchInFlight, SwitchStage};
 use crate::reload::test_support::boot_context_named;
-
-fn fault() -> ShioriFault {
-    ShioriFault {
-        kind: ShioriFaultKind::Disconnected,
-        reason: "テストの失敗".to_owned(),
-    }
-}
-
-/// `event` の記録の水準（届いた順）。
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
 
 /// 実行系の無い単位を置き場に持つ素の World（記憶の置き場は `tmp` の下・印＝A を書いておく）。
 /// 戻りの送出端から運行の通知を受け口へ積める。
@@ -69,33 +53,13 @@ fn slot_empty(world: &World) -> bool {
         .is_some_and(|slot| slot.0.is_none())
 }
 
-/// 送り出しの段の切替の予約（A → B）。
-fn send_off_reservation() -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: crate::switch_copy::SwitchCopy::None,
-    }
-}
-
 /// 切替の予約が在る World → 予約が消え `info!(ghost_switch_cancelled, reason=session_end)` 1 件・
 /// 最初の出所はセッションの終了・印が消える。
 #[test]
 fn session_end_drops_switch_reservation() {
     let tmp = TempPath::new("session-end-reservation");
     let (mut world, _tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
+    world.insert_non_send(reservation(SwitchStage::SendOff));
 
     let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));
     let cancelled_reason = events
@@ -125,7 +89,7 @@ fn session_end_drops_switch_reservation() {
 }
 
 /// 予約（送り出し）の下で、切替の握手を終えた停止（中身あり）が未処理のまま受け口に在る → 予約を
-/// 先に下ろしてから捌くので、停止は今日どおり終了（最初の出所は `KanadeStopped(Quit)`）になり、
+/// 先に下ろしてから捌くので、停止は予約の無い停止として終了（最初の出所は `KanadeStopped(Quit)`）になり、
 /// 切替の経路（降ろす・切替先を起こす）へは入らない。
 ///
 /// # 非空虚性
@@ -135,7 +99,7 @@ fn session_end_drops_switch_reservation() {
 fn pending_switch_stop_is_quit_not_switch() {
     let tmp = TempPath::new("session-end-pending-switch-stop");
     let (mut world, tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
+    world.insert_non_send(reservation(SwitchStage::SendOff));
     tx.send(KanadeNotice::Stopped(KanadeStopped {
         cause: KanadeStopCause::Quit,
         handoff: Some(ChangeHandoff { script: None }),
@@ -168,7 +132,7 @@ fn pending_switch_stop_is_quit_not_switch() {
             vec![tracing::Level::INFO],
             true,
         ),
-        "未処理の切替の停止が切替として捌かれた（最初の出所・切替の経路の記録 [降ろした・起こした・起こせない・文脈なし]・予約・今日の終了・置き場）: {events:?}"
+        "未処理の切替の停止が切替として捌かれた（最初の出所・切替の経路の記録 [降ろした・起こした・起こせない・文脈なし]・予約・終了の記録・置き場）: {events:?}"
     );
 }
 
@@ -178,7 +142,7 @@ fn pending_switch_stop_is_quit_not_switch() {
 fn pending_change_cancelled_is_quiet_during_session_end() {
     let tmp = TempPath::new("session-end-pending-cancel");
     let (mut world, tx) = bare_world(&tmp);
-    world.insert_non_send(send_off_reservation());
+    world.insert_non_send(reservation(SwitchStage::SendOff));
     tx.send(KanadeNotice::ChangeCancelled {
         reason: CancelReason::CloseRequest,
     })
@@ -204,7 +168,8 @@ fn pending_change_cancelled_is_quiet_during_session_end() {
 fn session_end_after_fault_exit_keeps_mark() {
     let tmp = TempPath::new("session-end-after-fault");
     let (mut world, _tx) = bare_world(&tmp);
-    let fault_origin = ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault()));
+    let fault_origin =
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault(ShioriFaultKind::Disconnected)));
     quit_app(&mut world, fault_origin.clone());
 
     let ((), events) = capture(|| on_os_session_end(&mut world, Entity::PLACEHOLDER));

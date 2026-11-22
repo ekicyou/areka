@@ -88,7 +88,7 @@ fn restore_seam_prefers_saved_position_over_default() {
     assert_eq!(
         out[0].char_pos,
         PointPx { x: 800, y: 300 },
-        "植えた保存位置が既定(100,100)に優先して spawn 前 placements へ載る（1.4）"
+        "植えた保存位置が既定(100,100)に優先して spawn 前 placements へ載る"
     );
     // 事後条件: 寸法・anchor は不変。
     assert_eq!(out[0].char_size, CSZ);
@@ -120,7 +120,7 @@ fn restore_seam_without_persist_is_identity_default() {
 
     assert_eq!(
         out, expected,
-        "永続不在は既定 placement に恒等＝既定位置解決のまま（1.5）"
+        "永続不在は既定 placement に恒等＝既定位置解決のまま"
     );
     assert!(
         restored.is_empty(),
@@ -164,7 +164,7 @@ fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
-        "記憶の値が既定と同じでも記憶から戻したスコープとして報告される（2.6・5.2）"
+        "記憶の値が既定と同じでも記憶から戻したスコープとして報告される"
     );
 }
 
@@ -194,7 +194,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     // 既定は保存値と別位置（保存値優先＝合流順序の証明のため）。
     let default_char_pos = PointPx { x: 900, y: 200 };
     let placements = vec![synthetic_placement(default_char_pos)];
-    // 作業領域の右端は 450: キャラ窓 (30,300)-(430,900) は収まるが、バルーンは右へはみ出し押し込まれる。
+    // 作業領域は (0,0)-(450,1080)。キャラ窓 (30,300)-(430,900) は収まり、バルーンだけが左の辺からはみ出す。
     let snapshot = MonitorSnapshot {
         work_areas: vec![RectPx {
             left: 0,
@@ -211,7 +211,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0usize],
-        "保存位置を採用した scope として報告される（合流規則は関門の設置で変わらない）"
+        "保存位置を採用した scope として報告される"
     );
     assert_eq!(
         out[0].char_pos,

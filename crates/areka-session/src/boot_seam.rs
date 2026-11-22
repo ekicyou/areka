@@ -19,7 +19,7 @@ pub fn restore_merged_placements(
     std::collections::BTreeMap<usize, Option<areka_placement::chain_finalize::AdjacencyMark>>,
     bool,
 ) {
-    // 唯一の IO 点: mount 解決 → Ghost スコープ永続 entries 先読み。
+    // 唯一の IO 点: ゴーストの descript を読めるかの確かめ → Ghost スコープの記憶の先読み。
     let entries = areka_placement::persist::load_restored_state(ghost_root);
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）と、記憶の位置を
     // 寄せて表示したかの判定（窓を作る閉包が `RestoredPositionsClamped` へ据える）。

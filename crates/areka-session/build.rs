@@ -1,5 +1,5 @@
-//! areka-session のテストの exe にだけ、標準の部品（comctl32）の版 6 を使う申告のマニフェスト
-//! 本体の `../areka/areka.manifest`（同じ申告）を埋める。
+//! areka-session のテストの exe にだけ、標準の部品（comctl32）の版 6 を使う申告として本体の
+//! `../areka/areka.manifest` を埋める。
 //!
 //! 告知（`alert.rs`）が版 6 にしか無い `TaskDialogIndirect` を取り込むので、申告の無い exe は
 //! 起動の時点で 0xc0000139（入口が見つからない）で落ちる。申告の正本は本体の `areka.manifest` で、写しは持たない。

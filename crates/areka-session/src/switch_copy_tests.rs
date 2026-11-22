@@ -1,7 +1,7 @@
 //! 切替の写しの決定論テスト。
 //!
 //! 写しの答えは受信端を自分で組んで送り、届く順をテストが決める（時刻・眠りに頼らない）。
-//! 背景のスレッドを走らせる [`start`] の確かめは、受信端の `recv` で答えを待つ。切替先は
+//! 背景のスレッドを走らせる [`start`] の確かめは、受信端で答えを有界に待つ。切替先は
 //! 起動入力の作り口の無い World で起こすので、起こす試みは `ghost_switch_boot_failed` で倒れ、
 //! その `dir` 欄が「どのフォルダから起こしたか」を答える。根は `target\` の下に掘る。
 
@@ -17,8 +17,6 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
@@ -76,29 +74,14 @@ impl Fixture {
         let mut world = World::new();
         world.insert_non_send(AppExit::new());
         let a = self.bundled("A");
-        world.insert_resource(BootContext {
-            roots: self.roots(),
-            roots_origin: crate::roots::RootsOrigin::Default,
-            app_profile_dir: self.user.join("profile"),
-            helper_exe: self.exe.join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: a.clone(),
-                    balloon_root: self.exe.join("balloon").join("X"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Memory,
-                    dir: a.clone(),
-                    folder: Some("A".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: self.exe.join("balloon").join("X"),
-                    folder: Some("X".to_owned()),
-                },
-            },
-        });
+        let mut ctx = crate::reload::test_support::boot_context_named(
+            &self.user,
+            &BasewareRoot::new(self.exe.clone()),
+            "A",
+            "X",
+        );
+        ctx.roots = self.roots();
+        world.insert_resource(ctx);
         world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, a.clone()))));
         world.insert_non_send(SwitchInFlight {
             target: SwitchTarget {

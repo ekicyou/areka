@@ -4,31 +4,12 @@
 //! 最初の物のまま残り、記録だけ残って告知が出ない。汲み出しはそれを受け手に残し、後始末が
 //! [`take_receiver`] → [`tell_at_close`] の降ろす途中の失敗として告げる。
 
-use std::path::PathBuf;
+use areka_sylphya::PersistKey;
 
-use areka_sylphya::{PersistKey, PersistScope};
-use wintf::AppExit;
-
+use super::tests::{failure, installed_world};
 use super::*;
 use crate::app_exit::FirstExit;
 use log_capture_kit::{CapturedEvent, capture};
-
-fn failure(reason: &str) -> PersistFailure {
-    PersistFailure {
-        scope: PersistScope::App,
-        dir: Some(PathBuf::from(r"C:\areka\profile\areka")),
-        keys: vec![PersistKey::LastRunning],
-        cause: PersistFailureCause::Io(reason.to_owned()),
-    }
-}
-
-fn installed_world() -> World {
-    let mut world = World::new();
-    world.insert_resource(Schedules::default());
-    world.insert_non_send(AppExit::new());
-    install(&mut world);
-    world
-}
 
 fn count(events: &[CapturedEvent], event: &str) -> usize {
     events
@@ -43,7 +24,10 @@ fn count(events: &[CapturedEvent], event: &str) -> usize {
 fn a_failure_after_another_origin_is_told_at_close() {
     let mut world = installed_world();
     quit_app(&mut world, ExitOrigin::Escape);
-    sender(&world).unwrap().send(failure("late")).unwrap();
+    sender(&world)
+        .unwrap()
+        .send(failure(PersistKey::LastRunning, "late"))
+        .unwrap();
 
     let (_, drained) = capture(|| drain_system(&mut world));
 
@@ -76,8 +60,14 @@ fn a_failure_after_another_origin_is_told_at_close() {
 #[test]
 fn a_failure_after_a_write_failure_is_still_drained() {
     let mut world = installed_world();
-    quit_app(&mut world, ExitOrigin::MemoryWriteFailed(failure("first")));
-    sender(&world).unwrap().send(failure("second")).unwrap();
+    quit_app(
+        &mut world,
+        ExitOrigin::MemoryWriteFailed(failure(PersistKey::LastRunning, "first")),
+    );
+    sender(&world)
+        .unwrap()
+        .send(failure(PersistKey::LastRunning, "second"))
+        .unwrap();
 
     let (_, events) = capture(|| drain_system(&mut world));
 
@@ -91,7 +81,10 @@ fn a_failure_after_os_session_end_is_drained_and_logged() {
     let mut world = installed_world();
     world.insert_resource(crate::session_end::SessionEnded);
     quit_app(&mut world, ExitOrigin::SessionEnd);
-    sender(&world).unwrap().send(failure("late")).unwrap();
+    sender(&world)
+        .unwrap()
+        .send(failure(PersistKey::LastRunning, "late"))
+        .unwrap();
 
     let (_, events) = capture(|| drain_system(&mut world));
 

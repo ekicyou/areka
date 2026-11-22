@@ -24,8 +24,7 @@ pub mod shell_balloon_switch;
 /// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す。
 pub mod switch_copy;
 
-/// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-/// 告知の抑止（`AREKA_NO_ALERT`）。
+/// 告知（起動を止める 4 場面・SHIORI が止まった・記憶を書けない）と、尋ねる口・抑止（`AREKA_NO_ALERT`）。
 pub mod alert;
 
 /// 記憶を書けない失敗を集める致命の机。

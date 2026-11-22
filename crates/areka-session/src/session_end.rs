@@ -175,6 +175,10 @@ pub fn end_session_from(world: &mut World, budget: WaitBudget) {
     );
 }
 
+#[cfg(any(test, feature = "test-support"))]
+#[path = "session_end_test_support.rs"]
+pub mod test_support;
+
 #[cfg(test)]
 #[path = "session_end_deadline_tests.rs"]
 mod deadline_tests;

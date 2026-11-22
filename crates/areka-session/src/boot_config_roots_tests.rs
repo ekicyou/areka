@@ -4,16 +4,14 @@
 //! 綴りでも当たる）・どの根にも無いときの次の候補と記録（値は格納フォルダの列を `; ` でつないだもの）。
 //! 根は `TempPath::under_target`。
 
+use super::balloon_tests::put_memory;
 use crate::boot_config::resolve_balloon_for_ghost;
+use crate::boot_resolve::boot_resolve_tests::no_pick;
 use crate::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 /// 上の根 `top` と下の根 `low`（どちらも `ghost\`・`balloon\` を持つ）。
 fn two_roots(tmp: &TempPath) -> (PathBuf, PathBuf, BasewareRoots) {
@@ -46,21 +44,6 @@ fn put_balloon(root: &Path, folder: &str) -> PathBuf {
     std::fs::create_dir_all(&dir).expect("フォルダを組む");
     std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
     dir
-}
-
-/// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
-fn put_balloon_memory(ghost: &Path, folder: &str) {
-    let dir = ghost
-        .join("ghost")
-        .join("master")
-        .join("profile")
-        .join("areka");
-    std::fs::create_dir_all(&dir).expect("フォルダを組む");
-    std::fs::write(
-        dir.join("sylphya.toml"),
-        format!("format-version = 1\n[last]\nballoon = \"{folder}\"\n"),
-    )
-    .expect("記憶");
 }
 
 fn named<'e>(events: &'e [CapturedEvent], event: &str) -> Vec<&'e CapturedEvent> {
@@ -98,7 +81,7 @@ fn memory_folder_name_hits_by_the_one_rule_across_roots() {
     let tmp = TempPath::under_target("cfg-roots-memory");
     let (top, low, roots) = two_roots(&tmp);
     let ghost = put_ghost(&top, "g", "");
-    put_balloon_memory(&ghost, "MINE");
+    put_memory(&ghost, "MINE");
     put_balloon(&top, DEFAULT_BALLOON_FOLDER);
     let mine = put_balloon(&low, "mine");
     let (got, events) = capture(|| resolve_balloon_for_ghost(&roots, &ghost, no_pick));
@@ -110,14 +93,14 @@ fn memory_folder_name_hits_by_the_one_rule_across_roots() {
     assert!(named(&events, "last_balloon_not_found").is_empty());
 }
 
-/// どの根にも無い記憶 → warn 1 件（event 名と欄名は今のまま・値は各根の `balloon\` を `; ` で
-/// つないだもの）で、今と同じ次の候補（既定）へ。
+/// どの根にも無い記憶 → warn `last_balloon_not_found` 1 件（`balloon_store` は各根の `balloon\` を
+/// `; ` でつないだもの）で、次の候補（既定）へ。
 #[test]
 fn memory_in_no_root_warns_with_store_list_and_falls_through() {
     let tmp = TempPath::under_target("cfg-roots-memory-gone");
     let (top, low, roots) = two_roots(&tmp);
     let ghost = put_ghost(&top, "g", "");
-    put_balloon_memory(&ghost, "gone");
+    put_memory(&ghost, "gone");
     put_balloon(&top, "x");
     let default_balloon = put_balloon(&low, DEFAULT_BALLOON_FOLDER);
     let (got, events) = capture(|| resolve_balloon_for_ghost(&roots, &ghost, no_pick));

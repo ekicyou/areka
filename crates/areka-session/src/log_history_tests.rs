@@ -153,7 +153,7 @@ fn unrelated_info_is_not_kept() {
 }
 
 #[test]
-fn rules_table_is_the_designed_fourteen_rows_in_order() {
+fn rules_table_is_these_fourteen_rows_in_order() {
     let rows: Vec<(&str, Kind, bool)> = RULES.iter().map(|r| (r.target, r.kind, r.exact)).collect();
     assert_eq!(
         rows,

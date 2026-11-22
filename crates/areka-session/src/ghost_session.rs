@@ -214,8 +214,8 @@ pub fn prepare_ghost_windows(
     // 窓 spawn より先に結線しても取りこぼさない）。
 
     // 復元マージ: `load_restored_state` → `restore_and_judge` → `apply_balloon_limit` →
-    // `restored_scope_marks` の順で保存位置を反映した placements を得て、titles と一緒に closure へ move する。作者基準 DPI は `prepared` を
-    // 分解する前に取り出して呼び手へ返す。
+    // `restored_scope_marks` の順で保存位置を反映した placements を得て、titles と一緒に closure へ
+    // move する。作者基準 DPI は `prepared` を分解する前に取り出して呼び手へ返す。
     let author_dpi = prepared.author_dpi;
     // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う）。
     let zorder_raw = prepared.zorder_raw.clone();
@@ -595,9 +595,10 @@ fn boot_wired(
         ghost_session_runtime::rewire_runtime_consumers(world, runtime, ghost, balloon);
     }
     // バルーン選択肢対話配線を World へ結線する: mpsc チャネル生成＋`BalloonWiring`／`BalloonHover`／
-    // `ChoiceSelectionInbox`／`ShellBoxHover`（NonSend）挿入。離脱の系の登録は [`register_systems`]、ハンドラ装着は [`open_ghost_windows`] の
-    // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `RuntimeWiring` を self-gate
-    // するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating）。
+    // `ChoiceSelectionInbox`／`ShellBoxHover`（NonSend）挿入。離脱の系の登録は [`register_systems`]、
+    // ハンドラ装着は [`open_ghost_windows`] の spawn 直後（`attach_balloon_pointer_handlers`）が担う。
+    // balloon ハンドラは `RuntimeWiring` を self-gate するため wired 経路でのみ意味を持つ
+    // （`wire_mouse_input` と同じ gating）。
     areka_input::balloon::wire_balloon_choice(world);
     Ok(GhostSession {
         kanade: outcome.ghost.as_ref().map(|r| r.kanade().clone()),

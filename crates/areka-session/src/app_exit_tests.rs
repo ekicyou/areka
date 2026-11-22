@@ -151,14 +151,14 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
     assert!(world.get_entity(leaf).is_err());
     assert!(
         world.get_entity(later).is_err(),
-        "打ち切りは後続の標的を止めない（Req 6.3「他の scope の処理を継続」）"
+        "打ち切りは後続の標的を止めない"
     );
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
     // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現。
     // ここが見ているのは areka 自身の出力である（bevy の `log` 経由 warn は対照アーム担当）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
-        "破棄済み標的に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        "破棄済み標的に対して警告以上のログが出ている: {events:?}"
     );
     let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
     assert_eq!(

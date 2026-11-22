@@ -39,9 +39,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 use super::end_session_within;
+use super::test_support::{event_field, on_close_ref0};
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::hold_support::HoldAt;
-use areka_runtime::spine::{Progress, RecordedCall, run_bounded, wait_until};
+use areka_runtime::spine::{Progress, run_bounded, wait_until};
 
 /// 見張りが発火しない上限（後始末が戻るのは解き手が解いたときだけにする）。
 const HOUR: Duration = Duration::from_secs(3600);
@@ -98,19 +99,6 @@ fn send_null(hwnd: isize) {
     // SAFETY: ポインタを運ばない問い合わせ。宛先の窓は UI 役のスレッドが生かしている
     // （UI 役のスレッドが終われば窓も消え、送信は返る）。
     let _ = unsafe { SendMessageW(HWND(hwnd as *mut _), WM_NULL, None, None) };
-}
-
-/// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
-fn on_close_ref0(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .filter_map(|c| match c {
-            RecordedCall::Notify { id, references } if id == "OnClose" => {
-                Some(references.first().cloned().unwrap_or_default())
-            }
-            _ => None,
-        })
-        .collect()
 }
 
 /// UI 役のスレッドの本体（モジュールの説明の手順）。
@@ -179,11 +167,7 @@ fn reproduce() -> Observed {
         teardown_before_send: teardown_seq < send_seq,
         unblock_calls: handle.unblock_calls(),
         on_close_ref0: on_close_ref0(&rig.calls("A").last().cloned().unwrap_or_default()),
-        shiori_cut: events
-            .iter()
-            .find(|e| e.field_str("event") == Some("os_session_end_done"))
-            .and_then(|e| e.field_str("shiori_cut").or_else(|| e.field("shiori_cut")))
-            .map(str::to_owned),
+        shiori_cut: event_field(&events, "os_session_end_done", "shiori_cut"),
     }
 }
 

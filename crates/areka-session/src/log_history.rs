@@ -565,10 +565,9 @@ pub fn init() {
 /// 写しの窓を触るテストが順に回るための握り。
 #[cfg(any(test, feature = "test-support"))]
 pub fn hold() -> MutexGuard<'static, ()> {
-    // 写しの窓そのものの `WINDOW` と名がぶつかるので、関数の中に置く。
     /// 窓を触るテストの排他（窓を開け閉めする書き出しの走りの試験 `offline_dump_tests` も握る）。
-    static WINDOW: Mutex<()> = Mutex::new(());
-    WINDOW.lock().unwrap_or_else(PoisonError::into_inner)
+    static HOLD: Mutex<()> = Mutex::new(());
+    HOLD.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]
