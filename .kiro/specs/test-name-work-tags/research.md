@@ -431,7 +431,8 @@ HEAD `122c4140a` の当たり。式 4 の 12 行の内訳は `zorder_wiring_test
 ### 14.6 全体テスト（要件 3.5）
 
 - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を、取り込む前の `0f2a4d9fa` で排他テストの机を持った回に 1 度回し、終了コード 0・「all steps green」（2026-11-22）。
-- #498 を取り込んだ後の HEAD の全体テストは、最後の確かめ（`/kiro-validate-impl`）で回し直す。
+- #498 を取り込んだ後の `6b90d9e39` でも、最後の確かめ（`/kiro-validate-impl`）で排他テストの机を持った回に 1 度回し、終了コード 0・「all steps green」（2026-11-22）。
+- 要件 6.5 の知らせ: G1 に手を付ける前に、`dola-cue-test-builder` のセッションへ「`consumer_ledger_test_support.rs` の 28 行のコメントの名だけを直す・126 行からの塊に触らない・cue のテストは `fn` の行とコメントだけを変える」と送った。
 
 ### 14.7 取り込む前の測り（`0f2a4d9fa`）
 
