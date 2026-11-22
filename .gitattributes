@@ -1,0 +1,5 @@
+# 取り出しも登録も LF にそろえる。core.autocrlf=true の Windows では取り出しが CRLF になる一方、
+# 道具（cargo の生成・ukadoc-survey の報告・エージェントの書き込み）は LF で書くので、
+# 中身が同じでも改行だけ違う「変更」が作業コピーに残り続けるため。
+# バイトのまま扱うフォルダは、その下の .gitattributes の `-text` が優先する。
+* text=auto eol=lf
