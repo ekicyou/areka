@@ -1152,3 +1152,22 @@ RED は n/a（文字列の target の書き換えのみ。期待値の側も同�
 - 触らない約束の `crates/areka/src/placement_tests/`・`crates/dola/`・`crates/areka-ghost/`・`crates/areka-seriko/`
 
 確かめ: `cargo check -p areka-runtime -p areka-kanade -p areka -p areka-session --all-targets` 警告 0・`cargo fmt --all -- --check` 差分なし。
+
+### 6.4
+
+古いパスと古い出所の名前を `git grep` で数えた。範囲は `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md`（`P` とする）。`roadmap-history.md`・`roadmap.md`・`.kiro/specs/completed/`・`doc/roadmap-overview-2026-10-16.html` は範囲の外（初めから数えない）。
+
+コマンドと件数:
+- `git grep -n -F 'crates/areka/src/session/' -- $P` → 1 件（`crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66`・除外 B）
+- `git grep -n -E 'areka/src/session/|(^|[^A-Za-z0-9_/-])session/[A-Za-z0-9_]+\.rs' -- $P` → 5 件（`areka-placement` の 4 か所と `REWRITE_TABLE.md:66`・すべて除外）。前に `-` が付く `areka-session/<名>.rs`（新しい名・本体の `session_tests/` 6 件）は移した先なので数えない
+- `git grep -n -E 'areka::session(::|=|$)' -- $P` → 0 件
+- `git grep -n -F 'areka::session' -- $P`（字面すべて） → 0 件
+
+除外した所（残りの 5 件はすべてここに含まれる）:
+- `crates/areka-placement/src/diag.rs:46`・`persist.rs:330`・`resolver.rs:97`・`resolver_resolve_balloon_tests.rs:123`（`session/boot_seam.rs` を名指す・触らない約束・`audit-areka-app` へ申し送り）
+- `crates/pilot/examples/pilot-windows-rs-next/REWRITE_TABLE.md:66`（過去の書き換えの記録の引用）
+- `crates/areka-placement/examples/window-placement.rs:37`（古い `crates/areka/src/smoke_exit.rs`・上の 3 つのパターンには当たらないが申し送りの一覧に載せる）
+
+除外のほかに当たった所: 0 件。
+
+RED: 該当なし（数えるだけ）。
