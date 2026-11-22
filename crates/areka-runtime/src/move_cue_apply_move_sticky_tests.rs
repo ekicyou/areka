@@ -5,11 +5,11 @@
 //! 動かすのはスコープ 1（基準はスコープ 0 の窓）、組の相手はスコープ 0。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::{Entity, World};
 use wintf::ecs::window::drain_window_pos_commands;
@@ -24,6 +24,7 @@ use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
+use areka_placement::test_support::SharedFakeIo;
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 帳簿を据え、台本の組 `members` を作る。
@@ -197,16 +198,6 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     finish(world);
 }
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 連れ動いた相手の位置を記憶に書かない。
 #[test]
 fn partner_position_is_not_persisted() {
@@ -217,7 +208,7 @@ fn partner_position_is_not_persisted() {
     };
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
+        io: Box::new(SharedFakeIo::new(shared.clone())),
         runtime_sink: None,
     });
     let (mut world, gw) = move_world();
@@ -241,10 +232,13 @@ fn partner_position_is_not_persisted() {
     );
 
     parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
+    let loaded: HashMap<PersistKey, String> = load_scope(
+        PersistScope::Ghost,
+        &roots,
+        &SharedFakeIo::new(shared.clone()),
+    )
+    .into_iter()
+    .collect();
     assert!(
         !loaded
             .keys()
@@ -252,7 +246,7 @@ fn partner_position_is_not_persisted() {
         "窓の位置を記憶に書かない: {loaded:?}"
     );
     parts.publisher.close();
-    let _ = parts.handle.join();
+    crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
     finish(world);
 }
 

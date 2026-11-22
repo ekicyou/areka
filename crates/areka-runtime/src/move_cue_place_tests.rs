@@ -3,16 +3,16 @@
 // 偽の窓（`spawn_ghost_windows`＋偽の `WindowHandle`）・主と副の偽の `Monitor`・その写しの
 // `MonitorSnapshot` を置いた headless World で `apply_move_directive` を駆動する。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
 use crate::move_cue::{MoveDirective, parse_move_directive};
@@ -24,6 +24,7 @@ use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::test_support::{SharedFakeIo, give_fake_handles};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（下にタスクバー）。
@@ -79,15 +80,7 @@ fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
         &[placement(0, S0, Anchor::Free), placement(1, S1, anchor1)],
         &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
     );
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [gw.char_window(scope), gw.balloon_window(scope)] {
-            raw += 0x10;
-            world.entity_mut(e.unwrap()).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-        }
-    }
+    give_fake_handles(&mut world, &gw);
     // 副モニタを先に置く（先頭を主と取り違える誤りを噛ませる）。
     let monitors = [monitor(2, SECONDARY, false), monitor(1, PRIMARY, true)];
     world.insert_resource(MonitorSnapshot::from_monitors(&monitors));
@@ -318,16 +311,6 @@ fn resize_after_move_keeps_bottom_and_center() {
 
 // バルーン・記憶・画面の外・Anchored
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 画面の外へ出ても寄せず、バルーンは今のずらしで付いて動き、記憶には何も送られず、
 /// `Anchored` とバルーンのずらしはビット同一。
 #[test]
@@ -339,7 +322,7 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
     };
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
+        io: Box::new(SharedFakeIo::new(shared.clone())),
         runtime_sink: None,
     });
     let (mut world, gw) = world_with(Anchor::Free);
@@ -379,11 +362,15 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
     );
 
     parts.publisher.barrier().expect("barrier が返る");
-    let stored = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let stored = load_scope(
+        PersistScope::Ghost,
+        &roots,
+        &SharedFakeIo::new(shared.clone()),
+    );
     assert!(stored.is_empty(), "記憶に何も送られない: {stored:?}");
     let _residue = wintf::ecs::window::drain_window_pos_commands();
     parts.publisher.close();
-    let _ = parts.handle.join();
+    crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
 }
 
 // 記録
@@ -528,27 +515,29 @@ fn absolute_move_rebases_the_pattern_shift_per_axis() {
 /// 自分の窓を基準にした `\![move]` は相対なので、当てた分を残す（ずれを二度数えない）。
 #[test]
 fn relative_move_keeps_the_pattern_shift() {
-    let (mut world, gw) = world_with(Anchor::Free);
-    let target = gw.char_window(1).unwrap();
-    assert!(apply_char_shift(
-        &mut world,
-        target,
-        (10, 20),
-        ScaleRatio::ONE
-    ));
+    for base in ["--base=me", "--base=1"] {
+        let (mut world, gw) = world_with(Anchor::Free);
+        let target = gw.char_window(1).unwrap();
+        assert!(apply_char_shift(
+            &mut world,
+            target,
+            (10, 20),
+            ScaleRatio::ONE
+        ));
 
-    assert!(apply_move_directive(
-        &mut world,
-        &args(&["--X=5", "--Y=5", "--base=me"]),
-        ScaleRatio::ONE
-    ));
-    assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 });
+        assert!(apply_move_directive(
+            &mut world,
+            &args(&["--X=5", "--Y=5", base]),
+            ScaleRatio::ONE
+        ));
+        assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 }, "{base}");
 
-    assert!(apply_char_shift(
-        &mut world,
-        target,
-        (0, 0),
-        ScaleRatio::ONE
-    ));
-    assert_eq!(pos(&world, target), PointPx { x: 205, y: 505 });
+        assert!(apply_char_shift(
+            &mut world,
+            target,
+            (0, 0),
+            ScaleRatio::ONE
+        ));
+        assert_eq!(pos(&world, target), PointPx { x: 205, y: 505 }, "{base}");
+    }
 }

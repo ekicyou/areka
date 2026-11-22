@@ -8,9 +8,9 @@
 // 取りこぼす（機序は `log_capture_kit` の crate doc）。
 
 use super::*;
-use crate::consumer_ledger::test_support::broken_custom_cue;
+use crate::consumer_ledger::test_support::{actor_carrier_cue, broken_custom_cue};
 use crate::frame::test_support::{capture_logs, count_level};
-use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::cue::CueSink;
 use std::sync::mpsc::{TryRecvError, channel};
 
 #[test]
@@ -110,12 +110,7 @@ fn canonical_non_move_carrier_debug_skips() {
     for name in ["bind", "raise", "unknownfoo"] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        let cue = TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::command_carrier(name, vec!["1".into(), "2".into()]),
-            duration: 0.0,
-        };
+        let cue = actor_carrier_cue("0", name, &["1", "2"]);
         let logs = capture_logs(|| sink.emit(cue));
 
         assert_eq!(
@@ -142,15 +137,7 @@ fn canonical_non_move_carrier_debug_skips() {
 fn parse_notes_warn_once_each_and_directive_is_sent() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    let cue = |tokens: &[&str]| TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("1"),
-        command: CueCommand::command_carrier(
-            "move",
-            tokens.iter().map(|s| s.to_string()).collect(),
-        ),
-        duration: 0.0,
-    };
+    let cue = |tokens: &[&str]| actor_carrier_cue("1", "move", tokens);
 
     let logs = capture_logs(|| sink.emit(cue(&["--X=abc", "--bogus=1", "--time=500"])));
     let substituted: Vec<&String> = logs
@@ -183,12 +170,7 @@ fn broken_execute_addressed_custom_is_debug_not_warn() {
 fn execute_resetwindowpos_sends_without_warn() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier("execute", vec!["resetwindowpos".into()]),
-        duration: 0.0,
-    };
+    let cue = actor_carrier_cue("0", "execute", &["resetwindowpos"]);
     let logs = capture_logs(|| sink.emit(cue));
     assert_eq!(count_level(&logs, "WARN"), 0, "{logs:?}");
     assert_eq!(rx.try_recv(), Ok(PositionCue::ResetWindowPos));

@@ -279,3 +279,24 @@ fn crossed_window_link_pairs_are_not_sent() {
         );
     }
 }
+
+/// 受信端が落ちていても落ちず、送れなかったことを `warn!` 1 行で記録する。
+#[test]
+fn dropped_receiver_is_logged_and_does_not_panic() {
+    let (tx, rx) = channel::<PositionCue>();
+    let mut sink = MoveCueSink::new(tx);
+    drop(rx);
+    let ((), events) = log_capture_kit::capture(|| {
+        sink.emit(actor_carrier_cue(
+            "0",
+            "move",
+            &["-353", "", "", "0", "base", "base"],
+        ))
+    });
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert!(warns[0].message().contains("送出に失敗"), "{events:?}");
+}
