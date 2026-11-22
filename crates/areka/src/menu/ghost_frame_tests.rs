@@ -18,10 +18,10 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::menu::{MenuAction, MenuWiring, wire_menu};
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::SwitchInFlight;
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::SwitchInFlight;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -43,7 +43,7 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 pub(crate) fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

@@ -9,7 +9,7 @@ use bevy_ecs::prelude::World;
 /// 実モニタの列挙と作業プール（`WintfTaskPool`）を要してテスト困難なので、純粋シーム（load→apply）を
 /// 本ヘルパへ抽出して単体で檻に入れる（IO は [`areka_placement::persist::load_restored_state`] の
 /// 1 点のみ・merge は純関数）。
-pub(crate) fn restore_merged_placements(
+pub fn restore_merged_placements(
     ghost_root: &std::path::Path,
     placements: Vec<areka_placement::resolver::ScopePlacement>,
     snapshot: &areka_placement::follow::MonitorSnapshot,
@@ -49,7 +49,7 @@ pub(crate) fn restore_merged_placements(
 /// （`persist_entries` は `PersistWiring` 不在で debug!＋no-op へ縮退）。挿入は純粋な World 変異ゆえ
 /// headless 単体テスト可能。
 /// を薄く包み `#[cfg(test)]` の檻に入れる）。
-pub(crate) fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
+pub fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
     world.insert_non_send(areka_placement::persist::PersistWiring { publisher });
 }
 

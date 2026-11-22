@@ -173,7 +173,7 @@ impl ShioriHostSink {
 /// App スコープのみの sylphya アクターを起動し、その reader/publisher と与えた session `AskerId` で
 /// sink を構築する（sink 組立各所〔shiori_session 系〕共通の App-root-only spawn）。
 ///
-/// - App root は呼び手が渡す（本番の demo は bin の [`crate::session::boot_config::default_app_profile_dir`]・テストは
+/// - App root は呼び手が渡す（本番の demo は bin の [`areka_session::boot_config::default_app_profile_dir`]・テストは
 ///   `None`＝本物の環境で置き場を決めない）。ghost/shell/balloon root は付けない
 ///   （bin の serving surface は App スコープのみを据える・ghost/shell スコープは ghost boot 系列が
 ///   `<shiori.dir>`／`<shell.dir>` から導く）。

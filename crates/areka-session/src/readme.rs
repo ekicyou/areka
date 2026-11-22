@@ -17,7 +17,7 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 /// 台本の受け口から届く要求。
-pub(crate) enum ReadmeRequest {
+pub enum ReadmeRequest {
     /// 引数なしの `\![open,readme]`。
     ///
     /// 中身を持たないのは、開くファイルが要求ごとではなく起動時に決まるからである
@@ -30,7 +30,7 @@ pub(crate) enum ReadmeRequest {
 /// 台本の説明書の要求の綴り（記録の `tag`）。
 const SCRIPT_README_TAG: &str = "\\![open,readme]";
 /// メニューの「説明書」の印（記録の `tag`）。
-pub(crate) const MENU_TAG: &str = "menu:readme";
+pub const MENU_TAG: &str = "menu:readme";
 
 /// `readme` キーが無いときの正典の既定名。
 ///
@@ -49,7 +49,7 @@ pub(crate) fn resolve_path(ghost_root: &Path, key: Option<&str>) -> PathBuf {
 ///
 /// `missing_logged` を [`Cell`] にしているのは、メニューの供給関数が `&World` しか持たない
 /// まま [`is_available`] を呼ぶためである（共有借用のまま初回の記録を覚える）。
-pub(crate) struct ReadmeWiring {
+pub struct ReadmeWiring {
     /// 起動時に決めた説明書のファイル（[`resolve_path`] の結果）。
     path: PathBuf,
     /// 台本からの要求の受信端（送出端は `ReadmeCueSink` が持つ）。
@@ -61,7 +61,7 @@ pub(crate) struct ReadmeWiring {
 /// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
 /// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所）。
-pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
+pub fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
     world.insert_non_send(ReadmeWiring {
         path,
         rx,
@@ -112,8 +112,8 @@ pub(crate) fn register_readme_drain(world: &mut World) {
 
 impl ReadmeWiring {
     /// 起動時に決めた説明書のファイル（テスト専用の読み口）。
-    #[cfg(test)]
-    pub(crate) fn path(&self) -> &Path {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn path(&self) -> &Path {
         &self.path
     }
 }
@@ -122,7 +122,7 @@ impl ReadmeWiring {
 ///
 /// 無いときは「説明書」を灰色で出すための `false` を返し、**初めて無いと分かったときだけ**
 /// `debug!` で記録する（毎 tick の照会で記録が溢れない）。持ち物が無いときも `false`。
-pub(crate) fn is_available(world: &World) -> bool {
+pub fn is_available(world: &World) -> bool {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::trace!(
             event = "readme_available_no_wiring",
@@ -152,7 +152,7 @@ pub(crate) fn is_available(world: &World) -> bool {
 ///
 /// 説明書のファイルが無ければ渡さず、要求 1 件につき 1 行を `warn!` で記録して戻る。
 /// [`is_available`] は呼ばない——メニュー側の初回だけの `debug!` を奪うため。
-pub(crate) fn open_from_world(world: &World, tag: &str) {
+pub fn open_from_world(world: &World, tag: &str) {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::warn!(
             event = "readme_open_no_wiring",
@@ -209,7 +209,7 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
 }
 
 // OS の境界。
-pub(crate) mod os_port;
+pub mod os_port;
 
 // 行き先の規則。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
 pub(crate) mod destination;
@@ -218,7 +218,7 @@ pub(crate) mod destination;
 mod opener;
 
 /// `\![open,…]` の受け口。
-pub(crate) mod readme_cue;
+pub mod readme_cue;
 
 #[cfg(test)]
 mod opener_test_support;

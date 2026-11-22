@@ -190,9 +190,9 @@ fn omitted_or_matching_name_answers_with_the_running_ghost() {
 // ---- 何もさせない（偽の SHIORI で起こした本物の単位） ----
 
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// kanade に今の実行の状態を問い、台詞の再生中かを答える。問いは受信の順に処理されるので、先に送られた
 /// 依頼が済むまで待つ口にもなる（状態の問い合わせは SHIORI を呼ばない・呼出の記録からも除かれる）。

@@ -23,13 +23,13 @@ use wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands;
 use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender};
 
 use super::*;
-use crate::session::alert::AlertScene;
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
-use crate::session::ghost_session::{GhostSlot, open_ghost_windows};
-use crate::session::ghost_switch::{GhostSpec, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use areka_placement::spawn::{GhostWindowMarker, GhostWindows};
 use areka_runtime::spine::{Progress, ScriptedShioriBackend, wait_until};
+use areka_session::alert::AlertScene;
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
+use areka_session::ghost_session::{GhostSlot, open_ghost_windows};
+use areka_session::ghost_switch::{GhostSpec, SwitchRequest, SwitchVerdict, request_ghost_switch};
 
 /// B の `descript.txt` の `name`（フォルダ名と違う綴り＝Ref7 がフォルダ名でなく名前を運ぶことを見る）。
 pub(super) const B_NAME: &str = "ビー";

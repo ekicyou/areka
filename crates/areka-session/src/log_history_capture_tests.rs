@@ -3,16 +3,7 @@
 //! 窓はプロセスに 1 つなので、窓を触るテストは [`WINDOW`] を握って順に回す。
 //! 層を通った写しは exe の試験で確かめる（単体テストはプロセスの受け口を据えない）。
 
-use std::sync::Mutex;
-
 use super::*;
-
-/// 窓を触るテストの排他（窓を開け閉めする書き出しの走りの試験 `offline_dump_tests` も握る）。
-static WINDOW: Mutex<()> = Mutex::new(());
-
-pub(crate) fn hold() -> MutexGuard<'static, ()> {
-    WINDOW.lock().unwrap_or_else(PoisonError::into_inner)
-}
 
 const AT: Hms = Hms {
     hour: 9,

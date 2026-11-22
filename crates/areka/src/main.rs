@@ -38,8 +38,6 @@ mod reference_brain;
 /// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
-#[cfg(test)]
-mod crate_source_test_support;
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く。
 #[cfg(test)]
 mod placement_tests;
@@ -55,9 +53,6 @@ mod session_tests;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
-
-/// 本体に頼る切替・読み直し・起動・終わる相の層。
-mod session;
 
 mod mcp;
 mod menu;
@@ -119,7 +114,7 @@ mod scope_bind_fixture_test_support;
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    use session::{
+    use areka_session::{
         alert,
         boot_config::{self, default_app_profile_dir, default_helper_exe_path},
         boot_request, boot_resolve, exit_wait, ghost_session, log_history, readonly,
@@ -264,7 +259,7 @@ fn main() -> Result<()> {
         }
     };
 
-    session::smoke_exit::arm(&app);
+    areka_session::smoke_exit::arm(&app);
 
     // ゴーストごとの結線（`ghost_session::boot_ghost`）: 実 sink 結線を試み、成立しなければ `LogSink`×2 の
     // fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・loop ticker）は `GhostSession` に束ねて置き場
@@ -362,8 +357,8 @@ fn main() -> Result<()> {
 }
 
 /// 本体だけのモジュールの系の登録（`register_systems` へ渡す）。
-pub(crate) const BODY_SYSTEMS: session::body_systems::BodySystems =
-    session::body_systems::BodySystems {
+pub(crate) const BODY_SYSTEMS: areka_session::body_systems::BodySystems =
+    areka_session::body_systems::BodySystems {
         menu_poll: menu::register_menu_poll,
         after_input: register_body_after_input,
         after_char_pointer: menu::attach_release_handlers,
@@ -465,15 +460,15 @@ fn finish_after_run(
 // ---------------------------------------------------------------------------
 
 /// 起動の文脈と起動入力の作り口（本番版）を World へ据える（系の登録の直後に 1 回）。
-/// 作り口は本番の入力の組み立て（[`session::ghost_session::GhostBootInputs::production`]）を文脈の helper の
+/// 作り口は本番の入力の組み立て（[`areka_session::ghost_session::GhostBootInputs::production`]）を文脈の helper の
 /// パスと停止通知の送出端の写しと文脈の記憶の置き場で閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
 fn install_boot_context(
     world: &mut World,
-    ctx: session::boot_config::BootContext,
+    ctx: areka_session::boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
-    modules: session::boot_request::ModulePolicy,
+    modules: areka_session::boot_request::ModulePolicy,
 ) {
-    use session::ghost_session;
+    use areka_session::ghost_session;
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値）。
     let app_profile_dir = ctx.app_profile_dir.clone();
@@ -510,13 +505,13 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// ので、2 つの書き手が同時に書くと片方が消えうる）。
 fn boot_first_ghost(
     world: &mut World,
-    cfg: &session::boot_config::ConfigInputs,
+    cfg: &areka_session::boot_config::ConfigInputs,
     origin: areka_kanade::BootOrigin,
-    descript: &session::ghost_session::StartupDescriptValues,
-    ghost: &session::boot_resolve::GhostDecision,
-    balloon: &session::boot_resolve::BalloonDecision,
+    descript: &areka_session::ghost_session::StartupDescriptValues,
+    ghost: &areka_session::boot_resolve::GhostDecision,
+    balloon: &areka_session::boot_resolve::BalloonDecision,
 ) -> std::result::Result<(), areka_sylphya::PersistFailure> {
-    use session::{boot_config, boot_resolve, ghost_session};
+    use areka_session::{boot_config, boot_resolve, ghost_session};
     let argv_session = world
         .get_resource::<boot_config::BootContext>()
         .is_some_and(|ctx| ctx.argv_session);
@@ -558,12 +553,12 @@ fn boot_first_ghost(
 /// `run()` の後に置き場と起動の文脈から組むもの。
 struct AfterRun {
     /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
-    session: Option<session::ghost_session::GhostSession>,
+    session: Option<areka_session::ghost_session::GhostSession>,
     /// 告知の場面（最初の出所が Fault か記憶を書けなかったもので、OS のセッションの終了を処理していないときだけ）。
-    scene: Option<session::alert::AlertScene>,
+    scene: Option<areka_session::alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
-    mark: Option<session::session_mark::MarkInputs>,
+    mark: Option<areka_session::session_mark::MarkInputs>,
     /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`／`write_failure_of`・告知の場面の有無とは独立）。
     fault: bool,
 }
@@ -575,7 +570,7 @@ struct AfterRun {
 /// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
 /// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
 fn after_run(world: &mut World) -> AfterRun {
-    use session::{
+    use areka_session::{
         alert, app_exit, boot_config, boot_resolve, ghost_session, session_end,
         session_mark::MarkInputs,
     };

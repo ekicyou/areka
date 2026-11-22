@@ -201,7 +201,7 @@ fn logsink_fallback_ended_by_os_session_end_keeps_mark() {
     first_boot_memory(&mut rig, "A");
     let app = app_dir(&rig);
     let ((), events) = capture(|| {
-        crate::session::session_end::end_session_within(
+        areka_session::session_end::end_session_within(
             &mut rig.world,
             std::time::Duration::from_secs(60),
         )
@@ -242,7 +242,7 @@ fn argv_session_falling_back_neither_reads_writes_nor_clears_mark() {
     let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
-        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
+        areka_session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),

@@ -14,7 +14,7 @@ use areka_user_data::{UserRoot, UserRootOrigin};
 /// 根の並びを渡す環境変数。
 pub(crate) const ROOTS_ENV: &str = "AREKA_ROOT";
 /// 記憶の中の「実行ファイルの隣」の綴り。
-pub(crate) const EXE_TOKEN: &str = "<exe>";
+pub const EXE_TOKEN: &str = "<exe>";
 /// 記憶の値の項目の区切り。
 pub(crate) const MEMORY_SEPARATOR: char = '|';
 /// `AREKA_ROOT` の項目の区切り（引用符は解かない）。
@@ -22,7 +22,7 @@ const ENV_SEPARATOR: u16 = b';' as u16;
 
 /// 並び全体の出どころ（並びで 1 つ）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RootsOrigin {
+pub enum RootsOrigin {
     EnvVar,
     Memory,
     Default,
@@ -30,7 +30,7 @@ pub(crate) enum RootsOrigin {
 
 /// 並びに入れなかった項目（記録用）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RootSkip {
+pub enum RootSkip {
     /// `AREKA_ROOT` の空の項目（0 から数えて何番目か）。
     Empty { index: usize },
     /// 記憶の読めない項目（綴りのまま・理由 `empty`／`relative`／`invalid`／`exe_unavailable`）。
@@ -41,14 +41,14 @@ pub(crate) enum RootSkip {
 
 /// 並びの 1 根の見え方（記録と告知に使う）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RootStatus {
+pub struct RootStatus {
     pub dir: PathBuf,
     pub found: bool,
 }
 
 /// 決めた並び。`status` は `roots` と同じ順・同じ数で、少なくとも 1 つが `found`。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ResolvedRoots {
+pub struct ResolvedRoots {
     pub roots: BasewareRoots,
     pub origin: RootsOrigin,
     pub status: Vec<RootStatus>,
@@ -62,7 +62,7 @@ pub(crate) struct ResolvedRoots {
 /// どの腕も控え（`skipped`）と「既定へ倒した」（`memory_fell_back`）を持つ。起動が失敗しても
 /// 控えの warn を残すため。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RootError {
+pub enum RootError {
     /// 既定（記憶の `<exe>` だけで既定へ倒したときも）なのに実行ファイルの場所が取れない。
     ExeLocationUnavailable {
         tried: Vec<PathBuf>,
@@ -234,7 +234,7 @@ fn split_env(env: &OsStr, skipped: &mut Vec<RootSkip>) -> Vec<PathBuf> {
 
 /// 記憶の値を並びへ（`<exe>` の読み替え・空／相対／読めない項目の控え）。純粋。
 /// 空文字は 0 項目。
-pub(crate) fn decode_memory(value: &str, exe_dir: Option<&Path>) -> (Vec<PathBuf>, Vec<RootSkip>) {
+pub fn decode_memory(value: &str, exe_dir: Option<&Path>) -> (Vec<PathBuf>, Vec<RootSkip>) {
     let mut items = Vec::new();
     let mut skipped = Vec::new();
     if value.is_empty() {
@@ -272,7 +272,7 @@ fn has_invalid_chars(item: &str) -> bool {
 
 /// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り。
 /// 一時の置き場は書かない。純粋。
-pub(crate) fn encode_memory(roots: &BasewareRoots, exe_dir: Option<&Path>) -> String {
+pub fn encode_memory(roots: &BasewareRoots, exe_dir: Option<&Path>) -> String {
     roots
         .roots()
         .iter()

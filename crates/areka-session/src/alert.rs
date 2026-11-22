@@ -43,7 +43,7 @@ pub(crate) const NO_ALERT_ENV: &str = "AREKA_NO_ALERT";
 
 /// 告知の場面。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum AlertScene {
+pub enum AlertScene {
     /// 根が決まらない。
     RootMissing(RootError),
     /// ゴーストが無い／argv のフォルダがゴーストでない（argv は Some）。
@@ -70,7 +70,7 @@ pub(crate) enum AlertScene {
 
 /// 記憶を書けなかった時点（足す告知は 2 つの時点だけ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WriteMoment {
+pub enum WriteMoment {
     /// 起動の時点（ゴーストを起こす前）。
     Boot,
     /// 動いている途中。
@@ -270,7 +270,7 @@ pub(crate) fn suppressed_from(value: Option<&str>) -> bool {
 
 /// env `AREKA_NO_ALERT` を読んで [`suppressed_from`] へ渡す薄い口。
 /// 非 UTF-8 の値も「設定されている」と読む（抑える）。
-pub(crate) fn suppressed() -> bool {
+pub fn suppressed() -> bool {
     match std::env::var(NO_ALERT_ENV) {
         Ok(v) => suppressed_from(Some(&v)),
         Err(std::env::VarError::NotPresent) => false,
@@ -282,7 +282,7 @@ pub(crate) fn suppressed() -> bool {
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
 /// 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）が立つ走行も抑える: 人が見ていない走行で箱が
 /// 閉じられるのを待つと、プロセスが終わらず走らせた側が失敗に気づけない（2026-10-31）。
-pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
+pub fn raise(scene: &AlertScene, suppressed: bool) {
     let suppressed = suppressed || crate::smoke_exit::smoke_exit_ms().is_some();
     let (title, body) = alert_text(scene);
     tracing::error!(
@@ -309,7 +309,7 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
 
 /// はい／いいえの答え。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum YesNo {
+pub enum YesNo {
     Yes,
     No,
     /// 抑止されていて出さなかった。
@@ -321,7 +321,7 @@ pub(crate) enum YesNo {
 /// はい／いいえの 2 択の画面を出して答えを返す（閉じるボタンは効かない）。
 /// `info!(event = "ask")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。持ち主の窓は
 /// 渡さない。抑止と失敗を拒否へ倒すのは呼び手。
-pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
+pub fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
     tracing::info!(event = "ask", title, suppressed, "[alert] 利用者に尋ねます");
     if suppressed {
         return YesNo::Suppressed;
@@ -355,7 +355,7 @@ fn yes_no_answer(shown: &windows::core::Result<MESSAGEBOX_RESULT>) -> YesNo {
 /// OK だけの警告の画面を出す（インストールの警告・2026-10-17 開発者の例外）。
 /// `warn!(event = "install_warning_dialog")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。
 /// 出せなかったら `error!(event = "warning_box_failed")` を 1 件足す。持ち主の窓は渡さない。
-pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool) {
+pub fn warn_ok(title: &str, body: &str, suppressed: bool) {
     tracing::warn!(
         event = "install_warning_dialog",
         title,

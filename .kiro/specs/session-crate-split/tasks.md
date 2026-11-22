@@ -115,7 +115,7 @@
   - `cargo check -p areka-session --lib` と `--features test-support` と `cargo check -p areka-session --tests` が警告 0、`git log --follow` で移したファイルの履歴が追える（出所の名前を見るテストはこの時点で赤になりうるので、テストを走らせるのは 4.4）
   - _Dispatch: standard — 骨組みと移動は設計が与えるが、開発用の依存と機能の条件をコンパイラの指摘から決める_
   - _Requirements: 3.1, 3.2, 3.4, 3.6, 3.7, 3.9, 4.3, 5.6, 5.7, 5.9, 5.10, 6.1_
-- [ ] 4.2 本体を新しい crate へつなぎ替え、公開面を決める
+- [x] 4.2 本体を新しい crate へつなぎ替え、公開面を決める
   - 本体の `Cargo.toml` に本番の依存と開発用（`test-support` つき）の依存の 2 行を、前例の `areka-input` の 2 行の形と理由の注で足す。`main.rs` から `mod session;`・`mod smoke_exit;`・`mod crate_source_test_support;` を外す（出し直しは置かない）
   - 本体の 117 ファイルの `crate::session::…`・`session::…` を `areka_session::…` へ、`crate_source!`・`crate_path` を `areka_session` から引く形へ書き換える。`tests/smoke_boot_loop_exit.rs` は説明の `ghost_session::` だけ（`tests/emo2_mcp_real_run.rs` は 5.1 が持つ）
   - `zorder_wiring_tests.rs` の 33・68 行の `include_str!("../session/…")` を `crate_source!("areka-session", "src/…")` へ替える（移した後は組めなくなるため、この段で替える）

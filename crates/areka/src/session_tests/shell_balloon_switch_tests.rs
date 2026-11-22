@@ -31,16 +31,16 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 use wintf::ecs::Input;
 
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
-use crate::session::shell_balloon_switch::*;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::assets::{BootAssets, LoopTables};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::talk_clock::TalkClock;
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::shell_balloon_switch::*;
 
 // ---------------------------------------------------------------- 土台
 
@@ -131,7 +131,7 @@ fn rig(label: &str) -> Rig {
     world.init_resource::<Schedules>();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
         helper_exe: temp.path().join("helper.exe"),
         argv_session: false,
@@ -257,7 +257,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
 }
 
@@ -543,7 +543,7 @@ fn exit_cleanup_drops_the_marker_with_one_info() {
     );
     let had = marker_folder(&rig.world);
     let ((), events) = capture(|| {
-        crate::session::exit_wait::begin_close(&mut rig.world);
+        areka_session::exit_wait::begin_close(&mut rig.world);
     });
     let dropped: Vec<_> = events
         .iter()

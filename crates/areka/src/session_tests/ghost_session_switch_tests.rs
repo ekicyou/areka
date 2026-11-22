@@ -1,6 +1,6 @@
 //! 偽の SHIORI を持つゴーストを同じ World で起こす統合テスト。
 //!
-//! 土台は `session::ghost_switch_test_support`。前半は土台そのものが使えることを確かめる:
+//! 土台は `areka_session::ghost_switch_test_support`。前半は土台そのものが使えることを確かめる:
 //! 作り口がフォルダ名で偽の SHIORI を選ぶこと・先に書いた起動記録が効くこと・接続に失敗する
 //! 版が kanade を `Fault` で止めること。後半は台本の `\![change,ghost,…]` から切替先の定常到達
 //! までを 1 周させる。判定は集めてから 1 回・降ろすのは必ず有界に行う。
@@ -16,16 +16,16 @@ use wintf::ecs::{FrameFinalize, Input, Update};
 
 use crate::menu::{Frame, MenuWiring};
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::ghost_quit::KanadeNoticeRx;
-use crate::session::ghost_session::GhostBootInputsSource;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{
-    CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
-};
-use crate::session::readme::ReadmeWiring;
 use areka_input::user_break::UserBreakWiring;
 use areka_runtime::spine::RecordedCall;
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::ghost_quit::KanadeNoticeRx;
+use areka_session::ghost_session::GhostBootInputsSource;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{
+    CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
+};
+use areka_session::readme::ReadmeWiring;
 
 /// 呼出列を「種類 名前」の列へ写す（Reference は見ない）。
 fn kinds(calls: &[RecordedCall]) -> Vec<String> {
@@ -305,11 +305,11 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
     // 切替先の新しい単位は LogSink へ倒れた旗を持たない（倒れた理由を引き継がない）。
     let fallback = rig
         .world
-        .get_non_send::<crate::session::ghost_session::GhostSlot>()
+        .get_non_send::<areka_session::ghost_session::GhostSlot>()
         .and_then(|slot| {
             slot.0
                 .as_ref()
-                .map(crate::session::ghost_session::GhostSession::logsink_fallback)
+                .map(areka_session::ghost_session::GhostSession::logsink_fallback)
         });
     let expected_changing = Some(vec![
         "Bのさくら".to_owned(),

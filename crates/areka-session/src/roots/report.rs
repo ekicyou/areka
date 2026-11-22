@@ -9,7 +9,7 @@ use super::resolve::{ResolvedRoots, RootError, RootSkip, RootsOrigin};
 
 /// 記録の場面（起動か並びの変更か）。どの行にも `occasion` 欄で添える。
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum ReportOccasion {
+pub enum ReportOccasion {
     Boot,
     Change,
 }
@@ -43,7 +43,7 @@ fn user_root_str(mark: RootMark) -> &'static str {
 
 /// 並びの 1 根ごとに info（絶対パス・出どころ・書ける根の出どころ・見つかったか）、見つからない根は warn（9.1）、
 /// 控え（`RootSkip`）と `memory_fell_back` は warn。
-pub(crate) fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion) {
+pub fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion) {
     let occ = occasion.as_str();
     let origin = origin_str(resolved.origin);
     // `status` は `roots` と同じ順・同じ数（`ResolvedRoots` の約束）。
@@ -128,7 +128,7 @@ fn log_notes(skipped: &[RootSkip], memory_fell_back: bool, occasion: ReportOccas
 }
 
 /// 隠れを 1 件 1 行で info（種類・フォルダ名・隠れた場所・隠した場所）＋件数を info（0 件も）。
-pub(crate) fn log_hidden(hidden: &[Hidden], occasion: ReportOccasion) {
+pub fn log_hidden(hidden: &[Hidden], occasion: ReportOccasion) {
     let occ = occasion.as_str();
     for h in hidden {
         let kind = match h.kind {

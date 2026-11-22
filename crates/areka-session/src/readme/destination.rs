@@ -35,7 +35,7 @@ impl OpenKind {
 
 /// `\![open,explorer,種類,名前]` の置き場（`headline`・`plugin` は areka に無い）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Store {
+pub enum Store {
     Ghost,
     Balloon,
     Shell,
@@ -43,7 +43,7 @@ pub(crate) enum Store {
 
 /// 書かれた綴りのままの行き先（解決は opener が行う）。変種は「解決の規則」ごとに分ける。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Target {
+pub enum Target {
     /// そのまま OS へ。
     Url(String),
     /// `mailto:` が無ければ付けて OS へ。
@@ -75,7 +75,7 @@ impl Target {
 
 /// 受理された行き先。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Destination {
+pub struct Destination {
     pub target: Target,
     /// X（書かれた綴りのまま）。
     pub written: String,

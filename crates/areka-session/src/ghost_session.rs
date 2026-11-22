@@ -23,13 +23,13 @@ use crate::readme;
 use crate::runtime_boot::CueSinkSources;
 
 #[path = "ghost_session_scope_rect.rs"]
-pub(crate) mod ghost_session_scope_rect;
+pub mod ghost_session_scope_rect;
 #[path = "ghost_session_scope_scale.rs"]
-pub(crate) mod ghost_session_scope_scale;
+pub mod ghost_session_scope_scale;
 
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;
-pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
+pub use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
 
 /// 系の登録をプロセスに 1 回・1 か所から行う。
 ///
@@ -39,7 +39,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// （`NonSend`）が無ければ無操作で戻る。バルーンの離脱の系だけは `BalloonWiring` 不在で
 /// `error!(balloon_wiring_missing)` の枝を持つが、LogSink の起動のバルーン窓は
 /// `HitTest::none()` のままで `PointerLeave` が立たず、そこへは届かない。
-pub(crate) fn register_systems(
+pub fn register_systems(
     world: &mut World,
     kanade_stop_rx: Receiver<KanadeNotice>,
     body: BodySystems,
@@ -88,13 +88,13 @@ pub(crate) fn register_systems(
 /// まとめるのは、同じ 1 度の読取から来た出所を型で示すため（別々に読み直すと、配置と重なりが
 /// 違う宣言を見うる）。
 #[derive(Clone)]
-pub(crate) struct StartupDescriptValues {
+pub struct StartupDescriptValues {
     /// 採寸 k₀ と attach（`attach_target`）が共有する作者基準 DPI。
-    pub(crate) author_dpi: areka_placement::AuthorDpi,
+    pub author_dpi: areka_placement::AuthorDpi,
     /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
-    pub(crate) zorder_raw: Option<String>,
+    pub zorder_raw: Option<String>,
     /// 準備が採寸に使ったスコープごとの既定の面。起動の資産も同じ値で組む。
-    pub(crate) default_surfaces: areka_placement::DefaultSurfaces,
+    pub default_surfaces: areka_placement::DefaultSurfaces,
 }
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル。起こす処理の 2 つの入口
@@ -120,7 +120,7 @@ fn take_boot_shell(world: &mut World, ghost_root: &Path) -> Option<String> {
 
 /// 窓を作る側が失敗する理由。
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum OpenWindowsError {
+pub enum OpenWindowsError {
     /// 配置の準備が通らない（モニタ 0 台・起動中の削除等）。
     #[error(transparent)]
     Placement(#[from] areka_placement::PlacementError),
@@ -147,7 +147,7 @@ pub(crate) enum OpenWindowsError {
 /// 戻り値は準備が descript から**1 度だけ**読んだ値の組（[`StartupDescriptValues`]）。作者基準
 /// DPI は採寸の k₀ と、呼び手経由で `wire_runtime`→`attach_target` の双方へ配られ、shell の
 /// `seriko.zorder` は同じ経路で重なりの台帳へ配られる。
-pub(crate) fn open_ghost_windows(
+pub fn open_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
 ) -> Result<StartupDescriptValues, OpenWindowsError> {
@@ -160,11 +160,11 @@ pub(crate) fn open_ghost_windows(
 /// 準備を終えた窓: 準備が descript から 1 度だけ読んだ値と、窓を作る閉包（まだ作業プールへ
 /// 渡していない）。投函（[`commit_ghost_windows`]）するまで窓は 1 枚も生えない。
 #[must_use = "準備した窓は投函しないと生えない（commit_ghost_windows へ渡す）"]
-pub(crate) struct PreparedWindows {
+pub struct PreparedWindows {
     /// 準備が descript から 1 度だけ読んだ値（ゴーストごとの結線へ渡す）。
-    pub(crate) descript: StartupDescriptValues,
+    pub descript: StartupDescriptValues,
     /// 窓の生成と受け口の装着を行う閉包（`Input` 段で World に適用される）。
-    pub(crate) spawn: BoxedCommand,
+    pub spawn: BoxedCommand,
 }
 
 /// 窓の準備（同期）: 作業プールの有無 → 配置の準備 → 監視の 2 源 → 復元 → 窓を作る閉包を組む。
@@ -174,7 +174,7 @@ pub(crate) struct PreparedWindows {
 /// - 最初に作業プール（[`WintfTaskPool`]）の有無を確かめる。無ければ配置の準備に入らず
 ///   `error!(event = "task_pool_missing")` の上で [`OpenWindowsError::TaskPoolMissing`]。
 /// - 配置の準備の失敗は [`areka_placement::PlacementError`] を包んで返す。
-pub(crate) fn prepare_ghost_windows(
+pub fn prepare_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
 ) -> Result<PreparedWindows, OpenWindowsError> {
@@ -316,7 +316,7 @@ pub(crate) fn prepare_ghost_windows(
 ///
 /// 作業プールが無ければ（準備の後に外された＝配線の誤り）閉包を捨てた上で
 /// `error!(event = "task_pool_missing")` を残す。
-pub(crate) fn commit_ghost_windows(world: &mut World, prepared: PreparedWindows) {
+pub fn commit_ghost_windows(world: &mut World, prepared: PreparedWindows) {
     let Some(task_pool) = world.get_resource::<WintfTaskPool>() else {
         tracing::error!(
             event = "task_pool_missing",
@@ -333,7 +333,7 @@ pub(crate) fn commit_ghost_windows(world: &mut World, prepared: PreparedWindows)
 /// 閉じた証を受けて窓を作り直す準備をする。証（[`WindowsClosed`]）の
 /// 唯一の消費先で、手順は 1 度目と同じ [`prepare_ghost_windows`] へ委譲する。窓は投函
 /// （[`commit_ghost_windows`]）するまで生えない（呼び手は起動が成功したときだけ投函する）。
-pub(crate) fn reopen_ghost_windows(
+pub fn reopen_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
     closed: WindowsClosed,
@@ -346,7 +346,7 @@ pub(crate) fn reopen_ghost_windows(
 }
 
 /// ゴーストごとの結線の入力の束。
-pub(crate) struct GhostBootInputs {
+pub struct GhostBootInputs {
     /// 起動の結線の入力（ゴーストの根・バルーンの根・SHIORI の結線・時計の種類・記憶の置き場）。
     pub wiring: areka_runtime::RuntimeInputs,
     /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
@@ -360,7 +360,7 @@ pub(crate) struct GhostBootInputs {
 impl GhostBootInputs {
     /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・根は構成入力のもの・起動の由来と
     /// 記憶の置き場は呼び手が渡したもの（本番は起動の文脈の置き場・テストは本物の環境で置き場を決めない）。
-    pub(crate) fn production(
+    pub fn production(
         cfg: &ConfigInputs,
         helper_exe: PathBuf,
         kanade_stop: Sender<KanadeNotice>,
@@ -389,27 +389,25 @@ impl GhostBootInputs {
 /// 写せず、停止通知の送り口は `main` にしか無いので、作り口ごと World に置く）。本番は
 /// [`GhostBootInputs::production`] を helper のパスと停止通知の送り口の写しで閉じたもの、
 /// テストは根のフォルダごとに偽の SHIORI を返すものを据える。
-pub(crate) struct GhostBootInputsSource(
-    pub(crate) Box<dyn Fn(&ConfigInputs, BootOrigin) -> GhostBootInputs>,
-);
+pub struct GhostBootInputsSource(pub Box<dyn Fn(&ConfigInputs, BootOrigin) -> GhostBootInputs>);
 
 /// 起こしたゴーストの置き場（World の NonSend・プロセスに 1 つ）。`main` が据え、切替が
 /// 入れ替え、`main` が `run()` の後に取り出して降ろす。
-pub(crate) struct GhostSlot(pub(crate) Option<GhostSession>);
+pub struct GhostSlot(pub Option<GhostSession>);
 
 /// 結線ありの起動が成立しなかった（理由は `wire_runtime` が `warn!`／`error!` で記録済み）。
 #[derive(Debug, thiserror::Error)]
 #[error("ゴーストの起動の結線が成立しなかった")]
-pub(crate) struct BootWiringFailed;
+pub struct BootWiringFailed;
 
 /// 1 体のゴーストの 3 ハンドル（ゴースト実行系・seriko・loop ticker）。
 ///
 /// **落としても何も起きない。降ろすのは必ず [`GhostSession::shutdown`] を呼ぶこと**
 /// （`Drop` は終了の理由を持てないので実装しない）。
-pub(crate) struct GhostSession {
+pub struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
-    pub(crate) seriko: Option<areka_actor::ActorHandle>,
-    pub(crate) loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    pub seriko: Option<areka_actor::ActorHandle>,
+    pub loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
     /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
     /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす。
     seriko_sink: Option<areka_seriko::SerikoSink>,
@@ -422,7 +420,7 @@ pub(crate) struct GhostSession {
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
     /// テスト用の記憶の書き手（実行系を起こさずに差し替えの後始末の記憶を観測する）。
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     memory_publisher_for_test: Option<areka_sylphya::SylphyaPublisher>,
     /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（倒れた先の成否を問わない・生涯で不変）。
     /// 結線ありの腕・切替の経路・テスト用の組み立ては偽。
@@ -431,39 +429,39 @@ pub(crate) struct GhostSession {
 
 impl GhostSession {
     /// 告知の場面が使うゴースト名（fallback の起動に失敗して実行系が無ければ `None`）。
-    pub(crate) fn ghost_name(&self) -> Option<String> {
+    pub fn ghost_name(&self) -> Option<String> {
         self.names().and_then(|n| n.name.clone())
     }
 
     /// ゴーストの名前情報（descript の `name`・`sakura.name` ほか）。実行系が無ければ `None`。
-    pub(crate) fn names(&self) -> Option<&GhostNames> {
+    pub fn names(&self) -> Option<&GhostNames> {
         self.ghost.as_ref().map(|r| &r.mount().names)
     }
 
     /// ゴーストの実行系（定常到達の記憶を、そのゴーストの記憶の書き手へ投函する）。無ければ `None`。
-    pub(crate) fn runtime(&self) -> Option<&areka_ghost::GhostRuntime> {
+    pub fn runtime(&self) -> Option<&areka_ghost::GhostRuntime> {
         self.ghost.as_ref()
     }
 
     /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（印の判定の材料）。
-    pub(crate) fn logsink_fallback(&self) -> bool {
+    pub fn logsink_fallback(&self) -> bool {
         self.logsink_fallback
     }
 
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
-    pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
+    pub fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
         self.kanade.as_ref()
     }
 
     /// seriko の送り手の複製（シェル・バルーンの差し替えを頼む）。結線ありの腕でなければ `None`。
-    pub(crate) fn seriko_sink(&self) -> Option<&areka_seriko::SerikoSink> {
+    pub fn seriko_sink(&self) -> Option<&areka_seriko::SerikoSink> {
         self.seriko_sink.as_ref()
     }
 
     /// 実行系の記憶の書き手（差し替えの後始末が `LastShell`／`LastBalloon` を投函する）。
     /// 実行系が無ければ `None`（テスト用の組み立ては [`GhostSession::with_memory_publisher`] の値）。
     pub(crate) fn memory_publisher(&self) -> Option<&areka_sylphya::SylphyaPublisher> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(publisher) = &self.memory_publisher_for_test {
             return Some(publisher);
         }
@@ -471,13 +469,13 @@ impl GhostSession {
     }
 
     /// 今のシェルのフォルダ名（実行系のマウントの末尾）。実行系が無ければ `None`。
-    pub(crate) fn current_shell_folder(&self) -> Option<String> {
+    pub fn current_shell_folder(&self) -> Option<String> {
         let dir = &self.ghost.as_ref()?.mount().shell.dir;
         dir.file_name().map(|n| n.to_string_lossy().into_owned())
     }
 
     /// 今のシェルのフォルダだけを書き換える（実行系へ委ねる）。実行系が無ければ偽。
-    pub(crate) fn set_shell_dir(&mut self, dir: PathBuf) -> bool {
+    pub fn set_shell_dir(&mut self, dir: PathBuf) -> bool {
         match self.ghost.as_mut() {
             Some(runtime) => {
                 runtime.set_shell_dir(dir);
@@ -489,14 +487,14 @@ impl GhostSession {
 
     /// 実行系だけを外す（窓の側＝seriko・ticker・送り手・束は残る）。
     /// kanade の送出端も外す。実行系が無ければ `None`。
-    pub(crate) fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {
+    pub fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {
         self.kanade = None;
         self.ghost.take()
     }
 
     /// 新しい実行系を付け、kanade の送出端を写す。付いていた実行系は降ろさずに
     /// 落ちるので、先に [`GhostSession::split_runtime`] で外しておくこと（外し忘れは `error!`）。
-    pub(crate) fn attach_runtime(&mut self, runtime: areka_ghost::GhostRuntime) {
+    pub fn attach_runtime(&mut self, runtime: areka_ghost::GhostRuntime) {
         if self.ghost.is_some() {
             tracing::error!(
                 ghost_dir = %self.ghost_dir.display(),
@@ -508,12 +506,12 @@ impl GhostSession {
     }
 
     /// 受け口の送出端の束（結線ありの腕だけ `Some`）。
-    pub(crate) fn sink_sources(&self) -> Option<&CueSinkSources> {
+    pub fn sink_sources(&self) -> Option<&CueSinkSources> {
         self.sinks.as_ref()
     }
 
     /// ゴーストの名前を替える（実行系へ委ねる）。実行系が無ければ偽。
-    pub(crate) fn set_names(&mut self, names: GhostNames) -> bool {
+    pub fn set_names(&mut self, names: GhostNames) -> bool {
         match self.ghost.as_mut() {
             Some(runtime) => {
                 runtime.set_names(names);
@@ -524,26 +522,23 @@ impl GhostSession {
     }
 
     /// テスト用の組み立てに記憶の書き手を持たせる（差し替えの後始末の記憶を観測するため）。
-    #[cfg(test)]
-    pub(crate) fn with_memory_publisher(
-        mut self,
-        publisher: areka_sylphya::SylphyaPublisher,
-    ) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_memory_publisher(mut self, publisher: areka_sylphya::SylphyaPublisher) -> Self {
         self.memory_publisher_for_test = Some(publisher);
         self
     }
 
     /// テスト用の組み立てに seriko の送り手を持たせる（切替の入口の文脈の判定を通すため）。
-    #[cfg(test)]
-    pub(crate) fn with_seriko_sink(mut self, sink: areka_seriko::SerikoSink) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_seriko_sink(mut self, sink: areka_seriko::SerikoSink) -> Self {
         self.seriko_sink = Some(sink);
         self
     }
 
     /// 実行系を持たない置き場の中身（テスト用）: kanade への送出端と根だけを持つ。
     /// 降ろすもの（実行系・seriko・ticker）が無いので `shutdown` は何もせず `Ok` を返す。
-    #[cfg(test)]
-    pub(crate) fn for_test(kanade: Option<Sender<KanadeMsg>>, ghost_dir: PathBuf) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn for_test(kanade: Option<Sender<KanadeMsg>>, ghost_dir: PathBuf) -> Self {
         Self {
             ghost: None,
             seriko: None,
@@ -553,7 +548,7 @@ impl GhostSession {
             kanade,
             ghost_dir,
             logsink_fallback: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             memory_publisher_for_test: None,
         }
     }
@@ -561,19 +556,19 @@ impl GhostSession {
     /// 台詞を進める Tick の注入口（テスト用・時計を止めて起こした実行系の dispatcher）。
     /// 実行系が無ければ `None`。
     #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn dispatcher(&self) -> Option<&Sender<areka_ghost::dispatcher::DispatcherMsg>> {
+    pub fn dispatcher(&self) -> Option<&Sender<areka_ghost::dispatcher::DispatcherMsg>> {
         self.ghost.as_ref().map(|r| r.dispatcher())
     }
 
     /// 起こしたゴーストの根（実行系が無くても起動に渡した根を返す）。
-    pub(crate) fn ghost_dir(&self) -> &Path {
+    pub fn ghost_dir(&self) -> &Path {
         &self.ghost_dir
     }
 
     /// 降ろす: ① loop ticker の停止（seriko の送り手の複製と束も落とす）→ ② ゴースト実行系の
     /// 終了（`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
-    pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
+    pub fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
         self.shutdown_impl(reason, None).0
     }
 
@@ -669,7 +664,7 @@ impl GhostSession {
 /// fallback の腕を通す（初回起動の非致命）。各状態は `insert_non_send` で置き換わるので n 回
 /// 呼べる（呼び手は先に [`GhostSession::shutdown`] で前のゴーストを降ろしておくこと）。証は
 /// 取らない（証は [`reopen_ghost_windows`] が消費する）。
-pub(crate) fn boot_ghost(
+pub fn boot_ghost(
     world: &mut World,
     inputs: GhostBootInputs,
     descript: &StartupDescriptValues,
@@ -752,7 +747,7 @@ pub(crate) fn boot_ghost(
         sinks: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         memory_publisher_for_test: None,
     }
 }
@@ -760,7 +755,7 @@ pub(crate) fn boot_ghost(
 /// 切替用の入口: 結線が成立しなければ fallback の骨格へ倒れず
 /// `Err(BootWiringFailed)` を返す（呼び手が既定ゴーストへ戻すか致命で終える）。成立したときの
 /// 状態の載せ替えは [`boot_ghost`] の結線ありの腕と同じ（[`boot_wired`]）。
-pub(crate) fn boot_ghost_strict(
+pub fn boot_ghost_strict(
     world: &mut World,
     inputs: GhostBootInputs,
     descript: &StartupDescriptValues,
@@ -837,7 +832,7 @@ fn boot_wired(
         sinks: outcome.sources,
         ghost_dir,
         logsink_fallback: false,
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         memory_publisher_for_test: None,
     })
 }
@@ -849,6 +844,10 @@ mod boot_shell_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_lap_tests.rs"]
 pub(crate) mod shell_balloon_switch_session_lap_tests;
+
+#[cfg(any(test, feature = "test-support"))]
+#[path = "shell_balloon_switch_session_lap_test_support.rs"]
+pub mod shell_balloon_switch_session_lap_test_support;
 
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_balloon_tests.rs"]

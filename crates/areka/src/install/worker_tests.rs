@@ -27,10 +27,10 @@ use super::*;
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use crate::session::exit_wait::{begin_close, register_gate};
-use crate::session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_runtime::spine::RecordedCall;
+use areka_session::exit_wait::{begin_close, register_gate};
+use areka_session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 // ---------------------------------------------------------------- 道具立て
 

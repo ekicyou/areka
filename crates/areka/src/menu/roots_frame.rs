@@ -12,8 +12,8 @@ use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
 use crate::roots::{self, desk, pick};
-use crate::session::boot_config::BootContext;
-use crate::session::roots::RootsOrigin;
+use areka_session::boot_config::BootContext;
+use areka_session::roots::RootsOrigin;
 
 /// 3 枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。
 pub(crate) fn register(world: &mut World) {
@@ -48,11 +48,7 @@ fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         enabled: editable(world) && desk::can_pick(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
-            let _ = desk::start_pick(
-                world,
-                crate::session::alert::suppressed(),
-                pick::pick_folder,
-            );
+            let _ = desk::start_pick(world, areka_session::alert::suppressed(), pick::pick_folder);
         })),
     }
 }
@@ -103,7 +99,7 @@ fn front_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     let marked = roots
         .iter()
         .any(|r| matches!(r.mark(), RootMark::UserRoot { .. }));
-    let exe_dir = crate::session::roots::user_root::exe_dir();
+    let exe_dir = areka_session::roots::user_root::exe_dir();
     let enabled =
         remembered(&roots) > 1 && ctx.is_some_and(|ctx| ctx.roots_origin != RootsOrigin::EnvVar);
     let head = roots.iter().position(|r| !r.is_temporary());

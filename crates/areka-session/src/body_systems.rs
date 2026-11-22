@@ -7,29 +7,29 @@ use bevy_ecs::world::World;
 
 /// 本体だけのモジュールの系の登録と、集めた層から本体へ向かう口（本体の `BODY_SYSTEMS` が中身を持つ）。
 #[derive(Resource, Clone, Copy)]
-pub(crate) struct BodySystems {
+pub struct BodySystems {
     /// 入力の取り出しの系の間（`user_break` の後・`balloon` の前）で呼ぶ。
-    pub(crate) menu_poll: fn(&mut World),
+    pub menu_poll: fn(&mut World),
     /// 入力の系の後・`FrameFinalize` への足し込みの前で呼ぶ。
-    pub(crate) after_input: fn(&mut World),
+    pub after_input: fn(&mut World),
     /// 窓を開いた直後、キャラ窓の入力の差し込みの後で呼ぶ（メニューの解放の受け手）。
-    pub(crate) after_char_pointer: fn(&mut World),
+    pub after_char_pointer: fn(&mut World),
     /// 窓を開いた直後、バルーン窓の入力の差し込みの後で呼ぶ（投げ込み → 位置初期化の近道の受け手）。
-    pub(crate) after_balloon_pointer: fn(&mut World),
+    pub after_balloon_pointer: fn(&mut World),
     /// 入力の結線の後・起動成功の記憶の前で呼ぶ（メニューの結線・枠の登記 8 本・置換語の載せ直し）。
-    pub(crate) after_runtime_wired: fn(&mut World, &GhostRuntime),
+    pub after_runtime_wired: fn(&mut World, &GhostRuntime),
     /// 切替を終えたとき（真は切替先が定常に入った）に更新の窓口へ知らせる。
-    pub(crate) on_switch_end: fn(&mut World, bool),
+    pub on_switch_end: fn(&mut World, bool),
     /// 定常に届いたとき、インストール → 更新の順に窓口へ知らせる。
-    pub(crate) on_steady: fn(&mut World),
+    pub on_steady: fn(&mut World),
     /// 降ろして全窓を閉じた直後・起こす前に、起動中のゴーストへ入れる一周を回す。
-    pub(crate) overwrite_between: fn(&mut World),
+    pub overwrite_between: fn(&mut World),
     /// 更新の窓口が忙しいか。
-    pub(crate) update_busy: fn(&World) -> bool,
+    pub update_busy: fn(&World) -> bool,
     /// インストールの窓口が忙しいか。
-    pub(crate) install_busy: fn(&World) -> bool,
+    pub install_busy: fn(&World) -> bool,
     /// 受け口の列の 9・10 番目（インストール・更新の順）。
-    pub(crate) cue_sinks: fn(&World) -> [Box<dyn BootCueSink>; 2],
+    pub cue_sinks: fn(&World) -> [Box<dyn BootCueSink>; 2],
 }
 
 impl BodySystems {

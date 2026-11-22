@@ -54,13 +54,13 @@ use areka_runtime::spine::{
 };
 
 /// 既定のバルーン（emo2 の同梱）。
-pub(crate) const BALLOON: &str = "emo2-kakukaku";
+pub const BALLOON: &str = "emo2-kakukaku";
 
 /// 接続に失敗する偽の SHIORI の理由。
-pub(crate) const CONNECT_ERR: &str = "ghost-switch-rig simulated connect failure";
+pub const CONNECT_ERR: &str = "ghost-switch-rig simulated connect failure";
 
 /// ゴーストごとの偽の SHIORI。
-pub(crate) enum FakeShiori {
+pub enum FakeShiori {
     /// 台本の組み立て（起こすたびに呼んで新品の台本を作る）。
     Scripted(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 接続に失敗する（kanade は `Fault` で止まる）。
@@ -84,7 +84,7 @@ pub(crate) enum FakeShiori {
 /// 偽の SHIORI を 1 つの GET の入口で止める栓（相手が進めない状態を、時間でなく固まりで作る）。
 /// 解く手 [`Stall::release`] は一度呼べば下ろさない（以後の同じ GET は止まらない）。
 #[derive(Clone)]
-pub(crate) struct Stall {
+pub struct Stall {
     at: &'static str,
     /// （入ったか・解かれたか）と、解かれたことを知らせる条件変数。
     state: Arc<(Mutex<(bool, bool)>, Condvar)>,
@@ -92,7 +92,7 @@ pub(crate) struct Stall {
 
 impl Stall {
     /// `id` の GET で止まる栓。
-    pub(crate) fn at(id: &'static str) -> Self {
+    pub fn at(id: &'static str) -> Self {
         Self {
             at: id,
             state: Arc::default(),
@@ -100,12 +100,12 @@ impl Stall {
     }
 
     /// 止まる GET に一度でも入ったか（後戻りしない観測）。
-    pub(crate) fn entered(&self) -> bool {
+    pub fn entered(&self) -> bool {
         self.state.0.lock().expect("stall poisoned").0
     }
 
     /// 解く（止まっている GET を通し、以後は止めない）。
-    pub(crate) fn release(&self) {
+    pub fn release(&self) {
         self.state.0.lock().expect("stall poisoned").1 = true;
         self.state.1.notify_all();
     }
@@ -166,7 +166,7 @@ impl ShioriBackend for StalledBackend {
 /// 標準の台本: 起動系列（`OnInitialize`・`OnFirstBoot` 204・`OnBoot` は `on_boot`・
 /// `basewareversion`）と降ろすときの `OnClose`・`Unload`。切替の握手の応答は呼び手が足す。
 /// 起動記録があって `OnFirstBoot` が呼ばれなくても、使われない応答は残るだけで害は無い。
-pub(crate) fn standard_script(on_boot: &str) -> ScriptedShioriBackendBuilder {
+pub fn standard_script(on_boot: &str) -> ScriptedShioriBackendBuilder {
     ScriptedShioriBackend::builder()
         .notify("OnInitialize", Ok(()))
         .get("OnFirstBoot", Ok(None))
@@ -185,9 +185,9 @@ pub(crate) const TICK_EVERY: Duration = Duration::from_millis(1);
 type BootLedger = Rc<RefCell<Vec<(String, ScriptedShioriHandle)>>>;
 
 /// 2 体以上の偽ゴーストを同じ World で起こす土台。
-pub(crate) struct SwitchRig {
-    pub(crate) world: World,
-    pub(crate) root: BasewareRoot,
+pub struct SwitchRig {
+    pub world: World,
+    pub root: BasewareRoot,
     boots: BootLedger,
     /// ゴーストの作り口（[`GhostBootInputsSource`] の閉包）が呼ばれた回数（進みの目印の片方）。
     /// 台帳 `boots` の長さでは足りない: 台帳に載るのは台本つきの回だけで、`ConnectFail`・`WiringFail`・
@@ -205,12 +205,12 @@ pub(crate) struct SwitchRig {
 }
 
 /// 切替の足場へ渡す検体（根・ゴーストのフォルダ・同梱バルーンの道と、木の寿命を持つ値）。
-pub(crate) struct RigSample {
-    pub(crate) root: PathBuf,
-    pub(crate) ghost: PathBuf,
-    pub(crate) bundled_balloon: PathBuf,
+pub struct RigSample {
+    pub root: PathBuf,
+    pub ghost: PathBuf,
+    pub bundled_balloon: PathBuf,
     #[allow(dead_code)] // 読まず、捨てると木が消える寿命だけを持つ
-    pub(crate) keep: Box<dyn std::any::Any>,
+    pub keep: Box<dyn std::any::Any>,
 }
 
 impl RigSample {
@@ -239,11 +239,7 @@ impl SwitchRig {
 
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
-    pub(crate) fn with(
-        sample: RigSample,
-        body: BodySystems,
-        scripts: Vec<(&str, FakeShiori)>,
-    ) -> Self {
+    pub fn with(sample: RigSample, body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> Self {
         // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -354,7 +350,7 @@ impl SwitchRig {
     }
 
     /// `folder` に起動記録（`[boot] count`）を先に書く（次の起動は `OnFirstBoot` を飛ばす）。
-    pub(crate) fn plant_boot_record(&self, folder: &str) {
+    pub fn plant_boot_record(&self, folder: &str) {
         let dir = self
             .root
             .ghost_dir(folder)
@@ -371,26 +367,26 @@ impl SwitchRig {
     }
 
     /// 起動の文脈に据える App スコープの記憶の置き場（最後に使ったゴースト・起動中の印）。
-    pub(crate) fn app_dir(&self) -> PathBuf {
+    pub fn app_dir(&self) -> PathBuf {
         app_dir_of(&self.sample.root)
     }
 
     /// 以後に起こす実行系へ App スコープの置き場（[`SwitchRig::app_dir`]＝起動の文脈と同じ場所）を
     /// 渡す（本番の `default_app_profile_dir()` の代わり）。起動の直後と定常到達の記憶の投函が実 fs に
     /// 届く。立てる前に起こした実行系には効かない。
-    pub(crate) fn wire_app_memory(&self) {
+    pub fn wire_app_memory(&self) {
         self.app_memory.set(true);
     }
 
     /// 根に既定のバルーンの複製 `balloon/<folder>` を足し、その descript.txt の `name` を `name` に
     /// 書き換える（2 つ目のバルーン）。
-    pub(crate) fn add_balloon_copy(&self, folder: &str, name: &str) {
+    pub fn add_balloon_copy(&self, folder: &str, name: &str) {
         self.copy_balloon_to(&self.root.balloon_dir(folder), name);
     }
 
     /// ゴーストの中に既定のバルーンの複製 `ghost/<ghost>/balloon/<folder>` を足し、`name` を書き換える。
     /// 足した場所を返す。
-    pub(crate) fn add_ghost_balloon_copy(&self, ghost: &str, folder: &str, name: &str) -> PathBuf {
+    pub fn add_ghost_balloon_copy(&self, ghost: &str, folder: &str, name: &str) -> PathBuf {
         let to = self.root.ghost_dir(ghost).join("balloon").join(folder);
         self.copy_balloon_to(&to, name);
         to
@@ -398,7 +394,7 @@ impl SwitchRig {
 
     /// `ghost` に起動記録とバルーンの記憶（`[last] balloon`＝フォルダ名）を書く（[`SwitchRig::plant_boot_record`]
     /// を置き換える）。
-    pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
+    pub fn plant_last_balloon(&self, ghost: &str, folder: &str) {
         self.plant_boot_record(ghost);
         let file = self
             .root
@@ -427,7 +423,7 @@ impl SwitchRig {
     }
 
     /// 構成入力（ゴーストの根と既定のバルーン）。
-    pub(crate) fn cfg(&self, folder: &str) -> ConfigInputs {
+    pub fn cfg(&self, folder: &str) -> ConfigInputs {
         ConfigInputs {
             ghost_root: self.root.ghost_dir(folder),
             balloon_root: self.root.balloon_dir(BALLOON),
@@ -436,7 +432,7 @@ impl SwitchRig {
 
     /// `folder` を今のゴーストとして起こす（起動の文脈を据え、作り口の入力で `boot_ghost` し、
     /// 置き場へ入れる＝`fn main` の据え付けと同じ形）。
-    pub(crate) fn boot(&mut self, folder: &str) {
+    pub fn boot(&mut self, folder: &str) {
         let balloon = BalloonDecision {
             route: BalloonRoute::Companion,
             dir: self.root.balloon_dir(BALLOON),
@@ -479,7 +475,7 @@ impl SwitchRig {
     /// `folder` を起こした回ごとの呼出列（状態の問い合わせと、定常到達で更新の窓口が飛ばす
     /// `homeurl` の照会を除く・起こした順）。照会は UI の定常到達の処理から非同期に届くので、
     /// 観測した時点で記録に載っているかが決まらない。
-    pub(crate) fn calls(&self, folder: &str) -> Vec<Vec<RecordedCall>> {
+    pub fn calls(&self, folder: &str) -> Vec<Vec<RecordedCall>> {
         self.boots
             .borrow()
             .iter()
@@ -497,7 +493,7 @@ impl SwitchRig {
     }
 
     /// `folder` を最後に起こした回の偽の SHIORI の観測口（固まりの確かめ・解く手）。
-    pub(crate) fn handle(&self, folder: &str) -> ScriptedShioriHandle {
+    pub fn handle(&self, folder: &str) -> ScriptedShioriHandle {
         self.boots
             .borrow()
             .iter()
@@ -511,7 +507,7 @@ impl SwitchRig {
     /// （状態の問い合わせは除く＝SHIORI のアクターは手が空くと 500 ms ごとに問い合わせるので、数えると
     /// 止まっていても増え続ける）。数えと台帳の写しだけを掴み World を借りないので、条件の関数が足場を
     /// 可変で借りている間も読める。
-    pub(crate) fn progress_probe(&self) -> impl Fn() -> u64 + 'static {
+    pub fn progress_probe(&self) -> impl Fn() -> u64 + 'static {
         let (factory_calls, boots) = (Rc::clone(&self.factory_calls), Rc::clone(&self.boots));
         move || {
             let shiori_calls: u64 = boots.borrow().iter().map(|(_, h)| h.call_count()).sum();
@@ -556,7 +552,7 @@ impl SwitchRig {
     /// 通知の相と台本の切替要求の取り出しを、`done` が真になるまで有界に回す（届かなければ打ち切りの
     /// 文言を標準エラーへ 1 行出して `false`）。打ち切りは進みの目印で決める（進む限り時間だけでは打ち切らない）。
     #[track_caller]
-    pub(crate) fn pump_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool {
+    pub fn pump_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool {
         reported(self.pump_until_with(Instant::now, std::thread::sleep, done))
     }
 
@@ -569,7 +565,7 @@ impl SwitchRig {
     /// 台詞の途中の状態を待たない: 台詞の時計は相手の処理を待たずに進むので（[`SwitchRig::inject_talk_tick`]）、
     /// 途中の状態は観測する前に過ぎ去りうる。
     #[track_caller]
-    pub(crate) fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
+    pub fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         let mut last_tick: Option<Instant> = None;
         reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
@@ -610,7 +606,7 @@ impl SwitchRig {
     /// インストールの窓口の取り出し）を、`done` が真になるまで有界に回す（届かなければ
     /// [`SwitchRig::pump_until`] と同じく文言を出して `false`）。
     #[track_caller]
-    pub(crate) fn pump_input_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
+    pub fn pump_input_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             run_ghost_quit_phase(&mut rig.world);
             rig.world.run_schedule(Input);
@@ -620,7 +616,7 @@ impl SwitchRig {
 
     /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
     #[track_caller]
-    pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {
+    pub fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {
         let probe = self.progress_probe();
         reported(wait_until(
             &place(Location::caller()),
@@ -633,7 +629,7 @@ impl SwitchRig {
     /// 先に別の通知が届いたら、届いたものを標準エラーへ出して `false`。届かなければ打ち切りの文言を
     /// 出して `false`。台詞の時計を回す前に呼べば、台本の切替要求は必ず定常の kanade へ届く。
     #[track_caller]
-    pub(crate) fn wait_steady(&self) -> bool {
+    pub fn wait_steady(&self) -> bool {
         let probe = self.progress_probe();
         let rx = &self.world.non_send::<KanadeNoticeRx>().0;
         let what = place(Location::caller());
@@ -648,12 +644,12 @@ impl SwitchRig {
     }
 
     /// 終了が指示されたか。
-    pub(crate) fn exit_requested(&self) -> bool {
+    pub fn exit_requested(&self) -> bool {
         self.world.non_send::<AppExit>().is_requested()
     }
 
     /// 置き場のゴーストを有界に降ろす（成功で `true`・置き場が空でも `true`）。
-    pub(crate) fn shutdown(&mut self) -> bool {
+    pub fn shutdown(&mut self) -> bool {
         let Some(session) = self
             .world
             .get_non_send_mut::<GhostSlot>()

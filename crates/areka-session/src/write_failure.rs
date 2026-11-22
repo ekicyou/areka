@@ -45,7 +45,7 @@ pub(crate) fn sender(world: &World) -> Option<Sender<PersistFailure>> {
 
 /// 致命: `error!(event = "memory_write_failed")` を 1 件残し、
 /// 出所 `ExitOrigin::MemoryWriteFailed(failure)` で `quit_app` を呼ぶ。巻き戻しはしない。
-pub(crate) fn fatal(world: &mut World, failure: PersistFailure) {
+pub fn fatal(world: &mut World, failure: PersistFailure) {
     log_failure(&failure, WriteMoment::Running);
     quit_app(world, ExitOrigin::MemoryWriteFailed(failure));
 }
@@ -76,7 +76,7 @@ fn log_failure(failure: &PersistFailure, moment: WriteMoment) {
 /// 別の出所で終わり始めた後（OS のセッションの終了を除く）は取り出さずに受け手へ残す。
 /// [`fatal`] へ渡しても最初の出所が勝って告知が出ないので、後始末の [`tell_at_close`] が
 /// 降ろす途中の失敗として告げる。
-pub(crate) fn drain_system(world: &mut World) {
+pub fn drain_system(world: &mut World) {
     let Some(rx) = world.get_non_send::<WriteFailureRx>() else {
         return;
     };
@@ -99,12 +99,12 @@ fn e_fail() -> windows::core::Error {
 
 /// 起動を止める: `memory_write_failed` を記録し、`MemoryWrite { moment: Boot }` を告げ、
 /// `main` が返す `E_FAIL` を返す。`AREKA_NO_ALERT` を読む薄い口。
-pub(crate) fn stop_boot(failure: PersistFailure) -> windows::core::Error {
+pub fn stop_boot(failure: PersistFailure) -> windows::core::Error {
     stop_boot_with(failure, alert::suppressed())
 }
 
 /// [`stop_boot`] の中身。抑止でも失敗を返す（画面だけを抑える）。
-pub(crate) fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windows::core::Error {
+pub fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windows::core::Error {
     log_failure(&failure, WriteMoment::Boot);
     alert::raise(
         &AlertScene::MemoryWrite {
@@ -139,7 +139,7 @@ pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()> {
 
 /// 起動の前の確かめの入口。`readonly` なら何も開かず
 /// 作らずに通す（info 1 件）。そうでなければ今の [`check_boot_dirs`]。
-pub(crate) fn check_boot(
+pub fn check_boot(
     readonly: bool,
     cfg: &ConfigInputs,
     app_profile_dir: &Path,
@@ -179,7 +179,7 @@ pub(crate) fn check_boot_dirs(
 }
 
 /// 後始末で受け手を取り出す（OS のセッションの終了を処理済みなら `None`＝告げない）。
-pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>> {
+pub fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>> {
     if world.contains_resource::<crate::session_end::SessionEnded>() {
         return None;
     }
@@ -203,7 +203,7 @@ pub(crate) fn log_only(world: &mut World, clear_failed: Option<PersistFailure>) 
 /// 失敗（受け手に残っていた最初の 1 件）の順。2・3 を告げたときは `Err(E_FAIL)`、1 のときの
 /// 終了コードは呼び手の旗が決める（`Ok`）。印を消せなかった失敗と残っていた失敗は、告げるかに
 /// 関わらず 1 件ずつ記録する。
-pub(crate) fn tell_at_close(
+pub fn tell_at_close(
     scene: Option<AlertScene>,
     clear_failed: Option<PersistFailure>,
     late: Option<Receiver<PersistFailure>>,

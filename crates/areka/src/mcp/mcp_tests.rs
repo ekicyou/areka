@@ -318,7 +318,7 @@ fn drain_without_inbox_is_a_no_op() {
 #[test]
 fn real_unit_answers_get_active_ghost_list_in_one_frame() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
     let mut rig = switch_rig(vec![(
         "A",
@@ -352,8 +352,8 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
 #[test]
 fn logsink_fallen_unit_is_active() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_session::GhostSlot;
-    use crate::session::ghost_switch_test_support::FakeShiori;
+    use areka_session::ghost_session::GhostSlot;
+    use areka_session::ghost_switch_test_support::FakeShiori;
 
     let mut rig = switch_rig(vec![("A", FakeShiori::BalloonMissing)]);
     rig.boot("A");
@@ -378,8 +378,8 @@ fn logsink_fallen_unit_is_active() {
 #[test]
 fn real_unit_resolves_by_sakura_name_and_ascii_case() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_session::GhostSlot;
-    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+    use areka_session::ghost_session::GhostSlot;
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
     let mut rig = switch_rig(vec![(
         "A",

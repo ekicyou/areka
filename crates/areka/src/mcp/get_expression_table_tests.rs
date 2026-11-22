@@ -736,7 +736,7 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
     use std::sync::mpsc;
 
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
     let mut rig = switch_rig(vec![(
         "A",

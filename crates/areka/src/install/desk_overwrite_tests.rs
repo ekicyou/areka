@@ -30,16 +30,16 @@ use super::overwrite::take;
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::DEFAULT_GHOST_FOLDER;
-use crate::session::ghost_switch::{
+use areka_placement::persist::PersistWiring;
+use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::DEFAULT_GHOST_FOLDER;
+use areka_session::ghost_switch::{
     GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
     SwitchTarget, SwitchVerdict, request_ghost_switch,
 };
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use areka_placement::persist::PersistWiring;
-use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 書庫が置くファイル（宛先のゴーストのフォルダからの相対）と中身。
 const MARKER: &str = "ghost/master/overwritten.txt";
@@ -365,7 +365,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
     let (reply, answer) = reply_channel();
     let mut got = None;
@@ -676,13 +676,13 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         1,
         "{events:?}"
     );
-    let end = crate::session::session_mark::Teardown {
+    let end = areka_session::session_mark::Teardown {
         run_ok: true,
         down_ok: true,
         shiori_cut: false,
     };
     assert_eq!(
-        crate::session::session_mark::session_mark_verdict(first.as_ref(), false, false, end),
-        crate::session::session_mark::MarkVerdict::Keep("switch_fatal")
+        areka_session::session_mark::session_mark_verdict(first.as_ref(), false, false, end),
+        areka_session::session_mark::MarkVerdict::Keep("switch_fatal")
     );
 }

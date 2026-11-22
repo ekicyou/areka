@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::session::alert::AlertScene;
-use crate::session::boot_config::BootResolved;
-use crate::session::boot_resolve::{DEFAULT_BALLOON_FOLDER, GhostRoute};
+use areka_session::alert::AlertScene;
+use areka_session::boot_config::BootResolved;
+use areka_session::boot_resolve::{DEFAULT_BALLOON_FOLDER, GhostRoute};
 
 /// 告知を出さない・読み取りだけでない走り。
 const QUIET: BeforeBootEnv = BeforeBootEnv {
@@ -91,7 +91,7 @@ fn root_with(label: &str, ghosts: &[&str], remember: Option<&str>) -> TempPath {
 
 /// 根 `root` の上で起動の前の道 → 起動の解決を 1 回走らせ、答えと記録を返す。
 fn boot(
-    resolved: Result<crate::session::roots::ResolvedRoots, crate::session::roots::RootError>,
+    resolved: Result<areka_session::roots::ResolvedRoots, areka_session::roots::RootError>,
     profile: &Path,
     startup: &mut StartupInstall,
 ) -> (
@@ -141,7 +141,7 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![ghost_nar(&dir, "newbie")], false), None);
     let (got, events) = boot(
-        crate::session::roots::single_env(root.path().to_path_buf()),
+        areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -165,7 +165,7 @@ fn callghost_wins_over_the_remembered_ghost() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![ghost_nar(&dir, "g2")], true), None);
     let (got, events) = boot(
-        crate::session::roots::single_env(root.path().to_path_buf()),
+        areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -187,7 +187,7 @@ fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
         Some(exe.path().to_path_buf()),
     );
     let (got, events) = boot(
-        crate::session::roots::single_env(root.path().to_path_buf()),
+        areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -211,9 +211,9 @@ fn root_missing_warns_once_and_installs_nothing() {
     let gone = profile.child("gone");
     let mut startup = StartupInstall::new_with(args(vec![archive.clone()], true), None);
     let (got, events) = boot(
-        Err(crate::session::roots::RootError::NoneFound {
+        Err(areka_session::roots::RootError::NoneFound {
             tried: vec![gone.clone()],
-            origin: crate::session::roots::RootsOrigin::EnvVar,
+            origin: areka_session::roots::RootsOrigin::EnvVar,
             skipped: Vec::new(),
             memory_fell_back: false,
         }),
@@ -241,7 +241,7 @@ fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup = StartupInstall::new_with(args(vec![balloon_nar(&dir)], false), None);
     let (got, events) = boot(
-        crate::session::roots::single_env(root.path().to_path_buf()),
+        areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
         &mut startup,
     );
@@ -287,9 +287,9 @@ fn carried(
 #[test]
 fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
     use crate::install::names::LastInstallNames;
-    use crate::session::ghost_switch::LastInstalledGhost;
     use areka_nar::InstallKind;
     use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
+    use areka_session::ghost_switch::LastInstalledGhost;
 
     let mut world = World::new();
     let startup = StartupInstall {

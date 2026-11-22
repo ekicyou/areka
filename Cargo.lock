@@ -104,6 +104,7 @@ dependencies = [
  "areka-runtime",
  "areka-sakura",
  "areka-seriko",
+ "areka-session",
  "areka-sylphya",
  "areka-update",
  "areka-user-data",

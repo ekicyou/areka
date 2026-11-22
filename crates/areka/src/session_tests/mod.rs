@@ -3,9 +3,9 @@
 //! 集めた層は本体を使えないので、本体の根の関数・`cli`・menu・install・update・mcp・`shiori_host` の本物を
 //! 見るテストはここに置く。各ファイルは元の親のモジュールの `use` を自分で持つ。本番のコードは置かない。
 
-use crate::session::alert::AlertScene;
-use crate::session::boot_config::{BootResolved, resolve_boot_with};
-use crate::session::roots::{ResolvedRoots, RootError};
+use areka_session::alert::AlertScene;
+use areka_session::boot_config::{BootResolved, resolve_boot_with};
+use areka_session::roots::{ResolvedRoots, RootError};
 
 /// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
 pub(crate) fn resolve_boot_from(

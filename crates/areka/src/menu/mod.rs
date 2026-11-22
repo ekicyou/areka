@@ -42,9 +42,9 @@ use windows::Win32::Foundation::HWND;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerReleased, dispatch_pointer_events};
 
-use crate::session::readme;
 use areka_input::MouseWiring;
 use areka_placement::spawn::CharWindowMarker;
+use areka_session::readme;
 use trigger::PendingQuery;
 
 /// メニューの枠。宣言順がそのまま並び順（①〜⑫）で、判別値を登記の添字に使う。

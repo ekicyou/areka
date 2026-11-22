@@ -11,7 +11,7 @@
 //! 「立っていないはず」は**主張しない**。旗はプロセスで 1 組しか無く、本番経路が同じ
 //! 旗を立てるため、そちらの主張は他の検査の巻き添えで揺れる。
 
-use crate::crate_source_test_support::crate_source;
+use areka_session::crate_source;
 
 /// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
@@ -187,11 +187,11 @@ fn walk_roots() -> [(&'static str, PathBuf); 3] {
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
         (
             "areka-runtime",
-            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
         ),
         (
             "areka-input",
-            crate::crate_source_test_support::crate_path("areka-input", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ]
 }
@@ -269,7 +269,8 @@ fn the_areka_table_lists_every_file_that_marks_the_wake() {
 /// 名簿の現物はワークスペース相対で読む（読めなければその場で落ちる＝静かには壊れない）。
 #[test]
 fn the_wintf_module_roster_names_every_areka_zorder_producer() {
-    let path = crate::crate_source_test_support::crate_path("wintf", "src/ecs/world/tick_wake.rs");
+    let path =
+        areka_session::crate_source_test_support::crate_path("wintf", "src/ecs/world/tick_wake.rs");
     let src = std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!(
             "起床の旗の名簿が読めない（置き場所が変わったか）: {} — {e}",

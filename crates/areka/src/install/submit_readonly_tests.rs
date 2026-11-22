@@ -17,8 +17,8 @@ use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::readonly::ReadOnlyRun;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::readonly::ReadOnlyRun;
 
 /// どの出どころの依頼も断られ、積まれず、窓口は忙しくなく、記録は依頼ごとに info が 1 件で
 /// 断りの warn は無く、ゴーストへは何も送らない。

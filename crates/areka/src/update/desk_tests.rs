@@ -16,13 +16,13 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::exit_wait::begin_close;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::refs::executing_refs;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::exit_wait::begin_close;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -48,7 +48,7 @@ impl Rig {
         register(&mut world);
         world.insert_resource(BootContext {
             roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
             app_profile_dir: root.path().join("profile"),
             helper_exe: root.path().join("helper.exe"),
             argv_session: false,
@@ -282,7 +282,7 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);

@@ -32,9 +32,9 @@ use super::{
     ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, shell_target, show_gate,
     wait_until, wait_until_paced,
 };
-use crate::session::app_exit::{ExitOrigin, FirstExit, fault_of};
-use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::test_support::emily_shaped_scopes;
+use areka_session::app_exit::{ExitOrigin, FirstExit, fault_of};
+use areka_session::ghost_quit::run_ghost_quit_phase;
 
 /// 起動の台本。scope 0・1 の台詞の間に scope 2 の面と台詞を挟み、その後ろへ scope 0 の目印の面
 /// （2100）を置く。目印が届けば、再生は scope 2 の区間を越えて最後まで進んでいる。

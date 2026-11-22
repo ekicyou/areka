@@ -19,11 +19,11 @@ use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, Update};
 
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::FirstExit;
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::*;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::app_exit::FirstExit;
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::*;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// `event` の記録（`event` 欄で引く）。
 fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {

@@ -156,7 +156,7 @@ fn balloon_bakes_per_file(balloon_dir: &Path) -> BTreeMap<String, (u32, u32)> {
 /// 動く絵の検体を `target\` の下の小さなゴーストの形へ写す（`ghost\master`・`shell\master`・
 /// `balloon`）。
 fn animated_ghost() -> TempPath {
-    let fixture = crate::crate_source_test_support::crate_path(
+    let fixture = areka_session::crate_source_test_support::crate_path(
         "areka-emo-compose",
         "tests/fixtures/animated-playback",
     );

@@ -15,7 +15,7 @@ use areka_kanade::WaitBudget;
 use bevy_ecs::prelude::*;
 
 /// 展開の終わりを待つ上限。
-pub(crate) const EXIT_WAIT_LIMIT: Duration = Duration::from_secs(3);
+pub const EXIT_WAIT_LIMIT: Duration = Duration::from_secs(3);
 
 /// 門の状態。3 つを 1 つの鍵の下で持つので、終了が始まった後に書く段へ入ることはない。
 #[derive(Default)]
@@ -30,7 +30,7 @@ struct GateState {
 
 /// 背景の仕事 1 本ぶんの門（複製して持つのは `Arc`）。
 #[derive(Default)]
-pub(crate) struct WorkGate {
+pub struct WorkGate {
     state: Mutex<GateState>,
     /// 書く段を出たことの合図。
     left: Condvar,
@@ -43,7 +43,7 @@ impl WorkGate {
     }
 
     /// 今扱っている物の名前を置く（記録用）。終了が始まっていれば偽。
-    pub(crate) fn begin(&self, label: String) -> bool {
+    pub fn begin(&self, label: String) -> bool {
         let mut s = self.lock();
         if s.closing {
             return false;
@@ -53,7 +53,7 @@ impl WorkGate {
     }
 
     /// 書く段へ入る。終了が始まっていれば偽（入らない）。
-    pub(crate) fn enter_write(&self) -> bool {
+    pub fn enter_write(&self) -> bool {
         let mut s = self.lock();
         if s.closing {
             return false;
@@ -63,13 +63,13 @@ impl WorkGate {
     }
 
     /// 書く段を出る。待っている後始末を起こす。
-    pub(crate) fn leave_write(&self) {
+    pub fn leave_write(&self) {
         self.lock().writing = false;
         self.left.notify_all();
     }
 
     /// 扱っていた物を手放す（書く段に居れば出る）。
-    pub(crate) fn end(&self) {
+    pub fn end(&self) {
         let mut s = self.lock();
         s.label = None;
         s.writing = false;
@@ -77,7 +77,7 @@ impl WorkGate {
         self.left.notify_all();
     }
 
-    pub(crate) fn is_closing(&self) -> bool {
+    pub fn is_closing(&self) -> bool {
         self.lock().closing
     }
 }
@@ -94,7 +94,7 @@ struct GateEntry {
 struct ExitGates(Vec<GateEntry>);
 
 /// 門と、終了が始まったときに UI スレッドで呼ぶ片付けを登記する。
-pub(crate) fn register_gate(
+pub fn register_gate(
     world: &mut World,
     name: &'static str,
     gate: Arc<WorkGate>,
@@ -118,10 +118,10 @@ struct WritingWork {
 }
 
 /// 閉じた門のうち、書いている最中だった仕事。
-pub(crate) struct ClosingWaits(Vec<WritingWork>);
+pub struct ClosingWaits(Vec<WritingWork>);
 
 /// 終了が始まった: 全部の門を閉じ、登記された片付けを呼び、その時点の仕事を記録に残す。
-pub(crate) fn begin_close(world: &mut World) -> ClosingWaits {
+pub fn begin_close(world: &mut World) -> ClosingWaits {
     let entries = world
         .get_resource_mut::<ExitGates>()
         .map(|mut gates| std::mem::take(&mut gates.0))
@@ -157,7 +157,7 @@ impl ClosingWaits {
     ///
     /// 期限は `budget.started + budget.limit`（今から数え直さない）。前の段と同じ出発点を渡せば、
     /// 合わせて上限を超えない。
-    pub(crate) fn wait(self, budget: WaitBudget) {
+    pub fn wait(self, budget: WaitBudget) {
         let deadline = budget.started + budget.limit;
         let waited_from = Instant::now();
         for work in self.0 {

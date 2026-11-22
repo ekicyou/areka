@@ -100,7 +100,7 @@ fn kind_name(kind: StoreKind) -> &'static str {
 
 /// 判断して写し、使うフォルダを返す（すべてのフックが通る 1 つの口）。
 /// 行き先が在れば写さずにそれ・写せた／先を越されたら行き先・失敗なら `dir` のまま。
-pub(crate) fn copy_for_write(
+pub fn copy_for_write(
     roots: &BasewareRoots,
     exe_dir: Option<&Path>,
     kind: StoreKind,
@@ -156,14 +156,14 @@ pub(crate) fn copy_for_write(
 }
 
 /// 実行ファイルのフォルダ（`exe_location` の親・環境変数を読まず物も作らない）。
-pub(crate) fn exe_dir() -> Option<PathBuf> {
+pub fn exe_dir() -> Option<PathBuf> {
     crate::boot_config::exe_location()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
 }
 
 /// `readonly` なら写さず `dir` を返す（写すはずだったときだけ info 1 件）。そうでなければ `copy_for_write`。
-pub(crate) fn copy_unless_readonly(
+pub fn copy_unless_readonly(
     readonly: bool,
     roots: &BasewareRoots,
     exe_dir: Option<&Path>,
@@ -197,7 +197,7 @@ pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) 
 }
 
 /// `resolve_boot_from` へ渡す口（ゴースト用）。
-pub(crate) fn writable_ghost(roots: &BasewareRoots, dir: &Path) -> PathBuf {
+pub fn writable_ghost(roots: &BasewareRoots, dir: &Path) -> PathBuf {
     writable_copy(roots, StoreKind::Ghost, dir)
 }
 

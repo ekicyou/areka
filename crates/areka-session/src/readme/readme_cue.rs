@@ -48,14 +48,14 @@ const SELECTOR_README: &str = "readme";
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る。内側の送信端は常に複製でき、
 /// どの複製も単一の受信端（UI の `ReadmeWiring`）へ届くので、複製しても配送の意味は変わらない。
 #[derive(Clone)]
-pub(crate) struct ReadmeCueSink {
+pub struct ReadmeCueSink {
     /// UI スレッド（説明書の取り出しの段）への送出端。
     tx: Sender<ReadmeRequest>,
 }
 
 impl ReadmeCueSink {
     /// 送信端（受信端は結線の task が `wire_readme` へ渡す）から受け口を組む。
-    pub(crate) fn new(tx: Sender<ReadmeRequest>) -> Self {
+    pub fn new(tx: Sender<ReadmeRequest>) -> Self {
         Self { tx }
     }
 }

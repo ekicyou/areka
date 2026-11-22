@@ -26,22 +26,22 @@ use temp_path_kit::TempPath;
 use super::sites_tests::{KINDS, drain_desk};
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::{ExitOrigin, FirstExit};
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::{
-    BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, LastUsed, record_last_balloon,
-    record_last_shell, running_name,
-};
-use crate::session::boot_seam::insert_persist_wiring;
-use crate::session::ghost_session::{GhostSlot, StartupDescriptValues};
-use crate::session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
-};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
+use areka_session::app_exit::{ExitOrigin, FirstExit};
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::{
+    BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, LastUsed, record_last_balloon,
+    record_last_shell, running_name,
+};
+use areka_session::boot_seam::insert_persist_wiring;
+use areka_session::ghost_session::{GhostSlot, StartupDescriptValues};
+use areka_session::ghost_switch::{
+    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
+};
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 
 /// 根の下の木（相対パス → ファイルの中身。フォルダは `None`）。
 fn tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
@@ -112,7 +112,7 @@ fn reservation(rig: &SwitchRig, stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     }
 }
 
@@ -257,14 +257,14 @@ fn every_write_kind_is_withheld_under_the_guard() {
         (kind, PersistScope::App, PersistKey::LastRunning, running),
     );
 
-    world.resource_mut::<BootContext>().roots_origin = crate::session::roots::RootsOrigin::Default;
+    world.resource_mut::<BootContext>().roots_origin = areka_session::roots::RootsOrigin::Default;
     let desk = reached_desk(world, Some(&publisher), |w| {
         crate::roots::add_root(w, present_root.clone());
     });
     let encoded = |w: &World| {
-        crate::session::roots::encode_memory(
+        areka_session::roots::encode_memory(
             &w.resource::<BootContext>().roots,
-            crate::session::roots::user_root::exe_dir().as_deref(),
+            areka_session::roots::user_root::exe_dir().as_deref(),
         )
     };
     let kind = "置き場の並び";
@@ -444,8 +444,8 @@ fn every_write_kind_is_withheld_under_the_guard() {
             shiori_cut: false,
         },
     );
-    assert_eq!(verdict, crate::session::session_mark::MarkVerdict::Clear);
-    let told = crate::session::write_failure::tell_at_close(None, clear_failed.clone(), None, true);
+    assert_eq!(verdict, areka_session::session_mark::MarkVerdict::Clear);
+    let told = areka_session::write_failure::tell_at_close(None, clear_failed.clone(), None, true);
     let kind = "印を消す";
     judge(
         kind,

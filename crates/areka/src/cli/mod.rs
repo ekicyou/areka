@@ -9,7 +9,7 @@ pub(crate) mod parse;
 
 use std::path::PathBuf;
 
-use crate::session::boot_request::{BootRequest, ModulePolicy};
+use areka_session::boot_request::{BootRequest, ModulePolicy};
 pub(crate) use listen::ListenPlan;
 
 /// 起動オプションの中身。

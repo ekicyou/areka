@@ -15,8 +15,8 @@ use areka_seriko::{
 };
 
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
 use areka_runtime::shell_carry::{ShellCarry, snapshot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 /// 面の番号がシェルに無いと分かっている値。
 const GONE: u32 = 987_654;
@@ -27,7 +27,7 @@ type Shown = Vec<(String, u32, Vec<u32>)>;
 /// 控え `carry` を持たせて装着の相を 1 回回し、seriko（本物の名前表と既定の着せ替え）が出した `Show` を返す。
 fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> Shown {
     let (_gpu, mut world, _gw) = gpu_attach_world();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let carry = carry(&assets);

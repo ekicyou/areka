@@ -9,22 +9,22 @@
 //! 差し替えは本番の台本の命令（`\![change,shell,…]` → `OnShellChanged` の台詞の
 //! `\![change,balloon,…]`）で起こし、差し替えの後の状態は本番の後始末が作る。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::sample_test_support::switch_rig;
-use crate::session::boot_config::BootContext;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_session::shell_balloon_switch_session_lap_tests::{
-    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
-};
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
+use areka_session::boot_config::BootContext;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
+    LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig_on,
+};
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 
 /// 2 つ目のバルーン（検体 `StayseeBalloon` の複製・フォルダ名）。
 const STAYSEE: &str = "StayseeBalloon";
@@ -50,11 +50,27 @@ fn add_staysee(rig: &SwitchRig) {
     copy_tree(staysee.folder(), &rig.root.balloon_dir(STAYSEE));
 }
 
+/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `folder`（`name` も `folder`）に
+/// 写し、それを A の `shell/<folder>` へ複製する。
+// 集めた層の `shell_balloon_switch_session_lap_tests.rs` にも同じ形がある: 検体の窓口は `test-support` に入れられない。
+fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
+    let rpost =
+        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    rpost
+        .add_shell_copy("master", folder, folder)
+        .expect("2 つ目のシェルを写す");
+    copy_tree(
+        &rpost.folder().join("shell").join(folder),
+        &ghost_dir.join("shell").join(folder),
+    );
+}
+
 /// 土台を組み、A が定常に着くのを待つ（差し替えはまだ始まっていない）。
 fn steady_rig() -> (LapRig, bool) {
     let lap = lap_rig_on(
         switch_rig(vec![("A", FakeShiori::Scripted(Box::new(script)))]),
         &[SECOND],
+        add_rpost_shell,
     );
     add_staysee(&lap.rig);
     let steady = lap.rig.wait_steady();

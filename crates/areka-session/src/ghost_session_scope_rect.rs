@@ -16,11 +16,11 @@ use areka_placement::spawn::GhostWindows;
 
 /// 窓の印（HWND の生の値）。HWND はスレッドをまたいで送れないので値で持つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct WindowKey(pub(crate) isize);
+pub struct WindowKey(pub isize);
 
 /// 画面の矩形（物理の画素・仮想画面の座標・右と下は外の最初の画素）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ScreenRect {
+pub struct ScreenRect {
     pub left: i32,
     pub top: i32,
     pub right: i32,
@@ -82,7 +82,7 @@ pub(crate) struct ScopeRectWiring {
 
 /// テスト用の OS の読み取りの差し替え口（本番は入れない＝本物の `os_window_rect`）。
 #[derive(Resource, Clone)]
-pub(crate) struct ScopeRectReadSeam(pub(crate) WindowRectFn);
+pub struct ScopeRectReadSeam(pub WindowRectFn);
 
 /// 実行系に読み手を登録し、今の窓の一式から表を組む（`rewire_runtime_consumers` から・同期）。
 pub(crate) fn wire(world: &mut World, runtime: &GhostRuntime) {

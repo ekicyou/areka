@@ -18,11 +18,11 @@ fn only_the_os_port_spells_shell_execute() {
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
         (
             "areka-runtime",
-            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
         ),
         (
             "areka-input",
-            crate::crate_source_test_support::crate_path("areka-input", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ];
     let mut hits = Vec::new();

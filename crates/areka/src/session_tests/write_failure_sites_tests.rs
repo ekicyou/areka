@@ -22,23 +22,23 @@ use temp_path_kit::TempPath;
 
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::ExitOrigin;
-use crate::session::app_exit::FirstExit;
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::{
-    BalloonRoute, GhostRoute, LastUsed, record_last_balloon, record_last_shell,
-};
-use crate::session::boot_seam::insert_persist_wiring;
-use crate::session::ghost_session::{GhostSlot, StartupDescriptValues};
-use crate::session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
-};
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
-use crate::session::session_mark::{MarkInputs, Teardown, settle_session_mark};
-use crate::session::write_failure::*;
 use areka_placement::AuthorDpi;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
+use areka_session::app_exit::ExitOrigin;
+use areka_session::app_exit::FirstExit;
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::{
+    BalloonRoute, GhostRoute, LastUsed, record_last_balloon, record_last_shell,
+};
+use areka_session::boot_seam::insert_persist_wiring;
+use areka_session::ghost_session::{GhostSlot, StartupDescriptValues};
+use areka_session::ghost_switch::{
+    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
+};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::session_mark::{MarkInputs, Teardown, settle_session_mark};
+use areka_session::write_failure::*;
 use areka_sylphya::PersistFailure;
 use bevy_ecs::prelude::*;
 
@@ -135,7 +135,7 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     }
 }
 
@@ -215,7 +215,7 @@ fn every_write_kind_reaches_the_desk() {
     let got = posted(world, &publisher, |w| on_notice(w, KanadeNotice::Steady));
     judged.push(("定常の印", PersistScope::App, PersistKey::LastRunning, got));
 
-    world.resource_mut::<BootContext>().roots_origin = crate::session::roots::RootsOrigin::Default;
+    world.resource_mut::<BootContext>().roots_origin = areka_session::roots::RootsOrigin::Default;
     let got = posted(world, &publisher, |w| {
         crate::roots::add_root(w, present_root.clone());
     });
@@ -350,7 +350,7 @@ fn every_write_kind_reaches_the_desk() {
             shiori_cut: false,
         },
     );
-    assert_eq!(verdict, crate::session::session_mark::MarkVerdict::Clear);
+    assert_eq!(verdict, areka_session::session_mark::MarkVerdict::Clear);
     let told = tell_at_close(None, failed.clone(), None, true);
     judged.push((
         "印を消す",

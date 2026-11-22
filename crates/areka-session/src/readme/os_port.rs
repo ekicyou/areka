@@ -20,7 +20,7 @@ use windows::core::{PCWSTR, w};
 
 /// OS の既定の動詞（areka 独自の設定値は持たない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Verb {
+pub enum Verb {
     /// 「開く」（既定の関連付け）。
     Open,
     /// 「編集」の関連付け。
@@ -29,7 +29,7 @@ pub(crate) enum Verb {
 
 /// OS へ渡す 1 回分の呼び出し（偽物はこれを記録する）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct OsCall {
+pub struct OsCall {
     pub verb: Verb,
     /// SHELLEXECUTEINFOW の lpFile（URL・パス・名前だけの実行ファイル・explorer.exe）。
     pub file: OsString,
@@ -40,7 +40,7 @@ pub(crate) struct OsCall {
 }
 
 /// OS の境界。
-pub(crate) trait OsPort {
+pub trait OsPort {
     /// OS へ渡す。失敗は GetLastError の Win32 の符号（例: 見つからない 2・関連付けが無い 1155）。
     fn shell_execute(&mut self, call: &OsCall) -> Result<(), u32>;
     /// 環境変数（Windows の規則で大文字小文字を区別しない）。
@@ -53,7 +53,7 @@ pub(crate) trait OsPort {
 /// テストのビルドは本物の OS を呼ばない（`Opener::spawn` が断る口を持つ）ので、
 /// 本物の口と COM の初期化はテストのビルドに呼び手が無い（関連付けの判定はテストが直に呼ぶ）。
 #[cfg_attr(test, allow(dead_code))]
-pub(crate) struct WindowsShell;
+pub struct WindowsShell;
 
 /// 終端 0 付きの UTF-16 へ写す。
 #[cfg_attr(test, allow(dead_code))]
@@ -176,7 +176,7 @@ impl OsPort for WindowsShell {
 /// 失敗は `warn!` を残して続ける（`ShellExecuteExW` は COM 無しでも多くの場合は動く）。
 /// テストのビルドでは呼ばない（[`WindowsShell`] と同じ）。
 #[cfg_attr(test, allow(dead_code))]
-pub(crate) fn init_com_for_shell() {
+pub fn init_com_for_shell() {
     // SAFETY: 予約の引数は None。対の CoUninitialize はスレッドの終わりまで呼ばない。
     let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
     if let Err(err) = hr.ok() {

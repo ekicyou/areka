@@ -33,7 +33,7 @@ const HOOKS: SessionHooks = SessionHooks {
 };
 
 /// 口を World へ据える（`ghost_session::register_systems` の先頭から・何度呼んでも同じ）。
-pub(crate) fn install(world: &mut World) {
+pub fn install(world: &mut World) {
     world.insert_resource(HOOKS);
 }
 

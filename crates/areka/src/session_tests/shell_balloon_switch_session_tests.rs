@@ -6,13 +6,13 @@
 use std::path::PathBuf;
 
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
-use crate::session::shell_balloon_switch::{
+use areka_runtime::spine::RecordedCall;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,
     request_skin_switch,
 };
-use areka_runtime::spine::RecordedCall;
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、
 /// 持ったセッションを降ろしても seriko の join が止まらずに戻る。複製を降ろす最初の
@@ -233,7 +233,7 @@ fn menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch(
         &areka_ghost::catalog_roots::BasewareRoots::single(rig.root.dir().to_path_buf()),
     )
     .into_iter()
-    .find(|e| e.identity.folder == crate::session::ghost_switch_test_support::BALLOON)
+    .find(|e| e.identity.folder == areka_session::ghost_switch_test_support::BALLOON)
     .map(|e| e.identity.name.unwrap_or(e.identity.folder))
     .expect("検体のバルーンが根に在る");
     rig.boot("A");

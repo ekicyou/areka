@@ -20,7 +20,7 @@ use super::judge::{
 };
 use super::terms::{TermsNotice, find_terms, nested_terms};
 use super::{InstallOrder, InstallOrigin};
-use crate::session::alert::YesNo;
+use areka_session::alert::YesNo;
 
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallBegin:1
 const ON_INSTALL_BEGIN: &str = "OnInstallBegin";

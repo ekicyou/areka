@@ -26,7 +26,7 @@
 //! 自前で覆う。
 
 use super::zorder_branch_coverage_test_support::check_table;
-use crate::crate_source_test_support::crate_source;
+use areka_session::crate_source;
 
 /// 11 分岐。「窓の出現・破棄に伴う繋ぎ直しの導出」は並立複合語として 1 分岐に数える
 /// （「窓の出現」だけ・「破棄に伴う繋ぎ直しの導出」だけを分岐名にすると後者が文の断片になる）。

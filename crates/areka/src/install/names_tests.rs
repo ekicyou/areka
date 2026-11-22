@@ -16,7 +16,7 @@ use tracing::Level;
 
 use super::*;
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// 値を本物の記憶の書き手へ載せ、台詞の開始の表で 2 語を展開する（`%lastghostname`, `%lastobjectname`）。
 fn resolved(names: &LastInstallNames) -> (ResolvedVar, ResolvedVar) {

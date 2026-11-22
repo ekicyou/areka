@@ -53,7 +53,7 @@ fn gpu_frame_world() -> (
     areka_placement::spawn::GhostWindows,
 ) {
     let (mut world, gw) = dpi_world();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     let gpu = gpu_on(&mut world);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     world.insert_non_send(BalloonHover::default());
@@ -453,8 +453,8 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
 /// 置き場に kanade の送出端だけを持つゴーストを据え、その受信端を返す（切替は据え直しで表す）。
 fn seat_ghost(world: &mut World) -> mpsc::Receiver<areka_kanade::KanadeMsg> {
     let (tx, rx) = mpsc::channel();
-    world.insert_non_send(crate::session::ghost_session::GhostSlot(Some(
-        crate::session::ghost_session::GhostSession::for_test(
+    world.insert_non_send(areka_session::ghost_session::GhostSlot(Some(
+        areka_session::ghost_session::GhostSession::for_test(
             Some(tx),
             std::path::PathBuf::from("ghost/test"),
         ),
@@ -555,7 +555,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
     drop(old_wiring);
 
-    let _ = crate::session::app_exit::close_windows_for_restart(&mut world);
+    let _ = areka_session::app_exit::close_windows_for_restart(&mut world);
     let gw = spawn_resnap_windows(&mut world);
     dress_dpi_windows(&mut world, &gw);
     let old_balloon = old_gw.balloon_window(0).expect("balloon 窓がある");

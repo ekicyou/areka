@@ -3,31 +3,31 @@
 use crate::app_exit;
 
 /// 起動中の印の判定の材料（`run()` の後に組み、降ろした後に [`settle_session_mark`] へ渡す）。
-pub(crate) struct MarkInputs {
+pub struct MarkInputs {
     /// 記憶の置き場（App スコープ）。
-    pub(crate) app_profile_dir: std::path::PathBuf,
+    pub app_profile_dir: std::path::PathBuf,
     /// 起動の文脈の argv の旗。
-    pub(crate) argv_session: bool,
+    pub argv_session: bool,
     /// 最初に終了を指示した出所（無ければ `None`）。
-    pub(crate) first: Option<app_exit::ExitOrigin>,
+    pub first: Option<app_exit::ExitOrigin>,
     /// 最初の起動が LogSink へ倒れたか（倒れた先の成否を問わない）。
-    pub(crate) logsink_fallback: bool,
+    pub logsink_fallback: bool,
 }
 
 /// 降ろした結果（`fn main` の後始末は `shiori_cut=false`・OS のセッションの終了は見張りの結果）。
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Teardown {
+pub struct Teardown {
     /// メッセージループ（`run()`）が成功したか。
-    pub(crate) run_ok: bool,
+    pub run_ok: bool,
     /// 降ろす処理が成功したか。
-    pub(crate) down_ok: bool,
+    pub down_ok: bool,
     /// OS のセッションの終了で SHIORI の待ちを上限で打ち切ったか。
-    pub(crate) shiori_cut: bool,
+    pub shiori_cut: bool,
 }
 
 /// きれいな終わりの判定の結論。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MarkVerdict {
+pub enum MarkVerdict {
     /// きれいに終わった＝印を消す。
     Clear,
     /// きれいに終わらなかった＝印を残す（理由は記録の `reason`）。
@@ -43,7 +43,7 @@ pub(crate) enum MarkVerdict {
 /// 失敗 → OS のセッションの終了で SHIORI の待ちを上限で打ち切った → 降ろす処理の失敗 → それ以外は
 /// 消す。出所は網羅の match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
 /// 名前は見ないので、倒れたのが既定ゴースト自身でも同じく残す。
-pub(crate) fn session_mark_verdict(
+pub fn session_mark_verdict(
     first: Option<&app_exit::ExitOrigin>,
     argv_session: bool,
     logsink_fallback: bool,
@@ -90,7 +90,7 @@ pub(crate) fn session_mark_verdict(
 /// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
 /// `info!(session_mark_kept)`（`boot_resolve::keep_session_mark`）、argv なら `debug!` だけ。
 /// 呼ぶのはゴーストの実行系が 0 の時点だけ。印を消せなかった失敗は組の 2 つ目で返す（記録済み）。
-pub(crate) fn settle_session_mark(
+pub fn settle_session_mark(
     mark: &MarkInputs,
     end: Teardown,
 ) -> (MarkVerdict, Option<areka_sylphya::PersistFailure>) {

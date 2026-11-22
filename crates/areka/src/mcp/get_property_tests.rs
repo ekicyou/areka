@@ -19,7 +19,7 @@ use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
 use super::*;
-use crate::session::ghost_session::GhostSlot;
+use areka_session::ghost_session::GhostSlot;
 
 /// `handle` を 1 回呼び、返った直後の答えを取り出す（まだ答えていなければ None）。
 fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<ToolOutcome> {
@@ -71,7 +71,7 @@ fn answers_unavailable_and_warns_once_without_a_runtime() {
 #[test]
 fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
     let mut rig = switch_rig(vec![(
         "A",
@@ -153,16 +153,16 @@ mod scope_rect {
 
     use super::*;
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_session::ghost_session_scope_rect::{
-        ScopeRectReadSeam, ScreenRect, WindowKey,
-    };
-    use crate::session::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
-    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
     use crate::shiori_host::ShioriHostSink;
     use areka_placement::follow::OffsetBase;
     use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
     use areka_placement::source::GhostTitles;
     use areka_placement::spawn::spawn_ghost_windows;
+    use areka_session::ghost_session::ghost_session_scope_rect::{
+        ScopeRectReadSeam, ScreenRect, WindowKey,
+    };
+    use areka_session::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
+    use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     /// 窓の印ごとに違う矩形（左＝印の値）を返す偽の OS で、答えの数からどの窓を引いたか分かる。
     fn rect_of(raw: isize) -> ScreenRect {

@@ -14,7 +14,7 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRou
 use crate::shell_balloon_switch::{SkinKind, SkinSwitchStage};
 
 /// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`・置き場は `temp` の下）。
-pub(crate) fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext {
+pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
         roots_origin: crate::roots::RootsOrigin::EnvVar,
@@ -41,7 +41,7 @@ pub(crate) fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext {
 }
 
 /// 他人のシェル／バルーンの切替の予約を直に置く（利用者の `\![change,shell,…]` の代わり）。
-pub(crate) fn plant_skin_switch(world: &mut World, kind: SkinKind, dir: &Path) {
+pub fn plant_skin_switch(world: &mut World, kind: SkinKind, dir: &Path) {
     world.insert_non_send(SkinSwitchInFlight {
         kind,
         target: SkinCandidate {

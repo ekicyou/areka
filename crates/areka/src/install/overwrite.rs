@@ -17,9 +17,9 @@ use bevy_ecs::world::World;
 use super::{InstallDesk, reply_to};
 use crate::install::destination::install_into;
 use crate::install::procedure::Overwritten;
-use crate::session::app_exit::FirstExit;
-use crate::session::boot_config::BootContext;
-use crate::session::ghost_switch::{
+use areka_session::app_exit::FirstExit;
+use areka_session::boot_config::BootContext;
+use areka_session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
 

@@ -52,7 +52,7 @@ fn show_dialog() -> Result<Option<PathBuf>, PickError> {
         dialog
             .SetOptions(dialog_options(
                 options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST,
-                crate::session::readonly::is_on(),
+                areka_session::readonly::is_on(),
             ))
             .map_err(|e| PickError::Com(e.code()))?;
         dialog

@@ -24,7 +24,7 @@ use windows::Win32::System::SystemInformation::GetLocalTime;
 
 /// 種別（SSP の 5 語）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Kind {
+pub enum Kind {
     Error,
     Script,
     Network,
@@ -53,7 +53,7 @@ impl Kind {
     }
 
     /// 5 語と大文字小文字の違いを除いて一致すれば Some（前後の空白は削らない・空は None）。
-    pub(crate) fn from_log_type(word: &str) -> Option<Kind> {
+    pub fn from_log_type(word: &str) -> Option<Kind> {
         Kind::ALL
             .into_iter()
             .find(|k| k.word().eq_ignore_ascii_case(word))
@@ -81,10 +81,10 @@ impl Kind {
 /// 取り決めの target: 再生した台本を script 種別へ残す（info 以上で出す約束）。
 pub(crate) const TARGET_SCRIPT: &str = areka_kanade::script_log::TARGET;
 /// 取り決めの target: error 種別へ直接残す（info 以上で出す約束）。
-pub(crate) const TARGET_ERROR: &str = "areka::log::error";
+pub const TARGET_ERROR: &str = "areka::log::error";
 
 /// info の行を種別へ振る規則 1 行。
-pub(crate) struct Rule {
+pub struct Rule {
     pub target: &'static str,
     pub kind: Kind,
     /// true は完全一致だけ。false は自身か `::` で区切った下のモジュール。
@@ -112,7 +112,7 @@ const fn rule(target: &'static str, kind: Kind, exact: bool) -> Rule {
 }
 
 /// 上から順に当て、最初に当たった行の種別になる（network の行は update の行より先）。
-pub(crate) const RULES: &[Rule] = &[
+pub const RULES: &[Rule] = &[
     rule("areka::install::fetch_url", Kind::Network, false),
     rule("areka_update::winhttp", Kind::Network, false),
     rule("areka_update::fetch", Kind::Network, false),
@@ -157,7 +157,7 @@ pub(crate) fn classify(level: Level, target: &str) -> Option<Kind> {
 }
 
 /// 欄 1 つ（tracing の訪問で得る 2 つの形）。
-pub(crate) struct FieldText<'a> {
+pub struct FieldText<'a> {
     pub name: &'a str,
     /// `{:?}` の形（文字列で渡された欄は引用符つき）。
     pub debug: &'a str,
@@ -167,7 +167,7 @@ pub(crate) struct FieldText<'a> {
 
 /// 置き場へ積む前の記録。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Draft {
+pub struct Draft {
     pub kind: Kind,
     pub label: String,
     pub name: String,
@@ -184,7 +184,7 @@ pub(crate) const TRUNCATED_SUFFIX: &str = " ...(truncated)";
 /// 本文は `message` の欄の後に残りの欄を ` 名前=値`（値は `{:?}` の形）で続ける。
 /// 取り決めの target の行だけ `ghost`・`label` を名と表示の語として読み本文から除く
 /// （同名が複数なら最後のもの）。`log.` で始まる欄（`log` クレートから橋渡しされた行）は除く。
-pub(crate) fn draft<'a>(
+pub fn draft<'a>(
     level: Level,
     target: &str,
     fields: impl IntoIterator<Item = FieldText<'a>>,
@@ -239,7 +239,7 @@ pub(crate) fn body_text<'a>(
 
 /// 記録した時刻（現地時刻・分まで）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Stamp {
+pub struct Stamp {
     pub year: u16,
     pub month: u8,
     pub day: u8,
@@ -249,7 +249,7 @@ pub(crate) struct Stamp {
 
 /// 置き場に積んだ記録 1 件。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Record {
+pub struct Record {
     pub id: u64,
     pub at: Stamp,
     pub kind: Kind,
@@ -265,14 +265,14 @@ pub(crate) const PER_KIND_CAP: usize = 1000;
 ///
 /// 番号は全種別で 1 本（1 から）。`last_id` は減らず、捨てた番号は使い回さない。
 /// ある種別の `push` は他の種別の列を変えない。
-pub(crate) struct History {
+pub struct History {
     last_id: u64,
     /// 添え字は `Kind` の宣言順。
     rows: [VecDeque<Record>; 5],
 }
 
 impl History {
-    pub(crate) const fn new() -> Self {
+    pub const fn new() -> Self {
         History {
             last_id: 0,
             rows: [const { VecDeque::new() }; 5],
@@ -280,7 +280,7 @@ impl History {
     }
 
     /// 番号を振って積む。その種別が上限なら最古の 1 件を捨ててから積む。振った番号を返す。
-    pub(crate) fn push(&mut self, at: Stamp, draft: Draft) -> u64 {
+    pub fn push(&mut self, at: Stamp, draft: Draft) -> u64 {
         self.last_id += 1;
         let row = &mut self.rows[draft.kind as usize];
         if row.len() >= PER_KIND_CAP {
@@ -303,7 +303,7 @@ impl History {
     }
 
     /// その種別の記録（古い順）。
-    pub(crate) fn rows(&self, kind: Kind) -> impl Iterator<Item = &Record> {
+    pub fn rows(&self, kind: Kind) -> impl Iterator<Item = &Record> {
         self.rows[kind as usize].iter()
     }
 }
@@ -321,18 +321,18 @@ fn lock(store: &Mutex<History>) -> MutexGuard<'_, History> {
 }
 
 /// 置き場へ 1 件積み、振った番号を返す（履歴の層とテストが使う同じ口）。
-pub(crate) fn record(at: Stamp, draft: Draft) -> u64 {
+pub fn record(at: Stamp, draft: Draft) -> u64 {
     lock(&STORE).push(at, draft)
 }
 
 /// いま最後に振った通し番号（1 件も無ければ 0）。MCP の読み直しの受理が返事に添える。
-pub(crate) fn last_id() -> u64 {
+pub fn last_id() -> u64 {
     lock(&STORE).last_id()
 }
 
 /// その種別の記録を写して返す（古い順・最大 [`PER_KIND_CAP`] 件）。
 /// 排他を握るのは写す間だけで、呼び手は排他の外で絞って整形する。
-pub(crate) fn snapshot(kind: Kind) -> Vec<Record> {
+pub fn snapshot(kind: Kind) -> Vec<Record> {
     lock(&STORE).rows(kind).cloned().collect()
 }
 
@@ -434,7 +434,7 @@ impl<S: Subscriber> Layer<S> for HistoryLayer {
 
 /// 写しの窓の時刻（現地時刻・秒まで）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Hms {
+pub struct Hms {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
@@ -442,7 +442,7 @@ pub(crate) struct Hms {
 
 /// 窓に写した記録 1 件（本文は切らない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CapturedRecord {
+pub struct CapturedRecord {
     pub at: Hms,
     pub level: Level,
     pub body: String,
@@ -459,12 +459,12 @@ fn window() -> MutexGuard<'static, Window> {
 }
 
 /// 窓を開ける（開いていれば中身を空にして開け直す）。呼んだスレッドの番号を覚える。
-pub(crate) fn capture_begin() {
+pub fn capture_begin() {
     *window() = Some((std::thread::current().id(), Vec::new()));
 }
 
 /// 窓を閉じて、写した記録を残した順に返す（開いていなければ空）。
-pub(crate) fn capture_finish() -> Vec<CapturedRecord> {
+pub fn capture_finish() -> Vec<CapturedRecord> {
     window().take().map(|(_, rows)| rows).unwrap_or_default()
 }
 
@@ -547,7 +547,7 @@ fn local_hms() -> Hms {
 /// ログの出口を据える（`fn main()` の先頭で 1 度だけ。2 度目はパニックする）。
 /// 標準出力の層（`RUST_LOG` のフィルタ・未設定や不正なら info）と履歴の層と写しの層を重ねる。
 /// `init()` は `log` クレートの受け口も据える。
-pub(crate) fn init() {
+pub fn init() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -555,6 +555,15 @@ pub(crate) fn init() {
         .with(HistoryLayer.with_filter(HistoryFilter))
         .with(CaptureLayer.with_filter(CaptureFilter))
         .init();
+}
+
+/// 写しの窓を触るテストが順に回るための握り。
+#[cfg(any(test, feature = "test-support"))]
+pub fn hold() -> MutexGuard<'static, ()> {
+    // 写しの窓そのものの `WINDOW` と名がぶつかるので、関数の中に置く。
+    /// 窓を触るテストの排他（窓を開け閉めする書き出しの走りの試験 `offline_dump_tests` も握る）。
+    static WINDOW: Mutex<()> = Mutex::new(());
+    WINDOW.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

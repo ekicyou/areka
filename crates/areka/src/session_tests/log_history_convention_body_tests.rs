@@ -1,6 +1,6 @@
 //! 決まりの表の出所が本体の `src` に在ることを確かめる構造の試験。
 
-use crate::session::log_history::RULES;
+use areka_session::log_history::RULES;
 
 // ---------------------------------------------------------------------------
 // 名指ししたモジュールの実在
@@ -15,7 +15,7 @@ fn crate_of(name: &str) -> Option<(std::path::PathBuf, &'static str)> {
             "main.rs",
         )),
         "areka_update" => Some((
-            crate::crate_source_test_support::crate_path("areka-update", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-update", "src"),
             "lib.rs",
         )),
         _ => None,
@@ -31,7 +31,8 @@ fn locate(target: &str) -> Result<(), String> {
             return Err(format!("{target}: クレート `{head}` のフォルダを導けない"));
         }
         // `::` を含まない明示の target はゴーストの実行時のファイルに字面がある。
-        let path = crate::crate_source_test_support::crate_path("areka-ghost", "src/runtime.rs");
+        let path =
+            areka_session::crate_source_test_support::crate_path("areka-ghost", "src/runtime.rs");
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("{target}: {} を読めない: {e}", path.display()))?;
         let literal = format!("target: \"{target}\"");

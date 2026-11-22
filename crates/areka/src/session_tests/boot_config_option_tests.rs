@@ -1,13 +1,13 @@
-//! 起動の求め（`session::boot_request::BootRequest`）から起動の答えへ。
+//! 起動の求め（`areka_session::boot_request::BootRequest`）から起動の答えへ。
 //!
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session::boot_config::BootResolved;
-use crate::session::boot_resolve::{
+use crate::session_tests::resolve_boot_from;
+use areka_session::boot_config::BootResolved;
+use areka_session::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
 };
-use crate::session_tests::resolve_boot_from;
 use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -61,7 +61,7 @@ fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved
         .map(str::to_owned)
         .collect();
     resolve_boot_from(
-        crate::session::roots::single_env(tmp.path().to_path_buf()),
+        areka_session::roots::single_env(tmp.path().to_path_buf()),
         &args,
         &tmp.child("app-profile"),
         pick,
@@ -184,7 +184,7 @@ fn boot_with(
         .map(str::to_owned)
         .collect();
     resolve_boot_from(
-        crate::session::roots::single_env(tmp.path().to_path_buf()),
+        areka_session::roots::single_env(tmp.path().to_path_buf()),
         &args,
         &tmp.child("app-profile"),
         no_pick,

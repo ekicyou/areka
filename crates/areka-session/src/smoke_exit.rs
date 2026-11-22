@@ -12,7 +12,7 @@ use wintf::WinApp;
 /// （ECS システムではない）。投入は 1 度目の窓の準備が通ったとき（呼び口は `main`）だけ。
 /// env 未設定・不正なら
 /// 発火せず、ゴースト窓はメニューの「終了」か OS の閉鎖要求を待ち続ける。
-pub(crate) fn arm(app: &WinApp) {
+pub fn arm(app: &WinApp) {
     if let Some(ms) = smoke_exit_ms() {
         // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
         let world_weak = std::rc::Rc::downgrade(&app.world());
@@ -59,7 +59,7 @@ fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
 
 /// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。
 /// 終わりの告知（`alert::raise`）も、これが立つ走行＝人が見ていない走行と読む。
-pub(crate) fn smoke_exit_ms() -> Option<u64> {
+pub fn smoke_exit_ms() -> Option<u64> {
     smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
 }
 

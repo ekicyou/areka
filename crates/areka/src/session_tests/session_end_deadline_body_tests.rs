@@ -60,11 +60,11 @@ fn production_sources() -> Vec<(String, String)> {
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
         (
             "areka-runtime",
-            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
         ),
         (
             "areka-input",
-            crate::crate_source_test_support::crate_path("areka-input", "src"),
+            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
         ),
     ] {
         let before = out.len();

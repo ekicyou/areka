@@ -16,7 +16,7 @@ use areka_runtime::frame::frame_system;
 ///
 /// 実 sink 結線（`wire_runtime`）と LogSink 側の起動とで同じ 1 つを共有する。
 /// 取り出すのは [`run_ghost_quit_phase`] の 1 か所だけ。
-pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
+pub struct KanadeNoticeRx(pub Receiver<KanadeNotice>);
 
 /// 終了相: kanade の運行の通知を取り出して 1 件ずつ捌く。
 ///
@@ -44,7 +44,7 @@ pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 /// そこは冪等である（kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
 ///
 /// 予約の無い停止で、原因（Fault を含む）によって終わらない分岐は置かない。
-pub(crate) fn run_ghost_quit_phase(world: &mut World) -> bool {
+pub fn run_ghost_quit_phase(world: &mut World) -> bool {
     let Some(rx) = world.get_non_send::<KanadeNoticeRx>() else {
         return false;
     };
@@ -94,7 +94,7 @@ fn quit_as_today(world: &mut World, stopped: KanadeStopped) {
 }
 
 /// 終了相 [`run_ghost_quit_phase`] を呼ぶだけの排他 system（起動の 2 経路で共有する）。
-pub(crate) fn ghost_quit_system(world: &mut World) {
+pub fn ghost_quit_system(world: &mut World) {
     run_ghost_quit_phase(world);
 }
 

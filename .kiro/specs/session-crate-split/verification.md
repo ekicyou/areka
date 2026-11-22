@@ -945,3 +945,73 @@ log-capture-kit・temp-path-kit・sample-ghost-kit（番人の注を写す）・
 - 門: 4.1 の門は「エラー 0」とし、警告 0 の門は 4.2（本体のコンパイラの指摘で公開面を決める段）へ移した（tasks.md の Implementation Notes に記録）。
 - `cargo fmt -p areka-session -- --check` 差分なし（`crate::session::` を外して並びが変わった `use` を `cargo fmt -p areka-session` で整えた）。
 - テストは走らせていない（4.4）。本体の crate はこの時点で組めない（4.2 でつなぎ替える）。
+
+### 4.2
+
+#### つなぎ替え
+
+- 本体の `Cargo.toml`: 本番の表に `areka-session = { path = "../areka-session" }`、開発用の表に `areka-session = { path = "../areka-session", features = ["test-support"] }`（`areka-input` の 2 行の形と理由の注）。
+- `main.rs` から `mod session;`・`#[cfg(test)] mod crate_source_test_support;` を外した（`mod smoke_exit;` は 2.3 で既に無い）。出し直しは置いていない。
+- 本体の 153 ファイル（`src/` 152・`tests/smoke_boot_loop_exit.rs` の説明の 1 行）: `crate::session::` → `areka_session::`、`session::`（前が識別子でも `:` でもないもの）→ `areka_session::`、`crate::crate_source_test_support::crate_source!` → `areka_session::crate_source!`、`use crate::crate_source_test_support::crate_source;` → `use areka_session::crate_source;`、`crate::crate_source_test_support::crate_path` → `areka_session::crate_source_test_support::crate_path`。`"areka::session::…"` の文字列（4.3）と `tests/emo2_mcp_real_run.rs`（5.1）は触っていない。
+- `runtime_tests/zorder_wiring_tests.rs`: 33・74 行の `include_str!("../session/…")` を `crate_source!("areka-session", "src/runtime_boot.rs")`・`crate_source!("areka-session", "src/ghost_session.rs")` へ（ほかは `use` の 1 行だけ）。
+- 本体の `placement_tests/` の 4 ファイル（`measure_bake_count_tests.rs`・`measure_template_tests.rs`・`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs`）は、読み口の `use`／パスの 1 行ずつだけが変わった（`mod crate_source_test_support;` を外すと組めないため。同じウェーブの約束の範囲の外の変更・申し送り）。
+- `sample_test_support.rs` の `switch_rig`: `RigSample::of`（集めた層の `#[cfg(test)]`）の代わりに `RigSample { root, ghost, bundled_balloon, keep }` を欄で組む（`RigSample` の 4 欄を `pub` に）。
+
+#### 公開面の決め方
+
+1. 本番の本体（`cargo check -p areka --bin areka`）のエラーを 1 件ずつ見て `pub` にした（E0603・E0616・E0451・`private_interfaces`。繰り返しで 0 まで）。
+2. 続けて本体のテストのビルド（`--tests`）のエラーを同じく見た。glob（`use areka_session::<mod>::*;`）の 9 ファイルは私有の名を黙って落とすので、`cannot find …` を glob の先のモジュールの定義へ引き当てて開けた。
+3. 集めた層の `--tests` の `private_interfaces` で、開けた項目の署名が名指す型を開けた（連れて開けた型）。
+- 一覧（ファイルごと・項目の名・本番の本体が使うか）: `target/session-crate-split/4.2-surface.txt`（P＝本番の本体も使う・T＝本体のテストだけ〔と連れて開けた型〕）。数: 本番の本体が使う 25 ファイル・本体のテストだけ 29 ファイル（T の `shell_balloon_switch_session_lap_tests.rs` の行は `use` の書き換えで、開けた項目ではない）。
+- 使われない `pub(crate)` は消していない（`cargo check -p areka-session --lib` が警告 0 で、残る `pub(crate)` は集めた層の中で使われている）。
+
+#### 本体のテストだけが使う `#[cfg(test)]` の項目（`#[cfg(any(test, feature = "test-support"))] pub`）
+
+| 項目 | 前 | 使う本体のテスト |
+|---|---|---|
+| `GhostSession::{for_test, with_memory_publisher, with_seriko_sink}` | `#[cfg(test)] pub(crate)` | `session_tests/`・`runtime_tests/`・`install`・`update`・`mcp` のテスト |
+| `GhostSession::dispatcher` | `#[cfg(any(test, feature = "test-support"))] pub(crate)`（4.1） | 同上 |
+| `GhostSession` の欄 `memory_publisher_for_test` とその読み・組み立て 4 か所 | `#[cfg(test)]`（欄は私有のまま） | `with_memory_publisher` が立てる |
+| `roots::single_env` | `#[cfg(test)] pub(crate)` | 本体のテスト 23 か所 |
+| `shell_balloon_switch::SwapFinish` の出し直し | `#[cfg(test)] pub(crate) use` | `runtime_tests/frame/switch_finish_tests.rs` |
+| `log_history::hold` | `log_history_capture_tests.rs` の `pub(crate) fn hold`＋`static WINDOW` | `offline_dump/offline_dump_tests.rs`（`use` を `areka_session::log_history::hold` へ） |
+| `ghost_switch_test_support`（モジュールは 4.1） | 中の項目が `pub(crate)` | 本体の 17 ファイル＋`session_tests/`（中の項目を `pub` に） |
+| `ReadmeWiring::path`（設計の 8 つの外） | `#[cfg(test)] pub(crate)` | `session_tests/ghost_session_restart_tests.rs`・`ghost_session_switch_tests.rs` |
+| `ghost_session::shell_balloon_switch_session_lap_test_support`（新設・下） | ― | `session_tests/shell_balloon_switch_session_update_tests.rs` |
+
+- `hold` の `static WINDOW` は `log_history.rs` の写しの窓そのものの `static WINDOW`（`Mutex<Window>`）と名がぶつかるので、`hold` の関数の中に置いた（名と中身は前のまま）。テストのモジュール `capture_tests` は `#[cfg(test)]` のまま。使われなくなった `use std::sync::Mutex;` を外した。
+- `ghost_switch_test_support` の中で集めた層のテストだけが使う `Stall::{at, entered, release}`・`SwitchRig::{add_balloon_copy, plant_last_balloon}` は、`--lib --features test-support` で死んだコードの警告になるので `pub` にした（モジュールが `test-support` の条件の下にある）。
+
+#### 本番の項目のうち本体のテストだけが使うもの（素の `pub`）
+
+- 3.4 で開けた私有の項目（`GhostSession::seriko`・`GhostSession::loop_ticker`・`PreparedWindows::spawn` の欄、`reload::drain`、`write_failure::drain_system`）は、集めた層の本番のコードも使う欄と関数で、可視性だけを機能で切り替えると項目を 2 つ書くことになる。`#[cfg(any(test, feature = "test-support"))] pub` にできないので素の `pub` にした（設計の「本番の公開面に中の関数を出さない」との違い・申し送り）。
+- `boot_seam::insert_persist_wiring` は `#[cfg(test)]` ではない本番の関数で、本体の `session_tests/readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` が使う（設計の「本体が使わない（0 件）」は 3.4 で 3 本が本体へ移る前の数）。素の `pub`。
+- ほかは一覧の T の行（`boot_resolve::{read_session_mark, clear_session_mark, keep_session_mark, …}`・`reload::{ReloadInFlight, ReloadStage, register, …}` ほか）。
+
+#### 連れて開けた型（`private_interfaces`）
+
+- 本番の本体の段: `boot_resolve::BalloonRoute`・`exit_wait::ClosingWaits`・`ghost_session::OpenWindowsError`・`ghost_switch::{SwitchTarget, PrevGhost, SwitchStage, WelcomeAttempt}`・`switch_copy::SwitchCopy`・`log_history::{Stamp, Hms}`・`reload::RefusedReason`・`roots::RootSkip`・`session_mark::MarkVerdict`。
+- 本体のテストの段: `ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}`（`ghost_session.rs` の `pub(crate) use` を `pub use` にした E0364・E0365）・`reload::SkinStep`・`log_history::Rule`・`readme::destination::{Destination, Target, Store}`・`boot_resolve::NoBalloon`・`app_exit::WindowsClosed`・`ghost_session::BootWiringFailed`・`ghost_switch_test_support::Stall`。
+- 出し直しの広げ: `shell_balloon_switch.rs` の `areka_runtime::skin_switch::{SkinKind, …}`・`ghost_switch.rs` の `areka_runtime::special_name::{LastInstalledGhost, …}` を `pub(crate) use` → `pub use`。
+
+#### lap_tests の小道具の置き場
+
+- 本体の `shell_balloon_switch_session_update_tests.rs` が使う `lap_rig_on`・`SECOND`・`UNBOUNDED`・`Ticks`・`LapRig`・`LapRig::frames_until`・`copy_tree`・`kinds`・`got`・`idle` は、集めた層の `shell_balloon_switch_session_lap_tests.rs` の中と兄弟の `_abort_tests.rs`・`_balloon_tests.rs` も使う（両側の使い手）。番人の crate に頼るのは `add_rpost_shell`（`SampleRoot::acquire("R_POST_and_KOMAINU")`）だけで、残りは頼らない。
+- 決め（D8 ⑵ の前者）: 番人に頼らない小道具を、行の範囲の移動で兄弟の `shell_balloon_switch_session_lap_test_support.rs`（`#[cfg(any(test, feature = "test-support"))] pub mod`・`ghost_session.rs` で宣言・`#[test]` を持たない）へ移した。移したのは上の 10 個と、それが引く `NO_TICKS`・`CREEP`・`ACCEPT`（`Ticks` の私有の欄を組むので一緒に）・`WORK_AREA`・`TICK_EVERY`・`UiMarks`・`UiSeen`（`ui_seen_counts_only_ui_side_progress` が使うので `pub(crate)`）・`spawn_windows`・`PUMP_MAX`・`pump_messages`・`refs_of`・`calls_a`。lap_tests は `pub(crate) use super::shell_balloon_switch_session_lap_test_support::*;` で引き、兄弟 2 本の `use super::shell_balloon_switch_session_lap_tests::{…}` は変えていない。テストの名前と中身は変えていない。
+- 番人に頼る `add_rpost_shell` は分けられないので、`lap_rig_on` は 2 つ目のシェルを足す関数を 3 つ目の引数 `add_shell: fn(&Path, &str)` で受ける形にした。集めた層の `lap_rig_of` は lap_tests の `add_rpost_shell` を、本体の `steady_rig` は本体のテストのファイルに置いた `add_rpost_shell`（同じ 9 行・理由の注つき）を渡す。この 9 行は両側の写し（`test-support` に `sample-ghost-kit` を入れられないため・申し送り）。ほかの写しは無い。
+
+#### 赤
+
+- `mod session;`・`mod crate_source_test_support;` を外しただけ: `cargo check -p areka --bin areka` が 106 件のエラー（E0433 100・E0432 6）。
+- パスを書き換えた直後: 同じく 122 件（`target/session-crate-split/4.2-red.txt`。E0603 の私有のモジュール 117 ほか）。公開面を開けて 0 へ。
+
+#### 確かめ
+
+- `cargo check --workspace --all-targets`: 警告 0・エラー 0。
+- `cargo check -p areka-session --lib`・`--lib --features test-support`・`--tests`: どれも警告 0（4.1 の 439・466・32 から）。
+- `cargo test -p areka --bin areka --no-run`・`cargo test -p areka-session --no-run`: 組めた（テストは 4.4 で走らせる）。
+- `cargo doc -p areka-session --no-deps`: 解けないリンクの警告に本体の名（`menu`・`install`・`update`・`mcp`・`cli`・`BODY_SYSTEMS`・根の関数・`areka::`）は 0 件。残る解けないリンク（`quit_app`・`fatal`・`request_ghost_switch` ほか集めた層の中の名）は集めた層の項目を指すもので、4.6 の対象の外。
+- 4.7 の式: `crates/areka-session/Cargo.toml` に `areka =` の行 0・`cargo tree -p areka-session -e normal,dev` に `areka v` 0・`crates/areka-session/src` の `//` の行を除き文字列の中を除いた `areka::` 0（文字列の中に残る `"areka::install"`・`"areka::session::…"` ほか 87 行はログの出所の語彙で、`"areka::session::…"` は 4.3 が替える）。
+- `Cargo.lock`（`main` との差）: `areka-session` の 1 項目と本体の依存の 1 行だけ（33 行の追加）。
+- `cargo fmt --all -- --check`: 差分なし。
+- `cargo clippy -p areka-session --all-targets`: 警告は移したコードに前からある形の指摘（`type_complexity` 33・`collapsible_if` 19 ほか）で、新しく足した `shell_balloon_switch_session_lap_test_support.rs`・`log_history::hold` には無い。

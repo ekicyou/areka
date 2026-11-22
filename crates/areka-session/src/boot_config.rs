@@ -16,9 +16,9 @@
 /// ゴースト／バルーンのルートパスを保持する。値は `main` の起動前の解決（根 → ゴースト →
 /// バルーン）が決めたもので、この型自身はマウントも読取もしない。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ConfigInputs {
-    pub(crate) ghost_root: std::path::PathBuf,
-    pub(crate) balloon_root: std::path::PathBuf,
+pub struct ConfigInputs {
+    pub ghost_root: std::path::PathBuf,
+    pub balloon_root: std::path::PathBuf,
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ fn probe_link(path: &std::path::Path) -> LinkProbe {
 /// 解けなければ（`follow_exe_links` の警告が `Some`）初回に 1 度だけ `exe_link_unresolved` を
 /// `warn!` に出し、起動した exe のパスをそのまま使う。覚えるのは、何度も呼ばれる
 /// `default_app_profile_dir` で警告が繰り返されず、途中でリンクが張り替えられても置き場が変わらないため。
-pub(crate) fn exe_location() -> Option<&'static std::path::Path> {
+pub fn exe_location() -> Option<&'static std::path::Path> {
     static LOC: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
     LOC.get_or_init(|| {
         let exe = std::env::current_exe().ok()?;
@@ -161,7 +161,7 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path> {
 /// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）と、
 /// 前回落ちたゴーストの名前（起動中の印の値・`read_session_mark`＝読むだけで消さない）と、
 /// 根の並び（起動の文脈へ渡す）。
-pub(crate) type BootResolved = (
+pub type BootResolved = (
     ConfigInputs,
     crate::boot_resolve::GhostDecision,
     crate::boot_resolve::BalloonDecision,
@@ -173,7 +173,7 @@ pub(crate) type BootResolved = (
 /// 目録とバルーンの解決に要る根を切替の経路へ渡す（切替が成功したら `current` を更新する）。
 /// 据え付けは `fn main`（系の登録の直後）。
 #[derive(bevy_ecs::prelude::Resource)]
-pub(crate) struct BootContext {
+pub struct BootContext {
     pub roots: areka_ghost::BasewareRoots,
     /// 並びの出どころ。読み手はメニューの置き場の項目と並びの変更（`roots::add_root`・`remove_root`）。
     pub roots_origin: crate::roots::RootsOrigin,
@@ -187,7 +187,7 @@ pub(crate) struct BootContext {
 }
 
 /// 今のゴースト（構成入力・ゴーストの決定・バルーンの決定）。
-pub(crate) struct CurrentGhost {
+pub struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
     /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、後続の
@@ -208,7 +208,7 @@ pub(crate) struct CurrentGhost {
 ///
 /// `call_ghost` は起こすゴーストのフォルダ名（起動の前に入れた道が決めたときだけ `Some`）。
 /// `GhostInputs` へ渡すだけで、記憶より先・起動中の印に関わらず目録から引かれる。
-pub(crate) fn resolve_boot_with(
+pub fn resolve_boot_with(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     request: &crate::boot_request::BootRequest,
     call_ghost: Option<&str>,
@@ -425,7 +425,7 @@ fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
 /// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ・
 /// 外した根の項目は 1 件ごとに info `ghost_balloon_hides_root` を残す（起動と切替でだけ）。
 /// 「当たらなかった」の記録の置き場は今どおり根の列だけ。
-pub(crate) fn resolve_balloon_for_ghost(
+pub fn resolve_balloon_for_ghost(
     roots: &areka_ghost::BasewareRoots,
     ghost_dir: &std::path::Path,
     pick: fn(usize) -> usize,
@@ -470,7 +470,7 @@ pub(crate) fn resolve_balloon_for_ghost(
 /// 起動した exe の本当の場所（`exe_location`）の親ディレクトリへ `shiori-host32-helper.exe` を結合する。
 /// `current_exe()` が失敗した場合は `"."` を親ディレクトリ扱いにフォールバックする——`boot` 呼び出し
 /// 自体はどのみち非致命として扱われるため、ここで panic/Err 伝播する必要はない。
-pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
+pub fn default_helper_exe_path() -> std::path::PathBuf {
     let dir = exe_location()
         .and_then(std::path::Path::parent)
         .unwrap_or(std::path::Path::new("."));
@@ -489,7 +489,7 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 ///
 /// 読み取りだけの走りでは 1 回の走りに 1 度だけ決めて覚える
 /// （呼び手は 1 回の走りで 3 か所以上・別の areka が途中で写しを終えても置き場が変わらないため）。
-pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
+pub fn default_app_profile_dir() -> std::path::PathBuf {
     static READONLY_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     let readonly = crate::readonly::is_on();
     let decide = || {
@@ -547,7 +547,7 @@ pub(crate) fn remembered(
 /// `app_profile_dir`（App スコープの sylphya profile root）は呼び手が渡す（本番の fallback の腕は結線の
 /// 入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の
 /// 形を作らない。
-pub(crate) fn ghost_boot_options(
+pub fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
     app_profile_dir: Option<std::path::PathBuf>,
@@ -568,7 +568,7 @@ pub(crate) fn ghost_boot_options(
 /// SHIORI の読み方の指定から結線を決める純粋な口。「読む」は今の補助のプロセス
 /// （`Helper { helper_exe }`）、「読まない」は何を聞かれても中身なしで答える差し替え口
 /// （`Custom(empty_connect())`）。倒れ先の [`ghost_boot_options`] と結線ありの起動の両方が使う。
-pub(crate) fn shiori_wiring_for(
+pub fn shiori_wiring_for(
     modules: crate::boot_request::ModulePolicy,
     helper_exe: std::path::PathBuf,
 ) -> areka_ghost::ShioriWiring {

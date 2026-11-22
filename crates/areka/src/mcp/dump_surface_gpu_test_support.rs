@@ -45,12 +45,12 @@ use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucG
 
 use crate::mcp::resolve;
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::spawn_ghost_windows;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 
 /// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
 const WORK_AREA: RectPx = RectPx {

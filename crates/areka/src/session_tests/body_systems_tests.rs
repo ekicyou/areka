@@ -10,8 +10,8 @@ use bevy_ecs::world::World;
 use wintf::AppExit;
 use wintf::ecs::Input;
 
-use crate::session::body_systems::BodySystems;
-use crate::session::ghost_session::register_systems;
+use areka_session::body_systems::BodySystems;
+use areka_session::ghost_session::register_systems;
 
 fn registered_world() -> World {
     let mut world = World::new();

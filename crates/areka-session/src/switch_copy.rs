@@ -16,7 +16,7 @@ use crate::roots::user_root::{CopyPlan, copy_for_write, copy_unless_readonly, pl
 
 /// 写しの見込み（予約 [`SwitchInFlight`] に持たせる）。
 #[derive(Debug)]
-pub(crate) enum SwitchCopy {
+pub enum SwitchCopy {
     /// 写す要が無い（`plan_copy` が `AsIs`）。
     None,
     /// 背景のスレッドで写している（答えのフォルダが届く受信端）。

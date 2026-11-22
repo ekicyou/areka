@@ -34,21 +34,21 @@ use areka_runtime::shell_balloon_resolve::{
 };
 use areka_runtime::switch_assets::{SwitchBuildRequest, spawn_switch_build};
 
-pub(crate) use areka_runtime::skin_switch::{
+pub use areka_runtime::skin_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinRequestRaw, SkinSpec, SkinSwitchInFlight,
     SkinSwitchStage, SkinVerdict, skin_ref_name, skin_ref_path,
 };
 // 本番で引く呼び手は無い（差し替えの相は skin_switch を直に引く）・テストの道のためだけに出し直す。
-#[cfg(test)]
-pub(crate) use areka_runtime::skin_switch::SwapFinish;
+#[cfg(any(test, feature = "test-support"))]
+pub use areka_runtime::skin_switch::SwapFinish;
 
 /// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
-pub(crate) struct SwitchRx(Receiver<SkinRequestRaw>);
+pub struct SwitchRx(Receiver<SkinRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_switch_drain`]）。
 ///
 /// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
-pub(crate) fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
+pub fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
     world.insert_non_send(SwitchRx(rx));
 }
 
@@ -56,7 +56,7 @@ pub(crate) fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
 /// （プロセスに 1 回・持ち物は置かない・呼び手は `ghost_session::register_systems`）。
 ///
 /// 門は背景で書く仕事を持たない（資産づくりはファイルを書かない）ので、片付けを呼ばせるためだけに置く。
-pub(crate) fn register_switch_drain(world: &mut World) {
+pub fn register_switch_drain(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_switch_requests.after(dispatch_pointer_events));
@@ -95,7 +95,7 @@ pub(crate) fn drain_switch_requests(world: &mut World) {
 }
 
 /// 切替要求の唯一の入口。乱数は本番の `pick_index`。
-pub(crate) fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVerdict {
+pub fn request_skin_switch(world: &mut World, req: SkinRequest) -> SkinVerdict {
     request_skin_switch_with(world, req, pick_index)
 }
 
@@ -312,7 +312,7 @@ impl SwitchContext {
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 進行中の印があれば
 /// `info!(skin_switch_dropped, reason=exit)` を残して消す。背景の資産づくりは
 /// 受け手が落ちたことで結果を捨てる。
-pub(crate) fn discard_for_exit(world: &mut World) {
+pub fn discard_for_exit(world: &mut World) {
     if let Some(dropped) = world.remove_non_send::<SkinSwitchInFlight>() {
         tracing::info!(
             event = "skin_switch_dropped",

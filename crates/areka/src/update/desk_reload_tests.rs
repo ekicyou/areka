@@ -19,16 +19,16 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::UpdateDesk;
 use crate::sample_test_support::switch_rig;
-use crate::session::boot_config::BootContext;
-use crate::session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
-use crate::session::exit_wait::begin_close;
-use crate::session::ghost_switch::{
+use crate::update::worker::DeskAsk;
+use areka_runtime::spine::RecordedCall;
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
+use areka_session::exit_wait::begin_close;
+use areka_session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
 };
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::update::worker::DeskAsk;
-use areka_runtime::spine::RecordedCall;
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 列を受ける回数の上限（偽の SHIORI の台本に積む数）。
 const TAIL_ROUNDS: usize = 4;
@@ -358,7 +358,7 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();

@@ -108,7 +108,7 @@ fn runtime_sinks(
 ///
 /// 停止通知の送出端は引数 `kanade_stop` をそのまま kanade へ渡す（ここでは channel を作らない）。
 /// 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`／読み直し）の選択へ渡る。
-pub(crate) fn boot_runtime(
+pub fn boot_runtime(
     world: &mut World,
     inputs: RuntimeInputs,
     sources: &CueSinkSources,
@@ -155,7 +155,7 @@ pub(crate) fn boot_runtime(
 
 /// 窓の在るゴーストの起動の選択肢（本番の [`boot_runtime`] と spine が同じ物を使う）。strict の判定は
 /// 必ず入れる（無いと strict の記録が無言で 0 件になる）。
-pub(crate) fn runtime_boot_options(
+pub fn runtime_boot_options(
     ghost_root: std::path::PathBuf,
     shiori: ShioriWiring,
     sinks: Vec<Box<dyn BootCueSink>>,

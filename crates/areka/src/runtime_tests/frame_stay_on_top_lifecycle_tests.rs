@@ -13,13 +13,13 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_switch::{
-    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
-};
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
 use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
+use areka_session::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::window_state::test_support::{on, on_mut};
 use areka_runtime::frame::wiring::test_support::{
@@ -107,7 +107,7 @@ fn reload(rig: &mut SwitchRig, target: ReloadTarget) -> Vec<CapturedEvent> {
     });
     assert_eq!(
         flow,
-        (crate::session::reload::ReloadVerdict::Accepted, true),
+        (areka_session::reload::ReloadVerdict::Accepted, true),
         "{events:?}"
     );
     assert!(!rig.exit_requested(), "終了しない: {events:?}");

@@ -14,7 +14,7 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 use super::resolve::CANNOT_FIND;
 use super::*;
 use crate::mcp::{McpLater, drain, install};
-use crate::session::ghost_session::GhostSession;
+use areka_session::ghost_session::GhostSession;
 
 fn ghost() -> ActiveGhost {
     ActiveGhost {
@@ -240,7 +240,7 @@ fn body(outcome: &ToolOutcome) -> String {
 #[test]
 fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
     let mut rig = switch_rig(vec![(
         "A",

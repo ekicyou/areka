@@ -21,24 +21,24 @@ use super::finish_after_run;
 use super::{AfterRun, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context};
 use crate::sample_test_support::switch_rig;
-use crate::session::alert::AlertScene;
-use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_config::{BootContext, CurrentGhost};
-use crate::session::boot_resolve::{
-    BalloonDecision, BalloonRoute, DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute,
-    read_last_ghost, read_session_mark, write_session_mark,
-};
-use crate::session::ghost_session::{
-    GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues,
-};
-use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
-use crate::session::session_mark::{
-    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
-};
 use crate::session_tests::resolve_boot_from;
 use areka_placement::AuthorDpi;
 use areka_runtime::spine::RecordedCall;
+use areka_session::alert::AlertScene;
+use areka_session::app_exit::{ExitOrigin, FirstExit, quit_app};
+use areka_session::boot_config::ConfigInputs;
+use areka_session::boot_config::{BootContext, CurrentGhost};
+use areka_session::boot_resolve::{
+    BalloonDecision, BalloonRoute, DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute,
+    read_last_ghost, read_session_mark, write_session_mark,
+};
+use areka_session::ghost_session::{
+    GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues,
+};
+use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use areka_session::session_mark::{
+    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
+};
 
 fn fault(kind: ShioriFaultKind) -> ShioriFault {
     ShioriFault {
@@ -73,7 +73,7 @@ fn world_with(
     let mut world = World::new();
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: ghost.route == GhostRoute::Argv,
@@ -163,7 +163,7 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
     };
     rig.world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(rig.root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: app_dir(rig),
         helper_exe: PathBuf::from("main_session_mark_tests/使わない/helper.exe"),
         argv_session,
@@ -237,7 +237,7 @@ struct NextBoot {
 fn next_boot(rig: &mut SwitchRig) -> NextBoot {
     let app = app_dir(rig);
     let (_, ghost, _, found, _) = resolve_boot_from(
-        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
+        areka_session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
@@ -317,7 +317,7 @@ fn install_puts_context_and_one_production_source() {
         &mut world,
         ctx,
         tx,
-        crate::session::boot_request::ModulePolicy::Load,
+        areka_session::boot_request::ModulePolicy::Load,
     );
 
     let has_context = world.contains_resource::<BootContext>();
@@ -749,7 +749,7 @@ fn default_ghost_fault_keeps_its_own_name() {
     let exited = rig.pump_until(SwitchRig::exit_requested);
     let settled = after_run_and_settle(&mut rig);
     let (_, next, _, found, _) = resolve_boot_from(
-        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
+        areka_session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
@@ -814,7 +814,7 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
     let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
-        crate::session::roots::single_env(rig.root.dir().to_path_buf()),
+        areka_session::roots::single_env(rig.root.dir().to_path_buf()),
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),

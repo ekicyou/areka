@@ -18,23 +18,23 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
-use crate::session::boot_config::BootContext;
-use crate::session::ghost_session::GhostSession;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch::{
-    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
-};
-use crate::session::log_history::TARGET_ERROR;
-use crate::session::reload::test_support::{boot_context, plant_skin_switch};
-use crate::session::reload::*;
-use crate::session::shell_balloon_switch::SkinKind;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::reload_args::DescriptNotes;
 use areka_runtime::reload_args::DescriptParts;
 use areka_runtime::reload_args::ReloadTarget;
 use areka_runtime::reload_args::ScriptReload;
 use areka_runtime::skin_switch::SkinSwitchInFlight;
+use areka_session::boot_config::BootContext;
+use areka_session::ghost_session::GhostSession;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch::{
+    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
+};
+use areka_session::log_history::TARGET_ERROR;
+use areka_session::reload::test_support::{boot_context, plant_skin_switch};
+use areka_session::reload::*;
+use areka_session::shell_balloon_switch::SkinKind;
 
 struct Rig {
     world: World,
@@ -102,7 +102,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     });
 }
 
@@ -223,7 +223,7 @@ fn missing_ghost_or_kanade_is_no_context() {
 fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
     plant_reload(&mut rig.world);
-    let (_, events) = capture(|| crate::session::exit_wait::begin_close(&mut rig.world));
+    let (_, events) = capture(|| areka_session::exit_wait::begin_close(&mut rig.world));
     let dropped = named(&events, "reload_dropped")
         .into_iter()
         .map(|e| {

@@ -41,14 +41,14 @@ use areka_runtime::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
 
 /// 読み直しの出どころ（記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReloadOrigin {
+pub enum ReloadOrigin {
     Script,
     Mcp,
 }
 
 /// 窓口へ渡す読み直しの要求（`notes` は台本の `\![reload,descript,パラメータ]` の語の仕分けだけが持つ）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ReloadRequest {
+pub struct ReloadRequest {
     pub target: ReloadTarget,
     pub origin: ReloadOrigin,
     pub notes: DescriptNotes,
@@ -56,7 +56,7 @@ pub(crate) struct ReloadRequest {
 
 /// 窓口の判定。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReloadVerdict {
+pub enum ReloadVerdict {
     Accepted,
     Refused(RefusedReason),
     /// 終了の途中（始めない・MCP は返事を落とす）。
@@ -65,7 +65,7 @@ pub(crate) enum ReloadVerdict {
 
 /// 断りの理由（`reload_refused` の `reason` 欄の語）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RefusedReason {
+pub enum RefusedReason {
     ReloadInFlight,
     GhostSwitching,
     SkinSwitching,
@@ -93,7 +93,7 @@ impl RefusedReason {
 ///
 /// 消すのは対象ごとの終わり（ゴーストの切替の [`on_switch_end`]・SHIORI の切れ目の [`poll_destroy`]・
 /// shell／balloon の列の [`skin_phase_ended`]／[`advance_skins`]）と終了の片付け [`discard_for_exit`]。
-pub(crate) struct ReloadInFlight {
+pub struct ReloadInFlight {
     pub target: ReloadTarget,
     pub origin: ReloadOrigin,
     /// 記録に添えるゴーストの名前（`get_active_ghost_list` と同じ綴り・`TARGET_ERROR` の `ghost` 欄）。
@@ -102,7 +102,7 @@ pub(crate) struct ReloadInFlight {
 }
 
 /// 印の段。
-pub(crate) enum ReloadStage {
+pub enum ReloadStage {
     /// shiori: 切れ目の印（`OnDestroy`）の返事を待っている（予約はまだ無い・下ろすのは [`drain`]）。
     AwaitingDestroy { gap: ReplyReceiver<TalkGap> },
     /// ghost／shiori: ゴースト切替の予約に乗っている（終わりは [`on_switch_end`] が告げる）。
@@ -119,7 +119,7 @@ pub(crate) enum ReloadStage {
 
 /// shell／balloon／descript の列の段（この順に直列に進める）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SkinStep {
+pub enum SkinStep {
     /// ゴーストの descript.txt の値（名前・readme の置き場）を替える（同期）。
     Names,
     Shell,
@@ -133,7 +133,7 @@ struct ReloadGate(Arc<WorkGate>);
 /// 取り出しの系を入力の段（`dispatch_pointer_events` の後）へ登録し、門 `reload` を終了の片付け
 /// [`discard_for_exit`] と一緒に終了の待ちへ登記する（プロセスに 1 回・呼び手は
 /// `ghost_session::register_systems`）。門は背景で書く仕事を持たない（片付けと `is_closing` のため）。
-pub(crate) fn register(world: &mut World) {
+pub fn register(world: &mut World) {
     let gate = Arc::new(WorkGate::default());
     world.insert_resource(ReloadGate(gate.clone()));
     world
@@ -146,7 +146,7 @@ pub(crate) fn register(world: &mut World) {
 /// shiori の切れ目の返事を覗く（[`poll_destroy`]・Input の系）。
 ///
 /// 受信端が無ければ取り出しは無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
-pub(crate) fn drain(world: &mut World) {
+pub fn drain(world: &mut World) {
     let pending: Vec<ScriptReload> = match world.get_non_send::<ReloadRx>() {
         Some(rx) => rx.try_iter().collect(),
         None => {
@@ -221,7 +221,7 @@ fn poll_destroy(world: &mut World) {
 }
 
 /// 唯一の入口。判定 → 語の記録 → 始めの記録 → 対象ごとの始め方。
-pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
+pub fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
     let ghost = ghost_name(world);
     if world
         .get_resource::<ReloadGate>()
@@ -445,7 +445,7 @@ fn own_switch(world: &World) -> Option<&ReloadInFlight> {
 /// ゴースト切替の予約が下りる全部の出口から（呼び手 `ghost_switch::end_switch`・**予約を下ろす前**に呼ぶ）。
 /// 印が `Switching` なら終わりの記録を 1 件残して印を下ろす。予約が窓口自身の
 /// ものでなければ `reload_failed(overtaken)`。印が無い・別の段なら何もしない。
-pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
+pub fn on_switch_end(world: &mut World, end: SwitchEnd) {
     if !matches!(
         world.get_non_send::<ReloadInFlight>().map(|f| &f.stage),
         Some(ReloadStage::Switching { .. })
@@ -483,7 +483,7 @@ pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
 
 /// `switch_to` が由来を決めるとき: 印が ghost／shiori の読み直しで、進行中の予約が
 /// 窓口自身のものなら `Some(Reloaded{scope})`。他人の予約なら `None`（既存の由来のまま）。
-pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
+pub fn boot_origin_override(world: &World) -> Option<BootOrigin> {
     let scope = match own_switch(world)?.target {
         ReloadTarget::Ghost => ReloadScope::Ghost,
         ReloadTarget::Shiori => ReloadScope::Shiori,
@@ -494,13 +494,13 @@ pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
 
 /// `switch_to` の分かれ目: 印が shiori の読み直しで、進行中の予約が窓口自身のものなら真（窓を閉じずに
 /// 実行系だけ組み直す）。
-pub(crate) fn wants_runtime_only(world: &World) -> bool {
+pub fn wants_runtime_only(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Shiori)
 }
 
 /// `switch_to` の分かれ目: 印が ghost の読み直しで、進行中の予約が窓口自身のものなら真（窓を作り直す
 /// 前に表示中の面を控え、作り直した窓へ出し直す）。
-pub(crate) fn carries_shell_state(world: &World) -> bool {
+pub fn carries_shell_state(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Ghost)
 }
 

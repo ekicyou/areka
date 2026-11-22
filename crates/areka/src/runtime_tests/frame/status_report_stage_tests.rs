@@ -16,7 +16,7 @@ use areka_seriko::{
 };
 
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::status_report::test_support::last_stage;
 
@@ -30,7 +30,7 @@ fn world_with_seriko() -> World {
         MockSurfaceOutput::new(),
     );
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/test")).with_seriko_sink(sink),
     )));
@@ -53,7 +53,7 @@ fn attach_balloon(presenter: &mut EmoPresenter, scope: u32) {
 #[test]
 fn empty_slot_in_the_phase_keeps_the_ledger() {
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(None));
     let mut presenter = EmoPresenter::new();
     attach_balloon(&mut presenter, 0);

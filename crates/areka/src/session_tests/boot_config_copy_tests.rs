@@ -5,8 +5,8 @@
 //! ときの既定ゴーストも口を通る」「口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない）」。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session::boot_resolve::{BalloonRoute, GhostRoute, write_session_mark};
 use crate::session_tests::resolve_boot_from;
+use areka_session::boot_resolve::{BalloonRoute, GhostRoute, write_session_mark};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -59,7 +59,7 @@ fn fixture(tmp: &TempPath, folder: &str) -> PathBuf {
     for b in [
         "b1",
         "b2",
-        crate::session::boot_resolve::DEFAULT_BALLOON_FOLDER,
+        areka_session::boot_resolve::DEFAULT_BALLOON_FOLDER,
     ] {
         put_balloon(&tmp.child("balloon").join(b));
     }
@@ -72,9 +72,9 @@ fn boot(
     tmp: &TempPath,
     args: &[String],
     prepare: fn(&areka_ghost::BasewareRoots, &Path) -> PathBuf,
-) -> crate::session::boot_config::BootResolved {
+) -> areka_session::boot_config::BootResolved {
     resolve_boot_from(
-        crate::session::roots::single_env(tmp.path().to_path_buf()),
+        areka_session::roots::single_env(tmp.path().to_path_buf()),
         args,
         &tmp.child("app-profile"),
         no_pick,
@@ -126,7 +126,7 @@ fn without_argv_balloon_and_config_come_from_the_copy() {
 #[test]
 fn default_ghost_after_unclean_exit_goes_through_the_copy() {
     let tmp = TempPath::under_target("cfg-copy-mark");
-    let copy = fixture(&tmp, crate::session::boot_resolve::DEFAULT_GHOST_FOLDER);
+    let copy = fixture(&tmp, areka_session::boot_resolve::DEFAULT_GHOST_FOLDER);
     put_ghost(&tmp.child("ghost").join("other"), "b1");
     write_session_mark(&tmp.child("app-profile"), "other").expect("印を書けること");
     ANSWER.with(|a| *a.borrow_mut() = Some(copy.clone()));
@@ -138,7 +138,7 @@ fn default_ghost_after_unclean_exit_goes_through_the_copy() {
         CALLS.with(|c| c.borrow().clone()),
         vec![
             tmp.child("ghost")
-                .join(crate::session::boot_resolve::DEFAULT_GHOST_FOLDER)
+                .join(areka_session::boot_resolve::DEFAULT_GHOST_FOLDER)
         ]
     );
 }

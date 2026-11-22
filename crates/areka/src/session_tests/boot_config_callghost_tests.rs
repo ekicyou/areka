@@ -3,9 +3,9 @@
 //! 起動の解決の中身 `resolve_boot_with` に callghost の相手（入れたゴーストのフォルダ名）を渡し、
 //! 経路・場所・起動中の印の値を見る。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session::alert::AlertScene;
-use crate::session::boot_config::{BootResolved, resolve_boot_with};
-use crate::session::boot_resolve::{
+use areka_session::alert::AlertScene;
+use areka_session::boot_config::{BootResolved, resolve_boot_with};
+use areka_session::boot_resolve::{
     DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
 };
 use std::path::{Path, PathBuf};
@@ -60,7 +60,7 @@ fn boot(
         .map(str::to_owned)
         .collect();
     resolve_boot_with(
-        crate::session::roots::single_env(tmp.path().to_path_buf()),
+        areka_session::roots::single_env(tmp.path().to_path_buf()),
         &crate::cli::parse::parse(&args).options.boot,
         call_ghost,
         &tmp.child("app-profile"),

@@ -27,7 +27,7 @@ use crate::write_failure;
 /// 2 通目以降の読み捨ては守りの判定: 本番では最初の受け手の `quit_app` が全ゴースト窓の entity を
 /// 破棄するので、残りの窓への `WM_ENDSESSION` は wintf の破棄済みの打ち切りで止まり、ここまで来ない。
 #[derive(Resource)]
-pub(crate) struct SessionEnded;
+pub struct SessionEnded;
 
 /// wintf の `OnSessionEnd` に差す関数（`app_exit::attach_os_close_request` が差す）。
 ///
@@ -57,7 +57,7 @@ pub(crate) struct SessionEnded;
 ///   見張りが補助プロセスを終わらせて切る。
 ///
 /// 所要は `os_session_end_done` の `ms` で実機サインオフで測る。
-pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity) {
+pub fn on_os_session_end(world: &mut World, _entity: Entity) {
     end_session_within(world, SESSION_END_SHIORI_LIMIT)
 }
 
@@ -67,7 +67,7 @@ pub(crate) const SESSION_END_SHIORI_LIMIT: Duration = Duration::from_secs(3);
 
 /// [`on_os_session_end`] の本体。上限を引数で受ける（本番は定数だけを渡す・テストは任意の上限）。
 /// 出発点は後始末に入った今。
-pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
+pub fn end_session_within(world: &mut World, limit: Duration) {
     end_session_from(
         world,
         WaitBudget {
@@ -79,7 +79,7 @@ pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
 
 /// [`end_session_within`] の中身。予算（出発点と上限）を外から受ける（テストは出発点を過去に置ける）。
 /// ゴーストを降ろす待ちと背景の仕事の待ちは、同じ予算から数える（足し算にしない）。
-pub(crate) fn end_session_from(world: &mut World, budget: WaitBudget) {
+pub fn end_session_from(world: &mut World, budget: WaitBudget) {
     if world.contains_resource::<SessionEnded>() {
         tracing::debug!(
             event = "os_session_end_again",

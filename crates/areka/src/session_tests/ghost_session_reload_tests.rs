@@ -9,16 +9,16 @@ use wintf::AppExit;
 
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
-use crate::session::boot_resolve::BalloonDecision;
-use crate::session::boot_resolve::GhostDecision;
-use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::session::ghost_session::*;
-use crate::session::runtime_boot;
 use areka_kanade::BootOrigin;
 use areka_kanade::KanadeMsg;
 use areka_kanade::KanadeNotice;
 use areka_parsers::package::GhostNames;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
+use areka_session::boot_resolve::BalloonDecision;
+use areka_session::boot_resolve::GhostDecision;
+use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
+use areka_session::ghost_session::*;
+use areka_session::runtime_boot;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use std::path::PathBuf;
@@ -102,7 +102,7 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
         wiring,
         helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
         kanade_stop: kanade_stop.clone(),
-        modules: crate::session::boot_request::ModulePolicy::Load,
+        modules: areka_session::boot_request::ModulePolicy::Load,
     };
     let mut session = boot_ghost(&mut world, inputs, &descript, &ghost, &balloon);
     let wired = !session.logsink_fallback() && session.sink_sources().is_some();
@@ -206,7 +206,7 @@ fn set_names_delegates_to_runtime_or_returns_false() {
             wiring,
             helper_exe: PathBuf::from("ghost_session_reload_tests/使わない/helper.exe"),
             kanade_stop,
-            modules: crate::session::boot_request::ModulePolicy::Load,
+            modules: areka_session::boot_request::ModulePolicy::Load,
         },
         &StartupDescriptValues {
             author_dpi: areka_placement::AuthorDpi::DEFAULT,

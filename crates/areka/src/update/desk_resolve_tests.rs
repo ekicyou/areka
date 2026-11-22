@@ -21,14 +21,14 @@ use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
 use crate::menu::captions::QueryReply;
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::exit_wait::begin_close;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::on_notice;
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
 };
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::exit_wait::begin_close;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::on_notice;
 
 const GHOST_URL: &str = "https://ghost.example/emo/";
 const SHELL_URL: &str = "https://shell.example/master/";
@@ -325,7 +325,7 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
     register(&mut world);
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.path("profile"),
         helper_exe: root.path("helper.exe"),
         argv_session: false,

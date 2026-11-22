@@ -18,19 +18,19 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_config::{BootContext, CurrentGhost};
-use crate::session::boot_resolve::{
-    BalloonDecision, BalloonRoute, GhostDecision, GhostRoute, read_session_mark, write_session_mark,
-};
-use crate::session::ghost_quit::KanadeNoticeRx;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
-use crate::session::ghost_switch_test_support::{FakeShiori, standard_script};
-use crate::session::session_end::{SessionEnded, end_session_within, on_os_session_end};
 use crate::{after_run, finish_after_run};
 use areka_runtime::spine::RecordedCall;
+use areka_session::app_exit::{ExitOrigin, FirstExit, quit_app};
+use areka_session::boot_config::ConfigInputs;
+use areka_session::boot_config::{BootContext, CurrentGhost};
+use areka_session::boot_resolve::{
+    BalloonDecision, BalloonRoute, GhostDecision, GhostRoute, read_session_mark, write_session_mark,
+};
+use areka_session::ghost_quit::KanadeNoticeRx;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+use areka_session::session_end::{SessionEnded, end_session_within, on_os_session_end};
 
 fn fault() -> ShioriFault {
     ShioriFault {
@@ -72,7 +72,7 @@ fn bare_world(tmp: &TempPath) -> (World, mpsc::Sender<KanadeNotice>) {
     world.insert_non_send(KanadeNoticeRx(rx));
     world.insert_resource(BootContext {
         roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: false,
@@ -195,7 +195,7 @@ fn send_off_reservation() -> SwitchInFlight {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::session::switch_copy::SwitchCopy::None,
+        copy: areka_session::switch_copy::SwitchCopy::None,
     }
 }
 

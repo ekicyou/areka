@@ -13,8 +13,8 @@ use bevy_ecs::world::World;
 
 use super::shell_frame::skin_frame;
 use super::{Frame, MenuContext, MenuItem};
-use crate::session::boot_config::BootContext;
-use crate::session::shell_balloon_switch::SkinKind;
+use areka_session::boot_config::BootContext;
+use areka_session::shell_balloon_switch::SkinKind;
 
 /// 「バルーン」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の直後）。
 pub(crate) fn register(world: &mut World) {

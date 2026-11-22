@@ -14,10 +14,10 @@ static ON: AtomicBool = AtomicBool::new(false);
 
 /// World の中の読み取りだけの印（在れば読み取りだけ）。本番は [`install`] だけが足し、外さない。
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ReadOnlyRun;
+pub struct ReadOnlyRun;
 
 /// 起動の前に 1 度だけ呼ぶ（呼び手は `main` だけ）。`on` が真なら旗・保存の口の範囲・記録を立てる。
-pub(crate) fn engage(on: bool) {
+pub fn engage(on: bool) {
     if !on {
         return;
     }
@@ -30,19 +30,19 @@ pub(crate) fn engage(on: bool) {
 }
 
 /// プロセスの旗（起動の前に決まる守りが引数として読む）。
-pub(crate) fn is_on() -> bool {
+pub fn is_on() -> bool {
     ON.load(Ordering::SeqCst)
 }
 
 /// 旗が立っていれば World に [`ReadOnlyRun`] を足す（呼び手は `main` だけ）。
-pub(crate) fn install(world: &mut World) {
+pub fn install(world: &mut World) {
     if is_on() {
         world.insert_resource(ReadOnlyRun);
     }
 }
 
 /// World の中の守りが読む（試験は自分の World に [`ReadOnlyRun`] を足す）。
-pub(crate) fn of(world: &World) -> bool {
+pub fn of(world: &World) -> bool {
     world.contains_resource::<ReadOnlyRun>()
 }
 

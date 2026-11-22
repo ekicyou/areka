@@ -11,15 +11,15 @@ use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::sample_test_support::switch_rig;
-use crate::session::ghost_session::ghost_session_scope_rect::test_support::LEFT_SCREEN;
-use crate::session::ghost_session::ghost_session_scope_rect::test_support::{
-    fake_handle, placement,
-};
-use crate::session::ghost_session::ghost_session_scope_rect::*;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
+use areka_session::ghost_session::ghost_session_scope_rect::test_support::LEFT_SCREEN;
+use areka_session::ghost_session::ghost_session_scope_rect::test_support::{
+    fake_handle, placement,
+};
+use areka_session::ghost_session::ghost_session_scope_rect::*;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use std::sync::Arc;
 
 /// A の `OnBoot`: 台詞の途中で B への切替を命じる。

@@ -18,7 +18,7 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::menu::ghost_frame::tests::{FrameShape, boot_context, shape};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring, wire_menu};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 // ---------------------------------------------------------------- 道具立て
 

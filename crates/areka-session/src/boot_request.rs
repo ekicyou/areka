@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 /// 起動の求め（起動の解決へ渡す）。
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct BootRequest {
+pub struct BootRequest {
     /// 位置の引数の 1 つ目（`--ghost` が渡されたら None）。
     pub positional_ghost: Option<PathBuf>,
     /// 位置の引数の 2 つ目。
@@ -17,7 +17,7 @@ pub(crate) struct BootRequest {
 
 /// SHIORI の読み方の指定（`--option dontloadmodule` で `Skip`）。既定は読む。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum ModulePolicy {
+pub enum ModulePolicy {
     #[default]
     Load,
     Skip,

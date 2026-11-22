@@ -5,14 +5,14 @@
 //! フォルダの列を `; ` でつないだもの）・0 体の失敗が各根の格納フォルダを持つこと・起動中の印に
 //! 書く名前が和を引かず決まったゴーストの場所から引けること。根は `TempPath::under_target`。
 
-use crate::session::alert::AlertScene;
-use crate::session::boot_config::resolve_balloon_for_ghost;
-use crate::session::boot_resolve::{
-    BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostDecision, GhostRoute, running_name,
-};
-use crate::session::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use crate::session_tests::resolve_boot_from;
 use areka_ghost::{BasewareRoot, BasewareRoots};
+use areka_session::alert::AlertScene;
+use areka_session::boot_config::resolve_balloon_for_ghost;
+use areka_session::boot_resolve::{
+    BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostDecision, GhostRoute, running_name,
+};
+use areka_session::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;

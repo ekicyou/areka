@@ -14,18 +14,18 @@ use wintf::ecs::{Input, Update};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
-use crate::session::app_exit;
-use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_resolve::BalloonDecision;
-use crate::session::boot_resolve::GhostDecision;
-use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::session::ghost_quit::KanadeNoticeRx;
-use crate::session::ghost_session::*;
-use crate::session::readme::ReadmeWiring;
 use areka_input::user_break::UserBreakWiring;
 use areka_kanade::KanadeNotice;
 use areka_placement::spawn::GhostWindowMarker;
 use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching, wait_until};
+use areka_session::app_exit;
+use areka_session::boot_config::ConfigInputs;
+use areka_session::boot_resolve::BalloonDecision;
+use areka_session::boot_resolve::GhostDecision;
+use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
+use areka_session::ghost_quit::KanadeNoticeRx;
+use areka_session::ghost_session::*;
+use areka_session::readme::ReadmeWiring;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
@@ -381,7 +381,7 @@ fn scripted_inputs(
         // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
         helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::session::boot_request::ModulePolicy::Load,
+        modules: areka_session::boot_request::ModulePolicy::Load,
     };
     (inputs, handle)
 }

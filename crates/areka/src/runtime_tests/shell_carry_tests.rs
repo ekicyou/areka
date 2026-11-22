@@ -16,8 +16,8 @@ use std::path::PathBuf;
 
 use super::test_support::set;
 use super::*;
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::reload::carries_shell_state;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::reload::carries_shell_state;
 
 /// 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
 #[test]
@@ -69,7 +69,7 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
         out,
     );
     let mut world = World::new();
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/A")).with_seriko_sink(sink),
     )));

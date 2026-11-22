@@ -11,7 +11,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 use areka_mcp::{ToolContent, ToolOutcome};
 
 use super::*;
-use crate::session::log_history::{Draft, History, Kind, Stamp};
+use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
     Stamp {

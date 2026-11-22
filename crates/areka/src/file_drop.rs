@@ -14,8 +14,8 @@ use wintf::ecs::window::OnFilesDropped;
 
 use crate::install::judge::SEPARATOR;
 use crate::install::{self, InstallOrder, InstallOrigin};
-use crate::session::ghost_session::GhostSlot;
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
+use areka_session::ghost_session::GhostSlot;
 
 /// `GhostWindowMarker` を持つ全 entity へ受け手 [`on_ghost_files_dropped`] を差す。
 ///

@@ -46,7 +46,7 @@ const SMOKE_EXIT: Duration = Duration::from_millis(500);
 /// wire 成立マーカー（`runtime` の `info!`・実 sink 結線が end-to-end で踏まれた証跡）。
 const WIRED: &str = "runtime: 実 sink 結線が成立しました（wire 成立）";
 
-/// 本物のゴースト窓を開いたマーカー（`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。
+/// 本物のゴースト窓を開いたマーカー（`areka_session::ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
 
 /// SHIORI の失敗の告知の題名（`alert.rs` の `SHIORI_FAULT_TITLE` と同じ綴り・bin crate の定数は

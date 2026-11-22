@@ -3,13 +3,13 @@
 use areka_kanade::{BootOrigin, ChangedFrom};
 
 use crate::menu::MenuWiring;
-use crate::session::boot_config::ConfigInputs;
-use crate::session::boot_resolve::BalloonDecision;
-use crate::session::boot_resolve::GhostDecision;
-use crate::session::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::session::ghost_session::*;
 use areka_input::MouseWiring;
 use areka_kanade::KanadeNotice;
+use areka_session::boot_config::ConfigInputs;
+use areka_session::boot_resolve::BalloonDecision;
+use areka_session::boot_resolve::GhostDecision;
+use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
+use areka_session::ghost_session::*;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use std::path::PathBuf;
@@ -33,7 +33,7 @@ fn unwirable_inputs() -> GhostBootInputs {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::session::boot_request::ModulePolicy::Load,
+        modules: areka_session::boot_request::ModulePolicy::Load,
     }
 }
 
@@ -150,7 +150,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
             kanade_stop.clone(),
             origin,
             None,
-            crate::session::boot_request::ModulePolicy::Load,
+            areka_session::boot_request::ModulePolicy::Load,
         )
     }));
     let cfg = ConfigInputs {
@@ -193,8 +193,8 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 #[test]
 fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     use crate::sample_test_support::switch_rig;
-    use crate::session::boot_resolve::read_last_ghost;
-    use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori};
+    use areka_session::boot_resolve::read_last_ghost;
+    use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori};
 
     let (descript, ghost, balloon) = decisions();
 
@@ -236,7 +236,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
-        modules: crate::session::boot_request::ModulePolicy::Load,
+        modules: areka_session::boot_request::ModulePolicy::Load,
     };
     let fallen = boot_ghost(
         &mut rig.world,

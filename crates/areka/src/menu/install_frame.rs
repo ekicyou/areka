@@ -23,7 +23,7 @@ fn install_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         label: captions::default_label(Frame::Install).to_string(),
         caption_resource: captions::resource_for(Frame::Install),
         // 読み取りだけの走りでは書庫選びを開かない。
-        enabled: desk::can_pick(world) && !crate::session::readonly::of(world),
+        enabled: desk::can_pick(world) && !areka_session::readonly::of(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
             desk::pick_and_submit(world)

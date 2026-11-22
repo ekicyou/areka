@@ -14,9 +14,9 @@ use bevy_ecs::world::World;
 use tracing::{info, warn};
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::session::ghost_session::GhostSlot;
 use areka_placement::reset_pos::reset_window_positions;
 use areka_placement::spawn::GhostWindows;
+use areka_session::ghost_session::GhostSlot;
 
 /// 「シェル位置初期化」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。
 pub(crate) fn register(world: &mut World) {

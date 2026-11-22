@@ -43,6 +43,8 @@ areka-placement = { path = "../areka-placement" }
 areka-runtime = { path = "../areka-runtime" }
 # 入力。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
 areka-input = { path = "../areka-input" }
+# 切替・読み直し・起動・終わる相の層。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+areka-session = { path = "../areka-session" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
@@ -105,6 +107,8 @@ areka-placement = { path = "../areka-placement", features = ["test-support"] }
 areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
 # 入力のテストの支えを本体のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
 areka-input = { path = "../areka-input", features = ["test-support"] }
+# 集めた層のテストの支えを本体のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
+areka-session = { path = "../areka-session", features = ["test-support"] }
 # オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
 # （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
 image = { version = "0.25.10", default-features = false, features = ["png"] }

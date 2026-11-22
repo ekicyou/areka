@@ -29,13 +29,13 @@ use areka_sylphya::{
 // （[`LastUsed`]）の消費者は boot 成功直後の `boot_seam::on_boot_ok`。
 
 /// 既定ゴースト（配布物に必ず同梱）。
-pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";
+pub const DEFAULT_GHOST_FOLDER: &str = "emo2";
 /// 既定バルーン（フォルダ名と id はバイト一致）。
-pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "areka-balloon";
+pub const DEFAULT_BALLOON_FOLDER: &str = "areka-balloon";
 
 /// ゴーストが決まった経路（記録に載せる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GhostRoute {
+pub enum GhostRoute {
     Argv,
     /// `--ghost` の指し先で決まった（記憶・印の書き込みは他の経路と同じ）。
     Pointed,
@@ -51,7 +51,7 @@ pub(crate) enum GhostRoute {
 
 /// バルーンが決まった経路（記録に載せる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BalloonRoute {
+pub enum BalloonRoute {
     Argv,
     Memory,
     /// ゴーストの descript.txt の `default.balloon.path`・`balloon` で決まった。
@@ -65,7 +65,7 @@ pub(crate) enum BalloonRoute {
 /// 決まったゴースト（argv なら渡されたパスそのもの・それ以外は当たった和の項目の場所）。
 /// argv の経路だけ `folder` が `None`（根の外かもしれないので名前を持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GhostDecision {
+pub struct GhostDecision {
     pub route: GhostRoute,
     pub dir: PathBuf,
     pub folder: Option<String>,
@@ -73,7 +73,7 @@ pub(crate) struct GhostDecision {
 
 /// 決まったバルーン（argv なら渡されたパスそのもの・それ以外は当たった和の項目の場所）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BalloonDecision {
+pub struct BalloonDecision {
     pub route: BalloonRoute,
     pub dir: PathBuf,
     pub folder: Option<String>,
@@ -87,7 +87,7 @@ pub(crate) struct NoGhost {
 
 /// 0。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NoBalloon {
+pub struct NoBalloon {
     pub balloon_stores: Vec<PathBuf>,
 }
 
@@ -354,7 +354,7 @@ pub(crate) fn resolve_balloon(
 
 /// 本番の添字（std の `RandomState` のプロセスごとの鍵から。新規依存 0）。
 /// 質は問わない（初回起動の 1 回だけ・その後は記憶で固定）。`n == 0` は呼ばれない。
-pub(crate) fn pick_index(n: usize) -> usize {
+pub fn pick_index(n: usize) -> usize {
     (RandomState::new().hash_one(n) % n as u64) as usize
 }
 
@@ -369,7 +369,7 @@ fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option
 }
 
 /// 起動前の記憶の直読み（App スコープ `areka.last.ghost`）。無ければ `None`。
-pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
+pub fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::App,
         &app_roots(app_profile_dir),
@@ -379,7 +379,7 @@ pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
 
 /// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`）。
 /// 根は boot が据える場所と同じ `profile_areka_root(<ゴースト>/ghost/master)`。無ければ `None`。
-pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
+pub fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::Ghost,
         &ghost_roots(ghost_dir),
@@ -459,7 +459,7 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
 // 同時に同じファイルを書くと片方が消えうるため。
 
 /// 起動中の印（App スコープ `areka.last.running`）。空文字・無しは `None`。読むだけで消さない。
-pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
+pub fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::App,
         &app_roots(app_profile_dir),
@@ -469,10 +469,7 @@ pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
 
 /// 印を書く（初回の起動の前・呼び手は argv で始まったプロセスでないときだけ呼ぶ）。
 /// 書けなければ失敗の中身を返す（呼び手が起動を止める）。
-pub(crate) fn write_session_mark(
-    app_profile_dir: &Path,
-    running: &str,
-) -> Result<(), PersistFailure> {
+pub fn write_session_mark(app_profile_dir: &Path, running: &str) -> Result<(), PersistFailure> {
     match save_app(
         app_profile_dir,
         vec![(PersistKey::LastRunning, running.to_owned())],
@@ -550,7 +547,7 @@ pub(crate) fn write_switch_drop(
 
 /// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
 /// 消せなければ記憶の印を読み直し、残る印が在るときだけ次の起動を予告する。
-pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> {
+pub fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> {
     match save_app(
         app_profile_dir,
         vec![(PersistKey::LastRunning, String::new())],
@@ -592,11 +589,7 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFa
 /// きれいに終わらなかったので印を残すときの記録（`session_mark_kept`）。記憶の印を読み直し、
 /// 印が在るときだけ次の起動の Ref6/7 を予告する。呼び手は `main::settle_session_mark`。
 /// 置き場が控える範囲の中なら印を読み直さない（控えの印で次の起動を予告しない）。
-pub(crate) fn keep_session_mark(
-    app_profile_dir: &Path,
-    reason: &'static str,
-    first: Option<&ExitOrigin>,
-) {
+pub fn keep_session_mark(app_profile_dir: &Path, reason: &'static str, first: Option<&ExitOrigin>) {
     if areka_sylphya::persist::withhold::withholds(app_profile_dir) {
         tracing::info!(
             event = "session_mark_kept",
@@ -627,7 +620,7 @@ pub(crate) fn keep_session_mark(
 
 /// 印に書く名前: 決まったゴーストの場所の descript の `name`、無ければフォルダ名（argv 以外の決定だけが来る）。
 /// 和は引かない（同じフォルダ名が別の根から見えても、動いているゴーストの名前を書く）。
-pub(crate) fn running_name(ghost: &GhostDecision) -> String {
+pub fn running_name(ghost: &GhostDecision) -> String {
     let folder = ghost.folder.clone().unwrap_or_else(|| {
         // argv の決定は印を書かない（呼び手が旗で止める）。来たらフォルダの末尾で代える。
         ghost
@@ -640,7 +633,7 @@ pub(crate) fn running_name(ghost: &GhostDecision) -> String {
 }
 
 /// 起動成功時に書く内容。
-pub(crate) struct LastUsed<'a> {
+pub struct LastUsed<'a> {
     pub ghost: &'a GhostDecision,
     pub balloon: &'a BalloonDecision,
     /// `mount().shell.dir` の末尾（`seriko.defaultsurfacedirectoryname` か `master`）
@@ -653,7 +646,7 @@ impl LastUsed<'_> {
     /// （反映は `GhostRuntime::shutdown` の barrier に任せる）。
     /// `areka.last.shell` は次の起動のシェルの決定（[`decide_boot_shell`]）が読む。
     /// 記憶の先が無かった起動では、ここで今マウントした既定のシェルへ書き直る。
-    pub(crate) fn record(&self, publisher: &SylphyaPublisher) {
+    pub fn record(&self, publisher: &SylphyaPublisher) {
         let ghost = remembered(
             self.ghost.route == GhostRoute::Argv,
             "ghost",
@@ -690,7 +683,7 @@ impl LastUsed<'_> {
 
 /// シェルの差し替えの完了: Ghost スコープへ `LastShell` だけを投函する。
 /// `LastBalloon`・App スコープには触れない。投函だけで待たない（[`LastUsed::record`] と同じ）。
-pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
+pub fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
     publisher.persist_put(
         PersistScope::Ghost,
         vec![(PersistKey::LastShell, folder.to_owned())],
@@ -705,7 +698,7 @@ pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
 /// バルーンの差し替えの完了: Ghost スコープへ `LastBalloon` だけを投函する。
 /// 3 つを書く [`LastUsed::record`] を通さないのは、入れた直後の `remember_balloon` の記憶を
 /// 上書きしないため。`LastShell`・App スコープには触れない。
-pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
+pub fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
     publisher.persist_put(
         PersistScope::Ghost,
         vec![(PersistKey::LastBalloon, folder.to_owned())],

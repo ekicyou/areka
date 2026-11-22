@@ -30,12 +30,6 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
-use crate::session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::session::ghost_session::{GhostSession, GhostSlot};
-use crate::session::shell_balloon_switch::{
-    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
-};
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::reseed::test_support as reseed_tests;
 use areka_placement::reset_pos::DefaultPlacementBasis;
@@ -50,6 +44,12 @@ use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::shell_box_assets::ShellBoxAssets;
 use areka_runtime::shell_cursor_assets::ShellCursorAssets;
 use areka_runtime::switch_assets::{SwapPayload, SwapSlot};
+use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::shell_balloon_switch::{
+    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
+};
 use face_tests::new_balloon_definitions;
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::frame::wiring::test_support::{last_drain_mut, zorder_ledger};
@@ -148,7 +148,7 @@ fn boot_context() -> BootContext {
     let root = BasewareRoot::new(PathBuf::from("skins"));
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::session::roots::RootsOrigin::EnvVar,
+        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
         app_profile_dir: PathBuf::from("skins/profile"),
         helper_exe: PathBuf::from("skins/helper.exe"),
         argv_session: true,
@@ -182,7 +182,7 @@ fn rig(kind: SkinKind, with_memory: bool) -> Rig {
 
 /// [`rig`] の土台を `world`（窓を組んだ World など）の上に、後始末の残り `finish` で組む。
 fn rig_on(mut world: World, kind: SkinKind, with_memory: bool, finish: SwapFinish) -> Rig {
-    crate::session::hooks::install(&mut world);
+    areka_session::hooks::install(&mut world);
     let store = Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
         app: Some(PathBuf::from("/app")),

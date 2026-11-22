@@ -39,9 +39,7 @@ use crate::ghost_session::{
 use areka_runtime::frame::{DiscardReason, log_stay_on_top_discard};
 #[cfg(test)]
 use areka_runtime::special_name::UnresolvedReason;
-pub(crate) use areka_runtime::special_name::{
-    LastInstalledGhost, NameResolution, resolve_special_name,
-};
+pub use areka_runtime::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
 
 pub(crate) use areka_runtime::change_cue::ChangeRequestRaw;
 
@@ -93,7 +91,7 @@ pub(crate) fn drain_change_requests(world: &mut World) {
 
 /// 切替要求（入口 [`request_ghost_switch`] の型）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SwitchRequest {
+pub struct SwitchRequest {
     pub ghost: GhostSpec,
     /// 真なら送り出す側へ `OnGhostChanging` を送る。
     pub raise_event: bool,
@@ -105,14 +103,14 @@ pub(crate) struct SwitchRequest {
 
 /// 切替先の指し方。台本は名前（`descript.txt` の `name` → フォルダ名の順）、メニューはフォルダ名。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum GhostSpec {
+pub enum GhostSpec {
     Name(String),
     Folder(String),
 }
 
 /// 入口の判定（記録の語彙・呼び手は分岐しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SwitchVerdict {
+pub enum SwitchVerdict {
     Accepted,
     Busy,
     NotFound,
@@ -121,7 +119,7 @@ pub(crate) enum SwitchVerdict {
 
 /// 切替先（`OnGhostChanging` の Ref0〜3 の材料）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SwitchTarget {
+pub struct SwitchTarget {
     pub dir: PathBuf,
     pub folder: String,
     /// `descript.txt` の `name`（無ければフォルダ名）。
@@ -132,7 +130,7 @@ pub(crate) struct SwitchTarget {
 
 /// 直前のゴースト（`OnGhostChanged` の Ref0・2・3 の材料）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PrevGhost {
+pub struct PrevGhost {
     pub dir: PathBuf,
     pub name: Option<String>,
     pub sakura_name: Option<String>,
@@ -140,7 +138,7 @@ pub(crate) struct PrevGhost {
 
 /// 切替の段。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SwitchStage {
+pub enum SwitchStage {
     /// kanade へ切替の要求を送り、送り出しの握手の終わり（停止通知）を待っている。
     SendOff,
     /// 起こしたゴーストの定常到達を待っている（起こしたのが切替先か既定か）。
@@ -151,14 +149,14 @@ pub(crate) enum SwitchStage {
 
 /// 迎え入れているゴースト（既定へ戻す試みは 1 回だけ＝`Default` からは戻らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WelcomeAttempt {
+pub enum WelcomeAttempt {
     Target,
     Default,
 }
 
 /// 切替の予約（World の NonSend・在れば切替中）。二重要求の判定はこの有無で行う。
 #[derive(Debug)]
-pub(crate) struct SwitchInFlight {
+pub struct SwitchInFlight {
     pub target: SwitchTarget,
     pub prev: PrevGhost,
     pub stage: SwitchStage,
@@ -170,7 +168,7 @@ pub(crate) struct SwitchInFlight {
 
 /// 予約の終わり（[`end_switch`] へ渡す出口の語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SwitchEnd {
+pub enum SwitchEnd {
     /// 迎え入れたゴーストが定常に入った。
     Steady { attempt: WelcomeAttempt },
     /// 切替は中止された。
@@ -229,7 +227,7 @@ pub(crate) fn resolve_switch_target(
 }
 
 /// 最後に入れたゴーストのフォルダ名を記録する（前の記録は置き換わる＝最後の 1 件だけ残る）。
-pub(crate) fn record_last_installed(world: &mut World, folder: String) {
+pub fn record_last_installed(world: &mut World, folder: String) {
     tracing::info!(
         event = "last_installed_recorded",
         folder = %folder,
@@ -239,7 +237,7 @@ pub(crate) fn record_last_installed(world: &mut World, folder: String) {
 }
 
 /// 切替要求の唯一の入口。乱数は本番の `pick_index`。
-pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
+pub fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
     request_ghost_switch_with(world, req, pick_index)
 }
 
@@ -482,7 +480,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
 /// 定常到達: 迎え入れの予約を下ろし `info!(ghost_switch_done)`。送り出しの段の予約は残す（まだ
 /// 握手の途中）。予約が無ければ `debug!`（初回起動・切替の外）。切替の中止: 予約を下ろし
 /// `info!(ghost_switch_cancelled)`。予約が無ければ `warn!`。停止は [`on_ghost_stopped`] へ。
-pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
+pub fn on_notice(world: &mut World, notice: KanadeNotice) {
     let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
     match notice {
         KanadeNotice::Steady => {
@@ -605,7 +603,7 @@ fn record_steady_memory(world: &World) {
 /// 組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
 /// 書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ
 /// [`switch_to_default`]。
-pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
+pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some((target, prev, boot_event)) = world
         .get_non_send::<SwitchInFlight>()
         .map(|f| (f.target.clone(), f.prev.clone(), f.boot_event.clone()))

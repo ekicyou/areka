@@ -32,7 +32,7 @@ use areka_runtime::frame::ZOrderAbsentReports;
 /// `Debug` 出力がそのまま実機ログの検索語になる（`origin=KanadeStopped(Quit)` のように
 /// `ghost_quit` の `cause` と同じ語に揃う）。Fault は種類と理由（`String`）を運ぶので `Copy` ではない。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ExitOrigin {
+pub enum ExitOrigin {
     /// kanade の終了系列の完了（メニューの終了・別れの台詞のあと・中断のあと）。
     KanadeStopped(KanadeStopCause),
     /// 強制退避（Ctrl+Shift+左ダブルクリック）。
@@ -59,14 +59,14 @@ pub(crate) enum ExitOrigin {
 /// （[`AppExit::request_exit`] の「最初が勝つ」と同じ規則）。`run()` の後で `main` が読み、
 /// [`fault_of`] で告知と終了コードを決める。
 #[derive(Resource)]
-pub(crate) struct FirstExit(pub(crate) ExitOrigin);
+pub struct FirstExit(pub ExitOrigin);
 
 /// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
 /// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
-pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
+pub fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))
         | ExitOrigin::GhostFallbackFailed(f) => Some(f),
@@ -86,7 +86,7 @@ pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
 
 /// 出所が記憶の書き込みの失敗なら中身（網羅の match）。
 /// `main` は [`fault_of`] が無くこれが在れば「記憶を書けない」の告知を組み、終了コードを 1 にする。
-pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
+pub fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
     match origin {
         ExitOrigin::MemoryWriteFailed(f) => Some(f),
         ExitOrigin::KanadeStopped(_)
@@ -104,7 +104,7 @@ pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
 /// 最初の出所は受け口の有無に依らず [`FirstExit`] に残す（2 度目は `debug` で流すだけ）。
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
 /// `error!` を残して戻る——窓は閉じたが終了は指示できない。
-pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
+pub fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
     areka_runtime::frame::log_stay_on_top_discard(world, areka_runtime::frame::DiscardReason::Exit);
     let closed = despawn_app_windows(world);
     if world.contains_resource::<FirstExit>() {
@@ -150,13 +150,13 @@ pub(crate) fn install_input_hooks(world: &mut World) {
 /// `ghost_session::reopen_ghost_windows` の 1 つに限る（値渡し・`Clone` なし＝1 回しか消費できない）。
 /// 呼んで捨てる使い方（`quit_app` の代わりに閉じて終わる）は `#[must_use]` の警告で露わになる。
 #[must_use = "閉じた窓は起こし直しへ続けること（reopen_ghost_windows へ渡す）"]
-pub(crate) struct WindowsClosed {
+pub struct WindowsClosed {
     closed: usize,
 }
 
 impl WindowsClosed {
     /// 閉じた窓の枚数（標的として拾った件数・[`despawn_app_windows`] の戻り値）。
-    pub(crate) fn closed(&self) -> usize {
+    pub fn closed(&self) -> usize {
         self.closed
     }
 }
@@ -199,7 +199,7 @@ impl WindowsClosed {
 /// - ゴーストごとの結線（`RuntimeWiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
 ///   `BalloonWiring`・メニュー・記憶の結線など）: 起こすたびに `insert_non_send` で差し替わる。
 /// - 環境変数の読み取りの控え（`OnceLock`）と系の `Local`: 窓の一式に依らない。
-pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
+pub fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
     world.remove_resource::<GhostWindows>();
     world.remove_resource::<ChainFinalized>();
@@ -261,7 +261,7 @@ fn despawn_app_windows(world: &mut World) -> usize {
 /// 着いたときに値が進んでいれば窓を作らない——投函した後・着く前に全窓を閉じた（切替先の非同期の
 /// 失敗で既定へ戻した・終了した）とき、閉じた後に古い窓が孤児として生えないため。
 #[derive(Resource, Default)]
-pub(crate) struct WindowsEpoch(pub(crate) u64);
+pub struct WindowsEpoch(pub u64);
 
 /// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手。
 ///

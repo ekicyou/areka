@@ -31,20 +31,20 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use crate::after_run;
 use crate::install::{InstallOrder, InstallOrigin};
 use crate::sample_test_support::switch_rig;
-use crate::session::app_exit::{ExitOrigin, FirstExit, quit_app};
-use crate::session::boot_config::BootContext;
-use crate::session::boot_seam::insert_persist_wiring;
-use crate::session::ghost_session::GhostSlot;
-use crate::session::ghost_switch::SwitchInFlight;
-use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::session::readonly::ReadOnlyRun;
-use crate::session::roots::user_root::copy_unless_readonly;
-use crate::session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
-use crate::session::write_failure::check_boot;
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
 use areka_runtime::spine::RecordedCall;
+use areka_session::app_exit::{ExitOrigin, FirstExit, quit_app};
+use areka_session::boot_config::BootContext;
+use areka_session::boot_seam::insert_persist_wiring;
+use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::readonly::ReadOnlyRun;
+use areka_session::roots::user_root::copy_unless_readonly;
+use areka_session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
+use areka_session::write_failure::check_boot;
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
@@ -207,13 +207,13 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         persist_entries(&rig.world, char_pos_entries(0, PointPx { x: 10, y: 20 }));
         PropSetCueSink::new(publisher.clone()).emit(prop_set_cue(PersistKey::BootCount, "7"));
         rig.world.resource_mut::<BootContext>().roots_origin =
-            crate::session::roots::RootsOrigin::Default;
+            areka_session::roots::RootsOrigin::Default;
         crate::roots::add_root(&mut rig.world, picked.clone());
         publisher.barrier().expect("記憶の書き手は生きている");
 
-        let roots_memory = crate::session::roots::encode_memory(
+        let roots_memory = areka_session::roots::encode_memory(
             &rig.world.resource::<BootContext>().roots,
-            crate::session::roots::user_root::exe_dir().as_deref(),
+            areka_session::roots::user_root::exe_dir().as_deref(),
         );
         let window_x = PersistKey::WindowPos {
             scope: 0,
@@ -284,7 +284,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         check(
             rig.world
                 .get_resource::<FirstExit>()
-                .is_some_and(|f| crate::session::app_exit::write_failure_of(&f.0).is_none()),
+                .is_some_and(|f| areka_session::app_exit::write_failure_of(&f.0).is_none()),
             "書けない失敗が致命の机に届いた",
         );
     });
