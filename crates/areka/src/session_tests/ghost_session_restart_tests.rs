@@ -1,6 +1,5 @@
 //! 起こし直しの単位（`ghost_session`）の決定論テスト。
 
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
@@ -11,7 +10,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::{Input, Update};
 
-use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
+use crate::menu::{Frame, MenuWiring};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
 use areka_input::user_break::UserBreakWiring;
@@ -153,7 +152,7 @@ fn prepare_spawns_no_window_until_commit() {
     };
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(WintfTaskPool::new());
+    world.insert_resource(WintfTaskPool::with_threads(1));
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_counting);
@@ -443,8 +442,8 @@ fn systems_lens(world: &World) -> [usize; 3] {
 /// 同じプロセスで 2 周する。
 ///
 /// 1 周目を降ろして全窓を閉じ、2 周目を結線した後に、⑴ 系が二重に登録されていない
-/// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューの登記が
-/// 組込 2 項目と「ゴースト」枠だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
+/// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューが 12 枠で、
+/// 2 周目の登記が置き換えを 1 件も残さない・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
 /// ⑶ 終了が指示されていない、を確かめる。
 ///
 /// 「つながっている」は `try_recv` を `Err` が出るまで回して最後が `Empty`（1 周目の受信端は
@@ -476,19 +475,6 @@ fn boots_twice_in_one_process_without_double_registration() {
     // ── 1 周目 ──
     let sample1 = acquire_emo2();
     let (session1, shiori1) = boot_round(&mut world, &sample1, kanade_stop_tx.clone());
-    // 1 周目のメニューへ余分な登記（7 枠すべてが本番で登記されるので一覧には現れない。残っていれば、
-    // 2 周目の「シェル」枠の登記が置き換えの記録 `menu_registration_replaced` を残す＝0 件で新品と判定する）。
-    crate::menu::register(
-        &mut world,
-        Frame::Shell,
-        Rc::new(|_: &World, _: &MenuContext| MenuItem {
-            label: "1 周目の余分な登記".to_owned(),
-            caption_resource: None,
-            enabled: true,
-            checked: None,
-            body: ItemBody::Action(Rc::new(|_: &mut World, _: &MenuContext| {})),
-        }),
-    );
     // 1 周目が結線ありの腕を通ったことの証（fallback に落ちると説明書・メニューの状態が
     // 挿されず、2 周目の「載せ替わった」面が素通りで緑になる）。
     let round1_readme_under_root1 = world
@@ -591,7 +577,7 @@ fn boots_twice_in_one_process_without_double_registration() {
         ),
         "2 周目が 1 周目と同じ姿で起きていない（1 周目の説明書が 1 周目の根の下・1 周目の登記の一覧・\
          系の数 [Input, Update, FrameFinalize]・説明書が \
-         2 周目の根の下・登記の一覧・2 周目の登記の置き換えの記録が 0 件・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
+         2 周目の根の下・登記の一覧・2 周目の登記が置き換えを 1 件も残さない・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
          readme={readme:?} root1={:?} root2={:?} closed={closed_count}",
         sample1.folder(),
         sample2.folder(),

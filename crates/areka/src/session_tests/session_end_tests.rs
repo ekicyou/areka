@@ -94,7 +94,7 @@ fn bare_world(tmp: &TempPath) -> (World, mpsc::Sender<KanadeNotice>) {
         },
     });
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, ghost_dir))));
-    let _ = write_session_mark(&tmp.child("app-profile"), "A");
+    write_session_mark(&tmp.child("app-profile"), "A").expect("印を書く");
     (world, tx)
 }
 
@@ -121,7 +121,7 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
     rig.plant_boot_record("A");
     rig.boot("A");
     let app = rig.world.resource::<BootContext>().app_profile_dir.clone();
-    let _ = write_session_mark(&app, "A");
+    write_session_mark(&app, "A").expect("印を書く");
     let steady = rig.wait_steady();
 
     let ((), first_events) =

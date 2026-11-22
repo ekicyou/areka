@@ -79,7 +79,7 @@ fn answer(got: &BootResolved) -> (GhostRoute, PathBuf, Option<String>) {
 #[test]
 fn without_options_the_answer_is_as_today() {
     let tmp = fixture("cfg-opt-none");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
         answer(&boot(&tmp, &[], no_pick)),
         (
@@ -113,7 +113,7 @@ fn ghost_option_overrides_positional_ghost() {
 #[test]
 fn nobootcheck_does_not_read_the_mark() {
     let tmp = fixture("cfg-opt-nobootcheck");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
         answer(&boot(&tmp, &["--option", "nobootcheck"], no_pick)),
         (GhostRoute::Memory, tmp.child("ghost").join("g1"), None)
@@ -124,7 +124,7 @@ fn nobootcheck_does_not_read_the_mark() {
 #[test]
 fn random_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-random-mark");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     let got = boot(&tmp, &["--random"], first);
     assert_eq!(
         (got.1.route, got.3.as_deref()),
@@ -388,7 +388,7 @@ fn ghost_without_value_uses_usual_choice() {
 #[test]
 fn ghost_option_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-ghost-mark");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     let dev = tmp.child("ext").join("dev");
     put_ghost(&dev);
     let dev_s = dev.display().to_string();

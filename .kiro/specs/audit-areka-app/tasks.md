@@ -100,14 +100,14 @@
   - _Dispatch: mechanical — 消す・移す行を設計が名指す_
   - _Requirements: 3.1, 5.19, 6.6, 7.5_
 
-- [ ] 8. 本体の落ちる力の無いテストを強める（G8）
+- [x] 8. 本体の落ちる力の無いテストを強める（G8）
 - [x] 8.1 旗の生産者の見張りが歩く根を広げる（指摘 15・33・5.6）
   - `tick_gate_config_producers_tests.rs` の自前の `code_only` を消し `areka_runtime::source_text_test_support::code_only` を use する
   - `walk_roots` に `areka-session`・`areka-placement` を足し、184・236 の説明を歩く根の名を並べた文に。足した根で見つかる生産者は表に載せる
   - 完了の姿: 見張りが緑で、`areka-session` に表に無い `tick_wake::mark` を足すと赤（較正）
   - _Dispatch: standard — 根を足して見つかる生産者を表に載せる判断が要る_
   - _Requirements: 3.1, 4.1, 4.2, 5.6_
-- [ ] 8.2 読み直し・本体の系・起動の設定・立ち上げ直しのテストの表明を立て直す（指摘 16〜19・22・23・93・5.16）
+- [x] 8.2 読み直し・本体の系・起動の設定・立ち上げ直しのテストの表明を立て直す（指摘 16〜19・22・23・93・5.16）
   - `reload_tests.rs` の `rig()` に本体の系を据え、142・199 を消す。377-382 の 1 回目の `drain` を `capture` で包み、記録 0 件と `ReloadInFlight` が無いことを見る
   - `body_systems_tests.rs` の `len()` の要素を外し、名を `missing_body_systems_logs_and_answers_idle` に、38 行の説明を合わせる
   - 読み返すだけの 2 本（`config_inputs_holds_resolved_roots`・`boot_context_holds_the_resolved_current_ghost`）を消す。`let _ = write_session_mark(..)` を `.expect("印を書く")` に（Some を期待する所も）
@@ -292,3 +292,4 @@
 - 6.1: 倍率の名は問い手に関わらず同じ値なので、問い手の取り違えを赤にするために問い手ごとの名 `probe.owner` を 1 つ足して問う
 - 6.2: 兄弟の `mcp/get_property_tests.rs` に当たりが残るので残す道。`shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `#[cfg(test)] mod shiori_host`・dev の `shiori-abi`／`windows-core` は `audit-areka-install-update` の着地の後に向こうの PR で消す（20 で申し送る）。`shiori_inproc.rs:246-247` を消したので `InProcHost` の件は行番号でなく名で指す
 - 8.1: `placement_tests/zorder_branch_coverage_test_support.rs:16` に自前の `code_only` の写しが残る（範囲の表に無い・21.1 で見る）
+- 8.2: 1 回目の `drain` は本番が `trace!(reload_drain_no_wiring)` を 1 件出すので「warn 以上 0 件」で見る（この枝に info/debug を足す壊し方は緑のまま）。`let _ = write_session_mark` は設計の一覧の外（areka-session の 3 ファイル・`main_session_mark_*`・`ghost_session_switch_memory_tests.rs`）に 9 件残る。兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す（20 で申し送る）

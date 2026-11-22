@@ -94,7 +94,7 @@ fn call_ghost_comes_before_the_remembered_ghost() {
 #[test]
 fn call_ghost_is_chosen_even_with_the_session_mark() {
     let tmp = installed("cfg-callghost-mark");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
         answer(boot(&tmp, &[], Some("g2"))),
         (

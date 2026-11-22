@@ -35,9 +35,9 @@ fn register_systems_installs_body_systems() {
     );
 }
 
-/// 束の無い World では `body_systems_missing` の error を 1 行残し、机の問いは偽・受け口は 2 つで答える。
+/// 束の無い World では `body_systems_missing` の error を 1 行残し、机の問いは偽で答える。
 #[test]
-fn missing_body_systems_logs_and_answers_like_no_desk() {
+fn missing_body_systems_logs_and_answers_idle() {
     let world = World::new();
 
     let (body, events) = capture(|| BodySystems::of(&world));
@@ -52,10 +52,9 @@ fn missing_body_systems_logs_and_answers_like_no_desk() {
             missing,
             (body.update_busy)(&world),
             (body.install_busy)(&world),
-            (body.cue_sinks)(&world).len(),
         ),
-        (vec![Level::ERROR], false, false, 2),
-        "(body_systems_missing の行, update_busy, install_busy, 受け口の数)"
+        (vec![Level::ERROR], false, false),
+        "(body_systems_missing の行, update_busy, install_busy)"
     );
 }
 

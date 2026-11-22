@@ -50,6 +50,7 @@ fn rig(label: &str) -> Rig {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(boot_context(temp.path(), &root));
+    world.insert_resource(crate::BODY_SYSTEMS);
     let (tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
@@ -139,7 +140,6 @@ fn refuse(
 #[test]
 fn refusals_in_order_leave_one_record_each() {
     let mut rig = rig("areka-reload-refusals");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     plant_reload(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     plant_skin_switch(&mut rig.world, SkinKind::Shell, Path::new("planted"));
@@ -196,7 +196,6 @@ fn refusals_in_order_leave_one_record_each() {
 #[test]
 fn updating_and_installing_refuse_only_mcp_requests() {
     let mut rig = rig("areka-reload-busy-origin");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     insert_running_desk_for_test(&mut rig.world);
     insert_busy_desk_for_test(&mut rig.world);
     let from_mcp = request_reload(&mut rig.world, mcp(ReloadTarget::Shell));
@@ -221,7 +220,6 @@ fn updating_and_installing_refuse_only_mcp_requests() {
 #[test]
 fn missing_ghost_or_kanade_is_no_context() {
     let mut rig = rig("areka-reload-no-context");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     rig.world
         .insert_non_send(GhostSlot(Some(GhostSession::for_test(
             None,
@@ -404,7 +402,15 @@ fn accepted_leaves_one_started_record() {
 #[test]
 fn drain_hands_script_requests_to_the_desk() {
     let mut rig = rig("areka-reload-drain");
-    drain(&mut rig.world);
+    let ((), idle) = capture(|| drain(&mut rig.world));
+    assert_eq!(
+        (
+            idle.iter().filter(|e| e.level <= Level::WARN).count(),
+            rig.world.get_non_send::<ReloadInFlight>().is_none(),
+        ),
+        (0, true),
+        "受信端が無いときの drain は warn 以上の記録も印も残さない（warn 以上の数, 印なし）"
+    );
     let (tx, rx) = mpsc::channel();
     areka_runtime::reload_cue::wire_reload_rx(&mut rig.world, rx);
     for target in [ReloadTarget::Shell, ReloadTarget::Balloon] {

@@ -1,17 +1,3 @@
-use areka_session::boot_config::ConfigInputs;
-use std::path::PathBuf;
-
-/// `ConfigInputs` は解決済みルートパスを保持する（型の存在確認）。
-#[test]
-fn config_inputs_holds_resolved_roots() {
-    let cfg = ConfigInputs {
-        ghost_root: PathBuf::from("g"),
-        balloon_root: PathBuf::from("b"),
-    };
-    assert_eq!(cfg.ghost_root, PathBuf::from("g"));
-    assert_eq!(cfg.balloon_root, PathBuf::from("b"));
-}
-
 // ---------------------------------------------------------------------------
 // 起動前の解決の判断
 // ---------------------------------------------------------------------------
@@ -359,7 +345,7 @@ mod switch_balloon {
             (g.route, g.folder, mark)
         };
         let without_mark = boot();
-        let _ = write_session_mark(&app_dir, "落ちた子");
+        write_session_mark(&app_dir, "落ちた子").expect("印を書く");
         let (first, events) = capture(boot);
         let second = boot();
         let found = events
@@ -399,7 +385,7 @@ mod switch_balloon {
         let tmp = TempPath::new("switch-balloon-mark-argv");
         let ghost = fixture(&tmp);
         let app_dir = tmp.child("app-profile");
-        let _ = write_session_mark(&app_dir, "落ちた子");
+        write_session_mark(&app_dir, "落ちた子").expect("印を書く");
         let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
         let (got, events) = capture(|| {
             resolve_boot_from(
@@ -421,47 +407,5 @@ mod switch_balloon {
             (None, 0, Some("落ちた子".to_owned())),
             "argv の起動が印に触れた（戻り・session_mark_found の件数・印は残る）"
         );
-    }
-
-    /// 起動前の解決の結果から起動の文脈を組み、World の資源として読める（据え付けは 8.5）。
-    #[test]
-    fn boot_context_holds_the_resolved_current_ghost() {
-        use areka_session::boot_config::{BootContext, CurrentGhost};
-        let tmp = TempPath::new("switch-balloon-context");
-        let ghost = fixture(&tmp);
-        let (cfg, g, b, _, _) = resolve_boot_from(
-            areka_session::roots::single_env(tmp.path().to_path_buf()),
-            &["areka.exe".to_owned()],
-            tmp.path(),
-            no_pick,
-            |_, dir| dir.to_path_buf(),
-        )
-        .expect("決まる");
-        let mut world = bevy_ecs::world::World::new();
-        world.insert_resource(BootContext {
-            roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-            app_profile_dir: tmp.path().to_path_buf(),
-            helper_exe: tmp.child("shiori-host32-helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg,
-                ghost: g,
-                balloon: b,
-            },
-        });
-        let ctx = world.resource::<BootContext>();
-        assert_eq!(ctx.current.cfg.ghost_root, ghost);
-        assert_eq!(ctx.current.ghost.folder.as_deref(), Some("g1"));
-        assert_eq!(
-            ctx.current.balloon.folder.as_deref(),
-            Some(DEFAULT_BALLOON_FOLDER)
-        );
-        assert_eq!(
-            ctx.roots.roots()[0].balloon_dir("b1"),
-            tmp.child("balloon").join("b1")
-        );
-        assert_eq!(ctx.app_profile_dir, tmp.path());
-        assert_eq!(ctx.helper_exe, tmp.child("shiori-host32-helper.exe"));
     }
 }
