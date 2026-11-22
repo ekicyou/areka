@@ -33,7 +33,7 @@
   - 完了の姿: テストが緑で、`inspect_err` を外すと赤（較正）
   - _Dispatch: mechanical — 記録の行と本文の確かめを設計が与え、手本（`readonly_body_tests.rs` の本文の確かめ）がある_
   - _Requirements: 3.1, 4.1, 4.2, 6.2_
-- [ ] 3.2 `areka-session` のテストの exe の申告を本体の申告ファイルから読み、`areka-emo-present` を省ける依存にする（指摘 12・78・5.18）
+- [x] 3.2 `areka-session` のテストの exe の申告を本体の申告ファイルから読み、`areka-emo-present` を省ける依存にする（指摘 12・78・5.18）
   - `build.rs` の読み先と `rerun-if-changed` を `../areka/areka.manifest` に替え、冒頭の説明を合わせる。`areka-session/tests.manifest` を消す。`areka.manifest` の 2 行目を「areka.exe と areka-session のテストの exe が使う申告」に
   - `areka-emo-present` を `optional = true` にし、`test-support` の機能で `dep:areka-emo-present` を開き、dev にも置く
   - 完了の姿: `cargo test -p areka-session` が緑（申告を誤ると `0xc0000139` で落ちる）、`cargo build -p areka-session` と `cargo build -p areka` が通る。`git grep -n "tests.manifest"` の当たりが `.kiro/specs/` の記録だけ

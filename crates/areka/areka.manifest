@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- areka.exe が標準の部品（comctl32）の版 6 を使う申告。build.rs がリンカへ渡して埋める。 -->
+<!-- areka.exe と areka-session のテストの exe が標準の部品（comctl32）の版 6 を使う申告。build.rs がリンカへ渡して埋める。 -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <dependency>
     <dependentAssembly>
