@@ -8,6 +8,7 @@ use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{after_run, finish_after_run};
+use crate::session_tests::reservation;
 use areka_session::alert::{AlertScene, WriteMoment};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::BootContext;
@@ -91,28 +92,6 @@ fn slot_empty(world: &World) -> bool {
     world
         .get_non_send::<GhostSlot>()
         .is_none_or(|slot| slot.0.is_none())
-}
-
-fn reservation(
-    stage: areka_session::ghost_switch::SwitchStage,
-) -> areka_session::ghost_switch::SwitchInFlight {
-    use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
 }
 
 /// ⑴ 起動の時点（由来 `Plain`）・⑵ 前回の印が残る起動（由来 `Halted`）で印を書けない

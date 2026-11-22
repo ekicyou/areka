@@ -12,22 +12,21 @@
 //!
 //! プロセスに 1 つの旗は立てない（取っ手と印だけで立てる・構造の試験が固める）。
 
-use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
 
-use areka_ghost::prop_sink::PropSetCueSink;
+use areka_ghost::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_ghost::{BasewareRoots, StoreKind};
 use areka_kanade::KanadeStopCause;
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use areka_sylphya::persist::FsPersistIo;
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_sakura::contract::CueSink;
 use areka_sylphya::persist::withhold::WithholdGuard;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use areka_sylphya::{PersistKey, PersistScope};
 use areka_user_data::{Signals, Writability, establish_readonly_from, readonly_app_profile_dir};
 use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::{publisher_of, read_back, tree};
 use crate::after_run;
 use crate::install::{InstallOrder, InstallOrigin};
 use crate::sample_test_support::switch_rig;
@@ -40,7 +39,7 @@ use areka_session::boot_config::BootContext;
 use areka_session::boot_seam::insert_persist_wiring;
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_session::readonly::ReadOnlyRun;
 use areka_session::roots::user_root::copy_unless_readonly;
 use areka_session::session_mark::{MarkVerdict, Teardown, settle_session_mark};
@@ -48,61 +47,6 @@ use areka_session::write_failure::check_boot;
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";
-
-/// 根の下の木（相対パス → ファイルの中身。フォルダは `None`）。
-fn tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
-    fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Option<Vec<u8>>>) {
-        for entry in std::fs::read_dir(dir).expect("木を歩く") {
-            let path = entry.expect("ディレクトリ項目").path();
-            let rel = path.strip_prefix(root).expect("根の下").to_path_buf();
-            if path.is_dir() {
-                out.insert(rel, None);
-                walk(root, &path, out);
-            } else {
-                out.insert(rel, Some(std::fs::read(&path).expect("ファイルを読む")));
-            }
-        }
-    }
-    let mut out = BTreeMap::new();
-    walk(root, root, &mut out);
-    assert!(!out.is_empty(), "走査が空振りした: {}", root.display());
-    out
-}
-
-/// 保存の口から 1 つの key を読み返す（控えを先に見る＝書けたときと同じ値）。
-fn read_back(app: &Path, ghost: &Path, scope: PersistScope, key: PersistKey) -> Option<String> {
-    let roots = ScopeRoots {
-        app: Some(app.to_path_buf()),
-        ghost: Some(ghost.to_path_buf()),
-        ..ScopeRoots::default()
-    };
-    load_scope(scope, &roots, &FsPersistIo)
-        .into_iter()
-        .find_map(|(k, v)| (k == key).then_some(v))
-}
-
-fn publisher_of(rig: &SwitchRig) -> SylphyaPublisher {
-    rig.world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("ゴーストの実行系が起きている")
-        .sylphya_publisher()
-        .clone()
-}
-
-fn prop_set_cue(key: PersistKey, value: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("sakura"),
-        command: CueCommand::command_carrier(
-            areka_ghost::prop_sink::PROP_SET_CUE_NAME,
-            vec![key.to_canonical_key(), value.to_owned()],
-        ),
-        duration: 0.0,
-    }
-}
 
 /// 呼出列の id（GET と NOTIFY）。
 fn ids(calls: &[Vec<RecordedCall>]) -> Vec<String> {
@@ -202,10 +146,13 @@ fn readonly_run_leaves_the_tree_as_it_was() {
         });
         check(welcomed && !rig.exit_requested(), "B への切替が済まない");
 
-        let publisher = publisher_of(&rig);
+        let publisher = publisher_of(&rig.world);
         insert_persist_wiring(&mut rig.world, publisher.clone());
         persist_entries(&rig.world, char_pos_entries(0, PointPx { x: 10, y: 20 }));
-        PropSetCueSink::new(publisher.clone()).emit(prop_set_cue(PersistKey::BootCount, "7"));
+        PropSetCueSink::new(publisher.clone()).emit(carrier_cue(
+            PROP_SET_CUE_NAME,
+            &[&PersistKey::BootCount.to_canonical_key(), "7"],
+        ));
         rig.world.resource_mut::<BootContext>().roots_origin =
             areka_session::roots::RootsOrigin::Default;
         crate::roots::add_root(&mut rig.world, picked.clone());

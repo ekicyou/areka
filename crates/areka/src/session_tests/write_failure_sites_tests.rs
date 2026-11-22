@@ -12,14 +12,14 @@
 //! 置き場の並びは、ゴーストが居る（投函）と居ない（直）の両方を踏む。判定した種類の並びが
 //! 13 種と等しいことも判定する。根・検体はワークツリーの `target\` の下だけ。
 
-use std::path::Path;
-
-use areka_ghost::prop_sink::PropSetCueSink;
+use areka_ghost::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use areka_kanade::{ChangeHandoff, KanadeNotice};
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_sakura::contract::CueSink;
 use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use temp_path_kit::TempPath;
 
+use super::{publisher_of, reservation, routes, unwritable, writable};
 use crate::boot_first_ghost;
 use crate::sample_test_support::switch_rig;
 use areka_placement::AuthorDpi;
@@ -33,9 +33,7 @@ use areka_session::boot_resolve::{
 };
 use areka_session::boot_seam::insert_persist_wiring;
 use areka_session::ghost_session::{GhostSlot, StartupDescriptValues};
-use areka_session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
-};
+use areka_session::ghost_switch::{SwitchStage, WelcomeAttempt, on_notice, switch_to};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 use areka_session::session_mark::{MarkInputs, Teardown, settle_session_mark};
 use areka_session::write_failure::*;
@@ -59,27 +57,6 @@ pub(crate) const KINDS: [&str; 13] = [
     "窓の位置",
     "ゴーストのプロパティ",
 ];
-
-/// 致命の机の汲み出しを 1 回回す（読み取りだけの行列が「机に届かない」を見る口）。
-pub(crate) fn drain_desk(world: &mut World) {
-    drain_system(world);
-}
-
-/// 置き場を普通のファイルに替える（書けない）。
-fn unwritable(dir: &Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
-/// 置き場をフォルダへ戻す（書ける）。
-fn writable(dir: &Path) {
-    if dir.is_file() {
-        std::fs::remove_file(dir).expect("置き場の位置のファイルを外す");
-    }
-    std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
-}
 
 /// 最初の出所の失敗の中身（`MemoryWriteFailed` でなければ `None`）。
 fn first_failure(world: &World) -> Option<PersistFailure> {
@@ -113,45 +90,6 @@ fn direct(world: &mut World, write: impl FnOnce(&mut World)) -> Option<PersistFa
     first_failure(world)
 }
 
-/// 今のゴースト・バルーンの決め方を書き換える（argv で決まった側は最後に使ったものを書かない）。
-fn routes(world: &mut World, ghost: GhostRoute, balloon: BalloonRoute) {
-    let mut ctx = world.resource_mut::<BootContext>();
-    ctx.current.ghost.route = ghost;
-    ctx.current.balloon.route = balloon;
-}
-
-fn reservation(stage: SwitchStage) -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
-}
-
-/// `\![areka.prop.set,<key>,<値>]` の汎用キャリア cue。
-fn prop_set_cue(key: PersistKey, value: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("sakura"),
-        command: CueCommand::command_carrier(
-            areka_ghost::prop_sink::PROP_SET_CUE_NAME,
-            vec![key.to_canonical_key(), value.to_owned()],
-        ),
-        duration: 0.0,
-    }
-}
-
 #[test]
 fn every_write_kind_reaches_the_desk() {
     let mut rig = switch_rig(vec![(
@@ -168,15 +106,7 @@ fn every_write_kind_reaches_the_desk() {
         .join("master")
         .join("profile")
         .join("areka");
-    let publisher = rig
-        .world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("A の実行系が起きている")
-        .sylphya_publisher()
-        .clone();
+    let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
     writable(&app);
     writable(&ghost);
@@ -302,7 +232,10 @@ fn every_write_kind_reaches_the_desk() {
     judged.push(("窓の位置", PersistScope::Ghost, window_x, got));
 
     let got = posted(world, &publisher, |_| {
-        PropSetCueSink::new(publisher.clone()).emit(prop_set_cue(PersistKey::BootCount, "7"));
+        PropSetCueSink::new(publisher.clone()).emit(carrier_cue(
+            PROP_SET_CUE_NAME,
+            &[&PersistKey::BootCount.to_canonical_key(), "7"],
+        ));
     });
     judged.push((
         "ゴーストのプロパティ",
@@ -409,6 +342,5 @@ fn every_write_kind_reaches_the_desk() {
     kinds.dedup();
     let mut table = KINDS.to_vec();
     table.sort_unstable();
-    assert_eq!(kinds, table, "判定した種類が要件 1 の表と合わない");
-    assert_eq!(kinds.len(), 13);
+    assert_eq!(kinds, table, "判定した種類が表と合わない");
 }

@@ -5,17 +5,12 @@
 // （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
 
 mod boot {
-    use crate::session_tests::resolve_boot_from;
+    use crate::session_tests::{no_pick, resolve_boot_from};
     use areka_session::alert::AlertScene;
     use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
     use log_capture_kit::capture;
     use std::path::Path;
     use temp_path_kit::TempPath;
-
-    /// 呼ばれない添字（この檻の入力では無作為の段へ届かない）。
-    fn no_pick(n: usize) -> usize {
-        panic!("無作為の段へ届いてはならない（候補 {n}）")
-    }
 
     fn args(rest: &[&Path]) -> Vec<String> {
         std::iter::once("areka.exe".to_owned())
@@ -146,7 +141,7 @@ mod boot {
 // それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
 
 mod switch_balloon {
-    use crate::session_tests::resolve_boot_from;
+    use crate::session_tests::{no_pick, put_ghost, resolve_boot_from, save_scope};
     use areka_session::boot_config::resolve_balloon_for_ghost;
     use areka_session::boot_resolve::{
         BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark,
@@ -155,11 +150,6 @@ mod switch_balloon {
     use log_capture_kit::capture;
     use std::path::{Path, PathBuf};
     use temp_path_kit::TempPath;
-
-    /// 呼ばれない添字（候補に既定のバルーンを置くので無作為の段へ届かない）。
-    fn no_pick(n: usize) -> usize {
-        panic!("無作為の段へ届いてはならない（候補 {n}）")
-    }
 
     /// 根にゴースト `g1` とバルーン 3 つ（既定・b1・b2）を組み、ゴーストのフォルダを返す。
     fn fixture(tmp: &TempPath) -> PathBuf {
@@ -249,25 +239,9 @@ mod switch_balloon {
 
     /// 根にゴースト `g1` と既定ゴーストを置き、最後のゴーストの記憶を `g1` にする。
     fn two_ghosts_remembering_g1(tmp: &TempPath, app_dir: &Path) {
-        use areka_sylphya::persist::FsPersistIo;
-        use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
         fixture(tmp);
-        let master = tmp
-            .child("ghost")
-            .join(DEFAULT_GHOST_FOLDER)
-            .join("ghost")
-            .join("master");
-        std::fs::create_dir_all(&master).expect("フォルダを組む");
-        std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-        save_scope(
-            PersistScope::App,
-            &ScopeRoots {
-                app: Some(app_dir.to_path_buf()),
-                ..ScopeRoots::default()
-            },
-            &FsPersistIo,
-            vec![(PersistKey::LastGhost, "g1".to_owned())],
-        );
+        put_ghost(&tmp.child("ghost").join(DEFAULT_GHOST_FOLDER));
+        save_scope(app_dir, "g1");
     }
 
     /// 印が在れば: `info!(session_mark_found)` の上で最後のゴーストの記憶を読まずに

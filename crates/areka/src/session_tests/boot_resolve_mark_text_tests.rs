@@ -8,18 +8,16 @@
 //! は UI スレッドの汲み出しの系が出すので、捕まえる閉包の中で `Update` の段を回す）。
 //! 根・検体はワークツリーの `target\` の下だけ。
 
-use std::path::Path;
-
 use areka_sylphya::SylphyaPublisher;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::{FrameTime, Update};
 
+use super::{publisher_of, unwritable, writable};
 use crate::sample_test_support::switch_rig;
 use areka_session::app_exit::FirstExit;
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::*;
-use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// `event` の記録（`event` 欄で引く）。
@@ -35,22 +33,6 @@ fn one_message(events: &[CapturedEvent], event: &str) -> String {
     let hits = events_named(events, event);
     assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
     hits[0].message().to_owned()
-}
-
-/// 置き場を普通のファイルに替える（書けない）。
-fn unwritable(dir: &Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
-/// 置き場をフォルダへ戻す（書ける）。
-fn writable(dir: &Path) {
-    if dir.is_file() {
-        std::fs::remove_file(dir).expect("置き場の位置のファイルを外す");
-    }
-    std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
 }
 
 /// 書き込みの場所を呼び、反映の柵の後に本番の `Update` の段（致命の机の汲み出し）を 1 回回す。
@@ -88,15 +70,7 @@ fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
         .join("master")
         .join("profile")
         .join("areka");
-    let publisher = rig
-        .world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("A の実行系が起きている")
-        .sylphya_publisher()
-        .clone();
+    let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
     {
         // argv でない決め方（最後に使ったものを 3 つとも書く）。

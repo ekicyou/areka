@@ -3,7 +3,7 @@
 //! 確かめること: 既定ゴーストと既定バルーンの採用・0 体の失敗が各根の格納フォルダを持つこと。
 //! 1 ゴースト分のバルーンの口と起動中の印の名前は `areka-session` の側が見る。根は `TempPath::under_target`。
 
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{no_pick, resolve_boot_from};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::alert::AlertScene;
 use areka_session::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER, GhostRoute};
@@ -11,10 +11,6 @@ use areka_session::roots::{ResolvedRoots, RootStatus, RootsOrigin};
 use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 /// 上の根 `top` と下の根 `low`（どちらも `ghost\`・`balloon\` を持つ）。
 fn two_roots(tmp: &TempPath) -> (PathBuf, PathBuf, BasewareRoots) {

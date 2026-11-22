@@ -5,15 +5,11 @@
 //! ときの既定ゴーストも口を通る」「口を通るのはゴーストの 1 回だけ（表示するだけのバルーンは写さない）」。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{no_pick, resolve_boot_from};
 use areka_session::boot_resolve::{BalloonRoute, GhostRoute, write_session_mark};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 thread_local! {
     /// 口が受け取ったフォルダ（呼ばれた順）。

@@ -3,7 +3,7 @@
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{no_pick, put_ghost, resolve_boot_from, save_scope};
 use areka_session::boot_config::BootResolved;
 use areka_session::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
@@ -12,24 +12,12 @@ use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
-
 fn first(_n: usize) -> usize {
     0
 }
 
-fn put_ghost(dir: &Path) {
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-}
-
 /// 根にゴースト `g1` と既定ゴースト、バルーン（既定・`b1`）を置き、最後のゴーストの記憶を `g1` にする。
 fn fixture(label: &str) -> TempPath {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = TempPath::under_target(label);
     for g in ["g1", DEFAULT_GHOST_FOLDER] {
         put_ghost(&tmp.child("ghost").join(g));
@@ -39,15 +27,7 @@ fn fixture(label: &str) -> TempPath {
         std::fs::create_dir_all(&dir).expect("フォルダを組む");
         std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
     }
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(tmp.child("app-profile")),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, "g1".to_owned())],
-    );
+    save_scope(&tmp.child("app-profile"), "g1");
     tmp
 }
 
@@ -300,19 +280,9 @@ fn absolute_path_not_a_ghost_folder_falls_back_to_usual() {
 /// 次の起動で一時の置き場が無く、記憶が一時の置き場のゴーストを指す: 見つからないを記録して次の段へ。
 #[test]
 fn next_boot_does_not_find_the_temporary_ghost_in_memory() {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = fixture("cfg-opt-ghost-next-boot");
     put_ghost(&tmp.child("ext").join("dev"));
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(tmp.child("app-profile")),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, "dev".to_owned())],
-    );
+    save_scope(&tmp.child("app-profile"), "dev");
     let (got, events) = capture(|| boot(&tmp, &[], no_pick));
     assert_eq!(got.1.route, GhostRoute::Default);
     assert_eq!(got.4.roots.roots().len(), 1, "一時の置き場は残らない");

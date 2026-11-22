@@ -4,16 +4,11 @@
 //! 「引数なしの起動で記録が 1 件」「引数の腕は読まないこと」「引数のゴーストの中の `balloon\` も数えること」だけ。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{no_pick, resolve_boot_from};
 use areka_session::boot_resolve::{BalloonRoute, DEFAULT_BALLOON_FOLDER};
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
-
-/// 呼ばれない添字（候補に既定のバルーンを置くので無作為の段へ届かない）。
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 /// 根にゴースト `g1`（descript.txt に `extra` を足す）と、バルーン（フォルダ名と `name`）を組む。
 /// 既定のバルーン（[`DEFAULT_BALLOON_FOLDER`]）はいつも置く。ゴーストのフォルダを返す。

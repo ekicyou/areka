@@ -188,7 +188,7 @@
   - _Requirements: 3.1, 3.3, 3.4, 4.4, 6.1, 7.6_
 
 - [ ] 13. 本体の `session_tests` の写しを 1 つずつにする（G13）
-- [ ] 13.1 行列と記憶の補助を `session_tests/mod.rs` に置き、合図の組み立てを共通の口へ寄せる（指摘 34・37・38・90・5.13）
+- [x] 13.1 行列と記憶の補助を `session_tests/mod.rs` に置き、合図の組み立てを共通の口へ寄せる（指摘 34・37・38・90・5.13）
   - `session_tests/mod.rs` に写しの補助（`tree`・`read_back`・記憶の書き手の取り出し・`unwritable`／`writable`・`routes`・送り出しの段の予約・`put_memory`・`save_scope`・`put_ghost`・`no_pick`）を `pub(crate)` で 1 つずつ置き、各テストの写しを消す。54-55 を `mod write_failure_sites_tests;` に
   - `readonly_run_tests.rs`・`readonly_sites_tests.rs`・`write_failure_sites_tests.rs` の `prop_set_cue` の写し 3 つを `carrier_cue(PROP_SET_CUE_NAME, &[&key.to_canonical_key(), value])` に。`drain_desk` を消し `drain_system` を直に。413 の `kinds.len() == 13` と 504・412 の要件の表を消す
   - 完了の姿: 既存の行列のテストが同じ表明のまま緑で、`git grep -n "fn prop_set_cue\|fn drain_desk"` が 0 件

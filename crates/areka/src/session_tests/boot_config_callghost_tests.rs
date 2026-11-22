@@ -3,28 +3,17 @@
 //! 起動の解決の中身 `resolve_boot_with` に callghost の相手（入れたゴーストのフォルダ名）を渡し、
 //! 経路・場所・起動中の印の値を見る。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
+use crate::session_tests::{no_pick, put_ghost, save_scope};
 use areka_session::alert::AlertScene;
 use areka_session::boot_config::{BootResolved, resolve_boot_with};
 use areka_session::boot_resolve::{
     DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use temp_path_kit::TempPath;
-
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
-
-fn put_ghost(dir: &Path) {
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-}
 
 /// 根にバルーン（既定）と `ghosts` のゴーストを置き、最後のゴーストの記憶を `g1` にする。
 fn fixture(label: &str, ghosts: &[&str]) -> TempPath {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = TempPath::under_target(label);
     std::fs::create_dir_all(tmp.child("ghost")).expect("ゴーストの置き場");
     for g in ghosts {
@@ -33,15 +22,7 @@ fn fixture(label: &str, ghosts: &[&str]) -> TempPath {
     let balloon = tmp.child("balloon").join(DEFAULT_BALLOON_FOLDER);
     std::fs::create_dir_all(&balloon).expect("フォルダを組む");
     std::fs::write(balloon.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(tmp.child("app-profile")),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, "g1".to_owned())],
-    );
+    save_scope(&tmp.child("app-profile"), "g1");
     tmp
 }
 
