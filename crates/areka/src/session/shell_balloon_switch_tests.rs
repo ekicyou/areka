@@ -284,6 +284,7 @@ fn refuse(rig: &mut Rig, request: SkinRequest, event: &str) -> (SkinVerdict, usi
 #[test]
 fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     let mut rig = rig("areka-skin-entry-refusals");
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     plant_marker(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     insert_running_desk_for_test(&mut rig.world);

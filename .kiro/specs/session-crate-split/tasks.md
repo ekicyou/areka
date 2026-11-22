@@ -22,7 +22,7 @@
   - _Dispatch: standard — 実機の窓の位置とメニューの並びを見て手順を組む_
   - _Requirements: 8.7, 2.5_
 
-- [ ] 2. 本体の中で呼び出しの向きを逆にする（まだ crate を作らない）
+- [x] 2. 本体の中で呼び出しの向きを逆にする（まだ crate を作らない）
 - [x] 2.1 口の束を新しいファイルへ出し、据え付けと倒れ方を作り、窓の直後と実行系の後の呼び出しを口へ通す
   - `BodySystems` を集めた層の新しいファイル `body_systems.rs` へ移して `Resource`・`Clone`・`Copy` にし、窓の直後の 2 欄（`after_char_pointer`・`after_balloon_pointer`）と実行系の後の 1 欄（`after_runtime_wired`）を足す。`of`（無ければ `#[cfg(not(test))]` で `error!(event = "body_systems_missing")`）と `NO_BODY` を設計の形で作る
   - `register_systems` の先頭の口の据え付け 2 行の直後で束を World の資源として 1 回据える。`menu_poll`・`after_input` の呼び方と登録の順は変えない
@@ -55,7 +55,7 @@
   - 3 本が緑で、口の呼び出しを 1 行入れ替えると赤になることを一時の書き換えで確かめた結果を記録する（書き換えはコミットしない）
   - _Dispatch: standard — 記録の偽物と表明を新しく書く_
   - _Requirements: 2.1, 2.2, 5.5, 1.5_
-- [ ] 2.5 段 1 を締める: 効き目を失ったテストを据え、本番 0 行を数える
+- [x] 2.5 段 1 を締める: 効き目を失ったテストを据え、本番 0 行を数える
   - 本体の bin のテストを回し、本体の効き目が無くなって赤になったテストにだけ、World を組んだ直後の `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足す（表明は変えない）。足したテストを一覧に記録し、そのうち `session/` の下のファイルにあるものに印を付ける（集めた層は `crate::BODY_SYSTEMS` を名指せないので、3.2・3.4 で本体へ移すか、`NO_BODY` に替えて理由を記録する）
   - 設計の Verification の 1.10 の式で、`session/` の本番のファイルのコードの行が本体の項目を名指す数を数え、本番 0 行を示す。テストだけに残る参照を一覧で記録する
   - 本体の bin のテストが緑で、1.10 の数と 2 つの一覧が検証の記録に書かれている

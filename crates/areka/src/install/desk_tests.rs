@@ -382,6 +382,7 @@ fn resend_waits_for_a_steady_arrival_after_the_last_send() {
 #[test]
 fn resend_goes_at_once_when_steady_arrived_since_the_last_send() {
     let mut rig = Rig::new();
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     let kanade = rig.put_ghost("ghost/A".into());
 
     let _first = rig.ask_raise("OnInstallBegin", false);
@@ -550,6 +551,7 @@ fn a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady
     let tmp = TempPath::new("desk-overwrite-cancelled");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     rig.world.insert_resource(boot_context(&root, "A"));
     let kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));

@@ -180,6 +180,7 @@ fn refuse(
 #[test]
 fn refusals_in_order_leave_one_record_each() {
     let mut rig = rig("areka-reload-refusals");
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     plant_reload(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     plant_skin_switch(&mut rig.world, SkinKind::Shell, Path::new("planted"));

@@ -555,6 +555,7 @@ fn update_current_submits_the_current_three_as_manual() {
 fn steady_notice_sends_one_homeurl_query_each_time() {
     let root = Root::new("areka-update-steady-notice");
     let (mut world, kanade) = world(&root, "bare", "plain");
+    world.insert_resource(crate::BODY_SYSTEMS);
     on_notice(&mut world, KanadeNotice::Steady);
     let first = queries(&kanade);
     assert_eq!(first.len(), 1);

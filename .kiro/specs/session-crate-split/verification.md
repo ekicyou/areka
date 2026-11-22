@@ -544,3 +544,65 @@ Note 'done'
 - `cargo test -p areka --bin areka`: 1835 通過・5 赤・3 無視。赤は 2.1〜2.3 から持ち越しの 5 本（`install::desk::tests::resend_goes_at_once_when_steady_arrived_since_the_last_send`・`install::desk::tests::a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady`・`update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time`・`session::reload::tests::refusals_in_order_leave_one_record_each`・`session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing`。2.5 で直す）だけで、増えていない。
 - 各テストの頭で `reset()` が `PROBE` を既定へ戻し、記録を捨て、`UPDATE_BUSY`・`INSTALL_BUSY` を偽へ戻す（同じスレッドで順に走ったとき、前のテストの印の読み手が `Schedules` の無い World で落ちないように）。`cargo test -p areka --bin areka body_systems -- --test-threads 1` と既定の並列の両方で 3 本緑。
 - `cargo check -p areka --bin areka --tests` 警告 0・`cargo clippy -p areka --bin areka --tests` で新しいファイルへの指摘 0・`cargo fmt --all -- --check` 差分なし。
+
+### 2.5
+
+本体の効き目を失って赤になったテストに、World を組んだ直後（足場の `rig`・`world()` を作った次の行）の `insert_resource(crate::BODY_SYSTEMS);` の 1 行だけを足した（表明は変えていない）。2.1〜2.4 で渡された 5 本がそのまま赤で、ほかに増えていない。
+
+足したテスト（`session/` の下は ※。集めた層は最後に `crate::BODY_SYSTEMS` を名指せないので、3.2・3.4 で本体へ移すか、`NO_BODY` に替えて理由を記録する）:
+
+| テスト | ファイル:足した行 |
+|---|---|
+| `install::desk::tests::resend_goes_at_once_when_steady_arrived_since_the_last_send` | `crates/areka/src/install/desk_tests.rs:385` |
+| `install::desk::tests::a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady` | `crates/areka/src/install/desk_tests.rs:554` |
+| `update::desk::resolve_tests::steady_notice_sends_one_homeurl_query_each_time` | `crates/areka/src/update/desk_resolve_tests.rs:558` |
+| ※ `session::reload::tests::refusals_in_order_leave_one_record_each` | `crates/areka/src/session/reload_tests.rs:183` |
+| ※ `session::shell_balloon_switch::tests::refusals_in_order_leave_one_warning_each_and_send_nothing` | `crates/areka/src/session/shell_balloon_switch_tests.rs:287` |
+
+確かめ（2026-11-22）:
+
+- RED（足す前）: `cargo test -p areka --bin areka` が 1835 passed・5 failed・3 ignored（赤は上の 5 本）。
+- `cargo test -p areka --bin areka`: 1840 passed・0 failed・3 ignored。
+- `cargo check -p areka --bin areka --tests`: 警告 0。
+- `cargo fmt --all -- --check`: 差分なし。
+
+#### 1.10 の数
+
+式（設計の Verification の 1.10）を本番のファイル（`*_tests.rs`・`*test_support*.rs` を除く 36 本）にかけた:
+
+```
+git grep -nE "crate::(menu|install|update|file_drop|mcp|cli|offline_dump|roots|shiori_host|shiori_session|shiori_demo|reference_brain|thread_roles|tick_gate_config|png_image|perf_thread_report|smoke_exit|BODY_SYSTEMS|after_run|finish_after_run|boot_first_ghost|install_boot_context)\b|use crate::\{" -- crates/areka/src/session ':!*_tests.rs' ':!*test_support*'
+```
+
+当たりは 1 行（`boot_config.rs:209` の `&crate::cli::parse::parse(args).options.boot,`）で、`#[cfg(test)]` の `resolve_boot_from`（199 行の印から関数の終わりまで）の中。`//` の説明の行の当たりは 0。式が除く `#[cfg(test)]` の塊と `//` の行を除くと、**本番 0 行**。`crate::session::roots` は式に当たらない（`crate::roots` の前が `session::` のため）。
+
+`#[cfg(test)]` の塊と `//` の行を除く数え方は、行ごとに `#[cfg(test)]` の印の次の項目（複数行の署名は最初の `{` か `;` まで）を波括弧の深さで飛ばし、`//` で始まる行を飛ばす使い捨ての python で数えた（36 本・当たり 0 行。同じ数え方で `#[cfg(test)]` の中の当たりは上の 1 行）。
+
+#### テストだけに残る参照（50 行・21 ファイル）
+
+上の式をテストのファイル（`crates/areka/src/session/*_tests.rs`・`*test_support*`）にかけた結果（`git grep -c`）と、ほかに本番のファイルの `#[cfg(test)]` の中の 1 行:
+
+| ファイル | 行の数 | 名指す本体の項目 |
+|---|---|---|
+| `app_exit_escape_tests.rs` | 1 | `crate::BODY_SYSTEMS` |
+| `boot_config_callghost_tests.rs` | 1 | `crate::cli::parse` |
+| `boot_config_module_policy_tests.rs` | 1 | `crate::install_boot_context` |
+| `boot_resolve_mark_text_tests.rs` | 1 | `crate::install::desk::remember_balloon` |
+| `ghost_session_reload_tests.rs` | 2 | `crate::BODY_SYSTEMS` |
+| `ghost_session_restart_tests.rs` | 3 | `crate::menu`（`Frame` ほか・`register`）・`crate::BODY_SYSTEMS` |
+| `ghost_session_scope_rect_boot_tests.rs` | 2 | `crate::mcp::{install, drain}` |
+| `ghost_session_scope_scale_boot_tests.rs` | 3 | `crate::shiori_host::ShioriHostSink`・`crate::mcp::{install, drain}` |
+| `ghost_session_strict_tests.rs` | 1 | `crate::menu::MenuWiring` |
+| `ghost_session_switch_fallback_tests.rs` | 1 | `crate::after_run` |
+| `ghost_session_switch_memory_tests.rs` | 1 | `crate::after_run` |
+| `ghost_session_switch_tests.rs` | 1 | `crate::menu::{Frame, MenuWiring}` |
+| `ghost_switch_test_support.rs` | 1 | `crate::BODY_SYSTEMS`（`SwitchRig` の `register_systems`。3.1 で `body` に替える） |
+| `readonly_run_tests.rs` | 8 | `crate::after_run`・`crate::install`・`crate::update`・`crate::roots::add_root` |
+| `readonly_sites_tests.rs` | 4 | `crate::boot_first_ghost`・`crate::roots::add_root`・`crate::install::desk::remember_balloon` |
+| `reload_tests.rs` | 3 | `crate::install::desk`・`crate::update::desk`・※ `crate::BODY_SYSTEMS`（2.5 で足した行） |
+| `session_end_tests.rs` | 1 | `use crate::{after_run, finish_after_run}` |
+| `shell_balloon_switch_session_tests.rs` | 7 | `crate::menu`（`Frame`・`MenuAction`・`MenuContext` ほか） |
+| `shell_balloon_switch_session_update_tests.rs` | 2 | `crate::update::desk`・`crate::update` |
+| `shell_balloon_switch_tests.rs` | 2 | `crate::update::desk`・※ `crate::BODY_SYSTEMS`（2.5 で足した行） |
+| `write_failure_sites_tests.rs` | 4 | `crate::boot_first_ghost`・`crate::roots::add_root`・`crate::install::desk::remember_balloon` |
+| `boot_config.rs`（`#[cfg(test)] resolve_boot_from` の中） | 1 | `crate::cli::parse::parse` |
