@@ -363,13 +363,16 @@ fn ghost_b() -> FakeShiori {
     }))
 }
 
-/// A・B の土台（A に 2 つ目のシェル・B は起動記録あり・切替先の窓の準備の閉包の投函先つき）。
+/// A・B の土台（A に 2 つ目のシェル・B は起動記録あり・切替先の窓を準備する作業プールつき）。
 fn rig_ab(a: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig {
-    let lap = lap_rig_of(
+    let mut lap = lap_rig_of(
         vec![("A", FakeShiori::Scripted(Box::new(a))), ("B", ghost_b())],
         &[SECOND],
     );
     lap.rig.plant_boot_record("B");
+    lap.rig
+        .world
+        .insert_resource(WintfTaskPool::with_threads(1));
     lap
 }
 
@@ -389,9 +392,6 @@ fn welcomed_b(rig: &SwitchRig) -> bool {
 #[test]
 fn ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind() {
     let mut lap = rig_ab(|| standard_script(BOOT_TO_SECOND_PLAIN));
-    lap.rig
-        .world
-        .insert_resource(WintfTaskPool::with_threads(1));
     let steady = lap.rig.wait_steady();
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
@@ -476,9 +476,6 @@ fn ghost_switch_after_a_shell_swap_unloads_the_session() {
             Ok(Some(r"\0\_w[3000]\![change,ghost,B]\e".to_owned())),
         )
     });
-    lap.rig
-        .world
-        .insert_resource(WintfTaskPool::with_threads(1));
     let steady = lap.rig.wait_steady();
 
     // 応答の台本の `\_w[3000]` の間に差し替えの完了を見る。

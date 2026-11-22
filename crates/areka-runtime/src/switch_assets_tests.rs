@@ -4,6 +4,7 @@
 //! - 背景のスレッドが COM（MTA）の上で名前の先のシェル・バルーンの資産を作って線で返すこと
 //! - 読めないフォルダ・復号できない画像で失敗の型が返り、`switch_assets_failed` の `error!` が 1 件
 //! - スレッドが倒れたら、受け手に「送り手が落ちた」が見えること
+//! - 背景のスレッドが暗黙の MTA に乗らず、自分で MTA に入ること（走る順に左右されない）
 
 use std::sync::mpsc::RecvError;
 
@@ -315,5 +316,43 @@ fn worker_panic_is_seen_as_sender_gone() {
         rx.recv().err(),
         Some(RecvError),
         "倒れたスレッドは結果を送らず、受け手は送り手が落ちたことを見る"
+    );
+}
+
+/// 背景のスレッドは自分で MTA に入る: 閉包の中のアパートが明示の MTA でなければ（同じプロセスの
+/// 別スレッドが立てた MTA に暗黙で乗っただけ・未初期化）閉包が倒れて受け手は送り手の切断を見る。
+/// このスレッドが MTA を立てておくので、背景のスレッドが初期化しなければ暗黙の MTA に居て赤。
+#[test]
+fn worker_enters_the_mta_itself_instead_of_riding_an_implicit_one() {
+    use windows::Win32::System::Com::{
+        APTTYPE, APTTYPE_MTA, APTTYPEQUALIFIER, APTTYPEQUALIFIER_NONE, CoGetApartmentType,
+        CoUninitialize,
+    };
+
+    // SAFETY: このテストのスレッドを MTA に入れる。成功したときだけ最後に対で解く。
+    let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    let rx = spawn_build_worker(|| {
+        let mut kind = APTTYPE::default();
+        let mut qualifier = APTTYPEQUALIFIER::default();
+        // SAFETY: 出力先は生きている局所変数。
+        let got = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) };
+        assert_eq!(
+            (got.map_err(|e| e.code()), kind, qualifier),
+            (Ok(()), APTTYPE_MTA, APTTYPEQUALIFIER_NONE),
+            "背景のスレッドが自分で MTA に入っていない"
+        );
+        Err(SwitchBuildError::ShellUndecodable {
+            shell_dir: PathBuf::new(),
+            failures: Vec::new(),
+        })
+    });
+    let received = rx.recv();
+    if com.is_ok() {
+        // SAFETY: 上の初期化が成功したときだけ対にして解く。
+        unsafe { CoUninitialize() };
+    }
+    assert!(
+        matches!(received, Ok(Err(SwitchBuildError::ShellUndecodable { .. }))),
+        "閉包が倒れずに結果が届く"
     );
 }

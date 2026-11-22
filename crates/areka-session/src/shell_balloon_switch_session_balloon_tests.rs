@@ -12,9 +12,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
 use wintf::ecs::Arrangement;
 
-use super::GhostSlot;
 use super::shell_balloon_switch_session_lap_tests::{
-    CREEP, LookLog, abs, calls_a, done_marks, got, idle, kinds, lap_rig, look_of, refs_of,
+    CREEP, LookLog, abs, calls_a, done_marks, fence, got, idle, kinds, lap_rig, look_of, refs_of,
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
@@ -163,13 +162,7 @@ fn external_transitions(events: &[CapturedEvent]) -> usize {
 
 /// 置き場のゴーストの記憶の書き手へ柵を掛けてから、A の `LastBalloon` を実 fs から読む。
 fn last_balloon(rig: &SwitchRig) -> Option<String> {
-    let fenced = rig
-        .world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.runtime())
-        .is_some_and(|runtime| runtime.sylphya_publisher().barrier().is_ok());
-    assert!(fenced, "記憶の書き手へ柵を掛けられない");
+    fence(rig);
     read_last_balloon(&rig.root.ghost_dir("A"))
 }
 

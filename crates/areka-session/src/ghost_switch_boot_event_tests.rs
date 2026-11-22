@@ -135,6 +135,7 @@ fn a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today
 
     let (flow, events) = capture(|| switch_to_a(&mut rig, None, a_rebooted));
     let calls = rig.calls("A");
+    assert!(!rig.exit_requested(), "終了しない: {events:?}");
     assert!(rig.shutdown());
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");

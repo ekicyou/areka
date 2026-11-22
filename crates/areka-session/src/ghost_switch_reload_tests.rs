@@ -30,13 +30,58 @@ fn a_script() -> FakeShiori {
 
 /// A を起こして定常に着かせる（起動記録を置く＝`OnFirstBoot` を飛ばす）。
 fn running_a() -> SwitchRig {
-    let mut rig = SwitchRig::new(vec![("A", a_script())]);
+    running_a_with(vec![("A", a_script())])
+}
+
+/// `scripts` で組んだ土台の上で A を起こして定常に着かせる（起動記録を置く）。
+fn running_a_with(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
+    let mut rig = SwitchRig::new(scripts);
     // 起こし直すときの窓の準備が閉包を投函する先。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.boot("A");
     assert!(rig.wait_steady(), "A が定常に着く");
     rig
+}
+
+/// ghost の読み直しを台本の出どころで頼む。
+fn reload_ghost(rig: &mut SwitchRig) -> ReloadVerdict {
+    request_reload(
+        &mut rig.world,
+        ReloadRequest {
+            target: ReloadTarget::Ghost,
+            origin: ReloadOrigin::Script,
+            notes: DescriptNotes::default(),
+        },
+    )
+}
+
+/// `folder` の次の起動の根を実在しない場所へ向けて、起こし直しを同期で失敗させる。
+fn break_boot(rig: &mut SwitchRig, folder: &'static str) {
+    use crate::ghost_session::GhostBootInputsSource;
+
+    let original = rig
+        .world
+        .remove_non_send::<GhostBootInputsSource>()
+        .expect("作り口が据わっている");
+    rig.world.insert_non_send(GhostBootInputsSource(Box::new(
+        move |cfg: &crate::boot_config::ConfigInputs, origin| {
+            let mut inputs = (original.0)(cfg, origin);
+            if cfg.ghost_root.ends_with(folder) {
+                inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
+            }
+            inputs
+        },
+    )));
+}
+
+/// `reload_failed` の理由（記録の順）。
+fn reload_reasons(events: &[CapturedEvent]) -> Vec<Option<String>> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reload_failed"))
+        .map(|e| e.field_str("reason").map(str::to_owned))
+        .collect()
 }
 
 /// A の 2 回目の起動が済み、切替の予約と読み直しの印が下りた（定常到達）。
@@ -72,14 +117,7 @@ fn a_ghost_reload_reboots_with_no_boot_notice_but_with_the_information_notices()
     let mut rig = running_a();
 
     let (flow, events) = capture(|| {
-        let verdict = request_reload(
-            &mut rig.world,
-            ReloadRequest {
-                target: ReloadTarget::Ghost,
-                origin: ReloadOrigin::Script,
-                notes: DescriptNotes::default(),
-            },
-        );
+        let verdict = reload_ghost(&mut rig);
         (verdict, rig.pump_talking_until(a_rebooted))
     });
     let calls = rig.calls("A");
@@ -135,6 +173,7 @@ fn a_switch_without_the_mark_boots_with_on_ghost_changed_as_before() {
         )
     });
     let calls = rig.calls("A");
+    assert!(!rig.exit_requested(), "終了しない: {events:?}");
     assert!(rig.shutdown());
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
@@ -165,18 +204,18 @@ fn a_foreign_switch_under_a_reload_mark_boots_as_before_and_drops_the_mark_as_ov
         )
     });
     let calls = rig.calls("A");
+    assert!(!rig.exit_requested(), "終了しない: {events:?}");
     assert!(rig.shutdown());
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     assert_eq!(calls.len(), 2, "{calls:?}");
     let new = kinds(&calls[1]);
     assert!(new.iter().any(|c| c == "GET OnGhostChanged"), "{new:?}");
-    let reasons: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_failed"))
-        .map(|e| e.field_str("reason").map(str::to_owned))
-        .collect();
-    assert_eq!(reasons, [Some("overtaken".to_owned())], "{events:?}");
+    assert_eq!(
+        reload_reasons(&events),
+        [Some("overtaken".to_owned())],
+        "{events:?}"
+    );
 }
 
 /// shiori の読み直しに応える A の台本（`OnDestroy` の NOTIFY に応える）。
@@ -184,16 +223,6 @@ fn a_shiori_script() -> FakeShiori {
     FakeShiori::Scripted(Box::new(|| {
         standard_script(r"\0A\e").notify("OnDestroy", Ok(()))
     }))
-}
-
-/// `scripts` で組んだ土台の上で A を起こして定常に着かせる（起動記録を置く）。
-fn running_a_with(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
-    let mut rig = SwitchRig::new(scripts);
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
-    rig.boot("A");
-    assert!(rig.wait_steady(), "A が定常に着く");
-    rig
 }
 
 /// 窓を閉じた回数（`close_windows_for_restart` が進める）。
@@ -345,7 +374,6 @@ fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
 #[test]
 fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
     use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
-    use crate::ghost_session::GhostBootInputsSource;
 
     let mut rig = running_a_with(vec![
         ("A", a_shiori_script()),
@@ -354,19 +382,7 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
             FakeShiori::Scripted(Box::new(|| standard_script(r"\0emo2\e"))),
         ),
     ]);
-    let original = rig
-        .world
-        .remove_non_send::<GhostBootInputsSource>()
-        .expect("作り口が据わっている");
-    rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::boot_config::ConfigInputs, origin| {
-            let mut inputs = (original.0)(cfg, origin);
-            if cfg.ghost_root.ends_with("A") {
-                inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
-            }
-            inputs
-        },
-    )));
+    break_boot(&mut rig, "A");
 
     let (flow, events) = capture(|| {
         let verdict = reload_shiori(&mut rig);
@@ -383,13 +399,8 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
 
     assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
     assert!(!exited, "既定へ戻って続く: {events:?}");
-    let reasons: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_failed"))
-        .map(|e| e.field_str("reason").map(str::to_owned))
-        .collect();
     assert_eq!(
-        reasons,
+        reload_reasons(&events),
         [Some("fell_back_to_default".to_owned())],
         "{events:?}"
     );
@@ -404,24 +415,13 @@ fn a_failed_shiori_rebuild_falls_back_to_the_default_ghost() {
 #[test]
 fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
     use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
-    use crate::ghost_session::GhostBootInputsSource;
 
     let mut rig = SwitchRig::new(vec![(DEFAULT_GHOST_FOLDER, a_shiori_script())]);
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record(DEFAULT_GHOST_FOLDER);
     rig.boot(DEFAULT_GHOST_FOLDER);
     assert!(rig.wait_steady(), "既定が定常に着く");
-    let original = rig
-        .world
-        .remove_non_send::<GhostBootInputsSource>()
-        .expect("作り口が据わっている");
-    rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::boot_config::ConfigInputs, origin| {
-            let mut inputs = (original.0)(cfg, origin);
-            inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
-            inputs
-        },
-    )));
+    break_boot(&mut rig, DEFAULT_GHOST_FOLDER);
 
     let (flow, events) = capture(|| {
         let verdict = reload_shiori(&mut rig);
@@ -439,13 +439,10 @@ fn a_failed_shiori_rebuild_of_the_default_ghost_is_fatal() {
     assert_eq!(loads, 2, "既定へ戻す 2 度目の試みが無い: {events:?}");
     assert_eq!(in_flight, (false, false), "予約と印は下りる: {events:?}");
     assert_eq!(count_event(&events, "ghost_switch_fatal"), 1, "{events:?}");
-    let reasons: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_failed"))
-        .filter_map(|e| e.field_str("reason").map(str::to_owned))
-        .collect();
     assert!(
-        reasons.iter().all(|r| r != "fell_back_to_default"),
+        reload_reasons(&events)
+            .iter()
+            .all(|r| r.as_deref() != Some("fell_back_to_default")),
         "既定へ戻す試みをしない: {events:?}"
     );
 }
@@ -521,14 +518,7 @@ fn carry_records(events: &[CapturedEvent]) -> usize {
 fn a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_not() {
     let mut rig = running_a();
     let (flow, events) = capture(|| {
-        let verdict = request_reload(
-            &mut rig.world,
-            ReloadRequest {
-                target: ReloadTarget::Ghost,
-                origin: ReloadOrigin::Script,
-                notes: DescriptNotes::default(),
-            },
-        );
+        let verdict = reload_ghost(&mut rig);
         (verdict, rig.pump_talking_until(a_rebooted))
     });
     let reloaded = carry_handed_over(&rig);
@@ -561,7 +551,6 @@ fn a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_
 #[test]
 fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
     use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
-    use crate::ghost_session::GhostBootInputsSource;
 
     let mut rig = running_a_with(vec![
         ("A", a_script()),
@@ -570,29 +559,10 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
             FakeShiori::Scripted(Box::new(|| standard_script(r"\0emo2\e"))),
         ),
     ]);
-    let original = rig
-        .world
-        .remove_non_send::<GhostBootInputsSource>()
-        .expect("作り口が据わっている");
-    rig.world.insert_non_send(GhostBootInputsSource(Box::new(
-        move |cfg: &crate::boot_config::ConfigInputs, origin| {
-            let mut inputs = (original.0)(cfg, origin);
-            if cfg.ghost_root.ends_with("A") {
-                inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
-            }
-            inputs
-        },
-    )));
+    break_boot(&mut rig, "A");
 
     let (flow, events) = capture(|| {
-        let verdict = request_reload(
-            &mut rig.world,
-            ReloadRequest {
-                target: ReloadTarget::Ghost,
-                origin: ReloadOrigin::Script,
-                notes: DescriptNotes::default(),
-            },
-        );
+        let verdict = reload_ghost(&mut rig);
         let done = rig.pump_talking_until(|rig| {
             rig.exit_requested()
                 || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
@@ -617,13 +587,8 @@ fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
         Some(false),
         "既定のゴーストの結線は控えを持たない: {events:?}"
     );
-    let reasons: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_failed"))
-        .map(|e| e.field_str("reason").map(str::to_owned))
-        .collect();
     assert_eq!(
-        reasons,
+        reload_reasons(&events),
         [Some("fell_back_to_default".to_owned())],
         "{events:?}"
     );
@@ -651,14 +616,7 @@ fn a_ghost_reload_keeps_the_ghost_inner_balloon_through_the_memory() {
     assert!(rig.wait_steady(), "A が定常に着く");
 
     let (flow, events) = capture(|| {
-        let verdict = request_reload(
-            &mut rig.world,
-            ReloadRequest {
-                target: ReloadTarget::Ghost,
-                origin: ReloadOrigin::Script,
-                notes: DescriptNotes::default(),
-            },
-        );
+        let verdict = reload_ghost(&mut rig);
         (verdict, rig.pump_talking_until(a_rebooted))
     });
     let balloon = rig

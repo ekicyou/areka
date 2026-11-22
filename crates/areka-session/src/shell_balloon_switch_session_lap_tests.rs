@@ -138,8 +138,8 @@ fn sizes(of: [(i32, i32); 2]) -> Vec<Option<(i32, i32)>> {
     of.iter().copied().map(Some).collect()
 }
 
-/// 置き場のゴーストの記憶の書き手へ柵を掛けてから、A の `LastShell` を実 fs から読む。
-pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
+/// 置き場のゴーストの記憶の書き手へ柵を掛ける（書き終えた記憶を実 fs から読めるようにする）。
+pub(super) fn fence(rig: &SwitchRig) {
     let fenced = rig
         .world
         .get_non_send::<GhostSlot>()
@@ -147,6 +147,11 @@ pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
         .and_then(|session| session.runtime())
         .is_some_and(|runtime| runtime.sylphya_publisher().barrier().is_ok());
     assert!(fenced, "記憶の書き手へ柵を掛けられない");
+}
+
+/// 柵を掛けてから、A の `LastShell` を実 fs から読む。
+pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
+    fence(rig);
     read_last_shell(&rig.root.ghost_dir("A"))
 }
 

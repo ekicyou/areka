@@ -106,15 +106,7 @@ fn assert_one_record(events: &[CapturedEvent], rig: &SwitchRig, route: &str) {
 #[test]
 fn switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_descript_route() {
     let rig = running_a();
-    let descript = rig
-        .root
-        .ghost_dir("B")
-        .join("ghost")
-        .join("master")
-        .join("descript.txt");
-    let text = std::fs::read_to_string(&descript).expect("B の descript.txt");
-    std::fs::write(&descript, format!("{text}\r\nballoon,{SECOND_NAME}\r\n"))
-        .expect("B の descript.txt に balloon を足す");
+    name_balloon_in_b(&rig, SECOND_NAME);
 
     let (balloon, events, rig) = switch_to_b(rig);
 
