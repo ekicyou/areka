@@ -261,7 +261,7 @@
   - _Dispatch: mechanical — 直す行と方向を設計が名指す_
   - _Requirements: 5.21, 7.7, 7.10_
 
-- [ ] 20. 件の記録と申し送りを残す（G21・5.14・5.22・S7）
+- [x] 20. 件の記録と申し送りを残す（G21・5.14・5.22・S7）
   - `research.md` に新しい節を足し、預かった件 5.1〜5.22 と S1〜S8 の件ごとの出どころと直した所、`pub` 6 項目を残す理由（5.14）、較正の控え（壊し方と赤になったテストの名）、照合の控え、脳の削除がどちらの道になったかを書く
   - S7 を `audit-areka-install-update` へ返す件として、`audit-emo2-boot-switch` への 5 件（`headless_wiring` は指摘 40 と同じ直し方を添える）、覚え書き 2 件、`InProcHost` の `GetProperty` の件（完了のときの `/kiro-discovery` の候補）を書く。脳の削除で残したものがあれば、`audit-areka-install-update` の brief へ渡す文を用意する
   - ギャップ分析と討議で済んだ要件 1・2 の記録（指摘の一覧・数え直し・行の当て直し・確定の一覧・残す裁定 0 件・1 本のまま）が research.md と requirements.md にあることを確かめ、無いものがあれば足す

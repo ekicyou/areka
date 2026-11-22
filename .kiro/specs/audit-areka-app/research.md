@@ -438,3 +438,154 @@
 - S8（台本の読み直しの断り）: 読み直しの出どころは `ReloadOrigin::{Script, Mcp}` の 2 つだけで、メニューからの読み直しは無い。`audit-emo2-boot-switch` が切り替えの断りを「ゴーストの台本からの要求は止めない」と決めたのにそろえ、更新中・インストール中の断りを MCP の要求だけに当てる。重なりと `NoContext` の断りは変えない。
 - 議題 2: S1 の `boot_context_named` を足すと、`menu/ghost_frame_tests.rs:43` の写しは `temp` に `root.dir()` を渡して同じ値になるため、要件の議題 13 の「寄せない」の理由（形が合わない）が消えた。
 - 議題 6: spec は squash の PR 1 本で着地するため、兄弟と同時の着地はできない。こちらが先なら残りを兄弟の PR で消す。こちらの着地で C26 の `Cargo.toml` の席は空く。
+
+## 12. 件の記録と申し送り（実装の段・タスク 20）
+
+コミットは短い名で書く（`git log --oneline main..HEAD` で引ける）。タスク番号は tasks.md のもの、指摘の番号は 4 節のもの。
+
+### 12.1 預かった件 5.1〜5.22 の出どころと直した所
+
+| 件 | 出どころ（brief の節） | 直した所（タスク・コミット・ファイル） |
+|---|---|---|
+| 5.1 | 追記（`audit-sylphya-actor`） | タスク 1・`5f15daa65`。`areka-session/src/alert.rs`（直し方を出し分ける）・`areka-sylphya/src/persist/mod.rs`（`PersistFailureCause::Unusable`） |
+| 5.2 | `placement-crate-split` の件 1 | タスク 11.1・`5b1a09aa0`（指摘 43）、11.2・`6fd9b72ae`（指摘 20）。見張りを `log-capture-kit/tests/` の `sync_send_guard_test.rs`・`readonly_withhold_guard_test.rs` へ移し、自前の走査（`session_end_sync_send_tests.rs`・`readonly_body_tests.rs` の該当）を消した |
+| 5.3 | `audit-placement-core` の件 5 | タスク 15.1・`a9fc4510e`（指摘 47）。`ghost_session.rs`・`boot_seam.rs` の戻しの流れの説明を今の関数名に |
+| 5.4 | 同 件 8 | タスク 9.2・`62f582133`（指摘 51）。`boot_seam_restore_tests.rs` |
+| 5.5 | 同 件 10 | タスク 9.1・`35c7d0e9a`、9.2・`62f582133`、14.1・`b779f2f73`（指摘 32）。`SharedFakeIo` の写し 3 つを上流へ寄せた（`boot_resolve_tests.rs`・`boot_seam_persist_wiring_tests.rs`・`runtime_tests/frame/switch_finish_tests.rs`） |
+| 5.6 | `audit-emo2-boot-spine`・`audit-emo2-boot-frame` のオ | タスク 8.1・`2888b9931`（指摘 33）。旗の生産者の見張りの `code_only` の写し |
+| 5.7 | `audit-emo2-boot-frame` のコ | タスク 9.1・`35c7d0e9a`（`boot_resolve_tests.rs` から分けた `boot_resolve_last_used_tests.rs`）、9.2・`62f582133`（`boot_seam_persist_wiring_tests.rs`）（指摘 29）。`let _ = …join()` を `join_bounded(..).expect(..)` に |
+| 5.8 | 同 サ | タスク 14.1・`b779f2f73`（指摘 35）。`runtime_tests/spine.rs` の写しを上流へ。`capture_logs` だけは上流が `cfg(test)` でしか立たないので、理由つきの 3 行の写しを残した |
+| 5.9 | 同 シ | タスク 14.1・`b779f2f73`（指摘 36）。`menu/ghost_frame_tests.rs` を `boot_context_named` へ寄せた（S1 と同じ） |
+| 5.10 | `audit-areka-input-menu` の件 1・件 3 | タスク 15.1・`a9fc4510e`（指摘 48・`ghost_session.rs`）、15.2・`d46c22331`（指摘 49・50・`app_exit_escape_tests.rs`・`app_exit_tests.rs`） |
+| 5.11 | `session-module-gather` の件 2 | タスク 16・`fdd522395`（指摘 65）。`menu/mod.rs` の説明 |
+| 5.12 | 棚卸㊷ | タスク 17・`6fa97a0e8`（指摘 66）。`zorder_wiring_tests.rs` |
+| 5.13 | `dola-cue-test-builder` | タスク 13.1・`4103266aa`（指摘 34）。`prop_set_cue` の 3 か所を共通の口へ |
+| 5.14 | `session-crate-split` | 直さず `pub` のまま残す裁定（12.2）。コードの変更は 0 行 |
+| 5.15 | 同 | タスク 3.3・`ed73afec3`（指摘 77）。`BodySystems::of` を `pub fn` 1 つにし `installed_or_none` を消した（使われない `pub(crate)` は 0 件） |
+| 5.16 | 同 | タスク 8.2・`2a7075985`（指摘 16）。`reload_tests.rs` の 2 本を共通の足場へ |
+| 5.17 | 同・約束 ⑴ | タスク 3.3・`ed73afec3`。兄弟の決め（受け口はそろえない）に従い `body_systems.rs:60` の括弧の文だけ消した |
+| 5.18 | 同 | タスク 3.2・`960c87266`（指摘 12）。テストの exe の申告を本体の申告ファイルから読み、`tests.manifest` を消した |
+| 5.19 | `runtime-crate-split` | タスク 7・`944357be6`（指摘 8・9・10・11・88）。本体の `Cargo.toml` の依存の行と README |
+| 5.20 | Upstream（SHIORI の脳） | タスク 6.1・`276a6d86a`、6.2・`164aae666`（指摘 5・6・7・14）。残す道（12.5） |
+| 5.21 | 古い節 | 件 1＝タスク 18・`da3487d05`（指摘 31・`examples/emo-present/balloon.rs`）／件 8 の `collision-probe/fixture.rs`＝タスク 19・`f322a3128`／キ＝タスク 15.2・`d46c22331`（指摘 53・`boot_config.rs`）／件 2・3・4・7・9・ク は着手の時点で済み（2 節の grep） |
+| 5.22 | — | この節（タスク 20） |
+
+### 12.2 `pub` のまま残す 6 項目の理由（5.14・design.md「預かった件の片づけ」）
+
+対象は `GhostSession::seriko`・`GhostSession::loop_ticker`・`PreparedWindows::spawn`・`reload::drain`・`write_failure::drain_system`・`boot_seam::insert_persist_wiring` の 6 つ。
+
+- 範囲の外の使い手は、どれも本体のテストだけ（6 節 (2) の表）。本番の使い手は範囲の外に無い。
+- どれも `areka-session` の中の本番が使う（欄・登録・呼び出し）ので、`#[cfg]` で消せない。
+- 狭めるなら「test-support では `pub`・本番では `pub(crate)`」の 2 つの定義か、test-support の口の包みが要り、行が増える。`pub(crate)` の項目は `pub use` で出し直せない（E0364）。5.15 で 2 つの定義を 1 つに寄せた向きとも逆になる。
+- 行を増やして狭めるより `pub` のままが小さいので、裁定で残す（確定の議題 9）。これは「残す指摘」ではなく、指摘の一覧に載らない。残す指摘は 0 件のまま。
+
+### 12.3 兄弟から受けた件 S1〜S8
+
+| 件 | 出どころ | 直した所（タスク・コミット・ファイル） |
+|---|---|---|
+| S1 | `audit-areka-install-update` の依頼 A | タスク 12.1・`35af27e83`。`reload_test_support.rs` に `boot_context_named`。タスク 14.1・`b779f2f73` で `menu/ghost_frame_tests.rs` の写しを寄せた |
+| S2 | 同 依頼 B（向こうの 103） | タスク 5.1・`bb00c6ba5`。`alert.rs` の公開関数 `alerts_suppressed`。`with_smoke_suppresses_when_either_is_set` で縛った |
+| S3 | 同（向こうの 94） | タスク 5.1・`bb00c6ba5`。`alert.rs` の `ExeLocationUnavailable` の腕を欄を読まない形に。`alert_tests.rs` の `tried`・`origin` の構築は向こうの列挙の変更と同じコミットでしか直せない（確定の議題 3） |
+| S4 | 同 `log_history.rs` の `snapshot` | タスク 5.2・`a37a153e5`。`log_history.rs`（記録の列を `Arc` で持ち、深い複製を排他の外へ） |
+| S5 | 同（向こうの 31） | タスク 14.2・`90a07ca85`。`png_image_tests.rs` の `wic_decode_rgba` を `pub(crate)` に |
+| S6 | 同（向こうの 85） | タスク 14.2・`90a07ca85`。`mcp/sakurascript_log_tests.rs` の中身を `log_history_tests.rs` の 1 本（`kanade_emit_with_three_labels_drafts_as_script_records`）へ |
+| S7 | 同 `menu/roots_frame.rs` の根の印の決まり | この spec は触らない。向こうへ返す（12.6 の A） |
+| S8 | `audit-emo2-boot-switch` からの知らせ | タスク 5.3・`fdfa5c524`。`reload.rs`（更新中・インストール中の断りを MCP の要求だけに）・`reload_tests.rs` の `updating_and_installing_refuse_only_mcp_requests` |
+
+### 12.4 較正の控え（本番の行を壊して赤を見て戻した）
+
+壊し方 → 赤になったテスト。写し・寄せ・移し・注釈だけで本番の行を壊す余地の無いタスク（3.3・6.2・7・9.2・10.1・13・14.1・15〜19）は、既存のテストが同じ表明のまま緑であることで確かめた。
+
+| タスク | 壊し方 | 赤になったテスト |
+|---|---|---|
+| 1 | `alert.rs` の出し分けの腕を `MEMORY_WRITE_FIX` に戻す | `alert_memory_write_tests::unusable_file_gets_the_file_fix_line_and_the_others_keep_the_write_fix` |
+| 1 | `persist/mod.rs` の `read_existing` の `Err` を `Io` に戻す | `persist_unreadable_tests` の 3 本（`a_newer_format_version_is_kept_and_the_save_degrades`・`a_read_failure_keeps_the_file_and_the_save_degrades`・`a_broken_toml_is_kept_and_the_save_degrades`） |
+| 2 | `if false && canvas.exceeds_limit()` | `offline_dump::offline_dump_tests::a_canvas_wider_than_the_limit_fails_every_surface_with_one_error`・`failure_branches_test::a_canvas_wider_than_the_limit_writes_no_png_and_exits_two`（直す前は終了コード 0・PNG 2 枚） |
+| 3.1 | `inspect_err` の塊を外す | `main_winapp_log_tests::winapp_init_failure_is_logged` |
+| 3.2 | build.rs の `/MANIFEST:EMBED` を `/MANIFEST:NO` | `areka-session` のテストの exe が 0xc0000139 で起動できない |
+| 4 | `fallback_boot_origin_missing` の名を変える | `ghost_session_strict_tests::strict_boot_returns_err_without_falling_back` |
+| 5.1 | `with_smoke` の `||` を `&&` | `alert::alert_tests::with_smoke_suppresses_when_either_is_set` |
+| 5.2 | `pop_front` を `pop_back` | `over_cap_drops_only_the_oldest_of_that_kind_and_ids_continue` |
+| 5.3 | 直す前の本番 | `session_tests::reload_tests::updating_and_installing_refuse_only_mcp_requests`（台本の要求まで `Updating` で断られた） |
+| 6.1 | 問い手を `ghost/other` に替える | `ghost_session_scope_scale_boot_tests::mcp_and_ghost_paths_answer_the_same_scale` |
+| 8.1 | `areka-session/src/lib.rs` に `#[cfg(any())]` の関数で `tick_wake::mark(0)` を呼ぶ | `the_areka_table_lists_every_file_that_marks_the_wake` |
+| 8.2 | `trace!(reload_drain_no_wiring)` を `warn!` | `drain_hands_script_requests_to_the_desk` |
+| 8.2 | `prepare_ghost_windows` に窓を作る閉包を投げる | `prepare_spawns_no_window_until_commit` ほか 2 本 |
+| 9.1 | `last_used_folder_missing` の warn の塊を消す／書く側を強制 | `record_without_ghost_folder_warns_and_skips_app` |
+| 9.1 | `boot_seam.rs` の let-else を `unwrap_or_default` | `record_last_used_without_shell_folder_writes_nothing` |
+| 9.1 | commit で panic する `PanicIo` | `record_non_argv_writes_all_three`（`join_bounded` の expect で落ちる） |
+| 10.2 | `has_group` を元の `contains('0') && contains('1')` に戻す | `has_group_reads_only_the_groups_field`（実画面の 2 本は 21.2 で見る） |
+| 10.3 | `AREKA_USER_ROOT` の既定を外す | `common::areka_command_defaults_sit_under_cwd_and_callers_override` |
+| 11.1 | 許可表から tooltip の行を落とす | `production_sync_sends_match_the_allowed_table`・`adding_or_removing_one_call_in_a_copy_turns_red`・`dropping_any_one_row_flags_exactly_that_row` |
+| 11.1 | 見張りのファイルに走査語を逐語で書く／inline mod の判定を壊す | `the_guard_files_never_spell_the_sync_send_tokens`／`only_inline_test_modules_are_marked_as_inside` |
+| 11.2 | `readonly.rs` の `withhold_everything();` を 2 つに | `withhold_calls_match_the_allowed_table`・`dropping_any_one_row_flags_exactly_that_row`・`adding_or_removing_one_call_in_a_copy_turns_red` |
+| 12.1 | `session_mark.rs` の `Keep("run_failed")` を壊す | `session_mark::tests::session_mark_verdict_table` |
+| 12.2 | `ghost_session.rs` の `self.kanade = None;` を外す | `split_runtime_drops_the_sender_and_a_second_split_is_none` |
+| 14.2 | `log_history.rs` の `return Some(Kind::Script)` を `None`／欄の名 `"label"` を `"labels"` | `kanade_emit_with_three_labels_drafts_as_script_records` |
+
+縛れていない所（21.1 のかけ直しで見る）: 4 の `fallback_boot_wired_off`・`fallback_boot_failed` の event 欄（テストの入力で届かない）／5.2 の `snapshot` が古い順に返すこと。設計との差: 6.1 は問い手ごとの名 `probe.owner` を足した・2 のテストは 2 本に分けた・14.1 の `capture_logs` の上流は `cfg(test)` だけなので写しを残した。
+
+### 12.5 照合の控え（消す・名を変える前の `git grep -n`・`vendors/` 除く）と脳の削除の道
+
+| タスク | 照合した名 | 結果 |
+|---|---|---|
+| 3.2 | `tests.manifest` | build.rs と .kiro だけ。消した後は .kiro だけ |
+| 3.3 | `installed_or_none`・`tick_gate_from_env_value` | 定義のファイルだけ。消した後は 0 件 |
+| 6.2 | 脳の 8 本の名・`AREKA_SHIORI_DEMO`・mod 名 | 照合の表の既知のものだけ（兄弟の `mcp/get_property_tests.rs`・残した 2 ファイル・`Cargo.toml` の説明・`structure.md:352`・`roadmap-history.md`・`doc/roadmap-overview-2026-10-16.html:70`） |
+| 8.2 | 消したテスト名 | .kiro の文書だけ（兄弟の `audit-areka-install-update/brief.md:99` が旧名 `missing_body_systems_logs_and_answers_like_no_desk` を指す） |
+| 9.1 | `last_used::`・`mod last_used` | .kiro だけ |
+| 9.2 | `unique_temp_dir` | `areka-session` は 0 件。同名の別の補助が `areka-ghost`・`areka-parsers`・`areka-placement` に残る（定義のファイルの中だけ） |
+| 11.1 | 移したテスト名・`ALLOWED_SYNC_SENDS`・`session_end_sync_send_tests` | コードは `doc/COMPAT_ARCHITECTURE.md` §8 の 319 行だけ |
+| 11.2 | `withhold_everything_is_called_only_from_readonly`・`files_calling` | 旧テストは .kiro だけ。`files_calling` は残す `engage` の 2 本が使うので残した |
+| 12.1・12.2 | 移したテスト名 | §8 の行と .kiro だけ。`crates/areka` の旧名は 0 件 |
+| 13.1 | `fn prop_set_cue`・`fn drain_desk` | 0 件 |
+| 13.2 | 寄せた名 | `switch_tests` の外は `readonly_run_tests.rs:49` の `const A_TO_B` だけ（残した） |
+| 14.1・14.2 | `fn headless_wiring`（`areka-session`） | 0 件 |
+| 17 | `t_zwi0`・改めた旧名 | .kiro と `vendors/` の外は 0 件 |
+| 18 | `mock-shell`・`read_balloon_offset`・消した絵の名 | 経緯の文書と、直した `menu-thumbnail-preview/brief.md:19` だけ |
+| 19 | 「段 ③」 | `crates/` の下 0 件 |
+
+**脳の削除は「残す道」になった**（design.md「設計の段で決めた事項」3 の 3）。兄弟の `mcp/get_property_tests.rs` に `ShioriHostSink` の当たりが残ったため、タスク 6.2 は `shiori_host.rs`・`shiori_host_case_fold_tests.rs` の 2 つを `main.rs` の `#[cfg(test)] mod shiori_host;` として残し、`shiori-abi`・`windows-core` を dev の依存へ移した。それ以外の脳のファイル・デモの入口・`AREKA_SHIORI_DEMO` は消した。`areka-ghost/src/shiori_inproc.rs` では、旧い行番号 246-247 が指していた `ShioriHostSink` についての 3 行の doc コメントが消えた（`164aae666`。`InProcHost` の `GetProperty` の腕そのものは残る）ので、G は行番号でなく名で指す。残りを消す件は 12.6 の B で `audit-areka-install-update` へ渡す。
+
+### 12.6 申し送り
+
+| 記号 | 宛先 | 件 |
+|---|---|---|
+| A | `audit-areka-install-update`（S7） | 「書ける根の印の項目は外せない」「印があるとき実行ファイルの隣は先頭へ動かせない」の決まりが `menu/roots_frame.rs`（73-75・109 行）にしかなく、判断の `roots/edit.rs` の `decide_remove`・`decide_front` は受け付ける。`menu/` はこの spec が見直さない所、`roots/` は向こうの持ち物なので、決まりを `roots/edit.rs` に置くかは向こうで決める |
+| B | `audit-areka-install-update`（脳の残り） | 下の「渡す文」のとおり |
+| C | `audit-areka-install-update` | `brief.md:99` が旧テスト名 `missing_body_systems_logs_and_answers_like_no_desk` を指す。タスク 8.2 で消えたので、今の読み直しのテストの名に替える |
+| D | `audit-areka-install-update` | `alert_tests.rs` の `ExeLocationUnavailable` の構築の `tried`・`origin`（S3）。向こうが列挙の欄を減らすコミットで 2 行を消す（確定の議題 3） |
+| E1 | `audit-emo2-boot-switch` | `areka-runtime/src/move_cue_apply_move_sticky_tests.rs:200`・`:255`、`move_cue_place_tests.rs:321`・`:386` の `SharedFakeIo` の写しと `let _ = …join()` |
+| E2 | 同 | `headless_wiring` の写し（本体の `session_tests/shell_balloon_switch_tests.rs:78`）。指摘 40 と同じ直し方を添える＝自前の `headless_wiring` を消し、`areka_runtime::frame::shared_test_support::wiring().1` を据える 1 行にする（`reload_skin_tests.rs` はこの spec のタスク 14.2 で済み） |
+| E3 | 同 | `areka-session/src/ghost_switch.rs:522` の記録の文「今日どおり終わる」の経緯の語。ログの語なので読み手の確認が要る |
+| E4 | 同 | `areka-session/src/shell_balloon_switch.rs` の `accept_skin`。送れたかを確かめる前に組み立てを起こす |
+| F | 覚え書き（持ち主なし） | `areka-placement/src/persist_finalize_save_tests.rs:106` の `let _ = …join()`（書き手が落ちても気づかない）。`areka-emo-present/src/shell_target.rs:494` のログの文の「（R6.1）」（`boot_shell_tests.rs:192`・`shell_target_boxes_tests.rs:172` が字面で突き合わせるので、ログの語の決めと同時に直す） |
+| G | 開発者（完了のときの `/kiro-discovery` の候補） | `areka-ghost` の `InProcHost`（`shiori_inproc.rs`）が `GetProperty` を sylphya に委ねない件。名で指す |
+
+`audit-emo2-boot-switch` から 11-23 に受けた件 ウ〜タ のうち、この spec で済んだもの: ウ（`SharedFakeIo`・タスク 9.1・9.2・14.1）・カ（13.2）・ケ（兄弟が済ませた）・セ（14.2）・ソ（8.1）・タ（8.2）。残るキ・ク・シ・ス は tasks.md の Implementation Notes のとおりで、21.1 のかけ直しで範囲の中のものを見る。use の行がぶつかったら後から着地する側が合わせる。
+
+**`audit-areka-install-update` の brief へ渡す文（B・渡す文）**
+
+> `audit-areka-app` は SHIORI の試験用の脳を「残す道」で消した（`mcp/get_property_tests.rs` の `ShioriHostSink` の当たりが残っていたため）。この spec の PR が着地したあと、向こうは自分の PR で次を消すこと。
+> 1. `crates/areka/src/shiori_host.rs` と `crates/areka/src/shiori_host_case_fold_tests.rs`
+> 2. `crates/areka/src/main.rs` の `#[cfg(test)] mod shiori_host;`
+> 3. `crates/areka/Cargo.toml` の dev の `shiori-abi`・`windows-core` の行（`tests/embedded_icon_test.rs` は `windows::core::{HSTRING, PCWSTR}` を引くので `windows-core` は要らない）
+>
+> 先に `mcp/get_property_tests.rs:144-300` を `PropGetCueSink` の形に直し、`git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` の当たりが残す 2 ファイルと `main.rs` の mod 行だけになるのを確かめてから消す。`Cargo.lock` の本体の依存の列と `THIRD-PARTY-NOTICES.md`（`tools/test-all.ps1 -License`）の差も同じ PR で直す。この spec の着地で C26 の `Cargo.toml` の席は空くので、約束 ⑵ は破れない。あわせて、旧テスト名の件（C）と `alert_tests.rs` の欄の件（D）を直す。
+
+### 12.7 要件 1・2 の記録の所在（確かめた）
+
+| 要件 | 所在 | 結果 |
+|---|---|---|
+| 1.1〜1.3 | 1 節（やり方）・3 節（読んだ範囲） | 在る |
+| 1.4 | 4 節（97 件・組つき） | 在る |
+| 1.5 | 5 節（5.1〜5.21 の照合）と 12.1 | 在る |
+| 1.6 | 2 節（数え直し・要件の表と 1 行も違わない） | 在る |
+| 1.7 | 2 節（行番号の当て直しと「済み」の grep） | 在る |
+| 1.8 | 6 節（脳の判断の材料） | 在る |
+| 2.1 | `requirements.md`「要件の討議で確定したこと」（97 件全部を直す対象） | 在る |
+| 2.2・2.4 | `research.md` 1 節（SSP 互換・ukadoc の正典に関わる直しは 0 件）・10.1（指摘 2 の終了コード）・`design.md`「設計の段で決めた事項」1 | 在る |
+| 2.5 | 同（残すと裁定した指摘は 0 件）と 12.2 | 在る |
+| 2.6 | 同（議題 3・2 本目に切らず 1 本のまま） | 在る |
+
+足したものは無い（既にそろっていた）。
