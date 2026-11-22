@@ -49,7 +49,7 @@ fn position_grid(area: RectPx, dpi: i32) -> Vec<PointPx> {
 
 /// 完全に内側の矩形はクランプで動かず、`limit_correction` は `None`（無補正）を返す。
 #[test]
-fn t_bl1_inside_is_not_corrected() {
+fn inside_is_not_corrected() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
@@ -70,7 +70,7 @@ fn t_bl1_inside_is_not_corrected() {
 
 /// 4 辺いずれかにぴったり接している境界ケースも「はみ出していない」＝無補正。
 #[test]
-fn t_bl1b_flush_edges_are_not_corrected() {
+fn flush_edges_are_not_corrected() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
@@ -98,7 +98,7 @@ fn t_bl1b_flush_edges_are_not_corrected() {
 /// 左辺・右辺・上辺・下辺それぞれ単独のはみ出しを、該当軸だけ引き戻す。
 /// 反対側の軸は 1px も動かない（辺の取り違えを暴く）。
 #[test]
-fn t_bl2_single_edge_overflow_each_side() {
+fn single_edge_overflow_each_side() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
@@ -146,7 +146,7 @@ fn t_bl2_single_edge_overflow_each_side() {
 
 /// 2 辺同時のはみ出し（左上・右上・左下・右下）を 1 回で両軸とも収める。
 #[test]
-fn t_bl3_composite_corner_overflow() {
+fn composite_corner_overflow() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
@@ -196,7 +196,7 @@ fn t_bl3_composite_corner_overflow() {
 /// バルーンが作業領域より大きい軸では left／top 辺を一致させる（両端は同時に収まらない）。
 /// 幅だけ超過・高さだけ超過・両方超過の 3 通り、および右側から寄せた入力でも同じ結論。
 #[test]
-fn t_bl4_oversized_balloon_prefers_left_top() {
+fn oversized_balloon_prefers_left_top() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let wide = SizePx {
@@ -250,7 +250,7 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
 
 /// 縮退した作業領域（right < left・bottom < top＝解決不能寸）でも panic せず left/top 優先。
 #[test]
-fn t_bl4b_degenerate_area_prefers_left_top() {
+fn degenerate_area_prefers_left_top() {
     for dpi in DPIS {
         let degenerate = RectPx {
             left: px(400, dpi),
@@ -280,7 +280,7 @@ fn t_bl4b_degenerate_area_prefers_left_top() {
 
 /// クランプ結果を再度クランプしても不変（グリッド全走査・通常寸と超過寸の双方）。
 #[test]
-fn t_bl5_clamp_is_idempotent() {
+fn clamp_is_idempotent() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let oversized = SizePx {
@@ -308,7 +308,7 @@ fn t_bl5_clamp_is_idempotent() {
 
 /// 極端な座標・作業領域でもオーバーフロー panic せず、内包側へ落ちる。
 #[test]
-fn t_bl8_extreme_values_do_not_panic() {
+fn extreme_values_do_not_panic() {
     let wa = RectPx {
         left: -1_000,
         top: -1_000,
@@ -344,7 +344,7 @@ fn t_bl8_extreme_values_do_not_panic() {
 /// タグ文字列は実機サインオフの grep 判定語（手順書と 1:1）。
 /// **本体の定数とは独立に literal で置き**、勝手な変更を檻が止める。
 #[test]
-fn t_bl9_observation_tags_are_stable_literals() {
+fn observation_tags_are_stable_literals() {
     assert_eq!(BALLOON_LIMIT_CLAMP_TAG, "[balloon-limit] Clamp");
     assert_eq!(BALLOON_LIMIT_UNRESOLVED_TAG, "[balloon-limit] Unresolved");
     // 起動時関門の契機ラベルも手順書が `context="boot-gate"` で grep する（ほかの 2 つの関門の

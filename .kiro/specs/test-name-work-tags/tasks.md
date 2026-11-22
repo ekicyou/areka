@@ -39,7 +39,7 @@
   - _Dispatch: mechanical, effort medium — design の示す決まりでの注釈の言い直し（60 行余り）_
   - _Requirements: 2.1, 3.1, 4.1, 4.2, 4.4, 4.6, 4.7, 4.9, 4.10, 6.3_
 
-- [ ] 5. 設定と再配置のテストを改める（G4）
+- [x] 5. 設定と再配置のテストを改める（G4）
   - G4 の行を機械で置き換える。`config.rs` は `#[cfg(test)] mod tests` の中の名とテストを指すコメントだけを変え、`mod` の宣言と本番のコードは変えない
   - `doc/COMPAT_ARCHITECTURE.md` の 354・412 行の名だけを直し、412 行の「旧 `t_c3_char_n_prefix_adds_scope_n`」と「テスト T-C3」は残す。`session-crate-split` が先に着地して隣の行（353・355・411 行）が動いていたら、相手の行を採ってから置き換えを当て直す
   - `.kiro/specs/extra-character-windows/brief.md:133` の 3 本の名を直し、131 行の「テスト T-C3」は残す

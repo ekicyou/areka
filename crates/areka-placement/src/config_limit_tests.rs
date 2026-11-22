@@ -14,7 +14,7 @@ use crate::test_support::kv;
 /// `ScopeConfig::default()` の limit は正典既定＝有効。
 /// 水平配置モードの既定は `Side`＝現行の左右分岐と同一挙動。
 #[test]
-fn t_l1_scope_config_default_enables_limit_and_side_mode() {
+fn scope_config_default_enables_limit_and_side_mode() {
     let d = ScopeConfig::default();
     assert!(
         d.balloon_limit,
@@ -41,7 +41,7 @@ fn t_l1_scope_config_default_enables_limit_and_side_mode() {
 /// バルーン定義側からの反映は `build_placement_config` の外、`lib.rs` の `scale_then_merge` が呼ぶ
 /// 取得経路（`merge_scope_windowpositions`）が行う。
 #[test]
-fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
+fn build_placement_config_keeps_canonical_defaults_for_all_scopes() {
     // emo2 実測相当（scope0/1）＋ char2（scope は足さない）
     let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
     let shell = kv(&[
