@@ -757,7 +757,7 @@ impl EmoPresenter {
 - 書き手の待ちは、門で止める偽の `PersistIo` を単独の `spawn_sylphya` に差して作る。門はテストの中で必ず開く（前例 `areka-sylphya` の `actor_barrier_within_tests.rs`）。
 - 取得は偽の作り口で、門（`mpsc` の受信端）で止めて「取得の途中」を作る。時刻の長さには頼らない。
 - panic は偽物の中で起こす。human-panic のフックはテストでは入らない（`main.rs` だけが入れる）。crash-report-kit の初回の受け手は ACCESS_VIOLATION だけを拾うので、std の panic では動かない（research.md 10.1 の R10）。
-- 背景のスレッドの記録を見るテストは、`capture` の窓の中でスレッドを起こす（`spawn_actor` が dispatcher を持たせる・4 の短命のスレッドも同じく持たせる）。
+- 背景のスレッドの記録を見るテストは、`capture` の窓の中でスレッドを起こす（`spawn_actor` が dispatcher を持たせる・4 の短命のスレッドも同じく持たせる）。ただし 4 のテストは、スレッドの名を残す自前の受け手を `tracing::subscriber::with_default` で据えて、呼んだスレッドの記録と `roots-log` の記録を分けて見る（`capture` の記録はスレッドの名を持たない）。
 
 ### 回さないもの（要件 8）
 
