@@ -305,3 +305,61 @@
 設計の議題 4 件を推奨案で確定した（design.md の「設計の決めた事」）: ⑴ 群ごとのコミット（G0〜G8 の 9 タスク）⑵ 改名表だけをコミットし、名の一覧と置き換えの道具は `target/test-name-work-tags/` に置く ⑶ 式 4・5 の例外に、`extra-character-windows/brief.md:131` の歴史の文・`audit-areka-app/brief.md` の本体の 2 本の名・`roadmap.md` のこの spec の行・この spec の文書を訳つきで足す ⑷ `areka-runtime` の `zorder_wiring_tests.rs:18` の「（zwi05）」「（zwi08）」は番号だけを消す。
 
 あわせて、設計の検証（design-validation.md・GO）の 3 件は自明な直しとして design.md に入れた（§8 の隣り合う行の衝突の解き方・式 4・5 の `-I` と表の数の主張をやめること・群の閉じ方に式 4・5 を足すこと）。
+
+## 13. 着手のときの数え直し（G0・2026-11-22）
+
+- 測った木: `claude/kiro-start-test-name-work-tags-c34897` の HEAD `3829a00b`（`origin/main` の先頭 `7cb95c3e` を取り込み済み・`git fetch origin` の後に `HEAD..origin/main` は 0 本）。`00877299` から main に足された 2 本（#496・#497）は steering と roadmap の文書だけで、範囲のファイルに触らない。
+- 使い捨ての式: `target/test-name-work-tags/rename.py`（`build`・`apply <群>`・`refs <群>`）・`mklist.py`（名の一覧）・`sumrefs.py`（名指しの数え）。コミットしない。
+
+### 13.1 並走の相手と、範囲のファイルを触る別の spec
+
+| spec | 状態（`git worktree list`・`git branch -a`・`origin/main..<枝>` の差分） | 扱い |
+|---|---|---|
+| `session-crate-split` | 枝 `claude/kiro-start-session-crate-split-56c35d` が要件の討議まで（コードの差分 0）。main に着地していない | 取り込むものは無い |
+| `dola-cue-test-builder` | 枝 `claude/kiro-start-dola-cue-test-builder-294439` がタスクの生成と実装の 1 コミット（`crates/dola/README.md` だけ）。main に着地していない | 取り込むものは無い。`consumer_ledger_test_support.rs` はまだ動いていない |
+| `zorder-property`・`zorder-chain-residue`・`extra-character-windows` | `.kiro/specs/` に brief だけ。枝も作業の木も無い（`claude/areka-p0-zorder-scope-87951c` は 10-19 の完了 spec の古い枝） | 走っていない。後に回す群・ファイルは 0（要件 6.4） |
+
+### 13.2 札つきの名の数え（要件 2.4）
+
+- 式: `fn t_[a-z]+[0-9]+[a-z]?_[a-z]\w*\(` の定義（`crates/` の `git ls-files` の `.rs`）と、名で足す `t_zbc_the_table_covers_every_branch_with_executed_tests`・`t_zic_the_table_covers_every_branch_with_executed_tests`。除くファイル: 本体の `runtime_tests/zorder_wiring_tests.rs`・`zorder_branch_coverage_test_support.rs`。
+- 結果: **30 ファイル・284 本**（282＋2）。起票の後に足された札つきのテストは 0、`#[test]` が付かない定義は 0、C25 の相手の持ち物のファイルに在るものは 0、G1〜G6 の一覧に無いファイルで見つかったもの（場所で群を決めたもの）は 0。
+
+| 群 | 本数 | ファイルごとの本数 |
+|---|---|---|
+| G1 | 146 | `areka-placement`: `zorder_group_ledger_tests.rs` 23・`zorder_group_ledger_state_tests.rs` 21・`zorder_group_ledger_written_order_tests.rs` 10・`zorder_chain_compose_tests.rs` 17・`zorder_chain_compose_written_order_tests.rs` 5／`areka-runtime`: `zorder_cue_tests.rs` 16・`frame/zorder_descript_tests.rs` 19・`frame/zorder_drain_tests.rs` 11・`frame/zorder_drain_projection_tests.rs` 14・`frame/zorder_drain_written_order_tests.rs` 8／本体: `placement_tests/zorder_group_branch_coverage_tests.rs` 1・`zorder_inversion_branch_coverage_tests.rs` 1 |
+| G2 | 17 | `zorder_group_ledger_rebase_tests.rs` 9・`zorder_property_deferral_tests.rs` 8 |
+| G3 | 42 | `resolver_resolve_tests.rs` 15・`resolver_balloon_keyword_tests.rs` 12・`resolver_resolve_free_tests.rs` 6・`resolver_resolve_balloon_tests.rs` 6・`resolver_union_tests.rs` 3 |
+| G4 | 47 | `config.rs` 20・`config_limit_tests.rs` 2・`reseed_tests.rs` 14・`balloon_limit_tests.rs` 9・`source_tests.rs` 2 |
+| G5 | 12 | `spawn_cleanup_tests.rs` 6・`spawn_follow_pipeline_tests.rs` 3・`spawn_clickthrough_tests.rs` 3 |
+| G6 | 20 | `window_state_cue_tests.rs` 13・`zorder_wiring_tests.rs` 5・`frame_schedule_tests.rs` 2 |
+
+crate ごと: `areka-placement` 194・`areka-runtime` 88・`areka` 2。design.md の File Structure Plan の本数と 1 本も違わない。
+
+### 13.3 改名表を作るときの検査（要件 1.1〜1.6）
+
+- 改名表: `.kiro/specs/test-name-work-tags/rename-table.tsv`（見出し 1 行＋284 行・UTF-8・LF・群とファイルと古い名で並べた）。`new` は `old` から頭の `t_<英小文字と数字>_` を外した残り。
+- 古い名の重なり 0・同じファイルの他の `fn`／`const`／`static`／`struct`／`enum`／`mod`／`type`／`trait`／`union` の名とのぶつかり 0（語を足した行 0・要件 1.2）・予約語と数字で始まる名 0。札の式は `spine_`・`real_`・`row1_` に当たらない（要件 1.6）。
+- 検査が止まることの確かめ: 予約語の名簿へ `clone_reaches_the_same_receiver` を足して `build` を走らせると `BLOCKED: bad new name clone_reaches_the_same_receiver` で止まり、表のファイルを書かない。
+- 別のファイルで同じ名になる組（改めた名どうしと、既にある `#[test]` の名・要件 1.3）: **6 組**で、2.2 の ⑴〜⑹ と同じ組。ただし ⑶ `clone_reaches_the_same_receiver` は、2.2 の 2 ファイルのほかに本体の `crates/areka/src/session/readme/readme_cue_tests.rs:166` の札の無い既存のテスト（`session-module-gather`・#494 で今の道へ移ったもの）とも同じ名で、3 本になる。コンパイルは通り、要件 1.3 で許す形。名指しにファイルを添える対象（要件 4.11）は、この名の名指しが無いので増えない。
+
+### 13.4 改める前の名の一覧（要件 3.2）
+
+- `cargo test -p areka-placement -p areka-runtime -p areka --no-fail-fast -- --list` の `: test` の行を、テストの束（crate とターゲット）とモジュールのパスつきで `target/test-name-work-tags/tests-before.txt` に取った（コミットしない）。改める名を持つのはこの 3 crate だけなので、名の一覧はこの 3 crate に限った（`areka-emo-present` は注釈だけを直す）。
+- 本数: 全 3,967（`areka` 1,898・`areka-placement` 1,019・`areka-runtime` 1,050）。改名表の古い名 284 は一覧にちょうど 1 度ずつ在る。
+
+### 13.5 名指しの当たり（要件 4.6）
+
+`rename.py refs <群>`（歴史の場所・この spec の文書・本体の `runtime_tests/zorder_wiring_tests.rs` を除く `git ls-files` の全部へ、群の古い名の全体と、群の中で 1 本だけが持つ札の短い書き方を当てる）から `fn` の定義の行を除いた当たり:
+
+| 群 | 行数 | 場所 |
+|---|---|---|
+| G1 | 85 | 本体の 2 つの表 50・19、`zorder_group_ledger_tests.rs` 8・9・10・24・25・315・357・472、`zorder_group_ledger_written_order_tests.rs:167`、`zorder_group_ledger_state_tests.rs:20`、`frame/zorder_drain_projection_tests.rs` 522・531、`window_state_cue_tests.rs:324`、`zorder_cue_tests.rs:148`（`t_zcs4`）、`consumer_ledger_test_support.rs:28`、`doc/COMPAT_ARCHITECTURE.md:226` |
+| G2 | 18 | `zorder_property_deferral_tests.rs` 6・20・23・25・27・29・77・123・126・268・307・308・453・487、`zorder_group_ledger.rs:667`、`.kiro/specs/zorder-property/brief.md` 59・81・94 |
+| G3 | 2 | `resolver_balloon_keyword_tests.rs:54`、`doc/COMPAT_ARCHITECTURE.md:196` |
+| G4 | 3 | `doc/COMPAT_ARCHITECTURE.md` 354・412、`.kiro/specs/extra-character-windows/brief.md:133` |
+| G5 | 1 | `spawn_assembly_tests.rs:154` |
+| G6 | 1 | `frame_schedule_tests.rs:14` |
+
+- design.md の「名指しの見込み」に無かった当たりは `zorder_cue_tests.rs:148` の `t_zcs4`（G1 のファイルの中・2.4 には在る）の 1 行。G1 で直す。
+- steering（`roadmap.md` を含む）・ほかの未完了の spec の文書の当たりは 0（`roadmap.md` の `t_i4_` ほかは複数のテストが持つ札の例で、名指しの式に当たらない・決めた事 3）。
+- 式 4（札だけの短い書き方）の当たりは 24 行、式 5（大文字の作業番号）の当たりは `crates/` に 70 行で、2.4 の数えと同じ。

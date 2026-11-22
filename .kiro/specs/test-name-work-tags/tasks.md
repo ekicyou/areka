@@ -4,7 +4,7 @@
 
 各群の閉じ方（design.md System Flows）: ⑴ `refs <群>` の当たりが 0、あわせてその群のファイルへ最後の確かめの式 4・5 を当て、当たりが例外の表のものだけ ⑵ `cargo fmt --all` ⑶ `cargo check --workspace --all-targets` が警告 0 ⑷ 改めた crate の `cargo test -p <crate>` が前と同じ合否 ⑸ コミット。`refs` は steering と未完了の spec の文書にも当て、当たれば同じ群で直す。歴史の場所は置き換えの外なので書き換わらない。群の中でテストの合否か本数が変わったら、その群の中で直す。
 
-- [ ] 1. 着手の数え直しと改名表を作る（G0）
+- [x] 1. 着手の数え直しと改名表を作る（G0）
   - C25 の相手（`session-crate-split`・`dola-cue-test-builder`）が着地していれば main を取り込んでから数える
   - 範囲のファイルを触る別の spec（`zorder-property`・`zorder-chain-residue` ほか）が走っていないかを確かめ、走っていればそのファイルの群を後に回すことを記録する
   - 使い捨ての式（表を作る・群を置き換える・残る名指しを数える）を作業の木の `target/test-name-work-tags/` に置く（コミットしない）。表を作るときの検査（古い名の重なり・同じファイルの名とのぶつかり・予約語・同じ名の組）が崩れたら表を作らずに止まる
@@ -77,3 +77,9 @@
   - 完了の状態: 全体テストが緑で、`research.md` に式 1〜5 の結果・較正・名の一覧の比べ・触らない所・行数の記録が入ったコミットになっている
   - _Dispatch: mechanical — design が式と期待する数を示す確かめ_
   - _Requirements: 1.3, 2.3, 3.1, 3.2, 3.3, 3.4, 3.5, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1_
+
+## Implementation Notes
+
+- 使い捨ての式は `target/test-name-work-tags/rename.py`（build・apply・refs）。G1〜G6 はこれの apply と refs で置き換えと確かめをする
+- `tests-before.txt` は改名のある 3 crate（areka・areka-placement・areka-runtime）の `cargo test -p ... -- --list` で取った。タスク 9 の `tests-after.txt` も同じ 3 crate の同じコマンドで取る
+- `zorder_cue_tests.rs:148` の `t_zcs4` は design の見込みに無かった名指しで、G1 で直す
