@@ -1,6 +1,4 @@
 //! 自動 close の仕掛け（env ゲート付き・CI smoke）。
-//!
-//! `main.rs` の 1,000 行の上限のため外へ出した。
 
 use super::app_exit;
 use wintf::WinApp;
