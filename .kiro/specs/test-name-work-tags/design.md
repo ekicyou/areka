@@ -61,7 +61,7 @@
 
 ### Existing Architecture Analysis
 
-- テストの名に依る作りは 1 つだけ: 本体の `placement_tests/` の 2 つの表（`COVERAGE`）が、`crate_source!` で他の crate のテストのファイルを読み、表の名ごとに `"\n#[test]\nfn {name}("` の字面が在るかを `check_table` で照合する。表が読む札つきのファイルは 10 本（G1 の一覧）。
+- テストの名に依る作りは 1 つだけ: 本体の `placement_tests/` の 2 つの表（`COVERAGE`）が、`crate_source!` で他の crate のテストのファイルを読み、表の名ごとに `"\n#[test]\nfn {name}("` の字面が在るかを `check_table` で照合する。表が読む札つきのファイルは 10 本（G1 の一覧）。表の行の数・名の数は数えの主張にせず、`check_table` が緑であることだけを条件にする。
 - 名から一時フォルダやログの名を作る所・マクロで名を作る所・`#[ignore]`・`#[should_panic]`・スナップショットは、範囲のファイルに無い。`tools/`・`.github/`・nextest の設定に、名で絞る所は無い。
 - 古い名の全体 284 本は全体で重ならない。札を外した名は同じモジュールの中で何ともぶつからない。別のモジュールで同じ名になる組は 6 組（research.md 2.2 の ⑴〜⑹・要件 1.3 で許す）。
 
@@ -169,7 +169,7 @@ flowchart TB
 ```
 
 - 群の順は G1 を先頭に固定する（いちばん大きく、表の照合が効く所なので、置き換えの式の誤りを早く見つける）。G2〜G7 は互いに独立で、順を入れ替えてよい。1 つの作業の木で 1 群ずつ直列に進める。
-- 各群の閉じ方: ⑴ `refs` の当たりと、その群の札の短い書き方の当たりが 0 ⑵ `cargo fmt --all` ⑶ `cargo check --workspace --all-targets` が警告 0 ⑷ 改めた crate の `cargo test -p <crate>`（G1 は `areka-placement`・`areka-runtime` と、本体の表の検査 `cargo test -p areka --bin areka placement_tests::zorder`）⑸ コミット。
+- 各群の閉じ方: ⑴ `refs` の当たりと、その群の札の短い書き方の当たりが 0。あわせて、その群のファイルへ最後の確かめの式 4・5 を当て、当たりが例外の表のものだけ ⑵ `cargo fmt --all` ⑶ `cargo check --workspace --all-targets` が警告 0 ⑷ 改めた crate の `cargo test -p <crate>`（G1 は `areka-placement`・`areka-runtime` と、本体の表の検査 `cargo test -p areka --bin areka placement_tests::zorder`）⑸ コミット。
 - 戻すきっかけ: 群の中でテストの合否か本数が変わったら、その群の中で直す（次の群へ持ち越さない）。
 
 ## Requirements Traceability
@@ -322,6 +322,7 @@ flowchart TB
 - `.kiro/specs/zorder-property/brief.md`: 94 行（名の全体）・59・81 行（`t_zpd40` の短い書き方を名の全体へ）・G2。同じ行の古い道は直さない（4.5）。
 - `.kiro/specs/extra-character-windows/brief.md:133`（3 本の名・G4）。同じ brief の 131 行の「テスト T-C3」は、完了 spec の設計の番号を書く歴史の文で、412 行と同じく残す（仮定・議題 3）（4.5）。
 - steering とほかの未完了の spec の文書は、各群の `refs` で当たりを見る。当たれば同じ群で直す（4.6）。2026-11-22 の測りでは、改める名の名指しは無い（`roadmap.md` の当たりはこの spec の行の札の例で、名指しではない・議題 3）。
+- 行の番号（196・226・354・412 ほか）は 2026-11-22 の目安で、正本は改名表。354・412 行は `session-crate-split` が直すパスの行（353・355・411 行）と隣り合うので、git は衝突として扱う。後に着地する側は、相手の行を採ってから `apply` を当て直す（`apply` は名で置き換えるので行の番号に依らず、2 度当てても結果は変わらない）。
 - 歴史の場所は `apply` の除く場所なので書き換わらない（4.7）。
 
 #### AuditHandover
@@ -332,7 +333,7 @@ flowchart TB
 | Requirements | 6.6 |
 
 - G6 のコミットで、`.kiro/specs/audit-areka-app/brief.md` の「棚卸㊷からの申し送り」の節に 1 項目を足す。中身: そのファイルの 2 本の改名と同じコミットで、4・5・10・11・13 行の名指し（`areka-runtime` の側の改めたテストを指す所）を新しい名へ直し、番号の札を消すこと。新しい名は改名表から引いて書く（`areka-runtime` の `zorder_wiring_tests.rs` の 6 本と、`frame_schedule_tests.rs`・`frame/zorder_descript_tests.rs` ほか当たるもの）。古い札は書かず、行の番号と新しい名で指す。
-- 既にある項目（159 行）は書き換えない。
+- 既にある項目（159 行）は書き換えない。足す文は今の決まりどおり、日付つきの経緯や開発者の言葉の引用を書かない。
 
 ### 決まり
 
@@ -359,9 +360,9 @@ flowchart TB
 1. 札の形（5.1）: `git grep -nE "fn t_[a-z]+[0-9]+[a-z]?_" -- crates` の当たりが、本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本だけ。
 2. 数字の無い札の形（5.2）: `git grep -nE "fn t_[a-z]+_" -- crates` から式 1 の当たりを除いたものが、`zorder_branch_coverage_test_support.rs` の見本の文字列だけ。
 3. 古い名（5.3）: 改名表の `old` を名簿にして `git grep -nwF -f <名簿>` を、歴史の場所と `.kiro/specs/test-name-work-tags/` を除くリポジトリ全体へ当てて 0。
-4. 札だけの短い書き方（5.5）: `git grep -nP "\bt_[a-z]+[0-9]+[a-z]?"` を `crates/`・`doc/`・`.kiro/steering/`・未完了の spec の文書へ（歴史の場所を除く）。
-5. 大文字の作業番号（5.5）: `git grep -nP "\bT-[A-Z]{1,4}[0-9]{1,2}[a-z]?\b"` を同じ範囲へ。
-- 式 4・5 の当たりは、例外の表（`research.md` 8.4 の下書き）と 1 件ずつ突き合わせ、例外ごとに訳を書く。例外の表: 本体の `runtime_tests/zorder_wiring_tests.rs` の申し送った行と札つきの 2 本・`doc/COMPAT_ARCHITECTURE.md:412` の歴史の文・`t_wait1`・`t_wait2`、それに仮定で足す `extra-character-windows/brief.md:131`・`audit-areka-app/brief.md` の本体の 2 本の名・`roadmap.md` のこの spec の行・この spec の文書（議題 3）。
+4. 札だけの短い書き方（5.5）: `git grep -nIP "\bt_[a-z]+[0-9]+[a-z]?"` を `crates/`・`doc/`・`.kiro/steering/`・未完了の spec の文書へ（歴史の場所を除く）。
+5. 大文字の作業番号（5.5）: `git grep -nIP "\bT-[A-Z]{1,4}[0-9]{1,2}[a-z]?\b"` を同じ範囲へ。
+- 式 4・5 の当たりは、例外の表（`research.md` 8.4 の下書き）と 1 件ずつ突き合わせ、例外ごとに訳を書く。例外の表: 本体の `runtime_tests/zorder_wiring_tests.rs` の申し送った行と札つきの 2 本・`doc/COMPAT_ARCHITECTURE.md:412` の歴史の文・`t_wait1`・`t_wait2`、それに仮定で足す `extra-character-windows/brief.md:131`・`audit-areka-app/brief.md` の本体の 2 本の名・`roadmap.md` のこの spec の行・この spec の文書（議題 3）。式 4・5 は `-I` でバイナリのファイル（`crates/areka/shell/` の画像ほか）を見ない。
 - 較正（5.4）: 式 1〜5 を改める前の木（`00877299`・`git grep … 00877299 -- …`）へ当て、式 1 が 284、式 2 が 4、式 3 が `fn` の定義の 284 行と research.md 2.3 の名指し、式 4・5 が research.md 2.4 の当たりを出すことを同じ記録に書く。
 - 名の一覧（3.1・3.2・1.3）: G0 で `cargo test --workspace --no-fail-fast -- --list` の `: test$` の行をモジュールのパスつきで `tests-before.txt` に取る。最後に同じ形で `tests-after.txt` を取り、前の一覧の最後の名を改名表で写して並べ直したものと 1 行も違わないことを示す。crate ごとの本数も添える。
 - 触らない所（2.3・6.1・3.3）: `git diff --name-only main...HEAD` が File Structure Plan のファイルと spec の文書だけ。本体は `placement_tests/` の 2 ファイルだけで、`runtime_tests/` は 0。本番のファイルの差分は `zorder_group_ledger.rs` のコメントの 1 行と、`config.rs` の `mod tests` の中だけ。
@@ -382,7 +383,7 @@ flowchart TB
 
 ### 各群の確かめ
 
-- 本体の表の検査（`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs` の `the_table_covers_every_branch_with_executed_tests` の 2 本）: G1 で、表の 68 の名が改めたファイルの `#[test]` つきの `fn` に在る（4.1・4.3）。
+- 本体の表の検査（`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs` の `the_table_covers_every_branch_with_executed_tests` の 2 本）: G1 で、表の名がどれも改めたファイルの `#[test]` つきの `fn` に在る（4.1・4.3）。
 - 改めた crate のテスト（`cargo test -p areka-placement`・`-p areka-runtime`）: 各群で合否が前と同じ（3.1）。
 - `cargo check --workspace --all-targets` の警告 0: 改名で使われない道具や、隠された本番の関数が出ていない（research.md 2.2 で 0 と測った）。
 - `cargo fmt --all` の後の `--check` が差分 0（表の畳みは research.md 8.2 で 4 行の見込み）。
@@ -395,5 +396,5 @@ flowchart TB
 
 1. **コミットの切り方**: 改める群ごと（G0〜G8 の 9 タスク）にした。全部を 1 コミットで置き換える形（4〜5 タスク）もある。群ごとを推す訳＝レビューの単位が小さく、brief の見込み（8〜12 タスク）に合い、G1 で置き換えの式の誤りを早く見つけられる。
 2. **記録の置き場**: 改名表 `rename-table.tsv` は spec の文書の隣にコミットし（後の spec が古い名を引ける）、名の一覧の前後と式は `target/test-name-work-tags/` に置いてコミットしない（数と比べの結果は research.md に書く）。前の spec（`session-module-gather`）は名の一覧を spec の文書にコミットしていた。
-3. **要件 5.5 の例外の表を広げる**: 要件 5.5 が挙げる例外のほかに、式 4・5 が当てる所が 4 つある（`extra-character-windows/brief.md:131` の「テスト T-C3」＝412 行と同じ歴史の文・`audit-areka-app/brief.md:159` の本体の 2 本の名＝まだ在るテストを正しく指す・`roadmap.md` 514・2033・2039 行のこの spec の札の例・この spec の文書）。仮定: どれも書き換えず、例外として訳つきで記録する（要件 5.3 がこの spec の文書を除くのと同じ扱い）。
+3. **要件 5.5 の例外の表を広げる**: 要件 5.5 が挙げる例外のほかに、式 4・5 が当てる所が 4 つある（`extra-character-windows/brief.md:131` の「テスト T-C3」＝412 行と同じ歴史の文・`audit-areka-app/brief.md:159` の本体の 2 本の名＝まだ在るテストを正しく指す・`roadmap.md` のこの spec の行の札の例・この spec の文書）。仮定: どれも書き換えず、例外として訳つきで記録する（要件 5.3 がこの spec の文書を除くのと同じ扱い）。
 4. **`areka-runtime` の `zorder_wiring_tests.rs:18` の「（zwi05）」「（zwi08）」**: 本体の 2 本は着地の後も札を持つ。仮定: 番号だけを消し、すでに在る「`areka` の `runtime_tests/` の同じ名前のファイル」と中身の言葉で指す形を残す。別案は本体の 2 本の今の名の全体（`t_zwi05_…`）を書くことで、そうすると `audit-areka-app` の申し送りにこの行も足す必要がある。
