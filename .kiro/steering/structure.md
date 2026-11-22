@@ -327,7 +327,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **BodySystems**: 本体の項目を引かず、本体へ向かう呼び出しは `body_systems.rs` の口の束 `BodySystems`（World の資源・`Copy`）を通す。中身は本体の `main.rs` の `BODY_SYSTEMS` が持ち、`register_systems` が系を登録する前に 1 回据える。据わっていなければ `body_systems_missing` を記録して何もしない束を使う
 **Features**: `test-support`（本体のテストだけが使う支えを開ける・本体は `[dev-dependencies]` でだけ付ける。切替の足場 `ghost_switch_test_support` と、ソースを読むテストの根の支え `crate_source_test_support`）
 **Tests**: 集めた層の中の `#[cfg(test)]` の子ファイル（`*_tests.rs`）。本体の本物どうしをつなぐテストは本体の `crates/areka/src/session_tests/` に置く
-**Dependencies**: wintf, dola, areka-runtime, areka-placement, areka-input, areka-user-data, `areka-ghost`・`areka-kanade`・`areka-sylphya`・`areka-parsers`・`areka-seriko`・`areka-actor`・`areka-emo-present`, bevy_ecs, thiserror, tracing, tracing-subscriber, async-io, windows。`[dev-dependencies]` は `log-capture-kit`・`temp-path-kit`・`sample-ghost-kit` ほか。**本体（`areka`）には依存しない**（集めた層は配置・実行系・入力の上に乗る）
+**Dependencies**: wintf, dola, areka-runtime, areka-placement, areka-input, areka-user-data, `areka-ghost`・`areka-kanade`・`areka-sylphya`・`areka-parsers`・`areka-seriko`・`areka-actor`・`areka-emo-present`, bevy_ecs, thiserror, tracing, tracing-subscriber, async-io, windows。`shiori-host32-host` は `test-support` でだけ付く（偽の SHIORI の戻り値の型・切替の足場が使う）。`[dev-dependencies]` は `log-capture-kit`・`temp-path-kit`・`sample-ghost-kit` ほか。**本体（`areka`）には依存しない**（集めた層は配置・実行系・入力の上に乗る）
 **Consumers**: `areka`（本番と、`test-support` つきの `[dev-dependencies]`）
 
 ### Parser Crate
