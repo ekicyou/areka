@@ -40,7 +40,7 @@
   - _Dispatch: mechanical — 読み先と依存の行の形を設計が与える_
   - _Requirements: 3.1, 3.3, 3.4, 5.18, 7.5_
 - [ ] 3.3 `BodySystems::of`・記録の歴史・自動終了・tick の門の小さな直し（指摘 77・82・83・87・5.15・5.17）
-  - `BodySystems::of` を `pub fn` 1 つにし `installed_or_none` を消す。`body_systems.rs:60` の「（窓口が無いときの答えと同じ）」を消す（`NO_BODY` の受け口はそろえない＝5.17。`UNKEPT_TARGETS`・`reload_test_support.rs` の該当は直さない）
+  - `BodySystems::of` を `pub fn` 1 つにし `installed_or_none` を消す。`body_systems.rs:60` の「（窓口が無いときの答えと同じ）」を消す。差を書き足すなら、兄弟の着地後の形（本体の側は窓口が無いと `install_cue_send_failed` の warn で終わり、URL も取りに行かない・`NO_BODY` は黙って捨て、束が無いことは error で残る）に合わせる（`NO_BODY` の受け口はそろえない＝5.17。`UNKEPT_TARGETS`・`reload_test_support.rs` の該当は直さない）
   - `log_history.rs:579` を `mod capture_tests;` に。`smoke_exit.rs:52-54` の早い戻りを 1 行に
   - tick の門の設定を `TickGateSetting::Set(enabled)` で直に据え、`tick_gate_from_env_value` と試験の 4 行を消す
   - 完了の姿: 既存の `body_systems_tests`・`smoke_exit_tests`・門の試験が同じ表明のまま緑で、`git grep -n "installed_or_none\|tick_gate_from_env_value"` が 0 件
