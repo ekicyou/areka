@@ -162,6 +162,8 @@ graph TB
 ```
 crates/areka-session/
 ├── Cargo.toml                        # lib・publish = false・test-support 機能（SessionCrate）
+├── build.rs                          # 段 3 で足した（設計との違い・検証の記録の 4.4）: テストの exe にだけ comctl32 版 6 の申告を埋める
+├── tests.manifest                    # 同じく build.rs が埋める申告（本体の areka.manifest と同じ中身）
 └── src/
     ├── lib.rs                        # 旧 session/mod.rs（宣言の並びは今のまま＋下の新しい宣言）
     ├── body_systems.rs               # 新設: BodySystems・of・NO_BODY（D1〜D4）

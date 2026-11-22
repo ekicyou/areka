@@ -12,20 +12,20 @@ const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_sess
 /// OS のセッションの終了の受け手が定数を渡す 1 行・受け手の降ろし・`GhostSession` の委譲の 3 行だけ。
 const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     (
-        "areka/session/ghost_session.rs",
+        "areka-session/ghost_session.rs",
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (
-        "areka/session/session_end.rs",
+        "areka-session/session_end.rs",
         "end_session_within(world, SESSION_END_SHIORI_LIMIT)",
     ),
     (
-        "areka/session/session_end.rs",
+        "areka-session/session_end.rs",
         "session.shutdown_within(CloseReason::System, WaitBudget { started, limit });",
     ),
 ];
 
-/// 本体（`crates/areka/src/`）・`crates/areka-runtime/src/`・`crates/areka-input/src/` の本番 `.rs`（テストとテストの土台＝
+/// 本体（`crates/areka/src/`）・`crates/areka-runtime/src/`・`crates/areka-input/src/`・`crates/areka-session/src/` の本番 `.rs`（テストとテストの土台＝
 /// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。分ける前に本体の
 /// `src` が覆っていた範囲を歩く。
 fn production_sources() -> Vec<(String, String)> {
@@ -65,6 +65,10 @@ fn production_sources() -> Vec<(String, String)> {
         (
             "areka-input",
             areka_session::crate_source_test_support::crate_path("areka-input", "src"),
+        ),
+        (
+            "areka-session",
+            areka_session::crate_source_test_support::crate_path("areka-session", "src"),
         ),
     ] {
         let before = out.len();
@@ -126,7 +130,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
     let removed: Vec<(String, String)> = files
         .iter()
         .map(|(rel, src)| {
-            let src = if rel == "areka/session/session_end.rs" {
+            let src = if rel == "areka-session/session_end.rs" {
                 src.replace("end_session_within(world, SESSION_END_SHIORI_LIMIT)", "")
             } else {
                 src.clone()
@@ -140,7 +144,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
         (
             vec![],
             vec![(
-                "areka/session/session_end.rs".to_owned(),
+                "areka-session/session_end.rs".to_owned(),
                 "end_session_within(world, SESSION_END_SHIORI_LIMIT)".to_owned()
             )]
         ),

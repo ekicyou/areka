@@ -105,7 +105,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        session_code.contains("pub(crate) fn open_ghost_windows("),
+        session_code.contains("pub fn open_ghost_windows("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(

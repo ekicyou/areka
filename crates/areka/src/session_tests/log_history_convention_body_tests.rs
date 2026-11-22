@@ -14,6 +14,10 @@ fn crate_of(name: &str) -> Option<(std::path::PathBuf, &'static str)> {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
             "main.rs",
         )),
+        "areka_session" => Some((
+            areka_session::crate_source_test_support::crate_path("areka-session", "src"),
+            "lib.rs",
+        )),
         "areka_update" => Some((
             areka_session::crate_source_test_support::crate_path("areka-update", "src"),
             "lib.rs",

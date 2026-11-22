@@ -196,6 +196,7 @@ fn refusals_in_order_leave_one_record_each() {
 #[test]
 fn missing_ghost_or_kanade_is_no_context() {
     let mut rig = rig("areka-reload-no-context");
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     rig.world
         .insert_non_send(GhostSlot(Some(GhostSession::for_test(
             None,

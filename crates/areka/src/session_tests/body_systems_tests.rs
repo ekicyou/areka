@@ -1,4 +1,4 @@
-//! 本体の口の束（`BODY_SYSTEMS`）が据わることと、`after_input` の登録の順を確かめるテスト。
+//! 本体の口の束（`BODY_SYSTEMS`）が据わること・据わらないときの倒れ方と、`after_input` の登録の順を確かめるテスト。
 
 use std::any::TypeId;
 use std::sync::mpsc;
@@ -7,6 +7,8 @@ use areka_kanade::KanadeNotice;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::system::{IntoSystem, System};
 use bevy_ecs::world::World;
+use log_capture_kit::capture;
+use tracing::Level;
 use wintf::AppExit;
 use wintf::ecs::Input;
 
@@ -30,6 +32,30 @@ fn register_systems_installs_body_systems() {
     assert!(
         world.get_resource::<BodySystems>().is_some(),
         "register_systems の後に BodySystems の資源が無い"
+    );
+}
+
+/// 束の無い World では `body_systems_missing` の error を 1 行残し、机の問いは偽・受け口は 2 つで答える。
+#[test]
+fn missing_body_systems_logs_and_answers_like_no_desk() {
+    let world = World::new();
+
+    let (body, events) = capture(|| BodySystems::of(&world));
+
+    let missing: Vec<Level> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("body_systems_missing"))
+        .map(|e| e.level)
+        .collect();
+    assert_eq!(
+        (
+            missing,
+            (body.update_busy)(&world),
+            (body.install_busy)(&world),
+            (body.cue_sinks)(&world).len(),
+        ),
+        (vec![Level::ERROR], false, false, 2),
+        "(body_systems_missing の行, update_busy, install_busy, 受け口の数)"
     );
 }
 

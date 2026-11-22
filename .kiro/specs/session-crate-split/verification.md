@@ -1024,3 +1024,54 @@ RED は n/a（文字列の target の書き換えのみ。期待値の側も同�
 - 期待値: `log_history_tests.rs`, `log_history_convention_tests.rs`, `reload_skin_tests.rs`（crate）、`session_tests/reload_tests.rs`（本体）。
 - `doc/ssp-mcp/log-convention.md` の規則表 5 行。
 - `git grep -n '"areka::session' -- crates/` の残りは 5.1 の持ち物の 3 件のみ（`emo2_mcp_real_run.rs`, `real-run-kit/src/launch.rs`, `real-run-kit/src/bin/real-run-fake-areka.rs`）。real-run-kit と `emo2_mcp_real_run.rs` は引用符つき・なしとも 5.1 に任せる。`cargo check -p areka-session --tests` / `cargo check -p areka --bin areka --tests` は警告 0、fmt 差分なし。
+
+### 4.4
+
+#### 赤（直す前）
+
+- `cargo test -p areka-session --lib`: テストの exe が起動の時点で `0xc0000139`（STATUS_ENTRYPOINT_NOT_FOUND）で落ち、1 本も走らない。
+- `cargo test -p areka --bin areka`: 1327 緑・10 赤。
+  - 見張り 6 本: `readme_body_tests::only_the_os_port_spells_shell_execute`（当たり 0）・`session_end_deadline_body_tests` の 2 本（許可表の 3 行が当たり無し）・`readonly_body_tests::engage_is_called_only_from_main`（較正の `mod session;` が `main.rs` に無い）・`readonly_body_tests::withhold_everything_is_called_only_from_readonly`（`areka/session/readonly.rs` が無い）・`log_history_convention_body_tests::every_rule_target_names_a_module_or_literal_that_exists`（`areka_session` の 5 行のフォルダを導けない）。
+  - 字面の対照 1 本: `zorder_wiring_tests::t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring`（4.2 で `open_ghost_windows` を `pub` にしたので、対照の字面 `pub(crate) fn open_ghost_windows(` が本文に無い）。
+  - 口を据えずに口の道を通り `body_systems_missing` の記録が 1 件増えた 3 本（D13）: 下の表。
+
+#### テストの exe の申告（設計との違い）
+
+- 原因: 告知の `alert.rs`（とその DPI のテスト）が `TaskDialogIndirect`・`TaskDialog` を取り込む。`dumpbin /imports` で areka-session の lib のテストの exe の `comctl32.dll` の取り込みはこの 2 つだけで、どちらも comctl32 の版 6 にしか無い。版 6 の申告を持つのは本体の exe（`crates/areka/build.rs` の `rustc-link-arg-bins`・bin のユニットテストの exe にも届く）と wintf のサンプル（`rustc-link-arg-examples`）だけで、crate を分けた後の areka-session のテストの exe には申告が無い。
+- 直し: `crates/areka-session/build.rs` と `crates/areka-session/tests.manifest`（中身は `areka.manifest` と同じ申告）を足し、MSVC のときだけ `cargo:rustc-link-arg=/MANIFEST:EMBED`・`/MANIFESTINPUT:<tests.manifest>` を出す。`rustc-link-arg-tests` は結合テスト（`tests/`）の無い crate では Cargo が「does not have a test target」で受け付けなかった。`rustc-link-arg` はこの package のリンクする成果物（ここでは lib のテストの exe だけ）にしか届かず、依存する側には伝わらない。
+- 確かめ:
+  - `cargo test -p areka-session --lib -- --list`: 510 本が並ぶ（直す前は 0xc0000139）。
+  - `EnumResourceNamesW(RT_MANIFEST)`: `target/debug/areka.exe`・areka-session の lib のテストの exe・本体の bin のテストの exe がどれも申告 1 つ（id 1）。`mt.exe -inputresource:…;#1` で取り出した areka.exe と areka-session のテストの exe の申告にどちらも `Microsoft.Windows.Common-Controls` が在る。
+  - `cargo build -p areka --bin areka -v` の areka の rustc の行の `/MANIFESTINPUT:` は `crates/areka/areka.manifest` の 1 つだけ（areka-session の `tests.manifest` は届かない）。
+- 設計の中身は変えず、設計の「新しい crate」のファイルの木に 2 行を足した。
+
+#### 見張りの付け替え（SourceGuards）
+
+- `readme_body_tests.rs`・`session_end_deadline_body_tests.rs`: 根の並びに `("areka-session", crate_path("areka-session", "src"))` を足した（3 → 4）。鍵 `"areka/session/…"` → `"areka-session/…"`（`readme/os_port.rs`・`ghost_session.rs`・`session_end.rs`）。許可表と期待値は鍵の字面のほか変えていない。説明の 3 つの木の列挙に `crates/areka-session/src` を足した。
+- `log_history_convention_body_tests.rs`: `crate_of` に `"areka_session"` → `(crate_path("areka-session", "src"), "lib.rs")` の行を足した。
+- `readonly_body_tests.rs`: `engage_is_called_only_from_main` は本体の `src` と `crate_path("areka-session", "src")`（相対パスに `areka-session/` を前置）の 2 つを歩く。名前だけで呼べる所の絞りを `areka-session/readonly.rs`・`areka-session/readonly_*` へ。較正の字面は、`main.rs` から消えた `mod session;` の代わりに `use areka_session::`。`withhold_everything_is_called_only_from_readonly` の除き方を `areka-session` の `readonly.rs` へ。`main.rs` を読む 1 本は変えていない。
+- `zorder_wiring_tests.rs` の `t_zwi08`: 対照の字面 `pub(crate) fn open_ghost_windows(` → `pub fn open_ghost_windows(`（4.2 の公開面に合わせる）。
+- 見張りの新しい当たりは無かった（許可表は変えていない）。
+
+#### 口が無いときの記録（OrderTests 6）
+
+- 本体の `session_tests/body_systems_tests.rs` に `missing_body_systems_logs_and_answers_like_no_desk` を足した。口の無い World で `BodySystems::of` を呼び、`body_systems_missing` の行が `ERROR` 1 つ・`update_busy`・`install_busy` が偽・`cue_sinks` が 2 つ。本体のテストのビルドでは areka-session は `cfg(test)` でないので記録が出ることを、このテストの緑で確かめた。
+- 本体のテストから `of` を呼ぶため、`BodySystems::of` を `#[cfg(any(test, feature = "test-support"))] pub` にした（それ以外では今のまま `pub(crate)`・中身は私有の `installed_or_none` 1 つ）。4.5 の「本体のテストだけが使う項目」の一覧に足す（`audit-areka-app` への申し送り）。
+
+#### `world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足したテスト（D13・表明は変えていない）
+
+| テスト | 赤の形 |
+|---|---|
+| `session_tests::reload_tests::missing_ghost_or_kanade_is_no_context` | warn 以上の総数 2（期待 1） |
+| `session_tests::shell_balloon_switch_tests::acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells` | warn＋error の数 1（期待 0）・5 件とも |
+| `session_tests::shell_balloon_switch_tests::send_failure_leaves_one_error_and_no_marker` | error の総数 2（期待 1） |
+
+- 前からあった 1 行（`reload_tests.rs` の `refusals_in_order_leave_one_record_each`・`shell_balloon_switch_tests.rs` の `refusals_in_order_leave_one_warning_each_and_send_nothing`）と合わせ、本体で 1 行を持つテストは 5 本。
+
+#### 確かめ
+
+- `cargo test -p areka-session`: 507 緑・3 無視・0 赤。
+- `cargo test -p areka --bin areka`: 赤の 10 本と足した 1 本を含む 15 本を回し直して 15 緑（赤のテストだけ回し直す）。
+- `cargo test -p log-capture-kit --test file_length_guard_test`: 7 緑（例外表は変えていない）。
+- `cargo check --workspace --all-targets`: 警告 0。`cargo fmt --all -- --check`: 差分なし。
+- `cargo clippy -p areka-session --all-targets`・`-p areka --bin areka --tests`: 触った所（`body_systems.rs`・`build.rs`・足したテスト）に指摘なし（残る指摘は移したコードに前からある形）。

@@ -404,6 +404,7 @@ fn acceptance_starts_one_wait_marked_only_for_menu_and_raise_event_shells() {
     let mut want = Vec::new();
     for (request, marked, to) in cases {
         let mut rig = rig("areka-skin-entry-accept");
+        rig.world.insert_resource(crate::BODY_SYSTEMS);
         let summer = rig.root.ghost_dir("A").join("shell").join("summer");
         let raise = marked.then(|| changing("夏服", "", &summer));
         let kind = request.kind;
@@ -459,6 +460,7 @@ fn balloon_switch_targets_the_ghost_inner_balloon() {
 #[test]
 fn send_failure_leaves_one_error_and_no_marker() {
     let mut rig = rig("areka-skin-entry-send-failed");
+    rig.world.insert_resource(crate::BODY_SYSTEMS);
     let (_, dead) = mpsc::channel();
     drop(std::mem::replace(&mut rig.kanade, dead));
     let (verdict, events) =

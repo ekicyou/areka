@@ -50,11 +50,18 @@ fn files_calling(files: &[(String, String)], needle: &str, def: &str) -> Vec<Str
 
 #[test]
 fn engage_is_called_only_from_main() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let files = all_sources(&src);
+    let mut files = all_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
+    files.extend(
+        all_sources(&areka_session::crate_source_test_support::crate_path(
+            "areka-session",
+            "src",
+        ))
+        .into_iter()
+        .map(|(rel, src)| (format!("areka-session/{rel}"), src)),
+    );
     let def = ["fn engage", "("].concat();
     // 較正: 走査が main.rs の本文を見ている。
-    let calibration = ["mod ", "session;"].concat();
+    let calibration = ["use areka_", "session::"].concat();
     assert!(files_calling(&files, &calibration, &def).contains(&"main.rs".to_owned()));
 
     let mut outside: Vec<String> = files_calling(&files, &["readonly::", "engage"].concat(), &def)
@@ -64,7 +71,9 @@ fn engage_is_called_only_from_main() {
     // `use super::*` で名前だけで呼べる所（このモジュールとその試験）は、裸の呼び出しも禁じる。
     let bare: Vec<(String, String)> = files
         .iter()
-        .filter(|(rel, _)| rel == "session/readonly.rs" || rel.starts_with("session/readonly_"))
+        .filter(|(rel, _)| {
+            rel == "areka-session/readonly.rs" || rel.starts_with("areka-session/readonly_")
+        })
         .cloned()
         .collect();
     assert!(
@@ -129,7 +138,7 @@ fn withhold_everything_is_called_only_from_readonly() {
             .to_string_lossy()
             .into_owned();
         for rel in files_calling(&all_sources(&src), &needle, &def) {
-            if krate == "areka" && rel == "session/readonly.rs" {
+            if krate == "areka-session" && rel == "readonly.rs" {
                 seen_in_readonly = true;
             } else {
                 outside.push(format!("{krate}/src/{rel}"));

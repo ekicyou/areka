@@ -106,7 +106,7 @@
   - _Dispatch: mechanical — 表明と数える式を設計が与える_
   - _Requirements: 1.11, 2.1, 2.2, 5.1_
 
-- [ ] 4. 新しい crate を作って移す
+- [x] 4. 新しい crate を作って移す
 - [x] 4.1 crate の骨組みを作り、集めた層を移して単独で組めて走るようにする
   - `crates/areka-session/Cargo.toml` を設計の SessionCrate の形で作る（lib・`publish = false` と理由を同じ行に・ワークスペースの値の継承・`test-support = ["dep:shiori-host32-host", "areka-runtime/test-support"]`・本番の依存は設計の 20 個と optional の 1 つ・開発用の依存は設計の一覧から始めてコンパイラの指摘で足す・各行に理由の注。番人の 3 crate は本番の表に書かない）
   - 残る `session/` の全部（`mod.rs` は `lib.rs` へ・`readme/`・`roots/` は同じ並び）と、本体の `crate_source_test_support.rs` を履歴を残す移動で移し、`lib.rs` に設計の宣言（`body_systems`・`smoke_exit`・`test-support` の条件の `crate_source_test_support` と `ghost_switch_test_support`・`#[cfg(test)]` の `crash_report_tests`）を置く。本体のテストが使う `ghost_session_scope_{rect,scale}_test_support`（3.5）も `ghost_switch_test_support` と同じ `#[cfg(any(test, feature = "test-support"))] pub mod` で宣言する（`write_failure` の `sites_tests` は 3.4 で 2 本とも本体へ移るので宣言を持たない）。`crate_source!` は `#[macro_export]`、その中の `mod tests` は `#[cfg(test)]`
@@ -131,7 +131,7 @@
   - 集めた層と本体のテストのファイルに `"areka::session` の直書きが grep で 0 件（テストを走らせるのは 4.4）
   - _Dispatch: mechanical — 書き換える文字列を設計が与える_
   - _Requirements: 6.2, 6.5, 6.7, 8.10_
-- [ ] 4.4 ソースを読むテストを付け替え、口が無いときの記録を確かめ、段 3 を締める
+- [x] 4.4 ソースを読むテストを付け替え、口が無いときの記録を確かめ、段 3 を締める
   - 本体へ分けた見張り（`readonly_body_tests.rs`・`readme_body_tests.rs`・`session_end_deadline_body_tests.rs`・`log_history_convention_body_tests.rs`）の歩く根の並びと鍵を設計の SourceGuards のとおり替える（根に `areka-session` を足す・鍵 `"areka/session/…"` → `"areka-session/…"`・`crate_of` に 1 行。許可表と期待値は鍵の字面のほか変えない）
   - 本体の `session_tests/body_systems_tests.rs` に `missing_body_systems_logs_and_answers_like_no_desk`（口の無い World で `body_systems_missing` の error が 1 行・机の問いが偽・受け口が 2 つ）を足す
   - 本体のテストで、口を据えずに口の道を通り `body_systems_missing` の記録が増えて赤になったものにだけ、`world.insert_resource(crate::BODY_SYSTEMS);` の 1 行を足して一覧に記録する（表明は変えない）
