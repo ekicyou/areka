@@ -27,7 +27,7 @@
   - _Requirements: 2.3, 3.1, 4.1, 4.2, 4.5, 6.2_
 
 - [ ] 3. 本番の小さな直し（G3・G20）
-- [ ] 3.1 UI の基盤の初期化の失敗に記録を付ける（指摘 3）
+- [x] 3.1 UI の基盤の初期化の失敗に記録を付ける（指摘 3）
   - `main.rs:196` の初期化の呼び出しに `inspect_err` で `error!(event = "winapp_init_failed", ..)` を付ける
   - 新しいテストのファイル `main_winapp_log_tests.rs` を `main.rs` から `#[cfg(test)]` の子として引き、`main.rs` の本文を `code_only` で読んで、初期化の呼び出しの直後に `inspect_err` と `winapp_init_failed` があることを見る
   - 完了の姿: テストが緑で、`inspect_err` を外すと赤（較正）

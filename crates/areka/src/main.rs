@@ -193,7 +193,9 @@ fn main() -> Result<()> {
     // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）。実 sink 結線
     // （`wire_runtime`）は UI 基盤の後なので、`WinApp` 構築はすべての boot より前に置く。
     // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る。
-    let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
+    let app = WinApp::with_exit_policy(ExitPolicy::Explicit).inspect_err(|e| {
+        tracing::error!(event = "winapp_init_failed", error = %e, "[main] UI の基盤を初期化できませんでした")
+    })?;
 
     // 系の登録（プロセスに 1 回・ここ 1 か所）。停止通知の channel は 1 本だけ作り、受信端をここで
     // 受け口へ据え、送出端の写しを下の起動の 2 経路へ渡す。main 自身の送出端は起動の分岐の後で落とす。
@@ -677,3 +679,8 @@ mod session_mark_tests;
 #[cfg(test)]
 #[path = "main_session_mark_write_tests.rs"]
 mod session_mark_write_tests;
+
+/// UI の基盤の初期化の失敗が記録に残ることの本文の確かめ。
+#[cfg(test)]
+#[path = "main_winapp_log_tests.rs"]
+mod main_winapp_log_tests;
