@@ -108,7 +108,6 @@ dependencies = [
  "areka-sylphya",
  "areka-update",
  "areka-user-data",
- "async-io",
  "bevy_ecs",
  "dola",
  "human-panic",
