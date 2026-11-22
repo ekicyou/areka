@@ -213,7 +213,7 @@ fn pipeline_target_absent_warns_false_no_mutation() {
 
     assert!(
         !apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
-        "対象 scope1 不在は pipeline 越しでも warn＋false（R5.5）"
+        "対象 scope1 不在は pipeline 越しでも warn＋false"
     );
     assert_eq!(
         pos_of(&world, base),

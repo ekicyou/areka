@@ -138,7 +138,7 @@
   - _Dispatch: standard — 注入のテストを組む_
   - _Requirements: 3.1, 4.1, 6.2, 6.3, 6.6_
 
-- [ ] 4.6 説明とテストの名から spec の名と番号を消す（T14・13 番）
+- [x] 4.6 説明とテストの名から spec の名と番号を消す（T14・13 番）
   - `research.md` の 13 番の場所の一覧のとおり、括弧の番号を消し、テストの名を替え、見出しを語だけにし、`MoveMeasure` の説明を理由だけの文にする
   - 完了: 範囲の中のコードとテストの名に spec の名・要件番号・タスク番号が 0 件（grep で確かめる）で、触った crate のテストが緑
   - _Depends: 3.2, 4.1, 4.4_
@@ -206,3 +206,4 @@
 ## Implementation Notes
 - 3.3: 署名の鎖で開いていた可視性の型（`VisibilityAction`・`VisibilityLogEvent` ほか）も、外の使い手が 0 なので私有・`pub(crate)` へ戻した。外に使い手があって `pub` に残したのは `BalloonVisibilityState`・`VisibilityDecision` と `timeout_notice`・`ScopeObservation` の型・`Frame` の 7 つの口と `TALK_ID`・`seen`・`notify_timeout`・`configured_timeout_secs`・`phase::run_balloon_visibility_phase`。
 - 2.2 は ghost_switch の filter だけで通し、同じ crate の口の束の順のテストを赤にしていた（`4cb2d09e5` で直した）。触った crate は lib 全体を回してから閉じる。
+- 4.6: 13 番でテストの名を替えたので、`doc/COMPAT_ARCHITECTURE.md` の 405 行（HEAD・main と同じ番号）の名指しも同じ変更で替えた（要件 7.7 の読み手の直し・行は足していない）。仕上げの COMPAT の差分の確かめでは 134・177・407 行に加えてこの 1 行を例外として数える。

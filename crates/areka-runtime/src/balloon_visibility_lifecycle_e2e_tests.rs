@@ -148,7 +148,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     assert_eq!(
         wiring.balloon_visibility.display_end,
         Some(horizon),
-        "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み・Requirement 4.1）"
+        "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み）"
     );
 
     let started: Vec<&CapturedEvent> = events

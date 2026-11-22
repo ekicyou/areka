@@ -137,7 +137,7 @@ pub fn run_hover_inject_with(
             period_ms = *period_ms,
             ordinal = ?ordinal,
             hit_rows = *hit_rows,
-            "choice hover inject: 周期巡回による ordinal 注入（実機サインオフ導線・8.2）"
+            "choice hover inject: 周期巡回による ordinal 注入（実機サインオフ導線）"
         );
     }
 }
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(
             calls.get(),
             0,
-            "Disabled は inject を一度も呼ばない（本番既定 no-op・8.6）"
+            "Disabled は inject を一度も呼ばない（本番既定 no-op）"
         );
     }
 

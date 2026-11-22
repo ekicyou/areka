@@ -44,7 +44,7 @@ fn non_move_carrier_is_benign_skip() {
         assert_eq!(
             rx.try_recv(),
             Err(TryRecvError::Empty),
-            "担当外キャリア {name} は何も送出しない（良性スキップ・R8.5）"
+            "担当外キャリア {name} は何も送出しない（良性スキップ）"
         );
     }
 }

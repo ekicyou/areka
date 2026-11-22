@@ -22,7 +22,7 @@ fn broken_move_addressed_custom_warns_once() {
     assert_eq!(
         count_level(&logs, "WARN"),
         1,
-        "自分宛（move）の非正準 Custom は WARN=1（D8④・自分宛の壊れ物）: {logs:?}"
+        "自分宛（move）の非正準 Custom は WARN=1（自分宛の壊れ物）: {logs:?}"
     );
     assert_eq!(
         count_level(&logs, "DEBUG"),
@@ -47,12 +47,12 @@ fn broken_other_addressed_custom_debug_not_warn() {
         assert_eq!(
             count_level(&logs, "WARN"),
             0,
-            "他人宛/未知（{command}）の非正準 Custom は WARN を出さない（担当外・D8④）: {logs:?}"
+            "他人宛/未知（{command}）の非正準 Custom は WARN を出さない（担当外）: {logs:?}"
         );
         assert_eq!(
             count_level(&logs, "DEBUG"),
             1,
-            "他人宛/未知（{command}）は DEBUG で良性 skip（報告責任は宛名の担当者・R2.5）: {logs:?}"
+            "他人宛/未知（{command}）は DEBUG で良性 skip（報告責任は宛名の担当者）: {logs:?}"
         );
         assert_eq!(
             rx.try_recv(),
@@ -99,7 +99,7 @@ fn addressee_discriminates_warn_vs_debug_for_same_broken_shape() {
     assert_ne!(
         count_level(&move_logs, "WARN"),
         count_level(&other_logs, "WARN"),
-        "同一壊れ形でも宛名で WARN 件数が分岐する（宛名規律 D8④ の非空虚化）"
+        "同一壊れ形でも宛名で WARN 件数が分岐する（宛名規律の非空虚化）"
     );
 }
 
@@ -116,12 +116,12 @@ fn canonical_non_move_carrier_debug_skips() {
         assert_eq!(
             count_level(&logs, "WARN"),
             0,
-            "正準・担当外キャリア（{name}）は WARN を出さない（名前ゲート・R4.5）: {logs:?}"
+            "正準・担当外キャリア（{name}）は WARN を出さない（名前ゲート）: {logs:?}"
         );
         assert_eq!(
             count_level(&logs, "DEBUG"),
             1,
-            "正準・担当外キャリア（{name}）は DEBUG で良性 skip（名前自己選別・R8.5）: {logs:?}"
+            "正準・担当外キャリア（{name}）は DEBUG で良性 skip（名前自己選別）: {logs:?}"
         );
         assert_eq!(
             rx.try_recv(),

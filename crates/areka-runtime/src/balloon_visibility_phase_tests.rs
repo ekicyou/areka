@@ -336,11 +336,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         1,
         "外因の可視性変化は 1 行で記録する: {events:?}"
     );
-    assert_eq!(
-        explicit[0].level,
-        Level::INFO,
-        "遷移の記録は情報レベル（D10）"
-    );
+    assert_eq!(explicit[0].level, Level::INFO, "遷移の記録は情報レベル");
     assert_eq!(explicit[0].expect_field("scope"), "0");
     assert_eq!(explicit[0].expect_field("visible"), "false");
 
@@ -637,7 +633,7 @@ fn hide_touches_only_the_balloon_target() {
         events
             .iter()
             .all(|e| e.field("target_id") != Some(shell.as_str())),
-        "キャラクター窓の target へは指令が届かない（可視性へ波及しない・Requirement 6.7）: {events:?}"
+        "キャラクター窓の target へは指令が届かない（可視性へ波及しない）: {events:?}"
     );
 
     // 較正: 未装着 scope の分がこの窓で確かに見えている（否定側の主張が空虚でない）。

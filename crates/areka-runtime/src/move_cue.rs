@@ -237,15 +237,15 @@ impl dola::cue::CueSink for MoveCueSink {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == "move" => warn!(
                     command = ?cue.command,
-                    "MoveCueSink: 自分宛（move）の非正準 Custom params を良性スキップ（D8④）"
+                    "MoveCueSink: 自分宛（move）の非正準 Custom params を良性スキップ"
                 ),
                 CueCommand::Custom { .. } => debug!(
                     command = ?cue.command,
-                    "MoveCueSink: 他人宛/未知名の非正準 Custom params を良性スキップ（担当外・D8④）"
+                    "MoveCueSink: 他人宛/未知名の非正準 Custom params を良性スキップ（担当外）"
                 ),
                 _ => debug!(
                     command = ?cue.command,
-                    "MoveCueSink: 非キャリア cue を良性スキップ（担当外・R8.5）"
+                    "MoveCueSink: 非キャリア cue を良性スキップ（担当外）"
                 ),
             }
             return;
@@ -299,7 +299,7 @@ impl dola::cue::CueSink for MoveCueSink {
         if name != "move" {
             debug!(
                 name,
-                "MoveCueSink: 担当外コマンド名を良性スキップ（名前自己選別・R4.5/R8.5）"
+                "MoveCueSink: 担当外コマンド名を良性スキップ（名前自己選別）"
             );
             return;
         }
@@ -331,7 +331,7 @@ fn actor_scope(cue: &TalkCue, tag: &str) -> Option<u32> {
     if scope.is_none() {
         warn!(
             actor = cue.actor.as_str(),
-            tag, "MoveCueSink: cue.actor が非数値 scope のため指令をスキップ（R5.5）"
+            tag, "MoveCueSink: cue.actor が非数値 scope のため指令をスキップ"
         );
     }
     scope

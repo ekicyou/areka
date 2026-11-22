@@ -29,7 +29,7 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 fn default_timeout_is_thirty_seconds() {
     assert_eq!(
         DEFAULT_BALLOON_TIMEOUT_SECS, 30.0,
-        "既定のタイムアウト時間は 30 秒（Requirement 4.2）"
+        "既定のタイムアウト時間は 30 秒"
     );
 }
 
@@ -177,7 +177,7 @@ fn resolve_without_env_adopts_default_and_records_source() {
     assert_eq!(
         recorded.expect_field("default_secs"),
         "30.0",
-        "短縮の有無に依らず既定値を併記する（Requirement 9.5）"
+        "短縮の有無に依らず既定値を併記する"
     );
     assert_eq!(
         events.len(),
@@ -208,7 +208,7 @@ fn resolve_with_positive_env_shortens_and_records_source() {
     assert_eq!(
         recorded.expect_field("default_secs"),
         "30.0",
-        "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる（Requirement 9.5）"
+        "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる"
     );
 }
 

@@ -184,7 +184,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         base_offset = ?computed.base_offset_used,
         move_offset = ?directive.move_offset,
         ?anchor,
-        // MoveMeasure の測り: 当てた拡大率と動かす窓の今の大きさ。
+        // 拡大率の取り違えを後で測るための欄: 当てた拡大率と動かす窓の今の大きさ。
         k = ?k,
         target_w = target_rect.right - target_rect.left,
         target_h = target_rect.bottom - target_rect.top,

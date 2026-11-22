@@ -231,7 +231,7 @@ fn switching_does_not_see_the_balloon_inside_the_previous_ghost() {
 /// # 非空虚性
 /// 記憶の段の候補にゴーストの中が入らないと記憶が当たらず `last_balloon_not_found` で赤。
 #[test]
-fn a_memory_written_before_this_spec_finds_the_ghost_inner_balloon() {
+fn a_folder_name_only_memory_finds_the_ghost_inner_balloon() {
     let rig = running_a();
     let inner = rig.add_ghost_balloon_copy("B", B_INNER, B_INNER_NAME);
     rig.plant_last_balloon("B", B_INNER);
