@@ -16,8 +16,8 @@ use super::shell_balloon_switch_session_lap_test_support::{
     ACCEPT, CREEP, LapRig, NO_TICKS, SECOND, UNBOUNDED, calls_a, current_shell, got, idle, kinds,
 };
 use super::shell_balloon_switch_session_lap_tests::{
-    BOOT_TO_SECOND, BOOT_TO_SECOND_PLAIN, LookLog, done_marks, lap_rig_of, last_shell, look_of,
-    recorded_shells,
+    BOOT_TO_SECOND, BOOT_TO_SECOND_PLAIN, LookLog, done_marks, lap_rig, lap_rig_of, last_shell,
+    look_of, recorded_shells,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
 use crate::boot_resolve::read_last_shell;
@@ -30,14 +30,6 @@ use areka_input::user_break::on_left_press;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_runtime::target_map::balloon_target;
-
-/// A だけの土台（2 つ目のシェルつき）。
-fn rig_a(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig {
-    lap_rig_of(
-        vec![("A", FakeShiori::Scripted(Box::new(script)))],
-        &[SECOND],
-    )
-}
 
 /// `event` の記録の数。
 // `ghost_switch` の `fallback_tests::count_event` は `ghost_session` の木の下から見えない。
@@ -104,7 +96,7 @@ const CHANGING_WITH_QUIT: &str = r"\0着替えます\_w[5000]\-\e";
 /// 進めると完了の記録と `OnShellChanged` が出て赤。
 #[test]
 fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
-    let mut lap = rig_a(|| {
+    let mut lap = lap_rig(|| {
         standard_script(BOOT_TO_SECOND)
             .get("OnShellChanging", Ok(Some(CHANGING_WITH_QUIT.to_owned())))
             // 印の台詞の中断で定常へ戻ると `OnBalloonBreak` が 1 本出る。応答は 204。
@@ -277,7 +269,7 @@ fn undecodable_shell_keeps_the_old_mount_and_records_one_error() {
 /// 間に取りやめが届かず、取りやめの記録も出ないまま終わって赤。
 #[test]
 fn close_request_while_waiting_drops_the_switch_and_exits_through_on_close() {
-    let mut lap = rig_a(|| standard_script(BOOT_TO_SECOND_PLAIN).get("OnClose", Ok(None)));
+    let mut lap = lap_rig(|| standard_script(BOOT_TO_SECOND_PLAIN).get("OnClose", Ok(None)));
     let steady = lap.rig.wait_steady();
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
