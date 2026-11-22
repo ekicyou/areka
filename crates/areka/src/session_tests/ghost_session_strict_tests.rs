@@ -57,13 +57,19 @@ fn decisions() -> (StartupDescriptValues, GhostDecision, BalloonDecision) {
     )
 }
 
-/// fallback の腕（LogSink の起動）を試みた証の本文（起点不在の `warn!`・その他の失敗の `error!`・成立の `info!`）。
+/// fallback の腕（LogSink の起動）を試みた証の `event` 欄（成立の `info!`・起点不在の `warn!`・その他の失敗の `error!`）。
 fn fallback_attempts(events: &[log_capture_kit::CapturedEvent]) -> usize {
     events
         .iter()
         .filter(|e| {
-            let m = e.message();
-            m.contains("ghost 結線層の起動") || m.contains("LogSink フォールバックで起動しました")
+            matches!(
+                e.field_str("event"),
+                Some(
+                    "fallback_boot_wired_off"
+                        | "fallback_boot_origin_missing"
+                        | "fallback_boot_failed"
+                )
+            )
         })
         .count()
 }

@@ -87,7 +87,7 @@ pub(crate) fn record_last_used_at_boot(
         tracing::debug!(
             event = "last_used_deferred",
             ghost = ?ghost.folder,
-            "[main] 切替で起こしたゴーストの記憶は定常到達まで書きません"
+            "[boot_seam] 切替で起こしたゴーストの記憶は定常到達まで書きません"
         );
         return;
     }
@@ -110,7 +110,7 @@ pub(crate) fn record_last_used(
         tracing::error!(
             event = "last_used_shell_folder_missing",
             shell_dir = %shell_dir.display(),
-            "[main] シェルのフォルダ名が取れないので記憶を書きません"
+            "[boot_seam] シェルのフォルダ名が取れないので記憶を書きません"
         );
         return;
     };

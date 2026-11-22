@@ -110,7 +110,7 @@ pub fn settle_session_mark(
         MarkVerdict::Untouched => {
             tracing::debug!(
                 event = "session_mark_untouched_argv",
-                "[main] argv で始まったプロセスなので起動中の印に触れません"
+                "[session_mark] argv で始まったプロセスなので起動中の印に触れません"
             );
             None
         }

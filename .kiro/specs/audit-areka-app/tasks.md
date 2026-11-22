@@ -47,7 +47,7 @@
   - _Dispatch: mechanical — 形を設計が与え、振る舞いは変えない_
   - _Requirements: 3.1, 3.4, 5.15, 5.17, 7.1_
 
-- [ ] 4. ログの文の頭と倒れ先の記録の `event` 欄を直す（G4・指摘 4・95）
+- [x] 4. ログの文の頭と倒れ先の記録の `event` 欄を直す（G4・指摘 4・95）
   - `session_mark.rs:113` の文の頭を `[session_mark]`、`boot_seam.rs:90`・`:113` を `[boot_seam]` に（event 名・本文・水準は変えない）
   - 倒れ先の起動の 3 つの記録（`ghost_session.rs:717`・`:726-734`）に `event` 欄 `fallback_boot_wired_off`（info）・`fallback_boot_origin_missing`（warn）・`fallback_boot_failed`（error）を足す
   - strict テストの `fallback_attempts` を、本文の部分一致から `event` 欄の 3 つの名で数える形に替える
@@ -284,3 +284,7 @@
   - 完了の姿: 全体テストが緑で、境界の確かめと通知の差の結果が research.md にある
   - _Dispatch: mechanical — 決まった確かめを回して記録する_
   - _Requirements: 4.4, 4.6, 7.3, 7.4, 7.5, 7.13, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.5_
+
+## Implementation Notes
+
+- 4: strict テストの `fallback_attempts` で縛れるのは到達できる `fallback_boot_origin_missing` の記録だけ。`fallback_boot_wired_off`・`fallback_boot_failed` の event 欄はどのテストでも縛られていない（入力を別に組むテストが要る・21.1 で見る）

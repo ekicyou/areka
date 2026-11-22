@@ -714,7 +714,10 @@ pub fn boot_ghost(
         crate::write_failure::sender(world),
     ) {
         Ok(runtime) => {
-            tracing::info!("LogSink フォールバックで起動しました（runtime wire 不成立）");
+            tracing::info!(
+                event = "fallback_boot_wired_off",
+                "LogSink フォールバックで起動しました（runtime wire 不成立）"
+            );
             // fallback boot でも生きた runtime があれば wired 経路と同型に `PersistWiring`（NonSend）を同一
             // World へ挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。起動成功時の
             // 記憶の書き込みも wired 経路と同じ 1 か所で行う。
@@ -724,11 +727,13 @@ pub fn boot_ghost(
         Err(err) => {
             if is_benign_boot_error(&err) {
                 tracing::warn!(
+                    event = "fallback_boot_origin_missing",
                     error = %err,
                     "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
                 );
             } else {
                 tracing::error!(
+                    event = "fallback_boot_failed",
                     error = %err,
                     "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
                 );
