@@ -117,7 +117,7 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     // 次の起床を預ける。預けられる期限は最も早い 1 つだけで、到来すると倒れる——だから
     // 待っている限り**本相が走るたびに預け直す**。1 度預けて済ませると、後から預けられた
     // 別の期限に押し出されたときに黙って落ちる。
-    match visibility_wake(now_talk_time, state.deadline) {
+    match visibility_wake(now_talk_time, state.deadline, state.prev_suppressed) {
         VisibilityWake::After(wait) => tick_wake::arm_deadline(Instant::now() + wait),
         VisibilityWake::Now => tick_wake::mark(tick_wake::REARM),
         VisibilityWake::None => {}
@@ -155,13 +155,13 @@ const MAX_WAIT_SECS: f64 = 3600.0;
 pub(crate) enum VisibilityWake {
     /// まだ待ち時間が残っている——この長さだけ後に起こす。
     After(Duration),
-    /// 期限は既に来ている（抑止で保留中など）——次の画面更新で見直す。
+    /// 期限は既に来ていて抑止も無い——次の画面更新で見直す。
     Now,
     /// 計測していない——何も預けない。
     None,
 }
 
-/// 満了予定と現在時刻から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
+/// 満了予定と現在時刻と抑止の有無から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
 ///
 /// 時刻軸はどちらも talk 相対秒である。計測が動いていない（起点未確立・満了予定なし）フレーム
 /// では何も預けない——待つ相手が居ないのに起きても、判断は同じ答えを返すだけである。
@@ -169,7 +169,11 @@ pub(crate) enum VisibilityWake {
 /// 引き算が数にならない期限（非有限）も預けない。そういう期限は満了の比較そのものが成立せず
 /// （表示を保持したまま動かない）、起こしても判断が変わらないからである。素通ししても心拍が
 /// 定期的に見に来る。
-pub(crate) fn visibility_wake(now_talk_time: Option<f64>, deadline: Option<f64>) -> VisibilityWake {
+pub(crate) fn visibility_wake(
+    now_talk_time: Option<f64>,
+    deadline: Option<f64>,
+    suppressed: bool,
+) -> VisibilityWake {
     let (Some(now), Some(deadline)) = (now_talk_time, deadline) else {
         return VisibilityWake::None;
     };
@@ -179,6 +183,9 @@ pub(crate) fn visibility_wake(now_talk_time: Option<f64>, deadline: Option<f64>)
     }
     if remaining > 0.0 {
         VisibilityWake::After(Duration::from_secs_f64(remaining.min(MAX_WAIT_SECS)))
+    } else if suppressed {
+        // 抑止の解けはポインタとドラッグの入力か cue がフレームを起こし、そのフレームで計り直す。
+        VisibilityWake::None
     } else {
         VisibilityWake::Now
     }
