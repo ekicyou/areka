@@ -136,7 +136,7 @@
 6. The 本 spec の直し shall 本体の `tick_gate_config_producers_tests.rs:68` の `code_only` を `source_text_test_support::code_only` を使う形に寄せる（`audit-emo2-boot-spine` のオ・`audit-emo2-boot-frame` のオ）
 7. The 本 spec の直し shall 記憶の書き手の待ち `let _ = parts.handle.join();` の 6 か所（`areka-session/src/boot_resolve_tests.rs` の 482・575・756・804 行、`boot_seam_persist_wiring_tests.rs` の 80・123 行）を、待ちに上限を持ち、書き手の panic を捨てない形（`areka_runtime::spine::join_bounded` と同じ扱い）に直す（`audit-emo2-boot-frame` のコ）
 8. The 本 spec の直し shall 本体の `runtime_tests/spine.rs:123` の `capture_logs` の写しと GPU の World の写しを、上流の共通の補助（`areka-runtime` の `frame_test_support::gpu_on` ほか）を使う形に寄せる。共通の補助が本体から読めないときは、その理由を一行で残して写しを残す（同 サ）
-9. The 本 spec の直し shall 本体の `menu/ghost_frame_tests.rs:43` の起動の文脈 `BootContext` を組む補助の写しを、共通の補助（`areka-session/src/reload_test_support.rs:17` の `boot_context`）へ寄せず、形が合わない（今のゴースト・バルーン・置き場の決め打ちが違う）ことを理由として 1 行残す。ほかの 2 本の持ち物の写しは触らず、5 か所のまとめ直しは C26 の 3 本の着地の後に回す（同 シ・棚卸㊸・仮定 6・討議の議題 13）
+9. The 本 spec の直し shall 本体の `menu/ghost_frame_tests.rs:43` の起動の文脈 `BootContext` を組む補助の写しを、`areka-session` の `reload_test_support` に足すゴースト名・バルーン名の引数を取る補助（`boot_context_named`）へ寄せる。ほかの 2 本の持ち物の写しは触らない（同 シ・仮定 6・2026-11-22 設計の討議の議題 2 で「寄せない」を改めた）
 10. The 本 spec の直し shall `areka-session/src/app_exit_escape_tests.rs:73` の説明が消したテストの名で指す所を、役目（入力の crate の送出のテスト）で指す形に直し、`ghost_session.rs:821` の結線の説明が挙げる資源を、今の結線が挿す 4 つ（`BalloonWiring`・`BalloonHover`・`ChoiceSelectionInbox`・`ShellBoxHover`）に合わせる（`audit-areka-input-menu` の件 1・件 3）
 11. The 本 spec の直し shall 本体の `menu/mod.rs:221-223`・`:254` の説明が呼び手を `ghost_session::register_systems` と書く所を、直すか残すかを見直しで決め、直すなら説明の文だけを直す（`session-module-gather` の件 2。同じ件の `mcp/mod.rs:48` は `audit-areka-install-update` の持ち物なので触らない・仮定 2）
 12. The 本 spec の直し shall 本体の `runtime_tests/zorder_wiring_tests.rs` の作業番号の札つきのテスト 2 本（29 行 `t_zwi05_…`・74 行 `t_zwi08_…`）の名から札だけを外し（`the_boot_wires_the_channel_the_sink_and_the_handoff`・`the_entry_point_carries_the_shell_setting_into_the_wiring`）、同じコミットで冒頭の説明（4・5・10・11・13 行）の名指しを `test-name-work-tags` の改名表の新しい名へ直して番号の札を消す（棚卸㊷の申し送り）
@@ -235,12 +235,22 @@
 | 10 マニフェストの写し | `areka-session/build.rs` が本体の `areka.manifest` を読み、`tests.manifest` を消す（要件 5.18） |
 | 11 全体を歩く見張り | `crates/log-capture-kit/tests/` へ移して `workspace_scan` を使う。歩く範囲は `crates/**` に広がるが、今の当たりの増えは 0 件なので要件 5.2 の「見る中身は変えない」の中とする。`readonly_body_tests.rs` の全体を歩かないテストは本体に残す |
 | 12 本体の部品を使わないテスト（指摘 30・46・91） | `areka-session` の同じ口のテストへ移す |
-| 13 `BootContext` の補助の写し | 寄せずに理由を 1 行残す（要件 5.9） |
+| 13 `BootContext` の補助の写し | 寄せずに理由を 1 行残す（要件 5.9）→ 設計の討議（議題 2）で、名の引数を取る補助を足して寄せる、に改めた |
 | 14 `NO_BODY` の受け口 | 仮定 7 のとおり、`audit-areka-install-update` の決めを伝言で受けてから直す。決まるまで、落ちる力の無い表明（指摘 17）は消すだけにする |
 | 15 使われない絵 77 個（指摘 76） | 消す。`shell/base.png` と `shell/org/2.zip` は残す。説明の文（`icon/README.md`・`doc/pasta-profile.md`）は指摘 97 で合わせる |
 | 16 `examples/mock-shell.rs`（指摘 75） | 消す。手本として名指す `menu-thumbnail-preview` の brief へ、git の履歴の場所を申し送る |
 | 17 持ち主のいない範囲の外の古い説明（ギャップ分析の 7 節） | コメント・doc の文だけのものは、この spec がその場で直す（要件 5.21・7.10）。コードの直し（`areka-placement/src/persist_finalize_save_tests.rs:106` の `join`）とログの語（`areka-emo-present/src/shell_target.rs:494`）は直さずに覚え書きとして回す。C26 のほかの 2 本の分は相手のセッションへ申し送る |
 | 18 先送りの印 | `perf_thread_report.rs:224` の `delta` と `offline_dump/render.rs:47-50` の `RenderError::Write` の中身は先送りの印として残す（要件 2.2 の 2 種類目）。事実と違う `DemoError::Timeout` の印は議題 5 で消える |
+
+設計の討議（2026-11-22・推奨どおり一括承認）で、並走の兄弟から受けた次の 7 件を確定した指摘の一覧に足した（どれも範囲の中のファイル）。直し方は design.md の「兄弟から受けた件」。
+
+- S1 `reload_test_support` にゴースト名・バルーン名の引数を取る `boot_context_named` を足す（`audit-areka-install-update` の依頼）
+- S2 `alert.rs` に「この走行で告知を抑えるか」を答える公開の関数 `alerts_suppressed()` を 1 つ置く（同）
+- S3 `alert.rs:150` の `ExeLocationUnavailable` の欄を読まない形にする（同）
+- S4 `log_history.rs` の `snapshot` が排他を握ったまま深く写すのを、排他の外で写す形にする（同）
+- S5 `png_image_tests.rs` の `wic_decode_rgba` を `pub(crate)` で共有する（同）
+- S6 `mcp/sakurascript_log_tests.rs` の中身を `log_history` のテストへ移す（同。向こうがファイルを消す）
+- S8 `reload.rs` の更新中・インストール中の断りを MCP からの要求だけに当て、台本の `\![reload,…]` は通す（`audit-emo2-boot-switch` の知らせ）
 
 仮定 1〜12 は、上の確定に合わせて全部そのまま確定した（仮定 4 は「消す」、仮定 5 は議題 9 の「`pub` のまま残す」、仮定 8 は「1 本で進める」に決まった）。
 

@@ -430,3 +430,11 @@
 - **一般化**: 写しの指摘（32〜45・5.5〜5.9・5.13）は「上流の test-support にもう在る補助へ寄せる」か「同じ crate の支え（`session_tests/mod.rs`・`reload_test_support.rs`・`tests/real_screen/common.rs`）に 1 つ置く」かの 2 つの形にまとめた。新しい補助の crate や trait は作らない。
 - **Build vs Adopt**: 見張りの走査は自作をやめ `log-capture-kit/tests/workspace_scan` を使う（5.2）。ほかに外のものを入れる所は無い。依存は足さない。
 - **簡素化**: 消すもの＝SHIORI の試験用の脳 8 ファイル・`mock-shell.rs`・絵 77 個・落ちる力の無いテスト・使い手の無い依存の行。`ghost_session.rs`（862 行）の `impl GhostSession` は兄弟のファイルへ移すだけ（形は変えない）。指摘 2 の上限は本体の 1 か所（合成の crate を変えない）。`snapshot` の排他は、記録を `Arc` で持って深い複製を排他の外へ出す（公開の形 `fn snapshot(Kind) -> Vec<Record>` は変えない。向こうの `mcp/get_log.rs:24` に触らない）。
+
+## 11. 設計の討議の確定（2026-11-22・推奨どおり一括承認）
+
+12 の議題を推奨どおり確定した（design.md の「設計の討議で確定したこと」）。根拠の要点:
+
+- S8（台本の読み直しの断り）: 読み直しの出どころは `ReloadOrigin::{Script, Mcp}` の 2 つだけで、メニューからの読み直しは無い。`audit-emo2-boot-switch` が切り替えの断りを「ゴーストの台本からの要求は止めない」と決めたのにそろえ、更新中・インストール中の断りを MCP の要求だけに当てる。重なりと `NoContext` の断りは変えない。
+- 議題 2: S1 の `boot_context_named` を足すと、`menu/ghost_frame_tests.rs:43` の写しは `temp` に `root.dir()` を渡して同じ値になるため、要件の議題 13 の「寄せない」の理由（形が合わない）が消えた。
+- 議題 6: spec は squash の PR 1 本で着地するため、兄弟と同時の着地はできない。こちらが先なら残りを兄弟の PR で消す。こちらの着地で C26 の `Cargo.toml` の席は空く。

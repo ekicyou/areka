@@ -35,7 +35,7 @@
 
 ### Out of Boundary
 
-- C26 の兄弟の持ち物（要件 7.3）: `audit-areka-install-update`＝本体の `install*`・`update*`・`mcp*`・`roots.rs`・`roots/`・`session_tests/readme_body_tests.rs`、`areka-session` の `roots/`・`readme*`。`audit-emo2-boot-switch`＝`areka-session` の `ghost_switch*`・`shell_balloon_switch*`、本体の `session_tests/shell_balloon_switch*`・`runtime_tests/balloon_visibility*`、`areka-runtime` の受け持ち。どれも差分 0 行。逆向きに、兄弟が列挙の欄を減らすコミットでこちらの `alert_tests.rs` の構築の 2 行を消すことだけを申し合わせる（OPEN QUESTION 4）。
+- C26 の兄弟の持ち物（要件 7.3）: `audit-areka-install-update`＝本体の `install*`・`update*`・`mcp*`・`roots.rs`・`roots/`・`session_tests/readme_body_tests.rs`、`areka-session` の `roots/`・`readme*`。`audit-emo2-boot-switch`＝`areka-session` の `ghost_switch*`・`shell_balloon_switch*`、本体の `session_tests/shell_balloon_switch*`・`runtime_tests/balloon_visibility*`、`areka-runtime` の受け持ち。どれも差分 0 行。逆向きに、兄弟が列挙の欄を減らすコミットでこちらの `alert_tests.rs` の構築の 2 行を消すことだけを申し合わせる（設計の討議の議題 3）。
 - `crates/dola/`・`crates/wintf*`・`vendors/`（要件 7.4・7.13）。
 - `areka-session` の公開の項目の名と形のうち、兄弟のファイルが使うもの（`boot_config`・`ghost_session`・`app_exit`・`log_history`・`write_failure`・`alert` ほか）。足すのは S1・S2 の 2 つだけで、既にある項目の名と形は変えない（`log_history::snapshot` の形も変えない）。
 - `session-crate-split` が開けた `pub` 6 項目（`pub` のまま残す・要件 5.14・確定の議題 9）。
@@ -232,7 +232,7 @@ crates/log-capture-kit/tests/
 | `crates/areka/src/runtime_tests/zorder_wiring_tests.rs` | 29・74 の名から札を外し、冒頭 4・5・10・11・13 行を改名表の名へ | 指摘 66・要件 5.12 |
 | `crates/areka/src/runtime_tests/spine.rs` | `capture_logs` を `areka_runtime::frame::test_support::capture_logs` の use に、`make_world_with_gpu` を `gpu_on` を呼んだ後に `AppExit` を据える 3 行に、119 行の理由を消す | 指摘 35・要件 5.8 |
 | `crates/areka/src/runtime_tests/frame/switch_finish_tests.rs` | 60-61 の `SharedFakeIo` の写しを消して `areka_placement::test_support::SharedFakeIo` | 要件 5.5 |
-| `crates/areka/src/menu/ghost_frame_tests.rs` | 既定（要件 5.9 のまま）: 43 行の写しは寄せず、理由を 1 行残す（「置き場と補助を根の下に置く形で、共通の `boot_context` と値が違う」）。討議で OPEN QUESTION 2 を採れば、本体を `boot_context_named(root.dir(), root, current, "StayseeBalloon")` の 1 行にする（`balloon_frame_tests.rs`・`shell_frame_tests.rs` は名と形の変わらない関数を使い続ける） | 要件 5.9・S1 |
+| `crates/areka/src/menu/ghost_frame_tests.rs` | 43 行の写しの本体を `boot_context_named(root.dir(), root, current, "StayseeBalloon")` の 1 行にする（設計の討議の議題 2）（`balloon_frame_tests.rs`・`shell_frame_tests.rs` は名と形の変わらない関数を使い続ける） | 要件 5.9・S1 |
 | `crates/areka/src/menu/mod.rs` | 221-223・254 の呼び手の説明を「本体の `wire_body_after_runtime`（`BODY_SYSTEMS.after_runtime_wired`）から、起動と読み直しのたびに」「`BODY_SYSTEMS.menu_poll` として `register_systems` から」に（説明の文だけ） | 指摘 65・要件 5.11 |
 | `crates/areka/src/placement_tests/measure_template_tests.rs` | 64-65 を「本体の 1 本と実行系の 1 本（配置の crate の 1 本は配置の片割れが見る）」に | 確定の議題 17 |
 | 脳を指す説明（`areka-ghost/Cargo.toml:31`・`areka-ghost/src/shiori_inproc.rs:246`・`areka-sylphya/src/actor.rs:125`・`log-capture-kit/src/event.rs:146`・`event_tests.rs:18`・`shiori-abi/src/interface.rs:45`・`shiori4-testdll/src/lib.rs` の 8 行） | 消えた `ShioriHostSink`・`reference_brain`・`shiori_demo` を名指す所を、今在るもの（`InProcHost`・`shiori4-testdll` 自身）で書き直すか消す。説明の文だけ | 指摘 5・要件 3.3 |
@@ -308,7 +308,7 @@ flowchart TD
 | 2.4 | 当たらないものは直す | 全件を作業の組 G1〜G22 に割り当てた |
 | 2.5 | 残す裁定の記録 | 残す裁定は指摘 0 件。`pub` 6 項目を残す理由は G21 で記録（要件 5.14） |
 | 2.6 | 1 本のまま | 「タスクの見込み」26 前後 |
-| 2.7 | 外への約束の確定 | 確定済みの 4 件（指摘 1・4・5・95）のほか、S2・S1 の公開の口の追加を設計の討議の議題にする（OPEN QUESTION 1・2） |
+| 2.7 | 外への約束の確定 | 確定済みの 4 件（指摘 1・4・5・95）のほか、S2・S1 の公開の口の追加を設計の討議の議題 1・2 で確定した |
 | 3.1・3.2 | 3 つの組を全部直す | 「指摘ごとの直し」の 97 行 |
 | 3.3 | 使う所まで直し切る | File Structure Plan の 3 つの表・「消す・名を変えるときの照合」 |
 | 3.4 | 消す前にツリー全体で確かめる | 「消す・名を変えるときの照合」 |
@@ -374,7 +374,7 @@ const MEMORY_FILE_FIX: &str =
 
 - 前提: `Unusable` を作るのは `persist/mod.rs` の `read_existing` の `Err` の腕（451 行）だけ。錠の失敗（416 行）と書き込みの失敗（485 行）は `Io` のまま。
 - 後条件: `alert_text` の `MemoryWrite` の行は、理由の行が `Unusable(reason)` でも `Io(reason)` でも「理由: {reason}」で、直し方の行だけが `MEMORY_FILE_FIX`／`MEMORY_WRITE_FIX` に分かれる。行の数（5 行）は変わらない。説明書の節の名指しは `MEMORY_WRITE_FIX` の中に残す（要件 5.1・仮定 9）。
-- 字面は既定の案（OPEN QUESTION 3）。
+- 字面は設計の討議の議題 8 で確定。
 
 ### `alerts_suppressed`（S2）
 
@@ -421,7 +421,7 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 ```
 
 - 置き場 `temp/profile`・補助 `temp/helper.exe`・根の出どころ `EnvVar`・経路 `Default` は今の `boot_context` のまま。
-- `menu/ghost_frame_tests.rs:43` の写しは、`temp` に `root.dir()` を渡すと同じ値になる（OPEN QUESTION 2）。
+- `menu/ghost_frame_tests.rs:43` の写しは、`temp` に `root.dir()` を渡すと同じ値になる（設計の討議の議題 2 で寄せると確定）。
 
 ## 指摘ごとの直し
 
@@ -464,7 +464,7 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | 33 | G14 | 写しを消して use | — |
 | 34 | G13 | `carrier_cue` に寄せる | 既存の行列のテスト |
 | 35 | G14 | 上流の `capture_logs`・`gpu_on` へ | 既存の結線のテスト（実 GPU） |
-| 36 | G14 | 既定は要件 5.9 のまま寄せずに理由を 1 行。S1 を足すと同じ値で寄せられるので、寄せるかを OPEN QUESTION 2 で確かめる | 既存の `menu/` のテスト |
+| 36 | G14 | S1 の `boot_context_named` へ寄せる（`temp` に `root.dir()`・同じ値・設計の討議の議題 2） | 既存の `menu/` のテスト |
 | 37 | G13 | `session_tests/mod.rs` に 1 つずつ・`drain_desk` を消す | — |
 | 38 | G13 | `mod.rs` の `resolve_boot_from` の隣に 1 つずつ | — |
 | 39 | G13 | `switch_tests` の `pub(super)` に寄せる・`kinds` は公開のもの | — |
@@ -556,7 +556,7 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | 5.6 | `audit-emo2-boot-spine`・`audit-emo2-boot-frame` のオ | 指摘 33 | G14 |
 | 5.7 | `audit-emo2-boot-frame` のコ | 指摘 29 | G9 |
 | 5.8 | 同 サ | 指摘 35（共通の補助は本体から読める＝写しを消す） | G14 |
-| 5.9 | 同 シ | 指摘 36（既定は寄せずに理由を 1 行・OPEN QUESTION 2） | G14 |
+| 5.9 | 同 シ | 指摘 36（`boot_context_named` へ寄せる・設計の討議の議題 2） | G14 |
 | 5.10 | `audit-areka-input-menu` の件 1・件 3 | 指摘 48・49・50 | G15 |
 | 5.11 | `session-module-gather` の件 2 | 指摘 65（直す・説明の文だけ） | G16 |
 | 5.12 | 棚卸㊷ | 指摘 66 | G17 |
@@ -573,17 +573,18 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 
 ### 兄弟から受けた件（`audit-areka-install-update` からの申し送り・2026-11-22）
 
-範囲の中のファイルにある件なので、要件 3 と要件 9.2（かけ直しで出れば直す）の中で直す。要件の確定の一覧（97 件）に載せるかは設計の討議で確かめる（OPEN QUESTION 1）。
+範囲の中のファイルにある件なので、要件 3 と要件 9.2（かけ直しで出れば直す）の中で直す。設計の討議（議題 1）で、要件の確定の一覧に S1〜S6 を足した。S8 は `audit-emo2-boot-switch` からの知らせで、同じく足した（議題 7）。
 
 | 件 | 中身 | 直し | 組 |
 |---|---|---|---|
 | S1 | 依頼 A: 起動の文脈の補助に名の引数 | `boot_context_named` を足す（上の部品） | G14 |
 | S2 | 依頼 B: 告知の抑止の決まりを 1 か所に（向こうの 103） | `alerts_suppressed`（上の部品）と `with_smoke` のテスト | G5 |
-| S3 | 向こうの 94: `ExeLocationUnavailable` の欄を減らす | `alert.rs:150` の腕を欄を読まない形に（今のうちに直せる・値は今と同じ）。`alert_tests.rs:51` の構築は向こうの列挙の変更と同じコミットでしか直せない（OPEN QUESTION 4） | G5 |
+| S3 | 向こうの 94: `ExeLocationUnavailable` の欄を減らす | `alert.rs:150` の腕を欄を読まない形に（今のうちに直せる・値は今と同じ）。`alert_tests.rs:51` の構築は向こうの列挙の変更と同じコミットでしか直せない（設計の討議の議題 3） | G5 |
 | S4 | `log_history.rs:335` の `snapshot` が排他を握ったまま深く写す | 記録の列を `Arc<Record>` にし、深い複製を排他の外へ（形は変えない） | G5 |
 | S5 | 向こうの 31: `wic_decode_rgba` の共有 | `pub(crate)` にし、`png_image.rs` の mod 行を `pub(crate) mod tests` に（向こうは写しを消す） | G14 |
-| S6 | 向こうの 85: `mcp/sakurascript_log_tests.rs` の中身を `log_history` のテストへ | `log_history_tests.rs` に 1 本足す（向こうはファイルと据え付けを消す・OPEN QUESTION 5） | G14 |
-| S7 | 範囲の外の件: 根の印の決まりが `menu/roots_frame.rs` にしかない | この spec は触らない（`menu/` は見直さない所・決まりの置き場は兄弟の `roots/edit.rs`）。向こうへ返す（OPEN QUESTION 6） | G21 |
+| S6 | 向こうの 85: `mcp/sakurascript_log_tests.rs` の中身を `log_history` のテストへ | `log_history_tests.rs` に 1 本足す（向こうはファイルと据え付けを消す・設計の討議の議題 4） | G14 |
+| S7 | 範囲の外の件: 根の印の決まりが `menu/roots_frame.rs` にしかない | この spec は触らない（`menu/` は見直さない所・決まりの置き場は兄弟の `roots/edit.rs`）。向こうへ返す（設計の討議の議題 5） | G21 |
+| S8 | `audit-emo2-boot-switch` からの知らせ: `reload.rs` の `overlap_or_context` は `update_busy`／`install_busy` で台本の `\![reload,…]` も断るので、インストール完了の応えの台本の読み直しが時刻の偶然で止まりうる | 更新中・インストール中の断り（`RefusedReason::Updating`・`Installing`）を `ReloadOrigin::Mcp` の要求だけに当て、`ReloadOrigin::Script` は通す（向こうの切り替えの決め＝ゴーストの台本からの要求は止めない、にそろえる）。重なり（`ReloadInFlight`・`SwitchInFlight`・`SkinSwitchInFlight`）と `NoContext` の断りは今のまま。`reload_tests.rs` に、更新中に台本の読み直しが通り MCP の読み直しが `Updating` で断られる 1 本を、先に赤で足す | G5 |
 
 ## 設計の段で決めた事項
 
@@ -605,13 +606,13 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | `winapp_init_failed`（error・新） | `areka` | 無い | 1 行 | 0 |
 | `offline_dump_canvas_too_large`（error・新） | `areka::offline_dump` | 無い | 1 行（CSV にも残る） | 0 |
 
-- 文の本文（頭の後ろ）と水準・出所は変えない。`doc/ssp-mcp/log-convention.md` は target で読むので直す所は無い。名の字面は OPEN QUESTION 7。
+- 文の本文（頭の後ろ）と水準・出所は変えない。`doc/ssp-mcp/log-convention.md` は target で読むので直す所は無い。名は設計の討議の議題 9 で確定。
 
 ### 3. 脳の削除の順（要件 5.20・7.2）
 
 1. 範囲の中の `ghost_session_scope_scale_boot_tests.rs` を `PropGetCueSink` の形に直す（G6 の頭）。
 2. 枝を `main` の頭に合わせてから `git grep -nE "shiori_host|shiori_abi|windows_core" -- crates/areka` を見る（脳の 8 本の中の当たりは除いて数える）。0 件（兄弟の直しが着地済み）なら 8 ファイルを全部消し、`shiori-abi`・`windows-core` の行も消す。
-3. 当たりがあり、兄弟が同時に着地する申し合わせなら、兄弟の直しと同じ時点で消す（着地の順は兄弟と申し合わせる）。間に合わないと分かったら、`shiori_host.rs` と `shiori_host_case_fold_tests.rs` だけを `#[cfg(test)] mod shiori_host;` として残し（使い手がテストだけになる）、`shiori-abi`・`windows-core` を dev へ移し、向こうの着地の後に消す件として申し送る（要件 5.20 のとおり）。
+3. 当たりがあり、兄弟が同時に着地する申し合わせなら、兄弟の直しと同じ時点で消す（着地の順は兄弟と申し合わせる）。間に合わないと分かったら、`shiori_host.rs` と `shiori_host_case_fold_tests.rs` だけを `#[cfg(test)] mod shiori_host;` として残し（使い手がテストだけになる）、`shiori-abi`・`windows-core` を dev へ移し、向こうの着地の後に消す件として申し送る（要件 5.20 のとおり）。申し送り先は `audit-areka-install-update` の brief で、向こうが自分の PR で `shiori_host.rs`・`shiori_host_case_fold_tests.rs`・`main.rs` の `mod` 行・dev の `shiori-abi`・`windows-core` の行を消す。こちらの着地で C26 の `Cargo.toml` の席は空くので、向こうが本体の `Cargo.toml` に触っても約束 ⑵ は破れない（設計の討議の議題 6・G21 に記録）。
 
 ### 4. そのほか
 
@@ -677,9 +678,9 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | `audit-areka-install-update` | `mcp/get_property_tests.rs:144-300` | 向こうが `PropGetCueSink` の形に直し、こちらの脳の削除より先か同時に着地（申し合わせ済み）。遅れたら「設計の段で決めた事項」3 の 3 |
 | 同 | `NO_BODY`（5.17） | 向こうの決め＝そろえない。こちらは `body_systems.rs:60` の文だけ（G20） |
 | 同 | S1・S2 | こちらが足す（G14・G5）。向こうはそれを使って写しを消す |
-| 同 | S3 | こちらは `alert.rs:150` を先に直す。`alert_tests.rs:51-56` の構築は向こうの列挙の変更と同じコミットで直す必要がある（OPEN QUESTION 4） |
+| 同 | S3 | こちらは `alert.rs:150` を先に直す。`alert_tests.rs:51-56` の構築は向こうの列挙の変更と同じコミットで直す必要がある（設計の討議の議題 3） |
 | 同 | S5・S6 | こちらが共有・移す。向こうは写しとファイルを消す（どちらが先でもビルドは壊れない） |
-| 同 | S7 | 向こうへ返す（OPEN QUESTION 6） |
+| 同 | S7 | 向こうへ返す（設計の討議の議題 5） |
 | 同 | research.md 7 節の申し送り（`install/startup.rs:220`＝S2 で片づく・`install/names_tests.rs:29`＝向こうの 19 で直す） | 済み（伝言で受けた） |
 | `audit-emo2-boot-switch` | research.md 7 節の 5 件（`move_cue_*` の `SharedFakeIo` と `join`・`shell_balloon_switch_tests.rs:78` の `headless_wiring`・`ghost_switch.rs:522` のログの語・`accept_skin`） | 申し送る（G21）。`headless_wiring` は指摘 40 と同じ直し方を添える |
 | `menu-thumbnail-preview`（brief へ書き足し） | `mock-shell.rs` の手本の場所 | git の履歴の場所を書き足す（`completed/` でないことを確かめる・要件 7.11） |
@@ -694,7 +695,7 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 | G2 | `--offline-dump` の下地の上限（2） | `offline_dump/render.rs`・`mod.rs`・`offline_dump_tests.rs` |
 | G3 | 本番の小さな直し（3・12・77・78・82・83・87・5.15・5.18） | `main.rs`・`areka-session` の `build.rs`・`Cargo.toml`・`body_systems.rs`・`log_history.rs`・`smoke_exit.rs`・`tick_gate_config.rs` |
 | G4 | ログの語（4・95） | `session_mark.rs`・`boot_seam.rs`・`ghost_session.rs`・`ghost_session_strict_tests.rs` |
-| G5 | 兄弟から受けた本番の件（S2・S3・S4） | `alert.rs`・`alert_tests.rs`・`log_history.rs` |
+| G5 | 兄弟から受けた本番の件（S2・S3・S4・S8） | `alert.rs`・`alert_tests.rs`・`log_history.rs`・`reload.rs`・`session_tests/reload_tests.rs` |
 | G6 | SHIORI の試験用の脳を消す（5・6・7・14・5.20） | 脳の 8 本・`main.rs`・`ghost_session_scope_scale_boot_tests.rs`・`structure.md`・範囲の外の説明 |
 | G7 | 依存と README（8〜11・13・88・89・5.19） | 本体の `Cargo.toml`・`README.md`・`embedded_icon_test.rs`・`Cargo.lock` |
 | G8 | 本体の落ちる力の無いテスト（15〜19・22・23・93・5.16） | `session_tests/` と `tick_gate_config_producers_tests.rs` |
@@ -723,15 +724,19 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext { boot_cont
 - 指摘 15 で歩く根を足すと、表に無い生産者が見つかる見込みがある。そのときは表に載せる（名簿の完全さを守るのが見張りの目的）。
 - 指摘 46 の 22 本の置き先は、呼ぶ関数を定義するモジュールのテストへの決まりで実装が選ぶ。§8 の名指しの行は同じ変更で直す。
 
-## OPEN QUESTIONS（設計の討議で確定する）
+## 設計の討議で確定したこと（2026-11-22・推奨どおり一括承認）
 
-1. **兄弟から受けた件 S1〜S6 を、要件の確定の一覧に載せるか** — 案: 載せる（範囲の中のファイルの件で、載せなくても要件 9.2 のかけ直しで直す対象になる）。設計は載せる前提で G5・G14 に入れた。
-2. **`menu/ghost_frame_tests.rs:43` の写し（確定の議題 13・要件 5.9）** — 兄弟の依頼 A で `boot_context_named` を足すと（設計は足す前提）、こちらの写しも同じ値で寄せられる（`temp` に `root.dir()`）。設計は確定どおり「寄せずに理由を 1 行」で書いた。推す案: 寄せて、議題 13 と要件 5.9 の「寄せない」を改める（`menu/` の 1 ファイルの本体を 1 行にするだけ・ほかの 2 本は触らない）。
-3. **知らせの一文の字面（指摘 1）** — 案: 「直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。」。型の名は `PersistFailureCause::Unusable(String)`。
-4. **`alert_tests.rs:51-56` の構築（S3）** — 列挙の欄と構築の字は同じコミットでしか合わない。案: 兄弟が列挙の欄を減らすコミットで、こちらの `alert_tests.rs` の 2 行（`tried`・`origin`）も消す（こちらはその 2 行に限って承知する）。こちらは `alert.rs:150` を先に欄を読まない形にしておく。
-5. **S6 の順** — こちらが `log_history_tests.rs` に 1 本足し、兄弟が `mcp/sakurascript_log_tests.rs` と据え付けを消す。どちらが先でもビルドは壊れない（間は同じテストが 2 本）。案: 順は問わず、両方の着地で閉じる。
-6. **S7（`menu/roots_frame.rs` にしかない根の印の決まり）** — 決まりの置き場は兄弟の `roots/edit.rs` の `decide_remove`・`decide_front` で、`menu/` はこの spec が見直さない所。案: この spec は触らず、向こうの件として返す（向こうが直すなら `menu/roots_frame.rs` の 2 か所は向こうの直しに要る呼び出し元になる）。
-7. **倒れ先の 3 つの記録の `event` の名（指摘 95）** — 案: `fallback_boot_wired_off`（info）・`fallback_boot_origin_missing`（warn）・`fallback_boot_failed`（error）。`[session_mark]`・`[boot_seam]` の頭は確定の議題 8 のとおり。
-8. **指摘 2 の面積の上限** — 案: 当てない（確定は「幅か高さ」・外形は面の和）。当てるなら `MAX_AREA` と同じ 2^25 を本体に置く。
-9. **指摘 79（`ghost_session.rs` の `impl` の移し）** — 「次に足すとき」でなく今移す案で書いた。今回の直しで行が増えないので見送る手もあるが、かけ直しで同じ指摘が残る。
-10. **S4（`snapshot` の排他）** — 案: 記録を `Arc` で持ち、深い複製を排他の外へ（公開の形は変えない）。MCP の `get_log` の 1 回の写しは 4MB ほどで数ミリ秒のため、直さずに「今の負荷を越えない」と記録して閉じる手もある。
+| 議題 | 確定 |
+|---|---|
+| 1 兄弟から受けた件 | S1〜S6 と S8 を要件の確定の一覧に足す（`requirements.md` の確定の節） |
+| 2 `menu/ghost_frame_tests.rs:43` の写し | `boot_context_named` へ寄せる。要件の議題 13 と要件 5.9 の「寄せない」を改めた |
+| 3 `alert_tests.rs:51-56` の構築（S3） | `audit-areka-install-update` が列挙の欄を減らすコミットで、こちらの `alert_tests.rs` の 2 行（`tried`・`origin`）も消すことを承知する。こちらは `alert.rs:150` を先に欄を読まない形にする |
+| 4 S6 の順 | 問わない。両方の着地で閉じる |
+| 5 S7 | この spec は触らず、`audit-areka-install-update` の件として返す |
+| 6 脳の削除で先に着地したとき | 「設計の段で決めた事項」3 の 3 のとおり、残りを `audit-areka-install-update` の brief へ渡し、向こうが自分の PR で消す |
+| 7 台本の読み直しの断り（S8） | 更新中・インストール中の断りを MCP からの要求だけに当てる |
+| 8 知らせの一文 | 「直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。」・型の腕は `PersistFailureCause::Unusable(String)` |
+| 9 倒れ先の記録の `event` | `fallback_boot_wired_off`（info）・`fallback_boot_origin_missing`（warn）・`fallback_boot_failed`（error） |
+| 10 指摘 2 の面積の上限 | 当てない。16,384×16,384（面ごとに約 1GiB）がまだ確保されうることは、この表に残す |
+| 11 指摘 79 | 今移す |
+| 12 S4 | `Arc` で持ち、深い複製を排他の外で行う（公開の形は変えない） |
