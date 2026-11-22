@@ -201,7 +201,7 @@
   - 全体テストが緑で、その要約が検証の記録に在る
   - _Dispatch: mechanical — 決まった道具を回すだけ_
   - _Requirements: 8.5, 5.11, 3.8, 5.9_
-- [ ] 7.4 ログの出所を名前で読む実機テストを回す
+- [x] 7.4 ログの出所を名前で読む実機テストを回す
   - 排他テストの机を取り、`crates/areka/tests/emo2_mcp_real_run.rs` を今の手順で 1 回走らせ、新しい出所の名前（`areka_session::boot_config=info` ほか）で行を拾って緑になることを示す
   - 実機テストが緑で、拾った行の数が移す前の記録と同じ
   - _Dispatch: mechanical — 決まった実機テストを 1 回回すだけ_

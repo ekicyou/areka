@@ -1409,3 +1409,11 @@ RED: 該当なし（数えるだけ）。
 - 要約は `all steps green`。21 の段がすべて OK（fmt --check 6 s・x64 workspace tests 410 s・dola toml feature tests・i686 tests (host-32)・crates.io pre-publish check・encoding check・load flake check・perf loop selftest ほか）。`test result: ok` の行は 180。
 - 含まれていることを出力で確かめたもの: `areka_session` の lib のテストの実行ファイル（`Running unittests src\lib.rs (… areka_session-….exe)`）・1,000 行の番人 `file_length_guard_test`・番人の決まり `with_default_guard_test`・`sample_path_guard_test`・`temp_path_guard_test`。
 - 赤は無く、回し直しはしていない。走らせ終えてすぐ机を返した。
+
+### 7.4
+
+- 排他テストの机を取り、`cargo test -p areka --test emo2_mcp_real_run -- --nocapture` を今の手順で 1 回走らせた（コミット `0b1413ca8`）。出力は `target/session-crate-split/7.4-emo2-mcp.log`。
+- 結果は緑（1 passed・25.31 秒）。証拠は 19.4 秒で集め終え、利用者と同じ閉じ方（`UserClose`）で終了コード 0。
+- 新しい出所の名前で行を拾えたことは、テストの表明そのものが示す。`BOOT_CONFIG_PREFIX = "areka_session::boot_config: "` と、`rust_log` の `areka_session::boot_config=info` ほかで、標準出力の行を拾えなければこのテストは赤になる。
+- 拾った行の数の比べ: 移す前（着手のとき）にこのテストの行の数を記録していなかったので、数どうしは比べられない。テストは拾う行を `ghost_resolved` の 1 行と出どころの記録に絞って表明しているので、緑であることは同じ行を拾えたことを意味する。
+- 走らせ終えてすぐ机を返した。
