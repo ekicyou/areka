@@ -131,10 +131,10 @@
   - **2026-11-14 追記（`audit-placement-core` の実装・指摘 1）**: 最初の位置（`resolve_placement`）は `audit-placement-core` で 4 つの辺で解く形に直した（`top` は上端・`left`／`right` はその辺に下から上へ連ねる・正典の値では警告を出さない）。作業領域が変わったときに辺へ沿わせ直す所はこの件に残る（網羅台帳の 8 行は `degraded` のまま）。
 - 本文 Current State の「`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・… は網羅台帳で absent」は古い。完了 `window-link-directives`（2026-10-23）がこの 2 つを実装した（網羅台帳 `sakura-script.toml` は `implemented`）。本文 議題 1 の「どれも未実装」も、残るのは時間をかける `\![move]`／`\![moveasync]` だけ。
 
-## 2026-11-22 正典の変化と v0.4.0 への格上げ
+## 正典のお座り
 
-- **版**: 開発者の版の決めで、夢（据え置き）から v0.4.0 へ上げた（2026-11-22 開発者「window-snapですが、SSPが対応しました。ukadocを確認せよ。これ0.4.0に」・区分 A）。
-- **正典が変わった**（ukadoc MCP で 2026-11-22 に引いた）: SSP 2.9.33 で `\![set,alignmenttodesktop,osuwari,オプション,…]` が入った。ukadoc の説明は「ゴーストのウインドウを、他のウインドウの隅や縁に『座らせる』『貼り付ける』『ぶら下げる』」（`list_sakura_script` の「`\![set,alignmenttodesktop,osuwari]`について」・ukiya 氏の SAORI「Osuwari.dll」と同じ処理の内蔵）。本文 Problem の「正典の吸着は…相手はデスクトップの端に限られる」と Current State の「無いもの: ほかのアプリの窓を相手にする吸着」は古い。
+- **版**: v0.4.0・区分 A。
+- **正典**（ukadoc MCP で引いた）: SSP 2.9.33 で `\![set,alignmenttodesktop,osuwari,オプション,…]` が入った。ukadoc の説明は「ゴーストのウインドウを、他のウインドウの隅や縁に『座らせる』『貼り付ける』『ぶら下げる』」（`list_sakura_script` の「`\![set,alignmenttodesktop,osuwari]`について」・ukiya 氏の SAORI「Osuwari.dll」と同じ処理の内蔵）。本文 Problem の「正典の吸着は…相手はデスクトップの端に限られる」と Current State の「無いもの: ほかのアプリの窓を相手にする吸着」は古い。
   - 台本: `\![set,alignmenttodesktop,osuwari,…]`。オプション＝`--target=`（`active` 前面の窓・`fix` 画面に固定・`@文字列` 題名・`#数値` 窓の番号）・`--origin=`／`--target-origin=`（2.9.34・`左右.上下` の点や `tl` などの 2 文字・`base`・`osuwari`）・`--x=`／`--y=`・`--interval=`（既定 100 ミリ秒）・`--xmove`／`--ymove`（動かせる範囲の中の比率で覚える）・`--noclip`・`--area=`・`--side=`・`--margin=`（座れないとき・見切れのときの基準の矩形）・`--zorder=`（`front`／`back`＝対象のすぐ奥から覗く）。
   - descript: ゴースト・シェルの `seriko.alignmenttodesktop`（`sakura.`・`kero.`・`char*.` つきも）の値に `osuwari,--…` を書ける（起動とシェルの切替で追尾を始める・`default` で descript の設定へ戻す・読めないオプションはエラーログに警告して無視）。
   - surfaces.txt: surface*ブレスの `point.osuwaripos.x`／`.y`（2.9.34・既定は `point.basepos.x`／`.y` と同じ）。
