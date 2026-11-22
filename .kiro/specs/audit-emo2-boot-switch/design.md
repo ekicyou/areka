@@ -337,7 +337,7 @@ if from_user_or_script && (BodySystems::of(world).update_busy)(world) {
 
 - 入口の中身の関数（`request_ghost_switch_with`・`request_skin_switch_with`）に、目録を一度だけ埋める私有の引数 `catalog: &mut Option<…>` を足す。公開の入口（`request_ghost_switch`・`request_skin_switch`）は `&mut None` を渡し、取り出しの系（`drain_change_requests`・`drain_switch_requests`）はループの外で 1 つ作って全件に渡す。
 - 目録が変わりうるのは、受理された切り替えの後だけで、その後の要求は今どおり「進行中」で目録を読む前に断られる。だから 1 回の取り出しの中で目録を共用しても答えは変わらない。シェルの候補は今のゴーストのフォルダ、バルーンの候補は根と今のゴーストから読むので、受理の後に使い回さない（受理したら埋めた目録を捨てる）。
-- 記録の件数と中身は変わらない（〔約束 c〕に触れない・`research.md` の 2.3 節の 34 番の (a)）。縛るテスト（`ghost_switch_tests.rs`）`unresolved_names_in_one_drain_read_the_catalog_once`: 同じ解けない名を 3 件溜めて取り出すと `warn!(ghost_switch_unknown)` が 3 行・解けた名を後に置けば今どおり受理。目録を読む回数は、`ghost_dir` の下の descript を読む回数でなく、目録の関数を呼ぶ回数を `#[cfg(test)]` の数えで見る形を実装で選ぶ（数えを足さずに済むなら足さない）。
+- 記録の件数と中身は変わらない（〔約束 c〕に触れない・`research.md` の 2.3 節の 34 番の (a)）。縛るテスト（`ghost_switch_tests.rs`・`shell_balloon_switch_tests.rs`）`unresolved_names_in_one_drain_read_the_catalog_once`: 目録を読む口は、74 番の `accept_skin_with` と同じ形の私有の注入の口（目録を読む閉包を受ける `*_with`）にし、テストは数える閉包を渡す。表明は ⑴ 同じ解けない名を 3 件溜めて取り出すと `warn!(ghost_switch_unknown)` が 3 行で、閉包は 1 回 ⑵ 解けた名の後に置いた要求は「進行中」で断られ、受理の後に埋めた目録を使い回さない（受理の後に閉包が呼ばれるなら、捨てて読み直した 1 回だけ）。**直しの前は閉包が 3 回＝赤**。
 
 ### 24・25・40 番 本体の可視性のテストを `areka-runtime` へ戻す（件 4・確定 13）
 
@@ -507,7 +507,7 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 | T1 | 毎画面更新の予約: 1 | `balloon_visibility_phase.rs`・`balloon_visibility_phase_wake_tests.rs` | — |
 | T2 | scope の上限（件 6）: 2 | `balloon_visibility_phase.rs`・`balloon_visibility_phase_box_tests.rs` | T1 |
 | T3 | インストール中の断りと送りの順: 3・74 | `shell_balloon_switch.rs`・`skin_switch.rs`・`shell_balloon_switch_tests.rs`（新） | — |
-| T4 | 更新中の断り: 76・55 | `ghost_switch.rs`・`ghost_switch_tests.rs`・（申し合わせ）`install/overwrite.rs` の腕 | T9 |
+| T4 | 更新中の断り: 76・55 | `ghost_switch.rs`・`ghost_switch_tests.rs`・（申し合わせ）`install/overwrite.rs` の腕 | T9・`audit-areka-install-update` との申し合わせ（新しい腕を足すと、相手のファイルの網羅の `match` に腕が入るまでワークスペースが組めない＝申し送りでは代われない） |
 | T5 | `areka-session` の公開の面（件 1・件 2）: 4・5・6・38（session）・39 | `shell_balloon_switch.rs`・`ghost_switch.rs`・`ghost_switch_test_support.rs`・範囲の中のテスト・（申し合わせ）範囲の外の 4 か所 | T3・T4 |
 | T6 | 本体のテストの戻し（件 4）: 24・25・26（runtime 分）・40・64・65・68・69 | 本体 `runtime_tests/balloon_visibility*`・`areka-runtime` の `balloon_visibility_phase*` | T2 |
 | T7 | `areka-runtime` の公開の数え直し（件 3）: 7・36・37・38（runtime） | `shell_box_hover.rs`・`lib.rs`・`move_cue.rs`・`balloon_visibility*.rs` | T6 |
