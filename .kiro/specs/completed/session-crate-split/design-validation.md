@@ -1,6 +1,6 @@
 # 設計の検証: session-crate-split
 
-- 対象: `.kiro/specs/session-crate-split/design.md`（requirements.md・research.md・steering・roadmap の C25 の行と照らした）
+- 対象: `.kiro/specs/completed/session-crate-split/design.md`（requirements.md・research.md・steering・roadmap の C25 の行と照らした）
 - 日付: 2026-11-22
 - 判定: **GO**（議題 3 つは設計の討議で決める）
 

@@ -6,7 +6,7 @@
 - **今の状態**: `session-module-gather`（PR#494・2026-11-22 着地）で、起動・終了・切替の層は本体の `crates/areka/src/session/`（122 ファイル・本番 約 8,600 行・テスト 約 25,000 行）に集まった。それでも、集めた層の本番は本体だけのモジュール（menu・install・update・`file_drop`・`smoke_exit`）を 28 行で直に呼んでいて、crate に出せない。たとえば窓を開いた直後にメニューの解放・投げ込み・近道の受け手を差す所、実行系が立った後にメニューを結線する所、切替の節目に install と update の机へ知らせる所、読み直しと切替の前に机が忙しいかを問う所、受け口の列に install と update の受け口を入れる所、告知を出すかの判断で煙の自動終了の設定を読む所がそうである。本体だけのモジュールの系の登録は、`main.rs` の `BODY_SYSTEMS`（`session::ghost_session::BodySystems` の関数の欄 2 つ）を `register_systems` へ渡す形になっている。
 - **変えたいこと**: 本体の中で先に呼ぶ向きを逆にし、`session/` から本体の外への参照が 0 になったのを grep で示してから、集めた層の本番とテストを新しい crate `crates/areka-session/`（lib・`publish = false`・`areka-input`・`areka-runtime`・`areka-placement` に依存）へ移す。本体は「UI スレッドからエンジンへつなぐ」部分（main と起動オプション・MCP・メニュー・インストール・更新・投げ込み・オフラインの面の書き出し・SHIORI のデモ）だけになる。振る舞いは何も変えない。
 
-（出どころ: `.kiro/specs/session-crate-split/brief.md`〔最後の「2026-11-22 棚卸㊷の再測定（main `d4db9eb0`）」の節を含む。数はこの節が古い節より優先する〕。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C25 の行。外への参照の一覧の元は `.kiro/specs/completed/session-module-gather/research.md` の 14.3・14.4。）
+（出どころ: `.kiro/specs/completed/session-crate-split/brief.md`〔最後の「2026-11-22 棚卸㊷の再測定（main `d4db9eb0`）」の節を含む。数はこの節が古い節より優先する〕。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C25 の行。外への参照の一覧の元は `.kiro/specs/completed/session-module-gather/research.md` の 14.3・14.4。）
 
 ## Introduction
 
