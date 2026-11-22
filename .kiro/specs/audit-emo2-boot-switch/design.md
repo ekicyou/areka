@@ -10,9 +10,9 @@
 
 1. 時間切れの満了の後も抑止（ドラッグか滞在）が続く間は、可視性の相が次の画面更新を予約しない（1 番・要件 5.13）。抑止が解けたフレームは、解けを起こした入力（ポインタ・ドラッグの終わり・cue）がそのフレームを起こし、そのフレームで待ちを `now + wait` から計り直して期限を預ける（今と同じ）。
 2. 窓の印の scope が `i32::MAX` を越えるシェルの窓は、時間切れを止めるドラッグの判定で `warn!` を残して読み飛ばす（2 番・件 6）。今は届かない（窓の scope は {0,1} だけ）。
-3. メニューからのシェル・バルーンの切り替えは、インストールの作業の途中なら `warn!(skin_switch_installing)` で断る（3 番・要件 5.16）。台本からの切り替えは断らない（「設計の決め」の D1・議題 1）。
+3. メニューからのシェル・バルーンの切り替えは、インストールの作業の途中なら `warn!(skin_switch_installing)` で断る（3 番・要件 5.16）。台本からの切り替えは断らない（「設計の決め」の D1・確定 1）。
 4. シェル・バルーンの切り替えは、kanade へ台詞の切れ目の待ちを頼めたときだけ資産の組み立てを起こす（74 番）。頼めなかった回は組み立てが起きない。
-5. メニューと台本からのゴーストの切り替えは、ネットワーク更新の途中なら `warn!(ghost_switch_updating)` で断る（76 番）。更新の手続き自身の読み直しと上書きのインストールの切り替えは断らない（D2・議題 2）。
+5. メニューからのゴーストの切り替えは、ネットワーク更新の途中なら `warn!(ghost_switch_updating)` で断る（76 番）。台本からの要求・更新の手続き自身の読み直し・上書きのインストールの切り替えは断らない（D2・確定 1）。
 6. 解けない同じ名前の切り替えの要求がまとめて届いても、目録を取り出しの 1 回につき 1 度だけ読む（34 番）。記録の件数と中身は変わらない。
 7. 配置の crate の `scale_signed(i32::MIN, k)` が、`i32` に収まる答え（恒等比なら `i32::MIN`）を返す（5.15 ㋑・D3・議題 3）。収まらない答えの飽和（`±i32::MAX`）は変えない。
 
@@ -75,7 +75,7 @@
 ### 見直しが要る変化（Revalidation Triggers）
 
 - `SkinVerdict::Installing` と `SwitchVerdict::Updating` が増える。網羅の `match` を書く後の呼び手は腕を足す。
-- 入口の断りの並びが「進行中 → ゴースト切替中 → 更新中 → インストール中 → 文脈」にそろう。ゴースト切替の入口の更新中の断りは「メニューか名前の要求」だけに当たる（D2）。新しく入口を呼ぶ手続き（`Automatic` かつ `Folder`）は断られない前提で組める。
+- 入口の断りの並びが「進行中 → ゴースト切替中 → 更新中 → インストール中 → 文脈」にそろう。インストール中・更新中の断りは、どちらの入口でもメニューからの要求（`SkinOrigin::Menu`・`ChangeOrigin::Manual`）だけに当たる（D1・D2）。新しく入口を呼ぶ手続きと台本（`Automatic`）は断られない前提で組める。
 - 可視性の相は、満了の後の抑止の間は起床を預けない。抑止を新しい種類で増やす spec は、その解けがフレームを起こす入力から来ることを確かめる。
 - 本体の `runtime_tests/` から `areka-runtime` へ可視性の相のテスト 29 本が移る（24・40 番）。本体に残るのは `notice_tests`（5 本）と代わりの親 2 つだけ。`areka-runtime` の `balloon_visibility::phase::test_support` の渡し口は `notify_timeout` だけになる見込み（確かめて記録する）。
 - `scale_signed` の答えが `i32::MIN` を取りうる（5.15 ㋑）。配置の後の段は `i32::MIN` を受けても回り込まない（今も `-i32::MAX` の 1 つ下の値で、加算は飽和の演算で行っている・実装で grep して確かめる）。
@@ -317,9 +317,7 @@ fn accept_skin_with(
 
 ```rust
 // ghost_switch.rs（request_ghost_switch_with の「進行中」の直後）
-let from_user_or_script =
-    req.origin == ChangeOrigin::Manual || matches!(req.ghost, GhostSpec::Name(_));
-if from_user_or_script && (BodySystems::of(world).update_busy)(world) {
+if req.origin == ChangeOrigin::Manual && (BodySystems::of(world).update_busy)(world) {
     tracing::warn!(
         event = "ghost_switch_updating",
         spec = ?req.ghost,
@@ -329,9 +327,10 @@ if from_user_or_script && (BodySystems::of(world).update_busy)(world) {
 }
 ```
 
-- 手続きの要求（更新の読み直し・上書きのインストール＝`Automatic` かつ `Folder`）には当てない。`accept_switch`（`reload.rs` から直に呼ばれる）にも足さない。
+- 台本の要求（`Automatic`・`Name`）と手続きの要求（更新の読み直し・上書きのインストール＝`Automatic` かつ `Folder`）には当てない。台本に当てない理由は 3 番と同じ: 更新の後の `OnUpdateComplete` は読み直しの切り替えが終わった後の後送りから送られ、そのときまだ `update_busy` が真でありうるので、その応えの台本のゴースト切替を時刻の偶然で黙って止めないため（イベント → 台本の輪を止めない）。`accept_switch`（`reload.rs` から直に呼ばれる）にも足さない。
 - `SwitchVerdict::Updating` を足すと、`install/overwrite.rs:L118-L130` の網羅の `match` に腕の名を 1 つ足す（`audit-areka-install-update` と申し合わせる・`NotFound | NoContext | Updating` の腕へ）。`update/desk.rs` は `== Accepted` だけを見るので変わらない。
-- 縛るテスト（`ghost_switch_tests.rs`・23 番で約 180 行を移した後）`updating_refuses_menu_and_script_requests_but_not_the_update_reload`: 文脈を据えた World に `BodySystems { update_busy: |_| true, ..NO_BODY }`。メニュー（`Manual`・`Folder`）と台本（`Automatic`・`Name`）は `Updating`・`warn!(ghost_switch_updating)` 1 行ずつ・kanade へ何も送らない。手続き（`Automatic`・`Folder`）は今どおり受理（`Accepted`）。**直しの前は 3 つとも受理＝赤**。
+- 縛るテスト（`ghost_switch_tests.rs`・23 番で約 180 行を移した後）`updating_refuses_menu_requests_only`: 文脈を据えた World に `BodySystems { update_busy: |_| true, ..NO_BODY }`。メニュー（`Manual`）は `Updating`・`warn!(ghost_switch_updating)` 1 行・kanade へ何も送らない。台本（`Automatic`・`Name`）と手続き（`Automatic`・`Folder`）は今どおり受理（`Accepted`）。**直しの前はメニューも受理＝赤**。
+- 腕を足す前に `audit-areka-install-update` と申し合わせる（確定 2）。相手が腕の追加を受けられないときは、新しい腕を足さずに既にある `SwitchVerdict::Busy` を返し、断りは `warn!(ghost_switch_updating)` で見分ける（メニューは判定で分岐しないので振る舞いは同じ）。
 
 ### 34 番 目録を取り出しの 1 回につき 1 度だけ読む（`ghost_switch.rs`・`shell_balloon_switch.rs`）
 
@@ -428,7 +427,7 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 | 33 | 補助を消して `Frame::new(e).signal(..)[.at(t)][.dragging()].run(..)` に・doc を直す | — | T12 |
 | 74 | 送りを先に・送れたときだけ組む（上の節） | `a_failed_gap_request_starts_no_build` | T3 |
 | 75 | 「今日どおり」を「そのまま終了する」「通常どおり終わる」の形に（語・target・欄は変えない） | — | T15 |
-| 76 | メニューと台本の要求だけを `update_busy` で断る（上の節・D2） | `updating_refuses_menu_and_script_requests_but_not_the_update_reload` | T4 |
+| 76 | メニューの要求だけを `update_busy` で断る（上の節・D2） | `updating_refuses_menu_requests_only` | T4 |
 
 ### できれば（34〜73）
 
@@ -490,7 +489,7 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 ## 設計の決め（議題の候補）
 
 - **D1（3 番の断りの位置）**: 入口の「更新中」の次に置き、メニューの要求だけに当てる。理由は「3 番の節」。別案は「書いている間」の問いを足して全部の要求に当てる形（議題 1）。
-- **D2（76 番の見分け方）**: 「`Manual` か `Name`」で、利用者と台本の要求を手続きの要求（`Automatic` かつ `Folder`）から見分ける。入口の呼び手の 4 つを全部見て決めた形で、新しい呼び手は「手続きなら `Folder`」で組む前提になる（見直しが要る変化に書いた）。別案は、取り出しの系（範囲の中）とメニューの登記（本体 `menu/ghost_frame.rs`・`audit-areka-app` の持ち物）の 2 か所で問う形（議題 2）。
+- **D2（76 番の見分け方）**: 出どころが `ChangeOrigin::Manual`（メニュー）の要求だけを断る。3 番の D1 と同じく、台本と手続きの要求（`Automatic`）は断らない（確定 1）。新しい腕 `SwitchVerdict::Updating` は申し合わせの後に足し、受けられなければ `Busy` を返す（確定 2）。
 - **D3（5.15 ㋑ の形）**: 収まる答えだけを素通しにし、収まらない答えの飽和の値は変えない（檻の 2 本だけが変わる）。
 - **D4（2 番）**: 要件 5.6 の字面どおり `window_scope` を使い、記録の抑えは足さない（前例の 9 か所と同じ・届かない道）。
 - **D5（16 番）**: 可視性は欄で数える・単位は陽性の対。本番の行は変えない。
@@ -640,7 +639,7 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 ## 安全の考え
 
 - 他人のゴーストの台本は信用できない入力。`\![change,ghost,…]` を大量に並べた台本でも、34 番で 1 回の取り出しの目録の読みは 1 度になる。
-- 3・76 番は、インストールと更新が書き換えているフォルダを利用者の操作で読むのを防ぐ。台本の要求の扱いは議題 1・2 で決める。
+- 3・76 番は、インストールと更新が書き換えているフォルダを利用者のメニューの操作で読むのを防ぐ。台本の要求は断らず、書きかけを読んだときは今の失敗の記録（`skin_switch_failed` ほか）で取りやめる（確定 1）。
 - 2 番は、窓の scope が大きくなる日（`extra-character-windows`）に、別の scope の時間切れが止まる道を閉じる。
 
 ## 並走の spec との継ぎ目（C26）
@@ -651,10 +650,11 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 - **`SwitchVerdict::Updating` の腕（同じ相手）**: `install/overwrite.rs` の網羅の `match` に名を 1 つ足す（T4）。
 - **`audit-areka-app`**: 4・5 番の use の道（T5）・26 番の寄せ先をそろえる（`wiring().1`）・3 番の続きの申し送り（T18）。
 
-## 設計の討議へ渡す議題
+## 設計の討議で確定したこと（2026-11-22・開発者が全議題を推奨案で承認）
 
-1. **3 番の断りの位置（要件 5.16）**: 推す＝メニューの要求だけを `install_busy` で断る（D1・範囲の中で済む・ゴーストのインストールの後の台本を止めない）。別案＝「書いている間」の問いを足して台本にも当てる（C26 の 2 本の持ち物に use の道を越えて及ぶ）。
-2. **76 番を直す対象に足すことと、その見分け方**: 推す＝足す。「`Manual` か `Name`」の要求だけを `update_busy` で断る（D2）。別案＝取り出しの系と本体のメニューの 2 か所で問う。
-3. **5.15 ㋑ が完了 spec の固定を変えること**: 推す＝収まる答えだけ素通しにし（D3）、固定していた檻 2 本を改める。`areka-P0-balloon-offset-dpi` の設計の「唯一の例外」は要件でなく設計の決めなので覆す直しには当たらないと読む。
-4. **`switch_to` の分けをどちらが着地させるか・順**: 推す＝分けは `audit-areka-install-update` が持ち、この spec は `switch_to` に触らず先に着地する（後なら取り込んでから直す）。
-5. **`spawn_windows(rig, dpi)`・`pump_messages` を `pub` にする頼み**: 推す＝受ける（写しの寄せ・範囲の中のファイルだけ・lap の呼び手は 96 を渡す）。本体の `mcp/` の写しを消すのは相手。
+1. **インストール中・更新中の断りはメニューからの要求だけ（D1・D2）**: 3 番も 76 番も、出どころがメニュー（`SkinOrigin::Menu`・`ChangeOrigin::Manual`）の要求だけを断る。台本と手続きの要求は断らない（`OnInstallComplete(Ex)`・`OnUpdateComplete` の応えの台本の切り替えを止めない）。読み直しの入口（`reload.rs`）が台本も断る件は、事実として `audit-areka-app` へ申し送る（T18）。要件 5.16 もこの形に改めた。
+2. **`SwitchVerdict::Updating` を足す**: T4 の前に `audit-areka-install-update` と申し合わせ、`install/overwrite.rs` の網羅の `match` に腕の名を足してもらうか、こちらで足す。受けられなければ腕を足さずに `Busy` を返し、記録で見分ける。
+3. **`scale_signed` の 1 ずれを直す（D3）**: 完了 spec `areka-P0-balloon-offset-dpi` の「唯一の例外」は設計の決めで、開発者の裁定ではない。固定していた檻 2 本を改める。
+4. **`switch_to` を段に分ける仕事は `audit-areka-install-update` が持つ**: この spec は `switch_to`・`take_down`・`boot_into` に触らない。相手が先に着地したら、取り込んでから T4・T5・T15・T16 を行う。
+5. **`spawn_windows(rig, dpi)`・`pump_messages` を `pub` にする頼みを受ける**: 範囲の中の 1 ファイルだけ・こちらの呼び手は 96 を渡す。本体の `mcp/` の写しを消すのは相手。
+6. **細かい選び（D4〜D10）**: 設計の決めのとおり（2 番は `window_scope`・抑えなし／16 番は欄で数え陽性の対／22 番は 2 本とも・44 番は単体 4 本を消す／28 番は (a)／41 番は ⑴ と ⑵／34 番は (a)／タスクは案 C の 20 本）。
