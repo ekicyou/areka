@@ -270,3 +270,48 @@ session の本番が名指す crate: `tracing`・`areka_ghost`・`areka_runtime`
 8. **本体を読む見張りの置き場**（要件 5.13）: W1（本体に置いて根の並びに `areka-session` を足す）か W2（session から上の crate を読む）か。
 9. **本体に残すテストの置き場の名前**（例 `crates/areka/src/session_tests/`）と、1 本のファイルの一部だけが本体を要るもの（`reload_tests.rs`・`shell_balloon_switch_tests.rs`）を分けてよいか。
 10. **`session_end.rs` の名前**（要件 3.9・未決 3）・**呼び手の書き換えの形**（要件 4.4・未決 4）・**`load-flake.ps1`**（要件 5.12・未決 7）: 測った事実で答えが変わる所は無い。前例どおりの仮定で足りる見込み。
+
+## 12. 設計の段の調べ（2026-11-22・作業の木 `b21fd552`）
+
+> 入力: `requirements.md`（要件の討議の決め 7 つを含む）・この research.md の 1〜11・brief・steering（product・tech・structure・roadmap の「本体の crate 分け」と C25 の行）・前例 `completed/{input-crate-split,runtime-crate-split,runtime-module-untangle,session-module-gather}`・`crates/areka-runtime/src/session_hooks.rs`・`crates/areka-input/src/hooks.rs`・`BodySystems`・`BODY_SYSTEMS`。
+> 使った手順: `kiro-spec-design` の `rules/design-principles.md`・`design-discovery-light.md`（既にある系の拡張なので軽い調べ）・`design-synthesis.md`・`design-review-gate.md`。外の依存を足さないので Web の調べはしていない。走らせたのは `git grep` と読むことだけで、`cargo` は回していない（数は静かに読んだ見込みを含む）。
+
+### 12.1 数の取り直し（要件の申し送り 1）
+
+| 項目 | 2026-11-22 の作業の木 | 要件・brief の数 |
+|---|---|---|
+| 本番の外への参照 | 28 行＋`alert.rs:286`（行番号は 2.2 と一致）。ほかに `#[cfg(test)]` の `boot_config.rs:209` | 一致 |
+| 本体で `session::` を引くファイル | 117（根 9・`install/` 20・`mcp/` 20・`menu/` 19・`update/` 11・`runtime_tests/` 24・`roots/` 6・`cli/` 4・`offline_dump/` 4）＋`tests/emo2_mcp_real_run.rs`。`smoke_exit.rs` は移す側に入る | 一致 |
+| 本体が名指す集めた層の項目のパス | 157 通り | （新しい数） |
+| `SwitchRig` を使うファイル | 集めた層 30・本体 17。`SwitchRig::new` の呼び出し 57（集めた層 35・本体 22） | 49 ファイル（`mod.rs` の宣言を含めた数え方の差） |
+| 本体の項目を引く集めた層のテストのファイル | 26 ファイル（`crate::<本体の項目>` を 1 つでも名指すもの・重なりを除く。支え 2 つ〔`crate_source_test_support` 4・`sample_test_support` 4〕だけを使うファイルと `ghost_switch_test_support.rs` を含む）＋`resolve_boot_from` だけを使う 5 本 | 21＋6（数え方の差） |
+| 文書の中のパス | `doc/COMPAT_ARCHITECTURE.md` 38・網羅台帳 38（18・10・9・1）・`doc/ideas/` 8 ファイル | 一致 |
+| 古い出所の名前 `areka::session` | 14 ファイル（`log_history.rs` 5・`log_history_tests.rs` 29・`log_history_convention_tests.rs` 6・`reload_tests.rs` 1・`reload_skin_tests.rs` 1・real-run-kit 14・`emo2_mcp_real_run.rs` 5・文書 9・`structure.md` 2） | 一致 |
+| 番人の表で集めた層を指す項目 | 0（`file_length_guard_test`・`temp_path_guard_test`・`workspace_scan_test`・`with_default_guard_test`） | 一致 |
+| 理由の文を持つ `#[allow]` | 0（`clippy::too_many_arguments`・`clippy::type_complexity` の 2 つだけ） | （新しい数） |
+
+### 12.2 Research Needed 1〜9 の答え
+
+1. **偽物の組で赤になる集めた層のテスト**（見込み・走らせていない）: 集めた層のテストで本体の項目を名指さないものは、本体の系の効き目を直には見られない。間接の効き目は 2 つ: ⑴ `update::register` が据える `UpdateDesk` は定常のたびに `homeurl` の照会を偽の SHIORI へ送る（`update/desk.rs:443〜`）。`SwitchRig` の記録はもともとこの照会を除いて見る（`ghost_switch_test_support.rs:446〜458`）が、進みの目印 `progress_probe` は照会も数えるので、待ちの打ち切りの時点が変わりうる。⑵ `install::register`・`update::register` は `exit_wait` の門を据える。終わりの待ちを見るテストが門の数に頼っていれば変わる。→ 設計の D9（段 2 で走らせ、赤だけを中身を変えずに本体へ移す）。
+2. **本体に残すテストが引く私有の項目**: `use super::*` の親は、`ghost_session.rs`（6 本）・`boot_config.rs`（7 本）・`readonly.rs`（2 本）・`session_end.rs`・`write_failure.rs`・`boot_resolve.rs`・`ghost_session_switch_tests.rs`（子 2 本）・`ghost_session_scope_{rect,scale}_tests.rs`（子 1 本ずつ）・`reload.rs`・`shell_balloon_switch.rs`。全数はコンパイラのエラーで数える（設計の D7・4.5 の記録）。
+3. **本体のテストが使う集めた層の `#[cfg(test)]` の項目**: `GhostSession::{for_test, with_memory_publisher, with_seriko_sink, dispatcher}`（本体の 30 ファイル余り）・`roots::single_env`（3）・`shell_balloon_switch::SwapFinish` の出し直し（6）・`log_history::capture_tests::hold`（`offline_dump_tests.rs`）・`ghost_switch_test_support`（17）・`boot_config::resolve_boot_from`（2）。どれも番人の crate に頼らない（`SwitchRig` は検体を呼び手から受ける形にすれば頼らない）。`readme::FakeOs`（`temp_path_kit` に頼る）・`boot_seam::insert_persist_wiring`・`opener::from_sender`・`readme::path` は本体が使わない（0 件）。
+4. **口が据わらない道**: 本番は 0（`register_systems` を呼ぶのは `main.rs` だけで、窓を開く・最初のゴーストを起こすのはその後。オフラインの面の書き出し・SHIORI のデモ・cli は口の道を通らない）。テストでは、集めた層の `runtime_boot_tests.rs`・`readme_script_e2e_tests.rs`・`script_security_e2e_tests.rs`（`boot_runtime` を直に・C5）、本体へ移す `ghost_session_strict_tests.rs`（`boot_ghost` を直に）・`ghost_session_restart_tests.rs`（窓を開く道・C1）。2.6 の「`SpineHarness` は C5 の道を通る」は誤り: `SpineHarness` は `runtime_boot_options` だけを使い、`runtime_sinks`・`boot_runtime` を通らない（`runtime_tests/spine.rs:429`）。error の 0 件を確かめるテスト（`install/procedure_tests.rs:483`・`install/worker_tests.rs:158・170`）は口の道を通らない。warn 以上を数えるテスト（`reload_tests.rs` の `refuse`・`shell_balloon_switch_tests.rs` の `refuse`）は `SwitchRig` を通り口が据わる。→ 設計の D13。
+5. **C5 の口が無いときの列**: `runtime_boot_tests.rs` の `sinks_are_thirteen_with_reload_then_window_state_last`・`rebuilt_window_state_sink_reaches_the_same_line` は口の無い `World::new()` で `runtime_sinks` を呼び、13 個と 12・13 番目を確かめる → 13 個を保つ（`areka_ghost::sink::DiscardSink` が既にある・設計の D4）。`t_zwi05` の新しい字面は設計の SourceGuards。
+6. **`smoke_exit` の出所**: `areka::smoke_exit`・`areka_session::smoke_exit` のどちらも `log_history` の決まりに当たらない。real-run-kit・`RUST_LOG` の名指しも 0。`tools/perf/invoke-perf-run.ps1:736` の `smoke_exit=` は地の文。
+7. **`readme::FakeOs`**: 本体は使わない（0 件）→ `#[cfg(test)]` のまま。
+8. **本番の依存**: 集めた層の本番（34 ファイル）が名指す crate は 19（tracing・tracing-subscriber・bevy_ecs・windows・thiserror・wintf・dola・areka-ghost・areka-kanade・areka-sylphya・areka-parsers・areka-seriko・areka-actor・areka-user-data・areka-update・areka-emo-present・areka-runtime・areka-placement・areka-input）＋`smoke_exit.rs` の async-io で 20。`windows` の機能は `Win32_UI_Controls`（タスクダイアログ）ほかで、本体が上乗せする `Win32_UI_Controls_Dialogs` は `install/pick.rs` だけが使う。`cargo check` は回していない（段 3 で確定）。
+9. **数の取り直し**: 12.1。
+
+### 12.3 2.11 の訂正
+
+- 2.11 の「`rule("areka", Status, true)` は完全一致なので、`areka_session` の行は別に要る」は誤り。集めた層の出所は今も `areka::session::…` で、`areka`（完全一致）には当たらない。根の `areka::session` もどの決まりにも当たらない。移した後の `areka_session` も当たらないので、前と同じ＝新しい行は要らない。直すのは決まりの 5 行の字面だけ。
+
+### 12.4 設計の決め（合成の 3 つの見方）
+
+- **一般化**: C1〜C5 は「集めた層の決まった所で本体の手続きを同期に 1 回呼ぶ」の同じ形で、今ある `BodySystems`（系の登録の 2 欄）もその特別な場合。型を増やさず、`BodySystems` を資源にして欄を足す（設計の D1）。中身の実装は本体の関数をそのまま指すか、今の行を写した小さな関数 4 つ。
+- **作るか使うか**: 新しい仕組みは作らない（要件 1.8）。関数のポインタの束を `Resource` で据える形は `SessionHooks`・`InputHooks` の前例、口が無いときの倒れ方は `SessionHooks::of`、捨てる受け口は `areka_ghost::sink::DiscardSink`、`SwitchRig` の検体は `sample_ghost_kit::SampleRoot` の窓口、落ちの報告は `areka_runtime::crash_report_test_support`、実機の操作は `tools/mouse-input.ps1` を使う。外の crate は足さない。
+- **簡素化**: 束を 2 つに分けない（`SwitchRig` へ渡す値が 1 つで済む）。C3 の `on_steady` は install → update を本体の中で続けて呼ぶ 1 欄、C2 は 10 件を 1 欄（1 つのひと続きの塊）。C4 は理由を分けて断るので 2 欄、C1 は入力の差し込みと交互なので 2 欄に留める。番人の crate に頼る足場を分け合うファイル（`reload_tests.rs`・`shell_balloon_switch_tests.rs`）は、足場を写さずファイルごと本体へ移す。
+
+### 12.5 設計の討議へ回したこと
+
+設計書の「設計の討議への議題（仮の決めつき）」の 8 件（束の数・口が無いときの記録の絞り・C5 の捨てる受け口・本体に残すテストの置き場と分け方・呼ぶ順の確かめの形・`SwitchRig` の作り口・口を据えずに通る本体のテスト・実機の 6 つの道の取り方）。
