@@ -649,8 +649,10 @@ saturated: i32::try_from(if v < 0 { -m } else { m }).is_err(),  // m = i64::from
 - **`update_reload_requested` の語の替え（同じ相手）**: 範囲の中の読み手 `session_tests/shell_balloon_switch_session_update_tests.rs:243`。相手の知らせを待って同じ変更で追う（T18 で確かめる）。
 - **`SwitchVerdict::Updating` の腕（同じ相手）**: `install/overwrite.rs` の網羅の `match` に名を 1 つ足す（T4）。
   - 相手の答え（2026-11-22）: 相手の推奨は「腕を足す同じ変更の中で、こちらが `NotFound | NoContext` の腕に名を 1 つ足してよい」。並走の約束の例外になるので、相手の設計の討議で開発者の確定を取り、こちらの実装より前に知らせる。T4 はその知らせを待つ（確定しなければ `Busy` を返す形）。`switch_to` の分けは相手が持ち、行が重ならないよう相手の設計に書く。`spawn_windows`・`pump_messages` の写しは、こちらの着地の後に相手が消す。`:243` の記録の側は相手が確かめて知らせる。
+  - 相手の答え（2026-11-22・続き）: `:243` は窓口の側（`update/desk.rs:206` の受理の `info!`）を数え、相手が改めるのは背景のスレッドの側の語だけなので、こちらの直しは要らない。腕の場所は `install/overwrite.rs:129` の `NotFound | NoContext` で合っている（相手の上書きの要求は `Automatic` なので本番でこの腕は返らない）。腕の名を誰が足すかは、相手の開発者の確定を待つ。
 - **`audit-areka-app`**: 4・5 番の use の道（T5）・26 番の寄せ先をそろえる（`wiring().1`）・3 番の続きの申し送り（T18）。
   - 申し合わせ済み（2026-11-22・相手のセッションの答え）: 4 か所（`reload_test_support.rs:14`・本体 `runtime_tests/frame/switch_tests.rs:37`・`:838`・`switch_finish_tests.rs:50-52`）の use の道はこの spec が替える（中身は変えない）。相手も近くを触る（`reload_test_support.rs` の `boot_context` の引数を足す見込み・`switch_finish_tests.rs:60-61` の `SharedFakeIo` を `areka_placement::test_support` へ寄せる）。use の行がぶつかったら、後から着地する側が合わせる。3 番の続き（`reload.rs` の `install_busy`）は相手の設計の議題に入った。
+  - 相手の答え（2026-11-22・続き）: 相手の設計の討議で開発者が承認し、`reload.rs` の更新中・インストール中の断りは MCP からの読み直しだけに当てる（台本の `\![reload,…]` は通す・こちらの決めにそろえた形）。重なりの断りは今のまま。3 番の続きの申し送りはこれで片づいた。
 
 ## 設計の討議で確定したこと（2026-11-22・開発者が全議題を推奨案で承認）
 
