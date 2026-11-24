@@ -1,13 +1,14 @@
-//! 置き場の追加・外す・先頭へ動かすの判断（純粋）。
+//! 置き場の追加・外す・先頭へ動かすの判断と適用。
 //!
-//! 値だけで判断する: 今の並び・出どころ・足すフォルダ（または外す根の絶対パス）。
+//! 判断は今の並び・出どころ・足すフォルダ（または外す根の絶対パス）で決める。足す判断だけは足すフォルダの直下を見る。
 //! フォルダそのものは消さない・動かさない。触るのは並びの値だけ。
-//! 適用（起動の文脈・記憶・記録）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
+//! 適用（起動の文脈・記憶）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
+//! 変更のときの並びと隠れの記録は短命のスレッド `roots-log` で残す（UI スレッドは根を見に行かない）。
 //! 並べ替えは「先頭へ動かす」だけ。
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::{BasewareRoot, BasewareRoots, same_root};
+use areka_ghost::{BasewareRoot, BasewareRoots, RootMark, same_root};
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
@@ -42,6 +43,8 @@ pub(crate) enum RemoveVerdict {
     Stale,
     /// 一時の置き場だけに一致した（warn・変えない）。
     Temporary,
+    /// 書ける根の印の項目（変えない）。
+    UserRoot,
 }
 
 /// 先頭へ動かすの判断。
@@ -57,11 +60,8 @@ pub(crate) enum FrontVerdict {
     Stale,
     /// 一時の置き場だけに一致した（warn・変えない）。
     Temporary,
-}
-
-/// 一時の置き場か（3 つの判断は一時の項目を探す相手にしない）。
-fn is_temp(root: &BasewareRoot) -> bool {
-    root.is_temporary()
+    /// 書ける根の印があるときの実行ファイルの隣（変えない・warn）。
+    ExeSide,
 }
 
 /// 覚える置き場（一時でない項目）のうち `dir` と同じ根の位置（並び全体での位置）。
@@ -69,7 +69,7 @@ fn remembered_position(roots: &BasewareRoots, dir: &Path) -> Option<usize> {
     roots
         .roots()
         .iter()
-        .position(|r| !is_temp(r) && same_root(r.dir(), dir))
+        .position(|r| !r.is_temporary() && same_root(r.dir(), dir))
 }
 
 /// 覚える置き場には無く、一時の置き場だけに一致するか。
@@ -77,7 +77,7 @@ fn only_temporary(roots: &BasewareRoots, dir: &Path) -> bool {
     roots
         .roots()
         .iter()
-        .any(|r| is_temp(r) && same_root(r.dir(), dir))
+        .any(|r| r.is_temporary() && same_root(r.dir(), dir))
 }
 
 /// 追加: 末尾に足す。一時の置き場は重なりに数えない＝同じフォルダは普通の置き場として足す。
@@ -117,8 +117,11 @@ pub(crate) fn decide_remove(
         }
         return RemoveVerdict::Stale;
     };
-    if roots.roots().iter().filter(|r| !is_temp(r)).count() == 1 {
+    if roots.roots().iter().filter(|r| !r.is_temporary()).count() == 1 {
         return RemoveVerdict::LastOne;
+    }
+    if matches!(roots.roots()[index].mark(), RootMark::UserRoot { .. }) {
+        return RemoveVerdict::UserRoot;
     }
     let mut list = roots.roots().to_vec();
     let removed = list.remove(index).dir().to_path_buf();
@@ -130,15 +133,31 @@ pub(crate) fn decide_remove(
 
 /// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。動かす先は覚える置き場の先頭＝一時の項目の直後で、
 /// 一時の置き場は並びの先頭のまま・一時の置き場は動かさない。
-pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Path) -> FrontVerdict {
+/// 書ける根の印があるとき、実行ファイルの隣（`exe_dir`）は動かさない。
+pub(crate) fn decide_front(
+    roots: &BasewareRoots,
+    origin: RootsOrigin,
+    dir: &Path,
+    exe_dir: Option<&Path>,
+) -> FrontVerdict {
     if origin == RootsOrigin::EnvVar {
         return FrontVerdict::EnvLocked;
     }
-    let front = roots.roots().iter().take_while(|r| is_temp(r)).count();
+    let front = roots
+        .roots()
+        .iter()
+        .take_while(|r| r.is_temporary())
+        .count();
+    let marked = roots
+        .roots()
+        .iter()
+        .any(|r| matches!(r.mark(), RootMark::UserRoot { .. }));
+    let exe_side = marked && exe_dir.is_some_and(|exe| same_root(exe, dir));
     match remembered_position(roots, dir) {
         None if only_temporary(roots, dir) => FrontVerdict::Temporary,
         None => FrontVerdict::Stale,
         Some(index) if index == front => FrontVerdict::AlreadyFront,
+        Some(_) if exe_side => FrontVerdict::ExeSide,
         Some(index) => {
             let mut list = roots.roots().to_vec();
             let picked = list.remove(index);
@@ -160,19 +179,21 @@ pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
         );
         return;
     };
-    let reason = match decide_front(&ctx.roots, ctx.roots_origin, &dir) {
+    let exe_dir = areka_session::roots::user_root::exe_dir();
+    let reason = match decide_front(&ctx.roots, ctx.roots_origin, &dir, exe_dir.as_deref()) {
         FrontVerdict::Moved { roots } => {
             tracing::info!(
                 event = "roots_moved_to_front",
                 path = %dir.display(),
                 "[RootsEdit] 置き場を並びの先頭へ動かしました"
             );
-            return apply(world, roots, areka_session::roots::user_root::exe_dir());
+            return apply(world, roots, exe_dir);
         }
         FrontVerdict::AlreadyFront => "already_front",
         FrontVerdict::EnvLocked => "env_var",
         FrontVerdict::Stale => "stale",
         FrontVerdict::Temporary => "temporary",
+        FrontVerdict::ExeSide => "exe_side",
     };
     tracing::warn!(
         event = "roots_front_refused",
@@ -227,13 +248,19 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
         return;
     };
     let reason = match decide_remove(&ctx.roots, ctx.roots_origin, &dir) {
-        RemoveVerdict::Removed { roots, .. } => {
+        RemoveVerdict::Removed { roots, removed } => {
+            tracing::info!(
+                event = "roots_removed",
+                path = %removed.display(),
+                "[RootsEdit] 置き場を並びから外しました"
+            );
             return apply(world, roots, areka_session::roots::user_root::exe_dir());
         }
         RemoveVerdict::LastOne => "last_one",
         RemoveVerdict::EnvLocked => "env_var",
         RemoveVerdict::Stale => "stale",
         RemoveVerdict::Temporary => "temporary",
+        RemoveVerdict::UserRoot => "user_root",
     };
     tracing::warn!(
         event = "roots_remove_refused",
@@ -244,7 +271,7 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
 }
 
 /// 適用: ①起動の文脈の並びと出どころ（記憶）を書き換える（その回に効かせる）
-/// ②記憶へ書く③変更のときの並びと隠れを記録する。
+/// ②記憶へ書く③変更のときの並びと隠れの記録をスレッド `roots-log` へ渡す。
 /// 今のゴースト・バルーン（`BootContext.current`）には触らない。
 fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
     let value = encode_memory(&roots, exe_dir.as_deref());
@@ -266,7 +293,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
         .and_then(|session| session.runtime());
     match runtime {
         // 動いているゴーストの記憶の書き手を通す（同じファイルを 2 か所から書かない）。
-        // 書けなければ `save_scope` が error を残す。
+        // 書けなければ書き手が致命の机へ送る（下の `None` の腕と同じく終わる）。
         Some(runtime) => runtime
             .sylphya_publisher()
             .persist_put(PersistScope::App, entries),
@@ -290,6 +317,35 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
         }
     }
 
+    spawn_change_log(roots);
+}
+
+/// 変更のときの並びと隠れを `roots-log` で記録する。根が遅い置き場（落ちた NAS）でも UI スレッドを止めない。
+fn spawn_change_log(roots: BasewareRoots) {
+    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let spawned = std::thread::Builder::new()
+        .name("roots-log".to_owned())
+        .spawn(move || {
+            let _dispatch = tracing::dispatcher::set_default(&dispatch);
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| log_change(roots))).is_err()
+            {
+                tracing::error!(
+                    event = "roots_log_spawn_failed",
+                    reason = "the roots log thread panicked",
+                    "[RootsEdit] 置き場の変更の記録の途中で倒れました"
+                );
+            }
+        });
+    if let Err(e) = spawned {
+        tracing::error!(
+            event = "roots_log_spawn_failed",
+            reason = %e,
+            "[RootsEdit] 置き場の変更を記録するスレッドを起こせません"
+        );
+    }
+}
+
+fn log_change(roots: BasewareRoots) {
     let status = roots
         .roots()
         .iter()

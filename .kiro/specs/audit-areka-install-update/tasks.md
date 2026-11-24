@@ -125,7 +125,7 @@
   - _Dispatch: mechanical — 移す先と文を design が与えている_
   - _Requirements: 3.1, 3.3, 4.8, 7.1, 7.7_
 
-- [ ] 2.8 置き場の変更で UI が根を見に行かないようにし、判断の関数に置き場の決まりを置く（G16・指摘 4・41〜43・90・104）
+- [x] 2.8 置き場の変更で UI が根を見に行かないようにし、判断の関数に置き場の決まりを置く（G16・指摘 4・41〜43・90・104）
   - `roots/edit.rs` の `apply` の記録の段（`status`・`survey`・`log_roots`・`log_hidden`）を、dispatcher を持たせた短命のスレッド `roots-log` へ移す。起こせなければ `roots_log_spawn_failed` の error（4）。
   - 外すと `info!(roots_removed, path)` を残す（42）。コメントと見出しを事実に直し（41・43）、包みを消す（90）。
   - `decide_remove`・`decide_front` に「書ける根の印の項目は外せない」「印があるとき実行ファイルの隣は先頭へ動かせない」を置き、断りの腕を足す。`menu/roots_frame.rs` には触らない（104）。

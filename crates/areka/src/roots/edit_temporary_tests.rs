@@ -63,7 +63,7 @@ fn front_refuses_temporary_root() {
     let tmp = TempPath::under_target("roots-edit-temp-front-refuse");
     let t = dir(&tmp, "t");
     let a = dir(&tmp, "a");
-    let v = decide_front(&with_temp(&t, &[&a]), RootsOrigin::Memory, &t);
+    let v = decide_front(&with_temp(&t, &[&a]), RootsOrigin::Memory, &t, None);
     assert_eq!(v, FrontVerdict::Temporary);
 }
 
@@ -73,7 +73,7 @@ fn front_moves_to_head_of_remembered_roots_temporary_stays_first() {
     let t = dir(&tmp, "t");
     let a = dir(&tmp, "a");
     let b = dir(&tmp, "b");
-    let v = decide_front(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &b);
+    let v = decide_front(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &b, None);
     assert_eq!(
         v,
         FrontVerdict::Moved {
@@ -81,7 +81,7 @@ fn front_moves_to_head_of_remembered_roots_temporary_stays_first() {
         }
     );
     // 覚える置き場の先頭はすでに先頭。
-    let v = decide_front(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &a);
+    let v = decide_front(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &a, None);
     assert_eq!(v, FrontVerdict::AlreadyFront);
 }
 

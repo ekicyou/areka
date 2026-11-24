@@ -164,14 +164,14 @@ fn front_moves_to_front_keeping_others_order() {
     let c = root(&tmp, "c", true);
     let picked = PathBuf::from(c.to_string_lossy().to_uppercase());
     assert_eq!(
-        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Memory, &picked),
+        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Memory, &picked, None),
         FrontVerdict::Moved {
             roots: roots_of(&[&c, &a, &b])
         }
     );
     // 真ん中の根でもほかの順は保つ。
     assert_eq!(
-        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Default, &b),
+        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Default, &b, None),
         FrontVerdict::Moved {
             roots: roots_of(&[&b, &a, &c])
         }
@@ -184,7 +184,7 @@ fn front_already_first_is_unchanged() {
     let a = root(&tmp, "a", true);
     let b = root(&tmp, "b", true);
     assert_eq!(
-        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &a),
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &a, None),
         FrontVerdict::AlreadyFront
     );
 }
@@ -195,7 +195,7 @@ fn front_env_var_is_locked() {
     let a = root(&tmp, "a", true);
     let b = root(&tmp, "b", true);
     assert_eq!(
-        decide_front(&roots_of(&[&a, &b]), RootsOrigin::EnvVar, &b),
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::EnvVar, &b, None),
         FrontVerdict::EnvLocked
     );
 }
@@ -207,8 +207,49 @@ fn front_not_listed_is_stale() {
     let b = root(&tmp, "b", true);
     let gone = root(&tmp, "gone", true);
     assert_eq!(
-        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &gone),
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &gone, None),
         FrontVerdict::Stale
+    );
+}
+
+#[test]
+fn remove_user_root_is_refused() {
+    let tmp = TempPath::under_target("roots-edit-remove-user-root");
+    let user = root(&tmp, "user", true);
+    let other = root(&tmp, "other", true);
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(other.clone()),
+    ]);
+    assert_eq!(
+        decide_remove(&roots, RootsOrigin::Memory, &user),
+        RemoveVerdict::UserRoot
+    );
+}
+
+#[test]
+fn front_exe_side_is_refused_only_while_marked() {
+    let tmp = TempPath::under_target("roots-edit-front-exe-side");
+    let user = root(&tmp, "user", true);
+    let exe = root(&tmp, "exe", true);
+    let marked = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    assert_eq!(
+        decide_front(&marked, RootsOrigin::Memory, &exe, Some(&exe)),
+        FrontVerdict::ExeSide
+    );
+    assert_eq!(
+        decide_front(
+            &roots_of(&[&user, &exe]),
+            RootsOrigin::Memory,
+            &exe,
+            Some(&exe)
+        ),
+        FrontVerdict::Moved {
+            roots: roots_of(&[&exe, &user])
+        }
     );
 }
 
@@ -247,7 +288,7 @@ fn user_root_mark_survives_add_remove_front() {
     assert!(is_marked(&removed), "外した後も印が残る");
 
     let FrontVerdict::Moved { roots: fronted } =
-        decide_front(&removed, RootsOrigin::Memory, &extra)
+        decide_front(&removed, RootsOrigin::Memory, &extra, None)
     else {
         panic!("先頭へ動かせるはず");
     };
@@ -259,11 +300,13 @@ fn user_root_mark_survives_add_remove_front() {
 
 mod apply {
     use super::*;
+    use areka_runtime::spine::{Progress, wait_until};
     use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
     use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     use areka_session::roots::{decode_memory, read_memory};
     use bevy_ecs::world::World;
     use log_capture_kit::{CapturedEvent, capture};
+    use std::sync::{Arc, Mutex};
 
     /// 根の下に読めるゴースト 1 体を置く。
     fn ghost(root: &Path, folder: &str) {
@@ -311,6 +354,106 @@ mod apply {
             .collect()
     }
 
+    /// 1 件の記録と、それを出したスレッドの名。
+    #[derive(Debug)]
+    struct Record {
+        thread: Option<String>,
+        level: tracing::Level,
+        fields: Vec<(String, String)>,
+    }
+
+    impl Record {
+        fn field(&self, name: &str) -> Option<&str> {
+            self.fields
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| v.as_str())
+        }
+    }
+
+    struct Fields<'a>(&'a mut Vec<(String, String)>);
+
+    impl tracing::field::Visit for Fields<'_> {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            self.0.push((field.name().to_owned(), value.to_owned()));
+        }
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.0.push((field.name().to_owned(), format!("{value:?}")));
+        }
+    }
+
+    /// 記録ごとに出したスレッドの名を残す受け手（`capture` の記録はスレッドの名を持たない）。
+    struct ByThread(Arc<Mutex<Vec<Record>>>);
+
+    impl tracing::Subscriber for ByThread {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut fields = Vec::new();
+            event.record(&mut Fields(&mut fields));
+            self.0.lock().unwrap().push(Record {
+                thread: std::thread::current().name().map(str::to_owned),
+                level: *event.metadata().level(),
+                fields,
+            });
+        }
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+
+    const CHANGE_LOG: [&str; 3] = ["root_listed", "root_hidden_item", "roots_hidden_count"];
+
+    /// `f` を [`ByThread`] の下で呼び、呼んだスレッドの記録と `roots-log` の記録を返す。
+    /// 呼んだスレッドに並びと隠れの記録が無いことを先に見て、`roots-log` の `roots_hidden_count` を待つ。
+    fn by_thread(f: impl FnOnce()) -> (Vec<Record>, Vec<Record>) {
+        let records = Arc::new(Mutex::new(Vec::new()));
+        log_capture_kit::ensure_interest_probes();
+        tracing::subscriber::with_default(ByThread(Arc::clone(&records)), || {
+            tracing::callsite::rebuild_interest_cache();
+            f();
+        });
+        let me = std::thread::current().name().map(str::to_owned);
+        let caller: Vec<Record> = {
+            let mut all = records.lock().unwrap();
+            let (mine, rest) = all.drain(..).partition(|r: &Record| r.thread == me);
+            *all = rest;
+            mine
+        };
+        let on_caller: Vec<_> = caller
+            .iter()
+            .filter(|r| r.field("event").is_some_and(|e| CHANGE_LOG.contains(&e)))
+            .collect();
+        assert!(
+            on_caller.is_empty(),
+            "呼んだスレッドで根を見に行った: {on_caller:?}"
+        );
+        wait_until("roots-log の隠れの件数", Progress::Unknown, || {
+            records.lock().unwrap().iter().any(|r| {
+                r.thread.as_deref() == Some("roots-log")
+                    && r.field("event") == Some("roots_hidden_count")
+            })
+        })
+        .expect("roots-log が並びと隠れを記録する");
+        let logged = std::mem::take(&mut *records.lock().unwrap())
+            .into_iter()
+            .filter(|r| r.thread.as_deref() == Some("roots-log"))
+            .collect();
+        (caller, logged)
+    }
+
+    fn with_event<'a>(records: &'a [Record], name: &str) -> Vec<&'a Record> {
+        records
+            .iter()
+            .filter(|r| r.field("event") == Some(name))
+            .collect()
+    }
+
     #[test]
     fn add_writes_memory_and_takes_effect_without_switching() {
         let tmp = TempPath::under_target("roots-edit-apply-add");
@@ -321,7 +464,7 @@ mod apply {
         let profile = tmp.path().join("profile");
         let mut world = world(&a, profile.clone());
 
-        let ((), events) = capture(|| add_root(&mut world, b.clone()));
+        let (caller, logged) = by_thread(|| add_root(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
         assert_eq!(ctx.roots, roots_of(&[&a, &b]), "その回に効く（要件 8.2）");
@@ -343,15 +486,11 @@ mod apply {
         let survey = areka_ghost::catalog_roots::survey(&ctx.roots);
         assert!(survey.ghosts.iter().any(|g| g.identity.folder == "gb"));
         // 変更のときの並びと隠れの記録。
-        let listed = named(&events, "root_listed");
+        let listed = with_event(&logged, "root_listed");
         assert_eq!(listed.len(), 2);
-        assert!(
-            listed
-                .iter()
-                .all(|e| e.field_str("occasion") == Some("change"))
-        );
-        assert_eq!(named(&events, "roots_hidden_count").len(), 1);
-        assert!(named(&events, "roots_memory_write_failed").is_empty());
+        assert!(listed.iter().all(|r| r.field("occasion") == Some("change")));
+        assert_eq!(with_event(&logged, "roots_hidden_count").len(), 1);
+        assert!(with_event(&caller, "roots_memory_write_failed").is_empty());
     }
 
     #[test]
@@ -381,8 +520,15 @@ mod apply {
         let mut world = world(&a, profile.clone());
         world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
 
-        remove_root(&mut world, b.clone());
+        let ((), events) = capture(|| remove_root(&mut world, b.clone()));
 
+        let removed = named(&events, "roots_removed");
+        assert_eq!(removed.len(), 1, "{events:?}");
+        assert_eq!(removed[0].level, tracing::Level::INFO);
+        assert_eq!(
+            removed[0].field("path"),
+            Some(b.display().to_string().as_str())
+        );
         assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a]));
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, _) = decode_memory(
@@ -434,7 +580,7 @@ mod apply {
         let mut world = world(&a, profile.clone());
         world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
 
-        let ((), events) = capture(|| move_to_front(&mut world, b.clone()));
+        let (caller, logged) = by_thread(|| move_to_front(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
         assert_eq!(ctx.roots, roots_of(&[&b, &a]), "その回に効く（要件 3.7）");
@@ -451,10 +597,10 @@ mod apply {
             areka_session::roots::user_root::exe_dir().as_deref(),
         );
         assert_eq!(decoded, vec![b.clone(), a.clone()]);
-        let moved = named(&events, "roots_moved_to_front");
-        assert_eq!(moved.len(), 1, "{events:?}");
+        let moved = with_event(&caller, "roots_moved_to_front");
+        assert_eq!(moved.len(), 1, "{caller:?}");
         assert_eq!(moved[0].level, tracing::Level::INFO);
-        assert_eq!(named(&events, "root_listed").len(), 2);
+        assert_eq!(with_event(&logged, "root_listed").len(), 2);
     }
 
     #[test]
