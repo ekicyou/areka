@@ -3,7 +3,7 @@
 //! 記録は起動と並びの変更のときだけ残す。判断の関数は失敗を値で返し、
 //! 記録はここで残す（起動が失敗した値からも控えと「既定へ倒した」を warn に出す）。
 
-use areka_ghost::{Hidden, RootMark, StoreKind};
+use areka_ghost::{Hidden, RootMark};
 
 use super::resolve::{ResolvedRoots, RootError, RootSkip, RootsOrigin};
 use super::user_root::kind_name;
