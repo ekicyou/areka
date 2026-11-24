@@ -2,8 +2,8 @@
 
 SSP の MCP サーバに無く、areka だけが出すツールの約束の正本。今は `check_script` の 1 本。ツールの名前・引数・結果の形・診断の種類と文面・SSP との違い・あとからツールを 1 本足す手順を書く。あわせて、SSP と同じツールの `strict` で残る再生中の記録の約束も ⑺ に書く。SSP と同じ 10 本の約束は [survey.md](survey.md)、輸送の差は [transport-diff-areka.md](transport-diff-areka.md) にある。
 
-- **areka の根拠**: ツールの定義・引数・結果の組み立ては `crates/areka-mcp/src/tools/check_script.rs`、独自のツールの表と登録は `crates/areka-mcp/src/tools/mod.rs` の `OWN_TABLE` と `all_entrances`。答えを作る処理は `crates/areka/src/mcp/check_script.rs`（事実を集めて別のスレッドへ渡す）と `crates/areka/src/mcp/check_script_judge.rs`（診断を決める純粋な関数と、文面の定数）
-- **文面の正本**: 下の ⑶ の文面が正本で、文面の定数（`crates/areka-sakura/src/strict.rs` の `MSG_*`。`check_script_judge.rs` の定数はこれを指す別名）はこれを写したもの。文面を変えるときは、この文書と定数を同じ変更で直す。⑶ の 2 つの表と ⑺ の検出点の表は、strict の記録のテスト（`crates/areka/src/runtime_tests/strict_judges_tests.rs`）がこの文書から読んで記録と比べる。表は `<!-- …:begin -->`〜`<!-- …:end -->` の印で挟んであるので、印と表の列の並びを崩さない
+- **areka の根拠**: ツールの定義・引数・結果の組み立ては `crates/areka-mcp/src/tools/check_script.rs`、独自のツールの表と登録は `crates/areka-mcp/src/tools/mod.rs` の `OWN_TABLE` と `all_entrances`。答えを作る処理は `crates/areka/src/mcp/check_script.rs`（事実を集めて別のスレッドへ渡す）と `crates/areka/src/mcp/check_script_judge.rs`（診断を決める純粋な関数）
+- **文面の正本**: 下の ⑶ の文面が正本で、文面の定数（`crates/areka-sakura/src/strict.rs` の `MSG_*`。`check_script_judge.rs` はこれを直に使う）はこれを写したもの。文面を変えるときは、この文書と定数を同じ変更で直す。⑶ の 2 つの表と ⑺ の検出点の表は、strict の記録のテスト（`crates/areka/src/runtime_tests/strict_judges_tests.rs`）がこの文書から読んで記録と比べる。表は `<!-- …:begin -->`〜`<!-- …:end -->` の印で挟んであるので、印と表の列の並びを崩さない
 
 ## ⑴ 独自のツールとは
 

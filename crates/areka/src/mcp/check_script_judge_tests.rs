@@ -4,7 +4,10 @@
 use std::collections::BTreeMap;
 
 use areka_parsers::sakura::parse_noted;
-use areka_sakura::strict::{MSG_DEFAULTED, MSG_UNCLOSED, MSG_UNKNOWN_COMMAND};
+use areka_sakura::strict::{
+    MSG_ANCHOR_REOPENED, MSG_ANCHOR_UNCLOSED, MSG_DEFAULTED, MSG_IGNORED, MSG_MISSING_BALLOON,
+    MSG_MISSING_SURFACE, MSG_UNCLOSED, MSG_UNKNOWN_COMMAND, MSG_UNKNOWN_TAG,
+};
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
 
 use super::*;

@@ -11,10 +11,10 @@ use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
-use super::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use super::*;
+use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain, install};
-use areka_session::ghost_session::GhostSession;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 const SCRIPT: &str = r"\0\s[0]hello\e";
 
@@ -374,7 +374,7 @@ fn error_log_ids_since(since_id: u64) -> Vec<u64> {
         max_count: None,
     };
     let (req, pending) = ToolRequest::new(ToolCall::GetLog(args.clone()));
-    crate::mcp::get_log::handle(&mut World::new(), args, req.reply);
+    crate::mcp::get_log::handle(None, args, req.reply);
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
     let [ToolContent::Text(body)] = outcome.content.as_slice() else {

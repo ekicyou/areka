@@ -106,7 +106,7 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
         // areka 独自のツール。解決の規則は 10 本と同じ。
         ToolCall::CheckScript(args) => resolved!(check_script, args, Omitted::UseActive),
         // `get_log` は解決しない。
-        ToolCall::GetLog(args) => get_log::handle(world, args, reply),
+        ToolCall::GetLog(args) => get_log::handle(active, args, reply),
     }
 }
 

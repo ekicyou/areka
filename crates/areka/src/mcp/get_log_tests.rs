@@ -389,7 +389,7 @@ fn unmatched_empty_and_no_ghost_are_cannot_find() {
         (Some(&g), "Nobody"),
         // フォルダ名だけは当たらない（他のツールと同じ解決）。
         (Some(&g), "emily4"),
-        // 空は解決を呼ばずに Cannot find（解決へ渡しても 0 体・1 体とも同じ Cannot find になる）。
+        // 空は何にも当たらず Cannot find。
         (Some(&g), ""),
         (None, ""),
         // 0 体で名前あり。
@@ -468,11 +468,10 @@ fn filters_apply_in_order_kind_ghost_since_max() {
 
 /// 空の World で入口を呼び、その場で届いた答え（まだなら None）。
 fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {
-    let mut world = World::new();
     let call = full(None, ghost_name, None, None);
     let (request, pending) = ToolRequest::new(ToolCall::GetLog(call.clone()));
     let ToolRequest { reply, .. } = request;
-    handle(&mut world, call, reply);
+    handle(None, call, reply);
     pending.try_answer().ok().flatten().map(|a| a.outcome)
 }
 

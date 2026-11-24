@@ -11,21 +11,15 @@ use areka_emo_text::look::{FontClass, classify_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read};
 use areka_sakura::compile::choice_timeout_of;
-use areka_sakura::strict::{self, CharCursor, DetectionPoint};
+use areka_sakura::strict::{
+    self, CharCursor, DetectionPoint, MSG_ANCHOR_REOPENED, MSG_ANCHOR_STRAY_CLOSE,
+    MSG_ANCHOR_UNCLOSED, MSG_CHAR_CODE_DROPPED, MSG_IGNORED, MSG_MISSING_BALLOON,
+    MSG_MISSING_SURFACE, MSG_UNKNOWN_TAG,
+};
 use areka_sakura::{AnchorIssue, pair_anchors};
 use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
 
 use areka_runtime::consumer_ledger::ConsumerLedger;
-
-// 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
-pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;
-pub(in crate::mcp) const MSG_MISSING_SURFACE: &str = strict::MSG_MISSING_SURFACE;
-pub(in crate::mcp) const MSG_MISSING_BALLOON: &str = strict::MSG_MISSING_BALLOON;
-pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
-pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
-pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
-pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
-pub(in crate::mcp) const MSG_CHAR_CODE_DROPPED: &str = strict::MSG_CHAR_CODE_DROPPED;
 
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
 /// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、

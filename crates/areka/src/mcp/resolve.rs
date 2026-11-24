@@ -1,7 +1,9 @@
 //! 宛先のゴーストの解決。World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断を置く。
 
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 
+use areka_kanade::KanadeMsg;
 use bevy_ecs::world::World;
 
 use areka_session::ghost_session::GhostSlot;
@@ -45,6 +47,26 @@ pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
         sakura_name,
         root,
     })
+}
+
+/// 宛先の kanade の送り口と、答える前に降りたときの文言。
+pub(crate) struct ScriptTarget {
+    pub kanade: Option<Sender<KanadeMsg>>,
+    /// 起動中のゴースト無しで解決したときの失敗の理由。
+    pub gone: &'static str,
+}
+
+/// 置き場の 1 体から送り口を引き、`ghost_name` から「降りた」の文言を求める。
+pub(crate) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTarget {
+    let gone = resolve(None, ghost_name, Omitted::UseActive)
+        .err()
+        .unwrap_or(NOT_ACTIVE);
+    let kanade = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.kanade())
+        .cloned();
+    ScriptTarget { kanade, gone }
 }
 
 /// 解決の判断（純粋）。失敗は `NG:` の後ろに付ける理由。

@@ -10,10 +10,8 @@ use areka_mcp::tools::raise_event::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
-use super::resolve::{ActiveGhost, listed_value};
-use super::sakurascript::{
-    NOT_NOW, ScriptTarget, UNAVAILABLE, script_target, since_id_if_strict, strict_note,
-};
+use super::resolve::{ActiveGhost, ScriptTarget, listed_value, script_target};
+use super::sakurascript::{NOT_NOW, UNAVAILABLE, since_id_if_strict, strict_note};
 
 /// 台本が返ったときの 1 行目（SSP の実測の文言）。
 const SCRIPT_RETURNED: &str = "OK:the ghost returned a script and it is being played.";

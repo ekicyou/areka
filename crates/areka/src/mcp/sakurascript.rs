@@ -1,8 +1,6 @@
 //! `sakurascript` の処理。kanade へ台本（`SstpSend`）を送り、返事は `super::later` で後から答える。
 //!
-//! `raise_event` と使う部品（`script_target`・文言の定数）もここに置く。
-
-use std::sync::mpsc::Sender;
+//! `raise_event` と使う部品（文言の定数）もここに置く。
 
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::KanadeMsg;
@@ -11,8 +9,7 @@ use areka_mcp::tools::sakurascript::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
-use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use areka_session::ghost_session::GhostSlot;
+use super::resolve::{ActiveGhost, ScriptTarget, listed_value, script_target};
 
 /// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言）。
 pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";
@@ -31,26 +28,6 @@ pub(super) fn strict_note(since_id: u64) -> String {
 /// strict 真のときだけ、送る前の最後の通し番号を読む（後に読むとその台本の記録より後になりうる）。
 pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
     (strict == Some(true)).then(areka_session::log_history::last_id)
-}
-
-/// 宛先の kanade の送り口と、答える前に降りたときの文言。
-pub(super) struct ScriptTarget {
-    pub kanade: Option<Sender<KanadeMsg>>,
-    /// 起動中のゴースト無しで解決したときの失敗の理由（`get_status` と同じ求め方）。
-    pub gone: &'static str,
-}
-
-/// 置き場の 1 体から送り口を引き、`ghost_name` から「降りた」の文言を求める。
-pub(super) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTarget {
-    let gone = resolve::resolve(None, ghost_name, Omitted::UseActive)
-        .err()
-        .unwrap_or(NOT_ACTIVE);
-    let kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-        .cloned();
-    ScriptTarget { kanade, gone }
 }
 
 /// 台本を 1 通送り、返事は待たずに `later` へ預ける。

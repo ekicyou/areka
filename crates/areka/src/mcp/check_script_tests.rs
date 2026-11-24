@@ -301,9 +301,9 @@ fn real_unit_answers_two_scripts_without_running_them() {
 #[cfg(target_pointer_width = "64")]
 #[test]
 fn attached_shell_reports_one_missing_surface() {
-    use crate::mcp::check_script_judge::MSG_MISSING_SURFACE;
     use crate::mcp::dump_surface::gpu_test_support::GpuRig;
     use areka_mcp::tools::check_script::Kind;
+    use areka_sakura::strict::MSG_MISSING_SURFACE;
 
     let script = r"\0\s[0]\s[99999]\e";
     let mut gpu = GpuRig::new(r"\0\s[0]\e", 96);

@@ -132,7 +132,7 @@ fn desk_refusal_answers_cannot_reload_now() {
             (answered(&pending), refused),
             (
                 (
-                    "NG:Cannot reload now (another switch, reload or update is in progress)"
+                    "NG:Cannot reload now (another switch, reload, update or install is in progress)"
                         .to_string(),
                     true
                 ),
@@ -202,7 +202,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
         (refused, closing),
         (
             Some(outcome::ng(
-                "Cannot reload now (another switch, reload or update is in progress)"
+                "Cannot reload now (another switch, reload, update or install is in progress)"
             )),
             None
         )

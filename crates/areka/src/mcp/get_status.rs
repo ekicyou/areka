@@ -10,8 +10,7 @@ use areka_mcp::tools::get_status::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
-use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use areka_session::ghost_session::GhostSlot;
+use super::resolve::{ActiveGhost, ScriptTarget, listed_value, script_target};
 
 /// 置き場に問い合わせ先（kanade の送り口）が無いときの本文（areka 独自・本番では起きない）。
 const UNAVAILABLE: &str = "Status is not available";
@@ -21,15 +20,7 @@ const UNAVAILABLE: &str = "Status is not available";
 /// `ghost` は問い合わせ先が無いときの `warn!` の欄にだけ使う（問い合わせ先は置き場の 1 体から引く）。
 /// 成功の枝では記録を出さない（橋が `debug!` を 1 行残す）。
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
-    // 降りたときの文言＝起動中のゴースト無しで解決したときの失敗の理由（`Ok` にはならない）。
-    let gone = resolve::resolve(None, args.ghost_name.as_deref(), Omitted::UseActive)
-        .err()
-        .unwrap_or(NOT_ACTIVE);
-    let kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-        .cloned();
+    let ScriptTarget { kanade, gone } = script_target(world, args.ghost_name.as_deref());
     let Some(kanade) = kanade else {
         tracing::warn!(
             event = "mcp_get_status_unavailable",

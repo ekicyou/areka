@@ -11,10 +11,10 @@ use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
-use super::resolve::CANNOT_FIND;
 use super::*;
+use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain, install};
-use areka_session::ghost_session::GhostSession;
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 fn ghost() -> ActiveGhost {
     ActiveGhost {

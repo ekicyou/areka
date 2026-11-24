@@ -116,7 +116,7 @@
   - _Dispatch: standard — 読む仕事をスレッドへ出し、呼んだスレッドの記録でテストを組む_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 6.2, 6.4, 7.7_
 
-- [ ] 2.7 MCP の小さな本番の直しを入れる（G13・指摘 35・39・82・83・88）
+- [x] 2.7 MCP の小さな本番の直しを入れる（G13・指摘 35・39・82・83・88）
   - `script_target` を `resolve.rs` へ移して 3 本で使い、写しを消す（35）。
   - `check_script_judge.rs` の別名の定数を消して `strict::MSG_*` を直に使い、`doc/ssp-mcp/areka-tools.md:6` を直す（39）。
   - `get_log` の余分な腕を消し、`active` を渡す（82・83）。
