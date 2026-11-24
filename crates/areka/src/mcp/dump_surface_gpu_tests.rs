@@ -325,6 +325,61 @@ fn hidden_character_returns_the_picture_before_hiding() {
     );
 }
 
+/// 隠したキャラクターの合成メモが捨てられた後（装置が替わった後と同じ）: `dump_surface`（省略）が、
+/// 最後に見せた 1101 を合成し直した絵で、今の見た目の本文の成功を返す。
+///
+/// # 非空虚性
+/// 捨てた後に ID の控えが残り絵だけが無いことを表示の層から確かめてから呼ぶ。控えが無いのを
+/// 想定外の失敗（`NG:`）で答えると赤。
+#[test]
+fn hidden_character_after_cache_invalidation_recomposes_the_last_picture() {
+    let mut gpu = GpuRig::new(r"\0\s[1101]\w2\s[-1]\e", 96);
+    let hidden = gpu.frames_until(100, |world| {
+        is_shown(world, 0, SHOWN)
+            && world
+                .non_send::<RuntimeWiring>()
+                .presenter()
+                .target_visible(shell_target(0))
+                == Some(false)
+    });
+    let invalidated = gpu.invalidate_cache(shell_target(0));
+    let kept = gpu
+        .rig
+        .world
+        .non_send::<RuntimeWiring>()
+        .presenter()
+        .last_shown(shell_target(0))
+        .map(|(id, pic)| (id, pic.is_some()));
+    let answer = gpu
+        .dump_surface(None, None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
+    let expected = gpu.composed_rgba(SHOWN);
+    let down = gpu.shutdown();
+
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
+    assert_eq!(
+        (
+            hidden,
+            invalidated,
+            kept,
+            down,
+            read_picture(&answer.outcome, &expected)
+        ),
+        (
+            true,
+            true,
+            Some((SHOWN, false)),
+            true,
+            picture_of(
+                "OK:scope 0, surface 1101 as currently shown (with running animations and \
+                 dressups, before scaling and transparency)",
+                &expected
+            )
+        ),
+        "（1101 を出して隠した, 捨てられた, 控え（ID, 絵が在るか）, 降ろせた, 答え）"
+    );
+}
+
 /// 一度も表示していないスコープ: 台本がスコープ 1 に触れないとき、スコープ 1 の
 /// 省略は `NG:No surface has been shown in this scope yet`、指定（2100）はその絵で成功する。
 ///

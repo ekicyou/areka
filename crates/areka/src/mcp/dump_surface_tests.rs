@@ -111,14 +111,14 @@ fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
     );
 }
 
-/// 単体の合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
+/// 合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
 /// 専用の文言で想定外の失敗を答え、`error!` を 1 件だけ出す。
 ///
 /// # 非空虚性
 /// 判断の断りの文言（`NO_SUCH_SCOPE`）のままだと本文が違って赤。`refuse` へ回すと ERROR が 0 件で赤。
 #[test]
 fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
-    let (step, levels) = log_capture_kit::count_levels(|| alone(0, 0, None));
+    let (step, levels) = log_capture_kit::count_levels(|| composed(0, 0, String::new(), None));
 
     let Step::Now(answered) = step else {
         panic!("その場で答える");

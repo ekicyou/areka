@@ -23,6 +23,7 @@ use areka_emo_present::balloon::{
     build_balloon_target, load_scope_balloon_model, resolve_balloon_faces,
 };
 use areka_emo_present::shell_target::load_shell_target;
+use areka_emo_present::{PresentCommand, TargetId};
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
@@ -48,6 +49,7 @@ use crate::sample_test_support::switch_rig;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::spawn_ghost_windows;
+use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
@@ -188,6 +190,25 @@ impl GpuRig {
         let ghost = resolve::active(&self.rig.world).expect("A は起動中");
         crate::mcp::dump_balloon::handle(&mut self.rig.world, &ghost, args, req.reply);
         pending
+    }
+
+    /// `target` の合成メモを本番の指令 `InvalidateCache` で捨てる（装置が替わった後の
+    /// 隠れた target と同じ、ID の控えは在り絵だけが無い状態を作る）。成功の返事が届けば `true`。
+    pub(in crate::mcp) fn invalidate_cache(&mut self, target: TargetId) -> bool {
+        let world = &mut self.rig.world;
+        let mut wiring = world
+            .remove_non_send::<RuntimeWiring>()
+            .expect("結線状態が在る");
+        let (tx, rx) = reply_channel();
+        wiring.apply_present(
+            world,
+            PresentCommand::InvalidateCache {
+                target,
+                reply: Some(tx),
+            },
+        );
+        world.insert_non_send(wiring);
+        matches!(rx.try_recv(), Ok(Some(Ok(()))))
     }
 
     /// 台詞の時計を止めたまま本番の段を有界に回し、`pending` の答えを待つ（答えが後の巡で届いても、

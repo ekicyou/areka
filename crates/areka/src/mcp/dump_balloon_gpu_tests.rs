@@ -339,6 +339,62 @@ fn hidden_balloon_returns_the_same_pixels() {
     );
 }
 
+/// 隠れたバルーンの合成メモが捨てられた後（装置が替わった後と同じ）: `dump_balloon` が、背景を
+/// 合成し直して、隠す前と同じ画素を成功で返す。
+///
+/// # 非空虚性
+/// 捨てた後に ID の控えが残り絵だけが無いことを表示の層から確かめてから呼ぶ。控えが無いのを
+/// 想定外の失敗（`NG:`）で答えると赤。
+#[test]
+fn hidden_balloon_after_cache_invalidation_returns_the_same_pixels() {
+    let mut gpu = GpuRig::new(LINE_THEN_HIDE, 96);
+    let spoke = speak(&mut gpu, 1);
+    let pending = gpu.dump_balloon(None);
+    let before = gpu.answer_of(&pending);
+    let hidden = gpu.frames_until(100, |world| balloon_visible(world) == Some(false));
+    let invalidated = gpu.invalidate_cache(balloon_target(0));
+    let kept = gpu
+        .rig
+        .world
+        .non_send::<RuntimeWiring>()
+        .presenter()
+        .last_shown(balloon_target(0))
+        .map(|(_, pic)| pic.is_some());
+    let pending = gpu.dump_balloon(None);
+    let after = gpu.answer_of(&pending);
+    let down = gpu.shutdown();
+
+    let (_, _, _, before) = read_picture(&before.expect("隠す前").outcome);
+    let after = after.expect("捨てた後").outcome;
+    assert!(
+        !after.is_error,
+        "捨てた後も成功で答える: {:?}",
+        after.content.first()
+    );
+    let (a_err, a_body, _, after) = read_picture(&after);
+    assert_eq!(
+        (
+            spoke,
+            hidden,
+            invalidated,
+            kept,
+            down,
+            (a_err, a_body),
+            differing(&after, &before)
+        ),
+        (
+            true,
+            true,
+            true,
+            Some(false),
+            true,
+            (false, ok_text(0)),
+            Some(0)
+        ),
+        "（字が現れ切った, 隠れた, 捨てられた, 控えの絵が在るか, 降ろせた, 後の答え, 前後で食い違った画素の数）"
+    );
+}
+
 /// 一度も話していないスコープ: スコープ 0 だけが話した後のスコープ 1 の
 /// `dump_balloon` が、スコープ 1 のバルーンの背景の合成と一致する絵を成功で返す。
 ///

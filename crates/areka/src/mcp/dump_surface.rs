@@ -268,7 +268,8 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         };
     Some(match plan {
         SurfacePlan::Shown { scope, surface_id } => {
-            match presenter.last_shown(shell_target(scope)) {
+            let target = shell_target(scope);
+            match presenter.last_shown(target) {
                 Some((_, Some(pic))) => picture(
                     scope,
                     surface_id,
@@ -277,33 +278,39 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
                     pic.width(),
                     pic.height(),
                 ),
-                _ => Step::Now(fail(
-                    TOOL,
+                // 装置が替わると隠れた target の合成メモだけが捨てられ、描き直されない。
+                Some((_, None)) => composed(
                     scope,
-                    "the last shown picture is no longer kept",
-                )),
+                    surface_id,
+                    judge::shown_text(scope, surface_id),
+                    presenter.compose_last_shown(target),
+                ),
+                None => Step::Now(refuse(TOOL, args.scope, judge::NOT_SHOWN_YET)),
             }
         }
-        SurfacePlan::Alone { scope, surface_id } => alone(
+        SurfacePlan::Alone { scope, surface_id } => composed(
             scope,
             surface_id,
+            judge::alone_text(scope, surface_id),
             presenter.compose_alone(shell_target(scope), surface_id),
         ),
     })
 }
 
-/// 単体の合成の結果から答えの種を作る。合成の結果が無い（表示の層にスコープのシェルが
-/// 無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で想定外の失敗。
-fn alone(
+/// 合成し直した結果から、本文 `text` の答えの種を作る。合成の結果が無い（表示の層にスコープの
+/// シェルが無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で
+/// 想定外の失敗。
+fn composed(
     scope: u32,
     surface_id: u32,
+    text: String,
     composed: Option<Result<ComposedSurface, ComposeError>>,
 ) -> Step {
     match composed {
         Some(Ok(pic)) => picture(
             scope,
             surface_id,
-            judge::alone_text(scope, surface_id),
+            text,
             pic.bytes(),
             pic.width(),
             pic.height(),

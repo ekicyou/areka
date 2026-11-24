@@ -51,9 +51,18 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     };
     let failed = |reason: &str| Some(Step::Now(fail(TOOL, scope, reason)));
     let target = balloon_target(scope);
+    let recomposed;
     let pic = match presenter.last_shown(target) {
         Some((_, Some(pic))) => pic,
-        Some((_, None)) => return failed("the last shown picture is no longer kept"),
+        // 装置が替わると隠れた target の合成メモだけが捨てられ、描き直されない。
+        Some((_, None)) => match presenter.compose_last_shown(target) {
+            Some(Ok(pic)) => {
+                recomposed = pic;
+                &recomposed
+            }
+            Some(Err(e)) => return failed(&e.to_string()),
+            None => return failed("the balloon of this scope is not ready"),
+        },
         None => return failed("the balloon of this scope is not ready"),
     };
     let (width, height) = (pic.width(), pic.height());

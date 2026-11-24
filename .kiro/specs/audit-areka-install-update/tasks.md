@@ -102,7 +102,7 @@
   - _Dispatch: mechanical — 直し方と期待の値を design が与えている_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 7.1, 7.7, 7.8_
 
-- [ ] 2.5 隠れたキャラクターの `dump_surface`・`dump_balloon` が答えるようにする（G12・指摘 3）
+- [x] 2.5 隠れたキャラクターの `dump_surface`・`dump_balloon` が答えるようにする（G12・指摘 3）
   - `areka-emo-present` の `EmoPresenter` に `compose_last_shown` を足し、`snapshot_tests.rs` に控えを捨てた後に `Some(Ok)` を返すテストを足す。
   - `dump_surface.rs` の `_` の腕を「一度も見せていない」と「控えが捨てられた」に分け、後者で `compose_last_shown` を呼ぶ。`dump_balloon.rs` も同じにする。
   - 実 GPU のテストで、隠した target に `InvalidateCache` を送り、控えの surface が残り絵だけが無いことを表明してから、`dump_surface`（surface の省略）と `dump_balloon` が `OK` で絵を返す（今は `NG:` で赤）。
