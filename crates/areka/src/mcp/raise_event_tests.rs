@@ -3,7 +3,6 @@
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で外から頼まれたイベントの知らせを
 //! 受け取って返信端へ結果を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
 
-use std::path::PathBuf;
 use std::sync::mpsc;
 
 use areka_actor::ReplySender;
@@ -12,33 +11,12 @@ use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::{answer, ghost, record_one, rig, text, warn_or_worse};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
-use crate::mcp::{McpLater, drain, install};
-use areka_session::ghost_session::{GhostSession, GhostSlot};
+use crate::mcp::{McpLater, drain};
 
 const EVENT: &str = "OnAiTalk";
 const SCRIPT: &str = r"\0\s[0]hello\e";
-
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
-/// 受け口と後から答える置き場を据え、置き場に偽の kanade の送り口を置いた World と、その受信端。
-fn rig() -> (World, mpsc::Receiver<KanadeMsg>) {
-    let mut world = World::new();
-    let (_inbox_tx, inbox_rx) = mpsc::channel();
-    install(&mut world, inbox_rx);
-    let (tx, rx) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        ghost().root,
-    ))));
-    (world, rx)
-}
 
 fn args(event: &str, references: &[&str], ghost_name: Option<&str>, strict: Option<bool>) -> Args {
     Args {
@@ -77,26 +55,6 @@ fn take_notify(rx: &mpsc::Receiver<KanadeMsg>) -> Notify {
             other.map(|_| "別の知らせ")
         ),
     }
-}
-
-fn answer(pending: &Pending) -> ToolOutcome {
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .expect("答えが届いている")
-        .outcome
-}
-
-fn warn_or_worse(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|ev| ev.level <= tracing::Level::WARN)
-        .count()
-}
-
-fn text(s: &str) -> Vec<ToolContent> {
-    vec![ToolContent::Text(s.to_string())]
 }
 
 /// 結果を送って 1 フレーム回した後の答え（その間の記録の warn 以上も返す）。
@@ -289,25 +247,6 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
 /// strict の文（`<n>` の前まで）。
 const STRICT_HEAD: &str = " strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
-/// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
-fn record_one() -> u64 {
-    areka_session::log_history::record(
-        areka_session::log_history::Stamp {
-            year: 2026,
-            month: 10,
-            day: 30,
-            hour: 12,
-            minute: 0,
-        },
-        areka_session::log_history::Draft {
-            kind: areka_session::log_history::Kind::Error,
-            label: "strict".to_string(),
-            name: String::new(),
-            body: "test".to_string(),
-        },
-    )
-}
-
 /// strict 真で台本が返った → 1 行目の末尾に strict の文・区切りと `Script: ` の行は今のまま・
 /// `<n>` は送る前に読んだ最後の番号。
 ///
@@ -373,60 +312,5 @@ fn strict_sentence_only_when_strict_true_and_a_script_returned() {
         take_notify(&rx).3.send(result).expect("返信端は生きている");
         drain(&mut world);
         assert_eq!(answer(&pending).content, text(want), "{strict:?}");
-    }
-}
-
-/// 捕まえた出来事のうち、エラーログに積まれる strict の記録（宛先が `RECORD_TARGET` で `point` の欄を持つ）の数。
-fn strict_records(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|ev| ev.target == areka_sakura::strict::RECORD_TARGET)
-        .filter(|ev| ev.fields.iter().any(|(name, _)| name == "point"))
-        .count()
-}
-
-/// 記録しない 4 つ（台本が返らない＝空の台本か 204 で `NoScript`・受け付けない・送れない〔失敗・返信端の落ち〕）を strict 真で、
-/// 台本が返ったのを strict 偽・省略で → エラーログに strict の記録が増えない。
-/// 記録は呼んだ・回したスレッドで拾う。
-#[test]
-fn no_strict_records_when_nothing_is_played_strictly() {
-    let (mut world, rx) = rig();
-    drop(rx);
-    let (pending, called) = call(&mut world, args(EVENT, &[], None, Some(true)));
-    let _ = answer(&pending);
-    assert_eq!(strict_records(&called), 0, "送れない");
-
-    let script = || Some(SstpNotifyOutcome::Script(SCRIPT.to_string()));
-    let cases = [
-        (Some(true), Some(SstpNotifyOutcome::NoScript), "返らない"),
-        (
-            Some(true),
-            Some(SstpNotifyOutcome::NotAccepted),
-            "受け付けない",
-        ),
-        (
-            Some(true),
-            Some(SstpNotifyOutcome::Failed),
-            "送れない（失敗）",
-        ),
-        (Some(true), None, "送れない（返信端の落ち）"),
-        (Some(false), script(), "strict 偽"),
-        (None, script(), "strict 省略"),
-    ];
-    for (strict, result, label) in cases {
-        let (mut world, rx) = rig();
-        let (pending, called) = call(&mut world, args(EVENT, &[], None, strict));
-        let (_, _, _, reply) = take_notify(&rx);
-        match result {
-            Some(r) => reply.send(r).expect("返信端は生きている"),
-            None => drop(reply),
-        }
-        let ((), polled) = capture(|| drain(&mut world));
-        let _ = answer(&pending);
-        assert_eq!(
-            strict_records(&called) + strict_records(&polled),
-            0,
-            "{label}"
-        );
     }
 }

@@ -174,4 +174,4 @@ fn kind_of(point: DetectionPoint) -> Kind {
 
 #[cfg(test)]
 #[path = "check_script_judge_tests.rs"]
-mod tests;
+pub(in crate::mcp) mod tests;

@@ -13,7 +13,7 @@ use areka_seriko::{SurfaceResolver, SurfaceTarget};
 use super::*;
 
 /// 手書きの事実の表。スコープ 0・1 に絵とバルーンが在り、スコープ 2 には何も無い。
-struct Table {
+pub(in crate::mcp) struct Table {
     resolver: SurfaceResolver,
     /// スコープごとのシェルの生の surface ID。
     shells: &'static [(u32, &'static [u32])],
@@ -42,7 +42,7 @@ impl SkinLookup for Table {
 
 /// スコープ 0 の絵は 0・3・10、スコープ 1（相方）の絵は 10・11。別名 `笑顔` は 3。
 /// バルーンはスコープ 0 が 0・2、スコープ 1 が 1（相方の側はシェルもバルーンも ID 0 を持たない）。
-fn ghost() -> Table {
+pub(in crate::mcp) fn ghost() -> Table {
     let mut aliases = BTreeMap::new();
     aliases.insert("笑顔".to_string(), vec![3]);
     Table {
@@ -79,7 +79,7 @@ fn silent(script: &str) {
     assert_eq!(check(script), Vec::new(), "{script}");
 }
 
-// ---- 種類の表の 14 行 ----
+// ---- 種類の表の 1〜13 行目 ----
 
 #[test]
 fn row01_bare_unknown_tag() {

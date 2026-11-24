@@ -148,5 +148,8 @@ fn poll_later(world: &mut World) {
 }
 
 #[cfg(test)]
+mod kanade_fake_test_support;
+
+#[cfg(test)]
 #[path = "mcp_tests.rs"]
 mod mcp_tests;

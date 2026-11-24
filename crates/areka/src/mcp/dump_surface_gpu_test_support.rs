@@ -12,7 +12,6 @@
 
 use std::panic::Location;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -29,6 +28,7 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
+use temp_path_kit::TempPath;
 use windows::Win32::Foundation::{GENERIC_READ, HWND};
 use windows::Win32::Graphics::Imaging::{
     GUID_WICPixelFormat32bppRGBA, IWICBitmapSource, WICBitmapDitherTypeNone,
@@ -411,21 +411,22 @@ pub(in crate::mcp) fn unpremultiply(premultiplied_bgra: &[u8]) -> Vec<u8> {
 /// 画像の content の base64 の PNG を、ワークツリーの `target\` の下の一時ファイルを経て WIC で
 /// 復号し、乗算していない RGBA の（幅, 高さ, 画素）を返す（別の実装で読み戻す）。
 pub(in crate::mcp) fn decode_png(png_base64: &str) -> (u32, u32, Vec<u8>) {
-    // 呼び出しごとに別のフォルダ（並走するテストが互いのフォルダを消さない）。
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/test-tmp")
-        .join(format!(
-            "areka-dump-gpu-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-    std::fs::create_dir_all(&dir).expect("target の下に一時ディレクトリを作れる");
-    let file = dir.join("dump.png");
+    let dir = TempPath::new("dump-gpu");
+    let file = dir.child("dump.png");
     std::fs::write(&file, base64_decode(png_base64)).expect("PNG を書ける");
-    let decoded = wic_decode_rgba(&file);
-    let _ = std::fs::remove_dir_all(&dir);
-    decoded
+    wic_decode_rgba(&file)
+}
+
+/// `a` と `b` の（大きさが同じなら）食い違った画素の数。大きさが違えば `None`。
+pub(in crate::mcp) fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> Option<usize> {
+    ((a.0, a.1) == (b.0, b.1)).then(|| {
+        a.2.as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.2.as_chunks::<4>().0)
+            .filter(|(p, q)| p != q)
+            .count()
+    })
 }
 
 fn wic_decode_rgba(path: &Path) -> (u32, u32, Vec<u8>) {

@@ -9,41 +9,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_mcp::tools::check_script::Diagnostic;
 use areka_parsers::sakura::parse_noted;
-use areka_seriko::{SkinFacts, SkinLookup, SurfaceResolver, SurfaceTarget};
+use areka_seriko::{SkinFacts, SkinLookup};
 
 use super::*;
 use crate::mcp::check_script_judge::diagnose;
+use crate::mcp::check_script_judge::tests::ghost;
 use areka_runtime::consumer_ledger::ConsumerLedger;
-
-/// 手で組んだ事実。スコープ 0 の絵は 0・3・10、スコープ 1 は 10・11、別名 `笑顔` は 3。
-/// バルーンはスコープ 0 が 0・2、スコープ 1 が 1。スコープ 2 には何も無い。
-struct ByHand(SurfaceResolver);
-
-impl SkinLookup for ByHand {
-    fn resolve_surface(&self, key: &str) -> SurfaceTarget {
-        self.0.resolve(key)
-    }
-    fn shell_has(&self, scope: u32, surface_id: u32) -> Option<bool> {
-        match scope {
-            0 => Some([0, 3, 10].contains(&surface_id)),
-            1 => Some([10, 11].contains(&surface_id)),
-            _ => None,
-        }
-    }
-    fn balloon_has(&self, scope: u32, balloon_id: u32) -> Option<bool> {
-        match scope {
-            0 => Some([0, 2].contains(&balloon_id)),
-            1 => Some(balloon_id == 1),
-            _ => None,
-        }
-    }
-}
 
 fn aliases() -> BTreeMap<String, Vec<u32>> {
     BTreeMap::from([("笑顔".to_string(), vec![3])])
 }
 
-/// 上と同じ事実を、写し取りの値の形（集合の表）で組む。
+/// 判断のテストの手書きの事実（`ghost()`）と同じ事実を、写し取りの値の形（集合の表）で組む。
 fn snapshot() -> SkinFacts {
     let ids = |v: &[u32]| v.iter().copied().collect::<BTreeSet<u32>>();
     SkinFacts::new(
@@ -64,7 +41,7 @@ fn check(script: &str, facts: &dyn SkinLookup) -> Vec<Diagnostic> {
 
 #[test]
 fn snapshot_answers_like_facts_built_by_hand() {
-    let by_hand = ByHand(SurfaceResolver::new(aliases()));
+    let by_hand = ghost();
     let snap = snapshot();
     let scripts = [
         r"\s[0]\s[3]\s[笑顔]\s[99999]\s[無い名前]\s[-1]",

@@ -178,7 +178,7 @@
   - _Dispatch: mechanical — 置く補助の形を design が与えている_
   - _Requirements: 3.1, 3.3, 3.4, 5.6, 5.7_
 
-- [ ] 3.4 MCP のテストの写しと要らないテストを片づける（G14・指摘 29・32・34・38・79・80・84・86・87）
+- [x] 3.4 MCP のテストの写しと要らないテストを片づける（G14・指摘 29・32・34・38・79・80・84・86・87）
   - 新しい `mcp/kanade_fake_test_support.rs` に偽の kanade の足場（`ghost`・`rig`・`answer`・`warn_or_worse`・`text`・`record_one`）を置き、`get_status_tests.rs`・`raise_event_tests.rs`・`sakurascript_tests.rs` の写しを寄せる（38）。
   - 番号の札と `mN_`・「MN:」を消し、名と定数を中身で付け直す（29・34）。`TempPath` に替える（32）。`differing` を支えへ移し `read_picture` に寄せる（79）。
   - `mcp_tests.rs` の 1 本（80）、2 本と `strict_records`（84）、`ByHand`（86・`Table`・`ghost()` を `pub(super)` に）を消し、「1〜13 行目」に直す（87）。
@@ -270,3 +270,4 @@
 - 2.2: `install_accept` を消したので、範囲の外の `doc/ukadoc-coverage/ledger/assets.toml` の install.accept の「根拠の場所」を新しい読み手（`master_install_keys`・`DeskPorts::ghost_facts`）へ直した。5.5 の範囲の外の差分の確かめで数える。
 - 2.3: design.md「設計の段で決めた事項」1 の `install_abandoned` の行（書いた後に締めが閉じたときは出ない）は、書き終えた書庫についてだけの決め。同じ依頼のまだ始めていない後の書庫は、黙って捨てず既にある `install_abandoned`（同じ欄）で 1 件残す（要件 6.2）。
 - 3.3: `boot_context_named` が `main` から入っていたので、`update/` のテストは支えのファイルに `boot_context` を置かず直に呼ぶ。5.1 の件 6 の `update/` の分は済み。共通の `run` は `FakePorts` が手続きの中に閉じているので `update/procedure_test_support.rs` に置いた。
+- 3.4 → 5.4: 同じ形の `fn ghost()` が `mcp/mcp_tests.rs` と `mcp/reload_tests.rs` に残る（指摘 38 の 3 ファイルの外）。かけ直しの audit で拾ったら `kanade_fake_test_support::ghost` へ寄せる。`check_script_judge::tests` は兄弟から引くため `pub(in crate::mcp)`。

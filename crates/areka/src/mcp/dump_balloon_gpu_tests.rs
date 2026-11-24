@@ -23,7 +23,9 @@ use log_capture_kit::count_levels;
 use wintf::ecs::FrameTime;
 
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
-use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
+use crate::mcp::dump_surface::gpu_test_support::{
+    FLUSH_EVENT, GpuRig, decode_png, differing, unpremultiply,
+};
 use crate::mcp::dump_surface::{Job, Step, finish};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::RecordedCall;
@@ -116,18 +118,6 @@ fn read_picture(outcome: &ToolOutcome) -> (bool, String, String, (u32, u32, Vec<
         mime_type.clone(),
         decode_png(data),
     )
-}
-
-/// `a` と `b` の（大きさが同じなら）食い違った画素の数。大きさが違えば `None`。
-fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> Option<usize> {
-    ((a.0, a.1) == (b.0, b.1)).then(|| {
-        a.2.as_chunks::<4>()
-            .0
-            .iter()
-            .zip(b.2.as_chunks::<4>().0)
-            .filter(|(p, q)| p != q)
-            .count()
-    })
 }
 
 /// 背景（乗算済み BGRA）の上へ、文字の面（乗算済み BGRA）を `origin` へそのまま重ねる

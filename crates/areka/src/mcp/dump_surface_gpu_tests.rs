@@ -9,7 +9,7 @@ use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 
 use super::dump_surface_tests::is_picture;
-use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
+use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, differing};
 use super::{Step, WaitAnswer, finish};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{Progress, RecordedCall};
@@ -42,48 +42,22 @@ fn shown_surface_matches_the_composed_pixels_at_native_size() {
     let down = gpu.shutdown();
 
     let answer = answer.expect("装着の後は上限のうちに答えが届く");
-    let (text, (w, h, pixels), mime) = match answer.outcome.content.as_slice() {
-        [
-            ToolContent::Text(text),
-            ToolContent::Image { data, mime_type },
-        ] => (text.clone(), decode_png(data), mime_type.clone()),
-        other => panic!("本文＋画像 1 枚の形ではない: {other:?}"),
-    };
-    let (ew, eh, expected_pixels) = expected;
-    // 画素の列は大きいので、食い違った画素の数で比べる（大きさが違えば数えずに大きさで赤）。
-    let differing = (pixels.len() == expected_pixels.len()).then(|| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(expected_pixels.as_chunks::<4>().0)
-            .filter(|(a, b)| a != b)
-            .count()
-    });
+    let picture = read_picture(&answer.outcome, &expected);
     assert_eq!(
-        (
-            shown,
-            down,
-            answer.outcome.is_error,
-            text,
-            mime,
-            (w, h),
-            differing
-        ),
+        (shown, down, picture),
         (
             true,
             true,
-            false,
-            "OK:scope 0, surface 1101 as currently shown (with running animations and dressups, \
-             before scaling and transparency)"
-                .to_owned(),
-            "image/png".to_owned(),
-            (ew, eh),
-            Some(0),
+            picture_of(
+                concat!(
+                    "OK:scope 0, surface 1101 as currently shown (with running animations and dressups, ",
+                    "before scaling and transparency)"
+                ),
+                &expected
+            ),
         ),
-        "（台本の surface が出た, 降ろせた, isError, 本文, MIME, 復号した（幅, 高さ）, 食い違った画素の数）"
+        "（台本の surface が出た, 降ろせた, 答え）"
     );
-    assert!(ew > 0 && eh > 0, "比べる絵が空ではない");
 }
 
 /// 表示中（[`SHOWN`]）と別の、同じスコープ 0 用の surface（`element0` 1 枚・アニメーションも着せ替えも無い）。
@@ -129,15 +103,7 @@ fn read_picture(outcome: &ToolOutcome, expected: &(u32, u32, Vec<u8>)) -> Pictur
         panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
     };
     let (w, h, pixels) = decode_png(data);
-    let differing = (pixels.len() == expected.2.len()).then(|| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(expected.2.as_chunks::<4>().0)
-            .filter(|(a, b)| a != b)
-            .count()
-    });
+    let differing = differing(&(w, h, pixels), expected);
     (
         outcome.is_error,
         text.clone(),
