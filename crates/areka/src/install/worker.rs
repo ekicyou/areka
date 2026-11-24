@@ -26,7 +26,8 @@ use super::terms::TermsNotice;
 use areka_session::alert::{self, YesNo};
 use areka_session::exit_wait::WorkGate;
 
-/// 背景のスレッドから窓口への頼み。どれも返信端を 1 つ持ち、窓口が答えるか落とす。
+/// 背景のスレッド（`install`・`install-fetch`）から窓口への頼みと知らせ。返信端を持つ頼みは、窓口が
+/// 答えるか落とす。
 pub(crate) enum DeskAsk {
     /// イベントを今のゴーストへ GET で送る。`reply` は kanade へそのまま渡す（kanade が直接答える）。
     Raise {
@@ -55,6 +56,8 @@ pub(crate) enum DeskAsk {
     OrderDone,
     /// 依頼の最中にスレッドが倒れた（次の依頼でスレッドを起こし直す）。
     WorkerPanicked,
+    /// 取得のスレッドが URL を 1 件終えた（`panicked` ならスレッドは抜けたので、次の URL で起こし直す）。
+    FetchDone { panicked: bool },
 }
 
 /// 依頼 1 件の守り手。倒れて落ちるときだけ、門を手放して窓口へ倒れを知らせる。

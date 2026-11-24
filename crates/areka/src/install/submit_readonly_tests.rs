@@ -43,7 +43,7 @@ fn readonly_refuses_every_origin_before_queueing() {
             },
         );
         desk::raw_sender(&world)
-            .send(RawInstallRequest {
+            .send(RawInstallRequest::Path {
                 path: PathBuf::from("C:/script.nar"),
                 origin: InstallOrigin::Script,
             })

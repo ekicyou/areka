@@ -27,7 +27,7 @@ use super::super::window_state_cue::WindowStateCueSink;
 use super::super::zorder_cue::ZOrderCueSink;
 use super::test_support::{carrier_cue, ledger_keys, samples};
 use super::{CommandConsumer, ConsumerLedger};
-use crate::install::install_cue::{InstallCueSink, StartFetch};
+use crate::install::install_cue::InstallCueSink;
 use crate::update::update_cue::UpdateCueSink;
 use areka_runtime::switch_cue::SwitchCueSink;
 use areka_session::readme::readme_cue::ReadmeCueSink;
@@ -62,7 +62,7 @@ fn runtime_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
 ///
 /// 中断の無効化の受け口とバルーンの寿命の受け口は、どの cue でも最初に話の始まり・落とすと話の終わりを
 /// 送るので、前者は出入り（`Enter`／`Leave`）、後者は待ち時間の指定（`BalloonTimeout`）だけを「届いた」と数える。
-/// 書庫の受け口は取得の口を差し替え、取得を起こしたことも「届いた」と数える（ネットへは出ない）。
+/// 書庫の受け口の `url` の腕は URL の要求を送るだけ（取りに行くのは窓口なので、ネットへは出ない）。
 fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
     let (move_tx, move_rx) = channel();
     let (zorder_tx, zorder_rx) = channel();
@@ -71,14 +71,10 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
     let (change_tx, change_rx) = channel();
     let (switch_tx, switch_rx) = channel();
     let (install_tx, install_rx) = channel();
-    let (fetch_tx, fetch_rx) = channel::<String>();
     let (update_tx, update_rx) = channel();
     let (lifecycle_tx, lifecycle_rx) = channel();
     let (reload_tx, reload_rx) = channel();
     let (window_state_tx, window_state_rx) = channel();
-    let fetch: StartFetch = Arc::new(move |url, _| {
-        fetch_tx.send(url).expect("取得の記録を受け取れる");
-    });
     let mut sinks: Vec<Box<dyn CueSink>> = vec![
         Box::new(MoveCueSink::new(move_tx)),
         Box::new(ZOrderCueSink::new(zorder_tx)),
@@ -86,7 +82,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
         Box::new(NoUserBreakCueSink::new(user_break_tx)),
         Box::new(ChangeCueSink::new(change_tx)),
         Box::new(SwitchCueSink::new(switch_tx)),
-        Box::new(InstallCueSink::with_fetch(install_tx, fetch)),
+        Box::new(InstallCueSink::with_readonly(install_tx, false)),
         Box::new(UpdateCueSink::new(update_tx)),
         Box::new(BalloonLifecycleSink::new(
             lifecycle_tx,
@@ -125,7 +121,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
             CommandConsumer::SwitchSink,
         ),
         (
-            install_rx.try_iter().count() + fetch_rx.try_iter().count() > 0,
+            install_rx.try_iter().count() > 0,
             CommandConsumer::InstallSink,
         ),
         (

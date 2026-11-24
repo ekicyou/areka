@@ -6,31 +6,27 @@
 //! 1. **自己選別**——コマンド名と第 1 引数の組が `("execute", "install")` のものだけを受理する。
 //!    `execute` の他の第 1 引数・裸の `\![execute]`・他の名前は担当外として `debug!` で読み飛ばす。
 //! 2. **送り出し**——2 番目以降の引数を `install::judge::script_request` へ渡し、`path` の腕は出どころ
-//!    「台本」の生の要求 1 件を窓口へ送る。`url` の腕は短命の取得のスレッド（`install::fetch_url`）を
-//!    起こし、落とし終えたらそのスレッドが同じ要求を送る。依頼にするのは窓口の取り出し（UI スレッド）の
-//!    仕事である。
+//!    「台本」の生の要求 1 件を、`url` の腕は URL の生の要求 1 件を窓口へ送る。URL を取りに行くのは窓口の
+//!    取得の待ち行列（`install::fetch_url` のスレッド）で、依頼にするのは窓口の取り出し（UI スレッド）の
+//!    仕事である。読み取りだけの走りの `url` の腕は、ここで断って送らない。
 //!
 //! # 黙って諦めない
 //!
 //! `path`／`url` 以外・相対パスと空・形の悪い URL・`nar` 以外の種別・読まない後ろの引数・送出の失敗の
 //! いずれも記録する。受信端が閉じていても台本は殺さない（記録して継続する）。
 
-use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, info, warn};
 
 use crate::install::judge::{ScriptRefusal, ScriptRequest, script_request};
-use crate::install::{InstallOrigin, RawInstallRequest, fetch_url};
+use crate::install::{InstallOrigin, RawInstallRequest};
 
 /// コマンド名（外部の仕事を始めさせる汎用の名前）。
 const NAME_EXECUTE: &str = "execute";
 /// 第 1 引数（選別子）——本受け口が担当するのはこの選別子を伴う組だけである。
 const SELECTOR_INSTALL: &str = "install";
-
-/// `url` の腕で取得を起こす口（本番は `fetch_url::spawn_download`・テストは偽の取得口を差す）。
-pub(crate) type StartFetch = Arc<dyn Fn(String, Sender<RawInstallRequest>) + Send + Sync>;
 
 /// `\![execute,install,…]` の受け口。
 ///
@@ -39,35 +35,19 @@ pub(crate) type StartFetch = Arc<dyn Fn(String, Sender<RawInstallRequest>) + Sen
 pub(crate) struct InstallCueSink {
     /// 窓口の生の要求の送出端（`install::desk::raw_sender` から借りる）。
     tx: Sender<RawInstallRequest>,
-    start_fetch: StartFetch,
+    /// 読み取りだけの走りか（`url` の腕を断る）。
+    readonly: bool,
 }
 
 impl InstallCueSink {
     pub(crate) fn new(tx: Sender<RawInstallRequest>) -> Self {
-        Self::with_fetch(tx, fetch_for(areka_session::readonly::is_on()))
+        Self::with_readonly(tx, areka_session::readonly::is_on())
     }
 
-    /// 取得の起こし方を差し替える口（テストが偽の取得口を差す）。
-    pub(crate) fn with_fetch(tx: Sender<RawInstallRequest>, start_fetch: StartFetch) -> Self {
-        Self { tx, start_fetch }
+    /// 読み取りだけかを差し替える口（テストが読み取りだけの走りを差す）。
+    pub(crate) fn with_readonly(tx: Sender<RawInstallRequest>, readonly: bool) -> Self {
+        Self { tx, readonly }
     }
-}
-
-/// 読み取りだけなら断りの記録だけを残す口、そうでなければ本物の取得（`fetch_url::spawn_download`）。
-///
-/// 断りの口は要求を送らず、スレッドも起こさない＝ネットワークへ行かない。
-fn fetch_for(readonly: bool) -> StartFetch {
-    if !readonly {
-        return Arc::new(fetch_url::spawn_download);
-    }
-    Arc::new(|url, _tx| {
-        info!(
-            event = "readonly_refused",
-            what = "install_url",
-            url = url.as_str(),
-            "[InstallCueSink] 読み取りだけなので、書庫を取りに行きません"
-        )
-    })
 }
 
 impl dola::cue::CueSink for InstallCueSink {
@@ -148,19 +128,27 @@ impl dola::cue::CueSink for InstallCueSink {
             );
         }
 
-        // `url` は取得のスレッドが落とし終えてから送る。受信端が閉じていても台本は殺さない。
-        let path = match request {
-            ScriptRequest::Path(path) => path,
-            ScriptRequest::Url(url) => return (self.start_fetch)(url, self.tx.clone()),
-        };
-        let request = RawInstallRequest {
-            path,
-            origin: InstallOrigin::Script,
+        // 送るのは要求だけで、取りに行くのは窓口の取得の待ち行列。受信端が閉じていても台本は殺さない。
+        let request = match request {
+            ScriptRequest::Path(path) => RawInstallRequest::Path {
+                path,
+                origin: InstallOrigin::Script,
+            },
+            ScriptRequest::Url(url) if self.readonly => {
+                info!(
+                    event = "readonly_refused",
+                    what = "install_url",
+                    url = url.as_str(),
+                    "[InstallCueSink] 読み取りだけなので、書庫を取りに行きません"
+                );
+                return;
+            }
+            ScriptRequest::Url(url) => RawInstallRequest::Url(url),
         };
         if let Err(err) = self.tx.send(request) {
             warn!(
                 event = "install_cue_send_failed",
-                path = %err.0.path.display(),
+                request = ?err.0,
                 "[InstallCueSink] インストールの要求を送り出せなかった（窓口が無い）"
             );
         }

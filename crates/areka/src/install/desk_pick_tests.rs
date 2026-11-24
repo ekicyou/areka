@@ -97,7 +97,7 @@ fn menu_order_is_the_script_order_with_only_the_origin_changed() {
         panic!("絶対パスは path の腕で通る");
     };
     raw_sender(&world)
-        .send(RawInstallRequest {
+        .send(RawInstallRequest::Path {
             path: script_path,
             origin: InstallOrigin::Script,
         })
@@ -259,7 +259,7 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
         ),
         (
             Ok(Some(PathBuf::from(ABSOLUTE))),
-            vec![RawInstallRequest {
+            vec![RawInstallRequest::Path {
                 path: PathBuf::from(ABSOLUTE),
                 origin: InstallOrigin::Menu,
             }],

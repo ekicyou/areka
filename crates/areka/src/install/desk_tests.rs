@@ -234,7 +234,7 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
     let mut rig = Rig::new();
     let raw = raw_sender(&rig.world);
     let send = |path: &str| {
-        raw.send(RawInstallRequest {
+        raw.send(RawInstallRequest::Path {
             path: PathBuf::from(path),
             origin: InstallOrigin::Script,
         })
@@ -282,7 +282,7 @@ fn raw_sender_without_desk_has_no_receiver() {
     let world = World::new();
     let raw = raw_sender(&world);
     assert!(
-        raw.send(RawInstallRequest {
+        raw.send(RawInstallRequest::Path {
             path: PathBuf::from("C:/a.nar"),
             origin: InstallOrigin::Menu,
         })

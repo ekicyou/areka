@@ -31,7 +31,7 @@
   - _Dispatch: standard — 守り手の落ちる順を含めて組む_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 6.1, 6.2, 6.3_
 
-- [ ] 1.4 URL からの取得を 1 本の長く生きるスレッドの待ち行列にし、終了の門に乗せる（G5・指摘 2・12）
+- [x] 1.4 URL からの取得を 1 本の長く生きるスレッドの待ち行列にし、終了の門に乗せる（G5・指摘 2・12）
   - `RawInstallRequest` をパスと URL の 2 つの腕にし、台本の受け口は URL を窓口へ送るだけにする（`StartFetch`・`fetch_for` を消す・読み取りだけの断りは受け口に残す）。
   - 窓口が待ち行列を持ち、取得のスレッド `install-fetch` へ一度に 1 件だけ渡す。取得のスレッドは URL ごとの守り手で、成功・失敗・panic のどの道でも門の `end` と `FetchDone` を送る。送れなければ起こし直し、それも失敗したら `install_fetch_failed` を残してその URL を捨てて次へ進む（design.md「取得の待ち行列」）。
   - 門 `install-fetch` を `install::register` で登記し、終了では積んだ残りを `discard_for_exit` が `install_fetch_abandoned` で 1 件ずつ残す。`gate.begin` が偽なら `install_fetch_closing` を残して抜ける。`MakeFetch` は作り口に替える。
@@ -258,3 +258,9 @@
   - 差分の確かめの記録と、全体テストの緑が research.md にある。
   - _Dispatch: mechanical — 確かめる項目と手順が決まっている_
   - _Requirements: 4.4, 6.1, 6.6, 6.8, 6.9, 6.10, 6.11, 7.3, 7.4, 7.5, 7.11, 8.1, 8.2, 8.3, 8.4, 8.5, 9.4, 9.5_
+
+## Implementation Notes
+
+- 1.4: `StartFetch` を消すと範囲の外の `runtime_tests/consumer_ledger_agreement_tests.rs` が壊れるので、`InstallCueSink::with_readonly(tx, false)` へ置き換えた（最小の直し）。5.5 の範囲の外の差分の確かめでは、この 1 ファイルを design.md「Modified Files（範囲の外）」に加えて数える。
+- 1.4: 取得のスレッドの panic は表に無い語を足さず、既にある `install_fetch_failed` に理由を添えて残す（design.md の Components の `install_fetch_panicked` は使わない）。
+- 1.4 → 2.1: `doc/COMPAT_ARCHITECTURE.md:427` が消えた `fetch_for` を名指している。2.1 で 344 行と一緒にこの行も直し、5.5 の「COMPAT_ARCHITECTURE の差分は 344 行だけ」は 344・427 の 2 行として確かめる。

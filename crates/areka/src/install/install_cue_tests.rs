@@ -2,9 +2,8 @@
 
 use super::*;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use areka_kanade::online::OnlineCounter;
 use areka_sakura::sysvar::SystemVarSnapshot;
@@ -17,9 +16,10 @@ use temp_path_kit::TempPath;
 
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
-use crate::install::fetch_url::{MakeFetch, spawn_download_with};
+use crate::install::fetch_url::FetchTools;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{self, InstallOrigin, desk};
+use areka_runtime::spine::{Progress, wait_until};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -28,26 +28,11 @@ const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
 /// `url` の腕の URL（偽の取得口だけが答える＝ネットへ出ない）。
 const URL: &str = "https://example.com/files/hana.nar";
 const BODY: &[u8] = b"PK\x03\x04 nar body";
-/// 取得のスレッドを待つ上限（届けば即座に返る）。
-const BOUND: Duration = Duration::from_secs(30);
 
-/// 取得を起こさない前提の受け口（起こせば panic＝ネットへ出る道を塞ぐ）。
+/// 読み取りだけでない受け口（取りに行くのは窓口なので、受け口だけではネットへ出ない）。
 fn sink() -> (InstallCueSink, Receiver<RawInstallRequest>) {
     let (tx, rx) = channel();
-    let never: StartFetch = Arc::new(|url, _| panic!("取得を起こさないはず: {url}"));
-    (InstallCueSink::with_fetch(tx, never), rx)
-}
-
-/// 取得を起こす代わりに URL を記録する受け口。
-fn recording_sink() -> (
-    InstallCueSink,
-    Receiver<RawInstallRequest>,
-    Receiver<String>,
-) {
-    let (tx, rx) = channel();
-    let (urls_tx, urls_rx) = channel();
-    let record: StartFetch = Arc::new(move |url, _| urls_tx.send(url).expect("記録できる"));
-    (InstallCueSink::with_fetch(tx, record), rx, urls_rx)
+    (InstallCueSink::with_readonly(tx, false), rx)
 }
 
 /// 1 つの cue を流し、送られた要求と記録を返す。
@@ -75,7 +60,7 @@ fn warns(events: &[CapturedEvent]) -> Vec<Option<&str>> {
 }
 
 fn script_raw(path: &str) -> RawInstallRequest {
-    RawInstallRequest {
+    RawInstallRequest::Path {
         path: PathBuf::from(path),
         origin: InstallOrigin::Script,
     }
@@ -202,98 +187,57 @@ fn not_path_warns_once_and_sends_nothing() {
 
 // ---------------------------------------------------------------- url の腕
 
-/// 偽の取得口を差した本物の取得のスレッドを起こす口。起こした手綱は `handles_tx` へ渡す。
-fn fetching_start(
-    fake: FakeFetch,
-    dir: PathBuf,
-    online: &'static OnlineCounter,
-    handles_tx: Sender<Option<JoinHandle<()>>>,
-) -> StartFetch {
-    Arc::new(move |url, tx| {
-        let fake = fake.clone();
-        let make: MakeFetch = Box::new(move || Ok(Box::new(fake) as Box<dyn areka_update::Fetch>));
-        let handle = spawn_download_with(url, tx, dir.clone(), make, online);
-        handles_tx.send(handle).expect("手綱を渡せる");
-    })
-}
-
-/// 台本の文字列の `\![execute,install,url,URL,nar]` は、偽の取得口を差した取得のスレッドを 1 本
-/// 起こし、落とし終えたら出どころ「台本」の生の要求がちょうど 1 件届く。
-/// 取得を抜けた後は通信中の数が 0 に戻っている。
+/// 台本の文字列の `\![execute,install,url,URL,nar]` は、受け口から窓口へ URL の要求として届き、
+/// 窓口が偽の取得口を差した取得のスレッドで落とし終えると、出どころ「台本」の依頼がちょうど 1 件
+/// 積まれる。取得を抜けた後は通信中の数が 0 に戻っている。
 #[test]
 fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
     static ONLINE: OnlineCounter = OnlineCounter::new();
     let tmp = TempPath::new("install-cue-url");
     let dir = tmp.child("download");
-    let (tx, rx) = channel();
-    let (handles_tx, handles_rx) = channel();
-    let start = fetching_start(
-        FakeFetch::new().serve(URL, BODY),
-        dir.clone(),
-        &ONLINE,
-        handles_tx,
+    let mut world = World::new();
+    desk::insert_busy_desk_for_test(&mut world);
+    let fake = FakeFetch::new().serve(URL, BODY);
+    desk::set_fetch_tools_for_test(
+        &mut world,
+        FetchTools {
+            dir: dir.clone(),
+            make: Arc::new(move || Ok(Box::new(fake.clone()) as Box<dyn areka_update::Fetch>)),
+            online: &ONLINE,
+        },
     );
+    let sink = InstallCueSink::new(desk::raw_sender(&world));
 
-    let ((), events) = capture(|| {
-        play_script(
-            &format!(r"\![execute,install,url,{URL},nar]\e"),
-            InstallCueSink::with_fetch(tx, start),
-        )
-    });
-    let handle = handles_rx
-        .try_recv()
-        .expect("取得が起きる")
-        .expect("install-fetch が起きる");
-    let request = rx.recv_timeout(BOUND).expect("依頼が届く");
-    handle.join().expect("install-fetch が panic しない");
-
-    assert!(!ONLINE.is_online(), "取得を抜けたら数は 0");
-    assert_eq!(request.origin, InstallOrigin::Script);
-    assert_eq!(request.path.parent(), Some(dir.as_path()));
-    assert_eq!(std::fs::read(&request.path).expect("読める"), BODY);
-    assert_eq!(
-        rx.try_recv(),
-        Err(TryRecvError::Disconnected),
-        "依頼は 1 件だけ"
-    );
-    assert_eq!(
-        handles_rx.try_recv().err(),
-        Some(TryRecvError::Disconnected),
-        "取得は 1 本だけ"
-    );
+    let ((), events) =
+        capture(|| play_script(&format!(r"\![execute,install,url,{URL},nar]\e"), sink));
+    wait_until(
+        "取得した書庫が依頼になる",
+        Progress::Unknown,
+        || {
+            desk::drain(&mut world);
+            !install::queued_orders(&world).is_empty()
+        },
+    )
+    .expect("依頼が積まれる");
+    // 依頼は通信中の数を立てたまま送られるので、数が戻るのは送った後。
+    wait_until("通信中の数が戻る", Progress::Unknown, || {
+        !ONLINE.is_online()
+    })
+    .expect("取得を抜けたら数は 0");
+    let orders = install::queued_orders(&world);
+    let [order] = orders.as_slice() else {
+        panic!("依頼は 1 件だけ: {orders:?}");
+    };
+    assert_eq!(order.origin, InstallOrigin::Script);
+    let [path] = order.archives.as_slice() else {
+        panic!("書庫は 1 本: {order:?}");
+    };
+    assert_eq!(path.parent(), Some(dir.as_path()));
+    assert_eq!(std::fs::read(path).expect("読める"), BODY);
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
 }
 
-/// `url` の腕で取得が失敗しても、依頼 0 件で通信中の数は 0 に戻る。
-#[test]
-fn url_arm_fetch_failure_sends_nothing_and_restores_online() {
-    static ONLINE: OnlineCounter = OnlineCounter::new();
-    let tmp = TempPath::new("install-cue-url-fail");
-    let (tx, rx) = channel();
-    let (handles_tx, handles_rx) = channel();
-    let start = fetching_start(
-        FakeFetch::new().fail(URL, areka_update::FetchError::Timeout),
-        tmp.child("download"),
-        &ONLINE,
-        handles_tx,
-    );
-
-    play_script(
-        &format!(r"\![execute,install,url,{URL},nar]\e"),
-        InstallCueSink::with_fetch(tx, start),
-    );
-    handles_rx
-        .try_recv()
-        .expect("取得が起きる")
-        .expect("install-fetch が起きる")
-        .join()
-        .expect("install-fetch が panic しない");
-
-    assert!(!ONLINE.is_online(), "取得を抜けたら数は 0");
-    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
-}
-
-/// 種別の省略は `nar` と同じく取得を起こす。種別より後ろの引数は `warn!` 1 件を残して読まない。
+/// 種別の省略も `nar` と同じく URL の要求 1 件になる。種別より後ろの引数は `warn!` 1 件を残して読まない。
 #[test]
 fn url_arm_with_no_kind_or_trailing_arguments_starts_the_fetch() {
     let cases: [(&[&str], Vec<Option<&str>>); 2] = [
@@ -304,13 +248,11 @@ fn url_arm_with_no_kind_or_trailing_arguments_starts_the_fetch() {
         ),
     ];
     for (tokens, expected_warns) in cases {
-        let (mut sink, rx, urls) = recording_sink();
-        let ((), events) = capture(|| sink.emit(carrier_cue("execute", tokens)));
-        assert_eq!(urls.try_iter().collect::<Vec<_>>(), vec![URL.to_owned()]);
+        let (sent, events) = emit_one("execute", tokens);
         assert_eq!(
-            rx.try_iter().count(),
-            0,
-            "{tokens:?}: 送るのは取得のスレッド"
+            sent,
+            vec![RawInstallRequest::Url(URL.to_owned())],
+            "{tokens:?}"
         );
         assert_eq!(warns(&events), expected_warns, "{tokens:?}");
     }
@@ -348,10 +290,8 @@ fn url_refusals_warn_once_and_start_nothing() {
         ),
     ];
     for (tokens, expected) in cases {
-        let (mut sink, rx, urls) = recording_sink();
-        let ((), events) = capture(|| sink.emit(carrier_cue("execute", tokens)));
-        assert_eq!(urls.try_iter().count(), 0, "{tokens:?}: 取得しない");
-        assert_eq!(rx.try_iter().count(), 0, "{tokens:?}: 依頼 0");
+        let (sent, events) = emit_one("execute", tokens);
+        assert!(sent.is_empty(), "{tokens:?}: 取得も依頼も 0");
         assert_eq!(
             warns(&events),
             vec![Some(expected)],
@@ -360,13 +300,12 @@ fn url_refusals_warn_once_and_start_nothing() {
     }
 }
 
-/// 読み取りだけの取得の口を差した `url` の腕は、要求を送らず、`readonly_refused`（`what =
-/// install_url`）の info を 1 件残す。記録が捕捉の窓（このスレッド）に入る＝
-/// スレッドを起こしていない。送出端を持ち続けないので、受け口を落とすと受信端は閉じる＝送り物 0。
+/// 読み取りだけの受け口の `url` の腕は、要求を送らず、`readonly_refused`（`what = install_url`）の
+/// info を 1 件残す。受け口を落とすと受信端は閉じる＝送り物 0。
 #[test]
 fn readonly_fetch_refuses_the_url_without_sending_or_warning() {
     let (tx, rx) = channel();
-    let mut sink = InstallCueSink::with_fetch(tx, fetch_for(true));
+    let mut sink = InstallCueSink::with_readonly(tx, true);
     let ((), events) =
         capture(|| sink.emit(carrier_cue("execute", &["install", "url", URL, "nar"])));
     drop(sink);
