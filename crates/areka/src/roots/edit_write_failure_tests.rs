@@ -5,42 +5,12 @@
 //! 最初の出所が `MemoryWriteFailed` になる。書き込みの前に書き換えた起動の文脈の並びは戻さない。
 
 use areka_ghost::{BasewareRoot, BasewareRoots};
-use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::roots::roots_test_support::world;
 use areka_session::app_exit::{ExitOrigin, FirstExit};
-use areka_session::boot_config::{ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-
-fn world(root: &Path, app_profile_dir: PathBuf) -> World {
-    let mut world = World::new();
-    world.insert_resource(BootContext {
-        roots: BasewareRoots::single(root.to_path_buf()),
-        roots_origin: RootsOrigin::Default,
-        app_profile_dir,
-        helper_exe: root.join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.join(r"ghost\ga"),
-                balloon_root: root.join(r"balloon\B"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.join(r"ghost\ga"),
-                folder: Some("ga".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.join(r"balloon\B"),
-                folder: Some("B".to_owned()),
-            },
-        },
-    });
-    world
-}
 
 #[test]
 fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {

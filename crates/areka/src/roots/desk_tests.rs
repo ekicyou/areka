@@ -9,16 +9,14 @@ use std::time::Duration;
 
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
-use areka_ghost::{BasewareRoot, BasewareRoots};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use areka_session::roots::RootsOrigin;
+use crate::roots::roots_test_support::{events_named, roots_of, world};
+use areka_session::boot_config::BootContext;
 
 /// 選ぶ口の代わりが止まっている間の待ちの上限（固まったときに赤で止めるためだけの値）。
 const BOUND: Duration = Duration::from_secs(10);
@@ -31,41 +29,10 @@ fn rig(name: &str) -> (TempPath, World, PathBuf, PathBuf) {
     for dir in [&a, &b] {
         std::fs::create_dir_all(dir.join("ghost")).unwrap();
     }
-    let mut world = World::new();
+    let mut world = world(&a, tmp.path().join("profile"));
     world.init_resource::<Schedules>();
-    world.insert_resource(BootContext {
-        roots: roots_of(&[&a]),
-        roots_origin: RootsOrigin::Default,
-        app_profile_dir: tmp.path().join("profile"),
-        helper_exe: a.join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: a.join(r"ghost\ga"),
-                balloon_root: a.join(r"balloon\B"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: a.join(r"ghost\ga"),
-                folder: Some("ga".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: a.join(r"balloon\B"),
-                folder: Some("B".to_owned()),
-            },
-        },
-    });
     install(&mut world);
     (tmp, world, a, b)
-}
-
-fn roots_of(dirs: &[&Path]) -> BasewareRoots {
-    BasewareRoots::new(
-        dirs.iter()
-            .map(|d| BasewareRoot::new(d.to_path_buf()))
-            .collect(),
-    )
 }
 
 /// 代わりの選ぶ口で画面を出し、スレッドの終わりを待ってから受ける系を回す。
@@ -75,13 +42,6 @@ fn pick_and_drain(world: &mut World, result: Result<Option<PathBuf>, PickError>)
     handle.join().expect("選ぶスレッドは panic しない");
     drain(world);
     name
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 決めたフォルダは `roots-pick` のスレッドから受け口へ届き、UI スレッドで並びの末尾に入る。

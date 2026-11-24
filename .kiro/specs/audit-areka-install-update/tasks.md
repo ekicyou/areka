@@ -186,7 +186,7 @@
   - _Dispatch: mechanical — 寄せ先と消す物を design が与えている_
   - _Requirements: 3.1, 3.3, 3.4, 4.5, 4.8, 6.1_
 
-- [ ] 3.5 `roots/` のテストの写しを寄せる（G18・指摘 44・45・93・件 6 の `roots/`）
+- [x] 3.5 `roots/` のテストの写しを寄せる（G18・指摘 44・45・93・件 6 の `roots/`）
   - 新しい `roots/roots_test_support.rs` に `roots_of`・`events_named` と、既にある `boot_context` に `roots_origin: Default`・`app_profile_dir` を上書きした `world` を置き、`edit_tests.rs`・`edit_write_failure_tests.rs`・`desk_tests.rs` の 3 つの写しを寄せる（45・93）。名 `ga` の表明 3 か所は呼ぶ前の `current` との比べにする。
   - `add_takes_effect_and_logs_error_when_memory_unwritable` を消す（44）。
   - `roots/` の中の `boot_context` の写しが 0 になり、テストが全部緑。

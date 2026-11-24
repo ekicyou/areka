@@ -3,6 +3,7 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
+use crate::roots::roots_test_support::roots_of;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::roots::{EXE_TOKEN, encode_memory};
 use std::path::{Path, PathBuf};
@@ -16,14 +17,6 @@ fn root(tmp: &TempPath, name: &str, with_ghost: bool) -> PathBuf {
         std::fs::create_dir_all(dir.join("ghost")).unwrap();
     }
     dir
-}
-
-fn roots_of(dirs: &[&Path]) -> BasewareRoots {
-    BasewareRoots::new(
-        dirs.iter()
-            .map(|d| BasewareRoot::new(d.to_path_buf()))
-            .collect(),
-    )
 }
 
 #[test]
@@ -300,12 +293,11 @@ fn user_root_mark_survives_add_remove_front() {
 
 mod apply {
     use super::*;
+    use crate::roots::roots_test_support::{events_named, world};
     use areka_runtime::spine::{Progress, wait_until};
-    use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-    use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use areka_session::boot_config::BootContext;
     use areka_session::roots::{decode_memory, read_memory};
-    use bevy_ecs::world::World;
-    use log_capture_kit::{CapturedEvent, capture};
+    use log_capture_kit::capture;
     use std::sync::{Arc, Mutex};
 
     /// 根の下に読めるゴースト 1 体を置く。
@@ -317,41 +309,6 @@ mod apply {
             format!("charset,UTF-8\r\nname,{folder}\r\n"),
         )
         .unwrap();
-    }
-
-    fn world(root: &Path, app_profile_dir: PathBuf) -> World {
-        let mut world = World::new();
-        world.insert_resource(BootContext {
-            roots: roots_of(&[root]),
-            roots_origin: RootsOrigin::Default,
-            app_profile_dir,
-            helper_exe: root.join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: root.join(r"ghost\ga"),
-                    balloon_root: root.join(r"balloon\B"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Default,
-                    dir: root.join(r"ghost\ga"),
-                    folder: Some("ga".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: root.join(r"balloon\B"),
-                    folder: Some("B".to_owned()),
-                },
-            },
-        });
-        world
-    }
-
-    fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some(name))
-            .collect()
     }
 
     /// 1 件の記録と、それを出したスレッドの名。
@@ -458,22 +415,19 @@ mod apply {
     fn add_writes_memory_and_takes_effect_without_switching() {
         let tmp = TempPath::under_target("roots-edit-apply-add");
         let a = root(&tmp, "a", true);
-        ghost(&a, "ga");
+        ghost(&a, "A");
         let b = root(&tmp, "b", true);
         ghost(&b, "gb");
         let profile = tmp.path().join("profile");
         let mut world = world(&a, profile.clone());
+        let before = world.resource::<BootContext>().current.ghost.folder.clone();
 
         let (caller, logged) = by_thread(|| add_root(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
         assert_eq!(ctx.roots, roots_of(&[&a, &b]), "その回に効く（要件 8.2）");
         assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
-        assert_eq!(
-            ctx.current.ghost.folder.as_deref(),
-            Some("ga"),
-            "切り替えない（要件 8.4）"
-        );
+        assert_eq!(ctx.current.ghost.folder, before, "切り替えない（要件 8.4）");
         // 記憶を直に読む口で読み戻すと同じ並び。
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, skipped) = decode_memory(
@@ -494,24 +448,6 @@ mod apply {
     }
 
     #[test]
-    fn add_takes_effect_and_logs_error_when_memory_unwritable() {
-        let tmp = TempPath::under_target("roots-edit-apply-unwritable");
-        let a = root(&tmp, "a", true);
-        let b = root(&tmp, "b", true);
-        // 記憶の置き場がファイル＝書けない。
-        let profile = tmp.path().join("profile-is-a-file");
-        std::fs::write(&profile, "x").unwrap();
-        let mut world = world(&a, profile);
-
-        let ((), events) = capture(|| add_root(&mut world, b.clone()));
-
-        assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a, &b]));
-        let failed = named(&events, "roots_memory_write_failed");
-        assert_eq!(failed.len(), 1, "{events:?}");
-        assert_eq!(failed[0].level, tracing::Level::ERROR);
-    }
-
-    #[test]
     fn remove_writes_memory_and_keeps_folder() {
         let tmp = TempPath::under_target("roots-edit-apply-remove");
         let a = root(&tmp, "a", true);
@@ -522,7 +458,7 @@ mod apply {
 
         let ((), events) = capture(|| remove_root(&mut world, b.clone()));
 
-        let removed = named(&events, "roots_removed");
+        let removed = events_named(&events, "roots_removed");
         assert_eq!(removed.len(), 1, "{events:?}");
         assert_eq!(removed[0].level, tracing::Level::INFO);
         assert_eq!(
@@ -551,8 +487,8 @@ mod apply {
             add_root(&mut world, a.clone());
             remove_root(&mut world, a.clone());
         });
-        assert_eq!(named(&events, "roots_add_already_listed").len(), 1);
-        let refused = named(&events, "roots_remove_refused");
+        assert_eq!(events_named(&events, "roots_add_already_listed").len(), 1);
+        let refused = events_named(&events, "roots_remove_refused");
         assert_eq!(refused.len(), 1);
         assert_eq!(refused[0].field_str("reason"), Some("last_one"));
         assert!(
@@ -561,7 +497,7 @@ mod apply {
         );
 
         let ((), events) = capture(|| add_root(&mut world, empty.clone()));
-        let warned = named(&events, "roots_add_empty_root");
+        let warned = events_named(&events, "roots_add_empty_root");
         assert_eq!(warned.len(), 1);
         assert_eq!(warned[0].level, tracing::Level::WARN);
         assert_eq!(
@@ -574,23 +510,20 @@ mod apply {
     fn front_writes_memory_and_takes_effect_without_switching() {
         let tmp = TempPath::under_target("roots-edit-apply-front");
         let a = root(&tmp, "a", true);
-        ghost(&a, "ga");
+        ghost(&a, "A");
         let b = root(&tmp, "b", true);
         let profile = tmp.path().join("profile");
         let mut world = world(&a, profile.clone());
         world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
+        let before = world.resource::<BootContext>().current.ghost.clone();
 
         let (caller, logged) = by_thread(|| move_to_front(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
         assert_eq!(ctx.roots, roots_of(&[&b, &a]), "その回に効く（要件 3.7）");
         assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
-        assert_eq!(
-            ctx.current.ghost.folder.as_deref(),
-            Some("ga"),
-            "切り替えない"
-        );
-        assert_eq!(ctx.current.ghost.dir, a.join(r"ghost\ga"));
+        assert_eq!(ctx.current.ghost.folder, before.folder, "切り替えない");
+        assert_eq!(ctx.current.ghost.dir, before.dir);
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, _) = decode_memory(
             &value,
@@ -620,9 +553,9 @@ mod apply {
         world.resource_mut::<BootContext>().roots_origin = RootsOrigin::EnvVar;
         let ((), env_events) = capture(|| move_to_front(&mut world, b.clone()));
 
-        let reasons: Vec<_> = named(&events, "roots_front_refused")
+        let reasons: Vec<_> = events_named(&events, "roots_front_refused")
             .iter()
-            .chain(named(&env_events, "roots_front_refused").iter())
+            .chain(events_named(&env_events, "roots_front_refused").iter())
             .map(|e| {
                 assert_eq!(e.level, tracing::Level::WARN);
                 e.field_str("reason").map(str::to_owned)
