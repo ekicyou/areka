@@ -40,7 +40,7 @@
   - _Dispatch: standard, effort high — 守り手・起こし直し・終了の始末の組み合わせが細かい_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 4.7, 6.2, 6.3, 6.4, 6.13, 7.1, 7.7, 7.8, 8.1_
 
-- [ ] 1.5 `switch_to` を「降ろした」と「起こす」の間で待てるように分ける（G7・指摘 13 の `areka-session` の側）
+- [x] 1.5 `switch_to` を「降ろした」と「起こす」の間で待てるように分ける（G7・指摘 13 の `areka-session` の側）
   - 触る前に `audit-emo2-boot-switch` の着地の有無を確かめ、着地していれば `main` を取り込んでから直す。触るのは `ghost_switch.rs` の `switch_to`（597〜708 行の当たり）と末尾の mod の行と、新しい `ghost_switch_between.rs`・`ghost_switch_between_tests.rs` だけ（`take_down`・`boot_into` の中身と向こうの行は変えない。ただし次の 1 か所だけは例外）。
   - `take_down` で `session.shutdown` が失敗したときも `info!(ghost_switch_down_ms, "ゴーストを降ろした")` が出て、1 回の失敗で ERROR 2 行と「降ろした」の INFO が並ぶ（`audit-emo2-boot-switch` のかけ直しの audit が見つけた件。向こうは直さない）。info を成功のときだけ出す。失敗の検査は、shutdown が Err のときにこの INFO が 0 件であることを数える 1 本。
   - 最初に、待ちの間の材料（`WindowsClosed`・`ShellCarry`）が借用を持たない値で NonSend に置けることを確かめる。置けなければ止めて設計へ戻す。
@@ -264,3 +264,4 @@
 - 1.4: `StartFetch` を消すと範囲の外の `runtime_tests/consumer_ledger_agreement_tests.rs` が壊れるので、`InstallCueSink::with_readonly(tx, false)` へ置き換えた（最小の直し）。5.5 の範囲の外の差分の確かめでは、この 1 ファイルを design.md「Modified Files（範囲の外）」に加えて数える。
 - 1.4: 取得のスレッドの panic は表に無い語を足さず、既にある `install_fetch_failed` に理由を添えて残す（design.md の Components の `install_fetch_panicked` は使わない）。
 - 1.4 → 2.1: `doc/COMPAT_ARCHITECTURE.md:427` が消えた `fetch_for` を名指している。2.1 で 344 行と一緒にこの行も直し、5.5 の「COMPAT_ARCHITECTURE の差分は 344 行だけ」は 344・427 の 2 行として確かめる。
+- 1.5 → 1.6: 本体の側に「印を消す」公開の口は無い（`clear_hold` は `pub(super)`）。`run_between` は返信を送れたのを確かめてから `hold_between` を呼ぶ順にする。印を消す代わりに `resume_between` を呼ぶと `ghost_switch_no_hold` の warn が誤って出る。`ghost_switch.rs` は 970 行で上限まで 30 行。

@@ -694,6 +694,7 @@ impl EmoPresenter {
 | `install_fetch_closing`（warn・新しい語） | 終了が始まって取りに行かない URL | 要件 6.2 | 0 |
 | `roots_log_spawn_failed`・`expression_table_spawn_failed`（error・新しい語） | 短命のスレッドを起こせない | 要件 6.2 | 0 |
 | `install_overwrite_unexpected`（warn・新しい語） | 段の合わない展開の答え | 要件 6.2 | 0 |
+| `ghost_switch_no_hold`（warn・新しい語） | 待ちの無い `resume_between` | 要件 6.2 | 0 |
 | `install_overwrite_done` の出所 | `areka::install::overwrite` → `areka::install::worker` | 13（展開する場所が変わる） | 0（前方一致 `areka::install` の下のまま・`UNKEPT_TARGETS` の `areka::install::install_cue` とは別） |
 
 新しい語は、どれも本番で通らない失敗の道か、裁定で足すと決めた記録である。名の決めは、同じファイルの既にある語の形（`<所>_<出来事>`）に合わせた。
