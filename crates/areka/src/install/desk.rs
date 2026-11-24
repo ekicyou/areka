@@ -294,8 +294,13 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 fn answer(world: &mut World, ask: DeskAsk) {
     let closing = world.non_send::<InstallDesk>().gate.is_closing();
     match ask {
-        DeskAsk::OrderDone { .. } => {
+        DeskAsk::OrderDone => {
             world.non_send_mut::<InstallDesk>().busy = false;
+        }
+        DeskAsk::WorkerPanicked => {
+            let mut desk = world.non_send_mut::<InstallDesk>();
+            desk.busy = false;
+            desk.worker = None;
         }
         ask if closing => {
             drop(ask);
@@ -572,11 +577,14 @@ fn hand_next_order(world: &mut World) {
     });
     match worker.send(order) {
         Ok(()) => desk.busy = true,
-        Err(SendError(order)) => tracing::error!(
-            event = "install_worker_gone",
-            archives = ?order.archives,
-            "[install] 背景のスレッドが居ないので、依頼を扱えません"
-        ),
+        Err(SendError(order)) => {
+            desk.worker = None;
+            tracing::error!(
+                event = "install_worker_gone",
+                archives = ?order.archives,
+                "[install] 背景のスレッドが居ないので、依頼を扱えません"
+            );
+        }
     }
 }
 
@@ -598,3 +606,7 @@ mod pick_tests;
 #[cfg(test)]
 #[path = "desk_overwrite_tests.rs"]
 mod overwrite_tests;
+
+#[cfg(test)]
+#[path = "desk_worker_gone_tests.rs"]
+mod worker_gone_tests;

@@ -258,12 +258,7 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
     rig.drain();
     assert_eq!(rig.orders.try_iter().count(), 0, "手続きの最中は渡さない");
 
-    rig.asks
-        .send(DeskAsk::OrderDone {
-            order: order("C:/1.nar"),
-            ends: Vec::new(),
-        })
-        .unwrap();
+    rig.asks.send(DeskAsk::OrderDone).unwrap();
     rig.drain();
     let second: Vec<Vec<PathBuf>> = rig.orders.try_iter().map(|o| o.archives).collect();
     assert_eq!(second, vec![vec![PathBuf::from("C:/2.nar")]]);
@@ -275,12 +270,7 @@ fn orders_arriving_mid_procedure_reach_the_worker_in_order() {
         "終わりの知らせまで次は渡さない"
     );
 
-    rig.asks
-        .send(DeskAsk::OrderDone {
-            order: order("C:/1.nar"),
-            ends: Vec::new(),
-        })
-        .unwrap();
+    rig.asks.send(DeskAsk::OrderDone).unwrap();
     rig.drain();
     let third: Vec<Vec<PathBuf>> = rig.orders.try_iter().map(|o| o.archives).collect();
     assert_eq!(third, vec![vec![PathBuf::from("C:/3.nar")]]);

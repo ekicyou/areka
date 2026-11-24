@@ -21,7 +21,7 @@ use areka_nar::{InstallOutcome, NarArchive, NarError};
 use super::InstallOrder;
 use super::destination::install_into;
 use super::judge::GhostFacts;
-use super::procedure::{ArchiveEnd, InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
+use super::procedure::{InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
 use super::terms::TermsNotice;
 use areka_session::alert::{self, YesNo};
 use areka_session::exit_wait::WorkGate;
@@ -51,15 +51,35 @@ pub(crate) enum DeskAsk {
         record: InstalledRecord,
         reply: ReplySender<()>,
     },
-    /// 依頼 1 件が終わった（次の依頼を受け取れる）。終わった依頼と、書庫の順の終わり方
-    /// （途中でやめたら依頼の書庫より短い）を運ぶ。
-    // 窓口は終わりの合図だけを使うので、中身を読むのは試験だけ。
-    OrderDone {
-        #[cfg_attr(not(test), allow(dead_code))]
-        order: InstallOrder,
-        #[cfg_attr(not(test), allow(dead_code))]
-        ends: Vec<ArchiveEnd>,
-    },
+    /// 依頼 1 件が終わった（次の依頼を受け取れる）。
+    OrderDone,
+    /// 依頼の最中にスレッドが倒れた（次の依頼でスレッドを起こし直す）。
+    WorkerPanicked,
+}
+
+/// 依頼 1 件の守り手。倒れて落ちるときだけ、門を手放して窓口へ倒れを知らせる。
+pub(super) struct OrderGuard {
+    pub(super) gate: Arc<WorkGate>,
+    pub(super) desk: Sender<DeskAsk>,
+}
+
+impl Drop for OrderGuard {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        tracing::error!(
+            event = "install_worker_panicked",
+            "[install] 背景のスレッドが依頼の最中に倒れました（次の依頼で起こし直します）"
+        );
+        self.gate.end();
+        if self.desk.send(DeskAsk::WorkerPanicked).is_err() {
+            tracing::debug!(
+                event = "install_desk_gone",
+                "[install] 窓口が居ないので、倒れを知らせられません"
+            );
+        }
+    }
 }
 
 /// 背景のスレッド `install` を起こし、依頼の送出端と join の取っ手を返す。
@@ -71,11 +91,15 @@ pub(crate) fn spawn_worker(
     spawn_actor("install", move |orders| {
         let mut ports = DeskPorts::new(desk.clone(), gate.clone());
         run_inbox(orders, |order: InstallOrder| {
+            let _guard = OrderGuard {
+                gate: gate.clone(),
+                desk: desk.clone(),
+            };
             let ends = run_order(&order, &mut ports);
             // 断った・拒否・失敗・途中でやめた書庫の名前を門に残さない。
             gate.end();
             tracing::debug!(event = "install_order_done", ends = ?ends, "[install] 依頼を終えました");
-            if desk.send(DeskAsk::OrderDone { order, ends }).is_err() {
+            if desk.send(DeskAsk::OrderDone).is_err() {
                 tracing::debug!(
                     event = "install_desk_gone",
                     "[install] 窓口が居ないので、依頼の終わりを知らせられません"

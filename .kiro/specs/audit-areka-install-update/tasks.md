@@ -16,7 +16,7 @@
   - _Dispatch: standard — 門で止める偽の書き手でテストを組む所が残る_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 5.1, 6.2, 6.4_
 
-- [ ] 1.2 インストールの背景のスレッドが倒れても窓口が固まらないようにする（G4・指摘 5・69）
+- [x] 1.2 インストールの背景のスレッドが倒れても窓口が固まらないようにする（G4・指摘 5・69）
   - 依頼ごとに守り手（門と窓口への送出端）を置き、panic で `install_worker_panicked` の error → 門の `end` → `DeskAsk::WorkerPanicked` を送る（design.md「倒れの守り手」）。
   - 窓口は閉じた後の頼みを捨てる腕より前で `WorkerPanicked` を拾い、`busy`・`worker` を戻す。`install_worker_gone` の腕でも `worker = None` にする。上書きの段が `Extracting` のときの `resume_between` の呼び出しは 1.6 で足す。
   - `OrderDone` の使わない欄と `allow` を消し、欄の無い腕にする（指摘 69・`desk_tests.rs`・`worker_tests.rs` の呼び手も直す）。
