@@ -541,7 +541,7 @@ fn take_query(
     Vec<&'static str>,
     areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
 ) {
-    match recv_within("仕事の送出端へ照会が届く", &rx) {
+    match recv_within("仕事の送出端へ照会が届く", rx) {
         KanadeMsg::ResourceQuery { ids, reply } => (ids, reply),
         _ => panic!("ResourceQuery のはず"),
     }
