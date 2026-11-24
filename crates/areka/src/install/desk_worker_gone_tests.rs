@@ -15,8 +15,10 @@ use log_capture_kit::capture;
 use super::*;
 use crate::install::worker::OrderGuard;
 use crate::install::{InstallOrigin, register};
+use areka_actor::reply_channel;
 use areka_runtime::spine::join_thread_bounded;
 use areka_session::exit_wait::{begin_close, register_gate};
+use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 fn order() -> InstallOrder {
     InstallOrder {
@@ -129,4 +131,35 @@ fn desk_forgets_a_gone_worker() {
     world.non_send_mut::<InstallDesk>().queue.push_back(order());
     drain(&mut world);
     assert!(world.non_send::<InstallDesk>().worker.is_none());
+}
+
+/// kanade の受信端が落ちていれば、イベントの頼みの返信端を落として警告を 1 件残す。
+#[test]
+fn raise_to_a_stopped_kanade_drops_the_reply_and_warns_once() {
+    let mut world = desk_world();
+    let (kanade, stopped) = mpsc::channel();
+    drop(stopped);
+    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
+        Some(kanade),
+        "ghost/A".into(),
+    ))));
+    let (reply, answer) = reply_channel();
+    world
+        .non_send::<InstallDesk>()
+        .asks_tx
+        .send(DeskAsk::Raise {
+            id: "OnInstallBegin",
+            references: Vec::new(),
+            resend: false,
+            reply,
+        })
+        .expect("窓口の頼みの受信端は生きている");
+    let (_, events) = capture(|| drain(&mut world));
+    assert!(answer.try_recv().is_err());
+    let failed: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("install_event_send_failed"))
+        .collect();
+    assert_eq!(failed.len(), 1, "{events:?}");
+    assert_eq!(failed[0].level, tracing::Level::WARN);
 }

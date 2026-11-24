@@ -380,3 +380,19 @@ fn a_stuck_writer_is_waited_for_only_up_to_the_limit() {
         "{events:?}"
     );
 }
+
+/// 置き場にゴーストが居なければ、バルーンの記憶を書かずに警告を 1 件残す。
+#[test]
+fn an_empty_slot_leaves_one_warning_instead_of_the_balloon_memory() {
+    let mut world = bevy_ecs::world::World::new();
+    world.init_resource::<bevy_ecs::schedule::Schedules>();
+    crate::install::register(&mut world);
+    world.insert_non_send(areka_session::ghost_session::GhostSlot(None));
+    let ((), events) = capture(|| remember_balloon(&world, "kaku".to_owned()));
+    assert_eq!(
+        count(&events, "install_balloon_not_remembered", Level::WARN),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(count(&events, "install_balloon_remembered", Level::INFO), 0);
+}

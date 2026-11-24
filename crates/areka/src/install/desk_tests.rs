@@ -211,19 +211,30 @@ fn submit_refuses_empty_no_desk_and_closing() {
     };
     let (verdict, events) = capture(|| submit(&mut rig.world, empty));
     assert_eq!(verdict, SubmitVerdict::Empty);
-    assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 1);
+    assert_refused_once(&events, "Empty");
 
     let mut bare = World::new();
     let (verdict, events) = capture(|| submit(&mut bare, order("C:/a.nar")));
     assert_eq!(verdict, SubmitVerdict::NoDesk);
-    assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 1);
+    assert_refused_once(&events, "NoDesk");
 
     let _ = begin_close(&mut rig.world);
     let (verdict, events) = capture(|| submit(&mut rig.world, order("C:/a.nar")));
     assert_eq!(verdict, SubmitVerdict::Closing);
-    assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 1);
+    assert_refused_once(&events, "Closing");
     assert!(rig.world.non_send::<InstallDesk>().queue.is_empty());
     assert!(events_named(&events, "install_order_queued").is_empty());
+}
+
+fn assert_refused_once(events: &[CapturedEvent], verdict: &str) {
+    assert_eq!(
+        events.iter().filter(|e| e.level == Level::WARN).count(),
+        1,
+        "{events:?}"
+    );
+    let refused = events_named(events, "install_order_refused");
+    assert_eq!(refused.len(), 1, "{events:?}");
+    assert_eq!(refused[0].field("verdict"), Some(verdict));
 }
 
 // ---------------------------------------------------------------- 待ち行列

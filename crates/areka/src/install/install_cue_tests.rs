@@ -18,7 +18,7 @@ use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
 use crate::install::fetch_url::FetchTools;
 use crate::install::fetch_url_test_support::FakeFetch;
-use crate::install::{self, InstallOrigin, desk};
+use crate::install::{self, InstallOrder, InstallOrigin, desk};
 use areka_runtime::spine::{Progress, wait_until};
 
 // ---------------------------------------------------------------- 道具立て
@@ -84,15 +84,12 @@ fn script_string_becomes_one_script_request_with_the_path() {
 
 /// 台本の文字列から受け口 → 窓口の取り出し → 受付まで通すと、窓口の待ち行列に出どころ「台本」・
 /// 書庫 1 本の依頼がちょうど 1 件入る。
-///
-/// 待ち行列の中身は `install` の外から読めないので、受付が積んだときに残す
-/// `info!(install_order_queued)`（出どころと書庫の本数）で判定する。依頼の中身が生の要求の
-/// パスそのままであることは上のテストと窓口のテストが固定している。
 #[test]
 fn script_string_reaches_the_desk_queue_as_one_script_order() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     install::register(&mut world);
+    desk::insert_busy_desk_for_test(&mut world);
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
     let ((), events) = capture(|| {
@@ -100,13 +97,13 @@ fn script_string_reaches_the_desk_queue_as_one_script_order() {
         desk::drain(&mut world);
     });
 
-    let queued: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_order_queued"))
-        .collect();
-    assert_eq!(queued.len(), 1, "依頼はちょうど 1 件: {events:?}");
-    assert_eq!(queued[0].field("origin"), Some("Script"), "出どころは台本");
-    assert_eq!(queued[0].field("count"), Some("1"), "書庫は 1 本");
+    assert_eq!(
+        install::queued_orders(&world),
+        vec![InstallOrder {
+            archives: vec![PathBuf::from(ABSOLUTE)],
+            origin: InstallOrigin::Script,
+        }]
+    );
     assert_eq!(
         warns(&events),
         Vec::<Option<&str>>::new(),

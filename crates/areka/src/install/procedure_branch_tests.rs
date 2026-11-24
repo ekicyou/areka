@@ -552,9 +552,27 @@ fn raise_closing_at_any_event_stops_every_later_event() {
         let mut ports = FakePorts::new();
         ports.terms_answer = answer;
         ports.replies.insert(closing, Raised::Closed);
-        let (ends, _) = run_many(&mut ports, vec![builder, balloon_nar()]);
+        let (ends, events) = run_many(&mut ports, vec![builder, balloon_nar()]);
 
-        assert_eq!(ends, vec![ArchiveEnd::Abandoned], "{closing}");
+        if closing == "OnInstallCompleteEx" {
+            assert!(
+                matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
+                "書いた後に閉じても入れ終えた形: {ends:?}"
+            );
+            let abandoned = logged(&events, "install_abandoned");
+            assert_eq!(abandoned.len(), 1, "入れた書庫には出さず、後の書庫に 1 件");
+            assert!(
+                abandoned[0]
+                    .field("archive")
+                    .is_some_and(|archive| archive.ends_with("archive1.nar")),
+                "{:?}",
+                abandoned[0]
+            );
+            assert_eq!(abandoned[0].field("skipped"), Some("0"));
+            assert!(!ports.under_root("balloon/round").exists());
+        } else {
+            assert_eq!(ends, vec![ArchiveEnd::Abandoned], "{closing}");
+        }
         let ids = ports.raised_ids();
         assert_eq!(
             ids.last(),

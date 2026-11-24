@@ -84,7 +84,7 @@
   - _Dispatch: standard — 読む場所を背景へ移し、窓口との頼みの形を変える_
   - _Requirements: 3.1, 3.3, 4.1, 4.8, 6.4, 7.1, 7.6_
 
-- [ ] 2.3 手続きの終わり方を直し、抜けたテストを足す（G9・指摘 7・14・18・63・64）
+- [x] 2.3 手続きの終わり方を直し、抜けたテストを足す（G9・指摘 7・14・18・63・64）
   - 書いた後に締めが閉じたときは `Installed(items)` を返し、残りの書庫だけを止める（`archive_steps` が止めるかの旗を添える・doc を直す・14）。
   - `install_cue_tests.rs` で `queued_orders` で比べ、doc の 3 行と記録の数えを消す（18）。
   - `install_order_refused` が 1 件・`verdict` が `Empty`／`NoDesk`／`Closing` の表明にする（63）。
@@ -268,3 +268,4 @@
 - 1.6 → 2.1: `doc/COMPAT_ARCHITECTURE.md:325` も「UI スレッドで展開する」と古い。2.1 で 344・427 と一緒に直し、5.5 の確かめは 325・344・427 の 3 行として数える。
 - 1.6 → 3.1: `desk_overwrite_between_tests.rs` の別スレッドの `answer.recv()` と `worker_tests.rs` の `asks.recv()`・`desk.join()` に上限の無い待ちが残る。3.1 で一緒に上限のある待ちへ替える。
 - 2.2: `install_accept` を消したので、範囲の外の `doc/ukadoc-coverage/ledger/assets.toml` の install.accept の「根拠の場所」を新しい読み手（`master_install_keys`・`DeskPorts::ghost_facts`）へ直した。5.5 の範囲の外の差分の確かめで数える。
+- 2.3: design.md「設計の段で決めた事項」1 の `install_abandoned` の行（書いた後に締めが閉じたときは出ない）は、書き終えた書庫についてだけの決め。同じ依頼のまだ始めていない後の書庫は、黙って捨てず既にある `install_abandoned`（同じ欄）で 1 件残す（要件 6.2）。

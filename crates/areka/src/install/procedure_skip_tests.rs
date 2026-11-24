@@ -294,17 +294,28 @@ fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
 fn a_closed_closing_notice_still_warns_once_before_stopping() {
     let mut ports = FakePorts::new();
     ports.replies.insert("OnInstallCompleteEx", Raised::Closed);
-    let ends = run_one(
-        &mut ports,
-        ghost_nar(
-            "newbie",
-            &[
-                "balloon.directory,kaku",
-                "balloon.source.directory,src-kaku",
-            ],
-        ),
+    let (ends, events) = log_capture_kit::capture(|| {
+        run_one(
+            &mut ports,
+            ghost_nar(
+                "newbie",
+                &[
+                    "balloon.directory,kaku",
+                    "balloon.source.directory,src-kaku",
+                ],
+            ),
+        )
+    });
+    assert!(
+        matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
+        "{ends:?}"
     );
-    assert_eq!(ends, vec![ArchiveEnd::Abandoned]);
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.field_str("event") == Some("install_abandoned")),
+        "後の書庫が無ければ出さない"
+    );
     assert_eq!(
         ports.warned().len(),
         1,
