@@ -27,6 +27,7 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::fetch_url_test_support::FakeFetch;
+use crate::update::update_test_support::named;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::exit_wait::{ClosingWaits, begin_close, register_gate};
@@ -100,13 +101,6 @@ fn close(gate: &Arc<WorkGate>) -> ClosingWaits {
     let mut world = World::new();
     register_gate(&mut world, "update", gate.clone(), |_| {});
     begin_close(&mut world)
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// kanade の代わりにイベントを 1 件だけ受けて `answer` を返し（None は返信端を落とす）、
@@ -188,7 +182,7 @@ fn raise_maps_five_outcomes_and_dropped_reply() {
         assert_eq!(raised, expected, "{answer:?} の写し");
         match record {
             Some((name, level)) => {
-                let found = events_named(&events, name);
+                let found = named(&events, name);
                 assert_eq!(found.len(), 1, "{answer:?} で {name} が 1 件: {events:?}");
                 assert_eq!(found[0].level, level, "{answer:?} の水準");
                 assert_eq!(found[0].field_str("id"), Some(EVENT));
@@ -209,7 +203,7 @@ fn raise_to_stopped_kanade_is_closed() {
     let (ports, _asks) = ports(kanade, Arc::default(), counting_fetch().0);
     let (raised, events) = capture(|| ports.raise(EVENT, refs()));
     assert_eq!(raised, Raised::Closed);
-    assert_eq!(events_named(&events, "update_kanade_gone").len(), 1);
+    assert_eq!(named(&events, "update_kanade_gone").len(), 1);
 }
 
 // ---------------------------------------------------------------- 照会
@@ -253,21 +247,21 @@ fn resources_query_both_ids_once_and_map_values() {
             useorigin1: Some("1".to_owned()),
         })
     );
-    assert!(events_named(&events, "update_resource_failed").is_empty());
+    assert!(named(&events, "update_resource_failed").is_empty());
 
     let (found, events) = resources_answered(vec![
         ResourceOutcome::Value(String::new()),
         ResourceOutcome::NoContent,
     ]);
     assert_eq!(found, Some(GhostResources::default()), "空と値なしは None");
-    assert!(events_named(&events, "update_resource_failed").is_empty());
+    assert!(named(&events, "update_resource_failed").is_empty());
 
     let (found, events) = resources_answered(vec![
         ResourceOutcome::Failed("timeout".to_owned()),
         ResourceOutcome::NoContent,
     ]);
     assert_eq!(found, Some(GhostResources::default()), "失敗は None");
-    let failed = events_named(&events, "update_resource_failed");
+    let failed = named(&events, "update_resource_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::WARN);
     assert_eq!(failed[0].field_str("id"), Some("homeurl"));
@@ -281,7 +275,7 @@ fn resources_without_kanade_is_none() {
     let (ports, _asks) = ports(kanade, Arc::default(), counting_fetch().0);
     let (found, events) = capture(|| ports.resources());
     assert_eq!(found, None);
-    assert_eq!(events_named(&events, "update_kanade_gone").len(), 1);
+    assert_eq!(named(&events, "update_kanade_gone").len(), 1);
 }
 
 // ---------------------------------------------------------------- 終了の後
@@ -367,7 +361,7 @@ fn open_gate_runs_engine_inside_write_stage_with_label() {
     let (run, events) = capture(|| ports.run_engine(HOMEURL, &target, &mut |_| {}));
     assert!(matches!(run, EngineRun::Done(Err(_))), "{run:?}");
     assert!(
-        events_named(&events, "exit_wait_abandoned").is_empty(),
+        named(&events, "exit_wait_abandoned").is_empty(),
         "取得の最中は書く段の中（途中でやめた扱いにしない）: {events:?}"
     );
 
@@ -382,7 +376,7 @@ fn open_gate_runs_engine_inside_write_stage_with_label() {
             limit: Duration::from_secs(3600),
         })
     });
-    let done = events_named(&events, "exit_wait_done");
+    let done = named(&events, "exit_wait_done");
     assert_eq!(done.len(), 1, "返ったら書く段を出ている: {events:?}");
     let label = format!("{HOMEURL} → {}", target.display());
     assert_eq!(done[0].field_str("label"), Some(label.as_str()));
@@ -428,7 +422,7 @@ fn gate_closed_while_making_fetch_skips_run_and_releases_gate() {
     assert!(matches!(run, EngineRun::Closed), "{run:?}");
     assert_eq!(observed, 0, "run に入らない");
     assert_eq!(gets.load(Ordering::SeqCst), 0, "取得しない");
-    let abandoned = events_named(&events, "exit_wait_abandoned");
+    let abandoned = named(&events, "exit_wait_abandoned");
     assert_eq!(abandoned.len(), 1, "書く前の段で終了: {events:?}");
     let label = format!("{HOMEURL} → {}", target.display());
     assert_eq!(abandoned[0].field_str("label"), Some(label.as_str()));
@@ -441,8 +435,8 @@ fn gate_closed_while_making_fetch_skips_run_and_releases_gate() {
         })
     });
     assert!(
-        events_named(&events, "exit_wait_done").is_empty()
-            && events_named(&events, "exit_wait_timeout").is_empty(),
+        named(&events, "exit_wait_done").is_empty()
+            && named(&events, "exit_wait_timeout").is_empty(),
         "書いている最中の仕事は無い: {events:?}"
     );
 }
@@ -462,7 +456,7 @@ fn unavailable_fetch_releases_gate_without_logging() {
         "{run:?}"
     );
     assert!(
-        events_named(&events, "update_fetch_unavailable").is_empty(),
+        named(&events, "update_fetch_unavailable").is_empty(),
         "記録は手続きの 1 件だけ: {events:?}"
     );
 

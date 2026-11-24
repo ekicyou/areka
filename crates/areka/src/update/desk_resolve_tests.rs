@@ -4,7 +4,7 @@
 //! `balloon/<名>`）を置き、今の 3 つの `dir`・名前・倒れ先の `homeurl` と、`updateother` の
 //! 名前引き（目録の `name` と完全一致）を判定する。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::ReplySender;
@@ -21,14 +21,14 @@ use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
 use crate::menu::captions::QueryReply;
+use crate::update::update_test_support::{named, write_descript};
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
 };
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::on_notice;
+use areka_session::reload::test_support::boot_context_named;
 
 const GHOST_URL: &str = "https://ghost.example/emo/";
 const SHELL_URL: &str = "https://shell.example/master/";
@@ -45,24 +45,24 @@ impl Root {
     fn new(label: &str) -> Self {
         let tmp = TempPath::under_target(label);
         let r = tmp.path();
-        write(
+        write_descript(
             &r.join("ghost/emo/ghost/master"),
-            &format!("charset,UTF-8\r\nname,Emo\r\nhomeurl,{GHOST_URL}\r\n"),
+            &format!("name,Emo\r\nhomeurl,{GHOST_URL}"),
         );
-        write(&r.join("ghost/bare/ghost/master"), "charset,UTF-8\r\n");
-        write(
+        write_descript(&r.join("ghost/bare/ghost/master"), "");
+        write_descript(
             &r.join("ghost/emo/shell/master"),
-            &format!("charset,UTF-8\r\nname,MasterShell\r\nhomeurl,{SHELL_URL}\r\n"),
+            &format!("name,MasterShell\r\nhomeurl,{SHELL_URL}"),
         );
-        write(
+        write_descript(
             &r.join("ghost/emo/shell/Hidden"),
-            "charset,UTF-8\r\nname,HiddenShell\r\nmenu,hidden\r\nhomeurl,https://hidden.example/\r\n",
+            "name,HiddenShell\r\nmenu,hidden\r\nhomeurl,https://hidden.example/",
         );
-        write(
+        write_descript(
             &r.join("balloon/kaku"),
-            &format!("charset,UTF-8\r\nname,Kaku\r\nhomeurl,{BALLOON_URL}\r\n"),
+            &format!("name,Kaku\r\nhomeurl,{BALLOON_URL}"),
         );
-        write(&r.join("balloon/plain"), "charset,UTF-8\r\n");
+        write_descript(&r.join("balloon/plain"), "");
         Root { tmp }
     }
 
@@ -86,11 +86,6 @@ impl Root {
     }
 }
 
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(dir.join("descript.txt"), descript).expect("descript.txt を書く");
-}
-
 fn spec(kind: TargetKind, dir: PathBuf, name: &str, homeurl: Option<&str>) -> TargetSpec {
     TargetSpec {
         kind,
@@ -106,13 +101,6 @@ fn all_three() -> RawUpdateRequest {
         TargetKind::Shell,
         TargetKind::Balloon,
     ])
-}
-
-fn skipped(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("update_target_skipped"))
-        .collect()
 }
 
 #[test]
@@ -142,7 +130,10 @@ fn current_three_resolve_dirs_names_and_fallback_homeurls() {
             ),
         ]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -208,7 +199,7 @@ fn a_missing_folder_or_unknown_shell_is_skipped_with_one_warning_each() {
             Some(GHOST_URL)
         )]
     );
-    let skipped = skipped(&events);
+    let skipped = named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -238,7 +229,10 @@ fn updateother_looks_names_up_exactly_in_the_order_given() {
             ),
         ]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -250,7 +244,7 @@ fn updateother_does_not_find_a_case_mismatched_name() {
     ]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = skipped(&events);
+    let skipped = named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -261,7 +255,7 @@ fn updateother_does_not_find_a_hidden_shell() {
     let raw = RawUpdateRequest::Other(vec![(TargetKind::Shell, "HiddenShell".to_owned())]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = skipped(&events);
+    let skipped = named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
 }
@@ -269,10 +263,7 @@ fn updateother_does_not_find_a_hidden_shell() {
 /// ゴーストの中のバルーン `ghost/emo/balloon/inner` に根の `kaku` と同じ `name`（Kaku）を置く。
 fn plant_inner_kaku(root: &Root) -> PathBuf {
     let inner = root.path("ghost/emo/balloon/inner");
-    write(
-        &inner,
-        "charset,UTF-8\r\nname,Kaku\r\nhomeurl,https://inner.example/\r\n",
-    );
+    write_descript(&inner, "name,Kaku\r\nhomeurl,https://inner.example/");
     inner
 }
 
@@ -291,7 +282,10 @@ fn updateother_finds_the_ghost_inner_balloon_first_for_the_same_name() {
             Some("https://inner.example/")
         )]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -313,7 +307,10 @@ fn current_balloon_inside_the_ghost_is_the_update_target() {
             Some("https://inner.example/")
         )]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 /// 窓口を据え、起動の文脈（バルーン `balloon`）と置き場のゴースト `ghost`（kanade の送出端だけ・
@@ -323,29 +320,7 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
     let mut world = World::new();
     world.init_resource::<Schedules>();
     register(&mut world);
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.path("profile"),
-        helper_exe: root.path("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: base.ghost_dir(ghost),
-                balloon_root: base.balloon_dir(balloon),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: base.ghost_dir(ghost),
-                folder: Some(ghost.to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: base.balloon_dir(balloon),
-                folder: Some(balloon.to_owned()),
-            },
-        },
-    });
+    world.insert_resource(boot_context_named(root.tmp.path(), &base, ghost, balloon));
     let (tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
@@ -378,7 +353,7 @@ fn resolve_targets_reads_the_slot_and_the_boot_context() {
             ),
         ]
     );
-    let skipped = skipped(&events);
+    let skipped = named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("kind"), Some("shell"));
 }
@@ -505,10 +480,7 @@ fn exit_discards_the_pending_query_reply() {
 
     let (_, events) = capture(|| begin_close(&mut world));
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("update_query_discarded"))
-            .count(),
+        named(&events, "update_query_discarded").len(),
         1,
         "{events:?}"
     );
@@ -537,7 +509,7 @@ fn update_current_submits_the_current_three_as_manual() {
 
     let ((), events) = capture(|| update_current(&mut world));
     // シェルも頼んだ（解けずに飛ばされた）ことを記録で確かめる。
-    let skipped = skipped(&events);
+    let skipped = named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("reason"), Some("no_shell"));
     let orders: Vec<_> = jobs.try_iter().map(|job| job.order).collect();
@@ -573,9 +545,8 @@ fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
     let root = Root::new("areka-update-steady-failed");
     let (mut world, kanade) = world(&root, "bare", "plain");
     let failed_warnings = |events: &[CapturedEvent]| {
-        events
+        named(events, "update_homeurl_query_failed")
             .iter()
-            .filter(|e| e.field_str("event") == Some("update_homeurl_query_failed"))
             .map(|e| e.level)
             .collect::<Vec<_>>()
     };

@@ -5,7 +5,6 @@
 //! `drain` を直接呼ぶ（フレームは回さない）。受け取りは `try_recv` で、背景スレッドを起こす 1 件だけ
 //! 本物のスレッドの照会を `wait_recv` で待つ。
 
-use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_ghost::BasewareRoot;
@@ -19,12 +18,12 @@ use tracing::Level;
 
 use super::*;
 use crate::update::refs::executing_refs;
+use crate::update::update_test_support::{named, write_descript};
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::reload::test_support::boot_context_named;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -44,33 +43,11 @@ impl Rig {
     fn new(label: &str) -> Self {
         let root = TempPath::new(label);
         let base = BasewareRoot::new(root.path().to_path_buf());
-        write(&base.ghost_dir("emo").join("ghost/master"), "name,Emo");
+        write_descript(&base.ghost_dir("emo").join("ghost/master"), "name,Emo");
         let mut world = World::new();
         world.init_resource::<Schedules>();
         register(&mut world);
-        world.insert_resource(BootContext {
-            roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-            app_profile_dir: root.path().join("profile"),
-            helper_exe: root.path().join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: base.ghost_dir("emo"),
-                    balloon_root: base.balloon_dir("kaku"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Default,
-                    dir: base.ghost_dir("emo"),
-                    folder: Some("emo".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: base.balloon_dir("kaku"),
-                    folder: Some("kaku".to_owned()),
-                },
-            },
-        });
+        world.insert_resource(boot_context_named(root.path(), &base, "emo", "kaku"));
         let (tx, kanade) = mpsc::channel();
         world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
             Some(tx),
@@ -142,15 +119,6 @@ impl Rig {
     }
 }
 
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\n{descript}\r\n"),
-    )
-    .expect("descript.txt を書く");
-}
-
 fn ghost_only() -> RawUpdateRequest {
     RawUpdateRequest::Current(vec![TargetKind::Ghost])
 }
@@ -161,13 +129,6 @@ fn executing(reason: UpdateReason) -> (String, Vec<String>, bool) {
         executing_refs(TargetKind::Ghost, reason),
         false,
     )
-}
-
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 fn warns(events: &[CapturedEvent]) -> usize {

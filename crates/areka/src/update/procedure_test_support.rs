@@ -11,7 +11,9 @@ use areka_update::{
     FailReason, FetchError, ManifestName, Progress, Stage, Undeletable, UpdateError, UpdateOutcome,
 };
 
-use super::{EngineRun, GhostResources, Raised, UpdatePorts};
+use log_capture_kit::{CapturedEvent, capture};
+
+use super::{EngineRun, GhostResources, OrderEnd, Raised, UpdatePorts, run_order};
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason, UpdateTail};
 
 /// 口への呼び出し 1 回。
@@ -331,4 +333,9 @@ fn error(target: &Path, stage: Stage, reason: FailReason) -> UpdateError {
         leftovers: Vec::new(),
         work: None,
     }
+}
+
+/// 1 件の依頼を回し、締めと捕まえた記録を返す。
+pub(super) fn run(order: &UpdateOrder, ports: &FakePorts) -> (OrderEnd, Vec<CapturedEvent>) {
+    capture(|| run_order(order, ports))
 }

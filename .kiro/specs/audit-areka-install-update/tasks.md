@@ -170,7 +170,7 @@
   - _Dispatch: mechanical — 既にある道具と引数の足しで寄せる_
   - _Requirements: 3.1, 4.3, 6.1_
 
-- [ ] 3.3 `update/` のテストの写しを支えのファイルへ寄せる（G11・指摘 27・72・74・75・件 6 の `update/`）
+- [x] 3.3 `update/` のテストの写しを支えのファイルへ寄せる（G11・指摘 27・72・74・75・件 6 の `update/`）
   - 新しい `update/update_test_support.rs` に、名を取る `boot_context(temp, root, ghost, balloon)`・`write_descript`（charset の頭と末尾の改行の形に統一）・イベント名で絞る補助・`run`・`ids`・`refs_of` を置き、`update/` の 4 つの写しと補助の写しを寄せる（27・74。`desk_resolve_tests.rs` の呼び手は頭を外す）。
   - `refs_of` の写し 3 つ（`install/desk_overwrite_tests.rs`・`update/desk_reload_tests.rs`・`update/worker_path_tests.rs`）と `worker_path_tests.rs` の `kinds` は、`areka-session` の `shell_balloon_switch_session_lap_test_support::kinds`（pub）と中身が同じ。本体のテストから引けるならそれを呼び、引けなければ支えのファイルの 1 つへ寄せる。
   - `desk_reload_tests.rs` は `super::ask_reload_for_test` を呼ぶ（72）。`update_tests.rs` と mod の行を消す（75）。
@@ -269,3 +269,4 @@
 - 1.6 → 3.1: `desk_overwrite_between_tests.rs` の別スレッドの `answer.recv()` と `worker_tests.rs` の `asks.recv()`・`desk.join()` に上限の無い待ちが残る。3.1 で一緒に上限のある待ちへ替える。
 - 2.2: `install_accept` を消したので、範囲の外の `doc/ukadoc-coverage/ledger/assets.toml` の install.accept の「根拠の場所」を新しい読み手（`master_install_keys`・`DeskPorts::ghost_facts`）へ直した。5.5 の範囲の外の差分の確かめで数える。
 - 2.3: design.md「設計の段で決めた事項」1 の `install_abandoned` の行（書いた後に締めが閉じたときは出ない）は、書き終えた書庫についてだけの決め。同じ依頼のまだ始めていない後の書庫は、黙って捨てず既にある `install_abandoned`（同じ欄）で 1 件残す（要件 6.2）。
+- 3.3: `boot_context_named` が `main` から入っていたので、`update/` のテストは支えのファイルに `boot_context` を置かず直に呼ぶ。5.1 の件 6 の `update/` の分は済み。共通の `run` は `FakePorts` が手続きの中に閉じているので `update/procedure_test_support.rs` に置いた。

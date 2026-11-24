@@ -8,7 +8,6 @@
 //!
 //! 印は試験の World に資源を直に足す（`readonly::engage` は呼ばない）。
 
-use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_ghost::BasewareRoot;
@@ -20,12 +19,12 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use crate::update::desk::{self, Stage, UpdateDesk};
+use crate::update::update_test_support::{named, write_descript};
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
+use areka_session::reload::test_support::boot_context_named;
 
 const GHOST_NAME: &str = "窓際のぱすたさんDRESSTEST";
 const BALLOON_NAME: &str = "にゃんばるーん";
@@ -41,41 +40,19 @@ impl Rig {
     fn new(label: &str) -> Self {
         let root = TempPath::under_target(label);
         let base = BasewareRoot::new(root.path().to_path_buf());
-        write(
+        write_descript(
             &base.ghost_dir("pasta").join("ghost/master"),
             &format!("name,{GHOST_NAME}"),
         );
-        write(&base.balloon_dir("kaku"), "name,Kaku");
-        write(
+        write_descript(&base.balloon_dir("kaku"), "name,Kaku");
+        write_descript(
             &base.balloon_dir("nyan"),
             &format!("name,{BALLOON_NAME}\r\nhomeurl,https://balloon.example/nyan/"),
         );
         let mut world = World::new();
         world.init_resource::<Schedules>();
         register(&mut world);
-        world.insert_resource(BootContext {
-            roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-            app_profile_dir: root.path().join("profile"),
-            helper_exe: root.path().join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: base.ghost_dir("pasta"),
-                    balloon_root: base.balloon_dir("kaku"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Default,
-                    dir: base.ghost_dir("pasta"),
-                    folder: Some("pasta".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: base.balloon_dir("kaku"),
-                    folder: Some("kaku".to_owned()),
-                },
-            },
-        });
+        world.insert_resource(boot_context_named(root.path(), &base, "pasta", "kaku"));
         let (tx, kanade) = mpsc::channel();
         world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
             Some(tx),
@@ -119,15 +96,6 @@ impl Rig {
     }
 }
 
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\n{descript}\r\n"),
-    )
-    .expect("descript.txt を書く");
-}
-
 /// 1 回の依頼を断らせ、送り物と `readonly_refused` の記録を確かめる（2 回目も同じ）。
 fn assert_refused_twice(
     raw: RawUpdateRequest,
@@ -147,10 +115,7 @@ fn assert_refused_twice(
             .collect();
         assert_eq!(raised, expected, "Ex → Result の 2 件だけ");
 
-        let refused: Vec<_> = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("readonly_refused"))
-            .collect();
+        let refused = named(&events, "readonly_refused");
         assert_eq!(refused.len(), 1, "1 回につき 1 件: {events:?}");
         let e = refused[0];
         assert_eq!(e.level, Level::INFO);
@@ -159,9 +124,7 @@ fn assert_refused_twice(
         assert_eq!(e.field("targets"), Some("1"));
         assert_eq!(e.field("notified"), Some("true"));
         assert!(
-            events
-                .iter()
-                .all(|e| e.field_str("event") != Some("update_refused")),
+            named(&events, "update_refused").is_empty(),
             "断りの warn を出さない"
         );
         assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
@@ -211,10 +174,7 @@ fn readonly_with_no_targets_sends_nothing() {
     assert_eq!(verdict, SubmitVerdict::ReadOnly);
     rig.assert_untouched();
     assert!(rig.raised().is_empty(), "対象が 0 なら送らない");
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_refused"))
-        .collect();
+    let refused = named(&events, "readonly_refused");
     assert_eq!(refused.len(), 1);
     assert_eq!(refused[0].field("targets"), Some("0"));
     assert_eq!(refused[0].field("notified"), Some("false"));

@@ -33,6 +33,7 @@ use crate::install::procedure::{InstallPorts, Overwritten};
 use crate::install::worker::{DeskPorts, OverwriteAnswer};
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
+use crate::update::update_test_support::refs_of;
 use areka_placement::persist::PersistWiring;
 use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
@@ -317,17 +318,6 @@ fn after_boot(calls: &[String]) -> &[String] {
         .position(|id| id == "basewareversion")
         .unwrap_or_else(|| panic!("起動の系列が無い: {calls:?}"));
     &calls[booted + 1..]
-}
-
-/// 起こした回の `id` の GET の Reference。
-fn refs_of(calls: &[RecordedCall], id: &str) -> Option<Vec<String>> {
-    calls.iter().find_map(|call| match call {
-        RecordedCall::Get {
-            id: got,
-            references,
-        } if got == id => Some(references.clone()),
-        _ => None,
-    })
 }
 
 /// `name` の記録。

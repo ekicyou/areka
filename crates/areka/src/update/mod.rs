@@ -244,7 +244,7 @@ pub(crate) fn register(world: &mut World) {
 mod homeurl_tests;
 
 #[cfg(test)]
-mod update_tests;
+pub(crate) mod update_test_support;
 
 #[cfg(test)]
 mod worker_path_tests;

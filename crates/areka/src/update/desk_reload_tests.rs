@@ -17,14 +17,14 @@ use tracing::Level;
 use wintf::ecs::Input;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::UpdateDesk;
+use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
 use crate::update::UpdateTail;
-use crate::update::worker::DeskAsk;
-use areka_runtime::spine::RecordedCall;
+use crate::update::update_test_support::{named, refs_of};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use areka_session::exit_wait::begin_close;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use areka_session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
@@ -81,29 +81,8 @@ fn running_a() -> SwitchRig {
     rig
 }
 
-/// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む。
-fn ask_reload(rig: &SwitchRig, ghost_dir: PathBuf, tail: UpdateTail) {
-    rig.world
-        .non_send::<UpdateDesk>()
-        .asks_tx
-        .send(DeskAsk::Reload { ghost_dir, tail })
-        .expect("窓口の頼みの受信端は生きている");
-}
-
-/// 呼び出しの列（`GET 名`／`NOTIFY 名`）。
-fn ids(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            other => format!("{other:?}"),
-        })
-        .collect()
-}
-
 fn boots_of(rig: &SwitchRig, folder: &str) -> Vec<Vec<String>> {
-    rig.calls(folder).iter().map(|c| ids(c)).collect()
+    rig.calls(folder).iter().map(|c| kinds(c)).collect()
 }
 
 /// `folder` の全起動で受けた `GET id` の数。
@@ -114,21 +93,6 @@ fn gets(rig: &SwitchRig, folder: &str, id: &str) -> usize {
         .flatten()
         .filter(|c| **c == want)
         .count()
-}
-
-/// `id` の GET の Reference（最初の 1 件）。
-fn refs_of(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
-    calls.iter().find_map(|call| match call {
-        RecordedCall::Get { id, references } if id == want => Some(references.clone()),
-        _ => None,
-    })
-}
-
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
@@ -150,7 +114,7 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
     let a_dir = rig.root.ghost_dir("A");
 
     let (flow, events) = capture(|| {
-        ask_reload(&rig, a_dir.clone(), tail());
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail());
         rig.world.run_schedule(Input);
         let reserved = rig
             .world
@@ -191,7 +155,7 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
     assert_eq!((calls.len(), b.len()), (2, 0), "A を 1 回起こし直すだけ");
     assert_eq!(current.as_deref(), Some("A"));
     assert_eq!(remembered, None, "覚えた物は使い切る");
-    let a: Vec<Vec<String>> = calls.iter().map(|c| ids(c)).collect();
+    let a: Vec<Vec<String>> = calls.iter().map(|c| kinds(c)).collect();
     for name in ["GET OnGhostChanging", "NOTIFY OnClose", "GET OnClose"] {
         assert!(
             a.iter().flatten().all(|id| id != name),
@@ -268,7 +232,7 @@ fn assert_not_reloaded(
     let (label, field, value) = verdict;
     let before = gets(rig, "A", "OnUpdateResult");
     let ((), events) = capture(|| {
-        ask_reload(rig, ghost_dir, tail());
+        ask_reload_for_test(&rig.world, ghost_dir, tail());
         rig.world.run_schedule(Input);
     });
     assert!(
@@ -412,7 +376,7 @@ fn a_reload_without_a_running_ghost_drops_the_tail() {
     assert!(rig.shutdown(), "A を降ろす");
 
     let ((), events) = capture(|| {
-        ask_reload(&rig, a_dir, tail());
+        ask_reload_for_test(&rig.world, a_dir, tail());
         rig.world.run_schedule(Input);
     });
     let dropped = named(&events, "update_tail_dropped");
@@ -438,7 +402,7 @@ fn a_finished_reload_purges_the_marked_leftover_once() {
 
     let (finished, events) = capture(|| {
         // 列は先頭だけ（ゴーストが対象でない回の総括）。
-        ask_reload(&rig, a_dir.clone(), tail().split_off(1));
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail().split_off(1));
         rig.world.run_schedule(Input);
         rig.pump_talking_until(|rig| {
             rig.exit_requested()
@@ -531,7 +495,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
     let marked = plant_committed(&a_dir, "run1");
 
     let (welcomed, events) = capture(|| {
-        ask_reload(&rig, a_dir.clone(), tail());
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail());
         rig.world.run_schedule(Input);
         rig.pump_talking_until(|rig| {
             rig.exit_requested()

@@ -21,10 +21,10 @@ use temp_path_kit::TempPath;
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
+use crate::update::update_test_support::{named, write_descript};
 use crate::update::{self as update, desk};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
+use areka_session::reload::test_support::boot_context_named;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -57,36 +57,14 @@ fn play_script(script: &str) -> (Vec<RawUpdateRequest>, Vec<CapturedEvent>) {
 fn desk_world() -> (World, TempPath) {
     let tmp = TempPath::new("areka-update-cue-desk");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let master = root.ghost_dir("emo").join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("検体のフォルダを作る");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,Emo\r\n")
-        .expect("descript.txt を書く");
+    write_descript(
+        &root.ghost_dir("emo").join("ghost").join("master"),
+        "name,Emo",
+    );
     let mut world = World::new();
     world.init_resource::<Schedules>();
     update::register(&mut world);
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: tmp.path().join("profile"),
-        helper_exe: tmp.path().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("emo"),
-                balloon_root: root.balloon_dir("kaku"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir("emo"),
-                folder: Some("emo".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("kaku"),
-                folder: Some("kaku".to_owned()),
-            },
-        },
-    });
+    world.insert_resource(boot_context_named(tmp.path(), &root, "emo", "kaku"));
     let (kanade, _) = channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(kanade),
@@ -104,13 +82,6 @@ fn play_to_desk(script: &str) -> Vec<CapturedEvent> {
         desk::drain(&mut world);
     });
     events
-}
-
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 fn emit_one(name: &str, tokens: &[&str]) -> (Vec<RawUpdateRequest>, Vec<CapturedEvent>) {
