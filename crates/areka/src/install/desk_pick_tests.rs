@@ -2,7 +2,7 @@
 //!
 //! 確かめること: 選ぶ画面は `install-pick` という名のスレッドで出て、出ている間は「インストール…」が
 //! 選べず 2 度目の起動は無視されること・スレッドが終わると旗が降りて選べるようになること・抑止の
-//! ときはスレッドが起きず `warn!(install_pick_suppressed)` が 1 件で依頼が 0 件であること・取り消しは
+//! ときはスレッドが起きず `info!(install_pick_suppressed)`（理由 `no_alert`）が 1 件で依頼が 0 件であること・取り消しは
 //! `info!`、出せなければ `error!` でどちらも要求 0 件であること・メニューの側の依頼が台本の側の
 //! 依頼と出どころだけ違う同じ依頼になること。
 //!
@@ -199,8 +199,8 @@ fn picking_disables_the_item_until_the_thread_ends() {
 
 // ---------------------------------------------------------------- 抑止
 
-/// 抑止のときは選ぶ画面のスレッドを起こさず、`warn!(install_pick_suppressed)` を 1 件残して取り消しと
-/// 同じに扱う（依頼 0 件・旗は立たない）。
+/// 抑止のときは選ぶ画面のスレッドを起こさず、`info!(install_pick_suppressed)`（理由 `no_alert`）を 1 件
+/// 残して取り消しと同じに扱う（依頼 0 件・旗は立たない）。
 #[test]
 fn suppressed_pick_starts_no_thread_and_queues_nothing() {
     let (mut world, orders) = rig();
@@ -220,6 +220,10 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
             handle.is_none(),
             called.try_recv().is_err(),
             warns_and_errors(&events),
+            events_named(&events, "install_pick_suppressed")
+                .iter()
+                .map(|e| (e.level, e.field_str("reason")))
+                .collect::<Vec<_>>(),
             queued,
             orders.try_recv().is_err(),
             events_named(&events, "install_order_queued").len(),
@@ -228,13 +232,14 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
         (
             true,
             true,
-            vec![(Level::WARN, Some("install_pick_suppressed"))],
+            vec![],
+            vec![(Level::INFO, Some("no_alert"))],
             0,
             true,
             0,
             true,
         ),
-        "スレッドなし・画面の代わりは呼ばれない・警告 1 件・依頼 0 件・旗は立たない: {events:?}"
+        "スレッドなし・画面の代わりは呼ばれない・警告 0 件・抑止の info 1 件・依頼 0 件・旗は立たない: {events:?}"
     );
 }
 

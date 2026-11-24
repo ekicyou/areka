@@ -218,45 +218,85 @@ where
         );
         return None;
     };
-    if desk.picking.load(Ordering::Acquire) {
+    let tx = desk.raw_tx.clone();
+    spawn_pick(
+        &desk.picking,
+        &PickLabels {
+            thread: "install-pick",
+            tag: "[install] ファイル",
+            busy: "install_pick_busy",
+            suppressed: "install_pick_suppressed",
+            failed: "install_pick_failed",
+        },
+        suppressed,
+        pick,
+        move |result| send_pick(result, &tx),
+    )
+}
+
+/// 選ぶ画面の窓口ごとの名（スレッドの名・記録の頭・記録の語）。
+pub(crate) struct PickLabels {
+    pub(crate) thread: &'static str,
+    pub(crate) tag: &'static str,
+    pub(crate) busy: &'static str,
+    pub(crate) suppressed: &'static str,
+    pub(crate) failed: &'static str,
+}
+
+/// 選ぶ画面のスレッドを起こす（インストールと置き場の窓口の共通の口）。出ている最中なら `debug!` で
+/// 無視し、抑止のときは出さずに `info!`（理由 `no_alert`）で取り消しと同じに扱う。選ぶ口の結果は
+/// 同じスレッドで `send` へ渡す。起こしたスレッドの取っ手を返す。
+pub(crate) fn spawn_pick<F, S>(
+    picking: &Arc<AtomicBool>,
+    labels: &PickLabels,
+    suppressed: bool,
+    pick: F,
+    send: S,
+) -> Option<JoinHandle<()>>
+where
+    F: FnOnce() -> Result<Option<PathBuf>, PickError> + Send + 'static,
+    S: FnOnce(Result<Option<PathBuf>, PickError>) + Send + 'static,
+{
+    let tag = labels.tag;
+    if picking.load(Ordering::Acquire) {
         tracing::debug!(
-            event = "install_pick_busy",
-            "[install] ファイルを選ぶ画面が出ているので、2 つ目は出しません"
+            event = labels.busy,
+            "{tag}を選ぶ画面が出ているので、2 つ目は出しません"
         );
         return None;
     }
     if suppressed {
-        tracing::warn!(
-            event = "install_pick_suppressed",
-            "[install] 告知が抑止されているので、ファイルを選ぶ画面を出さずに取り消しと同じに扱います"
+        tracing::info!(
+            event = labels.suppressed,
+            reason = "no_alert",
+            "{tag}を選ぶ画面は、告知が抑止されているので出さずに取り消しと同じに扱います"
         );
         return None;
     }
-    desk.picking.store(true, Ordering::Release);
+    picking.store(true, Ordering::Release);
     // 旗はスレッドが終わるとき（panic も含む）と、スレッドを起こせずに閉包が落ちたときに降りる。
-    let flag = PickingFlag(desk.picking.clone());
-    let tx = desk.raw_tx.clone();
+    let flag = PickingFlag(picking.clone());
     let spawned = thread::Builder::new()
-        .name("install-pick".to_owned())
+        .name(labels.thread.to_owned())
         .spawn(move || {
             let _flag = flag;
-            send_pick(pick(), &tx);
+            send(pick());
         });
     match spawned {
         Ok(handle) => Some(handle),
         Err(err) => {
             tracing::error!(
-                event = "install_pick_failed",
+                event = labels.failed,
                 error = %err,
-                "[install] ファイルを選ぶ画面のスレッドを起こせません"
+                "{tag}を選ぶ画面のスレッドを起こせません"
             );
             None
         }
     }
 }
 
-/// 選ぶ画面が出ている旗（落ちると降りる・置き場を選ぶ画面の受け口 `roots::desk` も使い回す）。
-pub(crate) struct PickingFlag(pub(crate) Arc<AtomicBool>);
+/// 選ぶ画面が出ている旗（落ちると降りる）。
+struct PickingFlag(Arc<AtomicBool>);
 
 impl Drop for PickingFlag {
     fn drop(&mut self) {
