@@ -9,7 +9,7 @@
 
 - [ ] 1. 本番の芯を直す（UI の待ち・背景のスレッドの倒れ・取得・上書き・ゴーストの道のテスト）
 
-- [ ] 1.1 入れた後の記録の待ちに上限を持たせる（G1・指摘 1・37・件 1）
+- [x] 1.1 入れた後の記録の待ちに上限を持たせる（G1・指摘 1・37・件 1）
   - 窓口の記録の段を `settle_record` に切り出し、`barrier_within(EXIT_WAIT_LIMIT)` で待つ。期限切れは `install_record_unsettled` の error を 1 件残して続ける（design.md「`settle_record`」）。
   - `mcp/get_property_tests.rs` の 2 か所の `barrier()` を `barrier_within(SPIN_WAIT)` にする（指摘 37）。
   - 門で止める偽の `PersistIo` を単独の書き手に差し、`settle_record` を別のスレッドで呼んで `join_thread_bounded` で待つテストが緑で、`install_record_unsettled` が 1 件。同じテストが今の `barrier()` では止まって赤になることを先に確かめてある。

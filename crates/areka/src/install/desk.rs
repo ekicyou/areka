@@ -25,7 +25,7 @@ use areka_actor::ReplySender;
 use areka_ghost::catalog_roots::{balloons_for, find_balloon, find_ghost, same_folder_name};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
-use areka_sylphya::{PersistKey, PersistScope};
+use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use bevy_ecs::world::World;
 
 use super::judge::GhostFacts;
@@ -37,7 +37,7 @@ use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 use areka_session::boot_config::BootContext;
-use areka_session::exit_wait::WorkGate;
+use areka_session::exit_wait::{EXIT_WAIT_LIMIT, WorkGate};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::{SwitchInFlight, record_last_installed};
 
@@ -357,7 +357,7 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 記憶へフォルダ名を書き、シェル・追加ファイルは置換語だけ（表示は替えない）。シェルとバルーンは
 /// `lastinstalled` の控えも置く。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りと
 /// フォルダ名の 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
-/// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
+/// 最後に今のゴーストの記憶の書き手の反映を上限まで待つ（背景のスレッドへ答えるのはその後）。
 pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
     let roots = world
         .get_resource::<BootContext>()
@@ -377,13 +377,18 @@ pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
             ghost_name,
         },
     );
-    if let Some(runtime) = names::current_runtime(world)
-        && let Err(err) = runtime.sylphya_publisher().barrier()
-    {
+    if let Some(runtime) = names::current_runtime(world) {
+        settle_record(runtime.sylphya_publisher());
+    }
+}
+
+/// 今のゴーストの記憶の書き手の反映を、上限まで待つ。待てなければ error を 1 件残して続ける。
+pub(super) fn settle_record(publisher: &SylphyaPublisher) {
+    if let Err(err) = publisher.barrier_within(EXIT_WAIT_LIMIT) {
         tracing::error!(
             event = "install_record_unsettled",
             error = %err,
-            "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
+            "[install] 今のゴーストの記憶の書き手が止まっているか遅れているので、入れた後の記録の反映を確かめないまま続けます"
         );
     }
 }

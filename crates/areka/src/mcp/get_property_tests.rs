@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
+use areka_runtime::spine::SPIN_WAIT;
 use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
@@ -100,7 +101,9 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     publisher.set(someone_else.clone(), "test.key".into(), "other".into());
     publisher.set(someone_else, "test.other_only".into(), "other".into());
     publisher.set(own, "test.empty".into(), String::new());
-    publisher.barrier().expect("載せた値が反映される");
+    publisher
+        .barrier_within(SPIN_WAIT)
+        .expect("載せた値が反映される");
 
     let ghost = crate::mcp::resolve::active(&rig.world).expect("起動中のゴーストがある");
     let names = [
@@ -315,7 +318,9 @@ mod scope_rect {
                 "test.marker".into(),
                 "old".into(),
             );
-            publisher.barrier().expect("載せた値が反映される");
+            publisher
+                .barrier_within(SPIN_WAIT)
+                .expect("載せた値が反映される");
         }
         let ghost = crate::mcp::resolve::active(&rig.world).expect("起動中のゴーストがある");
         let ask_both =

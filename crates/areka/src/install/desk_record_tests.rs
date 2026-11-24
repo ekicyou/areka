@@ -309,3 +309,67 @@ fn catalog_spelling_without_roots_keeps_the_archive_spelling() {
     let balloon = catalog_spelling(None, &record(InstallKind::Balloon, None));
     assert_eq!(balloon, ("dir".to_owned(), None));
 }
+
+/// 1 回目の書き込みで「入った」を知らせ、門の送り手が捨てられるまで止まる偽の IO。
+struct GatedFirstCommit {
+    entered: std::sync::mpsc::Sender<()>,
+    open: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+}
+
+impl areka_sylphya::persist::PersistIo for GatedFirstCommit {
+    fn read(&self, _path: &std::path::Path) -> std::io::Result<Option<String>> {
+        Ok(None)
+    }
+    fn commit(&self, _path: &std::path::Path, _content: &str) -> std::io::Result<()> {
+        // 受け手は文を分けて取り出す（if let の行に書くと、止まっている間も Mutex を握り続ける）。
+        let open = self.open.lock().unwrap().take();
+        if let Some(open) = open {
+            let _ = self.entered.send(());
+            let _ = open.recv();
+        }
+        Ok(())
+    }
+}
+
+/// 書き手が書き込みの最中で止まっていても、記録の待ちは上限で戻り、`install_record_unsettled` を 1 件残す。
+#[test]
+fn a_stuck_writer_is_waited_for_only_up_to_the_limit() {
+    use areka_runtime::spine::{SPIN_WAIT, join_bounded, join_thread_bounded};
+    use areka_sylphya::{ScopeRoots, SylphyaInit, spawn_sylphya};
+
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    // 門の送り手は待ちより先に捨てない（赤で巻き戻るときも捨てられて門が開く）。
+    let (open_tx, open_rx) = std::sync::mpsc::channel::<()>();
+    let parts = spawn_sylphya(SylphyaInit {
+        roots: ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        },
+        io: Box::new(GatedFirstCommit {
+            entered: entered_tx,
+            open: std::sync::Mutex::new(Some(open_rx)),
+        }),
+        runtime_sink: None,
+    });
+    parts.publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "1".into())],
+    );
+    entered_rx
+        .recv_timeout(SPIN_WAIT)
+        .expect("書き手が書き込みに入る");
+
+    let publisher = parts.publisher.clone();
+    let settler = std::thread::spawn(move || capture(|| settle_record(&publisher)).1);
+    let events = join_thread_bounded("settle_record", None, settler);
+    drop(open_tx);
+    parts.publisher.close();
+    join_bounded("sylphya", parts.handle).expect("書き手が閉じる");
+
+    let events = events.expect("記録の待ちのスレッドは倒れない");
+    assert_eq!(
+        count(&events, "install_record_unsettled", Level::ERROR),
+        1,
+        "{events:?}"
+    );
+}
