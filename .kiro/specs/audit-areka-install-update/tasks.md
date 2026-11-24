@@ -7,7 +7,7 @@
 - 消す・名を変えるときは、消す前に `git grep` で `.rs`・`doc/`・`tools/`・`.kiro/steering/` の字面を確かめる（design.md「消す・名を変えるときの照合」）。
 - 先のタスクがファイルを触るとき、そのファイルの番号の札や経緯の語（9・15〜17・29・47・56 ほか）を一緒に直してよい。残りは担当のタスクが拾う。
 
-- [ ] 1. 本番の芯を直す（UI の待ち・背景のスレッドの倒れ・取得・上書き・ゴーストの道のテスト）
+- [x] 1. 本番の芯を直す（UI の待ち・背景のスレッドの倒れ・取得・上書き・ゴーストの道のテスト）
 
 - [x] 1.1 入れた後の記録の待ちに上限を持たせる（G1・指摘 1・37・件 1）
   - 窓口の記録の段を `settle_record` に切り出し、`barrier_within(EXIT_WAIT_LIMIT)` で待つ。期限切れは `install_record_unsettled` の error を 1 件残して続ける（design.md「`settle_record`」）。
@@ -59,7 +59,7 @@
   - _Dispatch: standard, effort high — 2 往復の段と終了・倒れの道の組み合わせ_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 4.8, 6.1, 6.2, 6.3, 6.4, 6.7, 7.1, 7.7_
 
-- [ ] 1.7 MCP のテストを本番の道に乗せる（G15・指摘 36・102）
+- [x] 1.7 MCP のテストを本番の道に乗せる（G15・指摘 36・102）
   - `get_property_tests.rs` のゴーストの道を `PropGetCueSink::new(reader, asker, tx)` で組み直し、`carrier_cue` の `NAMES` の合図を 1 つ流して `KanadeMsg::PropertyEvent` の references を読む。値の無いものの書き方を直す（design.md 指摘 102 の行）。`ShioriHostSink` を使う所が範囲の中に残らない。
   - `check_script_tests.rs` に、本物のシェルを装着させて `\s[99999]` に `missing_surface` が 1 件になる実 GPU のテストを足す（`GpuPermit` で順を取る）。
   - 2 つのテストが緑。`git grep ShioriHostSink` で範囲の中の読み手が 0 件。済んだことを `audit-areka-app` のセッションへ知らせる（向こうの脳の削除の順のため）。

@@ -289,3 +289,49 @@ fn real_unit_answers_two_scripts_without_running_them() {
         "（再生中, 今のゴースト, 切替の途中でない, 終了の指示, B を起こした回数）"
     );
 }
+
+// ---- 本物のシェルを装着したゴースト（実 GPU・x64 だけ） ----
+
+/// 本物のシェル（emo2 の複製）を装着させた後、無い surface `\s[99999]` に `missing_surface` が
+/// ちょうど 1 件出て、在る `\s[0]` は診断しない（窓の無いゴーストの注記も付かない）。
+///
+/// # 非空虚性
+/// 装着の判定を逆にすると答えが届かず赤。スコープを取り損ねると写しの事実が空になり、
+/// `missing_surface` が出ずに赤（写しのスコープを空にして確かめた）。
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn attached_shell_reports_one_missing_surface() {
+    use crate::mcp::check_script_judge::MSG_MISSING_SURFACE;
+    use crate::mcp::dump_surface::gpu_test_support::GpuRig;
+    use areka_mcp::tools::check_script::Kind;
+
+    let script = r"\0\s[0]\s[99999]\e";
+    let mut gpu = GpuRig::new(r"\0\s[0]\e", 96);
+    let attached = gpu.frames_until(100, |world| {
+        world
+            .get_non_send::<RuntimeWiring>()
+            .is_some_and(RuntimeWiring::attached)
+    });
+    let args = Args {
+        script: script.to_owned(),
+        ghost_name: None,
+    };
+    let (request, pending) = ToolRequest::new(ToolCall::CheckScript(args.clone()));
+    let ghost = crate::mcp::resolve::active(&gpu.rig.world).expect("A は起動中");
+    handle(&mut gpu.rig.world, &ghost, args, request.reply);
+    let answer = gpu.answer_of(&pending).map(|a| a.outcome);
+    let down = gpu.shutdown();
+
+    let missing = Diagnostic {
+        kind: Kind::MissingSurface,
+        start: 7,
+        end: 16,
+        text: r"\s[99999]".to_owned(),
+        message: MSG_MISSING_SURFACE,
+    };
+    assert_eq!(
+        (attached, answer, down),
+        (true, Some(render(&[missing], None)), true),
+        "（装着した・{script} への答え・降ろせた）"
+    );
+}
