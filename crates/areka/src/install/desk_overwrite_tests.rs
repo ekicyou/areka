@@ -2,8 +2,9 @@
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口・kanade・背景のスレッド・口（`DeskPorts`）・切替の
 //! 道筋を通し、偽の SHIORI に届いた呼び出しの列と UI スレッドの記録の順を突き合わせる。確かめること:
-//! `OnGhostChanging` も `OnClose` も 0 件・降ろした後（全窓を閉じた後・起こす前）に宛先の中身が
-//! 替わる・同じゴーストが起き直す・定常到達の後に締めの知らせが出る。
+//! `OnGhostChanging` も `OnClose` も 0 件・降ろした後（全窓を閉じた後・起こす前）に背景のスレッドが
+//! 宛先の中身を替える・同じゴーストが起き直す・定常到達の後に締めの知らせが出る。降ろしてから起こす
+//! までの 2 往復の段は `desk_overwrite_between_tests.rs`。
 //!
 //! 切替の入口の判定と失敗の場合: 別の切替の最中（`Busy`）は預かったまま
 //! その予約が下りた tick に頼み直して一周する・別のゴーストへの切替では展開せず書庫を返す・目録に無い
@@ -15,8 +16,9 @@
 //! 待つ）、依頼の終わりは窓口が背景のスレッドから終わりの知らせを受けたことで揃える。
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
 
-use areka_actor::reply_channel;
+use areka_actor::{ActorHandle, reply_channel, spawn_actor};
 use areka_kanade::ChangeOrigin;
 use areka_nar::NarArchive;
 use log_capture_kit::{CapturedEvent, capture};
@@ -27,7 +29,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::InstallDesk;
 use super::overwrite::take;
-use crate::install::procedure::Overwritten;
+use crate::install::procedure::{InstallPorts, Overwritten};
+use crate::install::worker::{DeskPorts, OverwriteAnswer};
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
 use areka_placement::persist::PersistWiring;
@@ -64,10 +67,9 @@ fn first(events: &[CapturedEvent], name: &str) -> Option<usize> {
 }
 
 /// 呼び出しの列の確かめに添える手がかり: 起こした回ごとの列・`OnInstallFailure` の Reference・捕まえた
-/// 記録のうち warn 以上。手続きの失敗の詳しい記録（`install_failed`・`areka_nar` の失敗）は背景の
-/// スレッド `install` で出るので、呼び手のスレッドだけを捕える `capture` には映らない。Reference の語
-/// （`extraction` は `.nar` そのものを読めない失敗・`fileio` は作業フォルダ・入れる先・確定・巻き戻しの
-/// 入出力の失敗）がその代わりになる。
+/// 記録のうち warn 以上。背景のスレッド `install` は捕捉の窓の中で起きたときだけ記録が映る（窓の外で
+/// 起きていれば手続きの失敗の詳しい記録は映らない）。Reference の語（`extraction` は `.nar` そのものを
+/// 読めない失敗・`fileio` は作業フォルダ・入れる先・確定・巻き戻しの入出力の失敗）がその代わりになる。
 fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
     let failures: Vec<_> = rig
         .calls(folder)
@@ -187,6 +189,10 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     let steady = order_of("ghost_switch_done");
     assert!(down < done && done < booted, "{events:?}");
     let done_event = &events[done];
+    assert_eq!(
+        done_event.target, "areka::install::worker",
+        "{done_event:?}"
+    );
     assert_eq!(done_event.field("ok"), Some("true"), "{done_event:?}");
     assert!(done_event.field("ms").is_some(), "{done_event:?}");
     // 締めの知らせは定常到達の後に送る。
@@ -284,6 +290,21 @@ fn install_through(rig: &mut SwitchRig, path: PathBuf) -> bool {
     })
 }
 
+/// 背景のスレッドの代わりに本物の口で上書きを頼み、手続きへ返る答えの受信端を返す（捕捉の窓の中で
+/// 呼べば、スレッドの記録も窓に映る）。
+fn overwrite_from_worker(
+    rig: &SwitchRig,
+    archive: NarArchive,
+) -> (Receiver<Overwritten>, ActorHandle) {
+    let desk = rig.world.non_send::<InstallDesk>();
+    let mut ports = DeskPorts::new(desk.asks_tx.clone(), desk.gate.clone());
+    let (tx, rx) = mpsc::channel();
+    let (_, handle) = spawn_actor("install", move |_: Receiver<()>| {
+        let _ = tx.send(ports.overwrite_running(archive, None));
+    });
+    (rx, handle)
+}
+
 /// 起こした回ごとの呼び出しの名前の列。
 fn boots_of(rig: &SwitchRig, folder: &str) -> Vec<Vec<String>> {
     rig.calls(folder).iter().map(|c| ids(c)).collect()
@@ -367,14 +388,14 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         boot_event: None,
         copy: areka_session::switch_copy::SwitchCopy::None,
     });
-    let (reply, answer) = reply_channel();
     let mut got = None;
 
     let (flow, events) = capture(|| {
-        take(&mut rig.world, archive, None, reply);
+        let (answer, _worker) = overwrite_from_worker(&rig, archive);
+        let taken =
+            rig.pump_input_until(|rig| rig.world.non_send::<InstallDesk>().overwrite.is_some());
         rig.world.run_schedule(Input);
-        rig.world.run_schedule(Input);
-        let waited = (reserved_for(&rig), matches!(answer.try_recv(), Ok(None)));
+        let waited = (reserved_for(&rig), taken && answer.try_recv().is_err());
         rig.world.remove_non_send::<SwitchInFlight>();
         let asked = rig.pump_input_until(|rig| reserved_for(rig).is_some());
         let ours = reserved_for(&rig);
@@ -389,7 +410,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         );
         let finished = rig.pump_talking_until(|_| {
             if got.is_none() {
-                got = answer.try_recv().ok().flatten();
+                got = answer.try_recv().ok();
             }
             got.is_some()
         });
@@ -476,7 +497,7 @@ fn a_switch_to_another_ghost_does_not_install_and_returns_the_archive() {
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     match &got {
-        Some(Overwritten::NotRunning(back)) => assert_eq!(back.manifest().directory, "A"),
+        Some(OverwriteAnswer::NotRunning(back)) => assert_eq!(back.manifest().directory, "A"),
         _ => panic!("書庫が返る: {events:?}"),
     }
     assert!(!touched, "A のフォルダには展開しない");
@@ -579,6 +600,8 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     let done = named(&events, "install_overwrite_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].field("ok"), Some("false"));
+    assert_eq!(done[0].target, "areka::install::worker", "{:?}", done[0]);
+    // 展開は背景のスレッドで走る。スレッドは捕捉の窓の中で起きたので、`areka_nar` の失敗の記録も映る。
     let nar: Vec<_> = events
         .iter()
         .filter(|e| e.level == tracing::Level::ERROR && e.target.starts_with("areka_nar"))
@@ -686,3 +709,6 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         areka_session::session_mark::MarkVerdict::Keep("switch_fatal")
     );
 }
+
+#[path = "desk_overwrite_between_tests.rs"]
+mod between_tests;

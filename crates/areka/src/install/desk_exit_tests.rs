@@ -3,7 +3,7 @@
 //! 確かめること: 終了が始まると待っている依頼を始めずに捨て、捨てた書庫の件数とパスを `warn!` に
 //! 1 件残す・終了の後に届いたイベントの頼みは kanade へ 0 件で、返信端は落ちる・預かった書庫
 //! （起動中のゴーストへ入れる一周）は捨てて背景のスレッドを閉じた扱いで放す・展開し終えた書庫は
-//! 結果を返し、書く前にやめた書庫として記録しない・OS のセッションの終了では、降ろす待ちと同じ
+//! 返信端を落とし、書く前にやめた書庫として記録しない・OS のセッションの終了では、降ろす待ちと同じ
 //! 出発点から数えて合計が上限を超えない。
 
 use std::time::{Duration, Instant};
@@ -133,10 +133,10 @@ fn exit_discards_a_parked_overwrite_and_releases_the_worker() {
     );
 }
 
-/// 展開し終えた（定常到達を待っている）書庫は、終了で結果を背景のスレッドへ返し、書く前にやめた
-/// 書庫として記録しない（展開は UI スレッドで同期に済んでいる）。
+/// 展開し終えて起こし直した（定常到達を待っている）書庫は、終了で返信端を落とし、書く前にやめた
+/// 書庫として記録しない（門は展開した背景のスレッドが手放している）。
 #[test]
-fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
+fn exit_after_the_overwrite_was_extracted_drops_the_reply_without_abandoning() {
     let tmp = TempPath::new("desk-exit-ran");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
@@ -148,10 +148,16 @@ fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
     rig.drain();
     run_overwrite_between(&mut rig.world);
     assert!(
-        root.ghost_dir("A")
-            .join("ghost/master/overwritten.txt")
-            .exists(),
-        "展開した"
+        matches!(answer.try_recv(), Ok(Some(OverwriteAnswer::Down { .. }))),
+        "降ろしたと返す"
+    );
+    gate.end();
+    let (reply, extracted) = reply_channel();
+    rig.asks.send(DeskAsk::Extracted { reply }).unwrap();
+    rig.drain();
+    assert!(
+        matches!(extracted.try_recv(), Ok(None)),
+        "定常到達まで答えない"
     );
 
     let (_, events) = capture(|| begin_close(&mut rig.world));
@@ -159,16 +165,13 @@ fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "書き終えた書庫を書く前にやめたと記録しない: {events:?}"
     );
-    assert!(
-        matches!(answer.try_recv(), Ok(Some(Overwritten::Ran(Ok(_))))),
-        "展開の結果を返す"
-    );
+    assert!(extracted.try_recv().is_err(), "返信端を落とす");
     let discarded = events_named(&events, "install_pending_discarded");
     assert_eq!(discarded.len(), 1, "{events:?}");
     assert!(
         discarded[0]
             .field("overwrite")
-            .is_some_and(|o| o.contains("ran")),
+            .is_some_and(|o| o.contains("resumed")),
         "{events:?}"
     );
 }

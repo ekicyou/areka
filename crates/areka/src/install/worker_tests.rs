@@ -402,37 +402,45 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
     handle.join().expect("スレッドが終わる");
 }
 
-/// 起動中のゴーストへ入れ終えたら門を手放す。完了の知らせを待つ間に終了が始まっても、
-/// 書く前にやめた書庫として記録されない。
+/// 窓口が「降ろした」と答えたら、このスレッドで起動中のゴーストのフォルダへ展開して門を手放し、
+/// 展開し終えたと窓口へ知らせて返事を待ってから結果を返す。展開の記録はこのスレッドが残す。完了の
+/// 知らせを待つ間に終了が始まっても、書く前にやめた書庫として記録されない。
 #[test]
-fn overwrite_ran_releases_the_gate() {
+fn overwrite_extracts_after_down_and_waits_for_the_desk() {
     let root = TempPath::new("install-worker-root");
     let dir = TempPath::new("install-worker-archive");
     let (path, archive) = ghost_archive(&dir);
     let (mut ports, asks, gate) = ports();
     ports.begin_archive(&path);
 
-    let desk_root = root.path().to_path_buf();
+    let roots = BasewareRoots::single(root.path().to_path_buf());
+    let installed = root.path().join("ghost").join("newbie");
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Overwrite {
-            archive,
-            target_ghost,
-            reply,
-        }) = asks.recv()
-        else {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = asks.recv() else {
             panic!("上書きの頼みが届く");
         };
-        let result = archive.install(&areka_nar::InstallRequest {
-            roots: &areka_nar::SingleRoot(&desk_root),
-            target_ghost: target_ghost.as_deref(),
+        let _ = reply.send(OverwriteAnswer::Down {
+            archive,
+            roots,
+            running: None,
         });
-        let _ = reply.send(Overwritten::Ran(result));
+        let Ok(DeskAsk::Extracted { reply }) = asks.recv() else {
+            panic!("展開し終えた知らせが届く");
+        };
+        let placed = installed.is_dir();
+        let _ = reply.send(());
+        placed
     });
-    assert!(matches!(
-        ports.overwrite_running(archive, None),
-        Overwritten::Ran(Ok(_))
-    ));
-    desk.join().expect("窓口の代わりが最後まで走る");
+    let (overwritten, events) = capture(|| ports.overwrite_running(archive, None));
+    assert!(matches!(overwritten, Overwritten::Ran(Ok(_))));
+    assert!(
+        desk.join().expect("窓口の代わりが最後まで走る"),
+        "知らせより前に展開している"
+    );
+    let done = events_named(&events, "install_overwrite_done");
+    assert_eq!(done.len(), 1, "{events:?}");
+    assert_eq!(done[0].target, "areka::install::worker");
+    assert_eq!(done[0].field("ok"), Some("true"));
 
     let mut world = World::new();
     register_gate(&mut world, "install", gate, |_| {});
@@ -441,6 +449,39 @@ fn overwrite_ran_releases_the_gate() {
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "{events:?}"
     );
+}
+
+/// 「降ろした」の後に終了が始まっていれば、書かずに閉じた扱いで止まる（窓口へも知らせない）。
+#[test]
+fn overwrite_after_closing_writes_nothing() {
+    let root = TempPath::new("install-worker-root");
+    let dir = TempPath::new("install-worker-archive");
+    let (path, archive) = ghost_archive(&dir);
+    let (mut ports, asks, gate) = ports();
+    ports.begin_archive(&path);
+    let mut world = World::new();
+    register_gate(&mut world, "install", gate, |_| {});
+
+    let roots = BasewareRoots::single(root.path().to_path_buf());
+    let desk = thread::spawn(move || {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = asks.recv() else {
+            panic!("上書きの頼みが届く");
+        };
+        let _ = begin_close(&mut world);
+        let _ = reply.send(OverwriteAnswer::Down {
+            archive,
+            roots,
+            running: None,
+        });
+        asks
+    });
+    assert!(matches!(
+        ports.overwrite_running(archive, None),
+        Overwritten::Closed
+    ));
+    let asks = desk.join().expect("窓口の代わりが最後まで走る");
+    assert!(asks.try_recv().is_err(), "窓口へ知らせない");
+    assert_eq!(entries_under(root.path()), 0, "根の下に何も置かない");
 }
 
 // ---------------------------------------------------------------- 本番の道筋

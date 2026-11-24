@@ -18,7 +18,8 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::install::procedure::{InstalledRecord, Overwritten};
+use crate::install::procedure::InstalledRecord;
+use crate::install::worker::OverwriteAnswer;
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
 use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
@@ -82,7 +83,7 @@ impl Rig {
     }
 
     /// 起動中のゴーストへの上書きの頼みを 1 件入れ、答えの受信端を返す。
-    fn ask_overwrite(&self, archive: areka_nar::NarArchive) -> ReplyReceiver<Overwritten> {
+    fn ask_overwrite(&self, archive: areka_nar::NarArchive) -> ReplyReceiver<OverwriteAnswer> {
         let (reply, answer) = reply_channel();
         self.asks
             .send(DeskAsk::Overwrite {
@@ -474,7 +475,7 @@ fn overwrite_returns_the_archive_and_record_answers() {
         .unwrap();
     rig.drain();
     match answer.try_recv() {
-        Ok(Some(Overwritten::NotRunning(back))) => {
+        Ok(Some(OverwriteAnswer::NotRunning(back))) => {
             assert_eq!(back.manifest().directory, "newbie")
         }
         _ => panic!("書庫が返る"),
@@ -654,7 +655,7 @@ fn an_unavailable_switch_returns_the_archive_with_one_warning() {
 
         let ((), events) = capture(|| rig.drain());
         match answer.try_recv() {
-            Ok(Some(Overwritten::NotRunning(back))) => {
+            Ok(Some(OverwriteAnswer::NotRunning(back))) => {
                 assert_eq!(back.manifest().directory, "A", "{verdict}")
             }
             _ => panic!("{label}: 書庫が返る"),
@@ -674,10 +675,11 @@ fn an_unavailable_switch_returns_the_archive_with_one_warning() {
 }
 
 /// 「切替を頼んだ」の段でも、切替の予約の切替先が預かった宛先と違う（その間に利用者や台本が頼んだ
-/// 別のゴーストへの切替）なら、全窓を閉じた直後の口は展開せず `debug!(install_overwrite_skipped)` を
-/// 残す（背景のスレッドは待ったまま）。切替先が預かった宛先なら（ASCII の大文字小文字は無視）展開する。
+/// 別のゴーストへの切替）なら、全窓を閉じた直後の口は答えず `debug!(install_overwrite_skipped)` を
+/// 残す（背景のスレッドは待ったまま）。切替先が預かった宛先なら（ASCII の大文字小文字は無視）、自分では
+/// 展開せずに「降ろした」と宛先の並び・起動中のゴーストの場所を背景のスレッドへ返す。
 #[test]
-fn run_between_installs_only_on_the_switch_to_the_held_destination() {
+fn run_between_answers_down_only_on_the_switch_to_the_held_destination() {
     let tmp = TempPath::new("desk-overwrite-between");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
@@ -694,16 +696,11 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
 
     rig.world.insert_non_send(reservation());
     let ((), other) = capture(|| run_overwrite_between(&mut rig.world));
-    assert!(
-        events_named(&other, "install_overwrite_done").is_empty(),
-        "{other:?}"
-    );
     assert_eq!(
         events_named(&other, "install_overwrite_skipped").len(),
         1,
         "{other:?}"
     );
-    assert!(!marker.exists(), "A のフォルダには展開しない");
     assert!(
         matches!(answer.try_recv(), Ok(None)),
         "背景のスレッドは待ったまま"
@@ -711,10 +708,26 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
 
     rig.world.non_send_mut::<SwitchInFlight>().target.folder = "a".to_owned();
     let ((), ours) = capture(|| run_overwrite_between(&mut rig.world));
-    let done = events_named(&ours, "install_overwrite_done");
-    assert_eq!(done.len(), 1, "{ours:?}");
-    assert_eq!(done[0].field("ok"), Some("true"));
-    assert!(marker.exists(), "A のフォルダへ展開する");
+    assert!(
+        events_named(&ours, "install_overwrite_done").is_empty(),
+        "{ours:?}"
+    );
+    match answer.try_recv() {
+        Ok(Some(OverwriteAnswer::Down {
+            archive,
+            roots,
+            running,
+        })) => {
+            assert_eq!(archive.manifest().directory, "A");
+            assert_eq!(
+                roots,
+                areka_ghost::BasewareRoots::single(root.dir().to_path_buf())
+            );
+            assert_eq!(running, Some(root.ghost_dir("A")));
+        }
+        _ => panic!("「降ろした」を返す"),
+    }
+    assert!(!marker.exists(), "窓口は展開しない");
 }
 
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {

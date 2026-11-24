@@ -1,47 +1,45 @@
 //! 起動中のゴーストへ入れる一周（窓口の子）。
 //!
-//! 背景のスレッドから預かった書庫（高々 1 件）を段で進める: 預かった → 切替を頼んだ → 展開した。
-//! 預かったら既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で頼む（再生中の台詞の
-//! 終わりは kanade の保留が待つ）。`switch_to` が全窓を閉じた直後・起こす前に
-//! 呼ぶ [`run_between`] が UI スレッドで同期に展開し、定常到達 [`on_steady`] で
-//! 結果を背景のスレッドへ返す。展開の成否によらず、切替の道筋は今日のまま進む。
-
-use std::time::Instant;
+//! 背景のスレッドから預かった書庫（高々 1 件）を段で進める: 預かった → 切替を頼んだ → 展開中 →
+//! 起こし直した。預かったら既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で頼む
+//! （再生中の台詞の終わりは kanade の保留が待つ）。`switch_to` が全窓を閉じた直後・起こす前に
+//! 呼ぶ [`run_between`] が「降ろした」を背景のスレッドへ返して起こすのを待たせ、背景のスレッドが
+//! 展開し終えた答え [`extracted`] で切替を続け、定常到達 [`on_steady`] で背景のスレッドへ返事をする。
+//! 展開の成否によらず、切替の道筋は今日のまま進む。
 
 use areka_actor::ReplySender;
 use areka_ghost::same_folder_name;
 use areka_kanade::ChangeOrigin;
-use areka_nar::{InstallOutcome, NarArchive, NarError};
+use areka_nar::NarArchive;
 use bevy_ecs::world::World;
 
 use super::{InstallDesk, reply_to};
-use crate::install::destination::install_into;
-use crate::install::procedure::Overwritten;
+use crate::install::worker::OverwriteAnswer;
 use areka_session::app_exit::FirstExit;
 use areka_session::boot_config::BootContext;
 use areka_session::ghost_switch::{
-    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, hold_between, request_ghost_switch,
+    resume_between,
 };
 
 /// 預かった書庫の段。
 enum Stage {
     /// 預かった（切替はまだ頼んでいない・次の定常到達で頼む）。
-    Held(NarArchive),
+    Held(NarArchive, ReplySender<OverwriteAnswer>),
     /// 預かったが別の切替の最中だった（その予約が下りた tick か次の定常到達で頼み直す）。
-    Busy(NarArchive),
+    Busy(NarArchive, ReplySender<OverwriteAnswer>),
     /// 切替を頼んだ（切替の入口が受理した）。
-    Requested(NarArchive),
-    /// 展開した（定常到達で背景のスレッドへ返す）。
-    Ran(Result<InstallOutcome, NarError>),
+    Requested(NarArchive, ReplySender<OverwriteAnswer>),
+    /// 降ろしたと返した（背景のスレッドが展開している・切替は起こす前で待っている）。
+    Extracting,
+    /// 展開の答えを受けて起こし直した（定常到達で背景のスレッドへ返事をする）。
+    Resumed(ReplySender<()>),
 }
 
 /// 預かった書庫と段（窓口が高々 1 件持つ）。
 pub(super) struct Pending {
     /// 宛先のゴーストのフォルダ名（`ghost` は書庫の `directory`・`supplement` は宛先のゴースト）。
     folder: String,
-    /// 展開に渡す宛先のゴースト（`supplement` だけ在る）。
-    target_ghost: Option<String>,
-    reply: ReplySender<Overwritten>,
     stage: Stage,
 }
 
@@ -50,16 +48,12 @@ pub(super) fn take(
     world: &mut World,
     archive: NarArchive,
     target_ghost: Option<String>,
-    reply: ReplySender<Overwritten>,
+    reply: ReplySender<OverwriteAnswer>,
 ) {
-    let folder = target_ghost
-        .clone()
-        .unwrap_or_else(|| archive.manifest().directory.clone());
+    let folder = target_ghost.unwrap_or_else(|| archive.manifest().directory.clone());
     let pending = Pending {
         folder,
-        target_ghost,
-        reply,
-        stage: Stage::Held(archive),
+        stage: Stage::Held(archive, reply),
     };
     if let Some(old) = world
         .non_send_mut::<InstallDesk>()
@@ -85,7 +79,7 @@ fn request(world: &mut World) {
     let Some(pending) = world.non_send_mut::<InstallDesk>().overwrite.take() else {
         return;
     };
-    let (Stage::Held(archive) | Stage::Busy(archive)) = pending.stage else {
+    let (Stage::Held(archive, reply) | Stage::Busy(archive, reply)) = pending.stage else {
         world.non_send_mut::<InstallDesk>().overwrite = Some(pending);
         return;
     };
@@ -101,7 +95,7 @@ fn request(world: &mut World) {
                     folder = %pending.folder,
                     "[install] 宛先はもう起動中のゴーストではないので、書庫を返します"
                 );
-                reply_to(pending.reply, Overwritten::NotRunning(archive));
+                reply_to(reply, OverwriteAnswer::NotRunning(archive));
                 return;
             }
         },
@@ -122,10 +116,10 @@ fn request(world: &mut World) {
                 folder = %pending.folder,
                 "[install] 起動中のゴーストを降ろして入れるために、同じゴーストへの切替を頼みました"
             );
-            Stage::Requested(archive)
+            Stage::Requested(archive, reply)
         }
         // 別の切替の最中: 預かったまま、その予約が下りた tick か次の定常到達で頼み直す。
-        SwitchVerdict::Busy => Stage::Busy(archive),
+        SwitchVerdict::Busy => Stage::Busy(archive, reply),
         SwitchVerdict::NotFound | SwitchVerdict::NoContext | SwitchVerdict::Updating => {
             tracing::warn!(
                 event = "install_overwrite_unavailable",
@@ -133,7 +127,7 @@ fn request(world: &mut World) {
                 folder = %pending.folder,
                 "[install] 起動中のゴーストを降ろして入れられないので、書庫を返してよそへの展開へ進ませます"
             );
-            reply_to(pending.reply, Overwritten::NotRunning(archive));
+            reply_to(reply, OverwriteAnswer::NotRunning(archive));
             return;
         }
     };
@@ -141,7 +135,8 @@ fn request(world: &mut World) {
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`switch_to` から）: 段が「切替を頼んだ」で、切替の予約の
-/// 切替先が預かった宛先と同じ（フォルダ名の 1 つの規則）ときだけ、UI スレッドで同期に展開する。
+/// 切替先が預かった宛先と同じ（フォルダ名の 1 つの規則）ときだけ、「降ろした」を背景のスレッドへ
+/// 返して起こすのを待たせる。返せなければ待たせない（`switch_to` がそのまま起こす）。
 pub(super) fn run_between(world: &mut World) {
     let target = world
         .get_non_send::<SwitchInFlight>()
@@ -155,12 +150,12 @@ pub(super) fn run_between(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
-    let Some(pending) = desk.overwrite.as_mut() else {
+    let Some(pending) = desk.overwrite.as_ref() else {
         return;
     };
-    let Stage::Requested(archive) = &pending.stage else {
+    if !matches!(pending.stage, Stage::Requested(..)) {
         return;
-    };
+    }
     let ours = target.is_some_and(|t| same_folder_name(&t, &pending.folder));
     let (true, Some((roots, running))) = (ours, roots) else {
         tracing::debug!(
@@ -170,46 +165,77 @@ pub(super) fn run_between(world: &mut World) {
         );
         return;
     };
-    let started = Instant::now();
-    let result = install_into(
-        &roots,
+    let Some(Pending {
+        folder,
+        stage: Stage::Requested(archive, reply),
+    }) = desk.overwrite.take()
+    else {
+        return;
+    };
+    let down = OverwriteAnswer::Down {
         archive,
-        pending.target_ghost.as_deref(),
-        running.as_deref(),
-    );
-    let ms = started.elapsed().as_millis() as u64;
-    tracing::info!(
-        event = "install_overwrite_done",
-        ms,
-        ok = result.is_ok(),
-        folder = %pending.folder,
-        "[install] 降ろした起動中のゴーストのフォルダへ展開しました"
-    );
-    pending.stage = Stage::Ran(result);
-    // 書き終えたので門の名前を手放す（背景のスレッドは返事を待って止まっている）。定常到達の前に
-    // 終了が始まっても、書く前にやめた書庫として記録させない。展開は UI スレッドで同期に走るので、
-    // 同じ UI スレッドの後始末が展開の最中に始まることはなく、書く段の出入りは門へ知らせない。
-    desk.gate.end();
+        roots,
+        running,
+    };
+    if !reply_to(reply, down) {
+        return;
+    }
+    desk.overwrite = Some(Pending {
+        folder,
+        stage: Stage::Extracting,
+    });
+    hold_between(world);
+}
+
+/// 背景のスレッドが展開し終えた: 段が「展開中」なら待たせた切替を続けて起こし、定常到達を待つ。
+/// 段が合わなければ（終了の後・切替の中止の後）warn を 1 件残してその場で返事をする。
+pub(super) fn extracted(world: &mut World, reply: ReplySender<()>) {
+    let mut desk = world.non_send_mut::<InstallDesk>();
+    let Some(pending) = desk
+        .overwrite
+        .as_mut()
+        .filter(|p| matches!(p.stage, Stage::Extracting))
+    else {
+        tracing::warn!(
+            event = "install_overwrite_unexpected",
+            folder = desk.overwrite.as_ref().map(|p| p.folder.as_str()),
+            "[install] 展開中でないのに展開し終えた知らせが来たので、切替は続けずに返事だけします"
+        );
+        reply_to(reply, ());
+        return;
+    };
+    pending.stage = Stage::Resumed(reply);
+    resume_between(world);
+}
+
+/// 背景のスレッドが倒れた: 展開の最中なら書庫を捨て、待たせた切替を続けて起こす。
+pub(super) fn on_worker_panicked(world: &mut World) {
+    let extracting = world
+        .non_send_mut::<InstallDesk>()
+        .overwrite
+        .take_if(|p| matches!(p.stage, Stage::Extracting))
+        .is_some();
+    if extracting {
+        resume_between(world);
+    }
 }
 
 /// 終了が始まった（`desk::discard_for_exit` から）: 預かった書庫を捨て、宛先のフォルダ名と段の語を
-/// 返す。展開し終えていれば結果を背景のスレッドへ返し、それ以外は返信端を落とす（背景のスレッドは
-/// 閉じた扱いで止まる）。以後の切替の道筋では展開しない。
+/// 返す。返信端は落とす（背景のスレッドは閉じた扱いで止まるか、書き終えていれば結果を手続きへ返す）。
+/// 待たせた切替は解かない（プロセスは終わるので起こさない）。
 pub(super) fn discard(desk: &mut InstallDesk) -> Option<(String, &'static str)> {
     let pending = desk.overwrite.take()?;
     let stage = match pending.stage {
-        Stage::Held(_) => "held",
-        Stage::Busy(_) => "busy",
-        Stage::Requested(_) => "requested",
-        Stage::Ran(result) => {
-            reply_to(pending.reply, Overwritten::Ran(result));
-            return Some((pending.folder, "ran"));
-        }
+        Stage::Held(..) => "held",
+        Stage::Busy(..) => "busy",
+        Stage::Requested(..) => "requested",
+        Stage::Extracting => "extracting",
+        Stage::Resumed(_) => "resumed",
     };
     Some((pending.folder, stage))
 }
 
-/// 定常到達: 「展開した」なら結果を背景のスレッドへ返して消す。「切替を頼んだ」のまま予約が消えて
+/// 定常到達: 「起こし直した」なら背景のスレッドへ返事をして消す。「切替を頼んだ」のまま予約が消えて
 /// いれば「預かった」へ戻し、「預かった」「別の切替の最中だった」なら切替を頼み直す。
 pub(super) fn on_steady(world: &mut World) {
     requeue_if_cancelled(world);
@@ -218,13 +244,14 @@ pub(super) fn on_steady(world: &mut World) {
     };
     match desk.overwrite.take() {
         Some(Pending {
-            stage: Stage::Ran(result),
-            reply,
+            stage: Stage::Resumed(reply),
             ..
-        }) => reply_to(reply, Overwritten::Ran(result)),
+        }) => {
+            reply_to(reply, ());
+        }
         Some(
             pending @ Pending {
-                stage: Stage::Held(_) | Stage::Busy(_),
+                stage: Stage::Held(..) | Stage::Busy(..),
                 ..
             },
         ) => {
@@ -245,7 +272,7 @@ pub(super) fn on_tick(world: &mut World) {
         matches!(
             desk.overwrite,
             Some(Pending {
-                stage: Stage::Busy(_),
+                stage: Stage::Busy(..),
                 ..
             })
         )
@@ -270,13 +297,13 @@ fn requeue_if_cancelled(world: &mut World) {
         return;
     };
     let stage = match pending.stage {
-        Stage::Requested(archive) => {
+        Stage::Requested(archive, reply) => {
             tracing::info!(
                 event = "install_overwrite_requeued",
                 folder = %pending.folder,
                 "[install] 頼んだ切替が中止されたので、書庫を預かり直して次の定常到達で頼み直します"
             );
-            Stage::Held(archive)
+            Stage::Held(archive, reply)
         }
         stage => stage,
     };

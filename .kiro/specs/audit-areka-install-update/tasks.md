@@ -49,7 +49,7 @@
   - _Dispatch: standard, effort high — 範囲の外のファイルの段を、形を変えずに分ける_
   - _Requirements: 3.1, 4.1, 4.2, 6.3, 6.4, 6.7, 6.13, 7.2, 7.6_
 
-- [ ] 1.6 起動中のゴーストへの展開を背景のスレッドへ出す（G7・指摘 13・62 の本体の側）
+- [x] 1.6 起動中のゴーストへの展開を背景のスレッドへ出す（G7・指摘 13・62 の本体の側）
   - `overwrite::Stage` を `Held`・`Busy`・`Requested`・`Extracting`・`Resumed` の 5 つにし、`run_between` は `hold_between` を呼んで「降ろした」を返すだけにする。返信が送れなければ印を消してその場で起こす。
   - 背景のスレッドは「降ろした」を受けて `enter_write` → `install_into` → `leave_write` → `end` を行い、`DeskAsk::Extracted` を頼んで定常の返事を待ってから `Ran(result)` を返す。`install_overwrite_done` は背景のスレッドが残す（design.md「上書きの 2 往復」）。
   - 窓口は `Extracted` で `resume_between` を呼ぶ。段が合わなければ `install_overwrite_unexpected` を残して返事だけする。`WorkerPanicked` を受けたとき段が `Extracting` なら `resume_between` を呼ぶ（1.2 の腕に足す）。終了では `Extracting` が `"extracting"` を返し、`Resumed` は返信端を落とす。
@@ -265,3 +265,5 @@
 - 1.4: 取得のスレッドの panic は表に無い語を足さず、既にある `install_fetch_failed` に理由を添えて残す（design.md の Components の `install_fetch_panicked` は使わない）。
 - 1.4 → 2.1: `doc/COMPAT_ARCHITECTURE.md:427` が消えた `fetch_for` を名指している。2.1 で 344 行と一緒にこの行も直し、5.5 の「COMPAT_ARCHITECTURE の差分は 344 行だけ」は 344・427 の 2 行として確かめる。
 - 1.5 → 1.6: 本体の側に「印を消す」公開の口は無い（`clear_hold` は `pub(super)`）。`run_between` は返信を送れたのを確かめてから `hold_between` を呼ぶ順にする。印を消す代わりに `resume_between` を呼ぶと `ghost_switch_no_hold` の warn が誤って出る。`ghost_switch.rs` は 970 行で上限まで 30 行。
+- 1.6 → 2.1: `doc/COMPAT_ARCHITECTURE.md:325` も「UI スレッドで展開する」と古い。2.1 で 344・427 と一緒に直し、5.5 の確かめは 325・344・427 の 3 行として数える。
+- 1.6 → 3.1: `desk_overwrite_between_tests.rs` の別スレッドの `answer.recv()` と `worker_tests.rs` の `asks.recv()`・`desk.join()` に上限の無い待ちが残る。3.1 で一緒に上限のある待ちへ替える。

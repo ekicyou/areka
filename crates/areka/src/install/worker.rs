@@ -2,8 +2,8 @@
 //!
 //! スレッド `install` は依頼を 1 件ずつ受けて [`run_order`] を走らせ、終わったら窓口へ知らせる。
 //! 本物の口 [`DeskPorts`] は、World に触る仕事を窓口（`desk`）への頼み [`DeskAsk`] と返信端で
-//! 頼んで返事を待つ。イベントの結果は kanade から直接受ける。利用条件の画面と、起動中の
-//! ゴースト以外の宛先への展開は、このスレッドで行う（UI を塞がない）。
+//! 頼んで返事を待つ。イベントの結果は kanade から直接受ける。利用条件の画面と書庫の展開（起動中の
+//! ゴーストへは、窓口が降ろしたと答えた後）は、このスレッドで行う（UI を塞がない）。
 //!
 //! 頼みの型はこのモジュールが定義し、窓口が読む。
 
@@ -12,6 +12,7 @@ use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::time::Instant;
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel, run_inbox, spawn_actor};
 use areka_ghost::BasewareRoots;
@@ -45,8 +46,10 @@ pub(crate) enum DeskAsk {
     Overwrite {
         archive: NarArchive,
         target_ghost: Option<String>,
-        reply: ReplySender<Overwritten>,
+        reply: ReplySender<OverwriteAnswer>,
     },
+    /// 降ろした起動中のゴーストへ展開し終えた（窓口は切替を続け、定常到達で答える）。
+    Extracted { reply: ReplySender<()> },
     /// 入れた後の記録。反映が済んでから答える。
     Record {
         record: InstalledRecord,
@@ -58,6 +61,18 @@ pub(crate) enum DeskAsk {
     WorkerPanicked,
     /// 取得のスレッドが URL を 1 件終えた（`panicked` ならスレッドは抜けたので、次の URL で起こし直す）。
     FetchDone { panicked: bool },
+}
+
+/// 上書きの頼みへの窓口の答え。
+pub(crate) enum OverwriteAnswer {
+    /// 降ろして全窓を閉じた（起こすのは展開し終えた答えまで待つ）。展開の宛先の並びと起動中のゴーストの場所。
+    Down {
+        archive: NarArchive,
+        roots: BasewareRoots,
+        running: Option<PathBuf>,
+    },
+    /// 宛先はもう起動中のゴーストではない（書庫を返す）。
+    NotRunning(NarArchive),
 }
 
 /// 依頼 1 件の守り手。倒れて落ちるときだけ、門を手放して窓口へ倒れを知らせる。
@@ -251,18 +266,47 @@ impl InstallPorts for DeskPorts {
         archive: NarArchive,
         target_ghost: Option<String>,
     ) -> Overwritten {
-        let overwritten = self
-            .ask(|reply| DeskAsk::Overwrite {
+        let folder = target_ghost
+            .clone()
+            .unwrap_or_else(|| archive.manifest().directory.clone());
+        let answer = self.ask(|reply| DeskAsk::Overwrite {
+            archive,
+            target_ghost: target_ghost.clone(),
+            reply,
+        });
+        let (archive, roots, running) = match answer {
+            None => return Overwritten::Closed,
+            Some(OverwriteAnswer::NotRunning(archive)) => return Overwritten::NotRunning(archive),
+            Some(OverwriteAnswer::Down {
                 archive,
-                target_ghost,
-                reply,
-            })
-            .unwrap_or(Overwritten::Closed);
-        // 書き終えた書庫を、完了の知らせを待つ間に「書く前にやめた」と記録させない。
-        if matches!(overwritten, Overwritten::Ran(_)) {
+                roots,
+                running,
+            }) => (archive, roots, running),
+        };
+        if !self.gate.enter_write() {
             self.gate.end();
+            return Overwritten::Closed;
         }
-        overwritten
+        let started = Instant::now();
+        let result = install_into(
+            &roots,
+            &archive,
+            target_ghost.as_deref(),
+            running.as_deref(),
+        );
+        // 書き終えた書庫を、完了の知らせを待つ間に「書く前にやめた」と記録させない。
+        self.gate.leave_write();
+        self.gate.end();
+        tracing::info!(
+            event = "install_overwrite_done",
+            ms = started.elapsed().as_millis() as u64,
+            ok = result.is_ok(),
+            folder = %folder,
+            "[install] 降ろした起動中のゴーストのフォルダへ展開しました"
+        );
+        // 書き終えているので、返事が閉じても（終了が始まった）結果を手続きへ返す。
+        let _ = self.ask(|reply| DeskAsk::Extracted { reply });
+        Overwritten::Ran(result)
     }
 
     fn warn_skipped(&mut self, title: &str, body: &str) {

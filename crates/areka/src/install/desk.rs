@@ -8,7 +8,7 @@
 //! ⑸ 預かった書庫の段を切替の予約の有無で見直す。入れた後の記録（受け皿・バルーンの
 //! 記憶・置換語）は反映を待ってから答える。
 //! 起動中のゴーストへ入れる一周（預かった書庫と段）は子の `overwrite` が持ち、ここは切替の道筋から
-//! 呼ばれる口 [`run_overwrite_between`]・[`on_steady`] を開けるだけ。
+//! 呼ばれる口 [`run_overwrite_between`]・[`on_steady`] と、背景のスレッドの展開の答えの腕を開けるだけ。
 //!
 //! イベントを送るのは、切替の予約が無い・終了が始まっていない・置き場のゴーストに kanade への
 //! 送出端がある tick で、送り先は送る時点の置き場のゴースト。定常かどうかの正本は kanade で、
@@ -155,7 +155,7 @@ pub(crate) fn on_steady(world: &mut World) {
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった宛先への切替の
-/// ときだけ UI スレッドで同期に展開する（それ以外は無操作）。
+/// ときだけ「降ろした」を背景のスレッドへ返し、展開し終えるまで起こすのを待たせる（それ以外は無操作）。
 pub(crate) fn run_overwrite_between(world: &mut World) {
     overwrite::run_between(world);
 }
@@ -335,7 +335,9 @@ fn answer(world: &mut World, ask: DeskAsk) {
             let mut desk = world.non_send_mut::<InstallDesk>();
             desk.busy = false;
             desk.worker = None;
+            overwrite::on_worker_panicked(world);
         }
+        DeskAsk::Extracted { reply } => overwrite::extracted(world, reply),
         DeskAsk::FetchDone { panicked } => {
             let mut desk = world.non_send_mut::<InstallDesk>();
             desk.fetching = false;
@@ -520,14 +522,16 @@ pub(crate) fn remember_balloon(world: &World, folder: String) {
     );
 }
 
-/// 背景のスレッドへ答える。スレッドが居なければ記録だけ残す。
-fn reply_to<T: Send>(reply: ReplySender<T>, value: T) {
-    if reply.send(value).is_err() {
+/// 背景のスレッドへ答える（答えられたら真）。スレッドが居なければ記録だけ残す。
+fn reply_to<T: Send>(reply: ReplySender<T>, value: T) -> bool {
+    let sent = reply.send(value).is_ok();
+    if !sent {
         tracing::debug!(
             event = "install_reply_unread",
             "[install] 背景のスレッドが答えを待っていません"
         );
     }
+    sent
 }
 
 /// 今のゴーストの素性（起動の文脈と置き場のゴーストから引く・どちらかが無ければ None）。
