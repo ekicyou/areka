@@ -10,9 +10,9 @@ use areka_update::{FetchError, Progress, UpdateError, UpdateOutcome};
 
 use super::refs::{
     self, EventNames, Numbering, ON_UPDATE_PROCESS_EXEC, ON_UPDATE_RESULT, ON_UPDATE_RESULT_EX,
-    Tail, TargetEnd,
+    Ref34, TargetEnd,
 };
-use super::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
+use super::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason, UpdateTail};
 
 /// 手続きが外とやり取りする口（本番は背景スレッドの口・テストは偽物）。観測の閉包の中から
 /// 同じ口で送るため、どれも `&self`。
@@ -29,7 +29,7 @@ pub(crate) trait UpdatePorts {
         observe: &mut dyn FnMut(&Progress),
     ) -> EngineRun;
     /// 同じゴーストの読み直しを窓口へ頼む（後送りの列を添える・先頭が読み直した後の起動の知らせ）。
-    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
+    fn request_reload(&self, ghost_dir: &Path, tail: UpdateTail);
     /// 標準の手続きが始まったと窓口へ知らせる（`OnUpdateProcessExec` の段を抜けた直後・要求 1 件につき高々 1 回）。
     fn standard_started(&self);
     /// 照会が通った後・対象を扱う前に、対象のフォルダを書ける所へ替える（本番はバルーンの写し）。
@@ -85,7 +85,6 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     );
     let mut end = OrderEnd::default();
 
-    // メニューからだけ `OnUpdateProcessExec`。
     if order.reason == UpdateReason::Manual {
         match send(
             ports,
@@ -138,7 +137,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     ports.prepare_targets(&mut targets);
 
     // 後送りの列: ゴーストの成功の締めを取っておき、最後に総括を足す。
-    let mut tail: Vec<(&'static str, Vec<String>)> = Vec::new();
+    let mut tail: UpdateTail = Vec::new();
     for spec in &targets {
         let target_end = run_target(spec, order.reason, &resources, numbering, ports, &mut tail);
         let abandoned = target_end == TargetEnd::Abandoned;
@@ -154,7 +153,6 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         }
     }
 
-    // 総括を列の最後へ（飛ばした対象は載せない・全部飛ばせば列は空で送らない）。
     let pairs: Vec<(&TargetSpec, &TargetEnd)> = targets.iter().zip(&end.ends).collect();
     let summary = refs::summary_refs(order.summary, &pairs);
     if summary.is_empty() {
@@ -173,7 +171,6 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     tail.push((id, summary));
     let count = tail.len();
 
-    // changed が 1 つでもあれば列を添えて読み直しを頼む（列は送らない）。
     if end.ends.iter().any(|e| matches!(e, TargetEnd::Changed(_))) {
         tracing::debug!(
             event = "update_tail_deferred",
@@ -184,14 +181,13 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         end.summarised = true;
         end.reload_requested = true;
         tracing::info!(
-            event = "update_reload_requested",
+            event = "update_reload_asked",
             ghost_dir = %order.ghost_dir.display(),
             "[update] 同じゴーストの読み直しを頼みました"
         );
         return end;
     }
 
-    // 読み直さないときは列を今のゴーストへ順に送る（閉じたら残りを捨てる）。
     for (id, references) in tail {
         if send(ports, id, references) == Raised::Closed {
             tracing::warn!(
@@ -221,17 +217,13 @@ fn run_target(
     resources: &GhostResources,
     numbering: Numbering,
     ports: &dyn UpdatePorts,
-    deferred: &mut Vec<(&'static str, Vec<String>)>,
+    deferred: &mut UpdateTail,
 ) -> TargetEnd {
-    let tail = Tail::new(spec.kind, reason);
+    let tail = Ref34::new(spec.kind, reason);
     let names = EventNames::for_kind(spec.kind);
 
-    // ゴーストは照会の値 → descript.txt、他は descript.txt。
     let resource = match spec.kind {
-        TargetKind::Ghost => resources
-            .homeurl
-            .as_deref()
-            .filter(|url| !url.trim().is_empty()),
+        TargetKind::Ghost => resources.homeurl.as_deref(),
         TargetKind::Shell | TargetKind::Balloon => None,
     };
     let Some(homeurl) = resource.or(spec.descript_homeurl.as_deref()) else {
@@ -268,7 +260,6 @@ fn run_target(
         return done(spec, TargetEnd::Abandoned);
     }
 
-    // 観測の中で進捗をイベントへ写して送る。閉じた後は送らない。
     let mut closed = false;
     let mut observe = |p: &Progress| {
         tracing::debug!(event = "update_progress", progress = ?p, "[update] 進捗");

@@ -27,7 +27,7 @@ const NAME_UPDATE: &str = "update";
 /// 名前で引くシェル・バルーンを更新する。
 const NAME_UPDATE_OTHER: &str = "updateother";
 
-/// 更新オプション（α では受けない）。`--option=…` は接頭辞で判定する。
+/// 更新オプション（受けない）。`--option=…` は接頭辞で判定する。
 const UPDATE_OPTIONS: [&str; 3] = ["checkonly", "testonly", "recovery"];
 const OPTION_PREFIX: &str = "--option=";
 const SHELL_PREFIX: &str = "--shell=";

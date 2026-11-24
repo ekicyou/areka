@@ -19,6 +19,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::UpdateDesk;
 use crate::sample_test_support::switch_rig;
+use crate::update::UpdateTail;
 use crate::update::worker::DeskAsk;
 use areka_runtime::spine::RecordedCall;
 use areka_session::boot_config::BootContext;
@@ -34,7 +35,7 @@ use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_s
 const TAIL_ROUNDS: usize = 4;
 
 /// 後送りの列（ゴーストの `OnUpdateComplete` → 総括）。
-fn tail() -> Vec<(&'static str, Vec<String>)> {
+fn tail() -> UpdateTail {
     vec![
         (
             "OnUpdateComplete",
@@ -81,7 +82,7 @@ fn running_a() -> SwitchRig {
 }
 
 /// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む。
-fn ask_reload(rig: &SwitchRig, ghost_dir: PathBuf, tail: Vec<(&'static str, Vec<String>)>) {
+fn ask_reload(rig: &SwitchRig, ghost_dir: PathBuf, tail: UpdateTail) {
     rig.world
         .non_send::<UpdateDesk>()
         .asks_tx

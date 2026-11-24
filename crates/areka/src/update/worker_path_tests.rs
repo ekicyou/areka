@@ -197,13 +197,14 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         rig.pump_input_until(|rig| rig.world.get_non_send::<SwitchInFlight>().is_some())
     });
     assert!(reserved, "読み直しの切替が予約される: {events:?}");
-    // 背景のスレッド `update`（`areka::update::procedure`）の同名の記録も窓に入るので、UI の窓口の記録だけ数える。
-    let desk_reloads = events
-        .iter()
-        .filter(|e| e.target == "areka::update::desk")
-        .filter(|e| e.field_str("event") == Some("update_reload_requested"))
-        .count();
-    assert_eq!(desk_reloads, 1, "{events:?}");
+    let count_of = |name: &str| {
+        events
+            .iter()
+            .filter(|e| e.field_str("event") == Some(name))
+            .count()
+    };
+    assert_eq!(count_of("update_reload_requested"), 1, "{events:?}");
+    assert_eq!(count_of("update_reload_asked"), 1, "{events:?}");
     // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
     // 成功した走行の残りを置く。
     let leftover = a_dir.join(".update-work").join("held-run");
@@ -321,6 +322,7 @@ fn a_none_round_requests_no_switch() {
     assert_eq!((a.len(), reserved), (1, false), "起こし直さない");
     for name in [
         "update_reload_requested",
+        "update_reload_asked",
         "update_reload_skipped",
         "ghost_switch_requested",
     ] {

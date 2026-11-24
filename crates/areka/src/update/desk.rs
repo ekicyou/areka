@@ -24,7 +24,10 @@ use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
-use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
+use super::{
+    RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason, UpdateTail,
+    trimmed_homeurl,
+};
 use crate::menu::captions::{QueryReply, send_query};
 use areka_session::boot_config::BootContext;
 use areka_session::exit_wait::WorkGate;
@@ -32,9 +35,6 @@ use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
-
-/// 後送りの列（ゴーストの成功の締め → 総括）。
-type Tail = Vec<(&'static str, Vec<String>)>;
 
 /// UI 側の窓口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct UpdateDesk {
@@ -62,7 +62,7 @@ pub(crate) struct UpdateDesk {
     homeurl_query: Option<ReplyReceiver<QueryReply>>,
     /// 受け付けた読み直しのゴーストのフォルダと後送りの列の残り（その切替が終わったら成功した走行の
     /// 残りを消し、列の残りを送る・失敗や中止なら捨てる）。
-    pub(super) after_switch: Option<(PathBuf, Tail)>,
+    pub(super) after_switch: Option<(PathBuf, UpdateTail)>,
 }
 
 impl UpdateDesk {
@@ -174,7 +174,7 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 列の行き先: `Accepted` ならゴーストのフォルダと列の残りを覚え、その切替が終わったら
 /// [`on_switch_end`] が残りを消して列の残りを送る／`argv`・`switching`・入口が受け付けない
 /// （`Busy`・`NotFound`・`NoContext`）なら列を今のゴーストへ送る／`closing`・`other_ghost` なら捨てる。
-fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
+fn reload(world: &mut World, ghost_dir: &Path, mut tail: UpdateTail) {
     let folder = match reload_folder(world, ghost_dir) {
         Ok(folder) => folder,
         Err(reason) => {
@@ -185,7 +185,6 @@ fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
                 "[update] 読み直しの条件を満たさないので、読み直しません（更新した中身は次の起動で効きます）"
             );
             match reason {
-                // 終了の後・別のゴーストへは送らない。
                 "closing" | "other_ghost" => drop_tail(&tail, reason),
                 _ => send_tail(world, tail, "no_reload"),
             }
@@ -226,7 +225,7 @@ fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
 
 /// 後送りの列を置き場のゴーストへ順に送る（返事を待たない・`refuse_executing` と同じ形）。空なら何もしない。
 /// 送れたら `info!(update_tail_sent, when, count)`、送出端が無い・途中で送れなくなったら残りを捨てる。
-fn send_tail(world: &World, tail: Tail, when: &'static str) {
+fn send_tail(world: &World, tail: UpdateTail, when: &'static str) {
     if tail.is_empty() {
         return;
     }
@@ -247,7 +246,7 @@ fn send_tail(world: &World, tail: Tail, when: &'static str) {
             reply: None,
         };
         if kanade.send(raise).is_err() {
-            let left: Tail = std::iter::once((id, Vec::new())).chain(rest).collect();
+            let left: UpdateTail = std::iter::once((id, Vec::new())).chain(rest).collect();
             return drop_tail(&left, "no_ghost");
         }
     }
@@ -518,9 +517,20 @@ fn peek_homeurl(world: &mut World) {
         Some(Err(e)) => Err(e.to_string()),
     };
     desk.homeurl_query = None;
-    let outcome = reply.map(|reply| reply.into_iter().find(|(id, _)| *id == "homeurl"));
+    let outcome = reply.map(|reply| {
+        reply
+            .into_iter()
+            .find(|(id, _)| *id == "homeurl")
+            .map(|(id, answer)| match answer {
+                ResourceOutcome::Value(v) => (
+                    id,
+                    trimmed_homeurl(&v).map_or(ResourceOutcome::NoContent, ResourceOutcome::Value),
+                ),
+                other => (id, other),
+            })
+    });
     match outcome {
-        Ok(Some((_, ResourceOutcome::Value(v)))) if !v.is_empty() => {
+        Ok(Some((_, ResourceOutcome::Value(v)))) => {
             tracing::debug!(event = "update_homeurl_copied", homeurl = %v, "[update] SHIORI の homeurl を写しました");
             desk.ghost_homeurl = Some(v);
         }
@@ -555,7 +565,7 @@ pub(crate) fn insert_running_desk_for_test(world: &mut World) {
 /// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む（テスト用・
 /// 捌くのは次の取り出しの系）。
 #[cfg(test)]
-pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: Tail) {
+pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: UpdateTail) {
     world
         .non_send::<UpdateDesk>()
         .asks_tx
@@ -695,6 +705,20 @@ fn skip(kind: TargetKind, reason: &'static str, what: &str) -> Option<TargetSpec
         "[update] 対象を解けないので飛ばします"
     );
     None
+}
+
+#[cfg(test)]
+pub(super) fn copy_homeurl_for_test(answer: ResourceOutcome) -> Option<String> {
+    let mut world = World::new();
+    let mut desk = UpdateDesk::new(Arc::new(WorkGate::default()));
+    let (reply, query) = areka_actor::reply_channel();
+    reply
+        .send(vec![("homeurl", answer)])
+        .expect("返事待ちは生きている");
+    desk.homeurl_query = Some(query);
+    world.insert_non_send(desk);
+    peek_homeurl(&mut world);
+    world.non_send::<UpdateDesk>().ghost_homeurl.clone()
 }
 
 #[cfg(test)]

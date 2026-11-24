@@ -24,7 +24,7 @@ use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_update::{Fetch, FetchError, Progress, UpdateRequest, WinHttpFetch};
 
 use super::procedure::{EngineRun, GhostResources, Raised, UpdatePorts, run_order};
-use super::{TargetKind, TargetSpec, UpdateOrder};
+use super::{TargetKind, TargetSpec, UpdateOrder, UpdateTail, trimmed_homeurl};
 use areka_session::exit_wait::WorkGate;
 
 /// 照会する SHIORI リソース（1 回の照会で 2 つ）。窓口の `homeurl` の照会も同じ名前を使う。
@@ -44,13 +44,13 @@ pub(crate) struct UpdateJob {
 /// 背景スレッドから窓口への頼み（返事は待たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeskAsk {
-    /// 標準の手続きが始まった（`OnUpdateProcessExec` に応えが無かった・照会の直前）。
+    /// 標準の手続きが始まった（メニューからは `OnUpdateProcessExec` に応えが無かったとき・台本からは送らずに・照会の直前）。
     Started,
     /// 同じゴーストを読み直す（全対象の後・`changed` が 1 つ以上）。`tail` は後送りの列（先頭が
     /// 読み直した後の起動の知らせ）。
     Reload {
         ghost_dir: PathBuf,
-        tail: Vec<(&'static str, Vec<String>)>,
+        tail: UpdateTail,
     },
     /// 依頼 1 件が終わった。
     OrderDone,
@@ -220,7 +220,7 @@ impl UpdatePorts for KanadePorts {
                 }
             };
             if id == HOMEURL {
-                found.homeurl = value;
+                found.homeurl = value.as_deref().and_then(trimmed_homeurl);
             } else {
                 found.useorigin1 = value;
             }
@@ -268,7 +268,7 @@ impl UpdatePorts for KanadePorts {
         EngineRun::Done(result)
     }
 
-    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>) {
+    fn request_reload(&self, ghost_dir: &Path, tail: UpdateTail) {
         ask_desk(
             &self.desk,
             DeskAsk::Reload {
@@ -316,3 +316,17 @@ fn ask_desk(desk: &Sender<DeskAsk>, ask: DeskAsk) {
 #[cfg(test)]
 #[path = "worker_tests.rs"]
 mod worker_tests;
+
+#[cfg(test)]
+pub(super) fn ports_for_test(kanade: Sender<KanadeMsg>) -> KanadePorts {
+    KanadePorts {
+        kanade,
+        gate: Arc::default(),
+        desk: std::sync::mpsc::channel().0,
+        new_fetch: winhttp_fetch(),
+        online: Box::leak(Box::default()),
+        online_guard: Cell::new(None),
+        roots: BasewareRoots::new(Vec::new()),
+        exe_dir: None,
+    }
+}

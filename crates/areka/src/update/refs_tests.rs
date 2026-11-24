@@ -130,7 +130,7 @@ fn progress_maps_to_events_for_ghost_and_shell() {
         (TargetKind::Ghost, UpdateReason::Manual, "OnUpdate"),
         (TargetKind::Shell, UpdateReason::Script, "OnUpdateOther"),
     ] {
-        let tail = Tail::new(kind, reason);
+        let tail = Ref34::new(kind, reason);
         let (k, r) = (kind.as_ref_str(), reason.as_ref_str());
         let names = EventNames::for_kind(kind);
         let n = Numbering::from_useorigin1(None);
@@ -209,7 +209,7 @@ fn progress_maps_to_events_for_ghost_and_shell() {
 /// `useorigin1` の `1`・`0`・返事なし（と空）で番号と件数の読み。
 #[test]
 fn useorigin1_shifts_ready_count_and_download_numbers() {
-    let tail = Tail::new(TargetKind::Ghost, UpdateReason::Script);
+    let tail = Ref34::new(TargetKind::Ghost, UpdateReason::Script);
     let names = EventNames::for_kind(TargetKind::Ghost);
     for (value, ready0, index1, last2) in [
         (Some("1"), "3", "1", "3"),
@@ -249,7 +249,7 @@ fn useorigin1_shifts_ready_count_and_download_numbers() {
 fn process_exec_begin_complete_failure_and_executing_refs() {
     assert_eq!(process_exec_refs(UpdateReason::Manual), ["manual"]);
 
-    let tail = Tail::new(TargetKind::Balloon, UpdateReason::Script);
+    let tail = Ref34::new(TargetKind::Balloon, UpdateReason::Script);
     assert_eq!(
         begin_refs("えもバルーン", Path::new(r"C:\areka\balloon\emo"), tail),
         s(&[

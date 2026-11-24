@@ -1,7 +1,7 @@
 //! 読み取りだけの走りの更新の断り。
 //!
-//! 段・預かり・背景のスレッドには触れず、ネットワークへも行かない。readonly の SSP の測り
-//! （2026-10-23）どおり、成否の欄が空の `OnUpdateResultEx` → `OnUpdateResult` だけを送る。
+//! 段・預かり・背景のスレッドには触れず、ネットワークへも行かない。readonly の SSP と同じく、
+//! 成否の欄が空の `OnUpdateResultEx` → `OnUpdateResult` だけを送る。
 
 use areka_kanade::{KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;

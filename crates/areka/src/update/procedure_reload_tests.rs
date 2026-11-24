@@ -85,7 +85,7 @@ fn reload_is_requested_once_after_all_targets_with_the_tail() {
         assert_eq!(end.ends, vec![TargetEnd::Unchanged, TargetEnd::Changed(2)]);
         assert!(end.summarised);
         assert!(end.reload_requested);
-        let asked = with_event(&events, "update_reload_requested");
+        let asked = with_event(&events, "update_reload_asked");
         assert_eq!(asked.len(), 1, "{events:?}");
         assert_eq!(asked[0].level, Level::INFO);
         let deferred = with_event(&events, "update_tail_deferred");
@@ -172,7 +172,7 @@ fn no_reload_sends_the_tail_at_the_end_when_nothing_changed() {
         assert!(end.summarised, "{label}");
         assert!(!end.reload_requested, "{label}");
         assert!(
-            with_event(&events, "update_reload_requested").is_empty(),
+            with_event(&events, "update_reload_asked").is_empty(),
             "{label}"
         );
         let sent = with_event(&events, "update_tail_sent");

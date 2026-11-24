@@ -94,7 +94,7 @@
   - _Dispatch: standard — 手続きの止め方に旗を足す新しい分岐がある_
   - _Requirements: 3.1, 4.1, 4.2, 4.8, 6.2, 7.7_
 
-- [ ] 2.4 更新の本番の小さな直しを入れる（G10・指摘 24・25・76・77）
+- [x] 2.4 更新の本番の小さな直しを入れる（G10・指摘 24・25・76・77）
   - `homeurl` を 2 か所で `trim` してから空を None にし、手続きの重ねた `filter` を消す（24）。
   - 背景の側の語を `update_reload_asked` に改め、`procedure_reload_tests.rs:88・175`・`worker_path_tests.rs:200-205・323` と台帳 `doc/ukadoc-coverage/ledger/shiori.toml:7188` を同じ変更で直す（25）。
   - 列の型の別名を `update/mod.rs` に置いて 7 か所で使い、`refs::Tail` を `Ref34` に改める（76）。なぞるだけのコメントと古い doc を直す（77・`desk_tests.rs:3-5` を含む）。

@@ -24,6 +24,15 @@ mod refs;
 pub(crate) mod update_cue;
 mod worker;
 
+/// 後送りの列（イベント名と Reference の組を送る順に）。
+pub(crate) type UpdateTail = Vec<(&'static str, Vec<String>)>;
+
+/// `homeurl` の値の前後の空白を落とし、空なら None。
+fn trimmed_homeurl(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetKind {
@@ -230,6 +239,9 @@ pub(crate) fn register(world: &mut World) {
         .add_systems(Input, desk::drain.after(dispatch_pointer_events));
     exit_wait::register_gate(world, "update", gate, desk::discard_for_exit);
 }
+
+#[cfg(test)]
+mod homeurl_tests;
 
 #[cfg(test)]
 mod update_tests;

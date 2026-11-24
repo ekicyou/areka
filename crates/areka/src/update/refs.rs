@@ -6,7 +6,7 @@ use std::path::Path;
 
 use areka_update::{FailReason, FetchError, Progress, UpdateOutcome};
 
-use super::{SummaryKind, TargetKind, TargetSpec, UpdateReason};
+use super::{SummaryKind, TargetKind, TargetSpec, UpdateReason, UpdateTail};
 use crate::install::judge::SEPARATOR;
 
 // 送る 19 語（正典に在る語だけ）。
@@ -121,12 +121,12 @@ impl Numbering {
 
 /// 対象の全イベントに同じ値で載せる Reference3（種別）・Reference4（理由）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Tail {
+pub(crate) struct Ref34 {
     pub kind: &'static str,
     pub reason: &'static str,
 }
 
-impl Tail {
+impl Ref34 {
     pub(crate) fn new(kind: TargetKind, reason: UpdateReason) -> Self {
         Self {
             kind: kind.as_ref_str(),
@@ -152,7 +152,7 @@ pub(crate) enum TargetEnd {
 }
 
 /// Reference0〜2 の後ろに種別と理由を足した 5 欄。
-fn five(r0: String, r1: String, r2: String, tail: Tail) -> Vec<String> {
+fn five(r0: String, r1: String, r2: String, tail: Ref34) -> Vec<String> {
     vec![r0, r1, r2, tail.kind.to_owned(), tail.reason.to_owned()]
 }
 
@@ -162,7 +162,7 @@ pub(crate) fn process_exec_refs(reason: UpdateReason) -> Vec<String> {
 }
 
 /// `OnUpdateBegin` の Reference（名前・フォルダ・空・種別・理由）。
-pub(crate) fn begin_refs(name: &str, dir: &Path, tail: Tail) -> Vec<String> {
+pub(crate) fn begin_refs(name: &str, dir: &Path, tail: Ref34) -> Vec<String> {
     five(
         name.to_owned(),
         dir.display().to_string(),
@@ -176,8 +176,8 @@ pub(crate) fn progress_events(
     p: &Progress,
     names: &EventNames,
     n: Numbering,
-    tail: Tail,
-) -> Vec<(&'static str, Vec<String>)> {
+    tail: Ref34,
+) -> UpdateTail {
     match p {
         Progress::DiffDecided { files } if !files.is_empty() => {
             let refs = five(n.last(files.len()), files.join(","), String::new(), tail);
@@ -211,7 +211,7 @@ pub(crate) fn progress_events(
 }
 
 /// `OnUpdateComplete` の Reference（`none`／`changed` と入れ替えた一覧）。
-pub(crate) fn complete_refs(outcome: &UpdateOutcome, tail: Tail) -> Vec<String> {
+pub(crate) fn complete_refs(outcome: &UpdateOutcome, tail: Ref34) -> Vec<String> {
     let (word, list) = match outcome {
         UpdateOutcome::Unchanged { .. } => ("none", String::new()),
         UpdateOutcome::Updated { placed, .. } => ("changed", placed.join(",")),
@@ -220,7 +220,7 @@ pub(crate) fn complete_refs(outcome: &UpdateOutcome, tail: Tail) -> Vec<String> 
 }
 
 /// `OnUpdateFailure` の Reference（理由の語・原因のファイル〔無ければ空〕）。
-pub(crate) fn failure_refs(word: &str, file: Option<&str>, tail: Tail) -> Vec<String> {
+pub(crate) fn failure_refs(word: &str, file: Option<&str>, tail: Ref34) -> Vec<String> {
     five(
         word.to_owned(),
         file.unwrap_or_default().to_owned(),
@@ -231,7 +231,7 @@ pub(crate) fn failure_refs(word: &str, file: Option<&str>, tail: Tail) -> Vec<St
 
 /// 二重起動を断る `OnUpdateFailure` の Reference（理由 `executing`）。
 pub(crate) fn executing_refs(kind: TargetKind, reason: UpdateReason) -> Vec<String> {
-    failure_refs("executing", None, Tail::new(kind, reason))
+    failure_refs("executing", None, Ref34::new(kind, reason))
 }
 
 /// 失敗理由の表。網羅の分岐＝種類が増えればビルドが止まる。
