@@ -27,7 +27,9 @@ use super::*;
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use areka_runtime::spine::RecordedCall;
+use areka_runtime::spine::{
+    Progress, RecordedCall, WaitFailure, join_bounded, join_thread_bounded, wait_recv,
+};
 use areka_session::exit_wait::{begin_close, register_gate};
 use areka_session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
@@ -38,6 +40,11 @@ const EVENT: &str = "OnInstallBegin";
 
 fn refs() -> Vec<String> {
     vec!["a".to_owned(), "b".to_owned()]
+}
+
+/// 窓口の代わりが次の頼みを待つ（上限つき）。
+fn next_ask(asks: &Receiver<DeskAsk>) -> Result<DeskAsk, WaitFailure> {
+    wait_recv("窓口への頼み", Progress::Unknown, asks)
 }
 
 /// 本物の口と、窓口の代わりの受信端と、門。
@@ -67,7 +74,7 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
                 references,
                 resend,
                 reply,
-            }) = asks.recv()
+            }) = next_ask(&asks)
             else {
                 panic!("イベントの頼みが届く");
             };
@@ -78,12 +85,15 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
                 let _ = reply.send(outcome);
             }
         }
-        assert!(asks.recv().is_err(), "頼みは答えの数だけ");
+        assert!(
+            matches!(next_ask(&asks), Err(WaitFailure::Disconnected { .. })),
+            "頼みは答えの数だけ"
+        );
         resends
     });
     let (raised, events) = capture(|| ports.raise(EVENT, refs()));
     drop(ports);
-    let resends = desk.join().expect("窓口の代わりが最後まで走る");
+    let resends = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
     (raised, resends, events)
 }
 
@@ -132,14 +142,14 @@ fn ports_after_facts(root: &Path) -> (DeskPorts, Receiver<DeskAsk>, Arc<WorkGate
     // 口が倒れたら `ports` と一緒に送出端が落ち、窓口の代わりも受け取りで倒れて終わる
     // （scope で包むと、倒れた口が送出端を握ったまま窓口の代わりを待って止まる）。
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Facts { reply }) = asks.recv() else {
+        let Ok(DeskAsk::Facts { reply }) = next_ask(&asks) else {
             panic!("素性の頼みが届く");
         };
         let _ = reply.send(Some(facts));
         asks
     });
     assert_eq!(ports.ghost_facts(), Some(facts_at(root)));
-    let asks = desk.join().expect("窓口の代わりが最後まで走る");
+    let asks = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
     (ports, asks, gate)
 }
 
@@ -239,8 +249,6 @@ fn every_port_reads_a_missing_desk_as_closed() {
 /// 窓口は場所だけを答え、`sakura.name`・`install.accept` は口がその場所の descript から読む。
 #[test]
 fn facts_read_the_install_keys_from_the_answered_dir() {
-    use areka_runtime::spine::join_thread_bounded;
-
     let root = TempPath::new("install-worker-facts");
     let master = root.path().join("ghost").join("master");
     std::fs::create_dir_all(&master).unwrap();
@@ -252,7 +260,7 @@ fn facts_read_the_install_keys_from_the_answered_dir() {
     let (mut ports, asks, _gate) = ports();
     let facts = facts_at(root.path());
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Facts { reply }) = asks.recv() else {
+        let Ok(DeskAsk::Facts { reply }) = next_ask(&asks) else {
             panic!("素性の頼みが届く");
         };
         let _ = reply.send(Some(facts));
@@ -370,7 +378,7 @@ fn worker_runs_an_order_and_reports_done() {
     // 読めない書庫: 始まりの知らせ → 失敗の知らせ → 依頼の終わり。
     let mut raised = Vec::new();
     loop {
-        match asks.recv().expect("頼みが届く") {
+        match next_ask(&asks).expect("頼みが届く") {
             DeskAsk::Raise { id, reply, .. } => {
                 raised.push(id);
                 let _ = reply.send(RaiseOutcome::NoReply);
@@ -391,7 +399,7 @@ fn worker_runs_an_order_and_reports_done() {
     );
 
     drop(orders);
-    handle.join().expect("スレッドが終わる");
+    join_bounded("install-worker", handle).expect("スレッドが終わる");
 }
 
 /// 本番の結線: 手続きは書庫の始め（`OnInstallBegin` を送る前）に門へ書庫のパスを置く。
@@ -412,7 +420,7 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
         .expect("スレッドが受け取る");
 
     // 始まりの知らせの頼みを受け取るが、まだ答えない（スレッドは返事待ちで止まっている）。
-    let DeskAsk::Raise { id, reply, .. } = asks.recv().expect("頼みが届く") else {
+    let DeskAsk::Raise { id, reply, .. } = next_ask(&asks).expect("頼みが届く") else {
         panic!("最初の頼みはイベント");
     };
     assert_eq!(id, "OnInstallBegin");
@@ -429,11 +437,11 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
 
     drop(reply);
     assert!(
-        matches!(asks.recv(), Ok(DeskAsk::OrderDone)),
+        matches!(next_ask(&asks), Ok(DeskAsk::OrderDone)),
         "閉じた扱いで抜けて依頼の終わりが届く"
     );
     drop(orders);
-    handle.join().expect("スレッドが終わる");
+    join_bounded("install-worker", handle).expect("スレッドが終わる");
 }
 
 /// 窓口が「降ろした」と答えたら、このスレッドで起動中のゴーストのフォルダへ展開して門を手放し、
@@ -450,7 +458,7 @@ fn overwrite_extracts_after_down_and_waits_for_the_desk() {
     let roots = BasewareRoots::single(root.path().to_path_buf());
     let installed = root.path().join("ghost").join("newbie");
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = asks.recv() else {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = next_ask(&asks) else {
             panic!("上書きの頼みが届く");
         };
         let _ = reply.send(OverwriteAnswer::Down {
@@ -458,7 +466,7 @@ fn overwrite_extracts_after_down_and_waits_for_the_desk() {
             roots,
             running: None,
         });
-        let Ok(DeskAsk::Extracted { reply }) = asks.recv() else {
+        let Ok(DeskAsk::Extracted { reply }) = next_ask(&asks) else {
             panic!("展開し終えた知らせが届く");
         };
         let placed = installed.is_dir();
@@ -468,7 +476,7 @@ fn overwrite_extracts_after_down_and_waits_for_the_desk() {
     let (overwritten, events) = capture(|| ports.overwrite_running(archive, None));
     assert!(matches!(overwritten, Overwritten::Ran(Ok(_))));
     assert!(
-        desk.join().expect("窓口の代わりが最後まで走る"),
+        join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る"),
         "知らせより前に展開している"
     );
     let done = events_named(&events, "install_overwrite_done");
@@ -498,7 +506,7 @@ fn overwrite_after_closing_writes_nothing() {
 
     let roots = BasewareRoots::single(root.path().to_path_buf());
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = asks.recv() else {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = next_ask(&asks) else {
             panic!("上書きの頼みが届く");
         };
         let _ = begin_close(&mut world);
@@ -513,7 +521,7 @@ fn overwrite_after_closing_writes_nothing() {
         ports.overwrite_running(archive, None),
         Overwritten::Closed
     ));
-    let asks = desk.join().expect("窓口の代わりが最後まで走る");
+    let asks = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
     assert!(asks.try_recv().is_err(), "窓口へ知らせない");
     assert_eq!(entries_under(root.path()), 0, "根の下に何も置かない");
 }

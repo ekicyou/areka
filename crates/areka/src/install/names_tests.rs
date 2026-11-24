@@ -9,6 +9,7 @@
 //! `resolve_system_var` で展開する。起こし直しは偽の SHIORI の土台で本物の起動の結線を通す。
 
 use areka_ghost::sylphya_wiring::{from_sylphya_provider, spawn_ghost_sylphya};
+use areka_runtime::spine::{SPIN_WAIT, join_bounded};
 use areka_sakura::sysvar::{ResolvedVar, resolve_system_var};
 use areka_sylphya::ScopeRoots;
 use log_capture_kit::{CapturedEvent, capture};
@@ -23,10 +24,13 @@ fn resolved(names: &LastInstallNames) -> (ResolvedVar, ResolvedVar) {
     let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
     let asker = AskerId::new("ghost/install-names");
     publish(&parts.publisher, asker.clone(), names);
-    parts.publisher.barrier().expect("書き手は生きている");
+    parts
+        .publisher
+        .barrier_within(SPIN_WAIT)
+        .expect("書き手は生きている");
     let snapshot = from_sylphya_provider(parts.reader.clone(), asker)();
     parts.publisher.close();
-    let _ = parts.handle.join();
+    join_bounded("sylphya", parts.handle).expect("書き手は閉じて終わる");
     (
         resolve_system_var("lastghostname", &snapshot),
         resolve_system_var("lastobjectname", &snapshot),

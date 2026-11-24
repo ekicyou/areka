@@ -157,7 +157,7 @@
 
 - [ ] 3. テストの待ち・写し・番号を直す
 
-- [ ] 3.1 `install/` のテストの期限の無い待ちを無くす（G2・指摘 19〜21・件 4）
+- [x] 3.1 `install/` のテストの期限の無い待ちを無くす（G2・指摘 19〜21・件 4）
   - `names_tests.rs:29` を `join_bounded("sylphya", parts.handle).expect(..)` にする（19・件 4）。
   - `install_cue_tests.rs`・`worker_tests.rs` の待ちを `join_thread_bounded`・`recv_timeout`・`wait_recv`・`join_bounded` にする（20・21）。
   - 3 つのファイルに上限の無い待ちと `let _ = …join()` が残らず、テストが全部緑。

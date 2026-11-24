@@ -10,7 +10,7 @@ use std::thread;
 use super::*;
 use crate::install::destination::install_into;
 use crate::install::worker::{DeskAsk, OrderGuard};
-use areka_runtime::spine::join_thread_bounded;
+use areka_runtime::spine::{SPIN_WAIT, join_thread_bounded};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::GhostSlot;
 
@@ -215,7 +215,10 @@ fn a_worker_that_panics_while_extracting_lets_the_switch_boot_the_ghost() {
                 reply,
             })
             .expect("窓口の頼みの受信端は生きている");
-            let down = matches!(answer.recv(), Ok(OverwriteAnswer::Down { .. }));
+            let down = matches!(
+                answer.recv_timeout(SPIN_WAIT),
+                Ok(OverwriteAnswer::Down { .. })
+            );
             panic!("展開の最中に倒れる（降ろした: {down}）");
         });
         let finished = rig.pump_talking_until(|rig| {
