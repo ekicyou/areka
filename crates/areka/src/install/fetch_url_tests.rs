@@ -17,6 +17,7 @@ use tracing::Level;
 
 use super::{
     DownloadError, FetchTools, MakeFetch, download, download_dir, fetch_and_send, spawn_fetcher,
+    write_body,
 };
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::worker::DeskAsk;
@@ -388,4 +389,56 @@ fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
             script_path(rx.try_recv().expect(label));
         }
     }
+}
+
+/// 逆斜線・`..`・`:` を含む末尾も一時フォルダの直下の 1 つの名前になる。
+#[test]
+fn download_keeps_a_traversing_tail_inside_the_dir() {
+    let tmp = TempPath::new("fetch-url-traverse");
+    let dir = tmp.child("download");
+    let url = "https://example.com/a/..\\..\\x:y.nar";
+    let fake = FakeFetch::new().serve(url, BODY);
+
+    let path = download(url, &fake, &dir, SystemTime::now()).expect("落とせる");
+
+    assert_eq!(path.parent(), Some(dir.as_path()));
+    assert_name_shape(&path, ".._.._x_y.nar");
+}
+
+/// 消す古いファイルが無ければ `install_fetch_swept` を出さない。
+#[test]
+fn nothing_swept_logs_no_swept_record() {
+    let tmp = TempPath::new("fetch-url-swept-none");
+    let dir = tmp.child("download");
+    let fake = FakeFetch::new().serve(URL, BODY);
+
+    let (result, events) = capture(|| download(URL, &fake, &dir, SystemTime::now()));
+
+    result.expect("落とせる");
+    assert!(
+        events
+            .iter()
+            .all(|e| e.field_str("event") != Some("install_fetch_swept")),
+        "{events:?}"
+    );
+}
+
+/// 書きかけで書き込みが失敗したら、そのファイルを残さない。
+#[test]
+fn failed_write_leaves_no_partial_file() {
+    let tmp = TempPath::new("fetch-url-partial");
+    let dir = tmp.child("download");
+    fs::create_dir_all(&dir).expect("フォルダを作れる");
+    let path = dir.join("partial.nar");
+
+    let result = write_body(&path, BODY, |path, bytes| {
+        fs::write(path, &bytes[..2])?;
+        Err(std::io::Error::other("ディスクがいっぱい"))
+    });
+
+    assert!(
+        matches!(&result, Err(DownloadError::Io { path: p, .. }) if *p == path),
+        "{result:?}"
+    );
+    assert!(!path.exists(), "書きかけは消える");
 }

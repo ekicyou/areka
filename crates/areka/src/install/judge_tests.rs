@@ -514,6 +514,8 @@ fn script_request_url_passes_with_nar_or_no_kind() {
     for url in [
         "https://example.com/hana.nar",
         "http://example.com/hana.nar",
+        "HTTPS://example.com/hana.nar",
+        "Http://example.com/hana.nar",
     ] {
         let expected = Ok(ScriptRequest::Url(url.to_owned()));
         assert_eq!(script_request(&["url", url]), expected, "省略: {url}");

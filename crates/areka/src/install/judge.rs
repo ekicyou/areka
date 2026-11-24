@@ -243,9 +243,7 @@ pub(crate) fn script_request(arguments: &[&str]) -> Result<ScriptRequest, Script
         ["url", _, kind, ..] if *kind != "nar" => Err(ScriptRefusal::UnsupportedKind {
             found: (*kind).to_owned(),
         }),
-        ["url", url, ..] if url.starts_with("http://") || url.starts_with("https://") => {
-            Ok(ScriptRequest::Url((*url).to_owned()))
-        }
+        ["url", url, ..] if is_http(url) => Ok(ScriptRequest::Url((*url).to_owned())),
         ["url", rest @ ..] => Err(ScriptRefusal::BadUrl {
             found: rest.first().copied().unwrap_or_default().to_owned(),
         }),
@@ -253,6 +251,14 @@ pub(crate) fn script_request(arguments: &[&str]) -> Result<ScriptRequest, Script
             found: arguments.first().copied().unwrap_or_default().to_owned(),
         }),
     }
+}
+
+/// `http://`／`https://` で始まるか（スキームは大文字小文字を問わない）。
+fn is_http(url: &str) -> bool {
+    ["http://", "https://"].iter().any(|scheme| {
+        url.get(..scheme.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(scheme))
+    })
 }
 
 #[cfg(test)]

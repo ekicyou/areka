@@ -1,6 +1,7 @@
 //! 手続きを走らせる背景のスレッドと、窓口へ頼んで返事を待つ本物の口。
 //!
-//! スレッド `install` は依頼を 1 件ずつ受けて [`run_order`] を走らせ、終わったら窓口へ知らせる。
+//! スレッド `install` は依頼を 1 件ずつ受けて [`run_order`] を走らせ、台本の取得で落とした書庫を消し、
+//! 終わったら窓口へ知らせる。
 //! 本物の口 [`DeskPorts`] は、World に触る仕事を窓口（`desk`）への頼み [`DeskAsk`] と返信端で
 //! 頼んで返事を待つ。イベントの結果は kanade から直接受ける。利用条件の画面と書庫の展開（起動中の
 //! ゴーストへは、窓口が降ろしたと答えた後）は、このスレッドで行う（UI を塞がない）。
@@ -19,11 +20,12 @@ use areka_ghost::BasewareRoots;
 use areka_kanade::RaiseOutcome;
 use areka_nar::{InstallOutcome, NarArchive, NarError};
 
-use super::InstallOrder;
 use super::destination::install_into;
+use super::fetch_url::download_dir;
 use super::judge::GhostFacts;
 use super::procedure::{InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
 use super::terms::TermsNotice;
+use super::{InstallOrder, InstallOrigin};
 use areka_session::alert::{self, YesNo};
 use areka_session::exit_wait::WorkGate;
 
@@ -114,6 +116,7 @@ pub(crate) fn spawn_worker(
                 desk: desk.clone(),
             };
             let ends = run_order(&order, &mut ports);
+            remove_downloaded(&order, &download_dir());
             // 断った・拒否・失敗・途中でやめた書庫の名前を門に残さない。
             gate.end();
             tracing::debug!(event = "install_order_done", ends = ?ends, "[install] 依頼を終えました");
@@ -126,6 +129,26 @@ pub(crate) fn spawn_worker(
             Ok::<_, Infallible>(ControlFlow::Continue(()))
         });
     })
+}
+
+/// 出どころが台本で `dir` の直下にある書庫を消す（消せなければ取得の 7 日の掃除に任せる）。
+pub(super) fn remove_downloaded(order: &InstallOrder, dir: &Path) {
+    if order.origin != InstallOrigin::Script {
+        return;
+    }
+    for archive in &order.archives {
+        if archive.file_name().is_none() || archive.parent() != Some(dir) {
+            continue;
+        }
+        if let Err(err) = std::fs::remove_file(archive) {
+            tracing::debug!(
+                event = "install_fetch_sweep_skipped",
+                path = %archive.display(),
+                error = %err,
+                "[install] 落とした書庫を消せないので、7 日の掃除に任せます"
+            );
+        }
+    }
 }
 
 /// 本物の口: 窓口へ頼んで返事を待つ。

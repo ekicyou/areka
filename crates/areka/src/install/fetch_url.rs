@@ -3,10 +3,12 @@
 //! URL の本文を areka 専用の一時フォルダ（`%TEMP%\areka\download\`）へ落とし、落とし終えたら
 //! 出どころ「台本」の生のインストールの要求を窓口へ送る。取得は窓口が最初の URL で起こす長く生きる
 //! スレッド `install-fetch` が 1 件ずつ行い、門 `install-fetch` に URL を置く（終了では待たずに
-//! 記録だけ残す・落としかけの物は次の取得の 7 日の掃除に任せる）。
+//! 記録だけ残す）。入れ終えた書庫は背景のスレッド `install` が消し、落としかけと消せなかった物は
+//! 次の取得の 7 日の掃除に任せる。
 
 use std::fmt::Display;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -84,11 +86,32 @@ pub(crate) fn download(
     sweep_old(dir, now);
     let bytes = fetch.get(url)?;
     let path = dir.join(file_name(url));
-    fs::write(&path, bytes).map_err(|source| DownloadError::Io {
-        path: path.clone(),
-        source,
-    })?;
+    write_body(&path, &bytes, |path, bytes| fs::write(path, bytes))?;
     Ok(path)
+}
+
+/// `write` で `path` に本文を書く。失敗したら書きかけを消す。
+fn write_body(
+    path: &Path,
+    bytes: &[u8],
+    write: impl FnOnce(&Path, &[u8]) -> io::Result<()>,
+) -> Result<(), DownloadError> {
+    write(path, bytes).map_err(|source| {
+        if let Err(err) = fs::remove_file(path)
+            && err.kind() != io::ErrorKind::NotFound
+        {
+            tracing::debug!(
+                event = "install_fetch_sweep_skipped",
+                path = %path.display(),
+                error = %err,
+                "[install] 書きかけの一時ファイルを消せないので、7 日の掃除に任せます"
+            );
+        }
+        DownloadError::Io {
+            path: path.to_path_buf(),
+            source,
+        }
+    })
 }
 
 /// `<pid>-<連番>-<URL の末尾の安全な名前>`。
@@ -113,7 +136,7 @@ fn file_name(url: &str) -> String {
     format!("{}-{serial}-{safe}", std::process::id())
 }
 
-/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消し、消した数を返す。
+/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消し、消した数を返す（0 なら記録しない）。
 /// 消せなければ `debug!` で飛ばす（次の取得でまた試す）。
 fn sweep_old(dir: &Path, now: SystemTime) -> usize {
     let Some(limit) = now.checked_sub(KEEP) else {
@@ -153,12 +176,14 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
             ),
         }
     }
-    tracing::info!(
-        event = "install_fetch_swept",
-        dir = %dir.display(),
-        count = removed,
-        "[install] 7 日より古い一時ファイルを消しました"
-    );
+    if removed > 0 {
+        tracing::info!(
+            event = "install_fetch_swept",
+            dir = %dir.display(),
+            count = removed,
+            "[install] 7 日より古い一時ファイルを消しました"
+        );
+    }
     removed
 }
 

@@ -571,3 +571,34 @@ fn production_path_sends_no_legacy_complete_after_a_complete_ex_script() {
     );
     assert_eq!(last.as_deref(), Some("newbie"));
 }
+
+/// 消すのは出どころが台本で置き場の直下の書庫だけ。置き場の外と台本でない依頼の書庫は残る。
+#[test]
+fn remove_downloaded_removes_only_script_archives_under_the_dir() {
+    let tmp = TempPath::new("install-remove-downloaded");
+    let dir = tmp.child("download");
+    let outside = tmp.child("elsewhere");
+    std::fs::create_dir_all(&dir).expect("フォルダを作れる");
+    std::fs::create_dir_all(&outside).expect("フォルダを作れる");
+    let fetched = dir.join("fetched.nar");
+    let foreign = outside.join("foreign.nar");
+    let menu = dir.join("menu.nar");
+    for path in [&fetched, &foreign, &menu] {
+        std::fs::write(path, b"nar").expect("書ける");
+    }
+
+    let script = InstallOrder {
+        archives: vec![fetched.clone(), foreign.clone()],
+        origin: InstallOrigin::Script,
+    };
+    remove_downloaded(&script, &dir);
+    let by_menu = InstallOrder {
+        archives: vec![menu.clone()],
+        origin: InstallOrigin::Menu,
+    };
+    remove_downloaded(&by_menu, &dir);
+
+    assert!(!fetched.exists(), "台本の置き場の直下の物は消える");
+    assert!(foreign.exists(), "置き場の外の物は残る");
+    assert!(menu.exists(), "台本でない依頼の物は残る");
+}

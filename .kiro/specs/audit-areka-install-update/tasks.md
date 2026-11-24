@@ -68,7 +68,7 @@
 
 - [ ] 2. 本番の小さな直しを入れる
 
-- [ ] 2.1 取得の小さな直しと文書の行を直す（G6・指摘 22・65〜68・12 の文書）
+- [x] 2.1 取得の小さな直しと文書の行を直す（G6・指摘 22・65〜68・12 の文書）
   - スキームを `eq_ignore_ascii_case` で比べる（`judge.rs`・`fetch_url.rs`・指摘 65）。消した数が 0 なら `install_fetch_swept` を出さない（66）。書き込みの失敗で書きかけを消し、消せなければ `debug!`（67）。
   - `install/worker.rs` に `remove_downloaded(order, dir)` を置き、`run_order` の後に `download_dir()` で呼ぶ。出どころが `Script` で `dir` の下の物だけを消す（68）。
   - `doc/COMPAT_ARCHITECTURE.md` 344 行と `doc/ukadoc-coverage/ledger/sakura-script.toml` 1398〜1418 行を、取得の仕組み（1.4）と書庫を消すこと（68）と記録の条件（66）に合わせる。COMPAT_ARCHITECTURE はこの 1 行だけを直す。
