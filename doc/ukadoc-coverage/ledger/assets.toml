@@ -2959,7 +2959,7 @@ links = []
 note = """
 実装済み。インストールの手続きが書庫を扱うたびに、起動中のゴーストの ghost/master/descript.txt からこの欄を読み（鍵は ASCII 小文字化して引く）、カンマで分けて前後の空白を落とした名前の列にする（空の名前は落とす）。書庫の install.txt の accept をこの列の各名前と sakura.name に突き合わせ、どれか 1 つに完全一致（大文字小文字を区別）すれば受け取り、どれにも一致しなければ OnInstallRefuse で断る。読むのは照合のときだけで、目録の素性（Identity）には載せない。
 壊れ方: 無い。記録: 欄が無ければ空の列（異常ではない・記録なし）。descript.txt が読めないときは空の列にして warn!（catalog_descript_unreadable）を残す。照合の結果は info!（install_accept）か warn!（install_refused）に残る。
-根拠の場所: crates/areka-ghost/src/catalog.rs の install_accept（この欄の読み手）の上の正典 URL の行。照合は crates/areka/src/install/judge.rs の judge_accept、今のゴーストの素性を組むのは crates/areka/src/install/desk.rs の ghost_facts。
+根拠の場所: crates/areka-ghost/src/catalog.rs の master_install_keys（この欄と sakura.name を 1 回の読みで返す読み手）が返す MasterInstallKeys の install_accept 欄の上の正典 URL の行。照合は crates/areka/src/install/judge.rs の judge_accept、この欄を読むのは背景のスレッドの crates/areka/src/install/worker.rs の DeskPorts::ghost_facts（窓口の desk.rs の ghost_facts はゴーストの場所だけを答える）。
 束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の id,ID名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 

@@ -358,12 +358,16 @@ fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
 
     super::super::desk::record_installed(
         &mut world,
-        crate::install::procedure::InstalledRecord {
-            kind: InstallKind::Ghost,
-            object_name: "あとの書庫".to_owned(),
-            folder: "later".to_owned(),
-            ghost_folder: Some("later".to_owned()),
-        },
+        crate::install::worker::carry_record(
+            None,
+            None,
+            crate::install::procedure::InstalledRecord {
+                kind: InstallKind::Ghost,
+                object_name: "あとの書庫".to_owned(),
+                folder: "later".to_owned(),
+                ghost_folder: Some("later".to_owned()),
+            },
+        ),
     );
     assert_eq!(
         world

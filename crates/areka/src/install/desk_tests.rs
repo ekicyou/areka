@@ -388,8 +388,9 @@ fn resend_goes_at_once_when_steady_arrived_since_the_last_send() {
 
 // ---------------------------------------------------------------- 素性・上書き・記録
 
-/// 今のゴーストの素性: 根・フォルダ名・名前（実行系が無ければフォルダ名）・`sakura.name`・
-/// `install.accept` を答える。起動の文脈か置き場のゴーストが無ければ None。
+/// 今のゴーストの素性: 根・場所・フォルダ名・名前（実行系が無ければフォルダ名）を答え、descript の
+/// `sakura.name`・`install.accept` は読まない（背景のスレッドが場所から読む）。起動の文脈か置き場の
+/// ゴーストが無ければ None。
 #[test]
 fn facts_describe_the_running_ghost() {
     let tmp = TempPath::new("desk-facts");
@@ -417,11 +418,12 @@ fn facts_describe_the_running_ghost() {
         ask_facts(&mut rig),
         Some(Some(GhostFacts {
             roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
+            dir: root.ghost_dir("A"),
             folder: Some("A".to_owned()),
             running_dir: Some(root.ghost_dir("A")),
             name: "A".to_owned(),
-            sakura_name: Some("さくら".to_owned()),
-            install_accept: vec!["甲".to_owned(), "乙".to_owned()],
+            sakura_name: None,
+            install_accept: Vec::new(),
         }))
     );
 }
@@ -464,12 +466,16 @@ fn overwrite_returns_the_archive_and_record_answers() {
     let (record_reply, recorded) = reply_channel();
     rig.asks
         .send(DeskAsk::Record {
-            record: InstalledRecord {
-                kind: areka_nar::InstallKind::Ghost,
-                object_name: "あたらしい".to_owned(),
-                folder: "newbie".to_owned(),
-                ghost_folder: Some("newbie".to_owned()),
-            },
+            installed: crate::install::worker::carry_record(
+                None,
+                None,
+                InstalledRecord {
+                    kind: areka_nar::InstallKind::Ghost,
+                    object_name: "あたらしい".to_owned(),
+                    folder: "newbie".to_owned(),
+                    ghost_folder: Some("newbie".to_owned()),
+                },
+            ),
             reply: record_reply,
         })
         .unwrap();

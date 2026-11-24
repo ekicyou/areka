@@ -10,12 +10,12 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoots;
 use areka_nar::{InstallKind, InstallOutcome, NarArchive, NarError};
 
-use super::desk::catalog_spelling;
 use super::destination::install_into;
 use super::judge::GhostFacts;
 use super::procedure::{InstallPorts, InstalledRecord, ON_INSTALL_REFUSE, Overwritten, Raised};
 use super::startup::CarriedInstall;
 use super::terms::TermsNotice;
+use super::worker::carry_record;
 use areka_session::alert::{self, YesNo};
 
 /// 起動の前の口。根の並びと告知の抑止と、入れた物の控えを持つ。
@@ -72,6 +72,7 @@ impl InstallPorts for BootPorts {
     fn ghost_facts(&mut self) -> Option<GhostFacts> {
         Some(GhostFacts {
             roots: self.roots.clone(),
+            dir: PathBuf::new(),
             folder: None,
             running_dir: None,
             name: String::new(),
@@ -109,21 +110,15 @@ impl InstallPorts for BootPorts {
     }
 
     fn record(&mut self, record: InstalledRecord) {
-        let (folder, ghost_name) = catalog_spelling(Some(&self.roots), &record);
-        if record.kind == InstallKind::Balloon {
+        let installed = carry_record(Some(&self.roots), None, record);
+        if installed.kind == InstallKind::Balloon {
             tracing::info!(
                 event = "install_balloon_memory_skipped",
-                folder = folder.as_str(),
+                folder = installed.folder.as_str(),
                 "[install] 起動の前なので、入れたバルーンをどのゴーストの記憶にも書きません"
             );
         }
-        self.carried.push(CarriedInstall {
-            kind: record.kind,
-            folder,
-            ghost_folder: record.ghost_folder,
-            object_name: record.object_name,
-            ghost_name,
-        });
+        self.carried.push(installed);
     }
 
     fn warn_skipped(&mut self, title: &str, body: &str) {

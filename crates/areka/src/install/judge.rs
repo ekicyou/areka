@@ -16,11 +16,14 @@ pub(crate) const SEPARATOR: &str = "\u{1}";
 pub(crate) struct GhostFacts {
     /// ベースウェアの根の並びの写し（入れる根と、すでにあるものの引き当てに使う）。
     pub roots: BasewareRoots,
+    /// 今のゴーストの場所（`sakura_name`・`install_accept` を読む descript の在りか）。
+    pub dir: PathBuf,
     /// 根の下のフォルダ名（argv で根の外から起こしたゴーストは None）。
     pub folder: Option<String>,
     /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先）。
     pub running_dir: Option<std::path::PathBuf>,
     pub name: String,
+    /// 窓口は読まずに空で答え、背景のスレッドが `dir` の descript から埋める。
     pub sakura_name: Option<String>,
     pub install_accept: Vec<String>,
 }

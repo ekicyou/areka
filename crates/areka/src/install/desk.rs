@@ -23,7 +23,6 @@ use std::sync::mpsc::{self, Receiver, SendError, Sender};
 use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
-use areka_ghost::catalog_roots::{balloons_for, find_balloon, find_ghost, same_folder_name};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
 use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
@@ -33,7 +32,6 @@ use super::fetch_url::{self, FetchTools};
 use super::judge::GhostFacts;
 use super::names;
 use super::pick::{self, PickError};
-use super::procedure::InstalledRecord;
 use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
@@ -389,13 +387,13 @@ fn answer(world: &mut World, ask: DeskAsk) {
             target_ghost,
             reply,
         } => overwrite::take(world, archive, target_ghost, reply),
-        DeskAsk::Record { record, reply } => {
+        DeskAsk::Record { installed, reply } => {
             tracing::debug!(
                 event = "install_record_received",
-                record = ?record,
+                record = ?installed,
                 "[install] 入れた後の記録を受けました"
             );
-            record_installed(world, record);
+            record_installed(world, installed);
             reply_to(reply, ());
         }
     }
@@ -403,28 +401,13 @@ fn answer(world: &mut World, ask: DeskAsk) {
 
 /// 入れた後の記録: `ghost` は受け皿へ、`balloon` だけなら今のゴーストの「最後に使ったバルーン」の
 /// 記憶へフォルダ名を書き、シェル・追加ファイルは置換語だけ（表示は替えない）。シェルとバルーンは
-/// `lastinstalled` の控えも置く。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りと
-/// フォルダ名の 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
+/// `lastinstalled` の控えも置く。フォルダ名と名前は背景のスレッドが目録の綴りに直した値をそのまま使う。
 /// 最後に今のゴーストの記憶の書き手の反映を上限まで待つ（背景のスレッドへ答えるのはその後）。
-pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
-    let roots = world
-        .get_resource::<BootContext>()
-        .map(|ctx| ctx.roots.clone());
-    let (folder, ghost_name) = catalog_spelling(roots.as_ref(), &record);
-    if record.kind == InstallKind::Balloon {
-        remember_balloon(world, folder.clone());
-        note_hidden_by_ghost(world, &record.folder);
+pub(super) fn record_installed(world: &mut World, installed: CarriedInstall) {
+    if installed.kind == InstallKind::Balloon {
+        remember_balloon(world, installed.folder.clone());
     }
-    place_last_installed(
-        world,
-        CarriedInstall {
-            kind: record.kind,
-            folder,
-            ghost_folder: record.ghost_folder,
-            object_name: record.object_name,
-            ghost_name,
-        },
-    );
+    place_last_installed(world, installed);
     if let Some(runtime) = names::current_runtime(world) {
         settle_record(runtime.sylphya_publisher());
     }
@@ -453,52 +436,6 @@ pub(super) fn place_last_installed(world: &mut World, installed: CarriedInstall)
         InstallKind::Supplement => {}
     }
     names::update(world, installed.object_name, installed.ghost_name);
-}
-
-/// 目録の綴りに直したフォルダ名と、%lastghostname の値（窓口と起動の前の口の共通の決まり）。
-/// フォルダ名はゴースト・バルーンなら根の目録の綴り（目録に無ければ書庫の綴りのまま）、他は書庫の
-/// 綴りのまま。%lastghostname は関わったゴーストの目録の `name`（無ければゴーストは `install.txt` の
-/// `name`・他はそのフォルダ名）で、関わったゴーストが無ければ None。
-pub(super) fn catalog_spelling(
-    roots: Option<&areka_ghost::BasewareRoots>,
-    record: &InstalledRecord,
-) -> (String, Option<String>) {
-    let ghost_entry = |folder: &str| roots.and_then(|roots| find_ghost(roots, folder));
-    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
-        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
-            Some(name) => name,
-            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
-            None => folder.to_owned(),
-        }
-    });
-    let folder = match record.kind {
-        InstallKind::Ghost => ghost_entry(&record.folder).map(|e| e.identity.folder),
-        InstallKind::Balloon => {
-            roots.and_then(|roots| find_balloon(roots, &record.folder).map(|e| e.identity.folder))
-        }
-        InstallKind::Shell | InstallKind::Supplement => None,
-    }
-    .unwrap_or_else(|| record.folder.clone());
-    (folder, ghost_name)
-}
-
-/// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
-/// `installed_balloon_hidden_by_ghost` を 1 件残す。
-/// 起動の文脈が無いときは何もしない。
-fn note_hidden_by_ghost(world: &World, folder: &str) {
-    let Some(ctx) = world.get_resource::<BootContext>() else {
-        return;
-    };
-    let hidden = balloons_for(&ctx.roots, &ctx.current.ghost.dir).hidden;
-    if let Some(h) = hidden.iter().find(|h| same_folder_name(&h.folder, folder)) {
-        tracing::info!(
-            event = "installed_balloon_hidden_by_ghost",
-            folder = h.folder.as_str(),
-            installed = %h.hidden.display(),
-            by = %h.by.display(),
-            "[install] 入れたバルーンは今のゴーストの中の同じフォルダ名に隠れます"
-        );
-    }
 }
 
 /// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる）。
@@ -547,11 +484,12 @@ fn ghost_facts(world: &World) -> Option<GhostFacts> {
         .unwrap_or_else(|| dir.display().to_string());
     Some(GhostFacts {
         roots: ctx.roots.clone(),
+        dir: dir.to_path_buf(),
         running_dir: folder.as_ref().map(|_| dir.to_path_buf()),
         folder,
         name,
-        sakura_name: areka_ghost::catalog::sakura_name(dir),
-        install_accept: areka_ghost::catalog::install_accept(dir),
+        sakura_name: None,
+        install_accept: Vec::new(),
     })
 }
 

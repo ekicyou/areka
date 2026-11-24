@@ -76,7 +76,7 @@
   - _Dispatch: standard — 書庫を消す関数と信頼の境界の確かめを足す_
   - _Requirements: 3.1, 4.1, 4.2, 4.5, 4.7, 6.2, 6.5, 7.4, 7.7, 7.8, 8.1_
 
-- [ ] 2.2 インストールの UI のスレッドで目録を読まないようにする（G8・指摘 6・60・61）
+- [x] 2.2 インストールの UI のスレッドで目録を読まないようにする（G8・指摘 6・60・61）
   - `areka-ghost` の `catalog.rs` に descript を 1 回読んで sakura の名前と `install.accept` を返す公開の関数を足し、`install_accept` を消してテストも寄せる（60・`catalog_tests.rs`）。
   - 窓口は素性の問い合わせに `dir` だけを答え（`GhostFacts` に `dir`）、背景のスレッドが新しい関数で読む。綴り直しと隠れの判定を `DeskPorts::record` へ移し、`DeskAsk::Record` で運ぶ（6）。
   - `copied_root` の項目の根を答えに使う（61）。
@@ -267,3 +267,4 @@
 - 1.5 → 1.6: 本体の側に「印を消す」公開の口は無い（`clear_hold` は `pub(super)`）。`run_between` は返信を送れたのを確かめてから `hold_between` を呼ぶ順にする。印を消す代わりに `resume_between` を呼ぶと `ghost_switch_no_hold` の warn が誤って出る。`ghost_switch.rs` は 970 行で上限まで 30 行。
 - 1.6 → 2.1: `doc/COMPAT_ARCHITECTURE.md:325` も「UI スレッドで展開する」と古い。2.1 で 344・427 と一緒に直し、5.5 の確かめは 325・344・427 の 3 行として数える。
 - 1.6 → 3.1: `desk_overwrite_between_tests.rs` の別スレッドの `answer.recv()` と `worker_tests.rs` の `asks.recv()`・`desk.join()` に上限の無い待ちが残る。3.1 で一緒に上限のある待ちへ替える。
+- 2.2: `install_accept` を消したので、範囲の外の `doc/ukadoc-coverage/ledger/assets.toml` の install.accept の「根拠の場所」を新しい読み手（`master_install_keys`・`DeskPorts::ghost_facts`）へ直した。5.5 の範囲の外の差分の確かめで数える。

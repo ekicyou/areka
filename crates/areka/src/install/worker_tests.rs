@@ -91,6 +91,7 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
 fn facts_at(root: &Path) -> GhostFacts {
     GhostFacts {
         roots: areka_ghost::BasewareRoots::single(root.to_path_buf()),
+        dir: root.to_path_buf(),
         folder: Some("running".to_owned()),
         running_dir: None,
         name: "Running".to_owned(),
@@ -233,6 +234,39 @@ fn every_port_reads_a_missing_desk_as_closed() {
         folder: "newbie".to_owned(),
         ghost_folder: Some("newbie".to_owned()),
     });
+}
+
+/// 窓口は場所だけを答え、`sakura.name`・`install.accept` は口がその場所の descript から読む。
+#[test]
+fn facts_read_the_install_keys_from_the_answered_dir() {
+    use areka_runtime::spine::join_thread_bounded;
+
+    let root = TempPath::new("install-worker-facts");
+    let master = root.path().join("ghost").join("master");
+    std::fs::create_dir_all(&master).unwrap();
+    std::fs::write(
+        master.join("descript.txt"),
+        "charset,UTF-8\r\nsakura.name,さくら\r\ninstall.accept,甲, 乙\r\n",
+    )
+    .unwrap();
+    let (mut ports, asks, _gate) = ports();
+    let facts = facts_at(root.path());
+    let desk = thread::spawn(move || {
+        let Ok(DeskAsk::Facts { reply }) = asks.recv() else {
+            panic!("素性の頼みが届く");
+        };
+        let _ = reply.send(Some(facts));
+    });
+    let got = ports.ghost_facts();
+    join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
+    assert_eq!(
+        got,
+        Some(GhostFacts {
+            sakura_name: Some("さくら".to_owned()),
+            install_accept: vec!["甲".to_owned(), "乙".to_owned()],
+            ..facts_at(root.path())
+        })
+    );
 }
 
 // ---------------------------------------------------------------- 門

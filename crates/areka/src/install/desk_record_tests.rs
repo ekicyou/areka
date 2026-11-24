@@ -4,9 +4,10 @@
 //! 「最後に使ったバルーン」の記憶が目録の綴りへ替わる・シェルは記録だけで表示を替えない・置換語の
 //! 名前は目録の `name`・どの場合も反映が済んでから答える。
 //!
-//! 偽の SHIORI の土台で本物の実行系を起こし（今のゴーストの記憶の書き手が本物）、頼みは窓口の
-//! 頼みの送出端へ直接入れて取り出しの系 [`drain`] を直接呼ぶ。記憶は答えを受けた後に実 fs から読む
-//! （答えの前に反映の柵を掛けているので、時間では待たない）。
+//! 偽の SHIORI の土台で本物の実行系を起こし（今のゴーストの記憶の書き手が本物）、目録の綴りと隠れの
+//! 判定は背景のスレッドの口と同じ [`carry_record`] で済ませ、窓口には綴り直した値だけを頼む（窓口は
+//! 目録を読まない）。頼みは窓口の頼みの送出端へ直接入れて取り出しの系 [`drain`] を直接呼ぶ。記憶は
+//! 答えを受けた後に実 fs から読む（答えの前に反映の柵を掛けているので、時間では待たない）。
 
 use areka_actor::reply_channel;
 use areka_nar::InstallKind;
@@ -16,6 +17,7 @@ use tracing::Level;
 use super::*;
 use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
+use crate::install::worker::{carry_record, catalog_spelling};
 use crate::sample_test_support::switch_rig;
 use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use areka_session::boot_resolve::read_last_balloon;
@@ -32,15 +34,20 @@ fn rig() -> SwitchRig {
     rig
 }
 
-/// 入れた後の記録を 1 件頼んで取り出しの系を 1 回回し、答えが直ちに返ったかと記録を返す。
+/// 入れた後の記録を今のゴースト A の素性（根と場所）で綴り直し、窓口へ 1 件頼んで取り出しの系を
+/// 1 回回し、答えが直ちに返ったかと、綴り直しと窓口の記録を合わせて返す。
 fn record(rig: &mut SwitchRig, record: InstalledRecord) -> (bool, Vec<CapturedEvent>) {
+    let roots = rig.world.resource::<BootContext>().roots.clone();
+    let dir = rig.root.ghost_dir("A");
+    let (installed, mut events) = capture(|| carry_record(Some(&roots), Some(&dir), record));
     let (reply, answer) = reply_channel();
     rig.world
         .non_send::<InstallDesk>()
         .asks_tx
-        .send(DeskAsk::Record { record, reply })
+        .send(DeskAsk::Record { installed, reply })
         .expect("窓口の頼みの受信端は生きている");
-    let ((), events) = capture(|| drain(&mut rig.world));
+    let ((), desk_events) = capture(|| drain(&mut rig.world));
+    events.extend(desk_events);
     (matches!(answer.try_recv(), Ok(Some(()))), events)
 }
 

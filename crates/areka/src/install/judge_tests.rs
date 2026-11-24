@@ -32,6 +32,7 @@ fn manifest(
 fn emo2() -> GhostFacts {
     GhostFacts {
         roots: areka_ghost::BasewareRoots::single(PathBuf::from(r"C:\areka")),
+        dir: PathBuf::from(r"C:\areka\ghost\emo2"),
         folder: Some("emo2".to_owned()),
         running_dir: None,
         name: "emo2".to_owned(),

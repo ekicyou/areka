@@ -306,22 +306,34 @@ pub fn sakura_name(ghost_dir: &Path) -> Option<String> {
     master_descript_keys(ghost_dir)?.remove("sakura.name")
 }
 
-/// `<ゴースト>/ghost/master/descript.txt` の `install.accept`（受け手の名乗り）を
-/// カンマで分け、前後の空白を落とした名前の列。空の名前は落とす。`sakura_name` と同じ読み方で、
-/// 無い → 空の列・読めない → `warn!`＋空の列。素性（`Identity`）には載せない。
-/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1
-pub fn install_accept(ghost_dir: &Path) -> Vec<String> {
-    master_descript_keys(ghost_dir)
-        .and_then(|mut keys| keys.remove("install.accept"))
-        .map(|names| {
-            names
-                .split(',')
-                .map(str::trim)
-                .filter(|name| !name.is_empty())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+/// インストールの受け手の照合に使う、ゴーストの descript.txt の 2 欄。素性（`Identity`）には載せない。
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MasterInstallKeys {
+    /// [`sakura_name`] と同じ欄。
+    pub sakura_name: Option<String>,
+    /// 受け手の名乗りをカンマで分け、前後の空白を落とした名前の列（空の名前は落とす）。
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1
+    pub install_accept: Vec<String>,
+}
+
+/// `<ゴースト>/ghost/master/descript.txt` を 1 回だけ読み、`sakura.name` と `install.accept` を返す。
+/// 無い → 2 欄とも空・読めない → `warn!` 1 件＋2 欄とも空。
+pub fn master_install_keys(ghost_dir: &Path) -> MasterInstallKeys {
+    let mut keys = master_descript_keys(ghost_dir).unwrap_or_default();
+    MasterInstallKeys {
+        sakura_name: keys.remove("sakura.name"),
+        install_accept: keys
+            .remove("install.accept")
+            .map(|names| {
+                names
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
 }
 
 /// `<descript_dir>/descript.txt` の `homeurl`（ネットワーク更新の更新先）。前後の空白を落とし、

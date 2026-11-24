@@ -17,13 +17,16 @@ use std::time::Instant;
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel, run_inbox, spawn_actor};
 use areka_ghost::BasewareRoots;
+use areka_ghost::catalog::master_install_keys;
+use areka_ghost::catalog_roots::{balloons_for, find_balloon, find_ghost, same_folder_name};
 use areka_kanade::RaiseOutcome;
-use areka_nar::{InstallOutcome, NarArchive, NarError};
+use areka_nar::{InstallKind, InstallOutcome, NarArchive, NarError};
 
 use super::destination::install_into;
 use super::fetch_url::download_dir;
 use super::judge::GhostFacts;
 use super::procedure::{InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
+use super::startup::CarriedInstall;
 use super::terms::TermsNotice;
 use super::{InstallOrder, InstallOrigin};
 use areka_session::alert::{self, YesNo};
@@ -52,9 +55,9 @@ pub(crate) enum DeskAsk {
     },
     /// 降ろした起動中のゴーストへ展開し終えた（窓口は切替を続け、定常到達で答える）。
     Extracted { reply: ReplySender<()> },
-    /// 入れた後の記録。反映が済んでから答える。
+    /// 目録の綴りに直した入れた後の記録。反映が済んでから答える。
     Record {
-        record: InstalledRecord,
+        installed: CarriedInstall,
         reply: ReplySender<()>,
     },
     /// 依頼 1 件が終わった（次の依頼を受け取れる）。
@@ -159,6 +162,8 @@ pub(crate) struct DeskPorts {
     roots: Option<BasewareRoots>,
     /// 起動中のゴーストの場所（素性を最後に尋ねたときの値）。
     running: Option<PathBuf>,
+    /// 今のゴーストの場所（素性を最後に尋ねたときの値・隠れの判定に使う）。
+    ghost_dir: Option<PathBuf>,
     /// 今扱っている書庫のパス（`begin_archive` で覚える）。
     archive: PathBuf,
 }
@@ -170,6 +175,7 @@ impl DeskPorts {
             gate,
             roots: None,
             running: None,
+            ghost_dir: None,
             archive: PathBuf::new(),
         }
     }
@@ -248,9 +254,15 @@ impl InstallPorts for DeskPorts {
 
     fn ghost_facts(&mut self) -> Option<GhostFacts> {
         let facts = self.ask(|reply| DeskAsk::Facts { reply }).flatten()?;
+        let keys = master_install_keys(&facts.dir);
         self.roots = Some(facts.roots.clone());
         self.running = facts.running_dir.clone();
-        Some(facts)
+        self.ghost_dir = Some(facts.dir.clone());
+        Some(GhostFacts {
+            sakura_name: keys.sakura_name,
+            install_accept: keys.install_accept,
+            ..facts
+        })
     }
 
     fn ask_terms(&mut self, title: &str, notice: &TermsNotice) -> YesNo {
@@ -338,8 +350,80 @@ impl InstallPorts for DeskPorts {
     }
 
     fn record(&mut self, record: InstalledRecord) {
+        let installed = carry_record(self.roots.as_ref(), self.ghost_dir.as_deref(), record);
         // 窓口が居なければ記録は反映されない。続く `raise` が閉じた扱いで手続きを止める。
-        let _ = self.ask(|reply| DeskAsk::Record { record, reply });
+        let _ = self.ask(|reply| DeskAsk::Record { installed, reply });
+    }
+}
+
+/// 入れた後の記録を目録の綴りに直し、バルーンだけなら隠れを判定する（背景のスレッドで呼ぶ）。
+/// `ghost_dir` は今のゴーストの場所（無ければ隠れを見ない）。
+pub(super) fn carry_record(
+    roots: Option<&BasewareRoots>,
+    ghost_dir: Option<&Path>,
+    record: InstalledRecord,
+) -> CarriedInstall {
+    let (folder, ghost_name) = catalog_spelling(roots, &record);
+    if record.kind == InstallKind::Balloon
+        && let (Some(roots), Some(dir)) = (roots, ghost_dir)
+    {
+        note_hidden_by_ghost(roots, dir, &record.folder);
+    }
+    CarriedInstall {
+        kind: record.kind,
+        folder,
+        ghost_folder: record.ghost_folder,
+        object_name: record.object_name,
+        ghost_name,
+    }
+}
+
+/// 目録の綴りに直したフォルダ名と、%lastghostname の値（窓口と起動の前の口の共通の決まり）。
+/// フォルダ名はゴースト・バルーンなら根の目録の綴り（目録に無ければ書庫の綴りのまま）、他は書庫の
+/// 綴りのまま。%lastghostname は関わったゴーストの目録の `name`（無ければゴーストは `install.txt` の
+/// `name`・他はそのフォルダ名）で、関わったゴーストが無ければ None。
+pub(super) fn catalog_spelling(
+    roots: Option<&BasewareRoots>,
+    record: &InstalledRecord,
+) -> (String, Option<String>) {
+    // ゴーストの書庫の `ghost_folder` は `folder` と同じなので、目録の引き当ては 1 回で足りる。
+    let ghost_entry = record
+        .ghost_folder
+        .as_deref()
+        .and_then(|folder| roots.and_then(|roots| find_ghost(roots, folder)));
+    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
+        match ghost_entry
+            .as_ref()
+            .and_then(|entry| entry.identity.name.clone())
+        {
+            Some(name) => name,
+            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
+            None => folder.to_owned(),
+        }
+    });
+    let folder = match record.kind {
+        InstallKind::Ghost => ghost_entry.map(|e| e.identity.folder),
+        InstallKind::Balloon => {
+            roots.and_then(|roots| find_balloon(roots, &record.folder).map(|e| e.identity.folder))
+        }
+        InstallKind::Shell | InstallKind::Supplement => None,
+    }
+    .unwrap_or_else(|| record.folder.clone());
+    (folder, ghost_name)
+}
+
+/// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
+/// `installed_balloon_hidden_by_ghost` を 1 件残す。
+fn note_hidden_by_ghost(roots: &BasewareRoots, ghost_dir: &Path, folder: &str) {
+    let hidden = balloons_for(roots, ghost_dir).hidden;
+    if let Some(h) = hidden.iter().find(|h| same_folder_name(&h.folder, folder)) {
+        tracing::info!(
+            event = "installed_balloon_hidden_by_ghost",
+            folder = h.folder.as_str(),
+            installed = %h.hidden.display(),
+            by = %h.by.display(),
+            "[install] 入れたバルーンは今のゴーストの中の同じフォルダ名に隠れます"
+        );
     }
 }
 
