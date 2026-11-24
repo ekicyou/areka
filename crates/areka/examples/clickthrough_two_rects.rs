@@ -21,9 +21,9 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example clickthrough_two_rects
+//! cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example clickthrough_two_rects
 //! # 反応領域を十字カーソルで可視化する場合（wintf の診断フラグ・既定 OFF）:
-//! $env:WINTF_CROSSHAIR = "1"; cargo run -p areka --example clickthrough_two_rects
+//! $env:WINTF_CROSSHAIR = "1"; cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example clickthrough_two_rects
 //! ```
 //! 背面に別アプリ（ブラウザ・エディタ等）を置き、透明余白のクリックが背面へ抜けるか、
 //! 矩形上のクリックが本窓に入るか（十字カーソル＝反応領域）を目視で確認する。
@@ -86,7 +86,7 @@ fn main() -> Result<()> {
     println!("  左下の画像 = αピクセル判定（不透明ピクセルだけ不透過・透明周辺は透過）");
     println!("  透明な余白 = クリック透過（背面プロセスへ通過）");
     println!("  反応領域が矩形/画像と一致していれば座標＋αヒットテストは正しい");
-    println!("  ドラッグ移動: 矩形/画像を掴んで窓ごと移動（移動中は透過抑止=R5）");
+    println!("  ドラッグ移動: 矩形/画像を掴んで窓ごと移動（移動中は透過抑止）");
     println!("  終了: 赤 or 青の矩形をダブルクリック");
     println!("  ヒント: 環境変数 WINTF_CROSSHAIR=1 で反応領域が十字カーソルになる");
     println!();

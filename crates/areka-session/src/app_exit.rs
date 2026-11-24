@@ -57,15 +57,16 @@ pub enum ExitOrigin {
 ///
 /// [`quit_app`] が無ければ挿し、2 度目以降は上書きせず `debug!(event="app_exit_again")` で流す
 /// （[`AppExit::request_exit`] の「最初が勝つ」と同じ規則）。`run()` の後で `main` が読み、
-/// [`fault_of`] で告知と終了コードを決める。
+/// [`fault_of`]・[`write_failure_of`] で告知と終了コードを決める。
 #[derive(Resource)]
 pub struct FirstExit(pub ExitOrigin);
 
-/// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
+/// SHIORI の失敗の告知を出すか・その失敗の中身。
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
-/// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
+/// （告知の場面はどちらも SHIORI の失敗）。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
+/// 記憶を書けなかった出所もここでは `None` で、告知と終了コードは [`write_failure_of`] が決める。
 pub fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))
@@ -171,7 +172,7 @@ impl WindowsClosed {
 /// # 窓の一式に属する資源を外す
 ///
 /// 次の窓の一式が初回の起動と同じ手順で整うよう、窓の一式ごとに立つ World の資源を窓と一緒に
-/// 外す。`crates/areka/src` の資源の挿入を洗い出した結果は次のとおり。
+/// 外す。窓の一式に属する資源の洗い出しは次のとおり。
 ///
 /// 外すもの（窓の一式に属する）:
 /// - [`GhostWindows`]: 窓の束。消した窓の `Entity` を装着の相のゲートに見せない。
@@ -209,7 +210,6 @@ pub fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     world.remove_resource::<ZOrderAbsentReports>();
     world.remove_resource::<StickyGroupLedger>();
     world.remove_resource::<CharDragSession>();
-    // ドラッグの控えは wintf のものなので areka が外す物は無い。
     world.remove_resource::<BalloonLockLedger>();
     tracing::info!(
         event = "windows_closed_for_restart",
@@ -308,8 +308,8 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
 /// `session_end::on_os_session_end` を差す system。
 ///
 /// `register_ghost_windows_click_through` と同じ `Added<WindowHandle>` の捉え方で、同じ
-/// `FrameFinalize` 段に登録する。`placement` は `crate::` パスを持てない（example の `#[path]`
-/// include）ため、差し込みは `placement` の外のここで行う。
+/// `FrameFinalize` 段に登録する。`placement` は `areka-session` に依存できない（依存の向きは
+/// `areka-session` → `areka-placement`）ため、差し込みは `placement` の外のここで行う。
 pub(crate) fn attach_os_close_request(
     mut commands: Commands,
     new_windows: Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>,

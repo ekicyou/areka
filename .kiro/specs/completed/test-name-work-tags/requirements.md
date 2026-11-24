@@ -124,7 +124,7 @@
 3. The 名指しの直し shall `doc/COMPAT_ARCHITECTURE.md` §8 では名の行だけを直し、`session-crate-split` が直すパスの行に触らない
 4. If 着手のときに、範囲のファイルを触る別の spec（`zorder-property`・`zorder-chain-residue` ほか）が走っている, then the 改名 shall そのファイルを後に回し、そのことを実装の記録に残す
 5. The 名指しの直し shall `dola-cue-test-builder` の持ち物 `crates/areka-runtime/src/consumer_ledger_test_support.rs` では 28 行のコメントだけを直し（向こうが直す 126 行からの塊に触らない・許す重なり）、手を付ける前にそのことを向こうのセッションへ知らせる
-6. The 変更 shall `.kiro/specs/audit-areka-app/brief.md` へ、本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本の改名と同じコミットで、そのファイルの 4・5・10・11・13 行の名指しを、この spec が改めた新しい名へ直すことを申し送る
+6. The 変更 shall `.kiro/specs/completed/audit-areka-app/brief.md` へ、本体の `runtime_tests/zorder_wiring_tests.rs` の 2 本の改名と同じコミットで、そのファイルの 4・5・10・11・13 行の名指しを、この spec が改めた新しい名へ直すことを申し送る
 
 ### Requirement 7: 札をまた付けない決まり
 

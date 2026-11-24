@@ -11,104 +11,78 @@ publish = false # crates.io の 0.0.1 は名前の確保だけ・利用者は配
 keywords = ["ukagaka", "desktop-mascot", "windows", "character", "interactive"]
 categories = ["gui", "games", "multimedia"]
 
-[[bin]]
-name = "areka"
-path = "src/main.rs"
-
 [dependencies]
 wintf = { path = "../wintf" }
-shiori-abi = { path = "../shiori-abi" }
+# ゴーストの結線（置き場の根・一覧・GhostRuntime。起動・インストール・更新・メニュー・根の編集・MCP）。
 areka-ghost = { path = "../areka-ghost" }
+# 運行表 kanade への要求と答えの型（KanadeMsg・SSTP・オンラインの数え。起動・ドロップ・インストール・更新・メニュー・MCP）。
 areka-kanade = { path = "../areka-kanade" }
+# 設定・さくらスクリプト・文字コードの解析（インストールの規約・MCP の check_script／get_expression_table・書き出し・examples/emo-present.rs）。
 areka-parsers = { path = "../areka-parsers" }
-# ShioriHostSink 統合（areka-P0-sylphya task 9.1・R7.2/R7.3）で GetProperty/SetProperty を
-# 統一プロパティシステム sylphya の reader/publisher へ委譲し第 2 ストア（HashMap）を撤去する
-# ための workspace path 依存（bin → sylphya は許容・外部 crates.io 依存の追加ではない）。
+# プロパティの読み書き（MCP の GetProperty・名前の公開）と記憶の保存（起動・インストール・根の編集）。
 areka-sylphya = { path = "../areka-sylphya" }
-# `.nar` の読み取り・検査・展開（areka-P0-ghost-install・要件 4.1）。ワークスペースの中の
-# path 依存で、外部（crates.io）依存の追加ではない。
+# `.nar` の読み取り・検査・展開（ドロップ・メニュー・起動の `--install` のインストール）と CRC-32（png_image.rs）。
 areka-nar = { path = "../areka-nar" }
-# ネットワーク更新のエンジン（areka-P0-network-update・要件 8.2／8.6）。ワークスペースの中の
-# path 依存で、外部（crates.io）依存の追加ではない。
+# ネットワーク更新のエンジンと HTTP の取得（更新の手続き・インストールの URL 取得）。
 areka-update = { path = "../areka-update" }
-# MCP サーバの受け口（areka-P0-mcp-server-core・要件 1.1／8.6）。ワークスペースの中の
-# path 依存で、外部（crates.io）依存の追加ではない（rmcp・tokio・hyper は areka-mcp 側に閉じる）。
+# MCP サーバの受け口（rmcp・tokio・hyper は areka-mcp 側に閉じる）。
 areka-mcp = { path = "../areka-mcp" }
-# 書ける根の形の判断と写す手続き（areka-P0-user-data-root・要件 4.6）。ワークスペースの中の
-# path 依存で、外部（crates.io）依存の追加ではない。
-areka-user-data = { path = "../areka-user-data" }
-# 窓配置（spec: placement-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+# 窓配置（窓の印・ゴーストの窓の表・バルーン位置の戻し。ドロップ・メニュー・MCP の check_script・examples/emo-present）。
 areka-placement = { path = "../areka-placement" }
-# 実行系（spec: runtime-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+# 実行系（描画の結線・台帳・シェルとバルーンの解決・読み直しの引数。インストールの机・MCP・書き出し）。
 areka-runtime = { path = "../areka-runtime" }
-# 入力。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+# マウス入力の結線（メニューの開き口）。
 areka-input = { path = "../areka-input" }
-# 切替・読み直し・起動・終わる相の層。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+# 切替・読み直し・起動・終わる相の層。
 areka-session = { path = "../areka-session" }
-windows-core = { workspace = true }
+# 異常終了の報告の表示（main.rs）。
 human-panic = { workspace = true }
+# インストールの URL 取得の失敗の型（install/fetch_url.rs）。
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-async-io = { workspace = true }
-# MCP の画像の写し（areka-P0-mcp-dump-images・要件 5.1）で PNG の IDAT を圧縮する。
-# areka-nar と同じ版・同じ機能の指定で、Cargo.lock に新しいクレートは増えない。
+# MCP の画像の写しで PNG の IDAT を圧縮する（png_image.rs）。
 miniz_oxide = { workspace = true }
 bevy_ecs = { workspace = true }
-# ファイルを選ぶ画面（GetOpenFileNameW）の機能は本クレートで上乗せし、根の
-# [workspace.dependencies.windows] は変えない（areka-P0-ghost-install 要件 10.6・
-# crates/areka-update/Cargo.toml と同じやり方）。
+# ファイルを選ぶ画面（GetOpenFileNameW）の機能を本クレートで上乗せする。
 windows = { workspace = true, features = ["Win32_UI_Controls_Dialogs"] }
-# placement の採寸（measure）で surface 原寸を合成取得するため通常依存へ昇格
-# （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
+# surface 画像の素材の表（書き出し・examples/emo-present.rs）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
+# surface の合成（MCP の dump_surface・書き出し・examples/emo-present.rs）。
 areka-emo-compose = { path = "../areka-emo-compose" }
-# runtime 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
-# clock を消費するための workspace path 依存昇格。外部（crates.io）依存の追加ではない統合結線
-# （R10.5 の「新規依存」に該当しない）。
+# SERIKO の表と束ね（MCP の check_script・書き出し）。
 areka-seriko = { path = "../areka-seriko" }
+# バルーンの文字層（MCP の check_script の書体の判定・dump_balloon の読み戻し）。
 areka-emo-text = { path = "../areka-emo-text" }
+# さくらスクリプトの検査・字の数え・スコープの鍵（インストールの規約・MCP の check_script／dump_balloon・書き出し）。
 areka-sakura = { path = "../areka-sakura" }
+# アクター通信の原語（MCP・メニュー・インストールと更新の机と作業スレッド・スレッドの役割）。
 areka-actor = { path = "../areka-actor" }
+# 合図の型（インストールと更新の告知）。
 dola = { path = "../dola" }
-# emo-present は placement 観測 example 用 dev-dependency だったが、runtime の実 sink 結線
-# （EmoPresenter・PresentCommand 契約正本）で通常依存へ昇格（areka-P0-emo2-boot design R10.8）。
-# examples/emo-present.rs は通常依存からも参照可能。
+# 描画コマンドの契約型と presenter（MCP の dump_surface・書き出し・examples/emo-present.rs）。
 areka-emo-present = { path = "../areka-emo-present" }
 
 [dev-dependencies]
-# 本体のテストが ShioriBackend トレイトの戻り値型（RequestError/ExitKind/ShutdownError/
-# HelperStatus）を名前で参照するために置く。使い手は背骨の足場（runtime_tests/spine.rs とその子・
-# spec: runtime-crate-split 設計 D4）と、台本の SHIORI で起動を組む本体のテスト
-# （areka-session の src/ghost_switch_test_support.rs・src/script_security_e2e_tests.rs ほか）。台本の SHIORI
-# そのもの（ScriptedShioriBackend）は areka-runtime の spine（test-support）にある。areka-kanade は
-# これら host32 型を re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で
-# 推移ビルド済み・x64・新規外部（crates.io）依存ではない）。
+# 試験用の `shiori_host`（`IShioriHost` 実装）とそのテストが使う。
+shiori-abi = { path = "../shiori-abi" }
+# 試験用の `shiori_host` の COM の実装だけが使う。
+windows-core = { workspace = true }
+# readonly 起動のテストが書ける根の判断を直接引く。
+areka-user-data = { path = "../areka-user-data" }
+# examples のログの初期化。
+tracing-subscriber = { workspace = true }
+# ShioriBackend の戻り値型（RequestError/ExitKind/ShutdownError/HelperStatus）を名前で参照する背骨の足場と、台本の SHIORI で起動を組むテスト。areka-kanade はこれらを re-export しない。
 shiori-host32-host = { path = "../shiori-host32-host" }
-# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
-# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
-# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
-# 依存方向の規律により [dependencies] へは決して置かない。
+# ログ捕捉テストの硬化機構。テスト専用・[dependencies] へは置かない。
 log-capture-kit = { path = "../log-capture-kit" }
-# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（同 spec）。
-# 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
-# [dependencies] へは決して置かない。
+# テスト用一時パスをプロセス間で一意に組み立てる窓口。テスト専用・[dependencies] へは置かない。
 temp-path-kit = { path = "../temp-path-kit" }
-# 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
-# テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
-# log-capture-kit と同じく [dependencies] へは決して置かない。
+# 検体ゴースト／バルーンを名前で引く窓口。テスト・example 専用・[dependencies] へは置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
-# 実機の試験の窓口（spec: areka-P0-real-run-mcp-kit）。検体の窓口を本番の表に持つので、
-# [dependencies] へは決して置かない（見張り sample_path_guard_test が赤にする＝D-2）。
+# 実機の試験の窓口。検体の窓口を持つので [dependencies] へは置かない。
 real-run-kit = { path = "../real-run-kit" }
-# 配置のテストの支えを本体のテストにだけ開ける（spec: placement-crate-split 要件 3.5）。本番の表の同じ依存に機能を足すだけ。
-areka-placement = { path = "../areka-placement", features = ["test-support"] }
-# runtime のテストの支えを本体のテストにだけ開ける（spec: runtime-crate-split 要件 3.1／3.2）。本番の表の同じ依存に機能を足すだけ。
-areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
-# 入力のテストの支えを本体のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
+# 入力・集めた層のテストの支えを本体のテストにだけ開ける（配置・実行系の支えは areka-session からだけ連鎖で開く）。
 areka-input = { path = "../areka-input", features = ["test-support"] }
-# 集めた層のテストの支えを本体のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
 areka-session = { path = "../areka-session", features = ["test-support"] }
-# オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
-# （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
+# オフラインの書き出しの検体の PNG を書き、書き出した PNG を RGBA で読む。
 image = { version = "0.25.10", default-features = false, features = ["png"] }

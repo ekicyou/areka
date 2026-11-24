@@ -1,30 +1,8 @@
 //! `--option readonly` の語。
 
+use super::parse_tests::{run, s, split};
 use super::*;
 use areka_session::boot_request::ModulePolicy;
-
-/// `args[0]` に exe を足して読む。
-fn run(args: &[&str]) -> Parsed {
-    let mut all = vec!["areka".to_owned()];
-    all.extend(args.iter().map(|a| (*a).to_owned()));
-    parse(&all)
-}
-
-fn s(v: &str) -> String {
-    v.to_owned()
-}
-
-/// 最後のまとめの (効く・何もしない・無視)。
-fn summary(parsed: &Parsed) -> (&[String], &[String], &[String]) {
-    match parsed.notes.last() {
-        Some(ParseNote::Summary {
-            effective,
-            noop,
-            ignored,
-        }) => (effective, noop, ignored),
-        other => panic!("最後はまとめ: {other:?}"),
-    }
-}
 
 fn pending_words(parsed: &Parsed) -> Vec<&str> {
     parsed
@@ -52,7 +30,7 @@ fn readonly_word_is_effective_once() {
         let parsed = run(&args);
         assert!(parsed.options.readonly, "{args:?}");
         assert!(pending_words(&parsed).is_empty(), "{args:?}");
-        let (effective, _, ignored) = summary(&parsed);
+        let (effective, _, ignored) = split(&parsed).1;
         assert_eq!(
             effective.iter().filter(|w| *w == "readonly").count(),
             1,
@@ -70,7 +48,7 @@ fn kiosk_stays_pending_beside_readonly() {
     let parsed = run(&["--option", "kiosk,readonly"]);
     assert!(parsed.options.readonly);
     assert_eq!(pending_words(&parsed), vec!["kiosk"]);
-    let (effective, _, ignored) = summary(&parsed);
+    let (effective, _, ignored) = split(&parsed).1;
     assert_eq!(effective, &[s("readonly")]);
     assert_eq!(ignored, &[s("kiosk")]);
 }
@@ -85,7 +63,7 @@ fn readonly_with_offline_dump_is_ignored() {
             .contains(&ParseNote::OfflineIgnored { name: s("option") })
     );
     assert!(pending_words(&parsed).is_empty());
-    let (effective, _, ignored) = summary(&parsed);
+    let (effective, _, ignored) = split(&parsed).1;
     assert!(!effective.contains(&s("readonly")), "{effective:?}");
     assert!(ignored.contains(&s("readonly")), "{ignored:?}");
 }
@@ -109,7 +87,7 @@ fn readonly_keeps_other_words_effects() {
     assert_eq!(both.options.modules, ModulePolicy::Skip);
     assert_eq!(both.options.boot, alone.options.boot);
     assert_eq!(
-        summary(&both).0,
+        split(&both).1.0,
         &[s("nobootcheck"), s("readonly"), s("dontloadmodule")]
     );
 }

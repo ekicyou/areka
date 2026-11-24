@@ -3,21 +3,14 @@
 use super::*;
 use areka_placement::follow::OffsetBase;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use windows::Win32::Foundation::HWND;
 
-/// 主の画面より左上の画面の矩形（SSP の段 1 の値）。
+/// 主の画面より左上の画面の矩形。
 pub const LEFT_SCREEN: ScreenRect = ScreenRect {
     left: -782,
     top: 201,
     right: 49,
     bottom: 1227,
 };
-
-pub fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
 
 pub fn placement() -> ScopePlacement {
     ScopePlacement {

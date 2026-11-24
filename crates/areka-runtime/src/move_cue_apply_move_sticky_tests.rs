@@ -4,27 +4,22 @@
 //! `move_world`）、帳簿は `seed_sticky_descript`／`apply_set_sticky` で据える。
 //! 動かすのはスコープ 1（基準はスコープ 0 の窓）、組の相手はスコープ 0。
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::{Entity, World};
-use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{Point, WindowHandle};
 
-use super::apply_move_tests::{move_world, pos_of};
+use super::apply_move_tests::{
+    directive_for_scope1, events_named, move_world, persisted_after, pos_of,
+};
 use super::*;
 use areka_placement::follow::{Anchored, BalloonFollow};
-use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::Anchor;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 
 /// 帳簿を据え、台本の組 `members` を作る。
 fn group(world: &mut World, members: &[&str]) {
@@ -33,12 +28,7 @@ fn group(world: &mut World, members: &[&str]) {
     assert!(apply_set_sticky(world, &tokens));
 }
 
-/// スコープ 1 を動かす `\![move]`（x・y の両方が動く。基準はスコープ 0 の窓）。
-fn directive(tokens: &[&str]) -> MoveDirective {
-    let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-    parse_move_directive(1, &tokens).directive
-}
-
+/// x・y の両方が動く。基準はスコープ 0 の窓。
 const MOVE_XY: [&str; 6] = ["-353", "40", "", "0", "base", "base"];
 
 fn set_anchor(world: &mut World, gw: &GhostWindows, scope: usize, anchor: Anchor) {
@@ -51,18 +41,6 @@ fn diff(after: Point, before: Point) -> Point {
         x: after.x - before.x,
         y: after.y - before.y,
     }
-}
-
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
-fn finish(world: World) {
-    drop(world);
-    let _residue = drain_window_pos_commands();
 }
 
 struct Pair {
@@ -91,8 +69,9 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
     let (target_before, partner_before) = (pos_of(&world, p.target), pos_of(&world, p.partner));
     let offset = world.get::<BalloonFollow>(p.partner).unwrap().offset();
 
-    let (applied, events) =
-        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+    let (applied, events) = capture(|| {
+        apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+    });
     assert!(applied);
 
     let moved = diff(pos_of(&world, p.target), target_before);
@@ -106,15 +85,14 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
         "相手のバルーンが今のずらしで付いて動く"
     );
 
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_named(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
-    let e = logged[0];
+    let e = &logged[0];
     assert_eq!(e.field_str("trigger"), Some("move"));
     assert_eq!(e.field("scope"), Some("1"));
     assert_eq!(e.field("partners"), Some("[0]"));
     assert_eq!(e.field("dx"), Some(moved.x.to_string().as_str()));
     assert_eq!(e.field("dy"), Some(moved.y.to_string().as_str()));
-    finish(world);
 }
 
 /// 下に吸着した相手は横にだけ動く（吸着の軸の量は乗らない）。
@@ -128,7 +106,7 @@ fn bottom_partner_takes_only_the_horizontal_amount() {
 
     assert!(apply_move_directive(
         &mut world,
-        &directive(&MOVE_XY),
+        &directive_for_scope1(&MOVE_XY),
         ScaleRatio::ONE
     ));
 
@@ -141,7 +119,6 @@ fn bottom_partner_takes_only_the_horizontal_amount() {
             y: partner_before.y
         }
     );
-    finish(world);
 }
 
 /// `ignore-sticky-window` では相手が動かず組は残り、記録が出る。その後の
@@ -155,7 +132,7 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let p = pair(&gw);
     let partner_before = pos_of(&world, p.partner);
 
-    let ignore = directive(&[
+    let ignore = directive_for_scope1(&[
         "--x=-353",
         "--y=40",
         "--base=0",
@@ -167,11 +144,14 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let (applied, events) = capture(|| apply_move_directive(&mut world, &ignore, ScaleRatio::ONE));
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before, "相手は動かない");
-    let ignored = events_of(&events, "sticky_follow_ignored");
+    let ignored = events_named(&events, "sticky_follow_ignored");
     assert_eq!(ignored.len(), 1, "{events:?}");
     assert_eq!(ignored[0].field("scope"), Some("1"));
     assert_eq!(ignored[0].field("partners"), Some("[0]"));
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
     assert_eq!(
         world.resource::<StickyGroupLedger>().partners_of(1),
         vec![0],
@@ -182,7 +162,7 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
     let relation = diff(pos_of(&world, p.target), pos_of(&world, p.partner));
     assert!(apply_move_directive(
         &mut world,
-        &directive(&["-100", "-60", "", "0", "base", "base"]),
+        &directive_for_scope1(&["-100", "-60", "", "0", "base", "base"]),
         ScaleRatio::ONE
     ));
     assert_ne!(
@@ -194,66 +174,35 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
         diff(pos_of(&world, p.target), pos_of(&world, p.partner)),
         relation
     );
-    finish(world);
-}
-
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
 }
 
 /// 連れ動いた相手の位置を記憶に書かない。
 #[test]
 fn partner_position_is_not_persisted() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
     let (mut world, gw) = move_world();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
+    let loaded = persisted_after(&mut world, |world| {
+        set_anchor(world, &gw, 0, Anchor::Free);
+        group(world, &["0", "1"]);
+        let p = pair(&gw);
+        let partner_before = pos_of(world, p.partner);
+
+        assert!(apply_move_directive(
+            world,
+            &directive_for_scope1(&MOVE_XY),
+            ScaleRatio::ONE
+        ));
+        assert_ne!(
+            pos_of(world, p.partner),
+            partner_before,
+            "前提: 相手が動いた"
+        );
     });
-    set_anchor(&mut world, &gw, 0, Anchor::Free);
-    group(&mut world, &["0", "1"]);
-    let p = pair(&gw);
-    let partner_before = pos_of(&world, p.partner);
-
-    assert!(apply_move_directive(
-        &mut world,
-        &directive(&MOVE_XY),
-        ScaleRatio::ONE
-    ));
-    assert_ne!(
-        pos_of(&world, p.partner),
-        partner_before,
-        "前提: 相手が動いた"
-    );
-
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
     assert!(
         !loaded
-            .keys()
-            .any(|k| matches!(k, PersistKey::WindowPos { .. })),
+            .iter()
+            .any(|(k, _)| matches!(k, PersistKey::WindowPos { .. })),
         "窓の位置を記憶に書かない: {loaded:?}"
     );
-    parts.publisher.close();
-    let _ = parts.handle.join();
-    finish(world);
 }
 
 /// 時間つきの `\![move]` でも相手は最終の位置へすぐ置かれる。
@@ -266,13 +215,12 @@ fn timed_move_places_the_partner_at_once() {
     let p = pair(&gw);
     let (target_before, partner_before) = (pos_of(&world, p.target), pos_of(&world, p.partner));
 
-    let timed = directive(&["-353", "40", "500", "0", "base", "base"]);
+    let timed = directive_for_scope1(&["-353", "40", "500", "0", "base", "base"]);
     assert!(apply_move_directive(&mut world, &timed, ScaleRatio::ONE));
 
     let moved = diff(pos_of(&world, p.target), target_before);
     assert_ne!(moved, Point { x: 0, y: 0 });
     assert_eq!(diff(pos_of(&world, p.partner), partner_before), moved);
-    finish(world);
 }
 
 /// 組に入っていない窓への `\![move]` は今のまま（ほかの窓は動かず、連れ動きの記録も無い）。
@@ -287,8 +235,9 @@ fn ungrouped_window_moves_alone_as_before() {
         let p = pair(&gw);
         let partner_before = pos_of(&world, p.partner);
 
-        let (applied, events) =
-            capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+        let (applied, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+        });
         assert!(applied);
         assert_eq!(pos_of(&world, p.partner), partner_before, "seed={seed}");
         for name in [
@@ -297,11 +246,10 @@ fn ungrouped_window_moves_alone_as_before() {
             "sticky_member_absent",
         ] {
             assert!(
-                events_of(&events, name).is_empty(),
+                events_named(&events, name).is_empty(),
                 "seed={seed}: {events:?}"
             );
         }
-        finish(world);
     }
 }
 
@@ -314,18 +262,18 @@ fn absent_member_is_logged_and_left_out() {
     let p = pair(&gw);
     let partner_before = pos_of(&world, p.partner);
 
-    let (applied, events) =
-        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+    let (applied, events) = capture(|| {
+        apply_move_directive(&mut world, &directive_for_scope1(&MOVE_XY), ScaleRatio::ONE)
+    });
     assert!(applied);
     assert_ne!(pos_of(&world, p.partner), partner_before);
-    let absent = events_of(&events, "sticky_member_absent");
+    let absent = events_named(&events, "sticky_member_absent");
     assert_eq!(absent.len(), 1, "{events:?}");
     assert_eq!(absent[0].field("scope"), Some("5"));
     assert_eq!(absent[0].field_str("when"), Some("move"));
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_named(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
     assert_eq!(logged[0].field("partners"), Some("[0]"));
-    finish(world);
 }
 
 /// 動かす窓を書けなかったときは相手を動かさない。量が 0 のときも何もしない。
@@ -340,23 +288,32 @@ fn refused_write_or_zero_amount_moves_no_partner() {
     // 量が 0: x・y を省いた（今の位置のまま）指令。
     let partner_before = pos_of(&world, p.partner);
     let (applied, events) = capture(|| {
-        apply_move_directive(&mut world, &directive(&["", "", "", "0"]), ScaleRatio::ONE)
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["", "", "", "0"]),
+            ScaleRatio::ONE,
+        )
     });
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before);
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
 
     // 書けない: 動かす窓の窓ハンドルを外す。
     world.entity_mut(p.target).remove::<WindowHandle>();
     let (applied, events) = capture(|| {
         apply_move_directive(
             &mut world,
-            &directive(&["-100", "-60", "", "0", "base", "base"]),
+            &directive_for_scope1(&["-100", "-60", "", "0", "base", "base"]),
             ScaleRatio::ONE,
         )
     });
     assert!(!applied);
     assert_eq!(pos_of(&world, p.partner), partner_before);
-    assert!(events_of(&events, "sticky_follow").is_empty(), "{events:?}");
-    finish(world);
+    assert!(
+        events_named(&events, "sticky_follow").is_empty(),
+        "{events:?}"
+    );
 }

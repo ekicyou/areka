@@ -77,9 +77,9 @@ fn run(ghost_root: &std::path::Path, raw: &str, scope: u32) -> ([Vec<u32>; 4], V
 
 /// 記録のうち `level` の `event` の (category, part) の列。
 fn logged(events: &[CapturedEvent], level: tracing::Level, event: &str) -> Vec<(String, String)> {
-    events
-        .iter()
-        .filter(|e| e.level == level && e.field_str("event") == Some(event))
+    crate::session_tests::events_named(events, event)
+        .into_iter()
+        .filter(|e| e.level == level)
         .map(|e| {
             let f = |k| e.field_str(k).unwrap_or_default().to_owned();
             (f("category"), f("part"))
@@ -100,7 +100,7 @@ fn pair(c: &str, p: &str) -> (String, String) {
 
 /// 13 通り（指定 → スコープ 0 の着ているもの・無い名前の warn）。
 #[test]
-fn research_10_4_thirteen_cases() {
+fn named_binds_on_scope_zero_cases() {
     let ghost = g_bind("offline-bind-spec");
     let none = Vec::new;
     type Case = (&'static str, Vec<u32>, Vec<(String, String)>);
@@ -175,9 +175,9 @@ fn unreadable_specs_warn_and_empty_separators_are_skipped() {
     let raw = ";cloth,casual,2;cloth;acc,a,1,x;cloth,swim,TRUE;;acc,b,0;";
     let ([s0, ..], events) = run(ghost.path(), raw, 0);
     assert_eq!(s0, vec![UNIFORM, HAT, A], "読めた acc,b,0 だけが効く");
-    let unreadable: Vec<String> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN && e.field_str("event") == Some(UNREADABLE))
+    let unreadable: Vec<String> = crate::session_tests::events_named(&events, UNREADABLE)
+        .into_iter()
+        .filter(|e| e.level == tracing::Level::WARN)
         .map(|e| e.field_str("spec").unwrap_or_default().to_owned())
         .collect();
     assert_eq!(

@@ -1,6 +1,6 @@
 //! 実行系の側の起動（`boot_runtime`）の決定論テスト。
 //!
-//! 確かめること: 束から sink が今の並び（`runtime_sinks`）で組まれ、最後から 2 本目が読み直しの
+//! 確かめること: 束から sink が `runtime_sinks` の並びで組まれ、最後から 2 本目が読み直しの
 //! 受け口・最後が常に手前の受け口（線へ届く）であること・
 //! 起動に失敗したとき World が変わらないこと・成功したときだけ受信端 5 つが World に据わること。
 
@@ -113,7 +113,7 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
     assert_eq!(
         sinks.len(),
         13,
-        "11 本の今の並びの後ろに読み直しの受け口、その後ろに常に手前の受け口"
+        "11 本の並びの後ろに読み直しの受け口、その後ろに常に手前の受け口"
     );
 
     sinks[11].emit(carrier_cue("reload", &["ghost"]));

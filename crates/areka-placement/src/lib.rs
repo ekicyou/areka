@@ -27,7 +27,7 @@
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
 //! source→config→measure→resolver を束ねる配置準備の合成ルート [`prepare_ghost_windows`]
-//! を持つ（シームの結線自体は本体の `ghost_session::prepare_ghost_windows`）。
+//! を持つ（シームの結線自体は `areka-session` の `ghost_session::prepare_ghost_windows`）。
 
 pub mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手。
@@ -468,10 +468,8 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// `k` が恒等なら [`follow::scale_author_offset`] は生値を素通しする（丸め権威
 /// `ScaleRatio::scale_len` の恒等素通し）。
-/// 唯一の例外は `i32::MIN` で、`scale_signed` が `-i32::MAX` へ飽和させる（`windowposition` 由来の
-/// 調整量も同じ。回り込みは起きず、飽和は下の `warn!` で必ず記録に出る）。
-/// 作者が書ける生値の受理範囲は実質 `i32::MIN + 1..=i32::MAX`
-/// （檻 `supply_identity_saturates_only_at_i32_min` が固定）。
+/// `i32::MIN` も素通しになる（`windowposition` 由来の調整量も同じ。檻
+/// `supply_identity_passes_through_the_whole_range` が固定）。
 ///
 /// # 飽和と縮退
 ///

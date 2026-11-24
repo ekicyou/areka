@@ -13,7 +13,7 @@ use areka_kanade::{
 };
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
@@ -28,9 +28,7 @@ use areka_session::boot_config::BootContext;
 use areka_session::ghost_session::GhostSession;
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::SwitchInFlight;
-use areka_session::ghost_switch::{
-    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
-};
+use areka_session::ghost_switch::{SwitchEnd, SwitchStage, WelcomeAttempt};
 use areka_session::log_history::TARGET_ERROR;
 use areka_session::reload::test_support::{boot_context, plant_skin_switch};
 use areka_session::reload::*;
@@ -50,6 +48,7 @@ fn rig(label: &str) -> Rig {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(boot_context(temp.path(), &root));
+    world.insert_resource(crate::BODY_SYSTEMS);
     let (tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
@@ -88,29 +87,7 @@ fn plant_reload(world: &mut World) {
 }
 
 fn plant_ghost_switch(world: &mut World) {
-    world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: PathBuf::from("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: PathBuf::from("A"),
-            name: None,
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
-}
-
-fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
+    world.insert_non_send(super::reservation(SwitchStage::SendOff));
 }
 
 /// 1 件の要求を記録つきで出し、(判定, `reload_refused` の (水準, 理由, ゴースト) の並び, warn 以上の総数)。
@@ -119,7 +96,7 @@ fn refuse(
     request: ReloadRequest,
 ) -> (ReloadVerdict, Vec<(Level, String, String)>, usize) {
     let (verdict, events) = capture(|| request_reload(&mut rig.world, request));
-    let refused = named(&events, "reload_refused")
+    let refused = super::events_named(&events, "reload_refused")
         .into_iter()
         .map(|e| {
             (
@@ -139,7 +116,6 @@ fn refuse(
 #[test]
 fn refusals_in_order_leave_one_record_each() {
     let mut rig = rig("areka-reload-refusals");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     plant_reload(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     plant_skin_switch(&mut rig.world, SkinKind::Shell, Path::new("planted"));
@@ -192,11 +168,34 @@ fn refusals_in_order_leave_one_record_each() {
     );
 }
 
+/// 更新中・インストール中の断りは MCP からの要求だけ。台本からの要求は止めない。
+#[test]
+fn updating_and_installing_refuse_only_mcp_requests() {
+    let mut rig = rig("areka-reload-busy-origin");
+    insert_running_desk_for_test(&mut rig.world);
+    insert_busy_desk_for_test(&mut rig.world);
+    let from_mcp = request_reload(&mut rig.world, mcp(ReloadTarget::Shell));
+    let from_script = request_reload(
+        &mut rig.world,
+        ReloadRequest {
+            target: ReloadTarget::Shell,
+            origin: ReloadOrigin::Script,
+            notes: DescriptNotes::default(),
+        },
+    );
+    assert_eq!(
+        (from_mcp, from_script),
+        (
+            ReloadVerdict::Refused(RefusedReason::Updating),
+            ReloadVerdict::Accepted
+        )
+    );
+}
+
 /// 文脈なし: 置き場のゴーストが無い・kanade の送出端が無いときも `no_context` で断る。
 #[test]
 fn missing_ghost_or_kanade_is_no_context() {
     let mut rig = rig("areka-reload-no-context");
-    rig.world.insert_resource(crate::BODY_SYSTEMS);
     rig.world
         .insert_non_send(GhostSlot(Some(GhostSession::for_test(
             None,
@@ -225,7 +224,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
     let mut rig = rig("areka-reload-closing");
     plant_reload(&mut rig.world);
     let (_, events) = capture(|| areka_session::exit_wait::begin_close(&mut rig.world));
-    let dropped = named(&events, "reload_dropped")
+    let dropped = super::events_named(&events, "reload_dropped")
         .into_iter()
         .map(|e| {
             (
@@ -239,7 +238,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
 
     plant_ghost_switch(&mut rig.world);
     let (verdict, events) = capture(|| request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)));
-    let closing = named(&events, "reload_refused")
+    let closing = super::events_named(&events, "reload_refused")
         .into_iter()
         .map(|e| (e.level, e.field_str("reason").map(str::to_owned)))
         .collect::<Vec<_>>();
@@ -281,7 +280,7 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
     let words = |event: &str| {
-        named(&events, event)
+        super::events_named(&events, event)
             .into_iter()
             .map(|e| (e.level, e.field("word").map(str::to_owned)))
             .collect::<Vec<_>>()
@@ -292,8 +291,8 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
             words("reload_descript_unsupported"),
             words("reload_descript_unknown"),
             words("reload_descript_no_words"),
-            named(&events, "reload_refused").len(),
-            named(&events, "reload_started").len(),
+            super::events_named(&events, "reload_refused").len(),
+            super::events_named(&events, "reload_started").len(),
         ),
         (
             ReloadVerdict::Refused(RefusedReason::NoWords),
@@ -324,7 +323,7 @@ fn accepted_leaves_one_started_record() {
         },
     };
     let (verdict, events) = capture(|| request_reload(&mut rig.world, req));
-    let started = named(&events, "reload_started")
+    let started = super::events_named(&events, "reload_started")
         .into_iter()
         .map(|e| {
             (
@@ -344,8 +343,8 @@ fn accepted_leaves_one_started_record() {
         (
             verdict,
             started,
-            named(&events, "reload_descript_unknown").len(),
-            named(&events, "reload_failed")
+            super::events_named(&events, "reload_descript_unknown").len(),
+            super::events_named(&events, "reload_failed")
                 .iter()
                 .map(|e| (
                     e.level,
@@ -379,7 +378,15 @@ fn accepted_leaves_one_started_record() {
 #[test]
 fn drain_hands_script_requests_to_the_desk() {
     let mut rig = rig("areka-reload-drain");
-    drain(&mut rig.world);
+    let ((), idle) = capture(|| drain(&mut rig.world));
+    assert_eq!(
+        (
+            idle.iter().filter(|e| e.level <= Level::WARN).count(),
+            rig.world.get_non_send::<ReloadInFlight>().is_none(),
+        ),
+        (0, true),
+        "受信端が無いときの drain は warn 以上の記録も印も残さない（warn 以上の数, 印なし）"
+    );
     let (tx, rx) = mpsc::channel();
     areka_runtime::reload_cue::wire_reload_rx(&mut rig.world, rx);
     for target in [ReloadTarget::Shell, ReloadTarget::Balloon] {
@@ -390,7 +397,7 @@ fn drain_hands_script_requests_to_the_desk() {
         .unwrap();
     }
     let ((), events) = capture(|| drain(&mut rig.world));
-    let started = named(&events, "reload_started")
+    let started = super::events_named(&events, "reload_started")
         .into_iter()
         .map(|e| {
             (
@@ -460,7 +467,7 @@ fn ghost_reload_reserves_the_current_ghost() {
                 .get_non_send::<SwitchInFlight>()
                 .map(|f| f.target.dir.clone()),
             reserved,
-            named(&events, "reload_failed").len(),
+            super::events_named(&events, "reload_failed").len(),
             boot_origin_override(&rig.world),
             wants_runtime_only(&rig.world),
         ),
@@ -701,7 +708,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
                 .get_non_send::<SwitchInFlight>()
                 .map(|f| f.target.dir.clone()),
             reserved,
-            named(&events, "reload_failed").len(),
+            super::events_named(&events, "reload_failed").len(),
             wants_runtime_only(&rig.world),
             boot_origin_override(&rig.world),
         ),
@@ -749,7 +756,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
             None => drop(reply),
         }
         let ((), events) = capture(|| drain(&mut rig.world));
-        let ends = named(&events, "reload_failed")
+        let ends = super::events_named(&events, "reload_failed")
             .into_iter()
             .map(|e| {
                 (
@@ -795,7 +802,7 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
 }
 
 /// シェルの面の持ち越しは、自分の予約の ghost の読み直しのときだけ真。shiori の読み直し・
-/// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しは今までどおり）。
+/// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しには効かない）。
 #[test]
 fn shell_state_is_carried_only_by_its_own_ghost_reload() {
     let mut rig = rig("areka-reload-carry");

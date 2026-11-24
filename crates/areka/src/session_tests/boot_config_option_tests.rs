@@ -3,7 +3,7 @@
 //! テストの口 `resolve_boot_from` に引数の列を渡し（中で読み方を通す）、経路・場所・起動中の印の値を見る。
 //! 根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下）。
 
-use crate::session_tests::resolve_boot_from;
+use crate::session_tests::{no_pick, put_ghost, resolve_boot_from, save_scope};
 use areka_session::boot_config::BootResolved;
 use areka_session::boot_resolve::{
     BalloonRoute, DEFAULT_BALLOON_FOLDER, DEFAULT_GHOST_FOLDER, GhostRoute, write_session_mark,
@@ -12,24 +12,12 @@ use log_capture_kit::capture;
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
-
 fn first(_n: usize) -> usize {
     0
 }
 
-fn put_ghost(dir: &Path) {
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
-}
-
 /// 根にゴースト `g1` と既定ゴースト、バルーン（既定・`b1`）を置き、最後のゴーストの記憶を `g1` にする。
 fn fixture(label: &str) -> TempPath {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = TempPath::under_target(label);
     for g in ["g1", DEFAULT_GHOST_FOLDER] {
         put_ghost(&tmp.child("ghost").join(g));
@@ -39,15 +27,7 @@ fn fixture(label: &str) -> TempPath {
         std::fs::create_dir_all(&dir).expect("フォルダを組む");
         std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
     }
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(tmp.child("app-profile")),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, "g1".to_owned())],
-    );
+    save_scope(&tmp.child("app-profile"), "g1");
     tmp
 }
 
@@ -56,6 +36,16 @@ fn g1(tmp: &TempPath) -> String {
 }
 
 fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved {
+    boot_with(tmp, rest, pick, |_, dir| dir.to_path_buf())
+}
+
+/// 選び手と写しの口を選んで起動を決める。
+fn boot_with(
+    tmp: &TempPath,
+    rest: &[&str],
+    pick: fn(usize) -> usize,
+    prepare: fn(&areka_ghost::BasewareRoots, &Path) -> PathBuf,
+) -> BootResolved {
     let args: Vec<String> = std::iter::once("areka.exe")
         .chain(rest.iter().copied())
         .map(str::to_owned)
@@ -65,7 +55,7 @@ fn boot(tmp: &TempPath, rest: &[&str], pick: fn(usize) -> usize) -> BootResolved
         &args,
         &tmp.child("app-profile"),
         pick,
-        |_, dir| dir.to_path_buf(),
+        prepare,
     )
     .expect("決まる")
 }
@@ -75,11 +65,11 @@ fn answer(got: &BootResolved) -> (GhostRoute, PathBuf, Option<String>) {
     (got.1.route, got.1.dir.clone(), got.3.clone())
 }
 
-/// オプションなしは今と同じ答え: 引数なしは記憶、位置の引数は `Argv` で印を読まない。
+/// オプションなしの答え: 引数なしは印が無ければ記憶・印が在れば既定、位置の引数は `Argv` で印を読まない。
 #[test]
-fn without_options_the_answer_is_as_today() {
+fn without_options_the_answer_follows_the_session_mark() {
     let tmp = fixture("cfg-opt-none");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
         answer(&boot(&tmp, &[], no_pick)),
         (
@@ -113,7 +103,7 @@ fn ghost_option_overrides_positional_ghost() {
 #[test]
 fn nobootcheck_does_not_read_the_mark() {
     let tmp = fixture("cfg-opt-nobootcheck");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     assert_eq!(
         answer(&boot(&tmp, &["--option", "nobootcheck"], no_pick)),
         (GhostRoute::Memory, tmp.child("ghost").join("g1"), None)
@@ -124,7 +114,7 @@ fn nobootcheck_does_not_read_the_mark() {
 #[test]
 fn random_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-random-mark");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     let got = boot(&tmp, &["--random"], first);
     assert_eq!(
         (got.1.route, got.3.as_deref()),
@@ -139,16 +129,13 @@ fn positional_ghost_with_random_logs_unused_random() {
     let argv = g1(&tmp);
     let (got, events) = capture(|| answer(&boot(&tmp, &[&argv, "--random"], no_pick)));
     assert_eq!(got, (GhostRoute::Argv, PathBuf::from(&argv), None));
-    let unused = events
-        .iter()
-        .filter(|e| {
-            e.level == tracing::Level::INFO && e.field_str("event") == Some("random_unused")
-        })
-        .count();
-    assert_eq!(unused, 1);
+    assert_eq!(
+        super::levels_of(&events, "random_unused"),
+        vec![tracing::Level::INFO]
+    );
 }
 
-/// 位置のバルーンは `--ghost` の有無に関わらず今の道で使う。
+/// 位置のバルーンは `--ghost` の有無に関わらず通常の道で使う。
 #[test]
 fn positional_balloon_is_used_with_or_without_ghost_option() {
     let tmp = fixture("cfg-opt-positional-balloon");
@@ -173,26 +160,6 @@ fn positional_balloon_is_used_with_or_without_ghost_option() {
 // `--ghost` の指し先
 // ---------------------------------------------------------------------------
 
-/// `boot` と同じだが写しの口を選べる。
-fn boot_with(
-    tmp: &TempPath,
-    rest: &[&str],
-    prepare: fn(&areka_ghost::BasewareRoots, &Path) -> PathBuf,
-) -> BootResolved {
-    let args: Vec<String> = std::iter::once("areka.exe")
-        .chain(rest.iter().copied())
-        .map(str::to_owned)
-        .collect();
-    resolve_boot_from(
-        areka_session::roots::single_env(tmp.path().to_path_buf()),
-        &args,
-        &tmp.child("app-profile"),
-        no_pick,
-        prepare,
-    )
-    .expect("決まる")
-}
-
 /// 写しの口が呼ばれたら分かるように、フォルダの下の `copied` を返す。
 fn mark_copy(_: &areka_ghost::BasewareRoots, dir: &Path) -> PathBuf {
     dir.join("copied")
@@ -207,13 +174,6 @@ fn put_named_ghost(dir: &Path, name: &str) {
         format!("charset,UTF-8\nname,{name}\n"),
     )
     .expect("descript");
-}
-
-fn count(events: &[log_capture_kit::CapturedEvent], level: tracing::Level, event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == level && e.field_str("event") == Some(event))
-        .count()
 }
 
 /// 絶対パスで置き場の外のゴーストを指すと、親が一時の置き場として並びと状態の先頭に足され、
@@ -241,8 +201,8 @@ fn absolute_path_adds_temporary_root_at_head() {
         (tmp.child("ext").as_path(), true)
     );
     assert_eq!(
-        count(&events, tracing::Level::INFO, "temporary_root_added"),
-        1
+        super::levels_of(&events, "temporary_root_added"),
+        vec![tracing::Level::INFO]
     );
 }
 
@@ -259,8 +219,8 @@ fn absolute_path_under_root_ghost_store_adds_no_temporary_root() {
     assert_eq!(got.4.roots.roots().len(), 1);
     assert!(!got.4.roots.roots()[0].is_temporary());
     assert_eq!(
-        count(&events, tracing::Level::INFO, "temporary_root_added"),
-        0
+        super::levels_of(&events, "temporary_root_added"),
+        Vec::<tracing::Level>::new()
     );
 }
 
@@ -271,7 +231,7 @@ fn absolute_path_boots_the_pointed_folder_itself() {
     let ext_g1 = tmp.child("ext").join("g1");
     put_ghost(&ext_g1);
     let s = ext_g1.display().to_string();
-    let got = boot_with(&tmp, &["--ghost", &s], mark_copy);
+    let got = boot_with(&tmp, &["--ghost", &s], no_pick, mark_copy);
     assert_eq!(
         (got.1.route, &got.1.dir, got.1.folder.as_deref()),
         (GhostRoute::Pointed, &ext_g1, Some("g1"))
@@ -292,33 +252,23 @@ fn absolute_path_not_a_ghost_folder_falls_back_to_usual() {
     );
     assert_eq!(got.4.roots.roots().len(), 1);
     assert_eq!(
-        count(&events, tracing::Level::WARN, "ghost_option_not_ghost_dir"),
-        1
+        super::levels_of(&events, "ghost_option_not_ghost_dir"),
+        vec![tracing::Level::WARN]
     );
 }
 
 /// 次の起動で一時の置き場が無く、記憶が一時の置き場のゴーストを指す: 見つからないを記録して次の段へ。
 #[test]
 fn next_boot_does_not_find_the_temporary_ghost_in_memory() {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = fixture("cfg-opt-ghost-next-boot");
     put_ghost(&tmp.child("ext").join("dev"));
-    save_scope(
-        PersistScope::App,
-        &ScopeRoots {
-            app: Some(tmp.child("app-profile")),
-            ..ScopeRoots::default()
-        },
-        &FsPersistIo,
-        vec![(PersistKey::LastGhost, "dev".to_owned())],
-    );
+    save_scope(&tmp.child("app-profile"), "dev");
     let (got, events) = capture(|| boot(&tmp, &[], no_pick));
     assert_eq!(got.1.route, GhostRoute::Default);
     assert_eq!(got.4.roots.roots().len(), 1, "一時の置き場は残らない");
     assert_eq!(
-        count(&events, tracing::Level::WARN, "last_ghost_not_found"),
-        1
+        super::levels_of(&events, "last_ghost_not_found"),
+        vec![tracing::Level::WARN]
     );
 }
 
@@ -329,7 +279,7 @@ fn name_matches_descript_name_before_folder_name() {
     // フォルダ名 `Alpha` のゴーストと、`name,Alpha` のフォルダ `named`。
     put_named_ghost(&tmp.child("ghost").join("Alpha"), "Other");
     put_named_ghost(&tmp.child("ghost").join("named"), "Alpha");
-    let got = boot_with(&tmp, &["--ghost", "Alpha"], mark_copy);
+    let got = boot_with(&tmp, &["--ghost", "Alpha"], no_pick, mark_copy);
     assert_eq!(
         (got.1.route, &got.1.dir, got.1.folder.as_deref()),
         (
@@ -357,8 +307,8 @@ fn name_not_found_falls_back_to_usual() {
         (GhostRoute::Memory, Some("g1"))
     );
     assert_eq!(
-        count(&events, tracing::Level::WARN, "ghost_option_not_found"),
-        1
+        super::levels_of(&events, "ghost_option_not_found"),
+        vec![tracing::Level::WARN]
     );
 }
 
@@ -388,7 +338,7 @@ fn ghost_without_value_uses_usual_choice() {
 #[test]
 fn ghost_option_still_returns_the_mark() {
     let tmp = fixture("cfg-opt-ghost-mark");
-    let _ = write_session_mark(&tmp.child("app-profile"), "落ちた子");
+    write_session_mark(&tmp.child("app-profile"), "落ちた子").expect("印を書く");
     let dev = tmp.child("ext").join("dev");
     put_ghost(&dev);
     let dev_s = dev.display().to_string();
@@ -410,5 +360,8 @@ fn pointed_ghost_with_random_logs_unused_random() {
         (got.1.route, got.1.folder.as_deref()),
         (GhostRoute::Pointed, Some("g1"))
     );
-    assert_eq!(count(&events, tracing::Level::INFO, "random_unused"), 1);
+    assert_eq!(
+        super::levels_of(&events, "random_unused"),
+        vec![tracing::Level::INFO]
+    );
 }

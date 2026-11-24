@@ -179,7 +179,7 @@ crates/areka/src/
 - `tools/package.ps1:149`・`:153`・`:695`・`tools/perf/judge-perf.py:96`（説明のパスだけ・目印の本文は変えない）。
 - `doc/COMPAT_ARCHITECTURE.md`（§8 の既にある行のパス 33 か所と、`main.rs` の名で移す項目を指す `:189`・`:318`・`:319`）・`doc/ukadoc-coverage/ledger/*.toml`（32 行・43 か所）と `report/` の作り直し・`doc/ukadoc-coverage/briefing-assets.md:174`・`:213`・`doc/testing.md:47`・`doc/ssp-mcp/log-convention.md`（`:3`・`:39`・表の 4 行・`:135`）・`doc/pasta-real-run.md:127`・`:141`・`doc/ideas/novel-redesign-2026-11-20/` の 5 ファイル。
 - `.kiro/steering/structure.md`（本体の節の `session/`・`roots/`・`cli/`・`readme`・起動と終了の最上位のファイル・`log_history.rs`・`:281` の出し直し・`:319`・`:348`・`:418`・`:419`）・`.kiro/steering/tech.md:171`・`.kiro/steering/logging.md:103`。
-- `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`（受け持つファイルのパス）。
+- `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`（受け持つファイルのパス）。
 - `.kiro/specs/completed/session-module-gather/research.md`（検証の記録・外への参照の一覧・除いた所・申し送り）。
 
 ## System Flows

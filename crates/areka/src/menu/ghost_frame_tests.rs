@@ -18,10 +18,10 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::menu::{MenuAction, MenuWiring, wire_menu};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::boot_config::BootContext;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::SwitchInFlight;
+use areka_session::reload::test_support::boot_context_named;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -41,29 +41,7 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 
 /// 今のゴーストを `current` のフォルダとする起動の文脈。
 pub(crate) fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
-    BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.dir().join("profile"),
-        helper_exe: root.dir().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir(current),
-                balloon_root: root.balloon_dir("StayseeBalloon"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir(current),
-                folder: Some(current.to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("StayseeBalloon"),
-                folder: Some("StayseeBalloon".to_owned()),
-            },
-        },
-    }
+    boot_context_named(root.dir(), root, current, "StayseeBalloon")
 }
 
 /// メニューを結線し「ゴースト」枠を登記した World と kanade の受信端。文脈は `ctx` があれば据え、

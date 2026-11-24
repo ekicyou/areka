@@ -12,14 +12,13 @@
 //! ## スレッド座・COM
 //! 全 COM 参照は shiori アクタースレッド常駐で、`CoInitializeEx` は**呼ばない**（直接 vtable dispatch
 //! のみ・アクティベーション/マーシャリング非使用）。in-crate 檻は COM 未初期化スレッドで走るが、
-//! `windows-core` の `#[implement]` オブジェクトは直接 vtable dispatch ゆえ問題なく通る（reference_brain
-//! の in-crate 檻と同律）。
+//! `windows-core` の `#[implement]` オブジェクトは直接 vtable dispatch ゆえ問題なく通る。
 //!
 //! ## 依存境界
 //! 本 crate は [`shiori-abi`](shiori_abi) ＋ [`windows-core`](windows_core) のみに依存する。
 //! `windows`(Win32)・`tracing`・areka 系 crate へは依存しない（自給）。
 
-// `#[implement(...)]` の生成面が PascalCase メソッドを要求する（reference_brain と同律）。
+// `#[implement(...)]` の生成面が PascalCase メソッドを要求する。
 #![allow(non_snake_case)]
 
 use core::ffi::c_void;
@@ -67,7 +66,7 @@ const E_POINTER: HRESULT = HRESULT(0x8000_4003u32 as i32);
 /// 実 IShiori 境界を再現的に横断させる決定論 replay 脳。
 ///
 /// 保持状態は**不変データのみ**——`CreateInstance` で AddRef（clone）保持した host（parity 目的で
-/// 保持するが**呼び返さない**）と、観測用の `load_dir`／`shiori_name` clone（reference_brain と同律）。
+/// 保持するが**呼び返さない**）と、観測用の `load_dir`／`shiori_name` clone。
 /// 乱数・実時計・環境変数への依存を持たない（i686 testdll の env フック類も持ち込まない）。
 #[implement(IShiori)]
 pub struct ReplayBrain {
@@ -115,7 +114,7 @@ impl IShiori_Impl for ReplayBrain_Impl {
     }
 }
 
-/// 生成＋load 融合の生成面（reference_brain のパターン踏襲）。
+/// 生成＋load 融合の生成面。
 ///
 /// [`CreateInstance`](IShioriFactory_Impl::CreateInstance) は [`ReplayBrain`] を構築し、load 完了済みの
 /// `IShiori` を `out` へ move-out する。host `Ref` 欠落時は `out` 未書込で失敗する（半構築非露出）。
@@ -131,7 +130,7 @@ impl ReplayFactory {
 impl IShioriFactory_Impl for ReplayFactory_Impl {
     /// 脳を生成し、load 完了済みの `IShiori` を `out` へ move-out する。
     ///
-    /// - host `Ref` 欠落 → [`E_POINTER`] を返し `out` を書かない（半構築非露出・reference_brain と同律）。
+    /// - host `Ref` 欠落 → [`E_POINTER`] を返し `out` を書かない（半構築非露出）。
     /// - 成功時: `host` を clone（AddRef）して [`ReplayBrain`] へ保持させ（呼び返さない）、
     ///   refcount 1 の `IShiori` を `out` へ move-out する。
     unsafe fn CreateInstance(
@@ -153,8 +152,7 @@ impl IShioriFactory_Impl for ReplayFactory_Impl {
 
 /// `IShioriFactory` 実体を生成する純粋C コンストラクタ。
 ///
-/// production SHIORI4 生成入口（`crates/areka/src/reference_brain.rs::shiori_factory`）と同形の
-/// エクスポート ABI 形状（`#[unsafe(no_mangle)]`＋`extern "system"`＝Windows COM 標準の呼出規約・
+/// production SHIORI4 生成入口と同形のエクスポート ABI 形状（`#[unsafe(no_mangle)]`＋`extern "system"`＝Windows COM 標準の呼出規約・
 /// x64/ARM64 では `extern "C"` と同一 ABI だが COM 整合で正準表記は `system`）。host-32／InProc 経路が
 /// `GetProcAddress("shiori_factory")` で引ける形を満たす。
 ///
@@ -179,7 +177,7 @@ mod tests {
     //! in-crate 檻。
     //!
     //! cdylib の場所の決め方は `locate` の試験が持つ。ここは `ReplayFactory`→`CreateInstance`→
-    //! `Get`/`Notify` の vtable dispatch を実 COM 面で駆動する（reference_brain の流儀）。
+    //! `Get`/`Notify` の vtable dispatch を実 COM 面で駆動する。
 
     use super::*;
 
@@ -270,7 +268,7 @@ mod tests {
     }
 
     /// `shiori_factory` 成功時に refcount 1 の `IShioriFactory` を out へ move-out し `S_OK` を返す
-    /// こと（writes-on-success・reference_brain と同律）。
+    /// こと（writes-on-success）。
     #[test]
     fn shiori_factory_outputs_refcount_one_factory_on_success() {
         let mut out: *mut c_void = core::ptr::null_mut();

@@ -463,7 +463,7 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 | `crates/areka-input/src/user_break.rs:201` | 触らない crate（9.7）。14.6 で申し送る |
 | 素のファイル名だけの書き方・モジュール名だけの説明（`roots::user_root::exe_dir()` など） | 6.9 により当たりにしない（14.6 に古い説明として載せる） |
 | `.kiro/steering/product.md:81` の `crates/areka/src/boot_resolve.rs` | 式 3 の範囲（`structure`・`tech`・`logging` の 3 本）の外（14.6） |
-| `.kiro/specs/audit-areka-app/brief.md`・`audit-areka-install-update/brief.md` の所見の文に残る古いパス | 範囲の外（`.kiro/specs/` は式の範囲に無い・14.6） |
+| `.kiro/specs/completed/audit-areka-app/brief.md`・`audit-areka-install-update/brief.md` の所見の文に残る古いパス | 範囲の外（`.kiro/specs/` は式の範囲に無い・14.6） |
 
 `roots/mod.rs` を名指す行は式 3 に当たっていない（取り違えの確認は要らない）。
 
@@ -564,7 +564,7 @@ design.md の「設計の討議への持ち越し（OPEN QUESTIONS）」の 7 �
 | 7 | `crates/areka/src/menu/mod.rs:223`・`:254`・`install/mod.rs:132`・`update/mod.rs:224`・`mcp/mod.rs:48` | 呼び手を `ghost_session::register_systems` と書く（関数ポインタ経由で今も正しい）。名目上の渡し手は `main.rs` の `BODY_SYSTEMS` | `menu`・`mcp` は `audit-areka-app`・`install`・`update` は `audit-areka-install-update` |
 | 8 | `doc/COMPAT_ARCHITECTURE.md:346`・`:348`・`:349`・`:350`・`:405` | HEAD の時点から無い `runtime_tests/shell_balloon_resolve_tests.rs` を 5 か所名指す（実体は `crates/areka-runtime/src/shell_balloon_resolve_tests.rs`・移動と関係ない古い参照） | `audit-areka-app` |
 | 9 | `.kiro/steering/product.md:81` | `crates/areka/src/boot_resolve.rs` を名指す（式 3 の範囲の外・今は `crates/areka/src/session/boot_resolve.rs`） | `/kiro-complete` の steering の同期で直してよい |
-| 10 | `.kiro/specs/audit-areka-app/brief.md:84`・`:101`・`:113`・`:122`・`:131`〜`:134`・`audit-areka-install-update/brief.md:86` の所見の文 | `boot_config.rs`・`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`session_end_sync_send_tests.rs`・`readonly_tests.rs` など移す前のパスが所見の文に残る（受け持つファイルの一覧は直し済み・持ち主は変えていない） | 各 audit の要件の段で現在のパス（`session/…`・`session/boot_seam_persist_wiring_tests.rs` ほか）へ読み替える |
+| 10 | `.kiro/specs/completed/audit-areka-app/brief.md:84`・`:101`・`:113`・`:122`・`:131`〜`:134`・`audit-areka-install-update/brief.md:86` の所見の文 | `boot_config.rs`・`boot_resolve_tests.rs`・`main_persist_wiring_seam_tests.rs`・`session_end_sync_send_tests.rs`・`readonly_tests.rs` など移す前のパスが所見の文に残る（受け持つファイルの一覧は直し済み・持ち主は変えていない） | 各 audit の要件の段で現在のパス（`session/…`・`session/boot_seam_persist_wiring_tests.rs` ほか）へ読み替える |
 
 ### 14.7 机なしで走らせた実機の統合テスト
 

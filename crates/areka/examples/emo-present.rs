@@ -1,23 +1,21 @@
 //! areka emo-present 観測 example
 //!
 //! `areka_emo_present::EmoPresenter` を使い、**原寸バイトを記録した `GraphicsCommandList`** を
-//! WUC（Windows.UI.Composition）表示面へ載せて 2 窓を表示する観測用 example。mock-shell donor
-//! （`examples/mock-shell.rs`）から窓生成（WS_POPUP・透過 ex-style）・クリック透過機構への窓登録
-//! （`register_click_through_windows`・`Added<WindowHandle>`）・アプリ起動骨格を移植し、**表示内容の
-//! 供給機構だけ**を `BitmapSource`（ファイルパス widget）から `EmoPresenter`（合成した原寸バイトを
-//! コマンドリストへ記録し、拡大は D2D の変換行列が掛ける経路）へ差し替える。
-//! `main.rs`（本番アプリ骨格）は変更しない。
+//! WUC（Windows.UI.Composition）表示面へ載せて 2 窓を表示する観測用 example。窓生成（WS_POPUP・
+//! 透過 ex-style）・クリック透過機構への窓登録（`register_click_through_windows`・`Added<WindowHandle>`）・
+//! アプリ起動骨格を持ち、表示内容は `EmoPresenter`（合成した原寸バイトをコマンドリストへ記録し、
+//! 拡大は D2D の変換行列が掛ける経路）が供給する。
 //!
-//! - **シェル窓**（target 0）: emo2 `surface0`（`surface0.png` 単一 element）。
+//! - **シェル窓**（target 0）: emo2 `surface0` を照合のために 1 度出した後、`surface1000` の表情（下のまばたきの巡回）。
 //! - **バルーン窓**（target 1）: `balloons0.png`（`areka_emo_present::build_balloon_target` 経由）。
 //!
 //! 観測できること:
 //!
 //! - **surface 切替の周期観測**: wintf フレームクロック（`FrameTime`）駆動のタイマーで
-//!   シェル target（`TargetId(0)`）を `surface0` → `surface1000`（bind `[1100,1200,1302]`）→ `Hide` →
-//!   （反復）と数秒周期で巡回する。切替は必ず `EmoPresenter::apply`（指令 API）経由で行う。
+//!   シェル target（`TargetId(0)`）に `surface0` を出した後、`surface1000` のまばたき bind `1400` を
+//!   数秒周期で加えては外す。切替は必ず `EmoPresenter::apply`（指令 API）経由で行う。
 //! - **バルーンのアンカーオフセット配置**: shell descript の `sakura.balloon.offsetx/offsety`
-//!   を `areka_parsers::kv::parse_kv` で読み、あればそれを既定基準からの調整として適用する。emo2
+//!   を配置の crate の `build_placement_config` で読み、あればそれを既定基準からの調整として適用する。emo2
 //!   fixture は `sakura.balloon.alignment,left` を持つが offsetx/offsety は**無い**ため、実際に走るのは
 //!   **既定整列**（バルーン右端＝シェル左端・上端揃え）の算出配置である。
 //! - **起動時 golden バイト一致 assert**: 各 target の初回 `apply(ShowSurface)`
@@ -32,7 +30,7 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example emo-present
+//! cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example emo-present
 //! ```
 //! シェルをダブルクリックすると全窓を閉じて終了する。
 //!
@@ -64,7 +62,7 @@
 //!    **起動後にモニタ跨ぎで窓を移動してはならない** — 本 example は `refresh_scale` を
 //!    呼ばないため、移動後は「`apply_show` が毎回窓 DPI から k を再導出するシェルだけが追従し、
 //!    再表示の無いバルーンは据え置き」という**非対称**になる。
-//! 2. **起動する**: `cargo run -p areka --example emo-present` を実行する。
+//! 2. **起動する**: `cargo run --manifest-path <絶対パス>\Cargo.toml -p areka --example emo-present` を実行する。
 //! 3. **観測する**（3 点を確認する）:
 //!    - (a) **k 追従表示**: シェル surface とバルーン枠が **k 倍された物理 px**（150% なら 3/2 倍・
 //!      200% なら 2 倍）で描かれる。`apply(ShowSurface): 表示・マスクを更新` ログの `k_ratio`／
@@ -89,9 +87,7 @@
 //! UI スレッド（NonSend 到達可能スレッド）から呼ぶ（`&mut World` を要するのは `apply` だけ）。窓生成・アセット構築・presenter
 //! 生成は起動時コマンド（`CommandSender` 経由・UI スレッドで適用）で一度に行い、GPU 資源
 //! （`GraphicsCore`/`WucGraphicsResource`）が揃ったフレームで `boot_present_system`（排他 system・
-//! `&mut World`）が `attach_target`→`apply(ShowSurface)` を **各 target 高々 1 回**駆動する。将来の
-//! kanade/seriko 結線では `PresentCommand`（`Send` 所有）を channel 経由で受け、同じ `apply` を呼ぶ
-//! 形へ無改変で移行できる。
+//! `&mut World`）が `attach_target`→`apply(ShowSurface)` を **各 target 高々 1 回**駆動する。
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;

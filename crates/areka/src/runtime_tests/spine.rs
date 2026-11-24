@@ -64,7 +64,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::ExitKind;
-use wintf::ecs::{DPI, GraphicsCore, Point, WindowPos, WucGraphicsResource};
+use wintf::ecs::{DPI, Point, WindowPos};
 use wintf::executor::JoinHandle;
 
 use areka_placement::spawn::test_support::{titles, two_scope_placements};
@@ -88,16 +88,10 @@ use areka_session::ghost_quit::KanadeNoticeRx;
 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU）。
 ///
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。テストのスレッドは `runtime_tests/mod.rs` が据えるプロセスの寿命の MTA に居るので、ここでは COM を初期化しない。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
+/// 実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 fn make_world_with_gpu() -> (GpuPermit, World) {
-    let gpu = GpuPermit::take();
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-
     let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
+    let gpu = areka_runtime::frame::test_support::gpu_on(&mut world);
     // 終了系列の完了は `quit_app` を通る。本番の `WinApp` と同じく受け口を据える
     // （無いと `app_exit_unwired` の error を残す）。
     world.insert_non_send(wintf::AppExit::new());

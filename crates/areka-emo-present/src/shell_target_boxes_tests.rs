@@ -169,7 +169,7 @@ fn shell_without_boxes_keeps_result_and_records() {
         .collect();
     assert_eq!(
         messages,
-        vec!["shell: シェルの面の画像の一覧が終わった（R6.1）"],
+        vec!["shell: シェルの面の画像の一覧が終わった"],
         "記録は本 spec の前と同じ 1 行だけ"
     );
 }

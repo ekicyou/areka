@@ -5,12 +5,12 @@ use super::{
 };
 
 // ---------------------------------------------------------------------------
-// Window creation（mock-shell donor から移植・内容供給だけ差し替え）
+// Window creation
 // ---------------------------------------------------------------------------
 
 /// シェル窓 Entity を構築する（WS_POPUP 透過窓・物理 px 採寸・αマスク当たりは emo-surface 子が担う）。
 ///
-/// mock-shell と異なり `BitmapSource`／`BoxStyle` は使わない。表示内容は `EmoPresenter` が
+/// 表示内容は `EmoPresenter` が
 /// `attach_target`→`apply` で装着する原寸のコマンドリスト（拡大は wintf の `SetTransform`）。窓クライアント寸は
 /// 起動時点では surface の **native 原寸**（物理 px 単位）を `WindowPos.size` へ直接与える（DPI 表示契約・
 /// taffy 非経由）——表示成立後に `reconcile_window_size` が `target_physical_size`（`scaled_extent`）へ合わせ直す。
@@ -22,7 +22,6 @@ pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: 
             Window {
                 title: "areka emo shell".to_string(),
                 // WUC 合成固定。factory の compute_ex_style が WS_EX_LAYERED を剥がし
-                // WS_EX_NOREDIRECTIONBITMAP を付与するため ex_style は据え置きでよい。
                 // WS_EX_NOREDIRECTIONBITMAP を付与するため ex_style は据え置きでよい。
                 ..Default::default()
             },

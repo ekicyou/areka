@@ -5,7 +5,7 @@ use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::DoubleClick;
 
-/// 強制退避の檻: **Ctrl+Shift**+左ダブルクリックは従来どおり全窓を despawn し、
+/// 強制退避の檻: **Ctrl+Shift**+左ダブルクリックは全窓を despawn し、
 /// kanade へは何も送らない（起動後でも効く脱出口）。
 ///
 /// # 非空虚性
@@ -31,14 +31,14 @@ fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sendi
     assert_eq!(
         ghost_count(&mut world),
         0,
-        "Ctrl+Shift は強制退避＝全ゴースト窓が despawn される（R15.2）"
+        "Ctrl+Shift は強制退避＝全ゴースト窓が despawn される"
     );
     assert!(
         world
             .get_non_send::<wintf::AppExit>()
             .expect("world_with_wiring が受け口を挿している")
             .is_requested(),
-        "強制退避は窓を閉じた上で終了を指示する（要件 3.3）"
+        "強制退避は窓を閉じた上で終了を指示する"
     );
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
     assert!(rx.try_recv().is_err(), "強制退避は kanade へ何も送らない");
@@ -46,7 +46,7 @@ fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sendi
 
 /// 起動失敗時の脱出: `MouseWiring` 不在なら Ctrl+左で全窓 despawn。
 ///
-/// 結線前（ghost boot 失敗・boot 前）は終了指示の送り先が無いため、従来どおりの強制退避で
+/// 結線前（ghost boot 失敗・boot 前）は終了指示の送り先が無いため、強制退避で
 /// 窓を閉じて抜ける。この経路が残っていることが、終了指示を正規の握手へ配線しても
 /// 「起動に失敗したゴーストを閉じられる」ことの担保である。
 #[test]
@@ -61,17 +61,16 @@ fn escape_works_without_mouse_wiring() {
     let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(
         on_char_pointer_pressed(&mut world, w, w, &ev),
-        "wiring 不在でも暫定退避は機能する"
+        "wiring 不在でも強制退避は機能する"
     );
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓 despawn");
 }
 
 /// 「強制退避操作でのみ全窓終了が起きる」統合檻:
-/// Ctrl+左ダブルクリックの**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
+/// 非退避操作の**いずれも** `GhostWindowMarker` 窓を despawn しない。
 /// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
-/// pass/fail で固定する（plain-left 単独の
-/// `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` に対し、非退避操作
-/// 全集合の否定＋退避の肯定を 1 檻へ集約する）。
+/// pass/fail で固定する（左右のダブルクリックの送出は入力の crate のテストが受け持ち、ここは
+/// 非退避操作全集合の否定＋退避の肯定を 1 檻へ集約する）。
 #[test]
 fn only_escape_terminates_ghost_windows() {
     let (mut world, _rx) = world_with_wiring(
@@ -113,7 +112,7 @@ fn only_escape_terminates_ghost_windows() {
     assert_eq!(
         ghost_count(&mut world),
         3,
-        "結線済みの Ctrl+左は左ダブルクリックとして扱われ、窓を閉じない（要件 5.3）"
+        "結線済みの Ctrl+左は左ダブルクリックとして扱われ、窓を閉じない"
     );
 
     // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する。

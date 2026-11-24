@@ -1,24 +1,14 @@
 use super::*;
 use areka_placement::persist::{PersistWiring, char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_placement::test_support::SharedFakeIo;
+use areka_runtime::spine::join_bounded;
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
 };
 use std::path::Path;
 use std::sync::Arc;
-
-/// 共有 fake IO（アクターへ `Box<dyn PersistIo>` として移送しつつ、同一ストアを別ハンドルの
-/// `load_scope` で観測するための newtype ラッパ。persist.rs の write-through 檻と同流儀）。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
 
 /// 挿入シーム檻: `insert_persist_wiring` で headless World へ実 publisher を
 /// 挿入すると、(a) NonSend `PersistWiring` が存在し、(b) その World 越しの `persist_entries` 投函が
@@ -32,7 +22,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
     };
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
+        io: Box::new(SharedFakeIo::new(shared.clone())),
         runtime_sink: None,
     });
 
@@ -41,7 +31,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
 
     assert!(
         world.get_non_send::<PersistWiring>().is_some(),
-        "insert_persist_wiring 後、World に PersistWiring が挿入されているべき（C4/C5）"
+        "insert_persist_wiring 後、World に PersistWiring が挿入されているべき"
     );
 
     let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
@@ -54,7 +44,11 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
         .expect("barrier should resolve while actor is alive");
 
     // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝投函の証明）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = load_scope(
+        PersistScope::Ghost,
+        &roots,
+        &SharedFakeIo::new(shared.clone()),
+    );
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
@@ -77,7 +71,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
     );
 
     parts.publisher.close();
-    let _ = parts.handle.join();
+    join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
 }
 
 /// 起動の呼び出しが返った時点の記憶: 経路が切替なら書かず
@@ -95,7 +89,7 @@ fn last_used_is_deferred_only_for_the_switch_route() {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
+            io: Box::new(SharedFakeIo::new(shared.clone())),
             runtime_sink: None,
         });
         let ghost = GhostDecision {
@@ -117,15 +111,19 @@ fn last_used_is_deferred_only_for_the_switch_route() {
             )
         });
         parts.publisher.barrier().expect("barrier");
-        let app = load_scope(PersistScope::App, &roots, &SharedFakeIo(shared.clone()));
-        let ghost_scope = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        let app = load_scope(
+            PersistScope::App,
+            &roots,
+            &SharedFakeIo::new(shared.clone()),
+        );
+        let ghost_scope = load_scope(
+            PersistScope::Ghost,
+            &roots,
+            &SharedFakeIo::new(shared.clone()),
+        );
         parts.publisher.close();
-        let _ = parts.handle.join();
-        let deferred = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("last_used_deferred"))
-            .map(|e| e.level)
-            .collect::<Vec<_>>();
+        join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
+        let deferred = crate::session_end::test_support::levels_of(&events, "last_used_deferred");
         (
             app.contains(&(PersistKey::LastGhost, "B".to_owned())),
             ghost_scope.contains(&(PersistKey::LastShell, "master".to_owned())),

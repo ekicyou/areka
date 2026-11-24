@@ -3,28 +3,26 @@
 // 偽の窓（`spawn_ghost_windows`＋偽の `WindowHandle`）・主と副の偽の `Monitor`・その写しの
 // `MonitorSnapshot` を置いた headless World で `apply_move_directive` を駆動する。
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
-use crate::move_cue::{MoveDirective, parse_move_directive};
+use crate::move_cue::apply_move_tests::{
+    BALLOON_OFFSET, directive_for_scope1, events_named, persisted_after, placement, pos_of,
+};
 use areka_placement::diag::PlacementRoute;
 use areka_placement::follow::{
-    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, resize_window_to,
+    Anchored, BalloonFollow, MonitorSnapshot, apply_char_shift, resize_window_to,
 };
-use areka_placement::persist::PersistWiring;
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::resolver::{Anchor, PointPx, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
-use log_capture_kit::{CapturedEvent, capture};
+use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
+use areka_placement::test_support::give_fake_handles;
+use log_capture_kit::capture;
 
 /// 主モニタの作業領域（下にタスクバー）。
 const PRIMARY: (i32, i32, i32, i32) = (0, 0, 1920, 1040);
@@ -34,7 +32,6 @@ const SECONDARY: (i32, i32, i32, i32) = (-1280, 0, 0, 984);
 const S0: (PointPx, SizePx) = (PointPx { x: 1000, y: 300 }, SizePx { w: 400, h: 687 });
 /// scope1 の窓（左上・大きさ）。矩形 (200,500)-(500,934)。
 const S1: (PointPx, SizePx) = (PointPx { x: 200, y: 500 }, SizePx { w: 300, h: 434 });
-const BALLOON_OFFSET: PointPx = PointPx { x: 285, y: -19 };
 
 fn monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monitor {
     let (left, top, right, bottom) = work;
@@ -53,41 +50,18 @@ fn monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monit
     }
 }
 
-fn placement(scope: usize, (pos, size): (PointPx, SizePx), anchor: Anchor) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos: pos,
-        char_size: size,
-        balloon_pos: PointPx {
-            x: pos.x + BALLOON_OFFSET.x,
-            y: pos.y + BALLOON_OFFSET.y,
-        },
-        balloon_size: SizePx { w: 200, h: 150 },
-        balloon_offset: BALLOON_OFFSET,
-        balloon_offset_base: OffsetBase::unpinned(BALLOON_OFFSET),
-        balloon_limit: false,
-        anchor,
-        balloon_keyword_base: None,
-    }
-}
-
 /// 2 スコープの窓（scope1 の吸い付きは `anchor1`）・副を先に置いた 2 台のモニタ・その写し。
 fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
     let mut world = World::new();
     let gw = spawn_ghost_windows(
         &mut world,
-        &[placement(0, S0, Anchor::Free), placement(1, S1, anchor1)],
+        &[
+            placement(0, S0.0, S0.1, Anchor::Free, false),
+            placement(1, S1.0, S1.1, anchor1, false),
+        ],
         &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
     );
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [gw.char_window(scope), gw.balloon_window(scope)] {
-            raw += 0x10;
-            world.entity_mut(e.unwrap()).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-        }
-    }
+    give_fake_handles(&mut world, &gw);
     // 副モニタを先に置く（先頭を主と取り違える誤りを噛ませる）。
     let monitors = [monitor(2, SECONDARY, false), monitor(1, PRIMARY, true)];
     world.insert_resource(MonitorSnapshot::from_monitors(&monitors));
@@ -97,13 +71,8 @@ fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
     (world, gw)
 }
 
-fn args(items: &[&str]) -> MoveDirective {
-    let tokens: Vec<String> = items.iter().map(|s| s.to_string()).collect();
-    parse_move_directive(1, &tokens).directive
-}
-
 fn pos(world: &World, e: Entity) -> PointPx {
-    let p = world.get::<WindowPos>(e).unwrap().position.unwrap();
+    let p = pos_of(world, e);
     PointPx { x: p.x, y: p.y }
 }
 
@@ -111,14 +80,6 @@ fn pos(world: &World, e: Entity) -> PointPx {
 fn place(world: &mut World, e: Entity, x: i32, y: i32) {
     let mut wp = world.get_mut::<WindowPos>(e).unwrap();
     wp.position = Some(wintf::ecs::Point { x, y });
-}
-
-fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .cloned()
-        .collect()
 }
 
 // 基準 5 種と無いスコープ
@@ -208,8 +169,9 @@ fn every_base_resolves_to_its_frame() {
         let (mut world, gw) = world_with(Anchor::Free);
         let target = gw.char_window(1).unwrap();
         place(&mut world, target, bx, by);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(moved, "{name}: 動く（非スコープの基準でも動く）");
         assert_eq!(pos(&world, target), PointPx { x: ax, y: ay }, "{name}");
         assert_eq!(
@@ -239,11 +201,13 @@ fn substitutions_are_logged_one_by_one() {
             &["GlobalOffsetIgnored"],
         ),
         (&["--base=0", "--X=10", "--Y=20"], &[]),
+        (&["--base=5"], &[]),
     ];
     for &(script, want) in cases {
         let (mut world, _gw) = world_with(Anchor::Free);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(moved, "{script:?}");
         let subs = events_named(&events, "move_frame_substituted");
         assert_eq!(subs.len(), want.len(), "{script:?}: {events:?}");
@@ -275,7 +239,7 @@ fn bottom_anchor_ignores_script_y_and_free_keeps_it() {
         let target = gw.char_window(1).unwrap();
         assert!(apply_move_directive(
             &mut world,
-            &args(EMO2_ADJUST),
+            &directive_for_scope1(EMO2_ADJUST),
             ScaleRatio::ONE
         ));
         assert_eq!(
@@ -296,7 +260,7 @@ fn resize_after_move_keeps_bottom_and_center() {
     let target = gw.char_window(1).unwrap();
     assert!(apply_move_directive(
         &mut world,
-        &args(EMO2_ADJUST),
+        &directive_for_scope1(EMO2_ADJUST),
         ScaleRatio::ONE
     ));
     let before = pos(&world, target);
@@ -318,72 +282,45 @@ fn resize_after_move_keeps_bottom_and_center() {
 
 // バルーン・記憶・画面の外・Anchored
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 画面の外へ出ても寄せず、バルーンは今のずらしで付いて動き、記憶には何も送られず、
 /// `Anchored` とバルーンのずらしはビット同一。
 #[test]
 fn move_keeps_balloon_offset_and_writes_nothing_else() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
     let (mut world, gw) = world_with(Anchor::Free);
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
+    let stored = persisted_after(&mut world, |world| {
+        let target = gw.char_window(1).unwrap();
+        let balloon = gw.balloon_window(1).unwrap();
+        let anchored = *world.get::<Anchored>(target).unwrap();
+        let follow = *world.get::<BalloonFollow>(target).unwrap();
+        let default_pos = gw.default_char_pos(1);
+
+        assert!(apply_move_directive(
+            world,
+            &directive_for_scope1(&["--base=global", "--X=5000", "--Y=-3000"]),
+            ScaleRatio::ONE
+        ));
+
+        assert_eq!(
+            pos(world, target),
+            PointPx { x: 5000, y: -3000 },
+            "画面の外でも寄せない"
+        );
+        assert_eq!(
+            pos(world, balloon),
+            PointPx {
+                x: 5000 + BALLOON_OFFSET.x,
+                y: -3000 + BALLOON_OFFSET.y
+            },
+            "バルーンは今のずらしで付いて動く"
+        );
+        assert_eq!(*world.get::<Anchored>(target).unwrap(), anchored);
+        assert_eq!(*world.get::<BalloonFollow>(target).unwrap(), follow);
+        assert_eq!(
+            world.resource::<GhostWindows>().default_char_pos(1),
+            default_pos
+        );
     });
-    let target = gw.char_window(1).unwrap();
-    let balloon = gw.balloon_window(1).unwrap();
-    let anchored = *world.get::<Anchored>(target).unwrap();
-    let follow = *world.get::<BalloonFollow>(target).unwrap();
-    let default_pos = gw.default_char_pos(1);
-
-    assert!(apply_move_directive(
-        &mut world,
-        &args(&["--base=global", "--X=5000", "--Y=-3000"]),
-        ScaleRatio::ONE
-    ));
-
-    assert_eq!(
-        pos(&world, target),
-        PointPx { x: 5000, y: -3000 },
-        "画面の外でも寄せない"
-    );
-    assert_eq!(
-        pos(&world, balloon),
-        PointPx {
-            x: 5000 + BALLOON_OFFSET.x,
-            y: -3000 + BALLOON_OFFSET.y
-        },
-        "バルーンは今のずらしで付いて動く"
-    );
-    assert_eq!(*world.get::<Anchored>(target).unwrap(), anchored);
-    assert_eq!(*world.get::<BalloonFollow>(target).unwrap(), follow);
-    assert_eq!(
-        world.resource::<GhostWindows>().default_char_pos(1),
-        default_pos
-    );
-
-    parts.publisher.barrier().expect("barrier が返る");
-    let stored = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
     assert!(stored.is_empty(), "記憶に何も送られない: {stored:?}");
-    let _residue = wintf::ecs::window::drain_window_pos_commands();
-    parts.publisher.close();
-    let _ = parts.handle.join();
 }
 
 // 記録
@@ -392,8 +329,13 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
 #[test]
 fn move_applied_records_base_and_ref_points() {
     let (mut world, _gw) = world_with(Anchor::Bottom);
-    let (_, events) =
-        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+    let (_, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(EMO2_ADJUST),
+            ScaleRatio::ONE,
+        )
+    });
     let applied = events_named(&events, "move_applied");
     assert_eq!(applied.len(), 1, "{events:?}");
     let ev = &applied[0];
@@ -424,12 +366,20 @@ fn move_applied_records_base_and_ref_points() {
 
 type Strip = fn(&mut World);
 
-/// 窓の組・対象の窓・作業領域・主モニタが無ければ `move_skipped` の `warn!` で動かさない。
+/// 窓の組・対象の窓・その位置・作業領域・主モニタが無いか、窓へ書けなければ `move_skipped` の `warn!` で動かさない。
 #[test]
 fn missing_material_skips_with_warn() {
-    let cases: [(&str, &[&str], Strip); 4] = [
+    let cases: [(&str, &[&str], Strip); 6] = [
         ("no_ghost_windows", &["--base=0", "--X=1"], |w| {
             w.remove_resource::<GhostWindows>();
+        }),
+        ("no_target_window", &["--base=0", "--X=1"], |w| {
+            let e = w.resource::<GhostWindows>().char_window(1).unwrap();
+            w.resource_mut::<GhostWindows>().remove_entry_of(e);
+        }),
+        ("write_refused", &["--base=0", "--X=1"], |w| {
+            let e = w.resource::<GhostWindows>().char_window(1).unwrap();
+            w.entity_mut(e).remove::<WindowHandle>();
         }),
         ("no_target_position", &["--base=0", "--X=1"], |w| {
             let e = w.resource::<GhostWindows>().char_window(1).unwrap();
@@ -457,8 +407,9 @@ fn missing_material_skips_with_warn() {
         let target = gw.char_window(1).unwrap();
         strip(&mut world);
         let before = world.get::<WindowPos>(target).and_then(|w| w.position);
-        let (moved, events) =
-            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+        let (moved, events) = capture(|| {
+            apply_move_directive(&mut world, &directive_for_scope1(script), ScaleRatio::ONE)
+        });
         assert!(!moved, "{reason}: 動かさない");
         let skips = events_named(&events, "move_skipped");
         assert_eq!(skips.len(), 1, "{reason}: {events:?}");
@@ -473,14 +424,45 @@ fn missing_material_skips_with_warn() {
     }
 }
 
+/// 置き換えの後に動かせなくなっても、それまでの置き換えは `move_skipped` の前に記録する。
+#[test]
+fn substitution_before_skip_is_still_logged() {
+    let (mut world, _gw) = world_with(Anchor::Free);
+    world.remove_resource::<MonitorSnapshot>();
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["--base=5", "--X=1"]),
+            ScaleRatio::ONE,
+        )
+    });
+    assert!(!moved);
+    let subs = events_named(&events, "move_frame_substituted");
+    assert_eq!(subs.len(), 1, "{events:?}");
+    assert!(
+        subs[0]
+            .field("note")
+            .is_some_and(|n| n.starts_with("MissingBaseScope")),
+        "{events:?}"
+    );
+    let skips = events_named(&events, "move_skipped");
+    assert_eq!(skips.len(), 1, "{events:?}");
+    assert_eq!(skips[0].field_str("reason"), Some("no_work_area"));
+}
+
 /// `Anchored` が無ければ `move_anchor_missing` の `warn!` のうえで当て直さずに書く。
 #[test]
 fn missing_anchored_writes_script_position_with_warn() {
     let (mut world, gw) = world_with(Anchor::Bottom);
     let target = gw.char_window(1).unwrap();
     world.entity_mut(target).remove::<Anchored>();
-    let (moved, events) =
-        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(EMO2_ADJUST),
+            ScaleRatio::ONE,
+        )
+    });
     assert!(moved);
     let missing = events_named(&events, "move_anchor_missing");
     assert_eq!(missing.len(), 1, "{events:?}");
@@ -511,7 +493,7 @@ fn absolute_move_rebases_the_pattern_shift_per_axis() {
     // X だけ絶対（screen の左端から 50）・Y は fix。
     assert!(apply_move_directive(
         &mut world,
-        &args(&["--X=50"]),
+        &directive_for_scope1(&["--X=50"]),
         ScaleRatio::ONE
     ));
     assert_eq!(pos(&world, target), PointPx { x: 60, y: 520 });
@@ -525,30 +507,80 @@ fn absolute_move_rebases_the_pattern_shift_per_axis() {
     assert_eq!(pos(&world, target), PointPx { x: 50, y: 500 });
 }
 
-/// 自分の窓を基準にした `\![move]` は相対なので、当てた分を残す（ずれを二度数えない）。
+/// ずれを当て直した窓の組の相手は、当て直した後の位置までの量だけ連れ動き、`move_applied` の
+/// 行き先も当て直した後の位置になる。
 #[test]
-fn relative_move_keeps_the_pattern_shift() {
+fn absolute_move_with_shift_moves_the_partner_by_the_final_amount() {
     let (mut world, gw) = world_with(Anchor::Free);
     let target = gw.char_window(1).unwrap();
+    let partner = gw.char_window(0).unwrap();
+    seed_sticky_descript(&mut world, None);
+    assert!(apply_set_sticky(
+        &mut world,
+        &["0".to_string(), "1".to_string()]
+    ));
     assert!(apply_char_shift(
         &mut world,
         target,
         (10, 20),
         ScaleRatio::ONE
     ));
+    let (target_before, partner_before) = (pos(&world, target), pos(&world, partner));
 
-    assert!(apply_move_directive(
-        &mut world,
-        &args(&["--X=5", "--Y=5", "--base=me"]),
-        ScaleRatio::ONE
-    ));
-    assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 });
+    let (moved, events) = capture(|| {
+        apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["--X=50"]),
+            ScaleRatio::ONE,
+        )
+    });
+    assert!(moved);
 
-    assert!(apply_char_shift(
-        &mut world,
-        target,
-        (0, 0),
-        ScaleRatio::ONE
-    ));
-    assert_eq!(pos(&world, target), PointPx { x: 205, y: 505 });
+    let target_now = pos(&world, target);
+    assert_eq!(target_now, PointPx { x: 60, y: 520 });
+    let partner_now = pos(&world, partner);
+    assert_eq!(
+        (
+            partner_now.x - partner_before.x,
+            partner_now.y - partner_before.y
+        ),
+        (
+            target_now.x - target_before.x,
+            target_now.y - target_before.y
+        )
+    );
+    let applied = events_named(&events, "move_applied");
+    assert_eq!(applied.len(), 1, "{events:?}");
+    assert_eq!(applied[0].field("to_x"), Some("60"));
+    assert_eq!(applied[0].field("to_y"), Some("520"));
+}
+
+/// 自分の窓を基準にした `\![move]` は相対なので、当てた分を残す（ずれを二度数えない）。
+#[test]
+fn relative_move_keeps_the_pattern_shift() {
+    for base in ["--base=me", "--base=1"] {
+        let (mut world, gw) = world_with(Anchor::Free);
+        let target = gw.char_window(1).unwrap();
+        assert!(apply_char_shift(
+            &mut world,
+            target,
+            (10, 20),
+            ScaleRatio::ONE
+        ));
+
+        assert!(apply_move_directive(
+            &mut world,
+            &directive_for_scope1(&["--X=5", "--Y=5", base]),
+            ScaleRatio::ONE
+        ));
+        assert_eq!(pos(&world, target), PointPx { x: 215, y: 525 }, "{base}");
+
+        assert!(apply_char_shift(
+            &mut world,
+            target,
+            (0, 0),
+            ScaleRatio::ONE
+        ));
+        assert_eq!(pos(&world, target), PointPx { x: 205, y: 505 }, "{base}");
+    }
 }

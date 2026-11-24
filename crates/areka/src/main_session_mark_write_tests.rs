@@ -1,55 +1,26 @@
-//! 記憶を書けないときの起動中の印と終わり方の
-//! テスト。`main` は生きた `WinApp` を要するので、`run()` の後に組むもの（[`after_run`]）と
-//! 終了コードの判断（[`finish_after_run`]）を踏む。
-
-use std::path::PathBuf;
+//! 記憶を書けないときの起動中の印と終わり方のテスト。
+//!
+//! `main_session_mark_tests.rs` の子モジュール。World の組み方（`world_with`）は親のものを使い、
+//! `run()` の後に組むもの（[`after_run`]）と終了コードの判断（[`finish_after_run`]）を踏む。
 
 use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
 use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 
 use super::{after_run, finish_after_run};
+use crate::session_tests::{publisher_of, reservation, unwritable, writable};
 use areka_session::alert::{AlertScene, WriteMoment};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
-use areka_session::boot_config::ConfigInputs;
-use areka_session::boot_config::{BootContext, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use areka_session::boot_config::BootContext;
+use areka_session::boot_resolve::GhostRoute;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::session_mark::{
-    MarkInputs, MarkVerdict, Teardown, session_mark_verdict, settle_session_mark,
-};
+use areka_session::session_mark::{MarkVerdict, Teardown, session_mark_verdict};
 
-/// 根 `tmp`・ゴースト A・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
+/// 根 `tmp`・ゴースト A（記憶の経路）・置き場に単位 1 つ・最初の出所 `first` を組んだ World。
 fn world_with(tmp: &TempPath, first: ExitOrigin) -> World {
-    let ghost_dir = PathBuf::from("root").join("ghost").join("A");
-    let balloon_dir = tmp.child("balloon").join("b");
-    let mut world = World::new();
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: tmp.child("app-profile"),
-        helper_exe: tmp.child("shiori-host32-helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: ghost_dir.clone(),
-                balloon_root: balloon_dir.clone(),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Memory,
-                dir: ghost_dir.clone(),
-                folder: Some("A".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: balloon_dir,
-                folder: Some("b".to_owned()),
-            },
-        },
-    });
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, ghost_dir))));
-    world.insert_resource(FirstExit(first));
-    world
+    let ghost = super::decision(GhostRoute::Memory, Some("A"));
+    let session = GhostSession::for_test(None, ghost.dir.clone());
+    super::world_with(tmp, ghost, Some(session), Some(first))
 }
 
 /// 記憶を書けなかった終わり（出所 `MemoryWriteFailed`）: 途中の「記憶を書けない」
@@ -73,7 +44,7 @@ fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
     let verdict = after
         .mark
         .as_ref()
-        .map(|m| session_mark_verdict(m.first.as_ref(), m.argv_session, false, end));
+        .map(|m| session_mark_verdict(m.first.as_ref(), m.argv_session, m.logsink_fallback, end));
     let code_nonzero = finish_after_run(Ok(()), after.fault, || Ok(())).is_err();
     assert_eq!(
         (after.scene, verdict, code_nonzero),
@@ -90,23 +61,7 @@ fn memory_write_failed_exit_alerts_running_and_exits_nonzero() {
 }
 
 // ---------------------------------------------------------------------------
-// 印の 4 つの形。置き場は普通のファイルにして書けなくする。
-
-/// 置き場の位置に普通のファイルを置く（書けない）。
-fn unwritable(dir: &std::path::Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
-/// 置き場をフォルダへ戻す（書ける）。
-fn writable(dir: &std::path::Path) {
-    if dir.is_file() {
-        std::fs::remove_file(dir).expect("置き場の位置のファイルを外す");
-    }
-    std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
-}
+// 印の 4 つの形（⑷ は areka-session の `session_mark_tests.rs`）。置き場は普通のファイルにして書けなくする。
 
 /// 最初の出所が `MemoryWriteFailed` か。
 fn first_is_write_failed(world: &World) -> bool {
@@ -121,28 +76,6 @@ fn slot_empty(world: &World) -> bool {
     world
         .get_non_send::<GhostSlot>()
         .is_none_or(|slot| slot.0.is_none())
-}
-
-fn reservation(
-    stage: areka_session::ghost_switch::SwitchStage,
-) -> areka_session::ghost_switch::SwitchInFlight {
-    use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    }
 }
 
 /// ⑴ 起動の時点（由来 `Plain`）・⑵ 前回の印が残る起動（由来 `Halted`）で印を書けない
@@ -207,15 +140,7 @@ fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
     rig.wire_app_memory();
     rig.boot("A");
     let app = rig.app_dir();
-    let publisher = rig
-        .world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("A の実行系が起きている")
-        .sylphya_publisher()
-        .clone();
+    let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
 
     // 定常の印（投函）: 机へ届くまでは終わらせず、汲み出しで終わる。
@@ -253,45 +178,5 @@ fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
         ),
         (true, false, true),
         "降ろした直後: (出所・予約・置き場が空＝切替先を起こさない)"
-    );
-}
-
-/// ⑷ 終わるときに印を消せない → 後始末の 2 つ目が失敗・途中の告知が 1 件で `Err`。
-#[test]
-fn clear_mark_unwritable_tells_running_once() {
-    let tmp = TempPath::under_target("mark-write-clear");
-    let app = tmp.child("app-profile");
-    unwritable(&app);
-    let (verdict, failed) = settle_session_mark(
-        &MarkInputs {
-            app_profile_dir: app,
-            argv_session: false,
-            first: Some(ExitOrigin::Escape),
-            logsink_fallback: false,
-        },
-        Teardown {
-            run_ok: true,
-            down_ok: true,
-            shiori_cut: false,
-        },
-    );
-    assert_eq!(verdict, MarkVerdict::Clear);
-    let failed = failed.expect("印を消せない失敗が返る");
-    let (told, events) = log_capture_kit::capture(|| {
-        areka_session::write_failure::tell_at_close(None, Some(failed), None, true)
-    });
-    let alerts: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("alert"))
-        .collect();
-    assert_eq!(
-        (told.is_err(), alerts.len()),
-        (true, 1),
-        "(終了コード 1・告知の数): {events:?}"
-    );
-    let scene = alerts[0].field("scene").unwrap_or_default();
-    assert!(
-        scene.contains("Running") && scene.contains("LastRunning"),
-        "途中の告知で、起動中の印: {scene}"
     );
 }

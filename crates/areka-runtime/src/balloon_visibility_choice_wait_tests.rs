@@ -6,7 +6,7 @@
 // 待ち時間を使い切った形になり、待ちが解けた途端に消える。
 //
 //   ⑴ 待ちの間（トークの終わりが未着）は、時間がどれだけ進んでも隠さず知らせも作らない
-//   ⑵ 占有終端 2.0・止まった時刻 60.0 → 満了予定 90.0。選んだ・選択肢の時間切れ・中断の 3 つは
+//   ⑵ 占有終端 2.0・止まった時刻 60.0 → 満了予定は止まった時刻＋待ち時間。選んだ・選択肢の時間切れ・中断の 3 つは
 //      どれも同じ合図の形（止まった時刻つきの終わり）で届く＝名前つきの 3 行
 //   ⑶ 終わりの後の滞在は保留し、離れた時刻から既定の長さで測り直す
 //   ⑷ 次の会話の開始で選択肢つきでないトークの規則へ戻る
@@ -27,22 +27,11 @@ use super::*;
 use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::BalloonLifecycleSink;
 
-/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く。
-const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
-
 /// 占有区間の終端（選択肢を出した所・talk 相対秒）。
 const DISPLAY_END: f64 = 2.0;
 
 /// 選択の待ちが解けて受け口が落ちた時刻（talk 相対秒）。
 const STOPPED: f64 = 60.0;
-
-/// 箱に文字が出ている scope にする。
-fn boxed(observation: ScopeObservation) -> ScopeObservation {
-    ScopeObservation {
-        box_showing: true,
-        ..observation
-    }
-}
 
 /// 選択肢つきのトークを始め、バルーンを出したところまで進めた状態を返す。
 fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
@@ -58,11 +47,7 @@ fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
         "較正: 選択肢つきのトークになっている"
     );
     if !scope.box_showing {
-        assert_eq!(
-            shown.actions,
-            vec![VisibilityAction::Show { scope: 0 }],
-            "較正: 窓が出ている"
-        );
+        assert_eq!(shown.actions, vec![show(0)], "較正: 窓が出ている");
     }
     state
 }
@@ -80,13 +65,6 @@ fn started(origin: MeasurementOrigin, display_end: f64, deadline: f64) -> Visibi
     }
 }
 
-fn hide_timed_out(scopes: &[u32]) -> VisibilityAction {
-    VisibilityAction::HideScopes {
-        scopes: scopes.to_vec(),
-        trigger: VisibilityTrigger::Timeout,
-    }
-}
-
 /// ⑴ 選択を待つ間はトークの終わりが届かない＝時間がどれだけ進んでも隠さない。
 #[test]
 fn no_hide_while_the_choice_wait_is_alive_however_long() {
@@ -100,7 +78,7 @@ fn no_hide_while_the_choice_wait_is_alive_however_long() {
     }
 }
 
-/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に 90.0 で隠して
+/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に待ち時間が過ぎたら隠して
 /// 知らせを返す。終わりを観測したフレームの遅れ（`observed_at`）は満了に効かない。
 #[test]
 fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
@@ -133,15 +111,16 @@ fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
             .at(STOPPED + TIMEOUT - 0.25)
             .run(&mut state);
         if !before.actions.is_empty() || before.timeout_notice.is_some() {
-            failures.push(format!("{name}: 90.0 の直前で {before:?}"));
+            failures.push(format!("{name}: 止まった時刻＋待ち時間の直前で {before:?}"));
         }
 
         let expired = Frame::new(&[(0, seen(3, true))])
             .at(STOPPED + TIMEOUT)
             .run(&mut state);
-        if expired.actions != vec![hide_timed_out(&[0])] || expired.timeout_notice != Some(TALK_ID)
+        if expired.actions != vec![hide(&[0], VisibilityTrigger::Timeout)]
+            || expired.timeout_notice != Some(TALK_ID)
         {
-            failures.push(format!("{name}: 90.0 で {expired:?}"));
+            failures.push(format!("{name}: 止まった時刻＋待ち時間で {expired:?}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -186,7 +165,10 @@ fn hover_holds_and_the_measurement_restarts_from_leaving() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(left_at + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
@@ -240,7 +222,10 @@ fn per_talk_wait_setting_applies_to_choice_talks() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED + 5.0)
         .run(&mut millis);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
 
     let mut never = choice_talk_shown(seen(3, false));
     for now in [STOPPED, STOPPED + TIMEOUT, 10_000.0] {
@@ -289,7 +274,10 @@ fn timeless_end_starts_from_the_first_measurable_frame() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(first + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
 }
 
 /// ⑺ 箱にだけ文字が出ている scope でも、待ちの間は隠さず、止まった時刻から測る。
@@ -320,12 +308,15 @@ fn box_only_scope_follows_the_same_rule() {
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(STOPPED + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
 /// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60.0 で落とし、届いた合図の列を
-/// そのまま判断に通すと 90.0 で隠れる。
+/// そのまま判断に通すと止まった時刻＋待ち時間で隠れる。
 #[test]
 fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     let wall = Arc::new(Mutex::new(0.0_f64));
@@ -395,6 +386,9 @@ fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED + TIMEOUT)
         .run(&mut state);
-    assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
+    assert_eq!(
+        expired.actions,
+        vec![hide(&[0], VisibilityTrigger::Timeout)]
+    );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }

@@ -109,6 +109,7 @@ pub fn parse_move_directive(scope: u32, tokens: &[String]) -> ParsedMove {
 }
 
 /// 両方の形に共通の欄（空＝省略）。
+#[derive(Default)]
 struct Fields<'a> {
     x: &'a str,
     y: &'a str,
@@ -121,15 +122,7 @@ struct Fields<'a> {
 
 /// 名前付きの形の引数列を欄へ振り分ける（無視・重複・知らない option を記録）。
 fn named_fields<'a>(tokens: &'a [String], notes: &mut Vec<MoveNote>) -> Fields<'a> {
-    let mut f = Fields {
-        x: "",
-        y: "",
-        time: "",
-        base: "",
-        base_offset: "",
-        move_offset: "",
-        ignore_sticky_window: false,
-    };
+    let mut f = Fields::default();
     for arg in tokens.iter().filter(|t| !t.is_empty()) {
         let Some((key, value)) = arg.strip_prefix("--").and_then(|kv| kv.split_once('=')) else {
             notes.push(MoveNote::MalformedArg { arg: arg.clone() });

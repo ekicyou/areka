@@ -1,26 +1,18 @@
 // =============================================================================
-// トークの終わりから計る時間切れの記録の水準と欄
+// 判断中核が返した事象の記録の水準と欄
 //
-// 判断中核が返した起点の採り方（3 つの値）と、番号の無い時間切れの知らせを、配線層が
-// どの水準・どの欄で 1 行に写すかを固定する（`balloon_timeout_notice_failed`）。既定の起点（占有区間の終端）の行の水準と欄は
-// `balloon_visibility_phase_tests.rs` の
-// `decision_events_are_written_with_the_agreed_level_and_fields` が持つ。
+// 遷移・計測・時間切れの見送り・起点の採り方・番号の無い時間切れの知らせ
+// （`balloon_timeout_notice_failed`）を、配線層がどの水準・どの欄で 1 行に写すかを固定する。
 // =============================================================================
 
 use tracing::Level;
 
+use super::super::{MeasurementDiscardReason, SuppressionKinds};
+use super::test_support::visibility_lines;
 use super::*;
-use log_capture_kit::{CapturedEvent, ExpectField, capture};
+use log_capture_kit::{ExpectField, capture};
 
-/// 可視性の相が書いた行だけを拾う。
-fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains("[balloon-visibility]"))
-        .collect()
-}
-
-/// 起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
+/// 選択肢つきでないトークの起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
 /// 止まった時刻が届かなかったことは警告で残す。
 #[test]
 fn measurement_origin_is_written_with_its_level_and_fields() {
@@ -135,4 +127,131 @@ fn timeout_notice_without_talk_id_is_written_as_a_warning() {
         "\"balloon_timeout_notice_failed\""
     );
     assert_eq!(lines[0].expect_field("reason"), "\"no_talk_id\"");
+}
+
+/// 判断が返した事象は水準と語彙で 1 行ずつ出る。
+#[test]
+fn decision_events_are_written_with_the_agreed_level_and_fields() {
+    let logs = vec![
+        VisibilityLogEvent::Transition {
+            scope: 1,
+            trigger: VisibilityTrigger::Content,
+            visible: true,
+        },
+        VisibilityLogEvent::Transition {
+            scope: 0,
+            trigger: VisibilityTrigger::Clear,
+            visible: false,
+        },
+        VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
+            display_end: 4.0,
+            deadline: 34.0,
+        },
+        VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::TalkStarted,
+            deadline: 34.0,
+        },
+        VisibilityLogEvent::MeasurementRestarted {
+            now: 40.0,
+            deadline: 70.0,
+        },
+        VisibilityLogEvent::TimeoutSuppressed {
+            kinds: SuppressionKinds {
+                dragging: false,
+                hover: true,
+            },
+            deadline: 34.0,
+        },
+        VisibilityLogEvent::DisplayEndSignalMissing,
+        VisibilityLogEvent::Transition {
+            scope: 0,
+            trigger: VisibilityTrigger::Timeout,
+            visible: false,
+        },
+        VisibilityLogEvent::Transition {
+            scope: 1,
+            trigger: VisibilityTrigger::UserBreak,
+            visible: false,
+        },
+        VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::DisplayEndAdvanced,
+            deadline: 34.0,
+        },
+        VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::NoVisibleScope,
+            deadline: 34.0,
+        },
+    ];
+
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
+
+    let lines = visibility_lines(&events);
+    assert_eq!(lines.len(), 11, "事象 1 件につき 1 行: {events:?}");
+
+    assert_eq!(lines[0].level, Level::INFO);
+    assert_eq!(lines[0].expect_field("scope"), "1");
+    assert_eq!(lines[0].expect_field("trigger"), "\"content\"");
+    assert_eq!(lines[0].expect_field("visible"), "true");
+
+    assert_eq!(lines[1].expect_field("trigger"), "\"clear\"");
+    assert_eq!(lines[1].expect_field("visible"), "false");
+
+    assert_eq!(lines[2].level, Level::INFO);
+    assert_eq!(lines[2].expect_field("display_end"), "4.0");
+    assert_eq!(lines[2].expect_field("deadline"), "34.0");
+
+    assert_eq!(lines[3].expect_field("reason"), "\"talk_started\"");
+
+    assert_eq!(lines[4].expect_field("talk_time"), "40.0");
+    assert_eq!(lines[4].expect_field("deadline"), "70.0");
+
+    assert_eq!(lines[5].level, Level::INFO);
+    assert_eq!(lines[5].expect_field("hover"), "true");
+    assert_eq!(lines[5].expect_field("dragging"), "false");
+
+    assert_eq!(
+        lines[6].level,
+        Level::WARN,
+        "表示終了信号の欠落は縮退（表示は保持する）"
+    );
+
+    assert_eq!(lines[7].expect_field("trigger"), "\"timeout\"");
+    assert_eq!(lines[8].expect_field("trigger"), "\"user_break\"");
+    assert_eq!(lines[9].expect_field("reason"), "\"display_end_advanced\"");
+    assert_eq!(lines[10].expect_field("reason"), "\"no_visible_scope\"");
+}
+
+/// 発行が実らなかった scope の「表示へ遷移した」は名乗らない（起きていない遷移を記録しない）。
+#[test]
+fn transition_of_a_show_that_did_not_take_is_not_written() {
+    let logs = vec![
+        VisibilityLogEvent::Transition {
+            scope: 0,
+            trigger: VisibilityTrigger::Content,
+            visible: true,
+        },
+        VisibilityLogEvent::Transition {
+            scope: 1,
+            trigger: VisibilityTrigger::Content,
+            visible: true,
+        },
+        VisibilityLogEvent::Transition {
+            scope: 0,
+            trigger: VisibilityTrigger::Clear,
+            visible: false,
+        },
+    ];
+
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[0]));
+
+    let lines = visibility_lines(&events);
+    assert_eq!(lines.len(), 2, "scope 0 の表示だけが落ちる: {events:?}");
+    assert_eq!(lines[0].expect_field("scope"), "1");
+    assert_eq!(lines[1].expect_field("scope"), "0");
+    assert_eq!(
+        lines[1].expect_field("visible"),
+        "false",
+        "非表示の遷移は実際に起きるので落とさない"
+    );
 }

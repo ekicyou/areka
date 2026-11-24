@@ -231,6 +231,19 @@ fn surface_stage(req: &OfflineDumpRequest, scope: u32, shell: LoadedShell) -> Du
 
     let existing: BTreeSet<u32> = world.surface_ids().collect();
     let surfaces = surface_list::read_surface_list(list).resolve(&existing);
+    if canvas.exceeds_limit() {
+        tracing::error!(
+            event = "offline_dump_canvas_too_large",
+            width = canvas.width,
+            height = canvas.height,
+            max = render::MAX_CANVAS_SIDE,
+            "[offline_dump] シェル全体の下地が大きすぎるので面を書き出しません"
+        );
+        return DumpTally {
+            written: 0,
+            failed: surfaces.len(),
+        };
+    }
     let output_dir = match std::path::absolute(req.output_dir.as_deref().unwrap_or(".")) {
         Ok(dir) => dir,
         Err(e) => {

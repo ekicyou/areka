@@ -23,7 +23,7 @@ use super::{
 /// `0` を受理しないのは、会話の表示終了と同時にバルーンが消えてしまい、実機サインオフで
 /// 「既定時間の経過で消える」ことを観測できなくなるためである。`u64::from_str` が負号・小数点・非数字・範囲超過をいずれも `Err`
 /// にするため、それらは自然に不正側へ落ちる。
-pub(crate) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
+pub(super) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
     let trimmed = value.map(str::trim)?;
     if trimmed.is_empty() {
         return None;
@@ -126,6 +126,13 @@ pub(super) fn decide_timeout(
     let Some(now) = now_talk_time else {
         return (Vec::new(), None);
     };
+    // 文字の観測が取れなかったフレームも同じく触れない。そのフレームは箱の観測も失っていて
+    // （配線は同じ借用から両方を読む）、箱にだけ文字が出ている scope が見えないものに数えられる。
+    // そのまま進むと「消す対象が無い」で満了予定を捨て、次のフレームに実効の表示終了から
+    // 立て直すので、抑止の解けた縁で測り直した分だけ早く隠れる。
+    if obs.scopes.values().any(|o| o.visible_glyphs.is_none()) {
+        return (Vec::new(), None);
+    }
 
     // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
     // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。表示は最後の行動なので、
@@ -190,15 +197,19 @@ pub(super) fn decide_timeout(
     state.prev_suppressed = suppressed;
 
     if released {
-        // 抑止が全て解けた。ここからはこのトークの待ち時間を**現在時刻起点で改めて**計り直す
-        // 抑止前の残り時間は再開しない。
+        // 抑止が全て解けた。計測が立っていれば、このトークの待ち時間を**現在時刻起点で改めて**
+        // 計り直す（抑止前の残り時間は再開しない）。まだ立っていなければ測り直す相手が無いので、
+        // 下の初期確立に任せる。
         state.suppress_logged = false;
-        if let Some((_, _, _, wait)) = eligible {
+        if let Some((_, _, _, wait)) = eligible
+            && state.deadline.is_some()
+        {
             let deadline = now + wait;
             state.deadline = Some(deadline);
             logs.push(VisibilityLogEvent::MeasurementRestarted { now, deadline });
         }
-    } else if let Some((display_end, effective, origin, wait)) = eligible
+    }
+    if let Some((display_end, effective, origin, wait)) = eligible
         && state.deadline.is_none()
     {
         // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
@@ -242,9 +253,9 @@ pub(super) fn decide_timeout(
     }
 
     // 満了。本フレームに表示したばかりの scope は対象から外す——出してすぐ消す行動の対を
-    // 同じフレームで作らないための縮退で、表示を保持する側へ倒れる。外した scope は実効の表示終了が
-    // 据え置かれたままなら次フレームで計測が立ち直り、そこで改めて満了する（消えないまま
-    // 固着はしない）。なお本番では、コンテンツを運ぶ cue そのものが配信時点で占有終端を先へ
+    // 同じフレームで作らないための縮退で、表示を保持する側へ倒れる。満了予定は残すので、外した
+    // scope は次のフレームでその満了予定のまま改めて満了する（消えないまま固着はしない）。
+    // なお本番では、コンテンツを運ぶ cue そのものが配信時点で占有終端を先へ
     // 押し出すため、この分岐は信号を失ったときにしか通らない。
     let targets: Vec<u32> = visible
         .into_iter()

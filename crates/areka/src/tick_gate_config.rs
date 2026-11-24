@@ -51,17 +51,6 @@ pub fn parse_tick_gate(value: Option<&str>) -> TickGateSetting {
     }
 }
 
-/// [`parse_tick_gate`] の答えを「門を上書きするか否か」だけに縮めた形。
-///
-/// `None` は「上書きしない」であり、「無効にする」ではない（`Unset` と `Unknown` の
-/// 違いは呼び出し側のログにだけ現れる）。
-pub fn tick_gate_from_env_value(value: Option<&str>) -> Option<bool> {
-    match parse_tick_gate(value) {
-        TickGateSetting::Set(enabled) => Some(enabled),
-        TickGateSetting::Unset | TickGateSetting::Unknown => None,
-    }
-}
-
 /// 環境変数を 1 度読み、指定があれば門の既定を上書きする（起動時に 1 回）。
 ///
 /// 何もしなかった場合も含め、効いた値を必ず 1 行残す——「設定したのに効いていない」を
@@ -81,7 +70,7 @@ pub fn apply_from_env(world: &mut EcsWorld) {
             raw_str.unwrap_or("<非 UTF-8>")
         );
     }
-    if let Some(enabled) = tick_gate_from_env_value(raw_str) {
+    if let TickGateSetting::Set(enabled) = setting {
         world.set_tick_gate(enabled);
     }
 

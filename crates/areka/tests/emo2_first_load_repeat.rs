@@ -25,8 +25,8 @@
 //! ## 回し方
 //! 排他テストの机を借りてから（`doc/impl-watch.md`）:
 //!
-//!     $env:AREKA_EMO2_REPEAT="20"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
-//!     $env:AREKA_EMO2_REPEAT="20"; $env:AREKA_EMO2_REPEAT_DROP="gap"; cargo test -p areka --test emo2_first_load_repeat -- --nocapture
+//!     $env:AREKA_EMO2_REPEAT="20"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_first_load_repeat -- --nocapture
+//!     $env:AREKA_EMO2_REPEAT="20"; $env:AREKA_EMO2_REPEAT_DROP="gap"; cargo test --manifest-path <絶対パス>\Cargo.toml -p areka --test emo2_first_load_repeat -- --nocapture
 
 // `emo2_real_run` だけが使う残りの警告を抑える。
 #[allow(dead_code)]

@@ -1,18 +1,18 @@
 //! 起こし直しの単位（`ghost_session`）の決定論テスト。
 
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
 
 use areka_kanade::CloseReason;
 use sample_ghost_kit::SampleRoot;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
-use wintf::ecs::{Input, Update};
+use wintf::ecs::Input;
 
-use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
-use crate::runtime_tests::spine::SpineHarness;
+use super::ghost_session_switch_tests::{
+    emo2_balloon, notice_rx_live, scripted_inputs, systems_lens,
+};
+use crate::menu::{Frame, MenuWiring};
 use crate::sample_test_support::acquire_emo2;
 use areka_input::user_break::UserBreakWiring;
 use areka_kanade::KanadeNotice;
@@ -23,16 +23,13 @@ use areka_session::boot_config::ConfigInputs;
 use areka_session::boot_resolve::BalloonDecision;
 use areka_session::boot_resolve::GhostDecision;
 use areka_session::boot_resolve::{BalloonRoute, GhostRoute};
-use areka_session::ghost_quit::KanadeNoticeRx;
 use areka_session::ghost_session::*;
 use areka_session::readme::ReadmeWiring;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
-use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
-use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
@@ -58,19 +55,14 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
         (opened, reopened)
     });
 
-    let missing_errors = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
-        })
-        .count();
+    let missing = super::levels_of(&events, "task_pool_missing");
     assert_eq!(
         (
             matches!(opened, Err(OpenWindowsError::TaskPoolMissing)),
             matches!(reopened, Err(OpenWindowsError::TaskPoolMissing)),
-            missing_errors,
+            missing,
         ),
-        (true, true, 2),
+        (true, true, vec![tracing::Level::ERROR; 2]),
         "作業プールの欠落を最初に確かめて失敗していない: opened={:?} reopened={:?} events={events:?}",
         opened.as_ref().err(),
         reopened.as_ref().err(),
@@ -153,7 +145,7 @@ fn prepare_spawns_no_window_until_commit() {
     };
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(WintfTaskPool::new());
+    world.insert_resource(WintfTaskPool::with_threads(1));
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_counting);
@@ -222,7 +214,7 @@ fn close_before_commit_arrives_spawns_no_window() {
 
 /// emo2 の複製のシェルの descript に `seriko.sticky-window` を書き足し、窓を準備して投函し、窓が
 /// 生えるまで `Input` 段を回す。戻り値は窓が生えた後の World と、回したあいだの記録。
-fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::CapturedEvent>) {
+fn boot_windows_with_descript_line(line: &str) -> (World, Vec<log_capture_kit::CapturedEvent>) {
     // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -257,7 +249,7 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
 fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
     use areka_placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
 
-    let (world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0,1");
+    let (world, events) = boot_windows_with_descript_line("seriko.sticky-window,0,1");
 
     let groups: Vec<(Vec<u32>, StickySource)> = world
         .get_resource::<StickyGroupLedger>()
@@ -285,7 +277,7 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
     use areka_placement::spawn::BalloonWindowMarker;
     use wintf::ecs::drag::DragConfig;
 
-    let (mut world, events) = boot_windows_with_sticky_line("kero.balloon.dontmove,1");
+    let (mut world, events) = boot_windows_with_descript_line("kero.balloon.dontmove,1");
 
     let reasons = world
         .get_resource::<BalloonLockLedger>()
@@ -315,20 +307,15 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
 fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
     use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
-    let (mut world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0");
+    let (mut world, events) = boot_windows_with_descript_line("seriko.sticky-window,0");
 
-    let rejected = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("sticky_group_rejected") && e.level == tracing::Level::WARN
-        })
-        .count();
+    let rejected = super::levels_of(&events, "sticky_group_rejected");
     let groups = world
         .get_resource::<StickyGroupLedger>()
         .map(|ledger| ledger.groups().len());
     assert_eq!(
         (rejected, groups, ghost_window_count(&mut world)),
-        (1, Some(0), 4),
+        (vec![tracing::Level::WARN], Some(0), 4),
         "(拒否の記録, 帳簿の組の数, 窓の数): {events:?}"
     );
 }
@@ -347,54 +334,15 @@ fn commit_without_task_pool_logs_error() {
         spawn: Box::new(|_: &mut World| {}),
     };
     let ((), events) = capture(|| commit_ghost_windows(&mut world, prepared));
-    let missing_errors = events
-        .iter()
-        .filter(|e| {
-            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
-        })
-        .count();
     assert_eq!(
-        missing_errors, 1,
+        super::levels_of(&events, "task_pool_missing"),
+        [tracing::Level::ERROR],
         "作業プールの欠落が記録されない: {events:?}"
     );
 }
 
-/// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
-/// 台本は呼ぶたびに新しい（周ごとに `OnInitialize` から `Unload` までを 1 本ずつ消費する）。
-/// 偽の SHIORI の観測口も返す（降ろしの待ちの目印＝呼び出しの数）。
-fn scripted_inputs(
-    sample: &SampleRoot,
-    kanade_stop: Sender<KanadeNotice>,
-) -> (GhostBootInputs, ScriptedShioriHandle) {
-    let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
-    let inputs = GhostBootInputs {
-        wiring: areka_runtime::RuntimeInputs {
-            ghost_root: sample.folder().to_path_buf(),
-            balloon_root: emo2_balloon(sample),
-            shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
-                Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
-            })),
-            ticker: areka_ghost::TickerMode::Disabled,
-            app_profile_dir: None,
-            boot_origin: areka_kanade::BootOrigin::Plain,
-        },
-        // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
-        helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),
-        kanade_stop,
-        modules: areka_session::boot_request::ModulePolicy::Load,
-    };
-    (inputs, handle)
-}
-
-fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
-    sample
-        .balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
 /// 1 周分の結線（argv で決まった体の決定を合成する）。
-fn boot_round(
+pub(super) fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
     kanade_stop: Sender<KanadeNotice>,
@@ -421,7 +369,7 @@ fn boot_round(
 
 /// 降ろすのを有界に行う（seriko の join を含む）。偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの
 /// 目印にして待ち、30 秒進まなければ［止まった］で赤（spine の shutdown_bounded と同じ形）。
-fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHandle) {
+pub(super) fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHandle) {
     let calls = || shiori.call_count();
     run_bounded_watching(what, Progress::Count(&calls), move || {
         session
@@ -430,28 +378,12 @@ fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHa
     });
 }
 
-/// `Input`／`Update`／`FrameFinalize` の各段に載っている系の数。
-fn systems_lens(world: &World) -> [usize; 3] {
-    let schedules = world.resource::<Schedules>();
-    [
-        schedules.get(Input).map_or(0, |s| s.systems_len()),
-        schedules.get(Update).map_or(0, |s| s.systems_len()),
-        schedules.get(FrameFinalize).map_or(0, |s| s.systems_len()),
-    ]
-}
-
 /// 同じプロセスで 2 周する。
 ///
 /// 1 周目を降ろして全窓を閉じ、2 周目を結線した後に、⑴ 系が二重に登録されていない
-/// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューの登記が
-/// 組込 2 項目と「ゴースト」枠だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
-/// ⑶ 終了が指示されていない、を確かめる。
-///
-/// 「つながっている」は `try_recv` を `Err` が出るまで回して最後が `Empty`（1 周目の受信端は
-/// 未読の値を残したまま送出端が落ちて `Disconnected` になる）。停止通知の受け口は
-/// プロセスに 1 つなので、テストが持つ送出端の写しを落とした後は 2 周目の kanade の送出端
-/// だけがこれを生かす。`MouseWiring` 等は生死を副作用無しに問う口が無い（0 面）が、
-/// 上の面と同じ結線ありの腕の直線の手順で挿される。判定は集めてから 1 回。
+/// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューが 12 枠で、
+/// 2 周目の登記が置き換えを 1 件も残さない・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
+/// ⑶ 終了が指示されていない、を確かめる。判定は集めてから 1 回。
 #[test]
 fn boots_twice_in_one_process_without_double_registration() {
     // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
@@ -476,21 +408,6 @@ fn boots_twice_in_one_process_without_double_registration() {
     // ── 1 周目 ──
     let sample1 = acquire_emo2();
     let (session1, shiori1) = boot_round(&mut world, &sample1, kanade_stop_tx.clone());
-    // 1 周目のメニューへ余分な登記（7 枠すべてが本番で登記されるので一覧には現れない。残っていれば、
-    // 2 周目の「シェル」枠の登記が置き換えの記録 `menu_registration_replaced` を残す＝0 件で新品と判定する）。
-    crate::menu::register(
-        &mut world,
-        Frame::Shell,
-        Rc::new(|_: &World, _: &MenuContext| MenuItem {
-            label: "1 周目の余分な登記".to_owned(),
-            caption_resource: None,
-            enabled: true,
-            checked: None,
-            body: ItemBody::Action(Rc::new(|_: &mut World, _: &MenuContext| {})),
-        }),
-    );
-    // 1 周目が結線ありの腕を通ったことの証（fallback に落ちると説明書・メニューの状態が
-    // 挿されず、2 周目の「載せ替わった」面が素通りで緑になる）。
     let round1_readme_under_root1 = world
         .get_non_send::<ReadmeWiring>()
         .is_some_and(|w| w.path().starts_with(sample1.folder()));
@@ -498,7 +415,6 @@ fn boots_twice_in_one_process_without_double_registration() {
         .get_non_send::<MenuWiring>()
         .map(|w| w.registry.registered_frames());
     shutdown_bounded("1 周目を降ろす", session1, &shiori1);
-    // 窓を作る側は通さないので証は読んで落とす（消費先の型検査は本番の呼び手側で効く）。
     let closed = app_exit::close_windows_for_restart(&mut world);
     let closed_count = closed.closed();
 
@@ -506,10 +422,8 @@ fn boots_twice_in_one_process_without_double_registration() {
     let sample2 = acquire_emo2();
     let ((session2, shiori2), round2_events) =
         capture(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
-    let round2_replaced = round2_events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("menu_registration_replaced"))
-        .count();
+    let round2_replaced = super::events_named(&round2_events, "menu_registration_replaced").len();
+    // テストの写しを落とさないと、2 周目の kanade がつながらなくても受け口は生きて見える。
     drop(kanade_stop_tx);
 
     // ── 判定（集めてから 1 回） ──
@@ -519,15 +433,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     let frames = world
         .get_non_send::<MenuWiring>()
         .map(|w| w.registry.registered_frames());
-    let kanade_stop_live = {
-        let rx = &world.non_send::<KanadeNoticeRx>().0;
-        loop {
-            match rx.try_recv() {
-                Ok(_) => continue,
-                Err(err) => break err == TryRecvError::Empty,
-            }
-        }
-    };
+    let kanade_stop_live = notice_rx_live(&mut world);
     let user_break_live = world
         .get_non_send_mut::<UserBreakWiring>()
         .is_some_and(|mut w| w.flag_source_connected());
@@ -591,7 +497,7 @@ fn boots_twice_in_one_process_without_double_registration() {
         ),
         "2 周目が 1 周目と同じ姿で起きていない（1 周目の説明書が 1 周目の根の下・1 周目の登記の一覧・\
          系の数 [Input, Update, FrameFinalize]・説明書が \
-         2 周目の根の下・登記の一覧・2 周目の登記の置き換えの記録が 0 件・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
+         2 周目の根の下・登記の一覧・2 周目の登記が置き換えを 1 件も残さない・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
          readme={readme:?} root1={:?} root2={:?} closed={closed_count}",
         sample1.folder(),
         sample2.folder(),

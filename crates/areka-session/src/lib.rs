@@ -24,8 +24,7 @@ pub mod shell_balloon_switch;
 /// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す。
 pub mod switch_copy;
 
-/// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-/// 告知の抑止（`AREKA_NO_ALERT`）。
+/// 告知（起動を止める 4 場面・SHIORI が止まった・記憶を書けない）と、尋ねる口・抑止（`AREKA_NO_ALERT`）。
 pub mod alert;
 
 /// 記憶を書けない失敗を集める致命の机。
@@ -50,11 +49,9 @@ pub mod roots;
 pub mod boot_request;
 
 /// 起動時の構成入力解決と ghost 結線ヘルパ。
-///
-/// `main.rs` の 1,000 行規約のため切り出した。可視性は `pub(crate)`。
 pub mod boot_config;
 
-/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
+/// 起動解決の純粋な判断（ゴースト 9 通り・バルーン 8 分岐）と既定の定数。
 /// 起動前の解決は `install::startup::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 pub mod boot_resolve;
 

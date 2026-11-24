@@ -58,6 +58,11 @@ impl BaseposResolver for CanonDefaultBasepos {
     }
 }
 
+/// 窓の矩形の基準位置（既定＝幅÷2・下端）を左上からのずれで返す。
+pub(super) fn canon_basepos(rect: RectPx) -> PointPx {
+    CanonDefaultBasepos.basepos(SizeI::new(rect.right - rect.left, rect.bottom - rect.top))
+}
+
 // =============================================================================
 // 基準の枠と移動先の計算
 // =============================================================================
@@ -117,13 +122,17 @@ pub fn compute_move_target(
         ),
         BaseFrame::Area(rect) => {
             let x = if offset.x == RefX::Base {
-                notes.push(FrameNote::AreaBaseToCenter { axis: Axis::X });
+                if directive.x != AxisSpec::Fix {
+                    notes.push(FrameNote::AreaBaseToCenter { axis: Axis::X });
+                }
                 RefX::Center
             } else {
                 offset.x
             };
             let y = if offset.y == RefY::Base {
-                notes.push(FrameNote::AreaBaseToCenter { axis: Axis::Y });
+                if directive.y != AxisSpec::Fix {
+                    notes.push(FrameNote::AreaBaseToCenter { axis: Axis::Y });
+                }
                 RefY::Center
             } else {
                 offset.y
@@ -132,7 +141,8 @@ pub fn compute_move_target(
             (point_x(rect, 0, x), point_y(rect, 0, y), RefPoint { x, y })
         }
         BaseFrame::Origin => {
-            if offset != RefPoint::LEFT_TOP {
+            let moves = directive.x != AxisSpec::Fix || directive.y != AxisSpec::Fix;
+            if offset != RefPoint::LEFT_TOP && moves {
                 notes.push(FrameNote::GlobalOffsetIgnored { offset });
             }
             (0, 0, RefPoint::LEFT_TOP)

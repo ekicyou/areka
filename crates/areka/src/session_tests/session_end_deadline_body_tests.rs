@@ -1,4 +1,4 @@
-//! 期限つきの降ろしと見張りの張りを呼ぶ所を、本体の `src` ほかの木を歩いて固める構造の試験。
+//! 期限つきの降ろしと見張りの張りの呼び手を、呼び手の側の 4 crate（本体・`areka-runtime`・`areka-input`・`areka-session`）の `src` を歩いて固める構造の試験。`areka-ghost` の実装の中は数えない。
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -12,7 +12,7 @@ const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_sess
 /// OS のセッションの終了の受け手が定数を渡す 1 行・受け手の降ろし・`GhostSession` の委譲の 3 行だけ。
 const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     (
-        "areka-session/ghost_session.rs",
+        "areka-session/ghost_session_handle.rs",
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (
@@ -26,8 +26,7 @@ const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
 ];
 
 /// 本体（`crates/areka/src/`）・`crates/areka-runtime/src/`・`crates/areka-input/src/`・`crates/areka-session/src/` の本番 `.rs`（テストとテストの土台＝
-/// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。分ける前に本体の
-/// `src` が覆っていた範囲を歩く。
+/// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。定義の側の `areka-ghost` は歩かない。
 fn production_sources() -> Vec<(String, String)> {
     fn walk(krate: &str, root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {

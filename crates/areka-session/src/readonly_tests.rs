@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use super::*;
+use crate::boot_resolve::boot_resolve_tests::count_event;
 
 #[test]
 fn flag_is_off_and_install_adds_nothing_in_the_test_process() {
@@ -28,7 +29,7 @@ fn of_follows_the_resource() {
 }
 
 /// 置き場の木（下の階層まで、相対パスと中身）。
-fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+pub(crate) fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
         for e in std::fs::read_dir(dir).expect("木が読めない") {
             let p = e.expect("木の項目").path();
@@ -48,7 +49,7 @@ fn tree(dir: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 }
 
 /// アプリもゴーストも書けない置き場（フォルダの在るべき所に普通のファイル）。根は `target\` の下。
-fn unwritable_places(
+pub(crate) fn unwritable_places(
     tmp: &temp_path_kit::TempPath,
 ) -> (crate::boot_config::ConfigInputs, std::path::PathBuf) {
     let app = tmp.child("app-profile");
@@ -74,17 +75,14 @@ fn boot_check_passes_readonly_without_touching_the_tree() {
         log_capture_kit::capture(|| crate::write_failure::check_boot(true, &cfg, &app));
 
     assert!(result.is_ok(), "{result:?}");
-    let skipped = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_boot_check_skipped"))
-        .count();
+    let skipped = count_event(&events, "readonly_boot_check_skipped");
     assert_eq!(skipped, 1, "{events:?}");
     assert_eq!(tree(tmp.path()), before, "確かめが木を変えた");
 }
 
-/// 読み取りだけでなければ、今の確かめと同じ失敗を返し、飛ばした記録は出ない。
+/// 読み取りだけでなければ、通常の確かめと同じ失敗を返し、飛ばした記録は出ない。
 #[test]
-fn boot_check_without_readonly_is_the_current_check() {
+fn boot_check_without_readonly_fails_as_the_plain_check_does() {
     let tmp = temp_path_kit::TempPath::under_target("readonly-boot-check-normal");
     let (cfg, app) = unwritable_places(&tmp);
 
@@ -92,11 +90,10 @@ fn boot_check_without_readonly_is_the_current_check() {
     let (result, events) =
         log_capture_kit::capture(|| crate::write_failure::check_boot(false, &cfg, &app));
 
-    assert_eq!(result.expect_err("今の確かめと同じく止まる"), expected);
-    assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("readonly_boot_check_skipped")),
+    assert_eq!(result.expect_err("通常の確かめと同じく止まる"), expected);
+    assert_eq!(
+        count_event(&events, "readonly_boot_check_skipped"),
+        0,
         "{events:?}"
     );
 }
@@ -130,10 +127,7 @@ fn copy_is_withheld_and_the_original_is_used() {
     });
 
     assert_eq!(got, bundled, "元のフォルダを返す");
-    let withheld = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("user_data_copy_withheld"))
-        .count();
+    let withheld = count_event(&events, "user_data_copy_withheld");
     assert_eq!(withheld, 1, "{events:?}");
     assert!(!user.join("ghost").exists(), "写し先が作られた");
     assert_eq!(tree(tmp.path()), before, "木が変わった");

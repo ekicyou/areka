@@ -270,7 +270,7 @@ design.md の古い行も直した: `read_existing` の注と戻り値（2 つ�
    - 回したもの: `git diff --name-only origin/main...HEAD` から `crates/areka-sylphya/`・`crates/areka-actor/`・`crates/areka-talk/`・`.kiro/specs/audit-sylphya-actor/` の下を除いた残り。
    - 結果: 変わったファイルは全部で 48。残りは 5 つ。
      - `crates/log-capture-kit/tests/with_default_guard_test.rs`: 差分は例外の表への 1 件（`crates/areka-actor/tests/ui_span_test.rs` と理由の文・4 行の組）と、件数 `ALLOWED_DIRECT_CALLS_COUNT` の 5 → 6 だけ。
-     - `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/completed/audit-emo2-boot-spine/brief.md`・`.kiro/specs/sylphya-sqlite-kvs/brief.md`: 要件の討議で、直さずに回した指摘（#1 の決まった一文・#4 の呼び手・#16・#10 と #21）を回し先の brief へ書き足したコミット（`4176d4ea`・`dfeaacec`）の変更。意図した変更として数える（tasks.md の Implementation Notes 8.3）。
+     - `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/completed/audit-emo2-boot-spine/brief.md`・`.kiro/specs/sylphya-sqlite-kvs/brief.md`: 要件の討議で、直さずに回した指摘（#1 の決まった一文・#4 の呼び手・#16・#10 と #21）を回し先の brief へ書き足したコミット（`4176d4ea`・`dfeaacec`）の変更。意図した変更として数える（tasks.md の Implementation Notes 8.3）。
    - ほかに思いがけないファイルは無かった。
 3. 保存の口のファイルに、一時のパスの入口と `TempPath` の行の増減が無い（要件 6.3）
    - 回したもの: `git diff origin/main...HEAD -- crates/areka-sylphya/src/persist/io.rs` の増えた行と消えた行から `temp_dir(`・`process::id(`・`TempPath` を探す。あわせて既定の枝と今のファイルで同じ綴りの数を比べる。

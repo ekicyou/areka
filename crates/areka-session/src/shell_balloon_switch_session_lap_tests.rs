@@ -18,16 +18,16 @@ use sample_ghost_kit::SampleRoot;
 use wintf::ecs::WindowPos;
 
 use super::GhostSlot;
-pub(crate) use super::shell_balloon_switch_session_lap_test_support::*;
+use super::shell_balloon_switch_session_lap_test_support::*;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shell_balloon_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
-    request_skin_switch,
+    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
 use areka_input::user_break::UserBreakWiring;
 use areka_placement::spawn::GhostWindows;
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::skin_switch::{SkinSwitchInFlight, SkinSwitchStage};
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_runtime::target_map::shell_target;
 
@@ -51,20 +51,18 @@ pub(super) fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'stati
 /// `R_POST_and_KOMAINU` のシェルを `shells` の各名前（フォルダ名・`name` とも）で写してから、
 /// 窓の一式と GPU 資源つきで A を起こす。
 pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> LapRig {
-    lap_rig_on(SwitchRig::new(ghosts), shells, add_rpost_shell)
-}
-
-/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `folder`（`name` も `folder`）に
-/// 写し、それを A の `shell/<folder>` へ複製する。
-fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
+    // 検体の窓口は `test-support` に入れられないので、写す元のシェルは呼び手が作る。
     let rpost = SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
-    rpost
-        .add_shell_copy("master", folder, folder)
-        .expect("2 つ目のシェルを写す");
-    copy_tree(
-        &rpost.folder().join("shell").join(folder),
-        &ghost_dir.join("shell").join(folder),
-    );
+    for shell in shells {
+        rpost
+            .add_shell_copy("master", shell, shell)
+            .expect("2 つ目のシェルを写す");
+    }
+    lap_rig_on(
+        SwitchRig::new(ghosts),
+        &rpost.folder().join("shell"),
+        shells,
+    )
 }
 
 /// キャラ窓ごとの見え方。
@@ -140,8 +138,8 @@ fn sizes(of: [(i32, i32); 2]) -> Vec<Option<(i32, i32)>> {
     of.iter().copied().map(Some).collect()
 }
 
-/// 置き場のゴーストの記憶の書き手へ柵を掛けてから、A の `LastShell` を実 fs から読む。
-pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
+/// 置き場のゴーストの記憶の書き手へ柵を掛ける（書き終えた記憶を実 fs から読めるようにする）。
+pub(super) fn fence(rig: &SwitchRig) {
     let fenced = rig
         .world
         .get_non_send::<GhostSlot>()
@@ -149,6 +147,11 @@ pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
         .and_then(|session| session.runtime())
         .is_some_and(|runtime| runtime.sylphya_publisher().barrier().is_ok());
     assert!(fenced, "記憶の書き手へ柵を掛けられない");
+}
+
+/// 柵を掛けてから、A の `LastShell` を実 fs から読む。
+pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
+    fence(rig);
     read_last_shell(&rig.root.ghost_dir("A"))
 }
 
@@ -380,11 +383,11 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
     });
     let built = lap.frames_until(NO_TICKS, |rig| matches!(stage(rig), Some("built") | None));
     let mut frames = 0;
-    lap.frames_until(NO_TICKS, |_| {
+    let waited = lap.frames_until(NO_TICKS, |_| {
         frames += 1;
         frames >= 20
     });
-    let held = (stage(&lap.rig), got(&lap.rig, "OnShellChanged", 1));
+    let held = (waited, stage(&lap.rig), got(&lap.rig, "OnShellChanged", 1));
     let (done, events) = capture(|| {
         lap.frames_until(UNBOUNDED, |rig| {
             log.record(look_of(rig, &windows));
@@ -407,7 +410,7 @@ fn plain_script_shell_switch_skips_changing_and_waits_for_the_script_end() {
             shutdown_ok,
         ),
         (
-            (true, true, true, true, (Some("built"), false), true),
+            (true, true, true, true, (true, Some("built"), false), true),
             vec![
                 "NOTIFY OnInitialize".to_owned(),
                 "GET username".to_owned(),

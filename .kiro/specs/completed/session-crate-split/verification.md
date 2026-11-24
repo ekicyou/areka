@@ -12,7 +12,7 @@
 
 兄弟 2 本の作業の木（読むだけ）で、触るファイルを設計の「同じウェーブとの重なり」と照らした。
 
-- `test-name-work-tags`（木 `kiro-start-pilot-windows-rs-next-86646c`・tasks.md あり）: 名前の付け替えが中心。本体の `runtime_tests/zorder_wiring_tests.rs` は範囲から外れており、この仕様の `include_str!` と `t_zwi05` の字面の書き換えと重ならない（⑴）。名前の行を直す `doc/COMPAT_ARCHITECTURE.md` §8 はこの仕様がパスの行だけを直す許された重なり（⑷）で、後から着地する側が手で解く。`.kiro/specs/audit-areka-app/brief.md` は向こうが 1 項目を足し、こちらも書き換えるので、同じファイルの別の箇所として競合しうる。`crates/areka-runtime/src/consumer_ledger_test_support.rs` の 28 行・`window_state_cue_tests.rs` の 324 行は名のコメントだけで、この仕様は触らない。
+- `test-name-work-tags`（木 `kiro-start-pilot-windows-rs-next-86646c`・tasks.md あり）: 名前の付け替えが中心。本体の `runtime_tests/zorder_wiring_tests.rs` は範囲から外れており、この仕様の `include_str!` と `t_zwi05` の字面の書き換えと重ならない（⑴）。名前の行を直す `doc/COMPAT_ARCHITECTURE.md` §8 はこの仕様がパスの行だけを直す許された重なり（⑷）で、後から着地する側が手で解く。`.kiro/specs/completed/audit-areka-app/brief.md` は向こうが 1 項目を足し、こちらも書き換えるので、同じファイルの別の箇所として競合しうる。`crates/areka-runtime/src/consumer_ledger_test_support.rs` の 28 行・`window_state_cue_tests.rs` の 324 行は名のコメントだけで、この仕様は触らない。
 - `dola-cue-test-builder`（木 `kiro-start-pilot-windows-rs-next-86646c`・brief.md のみで tasks.md は無い）: brief の触るファイルは `crates/dola/src/cue/command.rs`・`crates/dola/Cargo.toml`・`areka-ghost` の `prop_sink.rs`・`prop_get_sink_tests.rs`、`areka-seriko` の `actor_test_support.rs`、`areka-runtime` の `consumer_ledger_test_support.rs`・`frame_window_link_drain_tests.rs`・使い手の `Cargo.toml`。呼び手の名（`carrier_cue` ほか）を残す形なら、この仕様が移す・書き換えるファイルに触らない（⑵）。
 - 結果: 設計が足したファイル（`tools/package.ps1`・`tools/perf/judge-perf.py`・`tools/load-flake.ps1`・`doc/ukadoc-coverage/`・`doc/ideas/`・`session_tests/` ほか）は兄弟 2 本の触るファイルと重ならない。重なりうるのは上の `doc/COMPAT_ARCHITECTURE.md` と `audit-areka-app/brief.md` の 2 件だけで、前者は設計が許した重なり、後者は後から着地する側が両方を残して解く。
 
@@ -1586,12 +1586,12 @@ if __name__ == '__main__':
 
 ### 受け手: 棚卸のセッション
 
-C25 の行の「触るファイル」に無く、この spec で足したファイル。兄弟 2 本（`test-name-work-tags`・`dola-cue-test-builder`）の触るファイルとは、`doc/COMPAT_ARCHITECTURE.md` §8 のパスの行（設計が許した重なり）と `.kiro/specs/audit-areka-app/brief.md` の 2 件を除いて重ならない（着手のとき・1.1）。
+C25 の行の「触るファイル」に無く、この spec で足したファイル。兄弟 2 本（`test-name-work-tags`・`dola-cue-test-builder`）の触るファイルとは、`doc/COMPAT_ARCHITECTURE.md` §8 のパスの行（設計が許した重なり）と `.kiro/specs/completed/audit-areka-app/brief.md` の 2 件を除いて重ならない（着手のとき・1.1）。
 
 1. 道具: `tools/package.ps1`（3 か所・注釈）・`tools/perf/judge-perf.py`（1 か所）・`tools/perf/invoke-perf-run.ps1`（29 行の説明）・`tools/load-flake.ps1`（`areka-session-lib` を足した・5.2）
 2. 文書: `doc/ukadoc-coverage/`（`briefing-assets.md`・`ledger/{sakura-script,property,shiori,assets}.toml`・作り直した `report/`）・`doc/ideas/novel-redesign-2026-11-20/` の 8 ファイル・`doc/COMPAT_ARCHITECTURE.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`・`THIRD-PARTY-NOTICES.md`（`areka-session` の 1 行・7.2）
 3. steering: `.kiro/steering/structure.md`・`tech.md`・`logging.md`・`product.md`
-4. 兄弟の brief: `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/audit-emo2-boot-switch/brief.md`（3 本目）。いずれも「受け持つファイル」の行の書き換え。`audit-areka-app` の brief は `test-name-work-tags` も 1 項目を足すので、後から着地する側が両方を残して解く。
+4. 兄弟の brief: `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/completed/audit-emo2-boot-switch/brief.md`（3 本目）。いずれも「受け持つファイル」の行の書き換え。`audit-areka-app` の brief は `test-name-work-tags` も 1 項目を足すので、後から着地する側が両方を残して解く。
 5. 新しい crate と本体: `crates/areka-session/`（`Cargo.toml`・`build.rs`・`tests.manifest`・`src/crash_report_tests.rs`・`src/body_systems.rs`・`src/shell_balloon_switch_session_lap_test_support.rs`・`src/reload_test_support.rs`・`src/ghost_session_scope_{rect,scale}_test_support.rs`）・本体の `crates/areka/src/session_tests/`（新設）・`crates/areka/src/sample_test_support.rs`・`crates/areka/src/install/startup.rs`・`crates/areka/Cargo.toml`・`Cargo.lock`
 6. 実機の道具: `crates/real-run-kit/`（`launch.rs`・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`）・`crates/areka/tests/emo2_mcp_real_run.rs`（5.1・ログの出所の名前）
 7. コメントだけの書き換え: `crates/areka-runtime/src/`（`lib.rs`・`strict_judges.rs`・`talk_clock.rs`・`user_break_cue.rs`・`session_hooks.rs`・`skin_switch.rs`・`placement_tests/transition_judge_offset_signoff_tests.rs`）・`crates/areka-kanade/src/schedule/`（`script_log.rs`・`events.rs`）

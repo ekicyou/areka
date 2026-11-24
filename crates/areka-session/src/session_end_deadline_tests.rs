@@ -25,27 +25,27 @@
 //! 見張りは環境変数を読まず外から解くので、SHIORI 側の期限として言い換えて起こす:
 //! - T より長い・無限: 台本が自分では切れずに固まる形＝段ごとのテスト（T で打ち切られる）。
 //! - T より短い: 台本が自分で期限切れを返す形＝[`self_timeout_shorter_than_limit_is_not_cut`]
-//!   （打ち切り 0 件・印の判定は今日どおり）。
+//!   （打ち切り 0 件・印の判定は応答のとおり）。
 //!
 //! 終了の観測の段は UNLOAD で固まる形で代表する（`request_clean_shutdown` の中で分けられない。
-//! 補助プロセスが終わった後の観測は host32 の既存の短絡のテストが固定する）。
+//! 補助プロセスが終わった後の観測は host32 の短絡のテストが固定する）。
 //! 呼び出しの外（`idle`）の段は見張り部品のテスト（`areka-kanade` の `probe_tests.rs`）が見る。
 
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use areka_kanade::{CloseReason, ShioriBusy, ShioriCut, ShioriProbe, WaitBudget};
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use shiori_host32_host::{ExitKind, RequestError};
 
+use super::test_support::{event_field, on_close_ref0};
 use super::{SESSION_END_SHIORI_LIMIT, end_session_within};
 use crate::boot_resolve::{read_session_mark, write_session_mark};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_runtime::spine::hold_support::HoldAt;
 use areka_runtime::spine::{
-    Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
-    ScriptedShioriHandle, wait_until,
+    Progress, ScriptedShioriBackend, ScriptedShioriBackendBuilder, ScriptedShioriHandle, wait_until,
 };
 
 /// 負荷で期限の口が先に発火しない上限（手動の口と「上限の中で応答」の回）。
@@ -68,28 +68,6 @@ struct Observed {
     kept_reason: Option<String>,
     /// `os_session_end_done` の `shiori_cut`。
     shiori_cut: Option<String>,
-}
-
-/// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
-fn on_close_ref0(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .filter_map(|c| match c {
-            RecordedCall::Notify { id, references } if id == "OnClose" => {
-                Some(references.first().cloned().unwrap_or_default())
-            }
-            _ => None,
-        })
-        .collect()
-}
-
-/// `event` の記録 1 件目の欄 `name`（文字列の欄は生値、それ以外は Debug 表現）。
-fn event_field(events: &[CapturedEvent], event: &str, name: &str) -> Option<String> {
-    events
-        .iter()
-        .find(|e| e.field_str("event") == Some(event))
-        .and_then(|e| e.field_str(name).or_else(|| e.field(name)))
-        .map(str::to_owned)
 }
 
 /// 台本 `script` の A を起こし、印＝A を書く。`hold` が GET なら起動の往復が固まるまで、
@@ -266,7 +244,7 @@ fn deadline_fires_without_manual_cut() {
     );
 }
 
-/// 上限の中で応答すれば今日どおり: 印が消え・解く手 0 回（＝`warn!` 0 件。対照は段ごとのテストの
+/// 上限の中で応答すれば: 印が消え・解く手 0 回（＝`warn!` 0 件。対照は段ごとのテストの
 /// 1 回）・所要の記録の打ち切りは偽。
 #[test]
 fn answered_within_limit_is_not_cut() {
@@ -297,7 +275,7 @@ fn on_close_times_out_by_itself() -> ScriptedShioriBackendBuilder {
 }
 
 /// SHIORI 側の期限（環境変数）が T より短い形: 台本が自分で期限切れを返す → 見張りは発火せず
-/// （解く手 0 回・打ち切りは偽）、印の判定は今日どおり（`OnClose` の失敗は降ろしの中の応答として
+/// （解く手 0 回・打ち切りは偽）、印の判定は応答のとおり（`OnClose` の失敗は降ろしの中の応答として
 /// 畳まれ、きれいな終わりで印が消える）。
 #[test]
 fn self_timeout_shorter_than_limit_is_not_cut() {

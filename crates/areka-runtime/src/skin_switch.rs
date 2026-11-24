@@ -1,7 +1,7 @@
 //! シェル・バルーンの切替の型。
 //!
 //! 本体を引かない型と Reference の組み立ての規則（[`skin_ref_name`]・[`skin_ref_path`]）を置く。
-//! `runtime` の中はここを直に引き、要求の入口（`shell_balloon_switch.rs`）は呼び手のために出し直す。
+//! 要求の入口（`areka_session::shell_balloon_switch`）が出し直すのは要求と判定の 5 型だけで、ほかはここを直に引く。
 
 use std::path::Path;
 use std::sync::mpsc::Receiver;
@@ -62,7 +62,7 @@ pub struct SkinRequest {
     pub origin: SkinOrigin,
 }
 
-/// 入口の判定（受理以外はどれも `warn!` を 1 件残して何もしない）。
+/// 入口の判定（受理以外は記録を 1 件残して何もしない（送れなかった回だけ `error!`、ほかは `warn!`））。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkinVerdict {
     Accepted,
@@ -72,9 +72,11 @@ pub enum SkinVerdict {
     GhostSwitching,
     /// ネットワーク更新の実行中。
     Updating,
+    /// インストールの作業の途中（メニューからの要求だけを断る）。
+    Installing,
     /// 切替先が決まらない。
     NotFound,
-    /// 起動の文脈・置き場のゴースト・結線・seriko の送り手のどれかが無い（kanade へ送れないときも）。
+    /// 起動の文脈・置き場のゴースト・結線・kanade の送出端・seriko の送り手のどれかが無い（kanade へ送れないときも）。
     NoContext,
 }
 

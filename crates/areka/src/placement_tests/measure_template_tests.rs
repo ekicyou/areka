@@ -61,8 +61,9 @@ fn the_boot_side_does_not_parse_the_shell_itself() {
     );
 }
 
-/// `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（本体の 2 本。
-/// 配置の crate の 1 本は配置の片割れが見る）。
+/// `load_shell_target` を呼ぶ examples のうち `areka` の `emo-present` と `areka-runtime` の
+/// `collision-probe` の 2 本も自前でやり直していない（`areka-placement` の `window-placement` は
+/// 配置の片割れが見る）。
 ///
 /// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具であり、ここで自前の解析へ
 /// 戻ると、目視で見た絵と製品の絵が静かに別物になる。名前を持ち込むだけの

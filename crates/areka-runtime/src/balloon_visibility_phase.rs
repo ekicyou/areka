@@ -7,8 +7,8 @@
 //! # 1 フレームの手順
 //!
 //! ⑴ 表示ライフサイクル信号を全件取り出す → ⑵ scope ごとの観測を集める → ⑶ 自分が発行して
-//! いない可視性の変化を前フレームとの差分で検出する → ⑷ [`decide`] を呼ぶ → ⑸ 返った行動を
-//! 発行する → ⑹ 返った事象をログへ写し、時間切れの知らせがあれば置き場のゴーストの kanade へ
+//! いない可視性の変化を前フレームとの差分で検出する → ⑷ [`decide`] を呼び、計測が動いている間は
+//! 満了の時刻に合わせて次の起床を預ける → ⑸ 返った行動を発行する → ⑹ 返った事象をログへ写し、時間切れの知らせがあれば置き場のゴーストの kanade へ
 //! 送る → ⑺ 不可視へ落ちた scope のポインタ滞在記録を掃除する。
 //!
 //! ⑶ が ⑷ より前にあるのは順序の都合ではなく必然である——[`decide`] は自分が積んだ遷移を
@@ -44,7 +44,7 @@ use crate::shell_box_hover::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{RuntimeWiring, resolve_talk_time};
-use super::super::target_map::{balloon_target, shell_target};
+use super::super::target_map::{balloon_target, shell_target, window_scope};
 use super::{
     BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
     TalkLifecycleSignal, VisibilityAction, VisibilityLogEvent, VisibilityObservations,
@@ -117,7 +117,7 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     // 次の起床を預ける。預けられる期限は最も早い 1 つだけで、到来すると倒れる——だから
     // 待っている限り**本相が走るたびに預け直す**。1 度預けて済ませると、後から預けられた
     // 別の期限に押し出されたときに黙って落ちる。
-    match visibility_wake(now_talk_time, state.deadline) {
+    match visibility_wake(now_talk_time, state.deadline, state.prev_suppressed) {
         VisibilityWake::After(wait) => tick_wake::arm_deadline(Instant::now() + wait),
         VisibilityWake::Now => tick_wake::mark(tick_wake::REARM),
         VisibilityWake::None => {}
@@ -152,16 +152,16 @@ const MAX_WAIT_SECS: f64 = 3600.0;
 
 /// 待ち時間の起こし方（[`visibility_wake`] の答え）。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum VisibilityWake {
+enum VisibilityWake {
     /// まだ待ち時間が残っている——この長さだけ後に起こす。
     After(Duration),
-    /// 期限は既に来ている（抑止で保留中など）——次の画面更新で見直す。
+    /// 期限は既に来ていて抑止も無い——次の画面更新で見直す。
     Now,
     /// 計測していない——何も預けない。
     None,
 }
 
-/// 満了予定と現在時刻から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
+/// 満了予定と現在時刻と抑止の有無から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
 ///
 /// 時刻軸はどちらも talk 相対秒である。計測が動いていない（起点未確立・満了予定なし）フレーム
 /// では何も預けない——待つ相手が居ないのに起きても、判断は同じ答えを返すだけである。
@@ -169,7 +169,11 @@ pub(crate) enum VisibilityWake {
 /// 引き算が数にならない期限（非有限）も預けない。そういう期限は満了の比較そのものが成立せず
 /// （表示を保持したまま動かない）、起こしても判断が変わらないからである。素通ししても心拍が
 /// 定期的に見に来る。
-pub(crate) fn visibility_wake(now_talk_time: Option<f64>, deadline: Option<f64>) -> VisibilityWake {
+fn visibility_wake(
+    now_talk_time: Option<f64>,
+    deadline: Option<f64>,
+    suppressed: bool,
+) -> VisibilityWake {
     let (Some(now), Some(deadline)) = (now_talk_time, deadline) else {
         return VisibilityWake::None;
     };
@@ -179,6 +183,9 @@ pub(crate) fn visibility_wake(now_talk_time: Option<f64>, deadline: Option<f64>)
     }
     if remaining > 0.0 {
         VisibilityWake::After(Duration::from_secs_f64(remaining.min(MAX_WAIT_SECS)))
+    } else if suppressed {
+        // 抑止の解けはポインタとドラッグの入力か cue がフレームを起こし、そのフレームで計り直す。
+        VisibilityWake::None
     } else {
         VisibilityWake::Now
     }
@@ -248,7 +255,11 @@ fn collect_observations(
     // 箱の観測（文字が出ているか・その上の滞在）。滞在は観測の直前に毎フレーム整える。
     // ドラッグ中の観測と記録の書き戻しは world の可変借用を要するため、ポインタ配線の共有借用
     // より先に済ませる。
-    let boxes = observe_boxes(world, runtime.as_deref(), scopes, state);
+    let actors: Vec<ActorKey> = scopes
+        .iter()
+        .map(|scope| ActorKey::from(scope.to_string()))
+        .collect();
+    let boxes = observe_boxes(world, runtime.as_deref(), scopes, &actors, state);
     let box_scopes: Vec<u32> = scopes
         .iter()
         .zip(&boxes)
@@ -259,7 +270,7 @@ fn collect_observations(
     let hover_wiring = observe_hover_wiring(world, state);
 
     let mut observed = BTreeMap::new();
-    for (&scope, &(box_showing, box_hovered)) in scopes.iter().zip(&boxes) {
+    for ((&scope, &(box_showing, box_hovered)), actor) in scopes.iter().zip(&boxes).zip(&actors) {
         let target = balloon_target(scope);
         let Some(visible) = presenter.target_visible(target) else {
             // 判断の真実源が引けない scope（表示層に target が無い）。第 2 の帳簿で代用せず、
@@ -283,7 +294,6 @@ fn collect_observations(
             .unattached_scopes
             .remove(&scope);
 
-        let actor = ActorKey::from(scope.to_string());
         observed.insert(
             scope,
             ScopeObservation {
@@ -301,11 +311,11 @@ fn collect_observations(
                 visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
                     GlyphObservation {
                         count: rt.balloon_shown_glyphs(
-                            &actor,
+                            actor,
                             presenter.current_surface_id(shell_target(scope)),
                             t,
                         ),
-                        clear_count: rt.state().clear_count(&actor),
+                        clear_count: rt.state().clear_count(actor),
                     }
                 }),
                 visible,
@@ -370,14 +380,16 @@ fn observe_hover_wiring<'w>(
 }
 
 /// scope ごとの箱の観測 `(箱に文字が出ているか, 文字の出ている箱の上に滞在しているか)` を
-/// `scopes` と同じ並びで返す。
+/// `scopes` と同じ並びで返す。`actors` は `scopes` と同じ並びの鍵。
 ///
-/// 文字層ランタイムを借りられなかったフレームは写しが読めないので、どちらも偽（抑止しない側）
-/// とし、滞在の記録も整えない（借用の失敗は [`borrow_runtime`] が記録済み）。
+/// 文字層ランタイムを借りられなかったフレームは写しが読めないので、どちらも偽とし、滞在の記録も
+/// 整えない（借用の失敗は [`borrow_runtime`] が記録済み）。この偽は「箱に文字が無い」の意味では
+/// ない——同じフレームは文字の数も観測できず、判断中核はそれを見て時間切れの計測に触れない。
 fn observe_boxes(
     world: &mut World,
     runtime: Option<&TextLayerRuntime>,
     scopes: &[u32],
+    actors: &[ActorKey],
     state: &mut BalloonVisibilityState,
 ) -> Vec<(bool, bool)> {
     let Some(runtime) = runtime else {
@@ -386,10 +398,10 @@ fn observe_boxes(
     let mut hover = world.get_non_send_mut::<ShellBoxHover>();
     scopes
         .iter()
-        .map(|&scope| {
-            let shown = runtime.shown_boxes(&ActorKey::from(scope.to_string()));
+        .zip(actors)
+        .map(|(&scope, actor)| {
             observe_scope_boxes(
-                shown,
+                runtime.shown_boxes(actor),
                 hover.as_deref_mut(),
                 scope,
                 &mut state.observation_failure_logged.box_hover,
@@ -461,7 +473,7 @@ fn observe_shell_dragging(world: &mut World, box_scopes: &[u32]) -> bool {
         && world
             .query_filtered::<&CharWindowMarker, With<WindowDragging>>()
             .iter(world)
-            .any(|marker| box_scopes.contains(&(marker.scope as u32)))
+            .any(|marker| window_scope(marker.scope).is_some_and(|s| box_scopes.contains(&s)))
 }
 
 // ---------------------------------------------------------------------------
@@ -504,89 +516,79 @@ fn log_external_transitions(
 // ⑸ 行動の発行
 // ---------------------------------------------------------------------------
 
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は相関数が使う（道と名前は同じ）。
-#[cfg(feature = "test-support")]
-pub use test_open::{IssueOutcome, clear_hover_residency, issue_actions};
-#[cfg(not(feature = "test-support"))]
-use test_open::{clear_hover_residency, issue_actions};
+/// 発行の結果（後段のログと掃除が要る分だけ）。
+struct IssueOutcome {
+    /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
+    hidden: Vec<u32>,
+    /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
+    not_shown: Vec<u32>,
+}
 
-mod test_open {
-    use super::*;
-
-    /// 発行の結果（後段のログと掃除が要る分だけ）。
-    pub struct IssueOutcome {
-        /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
-        pub hidden: Vec<u32>,
-        /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
-        pub not_shown: Vec<u32>,
-    }
-
-    /// 判断が返した行動を表示層へ発行する。
-    ///
-    /// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
-    /// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない）。
-    /// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
-    /// キャラクター窓には触れない。
-    ///
-    /// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
-    /// 同じ scope の箱を隠す印も立てる。窓の非表示は今までどおり
-    /// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
-    pub fn issue_actions(
-        presenter: &mut EmoPresenter,
-        world: &mut World,
-        runtime: &Rc<RefCell<TextLayerRuntime>>,
-        state: &mut BalloonVisibilityState,
-        observations: &VisibilityObservations,
-        actions: &[VisibilityAction],
-    ) -> IssueOutcome {
-        let mut hidden = Vec::new();
-        let mut not_shown = Vec::new();
-        for action in actions {
-            match action {
-                VisibilityAction::Show { scope } => {
-                    if !issue_show(presenter, world, *scope) {
-                        roll_back_show(state, observations, *scope);
-                        not_shown.push(*scope);
-                    }
-                }
-                VisibilityAction::HideScopes { scopes, trigger } => {
-                    for &scope in scopes {
-                        presenter.apply(
-                            world,
-                            PresentCommand::Hide {
-                                target: balloon_target(scope),
-                                reply: None,
-                            },
-                        );
-                        hidden.push(scope);
-                    }
-                    let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
-                    hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
+/// 判断が返した行動を表示層へ発行する。
+///
+/// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
+/// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない）。
+/// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
+/// キャラクター窓には触れない。
+///
+/// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
+/// 同じ scope の箱を隠す印も立てる。窓の非表示は列挙した scope すべてへ
+/// 発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
+fn issue_actions(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    runtime: &Rc<RefCell<TextLayerRuntime>>,
+    state: &mut BalloonVisibilityState,
+    observations: &VisibilityObservations,
+    actions: &[VisibilityAction],
+) -> IssueOutcome {
+    let mut hidden = Vec::new();
+    let mut not_shown = Vec::new();
+    for action in actions {
+        match action {
+            VisibilityAction::Show { scope } => {
+                if !issue_show(presenter, world, *scope) {
+                    roll_back_show(state, observations, *scope);
+                    not_shown.push(*scope);
                 }
             }
+            VisibilityAction::HideScopes { scopes, trigger } => {
+                for &scope in scopes {
+                    presenter.apply(
+                        world,
+                        PresentCommand::Hide {
+                            target: balloon_target(scope),
+                            reply: None,
+                        },
+                    );
+                    hidden.push(scope);
+                }
+                let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
+                hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
+            }
         }
-        IssueOutcome { hidden, not_shown }
     }
+    IssueOutcome { hidden, not_shown }
+}
 
-    // ---------------------------------------------------------------------------
-    // ⑺ ポインタ滞在記録の掃除
-    // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ⑺ ポインタ滞在記録の掃除
+// ---------------------------------------------------------------------------
 
-    /// 不可視へ落ちた scope のポインタ滞在の記録を落とす。
-    ///
-    /// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
-    /// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
-    /// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
-    pub fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
-        if scopes.is_empty() {
-            return;
-        }
-        let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
-            return;
-        };
-        for &scope in scopes {
-            wiring.clear_balloon_hover(scope as usize);
-        }
+/// 不可視へ落ちた scope のポインタ滞在の記録を落とす。
+///
+/// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
+/// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
+/// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
+fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
+    if scopes.is_empty() {
+        return;
+    }
+    let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
+        return;
+    };
+    for &scope in scopes {
+        wiring.clear_balloon_hover(scope as usize);
     }
 }
 
@@ -684,8 +686,7 @@ fn roll_back_show(
 /// 判断が返した事象をログへ写す（遷移・計測は情報レベル・信号の欠落は警告）。
 ///
 /// 判断中核は**状態が動いたフレームでしか**事象を作らないため、ここが毎フレーム鳴ることはない。
-/// 1 行から scope と契機が確定できるよう、構造化フィールドは
-/// `scope`／`trigger`／`visible`／`deadline`／`talk_time` で揃える。
+/// 各行はその事象を識別する構造化フィールドを持つ。
 ///
 /// `not_shown` の scope については表示への遷移を出さない——発行が実らなかった以上、遷移は
 /// 起きていない（起きていない遷移を記録すると、実機サインオフの合否判定が嘘をつく）。
@@ -819,13 +820,19 @@ pub mod test_support;
 #[path = "balloon_visibility_phase_tests.rs"]
 mod tests;
 
+// 隠れたバルーンが次の台詞の最初の文字とともに現れること。
+// 本物の文字の層と本物の観測の収集を通し、場面ごとの各フレームの行動と記録を見る決定論テスト。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_reappear_tests.rs"]
+mod reappear_tests;
+
 // 待ち時間の預け方（純判断）だけを見る決定論テスト。配線の檻とは相手が違うので分けてある。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_wake_tests.rs"]
 mod wake_tests;
 
 // 再表示は重なりへ作用しない。その不作用と、
-// 退役した追随トリガの痕跡が残っていないことを見る決定論テスト。
+// 配線層が重なりの機構を名指さないことを見る決定論テスト。
 #[cfg(test)]
 #[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
 mod zorder_chain_tests;

@@ -228,7 +228,7 @@ impl MonitorDpiTable {
 
 /// モニタ表から作られる 2 つの源（作業領域源＋モニタ別拡大率表）の組。
 ///
-/// **起動時（`main.rs` のシーム）も実行時の同期（`areka_runtime::frame::work_area_sync`）も
+/// **起動時（`areka-session` の `boot_seam.rs`）も実行時の同期（`areka_runtime::frame::work_area_sync`）も
 /// この 1 つの構築関数を通る**（二重権威にならない）。
 /// 起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 #[derive(Debug, Clone, PartialEq, Eq)]

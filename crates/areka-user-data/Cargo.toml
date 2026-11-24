@@ -1,7 +1,7 @@
 [package]
 name = "areka-user-data"
 workspace = "../.."
-description = "書ける根（利用者ごとの置き場）を使う形の判断・場所・記憶の置き場と、その手続きを areka と中継が共有する葉のクレート（spec: areka-P0-user-data-root）"
+description = "書ける根（利用者ごとの置き場）を使う形の判断・場所・記憶の置き場と、その手続きを areka と中継が共有する葉のクレート"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

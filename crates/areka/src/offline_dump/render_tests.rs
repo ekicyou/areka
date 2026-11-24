@@ -280,8 +280,8 @@ fn compose_failure_adds_only_info() {
         .count();
     assert_eq!(errors, 1, "error は合成の 1 行だけ: {events:?}");
     assert!(
-        events.iter().any(|e| e.level == tracing::Level::INFO
-            && e.field_str("event") == Some("offline_dump_surface_skipped")),
+        crate::session_tests::levels_of(&events, "offline_dump_surface_skipped")
+            .contains(&tracing::Level::INFO),
         "飛ばした info: {events:?}"
     );
 }

@@ -1,12 +1,13 @@
 //! 切替の写しの決定論テスト。
 //!
 //! 写しの答えは受信端を自分で組んで送り、届く順をテストが決める（時刻・眠りに頼らない）。
-//! 背景のスレッドを走らせる [`start`] の確かめは、受信端の `recv` で答えを待つ。切替先は
+//! 背景のスレッドを走らせる [`start`] の確かめは、受信端で答えを有界に待つ。切替先は
 //! 起動入力の作り口の無い World で起こすので、起こす試みは `ghost_switch_boot_failed` で倒れ、
 //! その `dir` 欄が「どのフォルダから起こしたか」を答える。根は `target\` の下に掘る。
 
 use std::fs;
 use std::sync::mpsc;
+use std::time::Duration;
 
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_kanade::{ChangeHandoff, ChangeOrigin};
@@ -16,8 +17,7 @@ use temp_path_kit::TempPath;
 use wintf::AppExit;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::boot_resolve::boot_resolve_tests::{count_event, events_named};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
@@ -75,29 +75,14 @@ impl Fixture {
         let mut world = World::new();
         world.insert_non_send(AppExit::new());
         let a = self.bundled("A");
-        world.insert_resource(BootContext {
-            roots: self.roots(),
-            roots_origin: crate::roots::RootsOrigin::Default,
-            app_profile_dir: self.user.join("profile"),
-            helper_exe: self.exe.join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: a.clone(),
-                    balloon_root: self.exe.join("balloon").join("X"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Memory,
-                    dir: a.clone(),
-                    folder: Some("A".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: self.exe.join("balloon").join("X"),
-                    folder: Some("X".to_owned()),
-                },
-            },
-        });
+        let mut ctx = crate::reload::test_support::boot_context_named(
+            &self.user,
+            &BasewareRoot::new(self.exe.clone()),
+            "A",
+            "X",
+        );
+        ctx.roots = self.roots();
+        world.insert_resource(ctx);
         world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, a.clone()))));
         world.insert_non_send(SwitchInFlight {
             target: SwitchTarget {
@@ -123,18 +108,10 @@ fn handoff() -> ChangeHandoff {
     ChangeHandoff { script: None }
 }
 
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
-
 /// 最初に起こそうとしたフォルダ（`ghost_switch_boot_failed` の 1 件目の `dir` 欄）。
 fn first_boot_dir(events: &[CapturedEvent]) -> Option<String> {
-    events
-        .iter()
-        .find(|e| e.field_str("event") == Some("ghost_switch_boot_failed"))
+    events_named(events, "ghost_switch_boot_failed")
+        .first()
         .and_then(|e| e.field("dir").map(str::to_owned))
 }
 
@@ -170,7 +147,10 @@ fn start_copies_on_a_background_thread() {
     let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
-    assert_eq!(rx.recv().unwrap(), f.copied("B"));
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(30)).unwrap(),
+        f.copied("B")
+    );
     assert!(
         f.copied("B")
             .join("ghost")
@@ -194,7 +174,7 @@ fn no_copy_boots_from_the_target() {
         shown(&f.bundled("B")),
         "{events:?}"
     );
-    assert_eq!(count(&events, "ghost_switch_copy_wait"), 0);
+    assert_eq!(count_event(&events, "ghost_switch_copy_wait"), 0);
 }
 
 /// 止まる前に写し終えた: 取り出しの系の先頭の受け取りで `Done` になり、止まった時点でそのまま
@@ -216,7 +196,7 @@ fn copied_before_stop_boots_from_the_copy() {
     assert!(received, "受け取りで写し終えたになる");
     assert_eq!(
         (
-            count(&events, "ghost_switch_copy_wait"),
+            count_event(&events, "ghost_switch_copy_wait"),
             first_boot_dir(&events)
         ),
         (0, shown(&f.copied("B"))),
@@ -235,8 +215,8 @@ fn copied_after_stop_waits_then_boots_from_the_copy() {
     let ((), stopped) = capture(|| switch_to(&mut world, handoff()));
     let waiting = (
         stage(&world),
-        count(&stopped, "ghost_switch_copy_wait"),
-        count(&stopped, "ghost_switch_down_ms"),
+        count_event(&stopped, "ghost_switch_copy_wait"),
+        count_event(&stopped, "ghost_switch_down_ms"),
         world
             .get_non_send::<GhostSlot>()
             .is_some_and(|s| s.0.is_some()),
@@ -264,7 +244,7 @@ fn copied_after_stop_waits_then_boots_from_the_copy() {
     assert_eq!(verdict, SwitchVerdict::Busy, "写し待ちの間の要求は退ける");
     assert_eq!(
         (
-            count(&resumed, "ghost_switch_down_ms"),
+            count_event(&resumed, "ghost_switch_down_ms"),
             first_boot_dir(&resumed)
         ),
         (1, shown(&f.copied("B"))),
@@ -282,7 +262,7 @@ fn copy_failure_boots_from_the_original() {
     let SwitchCopy::Running(rx) = start(false, &f.roots(), Some(&f.exe), &f.bundled("B")) else {
         panic!("写し中の見込みになる");
     };
-    let answer = rx.recv().unwrap();
+    let answer = rx.recv_timeout(Duration::from_secs(30)).unwrap();
 
     let (tx, rx) = mpsc::channel();
     let mut world = f.world(SwitchCopy::Running(rx));
@@ -303,7 +283,7 @@ fn copy_failure_boots_from_the_original() {
     );
     assert_eq!(
         (
-            count(&lost, "ghost_switch_copy_lost"),
+            count_event(&lost, "ghost_switch_copy_lost"),
             first_boot_dir(&lost)
         ),
         (1, shown(&f.bundled("B"))),
@@ -328,15 +308,15 @@ fn readonly_start_withholds_the_copy_and_boots_from_the_original() {
     assert!(user_tree.is_empty(), "書ける根は空のまま: {user_tree:?}");
     assert_eq!(
         (
-            count(&events, "user_data_copy_withheld"),
-            count(&events, "user_data_copied")
+            count_event(&events, "user_data_copy_withheld"),
+            count_event(&events, "user_data_copied")
         ),
         (1, 0),
         "(控えた・写した): {events:?}"
     );
     assert_eq!(
         (
-            count(&switched, "ghost_switch_copy_wait"),
+            count_event(&switched, "ghost_switch_copy_wait"),
             first_boot_dir(&switched)
         ),
         (0, shown(&f.bundled("B"))),

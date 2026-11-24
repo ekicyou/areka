@@ -1,6 +1,6 @@
 //! 起動解決の純粋な判断。
 //!
-//! 起動するゴースト（6 分岐）とバルーン（8 分岐＝argv・記憶・descript・同梱・唯一・既定・
+//! 起動するゴースト（9 通り）とバルーン（8 分岐＝argv・記憶・descript・同梱・唯一・既定・
 //! 無作為・0）を「argv・記憶の値・ゴーストの descript の 2 鍵・同梱の名・列挙の素性」だけから
 //! 決める。判断は I/O・時計・乱数源を持たず、無作為は「候補数 → 添字」の関数を注入する
 //! （本番は [`pick_index`]）。列挙の並びは判断に使わない。ただ 1 点、descript の
@@ -128,7 +128,7 @@ pub(crate) struct BalloonInputs<'a> {
     pub stores: &'a [PathBuf],
 }
 
-/// 格納フォルダの列を記録の値へ（`; ` でつなぐ・根 1 つなら今と同じ綴り）。
+/// 格納フォルダの列を記録の値へ（`; ` でつなぐ・根 1 つならその綴りそのまま）。
 fn joined(stores: &[PathBuf]) -> String {
     stores
         .iter()
@@ -163,8 +163,8 @@ fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'
 /// descript の段で鍵ごとに使う突き合わせ（[`find_balloon`] か [`find_balloon_by_name`]）。
 type FindBalloon = for<'l> fn(&'l [BalloonEntry], &str) -> Option<&'l BalloonEntry>;
 
-/// 段 1〜5＋0 体に、段 1b（指し先）と
-/// `--random` の段を足した並び。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
+/// 段 1〜5＋0 体に、段 1b（指し先）・`--random` の段・callghost の段を
+/// 足した並び。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_ghost(
     inputs: &GhostInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -587,7 +587,7 @@ pub fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> 
 }
 
 /// きれいに終わらなかったので印を残すときの記録（`session_mark_kept`）。記憶の印を読み直し、
-/// 印が在るときだけ次の起動の Ref6/7 を予告する。呼び手は `main::settle_session_mark`。
+/// 印が在るときだけ次の起動の Ref6/7 を予告する。呼び手は `session_mark::settle_session_mark`。
 /// 置き場が控える範囲の中なら印を読み直さない（控えの印で次の起動を予告しない）。
 pub fn keep_session_mark(app_profile_dir: &Path, reason: &'static str, first: Option<&ExitOrigin>) {
     if areka_sylphya::persist::withhold::withholds(app_profile_dir) {
@@ -740,7 +740,7 @@ fn remembered<'a>(
 
 #[cfg(test)]
 #[path = "boot_resolve_tests.rs"]
-mod boot_resolve_tests;
+pub(crate) mod boot_resolve_tests;
 
 #[cfg(test)]
 #[path = "boot_resolve_option_tests.rs"]
@@ -753,3 +753,7 @@ mod boot_resolve_balloon_tests;
 #[cfg(test)]
 #[path = "boot_resolve_readonly_tests.rs"]
 mod boot_resolve_readonly_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_last_used_tests.rs"]
+mod boot_resolve_last_used_tests;

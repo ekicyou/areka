@@ -126,7 +126,7 @@ fn request(world: &mut World) {
         }
         // 別の切替の最中: 預かったまま、その予約が下りた tick か次の定常到達で頼み直す。
         SwitchVerdict::Busy => Stage::Busy(archive),
-        SwitchVerdict::NotFound | SwitchVerdict::NoContext => {
+        SwitchVerdict::NotFound | SwitchVerdict::NoContext | SwitchVerdict::Updating => {
             tracing::warn!(
                 event = "install_overwrite_unavailable",
                 verdict = ?verdict,

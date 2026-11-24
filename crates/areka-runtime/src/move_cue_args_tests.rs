@@ -1,7 +1,6 @@
 // `\![move]` の引数の読みの決定論テスト。
 
 use super::*;
-use crate::move_cue::{Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY};
 
 fn toks(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
@@ -422,11 +421,4 @@ fn emo2_scripts_read_without_notes() {
             ..defaults(1)
         }
     );
-}
-
-/// 同じ入力には同じ出力（決定論）。
-#[test]
-fn parse_is_deterministic() {
-    let items = ["--X=1", "--bogus=2", "--X=3", "--base-offset=zz"];
-    assert_eq!(parse(0, &items), parse(0, &items));
 }

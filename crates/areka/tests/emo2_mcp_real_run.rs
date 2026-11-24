@@ -10,13 +10,13 @@
 //!    ⑴ MCP の `raise_event` は `sender=MCP`・`sender_type=external,sstp`・`security_level=local`
 //!    ⑵ MCP の `sakurascript` の `OnTranslate` は `sender=MCP`・`sender_type=internal`
 //!    ⑶ 起動の道のゴースト自身のイベントは `sender=areka`・`sender_type=internal`
-//!    ⑷ MCP の `sakurascript` で流した `\![enter,nouserbreakmode]` は今どおり区間に入る（MCP は `local`）。
+//!    ⑷ MCP の `sakurascript` で流した `\![enter,nouserbreakmode]` は区間に入る（MCP は `local`）。
 //!    決定論のテスト（偽の SHIORI の檻）の代わりではない。両方を置く。
 //! 3. strict: 誤りを 2 つ含む台本を `strict` 真で流し、
 //!    答えの `since_id` で `get_log(log_type=error, ghost_name=…)` を読むと 2 件が台本の順に読める。
 //!
 //! 記録の段は 3 つの和にする。`areka_session::ghost_session` の info（`本物のゴースト窓を開きました`）は
-//! どれにも含まれないので、1 の「標準出力から消える」は今のまま成り立つ。
+//! どれにも含まれないので、1 の「標準出力から消える」が成り立つ。
 //! 子の起こし方・MCP の呼び出し・閉じ方は窓口 `real-run-kit` に任せる。証拠を集め終えたら利用者と同じ
 //! 閉じ方で閉じ（保険の自動終了を待たない）、閉じた後に判定する。
 

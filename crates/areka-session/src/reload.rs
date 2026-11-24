@@ -1,9 +1,9 @@
 //! 読み直しの窓口。
 //!
 //! 台本（受け口 `reload_cue.rs` → 受信端 `ReloadRx` → 入力の段の取り出しの系 [`drain`]）と MCP の
-//! `reload` の 2 つの入口は、ここの [`request_reload`] 1 本だけを通る。窓口は 終了の途中 → 別の読み直し
-//! → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈 の順に判定し、
-//! 断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
+//! `reload` の 2 つの入口は、ここの [`request_reload`] 1 本だけを通る。窓口は 終了の途中 → 別の読み直し →
+//! ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール（この 2 つは MCP の要求だけ）→
+//! 文脈 の順に判定し、断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
 //! 最後に、読み直せる語の無い descript を `warn!(reload_descript_no_words)` で断る（`reload_refused` は出さない）。
 //! 受理したら `info!(reload_started)` を残し、対象ごとの始め方へ渡す。
 
@@ -237,7 +237,7 @@ pub fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
         );
         return ReloadVerdict::Closing;
     }
-    if let Some(reason) = overlap_or_context(world) {
+    if let Some(reason) = overlap_or_context(world, req.origin) {
         tracing::warn!(
             target: TARGET_ERROR,
             ghost = %ghost,
@@ -296,8 +296,9 @@ pub fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVerdict {
     ReloadVerdict::Accepted
 }
 
-/// 重なりと文脈の判定。判定の順はここの並びのとおり。
-fn overlap_or_context(world: &World) -> Option<RefusedReason> {
+/// 重なりと文脈の判定。判定の順はここの並びのとおり。更新中・インストール中は MCP からの要求だけを断り、
+/// ゴーストの台本からの要求は止めない（インストール完了の応えの台本の読み直しを時刻の偶然で止めない）。
+fn overlap_or_context(world: &World, origin: ReloadOrigin) -> Option<RefusedReason> {
     let body = BodySystems::of(world);
     if world.get_non_send::<ReloadInFlight>().is_some() {
         return Some(RefusedReason::ReloadInFlight);
@@ -308,11 +309,13 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if world.get_non_send::<SkinSwitchInFlight>().is_some() {
         return Some(RefusedReason::SkinSwitching);
     }
-    if (body.update_busy)(world) {
-        return Some(RefusedReason::Updating);
-    }
-    if (body.install_busy)(world) {
-        return Some(RefusedReason::Installing);
+    if origin == ReloadOrigin::Mcp {
+        if (body.update_busy)(world) {
+            return Some(RefusedReason::Updating);
+        }
+        if (body.install_busy)(world) {
+            return Some(RefusedReason::Installing);
+        }
     }
     let has_kanade = hooks::session(world).is_some_and(|session| session.kanade().is_some());
     if !has_kanade || world.get_resource::<BootContext>().is_none() {

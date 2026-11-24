@@ -4,7 +4,7 @@
 //! ⑴ B の SHIORI が接続に失敗（起こした後に非同期の `Fault`）→ 既定ゴーストが `OnBoot` の
 //! Ref6＝`halt`・Ref7＝B の名前で起き、`OnGhostChanged` 0 件・告知なし・終了の指示なし
 //! ⑵ 根に既定ゴーストが無い → 終了の指示・最初の出所が「既定ゴーストへ戻せなかった」
-//! ⑶ 既定ゴーストも接続に失敗 → 今日の SHIORI の失敗の経路で終了（告知の場面は既存の 1 つ）
+//! ⑶ 既定ゴーストも接続に失敗 → SHIORI の失敗の経路で終了（告知の場面は SHIORI の失敗の 1 つ）
 //! ⑷ 切替先の起動が同期で失敗 → 入力の段のあと、ゴーストの窓は既定ゴーストの分だけ・窓の束が 1 つ
 //! ⑸ 切替先の窓の閉包が着く前に切替先が失敗 → 入力の段のあと、ゴーストの窓は既定ゴーストの分だけ。
 //! 窓は作業プールの閉包が `Input` 段の取り出し（`drain_task_pool_commands`）で World へ生やす
@@ -119,7 +119,7 @@ fn after_run_alert(rig: &mut SwitchRig) -> (Option<Option<String>>, bool) {
 /// 記録は `error!(ghost_switch_target_fault)` 1 件。起動の文脈の今のゴーストは既定（経路＝既定）。
 ///
 /// # 非空虚性
-/// 迎え入れ（切替先）の `Fault` を今日どおり終了へ流すと終了の指示・告知が立って赤。既定へ戻す由来を
+/// 迎え入れ（切替先）の `Fault` を終了へ流すと終了の指示・告知が立って赤。既定へ戻す由来を
 /// 「ふつう」にすると `OnBoot` の Ref6/7 が載らず赤。
 #[test]
 fn target_connect_fail_boots_default_with_halt_and_no_alert() {
@@ -192,7 +192,7 @@ fn target_connect_fail_boots_default_with_halt_and_no_alert() {
 }
 
 /// 根に既定ゴーストが無いまま B が接続に失敗 → 戻す先が無いので致命: 終了が指示され、最初の出所は
-/// 「既定ゴーストへ戻せなかった」（理由に落ちた B の名前）。`main` の後始末は既存の SHIORI の失敗の
+/// 「既定ゴーストへ戻せなかった」（理由に落ちた B の名前）。`main` の後始末は SHIORI の失敗の
 /// 場面を既定ゴーストの名前で組み、終了コード 1。
 ///
 /// # 非空虚性
@@ -243,8 +243,8 @@ fn target_fault_without_default_ghost_is_fatal() {
     );
 }
 
-/// 既定ゴーストも接続に失敗 → 戻す試みは 1 回だけ（既定から先へは戻さない）で、今日の SHIORI の失敗の
-/// 経路（最初の出所が kanade の停止の `Fault`・告知の場面は既存の 1 つ・終了コード 1）で終える。
+/// 既定ゴーストも接続に失敗 → 戻す試みは 1 回だけ（既定から先へは戻さない）で、SHIORI の失敗の
+/// 経路（最初の出所が kanade の停止の `Fault`・告知の場面は SHIORI の失敗の 1 つ・終了コード 1）で終える。
 ///
 /// # 非空虚性
 /// 既定の失敗でも既定へ戻す経路へ入ると、既定を起こし直し続けて終了が指示されず（期限切れ）赤。
@@ -293,7 +293,7 @@ fn default_ghost_fault_after_fallback_exits_through_shiori_fault_path() {
             ),
             true,
         ),
-        "既定ゴーストの失敗が今日の失敗の経路で終わらない（A の定常・終了の指示・最初の出所・予約／告知の\
+        "既定ゴーストの失敗が SHIORI の失敗の経路で終わらない（A の定常・終了の指示・最初の出所・予約／告知の\
          場面がある・終了コード 1／切替先の失敗・既定の失敗・切替で起こした数・致命の記録／降ろせた): \
          {events:?}"
     );
@@ -433,11 +433,7 @@ fn sync_target_boot_failure_leaves_only_default_windows() {
 
     let titles = window_titles(&mut rig.world);
     let one_bundle = one_bundle_covers_all(&mut rig.world);
-    let boot_failed_stages: Vec<Option<String>> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("ghost_switch_boot_failed"))
-        .map(|e| e.field_str("stage").map(str::to_owned))
-        .collect();
+    let boot_failed_stages = field_of(&events, "ghost_switch_boot_failed", "stage");
     let on_boot_tail = default_on_boot_tail(&rig);
     let exit_requested = rig.exit_requested();
     let shutdown_ok = rig.shutdown();

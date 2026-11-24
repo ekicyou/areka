@@ -18,7 +18,7 @@ pub mod change_cue;
 pub mod consumer_ledger;
 pub mod frame;
 pub mod hit_region;
-pub mod hover_inject;
+pub(crate) mod hover_inject;
 pub mod move_cue;
 pub mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口。
@@ -342,9 +342,9 @@ fn build_boot_assets_for(
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
 /// `warn!` どまり。他（読取不能／bake／
-/// balloon 失敗等）は真に予期しない失敗として `error!` で区別する（本体の `boot_config.rs` の
+/// balloon 失敗等）は真に予期しない失敗として `error!` で区別する（`areka-session` の `boot_config.rs` の
 /// `is_benign_boot_error` と同じ分類方針）。boot 自体の
-/// `GhostBootError` は別途 本体の `is_benign_boot_error` が分類する。
+/// `GhostBootError` は別途 `areka-session` の `is_benign_boot_error` が分類する。
 fn classify_wiring_error(err: &BootWiringError) {
     match err {
         BootWiringError::Mount(MountError::StartPointMissing { .. }) => {
@@ -397,7 +397,7 @@ const _: fn() = || {
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動（引数 `boot_runtime`＝[`BootRuntimeFn`]）
 ///    （束の複製から sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
 ///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は
-///    本体の `is_benign_boot_error` で分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
+///    `areka-session` の `is_benign_boot_error` で分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは `areka_session::ghost_quit::wire_kanade_stop`）。
 /// 6. [`RuntimeWiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
@@ -440,7 +440,7 @@ pub fn wire_runtime(
     // 作者基準 DPI は placement の準備が **1 度だけ**読んだ値を
     // `main` から `ghost_session::boot_ghost` 経由で受け取る（採寸 k₀ と attach が同じ宣言を見る）。
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
-    // `shell` は配置の準備が決めた起動のシェル（本体の `ghost_session::BootShellChoice`）で、実行系の起動にも同じ値を渡す。
+    // `shell` は配置の準備が決めた起動のシェル（`areka-session` の `ghost_session::BootShellChoice`）で、実行系の起動にも同じ値を渡す。
     let assets = match build_boot_assets_for(
         &inputs.ghost_root,
         &inputs.balloon_root,

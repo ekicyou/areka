@@ -1,13 +1,14 @@
 //! 2 つの根の和の上での切替先の決め方の決定論テスト。
 //!
 //! 確かめること: `\![change,ghost,…]` の照合（`name`・フォルダ名）が両方の根のゴーストに届き、
-//! フォルダ名は 1 つの規則（大文字小文字を区別しない）で比べ、`name` は今のまま区別すること。
+//! フォルダ名は 1 つの規則（大文字小文字を区別しない）で比べ、`name` は大文字小文字を区別すること。
 //! `sequential` と `lastinstalled` も和の並びで引けること。
 
 use areka_ghost::catalog_roots::list_ghosts;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use temp_path_kit::TempPath;
 
+use super::tests::{folder, name, resolved_folder};
 use super::*;
 
 /// 根 1 に `Alpha`（name＝Alice）、根 2 に `beta`（name＝Bob）と隠れる `ALPHA` を組んだ和。
@@ -31,24 +32,18 @@ fn two_root_union(tmp: &TempPath) -> Vec<GhostEntry> {
     ]))
 }
 
-fn folder_of(entries: &[GhostEntry], spec: GhostSpec) -> Option<String> {
-    resolve_switch_target(entries, &spec).map(|t| t.folder)
-}
-
 #[test]
 fn change_ghost_matches_name_and_folder_across_two_roots() {
     let tmp = TempPath::under_target("ghost-switch-two-roots");
     let entries = two_root_union(&tmp);
-    let name = |s: &str| GhostSpec::Name(s.to_owned());
-    let folder = |s: &str| GhostSpec::Folder(s.to_owned());
     assert_eq!(
         [
-            folder_of(&entries, name("Bob")),
-            folder_of(&entries, name("Alice")),
-            folder_of(&entries, name("BETA")),
-            folder_of(&entries, folder("alpha")),
-            folder_of(&entries, name("bob")),
-            folder_of(&entries, name("Hidden")),
+            resolved_folder(&entries, name("Bob")),
+            resolved_folder(&entries, name("Alice")),
+            resolved_folder(&entries, name("BETA")),
+            resolved_folder(&entries, folder("alpha")),
+            resolved_folder(&entries, name("bob")),
+            resolved_folder(&entries, name("Hidden")),
         ],
         [
             Some("beta".to_owned()),

@@ -1,7 +1,7 @@
 //! 書き出しの走り（`offline_dump::run`）の分岐の試験と、その試験が使う検体の部品
 //! （`offline_dump_test_support`）の確かめ。
 //!
-//! 部品で組んだゴーストを、書き出しの走りが使うのと同じ今のシェルの読み込み
+//! 部品で組んだゴーストを、書き出しの走りが使うのと同じシェルの読み込み
 //! （`load_shell_target`）で、窓を出さずに読む。
 
 use areka_emo_atlas::WicDecoderArm;
@@ -13,6 +13,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use super::offline_dump_test_support::{self as fixture, ShellSpec};
 use super::{read_scope, run};
 use crate::cli::OfflineDumpRequest;
+use crate::session_tests::events_named;
 use areka_session::log_history::hold;
 
 fn com_init() {
@@ -22,10 +23,10 @@ fn com_init() {
     }
 }
 
-/// 全部の面の形を 1 つのシェルに持つ検体が、今のシェルの読み込みで窓なしに読める。
+/// 全部の面の形を 1 つのシェルに持つ検体が、シェルの読み込みで窓なしに読める。
 /// 絵の欠けの面はほかの層で組め、中身の無い面は読み込みに残って合成だけが error 1 行で失敗する。
 #[test]
-fn the_variety_ghost_loads_with_the_current_shell_loader_without_a_window() {
+fn the_variety_ghost_loads_with_the_shell_loader_without_a_window() {
     com_init();
     let root = fixture::build_ghost(
         "offline-variety",
@@ -146,13 +147,6 @@ fn request(ghost_dir: &std::path::Path, error_log: &std::path::Path) -> OfflineD
         error_log: Some(error_log.display().to_string()),
         ..OfflineDumpRequest::default()
     }
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 読んだシェルのフォルダ（読み込みまで進んだ走りの info から）。
@@ -547,4 +541,44 @@ fn dump_bind_warnings_come_before_surface_list_warnings() {
             "offline_dump_surface_list_unreadable"
         ]
     );
+}
+
+/// 下地の幅だけが一辺の上限を越えるシェルは、どの面も書かず全部の面を失敗にし、error を 1 行残す。
+#[test]
+fn a_canvas_wider_than_the_limit_fails_every_surface_with_one_error() {
+    let shell = ShellSpec {
+        folder: "master",
+        surfaces: &[
+            "surface0",
+            "{",
+            "element0,overlay,base.png,0,0",
+            "}",
+            "surface1",
+            "{",
+            "element0,overlay,base.png,20000,0",
+            "}",
+        ],
+        ..fixture::variety_shell("master")
+    };
+    let root = fixture::build_ghost("offline-run-too-wide", Some(&["name,g"]), &[shell]);
+    let out = root.path().join("out");
+    let req = OfflineDumpRequest {
+        surface_list: Some("0-1".to_string()),
+        output_dir: Some(out.display().to_string()),
+        ..request(root.path(), &root.path().join("errors.csv"))
+    };
+    let (_, events) = run_logged(&req);
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert_eq!(
+        errors[0].field_str("event"),
+        Some("offline_dump_canvas_too_large")
+    );
+    let done = finished(&events);
+    assert_eq!(done.field("written"), Some("0"));
+    assert_eq!(done.field("failed"), Some("2"));
+    assert!(!out.exists(), "PNG を書かない");
 }

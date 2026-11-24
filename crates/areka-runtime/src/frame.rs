@@ -116,6 +116,8 @@ pub use self::scale_text::{run_text_phase, run_text_scale_phase};
 pub use self::test_support::all_shown;
 pub use self::wiring::RuntimeWiring;
 pub use self::zorder_drain::run_zorder_drain_phase;
+#[cfg(test)]
+pub(crate) use self::zorder_drain::test_support as zorder_test_support;
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。サブモジュール間の
 // 相互参照とテストモジュールからの `use super::*;` は、いずれもここを経由する。

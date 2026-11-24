@@ -73,7 +73,6 @@ fn ten_thousand_and_one_records_are_all_written() {
 #[test]
 fn empty_records_do_not_create_or_touch_the_file() {
     let root = TempPath::under_target("offline_dump_report_empty");
-    std::fs::create_dir_all(root.path()).expect("根の作成");
     let absent = root.path().join("absent.csv");
     let present = root.path().join("present.csv");
     std::fs::write(&present, b"old").expect("前のファイル");
@@ -93,7 +92,6 @@ fn empty_records_do_not_create_or_touch_the_file() {
 #[test]
 fn write_csv_writes_the_csv_bytes() {
     let root = TempPath::under_target("offline_dump_report_write");
-    std::fs::create_dir_all(root.path()).expect("根の作成");
     let path = root.path().join("log.csv");
     std::fs::write(&path, b"old old old old old old old old old old old").expect("前のファイル");
     let records = [rec(12, 34, 56, Level::ERROR, "e")];
@@ -108,7 +106,6 @@ fn write_csv_writes_the_csv_bytes() {
 #[test]
 fn unwritable_path_logs_error_and_returns_err() {
     let root = TempPath::under_target("offline_dump_report_unwritable");
-    std::fs::create_dir_all(root.path()).expect("根の作成");
     // フォルダは CSV のファイルとして開けない。
     let (result, events) =
         capture(|| write_csv(root.path(), "g", &[rec(0, 0, 0, Level::WARN, "w")]));

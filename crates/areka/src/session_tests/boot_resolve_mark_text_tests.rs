@@ -1,59 +1,30 @@
-//! 記録の文の両面。
+//! 投函の 4 行の記録の文の両面。
 //!
 //! - 投函の 4 行（`last_used_recorded`・`last_shell_recorded`・`last_balloon_recorded`・
 //!   `install_balloon_remembered`）は、書けたときも書けないときも「書きました」「書き換えました」を含まない。
 //!   書けないときだけ、致命の机の汲み出しが `memory_write_failed` を残す（書けたときは 0 件）。
-//! - 印を消せない文（`session_mark_clear_degraded`）は、記憶に印が残るときだけ「前回落ちたとして」を含む。
-//! - 印を残す文（`session_mark_kept`）は、記憶に印が在るときだけ「Ref6/7 付き」を含む。
 //!
 //! 記録は呼び手のスレッドで捕まえる（4 行は投函の直後に呼び手のスレッドで出る。`memory_write_failed`
 //! は UI スレッドの汲み出しの系が出すので、捕まえる閉包の中で `Update` の段を回す）。
 //! 根・検体はワークツリーの `target\` の下だけ。
 
-use std::path::Path;
-
 use areka_sylphya::SylphyaPublisher;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
-use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, Update};
 
+use super::{events_named, publisher_of, routes, unwritable, writable};
 use crate::sample_test_support::switch_rig;
 use areka_session::app_exit::FirstExit;
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::*;
-use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
-
-/// `event` の記録（`event` 欄で引く）。
-fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
 
 /// `event` の記録がちょうど 1 件あり、その文を返す。
 fn one_message(events: &[CapturedEvent], event: &str) -> String {
     let hits = events_named(events, event);
     assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
     hits[0].message().to_owned()
-}
-
-/// 置き場を普通のファイルに替える（書けない）。
-fn unwritable(dir: &Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
-/// 置き場をフォルダへ戻す（書ける）。
-fn writable(dir: &Path) {
-    if dir.is_file() {
-        std::fs::remove_file(dir).expect("置き場の位置のファイルを外す");
-    }
-    std::fs::create_dir_all(dir).expect("置き場のフォルダを作る");
 }
 
 /// 書き込みの場所を呼び、反映の柵の後に本番の `Update` の段（致命の机の汲み出し）を 1 回回す。
@@ -91,22 +62,10 @@ fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
         .join("master")
         .join("profile")
         .join("areka");
-    let publisher = rig
-        .world
-        .non_send::<GhostSlot>()
-        .0
-        .as_ref()
-        .and_then(|s| s.runtime())
-        .expect("A の実行系が起きている")
-        .sylphya_publisher()
-        .clone();
+    let publisher = publisher_of(&rig.world);
     publisher.barrier().expect("起動の書き込みが済む");
-    {
-        // argv でない決め方（最後に使ったものを 3 つとも書く）。
-        let mut ctx = rig.world.resource_mut::<BootContext>();
-        ctx.current.ghost.route = GhostRoute::Memory;
-        ctx.current.balloon.route = BalloonRoute::Memory;
-    }
+    // argv でない決め方（最後に使ったものを 3 つとも書く）。
+    routes(&mut rig.world, GhostRoute::Memory, BalloonRoute::Memory);
 
     let record_all = |w: &mut World| {
         let ctx = w.resource::<BootContext>();
@@ -159,76 +118,4 @@ fn post_lines_never_claim_written_and_failure_is_logged_only_when_unwritable() {
         "記録の文が起きたことと合わない: {wrong:#?}"
     );
     assert!(rig.shutdown(), "A を降ろせる");
-}
-
-/// 印の書き手が書いた記憶のファイル（置き場にただ 1 つ在るファイル）。
-fn mark_file(app_dir: &Path) -> std::path::PathBuf {
-    let files: Vec<_> = std::fs::read_dir(app_dir)
-        .expect("置き場を読む")
-        .map(|e| e.expect("置き場の項目").path())
-        .filter(|p| p.is_file())
-        .collect();
-    assert_eq!(files.len(), 1, "置き場の記憶のファイル: {files:?}");
-    files[0].clone()
-}
-
-/// 印を消せない文は、記憶に印が残るときだけ「前回落ちたとして」を含む。
-#[test]
-fn clear_degraded_foretells_crash_only_when_mark_remains() {
-    let tmp = TempPath::under_target("mark-text-clear");
-
-    // 印が残る: 印を書いた後、書き換えの一時ファイルの位置にフォルダを置いて置き換えを失敗させる
-    // （本体は読めるまま）。
-    let kept = tmp.child("kept");
-    write_session_mark(&kept, "動いている子").expect("印を書く");
-    let file = mark_file(&kept);
-    let mut temp = file.clone().into_os_string();
-    temp.push(".tmp");
-    std::fs::create_dir_all(&temp).expect("一時ファイルの位置にフォルダを置く");
-    let (cleared, kept_events) = capture(|| clear_session_mark(&kept));
-    assert!(cleared.is_err(), "印を消せないはず");
-    assert_eq!(read_session_mark(&kept), Some("動いている子".to_owned()));
-    let kept_text = one_message(&kept_events, "session_mark_clear_degraded");
-
-    // 印が無い: 置き場が普通のファイル（読めず書けない）。
-    let gone = tmp.child("gone");
-    unwritable(&gone);
-    let (cleared, gone_events) = capture(|| clear_session_mark(&gone));
-    assert!(cleared.is_err(), "印を消せないはず");
-    assert_eq!(read_session_mark(&gone), None);
-    let gone_text = one_message(&gone_events, "session_mark_clear_degraded");
-
-    assert_eq!(
-        (
-            kept_text.contains("前回落ちたとして"),
-            gone_text.contains("前回落ちたとして"),
-        ),
-        (true, false),
-        "印が残る・無いの文: {kept_text} / {gone_text}"
-    );
-}
-
-/// 印を残す文は、記憶に印が在るときだけ「Ref6/7 付き」を含む。
-#[test]
-fn keep_mark_foretells_ref6_7_only_when_mark_exists() {
-    let tmp = TempPath::under_target("mark-text-keep");
-
-    let marked = tmp.child("marked");
-    write_session_mark(&marked, "動いている子").expect("印を書く");
-    let ((), marked_events) = capture(|| keep_session_mark(&marked, "run_failed", None));
-    let marked_text = one_message(&marked_events, "session_mark_kept");
-
-    let empty = tmp.child("empty");
-    std::fs::create_dir_all(&empty).unwrap();
-    let ((), empty_events) = capture(|| keep_session_mark(&empty, "run_failed", None));
-    let empty_text = one_message(&empty_events, "session_mark_kept");
-
-    assert_eq!(
-        (
-            marked_text.contains("Ref6/7 付き"),
-            empty_text.contains("Ref6/7 付き"),
-        ),
-        (true, false),
-        "印が在る・無いの文: {marked_text} / {empty_text}"
-    );
 }

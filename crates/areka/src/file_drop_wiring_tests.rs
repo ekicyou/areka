@@ -9,12 +9,13 @@ use std::sync::mpsc;
 use areka_kanade::{KanadeMsg, ShioriMethod};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::ecs::window::OnFilesDropped;
 
 use super::{ON_DIRECTORY_DROP, ON_FILE_DROP2, attach_file_drop_receivers, on_ghost_files_dropped};
 use crate::install::{self, InstallOrder, InstallOrigin};
+use crate::session_tests::events_named;
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 
@@ -26,13 +27,6 @@ fn world_with_desk() -> World {
     world.init_resource::<Schedules>();
     install::register(&mut world);
     world
-}
-
-fn with_event<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 fn has_receiver(world: &World, e: bevy_ecs::entity::Entity) -> bool {
@@ -91,7 +85,7 @@ fn empty_drop_writes_one_reception_line_and_nothing_else() {
 
     let ((), events) = capture(|| on_ghost_files_dropped(&mut world, chara, Vec::new()));
 
-    let received = with_event(&events, "file_drop_received");
+    let received = events_named(&events, "file_drop_received");
     assert_eq!(received.len(), 1, "受け取りの記録はちょうど 1 行");
     let fields = received[0].fields_map();
     assert_eq!(
@@ -129,11 +123,11 @@ fn window_without_marker_warns_once_and_does_nothing() {
         on_ghost_files_dropped(&mut world, plain, vec![dir.path().join("a.txt")]);
     });
 
-    let unknown = with_event(&events, "file_drop_unknown_window");
+    let unknown = events_named(&events, "file_drop_unknown_window");
     assert_eq!(unknown.len(), 1);
     assert_eq!(unknown[0].level, tracing::Level::WARN);
     assert_eq!(unknown[0].field("count"), Some("1"));
-    assert!(with_event(&events, "file_drop_received").is_empty());
+    assert!(events_named(&events, "file_drop_received").is_empty());
     assert!(rx.try_recv().is_err(), "kanade へは何も送らない");
     assert_eq!(install::queued_orders(&world), Vec::<InstallOrder>::new());
 }
@@ -166,14 +160,14 @@ fn installable_archive_becomes_one_window_drop_order() {
             origin: InstallOrigin::WindowDrop,
         }]
     );
-    let received = with_event(&events, "file_drop_received");
+    let received = events_named(&events, "file_drop_received");
     assert_eq!(received.len(), 1);
     let fields = received[0].fields_map();
     assert_eq!(
         ["scope", "count", "files", "dirs", "installs"].map(|k| fields.get(k).copied()),
         [Some("1"), Some("1"), Some("0"), Some("0"), Some("1")]
     );
-    let queued = with_event(&events, "install_order_queued");
+    let queued = events_named(&events, "install_order_queued");
     assert_eq!(queued.len(), 1);
     assert_eq!(queued[0].field("origin"), Some("WindowDrop"));
 }
@@ -312,14 +306,14 @@ fn mixed_drop_sends_files_then_dirs_then_one_order() {
         }],
         "依頼はちょうど 1 つ・出どころは窓への投げ込み"
     );
-    let received = with_event(&events, "file_drop_received");
+    let received = events_named(&events, "file_drop_received");
     assert_eq!(received.len(), 1);
     let fields = received[0].fields_map();
     assert_eq!(
         ["count", "files", "dirs", "installs"].map(|k| fields.get(k).copied()),
         [Some("6"), Some("3"), Some("2"), Some("1")]
     );
-    let sent_lines: Vec<_> = with_event(&events, "file_drop_event_sent")
+    let sent_lines: Vec<_> = events_named(&events, "file_drop_event_sent")
         .iter()
         .map(|e| (e.level, e.field_str("id").map(str::to_owned)))
         .collect();
@@ -358,7 +352,7 @@ fn no_kanade_warns_once_per_event_and_still_hands_the_order() {
 
     let ((), events) = capture(|| on_ghost_files_dropped(&mut world, chara, paths));
 
-    let no_kanade: Vec<_> = with_event(&events, "file_drop_no_kanade")
+    let no_kanade: Vec<_> = events_named(&events, "file_drop_no_kanade")
         .iter()
         .map(|e| (e.level, e.field_str("id").map(str::to_owned)))
         .collect();
@@ -369,7 +363,7 @@ fn no_kanade_warns_once_per_event_and_still_hands_the_order() {
             .to_vec(),
         "イベント 1 件につき 1 件"
     );
-    assert!(with_event(&events, "file_drop_event_sent").is_empty());
+    assert!(events_named(&events, "file_drop_event_sent").is_empty());
     assert_eq!(install::queued_orders(&world).len(), 1, "依頼は渡す");
 }
 
@@ -391,11 +385,11 @@ fn stopped_kanade_warns_send_failed_once_per_event() {
 
     let ((), events) = capture(|| on_ghost_files_dropped(&mut world, chara, paths));
 
-    let failed = with_event(&events, "file_drop_send_failed");
+    let failed = events_named(&events, "file_drop_send_failed");
     assert_eq!(failed.len(), 2, "イベント 1 件につき 1 件: {events:?}");
     assert!(failed.iter().all(|e| e.level == tracing::Level::WARN));
-    assert!(with_event(&events, "file_drop_no_kanade").is_empty());
-    assert!(with_event(&events, "file_drop_event_sent").is_empty());
+    assert!(events_named(&events, "file_drop_no_kanade").is_empty());
+    assert!(events_named(&events, "file_drop_event_sent").is_empty());
     assert_eq!(install::queued_orders(&world).len(), 1, "依頼は渡す");
 }
 
@@ -413,10 +407,10 @@ fn missing_archive_is_recorded_and_goes_to_file_drop2() {
 
     let ((), events) = capture(|| on_ghost_files_dropped(&mut world, chara, vec![missing.clone()]));
 
-    let probe = with_event(&events, "file_drop_probe_failed");
+    let probe = events_named(&events, "file_drop_probe_failed");
     assert_eq!(probe.len(), 1);
     assert_eq!(probe[0].level, tracing::Level::WARN);
-    let unreadable = with_event(&events, "file_drop_archive_unreadable");
+    let unreadable = events_named(&events, "file_drop_archive_unreadable");
     assert_eq!(unreadable.len(), 1);
     assert_eq!(unreadable[0].level, tracing::Level::WARN);
     // `reason` は `NarError` の Display。`Io` の変種は「I/O に失敗」と書く。

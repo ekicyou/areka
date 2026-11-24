@@ -3,7 +3,7 @@
 //! 確かめること: 指し先は記憶・列挙・既定より先で経路 `Pointed`・フォルダ名つき。
 //! `--random` は記憶・唯一・既定を飛ばし、0 体＝ゴーストなし・1 体＝その 1 体・2 体以上＝注入した
 //! 添字で選び、選んだものと候補の数を info `ghost_random_requested` で 1 件残す。
-//! 一時の置き場が消えた次の起動（記憶が列挙に無い）は今の `last_ghost_not_found` で次の段へ。
+//! 一時の置き場が消えた次の起動（記憶が列挙に無い）は`last_ghost_not_found` で次の段へ。
 //! callghost の相手は記憶より先で経路 `CallGhost`、
 //! 目録に無ければ warn `callghost_target_not_found` で記憶へ、位置引数・指し先・`--random` が先。
 //! プロセス・fs・乱数には触れない。
@@ -13,18 +13,11 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
 
+use super::boot_resolve_tests::{count_event, events_named, last, no_pick};
 use super::*;
 
 fn root() -> BasewareRoot {
     BasewareRoot::new(PathBuf::from(r"C:\areka-boot-resolve-option-tests"))
-}
-
-fn no_pick(n: usize) -> usize {
-    panic!("添字を選んではならない（候補数 {n}）")
-}
-
-fn last(n: usize) -> usize {
-    n - 1
 }
 
 fn ghost(
@@ -82,10 +75,7 @@ fn at(root: &BasewareRoot, route: GhostRoute, folder: &str) -> GhostDecision {
 
 /// `ghost_random_requested` の 1 件（info・選んだフォルダ名と候補の数）。
 fn assert_random_info(events: &[CapturedEvent], folder: &str, candidates: &str) {
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("ghost_random_requested"))
-        .collect();
+    let hits = events_named(events, "ghost_random_requested");
     assert_eq!(hits.len(), 1, "ちょうど 1 件: {events:?}");
     assert_eq!(hits[0].level, tracing::Level::INFO);
     assert_eq!(hits[0].field_str("folder"), Some(folder));
@@ -129,7 +119,7 @@ fn pointed_needs_no_listing() {
     assert_eq!(got.map(|g| g.route), Ok(GhostRoute::Pointed));
 }
 
-/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、今の warn で次の段（既定）へ。
+/// 次の起動で一時の置き場が無い: 記憶は列挙に無く、warn で次の段（既定）へ。
 #[test]
 fn next_boot_memory_of_temporary_ghost_falls_through() {
     let root = root();
@@ -142,10 +132,7 @@ fn next_boot_memory_of_temporary_ghost_falls_through() {
         no_pick,
     );
     assert_eq!(got, Ok(at(&root, GhostRoute::Default, "emo2")));
-    let warns = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("last_ghost_not_found"))
-        .count();
+    let warns = count_event(&events, "last_ghost_not_found");
     assert_eq!(warns, 1, "{events:?}");
 }
 
@@ -158,10 +145,9 @@ fn random_two_or_more_picks_ignoring_memory_and_default() {
     let (got, events) = ghost(&root, None, true, Some("emo2"), &["a", "emo2", "z"], last);
     assert_eq!(got, Ok(at(&root, GhostRoute::Random, "z")));
     assert_random_info(&events, "z", "3");
-    assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("ghost_picked_randomly")),
+    assert_eq!(
+        count_event(&events, "ghost_picked_randomly"),
+        0,
         "いつもの無作為の段の記録は出ない: {events:?}"
     );
 }
@@ -175,7 +161,7 @@ fn random_one_is_that_one() {
     assert_random_info(&events, "solo", "1");
 }
 
-/// 0 体: ゴーストなし（今の知らせと終了）。記録は出さない。
+/// 0 体: ゴーストなし（知らせと終了）。記録は出さない。
 #[test]
 fn random_zero_is_no_ghost() {
     let root = root();
@@ -241,10 +227,7 @@ fn call_ghost_not_listed_warns_and_falls_to_memory() {
         no_pick,
     );
     assert_eq!(got, Ok(at(&root, GhostRoute::Memory, "a")));
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("callghost_target_not_found"))
-        .collect();
+    let hits = events_named(&events, "callghost_target_not_found");
     assert_eq!(hits.len(), 1, "{events:?}");
     assert_eq!(hits[0].level, tracing::Level::WARN);
     assert_eq!(hits[0].field_str("folder"), Some("gone"));

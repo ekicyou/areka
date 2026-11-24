@@ -3,8 +3,9 @@
 //
 // ここが押さえるのは**相順そのもの**——本番の `frame_system` が決まった順で
 // 各相を回したときにだけ成り立つ性質である。判断中核の分岐表・配線層の縮退・表示層の
-// 可視性能力は、それぞれ `balloon_visibility_tests.rs` 群・`balloon_visibility_phase_tests.rs`・
-// `areka-emo-present` の in-crate テストが所有しており、ここでは重ねない。
+// 可視性能力は、それぞれ `crates/areka-runtime/src/balloon_visibility_tests.rs` 群・
+// `crates/areka-runtime/src/balloon_visibility_phase_tests.rs`・`areka-emo-present` の in-crate テストが
+// 所有しており、ここでは重ねない。
 //
 // 実 emo2 fixture ＋ 実 GPU（MTA）で本番の `frame_system` をそのまま駆動する。
 // 表示層の可視化（`show_target`）は「表示が一度も確立していない」と必ず失敗するため、確立が

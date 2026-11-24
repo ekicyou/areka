@@ -62,8 +62,7 @@ fn despawn_app_windows_empty_world_is_noop() {
 ///
 /// # 「警告ゼロ」を tracing 捕捉だけで主張してはならない（本檻の対照アームの理由）
 ///
-/// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`bevy_ecs-0.18.1` の
-/// `src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は同 :1462-1469 で
+/// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`World::despawn` は
 /// 失敗時に `warn!("{error}")`＋`false`）。本番プロセスでこの行が
 /// `WARN bevy_ecs::world: Could not despawn entity` として見えるのは
 /// `tracing_subscriber` が `log`→`tracing` ブリッジを張るからであって、
@@ -152,14 +151,14 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
     assert!(world.get_entity(leaf).is_err());
     assert!(
         world.get_entity(later).is_err(),
-        "打ち切りは後続の標的を止めない（Req 6.3「他の scope の処理を継続」）"
+        "打ち切りは後続の標的を止めない"
     );
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
     // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現。
     // ここが見ているのは areka 自身の出力である（bevy の `log` 経由 warn は対照アーム担当）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
-        "破棄済み標的に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        "破棄済み標的に対して警告以上のログが出ている: {events:?}"
     );
     let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
     assert_eq!(
@@ -179,8 +178,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 /// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
 /// 対照アーム: 送り口の無い World（kanade 未結線の起動）では窓を閉じて終了を指示する。
 ///
-/// 送り口は `pub(crate)` の構築関数でここに直接組む（`runtime_tests/frame/window_state_tests.rs` の
-/// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
+/// 当たり判定は受け手が読まないので代役で足りる。
 #[test]
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
     use areka_input::{MouseWiring, RegionSource};
@@ -336,10 +334,8 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
         first,
         "2 度目の出所で上書きしない"
     );
-    let again: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("app_exit_again"))
-        .collect();
+    let events_named = crate::boot_resolve::boot_resolve_tests::events_named;
+    let again = events_named(&events, "app_exit_again");
     assert_eq!(again.len(), 1, "app_exit_again はちょうど 1 件: {events:?}");
     assert_eq!(again[0].level, tracing::Level::DEBUG);
     assert!(
@@ -349,9 +345,8 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
         "app_exit_again は 2 度目の出所を名乗る: {:?}",
         again[0]
     );
-    let exit = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("app_exit"))
+    let exit = *events_named(&events, "app_exit")
+        .first()
         .expect("app_exit の記録");
     let origin = exit.field("origin").expect("origin 欄");
     assert!(
@@ -391,13 +386,11 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
         .query_filtered::<Entity, With<GhostWindowMarker>>()
         .iter(&world)
         .count();
-    let restart_logged_at_info = events.iter().any(|e| {
-        e.field_str("event") == Some("windows_closed_for_restart")
-            && e.level == tracing::Level::INFO
-    });
-    let app_exit_logged = events
-        .iter()
-        .any(|e| e.field_str("event") == Some("app_exit"));
+    let restart_logged_at_info =
+        crate::session_end::test_support::levels_of(&events, "windows_closed_for_restart")
+            == [tracing::Level::INFO];
+    let app_exit_logged =
+        crate::boot_resolve::boot_resolve_tests::count_event(&events, "app_exit") > 0;
     assert_eq!(
         (
             windows_left,
@@ -412,20 +405,12 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
     );
 }
 
-/// 起こし直しのために全窓を閉じたら、
-/// 窓の束（`GhostWindows` 資源）も外す（消した窓の `Entity` を装着の相のゲートに見せない）。
-/// 終了の指示は出さない。
-///
-/// 窓は本番と同じ `spawn_ghost_windows` で生やす（窓の印と `GhostWindows` 資源が揃う）。
-/// 前提として閉じる前に資源が在ることを確かめる（無い World では判定が空になる）。
-#[test]
-fn close_windows_for_restart_removes_ghost_windows_resource() {
+/// スコープ 0 の配置（キャラ窓とバルーン窓を 1 枚ずつ生やす値）。
+fn scope0_placement() -> areka_placement::resolver::ScopePlacement {
     use areka_placement::follow::OffsetBase;
     use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-    use areka_placement::source::GhostTitles;
-    use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
-    let placement = ScopePlacement {
+    ScopePlacement {
         scope: 0,
         char_pos: PointPx { x: 100, y: 100 },
         char_size: SizePx { w: 200, h: 300 },
@@ -436,12 +421,25 @@ fn close_windows_for_restart_removes_ghost_windows_resource() {
         balloon_limit: false,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,
-    };
+    }
+}
+
+/// 起こし直しのために全窓を閉じたら、
+/// 窓の束（`GhostWindows` 資源）も外す（消した窓の `Entity` を装着の相のゲートに見せない）。
+/// 終了の指示は出さない。
+///
+/// 窓は本番と同じ `spawn_ghost_windows` で生やす（窓の印と `GhostWindows` 資源が揃う）。
+/// 前提として閉じる前に資源が在ることを確かめる（無い World では判定が空になる）。
+#[test]
+fn close_windows_for_restart_removes_ghost_windows_resource() {
+    use areka_placement::source::GhostTitles;
+    use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
     spawn_ghost_windows(
         &mut world,
-        &[placement],
+        &[scope0_placement()],
         &GhostTitles::from_scope_titles([(0, "scope-0".to_string())]),
     );
     assert!(
@@ -471,29 +469,16 @@ fn close_windows_for_restart_removes_ghost_windows_resource() {
 /// ドラッグの控えも外す（次の一式は起動と同じく descript の組から始まる）。
 #[test]
 fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
-    use areka_placement::follow::{CharDragSession, OffsetBase, begin_char_drag};
-    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use areka_placement::follow::{CharDragSession, begin_char_drag};
     use areka_placement::source::GhostTitles;
     use areka_placement::spawn::spawn_ghost_windows;
     use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
 
-    let placement = ScopePlacement {
-        scope: 0,
-        char_pos: PointPx { x: 100, y: 100 },
-        char_size: SizePx { w: 200, h: 300 },
-        balloon_pos: PointPx { x: 320, y: 100 },
-        balloon_size: SizePx { w: 180, h: 120 },
-        balloon_offset: PointPx { x: 220, y: 0 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
-        balloon_limit: false,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    };
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
     let windows = spawn_ghost_windows(
         &mut world,
-        &[placement],
+        &[scope0_placement()],
         &GhostTitles::from_scope_titles([(0, "scope-0".to_string())]),
     );
     seed_sticky_descript(&mut world, Some("0,1"));

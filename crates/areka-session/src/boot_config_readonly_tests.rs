@@ -4,6 +4,7 @@
 //! 覚える所は試験の中の `OnceLock` を [`remembered`] へ渡して見る。根は `TempPath::under_target`。
 
 use crate::boot_config::{app_profile_dir_for, remembered};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use areka_user_data::{Layout, Reason, UserRoot, UserRootOrigin};
 use log_capture_kit::capture;
 use std::path::PathBuf;
@@ -39,19 +40,12 @@ fn fixture(label: &str) -> Fixture {
     }
 }
 
-fn read_beside_count(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("app_memory_read_beside"))
-        .count()
-}
-
 #[test]
 fn readonly_reads_the_bundled_memory_beside_the_exe() {
     let f = fixture("bc-ro-pick-on");
     let (dir, events) = capture(|| app_profile_dir_for(true, None, &f.layout, Some(&f.exe)));
     assert_eq!(dir, f.exe.join("profile").join("areka"));
-    assert_eq!(read_beside_count(&events), 1);
+    assert_eq!(count_event(&events, "app_memory_read_beside"), 1);
     assert!(!f.user.join("profile").exists(), "写さない・作らない");
 }
 
@@ -60,7 +54,7 @@ fn normal_run_keeps_the_user_root_memory() {
     let f = fixture("bc-ro-pick-off");
     let (dir, events) = capture(|| app_profile_dir_for(false, None, &f.layout, Some(&f.exe)));
     assert_eq!(dir, f.user.join("profile").join("areka"));
-    assert_eq!(read_beside_count(&events), 0);
+    assert_eq!(count_event(&events, "app_memory_read_beside"), 0);
 }
 
 #[test]
@@ -84,5 +78,5 @@ fn remembered_place_is_decided_once_and_logged_once() {
         capture(|| (remembered(&cell, decide), remembered(&cell, decide)));
     assert_eq!(first, second);
     assert_eq!(first, f.exe.join("profile").join("areka"));
-    assert_eq!(read_beside_count(&events), 1);
+    assert_eq!(count_event(&events, "app_memory_read_beside"), 1);
 }

@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 
 use sample_ghost_kit::SampleRoot;
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+/// emo2 検体。`Drop` が `target\` の下の複製を消すため、一時値にせずプロセス寿命で保持する。
 static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 

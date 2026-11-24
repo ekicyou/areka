@@ -29,7 +29,7 @@
 - 改めた名の名指し: 範囲の crate のコメント（本番のファイル `zorder_group_ledger.rs:667` のコメントを含む）、本体の 2 つの表、`doc/COMPAT_ARCHITECTURE.md` §8 の 196・226・354・412 行の名、`.kiro/specs/extra-character-windows/brief.md:133`、`.kiro/specs/zorder-property/brief.md` の 59・81・94 行。
 - 注釈の設計の作業番号: `crates/areka-placement/`・`crates/areka-runtime/` の `T-*` と `t_` の無い札、`crates/areka-emo-present/` の 2 行（`T-N3`）。
 - `crates/areka-runtime/src/consumer_ledger_test_support.rs` の 28 行のコメント（許す重なり）。
-- `.kiro/specs/audit-areka-app/brief.md` への申し送りの 1 項目。
+- `.kiro/specs/completed/audit-areka-app/brief.md` への申し送りの 1 項目。
 - CLAUDE.md の `## Comments` の 97 行目に語を足すこと。
 - 改名表 `rename-table.tsv` と、`research.md` の確かめの記録。
 
@@ -136,7 +136,7 @@ target/test-name-work-tags/ # 使い捨て（コミットしない）
 
 **G6 — `areka-runtime` の残り（20 本）**
 - `crates/areka-runtime/src/window_state_cue_tests.rs`（13）・`zorder_wiring_tests.rs`（5）・`frame_schedule_tests.rs`（2）
-- 名指しと注釈の見込み: `zorder_wiring_tests.rs` 7・8・11・18・182 行（`zwi01／02` ほか・`T-N10`）・`frame_schedule_tests.rs:14`（`t_zwi06`）・`.kiro/specs/audit-areka-app/brief.md`（申し送り）
+- 名指しと注釈の見込み: `zorder_wiring_tests.rs` 7・8・11・18・182 行（`zwi01／02` ほか・`T-N10`）・`frame_schedule_tests.rs:14`（`t_zwi06`）・`.kiro/specs/completed/audit-areka-app/brief.md`（申し送り）
 
 **群に属さない直し（G7）**
 - `crates/areka-emo-present/src/presenter_dpi_scale_tests.rs:24`・`presenter_test_support.rs:229`（`T-N3`）
@@ -150,7 +150,7 @@ target/test-name-work-tags/ # 使い捨て（コミットしない）
 - RenameScript → `target/test-name-work-tags/rename.py`（コミットしない）
 - RenamePrinciple・GroupCommit・ManualEdit → G1〜G6 の Modified Files（決まりと進め方で、ファイルを足さない）
 - DocFollow → `doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/zorder-property/brief.md`・`.kiro/specs/extra-character-windows/brief.md`
-- AuditHandover → `.kiro/specs/audit-areka-app/brief.md`
+- AuditHandover → `.kiro/specs/completed/audit-areka-app/brief.md`
 - RuleLine → `CLAUDE.md`
 - VerificationRecord → `.kiro/specs/test-name-work-tags/research.md`（記録）・`target/test-name-work-tags/tests-before.txt`・`tests-after.txt`（コミットしない）
 
@@ -332,7 +332,7 @@ flowchart TB
 | Intent | 本体の `runtime_tests/zorder_wiring_tests.rs` の名指しの直しを `audit-areka-app` へ渡す |
 | Requirements | 6.6 |
 
-- G6 のコミットで、`.kiro/specs/audit-areka-app/brief.md` の「棚卸㊷からの申し送り」の節に 1 項目を足す。中身: そのファイルの 2 本の改名と同じコミットで、4・5・10・11・13 行の名指し（`areka-runtime` の側の改めたテストを指す所）を新しい名へ直し、番号の札を消すこと。新しい名は改名表から引いて書く（`areka-runtime` の `zorder_wiring_tests.rs` の 6 本と、`frame_schedule_tests.rs`・`frame/zorder_descript_tests.rs` ほか当たるもの）。古い札は書かず、行の番号と新しい名で指す。
+- G6 のコミットで、`.kiro/specs/completed/audit-areka-app/brief.md` の「棚卸㊷からの申し送り」の節に 1 項目を足す。中身: そのファイルの 2 本の改名と同じコミットで、4・5・10・11・13 行の名指し（`areka-runtime` の側の改めたテストを指す所）を新しい名へ直し、番号の札を消すこと。新しい名は改名表から引いて書く（`areka-runtime` の `zorder_wiring_tests.rs` の 6 本と、`frame_schedule_tests.rs`・`frame/zorder_descript_tests.rs` ほか当たるもの）。古い札は書かず、行の番号と新しい名で指す。
 - 既にある項目（159 行）は書き換えない。足す文は今の決まりどおり、日付つきの経緯や開発者の言葉の引用を書かない。
 
 ### 決まり

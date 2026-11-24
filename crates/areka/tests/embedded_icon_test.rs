@@ -21,7 +21,7 @@ use windows::Win32::System::LibraryLoader::{
     SizeofResource,
 };
 use windows::Win32::UI::WindowsAndMessaging::{RT_GROUP_ICON, RT_ICON, RT_MANIFEST};
-use windows_core::{HSTRING, PCWSTR};
+use windows::core::{HSTRING, PCWSTR};
 
 /// 組の番号（資源の番号の表）。下流は自分の定数を持つ。テストの中だけの値。
 const APP_GROUP: u16 = 1;

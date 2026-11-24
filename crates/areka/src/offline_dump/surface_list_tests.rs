@@ -20,17 +20,17 @@ fn run(raw: &str) -> (Vec<u32>, Vec<CapturedEvent>) {
 }
 
 fn warns(events: &[CapturedEvent], event: &str) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN && e.field_str("event") == Some(event))
+    crate::session_tests::events_named(events, event)
+        .into_iter()
+        .filter(|e| e.level == tracing::Level::WARN)
         .map(|e| e.field_str("element").unwrap_or_default().to_owned())
         .collect()
 }
 
 fn missing(events: &[CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN && e.field_str("event") == Some(MISSING))
+    crate::session_tests::events_named(events, MISSING)
+        .into_iter()
+        .filter(|e| e.level == tracing::Level::WARN)
         .map(|e| e.field("surface").unwrap_or_default().to_owned())
         .collect()
 }

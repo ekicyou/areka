@@ -2,7 +2,7 @@
 //!
 //! `WM_ENDSESSION`（wParam が真）から戻った直後にプロセスは終了させられうるので、`run()` の後の
 //! 後始末に頼らず、窓の手続きの中（wintf の `OnSessionEnd` に差した [`on_os_session_end`]）で
-//! 同期に済ませる: 予約を下ろす → 未処理の運行の通知を今日の規則で捌く → 終了を指示する →
+//! 同期に済ませる: 予約を下ろす → 未処理の運行の通知を捌く → 終了を指示する →
 //! ゴーストを「システム」の理由で降ろす → きれいな終わりなら起動中の印を消す → 書いている最中の
 //! 背景の仕事を同じ予算の残りで待つ。告知（メッセージボックス）は出さない（OS の終了を塞がない・
 //! 失敗は記録に残る）。
@@ -50,7 +50,8 @@ pub struct SessionEnded;
 ///   メッセージで取り次がれない。したがって join が待つ相手は、UI スレッドを待たない。
 /// - 外から UI の窓へ同期に送る相手（IME・シェル・他のアプリ）は送り手の側が待つだけで、join は
 ///   それに依らないので輪にならない。その送信は後始末から戻った後に返る
-///   （`session_end_sync_send_tests.rs` が固定する）。
+///   （`session_end_sync_send_tests.rs` が固定する）。本番ソースの同期の送信の在りかは
+///   `log-capture-kit` の `tests/sync_send_guard_test.rs` の許可表が固定する。
 /// - 理屈の上で残る唯一の輪は、補助プロセスの中の SHIORI・SAORI が `OnClose` の処理中などに
 ///   areka の窓へ同期に送る形（UI スレッドの join → kanade → shiori のスレッドの往復 → 補助
 ///   プロセスの中の送信 → UI スレッド）。この輪は [`SESSION_END_SHIORI_LIMIT`] に達した時点で
@@ -174,6 +175,10 @@ pub fn end_session_from(world: &mut World, budget: WaitBudget) {
     );
 }
 
+#[cfg(any(test, feature = "test-support"))]
+#[path = "session_end_test_support.rs"]
+pub mod test_support;
+
 #[cfg(test)]
 #[path = "session_end_deadline_tests.rs"]
 mod deadline_tests;
@@ -181,3 +186,7 @@ mod deadline_tests;
 #[cfg(test)]
 #[path = "session_end_sync_send_tests.rs"]
 mod sync_send_tests;
+
+#[cfg(test)]
+#[path = "session_end_tests.rs"]
+mod tests;

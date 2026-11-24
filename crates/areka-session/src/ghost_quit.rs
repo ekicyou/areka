@@ -64,7 +64,7 @@ pub fn run_ghost_quit_phase(world: &mut World) -> bool {
             extra += 1;
         } else {
             quit = true;
-            quit_as_today(world, stopped);
+            quit_without_reservation(world, stopped);
         }
     }
     if extra > 0 {
@@ -78,7 +78,7 @@ pub fn run_ghost_quit_phase(world: &mut World) -> bool {
 }
 
 /// 予約の無い停止: 全ゴースト窓を閉じて終了を指示する。
-fn quit_as_today(world: &mut World, stopped: KanadeStopped) {
+fn quit_without_reservation(world: &mut World, stopped: KanadeStopped) {
     tracing::info!(
         event = "ghost_quit",
         cause = ?stopped.cause,

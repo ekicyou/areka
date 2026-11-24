@@ -1,15 +1,11 @@
 //! `perf_thread_report` の決定論テスト。
 //!
-//! 実時間の閾値も `sleep` も 1 つも使わない——行の組み立て・差分の計算・
-//! 名簿外の残りの算出・周期の読み取りはいずれも純関数であり、スレッドも Win32 も
-//! 通さずに固定できる。点灯していない場（テスト既定）で報告スレッドが起きないことも
-//! ここで押さえる。
+//! 実時間の閾値も `sleep` も合否に使わない——行の組み立て・差分の計算・
+//! 名簿外の残りの算出・周期の読み取りはいずれも純関数であり、Win32 を通さずに固定できる。
+//! スレッドを 1 本起こすのは終わり際のテストだけ（待ちの上限 `FINAL_WAIT` は合否に使わない）。
+//! 点灯していない場（テスト既定）で報告スレッドが起きないこともここで押さえる。
 
 use super::*;
-
-use wintf::ecs::world::thread_registry::{
-    ALL_ROLES, ROLE_UNREGISTERED_REST, is_known_role, role_actor,
-};
 
 /// 行を空白で切り、`名前=値` の**名前**だけを順に取り出す。
 /// 判定スクリプト `tools/perf/judge-perf.py` の `parse_fields` と同じ切り方
@@ -48,43 +44,6 @@ fn sample_process() -> ProcessSample {
         user_us: 600_000,
         threads: 9,
     }
-}
-
-// ---------------------------------------------------------------------------
-// 役割語彙の全件
-// ---------------------------------------------------------------------------
-
-/// 固定語彙は 8 件・綴りと並びまで動かさない。
-#[test]
-fn all_roles_is_the_fixed_eight_vocabulary() {
-    assert_eq!(
-        ALL_ROLES,
-        &[
-            "vblank",
-            "cursor_monitor",
-            "ui",
-            "ticker_dispatcher_kanade",
-            "ticker_loop",
-            "actor:",
-            "perf_report",
-            "unregistered_rest",
-        ],
-        "役割語彙が動いた（報告行の読み手＝perf-rank.py と設計 C14 の表も直すこと）"
-    );
-}
-
-/// 語彙の判定はアクターだけ接尾辞つきを認め、接尾辞なしは認めない。
-#[test]
-fn actor_role_needs_a_suffix_and_every_other_role_is_literal() {
-    for role in ALL_ROLES {
-        if *role == "actor:" {
-            assert!(!is_known_role(role), "接尾辞なしの actor: は語彙ではない");
-        } else {
-            assert!(is_known_role(role), "{role} が語彙として認められない");
-        }
-    }
-    assert!(is_known_role(&role_actor("seriko")));
-    assert!(!is_known_role("taskpool"));
 }
 
 // ---------------------------------------------------------------------------
@@ -378,4 +337,43 @@ fn start_spawns_nothing_while_the_target_is_off() {
         start().is_none(),
         "消灯しているのに報告スレッドが起きた（既定運転で費用を払っている）"
     );
+}
+
+// ---------------------------------------------------------------------------
+// 終わり際
+// ---------------------------------------------------------------------------
+
+/// 最後の 1 枚の途中で報告スレッドが panic した → 記録は panic の error 1 件だけ（待ちきれなかった、ではない）。
+#[test]
+fn a_panicked_report_thread_is_recorded_as_a_panic_not_a_timeout() {
+    let (stop, stop_rx) = mpsc::channel::<()>();
+    let (done_tx, done) = mpsc::channel::<()>();
+    let join = thread::spawn(move || {
+        let _done = done_tx;
+        let _ = stop_rx.recv();
+        std::panic::resume_unwind(Box::new("テストの panic"));
+    });
+    let handle = ReportHandle { stop, done, join };
+    let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
+    let levels: Vec<_> = events.iter().map(|e| e.level).collect();
+    assert_eq!(levels, [tracing::Level::ERROR], "{events:?}");
+}
+
+/// 停止を送る前に報告スレッドが panic していた → 記録は同じく panic の error 1 件だけ。
+#[test]
+fn a_report_thread_that_panicked_before_the_stop_is_recorded_as_a_panic() {
+    let (stop, stop_rx) = mpsc::channel::<()>();
+    let (done_tx, done) = mpsc::channel::<()>();
+    let (gone_tx, gone) = mpsc::channel::<()>();
+    let join = thread::spawn(move || {
+        let _done = done_tx;
+        drop(stop_rx);
+        let _ = gone_tx.send(());
+        std::panic::resume_unwind(Box::new("テストの panic"));
+    });
+    gone.recv().expect("停止の受け口が落ちた合図");
+    let handle = ReportHandle { stop, done, join };
+    let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
+    let levels: Vec<_> = events.iter().map(|e| e.level).collect();
+    assert_eq!(levels, [tracing::Level::ERROR], "{events:?}");
 }

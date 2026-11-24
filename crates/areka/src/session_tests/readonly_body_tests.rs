@@ -1,4 +1,4 @@
-//! 走りの状態の口の呼び手を、本体の `src` とワークスペースの木を歩いて固める構造の試験。
+//! 走りの状態の口の呼び手を、本体の `src` と `areka-session` の `src` を歩いて固める構造の試験。
 
 use std::path::Path;
 
@@ -110,45 +110,4 @@ fn main_calls_engage_exactly_once_before_resolve_boot() {
         .position(|line| line.contains(&["resolve_", "boot(&"].concat()))
         .expect("main.rs に resolve_boot の呼び出しが無い（走査が空振りした）");
     assert!(calls[0] < resolve, "engage が resolve_boot より後");
-}
-
-#[test]
-fn withhold_everything_is_called_only_from_readonly() {
-    // 定義の在る sylphya も含め、ワークスペースのクレートの源（試験も含む）を全部見る。
-    let crates = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("crates/ が無い");
-    let needle = ["withhold_", "everything("].concat();
-    let def = ["fn ", &needle].concat();
-    let mut outside = Vec::new();
-    let mut seen_in_readonly = false;
-    for entry in std::fs::read_dir(crates).expect("crates/ が読めない") {
-        let src = entry
-            .expect("ディレクトリ項目が読めない")
-            .path()
-            .join("src");
-        if !src.is_dir() {
-            continue;
-        }
-        let krate = src
-            .parent()
-            .unwrap()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned();
-        for rel in files_calling(&all_sources(&src), &needle, &def) {
-            if krate == "areka-session" && rel == "readonly.rs" {
-                seen_in_readonly = true;
-            } else {
-                outside.push(format!("{krate}/src/{rel}"));
-            }
-        }
-    }
-    // 較正: 走査が readonly.rs の呼び出しを見つける（空振りしていない）。
-    assert!(seen_in_readonly, "readonly.rs の呼び出しが走査に見えない");
-    assert!(
-        outside.is_empty(),
-        "readonly.rs の外から withhold_everything を呼ぶ所: {outside:?}"
-    );
 }

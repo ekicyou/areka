@@ -1,8 +1,9 @@
 //! 乗算を戻す・PNG の決定論テスト。
 //! PNG は自分で読むだけでなく、別の実装（WIC の復号）でも読み戻して確かめる。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use temp_path_kit::TempPath;
 use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Imaging::{
     GUID_WICPixelFormat32bppRGBA, IWICBitmapSource, WICBitmapDitherTypeNone,
@@ -143,27 +144,8 @@ fn png_of_flat_256x256_is_compressed() {
     );
 }
 
-/// ワークツリーの `target\` の下に置く一時ディレクトリ（OS の一時フォルダは使わない）。破棄で中身ごと消える。
-struct TargetTemp(PathBuf);
-
-impl TargetTemp {
-    fn new(label: &str) -> Self {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/test-tmp")
-            .join(format!("areka-{label}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("target の下に一時ディレクトリを作れるはず");
-        TargetTemp(dir)
-    }
-}
-
-impl Drop for TargetTemp {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 /// WIC で復号し、乗算していない 32 ビット RGBA へ変換した（幅, 高さ, 画素）を返す。
-fn wic_decode_rgba(path: &Path) -> (u32, u32, Vec<u8>) {
+pub(crate) fn wic_decode_rgba(path: &Path) -> (u32, u32, Vec<u8>) {
     let factory = wic_factory().expect("WIC の工場");
     let decoder = factory
         .create_decoder_from_filename(
@@ -211,15 +193,11 @@ fn png_reads_back_through_wic_with_same_size_and_pixels() {
     ]
     .concat();
     let rgba = unpremultiply(&premultiplied);
-    let dir = TargetTemp::new("dump-surface-image-wic");
-    let file = dir.0.join("readback.png");
+    let dir = TempPath::new("png-wic");
+    let file = dir.child("readback.png");
     std::fs::write(&file, png(&rgba, 3, 2)).expect("PNG を書ける");
 
     let (w, h, pixels) = wic_decode_rgba(&file);
-    assert_eq!((w, h), (3, 2), "幅と高さ（要件 5.3）");
+    assert_eq!((w, h), (3, 2), "幅と高さ");
     assert_eq!(pixels, rgba, "WIC で読み戻した画素が書いた RGBA と一致");
-
-    let kept = dir.0.clone();
-    drop(dir);
-    assert!(!kept.exists(), "一時ファイルはテストの後に消える");
 }

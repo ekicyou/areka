@@ -114,3 +114,21 @@ pub fn resolve_special_name(
 /// 入口は読むだけで、切替に使っても消さない。
 #[derive(Resource)]
 pub struct LastInstalledGhost(pub String);
+
+/// fs を見ない目録の 1 項目（突き合わせのテストが組む偽の目録）。
+#[cfg(any(test, feature = "test-support"))]
+pub fn catalog_entry(folder: &str, name: Option<&str>) -> GhostEntry {
+    GhostEntry {
+        dir: std::path::PathBuf::from(format!(r"C:\ghost-switch-tests\ghost\{folder}")),
+        root: std::path::PathBuf::from(r"C:\ghost-switch-tests"),
+        identity: areka_ghost::Identity {
+            folder: folder.to_owned(),
+            name: name.map(str::to_owned),
+            ..areka_ghost::Identity::default()
+        },
+    }
+}
+
+#[cfg(test)]
+#[path = "special_name_tests.rs"]
+mod tests;

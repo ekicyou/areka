@@ -17,7 +17,7 @@ use areka_kanade::{
     CancelReason, ChangeHandoff, ChangeOrigin, KanadeMsg, KanadeNotice, KanadeStopCause,
     KanadeStopped, TalkDone, TalkEndReason, TalkId,
 };
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use shiori_host32_host::ExitKind;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
@@ -25,19 +25,11 @@ use super::*;
 use crate::app_exit::FirstExit;
 use crate::ghost_session::GhostSlot;
 use crate::ghost_switch::{
-    GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
-    request_ghost_switch,
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchStage, SwitchVerdict, request_ghost_switch,
 };
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig};
+use crate::session_end::test_support::{levels_of, reservation};
 use areka_runtime::spine::{Progress, ScriptedShioriBackend, wait_recv};
-
-fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
-}
 
 /// 台詞を返さない台本（`OnBoot`・`OnGhostChanged` とも 204）。ただし起動記録の無いゴーストは
 /// 初回起動の記録を書く台詞（id 1）を再生するので、フレームを回さないこのテストでは
@@ -76,25 +68,6 @@ fn wait_steady(rig: &mut SwitchRig) -> bool {
     };
     rig.world.insert_non_send(rx);
     steady
-}
-
-fn reservation(stage: SwitchStage) -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage,
-        boot_event: None,
-        copy: crate::switch_copy::SwitchCopy::None,
-    }
 }
 
 /// 予約（送り出し）の下で A が中身つきの停止を出す → 終了の相は切替へ委譲し、B を起こして
@@ -169,7 +142,7 @@ fn stop_with_handoff_under_reservation_switches_without_exit() {
             1,
             true,
         ),
-        "(A の定常・受理・再生の完了を届けた・予約が消えた・終了の指示・降ろした記録・今日の終了・切替の完了・\
+        "(A の定常・受理・再生の完了を届けた・予約が消えた・終了の指示・降ろした記録・終了の記録・切替の完了・\
          B を起こした回数・降ろせた): {events:?}"
     );
 }
@@ -196,7 +169,7 @@ fn stop_with_handoff_without_reservation_quits() {
             levels_of(&events, "ghost_quit"),
         ),
         (true, true, vec![tracing::Level::INFO]),
-        "(消化・終了の指示・今日の終了の記録): {events:?}"
+        "(消化・終了の指示・終了の記録): {events:?}"
     );
 }
 
@@ -282,6 +255,6 @@ fn cancel_notice_before_stop_clears_reservation_without_warning() {
             vec![tracing::Level::INFO],
             false,
         ),
-        "(消化・終了の指示・最初の出所・受理されなかった記録・中止の記録・今日の終了・予約): {events:?}"
+        "(消化・終了の指示・最初の出所・受理されなかった記録・中止の記録・終了の記録・予約): {events:?}"
     );
 }

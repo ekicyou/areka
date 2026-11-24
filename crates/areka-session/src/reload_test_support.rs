@@ -6,15 +6,25 @@ use std::sync::mpsc;
 use areka_actor::reply_channel;
 use areka_ghost::BasewareRoot;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
-use areka_runtime::skin_switch::SkinSwitchInFlight;
+use areka_runtime::skin_switch::{SkinSwitchInFlight, SkinSwitchStage};
 use bevy_ecs::world::World;
 
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::shell_balloon_switch::{SkinKind, SkinSwitchStage};
+use crate::shell_balloon_switch::SkinKind;
 
 /// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`・置き場は `temp` の下）。
 pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext {
+    boot_context_named(temp, root, "A", "kaku")
+}
+
+/// 起動の文脈（今のゴースト `ghost`・今のバルーン `balloon`・置き場は `temp` の下）。
+pub fn boot_context_named(
+    temp: &Path,
+    root: &BasewareRoot,
+    ghost: &str,
+    balloon: &str,
+) -> BootContext {
     BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
         roots_origin: crate::roots::RootsOrigin::EnvVar,
@@ -23,18 +33,18 @@ pub fn boot_context(temp: &Path, root: &BasewareRoot) -> BootContext {
         argv_session: false,
         current: CurrentGhost {
             cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("A"),
-                balloon_root: root.balloon_dir("kaku"),
+                ghost_root: root.ghost_dir(ghost),
+                balloon_root: root.balloon_dir(balloon),
             },
             ghost: GhostDecision {
                 route: GhostRoute::Default,
-                dir: root.ghost_dir("A"),
-                folder: Some("A".to_owned()),
+                dir: root.ghost_dir(ghost),
+                folder: Some(ghost.to_owned()),
             },
             balloon: BalloonDecision {
                 route: BalloonRoute::Default,
-                dir: root.balloon_dir("kaku"),
-                folder: Some("kaku".to_owned()),
+                dir: root.balloon_dir(balloon),
+                folder: Some(balloon.to_owned()),
             },
         },
     }

@@ -491,7 +491,7 @@ fn load_shell_target_with(
             recognized = target.images.len(),
             used = target.base_images.used.len(),
             shadowed = target.base_images.shadowed.len(),
-            "shell: シェルの面の画像の一覧が終わった（R6.1）"
+            "shell: シェルの面の画像の一覧が終わった"
         );
     }
 

@@ -1,43 +1,15 @@
 //! `--install` の値の並びと語 `callghost`・`deletesource`。
 
+use super::parse_tests::{run, s, split};
 use super::*;
 use crate::cli::InstallArgs;
 use std::path::PathBuf;
-
-/// `args[0]` に exe を足して読む。
-fn run(args: &[&str]) -> Parsed {
-    let mut all = vec!["areka".to_owned()];
-    all.extend(args.iter().map(|a| (*a).to_owned()));
-    parse(&all)
-}
-
-fn s(v: &str) -> String {
-    v.to_owned()
-}
 
 fn install(archives: &[&str], call_ghost: bool, delete_source: bool) -> InstallArgs {
     InstallArgs {
         archives: archives.iter().map(PathBuf::from).collect(),
         call_ghost,
         delete_source,
-    }
-}
-
-/// 最後のまとめの (効く・何もしない・無視)。
-type Summary<'a> = (&'a [String], &'a [String], &'a [String]);
-
-/// まとめの前の材料と、最後のまとめ。
-fn split(parsed: &Parsed) -> (&[ParseNote], Summary<'_>) {
-    match parsed.notes.split_last() {
-        Some((
-            ParseNote::Summary {
-                effective,
-                noop,
-                ignored,
-            },
-            rest,
-        )) => (rest, (effective, noop, ignored)),
-        other => panic!("最後はまとめ: {other:?}"),
     }
 }
 
@@ -113,7 +85,7 @@ fn install_without_values_is_one_note() {
 }
 
 /// 2 つの語は大小を問わず、カンマの並び・`--option` の重ねでも効く語になり、まだ扱わない記録は出ない。
-/// `kiosk` は今のまま「まだ扱わない」。
+/// `kiosk` は「まだ扱わない」。
 #[test]
 fn install_words_are_effective_with_install() {
     let rows: Vec<(Vec<&str>, bool, bool)> = vec![
@@ -186,7 +158,7 @@ fn install_words_without_install_are_noted_and_off() {
     assert!(parsed.options.boot.no_boot_check);
 }
 
-/// `--offline-dump` と一緒なら今の決まりどおり、`install` と `option` は効かせない記録に載り、
+/// `--offline-dump` と一緒なら、`install` と `option` は効かせない記録に載り、
 /// 名前と語はまとめの無視の側へ。値なしや語だけでも `--install` 向けの注は出ない。
 #[test]
 fn install_with_offline_dump_is_not_effective() {

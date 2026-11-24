@@ -42,7 +42,7 @@ use windows_core::{HRESULT, HSTRING, IUnknown, IUnknown_Vtbl, OutRef, Ref, Resul
 ///
 /// IID は dev 用でリリースまで変動可・**リリース時に凍結**。
 ///
-/// [`CreateInstance`](IShioriFactory::CreateInstance) が `ReferenceBrain` 相当の脳を構築し、
+/// [`CreateInstance`](IShioriFactory::CreateInstance) が脳（例: `shiori4-testdll` の `ReplayBrain`）を構築し、
 /// load 完了済みの `IShiori` を `out`（[`OutRef`]）へ move-out する唯一の生成経路。
 #[interface("7E072AA3-2288-444E-A42F-779428A9545A")]
 pub unsafe trait IShioriFactory: IUnknown {
