@@ -66,7 +66,7 @@
   - _Dispatch: standard — 本番の受け口でテストを組み直す_
   - _Requirements: 3.1, 3.3, 4.1, 4.6, 4.8, 7.2, 7.12_
 
-- [ ] 2. 本番の小さな直しを入れる
+- [x] 2. 本番の小さな直しを入れる
 
 - [x] 2.1 取得の小さな直しと文書の行を直す（G6・指摘 22・65〜68・12 の文書）
   - スキームを `eq_ignore_ascii_case` で比べる（`judge.rs`・`fetch_url.rs`・指摘 65）。消した数が 0 なら `install_fetch_swept` を出さない（66）。書き込みの失敗で書きかけを消し、消せなければ `debug!`（67）。
@@ -148,7 +148,7 @@
   - _Dispatch: mechanical — 直し方と期待の値を design が与えている_
   - _Requirements: 3.1, 4.1, 6.2_
 
-- [ ] 2.11 説明書の本番の小さな直しを入れる（G19・指摘 49〜55・97）
+- [x] 2.11 説明書の本番の小さな直しを入れる（G19・指摘 49〜55・97）
   - 呼び手の説明を「`runtime_boot::install_lines`」に直す（49）。`set_path` で `missing_logged` を戻し、doc を直す（50）。`readme_cue` の文を直す（`event` は変えない・51・52）。
   - `os_port.rs` の doc と `// SAFETY:` の文を事実に直し（`// SAFETY:` は残す・53・55）、5 つの `allow` と説明を消す（54）。`fn win32_code(hr: i32) -> u32` を切り出す（97）。OS の既定のアプリで開く形は変えない。
   - 次が緑: 読み直しの後に別の無いファイルで `readme_missing` が 1 件（今は 0 で赤）。`0x80070002 → 2`・`0x80004005 → そのまま`。`cargo clippy -p areka-session --tests` で警告 0。

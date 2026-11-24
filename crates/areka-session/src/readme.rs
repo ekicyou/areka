@@ -60,7 +60,7 @@ pub struct ReadmeWiring {
 
 /// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
-/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所）。
+/// 呼び手は `runtime_boot::install_lines`（実行系の成立の後）。
 pub fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
     world.insert_non_send(ReadmeWiring {
         path,
@@ -69,7 +69,7 @@ pub fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>
     });
 }
 
-/// 説明書の置き場だけを動作中に差し替える（descript の読み直し）。
+/// 説明書の置き場だけを動作中に差し替える（descript の読み直し）。不在の記録は新しい置き場で数え直す。
 ///
 /// 持ち物を作り直さないのは、受信端の送出端が走っている dispatcher の中にあり作り直せないため。
 pub(crate) fn set_path(world: &mut World, path: PathBuf) {
@@ -82,6 +82,7 @@ pub(crate) fn set_path(world: &mut World, path: PathBuf) {
         return;
     };
     wiring.path = path;
+    wiring.missing_logged.set(false);
 }
 
 /// 要求の取り出しを入力の段へ登録し、開く専用のスレッドの持ち物（[`opener::Opener`]）が
@@ -121,7 +122,7 @@ impl ReadmeWiring {
 /// 説明書のファイルがあるか。
 ///
 /// 無いときは「説明書」を灰色で出すための `false` を返し、**初めて無いと分かったときだけ**
-/// `debug!` で記録する（毎 tick の照会で記録が溢れない）。持ち物が無いときも `false`。
+/// `debug!` で記録する（メニューの写しを取るたびの照会で記録が溢れない）。置き場を替えると記録は数え直す。持ち物が無いときも `false`。
 pub fn is_available(world: &World) -> bool {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::trace!(

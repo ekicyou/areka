@@ -203,6 +203,25 @@ fn is_available_follows_the_file_and_records_the_absence_only_once() {
     );
 }
 
+/// 置き場を差し替えた後に別の無いファイルを指すと、不在の記録がもう 1 件出る。
+#[test]
+fn set_path_to_another_missing_file_records_the_absence_again() {
+    let dir = TempPath::new("readme-set-path-missing");
+    let mut world = World::new();
+    let _tx = wired(&mut world, dir.child("a.txt"));
+    let first = capture(|| assert!(!is_available(&world)));
+    assert_eq!(lines_of(&first, "readme_missing").len(), 1, "{first:?}");
+
+    set_path(&mut world, dir.child("b.txt"));
+
+    let after = capture(|| assert!(!is_available(&world)));
+    assert_eq!(
+        lines_of(&after, "readme_missing").len(),
+        1,
+        "新しい置き場の不在が記録に残る: {after:?}"
+    );
+}
+
 // -------------------------------------------------------------------------
 // 要求の取り出し
 // -------------------------------------------------------------------------

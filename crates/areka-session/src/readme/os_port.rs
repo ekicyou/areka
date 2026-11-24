@@ -2,7 +2,7 @@
 //!
 //! OS へ渡す呼び出し（`ShellExecuteExW`）と環境変数の読み取りを 1 つの trait に閉じる。
 //! 本物は [`WindowsShell`]、テストの偽物は `opener_test_support.rs` の `FakeOs`。
-//! `crates/areka/src` で `ShellExecute` を綴るのは、このファイルだけにする。
+//! 本体・`areka-runtime`・`areka-input`・`areka-session` の `src` で `ShellExecute` を綴るのは、このファイルだけにする。
 
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::OsStrExt;
@@ -49,20 +49,14 @@ pub trait OsPort {
 
 /// 本物（`ShellExecuteExW`（`SEE_MASK_FLAG_NO_UI`）・`std::env::var`）。
 /// 実在するファイルは先に `AssocQueryStringW` で動詞の関連付けを引き、無ければ 1155 を返す。
-///
-/// テストのビルドは本物の OS を呼ばない（`Opener::spawn` が断る口を持つ）ので、
-/// 本物の口と COM の初期化はテストのビルドに呼び手が無い（関連付けの判定はテストが直に呼ぶ）。
-#[cfg_attr(test, allow(dead_code))]
 pub struct WindowsShell;
 
 /// 終端 0 付きの UTF-16 へ写す。
-#[cfg_attr(test, allow(dead_code))]
 fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
     s.encode_wide().chain(std::iter::once(0)).collect()
 }
 
 /// 関連付けが無いときの Win32 の符号（ERROR_NO_ASSOCIATION）。
-#[cfg_attr(test, allow(dead_code))]
 const ERROR_NO_ASSOCIATION: u32 = 1155;
 
 /// OS を呼ぶ前に関連付けを確かめるか（`HKCR\Unknown\shell\Open` があると
@@ -107,7 +101,6 @@ fn verb_w(verb: Verb) -> PCWSTR {
 
 /// 拡張子にこの動詞の関連付けがあるか（レジストリを読むだけ・`Unknown` へは落とさない）。
 /// 動詞はコマンド行か DelegateExecute（フォト・メディア プレーヤーなど）のどちらかで持つ。
-#[cfg_attr(test, allow(dead_code))]
 fn has_verb(ext: &OsStr, verb: Verb) -> bool {
     let ext = wide(ext);
     [ASSOCSTR_COMMAND, ASSOCSTR_DELEGATEEXECUTE]
@@ -127,6 +120,16 @@ fn has_verb(ext: &OsStr, verb: Verb) -> bool {
             }
             .is_ok()
         })
+}
+
+/// `HRESULT_FROM_WIN32` で包まれた符号は下位 16 ビットの Win32 の符号へ戻し、それ以外はそのまま返す。
+fn win32_code(hr: i32) -> u32 {
+    let h = hr as u32;
+    if h & 0xFFFF_0000 == 0x8007_0000 {
+        h & 0xFFFF
+    } else {
+        h
+    }
 }
 
 impl OsPort for WindowsShell {
@@ -154,15 +157,7 @@ impl OsPort for WindowsShell {
             ..Default::default()
         };
         // SAFETY: 文字列はすべて終端 0 付きで、呼び出しの間ずっと生存する。
-        unsafe { ShellExecuteExW(&mut info) }.map_err(|e| {
-            // windows の Error は GetLastError を HRESULT_FROM_WIN32 で包んでいるので、下位 16 ビットへ戻す。
-            let h = e.code().0 as u32;
-            if h & 0xFFFF_0000 == 0x8007_0000 {
-                h & 0xFFFF
-            } else {
-                h
-            }
-        })
+        unsafe { ShellExecuteExW(&mut info) }.map_err(|e| win32_code(e.code().0))
     }
 
     fn env_var(&self, name: &str) -> Option<String> {
@@ -174,10 +169,8 @@ impl OsPort for WindowsShell {
 /// 開く専用のスレッドの最初に 1 度だけ呼ぶ（`COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE`）。
 ///
 /// 失敗は `warn!` を残して続ける（`ShellExecuteExW` は COM 無しでも多くの場合は動く）。
-/// テストのビルドでは呼ばない（[`WindowsShell`] と同じ）。
-#[cfg_attr(test, allow(dead_code))]
 pub fn init_com_for_shell() {
-    // SAFETY: 予約の引数は None。対の CoUninitialize はスレッドの終わりまで呼ばない。
+    // SAFETY: 予約の引数は None。対の CoUninitialize は呼ばない（このスレッドは開く要求を受け終えるまで生き、終わりで COM ごと片づく）。
     let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
     if let Err(err) = hr.ok() {
         tracing::warn!(

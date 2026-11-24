@@ -55,7 +55,7 @@ fn open_readme_with_arguments_warns_and_sends_nothing() {
     assert_eq!(
         rx.try_iter().count(),
         0,
-        "引数付きは何もしない（列挙が要るため α では語彙だけ持つ・要件 4.6）"
+        "引数付きは何もしない（列挙が要るので語彙だけ持つ）"
     );
     assert_eq!(
         count_level(&logs, "WARN"),
