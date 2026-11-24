@@ -696,6 +696,9 @@ fn surfaces_txt_in_the_same_folder_does_not_change_the_table() {
 
 // ---- 配線（実行系つきの単位・同時の呼び出し・副作用なし・切替の後） ----
 
+use super::super::dump_surface::WaitAnswer;
+use areka_runtime::spine::Progress;
+
 /// 置き場のゴーストの今のシェルのフォルダ（実行系が無ければ `None`）。
 fn current_shell_dir(world: &World) -> Option<PathBuf> {
     world
@@ -764,7 +767,8 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
     };
     let (first, second) = (ask(), ask());
     rig.world.run_schedule(wintf::ecs::Input);
-    let both = [&first, &second].map(|p| p.try_answer().ok().flatten().map(|a| a.outcome));
+    let probe = rig.progress_probe();
+    let both = [&first, &second].map(|p| p.wait_answer(Progress::Count(&probe)).map(|a| a.outcome));
     settle_kanade(&rig.world);
     let calls_after = rig.calls("A");
 
@@ -786,7 +790,9 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
         .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_shell_dir(other.clone())));
     let third = ask();
     rig.world.run_schedule(wintf::ecs::Input);
-    let after_switch = third.try_answer().ok().flatten().map(|a| a.outcome);
+    let after_switch = third
+        .wait_answer(Progress::Count(&probe))
+        .map(|a| a.outcome);
     let down = rig.shutdown();
 
     let table = Some(outcome::value(hontai_answer()));
@@ -804,5 +810,76 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
             crlf(r"|\1|別|横顔|\s[200]|")
         ))),
         "替えた後の表"
+    );
+}
+
+/// 今のシェルのフォルダの `surfacetable.txt` が開けない（同名のフォルダ）とき、`handle` を呼んだ
+/// スレッドには表の読みと解析の記録が 1 件も出ず、既定の 15 件で答える。
+///
+/// # 非空虚性
+/// `load` を UI のスレッドで呼ぶと、開けない `warn!` が `capture` の窓に入って赤。
+#[test]
+fn real_unit_reads_the_table_off_the_calling_thread() {
+    use std::sync::mpsc;
+
+    use crate::sample_test_support::switch_rig;
+    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
+
+    let mut rig = switch_rig(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
+    )]);
+    rig.boot("A");
+    let (tx, rx) = mpsc::channel();
+    crate::mcp::install(&mut rig.world, rx);
+    let steady = rig.wait_steady();
+    let shell = current_shell_dir(&rig.world).expect("起動したゴーストには実行系がある");
+    let table = shell.join("surfacetable.txt");
+    if table.exists() {
+        std::fs::remove_file(&table).expect("同梱の surfacetable.txt を消す");
+    }
+    std::fs::create_dir(&table).expect("同名のフォルダを作る");
+
+    let (request, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args {
+        ghost_name: Some("A".to_owned()),
+    }));
+    let ((), events) = capture(|| {
+        assert!(tx.send(request).is_ok(), "受け口は生きている");
+        rig.world.run_schedule(wintf::ecs::Input);
+    });
+    let probe = rig.progress_probe();
+    let answer = pending
+        .wait_answer(Progress::Count(&probe))
+        .map(|a| a.outcome);
+    let down = rig.shutdown();
+
+    let on_caller: Vec<_> = events
+        .iter()
+        .filter(|ev| ev.message().starts_with("[get_expression_table]"))
+        .collect();
+    assert_eq!(
+        (steady, on_caller.len(), answer, down),
+        (
+            true,
+            0,
+            Some(outcome::value(crlf(DEFAULTS_ONLY_ANSWER))),
+            true
+        ),
+        "（定常に着いた・呼んだスレッドの表の記録・答え・降ろせた）: {events:?}"
+    );
+}
+
+/// 表を読む仕事が panic しても、答えは捨てられず `NG:` で届き、error の記録は 1 件だけ。
+#[test]
+fn a_panicking_table_job_answers_ng_with_one_error() {
+    let (req, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args { ghost_name: None }));
+    let ((), levels) = log_capture_kit::count_levels(|| {
+        answer_caught(req.reply, || panic!("わざと"));
+    });
+    let answer = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    assert_eq!(
+        (answer, levels.error),
+        (Some(outcome::ng("the expression table thread panicked")), 1),
+        "（届いた答え, ERROR）"
     );
 }

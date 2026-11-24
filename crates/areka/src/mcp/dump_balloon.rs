@@ -168,9 +168,7 @@ fn read_into(
             Ok(None) => return Ok(false),
             Err(e) => return Err(fail(TOOL, scope, &e.to_string())),
         };
-        if bytes.len() != *w as usize * *h as usize * 4 {
-            return Err(fail(TOOL, scope, "picture size mismatch"));
-        }
+        check_size(TOOL, scope, &bytes, *w, *h)?;
         *slot = Some(bytes);
     }
     Ok(true)

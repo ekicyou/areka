@@ -109,7 +109,7 @@
   - _Dispatch: standard — 範囲の外の crate の公開の口と実 GPU のテストを組む_
   - _Requirements: 3.1, 4.1, 4.2, 4.6, 6.4, 7.6_
 
-- [ ] 2.6 表情の表を UI の外で読み、絵の大きさの確かめを 1 つにする（G12・指摘 28・30・78）
+- [x] 2.6 表情の表を UI の外で読み、絵の大きさの確かめを 1 つにする（G12・指摘 28・30・78）
   - `get_expression_table.rs` で、シェルのフォルダを写して名前つきのスレッドで `load` と `render` を行う。起こせなければ `expression_table_spawn_failed` の error と `NG:`（`encode_elsewhere` と同じ形）。
   - `dump_balloon.rs` の大きさの確かめを `check_size` に寄せる（78）。`check_size` の (0,1,空)・(1,0,空)・(2,2,長さ 15) が Err、(1,1,長さ 4) が Ok のテストを足す（30）。
   - 実ユニットのテストを `wait_answer` で待つ形にし、`handle` を呼んだスレッドの記録に表の読みと解析の記録が 0 件であることを `capture` で見るテスト（読めないシェルのフォルダを差す。読むスレッドは `encode_elsewhere` と同じく dispatcher を持たせないので、記録は `capture` の窓に入らない。本番に JoinHandle を控えない）が緑（今は UI のスレッドに出て赤）。

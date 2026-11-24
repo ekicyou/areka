@@ -719,3 +719,11 @@ fn read_failure_after_attachment_answers_the_reader_outcome_with_one_error() {
         "（届いた答え, ERROR, 降ろせた）"
     );
 }
+
+/// 幅か高さが 0、またはバイト数が幅×高さ×4 と違えば想定外の失敗、合えば通す。
+#[test]
+fn check_size_rejects_zero_sides_and_mismatched_lengths() {
+    let judged = [(0, 1, 0), (1, 0, 0), (2, 2, 15), (1, 1, 4)]
+        .map(|(w, h, len)| check_size(TOOL, 0, &vec![0; len], w, h).is_ok());
+    assert_eq!(judged, [false, false, false, true]);
+}
