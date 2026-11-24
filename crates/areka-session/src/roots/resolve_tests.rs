@@ -445,3 +445,10 @@ fn no_user_root_leaves_every_item_plain() {
     assert_eq!(dirs(&r), vec![a, exe]);
     assert_eq!(marks(&r), vec![RootMark::Plain, RootMark::Plain]);
 }
+
+#[test]
+fn long_path_prefix_item_is_kept_not_skipped_as_invalid() {
+    let (items, skipped) = decode_memory(r"\\?\C:\x", None);
+    assert_eq!(items.len(), 1);
+    assert!(skipped.is_empty());
+}

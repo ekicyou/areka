@@ -6,6 +6,7 @@
 use areka_ghost::{Hidden, RootMark, StoreKind};
 
 use super::resolve::{ResolvedRoots, RootError, RootSkip, RootsOrigin};
+use super::user_root::kind_name;
 
 /// 記録の場面（起動か並びの変更か）。どの行にも `occasion` 欄で添える。
 #[derive(Clone, Copy, Debug)]
@@ -41,7 +42,7 @@ fn user_root_str(mark: RootMark) -> &'static str {
     }
 }
 
-/// 並びの 1 根ごとに info（絶対パス・出どころ・書ける根の出どころ・見つかったか）、見つからない根は warn（9.1）、
+/// 並びの 1 根ごとに info（絶対パス・出どころ・書ける根の出どころ・見つかったか）、見つからない根は warn、
 /// 控え（`RootSkip`）と `memory_fell_back` は warn。
 pub fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion) {
     let occ = occasion.as_str();
@@ -131,10 +132,7 @@ fn log_notes(skipped: &[RootSkip], memory_fell_back: bool, occasion: ReportOccas
 pub fn log_hidden(hidden: &[Hidden], occasion: ReportOccasion) {
     let occ = occasion.as_str();
     for h in hidden {
-        let kind = match h.kind {
-            StoreKind::Ghost => "ghost",
-            StoreKind::Balloon => "balloon",
-        };
+        let kind = kind_name(h.kind);
         tracing::info!(
             event = "root_hidden_item",
             kind,
