@@ -136,7 +136,8 @@ pub(crate) fn drain(world: &mut World) {
 }
 
 /// 背景スレッドの頼みを 1 件捌く。`Started`＝答え待ちなら走っているへ移し、預かりを `executing` で
-/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す／
+/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す（`WorkerPanicked`
+/// は加えて送出端を捨て、次の依頼で起こし直す）／
 /// `Reload`＝[`reload`]（条件を満たせば同じゴーストへの切替を 1 回頼む）。正しさは
 /// 段の判定が持ち、頼みと生の要求の届く順に依らない。
 fn answer(world: &mut World, ask: DeskAsk) {
@@ -154,7 +155,10 @@ fn answer(world: &mut World, ask: DeskAsk) {
                 refuse_executing(world, &raw, reason);
             }
         }
-        DeskAsk::OrderDone => {
+        DeskAsk::OrderDone | DeskAsk::WorkerPanicked => {
+            if ask == DeskAsk::WorkerPanicked {
+                desk.worker = None;
+            }
             set_stage(&mut desk, Stage::Idle);
             if let Some((raw, reason)) = desk.held.take() {
                 super::submit(world, raw, reason);
@@ -704,3 +708,7 @@ mod reload_tests;
 #[cfg(test)]
 #[path = "desk_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "worker_panic_tests.rs"]
+mod worker_panic_tests;

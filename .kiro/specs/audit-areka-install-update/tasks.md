@@ -24,7 +24,7 @@
   - _Dispatch: standard — 守り手と窓口の新しい腕を組む_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 4.3, 6.1, 6.2, 6.3, 7.1_
 
-- [ ] 1.3 更新の背景のスレッドが倒れても窓口が戻るようにする（G4・指摘 23）
+- [x] 1.3 更新の背景のスレッドが倒れても窓口が戻るようにする（G4・指摘 23）
   - 依頼ごとに守り手を `ports` より先に作り、panic で `update_worker_panicked` の error → 門の `end` → `DeskAsk::WorkerPanicked` の順に行う。`OrderDone` は倒れない道でだけ送る（design.md「倒れの守り手」の `update`）。
   - 窓口は `WorkerPanicked` で `worker = None` にし、段を `Idle` に戻す。
   - 新しい `update/worker_panic_tests.rs` で、偽の `NewFetch` の `get` が panic すると `WorkerPanicked` が届き、門が書く段に残らず、段が `Idle` になることが緑。

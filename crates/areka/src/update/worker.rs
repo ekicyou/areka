@@ -54,6 +54,28 @@ pub(crate) enum DeskAsk {
     },
     /// 依頼 1 件が終わった。
     OrderDone,
+    /// 依頼の最中にスレッドが倒れた（次の依頼でスレッドを起こし直す）。
+    WorkerPanicked,
+}
+
+/// 依頼 1 件の守り手。倒れて落ちるときだけ、門を手放して窓口へ倒れを知らせる。
+struct OrderGuard {
+    gate: Arc<WorkGate>,
+    desk: Sender<DeskAsk>,
+}
+
+impl Drop for OrderGuard {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        tracing::error!(
+            event = "update_worker_panicked",
+            "[update] 背景スレッドが依頼の最中に倒れました（次の依頼で起こし直します）"
+        );
+        self.gate.end();
+        ask_desk(&self.desk, DeskAsk::WorkerPanicked);
+    }
 }
 
 /// 取得口の作り方（本番は [`winhttp_fetch`]・テストは偽の取得口）。対象ごとにスレッドの中で呼ぶ。
@@ -75,6 +97,11 @@ pub(crate) fn spawn_worker(
 ) -> (Sender<UpdateJob>, ActorHandle) {
     spawn_actor("update", move |jobs| {
         run_inbox(jobs, |job: UpdateJob| {
+            // 口より先に作る（倒れて落ちるときは口が先に落ち、通信中の数が戻ってから知らせる）。
+            let _guard = OrderGuard {
+                gate: gate.clone(),
+                desk: desk.clone(),
+            };
             let ports = KanadePorts {
                 kanade: job.kanade,
                 gate: gate.clone(),
