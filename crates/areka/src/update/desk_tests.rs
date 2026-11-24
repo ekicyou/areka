@@ -3,13 +3,14 @@
 //! 背景スレッドは基本は起こさない: 窓口の仕事の送出端を受信端に差し替え、背景スレッドの頼みは窓口の
 //! 頼みの送出端へ直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は
 //! `drain` を直接呼ぶ（フレームは回さない）。受け取りは `try_recv` で、背景スレッドを起こす 1 件だけ
-//! 本物のスレッドの照会を `recv()` で待つ。
+//! 本物のスレッドの照会を `wait_recv` で待つ。
 
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_ghost::BasewareRoot;
 use areka_kanade::{KanadeMsg, ShioriMethod};
+use areka_runtime::spine::{Progress, wait_recv};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -440,7 +441,9 @@ fn the_spawned_worker_counts_on_the_desk_online() {
         desk.online = &ONLINE;
     }
     assert_eq!(rig.submit(UpdateReason::Script), SubmitVerdict::Started);
-    match rig.kanade.recv().expect("背景スレッドの照会が届く") {
+    match wait_recv("背景スレッドの照会", Progress::Unknown, &rig.kanade)
+        .expect("背景スレッドの照会が届く")
+    {
         KanadeMsg::ResourceQuery { reply, .. } => {
             assert!(ONLINE.is_online(), "窓口の数が立っている");
             drop(reply);

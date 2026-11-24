@@ -164,7 +164,7 @@
   - _Dispatch: mechanical — 既にある待ちの道具へ置き換える_
   - _Requirements: 3.1, 4.3, 5.4, 6.3_
 
-- [ ] 3.2 `update/` の背景のスレッドのテストの待ちと手順を寄せる（G3・指摘 26・73）
+- [x] 3.2 `update/` の背景のスレッドのテストの待ちと手順を寄せる（G3・指摘 26・73）
   - `worker_tests.rs`・`desk_tests.rs`・`worker_path_tests.rs` の自前の待ちを既にある道具に置き換える（26）。`run_one` に `roots`・`exe_dir` を足して写しを消す（73）。
   - `update/worker_tests.rs` が 1,000 行の内に収まり（見込み約 940 行）、テストが全部緑。
   - _Dispatch: mechanical — 既にある道具と引数の足しで寄せる_

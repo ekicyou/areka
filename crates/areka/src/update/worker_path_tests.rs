@@ -23,7 +23,7 @@ use super::{RawUpdateRequest, TargetKind};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
 use crate::sample_test_support::switch_rig;
-use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall};
+use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall, SPIN_WAIT};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -223,7 +223,7 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         .expect("A の kanade の送出端");
     send_query(&kanade, vec![HOMEURL_RESOURCE])
         .expect("kanade へ照会を送れる")
-        .recv()
+        .recv_timeout(SPIN_WAIT)
         .expect("kanade が照会に答える");
     let held_while_talking = (homeurl_gets(&rig) - before, rig.calls("A").len());
 
