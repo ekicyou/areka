@@ -132,7 +132,7 @@ fn several_installs_leave_the_last() {
 }
 
 /// 起こし直し: 入れる前に起こしたゴーストへは載せない。入れた後は、起こし直したゴーストの記憶の
-/// 書き手（そのゴーストの問い合わせ元）へ値を載せ直す（`boot_wired` の 1 行）。
+/// 書き手（そのゴーストの問い合わせ元）へ値を載せ直す（`BODY_SYSTEMS` の `after_runtime_wired` から）。
 #[test]
 fn reboot_reseeds_the_values_into_the_new_ghost() {
     let mut rig = switch_rig(vec![

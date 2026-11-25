@@ -74,7 +74,7 @@ pub enum CommandConsumer {
     /// 第 1 引数が `zorder` の出現だけを担当する。
     ZOrderSink,
     /// 開く系の受け口（説明書を含む）の担当消費者
-    /// （本体の `readme::readme_cue::ReadmeCueSink`）。`open` は名前だけでは決まらず、
+    /// （`areka_session::readme::readme_cue::ReadmeCueSink`）。`open` は名前だけでは決まらず、
     /// 第 1 引数が `readme`・`file`・`browser`・`explorer`・`editor`・`mailer` の出現だけを担当する
     /// （作り付けの窓の `help` などは将来の担当の余地）。運搬名 `\j` は選別子なしで
     /// 担当する。

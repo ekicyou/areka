@@ -230,7 +230,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
 
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後＝投げ込みの捌きの後）へ
 /// 登録し、門 `update` を片付けの関数と一緒に終了の待ちへ登記する（プロセスに 1 回・呼び手は
-/// `ghost_session::register_systems`）。窓口はゴーストを起こし直しても作り直さない。
+/// `BODY_SYSTEMS` の `after_input`）。窓口はゴーストを起こし直しても作り直さない。
 pub(crate) fn register(world: &mut World) {
     let gate = Arc::new(WorkGate::default());
     world.insert_non_send(desk::UpdateDesk::new(gate.clone()));

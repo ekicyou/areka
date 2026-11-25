@@ -133,7 +133,7 @@ pub(crate) fn queued_orders(world: &World) -> Vec<InstallOrder> {
 }
 
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後）へ登録し、門 2 つ（依頼と
-/// 取得）を終了の待ちへ登記する（プロセスに 1 回・呼び手は `ghost_session::register_systems`）。窓口はゴーストを
+/// 取得）を終了の待ちへ登記する（プロセスに 1 回・呼び手は `BODY_SYSTEMS` の `after_input`）。窓口はゴーストを
 /// 起こし直しても作り直さない。
 pub(crate) fn register(world: &mut World) {
     let gate = Arc::new(WorkGate::default());

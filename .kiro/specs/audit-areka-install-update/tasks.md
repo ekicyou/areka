@@ -208,7 +208,7 @@
   - _Dispatch: mechanical — 呼び替え先と文の形を design が与えている_
   - _Requirements: 3.1, 3.3, 5.6, 5.7_
 
-- [ ] 4. 呼び手の説明を今の事実に直す（G22・指摘 8・70・71・81・件 3）
+- [x] 4. 呼び手の説明を今の事実に直す（G22・指摘 8・70・71・81・件 3）
   - `install/mod.rs`・`install/names.rs`・`update/mod.rs`・`mcp/mod.rs` の呼び手の説明を、`BODY_SYSTEMS` の `after_input`・`after_runtime_wired` から呼ばれるという事実の文に直す。
   - `areka-runtime/src/consumer_ledger.rs:77` の「本体の `readme::readme_cue::ReadmeCueSink`」を 1 語だけ直す（設計の討議の確定）。
   - 4 つのファイルに `ghost_session::register_systems` の字面が残らない。`mcp/mod.rs` を直したことを `audit-areka-app` のセッションへ知らせる。

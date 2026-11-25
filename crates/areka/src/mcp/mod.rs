@@ -45,7 +45,7 @@ pub(crate) fn install(world: &mut World, inbox: Receiver<ToolRequest>) {
     world.insert_non_send(McpLater(Vec::new()));
 }
 
-/// 汲む系を Input 段（`dispatch_pointer_events` の後）へ登録する（`ghost_session::register_systems` から）。
+/// 汲む系を Input 段（`dispatch_pointer_events` の後）へ登録する（`BODY_SYSTEMS` の `after_input` から）。
 pub(crate) fn register(world: &mut World) {
     world
         .resource_mut::<Schedules>()

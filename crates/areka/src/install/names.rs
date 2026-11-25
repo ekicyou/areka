@@ -49,7 +49,7 @@ pub(crate) fn update(world: &mut World, object: String, ghost: Option<String>) {
     world.insert_resource(names);
 }
 
-/// ゴーストを起こした（`ghost_session::boot_wired` から）: 値が在れば、起こしたゴーストの記憶の
+/// ゴーストを起こした（`BODY_SYSTEMS` の `after_runtime_wired` から）: 値が在れば、起こしたゴーストの記憶の
 /// 書き手へ載せ直す。まだ入れていなければ何もしない。
 pub(crate) fn reseed(world: &World, runtime: &GhostRuntime) {
     let Some(names) = world.get_resource::<LastInstallNames>() else {
