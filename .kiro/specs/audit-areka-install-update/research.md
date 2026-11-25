@@ -621,3 +621,16 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 ### 残した件
 
 - なし（6 件とも向こうの着地の形があったので寄せた）。向こうの brief への書き足しは要らない（向こうは完了・残す件が無い）。
+
+## 12. `audit-emo2-boot-switch` の着地に依る寄せ（タスク 5.2・G23）
+
+- 着地の確かめ: `audit-emo2-boot-switch` は `main` へ着地済み（PR#503・`7f4778188`）。`main` はこのブランチへ取り込み済みで、`git fetch origin main` の後の `git log HEAD..origin/main` は 0 件。向こうは `completed/` へ移っている。
+
+### 寄せた件
+
+- **33**: `areka-session` の `shell_balloon_switch_session_lap_test_support.rs` で `spawn_windows(rig, dpi)` と `pump_messages()` が `pub` になっていた（`areka_session::ghost_session::shell_balloon_switch_session_lap_test_support` から届く）。`mcp/dump_surface_gpu_test_support.rs` の写し 2 本と、それだけが使っていた定数（`WORK_AREA`・`PUMP_MAX`）・import（`HWND`・`MSG` 系・`MonitorSnapshot`・`RectPx`・`spawn_ghost_windows`・`WindowHandle`・`DPI`）を消し、向こうの 2 本を呼ぶ。ファイル先頭の doc の行は、`lap_rig_of` を `shell_balloon_switch_session_lap_tests.rs` に、`spawn_windows` を本当の置き場の `shell_balloon_switch_session_lap_test_support.rs` に結び直し、写しでなく呼ぶ形へ直した（置き場の誤りも正した）。MCP の実 GPU のテスト（`dump_surface_gpu_tests`・`dump_balloon_gpu_tests`）は緑。
+- **例外 (a)**: `SwitchVerdict::Updating` は向こうの着地で `ghost_switch.rs` に入っていた。`install/overwrite.rs` の `SwitchVerdict` の腕は `NotFound | NoContext | Updating` と名前を挙げており、ビルドは緑。こちらの変更は要らなかった。
+
+### 残した件
+
+- なし（向こうの brief への書き足しは要らない・`/kiro-complete` の棚卸へ申し送る件も無い）。

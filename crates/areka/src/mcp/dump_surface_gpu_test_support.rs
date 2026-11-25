@@ -4,11 +4,12 @@
 //! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、GPU 資源（実 GPU）と、本物の
 //! 配置の準備（作業領域だけ合成）で組んだ窓の一式（偽 HWND・`DPI` は呼び手が選ぶ）を据え、本番の
 //! `Input`・`Update` の段をそのまま回す。組み方は `shell_balloon_switch_session_lap_tests.rs` の
-//! `lap_rig_of`・`spawn_windows` と同じ（2 つ目のシェルは足さない）。台本は A の `OnBoot` の応答で
-//! 流し、置き場のゴーストの dispatcher へ合成の Tick を注入して進める。MCP の受け口と後から答える
-//! 置き場も据えるので、装着の前に預けた答えはフレームを回すと届く。偽の SHIORI の呼び出しの列を
-//! 比べる前に通す関所（kanade へ返事つきの印の NOTIFY）も持つ。ERROR の記録を捕まえる口は
-//! 土台に持たず、呼ぶ側のテストが `log_capture_kit`（`capture`・`count_levels`）を直接使う。
+//! `lap_rig_of` と同じ（2 つ目のシェルは足さない）で、窓は `shell_balloon_switch_session_lap_test_support.rs`
+//! の `spawn_windows` で生やす。台本は A の `OnBoot` の応答で流し、置き場のゴーストの dispatcher へ
+//! 合成の Tick を注入して進める。MCP の受け口と後から答える置き場も据えるので、装着の前に預けた
+//! 答えはフレームを回すと届く。偽の SHIORI の呼び出しの列を比べる前に通す関所（kanade へ返事つきの
+//! 印の NOTIFY）も持つ。ERROR の記録を捕まえる口は土台に持たず、呼ぶ側のテストが
+//! `log_capture_kit`（`capture`・`count_levels`）を直接使う。
 
 use std::panic::Location;
 use std::sync::mpsc;
@@ -28,33 +29,20 @@ use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
-};
-use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
+use wintf::ecs::{FrameTime, GraphicsCore, Input, Update, WucGraphicsResource};
 
 use crate::mcp::resolve;
 use crate::sample_test_support::switch_rig;
-use areka_placement::follow::MonitorSnapshot;
-use areka_placement::resolver::RectPx;
-use areka_placement::spawn::spawn_ghost_windows;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
+    pump_messages, spawn_windows,
+};
 use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 
-/// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
-const WORK_AREA: RectPx = RectPx {
-    left: 0,
-    top: 0,
-    right: 3840,
-    bottom: 2100,
-};
 /// Tick を注入する実時間の最小間隔（反復ごとに投函して受信箱を溢れさせない）。
 const TICK_EVERY: Duration = Duration::from_millis(1);
-/// 1 巡で配るメッセージの上限（起こし直しの投函が続いても巡を終わらせる）。
-const PUMP_MAX: usize = 1024;
 /// 関所の印のイベント（許可表に在り、kanade は Tick が無いと自分では送らない・NOTIFY で送る）。
 pub(in crate::mcp) const FLUSH_EVENT: &str = "OnSecondChange";
 
@@ -326,58 +314,6 @@ impl GpuRig {
     /// 置き場のゴーストを有界に降ろす（成功で `true`）。
     pub(in crate::mcp) fn shutdown(&mut self) -> bool {
         self.rig.shutdown()
-    }
-}
-
-/// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と
-/// `DPI::from_dpi(dpi, dpi)` を持たせる（`WindowPos` への書込の口が通る・実窓には触れない）。
-fn spawn_windows(rig: &mut SwitchRig, dpi: u16) {
-    let prepared = areka_placement::prepare_ghost_windows_with_work_area(
-        &rig.root.ghost_dir("A"),
-        &rig.root.balloon_dir(BALLOON),
-        WORK_AREA,
-        Some(96),
-    )
-    .expect("A の配置の準備");
-    let world = &mut rig.world;
-    world.insert_resource(MonitorSnapshot {
-        work_areas: vec![WORK_AREA],
-    });
-    let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
-    let mut raw = 0x100usize;
-    let all: Vec<_> = windows
-        .scopes()
-        .flat_map(|s| [windows.char_window(s), windows.balloon_window(s)])
-        .map(Option::unwrap)
-        .collect();
-    for &window in &all {
-        world.entity_mut(window).insert(WindowHandle {
-            hwnd: HWND(raw as *mut _),
-        });
-        raw += 0x10;
-    }
-    // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
-    world.flush();
-    for window in all {
-        world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
-    }
-}
-
-/// 今のスレッドのキューに溜まったメッセージを配る（本番のメッセージループの 1 巡ぶん）。文字の層の
-/// cue の適用は executor の窓へのメッセージで走るので、配らないと台詞の文字が載らない。
-fn pump_messages() {
-    let mut msg = MSG::default();
-    for _ in 0..PUMP_MAX {
-        // SAFETY: 今のスレッドのキューから 1 件取り出して配るだけ（待たない）。
-        let got = unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE) };
-        if !got.as_bool() {
-            break;
-        }
-        // SAFETY: いま取り出したメッセージを同じスレッドで配る。
-        unsafe {
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
     }
 }
 

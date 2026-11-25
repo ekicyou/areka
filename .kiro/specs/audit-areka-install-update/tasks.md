@@ -228,7 +228,7 @@
   - _Dispatch: standard — 相手の着地の状態ごとに寄せるか残すかを決めて直す_
   - _Requirements: 3.3, 5.6, 7.2, 7.3, 7.9, 7.12, 7.13_
 
-- [ ] 5.2 `audit-emo2-boot-switch` の着地に依る寄せを入れる（G23・指摘 33・例外 (a)）
+- [x] 5.2 `audit-emo2-boot-switch` の着地に依る寄せを入れる（G23・指摘 33・例外 (a)）
   - 着地の有無を確かめ、着地していれば `main` を取り込む。`spawn_windows(rig, dpi)`・`pump_messages` が `pub` になっていれば、`dump_surface_gpu_test_support.rs` の写しと定数を消して呼ぶ。doc の行を直す（33）。
   - `SwitchVerdict::Updating` があれば、`install/overwrite.rs:129` の腕に名が入っていてビルドが緑であることを確かめる（例外 (a)・向こうが足す）。
   - 着地していなければ写しを残し、理由を research.md に記録して向こうの brief へ件として書く。
