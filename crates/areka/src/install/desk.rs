@@ -182,7 +182,8 @@ pub(crate) fn insert_busy_desk_for_test(world: &mut World) {
     world.insert_non_send(desk);
 }
 
-/// 窓口だけを据えた World（テスト用・背景スレッドは起こさない）。
+/// 窓口を登記した World（テスト用・背景スレッドは起こさない）。取り出しの系を `Input` に足し、
+/// 終わりの待ちの門 `install`・`install-fetch` も登記する。
 #[cfg(test)]
 pub(crate) fn desk_world() -> World {
     let mut world = World::new();

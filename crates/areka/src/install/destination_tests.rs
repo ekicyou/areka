@@ -114,34 +114,24 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
 
 use std::collections::BTreeMap;
 
+use crate::install::procedure::procedure_test_support::{
+    ghost_nar as shared_ghost_nar, shell_nar, write_nar,
+};
 use areka_nar::NarArchive;
-use sample_ghost_kit::{NarBuilder, install_txt};
 
 /// ゴースト `directory` の書庫（`balloon` が在れば同梱のバルーン `kaku` つき）を開く。
 fn ghost_nar(tmp: &TempPath, directory: &str, balloon: bool) -> NarArchive {
-    let mut lines = vec!["type,ghost".to_owned(), "name,テスト".to_owned()];
-    lines.push(format!("directory,{directory}"));
-    if balloon {
-        lines.push("balloon.directory,kaku".to_owned());
-        lines.push("balloon.source.directory,kaku".to_owned());
-    }
-    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
-    let mut builder = NarBuilder::new()
-        .file("install.txt", &install_txt(&lines))
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,New\r\n",
+    let builder = if balloon {
+        shared_ghost_nar(
+            directory,
+            &["balloon.directory,kaku", "balloon.source.directory,kaku"],
         )
-        .done();
-    if balloon {
-        builder = builder
-            .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
-            .done();
-    }
-    let path = tmp.child(&format!("{directory}.nar"));
-    builder.write_to(&path).expect("書庫を置ける");
-    NarArchive::open(&path).expect("書庫を開ける")
+        .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
+        .done()
+    } else {
+        shared_ghost_nar(directory, &[])
+    };
+    NarArchive::open(&write_nar(tmp, &format!("{directory}.nar"), builder)).expect("書庫を開ける")
 }
 
 /// 新しいゴーストは先頭の根へ、同梱のバルーンはそのゴーストの中へ入り、要素ごとに `install_placed`。
@@ -207,7 +197,7 @@ fn existing_ghost_is_overwritten_in_its_root_and_the_hidden_one_is_untouched() {
     install_into(&list(&[one.clone(), two.clone()]), &archive, None, None).expect("入る");
     assert_eq!(
         std::fs::read(one.join("ghost/Dup/ghost/master/descript.txt")).expect("上書き"),
-        b"charset,UTF-8\r\nname,New\r\n"
+        b"charset,UTF-8\r\nname,Newbie\r\n"
     );
     assert_eq!(tree(&two), below, "下の根の同じ名前は 1 バイトも変わらない");
 }
@@ -326,26 +316,13 @@ fn unmarked_list_answers_the_bundled_root() {
 
 /// 同梱のバルーン `kaku` つきのシェル `dress` の書庫を開く。
 fn shell_nar_with_companion(tmp: &TempPath) -> NarArchive {
-    let path = tmp.child("dress.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "type,shell",
-                "name,きがえ",
-                "directory,dress",
-                "balloon.directory,kaku",
-                "balloon.source.directory,kaku",
-            ]),
-        )
-        .done()
-        .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
-        .done()
-        .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
-    NarArchive::open(&path).expect("書庫を開ける")
+    let builder = shell_nar(
+        "emo2",
+        &["balloon.directory,kaku", "balloon.source.directory,kaku"],
+    )
+    .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
+    .done();
+    NarArchive::open(&write_nar(tmp, "dress.nar", builder)).expect("書庫を開ける")
 }
 
 /// 実行ファイルの隣の根に同じフォルダ名のバルーン `kaku` が在っても、ゴーストの書庫・シェルの書庫の

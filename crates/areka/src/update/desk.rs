@@ -532,7 +532,8 @@ fn peek_homeurl(world: &mut World) {
 }
 
 /// 更新の実行中か（手続きが走っている・答えを待っている間＝段が `Idle` でないか、読み直しの切替の
-/// 後送りを持っている間）。シェル・バルーンの切替の入口が断るのに使う。
+/// 後送りを持っている間）。シェル・バルーンの切替の入口、メニューからのゴーストの切替、MCP からの
+/// 読み直しの入口が断るのに使う。
 pub(crate) fn is_busy(world: &World) -> bool {
     world
         .get_non_send::<UpdateDesk>()

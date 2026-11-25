@@ -16,14 +16,14 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
 use crate::install::InstallOrigin;
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
-use crate::session_tests::{events_named, levels_of};
+use crate::session_tests::{events_named, levels_of, warn_or_worse};
 use areka_runtime::spine::{SPIN_WAIT, join_thread_bounded};
 
 /// 絶対パスの書庫（fs は読まない＝在る必要はない）。
@@ -47,14 +47,6 @@ fn item_enabled(world: &World) -> Option<bool> {
         .snapshot(world, &MenuContext { scope: 0 })
         .into_iter()
         .find_map(|(frame, item)| (frame == Frame::Install).then_some(item.enabled))
-}
-
-fn warns_and_errors(events: &[CapturedEvent]) -> Vec<(Level, Option<&str>)> {
-    events
-        .iter()
-        .filter(|e| e.level <= Level::WARN)
-        .map(|e| (e.level, e.field_str("event")))
-        .collect()
 }
 
 // ---------------------------------------------------------------- 出どころだけが違う
@@ -206,7 +198,7 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
         (
             handle.is_none(),
             called.try_recv().is_err(),
-            warns_and_errors(&events),
+            warn_or_worse(&events).is_empty(),
             events_named(&events, "install_pick_suppressed")
                 .iter()
                 .map(|e| (e.level, e.field_str("reason")))
@@ -219,7 +211,7 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
         (
             true,
             true,
-            vec![],
+            true,
             vec![(Level::INFO, Some("no_alert"))],
             0,
             true,
@@ -266,7 +258,7 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
         let logged = levels_of(&events, event);
         assert_eq!(rx.try_iter().collect::<Vec<_>>(), expected, "{label}");
         if event.is_empty() {
-            assert!(warns_and_errors(&events).is_empty(), "{label}: {events:?}");
+            assert!(warn_or_worse(&events).is_empty(), "{label}: {events:?}");
         } else {
             assert_eq!(logged, vec![level], "{label}: {events:?}");
         }

@@ -8,11 +8,10 @@
 //!
 //! 印は試験の World に資源を直に足す（`readonly::engage` は呼ばない）。
 
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::Receiver;
 
 use areka_ghost::BasewareRoot;
-use areka_kanade::{KanadeMsg, ShioriMethod};
-use bevy_ecs::schedule::Schedules;
+use areka_kanade::KanadeMsg;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -21,11 +20,10 @@ use tracing::Level;
 use crate::session_tests::events_named;
 use crate::session_tests::{warns, write_descript};
 use crate::update::desk::{self, Stage, UpdateDesk};
-use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
+use crate::update::update_test_support::{raised, slot_world};
+use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, submit};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
-use areka_session::reload::test_support::boot_context_named;
 
 const GHOST_NAME: &str = "窓際のぱすたさんDRESSTEST";
 const BALLOON_NAME: &str = "にゃんばるーん";
@@ -50,15 +48,7 @@ impl Rig {
             &base.balloon_dir("nyan"),
             &format!("name,{BALLOON_NAME}\r\nhomeurl,https://balloon.example/nyan/"),
         );
-        let mut world = World::new();
-        world.init_resource::<Schedules>();
-        register(&mut world);
-        world.insert_resource(boot_context_named(root.path(), &base, "pasta", "kaku"));
-        let (tx, kanade) = mpsc::channel();
-        world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-            Some(tx),
-            base.ghost_dir("pasta"),
-        ))));
+        let (mut world, kanade) = slot_world(root.path(), "pasta", "kaku");
         world.insert_resource(ReadOnlyRun);
         Rig {
             world,
@@ -69,25 +59,16 @@ impl Rig {
 
     /// kanade に届いた送出（id・Reference）。どれも返事なしの GET。
     fn raised(&self) -> Vec<(String, Vec<String>)> {
-        self.kanade
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::RaiseEvent {
-                    id,
-                    references,
-                    method,
-                    reply,
-                } => {
-                    assert_eq!(method, ShioriMethod::Get);
-                    assert!(reply.is_none(), "返事は待たない");
-                    (id, references)
-                }
-                _ => panic!("汎用の通知の入口の送出だけが届く"),
+        raised(&self.kanade)
+            .into_iter()
+            .map(|(id, references, reply)| {
+                assert!(!reply, "返事は待たない");
+                (id, references)
             })
             .collect()
     }
 
-    /// 段は待ち・預かりは空・窓口は忙しくない・背景のスレッドは起こさない。
+    /// 段は走っていない（Idle）・預かりは空・窓口は忙しくない・背景のスレッドは起こさない。
     fn assert_untouched(&self) {
         let desk = self.world.non_send::<UpdateDesk>();
         assert_eq!(desk.stage, Stage::Idle);

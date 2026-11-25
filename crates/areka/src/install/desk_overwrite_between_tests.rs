@@ -203,6 +203,7 @@ fn a_worker_that_panics_while_extracting_lets_the_switch_boot_the_ghost() {
     let desk = asks(&rig);
     let gate = rig.world.non_send::<InstallDesk>().gate.clone();
 
+    let (down_tx, down_rx) = std::sync::mpsc::channel();
     let (flow, events) = capture(|| {
         let worker = thread::spawn(move || {
             let _guard = OrderGuard {
@@ -220,20 +221,26 @@ fn a_worker_that_panics_while_extracting_lets_the_switch_boot_the_ghost() {
                 answer.recv_timeout(SPIN_WAIT),
                 Ok(OverwriteAnswer::Down { .. })
             );
-            panic!("展開の最中に倒れる（降ろした: {down}）");
+            let _ = down_tx.send(down);
+            panic!("展開の最中に倒れる");
         });
         let finished = rig.pump_talking_until(|rig| {
             rig.calls("A").len() == 2 && rig.world.get_non_send::<SwitchInFlight>().is_none()
         });
         let panicked = join_thread_bounded("倒れる背景のスレッド", None, worker).is_err();
-        (finished, panicked)
+        let down = down_rx.recv_timeout(SPIN_WAIT).unwrap_or(false);
+        (down, finished, panicked)
     });
     let current = current_of(&rig);
     let busy = crate::install::desk::is_busy(&rig.world);
     let touched = rig.root.ghost_dir("A").join(MARKER).exists();
     assert!(rig.shutdown());
 
-    assert_eq!(flow, (true, true), "(起こし直した・倒れた): {events:?}");
+    assert_eq!(
+        flow,
+        (true, true, true),
+        "(降ろした・起こし直した・倒れた): {events:?}"
+    );
     assert_eq!(
         (current.as_deref(), busy, touched),
         (Some("A"), false, false)

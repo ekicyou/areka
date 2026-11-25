@@ -8,9 +8,8 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_ghost::BasewareRoot;
-use areka_kanade::{KanadeMsg, ShioriMethod};
+use areka_kanade::KanadeMsg;
 use areka_runtime::spine::{Progress, wait_recv};
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -21,11 +20,10 @@ use crate::session_tests::events_named;
 use crate::session_tests::reservation;
 use crate::session_tests::{warns, write_descript};
 use crate::update::refs::executing_refs;
-use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
+use crate::update::update_test_support::{raised, slot_world};
+use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, submit};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::SwitchStage;
-use areka_session::reload::test_support::boot_context_named;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -46,15 +44,7 @@ impl Rig {
         let root = TempPath::new(label);
         let base = BasewareRoot::new(root.path().to_path_buf());
         write_descript(&base.ghost_dir("emo").join("ghost/master"), "name,Emo");
-        let mut world = World::new();
-        world.init_resource::<Schedules>();
-        register(&mut world);
-        world.insert_resource(boot_context_named(root.path(), &base, "emo", "kaku"));
-        let (tx, kanade) = mpsc::channel();
-        world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-            Some(tx),
-            base.ghost_dir("emo"),
-        ))));
+        let (mut world, kanade) = slot_world(root.path(), "emo", "kaku");
         let (worker, jobs) = mpsc::channel();
         let asks = {
             let mut desk = world.non_send_mut::<UpdateDesk>();
@@ -99,21 +89,7 @@ impl Rig {
 
     /// kanade に届いた送出（id・Reference・返信端の有無）。
     fn raised(&self) -> Vec<(String, Vec<String>, bool)> {
-        self.kanade
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::RaiseEvent {
-                    id,
-                    references,
-                    method,
-                    reply,
-                } => {
-                    assert_eq!(method, ShioriMethod::Get);
-                    (id, references, reply.is_some())
-                }
-                _ => panic!("汎用の通知の入口の送出だけが届く"),
-            })
-            .collect()
+        raised(&self.kanade)
     }
 
     fn orders(&self) -> Vec<UpdateOrder> {

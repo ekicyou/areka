@@ -20,11 +20,11 @@ use areka_kanade::RaiseOutcome;
 use areka_nar::NarArchive;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
-use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::desk::InstallDesk;
+use crate::install::procedure::procedure_test_support::{ghost_nar, order_of, write_nar};
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
 use crate::session_tests::{events_named, write_descript};
@@ -106,25 +106,7 @@ fn facts_at(root: &Path) -> GhostFacts {
 
 /// ゴースト `newbie` の書庫を `dir` へ置いて開く。
 fn ghost_archive(dir: &TempPath) -> (PathBuf, NarArchive) {
-    let path = dir.child("newbie.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                "name,あたらしい",
-                "directory,newbie",
-            ]),
-        )
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,Newbie\r\n",
-        )
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
+    let path = write_nar(dir, "newbie.nar", ghost_nar("newbie", &[]));
     let archive = NarArchive::open(&path).expect("書庫を開ける");
     (path, archive)
 }
@@ -360,10 +342,7 @@ fn worker_runs_an_order_and_reports_done() {
     let (orders, handle) = spawn_worker(desk, gate.clone());
     let dir = TempPath::new("install-worker-order");
     orders
-        .send(InstallOrder {
-            archives: vec![dir.child("missing.nar")],
-            origin: InstallOrigin::Menu,
-        })
+        .send(order_of(&[&dir.child("missing.nar")]))
         .expect("スレッドが受け取る");
 
     // 読めない書庫: 始まりの知らせ → 失敗の知らせ → 依頼の終わり。
@@ -544,11 +523,10 @@ fn install_through_production_path(
 
     let dir = TempPath::new("install-worker-e2e");
     let (path, _) = ghost_archive(&dir);
-    let order = InstallOrder {
-        archives: vec![path],
-        origin: InstallOrigin::Menu,
-    };
-    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
+    assert_eq!(
+        submit(&mut rig.world, order_of(&[&path])),
+        SubmitVerdict::Queued
+    );
 
     // 切替の予約が在る間は窓口がイベントを送らず依頼が終わらないので、予約を見たらそこで止める。
     let mut reserved = false;
@@ -625,11 +603,7 @@ fn remove_downloaded_removes_only_script_archives_under_the_dir() {
         origin: InstallOrigin::Script,
     };
     remove_downloaded(&script, &dir);
-    let by_menu = InstallOrder {
-        archives: vec![menu.clone()],
-        origin: InstallOrigin::Menu,
-    };
-    remove_downloaded(&by_menu, &dir);
+    remove_downloaded(&order_of(&[&menu]), &dir);
 
     assert!(!fetched.exists(), "台本の置き場の直下の物は消える");
     assert!(foreign.exists(), "置き場の外の物は残る");

@@ -167,11 +167,7 @@ fn submit_logs_startup_origin_spellings() {
 #[test]
 fn submit_refuses_empty_no_desk_and_closing() {
     let mut rig = Rig::new();
-    let empty = InstallOrder {
-        archives: Vec::new(),
-        origin: InstallOrigin::Menu,
-    };
-    let (verdict, events) = capture(|| submit(&mut rig.world, empty));
+    let (verdict, events) = capture(|| submit(&mut rig.world, order_of(&[])));
     assert_eq!(verdict, SubmitVerdict::Empty);
     assert_refused_once(&events, "Empty");
 

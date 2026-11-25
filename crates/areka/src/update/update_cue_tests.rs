@@ -10,7 +10,6 @@ use super::*;
 use std::sync::mpsc::{Receiver, channel};
 
 use areka_ghost::BasewareRoot;
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use dola::cue::CueSink;
 use log_capture_kit::{CapturedEvent, capture};
@@ -21,9 +20,8 @@ use areka_runtime::consumer_ledger::test_support::{broken_custom_cue, carrier_cu
 use crate::session_tests::write_descript;
 use crate::session_tests::{events_named, play_into, warns};
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
-use crate::update::{self as update, desk};
-use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::reload::test_support::boot_context_named;
+use crate::update::desk;
+use crate::update::update_test_support::slot_world;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -51,15 +49,7 @@ fn desk_world() -> (World, TempPath) {
         &root.ghost_dir("emo").join("ghost").join("master"),
         "name,Emo",
     );
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    update::register(&mut world);
-    world.insert_resource(boot_context_named(tmp.path(), &root, "emo", "kaku"));
-    let (kanade, _) = channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(kanade),
-        root.ghost_dir("emo"),
-    ))));
+    let (world, _) = slot_world(tmp.path(), "emo", "kaku");
     (world, tmp)
 }
 

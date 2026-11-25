@@ -11,7 +11,6 @@ use areka_actor::ReplySender;
 use areka_ghost::BasewareRoot;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, KanadeNotice};
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -23,13 +22,10 @@ use super::{
 use crate::menu::captions::QueryReply;
 use crate::session_tests::write_descript;
 use crate::session_tests::{events_named, levels_of};
-use crate::update::{
-    RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
-};
+use crate::update::update_test_support::slot_world;
+use crate::update::{RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::on_notice;
-use areka_session::reload::test_support::boot_context_named;
 
 const GHOST_URL: &str = "https://ghost.example/emo/";
 const SHELL_URL: &str = "https://shell.example/master/";
@@ -314,28 +310,12 @@ fn current_balloon_inside_the_ghost_is_the_update_target() {
     );
 }
 
-/// 窓口を据え、起動の文脈（バルーン `balloon`）と置き場のゴースト `ghost`（kanade の送出端だけ・
-/// 実行系なし＝シェルは解けない）を置いた World と、kanade の代わりの受信端。
-fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>) {
-    let base = root.baseware();
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
-    world.insert_resource(boot_context_named(root.tmp.path(), &base, ghost, balloon));
-    let (tx, kanade) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        base.ghost_dir(ghost),
-    ))));
-    (world, kanade)
-}
-
 /// World から写す口: 置き場のゴーストの根と起動の文脈のバルーンを読む。実行系の無い置き場
 /// （テスト用の組み立て）はシェルを解けないので、シェルだけ `warn!` で飛ばす。
 #[test]
 fn resolve_targets_reads_the_slot_and_the_boot_context() {
     let root = Root::new("areka-update-resolve-world");
-    let (world, _kanade) = world(&root, "emo", "kaku");
+    let (world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     let (specs, events) = capture(|| resolve_targets(&world, &all_three()));
     assert_eq!(
         specs,
@@ -389,7 +369,7 @@ fn copy(world: &World) -> Option<String> {
 #[test]
 fn not_selectable_when_none_of_the_three_has_a_source() {
     let root = Root::new("areka-update-can-none");
-    let (world, _kanade) = world(&root, "bare", "plain");
+    let (world, _kanade) = slot_world(root.tmp.path(), "bare", "plain");
     assert!(!can_update(&world));
 }
 
@@ -397,7 +377,7 @@ fn not_selectable_when_none_of_the_three_has_a_source() {
 #[test]
 fn selectable_when_the_copy_has_one() {
     let root = Root::new("areka-update-can-copy");
-    let (mut world, _kanade) = world(&root, "bare", "plain");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.non_send_mut::<UpdateDesk>().ghost_homeurl = Some(COPY_URL.to_owned());
     assert!(can_update(&world));
 }
@@ -406,7 +386,7 @@ fn selectable_when_the_copy_has_one() {
 #[test]
 fn selectable_when_one_descript_has_one() {
     let root = Root::new("areka-update-can-descript");
-    let (world, _kanade) = world(&root, "bare", "kaku");
+    let (world, _kanade) = slot_world(root.tmp.path(), "bare", "kaku");
     assert!(can_update(&world));
 }
 
@@ -415,7 +395,7 @@ fn selectable_when_one_descript_has_one() {
 #[test]
 fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     let root = Root::new("areka-update-can-running");
-    let (mut world, _kanade) = world(&root, "emo", "kaku");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     assert!(can_update(&world), "対照: 走っていなければ選べる");
     for stage in [Stage::Running, Stage::AwaitingExec] {
         world.non_send_mut::<UpdateDesk>().stage = stage;
@@ -438,7 +418,7 @@ fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
 #[test]
 fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
     let root = Root::new("areka-update-steady-query");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.non_send_mut::<UpdateDesk>().ghost_homeurl = Some("https://old.example/".to_owned());
 
     on_steady(&mut world);
@@ -479,7 +459,7 @@ fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
 #[test]
 fn exit_discards_the_pending_query_reply() {
     let root = Root::new("areka-update-steady-exit");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     on_steady(&mut world);
     let mut sent = queries(&kanade);
     assert_eq!(sent.len(), 1);
@@ -510,7 +490,7 @@ fn exit_discards_the_pending_query_reply() {
 #[test]
 fn update_current_submits_the_current_three_as_manual() {
     let root = Root::new("areka-update-current-manual");
-    let (mut world, _kanade) = world(&root, "emo", "kaku");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     let (worker, jobs) = mpsc::channel();
     world.non_send_mut::<UpdateDesk>().worker = Some(worker);
 
@@ -533,7 +513,7 @@ fn update_current_submits_the_current_three_as_manual() {
 #[test]
 fn steady_notice_sends_one_homeurl_query_each_time() {
     let root = Root::new("areka-update-steady-notice");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.insert_resource(crate::BODY_SYSTEMS);
     on_notice(&mut world, KanadeNotice::Steady);
     let first = queries(&kanade);
@@ -550,7 +530,7 @@ fn steady_notice_sends_one_homeurl_query_each_time() {
 #[test]
 fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
     let root = Root::new("areka-update-steady-failed");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     let failed_warnings =
         |events: &[CapturedEvent]| levels_of(events, "update_homeurl_query_failed");
 
@@ -580,7 +560,7 @@ fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
 #[test]
 fn steady_after_exit_does_not_query_again() {
     let root = Root::new("areka-update-steady-after-exit");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     let _ = begin_close(&mut world);
     on_steady(&mut world);
     assert!(queries(&kanade).is_empty());

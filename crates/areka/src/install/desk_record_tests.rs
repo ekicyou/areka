@@ -311,7 +311,7 @@ impl areka_sylphya::persist::PersistIo for GatedFirstCommit {
         let open = self.open.lock().unwrap().take();
         if let Some(open) = open {
             let _ = self.entered.send(());
-            let _ = open.recv();
+            let _ = open.recv_timeout(areka_runtime::spine::SPIN_WAIT);
         }
         Ok(())
     }

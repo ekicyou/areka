@@ -250,7 +250,7 @@ pub(super) fn run_many(
     capture(|| super::run_order(&order, ports))
 }
 
-/// 書庫 1 本の依頼。
+/// 書庫を並べた依頼（出どころはメニュー）。
 pub(crate) fn order_of(archives: &[&Path]) -> InstallOrder {
     InstallOrder {
         archives: archives.iter().map(|path| path.to_path_buf()).collect(),
@@ -294,7 +294,7 @@ pub(super) fn ghost_with_balloon_descript(descript: &[u8]) -> NarBuilder {
 }
 
 /// バルーン。
-pub(super) fn balloon_nar() -> NarBuilder {
+pub(crate) fn balloon_nar() -> NarBuilder {
     NarBuilder::new()
         .file(
             "install.txt",
@@ -311,7 +311,7 @@ pub(super) fn balloon_nar() -> NarBuilder {
 }
 
 /// `accept` 付きのシェル（`extra` で `install.txt` に行を足す）。
-pub(super) fn shell_nar(accept: &str, extra: &[&str]) -> NarBuilder {
+pub(crate) fn shell_nar(accept: &str, extra: &[&str]) -> NarBuilder {
     let accept_line = format!("accept,{accept}");
     let mut lines = vec![
         "charset,UTF-8",
@@ -329,14 +329,14 @@ pub(super) fn shell_nar(accept: &str, extra: &[&str]) -> NarBuilder {
 }
 
 /// 利用条件 `terms.txt` を足す。
-pub(super) fn with_terms(builder: NarBuilder) -> NarBuilder {
+pub(crate) fn with_terms(builder: NarBuilder) -> NarBuilder {
     builder
         .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
         .done()
 }
 
 /// byte 値 1 で繋ぐ。
-pub(super) fn joined(values: &[&str]) -> String {
+pub(crate) fn joined(values: &[&str]) -> String {
     values.join("\u{1}")
 }
 

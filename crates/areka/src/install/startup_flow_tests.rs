@@ -7,26 +7,13 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
-use super::tests::{QUIET, ghost_nar, nar};
+use super::tests::{QUIET, ghost_nar};
 use super::*;
+use crate::install::procedure::procedure_test_support::{balloon_nar, write_nar};
 use crate::session_tests::{events_named, no_pick, position_of, put_ghost, save_scope};
 use areka_session::alert::AlertScene;
 use areka_session::boot_config::BootResolved;
 use areka_session::boot_resolve::{DEFAULT_BALLOON_FOLDER, GhostRoute};
-
-fn balloon_nar(dir: &TempPath) -> PathBuf {
-    nar(
-        dir,
-        "round.nar",
-        &[
-            "charset,UTF-8",
-            "type,balloon",
-            "name,まるい",
-            "directory,round",
-        ],
-        &[("descript.txt", b"charset,UTF-8\r\nname,Round\r\n")],
-    )
-}
 
 /// 既定のバルーンだけを置いた根（ゴーストは `ghosts`・記憶は `remember`）。
 fn root_with(label: &str, ghosts: &[&str], remember: Option<&str>) -> TempPath {
@@ -84,7 +71,7 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
     let root = root_with("startup-flow-empty", &[], None);
     let dir = TempPath::under_target("startup-flow-nar");
     let mut startup =
-        StartupInstall::new_with(args(vec![ghost_nar(&dir, "newbie", &[], &[])], false), None);
+        StartupInstall::new_with(args(vec![ghost_nar(&dir, "newbie", &[])], false), None);
     let (got, events) = boot(
         areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
@@ -104,8 +91,7 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
 fn callghost_wins_over_the_remembered_ghost() {
     let root = root_with("startup-flow-callghost", &["g1"], Some("g1"));
     let dir = TempPath::under_target("startup-flow-nar");
-    let mut startup =
-        StartupInstall::new_with(args(vec![ghost_nar(&dir, "g2", &[], &[])], true), None);
+    let mut startup = StartupInstall::new_with(args(vec![ghost_nar(&dir, "g2", &[])], true), None);
     let (got, events) = boot(
         areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),
@@ -124,12 +110,12 @@ fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
     let root = root_with("startup-flow-initial", &["g1"], Some("g1"));
     let exe = TempPath::under_target("startup-flow-exe");
     std::fs::rename(
-        ghost_nar(&exe, "first", &[], &[]),
+        ghost_nar(&exe, "first", &[]),
         exe.child(INITIAL_INSTALL_FILE),
     )
     .expect("exe の隣へ");
     let mut startup = StartupInstall::new_with(
-        args(vec![balloon_nar(&exe)], true),
+        args(vec![write_nar(&exe, "round.nar", balloon_nar())], true),
         Some(exe.path().to_path_buf()),
     );
     let (got, events) = boot(
@@ -153,7 +139,7 @@ fn ghost_only_from_initial_install_falls_back_to_the_usual_choice() {
 fn root_missing_warns_once_and_installs_nothing() {
     let profile = TempPath::under_target("startup-flow-noroot");
     let dir = TempPath::under_target("startup-flow-nar");
-    let archive = ghost_nar(&dir, "lost", &[], &[]);
+    let archive = ghost_nar(&dir, "lost", &[]);
     let gone = profile.child("gone");
     let mut startup = StartupInstall::new_with(args(vec![archive.clone()], true), None);
     let (got, events) = boot(
@@ -185,7 +171,10 @@ fn root_missing_warns_once_and_installs_nothing() {
 fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     let root = root_with("startup-flow-balloon-only", &[], None);
     let dir = TempPath::under_target("startup-flow-nar");
-    let mut startup = StartupInstall::new_with(args(vec![balloon_nar(&dir)], false), None);
+    let mut startup = StartupInstall::new_with(
+        args(vec![write_nar(&dir, "round.nar", balloon_nar())], false),
+        None,
+    );
     let (got, events) = boot(
         areka_session::roots::single_env(root.path().to_path_buf()),
         &root.child("app-profile"),

@@ -10,12 +10,13 @@ use std::path::Path;
 use areka_ghost::BasewareRoots;
 use areka_nar::InstallKind;
 use log_capture_kit::capture;
-use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::install::procedure::procedure_test_support::{ghost_nar, order_of, write_nar};
+use crate::install::procedure::procedure_test_support::{
+    ghost_nar, order_of, with_terms, write_nar,
+};
 use crate::install::procedure::{ArchiveEnd, run_order};
 use crate::install::startup::CarriedInstall;
 use crate::session_tests::{count, events_named, write_descript};
@@ -191,27 +192,7 @@ fn carried_installs_come_out_in_order() {
 fn suppressed_terms_are_declined() {
     let root = TempPath::under_target("before-boot-ports");
     let dir = TempPath::under_target("before-boot-ports-nar");
-    let path = dir.child("terms.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                "name,条件つき",
-                "directory,termsy",
-            ]),
-        )
-        .done()
-        .file("terms.txt", "使う前に読んでください".as_bytes())
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,Termsy\r\n",
-        )
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
+    let path = write_nar(&dir, "terms.nar", with_terms(ghost_nar("termsy", &[])));
     let mut ports = ports(&root);
     let ends = run_order(&order_of(&[&path]), &mut ports);
     assert_eq!(ends, [ArchiveEnd::Declined]);

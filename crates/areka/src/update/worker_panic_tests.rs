@@ -22,8 +22,8 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::session_tests::events_named;
+use crate::update::update_test_support::close;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason, register};
-use areka_session::exit_wait::{begin_close, register_gate};
 
 struct PanickingGet;
 
@@ -105,9 +105,7 @@ fn panic_in_get_reports_worker_panicked_and_leaves_the_write_stage() {
     assert!(join_bounded("倒れたスレッドの終わり", handle).is_err());
     join_thread_bounded("kanade の代わりの終わり", None, answerer).expect("答える側は倒れない");
 
-    let mut world = World::new();
-    register_gate(&mut world, "update", gate, |_| {});
-    let (waits, events) = capture(|| begin_close(&mut world));
+    let (waits, events) = capture(|| close(&gate));
     assert!(
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "門に名が残らない: {events:?}"

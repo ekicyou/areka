@@ -8,13 +8,14 @@
 //! 背景のスレッドは起こさない（積まないので取り出しは渡す依頼を持たない）。印は試験の World に
 //! 資源を直に足す（`readonly::engage` は呼ばない）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
+use crate::install::procedure::procedure_test_support::order_of;
 use crate::session_tests::{events_named, warns};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
@@ -46,13 +47,7 @@ fn readonly_refuses_every_origin_before_queueing() {
             })
             .expect("窓口の生の要求の受信端は生きている");
         desk::drain(&mut world);
-        let menu_verdict = submit(
-            &mut world,
-            InstallOrder {
-                archives: vec![PathBuf::from("C:/menu.nar")],
-                origin: InstallOrigin::Menu,
-            },
-        );
+        let menu_verdict = submit(&mut world, order_of(&[Path::new("C:/menu.nar")]));
         (drop_verdict, menu_verdict)
     });
 

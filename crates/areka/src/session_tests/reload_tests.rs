@@ -18,6 +18,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
+use crate::session_tests::warn_or_worse;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::reload_args::DescriptNotes;
 use areka_runtime::reload_args::DescriptParts;
@@ -106,7 +107,7 @@ fn refuse(
             )
         })
         .collect();
-    let warns = events.iter().filter(|e| e.level <= Level::WARN).count();
+    let warns = warn_or_worse(&events).len();
     (verdict, refused, warns)
 }
 
@@ -242,7 +243,7 @@ fn closing_returns_closing_and_exit_drops_the_mark() {
         .into_iter()
         .map(|e| (e.level, e.field_str("reason").map(str::to_owned)))
         .collect::<Vec<_>>();
-    let warns = events.iter().filter(|e| e.level <= Level::WARN).count();
+    let warns = warn_or_worse(&events).len();
 
     assert_eq!(
         (dropped, mark_after_exit, verdict, closing, warns),
@@ -381,7 +382,7 @@ fn drain_hands_script_requests_to_the_desk() {
     let ((), idle) = capture(|| drain(&mut rig.world));
     assert_eq!(
         (
-            idle.iter().filter(|e| e.level <= Level::WARN).count(),
+            warn_or_worse(&idle).len(),
             rig.world.get_non_send::<ReloadInFlight>().is_none(),
         ),
         (0, true),

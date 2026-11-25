@@ -8,6 +8,7 @@ use areka_nar::{
 };
 
 use super::*;
+use crate::install::procedure::procedure_test_support::joined;
 
 const SEP: &str = "\u{1}";
 
@@ -336,7 +337,6 @@ fn five_archives() -> Vec<(
 )> {
     let ghost_place = r"C:\areka\ghost\hana";
     let balloon_place = r"C:\areka\balloon\hanab";
-    let j = |parts: &[&str]| parts.join(SEP);
     vec![
         (
             manifest(InstallKind::Ghost, "はな", "hana", None),
@@ -351,9 +351,9 @@ fn five_archives() -> Vec<(
                 item(&ElementKind::Balloon, "hanab", balloon_place),
             ],
             [
-                j(&["ghost", "balloon"]),
-                j(&["はな", "hanab"]),
-                j(&[ghost_place, balloon_place]),
+                joined(&["ghost", "balloon"]),
+                joined(&["はな", "hanab"]),
+                joined(&[ghost_place, balloon_place]),
             ],
             ["ghost".into(), "はな".into(), "hanab".into()],
         ),
@@ -425,9 +425,9 @@ fn two_companion_balloons_legacy_carries_only_the_first_two_items() {
     assert_eq!(
         complete_ex_refs(&items),
         vec![
-            ["ghost", "balloon", "balloon"].join(SEP),
-            ["はな", "hanab", "hanab2"].join(SEP),
-            [ghost, first, second].join(SEP),
+            joined(&["ghost", "balloon", "balloon"]),
+            joined(&["はな", "hanab", "hanab2"]),
+            joined(&[ghost, first, second]),
         ]
     );
     let legacy = complete_legacy_refs("はな", &items);

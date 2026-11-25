@@ -200,6 +200,16 @@ pub(crate) fn events_named<'a>(
         .collect()
 }
 
+/// warn 以上の記録。
+pub(crate) fn warn_or_worse(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .collect()
+}
+
 /// `event` の記録のうち水準が `level` の件数。
 pub(crate) fn count(
     events: &[log_capture_kit::CapturedEvent],

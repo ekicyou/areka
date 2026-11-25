@@ -29,11 +29,12 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::InstallDesk;
 use super::overwrite::take;
+use crate::install::procedure::procedure_test_support::order_of;
 use crate::install::procedure::{InstallPorts, Overwritten};
 use crate::install::worker::{DeskPorts, OverwriteAnswer};
-use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::install::{SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::{events_named, hold, position_of, reservation};
+use crate::session_tests::{events_named, hold, position_of, reservation, warn_or_worse};
 use crate::update::update_test_support::refs_of;
 use areka_placement::persist::PersistWiring;
 use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
@@ -71,10 +72,7 @@ fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
         .iter()
         .filter_map(|c| refs_of(c, "OnInstallFailure"))
         .collect();
-    let troubles: Vec<_> = events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .collect();
+    let troubles = warn_or_worse(events);
     format!(
         "{:?}／OnInstallFailure の Reference: {failures:?}／warn 以上の記録: {troubles:?}",
         boots_of(rig, folder)
@@ -236,11 +234,10 @@ pub(super) fn write_archive(dir: &TempPath, folder: &str, extra: &[&str]) -> Pat
 /// 書庫をメニューから入れる依頼を出し、依頼が終わる（窓口の待ち行列が空で背景のスレッドが空いた）か
 /// 終了が指示されるまで台詞を進めながら回す（期限切れは `false`）。
 fn install_through(rig: &mut SwitchRig, path: PathBuf) -> bool {
-    let order = InstallOrder {
-        archives: vec![path],
-        origin: InstallOrigin::Menu,
-    };
-    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
+    assert_eq!(
+        submit(&mut rig.world, order_of(&[&path])),
+        SubmitVerdict::Queued
+    );
     rig.pump_talking_until(|rig| {
         let desk = rig.world.non_send::<InstallDesk>();
         rig.exit_requested() || (desk.queue.is_empty() && !desk.busy)
@@ -590,7 +587,8 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
 }
 
 /// 起こせないのが既定ゴースト自身なら、致命の経路で終わる（終了の指示・最初の出所は「既定
-/// ゴーストへ戻せなかった」）。印の判定の引数は変えず、理由の語は `switch_fatal`。
+/// ゴーストへ戻せなかった」）。印の判定（起動引数のセッションでなく・記録の受け口は代わりでない）の
+/// 理由の語は `switch_fatal`。
 #[test]
 fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
     let mut rig = running(DEFAULT_GHOST_FOLDER, &[]);
