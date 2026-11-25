@@ -729,3 +729,21 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 - 振る舞いの変わる直しは 1 件: メニューの「ネットワーク更新」が、読み直しの切替の後送り（`after_switch`）を持つ間も選べないようにした（`update/desk.rs` の `can_update` を `is_busy` と同じ見方へ・完了 `areka-P0-network-update` の要件 16「手続きが走っている間は選べない」のとおり・赤を立ててから直した）。
 - 申し送らずに直した物（開発者の指示）: `SwitchRig::inject_talk_tick` を `pub` にして GpuRig の写しを消した。`areka-session` の `refs_of` を `pub` にして本体の `update_test_support::refs_of` をその先頭を返す形にした。`count(events, event, level)` の写し 5 本（範囲の外の `runtime_tests/frame/`・`session_tests/` を含む）を `session_tests::count` の 1 本へ寄せた。
 - 直しのコミット: `2cbace450`（areka-session）・`b399a2e56`（MCP と Tick）・`dd5fa22eb`（install・update・roots ほか）。
+
+### 3 回目（HEAD `e7877a3a0`）
+
+| 区画 | 必ず直す | 直したほうがよい | できれば | 2.2 の 3 種 |
+|---|---|---|---|---|
+| S1 | 0 | 3 | 7 | 0 |
+| S2 | 0 | 0 | 6 | 0 |
+| S3 | 0 | 3 | 5 | 0 |
+| S4 | 0 | 1 | 4 | 0 |
+| S5 | 0 | 3 | 3 | 0 |
+| S6 | 0 | 1 | 8 | 0 |
+| 計 | 0 | 11 | 33 | 0 |
+
+- 連鎖は 1 件（2 回目に中身を寄せた後に残った包みの関数）。ほかは 1・2 回目に見落としていた写し・古い doc・記録の文面。
+- 振る舞いの変わる直しは 1 件: 読み直しの切替の後送り（`after_switch`）を持ったまま終了へ入ると、列が記録なしで消えていた。終了でも切替の失敗と同じ形で `warn!(update_tail_dropped, reason = "closing")` と `debug!(update_purge_dropped)` を残すようにした（列が空でも残す・赤を立ててから直した・記録の鍵は増やしていない）。
+- ほかに記録の中身を変えた物: `roots_log_spawn_failed` は 3 つの失敗（起こせない・受け取る前に終わった・記録の途中で倒れた）を `reason`（`spawn`・`gone`・`panicked`）で分け、文を `detail` へ移した。`install_head_root_skipped` の文の頭に `[install]` を付けた。上書きの書く段で門の名を宛先つきにした。
+- `check_script` の判定は、全部の腕が strict の検出の点を通るようにした（答えの字は変わらない）。MCP の panic を受ける所は `work_elsewhere` の中の 1 か所にした。
+- 直しのコミット: `ee5508b80`（install・update）・`a45866a21`（MCP）・`6e67b620c`（根・説明書）。
