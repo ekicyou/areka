@@ -19,7 +19,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use crate::session_tests::events_named;
-use crate::session_tests::write_descript;
+use crate::session_tests::{warns, write_descript};
 use crate::update::desk::{self, Stage, UpdateDesk};
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
@@ -128,7 +128,7 @@ fn assert_refused_twice(
             events_named(&events, "update_refused").is_empty(),
             "断りの warn を出さない"
         );
-        assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
+        assert!(warns(&events).is_empty(), "{events:?}");
     }
 }
 

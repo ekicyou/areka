@@ -5,19 +5,18 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::session_tests::{events_named, hold, tree};
+use crate::session_tests::{events_named, hold, tree, write_descript};
 use log_capture_kit::capture;
 
 pub(super) fn put_ghost(root: &Path, folder: &str) {
-    let master = root.join("ghost").join(folder).join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,X\n").expect("descript");
+    write_descript(
+        &root.join("ghost").join(folder).join("ghost").join("master"),
+        "name,X",
+    );
 }
 
 fn put_balloon(root: &Path, folder: &str) {
-    let dir = root.join("balloon").join(folder);
-    std::fs::create_dir_all(&dir).expect("フォルダを組む");
-    std::fs::write(dir.join("descript.txt"), "charset,UTF-8\nname,B\n").expect("descript");
+    write_descript(&root.join("balloon").join(folder), "name,B");
 }
 
 fn list(dirs: &[PathBuf]) -> BasewareRoots {

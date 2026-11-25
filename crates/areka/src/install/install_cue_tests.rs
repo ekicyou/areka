@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use areka_kanade::online::OnlineCounter;
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use dola::cue::CueSink;
 use log_capture_kit::{CapturedEvent, capture};
@@ -67,9 +66,7 @@ fn script_string_becomes_one_script_request_with_the_path() {
 /// 書庫 1 本の依頼がちょうど 1 件入る。
 #[test]
 fn script_string_reaches_the_desk_queue_as_one_script_order() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    install::register(&mut world);
+    let mut world = desk::desk_world();
     desk::insert_busy_desk_for_test(&mut world);
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
@@ -124,9 +121,7 @@ fn relative_or_empty_path_warns_once_and_sends_nothing() {
 /// 台本の文字列の相対パスも、窓口まで通して依頼 0 件・`warn!` 1 件。
 #[test]
 fn relative_path_in_a_script_string_reaches_no_order() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    install::register(&mut world);
+    let mut world = desk::desk_world();
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
     let ((), events) = capture(|| {

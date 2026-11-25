@@ -3,19 +3,17 @@
 //! 宛先違い・利用条件・失敗・複数の書庫・途中でやめる の各場合で、送られるイベント・書庫の
 //! 終わり方・記録・宛先に書かれたものを判定する。偽の口の上で本物の `areka-nar` を走らせる。
 
-use std::path::{Path, PathBuf};
-
 use areka_nar::SurvivingTree;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::{Damage, NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
-    Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, balloon_nar, ghost_nar, order_of,
-    run_many, shell_nar, supplement_nar,
+    Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, balloon_nar, ghost_nar, joined,
+    order_of, run_many, run_one, shell_nar, supplement_nar, with_terms,
 };
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, tree};
 
 /// 締めの知らせになりうるイベント（`OnGhostTermsAccept` と `OnInstallBegin` 以外）。
 const CLOSING: [&str; 5] = [
@@ -25,10 +23,6 @@ const CLOSING: [&str; 5] = [
     "OnGhostTermsDecline",
     "OnInstallFailure",
 ];
-
-fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
-    run_many(ports, vec![builder])
-}
 
 fn errors(events: &[CapturedEvent]) -> usize {
     events
@@ -54,35 +48,12 @@ fn installs(ports: &FakePorts) -> usize {
         .count()
 }
 
-/// 根の下に在るものを全部（フォルダも）。
-fn entries_under(root: &Path) -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).expect("根の下を読める") {
-            let path = entry.expect("項目を読める").path();
-            if path.is_dir() {
-                stack.push(path.clone());
-            }
-            found.push(path);
-        }
-    }
-    found.sort();
-    found
-}
-
 /// `install.txt` の行だけを選べる書庫（中身は 1 ファイル）。
 fn nar_with(lines: &[&str]) -> NarBuilder {
     NarBuilder::new()
         .file("install.txt", &install_txt(lines))
         .done()
         .file("descript.txt", b"charset,UTF-8\r\nname,X\r\n")
-        .done()
-}
-
-fn with_terms(builder: NarBuilder) -> NarBuilder {
-    builder
-        .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
         .done()
 }
 
@@ -98,12 +69,12 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
     ];
     for (accept, kind, name) in cases {
         let builder = if kind == "shell" {
-            shell_nar(accept)
+            shell_nar(accept, &[])
         } else {
             supplement_nar(accept)
         };
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = run_one(&mut ports, with_terms(builder));
 
         assert_eq!(ends, vec![ArchiveEnd::Refused], "{kind}");
@@ -120,11 +91,7 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
         );
         assert_eq!(installs(&ports), 0, "展開の口を呼ばない");
         assert_eq!(asks(&ports), 0, "照合の前に利用条件を出さない");
-        assert_eq!(
-            entries_under(ports.root.path()),
-            before,
-            "宛先に 1 バイトも無い"
-        );
+        assert_eq!(tree(ports.root.path()), before, "宛先に 1 バイトも無い");
         assert_eq!(errors(&events), 0, "宛先違いは失敗ではない");
         let refused = events_named(&events, "install_refused");
         assert_eq!(refused.len(), 1);
@@ -139,7 +106,7 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
     for kind in ["shell", "supplement"] {
         let type_line = format!("type,{kind}");
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = run_one(
             &mut ports,
             nar_with(&["charset,UTF-8", &type_line, "name,なし", "directory,none"]),
@@ -155,7 +122,7 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
             "{kind}: accept の無い {kind} は invalid type"
         );
         assert_eq!(installs(&ports), 0);
-        assert_eq!(entries_under(ports.root.path()), before);
+        assert_eq!(tree(ports.root.path()), before);
         let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].level, tracing::Level::ERROR);
@@ -214,7 +181,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
         for builder in [ghost_nar("newbie", &[]), balloon_nar()] {
             let mut ports = FakePorts::new();
             ports.terms_answer = answer;
-            let before = entries_under(ports.root.path());
+            let before = tree(ports.root.path());
             let (ends, events) = run_one(&mut ports, with_terms(builder));
 
             assert_eq!(ends, vec![ArchiveEnd::Declined], "{answer:?}");
@@ -229,7 +196,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
             assert_eq!(asks(&ports), 1);
             assert_eq!(installs(&ports), 0, "{answer:?}: 展開の口を呼ばない");
             assert_eq!(
-                entries_under(ports.root.path()),
+                tree(ports.root.path()),
                 before,
                 "{answer:?}: 宛先に 1 バイトも無い"
             );
@@ -282,7 +249,7 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
     ];
     for (builder, word, phase) in cases {
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = match builder {
             Some(builder) => run_one(&mut ports, builder),
             None => {
@@ -302,7 +269,7 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
         );
         assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない");
         assert_eq!(installs(&ports), 0);
-        assert_eq!(entries_under(ports.root.path()), before);
+        assert_eq!(tree(ports.root.path()), before);
         let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1, "{word:?}");
         assert_eq!(failed[0].field_str("phase"), Some(phase), "{word:?}");
@@ -393,9 +360,9 @@ fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
         Some(&(
             "OnInstallCompleteAll",
             vec![
-                ["ghost", "balloon"].join("\u{1}"),
-                ["あたらしい", "まるい"].join("\u{1}"),
-                [ghost_at.as_str(), balloon_at.as_str()].join("\u{1}"),
+                joined(&["ghost", "balloon"]),
+                joined(&["あたらしい", "まるい"]),
+                joined(&[&ghost_at, &balloon_at]),
             ]
         )),
         "最後に 1 回・2 本ぶんを byte 値 1 区切りで"
@@ -441,7 +408,7 @@ fn complete_all_is_not_sent_unless_two_or_more_all_installed() {
         ),
         (
             "1 本目が宛先違い",
-            vec![shell_nar("よそのこ"), ghost_nar("newbie", &[])],
+            vec![shell_nar("よそのこ", &[]), ghost_nar("newbie", &[])],
             2,
         ),
         (
@@ -522,7 +489,7 @@ fn raise_closing_at_any_event_stops_every_later_event() {
             with_terms(ghost_nar("newbie", &[])),
             YesNo::No,
         ),
-        ("OnInstallRefuse", shell_nar("よそのこ"), YesNo::Yes),
+        ("OnInstallRefuse", shell_nar("よそのこ", &[]), YesNo::Yes),
         (
             "OnInstallFailure",
             ghost_nar("newbie", &[]).damage(Damage::NoEocd),
@@ -580,12 +547,12 @@ fn raise_closing_at_any_event_stops_every_later_event() {
 fn missing_ghost_facts_abandons_before_anything_is_written() {
     let mut ports = FakePorts::new();
     ports.facts = None;
-    let before = entries_under(ports.root.path());
+    let before = tree(ports.root.path());
     let (ends, _) = run_one(&mut ports, with_terms(ghost_nar("newbie", &[])));
     assert_eq!(ends, vec![ArchiveEnd::Abandoned]);
     assert_eq!(ports.raised_ids(), vec!["OnInstallBegin"]);
     assert_eq!(asks(&ports), 0);
-    assert_eq!(entries_under(ports.root.path()), before);
+    assert_eq!(tree(ports.root.path()), before);
 }
 
 /// 口が「送らなかった」と答えたら「送りました」を残さず、旧仕様の完了へも続けない。

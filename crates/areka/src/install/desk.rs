@@ -182,6 +182,15 @@ pub(crate) fn insert_busy_desk_for_test(world: &mut World) {
     world.insert_non_send(desk);
 }
 
+/// 窓口だけを据えた World（テスト用・背景スレッドは起こさない）。
+#[cfg(test)]
+pub(crate) fn desk_world() -> World {
+    let mut world = World::new();
+    world.init_resource::<bevy_ecs::schedule::Schedules>();
+    super::register(&mut world);
+    world
+}
+
 /// 取得のスレッドの道具を差し替える（テスト用・偽の作り口と一時フォルダを差す）。
 #[cfg(test)]
 pub(crate) fn set_fetch_tools_for_test(world: &mut World, tools: FetchTools) {

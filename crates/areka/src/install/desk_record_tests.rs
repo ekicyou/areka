@@ -19,7 +19,7 @@ use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
 use crate::install::worker::{carry_record, catalog_spelling};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::{count, events_named};
+use crate::session_tests::{count, events_named, write_descript};
 use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use areka_session::boot_resolve::read_last_balloon;
 use areka_session::ghost_switch::LastInstalledGhost;
@@ -54,24 +54,15 @@ fn record(rig: &mut SwitchRig, record: InstalledRecord) -> (bool, Vec<CapturedEv
 
 /// 目録に置くゴースト（`ghost/<folder>/ghost/master/descript.txt` の `name`）。
 fn plant_ghost(rig: &SwitchRig, folder: &str, name: &str) {
-    let master = rig.root.ghost_dir(folder).join("ghost").join("master");
-    std::fs::create_dir_all(&master).unwrap();
-    std::fs::write(
-        master.join("descript.txt"),
-        format!("charset,UTF-8\r\nname,{name}\r\n"),
-    )
-    .unwrap();
+    write_descript(
+        &rig.root.ghost_dir(folder).join("ghost").join("master"),
+        &format!("name,{name}"),
+    );
 }
 
 /// 目録に置くバルーン（`balloon/<folder>/descript.txt` の `name`）。
 fn plant_balloon(rig: &SwitchRig, folder: &str, name: &str) {
-    let dir = rig.root.balloon_dir(folder);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\nname,{name}\r\n"),
-    )
-    .unwrap();
+    write_descript(&rig.root.balloon_dir(folder), &format!("name,{name}"));
 }
 
 fn last_installed(rig: &SwitchRig) -> Option<String> {
@@ -372,9 +363,7 @@ fn a_stuck_writer_is_waited_for_only_up_to_the_limit() {
 /// 置き場にゴーストが居なければ、バルーンの記憶を書かずに警告を 1 件残す。
 #[test]
 fn an_empty_slot_leaves_one_warning_instead_of_the_balloon_memory() {
-    let mut world = bevy_ecs::world::World::new();
-    world.init_resource::<bevy_ecs::schedule::Schedules>();
-    crate::install::register(&mut world);
+    let mut world = desk_world();
     world.insert_non_send(areka_session::ghost_session::GhostSlot(None));
     let ((), events) = capture(|| remember_balloon(&world, "kaku".to_owned()));
     assert_eq!(

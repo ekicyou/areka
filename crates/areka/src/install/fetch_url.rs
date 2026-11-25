@@ -282,7 +282,7 @@ impl Drop for FetchGuard {
     }
 }
 
-/// スレッドの中身（取得口を作る → 落とす → 送る）。失敗は `error!` 1 件で依頼 0。
+/// スレッドの中身（取得口を作る → 落とす → 送る）。取得の失敗は `error!` 1 件で依頼 0・送れなければ `warn!` 1 件。
 /// 関数の間は `online` を立て、どの経路で抜けても戻す。
 pub(crate) fn fetch_and_send(
     url: &str,

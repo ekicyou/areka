@@ -8,15 +8,13 @@ use temp_path_kit::TempPath;
 
 use super::tests::put_ghost;
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, write_descript};
 use log_capture_kit::capture;
 
 /// 一時の置き場（フォルダそのものがゴーストの置き場）にゴーストを置く。
 fn put_temporary_ghost(temp: &Path, folder: &str) -> PathBuf {
     let dir = temp.join(folder);
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,T\n").expect("descript");
+    write_descript(&dir.join("ghost").join("master"), "name,T");
     dir
 }
 

@@ -3,37 +3,22 @@
 //! 守り手を持たせた素のスレッドを panic させ、窓口への知らせと門の後始末を見る。窓口の側は
 //! 知らせを頼みの送出端へ直接入れ、`drain` を直接呼ぶ（フレームは回さない）。
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 
 use super::*;
+use crate::install::procedure::procedure_test_support::order_of;
 use crate::install::worker::OrderGuard;
-use crate::install::{InstallOrigin, register};
 use crate::session_tests::events_named;
 use areka_actor::reply_channel;
 use areka_runtime::spine::join_thread_bounded;
 use areka_session::exit_wait::{begin_close, register_gate};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-
-fn order() -> InstallOrder {
-    InstallOrder {
-        archives: vec![PathBuf::from("C:/missing.nar")],
-        origin: InstallOrigin::Menu,
-    }
-}
-
-fn desk_world() -> World {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
-    world
-}
 
 /// 守り手を持ったスレッドが panic すると、窓口へ倒れの知らせが届き、門には名が残らない。
 #[test]
@@ -89,7 +74,10 @@ fn desk_respawns_the_worker_after_a_panic() {
     assert!(!is_busy(&world));
     assert!(world.non_send::<InstallDesk>().worker.is_none());
 
-    world.non_send_mut::<InstallDesk>().queue.push_back(order());
+    world
+        .non_send_mut::<InstallDesk>()
+        .queue
+        .push_back(order_of(&[Path::new("C:/missing.nar")]));
     let (_, events) = capture(|| drain(&mut world));
     assert!(
         !events_named(&events, "install_worker_spawned").is_empty(),
@@ -125,7 +113,10 @@ fn desk_forgets_a_gone_worker() {
     let (worker, orders) = mpsc::channel();
     drop(orders);
     world.non_send_mut::<InstallDesk>().worker = Some(worker);
-    world.non_send_mut::<InstallDesk>().queue.push_back(order());
+    world
+        .non_send_mut::<InstallDesk>()
+        .queue
+        .push_back(order_of(&[Path::new("C:/missing.nar")]));
     drain(&mut world);
     assert!(world.non_send::<InstallDesk>().worker.is_none());
 }

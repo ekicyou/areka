@@ -15,11 +15,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use areka_kanade::resources::{ResourceOutcome, is_allowed_resource_id};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod, WaitBudget};
-use areka_runtime::spine::{Progress, join_bounded, join_thread_bounded, wait_recv};
+use areka_runtime::spine::{Progress, SPIN_WAIT, join_bounded, join_thread_bounded, wait_recv};
 use areka_update::{Fetch, FetchError};
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -379,7 +379,7 @@ fn open_gate_runs_engine_inside_write_stage_with_label() {
     let ((), events) = capture(|| {
         waits.wait(WaitBudget {
             started: Instant::now(),
-            limit: Duration::from_secs(3600),
+            limit: SPIN_WAIT,
         })
     });
     let done = events_named(&events, "exit_wait_done");
@@ -437,7 +437,7 @@ fn gate_closed_while_making_fetch_skips_run_and_releases_gate() {
     let ((), events) = capture(|| {
         waits.wait(WaitBudget {
             started: Instant::now(),
-            limit: Duration::from_secs(3600),
+            limit: SPIN_WAIT,
         })
     });
     assert!(

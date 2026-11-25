@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::install::judge::{FailureWord, InstalledItem};
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, hold};
 use areka_session::boot_request::BootRequest;
 
 fn item(kind: &'static str, place: &str) -> InstalledItem {
@@ -680,17 +680,11 @@ fn without_deletesource_installed_args_copy_stays() {
 /// ファイルも消す。読むことだけを許す（消すことを許さない）開き方で握って「使われている」にする。
 #[test]
 fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
-    use std::os::windows::fs::OpenOptionsExt;
-    const FILE_SHARE_READ: u32 = 0x1;
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
     let dir = temp_path_kit::TempPath::under_target("startup-delete-nar");
     let locked = ghost_nar(&dir, "locked", &[], &[]);
     let good = ghost_nar(&dir, "good", &[], &[]);
-    let _held = std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(FILE_SHARE_READ)
-        .open(&locked)
-        .expect("写しを握れる");
+    let _held = hold(&locked);
     let args = InstallArgs {
         archives: vec![locked.clone(), good.clone()],
         call_ghost: false,

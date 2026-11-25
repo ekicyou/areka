@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 
 use areka_kanade::online::OnlineCounter;
 use areka_update::{Fetch, FetchError};
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -19,7 +18,7 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::install::fetch_url::MakeFetch;
 use crate::install::fetch_url_test_support::FakeFetch;
-use crate::install::{queued_orders, register};
+use crate::install::queued_orders;
 use crate::session_tests::events_named;
 use areka_runtime::spine::{Progress, SPIN_WAIT, wait_until};
 use areka_session::exit_wait::{begin_close, register_gate};
@@ -78,9 +77,7 @@ fn held_make() -> (MakeFetch, Held) {
 
 /// 窓口を据え、取得の道具を差し替えた World。依頼は待ち行列に残す。
 fn desk_world(make: MakeFetch, dir: PathBuf) -> World {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
+    let mut world = super::desk_world();
     {
         let mut desk = world.non_send_mut::<InstallDesk>();
         desk.fetch_tools = FetchTools {

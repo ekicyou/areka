@@ -7,10 +7,9 @@
 //! ことを見る。
 
 use areka_nar::InstallKind;
-use sample_ghost_kit::{NarBuilder, install_txt};
 
 use super::procedure_test_support::{
-    ARCHIVE, Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, run_one,
+    ARCHIVE, Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, run_one, shell_nar,
 };
 use super::*;
 use crate::session_tests::events_named;
@@ -31,31 +30,13 @@ fn assert_one_warning(ports: &FakePorts, title: &str, lines: &[&str]) {
     assert_eq!(warned[0].1, lines.join("\n"));
 }
 
-/// 同梱の行を足したシェル（`accept` は起動中のゴースト）。
-fn shell_with(companions: &[&str]) -> NarBuilder {
-    let accept_line = format!("accept,{RUNNING_SAKURA}");
-    let mut lines = vec![
-        "charset,UTF-8",
-        "type,shell",
-        "name,きがえ",
-        "directory,dress",
-        accept_line.as_str(),
-    ];
-    lines.extend_from_slice(companions);
-    NarBuilder::new()
-        .file("install.txt", &install_txt(&lines))
-        .done()
-        .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
-        .done()
-}
-
 // ---- 飛ばしの場面 ----
 
 /// 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は飛ばしの無い成功と同じ形で、口はその後ろ。
 #[test]
 fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let mut ports = FakePorts::new();
-    let ends = run_one(
+    let (ends, _) = run_one(
         &mut ports,
         ghost_nar(
             "newbie",
@@ -203,10 +184,13 @@ fn a_shell_with_a_skipped_companion_warns_once() {
     let mut ports = FakePorts::new();
     run_one(
         &mut ports,
-        shell_with(&[
-            "balloon.directory,kaku",
-            "balloon.source.directory,src-kaku",
-        ]),
+        shell_nar(
+            RUNNING_SAKURA,
+            &[
+                "balloon.directory,kaku",
+                "balloon.source.directory,src-kaku",
+            ],
+        ),
     );
     assert!(
         ports
@@ -229,7 +213,7 @@ fn a_shell_with_a_skipped_companion_warns_once() {
 #[test]
 fn companions_with_all_sources_do_not_warn() {
     let mut ports = FakePorts::new();
-    let ends = run_one(
+    let (ends, _) = run_one(
         &mut ports,
         ghost_nar(
             "newbie",
@@ -285,18 +269,16 @@ fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
 fn a_closed_closing_notice_still_warns_once_before_stopping() {
     let mut ports = FakePorts::new();
     ports.replies.insert("OnInstallCompleteEx", Raised::Closed);
-    let (ends, events) = log_capture_kit::capture(|| {
-        run_one(
-            &mut ports,
-            ghost_nar(
-                "newbie",
-                &[
-                    "balloon.directory,kaku",
-                    "balloon.source.directory,src-kaku",
-                ],
-            ),
-        )
-    });
+    let (ends, events) = run_one(
+        &mut ports,
+        ghost_nar(
+            "newbie",
+            &[
+                "balloon.directory,kaku",
+                "balloon.source.directory,src-kaku",
+            ],
+        ),
+    );
     assert!(
         matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
         "{ends:?}"

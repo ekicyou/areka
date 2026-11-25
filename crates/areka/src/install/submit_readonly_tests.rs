@@ -11,13 +11,11 @@
 use std::path::PathBuf;
 use std::sync::mpsc;
 
-use bevy_ecs::schedule::Schedules;
-use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, warns};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
 
@@ -25,9 +23,7 @@ use areka_session::readonly::ReadOnlyRun;
 /// 断りの warn は無く、ゴーストへは何も送らない。
 #[test]
 fn readonly_refuses_every_origin_before_queueing() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
+    let mut world = super::desk::desk_world();
     world.insert_resource(ReadOnlyRun);
     let (kanade_tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
@@ -83,5 +79,5 @@ fn readonly_refuses_every_origin_before_queueing() {
             && events_named(&events, "install_order_queued").is_empty(),
         "断りの warn も受け付けの記録も出さない"
     );
-    assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
+    assert!(warns(&events).is_empty(), "{events:?}");
 }

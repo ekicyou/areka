@@ -18,6 +18,7 @@ use super::{InstallPorts, InstalledRecord, Overwritten, Raised};
 use crate::install::judge::GhostFacts;
 use crate::install::terms::TermsNotice;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::session_tests::write_descript;
 use areka_session::alert::YesNo;
 
 /// 起動中のゴーストのフォルダ名。
@@ -73,12 +74,10 @@ impl FakePorts {
             .join(RUNNING)
             .join("ghost")
             .join("master");
-        std::fs::create_dir_all(&master).expect("起動中のゴーストの置き場を作れる");
-        std::fs::write(
-            master.join("descript.txt"),
-            format!("charset,UTF-8\r\nsakura.name,{RUNNING_SAKURA}\r\ninstall.accept,x,{RUNNING_ALIAS}\r\n"),
-        )
-        .expect("起動中のゴーストの descript.txt を置ける");
+        write_descript(
+            &master,
+            &format!("sakura.name,{RUNNING_SAKURA}\r\ninstall.accept,x,{RUNNING_ALIAS}"),
+        );
         let facts = GhostFacts {
             roots: areka_ghost::BasewareRoots::single(root.path().to_path_buf()),
             dir: root.path().join("ghost").join(RUNNING),
@@ -217,7 +216,7 @@ impl InstallPorts for FakePorts {
 }
 
 /// 書庫を一時フォルダへ書き、そのパスを返す（フォルダは `dir` が生きている間だけ在る）。
-pub(super) fn write_nar(dir: &TempPath, file: &str, builder: NarBuilder) -> PathBuf {
+pub(crate) fn write_nar(dir: &TempPath, file: &str, builder: NarBuilder) -> PathBuf {
     let path = dir.child(file);
     builder.write_to(&path).expect("書庫を置ける");
     path
@@ -226,11 +225,14 @@ pub(super) fn write_nar(dir: &TempPath, file: &str, builder: NarBuilder) -> Path
 /// `run_one` が書く書庫のファイル名。
 pub(super) const ARCHIVE: &str = "archive.nar";
 
-/// 本物の書庫 1 本（ファイル名は `ARCHIVE`）を偽の口で一周させる。
-pub(super) fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> Vec<super::ArchiveEnd> {
+/// 本物の書庫 1 本（ファイル名は `ARCHIVE`）を偽の口で一周させ、記録ごと返す。
+pub(super) fn run_one(
+    ports: &mut FakePorts,
+    builder: NarBuilder,
+) -> (Vec<super::ArchiveEnd>, Vec<CapturedEvent>) {
     let dir = TempPath::under_target("install-procedure-nar");
     let nar = write_nar(&dir, ARCHIVE, builder);
-    super::run_order(&order_of(&[&nar]), ports)
+    capture(|| super::run_order(&order_of(&[&nar]), ports))
 }
 
 /// 書庫を並べた依頼を偽の口で一周させ、記録ごと返す。
@@ -249,7 +251,7 @@ pub(super) fn run_many(
 }
 
 /// 書庫 1 本の依頼。
-pub(super) fn order_of(archives: &[&Path]) -> InstallOrder {
+pub(crate) fn order_of(archives: &[&Path]) -> InstallOrder {
     InstallOrder {
         archives: archives.iter().map(|path| path.to_path_buf()).collect(),
         origin: InstallOrigin::Menu,
@@ -257,7 +259,7 @@ pub(super) fn order_of(archives: &[&Path]) -> InstallOrder {
 }
 
 /// ゴースト（`directory` を選べる・`extra` で `install.txt` に行を足す）。
-pub(super) fn ghost_nar(directory: &str, extra: &[&str]) -> NarBuilder {
+pub(crate) fn ghost_nar(directory: &str, extra: &[&str]) -> NarBuilder {
     let directory_line = format!("directory,{directory}");
     let mut lines = vec![
         "charset,UTF-8",
@@ -308,23 +310,34 @@ pub(super) fn balloon_nar() -> NarBuilder {
         .done()
 }
 
-/// `accept` 付きのシェル。
-pub(super) fn shell_nar(accept: &str) -> NarBuilder {
+/// `accept` 付きのシェル（`extra` で `install.txt` に行を足す）。
+pub(super) fn shell_nar(accept: &str, extra: &[&str]) -> NarBuilder {
     let accept_line = format!("accept,{accept}");
+    let mut lines = vec![
+        "charset,UTF-8",
+        "type,shell",
+        "name,きがえ",
+        "directory,dress",
+        accept_line.as_str(),
+    ];
+    lines.extend_from_slice(extra);
     NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,shell",
-                "name,きがえ",
-                "directory,dress",
-                accept_line.as_str(),
-            ]),
-        )
+        .file("install.txt", &install_txt(&lines))
         .done()
         .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
         .done()
+}
+
+/// 利用条件 `terms.txt` を足す。
+pub(super) fn with_terms(builder: NarBuilder) -> NarBuilder {
+    builder
+        .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
+        .done()
+}
+
+/// byte 値 1 で繋ぐ。
+pub(super) fn joined(values: &[&str]) -> String {
+    values.join("\u{1}")
 }
 
 /// `accept` 付きの追加ファイル。

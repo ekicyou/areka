@@ -21,7 +21,7 @@ pub(crate) struct GhostFacts {
     /// 根の下のフォルダ名（argv で根の外から起こしたゴーストは None）。
     pub folder: Option<String>,
     /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先）。
-    pub running_dir: Option<std::path::PathBuf>,
+    pub running_dir: Option<PathBuf>,
     pub name: String,
     /// 窓口は読まずに空で答え、背景のスレッドが `dir` の descript から埋める。
     pub sakura_name: Option<String>,

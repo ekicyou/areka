@@ -5,20 +5,14 @@
 //! 順・Reference と、口への呼び出しの順を判定する。
 
 use areka_nar::InstallKind;
-use log_capture_kit::capture;
 
 use super::procedure_test_support::{
     Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, RUNNING_SAKURA, balloon_nar,
-    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, run_many, run_one, shell_nar,
-    supplement_nar,
+    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, joined, run_many, run_one,
+    shell_nar, supplement_nar, with_terms,
 };
 use super::*;
-use crate::session_tests::events_named;
-
-/// byte 値 1 で繋ぐ。
-fn joined(values: &[&str]) -> String {
-    values.join("\u{1}")
-}
+use crate::session_tests::{events_named, write_descript};
 
 fn refs(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
@@ -40,7 +34,7 @@ fn item(kind: &'static str, name: &str, place: String) -> InstalledItem {
 #[test]
 fn ghost_runs_begin_install_record_complete_ex_then_legacy_when_no_reply() {
     let mut ports = FakePorts::new();
-    let ends = run_one(&mut ports, ghost_nar("newbie", &[]));
+    let (ends, _) = run_one(&mut ports, ghost_nar("newbie", &[]));
 
     let at = place(&ports, "ghost/newbie");
     assert_eq!(
@@ -158,13 +152,7 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
 #[test]
 fn companion_name_comes_from_inside_the_ghost_not_the_root_of_the_same_folder() {
     let mut ports = FakePorts::new();
-    let root_kaku = ports.under_root("balloon/kaku");
-    std::fs::create_dir_all(&root_kaku).expect("根のバルーンを置ける");
-    std::fs::write(
-        root_kaku.join("descript.txt"),
-        "charset,UTF-8\r\nname,RootKaku\r\n",
-    )
-    .expect("根のバルーンの descript.txt を置ける");
+    write_descript(&ports.under_root("balloon/kaku"), "name,RootKaku");
     run_one(&mut ports, ghost_with_balloon_nar());
 
     let raised = ports.raised();
@@ -214,7 +202,7 @@ fn balloon_is_installed_elsewhere_and_recorded_without_a_ghost() {
 #[test]
 fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
     let mut ports = FakePorts::new();
-    run_one(&mut ports, shell_nar(RUNNING_SAKURA));
+    run_one(&mut ports, shell_nar(RUNNING_SAKURA, &[]));
 
     let at = place(&ports, &format!("ghost/{RUNNING}/shell/dress"));
     assert_eq!(
@@ -248,7 +236,7 @@ fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
 fn supplement_returned_as_not_running_is_installed_elsewhere_by_the_procedure() {
     let mut ports = FakePorts::new();
     ports.overwrite = OverwriteScript::NotRunning;
-    let ends = run_one(&mut ports, supplement_nar(RUNNING_ALIAS));
+    let (ends, _) = run_one(&mut ports, supplement_nar(RUNNING_ALIAS));
 
     let at = place(&ports, &format!("ghost/{RUNNING}"));
     assert!(
@@ -348,12 +336,7 @@ fn supplement_named_by_install_accept_overwrites_the_running_ghost() {
 #[test]
 fn accepted_terms_come_after_begin_and_before_the_install() {
     let mut ports = FakePorts::new();
-    run_one(
-        &mut ports,
-        ghost_nar("newbie", &[])
-            .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
-            .done(),
-    );
+    run_one(&mut ports, with_terms(ghost_nar("newbie", &[])));
     let order: Vec<&str> = ports
         .calls
         .iter()
@@ -400,14 +383,14 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
         ghost_nar("newbie", &[]),
         ghost_with_balloon_nar(),
         balloon_nar(),
-        shell_nar(RUNNING_SAKURA),
+        shell_nar(RUNNING_SAKURA, &[]),
         supplement_nar(RUNNING_ALIAS),
     ];
     for builder in kinds {
         for reply in [Raised::NoReply, Raised::Script] {
             let mut ports = FakePorts::new();
             ports.replies.insert("OnInstallCompleteEx", reply);
-            let ends = run_one(&mut ports, builder.clone());
+            let (ends, _) = run_one(&mut ports, builder.clone());
             let ids = ports.raised_ids();
             assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
             assert!(ids.iter().all(|id| INSTALL_EVENTS.contains(id)), "{ids:?}");
@@ -434,10 +417,7 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
 
 #[test]
 fn each_stage_is_logged() {
-    let (_, events) = capture(|| {
-        let mut ports = FakePorts::new();
-        run_one(&mut ports, ghost_nar("newbie", &[]));
-    });
+    let (_, events) = run_one(&mut FakePorts::new(), ghost_nar("newbie", &[]));
     let names: Vec<&str> = events
         .iter()
         .filter_map(|event| event.field_str("event"))

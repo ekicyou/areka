@@ -15,14 +15,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
+use crate::install::InstallOrigin;
 use crate::install::judge::{ScriptRequest, script_request};
-use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
 use crate::session_tests::{events_named, levels_of};
 use areka_runtime::spine::{SPIN_WAIT, join_thread_bounded};
@@ -32,9 +31,7 @@ const ABSOLUTE: &str = r"C:\areka-install-pick-test\in\hana.nar";
 
 /// 窓口とメニュー（「インストール」枠を登記済み）を据えた World と、背景のスレッドの代わり。
 fn rig() -> (World, Receiver<InstallOrder>) {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
+    let mut world = desk_world();
     let (worker, orders) = mpsc::channel();
     world.non_send_mut::<InstallDesk>().worker = Some(worker);
     wire_menu(&mut world, mpsc::channel().0);

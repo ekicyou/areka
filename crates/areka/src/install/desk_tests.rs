@@ -4,24 +4,24 @@
 //! 直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain` を
 //! 直接呼ぶ（フレームは回さない）。どの受け取りも待たない（`try_recv`）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_ghost::BasewareRoot;
 use areka_kanade::{CancelReason, KanadeMsg, KanadeNotice, RaiseOutcome, ShioriMethod};
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
-use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 use tracing::Level;
 
+use super::overwrite_tests::write_archive;
 use super::*;
 use crate::install::procedure::InstalledRecord;
+use crate::install::procedure::procedure_test_support::{ghost_nar, order_of, write_nar};
 use crate::install::worker::OverwriteAnswer;
-use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
-use crate::session_tests::{events_named, reservation};
+use crate::install::{InstallOrigin, SubmitVerdict, submit};
+use crate::session_tests::{events_named, reservation, warns, write_descript};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::{SwitchInFlight, SwitchStage, on_notice};
@@ -37,9 +37,7 @@ struct Rig {
 
 impl Rig {
     fn new() -> Self {
-        let mut world = World::new();
-        world.init_resource::<Schedules>();
-        register(&mut world);
+        let mut world = desk_world();
         let (worker, orders) = mpsc::channel();
         let asks = {
             let mut desk = world.non_send_mut::<InstallDesk>();
@@ -90,13 +88,6 @@ impl Rig {
             })
             .expect("窓口の頼みの受信端は生きている");
         answer
-    }
-}
-
-fn order(path: &str) -> InstallOrder {
-    InstallOrder {
-        archives: vec![PathBuf::from(path)],
-        origin: InstallOrigin::Menu,
     }
 }
 
@@ -185,12 +176,12 @@ fn submit_refuses_empty_no_desk_and_closing() {
     assert_refused_once(&events, "Empty");
 
     let mut bare = World::new();
-    let (verdict, events) = capture(|| submit(&mut bare, order("C:/a.nar")));
+    let (verdict, events) = capture(|| submit(&mut bare, order_of(&[Path::new("C:/a.nar")])));
     assert_eq!(verdict, SubmitVerdict::NoDesk);
     assert_refused_once(&events, "NoDesk");
 
     let _ = begin_close(&mut rig.world);
-    let (verdict, events) = capture(|| submit(&mut rig.world, order("C:/a.nar")));
+    let (verdict, events) = capture(|| submit(&mut rig.world, order_of(&[Path::new("C:/a.nar")])));
     assert_eq!(verdict, SubmitVerdict::Closing);
     assert_refused_once(&events, "Closing");
     assert!(rig.world.non_send::<InstallDesk>().queue.is_empty());
@@ -198,11 +189,7 @@ fn submit_refuses_empty_no_desk_and_closing() {
 }
 
 fn assert_refused_once(events: &[CapturedEvent], verdict: &str) {
-    assert_eq!(
-        events.iter().filter(|e| e.level == Level::WARN).count(),
-        1,
-        "{events:?}"
-    );
+    assert_eq!(warns(events).len(), 1, "{events:?}");
     let refused = events_named(events, "install_order_refused");
     assert_eq!(refused.len(), 1, "{events:?}");
     assert_eq!(refused[0].field("verdict"), Some(verdict));
@@ -377,13 +364,10 @@ fn resend_goes_at_once_when_steady_arrived_since_the_last_send() {
 fn facts_describe_the_running_ghost() {
     let tmp = TempPath::new("desk-facts");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let master = root.ghost_dir("A").join("ghost").join("master");
-    std::fs::create_dir_all(&master).unwrap();
-    std::fs::write(
-        master.join("descript.txt"),
-        "charset,UTF-8\r\nname,Alice\r\nsakura.name,さくら\r\ninstall.accept,甲, 乙\r\n",
-    )
-    .unwrap();
+    write_descript(
+        &root.ghost_dir("A").join("ghost").join("master"),
+        "name,Alice\r\nsakura.name,さくら\r\ninstall.accept,甲, 乙",
+    );
 
     let mut rig = Rig::new();
     let ask_facts = |rig: &mut Rig| {
@@ -419,36 +403,11 @@ fn facts_describe_the_running_ghost() {
 #[test]
 fn overwrite_returns_the_archive_and_record_answers() {
     let tmp = TempPath::new("desk-overwrite");
-    let path = tmp.child("newbie.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                "name,あたらしい",
-                "directory,newbie",
-            ]),
-        )
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,Newbie\r\n",
-        )
-        .done()
-        .write_to(&path)
-        .unwrap();
+    let path = write_nar(&tmp, "newbie.nar", ghost_nar("newbie", &[]));
     let archive = areka_nar::NarArchive::open(&path).unwrap();
 
     let mut rig = Rig::new();
-    let (reply, answer) = reply_channel();
-    rig.asks
-        .send(DeskAsk::Overwrite {
-            archive,
-            target_ghost: None,
-            reply,
-        })
-        .unwrap();
+    let answer = rig.ask_overwrite(archive);
     let (record_reply, recorded) = reply_channel();
     rig.asks
         .send(DeskAsk::Record {
@@ -478,39 +437,16 @@ fn overwrite_returns_the_archive_and_record_answers() {
 /// 目録に載るゴースト（`descript.txt` の `name` はフォルダ名）を 1 体置いた根。
 fn root_with_ghost(tmp: &TempPath, folder: &str) -> BasewareRoot {
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let master = root.ghost_dir(folder).join("ghost").join("master");
-    std::fs::create_dir_all(&master).unwrap();
-    std::fs::write(
-        master.join("descript.txt"),
-        format!(
-            "charset,UTF-8
-name,{folder}
-"
-        ),
-    )
-    .unwrap();
+    write_descript(
+        &root.ghost_dir(folder).join("ghost").join("master"),
+        &format!("name,{folder}"),
+    );
     root
 }
 
 /// `directory,<folder>` の `ghost` の書庫。
 fn ghost_archive(tmp: &TempPath, folder: &str) -> areka_nar::NarArchive {
-    let path = tmp.child(&format!("{folder}.nar"));
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                &format!("name,{folder}"),
-                &format!("directory,{folder}"),
-            ]),
-        )
-        .done()
-        .file("ghost/master/overwritten.txt", b"new")
-        .done()
-        .write_to(&path)
-        .unwrap();
-    areka_nar::NarArchive::open(&path).unwrap()
+    areka_nar::NarArchive::open(&write_archive(tmp, folder, &[])).unwrap()
 }
 
 /// kanade の受信端に届いた切替の要求（切替先の名前・知らせを送るか・出どころの綴り）を取り出す。
@@ -752,7 +688,7 @@ fn is_busy_while_running_queued_or_holding_an_overwrite() {
     rig.world
         .non_send_mut::<InstallDesk>()
         .queue
-        .push_back(order("C:/a.nar"));
+        .push_back(order_of(&[Path::new("C:/a.nar")]));
     assert!(is_busy(&rig.world), "待ち行列");
     rig.world.non_send_mut::<InstallDesk>().queue.clear();
     assert!(!is_busy(&rig.world));

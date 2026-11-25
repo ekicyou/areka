@@ -532,7 +532,7 @@ fn installed_record(kind: InstallKind, outcome: &InstallOutcome) -> InstalledRec
 
 #[cfg(test)]
 #[path = "procedure_test_support.rs"]
-mod procedure_test_support;
+pub(crate) mod procedure_test_support;
 
 #[cfg(test)]
 #[path = "procedure_tests.rs"]

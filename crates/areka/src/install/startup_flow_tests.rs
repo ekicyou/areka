@@ -9,14 +9,10 @@ use temp_path_kit::TempPath;
 
 use super::tests::{QUIET, ghost_nar, nar};
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, no_pick, position_of, put_ghost, save_scope};
 use areka_session::alert::AlertScene;
 use areka_session::boot_config::BootResolved;
 use areka_session::boot_resolve::{DEFAULT_BALLOON_FOLDER, GhostRoute};
-
-fn no_pick(n: usize) -> usize {
-    panic!("無作為の段へ届いてはならない（候補 {n}）")
-}
 
 fn balloon_nar(dir: &TempPath) -> PathBuf {
     nar(
@@ -34,27 +30,15 @@ fn balloon_nar(dir: &TempPath) -> PathBuf {
 
 /// 既定のバルーンだけを置いた根（ゴーストは `ghosts`・記憶は `remember`）。
 fn root_with(label: &str, ghosts: &[&str], remember: Option<&str>) -> TempPath {
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
     let tmp = TempPath::under_target(label);
     let balloon = tmp.child("balloon").join(DEFAULT_BALLOON_FOLDER);
     std::fs::create_dir_all(&balloon).expect("フォルダを組む");
     std::fs::write(balloon.join("descript.txt"), "charset,UTF-8\n").expect("descript");
     for g in ghosts {
-        let master = tmp.child("ghost").join(g).join("ghost").join("master");
-        std::fs::create_dir_all(&master).expect("フォルダを組む");
-        std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
+        put_ghost(&tmp.child("ghost").join(g));
     }
     if let Some(last) = remember {
-        save_scope(
-            PersistScope::App,
-            &ScopeRoots {
-                app: Some(tmp.child("app-profile")),
-                ..ScopeRoots::default()
-            },
-            &FsPersistIo,
-            vec![(PersistKey::LastGhost, last.to_owned())],
-        );
+        save_scope(&tmp.child("app-profile"), last);
     }
     tmp
 }
@@ -110,12 +94,8 @@ fn ghost_installed_into_an_empty_root_is_chosen_as_the_only_one() {
         route(got),
         (GhostRoute::Only, root.child("ghost").join("newbie"))
     );
-    let started = events
-        .iter()
-        .position(|e| e.field_str("event") == Some("startup_install_started"));
-    let resolved = events
-        .iter()
-        .position(|e| e.field_str("event") == Some("ghost_resolved"));
+    let started = position_of(&events, "startup_install_started");
+    let resolved = position_of(&events, "ghost_resolved");
     assert!(started < resolved && started.is_some(), "入れてから選ぶ");
 }
 

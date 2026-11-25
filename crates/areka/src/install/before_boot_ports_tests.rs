@@ -5,7 +5,7 @@
 //! なり `install_balloon_memory_skipped` が出る・抑止なら利用条件が拒否になる・空の根に入れた
 //! ゴーストが置き場に在り、控えが入れた順に取り出せる。画面は出さない（どれも抑止で回す）。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use areka_ghost::BasewareRoots;
 use areka_nar::InstallKind;
@@ -15,43 +15,14 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
+use crate::install::procedure::procedure_test_support::{ghost_nar, order_of, write_nar};
 use crate::install::procedure::{ArchiveEnd, run_order};
 use crate::install::startup::CarriedInstall;
-use crate::install::{InstallOrder, InstallOrigin};
-use crate::session_tests::{count, events_named};
+use crate::session_tests::{count, events_named, write_descript};
 
 /// 空の根の上の口（告知は抑止）。
 fn ports(root: &TempPath) -> BootPorts {
     BootPorts::new(BasewareRoots::single(root.path().to_path_buf()), true)
-}
-
-/// `install.txt` の行で書庫を `dir` へ置く（ゴーストなら `ghost/master/descript.txt` も入れる）。
-fn archive(dir: &TempPath, file: &str, lines: &[&str]) -> PathBuf {
-    let path = dir.child(file);
-    let mut builder = NarBuilder::new()
-        .file("install.txt", &install_txt(lines))
-        .done();
-    if lines.contains(&"type,ghost") {
-        builder = builder
-            .file(
-                "ghost/master/descript.txt",
-                b"charset,UTF-8\r\nname,Newbie\r\n",
-            )
-            .done();
-    } else {
-        builder = builder
-            .file("descript.txt", b"charset,UTF-8\r\nname,Fluffy\r\n")
-            .done();
-    }
-    builder.write_to(&path).expect("書庫を置ける");
-    path
-}
-
-fn order(archives: Vec<PathBuf>) -> InstallOrder {
-    InstallOrder {
-        archives,
-        origin: InstallOrigin::StartupArgs,
-    }
 }
 
 /// どのイベントにも「送らなかった」を返し、「閉じた」は返さない。
@@ -93,18 +64,9 @@ fn ghost_facts_are_present_and_empty() {
 fn a_ghost_lands_in_the_empty_root_and_no_event_is_sent() {
     let root = TempPath::under_target("before-boot-ports");
     let dir = TempPath::under_target("before-boot-ports-nar");
-    let path = archive(
-        &dir,
-        "newbie.nar",
-        &[
-            "charset,UTF-8",
-            "type,ghost",
-            "name,あたらしい",
-            "directory,newbie",
-        ],
-    );
+    let path = write_nar(&dir, "newbie.nar", ghost_nar("newbie", &[]));
     let mut ports = ports(&root);
-    let (ends, events) = capture(|| run_order(&order(vec![path]), &mut ports));
+    let (ends, events) = capture(|| run_order(&order_of(&[&path]), &mut ports));
     assert!(
         matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
         "{ends:?}"
@@ -140,19 +102,9 @@ fn a_ghost_lands_in_the_empty_root_and_no_event_is_sent() {
 fn an_archive_with_accept_is_refused_and_logged() {
     let root = TempPath::under_target("before-boot-ports");
     let dir = TempPath::under_target("before-boot-ports-nar");
-    let path = archive(
-        &dir,
-        "picky.nar",
-        &[
-            "charset,UTF-8",
-            "type,ghost",
-            "name,えらぶ",
-            "directory,picky",
-            "accept,さくら",
-        ],
-    );
+    let path = write_nar(&dir, "picky.nar", ghost_nar("picky", &["accept,さくら"]));
     let mut ports = ports(&root);
-    let (ends, events) = capture(|| run_order(&order(vec![path.clone()]), &mut ports));
+    let (ends, events) = capture(|| run_order(&order_of(&[&path]), &mut ports));
     assert_eq!(ends, [ArchiveEnd::Refused]);
     let refused: Vec<_> = events_named(&events, "install_refused_no_ghost");
     assert_eq!(refused.len(), 1, "{events:?}");
@@ -167,13 +119,7 @@ fn an_archive_with_accept_is_refused_and_logged() {
 
 /// 根に `balloon/<folder>/descript.txt` を置く。
 fn plant_balloon(root: &Path, folder: &str) {
-    let dir = root.join("balloon").join(folder);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("descript.txt"),
-        b"charset,UTF-8\r\nname,Fluffy\r\n",
-    )
-    .unwrap();
+    write_descript(&root.join("balloon").join(folder), "name,Fluffy");
 }
 
 /// バルーンの控えは目録の綴りになり、記憶へは書かず info `install_balloon_memory_skipped` が
@@ -267,7 +213,7 @@ fn suppressed_terms_are_declined() {
         .write_to(&path)
         .expect("書庫を置ける");
     let mut ports = ports(&root);
-    let ends = run_order(&order(vec![path]), &mut ports);
+    let ends = run_order(&order_of(&[&path]), &mut ports);
     assert_eq!(ends, [ArchiveEnd::Declined]);
     assert!(!root.path().join("ghost").join("termsy").exists());
     assert!(ports.take_carried().is_empty());

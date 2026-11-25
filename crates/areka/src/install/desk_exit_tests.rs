@@ -30,7 +30,7 @@ fn exit_discards_waiting_orders_with_archive_count_and_paths() {
     };
     assert_eq!(submit(&mut rig.world, two), SubmitVerdict::Queued);
     assert_eq!(
-        submit(&mut rig.world, order("C:/c.nar")),
+        submit(&mut rig.world, order_of(&[Path::new("C:/c.nar")])),
         SubmitVerdict::Queued
     );
 

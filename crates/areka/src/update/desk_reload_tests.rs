@@ -12,14 +12,14 @@
 use std::path::PathBuf;
 
 use areka_kanade::ChangeOrigin;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use tracing::Level;
 use wintf::ecs::Input;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::{events_named, reservation};
+use crate::session_tests::{events_named, reservation, warns};
 use crate::update::UpdateTail;
 use crate::update::update_test_support::{plant_committed, refs_of};
 use areka_session::boot_config::BootContext;
@@ -84,10 +84,6 @@ fn gets(rig: &SwitchRig, folder: &str, id: &str) -> usize {
         .flatten()
         .filter(|c| **c == want)
         .count()
-}
-
-fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events.iter().filter(|e| e.level == Level::WARN).collect()
 }
 
 /// 条件を満たした読み直しは、同じフォルダ・知らせなし・出どころ「自動」の切替として 1 回受け付けられ
@@ -274,9 +270,9 @@ fn assert_not_reloaded(
     // 判定の記録と列を捨てた記録のほかに `warn!` は無い（入口が断った記録を除く）。
     let others: Vec<_> = warns(&events)
         .into_iter()
-        .filter(|e| {
+        .filter(|name| {
             !matches!(
-                e.field_str("event"),
+                name,
                 Some("update_reload_skipped" | "update_reload_requested")
                     | Some("update_tail_dropped" | "ghost_switch_unknown")
             )

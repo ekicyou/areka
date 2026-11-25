@@ -27,7 +27,7 @@ use super::*;
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, write_descript};
 use areka_runtime::spine::{
     Progress, RecordedCall, WaitFailure, join_bounded, join_thread_bounded, wait_recv,
 };
@@ -244,13 +244,10 @@ fn every_port_reads_a_missing_desk_as_closed() {
 #[test]
 fn facts_read_the_install_keys_from_the_answered_dir() {
     let root = TempPath::new("install-worker-facts");
-    let master = root.path().join("ghost").join("master");
-    std::fs::create_dir_all(&master).unwrap();
-    std::fs::write(
-        master.join("descript.txt"),
-        "charset,UTF-8\r\nsakura.name,さくら\r\ninstall.accept,甲, 乙\r\n",
-    )
-    .unwrap();
+    write_descript(
+        &root.path().join("ghost").join("master"),
+        "sakura.name,さくら\r\ninstall.accept,甲, 乙",
+    );
     let (mut ports, asks, _gate) = ports();
     let facts = facts_at(root.path());
     let desk = thread::spawn(move || {

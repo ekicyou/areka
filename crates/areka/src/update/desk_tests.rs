@@ -12,14 +12,14 @@ use areka_kanade::{KanadeMsg, ShioriMethod};
 use areka_runtime::spine::{Progress, wait_recv};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
 use crate::session_tests::events_named;
 use crate::session_tests::reservation;
-use crate::session_tests::write_descript;
+use crate::session_tests::{warns, write_descript};
 use crate::update::refs::executing_refs;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
@@ -133,10 +133,6 @@ fn executing(reason: UpdateReason) -> (String, Vec<String>, bool) {
     )
 }
 
-fn warns(events: &[CapturedEvent]) -> usize {
-    events.iter().filter(|e| e.level == Level::WARN).count()
-}
-
 // ---------------------------------------------------------------- 受付
 
 /// 受けた依頼は対象を解いて背景スレッドへ渡り、メニューは答え待ち・台本は走っているの段へ。
@@ -156,7 +152,7 @@ fn accepted_orders_reach_the_worker_and_set_the_stage_by_reason() {
     let started = events_named(&events, "update_order_started");
     assert_eq!(started.len(), 1, "{events:?}");
     assert_eq!(started[0].level, Level::INFO);
-    assert_eq!(warns(&events), 0, "{events:?}");
+    assert_eq!(warns(&events).len(), 0, "{events:?}");
     assert!(rig.raised().is_empty());
 
     let mut rig = Rig::new("areka-update-desk-accept-script");
@@ -176,13 +172,13 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
     let mut bare = World::new();
     let (verdict, events) = capture(|| submit(&mut bare, ghost_only(), UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NoDesk);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let mut rig = Rig::new("areka-update-desk-refuse");
     rig.world.remove_resource::<BootContext>();
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NoContext);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let mut rig = Rig::new("areka-update-desk-refuse-targets");
     let (verdict, events) = capture(|| {
@@ -193,13 +189,13 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
         )
     });
     assert_eq!(verdict, SubmitVerdict::NoTargets);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let _ = begin_close(&mut rig.world);
     rig.world.remove_resource::<BootContext>();
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::Closing, "文脈が無くても終了が先");
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
     assert!(rig.orders().is_empty());
     assert!(rig.raised().is_empty());
     assert_eq!(rig.stage(), Stage::Idle);
@@ -226,7 +222,7 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
     assert!(rig.orders().is_empty());
     let refused = events_named(&events, "update_refused");
     assert_eq!(refused.len(), 1, "{events:?}");
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
     assert_eq!(rig.stage(), Stage::Running);
 }
 
@@ -239,7 +235,7 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
     assert_eq!(verdict, SubmitVerdict::NotSteady);
     assert!(rig.raised().is_empty());
     assert!(rig.orders().is_empty());
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
     assert_eq!(
         events_named(&events, "update_refused").len(),
         1,
@@ -442,36 +438,27 @@ fn is_busy_while_running_or_holding_the_after_switch() {
     assert!(is_busy(&rig.world));
 }
 
-/// 終了が始まった時に読み直しの切替の後送りを持っていれば、列を捨てて
-/// `warn!(update_tail_dropped, reason = "closing")` を 1 件残す。
+/// 終了が始まった時に読み直しの切替の後送りを持っていれば、列の残りが空でも 1 件でも後送りを捨て、
+/// `warn!(update_tail_dropped, reason = "closing")` と `debug!(update_purge_dropped)` を 1 件ずつ残す。
 #[test]
-fn exit_drops_the_after_switch_tail_with_one_warning() {
-    let mut rig = Rig::new("areka-update-desk-exit-tail");
-    rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((
-        PathBuf::from("emo"),
+fn exit_drops_the_after_switch_tail_and_records_the_postponed_purge() {
+    for rest in [
+        Vec::new(),
         vec![("OnUpdateResult", vec!["ghost".to_owned()])],
-    ));
-    let ((), events) = capture(|| discard_for_exit(&mut rig.world));
-    let dropped = events_named(&events, "update_tail_dropped");
-    assert_eq!(dropped.len(), 1, "{events:?}");
-    assert_eq!(dropped[0].level, Level::WARN);
-    assert_eq!(dropped[0].field_str("reason"), Some("closing"));
-    assert!(rig.world.non_send::<UpdateDesk>().after_switch.is_none());
-}
-
-/// 列の残りが空でも、終了で読み直しの後送りを捨てたことを `warn!(update_tail_dropped, reason =
-/// "closing")` と `debug!(update_purge_dropped)` に 1 件ずつ残す。
-#[test]
-fn exit_records_an_empty_after_switch_and_the_postponed_purge() {
-    let mut rig = Rig::new("areka-update-desk-exit-empty-tail");
-    rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
-    let ((), events) = capture(|| discard_for_exit(&mut rig.world));
-    let dropped = events_named(&events, "update_tail_dropped");
-    assert_eq!(dropped.len(), 1, "{events:?}");
-    assert_eq!(dropped[0].field_str("reason"), Some("closing"));
-    assert_eq!(
-        events_named(&events, "update_purge_dropped").len(),
-        1,
-        "{events:?}"
-    );
+    ] {
+        let len = rest.len();
+        let mut rig = Rig::new("areka-update-desk-exit-tail");
+        rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), rest));
+        let ((), events) = capture(|| discard_for_exit(&mut rig.world));
+        let dropped = events_named(&events, "update_tail_dropped");
+        assert_eq!(dropped.len(), 1, "{len}: {events:?}");
+        assert_eq!(dropped[0].level, Level::WARN);
+        assert_eq!(dropped[0].field_str("reason"), Some("closing"));
+        assert_eq!(
+            events_named(&events, "update_purge_dropped").len(),
+            1,
+            "{len}: {events:?}"
+        );
+        assert!(rig.world.non_send::<UpdateDesk>().after_switch.is_none());
+    }
 }
