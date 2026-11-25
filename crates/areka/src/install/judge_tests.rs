@@ -8,6 +8,7 @@ use areka_nar::{
 };
 
 use super::*;
+use crate::install::procedure::procedure_test_support::joined;
 
 const SEP: &str = "\u{1}";
 
@@ -32,6 +33,7 @@ fn manifest(
 fn emo2() -> GhostFacts {
     GhostFacts {
         roots: areka_ghost::BasewareRoots::single(PathBuf::from(r"C:\areka")),
+        dir: PathBuf::from(r"C:\areka\ghost\emo2"),
         folder: Some("emo2".to_owned()),
         running_dir: None,
         name: "emo2".to_owned(),
@@ -335,7 +337,6 @@ fn five_archives() -> Vec<(
 )> {
     let ghost_place = r"C:\areka\ghost\hana";
     let balloon_place = r"C:\areka\balloon\hanab";
-    let j = |parts: &[&str]| parts.join(SEP);
     vec![
         (
             manifest(InstallKind::Ghost, "はな", "hana", None),
@@ -350,9 +351,9 @@ fn five_archives() -> Vec<(
                 item(&ElementKind::Balloon, "hanab", balloon_place),
             ],
             [
-                j(&["ghost", "balloon"]),
-                j(&["はな", "hanab"]),
-                j(&[ghost_place, balloon_place]),
+                joined(&["ghost", "balloon"]),
+                joined(&["はな", "hanab"]),
+                joined(&[ghost_place, balloon_place]),
             ],
             ["ghost".into(), "はな".into(), "hanab".into()],
         ),
@@ -424,9 +425,9 @@ fn two_companion_balloons_legacy_carries_only_the_first_two_items() {
     assert_eq!(
         complete_ex_refs(&items),
         vec![
-            ["ghost", "balloon", "balloon"].join(SEP),
-            ["はな", "hanab", "hanab2"].join(SEP),
-            [ghost, first, second].join(SEP),
+            joined(&["ghost", "balloon", "balloon"]),
+            joined(&["はな", "hanab", "hanab2"]),
+            joined(&[ghost, first, second]),
         ]
     );
     let legacy = complete_legacy_refs("はな", &items);
@@ -464,7 +465,7 @@ fn ghost_with_balloon_never_appears() {
 // ---- script_request ----
 
 #[test]
-fn script_request_six_cases() {
+fn script_request_sorts_the_arms() {
     let absolute = r"C:\Users\u\Downloads\hana.nar";
     assert_eq!(
         script_request(&["path", absolute]),
@@ -478,7 +479,6 @@ fn script_request_six_cases() {
     );
     assert_eq!(script_request(&["path", ""]), Err(ScriptRefusal::Empty));
     assert_eq!(script_request(&["path"]), Err(ScriptRefusal::Empty));
-    // `url` は `NotPath` でなく URL の腕で判定される。
     assert_eq!(
         script_request(&["url", "https://example.com/hana.nar"]),
         Ok(ScriptRequest::Url(
@@ -514,6 +514,8 @@ fn script_request_url_passes_with_nar_or_no_kind() {
     for url in [
         "https://example.com/hana.nar",
         "http://example.com/hana.nar",
+        "HTTPS://example.com/hana.nar",
+        "Http://example.com/hana.nar",
     ] {
         let expected = Ok(ScriptRequest::Url(url.to_owned()));
         assert_eq!(script_request(&["url", url]), expected, "省略: {url}");

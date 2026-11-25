@@ -2,12 +2,13 @@
 //!
 //! World に触る仕事を 1 か所に集める。窓口 [`InstallDesk`] は World の NonSend・プロセスに 1 つで、
 //! ゴーストを起こし直しても作り直さない。取り出しの系 [`drain`] が毎 tick ⑴ 入口（台本の受け口・
-//! 選ぶ画面のスレッド）からの生の要求を受付 [`submit`] へ流し ⑵ 背景のスレッドの頼み [`DeskAsk`] を
-//! 捌き ⑶ 手元のイベントの頼み（高々 1 件）を条件を満たせば送り ⑷ 背景のスレッドが空いていれば
-//! 次の依頼を渡し ⑸ 預かった書庫の段を切替の予約の有無で見直す。入れた後の記録（受け皿・バルーンの
+//! 選ぶ画面と取得のスレッド）からの生の要求のうち、パスは受付 [`submit`] へ流し、URL は取得の待ち行列へ
+//! 積み ⑵ 背景のスレッドの頼み [`DeskAsk`] を捌き ⑶ 手元のイベントの頼み（高々 1 件）を条件を満たせば
+//! 送り ⑷ 背景のスレッドが空いていれば次の依頼を、取得のスレッドが空いていれば次の URL を渡し
+//! ⑸ 預かった書庫の段を切替の予約の有無で見直す。入れた後の記録（受け皿・バルーンの
 //! 記憶・置換語）は反映を待ってから答える。
 //! 起動中のゴーストへ入れる一周（預かった書庫と段）は子の `overwrite` が持ち、ここは切替の道筋から
-//! 呼ばれる口 [`run_overwrite_between`]・[`on_steady`] を開けるだけ。
+//! 呼ばれる口 [`run_overwrite_between`]・[`on_steady`] と、背景のスレッドの展開の答えの腕を開けるだけ。
 //!
 //! イベントを送るのは、切替の予約が無い・終了が始まっていない・置き場のゴーストに kanade への
 //! 送出端がある tick で、送り先は送る時点の置き場のゴースト。定常かどうかの正本は kanade で、
@@ -22,22 +23,21 @@ use std::sync::mpsc::{self, Receiver, SendError, Sender};
 use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
-use areka_ghost::catalog_roots::{balloons_for, find_balloon, find_ghost, same_folder_name};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
-use areka_sylphya::{PersistKey, PersistScope};
+use areka_sylphya::{PersistKey, PersistScope, SylphyaPublisher};
 use bevy_ecs::world::World;
 
+use super::fetch_url::{self, FetchTools};
 use super::judge::GhostFacts;
 use super::names;
 use super::pick::{self, PickError};
-use super::procedure::InstalledRecord;
 use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 use areka_session::boot_config::BootContext;
-use areka_session::exit_wait::WorkGate;
+use areka_session::exit_wait::{EXIT_WAIT_LIMIT, WorkGate};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::{SwitchInFlight, record_last_installed};
 
@@ -56,7 +56,7 @@ pub(crate) struct InstallDesk {
     raw_rx: Receiver<RawInstallRequest>,
     /// 待っている依頼（届いた順）。
     pub(super) queue: VecDeque<InstallOrder>,
-    /// 背景のスレッドへの依頼の送出端（最初の依頼で 1 度だけ起こす）。
+    /// 背景のスレッドへの依頼の送出端（最初の依頼で起こす・倒れた・居なくなったら捨てて起こし直す）。
     worker: Option<Sender<InstallOrder>>,
     /// 背景のスレッドが依頼を扱っている最中か。
     pub(super) busy: bool,
@@ -75,10 +75,19 @@ pub(crate) struct InstallDesk {
     picking: Arc<AtomicBool>,
     /// 起動中のゴーストへ入れる、預かった書庫と段（高々 1 件・中身は [`overwrite`]）。
     overwrite: Option<overwrite::Pending>,
+    /// 取得を待っている URL（届いた順）。
+    fetch_queue: VecDeque<String>,
+    /// 取得のスレッドへの URL の送出端（最初の URL で起こす・倒れたら捨てて起こし直す）。
+    fetch_tx: Option<Sender<String>>,
+    /// 取得のスレッドが URL を扱っている最中か。
+    fetching: bool,
+    /// 終了の待ちへ登記した取得の門（取得のスレッドと共有）。
+    fetch_gate: Arc<WorkGate>,
+    fetch_tools: FetchTools,
 }
 
 impl InstallDesk {
-    pub(super) fn new(gate: Arc<WorkGate>) -> Self {
+    pub(super) fn new(gate: Arc<WorkGate>, fetch_gate: Arc<WorkGate>) -> Self {
         let (raw_tx, raw_rx) = mpsc::channel();
         let (asks_tx, asks_rx) = mpsc::channel();
         InstallDesk {
@@ -95,6 +104,11 @@ impl InstallDesk {
             gate,
             picking: Arc::new(AtomicBool::new(false)),
             overwrite: None,
+            fetch_queue: VecDeque::new(),
+            fetch_tx: None,
+            fetching: false,
+            fetch_gate,
+            fetch_tools: FetchTools::real(),
         }
     }
 }
@@ -107,19 +121,25 @@ pub(crate) fn drain(world: &mut World) {
     let raws: Vec<RawInstallRequest> = desk.raw_rx.try_iter().collect();
     let asks: Vec<DeskAsk> = desk.asks_rx.try_iter().collect();
     for raw in raws {
-        submit(
-            world,
-            InstallOrder {
-                archives: vec![raw.path],
-                origin: raw.origin,
-            },
-        );
+        match raw {
+            RawInstallRequest::Path { path, origin } => {
+                submit(
+                    world,
+                    InstallOrder {
+                        archives: vec![path],
+                        origin,
+                    },
+                );
+            }
+            RawInstallRequest::Url(url) => queue_fetch(world, url),
+        }
     }
     for ask in asks {
         answer(world, ask);
     }
     send_held(world);
     hand_next_order(world);
+    hand_next_fetch(world);
     overwrite::on_tick(world);
 }
 
@@ -133,12 +153,12 @@ pub(crate) fn on_steady(world: &mut World) {
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった宛先への切替の
-/// ときだけ UI スレッドで同期に展開する（それ以外は無操作）。
+/// ときだけ「降ろした」を背景のスレッドへ返し、展開し終えるまで起こすのを待たせる（それ以外は無操作）。
 pub(crate) fn run_overwrite_between(world: &mut World) {
     overwrite::run_between(world);
 }
 
-/// 台本の受け口と選ぶ画面のスレッドへ配る送出端（窓口が無ければ受信端の無い送出端）。
+/// 台本の受け口へ配る送出端（窓口が無ければ受信端の無い送出端）。
 pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
     match world.get_non_send::<InstallDesk>() {
         Some(desk) => desk.raw_tx.clone(),
@@ -157,9 +177,25 @@ pub(crate) fn is_busy(world: &World) -> bool {
 /// 依頼を扱っている最中の窓口を据える（テスト用・背景スレッドは起こさない）。
 #[cfg(test)]
 pub(crate) fn insert_busy_desk_for_test(world: &mut World) {
-    let mut desk = InstallDesk::new(Arc::new(WorkGate::default()));
+    let mut desk = InstallDesk::new(Arc::new(WorkGate::default()), Arc::new(WorkGate::default()));
     desk.busy = true;
     world.insert_non_send(desk);
+}
+
+/// 窓口を登記した World（テスト用・背景スレッドは起こさない）。取り出しの系を `Input` に足し、
+/// 終わりの待ちの門 `install`・`install-fetch` も登記する。
+#[cfg(test)]
+pub(crate) fn desk_world() -> World {
+    let mut world = World::new();
+    world.init_resource::<bevy_ecs::schedule::Schedules>();
+    super::register(&mut world);
+    world
+}
+
+/// 取得のスレッドの道具を差し替える（テスト用・偽の作り口と一時フォルダを差す）。
+#[cfg(test)]
+pub(crate) fn set_fetch_tools_for_test(world: &mut World, tools: FetchTools) {
+    world.non_send_mut::<InstallDesk>().fetch_tools = tools;
 }
 
 /// メニュー「インストール…」を選べるか（窓口が在り・終了が始まっておらず・選ぶ画面が出ていない）。
@@ -192,45 +228,85 @@ where
         );
         return None;
     };
-    if desk.picking.load(Ordering::Acquire) {
+    let tx = desk.raw_tx.clone();
+    spawn_pick(
+        &desk.picking,
+        &PickLabels {
+            thread: "install-pick",
+            tag: "[install] ファイル",
+            busy: "install_pick_busy",
+            suppressed: "install_pick_suppressed",
+            failed: "install_pick_failed",
+        },
+        suppressed,
+        pick,
+        move |result| send_pick(result, &tx),
+    )
+}
+
+/// 選ぶ画面の窓口ごとの名（スレッドの名・記録の頭・記録の語）。
+pub(crate) struct PickLabels {
+    pub(crate) thread: &'static str,
+    pub(crate) tag: &'static str,
+    pub(crate) busy: &'static str,
+    pub(crate) suppressed: &'static str,
+    pub(crate) failed: &'static str,
+}
+
+/// 選ぶ画面のスレッドを起こす（インストールと置き場の窓口の共通の口）。出ている最中なら `debug!` で
+/// 無視し、抑止のときは出さずに `info!`（理由 `no_alert`）で取り消しと同じに扱う。選ぶ口の結果は
+/// 同じスレッドで `send` へ渡す。起こしたスレッドの取っ手を返す。
+pub(crate) fn spawn_pick<F, S>(
+    picking: &Arc<AtomicBool>,
+    labels: &PickLabels,
+    suppressed: bool,
+    pick: F,
+    send: S,
+) -> Option<JoinHandle<()>>
+where
+    F: FnOnce() -> Result<Option<PathBuf>, PickError> + Send + 'static,
+    S: FnOnce(Result<Option<PathBuf>, PickError>) + Send + 'static,
+{
+    let tag = labels.tag;
+    if picking.load(Ordering::Acquire) {
         tracing::debug!(
-            event = "install_pick_busy",
-            "[install] ファイルを選ぶ画面が出ているので、2 つ目は出しません"
+            event = labels.busy,
+            "{tag}を選ぶ画面が出ているので、2 つ目は出しません"
         );
         return None;
     }
     if suppressed {
-        tracing::warn!(
-            event = "install_pick_suppressed",
-            "[install] 告知が抑止されているので、ファイルを選ぶ画面を出さずに取り消しと同じに扱います"
+        tracing::info!(
+            event = labels.suppressed,
+            reason = "no_alert",
+            "{tag}を選ぶ画面は、告知が抑止されているので出さずに取り消しと同じに扱います"
         );
         return None;
     }
-    desk.picking.store(true, Ordering::Release);
+    picking.store(true, Ordering::Release);
     // 旗はスレッドが終わるとき（panic も含む）と、スレッドを起こせずに閉包が落ちたときに降りる。
-    let flag = PickingFlag(desk.picking.clone());
-    let tx = desk.raw_tx.clone();
+    let flag = PickingFlag(picking.clone());
     let spawned = thread::Builder::new()
-        .name("install-pick".to_owned())
+        .name(labels.thread.to_owned())
         .spawn(move || {
             let _flag = flag;
-            send_pick(pick(), &tx);
+            send(pick());
         });
     match spawned {
         Ok(handle) => Some(handle),
         Err(err) => {
             tracing::error!(
-                event = "install_pick_failed",
+                event = labels.failed,
                 error = %err,
-                "[install] ファイルを選ぶ画面のスレッドを起こせません"
+                "{tag}を選ぶ画面のスレッドを起こせません"
             );
             None
         }
     }
 }
 
-/// 選ぶ画面が出ている旗（落ちると降りる・置き場を選ぶ画面の受け口 `roots::desk` も使い回す）。
-pub(crate) struct PickingFlag(pub(crate) Arc<AtomicBool>);
+/// 選ぶ画面が出ている旗（落ちると降りる）。
+struct PickingFlag(Arc<AtomicBool>);
 
 impl Drop for PickingFlag {
     fn drop(&mut self) {
@@ -243,14 +319,15 @@ impl Drop for PickingFlag {
 fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallRequest>) {
     match result {
         Ok(Some(path)) => {
-            let request = RawInstallRequest {
+            let shown = path.display().to_string();
+            let request = RawInstallRequest::Path {
                 path,
                 origin: InstallOrigin::Menu,
             };
-            if let Err(err) = tx.send(request) {
+            if tx.send(request).is_err() {
                 tracing::warn!(
                     event = "install_pick_send_failed",
-                    path = %err.0.path.display(),
+                    path = shown,
                     "[install] 選ばれた書庫を窓口へ送れません（窓口が無い）"
                 );
             }
@@ -269,11 +346,16 @@ fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallR
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 待っている依頼・手元のイベントの頼み・預かった
 /// 書庫を捨てて記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。件数は
-/// まだ始めていない捨てた書庫の数。
+/// まだ始めていない捨てた書庫の数。取得を待っている URL は 1 件ずつ記録して捨て、取得のスレッドへの
+/// 送出端を落とす（スレッドは今の取得を終えると抜ける）。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
+    desk.fetch_tx = None;
+    for url in desk.fetch_queue.drain(..) {
+        record_fetch_abandoned(&url);
+    }
     let paths: Vec<PathBuf> = desk.queue.drain(..).flat_map(|o| o.archives).collect();
     let held = desk.held.take();
     let overwrite = overwrite::discard(&mut desk);
@@ -294,8 +376,22 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 fn answer(world: &mut World, ask: DeskAsk) {
     let closing = world.non_send::<InstallDesk>().gate.is_closing();
     match ask {
-        DeskAsk::OrderDone { .. } => {
+        DeskAsk::OrderDone => {
             world.non_send_mut::<InstallDesk>().busy = false;
+        }
+        DeskAsk::WorkerPanicked => {
+            let mut desk = world.non_send_mut::<InstallDesk>();
+            desk.busy = false;
+            desk.worker = None;
+            overwrite::on_worker_panicked(world);
+        }
+        DeskAsk::Extracted { reply } => overwrite::extracted(world, reply),
+        DeskAsk::FetchDone { panicked } => {
+            let mut desk = world.non_send_mut::<InstallDesk>();
+            desk.fetching = false;
+            if panicked {
+                desk.fetch_tx = None;
+            }
         }
         ask if closing => {
             drop(ask);
@@ -341,13 +437,13 @@ fn answer(world: &mut World, ask: DeskAsk) {
             target_ghost,
             reply,
         } => overwrite::take(world, archive, target_ghost, reply),
-        DeskAsk::Record { record, reply } => {
+        DeskAsk::Record { installed, reply } => {
             tracing::debug!(
                 event = "install_record_received",
-                record = ?record,
+                record = ?installed,
                 "[install] 入れた後の記録を受けました"
             );
-            record_installed(world, record);
+            record_installed(world, installed);
             reply_to(reply, ());
         }
     }
@@ -355,35 +451,25 @@ fn answer(world: &mut World, ask: DeskAsk) {
 
 /// 入れた後の記録: `ghost` は受け皿へ、`balloon` だけなら今のゴーストの「最後に使ったバルーン」の
 /// 記憶へフォルダ名を書き、シェル・追加ファイルは置換語だけ（表示は替えない）。シェルとバルーンは
-/// `lastinstalled` の控えも置く。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りと
-/// フォルダ名の 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
-/// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
-pub(super) fn record_installed(world: &mut World, record: InstalledRecord) {
-    let roots = world
-        .get_resource::<BootContext>()
-        .map(|ctx| ctx.roots.clone());
-    let (folder, ghost_name) = catalog_spelling(roots.as_ref(), &record);
-    if record.kind == InstallKind::Balloon {
-        remember_balloon(world, folder.clone());
-        note_hidden_by_ghost(world, &record.folder);
+/// `lastinstalled` の控えも置く。フォルダ名と名前は背景のスレッドが目録の綴りに直した値をそのまま使う。
+/// 最後に今のゴーストの記憶の書き手の反映を上限まで待つ（背景のスレッドへ答えるのはその後）。
+pub(super) fn record_installed(world: &mut World, installed: CarriedInstall) {
+    if installed.kind == InstallKind::Balloon {
+        remember_balloon(world, installed.folder.clone());
     }
-    place_last_installed(
-        world,
-        CarriedInstall {
-            kind: record.kind,
-            folder,
-            ghost_folder: record.ghost_folder,
-            object_name: record.object_name,
-            ghost_name,
-        },
-    );
-    if let Some(runtime) = names::current_runtime(world)
-        && let Err(err) = runtime.sylphya_publisher().barrier()
-    {
+    place_last_installed(world, installed);
+    if let Some(runtime) = names::current_runtime(world) {
+        settle_record(runtime.sylphya_publisher());
+    }
+}
+
+/// 今のゴーストの記憶の書き手の反映を、上限まで待つ。待てなければ error を 1 件残して続ける。
+pub(super) fn settle_record(publisher: &SylphyaPublisher) {
+    if let Err(err) = publisher.barrier_within(EXIT_WAIT_LIMIT) {
         tracing::error!(
             event = "install_record_unsettled",
             error = %err,
-            "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
+            "[install] 今のゴーストの記憶の書き手が止まっているか遅れているので、入れた後の記録の反映を確かめないまま続けます"
         );
     }
 }
@@ -400,52 +486,6 @@ pub(super) fn place_last_installed(world: &mut World, installed: CarriedInstall)
         InstallKind::Supplement => {}
     }
     names::update(world, installed.object_name, installed.ghost_name);
-}
-
-/// 目録の綴りに直したフォルダ名と、%lastghostname の値（窓口と起動の前の口の共通の決まり）。
-/// フォルダ名はゴースト・バルーンなら根の目録の綴り（目録に無ければ書庫の綴りのまま）、他は書庫の
-/// 綴りのまま。%lastghostname は関わったゴーストの目録の `name`（無ければゴーストは `install.txt` の
-/// `name`・他はそのフォルダ名）で、関わったゴーストが無ければ None。
-pub(super) fn catalog_spelling(
-    roots: Option<&areka_ghost::BasewareRoots>,
-    record: &InstalledRecord,
-) -> (String, Option<String>) {
-    let ghost_entry = |folder: &str| roots.and_then(|roots| find_ghost(roots, folder));
-    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
-        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
-            Some(name) => name,
-            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
-            None => folder.to_owned(),
-        }
-    });
-    let folder = match record.kind {
-        InstallKind::Ghost => ghost_entry(&record.folder).map(|e| e.identity.folder),
-        InstallKind::Balloon => {
-            roots.and_then(|roots| find_balloon(roots, &record.folder).map(|e| e.identity.folder))
-        }
-        InstallKind::Shell | InstallKind::Supplement => None,
-    }
-    .unwrap_or_else(|| record.folder.clone());
-    (folder, ghost_name)
-}
-
-/// バルーンだけの書庫を根へ入れた後、今のゴーストの中の同じフォルダ名に隠れるなら info
-/// `installed_balloon_hidden_by_ghost` を 1 件残す。
-/// 起動の文脈が無いときは何もしない。
-fn note_hidden_by_ghost(world: &World, folder: &str) {
-    let Some(ctx) = world.get_resource::<BootContext>() else {
-        return;
-    };
-    let hidden = balloons_for(&ctx.roots, &ctx.current.ghost.dir).hidden;
-    if let Some(h) = hidden.iter().find(|h| same_folder_name(&h.folder, folder)) {
-        tracing::info!(
-            event = "installed_balloon_hidden_by_ghost",
-            folder = h.folder.as_str(),
-            installed = %h.hidden.display(),
-            by = %h.by.display(),
-            "[install] 入れたバルーンは今のゴーストの中の同じフォルダ名に隠れます"
-        );
-    }
 }
 
 /// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる）。
@@ -469,14 +509,16 @@ pub(crate) fn remember_balloon(world: &World, folder: String) {
     );
 }
 
-/// 背景のスレッドへ答える。スレッドが居なければ記録だけ残す。
-fn reply_to<T: Send>(reply: ReplySender<T>, value: T) {
-    if reply.send(value).is_err() {
+/// 背景のスレッドへ答える（答えられたら真）。スレッドが居なければ記録だけ残す。
+fn reply_to<T: Send>(reply: ReplySender<T>, value: T) -> bool {
+    let sent = reply.send(value).is_ok();
+    if !sent {
         tracing::debug!(
             event = "install_reply_unread",
             "[install] 背景のスレッドが答えを待っていません"
         );
     }
+    sent
 }
 
 /// 今のゴーストの素性（起動の文脈と置き場のゴーストから引く・どちらかが無ければ None）。
@@ -492,11 +534,12 @@ fn ghost_facts(world: &World) -> Option<GhostFacts> {
         .unwrap_or_else(|| dir.display().to_string());
     Some(GhostFacts {
         roots: ctx.roots.clone(),
+        dir: dir.to_path_buf(),
         running_dir: folder.as_ref().map(|_| dir.to_path_buf()),
         folder,
         name,
-        sakura_name: areka_ghost::catalog::sakura_name(dir),
-        install_accept: areka_ghost::catalog::install_accept(dir),
+        sakura_name: None,
+        install_accept: Vec::new(),
     })
 }
 
@@ -545,7 +588,8 @@ fn send_held(world: &mut World) {
     }
 }
 
-/// 背景のスレッドが空いていれば、待っている依頼の先頭を渡す（最初の依頼でスレッドを起こす）。
+/// 背景のスレッドが空いていれば、待っている依頼の先頭を渡す（最初の依頼でスレッドを起こす・倒れた・
+/// 居なくなったら次の依頼で起こし直す）。
 fn hand_next_order(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
@@ -567,12 +611,66 @@ fn hand_next_order(world: &mut World) {
     });
     match worker.send(order) {
         Ok(()) => desk.busy = true,
-        Err(SendError(order)) => tracing::error!(
-            event = "install_worker_gone",
-            archives = ?order.archives,
-            "[install] 背景のスレッドが居ないので、依頼を扱えません"
-        ),
+        Err(SendError(order)) => {
+            desk.worker = None;
+            tracing::error!(
+                event = "install_worker_gone",
+                archives = ?order.archives,
+                "[install] 背景のスレッドが居ないので、依頼を扱えません"
+            );
+        }
     }
+}
+
+/// URL を取得の待ち行列の末尾へ積む。終了が始まっていれば積まずに記録だけ残す。
+fn queue_fetch(world: &mut World, url: String) {
+    let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
+        return;
+    };
+    if desk.gate.is_closing() {
+        return record_fetch_abandoned(&url);
+    }
+    desk.fetch_queue.push_back(url);
+}
+
+/// 取得のスレッドが空いていれば、待っている URL の先頭を渡す。スレッドが居なければ起こし直し、
+/// 起こせなければその URL を捨てて次へ進む。
+fn hand_next_fetch(world: &mut World) {
+    let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
+        return;
+    };
+    let desk = &mut *desk;
+    while !desk.fetching && !desk.gate.is_closing() {
+        let Some(url) = desk.fetch_queue.pop_front() else {
+            return;
+        };
+        let url = match &desk.fetch_tx {
+            Some(tx) => match tx.send(url) {
+                Ok(()) => {
+                    desk.fetching = true;
+                    continue;
+                }
+                Err(SendError(url)) => url,
+            },
+            None => url,
+        };
+        desk.fetch_tx = fetch_url::spawn_fetcher(
+            url,
+            desk.fetch_tools.clone(),
+            desk.fetch_gate.clone(),
+            desk.raw_tx.clone(),
+            desk.asks_tx.clone(),
+        );
+        desk.fetching = desk.fetch_tx.is_some();
+    }
+}
+
+fn record_fetch_abandoned(url: &str) {
+    tracing::warn!(
+        event = "install_fetch_abandoned",
+        url,
+        "[install] 終了が始まったので、取得を待っている URL を捨てます"
+    );
 }
 
 #[path = "overwrite.rs"]
@@ -593,3 +691,11 @@ mod pick_tests;
 #[cfg(test)]
 #[path = "desk_overwrite_tests.rs"]
 mod overwrite_tests;
+
+#[cfg(test)]
+#[path = "desk_worker_gone_tests.rs"]
+mod worker_gone_tests;
+
+#[cfg(test)]
+#[path = "fetch_queue_tests.rs"]
+mod fetch_queue_tests;

@@ -7,9 +7,9 @@
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_config::BootContext;
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, read_last_balloon};
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 

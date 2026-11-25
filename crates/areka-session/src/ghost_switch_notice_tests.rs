@@ -10,10 +10,12 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
-use super::fallback_tests::{count_event, root_with, switching_world};
+use super::fallback_tests::{root_with, switching_world};
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+use crate::boot_resolve::boot_resolve_tests::count_event;
+use crate::session_end::test_support::levels_of;
 
 fn set_stage_to(world: &mut World, stage: SwitchStage) {
     world.non_send_mut::<SwitchInFlight>().stage = stage;
@@ -28,14 +30,6 @@ fn fault() -> KanadeStopCause {
 
 fn stopped(cause: KanadeStopCause, handoff: Option<ChangeHandoff>) -> KanadeStopped {
     KanadeStopped { cause, handoff }
-}
-
-fn level_of(events: &[log_capture_kit::CapturedEvent], event: &str) -> Vec<tracing::Level> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .map(|e| e.level)
-        .collect()
 }
 
 /// 中止の通知 → 予約が消え `info!(ghost_switch_cancelled)` 1 件・終了は指示しない。
@@ -55,8 +49,8 @@ fn cancel_notice_clears_reservation_with_one_info() {
     assert_eq!(
         (
             world.get_non_send::<SwitchInFlight>().is_some(),
-            level_of(&events, "ghost_switch_cancelled"),
-            level_of(&again, "ghost_switch_cancelled"),
+            levels_of(&events, "ghost_switch_cancelled"),
+            levels_of(&again, "ghost_switch_cancelled"),
             world.non_send::<AppExit>().is_requested(),
         ),
         (
@@ -99,7 +93,7 @@ fn default_welcome_fault_quits_with_shiori_fault_origin() {
             world.non_send::<AppExit>().is_requested(),
             world.get_non_send::<SwitchInFlight>().is_some(),
             count_event(&events, "ghost_switch_down_ms"),
-            level_of(&events, "ghost_switch_default_fault"),
+            levels_of(&events, "ghost_switch_default_fault"),
             count_event(&events, "ghost_switch_target_fault"),
         ),
         (true, false, 0, vec![tracing::Level::ERROR], 0),
@@ -130,10 +124,10 @@ fn steady_clears_welcoming_reservation_only() {
     assert_eq!(
         (
             kept_in_send_off,
-            level_of(&send_off, "ghost_switch_done"),
+            levels_of(&send_off, "ghost_switch_done"),
             world.get_non_send::<SwitchInFlight>().is_some(),
-            level_of(&welcoming, "ghost_switch_done"),
-            level_of(&none, "ghost_switch_done"),
+            levels_of(&welcoming, "ghost_switch_done"),
+            levels_of(&none, "ghost_switch_done"),
         ),
         (
             true,
@@ -198,7 +192,7 @@ fn target_welcome_fault_falls_back_to_default() {
     );
     assert_eq!(
         (
-            level_of(&events, "ghost_switch_target_fault"),
+            levels_of(&events, "ghost_switch_target_fault"),
             count_event(&events, "ghost_switch_fatal"),
             count_event(&events, "ghost_switch_default_fault"),
         ),
@@ -231,7 +225,7 @@ fn default_as_target_fault_quits_without_retry() {
             ),
             world.get_non_send::<SwitchInFlight>().is_some(),
             count_event(&events, "ghost_switch_down_ms"),
-            level_of(&events, "ghost_switch_default_fault"),
+            levels_of(&events, "ghost_switch_default_fault"),
             count_event(&events, "ghost_switch_target_fault"),
         ),
         (true, false, 0, vec![tracing::Level::ERROR], 0),
@@ -259,7 +253,7 @@ fn welcoming_non_fault_stop_quits() {
         (
             world.get_resource::<FirstExit>().map(|f| f.0.clone()),
             world.get_non_send::<SwitchInFlight>().is_some(),
-            level_of(&events, "ghost_switch_target_quit"),
+            levels_of(&events, "ghost_switch_target_quit"),
         ),
         (
             Some(ExitOrigin::KanadeStopped(KanadeStopCause::Quit)),
@@ -284,7 +278,7 @@ fn stop_without_reservation_logs_error_and_quits() {
 
     assert_eq!(
         (
-            level_of(&events, "ghost_switch_no_reservation"),
+            levels_of(&events, "ghost_switch_no_reservation"),
             world.non_send::<AppExit>().is_requested(),
             world.get_resource::<FirstExit>().map(|f| f.0.clone()),
         ),
@@ -316,9 +310,9 @@ fn steady_without_slot_warns_once_and_clears_reservation() {
 
     assert_eq!(
         (
-            level_of(&events, "steady_memory_not_recorded"),
+            levels_of(&events, "steady_memory_not_recorded"),
             world.get_non_send::<SwitchInFlight>().is_some(),
-            level_of(&events, "ghost_switch_done"),
+            levels_of(&events, "ghost_switch_done"),
         ),
         (
             vec![tracing::Level::WARN],

@@ -7,10 +7,11 @@
 use std::cell::Cell;
 use std::path::PathBuf;
 
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, ids};
 use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
@@ -96,13 +97,6 @@ fn args(log_type: Option<&str>) -> Args {
     }
 }
 
-fn text(outcome: ToolOutcome) -> (String, bool) {
-    match outcome.content.as_slice() {
-        [ToolContent::Text(text)] => (text.clone(), outcome.is_error),
-        other => panic!("本文 1 つのはず: {other:?}"),
-    }
-}
-
 /// `h` の写しで答え、（本文, isError, 取り出した種別）を返す。
 fn ask(h: &History, log_type: Option<&str>) -> (String, bool, Option<Kind>) {
     ask_with(h, None, &args(log_type))
@@ -123,7 +117,7 @@ fn ask_with(
         active,
         args,
     );
-    let (body, is_error) = text(outcome);
+    let (body, is_error) = body_and_error(&outcome);
     (body, is_error, asked.get())
 }
 
@@ -194,12 +188,7 @@ fn many_records_are_joined_oldest_first_without_trailing_separator() {
     let (body, _, _) = ask(&history(), Some("error"));
     assert!(!body.starts_with("OK"));
     assert!(!body.ends_with("\r\n"));
-    let ids: Vec<&str> = body
-        .split("\r\n")
-        .filter(|l| l.starts_with('#'))
-        .map(|l| l.split(' ').next().unwrap())
-        .collect();
-    assert_eq!(ids, ["#1", "#5", "#8", "#10"]);
+    assert_eq!(ids(&body), [1, 5, 8, 10]);
 }
 
 #[test]
@@ -260,14 +249,6 @@ fn full(
     }
 }
 
-/// 本文の行のうち記録の先頭の行の番号（古い順）。0 件の本文は空の列。
-fn ids(body: &str) -> Vec<u64> {
-    body.split("\r\n")
-        .filter_map(|l| l.strip_prefix('#'))
-        .map(|l| l.split(' ').next().unwrap().parse().unwrap())
-        .collect()
-}
-
 /// error 種別（番号 1・5・8・10）を `since_id`・`max_count` で絞った番号。
 fn error_ids(since_id: Option<i64>, max_count: Option<i64>) -> Vec<u64> {
     let (body, is_error, _) = ask_with(
@@ -318,14 +299,6 @@ fn since_id_and_max_count_together() {
 
 // ---- ghost_name ----
 
-fn emily() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
 fn ghost_ids(active: Option<&ActiveGhost>, log_type: &str, ghost_name: &str) -> Vec<u64> {
     let (body, is_error, _) = ask_with(
         &history(),
@@ -338,7 +311,7 @@ fn ghost_ids(active: Option<&ActiveGhost>, log_type: &str, ghost_name: &str) -> 
 
 #[test]
 fn ghost_name_keeps_only_records_of_that_name() {
-    let g = emily();
+    let g = ghost();
     assert_eq!(ghost_ids(Some(&g), "error", "Emily/Phase4.5"), [10]);
     assert_eq!(ghost_ids(Some(&g), "script", "Emily/Phase4.5"), [2]);
     // 英字の大小違いでも名前そのもので指したときと同じ記録。
@@ -347,7 +320,7 @@ fn ghost_name_keeps_only_records_of_that_name() {
 
 #[test]
 fn ghost_name_full_path_is_read_as_that_ghost() {
-    let g = emily();
+    let g = ghost();
     for path in [
         r"C:\ssp\ghost\emily4",
         r"c:\SSP\Ghost\EMILY4\",
@@ -384,12 +357,12 @@ fn nameless_ghost_matches_records_named_by_its_full_path() {
 
 #[test]
 fn unmatched_empty_and_no_ghost_are_cannot_find() {
-    let g = emily();
+    let g = ghost();
     let cases: [(Option<&ActiveGhost>, &str); 5] = [
         (Some(&g), "Nobody"),
         // フォルダ名だけは当たらない（他のツールと同じ解決）。
         (Some(&g), "emily4"),
-        // 空は解決を呼ばずに Cannot find（解決へ渡しても 0 体・1 体とも同じ Cannot find になる）。
+        // 空は何にも当たらず Cannot find。
         (Some(&g), ""),
         (None, ""),
         // 0 体で名前あり。
@@ -409,7 +382,7 @@ fn unmatched_empty_and_no_ghost_are_cannot_find() {
 
 #[test]
 fn matched_ghost_without_records_is_no_log_entries() {
-    let g = emily();
+    let g = ghost();
     let (body, is_error, _) = ask_with(
         &history(),
         Some(&g),
@@ -422,7 +395,7 @@ fn matched_ghost_without_records_is_no_log_entries() {
 #[test]
 fn without_ghost_name_records_outside_any_ghost_are_returned() {
     // 起動中のゴーストが居ても、ghost_name が無ければ [SYSTEM] の記録も返る。
-    let g = emily();
+    let g = ghost();
     let (body, _, _) = ask_with(
         &history(),
         Some(&g),
@@ -433,7 +406,7 @@ fn without_ghost_name_records_outside_any_ghost_are_returned() {
 
 #[test]
 fn unknown_log_type_comes_before_ghost_name() {
-    for active in [None, Some(emily())] {
+    for active in [None, Some(ghost())] {
         let (body, is_error, asked) = ask_with(
             &history(),
             active.as_ref(),
@@ -447,7 +420,7 @@ fn unknown_log_type_comes_before_ghost_name() {
 
 #[test]
 fn filters_apply_in_order_kind_ghost_since_max() {
-    let g = emily();
+    let g = ghost();
     // script（2・7）→ Emily（2）→ 最後の 1 件＝2。件数を先に絞ると 7 だけ残り、ゴーストで 0 件になる。
     let (body, _, _) = ask_with(
         &history(),
@@ -466,26 +439,25 @@ fn filters_apply_in_order_kind_ghost_since_max() {
 
 // ---- 入口 ----
 
-/// 空の World で入口を呼び、その場で届いた答え（まだなら None）。
-fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {
-    let mut world = World::new();
+/// 起動中のゴースト無しで入口を呼び、その場で届いた答え。
+fn handle_now(ghost_name: Option<&str>) -> ToolOutcome {
     let call = full(None, ghost_name, None, None);
     let (request, pending) = ToolRequest::new(ToolCall::GetLog(call.clone()));
     let ToolRequest { reply, .. } = request;
-    handle(&mut world, call, reply);
-    pending.try_answer().ok().flatten().map(|a| a.outcome)
+    handle(None, call, reply);
+    kanade_fake_test_support::answer(&pending)
 }
 
 #[test]
-fn empty_world_without_ghost_name_answers_at_once_without_error() {
-    let outcome = handle_now(None).expect("その場で答える");
+fn no_active_ghost_without_ghost_name_answers_at_once_without_error() {
+    let outcome = handle_now(None);
     // 置き場はプロセスで共有なので本文は他のテストの積み方次第。失敗でないことだけを見る。
     assert!(!outcome.is_error);
 }
 
 #[test]
-fn empty_world_with_ghost_name_answers_cannot_find_at_once() {
-    let (body, is_error) = text(handle_now(Some("Emily/Phase4.5")).expect("その場で答える"));
+fn no_active_ghost_with_ghost_name_answers_cannot_find_at_once() {
+    let (body, is_error) = body_and_error(&handle_now(Some("Emily/Phase4.5")));
     assert_eq!(body, "NG:Cannot find active ghost from specified name");
     assert!(is_error);
 }

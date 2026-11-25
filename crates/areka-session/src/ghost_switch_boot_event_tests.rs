@@ -4,13 +4,15 @@
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::capture;
+use sample_ghost_kit::SampleRoot;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::fallback_tests::count_event;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
+use crate::body_systems::{BodySystems, NO_BODY};
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
-use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig, standard_script};
 use crate::reload::ReloadInFlight;
 use areka_runtime::spine::RecordedCall;
 
@@ -31,8 +33,14 @@ fn get_refs(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
 
 /// `scripts` の土台で A を起こして定常に着かせる（起動記録は全員に置く＝`OnFirstBoot` を飛ばす）。
 pub(super) fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
+    running_a_on(NO_BODY, scripts)
+}
+
+/// [`running_a`] を `body` の本体で。
+pub(super) fn running_a_on(body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     let folders: Vec<String> = scripts.iter().map(|(f, _)| (*f).to_owned()).collect();
-    let mut rig = SwitchRig::new(scripts);
+    let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let mut rig = SwitchRig::with(RigSample::of(sample), body, scripts);
     // 起こし直すときの窓の準備が閉包を投函する先。
     rig.world.insert_resource(WintfTaskPool::with_threads(1));
     for folder in &folders {

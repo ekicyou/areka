@@ -5,29 +5,21 @@
 
 use std::path::PathBuf;
 
-use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
 
 /// `active` で呼んだときの答え（本文, isError）。
 fn answer(active: Option<&ActiveGhost>) -> (String, bool) {
     let (req, pending) = ToolRequest::new(ToolCall::GetActiveGhostList);
     handle(active, req.reply);
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
-    match answer.outcome.content.as_slice() {
-        [ToolContent::Text(text)] => (text.clone(), answer.outcome.is_error),
-        other => panic!("本文 1 つのはず: {other:?}"),
-    }
+    body_and_error(&kanade_fake_test_support::answer(&pending))
 }
 
 #[test]
 fn named_ghost_lists_its_name() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     assert_eq!(answer(Some(&ghost)), ("Emily/Phase4.5".to_string(), false));
 }
 

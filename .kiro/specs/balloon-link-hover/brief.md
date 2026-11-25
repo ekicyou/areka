@@ -115,3 +115,7 @@
 ## 2026-11-01 棚卸㉝の後の開発者の決め
 
 2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝版に縛らない列から windows-reactor 待ちの段へ移した。`OnChoiceHover`・`OnAnchorHover` のイベントは描画と関係ないが、返った文を見せる先がツールチップなので、イベントだけ先に作ると使い道の無い段になる。前の `link-context-copy` は今のまま先に進められる。
+
+## 古いパスの直し
+
+- 上の `crates/areka/src/readme/destination.rs` は、今は `crates/areka-session/src/readme/destination.rs`（`link_destinations` の印は同じファイルの 223 行）。設計・タスクでは今のパスで読む。

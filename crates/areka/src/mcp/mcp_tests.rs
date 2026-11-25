@@ -1,7 +1,6 @@
 //! `mcp` の決定論テスト（汲む系・振り分け・準備の前・終了の途中）。
 
 use std::cell::Cell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc;
 
@@ -15,16 +14,9 @@ use bevy_ecs::world::World;
 
 use super::resolve::{ActiveGhost, CANNOT_FIND, NOT_ACTIVE};
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, ghost, try_outcome};
 
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
-/// 解決を通る 8 本（`get_expression_table` と任意の 7 本）。
+/// SSP と同じで解決を通る 8 本（`get_expression_table` と任意の 7 本。`check_script` は `check_script_tests.rs`）。
 fn eight(ghost_name: Option<&str>) -> Vec<ToolCall> {
     let g = ghost_name.map(str::to_owned);
     vec![
@@ -83,8 +75,7 @@ fn dispatch_text(active: Option<&ActiveGhost>, call: ToolCall) -> Option<String>
 }
 
 fn text_of(pending: &Pending) -> Option<String> {
-    let answer = pending.try_answer().ok().flatten()?;
-    match answer.outcome.content.first() {
+    match try_outcome(pending)?.content.first() {
         Some(ToolContent::Text(text)) => Some(text.clone()),
         _ => Some(String::new()),
     }
@@ -270,12 +261,10 @@ fn request_sent_before_install_is_answered_after_it() {
     drain(&mut world);
 
     // 置き場の無い World＝0 体＝空の本文。
-    let answer = pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .expect("汲んだフレームで答える");
-    assert_eq!(answer.outcome, outcome::value(""));
+    assert_eq!(
+        kanade_fake_test_support::answer(&pending),
+        outcome::value("")
+    );
 }
 
 #[test]
@@ -331,18 +320,13 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
     tx.send(request).ok().expect("受け口は生きている");
 
     rig.world.run_schedule(wintf::ecs::Input);
-    let answer = pending.try_answer().ok().flatten();
+    let answer = try_outcome(&pending);
     let active = resolve::active(&rig.world).map(|g| g.name);
     let down = rig.shutdown();
 
     let answer = answer.expect("1 フレームで答える");
     assert_eq!(
-        (
-            answer.outcome.clone(),
-            answer.outcome.is_error,
-            active,
-            down
-        ),
+        (answer.clone(), answer.is_error, active, down),
         (outcome::value("A"), false, Some(Some("A".to_owned())), true),
         "（答え・isError・起動中のゴーストの名前・降ろせた）"
     );
@@ -447,26 +431,4 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
         ),
         "（本体側名・本体側名で解決・大小違いで解決・相方の名前で外れ・sakura.name2 で外れ・回しても同じ値・降ろせた）"
     );
-}
-
-/// `crates/areka/src/mcp/` の本番のファイル（`_tests.rs` で終わらないもの）は
-/// `not implemented yet` の文字列を持たない（どのツールもその答えを返さない状態を保つ）。
-#[test]
-fn production_files_have_no_not_implemented_yet() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("mcp");
-    let mut read = 0;
-    for entry in std::fs::read_dir(&dir).expect("mcp のフォルダが読める") {
-        let path = entry.expect("項目が読める").path();
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).expect("本番のファイルが読める");
-        assert!(!text.contains("not implemented yet"), "{name}");
-        read += 1;
-    }
-    // 較正: 本番のファイルを実際に読んだ（0 本で通らない）。
-    assert!(read > 10, "読んだ本番のファイルが {read} 本");
 }

@@ -232,6 +232,32 @@ fn last_shown_after_invalidate_cache_keeps_id_without_picture() {
     );
 }
 
+/// 合成メモを捨てた後も、最後に表示した入力（着せ替え・アニメーションの段）の絵を合成し直して返す。
+/// 未表示・未登録は無し。
+#[test]
+fn compose_last_shown_after_invalidate_cache_returns_the_last_picture() {
+    let (mut presenter, mut world) = setup();
+    let expected = golden(&presenter, BASE, &bound(), &animated());
+    assert_ne!(
+        expected,
+        golden(&presenter, BASE, &bound(), &PatternState::default()),
+        "前提: アニメーションの段で絵が変わる"
+    );
+    show(&mut presenter, &mut world, SHOWN, BASE, bound(), animated());
+    invalidate_ok(&mut presenter, &mut world, SHOWN);
+    assert!(
+        matches!(presenter.last_shown(SHOWN), Some((BASE, None))),
+        "前提: 絵が合成メモに無い"
+    );
+
+    let again = presenter
+        .compose_last_shown(SHOWN)
+        .map(|r| r.map(|c| bytes_of(&c)).map_err(|e| e.to_string()));
+    assert_eq!(again, Some(Ok((expected, 4, 3))));
+    assert!(presenter.compose_last_shown(NEVER_SHOWN).is_none());
+    assert!(presenter.compose_last_shown(UNREGISTERED).is_none());
+}
+
 /// 「surface の有無」は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録は無し。
 #[test]
 fn has_surface_is_true_only_for_raw_ids() {

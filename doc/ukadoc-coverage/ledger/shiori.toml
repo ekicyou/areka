@@ -7185,7 +7185,7 @@ OnUpdateComplete の台詞の終わりを待たないので、両方に応える
 update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
 ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
 update_event_failed）を残す。総括を列に置いたときは info のログ（update_summary・Reference の列）、
-読み直しを頼んだときは info のログ（update_reload_requested）、列を送った・捨てたときは info のログ
+読み直しを頼んだときは info のログ（update_reload_asked）、列を送った・捨てたときは info のログ
 （update_tail_sent）・warn のログ（update_tail_dropped）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
 送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）か、起動の知らせのときは起動の由来

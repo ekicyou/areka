@@ -7,17 +7,17 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use areka_update::FetchError;
-use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::procedure_test_support::{
-    Call, EXPECTED, EngineScript, FakePorts, GHOST_URL, SHELL_URL, WRONG, order, script_changed,
-    script_fetch_failed, script_md5_mismatch, script_none, script_rollback_failed,
+    Call, EXPECTED, EngineScript, FakePorts, GHOST_URL, SHELL_URL, WRONG, order, run,
+    script_changed, script_fetch_failed, script_md5_mismatch, script_none, script_rollback_failed,
     script_updated_with_leftovers, spec,
 };
 use super::{EngineRun, GhostResources, OrderEnd, Raised, run_order};
+use crate::session_tests::events_named;
 use crate::update::refs::TargetEnd;
-use crate::update::{SummaryKind, TargetKind, UpdateOrder, UpdateReason};
+use crate::update::{SummaryKind, TargetKind, UpdateReason};
 
 const SEP: &str = "\u{1}";
 
@@ -72,17 +72,6 @@ fn absolute(dir: &Path) -> String {
         .expect("相対のフォルダを絶対にできる")
         .display()
         .to_string()
-}
-
-fn with_event<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
-fn run(order: &UpdateOrder, ports: &FakePorts) -> (OrderEnd, Vec<CapturedEvent>) {
-    capture(|| run_order(order, ports))
 }
 
 /// 4 経路 × ゴースト／シェルの名で、送るイベントの名前・順・Reference と締めが 1 件だけのこと。
@@ -212,7 +201,7 @@ fn four_paths_send_canonical_events_for_ghost_and_shell() {
             assert_eq!(order_end.ends, vec![end.clone()], "{k} {label}");
             assert!(order_end.summarised, "{k} {label}");
 
-            let failed = with_event(&events, "update_failed");
+            let failed = events_named(&events, "update_failed");
             if matches!(end, TargetEnd::Failed { .. }) {
                 assert_eq!(failed.len(), 1, "{k} {label}: {events:?}");
                 assert_eq!(failed[0].level, Level::ERROR);
@@ -274,7 +263,7 @@ fn process_exec_answered_by_script_stops_the_order() {
         vec![Call::Raise("OnUpdateProcessExec", s(&["manual"]))]
     );
     assert_eq!(end, OrderEnd::default());
-    let answered = with_event(&events, "update_process_exec");
+    let answered = events_named(&events, "update_process_exec");
     assert_eq!(answered.len(), 1, "{events:?}");
     assert_eq!(answered[0].level, Level::INFO);
     assert_eq!(answered[0].field("answered"), Some("true"));
@@ -390,7 +379,7 @@ fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     );
     assert_eq!(ports.raised().last().unwrap().1, s(&["ghost\u{1}OK\u{1}0"]));
     assert_eq!(end.ends, vec![TargetEnd::Unchanged, TargetEnd::Skipped]);
-    let skipped = with_event(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
 
@@ -415,7 +404,7 @@ fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     assert_eq!(end.ends, vec![TargetEnd::Skipped, TargetEnd::Skipped]);
     assert!(!end.summarised);
     assert!(!end.reload_requested);
-    assert_eq!(with_event(&events, "update_target_skipped").len(), 2);
+    assert_eq!(events_named(&events, "update_target_skipped").len(), 2);
 }
 
 /// 取得口を作れなければ `OnUpdateBegin` → `OnUpdateFailure(connect)` と `error!` 1 件。
@@ -549,7 +538,7 @@ fn missing_resources_abandons_before_any_target() {
     let (end, events) = run(&order, &ports);
     assert!(ports.raised().is_empty());
     assert_eq!(end, OrderEnd::default());
-    let abandoned = with_event(&events, "update_abandoned");
+    let abandoned = events_named(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].field_str("at"), Some("resources"));
 }
@@ -587,7 +576,7 @@ fn leftovers_after_success_are_warned_and_still_changed() {
         &("OnUpdateResult", s(&["ghost\u{1}OK\u{1}1"]))
     );
 
-    let left = with_event(&events, "update_leftover");
+    let left = events_named(&events, "update_leftover");
     assert_eq!(left.len(), 2, "{events:?}");
     assert!(left.iter().all(|e| e.level == Level::WARN));
     let paths: Vec<&str> = left.iter().map(|e| e.field("path").unwrap()).collect();

@@ -140,6 +140,55 @@ pub(crate) fn levels_of(
         .collect()
 }
 
+/// `warn!` の記録の `event` 欄（届いた順）。
+pub(crate) fn warns(events: &[log_capture_kit::CapturedEvent]) -> Vec<Option<&str>> {
+    events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .map(|e| e.field_str("event"))
+        .collect()
+}
+
+/// `event` の記録が最初に現れた位置。
+pub(crate) fn position_of(events: &[log_capture_kit::CapturedEvent], event: &str) -> Option<usize> {
+    events
+        .iter()
+        .position(|e| e.field_str("event") == Some(event))
+}
+
+/// 台本の文字列を本番と同じ解析と組み立てで cue にし、受け口へ最後まで配る。
+pub(crate) fn play_into(script: &str, sink: impl dola::cue::CueSink + 'static) {
+    let instructions = areka_parsers::sakura::parse(script);
+    let compiled = areka_sakura::compile(
+        &instructions,
+        &areka_sakura::sysvar::SystemVarSnapshot::default(),
+    );
+    let mut player = dola::cue::CuePlayer::from_sheet(&compiled.sheet);
+    player.register_sink(Box::new(sink));
+    player.tick(compiled.sheet.absolute_end_time());
+}
+
+/// `dir` に `descript.txt`（`charset,UTF-8` の頭＋`body`＋末尾の改行・CRLF）を置く。
+pub(crate) fn write_descript(dir: &Path, body: &str) {
+    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
+    std::fs::write(
+        dir.join("descript.txt"),
+        format!("charset,UTF-8\r\n{body}\r\n"),
+    )
+    .expect("descript.txt を書く");
+}
+
+/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` と同じ状態＝`areka-nar` のテストの
+/// 助手と同じ形）。共有を 0 にすると組み上げの段の複写が先に落ちて確定まで届かない。
+pub(crate) fn hold(path: &Path) -> std::fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1 /* FILE_SHARE_READ */)
+        .open(path)
+        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
+}
+
 /// `event` の記録（`event` 欄で引く）。
 pub(crate) fn events_named<'a>(
     events: &'a [log_capture_kit::CapturedEvent],
@@ -149,6 +198,28 @@ pub(crate) fn events_named<'a>(
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .collect()
+}
+
+/// warn 以上の記録。
+pub(crate) fn warn_or_worse(
+    events: &[log_capture_kit::CapturedEvent],
+) -> Vec<&log_capture_kit::CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .collect()
+}
+
+/// `event` の記録のうち水準が `level` の件数。
+pub(crate) fn count(
+    events: &[log_capture_kit::CapturedEvent],
+    event: &str,
+    level: tracing::Level,
+) -> usize {
+    events_named(events, event)
+        .iter()
+        .filter(|e| e.level == level)
+        .count()
 }
 
 /// 今のゴースト・バルーンの決め方を書き換える（argv で決まった側は最後に使ったものを書かない）。

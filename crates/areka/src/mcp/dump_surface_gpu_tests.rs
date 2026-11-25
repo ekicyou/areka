@@ -3,14 +3,16 @@
 use std::time::Duration;
 
 use areka_kanade::RaiseOutcome;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::dump_surface::Args;
-use areka_mcp::{ToolContent, ToolOutcome};
+use areka_mcp::tools::outcome;
 use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 
 use super::dump_surface_tests::is_picture;
-use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
-use super::{Step, WaitAnswer, finish};
+use super::gpu_test_support::{self, FLUSH_EVENT, GpuRig, differing};
+use super::{Step, WaitAnswer};
+use crate::mcp::kanade_fake_test_support::try_outcome;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{Progress, RecordedCall};
 use areka_runtime::target_map::shell_target;
@@ -29,12 +31,7 @@ const SHOWN: u32 = 1101;
 #[test]
 fn shown_surface_matches_the_composed_pixels_at_native_size() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 144);
-    let shown = gpu.frames_until(100, |world| {
-        world
-            .get_non_send::<RuntimeWiring>()
-            .and_then(|w| w.presenter().last_shown(shell_target(0)))
-            .is_some_and(|(id, pic)| id == SHOWN && pic.is_some())
-    });
+    let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let answer = gpu
         .dump_surface(None, None)
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
@@ -42,48 +39,22 @@ fn shown_surface_matches_the_composed_pixels_at_native_size() {
     let down = gpu.shutdown();
 
     let answer = answer.expect("装着の後は上限のうちに答えが届く");
-    let (text, (w, h, pixels), mime) = match answer.outcome.content.as_slice() {
-        [
-            ToolContent::Text(text),
-            ToolContent::Image { data, mime_type },
-        ] => (text.clone(), decode_png(data), mime_type.clone()),
-        other => panic!("本文＋画像 1 枚の形ではない: {other:?}"),
-    };
-    let (ew, eh, expected_pixels) = expected;
-    // 画素の列は大きいので、食い違った画素の数で比べる（大きさが違えば数えずに大きさで赤）。
-    let differing = (pixels.len() == expected_pixels.len()).then(|| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(expected_pixels.as_chunks::<4>().0)
-            .filter(|(a, b)| a != b)
-            .count()
-    });
+    let picture = read_picture(&answer.outcome, &expected);
     assert_eq!(
-        (
-            shown,
-            down,
-            answer.outcome.is_error,
-            text,
-            mime,
-            (w, h),
-            differing
-        ),
+        (shown, down, picture),
         (
             true,
             true,
-            false,
-            "OK:scope 0, surface 1101 as currently shown (with running animations and dressups, \
-             before scaling and transparency)"
-                .to_owned(),
-            "image/png".to_owned(),
-            (ew, eh),
-            Some(0),
+            picture_of(
+                concat!(
+                    "OK:scope 0, surface 1101 as currently shown (with running animations and dressups, ",
+                    "before scaling and transparency)"
+                ),
+                &expected
+            ),
         ),
-        "（台本の surface が出た, 降ろせた, isError, 本文, MIME, 復号した（幅, 高さ）, 食い違った画素の数）"
+        "（台本の surface が出た, 降ろせた, 答え）"
     );
-    assert!(ew > 0 && eh > 0, "比べる絵が空ではない");
 }
 
 /// 表示中（[`SHOWN`]）と別の、同じスコープ 0 用の surface（`element0` 1 枚・アニメーションも着せ替えも無い）。
@@ -105,6 +76,16 @@ fn is_shown(world: &World, scope: u32, id: u32) -> bool {
         .is_some_and(|(shown, pic)| shown == id && pic.is_some())
 }
 
+/// スコープ 0 に `id` の表示が成立した後に隠れた（不可視）。
+fn is_hidden_after(world: &World, id: u32) -> bool {
+    is_shown(world, 0, id)
+        && world
+            .non_send::<RuntimeWiring>()
+            .presenter()
+            .target_visible(shell_target(0))
+            == Some(false)
+}
+
 /// 画面の状態＝スコープ 0・1 の（今の surface, 可視）。読み戻しの前後で比べる。
 fn screen(world: &World) -> [(Option<u32>, Option<bool>); 2] {
     let presenter = world.non_send::<RuntimeWiring>().presenter();
@@ -121,30 +102,9 @@ type PictureFacts = (bool, String, String, (u32, u32), Option<usize>);
 
 /// 本文＋画像 1 枚の答えを [`PictureFacts`] に読む。大きさが違えば画素は数えず `None`。形が違えば panic。
 fn read_picture(outcome: &ToolOutcome, expected: &(u32, u32, Vec<u8>)) -> PictureFacts {
-    let [
-        ToolContent::Text(text),
-        ToolContent::Image { data, mime_type },
-    ] = outcome.content.as_slice()
-    else {
-        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
-    };
-    let (w, h, pixels) = decode_png(data);
-    let differing = (pixels.len() == expected.2.len()).then(|| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(expected.2.as_chunks::<4>().0)
-            .filter(|(a, b)| a != b)
-            .count()
-    });
-    (
-        outcome.is_error,
-        text.clone(),
-        mime_type.clone(),
-        (w, h),
-        differing,
-    )
+    let (is_error, text, mime_type, decoded) = gpu_test_support::read_picture(outcome);
+    let differing = differing(&decoded, expected);
+    (is_error, text, mime_type, (decoded.0, decoded.1), differing)
 }
 
 /// [`read_picture`] の期待（成功・PNG・`expected` と同じ大きさ・食い違い 0）。
@@ -157,14 +117,6 @@ fn picture_of(text: &str, expected: &(u32, u32, Vec<u8>)) -> PictureFacts {
         (expected.0, expected.1),
         Some(0),
     )
-}
-
-/// 画像の無い失敗（本文 1 つだけ・`isError: true`）。
-fn refusal(reason: &str) -> ToolOutcome {
-    ToolOutcome {
-        content: vec![ToolContent::Text(format!("NG:{reason}"))],
-        is_error: true,
-    }
 }
 
 /// 指定した surface: 表示中の 1101 と別の 1100 を指定すると、1100 を合成した
@@ -279,7 +231,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
             true,
             true,
             false,
-            Some(refusal(
+            Some(outcome::ng(
                 "No such surface ID. Check get_expression_table tool"
             ))
         ),
@@ -295,14 +247,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
 #[test]
 fn hidden_character_returns_the_picture_before_hiding() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\w2\s[-1]\e", 96);
-    let hidden = gpu.frames_until(100, |world| {
-        is_shown(world, 0, SHOWN)
-            && world
-                .non_send::<RuntimeWiring>()
-                .presenter()
-                .target_visible(shell_target(0))
-                == Some(false)
-    });
+    let hidden = gpu.frames_until(100, |world| is_hidden_after(world, SHOWN));
     let answer = gpu
         .dump_surface(None, None)
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
@@ -322,6 +267,54 @@ fn hidden_character_returns_the_picture_before_hiding() {
             )
         ),
         "（1101 を出して隠した, 降ろせた, 答え）"
+    );
+}
+
+/// 隠したキャラクターの合成メモが捨てられた後（装置が替わった後と同じ）: `dump_surface`（省略）が、
+/// 最後に見せた 1101 を合成し直した絵で、今の見た目の本文の成功を返す。
+///
+/// # 非空虚性
+/// 捨てた後に ID の控えが残り絵だけが無いことを表示の層から確かめてから呼ぶ。控えが無いのを
+/// 想定外の失敗（`NG:`）で答えると赤。
+#[test]
+fn hidden_character_after_cache_invalidation_recomposes_the_last_picture() {
+    let mut gpu = GpuRig::new(r"\0\s[1101]\w2\s[-1]\e", 96);
+    let hidden = gpu.frames_until(100, |world| is_hidden_after(world, SHOWN));
+    let invalidated = gpu.invalidate_cache(shell_target(0));
+    let kept = gpu
+        .rig
+        .world
+        .non_send::<RuntimeWiring>()
+        .presenter()
+        .last_shown(shell_target(0))
+        .map(|(id, pic)| (id, pic.is_some()));
+    let answer = gpu
+        .dump_surface(None, None)
+        .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
+    let expected = gpu.composed_rgba(SHOWN);
+    let down = gpu.shutdown();
+
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
+    assert_eq!(
+        (
+            hidden,
+            invalidated,
+            kept,
+            down,
+            read_picture(&answer.outcome, &expected)
+        ),
+        (
+            true,
+            true,
+            Some((SHOWN, false)),
+            true,
+            picture_of(
+                "OK:scope 0, surface 1101 as currently shown (with running animations and \
+                 dressups, before scaling and transparency)",
+                &expected
+            )
+        ),
+        "（1101 を出して隠した, 捨てられた, 控え（ID, 絵が在るか）, 降ろせた, 答え）"
     );
 }
 
@@ -363,7 +356,7 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
             true,
             true,
             true,
-            Some(refusal("No surface has been shown in this scope yet")),
+            Some(outcome::ng("No surface has been shown in this scope yet")),
             picture_of(
                 "OK:scope 1, surface 2100 rendered alone in its initial state (not what is on the \
                  screen now)",
@@ -391,7 +384,7 @@ fn scope_two_is_no_such_scope() {
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let down = gpu.shutdown();
 
-    let no_scope = Some(refusal("No such scope in this ghost"));
+    let no_scope = Some(outcome::ng("No such scope in this ghost"));
     assert_eq!(
         (
             shown,
@@ -419,10 +412,10 @@ fn before_attachment_answers_after_the_frames_run() {
         .get_non_send::<RuntimeWiring>()
         .map(|w| w.attached());
     let pending = gpu.dump_surface(None, Some(i64::from(OTHER)));
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let mut later = None;
     let arrived = gpu.frames_until(100, |_| {
-        later = pending.try_answer().ok().flatten();
+        later = try_outcome(&pending);
         later.is_some()
     });
     let expected = gpu.composed_rgba(OTHER);
@@ -435,7 +428,7 @@ fn before_attachment_answers_after_the_frames_run() {
             at_once,
             arrived,
             down,
-            read_picture(&later.outcome, &expected)
+            read_picture(&later, &expected)
         ),
         (
             Some(false),
@@ -513,15 +506,15 @@ fn calls_do_not_disturb_the_ghost() {
     );
 }
 
-/// 符号化のスレッドの記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事を、記録を数える中で符号化のスレッドの体
-/// （`finish`）に通すと、ERROR が 0 件で画像つきの成功。
+/// 仕事の記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事をその場で
+/// （符号化のスレッドを通さず）記録を数える中で走らせると、ERROR が 0 件で画像つきの成功。
 ///
 /// # 非空虚性
 /// 種が写しまで済んだ成功（`Step::Encode`）であることを確かめる（その場の失敗なら赤）。判定の関数
-/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
-/// `fail` を呼ぶと件数と判定の両方で赤。
+/// `is_picture` と ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で `fail` を呼ぶと
+/// 件数と判定の両方で赤。
 #[test]
-fn surface_job_runs_on_the_encoding_body_without_error() {
+fn surface_job_runs_without_error() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let args = Args {
@@ -535,7 +528,7 @@ fn surface_job_runs_on_the_encoding_body_without_error() {
     let Some(Step::Encode(scope, job)) = step else {
         panic!("台本の surface が出た後の今の見た目は、写しまで済んだ成功の種");
     };
-    let (answered, levels) = count_levels(|| finish(super::TOOL, scope, job, Duration::ZERO));
+    let (answered, levels) = count_levels(|| job(Duration::ZERO));
     assert_eq!(
         (shown, down, scope, is_picture(&answered), levels.error),
         (true, true, 0, true, 0),

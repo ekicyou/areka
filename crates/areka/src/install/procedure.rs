@@ -74,7 +74,7 @@ pub(crate) enum Raised {
     Script,
     /// 返事なし・空の台本。
     NoReply,
-    /// 終了が始まった・ゴーストが居ない。
+    /// 終了が始まった・ゴーストが居ない・往復が失敗した。
     Closed,
     /// 起動の前なので、送らなかった（受け取るゴーストが居ない）。
     Unsent,
@@ -107,24 +107,23 @@ pub(crate) enum ArchiveEnd {
     Refused,
     Declined,
     Failed(FailureWord),
-    /// 終了が始まったので途中でやめた（締めの知らせ 0 件）。
+    /// 入れ終える前に口が閉じたので途中でやめた（入れ終えた物は無い。断り・失敗の知らせで閉じたときもここ）。
     Abandoned,
 }
 
-/// 口が「閉じた」を返した（終了が始まった・ゴーストが居ない）。以後は送らない。
+/// 口が「閉じた」を返した（終了が始まった・ゴーストが居ない・往復が失敗した）。以後は送らない。
 struct Closed;
 
 /// 依頼 1 件を並んだ順に扱い、書庫ごとの終わり方を返す。
 ///
-/// 途中でやめた書庫があれば、そこで抜ける（以後の書庫は扱わず、イベントも送らない）。
+/// 口が閉じた書庫があれば、そこで抜ける（以後の書庫は扱わず、イベントも送らない）。
 /// 書庫が 2 本以上で全部が入ったときだけ、最後に `OnInstallCompleteAll` を送る。
 pub(crate) fn run_order(order: &InstallOrder, ports: &mut dyn InstallPorts) -> Vec<ArchiveEnd> {
     let mut ends = Vec::with_capacity(order.archives.len());
     for (index, archive) in order.archives.iter().enumerate() {
-        let end = run_archive(archive, &order.archives[index + 1..], order.origin, ports);
-        let abandoned = end == ArchiveEnd::Abandoned;
+        let (end, stop) = run_archive(archive, &order.archives[index + 1..], order.origin, ports);
         ends.push(end);
-        if abandoned {
+        if stop {
             return ends;
         }
     }
@@ -145,15 +144,28 @@ pub(crate) fn run_order(order: &InstallOrder, ports: &mut dyn InstallPorts) -> V
     ends
 }
 
-/// 書庫 1 本の一周。口が閉じたら、同じ依頼のまだ始めていない書庫（`rest`）の件数とパスも
-/// 載せた記録を 1 件残して `Abandoned`。
+/// 書庫 1 本の一周。終わり方と、以後の書庫を止めるかを返す。入れ終える前に口が閉じたら、同じ依頼の
+/// まだ始めていない書庫（`rest`）の件数とパスも載せた記録を 1 件残して `Abandoned`。書いた後に
+/// 閉じたら、入れた書庫には残さず、`rest` があればその先頭を `archive` にして 1 件残す。
 fn run_archive(
     path: &Path,
     rest: &[PathBuf],
     origin: InstallOrigin,
     ports: &mut dyn InstallPorts,
-) -> ArchiveEnd {
+) -> (ArchiveEnd, bool) {
     match archive_steps(path, origin, ports) {
+        Ok((end, true)) => {
+            if let Some((next, later)) = rest.split_first() {
+                tracing::warn!(
+                    event = "install_abandoned",
+                    archive = %next.display(),
+                    skipped = later.len(),
+                    skipped_archives = ?later,
+                    "[install] 前の書庫は入れ終えたが締めの知らせで口が閉じたので、まだ始めていない書庫を扱いません"
+                );
+            }
+            (end, true)
+        }
         Ok(end) => end,
         Err(Closed) => {
             tracing::warn!(
@@ -161,18 +173,19 @@ fn run_archive(
                 archive = %path.display(),
                 skipped = rest.len(),
                 skipped_archives = ?rest,
-                "[install] 終了が始まった・ゴーストが居ないので、書庫の手続きを途中でやめました（まだ始めていない書庫も扱いません）"
+                "[install] 終了が始まった・ゴーストが居ない・往復が失敗したので、書庫の手続きを途中でやめました（まだ始めていない書庫も扱いません）"
             );
-            ArchiveEnd::Abandoned
+            (ArchiveEnd::Abandoned, true)
         }
     }
 }
 
+/// 書庫 1 本の手続き。書いた後に締めの知らせで口が閉じたら `Installed` と「止める」を返す。
 fn archive_steps(
     path: &Path,
     origin: InstallOrigin,
     ports: &mut dyn InstallPorts,
-) -> Result<ArchiveEnd, Closed> {
+) -> Result<(ArchiveEnd, bool), Closed> {
     tracing::info!(
         event = "install_begin",
         archive = %path.display(),
@@ -185,7 +198,7 @@ fn archive_steps(
     // 読み取りと検査（1 バイトも書かない）。
     let archive = match NarArchive::open(path) {
         Ok(archive) => archive,
-        Err(error) => return fail_nar(ports, path, "open", &error),
+        Err(error) => return fail_nar(ports, path, "open", &error).map(go_on),
     };
     let manifest = archive.manifest();
     let kind = manifest.kind;
@@ -214,7 +227,7 @@ fn archive_steps(
                 "[install] 別のゴーストを指名した書庫なので断ります"
             );
             send(ports, ON_INSTALL_REFUSE, refuse_refs(&accept, manifest))?;
-            return Ok(ArchiveEnd::Refused);
+            return Ok(go_on(ArchiveEnd::Refused));
         }
         AcceptVerdict::AcceptMissing => {
             return fail(
@@ -227,13 +240,14 @@ fn archive_steps(
                     word: FailureWord::InvalidType,
                     survivors: &[],
                 },
-            );
+            )
+            .map(go_on);
         }
     };
 
     // 利用条件（`OnInstallBegin` と照合の後・展開の前）。
     if let Some(end) = terms_step(ports, path, &archive)? {
-        return Ok(end);
+        return Ok(go_on(end));
     }
 
     let result = match destination_of(manifest, &facts) {
@@ -251,7 +265,7 @@ fn archive_steps(
     };
     let outcome = match result {
         Ok(outcome) => outcome,
-        Err(error) => return fail_nar(ports, path, "install", &error),
+        Err(error) => return fail_nar(ports, path, "install", &error).map(go_on),
     };
 
     // 入れた物（識別子・名前・場所・並びは本体が先・同梱バルーンが後）。
@@ -282,8 +296,11 @@ fn archive_steps(
         let (title, body) = skipped_notice(path, &outcome.name, &items, &outcome.skipped);
         ports.warn_skipped(&title, &body);
     }
-    closing?;
-    Ok(ArchiveEnd::Installed(items))
+    Ok((ArchiveEnd::Installed(items), closing.is_err()))
+}
+
+fn go_on(end: ArchiveEnd) -> (ArchiveEnd, bool) {
+    (end, false)
 }
 
 /// 利用条件を出し、拒否なら `OnGhostTermsDecline` だけを送って `Declined` を返す。
@@ -515,7 +532,7 @@ fn installed_record(kind: InstallKind, outcome: &InstallOutcome) -> InstalledRec
 
 #[cfg(test)]
 #[path = "procedure_test_support.rs"]
-mod procedure_test_support;
+pub(crate) mod procedure_test_support;
 
 #[cfg(test)]
 #[path = "procedure_tests.rs"]

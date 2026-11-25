@@ -4,15 +4,14 @@
 //! 偽の SHIORI の土台（[`SwitchRig`]・emo2 の複製のゴースト A）に、GPU 資源（実 GPU）と、本物の
 //! 配置の準備（作業領域だけ合成）で組んだ窓の一式（偽 HWND・`DPI` は呼び手が選ぶ）を据え、本番の
 //! `Input`・`Update` の段をそのまま回す。組み方は `shell_balloon_switch_session_lap_tests.rs` の
-//! `lap_rig_of`・`spawn_windows` と同じ（2 つ目のシェルは足さない）。台本は A の `OnBoot` の応答で
-//! 流し、置き場のゴーストの dispatcher へ合成の Tick を注入して進める。MCP の受け口と後から答える
-//! 置き場も据えるので、装着の前に預けた答えはフレームを回すと届く。偽の SHIORI の呼び出しの列を
-//! 比べる前に通す関所（kanade へ返事つきの印の NOTIFY）も持つ。ERROR の記録を捕まえる口は
-//! 土台に持たず、呼ぶ側のテストが `log_capture_kit`（`capture`・`count_levels`）を直接使う。
+//! `lap_rig_of` と同じ（2 つ目のシェルは足さない）で、窓は `shell_balloon_switch_session_lap_test_support.rs`
+//! の `spawn_windows` で生やす。台本は A の `OnBoot` の応答で流し、置き場のゴーストの dispatcher へ
+//! 合成の Tick を注入して進める。MCP の受け口と後から答える置き場も据えるので、装着の前に預けた
+//! 答えはフレームを回すと届く。偽の SHIORI の呼び出しの列を比べる前に通す関所（kanade へ返事つきの
+//! 印の NOTIFY）も持つ。ERROR の記録を捕まえる口は土台に持たず、呼ぶ側のテストが
+//! `log_capture_kit`（`capture`・`count_levels`）を直接使う。
 
 use std::panic::Location;
-use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -23,54 +22,33 @@ use areka_emo_present::balloon::{
     build_balloon_target, load_scope_balloon_model, resolve_balloon_faces,
 };
 use areka_emo_present::shell_target::load_shell_target;
+use areka_emo_present::{PresentCommand, TargetId};
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
+use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
+use areka_mcp::{ToolContent, ToolOutcome};
 use bevy_ecs::world::World;
-use windows::Win32::Foundation::{GENERIC_READ, HWND};
-use windows::Win32::Graphics::Imaging::{
-    GUID_WICPixelFormat32bppRGBA, IWICBitmapSource, WICBitmapDitherTypeNone,
-    WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
-};
-use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
-};
-use windows::core::{HSTRING, Interface};
-use wintf::com::wic::{
-    WICBitmapDecoderExt, WICBitmapSourceExt, WICFormatConverterExt, WICImagingFactoryExt,
-    wic_factory,
-};
-use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
+use temp_path_kit::TempPath;
+use wintf::ecs::{FrameTime, GraphicsCore, Input, Update, WucGraphicsResource};
 
 use crate::mcp::resolve;
 use crate::sample_test_support::switch_rig;
-use areka_placement::follow::MonitorSnapshot;
-use areka_placement::resolver::RectPx;
-use areka_placement::spawn::spawn_ghost_windows;
+use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::{
+    pump_messages, spawn_windows,
+};
 use areka_session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 
-/// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
-const WORK_AREA: RectPx = RectPx {
-    left: 0,
-    top: 0,
-    right: 3840,
-    bottom: 2100,
-};
 /// Tick を注入する実時間の最小間隔（反復ごとに投函して受信箱を溢れさせない）。
 const TICK_EVERY: Duration = Duration::from_millis(1);
-/// 1 巡で配るメッセージの上限（起こし直しの投函が続いても巡を終わらせる）。
-const PUMP_MAX: usize = 1024;
 /// 関所の印のイベント（許可表に在り、kanade は Tick が無いと自分では送らない・NOTIFY で送る）。
 pub(in crate::mcp) const FLUSH_EVENT: &str = "OnSecondChange";
 
 /// 窓・GPU つきのゴースト A。
 pub(in crate::mcp) struct GpuRig {
     pub(in crate::mcp) rig: SwitchRig,
-    /// 注入した Tick の合成の時刻（単調増加）。
-    clock_ms: u64,
     /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
     _gpu: GpuPermit,
 }
@@ -102,19 +80,16 @@ impl GpuRig {
         crate::mcp::install(&mut rig.world, inbox);
         rig.wire_app_memory();
         rig.boot("A");
-        Self {
-            rig,
-            clock_ms: 0,
-            _gpu: gpu,
-        }
+        Self { rig, _gpu: gpu }
     }
 
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
-    /// 巡ごとに置き場のゴーストの dispatcher へ `step_ms` 進めた合成の Tick を注入して台詞を進め
+    /// 前の注入から [`TICK_EVERY`] 以上たった巡で `SwitchRig::inject_talk_tick` で `step_ms` 進めた合成の Tick を注入して台詞を進め
     /// （0 なら台詞の時計は止まったまま）、本番の巡と同じく `FrameTime` を置き、メッセージを配る。
     ///
     /// 打ち切りは足場の進みの目印（`SwitchRig::progress_probe`・SHIORI の呼び出しの数）で決め、打ち切ったら
-    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`（lap の `LapRig::frames_until` と同じ形）。台詞の再生（dispatcher が Tick を消化する進み）は
+    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。lap の `LapRig::frames_until` と違い、
+    /// UI の側の進みは目印に数えず、Tick の回数にも上限を置かない。台詞の再生（dispatcher が Tick を消化する進み）は
     /// テストの側から読めないので、SHIORI を呼ばずに台詞だけが進む間は目印が動かない（30 秒で［止まった］）。
     /// 合成の時刻は 1 巡に高々 `step_ms` しか進まない（時刻が観測を追い越さない）ので、台本の待ちを
     /// `step_ms` 1 で進めると待ちの ms と同じ数の巡が要り、巡が遅い机では届かない。`step_ms` 1（実時間
@@ -125,7 +100,7 @@ impl GpuRig {
         step_ms: u64,
         mut done: impl FnMut(&World) -> bool,
     ) -> bool {
-        let Self { rig, clock_ms, .. } = self;
+        let rig = &mut self.rig;
         let mut last_tick: Option<Instant> = None;
         let probe = rig.progress_probe();
         let at = Location::caller();
@@ -135,17 +110,7 @@ impl GpuRig {
             || {
                 if step_ms > 0 && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                     last_tick = Some(Instant::now());
-                    *clock_ms += step_ms;
-                    if let Some(dispatcher) = rig
-                        .world
-                        .get_non_send::<GhostSlot>()
-                        .and_then(|slot| slot.0.as_ref())
-                        .and_then(|session| session.dispatcher())
-                    {
-                        let _ = dispatcher.send(DispatcherMsg::Tick {
-                            now: MonotonicMs(*clock_ms),
-                        });
-                    }
+                    rig.inject_talk_tick(step_ms);
                 }
                 rig.world
                     .insert_resource(FrameTime(dola::runtime::clock::now()));
@@ -188,6 +153,25 @@ impl GpuRig {
         let ghost = resolve::active(&self.rig.world).expect("A は起動中");
         crate::mcp::dump_balloon::handle(&mut self.rig.world, &ghost, args, req.reply);
         pending
+    }
+
+    /// `target` の合成メモを本番の指令 `InvalidateCache` で捨てる（装置が替わった後の
+    /// 隠れた target と同じ、ID の控えは在り絵だけが無い状態を作る）。成功の返事が届けば `true`。
+    pub(in crate::mcp) fn invalidate_cache(&mut self, target: TargetId) -> bool {
+        let world = &mut self.rig.world;
+        let mut wiring = world
+            .remove_non_send::<RuntimeWiring>()
+            .expect("結線状態が在る");
+        let (tx, rx) = reply_channel();
+        wiring.apply_present(
+            world,
+            PresentCommand::InvalidateCache {
+                target,
+                reply: Some(tx),
+            },
+        );
+        world.insert_non_send(wiring);
+        matches!(rx.try_recv(), Ok(Some(Ok(()))))
     }
 
     /// 台詞の時計を止めたまま本番の段を有界に回し、`pending` の答えを待つ（答えが後の巡で届いても、
@@ -318,58 +302,6 @@ impl GpuRig {
     }
 }
 
-/// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と
-/// `DPI::from_dpi(dpi, dpi)` を持たせる（`WindowPos` への書込の口が通る・実窓には触れない）。
-fn spawn_windows(rig: &mut SwitchRig, dpi: u16) {
-    let prepared = areka_placement::prepare_ghost_windows_with_work_area(
-        &rig.root.ghost_dir("A"),
-        &rig.root.balloon_dir(BALLOON),
-        WORK_AREA,
-        Some(96),
-    )
-    .expect("A の配置の準備");
-    let world = &mut rig.world;
-    world.insert_resource(MonitorSnapshot {
-        work_areas: vec![WORK_AREA],
-    });
-    let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
-    let mut raw = 0x100usize;
-    let all: Vec<_> = windows
-        .scopes()
-        .flat_map(|s| [windows.char_window(s), windows.balloon_window(s)])
-        .map(Option::unwrap)
-        .collect();
-    for &window in &all {
-        world.entity_mut(window).insert(WindowHandle {
-            hwnd: HWND(raw as *mut _),
-        });
-        raw += 0x10;
-    }
-    // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
-    world.flush();
-    for window in all {
-        world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
-    }
-}
-
-/// 今のスレッドのキューに溜まったメッセージを配る（本番のメッセージループの 1 巡ぶん）。文字の層の
-/// cue の適用は executor の窓へのメッセージで走るので、配らないと台詞の文字が載らない。
-fn pump_messages() {
-    let mut msg = MSG::default();
-    for _ in 0..PUMP_MAX {
-        // SAFETY: 今のスレッドのキューから 1 件取り出して配るだけ（待たない）。
-        let got = unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE) };
-        if !got.as_bool() {
-            break;
-        }
-        // SAFETY: いま取り出したメッセージを同じスレッドで配る。
-        unsafe {
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-}
-
 /// 乗算済み BGRA → 乗算していない RGBA（検査の側で別に組む）。
 pub(in crate::mcp) fn unpremultiply(premultiplied_bgra: &[u8]) -> Vec<u8> {
     premultiplied_bgra
@@ -390,52 +322,42 @@ pub(in crate::mcp) fn unpremultiply(premultiplied_bgra: &[u8]) -> Vec<u8> {
 /// 画像の content の base64 の PNG を、ワークツリーの `target\` の下の一時ファイルを経て WIC で
 /// 復号し、乗算していない RGBA の（幅, 高さ, 画素）を返す（別の実装で読み戻す）。
 pub(in crate::mcp) fn decode_png(png_base64: &str) -> (u32, u32, Vec<u8>) {
-    // 呼び出しごとに別のフォルダ（並走するテストが互いのフォルダを消さない）。
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/test-tmp")
-        .join(format!(
-            "areka-dump-gpu-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-    std::fs::create_dir_all(&dir).expect("target の下に一時ディレクトリを作れる");
-    let file = dir.join("dump.png");
+    let dir = TempPath::new("dump-gpu");
+    let file = dir.child("dump.png");
     std::fs::write(&file, base64_decode(png_base64)).expect("PNG を書ける");
-    let decoded = wic_decode_rgba(&file);
-    let _ = std::fs::remove_dir_all(&dir);
-    decoded
+    crate::png_image::tests::wic_decode_rgba(&file)
 }
 
-fn wic_decode_rgba(path: &Path) -> (u32, u32, Vec<u8>) {
-    let factory = wic_factory().expect("WIC の工場");
-    let decoder = factory
-        .create_decoder_from_filename(
-            &HSTRING::from(path.as_os_str()),
-            None,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-        )
-        .expect("WIC が PNG を開ける");
-    let frame = decoder.frame(0).expect("先頭のフレーム");
-    let converter = factory.create_format_converter().expect("変換器");
-    converter
-        .init(
-            &frame.cast::<IWICBitmapSource>().expect("フレームは絵の源"),
-            &GUID_WICPixelFormat32bppRGBA,
-            WICBitmapDitherTypeNone,
-            None,
-            0.0,
-            WICBitmapPaletteTypeCustom,
-        )
-        .expect("乗算していない RGBA へ変換できる");
-    let source: IWICBitmapSource = converter.cast().expect("変換器は絵の源");
-    let (w, h) = source.get_size().expect("大きさ");
-    let mut pixels = vec![0u8; (w * h * 4) as usize];
-    source
-        .copy_pixels(None, w * 4, &mut pixels)
-        .expect("画素を写せる");
-    (w, h, pixels)
+/// `a` と `b` の（大きさが同じなら）食い違った画素の数。大きさが違えば `None`。
+pub(in crate::mcp) fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> Option<usize> {
+    ((a.0, a.1) == (b.0, b.1)).then(|| {
+        a.2.as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.2.as_chunks::<4>().0)
+            .filter(|(p, q)| p != q)
+            .count()
+    })
+}
+
+/// 本文＋画像 1 枚の答えの（isError, 本文, MIME, 復号した（幅, 高さ, 乗算していない RGBA））。
+/// 形が違えば panic。
+pub(in crate::mcp) fn read_picture(
+    outcome: &ToolOutcome,
+) -> (bool, String, String, (u32, u32, Vec<u8>)) {
+    let [
+        ToolContent::Text(text),
+        ToolContent::Image { data, mime_type },
+    ] = outcome.content.as_slice()
+    else {
+        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
+    };
+    (
+        outcome.is_error,
+        text.clone(),
+        mime_type.clone(),
+        decode_png(data),
+    )
 }
 
 /// 標準の文字集合・`=` の詰めありの base64 を戻す（改行なし前提）。

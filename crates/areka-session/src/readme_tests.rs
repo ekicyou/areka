@@ -5,11 +5,10 @@
 
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
 
-use super::destination::{Target, classify};
+use super::destination::Target;
 use super::opener::{OpenJob, Opener};
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
@@ -36,17 +35,7 @@ fn with_opener(world: &mut World, ghost_dir: PathBuf) -> Receiver<OpenJob> {
 
 /// 開く系の行き先（`\j` の URL）。
 fn url_request(url: &str) -> ReadmeRequest {
-    ReadmeRequest::Open(
-        classify(JUMP_TAG_CARRIER, &[url])
-            .expect("開く系")
-            .expect("受理される"),
-    )
-}
-
-/// クロージャ実行中にこのスレッドで発火した記録を 1 行 1 件で返す。
-fn capture<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelFields, f);
-    lines
+    ReadmeRequest::Open(super::opener_test_support::dest_url(url))
 }
 
 /// 指定した出来事の行だけを拾う。
@@ -55,7 +44,7 @@ fn lines_of<'a>(lines: &'a [String], event: &str) -> Vec<&'a String> {
 }
 
 /// 入力の段に載っている system の数（段がまだ無ければ 0）。
-fn input_systems_len(world: &World) -> usize {
+pub(crate) fn input_systems_len(world: &World) -> usize {
     world
         .resource::<Schedules>()
         .get(Input)
@@ -81,7 +70,7 @@ fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
     );
     assert!(
         world.get_resource::<Opener>().is_some(),
-        "開く専用のスレッドの持ち物が入る（要件 7.5）"
+        "開く専用のスレッドの持ち物が入る"
     );
 }
 
@@ -132,7 +121,7 @@ fn resolve_path_uses_the_readme_key_when_present() {
     assert_eq!(
         resolve_path(root, Some("manual.txt")),
         root.join("manual.txt"),
-        "キーの値をそのまま根の直下で解決する（要件 4.1 ⑴）"
+        "キーの値をそのまま根の直下で解決する"
     );
 }
 
@@ -141,11 +130,11 @@ fn resolve_path_uses_the_readme_key_when_present() {
 fn resolve_path_falls_back_to_the_canonical_default_name() {
     let root = Path::new("C:\\ghosts\\sample");
 
-    assert_eq!(DEFAULT_README, "readme.txt", "正典の既定名（要件 4.1 ⑵）");
+    assert_eq!(DEFAULT_README, "readme.txt", "正典の既定名");
     assert_eq!(
         resolve_path(root, None),
         root.join("readme.txt"),
-        "キーが無いときは既定名で解決する（要件 4.1 ⑵）"
+        "キーが無いときは既定名で解決する"
     );
 }
 
@@ -172,34 +161,50 @@ fn is_available_follows_the_file_and_records_the_absence_only_once() {
     let mut world = World::new();
     let _tx = wired(&mut world, path.clone());
 
-    let missing = capture(|| {
+    let ((), missing) = capture_lines(LineFormat::LevelFields, || {
         for _ in 0..3 {
-            assert!(!is_available(&world), "ファイルが無い間は無効（要件 4.3）");
+            assert!(!is_available(&world), "ファイルが無い間は無効");
         }
     });
     assert_eq!(
         lines_of(&missing, "readme_missing").len(),
         1,
-        "「無い」の記録は初回だけ（3 回見ても 1 行・要件 4.3）: {missing:?}"
+        "「無い」の記録は初回だけ（3 回見ても 1 行）: {missing:?}"
     );
     assert!(
         missing
             .iter()
             .any(|l| l.contains("readme_missing") && l.contains("level=DEBUG")),
-        "「無い」は debug! で記録する（要件 4.3）: {missing:?}"
+        "「無い」は debug! で記録する: {missing:?}"
     );
 
     std::fs::write(&path, "説明書").expect("一時ディレクトリへ書けるはず");
 
-    let after = capture(|| {
-        assert!(
-            is_available(&world),
-            "ファイルを置けば有効に変わる（要件 4.3）"
-        );
+    let ((), after) = capture_lines(LineFormat::LevelFields, || {
+        assert!(is_available(&world), "ファイルを置けば有効に変わる");
     });
     assert!(
         lines_of(&after, "readme_missing").is_empty(),
         "有効になった後に「無い」の記録は出ない: {after:?}"
+    );
+}
+
+/// 置き場を差し替えた後に別の無いファイルを指すと、不在の記録がもう 1 件出る。
+#[test]
+fn set_path_to_another_missing_file_records_the_absence_again() {
+    let dir = TempPath::new("readme-set-path-missing");
+    let mut world = World::new();
+    let _tx = wired(&mut world, dir.child("a.txt"));
+    let ((), first) = capture_lines(LineFormat::LevelFields, || assert!(!is_available(&world)));
+    assert_eq!(lines_of(&first, "readme_missing").len(), 1, "{first:?}");
+
+    set_path(&mut world, dir.child("b.txt"));
+
+    let ((), after) = capture_lines(LineFormat::LevelFields, || assert!(!is_available(&world)));
+    assert_eq!(
+        lines_of(&after, "readme_missing").len(),
+        1,
+        "新しい置き場の不在が記録に残る: {after:?}"
     );
 }
 
@@ -212,7 +217,7 @@ fn is_available_follows_the_file_and_records_the_absence_only_once() {
 fn take_pending_is_empty_without_wiring_and_records_it() {
     let world = World::new();
 
-    let lines = capture(|| {
+    let ((), lines) = capture_lines(LineFormat::LevelFields, || {
         assert!(take_pending(&world).is_empty(), "ReadmeWiring 不在は 0 件");
     });
     assert_eq!(
@@ -241,11 +246,7 @@ fn take_pending_returns_every_queued_request_and_leaves_none() {
             .expect("受信口は生存している");
     }
 
-    assert_eq!(
-        take_pending(&world).len(),
-        3,
-        "溜まった 3 件を全件返す（要件 4.5）"
-    );
+    assert_eq!(take_pending(&world).len(), 3, "溜まった 3 件を全件返す");
     assert!(
         take_pending(&world).is_empty(),
         "取り出した要求は残らない（同じ要求で二度開かない）"
@@ -304,7 +305,9 @@ fn drain_hands_readme_and_open_requests_over_in_arrival_order() {
 fn open_from_world_warns_without_wiring() {
     let world = World::new();
 
-    let lines = capture(|| open_from_world(&world, MENU_TAG));
+    let ((), lines) = capture_lines(LineFormat::LevelFields, || {
+        open_from_world(&world, MENU_TAG)
+    });
 
     let warned = lines_of(&lines, "readme_open_no_wiring");
     assert_eq!(
@@ -314,7 +317,7 @@ fn open_from_world_warns_without_wiring() {
     );
     assert!(
         warned[0].contains("level=WARN"),
-        "不在は warn! レベル（エラー表）: {warned:?}"
+        "不在は warn! レベル: {warned:?}"
     );
 }
 
@@ -349,21 +352,16 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
     let _tx = wired(&mut world, dir.child("readme.txt"));
     let jobs = with_opener(&mut world, dir.path().to_path_buf());
 
-    let lines = capture(|| open_from_world(&world, SCRIPT_README_TAG));
+    let ((), lines) = capture_lines(LineFormat::LevelFields, || {
+        open_from_world(&world, SCRIPT_README_TAG)
+    });
 
-    assert!(
-        jobs.try_recv().is_err(),
-        "無いファイルは渡さない（要件 5.1）"
-    );
+    assert!(jobs.try_recv().is_err(), "無いファイルは渡さない");
     let skipped = lines_of(&lines, "readme_open_skipped_missing");
-    assert_eq!(
-        skipped.len(),
-        1,
-        "要求 1 件につき 1 行（要件 5.1）: {lines:?}"
-    );
+    assert_eq!(skipped.len(), 1, "要求 1 件につき 1 行: {lines:?}");
     assert!(
         skipped[0].contains("level=WARN") && skipped[0].contains("readme.txt"),
-        "warn! でパスを添える（要件 5.1）: {skipped:?}"
+        "warn! でパスを添える: {skipped:?}"
     );
 }
 
@@ -406,7 +404,9 @@ fn set_path_makes_the_drain_open_the_new_readme() {
 fn set_path_warns_without_wiring() {
     let mut world = World::new();
 
-    let lines = capture(|| set_path(&mut world, PathBuf::from("readme.txt")));
+    let ((), lines) = capture_lines(LineFormat::LevelFields, || {
+        set_path(&mut world, PathBuf::from("readme.txt"))
+    });
 
     let warned = lines_of(&lines, "readme_set_path_no_wiring");
     assert_eq!(warned.len(), 1, "不在を 1 行記録する: {lines:?}");

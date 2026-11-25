@@ -20,6 +20,7 @@ use super::shell_balloon_switch_session_lap_tests::{
     look_of, recorded_shells,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::boot_resolve::read_last_shell;
 use crate::ghost_switch::{GhostSpec, SwitchInFlight, SwitchRequest, request_ghost_switch};
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -30,15 +31,6 @@ use areka_input::user_break::on_left_press;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::ScriptedShioriBackendBuilder;
 use areka_runtime::target_map::balloon_target;
-
-/// `event` の記録の数。
-// `ghost_switch` の `fallback_tests::count_event` は `ghost_session` の木の下から見えない。
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
-}
 
 /// `info!` の取りやめ（`skin_switch_dropped`）の理由の並び（ほかのレベルの取りやめは数えない）。
 fn dropped_reasons(events: &[CapturedEvent]) -> Vec<Option<String>> {
@@ -66,10 +58,10 @@ fn errors(events: &[CapturedEvent]) -> Vec<(Option<String>, Option<String>)> {
 /// 切替の終わり方の記録（完了・中止・失敗・取りやめ）の数。
 fn outcomes(events: &[CapturedEvent]) -> [usize; 4] {
     [
-        count(events, "skin_switch_done"),
-        count(events, "skin_switch_cancelled"),
-        count(events, "skin_switch_failed"),
-        count(events, "skin_switch_dropped"),
+        count_event(events, "skin_switch_done"),
+        count_event(events, "skin_switch_cancelled"),
+        count_event(events, "skin_switch_failed"),
+        count_event(events, "skin_switch_dropped"),
     ]
 }
 

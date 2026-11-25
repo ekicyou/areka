@@ -55,8 +55,6 @@ fn default_without_exe_location_fails() {
     assert_eq!(
         resolve_roots_from(None, None, None, None),
         Err(RootError::ExeLocationUnavailable {
-            tried: vec![],
-            origin: RootsOrigin::Default,
             skipped: vec![],
             memory_fell_back: false,
         })
@@ -245,8 +243,6 @@ fn memory_exe_token_without_exe_location_falls_back_and_fails() {
         resolve_roots_from(None, Some(format!("|{EXE_TOKEN}")), None, None),
         // 失敗しても控えと「既定へ倒した」は残る（記録の warn のため）。
         Err(RootError::ExeLocationUnavailable {
-            tried: vec![],
-            origin: RootsOrigin::Default,
             skipped: vec![
                 RootSkip::Unreadable {
                     item: String::new(),
@@ -444,4 +440,11 @@ fn no_user_root_leaves_every_item_plain() {
     let r = resolve_roots_from(None, Some(value), Some(exe.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![a, exe]);
     assert_eq!(marks(&r), vec![RootMark::Plain, RootMark::Plain]);
+}
+
+#[test]
+fn long_path_prefix_item_is_kept_not_skipped_as_invalid() {
+    let (items, skipped) = decode_memory(r"\\?\C:\x", None);
+    assert_eq!(items.len(), 1);
+    assert!(skipped.is_empty());
 }

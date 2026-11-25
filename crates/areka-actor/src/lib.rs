@@ -83,7 +83,7 @@ pub mod ui;
 
 pub use reply::{ReplyError, ReplyReceiver, ReplySender, reply_channel};
 pub use spawn::{
-    ActorError, ActorHandle, ThreadStartHook, ThreadStartHookAlreadyInstalled,
+    ActorError, ActorHandle, CarriedLog, ThreadStartHook, ThreadStartHookAlreadyInstalled,
     install_thread_start_hook, run_inbox, spawn_actor,
 };
 pub use ui::{UiSendError, UiSender, spawn_ui};

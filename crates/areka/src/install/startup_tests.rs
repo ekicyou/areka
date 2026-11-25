@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::install::judge::{FailureWord, InstalledItem};
+use crate::install::procedure::procedure_test_support::{self, with_terms, write_nar};
+use crate::session_tests::{events_named, hold, warn_or_worse};
 use areka_session::boot_request::BootRequest;
 
 fn item(kind: &'static str, place: &str) -> InstalledItem {
@@ -29,7 +31,7 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
 // ---- sources_to_delete ----
 
 #[test]
-fn only_installed_of_the_five_ends_is_deleted() {
+fn only_installed_of_the_four_ends_is_deleted() {
     let archives = paths(&[r"C:\a.nar", r"C:\b.nar", r"C:\c.nar", r"C:\d.nar"]);
     let ends = [
         ghost("a"),
@@ -90,9 +92,8 @@ fn args(archives: &[&str]) -> InstallArgs {
 }
 
 fn not_submitted(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("startup_install_not_submitted"))
+    events_named(events, "startup_install_not_submitted")
+        .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::WARN);
             e.field_str("reason").unwrap_or_default().to_owned()
@@ -121,10 +122,7 @@ fn new_makes_relative_paths_absolute_from_the_current_folder() {
         vec![cwd.join("rel.nar"), absolute, PathBuf::new()],
         "相対は今のフォルダから・絶対はそのまま・直せない空は綴りのまま"
     );
-    let warns: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_path_not_absolute"))
-        .collect();
+    let warns: Vec<_> = events_named(&events, "install_path_not_absolute");
     assert_eq!(warns.len(), 1, "直せない 1 本だけ warn");
     assert_eq!(warns[0].level, tracing::Level::WARN);
     assert_eq!(warns[0].field("archive"), Some(""), "直せない綴りを載せる");
@@ -137,7 +135,7 @@ fn dropping_unsubmitted_startup_warns_boot_stopped_once() {
     let ((), events) =
         log_capture_kit::capture(|| drop(StartupInstall::new_with(args(&[r"C:\a.nar"]), None)));
     assert_eq!(not_submitted(&events), ["boot_stopped"]);
-    let warn = startup_events(&events, "startup_install_not_submitted");
+    let warn = events_named(&events, "startup_install_not_submitted");
     assert_eq!(
         warn[0].field("archives"),
         Some(format!("{:?}", paths(&[r"C:\a.nar"])).as_str())
@@ -174,16 +172,6 @@ fn dropping_with_only_initial_install_warns_and_nothing_to_install_is_silent() {
     );
 }
 
-fn startup_events<'a>(
-    events: &'a [log_capture_kit::CapturedEvent],
-    name: &str,
-) -> Vec<&'a log_capture_kit::CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 // ---- decide_call_ghost ----
 
 fn facts(ends: &[ArchiveEnd]) -> CallGhostFacts<'_> {
@@ -198,14 +186,20 @@ fn facts(ends: &[ArchiveEnd]) -> CallGhostFacts<'_> {
 /// 判断を 1 回して、答えと `startup_callghost_*` の記録を返す。
 fn decide(facts: &CallGhostFacts<'_>) -> (CallGhost, Vec<log_capture_kit::CapturedEvent>) {
     let (answer, events) = log_capture_kit::capture(|| decide_call_ghost(facts));
-    let events = events
+    (answer, callghost_events(events))
+}
+
+/// `startup_callghost_*` の記録だけを残す。
+fn callghost_events(
+    events: Vec<log_capture_kit::CapturedEvent>,
+) -> Vec<log_capture_kit::CapturedEvent> {
+    events
         .into_iter()
         .filter(|e| {
             e.field_str("event")
                 .is_some_and(|name| name.starts_with("startup_callghost"))
         })
-        .collect();
-    (answer, events)
+        .collect()
 }
 
 fn skipped_reason(events: &[log_capture_kit::CapturedEvent]) -> (String, Option<String>) {
@@ -390,49 +384,17 @@ fn readonly_and_boot_target_come_before_no_ghost_installed() {
 
 // ---- 起動の前に 1 回だけ入れる ----
 
-/// `install.txt` の行と足すファイルで書庫を `dir` へ置く。
-fn nar(
-    dir: &temp_path_kit::TempPath,
-    file: &str,
-    lines: &[&str],
-    extra: &[(&str, &[u8])],
-) -> PathBuf {
-    let path = dir.child(file);
-    let mut builder = sample_ghost_kit::NarBuilder::new()
-        .file("install.txt", &sample_ghost_kit::install_txt(lines))
-        .done();
-    for (name, body) in extra {
-        builder = builder.file(*name, body).done();
-    }
-    builder.write_to(&path).expect("書庫を置ける");
-    path
-}
-
-/// ゴーストの書庫（`directory` が `folder`・`accept` などは `more` で足す）。
-fn ghost_nar(
-    dir: &temp_path_kit::TempPath,
-    folder: &str,
-    more: &[&str],
-    extra: &[(&str, &[u8])],
-) -> PathBuf {
-    let directory = format!("directory,{folder}");
-    let mut lines = vec![
-        "charset,UTF-8",
-        "type,ghost",
-        "name,入る",
-        directory.as_str(),
-    ];
-    lines.extend_from_slice(more);
-    let mut files: Vec<(&str, &[u8])> = vec![(
-        "ghost/master/descript.txt",
-        b"charset,UTF-8\r\nname,Newbie\r\n",
-    )];
-    files.extend_from_slice(extra);
-    nar(dir, &format!("{folder}.nar"), &lines, &files)
+/// ゴーストの書庫 `{folder}.nar` を `dir` へ置く（`directory` が `folder`・`accept` などは `more` で足す）。
+pub(super) fn ghost_nar(dir: &temp_path_kit::TempPath, folder: &str, more: &[&str]) -> PathBuf {
+    write_nar(
+        dir,
+        &format!("{folder}.nar"),
+        procedure_test_support::ghost_nar(folder, more),
+    )
 }
 
 /// 告知を出さない・読み取りだけでない走り。
-const QUIET: BeforeBootEnv = BeforeBootEnv {
+pub(super) const QUIET: BeforeBootEnv = BeforeBootEnv {
     readonly: false,
     alert_suppressed: true,
 };
@@ -447,7 +409,7 @@ fn before_boot(
     name: &str,
     field: &str,
 ) -> Vec<(String, String)> {
-    startup_events(events, name)
+    events_named(events, name)
         .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::INFO, "{name}");
@@ -460,24 +422,15 @@ fn before_boot(
         .collect()
 }
 
-fn warn_or_worse(
-    events: &[log_capture_kit::CapturedEvent],
-) -> Vec<&log_capture_kit::CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .collect()
-}
-
 /// `initial_install.nar` の依頼が先、`--install` の並びが後で別々の依頼になり、どちらも入る。
 /// 2 回目は何もしない。控えは入れた順。
 #[test]
 fn initial_install_goes_first_then_args_and_the_second_call_does_nothing() {
     let root = temp_path_kit::TempPath::under_target("startup-before-boot-root");
     let exe = temp_path_kit::TempPath::under_target("startup-before-boot-exe");
-    let initial = ghost_nar(&exe, "first", &[], &[]);
+    let initial = ghost_nar(&exe, "first", &[]);
     std::fs::rename(&initial, exe.child(INITIAL_INSTALL_FILE)).expect("exe の隣へ");
-    let args_nar = ghost_nar(&exe, "second", &[], &[]);
+    let args_nar = ghost_nar(&exe, "second", &[]);
     let mut startup = StartupInstall::new_with(
         InstallArgs {
             archives: vec![args_nar],
@@ -542,14 +495,13 @@ fn missing_unreadable_accept_and_terms_do_not_stop_the_rest() {
     let missing = dir.child("missing.nar");
     let unreadable = dir.child("broken.nar");
     std::fs::write(&unreadable, b"not a zip").expect("壊れた書庫");
-    let picky = ghost_nar(&dir, "picky", &["accept,さくら"], &[]);
-    let terms = ghost_nar(
+    let picky = ghost_nar(&dir, "picky", &["accept,さくら"]);
+    let terms = write_nar(
         &dir,
-        "termsy",
-        &[],
-        &[("terms.txt", "読んでください".as_bytes())],
+        "termsy.nar",
+        with_terms(procedure_test_support::ghost_nar("termsy", &[])),
     );
-    let good = ghost_nar(&dir, "good", &[], &[]);
+    let good = ghost_nar(&dir, "good", &[]);
     let mut startup = StartupInstall::new_with(
         InstallArgs {
             archives: vec![missing, unreadable, picky, terms, good],
@@ -601,7 +553,7 @@ fn nothing_to_install_calls_nothing_and_warns_nothing() {
         drop(startup);
     });
     assert!(warn_or_worse(&events).is_empty(), "{events:?}");
-    assert!(startup_events(&events, "startup_install_started").is_empty());
+    assert!(events_named(&events, "startup_install_started").is_empty());
     assert!(!root.path().join("ghost").exists(), "何も入らない");
 }
 
@@ -620,7 +572,7 @@ fn run_once(
 }
 
 fn archives_of(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<String> {
-    startup_events(events, name)
+    events_named(events, name)
         .into_iter()
         .map(|e| e.field("archive").unwrap_or_default().to_owned())
         .collect()
@@ -628,14 +580,7 @@ fn archives_of(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<Str
 
 /// `startup_callghost_*` の記録が `skipped` 1 件だけで、その `reason`。
 fn skipped(events: Vec<log_capture_kit::CapturedEvent>) -> String {
-    let callghost: Vec<_> = events
-        .into_iter()
-        .filter(|e| {
-            e.field_str("event")
-                .is_some_and(|name| name.starts_with("startup_callghost"))
-        })
-        .collect();
-    skipped_reason(&callghost).0
+    skipped_reason(&callghost_events(events)).0
 }
 
 /// `deletesource` で入った写しだけが 1 回消え、失敗・断った写しとフォルダは残る。
@@ -643,10 +588,10 @@ fn skipped(events: Vec<log_capture_kit::CapturedEvent>) -> String {
 fn deletesource_deletes_only_installed_copies_once() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
     let dir = temp_path_kit::TempPath::under_target("startup-delete-nar");
-    let good = ghost_nar(&dir, "good", &[], &[]);
+    let good = ghost_nar(&dir, "good", &[]);
     let broken = dir.child("broken.nar");
     std::fs::write(&broken, b"not a zip").expect("壊れた書庫");
-    let picky = ghost_nar(&dir, "picky", &["accept,さくら"], &[]);
+    let picky = ghost_nar(&dir, "picky", &["accept,さくら"]);
     let args = InstallArgs {
         archives: vec![good.clone(), broken.clone(), picky.clone(), good.clone()],
         call_ghost: false,
@@ -661,7 +606,7 @@ fn deletesource_deletes_only_installed_copies_once() {
         root.path().join("ghost/good").is_dir(),
         "入れた先は消えない"
     );
-    let ok = startup_events(&events, "startup_source_deleted");
+    let ok = events_named(&events, "startup_source_deleted");
     assert_eq!(ok.len(), 1, "同じパス 2 回は 1 回だけ: {events:?}");
     assert_eq!(ok[0].level, tracing::Level::INFO);
     assert_eq!(ok[0].field("origin"), Some("StartupArgs"));
@@ -669,7 +614,7 @@ fn deletesource_deletes_only_installed_copies_once() {
         archives_of(&events, "startup_source_deleted"),
         [good.display().to_string()]
     );
-    assert!(startup_events(&events, "startup_source_delete_failed").is_empty());
+    assert!(events_named(&events, "startup_source_delete_failed").is_empty());
 }
 
 /// `deletesource` が無ければ `--install` の写しは入っても残る。
@@ -677,7 +622,7 @@ fn deletesource_deletes_only_installed_copies_once() {
 fn without_deletesource_installed_args_copy_stays() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
     let dir = temp_path_kit::TempPath::under_target("startup-delete-nar");
-    let good = ghost_nar(&dir, "good", &[], &[]);
+    let good = ghost_nar(&dir, "good", &[]);
     let args = InstallArgs {
         archives: vec![good.clone()],
         ..Default::default()
@@ -685,26 +630,20 @@ fn without_deletesource_installed_args_copy_stays() {
     let (_, events) = run_once(&root, args, None, &BootRequest::default(), QUIET);
     assert!(root.path().join("ghost/good").is_dir());
     assert!(good.is_file());
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
 }
 
 /// 使われていて消せない写しは warn を残して残り、ほかの写しの消去は続く。
 ///
-/// 読み取り専用の属性では試さない: 今の `std::fs::remove_file` は Windows で読み取り専用の
+/// 読み取り専用の属性では試さない: `std::fs::remove_file` は Windows で読み取り専用の
 /// ファイルも消す。読むことだけを許す（消すことを許さない）開き方で握って「使われている」にする。
 #[test]
 fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
-    use std::os::windows::fs::OpenOptionsExt;
-    const FILE_SHARE_READ: u32 = 0x1;
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
     let dir = temp_path_kit::TempPath::under_target("startup-delete-nar");
-    let locked = ghost_nar(&dir, "locked", &[], &[]);
-    let good = ghost_nar(&dir, "good", &[], &[]);
-    let _held = std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(FILE_SHARE_READ)
-        .open(&locked)
-        .expect("写しを握れる");
+    let locked = ghost_nar(&dir, "locked", &[]);
+    let good = ghost_nar(&dir, "good", &[]);
+    let _held = hold(&locked);
     let args = InstallArgs {
         archives: vec![locked.clone(), good.clone()],
         call_ghost: false,
@@ -714,7 +653,7 @@ fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
     assert!(root.path().join("ghost/locked").is_dir(), "入りはする");
     assert!(locked.is_file(), "使われている写しは残る");
     assert!(!good.exists(), "次の写しは消える");
-    let failed = startup_events(&events, "startup_source_delete_failed");
+    let failed = events_named(&events, "startup_source_delete_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::WARN);
     assert!(failed[0].field("error").is_some());
@@ -730,7 +669,7 @@ fn initial_install_is_deleted_only_when_installed() {
     let root = temp_path_kit::TempPath::under_target("startup-delete-root");
     let exe = temp_path_kit::TempPath::under_target("startup-delete-exe");
     let initial = exe.child(INITIAL_INSTALL_FILE);
-    std::fs::rename(ghost_nar(&exe, "first", &[], &[]), &initial).expect("exe の隣へ");
+    std::fs::rename(ghost_nar(&exe, "first", &[]), &initial).expect("exe の隣へ");
     let (_, events) = run_once(
         &root,
         InstallArgs::default(),
@@ -739,7 +678,7 @@ fn initial_install_is_deleted_only_when_installed() {
         QUIET,
     );
     assert!(!initial.exists(), "入ったら消える");
-    let ok = startup_events(&events, "startup_source_deleted");
+    let ok = events_named(&events, "startup_source_deleted");
     assert_eq!(ok.len(), 1);
     assert_eq!(ok[0].field("origin"), Some("InitialInstall"));
 
@@ -752,7 +691,7 @@ fn initial_install_is_deleted_only_when_installed() {
         QUIET,
     );
     assert!(initial.is_file(), "入らなければ残る");
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
 }
 
 /// 読み取りだけなら出どころごとに断り、何も入れず何も消さず、callghost を readonly で
@@ -762,9 +701,9 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
     let root = temp_path_kit::TempPath::under_target("startup-readonly-root");
     let exe = temp_path_kit::TempPath::under_target("startup-readonly-exe");
     let initial = exe.child(INITIAL_INSTALL_FILE);
-    std::fs::rename(ghost_nar(&exe, "first", &[], &[]), &initial).expect("exe の隣へ");
-    let a = ghost_nar(&exe, "a", &[], &[]);
-    let b = ghost_nar(&exe, "b", &[], &[]);
+    std::fs::rename(ghost_nar(&exe, "first", &[]), &initial).expect("exe の隣へ");
+    let a = ghost_nar(&exe, "a", &[]);
+    let b = ghost_nar(&exe, "b", &[]);
     let args = InstallArgs {
         archives: vec![a.clone(), b.clone()],
         call_ghost: true,
@@ -776,7 +715,7 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
     };
     let (answer, events) = run_once(&root, args, Some(&exe), &BootRequest::default(), before);
     assert_eq!(answer, None);
-    let refused: Vec<_> = startup_events(&events, "readonly_refused")
+    let refused: Vec<_> = events_named(&events, "readonly_refused")
         .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::INFO);
@@ -798,8 +737,8 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
         assert!(copy.is_file(), "{copy:?} は消えない");
     }
     assert!(!root.path().join("ghost").exists(), "何も入らない");
-    assert!(startup_events(&events, "startup_install_started").is_empty());
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_install_started").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
     assert_eq!(skipped(events), "readonly");
 }
 
@@ -813,7 +752,7 @@ fn callghost_answers_from_the_install_args_only() {
         call_ghost: true,
         delete_source: false,
     };
-    let chosen = ghost_nar(&exe, "chosen", &[], &[]);
+    let chosen = ghost_nar(&exe, "chosen", &[]);
     let root = temp_path_kit::TempPath::under_target("startup-callghost-root");
     let (answer, _) = run_once(
         &root,
@@ -835,7 +774,7 @@ fn callghost_answers_from_the_install_args_only() {
 
     let root = temp_path_kit::TempPath::under_target("startup-callghost-root");
     std::fs::rename(
-        ghost_nar(&exe, "first", &[], &[]),
+        ghost_nar(&exe, "first", &[]),
         exe.child(INITIAL_INSTALL_FILE),
     )
     .expect("exe の隣へ");

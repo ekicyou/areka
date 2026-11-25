@@ -52,7 +52,7 @@ pub(crate) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
 }
 
 /// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
-pub(super) fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
+pub(crate) fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
     let hits = events_named(events, event);
     assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
     assert_eq!(hits[0].level, level, "{event} のレベル");

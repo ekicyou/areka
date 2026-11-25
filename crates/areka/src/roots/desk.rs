@@ -2,33 +2,27 @@
 //!
 //! 選ぶ画面は短命のスレッド `roots-pick` で出し（UI スレッドを塞がない）、決めたフォルダ
 //! だけを受け口へ送る。取り消しと失敗は選ぶスレッドで記録して送らない。UI スレッドの系 [`drain`] が
-//! 受けて [`super::add_root`] を呼ぶ。2 つ目の画面を出さない旗はインストールの窓口の
-//! [`PickingFlag`] を使い回す。
+//! 受けて [`super::add_root`] を呼ぶ。画面の出し方はインストールの窓口と共通の [`spawn_pick`]。
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use crate::install::desk::PickingFlag;
+use crate::install::desk::{PickLabels, spawn_pick};
 use crate::install::pick::PickError;
-
-/// 選ぶスレッドから受け口へ送るもの（決めたフォルダだけ）。
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum PickedFolder {
-    Chosen(PathBuf),
-}
 
 /// 受け口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct RootsDesk {
-    tx: Sender<PickedFolder>,
-    rx: Receiver<PickedFolder>,
+    /// 決めたフォルダだけを運ぶ。
+    tx: Sender<PathBuf>,
+    rx: Receiver<PathBuf>,
     /// 選ぶ画面が出ているか（選ぶスレッドと共有・スレッドが終わると降りる）。
     picking: Arc<AtomicBool>,
 }
@@ -52,8 +46,8 @@ pub(crate) fn drain(world: &mut World) {
     let Some(desk) = world.get_non_send::<RootsDesk>() else {
         return;
     };
-    let picked: Vec<PickedFolder> = desk.rx.try_iter().collect();
-    for PickedFolder::Chosen(dir) in picked {
+    let picked: Vec<PathBuf> = desk.rx.try_iter().collect();
+    for dir in picked {
         super::add_root(world, dir);
     }
 }
@@ -79,51 +73,29 @@ where
         );
         return None;
     };
-    if desk.picking.load(Ordering::Acquire) {
-        tracing::debug!(
-            event = "roots_pick_busy",
-            "[RootsDesk] フォルダを選ぶ画面が出ているので、2 つ目は出しません"
-        );
-        return None;
-    }
-    if suppressed {
-        tracing::info!(
-            event = "roots_pick_cancelled",
-            reason = "no_alert",
-            "[RootsDesk] 告知が抑止されているので、フォルダを選ぶ画面を出さずに取り消しと同じに扱います"
-        );
-        return None;
-    }
-    desk.picking.store(true, Ordering::Release);
-    // 旗はスレッドが終わるとき（panic も含む）と、スレッドを起こせずに閉包が落ちたときに降りる。
-    let flag = PickingFlag(desk.picking.clone());
     let tx = desk.tx.clone();
-    let spawned = thread::Builder::new()
-        .name("roots-pick".to_owned())
-        .spawn(move || {
-            let _flag = flag;
-            send_pick(pick(), &tx);
-        });
-    match spawned {
-        Ok(handle) => Some(handle),
-        Err(err) => {
-            tracing::error!(
-                event = "roots_pick_failed",
-                error = %err,
-                "[RootsDesk] フォルダを選ぶ画面のスレッドを起こせません"
-            );
-            None
-        }
-    }
+    spawn_pick(
+        &desk.picking,
+        &PickLabels {
+            thread: "roots-pick",
+            tag: "[RootsDesk] フォルダ",
+            busy: "roots_pick_busy",
+            suppressed: "roots_pick_cancelled",
+            failed: "roots_pick_failed",
+        },
+        suppressed,
+        pick,
+        move |result| send_pick(result, &tx),
+    )
 }
 
 /// 選ぶ画面の結果を受け口へ流す（選ぶスレッド）。決めたら 1 件送り、取り消しは `info!`、
 /// 出せなければ `error!` でどちらも送らない。
-fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<PickedFolder>) {
+fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<PathBuf>) {
     match result {
         Ok(Some(dir)) => {
-            if let Err(err) = tx.send(PickedFolder::Chosen(dir)) {
-                let PickedFolder::Chosen(dir) = err.0;
+            if let Err(err) = tx.send(dir) {
+                let dir = err.0;
                 tracing::warn!(
                     event = "roots_pick_send_failed",
                     path = %dir.display(),

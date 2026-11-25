@@ -150,10 +150,15 @@ const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
         "crates/areka-actor/tests/ui_span_test.rs",
         "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）",
     ),
+    (
+        "crates/areka/src/roots/edit_tests.rs",
+        "並びと隠れの記録が呼んだスレッドでなく roots-log で出ることを、記録ごとにスレッドの名を残す\
+         受け手で見る。共有の捕捉の記録はスレッドの名を持たないので素の with_default が要る",
+    ),
 ];
 
 /// [`ALLOWED_DIRECT_CALLS`] の件数（逐語）。表を増やすときはここも編集する。
-const ALLOWED_DIRECT_CALLS_COUNT: usize = 6;
+const ALLOWED_DIRECT_CALLS_COUNT: usize = 7;
 
 /// ⑵ の別表（相対パス・理由）。
 const ALLOWED_GLOBAL_CAPTURE: &[(&str, &str)] = &[

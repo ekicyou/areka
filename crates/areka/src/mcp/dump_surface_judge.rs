@@ -37,14 +37,14 @@ pub(in crate::mcp) enum SurfacePlan {
     Alone { scope: u32, surface_id: u32 },
 }
 
-/// `facts` が None＝窓の無いゴースト。Err は `NG:` の後ろに付ける理由。
-/// 順は 窓 → スコープ → surface ID → 一度も表示していない。
+/// 窓の在るゴーストの判断。Err は `NG:` の後ろに付ける理由。
+/// 順は スコープ → surface ID → 一度も表示していない。
 pub(in crate::mcp) fn judge_surface(
-    facts: Option<&dyn ShellFacts>,
+    facts: &dyn ShellFacts,
     scope: Option<i64>,
     surface: Option<i64>,
 ) -> Result<SurfacePlan, Refusal> {
-    let (facts, scope) = facts_and_scope(facts, scope)?;
+    let scope = known_scope(facts, scope)?;
     match surface {
         Some(id) => match u32::try_from(id) {
             Ok(surface_id) if facts.surface_exists(scope, surface_id) => {
@@ -59,27 +59,22 @@ pub(in crate::mcp) fn judge_surface(
     }
 }
 
-/// Ok はスコープ番号。順は 窓 → スコープ。
+/// 窓の在るゴーストの判断。Ok はスコープ番号。
 pub(in crate::mcp) fn judge_balloon(
-    facts: Option<&dyn ShellFacts>,
+    facts: &dyn ShellFacts,
     scope: Option<i64>,
 ) -> Result<u32, Refusal> {
-    facts_and_scope(facts, scope).map(|(_, scope)| scope)
+    known_scope(facts, scope)
 }
 
-/// 窓とスコープの 2 段。スコープは省略で 0、0 以上 `i32::MAX` 以下だけを数える
+/// スコープは省略で 0、0 以上 `i32::MAX` 以下だけを数える
 /// （target の番号 `2*scope+1` が `u32` からあふれないように）。
-fn facts_and_scope(
-    facts: Option<&dyn ShellFacts>,
-    scope: Option<i64>,
-) -> Result<(&dyn ShellFacts, u32), Refusal> {
-    let facts = facts.ok_or(NO_WINDOW)?;
-    let scope = i32::try_from(scope.unwrap_or(0))
+fn known_scope(facts: &dyn ShellFacts, scope: Option<i64>) -> Result<u32, Refusal> {
+    i32::try_from(scope.unwrap_or(0))
         .ok()
         .and_then(|s| u32::try_from(s).ok())
         .filter(|&s| facts.scope_exists(s))
-        .ok_or(NO_SUCH_SCOPE)?;
-    Ok((facts, scope))
+        .ok_or(NO_SUCH_SCOPE)
 }
 
 /// 今の見た目の `OK:` の後ろ。

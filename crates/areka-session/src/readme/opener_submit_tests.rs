@@ -5,54 +5,18 @@
 //! 時間の上限つきで待って判定する（記録はプロセス共有なので件数や位置では判定しない）。
 
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
 
 use areka_ghost::BasewareRoot;
 use areka_ghost::config::listed_name;
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
+use areka_runtime::spine::{Progress, wait_until};
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::super::destination::{Destination, classify};
-use super::super::opener_test_support::{build_ghost_root, refused_files};
+use super::super::opener_test_support::{build_ghost_root, dest_url, refused_files};
 use super::{OpenJob, Opener, submit};
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::log_history::TARGET_ERROR;
-
-fn dest(url: &str) -> Destination {
-    classify(JUMP_TAG_CARRIER, &[url])
-        .expect("開く系")
-        .expect("受理される")
-}
-
-fn boot_context(root: &BasewareRoot) -> BootContext {
-    BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.dir().join("profile"),
-        helper_exe: root.dir().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("g"),
-                balloon_root: root.balloon_dir("b"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Memory,
-                dir: root.ghost_dir("g"),
-                folder: Some("g".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("b"),
-                folder: Some("b".to_owned()),
-            },
-        },
-    }
-}
 
 /// 置き場にゴースト `g`（実行系なし）を据えた World。
 fn world_with_ghost(root: &BasewareRoot) -> World {
@@ -86,11 +50,11 @@ fn submit_copies_the_context_and_sends_one_job() {
     let tmp = TempPath::new("open-ext-submit");
     let root = build_ghost_root(&tmp, ("g", "G"), &[], &[]);
     let mut world = world_with_ghost(&root);
-    world.insert_resource(boot_context(&root));
+    world.insert_resource(crate::reload::test_support::boot_context(tmp.path(), &root));
     let (tx, rx) = mpsc::channel::<OpenJob>();
     world.insert_resource(Opener::from_sender(tx));
 
-    let d = dest("https://example.invalid/a");
+    let d = dest_url("https://example.invalid/a");
     let ((), events) = capture(|| submit(&world, d.clone()));
     assert!(
         events.iter().all(|e| e.level != tracing::Level::ERROR),
@@ -118,7 +82,7 @@ fn submit_without_boot_context_sends_no_baseware() {
     let (tx, rx) = mpsc::channel::<OpenJob>();
     world.insert_resource(Opener::from_sender(tx));
 
-    submit(&world, dest("https://example.invalid/b"));
+    submit(&world, dest_url("https://example.invalid/b"));
     assert_eq!(rx.try_recv().expect("1 件届く").context.baseware, None);
 }
 
@@ -132,7 +96,7 @@ fn submit_without_ghost_logs_one_error_and_sends_nothing() {
         let (tx, rx) = mpsc::channel::<OpenJob>();
         world.insert_resource(Opener::from_sender(tx));
 
-        let ((), events) = capture(|| submit(&world, dest("https://example.invalid/c")));
+        let ((), events) = capture(|| submit(&world, dest_url("https://example.invalid/c")));
         let ev = assert_one_drop(&events, "no_ghost");
         assert_eq!(ev.field("ghost"), None, "ゴーストが居なければ名は無い");
         assert!(rx.try_recv().is_err(), "送らない");
@@ -145,7 +109,7 @@ fn submit_without_opener_logs_one_error_with_the_ghost_name() {
     let root = build_ghost_root(&tmp, ("g", "G"), &[], &[]);
     let world = world_with_ghost(&root);
 
-    let ((), events) = capture(|| submit(&world, dest("https://example.invalid/d")));
+    let ((), events) = capture(|| submit(&world, dest_url("https://example.invalid/d")));
     let ev = assert_one_drop(&events, "no_opener");
     let ghost_dir = std::path::absolute(root.ghost_dir("g")).unwrap();
     assert_eq!(
@@ -163,7 +127,7 @@ fn submit_to_a_closed_thread_logs_one_error() {
     drop(rx);
     world.insert_resource(Opener::from_sender(tx));
 
-    let ((), events) = capture(|| submit(&world, dest("https://example.invalid/e")));
+    let ((), events) = capture(|| submit(&world, dest_url("https://example.invalid/e")));
     assert_one_drop(&events, "disconnected");
 }
 
@@ -183,14 +147,12 @@ fn spawned_thread_in_test_build_records_and_refuses() {
         "https://example.invalid/spawn-{}-{nanos}",
         std::process::id()
     );
-    submit(&world, dest(&url));
+    submit(&world, dest_url(&url));
 
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        if refused_files().iter().any(|f| f == url.as_str()) {
-            break;
-        }
-        assert!(Instant::now() < deadline, "断る口の記録に {url} が無い");
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
+    wait_until(
+        "断る口の記録に行き先が積まれる",
+        Progress::Unknown,
+        || refused_files().iter().any(|f| f == url.as_str()),
+    )
+    .unwrap_or_else(|e| panic!("断る口の記録に {url} が無い: {e}"));
 }

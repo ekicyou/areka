@@ -20,14 +20,17 @@ use areka_kanade::RaiseOutcome;
 use areka_nar::NarArchive;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
-use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::desk::InstallDesk;
+use crate::install::procedure::procedure_test_support::{ghost_nar, order_of, write_nar};
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use areka_runtime::spine::RecordedCall;
+use crate::session_tests::{events_named, write_descript};
+use areka_runtime::spine::{
+    Progress, RecordedCall, WaitFailure, join_bounded, join_thread_bounded, wait_recv,
+};
 use areka_session::exit_wait::{begin_close, register_gate};
 use areka_session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
@@ -40,18 +43,16 @@ fn refs() -> Vec<String> {
     vec!["a".to_owned(), "b".to_owned()]
 }
 
+/// 窓口の代わりが次の頼みを待つ（上限つき）。
+fn next_ask(asks: &Receiver<DeskAsk>) -> Result<DeskAsk, WaitFailure> {
+    wait_recv("窓口への頼み", Progress::Unknown, asks)
+}
+
 /// 本物の口と、窓口の代わりの受信端と、門。
 fn ports() -> (DeskPorts, Receiver<DeskAsk>, Arc<WorkGate>) {
     let (desk, asks) = mpsc::channel();
     let gate = Arc::new(WorkGate::default());
     (DeskPorts::new(desk, gate.clone()), asks, gate)
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 窓口の代わりに、イベントの頼みを `answers` の数だけ受けて順に答え（None は返信端を落とす）、
@@ -67,7 +68,7 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
                 references,
                 resend,
                 reply,
-            }) = asks.recv()
+            }) = next_ask(&asks)
             else {
                 panic!("イベントの頼みが届く");
             };
@@ -78,12 +79,15 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
                 let _ = reply.send(outcome);
             }
         }
-        assert!(asks.recv().is_err(), "頼みは答えの数だけ");
+        assert!(
+            matches!(next_ask(&asks), Err(WaitFailure::Disconnected { .. })),
+            "頼みは答えの数だけ"
+        );
         resends
     });
     let (raised, events) = capture(|| ports.raise(EVENT, refs()));
     drop(ports);
-    let resends = desk.join().expect("窓口の代わりが最後まで走る");
+    let resends = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
     (raised, resends, events)
 }
 
@@ -91,6 +95,7 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
 fn facts_at(root: &Path) -> GhostFacts {
     GhostFacts {
         roots: areka_ghost::BasewareRoots::single(root.to_path_buf()),
+        dir: root.to_path_buf(),
         folder: Some("running".to_owned()),
         running_dir: None,
         name: "Running".to_owned(),
@@ -101,25 +106,7 @@ fn facts_at(root: &Path) -> GhostFacts {
 
 /// ゴースト `newbie` の書庫を `dir` へ置いて開く。
 fn ghost_archive(dir: &TempPath) -> (PathBuf, NarArchive) {
-    let path = dir.child("newbie.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "charset,UTF-8",
-                "type,ghost",
-                "name,あたらしい",
-                "directory,newbie",
-            ]),
-        )
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,Newbie\r\n",
-        )
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
+    let path = write_nar(dir, "newbie.nar", ghost_nar("newbie", &[]));
     let archive = NarArchive::open(&path).expect("書庫を開ける");
     (path, archive)
 }
@@ -131,14 +118,14 @@ fn ports_after_facts(root: &Path) -> (DeskPorts, Receiver<DeskAsk>, Arc<WorkGate
     // 口が倒れたら `ports` と一緒に送出端が落ち、窓口の代わりも受け取りで倒れて終わる
     // （scope で包むと、倒れた口が送出端を握ったまま窓口の代わりを待って止まる）。
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Facts { reply }) = asks.recv() else {
+        let Ok(DeskAsk::Facts { reply }) = next_ask(&asks) else {
             panic!("素性の頼みが届く");
         };
         let _ = reply.send(Some(facts));
         asks
     });
     assert_eq!(ports.ghost_facts(), Some(facts_at(root)));
-    let asks = desk.join().expect("窓口の代わりが最後まで走る");
+    let asks = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
     (ports, asks, gate)
 }
 
@@ -235,6 +222,34 @@ fn every_port_reads_a_missing_desk_as_closed() {
     });
 }
 
+/// 窓口は場所だけを答え、`sakura.name`・`install.accept` は口がその場所の descript から読む。
+#[test]
+fn facts_read_the_install_keys_from_the_answered_dir() {
+    let root = TempPath::new("install-worker-facts");
+    write_descript(
+        &root.path().join("ghost").join("master"),
+        "sakura.name,さくら\r\ninstall.accept,甲, 乙",
+    );
+    let (mut ports, asks, _gate) = ports();
+    let facts = facts_at(root.path());
+    let desk = thread::spawn(move || {
+        let Ok(DeskAsk::Facts { reply }) = next_ask(&asks) else {
+            panic!("素性の頼みが届く");
+        };
+        let _ = reply.send(Some(facts));
+    });
+    let got = ports.ghost_facts();
+    join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
+    assert_eq!(
+        got,
+        Some(GhostFacts {
+            sakura_name: Some("さくら".to_owned()),
+            install_accept: vec!["甲".to_owned(), "乙".to_owned()],
+            ..facts_at(root.path())
+        })
+    );
+}
+
 // ---------------------------------------------------------------- 門
 
 /// 門が閉じていれば、宛先に 1 バイトも書かずに None。窓口へも頼まない。
@@ -327,32 +342,22 @@ fn worker_runs_an_order_and_reports_done() {
     let (orders, handle) = spawn_worker(desk, gate.clone());
     let dir = TempPath::new("install-worker-order");
     orders
-        .send(InstallOrder {
-            archives: vec![dir.child("missing.nar")],
-            origin: InstallOrigin::Menu,
-        })
+        .send(order_of(&[&dir.child("missing.nar")]))
         .expect("スレッドが受け取る");
 
     // 読めない書庫: 始まりの知らせ → 失敗の知らせ → 依頼の終わり。
     let mut raised = Vec::new();
-    let (order, ends) = loop {
-        match asks.recv().expect("頼みが届く") {
+    loop {
+        match next_ask(&asks).expect("頼みが届く") {
             DeskAsk::Raise { id, reply, .. } => {
                 raised.push(id);
                 let _ = reply.send(RaiseOutcome::NoReply);
             }
-            DeskAsk::OrderDone { order, ends } => break (order, ends),
+            DeskAsk::OrderDone => break,
             _ => panic!("読めない書庫ではイベントの頼みと終わりだけが届く"),
         }
-    };
+    }
     assert_eq!(raised, ["OnInstallBegin", "OnInstallFailure"]);
-    // 終わりの知らせは終わった依頼そのものと、書庫ごとの終わり方を運ぶ。
-    assert_eq!(order.archives, vec![dir.child("missing.nar")]);
-    assert_eq!(order.origin, InstallOrigin::Menu);
-    assert!(
-        matches!(ends.as_slice(), [ArchiveEnd::Failed(_)]),
-        "{ends:?}"
-    );
 
     // 依頼を終えた門には何も残らない（失敗した書庫を途中でやめた書庫として記録しない）。
     let mut world = World::new();
@@ -364,7 +369,7 @@ fn worker_runs_an_order_and_reports_done() {
     );
 
     drop(orders);
-    handle.join().expect("スレッドが終わる");
+    join_bounded("install-worker", handle).expect("スレッドが終わる");
 }
 
 /// 本番の結線: 手続きは書庫の始め（`OnInstallBegin` を送る前）に門へ書庫のパスを置く。
@@ -385,7 +390,7 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
         .expect("スレッドが受け取る");
 
     // 始まりの知らせの頼みを受け取るが、まだ答えない（スレッドは返事待ちで止まっている）。
-    let DeskAsk::Raise { id, reply, .. } = asks.recv().expect("頼みが届く") else {
+    let DeskAsk::Raise { id, reply, .. } = next_ask(&asks).expect("頼みが届く") else {
         panic!("最初の頼みはイベント");
     };
     assert_eq!(id, "OnInstallBegin");
@@ -402,44 +407,52 @@ fn worker_names_the_archive_on_the_gate_before_the_first_event() {
 
     drop(reply);
     assert!(
-        matches!(asks.recv(), Ok(DeskAsk::OrderDone { .. })),
+        matches!(next_ask(&asks), Ok(DeskAsk::OrderDone)),
         "閉じた扱いで抜けて依頼の終わりが届く"
     );
     drop(orders);
-    handle.join().expect("スレッドが終わる");
+    join_bounded("install-worker", handle).expect("スレッドが終わる");
 }
 
-/// 起動中のゴーストへ入れ終えたら門を手放す。完了の知らせを待つ間に終了が始まっても、
-/// 書く前にやめた書庫として記録されない。
+/// 窓口が「降ろした」と答えたら、このスレッドで起動中のゴーストのフォルダへ展開して門を手放し、
+/// 展開し終えたと窓口へ知らせて返事を待ってから結果を返す。展開の記録はこのスレッドが残す。完了の
+/// 知らせを待つ間に終了が始まっても、書く前にやめた書庫として記録されない。
 #[test]
-fn overwrite_ran_releases_the_gate() {
+fn overwrite_extracts_after_down_and_waits_for_the_desk() {
     let root = TempPath::new("install-worker-root");
     let dir = TempPath::new("install-worker-archive");
     let (path, archive) = ghost_archive(&dir);
     let (mut ports, asks, gate) = ports();
     ports.begin_archive(&path);
 
-    let desk_root = root.path().to_path_buf();
+    let roots = BasewareRoots::single(root.path().to_path_buf());
+    let installed = root.path().join("ghost").join("newbie");
     let desk = thread::spawn(move || {
-        let Ok(DeskAsk::Overwrite {
-            archive,
-            target_ghost,
-            reply,
-        }) = asks.recv()
-        else {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = next_ask(&asks) else {
             panic!("上書きの頼みが届く");
         };
-        let result = archive.install(&areka_nar::InstallRequest {
-            roots: &areka_nar::SingleRoot(&desk_root),
-            target_ghost: target_ghost.as_deref(),
+        let _ = reply.send(OverwriteAnswer::Down {
+            archive,
+            roots,
+            running: None,
         });
-        let _ = reply.send(Overwritten::Ran(result));
+        let Ok(DeskAsk::Extracted { reply }) = next_ask(&asks) else {
+            panic!("展開し終えた知らせが届く");
+        };
+        let placed = installed.is_dir();
+        let _ = reply.send(());
+        placed
     });
-    assert!(matches!(
-        ports.overwrite_running(archive, None),
-        Overwritten::Ran(Ok(_))
-    ));
-    desk.join().expect("窓口の代わりが最後まで走る");
+    let (overwritten, events) = capture(|| ports.overwrite_running(archive, None));
+    assert!(matches!(overwritten, Overwritten::Ran(Ok(_))));
+    assert!(
+        join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る"),
+        "知らせより前に展開している"
+    );
+    let done = events_named(&events, "install_overwrite_done");
+    assert_eq!(done.len(), 1, "{events:?}");
+    assert_eq!(done[0].target, "areka::install::worker");
+    assert_eq!(done[0].field("ok"), Some("true"));
 
     let mut world = World::new();
     register_gate(&mut world, "install", gate, |_| {});
@@ -448,6 +461,39 @@ fn overwrite_ran_releases_the_gate() {
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "{events:?}"
     );
+}
+
+/// 「降ろした」の後に終了が始まっていれば、書かずに閉じた扱いで止まる（窓口へも知らせない）。
+#[test]
+fn overwrite_after_closing_writes_nothing() {
+    let root = TempPath::new("install-worker-root");
+    let dir = TempPath::new("install-worker-archive");
+    let (path, archive) = ghost_archive(&dir);
+    let (mut ports, asks, gate) = ports();
+    ports.begin_archive(&path);
+    let mut world = World::new();
+    register_gate(&mut world, "install", gate, |_| {});
+
+    let roots = BasewareRoots::single(root.path().to_path_buf());
+    let desk = thread::spawn(move || {
+        let Ok(DeskAsk::Overwrite { archive, reply, .. }) = next_ask(&asks) else {
+            panic!("上書きの頼みが届く");
+        };
+        let _ = begin_close(&mut world);
+        let _ = reply.send(OverwriteAnswer::Down {
+            archive,
+            roots,
+            running: None,
+        });
+        asks
+    });
+    assert!(matches!(
+        ports.overwrite_running(archive, None),
+        Overwritten::Closed
+    ));
+    let asks = join_thread_bounded("desk", None, desk).expect("窓口の代わりが最後まで走る");
+    assert!(asks.try_recv().is_err(), "窓口へ知らせない");
+    assert_eq!(entries_under(root.path()), 0, "根の下に何も置かない");
 }
 
 // ---------------------------------------------------------------- 本番の道筋
@@ -477,11 +523,10 @@ fn install_through_production_path(
 
     let dir = TempPath::new("install-worker-e2e");
     let (path, _) = ghost_archive(&dir);
-    let order = InstallOrder {
-        archives: vec![path],
-        origin: InstallOrigin::Menu,
-    };
-    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
+    assert_eq!(
+        submit(&mut rig.world, order_of(&[&path])),
+        SubmitVerdict::Queued
+    );
 
     // 切替の予約が在る間は窓口がイベントを送らず依頼が終わらないので、予約を見たらそこで止める。
     let mut reserved = false;
@@ -536,4 +581,31 @@ fn production_path_sends_no_legacy_complete_after_a_complete_ex_script() {
         ["OnInstallBegin", "OnInstallCompleteEx", "OnTranslate"]
     );
     assert_eq!(last.as_deref(), Some("newbie"));
+}
+
+/// 消すのは出どころが台本で置き場の直下の書庫だけ。置き場の外と台本でない依頼の書庫は残る。
+#[test]
+fn remove_downloaded_removes_only_script_archives_under_the_dir() {
+    let tmp = TempPath::new("install-remove-downloaded");
+    let dir = tmp.child("download");
+    let outside = tmp.child("elsewhere");
+    std::fs::create_dir_all(&dir).expect("フォルダを作れる");
+    std::fs::create_dir_all(&outside).expect("フォルダを作れる");
+    let fetched = dir.join("fetched.nar");
+    let foreign = outside.join("foreign.nar");
+    let menu = dir.join("menu.nar");
+    for path in [&fetched, &foreign, &menu] {
+        std::fs::write(path, b"nar").expect("書ける");
+    }
+
+    let script = InstallOrder {
+        archives: vec![fetched.clone(), foreign.clone()],
+        origin: InstallOrigin::Script,
+    };
+    remove_downloaded(&script, &dir);
+    remove_downloaded(&order_of(&[&menu]), &dir);
+
+    assert!(!fetched.exists(), "台本の置き場の直下の物は消える");
+    assert!(foreign.exists(), "置き場の外の物は残る");
+    assert!(menu.exists(), "台本でない依頼の物は残る");
 }

@@ -63,10 +63,6 @@ dola = { path = "../dola" }
 areka-emo-present = { path = "../areka-emo-present" }
 
 [dev-dependencies]
-# 試験用の `shiori_host`（`IShioriHost` 実装）とそのテストが使う。
-shiori-abi = { path = "../shiori-abi" }
-# 試験用の `shiori_host` の COM の実装だけが使う。
-windows-core = { workspace = true }
 # readonly 起動のテストが書ける根の判断を直接引く。
 areka-user-data = { path = "../areka-user-data" }
 # examples のログの初期化。

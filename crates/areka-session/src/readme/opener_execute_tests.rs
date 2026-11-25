@@ -9,8 +9,7 @@ use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::super::destination::{Destination, classify};
-use super::super::opener_test_support::{FakeOs, build_ghost_root};
+use super::super::opener_test_support::{FakeOs, build_ghost_root, dest_of, open_context};
 use super::{OpenContext, OpenJob, execute, serve};
 use crate::log_history::{Draft, FieldText, Kind, TARGET_ERROR, draft};
 
@@ -24,27 +23,17 @@ impl Fixture {
     fn new() -> Self {
         let tmp = TempPath::new("open-ext-execute");
         let root = build_ghost_root(&tmp, ("g", "G"), &[("s", "S")], &[]);
-        let ghost_dir = root.ghost_dir("g");
-        std::fs::write(ghost_dir.join("ghost/master/readme.txt"), b"x").unwrap();
-        let ctx = OpenContext {
-            ghost: "G".to_owned(),
-            ghost_dir,
-            baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
-        };
+        let ctx = open_context(&root);
+        std::fs::write(ctx.ghost_dir.join("ghost/master/readme.txt"), b"x").unwrap();
         Fixture { _tmp: tmp, ctx }
     }
 
     fn job(&self, name: &str, args: &[&str]) -> OpenJob {
         OpenJob {
-            destination: dest(name, args),
+            destination: dest_of(name, args),
             context: self.ctx.clone(),
         }
     }
-}
-
-/// 台本のタグの形から本物の規則で行き先を作る。
-fn dest(name: &str, args: &[&str]) -> Destination {
-    classify(name, args).expect("開く系").expect("受理される")
 }
 
 /// 1 件を実行し、記録と偽物を返す。

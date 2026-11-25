@@ -5,25 +5,17 @@
 //! 窓口は受理しない）。
 
 use std::cell::Cell;
-use std::path::PathBuf;
 
 use areka_actor::ReplyError;
-use areka_mcp::ToolContent;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use bevy_ecs::schedule::Schedules;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
+use crate::session_tests::events_named;
 use areka_session::log_history::TARGET_ERROR;
-
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
 
 fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
     let args = Args {
@@ -37,18 +29,7 @@ fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
 
 /// その場で届いた答えの (本文, isError)。
 fn answered(pending: &Pending) -> (String, bool) {
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
-    let [ToolContent::Text(text)] = answer.outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", answer.outcome.content);
-    };
-    (text.clone(), answer.outcome.is_error)
-}
-
-fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
+    body_and_error(&kanade_fake_test_support::answer(pending))
 }
 
 /// 6 語以外（空・前後の空白・別の語）は `NG:Unknown target (…)` をその場で返し、窓口へ渡さない
@@ -60,8 +41,8 @@ fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
         assert_eq!(
             (
                 answered(&pending),
-                named(&events, "reload_refused").len(),
-                named(&events, "reload_started").len(),
+                events_named(&events, "reload_refused").len(),
+                events_named(&events, "reload_started").len(),
             ),
             (
                 (
@@ -83,7 +64,7 @@ fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
 fn makoto_answers_not_supported_yet_with_one_warn() {
     for target in ["makoto", "MaKoTo"] {
         let (pending, events) = call(&mut World::new(), target);
-        let warns = named(&events, "reload_makoto_unsupported")
+        let warns = events_named(&events, "reload_makoto_unsupported")
             .into_iter()
             .map(|e| {
                 (
@@ -97,7 +78,7 @@ fn makoto_answers_not_supported_yet_with_one_warn() {
             (
                 answered(&pending),
                 warns,
-                named(&events, "reload_refused").len()
+                events_named(&events, "reload_refused").len()
             ),
             (
                 ("NG:Reloading makoto is not supported yet".to_string(), true),
@@ -119,7 +100,7 @@ fn makoto_answers_not_supported_yet_with_one_warn() {
 fn desk_refusal_answers_cannot_reload_now() {
     for target in ["ghost", "Shiori", "SHELL", "balloon", "descript"] {
         let (pending, events) = call(&mut World::new(), target);
-        let refused = named(&events, "reload_refused")
+        let refused = events_named(&events, "reload_refused")
             .into_iter()
             .map(|e| {
                 (
@@ -132,7 +113,7 @@ fn desk_refusal_answers_cannot_reload_now() {
             (answered(&pending), refused),
             (
                 (
-                    "NG:Cannot reload now (another switch, reload or update is in progress)"
+                    "NG:Cannot reload now (another switch, reload, update or install is in progress)"
                         .to_string(),
                     true
                 ),
@@ -154,7 +135,7 @@ fn closing_drops_the_reply() {
     let (pending, events) = call(&mut world, "shell");
 
     assert!(matches!(pending.try_answer(), Err(ReplyError::Dropped)));
-    assert_eq!(named(&events, "reload_started").len(), 0);
+    assert_eq!(events_named(&events, "reload_started").len(), 0);
 }
 
 /// 受理は窓口の判定の直後に読んだ番号を `since_id` に載せた SSP の文（isError: false）で答え、断りは
@@ -202,7 +183,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
         (refused, closing),
         (
             Some(outcome::ng(
-                "Cannot reload now (another switch, reload or update is in progress)"
+                "Cannot reload now (another switch, reload, update or install is in progress)"
             )),
             None
         )

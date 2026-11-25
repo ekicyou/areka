@@ -8,23 +8,21 @@
 //!
 //! 印は試験の World に資源を直に足す（`readonly::engage` は呼ばない）。
 
-use std::path::Path;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::Receiver;
 
 use areka_ghost::BasewareRoot;
-use areka_kanade::{KanadeMsg, ShioriMethod};
-use bevy_ecs::schedule::Schedules;
+use areka_kanade::KanadeMsg;
 use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
+use crate::session_tests::events_named;
+use crate::session_tests::{warns, write_descript};
 use crate::update::desk::{self, Stage, UpdateDesk};
-use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::update::update_test_support::{raised, slot_world};
+use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, submit};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
 
 const GHOST_NAME: &str = "窓際のぱすたさんDRESSTEST";
@@ -41,46 +39,16 @@ impl Rig {
     fn new(label: &str) -> Self {
         let root = TempPath::under_target(label);
         let base = BasewareRoot::new(root.path().to_path_buf());
-        write(
+        write_descript(
             &base.ghost_dir("pasta").join("ghost/master"),
             &format!("name,{GHOST_NAME}"),
         );
-        write(&base.balloon_dir("kaku"), "name,Kaku");
-        write(
+        write_descript(&base.balloon_dir("kaku"), "name,Kaku");
+        write_descript(
             &base.balloon_dir("nyan"),
             &format!("name,{BALLOON_NAME}\r\nhomeurl,https://balloon.example/nyan/"),
         );
-        let mut world = World::new();
-        world.init_resource::<Schedules>();
-        register(&mut world);
-        world.insert_resource(BootContext {
-            roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-            app_profile_dir: root.path().join("profile"),
-            helper_exe: root.path().join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: base.ghost_dir("pasta"),
-                    balloon_root: base.balloon_dir("kaku"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Default,
-                    dir: base.ghost_dir("pasta"),
-                    folder: Some("pasta".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: base.balloon_dir("kaku"),
-                    folder: Some("kaku".to_owned()),
-                },
-            },
-        });
-        let (tx, kanade) = mpsc::channel();
-        world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-            Some(tx),
-            base.ghost_dir("pasta"),
-        ))));
+        let (mut world, kanade) = slot_world(root.path(), "pasta", "kaku");
         world.insert_resource(ReadOnlyRun);
         Rig {
             world,
@@ -91,25 +59,16 @@ impl Rig {
 
     /// kanade に届いた送出（id・Reference）。どれも返事なしの GET。
     fn raised(&self) -> Vec<(String, Vec<String>)> {
-        self.kanade
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::RaiseEvent {
-                    id,
-                    references,
-                    method,
-                    reply,
-                } => {
-                    assert_eq!(method, ShioriMethod::Get);
-                    assert!(reply.is_none(), "返事は待たない");
-                    (id, references)
-                }
-                _ => panic!("汎用の通知の入口の送出だけが届く"),
+        raised(&self.kanade)
+            .into_iter()
+            .map(|(id, references, reply)| {
+                assert!(!reply, "返事は待たない");
+                (id, references)
             })
             .collect()
     }
 
-    /// 段は待ち・預かりは空・窓口は忙しくない・背景のスレッドは起こさない。
+    /// 段は走っていない（Idle）・預かりは空・窓口は忙しくない・背景のスレッドは起こさない。
     fn assert_untouched(&self) {
         let desk = self.world.non_send::<UpdateDesk>();
         assert_eq!(desk.stage, Stage::Idle);
@@ -117,15 +76,6 @@ impl Rig {
         assert!(desk.worker.is_none(), "背景のスレッドを起こさない");
         assert!(!desk::is_busy(&self.world), "窓口を忙しいに残さない");
     }
-}
-
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\n{descript}\r\n"),
-    )
-    .expect("descript.txt を書く");
 }
 
 /// 1 回の依頼を断らせ、送り物と `readonly_refused` の記録を確かめる（2 回目も同じ）。
@@ -147,10 +97,7 @@ fn assert_refused_twice(
             .collect();
         assert_eq!(raised, expected, "Ex → Result の 2 件だけ");
 
-        let refused: Vec<_> = events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("readonly_refused"))
-            .collect();
+        let refused = events_named(&events, "readonly_refused");
         assert_eq!(refused.len(), 1, "1 回につき 1 件: {events:?}");
         let e = refused[0];
         assert_eq!(e.level, Level::INFO);
@@ -159,12 +106,10 @@ fn assert_refused_twice(
         assert_eq!(e.field("targets"), Some("1"));
         assert_eq!(e.field("notified"), Some("true"));
         assert!(
-            events
-                .iter()
-                .all(|e| e.field_str("event") != Some("update_refused")),
+            events_named(&events, "update_refused").is_empty(),
             "断りの warn を出さない"
         );
-        assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
+        assert!(warns(&events).is_empty(), "{events:?}");
     }
 }
 
@@ -211,10 +156,7 @@ fn readonly_with_no_targets_sends_nothing() {
     assert_eq!(verdict, SubmitVerdict::ReadOnly);
     rig.assert_untouched();
     assert!(rig.raised().is_empty(), "対象が 0 なら送らない");
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_refused"))
-        .collect();
+    let refused = events_named(&events, "readonly_refused");
     assert_eq!(refused.len(), 1);
     assert_eq!(refused[0].field("targets"), Some("0"));
     assert_eq!(refused[0].field("notified"), Some("false"));

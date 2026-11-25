@@ -33,6 +33,10 @@ const TOOL: &str = "dump_surface";
 /// 符号化を受け持つスレッドの名前。
 const ENCODE_THREAD: &str = "mcp-encode";
 
+const ENCODE_GONE: &str = "the encoding thread is gone";
+
+const ENCODE_PANICKED: &str = "the encoding thread panicked";
+
 /// 別のスレッドで行う残りの仕事。引数は UI スレッドの側の所要時間（成功の記録に載せる）。
 pub(in crate::mcp) type Job = Box<dyn FnOnce(Duration) -> ToolOutcome + Send>;
 
@@ -165,7 +169,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
 }
 
 /// 符号化待ちの 1 段。届いていれば答え、まだなら `None`。届けずにスレッドが消えたら
-/// 想定外の失敗（`finish` が必ず届けるので届かない枝）。
+/// 想定外の失敗（[`work_elsewhere`] が必ず届けるので届かない枝）。
 fn receive(
     tool: &'static str,
     scope: u32,
@@ -174,9 +178,7 @@ fn receive(
     match rx.try_recv() {
         Ok(outcome) => Some(outcome),
         Err(mpsc::TryRecvError::Empty) => None,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            Some(fail(tool, scope, "the encoding thread is gone"))
-        }
+        Err(mpsc::TryRecvError::Disconnected) => Some(fail(tool, scope, ENCODE_GONE)),
     }
 }
 
@@ -204,9 +206,7 @@ pub(in crate::mcp) fn reply_elsewhere(
 }
 
 /// 符号化のスレッド（名前 `mcp-encode`）を起こし、起こし終えた後に `ui()` で UI スレッドの側の
-/// 時間を測って、(仕事, 届け先, 時間) を手渡す。起こせなければ `deliver(to, fail(tool, scope, 理由))`。
-/// 手渡しの前にスレッドが消えていたら `deliver(to, fail(tool, scope, "the encoding thread is gone"))`。
-/// 必ず 1 度だけ届ける。
+/// 時間を測って仕事へ渡す。届けられない失敗は `fail(tool, scope, 理由)` で答える。
 fn encode_elsewhere<T: Send + 'static>(
     tool: &'static str,
     scope: u32,
@@ -215,36 +215,65 @@ fn encode_elsewhere<T: Send + 'static>(
     to: T,
     deliver: fn(T, ToolOutcome),
 ) {
+    let work = move || -> Work {
+        let ui = ui();
+        Box::new(move || job(ui))
+    };
+    let failed = move |reason: &str| fail(tool, scope, reason);
+    work_elsewhere(
+        ENCODE_THREAD,
+        ENCODE_GONE,
+        ENCODE_PANICKED,
+        failed,
+        work,
+        to,
+        deliver,
+    );
+}
+
+/// 別のスレッドで走らせる仕事。
+pub(in crate::mcp) type Work = Box<dyn FnOnce() -> ToolOutcome + Send>;
+
+/// `thread` の名前のスレッドを起こし、起こし終えた後に `work()` で仕事を作って、届け先と一緒に
+/// 手渡す。起こせなければ `deliver(to, failed(理由))`、手渡しの前にスレッドが消えていたら
+/// `deliver(to, failed(gone))`、仕事が panic したら `deliver(to, failed(panicked))`。必ず 1 度だけ届ける。
+pub(in crate::mcp) fn work_elsewhere<T: Send + 'static>(
+    thread: &str,
+    gone: &str,
+    panicked: &'static str,
+    failed: impl Fn(&str) -> ToolOutcome + Copy + Send + 'static,
+    work: impl FnOnce() -> Work,
+    to: T,
+    deliver: fn(T, ToolOutcome),
+) {
     // 仕事と届け先は起こせた後で渡す（起こせなければ手元に残り、その場で届けられる）。
-    let (tx, rx) = mpsc::channel::<(Job, T, Duration)>();
+    let (tx, rx) = mpsc::channel::<(Work, T)>();
     let spawned = std::thread::Builder::new()
-        .name(ENCODE_THREAD.to_owned())
+        .name(thread.to_owned())
         .spawn(move || {
-            if let Ok((job, to, ui)) = rx.recv() {
-                deliver(to, finish(tool, scope, job, ui));
+            if let Ok((work, to)) = rx.recv() {
+                deliver(to, caught(work, failed, panicked));
             }
         });
     match spawned {
         Ok(_) => {
-            if let Err(mpsc::SendError((_, to, _))) = tx.send((job, to, ui())) {
-                deliver(to, fail(tool, scope, "the encoding thread is gone"));
+            if let Err(mpsc::SendError((_, to))) = tx.send((work(), to)) {
+                deliver(to, failed(gone));
             }
         }
-        Err(e) => deliver(to, fail(tool, scope, &e.to_string())),
+        Err(e) => deliver(to, failed(&e.to_string())),
     }
 }
 
-/// 符号化のスレッドの体。仕事を panic を受けて走らせ、panic なら
-/// `fail(tool, scope, "the encoding thread panicked")`。
-pub(in crate::mcp) fn finish(
-    tool: &'static str,
-    scope: u32,
-    job: Job,
-    ui: Duration,
+/// [`work_elsewhere`] のスレッドの体。仕事を panic を受けて走らせ、panic なら `failed(panicked)`。
+pub(in crate::mcp) fn caught(
+    work: Work,
+    failed: impl Fn(&str) -> ToolOutcome,
+    panicked: &str,
 ) -> ToolOutcome {
     // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(ui)))
-        .unwrap_or_else(|_| fail(tool, scope, "the encoding thread panicked"))
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+        .unwrap_or_else(|_| failed(panicked))
 }
 
 /// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる。
@@ -261,14 +290,14 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         return None;
     }
     let presenter = wiring.presenter();
-    let plan =
-        match judge::judge_surface(Some(&PresenterFacts(presenter)), args.scope, args.surface) {
-            Ok(plan) => plan,
-            Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
-        };
+    let plan = match judge::judge_surface(&PresenterFacts(presenter), args.scope, args.surface) {
+        Ok(plan) => plan,
+        Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
+    };
     Some(match plan {
         SurfacePlan::Shown { scope, surface_id } => {
-            match presenter.last_shown(shell_target(scope)) {
+            let target = shell_target(scope);
+            match presenter.last_shown(target) {
                 Some((_, Some(pic))) => picture(
                     scope,
                     surface_id,
@@ -277,33 +306,39 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
                     pic.width(),
                     pic.height(),
                 ),
-                _ => Step::Now(fail(
-                    TOOL,
+                // 装置が替わると隠れた target の合成メモだけが捨てられ、描き直されない。
+                Some((_, None)) => composed(
                     scope,
-                    "the last shown picture is no longer kept",
-                )),
+                    surface_id,
+                    judge::shown_text(scope, surface_id),
+                    presenter.compose_last_shown(target),
+                ),
+                None => Step::Now(refuse(TOOL, args.scope, judge::NOT_SHOWN_YET)),
             }
         }
-        SurfacePlan::Alone { scope, surface_id } => alone(
+        SurfacePlan::Alone { scope, surface_id } => composed(
             scope,
             surface_id,
+            judge::alone_text(scope, surface_id),
             presenter.compose_alone(shell_target(scope), surface_id),
         ),
     })
 }
 
-/// 単体の合成の結果から答えの種を作る。合成の結果が無い（表示の層にスコープのシェルが
-/// 無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で想定外の失敗。
-fn alone(
+/// 合成し直した結果から、本文 `text` の答えの種を作る。合成の結果が無い（表示の層にスコープの
+/// シェルが無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で
+/// 想定外の失敗。
+fn composed(
     scope: u32,
     surface_id: u32,
+    text: String,
     composed: Option<Result<ComposedSurface, ComposeError>>,
 ) -> Step {
     match composed {
         Some(Ok(pic)) => picture(
             scope,
             surface_id,
-            judge::alone_text(scope, surface_id),
+            text,
             pic.bytes(),
             pic.width(),
             pic.height(),

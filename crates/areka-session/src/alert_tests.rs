@@ -42,8 +42,6 @@ fn only_alert_body(events: &[CapturedEvent]) -> String {
 /// 実行ファイルの場所が取れない失敗の値。
 fn exe_unavailable() -> RootError {
     RootError::ExeLocationUnavailable {
-        tried: Vec::new(),
-        origin: RootsOrigin::Default,
         skipped: Vec::new(),
         memory_fell_back: false,
     }

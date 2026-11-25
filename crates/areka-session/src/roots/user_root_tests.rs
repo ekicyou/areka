@@ -64,6 +64,7 @@ fn ghost_and_balloon_under_exe_root_are_copied() {
         CopyPlan::Copy {
             from: ghost.clone(),
             to: f.user.join("ghost").join("emo2"),
+            user_dir: f.user.clone(),
         }
     );
     let balloon = f.exe.join("balloon").join("bln");
@@ -72,6 +73,7 @@ fn ghost_and_balloon_under_exe_root_are_copied() {
         CopyPlan::Copy {
             from: balloon.clone(),
             to: f.user.join("balloon").join("bln"),
+            user_dir: f.user.clone(),
         }
     );
 }
@@ -180,6 +182,7 @@ fn temporary_root_at_exe_dir_does_not_hide_exe_root() {
         CopyPlan::Copy {
             from: ghost.clone(),
             to: f.user.join("ghost").join("emo2"),
+            user_dir: f.user.clone(),
         }
     );
     // 一時の置き場のゴースト（`<exe>\<フォルダ>`）そのものは写さない。

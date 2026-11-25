@@ -2,7 +2,7 @@
 //!
 //! 確かめること: 選ぶ画面は `install-pick` という名のスレッドで出て、出ている間は「インストール…」が
 //! 選べず 2 度目の起動は無視されること・スレッドが終わると旗が降りて選べるようになること・抑止の
-//! ときはスレッドが起きず `warn!(install_pick_suppressed)` が 1 件で依頼が 0 件であること・取り消しは
+//! ときはスレッドが起きず `info!(install_pick_suppressed)`（理由 `no_alert`）が 1 件で依頼が 0 件であること・取り消しは
 //! `info!`、出せなければ `error!` でどちらも要求 0 件であること・メニューの側の依頼が台本の側の
 //! 依頼と出どころだけ違う同じ依頼になること。
 //!
@@ -14,30 +14,24 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
 
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
+use crate::install::InstallOrigin;
 use crate::install::judge::{ScriptRequest, script_request};
-use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
-use areka_runtime::spine::join_thread_bounded;
+use crate::session_tests::{events_named, levels_of, warn_or_worse};
+use areka_runtime::spine::{SPIN_WAIT, join_thread_bounded};
 
 /// 絶対パスの書庫（fs は読まない＝在る必要はない）。
 const ABSOLUTE: &str = r"C:\areka-install-pick-test\in\hana.nar";
 
-/// 別のスレッドを待つ上限（固まったときに赤で止めるためだけの値）。
-const BOUND: Duration = Duration::from_secs(10);
-
 /// 窓口とメニュー（「インストール」枠を登記済み）を据えた World と、背景のスレッドの代わり。
 fn rig() -> (World, Receiver<InstallOrder>) {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
+    let mut world = desk_world();
     let (worker, orders) = mpsc::channel();
     world.non_send_mut::<InstallDesk>().worker = Some(worker);
     wire_menu(&mut world, mpsc::channel().0);
@@ -53,21 +47,6 @@ fn item_enabled(world: &World) -> Option<bool> {
         .snapshot(world, &MenuContext { scope: 0 })
         .into_iter()
         .find_map(|(frame, item)| (frame == Frame::Install).then_some(item.enabled))
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
-fn warns_and_errors(events: &[CapturedEvent]) -> Vec<(Level, Option<&str>)> {
-    events
-        .iter()
-        .filter(|e| e.level <= Level::WARN)
-        .map(|e| (e.level, e.field_str("event")))
-        .collect()
 }
 
 // ---------------------------------------------------------------- 出どころだけが違う
@@ -97,7 +76,7 @@ fn menu_order_is_the_script_order_with_only_the_origin_changed() {
         panic!("絶対パスは path の腕で通る");
     };
     raw_sender(&world)
-        .send(RawInstallRequest {
+        .send(RawInstallRequest::Path {
             path: script_path,
             origin: InstallOrigin::Script,
         })
@@ -147,13 +126,13 @@ fn picking_disables_the_item_until_the_thread_ends() {
     let handle = start_pick(&mut world, false, move || {
         moves.fetch_add(1, Ordering::SeqCst);
         let _ = entered_tx.send(thread::current().name().map(str::to_owned));
-        let _ = release_rx.recv_timeout(BOUND);
+        let _ = release_rx.recv_timeout(SPIN_WAIT);
         moves.fetch_add(1, Ordering::SeqCst);
         Ok(None)
     })
     .expect("選ぶ画面のスレッドが起きる");
     let thread_name = entered
-        .recv_timeout(BOUND)
+        .recv_timeout(SPIN_WAIT)
         .expect("選ぶ画面の代わりが呼ばれる");
 
     let during = (item_enabled(&world), can_pick(&world));
@@ -199,8 +178,8 @@ fn picking_disables_the_item_until_the_thread_ends() {
 
 // ---------------------------------------------------------------- 抑止
 
-/// 抑止のときは選ぶ画面のスレッドを起こさず、`warn!(install_pick_suppressed)` を 1 件残して取り消しと
-/// 同じに扱う（依頼 0 件・旗は立たない）。
+/// 抑止のときは選ぶ画面のスレッドを起こさず、`info!(install_pick_suppressed)`（理由 `no_alert`）を 1 件
+/// 残して取り消しと同じに扱う（依頼 0 件・旗は立たない）。
 #[test]
 fn suppressed_pick_starts_no_thread_and_queues_nothing() {
     let (mut world, orders) = rig();
@@ -219,7 +198,11 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
         (
             handle.is_none(),
             called.try_recv().is_err(),
-            warns_and_errors(&events),
+            warn_or_worse(&events).is_empty(),
+            events_named(&events, "install_pick_suppressed")
+                .iter()
+                .map(|e| (e.level, e.field_str("reason")))
+                .collect::<Vec<_>>(),
             queued,
             orders.try_recv().is_err(),
             events_named(&events, "install_order_queued").len(),
@@ -228,13 +211,14 @@ fn suppressed_pick_starts_no_thread_and_queues_nothing() {
         (
             true,
             true,
-            vec![(Level::WARN, Some("install_pick_suppressed"))],
+            true,
+            vec![(Level::INFO, Some("no_alert"))],
             0,
             true,
             0,
             true,
         ),
-        "スレッドなし・画面の代わりは呼ばれない・警告 1 件・依頼 0 件・旗は立たない: {events:?}"
+        "スレッドなし・画面の代わりは呼ばれない・警告 0 件・抑止の info 1 件・依頼 0 件・旗は立たない: {events:?}"
     );
 }
 
@@ -259,7 +243,7 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
         ),
         (
             Ok(Some(PathBuf::from(ABSOLUTE))),
-            vec![RawInstallRequest {
+            vec![RawInstallRequest::Path {
                 path: PathBuf::from(ABSOLUTE),
                 origin: InstallOrigin::Menu,
             }],
@@ -271,13 +255,10 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
         let label = format!("{result:?}");
         let (tx, rx) = mpsc::channel();
         let ((), events) = capture(|| send_pick(result, &tx));
-        let logged: Vec<Level> = events_named(&events, event)
-            .iter()
-            .map(|e| e.level)
-            .collect();
+        let logged = levels_of(&events, event);
         assert_eq!(rx.try_iter().collect::<Vec<_>>(), expected, "{label}");
         if event.is_empty() {
-            assert!(warns_and_errors(&events).is_empty(), "{label}: {events:?}");
+            assert!(warn_or_worse(&events).is_empty(), "{label}: {events:?}");
         } else {
             assert_eq!(logged, vec![level], "{label}: {events:?}");
         }

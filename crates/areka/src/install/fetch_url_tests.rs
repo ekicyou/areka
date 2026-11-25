@@ -2,6 +2,7 @@
 //! 偽の取得口だけを差し、ネットワークへ出ない。一時フォルダは `temp-path-kit`。
 //! 通信中の数はテストごとの `static` を渡し、プロセスの数（`PROCESS`）には触れない。
 
+use crate::session_tests::events_named;
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
@@ -16,11 +17,13 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::{
-    DownloadError, MakeFetch, download, download_dir, fetch_and_send, spawn_download_with,
+    DownloadError, FetchTools, MakeFetch, download, download_dir, fetch_and_send, spawn_fetcher,
+    write_body,
 };
 use crate::install::fetch_url_test_support::FakeFetch;
+use crate::install::worker::DeskAsk;
 use crate::install::{InstallOrigin, RawInstallRequest};
-use areka_runtime::spine::join_thread_bounded;
+use areka_session::exit_wait::WorkGate;
 
 const URL: &str = "https://example.com/files/my ghost.nar";
 const BODY: &[u8] = b"PK\x03\x04 nar body";
@@ -31,8 +34,15 @@ const BOUND: Duration = Duration::from_secs(30);
 /// 数を読まないテストへ渡す、誰も読まない通信中の数。
 static UNOBSERVED: OnlineCounter = OnlineCounter::new();
 
-fn make(fake: FakeFetch) -> MakeFetch {
-    Box::new(move || Ok(Box::new(fake) as Box<dyn areka_update::Fetch>))
+/// 台本の出どころのパスの要求なら、そのパス。
+fn script_path(request: RawInstallRequest) -> std::path::PathBuf {
+    match request {
+        RawInstallRequest::Path {
+            path,
+            origin: InstallOrigin::Script,
+        } => path,
+        other => panic!("台本のパスの要求でない: {other:?}"),
+    }
 }
 
 fn files_in(dir: &Path) -> Vec<String> {
@@ -77,9 +87,12 @@ fn set_mtime(path: &Path, at: SystemTime) {
 /// 取得口を作る（`MakeFetch`）たびと、偽の取得口の `get` のたびに `moves` を 1 増やす取得口。
 fn make_counted(fake: FakeFetch, moves: &Arc<AtomicU64>) -> MakeFetch {
     let moves = Arc::clone(moves);
-    Box::new(move || {
+    Arc::new(move || {
         moves.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(Counted { fake, moves }) as Box<dyn areka_update::Fetch>)
+        Ok(Box::new(Counted {
+            fake: fake.clone(),
+            moves: moves.clone(),
+        }) as Box<dyn areka_update::Fetch>)
     })
 }
 
@@ -166,34 +179,52 @@ fn files_older_than_seven_days_are_swept_before_download() {
     assert_eq!(files_in(&dir).len(), 2);
 }
 
+/// 取得のスレッドを起こして `URL` を取りに行かせ、窓口への生の要求の受信端と、知らせの受信端を返す。
+/// URL の送出端は落とす（スレッドは `URL` を終えると抜ける）。
+fn fetch_once(
+    make: MakeFetch,
+    dir: std::path::PathBuf,
+) -> (mpsc::Receiver<RawInstallRequest>, mpsc::Receiver<DeskAsk>) {
+    let (raw, raw_rx) = mpsc::channel();
+    let (desk, desk_rx) = mpsc::channel();
+    let tools = FetchTools {
+        dir,
+        make,
+        online: &UNOBSERVED,
+    };
+    let urls = spawn_fetcher(
+        URL.to_owned(),
+        tools,
+        Arc::new(WorkGate::default()),
+        raw,
+        desk,
+    );
+    assert!(urls.is_some(), "install-fetch が起きる");
+    (raw_rx, desk_rx)
+}
+
 #[test]
 fn thread_round_sends_one_script_request() {
     let tmp = TempPath::new("fetch-url-thread");
     let dir = tmp.child("download");
-    let (tx, rx) = mpsc::channel::<RawInstallRequest>();
     let inner = Arc::new(AtomicU64::new(0));
 
-    let handle = spawn_download_with(
-        URL.to_owned(),
-        tx,
-        dir.clone(),
+    let (rx, done) = fetch_once(
         make_counted(FakeFetch::new().serve(URL, BODY), &inner),
-        &UNOBSERVED,
-    )
-    .expect("install-fetch が起きる");
-    let request = rx.recv_timeout(BOUND).expect("依頼が届く");
-    let moves = || inner.load(Ordering::SeqCst);
-    assert!(
-        join_thread_bounded("install-fetch の終わり", Some(&moves), handle).is_ok(),
-        "install-fetch が panic した"
+        dir.clone(),
     );
+    let path = script_path(rx.recv_timeout(BOUND).expect("依頼が届く"));
+    assert!(matches!(
+        done.recv_timeout(BOUND),
+        Ok(DeskAsk::FetchDone { panicked: false })
+    ));
+    assert_eq!(inner.load(Ordering::SeqCst), 2, "作り口 1 回・取得 1 回");
 
-    assert_eq!(request.origin, InstallOrigin::Script);
-    assert_eq!(request.path.parent(), Some(dir.as_path()));
-    assert_eq!(fs::read(&request.path).expect("読める"), BODY);
+    assert_eq!(path.parent(), Some(dir.as_path()));
+    assert_eq!(fs::read(&path).expect("読める"), BODY);
     assert_eq!(
-        rx.try_recv(),
-        Err(TryRecvError::Disconnected),
+        rx.recv_timeout(BOUND).err(),
+        Some(mpsc::RecvTimeoutError::Disconnected),
         "依頼は 1 件だけ"
     );
 }
@@ -202,27 +233,25 @@ fn thread_round_sends_one_script_request() {
 fn thread_round_failure_sends_nothing() {
     let tmp = TempPath::new("fetch-url-thread-fail");
     let dir = tmp.child("download");
-    let (tx, rx) = mpsc::channel::<RawInstallRequest>();
     let inner = Arc::new(AtomicU64::new(0));
 
-    let handle = spawn_download_with(
-        URL.to_owned(),
-        tx,
-        dir.clone(),
+    let (rx, done) = fetch_once(
         make_counted(
             FakeFetch::new().fail(URL, FetchError::Status { code: 500 }),
             &inner,
         ),
-        &UNOBSERVED,
-    )
-    .expect("install-fetch が起きる");
-    let moves = || inner.load(Ordering::SeqCst);
-    assert!(
-        join_thread_bounded("install-fetch の終わり", Some(&moves), handle).is_ok(),
-        "install-fetch が panic した"
+        dir.clone(),
     );
+    assert!(matches!(
+        done.recv_timeout(BOUND),
+        Ok(DeskAsk::FetchDone { panicked: false })
+    ));
 
-    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
+    assert_eq!(
+        rx.recv_timeout(BOUND).err(),
+        Some(mpsc::RecvTimeoutError::Disconnected),
+        "依頼 0"
+    );
     assert_eq!(files_in(&dir), Vec::<String>::new());
 }
 
@@ -230,11 +259,11 @@ fn thread_round_failure_sends_nothing() {
 /// 依頼 0。
 #[test]
 fn failure_logs_one_error_with_url_and_reason_and_sends_nothing() {
-    let unavailable: MakeFetch = Box::new(|| Err(FetchError::Other { code: 12007 }));
+    let unavailable: MakeFetch = Arc::new(|| Err(FetchError::Other { code: 12007 }));
     let cases = [
         (
             "fetch",
-            make(FakeFetch::new().fail(URL, FetchError::Timeout)),
+            FakeFetch::new().fail(URL, FetchError::Timeout).maker(),
         ),
         ("unavailable", unavailable),
     ];
@@ -244,7 +273,7 @@ fn failure_logs_one_error_with_url_and_reason_and_sends_nothing() {
         let (tx, rx) = mpsc::channel::<RawInstallRequest>();
 
         let ((), events) =
-            capture(|| fetch_and_send(URL, maker, &dir, SystemTime::now(), &tx, &UNOBSERVED));
+            capture(|| fetch_and_send(URL, &maker, &dir, SystemTime::now(), &tx, &UNOBSERVED));
 
         let errors: Vec<_> = events.iter().filter(|e| e.level == Level::ERROR).collect();
         let [error] = errors.as_slice() else {
@@ -274,7 +303,7 @@ fn success_logs_done_without_warnings() {
     let ((), events) = capture(|| {
         fetch_and_send(
             URL,
-            make(FakeFetch::new().serve(URL, BODY)),
+            &FakeFetch::new().serve(URL, BODY).maker(),
             &dir,
             SystemTime::now(),
             &tx,
@@ -284,12 +313,10 @@ fn success_logs_done_without_warnings() {
 
     assert!(events.iter().all(|e| e.level > Level::WARN), "{events:?}");
     assert!(
-        events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_fetch_done")),
+        !events_named(&events, "install_fetch_done").is_empty(),
         "{events:?}"
     );
-    assert_eq!(rx.try_recv().map(|r| r.origin), Ok(InstallOrigin::Script));
+    script_path(rx.try_recv().expect("依頼が届く"));
 }
 
 /// 取得口を作る時点で通信中の数は立っていて、取得口を作れない・取得の失敗・書けない・送れない・
@@ -301,9 +328,9 @@ fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
     // 取得口を作る閉包の中で数を読む（関数の冒頭で立っていれば真）。
     let probe = |fake: Option<FakeFetch>| -> MakeFetch {
         let seen = Arc::clone(&seen);
-        Box::new(move || {
+        Arc::new(move || {
             seen.store(ONLINE.is_online(), Ordering::SeqCst);
-            match fake {
+            match fake.clone() {
                 Some(fake) => Ok(Box::new(fake) as Box<dyn areka_update::Fetch>),
                 None => Err(FetchError::Other { code: 12007 }),
             }
@@ -340,7 +367,7 @@ fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
         seen.store(false, Ordering::SeqCst);
 
         let ((), events) =
-            capture(|| fetch_and_send(URL, maker, &dir, SystemTime::now(), &tx, &ONLINE));
+            capture(|| fetch_and_send(URL, &maker, &dir, SystemTime::now(), &tx, &ONLINE));
 
         assert!(
             seen.load(Ordering::SeqCst),
@@ -348,17 +375,61 @@ fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
         );
         assert!(!ONLINE.is_online(), "{label}: 抜けたら数は 0");
         assert!(
-            events
-                .iter()
-                .any(|e| e.field_str("event") == Some(expected)),
+            !events_named(&events, expected).is_empty(),
             "{label}: {expected} の経路を踏む: {events:?}"
         );
         if let Some(rx) = rx {
-            assert_eq!(
-                rx.try_recv().map(|r| r.origin),
-                Ok(InstallOrigin::Script),
-                "{label}"
-            );
+            script_path(rx.try_recv().expect(label));
         }
     }
+}
+
+/// 逆斜線・`..`・`:` を含む末尾も一時フォルダの直下の 1 つの名前になる。
+#[test]
+fn download_keeps_a_traversing_tail_inside_the_dir() {
+    let tmp = TempPath::new("fetch-url-traverse");
+    let dir = tmp.child("download");
+    let url = "https://example.com/a/..\\..\\x:y.nar";
+    let fake = FakeFetch::new().serve(url, BODY);
+
+    let path = download(url, &fake, &dir, SystemTime::now()).expect("落とせる");
+
+    assert_eq!(path.parent(), Some(dir.as_path()));
+    assert_name_shape(&path, ".._.._x_y.nar");
+}
+
+/// 消す古いファイルが無ければ `install_fetch_swept` を出さない。
+#[test]
+fn nothing_swept_logs_no_swept_record() {
+    let tmp = TempPath::new("fetch-url-swept-none");
+    let dir = tmp.child("download");
+    let fake = FakeFetch::new().serve(URL, BODY);
+
+    let (result, events) = capture(|| download(URL, &fake, &dir, SystemTime::now()));
+
+    result.expect("落とせる");
+    assert!(
+        events_named(&events, "install_fetch_swept").is_empty(),
+        "{events:?}"
+    );
+}
+
+/// 書きかけで書き込みが失敗したら、そのファイルを残さない。
+#[test]
+fn failed_write_leaves_no_partial_file() {
+    let tmp = TempPath::new("fetch-url-partial");
+    let dir = tmp.child("download");
+    fs::create_dir_all(&dir).expect("フォルダを作れる");
+    let path = dir.join("partial.nar");
+
+    let result = write_body(&path, BODY, |path, bytes| {
+        fs::write(path, &bytes[..2])?;
+        Err(std::io::Error::other("ディスクがいっぱい"))
+    });
+
+    assert!(
+        matches!(&result, Err(DownloadError::Io { path: p, .. }) if *p == path),
+        "{result:?}"
+    );
+    assert!(!path.exists(), "書きかけは消える");
 }

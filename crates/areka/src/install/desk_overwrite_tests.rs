@@ -2,21 +2,23 @@
 //!
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口・kanade・背景のスレッド・口（`DeskPorts`）・切替の
 //! 道筋を通し、偽の SHIORI に届いた呼び出しの列と UI スレッドの記録の順を突き合わせる。確かめること:
-//! `OnGhostChanging` も `OnClose` も 0 件・降ろした後（全窓を閉じた後・起こす前）に宛先の中身が
-//! 替わる・同じゴーストが起き直す・定常到達の後に締めの知らせが出る。
+//! `OnGhostChanging` も `OnClose` も 0 件・降ろした後（全窓を閉じた後・起こす前）に背景のスレッドが
+//! 宛先の中身を替える・同じゴーストが起き直す・定常到達の後に締めの知らせが出る。降ろしてから起こす
+//! までの 2 往復の段は `desk_overwrite_between_tests.rs`。
 //!
 //! 切替の入口の判定と失敗の場合: 別の切替の最中（`Busy`）は預かったまま
 //! その予約が下りた tick に頼み直して一周する・別のゴーストへの切替では展開せず書庫を返す・目録に無い
 //! （`NotFound`）ときはよそへの展開で続いて締めの知らせが 1 つ出る・確定が失敗すれば同じゴーストが元の
-//! 中身で起き直って `OnInstallFailure` が出る・起こせなければ今日の切替の道（既定へ戻す・既定なら致命）に
+//! 中身で起き直って `OnInstallFailure` が出る・起こせなければ切替の失敗の道（既定へ戻す・既定なら致命）に
 //! 乗る。軽い判定（中止で「預かった」へ戻る・`NoContext`）は `desk_tests.rs`。
 //!
 //! 実時間の待ちに依らない: 台詞の時計は合成の Tick で進め（再生中の台詞の終わりを kanade の保留が
 //! 待つ）、依頼の終わりは窓口が背景のスレッドから終わりの知らせを受けたことで揃える。
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
 
-use areka_actor::reply_channel;
+use areka_actor::{ActorHandle, reply_channel, spawn_actor};
 use areka_kanade::ChangeOrigin;
 use areka_nar::NarArchive;
 use log_capture_kit::{CapturedEvent, capture};
@@ -27,17 +29,21 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::InstallDesk;
 use super::overwrite::take;
-use crate::install::procedure::Overwritten;
-use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::install::procedure::procedure_test_support::order_of;
+use crate::install::procedure::{InstallPorts, Overwritten};
+use crate::install::worker::{DeskPorts, OverwriteAnswer};
+use crate::install::{SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::{events_named, hold, position_of, reservation, warn_or_worse};
+use crate::update::update_test_support::refs_of;
 use areka_placement::persist::PersistWiring;
 use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::DEFAULT_GHOST_FOLDER;
 use areka_session::ghost_switch::{
-    GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
-    SwitchTarget, SwitchVerdict, request_ghost_switch,
+    GhostSpec, LastInstalledGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchVerdict,
+    request_ghost_switch,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
@@ -56,28 +62,17 @@ fn ids(calls: &[RecordedCall]) -> Vec<String> {
         .collect()
 }
 
-/// `name` の記録が最初に現れた位置。
-fn first(events: &[CapturedEvent], name: &str) -> Option<usize> {
-    events
-        .iter()
-        .position(|e| e.field_str("event") == Some(name))
-}
-
 /// 呼び出しの列の確かめに添える手がかり: 起こした回ごとの列・`OnInstallFailure` の Reference・捕まえた
-/// 記録のうち warn 以上。手続きの失敗の詳しい記録（`install_failed`・`areka_nar` の失敗）は背景の
-/// スレッド `install` で出るので、呼び手のスレッドだけを捕える `capture` には映らない。Reference の語
-/// （`extraction` は `.nar` そのものを読めない失敗・`fileio` は作業フォルダ・入れる先・確定・巻き戻しの
-/// 入出力の失敗）がその代わりになる。
+/// 記録のうち warn 以上。背景のスレッド `install` は捕捉の窓の中で起きたときだけ記録が映る（窓の外で
+/// 起きていれば手続きの失敗の詳しい記録は映らない）。Reference の語（`extraction` は `.nar` そのものを
+/// 読めない失敗・`fileio` は作業フォルダ・入れる先・確定・巻き戻しの入出力の失敗）がその代わりになる。
 fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
     let failures: Vec<_> = rig
         .calls(folder)
         .iter()
         .filter_map(|c| refs_of(c, "OnInstallFailure"))
         .collect();
-    let troubles: Vec<_> = events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .collect();
+    let troubles = warn_or_worse(events);
     format!(
         "{:?}／OnInstallFailure の Reference: {failures:?}／warn 以上の記録: {troubles:?}",
         boots_of(rig, folder)
@@ -87,52 +82,16 @@ fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
 /// 起動中のゴースト A（`directory,A` の `ghost`）へ、ファイルを 1 つ足す書庫を本番の道筋で入れる。
 #[test]
 fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
-    let mut rig = switch_rig(vec![(
-        "A",
-        FakeShiori::Scripted(Box::new(|| {
-            standard_script(r"\0A\e")
-                .get("OnGhostChanged", Ok(None))
-                .get("OnInstallBegin", Ok(None))
-                .get("OnInstallCompleteEx", Ok(None))
-                .get("OnInstallComplete", Ok(None))
-        })),
-    )]);
-    // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    rig.plant_boot_record("A");
-    rig.boot("A");
-    assert!(rig.wait_steady(), "A が定常に着く");
+    let mut rig = running("A", &[]);
     let marker = rig.root.ghost_dir("A").join(MARKER);
     assert!(!marker.exists(), "入れる前は無い");
 
     let dir = TempPath::new("desk-overwrite-running");
-    let path = dir.child("a.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&["charset,UTF-8", "type,ghost", "name,A", "directory,A"]),
-        )
-        .done()
-        .file(MARKER, MARKER_BODY)
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
-    let order = InstallOrder {
-        archives: vec![path],
-        origin: InstallOrigin::Menu,
-    };
-    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
-
-    let (finished, events) = capture(|| {
-        rig.pump_talking_until(|rig| {
-            let desk = rig.world.non_send::<InstallDesk>();
-            rig.exit_requested() || (desk.queue.is_empty() && !desk.busy)
-        })
-    });
+    let (finished, events) = capture(|| install_through(&mut rig, write_archive(&dir, "A", &[])));
     assert!(finished, "依頼が終わる（期限切れ）: {events:?}");
     assert!(!rig.exit_requested(), "終了しない: {events:?}");
 
-    let boots: Vec<Vec<String>> = rig.calls("A").iter().map(|c| ids(c)).collect();
+    let boots = boots_of(&rig, "A");
     let current = rig
         .world
         .get_resource::<BootContext>()
@@ -180,13 +139,18 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     );
     // 降ろした後に宛先の中身が替わる（全窓を閉じた後・起こす前に展開する）。
     assert_eq!(body.as_deref(), Some(MARKER_BODY));
-    let order_of = |name| first(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
+    let order_of =
+        |name| position_of(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
     let down = order_of("ghost_switch_down_ms");
     let done = order_of("install_overwrite_done");
     let booted = order_of("ghost_switch_booted");
     let steady = order_of("ghost_switch_done");
     assert!(down < done && done < booted, "{events:?}");
     let done_event = &events[done];
+    assert_eq!(
+        done_event.target, "areka::install::worker",
+        "{done_event:?}"
+    );
     assert_eq!(done_event.field("ok"), Some("true"), "{done_event:?}");
     assert!(done_event.field("ms").is_some(), "{done_event:?}");
     // 締めの知らせは定常到達の後に送る。
@@ -200,10 +164,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     assert!(steady < sent_ex, "{events:?}");
     // 起動中のゴースト自身を入れても、追加の切替はしない。受け皿へは書く。
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("ghost_switch_requested"))
-            .count(),
+        events_named(&events, "ghost_switch_requested").len(),
         1,
         "{events:?}"
     );
@@ -250,7 +211,7 @@ fn running(folder: &'static str, others: &[&'static str]) -> SwitchRig {
 }
 
 /// `directory,<folder>` の `ghost` の書庫（`extra` は `install.txt` に足す行・中身は目印 1 つ）。
-fn write_archive(dir: &TempPath, folder: &str, extra: &[&str]) -> PathBuf {
+pub(super) fn write_archive(dir: &TempPath, folder: &str, extra: &[&str]) -> PathBuf {
     let path = dir.child(&format!("{folder}.nar"));
     let (name, directory) = (format!("name,{folder}"), format!("directory,{folder}"));
     let mut lines = vec![
@@ -273,15 +234,29 @@ fn write_archive(dir: &TempPath, folder: &str, extra: &[&str]) -> PathBuf {
 /// 書庫をメニューから入れる依頼を出し、依頼が終わる（窓口の待ち行列が空で背景のスレッドが空いた）か
 /// 終了が指示されるまで台詞を進めながら回す（期限切れは `false`）。
 fn install_through(rig: &mut SwitchRig, path: PathBuf) -> bool {
-    let order = InstallOrder {
-        archives: vec![path],
-        origin: InstallOrigin::Menu,
-    };
-    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
+    assert_eq!(
+        submit(&mut rig.world, order_of(&[&path])),
+        SubmitVerdict::Queued
+    );
     rig.pump_talking_until(|rig| {
         let desk = rig.world.non_send::<InstallDesk>();
         rig.exit_requested() || (desk.queue.is_empty() && !desk.busy)
     })
+}
+
+/// 背景のスレッドの代わりに本物の口で上書きを頼み、手続きへ返る答えの受信端を返す（捕捉の窓の中で
+/// 呼べば、スレッドの記録も窓に映る）。
+fn overwrite_from_worker(
+    rig: &SwitchRig,
+    archive: NarArchive,
+) -> (Receiver<Overwritten>, ActorHandle) {
+    let desk = rig.world.non_send::<InstallDesk>();
+    let mut ports = DeskPorts::new(desk.asks_tx.clone(), desk.gate.clone());
+    let (tx, rx) = mpsc::channel();
+    let (_, handle) = spawn_actor("install", move |_: Receiver<()>| {
+        let _ = tx.send(ports.overwrite_running(archive, None));
+    });
+    (rx, handle)
 }
 
 /// 起こした回ごとの呼び出しの名前の列。
@@ -298,25 +273,6 @@ fn after_boot(calls: &[String]) -> &[String] {
     &calls[booted + 1..]
 }
 
-/// 起こした回の `id` の GET の Reference。
-fn refs_of(calls: &[RecordedCall], id: &str) -> Option<Vec<String>> {
-    calls.iter().find_map(|call| match call {
-        RecordedCall::Get {
-            id: got,
-            references,
-        } if got == id => Some(references.clone()),
-        _ => None,
-    })
-}
-
-/// `name` の記録。
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 /// 今の切替の予約の切替先のフォルダ名。
 fn reserved_for(rig: &SwitchRig) -> Option<String> {
     rig.world
@@ -331,17 +287,6 @@ fn current_of(rig: &SwitchRig) -> Option<String> {
         .and_then(|ctx| ctx.current.ghost.folder.clone())
 }
 
-/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` と同じ状態＝`areka-nar` のテストの
-/// 助手と同じ形）。共有を 0 にすると組み上げの段の複写が先に落ちて確定まで届かない。
-fn hold(path: &Path) -> std::fs::File {
-    use std::os::windows::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(1 /* FILE_SHARE_READ */)
-        .open(path)
-        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
-}
-
 /// 別の切替の最中に預かった書庫は「預かった」のまま置き（切替を重ねない）、その予約が下りた tick に
 /// 頼み直して一周する（判定 `Busy`）。頼み直しは同じフォルダの名指し・知らせなし・出どころ「自動」。
 /// 一周の途中に届いた切替要求は無視される。別の切替の予約は UI の側だけに置く（kanade へは
@@ -351,30 +296,18 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
     let mut rig = running("A", &["B"]);
     let dir = TempPath::new("desk-overwrite-busy");
     let archive = NarArchive::open(&write_archive(&dir, "A", &[])).expect("書庫を開ける");
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: rig.root.ghost_dir("A"),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
-    let (reply, answer) = reply_channel();
+    let mut switching = reservation(SwitchStage::SendOff);
+    switching.target.dir = rig.root.ghost_dir("B");
+    switching.prev.dir = rig.root.ghost_dir("A");
+    rig.world.insert_non_send(switching);
     let mut got = None;
 
     let (flow, events) = capture(|| {
-        take(&mut rig.world, archive, None, reply);
+        let (answer, _worker) = overwrite_from_worker(&rig, archive);
+        let taken =
+            rig.pump_input_until(|rig| rig.world.non_send::<InstallDesk>().overwrite.is_some());
         rig.world.run_schedule(Input);
-        rig.world.run_schedule(Input);
-        let waited = (reserved_for(&rig), matches!(answer.try_recv(), Ok(None)));
+        let waited = (reserved_for(&rig), taken && answer.try_recv().is_err());
         rig.world.remove_non_send::<SwitchInFlight>();
         let asked = rig.pump_input_until(|rig| reserved_for(rig).is_some());
         let ours = reserved_for(&rig);
@@ -389,7 +322,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         );
         let finished = rig.pump_talking_until(|_| {
             if got.is_none() {
-                got = answer.try_recv().ok().flatten();
+                got = answer.try_recv().ok();
             }
             got.is_some()
         });
@@ -421,7 +354,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         "降ろした後に中身が替わる"
     );
     assert_eq!((a, b, exited), (2, 0, false), "A を 1 回起こし直すだけ");
-    let requested = named(&events, "ghost_switch_requested");
+    let requested = events_named(&events, "ghost_switch_requested");
     assert_eq!(
         requested.len(),
         1,
@@ -431,11 +364,11 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
     assert_eq!(requested[0].field("raise_event"), Some("false"));
     assert_eq!(requested[0].field("to"), Some("A"));
     assert_eq!(
-        named(&events, "ghost_switch_busy").len(),
+        events_named(&events, "ghost_switch_busy").len(),
         2,
         "預かった時と一周の途中の要求: {events:?}"
     );
-    let done = named(&events, "install_overwrite_done");
+    let done = events_named(&events, "install_overwrite_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].field("ok"), Some("true"));
 }
@@ -476,15 +409,19 @@ fn a_switch_to_another_ghost_does_not_install_and_returns_the_archive() {
 
     assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
     match &got {
-        Some(Overwritten::NotRunning(back)) => assert_eq!(back.manifest().directory, "A"),
+        Some(OverwriteAnswer::NotRunning(back)) => assert_eq!(back.manifest().directory, "A"),
         _ => panic!("書庫が返る: {events:?}"),
     }
     assert!(!touched, "A のフォルダには展開しない");
     assert!(
-        named(&events, "install_overwrite_done").is_empty(),
+        events_named(&events, "install_overwrite_done").is_empty(),
         "{events:?}"
     );
-    assert_eq!(named(&events, "ghost_switch_busy").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "ghost_switch_busy").len(),
+        1,
+        "{events:?}"
+    );
     assert_eq!((current.as_deref(), a, b), (Some("B"), 1, 1));
 }
 
@@ -511,12 +448,12 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
-    let warned = named(&events, "install_overwrite_unavailable");
+    let warned = events_named(&events, "install_overwrite_unavailable");
     assert_eq!(warned.len(), 1, "{events:?}");
     assert_eq!(warned[0].level, tracing::Level::WARN);
     assert_eq!(warned[0].field("verdict"), Some("NotFound"));
     assert!(
-        named(&events, "ghost_switch_requested").is_empty(),
+        events_named(&events, "ghost_switch_requested").is_empty(),
         "{events:?}"
     );
     assert_eq!(boots.len(), 1, "降ろさない: {clue}");
@@ -576,9 +513,11 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     );
     assert!(!touched, "元の中身のまま（目印は入らない）");
     assert_eq!(kept.as_deref(), Some(&b"old"[..]));
-    let done = named(&events, "install_overwrite_done");
+    let done = events_named(&events, "install_overwrite_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].field("ok"), Some("false"));
+    assert_eq!(done[0].target, "areka::install::worker", "{:?}", done[0]);
+    // 展開は背景のスレッドで走る。スレッドは捕捉の窓の中で起きたので、`areka_nar` の失敗の記録も映る。
     let nar: Vec<_> = events
         .iter()
         .filter(|e| e.level == tracing::Level::ERROR && e.target.starts_with("areka_nar"))
@@ -605,8 +544,8 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     );
 }
 
-/// 入れた後に同じゴーストを起こせなければ（ここでは `refresh,1` で `descript.txt` が消える）、今日の
-/// 切替の道のまま既定ゴーストへ戻し（`OnBoot` の Reference6＝`halt`・Reference7＝そのゴーストの名前）、
+/// 入れた後に同じゴーストを起こせなければ（ここでは `refresh,1` で `descript.txt` が消える）、
+/// 切替の失敗の道で既定ゴーストへ戻し（`OnBoot` の Reference6＝`halt`・Reference7＝そのゴーストの名前）、
 /// 戻した既定ゴーストが定常に入ってから締めの知らせを送る。
 #[test]
 fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
@@ -626,7 +565,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
-    let failed = named(&events, "ghost_switch_boot_failed");
+    let failed = events_named(&events, "ghost_switch_boot_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].field("ghost"), Some("A"));
     assert_eq!(current.as_deref(), Some(DEFAULT_GHOST_FOLDER));
@@ -647,8 +586,9 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     );
 }
 
-/// 起こせないのが既定ゴースト自身なら、今日の致命の経路で終わる（終了の指示・最初の出所は「既定
-/// ゴーストへ戻せなかった」）。印の判定は今日の引数のまま、理由の語も今日の `switch_fatal`。
+/// 起こせないのが既定ゴースト自身なら、致命の経路で終わる（終了の指示・最初の出所は「既定
+/// ゴーストへ戻せなかった」）。印の判定（起動引数のセッションでなく・記録の受け口は代わりでない）の
+/// 理由の語は `switch_fatal`。
 #[test]
 fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
     let mut rig = running(DEFAULT_GHOST_FOLDER, &[]);
@@ -670,9 +610,13 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         "最初の出所: {first:?}"
     );
     assert!(!reserved, "予約は残らない");
-    assert_eq!(named(&events, "ghost_switch_fatal").len(), 1, "{events:?}");
     assert_eq!(
-        named(&events, "install_overwrite_done").len(),
+        events_named(&events, "ghost_switch_fatal").len(),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        events_named(&events, "install_overwrite_done").len(),
         1,
         "{events:?}"
     );
@@ -686,3 +630,6 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         areka_session::session_mark::MarkVerdict::Keep("switch_fatal")
     );
 }
+
+#[path = "desk_overwrite_between_tests.rs"]
+mod between_tests;

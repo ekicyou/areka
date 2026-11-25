@@ -5,29 +5,22 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::session_tests::{events_named, hold, tree, write_descript};
 use log_capture_kit::capture;
 
-fn put_ghost(root: &Path, folder: &str) {
-    let master = root.join("ghost").join(folder).join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,X\n").expect("descript");
+pub(super) fn put_ghost(root: &Path, folder: &str) {
+    write_descript(
+        &root.join("ghost").join(folder).join("ghost").join("master"),
+        "name,X",
+    );
 }
 
 fn put_balloon(root: &Path, folder: &str) {
-    let dir = root.join("balloon").join(folder);
-    std::fs::create_dir_all(&dir).expect("フォルダを組む");
-    std::fs::write(dir.join("descript.txt"), "charset,UTF-8\nname,B\n").expect("descript");
+    write_descript(&root.join("balloon").join(folder), "name,B");
 }
 
 fn list(dirs: &[PathBuf]) -> BasewareRoots {
     BasewareRoots::new(dirs.iter().cloned().map(BasewareRoot::new).collect())
-}
-
-fn skipped_warns(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_head_root_skipped"))
-        .count()
 }
 
 #[test]
@@ -51,7 +44,11 @@ fn new_items_go_to_head_root_and_existing_ones_to_their_root() {
         [one.clone(), two.clone(), one, two],
         "(新しいゴースト→先頭・すでにあるゴースト→その根・新しいバルーン→先頭・すでにあるバルーン→その根)"
     );
-    assert_eq!(skipped_warns(&events), 0, "先頭が見つかるなら warn は無い");
+    assert_eq!(
+        events_named(&events, "install_head_root_skipped").len(),
+        0,
+        "先頭が見つかるなら warn は無い"
+    );
 }
 
 #[test]
@@ -63,9 +60,9 @@ fn missing_head_root_answers_topmost_found_and_warns() {
     let dest = CatalogDestinations::new(list(&[gone.clone(), two.clone(), three])).expect("作れる");
     let (answer, events) = capture(|| dest.ghost_root("Fresh"));
     assert_eq!(answer, two, "見つかるいちばん上");
-    let warn = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("install_head_root_skipped"))
+    let warn = events_named(&events, "install_head_root_skipped")
+        .first()
+        .copied()
         .expect("warn が残る");
     assert_eq!(warn.level, tracing::Level::WARN);
     assert_eq!(
@@ -94,7 +91,7 @@ fn answers_built_root_when_all_roots_vanish_after_build() {
 }
 
 /// 起動中のゴーストの根が並びから外れ、別の根に同じフォルダ名が見えていても、起動中のゴーストの
-/// フォルダ名には起動中のゴーストの根を答える。別のフォルダ名は今の答えのまま。
+/// フォルダ名には起動中のゴーストの根を答える。別のフォルダ名は並びの先頭から探した根を答える。
 #[test]
 fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
     let tmp = TempPath::under_target("install-destination-running-pin");
@@ -110,64 +107,31 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
         [gone, seen],
         "(起動中→その根・別の名前→並びの答え)"
     );
-    assert!(
-        events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_running_ghost_root_kept"))
-    );
+    assert!(!events_named(&events, "install_running_ghost_root_kept").is_empty());
 }
 
 // ---- 並びを宛先にして入れる（install_into） ----
 
 use std::collections::BTreeMap;
-use std::os::windows::fs::OpenOptionsExt;
 
+use crate::install::procedure::procedure_test_support::{
+    ghost_nar as shared_ghost_nar, shell_nar, write_nar,
+};
 use areka_nar::NarArchive;
-use sample_ghost_kit::{NarBuilder, install_txt};
 
 /// ゴースト `directory` の書庫（`balloon` が在れば同梱のバルーン `kaku` つき）を開く。
 fn ghost_nar(tmp: &TempPath, directory: &str, balloon: bool) -> NarArchive {
-    let mut lines = vec!["type,ghost".to_owned(), "name,テスト".to_owned()];
-    lines.push(format!("directory,{directory}"));
-    if balloon {
-        lines.push("balloon.directory,kaku".to_owned());
-        lines.push("balloon.source.directory,kaku".to_owned());
-    }
-    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
-    let mut builder = NarBuilder::new()
-        .file("install.txt", &install_txt(&lines))
-        .done()
-        .file(
-            "ghost/master/descript.txt",
-            b"charset,UTF-8\r\nname,New\r\n",
+    let builder = if balloon {
+        shared_ghost_nar(
+            directory,
+            &["balloon.directory,kaku", "balloon.source.directory,kaku"],
         )
-        .done();
-    if balloon {
-        builder = builder
-            .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
-            .done();
-    }
-    let path = tmp.child(&format!("{directory}.nar"));
-    builder.write_to(&path).expect("書庫を置ける");
-    NarArchive::open(&path).expect("書庫を開ける")
-}
-
-/// 木の全内容（相対パス → バイト列）。無ければ空。
-fn tree(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-    fn walk(base: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(base, &path, out);
-            } else {
-                let bytes = std::fs::read(&path).expect("読める");
-                out.insert(path.strip_prefix(base).expect("下").to_path_buf(), bytes);
-            }
-        }
-    }
-    let mut out = BTreeMap::new();
-    walk(dir, dir, &mut out);
-    out
+        .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
+        .done()
+    } else {
+        shared_ghost_nar(directory, &[])
+    };
+    NarArchive::open(&write_nar(tmp, &format!("{directory}.nar"), builder)).expect("書庫を開ける")
 }
 
 /// 新しいゴーストは先頭の根へ、同梱のバルーンはそのゴーストの中へ入り、要素ごとに `install_placed`。
@@ -202,9 +166,8 @@ fn new_ghost_goes_to_head_and_companion_balloon_inside_it() {
         below,
         "別の根の同じフォルダ名は 1 バイトも変わらない"
     );
-    let placed: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_placed"))
+    let placed: Vec<_> = events_named(&events, "install_placed")
+        .into_iter()
         .map(|e| {
             (
                 e.field("root").map(str::to_owned),
@@ -234,7 +197,7 @@ fn existing_ghost_is_overwritten_in_its_root_and_the_hidden_one_is_untouched() {
     install_into(&list(&[one.clone(), two.clone()]), &archive, None, None).expect("入る");
     assert_eq!(
         std::fs::read(one.join("ghost/Dup/ghost/master/descript.txt")).expect("上書き"),
-        b"charset,UTF-8\r\nname,New\r\n"
+        b"charset,UTF-8\r\nname,Newbie\r\n"
     );
     assert_eq!(tree(&two), below, "下の根の同じ名前は 1 バイトも変わらない");
 }
@@ -250,11 +213,7 @@ fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
     let second = tree(&two);
     let archive = ghost_nar(&tmp, "fresh", true);
     // 読みだけを共有して掴む（areka-nar の檻と同じ型）。宛先なら確定の入れ替えが失敗する。
-    let handle = std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(1 /* FILE_SHARE_READ */)
-        .open(two.join("balloon/kaku/descript.txt"))
-        .expect("掴める");
+    let handle = hold(&two.join("balloon/kaku/descript.txt"));
 
     let outcome = install_into(&list(&[one.clone(), two.clone()]), &archive, None, None);
     drop(handle);
@@ -300,9 +259,9 @@ fn no_found_root_fails_before_writing_with_an_error() {
         crate::install::judge::failure_word(&error).as_ref_str(),
         "fileio"
     );
-    let logged = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("install_no_root"))
+    let logged = events_named(&events, "install_no_root")
+        .first()
+        .copied()
         .expect("error が残る");
     assert_eq!(logged.level, tracing::Level::ERROR);
     assert!(!tmp.child("a").exists(), "何も作らない");
@@ -339,17 +298,17 @@ fn bundled_ghost_answers_the_copy_root() {
         "同梱の中身が写っている"
     );
     assert_eq!(dest.ghost_root("emo2"), user, "2 回目も写しの根");
-    assert_eq!(dest.ghost_root("Fresh"), user, "新しい物は今どおり先頭");
+    assert_eq!(dest.ghost_root("Fresh"), user, "新しい物は先頭の根");
 }
 
-/// 印の無い並びでは写さず、今と同じ根（同梱のゴーストの根）を答える。
+/// 印の無い並びでは写さず、同梱のゴーストの根を答える。
 #[test]
-fn unmarked_list_answers_the_same_root_as_today() {
+fn unmarked_list_answers_the_bundled_root() {
     let (_tmp, user, exe) = bundled("install-destination-bundled-unmarked");
     let dest = CatalogDestinations::new(list(&[user.clone(), exe.clone()]))
         .expect("作れる")
         .with_exe_dir(Some(exe.clone()));
-    assert_eq!(dest.ghost_root("emo2"), exe, "今と同じ根");
+    assert_eq!(dest.ghost_root("emo2"), exe, "同梱のゴーストの根");
     assert!(!user.join("ghost").exists(), "写さない");
 }
 
@@ -357,26 +316,13 @@ fn unmarked_list_answers_the_same_root_as_today() {
 
 /// 同梱のバルーン `kaku` つきのシェル `dress` の書庫を開く。
 fn shell_nar_with_companion(tmp: &TempPath) -> NarArchive {
-    let path = tmp.child("dress.nar");
-    NarBuilder::new()
-        .file(
-            "install.txt",
-            &install_txt(&[
-                "type,shell",
-                "name,きがえ",
-                "directory,dress",
-                "balloon.directory,kaku",
-                "balloon.source.directory,kaku",
-            ]),
-        )
-        .done()
-        .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
-        .done()
-        .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
-        .done()
-        .write_to(&path)
-        .expect("書庫を置ける");
-    NarArchive::open(&path).expect("書庫を開ける")
+    let builder = shell_nar(
+        "emo2",
+        &["balloon.directory,kaku", "balloon.source.directory,kaku"],
+    )
+    .file("kaku/descript.txt", b"charset,UTF-8\r\nname,K\r\n")
+    .done();
+    NarArchive::open(&write_nar(tmp, "dress.nar", builder)).expect("書庫を開ける")
 }
 
 /// 実行ファイルの隣の根に同じフォルダ名のバルーン `kaku` が在っても、ゴーストの書庫・シェルの書庫の

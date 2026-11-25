@@ -50,3 +50,9 @@ fn shortcut_is_left_to_the_shell() {
     // lnkfile は動詞を持たず、OS がリンク先を解く（関連付けの照会は常に失敗する）。
     assert_eq!(check(r"C:\a\b.LNK", true), AssocCheck::Skip);
 }
+
+#[test]
+fn win32_code_unwraps_only_win32_facility_hresults() {
+    assert_eq!(win32_code(0x8007_0002_u32 as i32), 2);
+    assert_eq!(win32_code(0x8000_4005_u32 as i32), 0x8000_4005);
+}

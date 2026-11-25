@@ -27,7 +27,7 @@ pub(crate) struct CatalogDestinations {
 }
 
 impl CatalogDestinations {
-    /// 見つかる根が無ければ `None`（呼び手が error `install_no_root` を残して今の失敗の経路へ倒す）。
+    /// 見つかる根が無ければ `None`（呼び手が error `install_no_root` を残し、書く前の I/O の失敗として返す）。
     /// 一時の置き場は並びから除く（同じフォルダ名の相手・控えの根・記録の根に使わない）。
     pub(crate) fn new(roots: BasewareRoots) -> Option<Self> {
         let (temporary, kept): (Vec<_>, Vec<_>) = roots
@@ -89,29 +89,30 @@ impl CatalogDestinations {
         Some(root)
     }
 
-    /// 見えている物が実行ファイルの隣の根に在れば写し、写しになったら書ける根の綴り。
-    /// 並びに印の付いた項目が無ければ何も見ない。1 配置につき 1 回尋ねられるので写すのも 1 回。
-    fn copied_root(&self, kind: StoreKind, folder: &str) -> Option<PathBuf> {
+    /// 見えている物（`dir`）が実行ファイルの隣の根に在れば写し、写しになったら書ける根の綴り。
+    /// 並びに印の付いた項目が無ければ写さない。1 配置につき 1 回尋ねられるので写すのも 1 回。
+    fn copied_root(&self, kind: StoreKind, dir: &Path) -> Option<PathBuf> {
         let user = self.roots.user_root()?.dir();
-        let dir = match kind {
-            StoreKind::Ghost => find_ghost(&self.roots, folder)?.dir,
-            StoreKind::Balloon => find_balloon(&self.roots, folder)?.dir,
-        };
         let used = areka_session::roots::user_root::copy_for_write(
             &self.roots,
             self.exe_dir.as_deref(),
             kind,
-            &dir,
+            dir,
         );
         (used != dir).then(|| user.to_path_buf())
     }
 
+    /// すでにある物はその項目の根（写したら書ける根）、新しい物は `install_root` の答え。
     fn answer(&self, kind: StoreKind, folder: &str) -> PathBuf {
-        if let Some(root) = self.copied_root(kind, folder) {
-            return root;
+        let found = match kind {
+            StoreKind::Ghost => find_ghost(&self.roots, folder).map(|e| (e.dir, e.root)),
+            StoreKind::Balloon => find_balloon(&self.roots, folder).map(|e| (e.dir, e.root)),
+        };
+        if let Some((dir, root)) = found {
+            return self.copied_root(kind, &dir).unwrap_or(root);
         }
         // 答えが出ない（尋ねた間に全部の根が消えた）ときは作ったときの根を答える。
-        // `areka-nar` が作業フォルダを掘れずに失敗として返し、記録は `areka-nar` の今の `error!`。
+        // `areka-nar` が作業フォルダを掘れずに失敗として返し、記録は `areka-nar` の `error!`。
         let Some(dest) = install_root(&self.roots, kind, folder) else {
             return self.first.clone();
         };
@@ -136,7 +137,7 @@ impl areka_nar::InstallRoots for CatalogDestinations {
 /// 並びの写しを宛先にして書庫を入れる（背景のスレッドと起動中のゴーストへ入れる一周の共通の口）。
 /// `running` は起動中のゴーストの場所（根の下のゴーストのときだけ・[`CatalogDestinations::with_running`]）。
 /// 見つかる根が無ければ入れずに error `install_no_root` を残し、書く前の I/O の失敗として返す
-/// （手続きの今の失敗の経路へ倒す）。入れ終えたら要素ごとに info `install_placed`。
+/// （手続きの失敗の経路へ倒す）。入れ終えたら要素ごとに info `install_placed`。
 pub(crate) fn install_into(
     roots: &BasewareRoots,
     archive: &NarArchive,
@@ -202,7 +203,7 @@ fn log_head_skipped(head: &Path, root: &Path) {
         event = "install_head_root_skipped",
         head_root = %head.display(),
         root = %root.display(),
-        "先頭の根が見つからないので、見つかるいちばん上の根へ入れる"
+        "[install] 先頭の根が見つからないので、見つかるいちばん上の根へ入れる"
     );
 }
 

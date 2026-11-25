@@ -64,11 +64,15 @@ pub(crate) enum SubmitVerdict {
     ReadOnly,
 }
 
-/// 別のスレッド（台本の受け口・選ぶ画面）から窓口へ届く、依頼になる前の要求。
+/// 別のスレッド（台本の受け口・選ぶ画面・取得のスレッド）から窓口へ届く、依頼になる前の要求。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RawInstallRequest {
-    pub path: PathBuf,
-    pub origin: InstallOrigin,
+pub(crate) enum RawInstallRequest {
+    Path {
+        path: PathBuf,
+        origin: InstallOrigin,
+    },
+    /// 台本の `\![execute,install,url,…]` の URL（窓口が取得の待ち行列へ積む）。
+    Url(String),
 }
 
 /// 依頼を手続きへ渡す唯一の口（UI スレッド）。受けたら窓口の待ち行列の末尾に
@@ -128,16 +132,18 @@ pub(crate) fn queued_orders(world: &World) -> Vec<InstallOrder> {
         .map_or_else(Vec::new, |desk| desk.queue.iter().cloned().collect())
 }
 
-/// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後）へ登録し、門を終了の
-/// 待ちへ登記する（プロセスに 1 回・呼び手は `ghost_session::register_systems`）。窓口はゴーストを
+/// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後）へ登録し、門 2 つ（依頼と
+/// 取得）を終了の待ちへ登記する（プロセスに 1 回・呼び手は `BODY_SYSTEMS` の `after_input`）。窓口はゴーストを
 /// 起こし直しても作り直さない。
 pub(crate) fn register(world: &mut World) {
     let gate = Arc::new(WorkGate::default());
-    world.insert_non_send(desk::InstallDesk::new(gate.clone()));
+    let fetch_gate = Arc::new(WorkGate::default());
+    world.insert_non_send(desk::InstallDesk::new(gate.clone(), fetch_gate.clone()));
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, desk::drain.after(dispatch_pointer_events));
     exit_wait::register_gate(world, "install", gate, desk::discard_for_exit);
+    exit_wait::register_gate(world, "install-fetch", fetch_gate, |_| {});
 }
 
 #[cfg(test)]

@@ -627,9 +627,10 @@ fn record_steady_memory(world: &World) {
 
 /// 切替先を起こす。
 ///
-/// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
+/// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → 本体の上書きの口 → [`boot_into`]（由来＝切替で
 /// 来た〔予約に起動の知らせが在ればネットワーク更新で読み直した〕・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
+/// 上書きの口が [`hold_between`] を呼んだら起こさずに戻り、[`resume_between`] が続きを起こす（段は送り出しのまま）。
 ///
 /// shiori の読み直し（窓口自身の予約・[`super::reload::wants_runtime_only`]）だけは降ろさず・窓を閉じず・
 /// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す。組み直せたら段を「迎え入れ（切替先）」に。
@@ -701,7 +702,9 @@ pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         ),
     }
     let closed = close_windows_for_restart(world);
-    // 起動中のゴーストへ入れる一周（本体の `install::desk::run_overwrite_between`。預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
+    // 起動中のゴーストへ入れる一周（本体の `install::desk::run_overwrite_between`）。口の中で
+    // [`hold_between`] が呼ばれたら、起こすのは [`resume_between`] まで待つ。前の切替の印は先に消す。
+    between::clear_hold(world);
     (BodySystems::of(world).overwrite_between)(world);
     // 読み直しの窓口自身の予約なら読み直しの由来。それ以外は、起動の知らせが在れば
     // （ネットワーク更新の読み直し）それを根に、無ければ「切替で来た」。
@@ -722,17 +725,17 @@ pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         dir,
         folder: Some(target.folder.clone()),
     };
-    if boot_into(world, closed, ghost, origin) {
-        areka_runtime::shell_carry::hand_over(world, carry);
-        set_stage(world, WelcomeAttempt::Target);
-    } else if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) {
-        fatal(
-            world,
-            format!("切替先の既定ゴースト {} を起こせなかった", target.name),
-        );
-    } else {
-        switch_to_default(world, &target.name);
-    }
+    between::boot_or_hold(
+        world,
+        between::BootPlan {
+            closed,
+            ghost,
+            origin,
+            carry,
+            name: target.name,
+            folder: target.folder,
+        },
+    );
 }
 
 /// 既定ゴーストへ戻す。試みは 1 回だけで、失敗は致命。告知は出さない。
@@ -804,8 +807,9 @@ fn take_down(world: &mut World) {
             ms,
             "ゴーストを降ろすのに失敗した——戻す先が無いので切替を続ける"
         );
+    } else {
+        tracing::info!(event = "ghost_switch_down_ms", ms, "ゴーストを降ろした");
     }
-    tracing::info!(event = "ghost_switch_down_ms", ms, "ゴーストを降ろした");
 }
 
 /// 1 体を起こす共通の手順（同期）: 起動入力の作り口の有無 → バルーンの解決 → 窓の準備 → 厳格な起動。
@@ -924,6 +928,14 @@ fn fatal(world: &mut World, reason: String) {
         }),
     );
 }
+
+#[path = "ghost_switch_between.rs"]
+mod between;
+pub use between::{hold_between, resume_between};
+
+#[cfg(test)]
+#[path = "ghost_switch_between_tests.rs"]
+mod between_tests;
 
 #[cfg(test)]
 #[path = "ghost_switch_tests.rs"]

@@ -6,20 +6,16 @@ use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
+use super::tests::put_ghost;
 use super::*;
+use crate::session_tests::{events_named, write_descript};
 use log_capture_kit::capture;
 
 /// 一時の置き場（フォルダそのものがゴーストの置き場）にゴーストを置く。
 fn put_temporary_ghost(temp: &Path, folder: &str) -> PathBuf {
     let dir = temp.join(folder);
-    let master = dir.join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("フォルダを組む");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,T\n").expect("descript");
+    write_descript(&dir.join("ghost").join("master"), "name,T");
     dir
-}
-
-fn put_ghost(root: &Path, folder: &str) {
-    put_temporary_ghost(&root.join("ghost"), folder);
 }
 
 fn list_with_temporary(temp: &Path, dirs: &[PathBuf]) -> BasewareRoots {
@@ -45,9 +41,7 @@ fn running_ghost_in_temporary_root_installs_into_remembered_root() {
         "(動いている名前・新しい名前とも覚える置き場)"
     );
     assert!(
-        !events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_running_ghost_root_kept")),
+        events_named(&events, "install_running_ghost_root_kept").is_empty(),
         "一時の置き場の 2 つ上を根とみなさない"
     );
 }

@@ -3,7 +3,7 @@
 //! 確かめること: 終了が始まると待っている依頼を始めずに捨て、捨てた書庫の件数とパスを `warn!` に
 //! 1 件残す・終了の後に届いたイベントの頼みは kanade へ 0 件で、返信端は落ちる・預かった書庫
 //! （起動中のゴーストへ入れる一周）は捨てて背景のスレッドを閉じた扱いで放す・展開し終えた書庫は
-//! 結果を返し、書く前にやめた書庫として記録しない・OS のセッションの終了では、降ろす待ちと同じ
+//! 返信端を落とし、書く前にやめた書庫として記録しない・OS のセッションの終了では、降ろす待ちと同じ
 //! 出発点から数えて合計が上限を超えない。
 
 use std::time::{Duration, Instant};
@@ -12,6 +12,7 @@ use areka_kanade::WaitBudget;
 use wintf::AppExit;
 
 use super::*;
+use crate::session_tests::position_of;
 use areka_session::exit_wait::EXIT_WAIT_LIMIT;
 use areka_session::ghost_quit::KanadeNoticeRx;
 use areka_session::session_end::end_session_from;
@@ -29,7 +30,7 @@ fn exit_discards_waiting_orders_with_archive_count_and_paths() {
     };
     assert_eq!(submit(&mut rig.world, two), SubmitVerdict::Queued);
     assert_eq!(
-        submit(&mut rig.world, order("C:/c.nar")),
+        submit(&mut rig.world, order_of(&[Path::new("C:/c.nar")])),
         SubmitVerdict::Queued
     );
 
@@ -56,7 +57,7 @@ fn asks_after_exit_reach_kanade_zero_times() {
     let tmp = TempPath::new("desk-exit-asks");
     let mut rig = Rig::new();
     let kanade = rig.put_ghost(tmp.path().to_path_buf());
-    rig.world.insert_non_send(reservation());
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let before = rig.ask_raise("OnInstallBegin", false);
     rig.drain();
     assert!(
@@ -98,7 +99,11 @@ fn exit_discards_a_parked_overwrite_and_releases_the_worker() {
     let tmp = TempPath::new("desk-exit-parked");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let _kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     rig.drain();
@@ -133,14 +138,18 @@ fn exit_discards_a_parked_overwrite_and_releases_the_worker() {
     );
 }
 
-/// 展開し終えた（定常到達を待っている）書庫は、終了で結果を背景のスレッドへ返し、書く前にやめた
-/// 書庫として記録しない（展開は UI スレッドで同期に済んでいる）。
+/// 展開し終えて起こし直した（定常到達を待っている）書庫は、終了で返信端を落とし、書く前にやめた
+/// 書庫として記録しない（門は展開した背景のスレッドが手放している）。
 #[test]
-fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
+fn exit_after_the_overwrite_was_extracted_drops_the_reply_without_abandoning() {
     let tmp = TempPath::new("desk-exit-ran");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let _kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     let gate = rig.world.non_send::<InstallDesk>().gate.clone();
@@ -148,10 +157,16 @@ fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
     rig.drain();
     run_overwrite_between(&mut rig.world);
     assert!(
-        root.ghost_dir("A")
-            .join("ghost/master/overwritten.txt")
-            .exists(),
-        "展開した"
+        matches!(answer.try_recv(), Ok(Some(OverwriteAnswer::Down { .. }))),
+        "降ろしたと返す"
+    );
+    gate.end();
+    let (reply, extracted) = reply_channel();
+    rig.asks.send(DeskAsk::Extracted { reply }).unwrap();
+    rig.drain();
+    assert!(
+        matches!(extracted.try_recv(), Ok(None)),
+        "定常到達まで答えない"
     );
 
     let (_, events) = capture(|| begin_close(&mut rig.world));
@@ -159,16 +174,13 @@ fn exit_after_the_overwrite_ran_returns_the_result_without_abandoning() {
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "書き終えた書庫を書く前にやめたと記録しない: {events:?}"
     );
-    assert!(
-        matches!(answer.try_recv(), Ok(Some(Overwritten::Ran(Ok(_))))),
-        "展開の結果を返す"
-    );
+    assert!(extracted.try_recv().is_err(), "返信端を落とす");
     let discarded = events_named(&events, "install_pending_discarded");
     assert_eq!(discarded.len(), 1, "{events:?}");
     assert!(
         discarded[0]
             .field("overwrite")
-            .is_some_and(|o| o.contains("ran")),
+            .is_some_and(|o| o.contains("resumed")),
         "{events:?}"
     );
 }
@@ -197,11 +209,7 @@ fn os_session_end_waits_within_the_shared_budget() {
     let timeout = events_named(&events, "exit_wait_timeout");
     assert_eq!(timeout.len(), 1, "{events:?}");
     assert_eq!(timeout[0].field_str("label"), Some("C:/A.nar → 根"));
-    let position = |name: &str| {
-        events
-            .iter()
-            .position(|e| e.field_str("event") == Some(name))
-    };
+    let position = |name: &str| position_of(&events, name);
     assert!(
         position("exit_wait_timeout") < position("os_session_end_done"),
         "待ちは後始末の記録の前: {events:?}"

@@ -8,15 +8,15 @@
 //! 背景のスレッドは起こさない（積まないので取り出しは渡す依頼を持たない）。印は試験の World に
 //! 資源を直に足す（`readonly::engage` は呼ばない）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
-use bevy_ecs::schedule::Schedules;
-use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
+use crate::install::procedure::procedure_test_support::order_of;
+use crate::session_tests::{events_named, warns};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
 
@@ -24,9 +24,7 @@ use areka_session::readonly::ReadOnlyRun;
 /// 断りの warn は無く、ゴーストへは何も送らない。
 #[test]
 fn readonly_refuses_every_origin_before_queueing() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
+    let mut world = super::desk::desk_world();
     world.insert_resource(ReadOnlyRun);
     let (kanade_tx, kanade) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
@@ -43,19 +41,13 @@ fn readonly_refuses_every_origin_before_queueing() {
             },
         );
         desk::raw_sender(&world)
-            .send(RawInstallRequest {
+            .send(RawInstallRequest::Path {
                 path: PathBuf::from("C:/script.nar"),
                 origin: InstallOrigin::Script,
             })
             .expect("窓口の生の要求の受信端は生きている");
         desk::drain(&mut world);
-        let menu_verdict = submit(
-            &mut world,
-            InstallOrder {
-                archives: vec![PathBuf::from("C:/menu.nar")],
-                origin: InstallOrigin::Menu,
-            },
-        );
+        let menu_verdict = submit(&mut world, order_of(&[Path::new("C:/menu.nar")]));
         (drop_verdict, menu_verdict)
     });
 
@@ -65,10 +57,7 @@ fn readonly_refuses_every_origin_before_queueing() {
     assert!(!desk::is_busy(&world), "窓口を忙しいに残さない");
     assert_eq!(kanade.try_iter().count(), 0, "ゴーストへは何も送らない");
 
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_refused"))
-        .collect();
+    let refused: Vec<_> = events_named(&events, "readonly_refused");
     assert_eq!(refused.len(), 3, "依頼ごとに 1 件");
     let origins: Vec<_> = refused.iter().map(|e| e.field("origin")).collect();
     assert_eq!(
@@ -81,11 +70,9 @@ fn readonly_refuses_every_origin_before_queueing() {
         assert_eq!(e.field("count"), Some("1"));
     }
     assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("install_order_refused")
-                && e.field_str("event") != Some("install_order_queued")),
+        events_named(&events, "install_order_refused").is_empty()
+            && events_named(&events, "install_order_queued").is_empty(),
         "断りの warn も受け付けの記録も出さない"
     );
-    assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
+    assert!(warns(&events).is_empty(), "{events:?}");
 }

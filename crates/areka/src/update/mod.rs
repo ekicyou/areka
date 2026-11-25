@@ -24,6 +24,18 @@ mod refs;
 pub(crate) mod update_cue;
 mod worker;
 
+/// 後送りの列（イベント名と Reference の組を送る順に）。
+pub(crate) type UpdateTail = Vec<(&'static str, Vec<String>)>;
+
+/// `homeurl` の値の前後の空白を落とし、空なら None。
+fn trimmed_homeurl(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// 今の 3 つ（ゴースト・シェル・バルーン）。
+const CURRENT_ALL: [TargetKind; 3] = [TargetKind::Ghost, TargetKind::Shell, TargetKind::Balloon];
+
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetKind {
@@ -113,7 +125,7 @@ pub(crate) enum SubmitVerdict {
     Closing,
     /// 読み取りだけの走り（段を移さず、成否の欄が空の総括だけを送った）。
     ReadOnly,
-    /// 走っている（答え待ちで預かりが埋まっているときも）＝`OnUpdateFailure(executing)` を送った。
+    /// 走っている（答え待ちで預かりが埋まっているときも）＝`OnUpdateFailure(executing)` を送る（送れたかは記録の `notified`）。
     Executing,
     /// 切替の予約が在る。
     NotSteady,
@@ -221,7 +233,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
 
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後＝投げ込みの捌きの後）へ
 /// 登録し、門 `update` を片付けの関数と一緒に終了の待ちへ登記する（プロセスに 1 回・呼び手は
-/// `ghost_session::register_systems`）。窓口はゴーストを起こし直しても作り直さない。
+/// `BODY_SYSTEMS` の `after_input`）。窓口はゴーストを起こし直しても作り直さない。
 pub(crate) fn register(world: &mut World) {
     let gate = Arc::new(WorkGate::default());
     world.insert_non_send(desk::UpdateDesk::new(gate.clone()));
@@ -232,7 +244,7 @@ pub(crate) fn register(world: &mut World) {
 }
 
 #[cfg(test)]
-mod update_tests;
+pub(crate) mod update_test_support;
 
 #[cfg(test)]
 mod worker_path_tests;

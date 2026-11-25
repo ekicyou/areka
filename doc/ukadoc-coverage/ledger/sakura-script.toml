@@ -1412,10 +1412,10 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
 ]
 note = """
-壊れ方: 該当なし。InstallCueSink（crates/areka/src/install/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が url で第 3 引数が http:// か https:// で始まる URL、第 4 引数の種別が nar か省略なら、短命のスレッドで URL のファイルを areka 専用の一時フォルダ（%TEMP%\\areka\\download\\）へ落とし、落とし終えたら \\![execute,install,path,…] と同じインストールの手続きへ渡す（以後の検査とイベントはその手続きのまま）。取得の間もゴーストは止まらない。落としたファイルはその場では消さず、同じフォルダの 7 日より古い物を次の取得のときに消す。このタグの取得では OnURLQuery を送らない。
-ログ: 出る（種別が feed・homeurl・ical・ssf ほか nar 以外→ warn!（install_cue_unsupported_kind）・URL が空か http:// / https:// で始まらない→ warn!（install_cue_bad_url）で、どちらも取得を始めずイベントも送らない。取得は info!（install_fetch_begin／install_fetch_done）を残し、取得の失敗・取得の部品を用意できないときは error!（install_fetch_failed・URL と理由）を 1 件残してインストールの依頼を作らず、イベントも送らない。消した古いファイルの数は info!（install_fetch_swept））。
-根拠の場所: crates/areka/src/install/judge.rs の ScriptRequest::Url（台本の引数の url の腕）の上の正典 URL の行。取得は crates/areka/src/install/fetch_url.rs の spawn_download。
-[条件: 種別は nar と省略だけ（省略は nar と読む・Content-Type と中身からの自動判別は持たない）。feed・homeurl・ical・ssf は α 後。落としたファイルは一時フォルダに最大 7 日残る]
+壊れ方: 該当なし。InstallCueSink（crates/areka/src/install/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が url で第 3 引数が http:// か https:// で始まる URL、第 4 引数の種別が nar か省略なら、URL を窓口の待ち行列に積み、窓口が最初の URL で起こす長く生きるスレッド install-fetch が 1 件ずつ URL のファイルを areka 専用の一時フォルダ（%TEMP%\\areka\\download\\）へ落とし、落とし終えたら \\![execute,install,path,…] と同じインストールの手続きへ渡す（以後の検査とイベントはその手続きのまま）。取得の間もゴーストは止まらない。手続きを終えたら、インストールの背景のスレッドがその書庫を消す（消すのは出どころが台本でこのフォルダの直下の物だけ）。書き込みに失敗した書きかけはその場で消し、落としかけと消せなかった物は同じフォルダの 7 日より古い物として次の取得のときに消す。http:// と https:// は大文字小文字を問わない。終了では取得中の URL を待たず、積んだ残りの URL を捨てる。このタグの取得では OnURLQuery を送らない。
+ログ: 出る（種別が feed・homeurl・ical・ssf ほか nar 以外→ warn!（install_cue_unsupported_kind）・URL が空か http:// / https:// で始まらない→ warn!（install_cue_bad_url）で、どちらも取得を始めずイベントも送らない。取得は info!（install_fetch_begin／install_fetch_done）を残し、取得の失敗・取得の部品を用意できないときは error!（install_fetch_failed・URL と理由）を 1 件残してインストールの依頼を作らず、イベントも送らない。消した古いファイルの数は info!（install_fetch_swept・消した数が 0 なら出さない）。終了で捨てた積んだ残りの URL は 1 件ずつ warn!（install_fetch_abandoned））。
+根拠の場所: crates/areka/src/install/judge.rs の ScriptRequest::Url（台本の引数の url の腕）の上の正典 URL の行。取得は crates/areka/src/install/fetch_url.rs の spawn_fetcher、書庫を消すのは crates/areka/src/install/worker.rs の remove_downloaded。
+[条件: 種別は nar と省略だけ（省略は nar と読む・Content-Type と中身からの自動判別は持たない）。feed・homeurl・ical・ssf は α 後。入れ終えた書庫はその場で消す。落としかけと消せなかった物は一時フォルダに最大 7 日残る]
 [群: インストールと更新]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1]
 [テーマ: 網の先から取り込めず、配布された新しい一式が手元に入らない]

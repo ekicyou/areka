@@ -4,13 +4,18 @@
 use std::collections::BTreeMap;
 
 use areka_parsers::sakura::parse_noted;
-use areka_sakura::strict::{MSG_DEFAULTED, MSG_UNCLOSED, MSG_UNKNOWN_COMMAND};
+use areka_runtime::strict_judges::ArekaStrictJudges;
+use areka_sakura::strict::{
+    MSG_ANCHOR_REOPENED, MSG_ANCHOR_STRAY_CLOSE, MSG_ANCHOR_UNCLOSED, MSG_CHAR_CODE_DROPPED,
+    MSG_DEFAULTED, MSG_IGNORED, MSG_MISSING_BALLOON, MSG_MISSING_SURFACE, MSG_UNCLOSED,
+    MSG_UNKNOWN_COMMAND, MSG_UNKNOWN_TAG,
+};
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
 
 use super::*;
 
 /// 手書きの事実の表。スコープ 0・1 に絵とバルーンが在り、スコープ 2 には何も無い。
-struct Table {
+pub(in crate::mcp) struct Table {
     resolver: SurfaceResolver,
     /// スコープごとのシェルの生の surface ID。
     shells: &'static [(u32, &'static [u32])],
@@ -39,7 +44,7 @@ impl SkinLookup for Table {
 
 /// スコープ 0 の絵は 0・3・10、スコープ 1（相方）の絵は 10・11。別名 `笑顔` は 3。
 /// バルーンはスコープ 0 が 0・2、スコープ 1 が 1（相方の側はシェルもバルーンも ID 0 を持たない）。
-fn ghost() -> Table {
+pub(in crate::mcp) fn ghost() -> Table {
     let mut aliases = BTreeMap::new();
     aliases.insert("笑顔".to_string(), vec![3]);
     Table {
@@ -49,11 +54,11 @@ fn ghost() -> Table {
     }
 }
 
-fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
+pub(in crate::mcp) fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),
-        &ConsumerLedger::canonical(),
+        &ArekaStrictJudges::canonical(),
         facts,
     )
 }
@@ -76,7 +81,7 @@ fn silent(script: &str) {
     assert_eq!(check(script), Vec::new(), "{script}");
 }
 
-// ---- 種類の表の 14 行 ----
+// ---- 種類の表の 1〜13 行目 ----
 
 #[test]
 fn row01_bare_unknown_tag() {
@@ -543,7 +548,7 @@ fn ordinary_script_reports_only_the_raise_nobody_handles() {
             .iter()
             .map(|d| d.kind)
             .collect::<Vec<_>>(),
-        // `\![raise]` は今は誰も拾わない。
+        // `\![raise]` は表に担当が無い。
         [Kind::UnknownCommand]
     );
 }

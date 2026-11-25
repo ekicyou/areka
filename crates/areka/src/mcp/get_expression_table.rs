@@ -4,12 +4,14 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::get_expression_table::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use areka_parsers::charset::{self, DefaultEncoding};
 use areka_parsers::shell::{SurfaceTable, parse_surfacetable};
 use bevy_ecs::world::World;
 
+use super::dump_surface::{Work, work_elsewhere};
 use super::resolve::ActiveGhost;
 use areka_session::ghost_session::GhostSlot;
 
@@ -98,25 +100,43 @@ fn load(shell_dir: &Path) -> SurfaceTable {
 }
 
 /// 呼ばれるたびに稼働中のゴーストの今のシェルのフォルダを引き、表を素の値で 1 回だけ答える。
-/// 引けなければ（置き場が空・実行系が無い）`warn!` して既定の 15 件で答える。World は読むだけで、
-/// 送り口・SHIORI・サーフェスに触れず、ファイルを書かない。`ghost`・`args` は入口で解決済みなので
-/// 使わない。
+/// 表の読みと組み立ては名前つきのスレッドで行い、そのスレッドから答える。スレッドを起こせない・
+/// 仕事が panic したときは `error!` して `NG:` で答える。引けなければ（置き場が空・実行系が無い）`warn!` して既定の
+/// 15 件をその場で答える。World は読むだけで、送り口・SHIORI・サーフェスに触れず、ファイルを書かない。
+/// `ghost`・`args` は入口で解決済みなので使わない。
 pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply: ReplyTo) {
     let shell_dir = world
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref())
         .and_then(|session| session.runtime())
-        .map(|runtime| runtime.mount().shell.dir.as_path());
-    let table = match shell_dir {
-        Some(dir) => load(dir),
-        None => {
-            tracing::warn!(
-                "[get_expression_table] シェルのフォルダを引けない: 既定の名前だけで答える"
-            );
-            SurfaceTable::default()
-        }
+        .map(|runtime| runtime.mount().shell.dir.clone());
+    let Some(dir) = shell_dir else {
+        tracing::warn!("[get_expression_table] シェルのフォルダを引けない: 既定の名前だけで答える");
+        reply.send(outcome::value(render(&SurfaceTable::default())));
+        return;
     };
-    reply.send(outcome::value(render(&table)));
+    let work = move || -> Work { Box::new(move || outcome::value(render(&load(&dir)))) };
+    work_elsewhere(
+        "mcp-expression-table",
+        "the expression table thread is gone",
+        PANICKED,
+        failed,
+        work,
+        reply,
+        ReplyTo::send,
+    );
+}
+
+const PANICKED: &str = "the expression table thread panicked";
+
+/// 表を読むスレッドから答えを届けられない失敗（起こせない・消えた・panic）。`error!` 1 件と `NG:`。
+fn failed(reason: &str) -> ToolOutcome {
+    tracing::error!(
+        event = "expression_table_spawn_failed",
+        reason,
+        "[get_expression_table] 表を読むスレッドから答えを返せない"
+    );
+    outcome::ng(reason)
 }
 
 #[cfg(test)]

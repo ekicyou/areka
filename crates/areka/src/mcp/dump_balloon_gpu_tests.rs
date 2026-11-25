@@ -16,6 +16,7 @@ use std::sync::Arc;
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_kanade::RaiseOutcome;
 use areka_mcp::tools::dump_balloon::Args;
+use areka_mcp::tools::outcome;
 use areka_mcp::{ToolContent, ToolOutcome};
 use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
@@ -23,8 +24,10 @@ use log_capture_kit::count_levels;
 use wintf::ecs::FrameTime;
 
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
-use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
-use crate::mcp::dump_surface::{Job, Step, finish};
+use crate::mcp::dump_surface::gpu_test_support::{
+    FLUSH_EVENT, GpuRig, differing, read_picture, unpremultiply,
+};
+use crate::mcp::dump_surface::{Job, Step};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::RecordedCall;
 use areka_runtime::target_map::balloon_target;
@@ -71,7 +74,7 @@ fn reveals(world: &World) -> Option<(usize, f64)> {
     Some((times.len(), *times.last()?))
 }
 
-/// スコープ 0 の台詞の字が現れ切るまで、巡ごとに Tick の時刻を `step_ms` 進めて回す
+/// スコープ 0 の台詞の字が現れ切るまで、[`GpuRig::frames_until`] で Tick の時刻を `step_ms` ずつ進めて回す
 /// （期限切れは `false`・判定はファイルの頭の説明のとおり）。
 fn speak(gpu: &mut GpuRig, step_ms: u64) -> bool {
     speak_words(gpu, step_ms, WORDS.chars().count())
@@ -98,36 +101,6 @@ fn balloon_visible(world: &World) -> Option<bool> {
         .non_send::<RuntimeWiring>()
         .presenter()
         .target_visible(balloon_target(0))
-}
-
-/// 本文＋画像 1 枚の答えの（isError, 本文, MIME, 復号した（幅, 高さ, 乗算していない RGBA））。
-/// 形が違えば panic。
-fn read_picture(outcome: &ToolOutcome) -> (bool, String, String, (u32, u32, Vec<u8>)) {
-    let [
-        ToolContent::Text(text),
-        ToolContent::Image { data, mime_type },
-    ] = outcome.content.as_slice()
-    else {
-        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
-    };
-    (
-        outcome.is_error,
-        text.clone(),
-        mime_type.clone(),
-        decode_png(data),
-    )
-}
-
-/// `a` と `b` の（大きさが同じなら）食い違った画素の数。大きさが違えば `None`。
-fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> Option<usize> {
-    ((a.0, a.1) == (b.0, b.1)).then(|| {
-        a.2.as_chunks::<4>()
-            .0
-            .iter()
-            .zip(b.2.as_chunks::<4>().0)
-            .filter(|(p, q)| p != q)
-            .count()
-    })
 }
 
 /// 背景（乗算済み BGRA）の上へ、文字の面（乗算済み BGRA）を `origin` へそのまま重ねる
@@ -339,6 +312,62 @@ fn hidden_balloon_returns_the_same_pixels() {
     );
 }
 
+/// 隠れたバルーンの合成メモが捨てられた後（装置が替わった後と同じ）: `dump_balloon` が、背景を
+/// 合成し直して、隠す前と同じ画素を成功で返す。
+///
+/// # 非空虚性
+/// 捨てた後に ID の控えが残り絵だけが無いことを表示の層から確かめてから呼ぶ。控えが無いのを
+/// 想定外の失敗（`NG:`）で答えると赤。
+#[test]
+fn hidden_balloon_after_cache_invalidation_returns_the_same_pixels() {
+    let mut gpu = GpuRig::new(LINE_THEN_HIDE, 96);
+    let spoke = speak(&mut gpu, 1);
+    let pending = gpu.dump_balloon(None);
+    let before = gpu.answer_of(&pending);
+    let hidden = gpu.frames_until(100, |world| balloon_visible(world) == Some(false));
+    let invalidated = gpu.invalidate_cache(balloon_target(0));
+    let kept = gpu
+        .rig
+        .world
+        .non_send::<RuntimeWiring>()
+        .presenter()
+        .last_shown(balloon_target(0))
+        .map(|(_, pic)| pic.is_some());
+    let pending = gpu.dump_balloon(None);
+    let after = gpu.answer_of(&pending);
+    let down = gpu.shutdown();
+
+    let (_, _, _, before) = read_picture(&before.expect("隠す前").outcome);
+    let after = after.expect("捨てた後").outcome;
+    assert!(
+        !after.is_error,
+        "捨てた後も成功で答える: {:?}",
+        after.content.first()
+    );
+    let (a_err, a_body, _, after) = read_picture(&after);
+    assert_eq!(
+        (
+            spoke,
+            hidden,
+            invalidated,
+            kept,
+            down,
+            (a_err, a_body),
+            differing(&after, &before)
+        ),
+        (
+            true,
+            true,
+            true,
+            Some(false),
+            true,
+            (false, ok_text(0)),
+            Some(0)
+        ),
+        "（字が現れ切った, 隠れた, 捨てられた, 控えの絵が在るか, 降ろせた, 後の答え, 前後で食い違った画素の数）"
+    );
+}
+
 /// 一度も話していないスコープ: スコープ 0 だけが話した後のスコープ 1 の
 /// `dump_balloon` が、スコープ 1 のバルーンの背景の合成と一致する絵を成功で返す。
 ///
@@ -419,12 +448,7 @@ fn scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost() {
             )
         })
     });
-    let no_scope = ToolOutcome {
-        content: vec![ToolContent::Text(
-            "NG:No such scope in this ghost".to_owned(),
-        )],
-        is_error: true,
-    };
+    let no_scope = outcome::ng("No such scope in this ghost");
     let picture = Some((false, 2, true));
     let sent = Some(RaiseOutcome::NoReply);
     assert_eq!(
@@ -525,7 +549,9 @@ fn read_after_talk() -> ReadAfterTalk {
 /// # 非空虚性
 /// 呼び出しの時点の文字の面に字が在ることと、読む前に文字の面の読み戻しが呼び出しの時点と
 /// 違うようになったこと（`changed`）を確かめる。文字の面の写しを読み出しのフレームで取り直すと、
-/// 後の内容（消した後の別の字）が載って画素が食い違い赤。
+/// 後の内容（消した後の別の字）が載って画素が食い違い赤。仕事は記録を数える中で走らせ、ERROR が
+/// 0 件で画像つきの成功（`is_picture`）であることも確かめる（判定と数え方は `dump_surface_tests.rs` で
+/// 較正済み。仕事の中で `fail` を呼ぶと件数と判定の両方で赤）。
 #[test]
 fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
     let read = read_after_talk();
@@ -534,7 +560,7 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
         .read
         .expect("読み出しは失敗しない")
         .expect("上限のうちに読める");
-    let answered = finish(super::TOOL, 0, job, Duration::ZERO);
+    let (answered, levels) = count_levels(|| job(Duration::ZERO));
     let (is_error, body, mime, picture) = read_picture(&answered);
     assert_eq!(
         (
@@ -545,7 +571,9 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
             is_error,
             body,
             mime,
-            differing(&picture, &read.expected)
+            differing(&picture, &read.expected),
+            is_picture(&answered),
+            levels.error
         ),
         (
             true,
@@ -555,39 +583,12 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
             false,
             ok_text(0),
             "image/png".to_owned(),
-            Some(0)
+            Some(0),
+            true,
+            0
         ),
         "（字が現れ切った, 呼び出しの時点の文字の面に字が在った, 読む前に文字の面が変わった, \
-         降ろせた, isError, 本文, MIME, 期待の絵と食い違った画素の数）"
-    );
-}
-
-/// 符号化のスレッドの記録: 上と同じ形で得た `dump_balloon` の本物の仕事を、記録を
-/// 数える中で符号化のスレッドの体（`finish`）に通すと、ERROR が 0 件で画像つきの成功。
-///
-/// # 非空虚性
-/// 本物の重ね合わせ・PNG・base64 を通る（読めた仕事が在ることを確かめる）。判定の関数
-/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
-/// `fail` を呼ぶと件数と判定の両方で赤。
-#[test]
-fn balloon_job_runs_on_the_encoding_body_without_error() {
-    let read = read_after_talk();
-
-    let job = read
-        .read
-        .expect("読み出しは失敗しない")
-        .expect("上限のうちに読める");
-    let (answered, levels) = count_levels(|| finish(super::TOOL, 0, job, Duration::ZERO));
-    assert_eq!(
-        (
-            read.spoke,
-            read.changed,
-            read.down,
-            is_picture(&answered),
-            levels.error
-        ),
-        (true, true, true, true, 0),
-        "（字が現れ切った, 読む前に文字の面が変わった, 降ろせた, 画像つきの成功, ERROR の件数）"
+         降ろせた, isError, 本文, MIME, 期待の絵と食い違った画素の数, 画像つきの成功, ERROR の件数）"
     );
 }
 

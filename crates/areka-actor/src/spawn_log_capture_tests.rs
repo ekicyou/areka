@@ -334,3 +334,24 @@ fn closed_window_is_not_inherited() {
     drop(x_tx);
     x.join().expect("X は全 Sender を落とすと正常に終わるはず");
 }
+
+// 運んだ受け手に入ったスレッドの記録は、写した側の窓に入る。入る前と出た後の記録は入らない。
+#[test]
+fn records_under_carried_log_reach_the_window_it_was_taken_in() {
+    let ((), events) = capture(|| {
+        let carried = CarriedLog::here();
+        thread::spawn(move || {
+            tracing::warn!(target: TARGET, probe = "carried-out", "運ぶ前");
+            {
+                let _log = carried.enter();
+                tracing::warn!(target: TARGET, probe = "carried-in", "運んだ受け手の中");
+            }
+            tracing::warn!(target: TARGET, probe = "carried-out", "出た後");
+        })
+        .join()
+        .expect("スレッドは正常終了するはず");
+    });
+
+    assert_eq!(probed(&events, "carried-in").len(), 1, "{events:?}");
+    assert!(probed(&events, "carried-out").is_empty(), "{events:?}");
+}

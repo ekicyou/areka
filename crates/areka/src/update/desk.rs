@@ -3,9 +3,10 @@
 //! 窓口 [`UpdateDesk`] は World の NonSend・プロセスに 1 つで、ゴーストを起こし直しても作り直さない
 //! （据えるのは [`super::register`]）。取り出しの系 [`drain`] が毎 tick ⑴ 背景スレッドの頼み
 //! [`DeskAsk`] ⑵ 入口からの生の要求 [`RawUpdateRequest`] ⑶ `homeurl` の照会の返事 を順に捌く。
-//! 終了が始まったら [`discard_for_exit`] が照会の返事待ちを捨てる（走っている依頼は門が待つ）。
+//! 終了が始まったら [`discard_for_exit`] が照会の返事待ちと読み直しの切替の後送りを捨てる（走っている
+//! 依頼は門が待つ）。
 //!
-//! 対象の解決 [`resolve_targets`] は、置き場のゴーストのフォルダ・起動時に解いたシェルとバルーンの
+//! 対象の解決 [`resolve_targets`] は、置き場のゴーストのフォルダ・今のシェルとバルーンの
 //! フォルダから今の 3 つを、ゴーストのシェルの目録と今のゴーストのバルーンの一覧（ゴーストの中が先・
 //! 根が後）の `name` から `updateother` の名前を引く。
 
@@ -24,7 +25,10 @@ use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
-use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
+use super::{
+    CURRENT_ALL, RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason, UpdateTail,
+    trimmed_homeurl,
+};
 use crate::menu::captions::{QueryReply, send_query};
 use areka_session::boot_config::BootContext;
 use areka_session::exit_wait::WorkGate;
@@ -32,9 +36,6 @@ use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
-
-/// 後送りの列（ゴーストの成功の締め → 総括）。
-type Tail = Vec<(&'static str, Vec<String>)>;
 
 /// UI 側の窓口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct UpdateDesk {
@@ -62,7 +63,7 @@ pub(crate) struct UpdateDesk {
     homeurl_query: Option<ReplyReceiver<QueryReply>>,
     /// 受け付けた読み直しのゴーストのフォルダと後送りの列の残り（その切替が終わったら成功した走行の
     /// 残りを消し、列の残りを送る・失敗や中止なら捨てる）。
-    pub(super) after_switch: Option<(PathBuf, Tail)>,
+    pub(super) after_switch: Option<(PathBuf, UpdateTail)>,
 }
 
 impl UpdateDesk {
@@ -136,7 +137,8 @@ pub(crate) fn drain(world: &mut World) {
 }
 
 /// 背景スレッドの頼みを 1 件捌く。`Started`＝答え待ちなら走っているへ移し、預かりを `executing` で
-/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す／
+/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す（`WorkerPanicked`
+/// は加えて送出端を捨て、次の依頼で起こし直す）／
 /// `Reload`＝[`reload`]（条件を満たせば同じゴーストへの切替を 1 回頼む）。正しさは
 /// 段の判定が持ち、頼みと生の要求の届く順に依らない。
 fn answer(world: &mut World, ask: DeskAsk) {
@@ -154,7 +156,10 @@ fn answer(world: &mut World, ask: DeskAsk) {
                 refuse_executing(world, &raw, reason);
             }
         }
-        DeskAsk::OrderDone => {
+        DeskAsk::OrderDone | DeskAsk::WorkerPanicked => {
+            if ask == DeskAsk::WorkerPanicked {
+                desk.worker = None;
+            }
             set_stage(&mut desk, Stage::Idle);
             if let Some((raw, reason)) = desk.held.take() {
                 super::submit(world, raw, reason);
@@ -170,7 +175,7 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 列の行き先: `Accepted` ならゴーストのフォルダと列の残りを覚え、その切替が終わったら
 /// [`on_switch_end`] が残りを消して列の残りを送る／`argv`・`switching`・入口が受け付けない
 /// （`Busy`・`NotFound`・`NoContext`）なら列を今のゴーストへ送る／`closing`・`other_ghost` なら捨てる。
-fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
+fn reload(world: &mut World, ghost_dir: &Path, mut tail: UpdateTail) {
     let folder = match reload_folder(world, ghost_dir) {
         Ok(folder) => folder,
         Err(reason) => {
@@ -181,7 +186,6 @@ fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
                 "[update] 読み直しの条件を満たさないので、読み直しません（更新した中身は次の起動で効きます）"
             );
             match reason {
-                // 終了の後・別のゴーストへは送らない。
                 "closing" | "other_ghost" => drop_tail(&tail, reason),
                 _ => send_tail(world, tail, "no_reload"),
             }
@@ -222,7 +226,7 @@ fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
 
 /// 後送りの列を置き場のゴーストへ順に送る（返事を待たない・`refuse_executing` と同じ形）。空なら何もしない。
 /// 送れたら `info!(update_tail_sent, when, count)`、送出端が無い・途中で送れなくなったら残りを捨てる。
-fn send_tail(world: &World, tail: Tail, when: &'static str) {
+fn send_tail(world: &World, tail: UpdateTail, when: &'static str) {
     if tail.is_empty() {
         return;
     }
@@ -243,7 +247,7 @@ fn send_tail(world: &World, tail: Tail, when: &'static str) {
             reply: None,
         };
         if kanade.send(raise).is_err() {
-            let left: Tail = std::iter::once((id, Vec::new())).chain(rest).collect();
+            let left: UpdateTail = std::iter::once((id, Vec::new())).chain(rest).collect();
             return drop_tail(&left, "no_ghost");
         }
     }
@@ -265,7 +269,7 @@ fn drop_tail(tail: &[(&'static str, Vec<String>)], reason: &'static str) {
         event = "update_tail_dropped",
         reason,
         ids = ?ids,
-        "[update] 受け取るゴーストが居ないので、後送りの列を捨てます"
+        "[update] 後送りの列を捨てます"
     );
 }
 
@@ -284,19 +288,7 @@ pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
         return;
     };
     if !finished {
-        tracing::debug!(
-            event = "update_purge_dropped",
-            dir = %dir.display(),
-            "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
-        );
-        // 列の先頭（起動の知らせ）も届いていない＝残りが空でも列は捨てた。
-        tracing::warn!(
-            event = "update_tail_dropped",
-            reason = "switch_failed",
-            rest = rest.len(),
-            "[update] 読み直しの切替が終わらなかったので、後送りの列を捨てます（既定ゴーストへは送りません）"
-        );
-        return;
+        return abandon_reload(&dir, rest.len(), "switch_failed");
     }
     let purge = areka_update::purge_committed(&dir);
     for path in &purge.held {
@@ -466,12 +458,12 @@ pub(crate) fn on_steady(world: &mut World) {
 }
 
 /// メニューの項目を選べるか: 窓口が在り・終了が始まっておらず・段が `Idle`（答え待ちも灰色）・
-/// 写しか 3 つの `descript.txt` のどれかに更新先が在る。
+/// 読み直しの切替の後送りを持っておらず・写しか 3 つの `descript.txt` のどれかに更新先が在る。
 pub(crate) fn can_update(world: &World) -> bool {
     let Some(desk) = world.get_non_send::<UpdateDesk>() else {
         return false;
     };
-    if desk.gate.is_closing() || desk.stage != Stage::Idle {
+    if desk.gate.is_closing() || desk.stage != Stage::Idle || desk.after_switch.is_some() {
         return false;
     }
     if desk.ghost_homeurl.is_some() {
@@ -493,11 +485,7 @@ pub(crate) fn can_update(world: &World) -> bool {
 pub(crate) fn update_current(world: &mut World) {
     super::submit(
         world,
-        RawUpdateRequest::Current(vec![
-            TargetKind::Ghost,
-            TargetKind::Shell,
-            TargetKind::Balloon,
-        ]),
+        RawUpdateRequest::Current(CURRENT_ALL.to_vec()),
         UpdateReason::Manual,
     );
 }
@@ -514,9 +502,20 @@ fn peek_homeurl(world: &mut World) {
         Some(Err(e)) => Err(e.to_string()),
     };
     desk.homeurl_query = None;
-    let outcome = reply.map(|reply| reply.into_iter().find(|(id, _)| *id == "homeurl"));
+    let outcome = reply.map(|reply| {
+        reply
+            .into_iter()
+            .find(|(id, _)| *id == HOMEURL)
+            .map(|(id, answer)| match answer {
+                ResourceOutcome::Value(v) => (
+                    id,
+                    trimmed_homeurl(&v).map_or(ResourceOutcome::NoContent, ResourceOutcome::Value),
+                ),
+                other => (id, other),
+            })
+    });
     match outcome {
-        Ok(Some((_, ResourceOutcome::Value(v)))) if !v.is_empty() => {
+        Ok(Some((_, ResourceOutcome::Value(v)))) => {
             tracing::debug!(event = "update_homeurl_copied", homeurl = %v, "[update] SHIORI の homeurl を写しました");
             desk.ghost_homeurl = Some(v);
         }
@@ -532,8 +531,9 @@ fn peek_homeurl(world: &mut World) {
     }
 }
 
-/// 更新の実行中か（窓口が要求を預かっている間＝段が `Idle` でないか、読み直しの切替の後送りを
-/// 持っている）。シェル・バルーンの切替の入口が断るのに使う。
+/// 更新の実行中か（手続きが走っている・答えを待っている間＝段が `Idle` でないか、読み直しの切替の
+/// 後送りを持っている間）。シェル・バルーンの切替の入口、メニューからのゴーストの切替、MCP からの
+/// 読み直しの入口が断るのに使う。
 pub(crate) fn is_busy(world: &World) -> bool {
     world
         .get_non_send::<UpdateDesk>()
@@ -551,7 +551,7 @@ pub(crate) fn insert_running_desk_for_test(world: &mut World) {
 /// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む（テスト用・
 /// 捌くのは次の取り出しの系）。
 #[cfg(test)]
-pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: Tail) {
+pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: UpdateTail) {
     world
         .non_send::<UpdateDesk>()
         .asks_tx
@@ -559,11 +559,40 @@ pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: Tail)
         .expect("窓口の頼みの受信端は生きている");
 }
 
-/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちを捨てる。走っている依頼は門が待つ。
+/// 覚えた読み直しを捨てる: 残りの片付けは次の走行の始めに任せ（`debug!(update_purge_dropped)`）、
+/// 列は既定ゴーストへ送らずに捨てる（残りが空でも `warn!(update_tail_dropped, reason)` を 1 件）。
+fn abandon_reload(dir: &Path, rest: usize, reason: &'static str) {
+    if reason == "closing" {
+        tracing::debug!(
+            event = "update_purge_dropped",
+            dir = %dir.display(),
+            "[update] 終了が始まったので、読み直しの後の残りは次の走行の始めに消します"
+        );
+    } else {
+        tracing::debug!(
+            event = "update_purge_dropped",
+            dir = %dir.display(),
+            "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
+        );
+    }
+    // 列の先頭（起動の知らせ）の届き先が定常に入っていない＝残りが空でも列は捨てた。
+    tracing::warn!(
+        event = "update_tail_dropped",
+        reason,
+        rest,
+        "[update] 読み直しの後送りの列を捨てます（既定ゴーストへは送りません）"
+    );
+}
+
+/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちと覚えた読み直しを捨てる。
+/// 走っている依頼は門が待つ。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
         return;
     };
+    if let Some((dir, rest)) = desk.after_switch.take() {
+        abandon_reload(&dir, rest.len(), "closing");
+    }
     if desk.homeurl_query.take().is_some() {
         tracing::debug!(
             event = "update_query_discarded",
@@ -579,9 +608,9 @@ struct Here {
     ghost_dir: PathBuf,
     /// 実行系が読んだゴーストの名前（実行系が無ければ None）。
     ghost_name: Option<String>,
-    /// 起動時に解いたシェルのフォルダ（実行系が無ければ None）。
+    /// 今のシェルのフォルダ（実行系が無ければ None）。
     shell_dir: Option<PathBuf>,
-    /// 起動時に解いたバルーンのフォルダ。
+    /// 今のバルーンのフォルダ。
     balloon_dir: PathBuf,
 }
 
@@ -607,7 +636,7 @@ fn here(world: &World) -> Option<Here> {
 }
 
 /// 生の要求を対象の列へ（並んだ順）。今の 3 つ: ゴーストは置き場のフォルダ（名前は実行系の名前 →
-/// `descript.txt` の `name` → フォルダ名）、シェル・バルーンは起動時に解いたフォルダ（名前は
+/// `descript.txt` の `name` → フォルダ名）、シェル・バルーンは今のフォルダ（名前は
 /// `descript.txt` の `name` → フォルダ名）。`updateother` はゴーストのシェルの目録と今のゴーストの
 /// バルーンの一覧（ゴーストの中が先・根が後・`balloons_for`）の `name` に完全一致（大文字小文字を
 /// 区別）で引く（隠しシェルは目録に無い・同じ `name` はゴーストの中が当たる）。
@@ -704,3 +733,7 @@ mod reload_tests;
 #[cfg(test)]
 #[path = "desk_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "worker_panic_tests.rs"]
+mod worker_panic_tests;

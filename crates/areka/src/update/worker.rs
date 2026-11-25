@@ -24,7 +24,7 @@ use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_update::{Fetch, FetchError, Progress, UpdateRequest, WinHttpFetch};
 
 use super::procedure::{EngineRun, GhostResources, Raised, UpdatePorts, run_order};
-use super::{TargetKind, TargetSpec, UpdateOrder};
+use super::{TargetKind, TargetSpec, UpdateOrder, UpdateTail, trimmed_homeurl};
 use areka_session::exit_wait::WorkGate;
 
 /// 照会する SHIORI リソース（1 回の照会で 2 つ）。窓口の `homeurl` の照会も同じ名前を使う。
@@ -44,16 +44,38 @@ pub(crate) struct UpdateJob {
 /// 背景スレッドから窓口への頼み（返事は待たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeskAsk {
-    /// 標準の手続きが始まった（`OnUpdateProcessExec` に応えが無かった・照会の直前）。
+    /// 標準の手続きが始まった（メニューからは `OnUpdateProcessExec` に応えが無かったとき・台本からは送らずに・照会の直前）。
     Started,
     /// 同じゴーストを読み直す（全対象の後・`changed` が 1 つ以上）。`tail` は後送りの列（先頭が
     /// 読み直した後の起動の知らせ）。
     Reload {
         ghost_dir: PathBuf,
-        tail: Vec<(&'static str, Vec<String>)>,
+        tail: UpdateTail,
     },
     /// 依頼 1 件が終わった。
     OrderDone,
+    /// 依頼の最中にスレッドが倒れた（次の依頼でスレッドを起こし直す）。
+    WorkerPanicked,
+}
+
+/// 依頼 1 件の守り手。倒れて落ちるときだけ、門を手放して窓口へ倒れを知らせる。
+struct OrderGuard {
+    gate: Arc<WorkGate>,
+    desk: Sender<DeskAsk>,
+}
+
+impl Drop for OrderGuard {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        tracing::error!(
+            event = "update_worker_panicked",
+            "[update] 背景スレッドが依頼の最中に倒れました（次の依頼で起こし直します）"
+        );
+        self.gate.end();
+        ask_desk(&self.desk, DeskAsk::WorkerPanicked);
+    }
 }
 
 /// 取得口の作り方（本番は [`winhttp_fetch`]・テストは偽の取得口）。対象ごとにスレッドの中で呼ぶ。
@@ -75,6 +97,11 @@ pub(crate) fn spawn_worker(
 ) -> (Sender<UpdateJob>, ActorHandle) {
     spawn_actor("update", move |jobs| {
         run_inbox(jobs, |job: UpdateJob| {
+            // 口より先に作る（倒れて落ちるときは口が先に落ち、通信中の数が戻ってから知らせる）。
+            let _guard = OrderGuard {
+                gate: gate.clone(),
+                desk: desk.clone(),
+            };
             let ports = KanadePorts {
                 kanade: job.kanade,
                 gate: gate.clone(),
@@ -193,7 +220,7 @@ impl UpdatePorts for KanadePorts {
                 }
             };
             if id == HOMEURL {
-                found.homeurl = value;
+                found.homeurl = value.as_deref().and_then(trimmed_homeurl);
             } else {
                 found.useorigin1 = value;
             }
@@ -241,7 +268,7 @@ impl UpdatePorts for KanadePorts {
         EngineRun::Done(result)
     }
 
-    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>) {
+    fn request_reload(&self, ghost_dir: &Path, tail: UpdateTail) {
         ask_desk(
             &self.desk,
             DeskAsk::Reload {

@@ -1,31 +1,18 @@
 //! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言。
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
-//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`choice_timeout_of`・strict と同じ見分けの点
-//! （`strict::read_note_point`・`command_point`）・`classify_font_tag`・
-//! `surface_missing`・`balloon_missing`（`areka_seriko`）・`pair_anchors`）の答えを診断の種類へ写すだけにする。
+//! （`parse_noted` の印・strict の判定 `StrictJudges`・`choice_timeout_of`・strict と同じ見分けの点
+//! （`strict::read_note_point`・`command_point`）・`surface_missing`・`balloon_missing`（`areka_seriko`）・
+//! `pair_anchors`）の答えを strict の点にし、点から診断の種類と文言を引くだけにする。
 
 use std::ops::Range;
 
-use areka_emo_text::look::{FontClass, classify_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read};
 use areka_sakura::compile::choice_timeout_of;
-use areka_sakura::strict::{self, CharCursor, DetectionPoint};
+use areka_sakura::strict::{self, CharCursor, DetectionPoint, StrictJudges};
 use areka_sakura::{AnchorIssue, pair_anchors};
 use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
-
-use areka_runtime::consumer_ledger::ConsumerLedger;
-
-// 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
-pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;
-pub(in crate::mcp) const MSG_MISSING_SURFACE: &str = strict::MSG_MISSING_SURFACE;
-pub(in crate::mcp) const MSG_MISSING_BALLOON: &str = strict::MSG_MISSING_BALLOON;
-pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
-pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
-pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
-pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str = strict::MSG_ANCHOR_STRAY_CLOSE;
-pub(in crate::mcp) const MSG_CHAR_CODE_DROPPED: &str = strict::MSG_CHAR_CODE_DROPPED;
 
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
 /// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、
@@ -33,7 +20,7 @@ pub(in crate::mcp) const MSG_CHAR_CODE_DROPPED: &str = strict::MSG_CHAR_CODE_DRO
 pub(crate) fn diagnose(
     script: &str,
     reads: &[Read],
-    ledger: &ConsumerLedger,
+    judges: &dyn StrictJudges,
     facts: Option<&dyn SkinLookup>,
 ) -> Vec<Diagnostic> {
     let mut out = Out {
@@ -60,7 +47,7 @@ pub(crate) fn diagnose(
             Instruction::SpeakerScope { n } => scope = *n,
             Instruction::GenericCommand { name, raw_args } => {
                 let first = raw_args.first().map(String::as_str);
-                let handled = ledger.consumer_of(name, first).is_some();
+                let handled = judges.command_handled(name, first);
                 if let Some(point) =
                     strict::command_point(handled, choice_timeout_of(name, raw_args))
                 {
@@ -77,37 +64,33 @@ pub(crate) fn diagnose(
                 }
             }
             Instruction::Font { args } => {
-                if let Some((kind, message)) = judge_font(args) {
-                    out.push(kind, &span, message);
+                if let Some(point) = judges.font(args) {
+                    out.push_point(point, &span);
                 }
             }
             Instruction::Surface(arg) if !shell_switched => {
-                if let Some(facts) = facts
-                    && surface_missing(facts, scope, arg.as_str()).is_some()
-                {
-                    out.push(Kind::MissingSurface, &span, MSG_MISSING_SURFACE);
+                if let Some(point) = facts.and_then(|f| surface_missing(f, scope, arg.as_str())) {
+                    out.push_point(point, &span);
                 }
             }
             Instruction::BalloonSurface(arg) if !balloon_switched => {
-                if let Some(facts) = facts
-                    && balloon_missing(facts, scope, arg.as_str()).is_some()
-                {
-                    out.push(Kind::MissingBalloon, &span, MSG_MISSING_BALLOON);
+                if let Some(point) = facts.and_then(|f| balloon_missing(f, scope, arg.as_str())) {
+                    out.push_point(point, &span);
                 }
             }
             // 読み手が捨てた `\_u[…]`・`\_m[…]`（範囲は埋め込みの綴り）。出せる番号は `Text` で来るので診ない。
             Instruction::CharCodeDropped { .. } => {
-                out.push(Kind::UnreadableArgument, &span, MSG_CHAR_CODE_DROPPED);
+                out.push_point(DetectionPoint::CharCodeDropped, &span);
             }
             // 同じ開きに 2 件（重なり → 閉じ無し）付くことがあるので、その位置の分を全部出す。
             Instruction::Anchor(_) | Instruction::AnchorEnd => {
                 while let Some(finding) = anchor_findings.next_if(|f| f.index == index) {
-                    let message = match finding.issue {
-                        AnchorIssue::Unclosed => MSG_ANCHOR_UNCLOSED,
-                        AnchorIssue::Reopened => MSG_ANCHOR_REOPENED,
-                        AnchorIssue::StrayClose => MSG_ANCHOR_STRAY_CLOSE,
+                    let point = match finding.issue {
+                        AnchorIssue::Unclosed => DetectionPoint::AnchorUnclosed,
+                        AnchorIssue::Reopened => DetectionPoint::AnchorReopened,
+                        AnchorIssue::StrayClose => DetectionPoint::AnchorStrayClose,
                     };
-                    out.push(Kind::UnpairedTag, &span, message);
+                    out.push_point(point, &span);
                 }
             }
             // 診るものの無い命令（字・待ち・改行・選択肢・位置・終わり・消去・変数・知らないタグ
@@ -129,15 +112,6 @@ pub(crate) fn diagnose(
     out.list
 }
 
-/// `\f` の分類（文字の層の `classify_font_tag`）を診断の種類へ写す。受け取るだけは `ignored`、
-/// 知らないキー・キーなしは `unknown_tag`、値の誤りと他の受理は診ない。
-fn judge_font(args: &[String]) -> Option<(Kind, &'static str)> {
-    match classify_font_tag(args)? {
-        FontClass::Ignored => Some((Kind::Ignored, MSG_IGNORED)),
-        FontClass::UnknownKey => Some((Kind::UnknownTag, MSG_UNKNOWN_TAG)),
-    }
-}
-
 /// 診断の置き場。位置は strict の記録と同じ物差し（`CharCursor`）で文字の数へ直す（診断は台本の順に来る）。
 struct Out<'a> {
     cursor: CharCursor<'a>,
@@ -145,20 +119,16 @@ struct Out<'a> {
 }
 
 impl Out<'_> {
-    fn push(&mut self, kind: Kind, span: &Range<usize>, message: &'static str) {
+    /// strict と同じ見分けの点を診断にする。
+    fn push_point(&mut self, point: DetectionPoint, span: &Range<usize>) {
         let place = self.cursor.place(span.clone());
         self.list.push(Diagnostic {
-            kind,
+            kind: kind_of(point),
             start: place.start,
             end: place.end,
             text: place.text,
-            message,
+            message: point.message(),
         });
-    }
-
-    /// strict と同じ見分けの点を診断にする。
-    fn push_point(&mut self, point: DetectionPoint, span: &Range<usize>) {
-        self.push(kind_of(point), span, point.message());
     }
 }
 
@@ -180,4 +150,4 @@ fn kind_of(point: DetectionPoint) -> Kind {
 
 #[cfg(test)]
 #[path = "check_script_judge_tests.rs"]
-mod tests;
+pub(in crate::mcp) mod tests;

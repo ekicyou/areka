@@ -11,8 +11,10 @@ use areka_update::{
     FailReason, FetchError, ManifestName, Progress, Stage, Undeletable, UpdateError, UpdateOutcome,
 };
 
-use super::{EngineRun, GhostResources, Raised, UpdatePorts};
-use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
+use log_capture_kit::{CapturedEvent, capture};
+
+use super::{EngineRun, GhostResources, OrderEnd, Raised, UpdatePorts, run_order};
+use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason, UpdateTail};
 
 /// 口への呼び出し 1 回。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +26,7 @@ pub(super) enum Call {
         target: PathBuf,
     },
     /// 読み直しの頼み（フォルダと後送りの列）。
-    Reload(PathBuf, Vec<(&'static str, Vec<String>)>),
+    Reload(PathBuf, UpdateTail),
     Started,
 }
 
@@ -61,7 +63,7 @@ impl FakePorts {
     }
 
     /// 送ったイベントの (名前, Reference) の列。
-    pub(super) fn raised(&self) -> Vec<(&'static str, Vec<String>)> {
+    pub(super) fn raised(&self) -> UpdateTail {
         self.calls
             .borrow()
             .iter()
@@ -73,7 +75,7 @@ impl FakePorts {
     }
 
     /// 読み直しの頼みに添えた後送りの列（頼んだ順）。
-    pub(super) fn reload_tails(&self) -> Vec<Vec<(&'static str, Vec<String>)>> {
+    pub(super) fn reload_tails(&self) -> Vec<UpdateTail> {
         self.calls
             .borrow()
             .iter()
@@ -122,7 +124,7 @@ impl UpdatePorts for FakePorts {
         script.result
     }
 
-    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>) {
+    fn request_reload(&self, ghost_dir: &Path, tail: UpdateTail) {
         self.calls
             .borrow_mut()
             .push(Call::Reload(ghost_dir.to_path_buf(), tail));
@@ -159,8 +161,6 @@ pub(super) fn order(
         ghost_folder: Some("emo2".to_owned()),
     }
 }
-
-// 4 経路の台本。
 
 /// 差分 0＝`none`。
 pub(super) fn script_none() -> EngineScript {
@@ -333,4 +333,9 @@ fn error(target: &Path, stage: Stage, reason: FailReason) -> UpdateError {
         leftovers: Vec::new(),
         work: None,
     }
+}
+
+/// 1 件の依頼を回し、締めと捕まえた記録を返す。
+pub(super) fn run(order: &UpdateOrder, ports: &FakePorts) -> (OrderEnd, Vec<CapturedEvent>) {
+    capture(|| run_order(order, ports))
 }

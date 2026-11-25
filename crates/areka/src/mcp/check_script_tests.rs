@@ -1,49 +1,25 @@
 //! 写し取りの値の決定論テスト。写し取りの値が判断の事実の trait を満たし、手で組んだ事実と
 //! 同じ答えを返すこと（同じ台本 → 同じ診断）を確かめる。
 //!
-//! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を 10 本と同じ規則で解き、
+//! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を省略を起動中へ解く 7 本と同じ規則で解き、
 //! 偽の SHIORI で起こした本物の単位へ台本を 2 件渡しても、SHIORI への呼出・再生・終了・
 //! 切替のどれも起きないことを確かめる。
+//!
+//! 最後は本物のシェルを装着したゴースト（実 GPU・x64 だけ）で、無い surface に診断が出ること。
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_mcp::tools::check_script::Diagnostic;
-use areka_parsers::sakura::parse_noted;
-use areka_seriko::{SkinFacts, SkinLookup, SurfaceResolver, SurfaceTarget};
+use areka_seriko::SkinFacts;
 
 use super::*;
-use crate::mcp::check_script_judge::diagnose;
-use areka_runtime::consumer_ledger::ConsumerLedger;
-
-/// 手で組んだ事実。スコープ 0 の絵は 0・3・10、スコープ 1 は 10・11、別名 `笑顔` は 3。
-/// バルーンはスコープ 0 が 0・2、スコープ 1 が 1。スコープ 2 には何も無い。
-struct ByHand(SurfaceResolver);
-
-impl SkinLookup for ByHand {
-    fn resolve_surface(&self, key: &str) -> SurfaceTarget {
-        self.0.resolve(key)
-    }
-    fn shell_has(&self, scope: u32, surface_id: u32) -> Option<bool> {
-        match scope {
-            0 => Some([0, 3, 10].contains(&surface_id)),
-            1 => Some([10, 11].contains(&surface_id)),
-            _ => None,
-        }
-    }
-    fn balloon_has(&self, scope: u32, balloon_id: u32) -> Option<bool> {
-        match scope {
-            0 => Some([0, 2].contains(&balloon_id)),
-            1 => Some(balloon_id == 1),
-            _ => None,
-        }
-    }
-}
+use crate::mcp::check_script_judge::tests::{check_with, ghost};
+use crate::mcp::kanade_fake_test_support::try_outcome;
 
 fn aliases() -> BTreeMap<String, Vec<u32>> {
     BTreeMap::from([("笑顔".to_string(), vec![3])])
 }
 
-/// 上と同じ事実を、写し取りの値の形（集合の表）で組む。
+/// 判断のテストの手書きの事実（`ghost()`）と同じ事実を、写し取りの値の形（集合の表）で組む。
 fn snapshot() -> SkinFacts {
     let ids = |v: &[u32]| v.iter().copied().collect::<BTreeSet<u32>>();
     SkinFacts::new(
@@ -53,18 +29,9 @@ fn snapshot() -> SkinFacts {
     )
 }
 
-fn check(script: &str, facts: &dyn SkinLookup) -> Vec<Diagnostic> {
-    diagnose(
-        script,
-        &parse_noted(script),
-        &ConsumerLedger::canonical(),
-        Some(facts),
-    )
-}
-
 #[test]
 fn snapshot_answers_like_facts_built_by_hand() {
-    let by_hand = ByHand(SurfaceResolver::new(aliases()));
+    let by_hand = ghost();
     let snap = snapshot();
     let scripts = [
         r"\s[0]\s[3]\s[笑顔]\s[99999]\s[無い名前]\s[-1]",
@@ -76,8 +43,8 @@ fn snapshot_answers_like_facts_built_by_hand() {
     ];
     let mut fired = 0;
     for script in scripts {
-        let want = check(script, &by_hand);
-        assert_eq!(check(script, &snap), want, "{script}");
+        let want = check_with(script, Some(&by_hand));
+        assert_eq!(check_with(script, Some(&snap)), want, "{script}");
         fired += want.len();
     }
     // 比べた台本が何も診断しない組で素通りしていないこと（較正）。
@@ -113,14 +80,6 @@ fn call(script: &str, ghost_name: Option<&str>) -> ToolCall {
     })
 }
 
-fn emily() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: std::path::PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
 /// 空の World で振り分ける。（その場の答え, 上限つきで待った答え）。答えは別のスレッドからも届く。
 fn dispatch_and_wait(
     active: Option<&ActiveGhost>,
@@ -131,7 +90,7 @@ fn dispatch_and_wait(
 ) {
     let (request, pending) = ToolRequest::new(call(r"\0\s[0]こんにちは\e", ghost_name));
     crate::mcp::dispatch(&mut World::new(), active, request);
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let waited = match &at_once {
         Some(_) => None,
         // 例外: 空の World には数える足場が無く、答えの仕事は製品の
@@ -144,7 +103,7 @@ fn dispatch_and_wait(
 }
 
 /// ゴーストが居ないとき、名前を省くと `NG:Specified ghost is not active` をその場で答える
-/// （名前を渡すと 10 本と同じく `CANNOT_FIND`＝解決の規則のまま）。
+/// （名前を渡すとその 7 本と同じく `CANNOT_FIND`＝解決の規則のまま）。
 #[test]
 fn no_active_ghost_is_not_active() {
     assert_eq!(
@@ -160,7 +119,7 @@ fn no_active_ghost_is_not_active() {
 /// 違う名前は `NG:Cannot find active ghost from specified name` をその場で答える（判断へ進まない）。
 #[test]
 fn a_wrong_name_cannot_find() {
-    let g = emily();
+    let g = crate::mcp::kanade_fake_test_support::ghost();
     assert_eq!(
         dispatch_and_wait(Some(&g), Some("Someone else")),
         (Some(outcome::ng(CANNOT_FIND)), None)
@@ -174,7 +133,7 @@ fn a_wrong_name_cannot_find() {
 /// 省略を断ると、その場の答えが `NG:` で赤。答えが届かなければ待った答えが `None` で赤。
 #[test]
 fn omitted_or_matching_name_answers_with_the_running_ghost() {
-    let g = emily();
+    let g = crate::mcp::kanade_fake_test_support::ghost();
     for name in [None, Some("Emily/Phase4.5")] {
         assert_eq!(
             dispatch_and_wait(Some(&g), name),
@@ -287,5 +246,51 @@ fn real_unit_answers_two_scripts_without_running_them() {
         still,
         (false, Some("A".to_owned()), true, false, 0),
         "（再生中, 今のゴースト, 切替の途中でない, 終了の指示, B を起こした回数）"
+    );
+}
+
+// ---- 本物のシェルを装着したゴースト（実 GPU・x64 だけ） ----
+
+/// 本物のシェル（emo2 の複製）を装着させた後、無い surface `\s[99999]` に `missing_surface` が
+/// ちょうど 1 件出て、在る `\s[0]` は診断しない（窓の無いゴーストの注記も付かない）。
+///
+/// # 非空虚性
+/// 装着の判定を逆にすると答えが届かず赤。スコープを取り損ねると写しの事実が空になり、
+/// `missing_surface` が出ずに赤（写しのスコープを空にして確かめた）。
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn attached_shell_reports_one_missing_surface() {
+    use crate::mcp::dump_surface::gpu_test_support::GpuRig;
+    use areka_mcp::tools::check_script::{Diagnostic, Kind};
+    use areka_sakura::strict::MSG_MISSING_SURFACE;
+
+    let script = r"\0\s[0]\s[99999]\e";
+    let mut gpu = GpuRig::new(r"\0\s[0]\e", 96);
+    let attached = gpu.frames_until(100, |world| {
+        world
+            .get_non_send::<RuntimeWiring>()
+            .is_some_and(RuntimeWiring::attached)
+    });
+    let args = Args {
+        script: script.to_owned(),
+        ghost_name: None,
+    };
+    let (request, pending) = ToolRequest::new(ToolCall::CheckScript(args.clone()));
+    let ghost = crate::mcp::resolve::active(&gpu.rig.world).expect("A は起動中");
+    handle(&mut gpu.rig.world, &ghost, args, request.reply);
+    let answer = gpu.answer_of(&pending).map(|a| a.outcome);
+    let down = gpu.shutdown();
+
+    let missing = Diagnostic {
+        kind: Kind::MissingSurface,
+        start: 7,
+        end: 16,
+        text: r"\s[99999]".to_owned(),
+        message: MSG_MISSING_SURFACE,
+    };
+    assert_eq!(
+        (attached, answer, down),
+        (true, Some(render(&[missing], None)), true),
+        "（装着した・{script} への答え・降ろせた）"
     );
 }

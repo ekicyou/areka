@@ -1,18 +1,14 @@
 //! `sakurascript` の処理。kanade へ台本（`SstpSend`）を送り、返事は `super::later` で後から答える。
 //!
-//! `raise_event` と使う部品（`script_target`・文言の定数）もここに置く。
+//! `raise_event` と使う部品（文言の定数と strict の文・番号）もここに置く。
 
-use std::sync::mpsc::Sender;
-
-use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::KanadeMsg;
 use areka_kanade::sstp::SstpSendOutcome;
 use areka_mcp::tools::sakurascript::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
-use super::resolve::{self, ActiveGhost, NOT_ACTIVE, Omitted, listed_value};
-use areka_session::ghost_session::GhostSlot;
+use super::resolve::{ActiveGhost, KanadeAsk, ask_kanade};
 
 /// 起動・終了・切替の手順の途中で受け付けなかったときの本文（SSP の実測の文言）。
 pub(super) const NOT_NOW: &str = "the ghost cannot accept a script now";
@@ -33,25 +29,14 @@ pub(super) fn since_id_if_strict(strict: Option<bool>) -> Option<u64> {
     (strict == Some(true)).then(areka_session::log_history::last_id)
 }
 
-/// 宛先の kanade の送り口と、答える前に降りたときの文言。
-pub(super) struct ScriptTarget {
-    pub kanade: Option<Sender<KanadeMsg>>,
-    /// 起動中のゴースト無しで解決したときの失敗の理由（`get_status` と同じ求め方）。
-    pub gone: &'static str,
-}
-
-/// 置き場の 1 体から送り口を引き、`ghost_name` から「降りた」の文言を求める。
-pub(super) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTarget {
-    let gone = resolve::resolve(None, ghost_name, Omitted::UseActive)
-        .err()
-        .unwrap_or(NOT_ACTIVE);
-    let kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-        .cloned();
-    ScriptTarget { kanade, gone }
-}
+const ASK: KanadeAsk = KanadeAsk {
+    tool: "sakurascript",
+    what: "台本",
+    unavailable: UNAVAILABLE,
+    unavailable_event: "mcp_sakurascript_unavailable",
+    gone_event: "mcp_sakurascript_kanade_gone",
+    dropped_event: "mcp_sakurascript_reply_dropped",
+};
 
 /// 台本を 1 通送り、返事は待たずに `later` へ預ける。
 ///
@@ -62,66 +47,46 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
         reply.send(outcome::ng("script is empty"));
         return;
     }
-    let ScriptTarget { kanade, gone } = script_target(world, args.ghost_name.as_deref());
-    let Some(kanade) = kanade else {
-        tracing::warn!(
-            event = "mcp_sakurascript_unavailable",
-            ghost = listed_value(ghost).as_str(),
-            "[mcp] sakurascript: 宛先のゴーストの kanade の送り口が見つからない"
-        );
-        reply.send(outcome::ng(UNAVAILABLE));
-        return;
-    };
-    let (tx, rx) = reply_channel::<SstpSendOutcome>();
     let since_id = since_id_if_strict(args.strict);
-    let msg = KanadeMsg::SstpSend {
-        script: args.script,
-        strict: args.strict,
-        reply: tx,
-    };
-    if kanade.send(msg).is_err() {
-        tracing::debug!(
-            event = "mcp_sakurascript_kanade_gone",
-            "[mcp] sakurascript: kanade が止まっていて台本を送れない"
-        );
-        reply.send(outcome::ng(gone));
-        return;
-    }
-    super::later(world, reply, move |_| match rx.try_recv() {
-        Ok(None) => None,
-        Ok(Some(SstpSendOutcome::Accepted)) => Some(match since_id {
-            Some(n) => outcome::ok(&strict_note(n)),
-            None => outcome::ok(""),
-        }),
-        Ok(Some(SstpSendOutcome::NotAccepted)) => {
-            tracing::debug!(
-                event = "mcp_sakurascript_not_accepted",
-                "[mcp] sakurascript: 手順の途中で台本を受け付けなかった"
-            );
-            Some(outcome::ng(NOT_NOW))
-        }
-        Ok(Some(SstpSendOutcome::Failed)) => {
-            tracing::debug!(
-                event = "mcp_sakurascript_failed",
-                "[mcp] sakurascript: 台本の処理の中で kanade が止まった"
-            );
-            Some(outcome::ng(gone))
-        }
-        // `Timeout` は `try_recv` からは返らない。型の上の腕は「降りた」に倒す。
-        Err(ReplyError::Dropped | ReplyError::Timeout) => {
-            tracing::debug!(
-                event = "mcp_sakurascript_reply_dropped",
-                "[mcp] sakurascript: 返事の前に kanade の返信端が落ちた"
-            );
-            Some(outcome::ng(gone))
-        }
-    });
+    let Args {
+        script,
+        ghost_name,
+        strict,
+    } = args;
+    ask_kanade(
+        world,
+        ghost,
+        ghost_name.as_deref(),
+        ASK,
+        reply,
+        |reply| KanadeMsg::SstpSend {
+            script,
+            strict,
+            reply,
+        },
+        move |sent, gone| match sent {
+            SstpSendOutcome::Accepted => match since_id {
+                Some(n) => outcome::ok(&strict_note(n)),
+                None => outcome::ok(""),
+            },
+            SstpSendOutcome::NotAccepted => {
+                tracing::debug!(
+                    event = "mcp_sakurascript_not_accepted",
+                    "[mcp] sakurascript: 手順の途中で台本を受け付けなかった"
+                );
+                outcome::ng(NOT_NOW)
+            }
+            SstpSendOutcome::Failed => {
+                tracing::debug!(
+                    event = "mcp_sakurascript_failed",
+                    "[mcp] sakurascript: 台本の処理の中で kanade が止まった"
+                );
+                outcome::ng(gone)
+            }
+        },
+    );
 }
 
 #[cfg(test)]
 #[path = "sakurascript_tests.rs"]
 mod sakurascript_tests;
-
-#[cfg(test)]
-#[path = "sakurascript_log_tests.rs"]
-mod log_tests;

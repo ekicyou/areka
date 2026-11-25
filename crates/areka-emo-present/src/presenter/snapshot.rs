@@ -1,5 +1,5 @@
-//! 画面を変えずに読む口 3 本（MCP の `dump_surface`／`dump_balloon` が使う）——最後に表示した絵・生の
-//! surface ID の有無・単体の合成。
+//! 画面を変えずに読む口 4 本（MCP の `dump_surface`／`dump_balloon` が使う）——最後に表示した絵・生の
+//! surface ID の有無・単体の合成・最後に表示した絵の合成し直し。
 //!
 //! 加えて、別名の表と生の surface ID の集合の写し 2 本（MCP の台本の検査 `check_script` が使う）。
 //!
@@ -84,6 +84,19 @@ impl EmoPresenter {
             binds,
             &PatternState::default(),
         ))
+    }
+
+    /// 最後に見せた絵（surface・着せ替え・アニメーションの段）を新しく合成し直す。未登録・未表示は None。
+    ///
+    /// 合成メモが捨てられて [`Self::last_shown`] が `Some((id, None))` を返す間の読み口。
+    /// [`Self::compose_alone`] と同じく新しい [`Composer`] で合成し、合成メモには入れない。
+    pub fn compose_last_shown(
+        &self,
+        target: TargetId,
+    ) -> Option<Result<ComposedSurface, ComposeError>> {
+        let t = self.targets.get(&target)?;
+        let (surface_id, binds, pattern) = t.last_show.as_ref()?;
+        Some(Composer::new().compose(&t.emo_world, &t.atlas, *surface_id, binds, pattern))
     }
 }
 

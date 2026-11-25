@@ -7,19 +7,28 @@
 //! - `mod scope_rect` の 2 本: 窓の矩形を MCP とゴーストの道が同じに答えること・`reload` の後も
 //!   新しい読み口で答えること。
 //!
-//! どちらも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
+//! どれも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
 //! `ghost_name` はすべて省略。英字の大小違いの名前は `BASEWARE.NAME` の 1 つだけ（大小を畳んで `areka`）。前に空白のある ` baseware.name` は空白を削らず「無い名前」のまま。
-
-use std::path::PathBuf;
 
 use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
+use areka_runtime::spine::SPIN_WAIT;
 use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::{ghost, try_outcome};
+use crate::session_tests::events_named;
 use areka_session::ghost_session::GhostSlot;
+
+fn runtime_of(world: &World) -> &areka_ghost::GhostRuntime {
+    world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.runtime())
+        .expect("置き場に実行系がある")
+}
 
 /// `handle` を 1 回呼び、返った直後の答えを取り出す（まだ答えていなければ None）。
 fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<ToolOutcome> {
@@ -29,23 +38,17 @@ fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<To
     };
     let (req, pending) = ToolRequest::new(ToolCall::GetProperty(args.clone()));
     handle(world, ghost, args, req.reply);
-    pending.try_answer().ok().flatten().map(|a| a.outcome)
+    try_outcome(&pending)
 }
 
 #[test]
 fn answers_unavailable_and_warns_once_without_a_runtime() {
-    let ghost = ActiveGhost {
-        name: Some("emily4".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
     let mut world = World::new();
 
-    let (answer, events) = capture(|| ask(&mut world, &ghost, "baseware.name"));
+    let (answer, events) = capture(|| ask(&mut world, &ghost(), "baseware.name"));
 
-    let warned: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("mcp_get_property_unavailable"))
+    let warned: Vec<_> = events_named(&events, "mcp_get_property_unavailable")
+        .into_iter()
         .map(|e| {
             (
                 e.level,
@@ -60,7 +63,7 @@ fn answers_unavailable_and_warns_once_without_a_runtime() {
             Some(outcome::ng("Property system is not available")),
             vec![(
                 tracing::Level::WARN,
-                Some("emily4".to_owned()),
+                Some("Emily/Phase4.5".to_owned()),
                 Some("baseware.name".to_owned())
             )]
         ),
@@ -79,12 +82,7 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     )]);
     rig.boot("A");
     let (publisher, own) = {
-        let runtime = rig
-            .world
-            .get_non_send::<GhostSlot>()
-            .and_then(|slot| slot.0.as_ref())
-            .and_then(|session| session.runtime())
-            .expect("置き場に実行系がある");
+        let runtime = runtime_of(&rig.world);
         (
             runtime.sylphya_publisher().clone(),
             ghost_asker_id(&runtime.mount().shiori.dir),
@@ -100,7 +98,9 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     publisher.set(someone_else.clone(), "test.key".into(), "other".into());
     publisher.set(someone_else, "test.other_only".into(), "other".into());
     publisher.set(own, "test.empty".into(), String::new());
-    publisher.barrier().expect("載せた値が反映される");
+    publisher
+        .barrier_within(SPIN_WAIT)
+        .expect("載せた値が反映される");
 
     let ghost = crate::mcp::resolve::active(&rig.world).expect("起動中のゴーストがある");
     let names = [
@@ -143,17 +143,18 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
 
 mod scope_rect {
     use std::sync::Arc;
+    use std::sync::mpsc;
 
+    use areka_ghost::prop_get_sink::PropGetCueSink;
     use areka_ghost::sylphya_wiring::ghost_asker_id;
-    use shiori_abi::error::ShioriError;
-    use shiori_abi::interface::IShioriHost;
+    use areka_kanade::KanadeMsg;
+    use areka_runtime::consumer_ledger::test_support::carrier_cue;
+    use areka_sakura::contract::CueSink;
     use windows::Win32::Foundation::HWND;
-    use windows::core::HSTRING;
     use wintf::ecs::WindowHandle;
 
     use super::*;
     use crate::sample_test_support::switch_rig;
-    use crate::shiori_host::ShioriHostSink;
     use areka_placement::follow::OffsetBase;
     use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
     use areka_placement::source::GhostTitles;
@@ -233,41 +234,41 @@ mod scope_rect {
         "currentghost.balloon.scope(2).rect",
     ];
 
-    /// 同じ時点に MCP の `handle` と、同じ実行系の読み口から作ったゴーストの道（`ShioriHostSink` の
-    /// `GetProperty`）が同じ値・同じ値なしを返す。
+    /// 同じ時点に MCP の `handle` と、本番のゴーストの道（`\![get,property]` の受け口
+    /// `PropGetCueSink` が kanade へ頼む返し）が同じ値を返す。MCP の値なしは「無い名前」、
+    /// ゴーストの道では空の文字列（ゴーストの道は値なしと空を区別しない）。
     ///
     /// # 非空虚性
-    /// 結線（`wire`）を外すと両方の道が全部「無い名前」で赤。ゴーストの道だけが読み手に届かないと
-    /// ゴーストの答えが `PropertyNotFound` になって赤。
+    /// 結線（`wire`）を外すと両方の道が全部値なしで赤。受け口を別の実行系の読み口で組むと、
+    /// ゴーストの道の矩形が空で赤。
     #[test]
     fn mcp_and_ghost_paths_answer_the_same_window_rects() {
         let mut rig = booted_rig();
-        let sink = {
-            let runtime = rig
-                .world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
-                .and_then(|session| session.runtime())
-                .expect("置き場に実行系がある");
-            ShioriHostSink::with_sylphya(
+        let (tx, rx) = mpsc::channel();
+        {
+            let runtime = runtime_of(&rig.world);
+            let mut sink = PropGetCueSink::new(
                 runtime.sylphya_reader().clone(),
-                runtime.sylphya_publisher().clone(),
                 ghost_asker_id(&runtime.mount().shiori.dir),
-            )
-        };
-        let host: IShioriHost = sink.into();
+                tx,
+            );
+            let tokens: Vec<&str> = ["property", "OnRectProbe"]
+                .into_iter()
+                .chain(NAMES)
+                .collect();
+            sink.emit(carrier_cue("get", &tokens));
+        }
         let ghost = crate::mcp::resolve::active(&rig.world).expect("起動中のゴーストがある");
 
         let mcp: Vec<_> = NAMES
             .iter()
             .map(|n| ask(&mut rig.world, &ghost, n))
             .collect();
-        let shiori: Vec<_> = NAMES
-            .iter()
-            .map(|n| match host.get_property(&HSTRING::from(*n)) {
-                Ok(v) => Ok(v.to_string()),
-                Err(ShioriError::PropertyNotFound) => Err("PropertyNotFound".to_string()),
-                Err(e) => Err(format!("{e:?}")),
+        let shiori: Vec<_> = rx
+            .try_iter()
+            .map(|m| match m {
+                KanadeMsg::PropertyEvent { id, references } => (id, references),
+                _ => panic!("PropertyEvent 以外が届いた"),
             })
             .collect();
         let down = rig.shutdown();
@@ -281,15 +282,15 @@ mod scope_rect {
                     Some(outcome::value("32,0,33,1")),
                     Some(outcome::ng("Cannot find such property name.")),
                 ],
-                vec![
-                    Ok("16,0,17,1".to_string()),
-                    Ok("17,0,18,1".to_string()),
-                    Ok("32,0,33,1".to_string()),
-                    Err("PropertyNotFound".to_string()),
-                ],
+                vec![(
+                    "OnRectProbe".to_string(),
+                    ["16,0,17,1", "17,0,18,1", "32,0,33,1", ""]
+                        .map(str::to_string)
+                        .to_vec()
+                )],
                 true
             ),
-            "（{NAMES:?} への MCP の答え・ゴーストの道の答え・降ろせた）"
+            "（{NAMES:?} への MCP の答え・ゴーストの道の返し・降ろせた）"
         );
     }
 
@@ -303,19 +304,16 @@ mod scope_rect {
     fn reload_answers_the_same_rect_through_the_new_reader() {
         let mut rig = booted_rig();
         {
-            let runtime = rig
-                .world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
-                .and_then(|session| session.runtime())
-                .expect("置き場に実行系がある");
+            let runtime = runtime_of(&rig.world);
             let publisher = runtime.sylphya_publisher();
             publisher.set(
                 ghost_asker_id(&runtime.mount().shiori.dir),
                 "test.marker".into(),
                 "old".into(),
             );
-            publisher.barrier().expect("載せた値が反映される");
+            publisher
+                .barrier_within(SPIN_WAIT)
+                .expect("載せた値が反映される");
         }
         let ghost = crate::mcp::resolve::active(&rig.world).expect("起動中のゴーストがある");
         let ask_both =

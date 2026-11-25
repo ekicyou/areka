@@ -5,27 +5,16 @@
 use std::collections::HashMap;
 
 use areka_update::FetchError;
-use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::procedure_test_support::{
-    Call, EngineScript, FakePorts, GHOST_URL, SHELL_URL, order, script_changed,
+    Call, EngineScript, FakePorts, GHOST_URL, SHELL_URL, order, run, script_changed,
     script_fetch_failed, script_md5_mismatch, script_none, spec,
 };
-use super::{EngineRun, OrderEnd, Raised, run_order};
+use super::{EngineRun, OrderEnd, Raised};
+use crate::session_tests::events_named;
 use crate::update::refs::TargetEnd;
-use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
-
-fn with_event<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
-fn run(order: &UpdateOrder, ports: &FakePorts) -> (OrderEnd, Vec<CapturedEvent>) {
-    capture(|| run_order(order, ports))
-}
+use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateReason};
 
 fn reloads(ports: &FakePorts) -> usize {
     ports
@@ -85,14 +74,14 @@ fn reload_is_requested_once_after_all_targets_with_the_tail() {
         assert_eq!(end.ends, vec![TargetEnd::Unchanged, TargetEnd::Changed(2)]);
         assert!(end.summarised);
         assert!(end.reload_requested);
-        let asked = with_event(&events, "update_reload_requested");
+        let asked = events_named(&events, "update_reload_asked");
         assert_eq!(asked.len(), 1, "{events:?}");
         assert_eq!(asked[0].level, Level::INFO);
-        let deferred = with_event(&events, "update_tail_deferred");
+        let deferred = events_named(&events, "update_tail_deferred");
         assert_eq!(deferred.len(), 1, "{events:?}");
         assert_eq!(deferred[0].level, Level::DEBUG);
         assert_eq!(deferred[0].field("count"), Some("2"));
-        assert!(with_event(&events, "update_tail_sent").is_empty());
+        assert!(events_named(&events, "update_tail_sent").is_empty());
     }
 }
 
@@ -172,10 +161,10 @@ fn no_reload_sends_the_tail_at_the_end_when_nothing_changed() {
         assert!(end.summarised, "{label}");
         assert!(!end.reload_requested, "{label}");
         assert!(
-            with_event(&events, "update_reload_requested").is_empty(),
+            events_named(&events, "update_reload_asked").is_empty(),
             "{label}"
         );
-        let sent = with_event(&events, "update_tail_sent");
+        let sent = events_named(&events, "update_tail_sent");
         assert_eq!(sent.len(), 1, "{label}: {events:?}");
         assert_eq!(sent[0].level, Level::INFO);
         assert_eq!(sent[0].field_str("when"), Some("at_end"), "{label}");
@@ -215,12 +204,12 @@ fn closed_mid_progress_drops_the_rest_but_runs_the_engine_to_the_end() {
 
     // 観測は台本の 8 件が全部流れた＝エンジンの一周は最後まで。
     assert_eq!(
-        with_event(&events, "update_progress").len(),
+        events_named(&events, "update_progress").len(),
         8,
         "{events:?}"
     );
     // 捨てた進捗は 1 件ごとに `warn!`（a の照合 2・b の取得 1・b の照合 2）。
-    let dropped = with_event(&events, "update_event_dropped");
+    let dropped = events_named(&events, "update_event_dropped");
     assert!(
         dropped.iter().all(|e| e.level == Level::WARN),
         "{dropped:?}"
@@ -236,7 +225,7 @@ fn closed_mid_progress_drops_the_rest_but_runs_the_engine_to_the_end() {
             "OnUpdate.OnMD5CompareComplete",
         ]
     );
-    let abandoned = with_event(&events, "update_abandoned");
+    let abandoned = events_named(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].field_str("at"), Some("target"));
 }
@@ -279,7 +268,7 @@ fn closed_at_begin_or_closing_sends_nothing_further() {
         assert_eq!(end.ends, vec![TargetEnd::Abandoned], "{closed_at}");
         assert!(!end.summarised && !end.reload_requested, "{closed_at}");
         assert!(
-            with_event(&events, "update_event_dropped").is_empty(),
+            events_named(&events, "update_event_dropped").is_empty(),
             "{closed_at}"
         );
     }
@@ -299,11 +288,11 @@ fn closed_in_the_tail_drops_the_rest() {
     assert_eq!(end.ends, vec![TargetEnd::Unchanged]);
     assert!(!end.summarised);
     assert!(!end.reload_requested);
-    let abandoned = with_event(&events, "update_abandoned");
+    let abandoned = events_named(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].level, Level::WARN);
     assert_eq!(abandoned[0].field_str("at"), Some("tail"));
-    assert!(with_event(&events, "update_tail_sent").is_empty());
+    assert!(events_named(&events, "update_tail_sent").is_empty());
 }
 
 /// メニューで `OnUpdateProcessExec` が「閉じた」なら、標準が始まった知らせ・照会・イベント・読み直しは
@@ -323,9 +312,9 @@ fn process_exec_closed_abandons_before_the_standard_procedure() {
         )]
     );
     assert_eq!(end, OrderEnd::default());
-    let abandoned = with_event(&events, "update_abandoned");
+    let abandoned = events_named(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].level, Level::WARN);
     assert_eq!(abandoned[0].field_str("at"), Some("process_exec"));
-    assert!(with_event(&events, "update_process_exec").is_empty());
+    assert!(events_named(&events, "update_process_exec").is_empty());
 }

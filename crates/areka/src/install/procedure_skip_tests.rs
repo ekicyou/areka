@@ -1,31 +1,21 @@
 //! 同梱を飛ばしたインストールの警告の口のテスト。
 //!
-//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、6 場面ごとに口
+//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、場面ごとに口
 //! `warn_skipped` の呼び出しの件数（飛ばした場面は 1・全部在る場面は 0）と題名・本文を見る。
 //! あわせて、同じ書庫で 2 つ飛ばしても呼び出しは 1 回で本文に 2 行並ぶこと、イベントの列が
-//! 今の成功と同じ形で口がその後ろにあること、締めの知らせが「閉じた」でも口が 1 回呼ばれる
+//! 飛ばしの無い成功と同じ形で口がその後ろにあること、締めの知らせが「閉じた」でも口が 1 回呼ばれる
 //! ことを見る。
 
 use areka_nar::InstallKind;
-use sample_ghost_kit::{NarBuilder, install_txt};
-use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
-    Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, order_of, write_nar,
+    ARCHIVE, Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, run_one, shell_nar,
 };
 use super::*;
+use crate::session_tests::events_named;
 
-/// 書庫のファイル名（本文の 1 行目に載る）。
-const ARCHIVE: &str = "skip.nar";
 /// 本文の最後の行。
 const SUBSTITUTE: &str = "入らなかったバルーンの代わりに、入っている別のバルーンが使われます。";
-
-/// 本物の書庫 1 本を偽の口で一周させる。
-fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> Vec<ArchiveEnd> {
-    let dir = TempPath::under_target("install-procedure-skip-nar");
-    let nar = write_nar(&dir, ARCHIVE, builder);
-    run_order(&order_of(&[&nar]), ports)
-}
 
 /// 飛ばした場面の口の呼び出しがちょうど 1 回で、題名と本文が `title`・`lines` のとおり。
 fn assert_one_warning(ports: &FakePorts, title: &str, lines: &[&str]) {
@@ -40,31 +30,13 @@ fn assert_one_warning(ports: &FakePorts, title: &str, lines: &[&str]) {
     assert_eq!(warned[0].1, lines.join("\n"));
 }
 
-/// 同梱の行を足したシェル（`accept` は起動中のゴースト）。
-fn shell_with(companions: &[&str]) -> NarBuilder {
-    let accept_line = format!("accept,{RUNNING_SAKURA}");
-    let mut lines = vec![
-        "charset,UTF-8",
-        "type,shell",
-        "name,きがえ",
-        "directory,dress",
-        accept_line.as_str(),
-    ];
-    lines.extend_from_slice(companions);
-    NarBuilder::new()
-        .file("install.txt", &install_txt(&lines))
-        .done()
-        .file("descript.txt", b"charset,UTF-8\r\nname,Dress\r\n")
-        .done()
-}
+// ---- 飛ばしの場面 ----
 
-// ---- 6 場面 ----
-
-/// ⑴ 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は今の成功と同じ形で、口はその後ろ。
+/// 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は飛ばしの無い成功と同じ形で、口はその後ろ。
 #[test]
 fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let mut ports = FakePorts::new();
-    let ends = run_one(
+    let (ends, _) = run_one(
         &mut ports,
         ghost_nar(
             "newbie",
@@ -78,7 +50,7 @@ fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let at = ports.under_root("ghost/newbie").display().to_string();
     let title = "インストールの警告 - あたらしい";
     let body = [
-        "書庫: skip.nar",
+        &format!("書庫: {ARCHIVE}"),
         "入った物: ゴースト あたらしい",
         "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
         SUBSTITUTE,
@@ -117,7 +89,7 @@ fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     );
 }
 
-/// ⑵ 番号付きの同梱の取り出し元が無い → 口 1 回（取り出し元の値は書かれたまま）。
+/// 番号付きの同梱の取り出し元が無い → 口 1 回（取り出し元の値は書かれたまま）。
 #[test]
 fn a_numbered_skipped_companion_warns_once() {
     let mut ports = FakePorts::new();
@@ -135,7 +107,7 @@ fn a_numbered_skipped_companion_warns_once() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: skip.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: b0（書庫に取り出し元 extra\\s0 が無かったため）",
             SUBSTITUTE,
@@ -143,7 +115,7 @@ fn a_numbered_skipped_companion_warns_once() {
     );
 }
 
-/// ⑶ 同梱が 2 つで片方だけ無い → 口 1 回。入った物に在るほうのバルーンが並ぶ。
+/// 同梱が 2 つで片方だけ無い → 口 1 回。入った物に在るほうのバルーンが並ぶ。
 #[test]
 fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
     let mut ports = FakePorts::new();
@@ -170,7 +142,7 @@ fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: skip.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入った物: バルーン Kaku",
             "入らなかったバルーン: b0（書庫に取り出し元 s0 が無かったため）",
@@ -179,7 +151,7 @@ fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
     );
 }
 
-/// ⑷ 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じく口 1 回。
+/// 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じく口 1 回。
 #[test]
 fn a_source_with_only_its_folder_entry_warns_once() {
     let mut ports = FakePorts::new();
@@ -198,7 +170,7 @@ fn a_source_with_only_its_folder_entry_warns_once() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: skip.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             SUBSTITUTE,
@@ -206,16 +178,19 @@ fn a_source_with_only_its_folder_entry_warns_once() {
     );
 }
 
-/// ⑸ シェルの `.nar` で同梱の取り出し元が無い → シェルが入り、口 1 回。
+/// シェルの `.nar` で同梱の取り出し元が無い → シェルが入り、口 1 回。
 #[test]
 fn a_shell_with_a_skipped_companion_warns_once() {
     let mut ports = FakePorts::new();
     run_one(
         &mut ports,
-        shell_with(&[
-            "balloon.directory,kaku",
-            "balloon.source.directory,src-kaku",
-        ]),
+        shell_nar(
+            RUNNING_SAKURA,
+            &[
+                "balloon.directory,kaku",
+                "balloon.source.directory,src-kaku",
+            ],
+        ),
     );
     assert!(
         ports
@@ -226,7 +201,7 @@ fn a_shell_with_a_skipped_companion_warns_once() {
         &ports,
         "インストールの警告 - きがえ",
         &[
-            "書庫: skip.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: シェル きがえ",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             SUBSTITUTE,
@@ -234,11 +209,11 @@ fn a_shell_with_a_skipped_companion_warns_once() {
     );
 }
 
-/// ⑹ 取り出し元が全部在る → 口 0 回（ダイアログ 0）。
+/// 取り出し元が全部在る → 口 0 回（ダイアログ 0）。
 #[test]
 fn companions_with_all_sources_do_not_warn() {
     let mut ports = FakePorts::new();
-    let ends = run_one(
+    let (ends, _) = run_one(
         &mut ports,
         ghost_nar(
             "newbie",
@@ -280,7 +255,7 @@ fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: skip.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             "入らなかったバルーン: b0（書庫に取り出し元 s0 が無かったため）",
@@ -294,7 +269,7 @@ fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
 fn a_closed_closing_notice_still_warns_once_before_stopping() {
     let mut ports = FakePorts::new();
     ports.replies.insert("OnInstallCompleteEx", Raised::Closed);
-    let ends = run_one(
+    let (ends, events) = run_one(
         &mut ports,
         ghost_nar(
             "newbie",
@@ -304,7 +279,14 @@ fn a_closed_closing_notice_still_warns_once_before_stopping() {
             ],
         ),
     );
-    assert_eq!(ends, vec![ArchiveEnd::Abandoned]);
+    assert!(
+        matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
+        "{ends:?}"
+    );
+    assert!(
+        events_named(&events, "install_abandoned").is_empty(),
+        "後の書庫が無ければ出さない"
+    );
     assert_eq!(
         ports.warned().len(),
         1,

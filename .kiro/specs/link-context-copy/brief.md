@@ -108,3 +108,7 @@
 - **先に要るもの**: `range-choice-tag`（3 種を 1 本で扱う決め）。まだ列の先頭ではない。後ろに `balloon-link-hover` が待つ。
 - **優先度の区分**: A のまま。**要件定義のモデル**: Opus のまま。
 - **見つけた穴・古くなった記述**: 穴は無い。`range-choice-tag` とは `balloon_pressed.rs`・`shell_box_handler.rs` も重なる（あちらは選択の送り口の記録の直し）＝働きの順と同じく、続けて走らせる。
+
+## 古いパスの直し
+
+- 上の `crates/areka/src/readme/destination.rs` は、今は `crates/areka-session/src/readme/destination.rs`（`link_destinations` の印は同じファイルの 223 行）。設計・タスクでは今のパスで読む。

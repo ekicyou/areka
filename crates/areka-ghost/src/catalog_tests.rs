@@ -478,10 +478,10 @@ fn sakura_name_unreadable_warns_and_yields_none() {
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
 
-/// `install.accept` の読み手: カンマで分けて前後の空白を落とし、空の名前は落とす。
-/// 鍵は大文字小文字を問わない。鍵が無い／descript が無い → 黙って空の列。
+/// `sakura.name` と `install.accept` を 1 回の読みで返す: `install.accept` はカンマで分けて前後の空白を
+/// 落とし、空の名前は落とす。鍵は大文字小文字を問わない。鍵が無い／descript が無い → 黙って空。
 #[test]
-fn install_accept_splits_trims_and_drops_empty_names() {
+fn master_install_keys_reads_sakura_name_and_install_accept_at_once() {
     let tmp = TempPath::new("catalog-install-accept");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     let with = put_ghost_in(
@@ -497,39 +497,44 @@ fn install_accept_splits_trims_and_drops_empty_names() {
     let without = put_ghost_in(
         &root.ghost_store(),
         "without",
-        "charset,UTF-8\nsakura.name,本体\n",
+        "charset,UTF-8\nname,名無し\n",
     );
 
-    let mut got = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut got = Vec::new();
     let events = capture(|| {
-        got = (
-            install_accept(&with),
-            install_accept(&one),
-            install_accept(&without),
-            install_accept(&root.ghost_dir("none")),
-        )
+        got = [&with, &one, &without, &root.ghost_dir("none")]
+            .map(|dir| master_install_keys(dir))
+            .to_vec()
     });
-    assert_eq!(got.0, ["さくら", "Emily", "毒子"]);
-    assert_eq!(got.1, ["ひとり"]);
-    assert!(got.2.is_empty() && got.3.is_empty(), "{got:?}");
+    assert_eq!(
+        got[0],
+        MasterInstallKeys {
+            sakura_name: Some("本体".to_owned()),
+            install_accept: vec!["さくら".to_owned(), "Emily".to_owned(), "毒子".to_owned()],
+        }
+    );
+    assert_eq!(got[1].sakura_name, None);
+    assert_eq!(got[1].install_accept, ["ひとり"]);
+    assert_eq!(got[2], MasterInstallKeys::default());
+    assert_eq!(got[3], MasterInstallKeys::default());
     assert_eq!(catalog_warns(&events), Vec::<&str>::new());
 }
 
-/// descript が I/O 失敗で読めない → warn! 1 件＋空の列。
+/// descript が I/O 失敗で読めない → warn! 1 件＋2 欄とも空。
 #[test]
-fn install_accept_unreadable_warns_and_yields_empty() {
+fn master_install_keys_unreadable_warns_once_and_yields_empty() {
     let tmp = TempPath::new("catalog-install-accept-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     let ghost = put_ghost_in(
         &root.ghost_store(),
         "locked",
-        "charset,UTF-8\ninstall.accept,さくら\n",
+        "charset,UTF-8\nsakura.name,本体\ninstall.accept,さくら\n",
     );
     let _held = hold_exclusive(&ghost.join("ghost").join("master").join("descript.txt"));
 
-    let mut got = vec![String::new()];
-    let events = capture(|| got = install_accept(&ghost));
-    assert!(got.is_empty(), "{got:?}");
+    let mut got = None;
+    let events = capture(|| got = Some(master_install_keys(&ghost)));
+    assert_eq!(got, Some(MasterInstallKeys::default()));
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
 

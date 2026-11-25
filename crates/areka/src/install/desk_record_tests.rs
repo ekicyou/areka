@@ -4,9 +4,10 @@
 //! 「最後に使ったバルーン」の記憶が目録の綴りへ替わる・シェルは記録だけで表示を替えない・置換語の
 //! 名前は目録の `name`・どの場合も反映が済んでから答える。
 //!
-//! 偽の SHIORI の土台で本物の実行系を起こし（今のゴーストの記憶の書き手が本物）、頼みは窓口の
-//! 頼みの送出端へ直接入れて取り出しの系 [`drain`] を直接呼ぶ。記憶は答えを受けた後に実 fs から読む
-//! （答えの前に反映の柵を掛けているので、時間では待たない）。
+//! 偽の SHIORI の土台で本物の実行系を起こし（今のゴーストの記憶の書き手が本物）、目録の綴りと隠れの
+//! 判定は背景のスレッドの口と同じ [`carry_record`] で済ませ、窓口には綴り直した値だけを頼む（窓口は
+//! 目録を読まない）。頼みは窓口の頼みの送出端へ直接入れて取り出しの系 [`drain`] を直接呼ぶ。記憶は
+//! 答えを受けた後に実 fs から読む（答えの前に反映の柵を掛けているので、時間では待たない）。
 
 use areka_actor::reply_channel;
 use areka_nar::InstallKind;
@@ -16,7 +17,9 @@ use tracing::Level;
 use super::*;
 use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
+use crate::install::worker::{carry_record, catalog_spelling};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::{count, events_named, write_descript};
 use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use areka_session::boot_resolve::read_last_balloon;
 use areka_session::ghost_switch::LastInstalledGhost;
@@ -32,38 +35,34 @@ fn rig() -> SwitchRig {
     rig
 }
 
-/// 入れた後の記録を 1 件頼んで取り出しの系を 1 回回し、答えが直ちに返ったかと記録を返す。
+/// 入れた後の記録を今のゴースト A の素性（根と場所）で綴り直し、窓口へ 1 件頼んで取り出しの系を
+/// 1 回回し、答えが直ちに返ったかと、綴り直しと窓口の記録を合わせて返す。
 fn record(rig: &mut SwitchRig, record: InstalledRecord) -> (bool, Vec<CapturedEvent>) {
+    let roots = rig.world.resource::<BootContext>().roots.clone();
+    let dir = rig.root.ghost_dir("A");
+    let (installed, mut events) = capture(|| carry_record(Some(&roots), Some(&dir), record));
     let (reply, answer) = reply_channel();
     rig.world
         .non_send::<InstallDesk>()
         .asks_tx
-        .send(DeskAsk::Record { record, reply })
+        .send(DeskAsk::Record { installed, reply })
         .expect("窓口の頼みの受信端は生きている");
-    let ((), events) = capture(|| drain(&mut rig.world));
+    let ((), desk_events) = capture(|| drain(&mut rig.world));
+    events.extend(desk_events);
     (matches!(answer.try_recv(), Ok(Some(()))), events)
 }
 
 /// 目録に置くゴースト（`ghost/<folder>/ghost/master/descript.txt` の `name`）。
 fn plant_ghost(rig: &SwitchRig, folder: &str, name: &str) {
-    let master = rig.root.ghost_dir(folder).join("ghost").join("master");
-    std::fs::create_dir_all(&master).unwrap();
-    std::fs::write(
-        master.join("descript.txt"),
-        format!("charset,UTF-8\r\nname,{name}\r\n"),
-    )
-    .unwrap();
+    write_descript(
+        &rig.root.ghost_dir(folder).join("ghost").join("master"),
+        &format!("name,{name}"),
+    );
 }
 
 /// 目録に置くバルーン（`balloon/<folder>/descript.txt` の `name`）。
 fn plant_balloon(rig: &SwitchRig, folder: &str, name: &str) {
-    let dir = rig.root.balloon_dir(folder);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\nname,{name}\r\n"),
-    )
-    .unwrap();
+    write_descript(&rig.root.balloon_dir(folder), &format!("name,{name}"));
 }
 
 fn last_installed(rig: &SwitchRig) -> Option<String> {
@@ -74,13 +73,6 @@ fn last_installed(rig: &SwitchRig) -> Option<String> {
 
 fn names(rig: &SwitchRig) -> Option<LastInstallNames> {
     rig.world.get_resource::<LastInstallNames>().cloned()
-}
-
-fn count(events: &[CapturedEvent], name: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name) && e.level == level)
-        .count()
 }
 
 /// ゴーストを入れた: 受け皿へ目録の綴りのフォルダ名（書庫の `directory` と大文字小文字だけが違う）、
@@ -161,10 +153,7 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
         Some("Fluffy"),
         "目録の綴りで書く"
     );
-    let remembered: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_balloon_remembered"))
-        .collect();
+    let remembered: Vec<_> = events_named(&events, "install_balloon_remembered");
     assert_eq!(remembered.len(), 1);
     assert_eq!(remembered[0].level, Level::INFO);
     assert_eq!(remembered[0].field("folder"), Some("Fluffy"));
@@ -172,7 +161,7 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
     assert_eq!(
         rig.world.get_resource::<LastInstalledBalloon>(),
         Some(&LastInstalledBalloon("Fluffy".to_owned())),
-        "バルーンの lastinstalled の控えは目録の綴り（shell-balloon-switch 要件 1.11）"
+        "バルーンの lastinstalled の控えは目録の綴り"
     );
     assert!(rig.world.get_non_send::<SwitchInFlight>().is_none());
     assert_eq!(
@@ -241,17 +230,14 @@ fn record_fluffy(rig: &mut SwitchRig) -> Vec<CapturedEvent> {
 
 /// バルーンだけの書庫は根へ入り、今のゴーストの中に同じフォルダ名（大文字小文字違い）が在れば
 /// info `installed_balloon_hidden_by_ghost` が 1 件（`installed`＝根の場所・`by`＝ゴーストの中の場所）。
-/// 控えと記憶の書き方は今どおり。
+/// 控えと記憶は根の目録の綴りで書く。
 #[test]
 fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     let mut rig = rig();
     plant_balloon(&rig, "Fluffy", "ふわふわ");
     let by = rig.add_ghost_balloon_copy("A", "FLUFFY", "中のふわふわ");
     let events = record_fluffy(&mut rig);
-    let hidden: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("installed_balloon_hidden_by_ghost"))
-        .collect();
+    let hidden: Vec<_> = events_named(&events, "installed_balloon_hidden_by_ghost");
     assert_eq!(hidden.len(), 1, "{events:?}");
     assert_eq!(hidden[0].level, Level::INFO);
     assert_eq!(hidden[0].field_str("folder"), Some("Fluffy"));
@@ -268,12 +254,12 @@ fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     assert_eq!(
         rig.world.get_resource::<LastInstalledBalloon>(),
         Some(&LastInstalledBalloon("Fluffy".to_owned())),
-        "控えは今どおり根の目録の綴り"
+        "控えは根の目録の綴り"
     );
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("A")).as_deref(),
         Some("Fluffy"),
-        "記憶の書き方は今どおり"
+        "記憶は根の目録の綴り"
     );
     assert!(rig.shutdown());
 }
@@ -308,4 +294,82 @@ fn catalog_spelling_without_roots_keeps_the_archive_spelling() {
     assert_eq!(shell, ("dir".to_owned(), Some("g".to_owned())));
     let balloon = catalog_spelling(None, &record(InstallKind::Balloon, None));
     assert_eq!(balloon, ("dir".to_owned(), None));
+}
+
+/// 1 回目の書き込みで「入った」を知らせ、門の送り手が捨てられるまで止まる偽の IO。
+struct GatedFirstCommit {
+    entered: std::sync::mpsc::Sender<()>,
+    open: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+}
+
+impl areka_sylphya::persist::PersistIo for GatedFirstCommit {
+    fn read(&self, _path: &std::path::Path) -> std::io::Result<Option<String>> {
+        Ok(None)
+    }
+    fn commit(&self, _path: &std::path::Path, _content: &str) -> std::io::Result<()> {
+        // 受け手は文を分けて取り出す（if let の行に書くと、止まっている間も Mutex を握り続ける）。
+        let open = self.open.lock().unwrap().take();
+        if let Some(open) = open {
+            let _ = self.entered.send(());
+            let _ = open.recv_timeout(areka_runtime::spine::SPIN_WAIT);
+        }
+        Ok(())
+    }
+}
+
+/// 書き手が書き込みの最中で止まっていても、記録の待ちは上限で戻り、`install_record_unsettled` を 1 件残す。
+#[test]
+fn a_stuck_writer_is_waited_for_only_up_to_the_limit() {
+    use areka_runtime::spine::{SPIN_WAIT, join_bounded, join_thread_bounded};
+    use areka_sylphya::{ScopeRoots, SylphyaInit, spawn_sylphya};
+
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    // 門の送り手は待ちより先に捨てない（赤で巻き戻るときも捨てられて門が開く）。
+    let (open_tx, open_rx) = std::sync::mpsc::channel::<()>();
+    let parts = spawn_sylphya(SylphyaInit {
+        roots: ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        },
+        io: Box::new(GatedFirstCommit {
+            entered: entered_tx,
+            open: std::sync::Mutex::new(Some(open_rx)),
+        }),
+        runtime_sink: None,
+    });
+    parts.publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "1".into())],
+    );
+    entered_rx
+        .recv_timeout(SPIN_WAIT)
+        .expect("書き手が書き込みに入る");
+
+    let publisher = parts.publisher.clone();
+    let settler = std::thread::spawn(move || capture(|| settle_record(&publisher)).1);
+    let events = join_thread_bounded("settle_record", None, settler);
+    drop(open_tx);
+    parts.publisher.close();
+    join_bounded("sylphya", parts.handle).expect("書き手が閉じる");
+
+    let events = events.expect("記録の待ちのスレッドは倒れない");
+    assert_eq!(
+        count(&events, "install_record_unsettled", Level::ERROR),
+        1,
+        "{events:?}"
+    );
+}
+
+/// 置き場にゴーストが居なければ、バルーンの記憶を書かずに警告を 1 件残す。
+#[test]
+fn an_empty_slot_leaves_one_warning_instead_of_the_balloon_memory() {
+    let mut world = desk_world();
+    world.insert_non_send(areka_session::ghost_session::GhostSlot(None));
+    let ((), events) = capture(|| remember_balloon(&world, "kaku".to_owned()));
+    assert_eq!(
+        count(&events, "install_balloon_not_remembered", Level::WARN),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(count(&events, "install_balloon_remembered", Level::INFO), 0);
 }

@@ -72,7 +72,7 @@
 - `dola-cue-test-builder`: 呼び手の名（runtime の `carrier_cue` ほか）を残す形なら、この仕様が `git mv` する `session/readme/readme_cue_tests.rs`・`session/runtime_boot_tests.rs` と、書き換える `update/update_cue_tests.rs`・`runtime_tests/consumer_ledger_agreement_tests.rs` の中の `carrier_cue` の行に向こうは触らない（⑵）。重なりは 0。
 - `doc/COMPAT_ARCHITECTURE.md` §8: この仕様はパスの行だけ、`test-name-work-tags` は名の行だけ（⑷・許す重なり）。この仕様が書き換える行（353・355・411 の付近）は向こうの名の行（354・412）の隣なので、git は競合として出しうる。後から着地する側が、両方の書き換えを残して手で解く。
 - `Cargo.lock`・`THIRD-PARTY-NOTICES.md` の席はこの仕様だけ（⑸）。
-- roadmap の C25 の行の「触るファイル」に無く、この設計で足したファイル: `tools/package.ps1`（3 か所）・`tools/perf/judge-perf.py`（1 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`.kiro/steering/tech.md`（1 か所）・`crates/areka-runtime/src/lib.rs:391`・`strict_judges.rs:5`（コメント）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml`・`doc/ideas/` の 8 ファイル・`.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`tools/load-flake.ps1`・`crates/areka/src/session_tests/`（新設）・`crates/areka/src/sample_test_support.rs`・`crates/areka/src/crate_source_test_support.rs`（移す）・`crates/areka/src/smoke_exit{,_tests}.rs`（移す）・`crates/areka/src/install/startup.rs`。兄弟 2 本の触るファイルと重ならないことは、着手のときに兄弟の tasks.md の `_Boundary:_` と照らして確かめ、完了の報告で棚卸のセッションへ伝える。
+- roadmap の C25 の行の「触るファイル」に無く、この設計で足したファイル: `tools/package.ps1`（3 か所）・`tools/perf/judge-perf.py`（1 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`.kiro/steering/tech.md`（1 か所）・`crates/areka-runtime/src/lib.rs:391`・`strict_judges.rs:5`（コメント）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml`・`doc/ideas/` の 8 ファイル・`.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/completed/audit-areka-install-update/brief.md`・`tools/load-flake.ps1`・`crates/areka/src/session_tests/`（新設）・`crates/areka/src/sample_test_support.rs`・`crates/areka/src/crate_source_test_support.rs`（移す）・`crates/areka/src/smoke_exit{,_tests}.rs`（移す）・`crates/areka/src/install/startup.rs`。兄弟 2 本の触るファイルと重ならないことは、着手のときに兄弟の tasks.md の `_Boundary:_` と照らして確かめ、完了の報告で棚卸のセッションへ伝える。
 
 ## 構成
 
@@ -241,7 +241,7 @@ crates/areka/src/session_tests/
 - `doc/COMPAT_ARCHITECTURE.md`（パスの行 38 か所）・`doc/ukadoc-coverage/ledger/{sakura-script,property,shiori,assets}.toml`（18・10・9・1）・`doc/ukadoc-coverage/briefing-assets.md`・`doc/testing.md`・`doc/ssp-mcp/log-convention.md`・`doc/pasta-real-run.md`（127・141 行）・`doc/ideas/` の 8 ファイル・`tools/package.ps1`（3 か所）・`tools/perf/judge-perf.py`（1 か所） — パスと出所の名前（6.3・7.4）。`doc/ukadoc-coverage/report/` は `ukadoc-survey` で作り直す。
 - `tools/load-flake.ps1`（55・71・72・210・276 行の付近） — `areka-session-lib`（5.12）。
 - `.kiro/steering/structure.md`・`.kiro/steering/tech.md` — 7.5。
-- `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md` — 「受け持つファイル」（7.6）。
+- `.kiro/specs/completed/audit-areka-app/brief.md`・`.kiro/specs/completed/audit-areka-install-update/brief.md` — 「受け持つファイル」（7.6）。
 - `THIRD-PARTY-NOTICES.md` — `cargo about generate` で作り直す（8.11）。
 
 ### パスの書き換えの対応

@@ -291,7 +291,7 @@ pub fn kinds(calls: &[RecordedCall]) -> Vec<String> {
 }
 
 /// 呼出列から `id` の GET の Reference を順に取る。
-pub(crate) fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
+pub fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
     calls
         .iter()
         .filter_map(|c| match c {

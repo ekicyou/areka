@@ -5,20 +5,14 @@
 //! 順・Reference と、口への呼び出しの順を判定する。
 
 use areka_nar::InstallKind;
-use log_capture_kit::capture;
-use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
     Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, RUNNING_SAKURA, balloon_nar,
-    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, order_of, shell_nar,
-    supplement_nar, write_nar,
+    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, joined, run_many, run_one,
+    shell_nar, supplement_nar, with_terms,
 };
 use super::*;
-
-/// byte 値 1 で繋ぐ。
-fn joined(values: &[&str]) -> String {
-    values.join("\u{1}")
-}
+use crate::session_tests::{events_named, write_descript};
 
 fn refs(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
@@ -27,13 +21,6 @@ fn refs(values: &[&str]) -> Vec<String> {
 /// 根の下のフォルダの絶対パスの綴り（Reference2 の場所）。
 fn place(ports: &FakePorts, relative: &str) -> String {
     ports.under_root(relative).display().to_string()
-}
-
-/// 本物の書庫 1 本を偽の口で一周させる。
-fn run_one(ports: &mut FakePorts, builder: sample_ghost_kit::NarBuilder) -> Vec<ArchiveEnd> {
-    let dir = TempPath::under_target("install-procedure-nar");
-    let nar = write_nar(&dir, "archive.nar", builder);
-    run_order(&order_of(&[&nar]), ports)
 }
 
 fn item(kind: &'static str, name: &str, place: String) -> InstalledItem {
@@ -47,7 +34,7 @@ fn item(kind: &'static str, name: &str, place: String) -> InstalledItem {
 #[test]
 fn ghost_runs_begin_install_record_complete_ex_then_legacy_when_no_reply() {
     let mut ports = FakePorts::new();
-    let ends = run_one(&mut ports, ghost_nar("newbie", &[]));
+    let (ends, _) = run_one(&mut ports, ghost_nar("newbie", &[]));
 
     let at = place(&ports, "ghost/newbie");
     assert_eq!(
@@ -76,7 +63,7 @@ fn ghost_runs_begin_install_record_complete_ex_then_legacy_when_no_reply() {
             ),
             Call::Raise("OnInstallComplete", refs(&["ghost", "あたらしい", ""])),
         ],
-        "始まり → 照合 → 展開 → 記録 → 締め。応えが無いので旧仕様へ続く（2.2・2.6）"
+        "始まり → 照合 → 展開 → 記録 → 締め。応えが無いので旧仕様へ続く"
     );
     assert!(
         ports
@@ -94,7 +81,7 @@ fn complete_ex_with_a_script_sends_no_legacy_complete() {
     assert_eq!(
         ports.raised_ids(),
         vec!["OnInstallBegin", "OnInstallCompleteEx"],
-        "台本が返れば OnInstallComplete は 0 件（2.7）"
+        "台本が返れば OnInstallComplete は 0 件"
     );
 }
 
@@ -130,7 +117,7 @@ fn ghost_with_balloon_lists_body_first_then_the_companion() {
                 .iter()
                 .flat_map(|(_, r)| r)
                 .all(|r| !r.contains("with")),
-            "`ghost with balloon` は送らない（2.5）"
+            "`ghost with balloon` は送らない"
         );
         assert!(
             ports
@@ -152,7 +139,7 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
     assert_eq!(
         raised[1].1[1],
         joined(&["あたらしい", "kaku"]),
-        "目録に名前が無ければフォルダ名（設計で決めたこと 14）"
+        "目録に名前が無ければフォルダ名"
     );
     assert_eq!(
         raised[2],
@@ -165,13 +152,7 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
 #[test]
 fn companion_name_comes_from_inside_the_ghost_not_the_root_of_the_same_folder() {
     let mut ports = FakePorts::new();
-    let root_kaku = ports.under_root("balloon/kaku");
-    std::fs::create_dir_all(&root_kaku).expect("根のバルーンを置ける");
-    std::fs::write(
-        root_kaku.join("descript.txt"),
-        "charset,UTF-8\r\nname,RootKaku\r\n",
-    )
-    .expect("根のバルーンの descript.txt を置ける");
+    write_descript(&ports.under_root("balloon/kaku"), "name,RootKaku");
     run_one(&mut ports, ghost_with_balloon_nar());
 
     let raised = ports.raised();
@@ -221,7 +202,7 @@ fn balloon_is_installed_elsewhere_and_recorded_without_a_ghost() {
 #[test]
 fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
     let mut ports = FakePorts::new();
-    run_one(&mut ports, shell_nar(RUNNING_SAKURA));
+    run_one(&mut ports, shell_nar(RUNNING_SAKURA, &[]));
 
     let at = place(&ports, &format!("ghost/{RUNNING}/shell/dress"));
     assert_eq!(
@@ -255,7 +236,7 @@ fn shell_named_by_sakura_name_goes_into_the_running_ghost_shell_folder() {
 fn supplement_returned_as_not_running_is_installed_elsewhere_by_the_procedure() {
     let mut ports = FakePorts::new();
     ports.overwrite = OverwriteScript::NotRunning;
-    let ends = run_one(&mut ports, supplement_nar(RUNNING_ALIAS));
+    let (ends, _) = run_one(&mut ports, supplement_nar(RUNNING_ALIAS));
 
     let at = place(&ports, &format!("ghost/{RUNNING}"));
     assert!(
@@ -292,17 +273,10 @@ fn supplement_returned_as_not_running_is_installed_elsewhere_by_the_procedure() 
 
 #[test]
 fn abandoning_an_order_logs_the_archives_not_yet_started() {
-    let dir = TempPath::new("install-procedure-nar");
-    let naming = ["first.nar", "second.nar", "third.nar"];
-    let paths: Vec<_> = naming
-        .iter()
-        .map(|name| write_nar(&dir, name, ghost_nar("newbie", &[])))
-        .collect();
-    let order = order_of(&paths.iter().map(|path| path.as_path()).collect::<Vec<_>>());
     let mut ports = FakePorts::new();
     ports.replies.insert("OnInstallBegin", Raised::Closed);
 
-    let (ends, events) = capture(|| run_order(&order, &mut ports));
+    let (ends, events) = run_many(&mut ports, vec![ghost_nar("newbie", &[]); 3]);
 
     assert_eq!(
         ends,
@@ -310,10 +284,7 @@ fn abandoning_an_order_logs_the_archives_not_yet_started() {
         "最初に閉じたら以後の書庫は扱わない"
     );
     assert_eq!(ports.raised_ids(), vec!["OnInstallBegin"]);
-    let abandoned: Vec<_> = events
-        .iter()
-        .filter(|event| event.field_str("event") == Some("install_abandoned"))
-        .collect();
+    let abandoned: Vec<_> = events_named(&events, "install_abandoned");
     assert_eq!(abandoned.len(), 1);
     assert_eq!(
         abandoned[0].field("skipped"),
@@ -322,9 +293,9 @@ fn abandoning_an_order_logs_the_archives_not_yet_started() {
     );
     let skipped = abandoned[0].field("skipped_archives").expect("残りのパス");
     assert!(
-        skipped.contains("second.nar")
-            && skipped.contains("third.nar")
-            && !skipped.contains("first.nar"),
+        skipped.contains("archive1.nar")
+            && skipped.contains("archive2.nar")
+            && !skipped.contains("archive0.nar"),
         "{skipped}"
     );
 }
@@ -365,12 +336,7 @@ fn supplement_named_by_install_accept_overwrites_the_running_ghost() {
 #[test]
 fn accepted_terms_come_after_begin_and_before_the_install() {
     let mut ports = FakePorts::new();
-    run_one(
-        &mut ports,
-        ghost_nar("newbie", &[])
-            .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
-            .done(),
-    );
+    run_one(&mut ports, with_terms(ghost_nar("newbie", &[])));
     let order: Vec<&str> = ports
         .calls
         .iter()
@@ -396,7 +362,7 @@ fn accepted_terms_come_after_begin_and_before_the_install() {
             "OnInstallCompleteEx",
             "OnInstallComplete",
         ],
-        "始まりが先・照合と利用条件はその後・展開の前（12.8）"
+        "始まりが先・照合と利用条件はその後・展開の前"
     );
 }
 
@@ -417,14 +383,14 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
         ghost_nar("newbie", &[]),
         ghost_with_balloon_nar(),
         balloon_nar(),
-        shell_nar(RUNNING_SAKURA),
+        shell_nar(RUNNING_SAKURA, &[]),
         supplement_nar(RUNNING_ALIAS),
     ];
     for builder in kinds {
         for reply in [Raised::NoReply, Raised::Script] {
             let mut ports = FakePorts::new();
             ports.replies.insert("OnInstallCompleteEx", reply);
-            let ends = run_one(&mut ports, builder.clone());
+            let (ends, _) = run_one(&mut ports, builder.clone());
             let ids = ports.raised_ids();
             assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
             assert!(ids.iter().all(|id| INSTALL_EVENTS.contains(id)), "{ids:?}");
@@ -433,17 +399,17 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
                     .filter(|id| **id == "OnInstallCompleteEx")
                     .count(),
                 1,
-                "締めの知らせは 1 つ（2.3）"
+                "締めの知らせは 1 つ"
             );
             let legacy = ids.iter().filter(|id| **id == "OnInstallComplete").count();
             assert_eq!(
                 legacy,
                 usize::from(reply == Raised::NoReply),
-                "旧仕様は応えが無いときだけ（11.5）"
+                "旧仕様は応えが無いときだけ"
             );
             assert!(
                 !ids.contains(&"OnInstallCompleteAll"),
-                "1 本だけの依頼では送らない（2.9）"
+                "1 本だけの依頼では送らない"
             );
         }
     }
@@ -451,10 +417,7 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
 
 #[test]
 fn each_stage_is_logged() {
-    let (_, events) = capture(|| {
-        let mut ports = FakePorts::new();
-        run_one(&mut ports, ghost_nar("newbie", &[]));
-    });
+    let (_, events) = run_one(&mut FakePorts::new(), ghost_nar("newbie", &[]));
     let names: Vec<&str> = events
         .iter()
         .filter_map(|event| event.field_str("event"))
@@ -470,11 +433,11 @@ fn each_stage_is_logged() {
             "install_event",
             "install_event",
         ],
-        "各段の記録（10.1）"
+        "各段の記録"
     );
-    let begin = events
-        .iter()
-        .find(|event| event.field_str("event") == Some("install_begin"))
+    let begin = events_named(&events, "install_begin")
+        .first()
+        .copied()
         .expect("始まりの記録");
     assert_eq!(begin.field("origin"), Some("Menu"));
     assert!(

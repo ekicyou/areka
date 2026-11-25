@@ -4,14 +4,13 @@
 //! `balloon/<名>`）を置き、今の 3 つの `dir`・名前・倒れ先の `homeurl` と、`updateother` の
 //! 名前引き（目録の `name` と完全一致）を判定する。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::ReplySender;
 use areka_ghost::BasewareRoot;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, KanadeNotice};
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -21,13 +20,11 @@ use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
 use crate::menu::captions::QueryReply;
-use crate::update::{
-    RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
-};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::session_tests::write_descript;
+use crate::session_tests::{events_named, levels_of};
+use crate::update::update_test_support::slot_world;
+use crate::update::{RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::on_notice;
 
 const GHOST_URL: &str = "https://ghost.example/emo/";
@@ -45,24 +42,24 @@ impl Root {
     fn new(label: &str) -> Self {
         let tmp = TempPath::under_target(label);
         let r = tmp.path();
-        write(
+        write_descript(
             &r.join("ghost/emo/ghost/master"),
-            &format!("charset,UTF-8\r\nname,Emo\r\nhomeurl,{GHOST_URL}\r\n"),
+            &format!("name,Emo\r\nhomeurl,{GHOST_URL}"),
         );
-        write(&r.join("ghost/bare/ghost/master"), "charset,UTF-8\r\n");
-        write(
+        write_descript(&r.join("ghost/bare/ghost/master"), "");
+        write_descript(
             &r.join("ghost/emo/shell/master"),
-            &format!("charset,UTF-8\r\nname,MasterShell\r\nhomeurl,{SHELL_URL}\r\n"),
+            &format!("name,MasterShell\r\nhomeurl,{SHELL_URL}"),
         );
-        write(
+        write_descript(
             &r.join("ghost/emo/shell/Hidden"),
-            "charset,UTF-8\r\nname,HiddenShell\r\nmenu,hidden\r\nhomeurl,https://hidden.example/\r\n",
+            "name,HiddenShell\r\nmenu,hidden\r\nhomeurl,https://hidden.example/",
         );
-        write(
+        write_descript(
             &r.join("balloon/kaku"),
-            &format!("charset,UTF-8\r\nname,Kaku\r\nhomeurl,{BALLOON_URL}\r\n"),
+            &format!("name,Kaku\r\nhomeurl,{BALLOON_URL}"),
         );
-        write(&r.join("balloon/plain"), "charset,UTF-8\r\n");
+        write_descript(&r.join("balloon/plain"), "");
         Root { tmp }
     }
 
@@ -86,11 +83,6 @@ impl Root {
     }
 }
 
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(dir.join("descript.txt"), descript).expect("descript.txt を書く");
-}
-
 fn spec(kind: TargetKind, dir: PathBuf, name: &str, homeurl: Option<&str>) -> TargetSpec {
     TargetSpec {
         kind,
@@ -106,13 +98,6 @@ fn all_three() -> RawUpdateRequest {
         TargetKind::Shell,
         TargetKind::Balloon,
     ])
-}
-
-fn skipped(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("update_target_skipped"))
-        .collect()
 }
 
 #[test]
@@ -142,7 +127,10 @@ fn current_three_resolve_dirs_names_and_fallback_homeurls() {
             ),
         ]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -208,7 +196,7 @@ fn a_missing_folder_or_unknown_shell_is_skipped_with_one_warning_each() {
             Some(GHOST_URL)
         )]
     );
-    let skipped = skipped(&events);
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -238,7 +226,10 @@ fn updateother_looks_names_up_exactly_in_the_order_given() {
             ),
         ]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -250,7 +241,7 @@ fn updateother_does_not_find_a_case_mismatched_name() {
     ]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = skipped(&events);
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -261,7 +252,7 @@ fn updateother_does_not_find_a_hidden_shell() {
     let raw = RawUpdateRequest::Other(vec![(TargetKind::Shell, "HiddenShell".to_owned())]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = skipped(&events);
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
 }
@@ -269,10 +260,7 @@ fn updateother_does_not_find_a_hidden_shell() {
 /// ゴーストの中のバルーン `ghost/emo/balloon/inner` に根の `kaku` と同じ `name`（Kaku）を置く。
 fn plant_inner_kaku(root: &Root) -> PathBuf {
     let inner = root.path("ghost/emo/balloon/inner");
-    write(
-        &inner,
-        "charset,UTF-8\r\nname,Kaku\r\nhomeurl,https://inner.example/\r\n",
-    );
+    write_descript(&inner, "name,Kaku\r\nhomeurl,https://inner.example/");
     inner
 }
 
@@ -291,7 +279,10 @@ fn updateother_finds_the_ghost_inner_balloon_first_for_the_same_name() {
             Some("https://inner.example/")
         )]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -313,45 +304,10 @@ fn current_balloon_inside_the_ghost_is_the_update_target() {
             Some("https://inner.example/")
         )]
     );
-    assert!(skipped(&events).is_empty(), "{events:?}");
-}
-
-/// 窓口を据え、起動の文脈（バルーン `balloon`）と置き場のゴースト `ghost`（kanade の送出端だけ・
-/// 実行系なし＝シェルは解けない）を置いた World と、kanade の代わりの受信端。
-fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>) {
-    let base = root.baseware();
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    register(&mut world);
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.path("profile"),
-        helper_exe: root.path("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: base.ghost_dir(ghost),
-                balloon_root: base.balloon_dir(balloon),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: base.ghost_dir(ghost),
-                folder: Some(ghost.to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: base.balloon_dir(balloon),
-                folder: Some(balloon.to_owned()),
-            },
-        },
-    });
-    let (tx, kanade) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        base.ghost_dir(ghost),
-    ))));
-    (world, kanade)
+    assert!(
+        events_named(&events, "update_target_skipped").is_empty(),
+        "{events:?}"
+    );
 }
 
 /// World から写す口: 置き場のゴーストの根と起動の文脈のバルーンを読む。実行系の無い置き場
@@ -359,7 +315,7 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
 #[test]
 fn resolve_targets_reads_the_slot_and_the_boot_context() {
     let root = Root::new("areka-update-resolve-world");
-    let (world, _kanade) = world(&root, "emo", "kaku");
+    let (world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     let (specs, events) = capture(|| resolve_targets(&world, &all_three()));
     assert_eq!(
         specs,
@@ -378,7 +334,7 @@ fn resolve_targets_reads_the_slot_and_the_boot_context() {
             ),
         ]
     );
-    let skipped = skipped(&events);
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("kind"), Some("shell"));
 }
@@ -413,7 +369,7 @@ fn copy(world: &World) -> Option<String> {
 #[test]
 fn not_selectable_when_none_of_the_three_has_a_source() {
     let root = Root::new("areka-update-can-none");
-    let (world, _kanade) = world(&root, "bare", "plain");
+    let (world, _kanade) = slot_world(root.tmp.path(), "bare", "plain");
     assert!(!can_update(&world));
 }
 
@@ -421,7 +377,7 @@ fn not_selectable_when_none_of_the_three_has_a_source() {
 #[test]
 fn selectable_when_the_copy_has_one() {
     let root = Root::new("areka-update-can-copy");
-    let (mut world, _kanade) = world(&root, "bare", "plain");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.non_send_mut::<UpdateDesk>().ghost_homeurl = Some(COPY_URL.to_owned());
     assert!(can_update(&world));
 }
@@ -430,16 +386,16 @@ fn selectable_when_the_copy_has_one() {
 #[test]
 fn selectable_when_one_descript_has_one() {
     let root = Root::new("areka-update-can-descript");
-    let (world, _kanade) = world(&root, "bare", "kaku");
+    let (world, _kanade) = slot_world(root.tmp.path(), "bare", "kaku");
     assert!(can_update(&world));
 }
 
-/// 走っている間と答え待ちの間は選べない（段が `Idle` に戻れば選べる）。終了が始まった後・窓口が
-/// 無いときも選べない。
+/// 走っている間と答え待ちの間は選べない（段が `Idle` に戻れば選べる）。読み直しの切替の後送りを
+/// 持つ間・終了が始まった後・窓口が無いときも選べない。
 #[test]
 fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     let root = Root::new("areka-update-can-running");
-    let (mut world, _kanade) = world(&root, "emo", "kaku");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     assert!(can_update(&world), "対照: 走っていなければ選べる");
     for stage in [Stage::Running, Stage::AwaitingExec] {
         world.non_send_mut::<UpdateDesk>().stage = stage;
@@ -447,18 +403,22 @@ fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     }
     world.non_send_mut::<UpdateDesk>().stage = Stage::Idle;
     assert!(can_update(&world), "対照: 段が戻れば選べる");
+    world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
+    assert!(!can_update(&world), "読み直しの切替の後送りを持つ間");
+    world.non_send_mut::<UpdateDesk>().after_switch = None;
+    assert!(can_update(&world), "対照: 後送りを使い切れば選べる");
     let _ = begin_close(&mut world);
     assert!(!can_update(&world), "終了が始まった後");
     world.remove_non_send::<UpdateDesk>();
     assert!(!can_update(&world), "窓口が無い");
 }
 
-/// 定常到達のたびに写しを消して `homeurl` の照会が 1 件飛び、空でない返事だけが写しに載る
-/// （返事が来るまでは覗いても待たない）。
+/// 定常到達のたびに写しを消して `homeurl` の照会が 1 件飛び、空でない返事だけが前後の空白を落として
+/// 写しに載る（返事が来るまでは覗いても待たない）。
 #[test]
 fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
     let root = Root::new("areka-update-steady-query");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.non_send_mut::<UpdateDesk>().ghost_homeurl = Some("https://old.example/".to_owned());
 
     on_steady(&mut world);
@@ -473,31 +433,33 @@ fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
     reply
         .send(vec![(
             "homeurl",
-            ResourceOutcome::Value(COPY_URL.to_owned()),
+            ResourceOutcome::Value(format!("{COPY_URL} ")),
         )])
         .expect("返事待ちは生きている");
     drain(&mut world);
     assert_eq!(copy(&world).as_deref(), Some(COPY_URL));
     assert!(can_update(&world));
 
-    // 次の定常到達: 空の返事は写しに載らない。
-    on_steady(&mut world);
-    let mut sent = queries(&kanade);
-    assert_eq!(sent.len(), 1);
-    let (_, reply) = sent.remove(0);
-    reply
-        .send(vec![("homeurl", ResourceOutcome::Value(String::new()))])
-        .expect("返事待ちは生きている");
-    drain(&mut world);
-    assert_eq!(copy(&world), None);
-    assert!(!can_update(&world));
+    // 次の定常到達: 空・空白だけの返事は写しに載らない。
+    for blank in ["", " "] {
+        on_steady(&mut world);
+        let mut sent = queries(&kanade);
+        assert_eq!(sent.len(), 1);
+        let (_, reply) = sent.remove(0);
+        reply
+            .send(vec![("homeurl", ResourceOutcome::Value(blank.to_owned()))])
+            .expect("返事待ちは生きている");
+        drain(&mut world);
+        assert_eq!(copy(&world), None, "{blank:?}");
+        assert!(!can_update(&world), "{blank:?}");
+    }
 }
 
 /// 終了が始まったら照会の返事待ちは捨てられ、後から返事が来ても写しに載らない。
 #[test]
 fn exit_discards_the_pending_query_reply() {
     let root = Root::new("areka-update-steady-exit");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     on_steady(&mut world);
     let mut sent = queries(&kanade);
     assert_eq!(sent.len(), 1);
@@ -505,10 +467,7 @@ fn exit_discards_the_pending_query_reply() {
 
     let (_, events) = capture(|| begin_close(&mut world));
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("update_query_discarded"))
-            .count(),
+        events_named(&events, "update_query_discarded").len(),
         1,
         "{events:?}"
     );
@@ -531,13 +490,13 @@ fn exit_discards_the_pending_query_reply() {
 #[test]
 fn update_current_submits_the_current_three_as_manual() {
     let root = Root::new("areka-update-current-manual");
-    let (mut world, _kanade) = world(&root, "emo", "kaku");
+    let (mut world, _kanade) = slot_world(root.tmp.path(), "emo", "kaku");
     let (worker, jobs) = mpsc::channel();
     world.non_send_mut::<UpdateDesk>().worker = Some(worker);
 
     let ((), events) = capture(|| update_current(&mut world));
     // シェルも頼んだ（解けずに飛ばされた）ことを記録で確かめる。
-    let skipped = skipped(&events);
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("reason"), Some("no_shell"));
     let orders: Vec<_> = jobs.try_iter().map(|job| job.order).collect();
@@ -554,7 +513,7 @@ fn update_current_submits_the_current_three_as_manual() {
 #[test]
 fn steady_notice_sends_one_homeurl_query_each_time() {
     let root = Root::new("areka-update-steady-notice");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     world.insert_resource(crate::BODY_SYSTEMS);
     on_notice(&mut world, KanadeNotice::Steady);
     let first = queries(&kanade);
@@ -571,14 +530,9 @@ fn steady_notice_sends_one_homeurl_query_each_time() {
 #[test]
 fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
     let root = Root::new("areka-update-steady-failed");
-    let (mut world, kanade) = world(&root, "bare", "plain");
-    let failed_warnings = |events: &[CapturedEvent]| {
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("update_homeurl_query_failed"))
-            .map(|e| e.level)
-            .collect::<Vec<_>>()
-    };
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
+    let failed_warnings =
+        |events: &[CapturedEvent]| levels_of(events, "update_homeurl_query_failed");
 
     on_steady(&mut world);
     let (_, reply) = queries(&kanade).remove(0);
@@ -606,7 +560,7 @@ fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
 #[test]
 fn steady_after_exit_does_not_query_again() {
     let root = Root::new("areka-update-steady-after-exit");
-    let (mut world, kanade) = world(&root, "bare", "plain");
+    let (mut world, kanade) = slot_world(root.tmp.path(), "bare", "plain");
     let _ = begin_close(&mut world);
     on_steady(&mut world);
     assert!(queries(&kanade).is_empty());

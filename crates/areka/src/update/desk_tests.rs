@@ -1,28 +1,29 @@
 //! 受付と窓口の段の兄弟テスト。
 //!
-//! 背景スレッドは起こさない: 窓口の仕事の送出端を受信端に差し替え、背景スレッドの頼みは窓口の頼みの
-//! 送出端へ直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain`
-//! を直接呼ぶ（フレームは回さない）。どの受け取りも待たない（`try_recv`）。
+//! 背景スレッドは基本は起こさない: 窓口の仕事の送出端を受信端に差し替え、背景スレッドの頼みは窓口の
+//! 頼みの送出端へ直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は
+//! `drain` を直接呼ぶ（フレームは回さない）。受け取りは `try_recv` で、背景スレッドを起こす 1 件だけ
+//! 本物のスレッドの照会を `wait_recv` で待つ。
 
-use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_ghost::BasewareRoot;
-use areka_kanade::{KanadeMsg, ShioriMethod};
-use bevy_ecs::schedule::Schedules;
+use areka_kanade::KanadeMsg;
+use areka_runtime::spine::{Progress, wait_recv};
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
+use crate::session_tests::events_named;
+use crate::session_tests::reservation;
+use crate::session_tests::{warns, write_descript};
 use crate::update::refs::executing_refs;
-use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::update::update_test_support::{raised, slot_world};
+use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, submit};
 use areka_session::exit_wait::begin_close;
-use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::ghost_switch::SwitchStage;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -42,38 +43,8 @@ impl Rig {
     fn new(label: &str) -> Self {
         let root = TempPath::new(label);
         let base = BasewareRoot::new(root.path().to_path_buf());
-        write(&base.ghost_dir("emo").join("ghost/master"), "name,Emo");
-        let mut world = World::new();
-        world.init_resource::<Schedules>();
-        register(&mut world);
-        world.insert_resource(BootContext {
-            roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
-            roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-            app_profile_dir: root.path().join("profile"),
-            helper_exe: root.path().join("helper.exe"),
-            argv_session: false,
-            current: CurrentGhost {
-                cfg: ConfigInputs {
-                    ghost_root: base.ghost_dir("emo"),
-                    balloon_root: base.balloon_dir("kaku"),
-                },
-                ghost: GhostDecision {
-                    route: GhostRoute::Default,
-                    dir: base.ghost_dir("emo"),
-                    folder: Some("emo".to_owned()),
-                },
-                balloon: BalloonDecision {
-                    route: BalloonRoute::Default,
-                    dir: base.balloon_dir("kaku"),
-                    folder: Some("kaku".to_owned()),
-                },
-            },
-        });
-        let (tx, kanade) = mpsc::channel();
-        world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-            Some(tx),
-            base.ghost_dir("emo"),
-        ))));
+        write_descript(&base.ghost_dir("emo").join("ghost/master"), "name,Emo");
+        let (mut world, kanade) = slot_world(root.path(), "emo", "kaku");
         let (worker, jobs) = mpsc::channel();
         let asks = {
             let mut desk = world.non_send_mut::<UpdateDesk>();
@@ -118,35 +89,12 @@ impl Rig {
 
     /// kanade に届いた送出（id・Reference・返信端の有無）。
     fn raised(&self) -> Vec<(String, Vec<String>, bool)> {
-        self.kanade
-            .try_iter()
-            .map(|msg| match msg {
-                KanadeMsg::RaiseEvent {
-                    id,
-                    references,
-                    method,
-                    reply,
-                } => {
-                    assert_eq!(method, ShioriMethod::Get);
-                    (id, references, reply.is_some())
-                }
-                _ => panic!("汎用の通知の入口の送出だけが届く"),
-            })
-            .collect()
+        raised(&self.kanade)
     }
 
     fn orders(&self) -> Vec<UpdateOrder> {
         self.jobs.try_iter().map(|job| job.order).collect()
     }
-}
-
-fn write(dir: &Path, descript: &str) {
-    std::fs::create_dir_all(dir).expect("検体のフォルダを作る");
-    std::fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\n{descript}\r\n"),
-    )
-    .expect("descript.txt を書く");
 }
 
 fn ghost_only() -> RawUpdateRequest {
@@ -159,17 +107,6 @@ fn executing(reason: UpdateReason) -> (String, Vec<String>, bool) {
         executing_refs(TargetKind::Ghost, reason),
         false,
     )
-}
-
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
-fn warns(events: &[CapturedEvent]) -> usize {
-    events.iter().filter(|e| e.level == Level::WARN).count()
 }
 
 // ---------------------------------------------------------------- 受付
@@ -188,10 +125,10 @@ fn accepted_orders_reach_the_worker_and_set_the_stage_by_reason() {
     assert_eq!(orders[0].targets.len(), 1);
     assert_eq!(orders[0].targets[0].name, "Emo");
     assert_eq!(orders[0].ghost_folder.as_deref(), Some("emo"));
-    let started = named(&events, "update_order_started");
+    let started = events_named(&events, "update_order_started");
     assert_eq!(started.len(), 1, "{events:?}");
     assert_eq!(started[0].level, Level::INFO);
-    assert_eq!(warns(&events), 0, "{events:?}");
+    assert_eq!(warns(&events).len(), 0, "{events:?}");
     assert!(rig.raised().is_empty());
 
     let mut rig = Rig::new("areka-update-desk-accept-script");
@@ -211,13 +148,13 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
     let mut bare = World::new();
     let (verdict, events) = capture(|| submit(&mut bare, ghost_only(), UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NoDesk);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let mut rig = Rig::new("areka-update-desk-refuse");
     rig.world.remove_resource::<BootContext>();
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NoContext);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let mut rig = Rig::new("areka-update-desk-refuse-targets");
     let (verdict, events) = capture(|| {
@@ -228,12 +165,13 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
         )
     });
     assert_eq!(verdict, SubmitVerdict::NoTargets);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
 
     let _ = begin_close(&mut rig.world);
+    rig.world.remove_resource::<BootContext>();
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
-    assert_eq!(verdict, SubmitVerdict::Closing);
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(verdict, SubmitVerdict::Closing, "文脈が無くても終了が先");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
     assert!(rig.orders().is_empty());
     assert!(rig.raised().is_empty());
     assert_eq!(rig.stage(), Stage::Idle);
@@ -258,9 +196,9 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
         "総括は無い"
     );
     assert!(rig.orders().is_empty());
-    let refused = named(&events, "update_refused");
+    let refused = events_named(&events, "update_refused");
     assert_eq!(refused.len(), 1, "{events:?}");
-    assert_eq!(warns(&events), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
     assert_eq!(rig.stage(), Stage::Running);
 }
 
@@ -268,28 +206,17 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
 #[test]
 fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
     let mut rig = Rig::new("areka-update-desk-switching");
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);
     assert!(rig.raised().is_empty());
     assert!(rig.orders().is_empty());
-    assert_eq!(warns(&events), 1, "{events:?}");
-    assert_eq!(named(&events, "update_refused").len(), 1, "{events:?}");
+    assert_eq!(warns(&events).len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "update_refused").len(),
+        1,
+        "{events:?}"
+    );
     assert_eq!(rig.stage(), Stage::Idle);
 }
 
@@ -404,7 +331,11 @@ fn a_second_request_while_holding_is_refused() {
             Some((ghost_only(), UpdateReason::Script)),
             "{same_tick}"
         );
-        assert_eq!(named(&events, "update_refused").len(), 1, "{events:?}");
+        assert_eq!(
+            events_named(&events, "update_refused").len(),
+            1,
+            "{events:?}"
+        );
     }
 }
 
@@ -419,7 +350,7 @@ fn a_gone_worker_is_reported_and_dropped_and_the_stage_stays_idle() {
     rig.world.non_send_mut::<UpdateDesk>().worker = Some(dead);
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::WorkerGone);
-    let gone = named(&events, "update_worker_gone");
+    let gone = events_named(&events, "update_worker_gone");
     assert_eq!(gone.len(), 1, "{events:?}");
     assert_eq!(gone[0].level, Level::ERROR);
     assert!(rig.world.non_send::<UpdateDesk>().worker.is_none());
@@ -439,7 +370,9 @@ fn the_spawned_worker_counts_on_the_desk_online() {
         desk.online = &ONLINE;
     }
     assert_eq!(rig.submit(UpdateReason::Script), SubmitVerdict::Started);
-    match rig.kanade.recv().expect("背景スレッドの照会が届く") {
+    match wait_recv("背景スレッドの照会", Progress::Unknown, &rig.kanade)
+        .expect("背景スレッドの照会が届く")
+    {
         KanadeMsg::ResourceQuery { reply, .. } => {
             assert!(ONLINE.is_online(), "窓口の数が立っている");
             drop(reply);
@@ -479,4 +412,29 @@ fn is_busy_while_running_or_holding_the_after_switch() {
     assert!(!is_busy(&rig.world));
     rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
     assert!(is_busy(&rig.world));
+}
+
+/// 終了が始まった時に読み直しの切替の後送りを持っていれば、列の残りが空でも 1 件でも後送りを捨て、
+/// `warn!(update_tail_dropped, reason = "closing")` と `debug!(update_purge_dropped)` を 1 件ずつ残す。
+#[test]
+fn exit_drops_the_after_switch_tail_and_records_the_postponed_purge() {
+    for rest in [
+        Vec::new(),
+        vec![("OnUpdateResult", vec!["ghost".to_owned()])],
+    ] {
+        let len = rest.len();
+        let mut rig = Rig::new("areka-update-desk-exit-tail");
+        rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), rest));
+        let ((), events) = capture(|| discard_for_exit(&mut rig.world));
+        let dropped = events_named(&events, "update_tail_dropped");
+        assert_eq!(dropped.len(), 1, "{len}: {events:?}");
+        assert_eq!(dropped[0].level, Level::WARN);
+        assert_eq!(dropped[0].field_str("reason"), Some("closing"));
+        assert_eq!(
+            events_named(&events, "update_purge_dropped").len(),
+            1,
+            "{len}: {events:?}"
+        );
+        assert!(rig.world.non_send::<UpdateDesk>().after_switch.is_none());
+    }
 }

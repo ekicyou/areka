@@ -9,8 +9,8 @@
 //!    受理し、それ以外（他の名前・`\![open,help]` など他の選別子・裸の `\![open]`・
 //!    キャリアでない cue）は担当外として読み飛ばす。
 //! 2. **送り出し**——引数なしの `\![open,readme]` は説明書の要求、開く系は規則が分類した
-//!    行き先を 1 件ずつ UI へ送る。引数付きの `\![open,readme,種類,名前]` は列挙が要るため
-//!    α では語彙だけを持ち、警告して何もしない。規則が断る入力（引数が無い・
+//!    行き先を 1 件ずつ UI へ送る。引数付きの `\![open,readme,種類,名前]` は列挙が要るので
+//!    語彙だけを持ち、警告して何もしない。規則が断る入力（引数が無い・
 //!    `\j` の ID が知らない形・扱えない種類）は `open_external_rejected` を 1 行残して送らない。
 //!
 //! 行き先の規則は台本からの取り出し（`link_destinations`）と同じ 1 つの関数で、両者が
@@ -94,13 +94,13 @@ impl dola::cue::CueSink for ReadmeCueSink {
 
         let selector = params.first().copied().unwrap_or_default();
         let request = if (name, selector) == (NAME_OPEN, SELECTOR_README) {
-            // 引数付き（`\![open,readme,種類,名前]`）は列挙が要るため α では語彙だけを持ち、
+            // 引数付き（`\![open,readme,種類,名前]`）は列挙が要るので語彙だけを持ち、
             // 警告して何もしない。ukadoc の URL は `CommandConsumer::ReadmeSink` の doc にある。
             if params.len() > 1 {
                 warn!(
                     event = "readme_cue_unsupported",
                     arguments = ?&params[1..],
-                    "[readme] 引数付きの説明書タグは語彙のみのため何もしない（要件 4.6）"
+                    "[readme] 引数付きの説明書タグは語彙のみのため何もしない"
                 );
                 return;
             }

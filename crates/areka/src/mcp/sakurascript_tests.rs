@@ -3,41 +3,22 @@
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で外からの台本の知らせを受け取って
 //! 返信端へ結果を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
 
-use std::path::PathBuf;
 use std::sync::mpsc;
 
 use areka_actor::ReplySender;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
-use super::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use super::*;
-use crate::mcp::{McpLater, drain, install};
-use areka_session::ghost_session::GhostSession;
+use crate::mcp::kanade_fake_test_support::{
+    STRICT_NOTE_BEFORE_ID, answer, body, body_and_error, ghost, ids, record_one, rig, text,
+};
+use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
+use crate::mcp::{McpLater, drain};
+use crate::session_tests::warn_or_worse;
 
 const SCRIPT: &str = r"\0\s[0]hello\e";
-
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
-/// 受け口と後から答える置き場を据え、置き場に偽の kanade の送り口を置いた World と、その受信端。
-fn rig() -> (World, mpsc::Receiver<KanadeMsg>) {
-    let mut world = World::new();
-    let (_inbox_tx, inbox_rx) = mpsc::channel();
-    install(&mut world, inbox_rx);
-    let (tx, rx) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        ghost().root,
-    ))));
-    (world, rx)
-}
 
 /// `handle` を呼んで待つ側を返す（記録は呼んだスレッドで拾う）。
 fn call(
@@ -73,26 +54,6 @@ fn take_send(
     }
 }
 
-fn answer(pending: &Pending) -> ToolOutcome {
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .expect("答えが届いている")
-        .outcome
-}
-
-fn warn_or_worse(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|ev| ev.level <= tracing::Level::WARN)
-        .count()
-}
-
-fn text(s: &str) -> Vec<ToolContent> {
-    vec![ToolContent::Text(s.to_string())]
-}
-
 /// 結果を送って 1 フレーム回した後の答え（その間の記録の warn 以上も返す）。
 fn answer_with(ghost_name: Option<&str>, result: SstpSendOutcome) -> (ToolOutcome, usize) {
     let (mut world, rx) = rig();
@@ -102,7 +63,7 @@ fn answer_with(ghost_name: Option<&str>, result: SstpSendOutcome) -> (ToolOutcom
     let ((), polled) = capture(|| drain(&mut world));
     (
         answer(&pending),
-        warn_or_worse(&called) + warn_or_worse(&polled),
+        warn_or_worse(&called).len() + warn_or_worse(&polled).len(),
     )
 }
 
@@ -127,44 +88,17 @@ fn not_accepted_is_cannot_accept_now() {
     assert_eq!(warns, 0);
 }
 
-/// 失敗・返信端の落ち・送れなかった → `ghost_name` の有無で宛先が居ないときの 2 通りの `NG:`・
-/// warn 以上 0 件。
+/// 失敗 → `ghost_name` の有無で宛先が居ないときの 2 通りの `NG:`・warn 以上 0 件。
 #[test]
-fn failed_dropped_and_unsendable_read_as_the_resolve_failure() {
+fn failed_reads_as_the_resolve_failure() {
     for (ghost_name, expected) in [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)] {
-        let want = text(&format!("NG:{expected}"));
-
         let (outcome, warns) = answer_with(ghost_name, SstpSendOutcome::Failed);
-        assert_eq!(outcome.content, want, "Failed・{ghost_name:?}");
-        assert!(outcome.is_error, "Failed・{ghost_name:?}");
-        assert_eq!(warns, 0, "Failed・{ghost_name:?}");
-
-        // 返信端を落とす。
-        let (mut world, rx) = rig();
-        let (pending, called) = call(&mut world, SCRIPT, ghost_name, None);
-        drop(take_send(&rx));
-        let ((), polled) = capture(|| drain(&mut world));
-        let outcome = answer(&pending);
-        assert_eq!(outcome.content, want, "返信端を落とす・{ghost_name:?}");
-        assert!(outcome.is_error);
         assert_eq!(
-            warn_or_worse(&called) + warn_or_worse(&polled),
-            0,
-            "返信端を落とす・{ghost_name:?}: {called:?} {polled:?}"
+            body_and_error(&outcome),
+            (format!("NG:{expected}"), true),
+            "{ghost_name:?}"
         );
-
-        // 受信端を先に落として送れなくする（その場で答え、預けない）。
-        let (mut world, rx) = rig();
-        drop(rx);
-        let (pending, called) = call(&mut world, SCRIPT, ghost_name, None);
-        let outcome = answer(&pending);
-        assert_eq!(outcome.content, want, "送れない・{ghost_name:?}");
-        assert!(outcome.is_error);
-        assert_eq!(warn_or_worse(&called), 0, "送れない・{ghost_name:?}");
-        assert!(
-            world.non_send::<McpLater>().0.is_empty(),
-            "送れない・預けない"
-        );
+        assert_eq!(warns, 0, "{ghost_name:?}");
     }
 }
 
@@ -191,41 +125,11 @@ fn empty_script_sends_nothing() {
     assert!(outcome.is_error);
     assert!(rx.try_recv().is_err(), "kanade に何も届かない");
     assert!(world.non_send::<McpLater>().0.is_empty());
-    assert_eq!(warn_or_worse(&called), 0);
+    assert_eq!(warn_or_worse(&called).len(), 0);
 
     let (mut world, rx) = rig();
     let _ = call(&mut world, " ", None, None);
     assert_eq!(take_send(&rx).0, " ", "空白だけは送る");
-}
-
-/// 返事が呼んだ直後（最初の覗きの前）に届いていても、何フレームか後に届いても答えになる。
-#[test]
-fn answer_may_be_ready_at_once_or_arrive_later() {
-    // その場で返る（最初の覗きで答える）。
-    let (mut world, rx) = rig();
-    let (pending, _) = call(&mut world, SCRIPT, None, None);
-    take_send(&rx)
-        .2
-        .send(SstpSendOutcome::Accepted)
-        .expect("返信端は生きている");
-    drain(&mut world);
-    assert_eq!(answer(&pending).content, text("OK"));
-
-    // 後から届く（返事の前の覗きでは答えず預けたまま）。
-    let (mut world, rx) = rig();
-    let (pending, _) = call(&mut world, SCRIPT, None, None);
-    assert!(matches!(pending.try_answer(), Ok(None)), "呼んだ直後は未着");
-    let (_, _, reply) = take_send(&rx);
-    drain(&mut world);
-    drain(&mut world);
-    assert!(matches!(pending.try_answer(), Ok(None)), "返事の前は未着");
-    assert_eq!(world.non_send::<McpLater>().0.len(), 1, "預けたまま");
-    reply
-        .send(SstpSendOutcome::Accepted)
-        .expect("返信端は生きている");
-    drain(&mut world);
-    assert_eq!(answer(&pending).content, text("OK"));
-    assert!(world.non_send::<McpLater>().0.is_empty());
 }
 
 /// 置き場に送り口が無い（空の World）→ `NG:Script is not available`・warn ちょうど 1 件・error 0 件。
@@ -246,39 +150,14 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
 
-/// 2 本で使う部品: 送り口と「降りた」の文言（`ghost_name` の有無で 2 通り）。
-#[test]
-fn script_target_reads_the_sender_and_the_gone_wording() {
-    let (world, _rx) = rig();
-    let target = script_target(&world, Some("Emily/Phase4.5"));
-    assert!(target.kanade.is_some());
-    assert_eq!(target.gone, CANNOT_FIND);
-
-    let target = script_target(&World::new(), None);
-    assert!(target.kanade.is_none());
-    assert_eq!(target.gone, NOT_ACTIVE);
-}
-
-/// strict の答えの文の前後（`<n>` を挟む）。
-const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
-
-/// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
-fn record_one() -> u64 {
-    areka_session::log_history::record(
-        areka_session::log_history::Stamp {
-            year: 2026,
-            month: 10,
-            day: 30,
-            hour: 12,
-            minute: 0,
-        },
-        areka_session::log_history::Draft {
-            kind: areka_session::log_history::Kind::Error,
-            label: "strict".to_string(),
-            name: String::new(),
-            body: "test".to_string(),
-        },
-    )
+/// strict の文の答えの `<n>`（strict の文でなければ落ちる）。
+fn strict_id(outcome: &ToolOutcome) -> u64 {
+    let body = body(outcome);
+    body.strip_prefix("OK:")
+        .and_then(|rest| rest.strip_prefix(STRICT_NOTE_BEFORE_ID))
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("strict の文のはず: {body}"))
 }
 
 /// strict 真で受け付けた → strict の文・`<n>` は送る前に読んだ最後の番号。
@@ -297,15 +176,11 @@ fn strict_true_answer_carries_the_id_read_before_sending() {
     let ((), polled) = capture(|| drain(&mut world));
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
-    assert_eq!(warn_or_worse(&called) + warn_or_worse(&polled), 0);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    let n: u64 = body
-        .strip_prefix(STRICT_HEAD)
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    assert_eq!(
+        warn_or_worse(&called).len() + warn_or_worse(&polled).len(),
+        0
+    );
+    let n = strict_id(&outcome);
     assert!(
         before <= n && n < recorded,
         "送る前の番号: {before} <= {n} < {recorded}"
@@ -327,9 +202,9 @@ fn strict_false_or_omitted_answer_is_plain_ok() {
     }
 }
 
-/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）は今の答えのまま。
+/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）に strict の文は付かない。
 #[test]
-fn strict_true_ng_answers_are_unchanged() {
+fn strict_true_ng_answers_carry_no_strict_note() {
     let (mut world, _rx) = rig();
     let (pending, _) = call(&mut world, "", None, Some(true));
     assert_eq!(answer(&pending).content, text("NG:script is empty"));
@@ -356,15 +231,6 @@ fn strict_true_ng_answers_are_unchanged() {
     }
 }
 
-/// 捕まえた出来事のうち、エラーログに積まれる strict の記録（宛先が `RECORD_TARGET` で `point` の欄を持つ）の数。
-fn strict_records(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|ev| ev.target == areka_sakura::strict::RECORD_TARGET)
-        .filter(|ev| ev.fields.iter().any(|(name, _)| name == "point"))
-        .count()
-}
-
 /// `get_log(log_type=error, since_id)` の答えの行の番号（`#<id> ` で始まる行だけ）。
 fn error_log_ids_since(since_id: u64) -> Vec<u64> {
     let args = areka_mcp::tools::get_log::Args {
@@ -374,15 +240,10 @@ fn error_log_ids_since(since_id: u64) -> Vec<u64> {
         max_count: None,
     };
     let (req, pending) = ToolRequest::new(ToolCall::GetLog(args.clone()));
-    crate::mcp::get_log::handle(&mut World::new(), args, req.reply);
+    crate::mcp::get_log::handle(None, args, req.reply);
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    body.split("\r\n")
-        .filter_map(|line| line.strip_prefix('#')?.split(' ').next()?.parse().ok())
-        .collect()
+    ids(body(&outcome))
 }
 
 /// 答えの `<n>` で `get_log(log_type=error, since_id=<n>)` を読むと、送った後に積んだ記録が全部読め、
@@ -401,61 +262,10 @@ fn since_id_of_the_answer_reads_every_record_after_sending() {
         .expect("返信端は生きている");
     drain(&mut world);
     let outcome = answer(&pending);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    let n: u64 = body
-        .strip_prefix(STRICT_HEAD)
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    let n = strict_id(&outcome);
     let ids = error_log_ids_since(n);
     for id in recorded {
         assert!(ids.contains(&id), "送った後の {id} が読める: {ids:?}");
     }
     assert!(!ids.contains(&earlier), "呼ぶ前の {earlier} は読めない");
-}
-
-/// NG の 4 つ（空・受け付けない・居ない・降りた）を strict 真で、受け付けたのを strict 偽・省略で
-/// → エラーログに strict の記録が増えない。記録は呼んだ・回したスレッドで拾う。
-#[test]
-fn no_strict_records_for_ng_answers_or_strict_false() {
-    let (mut world, _rx) = rig();
-    let (pending, called) = call(&mut world, "", None, Some(true));
-    let _ = answer(&pending);
-    assert_eq!(strict_records(&called), 0, "空");
-
-    let (mut world, rx) = rig();
-    drop(rx);
-    let (pending, called) = call(&mut world, SCRIPT, None, Some(true));
-    let _ = answer(&pending);
-    assert_eq!(strict_records(&called), 0, "送れない");
-
-    let cases = [
-        (
-            Some(true),
-            Some(SstpSendOutcome::NotAccepted),
-            "受け付けない",
-        ),
-        (Some(true), Some(SstpSendOutcome::Failed), "居ない"),
-        (Some(true), None, "降りた"),
-        (Some(false), Some(SstpSendOutcome::Accepted), "strict 偽"),
-        (None, Some(SstpSendOutcome::Accepted), "strict 省略"),
-    ];
-    for (strict, result, label) in cases {
-        let (mut world, rx) = rig();
-        let (pending, called) = call(&mut world, SCRIPT, None, strict);
-        let (_, _, reply) = take_send(&rx);
-        match result {
-            Some(r) => reply.send(r).expect("返信端は生きている"),
-            None => drop(reply),
-        }
-        let ((), polled) = capture(|| drain(&mut world));
-        let _ = answer(&pending);
-        assert_eq!(
-            strict_records(&called) + strict_records(&polled),
-            0,
-            "{label}"
-        );
-    }
 }

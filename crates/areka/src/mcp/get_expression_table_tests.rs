@@ -6,18 +6,15 @@
 
 use std::path::PathBuf;
 
-use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
+use super::super::dump_surface::caught;
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, try_outcome};
 
 #[test]
 fn an_empty_world_answers_the_15_defaults_with_one_warning() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     let args = Args {
         ghost_name: Some("Emily/Phase4.5".to_string()),
     };
@@ -25,12 +22,10 @@ fn an_empty_world_answers_the_15_defaults_with_one_warning() {
 
     let ((), events) = capture(|| handle(&mut World::new(), &ghost, args, req.reply));
 
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
     assert_eq!(
-        answer.outcome.content,
-        vec![ToolContent::Text(crlf(DEFAULTS_ONLY_ANSWER))]
+        body_and_error(&kanade_fake_test_support::answer(&pending)),
+        (crlf(DEFAULTS_ONLY_ANSWER), false)
     );
-    assert!(!answer.outcome.is_error);
     let warns = warns(&events);
     assert_eq!(warns.len(), 1, "{events:?}");
     assert!(
@@ -39,15 +34,15 @@ fn an_empty_world_answers_the_15_defaults_with_one_warning() {
     );
 }
 
-// ---- 規則（render(&parse_surfacetable(..))・期待値は SSP の実測の写し） ----
+// ---- 規則（render(&parse_surfacetable(..))・期待値は SSP の答えの写し） ----
 
 /// 期待値の各行を `\r\n` で終えて 1 本にする（行の終わりは survey.md の `\r\n`）。
 fn crlf(lines: &str) -> String {
     lines.lines().map(|line| format!("{line}\r\n")).collect()
 }
 
-/// SSP の実測 14 の検体（検体 1・字下げはタブ）。
-const SAMPLE_1: &str = "charset,UTF-8
+/// SSP に読ませた surfacetable の全文（字下げはタブ）。
+const FULL_TEXT: &str = "charset,UTF-8
 version,1
 
 
@@ -99,8 +94,8 @@ group,1
 }
 ";
 
-/// 検体 1 に対する SSP の答えの全文。
-const SAMPLE_1_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|description|surface number : \s[]|
+/// 全文に対する SSP の答えの全文。
+const FULL_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|description|surface number : \s[]|
 |-----|-----|-----|-----|
 |\0|0|素|\s[0]|
 |\0|0|照れ|\s[1]|
@@ -142,7 +137,7 @@ const SAMPLE_1_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|description
 |\1|1|( ﾟдﾟ)(2)|\s[2210]|
 ";
 
-/// `surfacetable.txt` の無いシェルに対する SSP の答えの全文（検体 2・既定の 15 件だけ）。
+/// `surfacetable.txt` の無いシェルに対する SSP の答えの全文（既定の 15 件だけ）。
 const DEFAULTS_ONLY_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|description|surface number : \s[]|
 |-----|-----|-----|-----|
 |\0||素|\s[0]|
@@ -162,13 +157,13 @@ const DEFAULTS_ONLY_ANSWER: &str = r"|scope \0,\1,\p[2]...|character name|descri
 |\0||歌|\s[25]|
 ";
 
-/// 実測 14 の検体の全文が、見出し行から最後の `\r\n` まで SSP の答えと一致する。
+/// 全文が、見出し行から最後の `\r\n` まで SSP の答えと一致する。
 #[test]
-fn sample_1_matches_the_ssp_answer_in_full() {
-    assert_eq!(render(&parse_surfacetable(SAMPLE_1)), crlf(SAMPLE_1_ANSWER));
+fn full_text_matches_the_ssp_answer_in_full() {
+    assert_eq!(render(&parse_surfacetable(FULL_TEXT)), crlf(FULL_ANSWER));
 }
 
-/// 空の転記は既定の 15 件だけの表（検体 2）。
+/// 空の転記は既定の 15 件だけの表。
 #[test]
 fn an_empty_table_renders_the_15_defaults_only() {
     assert_eq!(render(&SurfaceTable::default()), crlf(DEFAULTS_ONLY_ANSWER));
@@ -189,7 +184,7 @@ fn scope_two_is_written_as_p_and_disabled_or_parts_rows_hide_defaults() {
     assert!(!rendered.contains("__"));
 }
 
-// ---- 実測ごとの行と既定の重ね合わせの境目（検体 3〜9） ----
+// ---- SSP の実測ごとの行と既定の重ね合わせの境目 ----
 
 /// 見出し行と区切り行を前に付け、各行を `\r\n` で終えて 1 本にする。
 fn answer(rows: &str) -> String {
@@ -199,10 +194,10 @@ fn answer(rows: &str) -> String {
     ))
 }
 
-/// 検体 3（`group` の無い平たいファイル）: `group` の外の行はスコープ `\0`・キャラクタ名は空で載り、
+/// `group` の無い平たいファイル: `group` の外の行はスコープ `\0`・キャラクタ名は空で載り、
 /// 既定の 20 はシェルの行に替わる。既定にも行にも無い ID（21〜24 など）は載らない。
 #[test]
-fn sample_3_rows_outside_any_group_are_scope_0_with_no_name() {
+fn rows_outside_any_group_are_scope_0_with_no_name() {
     let text = "charset,Shift_JIS\n\n0,素\n20,パーカー素\n30,両手素\n40,片手素\n50,チラ見せ\n";
     assert_eq!(
         render(&parse_surfacetable(text)),
@@ -229,10 +224,10 @@ fn sample_3_rows_outside_any_group_are_scope_0_with_no_name() {
     );
 }
 
-/// 検体 4（名前の省略と閉じていない `{`）: 名前を省略した行は説明の列を空にして載り、既定の 0 を消す。
+/// 名前の省略と閉じていない `{`: 名前を省略した行は説明の列を空にして載り、既定の 0 を消す。
 /// 閉じないまま終わっても読めた分で組む。
 #[test]
-fn sample_4_an_omitted_name_is_an_empty_description_even_in_an_unclosed_group() {
+fn an_omitted_name_is_an_empty_description_even_in_an_unclosed_group() {
     let text = "charset,Shift_JIS\nversion,1\ngroup,本体基本\n{\n0,\n";
     assert_eq!(
         render(&parse_surfacetable(text)),
@@ -256,9 +251,9 @@ fn sample_4_an_omitted_name_is_an_empty_description_even_in_an_unclosed_group() 
     );
 }
 
-/// 検体 5（`__disabled` が既定を消す）: `__disabled` の行は載らず、その中の 10 は既定の 10 も消す。
+/// `__disabled` が既定を消す: `__disabled` の行は載らず、その中の 10 は既定の 10 も消す。
 #[test]
-fn sample_5_disabled_rows_are_not_shown_and_hide_the_default() {
+fn disabled_rows_are_not_shown_and_hide_the_default() {
     let text = "charset,Shift_JIS
 version,1
 
@@ -307,10 +302,10 @@ group,__disabled
     );
 }
 
-/// 検体 6 と同じ形（グループ名が空・`scope` の行なし・字下げはタブ）: 行はスコープ `\0`・
+/// グループ名が空・`scope` の行なし・字下げはタブ: 行はスコープ `\0`・
 /// キャラクタ名は空で載り、書かれていない 11・20 の既定が ID の順の位置に入る。
 #[test]
-fn sample_6_shape_an_empty_group_name_without_scope_is_scope_0_with_no_name() {
+fn an_empty_group_name_without_scope_is_scope_0_with_no_name() {
     let text = "group,\n{\n\t10,星\n\t15,にっこり\n\t16,お祈り\n\t18,照れ手組口開け\n\
                 \t19,照れ手組口開け半目\n\t25,どや顔\n\t100,素\n}\n";
     assert_eq!(
@@ -339,11 +334,11 @@ fn sample_6_shape_an_empty_group_name_without_scope_is_scope_0_with_no_name() {
     );
 }
 
-/// 検体 7 と同じ形: スコープ 2 は `\p[2]`、同じスコープ 2 の `group` が 2 つあると `group` ごとに
+/// スコープ 2 は `\p[2]`、同じスコープ 2 の `group` が 2 つあると `group` ごとに
 /// まとめず ID の順に混ざる（ここではファイルに `その他` を先に書く）。スコープ 1 に書かれた
 /// 10・11・19 は `\0` の既定を消し、25 は消さない。
 #[test]
-fn sample_7_shape_scope_2_groups_mix_by_id_and_scope_1_ids_hide_defaults() {
+fn scope_2_groups_mix_by_id_and_scope_1_ids_hide_defaults() {
     let text = "charset,Shift_JIS
 group,__disabled
 {
@@ -413,9 +408,9 @@ group,エミリオ
     );
 }
 
-/// 検体 8（`option,DisableNoDefineSurfaces`）の写しにある行だけ（0〜8 と `__disabled` の行の名前は
-/// 写しに無い）。グループ名 `\0` はそのまま載る。
-const SAMPLE_8_ROWS: &str = r"group,\0
+/// `option,DisableNoDefineSurfaces` の文書にある行だけ（0〜8 と `__disabled` の行の名前は
+/// 文書に無い）。グループ名 `\0` はそのまま載る。
+const NO_DEFINE_ROWS: &str = r"group,\0
 {
 scope,0
 9,笑顔
@@ -432,8 +427,8 @@ group,__disabled
 }
 ";
 
-/// 検体 8 の答え（0〜8 は書いていないので既定）。
-const SAMPLE_8_ANSWER: &str = r"|\0||素|\s[0]|
+/// その答え（0〜8 は書いていないので既定）。
+const NO_DEFINE_ANSWER: &str = r"|\0||素|\s[0]|
 |\0||照れ|\s[1]|
 |\0||驚き|\s[2]|
 |\0||不安|\s[3]|
@@ -454,23 +449,23 @@ const SAMPLE_8_ANSWER: &str = r"|\0||素|\s[0]|
 |\0||歌|\s[25]|
 |\0|\0|ヤダ|\s[100]|";
 
-/// 検体 8: `option,DisableNoDefineSurfaces` の有無で同じ文字列になり、定義の無い既定の 19・20・25 も
+/// `option,DisableNoDefineSurfaces` の有無で同じ文字列になり、定義の無い既定の 19・20・25 も
 /// 載る。
 #[test]
-fn sample_8_disable_no_define_surfaces_does_not_change_the_table() {
+fn disable_no_define_surfaces_does_not_change_the_table() {
     let with = render(&parse_surfacetable(&format!(
-        "charset,UTF-8\noption,DisableNoDefineSurfaces\n{SAMPLE_8_ROWS}"
+        "charset,UTF-8\noption,DisableNoDefineSurfaces\n{NO_DEFINE_ROWS}"
     )));
     let without = render(&parse_surfacetable(&format!(
-        "charset,UTF-8\n{SAMPLE_8_ROWS}"
+        "charset,UTF-8\n{NO_DEFINE_ROWS}"
     )));
-    assert_eq!(with, answer(SAMPLE_8_ANSWER));
+    assert_eq!(with, answer(NO_DEFINE_ANSWER));
     assert_eq!(without, with);
 }
 
-/// 検体 9（行の終わりの `}`・ファイルはそこで終わる）: `}` は名前の一部として載る。
+/// 行の終わりの `}`・ファイルはそこで終わる: `}` は名前の一部として載る。
 #[test]
-fn sample_9_a_trailing_brace_is_part_of_the_name() {
+fn a_trailing_brace_is_part_of_the_name() {
     let text = "group,ほつれ銀糸\n{\n21,赤瞳孔_狂\n100,黒塗り}";
     assert_eq!(
         render(&parse_surfacetable(text)),
@@ -696,6 +691,9 @@ fn surfaces_txt_in_the_same_folder_does_not_change_the_table() {
 
 // ---- 配線（実行系つきの単位・同時の呼び出し・副作用なし・切替の後） ----
 
+use super::super::dump_surface::WaitAnswer;
+use areka_runtime::spine::Progress;
+
 /// 置き場のゴーストの今のシェルのフォルダ（実行系が無ければ `None`）。
 fn current_shell_dir(world: &World) -> Option<PathBuf> {
     world
@@ -727,14 +725,14 @@ fn settle_kanade(world: &World) {
         .expect("照会の返事が届く");
 }
 
-/// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
-/// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
-/// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
-/// 替えた後の表で答える。
-#[test]
-fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
-    use std::sync::mpsc;
-
+/// 偽の SHIORI で A を起こし、受け口を置いて定常に落ち着かせた単位（土台, 受け口へ送る口,
+/// 定常に着いたか, 今のシェルのフォルダ）。
+fn real_unit() -> (
+    areka_session::ghost_switch_test_support::SwitchRig,
+    std::sync::mpsc::Sender<ToolRequest>,
+    bool,
+    PathBuf,
+) {
     use crate::sample_test_support::switch_rig;
     use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
@@ -743,10 +741,20 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);
     rig.boot("A");
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = std::sync::mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     let steady = rig.wait_steady();
     let shell = current_shell_dir(&rig.world).expect("起動したゴーストには実行系がある");
+    (rig, tx, steady, shell)
+}
+
+/// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
+/// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
+/// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
+/// 替えた後の表で答える。
+#[test]
+fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
+    let (mut rig, tx, steady, shell) = real_unit();
     std::fs::write(
         shell.join("surfacetable.txt"),
         utf8_hontai("charset,UTF-8\r\n"),
@@ -764,7 +772,8 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
     };
     let (first, second) = (ask(), ask());
     rig.world.run_schedule(wintf::ecs::Input);
-    let both = [&first, &second].map(|p| p.try_answer().ok().flatten().map(|a| a.outcome));
+    let probe = rig.progress_probe();
+    let both = [&first, &second].map(|p| p.wait_answer(Progress::Count(&probe)).map(|a| a.outcome));
     settle_kanade(&rig.world);
     let calls_after = rig.calls("A");
 
@@ -786,7 +795,9 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
         .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_shell_dir(other.clone())));
     let third = ask();
     rig.world.run_schedule(wintf::ecs::Input);
-    let after_switch = third.try_answer().ok().flatten().map(|a| a.outcome);
+    let after_switch = third
+        .wait_answer(Progress::Count(&probe))
+        .map(|a| a.outcome);
     let down = rig.shutdown();
 
     let table = Some(outcome::value(hontai_answer()));
@@ -804,5 +815,72 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
             crlf(r"|\1|別|横顔|\s[200]|")
         ))),
         "替えた後の表"
+    );
+}
+
+/// 今のシェルのフォルダの `surfacetable.txt` が開けない（同名のフォルダ）とき、`handle` を呼んだ
+/// スレッドには表の読みと解析の記録が 1 件も出ず、既定の 15 件で答える。
+///
+/// # 非空虚性
+/// `load` を UI のスレッドで呼ぶと、開けない `warn!` が `capture` の窓に入って赤。
+#[test]
+fn real_unit_reads_the_table_off_the_calling_thread() {
+    let (mut rig, tx, steady, shell) = real_unit();
+    let table = shell.join("surfacetable.txt");
+    if table.exists() {
+        std::fs::remove_file(&table).expect("同梱の surfacetable.txt を消す");
+    }
+    std::fs::create_dir(&table).expect("同名のフォルダを作る");
+
+    let (request, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args {
+        ghost_name: Some("A".to_owned()),
+    }));
+    let ((), events) = capture(|| {
+        assert!(tx.send(request).is_ok(), "受け口は生きている");
+        rig.world.run_schedule(wintf::ecs::Input);
+    });
+    let probe = rig.progress_probe();
+    let answer = pending
+        .wait_answer(Progress::Count(&probe))
+        .map(|a| a.outcome);
+    let down = rig.shutdown();
+
+    let on_caller: Vec<_> = events
+        .iter()
+        .filter(|ev| ev.message().starts_with("[get_expression_table]"))
+        .collect();
+    assert_eq!(
+        (steady, on_caller.len(), answer, down),
+        (
+            true,
+            0,
+            Some(outcome::value(crlf(DEFAULTS_ONLY_ANSWER))),
+            true
+        ),
+        "（定常に着いた・呼んだスレッドの表の記録・答え・降ろせた）: {events:?}"
+    );
+}
+
+/// 表を読む仕事が panic しても、答えは捨てられず `NG:` で届き、記録は error 1 件だけ
+/// （スコープを持たないツールなので `scope` の欄は載らない）。
+#[test]
+fn a_panicking_table_job_answers_ng_with_one_error() {
+    let (req, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args { ghost_name: None }));
+    let ((), events) = capture(|| {
+        req.reply
+            .send(caught(Box::new(|| panic!("わざと")), failed, PANICKED));
+    });
+    let answer = try_outcome(&pending);
+    let records: Vec<_> = events
+        .iter()
+        .map(|ev| (ev.level, ev.field_names_sorted()))
+        .collect();
+    assert_eq!(
+        (answer, records),
+        (
+            Some(outcome::ng("the expression table thread panicked")),
+            vec![(tracing::Level::ERROR, vec!["event", "message", "reason"])]
+        ),
+        "（届いた答え, 記録の（段, 欄の名前））: {events:?}"
     );
 }

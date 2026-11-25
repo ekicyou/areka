@@ -4,8 +4,6 @@
 //! content は本文 1 つ＝画像なし）を返す。描画を通る場合は GPU のテストが固定する。
 //! 後半は窓の無い切り替えの道具（`SwitchRig`・GPU 不要）で、装着の前に預けた呼び出しを通す。
 
-use std::path::PathBuf;
-
 use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 use wintf::ecs::Input;
@@ -13,17 +11,14 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, try_outcome};
 use crate::sample_test_support::switch_rig;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     let args = Args {
         scope: Some(0),
         surface: Some(0),
@@ -33,12 +28,10 @@ fn answers_no_window_at_once_with_an_empty_world() {
 
     handle(&mut World::new(), &ghost, args, req.reply);
 
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
     assert_eq!(
-        answer.outcome.content,
-        vec![ToolContent::Text("NG:This ghost has no window".to_string())]
+        body_and_error(&kanade_fake_test_support::answer(&pending)),
+        ("NG:This ghost has no window".to_string(), true)
     );
-    assert!(answer.outcome.is_error);
 }
 
 /// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える。
@@ -97,11 +90,7 @@ fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
     });
 
     assert_eq!(
-        (
-            pending.try_answer().ok().flatten().map(|a| a.outcome),
-            levels.error,
-            reads.get()
-        ),
+        (try_outcome(&pending), levels.error, reads.get()),
         (
             Some(outcome::ng("the text read was handed to the wrong path")),
             1,
@@ -111,58 +100,55 @@ fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
     );
 }
 
-/// 単体の合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
+/// 合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
 /// 専用の文言で想定外の失敗を答え、`error!` を 1 件だけ出す。
 ///
 /// # 非空虚性
 /// 判断の断りの文言（`NO_SUCH_SCOPE`）のままだと本文が違って赤。`refuse` へ回すと ERROR が 0 件で赤。
 #[test]
 fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
-    let (step, levels) = log_capture_kit::count_levels(|| alone(0, 0, None));
+    let (step, levels) = log_capture_kit::count_levels(|| composed(0, 0, String::new(), None));
 
     let Step::Now(answered) = step else {
         panic!("その場で答える");
     };
     assert_eq!(
-        answered.content,
-        vec![ToolContent::Text(
-            "NG:the shell of this scope is not ready".to_string()
-        )]
+        body_and_error(&answered),
+        ("NG:the shell of this scope is not ready".to_string(), true)
     );
-    assert!(answered.is_error);
     assert_eq!(levels.error, 1);
 }
 
-/// 符号化のスレッドの体で出た `error!` の件数（答えと一緒に返す）。判定の本体で、
-/// 下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
-fn errors_in_finish(job: Job) -> (ToolOutcome, usize) {
-    let (answered, levels) = log_capture_kit::count_levels(|| finish(TOOL, 0, job, Duration::ZERO));
+/// 符号化のスレッドの体（符号化と同じ `failed`・`panicked` を渡した `caught`）で出た `error!` の件数
+/// （答えと一緒に返す）。判定の本体で、下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
+fn errors_in_encoding_body(job: Job) -> (ToolOutcome, usize) {
+    let work: Work = Box::new(move || job(Duration::ZERO));
+    let (answered, levels) = log_capture_kit::count_levels(|| {
+        caught(work, |reason| fail(TOOL, 0, reason), ENCODE_PANICKED)
+    });
     (answered, levels.error)
 }
 
-/// `finish` の較正: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
+/// 符号化のスレッドの体の較正: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
 /// `fail` を呼ぶ仕事は ERROR 1 件、成功する仕事は ERROR 0 件。同じ判定の関数で数える。
 ///
 /// # 非空虚性
-/// `finish` が panic を受けないとテストが panic して赤。判定の関数が常に 0 を返すと前の 2 つで赤、
+/// `caught` が panic を受けないとテストが panic して赤。判定の関数が常に 0 を返すと前の 2 つで赤、
 /// 常に 1 を返すと最後で赤。
 #[test]
-fn finish_calibration_counts_errors_of_failing_jobs_only() {
-    let (panicked, errors) = errors_in_finish(Box::new(|_| panic!("わざと")));
+fn encoding_body_calibration_counts_errors_of_failing_jobs_only() {
+    let (panicked, errors) = errors_in_encoding_body(Box::new(|_| panic!("わざと")));
     assert_eq!(
-        panicked.content,
-        vec![ToolContent::Text(
-            "NG:the encoding thread panicked".to_string()
-        )]
+        body_and_error(&panicked),
+        ("NG:the encoding thread panicked".to_string(), true)
     );
-    assert!(panicked.is_error);
     assert_eq!(errors, 1);
 
-    let (failed, errors) = errors_in_finish(Box::new(|_| fail(TOOL, 0, "わざと")));
+    let (failed, errors) = errors_in_encoding_body(Box::new(|_| fail(TOOL, 0, "わざと")));
     assert!(failed.is_error);
     assert_eq!(errors, 1);
 
-    let (ok, errors) = errors_in_finish(Box::new(|_| outcome::ok("撮れた")));
+    let (ok, errors) = errors_in_encoding_body(Box::new(|_| outcome::ok("撮れた")));
     assert!(!ok.is_error);
     assert_eq!(errors, 0);
 }
@@ -176,30 +162,18 @@ fn send_back_without_receiver_drops_silently() {
     let (tx, rx) = mpsc::channel();
     drop(rx);
 
-    let ((), levels) = log_capture_kit::count_levels(|| {
-        send_back(
-            tx,
-            finish(TOOL, 0, Box::new(|_| outcome::ok("撮れた")), Duration::ZERO),
-        )
-    });
+    let ((), levels) = log_capture_kit::count_levels(|| send_back(tx, outcome::ok("撮れた")));
 
     assert_eq!(levels.error, 0);
 }
 
-/// 成功の記録の欄: `picture` の 1×1 の仕事を UI 時間 1,234 µs で `finish` に通すと、
-/// `[mcp] 絵を返す` が 1 件で、`ui_us` が 1234、`encode_us` が数として読める。
+/// 成功の仕事を UI 時間 1,234 µs で走らせると成功の答えで、`[mcp] 絵を返す` が 1 件、`ui_us` が 1234、
+/// `encode_us` が数として読める。GPU を通らない `dump_balloon` のテストからも使う。
 ///
 /// # 非空虚性
 /// 記録が無い・2 件・欄の名前が変わる・`ui` を渡し損ねる（0 や別の値）といずれも赤。
-#[test]
-fn success_record_carries_ui_us_and_encode_us() {
-    let Step::Encode(scope, job) = picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1)
-    else {
-        panic!("写しまで済んだ成功");
-    };
-
-    let (answered, events) =
-        log_capture_kit::capture(|| finish(TOOL, scope, job, Duration::from_micros(1234)));
+pub(in crate::mcp) fn assert_success_record(job: Job) {
+    let (answered, events) = log_capture_kit::capture(|| job(Duration::from_micros(1234)));
 
     assert!(!answered.is_error);
     let records: Vec<_> = events
@@ -214,6 +188,15 @@ fn success_record_carries_ui_us_and_encode_us() {
             .and_then(|v| v.parse::<u64>().ok())
             .is_some()
     );
+}
+
+/// 成功の記録の欄: `picture` の 1×1 の仕事。
+#[test]
+fn success_record_carries_ui_us_and_encode_us() {
+    let Step::Encode(_, job) = picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1) else {
+        panic!("写しまで済んだ成功");
+    };
+    assert_success_record(job);
 }
 
 // ── 窓の無い切り替えの道具で、預けた呼び出しを通す ──
@@ -288,10 +271,10 @@ fn deposit_and_answer(
         calls += 1;
         (calls >= 2).then(&step)
     });
-    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_deposit = try_outcome(&pending);
     let mut later = None;
     rig.pump_input_until(|_| {
-        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later = try_outcome(&pending);
         later.is_some()
     });
     (at_deposit, later)
@@ -327,7 +310,7 @@ fn deposited_call_is_encoded_on_the_encoding_thread() {
 /// 預けると `is_picture` が真（判定の関数の較正）。
 ///
 /// # 非空虚性
-/// 判定の関数が常に真なら前で、常に偽なら後で赤。`finish` が panic を受けないと答えが届かず赤。
+/// 判定の関数が常に真なら前で、常に偽なら後で赤。`work_elsewhere` が panic を受けないと答えが届かず赤。
 #[test]
 fn deposited_panic_answers_encoding_thread_panicked_and_is_not_a_picture() {
     let mut rig = rig_with(r"\0A\e");
@@ -442,7 +425,7 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
     let ghost = active_ghost(&rig);
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     handle(&mut rig.world, &ghost, current_look(), req.reply);
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let steady = rig.wait_steady();
 
     let (welcomed, events) = log_capture_kit::capture(|| {
@@ -452,7 +435,7 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
                     && rig.world.get_non_send::<SwitchInFlight>().is_none())
         })
     });
-    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let answered = try_outcome(&pending);
     let now = resolve::active(&rig.world).and_then(|g| g.name);
     let mcp_errors = events
         .iter()
@@ -538,21 +521,14 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
             || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
     });
     let now = resolve::active(&rig.world).and_then(|g| g.name);
-    let before_release = (
-        reading.try_answer().ok().flatten().map(|a| a.outcome),
-        encoding.try_answer().ok().flatten().map(|a| a.outcome),
-    );
+    let before_release = (try_outcome(&reading), try_outcome(&encoding));
 
     freed.set(true);
     let _ = release_tx.send(());
     let (mut read_answer, mut encode_answer) = (None, None);
     rig.pump_input_until(|_| {
-        read_answer = read_answer
-            .take()
-            .or_else(|| reading.try_answer().ok().flatten().map(|a| a.outcome));
-        encode_answer = encode_answer
-            .take()
-            .or_else(|| encoding.try_answer().ok().flatten().map(|a| a.outcome));
+        read_answer = read_answer.take().or_else(|| try_outcome(&reading));
+        encode_answer = encode_answer.take().or_else(|| try_outcome(&encoding));
         read_answer.is_some() && encode_answer.is_some()
     });
     let down = rig.shutdown();
@@ -607,7 +583,7 @@ fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
     });
     // 起こし直した後の巡でも覗かれている（組が残り、答えはまだ）。
     rig.world.run_schedule(Input);
-    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let answered = try_outcome(&pending);
     let a_boots = rig.calls("A").len();
     let same = resolve::active(&rig.world) == Some(ghost);
     let held_after = held(&rig);
@@ -674,11 +650,11 @@ fn read_at_entry_is_deposited_and_read_on_later_frames() {
         counted.set(counted.get() + 1);
         read.take().map(|read| Step::Read(0, read))
     });
-    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_deposit = try_outcome(&pending);
     let reads_at_deposit = reads.get();
     let mut later = None;
     rig.pump_input_until(|_| {
-        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later = try_outcome(&pending);
         later.is_some()
     });
     let down = rig.shutdown();
@@ -718,4 +694,12 @@ fn read_failure_after_attachment_answers_the_reader_outcome_with_one_error() {
         (Some(outcome::ng("わざと")), 1, true),
         "（届いた答え, ERROR, 降ろせた）"
     );
+}
+
+/// 幅か高さが 0、またはバイト数が幅×高さ×4 と違えば想定外の失敗、合えば通す。
+#[test]
+fn check_size_rejects_zero_sides_and_mismatched_lengths() {
+    let judged = [(0, 1, 0), (1, 0, 0), (2, 2, 15), (1, 1, 4)]
+        .map(|(w, h, len)| check_size(TOOL, 0, &vec![0; len], w, h).is_ok());
+    assert_eq!(judged, [false, false, false, true]);
 }

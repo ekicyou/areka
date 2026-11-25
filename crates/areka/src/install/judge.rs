@@ -16,11 +16,14 @@ pub(crate) const SEPARATOR: &str = "\u{1}";
 pub(crate) struct GhostFacts {
     /// ベースウェアの根の並びの写し（入れる根と、すでにあるものの引き当てに使う）。
     pub roots: BasewareRoots,
+    /// 今のゴーストの場所（`sakura_name`・`install_accept` を読む descript の在りか）。
+    pub dir: PathBuf,
     /// 根の下のフォルダ名（argv で根の外から起こしたゴーストは None）。
     pub folder: Option<String>,
     /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先）。
-    pub running_dir: Option<std::path::PathBuf>,
+    pub running_dir: Option<PathBuf>,
     pub name: String,
+    /// 窓口は読まずに空で答え、背景のスレッドが `dir` の descript から埋める。
     pub sakura_name: Option<String>,
     pub install_accept: Vec<String>,
 }
@@ -243,9 +246,7 @@ pub(crate) fn script_request(arguments: &[&str]) -> Result<ScriptRequest, Script
         ["url", _, kind, ..] if *kind != "nar" => Err(ScriptRefusal::UnsupportedKind {
             found: (*kind).to_owned(),
         }),
-        ["url", url, ..] if url.starts_with("http://") || url.starts_with("https://") => {
-            Ok(ScriptRequest::Url((*url).to_owned()))
-        }
+        ["url", url, ..] if is_http(url) => Ok(ScriptRequest::Url((*url).to_owned())),
         ["url", rest @ ..] => Err(ScriptRefusal::BadUrl {
             found: rest.first().copied().unwrap_or_default().to_owned(),
         }),
@@ -253,6 +254,14 @@ pub(crate) fn script_request(arguments: &[&str]) -> Result<ScriptRequest, Script
             found: arguments.first().copied().unwrap_or_default().to_owned(),
         }),
     }
+}
+
+/// `http://`／`https://` で始まるか（スキームは大文字小文字を問わない）。
+fn is_http(url: &str) -> bool {
+    ["http://", "https://"].iter().any(|scheme| {
+        url.get(..scheme.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(scheme))
+    })
 }
 
 #[cfg(test)]

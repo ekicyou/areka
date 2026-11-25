@@ -379,7 +379,7 @@ fn summary(script: &str) -> Vec<(String, OpenKind, String)> {
 }
 
 #[test]
-fn link_destinations_returns_six_forms_in_order_without_others() {
+fn link_destinations_returns_open_forms_in_order_without_others() {
     let script = concat!(
         r"\0本文\![open,mailer,a@b.c]",
         r"\![open,readme]\![open,help]",

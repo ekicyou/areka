@@ -4,43 +4,13 @@
 //! `roots_memory_write_failed`（error・欄 dir・reason）と `memory_write_failed` を 1 件ずつ残し、
 //! 最初の出所が `MemoryWriteFailed` になる。書き込みの前に書き換えた起動の文脈の並びは戻さない。
 
-use areka_ghost::{BasewareRoot, BasewareRoots};
-use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::roots::roots_test_support::{roots_of, world};
+use crate::session_tests::events_named;
 use areka_session::app_exit::{ExitOrigin, FirstExit};
-use areka_session::boot_config::{ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-
-fn world(root: &Path, app_profile_dir: PathBuf) -> World {
-    let mut world = World::new();
-    world.insert_resource(BootContext {
-        roots: BasewareRoots::single(root.to_path_buf()),
-        roots_origin: RootsOrigin::Default,
-        app_profile_dir,
-        helper_exe: root.join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.join(r"ghost\ga"),
-                balloon_root: root.join(r"balloon\B"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.join(r"ghost\ga"),
-                folder: Some("ga".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.join(r"balloon\B"),
-                folder: Some("B".to_owned()),
-            },
-        },
-    });
-    world
-}
 
 #[test]
 fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
@@ -53,7 +23,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
     let profile = tmp.path().join("profile-is-a-file");
     std::fs::write(&profile, "x").unwrap();
     let mut world = world(&a, profile.clone());
-    let roots = BasewareRoots::new(vec![BasewareRoot::new(a.clone()), BasewareRoot::new(b)]);
+    let roots = roots_of(&[&a, &b]);
 
     let ((), events) = capture(|| apply(&mut world, roots.clone(), None));
 
@@ -67,10 +37,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
         roots,
         "書き換えた並びは戻さない"
     );
-    let failed: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("roots_memory_write_failed"))
-        .collect();
+    let failed: Vec<_> = events_named(&events, "roots_memory_write_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::ERROR);
     assert_eq!(
@@ -79,10 +46,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
     );
     assert!(failed[0].field("reason").is_some(), "欄 reason: {events:?}");
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("memory_write_failed"))
-            .count(),
+        events_named(&events, "memory_write_failed").len(),
         1,
         "{events:?}"
     );

@@ -3,18 +3,17 @@
 //! 宛先違い・利用条件・失敗・複数の書庫・途中でやめる の各場合で、送られるイベント・書庫の
 //! 終わり方・記録・宛先に書かれたものを判定する。偽の口の上で本物の `areka-nar` を走らせる。
 
-use std::path::{Path, PathBuf};
-
 use areka_nar::SurvivingTree;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::{Damage, NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
-    Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, balloon_nar, ghost_nar, order_of,
-    shell_nar, supplement_nar, write_nar,
+    Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, balloon_nar, ghost_nar, joined,
+    order_of, run_many, run_one, shell_nar, supplement_nar, with_terms,
 };
 use super::*;
+use crate::session_tests::{events_named, tree};
 
 /// 締めの知らせになりうるイベント（`OnGhostTermsAccept` と `OnInstallBegin` 以外）。
 const CLOSING: [&str; 5] = [
@@ -24,33 +23,6 @@ const CLOSING: [&str; 5] = [
     "OnGhostTermsDecline",
     "OnInstallFailure",
 ];
-
-/// 書庫を並べた依頼を偽の口で一周させ、記録ごと返す。
-fn run_many(
-    ports: &mut FakePorts,
-    builders: Vec<NarBuilder>,
-) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
-    let dir = TempPath::new("install-branch-nar");
-    let paths: Vec<PathBuf> = builders
-        .into_iter()
-        .enumerate()
-        .map(|(index, builder)| write_nar(&dir, &format!("archive{index}.nar"), builder))
-        .collect();
-    let order = order_of(&paths.iter().map(PathBuf::as_path).collect::<Vec<_>>());
-    capture(|| run_order(&order, ports))
-}
-
-fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
-    run_many(ports, vec![builder])
-}
-
-/// `event` 欄が `name` の記録。
-fn logged<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|event| event.field_str("event") == Some(name))
-        .collect()
-}
 
 fn errors(events: &[CapturedEvent]) -> usize {
     events
@@ -76,35 +48,12 @@ fn installs(ports: &FakePorts) -> usize {
         .count()
 }
 
-/// 根の下に在るものを全部（フォルダも）。
-fn entries_under(root: &Path) -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).expect("根の下を読める") {
-            let path = entry.expect("項目を読める").path();
-            if path.is_dir() {
-                stack.push(path.clone());
-            }
-            found.push(path);
-        }
-    }
-    found.sort();
-    found
-}
-
 /// `install.txt` の行だけを選べる書庫（中身は 1 ファイル）。
 fn nar_with(lines: &[&str]) -> NarBuilder {
     NarBuilder::new()
         .file("install.txt", &install_txt(lines))
         .done()
         .file("descript.txt", b"charset,UTF-8\r\nname,X\r\n")
-        .done()
-}
-
-fn with_terms(builder: NarBuilder) -> NarBuilder {
-    builder
-        .file("terms.txt", b"charset,UTF-8\r\nterms body\r\n")
         .done()
 }
 
@@ -120,12 +69,12 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
     ];
     for (accept, kind, name) in cases {
         let builder = if kind == "shell" {
-            shell_nar(accept)
+            shell_nar(accept, &[])
         } else {
             supplement_nar(accept)
         };
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = run_one(&mut ports, with_terms(builder));
 
         assert_eq!(ends, vec![ArchiveEnd::Refused], "{kind}");
@@ -138,21 +87,17 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
                     vec![accept.to_owned(), kind.to_owned(), name.to_owned()]
                 ),
             ],
-            "Reference0＝accept の値・1＝識別子・2＝name（3.2）"
+            "Reference0＝accept の値・1＝識別子・2＝name"
         );
         assert_eq!(installs(&ports), 0, "展開の口を呼ばない");
         assert_eq!(asks(&ports), 0, "照合の前に利用条件を出さない");
-        assert_eq!(
-            entries_under(ports.root.path()),
-            before,
-            "宛先に 1 バイトも無い"
-        );
-        assert_eq!(errors(&events), 0, "宛先違いは失敗ではない（3.7）");
-        let refused = logged(&events, "install_refused");
+        assert_eq!(tree(ports.root.path()), before, "宛先に 1 バイトも無い");
+        assert_eq!(errors(&events), 0, "宛先違いは失敗ではない");
+        let refused = events_named(&events, "install_refused");
         assert_eq!(refused.len(), 1);
         assert_eq!(refused[0].level, tracing::Level::WARN);
         assert_eq!(refused[0].field("accept"), Some(accept));
-        assert!(logged(&events, "install_failed").is_empty());
+        assert!(events_named(&events, "install_failed").is_empty());
     }
 }
 
@@ -161,7 +106,7 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
     for kind in ["shell", "supplement"] {
         let type_line = format!("type,{kind}");
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = run_one(
             &mut ports,
             nar_with(&["charset,UTF-8", &type_line, "name,なし", "directory,none"]),
@@ -174,16 +119,16 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
                 ("OnInstallBegin", Vec::new()),
                 ("OnInstallFailure", vec!["invalid type".to_owned()]),
             ],
-            "{kind}: accept の無い {kind} は invalid type（3.6）"
+            "{kind}: accept の無い {kind} は invalid type"
         );
         assert_eq!(installs(&ports), 0);
-        assert_eq!(entries_under(ports.root.path()), before);
-        let failed = logged(&events, "install_failed");
+        assert_eq!(tree(ports.root.path()), before);
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].level, tracing::Level::ERROR);
         assert_eq!(failed[0].field_str("kind"), Some("AcceptMissing"));
         assert_eq!(failed[0].field_str("phase"), Some("accept"));
-        assert!(logged(&events, "install_refused").is_empty());
+        assert!(events_named(&events, "install_refused").is_empty());
     }
 }
 
@@ -194,7 +139,7 @@ fn no_terms_file_asks_nothing_and_sends_no_terms_event() {
     let mut ports = FakePorts::new();
     let (ends, _) = run_one(&mut ports, ghost_nar("newbie", &[]));
     assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
-    assert_eq!(asks(&ports), 0, "画面を出さない（4.11）");
+    assert_eq!(asks(&ports), 0, "画面を出さない");
     let ids = ports.raised_ids();
     assert!(
         !ids.contains(&"OnGhostTermsAccept") && !ids.contains(&"OnGhostTermsDecline"),
@@ -209,14 +154,18 @@ fn accepted_terms_send_accept_without_references_and_install() {
     assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
     assert_eq!(asks(&ports), 1);
     let raised = ports.raised();
-    assert_eq!(raised[1], ("OnGhostTermsAccept", Vec::new()), "4.5");
+    assert_eq!(
+        raised[1],
+        ("OnGhostTermsAccept", Vec::new()),
+        "受諾は Reference なしで送る"
+    );
     assert!(!ports.raised_ids().contains(&"OnGhostTermsDecline"));
     assert!(
         ports
             .under_root("ghost/newbie/ghost/master/descript.txt")
             .is_file()
     );
-    let terms = logged(&events, "install_terms");
+    let terms = events_named(&events, "install_terms");
     assert_eq!(terms.len(), 1);
     assert_eq!(terms[0].field_str("answer"), Some("accept"));
 }
@@ -232,7 +181,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
         for builder in [ghost_nar("newbie", &[]), balloon_nar()] {
             let mut ports = FakePorts::new();
             ports.terms_answer = answer;
-            let before = entries_under(ports.root.path());
+            let before = tree(ports.root.path());
             let (ends, events) = run_one(&mut ports, with_terms(builder));
 
             assert_eq!(ends, vec![ArchiveEnd::Declined], "{answer:?}");
@@ -242,16 +191,16 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
                     ("OnInstallBegin", Vec::new()),
                     ("OnGhostTermsDecline", Vec::new()),
                 ],
-                "{answer:?}: Decline だけ・OnInstallFailure は 0 件（4.6・4.7・4.8）"
+                "{answer:?}: Decline だけ・OnInstallFailure は 0 件"
             );
             assert_eq!(asks(&ports), 1);
             assert_eq!(installs(&ports), 0, "{answer:?}: 展開の口を呼ばない");
             assert_eq!(
-                entries_under(ports.root.path()),
+                tree(ports.root.path()),
                 before,
                 "{answer:?}: 宛先に 1 バイトも無い"
             );
-            let terms = logged(&events, "install_terms");
+            let terms = events_named(&events, "install_terms");
             assert_eq!(terms.len(), 1, "{answer:?}");
             assert_eq!(terms[0].field_str("answer"), Some(word));
             assert_eq!(terms[0].level, level, "{answer:?}");
@@ -260,7 +209,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
                 usize::from(answer == YesNo::Unavailable),
                 "{answer:?}: error! は出せなかったときの 1 件だけ"
             );
-            assert!(logged(&events, "install_failed").is_empty());
+            assert!(events_named(&events, "install_failed").is_empty());
         }
     }
 }
@@ -300,7 +249,7 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
     ];
     for (builder, word, phase) in cases {
         let mut ports = FakePorts::new();
-        let before = entries_under(ports.root.path());
+        let before = tree(ports.root.path());
         let (ends, events) = match builder {
             Some(builder) => run_one(&mut ports, builder),
             None => {
@@ -316,17 +265,17 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
                 ("OnInstallBegin", Vec::new()),
                 ("OnInstallFailure", vec![word.as_ref_str().to_owned()]),
             ],
-            "{word:?}: Reference0 は表の語 1 つだけ・1 以降は 0 個（5.1）"
+            "{word:?}: Reference0 は表の語 1 つだけ・1 以降は 0 個"
         );
-        assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない（5.4）");
+        assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない");
         assert_eq!(installs(&ports), 0);
-        assert_eq!(entries_under(ports.root.path()), before);
-        let failed = logged(&events, "install_failed");
+        assert_eq!(tree(ports.root.path()), before);
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1, "{word:?}");
         assert_eq!(failed[0].field_str("phase"), Some(phase), "{word:?}");
         assert_eq!(failed[0].field("rolled_back"), Some("true"));
         assert_eq!(failed[0].field_str("word"), Some(word.as_ref_str()));
-        assert!(logged(&events, "install_survivor").is_empty());
+        assert!(events_named(&events, "install_survivor").is_empty());
     }
 }
 
@@ -352,7 +301,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
                 ("OnInstallFailure", vec!["fileio".to_owned()]),
             ]
         );
-        assert_eq!(asks(&ports), 0, "画面を出さない（5.4）");
+        assert_eq!(asks(&ports), 0, "画面を出さない");
         assert!(
             ports
                 .calls
@@ -360,7 +309,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
                 .all(|call| !matches!(call, Call::Record(_))),
             "入らなかった物は覚えない"
         );
-        let failed = logged(&events, "install_failed");
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].field_str("kind"), Some("Io"));
         assert_eq!(failed[0].field_str("phase"), Some("commit"));
@@ -368,8 +317,8 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
             failed[0].field("rolled_back"),
             Some(if survivors == 0 { "true" } else { "false" })
         );
-        let logged_survivors = logged(&events, "install_survivor");
-        assert_eq!(logged_survivors.len(), survivors, "宛先ごとに 1 件（5.6）");
+        let logged_survivors = events_named(&events, "install_survivor");
+        assert_eq!(logged_survivors.len(), survivors, "宛先ごとに 1 件");
         for (event, tree) in logged_survivors.iter().zip(&trees) {
             assert_eq!(event.level, tracing::Level::ERROR);
             assert_eq!(
@@ -411,12 +360,12 @@ fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
         Some(&(
             "OnInstallCompleteAll",
             vec![
-                ["ghost", "balloon"].join("\u{1}"),
-                ["あたらしい", "まるい"].join("\u{1}"),
-                [ghost_at.as_str(), balloon_at.as_str()].join("\u{1}"),
+                joined(&["ghost", "balloon"]),
+                joined(&["あたらしい", "まるい"]),
+                joined(&[&ghost_at, &balloon_at]),
             ]
         )),
-        "最後に 1 回・2 本ぶんを byte 値 1 区切りで（2.8）"
+        "最後に 1 回・2 本ぶんを byte 値 1 区切りで"
     );
     assert_eq!(
         ports
@@ -433,7 +382,7 @@ fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
             .filter(|id| **id == "OnInstallBegin")
             .count(),
         2,
-        "並んだ順に 1 本ずつ（9.2）"
+        "並んだ順に 1 本ずつ"
     );
 }
 
@@ -459,7 +408,7 @@ fn complete_all_is_not_sent_unless_two_or_more_all_installed() {
         ),
         (
             "1 本目が宛先違い",
-            vec![shell_nar("よそのこ"), ghost_nar("newbie", &[])],
+            vec![shell_nar("よそのこ", &[]), ghost_nar("newbie", &[])],
             2,
         ),
         (
@@ -475,7 +424,7 @@ fn complete_all_is_not_sent_unless_two_or_more_all_installed() {
         assert_eq!(ends.len(), count, "{label}: 失敗しても次の書庫へ進む");
         assert!(
             !ports.raised_ids().contains(&"OnInstallCompleteAll"),
-            "{label}: {:?}（2.9）",
+            "{label}: {:?}",
             ports.raised_ids()
         );
     }
@@ -508,7 +457,7 @@ fn install_port_closing_sends_no_closing_notice_and_abandons() {
         );
         assert!(!ports.under_root("ghost/newbie").exists());
         assert!(!ports.under_root("balloon/round").exists());
-        assert_eq!(logged(&events, "install_abandoned").len(), 1);
+        assert_eq!(events_named(&events, "install_abandoned").len(), 1);
         assert_eq!(errors(&events), 0, "{port}: 終了で止めるのは失敗ではない");
     }
     // 起動中のゴーストの口が「もう起動中でない」と返した後、よその口が閉じた場合。
@@ -540,7 +489,7 @@ fn raise_closing_at_any_event_stops_every_later_event() {
             with_terms(ghost_nar("newbie", &[])),
             YesNo::No,
         ),
-        ("OnInstallRefuse", shell_nar("よそのこ"), YesNo::Yes),
+        ("OnInstallRefuse", shell_nar("よそのこ", &[]), YesNo::Yes),
         (
             "OnInstallFailure",
             ghost_nar("newbie", &[]).damage(Damage::NoEocd),
@@ -552,9 +501,27 @@ fn raise_closing_at_any_event_stops_every_later_event() {
         let mut ports = FakePorts::new();
         ports.terms_answer = answer;
         ports.replies.insert(closing, Raised::Closed);
-        let (ends, _) = run_many(&mut ports, vec![builder, balloon_nar()]);
+        let (ends, events) = run_many(&mut ports, vec![builder, balloon_nar()]);
 
-        assert_eq!(ends, vec![ArchiveEnd::Abandoned], "{closing}");
+        if closing == "OnInstallCompleteEx" {
+            assert!(
+                matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
+                "書いた後に閉じても入れ終えた形: {ends:?}"
+            );
+            let abandoned = events_named(&events, "install_abandoned");
+            assert_eq!(abandoned.len(), 1, "入れた書庫には出さず、後の書庫に 1 件");
+            assert!(
+                abandoned[0]
+                    .field("archive")
+                    .is_some_and(|archive| archive.ends_with("archive1.nar")),
+                "{:?}",
+                abandoned[0]
+            );
+            assert_eq!(abandoned[0].field("skipped"), Some("0"));
+            assert!(!ports.under_root("balloon/round").exists());
+        } else {
+            assert_eq!(ends, vec![ArchiveEnd::Abandoned], "{closing}");
+        }
         let ids = ports.raised_ids();
         assert_eq!(
             ids.last(),
@@ -580,12 +547,12 @@ fn raise_closing_at_any_event_stops_every_later_event() {
 fn missing_ghost_facts_abandons_before_anything_is_written() {
     let mut ports = FakePorts::new();
     ports.facts = None;
-    let before = entries_under(ports.root.path());
+    let before = tree(ports.root.path());
     let (ends, _) = run_one(&mut ports, with_terms(ghost_nar("newbie", &[])));
     assert_eq!(ends, vec![ArchiveEnd::Abandoned]);
     assert_eq!(ports.raised_ids(), vec!["OnInstallBegin"]);
     assert_eq!(asks(&ports), 0);
-    assert_eq!(entries_under(ports.root.path()), before);
+    assert_eq!(tree(ports.root.path()), before);
 }
 
 /// 口が「送らなかった」と答えたら「送りました」を残さず、旧仕様の完了へも続けない。
@@ -602,8 +569,8 @@ fn unsent_logs_unsent_and_does_not_fall_back_to_legacy_complete() {
         vec!["OnInstallBegin", "OnInstallCompleteEx"],
         "送らなかったときは OnInstallComplete を試さない"
     );
-    assert!(logged(&events, "install_event").is_empty());
-    let unsent = logged(&events, "install_event_unsent");
+    assert!(events_named(&events, "install_event").is_empty());
+    let unsent = events_named(&events, "install_event_unsent");
     assert_eq!(unsent.len(), 2);
     assert!(
         unsent

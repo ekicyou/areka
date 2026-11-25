@@ -19,11 +19,12 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::fallback_tests::count_event;
 use super::*;
 use crate::body_systems::NO_BODY;
+use crate::boot_resolve::boot_resolve_tests::{assert_one_event, count_event};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch_test_support::boot_context;
+use crate::readme::readme_tests::input_systems_len;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -37,16 +38,6 @@ pub(super) fn name(s: &str) -> GhostSpec {
 
 pub(super) fn folder(s: &str) -> GhostSpec {
     GhostSpec::Folder(s.to_owned())
-}
-
-/// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
-fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect();
-    assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
-    assert_eq!(hits[0].level, level, "{event} のレベル");
 }
 
 /// 根に 2 体のゴーストを組む: `A`（`name`＝Alice・`sakura.name`＝さくら）と `B`（`name` も
@@ -462,14 +453,6 @@ fn send_failure_logs_error_and_leaves_no_reservation() {
 }
 
 // ---------------------------------------------------------------- 台本の切替要求の取り出し
-
-/// 入力の段に載っている系の数（段がまだ無ければ 0）。
-fn input_systems_len(world: &World) -> usize {
-    world
-        .resource::<Schedules>()
-        .get(Input)
-        .map_or(0, |input| input.systems_len())
-}
 
 /// 登録は入力の段へ取り出しの系をちょうど 1 つ足し、受信端は置かない。受信端が無いまま段を
 /// 回しても無操作（LogSink の起動と同じ）。

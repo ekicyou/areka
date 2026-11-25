@@ -4,29 +4,30 @@
 //! 偽の SHIORI を通す。背景スレッドは起こさず、読み直しの頼み（後送りの列つき）は窓口の頼みの送出端へ
 //! 直接入れる。確かめること: 条件を満たせば同じゴーストへの知らせなしの切替が 1 回受け付けられ
 //! （`OnGhostChanging`・`OnClose` 0 件・起動の知らせは列の先頭で `OnGhostChanged`・`OnBoot` 0 件）、
-//! 切替の終わりで列の残りが新しいゴーストへ届き、読み直しの途中の切替の頼みは今日どおり無視される／
+//! 切替の終わりで列の残りが新しいゴーストへ届き、読み直しの途中の切替の頼みは `Busy` で断られる／
 //! 読み直せないとき、切替の予約が在る・引数の起動・入口が受け付けないなら列を今のゴーストへ送り、
 //! 終了の後・別のゴーストなら捨てる／切替が既定へ戻ると列は捨てる。読み直しの切替が終わると成功した
 //! 走行の残り（印つき）が消え、読み直しでない切替・失敗した切替では消さない。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_kanade::ChangeOrigin;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use tracing::Level;
 use wintf::ecs::Input;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::UpdateDesk;
+use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
-use crate::update::worker::DeskAsk;
-use areka_runtime::spine::RecordedCall;
+use crate::session_tests::{events_named, reservation, warns};
+use crate::update::UpdateTail;
+use crate::update::update_test_support::{plant_committed, refs_of};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use areka_session::exit_wait::begin_close;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use areka_session::ghost_switch::{
-    GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
-    request_ghost_switch,
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchStage, SwitchVerdict, request_ghost_switch,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
@@ -34,7 +35,7 @@ use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_s
 const TAIL_ROUNDS: usize = 4;
 
 /// 後送りの列（ゴーストの `OnUpdateComplete` → 総括）。
-fn tail() -> Vec<(&'static str, Vec<String>)> {
+fn tail() -> UpdateTail {
     vec![
         (
             "OnUpdateComplete",
@@ -59,15 +60,6 @@ fn reloading(folder: &'static str) -> FakeShiori {
     }))
 }
 
-/// ゴーストの `.update-work/` の下に、成功した走行の残り（印 `committed` と古い DLL の写し）を置く。
-fn plant_committed(ghost_dir: &Path, run: &str) -> PathBuf {
-    let dir = ghost_dir.join(".update-work").join(run);
-    std::fs::create_dir_all(dir.join("old")).expect("走行フォルダを組む");
-    std::fs::write(dir.join("old").join("yaya.dll"), b"old").expect("古い写しを置く");
-    std::fs::write(dir.join("committed"), b"").expect("印を置く");
-    dir
-}
-
 /// A を起こして定常に着いた土台（B は切替で起こせるが、起こされないことを数える）。
 fn running_a() -> SwitchRig {
     let mut rig = switch_rig(vec![("A", reloading("A")), ("B", reloading("B"))]);
@@ -80,29 +72,8 @@ fn running_a() -> SwitchRig {
     rig
 }
 
-/// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む。
-fn ask_reload(rig: &SwitchRig, ghost_dir: PathBuf, tail: Vec<(&'static str, Vec<String>)>) {
-    rig.world
-        .non_send::<UpdateDesk>()
-        .asks_tx
-        .send(DeskAsk::Reload { ghost_dir, tail })
-        .expect("窓口の頼みの受信端は生きている");
-}
-
-/// 呼び出しの列（`GET 名`／`NOTIFY 名`）。
-fn ids(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            other => format!("{other:?}"),
-        })
-        .collect()
-}
-
 fn boots_of(rig: &SwitchRig, folder: &str) -> Vec<Vec<String>> {
-    rig.calls(folder).iter().map(|c| ids(c)).collect()
+    rig.calls(folder).iter().map(|c| kinds(c)).collect()
 }
 
 /// `folder` の全起動で受けた `GET id` の数。
@@ -113,25 +84,6 @@ fn gets(rig: &SwitchRig, folder: &str, id: &str) -> usize {
         .flatten()
         .filter(|c| **c == want)
         .count()
-}
-
-/// `id` の GET の Reference（最初の 1 件）。
-fn refs_of(calls: &[RecordedCall], want: &str) -> Option<Vec<String>> {
-    calls.iter().find_map(|call| match call {
-        RecordedCall::Get { id, references } if id == want => Some(references.clone()),
-        _ => None,
-    })
-}
-
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
-fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events.iter().filter(|e| e.level == Level::WARN).collect()
 }
 
 /// 条件を満たした読み直しは、同じフォルダ・知らせなし・出どころ「自動」の切替として 1 回受け付けられ
@@ -149,7 +101,7 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
     let a_dir = rig.root.ghost_dir("A");
 
     let (flow, events) = capture(|| {
-        ask_reload(&rig, a_dir.clone(), tail());
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail());
         rig.world.run_schedule(Input);
         let reserved = rig
             .world
@@ -190,7 +142,7 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
     assert_eq!((calls.len(), b.len()), (2, 0), "A を 1 回起こし直すだけ");
     assert_eq!(current.as_deref(), Some("A"));
     assert_eq!(remembered, None, "覚えた物は使い切る");
-    let a: Vec<Vec<String>> = calls.iter().map(|c| ids(c)).collect();
+    let a: Vec<Vec<String>> = calls.iter().map(|c| kinds(c)).collect();
     for name in ["GET OnGhostChanging", "NOTIFY OnClose", "GET OnClose"] {
         assert!(
             a.iter().flatten().all(|id| id != name),
@@ -221,12 +173,12 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
         "古い A へは送らない"
     );
 
-    let requested = named(&events, "update_reload_requested");
+    let requested = events_named(&events, "update_reload_requested");
     assert_eq!(requested.len(), 1, "{events:?}");
     assert_eq!(requested[0].level, Level::INFO);
     assert_eq!(requested[0].field("verdict"), Some("Accepted"));
-    assert!(named(&events, "update_reload_skipped").is_empty());
-    let switched = named(&events, "ghost_switch_requested");
+    assert!(events_named(&events, "update_reload_skipped").is_empty());
+    let switched = events_named(&events, "ghost_switch_requested");
     assert_eq!(
         switched.len(),
         1,
@@ -239,13 +191,17 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
         switched[0].field("boot_event"),
         Some("Some(\"OnUpdateComplete\")")
     );
-    assert_eq!(named(&events, "ghost_switch_busy").len(), 1, "{events:?}");
-    let sent = named(&events, "update_tail_sent");
+    assert_eq!(
+        events_named(&events, "ghost_switch_busy").len(),
+        1,
+        "{events:?}"
+    );
+    let sent = events_named(&events, "update_tail_sent");
     assert_eq!(sent.len(), 1, "{events:?}");
     assert_eq!(sent[0].level, Level::INFO);
     assert_eq!(sent[0].field_str("when"), Some("after_switch"));
     assert_eq!(sent[0].field("count"), Some("1"));
-    assert!(named(&events, "update_tail_dropped").is_empty());
+    assert!(events_named(&events, "update_tail_dropped").is_empty());
 }
 
 /// 読み直せないときの列の行き先。
@@ -267,23 +223,23 @@ fn assert_not_reloaded(
     let (label, field, value) = verdict;
     let before = gets(rig, "A", "OnUpdateResult");
     let ((), events) = capture(|| {
-        ask_reload(rig, ghost_dir, tail());
+        ask_reload_for_test(&rig.world, ghost_dir, tail());
         rig.world.run_schedule(Input);
     });
     assert!(
-        named(&events, "ghost_switch_requested").is_empty()
-            && named(&events, "ghost_switch_busy").is_empty(),
+        events_named(&events, "ghost_switch_requested").is_empty()
+            && events_named(&events, "ghost_switch_busy").is_empty(),
         "{value}: 切替の要求 0 件: {events:?}"
     );
-    let decided = named(&events, label);
+    let decided = events_named(&events, label);
     assert_eq!(decided.len(), 1, "{value}: {events:?}");
     assert_eq!(decided[0].level, Level::WARN, "{value}");
     // `reason` は文字列・`verdict` は Debug の綴り。
     let got = decided[0].field_str(field).or(decided[0].field(field));
     assert_eq!(got, Some(value), "{value}: {events:?}");
     let (sent, dropped) = (
-        named(&events, "update_tail_sent"),
-        named(&events, "update_tail_dropped"),
+        events_named(&events, "update_tail_sent"),
+        events_named(&events, "update_tail_dropped"),
     );
     match fate {
         Fate::Sent => {
@@ -314,9 +270,9 @@ fn assert_not_reloaded(
     // 判定の記録と列を捨てた記録のほかに `warn!` は無い（入口が断った記録を除く）。
     let others: Vec<_> = warns(&events)
         .into_iter()
-        .filter(|e| {
+        .filter(|name| {
             !matches!(
-                e.field_str("event"),
+                name,
                 Some("update_reload_skipped" | "update_reload_requested")
                     | Some("update_tail_dropped" | "ghost_switch_unknown")
             )
@@ -344,22 +300,10 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
     );
 
     // 切替の予約が在る（UI の側だけに置く＝kanade へは届かない）→ 今のゴーストへ送る。
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: a_dir.clone(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    let mut switching = reservation(SwitchStage::SendOff);
+    switching.target.dir = rig.root.ghost_dir("B");
+    switching.prev.dir = a_dir.clone();
+    rig.world.insert_non_send(switching);
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();
 
@@ -411,14 +355,21 @@ fn a_reload_without_a_running_ghost_drops_the_tail() {
     assert!(rig.shutdown(), "A を降ろす");
 
     let ((), events) = capture(|| {
-        ask_reload(&rig, a_dir, tail());
+        ask_reload_for_test(&rig.world, a_dir, tail());
         rig.world.run_schedule(Input);
     });
-    let dropped = named(&events, "update_tail_dropped");
+    let skipped = events_named(&events, "update_reload_skipped");
+    assert_eq!(skipped.len(), 1, "{events:?}");
+    assert_eq!(skipped[0].field_str("reason"), Some("other_ghost"));
+    let dropped = events_named(&events, "update_tail_dropped");
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0].level, Level::WARN);
-    assert!(named(&events, "update_tail_sent").is_empty(), "{events:?}");
-    assert!(named(&events, "ghost_switch_requested").is_empty());
+    assert_eq!(dropped[0].field_str("reason"), Some("other_ghost"));
+    assert!(
+        events_named(&events, "update_tail_sent").is_empty(),
+        "{events:?}"
+    );
+    assert!(events_named(&events, "ghost_switch_requested").is_empty());
 }
 
 /// 読み直しの切替が終わる（古い SHIORI を降ろして起き直ったゴーストが定常に入る）と、そのゴーストの
@@ -437,7 +388,7 @@ fn a_finished_reload_purges_the_marked_leftover_once() {
 
     let (finished, events) = capture(|| {
         // 列は先頭だけ（ゴーストが対象でない回の総括）。
-        ask_reload(&rig, a_dir.clone(), tail().split_off(1));
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail().split_off(1));
         rig.world.run_schedule(Input);
         rig.pump_talking_until(|rig| {
             rig.exit_requested()
@@ -457,12 +408,18 @@ fn a_finished_reload_purges_the_marked_leftover_once() {
         second.contains(&"GET OnUpdateResult".to_owned()),
         "起動の知らせは総括: {second:?}"
     );
-    let done = named(&events, "update_purge_done");
+    let done = events_named(&events, "update_purge_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].level, Level::INFO);
     assert_eq!(done[0].field("removed"), Some("1"));
-    assert!(named(&events, "update_purge_held").is_empty(), "{events:?}");
-    assert!(named(&events, "update_tail_sent").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "update_purge_held").is_empty(),
+        "{events:?}"
+    );
+    assert!(
+        events_named(&events, "update_tail_sent").is_empty(),
+        "{events:?}"
+    );
 }
 
 /// 読み直しでない切替（メニューから同じゴーストへ）が終わっても、印つきの残りは消さない
@@ -499,7 +456,7 @@ fn a_switch_without_a_reload_leaves_the_marked_leftover() {
     );
     assert!(marked.exists(), "読み直しでない切替では消さない");
     for name in ["update_purge_done", "update_purge_held", "update_tail_sent"] {
-        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+        assert!(events_named(&events, name).is_empty(), "{name}: {events:?}");
     }
 }
 
@@ -530,7 +487,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
     let marked = plant_committed(&a_dir, "run1");
 
     let (welcomed, events) = capture(|| {
-        ask_reload(&rig, a_dir.clone(), tail());
+        ask_reload_for_test(&rig.world, a_dir.clone(), tail());
         rig.world.run_schedule(Input);
         rig.pump_talking_until(|rig| {
             rig.exit_requested()
@@ -545,19 +502,19 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
 
     assert!(welcomed && !exited, "既定ゴーストへ戻る: {events:?}");
     assert_eq!(
-        named(&events, "update_reload_requested").len(),
+        events_named(&events, "update_reload_requested").len(),
         1,
         "{events:?}"
     );
     assert_eq!(
-        named(&events, "ghost_switch_target_fault").len(),
+        events_named(&events, "ghost_switch_target_fault").len(),
         1,
         "{events:?}"
     );
     assert!(marked.exists(), "失敗した切替では消さない");
     assert_eq!(remembered, None, "覚えた物は捨てる");
     for name in ["update_purge_done", "update_purge_held", "update_tail_sent"] {
-        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+        assert!(events_named(&events, name).is_empty(), "{name}: {events:?}");
     }
     assert!(
         defaults[0].contains(&"GET OnBoot".to_owned()),
@@ -567,7 +524,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
         defaults[0].iter().all(|c| !c.contains("OnUpdate")),
         "既定ゴーストへ列は送らない: {defaults:?}"
     );
-    let dropped = named(&events, "update_tail_dropped");
+    let dropped = events_named(&events, "update_tail_dropped");
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0].level, Level::WARN);
     assert_eq!(dropped[0].field_str("reason"), Some("switch_failed"));

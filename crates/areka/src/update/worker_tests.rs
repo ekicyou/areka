@@ -15,10 +15,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use areka_kanade::resources::{ResourceOutcome, is_allowed_resource_id};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod, WaitBudget};
+use areka_runtime::spine::{Progress, SPIN_WAIT, join_bounded, join_thread_bounded, wait_recv};
 use areka_update::{Fetch, FetchError};
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -26,6 +27,9 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::fetch_url_test_support::FakeFetch;
+use crate::session_tests::write_descript;
+use crate::session_tests::{events_named, warn_or_worse};
+use crate::update::update_test_support::close;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::exit_wait::{ClosingWaits, begin_close, register_gate};
@@ -48,6 +52,15 @@ fn counting_fetch() -> (NewFetch, Arc<AtomicUsize>) {
         Ok(Box::new(FakeFetch::new()) as Box<dyn Fetch>)
     });
     (new_fetch, made)
+}
+
+/// 受け口に 1 件届くまで有界で待つ（届かない・送り手が居ないなら赤）。
+fn recv_within<T>(what: &str, rx: &Receiver<T>) -> T {
+    wait_recv(what, Progress::Unknown, rx).expect(what)
+}
+
+fn next_ask(asks: &Receiver<DeskAsk>) -> DeskAsk {
+    recv_within("窓口への頼み", asks)
 }
 
 /// 誰も読まない通信中の数（数を見ないテストの口が持つ）。
@@ -85,27 +98,13 @@ fn ports_counting(
     )
 }
 
-/// 門を 1 つ登記した World で終了を始める（門が閉じる）。書いている最中だった仕事を返す。
-fn close(gate: &Arc<WorkGate>) -> ClosingWaits {
-    let mut world = World::new();
-    register_gate(&mut world, "update", gate.clone(), |_| {});
-    begin_close(&mut world)
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 /// kanade の代わりにイベントを 1 件だけ受けて `answer` を返し（None は返信端を落とす）、
 /// 本物の口の写しと記録を返す。2 件目が届いていたら赤。
 fn raise_answered(answer: Option<RaiseOutcome>) -> (Raised, Vec<CapturedEvent>) {
     let (kanade, rx) = mpsc::channel();
     let (ports, _asks) = ports(kanade, Arc::default(), counting_fetch().0);
     let answerer = thread::spawn(move || {
-        match rx.recv().expect("イベントが 1 件届く") {
+        match recv_within("イベントが 1 件届く", &rx) {
             KanadeMsg::RaiseEvent {
                 id,
                 references,
@@ -125,7 +124,8 @@ fn raise_answered(answer: Option<RaiseOutcome>) -> (Raised, Vec<CapturedEvent>) 
         rx
     });
     let (raised, events) = capture(|| ports.raise(EVENT, refs()));
-    let rx = answerer.join().expect("答える側が赤を出さない");
+    let rx = join_thread_bounded("kanade の代わりの終わり", None, answerer)
+        .expect("答える側が赤を出さない");
     assert!(
         matches!(rx.try_recv(), Err(TryRecvError::Empty)),
         "送るのは 1 件だけ"
@@ -184,7 +184,7 @@ fn raise_maps_five_outcomes_and_dropped_reply() {
                 assert_eq!(found[0].field_str("id"), Some(EVENT));
             }
             None => assert!(
-                !events.iter().any(|e| e.level <= tracing::Level::WARN),
+                warn_or_worse(&events).is_empty(),
                 "{answer:?} は警告も失敗も出さない: {events:?}"
             ),
         }
@@ -211,7 +211,7 @@ fn resources_answered(
     let (kanade, rx) = mpsc::channel();
     let (ports, _asks) = ports(kanade, Arc::default(), counting_fetch().0);
     let answerer = thread::spawn(move || {
-        match rx.recv().expect("照会が 1 件届く") {
+        match recv_within("照会が 1 件届く", &rx) {
             KanadeMsg::ResourceQuery { ids, reply } => {
                 assert_eq!(ids, ["homeurl", "useorigin1"], "2 つを 1 回で照会する");
                 let _ = reply.send(ids.into_iter().zip(answers).collect());
@@ -221,7 +221,8 @@ fn resources_answered(
         rx
     });
     let (found, events) = capture(|| ports.resources());
-    let rx = answerer.join().expect("答える側が赤を出さない");
+    let rx = join_thread_bounded("kanade の代わりの終わり", None, answerer)
+        .expect("答える側が赤を出さない");
     assert!(
         matches!(rx.try_recv(), Err(TryRecvError::Empty)),
         "照会は 1 件だけ"
@@ -229,11 +230,12 @@ fn resources_answered(
     (found, events)
 }
 
-/// 値は空でなければ Some、空・値なし・失敗は None（失敗は `warn!`）。
+/// 値は空でなければ Some、空・値なし・失敗は None（失敗は `warn!`）。`homeurl` は前後の空白を落とし、
+/// 空白だけなら None。
 #[test]
 fn resources_query_both_ids_once_and_map_values() {
     let (found, events) = resources_answered(vec![
-        ResourceOutcome::Value(HOMEURL.to_owned()),
+        ResourceOutcome::Value(format!("{HOMEURL} ")),
         ResourceOutcome::Value("1".to_owned()),
     ]);
     assert_eq!(
@@ -245,12 +247,14 @@ fn resources_query_both_ids_once_and_map_values() {
     );
     assert!(events_named(&events, "update_resource_failed").is_empty());
 
-    let (found, events) = resources_answered(vec![
-        ResourceOutcome::Value(String::new()),
-        ResourceOutcome::NoContent,
-    ]);
-    assert_eq!(found, Some(GhostResources::default()), "空と値なしは None");
-    assert!(events_named(&events, "update_resource_failed").is_empty());
+    for blank in ["", " "] {
+        let (found, events) = resources_answered(vec![
+            ResourceOutcome::Value(blank.to_owned()),
+            ResourceOutcome::NoContent,
+        ]);
+        assert_eq!(found, Some(GhostResources::default()), "{blank:?}");
+        assert!(events_named(&events, "update_resource_failed").is_empty());
+    }
 
     let (found, events) = resources_answered(vec![
         ResourceOutcome::Failed("timeout".to_owned()),
@@ -291,7 +295,7 @@ fn nothing_is_sent_after_exit_began() {
     assert_eq!(ports.raise(EVENT, refs()), Raised::Closed);
     assert_eq!(ports.resources(), None);
     drop(ports);
-    let sent = counter.join().expect("数える側が終わる");
+    let sent = join_thread_bounded("数える側の終わり", None, counter).expect("数える側が終わる");
     assert_eq!(sent, 0, "終了の後の送出は 0 件");
 }
 
@@ -369,7 +373,7 @@ fn open_gate_runs_engine_inside_write_stage_with_label() {
     let ((), events) = capture(|| {
         waits.wait(WaitBudget {
             started: Instant::now(),
-            limit: Duration::from_secs(3600),
+            limit: SPIN_WAIT,
         })
     });
     let done = events_named(&events, "exit_wait_done");
@@ -427,7 +431,7 @@ fn gate_closed_while_making_fetch_skips_run_and_releases_gate() {
     let ((), events) = capture(|| {
         waits.wait(WaitBudget {
             started: Instant::now(),
-            limit: Duration::from_secs(3600),
+            limit: SPIN_WAIT,
         })
     });
     assert!(
@@ -509,6 +513,8 @@ fn run_one(
     gate: Arc<WorkGate>,
     new_fetch: NewFetch,
     online: &'static OnlineCounter,
+    roots: BasewareRoots,
+    exe_dir: Option<PathBuf>,
 ) -> (
     Receiver<DeskAsk>,
     Receiver<KanadeMsg>,
@@ -521,8 +527,8 @@ fn run_one(
     jobs.send(UpdateJob {
         order,
         kanade,
-        roots: BasewareRoots::new(Vec::new()),
-        exe_dir: None,
+        roots,
+        exe_dir,
     })
     .expect("仕事を渡す");
     (asks, rx, jobs, handle)
@@ -535,7 +541,7 @@ fn take_query(
     Vec<&'static str>,
     areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
 ) {
-    match rx.recv().expect("仕事の送出端へ照会が届く") {
+    match recv_within("仕事の送出端へ照会が届く", rx) {
         KanadeMsg::ResourceQuery { ids, reply } => (ids, reply),
         _ => panic!("ResourceQuery のはず"),
     }
@@ -552,9 +558,11 @@ fn worker_runs_a_job_and_asks_order_done() {
         Arc::default(),
         new_fetch,
         &ONLINE,
+        BasewareRoots::new(Vec::new()),
+        None,
     );
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
     let (ids, reply) = take_query(&rx);
     assert!(ONLINE.is_online(), "標準の手続きの間は通信中");
     let _ = reply.send(
@@ -562,7 +570,7 @@ fn worker_runs_a_job_and_asks_order_done() {
             .map(|id| (id, ResourceOutcome::NoContent))
             .collect(),
     );
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone);
     assert!(!ONLINE.is_online(), "「終わった」の前に数が戻っている");
     assert_eq!(
         made.load(Ordering::SeqCst),
@@ -571,9 +579,7 @@ fn worker_runs_a_job_and_asks_order_done() {
     );
 
     drop(jobs);
-    handle
-        .join()
-        .expect("仕事の送出端が落ちたらスレッドは終わる");
+    join_bounded("update", handle).expect("仕事の送出端が落ちたらスレッドは終わる");
 }
 
 /// メニューの依頼: `OnUpdateProcessExec` の答え待ちの間は数を立てず、標準の手続きが
@@ -586,9 +592,11 @@ fn online_is_not_raised_while_awaiting_exec_and_drops_on_failure() {
         Arc::default(),
         counting_fetch().0,
         &ONLINE,
+        BasewareRoots::new(Vec::new()),
+        None,
     );
 
-    match rx.recv().expect("答えを問うイベントが届く") {
+    match recv_within("答えを問うイベントが届く", &rx) {
         KanadeMsg::RaiseEvent { id, reply, .. } => {
             assert_eq!(id, "OnUpdateProcessExec");
             assert!(!ONLINE.is_online(), "答え待ちの間は通信中でない");
@@ -598,15 +606,15 @@ fn online_is_not_raised_while_awaiting_exec_and_drops_on_failure() {
         }
         _ => panic!("RaiseEvent のはず"),
     }
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
     let (_ids, reply) = take_query(&rx);
     assert!(ONLINE.is_online(), "標準の手続きの間は通信中");
     drop(reply);
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone);
     assert!(!ONLINE.is_online(), "失敗で抜けても「終わった」の前に戻る");
 
     drop(jobs);
-    handle.join().expect("スレッドは終わる");
+    join_bounded("update", handle).expect("スレッドは終わる");
 }
 
 /// 門が閉じている: 標準の手続きは始まって（`Started`）照会を送らずに抜け、「終わった」の前に数が戻る。
@@ -620,10 +628,12 @@ fn online_drops_when_the_gate_is_closed() {
         gate,
         counting_fetch().0,
         &ONLINE,
+        BasewareRoots::new(Vec::new()),
+        None,
     );
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone);
     assert!(
         !ONLINE.is_online(),
         "門が閉じていても「終わった」の前に戻る"
@@ -631,7 +641,7 @@ fn online_drops_when_the_gate_is_closed() {
     assert!(rx.try_recv().is_err(), "照会は送らない");
 
     drop(jobs);
-    handle.join().expect("スレッドは終わる");
+    join_bounded("update", handle).expect("スレッドは終わる");
 }
 
 /// 口の単体: 始まる前は立たず、`standard_started` で立ち（重ねても真偽は 1 つ）、口を落とすと戻る。
@@ -655,14 +665,7 @@ fn bundled_balloon(label: &str) -> (TempPath, PathBuf, PathBuf) {
     let (user, exe) = (tmp.child("user"), tmp.child("exe"));
     std::fs::create_dir_all(&user).expect("書ける根");
     let b1 = exe.join("balloon").join("b1");
-    std::fs::create_dir_all(&b1).expect("同梱のバルーン");
-    std::fs::write(
-        b1.join("descript.txt"),
-        "charset,UTF-8
-name,B
-",
-    )
-    .expect("descript");
+    write_descript(&b1, "name,B");
     (tmp, user, exe)
 }
 
@@ -681,35 +684,33 @@ fn balloon_dir_begin_dir(roots: BasewareRoots, exe: &Path, dir: PathBuf) -> Stri
         name: "B".to_owned(),
         descript_homeurl: Some(HOMEURL.to_owned()),
     });
-    let (desk, asks) = mpsc::channel();
     let (new_fetch, made) = counting_fetch();
-    let (jobs, handle) = spawn_worker(desk, Arc::default(), new_fetch, &UNOBSERVED);
-    let (kanade, rx) = mpsc::channel();
-    jobs.send(UpdateJob {
+    let (asks, rx, jobs, handle) = run_one(
         order,
-        kanade,
+        Arc::default(),
+        new_fetch,
+        &UNOBSERVED,
         roots,
-        exe_dir: Some(exe.to_path_buf()),
-    })
-    .expect("仕事を渡す");
+        Some(exe.to_path_buf()),
+    );
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
     let (ids, reply) = take_query(&rx);
     let _ = reply.send(
         ids.into_iter()
             .map(|id| (id, ResourceOutcome::NoContent))
             .collect(),
     );
-    let dir = match rx.recv().expect("対象の始まりのイベントが届く") {
+    let dir = match recv_within("対象の始まりのイベントが届く", &rx) {
         KanadeMsg::RaiseEvent { references, .. } => references[1].clone(),
         _ => panic!("RaiseEvent のはず"),
     };
     assert_eq!(made.load(Ordering::SeqCst), 0, "取り込みの前");
     // 返信端と受信端を落とす＝閉じたとして対象を捨て、依頼を終える。
     drop(rx);
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone);
     drop(jobs);
-    handle.join().expect("スレッドは終わる");
+    join_bounded("update", handle).expect("スレッドは終わる");
     dir
 }
 
@@ -753,31 +754,29 @@ fn balloon_without_homeurl_is_skipped_and_not_copied() {
         name: "B".to_owned(),
         descript_homeurl: None,
     });
-    let (desk, asks) = mpsc::channel();
     let (new_fetch, made) = counting_fetch();
-    let (jobs, handle) = spawn_worker(desk, Arc::default(), new_fetch, &UNOBSERVED);
-    let (kanade, rx) = mpsc::channel();
-    jobs.send(UpdateJob {
+    let (asks, rx, jobs, handle) = run_one(
         order,
-        kanade,
+        Arc::default(),
+        new_fetch,
+        &UNOBSERVED,
         roots,
-        exe_dir: Some(exe.clone()),
-    })
-    .expect("仕事を渡す");
+        Some(exe.clone()),
+    );
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
     let (ids, reply) = take_query(&rx);
     let _ = reply.send(
         ids.into_iter()
             .map(|id| (id, ResourceOutcome::NoContent))
             .collect(),
     );
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone), "飛ばして終える");
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone, "飛ばして終える");
     assert!(rx.try_recv().is_err(), "始まりのイベントは送らない");
     assert_eq!(made.load(Ordering::SeqCst), 0, "取り込まない");
     assert!(!user.join("balloon").exists(), "写さない");
     drop(jobs);
-    handle.join().expect("スレッドは終わる");
+    join_bounded("update", handle).expect("スレッドは終わる");
 }
 
 /// 照会で依頼をやめたとき（`update_abandoned at=resources`）は、印の付いた並びで更新先の在る
@@ -796,24 +795,22 @@ fn abandoned_at_resources_does_not_copy_the_balloon_target() {
         name: "B".to_owned(),
         descript_homeurl: Some(HOMEURL.to_owned()),
     });
-    let (desk, asks) = mpsc::channel();
-    let (jobs, handle) = spawn_worker(desk, Arc::default(), counting_fetch().0, &UNOBSERVED);
-    let (kanade, rx) = mpsc::channel();
-    jobs.send(UpdateJob {
+    let (asks, rx, jobs, handle) = run_one(
         order,
-        kanade,
+        Arc::default(),
+        counting_fetch().0,
+        &UNOBSERVED,
         roots,
-        exe_dir: Some(exe.clone()),
-    })
-    .expect("仕事を渡す");
+        Some(exe.clone()),
+    );
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(next_ask(&asks), DeskAsk::Started);
     let (_ids, reply) = take_query(&rx);
     drop(reply);
-    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone), "照会でやめる");
+    assert_eq!(next_ask(&asks), DeskAsk::OrderDone, "照会でやめる");
     assert!(!user.join("balloon").exists(), "写さない");
     drop(jobs);
-    handle.join().expect("スレッドは終わる");
+    join_bounded("update", handle).expect("スレッドは終わる");
 }
 
 /// 印の無い並びでは写さず、同梱のフォルダのまま。
@@ -874,27 +871,23 @@ fn ghost_inner_balloon_target_is_written_in_place() {
 
 // ---------------------------------------------------------------- 字面の検査
 
-/// 本体・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
-/// で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
-/// `update/worker.rs` の 2 つだけ。分ける前に本体の `src` が覆っていた範囲を歩くため、
-/// 3 つの `src` を歩き、見出しに crate の名前を付ける。
+/// 本体・`areka-session`・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を
+/// 除く）で `WinHttp` で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
+/// `update/worker.rs` の 2 つだけ。見出しに crate の名前を付ける。
 #[test]
 fn winhttp_is_spelled_only_in_two_production_files() {
     let mut spelled: Vec<(String, String)> = Vec::new();
-    for (krate, src) in [
-        (
-            "areka",
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
-        ),
-        (
-            "areka-runtime",
-            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
-        ),
-        (
-            "areka-input",
-            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
-        ),
-    ] {
+    for (krate, src) in [(
+        "areka",
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
+    )]
+    .into_iter()
+    .chain(
+        ["areka-session", "areka-runtime", "areka-input"].map(|krate| {
+            let src = areka_session::crate_source_test_support::crate_path(krate, "src");
+            (krate, src)
+        }),
+    ) {
         let mut stack = vec![src.clone()];
         let mut read = 0;
         while let Some(dir) = stack.pop() {

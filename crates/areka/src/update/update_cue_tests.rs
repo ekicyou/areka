@@ -10,36 +10,24 @@ use super::*;
 use std::sync::mpsc::{Receiver, channel};
 
 use areka_ghost::BasewareRoot;
-use areka_sakura::sysvar::SystemVarSnapshot;
-use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use dola::DynamicValue;
-use dola::cue::{ActorKey, CueCommand, CuePlayer, CueSink, TalkCue};
+use dola::cue::CueSink;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_runtime::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 
+use crate::session_tests::write_descript;
+use crate::session_tests::{events_named, play_into, warns};
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
-use crate::update::{self as update, desk};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use areka_session::ghost_session::{GhostSession, GhostSlot};
+use crate::update::desk;
+use crate::update::update_test_support::slot_world;
 
 // ---------------------------------------------------------------- 道具立て
 
 fn sink() -> (UpdateCueSink, Receiver<RawUpdateRequest>) {
     let (tx, rx) = channel();
     (UpdateCueSink::new(tx), rx)
-}
-
-/// 台本の文字列を本番と同じ解析と組み立てで cue にし、受け口へ最後まで配る。
-fn play_into(script: &str, sink: UpdateCueSink) {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(sink));
-    player.tick(compiled.sheet.absolute_end_time());
 }
 
 /// 素の受信端を渡した受け口へ台本の文字列を配る。
@@ -57,41 +45,11 @@ fn play_script(script: &str) -> (Vec<RawUpdateRequest>, Vec<CapturedEvent>) {
 fn desk_world() -> (World, TempPath) {
     let tmp = TempPath::new("areka-update-cue-desk");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    let master = root.ghost_dir("emo").join("ghost").join("master");
-    std::fs::create_dir_all(&master).expect("検体のフォルダを作る");
-    std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,Emo\r\n")
-        .expect("descript.txt を書く");
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    update::register(&mut world);
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: tmp.path().join("profile"),
-        helper_exe: tmp.path().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("emo"),
-                balloon_root: root.balloon_dir("kaku"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir("emo"),
-                folder: Some("emo".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("kaku"),
-                folder: Some("kaku".to_owned()),
-            },
-        },
-    });
-    let (kanade, _) = channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(kanade),
-        root.ghost_dir("emo"),
-    ))));
+    write_descript(
+        &root.ghost_dir("emo").join("ghost").join("master"),
+        "name,Emo",
+    );
+    let (world, _) = slot_world(tmp.path(), "emo", "kaku");
     (world, tmp)
 }
 
@@ -106,25 +64,10 @@ fn play_to_desk(script: &str) -> Vec<CapturedEvent> {
     events
 }
 
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 fn emit_one(name: &str, tokens: &[&str]) -> (Vec<RawUpdateRequest>, Vec<CapturedEvent>) {
     let (mut sink, rx) = sink();
     let ((), events) = capture(|| sink.emit(carrier_cue(name, tokens)));
     (rx.try_iter().collect(), events)
-}
-
-fn warns(events: &[CapturedEvent]) -> Vec<Option<&str>> {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| e.field_str("event"))
-        .collect()
 }
 
 fn other(pairs: &[(TargetKind, &str)]) -> RawUpdateRequest {
@@ -288,17 +231,7 @@ fn not_ours_is_benign_skip_without_warning() {
 fn unopenable_own_cue_warns_and_sends_nothing() {
     for name in ["updatebymyself", "update", "updateother"] {
         let (mut sink, rx) = sink();
-        let ((), events) = capture(|| {
-            sink.emit(TalkCue {
-                at: 0.0,
-                actor: ActorKey::from("0"),
-                command: CueCommand::Custom {
-                    command: name.into(),
-                    params: DynamicValue::Null,
-                },
-                duration: 0.0,
-            })
-        });
+        let ((), events) = capture(|| sink.emit(broken_custom_cue("0", name)));
         assert_eq!(rx.try_iter().count(), 0, "{name}");
         assert_eq!(
             warns(&events),
@@ -329,7 +262,7 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
 #[test]
 fn script_string_reaches_the_desk_and_is_accepted() {
     let events = play_to_desk(r"\![update,ghost]\e");
-    let started = named(&events, "update_order_started");
+    let started = events_named(&events, "update_order_started");
     assert_eq!(started.len(), 1, "依頼はちょうど 1 件: {events:?}");
     assert_eq!(started[0].level, tracing::Level::INFO);
     assert_eq!(
@@ -355,7 +288,7 @@ fn script_string_reaches_the_desk_and_is_accepted() {
 fn refused_form_reaches_no_order() {
     let events = play_to_desk(r"\![updatebymyself,checkonly]\e");
     assert!(
-        named(&events, "update_order_started").is_empty(),
+        events_named(&events, "update_order_started").is_empty(),
         "依頼は 0 件: {events:?}"
     );
     assert_eq!(warns(&events), vec![Some("update_cue_refused")]);

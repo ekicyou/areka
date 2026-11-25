@@ -49,8 +49,12 @@ pub(crate) fn listed_from<'a>(
 pub(crate) enum CopyPlan {
     /// 写さない（印の付いた項目が無い・実行ファイルの隣の根の直下の物でない・書ける根が並びで下）。
     AsIs,
-    /// 写す（`to` は `<書ける根>\<ghost|balloon>\<フォルダ名>`・書ける根の綴りは並びの `dir()` のまま）。
-    Copy { from: PathBuf, to: PathBuf },
+    /// 写す（`to` は `<書ける根>\<ghost|balloon>\<フォルダ名>`・`user_dir` は書ける根の `dir()` のまま・作業の棚 `<書ける根>\.copy-work\` の親）。
+    Copy {
+        from: PathBuf,
+        to: PathBuf,
+        user_dir: PathBuf,
+    },
 }
 
 fn store_of(root: &BasewareRoot, kind: StoreKind) -> PathBuf {
@@ -85,13 +89,14 @@ pub(crate) fn plan_copy(
             CopyPlan::Copy {
                 from: dir.to_path_buf(),
                 to: store_of(&items[u], kind).join(folder),
+                user_dir: items[u].dir().to_path_buf(),
             }
         }
         _ => CopyPlan::AsIs,
     }
 }
 
-fn kind_name(kind: StoreKind) -> &'static str {
+pub(super) fn kind_name(kind: StoreKind) -> &'static str {
     match kind {
         StoreKind::Ghost => "ghost",
         StoreKind::Balloon => "balloon",
@@ -106,18 +111,14 @@ pub fn copy_for_write(
     kind: StoreKind,
     dir: &Path,
 ) -> PathBuf {
-    let CopyPlan::Copy { from, to } = plan_copy(roots, exe_dir, kind, dir) else {
+    let CopyPlan::Copy { from, to, user_dir } = plan_copy(roots, exe_dir, kind, dir) else {
         return dir.to_path_buf();
     };
     if to.exists() {
         return to;
     }
-    // 作業の棚は並びの書ける根の `dir()` の下（`<書ける根>\.copy-work\`）。
-    let Some(work_root) = roots.user_root().map(|r| r.dir().to_path_buf()) else {
-        return dir.to_path_buf();
-    };
     let kind = kind_name(kind);
-    match areka_user_data::copy_tree_atomic(&from, &to, &work_root) {
+    match areka_user_data::copy_tree_atomic(&from, &to, &user_dir) {
         Ok(CopyDone::Copied(stats)) => {
             tracing::info!(
                 event = "user_data_copied",
@@ -173,7 +174,7 @@ pub fn copy_unless_readonly(
     if !readonly {
         return copy_for_write(roots, exe_dir, kind, dir);
     }
-    if let CopyPlan::Copy { from, to } = plan_copy(roots, exe_dir, kind, dir) {
+    if let CopyPlan::Copy { from, to, .. } = plan_copy(roots, exe_dir, kind, dir) {
         tracing::info!(
             event = "user_data_copy_withheld",
             kind = kind_name(kind),

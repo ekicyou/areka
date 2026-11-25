@@ -1,24 +1,49 @@
 //! `\![execute,install,url]` の取得。
 //!
 //! URL の本文を areka 専用の一時フォルダ（`%TEMP%\areka\download\`）へ落とし、落とし終えたら
-//! 出どころ「台本」の生のインストールの要求を窓口へ送る。取得は短命のスレッド `install-fetch`
-//! で行い、門は持たない（終了で待たない・落としかけの物は次の取得の 7 日の掃除に任せる）。
+//! 出どころ「台本」の生のインストールの要求を窓口へ送る。取得は窓口が最初の URL で起こす長く生きる
+//! スレッド `install-fetch` が 1 件ずつ行い、門 `install-fetch` に URL を置く（終了では待たずに
+//! 記録だけ残す）。入れ終えた書庫は背景のスレッド `install` が消し、落としかけと消せなかった物は
+//! 次の取得の 7 日の掃除に任せる。
 
 use std::fmt::Display;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::mpsc::Sender;
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{self, Sender};
+use std::thread;
 use std::time::{Duration, SystemTime};
 
 use areka_kanade::online::OnlineCounter;
+use areka_session::exit_wait::WorkGate;
 use areka_update::{Fetch, FetchError, WinHttpFetch};
 
+use crate::install::worker::DeskAsk;
 use crate::install::{InstallOrigin, RawInstallRequest};
 
-/// 取得口の作り方（本番は `WinHttpFetch::new`・テストは偽の取得口）。取得口はスレッドの中で作る。
-pub(crate) type MakeFetch = Box<dyn FnOnce() -> Result<Box<dyn Fetch>, FetchError> + Send>;
+/// 取得口の作り口（本番は `WinHttpFetch::new`・テストは偽の取得口）。取得のスレッドが URL ごとに呼ぶ。
+pub(crate) type MakeFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>;
+
+/// 取得のスレッドの道具（落とす先・取得口の作り口・通信中の数）。
+#[derive(Clone)]
+pub(crate) struct FetchTools {
+    pub dir: PathBuf,
+    pub make: MakeFetch,
+    pub online: &'static OnlineCounter,
+}
+
+impl FetchTools {
+    /// 本番の道具（`download_dir`・`WinHttpFetch`・プロセスの通信中の数）。
+    pub(crate) fn real() -> FetchTools {
+        FetchTools {
+            dir: download_dir(),
+            make: Arc::new(|| Ok(Box::new(WinHttpFetch::new()?) as Box<dyn Fetch>)),
+            online: &areka_kanade::online::PROCESS,
+        }
+    }
+}
 
 /// これより古いファイルを次の取得のときに消す。
 const KEEP: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -61,11 +86,32 @@ pub(crate) fn download(
     sweep_old(dir, now);
     let bytes = fetch.get(url)?;
     let path = dir.join(file_name(url));
-    fs::write(&path, bytes).map_err(|source| DownloadError::Io {
-        path: path.clone(),
-        source,
-    })?;
+    write_body(&path, &bytes, |path, bytes| fs::write(path, bytes))?;
     Ok(path)
+}
+
+/// `write` で `path` に本文を書く。失敗したら書きかけを消す。
+fn write_body(
+    path: &Path,
+    bytes: &[u8],
+    write: impl FnOnce(&Path, &[u8]) -> io::Result<()>,
+) -> Result<(), DownloadError> {
+    write(path, bytes).map_err(|source| {
+        if let Err(err) = fs::remove_file(path)
+            && err.kind() != io::ErrorKind::NotFound
+        {
+            tracing::debug!(
+                event = "install_fetch_sweep_skipped",
+                path = %path.display(),
+                error = %err,
+                "[install] 書きかけの一時ファイルを消せないので、7 日の掃除に任せます"
+            );
+        }
+        DownloadError::Io {
+            path: path.to_path_buf(),
+            source,
+        }
+    })
 }
 
 /// `<pid>-<連番>-<URL の末尾の安全な名前>`。
@@ -90,11 +136,11 @@ fn file_name(url: &str) -> String {
     format!("{}-{serial}-{safe}", std::process::id())
 }
 
-/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消し、消した数を返す。
-/// 消せなければ `debug!` で飛ばす（次の取得でまた試す）。
-fn sweep_old(dir: &Path, now: SystemTime) -> usize {
+/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消す（消した数を `info!` に残す・0 なら記録しない）。
+/// 調べられない・消せないファイルは `debug!` で飛ばす（次の取得でまた試す）。
+fn sweep_old(dir: &Path, now: SystemTime) {
     let Some(limit) = now.checked_sub(KEEP) else {
-        return 0;
+        return;
     };
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -105,21 +151,38 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
                 error = %err,
                 "[install] 一時フォルダの一覧を読めないので、古いファイルの掃除を飛ばします"
             );
-            return 0;
+            return;
         }
     };
     let mut removed = 0;
-    for entry in entries.flatten() {
+    let unreadable = |path: &Path, err: &std::io::Error| {
+        tracing::debug!(
+            event = "install_fetch_sweep_skipped",
+            path = %path.display(),
+            error = %err,
+            "[install] 一時ファイルの古さを調べられないので、次の取得に任せます"
+        );
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                unreadable(dir, &err);
+                continue;
+            }
+        };
+        let path = entry.path();
         let old = entry
             .metadata()
-            .ok()
-            .filter(fs::Metadata::is_file)
-            .and_then(|m| m.modified().ok())
-            .is_some_and(|modified| modified < limit);
-        if !old {
-            continue;
+            .and_then(|m| Ok(m.is_file() && m.modified()? < limit));
+        match old {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(err) => {
+                unreadable(&path, &err);
+                continue;
+            }
         }
-        let path = entry.path();
         match fs::remove_file(&path) {
             Ok(()) => removed += 1,
             Err(err) => tracing::debug!(
@@ -130,58 +193,99 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
             ),
         }
     }
-    tracing::info!(
-        event = "install_fetch_swept",
-        dir = %dir.display(),
-        count = removed,
-        "[install] 7 日より古い一時ファイルを消しました"
-    );
-    removed
+    if removed > 0 {
+        tracing::info!(
+            event = "install_fetch_swept",
+            dir = %dir.display(),
+            count = removed,
+            "[install] 7 日より古い一時ファイルを消しました"
+        );
+    }
 }
 
-/// 短命のスレッド `install-fetch` を起こし、落とし終えたら `RawInstallRequest { origin: Script }` を送る。
-/// スレッドは待たない（終了でも待たない）。取得の間はプロセスの通信中の数を立てる。
-pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>) {
-    let make: MakeFetch = Box::new(|| Ok(Box::new(WinHttpFetch::new()?) as Box<dyn Fetch>));
-    // 手放す＝待たない。
-    drop(spawn_download_with(
-        url,
-        tx,
-        download_dir(),
-        make,
-        &areka_kanade::online::PROCESS,
-    ));
-}
-
-/// [`spawn_download`] の一時フォルダと取得口の作り方と通信中の数を差し替える口。起こせなければ
+/// 取得のスレッド `install-fetch` を起こして `first` から取りに行かせ、次の URL の送出端を返す。
+/// 送出端が全部落ちるとスレッドは今の取得を終えて抜ける（join はしない）。起こせなければ
 /// `error!(install_fetch_failed)` で `None`。
-pub(crate) fn spawn_download_with(
-    url: String,
-    tx: Sender<RawInstallRequest>,
-    dir: PathBuf,
-    make: MakeFetch,
-    online: &'static OnlineCounter,
-) -> Option<JoinHandle<()>> {
+pub(crate) fn spawn_fetcher(
+    first: String,
+    tools: FetchTools,
+    gate: Arc<WorkGate>,
+    raw: Sender<RawInstallRequest>,
+    desk: Sender<DeskAsk>,
+) -> Option<Sender<String>> {
+    let (urls_tx, urls) = mpsc::channel::<String>();
+    let label = first.clone();
+    let carried = areka_actor::CarriedLog::here();
     let spawned = thread::Builder::new()
         .name("install-fetch".to_owned())
-        .spawn({
-            let url = url.clone();
-            move || fetch_and_send(&url, make, &dir, SystemTime::now(), &tx, online)
+        .spawn(move || {
+            let _log = carried.enter();
+            let mut next = Some(first);
+            while let Some(url) = next.take().or_else(|| urls.recv().ok()) {
+                let _guard = FetchGuard {
+                    url: url.clone(),
+                    gate: gate.clone(),
+                    desk: desk.clone(),
+                };
+                if !gate.begin(url.clone()) {
+                    tracing::warn!(
+                        event = "install_fetch_closing",
+                        url,
+                        "[install] 終了が始まっているので、URL を取りに行きません"
+                    );
+                    return;
+                }
+                fetch_and_send(
+                    &url,
+                    &tools.make,
+                    &tools.dir,
+                    SystemTime::now(),
+                    &raw,
+                    tools.online,
+                );
+            }
         });
     match spawned {
-        Ok(handle) => Some(handle),
+        Ok(_) => Some(urls_tx),
         Err(err) => {
-            log_failed(&url, &format!("取得のスレッドを起こせない: {err}"));
+            log_failed(&label, &format!("取得のスレッドを起こせない: {err}"));
             None
         }
     }
 }
 
-/// スレッドの中身（取得口を作る → 落とす → 送る）。失敗は `error!` 1 件で依頼 0。
+/// URL 1 件の守り手。どの道で落ちても門を手放して窓口へ取得の終わりを知らせ、倒れたときは先に
+/// `error!(install_fetch_failed)` を残す。
+struct FetchGuard {
+    url: String,
+    gate: Arc<WorkGate>,
+    desk: Sender<DeskAsk>,
+}
+
+impl Drop for FetchGuard {
+    fn drop(&mut self) {
+        let panicked = thread::panicking();
+        if panicked {
+            log_failed(
+                &self.url,
+                &"取得のスレッドが倒れた（次の URL で起こし直す）",
+            );
+        }
+        self.gate.end();
+        if self.desk.send(DeskAsk::FetchDone { panicked }).is_err() {
+            tracing::debug!(
+                event = "install_desk_gone",
+                "[install] 窓口が居ないので、取得の終わりを知らせられません"
+            );
+        }
+    }
+}
+
+/// スレッドの中身（取得口を作る → 落とす → 送る）。取得の失敗は `error!` 1 件で依頼 0・送れなければ `warn!` 1 件。
 /// 関数の間は `online` を立て、どの経路で抜けても戻す。
 pub(crate) fn fetch_and_send(
     url: &str,
-    make: MakeFetch,
+    make: &MakeFetch,
     dir: &Path,
     now: SystemTime,
     tx: &Sender<RawInstallRequest>,
@@ -208,7 +312,7 @@ pub(crate) fn fetch_and_send(
         path = %path.display(),
         "[install] URL を落としました。インストールへ渡します"
     );
-    let request = RawInstallRequest {
+    let request = RawInstallRequest::Path {
         path,
         origin: InstallOrigin::Script,
     };

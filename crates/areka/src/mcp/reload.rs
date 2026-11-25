@@ -14,7 +14,8 @@ use areka_session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_
 const UNKNOWN_TARGET: &str =
     "Unknown target (ghost / shiori / shell / balloon / makoto / descript)";
 const MAKOTO_UNSUPPORTED: &str = "Reloading makoto is not supported yet";
-const CANNOT_RELOAD: &str = "Cannot reload now (another switch, reload or update is in progress)";
+const CANNOT_RELOAD: &str =
+    "Cannot reload now (another switch, reload, update or install is in progress)";
 
 /// 入口。答えがあればその場で送り、終了の途中（`None`）は送らずに落とす（橋が既存の
 /// "shutting down" で答える）。

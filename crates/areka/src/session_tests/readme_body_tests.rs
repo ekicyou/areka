@@ -7,8 +7,7 @@ use std::path::Path;
 // -------------------------------------------------------------------------
 
 /// 本体（`crates/areka/src`）・`crates/areka-runtime/src`・`crates/areka-input/src`・`crates/areka-session/src` の 4 つの木の下で OS の「開く」関数
-/// （Shell と Execute を繋いだ名）を綴るのは OS の境界のファイルだけ（分ける前に本体の `src` が
-/// 覆っていた範囲を歩く）。
+/// （Shell と Execute を繋いだ名）を綴るのは OS の境界のファイルだけ。
 ///
 /// 針は連結で組み、このファイルには繋いだ綴りを書かない（見張り自身を数えないように）。
 #[test]

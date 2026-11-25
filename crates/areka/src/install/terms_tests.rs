@@ -52,14 +52,13 @@ fn body(file: &'static str, body: &str) -> Option<TermsNotice> {
     Some(TermsNotice {
         file,
         body: body.to_owned(),
-        clipped: false,
     })
 }
 
 #[test]
 fn no_terms_file_is_none() {
     let archive = with(&[]);
-    assert_eq!(find_terms(&archive), None, "無ければ画面を出さない（4.11）");
+    assert_eq!(find_terms(&archive), None, "無ければ画面を出さない");
     assert!(nested_terms(&archive).is_empty());
 }
 
@@ -75,14 +74,18 @@ fn terms_md_only_is_shown_without_interpreting_markdown() {
     assert_eq!(
         find_terms(&archive),
         body("terms.md", "# Title\n**bold**"),
-        "Markdown の装飾は本文のまま（4.3）"
+        "Markdown の装飾は本文のまま"
     );
 }
 
 #[test]
 fn both_files_prefer_terms_txt() {
     let archive = with(&[("terms.md", b"md\r\n"), ("terms.txt", b"txt\r\n")]);
-    assert_eq!(find_terms(&archive), body("terms.txt", "txt"), "4.2");
+    assert_eq!(
+        find_terms(&archive),
+        body("terms.txt", "txt"),
+        "terms.txt が先"
+    );
 }
 
 #[test]
@@ -115,7 +118,6 @@ fn twenty_five_lines_are_not_clipped() {
     let text: String = (1..=TERMS_MAX_LINES).map(|n| format!("{n}\r\n")).collect();
     let archive = with(&[("terms.txt", text.as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(!notice.clipped);
     assert_eq!(notice.body.lines().count(), TERMS_MAX_LINES);
 }
 
@@ -126,7 +128,6 @@ fn twenty_six_lines_are_clipped_with_a_pointer_to_the_file() {
         .collect();
     let archive = with(&[("terms.txt", text.as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped, "4.9");
     let kept: Vec<String> = (1..=TERMS_MAX_LINES).map(|n| n.to_string()).collect();
     assert_eq!(
         notice.body,
@@ -142,7 +143,6 @@ fn over_1200_chars_are_clipped_with_a_pointer_to_the_file() {
     let text = "あ".repeat(TERMS_MAX_CHARS + 1);
     let archive = with(&[("terms.md", format!("charset,UTF-8\r\n{text}").as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped, "4.9");
     assert_eq!(
         notice.body,
         format!(
@@ -165,7 +165,6 @@ fn clipping_never_splits_an_emoji_cluster() {
     let text = format!("{}{family}{family}", "あ".repeat(TERMS_MAX_CHARS - 1));
     let archive = with(&[("terms.txt", format!("charset,UTF-8\r\n{text}").as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped);
     assert_eq!(
         notice.body,
         format!(
@@ -181,11 +180,7 @@ fn terms_inside_the_companion_balloon_only_are_not_shown_but_listed() {
         ("kaku/terms.txt", b"balloon\r\n"),
         ("kaku/terms.md", b"md\r\n"),
     ]);
-    assert_eq!(
-        find_terms(&archive),
-        None,
-        "同梱バルーンの中は出さない（4.10）"
-    );
+    assert_eq!(find_terms(&archive), None, "同梱バルーンの中は出さない");
     assert_eq!(
         nested_terms(&archive),
         vec!["kaku/terms.txt".to_owned(), "kaku/terms.md".to_owned()]

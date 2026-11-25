@@ -116,14 +116,12 @@ dependencies = [
  "miniz_oxide 0.9.1",
  "real-run-kit",
  "sample-ghost-kit",
- "shiori-abi",
  "shiori-host32-host",
  "temp-path-kit",
  "thiserror",
  "tracing",
  "tracing-subscriber",
  "windows",
- "windows-core",
  "wintf",
 ]
 

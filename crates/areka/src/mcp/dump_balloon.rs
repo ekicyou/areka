@@ -45,15 +45,24 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         return None;
     }
     let presenter = wiring.presenter();
-    let scope = match judge::judge_balloon(Some(&PresenterFacts(presenter)), args.scope) {
+    let scope = match judge::judge_balloon(&PresenterFacts(presenter), args.scope) {
         Ok(scope) => scope,
         Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
     };
     let failed = |reason: &str| Some(Step::Now(fail(TOOL, scope, reason)));
     let target = balloon_target(scope);
+    let recomposed;
     let pic = match presenter.last_shown(target) {
         Some((_, Some(pic))) => pic,
-        Some((_, None)) => return failed("the last shown picture is no longer kept"),
+        // 装置が替わると隠れた target の合成メモだけが捨てられ、描き直されない。
+        Some((_, None)) => match presenter.compose_last_shown(target) {
+            Some(Ok(pic)) => {
+                recomposed = pic;
+                &recomposed
+            }
+            Some(Err(e)) => return failed(&e.to_string()),
+            None => return failed("the balloon of this scope is not ready"),
+        },
         None => return failed("the balloon of this scope is not ready"),
     };
     let (width, height) = (pic.width(), pic.height());
@@ -159,9 +168,7 @@ fn read_into(
             Ok(None) => return Ok(false),
             Err(e) => return Err(fail(TOOL, scope, &e.to_string())),
         };
-        if bytes.len() != *w as usize * *h as usize * 4 {
-            return Err(fail(TOOL, scope, "picture size mismatch"));
-        }
+        check_size(TOOL, scope, &bytes, *w, *h)?;
         *slot = Some(bytes);
     }
     Ok(true)

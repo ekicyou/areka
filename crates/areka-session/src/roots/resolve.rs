@@ -1,8 +1,8 @@
-//! 起動時の根の並びの決め方（純粋）と、アプリの記憶の値の形。
+//! 起動時の根の並びの決め方と、アプリの記憶の値の形。
 //!
-//! 入力はすべて値で受ける（環境変数の値・記憶の値・実行ファイルのフォルダ）。プロセスの
+//! 環境変数の値・記憶の値・実行ファイルのフォルダは値で受ける（根が在るかと相対の解決だけはその場で見る）。プロセスの
 //! 環境変数と記憶のファイルを読むのは `mod.rs` の薄い口だけ。
-//! 控え（飛ばした項目）と「既定へ倒した」は結果に載せ、記録は `RootsReport` が残す。
+//! 控え（飛ばした項目）と「既定へ倒した」は結果に載せ、記録は [`super::report`] が残す。
 
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -65,8 +65,6 @@ pub struct ResolvedRoots {
 pub enum RootError {
     /// 既定（記憶の `<exe>` だけで既定へ倒したときも）なのに実行ファイルの場所が取れない。
     ExeLocationUnavailable {
-        tried: Vec<PathBuf>,
-        origin: RootsOrigin,
         skipped: Vec<RootSkip>,
         memory_fell_back: bool,
     },
@@ -84,7 +82,7 @@ pub enum RootError {
     },
 }
 
-/// 並びを決める純粋な判断。
+/// 並びを決める判断（根が在るかと相対の解決だけはその場で見る）。
 ///
 /// - `env`: `AREKA_ROOT` の値（`None`＝未設定）。在れば記憶は見ない。
 /// - `memory`: アプリの記憶の `[baseware] roots`（`None`＝鍵が無い・空文字は 0 項目）。
@@ -133,8 +131,6 @@ pub(crate) fn resolve_roots_from(
                     (None, Some(dir)) => (vec![dir], RootsOrigin::Default),
                     (None, None) => {
                         return Err(RootError::ExeLocationUnavailable {
-                            tried: Vec::new(),
-                            origin: RootsOrigin::Default,
                             skipped,
                             memory_fell_back,
                         });

@@ -3,9 +3,8 @@
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::get_log::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
-use bevy_ecs::world::World;
 
-use super::resolve::{self, ActiveGhost, CANNOT_FIND, Omitted};
+use super::resolve::{self, ActiveGhost, Omitted};
 use areka_session::log_history::{self, Kind, Record};
 
 /// 未知・空の `log_type` の理由（SSP と同じ本文）。
@@ -14,14 +13,9 @@ pub(crate) const UNKNOWN_LOG_TYPE: &str =
 /// 0 件の本文（失敗ではない）。
 pub(crate) const NO_ENTRIES: &str = "(no log entries)";
 
-/// 入口。World は `ghost_name` があるときに起動中のゴーストを読むだけで、ゴーストに何もさせない。
-/// 置き場の写しで答え、その場で送る。
-pub(super) fn handle(world: &mut World, args: Args, reply: ReplyTo) {
-    let active = args
-        .ghost_name
-        .as_ref()
-        .and_then(|_| resolve::active(world));
-    reply.send(answer(log_history::snapshot, active.as_ref(), &args));
+/// 入口。置き場の写しで答え、その場で送る。ゴーストに何もさせない。
+pub(super) fn handle(active: Option<&ActiveGhost>, args: Args, reply: ReplyTo) {
+    reply.send(answer(log_history::snapshot, active, &args));
 }
 
 /// 純粋な答え。`rows_of` は種別の記録（古い順）を返す口で、種別とゴーストが決まった後に 1 度だけ呼ぶ
@@ -40,13 +34,12 @@ fn answer(
             None => return outcome::ng(UNKNOWN_LOG_TYPE),
         },
     };
-    // 2. ゴースト。空は解決へ渡さずに外す（解決へ渡しても何にも当たらず同じ Cannot find。SSP も同じ）。
+    // 2. ゴースト。
     let name = match args.ghost_name.as_deref() {
         None => None,
-        Some("") => return outcome::ng(CANNOT_FIND),
         Some(given) => match resolve::resolve(active, Some(given), Omitted::Reject) {
             Ok(ghost) => Some(resolve::listed_value(ghost)),
-            Err(_) => return outcome::ng(CANNOT_FIND),
+            Err(reason) => return outcome::ng(reason),
         },
     };
     let mut rows = rows_of(kind);

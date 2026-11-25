@@ -12,19 +12,20 @@
 //! 実時間に依らない: 進みは偽の SHIORI の記録・窓口の段・kanade の返信端の受け取りで揃える。
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use areka_update::Fetch;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::desk::{Stage, UpdateDesk, raw_sender};
+use super::update_test_support::{plant_committed, refs_of};
 use super::{RawUpdateRequest, TargetKind};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
 use crate::sample_test_support::switch_rig;
-use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall};
+use crate::session_tests::events_named;
+use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall, SPIN_WAIT};
 use areka_session::ghost_session::GhostSlot;
+use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
@@ -82,8 +83,7 @@ fn running_a(local: Option<&[u8]>) -> SwitchRig {
     let site = FakeFetch::new()
         .serve(&format!("{HOMEURL}updates2.dau"), manifest.as_bytes())
         .serve(&format!("{HOMEURL}{FILE}"), BODY);
-    rig.world.non_send_mut::<UpdateDesk>().new_fetch =
-        Arc::new(move || Ok(Box::new(site.clone()) as Box<dyn Fetch>));
+    rig.world.non_send_mut::<UpdateDesk>().new_fetch = site.maker();
     rig.plant_boot_record("A");
     rig.boot("A");
     assert!(rig.wait_steady(), "A が定常に着く");
@@ -95,36 +95,6 @@ fn request_ghost_update(rig: &SwitchRig) {
     raw_sender(&rig.world)
         .send(RawUpdateRequest::Current(vec![TargetKind::Ghost]))
         .expect("窓口の生の要求の受信端は生きている");
-}
-
-/// 呼び出しの列（`GET 名`／`NOTIFY 名`／`UNLOAD`）。
-fn kinds(calls: &[RecordedCall]) -> Vec<String> {
-    calls
-        .iter()
-        .map(|call| match call {
-            RecordedCall::Get { id, .. } => format!("GET {id}"),
-            RecordedCall::Notify { id, .. } => format!("NOTIFY {id}"),
-            RecordedCall::Unload => "UNLOAD".to_owned(),
-        })
-        .collect()
-}
-
-/// `id` の GET の Reference（最初の 1 件）。
-fn refs_of(calls: &[RecordedCall], id: &str) -> Option<Vec<String>> {
-    calls.iter().find_map(|call| match call {
-        RecordedCall::Get {
-            id: got,
-            references,
-        } if got == id => Some(references.clone()),
-        _ => None,
-    })
-}
-
-fn named(events: &[CapturedEvent], name: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .count()
 }
 
 /// A の最初の起動の偽の SHIORI が受けた `GET homeurl` の数（定常到達の照会と本テストの確かめ）。
@@ -197,18 +167,19 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         rig.pump_input_until(|rig| rig.world.get_non_send::<SwitchInFlight>().is_some())
     });
     assert!(reserved, "読み直しの切替が予約される: {events:?}");
-    // 背景のスレッド `update`（`areka::update::procedure`）の同名の記録も窓に入るので、UI の窓口の記録だけ数える。
-    let desk_reloads = events
-        .iter()
-        .filter(|e| e.target == "areka::update::desk")
-        .filter(|e| e.field_str("event") == Some("update_reload_requested"))
-        .count();
-    assert_eq!(desk_reloads, 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "update_reload_requested").len(),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        events_named(&events, "update_reload_asked").len(),
+        1,
+        "{events:?}"
+    );
     // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
     // 成功した走行の残りを置く。
-    let leftover = a_dir.join(".update-work").join("held-run");
-    std::fs::create_dir_all(leftover.join("old")).expect("走行フォルダを組む");
-    std::fs::write(leftover.join("committed"), b"").expect("印を置く");
+    plant_committed(&a_dir, "held-run");
 
     // 予約の切替は kanade へ送ってある。同じ送出端で照会を 1 往復させ、返事を受けた時点で kanade は
     // 切替の要求を捌き終えている。まだ定常（再生中）なら照会は SHIORI まで届く＝切替は台詞の完了待ち。
@@ -222,7 +193,7 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         .expect("A の kanade の送出端");
     send_query(&kanade, vec![HOMEURL_RESOURCE])
         .expect("kanade へ照会を送れる")
-        .recv()
+        .recv_timeout(SPIN_WAIT)
         .expect("kanade が照会に答える");
     let held_while_talking = (homeurl_gets(&rig) - before, rig.calls("A").len());
 
@@ -272,13 +243,14 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         "OnClose は 0 件: {a:?}"
     );
     // 列の残りは窓口が切替の終わりで送った（UI の記録）。
-    let sent: Vec<_> = after
-        .iter()
-        .filter(|e| e.field_str("event") == Some("update_tail_sent"))
-        .collect();
+    let sent = events_named(&after, "update_tail_sent");
     assert_eq!(sent.len(), 1, "{after:?}");
     assert_eq!(sent[0].field_str("when"), Some("after_switch"));
-    assert_eq!(named(&after, "update_tail_dropped"), 0, "{after:?}");
+    assert_eq!(
+        events_named(&after, "update_tail_dropped").len(),
+        0,
+        "{after:?}"
+    );
 }
 
 /// `none` の一周（手元が配布と同じ）: `OnUpdateBegin` → `OnUpdateComplete`（`none`）→ `OnUpdateResult`
@@ -321,9 +293,10 @@ fn a_none_round_requests_no_switch() {
     assert_eq!((a.len(), reserved), (1, false), "起こし直さない");
     for name in [
         "update_reload_requested",
+        "update_reload_asked",
         "update_reload_skipped",
         "ghost_switch_requested",
     ] {
-        assert_eq!(named(&events, name), 0, "{name}: {events:?}");
+        assert_eq!(events_named(&events, name).len(), 0, "{name}: {events:?}");
     }
 }

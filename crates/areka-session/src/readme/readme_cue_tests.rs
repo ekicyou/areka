@@ -1,6 +1,4 @@
-// =============================================================================
-// ReadmeCueSink の自己選別と送り出しの決定論テスト
-// =============================================================================
+//! ReadmeCueSink の自己選別と送り出しの決定論テスト。
 
 use super::*;
 use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};
@@ -20,12 +18,6 @@ fn sink() -> (ReadmeCueSink, Receiver<ReadmeRequest>) {
     (ReadmeCueSink::new(tx), rx)
 }
 
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
-}
-
 // ---------------------------------------------------------------- 受理
 
 /// 引数なしの `\![open,readme]` は説明書の要求をちょうど 1 件送る。
@@ -37,30 +29,11 @@ fn bare_open_readme_sends_exactly_one_request() {
     assert_eq!(
         sent.len(),
         1,
-        "引数なしの \\![open,readme] は要求を 1 件だけ送る（要件 4.5）"
+        "引数なしの \\![open,readme] は要求を 1 件だけ送る"
     );
     assert!(
         matches!(sent[0], ReadmeRequest::Readme),
         "説明書の要求のまま送る"
-    );
-}
-
-// ---------------------------------------------------------------- 縮退
-
-/// 引数付きの `\![open,readme,種類,名前]` は何も送らず、警告を 1 行だけ残す。
-#[test]
-fn open_readme_with_arguments_warns_and_sends_nothing() {
-    let (mut sink, rx) = sink();
-    let logs = capture_logs(|| sink.emit(carrier_cue("open", &["readme", "ghost", "x"])));
-    assert_eq!(
-        rx.try_iter().count(),
-        0,
-        "引数付きは何もしない（列挙が要るため α では語彙だけ持つ・要件 4.6）"
-    );
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "引数付きは警告を 1 行だけ残す（要件 4.6）: {logs:?}"
     );
 }
 
@@ -74,29 +47,13 @@ fn other_command_name_is_benign_skip() {
     assert_eq!(rx.try_iter().count(), 0, "担当外の名前は何も送らない");
 }
 
-/// `\![open,help]`（SSP 自身の窓）は担当外——何も送らず、警告も出さない
-/// （報せる責任はその担当者にあるため）。
-#[test]
-fn open_help_is_benign_skip_without_warning() {
-    let (mut sink, rx) = sink();
-    let logs = capture_logs(|| sink.emit(carrier_cue("open", &["help"])));
-    assert_eq!(
-        rx.try_iter().count(),
-        0,
-        "\\![open,help] は担当外なので何も送らない"
-    );
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        0,
-        "担当外は警告にしない（良性の読み飛ばし）: {logs:?}"
-    );
-}
-
 /// 第 1 引数の無い裸の `\![open]` も担当外（選別子が読めないので受理しない）。
 #[test]
 fn bare_open_without_selector_is_benign_skip() {
     let (mut sink, rx) = sink();
-    let logs = capture_logs(|| sink.emit(carrier_cue("open", &[])));
+    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
+        sink.emit(carrier_cue("open", &[]))
+    });
     assert_eq!(rx.try_iter().count(), 0, "裸の \\![open] は担当外");
     assert_eq!(
         count_level(&logs, "WARN"),
@@ -105,61 +62,7 @@ fn bare_open_without_selector_is_benign_skip() {
     );
 }
 
-/// キャリアでない cue（文字など）は何も送らない。
-#[test]
-fn non_carrier_cue_is_benign_skip() {
-    let (mut sink, rx) = sink();
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("アヒル".into()),
-        duration: 0.0,
-    });
-    assert_eq!(
-        rx.try_iter().count(),
-        0,
-        "キャリアでない cue は何も送らない"
-    );
-}
-
-/// 開封できない `Custom`（`params` が String 配列でない）でも落ちない。宛名が自分（`open`）
-/// のときは壊れ物として警告を残す（宛名の規律・`zorder_cue.rs` と同じ流儀）。
-#[test]
-fn unopenable_custom_addressed_to_open_warns_and_sends_nothing() {
-    let (mut sink, rx) = sink();
-    let logs = capture_logs(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: "open".into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
-    assert_eq!(rx.try_iter().count(), 0, "開封できない荷物は何も送らない");
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "自分宛の開けない荷物は警告を残す（宛名の規律）: {logs:?}"
-    );
-}
-
-// ---------------------------------------------------------------- 送出の失敗
-
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない）。
-#[test]
-fn dropped_receiver_is_logged_and_does_not_panic() {
-    let (mut sink, rx) = sink();
-    drop(rx);
-    let logs = capture_logs(|| sink.emit(carrier_cue("open", &["readme"])));
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "送出の失敗は警告として残る（要件 8.4）: {logs:?}"
-    );
-}
+// ---------------------------------------------------------------- 複製
 
 /// 複製した受け口からの送出も同じ受信端へ届く（配送が台本ごとに複製する前提）。
 #[test]
@@ -170,7 +73,7 @@ fn clone_reaches_the_same_receiver() {
     assert_eq!(rx.try_iter().count(), 1, "複製からの送出も同じ受信端へ届く");
 }
 
-// ---------------------------------------------------------------- 開く系（open-external-tags）
+// ---------------------------------------------------------------- 開く系
 
 /// 受信端に届いた開く系の行き先を順に取り出す（`Readme` が混じれば落とす）。
 fn sent_destinations(rx: &Receiver<ReadmeRequest>) -> Vec<Destination> {
@@ -198,7 +101,9 @@ fn open_forms_and_jump_send_classified_destination() {
     ];
     for (name, tokens, kind) in cases {
         let (mut sink, rx) = sink();
-        let logs = capture_logs(|| sink.emit(carrier_cue(name, tokens)));
+        let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
+            sink.emit(carrier_cue(name, tokens))
+        });
         let sent = sent_destinations(&rx);
         let expected = classify(name, tokens).unwrap().unwrap();
         assert_eq!(sent, vec![expected], "{name} {tokens:?} は 1 件だけ送る");
@@ -223,7 +128,9 @@ fn rejected_inputs_warn_once_and_send_nothing() {
     ];
     for (name, tokens, reason) in cases {
         let (mut sink, rx) = sink();
-        let logs = capture_logs(|| sink.emit(carrier_cue(name, tokens)));
+        let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
+            sink.emit(carrier_cue(name, tokens))
+        });
         assert_eq!(rx.try_iter().count(), 0, "{name} {tokens:?} は何も送らない");
         let warns: Vec<&String> = logs.iter().filter(|l| l.contains("level=WARN")).collect();
         assert_eq!(warns.len(), 1, "{name} {tokens:?} は警告 1 行: {logs:?}");
@@ -235,52 +142,6 @@ fn rejected_inputs_warn_once_and_send_nothing() {
             "{name} {tokens:?} の警告に事象名・理由・綴りが要る: {line}"
         );
     }
-}
-
-/// 開封できない荷物の宛名が運搬名 `\j` でも、自分宛の壊れ物として警告を残す。
-#[test]
-fn unopenable_custom_addressed_to_jump_warns_and_sends_nothing() {
-    let (mut sink, rx) = sink();
-    let logs = capture_logs(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: JUMP_TAG_CARRIER.into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
-    assert_eq!(rx.try_iter().count(), 0, "開封できない荷物は何も送らない");
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "自分宛（\\j）の開けない荷物は警告を残す（宛名の規律）: {logs:?}"
-    );
-}
-
-/// 他人宛の開封できない荷物は警告しない（良性の読み飛ばし）。
-#[test]
-fn unopenable_custom_addressed_to_others_does_not_warn() {
-    let (mut sink, rx) = sink();
-    let logs = capture_logs(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: "move".into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
-    assert_eq!(rx.try_iter().count(), 0);
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        0,
-        "他人宛は警告しない: {logs:?}"
-    );
 }
 
 /// 同じ台本を読み込んで得た汎用コマンドを運び手の cue にして受け口へ通すと、送られた
@@ -321,8 +182,8 @@ fn sink_agrees_with_link_destinations() {
 
 // ---------------------------------------------------------------- 記録の型
 
-/// 7 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・表の `event=`・表の水準を
-/// 持つ。
+/// 8 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・場面ごとの `event=`・場面ごとの水準を
+/// 持ち、受信端へは 1 件も送らない（受信端を落とす場面を除く）。
 #[test]
 fn every_readme_cue_line_carries_the_prefix_and_an_event() {
     let unopenable = |command: &str| TalkCue {
@@ -345,6 +206,13 @@ fn every_readme_cue_line_carries_the_prefix_and_an_event() {
         (
             "自分宛の開けない荷物",
             unopenable("open"),
+            false,
+            "WARN",
+            "readme_cue_unopenable",
+        ),
+        (
+            "運搬名 \\j 宛の開けない荷物",
+            unopenable(JUMP_TAG_CARRIER),
             false,
             "WARN",
             "readme_cue_unopenable",
@@ -396,9 +264,13 @@ fn every_readme_cue_line_carries_the_prefix_and_an_event() {
         let (mut sink, rx) = sink();
         if drop_rx {
             drop(rx);
+            let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || sink.emit(cue));
+            assert_one_line(scene, &logs, level, event);
+        } else {
+            let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || sink.emit(cue));
+            assert_one_line(scene, &logs, level, event);
+            assert_eq!(rx.try_iter().count(), 0, "{scene}: 何も送らない");
         }
-        let logs = capture_logs(|| sink.emit(cue));
-        assert_one_line(scene, &logs, level, event);
     }
 }
 
