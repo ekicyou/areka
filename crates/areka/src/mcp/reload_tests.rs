@@ -13,7 +13,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, body, ghost};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
 use crate::session_tests::events_named;
 use areka_session::log_history::TARGET_ERROR;
 
@@ -29,8 +29,7 @@ fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
 
 /// その場で届いた答えの (本文, isError)。
 fn answered(pending: &Pending) -> (String, bool) {
-    let outcome = kanade_fake_test_support::answer(pending);
-    (body(&outcome).to_owned(), outcome.is_error)
+    body_and_error(&kanade_fake_test_support::answer(pending))
 }
 
 /// 6 語以外（空・前後の空白・別の語）は `NG:Unknown target (…)` をその場で返し、窓口へ渡さない

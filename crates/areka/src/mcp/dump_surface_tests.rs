@@ -11,7 +11,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{self, ghost, text, try_outcome};
 use crate::sample_test_support::switch_rig;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -28,12 +28,9 @@ fn answers_no_window_at_once_with_an_empty_world() {
 
     handle(&mut World::new(), &ghost, args, req.reply);
 
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
-    assert_eq!(
-        answer.outcome.content,
-        vec![ToolContent::Text("NG:This ghost has no window".to_string())]
-    );
-    assert!(answer.outcome.is_error);
+    let answered = kanade_fake_test_support::answer(&pending);
+    assert_eq!(answered.content, text("NG:This ghost has no window"));
+    assert!(answered.is_error);
 }
 
 /// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える。
@@ -92,11 +89,7 @@ fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
     });
 
     assert_eq!(
-        (
-            pending.try_answer().ok().flatten().map(|a| a.outcome),
-            levels.error,
-            reads.get()
-        ),
+        (try_outcome(&pending), levels.error, reads.get()),
         (
             Some(outcome::ng("the text read was handed to the wrong path")),
             1,
@@ -120,9 +113,7 @@ fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
     };
     assert_eq!(
         answered.content,
-        vec![ToolContent::Text(
-            "NG:the shell of this scope is not ready".to_string()
-        )]
+        text("NG:the shell of this scope is not ready")
     );
     assert!(answered.is_error);
     assert_eq!(levels.error, 1);
@@ -147,12 +138,7 @@ fn errors_in_encoding_body(job: Job) -> (ToolOutcome, usize) {
 #[test]
 fn encoding_body_calibration_counts_errors_of_failing_jobs_only() {
     let (panicked, errors) = errors_in_encoding_body(Box::new(|_| panic!("わざと")));
-    assert_eq!(
-        panicked.content,
-        vec![ToolContent::Text(
-            "NG:the encoding thread panicked".to_string()
-        )]
-    );
+    assert_eq!(panicked.content, text("NG:the encoding thread panicked"));
     assert!(panicked.is_error);
     assert_eq!(errors, 1);
 
@@ -283,10 +269,10 @@ fn deposit_and_answer(
         calls += 1;
         (calls >= 2).then(&step)
     });
-    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_deposit = try_outcome(&pending);
     let mut later = None;
     rig.pump_input_until(|_| {
-        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later = try_outcome(&pending);
         later.is_some()
     });
     (at_deposit, later)
@@ -437,7 +423,7 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
     let ghost = active_ghost(&rig);
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     handle(&mut rig.world, &ghost, current_look(), req.reply);
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let steady = rig.wait_steady();
 
     let (welcomed, events) = log_capture_kit::capture(|| {
@@ -447,7 +433,7 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
                     && rig.world.get_non_send::<SwitchInFlight>().is_none())
         })
     });
-    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let answered = try_outcome(&pending);
     let now = resolve::active(&rig.world).and_then(|g| g.name);
     let mcp_errors = events
         .iter()
@@ -533,21 +519,14 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
             || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
     });
     let now = resolve::active(&rig.world).and_then(|g| g.name);
-    let before_release = (
-        reading.try_answer().ok().flatten().map(|a| a.outcome),
-        encoding.try_answer().ok().flatten().map(|a| a.outcome),
-    );
+    let before_release = (try_outcome(&reading), try_outcome(&encoding));
 
     freed.set(true);
     let _ = release_tx.send(());
     let (mut read_answer, mut encode_answer) = (None, None);
     rig.pump_input_until(|_| {
-        read_answer = read_answer
-            .take()
-            .or_else(|| reading.try_answer().ok().flatten().map(|a| a.outcome));
-        encode_answer = encode_answer
-            .take()
-            .or_else(|| encoding.try_answer().ok().flatten().map(|a| a.outcome));
+        read_answer = read_answer.take().or_else(|| try_outcome(&reading));
+        encode_answer = encode_answer.take().or_else(|| try_outcome(&encoding));
         read_answer.is_some() && encode_answer.is_some()
     });
     let down = rig.shutdown();
@@ -602,7 +581,7 @@ fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
     });
     // 起こし直した後の巡でも覗かれている（組が残り、答えはまだ）。
     rig.world.run_schedule(Input);
-    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let answered = try_outcome(&pending);
     let a_boots = rig.calls("A").len();
     let same = resolve::active(&rig.world) == Some(ghost);
     let held_after = held(&rig);
@@ -669,11 +648,11 @@ fn read_at_entry_is_deposited_and_read_on_later_frames() {
         counted.set(counted.get() + 1);
         read.take().map(|read| Step::Read(0, read))
     });
-    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_deposit = try_outcome(&pending);
     let reads_at_deposit = reads.get();
     let mut later = None;
     rig.pump_input_until(|_| {
-        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later = try_outcome(&pending);
         later.is_some()
     });
     let down = rig.shutdown();

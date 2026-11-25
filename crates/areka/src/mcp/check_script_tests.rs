@@ -4,17 +4,16 @@
 //! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を省略を起動中へ解く 7 本と同じ規則で解き、
 //! 偽の SHIORI で起こした本物の単位へ台本を 2 件渡しても、SHIORI への呼出・再生・終了・
 //! 切替のどれも起きないことを確かめる。
+//!
+//! 最後は本物のシェルを装着したゴースト（実 GPU・x64 だけ）で、無い surface に診断が出ること。
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_mcp::tools::check_script::Diagnostic;
-use areka_parsers::sakura::parse_noted;
-use areka_seriko::{SkinFacts, SkinLookup};
+use areka_seriko::SkinFacts;
 
 use super::*;
-use crate::mcp::check_script_judge::diagnose;
-use crate::mcp::check_script_judge::tests::ghost;
-use areka_runtime::strict_judges::ArekaStrictJudges;
+use crate::mcp::check_script_judge::tests::{check_with, ghost};
+use crate::mcp::kanade_fake_test_support::try_outcome;
 
 fn aliases() -> BTreeMap<String, Vec<u32>> {
     BTreeMap::from([("笑顔".to_string(), vec![3])])
@@ -27,15 +26,6 @@ fn snapshot() -> SkinFacts {
         aliases(),
         BTreeMap::from([(0, ids(&[0, 3, 10])), (1, ids(&[10, 11]))]),
         BTreeMap::from([(0, ids(&[0, 2])), (1, ids(&[1]))]),
-    )
-}
-
-fn check(script: &str, facts: &dyn SkinLookup) -> Vec<Diagnostic> {
-    diagnose(
-        script,
-        &parse_noted(script),
-        &ArekaStrictJudges::canonical(),
-        Some(facts),
     )
 }
 
@@ -53,8 +43,8 @@ fn snapshot_answers_like_facts_built_by_hand() {
     ];
     let mut fired = 0;
     for script in scripts {
-        let want = check(script, &by_hand);
-        assert_eq!(check(script, &snap), want, "{script}");
+        let want = check_with(script, Some(&by_hand));
+        assert_eq!(check_with(script, Some(&snap)), want, "{script}");
         fired += want.len();
     }
     // 比べた台本が何も診断しない組で素通りしていないこと（較正）。
@@ -100,7 +90,7 @@ fn dispatch_and_wait(
 ) {
     let (request, pending) = ToolRequest::new(call(r"\0\s[0]こんにちは\e", ghost_name));
     crate::mcp::dispatch(&mut World::new(), active, request);
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let waited = match &at_once {
         Some(_) => None,
         // 例外: 空の World には数える足場が無く、答えの仕事は製品の
@@ -271,7 +261,7 @@ fn real_unit_answers_two_scripts_without_running_them() {
 #[test]
 fn attached_shell_reports_one_missing_surface() {
     use crate::mcp::dump_surface::gpu_test_support::GpuRig;
-    use areka_mcp::tools::check_script::Kind;
+    use areka_mcp::tools::check_script::{Diagnostic, Kind};
     use areka_sakura::strict::MSG_MISSING_SURFACE;
 
     let script = r"\0\s[0]\s[99999]\e";

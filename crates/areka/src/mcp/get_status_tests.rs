@@ -6,12 +6,14 @@
 use std::sync::mpsc;
 
 use areka_kanade::{BalloonBinding, ExecutionSnapshot};
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{answer, body, ghost, rig, warn_or_worse};
+use crate::mcp::kanade_fake_test_support::{
+    answer, body, ghost, rig, text, try_outcome, warn_or_worse,
+};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain, install};
 
@@ -55,7 +57,7 @@ fn answer_with(status: ExecutionStatus) -> (ToolOutcome, usize) {
 #[test]
 fn no_state_is_an_empty_body() {
     let (outcome, warns) = answer_with(ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE));
-    assert_eq!(outcome.content, vec![ToolContent::Text(String::new())]);
+    assert_eq!(outcome.content, text(""));
     assert!(!outcome.is_error);
     assert_eq!(warns, 0);
 }
@@ -81,7 +83,7 @@ fn states_are_the_rendered_value_verbatim() {
     assert_eq!(rendered, "talking,balloon(0=0/1=0)");
 
     let (outcome, warns) = answer_with(status);
-    assert_eq!(outcome.content, vec![ToolContent::Text(rendered)]);
+    assert_eq!(outcome.content, text(&rendered));
     assert!(!outcome.is_error);
     assert_eq!(warns, 0);
 }
@@ -99,7 +101,7 @@ fn gone_before_answering_reads_as_the_resolve_failure() {
         let outcome = answer(&pending);
         assert_eq!(
             outcome.content,
-            vec![ToolContent::Text(format!("NG:{expected}"))],
+            text(&format!("NG:{expected}")),
             "返信端を落とす・{ghost_name:?}"
         );
         assert!(outcome.is_error, "返信端を落とす・{ghost_name:?}");
@@ -116,7 +118,7 @@ fn gone_before_answering_reads_as_the_resolve_failure() {
         let outcome = answer(&pending);
         assert_eq!(
             outcome.content,
-            vec![ToolContent::Text(format!("NG:{expected}"))],
+            text(&format!("NG:{expected}")),
             "送れない・{ghost_name:?}"
         );
         assert!(outcome.is_error, "送れない・{ghost_name:?}");
@@ -173,10 +175,7 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     let ((), levels) = count_levels(|| handle(&mut World::new(), &ghost(), args, req.reply));
 
     let outcome = answer(&pending);
-    assert_eq!(
-        outcome.content,
-        vec![ToolContent::Text("NG:Status is not available".to_string())]
-    );
+    assert_eq!(outcome.content, text("NG:Status is not available"));
     assert!(outcome.is_error);
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
@@ -209,7 +208,7 @@ fn real_unit_answers_talking_then_not_after_the_talk_ends() {
     let pending = ask(&inbox);
     let mut first = None;
     let first_arrived = rig.pump_input_until(|_| {
-        first = pending.try_answer().ok().flatten();
+        first = try_outcome(&pending);
         first.is_some()
     });
 
@@ -217,13 +216,13 @@ fn real_unit_answers_talking_then_not_after_the_talk_ends() {
     let mut seen: Vec<ToolOutcome> = Vec::new();
     let mut pending = ask(&inbox);
     let ended = rig.pump_talking_until(|_| {
-        let Some(answer) = pending.try_answer().ok().flatten() else {
+        let Some(answer) = try_outcome(&pending) else {
             return false;
         };
         // 上限は答えの回数でなく土台の時刻の期限（`wait_until`）で取る。回数で数えると、
         // 並べて回すテストの負荷で台詞の時計の進みより答えが速く届き、終わる前に使い切る。
-        let done = !body(&answer.outcome).contains("talking");
-        seen.push(answer.outcome);
+        let done = !body(&answer).contains("talking");
+        seen.push(answer);
         if !done {
             pending = ask(&inbox);
         }
@@ -235,7 +234,7 @@ fn real_unit_answers_talking_then_not_after_the_talk_ends() {
         steady && first_arrived && down,
         "（定常・最初の答え・降ろせた）"
     );
-    let first = first.expect("最初の答えが届いている").outcome;
+    let first = first.expect("最初の答えが届いている");
     assert!(
         body(&first).starts_with("talking"),
         "時計を進めない間は talking: {first:?}"

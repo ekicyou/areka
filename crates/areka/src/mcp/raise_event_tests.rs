@@ -12,7 +12,7 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
 use crate::mcp::kanade_fake_test_support::{
-    answer, body, ghost, record_one, rig, text, warn_or_worse,
+    STRICT_NOTE_BEFORE_ID, answer, body, ghost, record_one, rig, text, warn_or_worse,
 };
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
@@ -246,9 +246,6 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
 
-/// strict の文（`<n>` の前まで）。
-const STRICT_HEAD: &str = " strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
-
 /// strict 真で台本が返った → 1 行目の末尾に strict の文・区切りと `Script: ` の行は strict の無いときと同じ・
 /// `<n>` は送る前に読んだ最後の番号。
 ///
@@ -269,7 +266,8 @@ fn strict_true_script_answer_carries_the_id_read_before_sending() {
     let body = body(&outcome);
     let n: u64 = body
         .strip_prefix("OK:the ghost returned a script and it is being played.")
-        .and_then(|rest| rest.strip_prefix(STRICT_HEAD))
+        .and_then(|rest| rest.strip_prefix(' '))
+        .and_then(|rest| rest.strip_prefix(STRICT_NOTE_BEFORE_ID))
         .and_then(|rest| rest.strip_suffix(&format!(")\r\nScript: {SCRIPT}")))
         .and_then(|n| n.parse().ok())
         .unwrap_or_else(|| panic!("strict の文の付いた 2 行のはず: {body:?}"));

@@ -8,14 +8,13 @@ use std::path::PathBuf;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, body, ghost};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
 
 /// `active` で呼んだときの答え（本文, isError）。
 fn answer(active: Option<&ActiveGhost>) -> (String, bool) {
     let (req, pending) = ToolRequest::new(ToolCall::GetActiveGhostList);
     handle(active, req.reply);
-    let outcome = kanade_fake_test_support::answer(&pending);
-    (body(&outcome).to_owned(), outcome.is_error)
+    body_and_error(&kanade_fake_test_support::answer(&pending))
 }
 
 #[test]

@@ -12,7 +12,7 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
 use crate::mcp::kanade_fake_test_support::{
-    answer, body, ghost, record_one, rig, text, warn_or_worse,
+    STRICT_NOTE_BEFORE_ID, answer, body, ghost, record_one, rig, text, warn_or_worse,
 };
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
@@ -206,13 +206,11 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
 
-/// strict の答えの文の前後（`<n>` を挟む）。
-const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
-
 /// strict の文の答えの `<n>`（strict の文でなければ落ちる）。
 fn strict_id(outcome: &ToolOutcome) -> u64 {
     let body = body(outcome);
-    body.strip_prefix(STRICT_HEAD)
+    body.strip_prefix("OK:")
+        .and_then(|rest| rest.strip_prefix(STRICT_NOTE_BEFORE_ID))
         .and_then(|rest| rest.strip_suffix(')'))
         .and_then(|n| n.parse().ok())
         .unwrap_or_else(|| panic!("strict の文のはず: {body}"))

@@ -549,7 +549,9 @@ fn read_after_talk() -> ReadAfterTalk {
 /// # 非空虚性
 /// 呼び出しの時点の文字の面に字が在ることと、読む前に文字の面の読み戻しが呼び出しの時点と
 /// 違うようになったこと（`changed`）を確かめる。文字の面の写しを読み出しのフレームで取り直すと、
-/// 後の内容（消した後の別の字）が載って画素が食い違い赤。
+/// 後の内容（消した後の別の字）が載って画素が食い違い赤。仕事は記録を数える中で走らせ、ERROR が
+/// 0 件で画像つきの成功（`is_picture`）であることも確かめる（判定と数え方は `dump_surface_tests.rs` で
+/// 較正済み。仕事の中で `fail` を呼ぶと件数と判定の両方で赤）。
 #[test]
 fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
     let read = read_after_talk();
@@ -558,7 +560,7 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
         .read
         .expect("読み出しは失敗しない")
         .expect("上限のうちに読める");
-    let answered = job(Duration::ZERO);
+    let (answered, levels) = count_levels(|| job(Duration::ZERO));
     let (is_error, body, mime, picture) = read_picture(&answered);
     assert_eq!(
         (
@@ -569,7 +571,9 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
             is_error,
             body,
             mime,
-            differing(&picture, &read.expected)
+            differing(&picture, &read.expected),
+            is_picture(&answered),
+            levels.error
         ),
         (
             true,
@@ -579,39 +583,12 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
             false,
             ok_text(0),
             "image/png".to_owned(),
-            Some(0)
+            Some(0),
+            true,
+            0
         ),
         "（字が現れ切った, 呼び出しの時点の文字の面に字が在った, 読む前に文字の面が変わった, \
-         降ろせた, isError, 本文, MIME, 期待の絵と食い違った画素の数）"
-    );
-}
-
-/// 符号化のスレッドの記録: 上と同じ形で得た `dump_balloon` の本物の仕事を、記録を
-/// 数える中で走らせると、ERROR が 0 件で画像つきの成功。
-///
-/// # 非空虚性
-/// 本物の重ね合わせ・PNG・base64 を通る（読めた仕事が在ることを確かめる）。判定の関数
-/// `is_picture` と符号化のスレッドの体の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
-/// `fail` を呼ぶと件数と判定の両方で赤。
-#[test]
-fn balloon_job_runs_on_the_encoding_body_without_error() {
-    let read = read_after_talk();
-
-    let job = read
-        .read
-        .expect("読み出しは失敗しない")
-        .expect("上限のうちに読める");
-    let (answered, levels) = count_levels(|| job(Duration::ZERO));
-    assert_eq!(
-        (
-            read.spoke,
-            read.changed,
-            read.down,
-            is_picture(&answered),
-            levels.error
-        ),
-        (true, true, true, true, 0),
-        "（字が現れ切った, 読む前に文字の面が変わった, 降ろせた, 画像つきの成功, ERROR の件数）"
+         降ろせた, isError, 本文, MIME, 期待の絵と食い違った画素の数, 画像つきの成功, ERROR の件数）"
     );
 }
 

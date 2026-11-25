@@ -34,13 +34,13 @@ pub(super) fn rig() -> (World, mpsc::Receiver<KanadeMsg>) {
     (world, rx)
 }
 
+/// 届いていれば答え（まだ・落ちたなら None）。
+pub(super) fn try_outcome(pending: &Pending) -> Option<ToolOutcome> {
+    pending.try_answer().ok().flatten().map(|a| a.outcome)
+}
+
 pub(super) fn answer(pending: &Pending) -> ToolOutcome {
-    pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .expect("答えが届いている")
-        .outcome
+    try_outcome(pending).expect("答えが届いている")
 }
 
 /// 答えの本文 1 つ（本文が 1 つの文字列でなければ落ちる）。
@@ -50,6 +50,14 @@ pub(super) fn body(outcome: &ToolOutcome) -> &str {
         other => panic!("本文は文字列 1 つのはず: {other:?}"),
     }
 }
+
+/// 答えの（本文, isError）。
+pub(super) fn body_and_error(outcome: &ToolOutcome) -> (String, bool) {
+    (body(outcome).to_owned(), outcome.is_error)
+}
+
+/// strict 真の答えに足す文の `<n>` の前まで（`OK:` や前の空白は付けない）。
+pub(super) const STRICT_NOTE_BEFORE_ID: &str = "strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
 pub(super) fn warn_or_worse(events: &[CapturedEvent]) -> usize {
     events

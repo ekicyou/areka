@@ -18,7 +18,7 @@ use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{ghost, try_outcome};
 use crate::session_tests::events_named;
 use areka_session::ghost_session::GhostSlot;
 
@@ -30,7 +30,7 @@ fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<To
     };
     let (req, pending) = ToolRequest::new(ToolCall::GetProperty(args.clone()));
     handle(world, ghost, args, req.reply);
-    pending.try_answer().ok().flatten().map(|a| a.outcome)
+    try_outcome(&pending)
 }
 
 #[test]

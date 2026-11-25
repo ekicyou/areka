@@ -54,7 +54,7 @@ pub(in crate::mcp) fn ghost() -> Table {
     }
 }
 
-fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
+pub(in crate::mcp) fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),

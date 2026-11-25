@@ -11,7 +11,7 @@ use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{body, ghost};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
 use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
@@ -97,10 +97,6 @@ fn args(log_type: Option<&str>) -> Args {
     }
 }
 
-fn text(outcome: ToolOutcome) -> (String, bool) {
-    (body(&outcome).to_owned(), outcome.is_error)
-}
-
 /// `h` の写しで答え、（本文, isError, 取り出した種別）を返す。
 fn ask(h: &History, log_type: Option<&str>) -> (String, bool, Option<Kind>) {
     ask_with(h, None, &args(log_type))
@@ -121,7 +117,7 @@ fn ask_with(
         active,
         args,
     );
-    let (body, is_error) = text(outcome);
+    let (body, is_error) = body_and_error(&outcome);
     (body, is_error, asked.get())
 }
 
@@ -456,25 +452,25 @@ fn filters_apply_in_order_kind_ghost_since_max() {
 
 // ---- 入口 ----
 
-/// 起動中のゴースト無しで入口を呼び、その場で届いた答え（まだなら None）。
-fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {
+/// 起動中のゴースト無しで入口を呼び、その場で届いた答え。
+fn handle_now(ghost_name: Option<&str>) -> ToolOutcome {
     let call = full(None, ghost_name, None, None);
     let (request, pending) = ToolRequest::new(ToolCall::GetLog(call.clone()));
     let ToolRequest { reply, .. } = request;
     handle(None, call, reply);
-    pending.try_answer().ok().flatten().map(|a| a.outcome)
+    kanade_fake_test_support::answer(&pending)
 }
 
 #[test]
 fn no_active_ghost_without_ghost_name_answers_at_once_without_error() {
-    let outcome = handle_now(None).expect("その場で答える");
+    let outcome = handle_now(None);
     // 置き場はプロセスで共有なので本文は他のテストの積み方次第。失敗でないことだけを見る。
     assert!(!outcome.is_error);
 }
 
 #[test]
 fn no_active_ghost_with_ghost_name_answers_cannot_find_at_once() {
-    let (body, is_error) = text(handle_now(Some("Emily/Phase4.5")).expect("その場で答える"));
+    let (body, is_error) = body_and_error(&handle_now(Some("Emily/Phase4.5")));
     assert_eq!(body, "NG:Cannot find active ghost from specified name");
     assert!(is_error);
 }

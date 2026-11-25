@@ -1,9 +1,12 @@
-//! 宛先のゴーストの解決。World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断を置く。
+//! 宛先のゴーストの解決。World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断と、宛先の kanade へ 1 通送って後から答える配線（[`ask_kanade`]）を置く。
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
+use areka_actor::{ReplyError, ReplySender, reply_channel};
 use areka_kanade::KanadeMsg;
+use areka_mcp::ToolOutcome;
+use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use areka_session::ghost_session::GhostSlot;
@@ -67,6 +70,73 @@ pub(crate) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTa
         .and_then(|session| session.kanade())
         .cloned();
     ScriptTarget { kanade, gone }
+}
+
+/// kanade へ 1 通送って返事を `later` で覗くツールの、名・答えの文言・記録の `event`。
+#[derive(Clone, Copy)]
+pub(crate) struct KanadeAsk {
+    /// 記録の文の頭に付けるツールの名。
+    pub tool: &'static str,
+    /// 送るものの呼び名（送れないときの記録の文に入れる）。
+    pub what: &'static str,
+    /// 置き場に送り口が無いときの本文。
+    pub unavailable: &'static str,
+    /// 送り口が無いとき（`warn!`）。
+    pub unavailable_event: &'static str,
+    /// kanade が止まっていて送れないとき（`debug!`）。
+    pub gone_event: &'static str,
+    /// 返事の前に返信端が落ちたとき（`debug!`）。
+    pub dropped_event: &'static str,
+}
+
+/// 宛先の kanade へ `msg` が組んだ 1 通を送り、返事は待たずに `later` へ預けて届いたら `answer` で答える。
+///
+/// 送り口が無い・送れない・返事の前に返信端が落ちたときは記録を残して `NG:` で答える（落ちたときと
+/// 送れないときは「降りた」の文言）。`ghost` は送り口が無いときの `warn!` の欄にだけ使う。
+pub(crate) fn ask_kanade<T: Send + 'static>(
+    world: &mut World,
+    ghost: &ActiveGhost,
+    ghost_name: Option<&str>,
+    ask: KanadeAsk,
+    reply: ReplyTo,
+    msg: impl FnOnce(ReplySender<T>) -> KanadeMsg,
+    mut answer: impl FnMut(T, &'static str) -> ToolOutcome + 'static,
+) {
+    let ScriptTarget { kanade, gone } = script_target(world, ghost_name);
+    let Some(kanade) = kanade else {
+        tracing::warn!(
+            event = ask.unavailable_event,
+            ghost = listed_value(ghost).as_str(),
+            "[mcp] {}: 宛先のゴーストの kanade の送り口が見つからない",
+            ask.tool
+        );
+        reply.send(outcome::ng(ask.unavailable));
+        return;
+    };
+    let (tx, rx) = reply_channel::<T>();
+    if kanade.send(msg(tx)).is_err() {
+        tracing::debug!(
+            event = ask.gone_event,
+            "[mcp] {}: kanade が止まっていて{}を送れない",
+            ask.tool,
+            ask.what
+        );
+        reply.send(outcome::ng(gone));
+        return;
+    }
+    super::later(world, reply, move |_| match rx.try_recv() {
+        Ok(None) => None,
+        Ok(Some(value)) => Some(answer(value, gone)),
+        // `Timeout` は `try_recv` からは返らない。型の上の腕は「降りた」に倒す。
+        Err(ReplyError::Dropped | ReplyError::Timeout) => {
+            tracing::debug!(
+                event = ask.dropped_event,
+                "[mcp] {}: 返事の前に kanade の返信端が落ちた",
+                ask.tool
+            );
+            Some(outcome::ng(gone))
+        }
+    });
 }
 
 /// 解決の判断（純粋）。失敗は `NG:` の後ろに付ける理由。

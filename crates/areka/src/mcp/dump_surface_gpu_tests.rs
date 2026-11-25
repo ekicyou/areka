@@ -12,6 +12,7 @@ use log_capture_kit::count_levels;
 use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{self, FLUSH_EVENT, GpuRig, differing};
 use super::{Step, WaitAnswer};
+use crate::mcp::kanade_fake_test_support::try_outcome;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{Progress, RecordedCall};
 use areka_runtime::target_map::shell_target;
@@ -420,10 +421,10 @@ fn before_attachment_answers_after_the_frames_run() {
         .get_non_send::<RuntimeWiring>()
         .map(|w| w.attached());
     let pending = gpu.dump_surface(None, Some(i64::from(OTHER)));
-    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let at_once = try_outcome(&pending);
     let mut later = None;
     let arrived = gpu.frames_until(100, |_| {
-        later = pending.try_answer().ok().flatten();
+        later = try_outcome(&pending);
         later.is_some()
     });
     let expected = gpu.composed_rgba(OTHER);
@@ -436,7 +437,7 @@ fn before_attachment_answers_after_the_frames_run() {
             at_once,
             arrived,
             down,
-            read_picture(&later.outcome, &expected)
+            read_picture(&later, &expected)
         ),
         (
             Some(false),
@@ -514,15 +515,15 @@ fn calls_do_not_disturb_the_ghost() {
     );
 }
 
-/// 符号化のスレッドの記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事を、
-/// 記録を数える中で走らせると、ERROR が 0 件で画像つきの成功。
+/// 仕事の記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事をその場で
+/// （符号化のスレッドを通さず）記録を数える中で走らせると、ERROR が 0 件で画像つきの成功。
 ///
 /// # 非空虚性
 /// 種が写しまで済んだ成功（`Step::Encode`）であることを確かめる（その場の失敗なら赤）。判定の関数
-/// `is_picture` と符号化のスレッドの体の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
-/// `fail` を呼ぶと件数と判定の両方で赤。
+/// `is_picture` と ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で `fail` を呼ぶと
+/// 件数と判定の両方で赤。
 #[test]
-fn surface_job_runs_on_the_encoding_body_without_error() {
+fn surface_job_runs_without_error() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let args = Args {

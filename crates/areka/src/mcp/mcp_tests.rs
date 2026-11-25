@@ -14,7 +14,7 @@ use bevy_ecs::world::World;
 
 use super::resolve::{ActiveGhost, CANNOT_FIND, NOT_ACTIVE};
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{self, ghost, try_outcome};
 
 /// SSP と同じで解決を通る 8 本（`get_expression_table` と任意の 7 本。`check_script` は `check_script_tests.rs`）。
 fn eight(ghost_name: Option<&str>) -> Vec<ToolCall> {
@@ -75,8 +75,7 @@ fn dispatch_text(active: Option<&ActiveGhost>, call: ToolCall) -> Option<String>
 }
 
 fn text_of(pending: &Pending) -> Option<String> {
-    let answer = pending.try_answer().ok().flatten()?;
-    match answer.outcome.content.first() {
+    match try_outcome(pending)?.content.first() {
         Some(ToolContent::Text(text)) => Some(text.clone()),
         _ => Some(String::new()),
     }
@@ -262,12 +261,10 @@ fn request_sent_before_install_is_answered_after_it() {
     drain(&mut world);
 
     // 置き場の無い World＝0 体＝空の本文。
-    let answer = pending
-        .try_answer()
-        .ok()
-        .flatten()
-        .expect("汲んだフレームで答える");
-    assert_eq!(answer.outcome, outcome::value(""));
+    assert_eq!(
+        kanade_fake_test_support::answer(&pending),
+        outcome::value("")
+    );
 }
 
 #[test]
@@ -323,18 +320,13 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
     tx.send(request).ok().expect("受け口は生きている");
 
     rig.world.run_schedule(wintf::ecs::Input);
-    let answer = pending.try_answer().ok().flatten();
+    let answer = try_outcome(&pending);
     let active = resolve::active(&rig.world).map(|g| g.name);
     let down = rig.shutdown();
 
     let answer = answer.expect("1 フレームで答える");
     assert_eq!(
-        (
-            answer.outcome.clone(),
-            answer.outcome.is_error,
-            active,
-            down
-        ),
+        (answer.clone(), answer.is_error, active, down),
         (outcome::value("A"), false, Some(Some("A".to_owned())), true),
         "（答え・isError・起動中のゴーストの名前・降ろせた）"
     );

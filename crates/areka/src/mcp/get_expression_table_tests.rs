@@ -6,12 +6,11 @@
 
 use std::path::PathBuf;
 
-use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::super::dump_surface::caught;
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{self, ghost, text, try_outcome};
 
 #[test]
 fn an_empty_world_answers_the_15_defaults_with_one_warning() {
@@ -23,12 +22,9 @@ fn an_empty_world_answers_the_15_defaults_with_one_warning() {
 
     let ((), events) = capture(|| handle(&mut World::new(), &ghost, args, req.reply));
 
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
-    assert_eq!(
-        answer.outcome.content,
-        vec![ToolContent::Text(crlf(DEFAULTS_ONLY_ANSWER))]
-    );
-    assert!(!answer.outcome.is_error);
+    let answered = kanade_fake_test_support::answer(&pending);
+    assert_eq!(answered.content, text(&crlf(DEFAULTS_ONLY_ANSWER)));
+    assert!(!answered.is_error);
     let warns = warns(&events);
     assert_eq!(warns.len(), 1, "{events:?}");
     assert!(
@@ -873,7 +869,7 @@ fn a_panicking_table_job_answers_ng_with_one_error() {
         req.reply
             .send(caught(Box::new(|| panic!("わざと")), failed, PANICKED));
     });
-    let answer = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let answer = try_outcome(&pending);
     let records: Vec<_> = events
         .iter()
         .map(|ev| (ev.level, ev.field_names_sorted()))
