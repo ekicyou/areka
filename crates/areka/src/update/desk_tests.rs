@@ -18,12 +18,13 @@ use tracing::Level;
 
 use super::*;
 use crate::session_tests::events_named;
+use crate::session_tests::reservation;
+use crate::session_tests::write_descript;
 use crate::update::refs::executing_refs;
-use crate::update::update_test_support::write_descript;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::ghost_switch::SwitchStage;
 use areka_session::reload::test_support::boot_context_named;
 
 // ---------------------------------------------------------------- 道具立て
@@ -233,22 +234,7 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
 #[test]
 fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
     let mut rig = Rig::new("areka-update-desk-switching");
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);
     assert!(rig.raised().is_empty());
@@ -454,4 +440,38 @@ fn is_busy_while_running_or_holding_the_after_switch() {
     assert!(!is_busy(&rig.world));
     rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
     assert!(is_busy(&rig.world));
+}
+
+/// 終了が始まった時に読み直しの切替の後送りを持っていれば、列を捨てて
+/// `warn!(update_tail_dropped, reason = "closing")` を 1 件残す。
+#[test]
+fn exit_drops_the_after_switch_tail_with_one_warning() {
+    let mut rig = Rig::new("areka-update-desk-exit-tail");
+    rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((
+        PathBuf::from("emo"),
+        vec![("OnUpdateResult", vec!["ghost".to_owned()])],
+    ));
+    let ((), events) = capture(|| discard_for_exit(&mut rig.world));
+    let dropped = events_named(&events, "update_tail_dropped");
+    assert_eq!(dropped.len(), 1, "{events:?}");
+    assert_eq!(dropped[0].level, Level::WARN);
+    assert_eq!(dropped[0].field_str("reason"), Some("closing"));
+    assert!(rig.world.non_send::<UpdateDesk>().after_switch.is_none());
+}
+
+/// 列の残りが空でも、終了で読み直しの後送りを捨てたことを `warn!(update_tail_dropped, reason =
+/// "closing")` と `debug!(update_purge_dropped)` に 1 件ずつ残す。
+#[test]
+fn exit_records_an_empty_after_switch_and_the_postponed_purge() {
+    let mut rig = Rig::new("areka-update-desk-exit-empty-tail");
+    rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
+    let ((), events) = capture(|| discard_for_exit(&mut rig.world));
+    let dropped = events_named(&events, "update_tail_dropped");
+    assert_eq!(dropped.len(), 1, "{events:?}");
+    assert_eq!(dropped[0].field_str("reason"), Some("closing"));
+    assert_eq!(
+        events_named(&events, "update_purge_dropped").len(),
+        1,
+        "{events:?}"
+    );
 }

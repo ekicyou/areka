@@ -12,6 +12,7 @@ use areka_kanade::WaitBudget;
 use wintf::AppExit;
 
 use super::*;
+use crate::session_tests::position_of;
 use areka_session::exit_wait::EXIT_WAIT_LIMIT;
 use areka_session::ghost_quit::KanadeNoticeRx;
 use areka_session::session_end::end_session_from;
@@ -56,7 +57,7 @@ fn asks_after_exit_reach_kanade_zero_times() {
     let tmp = TempPath::new("desk-exit-asks");
     let mut rig = Rig::new();
     let kanade = rig.put_ghost(tmp.path().to_path_buf());
-    rig.world.insert_non_send(reservation());
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let before = rig.ask_raise("OnInstallBegin", false);
     rig.drain();
     assert!(
@@ -208,11 +209,7 @@ fn os_session_end_waits_within_the_shared_budget() {
     let timeout = events_named(&events, "exit_wait_timeout");
     assert_eq!(timeout.len(), 1, "{events:?}");
     assert_eq!(timeout[0].field_str("label"), Some("C:/A.nar → 根"));
-    let position = |name: &str| {
-        events
-            .iter()
-            .position(|e| e.field_str("event") == Some(name))
-    };
+    let position = |name: &str| position_of(&events, name);
     assert!(
         position("exit_wait_timeout") < position("os_session_end_done"),
         "待ちは後始末の記録の前: {events:?}"

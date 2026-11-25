@@ -1,6 +1,6 @@
 //! 同梱を飛ばしたインストールの警告の口のテスト。
 //!
-//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、6 場面ごとに口
+//! 偽の口の上で本物の `areka-nar` を一時の根へ走らせ、場面ごとに口
 //! `warn_skipped` の呼び出しの件数（飛ばした場面は 1・全部在る場面は 0）と題名・本文を見る。
 //! あわせて、同じ書庫で 2 つ飛ばしても呼び出しは 1 回で本文に 2 行並ぶこと、イベントの列が
 //! 飛ばしの無い成功と同じ形で口がその後ろにあること、締めの知らせが「閉じた」でも口が 1 回呼ばれる
@@ -49,9 +49,9 @@ fn shell_with(companions: &[&str]) -> NarBuilder {
         .done()
 }
 
-// ---- 6 場面 ----
+// ---- 飛ばしの場面 ----
 
-/// ⑴ 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は飛ばしの無い成功と同じ形で、口はその後ろ。
+/// 無印の同梱の取り出し元が無い → 口 1 回。イベントの列は飛ばしの無い成功と同じ形で、口はその後ろ。
 #[test]
 fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let mut ports = FakePorts::new();
@@ -108,7 +108,7 @@ fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     );
 }
 
-/// ⑵ 番号付きの同梱の取り出し元が無い → 口 1 回（取り出し元の値は書かれたまま）。
+/// 番号付きの同梱の取り出し元が無い → 口 1 回（取り出し元の値は書かれたまま）。
 #[test]
 fn a_numbered_skipped_companion_warns_once() {
     let mut ports = FakePorts::new();
@@ -134,7 +134,7 @@ fn a_numbered_skipped_companion_warns_once() {
     );
 }
 
-/// ⑶ 同梱が 2 つで片方だけ無い → 口 1 回。入った物に在るほうのバルーンが並ぶ。
+/// 同梱が 2 つで片方だけ無い → 口 1 回。入った物に在るほうのバルーンが並ぶ。
 #[test]
 fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
     let mut ports = FakePorts::new();
@@ -170,7 +170,7 @@ fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
     );
 }
 
-/// ⑷ 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じく口 1 回。
+/// 取り出し元のフォルダのエントリだけが在り配下が空 → 無いのと同じく口 1 回。
 #[test]
 fn a_source_with_only_its_folder_entry_warns_once() {
     let mut ports = FakePorts::new();
@@ -197,7 +197,7 @@ fn a_source_with_only_its_folder_entry_warns_once() {
     );
 }
 
-/// ⑸ シェルの `.nar` で同梱の取り出し元が無い → シェルが入り、口 1 回。
+/// シェルの `.nar` で同梱の取り出し元が無い → シェルが入り、口 1 回。
 #[test]
 fn a_shell_with_a_skipped_companion_warns_once() {
     let mut ports = FakePorts::new();
@@ -225,7 +225,7 @@ fn a_shell_with_a_skipped_companion_warns_once() {
     );
 }
 
-/// ⑹ 取り出し元が全部在る → 口 0 回（ダイアログ 0）。
+/// 取り出し元が全部在る → 口 0 回（ダイアログ 0）。
 #[test]
 fn companions_with_all_sources_do_not_warn() {
     let mut ports = FakePorts::new();

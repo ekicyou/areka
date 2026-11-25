@@ -268,7 +268,7 @@ fn drop_tail(tail: &[(&'static str, Vec<String>)], reason: &'static str) {
         event = "update_tail_dropped",
         reason,
         ids = ?ids,
-        "[update] 受け取るゴーストが居ないので、後送りの列を捨てます"
+        "[update] 後送りの列を捨てます"
     );
 }
 
@@ -287,19 +287,7 @@ pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
         return;
     };
     if !finished {
-        tracing::debug!(
-            event = "update_purge_dropped",
-            dir = %dir.display(),
-            "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
-        );
-        // 列の先頭（起動の知らせ）も届いていない＝残りが空でも列は捨てた。
-        tracing::warn!(
-            event = "update_tail_dropped",
-            reason = "switch_failed",
-            rest = rest.len(),
-            "[update] 読み直しの切替が終わらなかったので、後送りの列を捨てます（既定ゴーストへは送りません）"
-        );
-        return;
+        return abandon_reload(&dir, rest.len(), "switch_failed");
     }
     let purge = areka_update::purge_committed(&dir);
     for path in &purge.held {
@@ -569,11 +557,40 @@ pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: Updat
         .expect("窓口の頼みの受信端は生きている");
 }
 
-/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちを捨てる。走っている依頼は門が待つ。
+/// 覚えた読み直しを捨てる: 残りの片付けは次の走行の始めに任せ（`debug!(update_purge_dropped)`）、
+/// 列は既定ゴーストへ送らずに捨てる（残りが空でも `warn!(update_tail_dropped, reason)` を 1 件）。
+fn abandon_reload(dir: &Path, rest: usize, reason: &'static str) {
+    if reason == "closing" {
+        tracing::debug!(
+            event = "update_purge_dropped",
+            dir = %dir.display(),
+            "[update] 終了が始まったので、読み直しの後の残りは次の走行の始めに消します"
+        );
+    } else {
+        tracing::debug!(
+            event = "update_purge_dropped",
+            dir = %dir.display(),
+            "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
+        );
+    }
+    // 列の先頭（起動の知らせ）の届き先が定常に入っていない＝残りが空でも列は捨てた。
+    tracing::warn!(
+        event = "update_tail_dropped",
+        reason,
+        rest,
+        "[update] 読み直しの後送りの列を捨てます（既定ゴーストへは送りません）"
+    );
+}
+
+/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちと覚えた読み直しを捨てる。
+/// 走っている依頼は門が待つ。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
         return;
     };
+    if let Some((dir, rest)) = desk.after_switch.take() {
+        abandon_reload(&dir, rest.len(), "closing");
+    }
     if desk.homeurl_query.take().is_some() {
         tracing::debug!(
             event = "update_query_discarded",

@@ -28,7 +28,7 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::session_tests::events_named;
-use crate::update::update_test_support::write_descript;
+use crate::session_tests::write_descript;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::exit_wait::{ClosingWaits, begin_close, register_gate};

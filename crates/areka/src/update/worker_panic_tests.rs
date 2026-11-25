@@ -119,12 +119,8 @@ fn panic_in_get_reports_worker_panicked_and_leaves_the_write_stage() {
         })
     });
     assert!(
-        !events.iter().any(|e| {
-            matches!(
-                e.field_str("event"),
-                Some("exit_wait_done" | "exit_wait_timeout")
-            )
-        }),
+        events_named(&events, "exit_wait_done").is_empty()
+            && events_named(&events, "exit_wait_timeout").is_empty(),
         "書く段に残らない: {events:?}"
     );
 }

@@ -35,7 +35,7 @@ use areka_runtime::skin_switch::{SkinSwitchInFlight, SkinSwitchStage};
 use areka_runtime::spine::Progress;
 use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::ghost_switch::SwitchStage;
 use areka_session::shell_balloon_switch::SkinKind;
 
 // ---------------------------------------------------------------- 土台
@@ -189,25 +189,6 @@ fn build_failure() -> BuildResult {
         shell_dir: PathBuf::from("shell/B"),
         failures: vec!["surface0.png".to_owned()],
     })
-}
-
-fn plant_ghost_switch(world: &mut World) {
-    world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: PathBuf::from("X"),
-            folder: "X".to_owned(),
-            name: "X".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: PathBuf::from("A"),
-            name: None,
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
 }
 
 /// 進行中の印の段（`None`＝印が無い）。
@@ -566,7 +547,8 @@ fn ghost_switch_in_flight_wins_before_the_replace() {
     let mut rig = rig(SkinKind::Shell);
     deliver(&mut rig, Ok(shell_built()));
     frame(&mut rig);
-    plant_ghost_switch(&mut rig.world);
+    rig.world
+        .insert_non_send(crate::session_tests::reservation(SwitchStage::SendOff));
     reply(&mut rig, TalkGap::Reached { marked: None });
     let events = frame(&mut rig);
     let (kanade, _) = kanade_msgs(&rig);

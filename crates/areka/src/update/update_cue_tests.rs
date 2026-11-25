@@ -10,19 +10,17 @@ use super::*;
 use std::sync::mpsc::{Receiver, channel};
 
 use areka_ghost::BasewareRoot;
-use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use dola::DynamicValue;
-use dola::cue::{ActorKey, CueCommand, CuePlayer, CueSink, TalkCue};
+use dola::cue::CueSink;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_runtime::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 
-use crate::session_tests::events_named;
+use crate::session_tests::write_descript;
+use crate::session_tests::{events_named, play_into, warns};
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
-use crate::update::update_test_support::write_descript;
 use crate::update::{self as update, desk};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::reload::test_support::boot_context_named;
@@ -32,15 +30,6 @@ use areka_session::reload::test_support::boot_context_named;
 fn sink() -> (UpdateCueSink, Receiver<RawUpdateRequest>) {
     let (tx, rx) = channel();
     (UpdateCueSink::new(tx), rx)
-}
-
-/// 台本の文字列を本番と同じ解析と組み立てで cue にし、受け口へ最後まで配る。
-fn play_into(script: &str, sink: UpdateCueSink) {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(sink));
-    player.tick(compiled.sheet.absolute_end_time());
 }
 
 /// 素の受信端を渡した受け口へ台本の文字列を配る。
@@ -89,14 +78,6 @@ fn emit_one(name: &str, tokens: &[&str]) -> (Vec<RawUpdateRequest>, Vec<Captured
     let (mut sink, rx) = sink();
     let ((), events) = capture(|| sink.emit(carrier_cue(name, tokens)));
     (rx.try_iter().collect(), events)
-}
-
-fn warns(events: &[CapturedEvent]) -> Vec<Option<&str>> {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| e.field_str("event"))
-        .collect()
 }
 
 fn other(pairs: &[(TargetKind, &str)]) -> RawUpdateRequest {
@@ -260,17 +241,7 @@ fn not_ours_is_benign_skip_without_warning() {
 fn unopenable_own_cue_warns_and_sends_nothing() {
     for name in ["updatebymyself", "update", "updateother"] {
         let (mut sink, rx) = sink();
-        let ((), events) = capture(|| {
-            sink.emit(TalkCue {
-                at: 0.0,
-                actor: ActorKey::from("0"),
-                command: CueCommand::Custom {
-                    command: name.into(),
-                    params: DynamicValue::Null,
-                },
-                duration: 0.0,
-            })
-        });
+        let ((), events) = capture(|| sink.emit(broken_custom_cue("0", name)));
         assert_eq!(rx.try_iter().count(), 0, "{name}");
         assert_eq!(
             warns(&events),

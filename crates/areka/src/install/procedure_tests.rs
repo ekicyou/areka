@@ -6,12 +6,11 @@
 
 use areka_nar::InstallKind;
 use log_capture_kit::capture;
-use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
     Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, RUNNING_SAKURA, balloon_nar,
-    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, order_of, run_one, shell_nar,
-    supplement_nar, write_nar,
+    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, run_many, run_one, shell_nar,
+    supplement_nar,
 };
 use super::*;
 use crate::session_tests::events_named;
@@ -286,17 +285,10 @@ fn supplement_returned_as_not_running_is_installed_elsewhere_by_the_procedure() 
 
 #[test]
 fn abandoning_an_order_logs_the_archives_not_yet_started() {
-    let dir = TempPath::new("install-procedure-nar");
-    let naming = ["first.nar", "second.nar", "third.nar"];
-    let paths: Vec<_> = naming
-        .iter()
-        .map(|name| write_nar(&dir, name, ghost_nar("newbie", &[])))
-        .collect();
-    let order = order_of(&paths.iter().map(|path| path.as_path()).collect::<Vec<_>>());
     let mut ports = FakePorts::new();
     ports.replies.insert("OnInstallBegin", Raised::Closed);
 
-    let (ends, events) = capture(|| run_order(&order, &mut ports));
+    let (ends, events) = run_many(&mut ports, vec![ghost_nar("newbie", &[]); 3]);
 
     assert_eq!(
         ends,
@@ -313,9 +305,9 @@ fn abandoning_an_order_logs_the_archives_not_yet_started() {
     );
     let skipped = abandoned[0].field("skipped_archives").expect("残りのパス");
     assert!(
-        skipped.contains("second.nar")
-            && skipped.contains("third.nar")
-            && !skipped.contains("first.nar"),
+        skipped.contains("archive1.nar")
+            && skipped.contains("archive2.nar")
+            && !skipped.contains("archive0.nar"),
         "{skipped}"
     );
 }

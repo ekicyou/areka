@@ -6,7 +6,6 @@
 //! 目録は一時フォルダに実物の `descript.txt` を置いて読む。判定は集めてから 1 回。
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 
@@ -24,7 +23,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 use wintf::ecs::Input;
 
-use super::count;
+use super::{count, write_descript};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::shared_test_support::wiring;
@@ -35,7 +34,7 @@ use areka_runtime::skin_switch::{
 use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use areka_session::ghost_switch::{SwitchInFlight, SwitchStage};
 use areka_session::shell_balloon_switch::*;
 
 // ---------------------------------------------------------------- 土台
@@ -47,15 +46,6 @@ struct Rig {
     kanade: Receiver<KanadeMsg>,
     root: BasewareRoot,
     _temp: TempPath,
-}
-
-pub(super) fn write_descript(dir: &Path, body: &str) {
-    fs::create_dir_all(dir).unwrap();
-    fs::write(
-        dir.join("descript.txt"),
-        format!("charset,UTF-8\r\n{body}\r\n"),
-    )
-    .unwrap();
 }
 
 /// テスト用の seriko の送り手（空の定義・ループ無し・出力は観測用の器）。
@@ -202,25 +192,6 @@ fn plant_marker(world: &mut World) {
     });
 }
 
-fn plant_ghost_switch(world: &mut World) {
-    world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: PathBuf::from("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: PathBuf::from("A"),
-            name: None,
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
-}
-
 fn marker_folder(world: &World) -> Option<String> {
     world
         .get_non_send::<SkinSwitchInFlight>()
@@ -246,7 +217,8 @@ fn refuse(rig: &mut Rig, request: SkinRequest, event: &str) -> (SkinVerdict, usi
 fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     let mut rig = rig("areka-skin-entry-refusals");
     plant_marker(&mut rig.world);
-    plant_ghost_switch(&mut rig.world);
+    rig.world
+        .insert_non_send(super::reservation(SwitchStage::SendOff));
     insert_running_desk_for_test(&mut rig.world);
     rig.world.remove_non_send::<RuntimeWiring>();
     let unknown = || req(SkinKind::Shell, name("無い"), PLAIN);

@@ -12,9 +12,7 @@
 //! 実時間に依らない: 進みは偽の SHIORI の記録・窓口の段・kanade の返信端の受け取りで揃える。
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use areka_update::Fetch;
 use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
@@ -85,8 +83,7 @@ fn running_a(local: Option<&[u8]>) -> SwitchRig {
     let site = FakeFetch::new()
         .serve(&format!("{HOMEURL}updates2.dau"), manifest.as_bytes())
         .serve(&format!("{HOMEURL}{FILE}"), BODY);
-    rig.world.non_send_mut::<UpdateDesk>().new_fetch =
-        Arc::new(move || Ok(Box::new(site.clone()) as Box<dyn Fetch>));
+    rig.world.non_send_mut::<UpdateDesk>().new_fetch = site.maker();
     rig.plant_boot_record("A");
     rig.boot("A");
     assert!(rig.wait_steady(), "A が定常に着く");

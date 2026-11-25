@@ -34,10 +34,6 @@ const BOUND: Duration = Duration::from_secs(30);
 /// 数を読まないテストへ渡す、誰も読まない通信中の数。
 static UNOBSERVED: OnlineCounter = OnlineCounter::new();
 
-fn make(fake: FakeFetch) -> MakeFetch {
-    Arc::new(move || Ok(Box::new(fake.clone()) as Box<dyn areka_update::Fetch>))
-}
-
 /// 台本の出どころのパスの要求なら、そのパス。
 fn script_path(request: RawInstallRequest) -> std::path::PathBuf {
     match request {
@@ -267,7 +263,7 @@ fn failure_logs_one_error_with_url_and_reason_and_sends_nothing() {
     let cases = [
         (
             "fetch",
-            make(FakeFetch::new().fail(URL, FetchError::Timeout)),
+            FakeFetch::new().fail(URL, FetchError::Timeout).maker(),
         ),
         ("unavailable", unavailable),
     ];
@@ -307,7 +303,7 @@ fn success_logs_done_without_warnings() {
     let ((), events) = capture(|| {
         fetch_and_send(
             URL,
-            &make(FakeFetch::new().serve(URL, BODY)),
+            &FakeFetch::new().serve(URL, BODY).maker(),
             &dir,
             SystemTime::now(),
             &tx,

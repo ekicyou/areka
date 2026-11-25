@@ -136,11 +136,11 @@ fn file_name(url: &str) -> String {
     format!("{}-{serial}-{safe}", std::process::id())
 }
 
-/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消し、消した数を返す（0 なら記録しない）。
+/// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消す（消した数を `info!` に残す・0 なら記録しない）。
 /// 調べられない・消せないファイルは `debug!` で飛ばす（次の取得でまた試す）。
-fn sweep_old(dir: &Path, now: SystemTime) -> usize {
+fn sweep_old(dir: &Path, now: SystemTime) {
     let Some(limit) = now.checked_sub(KEEP) else {
-        return 0;
+        return;
     };
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -151,7 +151,7 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
                 error = %err,
                 "[install] 一時フォルダの一覧を読めないので、古いファイルの掃除を飛ばします"
             );
-            return 0;
+            return;
         }
     };
     let mut removed = 0;
@@ -201,7 +201,6 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
             "[install] 7 日より古い一時ファイルを消しました"
         );
     }
-    removed
 }
 
 /// 取得のスレッド `install-fetch` を起こして `first` から取りに行かせ、次の URL の送出端を返す。

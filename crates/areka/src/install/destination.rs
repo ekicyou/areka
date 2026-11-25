@@ -203,7 +203,7 @@ fn log_head_skipped(head: &Path, root: &Path) {
         event = "install_head_root_skipped",
         head_root = %head.display(),
         root = %root.display(),
-        "先頭の根が見つからないので、見つかるいちばん上の根へ入れる"
+        "[install] 先頭の根が見つからないので、見つかるいちばん上の根へ入れる"
     );
 }
 

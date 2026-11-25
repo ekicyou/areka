@@ -56,7 +56,7 @@ pub(crate) struct InstallDesk {
     raw_rx: Receiver<RawInstallRequest>,
     /// 待っている依頼（届いた順）。
     pub(super) queue: VecDeque<InstallOrder>,
-    /// 背景のスレッドへの依頼の送出端（最初の依頼で 1 度だけ起こす）。
+    /// 背景のスレッドへの依頼の送出端（最初の依頼で起こす・倒れた・居なくなったら捨てて起こし直す）。
     worker: Option<Sender<InstallOrder>>,
     /// 背景のスレッドが依頼を扱っている最中か。
     pub(super) busy: bool,
@@ -578,7 +578,8 @@ fn send_held(world: &mut World) {
     }
 }
 
-/// 背景のスレッドが空いていれば、待っている依頼の先頭を渡す（最初の依頼でスレッドを起こす）。
+/// 背景のスレッドが空いていれば、待っている依頼の先頭を渡す（最初の依頼でスレッドを起こす・倒れた・
+/// 居なくなったら次の依頼で起こし直す）。
 fn hand_next_order(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;

@@ -5,10 +5,10 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, hold, tree};
 use log_capture_kit::capture;
 
-fn put_ghost(root: &Path, folder: &str) {
+pub(super) fn put_ghost(root: &Path, folder: &str) {
     let master = root.join("ghost").join(folder).join("ghost").join("master");
     std::fs::create_dir_all(&master).expect("フォルダを組む");
     std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,X\n").expect("descript");
@@ -22,10 +22,6 @@ fn put_balloon(root: &Path, folder: &str) {
 
 fn list(dirs: &[PathBuf]) -> BasewareRoots {
     BasewareRoots::new(dirs.iter().cloned().map(BasewareRoot::new).collect())
-}
-
-fn skipped_warns(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events_named(events, "install_head_root_skipped").len()
 }
 
 #[test]
@@ -49,7 +45,11 @@ fn new_items_go_to_head_root_and_existing_ones_to_their_root() {
         [one.clone(), two.clone(), one, two],
         "(新しいゴースト→先頭・すでにあるゴースト→その根・新しいバルーン→先頭・すでにあるバルーン→その根)"
     );
-    assert_eq!(skipped_warns(&events), 0, "先頭が見つかるなら warn は無い");
+    assert_eq!(
+        events_named(&events, "install_head_root_skipped").len(),
+        0,
+        "先頭が見つかるなら warn は無い"
+    );
 }
 
 #[test]
@@ -114,7 +114,6 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
 // ---- 並びを宛先にして入れる（install_into） ----
 
 use std::collections::BTreeMap;
-use std::os::windows::fs::OpenOptionsExt;
 
 use areka_nar::NarArchive;
 use sample_ghost_kit::{NarBuilder, install_txt};
@@ -144,24 +143,6 @@ fn ghost_nar(tmp: &TempPath, directory: &str, balloon: bool) -> NarArchive {
     let path = tmp.child(&format!("{directory}.nar"));
     builder.write_to(&path).expect("書庫を置ける");
     NarArchive::open(&path).expect("書庫を開ける")
-}
-
-/// 木の全内容（相対パス → バイト列）。無ければ空。
-fn tree(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-    fn walk(base: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
-        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(base, &path, out);
-            } else {
-                let bytes = std::fs::read(&path).expect("読める");
-                out.insert(path.strip_prefix(base).expect("下").to_path_buf(), bytes);
-            }
-        }
-    }
-    let mut out = BTreeMap::new();
-    walk(dir, dir, &mut out);
-    out
 }
 
 /// 新しいゴーストは先頭の根へ、同梱のバルーンはそのゴーストの中へ入り、要素ごとに `install_placed`。
@@ -243,11 +224,7 @@ fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
     let second = tree(&two);
     let archive = ghost_nar(&tmp, "fresh", true);
     // 読みだけを共有して掴む（areka-nar の檻と同じ型）。宛先なら確定の入れ替えが失敗する。
-    let handle = std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(1 /* FILE_SHARE_READ */)
-        .open(two.join("balloon/kaku/descript.txt"))
-        .expect("掴める");
+    let handle = hold(&two.join("balloon/kaku/descript.txt"));
 
     let outcome = install_into(&list(&[one.clone(), two.clone()]), &archive, None, None);
     drop(handle);

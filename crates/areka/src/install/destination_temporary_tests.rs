@@ -6,6 +6,7 @@ use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
+use super::tests::put_ghost;
 use super::*;
 use crate::session_tests::events_named;
 use log_capture_kit::capture;
@@ -17,10 +18,6 @@ fn put_temporary_ghost(temp: &Path, folder: &str) -> PathBuf {
     std::fs::create_dir_all(&master).expect("フォルダを組む");
     std::fs::write(master.join("descript.txt"), "charset,UTF-8\nname,T\n").expect("descript");
     dir
-}
-
-fn put_ghost(root: &Path, folder: &str) {
-    put_temporary_ghost(&root.join("ghost"), folder);
 }
 
 fn list_with_temporary(temp: &Path, dirs: &[PathBuf]) -> BasewareRoots {

@@ -21,8 +21,8 @@ use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
 use crate::menu::captions::QueryReply;
-use crate::session_tests::events_named;
-use crate::update::update_test_support::write_descript;
+use crate::session_tests::write_descript;
+use crate::session_tests::{events_named, levels_of};
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
 };
@@ -551,12 +551,8 @@ fn steady_notice_sends_one_homeurl_query_each_time() {
 fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
     let root = Root::new("areka-update-steady-failed");
     let (mut world, kanade) = world(&root, "bare", "plain");
-    let failed_warnings = |events: &[CapturedEvent]| {
-        events_named(events, "update_homeurl_query_failed")
-            .iter()
-            .map(|e| e.level)
-            .collect::<Vec<_>>()
-    };
+    let failed_warnings =
+        |events: &[CapturedEvent]| levels_of(events, "update_homeurl_query_failed");
 
     on_steady(&mut world);
     let (_, reply) = queries(&kanade).remove(0);

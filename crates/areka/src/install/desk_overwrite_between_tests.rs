@@ -122,7 +122,8 @@ fn the_desk_hands_down_resumes_on_extracted_and_answers_on_steady() {
         events_named(&events, "install_overwrite_done").is_empty(),
         "窓口は展開しない: {events:?}"
     );
-    let order_of = |name| first(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
+    let order_of =
+        |name| position_of(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
     let closed = order_of("windows_closed_for_restart");
     let booted = order_of("ghost_switch_booted");
     let done = order_of("ghost_switch_done");

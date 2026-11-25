@@ -1,21 +1,18 @@
 //! `InstallCueSink` の自己選別と送り出しの決定論テスト。
 
 use super::*;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, play_into, warns};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use areka_kanade::online::OnlineCounter;
-use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use dola::DynamicValue;
-use dola::cue::{ActorKey, CueCommand, CuePlayer, CueSink, TalkCue};
+use dola::cue::CueSink;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use areka_runtime::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 
 use crate::install::fetch_url::FetchTools;
 use crate::install::fetch_url_test_support::FakeFetch;
@@ -43,23 +40,6 @@ fn emit_one(name: &str, tokens: &[&str]) -> (Vec<RawInstallRequest>, Vec<Capture
     (rx.try_iter().collect(), events)
 }
 
-/// 台本の文字列を本番と同じ解析と組み立てで cue にし、受け口へ最後まで配る。
-fn play_script(script: &str, sink: InstallCueSink) {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(sink));
-    player.tick(compiled.sheet.absolute_end_time());
-}
-
-fn warns(events: &[CapturedEvent]) -> Vec<Option<&str>> {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| e.field_str("event"))
-        .collect()
-}
-
 fn script_raw(path: &str) -> RawInstallRequest {
     RawInstallRequest::Path {
         path: PathBuf::from(path),
@@ -75,7 +55,7 @@ fn script_raw(path: &str) -> RawInstallRequest {
 fn script_string_becomes_one_script_request_with_the_path() {
     let (sink, rx) = sink();
     let ((), events) =
-        capture(|| play_script(&format!(r"\![execute,install,path,{ABSOLUTE}]\e"), sink));
+        capture(|| play_into(&format!(r"\![execute,install,path,{ABSOLUTE}]\e"), sink));
     assert_eq!(
         rx.try_iter().collect::<Vec<_>>(),
         vec![script_raw(ABSOLUTE)]
@@ -94,7 +74,7 @@ fn script_string_reaches_the_desk_queue_as_one_script_order() {
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
     let ((), events) = capture(|| {
-        play_script(&format!(r"\![execute,install,path,{ABSOLUTE}]\e"), sink);
+        play_into(&format!(r"\![execute,install,path,{ABSOLUTE}]\e"), sink);
         desk::drain(&mut world);
     });
 
@@ -150,7 +130,7 @@ fn relative_path_in_a_script_string_reaches_no_order() {
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
     let ((), events) = capture(|| {
-        play_script(r"\![execute,install,path,in\hana.nar]\e", sink);
+        play_into(r"\![execute,install,path,in\hana.nar]\e", sink);
         desk::drain(&mut world);
     });
 
@@ -198,14 +178,14 @@ fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
         &mut world,
         FetchTools {
             dir: dir.clone(),
-            make: Arc::new(move || Ok(Box::new(fake.clone()) as Box<dyn areka_update::Fetch>)),
+            make: fake.maker(),
             online: &ONLINE,
         },
     );
     let sink = InstallCueSink::new(desk::raw_sender(&world));
 
     let ((), events) =
-        capture(|| play_script(&format!(r"\![execute,install,url,{URL},nar]\e"), sink));
+        capture(|| play_into(&format!(r"\![execute,install,url,{URL},nar]\e"), sink));
     wait_until(
         "取得した書庫が依頼になる",
         Progress::Unknown,
@@ -336,17 +316,7 @@ fn not_ours_is_benign_skip_without_warning() {
 #[test]
 fn unopenable_execute_warns_and_sends_nothing() {
     let (mut sink, rx) = sink();
-    let ((), events) = capture(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: "execute".into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
+    let ((), events) = capture(|| sink.emit(broken_custom_cue("0", "execute")));
     assert_eq!(rx.try_iter().count(), 0);
     assert_eq!(warns(&events), vec![Some("install_cue_unopenable")]);
 }

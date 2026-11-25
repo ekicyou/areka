@@ -21,12 +21,10 @@ use super::*;
 use crate::install::procedure::InstalledRecord;
 use crate::install::worker::OverwriteAnswer;
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, reservation};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
-use areka_session::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
-};
+use areka_session::ghost_switch::{SwitchInFlight, SwitchStage, on_notice};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -99,25 +97,6 @@ fn order(path: &str) -> InstallOrder {
     InstallOrder {
         archives: vec![PathBuf::from(path)],
         origin: InstallOrigin::Menu,
-    }
-}
-
-fn reservation() -> SwitchInFlight {
-    SwitchInFlight {
-        target: SwitchTarget {
-            dir: "ghost/B".into(),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: "ghost/A".into(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
     }
 }
 
@@ -302,7 +281,7 @@ fn raw_sender_without_desk_has_no_receiver() {
 fn raise_waits_for_the_switch_and_goes_to_the_ghost_at_send_time() {
     let mut rig = Rig::new();
     let old_kanade = rig.put_ghost("ghost/A".into());
-    rig.world.insert_non_send(reservation());
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
 
     let answer = rig.ask_raise("OnInstallBegin", false);
     rig.drain();
@@ -626,7 +605,7 @@ fn a_busy_overwrite_is_not_retried_after_the_exit_was_instructed() {
             &root,
         ));
     let kanade = rig.put_ghost(root.ghost_dir("A"));
-    rig.world.insert_non_send(reservation());
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let _answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     rig.drain();
     assert!(change_requests(&kanade).is_empty(), "予約の間は頼まない");
@@ -723,7 +702,7 @@ fn run_between_answers_down_only_on_the_switch_to_the_held_destination() {
     );
     let marker = root.ghost_dir("A").join("ghost/master/overwritten.txt");
 
-    rig.world.insert_non_send(reservation());
+    rig.world.insert_non_send(reservation(SwitchStage::SendOff));
     let ((), other) = capture(|| run_overwrite_between(&mut rig.world));
     assert_eq!(
         events_named(&other, "install_overwrite_skipped").len(),

@@ -19,7 +19,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, reservation};
 use crate::update::UpdateTail;
 use crate::update::update_test_support::{plant_committed, refs_of};
 use areka_session::boot_config::BootContext;
@@ -27,8 +27,7 @@ use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use areka_session::ghost_switch::{
-    GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
-    request_ghost_switch,
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchStage, SwitchVerdict, request_ghost_switch,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
@@ -305,22 +304,10 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
     );
 
     // 切替の予約が在る（UI の側だけに置く＝kanade へは届かない）→ 今のゴーストへ送る。
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: a_dir.clone(),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    let mut switching = reservation(SwitchStage::SendOff);
+    switching.target.dir = rig.root.ghost_dir("B");
+    switching.prev.dir = a_dir.clone();
+    rig.world.insert_non_send(switching);
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();
 

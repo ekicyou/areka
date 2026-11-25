@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 use areka_update::{Fetch, FetchError};
 
+use crate::install::fetch_url::MakeFetch;
+
 /// URL → 本文または失敗の固定表。表に無い URL は `NotFound`（「無い」）。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FakeFetch {
@@ -29,6 +31,11 @@ impl FakeFetch {
     pub(crate) fn fail(mut self, url: &str, err: FetchError) -> FakeFetch {
         self.table.insert(url.to_owned(), Err(err));
         self
+    }
+
+    /// 呼ぶたびにこの表の写しを返す取得口の作り方。
+    pub(crate) fn maker(self) -> MakeFetch {
+        std::sync::Arc::new(move || Ok(Box::new(self.clone()) as Box<dyn Fetch>))
     }
 }
 

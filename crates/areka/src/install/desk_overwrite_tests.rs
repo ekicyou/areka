@@ -33,7 +33,7 @@ use crate::install::procedure::{InstallPorts, Overwritten};
 use crate::install::worker::{DeskPorts, OverwriteAnswer};
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, hold, position_of, reservation};
 use crate::update::update_test_support::refs_of;
 use areka_placement::persist::PersistWiring;
 use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
@@ -41,8 +41,8 @@ use areka_session::app_exit::{ExitOrigin, FirstExit};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::DEFAULT_GHOST_FOLDER;
 use areka_session::ghost_switch::{
-    GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
-    SwitchTarget, SwitchVerdict, request_ghost_switch,
+    GhostSpec, LastInstalledGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchVerdict,
+    request_ghost_switch,
 };
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
@@ -59,13 +59,6 @@ fn ids(calls: &[RecordedCall]) -> Vec<String> {
             other => format!("{other:?}"),
         })
         .collect()
-}
-
-/// `name` の記録が最初に現れた位置。
-fn first(events: &[CapturedEvent], name: &str) -> Option<usize> {
-    events
-        .iter()
-        .position(|e| e.field_str("event") == Some(name))
 }
 
 /// 呼び出しの列の確かめに添える手がかり: 起こした回ごとの列・`OnInstallFailure` の Reference・捕まえた
@@ -184,7 +177,8 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     );
     // 降ろした後に宛先の中身が替わる（全窓を閉じた後・起こす前に展開する）。
     assert_eq!(body.as_deref(), Some(MARKER_BODY));
-    let order_of = |name| first(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
+    let order_of =
+        |name| position_of(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
     let down = order_of("ghost_switch_down_ms");
     let done = order_of("install_overwrite_done");
     let booted = order_of("ghost_switch_booted");
@@ -332,17 +326,6 @@ fn current_of(rig: &SwitchRig) -> Option<String> {
         .and_then(|ctx| ctx.current.ghost.folder.clone())
 }
 
-/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` と同じ状態＝`areka-nar` のテストの
-/// 助手と同じ形）。共有を 0 にすると組み上げの段の複写が先に落ちて確定まで届かない。
-fn hold(path: &Path) -> std::fs::File {
-    use std::os::windows::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode(1 /* FILE_SHARE_READ */)
-        .open(path)
-        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
-}
-
 /// 別の切替の最中に預かった書庫は「預かった」のまま置き（切替を重ねない）、その予約が下りた tick に
 /// 頼み直して一周する（判定 `Busy`）。頼み直しは同じフォルダの名指し・知らせなし・出どころ「自動」。
 /// 一周の途中に届いた切替要求は無視される。別の切替の予約は UI の側だけに置く（kanade へは
@@ -352,22 +335,10 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
     let mut rig = running("A", &["B"]);
     let dir = TempPath::new("desk-overwrite-busy");
     let archive = NarArchive::open(&write_archive(&dir, "A", &[])).expect("書庫を開ける");
-    rig.world.insert_non_send(SwitchInFlight {
-        target: SwitchTarget {
-            dir: rig.root.ghost_dir("B"),
-            folder: "B".to_owned(),
-            name: "B".to_owned(),
-            sakura_name: None,
-        },
-        prev: PrevGhost {
-            dir: rig.root.ghost_dir("A"),
-            name: Some("A".to_owned()),
-            sakura_name: None,
-        },
-        stage: SwitchStage::SendOff,
-        boot_event: None,
-        copy: areka_session::switch_copy::SwitchCopy::None,
-    });
+    let mut switching = reservation(SwitchStage::SendOff);
+    switching.target.dir = rig.root.ghost_dir("B");
+    switching.prev.dir = rig.root.ghost_dir("A");
+    rig.world.insert_non_send(switching);
     let mut got = None;
 
     let (flow, events) = capture(|| {

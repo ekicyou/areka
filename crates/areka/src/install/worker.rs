@@ -318,7 +318,8 @@ impl InstallPorts for DeskPorts {
                 running,
             }) => (archive, roots, running),
         };
-        if !self.gate.enter_write() {
+        let label = gate_label(&self.archive, &roots, &archive, target_ghost.as_deref());
+        if !self.gate.begin(label) || !self.gate.enter_write() {
             self.gate.end();
             return Overwritten::Closed;
         }

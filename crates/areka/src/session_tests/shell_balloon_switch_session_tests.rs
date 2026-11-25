@@ -5,7 +5,8 @@
 
 use std::path::PathBuf;
 
-use super::shell_balloon_switch_tests::{absolute, write_descript};
+use super::shell_balloon_switch_tests::absolute;
+use super::write_descript;
 use crate::sample_test_support::switch_rig;
 use areka_runtime::skin_switch::SkinSwitchInFlight;
 use areka_runtime::spine::RecordedCall;

@@ -19,8 +19,8 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use crate::session_tests::events_named;
+use crate::session_tests::write_descript;
 use crate::update::desk::{self, Stage, UpdateDesk};
-use crate::update::update_test_support::write_descript;
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};

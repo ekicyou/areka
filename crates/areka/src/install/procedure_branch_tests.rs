@@ -12,7 +12,7 @@ use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
     Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, balloon_nar, ghost_nar, order_of,
-    shell_nar, supplement_nar, write_nar,
+    run_many, shell_nar, supplement_nar,
 };
 use super::*;
 use crate::session_tests::events_named;
@@ -25,21 +25,6 @@ const CLOSING: [&str; 5] = [
     "OnGhostTermsDecline",
     "OnInstallFailure",
 ];
-
-/// 書庫を並べた依頼を偽の口で一周させ、記録ごと返す。
-fn run_many(
-    ports: &mut FakePorts,
-    builders: Vec<NarBuilder>,
-) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
-    let dir = TempPath::new("install-branch-nar");
-    let paths: Vec<PathBuf> = builders
-        .into_iter()
-        .enumerate()
-        .map(|(index, builder)| write_nar(&dir, &format!("archive{index}.nar"), builder))
-        .collect();
-    let order = order_of(&paths.iter().map(PathBuf::as_path).collect::<Vec<_>>());
-    capture(|| run_order(&order, ports))
-}
 
 fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
     run_many(ports, vec![builder])

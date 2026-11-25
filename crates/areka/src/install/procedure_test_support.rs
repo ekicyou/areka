@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use areka_nar::{
     InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SingleRoot, SurvivingTree,
 };
+use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
@@ -230,6 +231,21 @@ pub(super) fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> Vec<super::
     let dir = TempPath::under_target("install-procedure-nar");
     let nar = write_nar(&dir, ARCHIVE, builder);
     super::run_order(&order_of(&[&nar]), ports)
+}
+
+/// 書庫を並べた依頼を偽の口で一周させ、記録ごと返す。
+pub(super) fn run_many(
+    ports: &mut FakePorts,
+    builders: Vec<NarBuilder>,
+) -> (Vec<super::ArchiveEnd>, Vec<CapturedEvent>) {
+    let dir = TempPath::new("install-procedure-nar");
+    let paths: Vec<PathBuf> = builders
+        .into_iter()
+        .enumerate()
+        .map(|(index, builder)| write_nar(&dir, &format!("archive{index}.nar"), builder))
+        .collect();
+    let order = order_of(&paths.iter().map(PathBuf::as_path).collect::<Vec<_>>());
+    capture(|| super::run_order(&order, ports))
 }
 
 /// 書庫 1 本の依頼。

@@ -14,7 +14,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
 
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -25,14 +24,11 @@ use super::*;
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
-use crate::session_tests::events_named;
-use areka_runtime::spine::join_thread_bounded;
+use crate::session_tests::{events_named, levels_of};
+use areka_runtime::spine::{SPIN_WAIT, join_thread_bounded};
 
 /// 絶対パスの書庫（fs は読まない＝在る必要はない）。
 const ABSOLUTE: &str = r"C:\areka-install-pick-test\in\hana.nar";
-
-/// 別のスレッドを待つ上限（固まったときに赤で止めるためだけの値）。
-const BOUND: Duration = Duration::from_secs(10);
 
 /// 窓口とメニュー（「インストール」枠を登記済み）を据えた World と、背景のスレッドの代わり。
 fn rig() -> (World, Receiver<InstallOrder>) {
@@ -141,13 +137,13 @@ fn picking_disables_the_item_until_the_thread_ends() {
     let handle = start_pick(&mut world, false, move || {
         moves.fetch_add(1, Ordering::SeqCst);
         let _ = entered_tx.send(thread::current().name().map(str::to_owned));
-        let _ = release_rx.recv_timeout(BOUND);
+        let _ = release_rx.recv_timeout(SPIN_WAIT);
         moves.fetch_add(1, Ordering::SeqCst);
         Ok(None)
     })
     .expect("選ぶ画面のスレッドが起きる");
     let thread_name = entered
-        .recv_timeout(BOUND)
+        .recv_timeout(SPIN_WAIT)
         .expect("選ぶ画面の代わりが呼ばれる");
 
     let during = (item_enabled(&world), can_pick(&world));
@@ -270,10 +266,7 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
         let label = format!("{result:?}");
         let (tx, rx) = mpsc::channel();
         let ((), events) = capture(|| send_pick(result, &tx));
-        let logged: Vec<Level> = events_named(&events, event)
-            .iter()
-            .map(|e| e.level)
-            .collect();
+        let logged = levels_of(&events, event);
         assert_eq!(rx.try_iter().collect::<Vec<_>>(), expected, "{label}");
         if event.is_empty() {
             assert!(warns_and_errors(&events).is_empty(), "{label}: {events:?}");
