@@ -560,7 +560,7 @@ impl EmoPresenter {
 | 1 | G1 | `settle_record` に切り出して `barrier_within(EXIT_WAIT_LIMIT)` | 門で止める偽の `PersistIo` で単独の書き手を起こし、`settle_record` を別のスレッドで呼んで `join_thread_bounded` で待つ（今の `barrier()` なら止まって赤）。`install_record_unsettled` の error が 1 件 |
 | 2 | G5 | 取得のスレッドに門 `install-fetch`（取得の待ち行列）。1〜5 行の doc と 146 行のコメントを直す | 取得の途中で `begin_close` すると `exit_wait_abandoned` に URL が 1 件（`fetch_queue_tests.rs`） |
 | 3 | G12 | `compose_last_shown` を足し、2 つの腕から呼ぶ | `snapshot_tests.rs`: 控えを捨てた後に `Some(Ok)`。本体の実 GPU: 隠した target に `InvalidateCache` を送ってから `dump_surface`（surface の省略）と `dump_balloon` が `OK` で絵を返す |
-| 4 | G16 | `apply` の記録の段（`status`・`survey`・`log_roots`・`log_hidden`）を短命のスレッド `roots-log` へ移す。今の dispatcher を持たせ、テスト用に最後の JoinHandle を NonSend に控える | 置き場の変更が記録の段を待たずに戻ることを、控えた JoinHandle が `apply` の戻りの時点で在る（記録の段が別のスレッドに居る）ことで確かめる。今の `root_listed`・`roots_hidden_count` の表明は、控えを `join_thread_bounded` で待った後へ移す |
+| 4 | G16 | `apply` の記録の段（`status`・`survey`・`log_roots`・`log_hidden`）を、1 本の常駐のスレッド `roots-log` へ待ち行列で渡す（呼んだ側の dispatcher を 1 件ごとに添え、渡した順に記録する。JoinHandle は控えない） | 呼んだスレッドの記録に `root_listed`・`roots_hidden_*` が 0 件で、`roots-log` の記録に現れることを、スレッドの名を残す自前の受け手で確かめる。続けて渡した記録が渡した順に並ぶことと、記録の途中で倒れても次の記録が出ることを確かめる |
 | 5 | G4 | 守り手・`WorkerPanicked`・`install_worker_gone` でも `worker = None` | 守り手を持たせたスレッドで panic → `WorkerPanicked` が届き、門の名が空。窓口に `WorkerPanicked` を流すと `is_busy` が偽・次の依頼で起こし直す（`desk_worker_gone_tests.rs`） |
 | 6 | G8 | 綴り直しと隠れの判定を `DeskPorts::record` へ移し、`DeskAsk::Record` で運ぶ | 既存の `desk_record_tests` の 6 本を新しい形に合わせる（UI の側が目録を読まないことは、窓口に根を持たせない形で記録が正しく残ることで見る） |
 | 7 | G9 | テストを足す | `put_ghost` の受信端を落としてから `ask_raise` → `drain` で、答えが Err・`install_event_send_failed` の warn が 1 件 |
@@ -692,7 +692,7 @@ impl EmoPresenter {
 | 落とした書庫 | 入れ終えたらその場で消す | 議題 9 | `COMPAT_ARCHITECTURE.md:344`・台帳 1416〜1418 行（直す） |
 | `install_worker_panicked`・`update_worker_panicked`（error・新しい語） | 背景のスレッドの panic | 要件 6.2（新しい失敗の道の記録） | 0 |
 | `install_fetch_closing`（warn・新しい語） | 終了が始まって取りに行かない URL | 要件 6.2 | 0 |
-| `roots_log_spawn_failed`・`expression_table_spawn_failed`（error・新しい語） | 短命のスレッドを起こせない | 要件 6.2 | 0 |
+| `roots_log_spawn_failed`・`expression_table_spawn_failed`（error・新しい語） | 記録・表のスレッドを起こせない・渡せない・途中で倒れた（どれかは `reason` で分かる） | 要件 6.2 | 0 |
 | `install_overwrite_unexpected`（warn・新しい語） | 段の合わない展開の答え | 要件 6.2 | 0 |
 | `ghost_switch_no_hold`（warn・新しい語） | 待ちの無い `resume_between` | 要件 6.2 | 0 |
 | `install_overwrite_done` の出所 | `areka::install::overwrite` → `areka::install::worker` | 13（展開する場所が変わる） | 0（前方一致 `areka::install` の下のまま・`UNKEPT_TARGETS` の `areka::install::install_cue` とは別） |
@@ -758,7 +758,7 @@ impl EmoPresenter {
 - 書き手の待ちは、門で止める偽の `PersistIo` を単独の `spawn_sylphya` に差して作る。門はテストの中で必ず開く（前例 `areka-sylphya` の `actor_barrier_within_tests.rs`）。
 - 取得は偽の作り口で、門（`mpsc` の受信端）で止めて「取得の途中」を作る。時刻の長さには頼らない。
 - panic は偽物の中で起こす。human-panic のフックはテストでは入らない（`main.rs` だけが入れる）。crash-report-kit の初回の受け手は ACCESS_VIOLATION だけを拾うので、std の panic では動かない（research.md 10.1 の R10）。
-- 背景のスレッドの記録を見るテストは、`capture` の窓の中でスレッドを起こす（`spawn_actor` が dispatcher を持たせる・4 の短命のスレッドも同じく持たせる）。ただし 4 のテストは、スレッドの名を残す自前の受け手を `tracing::subscriber::with_default` で据えて、呼んだスレッドの記録と `roots-log` の記録を分けて見る（`capture` の記録はスレッドの名を持たない）。
+- 背景のスレッドの記録を見るテストは、`capture` の窓の中でスレッドを起こす（`spawn_actor` が dispatcher を持たせる・4 の `roots-log` は 1 件ごとに呼んだ側の dispatcher を添える）。ただし 4 のテストは、スレッドの名を残す自前の受け手を `tracing::subscriber::with_default` で据えて、呼んだスレッドの記録と `roots-log` の記録を分けて見る（`capture` の記録はスレッドの名を持たない）。
 
 ### 回さないもの（要件 8）
 
