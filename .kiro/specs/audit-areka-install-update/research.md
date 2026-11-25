@@ -676,13 +676,13 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 
 ### 申し送りの扱い（要件 5.2・5.3・5.8・7.2・7.9・7.10）
 
-`audit-areka-app` と `audit-emo2-boot-switch` は `main` へ着地して `completed/` へ移っている（PR#504・PR#503）。完了した spec の brief は消化されないので書き足さない。次の内容を、この spec の `/kiro-complete` の棚卸へ回す。
+`audit-areka-app` と `audit-emo2-boot-switch` は `main` へ着地して `completed/` へ移っている（PR#504・PR#503）。ほかに動いている spec のセッションは無いので、申し送らずにこの spec で片づけた（開発者の指示）。
 
-- **`audit-areka-app` 宛て（件 2・件 3・件 8）**:
+- **件 2・件 3・件 8（`audit-areka-app` の持ち物と重なっていた件）**: 残る作業は無い。
   - 件 2: `UNKEPT_TARGETS` へ足す物は無い。後で `update_cue`・`readme_cue` に `info!` を足すときは出所を `UNKEPT_TARGETS` へ足す。
-  - 件 3: `mcp/mod.rs` の呼び手の説明は、ファイルの持ち主の本 spec が直した（`b6477c5cb`）。
-  - 件 8: `NO_BODY` と「窓口が無い」の受け口をそろえない。指摘 12 の直しで「窓口が無い」の `url` の腕も取りに行かなくなる。`NO_BODY` の doc の直しは向こうが着地で済ませた（`056b66813`）。
-- **`audit-emo2-boot-switch` 宛て（範囲の外の件）**: `ghost_switch.rs` の切替の入口は、更新の実行中の断りを `origin == Manual`（メニュー）の要求にだけ掛ける（`request_ghost_switch_with`・`ghost_switch_updating`）。`ChangeOrigin::Automatic` の要求（台本の `\![change,ghost,…]` や更新自身の読み直し）は `update_busy` を見ない。見る形にするなら更新自身の頼みを除く決まりが要る。着地の後の棚卸で扱いを決める件として残る。
+  - 件 3: `mcp/mod.rs` の呼び手の説明は本 spec が直した（`b6477c5cb`）。
+  - 件 8: `NO_BODY` と「窓口が無い」の受け口はそろえない。指摘 12 の直しで「窓口が無い」の `url` の腕も取りに行かなくなる。`NO_BODY` の doc は `056b66813` で直っている。
+- **`ghost_switch.rs` の切替の入口が `ChangeOrigin::Automatic` の要求に `update_busy` を見ない件**: 直さないと決めた。台本の要求・更新自身の読み直しを断らない形は、完了 `audit-emo2-boot-switch` の決め（design.md の D2・確定 1、requirements.md 5.16）と完了 `areka-P0-network-update` の要件 5.7 のとおり。更新の途中で別のゴーストへ切り替わっても、依頼を受けた時点の kanade の送出端の写し（`update/worker.rs` の `UpdateJob.kanade`）が閉じて `update_abandoned` で残りを捨て、読み直しは `other_ghost` で頼まず（`update/desk.rs` の `reload_folder`）、ファイルの確定は全か無か（`areka-update/src/commit.rs`）。檻は `ghost_switch_tests.rs` の `updating_refuses_menu_requests_only`・`desk_reload_tests.rs`・`procedure_reload_tests.rs`。ukadoc は更新中の `\![change,ghost,…]` を書いていない（https://ukatech.shillest.net/ukadoc-spec/list_sakura_script.html#bang-change-ghost-option-eq-raise-event）。台本も断る直しは要件 2.2 の 1 種類目（完了 spec の決めに反する）に当たる。
 
 ### 書き足した brief
 
@@ -710,5 +710,22 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 
 - 半分ほどは前の直しが呼んだ連鎖（写しを寄せた後に残った写し・移した関数を指す古い doc・テスト用の継ぎ目）。要件 9.8 のとおり Fable で関連する指摘をまとめて直した（束 F1〜F4）。
 - 直した主なもの: 「`event` の名で記録を引く」補助の写しを `crate::session_tests::events_named` の 1 つへ寄せた（`install/`・`update/`・`roots/` の 11 本・`update_test_support::named`・`roots_test_support::events_named`）。`roots-log` を 1 本の常駐のスレッドの待ち行列にして、記録が渡した順に並ぶようにした。`dump_surface` と `get_expression_table` のスレッドの起こし方を `work_elsewhere` の 1 つにした。homeurl の trim のテストを本番の経路の 2 本へ移し、テスト用の継ぎ目 2 つを消した。使われない `TermsNotice::clipped` を消した。古い doc・経緯の語・テストの名を直した。
-- 直さずに申し送った物（数えない・要件 7.9）: S4 の 1（`dump_surface_gpu_test_support.rs` の台詞の Tick の注入は `areka-session` の `SwitchRig::inject_talk_tick` の写しだが、向こうが `pub(crate)` で、寄せるには範囲の外の `ghost_switch_test_support.rs` を変える）。完了した spec の持ち物なので本 spec の `/kiro-complete` の棚卸へ申し送る。
+- S4 の 1（`dump_surface_gpu_test_support.rs` の台詞の Tick の注入が `areka-session` の `SwitchRig::inject_talk_tick` の写し）は、1 回目は範囲の外として残し、2 回目で `inject_talk_tick` を `pub` にして寄せた（開発者の指示で申し送らずに直す）。
 - 直しのコミット: `cb5f93de5`（F4）・`f171d96dc`（F1）・`f16431745`（F3）・`b77a51661`（F2）・`8ac1d450b`（design の追随）。
+
+### 2 回目（HEAD `b705afee8`）
+
+| 区画 | 必ず直す | 直したほうがよい | できれば | 2.2 の 3 種 |
+|---|---|---|---|---|
+| S1 | 0 | 1 | 1 | 0 |
+| S2 | 0 | 0 | 4 | 0 |
+| S3 | 0 | 2 | 5 | 0 |
+| S4 | 0 | 1 | 2 | 0 |
+| S5 | 0 | 1 | 4 | 0 |
+| S6 | 0 | 2 | 5 | 0 |
+| 計 | 0 | 7 | 21 | 0 |
+
+- 連鎖は 4 件（1 回目の直しの後に残った doc・未使用の定数・`work` の効き方）。ほかは 1 回目に寄せ切れなかった写し（記録を `event` の名で引く式・`ghost()` の値・`count`・`plant_committed`）と、古い doc・経緯の語。
+- 振る舞いの変わる直しは 1 件: メニューの「ネットワーク更新」が、読み直しの切替の後送り（`after_switch`）を持つ間も選べないようにした（`update/desk.rs` の `can_update` を `is_busy` と同じ見方へ・完了 `areka-P0-network-update` の要件 16「手続きが走っている間は選べない」のとおり・赤を立ててから直した）。
+- 申し送らずに直した物（開発者の指示）: `SwitchRig::inject_talk_tick` を `pub` にして GpuRig の写しを消した。`areka-session` の `refs_of` を `pub` にして本体の `update_test_support::refs_of` をその先頭を返す形にした。`count(events, event, level)` の写し 5 本（範囲の外の `runtime_tests/frame/`・`session_tests/` を含む）を `session_tests::count` の 1 本へ寄せた。
+- 直しのコミット: `2cbace450`（areka-session）・`b399a2e56`（MCP と Tick）・`dd5fa22eb`（install・update・roots ほか）。
