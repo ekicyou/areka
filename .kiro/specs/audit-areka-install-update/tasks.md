@@ -237,7 +237,7 @@
   - _Dispatch: mechanical — 寄せる先と確かめる腕を design が与えている_
   - _Requirements: 4.6, 7.2, 7.9, 7.13_
 
-- [ ] 5.3 預かった件の片づけと申し送りを記録する（G24・件 2・7・8・指摘 59・91・`link_destinations`）
+- [x] 5.3 預かった件の片づけと申し送りを記録する（G24・件 2・7・8・指摘 59・91・`link_destinations`）
   - research.md に次を記録する: 件 1〜8 の片づけと出どころと申し送った相手（要件 5.9）。件 2 の `UNKEPT_TARGETS` へ足す物が無いこと。件 7（指摘 59）の 3 本の 1 行を残す理由。件 8 をそろえない決め。91 と `link_destinations` の印を裁定で残すこと。
   - brief へ件を書き足す: `audit-areka-app`（件 2・件 3・件 8 の決めと、12 の直しで「窓口が無い」の `url` の腕も取りに行かなくなる事実）、`audit-emo2-boot-switch`（`ghost_switch.rs` の切替の入口が `update_busy` を見ない件）、`link-context-copy`・`balloon-link-hover`（古いパス・`completed/` でないことを確かめてから）。C26 の 2 本のセッションへも知らせる。
   - research.md の記録と 4 つの brief の書き足しがコミットにある。

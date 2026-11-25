@@ -634,3 +634,60 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 ### 残した件
 
 - なし（向こうの brief への書き足しは要らない・`/kiro-complete` の棚卸へ申し送る件も無い）。
+
+## 13. 預かった件の片づけと申し送り（タスク 5.3・G24）
+
+### 件 1〜8 の片づけ（要件 5.9）
+
+| 件 | 出どころ | 片づけ | 申し送った相手 | コミット |
+|---|---|---|---|---|
+| 1 `barrier()` | `audit-sylphya-actor` の audit #4（2026-11-06 開発者の承認） | 指摘 1。`record_installed` の待ちを期限つきの待ちに替え、切れたら `install_record_unsettled` を残して続ける | なし | `e39f99d9e` |
+| 2 `UNKEPT_TARGETS` | `runtime-module-untangle` の申し送り（棚卸㊸で出所を `areka_session::readme` に読み替え） | 足す物は無い（下記） | `audit-areka-app`（完了済みのため本 spec の `/kiro-complete` の棚卸へ） | 記録のみ |
+| 3 呼び手の説明 | `session-module-gather` の申し送りの件 2 | 指摘 8・70・71・81・49。`install/mod.rs`・`update/mod.rs`・`mcp/mod.rs`・`install/names.rs`・`areka-session/src/readme.rs` の説明を今の呼び手（`BODY_SYSTEMS` の `after_input`・`after_runtime_wired`、説明書は `runtime_boot::install_lines`）に直した | `audit-areka-app`（完了済みのため本 spec の `/kiro-complete` の棚卸へ） | `b6477c5cb`・`fd86dfce6` |
+| 4 `let _ = join()` | 棚卸㊶（ほかの brief から寄せられた） | 指摘 19。`install/names_tests.rs` の待ちに上限を持たせ、書き手の panic を捨てない形にした | なし | `4d4538280` |
+| 5 `capture_logs` の写し | 同 | 指摘 57。`readme/readme_cue_tests.rs` の私有の写しを共通の捕捉の補助に寄せた（`areka-session` の中に `fn capture_logs` の写しは残っていない） | なし | `a20ff49e8` |
+| 6 `boot_context` の写し 9 | 同 | `install/desk_tests.rs`・`readme/opener_submit_tests.rs`・`roots/` は既にある `reload_test_support::boot_context` へ。`update/` の 4 つは `reload_test_support::boot_context_named`（`audit-areka-app` が着地で足した 4 引数の形）を直に呼ぶ形へ寄せ、範囲の中の補助は 0。範囲の中の `fn boot_context` の写しは残らない | なし（`audit-areka-app` が `boot_context_named` を足して済んだ） | `66889523f`・`ce6c8f54c`・`15be77e35`・`a20ff49e8`・`a6a452867` |
+| 7 `BODY_SYSTEMS` の 1 行 | `session-crate-split` の申し送り（C26 の約束 ⑴） | 3 本とも残す（下記） | なし | 記録のみ |
+| 8 `NO_BODY` | 同 | そろえない（下記） | `audit-areka-app`（完了済みのため本 spec の `/kiro-complete` の棚卸へ） | 記録のみ |
+
+件 2・8 の相手 `audit-areka-app` と、件 3 の `mcp/mod.rs` の相手も同じ `audit-areka-app` は、`completed/` へ移っており走っているセッションが無い。申し送りの宛先は `/kiro-complete` の棚卸（本 spec の完了時の棚卸）へ回す（下記「申し送りの扱い」）。
+
+### 件 2: `UNKEPT_TARGETS` へ足す物は無い
+
+- `update_cue`（`areka::update…`）と `readme_cue`（`areka_session::readme…`）に `info!` は 1 件も無い（`git grep "info!"` が両ファイルで 0 件）。本 spec の直しのどれも足していない。新しく足した `info!` は `roots_removed`（`areka::roots::edit`）と `install_fetch_*` の既存の出所の下だけで、前方一致の `RULES` に載る。
+- `UNKEPT_TARGETS` は今も `["areka::install::install_cue"]` の 1 要素（`areka-session/src/log_history.rs:136`）。**足す物は 0**。
+- 後の直しで `update_cue`・`readme_cue` に `info!` を足すことになったときは、足した出所を `UNKEPT_TARGETS` へ足すことを `audit-areka-app`（完了後は `log_history.rs` の持ち主の spec）へ申し送る。
+
+### 件 7（指摘 59）: 3 本の `world.insert_resource(crate::BODY_SYSTEMS);` を残す理由
+
+- 残す行は `install/desk_tests.rs` の 385・564 行と `update/desk_resolve_tests.rs` の 530 行（行は今のもの）。
+- 理由: 本体の口を通る道を試す前提を名指す 1 行で、共通の足場（`reload_test_support`）へ寄せると、同じ足場を使うほかのテストの前提が黙って変わる。1 行ずつ残すほうが前提が各テストに見える。この区画に新しく足す直しは無い。
+
+### 件 8: `NO_BODY` と「窓口が無い」の受け口をそろえない
+
+- `NO_BODY`（`areka-session/src/body_systems.rs`）の `cue_sinks` は `DiscardSink` 2 つで、本体が据わらない結線の誤りのときにだけ使う（`error!(body_systems_missing)` が先に出る）。本体の「窓口が無い」ときの受け口（受信端の無い送出端を持つ `InstallCueSink`）も本番の道では通らない。どちらも記録が残るので、**そろえない**と決める。
+- 指摘 12 の直し（`d31e38a8b`）で、`InstallCueSink` の `url` の腕は取得のスレッドを起こさず、要求を窓口へ送るだけになった（`install/install_cue.rs` の「送るのは要求だけで、取りに行くのは窓口の取得の待ち行列」）。このため「窓口が無い」の `url` の腕も取りに行かなくなる。件 8 の差が 1 つ減る。
+- `NO_BODY` の doc の「（窓口が無いときの答えと同じ）」は、持ち主の `audit-areka-app` が着地で消した（`056b66813`・PR#504。向こうの tasks.md 43 行・design.md 165 行）。今の `body_systems.rs` に無い（`git grep` が 0 件）。doc の直しで申し送る物は無い。
+
+### 91 と `link_destinations` の印は裁定で残す
+
+- **91**（`roots/edit.rs` の `error!(roots_memory_write_failed)`）: 残す（議題 10 の (i)）。完了 `areka-P0-write-failure-notice` の要件 5.5 が名前を変えないと決めており、2 行は致命の道でだけ出る。今も `roots/edit.rs:310` に在る。要件 9 の数から外す。
+- **`link_destinations` の先送りの印**（`areka-session/src/readme/destination.rs:223` の `#[cfg_attr(not(test), allow(dead_code))]`）: 残す（議題 11・要件 2.5）。実在の理由（`link-context-copy`・`balloon-link-hover` が本番の呼び手になる）があり、2 本とも `.kiro/specs/` の下で生きている（`completed/` でない）。要件 9 のかけ直しの数から外す。
+
+### 申し送りの扱い（要件 5.2・5.3・5.8・7.2・7.9・7.10）
+
+`audit-areka-app` と `audit-emo2-boot-switch` は `main` へ着地して `completed/` へ移っている（PR#504・PR#503）。完了した spec の brief は消化されないので書き足さない。次の内容を、この spec の `/kiro-complete` の棚卸へ回す。
+
+- **`audit-areka-app` 宛て（件 2・件 3・件 8）**:
+  - 件 2: `UNKEPT_TARGETS` へ足す物は無い。後で `update_cue`・`readme_cue` に `info!` を足すときは出所を `UNKEPT_TARGETS` へ足す。
+  - 件 3: `mcp/mod.rs` の呼び手の説明は、ファイルの持ち主の本 spec が直した（`b6477c5cb`）。
+  - 件 8: `NO_BODY` と「窓口が無い」の受け口をそろえない。指摘 12 の直しで「窓口が無い」の `url` の腕も取りに行かなくなる。`NO_BODY` の doc の直しは向こうが着地で済ませた（`056b66813`）。
+- **`audit-emo2-boot-switch` 宛て（範囲の外の件）**: `ghost_switch.rs` の切替の入口は、更新の実行中の断りを `origin == Manual`（メニュー）の要求にだけ掛ける（`request_ghost_switch_with`・`ghost_switch_updating`）。`ChangeOrigin::Automatic` の要求（台本の `\![change,ghost,…]` や更新自身の読み直し）は `update_busy` を見ない。見る形にするなら更新自身の頼みを除く決まりが要る。着地の後の棚卸で扱いを決める件として残る。
+
+### 書き足した brief
+
+- `.kiro/specs/link-context-copy/brief.md` と `.kiro/specs/balloon-link-hover/brief.md`: 古いパス `crates/areka/src/readme/destination.rs` を今のパス `crates/areka-session/src/readme/destination.rs` として読む件を書き足した（どちらも `completed/` でないことを確かめた。`crates/areka/src/readme/` は今は無い）。
+
+### 知らせなかったもの
+
+- C26 の 2 本のセッションへの知らせは行っていない。この実行には生きている相手のセッションが無く（両方とも `completed/` へ移った後）、知らせる宛先が無い。代わりに上の「申し送りの扱い」の内容を `/kiro-complete` の棚卸へ回す。
