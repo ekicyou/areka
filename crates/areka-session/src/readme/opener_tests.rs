@@ -256,11 +256,7 @@ fn named_fixture() -> (TempPath, OpenContext) {
         &[("a", "b"), ("b", "Other")],
         &[("ba", "bb"), ("bb", "OtherB")],
     );
-    let ctx = OpenContext {
-        ghost: "G".to_owned(),
-        ghost_dir: root.ghost_dir("g"),
-        baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
-    };
+    let ctx = open_context(&root);
     (tmp, ctx)
 }
 

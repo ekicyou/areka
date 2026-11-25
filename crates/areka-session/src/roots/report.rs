@@ -77,7 +77,6 @@ pub(crate) fn log_root_error(err: &RootError, occasion: ReportOccasion) {
     let (RootError::ExeLocationUnavailable {
         skipped,
         memory_fell_back,
-        ..
     }
     | RootError::EnvAllEmpty {
         skipped,

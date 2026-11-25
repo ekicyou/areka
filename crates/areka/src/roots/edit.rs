@@ -3,10 +3,12 @@
 //! 判断は今の並び・出どころ・足すフォルダ（または外す根の絶対パス）で決める。足す判断だけは足すフォルダの直下を見る。
 //! フォルダそのものは消さない・動かさない。触るのは並びの値だけ。
 //! 適用（起動の文脈・記憶）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
-//! 変更のときの並びと隠れの記録は短命のスレッド `roots-log` で残す（UI スレッドは根を見に行かない）。
+//! 変更のときの並びと隠れの記録は 1 本のスレッド `roots-log` が変更の順に残す（UI スレッドは根を見に行かない）。
 //! 並べ替えは「先頭へ動かす」だけ。
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Sender};
+use std::sync::{Mutex, PoisonError};
 
 use areka_ghost::{BasewareRoot, BasewareRoots, RootMark, same_root};
 use areka_sylphya::persist::FsPersistIo;
@@ -317,31 +319,67 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
         }
     }
 
-    spawn_change_log(roots);
+    queue_change_log(&CHANGE_LOG, roots, log_change);
 }
 
+type ChangeLogJob = (tracing::Dispatch, BasewareRoots);
+type ChangeLogSlot = Mutex<Option<Sender<ChangeLogJob>>>;
+
+static CHANGE_LOG: ChangeLogSlot = Mutex::new(None);
+
 /// 変更のときの並びと隠れを `roots-log` で記録する。根が遅い置き場（落ちた NAS）でも UI スレッドを止めない。
-fn spawn_change_log(roots: BasewareRoots) {
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+/// 記録は 1 本のスレッドが渡した順に残す。スレッドが居なければ起こす。
+fn queue_change_log(
+    slot: &ChangeLogSlot,
+    roots: BasewareRoots,
+    work: impl Fn(BasewareRoots) + Send + 'static,
+) {
+    let mut job = (tracing::dispatcher::get_default(Clone::clone), roots);
+    let mut slot = slot.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(tx) = slot.as_ref() {
+        match tx.send(job) {
+            Ok(()) => return,
+            Err(mpsc::SendError(back)) => job = back,
+        }
+    }
+    let (tx, rx) = mpsc::channel::<ChangeLogJob>();
     let spawned = std::thread::Builder::new()
         .name("roots-log".to_owned())
         .spawn(move || {
-            let _dispatch = tracing::dispatcher::set_default(&dispatch);
-            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| log_change(roots))).is_err()
-            {
-                tracing::error!(
-                    event = "roots_log_spawn_failed",
-                    reason = "the roots log thread panicked",
-                    "[RootsEdit] 置き場の変更の記録の途中で倒れました"
-                );
+            for (dispatch, roots) in rx {
+                let _dispatch = tracing::dispatcher::set_default(&dispatch);
+                if let Err(payload) =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(roots)))
+                {
+                    let reason = payload
+                        .downcast_ref::<&str>()
+                        .map(|s| (*s).to_owned())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "the roots log thread panicked".to_owned());
+                    tracing::error!(
+                        event = "roots_log_spawn_failed",
+                        reason = %reason,
+                        "[RootsEdit] 置き場の変更の記録の途中で倒れました"
+                    );
+                }
             }
         });
-    if let Err(e) = spawned {
-        tracing::error!(
+    match spawned {
+        Ok(_) => {
+            if tx.send(job).is_err() {
+                tracing::error!(
+                    event = "roots_log_spawn_failed",
+                    reason = "the roots log thread ended before taking the record",
+                    "[RootsEdit] 置き場の変更の記録をスレッドへ渡せません"
+                );
+            }
+            *slot = Some(tx);
+        }
+        Err(e) => tracing::error!(
             event = "roots_log_spawn_failed",
             reason = %e,
             "[RootsEdit] 置き場の変更を記録するスレッドを起こせません"
-        );
+        ),
     }
 }
 
@@ -379,3 +417,7 @@ mod temporary_tests;
 #[cfg(test)]
 #[path = "edit_write_failure_tests.rs"]
 mod write_failure_tests;
+
+#[cfg(test)]
+#[path = "edit_log_order_tests.rs"]
+mod log_order_tests;

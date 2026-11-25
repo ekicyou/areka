@@ -5,11 +5,10 @@
 
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
 
-use super::destination::{Target, classify};
+use super::destination::Target;
 use super::opener::{OpenJob, Opener};
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
@@ -36,11 +35,7 @@ fn with_opener(world: &mut World, ghost_dir: PathBuf) -> Receiver<OpenJob> {
 
 /// 開く系の行き先（`\j` の URL）。
 fn url_request(url: &str) -> ReadmeRequest {
-    ReadmeRequest::Open(
-        classify(JUMP_TAG_CARRIER, &[url])
-            .expect("開く系")
-            .expect("受理される"),
-    )
+    ReadmeRequest::Open(super::opener_test_support::dest_url(url))
 }
 
 /// 指定した出来事の行だけを拾う。
