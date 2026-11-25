@@ -4,12 +4,11 @@
 //! `roots_memory_write_failed`（error・欄 dir・reason）と `memory_write_failed` を 1 件ずつ残し、
 //! 最初の出所が `MemoryWriteFailed` になる。書き込みの前に書き換えた起動の文脈の並びは戻さない。
 
-use areka_ghost::{BasewareRoot, BasewareRoots};
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::roots::roots_test_support::world;
+use crate::roots::roots_test_support::{roots_of, world};
 use crate::session_tests::events_named;
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 
@@ -24,7 +23,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
     let profile = tmp.path().join("profile-is-a-file");
     std::fs::write(&profile, "x").unwrap();
     let mut world = world(&a, profile.clone());
-    let roots = BasewareRoots::new(vec![BasewareRoot::new(a.clone()), BasewareRoot::new(b)]);
+    let roots = roots_of(&[&a, &b]);
 
     let ((), events) = capture(|| apply(&mut world, roots.clone(), None));
 

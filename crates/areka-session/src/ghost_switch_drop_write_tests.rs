@@ -9,9 +9,10 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
-use super::fallback_tests::{count_event, root_with, switching_world};
+use super::fallback_tests::{root_with, switching_world};
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 
 #[test]
 fn switch_drop_write_failure_is_fatal_and_does_not_boot_target() {

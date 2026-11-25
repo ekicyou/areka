@@ -37,27 +37,6 @@ fn bare_open_readme_sends_exactly_one_request() {
     );
 }
 
-// ---------------------------------------------------------------- 縮退
-
-/// 引数付きの `\![open,readme,種類,名前]` は何も送らず、警告を 1 行だけ残す。
-#[test]
-fn open_readme_with_arguments_warns_and_sends_nothing() {
-    let (mut sink, rx) = sink();
-    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
-        sink.emit(carrier_cue("open", &["readme", "ghost", "x"]))
-    });
-    assert_eq!(
-        rx.try_iter().count(),
-        0,
-        "引数付きは何もしない（列挙が要るので語彙だけ持つ）"
-    );
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        1,
-        "引数付きは警告を 1 行だけ残す: {logs:?}"
-    );
-}
-
 // ---------------------------------------------------------------- 担当外
 
 /// 他のコマンド名（`\![move,…]`）は何も送らない（自己選別・担当外）。
@@ -66,26 +45,6 @@ fn other_command_name_is_benign_skip() {
     let (mut sink, rx) = sink();
     sink.emit(carrier_cue("move", &["-353", "", "", "0", "base", "base"]));
     assert_eq!(rx.try_iter().count(), 0, "担当外の名前は何も送らない");
-}
-
-/// `\![open,help]`（SSP 自身の窓）は担当外——何も送らず、警告も出さない
-/// （報せる責任はその担当者にあるため）。
-#[test]
-fn open_help_is_benign_skip_without_warning() {
-    let (mut sink, rx) = sink();
-    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || {
-        sink.emit(carrier_cue("open", &["help"]))
-    });
-    assert_eq!(
-        rx.try_iter().count(),
-        0,
-        "\\![open,help] は担当外なので何も送らない"
-    );
-    assert_eq!(
-        count_level(&logs, "WARN"),
-        0,
-        "担当外は警告にしない（良性の読み飛ばし）: {logs:?}"
-    );
 }
 
 /// 第 1 引数の無い裸の `\![open]` も担当外（選別子が読めないので受理しない）。

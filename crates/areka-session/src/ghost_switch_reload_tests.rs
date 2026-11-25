@@ -6,8 +6,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::boot_event_tests::{self, a_rebooted, default_rebooted, request_switch_to_a};
-use super::fallback_tests::count_event;
 use super::{SwitchInFlight, SwitchVerdict};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
 use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::reload::{

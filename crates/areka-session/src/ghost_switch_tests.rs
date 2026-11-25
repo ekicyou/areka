@@ -19,9 +19,9 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::fallback_tests::count_event;
 use super::*;
 use crate::body_systems::NO_BODY;
+use crate::boot_resolve::boot_resolve_tests::{assert_one_event, count_event};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch_test_support::boot_context;
 
@@ -37,16 +37,6 @@ pub(super) fn name(s: &str) -> GhostSpec {
 
 pub(super) fn folder(s: &str) -> GhostSpec {
     GhostSpec::Folder(s.to_owned())
-}
-
-/// `event` の記録がちょうど 1 件あり、そのレベルが `level` であることを確かめる。
-fn assert_one_event(events: &[CapturedEvent], event: &str, level: tracing::Level) {
-    let hits: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect();
-    assert_eq!(hits.len(), 1, "{event} はちょうど 1 件: {events:?}");
-    assert_eq!(hits[0].level, level, "{event} のレベル");
 }
 
 /// 根に 2 体のゴーストを組む: `A`（`name`＝Alice・`sakura.name`＝さくら）と `B`（`name` も

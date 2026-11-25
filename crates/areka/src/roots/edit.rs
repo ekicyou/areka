@@ -39,7 +39,7 @@ pub(crate) enum RemoveVerdict {
         roots: BasewareRoots,
         removed: PathBuf,
     },
-    /// 根が 1 つしか無い（変えない）。
+    /// 覚える置き場が 1 つしか無い（変えない）。
     LastOne,
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn・変えない）。

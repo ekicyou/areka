@@ -3,15 +3,11 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
-use crate::roots::roots_test_support::root_with_ghost;
+use crate::roots::roots_test_support::{root_with_ghost, roots_of};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::roots::encode_memory;
 use std::path::PathBuf;
 use temp_path_kit::TempPath;
-
-fn dir(tmp: &TempPath, name: &str) -> PathBuf {
-    root_with_ghost(tmp.path(), name)
-}
 
 /// 先頭に一時の置き場 `t`、続いて覚える置き場の並び。
 fn with_temp(t: &PathBuf, rest: &[&PathBuf]) -> BasewareRoots {
@@ -23,27 +19,21 @@ fn with_temp(t: &PathBuf, rest: &[&PathBuf]) -> BasewareRoots {
 #[test]
 fn temporary_root_is_not_written_to_memory() {
     let tmp = TempPath::under_target("roots-edit-temp-encode");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
-    let b = dir(&tmp, "b");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
+    let b = root_with_ghost(tmp.path(), "b");
     assert_eq!(
         encode_memory(&with_temp(&t, &[&a, &b]), None),
-        encode_memory(
-            &BasewareRoots::new(vec![
-                BasewareRoot::new(a.clone()),
-                BasewareRoot::new(b.clone())
-            ]),
-            None
-        ),
+        encode_memory(&roots_of(&[&a, &b]), None),
     );
 }
 
 #[test]
 fn remove_refuses_temporary_root() {
     let tmp = TempPath::under_target("roots-edit-temp-remove");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
-    let b = dir(&tmp, "b");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
+    let b = root_with_ghost(tmp.path(), "b");
     let v = decide_remove(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &t);
     assert_eq!(v, RemoveVerdict::Temporary);
 }
@@ -51,8 +41,8 @@ fn remove_refuses_temporary_root() {
 #[test]
 fn remove_counts_last_one_among_remembered_roots() {
     let tmp = TempPath::under_target("roots-edit-temp-last");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
     let v = decide_remove(&with_temp(&t, &[&a]), RootsOrigin::Memory, &a);
     assert_eq!(v, RemoveVerdict::LastOne);
 }
@@ -60,8 +50,8 @@ fn remove_counts_last_one_among_remembered_roots() {
 #[test]
 fn front_refuses_temporary_root() {
     let tmp = TempPath::under_target("roots-edit-temp-front-refuse");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
     let v = decide_front(&with_temp(&t, &[&a]), RootsOrigin::Memory, &t, None);
     assert_eq!(v, FrontVerdict::Temporary);
 }
@@ -69,9 +59,9 @@ fn front_refuses_temporary_root() {
 #[test]
 fn front_moves_to_head_of_remembered_roots_temporary_stays_first() {
     let tmp = TempPath::under_target("roots-edit-temp-front-move");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
-    let b = dir(&tmp, "b");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
+    let b = root_with_ghost(tmp.path(), "b");
     let v = decide_front(&with_temp(&t, &[&a, &b]), RootsOrigin::Memory, &b, None);
     assert_eq!(
         v,
@@ -87,8 +77,8 @@ fn front_moves_to_head_of_remembered_roots_temporary_stays_first() {
 #[test]
 fn adding_same_folder_as_temporary_yields_normal_root() {
     let tmp = TempPath::under_target("roots-edit-temp-add");
-    let t = dir(&tmp, "t");
-    let a = dir(&tmp, "a");
+    let t = root_with_ghost(tmp.path(), "t");
+    let a = root_with_ghost(tmp.path(), "a");
     let v = decide_add(&with_temp(&t, &[&a]), RootsOrigin::Memory, &t);
     let AddVerdict::Added { roots, empty } = v else {
         panic!("足せていない: {v:?}");
@@ -101,12 +91,6 @@ fn adding_same_folder_as_temporary_yields_normal_root() {
     // 足した普通の置き場は記憶に出る。
     assert_eq!(
         encode_memory(&roots, None),
-        encode_memory(
-            &BasewareRoots::new(vec![
-                BasewareRoot::new(a.clone()),
-                BasewareRoot::new(t.clone())
-            ]),
-            None
-        ),
+        encode_memory(&roots_of(&[&a, &t]), None),
     );
 }

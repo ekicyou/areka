@@ -12,6 +12,7 @@ use wintf::AppExit;
 use super::*;
 use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+use crate::boot_resolve::boot_resolve_tests::count_event;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 
@@ -78,13 +79,6 @@ pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
         copy: crate::switch_copy::SwitchCopy::None,
     });
     world
-}
-
-pub(super) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
 }
 
 /// 致命で終えた形: 終了の指示・最初の出所が「既定ゴーストへ戻せなかった」（内部の失敗）・予約なし・

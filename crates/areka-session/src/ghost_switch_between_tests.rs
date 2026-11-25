@@ -3,17 +3,17 @@
 use areka_kanade::{ChangeHandoff, ChangeOrigin};
 use areka_runtime::spine::{ScriptedShioriBackend, ScriptedShioriBackendBuilder};
 use log_capture_kit::capture;
-use sample_ghost_kit::SampleRoot;
 use temp_path_kit::TempPath;
 use wintf::AppExit;
-use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::between::BetweenHold;
-use super::fallback_tests::{count_event, root_with, switching_world};
+use super::boot_event_tests::running_a_on;
+use super::fallback_tests::{root_with, switching_world};
 use super::*;
 use crate::body_systems::NO_BODY;
-use crate::boot_resolve::boot_resolve_tests::events_named;
-use crate::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig, standard_script};
+use crate::boot_resolve::boot_resolve_tests::count_event;
+use crate::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session_end::test_support::levels_of;
 
 /// 上書きの口で待ちを立てる本体。
 const HOLDING: BodySystems = BodySystems {
@@ -37,20 +37,6 @@ fn holding(world: &World) -> bool {
     world
         .get_non_send::<BetweenHold>()
         .is_some_and(|hold| hold.0.is_some())
-}
-
-/// `body` の土台で A を起こして定常に着かせる（起動記録は全員に置く）。
-fn running_a(body: BodySystems, scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
-    let folders: Vec<String> = scripts.iter().map(|(f, _)| (*f).to_owned()).collect();
-    let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-    let mut rig = SwitchRig::with(RigSample::of(sample), body, scripts);
-    rig.world.insert_resource(WintfTaskPool::with_threads(1));
-    for folder in &folders {
-        rig.plant_boot_record(folder);
-    }
-    rig.boot("A");
-    assert!(rig.wait_steady(), "A が定常に着く");
-    rig
 }
 
 /// B への切替を頼み、待ちに入るまで回す（受理・待ちに入った・B を起こした回数）。
@@ -95,7 +81,7 @@ fn switch_to_waits_after_closing_windows_when_the_hook_holds() {
 /// 待たせた切替は `resume_between` で切替先を起こし、定常に着いて予約と待ちが下りる。
 #[test]
 fn resume_between_boots_the_held_target() {
-    let mut rig = running_a(
+    let mut rig = running_a_on(
         HOLDING,
         vec![("A", scripted(r"\0A\e")), ("B", switched_in(r"\0B\e"))],
     );
@@ -139,15 +125,11 @@ fn switch_to_boots_at_once_without_a_hold_from_the_hook() {
     let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
     let ((), resumed) = capture(|| resume_between(&mut world));
 
-    let no_hold: Vec<_> = events_named(&resumed, "ghost_switch_no_hold")
-        .iter()
-        .map(|e| e.level)
-        .collect();
     assert_eq!(
         (
             world.get_non_send::<BetweenHold>().is_some(),
             count_event(&events, "ghost_switch_no_context"),
-            no_hold,
+            levels_of(&resumed, "ghost_switch_no_hold"),
             count_event(&resumed, "ghost_switch_no_context"),
         ),
         (false, 1, vec![tracing::Level::WARN], 0),
@@ -158,7 +140,7 @@ fn switch_to_boots_at_once_without_a_hold_from_the_hook() {
 /// 待たせた切替先を起こせなければ既定ゴーストへ戻して定常に着く。
 #[test]
 fn resume_between_falls_back_to_default_when_the_target_fails() {
-    let mut rig = running_a(
+    let mut rig = running_a_on(
         HOLDING,
         vec![
             ("A", scripted(r"\0A\e")),
@@ -207,7 +189,7 @@ fn script_without_unload() -> ScriptedShioriBackendBuilder {
 /// 降ろす `shutdown` が失敗したら「降ろした」の info は出さず、失敗の error だけが残る。
 #[test]
 fn take_down_reports_down_only_when_shutdown_succeeds() {
-    let mut rig = running_a(
+    let mut rig = running_a_on(
         NO_BODY,
         vec![("A", FakeShiori::Scripted(Box::new(script_without_unload)))],
     );

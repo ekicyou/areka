@@ -16,7 +16,7 @@ use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
 use crate::roots::roots_test_support::{root_with_ghost, roots_of, world};
-use crate::session_tests::events_named;
+use crate::session_tests::{events_named, levels_of};
 use areka_session::boot_config::BootContext;
 
 /// 選ぶ口の代わりが止まっている間の待ちの上限（固まったときに赤で止めるためだけの値）。
@@ -93,11 +93,11 @@ fn pick_results_are_logged_and_only_a_choice_is_sent() {
                 "{label}: {events:?}"
             );
         } else {
-            let levels: Vec<Level> = events_named(&events, event)
-                .iter()
-                .map(|e| e.level)
-                .collect();
-            assert_eq!(levels, vec![level], "{label}: {events:?}");
+            assert_eq!(
+                levels_of(&events, event),
+                vec![level],
+                "{label}: {events:?}"
+            );
         }
     }
 }
