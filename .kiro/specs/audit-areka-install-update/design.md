@@ -141,7 +141,7 @@ graph TB
     Worker --> Catalog
 ```
 
-- **選んだ形**: 今の窓口と背景のスレッドの形のまま直す（research.md 8 節の案 A）。新しい本番のスレッドは、長く生きる取得のスレッド 1 本（12）だけ。短命のスレッドは、記録だけを持つもの（4）と答えだけを持つもの（28）の 2 つ。
+- **選んだ形**: 今の窓口と背景のスレッドの形のまま直す（research.md 8 節の案 A）。新しい本番のスレッドは、長く生きる 2 本（取得のスレッド `install-fetch`（12）と記録だけを持つ `roots-log`（4））。短命のスレッドは、答えだけを持つもの（28）の 1 つ。
 - **守る既存の形**: 重い仕事は UI の外へ出す。失敗は `error!` と `Err`（または `NG:`）で表す。書く段だけを終了が上限まで待つ。イベントを投げ、台本が返ったら再生する。
 - **steering**: GPU の描画を CPU へ移さない（3 は合成を GPU の `Composer` で組み直す）。1 フレーム遅らせて逃げない（13 は状態の持ち方で解く）。ベースウェアに判断やモードを足さない（13 は既存の切替の段を待たせるだけ）。
 
@@ -167,10 +167,10 @@ graph TB
 | `crates/areka/src/install/desk_overwrite_between_tests.rs` | 上書きの 2 往復（降ろした → 展開 → 起こす → 定常で返す）のテスト | 13 |
 | `crates/areka/src/install/fetch_queue_tests.rs` | 取得のスレッド 1 本・順に落とす・終了で積んだ残りを記録・門のテスト | 2・12 |
 | `crates/areka/src/update/worker_panic_tests.rs` | 背景のスレッド `update` が倒れたときのテスト（`worker_tests.rs` は 967 行） | 23 |
-| `crates/areka/src/update/homeurl_tests.rs` | `homeurl` の空の決まり（照会の写し・窓口の写し） | 24 |
-| `crates/areka/src/update/update_test_support.rs` | `update/` のテストの支え: 名を取る `boot_context`・`write_descript`・イベント名で絞る補助・`run`・`ids`・`refs_of` | 27・74 |
+| `crates/areka/src/update/update_test_support.rs` | `update/` のテストの支え: 名を取る World の `slot_world`（起動の文脈は `reload_test_support` の `boot_context_named`）・kanade に届いた送出を読む `raised`・`plant_committed`・`close`・`refs_of`。`run` は `update/procedure_test_support.rs` にある | 27・74 |
 | `crates/areka/src/mcp/kanade_fake_test_support.rs` | 偽の kanade の足場（`ghost`・`rig`・`answer`・`warn_or_worse`・`text`・`record_one`） | 38 |
-| `crates/areka/src/roots/roots_test_support.rs` | `roots` のテストの補助（`roots_of`・`events_named`・既にある補助と上書きによる `world`） | 45・93 |
+| `crates/areka/src/roots/roots_test_support.rs` | `roots` のテストの補助（`roots_of`・`root_with_ghost`・既にある補助と上書きによる `world`）。イベント名で絞るのは `crate::session_tests::events_named` | 45・93 |
+| `crates/areka/src/roots/edit_log_order_tests.rs` | `roots-log` へ渡した順に記録が残ること・記録の途中で倒れても次の記録が出ることのテスト | 4 |
 
 ### Modified Files（範囲の中・本番）
 
@@ -224,13 +224,13 @@ graph TB
 - `mcp/dump_surface.rs`: 3（`_` の腕を分け、`compose_last_shown` を呼ぶ）。
 - `mcp/dump_balloon.rs`: 3（同じ）・78（`check_size` に寄せる）。
 - `mcp/get_expression_table.rs`: 28（名前つきのスレッドで読む）。
-- `mcp/get_status.rs`・`mcp/sakurascript.rs`・`mcp/resolve.rs`: 35（`script_target` を `resolve.rs` へ移し、写しを消す）。
+- `mcp/get_status.rs`・`mcp/sakurascript.rs`・`mcp/resolve.rs`: 35（`script_target` の写しを消し、`resolve.rs` の `ask_kanade` に畳んだ。かけ直しの 4 回目）。
 - `mcp/check_script_judge.rs`: 39（別名の定数を消す）。
 - `mcp/get_log.rs`・`mcp/mod.rs`: 81（doc）・82・83（`active` を渡す）。
 - `mcp/reload.rs`: 88（断りの文）。
 - `mcp/sakurascript.rs`: 85（据え付けを消す・向こうの着地の後）。
 - `roots/edit.rs`:
-  - 4: 記録の段を短命のスレッドへ移す。
+  - 4: 記録の段を長く生きる 1 本のスレッド `roots-log` へ移す（`queue_change_log`）。
   - 41・43: doc を直す。
   - 42: `roots_removed` を記録する。
   - 90: 包みを消す。
@@ -308,10 +308,11 @@ graph TB
 
 ### Modified Files（範囲の外）
 
-- `crates/areka-session/src/ghost_switch.rs`: `switch_to`（597〜708 行）の後半を新しい子のファイルの `boot_target` へ移し、全窓を閉じて上書きの口を呼んだ後に `BetweenHold` が立っていれば待って戻る。末尾に `#[path = "ghost_switch_between.rs"] mod between;` と、テストの mod の行を 1 つ足す。`take_down`・`boot_into` の中身は変えない。
+- `crates/areka-session/src/ghost_switch.rs`: `switch_to`（597〜708 行）の後半を新しい子のファイルの `boot_target` へ移し、全窓を閉じて上書きの口を呼んだ後に `BetweenHold` が立っていれば待って戻る。末尾に `#[path = "ghost_switch_between.rs"] mod between;` と、テストの mod の行を 1 つ足す。`take_down`・`boot_into` の中身は変えない（例外は、タスク 1.5 で `take_down` の「降ろした」の `info!`（810 行あたり）を降ろせたときだけ出す形にした 1 行）。
 - `crates/areka-emo-present/src/presenter/snapshot.rs`・`snapshot_tests.rs`: 3。
 - `crates/areka-ghost/src/catalog.rs`・`catalog_tests.rs`: 60。
-- 文書 4 つと brief 4 つ（上の「This Spec Owns」）。
+- 文書 4 つと brief 2 つ（`link-context-copy`・`balloon-link-hover`。上の「This Spec Owns」）。
+- 実際に触った範囲の外のファイル（かけ直しの audit で寄せたテスト・`log-capture-kit` の `with_default_guard_test.rs` の例外表・台帳 `assets.toml`・`consumer_ledger_agreement_tests.rs`・`main.rs`）の分類は、research.md 14 節「既定のブランチとの差分の確かめ（タスク 5.5）」にある。
 - `crates/areka-runtime/src/consumer_ledger.rs` 77 行の doc の 1 語（OPEN QUESTION 6 で直すと決まったときだけ）。
 
 ### 1,000 行の見通し（要件 6.1）
@@ -577,10 +578,10 @@ impl EmoPresenter {
 | 20・21 | G2 | `join_thread_bounded`・`recv_timeout`・`wait_recv`・`join_bounded` | — |
 | 22 | G6 | テストを足す | `https://example.com/a/..\\..\\x:y.nar` の名前が `.._.._x_y.nar` で、置き場が一時フォルダの直下 |
 | 23 | G4 | 守り手（`ports` より先）・`WorkerPanicked` | 偽の `NewFetch` の `get` が panic → `WorkerPanicked` が届く・門が書く段に残らない・段が `Idle`（`worker_panic_tests.rs`） |
-| 24 | G10 | 2 か所で `trim` してから空を None・手続きの `filter` を消す | `homeurl_tests.rs`: 照会の写しで `" "` が None・`"https://x/ "` が `"https://x/"`。窓口の写しも同じ |
+| 24 | G10 | 2 か所で `trim` してから空を None・手続きの `filter` を消す | かけ直しの 1 回目に本物の道のテストへ移した: `worker_tests.rs` の `resources_query_both_ids_once_and_map_values`（照会の写し）と `desk_resolve_tests.rs` の `reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy`（窓口の写し）で、`" "` が None・末尾に空白の付いた URL が空白を落とした形 |
 | 25 | G10 | 手続きの側を `update_reload_asked` に。`procedure_reload_tests.rs:88・175` を新しい語へ・`worker_path_tests.rs:200-205` の出所の絞りを外す・`:323` の無いことの列に新しい語を足す・台帳 `shiori.toml:7188` | 表明（2 つの語が別々に 1 件ずつ） |
 | 26 | G3 | 既にある道具に置き換え | — |
-| 27 | G11 | `update_test_support.rs` に `boot_context(temp, root, ghost, balloon)` と `write_descript`（charset の頭と末尾の改行を付ける形に統一し、`desk_resolve_tests.rs` の呼び手は頭を外す） | — |
+| 27 | G11 | `update_test_support.rs` の `slot_world(root, ghost, balloon)` が `reload_test_support` の `boot_context_named` を使う。`write_descript` は `session_tests` の共有の補助を使う | — |
 | 28 | G12 | 名前つきのスレッドで `load` と `render`、起こせなければ `error!` と `NG:`（`encode_elsewhere` と同じ形） | 実ユニットのテストを `wait_answer` で待つ形に。UI の側で読まないことは、`handle` の戻りの時点で答えがまだ来ていない（`try_answer` が `None`）ことで見る |
 | 29 | G14 | 番号を消し、名と定数を中身で付け直す | — |
 | 30 | G12 | テストを足す | `check_size` の (0,1,空)・(1,0,空)・(2,2,長さ 15) が Err、(1,1,長さ 4) が Ok |
@@ -588,7 +589,7 @@ impl EmoPresenter {
 | 32 | G14 | `TempPath` に | — |
 | 33 | G23 | doc の行を直す。向こうが `spawn_windows(rig, dpi)`・`pump_messages` を `pub` にした後で写しを消す | — |
 | 34 | G14 | `mN_` と「MN:」を消す | — |
-| 35 | G13 | `script_target` を `resolve.rs` へ移して 3 本で使う | — |
+| 35 | G13 | `script_target` の写しを消し、`resolve.rs` の `ask_kanade` に畳んで 3 本で使う（かけ直しの 4 回目） | — |
 | 36 | G15 | 本物のシェルを装着させ、`\s[99999]` に `missing_surface` が 1 件（実 GPU） | 新しいテスト |
 | 37 | G1 | `barrier_within(SPIN_WAIT)`（今の行 103・318） | — |
 | 38 | G14 | `kanade_fake_test_support.rs` へ寄せる | — |
@@ -669,7 +670,7 @@ impl EmoPresenter {
 | 3 呼び手の説明 | 8・70・71・81・49。直したことを `audit-areka-app` へ知らせる | G22・G24 |
 | 4 `let _ = join()` | 19 | G2 |
 | 5 `capture_logs` | 57 | G20 |
-| 6 `boot_context` の写し 9 | 名が効かない 5 つ（11 の 1・45 の 3・58 の 1）は既にある補助へ。名が効く `update/` の 4 つは `update_test_support.rs` の 1 つへ。範囲の中の写しは 1 になる。向こうが既にある補助に名の引数を足せば（4 引数の形）、`update_test_support.rs` の補助も消して 0 にする。足さなければ 1 を残して理由を記録し、向こうの brief へ件として書く | G11・G18・G20・G21・G23 |
+| 6 `boot_context` の写し 9 | 名が効かない 5 つ（11 の 1・45 の 3・58 の 1）は既にある補助へ。名が効く `update/` の 4 つは、向こうが足した `reload_test_support` の `boot_context_named`（4 引数の形）を `update_test_support.rs` の `slot_world` から使う。範囲の中の写しは 0 | G11・G18・G20・G21・G23 |
 | 7 `BODY_SYSTEMS` の 1 行 | 3 本とも残し、理由を記録 | G24 |
 | 8 `NO_BODY` | そろえない。doc の直しは向こうへ申し送る（12 の直しで本体の側の `url` の腕も取りに行かなくなる＝OPEN QUESTION 2 の答えを添えて伝える） | G24 |
 
@@ -721,12 +722,12 @@ impl EmoPresenter {
 
 - **新しい失敗の道**（「設計の段で決めた事項」の 1 の新しい語）:
   - 背景のスレッドの panic は守り手が `error!` を残し、窓口が起こし直す。
-  - 短命のスレッドを起こせないとき: 4 は記録の行だけを失い、`error!` を残す。28 は `NG:` を返す。
+  - `roots-log` のスレッドを起こせないとき（4）は記録の行だけを失い、`error!` を残す。答えだけの短命のスレッドを起こせないとき（28）は `NG:` を返す。
   - 取得のスレッドを起こせないとき: 今と同じく `error!(install_fetch_failed)` を残す。
 - **終了**:
   - 取得は待たず、取得中の 1 件と積んだ残りを記録に残す。
   - 起動中のゴーストへの展開は書く段として上限まで待つ。
-  - 記録だけの短命のスレッドと答えだけの短命のスレッドは門に乗せない（失うのは記録の行と、相手が居ない答えだけ・research.md 10.1 の R8）。
+  - 記録だけの `roots-log` のスレッドと答えだけの短命のスレッドは門に乗せない（失うのは記録の行と、相手が居ない答えだけ・research.md 10.1 の R8）。
 - **待ちの上限**:
   - 本番の UI の待ちは 1 の `EXIT_WAIT_LIMIT` だけ。
   - テストの待ちはどれも `SPIN_WAIT` か `join_bounded` の上限で、赤で終わる。

@@ -780,11 +780,12 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 - 連鎖は 4 件（4 回目に寄せた後に残った doc・包み・型）。ほかは 4 回目に足した共通の補助へ寄せ切れていなかった写しと doc。
 - 本番に関わる指摘は 1 件だけ（S6 の「できれば」）: 説明書を開くときの `info!(open_external)` の文が、OS の呼び出しより前に出るのに「OS へ渡した」と書いていた。文を「渡す」の形に直した（記録の鍵・水準・欄は変えない）。ほかは本番のコードの doc と、テストの補助の寄せだけ。
 - 判定: 5 回目に「必ず直す」は 0 件。要件 9.6 の決まりで 5 回目の指摘を直したところで打ち切った（残りは直し済み）。9.6 の「本番の振る舞い（ログの行）に関わるもの」には上の 1 件の文の直しが当たるので、開発者に知らせた。
+- 本番に関わる 1 件が S6 にあったので、S6 だけに絞って 6 回目をかけた（HEAD `d6c5c13b9`）: 必ず直す 0・直したほうがよい 0・できれば 0・本番 0。要件 9.6 の打ち切りの条件は 6 回目で満たした。
 - 直しのコミット: `a3978d159`（根・説明書）・`fca8870c5`（MCP）・`99896534b`（install・update）。
 
 ### 既定のブランチとの差分の確かめ（タスク 5.5）
 
-土台は `git merge-base HEAD origin/main` の `056b66813`（`origin/main` に新しい commit は無い）。HEAD は `24950a17f`。差分は spec 自身のファイルを除いて 163 ファイル。
+土台は `git merge-base HEAD origin/main` の `056b66813`（`origin/main` に新しい commit は無い）。HEAD は `d6c5c13b9`。差分は spec 自身のファイルを除いて 164 ファイル。
 
 1. **触ってはいけない所**: `Cargo.toml`（根）・`crates/dola/`・`crates/wintf/`・`vendors/` の差分は 0。`Cargo.lock` は 2 行の削除（`shiori-abi`・`windows-core`）、`crates/areka/Cargo.toml` は dev の 2 行（`shiori-abi`・`windows-core`）の削除だけで、どちらも例外 (c) と一致する。
 2. **範囲の外のファイルの分類**（要件 9.5。範囲は要件の In scope の `install/`・`update/`・`mcp/`・`roots/`・`roots.rs`・`readme_body_tests.rs`・`areka-session` の `roots/`・`readme/`・`readme.rs`・`readme_tests.rs`）。どれにも当たらないファイルは 0。
@@ -793,7 +794,8 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
    - 例外 (c): `Cargo.lock`・`crates/areka/Cargo.toml`・`crates/areka/src/shiori_host.rs`・`shiori_host_case_fold_tests.rs`（削除）、`crates/areka/src/main.rs`（`mod shiori_host;` とその doc の 4 行の削除。実装ノート 5.1）。例外 (a) は範囲の中の `install/overwrite.rs` の腕で、範囲の外のファイルには出ない。
    - 実装ノート: `runtime_tests/consumer_ledger_agreement_tests.rs`（1.4・`StartFetch` の置き換え）、`doc/ukadoc-coverage/ledger/assets.toml`（2.2・install.accept の根拠の場所）。
    - かけ直しの audit で寄せた写し（1〜5 回目・開発者の指示で申し送らずに直した・テストのファイルだけ）: `areka-session` の `boot_resolve_tests.rs`・`ghost_switch_{balloon,boot_event,drop_write,fallback,notice,reload}_tests.rs`・`ghost_switch_tests.rs`・`ghost_switch_test_support.rs`・`shell_balloon_switch_session_abort_tests.rs`・`shell_balloon_switch_session_lap_test_support.rs`、本体の `runtime_tests/strict_judges_tests.rs`・`runtime_tests/frame/switch_finish_tests.rs`・`switch_tests.rs`、`session_tests/mod.rs`・`reload_tests.rs`・`shell_balloon_switch_session_tests.rs`・`shell_balloon_switch_session_update_tests.rs`・`shell_balloon_switch_tests.rs`。本番のコードは 1 つも含まない。
-   - 注: design.md の「brief 4 つ」のうち、`audit-areka-app`・`audit-emo2-boot-switch` の brief は差分に無い（この 2 つへの申し送りは 13 節のとおり）。
+   - 全体テストの赤の直し: `crates/log-capture-kit/tests/with_default_guard_test.rs`（例外表 3 件）。
+   - 注: `audit-areka-app`・`audit-emo2-boot-switch` の brief は差分に無い（この 2 つへの申し送りは 13 節のとおり）。
 3. **`doc/COMPAT_ARCHITECTURE.md`**: 差分は 3 行（325・344・427 行。いずれも §8 に既にある別々の行で、行の中の文だけを直した）。タスクの文面の「344 行だけ」は、実装ノート 1.4→2.1 と 1.6→2.1 で 3 行に改めてある。表の行の増減・見出し・文書の名とパスは変えていない。
 4. **名指しの文書の名**: `install/judge.rs` が名指す文書は `doc/COMPAT_ARCHITECTURE.md` の 1 つで、土台でも今でも同じ（行は 90 → 93 へ動いただけ）。
 5. **外への約束の変わった所**（本番の `.rs` の差分で `event = "…"` の足し引きを取った）。
@@ -807,5 +809,6 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
      - MCP の記録の出どころは `areka::mcp::resolve` になる（`get_status`・`raise_event`・`sakurascript` の骨組み）。前方一致 `areka::mcp` の下のままで、出どころで引く読み手（`tools/`・`log_history.rs`・文書）は無い。
    - CONCERN（約束の破りではないが、表の外）: 上の `update_tail_dropped` の `closing` と `detail` の欄、文の言い直しは、設計の表に行が無い。ログの語・水準・出どころの改名・破りではないので、要件 7.7 の議題には上げず、ここに残す。
 6. **新しい禁止物**: `MessageBox`・`SetConsoleOutputCP`・`chcp` を足す行は 0（`crates`・`tools` の差分の `+` 行を grep）。1,000 行の番人の表へ足した物は 0（差分の `+` 行に `.rs` のパスの字面を足した行が 0・差分で触った `.rs` に 1,000 行を超えるものが 0）。新しく置いたファイルと直したファイルの最大は `ghost_switch.rs` の 970 行。
-- 全体テスト: 1 回目（HEAD `24950a17f`）は 1 段だけ赤（x64 workspace tests の `log-capture-kit` の `no_direct_capture_call_lives_outside_the_shared_crate_and_the_allow_table`）。この spec が足した捕捉の受け手の直の差し方 3 か所（`install/fetch_url.rs` の取得のスレッド・`roots/edit.rs` の `roots-log` のスレッド・`roots/edit_tests.rs` のスレッドごとの受け手）が例外表の外にあった。共有の引き継ぎは `areka-actor` の中だけ（`pub(crate)`）で、起こせないと panic する・起こす時に 1 度だけ決める形なので、記録を残して `None` を返す取得のスレッドと、仕事ごとに受け手を運ぶ `roots-log` には合わない。例外表に理由つきで 3 件足した（記録の行き先は変わらない）。直した後に赤だったテストだけを回し直して緑（31 件）。全体の緑は最終検証の全体テストで確かめる。
-- 後の課題（この spec の外）: `areka-actor` に「失敗を返す・仕事ごとに窓を引き継ぐ」公開の手伝いを置けば、例外表の 2 件（取得・`roots-log`）を外せる。
+- 全体テスト: 1 回目（HEAD `24950a17f`）は 1 段だけ赤（x64 workspace tests の `log-capture-kit` の `no_direct_capture_call_lives_outside_the_shared_crate_and_the_allow_table`）。この spec が足した捕捉の受け手の直の差し方 3 か所（`install/fetch_url.rs` の取得のスレッド・`roots/edit.rs` の `roots-log` のスレッド・`roots/edit_tests.rs` のスレッドごとの受け手）が例外表の外にあった。共有の引き継ぎは `areka-actor` の中だけ（`pub(crate)`）で、起こせないと panic する・起こす時に 1 度だけ決める形なので、記録を残して `None` を返す取得のスレッドと、仕事ごとに受け手を運ぶ `roots-log` には合わない。例外表に理由つきで 3 件足した（記録の行き先は変わらない）。直した後に赤だったテストだけを回し直して緑（31 件）。最終検証の全体テスト（HEAD `d6c5c13b9`・`tools/test-all.ps1`）は全段が緑。
+- 後の課題（この spec の外）: `areka-actor` に「失敗を返す・仕事ごとに窓を引き継ぐ」公開の手伝いを置けば、例外表の 2 件（取得・`roots-log`）を外せる。本番の呼び場所は `install/fetch_url.rs` の `spawn_fetcher` と `roots/edit.rs` の `queue_change_log`。持ち主は `/kiro-complete` の棚卸で決める。
+- 後の課題（できれば・5 回目の打ち切りの後に残した）: `mcp/kanade_fake_test_support.rs` の `warn_or_worse`（数を返す）は `session_tests::warn_or_worse`（列を返す）と重なる。

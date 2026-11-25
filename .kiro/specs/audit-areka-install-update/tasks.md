@@ -98,7 +98,7 @@
   - `homeurl` を 2 か所で `trim` してから空を None にし、手続きの重ねた `filter` を消す（24）。
   - 背景の側の語を `update_reload_asked` に改め、`procedure_reload_tests.rs:88・175`・`worker_path_tests.rs:200-205・323` と台帳 `doc/ukadoc-coverage/ledger/shiori.toml:7188` を同じ変更で直す（25）。
   - 列の型の別名を `update/mod.rs` に置いて 7 か所で使い、`refs::Tail` を `Ref34` に改める（76）。なぞるだけのコメントと古い doc を直す（77・`desk_tests.rs:3-5` を含む）。
-  - 新しい `homeurl_tests.rs` で照会の写しと窓口の写しの両方が `" "` を None・`"https://x/ "` を `"https://x/"` にして緑（今は赤）。2 つの語が別々に 1 件ずつの表明が緑。
+  - 照会の写し（`worker_tests.rs`）と窓口の写し（`desk_resolve_tests.rs`）の本物の道のテストで、両方が `" "` を None・`"https://x/ "` を `"https://x/"` にして緑（今は赤）。2 つの語が別々に 1 件ずつの表明が緑。
   - _Dispatch: mechanical — 直し方と期待の値を design が与えている_
   - _Requirements: 3.1, 3.3, 4.1, 4.2, 7.1, 7.7, 7.8_
 
@@ -252,7 +252,7 @@
   - _Dispatch: standard — 指摘ごとに直し方を決めて直す_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.6, 3.2, 3.5, 9.1, 9.2, 9.3, 9.6, 9.7, 9.8_
 
-- [ ] 5.5 既定のブランチとの差分で約束を確かめ、全体テストを緑にする（G25・要件 9.4・9.5）
+- [x] 5.5 既定のブランチとの差分で約束を確かめ、全体テストを緑にする（G25・要件 9.4・9.5）
   - 既定のブランチとの差分で次を確かめて research.md に記録する: `Cargo.toml`・`Cargo.lock`・`crates/dola/`・`crates/wintf/`・`vendors/` の差分が 0（例外 (c) を除く）。範囲の外の差分が design.md「Modified Files（範囲の外）」と例外 (a)〜(c) の分だけ。`doc/COMPAT_ARCHITECTURE.md` の差分が 344 行だけ。`install/judge.rs` が名指す文書の名が変わっていない。外への約束の変わった所が design.md「設計の段で決めた事項」1 の表の分だけ。新しいメッセージボックス・コンソールの文字コードの切り替え・1,000 行の番人の表への足しが 0。
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回して緑（実機の確かめは全体テストの段の中だけ。赤が出たら 2 回目からは赤のテストだけを回す）。静かな机の計測・画面の操作・本物の置き場・外のホスト・開発者の MCP は回さない。
   - 差分の確かめの記録と、全体テストの緑が research.md にある。
