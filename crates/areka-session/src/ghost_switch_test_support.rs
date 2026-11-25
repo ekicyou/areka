@@ -591,7 +591,7 @@ impl SwitchRig {
     /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
     /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
     /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
-    pub(crate) fn inject_talk_tick(&mut self, step_ms: u64) {
+    pub fn inject_talk_tick(&mut self, step_ms: u64) {
         self.talk_clock_ms += step_ms;
         let now = MonotonicMs(self.talk_clock_ms);
         if let Some(dispatcher) = self

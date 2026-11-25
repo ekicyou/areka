@@ -1,5 +1,4 @@
-//! 偽の kanade を据えたテストの足場（`get_status`・`raise_event`・`sakurascript` の決定論テストが共有する。
-//! 起動中の 1 体の値 [`ghost`] はほかのツールのテストも使う）。
+//! 偽の kanade を据えたテストの足場（MCP のツールの決定論テストが共有する。起動中の 1 体の値 [`ghost`] も置く）。
 
 use std::path::PathBuf;
 use std::sync::mpsc;

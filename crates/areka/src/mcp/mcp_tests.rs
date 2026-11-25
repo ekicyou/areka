@@ -1,7 +1,6 @@
 //! `mcp` の決定論テスト（汲む系・振り分け・準備の前・終了の途中）。
 
 use std::cell::Cell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc;
 
@@ -15,16 +14,9 @@ use bevy_ecs::world::World;
 
 use super::resolve::{ActiveGhost, CANNOT_FIND, NOT_ACTIVE};
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
-/// 解決を通る 8 本（`get_expression_table` と任意の 7 本）。
+/// SSP と同じで解決を通る 8 本（`get_expression_table` と任意の 7 本。`check_script` は `check_script_tests.rs`）。
 fn eight(ghost_name: Option<&str>) -> Vec<ToolCall> {
     let g = ghost_name.map(str::to_owned);
     vec![

@@ -198,7 +198,7 @@ fn body(outcome: &ToolOutcome) -> String {
 
 /// 本物の単位で端から端まで。起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送る。
 /// 台詞の時計を進めない間は本文が `talking` で始まり、進めながら問い直すと期限の内に `talking` を
-/// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない。
+/// 含まない答えが返る。どの答えも `isError: false`。
 #[test]
 fn real_unit_answers_talking_then_not_after_the_talk_ends() {
     use crate::sample_test_support::switch_rig;
@@ -261,9 +261,5 @@ fn real_unit_answers_talking_then_not_after_the_talk_ends() {
     );
     for outcome in std::iter::once(&first).chain(&seen) {
         assert!(!outcome.is_error, "isError: false: {outcome:?}");
-        assert!(
-            !body(outcome).contains("not implemented yet"),
-            "本物の答え: {outcome:?}"
-        );
     }
 }

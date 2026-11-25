@@ -4,8 +4,6 @@
 //! content は本文 1 つ＝画像なし）を返す。描画を通る場合は GPU のテストが固定する。
 //! 後半は窓の無い切り替えの道具（`SwitchRig`・GPU 不要）で、装着の前に預けた呼び出しを通す。
 
-use std::path::PathBuf;
-
 use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 use wintf::ecs::Input;
@@ -13,17 +11,14 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 use crate::sample_test_support::switch_rig;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     let args = Args {
         scope: Some(0),
         surface: Some(0),

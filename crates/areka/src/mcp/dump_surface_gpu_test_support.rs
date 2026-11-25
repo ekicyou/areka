@@ -24,8 +24,7 @@ use areka_emo_present::balloon::{
 use areka_emo_present::shell_target::load_shell_target;
 use areka_emo_present::{PresentCommand, TargetId};
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
+use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use areka_mcp::{ToolContent, ToolOutcome};
 use bevy_ecs::world::World;
@@ -50,8 +49,6 @@ pub(in crate::mcp) const FLUSH_EVENT: &str = "OnSecondChange";
 /// 窓・GPU つきのゴースト A。
 pub(in crate::mcp) struct GpuRig {
     pub(in crate::mcp) rig: SwitchRig,
-    /// 注入した Tick の合成の時刻（単調増加）。
-    clock_ms: u64,
     /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
     _gpu: GpuPermit,
 }
@@ -83,19 +80,16 @@ impl GpuRig {
         crate::mcp::install(&mut rig.world, inbox);
         rig.wire_app_memory();
         rig.boot("A");
-        Self {
-            rig,
-            clock_ms: 0,
-            _gpu: gpu,
-        }
+        Self { rig, _gpu: gpu }
     }
 
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
-    /// 巡ごとに置き場のゴーストの dispatcher へ `step_ms` 進めた合成の Tick を注入して台詞を進め
+    /// 巡ごとに `SwitchRig::inject_talk_tick` で `step_ms` 進めた合成の Tick を注入して台詞を進め
     /// （0 なら台詞の時計は止まったまま）、本番の巡と同じく `FrameTime` を置き、メッセージを配る。
     ///
     /// 打ち切りは足場の進みの目印（`SwitchRig::progress_probe`・SHIORI の呼び出しの数）で決め、打ち切ったら
-    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`（lap の `LapRig::frames_until` と同じ形）。台詞の再生（dispatcher が Tick を消化する進み）は
+    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。lap の `LapRig::frames_until` と違い、
+    /// UI の側の進みは目印に数えず、Tick の回数にも上限を置かない。台詞の再生（dispatcher が Tick を消化する進み）は
     /// テストの側から読めないので、SHIORI を呼ばずに台詞だけが進む間は目印が動かない（30 秒で［止まった］）。
     /// 合成の時刻は 1 巡に高々 `step_ms` しか進まない（時刻が観測を追い越さない）ので、台本の待ちを
     /// `step_ms` 1 で進めると待ちの ms と同じ数の巡が要り、巡が遅い机では届かない。`step_ms` 1（実時間
@@ -106,7 +100,7 @@ impl GpuRig {
         step_ms: u64,
         mut done: impl FnMut(&World) -> bool,
     ) -> bool {
-        let Self { rig, clock_ms, .. } = self;
+        let rig = &mut self.rig;
         let mut last_tick: Option<Instant> = None;
         let probe = rig.progress_probe();
         let at = Location::caller();
@@ -116,17 +110,7 @@ impl GpuRig {
             || {
                 if step_ms > 0 && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                     last_tick = Some(Instant::now());
-                    *clock_ms += step_ms;
-                    if let Some(dispatcher) = rig
-                        .world
-                        .get_non_send::<GhostSlot>()
-                        .and_then(|slot| slot.0.as_ref())
-                        .and_then(|session| session.dispatcher())
-                    {
-                        let _ = dispatcher.send(DispatcherMsg::Tick {
-                            now: MonotonicMs(*clock_ms),
-                        });
-                    }
+                    rig.inject_talk_tick(step_ms);
                 }
                 rig.world
                     .insert_resource(FrameTime(dola::runtime::clock::now()));

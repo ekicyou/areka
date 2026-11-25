@@ -3,7 +3,6 @@
 //! 結線状態の無い空の World で呼ぶと、その場で `NG:This ghost has no window`（isError: true・
 //! content は本文 1 つ）を返す。
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use areka_mcp::ToolContent;
@@ -11,14 +10,11 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::super::dump_surface::finish;
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 
 #[test]
 fn answers_no_window_with_an_empty_world() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     let args = Args {
         scope: Some(0),
         ghost_name: Some("Emily/Phase4.5".to_string()),

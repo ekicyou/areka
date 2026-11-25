@@ -10,14 +10,11 @@ use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 
 #[test]
 fn an_empty_world_answers_the_15_defaults_with_one_warning() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     let args = Args {
         ghost_name: Some("Emily/Phase4.5".to_string()),
     };

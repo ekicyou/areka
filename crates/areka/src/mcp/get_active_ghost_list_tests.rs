@@ -9,6 +9,7 @@ use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 
 /// `active` で呼んだときの答え（本文, isError）。
 fn answer(active: Option<&ActiveGhost>) -> (String, bool) {
@@ -23,11 +24,7 @@ fn answer(active: Option<&ActiveGhost>) -> (String, bool) {
 
 #[test]
 fn named_ghost_lists_its_name() {
-    let ghost = ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
+    let ghost = ghost();
     assert_eq!(answer(Some(&ghost)), ("Emily/Phase4.5".to_string(), false));
 }
 

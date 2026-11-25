@@ -126,7 +126,7 @@ pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply
     );
 }
 
-/// 表を読むスレッドの体。`job` を panic を受けて走らせ、panic なら届けられない失敗で答える。
+/// 表を読む仕事を panic を受けて走らせ、panic なら届けられない失敗の答えを返す。
 fn caught(job: impl FnOnce() -> ToolOutcome) -> ToolOutcome {
     // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))

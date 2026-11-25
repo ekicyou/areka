@@ -7,7 +7,7 @@
 //! - `mod scope_rect` の 2 本: 窓の矩形を MCP とゴーストの道が同じに答えること・`reload` の後も
 //!   新しい読み口で答えること。
 //!
-//! どちらも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
+//! どれも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
 //! `ghost_name` はすべて省略。英字の大小違いの名前は `BASEWARE.NAME` の 1 つだけ（大小を畳んで `areka`）。前に空白のある ` baseware.name` は空白を削らず「無い名前」のまま。
 
 use std::path::PathBuf;

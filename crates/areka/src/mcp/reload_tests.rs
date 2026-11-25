@@ -15,6 +15,7 @@ use tracing::Level;
 
 use super::*;
 use crate::mcp::kanade_fake_test_support::ghost;
+use crate::session_tests::events_named;
 use areka_session::log_history::TARGET_ERROR;
 
 fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
@@ -36,13 +37,6 @@ fn answered(pending: &Pending) -> (String, bool) {
     (text.clone(), answer.outcome.is_error)
 }
 
-fn named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 /// 6 語以外（空・前後の空白・別の語）は `NG:Unknown target (…)` をその場で返し、窓口へ渡さない
 /// （`reload_refused` も `reload_started` も残らない）。
 #[test]
@@ -52,8 +46,8 @@ fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
         assert_eq!(
             (
                 answered(&pending),
-                named(&events, "reload_refused").len(),
-                named(&events, "reload_started").len(),
+                events_named(&events, "reload_refused").len(),
+                events_named(&events, "reload_started").len(),
             ),
             (
                 (
@@ -75,7 +69,7 @@ fn unknown_targets_answer_unknown_target_without_asking_the_desk() {
 fn makoto_answers_not_supported_yet_with_one_warn() {
     for target in ["makoto", "MaKoTo"] {
         let (pending, events) = call(&mut World::new(), target);
-        let warns = named(&events, "reload_makoto_unsupported")
+        let warns = events_named(&events, "reload_makoto_unsupported")
             .into_iter()
             .map(|e| {
                 (
@@ -89,7 +83,7 @@ fn makoto_answers_not_supported_yet_with_one_warn() {
             (
                 answered(&pending),
                 warns,
-                named(&events, "reload_refused").len()
+                events_named(&events, "reload_refused").len()
             ),
             (
                 ("NG:Reloading makoto is not supported yet".to_string(), true),
@@ -111,7 +105,7 @@ fn makoto_answers_not_supported_yet_with_one_warn() {
 fn desk_refusal_answers_cannot_reload_now() {
     for target in ["ghost", "Shiori", "SHELL", "balloon", "descript"] {
         let (pending, events) = call(&mut World::new(), target);
-        let refused = named(&events, "reload_refused")
+        let refused = events_named(&events, "reload_refused")
             .into_iter()
             .map(|e| {
                 (
@@ -146,7 +140,7 @@ fn closing_drops_the_reply() {
     let (pending, events) = call(&mut world, "shell");
 
     assert!(matches!(pending.try_answer(), Err(ReplyError::Dropped)));
-    assert_eq!(named(&events, "reload_started").len(), 0);
+    assert_eq!(events_named(&events, "reload_started").len(), 0);
 }
 
 /// 受理は窓口の判定の直後に読んだ番号を `since_id` に載せた SSP の文（isError: false）で答え、断りは
