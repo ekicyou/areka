@@ -7,6 +7,7 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::session_tests::events_named;
 use log_capture_kit::capture;
 
 /// 一時の置き場（フォルダそのものがゴーストの置き場）にゴーストを置く。
@@ -45,9 +46,7 @@ fn running_ghost_in_temporary_root_installs_into_remembered_root() {
         "(動いている名前・新しい名前とも覚える置き場)"
     );
     assert!(
-        !events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_running_ghost_root_kept")),
+        events_named(&events, "install_running_ghost_root_kept").is_empty(),
         "一時の置き場の 2 つ上を根とみなさない"
     );
 }

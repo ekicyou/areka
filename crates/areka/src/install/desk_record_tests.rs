@@ -19,6 +19,7 @@ use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
 use crate::install::worker::{carry_record, catalog_spelling};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::{count, events_named};
 use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use areka_session::boot_resolve::read_last_balloon;
 use areka_session::ghost_switch::LastInstalledGhost;
@@ -81,13 +82,6 @@ fn last_installed(rig: &SwitchRig) -> Option<String> {
 
 fn names(rig: &SwitchRig) -> Option<LastInstallNames> {
     rig.world.get_resource::<LastInstallNames>().cloned()
-}
-
-fn count(events: &[CapturedEvent], name: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name) && e.level == level)
-        .count()
 }
 
 /// ゴーストを入れた: 受け皿へ目録の綴りのフォルダ名（書庫の `directory` と大文字小文字だけが違う）、
@@ -168,10 +162,7 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
         Some("Fluffy"),
         "目録の綴りで書く"
     );
-    let remembered: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_balloon_remembered"))
-        .collect();
+    let remembered: Vec<_> = events_named(&events, "install_balloon_remembered");
     assert_eq!(remembered.len(), 1);
     assert_eq!(remembered[0].level, Level::INFO);
     assert_eq!(remembered[0].field("folder"), Some("Fluffy"));
@@ -255,10 +246,7 @@ fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     plant_balloon(&rig, "Fluffy", "ふわふわ");
     let by = rig.add_ghost_balloon_copy("A", "FLUFFY", "中のふわふわ");
     let events = record_fluffy(&mut rig);
-    let hidden: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("installed_balloon_hidden_by_ghost"))
-        .collect();
+    let hidden: Vec<_> = events_named(&events, "installed_balloon_hidden_by_ghost");
     assert_eq!(hidden.len(), 1, "{events:?}");
     assert_eq!(hidden[0].level, Level::INFO);
     assert_eq!(hidden[0].field_str("folder"), Some("Fluffy"));

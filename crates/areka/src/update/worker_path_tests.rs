@@ -19,7 +19,7 @@ use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::desk::{Stage, UpdateDesk, raw_sender};
-use super::update_test_support::refs_of;
+use super::update_test_support::{plant_committed, refs_of};
 use super::{RawUpdateRequest, TargetKind};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
@@ -182,9 +182,7 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
     );
     // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
     // 成功した走行の残りを置く。
-    let leftover = a_dir.join(".update-work").join("held-run");
-    std::fs::create_dir_all(leftover.join("old")).expect("走行フォルダを組む");
-    std::fs::write(leftover.join("committed"), b"").expect("印を置く");
+    plant_committed(&a_dir, "held-run");
 
     // 予約の切替は kanade へ送ってある。同じ送出端で照会を 1 往復させ、返事を受けた時点で kanade は
     // 切替の要求を捌き終えている。まだ定常（再生中）なら照会は SHIORI まで届く＝切替は台詞の完了待ち。

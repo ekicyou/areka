@@ -208,10 +208,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     assert!(steady < sent_ex, "{events:?}");
     // 起動中のゴースト自身を入れても、追加の切替はしない。受け皿へは書く。
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("ghost_switch_requested"))
-            .count(),
+        events_named(&events, "ghost_switch_requested").len(),
         1,
         "{events:?}"
     );

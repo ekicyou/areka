@@ -151,6 +151,18 @@ pub(crate) fn events_named<'a>(
         .collect()
 }
 
+/// `event` の記録のうち水準が `level` の件数。
+pub(crate) fn count(
+    events: &[log_capture_kit::CapturedEvent],
+    event: &str,
+    level: tracing::Level,
+) -> usize {
+    events_named(events, event)
+        .iter()
+        .filter(|e| e.level == level)
+        .count()
+}
+
 /// 今のゴースト・バルーンの決め方を書き換える（argv で決まった側は最後に使ったものを書かない）。
 pub(crate) fn routes(world: &mut World, ghost: GhostRoute, balloon: BalloonRoute) {
     let mut ctx = world.resource_mut::<BootContext>();

@@ -410,8 +410,8 @@ fn selectable_when_one_descript_has_one() {
     assert!(can_update(&world));
 }
 
-/// 走っている間と答え待ちの間は選べない（段が `Idle` に戻れば選べる）。終了が始まった後・窓口が
-/// 無いときも選べない。
+/// 走っている間と答え待ちの間は選べない（段が `Idle` に戻れば選べる）。読み直しの切替の後送りを
+/// 持つ間・終了が始まった後・窓口が無いときも選べない。
 #[test]
 fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     let root = Root::new("areka-update-can-running");
@@ -423,6 +423,10 @@ fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     }
     world.non_send_mut::<UpdateDesk>().stage = Stage::Idle;
     assert!(can_update(&world), "対照: 段が戻れば選べる");
+    world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
+    assert!(!can_update(&world), "読み直しの切替の後送りを持つ間");
+    world.non_send_mut::<UpdateDesk>().after_switch = None;
+    assert!(can_update(&world), "対照: 後送りを使い切れば選べる");
     let _ = begin_close(&mut world);
     assert!(!can_update(&world), "終了が始まった後");
     world.remove_non_send::<UpdateDesk>();

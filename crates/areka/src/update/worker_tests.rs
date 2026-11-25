@@ -28,6 +28,7 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::session_tests::events_named;
+use crate::update::update_test_support::write_descript;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::exit_wait::{ClosingWaits, begin_close, register_gate};
@@ -129,7 +130,8 @@ fn raise_answered(answer: Option<RaiseOutcome>) -> (Raised, Vec<CapturedEvent>) 
         rx
     });
     let (raised, events) = capture(|| ports.raise(EVENT, refs()));
-    let rx = join_thread_bounded("update", None, answerer).expect("答える側が赤を出さない");
+    let rx = join_thread_bounded("kanade の代わりの終わり", None, answerer)
+        .expect("答える側が赤を出さない");
     assert!(
         matches!(rx.try_recv(), Err(TryRecvError::Empty)),
         "送るのは 1 件だけ"
@@ -225,7 +227,8 @@ fn resources_answered(
         rx
     });
     let (found, events) = capture(|| ports.resources());
-    let rx = join_thread_bounded("update", None, answerer).expect("答える側が赤を出さない");
+    let rx = join_thread_bounded("kanade の代わりの終わり", None, answerer)
+        .expect("答える側が赤を出さない");
     assert!(
         matches!(rx.try_recv(), Err(TryRecvError::Empty)),
         "照会は 1 件だけ"
@@ -298,7 +301,7 @@ fn nothing_is_sent_after_exit_began() {
     assert_eq!(ports.raise(EVENT, refs()), Raised::Closed);
     assert_eq!(ports.resources(), None);
     drop(ports);
-    let sent = join_thread_bounded("update", None, counter).expect("数える側が終わる");
+    let sent = join_thread_bounded("数える側の終わり", None, counter).expect("数える側が終わる");
     assert_eq!(sent, 0, "終了の後の送出は 0 件");
 }
 
@@ -668,14 +671,7 @@ fn bundled_balloon(label: &str) -> (TempPath, PathBuf, PathBuf) {
     let (user, exe) = (tmp.child("user"), tmp.child("exe"));
     std::fs::create_dir_all(&user).expect("書ける根");
     let b1 = exe.join("balloon").join("b1");
-    std::fs::create_dir_all(&b1).expect("同梱のバルーン");
-    std::fs::write(
-        b1.join("descript.txt"),
-        "charset,UTF-8
-name,B
-",
-    )
-    .expect("descript");
+    write_descript(&b1, "name,B");
     (tmp, user, exe)
 }
 

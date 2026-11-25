@@ -125,7 +125,7 @@ pub(crate) enum SubmitVerdict {
     Closing,
     /// 読み取りだけの走り（段を移さず、成否の欄が空の総括だけを送った）。
     ReadOnly,
-    /// 走っている（答え待ちで預かりが埋まっているときも）＝`OnUpdateFailure(executing)` を送った。
+    /// 走っている（答え待ちで預かりが埋まっているときも）＝`OnUpdateFailure(executing)` を送る（送れたかは記録の `notified`）。
     Executing,
     /// 切替の予約が在る。
     NotSteady,

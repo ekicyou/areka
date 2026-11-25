@@ -15,7 +15,7 @@ use log_capture_kit::capture;
 use tracing::Level;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::shell_balloon_switch_tests::count;
+use super::count;
 use crate::sample_test_support::switch_rig;
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};

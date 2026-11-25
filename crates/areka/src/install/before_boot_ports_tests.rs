@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use areka_ghost::BasewareRoots;
 use areka_nar::InstallKind;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 use tracing::Level;
@@ -18,17 +18,11 @@ use super::*;
 use crate::install::procedure::{ArchiveEnd, run_order};
 use crate::install::startup::CarriedInstall;
 use crate::install::{InstallOrder, InstallOrigin};
+use crate::session_tests::{count, events_named};
 
 /// 空の根の上の口（告知は抑止）。
 fn ports(root: &TempPath) -> BootPorts {
     BootPorts::new(BasewareRoots::single(root.path().to_path_buf()), true)
-}
-
-fn count(events: &[CapturedEvent], name: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name) && e.level == level)
-        .count()
 }
 
 /// `install.txt` の行で書庫を `dir` へ置く（ゴーストなら `ghost/master/descript.txt` も入れる）。
@@ -160,10 +154,7 @@ fn an_archive_with_accept_is_refused_and_logged() {
     let mut ports = ports(&root);
     let (ends, events) = capture(|| run_order(&order(vec![path.clone()]), &mut ports));
     assert_eq!(ends, [ArchiveEnd::Refused]);
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_refused_no_ghost"))
-        .collect();
+    let refused: Vec<_> = events_named(&events, "install_refused_no_ghost");
     assert_eq!(refused.len(), 1, "{events:?}");
     assert_eq!(refused[0].level, Level::INFO);
     assert_eq!(
@@ -200,10 +191,7 @@ fn a_balloon_is_carried_in_the_catalog_spelling_and_memory_is_skipped() {
             ghost_folder: None,
         })
     });
-    let skipped: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_balloon_memory_skipped"))
-        .collect();
+    let skipped: Vec<_> = events_named(&events, "install_balloon_memory_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::INFO);
     assert_eq!(skipped[0].field_str("folder"), Some("Fluffy"));

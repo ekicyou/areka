@@ -10,6 +10,7 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::roots::roots_test_support::world;
+use crate::session_tests::events_named;
 use areka_session::app_exit::{ExitOrigin, FirstExit};
 
 #[test]
@@ -37,10 +38,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
         roots,
         "書き換えた並びは戻さない"
     );
-    let failed: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("roots_memory_write_failed"))
-        .collect();
+    let failed: Vec<_> = events_named(&events, "roots_memory_write_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::ERROR);
     assert_eq!(
@@ -49,10 +47,7 @@ fn apply_without_ghost_write_failure_is_fatal_and_keeps_new_list() {
     );
     assert!(failed[0].field("reason").is_some(), "欄 reason: {events:?}");
     assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.field_str("event") == Some("memory_write_failed"))
-            .count(),
+        events_named(&events, "memory_write_failed").len(),
         1,
         "{events:?}"
     );

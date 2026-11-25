@@ -328,7 +328,7 @@ type ChangeLogSlot = Mutex<Option<Sender<ChangeLogJob>>>;
 static CHANGE_LOG: ChangeLogSlot = Mutex::new(None);
 
 /// 変更のときの並びと隠れを `roots-log` で記録する。根が遅い置き場（落ちた NAS）でも UI スレッドを止めない。
-/// 記録は 1 本のスレッドが渡した順に残す。スレッドが居なければ起こす。
+/// 記録は 1 本のスレッドが渡した順に残す。スレッドが居なければ起こす（`work` を使うのは起こすときだけ）。
 fn queue_change_log(
     slot: &ChangeLogSlot,
     roots: BasewareRoots,

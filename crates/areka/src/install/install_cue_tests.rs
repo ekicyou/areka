@@ -1,6 +1,7 @@
 //! `InstallCueSink` の自己選別と送り出しの決定論テスト。
 
 use super::*;
+use crate::session_tests::events_named;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
@@ -154,9 +155,7 @@ fn relative_path_in_a_script_string_reaches_no_order() {
     });
 
     assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("install_order_queued")),
+        events_named(&events, "install_order_queued").is_empty(),
         "依頼は 0 件: {events:?}"
     );
     assert_eq!(warns(&events), vec![Some("install_cue_bad_path")]);
@@ -308,10 +307,7 @@ fn readonly_fetch_refuses_the_url_without_sending_or_warning() {
     drop(sink);
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_refused"))
-        .collect();
+    let refused: Vec<_> = events_named(&events, "readonly_refused");
     assert_eq!(refused.len(), 1, "断りの記録は 1 件");
     assert_eq!(refused[0].level, tracing::Level::INFO);
     assert_eq!(refused[0].field_str("what"), Some("install_url"));

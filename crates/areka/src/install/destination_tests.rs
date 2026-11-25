@@ -5,6 +5,7 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::session_tests::events_named;
 use log_capture_kit::capture;
 
 fn put_ghost(root: &Path, folder: &str) {
@@ -24,10 +25,7 @@ fn list(dirs: &[PathBuf]) -> BasewareRoots {
 }
 
 fn skipped_warns(events: &[log_capture_kit::CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_head_root_skipped"))
-        .count()
+    events_named(events, "install_head_root_skipped").len()
 }
 
 #[test]
@@ -63,9 +61,9 @@ fn missing_head_root_answers_topmost_found_and_warns() {
     let dest = CatalogDestinations::new(list(&[gone.clone(), two.clone(), three])).expect("作れる");
     let (answer, events) = capture(|| dest.ghost_root("Fresh"));
     assert_eq!(answer, two, "見つかるいちばん上");
-    let warn = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("install_head_root_skipped"))
+    let warn = events_named(&events, "install_head_root_skipped")
+        .first()
+        .copied()
         .expect("warn が残る");
     assert_eq!(warn.level, tracing::Level::WARN);
     assert_eq!(
@@ -110,11 +108,7 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
         [gone, seen],
         "(起動中→その根・別の名前→並びの答え)"
     );
-    assert!(
-        events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_running_ghost_root_kept"))
-    );
+    assert!(!events_named(&events, "install_running_ghost_root_kept").is_empty());
 }
 
 // ---- 並びを宛先にして入れる（install_into） ----
@@ -202,9 +196,8 @@ fn new_ghost_goes_to_head_and_companion_balloon_inside_it() {
         below,
         "別の根の同じフォルダ名は 1 バイトも変わらない"
     );
-    let placed: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_placed"))
+    let placed: Vec<_> = events_named(&events, "install_placed")
+        .into_iter()
         .map(|e| {
             (
                 e.field("root").map(str::to_owned),
@@ -300,9 +293,9 @@ fn no_found_root_fails_before_writing_with_an_error() {
         crate::install::judge::failure_word(&error).as_ref_str(),
         "fileio"
     );
-    let logged = events
-        .iter()
-        .find(|e| e.field_str("event") == Some("install_no_root"))
+    let logged = events_named(&events, "install_no_root")
+        .first()
+        .copied()
         .expect("error が残る");
     assert_eq!(logged.level, tracing::Level::ERROR);
     assert!(!tmp.child("a").exists(), "何も作らない");

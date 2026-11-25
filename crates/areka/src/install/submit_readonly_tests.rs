@@ -17,6 +17,7 @@ use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
+use crate::session_tests::events_named;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::readonly::ReadOnlyRun;
 
@@ -65,10 +66,7 @@ fn readonly_refuses_every_origin_before_queueing() {
     assert!(!desk::is_busy(&world), "窓口を忙しいに残さない");
     assert_eq!(kanade.try_iter().count(), 0, "ゴーストへは何も送らない");
 
-    let refused: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("readonly_refused"))
-        .collect();
+    let refused: Vec<_> = events_named(&events, "readonly_refused");
     assert_eq!(refused.len(), 3, "依頼ごとに 1 件");
     let origins: Vec<_> = refused.iter().map(|e| e.field("origin")).collect();
     assert_eq!(
@@ -81,10 +79,8 @@ fn readonly_refuses_every_origin_before_queueing() {
         assert_eq!(e.field("count"), Some("1"));
     }
     assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("install_order_refused")
-                && e.field_str("event") != Some("install_order_queued")),
+        events_named(&events, "install_order_refused").is_empty()
+            && events_named(&events, "install_order_queued").is_empty(),
         "断りの warn も受け付けの記録も出さない"
     );
     assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);

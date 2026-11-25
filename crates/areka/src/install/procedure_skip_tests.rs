@@ -9,8 +9,11 @@
 use areka_nar::InstallKind;
 use sample_ghost_kit::{NarBuilder, install_txt};
 
-use super::procedure_test_support::{Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, run_one};
+use super::procedure_test_support::{
+    ARCHIVE, Call, FakePorts, RUNNING, RUNNING_SAKURA, ghost_nar, run_one,
+};
 use super::*;
+use crate::session_tests::events_named;
 
 /// 本文の最後の行。
 const SUBSTITUTE: &str = "入らなかったバルーンの代わりに、入っている別のバルーンが使われます。";
@@ -66,7 +69,7 @@ fn a_plain_skipped_companion_warns_once_after_the_closing_notice() {
     let at = ports.under_root("ghost/newbie").display().to_string();
     let title = "インストールの警告 - あたらしい";
     let body = [
-        "書庫: archive.nar",
+        &format!("書庫: {ARCHIVE}"),
         "入った物: ゴースト あたらしい",
         "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
         SUBSTITUTE,
@@ -123,7 +126,7 @@ fn a_numbered_skipped_companion_warns_once() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: archive.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: b0（書庫に取り出し元 extra\\s0 が無かったため）",
             SUBSTITUTE,
@@ -158,7 +161,7 @@ fn one_of_two_companions_skipped_lists_the_installed_balloon_too() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: archive.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入った物: バルーン Kaku",
             "入らなかったバルーン: b0（書庫に取り出し元 s0 が無かったため）",
@@ -186,7 +189,7 @@ fn a_source_with_only_its_folder_entry_warns_once() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: archive.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             SUBSTITUTE,
@@ -214,7 +217,7 @@ fn a_shell_with_a_skipped_companion_warns_once() {
         &ports,
         "インストールの警告 - きがえ",
         &[
-            "書庫: archive.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: シェル きがえ",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             SUBSTITUTE,
@@ -268,7 +271,7 @@ fn two_skipped_companions_in_one_archive_warn_once_with_two_lines() {
         &ports,
         "インストールの警告 - あたらしい",
         &[
-            "書庫: archive.nar",
+            &format!("書庫: {ARCHIVE}"),
             "入った物: ゴースト あたらしい",
             "入らなかったバルーン: kaku（書庫に取り出し元 src-kaku が無かったため）",
             "入らなかったバルーン: b0（書庫に取り出し元 s0 が無かったため）",
@@ -299,9 +302,7 @@ fn a_closed_closing_notice_still_warns_once_before_stopping() {
         "{ends:?}"
     );
     assert!(
-        !events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_abandoned")),
+        events_named(&events, "install_abandoned").is_empty(),
         "後の書庫が無ければ出さない"
     );
     assert_eq!(

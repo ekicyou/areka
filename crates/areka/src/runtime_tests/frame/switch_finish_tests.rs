@@ -30,6 +30,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
+use crate::session_tests::count;
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::reseed::test_support as reseed_tests;
 use areka_placement::reset_pos::DefaultPlacementBasis;
@@ -293,13 +294,6 @@ fn memory(rig: Rig) -> Vec<(PersistKey, String)> {
         &rig.roots,
         &SharedFakeIo::new(rig.store.clone()),
     )
-}
-
-fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event) && e.level == level)
-        .count()
 }
 
 /// `skin_*`・`last_*` の記録の (event, 水準, stage)。

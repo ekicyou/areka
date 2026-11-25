@@ -15,6 +15,7 @@ use log_capture_kit::capture;
 use super::*;
 use crate::install::worker::OrderGuard;
 use crate::install::{InstallOrigin, register};
+use crate::session_tests::events_named;
 use areka_actor::reply_channel;
 use areka_runtime::spine::join_thread_bounded;
 use areka_session::exit_wait::{begin_close, register_gate};
@@ -56,9 +57,7 @@ fn panicking_thread_reports_and_clears_the_gate() {
     register_gate(&mut world, "install", gate, |_| {});
     let (_, events) = capture(|| begin_close(&mut world));
     assert!(
-        !events
-            .iter()
-            .any(|e| e.field_str("event") == Some("exit_wait_abandoned")),
+        events_named(&events, "exit_wait_abandoned").is_empty(),
         "{events:?}"
     );
 }
@@ -93,9 +92,7 @@ fn desk_respawns_the_worker_after_a_panic() {
     world.non_send_mut::<InstallDesk>().queue.push_back(order());
     let (_, events) = capture(|| drain(&mut world));
     assert!(
-        events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_worker_spawned")),
+        !events_named(&events, "install_worker_spawned").is_empty(),
         "{events:?}"
     );
     let desk = world.non_send::<InstallDesk>();
@@ -156,10 +153,7 @@ fn raise_to_a_stopped_kanade_drops_the_reply_and_warns_once() {
         .expect("窓口の頼みの受信端は生きている");
     let (_, events) = capture(|| drain(&mut world));
     assert!(answer.try_recv().is_err());
-    let failed: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_event_send_failed"))
-        .collect();
+    let failed: Vec<_> = events_named(&events, "install_event_send_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::WARN);
 }

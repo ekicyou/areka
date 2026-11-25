@@ -9,7 +9,7 @@
 //! 終了の後・別のゴーストなら捨てる／切替が既定へ戻ると列は捨てる。読み直しの切替が終わると成功した
 //! 走行の残り（印つき）が消え、読み直しでない切替・失敗した切替では消さない。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
@@ -21,7 +21,7 @@ use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
 use crate::session_tests::events_named;
 use crate::update::UpdateTail;
-use crate::update::update_test_support::refs_of;
+use crate::update::update_test_support::{plant_committed, refs_of};
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use areka_session::exit_wait::begin_close;
@@ -59,15 +59,6 @@ fn reloading(folder: &'static str) -> FakeShiori {
         }
         builder
     }))
-}
-
-/// ゴーストの `.update-work/` の下に、成功した走行の残り（印 `committed` と古い DLL の写し）を置く。
-fn plant_committed(ghost_dir: &Path, run: &str) -> PathBuf {
-    let dir = ghost_dir.join(".update-work").join(run);
-    std::fs::create_dir_all(dir.join("old")).expect("走行フォルダを組む");
-    std::fs::write(dir.join("old").join("yaya.dll"), b"old").expect("古い写しを置く");
-    std::fs::write(dir.join("committed"), b"").expect("印を置く");
-    dir
 }
 
 /// A を起こして定常に着いた土台（B は切替で起こせるが、起こされないことを数える）。
@@ -384,9 +375,13 @@ fn a_reload_without_a_running_ghost_drops_the_tail() {
         ask_reload_for_test(&rig.world, a_dir, tail());
         rig.world.run_schedule(Input);
     });
+    let skipped = events_named(&events, "update_reload_skipped");
+    assert_eq!(skipped.len(), 1, "{events:?}");
+    assert_eq!(skipped[0].field_str("reason"), Some("other_ghost"));
     let dropped = events_named(&events, "update_tail_dropped");
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0].level, Level::WARN);
+    assert_eq!(dropped[0].field_str("reason"), Some("other_ghost"));
     assert!(
         events_named(&events, "update_tail_sent").is_empty(),
         "{events:?}"

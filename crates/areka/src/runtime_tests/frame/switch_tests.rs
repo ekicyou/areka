@@ -24,6 +24,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::run_switch_phase;
+use crate::session_tests::count;
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
@@ -282,13 +283,6 @@ fn replaces(rig: Rig) -> Vec<(u64, RebaseKind)> {
             _ => None,
         })
         .collect()
-}
-
-fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event) && e.level == level)
-        .count()
 }
 
 /// `skin_switch_*` の記録の (event, 水準, reason, stage)。

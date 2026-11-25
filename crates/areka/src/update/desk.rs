@@ -469,12 +469,12 @@ pub(crate) fn on_steady(world: &mut World) {
 }
 
 /// メニューの項目を選べるか: 窓口が在り・終了が始まっておらず・段が `Idle`（答え待ちも灰色）・
-/// 写しか 3 つの `descript.txt` のどれかに更新先が在る。
+/// 読み直しの切替の後送りを持っておらず・写しか 3 つの `descript.txt` のどれかに更新先が在る。
 pub(crate) fn can_update(world: &World) -> bool {
     let Some(desk) = world.get_non_send::<UpdateDesk>() else {
         return false;
     };
-    if desk.gate.is_closing() || desk.stage != Stage::Idle {
+    if desk.gate.is_closing() || desk.stage != Stage::Idle || desk.after_switch.is_some() {
         return false;
     }
     if desk.ghost_homeurl.is_some() {
@@ -516,7 +516,7 @@ fn peek_homeurl(world: &mut World) {
     let outcome = reply.map(|reply| {
         reply
             .into_iter()
-            .find(|(id, _)| *id == "homeurl")
+            .find(|(id, _)| *id == HOMEURL)
             .map(|(id, answer)| match answer {
                 ResourceOutcome::Value(v) => (
                     id,

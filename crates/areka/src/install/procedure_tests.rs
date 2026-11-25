@@ -14,6 +14,7 @@ use super::procedure_test_support::{
     supplement_nar, write_nar,
 };
 use super::*;
+use crate::session_tests::events_named;
 
 /// byte 値 1 で繋ぐ。
 fn joined(values: &[&str]) -> String {
@@ -303,10 +304,7 @@ fn abandoning_an_order_logs_the_archives_not_yet_started() {
         "最初に閉じたら以後の書庫は扱わない"
     );
     assert_eq!(ports.raised_ids(), vec!["OnInstallBegin"]);
-    let abandoned: Vec<_> = events
-        .iter()
-        .filter(|event| event.field_str("event") == Some("install_abandoned"))
-        .collect();
+    let abandoned: Vec<_> = events_named(&events, "install_abandoned");
     assert_eq!(abandoned.len(), 1);
     assert_eq!(
         abandoned[0].field("skipped"),
@@ -465,9 +463,9 @@ fn each_stage_is_logged() {
         ],
         "各段の記録"
     );
-    let begin = events
-        .iter()
-        .find(|event| event.field_str("event") == Some("install_begin"))
+    let begin = events_named(&events, "install_begin")
+        .first()
+        .copied()
         .expect("始まりの記録");
     assert_eq!(begin.field("origin"), Some("Menu"));
     assert!(

@@ -24,6 +24,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 use wintf::ecs::Input;
 
+use super::count;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::shared_test_support::wiring;
@@ -156,13 +157,6 @@ fn sent(rx: &Receiver<KanadeMsg>) -> Vec<Option<Option<GapRaise>>> {
             _ => None,
         })
         .collect()
-}
-
-pub(super) fn count(events: &[CapturedEvent], event: &str, level: Level) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event) && e.level == level)
-        .count()
 }
 
 fn level_count(events: &[CapturedEvent], level: Level) -> usize {

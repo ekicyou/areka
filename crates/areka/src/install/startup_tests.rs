@@ -91,9 +91,8 @@ fn args(archives: &[&str]) -> InstallArgs {
 }
 
 fn not_submitted(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("startup_install_not_submitted"))
+    events_named(events, "startup_install_not_submitted")
+        .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::WARN);
             e.field_str("reason").unwrap_or_default().to_owned()
@@ -122,10 +121,7 @@ fn new_makes_relative_paths_absolute_from_the_current_folder() {
         vec![cwd.join("rel.nar"), absolute, PathBuf::new()],
         "相対は今のフォルダから・絶対はそのまま・直せない空は綴りのまま"
     );
-    let warns: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("install_path_not_absolute"))
-        .collect();
+    let warns: Vec<_> = events_named(&events, "install_path_not_absolute");
     assert_eq!(warns.len(), 1, "直せない 1 本だけ warn");
     assert_eq!(warns[0].level, tracing::Level::WARN);
     assert_eq!(warns[0].field("archive"), Some(""), "直せない綴りを載せる");
@@ -189,14 +185,20 @@ fn facts(ends: &[ArchiveEnd]) -> CallGhostFacts<'_> {
 /// 判断を 1 回して、答えと `startup_callghost_*` の記録を返す。
 fn decide(facts: &CallGhostFacts<'_>) -> (CallGhost, Vec<log_capture_kit::CapturedEvent>) {
     let (answer, events) = log_capture_kit::capture(|| decide_call_ghost(facts));
-    let events = events
+    (answer, callghost_events(events))
+}
+
+/// `startup_callghost_*` の記録だけを残す。
+fn callghost_events(
+    events: Vec<log_capture_kit::CapturedEvent>,
+) -> Vec<log_capture_kit::CapturedEvent> {
+    events
         .into_iter()
         .filter(|e| {
             e.field_str("event")
                 .is_some_and(|name| name.starts_with("startup_callghost"))
         })
-        .collect();
-    (answer, events)
+        .collect()
 }
 
 fn skipped_reason(events: &[log_capture_kit::CapturedEvent]) -> (String, Option<String>) {
@@ -619,14 +621,7 @@ fn archives_of(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<Str
 
 /// `startup_callghost_*` の記録が `skipped` 1 件だけで、その `reason`。
 fn skipped(events: Vec<log_capture_kit::CapturedEvent>) -> String {
-    let callghost: Vec<_> = events
-        .into_iter()
-        .filter(|e| {
-            e.field_str("event")
-                .is_some_and(|name| name.starts_with("startup_callghost"))
-        })
-        .collect();
-    skipped_reason(&callghost).0
+    skipped_reason(&callghost_events(events)).0
 }
 
 /// `deletesource` で入った写しだけが 1 回消え、失敗・断った写しとフォルダは残る。

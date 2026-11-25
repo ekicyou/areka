@@ -2,6 +2,7 @@
 //! 偽の取得口だけを差し、ネットワークへ出ない。一時フォルダは `temp-path-kit`。
 //! 通信中の数はテストごとの `static` を渡し、プロセスの数（`PROCESS`）には触れない。
 
+use crate::session_tests::events_named;
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
@@ -316,9 +317,7 @@ fn success_logs_done_without_warnings() {
 
     assert!(events.iter().all(|e| e.level > Level::WARN), "{events:?}");
     assert!(
-        events
-            .iter()
-            .any(|e| e.field_str("event") == Some("install_fetch_done")),
+        !events_named(&events, "install_fetch_done").is_empty(),
         "{events:?}"
     );
     script_path(rx.try_recv().expect("依頼が届く"));
@@ -380,9 +379,7 @@ fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
         );
         assert!(!ONLINE.is_online(), "{label}: 抜けたら数は 0");
         assert!(
-            events
-                .iter()
-                .any(|e| e.field_str("event") == Some(expected)),
+            !events_named(&events, expected).is_empty(),
             "{label}: {expected} の経路を踏む: {events:?}"
         );
         if let Some(rx) = rx {
@@ -416,9 +413,7 @@ fn nothing_swept_logs_no_swept_record() {
 
     result.expect("落とせる");
     assert!(
-        events
-            .iter()
-            .all(|e| e.field_str("event") != Some("install_fetch_swept")),
+        events_named(&events, "install_fetch_swept").is_empty(),
         "{events:?}"
     );
 }

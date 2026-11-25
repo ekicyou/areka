@@ -158,7 +158,7 @@ pub(crate) fn run_overwrite_between(world: &mut World) {
     overwrite::run_between(world);
 }
 
-/// 台本の受け口と選ぶ画面のスレッドへ配る送出端（窓口が無ければ受信端の無い送出端）。
+/// 台本の受け口へ配る送出端（窓口が無ければ受信端の無い送出端）。
 pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
     match world.get_non_send::<InstallDesk>() {
         Some(desk) => desk.raw_tx.clone(),
