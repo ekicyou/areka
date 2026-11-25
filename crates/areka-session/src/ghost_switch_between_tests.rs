@@ -12,6 +12,7 @@ use super::between::BetweenHold;
 use super::fallback_tests::{count_event, root_with, switching_world};
 use super::*;
 use crate::body_systems::NO_BODY;
+use crate::boot_resolve::boot_resolve_tests::events_named;
 use crate::ghost_switch_test_support::{FakeShiori, RigSample, SwitchRig, standard_script};
 
 /// 上書きの口で待ちを立てる本体。
@@ -138,9 +139,8 @@ fn switch_to_boots_at_once_without_a_hold_from_the_hook() {
     let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
     let ((), resumed) = capture(|| resume_between(&mut world));
 
-    let no_hold: Vec<_> = resumed
+    let no_hold: Vec<_> = events_named(&resumed, "ghost_switch_no_hold")
         .iter()
-        .filter(|e| e.field_str("event") == Some("ghost_switch_no_hold"))
         .map(|e| e.level)
         .collect();
     assert_eq!(

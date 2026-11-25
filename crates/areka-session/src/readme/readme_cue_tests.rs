@@ -225,7 +225,7 @@ fn sink_agrees_with_link_destinations() {
 
 // ---------------------------------------------------------------- 記録の型
 
-/// 8 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・表の `event=`・表の水準を
+/// 8 つの場面の記録はどれもちょうど 1 行で、`[readme]` の接頭辞・場面ごとの `event=`・場面ごとの水準を
 /// 持ち、受信端へは 1 件も送らない（受信端を落とす場面を除く）。
 #[test]
 fn every_readme_cue_line_carries_the_prefix_and_an_event() {

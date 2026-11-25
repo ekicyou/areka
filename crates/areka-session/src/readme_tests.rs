@@ -317,7 +317,7 @@ fn open_from_world_warns_without_wiring() {
     );
     assert!(
         warned[0].contains("level=WARN"),
-        "不在は warn! レベル（エラー表）: {warned:?}"
+        "不在は warn! レベル: {warned:?}"
     );
 }
 

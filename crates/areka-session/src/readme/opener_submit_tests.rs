@@ -5,10 +5,10 @@
 //! 時間の上限つきで待って判定する（記録はプロセス共有なので件数や位置では判定しない）。
 
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
 
 use areka_ghost::BasewareRoot;
 use areka_ghost::config::listed_name;
+use areka_runtime::spine::{Progress, wait_until};
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -149,12 +149,10 @@ fn spawned_thread_in_test_build_records_and_refuses() {
     );
     submit(&world, dest_url(&url));
 
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        if refused_files().iter().any(|f| f == url.as_str()) {
-            break;
-        }
-        assert!(Instant::now() < deadline, "断る口の記録に {url} が無い");
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
+    wait_until(
+        "断る口の記録に行き先が積まれる",
+        Progress::Unknown,
+        || refused_files().iter().any(|f| f == url.as_str()),
+    )
+    .unwrap_or_else(|e| panic!("断る口の記録に {url} が無い: {e}"));
 }
