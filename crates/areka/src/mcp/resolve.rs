@@ -1,7 +1,6 @@
 //! 宛先のゴーストの解決。World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断と、宛先の kanade へ 1 通送って後から答える配線（[`ask_kanade`]）を置く。
 
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
 
 use areka_actor::{ReplyError, ReplySender, reply_channel};
 use areka_kanade::KanadeMsg;
@@ -52,26 +51,6 @@ pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
     })
 }
 
-/// 宛先の kanade の送り口と、答える前に降りたときの文言。
-pub(crate) struct ScriptTarget {
-    pub kanade: Option<Sender<KanadeMsg>>,
-    /// 起動中のゴースト無しで解決したときの失敗の理由。
-    pub gone: &'static str,
-}
-
-/// 置き場の 1 体から送り口を引き、`ghost_name` から「降りた」の文言を求める。
-pub(crate) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTarget {
-    let gone = resolve(None, ghost_name, Omitted::UseActive)
-        .err()
-        .unwrap_or(NOT_ACTIVE);
-    let kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-        .cloned();
-    ScriptTarget { kanade, gone }
-}
-
 /// kanade へ 1 通送って返事を `later` で覗くツールの、名・答えの文言・記録の `event`。
 #[derive(Clone, Copy)]
 pub(crate) struct KanadeAsk {
@@ -102,7 +81,14 @@ pub(crate) fn ask_kanade<T: Send + 'static>(
     msg: impl FnOnce(ReplySender<T>) -> KanadeMsg,
     mut answer: impl FnMut(T, &'static str) -> ToolOutcome + 'static,
 ) {
-    let ScriptTarget { kanade, gone } = script_target(world, ghost_name);
+    let gone = resolve(None, ghost_name, Omitted::UseActive)
+        .err()
+        .unwrap_or(NOT_ACTIVE);
+    let kanade = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.kanade())
+        .cloned();
     let Some(kanade) = kanade else {
         tracing::warn!(
             event = ask.unavailable_event,

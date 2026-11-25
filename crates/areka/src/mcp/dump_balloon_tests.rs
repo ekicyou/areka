@@ -7,7 +7,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::super::dump_surface::dump_surface_tests::assert_success_record;
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, ghost, text};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
 
 #[test]
 fn answers_no_window_with_an_empty_world() {
@@ -20,9 +20,10 @@ fn answers_no_window_with_an_empty_world() {
 
     handle(&mut World::new(), &ghost, args, req.reply);
 
-    let answered = kanade_fake_test_support::answer(&pending);
-    assert_eq!(answered.content, text("NG:This ghost has no window"));
-    assert!(answered.is_error);
+    assert_eq!(
+        body_and_error(&kanade_fake_test_support::answer(&pending)),
+        ("NG:This ghost has no window".to_string(), true)
+    );
 }
 
 /// 文字の層の無い 1×1 の仕事の成功の記録の欄。

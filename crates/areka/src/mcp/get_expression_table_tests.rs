@@ -10,7 +10,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::super::dump_surface::caught;
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, ghost, text, try_outcome};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, try_outcome};
 
 #[test]
 fn an_empty_world_answers_the_15_defaults_with_one_warning() {
@@ -22,9 +22,10 @@ fn an_empty_world_answers_the_15_defaults_with_one_warning() {
 
     let ((), events) = capture(|| handle(&mut World::new(), &ghost, args, req.reply));
 
-    let answered = kanade_fake_test_support::answer(&pending);
-    assert_eq!(answered.content, text(&crlf(DEFAULTS_ONLY_ANSWER)));
-    assert!(!answered.is_error);
+    assert_eq!(
+        body_and_error(&kanade_fake_test_support::answer(&pending)),
+        (crlf(DEFAULTS_ONLY_ANSWER), false)
+    );
     let warns = warns(&events);
     assert_eq!(warns.len(), 1, "{events:?}");
     assert!(

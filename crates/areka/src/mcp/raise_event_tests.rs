@@ -1,7 +1,7 @@
 //! `raise_event` の決定論テスト。
 //!
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で外から頼まれたイベントの知らせを
-//! 受け取って返信端へ結果を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
+//! 受け取って返信端へ結果を送る。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
 
 use std::sync::mpsc;
 
@@ -12,7 +12,8 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
 use crate::mcp::kanade_fake_test_support::{
-    STRICT_NOTE_BEFORE_ID, answer, body, ghost, record_one, rig, text, warn_or_worse,
+    STRICT_NOTE_BEFORE_ID, answer, body, body_and_error, ghost, record_one, rig, text,
+    warn_or_worse,
 };
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
@@ -110,43 +111,17 @@ fn not_accepted_is_cannot_accept_now() {
     assert_eq!(warns, 0);
 }
 
-/// 失敗・返信端の落ち・送れなかった → `ghost_name` の有無で宛先が居ないときの 2 通りの `NG:`・
-/// warn 以上 0 件。
+/// 失敗 → `ghost_name` の有無で宛先が居ないときの 2 通りの `NG:`・warn 以上 0 件。
 #[test]
-fn failed_dropped_and_unsendable_read_as_the_resolve_failure() {
+fn failed_reads_as_the_resolve_failure() {
     for (ghost_name, expected) in [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)] {
-        let want = text(&format!("NG:{expected}"));
-
         let (outcome, warns) = answer_with(ghost_name, SstpNotifyOutcome::Failed);
-        assert_eq!(outcome.content, want, "Failed・{ghost_name:?}");
-        assert!(outcome.is_error, "Failed・{ghost_name:?}");
-        assert_eq!(warns, 0, "Failed・{ghost_name:?}");
-
-        let (mut world, rx) = rig();
-        let (pending, called) = call(&mut world, args(EVENT, &[], ghost_name, None));
-        drop(take_notify(&rx));
-        let ((), polled) = capture(|| drain(&mut world));
-        let outcome = answer(&pending);
-        assert_eq!(outcome.content, want, "返信端を落とす・{ghost_name:?}");
-        assert!(outcome.is_error);
         assert_eq!(
-            warn_or_worse(&called) + warn_or_worse(&polled),
-            0,
-            "返信端を落とす・{ghost_name:?}: {called:?} {polled:?}"
+            body_and_error(&outcome),
+            (format!("NG:{expected}"), true),
+            "{ghost_name:?}"
         );
-
-        // 受信端を先に落として送れなくする（その場で答え、預けない）。
-        let (mut world, rx) = rig();
-        drop(rx);
-        let (pending, called) = call(&mut world, args(EVENT, &[], ghost_name, None));
-        let outcome = answer(&pending);
-        assert_eq!(outcome.content, want, "送れない・{ghost_name:?}");
-        assert!(outcome.is_error);
-        assert_eq!(warn_or_worse(&called), 0, "送れない・{ghost_name:?}");
-        assert!(
-            world.non_send::<McpLater>().0.is_empty(),
-            "送れない・預けない"
-        );
+        assert_eq!(warns, 0, "{ghost_name:?}");
     }
 }
 
@@ -194,42 +169,6 @@ fn invalid_arguments_send_nothing() {
         assert!(world.non_send::<McpLater>().0.is_empty(), "{label}");
         assert_eq!(warn_or_worse(&called), 0, "{label}");
     }
-}
-
-/// 返事が呼んだ直後（最初の覗きの前）に届いていても、何フレームか後に届いても答えになる。
-#[test]
-fn answer_may_be_ready_at_once_or_arrive_later() {
-    // その場で返る（最初の覗きで答える）。
-    let (mut world, rx) = rig();
-    let (pending, _) = call(&mut world, args(EVENT, &[], None, None));
-    take_notify(&rx)
-        .3
-        .send(SstpNotifyOutcome::NoScript)
-        .expect("返信端は生きている");
-    drain(&mut world);
-    assert_eq!(
-        answer(&pending).content,
-        text("OK:the ghost returned no script.")
-    );
-
-    // 後から届く（返事の前の覗きでは答えず預けたまま）。
-    let (mut world, rx) = rig();
-    let (pending, _) = call(&mut world, args(EVENT, &[], None, None));
-    assert!(matches!(pending.try_answer(), Ok(None)), "呼んだ直後は未着");
-    let (_, _, _, reply) = take_notify(&rx);
-    drain(&mut world);
-    drain(&mut world);
-    assert!(matches!(pending.try_answer(), Ok(None)), "返事の前は未着");
-    assert_eq!(world.non_send::<McpLater>().0.len(), 1, "預けたまま");
-    reply
-        .send(SstpNotifyOutcome::NoScript)
-        .expect("返信端は生きている");
-    drain(&mut world);
-    assert_eq!(
-        answer(&pending).content,
-        text("OK:the ghost returned no script.")
-    );
-    assert!(world.non_send::<McpLater>().0.is_empty());
 }
 
 /// 置き場に送り口が無い（空の World）→ `NG:Script is not available`・warn ちょうど 1 件・error 0 件。

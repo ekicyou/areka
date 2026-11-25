@@ -56,6 +56,13 @@ pub(super) fn body_and_error(outcome: &ToolOutcome) -> (String, bool) {
     (body(outcome).to_owned(), outcome.is_error)
 }
 
+/// `get_log` の本文のうち `#<番号> ` で始まる行の番号（古い順）。0 件の本文は空の列。
+pub(super) fn ids(body: &str) -> Vec<u64> {
+    body.split("\r\n")
+        .filter_map(|line| line.strip_prefix('#')?.split(' ').next()?.parse().ok())
+        .collect()
+}
+
 /// strict 真の答えに足す文の `<n>` の前まで（`OK:` や前の空白は付けない）。
 pub(super) const STRICT_NOTE_BEFORE_ID: &str = "strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 

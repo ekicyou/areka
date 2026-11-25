@@ -11,7 +11,7 @@ use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, ids};
 use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
@@ -188,12 +188,7 @@ fn many_records_are_joined_oldest_first_without_trailing_separator() {
     let (body, _, _) = ask(&history(), Some("error"));
     assert!(!body.starts_with("OK"));
     assert!(!body.ends_with("\r\n"));
-    let ids: Vec<&str> = body
-        .split("\r\n")
-        .filter(|l| l.starts_with('#'))
-        .map(|l| l.split(' ').next().unwrap())
-        .collect();
-    assert_eq!(ids, ["#1", "#5", "#8", "#10"]);
+    assert_eq!(ids(&body), [1, 5, 8, 10]);
 }
 
 #[test]
@@ -252,14 +247,6 @@ fn full(
         since_id,
         max_count,
     }
-}
-
-/// 本文の行のうち記録の先頭の行の番号（古い順）。0 件の本文は空の列。
-fn ids(body: &str) -> Vec<u64> {
-    body.split("\r\n")
-        .filter_map(|l| l.strip_prefix('#'))
-        .map(|l| l.split(' ').next().unwrap().parse().unwrap())
-        .collect()
 }
 
 /// error 種別（番号 1・5・8・10）を `since_id`・`max_count` で絞った番号。

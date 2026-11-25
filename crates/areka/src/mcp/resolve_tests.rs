@@ -2,14 +2,21 @@
 //!
 //! ⑴ 解決の判断（名前・本体側名・英字の大小・前後の空白・フルパス・省略・空と空白だけ・0 体・`Reject`）
 //! ⑵ 一覧の値（名前あり・`name` 無し）が同じゴーストへ戻ること
-//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し・宛先の送り口）
+//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し）
+//! ⑷ `ask_kanade`（預けて後から答える・返信端の落ち・送れない・送り口が無い・`ghost_name` の有無で 2 通りの「降りた」）
 
 use std::path::PathBuf;
+use std::sync::mpsc;
 
+use areka_kanade::{ExecutionSnapshot, ExecutionStatus};
+use areka_mcp::tools::get_status::Args;
+use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use bevy_ecs::world::World;
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::rig;
+use crate::mcp::kanade_fake_test_support::{answer, body_and_error, ghost, rig, warn_or_worse};
+use crate::mcp::{McpLater, drain};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 const ROOT: &str = r"C:\ssp\ghost\emily4";
@@ -323,15 +330,138 @@ fn active_is_none_when_session_has_no_runtime() {
     assert_eq!(active(&world), None);
 }
 
-/// 3 本で使う部品: 送り口と「降りた」の文言（`ghost_name` の有無で 2 通り）。
-#[test]
-fn script_target_reads_the_sender_and_the_gone_wording() {
-    let (world, _rx) = rig();
-    let target = script_target(&world, Some("Emily/Phase4.5"));
-    assert!(target.kanade.is_some());
-    assert_eq!(target.gone, CANNOT_FIND);
+// ---- ⑷ kanade へ 1 通送って後から答える配線 ---------------------------------
 
-    let target = script_target(&World::new(), None);
-    assert!(target.kanade.is_none());
-    assert_eq!(target.gone, NOT_ACTIVE);
+const ASK: KanadeAsk = KanadeAsk {
+    tool: "probe",
+    what: "問い合わせ",
+    unavailable: "Probe is not available",
+    unavailable_event: "mcp_probe_unavailable",
+    gone_event: "mcp_probe_kanade_gone",
+    dropped_event: "mcp_probe_reply_dropped",
+};
+
+/// 問い合わせ 1 通を `ask_kanade` で送り、待つ側を返す。返事が届いたら `answer` が受けた「降りた」の文言を本文にする。
+fn ask(world: &mut World, ghost_name: Option<&str>) -> (Pending, Vec<CapturedEvent>) {
+    let (req, pending) = ToolRequest::new(ToolCall::GetStatus(Args { ghost_name: None }));
+    let ((), events) = capture(|| {
+        ask_kanade(
+            world,
+            &ghost(),
+            ghost_name,
+            ASK,
+            req.reply,
+            |reply| KanadeMsg::StatusQuery { reply },
+            |_: ExecutionStatus, gone| outcome::value(gone),
+        )
+    });
+    (pending, events)
+}
+
+fn take_query(rx: &mpsc::Receiver<KanadeMsg>) -> ReplySender<ExecutionStatus> {
+    match rx.try_recv() {
+        Ok(KanadeMsg::StatusQuery { reply }) => reply,
+        other => panic!(
+            "問い合わせ 1 通が届いているはず: {:?}",
+            other.map(|_| "別の知らせ")
+        ),
+    }
+}
+
+fn idle() -> ExecutionStatus {
+    ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE)
+}
+
+/// 「降りた」の文言は `ghost_name` の有無で 2 通り（返事を受けた `answer` へも同じ文言を渡す）。
+const GONE: [(Option<&str>, &str); 2] = [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)];
+
+/// 返事を待たずに預け、1 通だけ送る。返事の前に回しても預けたまま、届いたら答えて置き場から外れる。
+#[test]
+fn ask_kanade_defers_and_answers_when_the_reply_arrives() {
+    for (ghost_name, gone) in GONE {
+        let (mut world, rx) = rig();
+        let (pending, called) = ask(&mut world, ghost_name);
+        assert!(matches!(pending.try_answer(), Ok(None)), "呼んだ直後は未着");
+        let reply = take_query(&rx);
+        assert!(rx.try_recv().is_err(), "問い合わせは 1 通だけ");
+        let ((), before) = capture(|| drain(&mut world));
+        assert!(matches!(pending.try_answer(), Ok(None)), "返事の前は未着");
+        assert_eq!(world.non_send::<McpLater>().0.len(), 1, "預けたまま");
+
+        reply.send(idle()).expect("返信端は生きている");
+        let ((), after) = capture(|| drain(&mut world));
+        assert_eq!(
+            body_and_error(&answer(&pending)),
+            (gone.to_string(), false),
+            "{ghost_name:?}"
+        );
+        assert!(world.non_send::<McpLater>().0.is_empty());
+        assert_eq!(
+            warn_or_worse(&called) + warn_or_worse(&before) + warn_or_worse(&after),
+            0
+        );
+    }
+}
+
+/// 呼んだ直後（最初の覗きの前）に返事が届いていても、最初の覗きで答える。
+#[test]
+fn ask_kanade_answers_a_reply_ready_at_once() {
+    let (mut world, rx) = rig();
+    let (pending, _) = ask(&mut world, None);
+    take_query(&rx).send(idle()).expect("返信端は生きている");
+    drain(&mut world);
+    assert_eq!(
+        body_and_error(&answer(&pending)),
+        (NOT_ACTIVE.to_string(), false)
+    );
+}
+
+/// 返事の前に返信端が落ちた → 「降りた」の `NG:`・warn 以上 0 件。
+#[test]
+fn ask_kanade_reads_a_dropped_reply_as_gone() {
+    for (ghost_name, gone) in GONE {
+        let (mut world, rx) = rig();
+        let (pending, called) = ask(&mut world, ghost_name);
+        drop(take_query(&rx));
+        let ((), polled) = capture(|| drain(&mut world));
+        assert_eq!(
+            body_and_error(&answer(&pending)),
+            (format!("NG:{gone}"), true),
+            "{ghost_name:?}"
+        );
+        assert_eq!(
+            warn_or_worse(&called) + warn_or_worse(&polled),
+            0,
+            "{ghost_name:?}: {called:?} {polled:?}"
+        );
+    }
+}
+
+/// kanade が止まっていて送れない → その場で「降りた」の `NG:`・預けない・warn 以上 0 件。
+#[test]
+fn ask_kanade_reads_an_unsendable_kanade_as_gone() {
+    for (ghost_name, gone) in GONE {
+        let (mut world, rx) = rig();
+        drop(rx);
+        let (pending, called) = ask(&mut world, ghost_name);
+        assert_eq!(
+            body_and_error(&answer(&pending)),
+            (format!("NG:{gone}"), true),
+            "{ghost_name:?}"
+        );
+        assert_eq!(warn_or_worse(&called), 0, "{ghost_name:?}: {called:?}");
+        assert!(world.non_send::<McpLater>().0.is_empty(), "預けない");
+    }
+}
+
+/// 置き場に送り口が無い（空の World）→ `unavailable` の `NG:`・warn ちょうど 1 件・error 0 件。
+#[test]
+fn ask_kanade_answers_unavailable_without_a_kanade_in_the_slot() {
+    let (pending, called) = ask(&mut World::new(), Some("Emily/Phase4.5"));
+    assert_eq!(
+        body_and_error(&answer(&pending)),
+        ("NG:Probe is not available".to_string(), true)
+    );
+    let levels: Vec<_> = called.iter().map(|ev| ev.level).collect();
+    assert_eq!(levels, [tracing::Level::WARN], "{called:?}");
 }

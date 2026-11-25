@@ -22,6 +22,14 @@ use crate::mcp::kanade_fake_test_support::{ghost, try_outcome};
 use crate::session_tests::events_named;
 use areka_session::ghost_session::GhostSlot;
 
+fn runtime_of(world: &World) -> &areka_ghost::GhostRuntime {
+    world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.runtime())
+        .expect("置き場に実行系がある")
+}
+
 /// `handle` を 1 回呼び、返った直後の答えを取り出す（まだ答えていなければ None）。
 fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<ToolOutcome> {
     let args = Args {
@@ -74,12 +82,7 @@ fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
     )]);
     rig.boot("A");
     let (publisher, own) = {
-        let runtime = rig
-            .world
-            .get_non_send::<GhostSlot>()
-            .and_then(|slot| slot.0.as_ref())
-            .and_then(|session| session.runtime())
-            .expect("置き場に実行系がある");
+        let runtime = runtime_of(&rig.world);
         (
             runtime.sylphya_publisher().clone(),
             ghost_asker_id(&runtime.mount().shiori.dir),
@@ -243,12 +246,7 @@ mod scope_rect {
         let mut rig = booted_rig();
         let (tx, rx) = mpsc::channel();
         {
-            let runtime = rig
-                .world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
-                .and_then(|session| session.runtime())
-                .expect("置き場に実行系がある");
+            let runtime = runtime_of(&rig.world);
             let mut sink = PropGetCueSink::new(
                 runtime.sylphya_reader().clone(),
                 ghost_asker_id(&runtime.mount().shiori.dir),
@@ -306,12 +304,7 @@ mod scope_rect {
     fn reload_answers_the_same_rect_through_the_new_reader() {
         let mut rig = booted_rig();
         {
-            let runtime = rig
-                .world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
-                .and_then(|session| session.runtime())
-                .expect("置き場に実行系がある");
+            let runtime = runtime_of(&rig.world);
             let publisher = runtime.sylphya_publisher();
             publisher.set(
                 ghost_asker_id(&runtime.mount().shiori.dir),

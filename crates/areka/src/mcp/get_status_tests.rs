@@ -1,7 +1,7 @@
 //! `get_status` の決定論テスト。
 //!
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で問い合わせを受け取って
-//! 返信端へ値を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
+//! 返信端へ値を送る。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
 
 use std::sync::mpsc;
 
@@ -14,8 +14,7 @@ use super::*;
 use crate::mcp::kanade_fake_test_support::{
     answer, body, ghost, rig, text, try_outcome, warn_or_worse,
 };
-use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
-use crate::mcp::{McpLater, drain, install};
+use crate::mcp::{drain, install};
 
 /// `handle` を呼んで待つ側を返す（記録は呼んだスレッドで拾う）。
 fn call(world: &mut World, ghost_name: Option<&str>) -> (Pending, Vec<CapturedEvent>) {
@@ -86,81 +85,6 @@ fn states_are_the_rendered_value_verbatim() {
     assert_eq!(outcome.content, text(&rendered));
     assert!(!outcome.is_error);
     assert_eq!(warns, 0);
-}
-
-/// 答える前に降りた（`ghost_name` の有無 × 返信端を落とす／送れない）→ 宛先の解決の失敗と
-/// 同じ文言・isError: true・warn 以上は 0 件。
-#[test]
-fn gone_before_answering_reads_as_the_resolve_failure() {
-    for (ghost_name, expected) in [(Some("Emily/Phase4.5"), CANNOT_FIND), (None, NOT_ACTIVE)] {
-        // 返信端を落とす。
-        let (mut world, rx) = rig();
-        let (pending, called) = call(&mut world, ghost_name);
-        drop(take_query(&rx));
-        let ((), polled) = capture(|| drain(&mut world));
-        let outcome = answer(&pending);
-        assert_eq!(
-            outcome.content,
-            text(&format!("NG:{expected}")),
-            "返信端を落とす・{ghost_name:?}"
-        );
-        assert!(outcome.is_error, "返信端を落とす・{ghost_name:?}");
-        assert_eq!(
-            warn_or_worse(&called) + warn_or_worse(&polled),
-            0,
-            "返信端を落とす・{ghost_name:?}: {called:?} {polled:?}"
-        );
-
-        // 受信端を先に落として送れなくする（その場で答える）。
-        let (mut world, rx) = rig();
-        drop(rx);
-        let (pending, called) = call(&mut world, ghost_name);
-        let outcome = answer(&pending);
-        assert_eq!(
-            outcome.content,
-            text(&format!("NG:{expected}")),
-            "送れない・{ghost_name:?}"
-        );
-        assert!(outcome.is_error, "送れない・{ghost_name:?}");
-        assert_eq!(
-            warn_or_worse(&called),
-            0,
-            "送れない・{ghost_name:?}: {called:?}"
-        );
-        assert!(
-            world.non_send::<McpLater>().0.is_empty(),
-            "送れない・預けない"
-        );
-    }
-}
-
-/// 呼んだ直後は答えが無く、預けた組が 1 つ・届いたのは問い合わせ 1 通だけ。返信端へ送る前に
-/// 回しても答えは出ず預けたまま。成功の枝で warn 以上は 0 件。
-#[test]
-fn does_not_wait_and_sends_exactly_one_query() {
-    let (mut world, rx) = rig();
-    let (pending, called) = call(&mut world, None);
-
-    assert!(matches!(pending.try_answer(), Ok(None)), "呼んだ直後は未着");
-    assert_eq!(world.non_send::<McpLater>().0.len(), 1);
-    let reply = take_query(&rx);
-    assert!(rx.try_recv().is_err(), "問い合わせは 1 通だけ");
-
-    let ((), before) = capture(|| drain(&mut world));
-    assert!(matches!(pending.try_answer(), Ok(None)), "返事の前は未着");
-    assert_eq!(world.non_send::<McpLater>().0.len(), 1, "預けたまま");
-
-    reply
-        .send(ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE))
-        .ok()
-        .expect("返信端は生きている");
-    let ((), after) = capture(|| drain(&mut world));
-    assert!(!answer(&pending).is_error);
-    assert!(world.non_send::<McpLater>().0.is_empty());
-    assert_eq!(
-        warn_or_worse(&called) + warn_or_worse(&before) + warn_or_worse(&after),
-        0
-    );
 }
 
 /// 置き場に問い合わせ先が無い（空の World）→ `NG:Status is not available`・isError: true・

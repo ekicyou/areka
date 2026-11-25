@@ -11,7 +11,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
-use crate::mcp::kanade_fake_test_support::{self, ghost, text, try_outcome};
+use crate::mcp::kanade_fake_test_support::{self, body_and_error, ghost, try_outcome};
 use crate::sample_test_support::switch_rig;
 use areka_session::ghost_switch::SwitchInFlight;
 use areka_session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -28,9 +28,10 @@ fn answers_no_window_at_once_with_an_empty_world() {
 
     handle(&mut World::new(), &ghost, args, req.reply);
 
-    let answered = kanade_fake_test_support::answer(&pending);
-    assert_eq!(answered.content, text("NG:This ghost has no window"));
-    assert!(answered.is_error);
+    assert_eq!(
+        body_and_error(&kanade_fake_test_support::answer(&pending)),
+        ("NG:This ghost has no window".to_string(), true)
+    );
 }
 
 /// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える。
@@ -112,10 +113,9 @@ fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
         panic!("その場で答える");
     };
     assert_eq!(
-        answered.content,
-        text("NG:the shell of this scope is not ready")
+        body_and_error(&answered),
+        ("NG:the shell of this scope is not ready".to_string(), true)
     );
-    assert!(answered.is_error);
     assert_eq!(levels.error, 1);
 }
 
@@ -138,8 +138,10 @@ fn errors_in_encoding_body(job: Job) -> (ToolOutcome, usize) {
 #[test]
 fn encoding_body_calibration_counts_errors_of_failing_jobs_only() {
     let (panicked, errors) = errors_in_encoding_body(Box::new(|_| panic!("わざと")));
-    assert_eq!(panicked.content, text("NG:the encoding thread panicked"));
-    assert!(panicked.is_error);
+    assert_eq!(
+        body_and_error(&panicked),
+        ("NG:the encoding thread panicked".to_string(), true)
+    );
     assert_eq!(errors, 1);
 
     let (failed, errors) = errors_in_encoding_body(Box::new(|_| fail(TOOL, 0, "わざと")));

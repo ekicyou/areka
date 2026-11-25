@@ -31,12 +31,7 @@ const SHOWN: u32 = 1101;
 #[test]
 fn shown_surface_matches_the_composed_pixels_at_native_size() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 144);
-    let shown = gpu.frames_until(100, |world| {
-        world
-            .get_non_send::<RuntimeWiring>()
-            .and_then(|w| w.presenter().last_shown(shell_target(0)))
-            .is_some_and(|(id, pic)| id == SHOWN && pic.is_some())
-    });
+    let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let answer = gpu
         .dump_surface(None, None)
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
@@ -79,6 +74,16 @@ fn is_shown(world: &World, scope: u32, id: u32) -> bool {
         .get_non_send::<RuntimeWiring>()
         .and_then(|w| w.presenter().last_shown(shell_target(scope)))
         .is_some_and(|(shown, pic)| shown == id && pic.is_some())
+}
+
+/// スコープ 0 に `id` の表示が成立した後に隠れた（不可視）。
+fn is_hidden_after(world: &World, id: u32) -> bool {
+    is_shown(world, 0, id)
+        && world
+            .non_send::<RuntimeWiring>()
+            .presenter()
+            .target_visible(shell_target(0))
+            == Some(false)
 }
 
 /// 画面の状態＝スコープ 0・1 の（今の surface, 可視）。読み戻しの前後で比べる。
@@ -242,14 +247,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
 #[test]
 fn hidden_character_returns_the_picture_before_hiding() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\w2\s[-1]\e", 96);
-    let hidden = gpu.frames_until(100, |world| {
-        is_shown(world, 0, SHOWN)
-            && world
-                .non_send::<RuntimeWiring>()
-                .presenter()
-                .target_visible(shell_target(0))
-                == Some(false)
-    });
+    let hidden = gpu.frames_until(100, |world| is_hidden_after(world, SHOWN));
     let answer = gpu
         .dump_surface(None, None)
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
@@ -281,14 +279,7 @@ fn hidden_character_returns_the_picture_before_hiding() {
 #[test]
 fn hidden_character_after_cache_invalidation_recomposes_the_last_picture() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\w2\s[-1]\e", 96);
-    let hidden = gpu.frames_until(100, |world| {
-        is_shown(world, 0, SHOWN)
-            && world
-                .non_send::<RuntimeWiring>()
-                .presenter()
-                .target_visible(shell_target(0))
-                == Some(false)
-    });
+    let hidden = gpu.frames_until(100, |world| is_hidden_after(world, SHOWN));
     let invalidated = gpu.invalidate_cache(shell_target(0));
     let kept = gpu
         .rig
