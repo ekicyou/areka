@@ -747,3 +747,20 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 - ほかに記録の中身を変えた物: `roots_log_spawn_failed` は 3 つの失敗（起こせない・受け取る前に終わった・記録の途中で倒れた）を `reason`（`spawn`・`gone`・`panicked`）で分け、文を `detail` へ移した。`install_head_root_skipped` の文の頭に `[install]` を付けた。上書きの書く段で門の名を宛先つきにした。
 - `check_script` の判定は、全部の腕が strict の検出の点を通るようにした（答えの字は変わらない）。MCP の panic を受ける所は `work_elsewhere` の中の 1 か所にした。
 - 直しのコミット: `ee5508b80`（install・update）・`a45866a21`（MCP）・`6e67b620c`（根・説明書）。
+
+### 4 回目（HEAD `a05fa2182`）
+
+| 区画 | 必ず直す | 直したほうがよい | できれば | 2.2 の 3 種 |
+|---|---|---|---|---|
+| S1 | 0 | 4 | 4 | 0 |
+| S2 | 0 | 4 | 6 | 0 |
+| S3 | 0 | 3 | 4 | 0 |
+| S4 | 0 | 1 | 2 | 0 |
+| S5 | 0 | 2 | 6 | 0 |
+| S6 | 0 | 3 | 5 | 0 |
+| 計 | 0 | 17 | 27 | 0 |
+
+- 連鎖は 4 件（3 回目に寄せた後に残った包み・古いテストの名・古い doc）。ほかは 3 回目に足した共通の補助へ寄せ切れていなかった写し。
+- 本番の振る舞いが変わる直しは 0 件。本番のコードは、MCP の `get_status`・`raise_event`・`sakurascript` が kanade へ頼む骨組みを `resolve.rs` の `ask_kanade` の 1 つにした（記録の鍵・水準・文・答えの字は同じ・記録の出どころは `areka::mcp::resolve` になるが `areka::mcp` の下のまま）。ほかは doc の直しだけ。
+- 寄せた写しの中には、範囲の外のテスト（`areka-session` の `ghost_switch_*_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`）も入る（開発者の指示で申し送らずに直した）。
+- 直しのコミット: `6e602bf32`（install・update）・`abc018747`（MCP）・この記録の直前のコミット（根・説明書・切替のテスト）。
