@@ -115,10 +115,11 @@ pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply
         reply.send(outcome::value(render(&SurfaceTable::default())));
         return;
     };
-    let work = move || -> Work { Box::new(move || caught(|| outcome::value(render(&load(&dir))))) };
+    let work = move || -> Work { Box::new(move || outcome::value(render(&load(&dir)))) };
     work_elsewhere(
         "mcp-expression-table",
         "the expression table thread is gone",
+        PANICKED,
         failed,
         work,
         reply,
@@ -126,12 +127,7 @@ pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply
     );
 }
 
-/// 表を読む仕事を panic を受けて走らせ、panic なら届けられない失敗の答えを返す。
-fn caught(job: impl FnOnce() -> ToolOutcome) -> ToolOutcome {
-    // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
-        .unwrap_or_else(|_| failed("the expression table thread panicked"))
-}
+const PANICKED: &str = "the expression table thread panicked";
 
 /// 表を読むスレッドから答えを届けられない失敗（起こせない・消えた・panic）。`error!` 1 件と `NG:`。
 fn failed(reason: &str) -> ToolOutcome {

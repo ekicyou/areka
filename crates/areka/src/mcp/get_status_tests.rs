@@ -11,7 +11,7 @@ use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{answer, ghost, rig, warn_or_worse};
+use crate::mcp::kanade_fake_test_support::{answer, body, ghost, rig, warn_or_worse};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain, install};
 
@@ -186,14 +186,6 @@ fn ask(inbox: &mpsc::Sender<ToolRequest>) -> Pending {
     let (request, pending) = ToolRequest::new(ToolCall::GetStatus(Args { ghost_name: None }));
     inbox.send(request).ok().expect("受け口は生きている");
     pending
-}
-
-/// 答えの本文 1 つ（本文が 1 つの文字列でなければ落ちる）。
-fn body(outcome: &ToolOutcome) -> String {
-    match outcome.content.as_slice() {
-        [ToolContent::Text(text)] => text.clone(),
-        other => panic!("本文は文字列 1 つのはず: {other:?}"),
-    }
 }
 
 /// 本物の単位で端から端まで。起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送る。

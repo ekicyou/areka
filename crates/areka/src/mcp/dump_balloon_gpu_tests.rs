@@ -27,7 +27,7 @@ use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{
     FLUSH_EVENT, GpuRig, differing, read_picture, unpremultiply,
 };
-use crate::mcp::dump_surface::{Job, Step, finish};
+use crate::mcp::dump_surface::{Job, Step};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::RecordedCall;
 use areka_runtime::target_map::balloon_target;
@@ -74,7 +74,7 @@ fn reveals(world: &World) -> Option<(usize, f64)> {
     Some((times.len(), *times.last()?))
 }
 
-/// スコープ 0 の台詞の字が現れ切るまで、巡ごとに Tick の時刻を `step_ms` 進めて回す
+/// スコープ 0 の台詞の字が現れ切るまで、[`GpuRig::frames_until`] で Tick の時刻を `step_ms` ずつ進めて回す
 /// （期限切れは `false`・判定はファイルの頭の説明のとおり）。
 fn speak(gpu: &mut GpuRig, step_ms: u64) -> bool {
     speak_words(gpu, step_ms, WORDS.chars().count())
@@ -558,7 +558,7 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
         .read
         .expect("読み出しは失敗しない")
         .expect("上限のうちに読める");
-    let answered = finish(super::TOOL, 0, job, Duration::ZERO);
+    let answered = job(Duration::ZERO);
     let (is_error, body, mime, picture) = read_picture(&answered);
     assert_eq!(
         (
@@ -587,11 +587,11 @@ fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
 }
 
 /// 符号化のスレッドの記録: 上と同じ形で得た `dump_balloon` の本物の仕事を、記録を
-/// 数える中で符号化のスレッドの体（`finish`）に通すと、ERROR が 0 件で画像つきの成功。
+/// 数える中で走らせると、ERROR が 0 件で画像つきの成功。
 ///
 /// # 非空虚性
 /// 本物の重ね合わせ・PNG・base64 を通る（読めた仕事が在ることを確かめる）。判定の関数
-/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
+/// `is_picture` と符号化のスレッドの体の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
 /// `fail` を呼ぶと件数と判定の両方で赤。
 #[test]
 fn balloon_job_runs_on_the_encoding_body_without_error() {
@@ -601,7 +601,7 @@ fn balloon_job_runs_on_the_encoding_body_without_error() {
         .read
         .expect("読み出しは失敗しない")
         .expect("上限のうちに読める");
-    let (answered, levels) = count_levels(|| finish(super::TOOL, 0, job, Duration::ZERO));
+    let (answered, levels) = count_levels(|| job(Duration::ZERO));
     assert_eq!(
         (
             read.spoke,

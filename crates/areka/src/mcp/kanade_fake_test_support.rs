@@ -43,6 +43,14 @@ pub(super) fn answer(pending: &Pending) -> ToolOutcome {
         .outcome
 }
 
+/// 答えの本文 1 つ（本文が 1 つの文字列でなければ落ちる）。
+pub(super) fn body(outcome: &ToolOutcome) -> &str {
+    match outcome.content.as_slice() {
+        [ToolContent::Text(text)] => text,
+        other => panic!("本文は文字列 1 つのはず: {other:?}"),
+    }
+}
+
 pub(super) fn warn_or_worse(events: &[CapturedEvent]) -> usize {
     events
         .iter()

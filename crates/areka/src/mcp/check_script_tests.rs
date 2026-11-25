@@ -14,7 +14,7 @@ use areka_seriko::{SkinFacts, SkinLookup};
 use super::*;
 use crate::mcp::check_script_judge::diagnose;
 use crate::mcp::check_script_judge::tests::ghost;
-use areka_runtime::consumer_ledger::ConsumerLedger;
+use areka_runtime::strict_judges::ArekaStrictJudges;
 
 fn aliases() -> BTreeMap<String, Vec<u32>> {
     BTreeMap::from([("笑顔".to_string(), vec![3])])
@@ -34,7 +34,7 @@ fn check(script: &str, facts: &dyn SkinLookup) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),
-        &ConsumerLedger::canonical(),
+        &ArekaStrictJudges::canonical(),
         Some(facts),
     )
 }

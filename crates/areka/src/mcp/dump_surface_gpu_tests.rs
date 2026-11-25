@@ -11,7 +11,7 @@ use log_capture_kit::count_levels;
 
 use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{self, FLUSH_EVENT, GpuRig, differing};
-use super::{Step, WaitAnswer, finish};
+use super::{Step, WaitAnswer};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{Progress, RecordedCall};
 use areka_runtime::target_map::shell_target;
@@ -514,12 +514,12 @@ fn calls_do_not_disturb_the_ghost() {
     );
 }
 
-/// 符号化のスレッドの記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事を、記録を数える中で符号化のスレッドの体
-/// （`finish`）に通すと、ERROR が 0 件で画像つきの成功。
+/// 符号化のスレッドの記録: 台本の surface が出た後、本物の `answer` が返した写しまで済んだ仕事を、
+/// 記録を数える中で走らせると、ERROR が 0 件で画像つきの成功。
 ///
 /// # 非空虚性
 /// 種が写しまで済んだ成功（`Step::Encode`）であることを確かめる（その場の失敗なら赤）。判定の関数
-/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
+/// `is_picture` と符号化のスレッドの体の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
 /// `fail` を呼ぶと件数と判定の両方で赤。
 #[test]
 fn surface_job_runs_on_the_encoding_body_without_error() {
@@ -536,7 +536,7 @@ fn surface_job_runs_on_the_encoding_body_without_error() {
     let Some(Step::Encode(scope, job)) = step else {
         panic!("台本の surface が出た後の今の見た目は、写しまで済んだ成功の種");
     };
-    let (answered, levels) = count_levels(|| finish(super::TOOL, scope, job, Duration::ZERO));
+    let (answered, levels) = count_levels(|| job(Duration::ZERO));
     assert_eq!(
         (shown, down, scope, is_picture(&answered), levels.error),
         (true, true, 0, true, 0),

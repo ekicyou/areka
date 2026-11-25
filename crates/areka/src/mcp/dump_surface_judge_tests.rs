@@ -52,7 +52,7 @@ impl ShellFacts for Everything {
 }
 
 fn surface(scope: Option<i64>, id: Option<i64>) -> Result<SurfacePlan, Refusal> {
-    judge_surface(Some(&GHOST), scope, id)
+    judge_surface(&GHOST, scope, id)
 }
 
 // ---- dump_surface の判断 ----
@@ -91,18 +91,18 @@ fn scope_without_assets_is_no_such_scope() {
 fn scope_above_i32_max_is_no_such_scope_even_if_facts_say_yes() {
     let max = i64::from(i32::MAX);
     assert_eq!(
-        judge_surface(Some(&Everything), Some(max), None),
+        judge_surface(&Everything, Some(max), None),
         Ok(SurfacePlan::Shown {
             scope: i32::MAX as u32,
             surface_id: 0
         })
     );
     assert_eq!(
-        judge_surface(Some(&Everything), Some(max + 1), None),
+        judge_surface(&Everything, Some(max + 1), None),
         Err(NO_SUCH_SCOPE)
     );
     assert_eq!(
-        judge_surface(Some(&Everything), Some(i64::MAX), Some(0)),
+        judge_surface(&Everything, Some(i64::MAX), Some(0)),
         Err(NO_SUCH_SCOPE)
     );
 }
@@ -116,7 +116,7 @@ fn missing_surface_id_is_no_such_surface() {
 fn negative_surface_id_is_no_such_surface() {
     assert_eq!(surface(Some(0), Some(-1)), Err(NO_SUCH_SURFACE));
     assert_eq!(
-        judge_surface(Some(&Everything), Some(0), Some(-1)),
+        judge_surface(&Everything, Some(0), Some(-1)),
         Err(NO_SUCH_SURFACE)
     );
 }
@@ -125,14 +125,14 @@ fn negative_surface_id_is_no_such_surface() {
 fn surface_id_above_u32_max_is_no_such_surface_even_if_facts_say_yes() {
     let max = i64::from(u32::MAX);
     assert_eq!(
-        judge_surface(Some(&Everything), Some(0), Some(max)),
+        judge_surface(&Everything, Some(0), Some(max)),
         Ok(SurfacePlan::Alone {
             scope: 0,
             surface_id: u32::MAX
         })
     );
     assert_eq!(
-        judge_surface(Some(&Everything), Some(0), Some(max + 1)),
+        judge_surface(&Everything, Some(0), Some(max + 1)),
         Err(NO_SUCH_SURFACE)
     );
 }
@@ -172,15 +172,7 @@ fn never_shown_scope_still_renders_a_given_surface_alone() {
 }
 
 #[test]
-fn ghost_without_window_is_no_window() {
-    assert_eq!(judge_surface(None, None, None), Err(NO_WINDOW));
-    assert_eq!(judge_surface(None, Some(0), Some(0)), Err(NO_WINDOW));
-}
-
-#[test]
 fn first_matching_condition_wins_in_order() {
-    // 窓 → スコープ: 窓も無くスコープも負なら窓。
-    assert_eq!(judge_surface(None, Some(-1), Some(-1)), Err(NO_WINDOW));
     // スコープ → surface ID: 無いスコープと無い ID なら スコープ。
     assert_eq!(surface(Some(7), Some(4)), Err(NO_SUCH_SCOPE));
     assert_eq!(surface(Some(-1), Some(-1)), Err(NO_SUCH_SCOPE));
@@ -188,28 +180,23 @@ fn first_matching_condition_wins_in_order() {
     assert_eq!(surface(Some(1), Some(4)), Err(NO_SUCH_SURFACE));
 }
 
-// ---- dump_balloon の判断（窓・スコープ・成功） ----
-
-#[test]
-fn balloon_ghost_without_window_is_no_window() {
-    assert_eq!(judge_balloon(None, Some(-1)), Err(NO_WINDOW));
-}
+// ---- dump_balloon の判断（スコープ・成功） ----
 
 #[test]
 fn balloon_missing_scope_is_no_such_scope() {
-    assert_eq!(judge_balloon(Some(&GHOST), Some(-1)), Err(NO_SUCH_SCOPE));
-    assert_eq!(judge_balloon(Some(&GHOST), Some(2)), Err(NO_SUCH_SCOPE));
+    assert_eq!(judge_balloon(&GHOST, Some(-1)), Err(NO_SUCH_SCOPE));
+    assert_eq!(judge_balloon(&GHOST, Some(2)), Err(NO_SUCH_SCOPE));
     assert_eq!(
-        judge_balloon(Some(&Everything), Some(i64::from(i32::MAX) + 1)),
+        judge_balloon(&Everything, Some(i64::from(i32::MAX) + 1)),
         Err(NO_SUCH_SCOPE)
     );
 }
 
 #[test]
 fn balloon_succeeds_with_the_scope_number() {
-    assert_eq!(judge_balloon(Some(&GHOST), None), Ok(0));
+    assert_eq!(judge_balloon(&GHOST, None), Ok(0));
     // 一度も表示していないスコープでも、バルーンの判断はスコープまで。
-    assert_eq!(judge_balloon(Some(&GHOST), Some(1)), Ok(1));
+    assert_eq!(judge_balloon(&GHOST, Some(1)), Ok(1));
 }
 
 // ---- 成功の本文 ----

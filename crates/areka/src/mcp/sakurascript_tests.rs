@@ -6,12 +6,14 @@
 use std::sync::mpsc;
 
 use areka_actor::ReplySender;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{answer, ghost, record_one, rig, text, warn_or_worse};
+use crate::mcp::kanade_fake_test_support::{
+    answer, body, ghost, record_one, rig, text, warn_or_worse,
+};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
 
@@ -207,6 +209,15 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
 /// strict の答えの文の前後（`<n>` を挟む）。
 const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
+/// strict の文の答えの `<n>`（strict の文でなければ落ちる）。
+fn strict_id(outcome: &ToolOutcome) -> u64 {
+    let body = body(outcome);
+    body.strip_prefix(STRICT_HEAD)
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("strict の文のはず: {body}"))
+}
+
 /// strict 真で受け付けた → strict の文・`<n>` は送る前に読んだ最後の番号。
 ///
 /// 置き場はプロセスに 1 つで他のテストも積むので、`<n>` は「呼ぶ前の番号以上・送った後に積んだ番号未満」で測る。
@@ -224,14 +235,7 @@ fn strict_true_answer_carries_the_id_read_before_sending() {
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
     assert_eq!(warn_or_worse(&called) + warn_or_worse(&polled), 0);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    let n: u64 = body
-        .strip_prefix(STRICT_HEAD)
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    let n = strict_id(&outcome);
     assert!(
         before <= n && n < recorded,
         "送る前の番号: {before} <= {n} < {recorded}"
@@ -294,10 +298,8 @@ fn error_log_ids_since(since_id: u64) -> Vec<u64> {
     crate::mcp::get_log::handle(None, args, req.reply);
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    body.split("\r\n")
+    body(&outcome)
+        .split("\r\n")
         .filter_map(|line| line.strip_prefix('#')?.split(' ').next()?.parse().ok())
         .collect()
 }
@@ -318,14 +320,7 @@ fn since_id_of_the_answer_reads_every_record_after_sending() {
         .expect("返信端は生きている");
     drain(&mut world);
     let outcome = answer(&pending);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
-    let n: u64 = body
-        .strip_prefix(STRICT_HEAD)
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("strict の文のはず: {body}"));
+    let n = strict_id(&outcome);
     let ids = error_log_ids_since(n);
     for id in recorded {
         assert!(ids.contains(&id), "送った後の {id} が読める: {ids:?}");

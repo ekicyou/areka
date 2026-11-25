@@ -128,22 +128,25 @@ fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
     assert_eq!(levels.error, 1);
 }
 
-/// 符号化のスレッドの体で出た `error!` の件数（答えと一緒に返す）。判定の本体で、
-/// 下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
-fn errors_in_finish(job: Job) -> (ToolOutcome, usize) {
-    let (answered, levels) = log_capture_kit::count_levels(|| finish(TOOL, 0, job, Duration::ZERO));
+/// 符号化のスレッドの体（符号化と同じ `failed`・`panicked` を渡した `caught`）で出た `error!` の件数
+/// （答えと一緒に返す）。判定の本体で、下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
+fn errors_in_encoding_body(job: Job) -> (ToolOutcome, usize) {
+    let work: Work = Box::new(move || job(Duration::ZERO));
+    let (answered, levels) = log_capture_kit::count_levels(|| {
+        caught(work, |reason| fail(TOOL, 0, reason), ENCODE_PANICKED)
+    });
     (answered, levels.error)
 }
 
-/// `finish` の較正: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
+/// 符号化のスレッドの体の較正: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
 /// `fail` を呼ぶ仕事は ERROR 1 件、成功する仕事は ERROR 0 件。同じ判定の関数で数える。
 ///
 /// # 非空虚性
-/// `finish` が panic を受けないとテストが panic して赤。判定の関数が常に 0 を返すと前の 2 つで赤、
+/// `caught` が panic を受けないとテストが panic して赤。判定の関数が常に 0 を返すと前の 2 つで赤、
 /// 常に 1 を返すと最後で赤。
 #[test]
-fn finish_calibration_counts_errors_of_failing_jobs_only() {
-    let (panicked, errors) = errors_in_finish(Box::new(|_| panic!("わざと")));
+fn encoding_body_calibration_counts_errors_of_failing_jobs_only() {
+    let (panicked, errors) = errors_in_encoding_body(Box::new(|_| panic!("わざと")));
     assert_eq!(
         panicked.content,
         vec![ToolContent::Text(
@@ -153,11 +156,11 @@ fn finish_calibration_counts_errors_of_failing_jobs_only() {
     assert!(panicked.is_error);
     assert_eq!(errors, 1);
 
-    let (failed, errors) = errors_in_finish(Box::new(|_| fail(TOOL, 0, "わざと")));
+    let (failed, errors) = errors_in_encoding_body(Box::new(|_| fail(TOOL, 0, "わざと")));
     assert!(failed.is_error);
     assert_eq!(errors, 1);
 
-    let (ok, errors) = errors_in_finish(Box::new(|_| outcome::ok("撮れた")));
+    let (ok, errors) = errors_in_encoding_body(Box::new(|_| outcome::ok("撮れた")));
     assert!(!ok.is_error);
     assert_eq!(errors, 0);
 }
@@ -171,30 +174,18 @@ fn send_back_without_receiver_drops_silently() {
     let (tx, rx) = mpsc::channel();
     drop(rx);
 
-    let ((), levels) = log_capture_kit::count_levels(|| {
-        send_back(
-            tx,
-            finish(TOOL, 0, Box::new(|_| outcome::ok("撮れた")), Duration::ZERO),
-        )
-    });
+    let ((), levels) = log_capture_kit::count_levels(|| send_back(tx, outcome::ok("撮れた")));
 
     assert_eq!(levels.error, 0);
 }
 
-/// 成功の記録の欄: `picture` の 1×1 の仕事を UI 時間 1,234 µs で `finish` に通すと、
-/// `[mcp] 絵を返す` が 1 件で、`ui_us` が 1234、`encode_us` が数として読める。
+/// 成功の仕事を UI 時間 1,234 µs で走らせると成功の答えで、`[mcp] 絵を返す` が 1 件、`ui_us` が 1234、
+/// `encode_us` が数として読める。GPU を通らない `dump_balloon` のテストからも使う。
 ///
 /// # 非空虚性
 /// 記録が無い・2 件・欄の名前が変わる・`ui` を渡し損ねる（0 や別の値）といずれも赤。
-#[test]
-fn success_record_carries_ui_us_and_encode_us() {
-    let Step::Encode(scope, job) = picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1)
-    else {
-        panic!("写しまで済んだ成功");
-    };
-
-    let (answered, events) =
-        log_capture_kit::capture(|| finish(TOOL, scope, job, Duration::from_micros(1234)));
+pub(in crate::mcp) fn assert_success_record(job: Job) {
+    let (answered, events) = log_capture_kit::capture(|| job(Duration::from_micros(1234)));
 
     assert!(!answered.is_error);
     let records: Vec<_> = events
@@ -209,6 +200,15 @@ fn success_record_carries_ui_us_and_encode_us() {
             .and_then(|v| v.parse::<u64>().ok())
             .is_some()
     );
+}
+
+/// 成功の記録の欄: `picture` の 1×1 の仕事。
+#[test]
+fn success_record_carries_ui_us_and_encode_us() {
+    let Step::Encode(_, job) = picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1) else {
+        panic!("写しまで済んだ成功");
+    };
+    assert_success_record(job);
 }
 
 // ── 窓の無い切り替えの道具で、預けた呼び出しを通す ──
@@ -322,7 +322,7 @@ fn deposited_call_is_encoded_on_the_encoding_thread() {
 /// 預けると `is_picture` が真（判定の関数の較正）。
 ///
 /// # 非空虚性
-/// 判定の関数が常に真なら前で、常に偽なら後で赤。`finish` が panic を受けないと答えが届かず赤。
+/// 判定の関数が常に真なら前で、常に偽なら後で赤。`work_elsewhere` が panic を受けないと答えが届かず赤。
 #[test]
 fn deposited_panic_answers_encoding_thread_panicked_and_is_not_a_picture() {
     let mut rig = rig_with(r"\0A\e");

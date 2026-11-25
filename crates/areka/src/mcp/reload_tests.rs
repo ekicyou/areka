@@ -7,14 +7,13 @@
 use std::cell::Cell;
 
 use areka_actor::ReplyError;
-use areka_mcp::ToolContent;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use bevy_ecs::schedule::Schedules;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{self, body, ghost};
 use crate::session_tests::events_named;
 use areka_session::log_history::TARGET_ERROR;
 
@@ -30,11 +29,8 @@ fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
 
 /// その場で届いた答えの (本文, isError)。
 fn answered(pending: &Pending) -> (String, bool) {
-    let answer = pending.try_answer().ok().flatten().expect("その場で答える");
-    let [ToolContent::Text(text)] = answer.outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", answer.outcome.content);
-    };
-    (text.clone(), answer.outcome.is_error)
+    let outcome = kanade_fake_test_support::answer(pending);
+    (body(&outcome).to_owned(), outcome.is_error)
 }
 
 /// 6 語以外（空・前後の空白・別の語）は `NG:Unknown target (…)` をその場で返し、窓口へ渡さない

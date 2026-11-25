@@ -7,11 +7,11 @@
 use std::cell::Cell;
 use std::path::PathBuf;
 
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::ghost;
+use crate::mcp::kanade_fake_test_support::{body, ghost};
 use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
@@ -98,10 +98,7 @@ fn args(log_type: Option<&str>) -> Args {
 }
 
 fn text(outcome: ToolOutcome) -> (String, bool) {
-    match outcome.content.as_slice() {
-        [ToolContent::Text(text)] => (text.clone(), outcome.is_error),
-        other => panic!("本文 1 つのはず: {other:?}"),
-    }
+    (body(&outcome).to_owned(), outcome.is_error)
 }
 
 /// `h` の写しで答え、（本文, isError, 取り出した種別）を返す。

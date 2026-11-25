@@ -4,9 +4,11 @@
 use std::collections::BTreeMap;
 
 use areka_parsers::sakura::parse_noted;
+use areka_runtime::strict_judges::ArekaStrictJudges;
 use areka_sakura::strict::{
-    MSG_ANCHOR_REOPENED, MSG_ANCHOR_UNCLOSED, MSG_DEFAULTED, MSG_IGNORED, MSG_MISSING_BALLOON,
-    MSG_MISSING_SURFACE, MSG_UNCLOSED, MSG_UNKNOWN_COMMAND, MSG_UNKNOWN_TAG,
+    MSG_ANCHOR_REOPENED, MSG_ANCHOR_STRAY_CLOSE, MSG_ANCHOR_UNCLOSED, MSG_CHAR_CODE_DROPPED,
+    MSG_DEFAULTED, MSG_IGNORED, MSG_MISSING_BALLOON, MSG_MISSING_SURFACE, MSG_UNCLOSED,
+    MSG_UNKNOWN_COMMAND, MSG_UNKNOWN_TAG,
 };
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
 
@@ -56,7 +58,7 @@ fn check_with(script: &str, facts: Option<&dyn SkinLookup>) -> Vec<Diagnostic> {
     diagnose(
         script,
         &parse_noted(script),
-        &ConsumerLedger::canonical(),
+        &ArekaStrictJudges::canonical(),
         facts,
     )
 }

@@ -35,6 +35,8 @@ const ENCODE_THREAD: &str = "mcp-encode";
 
 const ENCODE_GONE: &str = "the encoding thread is gone";
 
+const ENCODE_PANICKED: &str = "the encoding thread panicked";
+
 /// 別のスレッドで行う残りの仕事。引数は UI スレッドの側の所要時間（成功の記録に載せる）。
 pub(in crate::mcp) type Job = Box<dyn FnOnce(Duration) -> ToolOutcome + Send>;
 
@@ -167,7 +169,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
 }
 
 /// 符号化待ちの 1 段。届いていれば答え、まだなら `None`。届けずにスレッドが消えたら
-/// 想定外の失敗（`finish` が必ず届けるので届かない枝）。
+/// 想定外の失敗（[`work_elsewhere`] が必ず届けるので届かない枝）。
 fn receive(
     tool: &'static str,
     scope: u32,
@@ -215,22 +217,31 @@ fn encode_elsewhere<T: Send + 'static>(
 ) {
     let work = move || -> Work {
         let ui = ui();
-        Box::new(move || finish(tool, scope, job, ui))
+        Box::new(move || job(ui))
     };
-    let failed = |reason: &str| fail(tool, scope, reason);
-    work_elsewhere(ENCODE_THREAD, ENCODE_GONE, failed, work, to, deliver);
+    let failed = move |reason: &str| fail(tool, scope, reason);
+    work_elsewhere(
+        ENCODE_THREAD,
+        ENCODE_GONE,
+        ENCODE_PANICKED,
+        failed,
+        work,
+        to,
+        deliver,
+    );
 }
 
-/// 別のスレッドで走らせる仕事。panic は中で受けておく（落とすと返事が届かない）。
+/// 別のスレッドで走らせる仕事。
 pub(in crate::mcp) type Work = Box<dyn FnOnce() -> ToolOutcome + Send>;
 
 /// `thread` の名前のスレッドを起こし、起こし終えた後に `work()` で仕事を作って、届け先と一緒に
 /// 手渡す。起こせなければ `deliver(to, failed(理由))`、手渡しの前にスレッドが消えていたら
-/// `deliver(to, failed(gone))`。必ず 1 度だけ届ける。
+/// `deliver(to, failed(gone))`、仕事が panic したら `deliver(to, failed(panicked))`。必ず 1 度だけ届ける。
 pub(in crate::mcp) fn work_elsewhere<T: Send + 'static>(
     thread: &str,
     gone: &str,
-    failed: impl Fn(&str) -> ToolOutcome,
+    panicked: &'static str,
+    failed: impl Fn(&str) -> ToolOutcome + Copy + Send + 'static,
     work: impl FnOnce() -> Work,
     to: T,
     deliver: fn(T, ToolOutcome),
@@ -241,7 +252,7 @@ pub(in crate::mcp) fn work_elsewhere<T: Send + 'static>(
         .name(thread.to_owned())
         .spawn(move || {
             if let Ok((work, to)) = rx.recv() {
-                deliver(to, work());
+                deliver(to, caught(work, failed, panicked));
             }
         });
     match spawned {
@@ -254,17 +265,15 @@ pub(in crate::mcp) fn work_elsewhere<T: Send + 'static>(
     }
 }
 
-/// 符号化のスレッドの体。仕事を panic を受けて走らせ、panic なら
-/// `fail(tool, scope, "the encoding thread panicked")`。
-pub(in crate::mcp) fn finish(
-    tool: &'static str,
-    scope: u32,
-    job: Job,
-    ui: Duration,
+/// [`work_elsewhere`] のスレッドの体。仕事を panic を受けて走らせ、panic なら `failed(panicked)`。
+pub(in crate::mcp) fn caught(
+    work: Work,
+    failed: impl Fn(&str) -> ToolOutcome,
+    panicked: &str,
 ) -> ToolOutcome {
     // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(ui)))
-        .unwrap_or_else(|_| fail(tool, scope, "the encoding thread panicked"))
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+        .unwrap_or_else(|_| failed(panicked))
 }
 
 /// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる。
@@ -281,11 +290,10 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         return None;
     }
     let presenter = wiring.presenter();
-    let plan =
-        match judge::judge_surface(Some(&PresenterFacts(presenter)), args.scope, args.surface) {
-            Ok(plan) => plan,
-            Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
-        };
+    let plan = match judge::judge_surface(&PresenterFacts(presenter), args.scope, args.surface) {
+        Ok(plan) => plan,
+        Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
+    };
     Some(match plan {
         SurfacePlan::Shown { scope, surface_id } => {
             let target = shell_target(scope);

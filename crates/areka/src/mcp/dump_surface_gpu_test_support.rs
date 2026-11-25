@@ -84,7 +84,7 @@ impl GpuRig {
     }
 
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
-    /// 巡ごとに `SwitchRig::inject_talk_tick` で `step_ms` 進めた合成の Tick を注入して台詞を進め
+    /// 前の注入から [`TICK_EVERY`] 以上たった巡で `SwitchRig::inject_talk_tick` で `step_ms` 進めた合成の Tick を注入して台詞を進め
     /// （0 なら台詞の時計は止まったまま）、本番の巡と同じく `FrameTime` を置き、メッセージを配る。
     ///
     /// 打ち切りは足場の進みの目印（`SwitchRig::progress_probe`・SHIORI の呼び出しの数）で決め、打ち切ったら

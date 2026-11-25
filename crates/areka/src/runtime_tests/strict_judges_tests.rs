@@ -34,7 +34,6 @@ mod doc_tables {
     use areka_session::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     // この中の汲み尽くしは背骨の足場（`spine.rs`）のものを使う。
     use crate::runtime_tests::spine::pump_until_idle;
-    use areka_runtime::consumer_ledger::ConsumerLedger;
     use areka_runtime::shell_box_assets::ShellBoxAssets;
     use areka_runtime::strict_judges::ArekaStrictJudges;
 
@@ -302,7 +301,7 @@ element1,balloon,a,0,0
         let want: Vec<(String, usize, usize, String, String)> = diagnose(
             script,
             &parse_noted(script),
-            &ConsumerLedger::canonical(),
+            &ArekaStrictJudges::canonical(),
             Some(&facts()),
         )
         .into_iter()

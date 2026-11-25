@@ -6,12 +6,14 @@
 use std::sync::mpsc;
 
 use areka_actor::ReplySender;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
-use areka_mcp::{ToolContent, ToolOutcome};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{answer, ghost, record_one, rig, text, warn_or_worse};
+use crate::mcp::kanade_fake_test_support::{
+    answer, body, ghost, record_one, rig, text, warn_or_worse,
+};
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
 
@@ -264,9 +266,7 @@ fn strict_true_script_answer_carries_the_id_read_before_sending() {
     drain(&mut world);
     let outcome = answer(&pending);
     assert!(!outcome.is_error);
-    let [ToolContent::Text(body)] = outcome.content.as_slice() else {
-        panic!("本文 1 つ: {:?}", outcome.content);
-    };
+    let body = body(&outcome);
     let n: u64 = body
         .strip_prefix("OK:the ghost returned a script and it is being played.")
         .and_then(|rest| rest.strip_prefix(STRICT_HEAD))

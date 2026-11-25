@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
 
+use super::super::dump_surface::caught;
 use super::*;
 use crate::mcp::kanade_fake_test_support::ghost;
 
@@ -727,14 +728,14 @@ fn settle_kanade(world: &World) {
         .expect("照会の返事が届く");
 }
 
-/// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
-/// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
-/// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
-/// 替えた後の表で答える。
-#[test]
-fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
-    use std::sync::mpsc;
-
+/// 偽の SHIORI で A を起こし、受け口を置いて定常に落ち着かせた単位（土台, 受け口へ送る口,
+/// 定常に着いたか, 今のシェルのフォルダ）。
+fn real_unit() -> (
+    areka_session::ghost_switch_test_support::SwitchRig,
+    std::sync::mpsc::Sender<ToolRequest>,
+    bool,
+    PathBuf,
+) {
     use crate::sample_test_support::switch_rig;
     use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
@@ -743,10 +744,20 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
         FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
     )]);
     rig.boot("A");
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = std::sync::mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     let steady = rig.wait_steady();
     let shell = current_shell_dir(&rig.world).expect("起動したゴーストには実行系がある");
+    (rig, tx, steady, shell)
+}
+
+/// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
+/// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
+/// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
+/// 替えた後の表で答える。
+#[test]
+fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
+    let (mut rig, tx, steady, shell) = real_unit();
     std::fs::write(
         shell.join("surfacetable.txt"),
         utf8_hontai("charset,UTF-8\r\n"),
@@ -817,20 +828,7 @@ fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
 /// `load` を UI のスレッドで呼ぶと、開けない `warn!` が `capture` の窓に入って赤。
 #[test]
 fn real_unit_reads_the_table_off_the_calling_thread() {
-    use std::sync::mpsc;
-
-    use crate::sample_test_support::switch_rig;
-    use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
-
-    let mut rig = switch_rig(vec![(
-        "A",
-        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
-    )]);
-    rig.boot("A");
-    let (tx, rx) = mpsc::channel();
-    crate::mcp::install(&mut rig.world, rx);
-    let steady = rig.wait_steady();
-    let shell = current_shell_dir(&rig.world).expect("起動したゴーストには実行系がある");
+    let (mut rig, tx, steady, shell) = real_unit();
     let table = shell.join("surfacetable.txt");
     if table.exists() {
         std::fs::remove_file(&table).expect("同梱の surfacetable.txt を消す");
@@ -872,7 +870,8 @@ fn real_unit_reads_the_table_off_the_calling_thread() {
 fn a_panicking_table_job_answers_ng_with_one_error() {
     let (req, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args { ghost_name: None }));
     let ((), events) = capture(|| {
-        req.reply.send(caught(|| panic!("わざと")));
+        req.reply
+            .send(caught(Box::new(|| panic!("わざと")), failed, PANICKED));
     });
     let answer = pending.try_answer().ok().flatten().map(|a| a.outcome);
     let records: Vec<_> = events

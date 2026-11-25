@@ -10,8 +10,6 @@
 //! どれも `handle` を直に呼び、答えは返った直後に `try_answer` で取り出す（その場で答える）。
 //! `ghost_name` はすべて省略。英字の大小違いの名前は `BASEWARE.NAME` の 1 つだけ（大小を畳んで `areka`）。前に空白のある ` baseware.name` は空白を削らず「無い名前」のまま。
 
-use std::path::PathBuf;
-
 use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::{ToolCall, ToolRequest};
@@ -20,6 +18,8 @@ use areka_sylphya::AskerId;
 use log_capture_kit::capture;
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
+use crate::session_tests::events_named;
 use areka_session::ghost_session::GhostSlot;
 
 /// `handle` を 1 回呼び、返った直後の答えを取り出す（まだ答えていなければ None）。
@@ -35,18 +35,12 @@ fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<To
 
 #[test]
 fn answers_unavailable_and_warns_once_without_a_runtime() {
-    let ghost = ActiveGhost {
-        name: Some("emily4".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    };
     let mut world = World::new();
 
-    let (answer, events) = capture(|| ask(&mut world, &ghost, "baseware.name"));
+    let (answer, events) = capture(|| ask(&mut world, &ghost(), "baseware.name"));
 
-    let warned: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("mcp_get_property_unavailable"))
+    let warned: Vec<_> = events_named(&events, "mcp_get_property_unavailable")
+        .into_iter()
         .map(|e| {
             (
                 e.level,
@@ -61,7 +55,7 @@ fn answers_unavailable_and_warns_once_without_a_runtime() {
             Some(outcome::ng("Property system is not available")),
             vec![(
                 tracing::Level::WARN,
-                Some("emily4".to_owned()),
+                Some("Emily/Phase4.5".to_owned()),
                 Some("baseware.name".to_owned())
             )]
         ),

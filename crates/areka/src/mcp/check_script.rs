@@ -19,9 +19,9 @@ use super::check_script_judge::diagnose;
 use super::dump_surface::{Job, Step, start};
 use super::resolve::ActiveGhost;
 use areka_placement::spawn::GhostWindows;
-use areka_runtime::consumer_ledger::ConsumerLedger;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::skin_facts_copy;
+use areka_runtime::strict_judges::ArekaStrictJudges;
 
 const TOOL: &str = "check_script";
 
@@ -56,9 +56,9 @@ fn job(script: String, facts: Option<SkinFacts>) -> Job {
     Box::new(move |ui| {
         let started = Instant::now();
         let reads = parse_noted(&script);
-        let ledger = ConsumerLedger::canonical();
+        let judges = ArekaStrictJudges::canonical();
         let facts_ref = facts.as_ref().map(|f| f as &dyn SkinLookup);
-        let list = diagnose(&script, &reads, &ledger, facts_ref);
+        let list = diagnose(&script, &reads, &judges, facts_ref);
         let unchecked = facts.is_none().then_some(NO_WINDOW_NOTE);
         debug!(
             tool = TOOL,

@@ -45,7 +45,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
         return None;
     }
     let presenter = wiring.presenter();
-    let scope = match judge::judge_balloon(Some(&PresenterFacts(presenter)), args.scope) {
+    let scope = match judge::judge_balloon(&PresenterFacts(presenter), args.scope) {
         Ok(scope) => scope,
         Err(reason) => return Some(Step::Now(refuse(TOOL, args.scope, reason))),
     };
