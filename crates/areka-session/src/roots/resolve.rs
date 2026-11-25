@@ -65,8 +65,6 @@ pub struct ResolvedRoots {
 pub enum RootError {
     /// 既定（記憶の `<exe>` だけで既定へ倒したときも）なのに実行ファイルの場所が取れない。
     ExeLocationUnavailable {
-        tried: Vec<PathBuf>,
-        origin: RootsOrigin,
         skipped: Vec<RootSkip>,
         memory_fell_back: bool,
     },
@@ -133,8 +131,6 @@ pub(crate) fn resolve_roots_from(
                     (None, Some(dir)) => (vec![dir], RootsOrigin::Default),
                     (None, None) => {
                         return Err(RootError::ExeLocationUnavailable {
-                            tried: Vec::new(),
-                            origin: RootsOrigin::Default,
                             skipped,
                             memory_fell_back,
                         });

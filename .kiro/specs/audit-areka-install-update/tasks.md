@@ -217,7 +217,7 @@
 
 - [ ] 5. 相手の着地に依る寄せ・記録・仕上げの確かめ
 
-- [ ] 5.1 `audit-areka-app` の着地に依る寄せを入れる（G23・指摘 31・85・94・103・件 6 の残り・例外 (b)(c)）
+- [x] 5.1 `audit-areka-app` の着地に依る寄せを入れる（G23・指摘 31・85・94・103・件 6 の残り・例外 (b)(c)）
   - 着地の有無を確かめ、着地していれば `main` を取り込んでから次を行う。着地していなければ写しと古い形を残し、理由を research.md に記録し、向こうの brief へ件として書く（要件 7.2・7.9）。
   - 31: `wic_decode_rgba` が `pub(crate)` になっていれば、こちらの写しを消す。85: `log_history` のテストに中身ができていれば、`sakurascript_log_tests.rs` と据え付けを消す。件 6: `boot_context_named` があれば、`update_test_support.rs` の `boot_context` を消してそれを使う。
   - 103: `alerts_suppressed()` があれば、`raise` と起動の前の道がそれを呼び、`before_boot_alert_suppressed` と `startup_flow_tests.rs:264-267` を消す。選ぶ画面の 3 か所は寄せない。
@@ -271,3 +271,4 @@
 - 2.3: design.md「設計の段で決めた事項」1 の `install_abandoned` の行（書いた後に締めが閉じたときは出ない）は、書き終えた書庫についてだけの決め。同じ依頼のまだ始めていない後の書庫は、黙って捨てず既にある `install_abandoned`（同じ欄）で 1 件残す（要件 6.2）。
 - 3.3: `boot_context_named` が `main` から入っていたので、`update/` のテストは支えのファイルに `boot_context` を置かず直に呼ぶ。5.1 の件 6 の `update/` の分は済み。共通の `run` は `FakePorts` が手続きの中に閉じているので `update/procedure_test_support.rs` に置いた。
 - 3.4 → 5.4: 同じ形の `fn ghost()` が `mcp/mcp_tests.rs` と `mcp/reload_tests.rs` に残る（指摘 38 の 3 ファイルの外）。かけ直しの audit で拾ったら `kanade_fake_test_support::ghost` へ寄せる。`check_script_judge::tests` は兄弟から引くため `pub(in crate::mcp)`。
+- 5.1: 例外 (c) で `shiori_host.rs` を消したので、`crates/areka/src/main.rs` の `#[cfg(test)] mod shiori_host;` とその doc の行も消した（避けられない 4 行の削除）。5.5 の範囲の外の差分の確かめで例外 (c) の分として数える。

@@ -55,8 +55,6 @@ fn default_without_exe_location_fails() {
     assert_eq!(
         resolve_roots_from(None, None, None, None),
         Err(RootError::ExeLocationUnavailable {
-            tried: vec![],
-            origin: RootsOrigin::Default,
             skipped: vec![],
             memory_fell_back: false,
         })
@@ -245,8 +243,6 @@ fn memory_exe_token_without_exe_location_falls_back_and_fails() {
         resolve_roots_from(None, Some(format!("|{EXE_TOKEN}")), None, None),
         // 失敗しても控えと「既定へ倒した」は残る（記録の warn のため）。
         Err(RootError::ExeLocationUnavailable {
-            tried: vec![],
-            origin: RootsOrigin::Default,
             skipped: vec![
                 RootSkip::Unreadable {
                     item: String::new(),

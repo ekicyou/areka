@@ -258,15 +258,6 @@ fn no_ghost_after_install_stops_with_ghost_missing_and_no_boot_stopped() {
     assert!(named(&dropped, "startup_install_not_submitted").is_empty());
 }
 
-/// 告知の抑止は `AREKA_NO_ALERT` の抑止と `AREKA_APP_SMOKE_EXIT_MS` の有無のどちらが立っても立つ。
-#[test]
-fn either_value_suppresses_the_alert_before_boot() {
-    assert!(!before_boot_alert_suppressed(false, None));
-    assert!(before_boot_alert_suppressed(true, None));
-    assert!(before_boot_alert_suppressed(false, Some(0)));
-    assert!(before_boot_alert_suppressed(true, Some(5000)));
-}
-
 fn carried(
     kind: areka_nar::InstallKind,
     folder: &str,

@@ -116,8 +116,6 @@ fn skips_and_fell_back_warn() {
 #[test]
 fn failure_value_still_warns_skips_and_fell_back() {
     let err = RootError::ExeLocationUnavailable {
-        tried: Vec::new(),
-        origin: RootsOrigin::Default,
         skipped: vec![RootSkip::Unreadable {
             item: EXE_TOKEN.into(),
             reason: "exe_unavailable",

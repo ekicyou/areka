@@ -11,7 +11,6 @@
 //! 土台に持たず、呼ぶ側のテストが `log_capture_kit`（`capture`・`count_levels`）を直接使う。
 
 use std::panic::Location;
-use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -29,18 +28,9 @@ use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
-use windows::Win32::Foundation::{GENERIC_READ, HWND};
-use windows::Win32::Graphics::Imaging::{
-    GUID_WICPixelFormat32bppRGBA, IWICBitmapSource, WICBitmapDitherTypeNone,
-    WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
-};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
-};
-use windows::core::{HSTRING, Interface};
-use wintf::com::wic::{
-    WICBitmapDecoderExt, WICBitmapSourceExt, WICFormatConverterExt, WICImagingFactoryExt,
-    wic_factory,
 };
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
 
@@ -414,7 +404,7 @@ pub(in crate::mcp) fn decode_png(png_base64: &str) -> (u32, u32, Vec<u8>) {
     let dir = TempPath::new("dump-gpu");
     let file = dir.child("dump.png");
     std::fs::write(&file, base64_decode(png_base64)).expect("PNG を書ける");
-    wic_decode_rgba(&file)
+    crate::png_image::tests::wic_decode_rgba(&file)
 }
 
 /// `a` と `b` の（大きさが同じなら）食い違った画素の数。大きさが違えば `None`。
@@ -427,37 +417,6 @@ pub(in crate::mcp) fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)
             .filter(|(p, q)| p != q)
             .count()
     })
-}
-
-fn wic_decode_rgba(path: &Path) -> (u32, u32, Vec<u8>) {
-    let factory = wic_factory().expect("WIC の工場");
-    let decoder = factory
-        .create_decoder_from_filename(
-            &HSTRING::from(path.as_os_str()),
-            None,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-        )
-        .expect("WIC が PNG を開ける");
-    let frame = decoder.frame(0).expect("先頭のフレーム");
-    let converter = factory.create_format_converter().expect("変換器");
-    converter
-        .init(
-            &frame.cast::<IWICBitmapSource>().expect("フレームは絵の源"),
-            &GUID_WICPixelFormat32bppRGBA,
-            WICBitmapDitherTypeNone,
-            None,
-            0.0,
-            WICBitmapPaletteTypeCustom,
-        )
-        .expect("乗算していない RGBA へ変換できる");
-    let source: IWICBitmapSource = converter.cast().expect("変換器は絵の源");
-    let (w, h) = source.get_size().expect("大きさ");
-    let mut pixels = vec![0u8; (w * h * 4) as usize];
-    source
-        .copy_pixels(None, w * 4, &mut pixels)
-        .expect("画素を写せる");
-    (w, h, pixels)
 }
 
 /// 標準の文字集合・`=` の詰めありの base64 を戻す（改行なし前提）。

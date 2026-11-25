@@ -215,12 +215,6 @@ pub(crate) struct BeforeBootEnv {
     pub alert_suppressed: bool,
 }
 
-/// 起動の前の告知の抑止（純粋）: `AREKA_NO_ALERT` の抑止か、`AREKA_APP_SMOKE_EXIT_MS` が立つ
-/// 有界の自動終了の走行（人が見ていない・自動終了の時計は窓のアプリの後に始まる）なら画面を出さない。
-pub(crate) fn before_boot_alert_suppressed(no_alert: bool, smoke_exit_ms: Option<u64>) -> bool {
-    no_alert || smoke_exit_ms.is_some()
-}
-
 /// 本物の口（`main` から 1 回）。env・記憶・exe の場所・読み取りだけの旗・告知の抑止を読み、
 /// [`resolve_boot_with_env`] を本番の根の解決と選び方で呼ぶ。
 pub(crate) fn resolve_boot(
@@ -230,10 +224,7 @@ pub(crate) fn resolve_boot(
     let app_profile_dir = areka_session::boot_config::default_app_profile_dir();
     let before = BeforeBootEnv {
         readonly: areka_session::readonly::is_on(),
-        alert_suppressed: before_boot_alert_suppressed(
-            areka_session::alert::suppressed(),
-            areka_session::smoke_exit::smoke_exit_ms(),
-        ),
+        alert_suppressed: areka_session::alert::alerts_suppressed(),
     };
     resolve_boot_with_env(
         areka_session::roots::resolve_roots(&app_profile_dir),

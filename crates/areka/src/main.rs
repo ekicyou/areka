@@ -19,10 +19,6 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::*;
 
-/// 試験用の `IShioriHost` 実装。使い手は `mcp/get_property_tests.rs` のテストだけ。
-#[cfg(test)]
-mod shiori_host;
-
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く。
 #[cfg(test)]
 mod placement_tests;

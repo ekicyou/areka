@@ -604,3 +604,20 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 - 13 の待ちの材料（`WindowsClosed`・`ShellCarry`）を NonSend に置けるか。どちらも借用を持たない値に見えるが、実装の最初に確かめる。
 - 12 で件 8 の事実の 1 つが変わる（OPEN QUESTION 2）。これは `audit-areka-app` の `NO_BODY` の doc の直しの文に効く。
 - 1 のテストは、期限（3 秒）のぶんだけ待つ。
+
+## 11. `audit-areka-app` の着地に依る寄せ（タスク 5.1・G23）
+
+- 着地の確かめ: `audit-areka-app` は `main` へ着地済み（PR#504・`056b66813`）。`main` はこのブランチへ取り込み済み（`d5f2d103f`）で、`git log HEAD..origin/main` は 0 件。向こうは `completed/` へ移っている。
+
+### 寄せた件
+
+- **31**: `png_image_tests.rs` の `wic_decode_rgba` が `pub(crate)` になっていた。`mcp/dump_surface_gpu_test_support.rs` の写し（約 30 行）と、それだけが使っていた WIC の import を消し、`crate::png_image::tests::wic_decode_rgba` を呼ぶ。
+- **85**: 向こうの `areka-session/src/log_history_tests.rs` に `kanade_emit_with_three_labels_drafts_as_script_records` が移っていた（中身は同じ）。`mcp/sakurascript_log_tests.rs` と `sakurascript.rs` の据え付けの 3 行を消した。
+- **件 6**: `reload_test_support::boot_context_named` が入っていた。`update/` の分はタスク 3.3 で済み（`update_test_support.rs` に `boot_context` は無く、`update/desk_tests.rs`・`desk_resolve_tests.rs` が直に呼ぶ）。確かめだけ。
+- **103**: 向こうの `alert.rs` に `alerts_suppressed()` が入っていた。起動の前の道（`install/startup.rs` の `resolve_boot`）がそれを呼び、`before_boot_alert_suppressed` と `startup_flow_tests.rs` の表明（`either_value_suppresses_the_alert_before_boot`）を消した。決まりのテストは向こうの `alert_tests.rs` の `with_smoke_suppresses_when_either_is_set`。`raise` は向こうの着地の形で既に同じ純粋な口 `with_smoke` を通るので、`alert.rs` には触らない（例外 (b) の外）。選ぶ画面の 3 か所は寄せない（OPEN QUESTION 4）。
+- **94**: 向こうの `alert.rs` の読み手は `RootError::ExeLocationUnavailable { .. }` で欄を読まない形だった（`alert.rs` は無変更）。`roots/resolve.rs` の `tried`・`origin` の欄を消し、`resolve_tests.rs` の 2 か所・`report_tests.rs` の 1 か所と、例外 (b) の `alert_tests.rs` の `tried`・`origin` の 2 行を同じ変更で消した。
+- **例外 (c)**: 向こうは脳の残り（`shiori_host.rs`・`shiori_host_case_fold_tests.rs`）を残して着地していた。1.7 の後に `ShioriHostSink` の読み手はこの 2 ファイルだけ。2 ファイルと、それを据える `main.rs` の `#[cfg(test)] mod shiori_host;`（と doc の 1 行）を消し、本体の `Cargo.toml` の dev の 2 行（`shiori-abi`・`windows-core`）をその注釈ごと消した。本体の中に `shiori_abi`・`windows_core` を使う所はほかに無い。`Cargo.lock` の差分は本体の依存の列の 2 行（`shiori-abi`・`windows-core`）だけ。
+
+### 残した件
+
+- なし（6 件とも向こうの着地の形があったので寄せた）。向こうの brief への書き足しは要らない（向こうは完了・残す件が無い）。
