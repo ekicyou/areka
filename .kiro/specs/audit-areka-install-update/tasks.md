@@ -193,7 +193,7 @@
   - _Dispatch: mechanical — 寄せ先の形を design が与えている_
   - _Requirements: 3.1, 3.3, 3.4, 5.6_
 
-- [ ] 3.6 説明書のテストの写しと番号を片づける（G20・指摘 56〜58・98〜101・件 5・件 6 の説明書）
+- [x] 3.6 説明書のテストの写しと番号を片づける（G20・指摘 56〜58・98〜101・件 5・件 6 の説明書）
   - `readme_cue_tests.rs` の私有の `capture_logs` を含む 2 つの包みを消し、`capture_lines(..).1` に替える（57・件 5）。
   - `opener_submit_tests.rs` の写しを `crate::reload::test_support::boot_context(tmp.path(), &root)` にする（58・件 6）。
   - 表の各行に「送った件数 0」を足して 5 本を消し（98）、`opener_test_support.rs` に `dest_of(name, args)`・`dest_url(url)` と文脈の補助を置いて寄せ（99）、その `mod tests` を消す（100）。番号の部分を消し（56）、`destination_tests.rs` のテストの名を改める（101）。

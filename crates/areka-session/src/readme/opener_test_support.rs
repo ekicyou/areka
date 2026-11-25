@@ -1,13 +1,15 @@
 //! 開く処理のテストの部品。
 //!
 //! 偽の [`OsPort`]（呼ばれた [`OsCall`] を順に記録し、指定した符号を返す・環境変数は表で返す）と、
-//! 一時フォルダに最小のゴーストを組む部品を置く。実際のアプリは 1 つも起こさない。
+//! 台本のタグの形から行き先を作る部品、一時フォルダに最小のゴーストを組む部品を置く。実際のアプリは 1 つも起こさない。
 
 use std::collections::VecDeque;
 
 use areka_ghost::BasewareRoot;
 use temp_path_kit::TempPath;
 
+use super::destination::{Destination, classify};
+use super::opener::OpenContext;
 use super::os_port::{OsCall, OsPort};
 
 /// 偽の OS の境界。
@@ -113,49 +115,21 @@ pub(crate) fn build_ghost_root(
     root
 }
 
-#[cfg(test)]
-mod tests {
-    use std::ffi::OsString;
+/// 台本のタグの形から本物の規則で行き先を作る。
+pub(crate) fn dest_of(name: &str, args: &[&str]) -> Destination {
+    classify(name, args).expect("開く系").expect("受理される")
+}
 
-    use super::super::os_port::Verb;
-    use super::*;
+/// `\j[url]` から本物の規則で行き先を作る。
+pub(crate) fn dest_url(url: &str) -> Destination {
+    dest_of(areka_parsers::sakura::JUMP_TAG_CARRIER, &[url])
+}
 
-    fn call(file: &str) -> OsCall {
-        OsCall {
-            verb: Verb::Open,
-            file: OsString::from(file),
-            params: None,
-            dir: None,
-        }
-    }
-
-    #[test]
-    fn fake_records_calls_in_order_and_returns_given_codes() {
-        let mut os = FakeOs::returning(&[Ok(()), Err(2), Err(1155)]);
-        assert_eq!(os.shell_execute(&call("a")), Ok(()));
-        assert_eq!(os.shell_execute(&call("b")), Err(2));
-        assert_eq!(os.shell_execute(&call("c")), Err(1155));
-        // 尽きたら成功。
-        assert_eq!(os.shell_execute(&call("d")), Ok(()));
-        let files: Vec<_> = os.calls.iter().map(|c| c.file.clone()).collect();
-        assert_eq!(files, ["a", "b", "c", "d"].map(OsString::from));
-    }
-
-    #[test]
-    fn fake_env_is_case_insensitive_and_missing_is_none() {
-        let os = FakeOs::default().with_env("Temp", r"C:\t");
-        assert_eq!(os.env_var("TEMP").as_deref(), Some(r"C:\t"));
-        assert_eq!(os.env_var("temp").as_deref(), Some(r"C:\t"));
-        assert_eq!(os.env_var("NOPE"), None);
-    }
-
-    #[test]
-    fn build_ghost_root_lays_out_minimal_ghost() {
-        let tmp = TempPath::new("open-ext-ghost-root");
-        let root = build_ghost_root(&tmp, ("g", "G"), &[("s", "S")], &[("b", "B")]);
-        let ghost = root.ghost_dir("g");
-        assert!(ghost.join("ghost/master/descript.txt").is_file());
-        assert!(ghost.join("shell/s/descript.txt").is_file());
-        assert!(root.balloon_dir("b").join("descript.txt").is_file());
+/// `build_ghost_root(.., ("g", "G"), ..)` で組んだ根のゴーストの開く文脈。
+pub(crate) fn open_context(root: &BasewareRoot) -> OpenContext {
+    OpenContext {
+        ghost: "G".to_owned(),
+        ghost_dir: root.ghost_dir("g"),
+        baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
     }
 }

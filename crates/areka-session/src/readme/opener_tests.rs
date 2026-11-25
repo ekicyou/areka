@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use temp_path_kit::TempPath;
 
-use super::super::destination::{Destination, Target, classify};
-use super::super::opener_test_support::{FakeOs, build_ghost_root};
+use super::super::destination::{Destination, Target};
+use super::super::opener_test_support::{FakeOs, build_ghost_root, dest_of, open_context};
 use super::super::os_port::{OsCall, Verb};
 use super::{OpenContext, OpenFailure, expand_env, resolve};
 
@@ -24,11 +24,7 @@ impl Fixture {
     fn new() -> Self {
         let tmp = TempPath::new("open-ext-resolve");
         let root = build_ghost_root(&tmp, ("g", "G"), &[], &[]);
-        let ctx = OpenContext {
-            ghost: "G".to_owned(),
-            ghost_dir: root.ghost_dir("g"),
-            baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
-        };
+        let ctx = open_context(&root);
         Fixture { _tmp: tmp, ctx }
     }
 
@@ -50,11 +46,6 @@ impl Fixture {
     }
 }
 
-/// 台本のタグの形から本物の規則で行き先を作る。
-fn dest(name: &str, args: &[&str]) -> Destination {
-    classify(name, args).expect("開く系").expect("受理される")
-}
-
 fn want(verb: Verb, file: impl Into<OsString>, params: Option<&str>, dir: Option<&Path>) -> OsCall {
     OsCall {
         verb,
@@ -68,7 +59,7 @@ fn want(verb: Verb, file: impl Into<OsString>, params: Option<&str>, dir: Option
 fn jump_url_is_opened_as_is() {
     let f = Fixture::new();
     let got = f.resolve(
-        &dest(JUMP_TAG_CARRIER, &["https://example.com/a"]),
+        &dest_of(JUMP_TAG_CARRIER, &["https://example.com/a"]),
         &FakeOs::default(),
     );
     assert_eq!(
@@ -81,7 +72,7 @@ fn jump_url_is_opened_as_is() {
 fn jump_mailto_is_opened_as_is() {
     let f = Fixture::new();
     let got = f.resolve(
-        &dest(JUMP_TAG_CARRIER, &["mailto:a@example.com"]),
+        &dest_of(JUMP_TAG_CARRIER, &["mailto:a@example.com"]),
         &FakeOs::default(),
     );
     assert_eq!(
@@ -95,7 +86,7 @@ fn jump_file_absolute_opens_with_its_folder_as_working_dir() {
     let f = Fixture::new();
     let p = f.file("abs.txt");
     let id = format!("file:///{}", p.display());
-    let got = f.resolve(&dest(JUMP_TAG_CARRIER, &[&id]), &FakeOs::default());
+    let got = f.resolve(&dest_of(JUMP_TAG_CARRIER, &[&id]), &FakeOs::default());
     assert_eq!(got, Ok(want(Verb::Open, &p, None, Some(&f.master()))));
 }
 
@@ -103,7 +94,7 @@ fn jump_file_absolute_opens_with_its_folder_as_working_dir() {
 fn jump_file_relative_is_joined_to_ghost_master() {
     let f = Fixture::new();
     let got = f.resolve(
-        &dest(JUMP_TAG_CARRIER, &["file:///descript.txt"]),
+        &dest_of(JUMP_TAG_CARRIER, &["file:///descript.txt"]),
         &FakeOs::default(),
     );
     let p = f.master().join("descript.txt");
@@ -114,7 +105,7 @@ fn jump_file_relative_is_joined_to_ghost_master() {
 fn jump_file_missing_is_not_found_at_the_joined_path() {
     let f = Fixture::new();
     let got = f.resolve(
-        &dest(JUMP_TAG_CARRIER, &["file:///none.txt"]),
+        &dest_of(JUMP_TAG_CARRIER, &["file:///none.txt"]),
         &FakeOs::default(),
     );
     let Err(OpenFailure::NotFound(p)) = got else {
@@ -131,11 +122,11 @@ fn open_file_absolute_and_relative() {
     let os = FakeOs::default();
     let abs = p.to_str().unwrap();
     assert_eq!(
-        f.resolve(&dest("open", &["file", abs]), &os),
+        f.resolve(&dest_of("open", &["file", abs]), &os),
         Ok(want(Verb::Open, &p, None, Some(dir)))
     );
     assert_eq!(
-        f.resolve(&dest("open", &["file", r"doc\manual.pdf"]), &os),
+        f.resolve(&dest_of("open", &["file", r"doc\manual.pdf"]), &os),
         Ok(want(Verb::Open, &p, None, Some(dir)))
     );
 }
@@ -146,7 +137,7 @@ fn open_file_expands_env_vars_from_the_boundary() {
     let p = f.file("env.txt");
     let os = FakeOs::default().with_env("AREKA_T_DIR", f.master().to_str().unwrap());
     // 大文字小文字を区別せずに引く（境界の規則）。
-    let got = f.resolve(&dest("open", &["file", r"%areka_t_dir%\env.txt"]), &os);
+    let got = f.resolve(&dest_of("open", &["file", r"%areka_t_dir%\env.txt"]), &os);
     assert_eq!(got, Ok(want(Verb::Open, &p, None, Some(&f.master()))));
 }
 
@@ -159,7 +150,7 @@ fn undefined_env_var_is_left_as_written() {
     assert_eq!(expand_env("%%", &os), "%%");
     // 未定義で据え置いた名前だけ（区切り無し）は、そのまま OS のパス探索へ渡る。
     let f = Fixture::new();
-    let got = f.resolve(&dest("open", &["file", "%NOPE%tool.exe"]), &os);
+    let got = f.resolve(&dest_of("open", &["file", "%NOPE%tool.exe"]), &os);
     assert_eq!(got, Ok(want(Verb::Open, "%NOPE%tool.exe", None, None)));
 }
 
@@ -167,14 +158,17 @@ fn undefined_env_var_is_left_as_written() {
 fn bare_name_in_ghost_master_resolves_to_that_file() {
     let f = Fixture::new();
     let p = f.file("tool.exe");
-    let got = f.resolve(&dest("open", &["file", "tool.exe"]), &FakeOs::default());
+    let got = f.resolve(&dest_of("open", &["file", "tool.exe"]), &FakeOs::default());
     assert_eq!(got, Ok(want(Verb::Open, &p, None, Some(&f.master()))));
 }
 
 #[test]
 fn bare_name_not_in_ghost_master_goes_to_os_path_search() {
     let f = Fixture::new();
-    let got = f.resolve(&dest("open", &["file", "notepad.exe"]), &FakeOs::default());
+    let got = f.resolve(
+        &dest_of("open", &["file", "notepad.exe"]),
+        &FakeOs::default(),
+    );
     assert_eq!(got, Ok(want(Verb::Open, "notepad.exe", None, None)));
 }
 
@@ -182,7 +176,7 @@ fn bare_name_not_in_ghost_master_goes_to_os_path_search() {
 fn missing_path_with_separator_is_not_found() {
     let f = Fixture::new();
     let got = f.resolve(
-        &dest("open", &["file", r"sub\none.exe"]),
+        &dest_of("open", &["file", r"sub\none.exe"]),
         &FakeOs::default(),
     );
     let Err(OpenFailure::NotFound(p)) = got else {
@@ -194,7 +188,10 @@ fn missing_path_with_separator_is_not_found() {
 #[test]
 fn open_browser_opens_url() {
     let f = Fixture::new();
-    let got = f.resolve(&dest("open", &["browser", "http://a/"]), &FakeOs::default());
+    let got = f.resolve(
+        &dest_of("open", &["browser", "http://a/"]),
+        &FakeOs::default(),
+    );
     assert_eq!(got, Ok(want(Verb::Open, "http://a/", None, None)));
 }
 
@@ -203,7 +200,7 @@ fn open_explorer_folder_opens_the_folder() {
     let f = Fixture::new();
     let docs = f.master().join("docs");
     std::fs::create_dir_all(&docs).unwrap();
-    let got = f.resolve(&dest("open", &["explorer", "docs"]), &FakeOs::default());
+    let got = f.resolve(&dest_of("open", &["explorer", "docs"]), &FakeOs::default());
     assert_eq!(got, Ok(want(Verb::Open, &docs, None, None)));
 }
 
@@ -212,7 +209,7 @@ fn open_explorer_file_selects_it_in_explorer() {
     let f = Fixture::new();
     let p = f.master().join("descript.txt");
     let got = f.resolve(
-        &dest("open", &["explorer", "descript.txt"]),
+        &dest_of("open", &["explorer", "descript.txt"]),
         &FakeOs::default(),
     );
     let params = format!("/select,\"{}\"", p.display());
@@ -227,7 +224,7 @@ fn open_editor_uses_edit_verb_and_ignores_line() {
     let f = Fixture::new();
     let p = f.master().join("descript.txt");
     let got = f.resolve(
-        &dest("open", &["editor", "descript.txt", "3"]),
+        &dest_of("open", &["editor", "descript.txt", "3"]),
         &FakeOs::default(),
     );
     assert_eq!(got, Ok(want(Verb::Edit, &p, None, None)));
@@ -238,12 +235,12 @@ fn open_mailer_adds_mailto_once() {
     let f = Fixture::new();
     let os = FakeOs::default();
     assert_eq!(
-        f.resolve(&dest("open", &["mailer", "a@example.com"]), &os),
+        f.resolve(&dest_of("open", &["mailer", "a@example.com"]), &os),
         Ok(want(Verb::Open, "mailto:a@example.com", None, None))
     );
     // 既に付いていれば（大文字小文字を区別しない）二重にしない。
     assert_eq!(
-        f.resolve(&dest("open", &["mailer", "MailTo:a@example.com"]), &os),
+        f.resolve(&dest_of("open", &["mailer", "MailTo:a@example.com"]), &os),
         Ok(want(Verb::Open, "MailTo:a@example.com", None, None))
     );
 }
@@ -268,7 +265,7 @@ fn named_fixture() -> (TempPath, OpenContext) {
 }
 
 fn named(kind: &str, name: &str) -> Destination {
-    dest("open", &["explorer", kind, name])
+    dest_of("open", &["explorer", kind, name])
 }
 
 #[test]

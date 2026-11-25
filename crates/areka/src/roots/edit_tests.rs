@@ -425,9 +425,9 @@ mod apply {
         let (caller, logged) = by_thread(|| add_root(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
-        assert_eq!(ctx.roots, roots_of(&[&a, &b]), "その回に効く（要件 8.2）");
+        assert_eq!(ctx.roots, roots_of(&[&a, &b]), "その回に効く");
         assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
-        assert_eq!(ctx.current.ghost.folder, before, "切り替えない（要件 8.4）");
+        assert_eq!(ctx.current.ghost.folder, before, "切り替えない");
         // 記憶を直に読む口で読み戻すと同じ並び。
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
         let (decoded, skipped) = decode_memory(
@@ -472,7 +472,7 @@ mod apply {
             areka_session::roots::user_root::exe_dir().as_deref(),
         );
         assert_eq!(decoded, vec![a.clone()]);
-        assert!(b.is_dir(), "フォルダは消さない（要件 7.2）");
+        assert!(b.is_dir(), "フォルダは消さない");
     }
 
     #[test]
@@ -493,7 +493,7 @@ mod apply {
         assert_eq!(refused[0].field_str("reason"), Some("last_one"));
         assert!(
             read_memory(&profile).is_none(),
-            "既定の並びのままなら書かない（要件 1.11）"
+            "既定の並びのままなら書かない"
         );
 
         let ((), events) = capture(|| add_root(&mut world, empty.clone()));
@@ -520,7 +520,7 @@ mod apply {
         let (caller, logged) = by_thread(|| move_to_front(&mut world, b.clone()));
 
         let ctx = world.resource::<BootContext>();
-        assert_eq!(ctx.roots, roots_of(&[&b, &a]), "その回に効く（要件 3.7）");
+        assert_eq!(ctx.roots, roots_of(&[&b, &a]), "その回に効く");
         assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
         assert_eq!(ctx.current.ghost.folder, before.folder, "切り替えない");
         assert_eq!(ctx.current.ghost.dir, before.dir);
