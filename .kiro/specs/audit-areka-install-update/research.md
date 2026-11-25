@@ -691,3 +691,24 @@ C26 の約束（roadmap の C26 の行）: ⑴ ほかの 2 本の持ち物は持
 ### 知らせなかったもの
 
 - C26 の 2 本のセッションへの知らせは行っていない。この実行には生きている相手のセッションが無く（両方とも `completed/` へ移った後）、知らせる宛先が無い。代わりに上の「申し送りの扱い」の内容を `/kiro-complete` の棚卸へ回す。
+
+## 14. かけ直しの audit（タスク 5.4・G25）
+
+同じ作法（`/ponytail:ponytail-audit` から「最大 20 件」と「読まなかった所」を外す・区画ごとに全行を読む）で、範囲の 124 ファイルに本 spec が新しく置いた範囲の中のファイルを足してかけ直した（消したファイル `update/update_tests.rs`・`mcp/sakurascript_log_tests.rs`・`shiori_host*` は外れる）。区画は 3 節の S1〜S6 と同じ割り方（S1 に `desk_overwrite_between_tests.rs`・`desk_worker_gone_tests.rs`・`fetch_queue_tests.rs`、S3 に `homeurl_tests.rs`・`update_test_support.rs`・`worker_panic_tests.rs`、S5 に `kanade_fake_test_support.rs`、S6 に `roots/roots_test_support.rs`・`areka-session` の `ghost_switch_between.rs`・`ghost_switch_between_tests.rs` を足した）。91 と `link_destinations` の印、11〜13 節で申し送った件は数えない。
+
+### 1 回目（HEAD `23c28dca1` の後）
+
+| 区画 | 必ず直す | 直したほうがよい | できれば | 2.2 の 3 種 |
+|---|---|---|---|---|
+| S1（`install/` の前半） | 0 | 3 | 2 | 0 |
+| S2（`install/` の後半） | 0 | 6 | 4 | 0 |
+| S3（`update/`） | 0 | 5 | 2 | 0 |
+| S4（`mcp/` の絵と表） | 0 | 1 | 6 | 0 |
+| S5（`mcp/` の残り） | 0 | 5 | 4 | 0 |
+| S6（根・説明書・切替の待ち） | 0 | 5 | 4 | 0 |
+| 計 | 0 | 25 | 22 | 0 |
+
+- 半分ほどは前の直しが呼んだ連鎖（写しを寄せた後に残った写し・移した関数を指す古い doc・テスト用の継ぎ目）。要件 9.8 のとおり Fable で関連する指摘をまとめて直した（束 F1〜F4）。
+- 直した主なもの: 「`event` の名で記録を引く」補助の写しを `crate::session_tests::events_named` の 1 つへ寄せた（`install/`・`update/`・`roots/` の 11 本・`update_test_support::named`・`roots_test_support::events_named`）。`roots-log` を 1 本の常駐のスレッドの待ち行列にして、記録が渡した順に並ぶようにした。`dump_surface` と `get_expression_table` のスレッドの起こし方を `work_elsewhere` の 1 つにした。homeurl の trim のテストを本番の経路の 2 本へ移し、テスト用の継ぎ目 2 つを消した。使われない `TermsNotice::clipped` を消した。古い doc・経緯の語・テストの名を直した。
+- 直さずに申し送った物（数えない・要件 7.9）: S4 の 1（`dump_surface_gpu_test_support.rs` の台詞の Tick の注入は `areka-session` の `SwitchRig::inject_talk_tick` の写しだが、向こうが `pub(crate)` で、寄せるには範囲の外の `ghost_switch_test_support.rs` を変える）。完了した spec の持ち物なので本 spec の `/kiro-complete` の棚卸へ申し送る。
+- 直しのコミット: `cb5f93de5`（F4）・`f171d96dc`（F1）・`f16431745`（F3）・`b77a51661`（F2）・`8ac1d450b`（design の追随）。
