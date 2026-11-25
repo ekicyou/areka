@@ -168,7 +168,7 @@ graph TB
 | `crates/areka/src/install/fetch_queue_tests.rs` | 取得のスレッド 1 本・順に落とす・終了で積んだ残りを記録・門のテスト | 2・12 |
 | `crates/areka/src/update/worker_panic_tests.rs` | 背景のスレッド `update` が倒れたときのテスト（`worker_tests.rs` は 967 行） | 23 |
 | `crates/areka/src/update/update_test_support.rs` | `update/` のテストの支え: 名を取る World の `slot_world`（起動の文脈は `reload_test_support` の `boot_context_named`）・kanade に届いた送出を読む `raised`・`plant_committed`・`close`・`refs_of`。`run` は `update/procedure_test_support.rs` にある | 27・74 |
-| `crates/areka/src/mcp/kanade_fake_test_support.rs` | 偽の kanade の足場（`ghost`・`rig`・`answer`・`warn_or_worse`・`text`・`record_one`） | 38 |
+| `crates/areka/src/mcp/kanade_fake_test_support.rs` | 偽の kanade の足場（`ghost`・`rig`・`answer`・`text`・`record_one`。warn 以上の数は `session_tests::warn_or_worse` を使う） | 38 |
 | `crates/areka/src/roots/roots_test_support.rs` | `roots` のテストの補助（`roots_of`・`root_with_ghost`・既にある補助と上書きによる `world`）。イベント名で絞るのは `crate::session_tests::events_named` | 45・93 |
 | `crates/areka/src/roots/edit_log_order_tests.rs` | `roots-log` へ渡した順に記録が残ること・記録の途中で倒れても次の記録が出ることのテスト | 4 |
 

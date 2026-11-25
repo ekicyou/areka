@@ -272,3 +272,5 @@
 - 3.3: `boot_context_named` が `main` から入っていたので、`update/` のテストは支えのファイルに `boot_context` を置かず直に呼ぶ。5.1 の件 6 の `update/` の分は済み。共通の `run` は `FakePorts` が手続きの中に閉じているので `update/procedure_test_support.rs` に置いた。
 - 3.4 → 5.4: 同じ形の `fn ghost()` が `mcp/mcp_tests.rs` と `mcp/reload_tests.rs` に残る（指摘 38 の 3 ファイルの外）。かけ直しの audit で拾ったら `kanade_fake_test_support::ghost` へ寄せる。`check_script_judge::tests` は兄弟から引くため `pub(in crate::mcp)`。
 - 5.1: 例外 (c) で `shiori_host.rs` を消したので、`crates/areka/src/main.rs` の `#[cfg(test)] mod shiori_host;` とその doc の行も消した（避けられない 4 行の削除）。5.5 の範囲の外の差分の確かめで例外 (c) の分として数える。
+- 完了時にその場で解決: `areka-actor` に `CarriedLog` を置き、取得のスレッドと `roots-log` の受け手の運びをそれへ寄せた。`with_default_guard_test.rs` の例外表から 2 件を外した（9 → 7）。
+- 完了時にその場で解決: MCP のテストの `warn_or_worse` の写しを消し、`session_tests::warn_or_worse` を使う。
