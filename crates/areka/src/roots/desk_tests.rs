@@ -3,7 +3,7 @@
 //! 本物の画面は出さない: 選ぶ口の代わり（閉包）を差し込み、選ぶスレッドの終わりを `join` で待って
 //! から UI スレッドの系 [`drain`] を 1 回回す。記録は選ぶスレッドの外で [`send_pick`] を直に呼んで見る。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
