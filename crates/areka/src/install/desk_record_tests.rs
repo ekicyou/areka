@@ -179,7 +179,7 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
     assert_eq!(
         rig.world.get_resource::<LastInstalledBalloon>(),
         Some(&LastInstalledBalloon("Fluffy".to_owned())),
-        "バルーンの lastinstalled の控えは目録の綴り（shell-balloon-switch 要件 1.11）"
+        "バルーンの lastinstalled の控えは目録の綴り"
     );
     assert!(rig.world.get_non_send::<SwitchInFlight>().is_none());
     assert_eq!(
@@ -248,7 +248,7 @@ fn record_fluffy(rig: &mut SwitchRig) -> Vec<CapturedEvent> {
 
 /// バルーンだけの書庫は根へ入り、今のゴーストの中に同じフォルダ名（大文字小文字違い）が在れば
 /// info `installed_balloon_hidden_by_ghost` が 1 件（`installed`＝根の場所・`by`＝ゴーストの中の場所）。
-/// 控えと記憶の書き方は今どおり。
+/// 控えと記憶は根の目録の綴りで書く。
 #[test]
 fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     let mut rig = rig();
@@ -275,12 +275,12 @@ fn a_balloon_hidden_by_the_running_ghost_is_recorded_once() {
     assert_eq!(
         rig.world.get_resource::<LastInstalledBalloon>(),
         Some(&LastInstalledBalloon("Fluffy".to_owned())),
-        "控えは今どおり根の目録の綴り"
+        "控えは根の目録の綴り"
     );
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("A")).as_deref(),
         Some("Fluffy"),
-        "記憶の書き方は今どおり"
+        "記憶は根の目録の綴り"
     );
     assert!(rig.shutdown());
 }

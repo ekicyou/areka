@@ -155,7 +155,7 @@
   - _Dispatch: mechanical — 文と小さな関数の形を design が与えている_
   - _Requirements: 3.1, 4.1, 4.2, 5.3, 6.12_
 
-- [ ] 3. テストの待ち・写し・番号を直す
+- [x] 3. テストの待ち・写し・番号を直す
 
 - [x] 3.1 `install/` のテストの期限の無い待ちを無くす（G2・指摘 19〜21・件 4）
   - `names_tests.rs:29` を `join_bounded("sylphya", parts.handle).expect(..)` にする（19・件 4）。
@@ -201,7 +201,7 @@
   - _Dispatch: mechanical — 寄せ先と消す物を design が与えている_
   - _Requirements: 3.1, 3.3, 3.4, 5.5, 5.6_
 
-- [ ] 3.7 `install/` のテストの写しと説明を片づける（G21・指摘 9〜11・15〜17・件 6 の `install/`）
+- [x] 3.7 `install/` のテストの写しと説明を片づける（G21・指摘 9〜11・15〜17・件 6 の `install/`）
   - `desk_tests.rs` ほか 8 か所の `boot_context` の写し（`desk_exit_tests.rs` の 2 つを含む）を消し、`areka_session::reload::test_support::boot_context(root.dir(), &root)` を呼ぶ（11）。`desk_tests.rs` 385・554 行の `BODY_SYSTEMS` の 1 行は残す（件 7）。
   - 括弧の番号と番号の行を消して平文に（9・15〜17）、変える前と比べた言い方を振る舞いの文にし、テストの名を `unmarked_list_answers_the_bundled_root` に改める（10）。
   - `install/` の中の `boot_context` の写しが 0 になり、テストが全部緑。

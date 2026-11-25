@@ -76,7 +76,7 @@ fn ghost_runs_begin_install_record_complete_ex_then_legacy_when_no_reply() {
             ),
             Call::Raise("OnInstallComplete", refs(&["ghost", "あたらしい", ""])),
         ],
-        "始まり → 照合 → 展開 → 記録 → 締め。応えが無いので旧仕様へ続く（2.2・2.6）"
+        "始まり → 照合 → 展開 → 記録 → 締め。応えが無いので旧仕様へ続く"
     );
     assert!(
         ports
@@ -94,7 +94,7 @@ fn complete_ex_with_a_script_sends_no_legacy_complete() {
     assert_eq!(
         ports.raised_ids(),
         vec!["OnInstallBegin", "OnInstallCompleteEx"],
-        "台本が返れば OnInstallComplete は 0 件（2.7）"
+        "台本が返れば OnInstallComplete は 0 件"
     );
 }
 
@@ -130,7 +130,7 @@ fn ghost_with_balloon_lists_body_first_then_the_companion() {
                 .iter()
                 .flat_map(|(_, r)| r)
                 .all(|r| !r.contains("with")),
-            "`ghost with balloon` は送らない（2.5）"
+            "`ghost with balloon` は送らない"
         );
         assert!(
             ports
@@ -152,7 +152,7 @@ fn companion_balloon_without_a_name_falls_back_to_its_folder_name() {
     assert_eq!(
         raised[1].1[1],
         joined(&["あたらしい", "kaku"]),
-        "目録に名前が無ければフォルダ名（設計で決めたこと 14）"
+        "目録に名前が無ければフォルダ名"
     );
     assert_eq!(
         raised[2],
@@ -396,7 +396,7 @@ fn accepted_terms_come_after_begin_and_before_the_install() {
             "OnInstallCompleteEx",
             "OnInstallComplete",
         ],
-        "始まりが先・照合と利用条件はその後・展開の前（12.8）"
+        "始まりが先・照合と利用条件はその後・展開の前"
     );
 }
 
@@ -433,17 +433,17 @@ fn every_kind_sends_only_install_events_and_exactly_one_closing_notice() {
                     .filter(|id| **id == "OnInstallCompleteEx")
                     .count(),
                 1,
-                "締めの知らせは 1 つ（2.3）"
+                "締めの知らせは 1 つ"
             );
             let legacy = ids.iter().filter(|id| **id == "OnInstallComplete").count();
             assert_eq!(
                 legacy,
                 usize::from(reply == Raised::NoReply),
-                "旧仕様は応えが無いときだけ（11.5）"
+                "旧仕様は応えが無いときだけ"
             );
             assert!(
                 !ids.contains(&"OnInstallCompleteAll"),
-                "1 本だけの依頼では送らない（2.9）"
+                "1 本だけの依頼では送らない"
             );
         }
     }
@@ -470,7 +470,7 @@ fn each_stage_is_logged() {
             "install_event",
             "install_event",
         ],
-        "各段の記録（10.1）"
+        "各段の記録"
     );
     let begin = events
         .iter()

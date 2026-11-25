@@ -98,7 +98,11 @@ fn exit_discards_a_parked_overwrite_and_releases_the_worker() {
     let tmp = TempPath::new("desk-exit-parked");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let _kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     rig.drain();
@@ -140,7 +144,11 @@ fn exit_after_the_overwrite_was_extracted_drops_the_reply_without_abandoning() {
     let tmp = TempPath::new("desk-exit-ran");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let _kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     let gate = rig.world.non_send::<InstallDesk>().gate.clone();

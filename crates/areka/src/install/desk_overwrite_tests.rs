@@ -9,7 +9,7 @@
 //! 切替の入口の判定と失敗の場合: 別の切替の最中（`Busy`）は預かったまま
 //! その予約が下りた tick に頼み直して一周する・別のゴーストへの切替では展開せず書庫を返す・目録に無い
 //! （`NotFound`）ときはよそへの展開で続いて締めの知らせが 1 つ出る・確定が失敗すれば同じゴーストが元の
-//! 中身で起き直って `OnInstallFailure` が出る・起こせなければ今日の切替の道（既定へ戻す・既定なら致命）に
+//! 中身で起き直って `OnInstallFailure` が出る・起こせなければ切替の失敗の道（既定へ戻す・既定なら致命）に
 //! 乗る。軽い判定（中止で「預かった」へ戻る・`NoContext`）は `desk_tests.rs`。
 //!
 //! 実時間の待ちに依らない: 台詞の時計は合成の Tick で進め（再生中の台詞の終わりを kanade の保留が
@@ -618,8 +618,8 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     );
 }
 
-/// 入れた後に同じゴーストを起こせなければ（ここでは `refresh,1` で `descript.txt` が消える）、今日の
-/// 切替の道のまま既定ゴーストへ戻し（`OnBoot` の Reference6＝`halt`・Reference7＝そのゴーストの名前）、
+/// 入れた後に同じゴーストを起こせなければ（ここでは `refresh,1` で `descript.txt` が消える）、
+/// 切替の失敗の道で既定ゴーストへ戻し（`OnBoot` の Reference6＝`halt`・Reference7＝そのゴーストの名前）、
 /// 戻した既定ゴーストが定常に入ってから締めの知らせを送る。
 #[test]
 fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
@@ -660,8 +660,8 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     );
 }
 
-/// 起こせないのが既定ゴースト自身なら、今日の致命の経路で終わる（終了の指示・最初の出所は「既定
-/// ゴーストへ戻せなかった」）。印の判定は今日の引数のまま、理由の語も今日の `switch_fatal`。
+/// 起こせないのが既定ゴースト自身なら、致命の経路で終わる（終了の指示・最初の出所は「既定
+/// ゴーストへ戻せなかった」）。印の判定の引数は変えず、理由の語は `switch_fatal`。
 #[test]
 fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
     let mut rig = running(DEFAULT_GHOST_FOLDER, &[]);

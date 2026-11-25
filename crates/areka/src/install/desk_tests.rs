@@ -21,8 +21,6 @@ use super::*;
 use crate::install::procedure::InstalledRecord;
 use crate::install::worker::OverwriteAnswer;
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
-use areka_session::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use areka_session::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::{
@@ -423,7 +421,11 @@ fn facts_describe_the_running_ghost() {
     };
     assert_eq!(ask_facts(&mut rig), Some(None), "文脈もゴーストも無い");
 
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     rig.put_ghost(root.ghost_dir("A"));
     assert_eq!(
         ask_facts(&mut rig),
@@ -560,7 +562,11 @@ fn a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
     rig.world.insert_resource(crate::BODY_SYSTEMS);
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     let same = ("A".to_owned(), false, "automatic");
@@ -620,7 +626,11 @@ fn a_busy_overwrite_is_not_retried_after_the_exit_was_instructed() {
     let tmp = TempPath::new("desk-overwrite-busy-exit");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let kanade = rig.put_ghost(root.ghost_dir("A"));
     rig.world.insert_non_send(reservation());
     let _answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
@@ -665,7 +675,11 @@ fn an_unavailable_switch_returns_the_archive_with_one_warning() {
         };
         let mut rig = Rig::new();
         if context {
-            rig.world.insert_resource(boot_context(&root, "A"));
+            rig.world
+                .insert_resource(areka_session::reload::test_support::boot_context(
+                    root.dir(),
+                    &root,
+                ));
         }
         let kanade = ghost.then(|| rig.put_ghost(root.ghost_dir("A")));
         let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
@@ -700,7 +714,11 @@ fn run_between_answers_down_only_on_the_switch_to_the_held_destination() {
     let tmp = TempPath::new("desk-overwrite-between");
     let root = root_with_ghost(&tmp, "A");
     let mut rig = Rig::new();
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let kanade = rig.put_ghost(root.ghost_dir("A"));
     let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     rig.drain();
@@ -747,32 +765,6 @@ fn run_between_answers_down_only_on_the_switch_to_the_held_destination() {
     assert!(!marker.exists(), "窓口は展開しない");
 }
 
-fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
-    BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: areka_session::roots::RootsOrigin::EnvVar,
-        app_profile_dir: root.dir().join("profile"),
-        helper_exe: root.dir().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir(current),
-                balloon_root: root.balloon_dir("B"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir(current),
-                folder: Some(current.to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("B"),
-                folder: Some("B".to_owned()),
-            },
-        },
-    }
-}
-
 /// 窓口が忙しいか: 実行中・待ち行列・預かった上書きのどれかで真、どれも無ければ偽。
 #[test]
 fn is_busy_while_running_queued_or_holding_an_overwrite() {
@@ -794,7 +786,11 @@ fn is_busy_while_running_queued_or_holding_an_overwrite() {
 
     let tmp = TempPath::new("desk-is-busy-overwrite");
     let root = root_with_ghost(&tmp, "A");
-    rig.world.insert_resource(boot_context(&root, "A"));
+    rig.world
+        .insert_resource(areka_session::reload::test_support::boot_context(
+            root.dir(),
+            &root,
+        ));
     let _kanade = rig.put_ghost(root.ghost_dir("A"));
     let _answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
     rig.drain();

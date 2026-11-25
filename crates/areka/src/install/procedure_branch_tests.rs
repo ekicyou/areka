@@ -138,7 +138,7 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
                     vec![accept.to_owned(), kind.to_owned(), name.to_owned()]
                 ),
             ],
-            "Reference0＝accept の値・1＝識別子・2＝name（3.2）"
+            "Reference0＝accept の値・1＝識別子・2＝name"
         );
         assert_eq!(installs(&ports), 0, "展開の口を呼ばない");
         assert_eq!(asks(&ports), 0, "照合の前に利用条件を出さない");
@@ -147,7 +147,7 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
             before,
             "宛先に 1 バイトも無い"
         );
-        assert_eq!(errors(&events), 0, "宛先違いは失敗ではない（3.7）");
+        assert_eq!(errors(&events), 0, "宛先違いは失敗ではない");
         let refused = logged(&events, "install_refused");
         assert_eq!(refused.len(), 1);
         assert_eq!(refused[0].level, tracing::Level::WARN);
@@ -174,7 +174,7 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
                 ("OnInstallBegin", Vec::new()),
                 ("OnInstallFailure", vec!["invalid type".to_owned()]),
             ],
-            "{kind}: accept の無い {kind} は invalid type（3.6）"
+            "{kind}: accept の無い {kind} は invalid type"
         );
         assert_eq!(installs(&ports), 0);
         assert_eq!(entries_under(ports.root.path()), before);
@@ -194,7 +194,7 @@ fn no_terms_file_asks_nothing_and_sends_no_terms_event() {
     let mut ports = FakePorts::new();
     let (ends, _) = run_one(&mut ports, ghost_nar("newbie", &[]));
     assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
-    assert_eq!(asks(&ports), 0, "画面を出さない（4.11）");
+    assert_eq!(asks(&ports), 0, "画面を出さない");
     let ids = ports.raised_ids();
     assert!(
         !ids.contains(&"OnGhostTermsAccept") && !ids.contains(&"OnGhostTermsDecline"),
@@ -209,7 +209,11 @@ fn accepted_terms_send_accept_without_references_and_install() {
     assert!(matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]));
     assert_eq!(asks(&ports), 1);
     let raised = ports.raised();
-    assert_eq!(raised[1], ("OnGhostTermsAccept", Vec::new()), "4.5");
+    assert_eq!(
+        raised[1],
+        ("OnGhostTermsAccept", Vec::new()),
+        "受諾は Reference なしで送る"
+    );
     assert!(!ports.raised_ids().contains(&"OnGhostTermsDecline"));
     assert!(
         ports
@@ -242,7 +246,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
                     ("OnInstallBegin", Vec::new()),
                     ("OnGhostTermsDecline", Vec::new()),
                 ],
-                "{answer:?}: Decline だけ・OnInstallFailure は 0 件（4.6・4.7・4.8）"
+                "{answer:?}: Decline だけ・OnInstallFailure は 0 件"
             );
             assert_eq!(asks(&ports), 1);
             assert_eq!(installs(&ports), 0, "{answer:?}: 展開の口を呼ばない");
@@ -316,9 +320,9 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
                 ("OnInstallBegin", Vec::new()),
                 ("OnInstallFailure", vec![word.as_ref_str().to_owned()]),
             ],
-            "{word:?}: Reference0 は表の語 1 つだけ・1 以降は 0 個（5.1）"
+            "{word:?}: Reference0 は表の語 1 つだけ・1 以降は 0 個"
         );
-        assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない（5.4）");
+        assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない");
         assert_eq!(installs(&ports), 0);
         assert_eq!(entries_under(ports.root.path()), before);
         let failed = logged(&events, "install_failed");
@@ -352,7 +356,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
                 ("OnInstallFailure", vec!["fileio".to_owned()]),
             ]
         );
-        assert_eq!(asks(&ports), 0, "画面を出さない（5.4）");
+        assert_eq!(asks(&ports), 0, "画面を出さない");
         assert!(
             ports
                 .calls
@@ -369,7 +373,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
             Some(if survivors == 0 { "true" } else { "false" })
         );
         let logged_survivors = logged(&events, "install_survivor");
-        assert_eq!(logged_survivors.len(), survivors, "宛先ごとに 1 件（5.6）");
+        assert_eq!(logged_survivors.len(), survivors, "宛先ごとに 1 件");
         for (event, tree) in logged_survivors.iter().zip(&trees) {
             assert_eq!(event.level, tracing::Level::ERROR);
             assert_eq!(
@@ -416,7 +420,7 @@ fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
                 [ghost_at.as_str(), balloon_at.as_str()].join("\u{1}"),
             ]
         )),
-        "最後に 1 回・2 本ぶんを byte 値 1 区切りで（2.8）"
+        "最後に 1 回・2 本ぶんを byte 値 1 区切りで"
     );
     assert_eq!(
         ports
@@ -433,7 +437,7 @@ fn two_archives_all_installed_end_with_one_complete_all_listing_both() {
             .filter(|id| **id == "OnInstallBegin")
             .count(),
         2,
-        "並んだ順に 1 本ずつ（9.2）"
+        "並んだ順に 1 本ずつ"
     );
 }
 
@@ -475,7 +479,7 @@ fn complete_all_is_not_sent_unless_two_or_more_all_installed() {
         assert_eq!(ends.len(), count, "{label}: 失敗しても次の書庫へ進む");
         assert!(
             !ports.raised_ids().contains(&"OnInstallCompleteAll"),
-            "{label}: {:?}（2.9）",
+            "{label}: {:?}",
             ports.raised_ids()
         );
     }

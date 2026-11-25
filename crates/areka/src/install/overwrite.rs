@@ -5,7 +5,7 @@
 //! （再生中の台詞の終わりは kanade の保留が待つ）。`switch_to` が全窓を閉じた直後・起こす前に
 //! 呼ぶ [`run_between`] が「降ろした」を背景のスレッドへ返して起こすのを待たせ、背景のスレッドが
 //! 展開し終えた答え [`extracted`] で切替を続け、定常到達 [`on_steady`] で背景のスレッドへ返事をする。
-//! 展開の成否によらず、切替の道筋は今日のまま進む。
+//! 展開の成否によらず、切替の道筋はそのまま進む。
 
 use areka_actor::ReplySender;
 use areka_ghost::same_folder_name;

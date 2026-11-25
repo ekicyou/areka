@@ -94,7 +94,7 @@ fn answers_built_root_when_all_roots_vanish_after_build() {
 }
 
 /// 起動中のゴーストの根が並びから外れ、別の根に同じフォルダ名が見えていても、起動中のゴーストの
-/// フォルダ名には起動中のゴーストの根を答える。別のフォルダ名は今の答えのまま。
+/// フォルダ名には起動中のゴーストの根を答える。別のフォルダ名は並びの先頭から探した根を答える。
 #[test]
 fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
     let tmp = TempPath::under_target("install-destination-running-pin");
@@ -339,17 +339,17 @@ fn bundled_ghost_answers_the_copy_root() {
         "同梱の中身が写っている"
     );
     assert_eq!(dest.ghost_root("emo2"), user, "2 回目も写しの根");
-    assert_eq!(dest.ghost_root("Fresh"), user, "新しい物は今どおり先頭");
+    assert_eq!(dest.ghost_root("Fresh"), user, "新しい物は先頭の根");
 }
 
-/// 印の無い並びでは写さず、今と同じ根（同梱のゴーストの根）を答える。
+/// 印の無い並びでは写さず、同梱のゴーストの根を答える。
 #[test]
-fn unmarked_list_answers_the_same_root_as_today() {
+fn unmarked_list_answers_the_bundled_root() {
     let (_tmp, user, exe) = bundled("install-destination-bundled-unmarked");
     let dest = CatalogDestinations::new(list(&[user.clone(), exe.clone()]))
         .expect("作れる")
         .with_exe_dir(Some(exe.clone()));
-    assert_eq!(dest.ghost_root("emo2"), exe, "今と同じ根");
+    assert_eq!(dest.ghost_root("emo2"), exe, "同梱のゴーストの根");
     assert!(!user.join("ghost").exists(), "写さない");
 }
 
