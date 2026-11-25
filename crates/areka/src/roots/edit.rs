@@ -1,6 +1,7 @@
 //! 置き場の追加・外す・先頭へ動かすの判断と適用。
 //!
 //! 判断は今の並び・出どころ・足すフォルダ（または外す根の絶対パス）で決める。足す判断だけは足すフォルダの直下を見る。
+//! 先頭へ動かす判断だけは実行ファイルの隣（`exe_dir`）も見る。
 //! フォルダそのものは消さない・動かさない。触るのは並びの値だけ。
 //! 適用（起動の文脈・記憶）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
 //! 変更のときの並びと隠れの記録は 1 本のスレッド `roots-log` が変更の順に残す（UI スレッドは根を見に行かない）。
@@ -134,7 +135,7 @@ pub(crate) fn decide_remove(
 }
 
 /// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。動かす先は覚える置き場の先頭＝一時の項目の直後で、
-/// 一時の置き場は並びの先頭のまま・一時の置き場は動かさない。
+/// 一時の置き場は動かさない。
 /// 書ける根の印があるとき、実行ファイルの隣（`exe_dir`）は動かさない。
 pub(crate) fn decide_front(
     roots: &BasewareRoots,
@@ -351,15 +352,16 @@ fn queue_change_log(
                 if let Err(payload) =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(roots)))
                 {
-                    let reason = payload
+                    let detail = payload
                         .downcast_ref::<&str>()
                         .map(|s| (*s).to_owned())
                         .or_else(|| payload.downcast_ref::<String>().cloned())
                         .unwrap_or_else(|| "the roots log thread panicked".to_owned());
                     tracing::error!(
                         event = "roots_log_spawn_failed",
-                        reason = %reason,
-                        "[RootsEdit] 置き場の変更の記録の途中で倒れました"
+                        reason = "panicked",
+                        detail = %detail,
+                        "[RootsEdit] 置き場の変更を記録できません"
                     );
                 }
             }
@@ -369,16 +371,18 @@ fn queue_change_log(
             if tx.send(job).is_err() {
                 tracing::error!(
                     event = "roots_log_spawn_failed",
-                    reason = "the roots log thread ended before taking the record",
-                    "[RootsEdit] 置き場の変更の記録をスレッドへ渡せません"
+                    reason = "gone",
+                    detail = "the roots log thread ended before taking the record",
+                    "[RootsEdit] 置き場の変更を記録できません"
                 );
             }
             *slot = Some(tx);
         }
         Err(e) => tracing::error!(
             event = "roots_log_spawn_failed",
-            reason = %e,
-            "[RootsEdit] 置き場の変更を記録するスレッドを起こせません"
+            reason = "spawn",
+            detail = %e,
+            "[RootsEdit] 置き場の変更を記録できません"
         ),
     }
 }

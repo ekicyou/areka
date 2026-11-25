@@ -38,16 +38,26 @@ fn records_keep_the_queued_order_and_survive_a_panic() {
 
     let got: Vec<_> = events
         .iter()
-        .filter_map(|e| Some((e.field_str("event")?, e.field("n").or(e.field("reason"))?)))
+        .filter_map(|e| {
+            Some((
+                e.field_str("event")?,
+                e.field("n").or(e.field_str("reason"))?,
+            ))
+        })
         .collect();
     assert_eq!(
         got,
         [
             ("listed", "1"),
-            ("roots_log_spawn_failed", "empty list"),
+            ("roots_log_spawn_failed", "panicked"),
             ("listed", "2"),
         ]
     );
+    let detail = events
+        .iter()
+        .find_map(|e| e.field("detail"))
+        .expect("倒れた回の中身が残る");
+    assert_eq!(detail, "empty list");
 }
 
 #[test]

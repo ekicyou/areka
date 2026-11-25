@@ -3,15 +3,14 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
+use crate::roots::roots_test_support::root_with_ghost;
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::roots::encode_memory;
 use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
 fn dir(tmp: &TempPath, name: &str) -> PathBuf {
-    let d = tmp.path().join(name);
-    std::fs::create_dir_all(d.join("ghost")).unwrap();
-    d
+    root_with_ghost(tmp.path(), name)
 }
 
 /// 先頭に一時の置き場 `t`、続いて覚える置き場の並び。

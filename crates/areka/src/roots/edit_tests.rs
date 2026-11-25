@@ -3,7 +3,7 @@
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
 use super::*;
-use crate::roots::roots_test_support::roots_of;
+use crate::roots::roots_test_support::{root_with_ghost, roots_of};
 use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_session::roots::{EXE_TOKEN, encode_memory};
 use std::path::{Path, PathBuf};
@@ -11,11 +11,11 @@ use temp_path_kit::TempPath;
 
 /// `target\` の下に実在する根を掘る（`ghost\` を持たせるかどうか）。
 fn root(tmp: &TempPath, name: &str, with_ghost: bool) -> PathBuf {
+    if with_ghost {
+        return root_with_ghost(tmp.path(), name);
+    }
     let dir = tmp.path().join(name);
     std::fs::create_dir_all(&dir).unwrap();
-    if with_ghost {
-        std::fs::create_dir_all(dir.join("ghost")).unwrap();
-    }
     dir
 }
 
@@ -294,7 +294,7 @@ fn user_root_mark_survives_add_remove_front() {
 mod apply {
     use super::*;
     use crate::roots::roots_test_support::world;
-    use crate::session_tests::events_named;
+    use crate::session_tests::{events_named, put_ghost};
     use areka_runtime::spine::{Progress, wait_until};
     use areka_session::boot_config::BootContext;
     use areka_session::roots::{decode_memory, read_memory};
@@ -303,13 +303,7 @@ mod apply {
 
     /// 根の下に読めるゴースト 1 体を置く。
     fn ghost(root: &Path, folder: &str) {
-        let master = root.join("ghost").join(folder).join("ghost").join("master");
-        std::fs::create_dir_all(&master).unwrap();
-        std::fs::write(
-            master.join("descript.txt"),
-            format!("charset,UTF-8\r\nname,{folder}\r\n"),
-        )
-        .unwrap();
+        put_ghost(&root.join("ghost").join(folder));
     }
 
     /// 1 件の記録と、それを出したスレッドの名。
@@ -365,7 +359,7 @@ mod apply {
         fn exit(&self, _: &tracing::span::Id) {}
     }
 
-    const CHANGE_LOG: [&str; 3] = ["root_listed", "root_hidden_item", "roots_hidden_count"];
+    const CHANGE_EVENTS: [&str; 3] = ["root_listed", "root_hidden_item", "roots_hidden_count"];
 
     /// `f` を [`ByThread`] の下で呼び、呼んだスレッドの記録と `roots-log` の記録を返す。
     /// 呼んだスレッドに並びと隠れの記録が無いことを先に見て、`roots-log` の `roots_hidden_count` を待つ。
@@ -385,7 +379,7 @@ mod apply {
         };
         let on_caller: Vec<_> = caller
             .iter()
-            .filter(|r| r.field("event").is_some_and(|e| CHANGE_LOG.contains(&e)))
+            .filter(|r| r.field("event").is_some_and(|e| CHANGE_EVENTS.contains(&e)))
             .collect();
         assert!(
             on_caller.is_empty(),

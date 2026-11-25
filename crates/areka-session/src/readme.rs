@@ -209,13 +209,11 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
     }
 }
 
-// OS の境界。
 pub mod os_port;
 
 // 行き先の規則。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
 pub(crate) mod destination;
 
-// 開く処理の 1 か所。
 mod opener;
 
 /// `\![open,…]` の受け口。

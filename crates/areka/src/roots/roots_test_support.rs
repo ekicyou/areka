@@ -17,6 +17,13 @@ pub(super) fn roots_of(dirs: &[&Path]) -> BasewareRoots {
     )
 }
 
+/// `parent` の下に `ghost\` を持つ根 `name` を掘る。
+pub(super) fn root_with_ghost(parent: &Path, name: &str) -> PathBuf {
+    let dir = parent.join(name);
+    std::fs::create_dir_all(dir.join("ghost")).unwrap();
+    dir
+}
+
 /// 根 `root` 1 つの並び（出所は既定）と、アプリの記憶の置き場 `app_profile_dir` を持つ起動の文脈を入れた World。
 pub(super) fn world(root: &Path, app_profile_dir: PathBuf) -> World {
     let mut world = World::new();

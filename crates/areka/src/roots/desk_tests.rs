@@ -15,7 +15,7 @@ use tracing::Level;
 use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
-use crate::roots::roots_test_support::{roots_of, world};
+use crate::roots::roots_test_support::{root_with_ghost, roots_of, world};
 use crate::session_tests::events_named;
 use areka_session::boot_config::BootContext;
 
@@ -25,11 +25,8 @@ const BOUND: Duration = Duration::from_secs(10);
 /// 根 1 つ（`a`）の並びの起動の文脈と受け口を据えた World と、足す候補の根 `b`。
 fn rig(name: &str) -> (TempPath, World, PathBuf, PathBuf) {
     let tmp = TempPath::under_target(name);
-    let a = tmp.path().join("a");
-    let b = tmp.path().join("b");
-    for dir in [&a, &b] {
-        std::fs::create_dir_all(dir.join("ghost")).unwrap();
-    }
+    let a = root_with_ghost(tmp.path(), "a");
+    let b = root_with_ghost(tmp.path(), "b");
     let mut world = world(&a, tmp.path().join("profile"));
     world.init_resource::<Schedules>();
     install(&mut world);

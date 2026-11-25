@@ -83,7 +83,7 @@ pub(crate) fn refused_files() -> Vec<std::ffi::OsString> {
 }
 
 /// `dir/descript.txt` に `name` だけの descript を書く。
-fn write_descript(dir: &std::path::Path, name: &str) {
+pub(crate) fn write_descript(dir: &std::path::Path, name: &str) {
     std::fs::create_dir_all(dir).expect("フォルダを組む");
     std::fs::write(
         dir.join("descript.txt"),

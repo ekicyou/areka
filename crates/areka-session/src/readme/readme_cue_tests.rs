@@ -1,6 +1,4 @@
-// =============================================================================
-// ReadmeCueSink の自己選別と送り出しの決定論テスト
-// =============================================================================
+//! ReadmeCueSink の自己選別と送り出しの決定論テスト。
 
 use super::*;
 use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};

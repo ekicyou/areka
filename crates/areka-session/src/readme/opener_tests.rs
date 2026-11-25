@@ -10,7 +10,9 @@ use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use temp_path_kit::TempPath;
 
 use super::super::destination::{Destination, Target};
-use super::super::opener_test_support::{FakeOs, build_ghost_root, dest_of, open_context};
+use super::super::opener_test_support::{
+    FakeOs, build_ghost_root, dest_of, open_context, write_descript,
+};
 use super::super::os_port::{OsCall, Verb};
 use super::{OpenContext, OpenFailure, expand_env, resolve};
 
@@ -386,8 +388,7 @@ fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
 fn named_balloon_finds_the_ghost_inner_first() {
     let (_tmp, ctx) = named_fixture();
     let inner = ctx.ghost_dir.join("balloon").join("BA");
-    std::fs::create_dir_all(&inner).expect("フォルダを組む");
-    std::fs::write(inner.join("descript.txt"), "charset,UTF-8\nname,bb\n").expect("descript");
+    write_descript(&inner, "bb");
     let os = FakeOs::default();
     for want_name in ["bb", "ba", "BA"] {
         assert_eq!(
