@@ -429,8 +429,8 @@ fn not_selectable_while_an_update_runs_or_after_exit_or_without_a_desk() {
     assert!(!can_update(&world), "窓口が無い");
 }
 
-/// 定常到達のたびに写しを消して `homeurl` の照会が 1 件飛び、空でない返事だけが写しに載る
-/// （返事が来るまでは覗いても待たない）。
+/// 定常到達のたびに写しを消して `homeurl` の照会が 1 件飛び、空でない返事だけが前後の空白を落として
+/// 写しに載る（返事が来るまでは覗いても待たない）。
 #[test]
 fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
     let root = Root::new("areka-update-steady-query");
@@ -449,24 +449,26 @@ fn reaching_steady_sends_one_query_and_the_reply_lands_in_the_copy() {
     reply
         .send(vec![(
             "homeurl",
-            ResourceOutcome::Value(COPY_URL.to_owned()),
+            ResourceOutcome::Value(format!("{COPY_URL} ")),
         )])
         .expect("返事待ちは生きている");
     drain(&mut world);
     assert_eq!(copy(&world).as_deref(), Some(COPY_URL));
     assert!(can_update(&world));
 
-    // 次の定常到達: 空の返事は写しに載らない。
-    on_steady(&mut world);
-    let mut sent = queries(&kanade);
-    assert_eq!(sent.len(), 1);
-    let (_, reply) = sent.remove(0);
-    reply
-        .send(vec![("homeurl", ResourceOutcome::Value(String::new()))])
-        .expect("返事待ちは生きている");
-    drain(&mut world);
-    assert_eq!(copy(&world), None);
-    assert!(!can_update(&world));
+    // 次の定常到達: 空・空白だけの返事は写しに載らない。
+    for blank in ["", " "] {
+        on_steady(&mut world);
+        let mut sent = queries(&kanade);
+        assert_eq!(sent.len(), 1);
+        let (_, reply) = sent.remove(0);
+        reply
+            .send(vec![("homeurl", ResourceOutcome::Value(blank.to_owned()))])
+            .expect("返事待ちは生きている");
+        drain(&mut world);
+        assert_eq!(copy(&world), None, "{blank:?}");
+        assert!(!can_update(&world), "{blank:?}");
+    }
 }
 
 /// 終了が始まったら照会の返事待ちは捨てられ、後から返事が来ても写しに載らない。

@@ -5,7 +5,7 @@
 //! [`DeskAsk`] ⑵ 入口からの生の要求 [`RawUpdateRequest`] ⑶ `homeurl` の照会の返事 を順に捌く。
 //! 終了が始まったら [`discard_for_exit`] が照会の返事待ちを捨てる（走っている依頼は門が待つ）。
 //!
-//! 対象の解決 [`resolve_targets`] は、置き場のゴーストのフォルダ・起動時に解いたシェルとバルーンの
+//! 対象の解決 [`resolve_targets`] は、置き場のゴーストのフォルダ・今のシェルとバルーンの
 //! フォルダから今の 3 つを、ゴーストのシェルの目録と今のゴーストのバルーンの一覧（ゴーストの中が先・
 //! 根が後）の `name` から `updateother` の名前を引く。
 
@@ -25,7 +25,7 @@ use bevy_ecs::world::World;
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{
-    RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason, UpdateTail,
+    CURRENT_ALL, RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason, UpdateTail,
     trimmed_homeurl,
 };
 use crate::menu::captions::{QueryReply, send_query};
@@ -496,11 +496,7 @@ pub(crate) fn can_update(world: &World) -> bool {
 pub(crate) fn update_current(world: &mut World) {
     super::submit(
         world,
-        RawUpdateRequest::Current(vec![
-            TargetKind::Ghost,
-            TargetKind::Shell,
-            TargetKind::Balloon,
-        ]),
+        RawUpdateRequest::Current(CURRENT_ALL.to_vec()),
         UpdateReason::Manual,
     );
 }
@@ -593,9 +589,9 @@ struct Here {
     ghost_dir: PathBuf,
     /// 実行系が読んだゴーストの名前（実行系が無ければ None）。
     ghost_name: Option<String>,
-    /// 起動時に解いたシェルのフォルダ（実行系が無ければ None）。
+    /// 今のシェルのフォルダ（実行系が無ければ None）。
     shell_dir: Option<PathBuf>,
-    /// 起動時に解いたバルーンのフォルダ。
+    /// 今のバルーンのフォルダ。
     balloon_dir: PathBuf,
 }
 
@@ -621,7 +617,7 @@ fn here(world: &World) -> Option<Here> {
 }
 
 /// 生の要求を対象の列へ（並んだ順）。今の 3 つ: ゴーストは置き場のフォルダ（名前は実行系の名前 →
-/// `descript.txt` の `name` → フォルダ名）、シェル・バルーンは起動時に解いたフォルダ（名前は
+/// `descript.txt` の `name` → フォルダ名）、シェル・バルーンは今のフォルダ（名前は
 /// `descript.txt` の `name` → フォルダ名）。`updateother` はゴーストのシェルの目録と今のゴーストの
 /// バルーンの一覧（ゴーストの中が先・根が後・`balloons_for`）の `name` に完全一致（大文字小文字を
 /// 区別）で引く（隠しシェルは目録に無い・同じ `name` はゴーストの中が当たる）。
@@ -705,20 +701,6 @@ fn skip(kind: TargetKind, reason: &'static str, what: &str) -> Option<TargetSpec
         "[update] 対象を解けないので飛ばします"
     );
     None
-}
-
-#[cfg(test)]
-pub(super) fn copy_homeurl_for_test(answer: ResourceOutcome) -> Option<String> {
-    let mut world = World::new();
-    let mut desk = UpdateDesk::new(Arc::new(WorkGate::default()));
-    let (reply, query) = areka_actor::reply_channel();
-    reply
-        .send(vec![("homeurl", answer)])
-        .expect("返事待ちは生きている");
-    desk.homeurl_query = Some(query);
-    world.insert_non_send(desk);
-    peek_homeurl(&mut world);
-    world.non_send::<UpdateDesk>().ghost_homeurl.clone()
 }
 
 #[cfg(test)]

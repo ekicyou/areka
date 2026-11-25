@@ -33,6 +33,9 @@ fn trimmed_homeurl(value: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_owned())
 }
 
+/// 今の 3 つ（ゴースト・シェル・バルーン）。
+const CURRENT_ALL: [TargetKind; 3] = [TargetKind::Ghost, TargetKind::Shell, TargetKind::Balloon];
+
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetKind {
@@ -239,9 +242,6 @@ pub(crate) fn register(world: &mut World) {
         .add_systems(Input, desk::drain.after(dispatch_pointer_events));
     exit_wait::register_gate(world, "update", gate, desk::discard_for_exit);
 }
-
-#[cfg(test)]
-mod homeurl_tests;
 
 #[cfg(test)]
 pub(crate) mod update_test_support;

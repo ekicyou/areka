@@ -195,8 +195,9 @@ fn refusals_leave_one_warning_each_and_send_nothing() {
     assert_eq!(warns(&events), 1, "{events:?}");
 
     let _ = begin_close(&mut rig.world);
+    rig.world.remove_resource::<BootContext>();
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
-    assert_eq!(verdict, SubmitVerdict::Closing);
+    assert_eq!(verdict, SubmitVerdict::Closing, "文脈が無くても終了が先");
     assert_eq!(warns(&events), 1, "{events:?}");
     assert!(rig.orders().is_empty());
     assert!(rig.raised().is_empty());

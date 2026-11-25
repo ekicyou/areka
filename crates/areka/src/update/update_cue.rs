@@ -18,7 +18,7 @@ use std::sync::mpsc::Sender;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 
-use crate::update::{RawUpdateRequest, TargetKind};
+use crate::update::{CURRENT_ALL, RawUpdateRequest, TargetKind};
 
 /// 今の 3 つを更新する（`all` と同じ）。
 const NAME_UPDATE_BY_MYSELF: &str = "updatebymyself";
@@ -32,9 +32,6 @@ const UPDATE_OPTIONS: [&str; 3] = ["checkonly", "testonly", "recovery"];
 const OPTION_PREFIX: &str = "--option=";
 const SHELL_PREFIX: &str = "--shell=";
 const BALLOON_PREFIX: &str = "--balloon=";
-
-/// 今の 3 つ。
-const CURRENT_ALL: [TargetKind; 3] = [TargetKind::Ghost, TargetKind::Shell, TargetKind::Balloon];
 
 fn is_own(name: &str) -> bool {
     [NAME_UPDATE_BY_MYSELF, NAME_UPDATE, NAME_UPDATE_OTHER].contains(&name)

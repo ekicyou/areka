@@ -316,17 +316,3 @@ fn ask_desk(desk: &Sender<DeskAsk>, ask: DeskAsk) {
 #[cfg(test)]
 #[path = "worker_tests.rs"]
 mod worker_tests;
-
-#[cfg(test)]
-pub(super) fn ports_for_test(kanade: Sender<KanadeMsg>) -> KanadePorts {
-    KanadePorts {
-        kanade,
-        gate: Arc::default(),
-        desk: std::sync::mpsc::channel().0,
-        new_fetch: winhttp_fetch(),
-        online: Box::leak(Box::default()),
-        online_guard: Cell::new(None),
-        roots: BasewareRoots::new(Vec::new()),
-        exe_dir: None,
-    }
-}

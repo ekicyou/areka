@@ -233,11 +233,12 @@ fn resources_answered(
     (found, events)
 }
 
-/// 値は空でなければ Some、空・値なし・失敗は None（失敗は `warn!`）。
+/// 値は空でなければ Some、空・値なし・失敗は None（失敗は `warn!`）。`homeurl` は前後の空白を落とし、
+/// 空白だけなら None。
 #[test]
 fn resources_query_both_ids_once_and_map_values() {
     let (found, events) = resources_answered(vec![
-        ResourceOutcome::Value(HOMEURL.to_owned()),
+        ResourceOutcome::Value(format!("{HOMEURL} ")),
         ResourceOutcome::Value("1".to_owned()),
     ]);
     assert_eq!(
@@ -249,12 +250,14 @@ fn resources_query_both_ids_once_and_map_values() {
     );
     assert!(events_named(&events, "update_resource_failed").is_empty());
 
-    let (found, events) = resources_answered(vec![
-        ResourceOutcome::Value(String::new()),
-        ResourceOutcome::NoContent,
-    ]);
-    assert_eq!(found, Some(GhostResources::default()), "空と値なしは None");
-    assert!(events_named(&events, "update_resource_failed").is_empty());
+    for blank in ["", " "] {
+        let (found, events) = resources_answered(vec![
+            ResourceOutcome::Value(blank.to_owned()),
+            ResourceOutcome::NoContent,
+        ]);
+        assert_eq!(found, Some(GhostResources::default()), "{blank:?}");
+        assert!(events_named(&events, "update_resource_failed").is_empty());
+    }
 
     let (found, events) = resources_answered(vec![
         ResourceOutcome::Failed("timeout".to_owned()),
@@ -878,27 +881,23 @@ fn ghost_inner_balloon_target_is_written_in_place() {
 
 // ---------------------------------------------------------------- 字面の検査
 
-/// 本体・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
-/// で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
-/// `update/worker.rs` の 2 つだけ。分ける前に本体の `src` が覆っていた範囲を歩くため、
-/// 3 つの `src` を歩き、見出しに crate の名前を付ける。
+/// 本体・`areka-session`・`areka-runtime`・`areka-input` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を
+/// 除く）で `WinHttp` で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
+/// `update/worker.rs` の 2 つだけ。見出しに crate の名前を付ける。
 #[test]
 fn winhttp_is_spelled_only_in_two_production_files() {
     let mut spelled: Vec<(String, String)> = Vec::new();
-    for (krate, src) in [
-        (
-            "areka",
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
-        ),
-        (
-            "areka-runtime",
-            areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
-        ),
-        (
-            "areka-input",
-            areka_session::crate_source_test_support::crate_path("areka-input", "src"),
-        ),
-    ] {
+    for (krate, src) in [(
+        "areka",
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
+    )]
+    .into_iter()
+    .chain(
+        ["areka-session", "areka-runtime", "areka-input"].map(|krate| {
+            let src = areka_session::crate_source_test_support::crate_path(krate, "src");
+            (krate, src)
+        }),
+    ) {
         let mut stack = vec![src.clone()];
         let mut read = 0;
         while let Some(dir) = stack.pop() {
