@@ -11,6 +11,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 use areka_mcp::{ToolContent, ToolOutcome};
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 use areka_session::log_history::{Draft, History, Kind, Stamp};
 
 fn at(year: u16, month: u8, day: u8, hour: u8, minute: u8) -> Stamp {
@@ -318,14 +319,6 @@ fn since_id_and_max_count_together() {
 
 // ---- ghost_name ----
 
-fn emily() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
 fn ghost_ids(active: Option<&ActiveGhost>, log_type: &str, ghost_name: &str) -> Vec<u64> {
     let (body, is_error, _) = ask_with(
         &history(),
@@ -338,7 +331,7 @@ fn ghost_ids(active: Option<&ActiveGhost>, log_type: &str, ghost_name: &str) -> 
 
 #[test]
 fn ghost_name_keeps_only_records_of_that_name() {
-    let g = emily();
+    let g = ghost();
     assert_eq!(ghost_ids(Some(&g), "error", "Emily/Phase4.5"), [10]);
     assert_eq!(ghost_ids(Some(&g), "script", "Emily/Phase4.5"), [2]);
     // 英字の大小違いでも名前そのもので指したときと同じ記録。
@@ -347,7 +340,7 @@ fn ghost_name_keeps_only_records_of_that_name() {
 
 #[test]
 fn ghost_name_full_path_is_read_as_that_ghost() {
-    let g = emily();
+    let g = ghost();
     for path in [
         r"C:\ssp\ghost\emily4",
         r"c:\SSP\Ghost\EMILY4\",
@@ -384,7 +377,7 @@ fn nameless_ghost_matches_records_named_by_its_full_path() {
 
 #[test]
 fn unmatched_empty_and_no_ghost_are_cannot_find() {
-    let g = emily();
+    let g = ghost();
     let cases: [(Option<&ActiveGhost>, &str); 5] = [
         (Some(&g), "Nobody"),
         // フォルダ名だけは当たらない（他のツールと同じ解決）。
@@ -409,7 +402,7 @@ fn unmatched_empty_and_no_ghost_are_cannot_find() {
 
 #[test]
 fn matched_ghost_without_records_is_no_log_entries() {
-    let g = emily();
+    let g = ghost();
     let (body, is_error, _) = ask_with(
         &history(),
         Some(&g),
@@ -422,7 +415,7 @@ fn matched_ghost_without_records_is_no_log_entries() {
 #[test]
 fn without_ghost_name_records_outside_any_ghost_are_returned() {
     // 起動中のゴーストが居ても、ghost_name が無ければ [SYSTEM] の記録も返る。
-    let g = emily();
+    let g = ghost();
     let (body, _, _) = ask_with(
         &history(),
         Some(&g),
@@ -433,7 +426,7 @@ fn without_ghost_name_records_outside_any_ghost_are_returned() {
 
 #[test]
 fn unknown_log_type_comes_before_ghost_name() {
-    for active in [None, Some(emily())] {
+    for active in [None, Some(ghost())] {
         let (body, is_error, asked) = ask_with(
             &history(),
             active.as_ref(),
@@ -447,7 +440,7 @@ fn unknown_log_type_comes_before_ghost_name() {
 
 #[test]
 fn filters_apply_in_order_kind_ghost_since_max() {
-    let g = emily();
+    let g = ghost();
     // script（2・7）→ Emily（2）→ 最後の 1 件＝2。件数を先に絞ると 7 だけ残り、ゴーストで 0 件になる。
     let (body, _, _) = ask_with(
         &history(),
@@ -466,7 +459,7 @@ fn filters_apply_in_order_kind_ghost_since_max() {
 
 // ---- 入口 ----
 
-/// 空の World で入口を呼び、その場で届いた答え（まだなら None）。
+/// 起動中のゴースト無しで入口を呼び、その場で届いた答え（まだなら None）。
 fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {
     let call = full(None, ghost_name, None, None);
     let (request, pending) = ToolRequest::new(ToolCall::GetLog(call.clone()));
@@ -476,14 +469,14 @@ fn handle_now(ghost_name: Option<&str>) -> Option<ToolOutcome> {
 }
 
 #[test]
-fn empty_world_without_ghost_name_answers_at_once_without_error() {
+fn no_active_ghost_without_ghost_name_answers_at_once_without_error() {
     let outcome = handle_now(None).expect("その場で答える");
     // 置き場はプロセスで共有なので本文は他のテストの積み方次第。失敗でないことだけを見る。
     assert!(!outcome.is_error);
 }
 
 #[test]
-fn empty_world_with_ghost_name_answers_cannot_find_at_once() {
+fn no_active_ghost_with_ghost_name_answers_cannot_find_at_once() {
     let (body, is_error) = text(handle_now(Some("Emily/Phase4.5")).expect("その場で答える"));
     assert_eq!(body, "NG:Cannot find active ghost from specified name");
     assert!(is_error);

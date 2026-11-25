@@ -103,7 +103,7 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
         ToolCall::Reload(args) => resolved!(reload, args, Omitted::UseActive),
         ToolCall::DumpSurface(args) => resolved!(dump_surface, args, Omitted::UseActive),
         ToolCall::DumpBalloon(args) => resolved!(dump_balloon, args, Omitted::UseActive),
-        // areka 独自のツール。解決の規則は 10 本と同じ。
+        // areka 独自のツール。解決の規則は省略を起動中へ解く 7 本と同じ。
         ToolCall::CheckScript(args) => resolved!(check_script, args, Omitted::UseActive),
         // `get_log` は解決しない。
         ToolCall::GetLog(args) => get_log::handle(active, args, reply),

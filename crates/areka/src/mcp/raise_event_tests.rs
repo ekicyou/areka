@@ -247,7 +247,7 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
 /// strict の文（`<n>` の前まで）。
 const STRICT_HEAD: &str = " strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
-/// strict 真で台本が返った → 1 行目の末尾に strict の文・区切りと `Script: ` の行は今のまま・
+/// strict 真で台本が返った → 1 行目の末尾に strict の文・区切りと `Script: ` の行は strict の無いときと同じ・
 /// `<n>` は送る前に読んだ最後の番号。
 ///
 /// 置き場はプロセスに 1 つで他のテストも積むので、`<n>` は「呼ぶ前の番号以上・送った後に積んだ番号未満」で測る。
@@ -279,7 +279,7 @@ fn strict_true_script_answer_carries_the_id_read_before_sending() {
     );
 }
 
-/// strict 偽・省略で台本が返った・strict 真でも台本が返らない／受け付けない → 今の答えのまま。
+/// strict 偽・省略で台本が返った・strict 真でも台本が返らない／受け付けない → strict の文は付かない。
 #[test]
 fn strict_sentence_only_when_strict_true_and_a_script_returned() {
     let plain =

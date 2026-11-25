@@ -27,6 +27,7 @@ use areka_emo_text::actor::ResolvedBalloonText;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
+use areka_mcp::{ToolContent, ToolOutcome};
 use bevy_ecs::world::World;
 use temp_path_kit::TempPath;
 use wintf::ecs::{FrameTime, GraphicsCore, Input, Update, WucGraphicsResource};
@@ -353,6 +354,26 @@ pub(in crate::mcp) fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)
             .filter(|(p, q)| p != q)
             .count()
     })
+}
+
+/// 本文＋画像 1 枚の答えの（isError, 本文, MIME, 復号した（幅, 高さ, 乗算していない RGBA））。
+/// 形が違えば panic。
+pub(in crate::mcp) fn read_picture(
+    outcome: &ToolOutcome,
+) -> (bool, String, String, (u32, u32, Vec<u8>)) {
+    let [
+        ToolContent::Text(text),
+        ToolContent::Image { data, mime_type },
+    ] = outcome.content.as_slice()
+    else {
+        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
+    };
+    (
+        outcome.is_error,
+        text.clone(),
+        mime_type.clone(),
+        decode_png(data),
+    )
 }
 
 /// 標準の文字集合・`=` の詰めありの base64 を戻す（改行なし前提）。

@@ -546,7 +546,7 @@ fn ordinary_script_reports_only_the_raise_nobody_handles() {
             .iter()
             .map(|d| d.kind)
             .collect::<Vec<_>>(),
-        // `\![raise]` は今は誰も拾わない。
+        // `\![raise]` は表に担当が無い。
         [Kind::UnknownCommand]
     );
 }

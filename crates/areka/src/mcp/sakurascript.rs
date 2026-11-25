@@ -1,6 +1,6 @@
 //! `sakurascript` の処理。kanade へ台本（`SstpSend`）を送り、返事は `super::later` で後から答える。
 //!
-//! `raise_event` と使う部品（文言の定数）もここに置く。
+//! `raise_event` と使う部品（文言の定数と strict の文・番号）もここに置く。
 
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::KanadeMsg;

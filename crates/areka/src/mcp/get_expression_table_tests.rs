@@ -869,17 +869,25 @@ fn real_unit_reads_the_table_off_the_calling_thread() {
     );
 }
 
-/// 表を読む仕事が panic しても、答えは捨てられず `NG:` で届き、error の記録は 1 件だけ。
+/// 表を読む仕事が panic しても、答えは捨てられず `NG:` で届き、記録は error 1 件だけ
+/// （スコープを持たないツールなので `scope` の欄は載らない）。
 #[test]
 fn a_panicking_table_job_answers_ng_with_one_error() {
     let (req, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args { ghost_name: None }));
-    let ((), levels) = log_capture_kit::count_levels(|| {
-        answer_caught(req.reply, || panic!("わざと"));
+    let ((), events) = capture(|| {
+        req.reply.send(caught(|| panic!("わざと")));
     });
     let answer = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let records: Vec<_> = events
+        .iter()
+        .map(|ev| (ev.level, ev.field_names_sorted()))
+        .collect();
     assert_eq!(
-        (answer, levels.error),
-        (Some(outcome::ng("the expression table thread panicked")), 1),
-        "（届いた答え, ERROR）"
+        (answer, records),
+        (
+            Some(outcome::ng("the expression table thread panicked")),
+            vec![(tracing::Level::ERROR, vec!["event", "message", "reason"])]
+        ),
+        "（届いた答え, 記録の（段, 欄の名前））: {events:?}"
     );
 }

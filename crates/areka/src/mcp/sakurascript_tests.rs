@@ -204,19 +204,6 @@ fn answers_not_available_without_a_kanade_in_the_slot() {
     assert_eq!((levels.warn, levels.error), (1, 0));
 }
 
-/// 2 本で使う部品: 送り口と「降りた」の文言（`ghost_name` の有無で 2 通り）。
-#[test]
-fn script_target_reads_the_sender_and_the_gone_wording() {
-    let (world, _rx) = rig();
-    let target = script_target(&world, Some("Emily/Phase4.5"));
-    assert!(target.kanade.is_some());
-    assert_eq!(target.gone, CANNOT_FIND);
-
-    let target = script_target(&World::new(), None);
-    assert!(target.kanade.is_none());
-    assert_eq!(target.gone, NOT_ACTIVE);
-}
-
 /// strict の答えの文の前後（`<n>` を挟む）。
 const STRICT_HEAD: &str = "OK:strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
 
@@ -266,9 +253,9 @@ fn strict_false_or_omitted_answer_is_plain_ok() {
     }
 }
 
-/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）は今の答えのまま。
+/// strict 真でも NG の 4 つ（空・受け付けない・失敗・返信端の落ち）に strict の文は付かない。
 #[test]
-fn strict_true_ng_answers_are_unchanged() {
+fn strict_true_ng_answers_carry_no_strict_note() {
     let (mut world, _rx) = rig();
     let (pending, _) = call(&mut world, "", None, Some(true));
     assert_eq!(answer(&pending).content, text("NG:script is empty"));

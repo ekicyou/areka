@@ -16,6 +16,7 @@ use std::sync::Arc;
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_kanade::RaiseOutcome;
 use areka_mcp::tools::dump_balloon::Args;
+use areka_mcp::tools::outcome;
 use areka_mcp::{ToolContent, ToolOutcome};
 use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
@@ -24,7 +25,7 @@ use wintf::ecs::FrameTime;
 
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{
-    FLUSH_EVENT, GpuRig, decode_png, differing, unpremultiply,
+    FLUSH_EVENT, GpuRig, differing, read_picture, unpremultiply,
 };
 use crate::mcp::dump_surface::{Job, Step, finish};
 use areka_runtime::frame::RuntimeWiring;
@@ -100,24 +101,6 @@ fn balloon_visible(world: &World) -> Option<bool> {
         .non_send::<RuntimeWiring>()
         .presenter()
         .target_visible(balloon_target(0))
-}
-
-/// 本文＋画像 1 枚の答えの（isError, 本文, MIME, 復号した（幅, 高さ, 乗算していない RGBA））。
-/// 形が違えば panic。
-fn read_picture(outcome: &ToolOutcome) -> (bool, String, String, (u32, u32, Vec<u8>)) {
-    let [
-        ToolContent::Text(text),
-        ToolContent::Image { data, mime_type },
-    ] = outcome.content.as_slice()
-    else {
-        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
-    };
-    (
-        outcome.is_error,
-        text.clone(),
-        mime_type.clone(),
-        decode_png(data),
-    )
 }
 
 /// 背景（乗算済み BGRA）の上へ、文字の面（乗算済み BGRA）を `origin` へそのまま重ねる
@@ -465,12 +448,7 @@ fn scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost() {
             )
         })
     });
-    let no_scope = ToolOutcome {
-        content: vec![ToolContent::Text(
-            "NG:No such scope in this ghost".to_owned(),
-        )],
-        is_error: true,
-    };
+    let no_scope = outcome::ng("No such scope in this ghost");
     let picture = Some((false, 2, true));
     let sent = Some(RaiseOutcome::NoReply);
     assert_eq!(

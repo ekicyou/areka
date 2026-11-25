@@ -2,8 +2,7 @@
 //! 今のシェルのフォルダの `surfacetable.txt` を読み、SSP の日本語の既定の名前と重ねた表を素の値で答える。
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::path::Path;
 
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::get_expression_table::Args;
@@ -12,7 +11,7 @@ use areka_parsers::charset::{self, DefaultEncoding};
 use areka_parsers::shell::{SurfaceTable, parse_surfacetable};
 use bevy_ecs::world::World;
 
-use super::dump_surface::fail;
+use super::dump_surface::{Work, work_elsewhere};
 use super::resolve::ActiveGhost;
 use areka_session::ghost_session::GhostSlot;
 
@@ -101,8 +100,8 @@ fn load(shell_dir: &Path) -> SurfaceTable {
 }
 
 /// 呼ばれるたびに稼働中のゴーストの今のシェルのフォルダを引き、表を素の値で 1 回だけ答える。
-/// 表の読みと組み立ては名前つきのスレッドで行い、そのスレッドから答える。スレッドを起こせなければ
-/// `error!` して `NG:` をその場で答える。引けなければ（置き場が空・実行系が無い）`warn!` して既定の
+/// 表の読みと組み立ては名前つきのスレッドで行い、そのスレッドから答える。スレッドを起こせない・
+/// 仕事が panic したときは `error!` して `NG:` で答える。引けなければ（置き場が空・実行系が無い）`warn!` して既定の
 /// 15 件をその場で答える。World は読むだけで、送り口・SHIORI・サーフェスに触れず、ファイルを書かない。
 /// `ghost`・`args` は入口で解決済みなので使わない。
 pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply: ReplyTo) {
@@ -116,43 +115,32 @@ pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, _args: Args, reply
         reply.send(outcome::value(render(&SurfaceTable::default())));
         return;
     };
-    // 届け先は起こせた後で渡す（起こせなければ手元に残り、その場で答えられる）。
-    let (tx, rx) = mpsc::channel::<(PathBuf, ReplyTo)>();
-    let spawned = std::thread::Builder::new()
-        .name(TABLE_THREAD.to_owned())
-        .spawn(move || {
-            if let Ok((dir, reply)) = rx.recv() {
-                answer_caught(reply, || outcome::value(render(&load(&dir))));
-            }
-        });
-    match spawned {
-        Ok(_) => {
-            if let Err(mpsc::SendError((_, reply))) = tx.send((dir, reply)) {
-                spawn_failed(reply, "the expression table thread is gone");
-            }
-        }
-        Err(e) => spawn_failed(reply, &e.to_string()),
-    }
+    let work = move || -> Work { Box::new(move || caught(|| outcome::value(render(&load(&dir))))) };
+    work_elsewhere(
+        "mcp-expression-table",
+        "the expression table thread is gone",
+        failed,
+        work,
+        reply,
+        ReplyTo::send,
+    );
 }
 
-const TABLE_THREAD: &str = "mcp-expression-table";
-const TOOL: &str = "get_expression_table";
-
-/// 表を読むスレッドの体。`job` の答えを送り、panic なら想定外の失敗で答える。
-fn answer_caught(reply: ReplyTo, job: impl FnOnce() -> ToolOutcome) {
+/// 表を読むスレッドの体。`job` を panic を受けて走らせ、panic なら届けられない失敗で答える。
+fn caught(job: impl FnOnce() -> ToolOutcome) -> ToolOutcome {
     // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
-        .unwrap_or_else(|_| fail(TOOL, 0, "the expression table thread panicked"));
-    reply.send(outcome);
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
+        .unwrap_or_else(|_| failed("the expression table thread panicked"))
 }
 
-fn spawn_failed(reply: ReplyTo, reason: &str) {
+/// 表を読むスレッドから答えを届けられない失敗（起こせない・消えた・panic）。`error!` 1 件と `NG:`。
+fn failed(reason: &str) -> ToolOutcome {
     tracing::error!(
         event = "expression_table_spawn_failed",
         reason,
-        "[get_expression_table] 表を読むスレッドを起こせない"
+        "[get_expression_table] 表を読むスレッドから答えを返せない"
     );
-    reply.send(outcome::ng(reason));
+    outcome::ng(reason)
 }
 
 #[cfg(test)]

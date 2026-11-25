@@ -5,7 +5,6 @@
 //! 窓口は受理しない）。
 
 use std::cell::Cell;
-use std::path::PathBuf;
 
 use areka_actor::ReplyError;
 use areka_mcp::ToolContent;
@@ -15,15 +14,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::ghost;
 use areka_session::log_history::TARGET_ERROR;
-
-fn ghost() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
 
 fn call(world: &mut World, target: &str) -> (Pending, Vec<CapturedEvent>) {
     let args = Args {

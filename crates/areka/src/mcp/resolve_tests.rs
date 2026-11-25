@@ -2,13 +2,14 @@
 //!
 //! ⑴ 解決の判断（名前・本体側名・英字の大小・前後の空白・フルパス・省略・空と空白だけ・0 体・`Reject`）
 //! ⑵ 一覧の値（名前あり・`name` 無し）が同じゴーストへ戻ること
-//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し）
+//! ⑶ World からの読み取り（GhostSlot 無し・置き場が空・実行系の無い単位は無し・宛先の送り口）
 
 use std::path::PathBuf;
 
 use bevy_ecs::world::World;
 
 use super::*;
+use crate::mcp::kanade_fake_test_support::rig;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 const ROOT: &str = r"C:\ssp\ghost\emily4";
@@ -38,7 +39,7 @@ fn sakura_only() -> ActiveGhost {
     }
 }
 
-/// 名前ありの 1 体へ `ghost_name` を任意の扱いで解いた結果。
+/// 名前ありの 1 体へ `ghost_name` を、省略を起動中へ解く扱い（`UseActive`）で解いた結果。
 fn solve(ghost_name: Option<&str>) -> Result<ActiveGhost, &'static str> {
     let g = named();
     resolve(Some(&g), ghost_name, Omitted::UseActive).cloned()
@@ -320,4 +321,17 @@ fn active_is_none_when_session_has_no_runtime() {
         PathBuf::from(ROOT),
     ))));
     assert_eq!(active(&world), None);
+}
+
+/// 3 本で使う部品: 送り口と「降りた」の文言（`ghost_name` の有無で 2 通り）。
+#[test]
+fn script_target_reads_the_sender_and_the_gone_wording() {
+    let (world, _rx) = rig();
+    let target = script_target(&world, Some("Emily/Phase4.5"));
+    assert!(target.kanade.is_some());
+    assert_eq!(target.gone, CANNOT_FIND);
+
+    let target = script_target(&World::new(), None);
+    assert!(target.kanade.is_none());
+    assert_eq!(target.gone, NOT_ACTIVE);
 }

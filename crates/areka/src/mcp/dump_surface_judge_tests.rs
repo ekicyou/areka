@@ -27,9 +27,9 @@ impl ShellFacts for Table {
     }
 }
 
-/// ふつうのゴースト: 窓はスコープ 0・1・2 に在るが、絵の資産はスコープ 0・1 だけ（2 は窓だけ）。
+/// ふつうのゴースト: 絵の資産はスコープ 0・1 だけ。
 /// 生の ID は 0・3・10（10 はスコープ 1 用の絵）。5 は別名（`\s[5]`）にしか無い番号。
-/// スコープ 0 は surface 3 を最後に表示した（今は `\s[-1]` で隠していても残る）。スコープ 1 は一度も表示していない。
+/// スコープ 0 は surface 3 を最後に表示した。スコープ 1 は一度も表示していない。
 const GHOST: Table = Table {
     scopes: &[0, 1],
     surfaces: &[0, 3, 10],
@@ -85,13 +85,6 @@ fn negative_scope_is_no_such_scope() {
 fn scope_without_assets_is_no_such_scope() {
     assert_eq!(surface(Some(7), None), Err(NO_SUCH_SCOPE));
     assert_eq!(surface(Some(7), Some(0)), Err(NO_SUCH_SCOPE));
-}
-
-#[test]
-fn scope_with_window_but_no_assets_is_no_such_scope() {
-    // スコープ 2 は窓だけ在って絵の資産が無い。
-    assert_eq!(surface(Some(2), None), Err(NO_SUCH_SCOPE));
-    assert_eq!(surface(Some(2), Some(0)), Err(NO_SUCH_SCOPE));
 }
 
 #[test]
@@ -158,18 +151,6 @@ fn surface_id_for_another_scope_succeeds() {
         Ok(SurfacePlan::Alone {
             scope: 0,
             surface_id: 10
-        })
-    );
-}
-
-#[test]
-fn hidden_scope_succeeds_with_the_last_shown_surface() {
-    // `\s[-1]` で隠しているだけ＝最後に表示した ID が残っている。
-    assert_eq!(
-        surface(Some(0), None),
-        Ok(SurfacePlan::Shown {
-            scope: 0,
-            surface_id: 3
         })
     );
 }

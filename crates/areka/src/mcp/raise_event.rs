@@ -1,7 +1,7 @@
 //! `raise_event` の処理。
 //!
 //! 引数を検査し、置き場のゴーストの kanade へ外から頼まれたイベント（`SstpNotify`）を送り、返事を
-//! 後から答える口（`super::later`）で毎フレーム覗く。宛先と文言の部品は `super::sakurascript` のもの。
+//! 後から答える口（`super::later`）で毎フレーム覗く。宛先は `super::resolve`、文言の部品は `super::sakurascript` のもの。
 
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::KanadeMsg;

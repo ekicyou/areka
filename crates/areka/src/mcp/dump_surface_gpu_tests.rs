@@ -3,13 +3,14 @@
 use std::time::Duration;
 
 use areka_kanade::RaiseOutcome;
+use areka_mcp::ToolOutcome;
 use areka_mcp::tools::dump_surface::Args;
-use areka_mcp::{ToolContent, ToolOutcome};
+use areka_mcp::tools::outcome;
 use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 
 use super::dump_surface_tests::is_picture;
-use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, differing};
+use super::gpu_test_support::{self, FLUSH_EVENT, GpuRig, differing};
 use super::{Step, WaitAnswer, finish};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::spine::{Progress, RecordedCall};
@@ -95,22 +96,9 @@ type PictureFacts = (bool, String, String, (u32, u32), Option<usize>);
 
 /// 本文＋画像 1 枚の答えを [`PictureFacts`] に読む。大きさが違えば画素は数えず `None`。形が違えば panic。
 fn read_picture(outcome: &ToolOutcome, expected: &(u32, u32, Vec<u8>)) -> PictureFacts {
-    let [
-        ToolContent::Text(text),
-        ToolContent::Image { data, mime_type },
-    ] = outcome.content.as_slice()
-    else {
-        panic!("本文＋画像 1 枚の形ではない: {:?}", outcome.content);
-    };
-    let (w, h, pixels) = decode_png(data);
-    let differing = differing(&(w, h, pixels), expected);
-    (
-        outcome.is_error,
-        text.clone(),
-        mime_type.clone(),
-        (w, h),
-        differing,
-    )
+    let (is_error, text, mime_type, decoded) = gpu_test_support::read_picture(outcome);
+    let differing = differing(&decoded, expected);
+    (is_error, text, mime_type, (decoded.0, decoded.1), differing)
 }
 
 /// [`read_picture`] の期待（成功・PNG・`expected` と同じ大きさ・食い違い 0）。
@@ -123,14 +111,6 @@ fn picture_of(text: &str, expected: &(u32, u32, Vec<u8>)) -> PictureFacts {
         (expected.0, expected.1),
         Some(0),
     )
-}
-
-/// 画像の無い失敗（本文 1 つだけ・`isError: true`）。
-fn refusal(reason: &str) -> ToolOutcome {
-    ToolOutcome {
-        content: vec![ToolContent::Text(format!("NG:{reason}"))],
-        is_error: true,
-    }
 }
 
 /// 指定した surface: 表示中の 1101 と別の 1100 を指定すると、1100 を合成した
@@ -245,7 +225,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
             true,
             true,
             false,
-            Some(refusal(
+            Some(outcome::ng(
                 "No such surface ID. Check get_expression_table tool"
             ))
         ),
@@ -384,7 +364,7 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
             true,
             true,
             true,
-            Some(refusal("No surface has been shown in this scope yet")),
+            Some(outcome::ng("No surface has been shown in this scope yet")),
             picture_of(
                 "OK:scope 1, surface 2100 rendered alone in its initial state (not what is on the \
                  screen now)",
@@ -412,7 +392,7 @@ fn scope_two_is_no_such_scope() {
         .wait_answer(Progress::Count(&gpu.rig.progress_probe()));
     let down = gpu.shutdown();
 
-    let no_scope = Some(refusal("No such scope in this ghost"));
+    let no_scope = Some(outcome::ng("No such scope in this ghost"));
     assert_eq!(
         (
             shown,

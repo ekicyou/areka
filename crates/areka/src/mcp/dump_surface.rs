@@ -33,6 +33,8 @@ const TOOL: &str = "dump_surface";
 /// 符号化を受け持つスレッドの名前。
 const ENCODE_THREAD: &str = "mcp-encode";
 
+const ENCODE_GONE: &str = "the encoding thread is gone";
+
 /// 別のスレッドで行う残りの仕事。引数は UI スレッドの側の所要時間（成功の記録に載せる）。
 pub(in crate::mcp) type Job = Box<dyn FnOnce(Duration) -> ToolOutcome + Send>;
 
@@ -174,9 +176,7 @@ fn receive(
     match rx.try_recv() {
         Ok(outcome) => Some(outcome),
         Err(mpsc::TryRecvError::Empty) => None,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            Some(fail(tool, scope, "the encoding thread is gone"))
-        }
+        Err(mpsc::TryRecvError::Disconnected) => Some(fail(tool, scope, ENCODE_GONE)),
     }
 }
 
@@ -204,9 +204,7 @@ pub(in crate::mcp) fn reply_elsewhere(
 }
 
 /// 符号化のスレッド（名前 `mcp-encode`）を起こし、起こし終えた後に `ui()` で UI スレッドの側の
-/// 時間を測って、(仕事, 届け先, 時間) を手渡す。起こせなければ `deliver(to, fail(tool, scope, 理由))`。
-/// 手渡しの前にスレッドが消えていたら `deliver(to, fail(tool, scope, "the encoding thread is gone"))`。
-/// 必ず 1 度だけ届ける。
+/// 時間を測って仕事へ渡す。届けられない失敗は `fail(tool, scope, 理由)` で答える。
 fn encode_elsewhere<T: Send + 'static>(
     tool: &'static str,
     scope: u32,
@@ -215,22 +213,44 @@ fn encode_elsewhere<T: Send + 'static>(
     to: T,
     deliver: fn(T, ToolOutcome),
 ) {
+    let work = move || -> Work {
+        let ui = ui();
+        Box::new(move || finish(tool, scope, job, ui))
+    };
+    let failed = |reason: &str| fail(tool, scope, reason);
+    work_elsewhere(ENCODE_THREAD, ENCODE_GONE, failed, work, to, deliver);
+}
+
+/// 別のスレッドで走らせる仕事。panic は中で受けておく（落とすと返事が届かない）。
+pub(in crate::mcp) type Work = Box<dyn FnOnce() -> ToolOutcome + Send>;
+
+/// `thread` の名前のスレッドを起こし、起こし終えた後に `work()` で仕事を作って、届け先と一緒に
+/// 手渡す。起こせなければ `deliver(to, failed(理由))`、手渡しの前にスレッドが消えていたら
+/// `deliver(to, failed(gone))`。必ず 1 度だけ届ける。
+pub(in crate::mcp) fn work_elsewhere<T: Send + 'static>(
+    thread: &str,
+    gone: &str,
+    failed: impl Fn(&str) -> ToolOutcome,
+    work: impl FnOnce() -> Work,
+    to: T,
+    deliver: fn(T, ToolOutcome),
+) {
     // 仕事と届け先は起こせた後で渡す（起こせなければ手元に残り、その場で届けられる）。
-    let (tx, rx) = mpsc::channel::<(Job, T, Duration)>();
+    let (tx, rx) = mpsc::channel::<(Work, T)>();
     let spawned = std::thread::Builder::new()
-        .name(ENCODE_THREAD.to_owned())
+        .name(thread.to_owned())
         .spawn(move || {
-            if let Ok((job, to, ui)) = rx.recv() {
-                deliver(to, finish(tool, scope, job, ui));
+            if let Ok((work, to)) = rx.recv() {
+                deliver(to, work());
             }
         });
     match spawned {
         Ok(_) => {
-            if let Err(mpsc::SendError((_, to, _))) = tx.send((job, to, ui())) {
-                deliver(to, fail(tool, scope, "the encoding thread is gone"));
+            if let Err(mpsc::SendError((_, to))) = tx.send((work(), to)) {
+                deliver(to, failed(gone));
             }
         }
-        Err(e) => deliver(to, fail(tool, scope, &e.to_string())),
+        Err(e) => deliver(to, failed(&e.to_string())),
     }
 }
 

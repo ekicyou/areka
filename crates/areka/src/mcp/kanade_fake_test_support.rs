@@ -1,4 +1,5 @@
-//! 偽の kanade を据えたテストの足場（`get_status`・`raise_event`・`sakurascript` の決定論テストが共有する）。
+//! 偽の kanade を据えたテストの足場（`get_status`・`raise_event`・`sakurascript` の決定論テストが共有する。
+//! 起動中の 1 体の値 [`ghost`] はほかのツールのテストも使う）。
 
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -54,7 +55,7 @@ pub(super) fn text(s: &str) -> Vec<ToolContent> {
     vec![ToolContent::Text(s.to_string())]
 }
 
-/// 送った後・返事の前に記録を 1 件積み、その番号を返す（答えの `<n>` が送る前の値かを測る）。
+/// 記録を 1 件積み、その番号を返す。
 pub(super) fn record_one() -> u64 {
     areka_session::log_history::record(
         areka_session::log_history::Stamp {

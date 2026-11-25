@@ -1,7 +1,7 @@
 //! 写し取りの値の決定論テスト。写し取りの値が判断の事実の trait を満たし、手で組んだ事実と
 //! 同じ答えを返すこと（同じ台本 → 同じ診断）を確かめる。
 //!
-//! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を 10 本と同じ規則で解き、
+//! 後半は解決の失敗と「何もさせない」の檻。`ghost_name` を省略を起動中へ解く 7 本と同じ規則で解き、
 //! 偽の SHIORI で起こした本物の単位へ台本を 2 件渡しても、SHIORI への呼出・再生・終了・
 //! 切替のどれも起きないことを確かめる。
 
@@ -90,14 +90,6 @@ fn call(script: &str, ghost_name: Option<&str>) -> ToolCall {
     })
 }
 
-fn emily() -> ActiveGhost {
-    ActiveGhost {
-        name: Some("Emily/Phase4.5".to_string()),
-        sakura_name: None,
-        root: std::path::PathBuf::from(r"C:\ssp\ghost\emily4"),
-    }
-}
-
 /// 空の World で振り分ける。（その場の答え, 上限つきで待った答え）。答えは別のスレッドからも届く。
 fn dispatch_and_wait(
     active: Option<&ActiveGhost>,
@@ -121,7 +113,7 @@ fn dispatch_and_wait(
 }
 
 /// ゴーストが居ないとき、名前を省くと `NG:Specified ghost is not active` をその場で答える
-/// （名前を渡すと 10 本と同じく `CANNOT_FIND`＝解決の規則のまま）。
+/// （名前を渡すとその 7 本と同じく `CANNOT_FIND`＝解決の規則のまま）。
 #[test]
 fn no_active_ghost_is_not_active() {
     assert_eq!(
@@ -137,7 +129,7 @@ fn no_active_ghost_is_not_active() {
 /// 違う名前は `NG:Cannot find active ghost from specified name` をその場で答える（判断へ進まない）。
 #[test]
 fn a_wrong_name_cannot_find() {
-    let g = emily();
+    let g = crate::mcp::kanade_fake_test_support::ghost();
     assert_eq!(
         dispatch_and_wait(Some(&g), Some("Someone else")),
         (Some(outcome::ng(CANNOT_FIND)), None)
@@ -151,7 +143,7 @@ fn a_wrong_name_cannot_find() {
 /// 省略を断ると、その場の答えが `NG:` で赤。答えが届かなければ待った答えが `None` で赤。
 #[test]
 fn omitted_or_matching_name_answers_with_the_running_ghost() {
-    let g = emily();
+    let g = crate::mcp::kanade_fake_test_support::ghost();
     for name in [None, Some("Emily/Phase4.5")] {
         assert_eq!(
             dispatch_and_wait(Some(&g), name),
