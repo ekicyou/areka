@@ -1,7 +1,7 @@
 //! 純粋層: 名前付きアクタースレッドの spawn／`ActorHandle`／受信ループヘルパ。
 //!
 //! `std`（[`std::sync::mpsc`]＋[`std::thread`]）のみを用い、wintf/executor 非依存で
-//! 実装される。提供物は次の 5 つ:
+//! 実装される。提供物は次の 6 つ:
 //!
 //! - [`spawn_actor`] — アクターを名前付きスレッドとして起動し、inbox の送信端と
 //!   [`ActorHandle`] を返す原語。
@@ -10,6 +10,7 @@
 //! - [`ActorError`] — join 時に panic を観測可能な失敗として写像するエラー型。
 //! - [`install_thread_start_hook`] — 生成されたスレッドの走り始めに 1 度呼ばれる
 //!   [`ThreadStartHook`] の呼ばれ口（何を行うかは統合側が決める・依存の向きは不変）。
+//! - [`CarriedLog`] — 呼んだスレッドの記録の受け手を別のスレッドへ運ぶ写し。
 //!
 //! 起こす側のスレッドの今の受け手が開いている捕捉の窓（`log-capture-kit` の `capture`）の
 //! ときだけ、その受け手を子のスレッドの既定にする（窓の中で起こしたアクターの記録が窓に
@@ -168,6 +169,27 @@ where
             },
             Err(RecvError) => return,
         }
+    }
+}
+
+/// 呼んだスレッドの記録の受け手の写し。別のスレッドで [`CarriedLog::enter`] すると、
+/// その間の記録が写した側と同じ受け手へ届く。
+///
+/// [`spawn_actor`] の引き継ぎ（起こす時点 1 度きり・捕捉の窓だけ）と違い、受け手を選ばずに
+/// そのまま運ぶ。アクターでないスレッドや、仕事ごとに積んだ側の受け手が違う使い回しの
+/// スレッドが使う。本番の写しは全体の既定そのものなので、本番の記録の行き先は変わらない。
+#[derive(Clone, Debug)]
+pub struct CarriedLog(tracing::Dispatch);
+
+impl CarriedLog {
+    /// 呼んだスレッドの今の受け手を写す。
+    pub fn here() -> Self {
+        Self(tracing::dispatcher::get_default(Clone::clone))
+    }
+
+    /// 写した受け手を呼んだスレッドの既定にする。戻りを落とすまで効く。
+    pub fn enter(&self) -> tracing::dispatcher::DefaultGuard {
+        tracing::dispatcher::set_default(&self.0)
     }
 }
 

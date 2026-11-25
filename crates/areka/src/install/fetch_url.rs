@@ -215,12 +215,11 @@ pub(crate) fn spawn_fetcher(
 ) -> Option<Sender<String>> {
     let (urls_tx, urls) = mpsc::channel::<String>();
     let label = first.clone();
-    // 起こした側の記録の受け手を引き継ぐ（本番では全体の既定と同じ・テストでは捕捉の窓）。
-    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let carried = areka_actor::CarriedLog::here();
     let spawned = thread::Builder::new()
         .name("install-fetch".to_owned())
         .spawn(move || {
-            let _dispatch = tracing::dispatcher::set_default(&dispatch);
+            let _log = carried.enter();
             let mut next = Some(first);
             while let Some(url) = next.take().or_else(|| urls.recv().ok()) {
                 let _guard = FetchGuard {

@@ -151,19 +151,6 @@ const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
         "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）",
     ),
     (
-        "crates/areka/src/install/fetch_url.rs",
-        "取得のスレッド install-fetch はアクターでなく（起こせないときは panic せず None で返す）\
-         spawn_actor の引き継ぎを使えない。起こした側の受け手の写しを子のスレッドの既定にする。\
-         本番の写しは全体の既定そのものなので振る舞いは変わらず、テストでは捕捉の窓に記録が入る",
-    ),
-    (
-        "crates/areka/src/roots/edit.rs",
-        "記録のスレッド roots-log はプロセスに 1 本の使い回しで、仕事ごとに積んだ側の受け手が違う。\
-         spawn_actor の起こす時点 1 度きりの引き継ぎでは足りないので、仕事と一緒に運んだ受け手を\
-         仕事ごとに既定にする。本番の写しは全体の既定そのもの。窓でない受け手（edit_tests.rs の\
-         スレッド別の受け手）も運ぶ",
-    ),
-    (
         "crates/areka/src/roots/edit_tests.rs",
         "並びと隠れの記録が呼んだスレッドでなく roots-log で出ることを、記録ごとにスレッドの名を残す\
          受け手で見る。共有の捕捉の記録はスレッドの名を持たないので素の with_default が要る",
@@ -171,7 +158,7 @@ const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
 ];
 
 /// [`ALLOWED_DIRECT_CALLS`] の件数（逐語）。表を増やすときはここも編集する。
-const ALLOWED_DIRECT_CALLS_COUNT: usize = 9;
+const ALLOWED_DIRECT_CALLS_COUNT: usize = 7;
 
 /// ⑵ の別表（相対パス・理由）。
 const ALLOWED_GLOBAL_CAPTURE: &[(&str, &str)] = &[

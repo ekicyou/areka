@@ -323,7 +323,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
     queue_change_log(&CHANGE_LOG, roots, log_change);
 }
 
-type ChangeLogJob = (tracing::Dispatch, BasewareRoots);
+type ChangeLogJob = (areka_actor::CarriedLog, BasewareRoots);
 type ChangeLogSlot = Mutex<Option<Sender<ChangeLogJob>>>;
 
 static CHANGE_LOG: ChangeLogSlot = Mutex::new(None);
@@ -335,7 +335,7 @@ fn queue_change_log(
     roots: BasewareRoots,
     work: impl Fn(BasewareRoots) + Send + 'static,
 ) {
-    let mut job = (tracing::dispatcher::get_default(Clone::clone), roots);
+    let mut job = (areka_actor::CarriedLog::here(), roots);
     let mut slot = slot.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(tx) = slot.as_ref() {
         match tx.send(job) {
@@ -347,8 +347,8 @@ fn queue_change_log(
     let spawned = std::thread::Builder::new()
         .name("roots-log".to_owned())
         .spawn(move || {
-            for (dispatch, roots) in rx {
-                let _dispatch = tracing::dispatcher::set_default(&dispatch);
+            for (log, roots) in rx {
+                let _log = log.enter();
                 if let Err(payload) =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(roots)))
                 {
