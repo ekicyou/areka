@@ -44,7 +44,7 @@ fn lines_of<'a>(lines: &'a [String], event: &str) -> Vec<&'a String> {
 }
 
 /// 入力の段に載っている system の数（段がまだ無ければ 0）。
-fn input_systems_len(world: &World) -> usize {
+pub(crate) fn input_systems_len(world: &World) -> usize {
     world
         .resource::<Schedules>()
         .get(Input)

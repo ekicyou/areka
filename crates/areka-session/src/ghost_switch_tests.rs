@@ -24,6 +24,7 @@ use crate::body_systems::NO_BODY;
 use crate::boot_resolve::boot_resolve_tests::{assert_one_event, count_event};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch_test_support::boot_context;
+use crate::readme::readme_tests::input_systems_len;
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -452,14 +453,6 @@ fn send_failure_logs_error_and_leaves_no_reservation() {
 }
 
 // ---------------------------------------------------------------- 台本の切替要求の取り出し
-
-/// 入力の段に載っている系の数（段がまだ無ければ 0）。
-fn input_systems_len(world: &World) -> usize {
-    world
-        .resource::<Schedules>()
-        .get(Input)
-        .map_or(0, |input| input.systems_len())
-}
 
 /// 登録は入力の段へ取り出しの系をちょうど 1 つ足し、受信端は置かない。受信端が無いまま段を
 /// 回しても無操作（LogSink の起動と同じ）。

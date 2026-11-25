@@ -474,7 +474,6 @@ mod apply {
     fn refusals_warn_and_never_write_memory() {
         let tmp = TempPath::under_target("roots-edit-apply-refuse");
         let a = root(&tmp, "a", true);
-        let empty = root(&tmp, "empty", false);
         let profile = tmp.path().join("profile");
         let mut world = world(&a, profile.clone());
 
@@ -490,6 +489,14 @@ mod apply {
             read_memory(&profile).is_none(),
             "既定の並びのままなら書かない"
         );
+    }
+
+    #[test]
+    fn empty_root_is_added_with_a_warning() {
+        let tmp = TempPath::under_target("roots-edit-apply-empty");
+        let a = root(&tmp, "a", true);
+        let empty = root(&tmp, "empty", false);
+        let mut world = world(&a, tmp.path().join("profile"));
 
         let ((), events) = capture(|| add_root(&mut world, empty.clone()));
         let warned = events_named(&events, "roots_add_empty_root");

@@ -230,4 +230,4 @@ pub(crate) use opener_test_support::FakeOs;
 
 #[cfg(test)]
 #[path = "readme_tests.rs"]
-mod readme_tests;
+pub(crate) mod readme_tests;

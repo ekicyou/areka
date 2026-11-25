@@ -105,7 +105,7 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
         ghost = %ctx.ghost,
         tag = %dest.tag,
         verb,
-        "[readme] handed the destination to the OS"
+        "[readme] handing the destination to the OS"
     );
     if let Err(code) = port.shell_execute(&call) {
         tracing::error!(
