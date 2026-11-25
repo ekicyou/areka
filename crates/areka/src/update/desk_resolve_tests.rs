@@ -21,7 +21,8 @@ use super::{
     Here, Stage, UpdateDesk, can_update, drain, on_steady, resolve, resolve_targets, update_current,
 };
 use crate::menu::captions::QueryReply;
-use crate::update::update_test_support::{named, write_descript};
+use crate::session_tests::events_named;
+use crate::update::update_test_support::write_descript;
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
 };
@@ -131,7 +132,7 @@ fn current_three_resolve_dirs_names_and_fallback_homeurls() {
         ]
     );
     assert!(
-        named(&events, "update_target_skipped").is_empty(),
+        events_named(&events, "update_target_skipped").is_empty(),
         "{events:?}"
     );
 }
@@ -199,7 +200,7 @@ fn a_missing_folder_or_unknown_shell_is_skipped_with_one_warning_each() {
             Some(GHOST_URL)
         )]
     );
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -230,7 +231,7 @@ fn updateother_looks_names_up_exactly_in_the_order_given() {
         ]
     );
     assert!(
-        named(&events, "update_target_skipped").is_empty(),
+        events_named(&events, "update_target_skipped").is_empty(),
         "{events:?}"
     );
 }
@@ -244,7 +245,7 @@ fn updateother_does_not_find_a_case_mismatched_name() {
     ]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     assert!(skipped.iter().all(|e| e.level == Level::WARN), "{events:?}");
 }
@@ -255,7 +256,7 @@ fn updateother_does_not_find_a_hidden_shell() {
     let raw = RawUpdateRequest::Other(vec![(TargetKind::Shell, "HiddenShell".to_owned())]);
     let (specs, events) = capture(|| resolve(&root.here(), &raw));
     assert!(specs.is_empty(), "{specs:?}");
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
 }
@@ -283,7 +284,7 @@ fn updateother_finds_the_ghost_inner_balloon_first_for_the_same_name() {
         )]
     );
     assert!(
-        named(&events, "update_target_skipped").is_empty(),
+        events_named(&events, "update_target_skipped").is_empty(),
         "{events:?}"
     );
 }
@@ -308,7 +309,7 @@ fn current_balloon_inside_the_ghost_is_the_update_target() {
         )]
     );
     assert!(
-        named(&events, "update_target_skipped").is_empty(),
+        events_named(&events, "update_target_skipped").is_empty(),
         "{events:?}"
     );
 }
@@ -353,7 +354,7 @@ fn resolve_targets_reads_the_slot_and_the_boot_context() {
             ),
         ]
     );
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("kind"), Some("shell"));
 }
@@ -480,7 +481,7 @@ fn exit_discards_the_pending_query_reply() {
 
     let (_, events) = capture(|| begin_close(&mut world));
     assert_eq!(
-        named(&events, "update_query_discarded").len(),
+        events_named(&events, "update_query_discarded").len(),
         1,
         "{events:?}"
     );
@@ -509,7 +510,7 @@ fn update_current_submits_the_current_three_as_manual() {
 
     let ((), events) = capture(|| update_current(&mut world));
     // シェルも頼んだ（解けずに飛ばされた）ことを記録で確かめる。
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("reason"), Some("no_shell"));
     let orders: Vec<_> = jobs.try_iter().map(|job| job.order).collect();
@@ -545,7 +546,7 @@ fn a_failed_or_dropped_reply_warns_once_and_leaves_the_copy_empty() {
     let root = Root::new("areka-update-steady-failed");
     let (mut world, kanade) = world(&root, "bare", "plain");
     let failed_warnings = |events: &[CapturedEvent]| {
-        named(events, "update_homeurl_query_failed")
+        events_named(events, "update_homeurl_query_failed")
             .iter()
             .map(|e| e.level)
             .collect::<Vec<_>>()

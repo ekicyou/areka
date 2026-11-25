@@ -52,7 +52,6 @@ fn body(file: &'static str, body: &str) -> Option<TermsNotice> {
     Some(TermsNotice {
         file,
         body: body.to_owned(),
-        clipped: false,
     })
 }
 
@@ -119,7 +118,6 @@ fn twenty_five_lines_are_not_clipped() {
     let text: String = (1..=TERMS_MAX_LINES).map(|n| format!("{n}\r\n")).collect();
     let archive = with(&[("terms.txt", text.as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(!notice.clipped);
     assert_eq!(notice.body.lines().count(), TERMS_MAX_LINES);
 }
 
@@ -130,7 +128,6 @@ fn twenty_six_lines_are_clipped_with_a_pointer_to_the_file() {
         .collect();
     let archive = with(&[("terms.txt", text.as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped, "上限を越えたら切る");
     let kept: Vec<String> = (1..=TERMS_MAX_LINES).map(|n| n.to_string()).collect();
     assert_eq!(
         notice.body,
@@ -146,7 +143,6 @@ fn over_1200_chars_are_clipped_with_a_pointer_to_the_file() {
     let text = "あ".repeat(TERMS_MAX_CHARS + 1);
     let archive = with(&[("terms.md", format!("charset,UTF-8\r\n{text}").as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped, "上限を越えたら切る");
     assert_eq!(
         notice.body,
         format!(
@@ -169,7 +165,6 @@ fn clipping_never_splits_an_emoji_cluster() {
     let text = format!("{}{family}{family}", "あ".repeat(TERMS_MAX_CHARS - 1));
     let archive = with(&[("terms.txt", format!("charset,UTF-8\r\n{text}").as_bytes())]);
     let notice = find_terms(&archive).expect("在る");
-    assert!(notice.clipped);
     assert_eq!(
         notice.body,
         format!(

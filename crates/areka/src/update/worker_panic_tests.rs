@@ -21,7 +21,7 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::update::update_test_support::named;
+use crate::session_tests::events_named;
 use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason, register};
 use areka_session::exit_wait::{begin_close, register_gate};
 
@@ -109,7 +109,7 @@ fn panic_in_get_reports_worker_panicked_and_leaves_the_write_stage() {
     register_gate(&mut world, "update", gate, |_| {});
     let (waits, events) = capture(|| begin_close(&mut world));
     assert!(
-        named(&events, "exit_wait_abandoned").is_empty(),
+        events_named(&events, "exit_wait_abandoned").is_empty(),
         "門に名が残らない: {events:?}"
     );
     let ((), events) = capture(|| {

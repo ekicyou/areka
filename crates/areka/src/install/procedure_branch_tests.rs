@@ -15,6 +15,7 @@ use super::procedure_test_support::{
     shell_nar, supplement_nar, write_nar,
 };
 use super::*;
+use crate::session_tests::events_named;
 
 /// 締めの知らせになりうるイベント（`OnGhostTermsAccept` と `OnInstallBegin` 以外）。
 const CLOSING: [&str; 5] = [
@@ -42,14 +43,6 @@ fn run_many(
 
 fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> (Vec<ArchiveEnd>, Vec<CapturedEvent>) {
     run_many(ports, vec![builder])
-}
-
-/// `event` 欄が `name` の記録。
-fn logged<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|event| event.field_str("event") == Some(name))
-        .collect()
 }
 
 fn errors(events: &[CapturedEvent]) -> usize {
@@ -148,11 +141,11 @@ fn refused_accept_sends_only_refuse_writes_nothing_and_logs_no_error() {
             "宛先に 1 バイトも無い"
         );
         assert_eq!(errors(&events), 0, "宛先違いは失敗ではない");
-        let refused = logged(&events, "install_refused");
+        let refused = events_named(&events, "install_refused");
         assert_eq!(refused.len(), 1);
         assert_eq!(refused[0].level, tracing::Level::WARN);
         assert_eq!(refused[0].field("accept"), Some(accept));
-        assert!(logged(&events, "install_failed").is_empty());
+        assert!(events_named(&events, "install_failed").is_empty());
     }
 }
 
@@ -178,12 +171,12 @@ fn shell_or_supplement_without_accept_fails_as_invalid_type() {
         );
         assert_eq!(installs(&ports), 0);
         assert_eq!(entries_under(ports.root.path()), before);
-        let failed = logged(&events, "install_failed");
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].level, tracing::Level::ERROR);
         assert_eq!(failed[0].field_str("kind"), Some("AcceptMissing"));
         assert_eq!(failed[0].field_str("phase"), Some("accept"));
-        assert!(logged(&events, "install_refused").is_empty());
+        assert!(events_named(&events, "install_refused").is_empty());
     }
 }
 
@@ -220,7 +213,7 @@ fn accepted_terms_send_accept_without_references_and_install() {
             .under_root("ghost/newbie/ghost/master/descript.txt")
             .is_file()
     );
-    let terms = logged(&events, "install_terms");
+    let terms = events_named(&events, "install_terms");
     assert_eq!(terms.len(), 1);
     assert_eq!(terms[0].field_str("answer"), Some("accept"));
 }
@@ -255,7 +248,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
                 before,
                 "{answer:?}: 宛先に 1 バイトも無い"
             );
-            let terms = logged(&events, "install_terms");
+            let terms = events_named(&events, "install_terms");
             assert_eq!(terms.len(), 1, "{answer:?}");
             assert_eq!(terms[0].field_str("answer"), Some(word));
             assert_eq!(terms[0].level, level, "{answer:?}");
@@ -264,7 +257,7 @@ fn declined_suppressed_or_unavailable_terms_send_only_decline_and_write_nothing(
                 usize::from(answer == YesNo::Unavailable),
                 "{answer:?}: error! は出せなかったときの 1 件だけ"
             );
-            assert!(logged(&events, "install_failed").is_empty());
+            assert!(events_named(&events, "install_failed").is_empty());
         }
     }
 }
@@ -325,12 +318,12 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
         assert_eq!(asks(&ports), 0, "{word:?}: 画面を出さない");
         assert_eq!(installs(&ports), 0);
         assert_eq!(entries_under(ports.root.path()), before);
-        let failed = logged(&events, "install_failed");
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1, "{word:?}");
         assert_eq!(failed[0].field_str("phase"), Some(phase), "{word:?}");
         assert_eq!(failed[0].field("rolled_back"), Some("true"));
         assert_eq!(failed[0].field_str("word"), Some(word.as_ref_str()));
-        assert!(logged(&events, "install_survivor").is_empty());
+        assert!(events_named(&events, "install_survivor").is_empty());
     }
 }
 
@@ -364,7 +357,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
                 .all(|call| !matches!(call, Call::Record(_))),
             "入らなかった物は覚えない"
         );
-        let failed = logged(&events, "install_failed");
+        let failed = events_named(&events, "install_failed");
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].field_str("kind"), Some("Io"));
         assert_eq!(failed[0].field_str("phase"), Some("commit"));
@@ -372,7 +365,7 @@ fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
             failed[0].field("rolled_back"),
             Some(if survivors == 0 { "true" } else { "false" })
         );
-        let logged_survivors = logged(&events, "install_survivor");
+        let logged_survivors = events_named(&events, "install_survivor");
         assert_eq!(logged_survivors.len(), survivors, "宛先ごとに 1 件");
         for (event, tree) in logged_survivors.iter().zip(&trees) {
             assert_eq!(event.level, tracing::Level::ERROR);
@@ -512,7 +505,7 @@ fn install_port_closing_sends_no_closing_notice_and_abandons() {
         );
         assert!(!ports.under_root("ghost/newbie").exists());
         assert!(!ports.under_root("balloon/round").exists());
-        assert_eq!(logged(&events, "install_abandoned").len(), 1);
+        assert_eq!(events_named(&events, "install_abandoned").len(), 1);
         assert_eq!(errors(&events), 0, "{port}: 終了で止めるのは失敗ではない");
     }
     // 起動中のゴーストの口が「もう起動中でない」と返した後、よその口が閉じた場合。
@@ -563,7 +556,7 @@ fn raise_closing_at_any_event_stops_every_later_event() {
                 matches!(ends.as_slice(), [ArchiveEnd::Installed(_)]),
                 "書いた後に閉じても入れ終えた形: {ends:?}"
             );
-            let abandoned = logged(&events, "install_abandoned");
+            let abandoned = events_named(&events, "install_abandoned");
             assert_eq!(abandoned.len(), 1, "入れた書庫には出さず、後の書庫に 1 件");
             assert!(
                 abandoned[0]
@@ -624,8 +617,8 @@ fn unsent_logs_unsent_and_does_not_fall_back_to_legacy_complete() {
         vec!["OnInstallBegin", "OnInstallCompleteEx"],
         "送らなかったときは OnInstallComplete を試さない"
     );
-    assert!(logged(&events, "install_event").is_empty());
-    let unsent = logged(&events, "install_event_unsent");
+    assert!(events_named(&events, "install_event").is_empty());
+    let unsent = events_named(&events, "install_event_unsent");
     assert_eq!(unsent.len(), 2);
     assert!(
         unsent

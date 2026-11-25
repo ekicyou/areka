@@ -18,8 +18,9 @@ use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use tracing::Level;
 
+use crate::session_tests::events_named;
 use crate::update::desk::{self, Stage, UpdateDesk};
-use crate::update::update_test_support::{named, write_descript};
+use crate::update::update_test_support::write_descript;
 use crate::update::{RawUpdateRequest, SubmitVerdict, TargetKind, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
@@ -115,7 +116,7 @@ fn assert_refused_twice(
             .collect();
         assert_eq!(raised, expected, "Ex → Result の 2 件だけ");
 
-        let refused = named(&events, "readonly_refused");
+        let refused = events_named(&events, "readonly_refused");
         assert_eq!(refused.len(), 1, "1 回につき 1 件: {events:?}");
         let e = refused[0];
         assert_eq!(e.level, Level::INFO);
@@ -124,7 +125,7 @@ fn assert_refused_twice(
         assert_eq!(e.field("targets"), Some("1"));
         assert_eq!(e.field("notified"), Some("true"));
         assert!(
-            named(&events, "update_refused").is_empty(),
+            events_named(&events, "update_refused").is_empty(),
             "断りの warn を出さない"
         );
         assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
@@ -174,7 +175,7 @@ fn readonly_with_no_targets_sends_nothing() {
     assert_eq!(verdict, SubmitVerdict::ReadOnly);
     rig.assert_untouched();
     assert!(rig.raised().is_empty(), "対象が 0 なら送らない");
-    let refused = named(&events, "readonly_refused");
+    let refused = events_named(&events, "readonly_refused");
     assert_eq!(refused.len(), 1);
     assert_eq!(refused[0].field("targets"), Some("0"));
     assert_eq!(refused[0].field("notified"), Some("false"));

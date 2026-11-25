@@ -465,7 +465,7 @@ fn ghost_with_balloon_never_appears() {
 // ---- script_request ----
 
 #[test]
-fn script_request_six_cases() {
+fn script_request_sorts_the_arms() {
     let absolute = r"C:\Users\u\Downloads\hana.nar";
     assert_eq!(
         script_request(&["path", absolute]),
@@ -479,7 +479,6 @@ fn script_request_six_cases() {
     );
     assert_eq!(script_request(&["path", ""]), Err(ScriptRefusal::Empty));
     assert_eq!(script_request(&["path"]), Err(ScriptRefusal::Empty));
-    // `url` は `NotPath` でなく URL の腕で判定される。
     assert_eq!(
         script_request(&["url", "https://example.com/hana.nar"]),
         Ok(ScriptRequest::Url(

@@ -27,6 +27,7 @@ use super::*;
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::events_named;
 use areka_runtime::spine::{
     Progress, RecordedCall, WaitFailure, join_bounded, join_thread_bounded, wait_recv,
 };
@@ -52,13 +53,6 @@ fn ports() -> (DeskPorts, Receiver<DeskAsk>, Arc<WorkGate>) {
     let (desk, asks) = mpsc::channel();
     let gate = Arc::new(WorkGate::default());
     (DeskPorts::new(desk, gate.clone()), asks, gate)
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 窓口の代わりに、イベントの頼みを `answers` の数だけ受けて順に答え（None は返信端を落とす）、

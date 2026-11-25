@@ -33,6 +33,7 @@ use crate::install::procedure::{InstallPorts, Overwritten};
 use crate::install::worker::{DeskPorts, OverwriteAnswer};
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::events_named;
 use crate::update::update_test_support::refs_of;
 use areka_placement::persist::PersistWiring;
 use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
@@ -135,7 +136,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     assert!(finished, "依頼が終わる（期限切れ）: {events:?}");
     assert!(!rig.exit_requested(), "終了しない: {events:?}");
 
-    let boots: Vec<Vec<String>> = rig.calls("A").iter().map(|c| ids(c)).collect();
+    let boots = boots_of(&rig, "A");
     let current = rig
         .world
         .get_resource::<BootContext>()
@@ -320,14 +321,6 @@ fn after_boot(calls: &[String]) -> &[String] {
     &calls[booted + 1..]
 }
 
-/// `name` の記録。
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 /// 今の切替の予約の切替先のフォルダ名。
 fn reserved_for(rig: &SwitchRig) -> Option<String> {
     rig.world
@@ -432,7 +425,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         "降ろした後に中身が替わる"
     );
     assert_eq!((a, b, exited), (2, 0, false), "A を 1 回起こし直すだけ");
-    let requested = named(&events, "ghost_switch_requested");
+    let requested = events_named(&events, "ghost_switch_requested");
     assert_eq!(
         requested.len(),
         1,
@@ -442,11 +435,11 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
     assert_eq!(requested[0].field("raise_event"), Some("false"));
     assert_eq!(requested[0].field("to"), Some("A"));
     assert_eq!(
-        named(&events, "ghost_switch_busy").len(),
+        events_named(&events, "ghost_switch_busy").len(),
         2,
         "預かった時と一周の途中の要求: {events:?}"
     );
-    let done = named(&events, "install_overwrite_done");
+    let done = events_named(&events, "install_overwrite_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].field("ok"), Some("true"));
 }
@@ -492,10 +485,14 @@ fn a_switch_to_another_ghost_does_not_install_and_returns_the_archive() {
     }
     assert!(!touched, "A のフォルダには展開しない");
     assert!(
-        named(&events, "install_overwrite_done").is_empty(),
+        events_named(&events, "install_overwrite_done").is_empty(),
         "{events:?}"
     );
-    assert_eq!(named(&events, "ghost_switch_busy").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "ghost_switch_busy").len(),
+        1,
+        "{events:?}"
+    );
     assert_eq!((current.as_deref(), a, b), (Some("B"), 1, 1));
 }
 
@@ -522,12 +519,12 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
-    let warned = named(&events, "install_overwrite_unavailable");
+    let warned = events_named(&events, "install_overwrite_unavailable");
     assert_eq!(warned.len(), 1, "{events:?}");
     assert_eq!(warned[0].level, tracing::Level::WARN);
     assert_eq!(warned[0].field("verdict"), Some("NotFound"));
     assert!(
-        named(&events, "ghost_switch_requested").is_empty(),
+        events_named(&events, "ghost_switch_requested").is_empty(),
         "{events:?}"
     );
     assert_eq!(boots.len(), 1, "降ろさない: {clue}");
@@ -587,7 +584,7 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     );
     assert!(!touched, "元の中身のまま（目印は入らない）");
     assert_eq!(kept.as_deref(), Some(&b"old"[..]));
-    let done = named(&events, "install_overwrite_done");
+    let done = events_named(&events, "install_overwrite_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].field("ok"), Some("false"));
     assert_eq!(done[0].target, "areka::install::worker", "{:?}", done[0]);
@@ -639,7 +636,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
-    let failed = named(&events, "ghost_switch_boot_failed");
+    let failed = events_named(&events, "ghost_switch_boot_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].field("ghost"), Some("A"));
     assert_eq!(current.as_deref(), Some(DEFAULT_GHOST_FOLDER));
@@ -683,9 +680,13 @@ fn an_overwritten_default_ghost_that_cannot_boot_is_fatal() {
         "最初の出所: {first:?}"
     );
     assert!(!reserved, "予約は残らない");
-    assert_eq!(named(&events, "ghost_switch_fatal").len(), 1, "{events:?}");
     assert_eq!(
-        named(&events, "install_overwrite_done").len(),
+        events_named(&events, "ghost_switch_fatal").len(),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        events_named(&events, "install_overwrite_done").len(),
         1,
         "{events:?}"
     );

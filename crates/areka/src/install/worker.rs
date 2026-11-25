@@ -106,7 +106,7 @@ impl Drop for OrderGuard {
 }
 
 /// 背景のスレッド `install` を起こし、依頼の送出端と join の取っ手を返す。
-/// 窓口が最初の依頼で 1 度だけ呼ぶ。依頼の送出端が全部落ちたらスレッドは終わる。
+/// 窓口がスレッドの居ないとき（最初の依頼と、倒れた後）に呼ぶ。依頼の送出端が全部落ちたらスレッドは終わる。
 pub(crate) fn spawn_worker(
     desk: Sender<DeskAsk>,
     gate: Arc<WorkGate>,

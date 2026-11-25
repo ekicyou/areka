@@ -119,7 +119,7 @@ fn the_desk_hands_down_resumes_on_extracted_and_answers_on_steady() {
     );
     assert_eq!(body.as_deref(), Some(MARKER_BODY));
     assert!(
-        named(&events, "install_overwrite_done").is_empty(),
+        events_named(&events, "install_overwrite_done").is_empty(),
         "窓口は展開しない: {events:?}"
     );
     let order_of = |name| first(&events, name).unwrap_or_else(|| panic!("{name}: {events:?}"));
@@ -128,7 +128,7 @@ fn the_desk_hands_down_resumes_on_extracted_and_answers_on_steady() {
     let done = order_of("ghost_switch_done");
     assert!(closed < booted && booted < done, "{events:?}");
     assert!(
-        named(&events, "ghost_switch_no_hold").is_empty(),
+        events_named(&events, "ghost_switch_no_hold").is_empty(),
         "{events:?}"
     );
 }
@@ -171,7 +171,7 @@ fn exit_during_extraction_discards_without_booting_and_answers_the_late_extracte
         "(書く段に入れた・展開した・返事をした・起こさない): {events:?}"
     );
     assert_eq!(boots, 1);
-    let discarded = named(&events, "install_pending_discarded");
+    let discarded = events_named(&events, "install_pending_discarded");
     assert_eq!(discarded.len(), 1, "{events:?}");
     assert!(
         discarded[0]
@@ -180,14 +180,14 @@ fn exit_during_extraction_discards_without_booting_and_answers_the_late_extracte
         "{events:?}"
     );
     assert!(
-        named(&events, "exit_wait_abandoned").is_empty(),
+        events_named(&events, "exit_wait_abandoned").is_empty(),
         "{events:?}"
     );
-    let unexpected = named(&events, "install_overwrite_unexpected");
+    let unexpected = events_named(&events, "install_overwrite_unexpected");
     assert_eq!(unexpected.len(), 1, "{events:?}");
     assert_eq!(unexpected[0].level, tracing::Level::WARN);
     assert!(
-        named(&events, "ghost_switch_booted").is_empty(),
+        events_named(&events, "ghost_switch_booted").is_empty(),
         "{events:?}"
     );
 }
@@ -237,9 +237,13 @@ fn a_worker_that_panics_while_extracting_lets_the_switch_boot_the_ghost() {
         (current.as_deref(), busy, touched),
         (Some("A"), false, false)
     );
-    assert_eq!(named(&events, "ghost_switch_booted").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "ghost_switch_booted").len(),
+        1,
+        "{events:?}"
+    );
     assert!(
-        named(&events, "ghost_switch_no_hold").is_empty(),
+        events_named(&events, "ghost_switch_no_hold").is_empty(),
         "{events:?}"
     );
 }

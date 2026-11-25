@@ -7,7 +7,6 @@ use areka_session::boot_config::BootContext;
 use areka_session::reload::test_support::boot_context;
 use areka_session::roots::RootsOrigin;
 use bevy_ecs::world::World;
-use log_capture_kit::CapturedEvent;
 
 /// 根を与えた並びの順に並べた置き場の並び。
 pub(super) fn roots_of(dirs: &[&Path]) -> BasewareRoots {
@@ -16,14 +15,6 @@ pub(super) fn roots_of(dirs: &[&Path]) -> BasewareRoots {
             .map(|d| BasewareRoot::new(d.to_path_buf()))
             .collect(),
     )
-}
-
-/// 記録のうち欄 `event` が `name` のもの。
-pub(super) fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 根 `root` 1 つの並び（出所は既定）と、アプリの記憶の置き場 `app_profile_dir` を持つ起動の文脈を入れた World。

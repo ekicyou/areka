@@ -20,8 +20,9 @@ use temp_path_kit::TempPath;
 
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 
+use crate::session_tests::events_named;
 use crate::update::TargetKind::{self, Balloon, Ghost, Shell};
-use crate::update::update_test_support::{named, write_descript};
+use crate::update::update_test_support::write_descript;
 use crate::update::{self as update, desk};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::reload::test_support::boot_context_named;
@@ -300,7 +301,7 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
 #[test]
 fn script_string_reaches_the_desk_and_is_accepted() {
     let events = play_to_desk(r"\![update,ghost]\e");
-    let started = named(&events, "update_order_started");
+    let started = events_named(&events, "update_order_started");
     assert_eq!(started.len(), 1, "依頼はちょうど 1 件: {events:?}");
     assert_eq!(started[0].level, tracing::Level::INFO);
     assert_eq!(
@@ -326,7 +327,7 @@ fn script_string_reaches_the_desk_and_is_accepted() {
 fn refused_form_reaches_no_order() {
     let events = play_to_desk(r"\![updatebymyself,checkonly]\e");
     assert!(
-        named(&events, "update_order_started").is_empty(),
+        events_named(&events, "update_order_started").is_empty(),
         "依頼は 0 件: {events:?}"
     );
     assert_eq!(warns(&events), vec![Some("update_cue_refused")]);

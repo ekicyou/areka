@@ -19,8 +19,9 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{UpdateDesk, ask_reload_for_test};
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::events_named;
 use crate::update::UpdateTail;
-use crate::update::update_test_support::{named, refs_of};
+use crate::update::update_test_support::refs_of;
 use areka_session::boot_config::BootContext;
 use areka_session::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use areka_session::exit_wait::begin_close;
@@ -186,12 +187,12 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
         "古い A へは送らない"
     );
 
-    let requested = named(&events, "update_reload_requested");
+    let requested = events_named(&events, "update_reload_requested");
     assert_eq!(requested.len(), 1, "{events:?}");
     assert_eq!(requested[0].level, Level::INFO);
     assert_eq!(requested[0].field("verdict"), Some("Accepted"));
-    assert!(named(&events, "update_reload_skipped").is_empty());
-    let switched = named(&events, "ghost_switch_requested");
+    assert!(events_named(&events, "update_reload_skipped").is_empty());
+    let switched = events_named(&events, "ghost_switch_requested");
     assert_eq!(
         switched.len(),
         1,
@@ -204,13 +205,17 @@ fn a_reload_of_the_running_ghost_boots_with_the_tail_head_and_sends_the_rest_aft
         switched[0].field("boot_event"),
         Some("Some(\"OnUpdateComplete\")")
     );
-    assert_eq!(named(&events, "ghost_switch_busy").len(), 1, "{events:?}");
-    let sent = named(&events, "update_tail_sent");
+    assert_eq!(
+        events_named(&events, "ghost_switch_busy").len(),
+        1,
+        "{events:?}"
+    );
+    let sent = events_named(&events, "update_tail_sent");
     assert_eq!(sent.len(), 1, "{events:?}");
     assert_eq!(sent[0].level, Level::INFO);
     assert_eq!(sent[0].field_str("when"), Some("after_switch"));
     assert_eq!(sent[0].field("count"), Some("1"));
-    assert!(named(&events, "update_tail_dropped").is_empty());
+    assert!(events_named(&events, "update_tail_dropped").is_empty());
 }
 
 /// 読み直せないときの列の行き先。
@@ -236,19 +241,19 @@ fn assert_not_reloaded(
         rig.world.run_schedule(Input);
     });
     assert!(
-        named(&events, "ghost_switch_requested").is_empty()
-            && named(&events, "ghost_switch_busy").is_empty(),
+        events_named(&events, "ghost_switch_requested").is_empty()
+            && events_named(&events, "ghost_switch_busy").is_empty(),
         "{value}: 切替の要求 0 件: {events:?}"
     );
-    let decided = named(&events, label);
+    let decided = events_named(&events, label);
     assert_eq!(decided.len(), 1, "{value}: {events:?}");
     assert_eq!(decided[0].level, Level::WARN, "{value}");
     // `reason` は文字列・`verdict` は Debug の綴り。
     let got = decided[0].field_str(field).or(decided[0].field(field));
     assert_eq!(got, Some(value), "{value}: {events:?}");
     let (sent, dropped) = (
-        named(&events, "update_tail_sent"),
-        named(&events, "update_tail_dropped"),
+        events_named(&events, "update_tail_sent"),
+        events_named(&events, "update_tail_dropped"),
     );
     match fate {
         Fate::Sent => {
@@ -379,11 +384,14 @@ fn a_reload_without_a_running_ghost_drops_the_tail() {
         ask_reload_for_test(&rig.world, a_dir, tail());
         rig.world.run_schedule(Input);
     });
-    let dropped = named(&events, "update_tail_dropped");
+    let dropped = events_named(&events, "update_tail_dropped");
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0].level, Level::WARN);
-    assert!(named(&events, "update_tail_sent").is_empty(), "{events:?}");
-    assert!(named(&events, "ghost_switch_requested").is_empty());
+    assert!(
+        events_named(&events, "update_tail_sent").is_empty(),
+        "{events:?}"
+    );
+    assert!(events_named(&events, "ghost_switch_requested").is_empty());
 }
 
 /// 読み直しの切替が終わる（古い SHIORI を降ろして起き直ったゴーストが定常に入る）と、そのゴーストの
@@ -422,12 +430,18 @@ fn a_finished_reload_purges_the_marked_leftover_once() {
         second.contains(&"GET OnUpdateResult".to_owned()),
         "起動の知らせは総括: {second:?}"
     );
-    let done = named(&events, "update_purge_done");
+    let done = events_named(&events, "update_purge_done");
     assert_eq!(done.len(), 1, "{events:?}");
     assert_eq!(done[0].level, Level::INFO);
     assert_eq!(done[0].field("removed"), Some("1"));
-    assert!(named(&events, "update_purge_held").is_empty(), "{events:?}");
-    assert!(named(&events, "update_tail_sent").is_empty(), "{events:?}");
+    assert!(
+        events_named(&events, "update_purge_held").is_empty(),
+        "{events:?}"
+    );
+    assert!(
+        events_named(&events, "update_tail_sent").is_empty(),
+        "{events:?}"
+    );
 }
 
 /// 読み直しでない切替（メニューから同じゴーストへ）が終わっても、印つきの残りは消さない
@@ -464,7 +478,7 @@ fn a_switch_without_a_reload_leaves_the_marked_leftover() {
     );
     assert!(marked.exists(), "読み直しでない切替では消さない");
     for name in ["update_purge_done", "update_purge_held", "update_tail_sent"] {
-        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+        assert!(events_named(&events, name).is_empty(), "{name}: {events:?}");
     }
 }
 
@@ -510,19 +524,19 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
 
     assert!(welcomed && !exited, "既定ゴーストへ戻る: {events:?}");
     assert_eq!(
-        named(&events, "update_reload_requested").len(),
+        events_named(&events, "update_reload_requested").len(),
         1,
         "{events:?}"
     );
     assert_eq!(
-        named(&events, "ghost_switch_target_fault").len(),
+        events_named(&events, "ghost_switch_target_fault").len(),
         1,
         "{events:?}"
     );
     assert!(marked.exists(), "失敗した切替では消さない");
     assert_eq!(remembered, None, "覚えた物は捨てる");
     for name in ["update_purge_done", "update_purge_held", "update_tail_sent"] {
-        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+        assert!(events_named(&events, name).is_empty(), "{name}: {events:?}");
     }
     assert!(
         defaults[0].contains(&"GET OnBoot".to_owned()),
@@ -532,7 +546,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
         defaults[0].iter().all(|c| !c.contains("OnUpdate")),
         "既定ゴーストへ列は送らない: {defaults:?}"
     );
-    let dropped = named(&events, "update_tail_dropped");
+    let dropped = events_named(&events, "update_tail_dropped");
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0].level, Level::WARN);
     assert_eq!(dropped[0].field_str("reason"), Some("switch_failed"));

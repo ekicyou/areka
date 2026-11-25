@@ -222,6 +222,16 @@ pub(super) fn write_nar(dir: &TempPath, file: &str, builder: NarBuilder) -> Path
     path
 }
 
+/// `run_one` が書く書庫のファイル名。
+pub(super) const ARCHIVE: &str = "archive.nar";
+
+/// 本物の書庫 1 本（ファイル名は `ARCHIVE`）を偽の口で一周させる。
+pub(super) fn run_one(ports: &mut FakePorts, builder: NarBuilder) -> Vec<super::ArchiveEnd> {
+    let dir = TempPath::under_target("install-procedure-nar");
+    let nar = write_nar(&dir, ARCHIVE, builder);
+    super::run_order(&order_of(&[&nar]), ports)
+}
+
 /// 書庫 1 本の依頼。
 pub(super) fn order_of(archives: &[&Path]) -> InstallOrder {
     InstallOrder {

@@ -19,7 +19,6 @@ pub(crate) const TERMS_MAX_CHARS: usize = 1200;
 pub(crate) struct TermsNotice {
     pub file: &'static str,
     pub body: String,
-    pub clipped: bool,
 }
 
 /// 書庫の最上位の利用条件（`terms.txt` が先・無ければ `terms.md`）。無ければ None。
@@ -48,15 +47,10 @@ pub(crate) fn find_terms(archive: &NarArchive) -> Option<TermsNotice> {
             .take(TERMS_MAX_CHARS)
             .collect();
     }
-    let clipped = clipped_lines || clipped_chars;
-    if clipped {
+    if clipped_lines || clipped_chars {
         body.push_str(&format!("\n\n続きは書庫の中の {file} にあります"));
     }
-    Some(TermsNotice {
-        file,
-        body,
-        clipped,
-    })
+    Some(TermsNotice { file, body })
 }
 
 /// 同梱バルーンの取り出し元フォルダの中に在る利用条件のパス（出さずに記録するため）。

@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use areka_runtime::spine::RecordedCall;
-use log_capture_kit::CapturedEvent;
 
 /// `dir` に `descript.txt`（`charset,UTF-8` の頭＋`body`＋末尾の改行・CRLF）を置く。
 pub(crate) fn write_descript(dir: &Path, body: &str) {
@@ -13,14 +12,6 @@ pub(crate) fn write_descript(dir: &Path, body: &str) {
         format!("charset,UTF-8\r\n{body}\r\n"),
     )
     .expect("descript.txt を書く");
-}
-
-/// `event` の名が `name` の記録。
-pub(crate) fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// `id` の GET の Reference（最初の 1 件）。

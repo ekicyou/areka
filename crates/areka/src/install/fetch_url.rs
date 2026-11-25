@@ -137,7 +137,7 @@ fn file_name(url: &str) -> String {
 }
 
 /// `dir` の直下で `modified` が `now - 7 日` より古いファイルを消し、消した数を返す（0 なら記録しない）。
-/// 消せなければ `debug!` で飛ばす（次の取得でまた試す）。
+/// 調べられない・消せないファイルは `debug!` で飛ばす（次の取得でまた試す）。
 fn sweep_old(dir: &Path, now: SystemTime) -> usize {
     let Some(limit) = now.checked_sub(KEEP) else {
         return 0;
@@ -155,17 +155,34 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
         }
     };
     let mut removed = 0;
-    for entry in entries.flatten() {
+    let unreadable = |path: &Path, err: &std::io::Error| {
+        tracing::debug!(
+            event = "install_fetch_sweep_skipped",
+            path = %path.display(),
+            error = %err,
+            "[install] 一時ファイルの古さを調べられないので、次の取得に任せます"
+        );
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                unreadable(dir, &err);
+                continue;
+            }
+        };
+        let path = entry.path();
         let old = entry
             .metadata()
-            .ok()
-            .filter(fs::Metadata::is_file)
-            .and_then(|m| m.modified().ok())
-            .is_some_and(|modified| modified < limit);
-        if !old {
-            continue;
+            .and_then(|m| Ok(m.is_file() && m.modified()? < limit));
+        match old {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(err) => {
+                unreadable(&path, &err);
+                continue;
+            }
         }
-        let path = entry.path();
         match fs::remove_file(&path) {
             Ok(()) => removed += 1,
             Err(err) => tracing::debug!(

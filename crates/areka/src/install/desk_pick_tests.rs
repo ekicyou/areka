@@ -25,6 +25,7 @@ use super::*;
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
+use crate::session_tests::events_named;
 use areka_runtime::spine::join_thread_bounded;
 
 /// 絶対パスの書庫（fs は読まない＝在る必要はない）。
@@ -53,13 +54,6 @@ fn item_enabled(world: &World) -> Option<bool> {
         .snapshot(world, &MenuContext { scope: 0 })
         .into_iter()
         .find_map(|(frame, item)| (frame == Frame::Install).then_some(item.enabled))
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 fn warns_and_errors(events: &[CapturedEvent]) -> Vec<(Level, Option<&str>)> {

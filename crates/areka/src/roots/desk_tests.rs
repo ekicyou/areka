@@ -15,7 +15,8 @@ use tracing::Level;
 use windows::Win32::Foundation::E_FAIL;
 
 use super::*;
-use crate::roots::roots_test_support::{events_named, roots_of, world};
+use crate::roots::roots_test_support::{roots_of, world};
+use crate::session_tests::events_named;
 use areka_session::boot_config::BootContext;
 
 /// 選ぶ口の代わりが止まっている間の待ちの上限（固まったときに赤で止めるためだけの値）。

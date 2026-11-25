@@ -19,11 +19,12 @@ use log_capture_kit::capture;
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::desk::{Stage, UpdateDesk, raw_sender};
-use super::update_test_support::{named, refs_of};
+use super::update_test_support::refs_of;
 use super::{RawUpdateRequest, TargetKind};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::events_named;
 use areka_runtime::spine::{HOMEURL_RESOURCE, RecordedCall, SPIN_WAIT};
 use areka_session::ghost_session::GhostSlot;
 use areka_session::ghost_session::shell_balloon_switch_session_lap_test_support::kinds;
@@ -170,11 +171,15 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
     });
     assert!(reserved, "読み直しの切替が予約される: {events:?}");
     assert_eq!(
-        named(&events, "update_reload_requested").len(),
+        events_named(&events, "update_reload_requested").len(),
         1,
         "{events:?}"
     );
-    assert_eq!(named(&events, "update_reload_asked").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "update_reload_asked").len(),
+        1,
+        "{events:?}"
+    );
     // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
     // 成功した走行の残りを置く。
     let leftover = a_dir.join(".update-work").join("held-run");
@@ -243,10 +248,14 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_t
         "OnClose は 0 件: {a:?}"
     );
     // 列の残りは窓口が切替の終わりで送った（UI の記録）。
-    let sent = named(&after, "update_tail_sent");
+    let sent = events_named(&after, "update_tail_sent");
     assert_eq!(sent.len(), 1, "{after:?}");
     assert_eq!(sent[0].field_str("when"), Some("after_switch"));
-    assert_eq!(named(&after, "update_tail_dropped").len(), 0, "{after:?}");
+    assert_eq!(
+        events_named(&after, "update_tail_dropped").len(),
+        0,
+        "{after:?}"
+    );
 }
 
 /// `none` の一周（手元が配布と同じ）: `OnUpdateBegin` → `OnUpdateComplete`（`none`）→ `OnUpdateResult`
@@ -293,6 +302,6 @@ fn a_none_round_requests_no_switch() {
         "update_reload_skipped",
         "ghost_switch_requested",
     ] {
-        assert_eq!(named(&events, name).len(), 0, "{name}: {events:?}");
+        assert_eq!(events_named(&events, name).len(), 0, "{name}: {events:?}");
     }
 }

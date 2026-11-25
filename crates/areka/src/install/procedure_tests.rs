@@ -10,7 +10,7 @@ use temp_path_kit::TempPath;
 
 use super::procedure_test_support::{
     Call, FakePorts, OverwriteScript, RUNNING, RUNNING_ALIAS, RUNNING_SAKURA, balloon_nar,
-    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, order_of, shell_nar,
+    ghost_nar, ghost_with_balloon_descript, ghost_with_balloon_nar, order_of, run_one, shell_nar,
     supplement_nar, write_nar,
 };
 use super::*;
@@ -27,13 +27,6 @@ fn refs(values: &[&str]) -> Vec<String> {
 /// 根の下のフォルダの絶対パスの綴り（Reference2 の場所）。
 fn place(ports: &FakePorts, relative: &str) -> String {
     ports.under_root(relative).display().to_string()
-}
-
-/// 本物の書庫 1 本を偽の口で一周させる。
-fn run_one(ports: &mut FakePorts, builder: sample_ghost_kit::NarBuilder) -> Vec<ArchiveEnd> {
-    let dir = TempPath::under_target("install-procedure-nar");
-    let nar = write_nar(&dir, "archive.nar", builder);
-    run_order(&order_of(&[&nar]), ports)
 }
 
 fn item(kind: &'static str, name: &str, place: String) -> InstalledItem {

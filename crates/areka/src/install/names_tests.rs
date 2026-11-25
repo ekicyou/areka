@@ -12,11 +12,12 @@ use areka_ghost::sylphya_wiring::{from_sylphya_provider, spawn_ghost_sylphya};
 use areka_runtime::spine::{SPIN_WAIT, join_bounded};
 use areka_sakura::sysvar::{ResolvedVar, resolve_system_var};
 use areka_sylphya::ScopeRoots;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use tracing::Level;
 
 use super::*;
 use crate::sample_test_support::switch_rig;
+use crate::session_tests::events_named;
 use areka_session::ghost_switch_test_support::{FakeShiori, standard_script};
 
 /// 値を本物の記憶の書き手へ載せ、台詞の開始の表で 2 語を展開する（`%lastghostname`, `%lastobjectname`）。
@@ -47,13 +48,6 @@ fn raw(name: &str) -> ResolvedVar {
 
 fn names_of(world: &World) -> Option<LastInstallNames> {
     world.get_resource::<LastInstallNames>().cloned()
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 /// 入れる前: 値は World に無く、載せる語も無い＝台詞の 2 語はそのまま通る。

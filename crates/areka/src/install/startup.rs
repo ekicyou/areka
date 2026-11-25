@@ -66,7 +66,7 @@ pub(crate) struct CarriedInstall {
     pub kind: areka_nar::InstallKind,
     /// 入れた先のフォルダ名（目録の綴り）。
     pub folder: String,
-    /// 関わったゴーストのフォルダ名（シェル・追加ファイル）。
+    /// 関わったゴーストのフォルダ名（バルーンは None）。
     pub ghost_folder: Option<String>,
     /// %lastobjectname の値（install.txt の name）。
     pub object_name: String,
@@ -238,7 +238,7 @@ pub(crate) fn resolve_boot(
 }
 
 /// 中身（テストは根の結果・旗・選び方を差し込む）。根が決まれば起動の前の道を通し、決まらなければ
-/// 入れる物を取り出して warn `root_missing` を 1 件残す。どちらの後も、`callghost` の相手を添えて
+/// 入れる物があれば取り出して warn `startup_install_not_submitted`（`reason=root_missing`）を 1 件残す。どちらの後も、`callghost` の相手を添えて
 /// 起動の解決へ渡す（根の記録と告知の場面は `resolve_boot_with` が出す）。
 pub(crate) fn resolve_boot_with_env(
     resolved: Result<areka_session::roots::ResolvedRoots, areka_session::roots::RootError>,

@@ -13,13 +13,14 @@ use areka_kanade::online::OnlineCounter;
 use areka_update::{Fetch, FetchError};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
 use super::*;
 use crate::install::fetch_url::MakeFetch;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{queued_orders, register};
+use crate::session_tests::events_named;
 use areka_runtime::spine::{Progress, SPIN_WAIT, wait_until};
 use areka_session::exit_wait::{begin_close, register_gate};
 
@@ -123,13 +124,6 @@ fn order_tails(world: &World) -> Vec<String> {
         .collect()
 }
 
-fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
-}
-
 /// 取得の途中で終了が始まると、取得の門の名として URL が `exit_wait_abandoned` に 1 件残る。
 #[test]
 fn closing_mid_fetch_records_the_url_on_the_gate() {
@@ -142,7 +136,7 @@ fn closing_mid_fetch_records_the_url_on_the_gate() {
 
     let (_, events) = capture(|| begin_close(&mut world));
 
-    let abandoned = named(&events, "exit_wait_abandoned");
+    let abandoned = events_named(&events, "exit_wait_abandoned");
     let [record] = abandoned.as_slice() else {
         panic!("記録は 1 件: {events:?}");
     };
@@ -198,7 +192,7 @@ fn exit_records_each_waiting_url_once() {
     drop(held.release);
     drain(&mut world);
 
-    let urls: Vec<Option<&str>> = named(&events, "install_fetch_abandoned")
+    let urls: Vec<Option<&str>> = events_named(&events, "install_fetch_abandoned")
         .iter()
         .map(|e| e.field_str("url"))
         .collect();
@@ -279,7 +273,7 @@ fn closed_gate_skips_the_fetch_and_still_reports_done() {
         matches!(done, Ok(DeskAsk::FetchDone { panicked: false })),
         "取得の終わりが届く"
     );
-    let closing = named(&events, "install_fetch_closing");
+    let closing = events_named(&events, "install_fetch_closing");
     let [record] = closing.as_slice() else {
         panic!("記録は 1 件: {events:?}");
     };

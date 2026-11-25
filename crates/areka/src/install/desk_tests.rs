@@ -21,6 +21,7 @@ use super::*;
 use crate::install::procedure::InstalledRecord;
 use crate::install::worker::OverwriteAnswer;
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
+use crate::session_tests::events_named;
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use areka_session::ghost_switch::{
@@ -143,13 +144,6 @@ fn raised(kanade: &Receiver<KanadeMsg>, outcome: RaiseOutcome) -> Vec<(String, V
             }
             _ => panic!("汎用の通知の入口の送出だけが届く"),
         })
-        .collect()
-}
-
-fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
         .collect()
 }
 

@@ -107,7 +107,7 @@ pub(crate) enum ArchiveEnd {
     Refused,
     Declined,
     Failed(FailureWord),
-    /// 書く前に口が閉じたので途中でやめた（入れた物は無い）。
+    /// 入れ終える前に口が閉じたので途中でやめた（入れ終えた物は無い。断り・失敗の知らせで閉じたときもここ）。
     Abandoned,
 }
 
@@ -144,7 +144,7 @@ pub(crate) fn run_order(order: &InstallOrder, ports: &mut dyn InstallPorts) -> V
     ends
 }
 
-/// 書庫 1 本の一周。終わり方と、以後の書庫を止めるかを返す。書く前に口が閉じたら、同じ依頼の
+/// 書庫 1 本の一周。終わり方と、以後の書庫を止めるかを返す。入れ終える前に口が閉じたら、同じ依頼の
 /// まだ始めていない書庫（`rest`）の件数とパスも載せた記録を 1 件残して `Abandoned`。書いた後に
 /// 閉じたら、入れた書庫には残さず、`rest` があればその先頭を `archive` にして 1 件残す。
 fn run_archive(

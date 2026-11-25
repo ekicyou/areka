@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::install::judge::{FailureWord, InstalledItem};
+use crate::session_tests::events_named;
 use areka_session::boot_request::BootRequest;
 
 fn item(kind: &'static str, place: &str) -> InstalledItem {
@@ -29,7 +30,7 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
 // ---- sources_to_delete ----
 
 #[test]
-fn only_installed_of_the_five_ends_is_deleted() {
+fn only_installed_of_the_four_ends_is_deleted() {
     let archives = paths(&[r"C:\a.nar", r"C:\b.nar", r"C:\c.nar", r"C:\d.nar"]);
     let ends = [
         ghost("a"),
@@ -137,7 +138,7 @@ fn dropping_unsubmitted_startup_warns_boot_stopped_once() {
     let ((), events) =
         log_capture_kit::capture(|| drop(StartupInstall::new_with(args(&[r"C:\a.nar"]), None)));
     assert_eq!(not_submitted(&events), ["boot_stopped"]);
-    let warn = startup_events(&events, "startup_install_not_submitted");
+    let warn = events_named(&events, "startup_install_not_submitted");
     assert_eq!(
         warn[0].field("archives"),
         Some(format!("{:?}", paths(&[r"C:\a.nar"])).as_str())
@@ -172,16 +173,6 @@ fn dropping_with_only_initial_install_warns_and_nothing_to_install_is_silent() {
         ["boot_stopped"],
         "大小を問わず exe の隣を見る"
     );
-}
-
-fn startup_events<'a>(
-    events: &'a [log_capture_kit::CapturedEvent],
-    name: &str,
-) -> Vec<&'a log_capture_kit::CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(name))
-        .collect()
 }
 
 // ---- decide_call_ghost ----
@@ -391,7 +382,7 @@ fn readonly_and_boot_target_come_before_no_ghost_installed() {
 // ---- 起動の前に 1 回だけ入れる ----
 
 /// `install.txt` の行と足すファイルで書庫を `dir` へ置く。
-fn nar(
+pub(super) fn nar(
     dir: &temp_path_kit::TempPath,
     file: &str,
     lines: &[&str],
@@ -409,7 +400,7 @@ fn nar(
 }
 
 /// ゴーストの書庫（`directory` が `folder`・`accept` などは `more` で足す）。
-fn ghost_nar(
+pub(super) fn ghost_nar(
     dir: &temp_path_kit::TempPath,
     folder: &str,
     more: &[&str],
@@ -432,7 +423,7 @@ fn ghost_nar(
 }
 
 /// 告知を出さない・読み取りだけでない走り。
-const QUIET: BeforeBootEnv = BeforeBootEnv {
+pub(super) const QUIET: BeforeBootEnv = BeforeBootEnv {
     readonly: false,
     alert_suppressed: true,
 };
@@ -447,7 +438,7 @@ fn before_boot(
     name: &str,
     field: &str,
 ) -> Vec<(String, String)> {
-    startup_events(events, name)
+    events_named(events, name)
         .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::INFO, "{name}");
@@ -601,7 +592,7 @@ fn nothing_to_install_calls_nothing_and_warns_nothing() {
         drop(startup);
     });
     assert!(warn_or_worse(&events).is_empty(), "{events:?}");
-    assert!(startup_events(&events, "startup_install_started").is_empty());
+    assert!(events_named(&events, "startup_install_started").is_empty());
     assert!(!root.path().join("ghost").exists(), "何も入らない");
 }
 
@@ -620,7 +611,7 @@ fn run_once(
 }
 
 fn archives_of(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<String> {
-    startup_events(events, name)
+    events_named(events, name)
         .into_iter()
         .map(|e| e.field("archive").unwrap_or_default().to_owned())
         .collect()
@@ -661,7 +652,7 @@ fn deletesource_deletes_only_installed_copies_once() {
         root.path().join("ghost/good").is_dir(),
         "入れた先は消えない"
     );
-    let ok = startup_events(&events, "startup_source_deleted");
+    let ok = events_named(&events, "startup_source_deleted");
     assert_eq!(ok.len(), 1, "同じパス 2 回は 1 回だけ: {events:?}");
     assert_eq!(ok[0].level, tracing::Level::INFO);
     assert_eq!(ok[0].field("origin"), Some("StartupArgs"));
@@ -669,7 +660,7 @@ fn deletesource_deletes_only_installed_copies_once() {
         archives_of(&events, "startup_source_deleted"),
         [good.display().to_string()]
     );
-    assert!(startup_events(&events, "startup_source_delete_failed").is_empty());
+    assert!(events_named(&events, "startup_source_delete_failed").is_empty());
 }
 
 /// `deletesource` が無ければ `--install` の写しは入っても残る。
@@ -685,12 +676,12 @@ fn without_deletesource_installed_args_copy_stays() {
     let (_, events) = run_once(&root, args, None, &BootRequest::default(), QUIET);
     assert!(root.path().join("ghost/good").is_dir());
     assert!(good.is_file());
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
 }
 
 /// 使われていて消せない写しは warn を残して残り、ほかの写しの消去は続く。
 ///
-/// 読み取り専用の属性では試さない: 今の `std::fs::remove_file` は Windows で読み取り専用の
+/// 読み取り専用の属性では試さない: `std::fs::remove_file` は Windows で読み取り専用の
 /// ファイルも消す。読むことだけを許す（消すことを許さない）開き方で握って「使われている」にする。
 #[test]
 fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
@@ -714,7 +705,7 @@ fn copy_in_use_is_kept_with_a_warn_and_the_rest_goes_on() {
     assert!(root.path().join("ghost/locked").is_dir(), "入りはする");
     assert!(locked.is_file(), "使われている写しは残る");
     assert!(!good.exists(), "次の写しは消える");
-    let failed = startup_events(&events, "startup_source_delete_failed");
+    let failed = events_named(&events, "startup_source_delete_failed");
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].level, tracing::Level::WARN);
     assert!(failed[0].field("error").is_some());
@@ -739,7 +730,7 @@ fn initial_install_is_deleted_only_when_installed() {
         QUIET,
     );
     assert!(!initial.exists(), "入ったら消える");
-    let ok = startup_events(&events, "startup_source_deleted");
+    let ok = events_named(&events, "startup_source_deleted");
     assert_eq!(ok.len(), 1);
     assert_eq!(ok[0].field("origin"), Some("InitialInstall"));
 
@@ -752,7 +743,7 @@ fn initial_install_is_deleted_only_when_installed() {
         QUIET,
     );
     assert!(initial.is_file(), "入らなければ残る");
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
 }
 
 /// 読み取りだけなら出どころごとに断り、何も入れず何も消さず、callghost を readonly で
@@ -776,7 +767,7 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
     };
     let (answer, events) = run_once(&root, args, Some(&exe), &BootRequest::default(), before);
     assert_eq!(answer, None);
-    let refused: Vec<_> = startup_events(&events, "readonly_refused")
+    let refused: Vec<_> = events_named(&events, "readonly_refused")
         .into_iter()
         .map(|e| {
             assert_eq!(e.level, tracing::Level::INFO);
@@ -798,8 +789,8 @@ fn readonly_refuses_each_origin_and_keeps_every_copy() {
         assert!(copy.is_file(), "{copy:?} は消えない");
     }
     assert!(!root.path().join("ghost").exists(), "何も入らない");
-    assert!(startup_events(&events, "startup_install_started").is_empty());
-    assert!(startup_events(&events, "startup_source_deleted").is_empty());
+    assert!(events_named(&events, "startup_install_started").is_empty());
+    assert!(events_named(&events, "startup_source_deleted").is_empty());
     assert_eq!(skipped(events), "readonly");
 }
 

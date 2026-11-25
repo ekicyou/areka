@@ -163,7 +163,7 @@ fn relative_path_in_a_script_string_reaches_no_order() {
 }
 
 /// 2 番目の引数が `path`／`url` 以外（大文字の `URL`・知らない語・無し）は `install_cue_unsupported`
-/// の `warn!` 1 件で送らない。`url` は URL の腕へ移った（下の節）。
+/// の `warn!` 1 件で送らない。
 #[test]
 fn not_path_warns_once_and_sends_nothing() {
     let cases: [&[&str]; 3] = [

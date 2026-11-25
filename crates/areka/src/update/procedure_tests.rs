@@ -15,8 +15,8 @@ use super::procedure_test_support::{
     script_updated_with_leftovers, spec,
 };
 use super::{EngineRun, GhostResources, OrderEnd, Raised, run_order};
+use crate::session_tests::events_named;
 use crate::update::refs::TargetEnd;
-use crate::update::update_test_support::named;
 use crate::update::{SummaryKind, TargetKind, UpdateReason};
 
 const SEP: &str = "\u{1}";
@@ -201,7 +201,7 @@ fn four_paths_send_canonical_events_for_ghost_and_shell() {
             assert_eq!(order_end.ends, vec![end.clone()], "{k} {label}");
             assert!(order_end.summarised, "{k} {label}");
 
-            let failed = named(&events, "update_failed");
+            let failed = events_named(&events, "update_failed");
             if matches!(end, TargetEnd::Failed { .. }) {
                 assert_eq!(failed.len(), 1, "{k} {label}: {events:?}");
                 assert_eq!(failed[0].level, Level::ERROR);
@@ -263,7 +263,7 @@ fn process_exec_answered_by_script_stops_the_order() {
         vec![Call::Raise("OnUpdateProcessExec", s(&["manual"]))]
     );
     assert_eq!(end, OrderEnd::default());
-    let answered = named(&events, "update_process_exec");
+    let answered = events_named(&events, "update_process_exec");
     assert_eq!(answered.len(), 1, "{events:?}");
     assert_eq!(answered[0].level, Level::INFO);
     assert_eq!(answered[0].field("answered"), Some("true"));
@@ -379,7 +379,7 @@ fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     );
     assert_eq!(ports.raised().last().unwrap().1, s(&["ghost\u{1}OK\u{1}0"]));
     assert_eq!(end.ends, vec![TargetEnd::Unchanged, TargetEnd::Skipped]);
-    let skipped = named(&events, "update_target_skipped");
+    let skipped = events_named(&events, "update_target_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
 
@@ -404,7 +404,7 @@ fn targets_without_homeurl_are_skipped_and_all_skipped_sends_no_summary() {
     assert_eq!(end.ends, vec![TargetEnd::Skipped, TargetEnd::Skipped]);
     assert!(!end.summarised);
     assert!(!end.reload_requested);
-    assert_eq!(named(&events, "update_target_skipped").len(), 2);
+    assert_eq!(events_named(&events, "update_target_skipped").len(), 2);
 }
 
 /// 取得口を作れなければ `OnUpdateBegin` → `OnUpdateFailure(connect)` と `error!` 1 件。
@@ -538,7 +538,7 @@ fn missing_resources_abandons_before_any_target() {
     let (end, events) = run(&order, &ports);
     assert!(ports.raised().is_empty());
     assert_eq!(end, OrderEnd::default());
-    let abandoned = named(&events, "update_abandoned");
+    let abandoned = events_named(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].field_str("at"), Some("resources"));
 }
@@ -576,7 +576,7 @@ fn leftovers_after_success_are_warned_and_still_changed() {
         &("OnUpdateResult", s(&["ghost\u{1}OK\u{1}1"]))
     );
 
-    let left = named(&events, "update_leftover");
+    let left = events_named(&events, "update_leftover");
     assert_eq!(left.len(), 2, "{events:?}");
     assert!(left.iter().all(|e| e.level == Level::WARN));
     let paths: Vec<&str> = left.iter().map(|e| e.field("path").unwrap()).collect();

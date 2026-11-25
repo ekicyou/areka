@@ -293,7 +293,8 @@ fn user_root_mark_survives_add_remove_front() {
 
 mod apply {
     use super::*;
-    use crate::roots::roots_test_support::{events_named, world};
+    use crate::roots::roots_test_support::world;
+    use crate::session_tests::events_named;
     use areka_runtime::spine::{Progress, wait_until};
     use areka_session::boot_config::BootContext;
     use areka_session::roots::{decode_memory, read_memory};

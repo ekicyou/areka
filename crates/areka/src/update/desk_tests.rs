@@ -17,8 +17,9 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
+use crate::session_tests::events_named;
 use crate::update::refs::executing_refs;
-use crate::update::update_test_support::{named, write_descript};
+use crate::update::update_test_support::write_descript;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
 use areka_session::exit_wait::begin_close;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
@@ -151,7 +152,7 @@ fn accepted_orders_reach_the_worker_and_set_the_stage_by_reason() {
     assert_eq!(orders[0].targets.len(), 1);
     assert_eq!(orders[0].targets[0].name, "Emo");
     assert_eq!(orders[0].ghost_folder.as_deref(), Some("emo"));
-    let started = named(&events, "update_order_started");
+    let started = events_named(&events, "update_order_started");
     assert_eq!(started.len(), 1, "{events:?}");
     assert_eq!(started[0].level, Level::INFO);
     assert_eq!(warns(&events), 0, "{events:?}");
@@ -221,7 +222,7 @@ fn a_request_while_running_sends_one_executing_and_no_summary() {
         "総括は無い"
     );
     assert!(rig.orders().is_empty());
-    let refused = named(&events, "update_refused");
+    let refused = events_named(&events, "update_refused");
     assert_eq!(refused.len(), 1, "{events:?}");
     assert_eq!(warns(&events), 1, "{events:?}");
     assert_eq!(rig.stage(), Stage::Running);
@@ -252,7 +253,11 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
     assert!(rig.raised().is_empty());
     assert!(rig.orders().is_empty());
     assert_eq!(warns(&events), 1, "{events:?}");
-    assert_eq!(named(&events, "update_refused").len(), 1, "{events:?}");
+    assert_eq!(
+        events_named(&events, "update_refused").len(),
+        1,
+        "{events:?}"
+    );
     assert_eq!(rig.stage(), Stage::Idle);
 }
 
@@ -367,7 +372,11 @@ fn a_second_request_while_holding_is_refused() {
             Some((ghost_only(), UpdateReason::Script)),
             "{same_tick}"
         );
-        assert_eq!(named(&events, "update_refused").len(), 1, "{events:?}");
+        assert_eq!(
+            events_named(&events, "update_refused").len(),
+            1,
+            "{events:?}"
+        );
     }
 }
 
@@ -382,7 +391,7 @@ fn a_gone_worker_is_reported_and_dropped_and_the_stage_stays_idle() {
     rig.world.non_send_mut::<UpdateDesk>().worker = Some(dead);
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::WorkerGone);
-    let gone = named(&events, "update_worker_gone");
+    let gone = events_named(&events, "update_worker_gone");
     assert_eq!(gone.len(), 1, "{events:?}");
     assert_eq!(gone[0].level, Level::ERROR);
     assert!(rig.world.non_send::<UpdateDesk>().worker.is_none());
