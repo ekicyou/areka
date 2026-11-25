@@ -11,10 +11,9 @@ use areka_mcp::tools::{Pending, ToolCall, ToolRequest};
 use log_capture_kit::{CapturedEvent, capture, count_levels};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{
-    answer, body, ghost, rig, text, try_outcome, warn_or_worse,
-};
+use crate::mcp::kanade_fake_test_support::{answer, body, ghost, rig, text, try_outcome};
 use crate::mcp::{drain, install};
+use crate::session_tests::warn_or_worse;
 
 /// `handle` を呼んで待つ側を返す（記録は呼んだスレッドで拾う）。
 fn call(world: &mut World, ghost_name: Option<&str>) -> (Pending, Vec<CapturedEvent>) {
@@ -48,7 +47,7 @@ fn answer_with(status: ExecutionStatus) -> (ToolOutcome, usize) {
     let ((), polled) = capture(|| drain(&mut world));
     (
         answer(&pending),
-        warn_or_worse(&called) + warn_or_worse(&polled),
+        warn_or_worse(&called).len() + warn_or_worse(&polled).len(),
     )
 }
 

@@ -8,7 +8,6 @@ use areka_mcp::tools::Pending;
 use areka_mcp::{ToolContent, ToolOutcome};
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use bevy_ecs::world::World;
-use log_capture_kit::CapturedEvent;
 
 use super::install;
 use super::resolve::ActiveGhost;
@@ -65,13 +64,6 @@ pub(super) fn ids(body: &str) -> Vec<u64> {
 
 /// strict 真の答えに足す文の `<n>` の前まで（`OK:` や前の空白は付けない）。
 pub(super) const STRICT_NOTE_BEFORE_ID: &str = "strict errors will be recorded to the error log. Check them later with get_log tool (log_type=error, since_id=";
-
-pub(super) fn warn_or_worse(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|ev| ev.level <= tracing::Level::WARN)
-        .count()
-}
 
 pub(super) fn text(s: &str) -> Vec<ToolContent> {
     vec![ToolContent::Text(s.to_string())]

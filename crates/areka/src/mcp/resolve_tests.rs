@@ -15,8 +15,9 @@ use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
-use crate::mcp::kanade_fake_test_support::{answer, body_and_error, ghost, rig, warn_or_worse};
+use crate::mcp::kanade_fake_test_support::{answer, body_and_error, ghost, rig};
 use crate::mcp::{McpLater, drain};
+use crate::session_tests::warn_or_worse;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 
 const ROOT: &str = r"C:\ssp\ghost\emily4";
@@ -397,7 +398,9 @@ fn ask_kanade_defers_and_answers_when_the_reply_arrives() {
         );
         assert!(world.non_send::<McpLater>().0.is_empty());
         assert_eq!(
-            warn_or_worse(&called) + warn_or_worse(&before) + warn_or_worse(&after),
+            warn_or_worse(&called).len()
+                + warn_or_worse(&before).len()
+                + warn_or_worse(&after).len(),
             0
         );
     }
@@ -430,7 +433,7 @@ fn ask_kanade_reads_a_dropped_reply_as_gone() {
             "{ghost_name:?}"
         );
         assert_eq!(
-            warn_or_worse(&called) + warn_or_worse(&polled),
+            warn_or_worse(&called).len() + warn_or_worse(&polled).len(),
             0,
             "{ghost_name:?}: {called:?} {polled:?}"
         );
@@ -449,7 +452,11 @@ fn ask_kanade_reads_an_unsendable_kanade_as_gone() {
             (format!("NG:{gone}"), true),
             "{ghost_name:?}"
         );
-        assert_eq!(warn_or_worse(&called), 0, "{ghost_name:?}: {called:?}");
+        assert_eq!(
+            warn_or_worse(&called).len(),
+            0,
+            "{ghost_name:?}: {called:?}"
+        );
         assert!(world.non_send::<McpLater>().0.is_empty(), "預けない");
     }
 }

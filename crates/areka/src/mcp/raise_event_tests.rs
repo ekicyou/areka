@@ -13,10 +13,10 @@ use log_capture_kit::{CapturedEvent, capture, count_levels};
 use super::*;
 use crate::mcp::kanade_fake_test_support::{
     STRICT_NOTE_BEFORE_ID, answer, body, body_and_error, ghost, record_one, rig, text,
-    warn_or_worse,
 };
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
 use crate::mcp::{McpLater, drain};
+use crate::session_tests::warn_or_worse;
 
 const EVENT: &str = "OnAiTalk";
 const SCRIPT: &str = r"\0\s[0]hello\e";
@@ -69,7 +69,7 @@ fn answer_with(ghost_name: Option<&str>, result: SstpNotifyOutcome) -> (ToolOutc
     let ((), polled) = capture(|| drain(&mut world));
     (
         answer(&pending),
-        warn_or_worse(&called) + warn_or_worse(&polled),
+        warn_or_worse(&called).len() + warn_or_worse(&polled).len(),
     )
 }
 
@@ -167,7 +167,7 @@ fn invalid_arguments_send_nothing() {
         assert!(outcome.is_error, "{label}");
         assert!(rx.try_recv().is_err(), "kanade に何も届かない・{label}");
         assert!(world.non_send::<McpLater>().0.is_empty(), "{label}");
-        assert_eq!(warn_or_worse(&called), 0, "{label}");
+        assert_eq!(warn_or_worse(&called).len(), 0, "{label}");
     }
 }
 
