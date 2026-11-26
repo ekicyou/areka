@@ -411,12 +411,21 @@ fn node_opacity_change_rebuilds_and_marks_dirty() {
 /// 節の上げ下げの相を規則の答えのとおりに進める（8 回の更新で用意中、描画面がそろえば上げた）。
 fn drive_to(world: &mut World, e: Entity, phase: Phase) {
     let mut a = world.get_mut::<AutoPromotion>(e).unwrap();
-    for i in 0..8 {
-        a.rule
-            .step(i as f64 * 0.1, true, || Ok(()), SurfaceReadiness::Pending);
+    for i in 0..8i64 {
+        a.rule.step(
+            dola::time::testing::at_ms(i * 100),
+            true,
+            || Ok(()),
+            SurfaceReadiness::Pending,
+        );
     }
     if phase == Phase::Active {
-        a.rule.step(0.8, false, || Ok(()), SurfaceReadiness::Ready);
+        a.rule.step(
+            dola::time::testing::at_ms(800),
+            false,
+            || Ok(()),
+            SurfaceReadiness::Ready,
+        );
     }
     assert_eq!(a.rule.phase(), phase);
 }
@@ -437,7 +446,7 @@ fn phase_change_moves_surface_parts_in_and_out() {
             .get_mut::<AutoPromotion>(node)
             .unwrap()
             .rule
-            .absorb(1.0);
+            .absorb(dola::time::testing::at_ms(1000));
         world.run_schedule(PreRenderSurface);
         assert!(
             has_none(world, node),

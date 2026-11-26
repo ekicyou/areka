@@ -223,9 +223,13 @@ fn active_auto_owner_attaches_to_its_parent_owner_below_manual_owners() {
     world.spawn((VisualGraphics::new(vm.clone()), ChildOf(host)));
     {
         let mut a = world.get_mut::<AutoPromotion>(x).unwrap();
-        for i in 0..8 {
-            a.rule
-                .step(i as f64 * 0.1, true, || Ok(()), SurfaceReadiness::Pending);
+        for i in 0..8i64 {
+            a.rule.step(
+                dola::time::testing::at_ms(i * 100),
+                true,
+                || Ok(()),
+                SurfaceReadiness::Pending,
+            );
         }
         assert_eq!(a.rule.phase(), Phase::Preparing);
     }
@@ -235,7 +239,12 @@ fn active_auto_owner_attaches_to_its_parent_owner_below_manual_owners() {
 
     {
         let mut a = world.get_mut::<AutoPromotion>(x).unwrap();
-        a.rule.step(0.8, false, || Ok(()), SurfaceReadiness::Ready);
+        a.rule.step(
+            dola::time::testing::at_ms(800),
+            false,
+            || Ok(()),
+            SurfaceReadiness::Ready,
+        );
         assert_eq!(a.rule.phase(), Phase::Active);
     }
     run_hierarchy(&mut world);

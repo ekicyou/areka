@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::iter::successors;
 
 use bevy_ecs::prelude::*;
+use dola::TimePoint;
 
 use super::placement::{PlacementClip, PlacementKind, SurfacePlacement};
 use super::promotion::{AutoPromotion, DemoteReason, Phase, SurfaceReadiness, Verdict};
@@ -28,7 +29,7 @@ pub(crate) type PromotionData = (
 /// 1 回の判断の入力（1 つの手動の持ち主の回ぶん）。
 pub(crate) struct RoundContext {
     /// フレームの時刻。無ければ判断しない（相を進めない）。
-    pub now: Option<f64>,
+    pub now: Option<TimePoint>,
     /// 装置と WUC の資源が在るか。
     pub device_ready: bool,
     /// 親の持ち主の拡大（`GlobalArrangement`）。
@@ -181,7 +182,7 @@ pub(crate) fn run_round(
 /// 全部の根を回した後、前の回に控えた自動の持ち主のうち、この回どの走査の列にも現れなかった実体
 /// （窓の外へ移った・持ち主の下から外れた）を見えないとして即時に戻す（記録の理由は `hidden`）。
 pub(crate) fn demote_unseen(
-    now: f64,
+    now: TimePoint,
     unseen: impl Iterator<Item = Entity>,
     states: &mut Query<PromotionData>,
 ) {
@@ -206,7 +207,7 @@ pub(crate) fn demote_unseen(
 /// 帰属・判断・祖先の優先と吸い込み。`phases` を判断の後の相へ書き換え、相が移った節が在れば真。
 fn decide(
     ctx: &RoundContext,
-    now: f64,
+    now: TimePoint,
     scan: &TreeScan,
     phases: &mut [Phase],
     states: &mut Query<PromotionData>,

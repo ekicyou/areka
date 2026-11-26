@@ -3,6 +3,7 @@
 //! ログの水準を変えても判断の答えが同じことを確かめる。
 
 use bevy_ecs::prelude::*;
+use dola::time::testing::at_ms;
 
 use super::promotion::*;
 use super::promotion_round::RoundContext;
@@ -36,7 +37,7 @@ fn promotion_and_activation_log_one_line_only_on_the_transition_frame() {
     for k in 0..PROMOTE_COUNT + 3 {
         let before = ph(&world, a);
         let log = capture_under_filter("debug", || {
-            round(&mut world, &mut s, &ctx(k as f64 * 0.125));
+            round(&mut world, &mut s, &ctx(at_ms(k as i64 * 125)));
         });
         let moved = ph(&world, a) != before;
         assert_eq!(lines(&log, PROMOTED), usize::from(moved), "回 {k}: {log}");
@@ -51,8 +52,8 @@ fn promotion_and_activation_log_one_line_only_on_the_transition_frame() {
     world.entity_mut(a).insert(surface);
     world.get_mut::<AutoPromotion>(a).unwrap().built = true;
     let log = capture_under_filter("debug", || {
-        round(&mut world, &mut s, &ctx(2.0));
-        round(&mut world, &mut s, &ctx(2.125));
+        round(&mut world, &mut s, &ctx(at_ms(2000)));
+        round(&mut world, &mut s, &ctx(at_ms(2125)));
     });
     assert_eq!(ph(&world, a), Phase::Active);
     assert_eq!(lines(&log, ACTIVATED), 1, "{log}");
@@ -69,7 +70,7 @@ fn demotion_logs_one_line_with_the_reason_word() {
     );
     let log = capture_under_filter("debug", || {
         for k in 0..10 {
-            round(&mut world, &mut s, &ctx(1.5 + k as f64 * 0.5));
+            round(&mut world, &mut s, &ctx(at_ms(1500 + k as i64 * 500)));
         }
     });
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Node);
@@ -104,8 +105,8 @@ fn demotion_logs_one_line_with_the_reason_word() {
             world.get_mut::<AutoPromotion>(a).unwrap().built = true;
         }
         let log = capture_under_filter("debug", || {
-            round(&mut world, &mut s, &ctx(1.5));
-            round(&mut world, &mut s, &ctx(1.625));
+            round(&mut world, &mut s, &ctx(at_ms(1500)));
+            round(&mut world, &mut s, &ctx(at_ms(1625)));
         });
         assert_eq!(ph(&world, ent(&s, 0)), Phase::Node, "{word}");
         assert_eq!(lines(&log, DEMOTED), 1, "{word}: {log}");
@@ -122,7 +123,7 @@ fn demotion_logs_one_line_with_the_reason_word() {
         ],
     );
     let log = capture_under_filter("debug", || {
-        feed(&mut world, &mut s, &[0], 1.0, PROMOTE_COUNT);
+        feed(&mut world, &mut s, &[0], at_ms(1000), PROMOTE_COUNT);
     });
     assert_eq!(ph(&world, ent(&s, 1)), Phase::Node);
     assert_eq!(lines(&log, PROMOTED), 1, "{log}");
@@ -144,7 +145,7 @@ fn skip_logs_once_while_the_same_reason_continues() {
         ],
     );
     let log = capture_under_filter("debug", || {
-        feed(&mut world, &mut s, &[0], 0.0, PROMOTE_COUNT + 6);
+        feed(&mut world, &mut s, &[0], at_ms(0), PROMOTE_COUNT + 6);
     });
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Node);
     assert_eq!(lines(&log, SKIPPED), 1, "{log}");
@@ -155,11 +156,11 @@ fn skip_logs_once_while_the_same_reason_continues() {
         for k in 0..3 {
             let c = RoundContext {
                 device_ready: false,
-                ..ctx(1.75 + k as f64 * 0.125)
+                ..ctx(at_ms(1750 + k as i64 * 125))
             };
             round(&mut world, &mut s, &c);
         }
-        feed(&mut world, &mut s, &[0], 2.125, 3);
+        feed(&mut world, &mut s, &[0], at_ms(2125), 3);
     });
     assert_eq!(lines(&log, SKIPPED), 2, "{log}");
     assert_eq!(lines(&log, "no_device"), 1, "{log}");
@@ -196,7 +197,12 @@ fn unhonored_shape_under_a_node_warns_once_while_it_persists() {
         let mut reported = ReportedIssues::default();
         let log = capture_under_filter("warn", || {
             for k in 0..3 {
-                round_with(&mut world, &mut s, &ctx(k as f64), &mut reported);
+                round_with(
+                    &mut world,
+                    &mut s,
+                    &ctx(at_ms(k as i64 * 1000)),
+                    &mut reported,
+                );
             }
         });
         assert_eq!(lines(&log, UNHONORED), 1, "{word}: {log}");
@@ -209,12 +215,12 @@ fn unhonored_shape_under_a_node_warns_once_while_it_persists() {
         s.entries[1].ancestors = below().ancestors;
         s.entries.truncate(2);
         let log = capture_under_filter("warn", || {
-            round_with(&mut world, &mut s, &ctx(3.0), &mut reported);
+            round_with(&mut world, &mut s, &ctx(at_ms(3000)), &mut reported);
         });
         assert_eq!(lines(&log, UNHONORED), 0, "{word}: {log}");
         s.entries = kept;
         let log = capture_under_filter("warn", || {
-            round_with(&mut world, &mut s, &ctx(4.0), &mut reported);
+            round_with(&mut world, &mut s, &ctx(at_ms(4000)), &mut reported);
         });
         assert_eq!(lines(&log, UNHONORED), 1, "{word}: {log}");
     }
@@ -238,7 +244,7 @@ fn plain_or_root_owners_do_not_warn() {
         let mut world = World::new();
         let mut s = world_scan(&mut world, entries);
         let log = capture_under_filter("warn", || {
-            round(&mut world, &mut s, &ctx(0.0));
+            round(&mut world, &mut s, &ctx(at_ms(0)));
         });
         assert_eq!(lines(&log, UNHONORED), 0, "{log}");
     }
@@ -262,7 +268,7 @@ fn answers_do_not_depend_on_the_log_level() {
         capture_under_filter(filter, || {
             only_updated(&mut s, &[0, 2]);
             for k in 0..PROMOTE_COUNT + 4 {
-                let (plan, written) = round(&mut world, &mut s, &ctx(1.0 + k as f64 * 0.125));
+                let (plan, written) = round(&mut world, &mut s, &ctx(at_ms(1000 + k as i64 * 125)));
                 let phases: Vec<_> = (0..4).map(|i| ph(&world, ent(&s, i))).collect();
                 let memo: Vec<_> = (0..4)
                     .map(|i| world.get::<AutoPromotion>(ent(&s, i)).unwrap().skip_memo)
