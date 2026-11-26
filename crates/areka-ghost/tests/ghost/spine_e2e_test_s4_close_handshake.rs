@@ -72,7 +72,7 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     // basewareversion より先に積まれ、別スレッドの競走になる）。起動系列の途中で届いた
     // CloseRequest は pending_close として持ち越され、握手は Steady 到達の後に始まる
     // ので、cue を待ってから送れば握手の完走を下の有界待ちで確かめられる。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     super::spin_pumping_ticks(
         "S4: surface cue never fired after repeated Tick — boot talk did not reach \
          dispatcher's active slot",

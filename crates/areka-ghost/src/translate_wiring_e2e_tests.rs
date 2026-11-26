@@ -8,8 +8,9 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use areka_kanade::{MonotonicMs, ShioriBackend};
+use areka_kanade::ShioriBackend;
 use areka_sakura::contract::{CueCommand, CuePayload, CueSink, SystemVarSnapshot, TalkCue};
+use dola::time::testing::at_ms;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 use crate::dispatcher::DispatcherMsg;
@@ -130,9 +131,7 @@ fn boot_and_play(
     {
         runtime
             .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
+            .send(DispatcherMsg::Tick { now: at_ms(now) })
             .expect("dispatcher alive while playing the greeting");
         now += 1000;
         std::thread::yield_now();

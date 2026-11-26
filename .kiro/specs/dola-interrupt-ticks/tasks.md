@@ -383,7 +383,7 @@
   - _Dispatch: standard — 前半の値の意味を保った型の付け替え_
   - _Requirements: 7.1, 14.6, 15.7_
 
-- [ ] 4.11 (P) areka-ghost の受け口と結合テストを直す
+- [x] 4.11 (P) areka-ghost の受け口と結合テストを直す
   - 受け口のログの欄を文字の形で出し、欄を読むテストは逆の読みで型へ読んで比べる。結合のテスト（964 行）の行を増やさない
   - このタスクのファイルについて、`cargo check -p areka-ghost --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-ghost 受け口と結合テスト_

@@ -21,8 +21,8 @@
 // 同期往復・状態遷移まで完結させてから次の inbox メッセージを取り出す）ため、`CloseRequest`→(直後に送る)`Tick` の到達順序は
 // mpsc の FIFO 保証と合わせて決定論的である。ゆえに:
 // - 1本目の `Tick{now: arm_now}` → `CloseTalkWait` に入って初めて受ける Tick ゆえ deadline を
-//   `arm_now + close_talk_deadline_ms` へ**確定するだけ**（超過判定はしない）。
-// - 2本目の `Tick{now: arm_now + close_talk_deadline_ms}` → `now >= deadline` で確実に超過 →
+//   `arm_now + close_talk_deadline` へ**確定するだけ**（超過判定はしない）。
+// - 2本目の `Tick{now: arm_now + close_talk_deadline}` → `now >= deadline` で確実に超過 →
 //   `Unloading{DeadlineExceeded}` → `ShioriUnload`。
 // 2 本の Tick 送出は即座に返る（inbox への enqueue のみ）ため、その後の `Unload` 呼出の実際の発火は有界スピン待機
 // （`yield_now` のみ・sleep も追加 Tick も伴わない）で確認する。
@@ -33,10 +33,10 @@ use areka_ghost::{
     GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot_with_kanade_stop,
 };
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
-    MonotonicMs, events,
+    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, events,
 };
 use areka_parsers::charset::DefaultEncoding;
+use dola::time::testing::at_ms;
 
 /// S5: close deadline 超過——close talk を意図的に完了させず（`\_w[49999950]`＝約13.9時間
 /// 相当の待ちで恒久的に止める）、`runtime.kanade()` へ `Tick` を 2 回注入するだけで
@@ -90,7 +90,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // ---- boot talk を Steady 到達まで駆動する（S1/S3/S4 と同一技法・sleep 不使用) ----
     // dispatcher への Tick は kanade 自身の last_now を更新しない（別チャンネル・別
     // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     super::spin_pumping_ticks(
         "S5: surface cue never fired after repeated Tick — boot talk did not reach \
          dispatcher's active slot",
@@ -141,24 +141,20 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
 
     // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用) ----
     // 1本目: CloseTalkWait 入場後 初めて受ける Tick——deadline を
-    // `arm_now + close_talk_deadline_ms` へ確定するだけで比較はしない
+    // `arm_now + close_talk_deadline` へ確定するだけで比較はしない
     // （close.rs の deadline=None 分岐）。
-    let arm_now: u64 = 5_000;
+    let arm_now = at_ms(5_000);
     runtime
         .kanade()
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(arm_now),
-        })
+        .send(KanadeMsg::Tick { now: arm_now })
         .expect("kanade actor should still be alive to receive the deadline-arming Tick");
 
-    // 2本目: `now >= deadline`（`arm_now + close_talk_deadline_ms`）を確実に跨ぐ値を
+    // 2本目: `now >= deadline`（`arm_now + close_talk_deadline`）を確実に跨ぐ値を
     // 注入する——生産既定 30_000ms を数値的に跨ぐだけで実時間はゼロ。
-    let cross_now = arm_now + config.close_talk_deadline_ms;
+    let cross_now = arm_now + config.close_talk_deadline;
     runtime
         .kanade()
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(cross_now),
-        })
+        .send(KanadeMsg::Tick { now: cross_now })
         .expect("kanade actor should still be alive to receive the deadline-crossing Tick");
 
     // ---- deadline 超過による強制終了系列の完走を有界スピン待機で確認する ----

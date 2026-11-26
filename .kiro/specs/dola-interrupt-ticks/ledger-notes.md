@@ -208,3 +208,9 @@
 - ログの欄: `choice_waiting_stale` の `warn!` の `display_end_elapsed_secs`（秒の実数）→ `display_end`（Display）。外したテストは無い。
 - 分けたファイル: `dispatcher_choice_tests.rs`（908 行）→ `dispatcher_choice_tests.rs`・`dispatcher_choice_waiting_tests.rs`・`dispatcher_selection_tests.rs`（テスト 15 本のまま）。
 - 改名と変える前後の期待: `choice_waiting_converts_elapsed_secs_to_ms_from_the_tick_base_and_forwards_to_kanade` → `choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade`（前は 4,000 + round(356.7) = 4,357 と 4,000 + round(1,250.4) = 5,250 で丸めを両側から挟んだ。後は 4,000 ms + 356.7 ms を丸めずに足す・`at_ms(1_250)` → `at_ms(5_250)`、指令 `Some(12.0)` → `Some(delta_ms(12_000))`）。`tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick` → `tick_relay_converts_absolute_now_to_offset_from_first_tick`。`resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base`（`(0.0, 0.5)` → `(at_ms(0), at_ms(500))`）。`script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive`（`Some(1.234)` → `Some(delta_ms(1_234))`）。
+
+## 4.11
+
+- 外したテスト・分かれ道・ログは無い。足したログの欄: `sink.rs` の `LogSink::emit` に `fire_time`、`at` は Display（文字の形）。
+- 変える前後の期待: `sink.rs` の `emit_logs_structured_event_with_at_actor_and_command_kind`・`emit_logs_structured_event_for_newline_cue`（欄 `at` の実数 `Some(1.5)`・`Some(3.25)` → `FromStr` で読んで `TimeSpan::from_millis(1500)`・`(3250)`）。`spine_e2e_test_s5_close_deadline`（`close_talk_deadline_ms` → `close_talk_deadline`）。`spine_e2e_test_s1_boot_success`（期待 `(f64, CueCommand)` → `(TimeSpan, CueCommand)`）。ほかは `MonotonicMs(n)` → `at_ms(n)`・`Tick(0.0)` → `Tick(at_ms(0))`。
+- areka-ghost の締め: `cargo test -p areka-ghost` は lib 235・ghost 39・ほか 8 が緑。

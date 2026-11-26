@@ -111,6 +111,8 @@ mod tests {
     use areka_sylphya::{
         PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
+    use dola::time::testing::at_ms;
+    use dola::{TimePoint, TimeSpan};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -251,12 +253,13 @@ mod tests {
         let (parts, roots, shared) = spawn_with_shared_io();
         let mut sink = PropSetCueSink::new(parts.publisher.clone());
 
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Text("こんにちは".into()),
-            duration: 0.0,
-        });
+        sink.emit(TalkCue::scheduled(
+            TimePoint::ZERO,
+            TimeSpan::ZERO,
+            ActorKey::from("0"),
+            CueCommand::Text("こんにちは".into()),
+            TimeSpan::ZERO,
+        ));
         parts.publisher.barrier().expect("barrier");
 
         let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
@@ -380,9 +383,9 @@ mod tests {
             );
 
             // 初回 Tick で時刻を刻む。挨拶 cue は出て、末尾の SET は保留。
-            handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+            handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
             // horizon を跨ぐ Tick で末尾の SET が発火し、完走する。
-            handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+            handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
 
             let TalkNotice::Done(done) = done_rx
                 .recv_timeout(Duration::from_secs(5))
@@ -436,7 +439,7 @@ mod tests {
                 None,
             );
 
-            handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+            handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
             handle.inbox.send(SakuraMsg::Close).unwrap();
 
             let TalkNotice::Done(done) = done_rx

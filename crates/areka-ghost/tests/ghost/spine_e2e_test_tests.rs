@@ -3,6 +3,7 @@
 // 台本通りの応答・終了結果・死活遷移を任意に再現できることを、6 シナリオで直接固定する。
 
 use super::*;
+use dola::{TimePoint, TimeSpan};
 
 /// シナリオ1: GET 応答（`Ok(Some)`）が台本どおり返り、呼出が記録されること。
 #[test]
@@ -119,18 +120,20 @@ fn recording_sink_clones_share_storage_in_fifo_order() {
     let mut clone_a = sink.clone();
     let mut clone_b = sink.clone();
 
-    let cue_a = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("via clone a".to_string()),
-        duration: 0.0,
-    };
-    let cue_b = TalkCue {
-        at: 1.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("via clone b".to_string()),
-        duration: 0.0,
-    };
+    let cue_a = TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("via clone a".to_string()),
+        TimeSpan::ZERO,
+    );
+    let cue_b = TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::from_millis(1000),
+        ActorKey::from("0"),
+        CueCommand::Text("via clone b".to_string()),
+        TimeSpan::ZERO,
+    );
 
     CueSink::emit(&mut clone_a, cue_a.clone());
     CueSink::emit(&mut clone_b, cue_b.clone());

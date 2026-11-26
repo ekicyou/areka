@@ -35,7 +35,7 @@ fn mount_variant_is_a_std_error() {
 
 // ---- boot 統合テスト ----
 
-use areka_kanade::MonotonicMs;
+use dola::time::testing::at_ms;
 
 /// `ghost_root` に `ghost/master/descript.txt` が無いと `boot` は
 /// `Err(GhostBootError::Mount(_))` を返す。connect closure は呼ばれたら panic するものを仕込み、
@@ -108,15 +108,11 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
 
     parts
         .kanade
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1),
-        })
+        .send(KanadeMsg::Tick { now: at_ms(1) })
         .expect("kanade sender from into_parts should still be alive");
     parts
         .dispatcher
-        .send(DispatcherMsg::Tick {
-            now: MonotonicMs(1),
-        })
+        .send(DispatcherMsg::Tick { now: at_ms(1) })
         .expect("dispatcher sender from into_parts should still be alive");
 
     let GhostParts {
@@ -298,15 +294,13 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     // 反復回数でなく壁時計デッドラインで括る: 最初の SHIORI 呼出が shiori アクタースレッド上で
     // 実 DLL の `LoadLibraryExW`＋`CreateInstance` を初めて走らせ、数十 ms を要するため。
     // デッドラインは宙吊り防止の上限にすぎず、時刻の前進は注入 Tick のみ。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     let mut fired = false;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
         runtime
             .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
+            .send(DispatcherMsg::Tick { now: at_ms(now) })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
         now += 1;
         if !records.lock().expect("records mutex poisoned").is_empty() {

@@ -8,6 +8,7 @@ use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{ScopeRoots, SylphyaInit, SylphyaParts, spawn_sylphya};
+use dola::{TimePoint, TimeSpan};
 use std::sync::mpsc::{self, Receiver};
 use tracing::Level;
 
@@ -157,12 +158,13 @@ fn not_mine_is_skipped_below_warn() {
     let events = capture(|| {
         sink.emit(carrier("get", &["other", "OnX", "baseware.name"]));
         sink.emit(carrier("set", &["property", "OnX", "baseware.name"]));
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Text("hi".into()),
-            duration: 0.0,
-        });
+        sink.emit(TalkCue::scheduled(
+            TimePoint::ZERO,
+            TimeSpan::ZERO,
+            ActorKey::from("0"),
+            CueCommand::Text("hi".into()),
+            TimeSpan::ZERO,
+        ));
     });
     assert!(drained(&rx).is_empty());
     assert_eq!(warns(&events), 0);

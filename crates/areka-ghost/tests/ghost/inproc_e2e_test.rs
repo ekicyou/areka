@@ -26,11 +26,12 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
     GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot, inproc_connect,
 };
-use areka_kanade::{MonotonicMs, ShioriBackend};
+use areka_kanade::ShioriBackend;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use areka_parsers::package::ShioriMount;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::at_ms;
 
 use temp_path_kit::TempPath;
 
@@ -608,13 +609,11 @@ fn drive_until_greeting_settles(
 ) {
     let expected_len = expected_greeting_sequence().len();
     let deadline = Instant::now() + Duration::from_secs(60);
-    let mut now: u64 = 500;
+    let mut now: i64 = 500;
     while Instant::now() < deadline {
         runtime
             .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
+            .send(DispatcherMsg::Tick { now: at_ms(now) })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
         now += 500;
         let s = surface_records

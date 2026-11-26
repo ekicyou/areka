@@ -10,6 +10,7 @@ use super::*;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
 use areka_kanade::KanadeConfig;
 use areka_parsers::charset::DefaultEncoding;
+use dola::TimeSpan;
 
 /// S1: boot 成功——boot→OnBoot(Value)→StartTalk→sakura 再生→RecordingSink の発火列
 /// （at 昇順・内容一致）を、Tick 注入のみで決定論的に確認する。
@@ -57,7 +58,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     // active slot に載るタイミングはスケジューリング依存で、単一の Tick 送出が間に合う保証はない。sleep は使わず、
     // Tick を送るたびに RecordingSink を確認する再送ループ（単調増加する `now` の注入と `yield_now` のみ）で
     // 橋渡しする。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     super::spin_pumping_ticks(
         "S1: surface cue never fired after repeated Tick — boot talk did not reach \
          dispatcher's active slot",
@@ -106,15 +107,15 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     //
     // 整定は `spin_pumping_ticks` で行う——4 件目は仮想時刻が `hello` の horizon を越えて初めて発火するため、
     // **Tick を注入し続けなければ届かない**（yield のみで待つと越えるか否かがスケジューラ依存になる）。
-    let expected: Vec<(f64, CueCommand)> = vec![
-        (0.0, CueCommand::ClearAll),
+    let expected: Vec<(TimeSpan, CueCommand)> = vec![
+        (TimeSpan::ZERO, CueCommand::ClearAll),
         (
-            0.0,
+            TimeSpan::ZERO,
             CueCommand::Emote {
                 key: "0".to_string(),
             },
         ),
-        (0.0, CueCommand::Text("hello".to_string())),
+        (TimeSpan::ZERO, CueCommand::Text("hello".to_string())),
         (
             areka_sakura::duration::text_playback_duration("hello"),
             CueCommand::command_carrier(
@@ -145,7 +146,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
         .clone();
     let text = text_records.lock().expect("records mutex poisoned").clone();
     let assert_broadcast = |cues: &[TalkCue], who: &str| {
-        let observed: Vec<(f64, CueCommand)> =
+        let observed: Vec<(TimeSpan, CueCommand)> =
             cues.iter().map(|c| (c.at, c.command.clone())).collect();
         assert_eq!(
             observed, expected,
