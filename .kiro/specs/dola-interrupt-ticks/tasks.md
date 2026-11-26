@@ -104,7 +104,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 4.4, 9.1, 9.2_
 
-- [ ] 2.6 (P) 台本の直列化の結合テストを、新しい形で書く
+- [x] 2.6 (P) 台本の直列化の結合テストを、新しい形で書く
   - JSON と TOML（機能 `toml`）の往復・起点の押されていない台本・負と 0 の時間切れ・整数でない値と負の長さの失敗を確かめる
   - このタスクのファイルについて、`cargo check -p dola --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）。dola の本体が組める時に、`cargo test -p dola --test cue` と機能 `toml` を付けた同じ入口で緑である
   - _Boundary: cue の結合テスト（台本）_
@@ -800,3 +800,4 @@
 - 2.2: `CueError::OriginNotStamped` は `cue/runtime.rs` に置き `cue/mod.rs` で再公開済み。`to_talk_schedule` は `Result` を返す。2.3 は schedule.rs の `with_horizon(origin: TimePoint, horizon: TimeSpan)`・`Entry<TimeSpan>` へ替えれば sheet.rs の 3 件が消える。schedule.rs の `sum_on_ms_grid` の呼び出し 3 か所と説明、runtime.rs の `from_sheet`（`Result` を受ける・説明「dispatch 刻印まで 0.0」）は 2.3 が直す。
 - 2.3: dola の結合テストの組み立て（`tests/cue/test_support.rs`）は名前と引数の順を変えず `TimeSpan` を受ける。`pub(crate) const fn ms(u32) -> TimeSpan` がある（例: `text(0.5, "b", 0.0)` → `text(ms(500), "b", ms(0))`）。時刻の表の 128 ビットの起点は後半（8.2）。
 - 2.4: `command_tests.rs` の `cue_duration_defaults_to_zero_for_legacy_serialized_data` の名前とコメント（「旧シリアライズ資産」「後方互換」）と 488 行の「不透明秒数」は古い言い方のまま。中身は「duration の欄が無い時は 0」。12.2 の説明の直しで拾う。
+- 2.6〜2.13 の dola の結合テストは、lib が組めるまで型の検査に届かない（`cargo check --all-targets` の誤り 0 件は「まだ見られていない」）。2.14 の締めで初めて型と実行の誤りが出る。
