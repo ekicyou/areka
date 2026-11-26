@@ -137,7 +137,7 @@ mod window;
 
 use self::balloon::compute_balloon_pos;
 use self::fixture::{
-    AUTHOR_DPI, CYCLE_INTERVAL_SECS, SHELL_INITIAL_X, SHELL_INITIAL_Y, emo2, emo2_balloon,
+    AUTHOR_DPI, CYCLE_INTERVAL, SHELL_INITIAL_X, SHELL_INITIAL_Y, emo2, emo2_balloon,
 };
 use self::input::on_shell_pressed;
 use self::reconcile::{assert_startup_golden, cycle_present_system, reconcile_present_sizes};
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
     println!("areka emo-present 観測 example");
     println!("================================");
     println!("  シェル窓（target 0）: emo2 surface1000 の着せ替え表情（腕組み・悲しみ眉・‥‥口）");
-    println!("    ＋ まばたきを {CYCLE_INTERVAL_SECS} 秒周期で開閉再現（bind 1400 の指令切替）");
+    println!("    ＋ まばたきを {CYCLE_INTERVAL} 秒周期で開閉再現（bind 1400 の指令切替）");
     println!("  バルーン窓（target 1）: balloons0.png（既定整列＝シェル左・上端揃え）");
     println!("  終了: シェルをダブルクリック");
     println!();

@@ -270,3 +270,7 @@
 ## 6.4
 
 - 外したテスト・分かれ道・ログ・変わった期待は無い（`dola::runtime::clock::now` → `dola::now`、`play_into` は起点 0 を押した台本で組む、`dump_balloon_gpu_tests.rs` の経過の比べは時刻の型）。
+
+## 6.5
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（`thread_roles_tests.rs` の `NEVER_FIRES` → `TimeSpan`、`offline_dump/render_tests.rs` の `settle_time` の期待 → `TimeSpan`、例 `emo-present` の `CYCLE_INTERVAL_SECS: f64` → `CYCLE_INTERVAL: TimeSpan`・`next_switch_at: TimePoint`）。例の表示「2.5 秒周期」が文字の形「2.5000000 秒周期」になった。

@@ -19,7 +19,7 @@ pub struct BalloonWindowMarker;
 // Surface cycle（surface1000 のまばたき bind の出し入れ）
 // ---------------------------------------------------------------------------
 
-/// シェル target のまばたき巡回状態（[`CYCLE_INTERVAL_SECS`] 周期で開閉し、各遷移で `apply` を 1 回発行）。
+/// シェル target のまばたき巡回状態（[`CYCLE_INTERVAL`] 周期で開閉し、各遷移で `apply` を 1 回発行）。
 ///
 /// さくらスクリプト `\s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]`
 /// `\![bind,目,通常,1]\![bind,まばたき,通常,1]` 相当を seriko 代役でハンドコンパイルした表情を、
@@ -84,6 +84,6 @@ pub(super) struct EmoBoot {
     pub(super) shell_cycling: bool,
     /// シェル target の現在のまばたき状態（装着直後は `EyesOpen`＝surface1000 初回表示に一致）。
     pub(super) cycle_state: CycleState,
-    /// 次の切替を行う `FrameTime` 絶対時刻（秒）。装着完了時に `now + CYCLE_INTERVAL_SECS` で確定する。
-    pub(super) next_switch_at: f64,
+    /// 次の切替を行う `FrameTime` 絶対時刻（秒）。装着完了時に `now + CYCLE_INTERVAL` で確定する。
+    pub(super) next_switch_at: dola::TimePoint,
 }

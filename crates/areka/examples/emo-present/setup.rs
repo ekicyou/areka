@@ -50,7 +50,7 @@ fn build_and_spawn(world: &mut World) {
         attached: false,
         shell_cycling: false,
         cycle_state: CycleState::EyesOpen,
-        next_switch_at: 0.0,
+        next_switch_at: dola::TimePoint::ZERO,
     };
 
     if let Some((emo_world, atlas, w, h)) = shell {

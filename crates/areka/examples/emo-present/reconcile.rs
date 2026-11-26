@@ -1,7 +1,7 @@
 use super::{
-    AUTHOR_DPI, CYCLE_INTERVAL_SECS, ComposeError, ComposedSurface, DPI, EmoBoot, EmoPresenter,
-    Entity, FrameTime, Point, SHELL_INITIAL_X, SHELL_INITIAL_Y, ScalePolicy, ScaleRatio, SizeI,
-    TargetId, WindowPos, World, compute_balloon_pos, derive_scale,
+    AUTHOR_DPI, CYCLE_INTERVAL, ComposeError, ComposedSurface, DPI, EmoBoot, EmoPresenter, Entity,
+    FrameTime, Point, SHELL_INITIAL_X, SHELL_INITIAL_Y, ScalePolicy, ScaleRatio, SizeI, TargetId,
+    WindowPos, World, compute_balloon_pos, derive_scale,
 };
 
 // ---------------------------------------------------------------------------
@@ -315,7 +315,7 @@ pub(super) fn assert_startup_golden(
 
 /// フレームクロック駆動でシェル target を数秒周期で巡回させる system。
 ///
-/// wintf の `FrameTime`（f64 秒）を基準に、[`CYCLE_INTERVAL_SECS`] を跨いだフレームで
+/// wintf の `FrameTime`（TimePoint）を基準に、[`CYCLE_INTERVAL`] を跨いだフレームで
 /// [`CycleState::next`] へ進めて対応する [`PresentCommand`] を `EmoPresenter::apply` で発行する。
 /// 装着（`boot_present_system`）が済み、かつシェルが巡回対象（`shell_cycling`）のときのみ動く。
 /// `apply`/presenter は `&mut World` と NonSend を要するため排他 system とし、切替が起きる
@@ -324,7 +324,7 @@ pub(super) fn cycle_present_system(world: &mut World) {
     let now = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
+        .unwrap_or_default();
 
     let due = match world.get_non_send::<EmoBoot>() {
         Some(b) if b.attached && b.shell_cycling => now >= b.next_switch_at,
@@ -339,7 +339,7 @@ pub(super) fn cycle_present_system(world: &mut World) {
         .expect("直上で存在確認済み");
 
     boot.cycle_state = boot.cycle_state.next();
-    boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
+    boot.next_switch_at = now + CYCLE_INTERVAL;
     // ComposeCache は surface id＋bind 集合をキーにするため、binds が異なる目開き/目閉じは自然に再合成される。
     let cmd = boot.cycle_state.command();
     boot.presenter.apply(world, cmd);

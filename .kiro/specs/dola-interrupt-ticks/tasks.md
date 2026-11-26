@@ -482,7 +482,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.1, 7.7_
 
-- [ ] 6.5 (P) 本体のインストール・更新・スレッドの役のテストと例を付け替える
+- [x] 6.5 (P) 本体のインストール・更新・スレッドの役のテストと例を付け替える
   - 新しい形で書く
   - このタスクのファイルについて、`cargo check -p areka --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: 本体 install・update・thread_roles・examples_
@@ -819,3 +819,4 @@
 - 5.3: `balloon_visibility_phase.rs` は `resolve_talk_time(None, ..)` を呼ばず `frame_now.and_then(|now| clock.talk_time(now))` を直に書く（同じ式）。`frame.rs:145` の `pub(super) use scale_text::resolve_talk_time` は未使用の警告が出る。5.6 が残すか外すかを決める（`frame_drain_text_tests.rs` が使う）。`balloon_visibility_decision.rs:20` の説明と phase.rs:91 の「text 相と同一の解決経路」は 5.6 の後に合わせる。
 - 5.6: `frame/scale_text.rs:194` の `resolve_talk_time` の説明「可視性の相も同じ関数で解決する」は事実と合わない（5.3 から相は同じ式を直に書く）。12.2 で直す。本体 `areka` の `runtime_tests/spine_*` が `run_text_phase(.., Some(10.0))`・`Some(0.30)` を渡している（段 5 の 6.3 で直す）。
 - 6.3: 本体 `areka` の `src/offline_dump/render_tests.rs`（217・228・249 行で `TimeSpan` が要る）はどのタスクの一覧にも無い。6.5 が持つ。
+- 6.5: 例 `emo-present` の `state.rs:87` の説明「（秒）」と `emo-present.rs:179` の `{CYCLE_INTERVAL} 秒周期`（文字の形で 2.5000000 と出る）は 12.2 で直す。

@@ -8,6 +8,7 @@ use areka_emo_atlas::WicDecoderArm;
 use areka_emo_compose::{BindSet, Composer, EmoWorld, shell_bounds};
 use areka_emo_present::{ShellTarget, load_shell_target};
 use areka_seriko::{AnimationTable, settle_surface, settle_time};
+use dola::TimeSpan;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -214,7 +215,10 @@ fn png_comes_from_the_function_mcp_uses() {
 #[test]
 fn runonce_shows_its_last_frame() {
     let shell = load("offline-render-runonce");
-    assert_eq!(settle_time(&shell.table, fixture::RUNONCE), 300);
+    assert_eq!(
+        settle_time(&shell.table, fixture::RUNONCE),
+        TimeSpan::from_millis(300)
+    );
     let got = shell.render(&default_binds(), fixture::RUNONCE).unwrap();
     assert_eq!(shell.pixel(&got, 2, 2), BLUE, "最後のコマの 102");
     assert_eq!(shell.pixel(&got, 10, 2), GRAY, "102 の右は土台");
@@ -225,7 +229,7 @@ fn runonce_shows_its_last_frame() {
 #[test]
 fn always_shows_the_frame_at_t() {
     let shell = load("offline-render-always");
-    assert_eq!(settle_time(&shell.table, fixture::ALWAYS), 0);
+    assert_eq!(settle_time(&shell.table, fixture::ALWAYS), TimeSpan::ZERO);
     let got = shell.render(&default_binds(), fixture::ALWAYS).unwrap();
     assert_eq!(
         shell.pixel(&got, 10, 2),
@@ -246,7 +250,7 @@ fn random_never_appears() {
 #[test]
 fn periodic_advances_to_t_and_has_not_fired_at_zero() {
     let shell = load("offline-render-periodic");
-    assert_eq!(settle_time(&shell.table, fixture::PERIODIC), 0);
+    assert_eq!(settle_time(&shell.table, fixture::PERIODIC), TimeSpan::ZERO);
     let got = shell.render(&default_binds(), fixture::PERIODIC).unwrap();
     assert_eq!(
         shell.pixel(&got, 10, 2),

@@ -1,8 +1,8 @@
 use super::{
-    AUTHOR_DPI, Added, BalloonWindowMarker, BindSet, CYCLE_INTERVAL_SECS,
-    ClickThroughRegistryHandle, Composer, EmoBoot, Entity, FrameTime, GraphicsCore, NonSend, Or,
-    PatternState, PresentCommand, Query, ShellWindowMarker, TargetId, WindowHandle, With, World,
-    WucGraphicsResource, assert_startup_golden, reconcile_present_sizes,
+    AUTHOR_DPI, Added, BalloonWindowMarker, BindSet, CYCLE_INTERVAL, ClickThroughRegistryHandle,
+    Composer, EmoBoot, Entity, FrameTime, GraphicsCore, NonSend, Or, PatternState, PresentCommand,
+    Query, ShellWindowMarker, TargetId, WindowHandle, With, World, WucGraphicsResource,
+    assert_startup_golden, reconcile_present_sizes,
 };
 
 // ---------------------------------------------------------------------------
@@ -98,15 +98,15 @@ pub(super) fn boot_present_system(world: &mut World) {
             "shell surface0",
         );
         // 手動デモ: 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）を
-        // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL_SECS 周期で出し入れして目の開閉を
+        // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL 周期で出し入れして目の開閉を
         // 手動再現する。時間駆動のアニメ本体は seriko エンジンの領分。
         boot.presenter.apply(world, boot.cycle_state.command()); // 初回＝EyesOpen（surface1000）
         let now = world
             .get_resource::<FrameTime>()
             .map(|ft| ft.0)
-            .unwrap_or(0.0);
+            .unwrap_or_default();
         boot.shell_cycling = true;
-        boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
+        boot.next_switch_at = now + CYCLE_INTERVAL;
     }
 
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
