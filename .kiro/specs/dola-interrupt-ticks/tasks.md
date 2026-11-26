@@ -595,7 +595,7 @@
   - _Dispatch: mechanical — 分かれ道を外し、期待は設計が与える_
   - _Requirements: 11.9, 11.10, 11.11_
 
-- [ ] 9.3 (P) 届いた物を、届いた順のまま、絶対の時刻が来るまで持つ列の型を置く
+- [x] 9.3 (P) 届いた物を、届いた順のまま、絶対の時刻が来るまで持つ列の型を置く
   - areka-sakura に、列の型を置く。crate の頭の `mod` の行は、このタスクが、列の型が組めるようになってから足す（8.6・9.1・9.2 の確かめを壊さない。8.6・9.1・9.2 は crate の頭を編集しない）。頭の物の時刻が来ていれば出し、来ていなければ出さない（後ろの物を先に出さない）。時刻を持たない物は、頭に来た時に出る。待っている頭の物の時刻を返す口を置く。時計も窓も世界も見ない
   - 隣のテストで、設計の Unit Tests の「届いた物を持つ列」の全部（頭が待つ間は後ろも待つ・届いた順に出る・ちょうどの時刻・時刻を持たない物・待っている時刻と空の時の `None`・1 つずつ入れてもまとめて入れても同じ）が通る
   - _Boundary: areka_sakura::held_
@@ -825,3 +825,4 @@
 - 8.3: 新しい再生機の結合テスト 4 本の入口は `crates/dola/tests/cue/runtime_test.rs`（`tests/cue.rs` ではない）。「冪等再 tick」の古い言い方が `runtime_test_broadcast_tests.rs:151`・`runtime_test_choice_delivery_tests.rs:92,112` に残る（12.2）。
 - 9.1: `base_now` の語が `crates/areka/src/runtime_tests/spine_talk_close_tests.rs` の 84・109・142 行のコメントに残る（12.2 で直す。12.3 の検索の前に）。
 - 9.2: `duplicate_and_backward_tick_do_not_double_fire` の中の注釈「同値 → no-op」「逆行 → no-op」は、守りが止めるのではなく再生機に新しく届く物が無いという意味になった（12.2 で拾う）。
+- 9.3: 届いた物を持つ列は `areka_sakura::held::HeldQueue<T>`（`push(Option<TimePoint>, T)`・`pop_due(frame_now) -> Option<T>`・`waiting_until() -> Option<TimePoint>`・`is_empty`）。

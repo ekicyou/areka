@@ -327,3 +327,7 @@
 
 - 取り除いた分かれ道とログ: `drive.rs` の `on_tick` の `t <= last_tick` の守りと、その `debug!`（"non-monotonic Tick ignored (backward or equal)"）。`last_tick` は受けた時刻の最大。外したテスト・変えた期待は無い（`duplicate_and_backward_tick_do_not_double_fire` はそのまま緑）。
 - 足したテスト: `drive_delivery_tests::same_time_tick_reaches_player_after_origin_shift`（守りを戻すと赤になる事を確かめた）。
+
+## 9.3（後半）
+
+- 足した型とテスト: `areka_sakura::held::HeldQueue<T>`（`new`・`push`・`pop_due`・`waiting_until`・`is_empty`）と `held_tests.rs` の 7 本。外した物・変えた期待は無い。

@@ -35,6 +35,7 @@ pub mod compile;
 pub mod contract;
 pub mod drive;
 pub mod duration;
+pub mod held;
 pub mod reveal;
 pub mod strict;
 pub(crate) mod strict_tap;
