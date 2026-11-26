@@ -2,7 +2,7 @@
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
 //! 起動指示から毎秒 Tick 数回・close 指示・終了完了までの運行全体を単一の `#[test]` で
-//! 駆動する。時刻は注入した [`MonotonicMs`] Tick のみで進行させ（実時間 sleep なし・
+//! 駆動する。時刻は注入した `TimePoint` の Tick のみで進行させ（実時間 sleep なし・
 //! mock 即応・全 join は期限付き）、以下 3 点を単一の合否として検証する:
 //!
 //! - (a) 起動系列が正典順序で発火したこと（NOTIFY／GET の別・Reference 構成込み）。
