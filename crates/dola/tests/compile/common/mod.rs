@@ -27,6 +27,14 @@ pub fn make_doc_with_storyboard(
     }
 }
 
+pub const fn ms(millis: u32) -> TimeSpan {
+    TimeSpan::from_millis(millis)
+}
+
+pub const fn delta_ms(millis: i64) -> TimeDelta {
+    TimeDelta::from_millis_saturating(millis)
+}
+
 /// 制約の無い f64 変数（初期値 0.0）
 pub fn float_var() -> AnimationVariableDef {
     AnimationVariableDef::Float {
@@ -37,7 +45,7 @@ pub fn float_var() -> AnimationVariableDef {
 }
 
 /// 変数 `var` を 0.0→1.0 へ動かすインラインの遷移のエントリ
-pub fn transition_entry(var: &str, delay: f64, duration: Option<f64>) -> StoryboardEntry {
+pub fn transition_entry(var: &str, delay: TimeSpan, duration: Option<TimeSpan>) -> StoryboardEntry {
     StoryboardEntry {
         variable: Some(var.to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {

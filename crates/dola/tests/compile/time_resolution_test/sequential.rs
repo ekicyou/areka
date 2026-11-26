@@ -1,4 +1,4 @@
-//! sequential の時刻と start_time オフセットの解決
+//! sequential の時刻の解決（storyboard の頭からの隔たり）
 
 use super::*;
 
@@ -14,7 +14,7 @@ fn simple_sequential_single_variable() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -25,7 +25,7 @@ fn simple_sequential_single_variable() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // infer from previous
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -34,18 +34,18 @@ fn simple_sequential_single_variable() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
 
-    assert_eq!(tl.segments[0].start_time, 0.0);
-    assert_eq!(tl.segments[0].end_time, 1.0);
+    assert_eq!(tl.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl.segments[0].end_time, delta_ms(1000));
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(0.0));
     assert_eq!(tl.segments[0].to_value, TransitionValue::Scalar(100.0));
 
     // Second segment: 1.0 -> 3.0 (sequential, from = previous to)
-    assert_eq!(tl.segments[1].start_time, 1.0);
-    assert_eq!(tl.segments[1].end_time, 3.0);
+    assert_eq!(tl.segments[1].start_time, delta_ms(1000));
+    assert_eq!(tl.segments[1].end_time, delta_ms(3000));
     assert_eq!(tl.segments[1].from_value, TransitionValue::Scalar(100.0));
     assert_eq!(tl.segments[1].to_value, TransitionValue::Scalar(200.0));
 }
@@ -62,8 +62,8 @@ fn sequential_with_delay() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    delay: 0.5,
-                    duration: Some(1.0),
+                    delay: ms(500),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -72,12 +72,12 @@ fn sequential_with_delay() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 10.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
 
-    // start_time = 10.0, delay = 0.5 → segment 10.5 -> 11.5
-    assert_eq!(tl.segments[0].start_time, 10.5);
-    assert_eq!(tl.segments[0].end_time, 11.5);
+    // delay = 0.5 → segment 0.5 -> 1.5
+    assert_eq!(tl.segments[0].start_time, delta_ms(500));
+    assert_eq!(tl.segments[0].end_time, delta_ms(1500));
 }
 
 #[test]
@@ -101,14 +101,14 @@ fn duration_zero_instant_transition() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments[0].start_time, tl.segments[0].end_time);
 }
 
 #[test]
-fn sequential_first_entry_uses_compile_start_time() {
-    // First entry for a variable: base_time = compile start_time
+fn sequential_first_entry_starts_from_head() {
+    // First entry for a variable: base_time = 頭（0）
     let doc = make_doc_with_storyboard(
         vec![(
             "x",
@@ -126,8 +126,8 @@ fn sequential_first_entry_uses_compile_start_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // infer from initial = 10.0
                     to: Some(TransitionValue::Scalar(20.0)),
-                    delay: 1.0,
-                    duration: Some(2.0),
+                    delay: ms(1000),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -136,13 +136,12 @@ fn sequential_first_entry_uses_compile_start_time() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 3.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
-    // base_time = 3.0 (compile start_time), segment_start = 3.0 + 1.0 = 4.0
-    assert_eq!(tl.segments[0].start_time, 4.0);
-    assert_eq!(tl.segments[0].end_time, 6.0);
+    // base_time = 0 (頭), segment_start = 0 + 1.0 = 1.0
+    assert_eq!(tl.segments[0].start_time, delta_ms(1000));
+    assert_eq!(tl.segments[0].end_time, delta_ms(3000));
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(10.0));
-    assert_eq!(result.start_time, 3.0);
 }
 
 fn x_to(to: f64, at: Option<KeyframeRef>) -> StoryboardEntry {
@@ -150,7 +149,7 @@ fn x_to(to: f64, at: Option<KeyframeRef>) -> StoryboardEntry {
         variable: Some("x".to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
             to: Some(TransitionValue::Scalar(to)),
-            duration: Some(1.0),
+            duration: Some(ms(1000)),
             ..Default::default()
         })),
         at,
@@ -162,7 +161,7 @@ fn at_name(name: &str) -> Option<KeyframeRef> {
     Some(KeyframeRef::Single(name.to_string()))
 }
 
-fn kf_at_start_plus(name: &str, offset: f64) -> StoryboardEntry {
+fn kf_at_start_plus(name: &str, offset: TimeDelta) -> StoryboardEntry {
     StoryboardEntry {
         keyframe: Some(name.to_string()),
         at: Some(KeyframeRef::WithOffset {
@@ -183,17 +182,23 @@ fn sequential_follows_previous_entry_in_array_despite_forward_ref() {
         StoryboardBuilder::new()
             .entry(x_to(1.0, at_name("k")))
             .entry(x_to(2.0, None))
-            .entry(kf_at_start_plus("k", 5.0))
+            .entry(kf_at_start_plus("k", delta_ms(5000)))
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let segs = &result.timelines["x"].segments;
     assert_eq!(segs.len(), 2);
-    assert_eq!((segs[0].start_time, segs[0].end_time), (5.0, 6.0));
+    assert_eq!(
+        (segs[0].start_time, segs[0].end_time),
+        (delta_ms(5000), delta_ms(6000))
+    );
     assert_eq!(segs[0].from_value, TransitionValue::Scalar(0.0));
     assert_eq!(segs[0].to_value, TransitionValue::Scalar(1.0));
-    assert_eq!((segs[1].start_time, segs[1].end_time), (6.0, 7.0));
+    assert_eq!(
+        (segs[1].start_time, segs[1].end_time),
+        (delta_ms(6000), delta_ms(7000))
+    );
     assert_eq!(segs[1].from_value, TransitionValue::Scalar(1.0));
     assert_eq!(segs[1].to_value, TransitionValue::Scalar(2.0));
 }
@@ -211,17 +216,23 @@ fn pure_keyframe_without_at_follows_previous_entry_despite_forward_ref() {
                 keyframe: Some("m".to_string()),
                 ..Default::default()
             })
-            .entry(kf_at_start_plus("k", 5.0))
+            .entry(kf_at_start_plus("k", delta_ms(5000)))
             .entry(x_to(2.0, at_name("m")))
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let segs = &result.timelines["x"].segments;
     assert_eq!(segs.len(), 2);
-    assert_eq!((segs[0].start_time, segs[0].end_time), (5.0, 6.0));
+    assert_eq!(
+        (segs[0].start_time, segs[0].end_time),
+        (delta_ms(5000), delta_ms(6000))
+    );
     // "m" は entry 0 の終わり（6.0）
-    assert_eq!((segs[1].start_time, segs[1].end_time), (6.0, 7.0));
+    assert_eq!(
+        (segs[1].start_time, segs[1].end_time),
+        (delta_ms(6000), delta_ms(7000))
+    );
 }
 
 /// 連結の遷移は処理の順で最後に解いた同じ変数のエントリでなく、配列上の直前のエントリに続く
@@ -243,7 +254,7 @@ fn sequential_follows_array_predecessor_not_last_processed() {
             .build(),
     );
 
-    let errors = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errors = compile_storyboard(&doc, "test").unwrap_err();
     assert!(
         errors
             .iter()
@@ -256,39 +267,43 @@ fn sequential_follows_array_predecessor_not_last_processed() {
 /// 配列上の直前のエントリの to から始まる
 #[test]
 fn sequential_from_follows_array_predecessor_not_previous_in_time() {
-    let x_entry = |from: Option<f64>, to: f64, delay: f64, duration: f64| StoryboardEntry {
-        variable: Some("x".to_string()),
-        transition: Some(TransitionRef::Inline(TransitionDef {
-            from: from.map(TransitionValue::Scalar),
-            to: Some(TransitionValue::Scalar(to)),
-            delay,
-            duration: Some(duration),
+    let x_entry =
+        |from: Option<f64>, to: f64, delay: TimeSpan, duration: TimeSpan| StoryboardEntry {
+            variable: Some("x".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: from.map(TransitionValue::Scalar),
+                to: Some(TransitionValue::Scalar(to)),
+                delay,
+                duration: Some(duration),
+                ..Default::default()
+            })),
             ..Default::default()
-        })),
-        ..Default::default()
-    };
+        };
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
             // P: [0,1] 0→5
-            .entry(x_entry(Some(0.0), 5.0, 0.0, 1.0))
+            .entry(x_entry(Some(0.0), 5.0, ms(0), ms(1000)))
             // C: P に続き delay 1 で [2,3]
-            .entry(x_entry(None, 9.0, 1.0, 1.0))
+            .entry(x_entry(None, 9.0, ms(1000), ms(1000)))
             // A: [1.2,1.7] 5→7（時刻の上では P と C の間）
             .entry(StoryboardEntry {
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 1.2,
+                    offset: delta_ms(1200),
                 }),
-                ..x_entry(None, 7.0, 0.0, 0.5)
+                ..x_entry(None, 7.0, ms(0), ms(500))
             })
             .build(),
     );
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let segs = &result.timelines["x"].segments;
     assert_eq!(segs[1].from_value, TransitionValue::Scalar(5.0));
-    assert_eq!((segs[2].start_time, segs[2].end_time), (2.0, 3.0));
+    assert_eq!(
+        (segs[2].start_time, segs[2].end_time),
+        (delta_ms(2000), delta_ms(3000))
+    );
     assert_eq!(segs[2].from_value, TransitionValue::Scalar(5.0));
 }

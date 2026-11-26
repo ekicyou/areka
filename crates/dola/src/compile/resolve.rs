@@ -8,6 +8,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{KeyframeNames, KeyframeRef, StoryboardEntry};
+use crate::time::{TimeDelta, TimeSpan};
 use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
 use crate::validate::{IMPLICIT_KEYFRAME_PREFIX, collect_keyframe_names_from_ref};
 use crate::variable::AnimationVariableDef;
@@ -169,20 +170,31 @@ pub(super) fn topological_sort(
     }
 }
 
-/// 純粋なキーフレーム・トリガーのエントリの時刻を解く
+/// 和があふれた時刻の誤り
+fn time_overflow(storyboard_name: &str, entry_idx: usize, field: &str) -> DolaError {
+    DolaError::TimeOutOfDocumentRange {
+        location: format!("storyboard '{storyboard_name}' entry {entry_idx}"),
+        field: field.to_string(),
+    }
+}
+
+/// 純粋なキーフレーム・トリガーのエントリの時刻を解く（`field` は和があふれた時の欄の名前）
 pub(super) fn resolve_pure_keyframe_time(
     storyboard_name: &str,
     entry_idx: usize,
     entry: &StoryboardEntry,
-    start_time: f64,
-    keyframe_times: &HashMap<String, f64>,
-    entry_keyframe_time: &HashMap<usize, f64>,
+    field: &str,
+    keyframe_times: &HashMap<String, TimeDelta>,
+    entry_keyframe_time: &HashMap<usize, TimeDelta>,
     errors: &mut Vec<DolaError>,
-) -> Option<f64> {
+) -> Option<TimeDelta> {
     if let Some(ref kf_ref) = entry.at {
-        let time = resolve_keyframe_ref_time(kf_ref, keyframe_times);
-        match time {
-            Some(t) => Some(t),
+        match resolve_keyframe_ref_time(kf_ref, keyframe_times) {
+            Some(Some(t)) => Some(t),
+            Some(None) => {
+                errors.push(time_overflow(storyboard_name, entry_idx, field));
+                None
+            }
             None => {
                 errors.push(DolaError::CompileError {
                     storyboard: storyboard_name.to_string(),
@@ -204,9 +216,9 @@ pub(super) fn resolve_pure_keyframe_time(
         }
         time
     } else {
-        // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承。先頭は start_time
+        // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承。先頭は頭（0）
         let Some(prev_idx) = entry_idx.checked_sub(1) else {
-            return Some(start_time);
+            return Some(TimeDelta::ZERO);
         };
         let time = entry_keyframe_time.get(&prev_idx).copied();
         if time.is_none() {
@@ -223,29 +235,32 @@ pub(super) fn resolve_pure_keyframe_time(
 }
 
 /// 全キーフレームを解いて最も遅い時刻を取る（1つでも未解決、または names が空なら None）
-fn latest_keyframe_time(names: &[String], keyframe_times: &HashMap<String, f64>) -> Option<f64> {
-    let mut max_time: Option<f64> = None;
+fn latest_keyframe_time(
+    names: &[String],
+    keyframe_times: &HashMap<String, TimeDelta>,
+) -> Option<TimeDelta> {
+    let mut max_time: Option<TimeDelta> = None;
     for name in names {
         let t = *keyframe_times.get(name)?;
-        max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
+        max_time = Some(max_time.map_or(t, |m| m.max(t)));
     }
     max_time
 }
 
-/// KeyframeRef を時刻に解く
+/// KeyframeRef を時刻に解く。参照が解けなければ `None`、ずらしの和があふれれば `Some(None)`
 pub(super) fn resolve_keyframe_ref_time(
     kf_ref: &KeyframeRef,
-    keyframe_times: &HashMap<String, f64>,
-) -> Option<f64> {
+    keyframe_times: &HashMap<String, TimeDelta>,
+) -> Option<Option<TimeDelta>> {
     match kf_ref {
-        KeyframeRef::Single(name) => keyframe_times.get(name).copied(),
-        KeyframeRef::Multiple(names) => latest_keyframe_time(names, keyframe_times),
+        KeyframeRef::Single(name) => keyframe_times.get(name).copied().map(Some),
+        KeyframeRef::Multiple(names) => latest_keyframe_time(names, keyframe_times).map(Some),
         KeyframeRef::WithOffset { keyframes, offset } => {
             let base_time = match keyframes {
                 KeyframeNames::Single(name) => keyframe_times.get(name).copied(),
                 KeyframeNames::Multiple(names) => latest_keyframe_time(names, keyframe_times),
             };
-            base_time.map(|t| t + offset)
+            base_time.map(|t| t.checked_add(*offset))
         }
     }
 }
@@ -263,23 +278,19 @@ pub(super) fn resolve_transition<'a>(
 
 /// エントリの時刻を解く。(segment_start, segment_end, keyframe_time) を返す
 ///
-/// delay / duration / offset の有限・符号は validate() の数値の規則が先に見ている。
-#[expect(
-    clippy::too_many_arguments,
-    reason = "解決の途中の表を 1 か所で受ける私的な関数で、束の型を作ると同じ欄の写しが増える"
-)]
+/// delay・duration が 0 以上で文書の値の上限の中にある事は、型と読み込みと validate() が保証する。
+/// それでも和は型の範囲を越えうるので、`checked_add` で拒む。
 pub(super) fn resolve_entry_timing(
     storyboard_name: &str,
     entry_idx: usize,
     entry: &StoryboardEntry,
     trans_def: &TransitionDef,
-    start_time: f64,
-    keyframe_times: &HashMap<String, f64>,
-    prev_end_time: Option<f64>,
+    keyframe_times: &HashMap<String, TimeDelta>,
+    prev_end_time: Option<TimeDelta>,
     errors: &mut Vec<DolaError>,
-) -> Option<(f64, f64, f64)> {
-    let delay = trans_def.delay;
-    let duration = trans_def.duration.unwrap_or(0.0);
+) -> Option<(TimeDelta, TimeDelta, TimeDelta)> {
+    let delay = TimeDelta::from(trans_def.delay);
+    let duration = TimeDelta::from(trans_def.duration.unwrap_or(TimeSpan::ZERO));
 
     if let Some(ref between) = entry.between {
         let from_time = keyframe_times.get(&between.from).copied();
@@ -287,20 +298,20 @@ pub(super) fn resolve_entry_timing(
 
         match (from_time, to_time) {
             (Some(from_t), Some(to_t)) => {
-                let segment_start = from_t + delay;
                 let segment_end = to_t;
-
-                if segment_start >= segment_end {
+                // あふれた始まりは、どの終わりよりも後
+                let segment_start = from_t.checked_add(delay).filter(|&s| s < segment_end);
+                let Some(segment_start) = segment_start else {
                     errors.push(DolaError::CompileError {
                         storyboard: storyboard_name.to_string(),
                         entry_index: entry_idx,
                         reason: format!(
                             "Between delay {} exceeds or equals interval ({} to {})",
-                            delay, from_t, to_t
+                            trans_def.delay, from_t, to_t
                         ),
                     });
                     return None;
-                }
+                };
 
                 let kf_time = segment_end;
                 Some((segment_start, segment_end, kf_time))
@@ -314,27 +325,29 @@ pub(super) fn resolve_entry_timing(
                 None
             }
         }
-    } else if let Some(ref kf_ref) = entry.at {
-        match resolve_keyframe_ref_time(kf_ref, keyframe_times) {
-            Some(base_time) => {
-                let segment_start = base_time + delay;
-                let segment_end = segment_start + duration;
-                let kf_time = segment_end;
-                Some((segment_start, segment_end, kf_time))
-            }
-            None => {
-                errors.push(DolaError::CompileError {
-                    storyboard: storyboard_name.to_string(),
-                    entry_index: entry_idx,
-                    reason: "Cannot resolve 'at' keyframe reference time".to_string(),
-                });
-                None
-            }
-        }
     } else {
-        let base_time = prev_end_time.unwrap_or(start_time);
-        let segment_start = base_time + delay;
-        let segment_end = segment_start + duration;
+        let base_time = match entry.at {
+            Some(ref kf_ref) => match resolve_keyframe_ref_time(kf_ref, keyframe_times) {
+                Some(t) => t,
+                None => {
+                    errors.push(DolaError::CompileError {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        reason: "Cannot resolve 'at' keyframe reference time".to_string(),
+                    });
+                    return None;
+                }
+            },
+            None => Some(prev_end_time.unwrap_or(TimeDelta::ZERO)),
+        };
+        let timing = base_time.and_then(|base| {
+            let segment_start = base.checked_add(delay)?;
+            Some((segment_start, segment_start.checked_add(duration)?))
+        });
+        let Some((segment_start, segment_end)) = timing else {
+            errors.push(time_overflow(storyboard_name, entry_idx, "end_time"));
+            return None;
+        };
         let kf_time = segment_end;
         Some((segment_start, segment_end, kf_time))
     }

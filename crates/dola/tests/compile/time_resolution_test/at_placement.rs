@@ -15,7 +15,7 @@ fn at_reference_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -27,7 +27,7 @@ fn at_reference_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("kf1".to_string())),
@@ -37,10 +37,10 @@ fn at_reference_keyframe() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 2.0);
-    assert_eq!(tl_y.segments[0].end_time, 3.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(2000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(3000));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn at_with_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -66,12 +66,12 @@ fn at_with_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("kf1".to_string()),
-                    offset: 0.5,
+                    offset: delta_ms(500),
                 }),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -79,11 +79,11 @@ fn at_with_offset() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
     // kf1 ends at 2.0, offset 0.5 → base_time = 2.5, segment 2.5 -> 3.5
-    assert_eq!(tl_y.segments[0].start_time, 2.5);
-    assert_eq!(tl_y.segments[0].end_time, 3.5);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(2500));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(3500));
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -117,7 +117,7 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("marker".to_string())),
@@ -127,21 +127,21 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 2.0);
-    assert_eq!(tl_y.segments[0].end_time, 3.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(2000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(3000));
 }
 
 #[test]
 fn pure_keyframe_without_at_as_first_entry_falls_back_to_start() {
-    // 先頭エントリの純粋KF（at なし）は "start"（= compile start_time）へフォールバック
+    // 先頭エントリの純粋KF（at なし）は "start"（頭）へフォールバック
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: 純粋KF（at なし）が先頭 → start_time を継承
+            // entry 0: 純粋KF（at なし）が先頭 → 頭の時刻を継承
             .entry(StoryboardEntry {
                 keyframe: Some("marker".to_string()),
                 ..Default::default()
@@ -152,7 +152,7 @@ fn pure_keyframe_without_at_as_first_entry_falls_back_to_start() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("marker".to_string())),
@@ -162,10 +162,10 @@ fn pure_keyframe_without_at_as_first_entry_falls_back_to_start() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 5.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
-    assert_eq!(tl.segments[0].start_time, 5.0);
-    assert_eq!(tl.segments[0].end_time, 6.0);
+    assert_eq!(tl.segments[0].start_time, TimeDelta::ZERO);
+    assert_eq!(tl.segments[0].end_time, delta_ms(1000));
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn at_with_offset_multiple_keyframes() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf_x".to_string()),
@@ -194,7 +194,7 @@ fn at_with_offset_multiple_keyframes() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf_y".to_string()),
@@ -206,7 +206,7 @@ fn at_with_offset_multiple_keyframes() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
@@ -214,7 +214,7 @@ fn at_with_offset_multiple_keyframes() {
                         "kf_x".to_string(),
                         "kf_y".to_string(),
                     ]),
-                    offset: 0.5,
+                    offset: delta_ms(500),
                 }),
                 keyframe: Some("kf_z".to_string()),
                 ..Default::default()
@@ -222,10 +222,10 @@ fn at_with_offset_multiple_keyframes() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_z = result.timelines.get("z").unwrap();
-    assert_eq!(tl_z.segments[0].start_time, 3.5);
-    assert_eq!(tl_z.segments[0].end_time, 4.5);
+    assert_eq!(tl_z.segments[0].start_time, delta_ms(3500));
+    assert_eq!(tl_z.segments[0].end_time, delta_ms(4500));
 }
 
 #[test]
@@ -241,7 +241,7 @@ fn at_with_negative_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -253,12 +253,12 @@ fn at_with_negative_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("kf1".to_string()),
-                    offset: -0.5,
+                    offset: delta_ms(-500),
                 }),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -266,10 +266,10 @@ fn at_with_negative_offset() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 1.5);
-    assert_eq!(tl_y.segments[0].end_time, 2.5);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(1500));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(2500));
 }
 
 /// from を省いた at の遷移は、処理の順でなく時刻の上で直前のセグメントの to から始まる。
@@ -280,13 +280,13 @@ fn at_from_follows_previous_segment_in_time_regardless_of_keyframe_order() {
         variable: Some("x".to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
             to: Some(TransitionValue::Scalar(to)),
-            duration: Some(1.0),
+            duration: Some(ms(1000)),
             ..Default::default()
         })),
         at: Some(KeyframeRef::Single(kf.to_string())),
         ..Default::default()
     };
-    let kf_entry = |name: &str, offset: f64| StoryboardEntry {
+    let kf_entry = |name: &str, offset: TimeDelta| StoryboardEntry {
         keyframe: Some(name.to_string()),
         at: Some(KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Single("start".to_string()),
@@ -295,8 +295,8 @@ fn at_from_follows_previous_segment_in_time_regardless_of_keyframe_order() {
         ..Default::default()
     };
     for kfs in [
-        [("k", 5.0), ("j", 1.0)], // 処理は k→[0]→j→[1]
-        [("j", 1.0), ("k", 5.0)], // 処理は j→[1]→k→[0]
+        [("k", delta_ms(5000)), ("j", delta_ms(1000))], // 処理は k→[0]→j→[1]
+        [("j", delta_ms(1000)), ("k", delta_ms(5000))], // 処理は j→[1]→k→[0]
     ] {
         let doc = make_doc_with_storyboard(
             vec![("x", float_var())],
@@ -309,7 +309,7 @@ fn at_from_follows_previous_segment_in_time_regardless_of_keyframe_order() {
                 .entry(kf_entry(kfs[1].0, kfs[1].1))
                 .build(),
         );
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        let result = compile_storyboard(&doc, "test").unwrap();
         let fromto: Vec<_> = result.timelines["x"]
             .segments
             .iter()
@@ -319,12 +319,12 @@ fn at_from_follows_previous_segment_in_time_regardless_of_keyframe_order() {
             fromto,
             vec![
                 (
-                    1.0,
+                    delta_ms(1000),
                     TransitionValue::Scalar(0.0),
                     TransitionValue::Scalar(3.0)
                 ),
                 (
-                    5.0,
+                    delta_ms(5000),
                     TransitionValue::Scalar(3.0),
                     TransitionValue::Scalar(10.0)
                 ),
@@ -341,7 +341,7 @@ fn zero_length_at_segments_at_same_time_keep_array_order() {
         variable: Some("x".to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
             to: Some(TransitionValue::Scalar(to)),
-            duration: Some(0.0),
+            duration: Some(ms(0)),
             ..Default::default()
         })),
         at: Some(KeyframeRef::Single(kf.to_string())),
@@ -351,7 +351,7 @@ fn zero_length_at_segments_at_same_time_keep_array_order() {
         keyframe: Some(name.to_string()),
         at: Some(KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Single("start".to_string()),
-            offset: 1.0,
+            offset: delta_ms(1000),
         }),
         ..Default::default()
     };
@@ -367,7 +367,7 @@ fn zero_length_at_segments_at_same_time_keep_array_order() {
                 .entry(kf_entry(kfs[1]))
                 .build(),
         );
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        let result = compile_storyboard(&doc, "test").unwrap();
         result.timelines["x"]
             .segments
             .iter()

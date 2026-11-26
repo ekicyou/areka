@@ -147,7 +147,7 @@
   - _Dispatch: mechanical — 期待は設計が与える_
   - _Requirements: 5.3, 5.10, 6.6, 6.7, 6.8, 9.4, 9.7_
 
-- [ ] 2.11 (P) コンパイルから開始の時刻を外し、区間と引き金を頭からの隔たりで求める
+- [x] 2.11 (P) コンパイルから開始の時刻を外し、区間と引き金を頭からの隔たりで求める
   - `compile_storyboard` の開始の時刻の引数を消し、区間と引き金の時刻を storyboard の頭からの隔たりで求める。足し算は `checked_add` で、越えたら誤り
   - 1 周の長さが表せない storyboard を、共有の 1 本の関数で拒む
   - 呼ぶ所のうち、コンパイルの家族のテストの呼び出しを直し、0 でない開始の時刻を使っていた 5 か所を設計の表のとおりに書き直すか外し（外した物は記録に書く事として報告に挙げる）、同じ確かめのコンパイルの結果を違う開始の時刻で始めても値と引き金が開始の差だけずれる事を確かめる
@@ -804,3 +804,4 @@
 - 2.7: `tests/cue/schedule_test.rs` は設計の表で 2.7 の持ち物で、済んでいる。2.8 は `runtime_test*.rs` と `sink_test.rs` だけを持つ。
 - 2.9: 2.10 が直すテストは `tests/validation/schema_test.rs`（`invalid_numbers_are_rejected` の 4 件・`all_violations_are_collected`・`negative_scalar_loop_offset_reports_one_error`・`base_doc`）、`tests/runtime/loop_offset_test/loop_offset_validation.rs`（`v14_negative_min_error`・`v15_negative_max_error`・`v15_negative_scalar_error`・NaN の 3 本ほか）、`tests/validation/transition_test/transition_v13_nan.rs`、`tests/general/**`、`tests/trigger/{serde_test,validation_test}.rs`、`tests/runtime/loop_offset_test/loop_offset_serde.rs`。`tests/compile/boundary_test.rs` の NaN／負の delay・duration・trigger_start_offset のテスト（`invalid_delay_and_duration_are_rejected_before_compile`・`nan_delay_that_bypassed_overlap_check_is_rejected`・`between_nan_delay_is_rejected`・`nan_trigger_start_offset_is_rejected`・`toml_non_finite_numbers_are_rejected_by_validate` の時間の欄）はコンパイルの家族＝2.11 の持ち物。`compile/resolve.rs:266` の説明（有限・符号は validate が見る）は 2.11 で直す。
 - 2.10: 境界の外で実数の秒の時間の値が残るテストは、2.11（`tests/compile/**`・`tests/trigger/compile_test.rs`）と 2.13（`tests/runtime/conflict_resolution_test/**`・`runtime/facade_test/diff_delivery.rs`・`runtime/loop_offset_test/loop_offset_compile.rs`・`tests/trigger/runtime_test.rs`）の持ち物。`tests/general/time_range_test.rs` は `compile_storyboard(&doc, "sb")` の 2 引数で呼ぶ（2.11 が開始の時刻を外す）。
+- 2.11: `src/runtime/facade.rs:192` が `compile_validated(doc, name, base_time)` で引き金の子を 0 でない開始の時刻でコンパイルしている。2.12 は子を `start(name, TimePoint)` の起点で始め、子の区間と引き金を「起点＋隔たり」で求める。`tests/compile/start_shift_test.rs` は 2.12 の口 `start(name, TimePoint)`・`tick(TimePoint)`・`StartResult.end_time: Option<TimePoint>`・`TriggerResult::Started { start_result, .. }` に頼る。

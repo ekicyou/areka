@@ -14,7 +14,7 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -25,7 +25,7 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -37,7 +37,7 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(999.0), // ignored for between
+                    duration: Some(ms(999000)), // ignored for between
                     ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
@@ -50,10 +50,10 @@ fn between_placement() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 2.0);
-    assert_eq!(tl_y.segments[0].end_time, 5.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(2000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(5000));
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn between_from_start_pseudo_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -93,10 +93,10 @@ fn between_from_start_pseudo_keyframe() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 0.0);
-    assert_eq!(tl_y.segments[0].end_time, 2.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(2000));
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn between_with_valid_delay() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -123,7 +123,7 @@ fn between_with_valid_delay() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -135,7 +135,7 @@ fn between_with_valid_delay() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    delay: 1.0,
+                    delay: ms(1000),
                     ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
@@ -148,8 +148,8 @@ fn between_with_valid_delay() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 3.0);
-    assert_eq!(tl_y.segments[0].end_time, 5.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(3000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(5000));
 }

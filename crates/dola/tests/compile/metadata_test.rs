@@ -2,7 +2,7 @@
 
 use dola::*;
 
-use super::common::{float_var, make_doc_with_storyboard};
+use super::common::{delta_ms, float_var, make_doc_with_storyboard, ms};
 
 #[test]
 fn time_scale_propagated_not_applied() {
@@ -17,7 +17,7 @@ fn time_scale_propagated_not_applied() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -26,12 +26,12 @@ fn time_scale_propagated_not_applied() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-    assert_eq!(result.time_scale, 2.0);
+    let result = compile_storyboard(&doc, "test").unwrap();
+    assert_eq!(result.time_scale.get(), 2.0);
     // Segment times should NOT be affected by time_scale
     let tl = result.timelines.get("x").unwrap();
-    assert_eq!(tl.segments[0].start_time, 0.0);
-    assert_eq!(tl.segments[0].end_time, 1.0);
+    assert_eq!(tl.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl.segments[0].end_time, delta_ms(1000));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn loop_count_propagated() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -56,7 +56,7 @@ fn loop_count_propagated() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     assert_eq!(result.loop_count, 3);
 }
 
@@ -73,7 +73,7 @@ fn interruption_policy_propagated() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -82,7 +82,7 @@ fn interruption_policy_propagated() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     assert_eq!(result.interruption_policy, InterruptionPolicy::Cancel);
 }
 
@@ -99,7 +99,7 @@ fn base_duration_and_total_base_duration() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -111,7 +111,7 @@ fn base_duration_and_total_base_duration() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -120,8 +120,14 @@ fn base_duration_and_total_base_duration() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-    assert_eq!(result.timelines.get("x").unwrap().base_duration, 1.0);
-    assert_eq!(result.timelines.get("y").unwrap().base_duration, 3.0);
-    assert_eq!(result.total_base_duration, 3.0);
+    let result = compile_storyboard(&doc, "test").unwrap();
+    assert_eq!(
+        result.timelines.get("x").unwrap().base_duration,
+        delta_ms(1000)
+    );
+    assert_eq!(
+        result.timelines.get("y").unwrap().base_duration,
+        delta_ms(3000)
+    );
+    assert_eq!(result.total_base_duration, ms(3000));
 }

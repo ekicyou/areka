@@ -1,147 +1,34 @@
 //! デシリアライズ境界・数値境界・panic 経路のテスト
 //!
 //! 外部入力（JSON・機能 `toml` の TOML）由来の DolaDocument が compile へ渡される境界で、
-//! 数値の規則を外れた文書が panic でなくエラーで拒まれることと、
+//! 規則を外れた文書が panic でなくエラーで拒まれることと、
 //! 検証を通った文書が panic しないことを縛る。
 
 use dola::*;
 
-use super::common::{float_var, make_doc_with_storyboard, transition_entry};
+use super::common::{delta_ms, float_var, make_doc_with_storyboard, ms, transition_entry};
 
-/// compile が数値の規則で拒み、違反の欄を返す
+/// 文書の値の上限の中で最も大きい値（100ns の数で 2^51 − 1）
+const MAX_DOC_TICKS: i64 = (1 << 51) - 1;
+
+/// compile が数の規則・時刻の範囲で拒み、違反の欄を返す
 fn rejected_fields(doc: &DolaDocument, sb_name: &str) -> Vec<String> {
-    compile_storyboard(doc, sb_name, 0.0)
+    compile_storyboard(doc, sb_name)
         .unwrap_err()
         .into_iter()
         .map(|e| match e {
-            DolaError::InvalidNumber { field, .. } => field,
+            DolaError::InvalidNumber { field, .. }
+            | DolaError::TimeOutOfDocumentRange { field, .. } => field,
+            DolaError::LoopDurationOutOfRange { .. } => "loop_duration".to_string(),
             other => panic!("unexpected error: {other:?}"),
         })
         .collect()
 }
 
-fn single_transition_doc(delay: f64, duration: Option<f64>) -> DolaDocument {
-    make_doc_with_storyboard(
-        vec![("x", float_var())],
-        vec![],
-        "test",
-        StoryboardBuilder::new()
-            .entry(transition_entry("x", delay, duration))
-            .build(),
-    )
-}
-
-#[test]
-fn invalid_delay_and_duration_are_rejected_before_compile() {
-    // 拒まないと、負の duration は逆向きのセグメント、負の delay は start より前の
-    // セグメント、NaN／inf は NaN／inf 時刻のセグメントになっていた
-    for (delay, duration, field) in [
-        (0.0, Some(-3.0), "duration"),
-        (0.0, Some(f64::NAN), "duration"),
-        (-2.0, Some(1.0), "delay"),
-        (f64::INFINITY, Some(1.0), "delay"),
-    ] {
-        let doc = single_transition_doc(delay, duration);
-        assert_eq!(
-            rejected_fields(&doc, "test"),
-            [field],
-            "{delay} {duration:?}"
-        );
-    }
-}
-
-#[test]
-fn nan_delay_that_bypassed_overlap_check_is_rejected() {
-    // NaN 時刻は重なりの比べ（prev.end > next.start）を素通りしていた
-    let doc = make_doc_with_storyboard(
-        vec![("x", float_var())],
-        vec![],
-        "test",
-        StoryboardBuilder::new()
-            .entry(transition_entry("x", f64::NAN, Some(10.0)))
-            .entry(transition_entry("x", 0.0, Some(1.0)))
-            .build(),
-    );
-    assert_eq!(rejected_fields(&doc, "test"), ["delay"]);
-}
-
-#[test]
-fn between_nan_delay_is_rejected() {
-    // between の逆転の検査（segment_start >= segment_end）を NaN が素通りしていた
-    let doc = make_doc_with_storyboard(
-        vec![("x", float_var())],
-        vec![],
-        "test",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                keyframe: Some("a".to_string()),
-                at: Some(KeyframeRef::Single("start".to_string())),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                keyframe: Some("b".to_string()),
-                at: Some(KeyframeRef::WithOffset {
-                    keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 5.0,
-                }),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                variable: Some("x".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    delay: f64::NAN,
-                    duration: None,
-                    ..Default::default()
-                })),
-                between: Some(BetweenKeyframes {
-                    from: "a".to_string(),
-                    to: "b".to_string(),
-                }),
-                ..Default::default()
-            })
-            .build(),
-    );
-    assert_eq!(rejected_fields(&doc, "test"), ["delay"]);
-}
-
-#[test]
-fn nan_trigger_start_offset_is_rejected() {
-    // 拒まないと CompiledTrigger へ NaN のまま渡っていた
-    let mut doc = make_doc_with_storyboard(
-        vec![],
-        vec![],
-        "parent",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                trigger_storyboard: Some("child".to_string()),
-                trigger_start_offset: Some(f64::NAN),
-                at: Some(KeyframeRef::Single("start".to_string())),
-                ..Default::default()
-            })
-            .build(),
-    );
-    doc.storyboard.insert(
-        "child".to_string(),
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                keyframe: Some("k".to_string()),
-                at: Some(KeyframeRef::Single("start".to_string())),
-                ..Default::default()
-            })
-            .build(),
-    );
-    assert_eq!(rejected_fields(&doc, "parent"), ["trigger_start_offset"]);
-}
-
 #[test]
 fn overflowing_sums_of_finite_numbers_are_rejected() {
-    // validate は数を 1 つずつしか見ないので、有限どうしの和が inf になった時刻・値が
-    // そのまま通り、終わらないインスタンスや inf の値を配っていた
-    let doc = single_transition_doc(1e308, Some(1e308));
-    assert_eq!(rejected_fields(&doc, "test"), ["end_time"]);
-
+    // validate は数を 1 つずつしか見ないので、有限どうしの和が inf になった値が
+    // そのまま通り、inf の値を配っていた
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
@@ -152,7 +39,7 @@ fn overflowing_sums_of_finite_numbers_are_rejected() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(1e308)),
                     relative_to: Some(1e308),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -161,50 +48,67 @@ fn overflowing_sums_of_finite_numbers_are_rejected() {
     );
     assert_eq!(rejected_fields(&doc, "test"), ["relative_to"]);
 
-    // 有限の長さも小さい time_scale で割ると 1 周の実時間が inf になり、インスタンスが終わらなかった
+    // 上限の中の長さも小さい time_scale では 1 周の経った長さが型の範囲を越え、インスタンスが終わらない
     let doc = make_doc_with_storyboard(
         vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
             .time_scale(1e-10)
-            .entry(transition_entry("x", 0.0, Some(1e300)))
+            .entry(transition_entry(
+                "x",
+                ms(0),
+                Some(TimeSpan::try_from_ticks(MAX_DOC_TICKS).unwrap()),
+            ))
             .build(),
     );
     assert_eq!(rejected_fields(&doc, "test"), ["loop_duration"]);
+}
 
-    // 純粋なキーフレームとトリガーの時刻（k の 1e308 にさらに 1e308 を足す）
-    let at_k_plus = || {
+#[test]
+fn time_sums_beyond_the_type_range_are_rejected() {
+    // 上限の中のずらしも積み重ねると型の範囲を越える。4096 個の和 2^63 − 4096 までは収まり、
+    // そこへもう 1 つ足す純粋なキーフレーム・トリガー・遷移の終わりが、どれも拒まれる
+    let at_plus_max = |name: &str| {
         Some(KeyframeRef::WithOffset {
-            keyframes: KeyframeNames::Single("k".to_string()),
-            offset: 1e308,
+            keyframes: KeyframeNames::Single(name.to_string()),
+            offset: TimeDelta::from_ticks(MAX_DOC_TICKS),
         })
     };
-    let mut doc = make_doc_with_storyboard(
-        vec![],
-        vec![],
-        "parent",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                keyframe: Some("k".to_string()),
-                at: Some(KeyframeRef::WithOffset {
-                    keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 1e308,
-                }),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                keyframe: Some("k2".to_string()),
-                at: at_k_plus(),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                trigger_storyboard: Some("child".to_string()),
-                at: at_k_plus(),
-                ..Default::default()
-            })
-            .build(),
-    );
+    let mut builder = StoryboardBuilder::new();
+    for i in 0..4096 {
+        let base = if i == 0 {
+            "start".to_string()
+        } else {
+            format!("k{}", i - 1)
+        };
+        builder = builder.entry(StoryboardEntry {
+            keyframe: Some(format!("k{i}")),
+            at: at_plus_max(&base),
+            ..Default::default()
+        });
+    }
+    let parent = builder
+        .entry(StoryboardEntry {
+            keyframe: Some("beyond".to_string()),
+            at: at_plus_max("k4095"),
+            ..Default::default()
+        })
+        .entry(StoryboardEntry {
+            trigger_storyboard: Some("child".to_string()),
+            at: at_plus_max("k4095"),
+            ..Default::default()
+        })
+        .entry(StoryboardEntry {
+            at: Some(KeyframeRef::Single("k4095".to_string())),
+            ..transition_entry(
+                "x",
+                ms(0),
+                Some(TimeSpan::try_from_ticks(MAX_DOC_TICKS).unwrap()),
+            )
+        })
+        .build();
+    let mut doc = make_doc_with_storyboard(vec![("x", float_var())], vec![], "parent", parent);
     doc.storyboard.insert(
         "child".to_string(),
         StoryboardBuilder::new()
@@ -217,38 +121,28 @@ fn overflowing_sums_of_finite_numbers_are_rejected() {
     );
     let mut fields = rejected_fields(&doc, "parent");
     fields.sort();
-    assert_eq!(fields, ["fire_time", "keyframe_time"]);
+    assert_eq!(fields, ["end_time", "fire_time", "keyframe_time"]);
 }
 
 #[test]
-fn segment_sort_with_many_nan_follows_total_order() {
-    // 並べ替えは −0.0 を +0.0 にそろえた全順序。delay は 48…2 の降順に並べてあるので、
-    // 有限の start_time では並べ替えを外すと昇順の確かめが落ちる。
-    // 公開の口からは NaN と有限の値が混ざった並びを作れない（文書の NaN は検証が拒み、
-    // start_time の NaN は全部の終わりの時刻を NaN にし、有限でない時刻としてコンパイルが拒む）ので、
-    // 全順序と partial_cmp の違いはここでは観測できない。NaN の回は panic せずに拒むことだけを見る。
+fn segment_sort_is_ascending_by_start_time() {
+    // delay は 48…2 秒の降順に並べてあるので、並べ替えを外すと昇順の確かめが落ちる
     let mut builder = StoryboardBuilder::new();
     for i in 0..24 {
-        let mut entry = transition_entry("x", f64::from(2 * (24 - i)), Some(1.0));
+        let mut entry = transition_entry("x", ms(2000 * (24 - i)), Some(ms(1000)));
         entry.at = Some(KeyframeRef::Single("start".to_string()));
         builder = builder.entry(entry);
     }
     let doc = make_doc_with_storyboard(vec![("x", float_var())], vec![], "test", builder.build());
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-    let starts: Vec<f64> = result.timelines["x"]
+    let result = compile_storyboard(&doc, "test").unwrap();
+    let starts: Vec<TimeDelta> = result.timelines["x"]
         .segments
         .iter()
         .map(|s| s.start_time)
         .collect();
-    let expected: Vec<f64> = (1..=24).map(|k| f64::from(2 * k)).collect();
+    let expected: Vec<TimeDelta> = (1..=24).map(|k| delta_ms(2000 * k)).collect();
     assert_eq!(starts, expected);
-
-    let computed_nan = std::hint::black_box(f64::INFINITY) - f64::INFINITY;
-    for start_time in [f64::NAN, computed_nan] {
-        let errors = compile_storyboard(&doc, "test", start_time).unwrap_err();
-        assert_eq!(errors.len(), 24);
-    }
 }
 
 // ---------------------------------------------------------------
@@ -258,9 +152,9 @@ fn segment_sort_with_many_nan_follows_total_order() {
 #[test]
 fn json_rejects_nan_literal_at_deserialization_boundary() {
     // 標準 JSON 経由では NaN/inf リテラルを注入できない（serde_json がパース時に
-    // 拒否する）。NaN/inf の流入経路は機能 `toml` の TOML（nan/inf/-inf）で、読み込みは
-    // 断らず、数値の欄に来た値は validate の数値の規則が拒む。Object の値の中の数は
-    // 補間しない中身として運ぶだけで、数値の規則の外（下の TOML の境界のテスト）。
+    // 拒否する）。NaN/inf の流入経路は機能 `toml` の TOML（nan/inf/-inf）で、時間の欄は
+    // 読み込みで落ち、ほかの数値の欄に来た値は validate の数値の規則が拒む。Object の値の
+    // 中の数は補間しない中身として運ぶだけで、数値の規則の外（下の TOML の境界のテスト）。
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": NaN }"#).is_err());
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": Infinity }"#).is_err());
 }
@@ -279,7 +173,7 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
                 keyframe: Some("__implicit_1".to_string()),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 1.0,
+                    offset: delta_ms(1000),
                 }),
                 ..Default::default()
             })
@@ -294,7 +188,7 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
                 keyframe: None,
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 5.0,
+                    offset: delta_ms(5000),
                 }),
                 ..Default::default()
             })
@@ -304,7 +198,7 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("__implicit_1".to_string())),
@@ -313,7 +207,7 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
             .build(),
     );
 
-    let errors = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errors = compile_storyboard(&doc, "test").unwrap_err();
     assert!(errors.iter().any(|e| matches!(
         e,
         DolaError::ReservedKeyframeName { storyboard, entry_index: 0, name }
@@ -334,7 +228,7 @@ fn long_dependency_chain_compiles_without_stack_exhaustion() {
         } else {
             KeyframeRef::WithOffset {
                 keyframes: KeyframeNames::Single(format!("kf{}", i - 1)),
-                offset: 1.0,
+                offset: delta_ms(1000),
             }
         };
         builder = builder.entry(StoryboardEntry {
@@ -347,12 +241,12 @@ fn long_dependency_chain_compiles_without_stack_exhaustion() {
 
     let result = std::thread::Builder::new()
         .stack_size(64 * 1024)
-        .spawn(move || compile_storyboard(&doc, "chain", 0.0).unwrap())
+        .spawn(move || compile_storyboard(&doc, "chain").unwrap())
         .unwrap()
         .join()
         .expect("compile must not exhaust a 64 KiB stack");
     assert_eq!(result.timelines.len(), 0);
-    assert_eq!(result.total_base_duration, 0.0);
+    assert_eq!(result.total_base_duration, ms(0));
 }
 
 use std::collections::BTreeMap;
@@ -383,7 +277,7 @@ fn storyboard_builder_cannot_bypass_compile_validation() {
         storyboard,
     };
 
-    let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errs = compile_storyboard(&doc, "test").unwrap_err();
     assert!(errs.iter().any(
         |e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var")
     ));
@@ -396,8 +290,8 @@ fn storyboard_builder_cannot_bypass_compile_validation() {
 #[cfg(feature = "toml")]
 #[test]
 fn toml_non_finite_numbers_are_rejected_by_validate() {
-    // 型の決まった欄（initial・delay・time_scale）と untagged の欄
-    // （to・ベジェの点・loop_offset・at の offset）に同じ値を入れる
+    // 型の決まった欄（initial・time_scale）と untagged の欄（to・ベジェの点）に同じ値を入れる。
+    // 時間の欄は読み込みで落ちる（下の toml_non_finite_times_fail_to_load）
     const TEMPLATE: &str = r#"
 schema_version = "1.0"
 
@@ -407,28 +301,23 @@ initial = V
 
 [transition.t]
 to = V
-delay = V
 easing = { type = "cubic_bezier", x0 = 0.0, x1 = V, x2 = 0.0, x3 = 1.0 }
 
 [storyboard.s]
 time_scale = V
-loop_offset = V
 
 [[storyboard.s.entry]]
 variable = "x"
 transition = "t"
-at = { keyframes = "start", offset = V }
+at = { keyframes = "start", offset = 0.0 }
 
 [[storyboard.s.entry]]
 variable = "x"
 transition = { to = V }
 "#;
     let mut expected = vec![
-        ("storyboard 's'", "loop_offset"),
         ("storyboard 's'", "time_scale"),
-        ("storyboard 's' entry 0", "offset"),
         ("storyboard 's' entry 1", "to"),
-        ("transition 't'", "delay"),
         ("transition 't'", "easing.x1"),
         ("transition 't'", "to"),
         ("variable 'x'", "initial"),
@@ -437,7 +326,6 @@ transition = { to = V }
     for value in ["nan", "inf", "-inf"] {
         let doc = DolaDocument::from_toml_str(&TEMPLATE.replace('V', value))
             .unwrap_or_else(|e| panic!("{value}: read refused: {e}"));
-        // -inf は loop_offset の負の上限の規則にも掛かるので、数値の規則の誤りだけを見る
         let mut fields: Vec<(String, String)> = doc
             .validate()
             .unwrap_err()
@@ -460,6 +348,27 @@ transition = { to = V }
 
 #[cfg(feature = "toml")]
 #[test]
+fn toml_non_finite_times_fail_to_load() {
+    // 0.5 は読めるので、落ちるのは値のせいで、文書の形のせいではない
+    for value in ["0.5", "nan", "inf", "-inf"] {
+        for part in [
+            format!("[transition.t]\nto = 1.0\ndelay = {value}\n"),
+            format!(
+                "[storyboard.s]\nloop_offset = {value}\n[[storyboard.s.entry]]\nkeyframe = \"k\"\n"
+            ),
+            format!(
+                "[[storyboard.s.entry]]\nkeyframe = \"k\"\nat = {{ keyframes = \"start\", offset = {value} }}\n"
+            ),
+        ] {
+            let text = format!("schema_version = \"1.0\"\n{part}");
+            let read = DolaDocument::from_toml_str(&text);
+            assert_eq!(read.is_ok(), value == "0.5", "{text}");
+        }
+    }
+}
+
+#[cfg(feature = "toml")]
+#[test]
 fn toml_non_finite_in_object_value_does_not_panic() {
     // Object の値は補間しない中身として運ぶだけで、数値の規則の外（通る）
     let doc = DolaDocument::from_toml_str(
@@ -477,5 +386,5 @@ transition = { to = { a = inf, b = nan } }
     )
     .unwrap();
     assert!(doc.validate().is_ok());
-    assert!(compile_storyboard(&doc, "s", 0.0).is_ok());
+    assert!(compile_storyboard(&doc, "s").is_ok());
 }

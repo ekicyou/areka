@@ -16,7 +16,7 @@ fn pure_keyframe_with_at() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -26,7 +26,7 @@ fn pure_keyframe_with_at() {
             .entry(StoryboardEntry {
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("kf1".to_string()),
-                    offset: 1.0,
+                    offset: delta_ms(1000),
                 }),
                 keyframe: Some("marker".to_string()),
                 ..Default::default()
@@ -37,7 +37,7 @@ fn pure_keyframe_with_at() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("marker".to_string())),
@@ -47,10 +47,10 @@ fn pure_keyframe_with_at() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 3.0);
-    assert_eq!(tl_y.segments[0].end_time, 4.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(3000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(4000));
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf_x".to_string()),
@@ -79,7 +79,7 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf_y".to_string()),
@@ -91,7 +91,7 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Multiple(vec![
@@ -104,26 +104,26 @@ fn multiple_keyframe_wait() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl_z = result.timelines.get("z").unwrap();
-    assert_eq!(tl_z.segments[0].start_time, 3.0); // max(1.0, 3.0)
-    assert_eq!(tl_z.segments[0].end_time, 4.0);
+    assert_eq!(tl_z.segments[0].start_time, delta_ms(3000)); // max(1.0, 3.0)
+    assert_eq!(tl_z.segments[0].end_time, delta_ms(4000));
 }
 
 // =========================================================
 // トリガーエントリの時刻解決（compile_storyboard 内ロジック）
 // =========================================================
 
-fn float_x_entry(duration: f64, kf: &str) -> StoryboardEntry {
+fn float_x_entry(duration: TimeSpan, kf: &str) -> StoryboardEntry {
     StoryboardEntry {
         keyframe: Some(kf.to_string()),
-        ..transition_entry("x", 0.0, Some(duration))
+        ..transition_entry("x", ms(0), Some(duration))
     }
 }
 
 fn simple_child_storyboard() -> Storyboard {
     StoryboardBuilder::new()
-        .entry(float_x_entry(1.0, "ckf"))
+        .entry(float_x_entry(ms(1000), "ckf"))
         .build()
 }
 
@@ -132,7 +132,7 @@ fn trigger_without_at_inherits_previous_entry_time() {
     // at なしトリガーは配列直前エントリの keyframe 時刻で発火する
     let parent = StoryboardBuilder::new()
         // entry 0: x 0.0..1.0, kf1 = 1.0
-        .entry(float_x_entry(1.0, "kf1"))
+        .entry(float_x_entry(ms(1000), "kf1"))
         // entry 1: trigger（at なし）→ fire_time = 1.0
         .entry(StoryboardEntry {
             trigger_storyboard: Some("child".to_string()),
@@ -147,11 +147,12 @@ fn trigger_without_at_inherits_previous_entry_time() {
         .build()
         .unwrap();
 
-    let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
+    let compiled = compile_storyboard(&doc, "parent").unwrap();
     assert_eq!(compiled.triggers.len(), 1);
     assert_eq!(compiled.triggers[0].target_storyboard, "child");
     assert_eq!(
-        compiled.triggers[0].fire_time, 1.0,
+        compiled.triggers[0].fire_time,
+        delta_ms(1000),
         "fire_time should inherit previous entry keyframe time 1.0, got {}",
         compiled.triggers[0].fire_time
     );
@@ -164,7 +165,7 @@ fn entry_anchored_at_trigger_keyframe() {
     // 後続エントリの at 参照のアンカーとして使える
     let parent = StoryboardBuilder::new()
         // entry 0: x 0.0..1.0, kf1 = 1.0
-        .entry(float_x_entry(1.0, "kf1"))
+        .entry(float_x_entry(ms(1000), "kf1"))
         // entry 1: trigger at kf1, keyframe "trig_kf" = 1.0
         .entry(StoryboardEntry {
             trigger_storyboard: Some("child".to_string()),
@@ -178,7 +179,7 @@ fn entry_anchored_at_trigger_keyframe() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(50.0)),
-                duration: Some(1.0),
+                duration: Some(ms(1000)),
                 ..Default::default()
             })),
             at: Some(KeyframeRef::Single("trig_kf".to_string())),
@@ -195,8 +196,8 @@ fn entry_anchored_at_trigger_keyframe() {
         .build()
         .unwrap();
 
-    let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
+    let compiled = compile_storyboard(&doc, "parent").unwrap();
     let tl_y = compiled.timelines.get("y").unwrap();
-    assert_eq!(tl_y.segments[0].start_time, 1.0);
-    assert_eq!(tl_y.segments[0].end_time, 2.0);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(1000));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(2000));
 }

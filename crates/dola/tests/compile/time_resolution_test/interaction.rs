@@ -16,12 +16,12 @@ fn sequential_after_at_placement_continues_from_segment_end() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 5.0,
+                    offset: delta_ms(5000),
                 }),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -32,7 +32,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None,
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -41,11 +41,11 @@ fn sequential_after_at_placement_continues_from_segment_end() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
-    assert_eq!(tl.segments[1].start_time, 6.0);
-    assert_eq!(tl.segments[1].end_time, 7.0);
+    assert_eq!(tl.segments[1].start_time, delta_ms(6000));
+    assert_eq!(tl.segments[1].end_time, delta_ms(7000));
     assert_eq!(tl.segments[1].from_value, TransitionValue::Scalar(100.0));
 }
 
@@ -63,12 +63,12 @@ fn out_of_order_at_entries_sorted_by_start_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 2.0,
+                    offset: delta_ms(2000),
                 }),
                 keyframe: Some("kf_late".to_string()),
                 ..Default::default()
@@ -79,7 +79,7 @@ fn out_of_order_at_entries_sorted_by_start_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("start".to_string())),
@@ -89,11 +89,11 @@ fn out_of_order_at_entries_sorted_by_start_time() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
-    assert_eq!(tl.segments[0].start_time, 0.0);
-    assert_eq!(tl.segments[0].end_time, 1.0);
-    assert_eq!(tl.segments[1].start_time, 2.0);
-    assert_eq!(tl.segments[1].end_time, 3.0);
+    assert_eq!(tl.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl.segments[0].end_time, delta_ms(1000));
+    assert_eq!(tl.segments[1].start_time, delta_ms(2000));
+    assert_eq!(tl.segments[1].end_time, delta_ms(3000));
 }

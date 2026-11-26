@@ -8,6 +8,8 @@ mod error_test;
 mod integration_test;
 #[path = "compile/metadata_test.rs"]
 mod metadata_test;
+#[path = "compile/start_shift_test.rs"]
+mod start_shift_test;
 #[path = "compile/time_resolution_test/mod.rs"]
 mod time_resolution_test;
 #[path = "compile/transition_test.rs"]

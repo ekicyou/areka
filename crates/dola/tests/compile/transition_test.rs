@@ -2,7 +2,7 @@
 
 use dola::*;
 
-use super::common::{float_var, make_doc_with_storyboard};
+use super::common::{float_var, make_doc_with_storyboard, ms};
 
 #[test]
 fn from_inferred_from_previous_segment() {
@@ -16,7 +16,7 @@ fn from_inferred_from_previous_segment() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -27,7 +27,7 @@ fn from_inferred_from_previous_segment() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // should be inferred as 50.0
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -36,7 +36,7 @@ fn from_inferred_from_previous_segment() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments[1].from_value, TransitionValue::Scalar(50.0));
 }
@@ -60,7 +60,7 @@ fn from_inferred_from_initial_value() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // inferred as initial = 42.0
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -69,7 +69,7 @@ fn from_inferred_from_initial_value() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(42.0));
 }
@@ -94,7 +94,7 @@ fn relative_to_calculation() {
                     from: Some(TransitionValue::Scalar(10.0)),
                     to: None,
                     relative_to: Some(25.0), // to = from + 25 = 35
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -103,7 +103,7 @@ fn relative_to_calculation() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments[0].to_value, TransitionValue::Scalar(35.0));
 }
@@ -121,7 +121,7 @@ fn easing_function_preserved() {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
                     easing: Some(EasingFunction::Named(EasingName::BounceOut)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -130,7 +130,7 @@ fn easing_function_preserved() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(
         tl.segments[0].easing,
@@ -162,7 +162,7 @@ fn from_inferred_from_integer_initial_as_f64() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // inferred as initial = 7 → Scalar(7.0)
                     to: Some(TransitionValue::Scalar(10.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -171,7 +171,7 @@ fn from_inferred_from_integer_initial_as_f64() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("idx").unwrap();
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(7.0));
 }
