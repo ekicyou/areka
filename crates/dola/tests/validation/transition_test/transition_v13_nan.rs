@@ -23,7 +23,7 @@ mod v13_tests {
                 to: Some(TransitionValue::Dynamic(DynamicValue::String(
                     "bad".to_string(),
                 ))),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -39,7 +39,7 @@ mod v13_tests {
             TransitionDef {
                 from: Some(TransitionValue::Dynamic(DynamicValue::Null)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -98,7 +98,7 @@ mod v12_nan_tests {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(f64::NAN)),
                 to: Some(TransitionValue::Scalar(f64::NAN)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );

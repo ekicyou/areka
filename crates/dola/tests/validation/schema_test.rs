@@ -62,8 +62,8 @@ mod error_accumulation_tests {
                         to: Some(TransitionValue::Scalar(1.0)),
                         relative_to: None,
                         easing: None,
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                     })),
                     ..Default::default()
                 }],
@@ -109,8 +109,8 @@ mod numeric_rule_tests {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
                         to: Some(TransitionValue::Scalar(1.0)),
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                         ..Default::default()
                     })),
                     ..Default::default()
@@ -134,7 +134,7 @@ mod numeric_rule_tests {
     #[test]
     fn invalid_numbers_are_rejected() {
         type Mutate = fn(&mut DolaDocument);
-        let cases: [(Mutate, &str, &str, f64); 13] = [
+        let cases: [(Mutate, &str, &str, f64); 9] = [
             (
                 |d| sb_mut(d).time_scale = 0.0,
                 "storyboard 'sb'",
@@ -154,34 +154,10 @@ mod numeric_rule_tests {
                 f64::NAN,
             ),
             (
-                |d| trans(d).duration = Some(f64::NAN),
-                "storyboard 'sb' entry 0",
-                "duration",
-                f64::NAN,
-            ),
-            (
-                |d| trans(d).duration = Some(-3.0),
-                "storyboard 'sb' entry 0",
-                "duration",
-                -3.0,
-            ),
-            (
-                |d| trans(d).delay = -1.0,
-                "storyboard 'sb' entry 0",
-                "delay",
-                -1.0,
-            ),
-            (
                 |d| sb_mut(d).loop_count = 0,
                 "storyboard 'sb'",
                 "loop_count",
                 0.0,
-            ),
-            (
-                |d| sb_mut(d).loop_offset = Some(LoopOffset::Scalar(f64::NAN)),
-                "storyboard 'sb'",
-                "loop_offset",
-                f64::NAN,
             ),
             (
                 |d| {
@@ -236,8 +212,8 @@ mod numeric_rule_tests {
             (
                 |d| {
                     sb_mut(d).loop_offset = Some(LoopOffset::Range(LoopOffsetRange {
-                        min: 0.0,
-                        max: 1.0,
+                        min: TimeSpan::ZERO,
+                        max: TimeSpan::from_millis(1000),
                         easing: EasingFunction::Parametric(ParametricEasing::QuadraticBezier {
                             x0: 0.0,
                             x1: 0.5,
@@ -303,7 +279,6 @@ mod numeric_rule_tests {
         let mut doc = base_doc();
         sb_mut(&mut doc).time_scale = 0.0;
         sb_mut(&mut doc).loop_count = -2;
-        trans(&mut doc).duration = Some(-1.0);
         let errors = doc.validate().unwrap_err();
         let fields: Vec<&str> = errors
             .iter()
@@ -312,7 +287,7 @@ mod numeric_rule_tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(fields, ["time_scale", "loop_count", "duration"]);
+        assert_eq!(fields, ["time_scale", "loop_count"]);
     }
 
     #[test]
@@ -328,6 +303,177 @@ mod numeric_rule_tests {
             sb_mut(&mut doc).loop_count = loop_count;
             assert!(doc.validate().is_ok(), "loop_count = {loop_count}");
         }
+    }
+}
+
+// =============================================================
+// 時間の欄: 有限でない・負は読み込みの失敗、文書の値の上限は検査の誤り
+// =============================================================
+
+mod time_field_tests {
+    use super::*;
+
+    const LIMIT: i64 = 1 << 51;
+    /// 2^51 刻み（100ns）の秒。上限の丁度
+    const LIMIT_SECS: &str = "225179981.3685248";
+    /// 2^51 - 1 刻みの秒。上限の内側の端
+    const EDGE_SECS: &str = "225179981.3685247";
+
+    fn span(ticks: i64) -> TimeSpan {
+        TimeSpan::try_from_ticks(ticks).unwrap()
+    }
+
+    fn transition_json(delay: &str, duration: &str) -> String {
+        format!(r#"{{"to":1.0,"delay":{delay},"duration":{duration}}}"#)
+    }
+
+    #[test]
+    fn negative_or_non_finite_times_fail_to_load() {
+        for json in [
+            transition_json("0.0", "-3.0"),
+            transition_json("-1.0", "1.0"),
+            transition_json("0.0", "1e400"),
+            transition_json("1e400", "1.0"),
+            transition_json("0.0", "-1e400"),
+        ] {
+            assert!(
+                serde_json::from_str::<TransitionDef>(&json).is_err(),
+                "{json}"
+            );
+        }
+    }
+
+    #[test]
+    fn seconds_round_trip_read_write_read() {
+        let json = transition_json("0.25", "1.5");
+        let first: TransitionDef = serde_json::from_str(&json).unwrap();
+        assert_eq!(first.delay, TimeSpan::from_millis(250));
+        assert_eq!(first.duration, Some(TimeSpan::from_millis(1500)));
+        let written = serde_json::to_string(&first).unwrap();
+        let second: TransitionDef = serde_json::from_str(&written).unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn limit_edge_round_trips_and_the_limit_fails_everywhere() {
+        let at_edge = TransitionDef {
+            delay: span(LIMIT - 1),
+            duration: Some(span(LIMIT - 1)),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&at_edge).unwrap();
+        assert_eq!(
+            serde_json::from_str::<TransitionDef>(&json).unwrap(),
+            at_edge
+        );
+        assert!(
+            serde_json::from_str::<TransitionDef>(&transition_json(EDGE_SECS, EDGE_SECS)).is_ok()
+        );
+
+        for json in [
+            transition_json(LIMIT_SECS, "1.0"),
+            transition_json("0.0", LIMIT_SECS),
+        ] {
+            assert!(
+                serde_json::from_str::<TransitionDef>(&json).is_err(),
+                "{json}"
+            );
+        }
+
+        let over_delay = TransitionDef {
+            delay: span(LIMIT),
+            ..Default::default()
+        };
+        let over_duration = TransitionDef {
+            duration: Some(span(LIMIT)),
+            ..Default::default()
+        };
+        for over in [&over_delay, &over_duration] {
+            assert!(serde_json::to_string(over).is_err());
+        }
+
+        let mut doc = minimal_valid_doc();
+        doc.transition.insert("t".to_string(), over_delay);
+        doc.transition.insert("u".to_string(), over_duration);
+        let errors = doc.validate().unwrap_err();
+        let fields: Vec<(&str, &str)> = errors
+            .iter()
+            .map(|e| match e {
+                DolaError::TimeOutOfDocumentRange { location, field } => {
+                    (location.as_str(), field.as_str())
+                }
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            fields,
+            [("transition 't'", "delay"), ("transition 'u'", "duration")]
+        );
+    }
+
+    #[test]
+    fn keyframe_offset_limit_edges_on_both_sides() {
+        let with_offset = |ticks: i64| KeyframeRef::WithOffset {
+            keyframes: KeyframeNames::Single("kf".to_string()),
+            offset: TimeDelta::from_ticks(ticks),
+        };
+        for ticks in [LIMIT - 1, -(LIMIT - 1)] {
+            let json = serde_json::to_string(&with_offset(ticks)).unwrap();
+            assert_eq!(
+                serde_json::from_str::<KeyframeRef>(&json).unwrap(),
+                with_offset(ticks)
+            );
+        }
+        for ticks in [LIMIT, -LIMIT] {
+            assert!(serde_json::to_string(&with_offset(ticks)).is_err());
+            let secs = if ticks < 0 {
+                format!("-{LIMIT_SECS}")
+            } else {
+                LIMIT_SECS.to_string()
+            };
+            let json = format!(r#"{{"keyframes":"kf","offset":{secs}}}"#);
+            assert!(serde_json::from_str::<KeyframeRef>(&json).is_err());
+        }
+    }
+
+    #[test]
+    fn storyboard_times_beyond_the_range_are_reported_by_validate() {
+        let mut doc = minimal_valid_doc();
+        doc.variable.insert(
+            "x".to_string(),
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        );
+        doc.storyboard.insert(
+            "sb".to_string(),
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("x".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        to: Some(TransitionValue::Scalar(1.0)),
+                        duration: Some(span(LIMIT)),
+                        ..Default::default()
+                    })),
+                    at: Some(KeyframeRef::WithOffset {
+                        keyframes: KeyframeNames::Single("start".to_string()),
+                        offset: TimeDelta::from_ticks(-LIMIT),
+                    }),
+                    ..Default::default()
+                })
+                .build(),
+        );
+        let errors = doc.validate().unwrap_err();
+        let fields: Vec<&str> = errors
+            .iter()
+            .filter_map(|e| match e {
+                DolaError::TimeOutOfDocumentRange { field, .. } => Some(field.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(fields, ["offset", "duration"]);
     }
 }
 
@@ -368,8 +514,8 @@ mod v2_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("visible".to_string()),
                         ..Default::default()
@@ -381,8 +527,8 @@ mod v2_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("visible".to_string()),
                         ..Default::default()
@@ -437,8 +583,8 @@ mod v3_tests {
                         to: Some(TransitionValue::Scalar(1.0)),
                         relative_to: None,
                         easing: None,
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                     })),
                     keyframe: Some("start".to_string()),
                     ..Default::default()
@@ -459,30 +605,6 @@ mod v3_tests {
                 .iter()
                 .any(|e| e.to_string().contains("storyboard 'sb1' entry 0")),
             "{errors:?}"
-        );
-    }
-
-    /// Scalar の周回の待ちは min が 0 なので、負なら V15 の 1 件だけ（V16 の逆転は重ねない）
-    #[test]
-    fn negative_scalar_loop_offset_reports_one_error() {
-        let mut doc = minimal_valid_doc();
-        doc.storyboard = BTreeMap::from([(
-            "sb1".to_string(),
-            Storyboard {
-                time_scale: 1.0,
-                loop_count: 1,
-                interruption_policy: InterruptionPolicy::Conclude,
-                loop_offset: Some(LoopOffset::Scalar(-1.0)),
-                entry: vec![],
-            },
-        )]);
-        let errors = doc.validate().unwrap_err();
-        assert_eq!(
-            errors,
-            vec![DolaError::LoopOffsetNegativeMax {
-                storyboard: "sb1".to_string(),
-                value: -1.0,
-            }]
         );
     }
 }
@@ -512,8 +634,8 @@ mod v4_tests {
                         to: Some(TransitionValue::Scalar(1.0)),
                         relative_to: None,
                         easing: None,
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                     })),
                     ..Default::default()
                 }],

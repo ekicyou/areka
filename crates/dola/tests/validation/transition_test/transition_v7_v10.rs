@@ -11,7 +11,7 @@ mod v7_tests {
         doc.storyboard = sb(vec![StoryboardEntry {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()

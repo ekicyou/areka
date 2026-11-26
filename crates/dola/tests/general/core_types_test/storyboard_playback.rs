@@ -30,7 +30,7 @@ mod storyboard_tests {
     fn keyframe_ref_with_offset_single_json_roundtrip() {
         let kf = KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Single("visible".to_string()),
-            offset: 0.5,
+            offset: TimeDelta::from_millis_saturating(500),
         };
         let json = serde_json::to_string(&kf).unwrap();
         let deserialized: KeyframeRef = serde_json::from_str(&json).unwrap();
@@ -41,7 +41,7 @@ mod storyboard_tests {
     fn keyframe_ref_with_offset_multiple_json_roundtrip() {
         let kf = KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Multiple(vec!["a".to_string(), "b".to_string()]),
-            offset: 1.0,
+            offset: TimeDelta::from_millis_saturating(1000),
         };
         let json = serde_json::to_string(&kf).unwrap();
         let deserialized: KeyframeRef = serde_json::from_str(&json).unwrap();
@@ -87,7 +87,7 @@ mod storyboard_tests {
                 to: Some(TransitionValue::Scalar(0.0)),
                 relative_to: None,
                 easing: Some(EasingFunction::Named(EasingName::Linear)),
-                delay: 0.0,
+                delay: TimeSpan::ZERO,
                 duration: None,
             })),
             between: Some(BetweenKeyframes {

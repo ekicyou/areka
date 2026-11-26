@@ -138,7 +138,7 @@
   - _Dispatch: standard — 欄の型は設計が与え、検査の直しが残る_
   - _Requirements: 5.3, 5.9, 5.10, 6.6, 6.7_
 
-- [ ] 2.10 (P) 文書の型と検査のテストを、新しい失敗の出る所へ直す
+- [x] 2.10 (P) 文書の型と検査のテストを、新しい失敗の出る所へ直す
   - 有限でない長さ・負の長さ・負の周回のずらしのテストを、検査の誤りから読み込みの失敗へ移し、行き先を記録に書く事として報告に挙げる
   - 秒の往復（読む → 書く → 読むで等しい）と、上限の端（2^51 − 1 は往復し、2^51 は読む・検査・書くの 3 つとも失敗・符号つきの欄は負の側も同じ・型で作った上限を越える文書が `build` と `compile_storyboard` で拒まれる）を確かめる
   - このタスクのファイルについて、`cargo check -p dola --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）。dola の本体が組める時に `--test validation`・`--test general` と機能 `toml` の入口で緑である
@@ -803,3 +803,4 @@
 - 2.6〜2.13 の dola の結合テストは、lib が組めるまで型の検査に届かない（`cargo check --all-targets` の誤り 0 件は「まだ見られていない」）。2.14 の締めで初めて型と実行の誤りが出る。
 - 2.7: `tests/cue/schedule_test.rs` は設計の表で 2.7 の持ち物で、済んでいる。2.8 は `runtime_test*.rs` と `sink_test.rs` だけを持つ。
 - 2.9: 2.10 が直すテストは `tests/validation/schema_test.rs`（`invalid_numbers_are_rejected` の 4 件・`all_violations_are_collected`・`negative_scalar_loop_offset_reports_one_error`・`base_doc`）、`tests/runtime/loop_offset_test/loop_offset_validation.rs`（`v14_negative_min_error`・`v15_negative_max_error`・`v15_negative_scalar_error`・NaN の 3 本ほか）、`tests/validation/transition_test/transition_v13_nan.rs`、`tests/general/**`、`tests/trigger/{serde_test,validation_test}.rs`、`tests/runtime/loop_offset_test/loop_offset_serde.rs`。`tests/compile/boundary_test.rs` の NaN／負の delay・duration・trigger_start_offset のテスト（`invalid_delay_and_duration_are_rejected_before_compile`・`nan_delay_that_bypassed_overlap_check_is_rejected`・`between_nan_delay_is_rejected`・`nan_trigger_start_offset_is_rejected`・`toml_non_finite_numbers_are_rejected_by_validate` の時間の欄）はコンパイルの家族＝2.11 の持ち物。`compile/resolve.rs:266` の説明（有限・符号は validate が見る）は 2.11 で直す。
+- 2.10: 境界の外で実数の秒の時間の値が残るテストは、2.11（`tests/compile/**`・`tests/trigger/compile_test.rs`）と 2.13（`tests/runtime/conflict_resolution_test/**`・`runtime/facade_test/diff_delivery.rs`・`runtime/loop_offset_test/loop_offset_compile.rs`・`tests/trigger/runtime_test.rs`）の持ち物。`tests/general/time_range_test.rs` は `compile_storyboard(&doc, "sb")` の 2 引数で呼ぶ（2.11 が開始の時刻を外す）。

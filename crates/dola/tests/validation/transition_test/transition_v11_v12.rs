@@ -13,7 +13,7 @@ mod v11_tests {
             TransitionDef {
                 to: Some(TransitionValue::Scalar(1.0)),
                 relative_to: Some(50.0),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -83,7 +83,7 @@ mod v12_tests {
             "x",
             TransitionDef {
                 to: Some(TransitionValue::Scalar(200.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -108,7 +108,7 @@ mod v12_tests {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(-5.0)),
                 to: Some(TransitionValue::Scalar(5.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -124,7 +124,7 @@ mod v12_tests {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );
@@ -145,7 +145,7 @@ mod v12_tests {
             "x",
             TransitionDef {
                 to: Some(TransitionValue::Scalar(11.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             },
         );

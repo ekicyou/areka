@@ -3,7 +3,7 @@
 use super::common::minimal_trigger_doc;
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, DolaError, StoryboardBuilder, StoryboardEntry,
-    TransitionDef, TransitionRef, TransitionValue,
+    TimeDelta, TimeSpan, TransitionDef, TransitionRef, TransitionValue,
 };
 
 // ============================================================
@@ -110,7 +110,7 @@ fn v15t_no_cycle_chain_is_valid() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -154,7 +154,7 @@ fn v16t_trigger_with_variable_is_error() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -191,7 +191,7 @@ fn v16t_trigger_with_transition_is_error() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -204,7 +204,7 @@ fn v16t_trigger_with_transition_is_error() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -256,7 +256,7 @@ fn v15t_long_chain_validates_ok_on_small_stack() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -371,7 +371,7 @@ fn v15t_diamond_join_is_not_a_cycle() {
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(TimeSpan::from_millis(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -453,7 +453,7 @@ fn trigger_start_offset_on_non_trigger_is_rejected() {
     let sb = StoryboardBuilder::new()
         .entry(StoryboardEntry {
             keyframe: Some("kf".to_string()),
-            trigger_start_offset: Some(1.0),
+            trigger_start_offset: Some(TimeDelta::from_millis_saturating(1000)),
             ..Default::default()
         })
         .build();
@@ -467,4 +467,30 @@ fn trigger_start_offset_on_non_trigger_is_rejected() {
         DolaError::InvalidEntry { entry_index: 0, reason, .. }
         if reason.contains("trigger_start_offset")
     )));
+}
+
+/// 文書の値の上限を越える trigger_start_offset は、正負どちらも型で作れても拒まれる
+#[test]
+fn trigger_start_offset_beyond_document_range_is_rejected() {
+    for ticks in [1_i64 << 51, -(1_i64 << 51)] {
+        let parent = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child".to_string()),
+                trigger_start_offset: Some(TimeDelta::from_ticks(ticks)),
+                ..Default::default()
+            })
+            .build();
+        let errors = DolaDocumentBuilder::new("1.0")
+            .storyboard("parent", parent)
+            .storyboard("child", StoryboardBuilder::new().build())
+            .build()
+            .unwrap_err();
+        assert!(
+            errors.iter().any(|e| matches!(
+                e,
+                DolaError::TimeOutOfDocumentRange { field, .. } if field == "trigger_start_offset"
+            )),
+            "{ticks}: {errors:?}"
+        );
+    }
 }

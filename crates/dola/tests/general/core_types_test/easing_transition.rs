@@ -150,8 +150,8 @@ mod transition_tests {
             to: Some(TransitionValue::Scalar(1.0)),
             relative_to: None,
             easing: Some(EasingFunction::Named(EasingName::QuadraticInOut)),
-            delay: 0.5,
-            duration: Some(2.0),
+            delay: TimeSpan::from_millis(500),
+            duration: Some(TimeSpan::from_millis(2000)),
         };
         let json = serde_json::to_string(&def).unwrap();
         let deserialized: TransitionDef = serde_json::from_str(&json).unwrap();
@@ -165,8 +165,8 @@ mod transition_tests {
             to: None,
             relative_to: Some(50.0),
             easing: Some(EasingFunction::Named(EasingName::Linear)),
-            delay: 0.0,
-            duration: Some(1.0),
+            delay: TimeSpan::ZERO,
+            duration: Some(TimeSpan::from_millis(1000)),
         };
         let json = serde_json::to_string(&def).unwrap();
         let deserialized: TransitionDef = serde_json::from_str(&json).unwrap();
@@ -178,7 +178,7 @@ mod transition_tests {
         // delay 省略時はデフォルト 0.0
         let json = r#"{"to":1.0,"duration":1.0}"#;
         let def: TransitionDef = serde_json::from_str(json).unwrap();
-        assert_eq!(def.delay, 0.0);
+        assert_eq!(def.delay, TimeSpan::ZERO);
     }
 
     #[test]
@@ -197,8 +197,8 @@ mod transition_tests {
             to: Some(TransitionValue::Scalar(1.0)),
             relative_to: None,
             easing: None,
-            delay: 0.0,
-            duration: Some(1.5),
+            delay: TimeSpan::ZERO,
+            duration: Some(TimeSpan::from_millis(1500)),
         });
         let json = serde_json::to_string(&tref).unwrap();
         let deserialized: TransitionRef = serde_json::from_str(&json).unwrap();

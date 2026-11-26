@@ -43,8 +43,8 @@ mod v6_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::Single("kf_from_entry_1".to_string())),
                         ..Default::default()
@@ -56,8 +56,8 @@ mod v6_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("kf_from_entry_1".to_string()),
                         ..Default::default()
@@ -99,8 +99,8 @@ mod v6_tests {
                         to: Some(TransitionValue::Scalar(1.0)),
                         relative_to: None,
                         easing: None,
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                     })),
                     at: Some(KeyframeRef::Single("nonexistent".to_string())),
                     ..Default::default()
@@ -148,8 +148,8 @@ mod v6_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::Single("__implicit_1".to_string())),
                         ..Default::default()
@@ -161,8 +161,8 @@ mod v6_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         ..Default::default()
                     },
@@ -204,8 +204,8 @@ mod v6_tests {
                         to: Some(TransitionValue::Scalar(1.0)),
                         relative_to: None,
                         easing: None,
-                        delay: 0.0,
-                        duration: Some(1.0),
+                        delay: TimeSpan::ZERO,
+                        duration: Some(TimeSpan::from_millis(1000)),
                     })),
                     at: Some(KeyframeRef::Single("start".to_string())),
                     ..Default::default()
@@ -234,8 +234,8 @@ mod v6_ref_shape_tests {
                 to: Some(TransitionValue::Scalar(val)),
                 relative_to: None,
                 easing: None,
-                delay: 0.0,
-                duration: Some(1.0),
+                delay: TimeSpan::ZERO,
+                duration: Some(TimeSpan::from_millis(1000)),
             })),
             ..Default::default()
         }
@@ -300,7 +300,7 @@ mod v6_ref_shape_tests {
         let mut e0 = float_entry(1.0);
         e0.at = Some(KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Single("nonexistent".to_string()),
-            offset: 0.5,
+            offset: TimeDelta::from_millis_saturating(500),
         });
         let doc = doc_with_entries(vec![e0]);
 
@@ -320,7 +320,7 @@ mod v6_ref_shape_tests {
         let mut e1 = float_entry(2.0);
         e1.at = Some(KeyframeRef::WithOffset {
             keyframes: KeyframeNames::Multiple(vec!["start".to_string(), "kf1".to_string()]),
-            offset: 0.25,
+            offset: TimeDelta::from_millis_saturating(250),
         });
         let doc = doc_with_entries(vec![e0, e1]);
 
@@ -386,8 +386,8 @@ mod v8_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("kf1".to_string()),
                         ..Default::default()
@@ -399,8 +399,8 @@ mod v8_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::Single("kf1".to_string())),
                         between: Some(BetweenKeyframes {

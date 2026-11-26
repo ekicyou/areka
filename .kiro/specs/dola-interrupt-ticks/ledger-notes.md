@@ -54,3 +54,9 @@
 - 足した分かれ道: 文書の時間の欄の全部（名前つきとインラインの transition の delay・duration、loop_offset の Scalar と Range の min・max、`KeyframeRef::WithOffset.offset`、`trigger_start_offset`）を文書の値の上限で見て `TimeOutOfDocumentRange` にする。
 - 変える前後の期待: `builder.rs` の `storyboard_builder_loop_offset_set`（`Scalar(1.5)` → `Scalar(TimeSpan::from_millis(1500))`）。
 - untagged の `LoopOffset` は、負の値や上限を越える値の読み込みの失敗の文が「data did not match any variant of untagged enum」になる（テストは失敗した事を見る）。
+
+## 2.10
+
+- 行き先（検査の誤り → 読み込みの失敗）: `schema_test.rs` の `invalid_numbers_are_rejected` の 4 件（`trans.duration=NaN`・`duration=-3.0`・`delay=-1.0`・`loop_offset=Scalar(NaN)`）を外し（ケース 13 → 9 件）、`schema_test.rs::time_field_tests::negative_or_non_finite_times_fail_to_load` へ。`negative_scalar_loop_offset_reports_one_error`（`LoopOffsetNegativeMax`）と、`loop_offset_validation.rs` の `v14_negative_min_error`・`v15_negative_max_error`・`v15_negative_scalar_error`・`nan_scalar_loop_offset_is_rejected`・`nan_range_max_is_rejected_even_with_positive_min`・`nan_range_min_is_rejected` を外し、`loop_offset_serde.rs::negative_or_non_finite_offsets_fail_to_load` へ。
+- 変える前後の期待: `all_violations_are_collected`（`["time_scale","loop_count","duration"]` → `["time_scale","loop_count"]`。負の長さは作れない）。`v16_range_inverted_error`（`*min == 5.0` → `TimeSpan::from_millis(5000)`）。`tests/trigger/serde_test.rs` の `trigger_start_offset` は符号つきになり、−0.5 秒の往復を確かめる。ほかは実数の秒 → ちょうどの値。
+- 足したテスト: `schema_test.rs::time_field_tests`（往復・上限の端・キーフレームのずらしの両側・検査の報告の順）、`loop_offset_validation.rs::document_range_tests`、`loop_offset_serde.rs` の 4 本、`trigger/serde_test.rs` の 2 本、`trigger/validation_test.rs::trigger_start_offset_beyond_document_range_is_rejected`、新しい `tests/general/time_range_test.rs`（往復・上限の端・`compile_storyboard` と `DolaDocumentBuilder::build` が拒む・toml）。

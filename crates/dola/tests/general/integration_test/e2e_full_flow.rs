@@ -39,8 +39,8 @@ mod e2e_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         ..Default::default()
                     })
@@ -51,8 +51,8 @@ mod e2e_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         ..Default::default()
                     })

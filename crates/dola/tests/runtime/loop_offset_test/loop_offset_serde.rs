@@ -10,15 +10,15 @@ mod serde_tests {
 
     #[test]
     fn scalar_shorthand_deserialize() {
-        // 数値 3.0 → LoopOffset::Scalar(3.0)
+        // 数値 3.0 → LoopOffset::Scalar(3 秒)
         let json = "3.0";
         let lo: LoopOffset = serde_json::from_str(json).unwrap();
-        assert_eq!(lo, LoopOffset::Scalar(3.0));
+        assert_eq!(lo, LoopOffset::Scalar(TimeSpan::from_millis(3000)));
     }
 
     #[test]
     fn scalar_shorthand_round_trip() {
-        let lo = LoopOffset::Scalar(5.0);
+        let lo = LoopOffset::Scalar(TimeSpan::from_millis(5000));
         let json = serde_json::to_string(&lo).unwrap();
         let deserialized: LoopOffset = serde_json::from_str(&json).unwrap();
         assert_eq!(lo, deserialized);
@@ -30,8 +30,8 @@ mod serde_tests {
         let lo: LoopOffset = serde_json::from_str(json).unwrap();
         match &lo {
             LoopOffset::Range(r) => {
-                assert_eq!(r.min, 1.0);
-                assert_eq!(r.max, 5.0);
+                assert_eq!(r.min, TimeSpan::from_millis(1000));
+                assert_eq!(r.max, TimeSpan::from_millis(5000));
                 assert_eq!(r.easing, EasingFunction::Named(EasingName::QuadraticOut));
             }
             _ => panic!("Expected LoopOffset::Range"),
@@ -41,8 +41,8 @@ mod serde_tests {
     #[test]
     fn object_form_round_trip() {
         let lo = LoopOffset::Range(LoopOffsetRange {
-            min: 1.0,
-            max: 5.0,
+            min: TimeSpan::from_millis(1000),
+            max: TimeSpan::from_millis(5000),
             easing: EasingFunction::Named(EasingName::QuadraticOut),
         });
         let json = serde_json::to_string_pretty(&lo).unwrap();
@@ -70,8 +70,8 @@ mod serde_tests {
         let lo: LoopOffset = serde_json::from_str(json).unwrap();
         match &lo {
             LoopOffset::Range(r) => {
-                assert_eq!(r.min, 0.0);
-                assert_eq!(r.max, 5.0);
+                assert_eq!(r.min, TimeSpan::ZERO);
+                assert_eq!(r.max, TimeSpan::from_millis(5000));
             }
             _ => panic!("Expected LoopOffset::Range"),
         }
@@ -80,8 +80,8 @@ mod serde_tests {
     #[test]
     fn parametric_easing_round_trip() {
         let lo = LoopOffset::Range(LoopOffsetRange {
-            min: 0.5,
-            max: 3.0,
+            min: TimeSpan::from_millis(500),
+            max: TimeSpan::from_millis(3000),
             easing: EasingFunction::Parametric(ParametricEasing::CubicBezier {
                 x0: 0.0,
                 x1: 0.42,
@@ -103,7 +103,10 @@ mod serde_tests {
             "entry": []
         }"#;
         let sb: Storyboard = serde_json::from_str(json).unwrap();
-        assert_eq!(sb.loop_offset, Some(LoopOffset::Scalar(5.0)));
+        assert_eq!(
+            sb.loop_offset,
+            Some(LoopOffset::Scalar(TimeSpan::from_millis(5000)))
+        );
     }
 
     #[test]
@@ -120,8 +123,8 @@ mod serde_tests {
         let sb: Storyboard = serde_json::from_str(json).unwrap();
         match &sb.loop_offset {
             Some(LoopOffset::Range(r)) => {
-                assert_eq!(r.min, 1.0);
-                assert_eq!(r.max, 5.0);
+                assert_eq!(r.min, TimeSpan::from_millis(1000));
+                assert_eq!(r.max, TimeSpan::from_millis(5000));
             }
             other => panic!("Expected Some(LoopOffset::Range), got {:?}", other),
         }
@@ -169,5 +172,51 @@ mod serde_tests {
         assert!(!json.contains("loop_offset"));
         let deserialized: Storyboard = serde_json::from_str(&json).unwrap();
         assert_eq!(sb, deserialized);
+    }
+
+    #[test]
+    fn negative_or_non_finite_offsets_fail_to_load() {
+        // 失敗した事だけを見る（untagged の文は「どの形にも合わない」になる）
+        for json in [
+            "-1.0",
+            r#"{ "min": -1.0, "max": 5.0 }"#,
+            r#"{ "min": 0.0, "max": -3.0 }"#,
+            r#"{ "max": 1e400 }"#,
+            r#"{ "min": 1e400, "max": 1.0 }"#,
+        ] {
+            assert!(serde_json::from_str::<LoopOffset>(json).is_err(), "{json}");
+        }
+    }
+
+    #[test]
+    fn offsets_beyond_the_document_range_fail_to_load() {
+        for json in [
+            "225179981.3685248",
+            r#"{ "max": 225179981.3685248 }"#,
+            r#"{ "min": 225179981.3685248, "max": 225179981.3685248 }"#,
+        ] {
+            assert!(serde_json::from_str::<LoopOffset>(json).is_err(), "{json}");
+        }
+        assert!(serde_json::from_str::<LoopOffset>("225179981.3685247").is_ok());
+    }
+
+    #[test]
+    fn offsets_at_the_limit_edge_round_trip() {
+        let edge = TimeSpan::try_from_ticks((1 << 51) - 1).unwrap();
+        let lo = LoopOffset::Scalar(edge);
+        let json = serde_json::to_string(&lo).unwrap();
+        assert_eq!(serde_json::from_str::<LoopOffset>(&json).unwrap(), lo);
+    }
+
+    #[test]
+    fn offsets_beyond_the_document_range_fail_to_write() {
+        let over = TimeSpan::try_from_ticks(1 << 51).unwrap();
+        assert!(serde_json::to_string(&LoopOffset::Scalar(over)).is_err());
+        let range = LoopOffset::Range(LoopOffsetRange {
+            min: TimeSpan::ZERO,
+            max: over,
+            easing: EasingFunction::Named(EasingName::Linear),
+        });
+        assert!(serde_json::to_string(&range).is_err());
     }
 }
