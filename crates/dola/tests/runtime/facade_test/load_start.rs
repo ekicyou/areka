@@ -19,12 +19,12 @@ mod full_playback_cycle {
 
         let StartResult {
             group_id, end_time, ..
-        } = rt.start("fade_in", 0.0).unwrap();
+        } = rt.start("fade_in", at_ms(0)).unwrap();
         assert_eq!(group_id, 1);
-        assert!((end_time - 1.0).abs() < 1e-9);
+        assert_eq!(end_time, Some(at_ms(1000)));
 
         // t=0.0: 初回 update — opacity=0.0
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
         let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].0, opacity_id);
@@ -34,7 +34,7 @@ mod full_playback_cycle {
         }
 
         // t=0.5: 中間値 — opacity≈0.5
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
         match &diff[0].1 {
@@ -43,7 +43,7 @@ mod full_playback_cycle {
         }
 
         // t=1.0: 最終値 — opacity=1.0, 自然終了トリガー
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let diff = rt.last_result().changes.clone();
         // 自然終了により conclude_internal が呼ばれ、最終値が配信される
         assert!(!diff.is_empty(), "expected final value delivery at t=1.0");
@@ -57,7 +57,7 @@ mod full_playback_cycle {
         }
 
         // t=1.5: 終了後 — 差分なし
-        rt.tick(1.5);
+        rt.tick(at_ms(1500));
         let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected empty diff after natural end");
     }
@@ -68,14 +68,14 @@ mod full_playback_cycle {
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
 
-        let err = rt.start("nonexistent", 0.0).unwrap_err();
+        let err = rt.start("nonexistent", at_ms(0)).unwrap_err();
         assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
     }
 
     #[test]
     fn start_without_document_fails() {
         let mut rt = DolaRuntime::new();
-        let err = rt.start("fade_in", 0.0).unwrap_err();
+        let err = rt.start("fade_in", at_ms(0)).unwrap_err();
         assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
     }
 
@@ -87,16 +87,16 @@ mod full_playback_cycle {
         let Some(TransitionRef::Inline(tr)) = sb.entry[0].transition.as_mut() else {
             panic!("inline transition expected");
         };
-        tr.delay = 0.5;
+        tr.delay = ms(500);
 
         let mut rt = DolaRuntime::new();
         let opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        let StartResult { end_time, .. } = rt.start("delayed", 0.0).unwrap();
-        assert_eq!(end_time, 1.5);
+        let StartResult { end_time, .. } = rt.start("delayed", at_ms(0)).unwrap();
+        assert_eq!(end_time, Some(at_ms(1500)));
 
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let (_, v) = rt
             .last_result()
             .changes
@@ -147,9 +147,9 @@ mod full_playback_cycle {
             );
 
             let StartResult { end_time, .. } = rt
-                .start("fade_in", 0.0)
+                .start("fade_in", at_ms(0))
                 .unwrap_or_else(|e| panic!("{label}: previous document must start: {e:?}"));
-            assert_eq!(end_time, 1.0, "{label}");
+            assert_eq!(end_time, Some(at_ms(1000)), "{label}");
         }
     }
 }
@@ -182,7 +182,7 @@ mod start_error_paths {
     }
 
     /// loop_count を任意指定した 1 変数ドキュメント（duration 指定可）。
-    fn loop_count_doc(sb_name: &str, loop_count: i32, duration: f64) -> DolaDocument {
+    fn loop_count_doc(sb_name: &str, loop_count: i32, duration: TimeSpan) -> DolaDocument {
         let mut variable = BTreeMap::new();
         variable.insert(
             "opacity".to_string(),
@@ -221,10 +221,10 @@ mod start_error_paths {
     fn load_with_zero_loop_count_is_rejected() {
         // 0 と −2 以下の loop_count は、start を待たず読み込みの検証で拒まれる
         let mut rt = DolaRuntime::new();
-        let rejected = rejected_number(&mut rt, loop_count_doc("fade", 0, 1.0));
+        let rejected = rejected_number(&mut rt, loop_count_doc("fade", 0, ms(1000)));
         assert_eq!(rejected, ("loop_count".to_string(), 0.0));
         assert!(matches!(
-            rt.start("fade", 0.0).unwrap_err(),
+            rt.start("fade", at_ms(0)).unwrap_err(),
             RuntimeError::StoryboardNotFound(_)
         ));
     }
@@ -233,7 +233,7 @@ mod start_error_paths {
     fn load_with_negative_loop_count_is_rejected() {
         // -1（無限）以外の負値は無効
         let mut rt = DolaRuntime::new();
-        let rejected = rejected_number(&mut rt, loop_count_doc("fade", -2, 1.0));
+        let rejected = rejected_number(&mut rt, loop_count_doc("fade", -2, ms(1000)));
         assert_eq!(rejected, ("loop_count".to_string(), -2.0));
     }
 
@@ -249,7 +249,7 @@ mod start_error_paths {
             "expected ZeroDurationWithLoop, got {err:?}"
         );
         assert!(matches!(
-            rt.start("empty_sb", 0.0).unwrap_err(),
+            rt.start("empty_sb", at_ms(0)).unwrap_err(),
             RuntimeError::StoryboardNotFound(_)
         ));
     }
@@ -259,21 +259,21 @@ mod start_error_paths {
         // entry 空でも loop_count=1 なら開始可能（end_time = start_time）
         let mut rt = DolaRuntime::new();
         rt.load_document(empty_entry_doc("empty_sb", 1)).unwrap();
-        let result = rt.start("empty_sb", 2.0).unwrap();
-        assert!((result.end_time - 2.0).abs() < 1e-9);
+        let result = rt.start("empty_sb", at_ms(2000)).unwrap();
+        assert_eq!(result.end_time, Some(at_ms(2000)));
     }
 
     #[test]
     fn pause_on_invalid_group_id_fails() {
         let mut rt = DolaRuntime::new();
-        let err = rt.pause(9999, 0.0).unwrap_err();
+        let err = rt.pause(9999, at_ms(0)).unwrap_err();
         assert!(matches!(err, RuntimeError::InvalidGroupId(9999)));
     }
 
     #[test]
     fn resume_on_invalid_group_id_fails() {
         let mut rt = DolaRuntime::new();
-        let err = rt.resume(9999, 0.0).unwrap_err();
+        let err = rt.resume(9999, at_ms(0)).unwrap_err();
         assert!(matches!(err, RuntimeError::InvalidGroupId(9999)));
     }
 }
@@ -287,7 +287,7 @@ mod time_scale_boundary {
     use dola::{DolaError, InterruptionPolicy, Storyboard};
 
     /// time_scale を任意指定した 1 変数ドキュメント（duration 指定可）。
-    fn time_scale_doc(sb_name: &str, time_scale: f64, duration: f64) -> DolaDocument {
+    fn time_scale_doc(sb_name: &str, time_scale: f64, duration: TimeSpan) -> DolaDocument {
         let mut variable = BTreeMap::new();
         variable.insert(
             "opacity".to_string(),
@@ -350,7 +350,7 @@ mod time_scale_boundary {
     #[test]
     fn non_positive_or_nan_time_scale_is_rejected_at_load() {
         for time_scale in [0.0, -1.0, f64::NAN] {
-            assert_rejected(time_scale_doc("fade", time_scale, 1.0), time_scale);
+            assert_rejected(time_scale_doc("fade", time_scale, ms(1000)), time_scale);
         }
     }
 

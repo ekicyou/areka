@@ -15,16 +15,16 @@ mod conclude_cancel_finish {
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         // t=0.0: 初回
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
 
         // t=0.3 で Conclude
         rt.conclude(group_id).unwrap();
 
         // 次の update で最終値 (1.0) が配信される
-        rt.tick(0.3);
+        rt.tick(at_ms(300));
         let diff = rt.last_result().changes.clone();
         let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
         match opacity {
@@ -35,7 +35,7 @@ mod conclude_cancel_finish {
         }
 
         // 以降は差分なし
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
@@ -50,22 +50,22 @@ mod conclude_cancel_finish {
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         // t=0.0: 初回
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
         // t=0.5: 中間値取得
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
 
         // Cancel — 現在値凍結
         rt.cancel(group_id).unwrap();
 
         // 以降は差分なし（タイムテーブル削除済み、値は前回 update 値で凍結）
-        rt.tick(0.6);
+        rt.tick(at_ms(600));
         let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected empty diff after cancel");
 
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected still empty after cancel");
     }
@@ -77,16 +77,16 @@ mod conclude_cancel_finish {
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         // t=0.0
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
 
         // finish: deadline = 0.5（t=0.5 で Conclude 相当）
-        rt.finish(group_id, 0.5).unwrap();
+        rt.finish(group_id, at_ms(500)).unwrap();
 
         // t=0.3: deadline 未到達 → まだ再生中
-        rt.tick(0.3);
+        rt.tick(at_ms(300));
         let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff
             .iter()
@@ -98,7 +98,7 @@ mod conclude_cancel_finish {
         }
 
         // t=0.5: deadline 到達 → Conclude 相当で最終値が飛ぶ
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff
             .iter()
@@ -111,7 +111,7 @@ mod conclude_cancel_finish {
         );
 
         // 以降は差分なし
-        rt.tick(0.8);
+        rt.tick(at_ms(800));
         let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
@@ -138,7 +138,7 @@ mod conclude_cancel_finish {
         let mut rt = DolaRuntime::new();
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         rt.conclude(group_id).unwrap();
         // Concluded でインスタンス削除済み → 2 回目は InvalidGroupId
@@ -151,7 +151,7 @@ mod conclude_cancel_finish {
         let mut rt = DolaRuntime::new();
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         rt.conclude(group_id).unwrap();
         // Conclude 済み（インスタンス削除済み）の Cancel は InvalidGroupId
@@ -162,7 +162,7 @@ mod conclude_cancel_finish {
     #[test]
     fn finish_on_invalid_group_id_fails() {
         let mut rt = DolaRuntime::new();
-        let err = rt.finish(9999, 1.0).unwrap_err();
+        let err = rt.finish(9999, at_ms(1000)).unwrap_err();
         assert!(matches!(err, RuntimeError::InvalidGroupId(9999)));
     }
 
@@ -171,10 +171,10 @@ mod conclude_cancel_finish {
         let mut rt = DolaRuntime::new();
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         rt.conclude(group_id).unwrap();
-        let err = rt.finish(group_id, 1.0).unwrap_err();
+        let err = rt.finish(group_id, at_ms(1000)).unwrap_err();
         assert!(matches!(err, RuntimeError::InvalidGroupId(_)));
     }
 }

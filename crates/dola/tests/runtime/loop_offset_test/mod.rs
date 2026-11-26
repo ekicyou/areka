@@ -1,6 +1,6 @@
 //! LoopOffset のテスト群（serde / validation / compile の 3 群）
 
-use crate::support::linear;
+use crate::support::{linear, ms};
 use dola::*;
 use std::collections::BTreeMap;
 

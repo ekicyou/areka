@@ -16,13 +16,13 @@ mod pause_resume_cycle {
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
 
-        let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
         // t=0.0: 初回
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
 
         // t=0.3: 中間
-        rt.tick(0.3);
+        rt.tick(at_ms(300));
         let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty());
         match &diff[0].1 {
@@ -31,11 +31,11 @@ mod pause_resume_cycle {
         }
 
         // Pause at (logical) t=0.3
-        rt.pause(group_id, 0.3).unwrap();
+        rt.pause(group_id, at_ms(300)).unwrap();
 
         // t=0.5: Pause 中 — 値が凍結される
         // Paused 状態では timeline_manager が pause_start 時点の値を返す
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         // Paused 中は前回値と同じ → diff 空
         assert!(
@@ -44,15 +44,12 @@ mod pause_resume_cycle {
         );
 
         // Resume at logical t=0.5
-        let new_end = rt.resume(group_id, 0.5).unwrap();
-        // end_time は pause 分（0.2s）延長される: 1.0 + 0.2 = 1.2
-        assert!(
-            (new_end - 1.2).abs() < 1e-9,
-            "expected end_time ~1.2, got {new_end}"
-        );
+        let new_end = rt.resume(group_id, at_ms(500)).unwrap();
+        // 終わりの予定は pause 分（0.2s）延長される: 1.0 + 0.2 = 1.2
+        assert_eq!(new_end, Some(at_ms(1200)));
 
         // t=0.7: pause 分 0.2s ずれで effective=0.5
-        rt.tick(0.7);
+        rt.tick(at_ms(700));
         let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
@@ -80,14 +77,14 @@ mod concurrent_playback {
         rt.load_document(doc).unwrap();
 
         // 両方の SB を開始
-        let r1 = rt.start("fade", 0.0).unwrap();
-        let r2 = rt.start("zoom", 0.0).unwrap();
+        let r1 = rt.start("fade", at_ms(0)).unwrap();
+        let r2 = rt.start("zoom", at_ms(0)).unwrap();
         assert_ne!(r1.group_id, r2.group_id);
-        assert!((r1.end_time - 1.0).abs() < 1e-9, "fade end_time");
-        assert!((r2.end_time - 2.0).abs() < 1e-9, "zoom end_time");
+        assert_eq!(r1.end_time, Some(at_ms(1000)), "fade end_time");
+        assert_eq!(r2.end_time, Some(at_ms(2000)), "zoom end_time");
 
         // t=0.5: opacity=0.5, scale=1.25
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
@@ -103,7 +100,7 @@ mod concurrent_playback {
         assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@0.5");
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
-        rt.tick(1.5);
+        rt.tick(at_ms(1500));
         let diff = rt.last_result().changes.clone();
         // opacity の自然終了 + scale の更新
         let (_, scale) = diff
@@ -125,8 +122,8 @@ mod value_hold {
     fn short_and_long_doc() -> DolaDocument {
         let mut doc = dual_variable_doc();
         let sb = StoryboardBuilder::new()
-            .entry(linear("opacity", 0.0, 1.0, 1.0))
-            .entry(linear("scale", 1.0, 2.0, 2.0))
+            .entry(linear("opacity", 0.0, 1.0, ms(1000)))
+            .entry(linear("scale", 1.0, 2.0, ms(2000)))
             .build();
         doc.storyboard.clear();
         doc.storyboard.insert("both".to_string(), sb);
@@ -138,24 +135,24 @@ mod value_hold {
         let mut rt = DolaRuntime::new();
         let opacity_id = rt.subscribe("opacity");
         rt.load_document(short_and_long_doc()).unwrap();
-        rt.start("both", 0.0).unwrap();
+        rt.start("both", at_ms(0)).unwrap();
 
         // 受け手が持つ最後の値
         let mut seen: HashMap<i64, EvaluatedValue> = HashMap::new();
-        let mut tick = |rt: &mut DolaRuntime, t: f64| {
-            rt.tick(t);
+        let mut tick = |rt: &mut DolaRuntime, t: i64| {
+            rt.tick(at_ms(t));
             for (id, v) in &rt.last_result().changes {
                 seen.insert(*id, v.clone());
             }
             seen.get(&opacity_id).cloned()
         };
 
-        assert_eq!(tick(&mut rt, 0.992), Some(EvaluatedValue::Float(0.992)));
+        assert_eq!(tick(&mut rt, 992), Some(EvaluatedValue::Float(0.992)));
         // opacity の最後のセグメントを過ぎても、インスタンスは生きている → 最後の値
-        assert_eq!(tick(&mut rt, 1.008), Some(EvaluatedValue::Float(1.0)));
+        assert_eq!(tick(&mut rt, 1008), Some(EvaluatedValue::Float(1.0)));
         // t=2.0 で Conclude した後も 1.0 のまま
-        assert_eq!(tick(&mut rt, 2.0), Some(EvaluatedValue::Float(1.0)));
-        assert_eq!(tick(&mut rt, 2.5), Some(EvaluatedValue::Float(1.0)));
+        assert_eq!(tick(&mut rt, 2000), Some(EvaluatedValue::Float(1.0)));
+        assert_eq!(tick(&mut rt, 2500), Some(EvaluatedValue::Float(1.0)));
     }
 }
 
@@ -173,22 +170,22 @@ mod has_instances {
         let Some(TransitionRef::Inline(tr)) = sb.entry[0].transition.as_mut() else {
             panic!("inline transition expected");
         };
-        tr.delay = 1.0;
+        tr.delay = ms(1000);
 
         let mut rt = DolaRuntime::new();
         rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         assert!(!rt.has_instances());
 
-        let StartResult { group_id, .. } = rt.start("delayed", 0.0).unwrap();
-        rt.tick(0.0);
-        for t in [0.3, 0.6, 0.9] {
-            rt.tick(t);
+        let StartResult { group_id, .. } = rt.start("delayed", at_ms(0)).unwrap();
+        rt.tick(at_ms(0));
+        for t in [300, 600, 900] {
+            rt.tick(at_ms(t));
             assert!(
                 rt.last_result().changes.is_empty(),
-                "t={t}: delay 中は変化なし"
+                "t={t}ms: delay 中は変化なし"
             );
-            assert!(rt.has_instances(), "t={t}: delay 中も生きている");
+            assert!(rt.has_instances(), "t={t}ms: delay 中も生きている");
         }
 
         rt.conclude(group_id).unwrap();

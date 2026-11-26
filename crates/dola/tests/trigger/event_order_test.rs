@@ -1,14 +1,16 @@
 //! 1 回の tick の中の出来事（トリガー・周回の終わり・finish の期限）を時刻の順に処理する。
 //! 60fps で回しても、tick を大きく飛ばしても同じ結果になる
 
-use super::runtime_test::three_loop_trigger_doc;
+use super::common::{at_ms, delta_ms, ms};
+use super::runtime_loop_test::three_loop_trigger_doc;
 use dola::runtime::{DolaRuntime, EvaluatedValue, TriggerResult};
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, InterruptionPolicy, KeyframeNames,
-    KeyframeRef, StoryboardBuilder, StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
+    KeyframeRef, StoryboardBuilder, StoryboardEntry, TimeDelta, TimePoint, TimeSpan, TransitionDef,
+    TransitionRef, TransitionValue,
 };
 
-fn ramp(var: &str, from: f64, to: f64, duration: f64) -> StoryboardEntry {
+fn ramp(var: &str, from: f64, to: f64, duration: TimeSpan) -> StoryboardEntry {
     StoryboardEntry {
         variable: Some(var.to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
@@ -21,8 +23,14 @@ fn ramp(var: &str, from: f64, to: f64, duration: f64) -> StoryboardEntry {
     }
 }
 
-/// 親は自分の変数 `var` を `loop_len` 秒動かし、周回の頭から `at` 秒で `child` を起こす
-fn parent(var: &str, loop_len: f64, loops: i32, at: f64, child: &str) -> dola::Storyboard {
+/// 親は自分の変数 `var` を `loop_len` の長さ動かし、周回の頭から `at` 後に `child` を起こす
+fn parent(
+    var: &str,
+    loop_len: TimeSpan,
+    loops: i32,
+    at: TimeDelta,
+    child: &str,
+) -> dola::Storyboard {
     StoryboardBuilder::new()
         .loop_count(loops)
         .entry(ramp(var, 0.0, 1.0, loop_len))
@@ -47,7 +55,7 @@ fn two_parent_doc(p1: dola::Storyboard, p2: dola::Storyboard) -> DolaDocument {
     let child = |from: f64| {
         StoryboardBuilder::new()
             .interruption_policy(InterruptionPolicy::Cancel)
-            .entry(ramp("x", from, from + 1.0, 5.0))
+            .entry(ramp("x", from, from + 1.0, ms(5000)))
             .build()
     };
     DolaDocumentBuilder::new("1.0")
@@ -63,12 +71,12 @@ fn two_parent_doc(p1: dola::Storyboard, p2: dola::Storyboard) -> DolaDocument {
 }
 
 /// p1（group 1）・p2（group 2）を 0 秒に起こし、`times` の順に tick して最後の x を返す
-fn final_x(doc: &DolaDocument, times: &[f64]) -> f64 {
+fn final_x(doc: &DolaDocument, times: &[TimePoint]) -> f64 {
     let mut rt = DolaRuntime::new();
     let x_id = rt.subscribe("x");
     rt.load_document(doc.clone()).unwrap();
-    assert_eq!(rt.start("p1", 0.0).unwrap().group_id, 1);
-    assert_eq!(rt.start("p2", 0.0).unwrap().group_id, 2);
+    assert_eq!(rt.start("p1", at_ms(0)).unwrap().group_id, 1);
+    assert_eq!(rt.start("p2", at_ms(0)).unwrap().group_id, 2);
     let mut x = f64::NAN;
     for &t in times {
         rt.tick(t);
@@ -83,10 +91,14 @@ fn final_x(doc: &DolaDocument, times: &[f64]) -> f64 {
     x
 }
 
-fn frames_60fps(end: f64) -> Vec<f64> {
-    (0..=(end * 60.0).round() as u32)
-        .map(|k| k as f64 / 60.0)
-        .collect()
+/// 60fps の 1 コマ目から数えた k コマ目の時刻（100ns の刻みへ四捨五入）。
+fn frame(k: i64) -> TimePoint {
+    TimePoint::from_ticks((k * 10_000_000 + 30) / 60)
+}
+
+/// 0 から `end_ms` までの 60fps のコマの時刻。
+fn frames_60fps(end_ms: i64) -> Vec<TimePoint> {
+    (0..=end_ms * 60 / 1000).map(frame).collect()
 }
 
 fn assert_close(actual: f64, expected: f64, var: &str, what: &str) {
@@ -99,32 +111,46 @@ fn assert_close(actual: f64, expected: f64, var: &str, what: &str) {
 /// p1 は 0.9 秒に A、p2 は 0.1 秒に B を起こす。時刻の上で後の A が B を終わらせる
 #[test]
 fn triggers_in_one_tick_fire_in_time_order() {
-    let doc = two_parent_doc(parent("a", 1.0, 1, 0.9, "A"), parent("b", 1.0, 1, 0.1, "B"));
+    let doc = two_parent_doc(
+        parent("a", ms(1000), 1, delta_ms(900), "A"),
+        parent("b", ms(1000), 1, delta_ms(100), "B"),
+    );
     // A は 0.9 秒に起き、1.0 秒で 0.1 秒ぶん進む
-    assert_close(final_x(&doc, &frames_60fps(1.0)), 10.02, "x", "60fps");
-    assert_close(final_x(&doc, &[0.0, 1.0]), 10.02, "x", "one tick");
+    assert_close(final_x(&doc, &frames_60fps(1000)), 10.02, "x", "60fps");
+    assert_close(
+        final_x(&doc, &[at_ms(0), at_ms(1000)]),
+        10.02,
+        "x",
+        "one tick",
+    );
 }
 
 /// 周回を飛ばしても、最後に起きるのは時刻の上で最後の A（P1 の 3 周目・2.9 秒）
 #[test]
 fn skipped_loop_triggers_fire_in_time_order_across_parents() {
     let doc = two_parent_doc(
-        parent("a", 1.0, 3, 0.9, "A"),
-        parent("b", 0.25, 12, 0.0, "B"),
+        parent("a", ms(1000), 3, delta_ms(900), "A"),
+        parent("b", ms(250), 12, delta_ms(0), "B"),
     );
     // A は 2.9 秒に起き、3.5 秒で 0.6 秒ぶん進む
-    assert_close(final_x(&doc, &frames_60fps(3.5)), 10.12, "x", "60fps");
-    assert_close(final_x(&doc, &[0.0, 3.5]), 10.12, "x", "one tick");
+    assert_close(final_x(&doc, &frames_60fps(3500)), 10.12, "x", "60fps");
+    assert_close(
+        final_x(&doc, &[at_ms(0), at_ms(3500)]),
+        10.12,
+        "x",
+        "one tick",
+    );
 }
 
 /// finish の期限を同じ tick で越えても、期限より前のトリガーは起きる（0.5・1.5 秒の 2 回）
 #[test]
 fn triggers_before_finish_deadline_fire_in_the_crossing_tick() {
-    let fired = |times: &[f64]| {
+    let fired = |times: &[TimePoint]| {
         let mut rt = DolaRuntime::new();
-        rt.load_document(three_loop_trigger_doc(0.5)).unwrap();
-        let gid = rt.start("parent", 0.0).unwrap().group_id;
-        rt.finish(gid, 2.0).unwrap();
+        rt.load_document(three_loop_trigger_doc(delta_ms(500)))
+            .unwrap();
+        let gid = rt.start("parent", at_ms(0)).unwrap().group_id;
+        rt.finish(gid, at_ms(2000)).unwrap();
         let mut n = 0;
         for &t in times {
             rt.tick(t);
@@ -139,19 +165,20 @@ fn triggers_before_finish_deadline_fire_in_the_crossing_tick() {
         assert!(!rt.has_instances(), "parent and children should all end");
         n
     };
-    assert_eq!(fired(&frames_60fps(3.5)), 2, "60fps");
-    assert_eq!(fired(&[0.0, 3.5]), 2, "one tick");
+    assert_eq!(fired(&frames_60fps(3500)), 2, "60fps");
+    assert_eq!(fired(&[at_ms(0), at_ms(3500)]), 2, "one tick");
 }
 
-/// 周回の終わりちょうどのトリガーは、一時停止の後に壁時計の時刻が end_time を丸めで越えても起きる。
-/// 13/60 秒に止めて 14/60 秒に戻すと、トリガーの式の値が end_time より 1 ulp 後ろになる
+/// 周回の終わりちょうどのトリガーは、一時停止で周回が後ろへずれた後も、ずれた周回の終わりに起きる。
+/// 13 コマ目に止めて 14 コマ目に戻すと、周回の終わりは止めた長さ（166,666 tick）だけ後ろへずれる
 #[test]
-fn loop_end_trigger_survives_pause_rounding() {
-    let fired = |times: &[f64]| {
+fn loop_end_trigger_fires_after_pause_shift() {
+    let fired = |times: &[TimePoint]| {
         let mut rt = DolaRuntime::new();
-        rt.load_document(three_loop_trigger_doc(1.0)).unwrap();
-        let gid = rt.start("parent", 0.2).unwrap().group_id;
-        let (pause_at, resume_at) = (13.0 / 60.0, 14.0 / 60.0);
+        rt.load_document(three_loop_trigger_doc(delta_ms(1000)))
+            .unwrap();
+        let gid = rt.start("parent", at_ms(200)).unwrap().group_id;
+        let (pause_at, resume_at) = (frame(13), frame(14));
         let (mut paused, mut resumed) = (false, false);
         let mut n = 0;
         for &t in times {
@@ -168,9 +195,9 @@ fn loop_end_trigger_survives_pause_rounding() {
         }
         n
     };
-    // 周回の終わりは約 1.217・2.217・3.217 秒
-    assert_eq!(fired(&frames_60fps(3.5)), 3, "60fps");
-    assert_eq!(fired(&[0.2, 3.5]), 3, "one tick");
+    // 周回の終わりは 1 周目が 1.2166666 秒・以降 1 秒ずつ
+    assert_eq!(fired(&frames_60fps(3500)), 3, "60fps");
+    assert_eq!(fired(&[at_ms(200), at_ms(3500)]), 3, "one tick");
 }
 
 /// トリガーを持たない 1 回きりの Never の X（1.2 秒）は、同じ tick の 2.5 秒のトリガーより先に終わる。
@@ -189,23 +216,23 @@ fn finite_loop_end_precedes_later_trigger_in_one_tick() {
             "X",
             StoryboardBuilder::new()
                 .interruption_policy(InterruptionPolicy::Never)
-                .entry(ramp("x", 0.0, 1.0, 1.2))
+                .entry(ramp("x", 0.0, 1.0, ms(1200)))
                 .build(),
         )
-        .storyboard("P", parent("a", 3.0, 1, 2.5, "C"))
+        .storyboard("P", parent("a", ms(3000), 1, delta_ms(2500), "C"))
         .storyboard(
             "C",
             StoryboardBuilder::new()
-                .entry(ramp("x", 5.0, 6.0, 1.0))
+                .entry(ramp("x", 5.0, 6.0, ms(1000)))
                 .build(),
         )
         .build()
         .expect("doc should be valid");
-    let triggered = |times: &[f64]| {
+    let triggered = |times: &[TimePoint]| {
         let mut rt = DolaRuntime::new();
         rt.load_document(doc.clone()).unwrap();
-        rt.start("X", 0.0).unwrap();
-        rt.start("P", 0.0).unwrap();
+        rt.start("X", at_ms(0)).unwrap();
+        rt.start("P", at_ms(0)).unwrap();
         let mut all = Vec::new();
         for &t in times {
             rt.tick(t);
@@ -213,7 +240,10 @@ fn finite_loop_end_precedes_later_trigger_in_one_tick() {
         }
         all
     };
-    for (what, times) in [("60fps", frames_60fps(3.0)), ("one tick", vec![0.0, 3.0])] {
+    for (what, times) in [
+        ("60fps", frames_60fps(3000)),
+        ("one tick", vec![at_ms(0), at_ms(3000)]),
+    ] {
         let r = triggered(&times);
         assert_eq!(r.len(), 1, "{what}: {r:?}");
         assert!(
@@ -241,25 +271,25 @@ fn infinite_loop_is_current_when_trigger_ends_it_in_one_tick() {
             StoryboardBuilder::new()
                 .loop_count(-1)
                 .interruption_policy(InterruptionPolicy::Cancel)
-                .entry(ramp("x", 0.0, 1.0, 1.0))
-                .entry(ramp("y", 0.0, 1.0, 1.0))
+                .entry(ramp("x", 0.0, 1.0, ms(1000)))
+                .entry(ramp("y", 0.0, 1.0, ms(1000)))
                 .build(),
         )
-        .storyboard("P", parent("a", 3.0, 1, 2.5, "C"))
+        .storyboard("P", parent("a", ms(3000), 1, delta_ms(2500), "C"))
         .storyboard(
             "C",
             StoryboardBuilder::new()
-                .entry(ramp("x", 5.0, 6.0, 1.0))
+                .entry(ramp("x", 5.0, 6.0, ms(1000)))
                 .build(),
         )
         .build()
         .expect("doc should be valid");
-    let final_y = |times: &[f64]| {
+    let final_y = |times: &[TimePoint]| {
         let mut rt = DolaRuntime::new();
         let y_id = rt.subscribe("y");
         rt.load_document(doc.clone()).unwrap();
-        rt.start("L", 0.0).unwrap();
-        rt.start("P", 0.0).unwrap();
+        rt.start("L", at_ms(0)).unwrap();
+        rt.start("P", at_ms(0)).unwrap();
         let mut y = f64::NAN;
         for &t in times {
             rt.tick(t);
@@ -273,6 +303,6 @@ fn infinite_loop_is_current_when_trigger_ends_it_in_one_tick() {
         }
         y
     };
-    assert_close(final_y(&frames_60fps(3.0)), 0.5, "y", "60fps");
-    assert_close(final_y(&[0.0, 3.0]), 0.5, "y", "one tick");
+    assert_close(final_y(&frames_60fps(3000)), 0.5, "y", "60fps");
+    assert_close(final_y(&[at_ms(0), at_ms(3000)]), 0.5, "y", "one tick");
 }

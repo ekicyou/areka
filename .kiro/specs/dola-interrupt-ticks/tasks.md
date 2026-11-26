@@ -168,7 +168,7 @@
   - _Dispatch: standard, effort high — 式は設計が与えるが、周回と終わりの時刻の書き換えが広い_
   - _Requirements: 1.7, 2.8, 5.1, 5.4, 5.5, 5.6, 5.7, 5.8, 5.11_
 
-- [ ] 2.13 (P) storyboard の runtime のテストを直す
+- [x] 2.13 (P) storyboard の runtime のテストを直す
   - 触る前に trigger の runtime のテスト（854 行）を主題ごとに分ける
   - 期待の値を、ちょうどの値へ写す。倍率が 1 でない再生の出来事の時刻・終わらないループの下限の境・終わりの予定の時刻の意味の変化は、変える前後の期待をテストの名前で報告に挙げる
   - 終わりの予定の時刻（1 回だけ・待ちの無い有限・待ちが決まった値の有限・待ちを引く有限・終わらない）と下限の境（倍率 0.5 で 500,000 は始まり、499,999 は拒む）を確かめる
@@ -806,3 +806,4 @@
 - 2.10: 境界の外で実数の秒の時間の値が残るテストは、2.11（`tests/compile/**`・`tests/trigger/compile_test.rs`）と 2.13（`tests/runtime/conflict_resolution_test/**`・`runtime/facade_test/diff_delivery.rs`・`runtime/loop_offset_test/loop_offset_compile.rs`・`tests/trigger/runtime_test.rs`）の持ち物。`tests/general/time_range_test.rs` は `compile_storyboard(&doc, "sb")` の 2 引数で呼ぶ（2.11 が開始の時刻を外す）。
 - 2.11: `src/runtime/facade.rs:192` が `compile_validated(doc, name, base_time)` で引き金の子を 0 でない開始の時刻でコンパイルしている。2.12 は子を `start(name, TimePoint)` の起点で始め、子の区間と引き金を「起点＋隔たり」で求める。`tests/compile/start_shift_test.rs` は 2.12 の口 `start(name, TimePoint)`・`tick(TimePoint)`・`StartResult.end_time: Option<TimePoint>`・`TriggerResult::Started { start_result, .. }` に頼る。
 - 2.12: `resume` の戻り値は、まだ終わりの期限との早い方を取らない（8.1）。`tests/cue/sheet_test.rs:180` の `stamping_absolute_start_time_leaves_relative_times_untouched` は期待の値が誤り（相対の終わりは `ms(500)` が正しく、`ms(1000)` ではない。1aaf136a3 で入った）。2.14 の締めで直す。runtime のテストのうち `src/runtime/{instance_manager,loop_controller}/tests.rs` も 2.13 の持ち物。
+- 2.13: `LoopOffset::Scalar(v)` は 0 から v の幅で引く待ち（main からの意味・設計 964 行）。決まった値の待ちは `Range{min == max}` で書く。

@@ -2,10 +2,25 @@
 
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry,
-    TimeDelta, TimeSpan, TransitionDef, TransitionRef, TransitionValue,
+    TimeDelta, TimePoint, TimeSpan, TransitionDef, TransitionRef, TransitionValue,
 };
 
 const ONE_SEC: TimeSpan = TimeSpan::from_millis(1000);
+
+/// ミリ秒の値の時刻。
+pub const fn at_ms(ms: i64) -> TimePoint {
+    TimePoint::from_ticks(ms * 10_000)
+}
+
+/// ミリ秒の値の長さ。
+pub const fn ms(ms: u32) -> TimeSpan {
+    TimeSpan::from_millis(ms)
+}
+
+/// ミリ秒の値の符号つきの差。
+pub const fn delta_ms(ms: i64) -> TimeDelta {
+    TimeDelta::from_ticks(ms * 10_000)
+}
 
 /// 最小の有効ドキュメント（変数 opacity + トランジション fade_t + ストーリーボード）
 pub fn minimal_trigger_doc(parent_name: &str, child_name: &str) -> DolaDocument {

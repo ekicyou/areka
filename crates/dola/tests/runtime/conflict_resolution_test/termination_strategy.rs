@@ -35,16 +35,16 @@ mod cancel_strategy {
         let y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("sb_a", 0.0).unwrap();
+        let r1 = rt.start("sb_a", at_ms(0)).unwrap();
         assert!(r1.affected_group_ids.is_empty());
 
         // Start sb_new (operates x only) at t=0.5
         // → sb_a conflicts on x → Cancel sb_a (both x and y entries removed)
-        let r2 = rt.start("sb_new", 0.5).unwrap();
+        let r2 = rt.start("sb_new", at_ms(500)).unwrap();
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
         // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let changes = rt.last_result().changes.clone();
         // y should show frozen value, x shows new SB value
         let (_, y_val) = changes
@@ -93,7 +93,7 @@ mod conclude_strategy {
             .storyboard(
                 "fade",
                 StoryboardBuilder::new()
-                    .entry(linear("opacity", 0.0, 100.0, 2.0))
+                    .entry(linear("opacity", 0.0, 100.0, ms(2000)))
                     .build(),
             )
             .build()
@@ -103,8 +103,8 @@ mod conclude_strategy {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("fade", 0.0).unwrap();
-        let r2 = rt.start("fade", 0.5).unwrap();
+        let r1 = rt.start("fade", at_ms(0)).unwrap();
+        let r2 = rt.start("fade", at_ms(500)).unwrap();
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
     }
 }
@@ -146,13 +146,13 @@ mod edge_cases {
             .storyboard(
                 "sb_x",
                 StoryboardBuilder::new()
-                    .entry(linear("x", 0.0, 100.0, 2.0))
+                    .entry(linear("x", 0.0, 100.0, ms(2000)))
                     .build(),
             )
             .storyboard(
                 "sb_y",
                 StoryboardBuilder::new()
-                    .entry(linear("y", 0.0, 50.0, 2.0))
+                    .entry(linear("y", 0.0, 50.0, ms(2000)))
                     .build(),
             )
             .build()
@@ -163,18 +163,18 @@ mod edge_cases {
         let y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
-        rt.start("sb_x", 0.0).unwrap();
+        rt.start("sb_x", at_ms(0)).unwrap();
 
         // Update at t=1.0 → x = 50.0
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let changes = rt.last_result().changes.clone();
         let x_val = changes.iter().find(|(id, _)| *id == x_id);
         assert!(x_val.is_some());
 
-        let r = rt.start("sb_y", 1.0).unwrap();
+        let r = rt.start("sb_y", at_ms(1000)).unwrap();
         assert!(r.affected_group_ids.is_empty());
 
-        rt.tick(1.5);
+        rt.tick(at_ms(1500));
         let changes = rt.last_result().changes.clone();
         let x_change = changes.iter().find(|(id, _)| *id == x_id);
         let y_change = changes.iter().find(|(id, _)| *id == y_id);
@@ -192,14 +192,14 @@ mod edge_cases {
         let _y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("sb_a", 0.0).unwrap();
-        let r2 = rt.start("sb_b", 0.0).unwrap();
+        let r1 = rt.start("sb_a", at_ms(0)).unwrap();
+        let r2 = rt.start("sb_b", at_ms(0)).unwrap();
 
         // sb_b conflicts with sb_a on x → sb_a was Cancel'd
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
         // Start sb_new (x) at t=0.5 → conflicts with sb_b (Conclude)
-        let r3 = rt.start("sb_new", 0.5).unwrap();
+        let r3 = rt.start("sb_new", at_ms(500)).unwrap();
         assert_eq!(r3.affected_group_ids, vec![r2.group_id]);
     }
 }
@@ -208,15 +208,15 @@ mod edge_cases {
 /// x だけを触る b に終わらされたとき、t=1.5 から購読した y に届く値。
 fn y_after_interrupt_in_loop_delay(policy: InterruptionPolicy) -> Option<EvaluatedValue> {
     use dola::{EasingFunction, EasingName, LoopOffset, LoopOffsetRange, Storyboard};
-    let ramp = |var: &str| linear(var, 0.0, 1.0, 1.0);
+    let ramp = |var: &str| linear(var, 0.0, 1.0, ms(1000));
     // a: x と y を [0,1] で回し、周回の間に 2 秒待つ（1 周目 [0,1]・待ち [1,3]）
     let a = Storyboard {
         time_scale: 1.0,
         loop_count: -1,
         interruption_policy: policy,
         loop_offset: Some(LoopOffset::Range(LoopOffsetRange {
-            min: 2.0,
-            max: 2.0,
+            min: ms(2000),
+            max: ms(2000),
             easing: EasingFunction::Named(EasingName::Linear),
         })),
         entry: vec![ramp("x"), ramp("y")],
@@ -233,14 +233,14 @@ fn y_after_interrupt_in_loop_delay(policy: InterruptionPolicy) -> Option<Evaluat
     let _x_id = rt.subscribe("x");
     rt.load_document(doc).unwrap();
 
-    let ra = rt.start("a", 0.0).unwrap();
-    rt.tick(1.5); // 周回を終えて待ちの中
+    let ra = rt.start("a", at_ms(0)).unwrap();
+    rt.tick(at_ms(1500)); // 周回を終えて待ちの中
     // y の購読はここから: 届く y は a の確定値だけ（b は y を触らない）
     let y_id = rt.subscribe("y");
-    let rb = rt.start("b", 2.0).unwrap();
+    let rb = rt.start("b", at_ms(2000)).unwrap();
     assert_eq!(rb.affected_group_ids, vec![ra.group_id]);
 
-    rt.tick(2.0);
+    rt.tick(at_ms(2000));
     rt.last_result()
         .changes
         .iter()
@@ -259,15 +259,15 @@ fn y_after_interrupt(policy: InterruptionPolicy) -> EvaluatedValue {
             "a",
             StoryboardBuilder::new()
                 .interruption_policy(policy)
-                .entry(linear("x", 0.0, 100.0, 2.0))
-                .entry(linear("y", 0.0, 10.0, 1.0))
-                .entry(linear("y", 10.0, 30.0, 1.0))
+                .entry(linear("x", 0.0, 100.0, ms(2000)))
+                .entry(linear("y", 0.0, 10.0, ms(1000)))
+                .entry(linear("y", 10.0, 30.0, ms(1000)))
                 .build(),
         )
         .storyboard(
             "b",
             StoryboardBuilder::new()
-                .entry(linear("x", 0.0, 10.0, 1.0))
+                .entry(linear("x", 0.0, 10.0, ms(1000)))
                 .build(),
         )
         .build()
@@ -276,12 +276,12 @@ fn y_after_interrupt(policy: InterruptionPolicy) -> EvaluatedValue {
     let y_id = rt.subscribe("y");
     rt.load_document(doc).unwrap();
 
-    let ra = rt.start("a", 0.0).unwrap();
-    rt.tick(0.25); // y = 2.5 を配る（確定値が差分として届くように）
-    let rb = rt.start("b", 0.5).unwrap();
+    let ra = rt.start("a", at_ms(0)).unwrap();
+    rt.tick(at_ms(250)); // y = 2.5 を配る（確定値が差分として届くように）
+    let rb = rt.start("b", at_ms(500)).unwrap();
     assert_eq!(rb.affected_group_ids, vec![ra.group_id]);
 
-    rt.tick(0.5);
+    rt.tick(at_ms(500));
     rt.last_result()
         .changes
         .iter()

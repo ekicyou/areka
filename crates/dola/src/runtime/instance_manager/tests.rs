@@ -1,5 +1,6 @@
 use super::*;
 use crate::easing::EasingName;
+use crate::time::testing::{at_ms, delta_ms, ms};
 
 fn create_test_instance(mgr: &mut InstanceManager, group_id: u64) {
     mgr.instances_mut().insert(
@@ -8,17 +9,16 @@ fn create_test_instance(mgr: &mut InstanceManager, group_id: u64) {
             storyboard_name: "test_sb".to_string(),
             state: InstanceState::Created,
             interruption_policy: InterruptionPolicy::Conclude,
-            time_scale: 1.0,
-            pause_accumulated: 0.0,
+            time_scale: TimeScale::ONE,
+            pause_accumulated: TimeDelta::ZERO,
             pause_start: None,
             loop_count: 1,
             loops_completed: 0,
             finish_deadline: None,
-            end_time: 2.0,
-            loop_start_time: 0.0,
-            loop_duration: 2.0,
+            loop_start: at_ms(0),
+            lap_length: ms(2000),
             loop_offset_min: None,
-            loop_offset_max: 0.0,
+            loop_offset_max: TimeSpan::ZERO,
             loop_offset_easing: EasingFunction::Named(EasingName::Linear),
             trigger_states: Vec::new(),
         },
@@ -81,17 +81,17 @@ fn pause_and_resume() {
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
 
-    mgr.pause(1, 1.0).unwrap();
+    mgr.pause(1, at_ms(1000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
-    assert_eq!(mgr.get(1).unwrap().pause_start, Some(1.0));
+    assert_eq!(mgr.get(1).unwrap().pause_start, Some(at_ms(1000)));
 
     // 2秒間 pause
-    let new_end = mgr.resume(1, 3.0).unwrap();
+    let new_end = mgr.resume(1, at_ms(3000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
-    assert_eq!(mgr.get(1).unwrap().pause_accumulated, 2.0);
+    assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(2000));
     assert!(mgr.get(1).unwrap().pause_start.is_none());
-    // end_time = 2.0 + 2.0(pause)
-    assert_eq!(new_end, 4.0);
+    // 終わりの予定 = 2.0 + 2.0(pause)
+    assert_eq!(new_end, Some(at_ms(4000)));
 }
 
 #[test]
@@ -99,12 +99,12 @@ fn finish_deadline_check() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.set_finish_deadline(1, 5.0).unwrap();
+    mgr.set_finish_deadline(1, at_ms(5000)).unwrap();
 
     // まだ deadline に達していない
-    assert!(mgr.check_finish_deadlines(4.0).is_empty());
+    assert!(mgr.check_finish_deadlines(at_ms(4000)).is_empty());
 
-    let expired = mgr.check_finish_deadlines(5.0);
+    let expired = mgr.check_finish_deadlines(at_ms(5000));
     assert_eq!(expired, vec![1]);
 }
 
@@ -115,7 +115,7 @@ fn multiple_independent_instances() {
     create_test_instance(&mut mgr, 2);
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
-    mgr.pause(1, 0.0).unwrap();
+    mgr.pause(1, at_ms(0)).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
     assert_eq!(mgr.get(2).unwrap().state, InstanceState::Playing);
 }
@@ -136,15 +136,15 @@ fn operations_on_nonexistent_group_id_return_invalid_group_id() {
         Some(RuntimeError::InvalidGroupId(999))
     );
     assert_eq!(
-        mgr.pause(999, 1.0).err(),
+        mgr.pause(999, at_ms(1000)).err(),
         Some(RuntimeError::InvalidGroupId(999))
     );
     assert_eq!(
-        mgr.resume(999, 1.0).err(),
+        mgr.resume(999, at_ms(1000)).err(),
         Some(RuntimeError::InvalidGroupId(999))
     );
     assert_eq!(
-        mgr.set_finish_deadline(999, 1.0).err(),
+        mgr.set_finish_deadline(999, at_ms(1000)).err(),
         Some(RuntimeError::InvalidGroupId(999))
     );
 }
@@ -169,7 +169,7 @@ fn pause_on_created_rejected_keeps_state() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     // pause() 経由でも Created → Paused は拒否される
-    assert!(mgr.pause(1, 0.0).is_err());
+    assert!(mgr.pause(1, at_ms(0)).is_err());
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Created);
 }
 
@@ -179,7 +179,7 @@ fn resume_on_playing_rejected() {
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
     // Resume は Paused からのみ
-    assert!(mgr.resume(1, 1.0).is_err());
+    assert!(mgr.resume(1, at_ms(1000)).is_err());
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 
@@ -216,53 +216,44 @@ fn check_finish_deadlines_ignores_instances_without_deadline() {
     create_test_instance(&mut mgr, 2);
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
-    mgr.set_finish_deadline(1, 5.0).unwrap();
+    mgr.set_finish_deadline(1, at_ms(5000)).unwrap();
     // gid=2 は deadline 未設定なので対象外
-    let expired = mgr.check_finish_deadlines(10.0);
+    let expired = mgr.check_finish_deadlines(at_ms(10_000));
     assert_eq!(expired, vec![1]);
 }
 
 // =========================================================================
-// 数値境界（非単調時刻入力・NaN deadline）
+// 数値境界（非単調時刻入力・最大の時刻の deadline）
 // =========================================================================
 
-/// current_time < pause_start の resume は pause_duration が負となり
-/// pause_accumulated / end_time が過去方向へ補正される（時刻の単調性は検証しない）
+/// now < pause_start の resume は止めていた長さが負となり
+/// pause_accumulated と終わりの予定が過去方向へ補正される（時刻の単調性は検証しない）
 #[test]
 fn resume_with_time_before_pause_start_shrinks_end_time() {
     let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1); // end_time = 2.0
+    create_test_instance(&mut mgr, 1); // 周回の長さ 2 秒
     mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.pause(1, 5.0).unwrap();
+    mgr.pause(1, at_ms(5000)).unwrap();
 
-    // pause_start より過去の時刻で resume すると pause_duration = -2.0
-    let new_end = mgr.resume(1, 3.0).unwrap();
-    assert_eq!(mgr.get(1).unwrap().pause_accumulated, -2.0);
-    assert_eq!(new_end, 0.0); // 2.0 + (-2.0)
+    // pause_start より過去の時刻で resume すると止めていた長さ = -2.0 秒
+    let new_end = mgr.resume(1, at_ms(3000)).unwrap();
+    assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(-2000));
+    assert_eq!(new_end, Some(at_ms(0))); // 2.0 + (-2.0)
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 
-/// NaN deadline は `current_time >= deadline` が常に false となり発火しない
-/// （deadline の有限性は検証しない）
+/// 型の最大の時刻の deadline は、最大の時刻でだけ発火する
 #[test]
-fn nan_finish_deadline_never_fires() {
+fn max_finish_deadline_fires_only_at_max() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.set_finish_deadline(1, f64::NAN).unwrap();
-    assert!(mgr.check_finish_deadlines(f64::MAX).is_empty());
-    assert!(mgr.check_finish_deadlines(f64::INFINITY).is_empty());
-}
-
-/// +inf deadline は有限の current_time では発火せず、inf 同士の比較でのみ発火する
-#[test]
-fn infinite_finish_deadline_fires_only_at_infinity() {
-    let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1);
-    mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.set_finish_deadline(1, f64::INFINITY).unwrap();
-    assert!(mgr.check_finish_deadlines(f64::MAX).is_empty());
-    assert_eq!(mgr.check_finish_deadlines(f64::INFINITY), vec![1]);
+    mgr.set_finish_deadline(1, TimePoint::MAX).unwrap();
+    assert!(
+        mgr.check_finish_deadlines(TimePoint::MAX - ms(1))
+            .is_empty()
+    );
+    assert_eq!(mgr.check_finish_deadlines(TimePoint::MAX), vec![1]);
 }
 
 #[test]

@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::storyboard::{InterruptionPolicy, Storyboard, StoryboardEntry};
+use crate::time::TimeSpan;
+use crate::time::testing::{at_ms, ms};
 use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
@@ -29,7 +31,7 @@ fn make_valid_doc() -> DolaDocument {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -86,7 +88,7 @@ fn overwrite_document() {
     assert!(rt.document.as_ref().unwrap().variable.contains_key("y"));
 }
 
-fn fade_x(from: f64, to: f64, duration: f64) -> StoryboardEntry {
+fn fade_x(from: f64, to: f64, duration: TimeSpan) -> StoryboardEntry {
     StoryboardEntry {
         variable: Some("x".to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
@@ -110,7 +112,7 @@ fn conflict_termination_drops_trigger_store() {
         .interruption_policy(InterruptionPolicy::Cancel)
         .entry(StoryboardEntry {
             keyframe: Some("kf1".to_string()),
-            ..fade_x(0.0, 1.0, 2.0)
+            ..fade_x(0.0, 1.0, ms(2000))
         })
         .entry(StoryboardEntry {
             trigger_storyboard: Some("child".to_string()),
@@ -124,13 +126,13 @@ fn conflict_termination_drops_trigger_store() {
         .storyboard(
             "child",
             StoryboardBuilder::new()
-                .entry(fade_x(1.0, 0.0, 1.0))
+                .entry(fade_x(1.0, 0.0, ms(1000)))
                 .build(),
         )
         .storyboard(
             "interrupt",
             StoryboardBuilder::new()
-                .entry(fade_x(0.0, 0.5, 1.0))
+                .entry(fade_x(0.0, 0.5, ms(1000)))
                 .build(),
         )
         .build()
@@ -138,10 +140,10 @@ fn conflict_termination_drops_trigger_store() {
 
     let mut rt = DolaRuntime::new();
     rt.load_document(doc).unwrap();
-    let parent_gid = rt.start("parent", 0.0).unwrap().group_id;
+    let parent_gid = rt.start("parent", at_ms(0)).unwrap().group_id;
     assert!(rt.trigger_store.contains_key(&parent_gid));
 
-    let r = rt.start("interrupt", 1.0).unwrap();
+    let r = rt.start("interrupt", at_ms(1000)).unwrap();
     assert_eq!(r.affected_group_ids, vec![parent_gid]);
     assert!(
         rt.trigger_store.is_empty(),
@@ -161,13 +163,13 @@ fn never_conflict_removes_new_instance() {
             "never",
             StoryboardBuilder::new()
                 .interruption_policy(InterruptionPolicy::Never)
-                .entry(fade_x(0.0, 1.0, 2.0))
+                .entry(fade_x(0.0, 1.0, ms(2000)))
                 .build(),
         )
         .storyboard(
             "new",
             StoryboardBuilder::new()
-                .entry(fade_x(1.0, 0.0, 1.0))
+                .entry(fade_x(1.0, 0.0, ms(1000)))
                 .build(),
         )
         .build()
@@ -175,10 +177,10 @@ fn never_conflict_removes_new_instance() {
 
     let mut rt = DolaRuntime::new();
     rt.load_document(doc).unwrap();
-    let never_gid = rt.start("never", 0.0).unwrap().group_id;
+    let never_gid = rt.start("never", at_ms(0)).unwrap().group_id;
 
     assert!(matches!(
-        rt.start("new", 0.5),
+        rt.start("new", at_ms(500)),
         Err(RuntimeError::Conflict { .. })
     ));
     assert_eq!(
@@ -201,7 +203,7 @@ fn start_initializes_trigger_states_in_order() {
     let parent = StoryboardBuilder::new()
         .entry(StoryboardEntry {
             keyframe: Some("kf1".to_string()),
-            ..fade_x(0.0, 1.0, 2.0)
+            ..fade_x(0.0, 1.0, ms(2000))
         })
         .entry(trigger())
         .entry(trigger())
@@ -216,7 +218,7 @@ fn start_initializes_trigger_states_in_order() {
             StoryboardBuilder::new()
                 .entry(StoryboardEntry {
                     variable: Some("y".to_string()),
-                    ..fade_x(0.0, 1.0, 1.0)
+                    ..fade_x(0.0, 1.0, ms(1000))
                 })
                 .build(),
         )
@@ -225,7 +227,7 @@ fn start_initializes_trigger_states_in_order() {
 
     let mut rt = DolaRuntime::new();
     rt.load_document(doc).unwrap();
-    let gid = rt.start("parent", 0.0).unwrap().group_id;
+    let gid = rt.start("parent", at_ms(0)).unwrap().group_id;
 
     let states = &rt.instance_manager.get(gid).unwrap().trigger_states;
     let got: Vec<(usize, bool)> = states.iter().map(|t| (t.trigger_index, t.fired)).collect();

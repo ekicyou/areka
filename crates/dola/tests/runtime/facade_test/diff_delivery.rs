@@ -16,14 +16,14 @@ mod document_replacement {
         let _opacity_id = rt.subscribe("opacity");
 
         rt.load_document(simple_float_doc("fade_in")).unwrap();
-        rt.start("fade_in", 0.0).unwrap();
-        rt.tick(0.5);
+        rt.start("fade_in", at_ms(0)).unwrap();
+        rt.tick(at_ms(500));
         assert!(!rt.last_result().changes.is_empty());
         // 自然終了で最終値 1.0 が配信される
-        rt.tick(1.5);
+        rt.tick(at_ms(1500));
 
         rt.load_document(simple_float_doc("fade_in")).unwrap();
-        rt.tick(2.0);
+        rt.tick(at_ms(2000));
         assert!(
             rt.last_result().changes.is_empty(),
             "reload must keep delivered values: {:?}",
@@ -48,7 +48,7 @@ mod document_replacement {
                 to: Some(TransitionValue::Dynamic(DynamicValue::String(
                     "b".to_string(),
                 ))),
-                duration: Some(1.0),
+                duration: Some(ms(1000)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -57,13 +57,13 @@ mod document_replacement {
         let mut rt = DolaRuntime::new();
         rt.subscribe("o");
         rt.load_document(doc.clone()).unwrap();
-        rt.start("swap", 0.0).unwrap();
-        rt.tick(0.25);
-        rt.tick(0.5);
+        rt.start("swap", at_ms(0)).unwrap();
+        rt.tick(at_ms(250));
+        rt.tick(at_ms(500));
         assert!(rt.last_result().changes.is_empty());
 
         rt.load_document(doc).unwrap();
-        rt.tick(0.75);
+        rt.tick(at_ms(750));
         assert!(
             rt.last_result().changes.is_empty(),
             "{:?}",
@@ -92,13 +92,13 @@ mod document_replacement {
                     to: Some(TransitionValue::Dynamic(DynamicValue::String(
                         "b".to_string(),
                     ))),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 ..Default::default()
             },
             // o の後に opacity を長く動かす（競合の的）
-            linear("opacity", 0.0, 1.0, 10.0),
+            linear("opacity", 0.0, 1.0, ms(10000)),
         ];
         doc.storyboard.insert("swap".to_string(), swap);
 
@@ -107,13 +107,13 @@ mod document_replacement {
         rt.load_document(doc).unwrap();
 
         // 1 回目: 自然終了で "b" を初めて配信
-        rt.start("swap", 0.0).unwrap();
-        rt.tick(20.0);
+        rt.start("swap", at_ms(0)).unwrap();
+        rt.tick(at_ms(20000));
         assert_eq!(rt.last_result().changes.len(), 1);
 
         // 2 回目: 自然終了（collect_final_values）
-        rt.start("swap", 30.0).unwrap();
-        rt.tick(50.0);
+        rt.start("swap", at_ms(30000)).unwrap();
+        rt.tick(at_ms(50000));
         assert!(
             rt.last_result().changes.is_empty(),
             "{:?}",
@@ -121,10 +121,10 @@ mod document_replacement {
         );
 
         // 3 回目: o を終えた後に opacity の競合で Conclude（collect_current_segment_final_values）
-        rt.start("swap", 60.0).unwrap();
-        rt.tick(65.0);
-        rt.start("x_only", 65.0).unwrap();
-        rt.tick(66.0);
+        rt.start("swap", at_ms(60000)).unwrap();
+        rt.tick(at_ms(65000));
+        rt.start("x_only", at_ms(65000)).unwrap();
+        rt.tick(at_ms(66000));
         assert!(
             rt.last_result().changes.is_empty(),
             "{:?}",
@@ -142,7 +142,7 @@ mod document_replacement {
         bad_doc.schema_version = "99.0".to_string();
         assert!(rt.load_document(bad_doc).is_err());
 
-        rt.start("fade_in", 0.0).unwrap();
+        rt.start("fade_in", at_ms(0)).unwrap();
     }
 }
 
@@ -157,16 +157,16 @@ mod subscription_via_facade {
         let mut rt = DolaRuntime::new();
         let opacity_id = rt.subscribe("opacity");
         rt.load_document(simple_float_doc("fade_in")).unwrap();
-        rt.start("fade_in", 0.0).unwrap();
+        rt.start("fade_in", at_ms(0)).unwrap();
 
         // 購読中は差分が配信される
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
         let diff = rt.last_result().changes.clone();
         assert!(diff.iter().any(|(id, _)| *id == opacity_id));
 
         // 購読解除後は配信されない
         rt.unsubscribe(opacity_id).unwrap();
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
@@ -185,7 +185,7 @@ mod subscription_via_facade {
     fn default_is_equivalent_to_new() {
         let mut rt = DolaRuntime::default();
         // ドキュメント未読込 → StoryboardNotFound
-        let err = rt.start("any", 0.0).unwrap_err();
+        let err = rt.start("any", at_ms(0)).unwrap_err();
         assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
         // 採番は 0-origin（new() と同一の初期状態）
         assert_eq!(rt.subscribe("x"), 0);
@@ -206,12 +206,12 @@ mod tick_last_result {
         let mut rt = DolaRuntime::new();
         rt.subscribe("opacity");
         rt.load_document(simple_float_doc("fade")).unwrap();
-        rt.start("fade", 0.0).unwrap();
+        rt.start("fade", at_ms(0)).unwrap();
 
-        rt.tick(0.0);
+        rt.tick(at_ms(0));
         let r0 = rt.last_result().clone();
 
-        rt.tick(0.5);
+        rt.tick(at_ms(500));
         let r1 = rt.last_result().clone();
 
         assert!(!r0.changes.is_empty());
@@ -247,7 +247,7 @@ mod change_order {
         let mut sb = StoryboardBuilder::new();
         for name in names {
             builder = builder.variable(name, crate::support::float());
-            sb = sb.entry(linear(name, 0.0, 1.0, 1.0));
+            sb = sb.entry(linear(name, 0.0, 1.0, ms(1000)));
         }
         let doc = builder.storyboard("all", sb.build()).build().unwrap();
 
@@ -255,8 +255,8 @@ mod change_order {
             let mut rt = DolaRuntime::new();
             let ids: Vec<i64> = names.iter().map(|n| rt.subscribe(n)).collect();
             rt.load_document(doc.clone()).unwrap();
-            rt.start("all", 0.0).unwrap();
-            rt.tick(0.5);
+            rt.start("all", at_ms(0)).unwrap();
+            rt.tick(at_ms(500));
             let got: Vec<i64> = rt.last_result().changes.iter().map(|(id, _)| *id).collect();
             assert_eq!(got, ids);
         }
