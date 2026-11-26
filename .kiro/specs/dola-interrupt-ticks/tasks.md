@@ -364,7 +364,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 4.9 (P) areka-ghost の刻み役と時計: 1 本の時計を読む
+- [x] 4.9 (P) areka-ghost の刻み役と時計: 1 本の時計を読む
   - 本番の依存に dola を足す。刻み役と seriko を進める刻み役の時計の既定を 1 本の時計にし、`GetTickCount64` を読む関数を消す。周期を長さの型にし、OS の待ちへ渡す所だけちょうどの `Duration` にする
   - 刻みと起こしのメッセージを時刻の型にする。刻みが運ぶ値は、刻み役が起きた時に読んだ時計の値である
   - 時計の出どころが替わる事による本番の変化（眠り・`OnSecondChange`・分解能・境の格子の 0 の位置）を、変える前後の期待として報告に挙げる
@@ -814,3 +814,4 @@
 - 4.1: `crates/areka-seriko/src/looper.rs` は 4.1 の口の付け替えで 887 → 892 行。4.2 は終える時に 887 行以下へ戻す。`timeline.rs` の `lap_of` などは周期で割るので、4.2 は 0 の周期で panic しない形にするか前提を `debug_assert!` で示す。`timeline.rs:56` の説明が `LOTTERY_GRID_MS` を名指している（4.2 で直す）。`table.rs` は 969 行。seriko の組み立て: `cue(at: TimeSpan, ..)`・`text(at: TimeSpan, ..)`（1 字 `ms(50)`）・`part_playing(TimePoint)`・`draw_frame(id, TimeSpan)`・`emote_cue(TimeSpan, ..)`・`ClockRig::{send, tick, hear}(TimePoint, ..)`・looper_test_support の `switch(.., at: TimePoint)`・`started(..) -> Option<TimePoint>`（`Playback.started_at` へ改名待ち）・tests/common の `run_core(.., ticks: &[TimePoint], ..)`。
 - 4.2: seriko の改名（4.3・4.4 が追う）: `glyph_wall_ms` → `glyph_wall`、`TalkEpoch::wall_ms` → `wall`、`TalkWindow.wall_ms` → `wall`（`&dyn Fn(u64) -> TimePoint`）、`Playback.started_at_ms` → `started_at`、`CallOutcome.shift: Option<(TimePoint, i64, i64)>`、timeline の `frame_at`・`current_frame_index`・`always_at`・`always_visible` は経過を `TimeSpan` で受け、`lap_of` は `(u64, TimeSpan)`、新しい `timeline::elapsed_since(now, start) -> TimeSpan`。`lap_of` は `debug_assert!(period > ZERO)` を持つので、テストで周期 0 の `Always` を組まない。
 - 4.5: emo-text の組み立ての口: `cue(actor, at: TimeSpan, cmd)`・`cue_dur(actor, at, duration: TimeSpan, cmd)`・`choice_cue(actor, at: TimeSpan, ..)`・`REVEAL_INTERVAL: TimeSpan`（state 側 `ms(250)`・actor 側 `ms(50)`）・`reveal_times_of -> Vec<TimeSpan>`・`apply_fixture_script(at: [TimeSpan; 4], interval: TimeSpan)`・`state_frame(t: TimeSpan)`・actor_test_support の `reveal_duration(text)`・`cue_at(actor, at, cmd, duration)`・tests/support の `cue(actor, at: TimeSpan, cmd, interval: TimeSpan)`。どの合図も起点 0 なので前半は `fire_time == at`。`state.rs:277` の「`extend_chunk` の max が保証」と `state_test_support.rs:10` の「interval=0.25」は古い言い方（12.2 で拾う）。
+- 4.9: areka-ghost の `src/runtime_tests.rs`・`src/shiori_wiring_empty_tests.rs`・`src/prop_get_sink_tests.rs` は設計の家族の表に名前が無いが、`MonotonicMs` などで組めない。4.11（受け口と結合テスト）が持つ。

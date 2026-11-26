@@ -6,10 +6,11 @@
 //! 受けた GET の知らせを期限付きで待つ 1 か所だけ。
 use super::*;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
+use dola::time::testing::{at_ms, ms};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
@@ -48,7 +49,7 @@ impl ShioriBackend for ChoiceShiori {
 }
 
 /// 時刻を 1 回に進める幅（既定の選択の期限 30 秒より長い＝頼みの後の 1 歩で期限を越える）。
-const STEP_MS: u64 = 60_000;
+const STEP_MS: i64 = 60_000;
 
 /// 起こしの中継が刻み役へ頼みを渡すと、時刻を進めるだけで `OnChoiceTimeout` が出る。
 /// 中継をつながないと `Tick` が来ず、`OnChoiceTimeout` は出ないまま期限で落ちる。
@@ -58,7 +59,7 @@ fn choice_timeout_reaches_kanade_through_the_relay_and_the_real_ticker() {
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
-    let now = Arc::new(AtomicU64::new(1_000));
+    let now = Arc::new(AtomicI64::new(1_000));
     let clock_now = Arc::clone(&now);
     let (ids_tx, ids_rx) = mpsc::channel::<String>();
     let options = GhostBootOptions {
@@ -67,8 +68,8 @@ fn choice_timeout_reaches_kanade_through_the_relay_and_the_real_ticker() {
         })),
         ticker: TickerMode::Real(crate::ticker::TickerConfig {
             // 毎秒の Tick は試験中の時刻（高々 数時間）では来ない。
-            kanade_interval: Duration::from_secs(30 * 24 * 60 * 60),
-            clock: Box::new(move || areka_kanade::MonotonicMs(clock_now.load(Ordering::SeqCst))),
+            kanade_interval: ms(30 * 24 * 60 * 60 * 1000),
+            clock: Box::new(move || at_ms(clock_now.load(Ordering::SeqCst))),
             ..crate::ticker::TickerConfig::default()
         }),
         ..fake_options(root)

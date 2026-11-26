@@ -195,3 +195,9 @@
 - 外したテスト・分かれ道・ログは無い。変える前後の期待: 秒 → `ms(..)` を 1 対 1 で写した（`pipeline_test::typewriter_reveal_drives_layout_and_window_through_the_pipeline`・`clear_mid_reveal_resets_visibility_and_window_through_the_pipeline` の期待表、`box_attach_test` の `LATE`、`viewbox_scroll_test` の `FULLY_REVEALED`、`decoration_readback` の `SETTLED` ほか）。
 - 例: `last_click_time` の番兵 −10.0 → `Option<TimePoint>`、`WATCHDOG_SECS` → `WATCHDOG: TimeSpan`、`CYCLE_SECS` → `CYCLE`、ログと panic の文 `{t:.1}s` → 文字の形 `{t}`。例は公開の `TimeSpan::from_millis` を使う（テストの組み立てを使わない）。
 - emo-text の締め: `cargo test -p areka-emo-text` は lib 1198 と結合テスト全部緑、例が組める。
+
+## 4.9
+
+- 取り除いた分かれ道: 関数 `real_clock`（`GetTickCount64` の読み取りとその `// SAFETY:`）・`duration_to_millis` のミリ秒への切り捨て。外したテスト・ログは無い（catch-up と disconnected の info の文言は同じ）。
+- 時計の出どころが替わる事による本番の変化（決定論のテストは偽の時計なので結果は同じ）: 眠り（前は眠りの間も数え、復帰で大きく跳んで `ticker catch-up` の info を出し、過ぎた選択待ちの期限は復帰してすぐ `ChoiceTimeoutDue` を送った → 後は眠りを数えず、跳ばず、期限は眠りの分だけ後ろへずれる）。`OnSecondChange`（Reference0 へ渡る値が眠りを含まない時刻になり、眠った機械では時の数が前より小さい）。分解能（前は OS の刻み約 15.6 ms ごと → 後は 100ns の単位で、残りの時間も 100ns ちょうどの `Duration`）。境の格子の 0 の位置（前は起動からの時刻 → 後は眠りを含まない割り込みの時刻の 0。刻み役どうしは同じ格子）。
+- 変える前後の期待: `ticker_tests.rs` を `at_ms`・`ms` へ写した（`next_deadline_ms` → `next_deadline`）。`wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one` に「1 刻み先なら 100ns」を足した。`poll_skips_multiple_missed_boundaries_and_fires_only_once`・`spawn_loop_ticker_catch_up_delivers_the_current_clock` は期待は同じで、説明の「サスペンド復帰」を「処理の大幅な遅れ」に直した。
