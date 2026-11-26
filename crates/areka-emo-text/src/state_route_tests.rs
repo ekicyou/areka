@@ -75,7 +75,7 @@ pub(super) fn state_with_boxes() -> TextLayerState {
 pub(super) fn select(actor: &str, name: &str) -> TalkCue {
     cue(
         actor,
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::BalloonSurface {
             key: name.to_owned(),
         },
@@ -194,10 +194,10 @@ fn row7_shell_switch_keeps_surface_and_redraws_default_and_drops_box_text() {
     // 番号は保ち、行き先は新しい表での既定へ。箱の場所の文字は捨て、
     // 普通のバルーンの場所の文字は残す。
     let mut state = state_with_boxes();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("前".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("前".into())));
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("箱".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("箱".into())));
     assert_eq!(place_items(&state, "0", boxed("b")).len(), 1);
 
     state.set_box_index(index());
@@ -276,7 +276,7 @@ fn row11_clear_all_resets_every_scope_to_default_and_keeps_surface() {
     state.apply_cue(&select("0", "b"));
     show(&mut state, "1", 1);
     state.apply_cue(&select("1", "a"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     assert_eq!(state.current_surface(&key("0")), Some(0));
     assert_eq!(state.destination(&key("0")), boxed("a"));
     assert_eq!(state.current_surface(&key("1")), Some(1));
@@ -290,11 +290,15 @@ fn content_cues_go_to_current_destination() {
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
-    state.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
+        CueCommand::NewLine { ratio: 1.0 },
+    ));
+    state.apply_cue(&cue(
+        "0",
+        TimeSpan::ZERO,
         CueCommand::Cursor {
             x: "1".into(),
             y: String::new(),
@@ -302,7 +306,7 @@ fn content_cues_go_to_current_destination() {
     ));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::Choice {
             id: "q".into(),
             text: "い".into(),
@@ -311,7 +315,7 @@ fn content_cues_go_to_current_destination() {
     ));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::command_carrier(FONT_TAG_CARRIER, vec!["bold".into(), "1".into()]),
     ));
 
@@ -329,7 +333,7 @@ fn content_cues_go_to_current_destination() {
     );
 
     // `\c` の宛先も今の行き先の場所。
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
     assert!(state.place_state(&b).unwrap().is_empty());
     assert_eq!(
         state.clear_count(&key("0")),
@@ -358,10 +362,10 @@ fn routes_are_per_scope() {
 fn empty_box_index_never_leaves_balloon() {
     let mut state = TextLayerState::default();
     let cues = [
-        cue("0", 0.0, CueCommand::Text("あ".into())),
+        cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())),
         select("0", "a"),
-        cue("0", 0.0, CueCommand::ClearAll),
-        cue("0", 0.0, CueCommand::Text("い".into())),
+        cue("0", TimeSpan::ZERO, CueCommand::ClearAll),
+        cue("0", TimeSpan::ZERO, CueCommand::Text("い".into())),
     ];
     for c in &cues {
         state.apply_cue(c);
@@ -375,7 +379,7 @@ fn empty_box_index_never_leaves_balloon() {
         state.route_surface(&key("0"), outcome);
         assert_eq!(state.destination(&key("0")), TextPlace::Balloon);
     }
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("う".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("う".into())));
     assert_eq!(
         items_of(&state, "0"),
         &[TextItem::glyph("い"), TextItem::glyph("う")]

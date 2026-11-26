@@ -179,3 +179,7 @@
 
 - 外したテスト・分かれ道は無い。取り除いたログの欄: `state.rs` の Text と Choice の debug! の `interval`（実数の間隔そのものが無くなった）。足したログの欄: 受け口の配送の失敗の error に `fire_time`。ほかの時刻の欄は Display。
 - 字の時刻の式: 実数の `interval` と `max(prev + interval, chunk_start)` → `chunk_reveal_offsets`（割り切れる長さでは値は同じ）。`sink.rs` の中のテストは秒 → `ms(..)` へ写した。
+
+## 4.6
+
+- 外したテスト・分かれ道・ログは無い。変える前後の期待: `choice_anchor_tests::hit_area_stops_at_what_has_been_revealed`（覗く時刻 `shown − 0.5` 秒が shown=0 で負になり長さの型で書けないので、合図の時刻を 1000 ms へずらし `ms(1000*shown + 500)` で覗く。期待の表は同じ）。`state_reveal_tests::visible_glyphs_progress_with_duration_derived_interval`（±0.01 秒の余白の近似 → 境目のちょうどの値 `ms(1049)`→1・`ms(1050)`→2・`ms(1099)`→2・`ms(1100)`→3 と `reveal_times_of == [1000,1050,1100] ms`）。「全部が現れている時刻」（100.0・42.0・`f64::MAX` など）→ `TimeSpan::MAX`。ほかは秒 → `ms(..)`。

@@ -4,13 +4,14 @@ use tracing::Level;
 use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_of};
 use super::*;
 use crate::actor::test_support::{capture_checked, level_count};
+use dola::time::testing::ms;
 
 // ── Text 追記 ──
 
 #[test]
 fn text_cue_appends_glyphs_in_order() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("アヒル".into())));
     assert_eq!(
         items_of(&state, "0"),
         &[
@@ -24,8 +25,8 @@ fn text_cue_appends_glyphs_in_order() {
 #[test]
 fn consecutive_text_cues_append() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒ".into())));
-    state.apply_cue(&cue("0", 0.5, CueCommand::Text("ルや".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("アヒ".into())));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Text("ルや".into())));
     assert_eq!(
         items_of(&state, "0"),
         &[
@@ -42,10 +43,10 @@ fn consecutive_text_cues_append() {
 #[test]
 fn newline_cue_appends_line_break_marker_with_ratio() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("A".into())));
-    state.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 0.5 }));
-    state.apply_cue(&cue("0", 0.3, CueCommand::Text("B".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("A".into())));
+    state.apply_cue(&cue("0", ms(100), CueCommand::NewLine { ratio: 1.0 }));
+    state.apply_cue(&cue("0", ms(200), CueCommand::NewLine { ratio: 0.5 }));
+    state.apply_cue(&cue("0", ms(300), CueCommand::Text("B".into())));
     assert_eq!(
         items_of(&state, "0"),
         &[
@@ -62,10 +63,14 @@ fn newline_cue_appends_line_break_marker_with_ratio() {
 #[test]
 fn clear_resets_actor_state_to_initial() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒルや".into())));
-    state.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue("0", 0.2, CueCommand::Text("アヒル！".into())));
-    state.apply_cue(&cue("0", 0.3, CueCommand::Clear));
+    state.apply_cue(&cue(
+        "0",
+        TimeSpan::ZERO,
+        CueCommand::Text("アヒルや".into()),
+    ));
+    state.apply_cue(&cue("0", ms(100), CueCommand::NewLine { ratio: 1.0 }));
+    state.apply_cue(&cue("0", ms(200), CueCommand::Text("アヒル！".into())));
+    state.apply_cue(&cue("0", ms(300), CueCommand::Clear));
 
     let actor = state
         .actor_state(&ActorKey::from("0"))
@@ -76,9 +81,9 @@ fn clear_resets_actor_state_to_initial() {
 #[test]
 fn clear_only_affects_target_actor() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("さくら".into())));
-    state.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())));
-    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("さくら".into())));
+    state.apply_cue(&cue("1", TimeSpan::ZERO, CueCommand::Text("けろ".into())));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Clear));
 
     assert!(items_of(&state, "0").is_empty());
     assert_eq!(
@@ -93,13 +98,13 @@ fn clear_only_affects_target_actor() {
 #[test]
 fn clear_all_erases_every_actor_scope_unlike_clear() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("さくら".into())));
-    state.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("さくら".into())));
+    state.apply_cue(&cue("1", TimeSpan::ZERO, CueCommand::Text("けろ".into())));
 
-    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Clear));
     assert!(!items_of(&state, "1").is_empty());
 
-    state.apply_cue(&cue("0", 1.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", ms(1000), CueCommand::ClearAll));
     assert!(items_of(&state, "0").is_empty());
     assert!(
         items_of(&state, "1").is_empty(),
@@ -112,13 +117,13 @@ fn clear_all_erases_every_actor_scope_unlike_clear() {
 #[test]
 fn wait_cue_leaves_text_state_untouched() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())));
     let before = state
         .actor_state(&ActorKey::from("0"))
         .expect("actor state should exist")
         .clone();
 
-    state.apply_cue(&cue("0", 0.5, CueCommand::Wait));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Wait));
 
     let after = state
         .actor_state(&ActorKey::from("0"))
@@ -131,9 +136,9 @@ fn wait_cue_leaves_text_state_untouched() {
 #[test]
 fn cues_route_to_independent_actor_states() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("A".into())));
-    state.apply_cue(&cue("1", 0.1, CueCommand::Text("B".into())));
-    state.apply_cue(&cue("0", 0.2, CueCommand::Text("C".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("A".into())));
+    state.apply_cue(&cue("1", ms(100), CueCommand::Text("B".into())));
+    state.apply_cue(&cue("0", ms(200), CueCommand::Text("C".into())));
 
     assert_eq!(
         items_of(&state, "0"),
@@ -147,7 +152,7 @@ fn unknown_actor_state_lazily_created_and_accumulates() {
     let mut state = TextLayerState::default();
     assert!(state.actor_state(&ActorKey::from("7")).is_none());
 
-    state.apply_cue(&cue("7", 0.0, CueCommand::Text("x".into())));
+    state.apply_cue(&cue("7", TimeSpan::ZERO, CueCommand::Text("x".into())));
     assert_eq!(items_of(&state, "7"), &[TextItem::glyph("x")]);
 }
 
@@ -155,8 +160,8 @@ fn unknown_actor_state_lazily_created_and_accumulates() {
 fn actors_iterate_in_deterministic_key_order() {
     let mut state = TextLayerState::default();
     // 逆順に生成しても走査は ActorKey 昇順（決定論的順序）。
-    state.apply_cue(&cue("1", 0.0, CueCommand::Text("b".into())));
-    state.apply_cue(&cue("0", 0.1, CueCommand::Text("a".into())));
+    state.apply_cue(&cue("1", TimeSpan::ZERO, CueCommand::Text("b".into())));
+    state.apply_cue(&cue("0", ms(100), CueCommand::Text("a".into())));
 
     let keys: Vec<&ActorKey> = state.actors().map(|(k, _)| k).collect();
     assert_eq!(keys, vec![&ActorKey::from("0"), &ActorKey::from("1")]);
@@ -168,9 +173,9 @@ fn actors_iterate_in_deterministic_key_order() {
 fn later_cues_apply_immediately_without_overwrite_guard() {
     let mut state = TextLayerState::default();
     // talk 1 の途中に talk 2 の cue 列（Clear→Text）が届いても、そのまま忠実に適用される。
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("talk1".into())));
-    state.apply_cue(&cue("0", 0.1, CueCommand::Clear));
-    state.apply_cue(&cue("0", 0.1, CueCommand::Text("talk2".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("talk1".into())));
+    state.apply_cue(&cue("0", ms(100), CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(100), CueCommand::Text("talk2".into())));
 
     let expected: Vec<TextItem> = clusters("talk2").map(TextItem::glyph).collect();
     assert_eq!(items_of(&state, "0"), expected.as_slice());
@@ -187,9 +192,9 @@ fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
 }
 
 /// Choice cue ヘルパ。reveal を Text と同じ時刻式で観測するため、配送 duration =
-/// `N × REVEAL_INTERVAL` を焼き込む（interval=0.25・[`cue`] の Text 分岐と機能等価）。
-fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
-    let duration = areka_sakura::cluster::cluster_count(text) as f64 * REVEAL_INTERVAL;
+/// `N × REVEAL_INTERVAL` を焼き込む（interval=250ms・[`cue`] の Text 分岐と機能等価）。
+fn choice_cue(actor: &str, at: TimeSpan, id: &str, text: &str, refs: &[&str]) -> TalkCue {
+    let duration = REVEAL_INTERVAL.mul_div(areka_sakura::cluster::cluster_count(text) as u64, 1);
     cue_dur(
         actor,
         at,
@@ -209,7 +214,13 @@ fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> Talk
 #[test]
 fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0", "r1"]));
+    state.apply_cue(&choice_cue(
+        "0",
+        TimeSpan::ZERO,
+        "OnYes",
+        "はい",
+        &["r0", "r1"],
+    ));
 
     assert_eq!(
         items_of(&state, "0"),
@@ -226,8 +237,8 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
             glyph_range: 0..2,
         }]
     );
-    // reveal も Text と同じ時刻式で拡張される（duration=2×0.25 → interval=0.25）。
-    assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25]);
+    // reveal も Text と同じ時刻式で拡張される（duration=2×250ms → interval=250ms）。
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(250)]);
 }
 
 /// 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、`ChoiceSpan` は配送順に並び
@@ -236,12 +247,12 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
 #[test]
 fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("どれ".into()))); // グリフ 0..2
-    state.apply_cue(&choice_cue("0", 0.1, "q0", "はい", &["a"])); // グリフ 2..4
-    state.apply_cue(&cue("0", 0.2, CueCommand::Text("か".into()))); // グリフ 4..5（間テキスト）
-    state.apply_cue(&cue("0", 0.3, CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
-    state.apply_cue(&choice_cue("0", 0.4, "q1", "いいえ", &["b"])); // グリフ 5..8
-    state.apply_cue(&choice_cue("0", 0.5, "q2", "たぶん", &["c"])); // グリフ 8..11
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("どれ".into()))); // グリフ 0..2
+    state.apply_cue(&choice_cue("0", ms(100), "q0", "はい", &["a"])); // グリフ 2..4
+    state.apply_cue(&cue("0", ms(200), CueCommand::Text("か".into()))); // グリフ 4..5（間テキスト）
+    state.apply_cue(&cue("0", ms(300), CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
+    state.apply_cue(&choice_cue("0", ms(400), "q1", "いいえ", &["b"])); // グリフ 5..8
+    state.apply_cue(&choice_cue("0", ms(500), "q2", "たぶん", &["c"])); // グリフ 8..11
 
     let spans = choices_of(&state, "0");
     assert_eq!(spans.len(), 3);
@@ -269,13 +280,13 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     let (state, counts) = count_levels(|| {
         let mut state = TextLayerState::default();
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into()))); // グリフ 0
-        state.apply_cue(&choice_cue("0", 0.1, "empty", "", &[]));
+        state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into()))); // グリフ 0
+        state.apply_cue(&choice_cue("0", ms(100), "empty", "", &[]));
         state
     });
 
     assert_eq!(items_of(&state, "0"), &[TextItem::glyph("あ")]);
-    assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO]);
     // 空範囲スパンが記録される（start==end==1＝現グリフ末尾）。
     assert_eq!(
         choices_of(&state, "0"),
@@ -296,9 +307,9 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
 fn repeated_nonempty_choice_cues_do_not_warn() {
     let ((), events) = capture_checked(|| {
         let mut state = TextLayerState::default();
-        state.apply_cue(&choice_cue("0", 0.0, "a", "はい", &[]));
-        state.apply_cue(&choice_cue("0", 0.5, "b", "いいえ", &[]));
-        state.apply_cue(&choice_cue("1", 1.0, "c", "はい", &[]));
+        state.apply_cue(&choice_cue("0", TimeSpan::ZERO, "a", "はい", &[]));
+        state.apply_cue(&choice_cue("0", ms(500), "b", "いいえ", &[]));
+        state.apply_cue(&choice_cue("1", ms(1000), "c", "はい", &[]));
     });
 
     assert_eq!(
@@ -316,10 +327,10 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
 fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     let (state, events) = capture_checked(|| {
         let mut state = TextLayerState::default();
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+        state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())));
         state.apply_cue(&cue(
             "0",
-            0.1,
+            ms(100),
             CueCommand::Cursor {
                 x: "5em".into(),
                 y: "2lh".into(),
@@ -327,7 +338,7 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
         ));
         state.apply_cue(&cue(
             "0",
-            0.2,
+            ms(200),
             CueCommand::Cursor {
                 x: "".into(),
                 y: "@3".into(),
@@ -359,8 +370,8 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
             },
         ]
     );
-    assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
-    assert_eq!(state.visible_glyphs(&ActorKey::from("0"), 100.0), 1);
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO]);
+    assert_eq!(state.visible_glyphs(&ActorKey::from("0"), TimeSpan::MAX), 1);
     assert!(choices_of(&state, "0").is_empty());
     assert_eq!(level_count(&events, Level::WARN), 0);
 }
@@ -372,24 +383,24 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
 #[test]
 fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     let mut control = TextLayerState::default();
-    control.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
-    control.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+    control.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あい".into())));
+    control.apply_cue(&cue("0", ms(500), CueCommand::Text("うえ".into())));
 
     // 実験: 途中と末尾に Cursor cue を挟む（Absolute/Relative/Omitted/Invalid を混在）。
     let mut experiment = TextLayerState::default();
-    experiment.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    experiment.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あい".into())));
     experiment.apply_cue(&cue(
         "0",
-        0.25,
+        ms(250),
         CueCommand::Cursor {
             x: "3em".into(),
             y: "@-1".into(),
         },
     ));
-    experiment.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+    experiment.apply_cue(&cue("0", ms(500), CueCommand::Text("うえ".into())));
     experiment.apply_cue(&cue(
         "0",
-        0.75,
+        ms(750),
         CueCommand::Cursor {
             x: "".into(),
             y: "bogus".into(),
@@ -416,8 +427,8 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     );
 
     let actor = ActorKey::from("0");
-    for i in 0..30 {
-        let t = i as f64 * 0.05;
+    for i in 0..30u32 {
+        let t = ms(50 * i);
         assert_eq!(
             experiment.visible_glyphs(&actor, t),
             control.visible_glyphs(&actor, t),
@@ -432,10 +443,10 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
 #[test]
 fn clear_resets_choices_alongside_items() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&choice_cue("0", 0.0, "q0", "はい", &[]));
+    state.apply_cue(&choice_cue("0", TimeSpan::ZERO, "q0", "はい", &[]));
     assert_eq!(choices_of(&state, "0").len(), 1);
 
-    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Clear));
 
     let actor = state
         .actor_state(&ActorKey::from("0"))
@@ -451,10 +462,10 @@ fn clear_resets_choices_alongside_items() {
 #[test]
 fn clear_all_resets_choices_of_every_actor_scope() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&choice_cue("0", 0.0, "q0", "はい", &[]));
-    state.apply_cue(&choice_cue("1", 0.1, "q1", "いいえ", &[]));
+    state.apply_cue(&choice_cue("0", TimeSpan::ZERO, "q0", "はい", &[]));
+    state.apply_cue(&choice_cue("1", ms(100), "q1", "いいえ", &[]));
 
-    state.apply_cue(&cue("0", 1.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", ms(1000), CueCommand::ClearAll));
 
     assert!(choices_of(&state, "0").is_empty());
     assert!(
@@ -468,12 +479,12 @@ fn clear_all_resets_choices_of_every_actor_scope() {
 #[test]
 fn non_balloon_commands_do_not_disturb_state() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("A".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("A".into())));
 
     let before = state.clone();
     state.apply_cue(&cue(
         "0",
-        0.1,
+        ms(100),
         CueCommand::Emote {
             key: "smile".into(),
         },
@@ -481,7 +492,7 @@ fn non_balloon_commands_do_not_disturb_state() {
     // BalloonSurface は表示系の消費対象で、文字状態（items／reveal／visible_glyphs）は完全に不変。
     state.apply_cue(&cue(
         "0",
-        0.3,
+        ms(300),
         CueCommand::BalloonSurface { key: "2".into() },
     ));
     assert_eq!(state, before);

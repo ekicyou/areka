@@ -11,6 +11,7 @@
 //! 「一から計算した値」は、場所ごとの土台と 2 層の上へ、当てた指定の列を `apply_font_tag` で順に
 //! 当てた見た目と、所有外の答えを返した指定を順に入れた所有外のキー。
 
+use dola::TimeSpan;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
@@ -115,7 +116,7 @@ fn f(state: &mut TextLayerState, actor: &str, tokens: &[&str]) {
 }
 
 fn clear_all(actor: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::ClearAll)
+    cue(actor, TimeSpan::ZERO, CueCommand::ClearAll)
 }
 
 /// 数え 2 つを 0 にする。

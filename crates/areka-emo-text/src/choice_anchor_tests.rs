@@ -15,23 +15,25 @@ use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
 use crate::state::test_support::{applied, choice, close, open, spans};
 use crate::state::{SpanKind, TextLayerState};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
+use dola::time::testing::ms;
 
 const ACTOR: &str = "0";
 
-/// 時刻 `at` に届き、`duration` 秒かけて表示される合図。
-fn cue_at(at: f64, duration: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
+/// 時刻 `at` に届き、`duration` かけて表示される合図。
+fn cue_at(at: TimeSpan, duration: TimeSpan, command: CueCommand) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(ACTOR),
+        ActorKey::from(ACTOR),
         command,
         duration,
-    }
+    )
 }
 
 /// 届いた時点で全部の字が出る文字（`state::test_support::text` は字数に応じた再生時間を持つので使わない）。
 fn text(s: &str) -> TalkCue {
-    cue_at(0.0, 0.0, CueCommand::Text(s.into()))
+    cue_at(TimeSpan::ZERO, TimeSpan::ZERO, CueCommand::Text(s.into()))
 }
 
 /// 普通のバルーンの場所の範囲の列（種類と位置だけ）。
@@ -55,7 +57,7 @@ fn rect(left: f32, top: f32, right: f32, bottom: f32) -> LineRect {
 /// 帯 → 当たりの行）。当たりの行には、通し番号で引いた元の範囲の種類を添える。
 fn hit(
     state: &TextLayerState,
-    t: f64,
+    t: TimeSpan,
 ) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
     hit_in(state, t, WritingMode::HorizontalTb)
 }
@@ -63,7 +65,7 @@ fn hit(
 /// 時刻 `t` に出ている字までを決まった字幅で配置した行の列と、その描画範囲。
 fn arranged(
     state: &TextLayerState,
-    t: f64,
+    t: TimeSpan,
     mode: WritingMode,
 ) -> (Vec<PositionedLine>, TextRegion) {
     let actor = ActorKey::from(ACTOR);
@@ -84,7 +86,7 @@ fn arranged(
 /// [`hit`] の書字方向を選べる形。範囲・帯・当たりの行は本番の提示と同じ関数で出す。
 fn hit_in(
     state: &TextLayerState,
-    t: f64,
+    t: TimeSpan,
     mode: WritingMode,
 ) -> (Vec<LineChoiceSegment>, Vec<(SpanKind, usize, LineRect)>) {
     let (lines, region) = arranged(state, t, mode);
@@ -114,7 +116,7 @@ fn anchor_across_a_wrap_has_a_hit_segment_on_each_line() {
         close(ACTOR),
         text("き"),
     ]);
-    let (segments, rows) = hit(&state, 0.0);
+    let (segments, rows) = hit(&state, TimeSpan::ZERO);
     assert_eq!(
         segments,
         vec![
@@ -143,11 +145,11 @@ fn anchor_across_a_wrap_has_a_hit_segment_on_each_line() {
 /// 範囲の記録は最初から全文ぶんで、切るのは配置の側。
 #[test]
 fn hit_area_stops_at_what_has_been_revealed() {
-    // アンカーを開いて 6 字を 1 秒に 1 字（字 i は時刻 i に出る）。話している最中なので、
+    // アンカーを開いて 6 字を 1 秒に 1 字（字 i は時刻 1 + i 秒に出る）。話している最中なので、
     // 閉じはまだ届いていない。
     let mut state = applied(&[
         open(ACTOR, "x", &[]),
-        cue_at(0.0, 6.0, CueCommand::Text("あいうえおか".into())),
+        cue_at(ms(1000), ms(6000), CueCommand::Text("あいうえおか".into())),
     ]);
     assert_eq!(kinds_and_ranges(&state), vec![(SpanKind::Anchor, 0..6)]);
     // 出た字の数 → 当たりの行（1 行目は 4 字まで・5 字目から 2 行目）。
@@ -163,13 +165,13 @@ fn hit_area_stops_at_what_has_been_revealed() {
         vec![line0(4.0), line1(2.0)],
     ];
     for (shown, want) in expected.iter().enumerate() {
-        // 字 i は時刻 i に出るので、時刻 shown − 0.5 には shown 字が出ている。
-        let (_, rows) = hit(&state, shown as f64 - 0.5);
+        // 字 i は時刻 1 + i 秒に出るので、時刻 shown + 0.5 秒には shown 字が出ている。
+        let (_, rows) = hit(&state, ms(1000 * shown as u32 + 500));
         assert_eq!(&rows, want, "出た字 {shown}");
     }
     // 全部出た後に閉じが届いても、当たりは変わらない。
     state.apply_cue(&close(ACTOR));
-    assert_eq!(hit(&state, 6.0).1, expected[6]);
+    assert_eq!(hit(&state, TimeSpan::MAX).1, expected[6]);
 }
 
 /// 選択肢とアンカーが混ざる列でも、当たりの矩形と種類は範囲ごとに合う。
@@ -186,7 +188,7 @@ fn mixed_choices_and_anchors_keep_their_rects_and_kinds() {
         choice(ACTOR, "no", "いいえ"),
     ]);
     assert_eq!(
-        hit(&state, 0.0).1,
+        hit(&state, TimeSpan::ZERO).1,
         vec![
             (SpanKind::Choice, 0, rect(0.0, 1.0, 20.0, 13.0)),
             (SpanKind::Anchor, 1, rect(30.0, 1.0, 40.0, 13.0)),
@@ -226,7 +228,7 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
         "同じ種類の範囲は重ならない"
     );
     assert_eq!(
-        hit(&state, 0.0).1,
+        hit(&state, TimeSpan::ZERO).1,
         vec![
             (SpanKind::Anchor, 0, rect(0.0, 1.0, 40.0, 13.0)),
             (SpanKind::Choice, 1, rect(10.0, 1.0, 30.0, 13.0)), // アンカー a の行の中
@@ -256,8 +258,8 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
         (WritingMode::VerticalRl, (28.0, 38.0)),
         (WritingMode::VerticalLr, (2.0, 12.0)),
     ] {
-        let (_, a) = hit_in(&anchor, 0.0, mode);
-        let (_, c) = hit_in(&as_choice, 0.0, mode);
+        let (_, a) = hit_in(&anchor, TimeSpan::ZERO, mode);
+        let (_, c) = hit_in(&as_choice, TimeSpan::ZERO, mode);
         assert_eq!(a.len(), 1, "{mode:?}: アンカーの当たりの行");
         assert_eq!(c.len(), 1, "{mode:?}: 選択肢の当たりの行");
         let ((ak, _, ar), (ck, _, cr)) = (a[0], c[0]);
@@ -285,7 +287,7 @@ fn vertical_choice_across_columns_has_a_band_on_each_column() {
         // 左から右: 0 ＋ 2 ＝ 2・12 ＋ 2 ＝ 14。
         (WritingMode::VerticalLr, (2.0, 12.0), (14.0, 24.0)),
     ] {
-        let (segments, rows) = hit_in(&state, 0.0, mode);
+        let (segments, rows) = hit_in(&state, TimeSpan::ZERO, mode);
         assert_eq!(
             segments.iter().map(|s| s.line_index).collect::<Vec<_>>(),
             vec![0, 1],
@@ -316,7 +318,7 @@ fn highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode() {
         (WritingMode::VerticalRl, &vertical),
         (WritingMode::VerticalLr, &vertical),
     ] {
-        let (lines, region) = arranged(state, 0.0, mode);
+        let (lines, region) = arranged(state, TimeSpan::ZERO, mode);
         let spans = state
             .actor_state(&ActorKey::from(ACTOR))
             .expect("場所の状態")

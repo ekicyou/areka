@@ -3,6 +3,7 @@
 //! 受け口 [`EmoTextSink::emit_with`] は名前の形の `\b` だけ [`TextMsg::ProbedCue`] を積み、UI の取り出し
 //! （[`spawn_emo_text`]）は箱が見つからず空回しの写しでもないときだけ 1 回知らせる。実 channel・実 pump。
 
+use dola::TimeSpan;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
@@ -36,7 +37,11 @@ fn index() -> BTreeMap<u32, Vec<BoxName>> {
 }
 
 fn select(key: &str) -> TalkCue {
-    cue("0", 0.0, CueCommand::BalloonSurface { key: key.into() })
+    cue(
+        "0",
+        TimeSpan::ZERO,
+        CueCommand::BalloonSurface { key: key.into() },
+    )
 }
 
 /// 知らせを積む口と、積まれた知らせ。
@@ -64,7 +69,7 @@ fn emit_with_wraps_only_name_form_balloon_cues() {
 
     let named = select("a");
     let numbered = select("0");
-    let text = cue("0", 0.0, CueCommand::Text("あ".into()));
+    let text = cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into()));
     sink.emit_with(named.clone(), &probe);
     sink.emit_with(numbered.clone(), &probe);
     sink.emit_with(text.clone(), &probe);

@@ -12,6 +12,7 @@
 //! DirectWrite も GPU も要らない。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
+use dola::TimeSpan;
 
 use super::super::test_support::{cue, font, text};
 use super::super::{ActorTextState, TextItem, TextLayerState};
@@ -161,10 +162,14 @@ fn same_look_folds_into_one_style_number() {
 fn glyph_style_count_matches_glyph_count() {
     let mut state = TextLayerState::default();
     state.apply_cue(&text("0", "あ"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
+        CueCommand::NewLine { ratio: 1.0 },
+    ));
+    state.apply_cue(&cue(
+        "0",
+        TimeSpan::ZERO,
         CueCommand::Cursor {
             x: "5em".to_owned(),
             y: String::new(),
@@ -189,7 +194,7 @@ fn choice_glyphs_carry_current_decoration() {
     state.apply_cue(&font("0", &["italic", "1"]));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::Choice {
             id: "OnPick".to_owned(),
             text: "はい".to_owned(),
@@ -248,7 +253,7 @@ fn empty_choice_appends_no_style_number() {
     state.apply_cue(&font("0", &["bold", "1"]));
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::Choice {
             id: "OnPick".to_owned(),
             text: String::new(),
@@ -269,7 +274,7 @@ fn empty_choice_appends_no_style_number() {
 #[test]
 fn content_clear_keeps_decoration() {
     let mut state = state_with_bold_then_text();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
 
     assert!(st(&state, "0").items().is_empty(), "内容は消える");
     assert!(
@@ -290,7 +295,11 @@ fn content_clear_keeps_decoration() {
 #[test]
 fn newline_keeps_decoration() {
     let mut state = state_with_bold_then_text();
-    state.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
+    state.apply_cue(&cue(
+        "0",
+        TimeSpan::ZERO,
+        CueCommand::NewLine { ratio: 1.0 },
+    ));
     state.apply_cue(&text("0", "う"));
 
     assert!(st(&state, "0").current_look().bold);
@@ -303,7 +312,7 @@ fn cursor_move_keeps_decoration() {
     let mut state = state_with_bold_then_text();
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::Cursor {
             x: "0".to_owned(),
             y: "1lh".to_owned(),
@@ -321,7 +330,7 @@ fn content_clear_keeps_unowned_vocabulary() {
     let mut state = TextLayerState::default();
     state.apply_cue(&font("0", &["align", "center"]));
     state.apply_cue(&text("0", "あ"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
 
     assert_eq!(
         st(&state, "0")
@@ -339,7 +348,7 @@ fn content_clear_keeps_unowned_vocabulary() {
 fn clear_all_resets_decoration_to_default() {
     let mut state = state_with_bold_then_text();
     state.apply_cue(&font("0", &["align", "center"]));
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
 
     let actor = st(&state, "0");
     assert!(actor.items().is_empty());
@@ -363,7 +372,7 @@ fn clear_all_resets_every_scope() {
     state.apply_cue(&text("0", "あ"));
     state.apply_cue(&font("1", &["italic", "1"]));
     state.apply_cue(&text("1", "い"));
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
 
     assert!(!st(&state, "0").current_look().bold);
     assert!(!st(&state, "1").current_look().italic);
@@ -434,7 +443,7 @@ fn carrier_with_another_name_is_ignored() {
     let before = state.clone();
     state.apply_cue(&cue(
         "0",
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::command_carrier("raise", vec!["OnTest".to_owned()]),
     ));
 

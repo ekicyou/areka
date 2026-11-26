@@ -5,6 +5,7 @@
 
 use super::test_support::{cue_dur, items_of, reveal_times_of};
 use super::*;
+use dola::time::testing::ms;
 
 /// 家族（ZWJ で結んだ列）: 👨 ZWJ 👩 ZWJ 👧
 const FAMILY: &str = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
@@ -30,27 +31,32 @@ const SIX_FORMS: [&str; 6] = [
 ];
 
 /// 「👨‍👩‍👧🇯🇵」（時間 1.0）は 2 アイテムになり、各アイテムの文字列は形の全体。
-/// 出す間隔は「時間 ÷ クラスタの数」＝0.5 で、時刻 0.5 の手前では家族の 1 つだけが
+/// 出す間隔は「時間 ÷ クラスタの数」＝500ms で、時刻 500ms の手前では家族の 1 つだけが
 /// まるごと見える（部品の数で割ると 7 つに割れ、途中の段に 👨 だけが見える）。
 #[test]
 fn text_cue_of_family_and_flag_yields_two_whole_items() {
     let mut state = TextLayerState::default();
     let text = format!("{FAMILY}{FLAG_JP}");
-    state.apply_cue(&cue_dur("0", 0.0, 1.0, CueCommand::Text(text.into())));
+    state.apply_cue(&cue_dur(
+        "0",
+        TimeSpan::ZERO,
+        ms(1000),
+        CueCommand::Text(text.into()),
+    ));
 
     assert_eq!(
         items_of(&state, "0"),
         &[TextItem::glyph(FAMILY), TextItem::glyph(FLAG_JP)]
     );
-    // 間隔は 1.0 ÷ 2 = 0.5（2 の冪なので丸めは入らない）。
-    assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.5]);
+    // 間隔は 1000ms ÷ 2 = 500ms。
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(500)]);
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, 0.0), 1);
-    assert_eq!(state.visible_glyphs(&actor, 0.25), 1);
-    assert_eq!(state.visible_glyphs(&actor, 0.49), 1);
-    assert_eq!(state.visible_glyphs(&actor, 0.5), 2);
-    assert_eq!(state.visible_glyphs(&actor, 1.0), 2);
+    assert_eq!(state.visible_glyphs(&actor, TimeSpan::ZERO), 1);
+    assert_eq!(state.visible_glyphs(&actor, ms(250)), 1);
+    assert_eq!(state.visible_glyphs(&actor, ms(490)), 1);
+    assert_eq!(state.visible_glyphs(&actor, ms(500)), 2);
+    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 2);
 }
 
 /// 6 形のそれぞれが 1 アイテム・1 時刻で積まれる（途中の段に部品が見えない）。
@@ -58,7 +64,12 @@ fn text_cue_of_family_and_flag_yields_two_whole_items() {
 fn each_of_six_forms_is_one_item_revealed_at_one_time() {
     for form in SIX_FORMS {
         let mut state = TextLayerState::default();
-        state.apply_cue(&cue_dur("0", 0.0, 1.0, CueCommand::Text(form.into())));
+        state.apply_cue(&cue_dur(
+            "0",
+            TimeSpan::ZERO,
+            ms(1000),
+            CueCommand::Text(form.into()),
+        ));
 
         assert_eq!(
             items_of(&state, "0"),
@@ -67,7 +78,7 @@ fn each_of_six_forms_is_one_item_revealed_at_one_time() {
         );
         assert_eq!(
             reveal_times_of(&state, "0"),
-            vec![0.0],
+            vec![TimeSpan::ZERO],
             "{form:?} は 1 つの段で出なければならない"
         );
     }
@@ -78,14 +89,26 @@ fn each_of_six_forms_is_one_item_revealed_at_one_time() {
 fn six_forms_in_one_cue_yield_six_items_in_order() {
     let mut state = TextLayerState::default();
     let text: String = SIX_FORMS.concat();
-    state.apply_cue(&cue_dur("0", 0.0, 1.5, CueCommand::Text(text.into())));
+    state.apply_cue(&cue_dur(
+        "0",
+        TimeSpan::ZERO,
+        ms(1500),
+        CueCommand::Text(text.into()),
+    ));
 
     let expected: Vec<TextItem> = SIX_FORMS.iter().map(|f| TextItem::glyph(f)).collect();
     assert_eq!(items_of(&state, "0"), expected.as_slice());
-    // 間隔は 1.5 ÷ 6 = 0.25。
+    // 間隔は 1500ms ÷ 6 = 250ms。
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![0.0, 0.25, 0.5, 0.75, 1.0, 1.25]
+        vec![
+            TimeSpan::ZERO,
+            ms(250),
+            ms(500),
+            ms(750),
+            ms(1000),
+            ms(1250)
+        ]
     );
 }
 
@@ -96,8 +119,8 @@ fn choice_cue_range_counts_clusters() {
     let text = format!("A{THUMBS_UP_LIGHT}B");
     state.apply_cue(&cue_dur(
         "0",
-        0.0,
-        0.75,
+        TimeSpan::ZERO,
+        ms(750),
         CueCommand::Choice {
             id: "OnThumbsUp".into(),
             text: text.into(),
@@ -139,7 +162,7 @@ fn choice_and_anchor_start_counts_clusters_before_them() {
             references: vec![],
         },
     ] {
-        state.apply_cue(&cue_dur("0", 0.0, 0.0, command));
+        state.apply_cue(&cue_dur("0", TimeSpan::ZERO, TimeSpan::ZERO, command));
     }
 
     let spans = state
