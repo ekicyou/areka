@@ -43,8 +43,8 @@
 - **在る物**: dola は時刻を外から受ける受け身の作りで、自分の中から「今」を読まない（要件 2 の 8 は今も成り立つ）。cue の層と storyboard の層はコードで互いを参照しない。トークのスレッド（`areka-sakura` の `drive.rs`）は、もう絶対の刻みで動く。正準のキャリアの合図は組み立て 1 か所に寄っている。`QueryUnbiasedInterruptTimePrecise` は今の `windows` 0.62.2 に在る（機能 `Win32_System_WindowsProgramming`）。
 - **無い物**: 時刻と長さの型・作者が書く単位から変える口・倍率を掛けて整数へ戻す 1 か所・起点を置き直す口・受け口への知らせ・合図の絶対の発火時刻。どれも新しく作る。
 - **型が 2 つでは足りない**: 符号つきの差が要る所が、選択待ちの時間切れの指令・storyboard の文書の負のオフセット・実効の時刻・`TalkClock` と seriko の起点の見積もり・バルーンの待ちの残りに在る。
-- **要件のままでは成り立たない所が在る**（4 章・18 件）。大きいのは、負を運ぶ選択待ちの時間切れ・9 つの外の `areka-talk` と `areka-kanade`・刻みの時計の物差し・storyboard の文書の型・丸めそのものを固定するテスト。
-- **進め方**: 継ぎを置かずに、下の crate から上へ 1 回で切り替える。前半（型の付け替え・合図と刻みの形は最後の形まで）と後半（振る舞い）に分けて確かめる形を推す（8 章）。並行の単位で刻んだタスクは 50〜53 の見込み。
+- **要件のままでは成り立たない所が在る**（4 章・18 件）。大きいのは、負を運ぶ選択待ちの時間切れ・9 つの外の `areka-talk` と `areka-kanade`・刻みの時計の物差し・storyboard の文書の型・丸めそのものを固定するテスト。（13 章で改めた）
+- **進め方**: 継ぎを置かずに、下の crate から上へ 1 回で切り替える。前半（型の付け替え・合図と刻みの形は最後の形まで）と後半（振る舞い）に分けて確かめる形を推す（8 章）。並行の単位で刻んだタスクは 50〜53 の見込み。（13 章で改めた）
 
 ## 2. 今のコード
 
@@ -363,7 +363,7 @@ brief の古くなった所（今のコードと合わない）: 「`BarrierKind
 3. **型が「時刻」と「長さ」の 2 つでは足りない（要件 1 の 1・1 の 5・5 の 2）**。符号つきの差が要る所: 上の 1、storyboard の文書の `KeyframeRef::WithOffset.offset`（−0.5 を固定するテストが在る）と `trigger_start_offset`、コンパイル後の区間の時刻（起点より前に置ける）、実効の時刻（★1）、`TalkClock` と seriko の起点の見積もり（今 − 合図の時刻）、バルーンの待ちの残り（期限 − 今）。要件 1 の 5 は「負を区別できる形で返す」とだけ言い、それを運ぶ型を置いていない。
 4. **`TalkCue.at` は相対（要件 4 の 1・13 の 2・13 の 7）**。名前と説明は「発火時刻」だが、中身は起点からの隔たりである。要件 4 の 1 は「`TalkCue` の時刻と長さ」としか言わない。`at` に時刻の型を当てると誤る。`at` は長さ、新しく足す絶対の発火時刻が時刻、と欄ごとに書く必要が在る。
 5. **終わらないループの終わりの時刻は、今も有限（要件 1 の 7・5 の 5）**。今は 1 周分の終わりの時刻を持ち、周回ごとに延ばす（テスト「not INFINITY」が固定）。要件 5 の 5 の文のままだと、振る舞いを変える事になる。`f64::INFINITY` が時刻に出るのは、周回の後の待ちで最後の値を保つ番兵だけ。終わらないループを止める決まりは `f64` の吸収に頼っていて（`loop_controller/mod.rs:132-136`）、整数ではあふれの決まり（要件 1 の 6）で決め直す所になる。
-6. **刻みの時計の物差しが、dola の時計と違う（要件 14 の 7・1 の 2・5 の 4・6 の 3・8 の 3）**。刻みは `GetTickCount64` のミリ秒で、要件 14 の 7 はそれを時刻の型へ写すと言う。その値は、要件 1 の 2 の「`QueryUnbiasedInterruptTimePrecise` と同じ物差し」ではない。この spec の後、`FrameTime`（dola の時計）と、cue の道を流れる時刻（起点・絶対の発火時刻・占有の終わり・直列化した起点）は、同じ型なのに比べられない。要件 5 の 4 と 6 の 3 は、型と決定論のテストの上でだけ成り立つ。仮定 1 は気付いているが、要件 1 の 2・5 の 4・6 の 3 の文には断りが無い。
+6. **刻みの時計の物差しが、dola の時計と違う（要件 14 の 7・1 の 2・5 の 4・6 の 3・8 の 3）**。刻みは `GetTickCount64` のミリ秒で、要件 14 の 7 はそれを時刻の型へ写すと言う。その値は、要件 1 の 2 の「`QueryUnbiasedInterruptTimePrecise` と同じ物差し」ではない。この spec の後、`FrameTime`（dola の時計）と、cue の道を流れる時刻（起点・絶対の発火時刻・占有の終わり・直列化した起点）は、同じ型なのに比べられない。要件 5 の 4 と 6 の 3 は、型と決定論のテストの上でだけ成り立つ。仮定 1 は気付いているが、要件 1 の 2・5 の 4・6 の 3 の文には断りが無い。（13 章で改めた）
 7. **storyboard の文書の型をどう持つかで、範囲が大きく変わる（要件 5 の 2・5 の 3・6 の 6・15 の 4・仮定 2）**。文書の型（`TransitionDef.delay`・`duration`・`LoopOffset`・オフセット）を新しい型にすると、検査の決まり（有限かつ 0 以上＝`validate/rules.rs`）の大半と `DolaError` の欄（`InvalidNumber { value: f64 }` ほか）が「起きない」事になり、`tests/validation/**` と文書を字面で組むテストの全部に及ぶ。文書の型を秒のまま残し、コンパイルの縁で 1 回だけ変える形なら、`storyboard.rs`・`transition.rs`・`builder.rs`・`validate/**`・`error.rs`・`tests/validation/**`・文書の往復のテストは触らない。ただし公開の文書の型に秒の `f64` が残る。
 8. **使い手が自分で持つ公開の口が、名指しされていない（要件 7 の 1・7 の 5・8 の 1・16 の 3・仮定 3）**。`areka-emo-text` の `present_frame(.., talk_time: f64)`（中 157・外 6）・`visible_glyphs`（60）・`RevealSchedule::times()`、wintf のタイプライターの口と自動の上げ下げの判断、`areka-sakura` の `text_playback_duration`・`ChoiceTimeoutDirective::Secs`、`areka-runtime` の `TalkClock` の 4 口・`TalkLifecycleSignal`・`configured_timeout_secs`・`run_text_phase`・`hover_inject`。要件 7 の 5 のとおりなら全部が替わるが、要件 8 の 1 と 16 の 3 は wintf について `FrameTime` しか言わない（タイプライターの口も crates.io の利用者に見える）。
 9. **丸めそのものを固定するテストが在る（要件 9 の 2・9 の 4・9 の 5）**。要件 9 が拾うのは「表せない入力（NaN・無限大・負）だけを確かめるテスト」と「ミリ秒の格子の継ぎを確かめるテスト」。次の物は、どちらにも当たらず、「同じ意味の値へ写すだけ」（9 の 2）でも通らない。
@@ -379,9 +379,9 @@ brief の古くなった所（今のコードと合わない）: 「`BarrierKind
 12. **逆の向きの穴（要件 10 の 3）**。要件は「再生中なのに、止めた時点の記録が残っている」だけを言う。「止まっているのに、止めた時点の記録が無い」状態（`transition(gid, Paused)` の直呼び）も作れ、それを正しい物として使うテストが在る。
 13. **ログに出す時刻の形が決まっていない（要件 7 の 5）**。合図の時刻をログの欄に出す所が `areka-ghost/src/sink.rs:72`・`areka-emo-text` の `state.rs:498`・`:554`・`:584`・`sink.rs:115`・seriko の `actor.rs:227`・`areka-sakura` の `drive.rs:299`・`:348`・`:456`・`areka-runtime` の `talk_lifecycle.rs:286-287`・dispatcher の `:252` に在り、ghost のテストは欄の文字を `f64` に解いて比べる。要件は「ログへ出す所は実数へ直してよい」とだけ言い、秒で出し続けるのか、100ns の整数で出すのかを決めていない。
 14. **消える公開の関数が、壊れる変更の一覧に無い（要件 4 の 3・16 の 2）**。`dola::cue::sum_on_ms_grid` は公開で、dola の外（`areka-runtime` の本番）からも呼ばれている。要件 16 の 2 が挙げるのは「公開の口の型・直列化の形・これまでの時計」。
-15. **版の行（要件 16 の 2・15 の 3）**。dola は `version.workspace = true` で、版を動かすのは `/release` が触る根の `Cargo.toml` の 3 行（うち `:32` が dola）。この spec が着地してから次の公開までの間、木の中の dola 0.1.0 は、crates.io に在る dola 0.1.0 と公開の形が違う。全体テストの包みの段は `--no-verify --offline` なので緑のまま。索引を読む形（`tools/crates-io.ps1 -Verify`）で wintf を組むと、公開済みの dola と合わずに落ちる。要件は、この spec が版の行を動かさない事と、次の公開が壊れる変更の版上げになる事を書いていない。
-16. **見どころの「必ず載せるもの」の字面（要件 16 の 4）**。決まりは「使う人やゴーストを作る人が何かを直さなければならない変更」で、crates.io の利用者は字面に入っていない。要件 16 の 4 は、この決まりに当たる前提で書かれている。
-17. **5 つが 2 本の brief に同じ文で在る（仮定 1・Out of scope・要件 12・14）**。項目 1（置き直した起点に付いて来る）と項目 4（刻みが絶対の時刻）は、`talk-anchor-interrupt-ticks` の In とも同じ所を指す。要件は仮定 1 で線を引いたが、`talk-anchor-interrupt-ticks` の brief・この spec の brief の 80 行目と 109 行目・Scope と Out of Boundary・`roadmap.md:132` は古いままで、要件 16 の直す文書に入っていない。
+15. **版の行（要件 16 の 2・15 の 3）**。dola は `version.workspace = true` で、版を動かすのは `/release` が触る根の `Cargo.toml` の 3 行（うち `:32` が dola）。この spec が着地してから次の公開までの間、木の中の dola 0.1.0 は、crates.io に在る dola 0.1.0 と公開の形が違う。全体テストの包みの段は `--no-verify --offline` なので緑のまま。索引を読む形（`tools/crates-io.ps1 -Verify`）で wintf を組むと、公開済みの dola と合わずに落ちる。要件は、この spec が版の行を動かさない事と、次の公開が壊れる変更の版上げになる事を書いていない。（13 章で改めた）
+16. **見どころの「必ず載せるもの」の字面（要件 16 の 4）**。決まりは「使う人やゴーストを作る人が何かを直さなければならない変更」で、crates.io の利用者は字面に入っていない。要件 16 の 4 は、この決まりに当たる前提で書かれている。（13 章で改めた）
+17. **5 つが 2 本の brief に同じ文で在る（仮定 1・Out of scope・要件 12・14）**。項目 1（置き直した起点に付いて来る）と項目 4（刻みが絶対の時刻）は、`talk-anchor-interrupt-ticks` の In とも同じ所を指す。要件は仮定 1 で線を引いたが、`talk-anchor-interrupt-ticks` の brief・この spec の brief の 80 行目と 109 行目・Scope と Out of Boundary・`roadmap.md:132` は古いままで、要件 16 の直す文書に入っていない。（13 章で改めた）
 18. **Windows の外で組める事の示し方が無い（要件 1 の 8・2 の 7）**。確かめる仕組みは今 0（CI は Windows だけ・`--target` を名指す段は無い）。dola の `[package.metadata.docs.rs]` は `targets` を指定していない。
 
 小さい物（設計で拾えば足りる）: 先進坑の 3 か所（0 章）は全体テストが組まないので、黙って壊れる。例は `dola` の字を書かずに壊れる（2.1）。`Cue.duration` の「欄の無い古い形は 0 として読める」の約束は、欄が無い時だけ守られる。
@@ -406,6 +406,8 @@ brief の古くなった所（今のコードと合わない）: 「`BarrierKind
 | 12 | Windows の外で組める事の示し方（課題 18） | ⑴ 全体テストに、Windows でない target の `cargo check -p dola` を 1 段足す（rustup の target を 1 つ足す。外の crate は足さない） ⑵ `cfg` の字面の検査だけ ⑶ 今と同じ（示さない） | **⑴**。要件 1 の 8 と 2 の 7 を、検査で示せる |
 
 要件の討議での扱い: 決め 2・6・7・9 と、決め 8 のうち逆の向きの穴は、「型の付け替えで振る舞いを変えない」「時刻は正確に扱う」から答えが 1 つに決まるので、自明な修正として要件へ入れた（要件 1 の 7・1 の 9・3 の 8・4 の 5・4 の 6・5 の 5・5 の 8・6 の 5・7 の 8〜10・9 の 7・9 の 8・10 の 5・11 の 12・16 の 2）。課題 3・4・5・14 も同じ修正で拾った。決め 11 は決め 1 と一緒に扱う。残る決め 1・3・4・5・8・10・12 と、要件の仮定 4・6 を、議題として開発者に確かめる。
+
+討議で決まった事: 決め 1 は、時計を dola の時計の 1 本にそろえ、`GetTickCount64` は使わない事に決まった。`talk-anchor-interrupt-ticks` の範囲は、この spec に入れた（要件 17・12 の 9・12 の 10・14 の 6・14 の 7）。決め 3 は ⑴（`areka-talk`・`areka-kanade`・先進坑も追従する）。決め 5 は ⑴（タイプライターと自動の上げ下げの判断を含め、使う所まで新しい型）。決め 10 は、古い形の説明も書き換え方の案内も書かず、見どころの決まりは直さず、版の行も動かさない（要件 16 の 2）。決め 11 は決め 1 と一緒に済んだ。決め 12 は ⑴（全体テストに 1 段足す・要件 15 の 8）。決め 4 と 8 は、まだ討議の中。広がった範囲は 13 章。
 
 ## 6. 設計で決めること
 
@@ -492,6 +494,8 @@ brief の古くなった所（今のコードと合わない）: 「`BarrierKind
 
 ### 8.5 段とタスクの数（並行の単位で刻んだ見込み）
 
+（13 章で改めた）
+
 | 段 | 中身 | 並べられる数 | タスク |
 |---|---|---|---|
 | 0 | dola の土台（型・変える口・倍率の 1 か所・時計・`Cargo.toml`）。足すだけで、ワークスペースは緑 | 2 | 3 |
@@ -519,7 +523,7 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 
 ## 10. 規模とリスク
 
-- **規模: XL**（2 週間を越える仕事）。dola の公開の口 49 か所（cue 20・storyboard 29）と、使い手の 9 crate＋外の 2 crate のテストの大半に及ぶ。新しい型・新しい口（起点の置き直し・知らせ・絶対の発火時刻）を含む。
+- **規模: XL**（2 週間を越える仕事）。dola の公開の口 49 か所（cue 20・storyboard 29）と、使い手の 9 crate＋外の 2 crate のテストの大半に及ぶ。新しい型・新しい口（起点の置き直し・知らせ・絶対の発火時刻）を含む。（13 章で改めた）
 - **リスク: 高**。外の技術に分からない所は少ない（OS の関数 1 つ・`windows` の機能 1 つ）。危うさは幅と決まりに在る: ⑴ 前半の間、全体テストが使えない ⑵ 丸めの決まり（★1 と ★2 の対・1 字ごとの間隔・作者の単位の縁）を誤ると、ちょうどの刻みの届き方が変わる ⑶ 起点を置き直す時の順の保証（落とさない・2 度届けない・起きた順）は、今のどこにも前例が無い ⑷ 1,000 行に近い 13 ファイル ⑸ 同じ時に走らせない相手が多い（`element-animation-easing`・`seriko-talk-clock-fidelity`・`talk-fast-forward`・`sakura-embed-directive`・`tick-gate-adoption`）。
 
 ## 11. 設計で調べること
@@ -536,6 +540,170 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 ## 12. 設計フェーズへの勧め
 
 - 作り方は 7 章の案 C、段取りは 8.4 の案 2 を出発点にする。
-- 先に 5 章の 12 件を要件の討議で決める。決め 1〜5 は、型の数・追従する crate の数・触るファイルの数を動かす。
+- 先に 5 章の 12 件を要件の討議で決める。決め 1〜5 は、型の数・追従する crate の数・触るファイルの数を動かす。（13 章で改めた）
 - 設計の最初に、6 章の 1〜3（置き場・型の細部・丸めの 1 か所）を固める。ほかの全部がこれに乗る。
 - 起点の置き直し（6 章の 4）は、今の再生機の「進め終えてから配る」形を変える所なので、順の保証を先に文で決めてから口の形を選ぶ。
+
+## 13. 時計の統一で広がった範囲
+
+要件の討議で時計を 1 本にそろえると決まり（5 章）、`talk-anchor-interrupt-ticks` の範囲（要件 17・12 の 9・12 の 10・14 の 6・14 の 7）が、この spec に入った。この章は、その範囲を今のコードで測り直した物で、1・4・5・8・10・12 章のうち古くなった所は、ここが改める。測った木は同じワークツリー（HEAD `4a8ff9d08`）。数は grep の行数とファイル数。0 と書いた物は、同じ式が在ると分かっている所に当たる事を先に確かめた。
+
+### 13.1 `GetTickCount64` を読む所と、時計を差し込む所
+
+- **読む所は本番 2・テスト 0**（`windows::Win32::System::SystemInformation::GetTickCount64()` の呼び出し）:
+  - `areka-ghost/src/ticker.rs:80`（`real_clock`）。刻み役の既定の時計で、`TickerConfig::default`（:65-73・50 ms と 1000 ms の 2 系統）と `LoopTickerConfig::default`（:279-286・16 ms）の両方が使う。
+  - `areka-runtime/src/lib.rs:653`（`tick_count_ms`）。:537 で `SerikoClock` にし、seriko の起動（:538 `spawn_seriko_clocked`）と SERIKO のループの刻み（:631 → `loop_ticker_config` :657-663）の両方へ渡す。
+- 説明の文だけの物は 12 行（`ticker.rs:60`・`:66`・`:76`・`:78`・`:266`・`:274`・`:280`、`areka-runtime/src/lib.rs:535`・`:652`、`areka-kanade/src/msg.rs:29`、`areka-sakura/src/contract.rs:24`、`areka-session/src/boot_config.rs:539`）。`:78` と `:652` は呼び出しに付く `SAFETY:` で、呼び出しと一緒に消える。
+- ほかの時計の関数（`GetTickCount`・`timeGetTime`・`QueryInterruptTime*`・`QueryUnbiased*`）を読む所は `crates` に 0。機能 `Win32_System_SystemInformation`（根の `Cargo.toml:69`）は `areka-session/src/log_history.rs:23` の `GetLocalTime`（暦の時刻・範囲の外）も使うので、残る。
+- **時計を差し込む所**:
+  - ghost の刻み: `TickerConfig.clock: Box<dyn Fn() -> MonotonicMs + Send>`（`ticker.rs:62`）・`LoopTickerConfig.clock`（:276）。本番は既定のまま（`areka-session/src/boot_config.rs:558`・`ghost_session.rs:379` の `TickerMode::Real(Default::default())`。受けるのは `areka-ghost/src/runtime.rs:96`・`:723`）。
+  - seriko: `SerikoClock = Arc<dyn Fn() -> u64 + Send + Sync>`（`areka-seriko/src/actor.rs:328`・ミリ秒）。持つのは `SerikoSink.clock`（:140）と `LoopRuntime`（`looper.rs:139`・`with_clock` :357・`event_ms` :364）。読むのは `actor.rs:189`・`:530`・`:727`・`:770`・`looper.rs:379`。
+  - kanade: 時計を持たない。時刻は刻み（`KanadeMsg::Tick { now }`・`ChoiceTimeoutDue { now }`＝`msg.rs:203`・`:206`）と選択待ちの知らせ（`ChoiceWaiting.display_end`・:239）で外から届く。
+  - 選択待ちの起こし: `TickerMsg::WakeKanadeAt(MonotonicMs)`（`ticker.rs:29`）・`KanadeConfig.choice_wake: Option<Sender<MonotonicMs>>`（`msg.rs:576`）・中継 `areka-ghost/src/runtime.rs:620`・`:731`。
+- brief の `emo2_boot/mod.rs`・`emo2_boot/talk_clock.rs` の道は古い。今の結線は `areka-runtime/src/lib.rs`（:465 文字の層の時計・:537 seriko の時計）と `areka-runtime/src/talk_clock.rs`。
+- **テストの偽の時計**（どれも型が替わる）: `areka-ghost/src/ticker_tests.rs`（`TickerConfig {` 4・`LoopTickerConfig {` 5）・`areka-ghost/src/runtime_choice_wake_tests.rs:68`・`areka/src/thread_roles_tests.rs:81`・`:90`・`areka-runtime/src/seriko_clock_tests.rs:15`・`film_playback_e2e_tests.rs:409`（`AtomicU64` の時計）・`areka-seriko/src/actor_clock_tests.rs:229`・`actor_stage_tests.rs:205`・`areka-session/src/runtime_boot_tests.rs:253-260`・`ghost_switch_test_support.rs:211`・`:595`（`talk_clock_ms`）。実の時計で回すテスト（`TickerConfig::default()`）は `areka-ghost/src/runtime_tests.rs:624`・`:704`・`tests/real_pasta_online.rs:163`・`tests/ghost/snapshot_capture_test.rs:185`・`tests/ghost/real_pasta_test.rs:123`。
+
+`MonotonicMs` を書くファイル（crate ごと）:
+
+| crate | 本番のファイル | テストのファイル | 行 |
+|---|---|---|---|
+| `areka-kanade` | 10（`actor.rs`・`lib.rs`・`msg.rs`・`schedule/{change,choice,close,events,mod,steady,types}.rs`） | 45 | 286 |
+| `areka-ghost` | 3（`ticker.rs` 15・`dispatcher.rs` 5・`runtime.rs` 2） | 13 | 117 |
+| `areka-runtime` | 1（`lib.rs` 3） | 0 | 3 |
+| `areka-session` | 0 | 2 | 4 |
+| 本体 `areka` | 0 | 3（`runtime_tests/spine.rs`・`spine_conformance_support.rs`・`spine_conformance_support_tests.rs`） | 8 |
+| 計 | 14 | 63 | 418 |
+
+### 13.2 kanade の `MonotonicMs`
+
+- 定義: `msg.rs:32` の `pub struct MonotonicMs(pub u64)`（`Ord` まで導出）。説明 :29-30 は「GetTickCount64 相当」。`lib.rs:56` で再公開。
+- 運ぶ口: `KanadeMsg::Tick`・`ChoiceTimeoutDue`・`ChoiceWaiting { display_end: MonotonicMs, timeout_directive_secs: Option<f64> }`（`msg.rs:203`・`:206`・`:233-243`）・`KanadeConfig.choice_wake`（:576）。中の口: `Input::Tick`・`ChoiceWaiting`・`ChoiceTimeoutDue`（`schedule/types.rs:21`・`:62`・`:69`）・相の `deadline: Option<MonotonicMs>`（:147・:154・:161）・選択の帳簿の `deadline`（:192）・`State.last_now`（:219）・`Action::ArmChoiceWake`（:403）。関数は `steady.rs:170`・`:389`・`:533`・`:662`・`:684`・`events.rs:468`・`change.rs:306`・`:438`・`close.rs:118`・`:161-195`・`actor.rs:481`。
+- 足し引き:
+  - 選択待ちの期限 `choice.rs:100-114`（`display_end + round(秒 × 1000)`・`saturating_add`・NaN と 0 以下は無期限・指令が無ければ既定）。期限の比べは `steady.rs:540`（`now < deadline`）。
+  - 終わりの握手と送り出しの台詞の再生完了待ちの上限: `close.rs:169-170`（`now + close_talk_deadline_ms`・`saturating_add`）・`:185-195`（超過の量 `saturating_sub`）。`change.rs:254`・`:306-330` が同じ関数を使う。
+  - 長さの設定 `KanadeConfig.close_talk_deadline_ms`・`choice_timeout_default_ms`（`msg.rs:551`・`:563`・既定はどちらも 30_000）。作者が書く値ではなく、ベースウェアの定数。
+- **`OnSecondChange`**: `events.rs:468-470` が Reference0 を `now.0 / MS_PER_HOUR`（:93 `3_600_000`）の 10 進の文字列にして SHIORI へ送る＝時（hour）の整数。1000 ms の刻みごとに `steady.rs:709` から出る。ukadoc は Reference0 を「OSの連続起動時間（hour）」とだけ書く（`ukadoc:list/shiori-event/time/OnSecondChange`）。時計を替えると、割る数は 100ns で 36,000,000,000 になり、値は眠りの間を数えない（要件 17 の 7）。SSP が何を数えているかは測っていない。
+- ログの欄はミリ秒の整数: `now_ms`・`deadline_ms`・`display_end_ms`・`overshoot_ms`（`steady.rs:205-206`・`:553-554`・`:572-573`・`:669`・`mod.rs:294`・`close.rs:133`・`:141`・`change.rs:320`・`:325`）。
+- テスト: `MonotonicMs(` の字面を書くテストのファイル 39・行 148（`steady_choice_timeout_tests.rs` 16・`schedule_tests.rs` 16・`schedule_log_firing_tests.rs` 14・`user_break_tests.rs` 9・`change_tests.rs` 8・`tests/kanade/steady_test.rs` 8 ほか）と、本番のファイルの中のテスト（`close.rs` 19 行・`choice.rs` 約 30 行）。`tests/kanade/choice_test_test_support.rs:73` の `MonotonicMs(1_000)` は、brief の申し送りのとおり定数の名へ替える。
+- 840 行以上: `schedule/events.rs` 941・`schedule/steady.rs` 926・`actor.rs` 873。どれも時刻の行は 2〜6 で、替える量は小さい。
+
+### 13.3 areka-ghost の刻み・中継・受け口
+
+- `ticker.rs`（344 行）: 周期は `base_interval` 50 ms・`kanade_interval` 1000 ms（:69-70）・ループ 16 ms（:283）。刻みは `Tick { now: MonotonicMs }`（:51-52）で、時計の読みそのもの（ミリ秒）を運ぶ。境は「時計の 0 からの周期の倍数」（`BoundarySchedule`・:95-160・`next_grid_multiple_strictly_after` :170-172）で、別の刻み役どうしも同じ格子に乗る。待ちは `recv_timeout`（残りは `Duration::from_millis`・:44・:126）。遅れて境を 2 つ以上またいだら 1 回にまとめ、`info!` を出す。kanade へは `KanadeMsg::Tick { now }`（:228）と起こし `ChoiceTimeoutDue { now }`（:237-239）。
+- `dispatcher.rs`（478 行）: `DispatcherMsg::Tick { now }`（:37）・`base_now: Option<MonotonicMs>`（:101）。刻みの中継は :366-381（最初の刻みを `base_now` にし、`(now − base) / 1000.0` を `SakuraMsg::Tick(f64)` で送る）。逆の写しは :281-285（`base + round(秒 × 1000)`）。`base_now` が無い時の `warn!`（:268-276）。刻みを絶対の時刻にすると、`base_now` は使い道が無くなり、この 3 か所ごと消える。
+- `sink.rs`（264 行）: **起点を押さない**（brief の「`sink.rs` は `0.0` を押す」は古い）。:72 はログの欄 `at = cue.at` だけ。テストの `sample_cue(at: f64)`（:168-175）が `duration: 0.0` で組む。
+- 起点を押す本番は `areka-sakura/src/drive.rs:317`（`with_absolute_start_time(t)`・`t` は中継された相対の秒）の 1 か所で、`CuePlayer::from_sheet` の本番の呼び手もここ（:318）だけ。テストでは 10 ファイル・11 か所（`areka/src/session_tests/mod.rs:166` ほか）が起点を押さずに再生機を作る。
+- テスト: `MonotonicMs(`・`Tick { now`・`DispatcherMsg::Tick` を書くテストのファイル 13・行 123（`ticker_tests.rs` 36・`dispatcher_choice_tests.rs` 20・`dispatcher_slot_tests.rs` 15 ほか）。840 行以上は `dispatcher_choice_tests.rs` 908・`tests/ghost/inproc_e2e_test.rs` 964（2.7 に在る）。
+
+### 13.4 areka-seriko の時計がどこまで届くか
+
+- 時計と刻み: `SerikoClock`（`actor.rs:328`・ミリ秒の `u64`）・`SerikoMsg::Tick { now_ms: u64 }`（:75）・`SerikoSink::send_tick(now_ms)`（:175・公開）・`LoopRuntime::on_tick(now_ms)`（`looper.rs:437`）。
+- **seriko のアニメの時刻は、全部この時計の上にある**。本番のファイルで `now_ms`・`*_ms` を書くのは 17（`looper.rs` 36 行・`timeline.rs` 35・`looper_trigger.rs` 34・`parts.rs` 30・`parts_trigger.rs` 23・`table.rs` 21・`actor.rs` 20・`trigger.rs` 20・`parts_calls.rs` 17・`calls.rs` 16・`parts_refresh.rs` 15・`looper_calls.rs` 14・`looper_refresh.rs` 12・`talk.rs` 10・`settle.rs` 8・`table_calls.rs` 4・`actor_bind.rs` 2）。`now_ms: u64` か `*_ms: u64` を引数に取る関数は 21。中身:
+  - コマの進み（`timeline.rs:106` `frame_at(.., elapsed_ms)`・`:122` `lap_of`・`:130`）
+  - 毎秒の抽選の境（`LotteryBoundary`・`timeline.rs:48-82`・1000 ms の格子。ghost の刻み役と同じ「時計の 0 からの倍数」）
+  - `periodic`（`table.rs:222-226`）と `always` の 1 周（:336-346）
+  - 口パクの引き金（`trigger.rs:60-95` の `at_ms`・`wall_ms`）
+  - 着せ替えと部品の始まりの時刻（`looper.rs:110` `started_at_ms`・`parts.rs:68`）
+  - 窓の知らせに載せる時刻（`actor.rs:189`・`:530`・`:727`・`:770`）
+- **作者が書く値（読む縁で 1 回だけ長さへ変える所）**: pattern定義のコマの待ち `LoopFrame.wait_ms: u32`（`table.rs:115`・1 ms 単位）・`periodic,秒` の秒（`table.rs:223` が `secs × 1000`）・`always` の 1 周（`table.rs:336` が `wait_ms` の和）。3 つとも表を組む所（`from_world_and_films`・`table.rs:196` から）に集まっている。毎秒の抽選の 1000 ms と刻みの 16 ms はベースウェアの定数。
+- 台本の時刻との継ぎ目（`talk.rs`・123 行）: `TalkEpoch.epoch_ms: Option<f64>`（:23）・`observe(at_s, now_ms)`（:32-38・起点＝今 − 合図の秒 × 1000 の最大）・`talk_time`（:41-44・負は 0）・`wall_ms`（:49-52・最も近い 1 ms へ丸める）。`TalkFeed` は台本の秒の `f64` で持つ（:55-63・`push_chunk` :76-90）。読む所は `looper.rs:382`（`observe`）・`looper_trigger.rs:155-180`・`:217-223`、起点を捨てる所は `looper.rs:849`。同じ物差しになれば、`wall_ms` の 1 ms の丸めは要らなくなる。
+- テスト: `now_ms`・`send_tick(`・`on_tick(`・`Tick { now_ms`・`SerikoClock` を書くテストのファイル 26・行 373（`looper_trigger_tests.rs` 78・`looper_tests.rs` 70・`looper_calls_tests.rs` 52・`parts_calls_tests.rs` 42・`looper_always_tests.rs` 27 ほか）。組み立て `actor_test_support.rs:94`・`:109`・`:114`（`send(ms, ..)`・`tick(ms)`・`hear(ms, cue)`）。`looper_talk_tests.rs` は `.tick(`・`hear(` を 128 回呼ぶ（2.4 の「36 行＋組み立ての呼び出し 43」より多い）。
+- 840 行以上: `looper_tests.rs` 975・`parts_tests.rs` 975・`parts_trigger_tests.rs` 906・`looper.rs` 887・`looper_talk_tests.rs` 861。上の 2 本は上限まで 25 行しか無い。ミリ秒の整数から時刻と長さを 1 語で作る組み立てを先に置かないと、整形の折り返しで越える。
+
+### 13.5 起点を見積もる読み手と、押された起点を読むのに要る物
+
+- 見積もる所は 2 つ: `areka-runtime/src/talk_clock.rs:34-53`（`observe_cue`・最大）と `:56-68`（`talk_time`・負は 0）、seriko の `talk.rs:32-52`。見積もりを読む本番は `areka-runtime/src/talk_lifecycle.rs:248`（`now_talk_time`＝バルーンの寿命の時計の元）・`frame/scale_text.rs:201`（文字の層）・seriko の `looper_trigger.rs:163`・`:219`。
+- 押された起点を読むのに dola から要る物: ⑴ 合図の絶対の発火時刻（要件 13）。読み手は「起点＝絶対の発火時刻 − `at`」を得る（要件 13 の 6 で、刻みが遅れても揺れない）。⑵ 置き直しの知らせ（要件 12 の 1）。⑶ 合図の無い間（最初の合図の前・合図と合図の間）に起点を持ち続ける事。最初の起点を知らせで配るか、最初の合図から読むかは設計（6 章の 4）。
+- 今の見積もりを固定するテスト: `talk_clock.rs` の `new_talk_rebases_epoch_forward`（:237）・`intra_talk_jitter_does_not_lower_epoch`（:286）・`talk_time_clamps_negative_to_zero`（:321）・`clocked_sink_forwards_cue_unchanged_and_observes_at`（:339）・`clocked_sink_forwards_emit_with_after_observing_time`（:449）、seriko の `talk_tests.rs` の `epoch_is_the_largest_now_minus_cue_time`（:18）・`wall_time_rounds_to_the_nearest_millisecond`（:43）。時計を差し込む `controllable_clock`・`set_now`（`talk_clock.rs:129`・`:140`）を使うテストは 10 ファイル・45 行。2.6 は「起点を置き直さない間は今の期待のまま残る」と書いたが、要件 12 の 9 で見積もりそのものが無くなるので、「最大を取る」「揺れで起点が戻らない」の 2 本と seriko の 2 本は、押された起点を読むテストへ置き換え、変える前後の期待として記録する（要件 9 の 6）。
+
+### 13.6 眠りで振る舞いが変わる所
+
+今の時計の上で眠りの間も進む物（一般の知識では `GetTickCount64` は眠りの間も数える。確かめていない）は、替えた後は眠りの間に進まない。
+
+| 所 | 今（復帰した瞬間） | 替えた後 |
+|---|---|---|
+| 選択待ちの時間切れ（`choice.rs:100-114`・既定 30 秒・起こし `WakeKanadeAt`） | 眠った分が経ったとして切れうる | 眠る前の残りから続く |
+| 終わりの握手・送り出しの台詞の再生完了待ちの上限（`close.rs:169-170`・`change.rs:254`・30 秒） | 同上 | 同上 |
+| `OnSecondChange` の Reference0（`events.rs:470`） | 眠った分が入る | 入らない |
+| 刻み（50・1000・16 ms・`ticker.rs`） | 境を飛ばしてまとめた 1 回と `info!` が出る | 出ない |
+| seriko のコマの進み・`periodic`・`always`・毎秒の抽選の境 | 眠った分だけ進む | 眠る前から続く |
+| 台本の再生（字・口パク・待ち。刻みの相対の秒） | 眠った分だけ進む | 進まない |
+| 文字の層の時計・バルーンの寿命・`FrameTime` | QPC（眠りの間を数えるかは確かめていない・11 章） | 数えない |
+
+範囲の外で、眠りの間も数え続ける物が残る: `std::time::Instant` で測る締め切り（例 `areka-kanade/src/shiori/probe.rs:238-239` の SHIORI の応答の予算・wintf の `Instant::now` 94 行＝2.4）。`instant-to-interrupt-ticks` が着地するまで、2 つの数え方が並ぶ。
+
+### 13.7 `talk-anchor-interrupt-ticks` を名指す、ほかの spec の brief
+
+直さない（棚卸の持ち物）。行番号は測った時点の物。
+
+- `instant-to-interrupt-ticks/brief.md:46`・`:61`・`:87`
+- `seriko-talk-clock-fidelity/brief.md:84`・`:86`・`:89`・`:92`・`:94`・`:96`
+- `talk-script-metadata/brief.md:42`・`:71`・`:77`・`:91`
+- `parallel-visual-script/brief.md:67`・`:73`
+- `talk-fast-forward/brief.md:95`
+- `talk-thread-count-growth/brief.md:59`
+- `window-timed-directives/brief.md:67`
+- `sound-canon-tags/brief.md:61`
+- `shell-hover-animation/brief.md:65`
+- brief の外: `.kiro/steering/roadmap.md:134`・`:164`・`:386`・`:1048`・`:1174`、暫定の設計とその確かめ（`element-animation-easing`・`parallel-visual-script`・`talk-fast-forward`・`sakura-time-directives`・`sound-canon-tags`・`shell-multi-compose`）、`doc/ideas/novel-redesign-2026-11-20/` の 6 ファイル。
+
+### 13.8 依存の辺
+
+- `dola` はワークスペースの crate を 1 つも引かない（`serde`・`thiserror`・`interpolation`・`rand`・機能 `toml`・Windows だけ `windows`）。だから、だれが `dola` を引いても輪はできない。
+- 型が要る crate:
+
+| crate | `dola` を引くか | 要る物 | crates.io へ出すか |
+|---|---|---|---|
+| `areka-kanade` | 引かない（`areka-actor`・`areka-talk`・`shiori-host32-host`・`tracing`・`thiserror`） | 時刻の型・長さの型・符号つきの差（時計は要らない） | 出さない（`publish = false`） |
+| `areka-talk` | 依存 0（manifest の説明が「std-only, zero dependencies」） | `ChoiceWaiting` の 2 欄の型 | 出さない |
+| `areka-ghost` | 本番は引かない（dev だけ） | 型と時計（刻み役の既定の時計） | 出さない |
+| `areka-seriko` | 引く | 型と時計の型 | 出さない |
+
+- 型と時計を `dola` に置くと: `areka-kanade`・`areka-talk`・`areka-ghost`（本番）に `dola` の辺が 1 本ずつ増える。kanade と `areka-talk` は storyboard の層ごと組む事になり、`areka-talk` の「依存 0」の説明は改める。crates.io へ出す物（`tools/crates-io.ps1:68` の `dola`・`wintf`・`wintf-winmsg-executor`）は増えない。
+- `dola` の下の小さい crate に置くと: `dola`・kanade・`areka-talk`・`areka-ghost`・seriko がそれを引く。`dola` と `wintf` が引くので、crates.io へ出す物が 1 つ増える（外の crate を足す事にはならない＝要件 15 の 6）。
+- `areka-talk` の欄だけ素の整数で持つ形は、要件 4 の 6・17 の 3 の「型のまま」と当たる。
+
+### 13.9 要件の側の課題（4 章の続き）
+
+19. **kanade は時計を読まない（要件 17 の 1）**。kanade の時刻は刻みと選択待ちの知らせで届く（13.1）。「ghost の刻みと seriko の時計は dola の時計から読み、kanade は刻みが運ぶ dola の時計の値で動く」と書くのが正しい。
+20. **ミリ秒の整数で外へ出す所（要件 17 の 3・7 の 5・7 の 8）**。kanade・ghost・seriko のログの欄はミリ秒の整数（13.2）で、要件 7 の 8 の括弧「秒の小数」に当たらない。`OnSecondChange` の時（hour）と、OS の待ち（`recv_timeout` へ渡す `Duration`）へ渡す長さも、出す縁で換算が要る。要件 17 の 3 の除く物に「表示・ログ・SHIORI へ出す縁と、OS の待ちへ渡す縁」を足し、7 の 8 を「欄の名前と形（秒の小数・ミリ秒の整数）を変えない」に直す。
+21. **起点に押す値が 2 通りに読める（要件 17 の 8・14 の 3・12 の 9）**。17 の 8 は「配る時の dola の時計の値」、14 の 3 は「最初の刻みの絶対の時刻」。刻みの値なら、テストが刻みを注入して決定論で回る（要件 7 の 7）。17 の 8 を「最初の刻みが運ぶ dola の時計の値」にそろえる。あわせて、本番の配り手は `drive.rs:317` の 1 か所だけで、テストは起点を押さない台本を今どおり作る（要件 6 の 4・13.3）ので、「どの配り手でも」は「本番の配り手」に限る。12 の 9 の「再生機が押した起点」も、押すのはトークのスレッドである。
+22. **起点より前の「今」（要件 12 の 10）**。フレームの頭で読んだ時刻は、別のスレッドの刻みで押された起点より前になりうる。今は 0 に止めている（`talk_clock.rs:67`・seriko `talk.rs:42`）。要件 12 の 10 に「起点より前は 0」を足す。
+23. **刻みを絶対にして要らなくなる本番の分かれ道（要件 7 の 9・14 の 6）**。dispatcher の `base_now`（:101）・逆の写しの丸め（:281-285）・`base_now` が無い時の `warn!`（:268-276）が消える。要件 7 の 9 は「表せなくなった入力のための枝」だけを言うので、「絶対の刻みで要らなくなった枝」も取り除いて記録する物に足す。
+24. **眠りの決まりの及ぶ所と確かめ方（要件 17 の 6・2 の 5）**。17 の 6 の「締め切りと台本の再生」は、この spec が替える時計の上の物だけで、`Instant` で測る締め切り（範囲の外）は眠りの間も数え続ける（13.6）。その断りと、確かめ方（偽の時計を止めている間に締め切りも台本も進まない決定論のテスト＋時計の関数の決まりの静的な証跡。眠らせる実機の確かめは要件にしない）を書く。
+
+どれも答えが 1 つに決まるので、自明な修正として要件へ入れられる。開発者の答えで範囲が変わる物は無い（型の置き場は設計の決め。13.8 の「下の小さい crate」を設計が選ぶ時だけ、crates.io へ出す物が増えるので開発者に確かめる）。
+
+### 13.10 設計で決める事（足す分）
+
+1. 型の置き場（6 章の 1 と同じ決め）: `dola` に置いて kanade・`areka-talk`・`areka-ghost` に辺を足すか、下の小さい crate か（13.8）。
+2. 偽の時計の形: `TickerConfig.clock`・`LoopTickerConfig.clock`・`SerikoClock` を「時刻を返す関数」にする。テストの数字は、ミリ秒の整数から時刻と長さを作る 1 語の組み立てで書く（1,000 行に近いファイルの手当て）。
+3. 長さを OS の待ちの `std::time::Duration` へ写す 1 か所と、その丸めの向き（切り上げなら、早く起きて空回りしない）。
+4. 格子の 0: 周期の倍数を時計の 0 から数える作り（刻み役・seriko の毎秒の抽選）を、そのまま新しい物差しへ移す（50・1000・16 ms は 100ns でちょうど）。
+5. `OnSecondChange` の Reference0 の割る数の置き場と、時の値を固定するテスト。
+6. kanade の設定の長さ（`close_talk_deadline_ms`・`choice_timeout_default_ms`）を長さの型にする形と、名前。
+7. seriko の作者の値の縁（`table.rs` の 3 か所）と、`TalkEpoch`・`TalkFeed` を時刻と長さの型へ替える形（要件 7 の 10 の同じ式・`wall_ms` の丸めを無くす）。
+8. 時計の出どころを替える時期（13.11）。
+
+### 13.11 段取りの改め
+
+8.4 の案 2（継ぎ無し・前半と後半）のまま、次のとおり足す。
+
+- **前半（型の付け替え）**: kanade・ghost の刻み・seriko の時刻を、新しい型へ替える。本番の 2 か所の時計（`ticker.rs:80`・`areka-runtime/src/lib.rs:653`）は、型と一緒に dola の時計へ替える。`GetTickCount64` のミリ秒を 10,000 倍して型に載せる継ぎは置かない（要件 15 の 5）。決定論のテストは偽の時計で回るので、時計の出どころが替わっても結果は変わらない。替えた事で変わる振る舞い（眠りの扱い・`OnSecondChange` の値・分解能）は、要件 9 の 6 の「変えた後の期待」に名指しで記録する。dispatcher が送る値は、前半では今の意味（台詞の最初の刻みからの隔たり）のまま、型だけ替える。
+- **後半（振る舞い）**: 刻みを絶対の時刻にする（dispatcher の `base_now` を消す・トークのスレッドが最初の刻みを起点に押す・`ChoiceWaiting` の表示の終わりを換算せずに渡す）、文字の層と seriko とバルーンの寿命の時計が見積もりをやめて押された起点を読む、眠りの決まりと `OnSecondChange` の確かめ。
+- **並べられる物**: kanade は `areka-talk` と dola の後で、`areka-sakura` と並べられる。`areka-ghost` は kanade と `areka-sakura` の後で、seriko・`areka-emo-text` と並べられる。seriko の本番とテストは、表を組む所（`table.rs` ほか）・ループと部品の芯（`looper*`・`parts*`・`timeline.rs`・`trigger.rs`）・テストの 2 組に割れる。
+
+| 段 | 中身 | 並べられる数 | タスク |
+|---|---|---|---|
+| 0 | dola の土台（型・変える口・倍率の 1 か所・時計・`Cargo.toml`）と、Windows でない target の検査の段（要件 15 の 8） | 2 | 4 |
+| 1 | dola の付け替え（8.5 のまま） | 2〜5 | 10〜11 |
+| 2 | `wintf`（3）・`areka-talk`＋`areka-sakura`（3）・`areka-kanade`（本番と組み立て 1・`schedule` のテスト 1・`tests/kanade` 1） | 3〜7 | 9 |
+| 3 | `areka-seriko`（本番の時計と表の縁 1・芯 1・テスト 2）・`areka-emo-text`（4）・`areka-ghost`（刻み役と時計 1・dispatcher の家族 1・`prop_*`／`sink.rs`／`tests/ghost/` 1） | 3〜9 | 11 |
+| 4 | `areka-runtime`（土台と結線 1・`balloon_visibility*` 3・変更の受け口 1・`frame_*` 1・seriko の時計のテスト 0〜1） | 1 → 5 | 6〜7 |
+| 5 | `areka-input`・`areka-session`（偽の刻みの時計を含む）・本体（`thread_roles_tests.rs`・`runtime_tests/spine*` と先進坑を含む） | 1 → 3 | 5 |
+| 6 | 前半の締め（残った `f64` の秒と `GetTickCount64` の検索・外したテストの記録・全体テスト 1 回） | 1 | 1 |
+| 7 | 後半（止めて戻す 1・起点の置き直し 2・絶対の発火時刻 1・知らせと押された起点を読む側〔`TalkClock`・seriko・バルーンの寿命〕4・刻みを絶対にする〔dispatcher・`drive.rs`・`ChoiceWaiting`〕2・眠りと `OnSecondChange` 1） | 2〜3 | 11 |
+| 8 | 文書（8.5 に、ghost・kanade・seriko の時計の説明を足す）と締めの検査 | 2 | 3 |
+| 計 | | | **60〜62**（決め 4 を ⑴ にすると +3〜4） |
+
+8.5 の 50〜53 から、kanade（+2）・ghost の刻み役（+1）・seriko の時計（+2）・結線とテストの時計（+1）・後半の読む側と眠り（+2）・検査の段（+1）・決め 5 が ⑴ に決まった分（−2 の見込みが消えた）で増えた。規模は XL のまま、リスクは高のまま（10 章）で、新しく加わる危うさは ⑹ 1,000 行に近い seriko の 5 本（うち 2 本は残り 25 行）と kanade の 3 本 ⑺ 眠りの振る舞いの変化を、決定論のテストでは偽の時計の上でしか示せない事。
