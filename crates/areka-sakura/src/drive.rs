@@ -149,7 +149,7 @@ enum TalkPhase {
         player: CuePlayer,
         /// 終端理由（自然終端で返す reason）。
         end: TalkEndReason,
-        /// 直前に処理した `Tick` の時刻（単調・冪等ガード用）。
+        /// 受けた `Tick` の時刻の最大値（区切りが解けたときに同じ時刻で `tick` し直すのに使う）。
         last_tick: TimePoint,
     },
 }
@@ -272,20 +272,18 @@ where
         ControlFlow::Continue(())
     }
 
-    /// `Tick(t)` 受領: 単調ガードの後、cue 再生ランタイムへ委譲する。
+    /// `Tick(t)` 受領: cue 再生ランタイムへ委譲する。
     ///
     /// - **初回 `Tick`（`Armed`）**: `t` を絶対開始時刻としてアンカー刻印し、刻印済み台本から
     ///   [`CuePlayer`] を構築、両演者 sink を broadcast 登録して `player.tick(t)`。以降の cue
     ///   絶対発火時刻は `t + 相対 start_time`。
-    /// - **以降の `Tick`（`Driving`）**: 単調ガード後 `player.tick(t)`（broadcast は CuePlayer 内）。
+    /// - **以降の `Tick`（`Driving`）**: `player.tick(t)`（broadcast は CuePlayer 内）。
     ///
     /// いずれも [`CuePlayer::is_completed`]（占有 horizon gated）が真なら `TalkDone{end}` を
     /// 送出し `Break`（自然終端・entry 枯渇でなく horizon 到達で完了）。
     ///
-    /// # ガード（受信ループは殺さない）
-    ///
-    /// - **逆行/同値**（`Driving` の `last_tick` に対し `t <= last_tick`）: `tracing::debug!` の
-    ///   no-op で `Continue`。初回 `Tick`（`Armed`）は比較対象が無く必ず通過する。
+    /// 受けた `Tick` は同値・逆行も含めすべて再生機へ渡す（冪等は再生機の責務）。`last_tick` は
+    /// 受けた時刻の最大値を保つ。
     ///
     /// 状態未確定（`Idle`＝`Start` 未受領・投函経路上は非到達の防御枝）なら no-op で `Continue`。
     fn on_tick(&mut self, t: TimePoint) -> ControlFlow<()> {
@@ -342,23 +340,8 @@ where
                 end,
                 last_tick,
             } => {
-                // 単調ガード（逆行/同値は no-op・冪等）。phase を書き戻して Continue。
-                if t <= last_tick {
-                    tracing::debug!(
-                        prev = %last_tick,
-                        t = %t,
-                        "non-monotonic Tick ignored (backward or equal)"
-                    );
-                    self.phase = TalkPhase::Driving {
-                        talk_id,
-                        player,
-                        end,
-                        last_tick,
-                    };
-                    return ControlFlow::Continue(());
-                }
                 player.tick(t);
-                self.settle_after_tick(talk_id, player, end, t)
+                self.settle_after_tick(talk_id, player, end, t.max(last_tick))
             }
         }
     }

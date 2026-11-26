@@ -2,7 +2,7 @@ use super::test_support::*;
 use super::*;
 use crate::contract::{CueCommand, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
-use dola::time::testing::{at_ms, ms};
+use dola::time::testing::{at_ms, delta_ms, ms};
 use dola::{TimePoint, TimeSpan};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -426,6 +426,35 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
             CueCommand::Text("world".into()),
         ],
         "dupe/逆行 Tick でも二重発火しない（各 cue 1 回）"
+    );
+}
+
+/// 同じ時刻の `Tick` も再生機へ渡る（起点を前へずらした後の同じ時刻の `tick` で、来た項目が配られる）。
+#[test]
+fn same_time_tick_reaches_player_after_origin_shift() {
+    let sink = RecordingSink::new();
+    let records = sink.records();
+    let (mut driver, _rx) = driver(one_sink(sink), None);
+    let start = StartTalk::new(TalkId(1), r"\s[10]hello\_w[500]world\e".to_string());
+    let world = CueCommand::Text("world".into());
+    let world_count = |records: &Arc<Mutex<Vec<TalkCue>>>| {
+        commands(records).iter().filter(|c| **c == world).count()
+    };
+
+    assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
+    assert!(driver.handle(SakuraMsg::Tick(at_ms(0))).is_continue());
+    assert_eq!(world_count(&records), 0, "world(at=0.75) はまだ来ていない");
+
+    let TalkPhase::Driving { player, .. } = &mut driver.phase else {
+        panic!("初回 Tick の後は Driving");
+    };
+    player.shift_origin(at_ms(0), delta_ms(-750));
+
+    let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
+    assert_eq!(
+        world_count(&records),
+        1,
+        "同じ時刻の Tick で world が 1 回だけ配られる"
     );
 }
 

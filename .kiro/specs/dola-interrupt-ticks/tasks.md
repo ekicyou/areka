@@ -588,7 +588,7 @@
   - _Dispatch: standard — 2 つの crate をまたぐ、刻みの値の意味の付け替え_
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 17.8_
 
-- [ ] 9.2 トークのスレッドの同じ時刻の守りを取り除く
+- [x] 9.2 トークのスレッドの同じ時刻の守りを取り除く
   - 受けた刻みを全部再生機へ渡し、守りの分かれ道と `debug!` を消す（記録に書く事として報告に挙げる）。最後に受けた刻みの時刻は、受けた時刻の最大で持つ
   - トークのスレッドへ同じ時刻と前の時刻の刻みを送っても何も 2 度届かない（今の期待のまま）事と、同じ時刻の刻みが再生機まで渡る（再生機の刻みが同じ時刻で 2 度呼ばれる）事を確かめ、`cargo test -p areka-sakura` が緑である
   - _Depends: 8.2, 9.1_
@@ -824,3 +824,4 @@
 - 8.2: `CuePlayer` に仮の欄 `last_tick: TimePoint` があり `settle_completion_after_resolve` が使う。8.3 はこの欄と `settle_completion_after_resolve` を必ず消す（解く口は時刻に依らない）。8.3 に残る物: `step`／`StepOutcome`、再生機の `reanchor`／`shift_origin`／`origin`、`CueSink::origin_set`、登録の時の最初の起点の知らせ、完了の後の置き直しの無視。`crates/dola/src/runtime/facade.rs:285,293` の「`TimedSchedule::tick()`／`ready()` と対称」と `tests/cue/runtime_test_*` の「冪等再 tick」は古い言い方。
 - 8.3: 新しい再生機の結合テスト 4 本の入口は `crates/dola/tests/cue/runtime_test.rs`（`tests/cue.rs` ではない）。「冪等再 tick」の古い言い方が `runtime_test_broadcast_tests.rs:151`・`runtime_test_choice_delivery_tests.rs:92,112` に残る（12.2）。
 - 9.1: `base_now` の語が `crates/areka/src/runtime_tests/spine_talk_close_tests.rs` の 84・109・142 行のコメントに残る（12.2 で直す。12.3 の検索の前に）。
+- 9.2: `duplicate_and_backward_tick_do_not_double_fire` の中の注釈「同値 → no-op」「逆行 → no-op」は、守りが止めるのではなく再生機に新しく届く物が無いという意味になった（12.2 で拾う）。
