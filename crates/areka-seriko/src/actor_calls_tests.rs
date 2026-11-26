@@ -4,6 +4,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::counting_rng;
 use crate::test_support::table_of;
+use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
 
 /// 面 0: animation0 は `always`（101→102→103・周期 200）、animation1 は抽選で動き 100 ms 後に animation0 を止める。
@@ -28,19 +29,22 @@ fn same_surface_reshow_restarts_a_stopped_always_at_the_event_time() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    rig.hear(0, emote_cue(0.0, "0", "0"));
-    rig.tick(10);
-    rig.tick(1000); // animation1 が始まる。止めは 1100。
-    assert_eq!(frames(&rig.tick(1100), 0), vec![("0", None)]);
+    rig.hear(at_ms(0), emote_cue(ms(0), "0", "0"));
+    rig.tick(at_ms(10));
+    rig.tick(at_ms(1000)); // animation1 が始まる。止めは 1100。
+    assert_eq!(frames(&rig.tick(at_ms(1100)), 0), vec![("0", None)]);
     assert!(
-        rig.tick(2000).is_empty(),
+        rig.tick(at_ms(2000)).is_empty(),
         "止めた always は刻みで始め直さない"
     );
 
     // 始めの絵は経過 0 の絵と同じなので、合図では何も出ない。
-    assert!(rig.hear(2500, emote_cue(2.5, "0", "0")).is_empty());
+    assert!(
+        rig.hear(at_ms(2500), emote_cue(ms(2500), "0", "0"))
+            .is_empty()
+    );
     // 合図の時刻 2500 から 150 ms＝2 枚目（刻みの時刻で始めたなら経過 0 で何も出ない）。
-    assert_eq!(frames(&rig.tick(2650), 0), vec![("0", Some(102))]);
+    assert_eq!(frames(&rig.tick(at_ms(2650)), 0), vec![("0", Some(102))]);
 }
 
 /// 面 0 の `runonce` が頭で `move` を当てる。
@@ -68,8 +72,8 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    rig.tick(0);
-    let cmds = rig.hear(10, emote_cue(0.0, "0", "0"));
+    rig.tick(at_ms(0));
+    let cmds = rig.hear(at_ms(10), emote_cue(ms(0), "0", "0"));
     assert_eq!(cmds.len(), 2, "{cmds:?}");
     assert!(matches!(
         cmds[0],
@@ -77,8 +81,11 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
     ));
     assert_eq!(cmds[1], shift(2, 4));
     // 2 枚目の絵（120）だけ・同じ値のずれは繰り返さない。
-    assert_eq!(frames(&rig.tick(200), 0), vec![("0", Some(120))]);
-    assert_eq!(rig.hear(300, emote_cue(0.3, "0", "0")), vec![shift(0, 0)]);
+    assert_eq!(frames(&rig.tick(at_ms(200)), 0), vec![("0", Some(120))]);
+    assert_eq!(
+        rig.hear(at_ms(300), emote_cue(ms(300), "0", "0")),
+        vec![shift(0, 0)]
+    );
 }
 
 /// シェルの差し替え（`Rebased`）も面を出す合図: 全スコープのずれを 0 へ戻し、合図の後に (0, 0) を出す。
@@ -99,9 +106,9 @@ fn shell_replace_resets_the_shift_after_the_rebased() {
         crate::looper::tests::cfg(table_of(MOVE), crate::looper::tests::always_fire()),
         out,
     );
-    dola::cue::CueSink::emit(&mut sink, emote_cue(0.0, "0", "0"));
-    sink.send_tick(0);
-    sink.send_tick(1000);
+    dola::cue::CueSink::emit(&mut sink, emote_cue(ms(0), "0", "0"));
+    sink.send_tick(at_ms(0));
+    sink.send_tick(at_ms(1000));
     assert!(sink.send_replace(
         SerikoReplace::Shell {
             epoch: 3,

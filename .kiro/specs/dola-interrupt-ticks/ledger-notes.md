@@ -168,3 +168,9 @@
 - 外したテスト・分かれ道・ログは無い。分けたファイル: `looper_tests.rs`（975 行）→ `looper_tests.rs`・`looper_order_tests.rs`・`looper_progress_tests.rs`・`looper_blink_tests.rs`。`looper_talk_tests.rs`（861 行）→ `looper_talk_tests.rs`・`looper_talk_part_tests.rs`。テストは 173 本のまま。
 - seriko のミリ秒への丸めが無くなった所: `talk_tests.rs::wall_time_rounds_to_the_nearest_millisecond` → `wall_time_keeps_sub_millisecond_precision`（起点 1000 ms − 0.25 ms を `at_ms(1000)` で観測。前は `wall(0)`・`wall(0.5 ms)`・`wall(1 ms)` が 1000・1000・1001 ms、後は 999.75・1000.25・1000.75 ms ちょうど）。
 - 変える前後の期待: `timeline_repeat_tests.rs::lap_of_splits_elapsed_by_period`（`lap_of(u64::MAX, 1)` の `(u64::MAX, 0)` → `lap_of(TimeSpan::MAX, ms(1))` の商と余りを刻みで）。`looper_trigger_tests.rs::glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn`（欄 `now_ms=1234` → `now=` の文字の形）。`calls_tests.rs` の `period_ms: NonZeroU64` → `period: TimeSpan`。ほかはミリ秒の整数を `at_ms`／`ms` へ写した。
+
+## 4.4
+
+- 外したテスト・分かれ道・ログは無い。分けたファイル: `parts_tests.rs`（975 行）→ `parts_tests.rs`・`parts_refresh_tests.rs`、`parts_trigger_tests.rs`（906 行）→ `parts_trigger_tests.rs`・`parts_trigger_talk_tests.rs`。テストは 156 本（lib 全体 545）のまま。
+- 変える前後の期待: `parts_calls_tests::part_refresh_judges_periodic_before_applying_calls`（欄の字面 `started_at_ms=1000` → `started_at=` の文字の形）。ほかは秒・ミリ秒の整数を `ms`／`at_ms` へ写した（振る舞いの変わった期待は無い）。`balloon_hide` の `Duration::from_millis(50).as_secs_f64()` → `at_ms(50)`。
+- seriko の締め: `cargo test -p areka-seriko` は lib 545・結合テスト全部緑。

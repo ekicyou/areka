@@ -5,6 +5,7 @@ use super::*;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
+use dola::time::testing::ms;
 
 /// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ無変形で橋渡しする。
 /// trait 実装＝結線契約（追加の口を設けず単一の出力契約 `CueSink` 経由でのみ届く）。
@@ -13,10 +14,10 @@ fn emit_forwards_cue_to_inbox() {
     let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
     let mut sink = SerikoSink::new(tx);
 
-    let emote = emote_cue(1.5, "0", "smile");
+    let emote = emote_cue(ms(1500), "0", "smile");
     // 担当外の Text cue（broadcast 受信）でも sink は無変形で inbox へ橋渡しする
     // （担当判定は handler の演者側 relevance の領分・sink は選別しない）。`duration` も守る中身。
-    let text = cue(2.5, "1", CueCommand::Text("アヒル".into()), 0.75);
+    let text = cue(ms(2500), "1", CueCommand::Text("アヒル".into()), ms(750));
     CueSink::emit(&mut sink, emote.clone());
     CueSink::emit(&mut sink, text.clone());
 
@@ -60,7 +61,7 @@ fn single_cue_emits_one_display_command() {
         SerikoLoopConfig::disabled(),
         out,
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "2100"));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -162,7 +163,7 @@ fn numeric_boundary_is_unresolved() {
                 &mut states,
                 &mut loop_runtime,
                 &mut out,
-                SerikoMsg::Cue(emote_cue(0.0, "0", bad)),
+                SerikoMsg::Cue(emote_cue(ms(0), "0", bad)),
             )
         });
 
@@ -210,7 +211,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
 
     // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約）。
     let logs = capture_text(|| {
-        CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
+        CueSink::emit(&mut sink, emote_cue(ms(0), "0", "2100"));
     });
 
     assert!(
@@ -253,10 +254,10 @@ fn balloon_numeric_key_emits_showballoon() {
         &mut loop_runtime,
         &mut out,
         SerikoMsg::Cue(cue(
-            0.0,
+            ms(0),
             "0",
             CueCommand::BalloonSurface { key: "2".into() },
-            0.0,
+            ms(0),
         )),
     );
 
@@ -289,10 +290,10 @@ fn balloon_minus_one_emits_hideballoon() {
         &mut loop_runtime,
         &mut out,
         SerikoMsg::Cue(cue(
-            0.0,
+            ms(0),
             "0",
             CueCommand::BalloonSurface { key: "-1".into() },
-            0.0,
+            ms(0),
         )),
     );
 
@@ -329,12 +330,12 @@ fn balloon_name_form_is_debug_only_no_emit() {
             &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(cue(
-                0.0,
+                ms(0),
                 "0",
                 CueCommand::BalloonSurface {
                     key: "バルーン１".into(),
                 },
-                0.0,
+                ms(0),
             )),
         )
     });
@@ -394,10 +395,10 @@ fn balloon_invalid_numeric_errors_once_no_emit() {
                 &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(cue(
-                    0.0,
+                    ms(0),
                     "0",
                     CueCommand::BalloonSurface { key: bad.into() },
-                    0.0,
+                    ms(0),
                 )),
             )
         });
@@ -455,10 +456,10 @@ fn balloon_same_surface_twice_emits_once() {
         &mut loop_runtime,
         &mut out,
         SerikoMsg::Cue(cue(
-            0.0,
+            ms(0),
             "0",
             CueCommand::BalloonSurface { key: "2".into() },
-            0.0,
+            ms(0),
         )),
     );
     let f2 = handle_message(
@@ -468,10 +469,10 @@ fn balloon_same_surface_twice_emits_once() {
         &mut loop_runtime,
         &mut out,
         SerikoMsg::Cue(cue(
-            1.0,
+            ms(1000),
             "0",
             CueCommand::BalloonSurface { key: "2".into() },
-            0.0,
+            ms(0),
         )),
     );
 
@@ -509,7 +510,7 @@ fn shell_and_balloon_recorded_independently() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(emote_cue(0.0, "0", "2100")),
+        SerikoMsg::Cue(emote_cue(ms(0), "0", "2100")),
     );
     let balloon = handle_message(
         &resolver,
@@ -518,10 +519,10 @@ fn shell_and_balloon_recorded_independently() {
         &mut loop_runtime,
         &mut out,
         SerikoMsg::Cue(cue(
-            1.0,
+            ms(1000),
             "0",
             CueCommand::BalloonSurface { key: "2".into() },
-            0.0,
+            ms(0),
         )),
     );
 
@@ -580,10 +581,10 @@ fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
             &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(cue(
-                0.0,
+                ms(0),
                 "0",
                 CueCommand::Text("アヒルやアヒル".into()),
-                0.0,
+                ms(0),
             )),
         )
     });
@@ -638,7 +639,7 @@ fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Cue(cue(0.0, "0", CueCommand::Wait, 0.5)),
+            SerikoMsg::Cue(cue(ms(0), "0", CueCommand::Wait, ms(500))),
         )
     });
 
@@ -686,10 +687,10 @@ fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {
 
     CueSink::emit(
         &mut sink,
-        cue(0.0, "0", CueCommand::Text("担当外テキスト".into()), 0.0),
+        cue(ms(0), "0", CueCommand::Text("担当外テキスト".into()), ms(0)),
     ); // 非 Shell＝skip
-    CueSink::emit(&mut sink, cue(0.5, "0", CueCommand::Wait, 1.0)); // Wait＝skip
-    CueSink::emit(&mut sink, emote_cue(1.5, "0", "2100")); // 担当＝発行
+    CueSink::emit(&mut sink, cue(ms(500), "0", CueCommand::Wait, ms(1000))); // Wait＝skip
+    CueSink::emit(&mut sink, emote_cue(ms(1500), "0", "2100")); // 担当＝発行
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 

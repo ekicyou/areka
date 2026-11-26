@@ -321,7 +321,7 @@
   - _Dispatch: mechanical — 分けて期待の値を写す_
   - _Requirements: 7.7, 9.1, 15.7_
 
-- [ ] 4.4 (P) areka-seriko のテスト（部品・actor・結合テスト）を直す
+- [x] 4.4 (P) areka-seriko のテスト（部品・actor・結合テスト）を直す
   - 触る前に、部品のテスト（975 行）と部品の引き金のテスト（906 行）を主題ごとに分ける
   - 期待の値を時刻の型で書く
   - このタスクのファイルについて、`cargo check -p areka-seriko --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）

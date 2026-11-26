@@ -35,6 +35,8 @@
 //!    ベース復帰）し `warn!` が **1 回だけ**発火（2 度目の走査では dedup で再 warn しない）。かつ `-2` は
 //!    **他アニメを停止させない**——同時再生の別アニメが停止を跨いで生存し続けることを発行列で示す。
 
+use dola::TimePoint;
+use dola::time::testing::{at_ms, ms};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -56,12 +58,12 @@ use common::*;
 /// 1 ステップ（表示 surface を確定する cue、または時間駆動 tick）。順序どおり単一 inbox へ注入する。
 enum Step {
     Cue(TalkCue),
-    Tick(u64),
+    Tick(TimePoint),
 }
 
 /// 表示中 surface を確定する Shell 系 Emote cue（数値 key は数値枝で直接解決＝空 alias 表で足りる）。
 fn emote(scope: &str, key: &str) -> Step {
-    Step::Cue(emote_cue(0.0, scope, key))
+    Step::Cue(emote_cue(ms(0), scope, key))
 }
 
 /// アクターを起動し `steps` を FIFO 順に注入、`Close`→`join` で同期して全発行列を返す（[`run_actor`]・sleep なし）。
@@ -253,11 +255,11 @@ fn kero_negative_tail_restores_base_full_path() {
         empty.clone(),
         cfg(table, rng),
         vec![
-            emote("0", "10"), // 表示 surface 10 を確定（初回 Show・空 pattern）
-            Step::Tick(0),    // 遅延初期化（境界 next=1000）・非跨ぎ・無発行
-            Step::Tick(1000), // 境界跨ぎ＋発火・elapsed0 → 先頭コマ 2106
-            Step::Tick(1040), // elapsed40 → 2110
-            Step::Tick(1120), // elapsed120 → -1 → 停止・ベース復帰（空 pattern）
+            emote("0", "10"),        // 表示 surface 10 を確定（初回 Show・空 pattern）
+            Step::Tick(at_ms(0)),    // 遅延初期化（境界 next=1000）・非跨ぎ・無発行
+            Step::Tick(at_ms(1000)), // 境界跨ぎ＋発火・elapsed0 → 先頭コマ 2106
+            Step::Tick(at_ms(1040)), // elapsed40 → 2110
+            Step::Tick(at_ms(1120)), // elapsed120 → -1 → 停止・ベース復帰（空 pattern）
         ],
     );
 
@@ -302,11 +304,11 @@ fn sakura_residual_tail_keeps_frame_full_path() {
         cfg(table, rng),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 発火 → 1412
-            Step::Tick(1150), // elapsed150 → 1411
-            Step::Tick(1172), // elapsed172 → 末尾 1410 残留（playback 除去）
-            Step::Tick(1500), // 残留は恒久＝無発行
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 発火 → 1412
+            Step::Tick(at_ms(1150)), // elapsed150 → 1411
+            Step::Tick(at_ms(1172)), // elapsed172 → 末尾 1410 残留（playback 除去）
+            Step::Tick(at_ms(1500)), // 残留は恒久＝無発行
         ],
     );
 
@@ -340,9 +342,9 @@ fn playing_anim_not_relotteried_across_boundary_full_path() {
         cfg(table, rng),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 発火（rng 1 回）→ 2106
-            Step::Tick(2000), // 境界跨ぎだが再生中ゆえ再抽選しない・同一コマ継続で無発行
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 発火（rng 1 回）→ 2106
+            Step::Tick(at_ms(2000)), // 境界跨ぎだが再生中ゆえ再抽選しない・同一コマ継続で無発行
         ],
     );
 
@@ -378,9 +380,9 @@ fn bindrandom_off_consumes_no_rng_full_path() {
         cfg(table, rng),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 境界跨ぎでも bind OFF ゆえ should_fire 未呼出
-            Step::Tick(2000),
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 境界跨ぎでも bind OFF ゆえ should_fire 未呼出
+            Step::Tick(at_ms(2000)),
         ],
     );
 
@@ -411,7 +413,11 @@ fn bindrandom_on_fires_full_path() {
     let records = run(
         on.clone(),
         cfg(table, rng),
-        vec![emote("0", "10"), Step::Tick(0), Step::Tick(1000)],
+        vec![
+            emote("0", "10"),
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)),
+        ],
     );
 
     assert_eq!(
@@ -445,10 +451,10 @@ fn unchanged_tick_emits_nothing_full_path() {
         cfg(table, always_fire()),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 発火 → 2106
-            Step::Tick(1050), // 同一コマ・境界非跨ぎ → 無発行
-            Step::Tick(1100), // 同一コマ → 無発行
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 発火 → 2106
+            Step::Tick(at_ms(1050)), // 同一コマ・境界非跨ぎ → 無発行
+            Step::Tick(at_ms(1100)), // 同一コマ → 無発行
         ],
     );
 
@@ -489,10 +495,10 @@ fn surface_switch_clears_playback_and_frame_full_path() {
         cfg(table, always_fire()),
         vec![
             emote("0", "10"), // surface 10 表示（初回 Show）
-            Step::Tick(0),
-            Step::Tick(1000), // 発火 → 2106（再生中）
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 発火 → 2106（再生中）
             emote("0", "20"), // surface 切替 → pattern クリア＋playback 除去（空 pattern の Show{20}）
-            Step::Tick(2000), // surface20 にアニメ無し・陳腐 2106 は蘇生しない → 無発行
+            Step::Tick(at_ms(2000)), // surface20 にアニメ無し・陳腐 2106 は蘇生しない → 無発行
         ],
     );
 
@@ -525,11 +531,11 @@ fn residual_immediately_cleared_on_refire_full_path() {
         cfg(table, always_fire()),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 発火（started=1000）・elapsed0 → Pending（wait50 未到達）＝無コマ・無発行
-            Step::Tick(1100), // elapsed100 → 末尾 701 残留
-            Step::Tick(2000), // 再発火（always_fire）・elapsed0 → Pending → 残留 701 即時クリア（ベース復帰）
-            Step::Tick(2050), // started=2000＋50 → 先頭コマ 700
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 発火（started=1000）・elapsed0 → Pending（wait50 未到達）＝無コマ・無発行
+            Step::Tick(at_ms(1100)), // elapsed100 → 末尾 701 残留
+            Step::Tick(at_ms(2000)), // 再発火（always_fire）・elapsed0 → Pending → 残留 701 即時クリア（ベース復帰）
+            Step::Tick(at_ms(2050)), // started=2000＋50 → 先頭コマ 700
         ],
     );
 
@@ -575,11 +581,11 @@ fn other_negative_surface_warns_once_and_spares_others_full_path() {
         cfg(table, always_fire()),
         vec![
             emote("0", "10"),
-            Step::Tick(0),
-            Step::Tick(1000), // 両アニメ発火 → {0:2106, 1:3000}
-            Step::Tick(1040), // id0 が -2 で停止（warn 1 回目）・id1 は 3000 生存 → {1:3000}
-            Step::Tick(2000), // 境界跨ぎ: id0 再発火（id1 は再生中で非再抽選）→ {0:2106, 1:3000}
-            Step::Tick(2040), // id0 が再び -2 で停止（2 度目の走査・dedup で再 warn なし）→ {1:3000}
+            Step::Tick(at_ms(0)),
+            Step::Tick(at_ms(1000)), // 両アニメ発火 → {0:2106, 1:3000}
+            Step::Tick(at_ms(1040)), // id0 が -2 で停止（warn 1 回目）・id1 は 3000 生存 → {1:3000}
+            Step::Tick(at_ms(2000)), // 境界跨ぎ: id0 再発火（id1 は再生中で非再抽選）→ {0:2106, 1:3000}
+            Step::Tick(at_ms(2040)), // id0 が再び -2 で停止（2 度目の走査・dedup で再 warn なし）→ {1:3000}
         ],
     );
 

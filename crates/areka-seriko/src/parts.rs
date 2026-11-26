@@ -837,3 +837,11 @@ mod trigger_tests;
 #[cfg(test)]
 #[path = "parts_calls_tests.rs"]
 mod calls_tests;
+
+#[cfg(test)]
+#[path = "parts_refresh_tests.rs"]
+mod refresh_tests;
+
+#[cfg(test)]
+#[path = "parts_trigger_talk_tests.rs"]
+mod trigger_talk_tests;

@@ -17,7 +17,8 @@
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
 use areka_seriko::{BindResolver, DisplayCommand};
-use std::time::Duration;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 
 mod common;
 use common::*;
@@ -26,7 +27,7 @@ use common::*;
 ///
 /// 空の別名の表でも数値の鍵は数値の枝で解ける。静的な着せ替えは空（バルーンに着せ替えは無く、
 /// ここで見るシェルの Show も binds 空で足りる）。
-fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
+fn run_scenario(script: &str, ticks: &[TimePoint]) -> Vec<DisplayCommand> {
     run_core(
         BindSet::from_ids([]),
         BindResolver::empty(),
@@ -43,7 +44,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
 /// （既定 scope は `\p[n]` 未指定ゆえ "0"・compile が転写）。
 #[test]
 fn balloon_show_is_observed_end_to_end() {
-    let records = run_scenario(r"\b[2]\e", &[0.0]);
+    let records = run_scenario(r"\b[2]\e", &[at_ms(0)]);
     assert_eq!(
         records,
         vec![DisplayCommand::ShowBalloon {
@@ -59,13 +60,9 @@ fn balloon_show_is_observed_end_to_end() {
 /// 「非表示指令」を mock 表示 sink 上に観測する。`\w1`（=50ms）を跨ぐ Tick 時刻で駆動する。
 ///
 /// `\b[2]\w1\b[-1]\e` → Tick(0.0) で `ShowBalloon{2}`、Tick(0.05) で `HideBalloon` を順に観測。
-/// `\w1` の時刻は compile と同一の `Duration::from_millis(50).as_secs_f64()` で導出し、10 進
-/// 直書き（0.05）の f64 表現誤差で境界包含判定（`at <= tick`）を誤らないようにする。
 #[test]
 fn balloon_hide_is_observed_end_to_end() {
-    // `\w1`＝1×50ms。compile 側の累積と同一計算で導出する（リテラル直書きの誤差回避）。
-    let at_hide = Duration::from_millis(50).as_secs_f64();
-    let records = run_scenario(r"\b[2]\w1\b[-1]\e", &[0.0, at_hide]);
+    let records = run_scenario(r"\b[2]\w1\b[-1]\e", &[at_ms(0), at_ms(50)]);
     assert_eq!(
         records,
         vec![
@@ -89,7 +86,7 @@ fn balloon_hide_is_observed_end_to_end() {
 /// 裸形が本文数字を漏らさず（`\b2` の `2` は面数字として消費される）同一経路へ乗ることを固定する。
 #[test]
 fn bare_balloon_matches_bracket_form_end_to_end() {
-    let bare = run_scenario(r"\b2\e", &[0.0]);
+    let bare = run_scenario(r"\b2\e", &[at_ms(0)]);
     assert_eq!(
         bare,
         vec![DisplayCommand::ShowBalloon {
@@ -107,7 +104,7 @@ fn bare_balloon_matches_bracket_form_end_to_end() {
 /// 状態不変ゆえ発行が抑止され、`ShowBalloon{2}` はちょうど 1 件のみ観測される（per-scope の冪等ガード）。
 #[test]
 fn same_balloon_twice_emits_once_end_to_end() {
-    let records = run_scenario(r"\b[2]\b[2]\e", &[0.0]);
+    let records = run_scenario(r"\b[2]\b[2]\e", &[at_ms(0)]);
     assert_eq!(
         records,
         vec![DisplayCommand::ShowBalloon {
@@ -127,7 +124,7 @@ fn same_balloon_twice_emits_once_end_to_end() {
 /// が互いに干渉せず送信順どおりに記録される（別 map・別発行）。
 #[test]
 fn shell_and_balloon_mixed_recorded_independently_end_to_end() {
-    let records = run_scenario(r"\s[0]\b[2]\e", &[0.0]);
+    let records = run_scenario(r"\s[0]\b[2]\e", &[at_ms(0)]);
     assert_eq!(
         records,
         vec![

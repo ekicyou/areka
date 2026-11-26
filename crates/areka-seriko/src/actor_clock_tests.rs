@@ -11,6 +11,7 @@ use crate::test_support::{part_frames, table_of};
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand};
 use dola::cue::CueSink;
+use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -51,19 +52,19 @@ fn top(pattern: &PatternState) -> Option<u32> {
 #[test]
 fn surface_cue_starts_always_at_the_clock_time_of_processing() {
     let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
-    rig.tick(0);
+    rig.tick(at_ms(0));
     let cmds = rig.hear(
-        1030,
-        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
+        at_ms(1030),
+        cue(ms(0), "0", CueCommand::Emote { key: "0".into() }, ms(0)),
     );
     assert_eq!(top(single_pattern(&cmds)), None, "最初の指令は経過 0");
 
     assert!(
-        rig.tick(1100).is_empty(),
+        rig.tick(at_ms(1100)).is_empty(),
         "経過 70＝経過 0 のコマ（刻み 0 から数えれば 102）"
     );
     assert_eq!(
-        top(single_pattern(&rig.tick(1130))),
+        top(single_pattern(&rig.tick(at_ms(1130)))),
         Some(102),
         "1030 から 100ms"
     );
@@ -73,13 +74,16 @@ fn surface_cue_starts_always_at_the_clock_time_of_processing() {
 #[test]
 fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
     let mut rig = rig(cfg(table_of(TOP_ALWAYS), always_fire()));
-    rig.tick(0);
+    rig.tick(at_ms(0));
     rig.hear(
-        1030,
-        cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0),
+        at_ms(1030),
+        cue(ms(0), "0", CueCommand::Emote { key: "0".into() }, ms(0)),
     );
 
-    assert!(rig.tick(1020).is_empty(), "開始の 10ms 前の刻みは経過 0");
+    assert!(
+        rig.tick(at_ms(1020)).is_empty(),
+        "開始の 10ms 前の刻みは経過 0"
+    );
     assert_eq!(
         top(rig
             .states
@@ -87,7 +91,7 @@ fn tick_slightly_before_the_start_clamps_elapsed_to_zero() {
         None
     );
     assert_eq!(
-        top(single_pattern(&rig.tick(1130))),
+        top(single_pattern(&rig.tick(at_ms(1130)))),
         Some(102),
         "開始は 1030 のまま"
     );
@@ -103,20 +107,20 @@ fn balloon_cue_starts_always_at_the_clock_time_of_processing() {
         pick_rng: crate::seeded_rng(0),
     };
     let mut rig = rig(config);
-    rig.tick(0);
+    rig.tick(at_ms(0));
     let cmds = rig.hear(
-        1030,
+        at_ms(1030),
         cue(
-            0.0,
+            ms(0),
             "0",
             CueCommand::BalloonSurface { key: "0".into() },
-            0.0,
+            ms(0),
         ),
     );
     assert_eq!(top(single_pattern(&cmds)), None, "最初の指令は経過 0");
 
-    assert!(rig.tick(1100).is_empty(), "経過 70＝経過 0 のコマ");
-    let cmds = rig.tick(1130);
+    assert!(rig.tick(at_ms(1100)).is_empty(), "経過 70＝経過 0 のコマ");
+    let cmds = rig.tick(at_ms(1130));
     assert!(
         matches!(cmds[..], [DisplayCommand::ShowBalloon { .. }]),
         "{cmds:?}"
@@ -130,15 +134,18 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
     let table = table_of(BIND_ALWAYS);
     assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
     let mut rig = rig(cfg(table, always_fire()));
-    rig.hear(0, cue(0.0, "0", CueCommand::Emote { key: "0".into() }, 0.0));
-    rig.tick(0);
-    let cmds = rig.hear(1030, carrier_cue("0", "bind", &["目", "閉", "1"]));
+    rig.hear(
+        at_ms(0),
+        cue(ms(0), "0", CueCommand::Emote { key: "0".into() }, ms(0)),
+    );
+    rig.tick(at_ms(0));
+    let cmds = rig.hear(at_ms(1030), carrier_cue("0", "bind", &["目", "閉", "1"]));
     assert!(
         part_frames(single_pattern(&cmds), 100).is_empty(),
         "最初の指令は経過 0"
     );
 
-    rig.tick(1100);
+    rig.tick(at_ms(1100));
     assert!(
         part_frames(
             rig.states
@@ -148,7 +155,7 @@ fn bind_cue_starts_part_always_at_the_clock_time_of_processing() {
         .is_empty(),
         "経過 70＝経過 0 のコマ（刻み 0 から数えれば 102）"
     );
-    rig.tick(1130);
+    rig.tick(at_ms(1130));
     assert_eq!(
         part_frames(
             rig.states
@@ -168,9 +175,9 @@ fn run_actor(
     let out = MockSurfaceOutput::new();
     let records = out.records();
     let (mut sink, handle) = spawn(out);
-    sink.send_tick(0);
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "0"));
-    sink.send_tick(1100);
+    sink.send_tick(at_ms(0));
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "0"));
+    sink.send_tick(at_ms(1100));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
     records.lock().unwrap().clone()
@@ -226,7 +233,7 @@ fn clockless_spawn_keeps_the_command_sequence_and_clocked_spawn_starts_at_cue_ti
         "None は spawn_seriko と同じ列"
     );
 
-    let clock: SerikoClock = Arc::new(|| 1030);
+    let clock: SerikoClock = Arc::new(|| at_ms(1030));
     assert_eq!(
         show_surfaces(&run_actor(spawn(Some(clock)))),
         vec![(0, None)],

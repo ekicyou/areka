@@ -16,6 +16,7 @@ use crate::test_support::table_of;
 use areka_emo_compose::BindSet;
 use areka_sakura::CueCommand;
 use dola::cue::CueSink;
+use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -59,40 +60,46 @@ impl Rig {
 #[test]
 fn arriving_text_moves_the_mouth_from_the_glyph_reveal_time() {
     let mut rig = Rig::new();
-    rig.tick(1000);
+    rig.tick(at_ms(1000));
     assert_eq!(
-        frames(&rig.hear(1000, emote_cue(0.0, "0", "0")), MOUTH),
+        frames(&rig.hear(at_ms(1000), emote_cue(ms(0), "0", "0")), MOUTH),
         [("0", None)]
     );
-    rig.hear(1000, clear_all());
+    rig.hear(at_ms(1000), clear_all());
     assert!(
-        rig.hear(1000, text(0.0, "0", "あいう")).is_empty(),
+        rig.hear(at_ms(1000), text(ms(0), "0", "あいう")).is_empty(),
         "文字の cue そのものは指令を出さない"
     );
 
-    assert!(rig.tick(1090).is_empty(), "2 文字（1000・1050）ではまだ");
+    assert!(
+        rig.tick(at_ms(1090)).is_empty(),
+        "2 文字（1000・1050）ではまだ"
+    );
     assert_eq!(
-        frames(&rig.tick(1120), MOUTH),
+        frames(&rig.tick(at_ms(1120)), MOUTH),
         [("0", Some(601))],
         "3 文字目（1100）が現れた刻みで口が動く"
     );
     assert_eq!(
-        frames(&rig.tick(1145), MOUTH),
+        frames(&rig.tick(at_ms(1145)), MOUTH),
         [("0", Some(602))],
         "開始は 1100（刻みの 1120 から数えれば 1160 まで 601 のまま）"
     );
-    rig.hear(1150, cue(0.15, "0", CueCommand::Wait, 0.5));
+    rig.hear(at_ms(1150), cue(ms(150), "0", CueCommand::Wait, ms(500)));
     assert_eq!(
-        frames(&rig.tick(1190), MOUTH),
+        frames(&rig.tick(at_ms(1190)), MOUTH),
         [("0", None)],
         "`-1` で消える"
     );
-    assert!(rig.tick(1640).is_empty(), "待ちの間は動かない");
+    assert!(rig.tick(at_ms(1640)).is_empty(), "待ちの間は動かない");
 
-    rig.hear(1650, text(0.65, "0", "えおか"));
-    assert!(rig.tick(1710).is_empty(), "通算 5 文字（1650・1700）");
+    rig.hear(at_ms(1650), text(ms(650), "0", "えおか"));
+    assert!(
+        rig.tick(at_ms(1710)).is_empty(),
+        "通算 5 文字（1650・1700）"
+    );
     assert_eq!(
-        frames(&rig.tick(1795), MOUTH),
+        frames(&rig.tick(at_ms(1795)), MOUTH),
         [("0", Some(602))],
         "通算 6 文字目（1750）から 45ms の分だけ進んだコマを同じ刻みで出す"
     );
@@ -107,17 +114,17 @@ fn arriving_text_moves_the_mouth_from_the_glyph_reveal_time() {
 #[test]
 fn cue_that_is_not_text_moves_the_time_origin() {
     let mut rig = Rig::new();
-    rig.tick(900);
-    rig.hear(900, emote_cue(0.0, "0", "0"));
-    rig.hear(1000, cue(0.0, "0", CueCommand::Wait, 0.1));
-    rig.hear(1090, text(0.1, "0", "あいう"));
+    rig.tick(at_ms(900));
+    rig.hear(at_ms(900), emote_cue(ms(0), "0", "0"));
+    rig.hear(at_ms(1000), cue(ms(0), "0", CueCommand::Wait, ms(100)));
+    rig.hear(at_ms(1090), text(ms(100), "0", "あいう"));
 
     assert!(
-        rig.tick(1195).is_empty(),
+        rig.tick(at_ms(1195)).is_empty(),
         "3 文字目は 1200（起点 1000＋台本の 0.2 秒）"
     );
     assert_eq!(
-        frames(&rig.tick(1245), MOUTH),
+        frames(&rig.tick(at_ms(1245)), MOUTH),
         [("0", Some(602))],
         "1200 から 45ms"
     );
@@ -127,41 +134,41 @@ fn cue_that_is_not_text_moves_the_time_origin() {
 #[test]
 fn text_of_one_scope_does_not_move_the_other_scope() {
     let mut rig = Rig::new();
-    rig.tick(1000);
-    rig.hear(1000, emote_cue(0.0, "0", "0"));
-    rig.hear(1000, emote_cue(0.0, "1", "0"));
-    rig.hear(1000, clear_all());
-    rig.hear(1000, text(0.0, "0", "あいう"));
+    rig.tick(at_ms(1000));
+    rig.hear(at_ms(1000), emote_cue(ms(0), "0", "0"));
+    rig.hear(at_ms(1000), emote_cue(ms(0), "1", "0"));
+    rig.hear(at_ms(1000), clear_all());
+    rig.hear(at_ms(1000), text(ms(0), "0", "あいう"));
 
     assert_eq!(
-        frames(&rig.tick(1120), MOUTH),
+        frames(&rig.tick(at_ms(1120)), MOUTH),
         [("0", Some(601))],
         "指令は `\\0` の 1 件だけ"
     );
-    assert_eq!(frames(&rig.tick(1190), MOUTH), [("0", None)]);
+    assert_eq!(frames(&rig.tick(at_ms(1190)), MOUTH), [("0", None)]);
 
     // 陽性対照: `\1` の文字（1500・1550・1600）では `\1` の口だけが動く。
-    rig.hear(1500, text(0.5, "1", "かきく"));
-    assert_eq!(frames(&rig.tick(1610), MOUTH), [("1", Some(601))]);
+    rig.hear(at_ms(1500), text(ms(500), "1", "かきく"));
+    assert_eq!(frames(&rig.tick(at_ms(1610)), MOUTH), [("1", Some(601))]);
 }
 
 /// 選択肢の文字は数える。改行・待ち・`\!` のコマンドは数えない。
 #[test]
 fn choice_text_counts_and_newline_wait_and_command_do_not() {
     let mut rig = Rig::new();
-    rig.tick(1000);
-    rig.hear(1000, emote_cue(0.0, "0", "0"));
-    rig.hear(1000, clear_all());
-    rig.hear(1000, text(0.0, "0", "あ"));
+    rig.tick(at_ms(1000));
+    rig.hear(at_ms(1000), emote_cue(ms(0), "0", "0"));
+    rig.hear(at_ms(1000), clear_all());
+    rig.hear(at_ms(1000), text(ms(0), "0", "あ"));
     rig.hear(
-        1050,
-        cue(0.05, "0", CueCommand::NewLine { ratio: 1.0 }, 0.0),
+        at_ms(1050),
+        cue(ms(50), "0", CueCommand::NewLine { ratio: 1.0 }, ms(0)),
     );
-    rig.hear(1050, cue(0.05, "0", CueCommand::Wait, 0.1));
+    rig.hear(at_ms(1050), cue(ms(50), "0", CueCommand::Wait, ms(100)));
     let raise = CueCommand::command_carrier("raise", vec!["OnTest".to_string()]);
-    rig.hear(1150, cue(0.15, "0", raise, 0.0));
+    rig.hear(at_ms(1150), cue(ms(150), "0", raise, ms(0)));
     assert!(
-        rig.tick(1160).is_empty(),
+        rig.tick(at_ms(1160)).is_empty(),
         "文字は 1 つ（改行・待ち・`\\!` を数えれば 4 つで口が動く）"
     );
 
@@ -170,10 +177,13 @@ fn choice_text_counts_and_newline_wait_and_command_do_not() {
         text: "はい".into(),
         references: Vec::new(),
     };
-    rig.hear(1200, cue(0.2, "0", choice, 0.1));
-    assert!(rig.tick(1210).is_empty(), "通算 2 文字（1000・1200）");
+    rig.hear(at_ms(1200), cue(ms(200), "0", choice, ms(100)));
+    assert!(
+        rig.tick(at_ms(1210)).is_empty(),
+        "通算 2 文字（1000・1200）"
+    );
     assert_eq!(
-        frames(&rig.tick(1295), MOUTH),
+        frames(&rig.tick(at_ms(1295)), MOUTH),
         [("0", Some(602))],
         "選択肢の 2 文字目（1250）が通算 3 文字目"
     );
@@ -184,19 +194,19 @@ fn choice_text_counts_and_newline_wait_and_command_do_not() {
 #[test]
 fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     let mut rig = Rig::new();
-    rig.tick(1000);
-    let first = rig.hear(1000, emote_cue(0.0, "0", "1"));
+    rig.tick(at_ms(1000));
+    let first = rig.hear(at_ms(1000), emote_cue(ms(0), "0", "1"));
     assert_eq!(
         frames(&first, ONCE),
         [("0", Some(701))],
         "前提: 最初の表示で鳴る"
     );
     assert_eq!(
-        frames(&rig.tick(1050), ONCE),
+        frames(&rig.tick(at_ms(1050)), ONCE),
         [("0", None)],
         "前提: 1 回で終える"
     );
-    let hidden = rig.hear(1060, emote_cue(0.06, "0", "-1"));
+    let hidden = rig.hear(at_ms(1060), emote_cue(ms(60), "0", "-1"));
     assert!(
         matches!(hidden[..], [DisplayCommand::Hide { .. }]),
         "{hidden:?}"
@@ -204,12 +214,12 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
 
     // 時計 2000 が新しい台詞の 0 秒。9 文字は 2000・2050・…・2400。
     let logs = capture_text(|| {
-        assert!(rig.hear(2000, clear_all()).is_empty());
+        assert!(rig.hear(at_ms(2000), clear_all()).is_empty());
         assert!(
-            rig.hear(2000, text(0.0, "0", "あいうえおかきくけ"))
+            rig.hear(at_ms(2000), text(ms(0), "0", "あいうえおかきくけ"))
                 .is_empty()
         );
-        for now in [2060, 2120, 2190, 2240] {
+        for now in [2060, 2120, 2190, 2240].map(at_ms) {
             assert!(rig.tick(now).is_empty(), "{now}: 非表示の間は何も出ない");
         }
     });
@@ -226,17 +236,17 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     );
 
     // 2260 に戻る: 6 文字（2000〜2250）が現れている。そこから 3 文字目は 9 文字目（2400）。
-    let back = rig.hear(2260, emote_cue(0.26, "0", "1"));
+    let back = rig.hear(at_ms(2260), emote_cue(ms(260), "0", "1"));
     assert_eq!(frames(&back, ONCE), [("0", Some(701))], "戻ると鳴る");
     assert_eq!(
         frames(&back, MOUTH),
         [("0", None)],
         "戻る前の文字で口は動かない"
     );
-    assert_eq!(frames(&rig.tick(2310), ONCE), [("0", None)]);
-    assert!(rig.tick(2395).is_empty(), "戻ってから 2 文字");
+    assert_eq!(frames(&rig.tick(at_ms(2310)), ONCE), [("0", None)]);
+    assert!(rig.tick(at_ms(2395)).is_empty(), "戻ってから 2 文字");
     assert_eq!(
-        frames(&rig.tick(2410), MOUTH),
+        frames(&rig.tick(at_ms(2410)), MOUTH),
         [("0", Some(601))],
         "陽性対照: 表示中は同じ台詞の文字で口が動く"
     );
@@ -254,14 +264,14 @@ fn spawned_actor_moves_the_mouth_for_text_arriving_through_the_sink() {
         BindResolver::empty(),
         config(),
         out,
-        Some(Arc::new(|| 1000)),
+        Some(Arc::new(|| at_ms(1000))),
     );
-    sink.send_tick(1000);
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "0"));
+    sink.send_tick(at_ms(1000));
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "0"));
     CueSink::emit(&mut sink, clear_all());
-    CueSink::emit(&mut sink, text(0.0, "0", "あいう"));
-    sink.send_tick(1120);
-    sink.send_tick(1145);
+    CueSink::emit(&mut sink, text(ms(0), "0", "あいう"));
+    sink.send_tick(at_ms(1120));
+    sink.send_tick(at_ms(1145));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 

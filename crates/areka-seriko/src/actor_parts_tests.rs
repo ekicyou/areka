@@ -8,6 +8,8 @@ use crate::looper::tests::{always_fire, cfg};
 use crate::output::DisplayCommand;
 use crate::test_support::{part_frames, table_of};
 use areka_emo_compose::BindSet;
+use dola::TimePoint;
+use dola::time::testing::{at_ms, ms};
 
 /// 一番上 0・2 は子 100 を置き、自分の animation9（200 → 201 → `-1`）を持つ。1 は何も置かない。
 /// 100 の animation0 は 101（開き目・すぐ）→ 102（閉じ目・500ms 後）→ `-1`（さらに 500ms 後）。
@@ -54,14 +56,14 @@ impl Rig {
         Self::configured(cfg(table, always_fire()), eye_resolver(), static_binds)
     }
 
-    /// 時計が `ms` のときに `\0\s[key]`。
-    fn surface(&mut self, ms: u64, key: &str) -> Vec<DisplayCommand> {
-        self.hear(ms, emote_cue(0.0, "0", key))
+    /// 時計が `now` のときに `\0\s[key]`。
+    fn surface(&mut self, now: TimePoint, key: &str) -> Vec<DisplayCommand> {
+        self.hear(now, emote_cue(ms(0), "0", key))
     }
 
-    /// 時計が `ms` のときに `\0\![bind,目,閉,on]`。
-    fn bind_eye(&mut self, ms: u64, on: &str) -> Vec<DisplayCommand> {
-        self.hear(ms, carrier_cue("0", "bind", &["目", "閉", on]))
+    /// 時計が `now` のときに `\0\![bind,目,閉,on]`。
+    fn bind_eye(&mut self, now: TimePoint, on: &str) -> Vec<DisplayCommand> {
+        self.hear(now, carrier_cue("0", "bind", &["目", "閉", on]))
     }
 }
 
@@ -71,16 +73,16 @@ impl Rig {
 #[test]
 fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
     let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
-    rig.surface(0, "0");
-    rig.tick(0);
-    let (_, _, p) = single_show(rig.tick(1000));
+    rig.surface(at_ms(0), "0");
+    rig.tick(at_ms(0));
+    let (_, _, p) = single_show(rig.tick(at_ms(1000)));
     assert_eq!(top_frames(&p), vec![(9, 200)]);
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
-    let (_, _, p) = single_show(rig.tick(1600));
+    let (_, _, p) = single_show(rig.tick(at_ms(1600)));
     assert_eq!(top_frames(&p), vec![(9, 201)], "前提: 一番上は 2 コマ目");
     assert_eq!(part_frames(&p, 100), vec![(0, 102)], "前提: 子は閉じ目");
 
-    let cmds = rig.surface(1600, "2");
+    let cmds = rig.surface(at_ms(1600), "2");
     let (sid, _, p) = single_show(cmds);
     assert_eq!(sid, 2);
     assert_eq!(
@@ -90,11 +92,14 @@ fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
     );
     assert!(top_frames(&p).is_empty(), "一番上の再生は捨てた");
 
-    assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
+    assert!(
+        rig.tick(at_ms(1700)).is_empty(),
+        "同じ Show を二重に出さない"
+    );
 
     // 次の境界: 一番上は面 2 で最初のコマ（200）から。子は経過 1000 で `-1` に着いて再生を終えているので、
     // 同じ境界の抽選に当たり最初のコマ（101）から。
-    let (sid, _, p) = single_show(rig.tick(2000));
+    let (sid, _, p) = single_show(rig.tick(at_ms(2000)));
     assert_eq!(sid, 2);
     assert_eq!(top_frames(&p), vec![(9, 200)], "一番上は最初から");
     assert_eq!(part_frames(&p, 100), vec![(0, 101)], "子も最初から");
@@ -104,24 +109,30 @@ fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
 #[test]
 fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
     let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
-    rig.surface(0, "0");
-    rig.tick(0);
-    let (_, _, p) = single_show(rig.tick(1000));
+    rig.surface(at_ms(0), "0");
+    rig.tick(at_ms(0));
+    let (_, _, p) = single_show(rig.tick(at_ms(1000)));
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
 
-    let (sid, _, p) = single_show(rig.surface(1000, "1"));
+    let (sid, _, p) = single_show(rig.surface(at_ms(1000), "1"));
     assert_eq!(sid, 1);
     assert!(p.is_empty(), "子を置いていない面に部品のコマは無い");
-    assert!(rig.tick(1600).is_empty(), "見えない子のために描き直さない");
+    assert!(
+        rig.tick(at_ms(1600)).is_empty(),
+        "見えない子のために描き直さない"
+    );
 
-    let (sid, _, p) = single_show(rig.surface(1600, "0"));
+    let (sid, _, p) = single_show(rig.surface(at_ms(1600), "0"));
     assert_eq!(sid, 0);
     assert_eq!(
         part_frames(&p, 100),
         vec![(0, 102)],
         "戻った 1 枚目が経過 600 の閉じ目（巻き戻らない）"
     );
-    assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
+    assert!(
+        rig.tick(at_ms(1700)).is_empty(),
+        "同じ Show を二重に出さない"
+    );
 }
 
 /// 着せ替えの変化でも `Show` は 1 件だけ。外した瞬間の `Show` に外れた側の部品のコマは載らず、
@@ -129,28 +140,31 @@ fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
 #[test]
 fn bind_change_emits_one_show_without_the_removed_side_frames() {
     let mut rig = Rig::from_text(BIND_CHILD, BindSet::from_ids([5]));
-    rig.surface(0, "0");
-    rig.tick(0);
-    let (_, _, p) = single_show(rig.tick(1000));
+    rig.surface(at_ms(0), "0");
+    rig.tick(at_ms(0));
+    let (_, _, p) = single_show(rig.tick(at_ms(1000)));
     assert_eq!(part_frames(&p, 100), vec![(5, 105)]);
-    let (_, _, p) = single_show(rig.tick(1600));
+    let (_, _, p) = single_show(rig.tick(at_ms(1600)));
     assert_eq!(
         part_frames(&p, 100),
         vec![(5, 106)],
         "前提: 着せ替えの子が 2 コマ目"
     );
 
-    let (sid, binds, p) = single_show(rig.bind_eye(1600, "0"));
+    let (sid, binds, p) = single_show(rig.bind_eye(at_ms(1600), "0"));
     assert_eq!(sid, 0);
     assert_eq!(binds, BindSet::from_ids([]));
     assert!(p.is_empty(), "外れた側の部品のコマを載せない: {p:?}");
 
     // 刻みを挟まずに付け直す: 時計は次の刻みまで残っているので続きのコマが載る。
-    let (_, binds, p) = single_show(rig.bind_eye(1600, "1"));
+    let (_, binds, p) = single_show(rig.bind_eye(at_ms(1600), "1"));
     assert_eq!(binds, BindSet::from_ids([5]));
     assert_eq!(part_frames(&p, 100), vec![(5, 106)]);
 
-    assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
+    assert!(
+        rig.tick(at_ms(1700)).is_empty(),
+        "同じ Show を二重に出さない"
+    );
 }
 
 /// 出来事の直後の作り直し（`refresh`）は `-1` 以外の負の番号のコマを書かない。
@@ -158,14 +172,14 @@ fn bind_change_emits_one_show_without_the_removed_side_frames() {
 #[test]
 fn switch_back_onto_a_negative_frame_carries_no_part_frame() {
     let mut rig = Rig::from_text(NEGATIVE_CHILD, BindSet::from_ids([]));
-    rig.surface(0, "0");
-    rig.tick(0);
-    let (_, _, p) = single_show(rig.tick(1000));
+    rig.surface(at_ms(0), "0");
+    rig.tick(at_ms(0));
+    let (_, _, p) = single_show(rig.tick(at_ms(1000)));
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
-    single_show(rig.surface(1000, "1"));
-    assert!(rig.tick(1600).is_empty());
+    single_show(rig.surface(at_ms(1000), "1"));
+    assert!(rig.tick(at_ms(1600)).is_empty());
 
-    let (sid, _, p) = single_show(rig.surface(1600, "0"));
+    let (sid, _, p) = single_show(rig.surface(at_ms(1600), "0"));
     assert_eq!(sid, 0);
     assert!(p.is_empty(), "負の番号のコマは載らない: {p:?}");
 }
@@ -175,15 +189,15 @@ fn switch_back_onto_a_negative_frame_carries_no_part_frame() {
 #[test]
 fn top_and_child_ending_on_a_boundary_both_restart_on_it() {
     let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
-    rig.surface(0, "0");
-    rig.tick(0);
-    let (_, _, p) = single_show(rig.tick(1000));
+    rig.surface(at_ms(0), "0");
+    rig.tick(at_ms(0));
+    let (_, _, p) = single_show(rig.tick(at_ms(1000)));
     assert_eq!(top_frames(&p), vec![(9, 200)]);
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
-    let (_, _, p) = single_show(rig.tick(1600));
+    let (_, _, p) = single_show(rig.tick(at_ms(1600)));
     assert_eq!(top_frames(&p), vec![(9, 201)], "前提: 一番上は 2 コマ目");
     assert_eq!(part_frames(&p, 100), vec![(0, 102)], "前提: 子は 2 コマ目");
-    let (_, _, p) = single_show(rig.tick(2000));
+    let (_, _, p) = single_show(rig.tick(at_ms(2000)));
     assert_eq!(top_frames(&p), vec![(9, 200)], "一番上も最初から");
     assert_eq!(part_frames(&p, 100), vec![(0, 101)], "子も最初から");
 }
