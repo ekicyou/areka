@@ -474,7 +474,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.1, 7.7, 9.1_
 
-- [ ] 6.4 (P) 本体のセッションと MCP のテストを付け替える
+- [x] 6.4 (P) 本体のセッションと MCP のテストを付け替える
   - 新しい形で書く
   - そのファイルが誤り 0 件である
   - _Boundary: 本体 session_tests・mcp_

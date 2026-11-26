@@ -163,9 +163,12 @@ pub(crate) fn play_into(script: &str, sink: impl dola::cue::CueSink + 'static) {
         &instructions,
         &areka_sakura::sysvar::SystemVarSnapshot::default(),
     );
-    let mut player = dola::cue::CuePlayer::from_sheet(&compiled.sheet);
+    let sheet = compiled
+        .sheet
+        .with_absolute_start_time(dola::TimePoint::ZERO);
+    let mut player = dola::cue::CuePlayer::from_sheet(&sheet).expect("原点は刻印済み");
     player.register_sink(Box::new(sink));
-    player.tick(compiled.sheet.absolute_end_time());
+    player.tick(sheet.absolute_end_time().expect("原点は刻印済み"));
 }
 
 /// `dir` に `descript.txt`（`charset,UTF-8` の頭＋`body`＋末尾の改行・CRLF）を置く。

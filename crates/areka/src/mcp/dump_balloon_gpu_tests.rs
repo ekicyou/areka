@@ -64,7 +64,7 @@ fn has_ink(bytes: &[u8]) -> bool {
 }
 
 /// スコープ 0 の、届いた字の数と最後の字が現れる台詞の時刻（秒）。字が 1 つも無ければ `None`。
-fn reveals(world: &World) -> Option<(usize, f64)> {
+fn reveals(world: &World) -> Option<(usize, dola::TimeSpan)> {
     let runtime = world.get_non_send::<RuntimeWiring>()?.runtime().borrow();
     let times = runtime
         .state()
@@ -83,14 +83,14 @@ fn speak(gpu: &mut GpuRig, step_ms: u64) -> bool {
 /// [`speak`] の字の数を `words` にしたもの（[`WORDS`] でない台詞の待ち）。
 fn speak_words(gpu: &mut GpuRig, step_ms: u64, words: usize) -> bool {
     // 字の列が揃ったのを見た時刻（`T`）と、前の巡で台詞の時刻が末尾を越えていたか。
-    let mut all_by: Option<f64> = None;
+    let mut all_by: Option<dola::TimePoint> = None;
     let mut past_before = false;
     gpu.frames_until(step_ms, |world| {
         let Some((_, last)) = reveals(world).filter(|&(n, _)| n == words) else {
             return false;
         };
-        let all_by = *all_by.get_or_insert_with(dola::runtime::clock::now);
-        let past = world.resource::<FrameTime>().0 - all_by >= last;
+        let all_by = *all_by.get_or_insert_with(dola::now);
+        let past = world.resource::<FrameTime>().0 - all_by >= dola::TimeDelta::from(last);
         std::mem::replace(&mut past_before, past) && past
     })
 }

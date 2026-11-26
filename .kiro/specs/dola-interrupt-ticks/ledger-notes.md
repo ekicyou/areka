@@ -266,3 +266,7 @@
 ## 6.3
 
 - 外したテスト・分かれ道・ログは無い。変える前後の期待は単位の写しだけ（`strict_judges_tests.rs` の `t < 1e7` 秒・刻み `1e6` 秒 → `at_ms(10_000_000_000)`・`ms(1_000_000_000)`、`balloon_visibility_phase_notice_tests.rs` の `END + WAIT - 0.001` 秒 → `END + 1999 ms`）。手で組む合図は `TalkCue::scheduled`、`run_text_phase(.., Some(ms(..)))`。
+
+## 6.4
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（`dola::runtime::clock::now` → `dola::now`、`play_into` は起点 0 を押した台本で組む、`dump_balloon_gpu_tests.rs` の経過の比べは時刻の型）。
