@@ -462,7 +462,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.1, 7.7_
 
-- [ ] 6.2 areka-session を付け替える
+- [x] 6.2 areka-session を付け替える
   - 起動と設定と、時計を差し込むテストの組み立てを、時刻を返す関数の型で書く
   - `cargo test -p areka-session` が緑である
   - _Dispatch: mechanical — 形の追従_

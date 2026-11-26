@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
+use areka_kanade::{BootOrigin, CloseReason, KanadeNotice};
 #[cfg(test)]
 use areka_kanade::{ShioriBackend, ShioriUnblock};
 use bevy_ecs::schedule::Schedules;
@@ -208,7 +208,7 @@ pub struct SwitchRig {
     /// 置き場が無いと App スコープの投函が致命の机で終了を招くため。
     app_memory: Rc<Cell<bool>>,
     /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
-    talk_clock_ms: u64,
+    talk_clock: dola::TimePoint,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
     sample: RigSample,
 }
@@ -353,7 +353,7 @@ impl SwitchRig {
             boots,
             factory_calls,
             app_memory,
-            talk_clock_ms: 0,
+            talk_clock: dola::TimePoint::ZERO,
             sample,
         }
     }
@@ -587,13 +587,13 @@ impl SwitchRig {
     ///
     /// dispatcher は Tick を届いた順に消化し、再生中の台詞へ「その台詞が最初に見た Tick からの経過」と
     /// して渡すだけで、合成の締切も後戻りする状態も持たない。だから足場の時計が相手の処理より先へ
-    /// 進んでも、増えるのは順番待ちの列だけで、合成の締切（kanade の `close_talk_deadline_ms` ＝
+    /// 進んでも、増えるのは順番待ちの列だけで、合成の締切（kanade の `close_talk_deadline` ＝
     /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
     /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
     /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
     pub fn inject_talk_tick(&mut self, step_ms: u64) {
-        self.talk_clock_ms += step_ms;
-        let now = MonotonicMs(self.talk_clock_ms);
+        self.talk_clock = self.talk_clock + dola::TimeSpan::from_millis(step_ms as u32);
+        let now = self.talk_clock;
         if let Some(dispatcher) = self
             .world
             .get_non_send::<GhostSlot>()

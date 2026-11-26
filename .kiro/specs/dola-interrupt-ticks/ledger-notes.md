@@ -258,3 +258,7 @@
 ## 6.1
 
 - 外したテスト・分かれ道・ログ・変わった期待は無い（手で組む合図を `TalkCue::scheduled` へ、`present_frame` の秒 → `ms(..)`、テストの時計は `TimePoint::ZERO`）。`cargo test -p areka-input` は 294 passed。
+
+## 6.2
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（本番は直す所が無かった。テストの時計は `TimePoint`、`dola::runtime::clock::now` → `dola::now`、手で組む合図は `TalkCue::scheduled`）。`cargo test -p areka-session` は 534 passed・3 ignored。

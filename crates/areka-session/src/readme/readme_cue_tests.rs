@@ -5,8 +5,8 @@ use crate::readme::destination::{Destination, OpenKind, classify, link_destinati
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_runtime::frame::test_support::count_level;
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::{DynamicValue, TimePoint, TimeSpan};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
@@ -160,12 +160,13 @@ fn sink_agrees_with_link_destinations() {
     let (mut sink, rx) = sink();
     for ins in areka_parsers::sakura::parse(script) {
         if let areka_parsers::sakura::Instruction::GenericCommand { name, raw_args } = ins {
-            sink.emit(TalkCue {
-                at: 0.0,
-                actor: ActorKey::from("0"),
-                command: CueCommand::command_carrier(&name, raw_args),
-                duration: 0.0,
-            });
+            sink.emit(TalkCue::scheduled(
+                TimePoint::ZERO,
+                TimeSpan::ZERO,
+                ActorKey::from("0"),
+                CueCommand::command_carrier(&name, raw_args),
+                TimeSpan::ZERO,
+            ));
         }
     }
     let sent: Vec<Destination> = rx
@@ -186,21 +187,25 @@ fn sink_agrees_with_link_destinations() {
 /// 持ち、受信端へは 1 件も送らない（受信端を落とす場面を除く）。
 #[test]
 fn every_readme_cue_line_carries_the_prefix_and_an_event() {
-    let unopenable = |command: &str| TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Custom {
-            command: command.into(),
-            params: DynamicValue::Null,
-        },
-        duration: 0.0,
+    let unopenable = |command: &str| {
+        TalkCue::scheduled(
+            TimePoint::ZERO,
+            TimeSpan::ZERO,
+            ActorKey::from("0"),
+            CueCommand::Custom {
+                command: command.into(),
+                params: DynamicValue::Null,
+            },
+            TimeSpan::ZERO,
+        )
     };
-    let text = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("アヒル".into()),
-        duration: 0.0,
-    };
+    let text = TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("アヒル".into()),
+        TimeSpan::ZERO,
+    );
     // (場面, cue, 受信端を落とすか, 水準, event)
     let cases: Vec<(&str, TalkCue, bool, &str, &str)> = vec![
         (

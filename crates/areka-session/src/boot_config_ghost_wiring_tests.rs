@@ -40,8 +40,8 @@ fn ghost_boot_options_wires_expected_fields() {
     assert!(options.strict_judges.is_some(), "strict の判定が入っている");
     match options.ticker {
         TickerMode::Real(cfg) => {
-            assert_eq!(cfg.base_interval, std::time::Duration::from_millis(50));
-            assert_eq!(cfg.kanade_interval, std::time::Duration::from_millis(1000));
+            assert_eq!(cfg.base_interval, dola::TimeSpan::from_millis(50));
+            assert_eq!(cfg.kanade_interval, dola::TimeSpan::from_millis(1000));
         }
         TickerMode::Disabled => panic!("expected TickerMode::Real, got Disabled"),
     }

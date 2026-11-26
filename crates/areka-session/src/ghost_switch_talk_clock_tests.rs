@@ -3,7 +3,7 @@
 //! 足場の時刻の注入（[`SwitchRig::inject_talk_tick`]）の送り先が dispatcher の `Tick` だけであることを、
 //! 相手が進めない間に時計だけが先へ行く場面で固定する。A の台本で B への切替を始め、切替の握手の
 //! `GET OnGhostChanging` を [`Stall`] で止める（相手が進めない状態を、時間でなく固まりで作る）。止まって
-//! いる間に足場の時計を kanade の合成の締切（`close_talk_deadline_ms` ＝ 30,000 ms）の 3 倍以上進め、
+//! いる間に足場の時計を kanade の合成の締切（`close_talk_deadline` ＝ 30,000 ms）の 3 倍以上進め、
 //! 解いた後に B が定常に着くこと・A と B の呼び出しの並びが止めない回と同じであること・error の記録が
 //! 0 件であることを見る。
 //!
@@ -168,7 +168,10 @@ fn drained_then_unloaded(rig: &SwitchRig) -> bool {
 /// 同じに終わる（B が定常に着く・呼び出しの並びが同じ・締切が切れない・error 0 件）。
 #[test]
 fn a_rig_clock_far_ahead_of_a_stalled_handshake_leaves_the_switch_unchanged() {
-    let deadline_ms = KanadeConfig::new("", "").close_talk_deadline_ms;
+    let deadline_ms = KanadeConfig::new("", "")
+        .close_talk_deadline
+        .to_std()
+        .as_millis() as u64;
     let advance_ms = deadline_ms * 3 + TICK_STEP_MS;
     let free = lap(None, 0);
     let held = lap(Some(Stall::at(HANDSHAKE)), advance_ms);
