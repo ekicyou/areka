@@ -40,7 +40,7 @@
   - _Dispatch: mechanical — 形は設計が与え、1 ファイルの中で閉じる_
   - _Requirements: 7.8_
 
-- [ ] 1.4 (P) ただ 1 つの時計・テストの組み立て・直列化のアダプタを置く
+- [x] 1.4 (P) ただ 1 つの時計・テストの組み立て・直列化のアダプタを置く
   - Windows の時だけ、`QueryUnbiasedInterruptTimePrecise` の値をそのまま時刻の型にする関数を置き、`unsafe` に `// SAFETY:` を書く。dola の `windows` の依存に機能 `Win32_System_WindowsProgramming` を足し（古い時計の機能はまだ外さない）、`docs.rs` の既定の target を Windows にする
   - 機能 `test-support` の下に、ミリ秒の値から時刻・長さ・符号つきの差を作る 1 語の組み立てを置く
   - cue の層の 100ns の整数のアダプタと、storyboard の文書の秒のアダプタ（読む・書く時に、文書の値の上限＝絶対値 2^51 未満を確かめる 1 本の関数を持つ）を置く
@@ -795,3 +795,4 @@
 ## Implementation Notes
 
 - 1.1: `now` の再公開は `time/mod.rs` と `lib.rs` の `#[cfg(windows)] #[allow(unused_imports)] pub use …clock::*;`（`shortcut:` のコメントつき）の仮の形。1.4 が `now` を置く時に、2 か所の `allow` とコメントを消し、`pub use clock::now;`／`pub use time::now;` の名前の形へ替える。`serde_ticks`・`serde_secs` は `pub(crate) mod`。秒の丸めは「`secs × 1e7` の f64 の積を round（中間は 0 から遠い側）」。
+- 1.4: `serde_ticks`・`serde_secs` は `pub(crate)` で、`time/mod.rs` の宣言に `#[allow(dead_code)]` と `shortcut:` のコメントがある。欄をアダプタへ付け替えるタスク（2.2・2.9）が外す。`Option` の欄は `#[serde(with = ..., default)]`（cue の欄はさらに `skip_serializing_if = "Option::is_none"`）が要る。上限の検査は `serde_secs::within_document_range(ticks) -> bool` を呼ぶ。Windows でない検査は、入っている aarch64-unknown-linux-gnu で見た（x86_64-unknown-linux-gnu は未導入）。

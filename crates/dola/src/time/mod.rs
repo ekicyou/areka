@@ -8,7 +8,10 @@ mod span;
 mod text;
 
 pub(crate) mod clock;
+// shortcut: no field uses the adapters until the cue and document types move to the time types; drop the allow then.
+#[allow(dead_code)]
 pub(crate) mod serde_secs;
+#[allow(dead_code)]
 pub(crate) mod serde_ticks;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
@@ -20,7 +23,5 @@ pub use scale::TimeScale;
 pub use span::TimeSpan;
 pub use text::TimeParseError;
 
-// shortcut: clock.rs has no `now` yet; name `now` here and drop the allow once it exists.
 #[cfg(windows)]
-#[allow(unused_imports)]
-pub use clock::*;
+pub use clock::now;
