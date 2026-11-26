@@ -89,3 +89,9 @@
 ## 3.1
 
 - 外したテスト・分かれ道・ログは無い。テストの時刻を型へ写しただけ（`ecs/dola/mod.rs` のテスト・`tests/ecs/dola_animator_test.rs`・`tests/graphics/surface_embedding_test.rs`。期待は同じ）。
+
+## 3.2
+
+- 外したテストは無い。分けたファイル: `wintf/src/ecs/widget/text/typewriter/tests.rs`（944 行）→ 共通の組み立て＋`tests/{talk,events,timeline,cache,draw}.rs`。足したテスト: `glyph_appears_exactly_at_show_at`・`pause_before_start_keeps_remaining_lead_on_resume`・`skip_before_start_runs_whole_timeline`・`update_before_start_reveals_nothing`・`unrepresentable_waits_become_zero_length`・`unrepresentable_default_char_wait_becomes_zero_length`・`timeline_end_is_where_last_item_finishes`。
+- 変える前後の期待: `timeline_puts_glyph_after_wait_when_cluster_spans_two_chars`（`abs() < 1e-9` → `assert_eq!(show_at, ms(1400))`）。作者の秒が負・NaN・無限大・範囲の外 → 前は負が時刻を戻し、NaN は後ろの全部を壊し、無限大は後ろが来なかった。後は長さ 0 として `warn!`。項目の無いトークの開始より前の刻み → 前は `Completed`（進行度 1.0）、後は `Playing`（進行度 0）。
+- 取り除いた分かれ道: `skip` の `f64::INFINITY`（行程の終わりまで進める形に替えた）。取り除いたログは無い。

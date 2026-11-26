@@ -13,6 +13,7 @@ use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
+use dola::{TimeDelta, TimePoint, TimeSpan};
 use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 
 pub use crate::ecs::widget::text::label::TextDirection;
@@ -80,7 +81,7 @@ fn on_typewriter_add(mut world: DeferredWorld, hook: HookContext) {
         }
         if needs_talk {
             // 空のトークを登録（背景描画のため）
-            entity_cmds.insert(TypewriterTalk::new(vec![], 0.0));
+            entity_cmds.insert(TypewriterTalk::new(vec![], TimePoint::ZERO));
         }
     }
 }
@@ -119,9 +120,9 @@ pub struct TypewriterTalk {
     // === 再生状態 ===
     state: TypewriterState,
     /// 再生開始時刻
-    start_time: f64,
-    /// 一時停止時の経過時間
-    paused_elapsed: f64,
+    start_time: TimePoint,
+    /// 一時停止時の経過時間（開始より前に止めたら負）
+    paused_elapsed: TimeDelta,
     /// 現在の表示クラスタ数
     visible_cluster_count: u32,
     /// 進行度（0.0〜1.0）
@@ -132,12 +133,12 @@ pub struct TypewriterTalk {
 
 impl TypewriterTalk {
     /// トークン列と開始時刻から TypewriterTalk を生成
-    pub fn new(tokens: Vec<TypewriterToken>, start_time: f64) -> Self {
+    pub fn new(tokens: Vec<TypewriterToken>, start_time: TimePoint) -> Self {
         Self {
             tokens,
             state: TypewriterState::Playing,
             start_time,
-            paused_elapsed: 0.0,
+            paused_elapsed: TimeDelta::ZERO,
             visible_cluster_count: 0,
             progress: 0.0,
             next_item_index: 0,
@@ -147,7 +148,7 @@ impl TypewriterTalk {
     // === 操作 API ===
 
     /// 一時停止
-    pub fn pause(&mut self, current_time: f64) {
+    pub fn pause(&mut self, current_time: TimePoint) {
         if self.state == TypewriterState::Playing {
             self.paused_elapsed = current_time - self.start_time;
             self.state = TypewriterState::Paused;
@@ -155,7 +156,7 @@ impl TypewriterTalk {
     }
 
     /// 再開
-    pub fn resume(&mut self, current_time: f64) {
+    pub fn resume(&mut self, current_time: TimePoint) {
         if self.state == TypewriterState::Paused {
             self.start_time = current_time - self.paused_elapsed;
             self.state = TypewriterState::Playing;
@@ -176,7 +177,7 @@ impl TypewriterTalk {
             return Vec::new();
         }
         self.state = TypewriterState::Playing;
-        self.advance(f64::INFINITY, timeline)
+        self.advance(timeline.end(), timeline)
     }
 
     // === 状態取得 ===
@@ -207,7 +208,7 @@ impl TypewriterTalk {
     }
 
     /// 開始時刻を取得
-    pub fn start_time(&self) -> f64 {
+    pub fn start_time(&self) -> TimePoint {
         self.start_time
     }
 
@@ -220,22 +221,25 @@ impl TypewriterTalk {
     /// * `timeline` - Stage 2 IR タイムライン（LayoutCache から取得）
     ///
     /// # Returns
-    /// 発火すべきイベントのリスト
+    /// 発火すべきイベントのリスト（開始より前の刻みでは何も進めず空）
     pub fn update(
         &mut self,
-        current_time: f64,
+        current_time: TimePoint,
         timeline: &TypewriterTimeline,
     ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
         if self.state != TypewriterState::Playing {
             return Vec::new();
         }
-        self.advance(current_time - self.start_time, timeline)
+        let Some(elapsed) = current_time.span_since(self.start_time) else {
+            return Vec::new();
+        };
+        self.advance(elapsed, timeline)
     }
 
     /// 経過時間 `elapsed` まで時間表を進め、発火すべきイベントを返す
     fn advance(
         &mut self,
-        elapsed: f64,
+        elapsed: TimeSpan,
         timeline: &TypewriterTimeline,
     ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
         let mut events_to_fire = Vec::new();

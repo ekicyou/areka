@@ -12,6 +12,7 @@ use crate::ecs::widget::text::typewriter::{Typewriter, TypewriterLayoutCache, Ty
 use crate::ecs::widget::text::typewriter_ir::{TimelineItem, TypewriterTimeline, TypewriterToken};
 use bevy_ecs::entity::EntityHashSet;
 use bevy_ecs::prelude::*;
+use dola::TimeSpan;
 use tracing::{debug, trace, warn};
 use windows::Win32::Graphics::DirectWrite::*;
 
@@ -196,13 +197,15 @@ fn build_layout_cache(
 ///
 /// 文のトークンは、その UTF-16 の終わりに届くまでクラスタを 1 つずつ `Glyph` にする
 /// （サロゲート対や結合文字の 2 文字以上が 1 クラスタでも数がずれない）。
+/// 作者が書いた秒（待ちと 1 字の待ちの既定）は、ここで 1 回だけ長さへ変える。
 pub(crate) fn timeline_items(
     tokens: &[TypewriterToken],
     cluster_lengths: &[u16],
     default_char_wait: f64,
 ) -> Vec<TimelineItem> {
+    let char_wait = author_span(default_char_wait, "default_char_wait");
     let mut items = Vec::new();
-    let mut current_time = 0.0;
+    let mut current_time = TimeSpan::ZERO;
     let mut cluster_index = 0usize;
     // 出したクラスタの UTF-16 の長さの和と、ここまでの文の UTF-16 の長さの和
     let mut shown_end = 0usize;
@@ -213,7 +216,7 @@ pub(crate) fn timeline_items(
             TypewriterToken::Text(text) => {
                 text_end += text.encode_utf16().count();
                 while shown_end < text_end && cluster_index < cluster_lengths.len() {
-                    current_time += default_char_wait;
+                    current_time = current_time + char_wait;
                     items.push(TimelineItem::Glyph {
                         cluster_index: cluster_index as u32,
                         show_at: current_time,
@@ -222,12 +225,13 @@ pub(crate) fn timeline_items(
                     cluster_index += 1;
                 }
             }
-            TypewriterToken::Wait(duration) => {
+            TypewriterToken::Wait(secs) => {
+                let duration = author_span(*secs, "wait");
                 items.push(TimelineItem::Wait {
-                    duration: *duration,
+                    duration,
                     start_at: current_time,
                 });
-                current_time += duration;
+                current_time = current_time + duration;
             }
             TypewriterToken::FireEvent { target, event } => {
                 items.push(TimelineItem::FireEvent {
@@ -239,6 +243,14 @@ pub(crate) fn timeline_items(
         }
     }
     items
+}
+
+/// 作者が書いた秒を長さへ変える。変えられない値（有限でない・負・範囲の外）は長さ 0 にする。
+fn author_span(secs: f64, field: &'static str) -> TimeSpan {
+    TimeSpan::try_from_secs_f64(secs).unwrap_or_else(|error| {
+        warn!(field, secs, %error, "Typewriter wait is not a valid length; using 0");
+        TimeSpan::ZERO
+    })
 }
 
 /// Stage 1 → Stage 2 IR 変換

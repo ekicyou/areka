@@ -287,7 +287,7 @@ fn create_typewriter_demo_window(world: &mut World) {
                 a: 1.0,
             },
         ),
-        TypewriterTalk::new(vec![], 0.0),
+        TypewriterTalk::new(vec![], dola::TimePoint::ZERO),
         BoxStyle {
             // size 100% + margin は親をはみ出すため、flex_grow を使用
             size: Some(BoxSize {
