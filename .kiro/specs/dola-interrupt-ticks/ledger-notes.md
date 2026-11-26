@@ -112,3 +112,7 @@
 - 振る舞いの変化: 1 ms 未満の `Instruction::Wait` が 100ns の格子でちょうど残る（今の parser は整数のミリ秒しか作らないので本番の値は変わらない）。`ChoiceTimeoutDirective::Secs(f64)` → `Delta(TimeDelta)`。
 - 変える前後の期待（`duration.rs` の中のテスト）: `char_count_times_nominal_ms_in_seconds` → `char_count_times_nominal_ms`（実数の秒 → `ms(250)`）。`empty_text_has_zero_duration`（0.0 → `TimeSpan::ZERO`）・`counts_clusters_not_bytes_or_utf16_units`（`ms(150)`）・`zwj_sequence_counts_as_one_cluster`（`ms(50)`）。足したテスト `unrepresentable_millis_stick_to_the_max`。
 - 3.8 で外す見込み: `drive_delivery_tests.rs::non_finite_tick_is_ignored_and_playback_survives`。`compile_sheet_tests.rs::compiled_start_times_are_finite_non_negative_non_decreasing` の有限の主張と `compile_choice_timeout_tests.rs` の `is_finite` は型で表せない。
+
+## 3.6
+
+- 外したテスト・分かれ道・ログは無い。足した関数 `areka_sakura::reveal::chunk_reveal_offsets` と隣のテスト 12 本。割り切れる長さ（字数 × 50 ms）では今の値と同じ（`production_length_matches_current_values`）。割り切れない長さでは、どの字も今の実数の式の値から 100ns 未満だけ動く（`chained_chunks_keep_error_below_one_tick_and_never_go_back` ほか）。今の実数の式（emo-text の `extend_chunk`・seriko の `push_chunk`）の置き換えは 4.2・4.5。

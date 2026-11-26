@@ -232,7 +232,7 @@
   - _Dispatch: standard — 形は設計が与え、刻みと縁の書き換えが残る_
   - _Requirements: 7.1, 7.4, 7.9, 14.3, 14.4, 17.8_
 
-- [ ] 3.6 (P) areka-sakura: 1 字ごとの間隔の式を 1 本の関数として置く
+- [x] 3.6 (P) areka-sakura: 1 字ごとの間隔の式を 1 本の関数として置く
   - 塊の頭から始まる塊と、前の字から続く塊を、整数の比べで分け、字ごとに 1 回だけ丸める式で、塊の頭からの隔たりを返す
   - 隣のテストで、有理数の値との比べ（100 ms を 3 字・長さ 10,000 を 32 字・`p = 0`・続く塊の最後の字・前の字が遠い塊・長さ 0・字数 0）、塊を 3 つ以上続けた列で差が 100ns 未満で減らない事、字数 × 50 ms で今の値と等しい事が通る
   - _Boundary: areka-sakura 本体（1 字ごとの間隔）_
@@ -809,3 +809,4 @@
 - 2.13: `LoopOffset::Scalar(v)` は 0 から v の幅で引く待ち（main からの意味・設計 964 行）。決まった値の待ちは `Range{min == max}` で書く。
 - 3.4: `crates/areka-talk/src/origin.rs` の `//!` の「`dola::time` の型と `std` のみ」は、origin.rs 自身が dola を使わないので「`std` のみ」が正しい。12.2 で拾う。
 - 3.5: areka-sakura のテストの組み立て `menu_horizon()` は `TimeSpan`（起点からの隔たり 350 ms）。`ChoiceWaiting.display_end` は `TimePoint` なので、3.8 は「起点の時刻 + `menu_horizon()`」と比べる。`compile_test_support.rs:64-65` の 2 件は 3.7 が直す。
+- 3.6: 1 字ごとの間隔は `areka_sakura::reveal::chunk_reveal_offsets(prev_since_chunk_start: Option<TimeDelta>, duration: TimeSpan, count: usize) -> impl Iterator<Item = TimeSpan>`（塊の頭からの隔たり）。areka-sakura の中のテストは 3.7・3.8 の後に回す（3.6 の 12 本は仮の crate で緑）。
