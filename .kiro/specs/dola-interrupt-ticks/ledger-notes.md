@@ -148,3 +148,9 @@
 ## 3.12
 
 - 段 2 の締め: `cargo test -p wintf`（lib 1607 passed・22 ignored ほか全部緑）・`-p areka-talk`（14）・`-p areka-sakura`（161）・`-p areka-kanade`（651 + 77）が 1 本ずつ緑。`cargo build -p wintf --examples` 可。整形の検査は緑。clippy の警告はこの spec が触ったファイルに新しく足した物は無い（`wintf/examples/typewriter_demo.rs` の `needless_update` 2 件は付け替えの前から在る）。
+
+## 4.1
+
+- 外したテスト・分かれ道・ログは無い。ログの欄: `send_tick` の debug `now_ms` → `now`、settle の warn `wait_ms` → `wait`、配送の失敗の error に `fire_time` を足した（Display）。
+- 変える前後の期待: `settle_tests::wait_over_the_cap_stops_at_the_cap`（字面 `"wait_ms=600001"` → `wait=` を `FromStr` で読んで `ms(600_001)` と比べる）・`settle_time_is_the_longest_runonce`（整数 → `ms(want)`）。table.rs の中のテストと table_always・table_film・table_trigger・table_calls・table_calls_check の期待は同じ値を `ms(..)`／`at_ms(..)` へ写した。
+- 型: `LoopTrigger::Always/Periodic` の周期は `NonZeroU64` → `TimeSpan`（0 は表を組む所で落とす）。seriko の時計は `TimePoint` を返す（ミリ秒への丸めの元が無くなる）。settle は軸 0 で `TalkCue::scheduled(ZERO, ZERO, ..)` を組む。

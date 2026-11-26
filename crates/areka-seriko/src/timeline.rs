@@ -15,6 +15,7 @@
 //!   （経過を周期で割る・丸めない）。
 
 use crate::table::{FrameAct, LoopFrame};
+use dola::TimeSpan;
 use std::num::{NonZeroU32, NonZeroU64};
 
 /// 乱数注入シーム（クロック注入と同型）。`[0, bound)` の一様整数を返す。
@@ -50,7 +51,7 @@ pub(crate) struct LotteryBoundary {
 }
 
 /// 1 秒（1000ms）グリッド。ghost `BoundarySchedule` と同じ絶対グリッド整列（毎秒抽選の写像）。
-const LOTTERY_GRID_MS: u64 = 1000;
+const LOTTERY_GRID: TimeSpan = TimeSpan::from_millis(1000);
 
 /// `LOTTERY_GRID_MS` の倍数のうち `now_ms` より厳密に大きい最小値（例: 0→1000・1000→2000・1500→2000）。
 fn next_boundary_strictly_after(now_ms: u64) -> u64 {

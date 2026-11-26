@@ -1,6 +1,7 @@
 //! looper の子: 台本の合図の後の作り直し（[`LoopRuntime::refresh`]）。
 
 use areka_sakura::ActorKey;
+use dola::TimePoint;
 
 use super::top_calls::{put_top_always, put_visible, run_top_calls};
 use super::{
@@ -37,7 +38,7 @@ impl LoopRuntime {
         &mut self,
         scope: &ActorKey,
         slot: Slot,
-        at_ms: Option<u64>,
+        at_ms: Option<TimePoint>,
         states: &mut ScopeStates,
     ) -> Option<DisplayCommand> {
         let LoopRuntime {

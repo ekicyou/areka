@@ -99,9 +99,9 @@ pub(super) fn on_bind<O: SurfaceOutput>(
 
     if let Some(command) = last_changed {
         // 途中の姿は出さず、最後の集合で 1 件だけ。部品のコマを載せ直した Show があればそれを出す。
-        let at_ms = loop_runtime.event_ms();
+        let at = loop_runtime.event_time();
         let command = loop_runtime
-            .refresh(&cue.actor, Slot::Shell, at_ms, states)
+            .refresh(&cue.actor, Slot::Shell, at, states)
             .unwrap_or(command);
         emit_display(out, command);
     }

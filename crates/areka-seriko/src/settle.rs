@@ -8,10 +8,11 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use dola::{TimePoint, TimeSpan};
 
 use crate::actor::{SerikoMsg, handle_message};
 use crate::bind::{BindResolver, DefaultBinds};
@@ -19,23 +20,23 @@ use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, SurfaceOutput};
 use crate::resolve::SurfaceResolver;
 use crate::state::{ScopeStates, Slot};
-use crate::table::{AnimationTable, LoopTrigger};
+use crate::table::{AnimationTable, LoopTrigger, total_wait};
 
-/// 本番の刻みと同じ間隔（ms・`areka-ghost` の ticker と同じ）。
-pub(crate) const SETTLE_TICK_MS: u64 = 16;
+/// 本番の刻みと同じ間隔（`areka-ghost` の ticker と同じ）。
+pub(crate) const SETTLE_TICK: TimeSpan = TimeSpan::from_millis(16);
 
 /// 進める刻みの数の上限（16ms × 37,500 ＝ 10 分）。作者の書いた長すぎる待ちで書き出しが止まらないように。
 pub(crate) const SETTLE_MAX_TICKS: u64 = 37_500;
 
 /// その面の `runonce` の待ちの合計の最大（無ければ 0・部品の `runonce` は数えない）。
-pub fn settle_time(table: &AnimationTable, surface_id: u32) -> u64 {
+pub fn settle_time(table: &AnimationTable, surface_id: u32) -> TimeSpan {
     table
         .animations(surface_id)
         .iter()
         .filter(|a| a.trigger == LoopTrigger::Runonce)
-        .map(|a| a.frames.iter().map(|f| u64::from(f.wait_ms)).sum::<u64>())
+        .map(|a| total_wait(&a.frames))
         .max()
-        .unwrap_or(0)
+        .unwrap_or(TimeSpan::ZERO)
 }
 
 /// 指令を捨てる出力（書き出しは最後の状態だけを読む）。
@@ -56,17 +57,17 @@ pub fn settle_surface(
     binds: &BindSet,
     surface_id: u32,
 ) -> PatternState {
-    let wait_ms = settle_time(table, surface_id);
-    let until = wait_ms.min(SETTLE_MAX_TICKS * SETTLE_TICK_MS);
-    if until < wait_ms {
+    let wait = settle_time(table, surface_id);
+    let until = wait.min(SETTLE_TICK.mul_div(SETTLE_MAX_TICKS, 1));
+    if until < wait {
         tracing::warn!(
             surface_id,
             max_ticks = SETTLE_MAX_TICKS,
-            wait_ms,
+            wait = %wait,
             "seriko: settle runonce の待ちの合計が上限を越える——上限の時点で打ち切って書き出す"
         );
     }
-    let clock = Arc::new(AtomicU64::new(0));
+    let clock = Arc::new(AtomicI64::new(0));
     let read = Arc::clone(&clock);
     let resolver = SurfaceResolver::new(BTreeMap::new());
     let bind_resolver = BindResolver::empty();
@@ -77,10 +78,12 @@ pub fn settle_surface(
         rng: Box::new(|_| 1),
         pick_rng: crate::seeded_rng(0),
     })
-    .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst))));
+    .with_clock(Some(Arc::new(move || {
+        TimePoint::from_ticks(read.load(Ordering::SeqCst))
+    })));
     let actor = ActorKey::from(scope.to_string());
-    let mut send = |ms: u64, msg: SerikoMsg| {
-        clock.store(ms, Ordering::SeqCst);
+    let mut send = |now: TimePoint, msg: SerikoMsg| {
+        clock.store(now.as_ticks(), Ordering::SeqCst);
         let _ = handle_message(
             &resolver,
             &bind_resolver,
@@ -91,24 +94,27 @@ pub fn settle_surface(
         );
     };
 
-    send(0, SerikoMsg::Tick { now_ms: 0 });
+    let start = TimePoint::ZERO;
+    send(start, SerikoMsg::Tick { now: start });
     send(
-        0,
-        SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: actor.clone(),
-            command: CueCommand::Emote {
+        start,
+        SerikoMsg::Cue(TalkCue::scheduled(
+            start,
+            TimeSpan::ZERO,
+            actor.clone(),
+            CueCommand::Emote {
                 key: surface_id.to_string(),
             },
-            duration: 0.0,
-        }),
+            TimeSpan::ZERO,
+        )),
     );
-    let mut now = SETTLE_TICK_MS;
-    while now < until {
-        send(now, SerikoMsg::Tick { now_ms: now });
-        now += SETTLE_TICK_MS;
+    let end = start + until;
+    let mut now = start + SETTLE_TICK;
+    while now < end {
+        send(now, SerikoMsg::Tick { now });
+        now = now + SETTLE_TICK;
     }
-    send(until, SerikoMsg::Tick { now_ms: until });
+    send(end, SerikoMsg::Tick { now: end });
     drop(send);
     states.current_pattern(&actor, Slot::Shell).clone()
 }

@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use dola::TimePoint;
 
 use crate::actor::SerikoClock;
 use crate::calls::CallOutcome;
@@ -135,7 +136,7 @@ pub(crate) struct LoopRuntime {
     /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない。
     parts: PartClocks,
     /// 刻みと同じ時計。台本の合図を処理する
-    /// ときに読む（[`LoopRuntime::event_ms`]）。無ければ出来事の時刻は直前の刻みの時刻。
+    /// ときに読む（[`LoopRuntime::event_time`]）。無ければ出来事の時刻は直前の刻みの時刻。
     clock: Option<SerikoClock>,
     /// 一番上の面の引き金の状態。面に入ったときに
     /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
@@ -361,7 +362,7 @@ impl LoopRuntime {
 
     /// 台本の合図を処理する今の時刻（時計が無ければ `None`＝[`LoopRuntime::refresh`] が直前の刻みの
     /// 時刻を使う）。
-    pub(crate) fn event_ms(&self) -> Option<u64> {
+    pub(crate) fn event_time(&self) -> Option<TimePoint> {
         self.clock.as_ref().map(|clock| clock())
     }
 
@@ -376,7 +377,7 @@ impl LoopRuntime {
         if !self.has_talk {
             return;
         }
-        let Some(now_ms) = self.event_ms().or(self.last_seen) else {
+        let Some(now_ms) = self.event_time().or(self.last_seen) else {
             return;
         };
         self.epoch.observe(cue.at, now_ms);
@@ -434,7 +435,11 @@ impl LoopRuntime {
     /// 数えた数・今現れている数・文字が現れた壁時刻の写し）を 1 つ作り、一番上の `talk` を同じ判定に
     /// 掛ける（開始の時刻は区切りの文字が現れた時刻）。数えを進めて文字の列を刈り込むのは、全部の面が
     /// 窓を読み終えた刻みの最後（[`settle_talk`]）。
-    pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
+    pub(crate) fn on_tick(
+        &mut self,
+        now_ms: TimePoint,
+        states: &mut ScopeStates,
+    ) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen
             && now_ms < last

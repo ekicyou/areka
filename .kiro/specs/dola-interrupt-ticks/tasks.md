@@ -292,7 +292,7 @@
 
 - [ ] 4. 段 3: areka-seriko・areka-emo-text・areka-ghost を付け替える
 
-- [ ] 4.1 (P) areka-seriko の時計と表の縁: 作者の値を表を組む所で 1 回だけ変える
+- [x] 4.1 (P) areka-seriko の時計と表の縁: 作者の値を表を組む所で 1 回だけ変える
   - 刻みのメッセージと送り口を時刻の型にし、ミリ秒の引数と欄を、時刻なら時刻の型、長さなら長さの型にする
   - 表を組む所の 3 つ（pattern定義のコマの待ち・`periodic` の秒・`always` の 1 周）で 1 回だけ長さへ変え、毎秒の抽選と刻みの周期を長さの定数にする
   - 前半は、seriko の時計を時刻を返す関数の型にして残し、合図を処理する時に時計を読む作りと書き出しの進め方の偽の時計を型だけ替える
@@ -811,3 +811,4 @@
 - 3.5: areka-sakura のテストの組み立て `menu_horizon()` は `TimeSpan`（起点からの隔たり 350 ms）。`ChoiceWaiting.display_end` は `TimePoint` なので、3.8 は「起点の時刻 + `menu_horizon()`」と比べる。`compile_test_support.rs:64-65` の 2 件は 3.7 が直す。
 - 3.6: 1 字ごとの間隔は `areka_sakura::reveal::chunk_reveal_offsets(prev_since_chunk_start: Option<TimeDelta>, duration: TimeSpan, count: usize) -> impl Iterator<Item = TimeSpan>`（塊の頭からの隔たり）。areka-sakura の中のテストは 3.7・3.8 の後に回す（3.6 の 12 本は仮の crate で緑）。
 - 3.9: kanade の `src/schedule/mod.rs:30` の `#[cfg(test)] use dola::{TimePoint, time::testing::at_ms};` は 3.10 のテストが使う前提（使わなければ 3.10 で外す。3.12 で警告 0 を見る）。kanade の共有の組み立ては `tests/kanade/choice_test_test_support.rs` の `CHOICE_DISPLAY_END`／`CHOICE_DEADLINE: TimePoint`、`establish_choice_wait` の `directive: Option<TimeDelta>`、`common_recording::tick(harness, now: TimePoint)`、`common_bounded::drive_ticks_until_disconnect(.., first_tick_second: i64, ..)`。
+- 4.1: `crates/areka-seriko/src/looper.rs` は 4.1 の口の付け替えで 887 → 892 行。4.2 は終える時に 887 行以下へ戻す。`timeline.rs` の `lap_of` などは周期で割るので、4.2 は 0 の周期で panic しない形にするか前提を `debug_assert!` で示す。`timeline.rs:56` の説明が `LOTTERY_GRID_MS` を名指している（4.2 で直す）。`table.rs` は 969 行。seriko の組み立て: `cue(at: TimeSpan, ..)`・`text(at: TimeSpan, ..)`（1 字 `ms(50)`）・`part_playing(TimePoint)`・`draw_frame(id, TimeSpan)`・`emote_cue(TimeSpan, ..)`・`ClockRig::{send, tick, hear}(TimePoint, ..)`・looper_test_support の `switch(.., at: TimePoint)`・`started(..) -> Option<TimePoint>`（`Playback.started_at` へ改名待ち）・tests/common の `run_core(.., ticks: &[TimePoint], ..)`。

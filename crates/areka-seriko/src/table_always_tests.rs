@@ -2,9 +2,9 @@
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
-use std::num::NonZeroU64;
-
 use areka_emo_compose::{EmoWorld, PartKey};
+use dola::TimeSpan;
+use dola::time::testing::ms;
 
 use super::{AnimationTable, LoopTrigger};
 use crate::test_support::{table_and_logs, warns};
@@ -21,10 +21,6 @@ fn surface0_with(interval: &str) -> String {
     )
 }
 
-fn period(ms: u64) -> NonZeroU64 {
-    NonZeroU64::new(ms).expect("正")
-}
-
 /// `always` の単独（小文字の完全一致）だけを、回数なし・周期＝待ちの合計で採る。コマは pattern の
 /// 番号の昇順・サーフェスを指す（絵は指さない）。
 #[test]
@@ -36,16 +32,19 @@ fn exact_always_is_adopted_with_period_and_no_laps() {
     assert_eq!(
         anims[0].trigger,
         LoopTrigger::Always {
-            period_ms: period(80),
+            period: ms(80),
             laps: None
         }
     );
-    let frames: Vec<(i64, u32, Option<u32>)> = anims[0]
+    let frames: Vec<(i64, TimeSpan, Option<u32>)> = anims[0]
         .frames
         .iter()
-        .map(|f| (f.surface_id, f.wait_ms, f.picture))
+        .map(|f| (f.surface_id, f.wait, f.picture))
         .collect();
-    assert_eq!(frames, vec![(10, 0, None), (11, 50, None), (-1, 30, None)]);
+    assert_eq!(
+        frames,
+        vec![(10, ms(0), None), (11, ms(50), None), (-1, ms(30), None)]
+    );
     assert!(
         warns(&logs).is_empty(),
         "採ったときは warn! を出さない: {logs:?}"
@@ -130,8 +129,8 @@ fn fixture_table_carries_hand_written_always() {
             })
             .collect()
     };
-    let endless = |ms| LoopTrigger::Always {
-        period_ms: period(ms),
+    let endless = |total| LoopTrigger::Always {
+        period: ms(total),
         laps: None,
     };
     assert_eq!(always_of(0), vec![(0, endless(200), vec![30, 31])]);

@@ -5,9 +5,11 @@
 //! 同じ関数へ `film_sheets()`・`film_skips()` を渡すだけ）。面の表の element の種類も、分解と同じに
 //! `ElementKind::Film` へ替えて組む。
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
 
 use areka_emo_compose::{EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, PartKey};
+use dola::TimeSpan;
+use dola::time::testing::ms;
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
@@ -64,32 +66,32 @@ fn film_rows_carry_period_laps_and_picture_frames() {
     assert_eq!(
         rgb[0].trigger,
         LoopTrigger::Always {
-            period_ms: NonZeroU64::new(200).unwrap(),
+            period: ms(200),
             laps: None
         }
     );
-    let frames: Vec<(Option<u32>, u32)> = rgb[0]
-        .frames
-        .iter()
-        .map(|f| (f.picture, f.wait_ms))
-        .collect();
-    assert_eq!(frames, vec![(Some(3), 0), (Some(4), 100)]);
+    let frames: Vec<(Option<u32>, TimeSpan)> =
+        rgb[0].frames.iter().map(|f| (f.picture, f.wait)).collect();
+    assert_eq!(frames, vec![(Some(3), ms(0)), (Some(4), ms(100))]);
 
     let alpha = table.part_animations(PartKey::Film(FilmId(ALPHA_WEBP)));
     assert_eq!(alpha.len(), 1);
     assert_eq!(
         alpha[0].trigger,
         LoopTrigger::Always {
-            period_ms: NonZeroU64::new(170).unwrap(),
+            period: ms(170),
             laps: NonZeroU32::new(3)
         }
     );
-    let frames: Vec<(Option<u32>, u32)> = alpha[0]
+    let frames: Vec<(Option<u32>, TimeSpan)> = alpha[0]
         .frames
         .iter()
-        .map(|f| (f.picture, f.wait_ms))
+        .map(|f| (f.picture, f.wait))
         .collect();
-    assert_eq!(frames, vec![(Some(5), 0), (Some(6), 100), (Some(7), 0)]);
+    assert_eq!(
+        frames,
+        vec![(Some(5), ms(0)), (Some(6), ms(100)), (Some(7), ms(0))]
+    );
     assert!(
         alpha[0].frames.iter().all(|f| f.surface_id < 0),
         "絵を指すコマはサーフェスの番号を指さない（番号の経路へ渡っても何も描かない）"

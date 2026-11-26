@@ -38,6 +38,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
+use dola::TimePoint;
 
 use crate::calls::CallOutcome;
 use crate::looper::{log_play_end, pattern_frame};
@@ -65,9 +66,9 @@ use part_calls::{place, run_part_calls};
 pub(crate) enum PartAnim {
     /// 再生中（開始の時刻）。今のコマは `frame_at(経過)` で求める。
     Playing {
-        started_at_ms: u64,
+        started_at: TimePoint,
         /// 働きのコマを当て終えた時刻（まだなら `None`）。
-        acts_through: Option<u64>,
+        acts_through: Option<TimePoint>,
     },
     /// `-1` の無い末尾まで進んで、最後のコマを保っている（抽選の対象）。
     Residual { frame_index: usize },

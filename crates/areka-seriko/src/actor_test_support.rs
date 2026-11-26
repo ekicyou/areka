@@ -3,17 +3,23 @@ use crate::output::MockSurfaceOutput;
 use areka_emo_compose::{BindSet, PatternState};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // テストの道具は層をまたぐ受け口の 1 か所の定義。
 pub(super) use crate::test_support::{capture_text, clear_all, cue, fresh_states, text};
 pub(super) use dola::cue::test_support::carrier_cue;
+use dola::{TimePoint, TimeSpan};
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
-pub(super) fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
+pub(super) fn emote_cue(at: TimeSpan, scope: &str, key: &str) -> TalkCue {
     // 表情切替は瞬時（明示的 0）。
-    cue(at, scope, CueCommand::Emote { key: key.into() }, 0.0)
+    cue(
+        at,
+        scope,
+        CueCommand::Emote { key: key.into() },
+        TimeSpan::ZERO,
+    )
 }
 
 /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
@@ -59,7 +65,7 @@ pub(super) struct ClockRig {
     rt: LoopRuntime,
     out: MockSurfaceOutput,
     records: Arc<Mutex<Vec<DisplayCommand>>>,
-    clock: Arc<AtomicU64>,
+    clock: Arc<AtomicI64>,
 }
 
 impl ClockRig {
@@ -74,7 +80,7 @@ impl ClockRig {
         bind_resolver: BindResolver,
         static_binds: BindSet,
     ) -> Self {
-        let clock = Arc::new(AtomicU64::new(0));
+        let clock = Arc::new(AtomicI64::new(0));
         let read = Arc::clone(&clock);
         let out = MockSurfaceOutput::new();
         let records = out.records();
@@ -82,17 +88,18 @@ impl ClockRig {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             bind_resolver,
             states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
-            rt: LoopRuntime::new(config)
-                .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
+            rt: LoopRuntime::new(config).with_clock(Some(Arc::new(move || {
+                TimePoint::from_ticks(read.load(Ordering::SeqCst))
+            }))),
             out,
             records,
             clock,
         }
     }
 
-    /// 時計が `ms` のときに `msg` が届く。そのメッセージで出た指令を返す。
-    pub(super) fn send(&mut self, ms: u64, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        self.clock.store(ms, Ordering::SeqCst);
+    /// 時計が `now` のときに `msg` が届く。そのメッセージで出た指令を返す。
+    pub(super) fn send(&mut self, now: TimePoint, msg: SerikoMsg) -> Vec<DisplayCommand> {
+        self.clock.store(now.as_ticks(), Ordering::SeqCst);
         let before = self.records.lock().unwrap().len();
         let flow = handle_message(
             &self.resolver,
@@ -106,13 +113,13 @@ impl ClockRig {
         self.records.lock().unwrap()[before..].to_vec()
     }
 
-    pub(super) fn tick(&mut self, ms: u64) -> Vec<DisplayCommand> {
-        self.send(ms, SerikoMsg::Tick { now_ms: ms })
+    pub(super) fn tick(&mut self, now: TimePoint) -> Vec<DisplayCommand> {
+        self.send(now, SerikoMsg::Tick { now })
     }
 
-    /// 時計が `ms` のときに cue が届く。
-    pub(super) fn hear(&mut self, ms: u64, cue: TalkCue) -> Vec<DisplayCommand> {
-        self.send(ms, SerikoMsg::Cue(cue))
+    /// 時計が `now` のときに cue が届く。
+    pub(super) fn hear(&mut self, now: TimePoint, cue: TalkCue) -> Vec<DisplayCommand> {
+        self.send(now, SerikoMsg::Cue(cue))
     }
 
     /// これまでに出た指令の全部。
@@ -124,13 +131,13 @@ impl ClockRig {
 /// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
 pub(super) fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
     let cue = cue(
-        0.0,
+        TimeSpan::ZERO,
         scope,
         CueCommand::Custom {
             command: command.to_string(),
             params: dola::DynamicValue::Null,
         },
-        0.0,
+        TimeSpan::ZERO,
     );
     // 前提: この構成は必ずキャリア開封に失敗する。
     assert!(

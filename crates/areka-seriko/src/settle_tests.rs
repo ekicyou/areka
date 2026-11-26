@@ -4,6 +4,8 @@
 //! `always` のコマの頭。刻みの位相は書き出しの決め方（合図と同じ時刻 0 から 16ms ごと）。
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
+use dola::TimeSpan;
+use dola::time::testing::ms;
 
 use super::{settle_surface, settle_time};
 use crate::table::AnimationTable;
@@ -100,7 +102,7 @@ fn settle_time_is_the_longest_runonce() {
         (100, 0),
         (999, 0),
     ] {
-        assert_eq!(settle_time(&t, surface), want, "面 {surface}");
+        assert_eq!(settle_time(&t, surface), ms(want), "面 {surface}");
     }
 }
 
@@ -191,8 +193,13 @@ fn wait_over_the_cap_stops_at_the_cap() {
     let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 11)));
     let warns = crate::test_support::warns(&logs);
     assert_eq!(warns.len(), 1, "{logs:?}");
-    for field in ["surface_id=11", "max_ticks=37500", "wait_ms=600001"] {
+    for field in ["surface_id=11", "max_ticks=37500"] {
         assert!(warns[0].contains(field), "{field}: {}", warns[0]);
     }
+    let wait = warns[0]
+        .split_whitespace()
+        .find_map(|f| f.strip_prefix("wait="))
+        .and_then(|v| v.parse::<TimeSpan>().ok());
+    assert_eq!(wait, Some(ms(600_001)), "{}", warns[0]);
     assert_eq!(top(&p.unwrap(), 0), Some(100));
 }

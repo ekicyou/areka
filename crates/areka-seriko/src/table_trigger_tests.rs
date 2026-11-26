@@ -2,7 +2,9 @@
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
+
+use dola::time::testing::ms;
 
 use super::{AnimationTable, LoopTrigger};
 use crate::test_support::{table_and_logs, warns};
@@ -31,9 +33,7 @@ fn three_words_are_adopted_and_debug_logged_once() {
         ("runonce", LoopTrigger::Runonce, "runonce", None),
         (
             "periodic,3",
-            LoopTrigger::Periodic {
-                period_ms: NonZeroU64::new(3000).expect("正"),
-            },
+            LoopTrigger::Periodic { period: ms(3000) },
             "periodic",
             Some("value=3"),
         ),

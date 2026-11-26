@@ -44,6 +44,7 @@ use std::sync::{Arc, PoisonError, RwLock};
 
 use areka_sakura::strict::DetectionPoint;
 use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
+use dola::TimePoint;
 
 use crate::bind::BindResolver;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
@@ -68,20 +69,23 @@ pub const BIND_NOEVENT_COMMAND: &str = "bind-noevent";
 pub enum SerikoMsg {
     /// broadcast された 1 発火（`SerikoSink::emit` が橋渡しする・到着順に適用）。
     Cue(TalkCue),
-    /// 時間駆動ループの 1 tick（絶対時刻 ms・素の `u64`）。
+    /// 時間駆動ループの 1 tick（絶対の時刻）。
     ///
     /// cue と同一 inbox を FIFO 共有し、`SerikoSink::send_tick` が橋渡しする。`handle_message` の
     /// Tick 腕が `LoopRuntime::on_tick` を回し、単一発行点 `emit_display` から発行する。
-    Tick { now_ms: u64 },
+    Tick { now: TimePoint },
     /// 定義の差し替えの依頼。
     ///
     /// [`spawn_seriko`] の受信の閉包が `handle_message` より先に捌く（定義を所有する殻の仕事）。
     Replace(Box<SerikoReplace>),
     /// 表示層からの窓の知らせ。
     ///
-    /// `at_ms` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
+    /// `at` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
     /// [`SerikoSink::send_stage`] が橋渡しする。
-    Stage { note: StageNote, at_ms: Option<u64> },
+    Stage {
+        note: StageNote,
+        at: Option<TimePoint>,
+    },
     /// 明示の停止の口（[`SerikoSink::close`]・今はテストが使う）。本番は送り手を全部 drop して止める。
     Close,
 }
@@ -166,16 +170,16 @@ impl SerikoSink {
         self.tx.send(SerikoMsg::Close)
     }
 
-    /// 時間駆動ループの 1 tick（絶対時刻 ms）を inbox へ橋渡しする。
+    /// 時間駆動ループの 1 tick（絶対の時刻）を inbox へ橋渡しする。
     ///
     /// loop ticker（本番）／テストの直接注入がアクターへ tick を届ける最小 API。cue と同一 inbox を
     /// FIFO 共有するため、tick と cue は構造的に直列化され状態競合しない。受信端消失時（アクター
     /// 停止後）は `send` が `Err` を返すが、それは **shutdown 中の期待事象**（PresentBridge 先例）
     /// ゆえ `error!` でなく [`tracing::debug!`] で観測して戻る（silent failure 禁止・panic しない）。
-    pub fn send_tick(&self, now_ms: u64) {
-        if self.tx.send(SerikoMsg::Tick { now_ms }).is_err() {
+    pub fn send_tick(&self, now: TimePoint) {
+        if self.tx.send(SerikoMsg::Tick { now }).is_err() {
             tracing::debug!(
-                now_ms,
+                now = %now,
                 "seriko: inbox が消失; tick を配送できず破棄した（shutdown 中の期待事象・PresentBridge 先例・R7.5）"
             );
         }
@@ -186,8 +190,8 @@ impl SerikoSink {
     /// 時計が在れば、送るときの時刻を載せる。受信端消失（アクター停止後）は shutdown 中の期待事象
     /// ゆえ [`SerikoSink::send_tick`] と同じく `debug!` で観測して戻る。
     pub fn send_stage(&self, note: StageNote) {
-        let at_ms = self.clock.as_ref().map(|clock| clock());
-        if let Err(err) = self.tx.send(SerikoMsg::Stage { note, at_ms }) {
+        let at = self.clock.as_ref().map(|clock| clock());
+        if let Err(err) = self.tx.send(SerikoMsg::Stage { note, at }) {
             tracing::debug!(
                 msg = ?err.0,
                 "seriko: inbox が消失; 窓の知らせを配送できず破棄した（shutdown 中の期待事象）"
@@ -224,7 +228,8 @@ impl SerikoSink {
                 unreachable!("emit が送るのは常に SerikoMsg::Cue");
             };
             tracing::error!(
-                at = dropped.at,
+                at = %dropped.at,
+                fire_time = %dropped.fire_time,
                 scope = %dropped.actor,
                 command = ?dropped.command,
                 "seriko inbox が消失: surface 発火を配送できず破棄した（受信端全消失）"
@@ -324,8 +329,8 @@ where
     )
 }
 
-/// 刻みと同じ時計（単調・ミリ秒）。
-pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
+/// 刻みと同じ時計（単調）。
+pub type SerikoClock = std::sync::Arc<dyn Fn() -> TimePoint + Send + Sync>;
 
 /// 時計つきの起動（[`spawn_seriko`] は `clock = None` でここへ委ねる）。
 ///
@@ -494,7 +499,7 @@ fn on_stage<O: SurfaceOutput>(
     loop_runtime: &mut LoopRuntime,
     out: &mut O,
     note: StageNote,
-    at_ms: Option<u64>,
+    at: Option<TimePoint>,
 ) {
     let StageNote::Balloon {
         scope, generation, ..
@@ -510,7 +515,7 @@ fn on_stage<O: SurfaceOutput>(
         loop_runtime.drop_finite(scope, Slot::Balloon);
     }
     states.note_stage(&note);
-    if let Some(command) = loop_runtime.refresh(scope, Slot::Balloon, at_ms, states) {
+    if let Some(command) = loop_runtime.refresh(scope, Slot::Balloon, at, states) {
         emit_display(out, command);
     }
 }
@@ -527,8 +532,8 @@ fn on_surface_shown<O: SurfaceOutput>(
     outcome: &ApplyOutcome,
 ) {
     if loop_runtime.on_surface_shown(scope, slot) && matches!(outcome, ApplyOutcome::Unchanged) {
-        let at_ms = loop_runtime.event_ms();
-        if let Some(command) = loop_runtime.refresh(scope, slot, at_ms, states) {
+        let at = loop_runtime.event_time();
+        if let Some(command) = loop_runtime.refresh(scope, slot, at, states) {
             emit_display(out, command);
         }
     }
@@ -572,8 +577,8 @@ fn dispatch_message<O: SurfaceOutput>(
         SerikoMsg::Close => return ControlFlow::Break(()),
         // 時間駆動ループの 1 tick: LoopRuntime へ委譲し、返る指令列を単一発行点 `emit_display`
         // だけで発行する。表示中 slot が 1 つもない tick は on_tick が空を返す＝完全 no-op。
-        SerikoMsg::Tick { now_ms } => {
-            for cmd in loop_runtime.on_tick(now_ms, states) {
+        SerikoMsg::Tick { now } => {
+            for cmd in loop_runtime.on_tick(now, states) {
                 emit_display(out, cmd);
             }
             return ControlFlow::Continue(());
@@ -586,8 +591,8 @@ fn dispatch_message<O: SurfaceOutput>(
             );
             return ControlFlow::Continue(());
         }
-        SerikoMsg::Stage { note, at_ms } => {
-            on_stage(states, loop_runtime, out, note, at_ms);
+        SerikoMsg::Stage { note, at } => {
+            on_stage(states, loop_runtime, out, note, at);
             return ControlFlow::Continue(());
         }
         SerikoMsg::Cue(cue) => cue,
@@ -724,9 +729,9 @@ fn dispatch_message<O: SurfaceOutput>(
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
             // 一番上の `always` を出来事の時刻で始めた絵が在ればそれを、無ければ apply の指令を 1 件だけ
             // 出す。時計は合図を処理する今読む。
-            let at_ms = loop_runtime.event_ms();
+            let at = loop_runtime.event_time();
             let command = loop_runtime
-                .refresh(&cue.actor, Slot::Balloon, at_ms, states)
+                .refresh(&cue.actor, Slot::Balloon, at, states)
                 .unwrap_or(command);
             emit_display(out, command);
         }
@@ -767,9 +772,9 @@ fn dispatch_message<O: SurfaceOutput>(
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
         // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ。
         // 時計は合図を処理する今読む。
-        let at_ms = loop_runtime.event_ms();
+        let at = loop_runtime.event_time();
         let command = loop_runtime
-            .refresh(&cue.actor, Slot::Shell, at_ms, states)
+            .refresh(&cue.actor, Slot::Shell, at, states)
             .unwrap_or(command);
         emit_display(out, command);
     }

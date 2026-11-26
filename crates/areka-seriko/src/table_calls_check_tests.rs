@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
+use dola::TimeSpan;
+use dola::time::testing::at_ms;
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::FrameAct;
@@ -58,7 +60,10 @@ fn move_in_pure_bind_becomes_inert() {
     let (table, _) = table_and_logs(SIX_KINDS);
     let anim = table.animations(10).iter().find(|a| a.id == 1).unwrap();
     let f = &anim.frames[1];
-    assert_eq!((&f.act, f.wait_ms, f.x, f.y), (&FrameAct::Inert, 0, 0, 0));
+    assert_eq!(
+        (&f.act, f.wait, f.x, f.y),
+        (&FrameAct::Inert, TimeSpan::ZERO, 0, 0)
+    );
     // 抽選で動く animation の呼び出しはそのまま働く（相手の欠けは実行時にその相手だけ何もしない）。
     let caller = table.animations(10).iter().find(|a| a.id == 0).unwrap();
     assert_eq!(
@@ -103,10 +108,10 @@ fn ticks_add_no_warn() {
         let scope = areka_sakura::ActorKey::from("0");
         states.apply(&scope, SurfaceTarget::Show(10));
         rt.on_surface_changed(&scope, Slot::Shell);
-        rt.refresh(&scope, Slot::Shell, Some(0), &mut states);
+        rt.refresh(&scope, Slot::Shell, Some(at_ms(0)), &mut states);
         (0..10_000)
             .step_by(100)
-            .flat_map(|now| rt.on_tick(now, &mut states))
+            .flat_map(|now| rt.on_tick(at_ms(now), &mut states))
             .filter(|c| matches!(c, DisplayCommand::Show { .. }))
             .count()
     });
