@@ -214,3 +214,7 @@
 - 外したテスト・分かれ道・ログは無い。足したログの欄: `sink.rs` の `LogSink::emit` に `fire_time`、`at` は Display（文字の形）。
 - 変える前後の期待: `sink.rs` の `emit_logs_structured_event_with_at_actor_and_command_kind`・`emit_logs_structured_event_for_newline_cue`（欄 `at` の実数 `Some(1.5)`・`Some(3.25)` → `FromStr` で読んで `TimeSpan::from_millis(1500)`・`(3250)`）。`spine_e2e_test_s5_close_deadline`（`close_talk_deadline_ms` → `close_talk_deadline`）。`spine_e2e_test_s1_boot_success`（期待 `(f64, CueCommand)` → `(TimeSpan, CueCommand)`）。ほかは `MonotonicMs(n)` → `at_ms(n)`・`Tick(0.0)` → `Tick(at_ms(0))`。
 - areka-ghost の締め: `cargo test -p areka-ghost` は lib 235・ghost 39・ほか 8 が緑。
+
+## 4.12
+
+- 段 3 の締め: `cargo test -p areka-seriko`（lib 545・結合テスト全部）・`-p areka-emo-text`（lib 1198・2 ignored・結合テスト全部）・`-p areka-ghost`（lib 235・ghost 39・ほか 8）が 1 本ずつ緑。`cargo build -p areka-emo-text --examples` 可。整形の検査は緑。

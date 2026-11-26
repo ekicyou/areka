@@ -391,7 +391,7 @@
   - _Dispatch: mechanical — 欄の書き方と期待の値の写し_
   - _Requirements: 7.7, 7.8, 9.1_
 
-- [ ] 4.12 段 3 を締める
+- [x] 4.12 段 3 を締める
   - `cargo test -p areka-seriko`・`-p areka-emo-text`・`-p areka-ghost` が、1 本ずつ回して緑で、areka-emo-text の例が組める
   - _Dispatch: mechanical — 確かめを回すだけ_
   - _Requirements: 7.1, 7.7, 9.1_
