@@ -110,7 +110,7 @@ pub(super) fn hide_reaches_boxes(trigger: VisibilityTrigger, break_latch: bool) 
 fn apply_lifecycle_signals(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<f64>,
+    now_talk_time: Option<TimeSpan>,
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> bool {
     let mut broke = false;
@@ -140,10 +140,6 @@ fn apply_lifecycle_signals(
                 state.break_latch = true;
             }
             TalkLifecycleSignal::DisplayEndAt(end) => {
-                // 送出側の畳み込み種（`talk_lifecycle.rs` の `horizon` の初期値）は負の無限大であり、非有限値は
-                // 送出側で弾かれるが負の有限値は通る。下限 0.0 で丸めて、起点が負へ回った分だけ
-                // 早く消える側へ倒れる乖離を断つ（非数もこの丸めで 0.0 になる）。
-                let end = end.max(0.0);
                 let raised = state.display_end.is_none_or(|known| end > known);
                 if !raised {
                     continue;

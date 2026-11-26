@@ -138,9 +138,9 @@ fn a_user_break_and_the_next_talk_in_the_same_round_hide_then_show() {
 fn a_deadline_reached_after_a_user_break_produces_no_action() {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
+        .at(ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(ms(0))
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)], "前提: 表示が起きていない");
     assert_eq!(
@@ -151,7 +151,7 @@ fn a_deadline_reached_after_a_user_break_produces_no_action() {
 
     let broken = Frame::new(&[(0, seen(2, true))])
         .signal(TalkLifecycleSignal::UserBreak)
-        .at(1.0)
+        .at(ms(1_000))
         .run(&mut state);
     assert_eq!(
         broken.actions,
@@ -188,7 +188,7 @@ fn suppression_does_not_hold_back_a_user_break() {
 
     let broken = Frame::new(&[(0, hovered(seen(3, true)))])
         .signal(TalkLifecycleSignal::UserBreak)
-        .at(1.0)
+        .at(ms(1_000))
         .dragging()
         .run(&mut state);
     assert_eq!(

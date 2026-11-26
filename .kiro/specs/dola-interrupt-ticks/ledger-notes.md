@@ -226,3 +226,9 @@
 - 足した確かめ: `parse_balloon_timeout_reads_every_shape_of_the_value` に `"1000000000000000"` → `Default`・unreadable、`parse_invalid_values_are_disabled` に `cycle:18446744073709551615` → `Disabled`。
 - 改名とログの欄: `configured_timeout_secs` → `configured_timeout`・`resolve_timeout_secs` → `resolve_timeout`・`DEFAULT_BALLOON_TIMEOUT_SECS` → `DEFAULT_BALLOON_TIMEOUT`・`TalkTimeout::Millis(u64)` → `After(TimeSpan)`・`HoverInjectConfig::Cycle { period_ms }` → `{ period }`。欄 `timeout_secs`→`timeout`・`default_secs`→`default`・`period_ms`→`period`（Display）。
 - 変える前後の期待: `horizon_matches_dola_occupancy_definition`（0.95 → `ms(950)`）・talk_clock の 4 本（許容幅つきの比べ → ちょうどの値）・`talk_ended_carries_the_injected_clock_once_when_dropped`（1.234 → `ms(1_234)`）・`talk_clock_now_talk_time_reads_the_injected_clock`（2.5 → `ms(2_500)`）・台本の通しの 2 本（`absolute_end_time()` → `relative_end()`）・seriko_clock_tests（ミリ秒 → `TimePoint::from_ticks`）。
+
+## 5.2
+
+- 取り除いた分かれ道: `balloon_visibility_decision.rs` の `DisplayEndAt` の `end.max(0.0)`（負・非数を 0 へ寄せる所）とその説明。
+- 外したテスト（`balloon_visibility_tests.rs` の「端の値」の節）: `a_negative_display_end_is_rounded_up_to_zero_before_anchoring`・`a_non_number_display_end_is_rounded_up_to_zero_before_anchoring`・`a_non_number_current_time_never_expires_the_measurement`（どれも型で書けない入力。時刻の分からないフレームで満了させない事は `balloon_visibility_timeout_suppression_cases.rs` の場合 ⑾ と `no_measurement_starts_in_frames_without_time` が押さえる）。
+- 変える前後の期待: `parse_accepts_positive_milliseconds`（`"18446744073709551615"` を受け入れ側から外し、`parse_rejects_zero_negative_non_numeric_and_overflow` に「長さの型の範囲を越える」として足した。9 → 10 件）。採った値の記録の欄 `timeout_secs`／`default_secs` → `timeout`／`default`（"30.0" → "30.0000000"、`FromStr` で読んで比べる）。改名 `configured_timeout_secs_reads_env_once_and_is_stable` → `configured_timeout_reads_env_once_and_is_stable`。ほかは秒 → `ms`／`delta_ms`。

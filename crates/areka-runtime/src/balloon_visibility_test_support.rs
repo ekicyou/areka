@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 
 use areka_sakura::TalkId;
 use dola::TimeSpan;
+#[cfg(test)]
+pub(super) use dola::time::testing::{delta_ms, ms};
 
 use super::{
     BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT, GlyphObservation, ScopeObservation,
@@ -225,4 +227,10 @@ impl Frame {
     pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
         decide(state, &self.obs, self.now, self.timeout)
     }
+}
+
+/// `t` から `by` だけ前の時刻（満了の直前などを指す）。
+#[cfg(test)]
+pub(super) fn earlier(t: TimeSpan, by: TimeSpan) -> TimeSpan {
+    t.checked_sub(by).expect("固定した時刻は 0 以上")
 }

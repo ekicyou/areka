@@ -76,16 +76,16 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
 fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(0.0)
+        .at(ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(ms(0))
         .run(&mut state);
     assert!(armed.actions.is_empty(), "箱だけの scope で窓が出た");
     assert_eq!(
         armed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: 0.0,
+            display_end: ms(0),
             deadline: TIMEOUT,
         }]
     );
@@ -100,11 +100,11 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
 
     // 対照: 箱に文字が出ていなければ計測は立たず、何も隠さない。
     let mut state = BalloonVisibilityState::default();
-    for now in [0.0, TIMEOUT] {
+    for now in [ms(0), TIMEOUT] {
         let plain = Frame::new(&[(0, seen(0, false))])
             .at(now)
             .talk_started()
-            .ended_at(0.0)
+            .ended_at(ms(0))
             .run(&mut state);
         assert!(plain.actions.is_empty());
         assert!(plain.logs.is_empty());
@@ -116,9 +116,9 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
 fn hover_on_a_box_holds_the_expired_deadline() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(0.0)
+        .at(ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(ms(0))
         .run(&mut state);
 
     let held = Frame::new(&[(0, hovered(boxed(seen(0, false))))])
@@ -143,13 +143,13 @@ fn hover_on_a_box_holds_the_expired_deadline() {
 fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
+        .at(ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(ms(0))
         .run(&mut state);
 
     let cleared = Frame::new(&[(0, boxed(seen(0, true)))])
-        .at(2.0)
+        .at(ms(2_000))
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
     assert_eq!(
@@ -173,9 +173,9 @@ fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
 fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(0.0)
+        .at(ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(ms(0))
         .run(&mut state);
 
     let broke = Frame::new(&[(0, boxed(seen(0, false)))])
@@ -203,8 +203,8 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
     let decision = Frame::new(&[(1, boxed(seen(0, false)))])
         .signal(TalkLifecycleSignal::UserBreak)
         .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
-        .ended_at(0.0)
-        .at(0.0)
+        .ended_at(ms(0))
+        .at(ms(0))
         .run(&mut state);
     assert!(decision.actions.is_empty(), "{:?}", decision.actions);
     assert!(
@@ -212,7 +212,7 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
             .logs
             .contains(&VisibilityLogEvent::MeasurementStarted {
                 origin: MeasurementOrigin::DisplayEnd,
-                display_end: 0.0,
+                display_end: ms(0),
                 deadline: TIMEOUT,
             }),
         "掛け金の解けた中断で箱だけの scope が計測から外れた: {:?}",
@@ -226,21 +226,21 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
 fn an_unobserved_frame_keeps_the_restarted_deadline_while_a_box_is_showing() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .ended_at(0.0)
-        .at(0.0)
+        .ended_at(ms(0))
+        .at(ms(0))
         .run(&mut state);
     Frame::new(&[(0, hovered(boxed(seen(0, false))))])
-        .at(TIMEOUT + 5.0)
+        .at(TIMEOUT + ms(5_000))
         .run(&mut state);
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(50.0)
+        .at(ms(50_000))
         .run(&mut state);
 
     let blind = Frame::new(&[(0, unobserved(false))])
-        .at(60.0)
+        .at(ms(60_000))
         .run(&mut state);
     let next = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(61.0)
+        .at(ms(61_000))
         .run(&mut state);
 
     assert_eq!(
@@ -248,7 +248,7 @@ fn an_unobserved_frame_keeps_the_restarted_deadline_while_a_box_is_showing() {
         (
             VisibilityDecision::default(),
             VisibilityDecision::default(),
-            Some(50.0 + TIMEOUT)
+            Some(ms(50_000) + TIMEOUT)
         ),
         "(観測の取れなかったフレームの判断, 次のフレームの判断, 満了予定)"
     );

@@ -64,6 +64,7 @@
 
 use super::test_support::*;
 use super::*;
+use dola::TimeDelta;
 
 // ---------------------------------------------------------------------------
 // 表の座標系
@@ -73,23 +74,23 @@ use super::*;
 ///
 /// 0 以外の値にしてあるのは、相対で書いた期待値が絶対時刻の偶然の一致で通らないようにする
 /// ためである。
-const ANCHOR: f64 = 12.0;
+const ANCHOR: TimeSpan = ms(12_000);
 
 /// タイムアウト時間（秒）。各フレームへは [`Frame::timeout`] で渡す。
 ///
 /// 既定と違う値にしてあるのは、`decide` が引数の待ち時間を読まずに既定で測ったときに表が
 /// 赤くなるようにするためである。
-const TIMEOUT: f64 = 20.0;
+const TIMEOUT: TimeDelta = delta_ms(20_000);
 
 /// 計測が成り立つ最初の観測が占有終端から遅れて訪れる量（秒）。
 ///
 /// **0 にしてはならない**——観測はフレーム単位で飛び飛びに入るという前提そのものを表す量で
 /// あり、これが 0 だと「占有終端起点」と「最初の観測の現在時刻起点」が同じ値になって、
 /// 起点の取り違えを表が検出できなくなる。
-const LATE: f64 = 7.0;
+const LATE: TimeDelta = delta_ms(7_000);
 
 /// 満了境界の直前を表す量（秒）。
-const EPS: f64 = 0.25;
+const EPS: TimeDelta = delta_ms(250);
 
 // ---------------------------------------------------------------------------
 // 表の記述語
@@ -126,16 +127,16 @@ enum Signal {
     /// 会話の開始。
     TalkStarted,
     /// 占有終端（[`ANCHOR`] からの相対秒）。
-    DisplayEnd(f64),
+    DisplayEnd(TimeDelta),
     /// 占有終端とトークの終わり（止まった時刻＝占有終端）を一緒に（[`ANCHOR`] からの相対秒）。
-    Ended(f64),
+    Ended(TimeDelta),
 }
 
 /// 本フレームの現在時刻。
 #[derive(Debug, Clone, Copy)]
 enum Now {
     /// [`ANCHOR`] からの相対秒。
-    At(f64),
+    At(TimeDelta),
     /// 現在時刻が分からないフレーム（talk の起点が未確立）。
     Unknown,
 }
@@ -153,18 +154,21 @@ enum Expect {
     /// 列挙した scope をまとめて非表示にする（契機＝タイムアウト）。
     TimedOut(&'static [u32]),
     /// 計測を開始した（値は [`ANCHOR`] からの相対秒）。
-    Started { display_end: f64, deadline: f64 },
+    Started {
+        display_end: TimeDelta,
+        deadline: TimeDelta,
+    },
     /// 計測を破棄した（`deadline` は [`ANCHOR`] からの相対秒）。
     Discarded {
         reason: MeasurementDiscardReason,
-        deadline: f64,
+        deadline: TimeDelta,
     },
     /// 抑止の解除に伴い計測をやり直した（値は [`ANCHOR`] からの相対秒）。
-    Restarted { now: f64, deadline: f64 },
+    Restarted { now: TimeDelta, deadline: TimeDelta },
     /// 抑止のため非表示を見送った（`deadline` は [`ANCHOR`] からの相対秒）。
     Suppressed {
         kinds: SuppressionKinds,
-        deadline: f64,
+        deadline: TimeDelta,
     },
     /// 可視コンテンツが現れたのに表示終了信号が 1 件も届いていない。
     SignalMissing,
@@ -174,7 +178,7 @@ enum Expect {
 #[derive(Debug, Clone, Copy)]
 enum After {
     /// 満了予定が立っている（[`ANCHOR`] からの相対秒）。
-    Deadline(f64),
+    Deadline(TimeDelta),
     /// 満了予定が無い。
     NoDeadline,
     /// 当該 scope の持ち越し可視。
@@ -206,6 +210,19 @@ struct Case {
 // ---------------------------------------------------------------------------
 // 期待記述の展開と走査
 // ---------------------------------------------------------------------------
+
+const fn plus(a: TimeDelta, b: TimeDelta) -> TimeDelta {
+    TimeDelta::from_ticks(a.as_ticks() + b.as_ticks())
+}
+
+const fn minus(a: TimeDelta, b: TimeDelta) -> TimeDelta {
+    TimeDelta::from_ticks(a.as_ticks() - b.as_ticks())
+}
+
+/// [`ANCHOR`] を足して絶対時刻へ直す。
+fn anchored(rel: TimeDelta) -> TimeSpan {
+    TimeSpan::try_from_ticks(ANCHOR.as_ticks() + rel.as_ticks()).expect("表の時刻は 0 以上")
+}
 
 /// 期待記述から、そのフレームの行動列とログ列を組み立てる。
 ///
@@ -255,25 +272,25 @@ fn expand(expect: &[Expect]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent>)
                 deadline,
             } => logs.push(VisibilityLogEvent::MeasurementStarted {
                 origin: MeasurementOrigin::DisplayEnd,
-                display_end: ANCHOR + display_end,
-                deadline: ANCHOR + deadline,
+                display_end: anchored(display_end),
+                deadline: anchored(deadline),
             }),
             Expect::Discarded { reason, deadline } => {
                 logs.push(VisibilityLogEvent::MeasurementDiscarded {
                     reason,
-                    deadline: ANCHOR + deadline,
+                    deadline: anchored(deadline),
                 })
             }
             Expect::Restarted { now, deadline } => {
                 logs.push(VisibilityLogEvent::MeasurementRestarted {
-                    now: ANCHOR + now,
-                    deadline: ANCHOR + deadline,
+                    now: anchored(now),
+                    deadline: anchored(deadline),
                 })
             }
             Expect::Suppressed { kinds, deadline } => {
                 logs.push(VisibilityLogEvent::TimeoutSuppressed {
                     kinds,
-                    deadline: ANCHOR + deadline,
+                    deadline: anchored(deadline),
                 })
             }
             Expect::SignalMissing => logs.push(VisibilityLogEvent::DisplayEndSignalMissing),
@@ -308,9 +325,9 @@ fn run(case: &Case, failures: &mut Vec<String>) {
             })
             .collect();
 
-        let mut frame = Frame::new(&entries).timeout(TIMEOUT);
+        let mut frame = Frame::new(&entries).timeout(TIMEOUT.to_span().expect("正の長さ"));
         if let Now::At(rel) = row.now {
-            frame = frame.at(ANCHOR + rel);
+            frame = frame.at(anchored(rel));
         }
         if row.dragging {
             frame = frame.dragging();
@@ -318,8 +335,8 @@ fn run(case: &Case, failures: &mut Vec<String>) {
         for signal in row.signals {
             frame = match *signal {
                 Signal::TalkStarted => frame.talk_started(),
-                Signal::DisplayEnd(rel) => frame.display_end(ANCHOR + rel),
-                Signal::Ended(rel) => frame.ended_at(ANCHOR + rel),
+                Signal::DisplayEnd(rel) => frame.display_end(anchored(rel)),
+                Signal::Ended(rel) => frame.ended_at(anchored(rel)),
             };
         }
 
@@ -341,10 +358,10 @@ fn run(case: &Case, failures: &mut Vec<String>) {
 
         for &check in row.after {
             let mismatch = match check {
-                After::Deadline(rel) => (state.deadline != Some(ANCHOR + rel)).then(|| {
+                After::Deadline(rel) => (state.deadline != Some(anchored(rel))).then(|| {
                     format!(
                         "満了予定が {:?} ではなく {:?}",
-                        Some(ANCHOR + rel),
+                        Some(anchored(rel)),
                         state.deadline
                     )
                 }),
@@ -444,7 +461,7 @@ fn expectation_expansion_follows_both_ordering_rules() {
 #[test]
 fn expectation_times_are_anchored_on_the_display_end() {
     let (_, logs) = expand(&[Expect::Started {
-        display_end: 0.0,
+        display_end: delta_ms(0),
         deadline: TIMEOUT,
     }]);
     assert_eq!(
@@ -452,19 +469,22 @@ fn expectation_times_are_anchored_on_the_display_end() {
         vec![VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
             display_end: ANCHOR,
-            deadline: ANCHOR + TIMEOUT,
+            deadline: anchored(TIMEOUT),
         }]
     );
     assert_ne!(
-        ANCHOR, 0.0,
+        ANCHOR,
+        ms(0),
         "起点が 0 だと相対と絶対の取り違えが検出できない"
     );
     assert_ne!(
-        LATE, 0.0,
+        LATE,
+        delta_ms(0),
         "最初の観測が遅れて訪れないと起点の取り違えを検出できない"
     );
     assert_ne!(
-        TIMEOUT, DEFAULT_BALLOON_TIMEOUT_SECS,
+        TIMEOUT.to_span().unwrap(),
+        DEFAULT_BALLOON_TIMEOUT,
         "既定と同じだと引数の待ち時間を読まない実装が緑になる"
     );
 }
@@ -474,25 +494,25 @@ fn expectation_times_are_anchored_on_the_display_end() {
 /// scope）も食い違いを拾う。これが 0 件なら表は緑を返すだけの飾りである。
 #[test]
 fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
-    let calibration = Case {
+    const CALIBRATION: Case = Case {
         name: "較正",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::DisplayEnd(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 // 実際には表示が起き、満了予定は立たない。
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
             Row {
-                signals: &[Signal::Ended(0.0)],
+                signals: &[Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(1.0),
+                now: Now::At(delta_ms(1_000)),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 // 実際には満了予定が立ち、scope 0 は見えていて、scope 9 は一度も観測していない。
@@ -506,7 +526,7 @@ fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
     };
 
     let mut failures = Vec::new();
-    run(&calibration, &mut failures);
+    run(&CALIBRATION, &mut failures);
     assert_eq!(
         failures.len(),
         6,
