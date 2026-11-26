@@ -24,8 +24,8 @@ use std::collections::BTreeMap;
 use areka_emo_compose::BindSet;
 use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, DefaultBinds, scope_namespace};
 use bevy_ecs::world::World;
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::{DynamicValue, TimePoint, TimeSpan};
 use tracing::{info, warn};
 
 use super::frame::RuntimeWiring;
@@ -373,12 +373,13 @@ pub(crate) fn emit_binds(sink: &mut impl CueSink, binds: &[(u32, CarriedBinds)])
 }
 
 fn cue(scope: u32, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope.to_string()),
+    TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        ActorKey::from(scope.to_string()),
         command,
-        duration: 0.0,
-    }
+        TimeSpan::ZERO,
+    )
 }
 
 #[cfg(test)]

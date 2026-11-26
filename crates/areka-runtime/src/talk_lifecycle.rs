@@ -4,7 +4,7 @@
 //!
 //! バルーンのタイムアウト計測は「スクリプトの表示が終わってから」を起点とする。
 //! ここでいう表示終了は**待機（`\w` 等）を含む台本の占有区間の終端**であって、最後の文字が
-//! 現れた時刻ではない。dola の占有 horizon は `max(sum_on_ms_grid(cue.at, cue.duration))` で定義されるため、
+//! 現れた時刻ではない。dola の占有 horizon は `max(cue.at + cue.duration)` で定義されるため、
 //! [`BalloonLifecycleSink`] は broadcast される全 cue を観測して同じ式で最大値を集約し、
 //! その**既知最大が更新されたときだけ** UI へ送る。
 //!
@@ -19,7 +19,7 @@
 //! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
 //! 選択肢つきと覚えられるようにする。バリア中はトークの終わりが届かないので計測は立たない。
 //! 中断では起点を占有終端と止まった時刻の早い方にするため（`balloon_visibility.rs` の表）、
-//! 受け口は落ちる瞬間の talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る
+//! 受け口は落ちる瞬間の台本の時刻を [`TalkLifecycleSignal::TalkEnded`] で送る
 //! （判断の側の採り方は `balloon_visibility_wait.rs`）。
 //!
 //! # 会話境界の自己検出
@@ -42,6 +42,7 @@ use std::sync::mpsc::Sender;
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use areka_sakura::contract::ScriptOrigin;
+use dola::TimeSpan;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
@@ -56,7 +57,7 @@ use super::talk_clock::TalkClock;
 /// 台本の順）→ `TalkEnded`。次のトークの `TalkStarted` は必ず前のトークの `TalkEnded` の後に届く
 /// （talk スレッドは受け口を落としてから完了を知らせる）。
 ///
-/// 時刻軸は **talk 相対秒**（`TalkClock::talk_time` と同一軸）。
+/// 時刻軸は **台本の時刻**（`TalkClock::talk_time` と同一軸）。
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
@@ -68,16 +69,16 @@ pub enum TalkLifecycleSignal {
     /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う。
     /// `talk_id` は配送から受け取った番号（受け取っていなければ `None`）。
     TalkStarted { talk_id: Option<TalkId> },
-    /// 待機を含む占有区間の終端（talk 相対秒）。既知最大が更新されたときだけ届く。
-    DisplayEndAt(f64),
+    /// 待機を含む占有区間の終端（台本の時刻）。既知最大が更新されたときだけ届く。
+    DisplayEndAt(TimeSpan),
     /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。
     BalloonTimeout(TalkTimeout),
     /// このトークで選択肢を出した（選択肢の合図を初めて見たときに 1 回だけ・アンカーは数えない・
     /// 場所とスコープを問わない）。
     ChoiceShown,
     /// このトークの受け口が落ちた（最後まで・中断・置き換えのどれでも）。`at` は落ちた瞬間の
-    /// talk 相対秒で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
-    TalkEnded { at: Option<f64> },
+    /// 台本の時刻で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
+    TalkEnded { at: Option<TimeSpan> },
     /// 利用者がバルーンを左ダブルクリックして再生を中断した。
     ///
     /// 送り手は UI スレッドの押下ハンドラで、この信号は `BalloonLifecycleSink` を経由しない。
@@ -91,8 +92,8 @@ pub enum TalkTimeout {
     /// 既定の待ち時間（30 秒か環境変数。決め方は判断の側が持つ）。
     #[default]
     Default,
-    /// そのミリ秒。
-    Millis(u64),
+    /// その長さ。
+    After(TimeSpan),
     /// 時間切れで隠さない。
     Never,
 }
@@ -104,8 +105,8 @@ pub(crate) struct ParsedTimeout {
     pub(crate) unreadable: bool,
 }
 
-/// 時間の欄を読む。省略・空は既定、正の整数はそのミリ秒、0 と負の整数は
-/// 時間切れなし、整数として読めない値（文字・小数・桁あふれ）は既定で `unreadable`。
+/// 時間の欄を読む。省略・空は既定、正の整数はそのミリ秒の長さ、0 と負の整数は
+/// 時間切れなし、整数として読めない値（文字・小数・桁あふれ・長さの型に収まらない値）は既定で `unreadable`。
 /// 前後の空白は落として読む。
 pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
     let value = value.map(str::trim).unwrap_or_default();
@@ -113,7 +114,10 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
         (TalkTimeout::Default, false)
     } else {
         match value.parse::<i64>() {
-            Ok(ms) if ms > 0 => (TalkTimeout::Millis(ms.unsigned_abs()), false),
+            Ok(ms) if ms > 0 => match TimeSpan::try_from_millis(ms.unsigned_abs()) {
+                Ok(span) => (TalkTimeout::After(span), false),
+                Err(_) => (TalkTimeout::Default, true),
+            },
             Ok(_) => (TalkTimeout::Never, false),
             Err(_) => (TalkTimeout::Default, true),
         }
@@ -127,7 +131,7 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 /// 会話の表示終了時刻を UI へ届ける broadcast sink（`runtime_sinks` が `GhostBootOptions.sinks` に載せる受け口の 1 本）。
 ///
 /// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
-/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `sum_on_ms_grid(at, duration)` の最大値
+/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `at + duration` の最大値
 /// として定義されるため、種別に依らず全件を集約対象にするのが正しい（名前で拾うのは
 /// `\![set,balloontimeout,…]` の待ち時間の指定だけ）。cue を**観測するのみ**で
 /// `duration` にも会話進行にも触れないため、duration honor 契約へ影響しない。
@@ -144,15 +148,15 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 pub struct BalloonLifecycleSink {
     /// UI スレッド（frame 相 drain）への送出端。全 clone は単一受信端へ配送する。
     tx: Sender<TalkLifecycleSignal>,
-    /// 落ちた瞬間の talk 相対秒を読む時刻源（文字の受け口と共有・起点はそちらが決める）。
+    /// 落ちた瞬間の台本の時刻を読む時刻源（文字の受け口と共有・起点はそちらが決める）。
     clock: TalkClock,
     /// この複製が受け持つトークの番号（配送が `begin_talk` で渡す・複製ごとに `None` から）。
     talk_id: Option<TalkId>,
     /// この talk で [`TalkLifecycleSignal::TalkStarted`] を送出済みか（複製ごとに `false` から）。
     /// 立っていれば合図を 1 つ以上送っている＝落ちるときに `TalkEnded` を送る。
     started: bool,
-    /// 既知最大の占有終端。未観測は `NEG_INFINITY` ゆえ、最初の有限値は必ず送出される。
-    horizon: f64,
+    /// 既知最大の占有終端。未観測は `None` ゆえ、最初の値は必ず送出される。
+    horizon: Option<TimeSpan>,
     /// この talk で [`TalkLifecycleSignal::ChoiceShown`] を送出済みか（複製ごとに `false` から）。
     choice_sent: bool,
 }
@@ -166,7 +170,7 @@ impl BalloonLifecycleSink {
             clock,
             talk_id: None,
             started: false,
-            horizon: f64::NEG_INFINITY,
+            horizon: None,
             choice_sent: false,
         }
     }
@@ -237,7 +241,7 @@ impl BootCueSink for BalloonLifecycleSink {
 }
 
 /// 落ちる＝このトークが終わった（最後まで・中断・置き換えのどれでも）。合図を 1 つでも送った
-/// 複製だけが、落ちた瞬間の talk 相対秒つきで `TalkEnded` を 1 回送る（登録の原本と cue の
+/// 複製だけが、落ちた瞬間の台本の時刻つきで `TalkEnded` を 1 回送る（登録の原本と cue の
 /// 来なかった複製は何も送らない・`NoUserBreakCueSink` の `Drop` と同じ型）。時刻はフレームに
 /// 丸めない。時刻源に起点が無ければ時刻無しで送り、記録を残す。
 impl Drop for BalloonLifecycleSink {
@@ -276,22 +280,10 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
         }
 
         // 待機 cue も duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される。
-        let end = dola::cue::sum_on_ms_grid(cue.at, cue.duration);
+        let end = cue.at + cue.duration;
 
-        // 非有限（NaN / ±inf）は horizon に採らない。`+inf` は「既知最大を超える」判定を通ってしまい、
-        // 受信側の `deadline = display_end + timeout` を到達不能にして**タイムアウトが永久に成立しない**。
-        // 無音で起こすと原因が追えないため記録付きスキップにする。
-        if !end.is_finite() {
-            warn!(
-                at = cue.at,
-                duration = cue.duration,
-                "BalloonLifecycleSink: 非有限な占有終端を記録付きスキップ（horizon を汚さない）"
-            );
-            return;
-        }
-
-        if end > self.horizon {
-            self.horizon = end;
+        if self.horizon.is_none_or(|horizon| end > horizon) {
+            self.horizon = Some(end);
             self.send(TalkLifecycleSignal::DisplayEndAt(end));
         }
     }

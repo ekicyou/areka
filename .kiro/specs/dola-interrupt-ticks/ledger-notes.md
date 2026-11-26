@@ -218,3 +218,11 @@
 ## 4.12
 
 - 段 3 の締め: `cargo test -p areka-seriko`（lib 545・結合テスト全部）・`-p areka-emo-text`（lib 1198・2 ignored・結合テスト全部）・`-p areka-ghost`（lib 235・ghost 39・ほか 8）が 1 本ずつ緑。`cargo build -p areka-emo-text --examples` 可。整形の検査は緑。
+
+## 5.1
+
+- 取り除いた分かれ道とログ: `talk_lifecycle.rs` の「有限でない占有の終わりを warn! して捨てる」分かれ道（horizon の `NEG_INFINITY` の番兵は `Option<TimeSpan>` に替えた）・`hover_inject.rs` の負の frame_time を 0 に寄せる所と、有限でない・負の周期を止める守り・`balloon_visibility_wait.rs` の「非数の現在時刻」の説明・組み立ての `ended_at` の `.max(0.0)`・`lib.rs` の `GetTickCount64` を読む `tick_count_ms`（`unsafe` の塊ごと）と `MonotonicMs` で包む所。
+- 外したテスト: `talk_lifecycle_tests.rs::non_finite_cue_times_are_skipped_with_a_record`（NaN・無限大は型で書けない）・`hover_inject.rs::cycle_ordinal_defensive_clamps_and_guards`（負の時刻・負の周期・NaN。周期 0 の確かめは `cycle_ordinal_zero_period_is_none` に残した）。
+- 足した確かめ: `parse_balloon_timeout_reads_every_shape_of_the_value` に `"1000000000000000"` → `Default`・unreadable、`parse_invalid_values_are_disabled` に `cycle:18446744073709551615` → `Disabled`。
+- 改名とログの欄: `configured_timeout_secs` → `configured_timeout`・`resolve_timeout_secs` → `resolve_timeout`・`DEFAULT_BALLOON_TIMEOUT_SECS` → `DEFAULT_BALLOON_TIMEOUT`・`TalkTimeout::Millis(u64)` → `After(TimeSpan)`・`HoverInjectConfig::Cycle { period_ms }` → `{ period }`。欄 `timeout_secs`→`timeout`・`default_secs`→`default`・`period_ms`→`period`（Display）。
+- 変える前後の期待: `horizon_matches_dola_occupancy_definition`（0.95 → `ms(950)`）・talk_clock の 4 本（許容幅つきの比べ → ちょうどの値）・`talk_ended_carries_the_injected_clock_once_when_dropped`（1.234 → `ms(1_234)`）・`talk_clock_now_talk_time_reads_the_injected_clock`（2.5 → `ms(2_500)`）・台本の通しの 2 本（`absolute_end_time()` → `relative_end()`）・seriko_clock_tests（ミリ秒 → `TimePoint::from_ticks`）。

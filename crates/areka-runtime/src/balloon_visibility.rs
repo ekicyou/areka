@@ -59,7 +59,7 @@
 //! 唯一の例外が抑止の観測不能で、これは**抑止なし**として扱う——観測が取れないことを抑止と読むと、
 //! 消えないまま固着する側へ倒れるためである。
 //!
-//! 待ち時間そのものの既定値（30 秒）は [`DEFAULT_BALLOON_TIMEOUT_SECS`] ただ 1 箇所で定義し、
+//! 待ち時間そのものの既定値（30 秒）は [`DEFAULT_BALLOON_TIMEOUT`] ただ 1 箇所で定義し、
 //! 実機サインオフで満了を観測するための短縮を環境変数 `AREKA_BALLOON_TIMEOUT_MS` で受ける。
 //! 判断中核 [`decide`] は待ち時間を引数で受け取るだけで、環境変数にも既定値にも依存しない。
 //!
@@ -80,6 +80,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::TalkId;
+use dola::TimeSpan;
 
 use super::talk_lifecycle::{TalkLifecycleSignal, TalkTimeout};
 
@@ -90,15 +91,15 @@ mod wait;
 
 use decision::decide;
 use decision::hide_reaches_boxes;
-pub use wait::configured_timeout_secs;
+pub use wait::configured_timeout;
 #[cfg(test)]
-use wait::{parse_timeout_ms, resolve_timeout_secs};
+use wait::{parse_timeout_ms, resolve_timeout};
 
-/// バルーンを非表示にするまでの既定の待ち時間（秒）。**この値の定義箇所はここ 1 つだけ**
+/// バルーンを非表示にするまでの既定の待ち時間。**この値の定義箇所はここ 1 つだけ**
 /// （同じ数値を複数箇所へ散らさない）。
 ///
 /// 30 秒は正典が沈黙する領域の areka 裁量であり、互換対応表へ記録する対象である。
-const DEFAULT_BALLOON_TIMEOUT_SECS: f64 = 30.0;
+const DEFAULT_BALLOON_TIMEOUT: TimeSpan = TimeSpan::from_millis(30_000);
 
 /// 既定の待ち時間を短縮するための環境変数名。
 ///
@@ -109,7 +110,7 @@ const TIMEOUT_ENV_KEY: &str = "AREKA_BALLOON_TIMEOUT_MS";
 /// 採用した待ち時間がどこから来たか（ログの `source` フィールド）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TimeoutSource {
-    /// [`DEFAULT_BALLOON_TIMEOUT_SECS`]（環境変数が未設定、または不正で縮退した場合）。
+    /// [`DEFAULT_BALLOON_TIMEOUT`]（環境変数が未設定、または不正で縮退した場合）。
     Default,
     /// 環境変数 [`TIMEOUT_ENV_KEY`] による短縮指定。
     Env,
@@ -222,20 +223,20 @@ enum VisibilityLogEvent {
     /// タイムアウト計測を開始した（占有終端・満了予定・起点の採り方）。
     MeasurementStarted {
         origin: MeasurementOrigin,
-        display_end: f64,
-        deadline: f64,
+        display_end: TimeSpan,
+        deadline: TimeSpan,
     },
     /// タイムアウト計測を破棄した（理由と破棄した満了予定）。
     MeasurementDiscarded {
         reason: MeasurementDiscardReason,
-        deadline: f64,
+        deadline: TimeSpan,
     },
     /// 抑止の解除に伴い計測をやり直した（起点＝現在時刻・満了予定）。
-    MeasurementRestarted { now: f64, deadline: f64 },
+    MeasurementRestarted { now: TimeSpan, deadline: TimeSpan },
     /// 抑止が成立しているため非表示を見送った（抑止 1 回につき 1 件）。
     TimeoutSuppressed {
         kinds: SuppressionKinds,
-        deadline: f64,
+        deadline: TimeSpan,
     },
     /// 可視コンテンツが現れたのに会話の表示終了信号が 1 件も届いていない
     /// （会話 1 回。表示は保持したまま記録だけ残す）。
@@ -250,15 +251,15 @@ enum VisibilityLogEvent {
 /// 記録の語に「中断」は使わない——最後まで流れたトークでも止まった時刻が終端より早く読まれうる。
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MeasurementOrigin {
-    /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（talk 相対秒）を採った。
-    StoppedAt(f64),
+    /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（台本の時刻）を採った。
+    StoppedAt(TimeSpan),
     /// 占有区間の終端を採った（止まった時刻が終端以後）。
     DisplayEnd,
     /// 止まった時刻が届かなかった（時刻源が起点を持たない）ので、占有区間の終端を採った。
     StopTimeMissing,
-    /// 選択肢つきのトークで、選択の待ちが解けた＝止まった時刻（talk 相対秒）を採った
+    /// 選択肢つきのトークで、選択の待ちが解けた＝止まった時刻（台本の時刻）を採った
     /// （占有区間の終端とは比べない）。
-    ChoiceWaitEndedAt(f64),
+    ChoiceWaitEndedAt(TimeSpan),
     /// 選択肢つきのトークで止まった時刻が届かなかったので、終わりを畳んだ後で計測が成り立った
     /// 最初のフレームの現在時刻を採った（表示を保持する側の縮退・本番では起きない）。
     ChoiceWaitEndTimeMissing,
@@ -283,8 +284,8 @@ enum TalkEnd {
     /// まだ届いていない（時間切れの計測を始めない）。
     #[default]
     NotYet,
-    /// 届いた。受け口が落ちた瞬間の talk 相対秒。
-    At(f64),
+    /// 届いた。受け口が落ちた瞬間の 台本の時刻。
+    At(TimeSpan),
     /// 届いたが、時刻源が起点を持たず時刻が無い。
     TimeUnknown,
 }
@@ -428,10 +429,10 @@ struct ObservationFailureLogged {
 pub struct BalloonVisibilityState {
     /// scope ごとのエッジ検出状態。観測された scope の分だけ生える。
     per_scope: BTreeMap<u32, ScopeVisibility>,
-    /// 現在の会話の占有終端（talk 相対秒・表示終了信号の最大値）。`None` は信号未着。
-    display_end: Option<f64>,
-    /// 非表示の満了予定（talk 相対秒）。`None` は計測なし。
-    deadline: Option<f64>,
+    /// 現在の会話の占有終端（台本の時刻・表示終了信号の最大値）。`None` は信号未着。
+    display_end: Option<TimeSpan>,
+    /// 非表示の満了予定（台本の時刻）。`None` は計測なし。
+    deadline: Option<TimeSpan>,
     /// いまバルーンに出ている台詞のトークの番号（会話開始の信号で置き換える）。
     talk_id: Option<TalkId>,
     /// トークの終わり（会話開始の信号で `NotYet` へ戻す）。

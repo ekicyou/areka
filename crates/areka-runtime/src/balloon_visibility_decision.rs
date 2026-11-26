@@ -1,5 +1,7 @@
 //! balloon_visibility の子: 見える・隠すの判断（`decide` と、ライフサイクル信号・利用者の中断・内容の増減の判定）。
 
+use dola::TimeSpan;
+
 use super::wait::decide_timeout;
 use super::{
     BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility, TalkEnd,
@@ -15,14 +17,14 @@ use super::{
 /// 不可視として扱うためである。⑷ が最後にあるのは、満了で消す対象が「本フレームの発行を
 /// 反映したあとに可視である scope」だからである。
 ///
-/// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
+/// `now_talk_time` は台本の時刻の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
 /// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
 /// 名乗ると、表示を失う側へ倒れるためである。
 pub(super) fn decide(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<f64>,
-    timeout_secs: f64,
+    now_talk_time: Option<TimeSpan>,
+    timeout: TimeSpan,
 ) -> VisibilityDecision {
     let mut logs: Vec<VisibilityLogEvent> = Vec::new();
 
@@ -33,7 +35,7 @@ pub(super) fn decide(
         state,
         obs,
         now_talk_time,
-        timeout_secs,
+        timeout,
         &broken,
         &content,
         &mut logs,

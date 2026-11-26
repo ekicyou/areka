@@ -14,12 +14,13 @@ use dola::cue::{ActorKey, CueCommand, TalkCue};
 use std::sync::mpsc::{Receiver, channel};
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
+    TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from(actor),
         command,
-        duration: 0.0,
-    }
+        dola::TimeSpan::ZERO,
+    )
 }
 
 fn choice(actor: &str, id: &str) -> TalkCue {

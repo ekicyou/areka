@@ -134,15 +134,16 @@ pub use dola::cue::test_support::carrier_cue as actor_carrier_cue;
 /// `DynamicValue::Null` は配列ではないので `as_command_carrier()` は `None` を返す。
 /// それでも宛名（`Custom{command}`）は読めるため、受け口の宛名で分ける枝へ入る。
 pub fn broken_custom_cue(actor: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Custom {
+    let cue = TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from(actor),
+        CueCommand::Custom {
             command: command.to_string(),
             params: DynamicValue::Null,
         },
-        duration: 0.0,
-    };
+        dola::TimeSpan::ZERO,
+    );
     assert_eq!(
         cue.command.as_command_carrier(),
         None,

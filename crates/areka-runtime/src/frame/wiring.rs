@@ -55,7 +55,7 @@ pub struct RuntimeWiring {
     pub(super) move_talk_ends_seen: Cell<u64>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端（バルーン可視性相が消費）。
     ///
-    /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
+    /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が台本の時刻で FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
     ///
     /// 取り出しは可視性相の `try_iter` による全件 drain。受信前の信号はチャネル自身が預かるので、attach 前に始まった会話の信号も落ちない。
     pub lifecycle_rx: Receiver<TalkLifecycleSignal>,
@@ -102,7 +102,7 @@ pub struct RuntimeWiring {
     pub(super) text_scale_warned: BTreeSet<u32>,
     /// 装着で文字層を繋げなかった scope と、その面 0 の背景色（[`run_text_scale_phase`] が繋ぎ直す時に渡す）。
     pub(super) unconnected_text: BTreeMap<u32, (u8, u8, u8)>,
-    /// talk 起点相対秒の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
+    /// 台本の時刻の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
     pub clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
     pub(super) assets: Option<BootAssets>,

@@ -8,17 +8,18 @@
 use std::collections::BTreeMap;
 
 use areka_sakura::TalkId;
+use dola::TimeSpan;
 
 use super::{
-    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
+    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT, GlyphObservation, ScopeObservation,
     TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
 #[cfg(test)]
 use super::{VisibilityAction, VisibilityLogEvent, VisibilityTrigger};
 
-/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
+/// タイムアウト時間。[`Frame::new`] の既定と同じ値。
 #[cfg(test)]
-pub(super) const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
+pub(super) const TIMEOUT: TimeSpan = DEFAULT_BALLOON_TIMEOUT;
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
@@ -149,31 +150,31 @@ pub(super) fn step(
 /// （満了境界の直前・直後など）そのものに限り、そこで頭打ちにする。
 pub struct Frame {
     obs: VisibilityObservations,
-    now: Option<f64>,
-    timeout_secs: f64,
+    now: Option<TimeSpan>,
+    timeout: TimeSpan,
 }
 
 impl Frame {
     /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウトは既定時間・抑止なし・信号なし）。
     ///
-    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（同じ数値を複数箇所へ散らさない）。
+    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT`] から引く（同じ数値を複数箇所へ散らさない）。
     pub fn new(entries: &[(u32, ScopeObservation)]) -> Self {
         Self {
             obs: observations(entries),
             now: None,
-            timeout_secs: DEFAULT_BALLOON_TIMEOUT_SECS,
+            timeout: DEFAULT_BALLOON_TIMEOUT,
         }
     }
 
-    /// 現在時刻（talk 相対秒）を注入する。
-    pub fn at(mut self, now: f64) -> Self {
+    /// 現在時刻（台本の時刻）を注入する。
+    pub fn at(mut self, now: TimeSpan) -> Self {
         self.now = Some(now);
         self
     }
 
-    /// タイムアウト時間（秒）を指定する。
-    pub fn timeout(mut self, timeout_secs: f64) -> Self {
-        self.timeout_secs = timeout_secs;
+    /// タイムアウト時間を指定する。
+    pub fn timeout(mut self, timeout: TimeSpan) -> Self {
+        self.timeout = timeout;
         self
     }
 
@@ -186,7 +187,7 @@ impl Frame {
     }
 
     /// 占有終端の信号を本フレームに届ける。
-    pub fn display_end(mut self, end: f64) -> Self {
+    pub fn display_end(mut self, end: TimeSpan) -> Self {
         self.obs
             .lifecycle
             .push(TalkLifecycleSignal::DisplayEndAt(end));
@@ -195,13 +196,14 @@ impl Frame {
 
     /// 占有終端とトークの終わり（止まった時刻＝占有終端）を本フレームに一緒に届ける。
     ///
-    /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
-    /// するので、起点は終端のままで満了の時刻は変わらない。
-    pub fn ended_at(self, end: f64) -> Self {
+    /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は終端と同じにするので、
+    /// 起点は終端のままで満了の時刻は変わらない。
+    pub fn ended_at(self, end: TimeSpan) -> Self {
         let mut frame = self.display_end(end);
-        frame.obs.lifecycle.push(TalkLifecycleSignal::TalkEnded {
-            at: Some(end.max(0.0)),
-        });
+        frame
+            .obs
+            .lifecycle
+            .push(TalkLifecycleSignal::TalkEnded { at: Some(end) });
         frame
     }
 
@@ -221,6 +223,6 @@ impl Frame {
 
     /// 判断を 1 フレーム進める。
     pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
-        decide(state, &self.obs, self.now, self.timeout_secs)
+        decide(state, &self.obs, self.now, self.timeout)
     }
 }

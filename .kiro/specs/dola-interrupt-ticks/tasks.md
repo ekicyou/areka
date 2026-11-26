@@ -398,7 +398,7 @@
 
 - [ ] 5. 段 4: areka-runtime を付け替える
 
-- [ ] 5.1 areka-runtime の土台と結線を型へ付け替える
+- [x] 5.1 areka-runtime の土台と結線を型へ付け替える
   - 時計の既定を 1 本の時計にし、`TalkClock` は見積もりのまま型だけ替える（後半でもう一度替わる）。寿命の知らせは台本の時刻（長さの型）で運ぶ
   - 手で組む合図を `TalkCue::scheduled` で組み、バルーンの待ちのミリ秒を読む縁で 1 回だけ変え、`hover_inject` の周期を長さの型にする（前半は台本の時刻を受ける）
   - 共有の組み立てと、寿命の知らせのテストを型で書く。フレームの組み立て（939 行）の行を増やさない
@@ -815,3 +815,4 @@
 - 4.2: seriko の改名（4.3・4.4 が追う）: `glyph_wall_ms` → `glyph_wall`、`TalkEpoch::wall_ms` → `wall`、`TalkWindow.wall_ms` → `wall`（`&dyn Fn(u64) -> TimePoint`）、`Playback.started_at_ms` → `started_at`、`CallOutcome.shift: Option<(TimePoint, i64, i64)>`、timeline の `frame_at`・`current_frame_index`・`always_at`・`always_visible` は経過を `TimeSpan` で受け、`lap_of` は `(u64, TimeSpan)`、新しい `timeline::elapsed_since(now, start) -> TimeSpan`。`lap_of` は `debug_assert!(period > ZERO)` を持つので、テストで周期 0 の `Always` を組まない。
 - 4.5: emo-text の組み立ての口: `cue(actor, at: TimeSpan, cmd)`・`cue_dur(actor, at, duration: TimeSpan, cmd)`・`choice_cue(actor, at: TimeSpan, ..)`・`REVEAL_INTERVAL: TimeSpan`（state 側 `ms(250)`・actor 側 `ms(50)`）・`reveal_times_of -> Vec<TimeSpan>`・`apply_fixture_script(at: [TimeSpan; 4], interval: TimeSpan)`・`state_frame(t: TimeSpan)`・actor_test_support の `reveal_duration(text)`・`cue_at(actor, at, cmd, duration)`・tests/support の `cue(actor, at: TimeSpan, cmd, interval: TimeSpan)`。どの合図も起点 0 なので前半は `fire_time == at`。`state.rs:277` の「`extend_chunk` の max が保証」と `state_test_support.rs:10` の「interval=0.25」は古い言い方（12.2 で拾う）。
 - 4.9: areka-ghost の `src/runtime_tests.rs`・`src/shiori_wiring_empty_tests.rs`・`src/prop_get_sink_tests.rs` は設計の家族の表に名前が無いが、`MonotonicMs` などで組めない。4.11（受け口と結合テスト）が持つ。
+- 5.1: areka-runtime の改名は本体 `areka` の `frame_balloon_timeout_notice_e2e_tests.rs`・`frame_shell_box_integration_tests.rs`（`configured_timeout_secs`）も追う（段 5）。5.1 が balloon_visibility.rs の型の定義（`DEFAULT_BALLOON_TIMEOUT: TimeSpan`・`VisibilityLogEvent`・`MeasurementOrigin`・`TalkEnd::At`・状態の `display_end`／`deadline`）と decision.rs の `decide(Option<TimeSpan>, TimeSpan)` の頭を先に替えた。5.2 は `apply_lifecycle_signals` の本体（3 件）と判断のテストを持つ。`balloon_visibility_forget_tests.rs`・`balloon_visibility_user_break_tests.rs` は 5.2 の持ち物。balloon_visibility.rs:96 の unused の警告は 5.2 の後に消える。

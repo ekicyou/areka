@@ -133,7 +133,7 @@ pub fn count_level(logs: &[String], level: &str) -> usize {
 
 /// epoch を確立しない固定クロック（drain 系テストは talk_time を使わない）。
 pub fn zero_clock() -> TalkClock {
-    TalkClock::new(Arc::new(|| 0.0))
+    TalkClock::new(Arc::new(|| dola::TimePoint::ZERO))
 }
 
 /// headless な `RuntimeWiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
