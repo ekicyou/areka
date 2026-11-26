@@ -4,7 +4,7 @@
 //! `TextLayerState`／`ActorTextState`／`RevealSchedule`（注入時刻駆動 typewriter）を担う。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
-//! 時刻は常に注入（`talk_time`）で受け取り、内部で実時間を読まない。
+//! 時刻は常に注入（フレームの時刻 `frame_now`）で受け取り、内部で実時間を読まない。
 //!
 //! ## 遷移規則
 //!
@@ -26,7 +26,8 @@
 //!   その解決を軸ごとに呼ぶ配線が `layout` である。
 //! - **typewriter リビール**: `Text` 追記時に per-glyph リビール時刻を、seriko と同じ 1 本の式
 //!   [`areka_sakura::reveal::chunk_reveal_offsets`]（配送された cue の再生時間から導く）で確定する。
-//!   自前の文字送り定数は持たない。可視数は `visible_glyphs(actor, t)`＝注入時刻 `t` で `r_i <= t` のグリフ数。
+//!   字の現れる時刻は「合図の発火時刻＋塊の頭からの隔たり」の絶対の時刻。自前の文字送り定数は持たない。
+//!   可視数は `visible_glyphs(actor, frame_now)`＝`r_i <= frame_now` のグリフ数で、見せた字の数は別に覚えない。
 //! - グリフ単位は書記素クラスタ（UAX #29）。切り方は [`areka_sakura::cluster::clusters`] だけを通す
 //!   （再生時間の文字数と同じ切り方・ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字が 1 アイテム）。
 //! - 同一 cue 列＋同一入力条件→同一状態（決定論）。
@@ -35,7 +36,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use areka_sakura::cluster::clusters;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimeSpan};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use areka_sakura::reveal::chunk_reveal_offsets;
 
 use crate::inline_marker::{MARKER_GLYPH, is_marker_carrier};
@@ -252,18 +253,18 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
 /// per-glyph リビール時刻列（注入時刻駆動 typewriter）。
 ///
 /// 時刻式は [`chunk_reveal_offsets`]（`max(前の字 + duration ÷ count, 塊の頭)` を字ごとに 1 回だけ丸める）。
-/// 可視数は `visible(t) = |{ i : r_i <= t }|`。`at` は下限（それより早く可視化しない）で、
+/// 可視数は `visible(frame_now) = |{ i : r_i <= frame_now }|`。発火時刻は下限（それより早く可視化しない）で、
 /// リビールは配送 duration が定めるペースでバッファ末尾を追う（長文時は遅延しうる・無損失）。
-/// 時刻は常に注入（台本の時刻）で、実時間には依存しない。`Clear` は schedule ごと初期化する。
+/// 時刻は常に注入（絶対の時刻）で、実時間には依存しない。`Clear` は schedule ごと初期化する。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RevealSchedule {
-    /// グリフ i のリビール時刻 `r_i`（台本の時刻・単調非減少）。
-    times: Vec<TimeSpan>,
+    /// グリフ i のリビール時刻 `r_i`（絶対の時刻・単調非減少）。
+    times: Vec<TimePoint>,
 }
 
 impl RevealSchedule {
-    /// リビール時刻列（台本の時刻）。
-    pub fn times(&self) -> &[TimeSpan] {
+    /// リビール時刻列（絶対の時刻）。
+    pub fn times(&self) -> &[TimePoint] {
         &self.times
     }
 
@@ -272,19 +273,19 @@ impl RevealSchedule {
         self.times.is_empty()
     }
 
-    /// 注入時刻 `t` での可視グリフ数 `visible(t) = |{ i : r_i <= t }|`。
+    /// フレームの時刻での可視グリフ数 `visible(frame_now) = |{ i : r_i <= frame_now }|`。
     ///
     /// `times` は単調非減少（`extend_chunk` の max が保証）なので二分探索で数える。
-    pub fn visible(&self, t: TimeSpan) -> usize {
-        self.times.partition_point(|&r| r <= t)
+    pub fn visible(&self, frame_now: TimePoint) -> usize {
+        self.times.partition_point(|&r| r <= frame_now)
     }
 
     /// chunk（Text cue 1 件分のグリフ列）のリビール時刻を時刻式で追記する。
     ///
-    /// 前の字は schedule の最後の字（空なら塊の頭から）。改行マーカーはグリフでないため対象外。
-    /// duration=0 なら全グリフが `chunk_start` で同時可視で、`times` は単調非減少に保たれる
-    /// （`visible` の二分探索前提）。
-    fn extend_chunk(&mut self, glyph_count: usize, chunk_start: TimeSpan, duration: TimeSpan) {
+    /// 塊の頭は合図の発火時刻。前の字は schedule の最後の字（空なら塊の頭から）で、塊の頭からの差で渡す。
+    /// 改行マーカーはグリフでないため対象外。duration=0 なら全グリフが `chunk_start` で同時可視で、
+    /// `times` は単調非減少に保たれる（`visible` の二分探索前提）。
+    fn extend_chunk(&mut self, glyph_count: usize, chunk_start: TimePoint, duration: TimeSpan) {
         let prev = self.times.last().map(|&last| last - chunk_start);
         self.times.reserve(glyph_count);
         self.times.extend(
@@ -466,10 +467,10 @@ impl TextLayerState {
     /// 後出し優先の即時適用（`Text`＝追記・`NewLine`＝改行マーカー追記・`Clear`＝未リビール分を含む全消去）。
     /// トーク上書きガードは持たず、届いた cue 列を到着順に適用する。未知 actor は lazily 生成する。
     ///
-    /// `Text` は追記と同時に per-glyph リビール時刻を `cue.at`（リビール開始の下限）と `duration` から
+    /// `Text` は追記と同時に per-glyph リビール時刻を `cue.fire_time`（リビール開始の下限）と `duration` から
     /// [`chunk_reveal_offsets`] で確定する。`glyph_count = 0`（空テキスト）は追記しない。
-    /// `duration = 0`（瞬時／後方互換 cue）は全グリフが `cue.at` で同時可視になる。
-    /// リビール中の後続 cue も即時適用される（本層は cue の `at`／`duration` を読むだけで書き換えない）。
+    /// `duration = 0`（瞬時／後方互換 cue）は全グリフが `cue.fire_time` で同時可視になる。
+    /// リビール中の後続 cue も即時適用される（本層は cue の `fire_time`／`duration` を読むだけで書き換えない）。
     ///
     /// 戻り値は名前の形の `\b[名前]` の箱が無かった（空回しの写しでない）か（[`Self::route_select`]）。
     pub fn apply_cue(&mut self, cue: &TalkCue) -> bool {
@@ -483,13 +484,15 @@ impl TextLayerState {
             CueCommand::Text(text) => {
                 let glyph_units: Vec<&str> = clusters(text).collect();
                 let glyph_count = glyph_units.len();
-                tracing::debug!(actor = %cue.actor, len = glyph_count, at = %cue.at, duration = %cue.duration, "Text cue 適用（追記＋配送 duration 由来のリビール時刻確定）");
+                tracing::debug!(actor = %cue.actor, len = glyph_count, fire_time = %cue.fire_time, duration = %cue.duration, "Text cue 適用（追記＋配送 duration 由来のリビール時刻確定）");
                 let state = self.place_entry(&dest);
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                 state.extend_open_anchor(&glyph_units);
-                state.reveal.extend_chunk(glyph_count, cue.at, cue.duration);
+                state
+                    .reveal
+                    .extend_chunk(glyph_count, cue.fire_time, cue.duration);
                 state.push_current_style(&cue.actor, glyph_count, quiet);
             }
             CueCommand::NewLine { ratio } => {
@@ -534,12 +537,14 @@ impl TextLayerState {
                         tracing::warn!(actor = %cue.actor, id = %id, "Choice cue の text が空——空範囲スパンを記録（グリフ追記なし・R1.5 縮退）");
                     }
                 } else {
-                    tracing::debug!(actor = %cue.actor, id = %id, len = glyph_count, at = %cue.at, duration = %cue.duration, "Choice cue 適用（グリフ追記＋配送 duration 由来のリビール時刻確定＋スパン記録）");
+                    tracing::debug!(actor = %cue.actor, id = %id, len = glyph_count, fire_time = %cue.fire_time, duration = %cue.duration, "Choice cue 適用（グリフ追記＋配送 duration 由来のリビール時刻確定＋スパン記録）");
                     state
                         .items
                         .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                     state.extend_open_anchor(&glyph_units);
-                    state.reveal.extend_chunk(glyph_count, cue.at, cue.duration);
+                    state
+                        .reveal
+                        .extend_chunk(glyph_count, cue.fire_time, cue.duration);
                     state.push_current_style(&cue.actor, glyph_count, quiet);
                 }
                 let ordinal = state.choices.len();
@@ -564,12 +569,12 @@ impl TextLayerState {
             // 印の合図（`\![*]`・`%*`）は書式の見分けの前に見て、今の場所に目印の字を 1 つ積む。
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5b_2a_5d:1
             CueCommand::Custom { .. } if is_marker_carrier(&cue.command) => {
-                tracing::debug!(actor = %cue.actor, at = %cue.at, "印の cue 適用（目印の字を 1 つ追記）");
+                tracing::debug!(actor = %cue.actor, fire_time = %cue.fire_time, "印の cue 適用（目印の字を 1 つ追記）");
                 let state = self.place_entry(&dest);
                 state.items.push(TextItem::glyph(MARKER_GLYPH));
                 // アンカーの題（Reference0）には足さない（範囲だけ伸ばす）。
                 state.extend_open_anchor_range(1);
-                state.reveal.extend_chunk(1, cue.at, cue.duration);
+                state.reveal.extend_chunk(1, cue.fire_time, cue.duration);
                 state.push_current_style(&cue.actor, 1, quiet);
             }
             CueCommand::Custom { .. } => match font_tag_tokens(&cue.command) {
@@ -601,13 +606,13 @@ impl TextLayerState {
         box_missing
     }
 
-    /// 注入時刻 `t` での actor 別可視グリフ数（決定論）。
+    /// フレームの時刻での actor 別可視グリフ数（決定論）。
     ///
-    /// `visible(t) = |{ i : r_i <= t }|`（改行マーカーは数えない・グリフのみ）。
+    /// `visible(frame_now) = |{ i : r_i <= frame_now }|`（改行マーカーは数えない・グリフのみ）。
     /// 未生成の actor は 0。同一 cue 列＋同一注入時刻列→同一可視数（決定論檻）。
-    pub fn visible_glyphs(&self, actor: &ActorKey, t: TimeSpan) -> usize {
+    pub fn visible_glyphs(&self, actor: &ActorKey, frame_now: TimePoint) -> usize {
         self.actor_state(actor)
-            .map_or(0, |state| state.reveal.visible(t))
+            .map_or(0, |state| state.reveal.visible(frame_now))
     }
 
     /// scope の内容が消された回数（`Clear` と `ClearAll` の累計・普通のバルーンの場所）。

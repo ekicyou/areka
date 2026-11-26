@@ -271,7 +271,7 @@ pub(crate) fn layout_frame(
 pub(super) fn state_frame(
     state: &TextLayerState,
     actor: &ActorKey,
-    t: TimeSpan,
+    t: TimePoint,
     region: &TextRegion,
     mode: WritingMode,
     font_height: f32,

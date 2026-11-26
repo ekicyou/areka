@@ -45,7 +45,7 @@ pub(super) fn items_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [TextI
 
 // ══ typewriter リビール進行（注入時刻駆動） ══
 
-pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<TimeSpan> {
+pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<TimePoint> {
     state
         .actor_state(&ActorKey::from(actor))
         .expect("actor state should exist")

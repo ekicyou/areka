@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
-use areka_sakura::contract::{ActorKey, TimeSpan};
+use areka_sakura::contract::{ActorKey, TimePoint};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use tracing::{debug, warn};
@@ -169,14 +169,14 @@ impl TextLayerRuntime {
         &self,
         actor: &ActorKey,
         shown_surface: Option<u32>,
-        talk_time: TimeSpan,
+        frame_now: TimePoint,
     ) -> usize {
         let has_boxes =
             shown_surface.is_some_and(|surface| !self.box_layout.placements(surface).is_empty());
         if has_boxes {
             0
         } else {
-            self.state.visible_glyphs(actor, talk_time)
+            self.state.visible_glyphs(actor, frame_now)
         }
     }
 }
@@ -221,7 +221,7 @@ impl TextLayerRuntime {
     /// 提示のたびに写しを作り直す（`present_frame` の最後）。`presented` はこのフレームで提示に
     /// 成功した場所。箱の場所で、今も出ていてよく（[`box_still_shown`](Self::box_still_shown)）、
     /// 文字が 1 字以上見えているものだけを、スコープごとに手前から並べる。
-    pub(super) fn refresh_shown_boxes(&mut self, presented: &[PlaceKey], talk_time: TimeSpan) {
+    pub(super) fn refresh_shown_boxes(&mut self, presented: &[PlaceKey], frame_now: TimePoint) {
         let mut shown: HashMap<ActorKey, Vec<ShownBox>> = HashMap::new();
         for key in presented {
             let TextPlace::Box(name) = &key.place else {
@@ -230,7 +230,7 @@ impl TextLayerRuntime {
             let visible = self
                 .state
                 .place_state(key)
-                .map_or(0, |s| s.reveal().visible(talk_time));
+                .map_or(0, |s| s.reveal().visible(frame_now));
             if visible == 0 || !self.box_still_shown(key) {
                 continue;
             }

@@ -213,7 +213,7 @@ pub type SurfaceKeyResolver = Box<dyn Fn(&str) -> SurfaceKeyOutcome>;
 ///
 /// - cue 適用（[`apply_cue`](Self::apply_cue)）は純粋状態の更新のみで World に触れない。
 /// - World への装着・描画はフレーム提示ステップ（[`present_frame`]）が担う。
-/// - 時刻は常に注入（`talk_time`）——内部で `Instant::now()` を読まない。
+/// - 時刻は常に注入（`frame_now`）——内部で `Instant::now()` を読まない。
 pub struct TextLayerRuntime {
     /// 純粋状態機械（actor 別・cue 列→行/グリフ状態）。
     state: TextLayerState,
@@ -638,7 +638,7 @@ impl TextLayerRuntime {
         &mut self,
         place: &PlaceKey,
         metrics: &dyn crate::layout::GlyphMetrics,
-        talk_time: dola::TimeSpan,
+        frame_now: dola::TimePoint,
     ) -> Option<Vec<crate::layout::PositionedLine>> {
         let resolved = self.layout_input.get(place)?;
         present::arrange_lines(
@@ -649,7 +649,7 @@ impl TextLayerRuntime {
             resolved,
             metrics,
             &mut present::BreakMemo::default(),
-            talk_time,
+            frame_now,
         )
     }
 }

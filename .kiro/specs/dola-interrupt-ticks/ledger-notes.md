@@ -331,3 +331,7 @@
 ## 9.3（後半）
 
 - 足した型とテスト: `areka_sakura::held::HeldQueue<T>`（`new`・`push`・`pop_due`・`waiting_until`・`is_empty`）と `held_tests.rs` の 7 本。外した物・変えた期待は無い。
+
+## 10.1（後半）
+
+- 外したテスト・分かれ道・ログは無い。字の現れる時刻は「合図の発火時刻 + 塊の頭からの隔たり」（`TimePoint`）、提示と読み口はフレームの時刻を受ける。ログの欄 `at` → `fire_time`、`talk_time` → `frame_now`。

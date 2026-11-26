@@ -605,7 +605,7 @@
 
 - [ ] 10. 後半の 4: 受け手が受け取った物を絶対の時刻で持つ（ここは赤になる）
 
-- [ ] 10.1 areka-emo-text: 字の現れる時刻を絶対の時刻で積み、提示と読み口がフレームの時刻を受ける
+- [x] 10.1 areka-emo-text: 字の現れる時刻を絶対の時刻で積み、提示と読み口がフレームの時刻を受ける
   - 字の現れる時刻を「合図の発火時刻＋塊の頭からの隔たり」で積み、「前の字」は前の字の時刻から発火時刻を引いた差で渡す
   - 提示・現れた字の数・バルーンに出た字の数・字の現れる時刻の列が、フレームの時刻（時刻の型）を受け、現れた数を「現れる時刻 ≤ フレームの時刻」の数だけで求める（見せた字の数を覚えない）。台本の時刻を受ける引数はどの口にも残らない
   - 本体と組み立てのファイルが `cargo check -p areka-emo-text --all-targets` で誤り 0 件である
@@ -826,3 +826,4 @@
 - 9.1: `base_now` の語が `crates/areka/src/runtime_tests/spine_talk_close_tests.rs` の 84・109・142 行のコメントに残る（12.2 で直す。12.3 の検索の前に）。
 - 9.2: `duplicate_and_backward_tick_do_not_double_fire` の中の注釈「同値 → no-op」「逆行 → no-op」は、守りが止めるのではなく再生機に新しく届く物が無いという意味になった（12.2 で拾う）。
 - 9.3: 届いた物を持つ列は `areka_sakura::held::HeldQueue<T>`（`push(Option<TimePoint>, T)`・`pop_due(frame_now) -> Option<T>`・`waiting_until() -> Option<TimePoint>`・`is_empty`）。
+- 10.1: emo-text の提示の口は `frame_now: TimePoint`。下で壊れる呼び出し: areka-runtime `frame/scale_text.rs:238,250`・`balloon_visibility_phase.rs:306`・`frame_balloon_runtime_test_support.rs:60`（10.10・10.11）、areka-input `balloon_test_support.rs:322`・`balloon_choice_settle_tests.rs:151`・`balloon_pressed_tests.rs:81`（10.15）、本体 `runtime_tests/frame_shell_box_integration_tests.rs:310`（10.16）、先進坑 `q7-vertical/src/old_side.rs:100`（10.16 か締め）。
