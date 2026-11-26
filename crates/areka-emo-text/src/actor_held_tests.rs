@@ -10,14 +10,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use areka_emo_compose::BoxName;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
-use dola::cue::{CueFinding, CueProbe};
-use dola::time::testing::{at_ms, ms};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimePoint, TimeSpan};
+use dola::cue::{CueFinding, CueProbe, OriginNotice};
+use dola::time::testing::{at_ms, delta_ms, ms};
 use wintf::ecs::world::tick_wake::{self, WakeBits};
 
 use super::receive_msg;
 use crate::actor::TextLayerRuntime;
-use crate::actor::test_support::{balloon, box_index, box_layout, reveal_duration};
+use crate::actor::test_support::{
+    balloon, box_index, box_layout, pump_until_idle, reveal_duration, spawn_message_drain,
+};
 use crate::sink::TextMsg;
 use crate::state::{SurfaceKeyOutcome, TextLayerConfig};
 
@@ -413,4 +415,160 @@ fn receipt_while_borrowed_is_an_error_and_holds_nothing() {
         assert!(receive_msg(&rt, TextMsg::TalkEnded).is_err());
     }
     assert!(rt.borrow().held.is_empty());
+}
+
+// ── 置き直しの知らせ ──
+
+/// 効く時刻 `effective`（台本の時刻）に、起点を [`ORIGIN`] から `delta` ms 動かす置き直しの知らせ。
+fn moved(effective: u32, delta: i64) -> OriginNotice {
+    OriginNotice {
+        effective_at: frame(effective),
+        origin: ORIGIN + delta_ms(delta),
+        previous: Some(ORIGIN),
+    }
+}
+
+fn reveal_times(rt: &TextLayerRuntime, actor: &ActorKey) -> Vec<TimePoint> {
+    rt.state()
+        .actor_state(actor)
+        .expect("当たった")
+        .reveal()
+        .times()
+        .to_vec()
+}
+
+/// 効く時刻以前の字は動かず、後の字だけが動いた長さだけ後ろへ動く。
+#[test]
+fn reorigin_moves_only_glyphs_after_the_effective_time() {
+    let rt = runtime();
+    send_cues(&rt, &[text(0, "あいうえお")]);
+    assert_eq!(rt.borrow_mut().advance(frame(0)), None);
+
+    send(&rt, TextMsg::Origin(moved(100, 500)));
+    let mut rt = rt.borrow_mut();
+    assert_eq!(
+        rt.advance(frame(99)),
+        Some(frame(100)),
+        "知らせは効く時刻を待つ"
+    );
+    assert_eq!(
+        reveal_times(&rt, &actor()),
+        [0, 50, 100, 150, 200].map(frame),
+        "効く時刻の前は動かない"
+    );
+    assert_eq!(rt.advance(frame(100)), None);
+    assert_eq!(
+        reveal_times(&rt, &actor()),
+        [0, 50, 100, 650, 700].map(frame),
+        "ちょうど効く時刻の字は動かず、後の字は 500 ms 後ろへ"
+    );
+}
+
+/// 前へ動いて効く時刻より前になる字は、効く時刻に現れる。
+#[test]
+fn reorigin_earlier_clamps_to_the_effective_time() {
+    let rt = runtime();
+    send_cues(&rt, &[text(0, "あいうえおか")]);
+    send(&rt, TextMsg::Origin(moved(100, -120)));
+    let mut rt = rt.borrow_mut();
+    assert_eq!(rt.advance(frame(100)), None);
+    assert_eq!(
+        reveal_times(&rt, &actor()),
+        [0, 50, 100, 100, 100, 130].map(frame)
+    );
+    assert_eq!(
+        rt.state().visible_glyphs(&actor(), frame(100)),
+        5,
+        "時刻の来ている字は効く時刻のフレームで一度に現れる"
+    );
+}
+
+/// 知らせより前に届いてまだ当たっていない合図の字も、当てた後に動く（合図を先に当てた時と同じ時刻）。
+#[test]
+fn reorigin_moves_glyphs_of_cues_held_before_it() {
+    let applied_first = runtime();
+    send_cues(&applied_first, &[text(0, "あいうえお")]);
+    assert_eq!(applied_first.borrow_mut().advance(frame(0)), None);
+    send(&applied_first, TextMsg::Origin(moved(100, 500)));
+    assert_eq!(applied_first.borrow_mut().advance(frame(100)), None);
+
+    let held = runtime();
+    send_cues(&held, &[text(0, "あいうえお")]);
+    send(&held, TextMsg::Origin(moved(100, 500)));
+    assert_eq!(held.borrow_mut().advance(frame(100)), None);
+
+    assert_eq!(
+        reveal_times(&held.borrow(), &actor()),
+        [0, 50, 100, 650, 700].map(frame)
+    );
+    assert_eq!(held.borrow().state(), applied_first.borrow().state());
+}
+
+/// 知らせは全部の場所の字を動かす。
+#[test]
+fn reorigin_moves_glyphs_of_every_place() {
+    let other = ActorKey::from("1");
+    let rt = runtime();
+    send_cues(
+        &rt,
+        &[
+            text(0, "あいう"),
+            TalkCue::scheduled(
+                ORIGIN,
+                ms(0),
+                other.clone(),
+                CueCommand::Text("かきく".into()),
+                reveal_duration("かきく"),
+            ),
+        ],
+    );
+    send(&rt, TextMsg::Origin(moved(50, 1000)));
+    let mut rt = rt.borrow_mut();
+    assert_eq!(rt.advance(frame(50)), None);
+    assert_eq!(reveal_times(&rt, &actor()), [0, 50, 1100].map(frame));
+    assert_eq!(reveal_times(&rt, &other), [0, 50, 1100].map(frame));
+}
+
+/// 前へ動いた後に届いた合図は、新しい起点での発火時刻が効く時刻より前でも、効く時刻より前のフレームで当たらない。
+#[test]
+fn cue_after_reorigin_waits_for_the_effective_time() {
+    let rt = runtime();
+    send(&rt, TextMsg::Origin(moved(1000, -500)));
+    let after = TalkCue::scheduled(
+        ORIGIN - ms(500),
+        ms(1200),
+        actor(),
+        CueCommand::Text("あ".into()),
+        reveal_duration("あ"),
+    );
+    assert_eq!(after.fire_time, frame(700));
+    send_cues(&rt, &[after]);
+    let mut rt = rt.borrow_mut();
+
+    assert_eq!(rt.advance(frame(800)), Some(frame(1000)));
+    assert!(
+        rt.state().actor_state(&actor()).is_none(),
+        "効く時刻より前は当たらない"
+    );
+    assert_eq!(rt.advance(frame(1000)), None);
+    assert_eq!(rt.state().visible_glyphs(&actor(), frame(1000)), 1);
+}
+
+/// 受け口は、最初の起点の知らせを送らず、置き直しの知らせだけを送る。
+#[test]
+fn sink_forwards_only_reorigin_notices() {
+    let (mut sink, records) = spawn_message_drain("emo-text-origin-test");
+    sink.origin_set(OriginNotice::first(ORIGIN));
+    pump_until_idle();
+    assert!(
+        records.lock().expect("records").is_empty(),
+        "最初の起点の知らせは送らない"
+    );
+
+    sink.origin_set(moved(100, 500));
+    pump_until_idle();
+    assert_eq!(
+        *records.lock().expect("records"),
+        vec![TextMsg::Origin(moved(100, 500))]
+    );
 }

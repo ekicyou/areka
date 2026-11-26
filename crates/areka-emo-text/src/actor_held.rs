@@ -9,7 +9,7 @@ use std::ops::ControlFlow;
 
 use areka_sakura::contract::{TalkCue, TimePoint};
 use areka_sakura::strict::DetectionPoint;
-use dola::cue::CueProbe;
+use dola::cue::{CueProbe, OriginNotice};
 use wintf::ecs::world::tick_wake;
 
 use crate::sink::{TextMsg, handle_text_msg_with};
@@ -27,6 +27,8 @@ pub(super) enum Held {
     ChoiceWaitBegan,
     /// トークの終わり（時刻を持たない）。
     TalkEnded,
+    /// 置き直しの知らせ（前の起点が在る物だけ）。列に入れる時刻は効く時刻。
+    Origin(OriginNotice),
 }
 
 impl TextLayerRuntime {
@@ -66,6 +68,7 @@ impl TextLayerRuntime {
                 self.settle_all_choices();
                 self.close_choice_wait();
             }
+            Held::Origin(notice) => self.state.apply_origin_notice(&notice),
         }
     }
 }
@@ -81,13 +84,12 @@ pub(super) fn receive_msg(
         msg,
         |cue, probe| hold(runtime, Some(cue.fire_time), Held::Cue(cue, probe)),
         |upcoming| hold(runtime, None, Held::Upcoming(upcoming)),
-        |mark| {
-            let item = if mark == TextMsg::ChoiceWaitBegan {
-                Held::ChoiceWaitBegan
-            } else {
-                Held::TalkEnded
-            };
-            hold(runtime, None, item)
+        |mark| match mark {
+            TextMsg::ChoiceWaitBegan => hold(runtime, None, Held::ChoiceWaitBegan),
+            TextMsg::Origin(notice) => {
+                hold(runtime, Some(notice.effective_at), Held::Origin(notice))
+            }
+            _ => hold(runtime, None, Held::TalkEnded),
         },
     )
 }
@@ -106,6 +108,10 @@ fn hold(
             Held::Upcoming(upcoming) => format!(
                 "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
                 upcoming.len()
+            ),
+            Held::Origin(notice) => format!(
+                "TextLayerRuntime が借用中のため置き直しの知らせを受け取れない（effective_at={}）——字の時刻は動かない",
+                notice.effective_at
             ),
             mark => format!("TextLayerRuntime が借用中のためトークの印を受け取れない（{mark:?}）"),
         });

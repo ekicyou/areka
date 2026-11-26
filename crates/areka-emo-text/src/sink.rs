@@ -15,7 +15,7 @@ use std::ops::ControlFlow;
 
 use areka_actor::{UiSendError, UiSender};
 use areka_sakura::contract::{CueCommand, TalkCue};
-use dola::cue::CueProbe;
+use dola::cue::{CueProbe, OriginNotice};
 
 /// UI ドレインへの搬送 envelope（`Send + 'static`）。
 ///
@@ -38,6 +38,8 @@ pub enum TextMsg {
     TalkEnded,
     /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し）。
     ChoiceWaitBegan,
+    /// 置き直しの知らせ（[`dola::cue::CueSink::origin_set`] の、前の起点が在る物だけ）。
+    Origin(OriginNotice),
 }
 
 /// **単一の出力契約** [`dola::cue::CueSink`] の実装——broadcast された全 cue を UI ドレインへ
@@ -164,13 +166,24 @@ impl dola::cue::CueSink for EmoTextSink {
             );
         }
     }
+
+    /// 置き直しの知らせだけを [`TextMsg::Origin`] として合図と同じ口へ積む。最初の起点の知らせは
+    /// 送らない（文字の層は起点を持たない）。積めなかったときは `preview` と同じく `error!` 1 行のみ。
+    fn origin_set(&mut self, notice: OriginNotice) {
+        if notice.previous.is_some() && self.tx.send(TextMsg::Origin(notice)).is_err() {
+            tracing::error!(
+                effective_at = %notice.effective_at,
+                "EmoTextSink::origin_set: UI text drain already stopped; origin notice dropped"
+            );
+        }
+    }
 }
 
 /// 終了規律の正準写像。
 ///
 /// cue の処理（状態機械適用等）を `on_cue`、先渡し（[`TextMsg::Upcoming`]）を `on_upcoming`、
-/// トークの印（[`TextMsg::TalkEnded`]・[`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）を
-/// `on_talk_mark` で差し込む。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
+/// トークの印と置き直しの知らせ（[`TextMsg::TalkEnded`]・[`TextMsg::ChoiceWaitBegan`]・
+/// [`TextMsg::Origin`] のどれかだけが渡る）を `on_talk_mark` で差し込む。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
 /// 終了経路はちょうど 2 つ:
 ///
 /// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（受け取りはどれも呼ばれない・
@@ -193,7 +206,7 @@ pub fn handle_text_msg_with<E>(
             on_cue(cue, Some(probe)).map(|()| ControlFlow::Continue(()))
         }
         TextMsg::Upcoming(upcoming) => on_upcoming(upcoming).map(|()| ControlFlow::Continue(())),
-        mark @ (TextMsg::TalkEnded | TextMsg::ChoiceWaitBegan) => {
+        mark @ (TextMsg::TalkEnded | TextMsg::ChoiceWaitBegan | TextMsg::Origin(_)) => {
             on_talk_mark(mark).map(|()| ControlFlow::Continue(()))
         }
     }

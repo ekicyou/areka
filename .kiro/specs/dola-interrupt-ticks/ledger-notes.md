@@ -341,3 +341,8 @@
 - 取り除いた分かれ道: `spawn_emo_text` の、受け取った場で当てる 3 つの閉包（受け取りは列に足し、`advance(frame_now)` が当てる）。外したテスト・ログは無い。借用中の `Err` の文言「適用できない（actor, at）」→「受け取れない（actor, fire_time）」（字面で読むテストは無い）。
 - 変える前後の期待（10.4・10.5 が直す）: `spawn_emo_text` 越しに合図を入れてその場で当たる事を期待していたテスト（`sink_probe_tests::drain_reports_missing_box_once_and_not_for_present_box`・`actor_lookahead_tests`・`actor_runtime_frame_tests`・`actor_tests`・`sink_talk_end_tests`、`tests/` の `attach_wiring_test`・`draw_readback_test`・`viewbox_scroll_test`、例 `emo-text-layer`）は、`advance` の後に当たる事を期待する形になる。
 - 足したテスト: `actor_held_tests.rs` の 13 本（3 秒後の消去・字のほかの指令・届いたフレームより後の合図・同じ時刻の順・遅れた合図・250 ms 遅れのタイプライター・先渡しの位置・終わりの印・空の時の先渡しと印・選択待ちの後の押下・箱が無い知らせは当てる時・受け取りで当てず旗が立つ・借用中は Err）。
+
+## 10.3（後半）
+
+- 消したテスト・分かれ道・ログは無い。足したログ: `EmoTextSink::origin_set` が送れない時の `error!` 1 行、借用中に知らせを受け取れない時の `Err` の文。
+- 足したテスト: `actor_held_tests.rs` の 6 本（E より後の字だけ動く・前へ動いた字は E に寄る・知らせより前に届いた合図の字も動く・全部の場所の字が動く・知らせの後の合図は E を待つ・受け口は置き直しの知らせだけを送る）。緑は 10.4 で確かめる。

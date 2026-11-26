@@ -36,8 +36,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use areka_sakura::cluster::clusters;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimeDelta, TimePoint, TimeSpan};
 use areka_sakura::reveal::chunk_reveal_offsets;
+use dola::cue::OriginNotice;
 
 use crate::inline_marker::{MARKER_GLYPH, is_marker_carrier};
 use crate::look::{StyleId, StyleTable};
@@ -278,6 +279,13 @@ impl RevealSchedule {
     /// `times` は単調非減少（`extend_chunk` の max が保証）なので二分探索で数える。
     pub fn visible(&self, frame_now: TimePoint) -> usize {
         self.times.partition_point(|&r| r <= frame_now)
+    }
+
+    /// 効く時刻より後の時刻を `delta` だけ動かす。効く時刻より前になる時刻は効く時刻にする（順は保たれる）。
+    fn shift_after(&mut self, effective_at: TimePoint, delta: TimeDelta) {
+        for t in self.times.iter_mut().filter(|t| **t > effective_at) {
+            *t = (*t + delta).max(effective_at);
+        }
     }
 
     /// chunk（Text cue 1 件分のグリフ列）のリビール時刻を時刻式で追記する。
@@ -604,6 +612,14 @@ impl TextLayerState {
             }
         }
         box_missing
+    }
+
+    /// 置き直しの知らせを全部の場所のリビール時刻へ当てる（最初の起点の知らせは何も動かさない）。
+    pub(crate) fn apply_origin_notice(&mut self, notice: &OriginNotice) {
+        let Some(delta) = notice.delta() else { return };
+        for state in self.actors.values_mut() {
+            state.reveal.shift_after(notice.effective_at, delta);
+        }
     }
 
     /// フレームの時刻での actor 別可視グリフ数（決定論）。

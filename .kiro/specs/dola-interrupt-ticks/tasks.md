@@ -622,7 +622,7 @@
   - _Dispatch: standard, effort high — 列の決まりは設計が与えるが、受け取りと当てる順の結線が細かい_
   - _Requirements: 12.4, 12.10, 12.13, 18.1, 18.4, 18.6_
 
-- [ ] 10.3 areka-emo-text: 置き直しの知らせの受け方を入れる
+- [x] 10.3 areka-emo-text: 置き直しの知らせの受け方を入れる
   - 受け口が、前の起点の在る知らせだけを列に送り、最初の起点の知らせでは何も送らない
   - 知らせが当たる時に、全部の場所の字の現れる時刻のうち、効く時刻より後の物だけを動いた長さだけ動かし、効く時刻より前になる物は効く時刻にする
   - 隣の新しいテストで、設計の Unit Tests の「文字の層の、置き直しの知らせ」の全部（効く時刻以前は動かない・後は動く・前へ動いて効く時刻・知らせより前に届いた未当ての合図の字も動く・知らせの後の合図が効く時刻より前に当たらない・最初の起点の知らせを送らない）を書き、自分のファイルの分が誤り 0 件である（緑は 10.4 で確かめる）
@@ -828,3 +828,4 @@
 - 9.3: 届いた物を持つ列は `areka_sakura::held::HeldQueue<T>`（`push(Option<TimePoint>, T)`・`pop_due(frame_now) -> Option<T>`・`waiting_until() -> Option<TimePoint>`・`is_empty`）。
 - 10.1: emo-text の提示の口は `frame_now: TimePoint`。下で壊れる呼び出し: areka-runtime `frame/scale_text.rs:238,250`・`balloon_visibility_phase.rs:306`・`frame_balloon_runtime_test_support.rs:60`（10.10・10.11）、areka-input `balloon_test_support.rs:322`・`balloon_choice_settle_tests.rs:151`・`balloon_pressed_tests.rs:81`（10.15）、本体 `runtime_tests/frame_shell_box_integration_tests.rs:310`（10.16）、先進坑 `q7-vertical/src/old_side.rs:100`（10.16 か締め）。
 - 10.2: emo-text の新しい口 `TextLayerRuntime::advance(frame_now) -> Option<TimePoint>`（`actor_held.rs`）。受け取りは `held::receive_msg` が列へ足し `tick_wake::mark(PRESENT)` を立てる。10.3 が `TextMsg::Origin`・`EmoTextSink::origin_set` の送り・`Held::Origin` を足す。10.10 が runtime のフレームの頭で `advance` を呼ぶ。10.16 が本体の `AREKA_PRODUCERS` に `actor_held.rs` の行と木の根に areka-emo-text を足す。12.2 が wintf の `tick_wake.rs` の頭の一覧の `PRESENT` の行を直す。
+- 10.3: `actor_held.rs`・`actor_held_tests.rs`（10.2 で足した）が lib.rs の `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` のどちらにも無い。10.4 で載せる（`every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる）。
