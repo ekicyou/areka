@@ -4,20 +4,24 @@
 
 use crate::test_support::{recording_sink, text};
 use dola::cue::{CuePlayer, CueSheet};
+use dola::time::{TimePoint, TimeSpan};
 
-/// アンカーを刻んだときに、引き算で相対へ戻すと丸めで手前に落ちる相対時刻。
-const ROUNDS_DOWN: f64 = 2.5999999999999996;
-
-/// 刻印した台本の `absolute_fire_time` ちょうどの tick で、再生機がその合図を配る。
+/// 刻印した台本の `absolute_fire_time` ちょうどの tick で配り、1 刻み手前では配らない。
 #[test]
-fn player_emits_cue_at_sheet_absolute_fire_time() {
-    let sheet = CueSheet::new(vec![text(ROUNDS_DOWN, "x", 0.0)]).with_absolute_start_time(100.0);
-    let fire = sheet.absolute_fire_time(&sheet.cues()[0]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+fn player_emits_cue_exactly_at_sheet_absolute_fire_time() {
+    let at = TimeSpan::try_from_ticks(25_999_999).unwrap();
+    let sheet = CueSheet::new(vec![text(at, "x", TimeSpan::ZERO)])
+        .with_absolute_start_time(TimePoint::from_ticks(1_000_000_000));
+    let fire = sheet.absolute_fire_time(&sheet.cues()[0]).unwrap();
+    assert_eq!(fire.as_ticks(), 1_025_999_999);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
+    player.tick(TimePoint::from_ticks(fire.as_ticks() - 1));
+    assert!(log.borrow().is_empty());
+
     player.tick(fire);
-    let received: Vec<f64> = log.borrow().iter().map(|c| c.at).collect();
-    assert_eq!(received, vec![ROUNDS_DOWN]);
+    let received: Vec<TimeSpan> = log.borrow().iter().map(|c| c.at).collect();
+    assert_eq!(received, vec![at]);
 }

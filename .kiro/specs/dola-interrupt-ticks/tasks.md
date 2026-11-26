@@ -112,7 +112,7 @@
   - _Dispatch: mechanical — 期待の値は設計が与える_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.8, 6.9_
 
-- [ ] 2.7 (P) 台本の並べ替えと時刻の表の結合テストを直す
+- [x] 2.7 (P) 台本の並べ替えと時刻の表の結合テストを直す
   - 期待の値を、ちょうどの 100ns の値へ写す。ミリ秒の格子の継ぎを確かめていた物は外し、置き換えた先と一緒に、記録に書く事として報告に挙げる
   - そのファイルが誤り 0 件で、dola の本体が組める時に `cargo test -p dola --test cue` の中で緑である
   - _Boundary: cue の結合テスト（並べ替えと時刻の表）_
@@ -801,3 +801,4 @@
 - 2.3: dola の結合テストの組み立て（`tests/cue/test_support.rs`）は名前と引数の順を変えず `TimeSpan` を受ける。`pub(crate) const fn ms(u32) -> TimeSpan` がある（例: `text(0.5, "b", 0.0)` → `text(ms(500), "b", ms(0))`）。時刻の表の 128 ビットの起点は後半（8.2）。
 - 2.4: `command_tests.rs` の `cue_duration_defaults_to_zero_for_legacy_serialized_data` の名前とコメント（「旧シリアライズ資産」「後方互換」）と 488 行の「不透明秒数」は古い言い方のまま。中身は「duration の欄が無い時は 0」。12.2 の説明の直しで拾う。
 - 2.6〜2.13 の dola の結合テストは、lib が組めるまで型の検査に届かない（`cargo check --all-targets` の誤り 0 件は「まだ見られていない」）。2.14 の締めで初めて型と実行の誤りが出る。
+- 2.7: `tests/cue/schedule_test.rs` は設計の表で 2.7 の持ち物で、済んでいる。2.8 は `runtime_test*.rs` と `sink_test.rs` だけを持つ。
