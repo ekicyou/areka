@@ -100,3 +100,7 @@
 
 - 外したテスト・分かれ道・ログは無い。定数の名前を替えた: `PROMOTE_WINDOW_SECS`・`DEMOTE_QUIET_SECS`・`HOLD_AFTER_PROMOTE_SECS`・`HOLD_AFTER_DEMOTE_SECS` → `PROMOTE_WINDOW`・`DEMOTE_QUIET`・`HOLD_AFTER_PROMOTE`・`HOLD_AFTER_DEMOTE`（長さの型）。
 - 変える前後の期待: 「ちょうど前・少し越え」を 1e-9 秒で表していた `active_quiet_demotes_only_after_quiet_and_hold`・`active_not_quiet_stays`・`exactly_one_second_window_promotes_just_over_does_not` → ちょうど 1 刻み。`just_under_8hz_never_promotes` の間隔 1/7 秒 + 1e-6 秒 → 1,428,571 + 10 刻み。ほかは秒 → ちょうどの値。
+
+## 3.4
+
+- 外したテスト・分かれ道・ログは無い。欄の名前を替えた: `ChoiceWaiting.display_end_elapsed_secs: f64` → `display_end: TimePoint`、`timeout_directive_secs: Option<f64>` → `timeout_directive: Option<TimeDelta>`。areka-talk は本番の依存に dola を引く（説明の「依存 0」を改めた）。

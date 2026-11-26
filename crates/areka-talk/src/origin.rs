@@ -1,6 +1,6 @@
 //! 台本とイベントの出どころの語彙（ukadoc の `SenderType`・Owned SSTP・`SecurityLevel`）。
 //!
-//! 依存ゼロ・`std` のみ。導く規則（kanade）・線の書き読み（host32）・止める判断（受け口）は
+//! `dola::time` の型と `std` のみ。導く規則（kanade）・線の書き読み（host32）・止める判断（受け口）は
 //! ここに持たない。下流は語の組を定数で足し、型の形は変えない。
 //!
 //! `SenderType` は 9 語・Owned かどうか・`local`／`external` で出どころを表す。先頭の語

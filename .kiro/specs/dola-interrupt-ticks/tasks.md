@@ -212,7 +212,7 @@
   - _Dispatch: mechanical — 欄の型を設計が与える_
   - _Requirements: 7.12, 9.1_
 
-- [ ] 3.4 (P) areka-talk: dola を引き、選択待ちの知らせを時刻の型にする
+- [x] 3.4 (P) areka-talk: dola を引き、選択待ちの知らせを時刻の型にする
   - 本番の依存に dola を足し、説明の「依存 0」を改める
   - 選択待ちの知らせの表示の終わりを時刻、時間切れの指令を `Option<符号つきの差>` にする
   - `cargo test -p areka-talk` が緑である
@@ -807,3 +807,4 @@
 - 2.11: `src/runtime/facade.rs:192` が `compile_validated(doc, name, base_time)` で引き金の子を 0 でない開始の時刻でコンパイルしている。2.12 は子を `start(name, TimePoint)` の起点で始め、子の区間と引き金を「起点＋隔たり」で求める。`tests/compile/start_shift_test.rs` は 2.12 の口 `start(name, TimePoint)`・`tick(TimePoint)`・`StartResult.end_time: Option<TimePoint>`・`TriggerResult::Started { start_result, .. }` に頼る。
 - 2.12: `resume` の戻り値は、まだ終わりの期限との早い方を取らない（8.1）。`tests/cue/sheet_test.rs:180` の `stamping_absolute_start_time_leaves_relative_times_untouched` は期待の値が誤り（相対の終わりは `ms(500)` が正しく、`ms(1000)` ではない。1aaf136a3 で入った）。2.14 の締めで直す。runtime のテストのうち `src/runtime/{instance_manager,loop_controller}/tests.rs` も 2.13 の持ち物。
 - 2.13: `LoopOffset::Scalar(v)` は 0 から v の幅で引く待ち（main からの意味・設計 964 行）。決まった値の待ちは `Range{min == max}` で書く。
+- 3.4: `crates/areka-talk/src/origin.rs` の `//!` の「`dola::time` の型と `std` のみ」は、origin.rs 自身が dola を使わないので「`std` のみ」が正しい。12.2 で拾う。

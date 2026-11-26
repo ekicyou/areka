@@ -1,7 +1,7 @@
 [package]
 name = "areka-talk"
 workspace = "../.."
-description = "Sole physical definition of the talk hand-off contract (StartTalk/TalkDone/TalkEndReason/TalkId) shared by kanade and sakura; std-only, zero dependencies"
+description = "Sole physical definition of the talk hand-off contract (StartTalk/TalkDone/TalkEndReason/TalkId) shared by kanade and sakura; depends only on dola time types and std"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,3 +10,4 @@ publish = false # areka 本体の部品・areka の中でしか意味を持た�
 repository.workspace = true
 
 [dependencies]
+dola = { path = "../dola" }

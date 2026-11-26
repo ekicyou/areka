@@ -469,6 +469,9 @@ dependencies = [
 [[package]]
 name = "areka-talk"
 version = "0.1.0"
+dependencies = [
+ "dola",
+]
 
 [[package]]
 name = "areka-update"
