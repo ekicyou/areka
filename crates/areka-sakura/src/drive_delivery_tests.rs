@@ -2,6 +2,8 @@ use super::test_support::*;
 use super::*;
 use crate::contract::{CueCommand, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
+use dola::time::testing::{at_ms, ms};
+use dola::{TimePoint, TimeSpan};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -26,8 +28,8 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         None,
     );
     // 初回 Tick でアンカー刻印、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
     recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone");
     handle.actor.join().expect("body は正常終了する");
 
@@ -65,7 +67,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
 fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times() {
     // 1 回の再生を anchor で駆動し、初回 Tick(A) と A+0.5 では何も届かず、A+0.6 の Tick の直後に
     // bye が届くことを確かめる（来ないことは時限つきの受け取りの時間切れで決める）。
-    fn run_with_anchor(anchor: f64) {
+    fn run_with_anchor(anchor: TimePoint) {
         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk::new(TalkId(1), r"\s[0]hi\_w[500]bye\e".to_string());
         let (tx, rx) = mpsc::channel::<TalkCue>();
@@ -96,7 +98,10 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
         );
 
         // Tick(A+0.5): Wait(at=0.1) が due。bye は保留。
-        handle.inbox.send(SakuraMsg::Tick(anchor + 0.5)).unwrap();
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(anchor + ms(500)))
+            .unwrap();
         recv_until(&CueCommand::Wait, "Wait(at=0.1)");
         assert_eq!(
             rx.recv_timeout(NEG_WINDOW).unwrap_err(),
@@ -105,7 +110,10 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
         );
 
         // Tick(A+0.6): 次の Tick を送る前に bye が届く（＝絶対発火時刻 anchor+0.6）。
-        handle.inbox.send(SakuraMsg::Tick(anchor + 0.6)).unwrap();
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(anchor + ms(600)))
+            .unwrap();
         let cue = rx
             .recv_timeout(Duration::from_secs(5))
             .expect("A+0.6 の Tick で bye が届くはず");
@@ -116,14 +124,17 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
         );
 
         // horizon=0.75 を跨ぐ A+1.0 で自然終端。
-        handle.inbox.send(SakuraMsg::Tick(anchor + 1.0)).unwrap();
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(anchor + ms(1000)))
+            .unwrap();
         recv_done(&done_rx, Duration::from_secs(5)).expect("horizon 到達で TalkDone");
         handle.actor.join().expect("body 正常終了");
     }
 
     // Run A（anchor 10.0）と Run B（anchor 20.0）: 同じ台本の bye が 10.6 と 20.6 で配られる。
-    run_with_anchor(10.0);
-    run_with_anchor(20.0);
+    run_with_anchor(at_ms(10000));
+    run_with_anchor(at_ms(20000));
 }
 
 /// 未 due の発火は Tick を受けても**保留**され、`at` 到達（境界含む・`at <= offset`）の Tick で
@@ -152,9 +163,9 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     );
 
     // 開始時刻は整数 ms の格子（hello 250 ms・probe 300 ms・\_w[100]）を秒にしたもの。
-    let at_a = 350.0 / 1000.0; // probeA: 0.35
-    let at_b = 750.0 / 1000.0; // probeB: 0.75
-    let at_w = 1150.0 / 1000.0; // world:  1.15
+    let at_a = ms(350); // probeA: 0.35
+    let at_b = ms(750); // probeB: 0.75
+    let at_w = ms(1150); // world:  1.15
 
     let recv = |rx: &mpsc::Receiver<TalkCue>| {
         rx.recv_timeout(Duration::from_secs(5))
@@ -171,18 +182,18 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     };
 
     // 初回 Tick でアンカー刻印（0）。ClearAll/Emote/hello が due（probe は未 due）。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
     let hello = recv_text(&rx, "hello");
-    assert_eq!(hello.at, 0.0, "hello の発火時刻は 0.0");
+    assert_eq!(hello.at, TimeSpan::ZERO, "hello の発火時刻は 0.0");
     // 初回群 drain 後、probeA は未着（保留の決定的証明）。
     assert_eq!(
         rx.recv_timeout(NEG_WINDOW).unwrap_err(),
         RecvTimeoutError::Timeout,
-        "初回 Tick(0.0) では未 due の probeA(0.35) が保留されること"
+        "初回 Tick(at_ms(0)) では未 due の probeA(0.35) が保留されること"
     );
 
     // Tick(at_a=0.35): Wait@0.25 と probeA@0.35 が due。probeB/world は未 due。
-    handle.inbox.send(SakuraMsg::Tick(at_a)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0) + at_a)).unwrap();
     let probe_a = recv_text(&rx, "probeA");
     assert_eq!(probe_a.at, at_a, "probeA の発火時刻は 0.35");
     assert_eq!(
@@ -192,7 +203,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     );
 
     // Tick(at_b=0.75): probeB@0.75 が新規 due。world は依然未 due。
-    handle.inbox.send(SakuraMsg::Tick(at_b)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0) + at_b)).unwrap();
     let probe_b = recv_text(&rx, "probeB");
     assert_eq!(probe_b.at, at_b, "probeB の発火時刻は 0.75");
     assert_eq!(
@@ -202,12 +213,12 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
     );
 
     // Tick(at_w=1.15): world@1.15 が due（境界含む `at <= offset`）→ ここで初めて発火。
-    handle.inbox.send(SakuraMsg::Tick(at_w)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0) + at_w)).unwrap();
     let world = recv_text(&rx, "world");
     assert_eq!(world.at, at_w, "world の発火時刻は 1.15（境界包含で発火）");
 
     // 占有 horizon（world 再生完了＝1.15+0.25=1.40）を跨ぐ Tick で自然終端。
-    handle.inbox.send(SakuraMsg::Tick(2.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(2000))).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("末尾到達で TalkDone");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー");
     assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -234,8 +245,8 @@ fn same_at_cues_preserve_script_order_fifo() {
         None,
     );
     // 初回 Tick 刻印＋単一 Tick で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(500))).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("単一 Tick で自然終端");
     assert_eq!(done.reason, TalkEndReason::Ended);
     handle.actor.join().expect("body は正常終了する");
@@ -253,11 +264,11 @@ fn same_at_cues_preserve_script_order_fifo() {
         CueCommand::ClearAll,
         "冒頭は全消去 ClearAll（at=0）"
     );
-    assert_eq!(recs[0].at, 0.0);
+    assert_eq!(recs[0].at, TimeSpan::ZERO);
     assert_eq!(recs[1].command, CueCommand::Emote { key: "10".into() });
-    assert_eq!(recs[1].at, 0.0);
+    assert_eq!(recs[1].at, TimeSpan::ZERO);
     assert_eq!(recs[2].command, CueCommand::Text("hello".into()));
-    assert_eq!(recs[2].at, 0.0);
+    assert_eq!(recs[2].at, TimeSpan::ZERO);
     assert!(
         matches!(recs[3].command, CueCommand::NewLine { .. }),
         "at=0.25 群先頭は NewLine（FIFO・extend なら逆順化する）"
@@ -293,12 +304,11 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         None,
     );
 
-    // 開始時刻は compile と同じく整数 ms で積んでから秒にする。
-    let at_world = crate::duration::ms_to_secs(crate::duration::text_playback_ms("hello") + 100);
+    let at_world = text_playback_duration("hello") + ms(100);
 
     // 初回 Tick 刻印＋占有 horizon（world 再生完了＝at_world+0.25=0.60）を跨ぐ Tick。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
 
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone が返るべき");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー（R6.6）");
@@ -313,12 +323,12 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
         "broadcast は 5 件（ClearAll/Emote/hello/Wait/world）"
     );
     assert_eq!(recs[0].command, CueCommand::ClearAll);
-    assert_eq!(recs[0].at, 0.0);
+    assert_eq!(recs[0].at, TimeSpan::ZERO);
     assert_eq!(recs[1].command, CueCommand::Emote { key: "10".into() });
-    assert_eq!(recs[1].at, 0.0);
+    assert_eq!(recs[1].at, TimeSpan::ZERO);
     assert_eq!(recs[1].actor.as_str(), "0", "既定 scope=0 の転写");
     assert_eq!(recs[2].command, CueCommand::Text("hello".into()));
-    assert_eq!(recs[2].at, 0.0);
+    assert_eq!(recs[2].at, TimeSpan::ZERO);
     assert_eq!(
         recs[3].command,
         CueCommand::Wait,
@@ -341,10 +351,18 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
     // 期待値とビット同一（`==`）なら、D 焼き込み → `to_talk_schedule` → CuePlayer broadcast の
     // どの hop でも duration が落とされ／ゼロ化され／再導出されていない（無変形搬送）ことの証拠。
     let d_hello = text_playback_duration("hello");
-    let w2 = crate::duration::ms_to_secs(100); // \_w[100] = 絶対 100ms（compile の算術と同一）
+    let w2 = ms(100); // \_w[100] = 絶対 100ms
     let d_world = text_playback_duration("world");
-    assert_eq!(recs[0].duration, 0.0, "ClearAll は瞬時（duration=0）");
-    assert_eq!(recs[1].duration, 0.0, "Emote は瞬時（duration=0）");
+    assert_eq!(
+        recs[0].duration,
+        TimeSpan::ZERO,
+        "ClearAll は瞬時（duration=0）"
+    );
+    assert_eq!(
+        recs[1].duration,
+        TimeSpan::ZERO,
+        "Emote は瞬時（duration=0）"
+    );
     assert_eq!(
         recs[2].duration, d_hello,
         "hello の delivered duration はコンパイル焼き込み D（text_playback_duration）と無変形一致（R1.1/7.1）"
@@ -386,13 +404,13 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
     );
 
     // 初回 Tick 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap(); // 同値 → no-op
-    handle.inbox.send(SakuraMsg::Tick(-1.0)).unwrap(); // 逆行 → no-op
-    handle.inbox.send(SakuraMsg::Tick(0.1)).unwrap(); // 前進だが world(at=0.75) 未達
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap(); // 同値 → no-op
+    handle.inbox.send(SakuraMsg::Tick(at_ms(-1000))).unwrap(); // 逆行 → no-op
+    handle.inbox.send(SakuraMsg::Tick(at_ms(100))).unwrap(); // 前進だが world(at=0.75) 未達
 
     // 終端まで進める（hello D=0.25＋\_w[500]=0.5 後 world@0.75・horizon=1.0 を跨ぐ）。
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("終端で TalkDone");
     assert_eq!(done.reason, TalkEndReason::Ended);
     handle.actor.join().expect("body は正常終了する");
@@ -411,68 +429,17 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
     );
 }
 
-/// 非有限 `Tick`（`NaN`/`inf`）は無視され再生が破綻しない。刻印前（`Armed`）でも
-/// 非有限 Tick でアンカーを刻印せず（NaN アンカー防止）、その後の正常 Tick で通常どおり終端する。
-/// 捨てた Tick は 1 件ごとに `error!` で値（`tick`）を名指して残る（ログの無い失敗の道を作らない）。
-/// 同期の driver で回し、記録の捕捉にスレッドの競りを持ち込まない。
-#[test]
-fn non_finite_tick_is_ignored_and_playback_survives() {
-    let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-    let start = StartTalk::new(TalkId(9), r"\s[10]hello\_w[100]world\e".to_string());
-    let sink = RecordingSink::new();
-    let records = sink.records();
-    let mut driver = TalkDriver::new(one_sink(sink), SystemVarSnapshot::default(), done_tx, None);
-
-    let ((), events) = log_capture_kit::capture(|| {
-        assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
-        // 刻印前に非有限 Tick を送る: 無視され（error ログ）刻印もされない。
-        assert!(driver.handle(SakuraMsg::Tick(f64::NAN)).is_continue());
-        assert!(driver.handle(SakuraMsg::Tick(f64::INFINITY)).is_continue());
-        // 正常 Tick 列で通常どおり駆動・終端する（ガードがループを殺していないことの証）。
-        assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
-        assert!(driver.handle(SakuraMsg::Tick(1.0)).is_break());
-    });
-
-    let errors: Vec<Option<&str>> = events
-        .iter()
-        .filter(|ev| ev.level == tracing::Level::ERROR)
-        .map(|ev| ev.field("tick"))
-        .collect();
-    assert_eq!(
-        errors,
-        [Some("NaN"), Some("inf")],
-        "捨てた非有限 Tick 2 件が値つきの ERROR で残る"
-    );
-
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("非有限 Tick 後も正常 Tick で終端するべき");
-    assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
-
-    // 非有限 Tick で早期全量配信されず、正常 Tick 分だけ届く（5 件）。
-    assert_eq!(
-        records.lock().unwrap().len(),
-        5,
-        "非有限 Tick で早期全量配信されていない（ClearAll/Emote/hello/Wait/world）"
-    );
-}
-
 /// 同一 fixture script＋同一注入 Tick 列を N 回実行し、毎回**同一の観測結果**（cue 列・at・
 /// actor・順序・終端理由）が得られることを確認する（決定的再現）。
 #[test]
 fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
-    type CueKey = (u64, String, CueCommand);
+    type CueKey = (TimeSpan, String, CueCommand);
     fn project(records: &Arc<Mutex<Vec<TalkCue>>>) -> Vec<CueKey> {
         records
             .lock()
             .unwrap()
             .iter()
-            .map(|c| {
-                (
-                    c.at.to_bits(),
-                    c.actor.as_str().to_string(),
-                    c.command.clone(),
-                )
-            })
+            .map(|c| (c.at, c.actor.as_str().to_string(), c.command.clone()))
             .collect()
     }
 
@@ -489,8 +456,14 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
             SystemVarSnapshot::default(),
             None,
         );
-        handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
-        handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(at_ms(0)))
+            .expect("Tick(at_ms(0))");
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(at_ms(1000)))
+            .expect("Tick(at_ms(1000))");
 
         let done = recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone");
         handle.actor.join().expect("body 正常終了");
@@ -540,7 +513,8 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
 
     // 実 compile 出力から CuePlayer を構築し、記録 sink を **2 本** broadcast 登録する
     // （どの sink も全 cue を受ける・登録順は配送内容に影響しない）。
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    let sheet = compiled.sheet.clone().with_absolute_start_time(at_ms(0));
+    let mut player = CuePlayer::from_sheet(&sheet).expect("起点を押した台本");
     let sink_a = RecordingSink::new();
     let sink_b = RecordingSink::new();
     let records_a = sink_a.records();
@@ -550,7 +524,7 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
 
     // 全内容は瞬時（at=0）＋末尾に選択待ち barrier@0。単一 tick で offset 0 群（内容 6 cue）を
     // 配送し barrier@0 到達 → WaitingForChoice（barrier 手前の cue は配送済み）。
-    player.tick(0.0);
+    player.tick(at_ms(0));
     assert_eq!(
         player.state(),
         &dola::cue::CuePlayerState::WaitingForChoice,
@@ -694,8 +668,8 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
 
     // 初回 Tick でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。
     // 占有 horizon（world 再生完了＝0.25+0.25=0.50）を跨ぐ Tick で自然終端する。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
 
     // 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
     let done = recv_done(&done_rx, Duration::from_secs(5))

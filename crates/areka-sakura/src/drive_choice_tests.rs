@@ -1,6 +1,8 @@
 use super::test_support::*;
 use super::*;
 use crate::contract::{TalkCue, TalkId};
+use dola::TimeSpan;
+use dola::time::testing::at_ms;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
@@ -19,9 +21,9 @@ const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 /// `WaitingForChoice`・後続 ResolveChoice は inbox FIFO でこの後に処理される）。
 fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
     // 初回 Tick 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
     // Tick: Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
-    handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(500))).unwrap();
     // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
     recv_until_choice(rx);
 }
@@ -44,8 +46,8 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
     drive_menu_to_barrier(&handle, &rx);
 
     // horizon を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
-    handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(5000))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(50000))).unwrap();
 
     // 負の窓: barrier 未解決の間は TalkDone が発火しない（早期完了しない）。
     assert!(
@@ -190,8 +192,8 @@ fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediate
     drive_menu_to_barrier(&handle, &rx);
 
     // barrier-stop: horizon(=0) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
-    handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(5000))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(50000))).unwrap();
     assert!(
         recv_done(&done_rx, NEG_WINDOW).is_err(),
         "実 3 択 menu でも barrier 未解決の間は horizon 越え Tick で TalkDone を出さない（R2.3）"
@@ -262,8 +264,8 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
         .unwrap();
 
     // 通常 Tick 列で駆動・終端する（防御枝がループを殺していない証）。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("Armed 誤投函後も通常 Tick で終端するべき");
     assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
@@ -282,8 +284,8 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
 // 駆動し（実時間待機なし）、次の 4 点を固定する:
 //
 //  - **一度きり**: barrier 成立の tick でちょうど 1 通。以降 Tick を打ち続けても 2 通目は来ない。
-//  - **内容**: 候補 id 列（`pending_choices()` 由来・表示順）／`display_end_elapsed_secs`
-//    （占有 horizon＝duration 権威・**tick 時刻ではない**）／`timeout_directive_secs`
+//  - **内容**: 候補 id 列（`pending_choices()` 由来・表示順）／`display_end`
+//    （占有 horizon＝duration 権威・**tick 時刻ではない**）／`timeout_directive`
 //    （compile は `None` を書く＝未指定＝下流の既定値へ委譲）。
 //  - **解決後に再通知しない**: 同一バリアが再成立しない限り 2 通目は出ない。
 //  - **送出失敗で運行継続**: done 受信端 drop でも `error!` 記録のみで talk は死なない。
@@ -292,7 +294,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
 /// 駆動すると、選択待ちバリア成立の tick で `ChoiceWaiting` が**ちょうど 1 回**届き、
 /// 候補 id 列・占有 horizon・タイムアウト指令を同梱する。以降 Tick を打ち続けても再通知されない。
 ///
-/// **弁別**: `display_end_elapsed_secs` は **注入 Tick 時刻ではなく** 占有 horizon
+/// **弁別**: `display_end` は **注入 Tick 時刻ではなく** 占有 horizon
 /// （0.35＝台本由来の duration 権威）である。tick 時刻を載せる実装ならこの assert が落ちる。
 #[test]
 fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
@@ -321,7 +323,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         &areka_parsers::sakura::parse(MENU_SCRIPT),
         &SystemVarSnapshot::default(),
     );
-    let expected_horizon = compiled.sheet.absolute_end_time();
+    let expected_horizon = compiled.sheet.relative_end();
     assert_eq!(
         expected_horizon,
         menu_horizon(),
@@ -333,16 +335,16 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         TalkNotice::ChoiceWaiting(ChoiceWaiting {
             talk_id,
             choice_ids: vec!["targetA".to_string()],
-            display_end_elapsed_secs: expected_horizon,
-            timeout_directive_secs: None,
+            display_end: at_ms(0) + expected_horizon,
+            timeout_directive: None,
         }),
         "通知は talk_id エコー＋候補 id 列＋占有 horizon（tick 時刻 0.5 ではない・R7.2）＋\
          タイムアウト未指定（compile は `None` を書く＝下流の既定値へ委譲・DD-8）を同梱する"
     );
 
     // 一度きり: barrier は解けていないため以降の Tick でも 2 通目は出ない（検出フラグ）。
-    handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(5000))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(50000))).unwrap();
     assert_eq!(
         done_rx.recv_timeout(NEG_WINDOW).unwrap_err(),
         RecvTimeoutError::Timeout,
@@ -367,7 +369,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
 
 /// **候補 id 列は表示順・horizon はアンカー込み**: 実 3 択メニューを **0 以外の
 /// アンカー**で駆動し、通知が (1) 3 択の id を**表示順のまま**運び、(2)
-/// `display_end_elapsed_secs` に**アンカーを含む**占有 horizon を載せることを固定する。
+/// `display_end` に**アンカーを含む**占有 horizon を載せることを固定する。
 ///
 /// **弁別**: この台本は全内容が `at=0`（相対 horizon＝0）ゆえ、期待値は **アンカー 7.0 そのもの**。
 /// アンカーを無視して相対 horizon だけを載せる実装なら 0.0 が届いて落ちる。
@@ -391,9 +393,9 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
     );
 
     // アンカー 7.0 で刻印し、7.5 で barrier@0（相対）到達まで進める。
-    const ANCHOR: f64 = 7.0;
-    handle.inbox.send(SakuraMsg::Tick(ANCHOR)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(ANCHOR + 0.5)).unwrap();
+    let anchor = at_ms(7000);
+    handle.inbox.send(SakuraMsg::Tick(anchor)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(7500))).unwrap();
     recv_until_choice(&rx);
 
     // 弁別の前提: この台本の相対占有 horizon は 0.0（全内容が at=0・duration 0）。
@@ -402,8 +404,8 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
         &SystemVarSnapshot::default(),
     );
     assert_eq!(
-        compiled.sheet.absolute_end_time(),
-        0.0,
+        compiled.sheet.relative_end(),
+        TimeSpan::ZERO,
         "3 択 menu は全内容 at=0 ゆえ相対占有 horizon は 0.0（アンカー弁別の前提）"
     );
 
@@ -419,8 +421,8 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
                 "Onエモの位置調整メニュー".to_string(),
                 "Onメニュー閉じる".to_string(),
             ],
-            display_end_elapsed_secs: ANCHOR,
-            timeout_directive_secs: None,
+            display_end: anchor,
+            timeout_directive: None,
         }),
         "候補 id は表示順（先頭/中間/末尾）で運ばれ、horizon はアンカー込み（7.0・相対 0.0 ではない）"
     );
@@ -462,8 +464,8 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         TalkNotice::ChoiceWaiting(ChoiceWaiting {
             talk_id,
             choice_ids: vec!["targetA".to_string()],
-            display_end_elapsed_secs: menu_horizon(),
-            timeout_directive_secs: None,
+            display_end: at_ms(0) + menu_horizon(),
+            timeout_directive: None,
         }),
         "1 通目は選択待ち成立通知（因果順の先）"
     );
@@ -560,8 +562,8 @@ fn script_without_choices_never_notifies_choice_waiting() {
     );
 
     // Tick でアンカー刻印、Tick で占有 horizon（hello の D＝0.25）を跨いで自然終端。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
 
     // 1 通目は `TalkDone{Ended}`（`recv_done` の読み飛ばしを使わず**生の 1 通目**を突合する）。
     let first = done_rx
@@ -594,7 +596,7 @@ fn script_without_choices_never_notifies_choice_waiting() {
 #[test]
 fn resolved_choice_flushes_due_epilogue_before_following_close() {
     // 選ぶまでに来る Tick（本番の流れ）。
-    assert_resolve_flushes_epilogue(TalkId(830), Some(0.6));
+    assert_resolve_flushes_epilogue(TalkId(830), Some(at_ms(600)));
 }
 
 /// **形 B**: 解決が次の Tick より先に来る（`last_tick` が区切りの時刻のまま）ときも、
@@ -606,7 +608,7 @@ fn resolved_choice_before_next_tick_flushes_due_epilogue() {
 }
 
 /// 形 A・B の共通の手順。区切りの Tick の後に `tick_before_resolve` があれば送ってから解決する。
-fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<f64>) {
+fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<TimePoint>) {
     let sink = RecordingSink::new();
     let records = sink.records();
     let (mut driver, rx) = driver(one_sink(sink), None);
@@ -619,9 +621,9 @@ fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<
     };
 
     assert!(driver.handle(SakuraMsg::Start(start)).is_continue());
-    assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
+    assert!(driver.handle(SakuraMsg::Tick(at_ms(0))).is_continue());
     // 区切りに着いて選択待ち。
-    assert!(driver.handle(SakuraMsg::Tick(0.5)).is_continue());
+    assert!(driver.handle(SakuraMsg::Tick(at_ms(500))).is_continue());
     if let Some(t) = tick_before_resolve {
         assert!(driver.handle(SakuraMsg::Tick(t)).is_continue());
     }
@@ -658,8 +660,8 @@ fn assert_resolve_flushes_epilogue(talk_id: TalkId, tick_before_resolve: Option<
 fn mismatched_resolve_choice_is_warned() {
     let (mut driver, rx) = driver(one_sink(NoopSink), None);
     let _ = driver.handle(SakuraMsg::Start(StartTalk::new(TalkId(831), MENU_SCRIPT)));
-    let _ = driver.handle(SakuraMsg::Tick(0.0));
-    let _ = driver.handle(SakuraMsg::Tick(0.5));
+    let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
+    let _ = driver.handle(SakuraMsg::Tick(at_ms(500)));
 
     let (flow, events) = log_capture_kit::capture(|| {
         driver.handle(SakuraMsg::ResolveChoice {

@@ -248,7 +248,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 3.8 (P) areka-sakura の再生のテストを直す
+- [x] 3.8 (P) areka-sakura の再生のテストを直す
   - 期待の値を、ちょうどの値へ写し、刻みを時刻の型で渡す。同じ時刻と前の時刻の刻みで何も 2 度届かない期待は、そのまま通す
   - このタスクのファイルについて、`cargo check -p areka-sakura --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-sakura 再生のテスト_

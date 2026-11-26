@@ -123,3 +123,8 @@
 - 改名（実数のビットの比べ → ちょうどの型の値）: `start_times_sit_on_the_millisecond_grid` → `start_times_accumulate_exactly`・`wait_duration_is_on_the_ms_grid` → `wait_duration_is_exact`・`integer_ms_round_trips_through_secs` → `integer_ms_is_exact`。
 - 変える前後の期待: `ChoiceTimeoutDirective::Secs(..)` → `Delta(delta_ms(..))`、桁あふれの行は `Delta(TimeDelta::MAX/MIN)`。`trailing_explicit_wait_remains_in_sheet_and_extends_extent`（実数の和 0.9500000000000001 → `ms(950)`）。起点を押していない台本は `absolute_end_time()` → `relative_end()`。
 - 足したテスト: `compile_arm_tests.rs::sysvar_after_text_starts_at_the_preceding_offset`。
+
+## 3.8
+
+- 外したテスト: `drive_delivery_tests.rs::non_finite_tick_is_ignored_and_playback_survives`（有限でない刻みを捨てて `error!` を出す枝の檻。`Tick(TimePoint)` で作れず、枝は 3.5 で取り除いた）。
+- 変える前後の期待（名前は変えていない）: 秒の `Tick(x.y)` → `Tick(at_ms(..))`。`ChoiceWaiting` の欄の名前は `display_end`・`timeout_directive`、`display_end` の期待は「起点 + `menu_horizon()`」。`one_step_clock_jump_enters_choice_wait_for_each_directive` の指令 `Some(0.5)`・`Some(0.0)`・`Some(-0.001)`・`None` → `delta_ms(500)`・`delta_ms(0)`・`delta_ms(-1)`・`None`。`same_fixture_and_tick_sequence_produces_identical_observation_each_run` の鍵 `to_bits` → `TimeSpan`。`compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag` は起点を押した台本から再生機を組む。同じ時刻・前の時刻の刻みで 2 度届かない期待（`duplicate_and_backward_tick_do_not_double_fire`）はそのまま。
