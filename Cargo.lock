@@ -272,6 +272,7 @@ version = "0.1.0"
 dependencies = [
  "areka-actor",
  "areka-talk",
+ "dola",
  "log-capture-kit",
  "shiori-host32-host",
  "shiori-host32-ipc",

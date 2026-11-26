@@ -7,18 +7,17 @@ use super::{
     anchor, balloon_events, change, events, mouse_events, resources, sstp, talk_active_of,
     talk_gap, translate,
 };
-use crate::msg::{
-    ChoiceInput, CloseReason, MonotonicMs, MouseInput, ShioriCall, ShioriFault, ShioriOutcome,
-};
+use crate::msg::{ChoiceInput, CloseReason, MouseInput, ShioriCall, ShioriFault, ShioriOutcome};
 use crate::status::{ExecutionSnapshot, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{StartTalk, TalkDone, TalkId};
+use dola::{TimeDelta, TimePoint};
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
 /// `ShioriReply` が `KanadeMsg` に存在しないため、応答注入経路はシェル内部に閉じる。
 pub(crate) enum Input {
     Boot,
     Tick {
-        now: MonotonicMs,
+        now: TimePoint,
     },
     TalkDone(TalkDone),
     CloseRequest {
@@ -53,20 +52,20 @@ pub(crate) enum Input {
     Anchor(crate::anchor_input::AnchorInput),
     /// 選択待ち成立の通知（talk → dispatcher → kanade）。
     ///
-    /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（時間基準は新設しない）。
-    /// `timeout_directive_secs` から期限への写像は [`choice::choice_deadline`]が担い、
+    /// `display_end` は刻みと同じ物差しの時刻（時間基準は新設しない）。
+    /// `timeout_directive` から期限への写像は [`choice::choice_deadline`]が担い、
     /// 帳簿確立は [`steady::on_choice_waiting`]が行う。
     ChoiceWaiting {
         talk_id: TalkId,
         choice_ids: Vec<String>,
-        display_end: MonotonicMs,
-        timeout_directive_secs: Option<f64>,
+        display_end: TimePoint,
+        timeout_directive: Option<TimeDelta>,
     },
     /// 選択待ちの期限の知らせ（刻み役 → kanade・[`Action::ArmChoiceWake`] の頼みに 1 回だけ応える）。
     ///
     /// 判断は [`steady::on_choice_timeout_due`] が持つ。`Tick` と違い `last_now` を進めず、pump も出さない。
     ChoiceTimeoutDue {
-        now: MonotonicMs,
+        now: TimePoint,
     },
     /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。
     ///
@@ -144,21 +143,21 @@ pub(crate) enum Phase {
     ClosePending,
     CloseTalkWait {
         talk_id: TalkId,
-        deadline: Option<MonotonicMs>,
+        deadline: Option<TimePoint>,
     },
     /// 切替の `OnGhostChanging` の応答待ち（[`change`]）。
     ChangePending,
     /// `OnGhostChanging` の台詞の完了待ち／期限判定。
     ChangeTalkWait {
         talk_id: TalkId,
-        deadline: Option<MonotonicMs>,
+        deadline: Option<TimePoint>,
     },
     /// 切替の `OnClose` の応答待ち。
     ChangeClosePending,
     /// 切替の `OnClose` の別れの台詞の完了待ち／期限判定。
     ChangeCloseTalkWait {
         talk_id: TalkId,
-        deadline: Option<MonotonicMs>,
+        deadline: Option<TimePoint>,
     },
     Unloading {
         cause: TermCause,
@@ -189,7 +188,7 @@ pub(crate) struct ChoiceState {
     /// 照合用の候補選択肢 ID 列（表示順を保存）。
     pub candidates: Vec<String>,
     /// 選択待ちの期限（`None`＝無期限）。
-    pub deadline: Option<MonotonicMs>,
+    pub deadline: Option<TimePoint>,
     /// 帳簿の段フェーズ。
     pub phase: ChoicePhase,
 }
@@ -216,7 +215,7 @@ pub(crate) enum CascadeNext {
 pub(crate) struct State {
     pub phase: Phase,
     /// 直近 Tick の注入時刻（Tick 受領ごとに更新・close 期限計算の基準）。
-    pub last_now: Option<MonotonicMs>,
+    pub last_now: Option<TimePoint>,
     /// talk_id 採番カウンタ（単調増番・再利用しない・StartTalk 生成時にインクリメント）。
     pub next_talk_id: u64,
     /// boot 中・active talk 中に受領した close 指示の保留。
@@ -400,7 +399,7 @@ pub(crate) enum Action {
     /// 選択待ちの期限で 1 回だけ起こす頼み（殻が刻み役へ渡し、期限で [`Input::ChoiceTimeoutDue`] が返る）。
     ///
     /// 発行点は [`steady::on_choice_waiting`] だけ（期限つきの帳簿を作った時・無期限では出さない）。
-    ArmChoiceWake(MonotonicMs),
+    ArmChoiceWake(TimePoint),
     /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
     Notice(crate::change::KanadeNotice),
     /// 翻訳の依頼（殻が `OnTranslate` を往復させ、結果を [`Input::TranslateDone`] で再投入する）。

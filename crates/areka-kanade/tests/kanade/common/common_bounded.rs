@@ -7,7 +7,8 @@ use std::thread;
 use std::time::Duration;
 
 use areka_actor::{ActorError, ActorHandle};
-use areka_kanade::{KanadeMsg, MonotonicMs};
+use areka_kanade::KanadeMsg;
+use dola::time::testing::at_ms;
 
 /// 期限付き待機の既定上限（mock は即応ゆえ十分に余裕を持たせた保険値）。
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -52,7 +53,7 @@ pub fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Resul
 /// ハングでなく panic（失敗）として検出する。
 ///
 /// 復帰駆動の完了バリア（7.1/7.3/8.5）。`first_tick_second` から 1 秒刻みで
-/// 単調増加する `now`（＝`MonotonicMs(second * 1_000)`）を持つ [`KanadeMsg::Tick`] を、
+/// 単調増加する `now`（＝`at_ms(second * 1_000)`）を持つ [`KanadeMsg::Tick`] を、
 /// `sender.send` が `Err`（Receiver drop＝kanade スレッド終了＝inbox 切断）を返すまで
 /// 反復送出する（反復回数の上限は持たない・上限非依存の完了バリア）。
 ///
@@ -65,7 +66,7 @@ pub fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Resul
 /// 説明的メッセージで [`panic!`] する（silent hang を作らない）。
 pub fn drive_ticks_until_disconnect(
     sender: &Sender<KanadeMsg>,
-    first_tick_second: u64,
+    first_tick_second: i64,
     what: &str,
 ) {
     let deadline = std::time::Instant::now() + DEFAULT_TIMEOUT;
@@ -74,7 +75,7 @@ pub fn drive_ticks_until_disconnect(
         // 切断（Receiver drop＝kanade 終了）で戻る＝完了バリア。上限回数は持たない。
         if sender
             .send(KanadeMsg::Tick {
-                now: MonotonicMs(second * 1_000),
+                now: at_ms(second * 1_000),
             })
             .is_err()
         {

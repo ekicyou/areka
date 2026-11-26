@@ -256,7 +256,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1, 11.11_
 
-- [ ] 3.9 (P) areka-kanade の本体と組み立て: 締め切りと `OnSecondChange` を時刻の型で持つ
+- [x] 3.9 (P) areka-kanade の本体と組み立て: 締め切りと `OnSecondChange` を時刻の型で持つ
   - 本番の依存と、機能 `test-support` を付けた `[dev-dependencies]` に dola を足す
   - ミリ秒の時刻の型を消し、刻み・時間切れ・選択待ち・相の締め切り・起こしの送り口を時刻の型に、設定の長さを長さの型（既定 30 秒）にする
   - 選択待ちの期限を「指令が無ければ表示の終わり＋既定・0 以下なら無期限・正なら表示の終わり＋指令」で求める。NaN と無限大の指令の分かれ道とテストを消す（記録に書く事として報告に挙げる）
@@ -810,3 +810,4 @@
 - 3.4: `crates/areka-talk/src/origin.rs` の `//!` の「`dola::time` の型と `std` のみ」は、origin.rs 自身が dola を使わないので「`std` のみ」が正しい。12.2 で拾う。
 - 3.5: areka-sakura のテストの組み立て `menu_horizon()` は `TimeSpan`（起点からの隔たり 350 ms）。`ChoiceWaiting.display_end` は `TimePoint` なので、3.8 は「起点の時刻 + `menu_horizon()`」と比べる。`compile_test_support.rs:64-65` の 2 件は 3.7 が直す。
 - 3.6: 1 字ごとの間隔は `areka_sakura::reveal::chunk_reveal_offsets(prev_since_chunk_start: Option<TimeDelta>, duration: TimeSpan, count: usize) -> impl Iterator<Item = TimeSpan>`（塊の頭からの隔たり）。areka-sakura の中のテストは 3.7・3.8 の後に回す（3.6 の 12 本は仮の crate で緑）。
+- 3.9: kanade の `src/schedule/mod.rs:30` の `#[cfg(test)] use dola::{TimePoint, time::testing::at_ms};` は 3.10 のテストが使う前提（使わなければ 3.10 で外す。3.12 で警告 0 を見る）。kanade の共有の組み立ては `tests/kanade/choice_test_test_support.rs` の `CHOICE_DISPLAY_END`／`CHOICE_DEADLINE: TimePoint`、`establish_choice_wait` の `directive: Option<TimeDelta>`、`common_recording::tick(harness, now: TimePoint)`、`common_bounded::drive_ticks_until_disconnect(.., first_tick_second: i64, ..)`。

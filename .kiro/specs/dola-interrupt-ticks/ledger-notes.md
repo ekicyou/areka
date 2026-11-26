@@ -128,3 +128,11 @@
 
 - 外したテスト: `drive_delivery_tests.rs::non_finite_tick_is_ignored_and_playback_survives`（有限でない刻みを捨てて `error!` を出す枝の檻。`Tick(TimePoint)` で作れず、枝は 3.5 で取り除いた）。
 - 変える前後の期待（名前は変えていない）: 秒の `Tick(x.y)` → `Tick(at_ms(..))`。`ChoiceWaiting` の欄の名前は `display_end`・`timeout_directive`、`display_end` の期待は「起点 + `menu_horizon()`」。`one_step_clock_jump_enters_choice_wait_for_each_directive` の指令 `Some(0.5)`・`Some(0.0)`・`Some(-0.001)`・`None` → `delta_ms(500)`・`delta_ms(0)`・`delta_ms(-1)`・`None`。`same_fixture_and_tick_sequence_produces_identical_observation_each_run` の鍵 `to_bits` → `TimeSpan`。`compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag` は起点を押した台本から再生機を組む。同じ時刻・前の時刻の刻みで 2 度届かない期待（`duplicate_and_backward_tick_do_not_double_fire`）はそのまま。
+
+## 3.9
+
+- 取り除いた分かれ道: `choice_deadline` の `v.is_nan()` の腕と `(v * 1000.0).round() as u64` の飽和の変換。消した型: `MonotonicMs`（再公開ごと）。
+- 外したテスト（`schedule/choice.rs` の中）: `choice_deadline_nan_is_indefinite`（NaN は型で表せない）・`choice_deadline_rounds_fractional_seconds_half_away_from_zero`（秒から型への丸めは指令の縁＝areka-sakura の `from_millis_saturating` へ移った）・`choice_deadline_zero_is_indefinite` の中の −0.0 の件。
+- 書き替えたテスト: `choice_deadline_tiny_positive_is_immediate_not_indefinite` → `choice_deadline_smallest_positive_is_not_indefinite`（1e-9 秒・期待 1,000 ms → 100ns・期待 `at_ms(1000)` + 1 刻み）・`choice_deadline_positive_adds_seconds` → `choice_deadline_positive_adds_directive`・`choice_deadline_saturates_on_extreme_values`（`INFINITY`／`1e300` → `TimeDelta::MAX`、期待 `u64::MAX` → `TimePoint::MAX`）・`choice_deadline_negative_is_indefinite`（`NEG_INFINITY` → `TimeDelta::MIN`、−0.001 → 1 刻みの負）。
+- ログの欄: `deadline_ms`→`deadline`・`overshoot_ms`→`overshoot`・`display_end_ms`→`display_end`・`timeout_directive_secs`→`timeout_directive`・`now_ms`→`now`（Display で出す）。
+- `OnSecondChange` の Reference0: 「ミリ秒 ÷ 3,600,000」→「100ns の数 ÷ 36,000,000,000」（`at_ms` で書いた値なら時の数は同じ）。
