@@ -312,3 +312,7 @@
 ## 8.5（後半）
 
 - 足したテスト: `runtime_test_origin_notice_tests.rs`（`first_origin_is_delivered_at_registration_before_any_cue`・`sink_registered_later_gets_the_origin_of_that_moment`・`cue_before_notice_before_cue_after_in_one_log`・`notice_takes_effect_at_the_time_the_caller_passed`・`unchanged_reorigin_emits_no_notice`・`notice_reaches_every_sink_in_registration_order_and_none_after_completion`・`sink_without_origin_set_override_behaves_the_same`。知らせ・先渡し・合図を 1 本の記録で確かめる）、`runtime_test_late_delivery_tests.rs`（`sheet_whose_origin_is_past_delivers_all_past_cues_in_order_with_own_fire_times`・`sheet_whose_origin_has_not_arrived_delivers_nothing`・`resolve_click_alone_delivers_nothing_and_does_not_complete_then_tick_does_both`・`tick_right_after_resolve_before_the_occupancy_end_delivers_but_does_not_complete`・`resolve_choice_alone_delivers_nothing_and_does_not_complete_then_tick_does_both`）。外した物・変えた期待は無い。
+
+## 8.6（後半）
+
+- 足した口とテスト: `StrictTap` の `origin_set` が中の全部の受け口へ登録順に通す。テスト `strict_tap.rs::origin_set_passes_through_to_inner_sinks`。外した物・変えた期待は無い。
