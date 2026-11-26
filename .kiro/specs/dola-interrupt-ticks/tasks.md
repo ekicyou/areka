@@ -431,7 +431,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 5.5 (P) areka-runtime の変更の受け口を型へ付け替える
+- [x] 5.5 (P) areka-runtime の変更の受け口を型へ付け替える
   - 7 つの変更の受け口と窓の状態のテストを、合図の新しい形で書く（取り込みの行のほか、本番は変わらない）
   - そのファイルが誤り 0 件である
   - _Boundary: areka-runtime 変更の受け口_

@@ -38,12 +38,13 @@ fn move_carrier_sends_directive() {
 fn non_carrier_cue_is_benign_skip() {
     let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("アヒル".into()),
-        duration: 0.0,
-    });
+    sink.emit(TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("アヒル".into()),
+        dola::TimeSpan::ZERO,
+    ));
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 }
 

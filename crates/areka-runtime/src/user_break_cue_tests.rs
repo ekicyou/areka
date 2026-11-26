@@ -115,12 +115,13 @@ fn other_command_name_is_benign_skip() {
 #[test]
 fn non_carrier_cue_is_benign_skip() {
     let (mut sink, rx) = sink();
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("アヒル".into()),
-        duration: 0.0,
-    });
+    sink.emit(TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("アヒル".into()),
+        dola::TimeSpan::ZERO,
+    ));
     sink.emit(broken_custom_cue("0", "enter"));
     assert_eq!(
         drain(&rx),
@@ -176,12 +177,13 @@ fn talk_started_is_sent_once_per_clone_and_comes_first() {
 #[test]
 fn talk_started_comes_from_any_first_cue() {
     let (mut sink, rx) = sink();
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::ClearAll,
-        duration: 0.0,
-    });
+    sink.emit(TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::ClearAll,
+        dola::TimeSpan::ZERO,
+    ));
     assert_eq!(
         drain(&rx),
         vec![NoUserBreakSignal::TalkStarted],

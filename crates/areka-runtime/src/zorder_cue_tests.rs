@@ -30,11 +30,14 @@ fn non_carrier_cues() -> Vec<TalkCue> {
         CueCommand::Wait,
     ]
     .into_iter()
-    .map(|command| TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command,
-        duration: 0.0,
+    .map(|command| {
+        TalkCue::scheduled(
+            dola::TimePoint::ZERO,
+            dola::TimeSpan::ZERO,
+            ActorKey::from("0"),
+            command,
+            dola::TimeSpan::ZERO,
+        )
     })
     .collect()
 }

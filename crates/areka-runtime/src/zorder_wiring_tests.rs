@@ -38,12 +38,13 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 /// 文字の cue（台本の大半はこれで、受け口には全部届く）。
 fn text_cue(text: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text(text.into()),
-        duration: 0.0,
-    }
+    TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text(text.into()),
+        dola::TimeSpan::ZERO,
+    )
 }
 
 /// 1 スコープぶんの合成配置（値は散らしただけで意味を持たない。この相は窓を動かさない）。

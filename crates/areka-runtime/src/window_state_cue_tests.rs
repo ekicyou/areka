@@ -264,12 +264,13 @@ fn skips_send_nothing_and_leave_a_debug_record() {
         actor_carrier_cue("0", "set", &[]),
         broken_custom_cue("0", "set"),
         broken_custom_cue("0", "noexist"),
-        TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Text("あひる".into()),
-            duration: 0.0,
-        },
+        TalkCue::scheduled(
+            dola::TimePoint::ZERO,
+            dola::TimeSpan::ZERO,
+            ActorKey::from("0"),
+            CueCommand::Text("あひる".into()),
+            dola::TimeSpan::ZERO,
+        ),
     ];
     for cue in skipped {
         let label = format!("{:?}", cue.command);

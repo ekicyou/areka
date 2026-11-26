@@ -241,3 +241,7 @@
 ## 5.4
 
 - 外したテスト・確かめ・分かれ道・ログは無い。変える前後の期待: 秒 → `ms(..)`、`X - 0.001` → `earlier(X, ms(1))`、`TalkTimeout::Millis(n)` → `After(ms(n))`（`talk_timeout_replaces_the_wait_until_the_next_talk` の期限 `2.0 + 1234.0/1000.0` → `ms(2000) + ms(1234)` ほか）。`script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core` は起点 0 を押した台本で、ログの欄 `display_end`・`deadline` を Debug の実数 → Display の文字の形で比べる。
+
+## 5.5
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（手で組む合図を `TalkCue::scheduled(TimePoint::ZERO, ..)` へ、`frame/window_state_tests.rs` の `player_for` は起点 0 を押した台本で組む）。
