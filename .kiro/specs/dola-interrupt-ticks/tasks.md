@@ -511,7 +511,7 @@
   - _Dispatch: standard — 報告を集めて記録を組み立てる_
   - _Requirements: 2.6, 7.9, 8.4, 9.4, 9.5, 9.6, 9.7, 15.1, 15.2, 15.3, 15.5_
 
-- [ ] 7.2 全体テストの 1 回目を回す
+- [x] 7.2 全体テストの 1 回目を回す
   - `pwsh -NoProfile -File tools/test-all.ps1 -Format` を 1 回回し、緑である（段 `dola non-windows check` と、1,000 行の番人を含む）
   - 赤が出たら、赤のテストだけに絞って直し、絞った確かめで緑を示す
   - _Dispatch: mechanical — 全体テストを回すだけ_

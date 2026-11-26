@@ -282,3 +282,7 @@
 ## 6.7
 
 - 段 5 の締め: `cargo test -p areka` は全部緑（lib 1263 ほか）、`cargo build -p areka --examples` 可、`cargo build --workspace` 可（`pilot` の manifest の警告 2 件はこの spec の前から在る）。
+
+## 7.2
+
+- 全体テストの 1 回目（`tools/test-all.ps1 -Format`、コミット f022cab6c、排他テストの机を取って 1 回）: 23 段すべて緑（x64 workspace tests 661 秒・dola toml feature tests・dola non-windows check を含む）。整形の差分は出なかった。
