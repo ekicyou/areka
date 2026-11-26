@@ -85,3 +85,7 @@
 
 - 変えた期待: `tests/cue/sheet_test.rs::stamping_absolute_start_time_leaves_relative_times_untouched` の 2 か所 `ms(1000)` → `ms(500)`（2.6 で型へ写す時の書き誤り。台本の相対の終わりは 500ms）。
 - 締めの検査: `cargo test -p dola`・`cargo test -p dola --features toml`・`cargo check -p dola --features toml --target x86_64-unknown-linux-gnu`・clippy（機能 toml）は緑。dola の公開の口で f64 を返す物は `TimeScale::get`（倍率）と `TimeScale::ratio_of`（比）だけで、秒の実数を返す公開の口は 0 件。
+
+## 3.1
+
+- 外したテスト・分かれ道・ログは無い。テストの時刻を型へ写しただけ（`ecs/dola/mod.rs` のテスト・`tests/ecs/dola_animator_test.rs`・`tests/graphics/surface_embedding_test.rs`。期待は同じ）。

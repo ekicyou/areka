@@ -313,15 +313,15 @@ fn create_device_3d_with<T>(
 // FrameTime - 高精度フレーム時刻リソース
 // ============================================================
 
-/// FrameTime - 高精度フレーム時刻リソース（f64 秒、OS起動時=0秒）
+/// FrameTime - 高精度フレーム時刻リソース（時計の時刻）
 ///
 /// `FrameCount` と同じ設計パターン。ワールド外（`try_tick_world()` 実行前）で
-/// `dola::runtime::clock::now()` を呼び出して値を更新する。
+/// `dola::now()` を呼び出して値を更新する。
 /// ワールド内の全システムは同じフレームの時刻値（`.0`）を参照する。
 ///
-/// 時刻基準: `QueryPerformanceCounter / QueryPerformanceFrequency`
+/// 時刻基準: `dola::now()`（`QueryUnbiasedInterruptTimePrecise`）
 #[derive(Resource, Default, Debug, Clone, Copy)]
-pub struct FrameTime(pub f64);
+pub struct FrameTime(pub dola::TimePoint);
 
 #[cfg(test)]
 #[path = "core_tests.rs"]

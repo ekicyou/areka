@@ -186,7 +186,7 @@
 
 - [ ] 3. 段 2: wintf・areka-talk と areka-sakura・areka-kanade を付け替える
 
-- [ ] 3.1 wintf の時計と世界: フレームの時刻を 1 本の時計の時刻にする
+- [x] 3.1 wintf の時計と世界: フレームの時刻を 1 本の時計の時刻にする
   - フレームの時刻を時刻の型にし、置く 2 か所で 1 本の時計を読む。`DolaAnimator` の刻みを時刻の型で受ける
   - `[dev-dependencies]` に、機能 `test-support` を付けた dola の行を足し、フレームの時刻を書くテストを型で書く
   - `cargo check -p wintf --all-targets` の誤りの一覧に、この家族のファイルの分が 0 件である

@@ -6,6 +6,7 @@
 
 use bevy_ecs::prelude::*;
 use dola::runtime::DolaRuntime;
+use dola::time::testing::{at_ms, ms};
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
     TransitionRef, TransitionValue,
@@ -29,7 +30,7 @@ fn make_runtime_with_animation() -> DolaRuntime {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(ms(1000)),
                 ..Default::default()
             },
         )
@@ -61,11 +62,11 @@ fn spawn_tick_last_result_flow() {
     // runtime_mut は pub(crate) なので、テストでは DolaRuntime を
     // 事前に start してから DolaAnimator に渡す。
     let mut rt = make_runtime_with_animation();
-    rt.start("fade_in", 0.0).unwrap();
+    rt.start("fade_in", at_ms(0)).unwrap();
     let mut animator = DolaAnimator::with_runtime(rt);
 
     // tick to midpoint
-    animator.tick(0.5);
+    animator.tick(at_ms(500));
     let len = animator.last_result().changes.len();
     assert!(len > 0, "Should have opacity change at t=0.5");
 
@@ -89,14 +90,14 @@ fn default_animator_has_empty_result() {
 fn tick_dola_animators_system_updates_all_entities() {
     let mut world = World::new();
 
-    world.insert_resource(FrameTime(0.5));
+    world.insert_resource(FrameTime(at_ms(500)));
 
     let mut rt1 = make_runtime_with_animation();
-    rt1.start("fade_in", 0.0).unwrap();
+    rt1.start("fade_in", at_ms(0)).unwrap();
     let a1 = DolaAnimator::with_runtime(rt1);
 
     let mut rt2 = make_runtime_with_animation();
-    rt2.start("fade_in", 0.0).unwrap();
+    rt2.start("fade_in", at_ms(0)).unwrap();
     let a2 = DolaAnimator::with_runtime(rt2);
 
     let e1 = world.spawn(a1).id();

@@ -111,7 +111,7 @@ impl EcsWorld {
             }
         }
 
-        world.insert_resource(crate::ecs::graphics::FrameTime(dola::runtime::clock::now()));
+        world.insert_resource(crate::ecs::graphics::FrameTime(dola::now()));
 
         // TickStart初期化（遷移観測の刻印の時刻基準）
         // 最初の tick で FrameCount と同じ点から更新されるが、tick 前に World を借りる
@@ -560,7 +560,7 @@ impl EcsWorld {
             .world
             .get_resource_mut::<crate::ecs::graphics::FrameTime>()
         {
-            frame_time.0 = dola::runtime::clock::now();
+            frame_time.0 = dola::now();
         }
 
         // WndProc スレッドの thread_local バッファから World に直接データを投入する
