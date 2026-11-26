@@ -106,3 +106,11 @@
 3. 合図が、絶対の発火時刻を持つ事。時刻の表が、項目を取り出した時の起点で決める（同じ刻みの中で起点が動いても、後ろの変化の長さが狂わない）。
 4. トークのスレッドへ送る刻みが、絶対の時刻である事（今は相対の秒＝`crates/areka-ghost/src/dispatcher.rs:392-399`。並走の流れと主の流れを、同じ時刻で進めるため）。
 5. 連続値の側（storyboard の層）を、後ろへ切らない事（値を時間で変える仕組みは dola が持つ、と開発者が決めた＝「イージングはdolaの仕事」）。
+
+## この spec の範囲は `dola-interrupt-ticks` に入った
+
+`dola-interrupt-ticks` の要件が、時計を `QueryUnbiasedInterruptTimePrecise` の 1 本に統一すると決めたので、この brief の In の全部（ghost の刻み・台詞の刻みの中継・kanade・seriko の時計を新しい型と時計へ替える事、台本の起点を配る時に本物の絶対時刻で押す事、文字の層と seriko が起点を見積もるのをやめて押された起点を読む事、`OnSecondChange` の連続起動時間の決め）は、`dola-interrupt-ticks` の要件 12・14・17・18 に入っている。
+
+- 「要件の段で決める議題」の 1 と 2 は決まった: 時計は 1 本だけなので、`OnSecondChange` の連続起動時間も、時間切れの締め切りも、眠りの間を数えない。
+- ノベルの作り直しの 5 つも、`dola-interrupt-ticks` の要件 5・11〜14 に入っている。
+- この spec に残る仕事は無い。`dola-interrupt-ticks` が着地するまで、この spec を始めない。台帳の扱いは棚卸で決める。
