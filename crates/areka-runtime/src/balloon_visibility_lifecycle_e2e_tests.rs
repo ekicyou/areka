@@ -24,6 +24,8 @@ use areka_sakura::ActorKey;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::world::World;
 use dola::cue::{CueCommand, CuePlayer, TalkCue};
+use dola::time::testing::ms;
+use dola::{TimePoint, TimeSpan};
 use wintf::ecs::FrameTime;
 
 use crate::balloon_hover::BalloonHover;
@@ -33,7 +35,7 @@ use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
-use super::configured_timeout_secs;
+use super::configured_timeout;
 use super::phase::run_balloon_visibility_phase;
 use super::phase::test_support::{attach_headless, runtime};
 
@@ -51,13 +53,13 @@ use super::phase::test_support::{attach_headless, runtime};
 fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // 待ち時間の確定は**プロセスで一度きり**の記録であり、最初に相を回したテストの捕捉窓へ
     // 紛れ込む。どのテストが先に走るかは並行実行の都合で決まるため、捕捉窓の外で先に確定させる。
-    let timeout_secs = configured_timeout_secs();
+    let timeout = configured_timeout();
 
     // ── 本番 `wire_runtime` と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let runtime = runtime();
     // 時刻源は手で進める（受け口が落ちる瞬間に止まった時刻を読むため）。
-    let wall = std::sync::Arc::new(std::sync::Mutex::new(0.0_f64));
+    let wall = std::sync::Arc::new(std::sync::Mutex::new(TimePoint::ZERO));
     let clock = TalkClock::new({
         let wall = std::sync::Arc::clone(&wall);
         std::sync::Arc::new(move || *wall.lock().expect("時計の錠"))
@@ -76,30 +78,30 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let horizon = compiled.sheet.absolute_end_time();
-    let last_fire = compiled
-        .sheet
+    let sheet = compiled.sheet.with_absolute_start_time(TimePoint::ZERO);
+    let horizon = sheet.relative_end();
+    let last_fire = sheet
         .cues()
         .iter()
-        .map(|cue| compiled.sheet.absolute_fire_time(cue))
-        .fold(f64::NEG_INFINITY, f64::max);
+        .map(|cue| cue.start_time)
+        .max()
+        .expect("台本には cue がある");
     assert!(
         horizon > last_fire,
         "前提: 待機を含む台本の占有終端は最後の cue の発火時刻より後（同値なら待機込みかどうかを弁別できない）: horizon={horizon} last_fire={last_fire}"
     );
 
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).expect("起点を刻んだ台本");
     player.register_sink(Box::new(BalloonLifecycleSink::new(
         lifecycle_tx,
         wiring.clock.clone(),
     )));
-    let mut tick_points: Vec<f64> = compiled
-        .sheet
+    let mut tick_points: Vec<TimePoint> = sheet
         .cues()
         .iter()
-        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .map(|cue| sheet.absolute_fire_time(cue).expect("起点を刻んだ台本"))
         .collect();
-    tick_points.push(horizon);
+    tick_points.push(sheet.absolute_end_time().expect("起点を刻んだ台本"));
     for at in tick_points {
         player.tick(at);
     }
@@ -107,18 +109,19 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // ── 判断が計測を確立できる状態を作る: 会話は終わっており、可視コンテンツが現れている ──
     // 可視グリフは相が観測する軸そのものなので、文字層ランタイムへ直接置く（cue の配送経路は
     // 本項の対象ではない）。
-    runtime.borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("あい".into()),
-        duration: 0.5,
-    });
-    wiring.clock.observe_cue(0.0);
+    runtime.borrow_mut().apply_cue(&TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("あい".into()),
+        ms(500),
+    ));
+    wiring.clock.observe_cue(TimeSpan::ZERO);
     // 台本を最後まで流し終えたところで受け口が落ち、トークの終わり（止まった時刻＝占有終端）が
     // 届く。時間切れの計測はこれが届いてから始まる。
-    *wall.lock().expect("時計の錠") = horizon;
+    *wall.lock().expect("時計の錠") = TimePoint::ZERO + horizon;
     drop(player);
-    let now = horizon + 1.0;
+    let now = TimePoint::ZERO + horizon + ms(1000);
     world.insert_resource(FrameTime(now));
 
     let (_, events) = capture(|| run_balloon_visibility_phase(&mut wiring, &mut world));
@@ -140,13 +143,13 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     );
     assert_eq!(
         started[0].expect_field("display_end"),
-        format!("{horizon:?}"),
+        horizon.to_string(),
         "計測の起点は台本の占有終端"
     );
     assert_eq!(
         started[0].expect_field("deadline"),
-        format!("{:?}", horizon + timeout_secs),
+        (horizon + timeout).to_string(),
         "満了予定は「占有終端＋待ち時間」（現在時刻 {now} 起点なら {} になって落ちる）",
-        now + timeout_secs
+        (now.span_since(TimePoint::ZERO).expect("起点以後") + timeout)
     );
 }

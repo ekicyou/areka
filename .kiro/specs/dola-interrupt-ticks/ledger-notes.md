@@ -237,3 +237,7 @@
 
 - 取り除いた分かれ道: `visibility_wake` の `!remaining.is_finite()` の守りとその説明。外したテスト: `balloon_visibility_phase_wake_tests.rs::non_finite_deadline_arms_nothing`（無限大・NaN の期限と今は型で書けない。期限か今が無い場合は `no_measurement_arms_nothing` が押さえる）。
 - 変える前後の期待: 起こしのテストは秒 → `ms(..)`、`Duration::from_secs_f64(x)` → `Duration::from_millis(..)`、上限の確かめは `ms(u32::MAX)` と `MAX_WAIT == 1 時間`。`DisplayEndAt(2/5/3 秒)` → `Some(ms(5000))`。記録のテストは欄の字面（"4.5"・"10.0"）→ `FromStr` で読んで `ms(..)` と比べる。ログの欄 `stopped_at`・`display_end`・`deadline`・`talk_time` は Display。`MAX_WAIT_SECS: f64` → `MAX_WAIT: Duration`。
+
+## 5.4
+
+- 外したテスト・確かめ・分かれ道・ログは無い。変える前後の期待: 秒 → `ms(..)`、`X - 0.001` → `earlier(X, ms(1))`、`TalkTimeout::Millis(n)` → `After(ms(n))`（`talk_timeout_replaces_the_wait_until_the_next_talk` の期限 `2.0 + 1234.0/1000.0` → `ms(2000) + ms(1234)` ほか）。`script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core` は起点 0 を押した台本で、ログの欄 `display_end`・`deadline` を Debug の実数 → Display の文字の形で比べる。

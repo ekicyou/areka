@@ -423,7 +423,7 @@
   - _Dispatch: mechanical — 型の付け替えと期待の写し_
   - _Requirements: 7.1, 7.7, 9.1_
 
-- [ ] 5.4 (P) areka-runtime のバルーンの通しのテストを直す
+- [x] 5.4 (P) areka-runtime のバルーンの通しのテストを直す
   - 選択待ち・寿命の通し・トークの終わりのテストの期待の値を、ちょうどの値へ写す
   - そのファイルが誤り 0 件である
   - _Boundary: areka-runtime バルーンの通し_
