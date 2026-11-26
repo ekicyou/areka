@@ -1,84 +1,83 @@
-//! CueSheet — 自己完結した絶対時刻台本（絶対開始時刻＋相対時刻コマンド列）と
-//! canonical 変換 `to_talk_schedule`（dola ingress の単一権威・duration clamp・占有 horizon）。
+//! CueSheet — 自己完結した台本（起点＋起点からの隔たりのコマンド列）と、
+//! 時刻の表への canonical 変換 `to_talk_schedule`。
 
 use super::command::{Cue, CuePayload, TalkCue};
-use super::schedule::{Entry, TimedSchedule, sum_on_ms_grid};
+use super::runtime::CueError;
+use super::schedule::{Entry, TimedSchedule};
+use crate::time::{TimePoint, TimeSpan};
 use serde::{Deserialize, Serialize};
 
-/// 自己完結した絶対時刻の演出台本。
+/// 自己完結した演出台本。
 ///
-/// 台本は「絶対開始時刻（アンカー）＋ 相対時刻の Cue 列」の 2 層で時間を表現する:
+/// 台本は「起点（絶対の時刻）＋ 起点からの隔たりの Cue 列」の 2 層で時間を表す:
 ///
-/// - `absolute_start_time` — talk が再生を開始する壁時計の絶対秒。dispatch 時に刻印される。
-/// - `Cue::start_time` — 台本先頭を 0 とする相対秒（上流 compile が焼き込み済み）。
-/// - `Cue::duration` — 当該 cue の presentation 占有秒（cue は区間
+/// - `absolute_start_time` — 台本の時刻 0 の絶対の時刻。dispatch 時に押される。
+/// - `Cue::start_time` — 起点からの隔たり（上流 compile が焼き込み済み）。
+/// - `Cue::duration` — 当該 cue の presentation 占有の長さ（cue は区間
 ///   `[start_time, start_time + duration)`）。
 ///
-/// この 2 層により、**台本 1 枚のみから**各 cue の絶対発火時刻
-/// （[`absolute_fire_time`](Self::absolute_fire_time)）と talk の絶対終了時刻
-/// （[`absolute_end_time`](Self::absolute_end_time)）が復元できる。broadcast された同一台本を
-/// 受け取った任意の表現者（プロセス境界を跨ぐ場合を含む）が、互いに協調せずとも同一の
-/// 絶対時刻を独立に算出できる——これが dola の「同一台本を同一絶対時刻で」の物理的な形。
-///
-/// `absolute_start_time` は `#[serde(default)]`（未刻印は 0.0）。
+/// 絶対の時刻は「起点＋隔たり」の整数の足し算だけで作る。broadcast された同一台本を
+/// 受け取った任意の表現者が、互いに協調せずとも同一の絶対時刻を独立に算出できる。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CueSheet {
-    /// talk が再生を開始する絶対秒（dispatch 時に刻印されるアンカー）。
-    #[serde(default)]
-    absolute_start_time: f64,
-    /// 相対時刻の Cue 列（start_time 昇順）。
+    /// 台本の起点（押されていなければ `None`）。
+    #[serde(
+        with = "crate::time::serde_ticks",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    absolute_start_time: Option<TimePoint>,
+    /// Cue 列（start_time 昇順）。
     cues: Vec<Cue>,
 }
 
 impl CueSheet {
-    /// start_time 昇順でソートして構築（安定ソート）
+    /// start_time 昇順に安定ソートして構築する（起点は押されていない）。
     ///
-    /// 絶対開始時刻は未刻印（0.0）。dispatch 時に
-    /// [`with_absolute_start_time`](Self::with_absolute_start_time) で刻印する。
-    ///
-    /// 比べは −0.0 を +0.0 にそろえた全順序（同じ瞬間の合図は台本の順のまま・NaN は符号で
-    /// 両端に分かれる）。
+    /// 同じ瞬間の合図は台本の順のまま。
     pub fn new(mut cues: Vec<Cue>) -> Self {
-        cues.sort_by(|a, b| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
+        cues.sort_by_key(|cue| cue.start_time);
         Self {
-            absolute_start_time: 0.0,
+            absolute_start_time: None,
             cues,
         }
     }
 
-    /// 絶対開始時刻（アンカー）を刻印した台本を返す（dispatch 時に呼ぶ）。
-    ///
-    /// 刻印は各 Cue の**相対**時刻（`start_time`/`duration`）を書き換えない——
-    /// 台本内の整列は上流 compile が焼き込み済みで、アンカーはその上に載る。
-    pub fn with_absolute_start_time(mut self, absolute_start_time: f64) -> Self {
-        self.absolute_start_time = absolute_start_time;
+    /// 起点を押した台本を返す（dispatch 時に呼ぶ）。各 Cue の隔たりは書き換えない。
+    pub fn with_absolute_start_time(mut self, origin: TimePoint) -> Self {
+        self.absolute_start_time = Some(origin);
         self
     }
 
-    /// 台本の絶対開始時刻（未刻印なら 0.0）。
-    pub fn absolute_start_time(&self) -> f64 {
+    /// 台本の起点（押されていなければ `None`）。
+    pub fn absolute_start_time(&self) -> Option<TimePoint> {
         self.absolute_start_time
     }
 
-    /// 指定 Cue の絶対発火時刻 = `absolute_start_time` と `start_time` の和（`sum_on_ms_grid`）。
-    ///
-    /// dola は時刻を導出・変換せず、この和のみが絶対時刻の定義（配送時に別の時刻を
-    /// 算出すると表現者ごとに独立計算となり desync するため）。
-    pub fn absolute_fire_time(&self, cue: &Cue) -> f64 {
-        sum_on_ms_grid(self.absolute_start_time, cue.start_time)
+    /// 指定 Cue の絶対の発火時刻（起点＋`start_time`）。起点が無ければ `None`。
+    pub fn absolute_fire_time(&self, cue: &Cue) -> Option<TimePoint> {
+        self.absolute_start_time
+            .map(|origin| origin + cue.start_time)
     }
 
-    /// talk の絶対終了時刻 = `absolute_start_time + max(start_time + duration)`。
+    /// 台本の絶対の終わり（起点＋[`relative_end`](Self::relative_end)）。起点が無ければ `None`。
     ///
-    /// cue は点でなく区間 `[start_time, start_time + duration)` ゆえ、終了時刻は
-    /// 「最後に発火する cue の時刻」でなく**占有区間の最大端**。末尾 Wait・最終 Text の
-    /// duration もここに含まれる（配り終えた ≠ 再生し終えた）。空台本は時間を占有せず
-    /// アンカーそのものを返す（相対 horizon の下限は台本先頭 0.0）。
+    /// 変換した予定の [`TimedSchedule::occupancy_horizon`] と常に等しい。
+    pub fn absolute_end_time(&self) -> Option<TimePoint> {
+        self.absolute_start_time
+            .map(|origin| origin + self.relative_end())
+    }
+
+    /// 占有の終わりの、起点からの隔たり（全部の合図の「開始＋長さ」の最大・空台本は 0）。
     ///
-    /// 相対の終わりは [`to_talk_schedule`] の占有 horizon と同じ関数で出す（duration の
-    /// clamp も同じ）ので、変換した予定の [`TimedSchedule::occupancy_horizon`] と常に等しい。
-    pub fn absolute_end_time(&self) -> f64 {
-        sum_on_ms_grid(self.absolute_start_time, relative_end(&self.cues))
+    /// cue は点でなく区間ゆえ、最後に発火する cue の時刻でなく占有区間の最大端である
+    /// （配り終えた ≠ 再生し終えた）。
+    pub fn relative_end(&self) -> TimeSpan {
+        self.cues
+            .iter()
+            .map(|cue| cue.start_time + cue.duration)
+            .max()
+            .unwrap_or(TimeSpan::ZERO)
     }
 
     /// 全 Cue のスライスを取得
@@ -92,67 +91,37 @@ impl CueSheet {
     }
 }
 
-/// duration を「有限かつ非負」へ丸める（dola ingress の**単一権威**）。
+/// 台本 [`CueSheet`] を時刻の表 [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
+/// **唯一の canonical 変換**。起点の押されていない台本は `Err(CueError::OriginNotStamped)`。
 ///
-/// 非有限（NaN/±inf）・負値はすべて 0（瞬時）とみなす。+inf も畳み込む——horizon が ∞ に
-/// なると talk が永遠に終わらない同種の病理ゆえ（開発者決裁）。この clamp を通した値のみが
-/// 配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ流れるため、検証されない
-/// 台本（プロセス跨ぎの自作 cue を含む）でも horizon 完了判定と下流 reveal の可視グリフ数
-/// 計算が全域で well-defined になる。
-fn clamp_duration(duration: f64) -> f64 {
-    if duration.is_finite() && duration >= 0.0 {
-        duration
-    } else {
-        0.0
-    }
-}
-
-/// 相対の終わり = 全 cue の `max(start_time + clamp(duration))`（和は [`sum_on_ms_grid`]・空台本は 0.0）。
-/// fold の種を 0.0 とするため、NaN の start_time を持つ cue は `f64::max` が読み飛ばす。
-fn relative_end(cues: &[Cue]) -> f64 {
-    cues.iter()
-        .map(|cue| sum_on_ms_grid(cue.start_time, clamp_duration(cue.duration)))
-        .fold(0.0_f64, f64::max)
-}
-
-/// 台本 [`CueSheet`] を時刻駆動可能な [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
-/// **唯一の canonical 変換**（dola ingress の単一権威）。
+/// - 表の起点は台本の起点。各 cue の `start_time` はエントリの隔たりとして**そのまま**
+///   保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
+/// - 合図の発火時刻は「台本の起点＋`start_time`」（[`TalkCue::scheduled`]）。
+/// - 同じ隔たりの合図は [`CueSheet::cues`] の記述順（FIFO）。
+/// - 占有の終わりは [`CueSheet::relative_end`]。表の完了は配り終えた時でなく、占有の終わりで決まる。
 ///
-/// 以下を同時に成立させる:
-///
-/// - **絶対アンカーの継承**: スケジュールの `start_time` に [`CueSheet::absolute_start_time`]
-///   を用いる（dispatch 刻印前は 0.0）。各 cue の相対 `start_time` はエントリオフセットとして
-///   **そのまま**保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
-/// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ `insert` したのと
-///   同じ並びを [`TimedSchedule::insert_each`] で作る。
-/// - **duration の clamp**: 各 cue の duration を `clamp_duration` で有限・非負へ丸め、
-///   その**同一値**を配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ用いる。
-/// - **占有 horizon の算出**: 全 cue の `max(start_time + clamp(duration))`（空台本は 0.0）を
-///   相対 horizon としてスケジュールへ保持し、[`TimedSchedule::is_completed`] が配送完了でなく
-///   **占有終了**で真になるようにする（末尾待ちの duration を終端で落とさない）。
-///
-/// ペイロード写像: [`CuePayload::Command`] → [`Entry::Payload`]（[`TalkCue`] を組む）、
+/// ペイロード写像: [`CuePayload::Command`] → [`Entry::Payload`]、
 /// [`CuePayload::Barrier`] → [`Entry::Barrier`]。
-/// Barrier は presentation でなくenvelope duration を持たないが、その
-/// `start_time` は horizon の fold に一律に寄与する（duration 相当は 0）。
-pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
-    let mut schedule =
-        TimedSchedule::with_horizon(sheet.absolute_start_time(), relative_end(sheet.cues()));
+pub fn to_talk_schedule(sheet: &CueSheet) -> Result<TimedSchedule<TalkCue>, CueError> {
+    let origin = sheet
+        .absolute_start_time()
+        .ok_or(CueError::OriginNotStamped)?;
+    let mut schedule = TimedSchedule::with_horizon(origin, sheet.relative_end());
 
-    // per-cue insert と同じ並び: 同一 at 群を記述順（FIFO）で保つ。まとめて入れて
-    // 台本の長さに比例する手間にする（1 件ずつの insert は長い台本で 2 乗になる）。
+    // まとめて入れて台本の長さに比例する手間にする（1 件ずつの insert は長い台本で 2 乗になる）。
     schedule.insert_each(sheet.cues().iter().map(|cue| match &cue.payload {
         CuePayload::Command(command) => Entry::Payload(
             cue.start_time,
-            TalkCue {
-                at: cue.start_time,
-                actor: cue.actor.clone(),
-                command: command.clone(),
-                duration: clamp_duration(cue.duration),
-            },
+            TalkCue::scheduled(
+                origin,
+                cue.start_time,
+                cue.actor.clone(),
+                command.clone(),
+                cue.duration,
+            ),
         ),
         CuePayload::Barrier(kind) => Entry::Barrier(cue.start_time, kind.clone()),
     }));
 
-    schedule
+    Ok(schedule)
 }

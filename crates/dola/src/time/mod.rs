@@ -8,10 +8,9 @@ mod span;
 mod text;
 
 pub(crate) mod clock;
-// shortcut: no field uses the adapters until the cue and document types move to the time types; drop the allow then.
+// shortcut: no field uses the document adapter until the document types move to the time types; drop the allow then.
 #[allow(dead_code)]
 pub(crate) mod serde_secs;
-#[allow(dead_code)]
 pub(crate) mod serde_ticks;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;

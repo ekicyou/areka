@@ -18,6 +18,7 @@
 //! | `cue_target_of` | cue→演者担当の型レベル relevance 分類（全演者共有の単一権威） |
 //! | `CuePlayer` | cue 再生の受動的注入時刻ランタイム（状態機械・バリア seam・選択肢先積み・完了 horizon） |
 //! | `CuePlayerState` / `PendingChoice` | ランタイムの再生状態・先積み選択肢 |
+//! | `CueError` | cue の層の誤り（台本の起点が押されていない） |
 
 mod command;
 pub mod runtime;
@@ -28,7 +29,7 @@ mod sink;
 pub mod test_support;
 
 pub use command::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, TalkCue};
-pub use runtime::{CuePlayer, CuePlayerState, PendingChoice};
-pub use schedule::{Entry, TimedSchedule, sum_on_ms_grid};
+pub use runtime::{CueError, CuePlayer, CuePlayerState, PendingChoice};
+pub use schedule::{Entry, TimedSchedule};
 pub use sheet::{CueSheet, to_talk_schedule};
 pub use sink::{CueFinding, CueProbe, CueSink, cue_target_of};

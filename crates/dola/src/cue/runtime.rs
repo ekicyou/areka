@@ -36,6 +36,14 @@ use super::schedule::TimedSchedule;
 use super::sheet::{CueSheet, to_talk_schedule};
 use super::sink::CueSink;
 
+/// cue の層の誤り。
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum CueError {
+    /// 台本の起点が押されていない。
+    #[error("cue sheet has no absolute start time")]
+    OriginNotStamped,
+}
+
 /// 選択肢バリア（`WaitForChoice`）の手前で蓄積された選択肢データ（**解決照合専用のバッグ**）。
 ///
 /// 上流の台本は選択肢を `WaitForChoice` バリアの直前に連続投入する。

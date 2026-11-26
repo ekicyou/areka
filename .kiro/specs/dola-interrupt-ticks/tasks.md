@@ -67,7 +67,7 @@
   - _Dispatch: standard — 欄と variant の形は設計が与えるが、複数の家族が読む共有の所を 1 度で替える_
   - _Requirements: 2.6, 5.2, 5.6, 15.6_
 
-- [ ] 2.2 (P) cue の本体: 合図と台本の型と直列化を替える
+- [x] 2.2 (P) cue の本体: 合図と台本の型と直列化を替える
   - 合図の型に絶対の発火時刻の欄を足し、`at`・開始・長さを長さの型、選択待ちの時間切れを `Option<符号つきの差>` にする。`TalkCue::scheduled(origin, at, ..)` を置く
   - 台本の起点を `Option<時刻>` にし、絶対の時刻を整数の足し算で作り、ミリ秒の格子の継ぎ（`sum_on_ms_grid`）と長さの clamp を消す。占有の終わりの隔たり（`relative_end`）を置く
   - 欄に 100ns の整数のアダプタを付け、起点と時間切れは無い時に欄ごと書かない
@@ -797,3 +797,4 @@
 - 1.1: `now` の再公開は `time/mod.rs` と `lib.rs` の `#[cfg(windows)] #[allow(unused_imports)] pub use …clock::*;`（`shortcut:` のコメントつき）の仮の形。1.4 が `now` を置く時に、2 か所の `allow` とコメントを消し、`pub use clock::now;`／`pub use time::now;` の名前の形へ替える。`serde_ticks`・`serde_secs` は `pub(crate) mod`。秒の丸めは「`secs × 1e7` の f64 の積を round（中間は 0 から遠い側）」。
 - 1.4: `serde_ticks`・`serde_secs` は `pub(crate)` で、`time/mod.rs` の宣言に `#[allow(dead_code)]` と `shortcut:` のコメントがある。欄をアダプタへ付け替えるタスク（2.2・2.9）が外す。`Option` の欄は `#[serde(with = ..., default)]`（cue の欄はさらに `skip_serializing_if = "Option::is_none"`）が要る。上限の検査は `serde_secs::within_document_range(ticks) -> bool` を呼ぶ。Windows でない検査は、入っている aarch64-unknown-linux-gnu で見た（x86_64-unknown-linux-gnu は未導入）。
 - 2.1: コンパイルの `checked_add` のあふれは、error.rs を触らずに、今在る `TimeOutOfDocumentRange { location, field }` を使う（`InvalidNumber` の `value: f64` は整数の和のあふれに合わない）。dola の結合テストは `dola::time::testing` を使えない（自分を dev-dependency に持たない）ので、`TimeSpan::from_millis` などの公開の const fn で組む。各タスクの記録に書く事は、進行役が `ledger-notes.md` に控える。
+- 2.2: `CueError::OriginNotStamped` は `cue/runtime.rs` に置き `cue/mod.rs` で再公開済み。`to_talk_schedule` は `Result` を返す。2.3 は schedule.rs の `with_horizon(origin: TimePoint, horizon: TimeSpan)`・`Entry<TimeSpan>` へ替えれば sheet.rs の 3 件が消える。schedule.rs の `sum_on_ms_grid` の呼び出し 3 か所と説明、runtime.rs の `from_sheet`（`Result` を受ける・説明「dispatch 刻印まで 0.0」）は 2.3 が直す。
