@@ -4,6 +4,7 @@
 //! `refresh`）で踏む。刻みは `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、
 //! どれも決定論。時刻は観測の後にだけ進める。
 
+use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
@@ -37,9 +38,9 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
     let (rng, probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TRIGGERS), rng));
     let mut states = empty_states();
-    assert!(rt.on_tick(1000, &mut states).is_empty());
+    assert!(rt.on_tick(at_ms(1000), &mut states).is_empty());
 
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1030).expect("Show");
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1030)).expect("Show");
     assert_eq!(
         pattern_of(&cmd).get(0).map(|f| f.surface_id),
         Some(301),
@@ -47,28 +48,28 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
     );
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(1030),
+        Some(at_ms(1030)),
         "開始は出来事の時刻（刻みの境目に丸めない）"
     );
 
     assert!(
-        rt.on_tick(1100, &mut states).is_empty(),
+        rt.on_tick(at_ms(1100), &mut states).is_empty(),
         "経過 70＝頭のコマのまま"
     );
-    assert_eq!(rt.on_tick(1140, &mut states).len(), 1);
+    assert_eq!(rt.on_tick(at_ms(1140), &mut states).len(), 1);
     assert_eq!(
         cell(&states, Slot::Shell, 0),
         Some(302),
         "経過 110 で 2 枚目"
     );
-    rt.on_tick(1230, &mut states);
+    rt.on_tick(at_ms(1230), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 0), None, "`-1` で消す");
     assert_eq!(started(&rt, Slot::Shell, 0), None, "`-1` で終える");
 
     let logs = capture_logs(|| {
         let mut now = 1250;
         while now <= 4000 {
-            rt.on_tick(now, &mut states);
+            rt.on_tick(at_ms(now), &mut states);
             assert_eq!(
                 started(&rt, Slot::Shell, 0),
                 None,
@@ -90,17 +91,21 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
 #[test]
 fn runonce_stays_silent_on_same_surface_and_dress_change() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(10), "前提: 最初は鳴る");
-    rt.on_tick(300, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(at_ms(10)),
+        "前提: 最初は鳴る"
+    );
+    rt.on_tick(at_ms(300), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "前提: 鳴り終えた");
 
     assert!(
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 320).is_none(),
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(320)).is_none(),
         "同じ面の再指定は切り替わりでない"
     );
-    rt.on_tick(330, &mut states);
+    rt.on_tick(at_ms(330), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "再指定では鳴らない");
 
     // 着せ替えだけ: アクターは面の切り替えの知らせ無しで評価だけを呼ぶ。
@@ -108,9 +113,9 @@ fn runonce_stays_silent_on_same_surface_and_dress_change() {
         states.apply_bind(&scope(), 7, true),
         BindApplyOutcome::Changed(_)
     ));
-    rt.refresh(&scope(), Slot::Shell, Some(340), &mut states);
+    rt.refresh(&scope(), Slot::Shell, Some(at_ms(340)), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "着せ替えでは鳴らない");
-    rt.on_tick(350, &mut states);
+    rt.on_tick(at_ms(350), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None);
     assert_eq!(cell(&states, Slot::Shell, 0), None);
 }
@@ -120,28 +125,32 @@ fn runonce_stays_silent_on_same_surface_and_dress_change() {
 #[test]
 fn runonce_replays_on_return_and_after_hidden() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(10));
-    rt.on_tick(300, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(10)));
+    rt.on_tick(at_ms(300), &mut states);
 
-    switch(&mut rt, &mut states, SurfaceTarget::Show(1), 400).expect("1 へ");
-    rt.on_tick(420, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(1), at_ms(400)).expect("1 へ");
+    rt.on_tick(at_ms(420), &mut states);
     assert!(rt.armed.is_empty(), "3 語の無い面では構えない");
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 450).expect("0 へ");
-    assert_eq!(pattern_of(&cmd).get(0).map(|f| f.surface_id), Some(301));
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(450), "戻ったら鳴る");
-    rt.on_tick(700, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 0), None);
-
-    switch(&mut rt, &mut states, SurfaceTarget::Hide, 800).expect("Hide");
-    rt.on_tick(820, &mut states);
-    assert!(rt.armed.is_empty(), "非表示の間は構えない");
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 900).expect("0 へ");
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(450)).expect("0 へ");
     assert_eq!(pattern_of(&cmd).get(0).map(|f| f.surface_id), Some(301));
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(900),
+        Some(at_ms(450)),
+        "戻ったら鳴る"
+    );
+    rt.on_tick(at_ms(700), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 0), None);
+
+    switch(&mut rt, &mut states, SurfaceTarget::Hide, at_ms(800)).expect("Hide");
+    rt.on_tick(at_ms(820), &mut states);
+    assert!(rt.armed.is_empty(), "非表示の間は構えない");
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(900)).expect("0 へ");
+    assert_eq!(pattern_of(&cmd).get(0).map(|f| f.surface_id), Some(301));
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(at_ms(900)),
         "非表示から戻ったら鳴る"
     );
 }
@@ -155,8 +164,12 @@ fn runonce_waits_for_the_first_tick_when_no_time_is_known() {
     rt.refresh(&scope(), Slot::Shell, None, &mut states);
     assert!(rt.armed.is_empty(), "時刻が無ければ構えない");
 
-    let cmds = rt.on_tick(1000, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(1000), "刻みの時刻で鳴る");
+    let cmds = rt.on_tick(at_ms(1000), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(at_ms(1000)),
+        "刻みの時刻で鳴る"
+    );
     assert_eq!(cmds.len(), 1, "同じ刻みで頭のコマを出す");
     assert_eq!(cell(&states, Slot::Shell, 0), Some(301));
 }
@@ -166,19 +179,19 @@ fn runonce_waits_for_the_first_tick_when_no_time_is_known() {
 #[test]
 fn periodic_fires_at_exact_laps_from_the_event_time() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(at_ms(0), &mut states);
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
     assert!(
         pattern_of(&cmd).get(1).is_none(),
         "切り替わった瞬間には鳴らない"
     );
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 1), None, "起点 30 から 970ms");
 
-    rt.on_tick(1150, &mut states);
+    rt.on_tick(at_ms(1150), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
-        Some(1030),
+        Some(at_ms(1030)),
         "開始は起点＋1000 そのもの（刻みの時刻ではない）"
     );
     assert_eq!(
@@ -186,12 +199,16 @@ fn periodic_fires_at_exact_laps_from_the_event_time() {
         Some(402),
         "遅れた 120ms の分だけ進んだコマ"
     );
-    rt.on_tick(1500, &mut states);
+    rt.on_tick(at_ms(1500), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 1), None, "1 回流して終える");
     assert_eq!(cell(&states, Slot::Shell, 1), None);
 
-    rt.on_tick(2040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "2 周目の境目");
+    rt.on_tick(at_ms(2040), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(2030)),
+        "2 周目の境目"
+    );
     assert_eq!(cell(&states, Slot::Shell, 1), Some(401));
 }
 
@@ -199,26 +216,26 @@ fn periodic_fires_at_exact_laps_from_the_event_time() {
 #[test]
 fn periodic_stops_on_leaving_and_restarts_from_the_return_time() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    switch(&mut rt, &mut states, SurfaceTarget::Show(1), 500).expect("1 へ");
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    switch(&mut rt, &mut states, SurfaceTarget::Show(1), at_ms(500)).expect("1 へ");
     assert!(
-        rt.on_tick(1100, &mut states).is_empty(),
+        rt.on_tick(at_ms(1100), &mut states).is_empty(),
         "離れた面の境目（1030）では鳴らない"
     );
     assert!(rt.playback.is_empty());
 
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1200).expect("0 へ");
-    rt.on_tick(2100, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1200)).expect("0 へ");
+    rt.on_tick(at_ms(2100), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         None,
         "前の起点 30 の境目（2030）では鳴らない"
     );
-    rt.on_tick(2210, &mut states);
+    rt.on_tick(at_ms(2210), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
-        Some(2200),
+        Some(at_ms(2200)),
         "戻った時刻 1200 が新しい起点"
     );
 }
@@ -235,31 +252,35 @@ const LONG_PERIODIC: &str = "surface0\n{\n\
 #[test]
 fn periodic_skips_a_lap_while_still_playing() {
     let (mut rt, mut states) = shell_runtime(LONG_PERIODIC);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(1030));
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    rt.on_tick(at_ms(1040), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(1030)));
 
-    rt.on_tick(2040, &mut states);
+    rt.on_tick(at_ms(2040), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
-        Some(1030),
+        Some(at_ms(1030)),
         "再生中の境目（2030）では始め直さない"
     );
     assert_eq!(cell(&states, Slot::Shell, 1), Some(401), "コマを乱さない");
 
-    rt.on_tick(2540, &mut states);
+    rt.on_tick(at_ms(2540), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 1), Some(402), "末尾のコマ");
     assert_eq!(started(&rt, Slot::Shell, 1), None, "末尾で終える");
-    rt.on_tick(2600, &mut states);
+    rt.on_tick(at_ms(2600), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         None,
         "飛ばした回は後から鳴らない"
     );
 
-    rt.on_tick(3040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(3030), "次の境目で鳴る");
+    rt.on_tick(at_ms(3040), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(3030)),
+        "次の境目で鳴る"
+    );
 }
 
 /// 面 0 の一番上: `periodic,1` で、長さが周期ちょうどの再生（401 → 400ms で 402 → 600ms で `-1`・
@@ -290,8 +311,8 @@ fn periodic_as_long_as_its_period_fires_at_every_lap() {
     ] {
         let (mut rt, mut states) = shell_runtime(text);
         let logs = capture_logs(|| {
-            rt.on_tick(0, &mut states);
-            switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30);
+            rt.on_tick(at_ms(0), &mut states);
+            switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30));
             // （刻みの時刻, 開始の時刻, 欄の絵）: 境目を過ぎた刻み・周の途中の刻み・境目ちょうどの刻み
             // （3030）・前の再生の終わり＝境目をまたいだ遅い刻み（4500）。
             for (now, start, shown) in [
@@ -302,8 +323,8 @@ fn periodic_as_long_as_its_period_fires_at_every_lap() {
                 (3030, 3030, 401),
                 (4500, 4030, 402),
             ] {
-                rt.on_tick(now, &mut states);
-                assert_eq!(started(&rt, Slot::Shell, 1), Some(start), "{now}");
+                rt.on_tick(at_ms(now), &mut states);
+                assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(start)), "{now}");
                 assert_eq!(cell(&states, Slot::Shell, 1), Some(shown), "{now}");
             }
         });
@@ -325,28 +346,32 @@ fn periodic_as_long_as_its_period_fires_at_every_lap() {
 #[test]
 fn periodic_skips_a_lap_playing_at_the_boundary_even_when_seen_by_a_late_tick() {
     let (mut rt, mut states) = shell_runtime(LONG_PERIODIC);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(1030));
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    rt.on_tick(at_ms(1040), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(1030)));
 
     // 再生は 2530 で終わる。境目 2030 を見る刻みは、その後の 2600。
-    rt.on_tick(2600, &mut states);
+    rt.on_tick(at_ms(2600), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         None,
         "境目 2030 では再生中だった＝始めない"
     );
     assert_eq!(cell(&states, Slot::Shell, 1), Some(402), "末尾のコマが残る");
-    rt.on_tick(2700, &mut states);
+    rt.on_tick(at_ms(2700), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         None,
         "飛ばした周は後から鳴らない"
     );
 
-    rt.on_tick(3040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(3030), "次の境目で鳴る");
+    rt.on_tick(at_ms(3040), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(3030)),
+        "次の境目で鳴る"
+    );
 }
 
 /// 前の再生の終わりと次の境目の両方をまたいだ刻み（終わり < 境目 < 刻み）は、境目で 1 回だけ鳴らす。
@@ -355,16 +380,16 @@ fn periodic_skips_a_lap_playing_at_the_boundary_even_when_seen_by_a_late_tick() 
 fn periodic_fires_at_the_boundary_when_a_late_tick_spans_the_previous_end() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
     let logs = capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30);
-        rt.on_tick(1040, &mut states);
-        assert_eq!(started(&rt, Slot::Shell, 1), Some(1030));
+        rt.on_tick(at_ms(0), &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30));
+        rt.on_tick(at_ms(1040), &mut states);
+        assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(1030)));
 
         // 再生は 1430 で終わり、次の境目は 2030。その間に刻みは来ない。
-        rt.on_tick(2100, &mut states);
-        assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "境目から");
+        rt.on_tick(at_ms(2100), &mut states);
+        assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(2030)), "境目から");
         assert_eq!(cell(&states, Slot::Shell, 1), Some(401), "経過 70");
-        rt.on_tick(2140, &mut states);
+        rt.on_tick(at_ms(2140), &mut states);
         assert_eq!(cell(&states, Slot::Shell, 1), Some(402), "経過 110");
     });
     let periodic: Vec<String> = logs
@@ -384,51 +409,51 @@ fn periodic_fires_at_the_boundary_when_a_late_tick_spans_the_previous_end() {
 #[test]
 fn periodic_fires_once_when_a_tick_spans_two_laps() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
 
-    rt.on_tick(2100, &mut states);
+    rt.on_tick(at_ms(2100), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
-        Some(2030),
+        Some(at_ms(2030)),
         "境目 1030・2030 をまたいだ刻みは最新の境目から"
     );
     assert_eq!(cell(&states, Slot::Shell, 1), Some(401), "経過 70");
-    rt.on_tick(2500, &mut states);
+    rt.on_tick(at_ms(2500), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 1), None, "1 回流して終える");
-    rt.on_tick(2600, &mut states);
+    rt.on_tick(at_ms(2600), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         None,
         "またいだ数を積み上げない"
     );
-    rt.on_tick(3040, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(3030));
+    rt.on_tick(at_ms(3040), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(3030)));
 }
 
 /// 表の差し替えで引き金の状態を捨て、次の刻みの時刻で構え直す。
 #[test]
 fn table_replacement_drops_trigger_state_and_rearms_on_the_next_tick() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
-    rt.on_tick(300, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
+    rt.on_tick(at_ms(300), &mut states);
     assert!(rt.armed.contains_key(&(scope(), Slot::Shell)), "前提");
 
     states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
     rt.replace_shell_table(table_of(TRIGGERS));
     assert!(rt.armed.is_empty(), "差し替えで捨てる");
 
-    rt.on_tick(350, &mut states);
+    rt.on_tick(at_ms(350), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(350),
+        Some(at_ms(350)),
         "次の刻みで構え直す"
     );
-    rt.on_tick(1360, &mut states);
+    rt.on_tick(at_ms(1360), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
-        Some(1350),
+        Some(at_ms(1350)),
         "構え直した時刻が起点"
     );
 }
@@ -450,11 +475,11 @@ fn tables_without_trigger_words_keep_no_trigger_state() {
     let mut states = empty_states();
 
     let logs = capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
+        rt.on_tick(at_ms(0), &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
         let mut now = 50;
         while now <= 3000 {
-            rt.on_tick(now, &mut states);
+            rt.on_tick(at_ms(now), &mut states);
             assert!(rt.armed.is_empty(), "{now}: 引き金の状態は空のまま");
             now += 50;
         }
@@ -495,13 +520,13 @@ fn trigger_words_beside_random_do_not_interfere() {
         let (rng, probe) = counting_rng(&draws);
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
         let mut states = empty_states();
-        rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0);
+        rt.on_tick(at_ms(0), &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(0));
         let runonce = started(&rt, Slot::Shell, 0);
         let (mut random, mut periodic) = (Vec::new(), Vec::new());
         let mut now = 0;
         while now <= 9000 {
-            rt.on_tick(now, &mut states);
+            rt.on_tick(at_ms(now), &mut states);
             let seen = cell(&states, Slot::Shell, 1);
             if random.last().map(|(_, c)| *c) != Some(seen) {
                 random.push((now, seen));
@@ -525,10 +550,10 @@ fn trigger_words_beside_random_do_not_interfere() {
     );
     assert_eq!(mixed, plain, "random の発火の時刻が変わらない");
     assert_eq!(mixed_calls, plain_calls, "引いた乱数の数が同じ");
-    assert_eq!(runonce, Some(0), "runonce は切り替えで鳴る");
+    assert_eq!(runonce, Some(at_ms(0)), "runonce は切り替えで鳴る");
     assert_eq!(
         periodic,
-        (1..=9).map(|lap| lap * 1000).collect::<Vec<u64>>(),
+        (1..=9).map(|lap| at_ms(lap * 1000)).collect::<Vec<_>>(),
         "periodic は 1 秒ごとに鳴る"
     );
 }
@@ -546,15 +571,15 @@ const TALK_ELSEWHERE: &str = "surface0\n{\n}\n\
 #[test]
 fn talk_elsewhere_in_the_table_arms_and_plays_nothing() {
     let (mut rt, mut states) = shell_runtime(TALK_ELSEWHERE);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
     assert!(
         rt.armed.contains_key(&(scope(), Slot::Shell)),
         "表に talk が在るので構える"
     );
     let mut now = 50;
     while now <= 3000 {
-        assert!(rt.on_tick(now, &mut states).is_empty(), "{now}");
+        assert!(rt.on_tick(at_ms(now), &mut states).is_empty(), "{now}");
         assert!(rt.playback.is_empty(), "{now}");
         now += 50;
     }
@@ -575,20 +600,20 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
     let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
 
     note(&mut states, true);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
-        Some(1000),
+        Some(at_ms(1000)),
         "前提: 開いている面で runonce が鳴る"
     );
-    rt.on_tick(1300, &mut states);
+    rt.on_tick(at_ms(1300), &mut states);
     assert_eq!(started(&rt, Slot::Balloon, 0), None);
 
     // 閉じる（出来事 1500）: 起点 1000 の境目 2000・3000 では鳴らない。
     note(&mut states, false);
-    rt.refresh(&scope(), Slot::Balloon, Some(1500), &mut states);
-    rt.on_tick(2100, &mut states);
-    rt.on_tick(3100, &mut states);
+    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1500)), &mut states);
+    rt.on_tick(at_ms(2100), &mut states);
+    rt.on_tick(at_ms(3100), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 1),
         None,
@@ -597,22 +622,22 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
 
     // 開き直す（出来事 3200）。
     note(&mut states, true);
-    rt.refresh(&scope(), Slot::Balloon, Some(3200), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(3200)), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
         "開き直しで runonce は鳴らない"
     );
-    rt.on_tick(4100, &mut states);
+    rt.on_tick(at_ms(4100), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 1),
         None,
         "前の起点 1000 の境目（4000）では鳴らない"
     );
-    rt.on_tick(4250, &mut states);
+    rt.on_tick(at_ms(4250), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 1),
-        Some(4200),
+        Some(at_ms(4200)),
         "開いた時刻 3200 が新しい起点"
     );
     assert_eq!(started(&rt, Slot::Balloon, 0), None);
@@ -646,17 +671,17 @@ fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
     let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
     note(&mut states, false);
     let logs = capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        rt.on_tick(1000, &mut states); // 抽選の 1 が鳴り、start,0 が 0 を 1000 に始める。
-        assert_eq!(started(&rt, Slot::Balloon, 0), Some(1000), "前提");
+        rt.on_tick(at_ms(0), &mut states);
+        rt.on_tick(at_ms(1000), &mut states); // 抽選の 1 が鳴り、start,0 が 0 を 1000 に始める。
+        assert_eq!(started(&rt, Slot::Balloon, 0), Some(at_ms(1000)), "前提");
         note(&mut states, true);
         for now in [1050, 1200, 1600, 1700] {
-            rt.on_tick(now, &mut states); // 0 の start,2 は 1100・0 は 1500 に終わる。
+            rt.on_tick(at_ms(now), &mut states); // 0 の start,2 は 1100・0 は 1500 に終わる。
         }
     });
     assert_eq!(
         started(&rt, Slot::Balloon, 2),
-        Some(1100),
+        Some(at_ms(1100)),
         "start,2 は 1 度だけ"
     );
     assert_eq!(started(&rt, Slot::Balloon, 0), None, "鳴り直さない");
@@ -669,14 +694,14 @@ fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
 fn entering_and_starts_are_logged_and_discards_are_silent() {
     let (mut rt, mut states) = shell_runtime(TRIGGERS);
     let logs = capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30);
+        rt.on_tick(at_ms(0), &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30));
         for now in [500, 1040, 1500, 2040, 2500] {
-            rt.on_tick(now, &mut states);
+            rt.on_tick(at_ms(now), &mut states);
         }
-        switch(&mut rt, &mut states, SurfaceTarget::Show(1), 2600);
-        rt.on_tick(2700, &mut states);
-        rt.on_tick(3100, &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(1), at_ms(2600));
+        rt.on_tick(at_ms(2700), &mut states);
+        rt.on_tick(at_ms(3100), &mut states);
     });
 
     let line = |needle: &str| {
@@ -718,19 +743,19 @@ fn entering_and_starts_are_logged_and_discards_are_silent() {
 #[test]
 fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
     let mut epoch = TalkEpoch::default();
-    epoch.observe(0.0, 1000);
+    epoch.observe(ms(0), at_ms(1000));
     let mut feed = TalkFeed::default();
-    feed.push_chunk(0.0, 0.1, 1);
+    feed.push_chunk(ms(0), ms(100), 1);
     let mut at = None;
-    let logs = capture_logs(|| at = Some(glyph_wall_ms(&epoch, Some(&feed), 5, 1234)));
+    let logs = capture_logs(|| at = Some(glyph_wall(&epoch, Some(&feed), 5, at_ms(1234))));
 
-    assert_eq!(at, Some(1234));
+    assert_eq!(at, Some(at_ms(1234)));
     let warned = crate::test_support::warns(&logs);
     assert_eq!(warned.len(), 1, "{logs:?}");
     assert!(
         warned[0].contains("seriko: trigger talk の区切りの文字が文字の列に無い")
             && warned[0].contains("glyph=5")
-            && warned[0].contains("now_ms=1234"),
+            && warned[0].contains(&format!("now={}", at_ms(1234))),
         "{logs:?}"
     );
 }
@@ -748,12 +773,12 @@ fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
         animation1.pattern1,overlay,402,500,0,0\n}\n\
         surface301\n{\n}\nsurface401\n{\n}\nsurface402\n{\n}\n";
     let (mut rt, mut states) = shell_runtime(TEXT);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
-    rt.on_tick(1500, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1000)).expect("Show");
+    rt.on_tick(at_ms(1500), &mut states);
     let logs = capture_logs(|| {
-        rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
-        rt.on_tick(2100, &mut states);
+        rt.refresh(&scope(), Slot::Shell, Some(at_ms(2010)), &mut states);
+        rt.on_tick(at_ms(2100), &mut states);
     });
     assert_eq!(
         started(&rt, Slot::Shell, 1),
@@ -773,16 +798,16 @@ fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
         animation0.pattern1,overlay,302,50,0,0\n}\n\
         surface301\n{\n}\nsurface302\n{\n}\n";
     let (mut rt, mut states) = shell_runtime(TEXT);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0).expect("Show");
-    rt.on_tick(1150, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(0)).expect("Show");
+    rt.on_tick(at_ms(1150), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 0), Some(302), "前の周の残り");
     assert_eq!(started(&rt, Slot::Shell, 0), None);
 
-    rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
+    rt.refresh(&scope(), Slot::Shell, Some(at_ms(2010)), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(2000),
+        Some(at_ms(2000)),
         "境目 2000 で鳴り直す"
     );
     assert_eq!(
@@ -806,12 +831,16 @@ fn refresh_clears_the_leftover_frame_when_the_called_head_is_stopped() {
         animation1.pattern1,overlay,-1,100,0,0\n}\n\
         surface100\n{\n}\nsurface111\n{\n}\n";
     let (mut rt, mut states) = shell_runtime(TEXT);
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
-    rt.on_tick(30, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(10)).expect("Show");
+    rt.on_tick(at_ms(30), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 1), Some(111), "前の再生の残り");
 
-    rt.refresh(&scope(), Slot::Shell, Some(200), &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(60), "60 に始め直す");
+    rt.refresh(&scope(), Slot::Shell, Some(at_ms(200)), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(60)),
+        "60 に始め直す"
+    );
     assert_eq!(cell(&states, Slot::Shell, 1), None, "止まった頭は欄が空");
 }

@@ -162,3 +162,9 @@
 - 振る舞いの変化: `calls.rs` の `just_after`（印の次の時刻 +1 ms → +100ns）・区切りの文字の壁時刻がミリ秒の丸めの無いちょうどの値・割り切れない長さの塊の字の時刻は実数の式から 100ns 未満だけ違う（本番の字数 × 50 ms は今と同じ）。
 - 変える前後の期待（timeline.rs の中のテスト）: `starting_at_sets_strictly_future_boundary`・`poll_*` の 4 本・`frame_at_*` を `at_ms`／`ms` へ写した。`u64::MAX` の経過 → `TimeSpan::MAX`。talk_tests の `wall_ms` の丸めの期待は 4.3 が書き直す。
 - 移した関数: `start_top_always`（looper.rs → looper_calls.rs。looper.rs は 857 行）。
+
+## 4.3
+
+- 外したテスト・分かれ道・ログは無い。分けたファイル: `looper_tests.rs`（975 行）→ `looper_tests.rs`・`looper_order_tests.rs`・`looper_progress_tests.rs`・`looper_blink_tests.rs`。`looper_talk_tests.rs`（861 行）→ `looper_talk_tests.rs`・`looper_talk_part_tests.rs`。テストは 173 本のまま。
+- seriko のミリ秒への丸めが無くなった所: `talk_tests.rs::wall_time_rounds_to_the_nearest_millisecond` → `wall_time_keeps_sub_millisecond_precision`（起点 1000 ms − 0.25 ms を `at_ms(1000)` で観測。前は `wall(0)`・`wall(0.5 ms)`・`wall(1 ms)` が 1000・1000・1001 ms、後は 999.75・1000.25・1000.75 ms ちょうど）。
+- 変える前後の期待: `timeline_repeat_tests.rs::lap_of_splits_elapsed_by_period`（`lap_of(u64::MAX, 1)` の `(u64::MAX, 0)` → `lap_of(TimeSpan::MAX, ms(1))` の商と余りを刻みで）。`looper_trigger_tests.rs::glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn`（欄 `now_ms=1234` → `now=` の文字の形）。`calls_tests.rs` の `period_ms: NonZeroU64` → `period: TimeSpan`。ほかはミリ秒の整数を `at_ms`／`ms` へ写した。

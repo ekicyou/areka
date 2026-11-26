@@ -1,11 +1,12 @@
 //! 合成し直す回数（＝刻みが出す指令の数）を数える檻。
 //!
 //! 動く絵 1 つ（待ち 100ms のコマ 3 枚・終わりなし）だけの表で、16ms の刻みを与える。時刻は
-//! `on_tick(now_ms)`、乱数は注入列だけで決定論（実際の時計・OS に依らない）。動く絵も `always` も
+//! `on_tick(now)`、乱数は注入列だけで決定論（実際の時計・OS に依らない）。動く絵も `always` も
 //! 無い表（`emo2` を含む）の列は `looper_parts_emo2_tests.rs` と `areka` の
 //! `spine_seriko_loop_tests.rs` が書き換えずに固定している。
 
 use areka_emo_compose::FilmId;
+use dola::time::testing::at_ms;
 
 use super::test_support::switch_at;
 use super::tests::{cfg, counting_rng};
@@ -15,9 +16,9 @@ use crate::test_support::{empty_states, film_sheet, film_world};
 
 const FILM: FilmId = FilmId(10);
 /// 1 コマの待ち時間。
-const DELAY_MS: u64 = 100;
+const DELAY_MS: i64 = 100;
 /// 画面の更新の刻み。
-const TICK_MS: u64 = 16;
+const TICK_MS: i64 = 16;
 
 /// 面 0 に動く絵 `a.png` を 1 つ置いた表（分解と同じ形を手で組む）。
 fn one_film_table() -> AnimationTable {
@@ -34,7 +35,7 @@ fn shown() -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
     let mut states = empty_states();
-    assert!(rt.on_tick(0, &mut states).is_empty());
+    assert!(rt.on_tick(at_ms(0), &mut states).is_empty());
     switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("面 0 の表示の指令");
     (rt, states)
 }
@@ -45,7 +46,7 @@ fn shown() -> (LoopRuntime, ScopeStates) {
 fn hundred_ms_frame_over_seven_16ms_ticks_emits_exactly_one_command() {
     let (mut rt, mut states) = shown();
     let counts: Vec<usize> = (1..=7)
-        .map(|i| rt.on_tick(i * TICK_MS, &mut states).len())
+        .map(|i| rt.on_tick(at_ms(i * TICK_MS), &mut states).len())
         .collect();
     assert_eq!(counts, [0, 0, 0, 0, 0, 0, 1]);
 }
@@ -59,7 +60,7 @@ fn commands_are_emitted_only_on_ticks_where_the_frame_changes() {
     while now <= 3000 {
         let changed = now / DELAY_MS != prev / DELAY_MS;
         assert_eq!(
-            rt.on_tick(now, &mut states).len(),
+            rt.on_tick(at_ms(now), &mut states).len(),
             usize::from(changed),
             "刻み {now}ms"
         );

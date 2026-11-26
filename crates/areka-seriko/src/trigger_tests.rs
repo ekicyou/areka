@@ -1,10 +1,11 @@
 //! 引き金の判定（`runonce`・`periodic`・`talk`）の決定論テスト。
 //!
-//! 時刻は全部ただの数（ms）。判定はコマ列を読まないので、animation のコマ列は空で組む。
+//! 時刻は `TimePoint`／`TimeSpan`。判定はコマ列を読まないので、animation のコマ列は空で組む。
 //! 文字が現れる時刻は、序数から壁時刻への偽の写し（閉包）で渡す。
 
 use super::*;
-use std::num::{NonZeroU32, NonZeroU64};
+use dola::time::testing::{at_ms, ms};
+use std::num::NonZeroU32;
 
 fn runonce(id: u32) -> LoopAnimation {
     LoopAnimation {
@@ -14,11 +15,11 @@ fn runonce(id: u32) -> LoopAnimation {
     }
 }
 
-fn periodic(id: u32, period_ms: u64) -> LoopAnimation {
+fn periodic(id: u32, period_ms: u32) -> LoopAnimation {
     LoopAnimation {
         id,
         trigger: LoopTrigger::Periodic {
-            period_ms: NonZeroU64::new(period_ms).expect("正"),
+            period: ms(period_ms),
         },
         frames: Vec::new(),
     }
@@ -39,31 +40,31 @@ fn talk(id: u32, every: u32) -> LoopAnimation {
 fn poll(
     armed: &mut Armed,
     anim: &LoopAnimation,
-    now_ms: u64,
-    playing_at: impl Fn(u64) -> bool,
+    now: TimePoint,
+    playing_at: impl Fn(TimePoint) -> bool,
     talk: Option<&TalkWindow<'_>>,
-) -> Option<u64> {
-    let at = armed.next_start(anim, now_ms, talk)?;
+) -> Option<TimePoint> {
+    let at = armed.next_start(anim, now, talk)?;
     armed.commit(anim, at, playing_at(at)).then_some(at)
 }
 
-/// 開いた窓で `at_ms` に見え始めた状態。
-fn armed_at(at_ms: u64) -> Armed {
-    Armed::arm(at_ms, true, None)
+/// 開いた窓で `at` に見え始めた状態。
+fn armed_at(at: i64) -> Armed {
+    Armed::arm(at_ms(at), true, None)
 }
 
 /// 開いた窓で見え始め、その時点で `revealed` 文字が現れていた状態（`talk` の数えを持つ）。
 fn armed_with_text(revealed: u64) -> Armed {
-    Armed::arm(0, true, Some(revealed))
+    Armed::arm(at_ms(0), true, Some(revealed))
 }
 
 /// `talk` の判定に渡す刻みの時刻。文字が現れる時刻のどれよりも後に置き、開始の時刻が
 /// 刻みの時刻でないことを見分ける。
-const TICK_MS: u64 = 90_000;
+const TICK: TimePoint = at_ms(90_000);
 
 /// 序数 `g` の文字が 50 ms おきに現れる偽の写し（0 文字目が 1000 ms）。
-fn every_50ms(g: u64) -> u64 {
-    1000 + g * 50
+fn every_50ms(g: u64) -> TimePoint {
+    at_ms(1000 + g as i64 * 50)
 }
 
 /// 刻み 1 回分: 数えから文字の窓を組んで判定し、判定の後に数えを進める（一番上の面の配線と同じ順）。
@@ -72,16 +73,16 @@ fn talk_tick(
     anim: &LoopAnimation,
     now_seen: u64,
     playing: bool,
-    wall_ms: &dyn Fn(u64) -> u64,
-) -> Option<u64> {
+    wall: &dyn Fn(u64) -> TimePoint,
+) -> Option<TimePoint> {
     let (base, prev_seen) = armed.talk_window_bounds().expect("数えを持つ");
     let window = TalkWindow {
         base,
         prev_seen,
         now_seen,
-        wall_ms,
+        wall,
     };
-    let started = poll(armed, anim, TICK_MS, |_| playing, Some(&window));
+    let started = poll(armed, anim, TICK, |_| playing, Some(&window));
     armed.advance_talk(now_seen);
     started
 }
@@ -95,20 +96,26 @@ fn runonce_fires_once_and_starts_at_visible_since() {
     let mut armed = armed_at(1234);
     let (a, b) = (runonce(1), runonce(2));
 
-    assert_eq!(poll(&mut armed, &a, 1250, |_| false, None), Some(1234));
     assert_eq!(
-        poll(&mut armed, &a, 1266, |_| false, None),
+        poll(&mut armed, &a, at_ms(1250), |_| false, None),
+        Some(at_ms(1234))
+    );
+    assert_eq!(
+        poll(&mut armed, &a, at_ms(1266), |_| false, None),
         None,
         "鳴らし済み"
     );
     assert_eq!(
-        poll(&mut armed, &a, 9000, |_| false, None),
+        poll(&mut armed, &a, at_ms(9000), |_| false, None),
         None,
         "再生が終わった後"
     );
 
-    assert_eq!(poll(&mut armed, &b, 9000, |_| false, None), Some(1234));
-    assert_eq!(poll(&mut armed, &b, 9016, |_| false, None), None);
+    assert_eq!(
+        poll(&mut armed, &b, at_ms(9000), |_| false, None),
+        Some(at_ms(1234))
+    );
+    assert_eq!(poll(&mut armed, &b, at_ms(9016), |_| false, None), None);
 }
 
 /// 見え始めの時刻に再生中だった回は見送り、印を付ける（再生が終わった後に、過ぎた見え始めの時刻で
@@ -118,8 +125,8 @@ fn runonce_polled_while_playing_is_skipped_for_good() {
     let mut armed = armed_at(100);
     let a = runonce(1);
 
-    assert_eq!(poll(&mut armed, &a, 100, |_| true, None), None);
-    assert_eq!(poll(&mut armed, &a, 116, |_| false, None), None);
+    assert_eq!(poll(&mut armed, &a, at_ms(100), |_| true, None), None);
+    assert_eq!(poll(&mut armed, &a, at_ms(116), |_| false, None), None);
 }
 
 // ── periodic ─────────────────────────────────────────────────────────────
@@ -132,24 +139,28 @@ fn periodic_fires_at_each_lap_boundary_counted_from_visible_since() {
     let p = periodic(3, 2000);
 
     assert_eq!(
-        poll(&mut armed, &p, 500, |_| false, None),
+        poll(&mut armed, &p, at_ms(500), |_| false, None),
         None,
         "見え始めの瞬間"
     );
     assert_eq!(
-        poll(&mut armed, &p, 2499, |_| false, None),
+        poll(&mut armed, &p, at_ms(2499), |_| false, None),
         None,
         "境目の 1 ms 前"
     );
     assert_eq!(
-        poll(&mut armed, &p, 2500, |_| false, None),
-        Some(2500),
+        poll(&mut armed, &p, at_ms(2500), |_| false, None),
+        Some(at_ms(2500)),
         "境目ちょうど"
     );
-    assert_eq!(poll(&mut armed, &p, 2516, |_| false, None), None, "同じ周");
     assert_eq!(
-        poll(&mut armed, &p, 4510, |_| false, None),
-        Some(4500),
+        poll(&mut armed, &p, at_ms(2516), |_| false, None),
+        None,
+        "同じ周"
+    );
+    assert_eq!(
+        poll(&mut armed, &p, at_ms(4510), |_| false, None),
+        Some(at_ms(4500)),
         "境目を 10 ms 過ぎた刻み"
     );
 }
@@ -160,10 +171,19 @@ fn periodic_laps_are_counted_per_animation() {
     let mut armed = armed_at(0);
     let (fast, slow) = (periodic(1, 1000), periodic(2, 3000));
 
-    assert_eq!(poll(&mut armed, &fast, 2000, |_| false, None), Some(2000));
-    assert_eq!(poll(&mut armed, &slow, 2000, |_| false, None), None);
-    assert_eq!(poll(&mut armed, &fast, 3000, |_| false, None), Some(3000));
-    assert_eq!(poll(&mut armed, &slow, 3000, |_| false, None), Some(3000));
+    assert_eq!(
+        poll(&mut armed, &fast, at_ms(2000), |_| false, None),
+        Some(at_ms(2000))
+    );
+    assert_eq!(poll(&mut armed, &slow, at_ms(2000), |_| false, None), None);
+    assert_eq!(
+        poll(&mut armed, &fast, at_ms(3000), |_| false, None),
+        Some(at_ms(3000))
+    );
+    assert_eq!(
+        poll(&mut armed, &slow, at_ms(3000), |_| false, None),
+        Some(at_ms(3000))
+    );
 }
 
 /// 再生中に来た周は飛ばす。飛ばした周は、再生が終わっても後から鳴らない。
@@ -173,18 +193,18 @@ fn periodic_lap_reached_while_playing_is_skipped_for_good() {
     let p = periodic(3, 1000);
 
     assert_eq!(
-        poll(&mut armed, &p, 1000, |_| true, None),
+        poll(&mut armed, &p, at_ms(1000), |_| true, None),
         None,
         "再生中の周"
     );
     assert_eq!(
-        poll(&mut armed, &p, 1016, |_| false, None),
+        poll(&mut armed, &p, at_ms(1016), |_| false, None),
         None,
         "飛ばした周"
     );
     assert_eq!(
-        poll(&mut armed, &p, 2000, |_| false, None),
-        Some(2000),
+        poll(&mut armed, &p, at_ms(2000), |_| false, None),
+        Some(at_ms(2000)),
         "次の周"
     );
 }
@@ -195,13 +215,19 @@ fn periodic_tick_spanning_laps_fires_once_at_the_latest_boundary() {
     let mut armed = armed_at(100);
     let p = periodic(3, 1000);
 
-    assert_eq!(poll(&mut armed, &p, 3350, |_| false, None), Some(3100));
     assert_eq!(
-        poll(&mut armed, &p, 3350, |_| false, None),
+        poll(&mut armed, &p, at_ms(3350), |_| false, None),
+        Some(at_ms(3100))
+    );
+    assert_eq!(
+        poll(&mut armed, &p, at_ms(3350), |_| false, None),
         None,
         "またいだ分を積まない"
     );
-    assert_eq!(poll(&mut armed, &p, 4100, |_| false, None), Some(4100));
+    assert_eq!(
+        poll(&mut armed, &p, at_ms(4100), |_| false, None),
+        Some(at_ms(4100))
+    );
 }
 
 /// 「再生中か」は判定の時刻でなく周の境目の時刻で尋ねる: 境目ちょうどで終わっていた再生は遅れた
@@ -212,19 +238,31 @@ fn periodic_asks_whether_it_is_playing_at_the_lap_boundary() {
 
     let mut ended_at_boundary = armed_at(100);
     assert_eq!(
-        poll(&mut ended_at_boundary, &p, 1350, |at| at < 1100, None),
-        Some(1100),
+        poll(
+            &mut ended_at_boundary,
+            &p,
+            at_ms(1350),
+            |at| at < at_ms(1100),
+            None
+        ),
+        Some(at_ms(1100)),
         "境目 1100 で終わっている"
     );
 
     let mut ended_after_boundary = armed_at(100);
     assert_eq!(
-        poll(&mut ended_after_boundary, &p, 1350, |at| at < 1200, None),
+        poll(
+            &mut ended_after_boundary,
+            &p,
+            at_ms(1350),
+            |at| at < at_ms(1200),
+            None
+        ),
         None,
         "境目 1100 では再生中"
     );
     assert_eq!(
-        poll(&mut ended_after_boundary, &p, 1360, |_| false, None),
+        poll(&mut ended_after_boundary, &p, at_ms(1360), |_| false, None),
         None,
         "飛ばした周"
     );
@@ -238,36 +276,42 @@ fn periodic_asks_whether_it_is_playing_at_the_lap_boundary() {
 fn hide_silences_and_show_rebases_periodic_but_keeps_the_runonce_mark() {
     let mut armed = armed_at(0);
     let (r, p) = (runonce(1), periodic(3, 1000));
-    assert_eq!(poll(&mut armed, &r, 0, |_| false, None), Some(0));
-    assert_eq!(poll(&mut armed, &p, 1000, |_| false, None), Some(1000));
+    assert_eq!(
+        poll(&mut armed, &r, at_ms(0), |_| false, None),
+        Some(at_ms(0))
+    );
+    assert_eq!(
+        poll(&mut armed, &p, at_ms(1000), |_| false, None),
+        Some(at_ms(1000))
+    );
 
     armed.hide();
     assert_eq!(
-        poll(&mut armed, &p, 5000, |_| false, None),
+        poll(&mut armed, &p, at_ms(5000), |_| false, None),
         None,
         "隠れている間"
     );
-    assert_eq!(poll(&mut armed, &r, 5000, |_| false, None), None);
+    assert_eq!(poll(&mut armed, &r, at_ms(5000), |_| false, None), None);
 
-    armed.show(5300, None);
+    armed.show(at_ms(5300), None);
     assert_eq!(
-        poll(&mut armed, &r, 5300, |_| false, None),
+        poll(&mut armed, &r, at_ms(5300), |_| false, None),
         None,
         "印は残る"
     );
     assert_eq!(
-        poll(&mut armed, &p, 5300, |_| false, None),
+        poll(&mut armed, &p, at_ms(5300), |_| false, None),
         None,
         "現れた瞬間"
     );
     assert_eq!(
-        poll(&mut armed, &p, 6299, |_| false, None),
+        poll(&mut armed, &p, at_ms(6299), |_| false, None),
         None,
         "古い起点の境目"
     );
     assert_eq!(
-        poll(&mut armed, &p, 6300, |_| false, None),
-        Some(6300),
+        poll(&mut armed, &p, at_ms(6300), |_| false, None),
+        Some(at_ms(6300)),
         "新しい起点の 1 周目"
     );
 }
@@ -275,14 +319,20 @@ fn hide_silences_and_show_rebases_periodic_but_keeps_the_runonce_mark() {
 /// 閉じた窓で構えたら、現れるまで何も鳴らない。まだ鳴らしていない `runonce` は現れた時刻で鳴る。
 #[test]
 fn armed_closed_stays_silent_until_shown() {
-    let mut armed = Armed::arm(100, false, None);
+    let mut armed = Armed::arm(at_ms(100), false, None);
     let (r, p) = (runonce(1), periodic(3, 1000));
-    assert_eq!(poll(&mut armed, &r, 100, |_| false, None), None);
-    assert_eq!(poll(&mut armed, &p, 4000, |_| false, None), None);
+    assert_eq!(poll(&mut armed, &r, at_ms(100), |_| false, None), None);
+    assert_eq!(poll(&mut armed, &p, at_ms(4000), |_| false, None), None);
 
-    armed.show(4200, None);
-    assert_eq!(poll(&mut armed, &r, 4216, |_| false, None), Some(4200));
-    assert_eq!(poll(&mut armed, &p, 5200, |_| false, None), Some(5200));
+    armed.show(at_ms(4200), None);
+    assert_eq!(
+        poll(&mut armed, &r, at_ms(4216), |_| false, None),
+        Some(at_ms(4200))
+    );
+    assert_eq!(
+        poll(&mut armed, &p, at_ms(5200), |_| false, None),
+        Some(at_ms(5200))
+    );
 }
 
 /// 隠すと `talk` の数えを捨てる（隠れている間は文字を数えない）。現すときに数を渡されなければ、
@@ -295,7 +345,7 @@ fn hide_drops_the_talk_count() {
 
     armed.hide();
     assert_eq!(armed.talk_window_bounds(), None);
-    armed.show(5000, None);
+    armed.show(at_ms(5000), None);
     assert_eq!(armed.talk_window_bounds(), None);
 }
 
@@ -312,7 +362,7 @@ fn talk_fires_at_every_third_glyph_and_starts_at_its_reveal_time() {
     assert_eq!(talk_tick(&mut armed, &t, 2, false, &every_50ms), None);
     assert_eq!(
         talk_tick(&mut armed, &t, 3, false, &every_50ms),
-        Some(1100),
+        Some(at_ms(1100)),
         "3 文字目（序数 2）"
     );
     assert_eq!(
@@ -323,7 +373,7 @@ fn talk_fires_at_every_third_glyph_and_starts_at_its_reveal_time() {
     assert_eq!(talk_tick(&mut armed, &t, 5, false, &every_50ms), None);
     assert_eq!(
         talk_tick(&mut armed, &t, 6, false, &every_50ms),
-        Some(1250),
+        Some(at_ms(1250)),
         "6 文字目（序数 5）"
     );
 }
@@ -338,13 +388,13 @@ fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
     assert_eq!(talk_tick(&mut armed, &t, 6, false, &every_50ms), None);
     assert_eq!(
         talk_tick(&mut armed, &t, 7, false, &every_50ms),
-        Some(1300),
+        Some(at_ms(1300)),
         "構えてから 3 文字目（序数 6）"
     );
 
     armed.hide();
     // 8 文字目（序数 7）が現れた 1350 に現し直す。
-    armed.show(1350, Some(8));
+    armed.show(at_ms(1350), Some(8));
     assert_eq!(armed.talk_window_bounds(), Some((8, 8)));
     assert_eq!(
         talk_tick(&mut armed, &t, 10, false, &every_50ms),
@@ -353,7 +403,7 @@ fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
     );
     assert_eq!(
         talk_tick(&mut armed, &t, 11, false, &every_50ms),
-        Some(1500),
+        Some(at_ms(1500)),
         "現れてから 3 文字目（序数 10）"
     );
 }
@@ -367,7 +417,7 @@ fn talk_boundaries_crossed_in_one_window_fire_once_at_the_latest() {
     let mut late = armed_with_text(0);
     assert_eq!(
         talk_tick(&mut late, &t, 7, false, &every_50ms),
-        Some(1250),
+        Some(at_ms(1250)),
         "序数 2 と 5 を越えた"
     );
     assert_eq!(
@@ -375,11 +425,17 @@ fn talk_boundaries_crossed_in_one_window_fire_once_at_the_latest() {
         None,
         "越えた分を積まない"
     );
-    assert_eq!(talk_tick(&mut late, &t, 9, false, &every_50ms), Some(1400));
+    assert_eq!(
+        talk_tick(&mut late, &t, 9, false, &every_50ms),
+        Some(at_ms(1400))
+    );
 
-    let at_once = |_g: u64| 2000;
+    let at_once = |_g: u64| at_ms(2000);
     let mut burst = armed_with_text(0);
-    assert_eq!(talk_tick(&mut burst, &t, 9, false, &at_once), Some(2000));
+    assert_eq!(
+        talk_tick(&mut burst, &t, 9, false, &at_once),
+        Some(at_ms(2000))
+    );
     assert_eq!(talk_tick(&mut burst, &t, 9, false, &at_once), None);
 }
 
@@ -398,7 +454,7 @@ fn talk_boundary_reached_while_playing_is_skipped_for_good() {
     );
     assert_eq!(
         talk_tick(&mut armed, &t, 6, false, &every_50ms),
-        Some(1250),
+        Some(at_ms(1250)),
         "次の区切り"
     );
 }
@@ -413,17 +469,17 @@ fn talk_asks_whether_it_is_playing_at_the_glyph_reveal_time() {
         base: 0,
         prev_seen: 0,
         now_seen: 3,
-        wall_ms: &every_50ms,
+        wall: &every_50ms,
     };
 
     assert_eq!(
-        poll(&mut armed, &t, TICK_MS, |at| at <= 1100, Some(&window)),
+        poll(&mut armed, &t, TICK, |at| at <= at_ms(1100), Some(&window)),
         None,
         "1100 ではまだ再生中"
     );
     assert_eq!(
-        poll(&mut armed, &t, TICK_MS, |at| at < 1100, Some(&window)),
-        Some(1100),
+        poll(&mut armed, &t, TICK, |at| at < at_ms(1100), Some(&window)),
+        Some(at_ms(1100)),
         "1100 ちょうどで終わっている"
     );
 }
@@ -436,7 +492,7 @@ fn talk_count_never_goes_back_when_fewer_glyphs_are_visible() {
     let t = talk(1, 3);
     assert_eq!(
         talk_tick(&mut armed, &t, 6, false, &every_50ms),
-        Some(1150),
+        Some(at_ms(1150)),
         "序数 3"
     );
 
@@ -455,7 +511,7 @@ fn talk_count_never_goes_back_when_fewer_glyphs_are_visible() {
     );
     assert_eq!(
         talk_tick(&mut armed, &t, 7, false, &every_50ms),
-        Some(1300),
+        Some(at_ms(1300)),
         "序数 6"
     );
 }
@@ -469,19 +525,15 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
         base: 0,
         prev_seen: 0,
         now_seen: 3,
-        wall_ms: &every_50ms,
+        wall: &every_50ms,
     };
 
     let mut open = armed_with_text(0);
-    assert_eq!(
-        poll(&mut open, &t, TICK_MS, |_| false, None),
-        None,
-        "窓が無い"
-    );
+    assert_eq!(poll(&mut open, &t, TICK, |_| false, None), None, "窓が無い");
 
-    let mut closed = Armed::arm(0, false, Some(0));
+    let mut closed = Armed::arm(at_ms(0), false, Some(0));
     assert_eq!(
-        poll(&mut closed, &t, TICK_MS, |_| false, Some(&crossed)),
+        poll(&mut closed, &t, TICK, |_| false, Some(&crossed)),
         None,
         "隠れている"
     );
@@ -490,8 +542,8 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
     part.advance_talk(3);
     assert_eq!(part.talk_window_bounds(), None);
     assert_eq!(
-        poll(&mut part, &t, TICK_MS, |_| false, Some(&crossed)),
-        Some(1100),
+        poll(&mut part, &t, TICK, |_| false, Some(&crossed)),
+        Some(at_ms(1100)),
         "借りた窓で鳴る"
     );
 }
@@ -516,7 +568,7 @@ fn realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed() {
     );
     assert_eq!(
         talk_tick(&mut armed, &t, 8, false, &every_50ms),
-        Some(1350),
+        Some(at_ms(1350)),
         "次に届いた 1 文字（序数 7）が 3 文字目"
     );
 

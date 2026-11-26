@@ -2,8 +2,9 @@
 //!
 //! バルーンの表もシェルと同じ `parts_film_tests` の表（0 と 1 は終わりなしの子 `ENDLESS` を置き、
 //! 1 は合計 1 回の子 `ONCE` も置く）。窓の知らせは `note_stage` で直に覚えさせる。
-//! 刻みは `on_tick(now_ms)`、乱数は注入列（子の表に抽選は無い。抽選の檻は部品に `random` を置いた表で回す）。
+//! 刻みは `on_tick(now)`、乱数は注入列（子の表に抽選は無い。抽選の檻は部品に `random` を置いた表で回す）。
 
+use dola::time::testing::at_ms;
 use std::collections::BTreeMap;
 
 use areka_emo_compose::FilmId;
@@ -37,20 +38,20 @@ fn film_cell(states: &ScopeStates, slot: Slot, film: FilmId) -> Option<u32> {
 fn open_window_births_child_clock_on_noted_face() {
     let mut rt = runtime(AnimationTable::empty());
     let mut states = empty_states();
-    rt.on_tick(500, &mut states);
+    rt.on_tick(at_ms(500), &mut states);
 
     note(&mut states, true, 0);
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(600), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(600)), &mut states),
         None
     );
     assert_eq!(
         clock(&rt, Slot::Balloon, ENDLESS),
-        playing(600),
+        playing(at_ms(600)),
         "知らせの直後の評価の時刻で生まれる"
     );
 
-    let cmds = rt.on_tick(700, &mut states);
+    let cmds = rt.on_tick(at_ms(700), &mut states);
     assert_eq!(cmds.len(), 1, "コマが替わったので 1 件: {cmds:?}");
     let DisplayCommand::ShowBalloon { surface_id, .. } = &cmds[0] else {
         panic!("ShowBalloon を期待: {cmds:?}");
@@ -72,9 +73,9 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     let mut states = empty_states();
 
     note(&mut states, false, 1);
-    assert!(rt.on_tick(1000, &mut states).is_empty());
+    assert!(rt.on_tick(at_ms(1000), &mut states).is_empty());
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(1000), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1000)), &mut states),
         None
     );
     assert_eq!(
@@ -85,19 +86,19 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     assert_eq!(clock(&rt, Slot::Balloon, ONCE), None);
 
     note(&mut states, true, 1);
-    rt.on_tick(2000, &mut states);
-    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(2000));
-    assert_eq!(clock(&rt, Slot::Balloon, ONCE), playing(2000));
-    assert_eq!(rt.on_tick(2100, &mut states).len(), 1);
+    rt.on_tick(at_ms(2000), &mut states);
+    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(at_ms(2000)));
+    assert_eq!(clock(&rt, Slot::Balloon, ONCE), playing(at_ms(2000)));
+    assert_eq!(rt.on_tick(at_ms(2100), &mut states).len(), 1);
     assert_eq!(film_cell(&states, Slot::Balloon, ENDLESS), Some(11));
     assert_eq!(film_cell(&states, Slot::Balloon, ONCE), Some(21));
 
     note(&mut states, false, 1);
-    let cmds = rt.on_tick(2200, &mut states);
+    let cmds = rt.on_tick(at_ms(2200), &mut states);
     assert_eq!(clock(&rt, Slot::Balloon, ONCE), None, "回数つきは捨てる");
     assert_eq!(
         clock(&rt, Slot::Balloon, ENDLESS),
-        playing(2000),
+        playing(at_ms(2000)),
         "終わりなしは残る"
     );
     assert_eq!(
@@ -117,7 +118,7 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
         ),
         "隠れていてもコマは出す（出すか隠すかは表示層・要件 6.3）: {cmds:?}"
     );
-    rt.on_tick(2300, &mut states);
+    rt.on_tick(at_ms(2300), &mut states);
     assert_eq!(
         clock(&rt, Slot::Balloon, ONCE),
         None,
@@ -125,13 +126,13 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     );
 
     note(&mut states, true, 1);
-    rt.on_tick(2400, &mut states);
+    rt.on_tick(at_ms(2400), &mut states);
     assert_eq!(
         clock(&rt, Slot::Balloon, ONCE),
-        playing(2400),
+        playing(at_ms(2400)),
         "開くと頭から"
     );
-    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(2000));
+    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(at_ms(2000)));
 }
 
 /// `\b[-1]` の後の評価で、バルーンの面の回数つきの時計を捨てる（終わりなしは残す）。
@@ -139,20 +140,20 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
 fn balloon_hide_cue_drops_finite_clocks() {
     let mut rt = runtime(AnimationTable::empty());
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
     states.apply_balloon(&scope(), SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope(), Slot::Balloon);
-    rt.refresh(&scope(), Slot::Balloon, Some(100), &mut states);
-    assert_eq!(clock(&rt, Slot::Balloon, ONCE), playing(100));
+    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(100)), &mut states);
+    assert_eq!(clock(&rt, Slot::Balloon, ONCE), playing(at_ms(100)));
 
     states.apply_balloon(&scope(), SurfaceTarget::Hide);
     rt.on_surface_changed(&scope(), Slot::Balloon);
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(150), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(150)), &mut states),
         None
     );
     assert_eq!(clock(&rt, Slot::Balloon, ONCE), None);
-    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(100));
+    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(at_ms(100)));
 }
 
 /// シェルとバルーンが同じ子を置いても時計は混ざらない。
@@ -161,20 +162,20 @@ fn shell_and_balloon_clocks_do_not_mix() {
     let mut rt = runtime(film_table());
     let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
-    rt.on_tick(1000, &mut states);
-    assert_eq!(clock(&rt, Slot::Shell, ENDLESS), playing(1000));
+    rt.on_tick(at_ms(1000), &mut states);
+    assert_eq!(clock(&rt, Slot::Shell, ENDLESS), playing(at_ms(1000)));
     assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), None);
 
     note(&mut states, true, 0);
-    rt.on_tick(1500, &mut states);
-    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(1500));
+    rt.on_tick(at_ms(1500), &mut states);
+    assert_eq!(clock(&rt, Slot::Balloon, ENDLESS), playing(at_ms(1500)));
     assert_eq!(
         clock(&rt, Slot::Shell, ENDLESS),
-        playing(1000),
+        playing(at_ms(1000)),
         "シェルの時計はそのまま"
     );
 
-    rt.on_tick(1600, &mut states);
+    rt.on_tick(at_ms(1600), &mut states);
     assert_eq!(
         film_cell(&states, Slot::Shell, ENDLESS),
         None,
@@ -210,13 +211,13 @@ fn closed_window_births_no_top_always_playback() {
     let mut states = empty_states();
 
     note(&mut states, false, 0);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
         "閉じている間の刻みでは生まれない"
     );
-    rt.refresh(&scope(), Slot::Balloon, Some(1100), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1100)), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
@@ -224,10 +225,10 @@ fn closed_window_births_no_top_always_playback() {
     );
 
     note(&mut states, true, 0);
-    rt.refresh(&scope(), Slot::Balloon, Some(1200), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1200)), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
-        Some(1200),
+        Some(at_ms(1200)),
         "開いた後の評価の時刻で生まれる"
     );
 
@@ -235,10 +236,10 @@ fn closed_window_births_no_top_always_playback() {
     let mut rt = runtime_of(BALLOON_TOP_ALWAYS, rng);
     let mut states = empty_states();
     note(&mut states, true, 0);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
-        Some(1000),
+        Some(at_ms(1000)),
         "開いている面の刻みの時刻で生まれる"
     );
 }
@@ -258,9 +259,9 @@ fn closed_window_draws_no_part_lottery() {
     let mut states = empty_states();
 
     note(&mut states, false, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    rt.on_tick(2000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    rt.on_tick(at_ms(2000), &mut states);
     assert_eq!(
         probe.lock().unwrap().calls,
         0,
@@ -273,7 +274,7 @@ fn closed_window_draws_no_part_lottery() {
     );
 
     note(&mut states, true, 0);
-    rt.on_tick(3000, &mut states);
+    rt.on_tick(at_ms(3000), &mut states);
     assert_eq!(probe.lock().unwrap().calls, 1, "開いた後の境で引く");
-    assert_eq!(part_clock(&rt, Slot::Balloon, 100, 0), playing(3000));
+    assert_eq!(part_clock(&rt, Slot::Balloon, 100, 0), playing(at_ms(3000)));
 }

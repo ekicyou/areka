@@ -5,6 +5,7 @@ use super::*;
 use crate::resolve::SurfaceTarget;
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::Interval;
+use dola::time::testing::at_ms;
 
 /// シェルの表の差し替え: 再生中のループを捨て、古い表のコマは以後 0 件。次の抽選から
 /// 新しい表で始め直す。
@@ -17,8 +18,8 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(10));
 
-    rt.on_tick(0, &mut states);
-    let c1 = rt.on_tick(1000, &mut states); // 古い表で発火・先頭コマ 2106
+    rt.on_tick(at_ms(0), &mut states);
+    let c1 = rt.on_tick(at_ms(1000), &mut states); // 古い表で発火・先頭コマ 2106
     assert_eq!(pattern_of(&c1[0]).get(0).unwrap().surface_id, 2106);
 
     // 差し替え（アクターの順: 状態 → 表）。
@@ -27,10 +28,10 @@ fn replace_shell_table_drops_playing_loop_and_restarts_from_new_table() {
     rt.replace_shell_table(new);
 
     assert!(
-        rt.on_tick(1200, &mut states).is_empty(),
+        rt.on_tick(at_ms(1200), &mut states).is_empty(),
         "古い表のループの指令は差し替えの後に 0 件"
     );
-    let c2 = rt.on_tick(2000, &mut states);
+    let c2 = rt.on_tick(at_ms(2000), &mut states);
     assert_eq!(c2.len(), 1, "新しい表で発火");
     let p = pattern_of(&c2[0]);
     assert_eq!(p.get(0).unwrap().surface_id, 3000, "新しい表のコマ");
@@ -52,8 +53,12 @@ fn replace_balloon_tables_keeps_shell_loop() {
     states.apply(&scope, SurfaceTarget::Show(10));
     states.apply_balloon(&scope, SurfaceTarget::Show(20));
 
-    rt.on_tick(0, &mut states);
-    assert_eq!(rt.on_tick(1000, &mut states).len(), 2, "両 slot が発火");
+    rt.on_tick(at_ms(0), &mut states);
+    assert_eq!(
+        rt.on_tick(at_ms(1000), &mut states).len(),
+        2,
+        "両 slot が発火"
+    );
 
     // 新しいバルーンの表: 同じ scope・同じ面 20・同じ anim id 1 でコマだけが違う。古い再生が
     // 残っていれば、同じ id の新しいコマ 50 が 1200 の時点で出てしまう（再生を捨てたことの檻）。
@@ -62,7 +67,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
     rt.replace_balloon_tables(BTreeMap::from([(scope.clone(), new_balloon)]));
 
     // (a) 境界の前: シェルだけが次のコマ 2110 へ進み、バルーンからは何も出ない。
-    let cmds = rt.on_tick(1200, &mut states);
+    let cmds = rt.on_tick(at_ms(1200), &mut states);
     assert_eq!(cmds.len(), 1, "シェル側だけが進む: {cmds:?}");
     match &cmds[0] {
         DisplayCommand::Show { pattern, .. } => {
@@ -72,7 +77,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
     }
 
     // (b)(c) 次の境界: シェルは再抽選で 2106 から、バルーンは新しい表の 50 で始まる。
-    let cmds = rt.on_tick(2000, &mut states);
+    let cmds = rt.on_tick(at_ms(2000), &mut states);
     assert_eq!(cmds.len(), 2, "シェルとバルーンが発火: {cmds:?}");
     match &cmds[0] {
         DisplayCommand::Show { pattern, .. } => {

@@ -829,11 +829,17 @@ mod always_tests;
 #[path = "looper_balloon_tests.rs"]
 mod balloon_tests;
 #[cfg(test)]
+#[path = "looper_blink_tests.rs"]
+mod blink_tests;
+#[cfg(test)]
 #[path = "looper_calls_tests.rs"]
 mod calls_tests;
 #[cfg(test)]
 #[path = "looper_film_count_tests.rs"]
 mod film_count_tests;
+#[cfg(test)]
+#[path = "looper_order_tests.rs"]
+mod order_tests;
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 pub(crate) mod parts_emo2_tests;
@@ -841,8 +847,14 @@ pub(crate) mod parts_emo2_tests;
 #[path = "looper_parts_tests.rs"]
 mod parts_tests;
 #[cfg(test)]
+#[path = "looper_progress_tests.rs"]
+mod progress_tests;
+#[cfg(test)]
 #[path = "looper_replace_tests.rs"]
 mod replace_tests;
+#[cfg(test)]
+#[path = "looper_talk_part_tests.rs"]
+mod talk_part_tests;
 #[cfg(test)]
 #[path = "looper_talk_tests.rs"]
 mod talk_tests;
