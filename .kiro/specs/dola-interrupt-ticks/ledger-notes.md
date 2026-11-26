@@ -335,3 +335,9 @@
 ## 10.1（後半）
 
 - 外したテスト・分かれ道・ログは無い。字の現れる時刻は「合図の発火時刻 + 塊の頭からの隔たり」（`TimePoint`）、提示と読み口はフレームの時刻を受ける。ログの欄 `at` → `fire_time`、`talk_time` → `frame_now`。
+
+## 10.2（後半）
+
+- 取り除いた分かれ道: `spawn_emo_text` の、受け取った場で当てる 3 つの閉包（受け取りは列に足し、`advance(frame_now)` が当てる）。外したテスト・ログは無い。借用中の `Err` の文言「適用できない（actor, at）」→「受け取れない（actor, fire_time）」（字面で読むテストは無い）。
+- 変える前後の期待（10.4・10.5 が直す）: `spawn_emo_text` 越しに合図を入れてその場で当たる事を期待していたテスト（`sink_probe_tests::drain_reports_missing_box_once_and_not_for_present_box`・`actor_lookahead_tests`・`actor_runtime_frame_tests`・`actor_tests`・`sink_talk_end_tests`、`tests/` の `attach_wiring_test`・`draw_readback_test`・`viewbox_scroll_test`、例 `emo-text-layer`）は、`advance` の後に当たる事を期待する形になる。
+- 足したテスト: `actor_held_tests.rs` の 13 本（3 秒後の消去・字のほかの指令・届いたフレームより後の合図・同じ時刻の順・遅れた合図・250 ms 遅れのタイプライター・先渡しの位置・終わりの印・空の時の先渡しと印・選択待ちの後の押下・箱が無い知らせは当てる時・受け取りで当てず旗が立つ・借用中は Err）。

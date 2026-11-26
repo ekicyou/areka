@@ -613,7 +613,7 @@
   - _Dispatch: standard — 字の時刻の持ち方の書き換え_
   - _Requirements: 12.9, 18.2, 18.6_
 
-- [ ] 10.2 areka-emo-text: 届いた物を列に持ち、フレームの頭で時刻の来た物を届いた順に当てる
+- [x] 10.2 areka-emo-text: 届いた物を列に持ち、フレームの頭で時刻の来た物を届いた順に当てる
   - 新しいファイルに、文字の層が持つ 1 本の列と、フレームの時刻までに時刻の来た物（合図・置き直しの知らせ・先渡し・トークの印）を届いた順に当て、頭の物が待っている時刻を返す口を置く。1,000 行に近い actor と提示には足さない
   - UI のスレッドの受け取りは、当てずに列へ足す。時刻を持たない物（先渡し・トークの印）は、列が空ならその場で当てる。足した後（その場で当てた時は当てた後）に、次の画面の更新でフレームを回す旗を立てる
   - 名前の形の箱が無い事の知らせを、当てる時に出す
@@ -827,3 +827,4 @@
 - 9.2: `duplicate_and_backward_tick_do_not_double_fire` の中の注釈「同値 → no-op」「逆行 → no-op」は、守りが止めるのではなく再生機に新しく届く物が無いという意味になった（12.2 で拾う）。
 - 9.3: 届いた物を持つ列は `areka_sakura::held::HeldQueue<T>`（`push(Option<TimePoint>, T)`・`pop_due(frame_now) -> Option<T>`・`waiting_until() -> Option<TimePoint>`・`is_empty`）。
 - 10.1: emo-text の提示の口は `frame_now: TimePoint`。下で壊れる呼び出し: areka-runtime `frame/scale_text.rs:238,250`・`balloon_visibility_phase.rs:306`・`frame_balloon_runtime_test_support.rs:60`（10.10・10.11）、areka-input `balloon_test_support.rs:322`・`balloon_choice_settle_tests.rs:151`・`balloon_pressed_tests.rs:81`（10.15）、本体 `runtime_tests/frame_shell_box_integration_tests.rs:310`（10.16）、先進坑 `q7-vertical/src/old_side.rs:100`（10.16 か締め）。
+- 10.2: emo-text の新しい口 `TextLayerRuntime::advance(frame_now) -> Option<TimePoint>`（`actor_held.rs`）。受け取りは `held::receive_msg` が列へ足し `tick_wake::mark(PRESENT)` を立てる。10.3 が `TextMsg::Origin`・`EmoTextSink::origin_set` の送り・`Held::Origin` を足す。10.10 が runtime のフレームの頭で `advance` を呼ぶ。10.16 が本体の `AREKA_PRODUCERS` に `actor_held.rs` の行と木の根に areka-emo-text を足す。12.2 が wintf の `tick_wake.rs` の頭の一覧の `PRESENT` の行を直す。
