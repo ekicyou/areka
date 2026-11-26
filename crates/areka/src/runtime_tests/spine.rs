@@ -51,7 +51,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop};
-use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeNotice, ShioriBackend};
 use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, DisplayCommand, LoopRng, SerikoLoopConfig, SerikoSink,
@@ -325,7 +325,7 @@ impl SpineHarness {
         let (emo_text_sink, text_pump) = spawn_emo_text(Rc::clone(&runtime));
 
         // ── talk 時刻源（本番同様 dola clock 注入）＋実 ClockedTextSink<EmoTextSink> ──
-        let clock_fn: Arc<dyn Fn() -> f64 + Send + Sync> = Arc::new(dola::runtime::clock::now);
+        let clock_fn: Arc<dyn Fn() -> dola::TimePoint + Send + Sync> = Arc::new(dola::now);
         let clock = TalkClock::new(clock_fn);
         let clocked_text_sink = ClockedTextSink::new(emo_text_sink, clock.clone());
 
@@ -501,7 +501,8 @@ impl SpineHarness {
     /// dispatcher 経路（`inject_dispatcher_tick`）は talk/cue clock を進めるのみで seriko ループには届かない
     /// （ghost 側にループ結線なし）——ループ tick はこの直接注入だけが供給する。
     fn inject_seriko_tick(&self, now_ms: u64) {
-        self.tick_sink.send_tick(now_ms);
+        self.tick_sink
+            .send_tick(dola::time::testing::at_ms(now_ms as i64));
     }
 
     /// dispatcher へ Tick を 1 発注入する（時刻は注入時刻のみで進める）。
@@ -509,7 +510,7 @@ impl SpineHarness {
         self.ghost
             .dispatcher()
             .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
+                now: dola::time::testing::at_ms(now as i64),
             })
             .expect("dispatcher actor should still be alive to accept an injected Tick");
     }

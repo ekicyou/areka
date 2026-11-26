@@ -262,13 +262,9 @@ impl StageSink for LapSink<'_> {
     }
 }
 
-/// 占有終端（talk 相対秒）をミリ秒へ切り上げる。
-fn horizon_ms(seconds: f64) -> u64 {
-    if seconds <= 0.0 {
-        0
-    } else {
-        (seconds * 1_000.0).ceil() as u64
-    }
+/// 占有終端（台本の時刻）をミリ秒へ切り上げる。
+fn horizon_ms(end: dola::TimeSpan) -> u64 {
+    (end.as_ticks() as u64).div_ceil(10_000)
 }
 
 // ===========================================================================

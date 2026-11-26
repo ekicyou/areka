@@ -14,6 +14,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_kanade::KanadeMsg;
 use areka_sakura::TalkId;
+use dola::TimeSpan;
 use tracing::Level;
 
 use super::super::test_support::{Frame, TALK_ID, seen};
@@ -23,8 +24,8 @@ use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 待ち時間（秒）と前の台詞の占有終端（talk 相対秒）。
-const WAIT: f64 = 2.0;
-const END: f64 = 1.0;
+const WAIT: TimeSpan = TimeSpan::from_millis(2_000);
+const END: TimeSpan = TimeSpan::from_millis(1_000);
 
 /// 置き場にゴースト（kanade への送出端を持つか持たないか）を据えた World。
 fn world_with_ghost(kanade: Option<Sender<KanadeMsg>>) -> World {
@@ -59,7 +60,7 @@ fn talk_until_just_before_timeout(state: &mut BalloonVisibilityState, world: &Wo
         state,
         world,
         Frame::new(&[(0, seen(3, false))])
-            .at(0.0)
+            .at(TimeSpan::ZERO)
             .talk_started()
             .display_end(END),
     );
@@ -71,7 +72,7 @@ fn talk_until_just_before_timeout(state: &mut BalloonVisibilityState, world: &Wo
     frame(
         state,
         world,
-        Frame::new(&[(0, seen(3, true))]).at(END + WAIT - 0.001),
+        Frame::new(&[(0, seen(3, true))]).at(END + TimeSpan::from_millis(1_999)),
     );
 }
 
@@ -113,7 +114,7 @@ fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
     frame(
         &mut state,
         &world,
-        Frame::new(&[(0, seen(3, false))]).at(END + WAIT + 1.0),
+        Frame::new(&[(0, seen(3, false))]).at(END + WAIT + TimeSpan::from_millis(1_000)),
     );
     assert_eq!(received(&rx), vec![], "隠した後のフレームは送らない");
 }
@@ -228,7 +229,7 @@ fn notice_of_the_previous_ghost_does_not_reach_the_new_ghost_after_a_switch() {
     frame(
         new_state,
         &world,
-        Frame::new(&[(0, seen(3, true))]).at(END + WAIT + 5.0),
+        Frame::new(&[(0, seen(3, true))]).at(END + WAIT + TimeSpan::from_millis(5_000)),
     );
     assert_eq!(
         received(&new_rx),

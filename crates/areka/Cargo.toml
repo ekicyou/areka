@@ -63,6 +63,8 @@ dola = { path = "../dola" }
 areka-emo-present = { path = "../areka-emo-present" }
 
 [dev-dependencies]
+# テストの時刻の組み立て（dola の test-support）。
+dola = { path = "../dola", features = ["test-support"] }
 # readonly 起動のテストが書ける根の判断を直接引く。
 areka-user-data = { path = "../areka-user-data" }
 # examples のログの初期化。

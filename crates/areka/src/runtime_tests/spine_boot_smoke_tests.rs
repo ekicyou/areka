@@ -128,7 +128,11 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
             logs.extend(capture_logs(|| {
                 harness.inject_dispatcher_tick(now);
                 harness.pump_text();
-                run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+                run_text_phase(
+                    &mut harness.wiring,
+                    &mut harness.world,
+                    Some(dola::time::testing::ms(10_000)),
+                );
             }));
             now += 10;
             seen.set(logs.len() as u64);

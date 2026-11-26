@@ -50,12 +50,13 @@ fn box_bundle(text: &str) -> ShellBoxAssets {
 }
 
 fn cue(actor: &ActorKey, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
+    TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        actor.clone(),
         command,
-        duration: 0.0,
-    }
+        dola::TimeSpan::ZERO,
+    )
 }
 
 /// スコープの文字を持つ場所（場所の名前・文字の数）。普通のバルーンは `balloon`。

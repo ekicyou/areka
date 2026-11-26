@@ -147,7 +147,11 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             }
             harness.pump_text();
             // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
-            run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+            run_text_phase(
+                &mut harness.wiring,
+                &mut harness.world,
+                Some(dola::time::testing::ms(300)),
+            );
             // 文字の面は最初に描く文字が届いた present で作られるので、作られる前は「まだ」と読む。
             let attached = harness.runtime.borrow().is_attached(&actor);
             talk_started && attached && text_surface_opaque(&harness, &actor) > 0
@@ -204,7 +208,8 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // ── (2) typewriter: Clear 未配送（テキストのみの単一 talk バッファ）に対し注入
     //    talk_time 階段で present_frame を駆動し、text 供給面の opaque_count が単調非減少であること・
     //    pre-reveal（t=0.0＜先頭グリフ r_0=0.05）が全透明であることを固定する。 ──
-    let staircase: Vec<f64> = (0..=18).map(|i| i as f64 * 0.05).collect(); // 0.00,0.05,...,0.90
+    let staircase: Vec<dola::TimeSpan> =
+        (0..=18).map(|i| dola::time::testing::ms(i * 50)).collect(); // 0.00,0.05,...,0.90
     let mut counts: Vec<usize> = Vec::with_capacity(staircase.len());
     for &t in &staircase {
         run_text_phase(&mut harness.wiring, &mut harness.world, Some(t));
@@ -237,12 +242,20 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
         now += 50; // 大きめに進め Clear（at=1.40s・上のタイムライン導出）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
-        run_text_phase(&mut harness.wiring, &mut harness.world, Some(2.0));
+        run_text_phase(
+            &mut harness.wiring,
+            &mut harness.world,
+            Some(dola::time::testing::ms(2_000)),
+        );
         text_surface_opaque(&harness, &actor) == 0
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}: \\_w[1000]\\c の配送が完了しない"));
     // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去）。
-    run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+    run_text_phase(
+        &mut harness.wiring,
+        &mut harness.world,
+        Some(dola::time::testing::ms(300)),
+    );
     assert_eq!(
         text_surface_opaque(&harness, &actor),
         0,
