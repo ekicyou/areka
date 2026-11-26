@@ -299,3 +299,8 @@
 - 取り除いた分かれ道: 時刻の表の `tick`／`ready`／`ready_buffer`／`current_time`／`is_completed`、同じ時刻の刻み直しの守り、起点より前の刻みを先に返す守り、区切りを解く時に溜めを空にする処理。再生機の `BarrierReached` と「残りが減った時だけ配る」門。ログは触っていない。
 - 改名と変える前後の期待: `tick_idempotent_same_time` → `take_twice_at_same_time_delivers_once`（前は同じ時刻の 2 度目も同じ中身が `ready()` に残った、後は 2 度目は 0 件＝溜めが無い）。`notify_barrier_resolved_noop_when_no_barrier`（前は解いた後も `ready()` が "x" のまま、後は解く → 取り出しで "x"、もう一度解いて残り 0）。`is_completed()` を見ていたテスト（単体 `remaining_and_is_completed`・`with_horizon_*` 2 本・`occupancy_horizon_matches_is_completed_threshold`・`completion_is_reached_at_exact_occupancy_horizon`、結合 `sheet_test.rs` の 5 本）は直前の刻みの時刻を `is_completed_at` へ渡す（期待は同じ）。外したテストは無い。
 - 足したテスト（`src/cue/schedule/reorigin_tests.rs` の 21 本）: 取り出し・遅れた刻み・同じ時刻の 2 度目・前／後ろへの置き直し・取り出しの間の置き直し・区切りの間・落とさず 2 度届けず順を保つ・型の下の端を越える起点・知らせの中身・変わらない置き直し・占有の終わりと完了が起点と一緒に動く・先渡しの照会。
+
+## 8.3（後半）
+
+- 取り除いた物: `CuePlayer` の仮の欄 `last_tick` と `settle_completion_after_resolve`（区切りを解いた直後に完了を確かめる分かれ道）。ログは無かった。外したテストは無い。解くだけで完了を期待していたテストは 0 本（どれも元から解く → 刻むの形）。dola の外の呼び出しの直しは 0 件（`areka-sakura/src/drive.rs` の `on_resolve_choice` は解いた直後に刻むので、選択を解いたその場で完了する振る舞いは同じ）。
+- 足した口とテスト: `step(now) -> StepOutcome`・`reanchor`・`shift_origin`・`origin`・`CueSink::origin_set`（既定は何もしない）。登録の時に最初の起点の知らせ → 先渡しの順に渡す。テスト `step_advances_one_item_per_call`・`reanchor_after_completion_is_ignored`。空の 4 本（`tests/cue/runtime_test_{reanchor,fire_time,origin_notice,late_delivery}_tests.rs`）の `mod` の行は `tests/cue/runtime_test.rs` に置いた。

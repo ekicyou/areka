@@ -19,7 +19,7 @@
 //! | `CueProbe` / `CueFinding` | 合図の受け手が誤りを知らせる口と、その知らせ 1 件（中身は不透明な文字列） |
 //! | `cue_target_of` | cue→演者担当の型レベル relevance 分類（全演者共有の単一権威） |
 //! | `CuePlayer` | cue 再生の受動的注入時刻ランタイム（状態機械・バリア seam・選択肢先積み・完了 horizon） |
-//! | `CuePlayerState` / `PendingChoice` | ランタイムの再生状態・先積み選択肢 |
+//! | `CuePlayerState` / `PendingChoice` / `StepOutcome` | ランタイムの再生状態・先積み選択肢・1 件進めた結果 |
 //! | `CueError` | cue の層の誤り（台本の起点が押されていない） |
 
 mod command;
@@ -33,7 +33,7 @@ pub mod test_support;
 pub use command::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, PendingCue, TalkCue,
 };
-pub use runtime::{CueError, CuePlayer, CuePlayerState, PendingChoice};
+pub use runtime::{CueError, CuePlayer, CuePlayerState, PendingChoice, StepOutcome};
 pub use schedule::{Due, Entry, OriginNotice, TimedSchedule};
 pub use sheet::{CueSheet, to_talk_schedule};
 pub use sink::{CueFinding, CueProbe, CueSink, cue_target_of};

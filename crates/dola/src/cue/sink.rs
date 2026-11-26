@@ -12,6 +12,7 @@
 use std::sync::Arc;
 
 use super::command::{CueCommand, CueTarget, TalkCue};
+use super::schedule::OriginNotice;
 
 /// 演者非依存の**単一**出力契約。全表現者（seriko／emo-text／将来の演者）がこの 1 本を
 /// 各自 1 実装として持つ。
@@ -51,6 +52,13 @@ pub trait CueSink {
     /// 再生器の状態の移り（`tick`）の中では呼ばれない。既定は何もしない（上書きしない受け手の
     /// 動きは変わらない）。
     fn choice_wait_began(&mut self) {}
+
+    /// 起点の知らせ: 登録の時に最初の起点（[`OriginNotice::first`]）を、どの合図よりも前に 1 度、
+    /// その後は起点が置き直されるたびに、合図と同じくその場で登録順に呼ばれる。既定は何もしない
+    /// （上書きしない受け手の動きは変わらない）。
+    fn origin_set(&mut self, notice: OriginNotice) {
+        let _ = notice;
+    }
 }
 
 /// 合図の受け手が返す知らせ 1 件。dola は中身を解釈しない（どれも不透明な文字列）。

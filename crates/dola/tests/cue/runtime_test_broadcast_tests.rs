@@ -1,11 +1,13 @@
 //! broadcast 配送・占有終了検知（`is_completed`）・中断（`stop`）・sink 登録の檻。
 
 use super::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue, at_ms,
-    sheet_at_zero,
+    ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, CueSink, TalkCue,
+    at_ms, sheet_at_zero,
 };
 use crate::test_support::{barrier, logged_commands, ms, recording_sink, text, wait};
-use dola::time::{TimePoint, TimeSpan};
+use dola::cue::{OriginNotice, StepOutcome};
+use dola::time::{TimeDelta, TimePoint, TimeSpan};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 /// **観測可能な完了条件**: 1 つの台本を複数の登録済み sink へ流すと、
@@ -257,5 +259,78 @@ fn tick_with_no_registered_sinks_still_advances_and_completes() {
     assert!(
         player.is_completed(),
         "sink 未登録でも占有 horizon 到達で完了する（配送先 0 個でも破綻しない）"
+    );
+}
+
+/// 1 件ずつ進める口: 届いた合図ごとに `Delivered`、区切りで `Barrier`（待っている間も）、
+/// 届いた物が無ければ `Idle`、占有の終わりで `Completed`（完了の後も）。
+#[test]
+fn step_advances_one_item_per_call() {
+    let sheet = sheet_at_zero(vec![
+        text(ms(0), "a", ms(0)),
+        text(ms(0), "b", ms(0)),
+        barrier(ms(100), BarrierKind::WaitForInput),
+        text(ms(200), "c", ms(300)),
+    ]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
+    let (log, sink) = recording_sink();
+    player.register_sink(sink);
+
+    assert_eq!(player.step(at_ms(0)), StepOutcome::Delivered);
+    assert_eq!(logged_commands(&log), vec![CueCommand::Text("a".into())]);
+    assert_eq!(player.step(at_ms(0)), StepOutcome::Delivered);
+    assert_eq!(player.step(at_ms(0)), StepOutcome::Idle);
+    assert_eq!(player.step(at_ms(100)), StepOutcome::Barrier);
+    assert_eq!(player.state(), &CuePlayerState::WaitingForInput);
+    assert_eq!(player.step(at_ms(1000)), StepOutcome::Barrier);
+    assert_eq!(log.borrow().len(), 2, "待っている間は配らない");
+
+    player.resolve_click();
+    assert_eq!(player.step(at_ms(200)), StepOutcome::Delivered);
+    assert_eq!(player.step(at_ms(200)), StepOutcome::Idle);
+    assert_eq!(player.step(at_ms(500)), StepOutcome::Completed);
+    assert!(player.is_completed());
+    assert_eq!(player.step(at_ms(600)), StepOutcome::Completed);
+    assert_eq!(
+        logged_commands(&log),
+        vec![
+            CueCommand::Text("a".into()),
+            CueCommand::Text("b".into()),
+            CueCommand::Text("c".into()),
+        ]
+    );
+}
+
+/// 完了の後の置き直しは、起点を動かさず、受け口へも知らせない。
+#[test]
+fn reanchor_after_completion_is_ignored() {
+    struct NoticeLog(Rc<RefCell<Vec<OriginNotice>>>);
+    impl CueSink for NoticeLog {
+        fn emit(&mut self, _cue: TalkCue) {}
+        fn origin_set(&mut self, notice: OriginNotice) {
+            self.0.borrow_mut().push(notice);
+        }
+    }
+
+    let sheet = sheet_at_zero(vec![text(ms(0), "a", ms(100))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
+    let notices = Rc::new(RefCell::new(Vec::new()));
+    player.register_sink(Box::new(NoticeLog(notices.clone())));
+    player.tick(at_ms(100));
+    assert!(player.is_completed());
+
+    assert_eq!(
+        player.reanchor(at_ms(200), at_ms(200), TimeSpan::ZERO),
+        None
+    );
+    assert_eq!(
+        player.shift_origin(at_ms(200), TimeDelta::from_ticks(10_000)),
+        None
+    );
+    assert_eq!(player.origin(), TimePoint::ZERO);
+    assert_eq!(
+        *notices.borrow(),
+        vec![OriginNotice::first(TimePoint::ZERO)],
+        "登録の時の最初の起点だけが届く"
     );
 }

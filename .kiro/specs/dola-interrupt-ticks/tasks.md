@@ -539,7 +539,7 @@
   - _Dispatch: judgment — 取り出しと置き直しの順の保証を新しく組む_
   - _Requirements: 4.4, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10, 11.12, 13.1, 13.3, 13.4, 13.5, 13.6_
 
-- [ ] 8.3 (P) 再生機と受け口に、起点の知らせと、時刻に依らない解く口を入れる
+- [x] 8.3 (P) 再生機と受け口に、起点の知らせと、時刻に依らない解く口を入れる
   - 1 件ずつ進める口と、届いた分の全部を進める口を置き、発火時刻と台本の時刻を付けた合図を全部の受け口へ登録順に配る
   - 受け口の登録の時に、最初の起点の知らせと先渡しを、その受け口へ、どの合図よりも前に渡す。置き直しの口は、時刻の表の知らせを全部の受け口へ配って返す。完了の後と起点が変わらない時は何もしない。受け口に、既定が何もしない起点の知らせの口を足す
   - 区切りを解く口から時刻を外し、解いた直後に完了を確かめる処理を消す（記録に書く事として報告に挙げる）。解く口だけで完了を期待していたテストを、解く → 刻むの形へ直し、変える前後の期待を報告に挙げる
@@ -822,3 +822,4 @@
 - 6.5: 例 `emo-present` の `state.rs:87` の説明「（秒）」と `emo-present.rs:179` の `{CYCLE_INTERVAL} 秒周期`（文字の形で 2.5000000 と出る）は 12.2 で直す。
 - 8.1: `crates/dola/tests/runtime/facade_test/update_flow.rs:37` のコメント「pause_start 時点の値」は古い（12.2 で「止めた時刻の値」に直す）。
 - 8.2: `CuePlayer` に仮の欄 `last_tick: TimePoint` があり `settle_completion_after_resolve` が使う。8.3 はこの欄と `settle_completion_after_resolve` を必ず消す（解く口は時刻に依らない）。8.3 に残る物: `step`／`StepOutcome`、再生機の `reanchor`／`shift_origin`／`origin`、`CueSink::origin_set`、登録の時の最初の起点の知らせ、完了の後の置き直しの無視。`crates/dola/src/runtime/facade.rs:285,293` の「`TimedSchedule::tick()`／`ready()` と対称」と `tests/cue/runtime_test_*` の「冪等再 tick」は古い言い方。
+- 8.3: 新しい再生機の結合テスト 4 本の入口は `crates/dola/tests/cue/runtime_test.rs`（`tests/cue.rs` ではない）。「冪等再 tick」の古い言い方が `runtime_test_broadcast_tests.rs:151`・`runtime_test_choice_delivery_tests.rs:92,112` に残る（12.2）。
