@@ -908,3 +908,21 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 - `windows` 0.62.2 の `src/Windows/Win32/System/WindowsProgramming/mod.rs`（`QueryUnbiasedInterruptTimePrecise`）。
 - `doc/ideas/novel-redesign-2026-11-20/`（`00-architecture.md` 4.1〜4.3・`01-playback-control.md` 5.2〜5.9・`02-parallel.md` 6.3〜6.12・`04-sound.md` 5.4・`07-timed-values.md` 5.3〜5.9・`91-validation-seams.md`・`92-validation-code.md`）。
 - `.kiro/specs/instant-to-interrupt-ticks/brief.md`・`.kiro/specs/seriko-talk-clock-fidelity/brief.md`。
+
+## 15. 設計の検証の後に確かめた事
+
+11 章と 13.6 で「確かめていない」と書いた事を、Microsoft Learn の説明で確かめた。
+
+| 事 | 説明の字面 | 出どころ |
+|---|---|---|
+| `QueryUnbiasedInterruptTimePrecise` の単位 | 100 ナノ秒 | `learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryunbiasedinterrupttimeprecise` |
+| 眠りの間 | 数えない（"does not include time the system spends in sleep or hibernation"） | 同上 |
+| 0 の時点 | システムの起動（"begins at zero when the system starts"）。プロセスごとの起点は無い | `…/nf-realtimeapiset-queryunbiasedinterrupttime` |
+| 失敗の道 | 無い（戻り値は無し） | 1 行目と同じ |
+| 対応する一番古い Windows | Windows 10・Windows Server 2016 | 同上 |
+| `GetTickCount64` と眠り | 眠りの間も数える（"To retrieve elapsed time that accounts for sleep or hibernation, use the GetTickCount or GetTickCount64 function"）。分解能は 10〜16 ms | `learn.microsoft.com/en-us/windows/win32/sysinfo/interrupt-time`・`…/nf-sysinfoapi-gettickcount64` |
+| QPC と眠り | 眠りの間も数える（"including the time when the machine was in a sleep state"） | `learn.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps` |
+
+- だから 13.6 の表の「今（復帰した瞬間）」の列は、説明のとおりである（刻み・kanade・seriko も、文字の層の時計とフレームの時刻も、今は眠りの間を数えている）。
+- ARM64 での有無は、説明に書かれていない。`windows` 0.62.2 の束縛には在る（0 章）。ARM64 の実機では確かめていない。
+- crates.io に `dola-time` の名前の crate は、検索に出ない（`cargo search dola-time` が 0 件。同じ検索で `dola` は出る）。名前が空いている事の確かめは、初回の公開の時にもう 1 度行う。
