@@ -12,6 +12,7 @@ mod easing;
 mod error;
 pub mod runtime;
 mod storyboard;
+pub mod time;
 mod transition;
 mod validate;
 mod value;
@@ -29,6 +30,11 @@ pub use storyboard::{
     BetweenKeyframes, InterruptionPolicy, KeyframeNames, KeyframeRef, LoopOffset, LoopOffsetRange,
     Storyboard, StoryboardEntry,
 };
+// shortcut: time::clock has no `now` yet; name `time::now` here and drop the allow once it exists.
+#[cfg(windows)]
+#[allow(unused_imports)]
+pub use time::clock::*;
+pub use time::{TimeDelta, TimePoint, TimeScale, TimeSpan};
 #[cfg(feature = "toml")]
 pub use toml::{de::Error as TomlReadError, ser::Error as TomlWriteError};
 pub use transition::{TransitionDef, TransitionRef, TransitionValue};

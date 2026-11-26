@@ -14,7 +14,7 @@
 
 - [ ] 1. 段 0: dola の時刻のモジュールを足す（古い時計と `f64` の口は残す）
 
-- [ ] 1.1 時刻・長さ・符号つきの差の型と、作者の単位からの変え方を置く
+- [x] 1.1 時刻・長さ・符号つきの差の型と、作者の単位からの変え方を置く
   - 時刻のモジュールの子の宣言の全部（後のタスクの分も）と、dola の頭での再公開（`TimePoint`・`TimeSpan`・`TimeDelta`・`TimeScale`、`now` は Windows の時だけ）を、この 1 度で書く
   - 3 つの型・張り付く演算子・`checked_*`・`span_since`・`to_span`・`try_from_ticks`・`to_std` を、設計の表のとおりに置く。意味の通らない足し引きは演算子を置かずにコンパイルで止める
   - ミリ秒・秒の実数・`std::time::Duration` からの変え方と `TimeRangeError` を置き、丸めの決まり（最も近い 100ns・ちょうど中間は 0 から遠い側）をファイルの頭に 1 度だけ書く。秒の実数を返す口は置かない
@@ -791,3 +791,7 @@
   - _Depends: 12.1, 12.2_
   - _Dispatch: standard — 検索の結果を確かめて記録を組み立てる_
   - _Requirements: 2.6, 7.9, 8.4, 9.6, 12.9, 15.4, 15.5, 17.2, 18.1, 18.2_
+
+## Implementation Notes
+
+- 1.1: `now` の再公開は `time/mod.rs` と `lib.rs` の `#[cfg(windows)] #[allow(unused_imports)] pub use …clock::*;`（`shortcut:` のコメントつき）の仮の形。1.4 が `now` を置く時に、2 か所の `allow` とコメントを消し、`pub use clock::now;`／`pub use time::now;` の名前の形へ替える。`serde_ticks`・`serde_secs` は `pub(crate) mod`。秒の丸めは「`secs × 1e7` の f64 の積を round（中間は 0 から遠い側）」。
