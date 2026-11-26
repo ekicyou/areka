@@ -31,7 +31,6 @@ pub(crate) struct StoryboardInstance {
     pub time_scale: TimeScale,
     /// 止めていた長さの和（符号つき）
     pub pause_accumulated: TimeDelta,
-    pub pause_start: Option<TimePoint>,
     /// 1=1回, n≥2=n回, -1=無限ループ
     pub loop_count: i32,
     /// 完了済み周回数
@@ -55,7 +54,10 @@ pub(crate) struct StoryboardInstance {
 impl StoryboardInstance {
     /// 周回の始まりからの経った長さ。止まっていれば止めた時刻で求める。
     pub fn elapsed(&self, now: TimePoint) -> TimeDelta {
-        let now = self.pause_start.unwrap_or(now);
+        let now = match self.state {
+            InstanceState::Paused { since } => since,
+            _ => now,
+        };
         now - self.loop_start - self.pause_accumulated
     }
 
@@ -138,34 +140,34 @@ impl InstanceManager {
         }
     }
 
-    /// Pause: Paused 遷移と pause_start の記録を 1 段で行う（Paused なら pause_start は必ずある）。
+    /// Pause: Playing のときだけ、止めた時刻を持つ Paused にする。
     pub fn pause(&mut self, group_id: u64, now: TimePoint) -> Result<(), RuntimeError> {
-        self.transition(group_id, InstanceState::Paused)?;
-        self.get_mut(group_id)?.pause_start = Some(now);
+        let instance = self.get_mut(group_id)?;
+        if instance.state != InstanceState::Playing {
+            return Err(RuntimeError::InvalidGroupId(group_id));
+        }
+        instance.state = InstanceState::Paused { since: now };
         Ok(())
     }
 
-    /// Resume: pause_accumulated 加算 + Playing 遷移。戻した後の再生の全体の終わりの時刻を返す。
+    /// Resume: 止めていた長さ（符号つき）を足して Playing にする。
+    /// 戻した後の再生の全体の終わりの時刻を、終わりの期限があればそれとの早い方で返す。
     pub fn resume(
         &mut self,
         group_id: u64,
         now: TimePoint,
     ) -> Result<Option<TimePoint>, RuntimeError> {
         let instance = self.get_mut(group_id)?;
-
-        match instance.state.try_transition(InstanceState::Playing) {
-            Ok(new_state) => {
-                // Paused からの遷移なので pause_start は pause が入れてある。
-                // now < pause_start（非単調な時刻入力）だと止めていた長さが負になり、
-                // 周回の終わりが前へ動く（早期終了の誘発）。呼び出し側の時刻の単調性は検証しない
-                // （`tests.rs` の `resume_with_time_before_pause_start_shrinks_end_time`）。
-                let pause_start = instance.pause_start.take().unwrap_or(now);
-                instance.pause_accumulated = instance.pause_accumulated + (now - pause_start);
-                instance.state = new_state;
-                Ok(instance.planned_end())
-            }
-            Err(_) => Err(RuntimeError::InvalidGroupId(group_id)),
-        }
+        let InstanceState::Paused { since } = instance.state else {
+            return Err(RuntimeError::InvalidGroupId(group_id));
+        };
+        // now < since でも同じ式で、終わりはその差だけ前へ動く（時刻の単調性は検証しない）
+        instance.pause_accumulated = instance.pause_accumulated + (now - since);
+        instance.state = InstanceState::Playing;
+        Ok(match (instance.planned_end(), instance.finish_deadline) {
+            (Some(end), Some(deadline)) => Some(end.min(deadline)),
+            (end, deadline) => end.or(deadline),
+        })
     }
 
     /// Finish deadline 設定。

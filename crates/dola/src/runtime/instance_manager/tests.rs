@@ -11,7 +11,6 @@ fn create_test_instance(mgr: &mut InstanceManager, group_id: u64) {
             interruption_policy: InterruptionPolicy::Conclude,
             time_scale: TimeScale::ONE,
             pause_accumulated: TimeDelta::ZERO,
-            pause_start: None,
             loop_count: 1,
             loops_completed: 0,
             finish_deadline: None,
@@ -34,21 +33,14 @@ fn transition_created_to_playing() {
 }
 
 #[test]
-fn transition_playing_to_paused() {
+fn transition_cannot_pause_playing_instance() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     mgr.transition(1, InstanceState::Playing).unwrap();
-    assert!(mgr.transition(1, InstanceState::Paused).is_ok());
-    assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
-}
-
-#[test]
-fn transition_paused_to_playing() {
-    let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1);
-    mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.transition(1, InstanceState::Paused).unwrap();
-    assert!(mgr.transition(1, InstanceState::Playing).is_ok());
+    assert_eq!(
+        mgr.transition(1, InstanceState::Paused { since: at_ms(0) }),
+        Err(RuntimeError::InvalidGroupId(1))
+    );
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 
@@ -66,7 +58,10 @@ fn invalid_transition_rejected() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     // Created → Paused は不正
-    assert!(mgr.transition(1, InstanceState::Paused).is_err());
+    assert!(
+        mgr.transition(1, InstanceState::Paused { since: at_ms(0) })
+            .is_err()
+    );
 }
 
 #[test]
@@ -82,14 +77,15 @@ fn pause_and_resume() {
     mgr.transition(1, InstanceState::Playing).unwrap();
 
     mgr.pause(1, at_ms(1000)).unwrap();
-    assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
-    assert_eq!(mgr.get(1).unwrap().pause_start, Some(at_ms(1000)));
+    assert_eq!(
+        mgr.get(1).unwrap().state,
+        InstanceState::Paused { since: at_ms(1000) }
+    );
 
     // 2秒間 pause
     let new_end = mgr.resume(1, at_ms(3000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(2000));
-    assert!(mgr.get(1).unwrap().pause_start.is_none());
     // 終わりの予定 = 2.0 + 2.0(pause)
     assert_eq!(new_end, Some(at_ms(4000)));
 }
@@ -116,7 +112,10 @@ fn multiple_independent_instances() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
     mgr.pause(1, at_ms(0)).unwrap();
-    assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
+    assert_eq!(
+        mgr.get(1).unwrap().state,
+        InstanceState::Paused { since: at_ms(0) }
+    );
     assert_eq!(mgr.get(2).unwrap().state, InstanceState::Playing);
 }
 
@@ -158,7 +157,9 @@ fn invalid_transition_on_existing_instance_reports_invalid_group_id() {
     // エラー型が ID 不在と遷移不正を区別しないので、不正遷移も InvalidGroupId(gid) になる
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
-    let err = mgr.transition(1, InstanceState::Paused).unwrap_err();
+    let err = mgr
+        .transition(1, InstanceState::Paused { since: at_ms(0) })
+        .unwrap_err();
     assert_eq!(err, RuntimeError::InvalidGroupId(1));
     // 失敗してもインスタンスと状態は保持される
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Created);
@@ -226,16 +227,16 @@ fn check_finish_deadlines_ignores_instances_without_deadline() {
 // 数値境界（非単調時刻入力・最大の時刻の deadline）
 // =========================================================================
 
-/// now < pause_start の resume は止めていた長さが負となり
+/// 止めた時刻より前の resume は止めていた長さが負となり
 /// pause_accumulated と終わりの予定が過去方向へ補正される（時刻の単調性は検証しない）
 #[test]
-fn resume_with_time_before_pause_start_shrinks_end_time() {
+fn resume_with_time_before_pause_time_shrinks_end_time() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1); // 周回の長さ 2 秒
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.pause(1, at_ms(5000)).unwrap();
 
-    // pause_start より過去の時刻で resume すると止めていた長さ = -2.0 秒
+    // 止めた時刻より過去の時刻で resume すると止めていた長さ = -2.0 秒
     let new_end = mgr.resume(1, at_ms(3000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(-2000));
     assert_eq!(new_end, Some(at_ms(0))); // 2.0 + (-2.0)
@@ -281,4 +282,20 @@ fn transition_to_compressed_removes_instance() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(1, InstanceState::Compressed).unwrap();
     assert!(mgr.get(1).is_err());
+}
+
+#[test]
+fn transition_cannot_resume_paused_instance() {
+    let mut mgr = InstanceManager::new();
+    create_test_instance(&mut mgr, 1);
+    mgr.transition(1, InstanceState::Playing).unwrap();
+    mgr.pause(1, at_ms(1000)).unwrap();
+    assert_eq!(
+        mgr.transition(1, InstanceState::Playing),
+        Err(RuntimeError::InvalidGroupId(1))
+    );
+    assert_eq!(
+        mgr.get(1).unwrap().state,
+        InstanceState::Paused { since: at_ms(1000) }
+    );
 }

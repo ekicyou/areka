@@ -142,7 +142,6 @@ impl DolaRuntime {
             interruption_policy: compiled.interruption_policy,
             time_scale: compiled.time_scale,
             pause_accumulated: TimeDelta::ZERO,
-            pause_start: None,
             loop_count: compiled.loop_count,
             loops_completed: 0,
             finish_deadline: None,

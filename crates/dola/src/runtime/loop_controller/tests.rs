@@ -15,7 +15,6 @@ fn make_instance(loop_count: i32, lap: TimeSpan) -> StoryboardInstance {
         interruption_policy: InterruptionPolicy::Conclude,
         time_scale: TimeScale::ONE,
         pause_accumulated: TimeDelta::ZERO,
-        pause_start: None,
         loop_count,
         loops_completed: 0,
         finish_deadline: None,

@@ -94,7 +94,6 @@ fn make_instance(start_ms: i64) -> StoryboardInstance {
         interruption_policy: InterruptionPolicy::Conclude,
         time_scale: TimeScale::ONE,
         pause_accumulated: TimeDelta::ZERO,
-        pause_start: None,
         loop_count: 1,
         loops_completed: 0,
         finish_deadline: None,
@@ -174,11 +173,10 @@ fn pause_freezes_value() {
 
     let mut instances = BTreeMap::new();
     let mut inst = make_instance(0);
-    inst.state = InstanceState::Paused;
-    inst.pause_start = Some(at_ms(500));
+    inst.state = InstanceState::Paused { since: at_ms(500) };
     instances.insert(1, inst);
 
-    // Pause 中は current_time に依らず pause_start 時点の値（effective=0.5, progress=0.25）
+    // Pause 中は current_time に依らず止めた時刻の値（effective=0.5, progress=0.25）
     let val = mgr.evaluate("x", at_ms(10000), &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(25.0)));
 }
@@ -434,11 +432,10 @@ fn effective_time_playing_basic() {
 }
 
 #[test]
-fn effective_time_paused_frozen_at_pause_start() {
+fn effective_time_paused_frozen_at_pause_time() {
     let mut inst = make_instance(0);
-    inst.state = InstanceState::Paused;
-    inst.pause_start = Some(at_ms(3000));
-    // current_time に依らず pause_start 基準
+    inst.state = InstanceState::Paused { since: at_ms(3000) };
+    // current_time に依らず止めた時刻が基準
     assert_eq!(
         calculate_effective_time(at_ms(100_000), &inst),
         delta_ms(3000)

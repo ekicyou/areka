@@ -59,6 +59,116 @@ mod pause_resume_cycle {
             other => panic!("expected Float, got {other:?}"),
         }
     }
+
+    fn opacity(rt: &DolaRuntime) -> Option<f64> {
+        match rt.last_result().changes.first() {
+            Some((_, EvaluatedValue::Float(v))) => Some(*v),
+            None => None,
+            Some((_, other)) => panic!("expected Float, got {other:?}"),
+        }
+    }
+
+    fn assert_opacity(rt: &DolaRuntime, expected: f64) {
+        let v = opacity(rt).expect("expected a change");
+        assert!((v - expected).abs() < 1e-9, "expected {expected}, got {v}");
+    }
+
+    fn started(doc: DolaDocument, name: &str) -> (DolaRuntime, u64) {
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+        let StartResult { group_id, .. } = rt.start(name, at_ms(0)).unwrap();
+        (rt, group_id)
+    }
+
+    #[test]
+    fn value_right_after_resume_continues_from_pause_point() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.tick(at_ms(300));
+        assert_opacity(&rt, 0.3);
+        rt.pause(gid, at_ms(300)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(800)).unwrap(), Some(at_ms(1500)));
+        rt.tick(at_ms(800));
+        assert_eq!(opacity(&rt), None);
+        rt.tick(at_ms(900));
+        assert_opacity(&rt, 0.4);
+    }
+
+    #[test]
+    fn paused_value_is_the_same_at_any_time_and_does_not_end() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.tick(at_ms(300));
+        rt.pause(gid, at_ms(300)).unwrap();
+        for t in [400, 1000, 60_000] {
+            rt.tick(at_ms(t));
+            assert_eq!(opacity(&rt), None, "t={t}");
+        }
+        assert!(rt.has_instances());
+    }
+
+    #[test]
+    fn resume_before_pause_time_continues_from_pause_point() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.tick(at_ms(500));
+        assert_opacity(&rt, 0.5);
+        rt.pause(gid, at_ms(500)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(300)).unwrap(), Some(at_ms(800)));
+        rt.tick(at_ms(300));
+        assert_eq!(opacity(&rt), None);
+        rt.tick(at_ms(400));
+        assert_opacity(&rt, 0.6);
+    }
+
+    #[test]
+    fn finish_deadline_takes_effect_while_paused() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.tick(at_ms(300));
+        rt.pause(gid, at_ms(300)).unwrap();
+        rt.finish(gid, at_ms(600)).unwrap();
+        rt.tick(at_ms(599));
+        assert_eq!(opacity(&rt), None);
+        assert!(rt.has_instances());
+        rt.tick(at_ms(600));
+        assert_opacity(&rt, 1.0);
+        assert!(!rt.has_instances());
+    }
+
+    #[test]
+    fn resume_returns_deadline_when_it_is_earlier_than_end() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.pause(gid, at_ms(300)).unwrap();
+        rt.finish(gid, at_ms(900)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(500)).unwrap(), Some(at_ms(900)));
+    }
+
+    #[test]
+    fn resume_returns_end_when_it_is_earlier_than_deadline() {
+        let (mut rt, gid) = started(simple_float_doc("fade_in"), "fade_in");
+        rt.pause(gid, at_ms(300)).unwrap();
+        rt.finish(gid, at_ms(5000)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(500)).unwrap(), Some(at_ms(1200)));
+    }
+
+    #[test]
+    fn resume_of_endless_loop_returns_deadline() {
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("opacity", bounded(0.0, 0.0, 1.0))
+            .storyboard(
+                "pulse",
+                StoryboardBuilder::new()
+                    .loop_count(-1)
+                    .entry(linear("opacity", 0.0, 1.0, ms(1000)))
+                    .build(),
+            )
+            .build()
+            .unwrap();
+        let (mut rt, gid) = started(doc, "pulse");
+        rt.pause(gid, at_ms(300)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(500)).unwrap(), None);
+        rt.pause(gid, at_ms(600)).unwrap();
+        rt.finish(gid, at_ms(5000)).unwrap();
+        assert_eq!(rt.resume(gid, at_ms(700)).unwrap(), Some(at_ms(5000)));
+    }
 }
 
 // =========================================================================

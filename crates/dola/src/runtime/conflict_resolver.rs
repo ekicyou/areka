@@ -139,7 +139,10 @@ fn detect_overlaps(
         .filter(|gid| {
             !skip_group_ids.contains(gid)
                 && instances.get(gid).is_some_and(|inst| {
-                    inst.state == InstanceState::Playing || inst.state == InstanceState::Paused
+                    matches!(
+                        inst.state,
+                        InstanceState::Playing | InstanceState::Paused { .. }
+                    )
                 })
         })
         .collect()

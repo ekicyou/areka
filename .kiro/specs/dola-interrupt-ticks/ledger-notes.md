@@ -286,3 +286,10 @@
 ## 7.2
 
 - 全体テストの 1 回目（`tools/test-all.ps1 -Format`、コミット f022cab6c、排他テストの机を取って 1 回）: 23 段すべて緑（x64 workspace tests 661 秒・dola toml feature tests・dola non-windows check を含む）。整形の差分は出なかった。
+
+## 8.1（後半）
+
+- 消した欄と道: `StoryboardInstance.pause_start`（止めた時刻は `InstanceState::Paused { since }` が持つ）・`try_transition` の Playing → Paused と Paused → Playing（止めるのは `pause`、戻すのは `resume` だけ）・`resume` の `pause_start.take().unwrap_or(now)` の防御とその説明。
+- 置き換えたテスト: `instance_manager::tests::transition_playing_to_paused` → `transition_cannot_pause_playing_instance`（前は Ok、後は `Err`）・`transition_paused_to_playing` → `transition_cannot_resume_paused_instance`（同）。改名（期待は同じ）: `resume_with_time_before_pause_start_shrinks_end_time` → `resume_with_time_before_pause_time_shrinks_end_time`・`effective_time_paused_frozen_at_pause_start` → `effective_time_paused_frozen_at_pause_time`。`try_transition_table` の Playing → Paused・Paused → Playing を true → false。
+- 振る舞いの変化: 終わりの期限を置いた後の `resume` の戻り値（前は `planned_end()` だけ、後は期限との早い方。終わりが決まらなければ期限）。
+- 足したテスト（`tests/runtime/facade_test/update_flow.rs` の `pause_resume_cycle`）: `value_right_after_resume_continues_from_pause_point`・`paused_value_is_the_same_at_any_time_and_does_not_end`・`resume_before_pause_time_continues_from_pause_point`・`finish_deadline_takes_effect_while_paused`・`resume_returns_deadline_when_it_is_earlier_than_end`・`resume_returns_end_when_it_is_earlier_than_deadline`・`resume_of_endless_loop_returns_deadline`。
