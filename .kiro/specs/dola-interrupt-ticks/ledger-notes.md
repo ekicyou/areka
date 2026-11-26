@@ -278,3 +278,7 @@
 ## 6.6
 
 - 外したテスト・分かれ道・ログ・変わった期待は無い（先進坑の `q7-vertical/src/old_side.rs` の `SETTLED` → `TimeSpan::from_millis(100_000)`、合図は `TalkCue::scheduled`）。先進坑のワークスペースで `cargo check` が通る。
+
+## 6.7
+
+- 段 5 の締め: `cargo test -p areka` は全部緑（lib 1263 ほか）、`cargo build -p areka --examples` 可、`cargo build --workspace` 可（`pilot` の manifest の警告 2 件はこの spec の前から在る）。

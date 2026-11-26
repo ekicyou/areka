@@ -497,7 +497,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.11_
 
-- [ ] 6.7 段 5 を締める
+- [x] 6.7 段 5 を締める
   - `cargo test -p areka` が緑で、本体の例が組め、`cargo build --workspace` が通る
   - _Dispatch: mechanical — 確かめを回すだけ_
   - _Requirements: 7.1, 7.7_
