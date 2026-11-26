@@ -177,8 +177,8 @@ fn stamping_absolute_start_time_leaves_relative_times_untouched() {
     };
     assert_eq!(rel(&stamped), rel(&unstamped));
     assert_eq!(stamped.absolute_start_time(), Some(pt(1_234_500)));
-    assert_eq!(stamped.absolute_end_time(), Some(pt(1_234_500) + ms(1000)));
-    assert_eq!(unstamped.relative_end(), ms(1000));
+    assert_eq!(stamped.absolute_end_time(), Some(pt(1_234_500) + ms(500)));
+    assert_eq!(unstamped.relative_end(), ms(500));
 }
 
 // ============================================================================

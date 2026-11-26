@@ -178,7 +178,7 @@
   - _Dispatch: mechanical — 期待は設計が与える_
   - _Requirements: 5.5, 5.6, 5.8, 9.1, 9.2, 9.3, 9.6_
 
-- [ ] 2.14 dola の前半を締める
+- [x] 2.14 dola の前半を締める
   - `cargo test -p dola` と `cargo test -p dola --features toml` が緑で、`cargo check -p dola --features toml --target x86_64-unknown-linux-gnu` が通る
   - dola の公開の口に、秒の実数を返す口が残っていない事を、検索で確かめる（締めの全体の確かめは 12.3）
   - _Dispatch: mechanical — 確かめを回すだけ_
