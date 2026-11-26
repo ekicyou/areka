@@ -15,6 +15,7 @@
 //!
 //! 「違う画素」の述語は、同じ台本を 2 度撮って 1 バイトも違わないこと（較正）を先に確かめる。
 
+use dola::{TimeSpan, time::testing::ms};
 use std::cell::RefCell;
 
 use areka_parsers::balloon::parse_str;
@@ -49,7 +50,7 @@ const PITCH: f32 = 30.0;
 /// 確かめる拡大率。
 const SCALES: [f32; 3] = [1.0, 1.25, 1.5];
 /// 全部の字が見えている時刻。
-const LATE: f64 = 100.0;
+const LATE: TimeSpan = ms(100000);
 /// インクとみなす α の下限（`decoration_readback_test` と同じ二値化）。
 const INK_ALPHA_MIN: u8 = 128;
 
@@ -206,7 +207,7 @@ fn with_slot<R>(f: impl FnOnce(&mut World, (Entity, Entity)) -> R) -> R {
 
 fn apply(rt: &mut TextLayerRuntime, script: &[CueCommand]) {
     for c in script {
-        rt.apply_cue(&cue("0", 0.0, c.clone()));
+        rt.apply_cue(&cue("0", ms(0), c.clone()));
     }
 }
 
@@ -216,13 +217,13 @@ fn present(rt: &mut TextLayerRuntime, world: &mut World) {
 
 /// 台本を時刻の順に並べる（前の台詞を出し終えてから次の台詞が出始める＝最下行は最後に
 /// 1 字ずつ出る）。返り値は (cue 列, 最後の字が出る時刻)。
-fn timed(script: &[CueCommand]) -> (Vec<TalkCue>, f64) {
-    let mut at = 0.0;
+fn timed(script: &[CueCommand]) -> (Vec<TalkCue>, TimeSpan) {
+    let mut at = TimeSpan::ZERO;
     let cues = script
         .iter()
         .map(|c| {
             let c = cue("0", at, c.clone());
-            at += c.duration;
+            at = at + c.duration;
             c
         })
         .collect();
@@ -236,12 +237,12 @@ fn shoot_balloon(image: (u32, u32), k: f32, script: &[CueCommand]) -> Shot {
 
 /// 定義 `descript` の普通のバルーンへ台本を流して 1 フレーム提示し、面を読み戻す。
 fn shoot_described(descript: &str, image: (u32, u32), k: f32, script: &[CueCommand]) -> Shot {
-    let cues: Vec<TalkCue> = script.iter().map(|c| cue("0", 0.0, c.clone())).collect();
+    let cues: Vec<TalkCue> = script.iter().map(|c| cue("0", ms(0), c.clone())).collect();
     shoot_frames_described(descript, image, k, &cues, &[LATE])
 }
 
 /// 普通のバルーンへ cue 列を流し、時刻 `frames` の順にフレームを提示して、最後の面を読み戻す。
-fn shoot_frames(image: (u32, u32), k: f32, cues: &[TalkCue], frames: &[f64]) -> Shot {
+fn shoot_frames(image: (u32, u32), k: f32, cues: &[TalkCue], frames: &[TimeSpan]) -> Shot {
     shoot_frames_described(BALLOON, image, k, cues, frames)
 }
 
@@ -251,7 +252,7 @@ fn shoot_frames_described(
     image: (u32, u32),
     k: f32,
     cues: &[TalkCue],
-    frames: &[f64],
+    frames: &[TimeSpan],
 ) -> Shot {
     with_slot(|world, reserved| shoot_frames_in(world, reserved, descript, image, k, cues, frames))
 }
@@ -263,7 +264,7 @@ fn shoot_frames_in(
     image: (u32, u32),
     k: f32,
     cues: &[TalkCue],
-    frames: &[f64],
+    frames: &[TimeSpan],
 ) -> Shot {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -587,18 +588,29 @@ fn box_text_surfaces_paint_the_bottom_row_underline_inside_the_surface() {
 #[test]
 fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame() {
     /// 1 フレームの刻み（1 字の出る間隔と同じ）。
-    const STEP: f64 = 0.05;
+    const STEP: TimeSpan = ms(50);
     for k in [1.25, 1.5] {
         for image in [REAL, SHORT] {
             for mark in [Mark::Author, Mark::Anchor] {
                 let what = format!("k={k} 面 {image:?} {mark:?}");
                 let (cues, end) = timed(&bottom(mark));
-                let frames: Vec<f64> = (1..=(end / STEP).ceil() as usize + 2)
-                    .map(|i| i as f64 * STEP)
+                let frames: Vec<TimeSpan> = (1..=end
+                    .as_ticks()
+                    .unsigned_abs()
+                    .div_ceil(STEP.as_ticks().unsigned_abs())
+                    + 2)
+                    .map(|i| STEP.mul_div(i, 1))
                     .collect();
                 let whole = shoot_frames(image, k, &cues, &[LATE]);
                 // 較正: 最下行の途中の時刻の面は最後の面と違う（最下行が何フレームかに分けて出る）。
-                let midway = shoot_frames(image, k, &cues, &[end - STEP * 1.5]);
+                let midway = shoot_frames(
+                    image,
+                    k,
+                    &cues,
+                    &[end
+                        .checked_sub(STEP.mul_div(3, 2))
+                        .expect("最下行は 75 ms より長い")],
+                );
                 assert!(
                     midway != whole,
                     "{what}: 最下行が途中の時刻で出揃っている（前提）"

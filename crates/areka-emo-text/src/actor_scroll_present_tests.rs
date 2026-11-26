@@ -4,6 +4,7 @@
 //! 有無が変わった次の提示で矢印が合うこと、モデルを替えると置き場が替わり古い印の面が窓の子から
 //! 消えること、α < 0.5 の画素で当たらないこと。箱の足りない番号の埋め方は純粋な引き当てで見る。
 
+use dola::{TimeSpan, time::testing::ms};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -31,7 +32,7 @@ use crate::state::TextLayerConfig;
 /// 小さいバルーン（既定の 12px の字で 2〜3 行しか入らない）。
 const IMAGE: (u32, u32) = (120, 40);
 /// 全部の字が見えている時刻。
-const DONE: f64 = 100.0;
+const DONE: TimeSpan = ms(100000);
 
 /// 塗りつぶしの絵（乗算済み BGRA）。
 fn solid(w: u32, h: u32, alpha: u8) -> Arc<MarkerImage> {
@@ -77,11 +78,15 @@ fn runtime(slot: Entity, window: Entity, lines: usize) -> (TextLayerRuntime, Act
         ResolvedBalloonText::resolve(&geo_model(), IMAGE),
     );
     for i in 0..lines {
-        rt.apply_cue(&cue("0", i as f64, CueCommand::Text("あ".into())));
+        rt.apply_cue(&cue(
+            "0",
+            ms(1000 * i as u32),
+            CueCommand::Text("あ".into()),
+        ));
         if i + 1 < lines {
             rt.apply_cue(&cue(
                 "0",
-                i as f64 + 0.5,
+                ms(1000 * i as u32 + 500),
                 CueCommand::NewLine { ratio: 1.0 },
             ));
         }
@@ -115,9 +120,9 @@ fn arrows_follow_the_pushed_out_lines_on_the_next_present() {
     );
 
     for i in 1..8 {
-        let at = i as f64;
+        let at = ms(1000 * i as u32);
         rt.apply_cue(&cue("0", at, CueCommand::NewLine { ratio: 1.0 }));
-        rt.apply_cue(&cue("0", at + 0.5, CueCommand::Text("い".into())));
+        rt.apply_cue(&cue("0", at + ms(500), CueCommand::Text("い".into())));
     }
     present_frame(&mut rt, &mut world, DONE).expect("あふれの提示");
     assert_eq!(shown(&rt, &place), (true, false), "古い側に隠れた行");
@@ -340,7 +345,7 @@ fn marker_failure_keeps_the_box_in_the_shown_copy() {
     for i in 0..8 {
         rt.apply_cue(&cue(
             "0",
-            1.0 + i as f64,
+            ms(1000 * (1 + i as u32)),
             CueCommand::NewLine { ratio: 1.0 },
         ));
         rt.apply_cue(&text("0", "い"));
@@ -426,10 +431,10 @@ fn scrolling_back_matches_a_full_redraw_of_the_same_window() {
         ResolvedBalloonText::resolve(&default_balloon_model(), BALLOON),
     );
     for i in 0..15 {
-        let at = i as f64;
+        let at = ms(1000 * i as u32);
         rt.apply_cue(&cue("0", at, CueCommand::Text(format!("{}行目", i + 1))));
         if i + 1 < 15 {
-            rt.apply_cue(&cue("0", at + 0.5, CueCommand::NewLine { ratio: 1.0 }));
+            rt.apply_cue(&cue("0", at + ms(500), CueCommand::NewLine { ratio: 1.0 }));
         }
     }
     present_frame(&mut rt, &mut world, DONE).expect("自動の位置の提示");

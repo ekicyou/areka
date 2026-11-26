@@ -348,7 +348,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 4.7 (P) areka-emo-text の `src` のテスト（actor・viewbox）を直す
+- [x] 4.7 (P) areka-emo-text の `src` のテスト（actor・viewbox）を直す
   - 期待の値を型で書く
   - そのファイルが誤り 0 件である
   - _Boundary: areka-emo-text src のテスト（actor）_

@@ -15,6 +15,7 @@
 //! 読み戻しが同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use dola::{TimeSpan, time::testing::ms};
 
 use super::test_support::{balloon, choice, instant};
 use crate::place::PlaceKey;
@@ -331,7 +332,7 @@ use super::{ResolvedBalloonText, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
 
 /// 全部の文字が見えている時刻。
-const LATE: f64 = 10.0;
+const LATE: TimeSpan = ms(10000);
 
 /// 済んだ行の通しの檻。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
 ///
@@ -408,8 +409,8 @@ fn settled_balloon_row_is_unpressable_and_unlit_on_the_gpu() {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
-    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &[]));
+    rt.apply_cue(&choice_cue("0", ms(0), "OnYes", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", ms(200), "OnNo", "いいえ", &[]));
     let image = (120u32, 60u32);
     rt.register_actor(
         actor.clone(),
@@ -431,8 +432,8 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
     rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&select("0", "b"));
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
-    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &[]));
+    rt.apply_cue(&choice_cue("0", ms(0), "OnYes", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", ms(200), "OnNo", "いいえ", &[]));
     let shell = TextSlotBinding::new(slot, window, 1.0, SHELL_IMAGE, SHELL_IMAGE);
     rt.sync_box_bindings(&mut world, &[(actor.clone(), Some((shell, 0)))]);
 

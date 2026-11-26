@@ -9,6 +9,7 @@
 //! - 作れない文字の面の覚えは、WUC の資源の作り直しと装置の作り直しで試し直す。
 //! - 一辺が上限を越える矢印の絵は描かず、`error!` は 10 フレームで 1 回のまま。
 
+use dola::{TimeSpan, time::testing::ms};
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
@@ -70,7 +71,7 @@ fn runtime(
 fn large_validrect_surface_does_not_exceed_the_image() {
     let (mut world, _, _) = com_world();
     let actor = ActorKey::from("0");
-    let cues = [cue("0", 0.0, CueCommand::Text("あ".into()))];
+    let cues = [cue("0", ms(0), CueCommand::Text("あ".into()))];
     // x だけ・y だけ・両方（片方の切りを外すと、その軸の case が落ちる）。
     let cases = [
         ("x", ValidRect::new(None, None, None, Some(5000))),
@@ -80,7 +81,7 @@ fn large_validrect_surface_does_not_exceed_the_image() {
     for k in [1.0, 1.5] {
         for (axis, vr) in &cases {
             let mut rt = runtime(&mut world, &cues, &model(*vr, None), IMAGE, k);
-            present_frame(&mut rt, &mut world, 1.0).expect("提示");
+            present_frame(&mut rt, &mut world, ms(1000)).expect("提示");
             let size = rt.surface(&actor).expect("面").size();
             assert_eq!(
                 size,
@@ -99,7 +100,7 @@ fn large_validrect_surface_does_not_exceed_the_image() {
 fn over_limit_surface_logs_once_in_ten_frames() {
     let (mut world, _, _) = com_world();
     let actor = ActorKey::from("0");
-    let cues = [cue("0", 0.0, CueCommand::Text("あ".into()))];
+    let cues = [cue("0", ms(0), CueCommand::Text("あ".into()))];
     // 一辺が x だけ越える・y だけ越える・一辺は内で面積だけ越える（左と上へ大きく負の validrect）。
     let cases = [
         ("x", ValidRect::new(None, None, Some(-100_000), None)),
@@ -110,7 +111,7 @@ fn over_limit_surface_logs_once_in_ten_frames() {
         let mut rt = runtime(&mut world, &cues, &model(*vr, None), IMAGE, 1.0);
         let (results, events) = capture(|| {
             (0..10)
-                .map(|i| present_frame(&mut rt, &mut world, 1.0 + f64::from(i) * 0.1))
+                .map(|i| present_frame(&mut rt, &mut world, ms(1000 + 100 * i)))
                 .collect::<Vec<_>>()
         });
         assert_eq!(
@@ -139,20 +140,20 @@ fn over_limit_surface_logs_once_in_ten_frames() {
 fn text_appears_once_resources_arrive_after_a_frame_without_them() {
     let (mut world, _, _) = com_world();
     let actor = ActorKey::from("0");
-    let cues = [cue("0", 0.0, CueCommand::Text("あいう".into()))];
+    let cues = [cue("0", ms(0), CueCommand::Text("あいう".into()))];
     let vr = ValidRect::new(None, None, None, None);
     let mut rt = runtime(&mut world, &cues, &model(vr, None), IMAGE, 1.0);
     let core = world
         .remove_resource::<GraphicsCore>()
         .expect("GraphicsCore");
     assert!(
-        present_frame(&mut rt, &mut world, 1.0).is_err(),
+        present_frame(&mut rt, &mut world, ms(1000)).is_err(),
         "資源が無いフレームは作れない"
     );
     assert!(rt.surface(&actor).is_none());
     // 同じ装置を戻す（入力も WUC の資源も同じ）: 一時の失敗を覚えていなければ作れる。
     world.insert_resource(core);
-    present_frame(&mut rt, &mut world, 1.1).expect("資源が入ったフレーム");
+    present_frame(&mut rt, &mut world, ms(1100)).expect("資源が入ったフレーム");
     assert!(
         opaque_count(&read_back(&rt, &actor)) > 0,
         "同じ入力で字が出る"
@@ -168,19 +169,19 @@ fn rows_of_a_validrect_larger_than_the_surface_draw_the_same_pixels_after_scroll
     let vr = ValidRect::new(Some(0), Some(300), Some(0), Some(400));
     let m = model(vr, Some(40));
     let mut cues = Vec::new();
-    let mut t = 0.0;
+    let mut t = TimeSpan::ZERO;
     for i in 0..12 {
         let line = format!("行{i}あいう");
         cues.push(cue("0", t, CueCommand::Text(line.clone())));
-        t += line.chars().count() as f64 * REVEAL_INTERVAL;
+        t = t + REVEAL_INTERVAL.mul_div(line.chars().count() as u64, 1);
         cues.push(cue("0", t, CueCommand::NewLine { ratio: 1.0 }));
     }
     for k in [1.0, 2.0] {
         // 切る面（画像 200×100）と、切らない面（今までの形＝画像を validrect の大きさにした）。
         let mut clipped = runtime(&mut world, &cues, &m, IMAGE, k);
         let mut full = runtime(&mut world, &cues, &m, (400, 300), k);
-        let mut frame = 0.0;
-        while frame <= t + 0.1 {
+        let mut frame = TimeSpan::ZERO;
+        while frame <= t + ms(100) {
             present_frame(&mut clipped, &mut world, frame).expect("切る面");
             present_frame(&mut full, &mut world, frame).expect("切らない面");
             let (cw, ch) = clipped.surface(&actor).expect("面").size();
@@ -194,7 +195,7 @@ fn rows_of_a_validrect_larger_than_the_surface_draw_the_same_pixels_after_scroll
                     "k={k}・t={frame}: 行 {y} の画素が切らない面と違う"
                 );
             }
-            frame += 0.07;
+            frame = frame + ms(70);
         }
         let committed = clipped.surfaces[&place].executor.scroll_state().committed;
         assert!(committed != 0, "k={k}: スクロールが起きている");
@@ -209,14 +210,14 @@ fn rows_of_a_validrect_larger_than_the_surface_draw_the_same_pixels_after_scroll
 fn text_appears_after_reregistering_on_a_new_slot_with_the_same_size() {
     let (mut world, _, _) = com_world();
     let actor = ActorKey::from("0");
-    let cues = [cue("0", 0.0, CueCommand::Text("あいう".into()))];
+    let cues = [cue("0", ms(0), CueCommand::Text("あいう".into()))];
     let m = model(ValidRect::new(None, None, None, None), None);
     let mut rt = runtime(&mut world, &cues, &m, IMAGE, 1.0);
     // 古い差し込み口が消えた結線: 装着は失敗する（寸と位置は同じのまま）。
     let old_slot = rt.routing[&balloon("0")].slot;
     world.despawn(old_slot);
     assert!(
-        present_frame(&mut rt, &mut world, 1.0).is_err(),
+        present_frame(&mut rt, &mut world, ms(1000)).is_err(),
         "古い差し込み口"
     );
     // 新しい差し込み口で登録し直す（画像も validrect も同じ）: 次のフレームで字が出る。
@@ -226,7 +227,7 @@ fn text_appears_after_reregistering_on_a_new_slot_with_the_same_size() {
         TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE),
         ResolvedBalloonText::resolve(&m, IMAGE),
     );
-    present_frame(&mut rt, &mut world, 1.1).expect("新しい差し込み口");
+    present_frame(&mut rt, &mut world, ms(1100)).expect("新しい差し込み口");
     assert!(
         opaque_count(&read_back(&rt, &actor)) > 0,
         "同じ寸でも字が出る"
@@ -275,7 +276,11 @@ element1,balloon,big,{},{}
     rt.apply_cue(&emote("0", "0"));
     for i in 0..lines {
         rt.apply_cue(&text("0", "あ"));
-        rt.apply_cue(&cue("0", i as f64, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&cue(
+            "0",
+            ms(1000 * i as u32),
+            CueCommand::NewLine { ratio: 1.0 },
+        ));
     }
     (rt, place)
 }
@@ -314,18 +319,18 @@ fn marker_surface_appears_once_the_device_is_valid_again() {
     let (mut rt, place) = box_runtime(&mut world, "size,200,100", 40);
     sync(&mut rt, &mut world, SHELL);
     // まだあふれない時刻で文字の面だけを作る。
-    present_frame(&mut rt, &mut world, 0.0).expect("あふれる前の提示");
+    present_frame(&mut rt, &mut world, ms(0)).expect("あふれる前の提示");
     assert!(rt.surfaces[&place].markers.is_none(), "まだ矢印は出ない");
     let mut dead = GraphicsCore::new().expect("GraphicsCore");
     dead.invalidate();
     let live = swap_core(&mut world, dead);
-    let _ = present_frame(&mut rt, &mut world, 1000.5);
+    let _ = present_frame(&mut rt, &mut world, ms(1000500));
     assert!(
         rt.surfaces[&place].markers.is_none(),
         "無効な装置では作れない"
     );
     swap_core(&mut world, live);
-    present_frame(&mut rt, &mut world, 1001.0).expect("装置が戻った提示");
+    present_frame(&mut rt, &mut world, ms(1001000)).expect("装置が戻った提示");
     let markers = rt.surfaces[&place].markers.as_ref();
     assert_eq!(
         markers.map(|m| m.surface().size()),
@@ -346,10 +351,10 @@ validrect.right,-16800",
         40,
     );
     sync(&mut rt, &mut world, (20000, 200));
-    let count = |rt: &mut TextLayerRuntime, world: &mut bevy_ecs::prelude::World, t: f64| {
+    let count = |rt: &mut TextLayerRuntime, world: &mut bevy_ecs::prelude::World, t: TimeSpan| {
         let (_, events) = capture_alive(|| {
             for i in 0..10 {
-                let _ = present_frame(rt, world, t + f64::from(i) * 0.1);
+                let _ = present_frame(rt, world, t + ms(100 * i));
             }
         });
         events
@@ -357,16 +362,20 @@ validrect.right,-16800",
             .filter(|e| e.level == tracing::Level::ERROR && e.message() == MARKER_LIMIT_MESSAGE)
             .count()
     };
-    assert_eq!(count(&mut rt, &mut world, 1000.0), 1, "10 フレームで 1 回");
+    assert_eq!(
+        count(&mut rt, &mut world, ms(1_000_000)),
+        1,
+        "10 フレームで 1 回"
+    );
     assert!(rt.surfaces[&place].markers.is_none(), "印の面は作らない");
     assert_eq!(
-        count(&mut rt, &mut world, 1002.0),
+        count(&mut rt, &mut world, ms(1_002_000)),
         0,
         "同じ入力では試さない"
     );
     world.resource_mut::<WucGraphicsResource>().set_changed();
     assert_eq!(
-        count(&mut rt, &mut world, 1004.0),
+        count(&mut rt, &mut world, ms(1_004_000)),
         1,
         "WUC の資源が変わると試し直す"
     );
@@ -396,12 +405,12 @@ font.height,40",
                 ),
                 500,
             );
-            for (shell, t) in [(SHELL, 1000.0), ((400, 260), 1001.0)] {
+            for (shell, t) in [(SHELL, ms(1_000_000)), ((400, 260), ms(1_001_000))] {
                 let binding = TextSlotBinding::new(slot, window, k, physical(shell, k), shell);
                 rt.sync_box_bindings(&mut world, &[(actor.clone(), Some((binding, 0)))]);
                 // 矢印はあふれた次の提示で出る。
                 present_frame(&mut rt, &mut world, t).expect("提示");
-                present_frame(&mut rt, &mut world, t + 0.5).expect("次の提示");
+                present_frame(&mut rt, &mut world, t + ms(500)).expect("次の提示");
                 let overlap = (size.0.min(shell.0 - SITE.0), size.1.min(shell.1 - SITE.1));
                 let render = &rt.surfaces[&place];
                 assert_eq!(
@@ -425,13 +434,13 @@ font.height,40",
 #[test]
 fn remembered_surface_failure_is_retried_after_wuc_or_device_recreation() {
     let (mut world, _, _) = com_world();
-    let cues = [cue("0", 0.0, CueCommand::Text("あ".into()))];
+    let cues = [cue("0", ms(0), CueCommand::Text("あ".into()))];
     let vr = ValidRect::new(None, None, Some(-100_000), None);
     let mut rt = runtime(&mut world, &cues, &model(vr, None), IMAGE, 1.0);
     let mut count = |world: &mut bevy_ecs::prelude::World| {
         let (_, events) = capture_alive(|| {
             for i in 0..3 {
-                let _ = present_frame(&mut rt, world, 1.0 + f64::from(i) * 0.1);
+                let _ = present_frame(&mut rt, world, ms(1000 + 100 * i));
             }
         });
         events
@@ -469,7 +478,7 @@ fn over_limit_arrow_image_logs_once_in_ten_frames() {
     sync(&mut rt, &mut world, SHELL);
     let (results, events) = capture(|| {
         (0..10)
-            .map(|i| present_frame(&mut rt, &mut world, 1000.0 + f64::from(i) * 0.1))
+            .map(|i| present_frame(&mut rt, &mut world, ms(1_000_000 + 100 * i)))
             .collect::<Vec<_>>()
     });
     assert_eq!(

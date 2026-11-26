@@ -30,6 +30,7 @@ use areka_parsers::balloon::{
 };
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
+use dola::{TimeSpan, time::testing::ms};
 
 use super::test_support::{
     REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, physical, read_back,
@@ -68,13 +69,13 @@ fn kero_model() -> BalloonModel {
 
 /// 実機の台本（`boot.pasta:78-90`）と同じ形の cue 列——2 行に折り返す台詞 → `\n[150]`
 /// （＝`NewLine { ratio: 1.5 }`）→ 次の台詞。返り値は (cue 列, 最終時刻)。
-fn boot_cues(actor: &str) -> (Vec<TalkCue>, f64) {
+fn boot_cues(actor: &str) -> (Vec<TalkCue>, TimeSpan) {
     let first = "僕はエモ。クール系の可愛い娘。";
     let second = "イイジャン！‥‥ええと、";
-    let t1 = first.chars().count() as f64 * REVEAL_INTERVAL;
-    let t_end = t1 + second.chars().count() as f64 * REVEAL_INTERVAL;
+    let t1 = REVEAL_INTERVAL.mul_div(first.chars().count() as u64, 1);
+    let t_end = t1 + REVEAL_INTERVAL.mul_div(second.chars().count() as u64, 1);
     let cues = vec![
-        cue(actor, 0.0, CueCommand::Text(first.into())),
+        cue(actor, ms(0), CueCommand::Text(first.into())),
         cue(actor, t1, CueCommand::NewLine { ratio: 1.5 }),
         cue(actor, t1, CueCommand::Text(second.into())),
     ];
@@ -83,14 +84,20 @@ fn boot_cues(actor: &str) -> (Vec<TalkCue>, f64) {
 
 /// 実機の相方側 scope と同じ形の cue 列——**先頭が `NewLine { ratio: 1.5 }`**（トーク開始時の
 /// 空の scope へ落ちる `\n[150]`）で、以降は [`boot_cues`] と同じ台本。返り値は (cue 列, 最終時刻)。
-fn leading_gap_cues(actor: &str) -> (Vec<TalkCue>, f64) {
+fn leading_gap_cues(actor: &str) -> (Vec<TalkCue>, TimeSpan) {
     let (mut cues, t_end) = boot_cues(actor);
-    cues.insert(0, cue(actor, 0.0, CueCommand::NewLine { ratio: 1.5 }));
+    cues.insert(0, cue(actor, ms(0), CueCommand::NewLine { ratio: 1.5 }));
     (cues, t_end)
 }
 
 /// まっさらな runtime に同じ cue 列を積み、**その 1 フレームだけ**提示した面を返す（オラクル）。
-fn oracle_frame(world: &mut World, cues: &[TalkCue], actor: &ActorKey, t: f64, k: f32) -> Vec<u8> {
+fn oracle_frame(
+    world: &mut World,
+    cues: &[TalkCue],
+    actor: &ActorKey,
+    t: TimeSpan,
+    k: f32,
+) -> Vec<u8> {
     let (window, slot) = spawn_reserved_slot(world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     for c in cues {
@@ -106,13 +113,13 @@ fn oracle_frame(world: &mut World, cues: &[TalkCue], actor: &ActorKey, t: f64, k
 }
 
 /// 台本を 1 字ずつ通しで駆動し、各フレームを積み上げ側とオラクル側で突き合わせる。
-fn drive_scroll_lap(k: f32, frame_period: f64) {
+fn drive_scroll_lap(k: f32, frame_period: TimeSpan) {
     let (cues, t_end) = boot_cues("1");
     drive_lap(k, frame_period, &cues, t_end);
 }
 
 /// 与えた cue 列で 1 周を駆動し、最終フレームの供給面を返す（帯の追加判定は呼び手が持つ）。
-fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8> {
+fn drive_lap(k: f32, frame_period: TimeSpan, cues: &[TalkCue], t_end: TimeSpan) -> Vec<u8> {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("1");
 
@@ -130,10 +137,14 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
     // その帯は上端 0 から字の丈 × k ぶん。
     let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
-    let steps = ((t_end / frame_period).ceil() as usize) + 2;
+    let steps = t_end
+        .as_ticks()
+        .unsigned_abs()
+        .div_ceil(frame_period.as_ticks().unsigned_abs())
+        + 2;
     let mut checked = 0usize;
     for step in 1..=steps {
-        let t = step as f64 * frame_period;
+        let t = frame_period.mul_div(step, 1);
         present_frame(&mut rt, &mut world, t).expect("提示フレーム");
         let live = read_back(&rt, &actor);
         assert_eq!(
@@ -194,9 +205,9 @@ fn present_actor_scroll_keeps_first_visible_line_ink_k2() {
 /// 整数倍に乗らない位相を通す。
 #[test]
 fn present_actor_scroll_keeps_first_visible_line_ink_coarse_cadence() {
-    drive_scroll_lap(2.0, 0.078);
-    drive_scroll_lap(2.0, 0.19);
-    drive_scroll_lap(1.0, 0.078);
+    drive_scroll_lap(2.0, ms(78));
+    drive_scroll_lap(2.0, ms(190));
+    drive_scroll_lap(1.0, ms(78));
 }
 
 /// 冒頭に `\n[150]` が立つ台本を拡大率 1.0 で駆動する（症状 F の再現）。

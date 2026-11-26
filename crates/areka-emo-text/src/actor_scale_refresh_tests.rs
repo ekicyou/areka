@@ -3,6 +3,7 @@ use areka_parsers::balloon::{
 };
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
+use dola::time::testing::ms;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
@@ -206,14 +207,14 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
     // k=1.0・物理 120×60＝image 120×60（validrect 未指定＝画像全域ゆえ供給面も 120×60）。
     rt.register_actor_binding(
         actor.clone(),
         TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
         &geo_model(),
     );
-    present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("初回提示（装着）");
     assert!(
         rt.is_attached(&actor),
         "初回提示で ActorRender が生成される"
@@ -229,7 +230,7 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         .expect("actor 状態")
         .items()
         .len();
-    let visible_before = rt.state().visible_glyphs(&actor, 10.0);
+    let visible_before = rt.state().visible_glyphs(&actor, ms(10000));
     assert!(visible_before > 0, "リビール済みグリフがある前提");
 
     // ── k=1.0 → 2.0 の再追従（物理 240×120＝image 120×60・image 空間は不変） ──
@@ -254,13 +255,13 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         "確定行・グリフ列は保存される（R8.3）"
     );
     assert_eq!(
-        rt.state().visible_glyphs(&actor, 10.0),
+        rt.state().visible_glyphs(&actor, ms(10000)),
         visible_before,
         "リビール進行も保存される（R8.3）"
     );
 
     // ── 次フレーム: 新 k の物理寸で再生成され、保存済み状態から全再描画される ──
-    present_frame(&mut rt, &mut world, 10.0).expect("再追従後の提示");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("再追従後の提示");
     assert!(rt.is_attached(&actor), "次フレームで再装着される");
     assert_eq!(
         rt.surface(&actor).expect("供給面").size(),
@@ -584,7 +585,7 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
     rt.register_actor_binding(
         actor.clone(),
         TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
@@ -595,9 +596,9 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
             .get::<VisualGraphics>(slot)
             .and_then(|v| v.visual().cloned())
     };
-    present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("初回提示（装着）");
     let first = slot_visual(&world).expect("初回提示で差し込み口に見た目が付く");
-    present_frame(&mut rt, &mut world, 10.0).expect("印の立たない回");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("印の立たない回");
     assert_eq!(
         slot_visual(&world).as_ref(),
         Some(&first),
@@ -606,21 +607,21 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
 
     // 有効なまま作り直した装置（印が立つ）: 同じ回に新しい描き手を作る。
     insert_gpu(&mut world);
-    present_frame(&mut rt, &mut world, 10.0).expect("作り直した装置の回");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("作り直した装置の回");
     let second = slot_visual(&world).expect("作り直した装置で差し込み口に見た目が付く");
     assert_ne!(second, first, "古い装置の描き手を使い続けた");
 
     // 失った装置（無効にすると印が立つ）: 捨てて外し、無効な装置では作らない。
     world.resource_mut::<GraphicsCore>().invalidate();
     assert!(
-        present_frame(&mut rt, &mut world, 10.0).is_err(),
+        present_frame(&mut rt, &mut world, ms(10000)).is_err(),
         "無効な装置で描けたことにした"
     );
     assert!(!rt.is_attached(&actor), "無効な装置で描き手を残すか作った");
     assert!(slot_visual(&world).is_none(), "差し込み口から外していない");
 
     insert_gpu(&mut world);
-    present_frame(&mut rt, &mut world, 10.0).expect("立ち直りの回");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("立ち直りの回");
     assert!(rt.is_attached(&actor), "作り直した装置の回に作り直さない");
     let bytes = read_back(&rt, &actor);
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
@@ -636,7 +637,7 @@ fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
     let (window2, slot2) = spawn_reserved_slot(&mut world);
     let layer = |slot, window| {
         let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
         rt.register_actor_binding(
             ActorKey::from("0"),
             TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
@@ -651,16 +652,16 @@ fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
             .get::<VisualGraphics>(slot)
             .and_then(|v| v.visual().cloned())
     };
-    present_frame(&mut first, &mut world, 10.0).expect("先の層の初回提示");
-    present_frame(&mut later, &mut world, 10.0).expect("後の層の初回提示");
+    present_frame(&mut first, &mut world, ms(10000)).expect("先の層の初回提示");
+    present_frame(&mut later, &mut world, ms(10000)).expect("後の層の初回提示");
     let before = (
         visual(&world, slot).expect("先の層の見た目"),
         visual(&world, slot2).expect("後の層の見た目"),
     );
 
     insert_gpu(&mut world);
-    present_frame(&mut first, &mut world, 10.0).expect("先の層の作り直しの回");
-    present_frame(&mut later, &mut world, 10.0).expect("後の層の作り直しの回");
+    present_frame(&mut first, &mut world, ms(10000)).expect("先の層の作り直しの回");
+    present_frame(&mut later, &mut world, ms(10000)).expect("後の層の作り直しの回");
     let after = (
         visual(&world, slot).expect("先の層の新しい見た目"),
         visual(&world, slot2).expect("後の層の新しい見た目"),
@@ -678,8 +679,8 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
-    rt.apply_cue(&choice_cue("0", 0.0, "c1", "はい", &[]));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
+    rt.apply_cue(&choice_cue("0", ms(0), "c1", "はい", &[]));
     let wide = (9000, 60);
     rt.register_actor_binding(
         actor.clone(),
@@ -691,7 +692,7 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
             .get::<VisualGraphics>(slot)
             .and_then(|v| v.visual().cloned())
     };
-    present_frame(&mut rt, &mut world, 10.0).expect("k=1 の提示");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("k=1 の提示");
     assert!(slot_visual(&world).is_some(), "k=1 では字の絵が付く");
     assert!(
         !rt.choice_hit_rows(&actor).is_empty(),
@@ -702,7 +703,7 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
         TextSlotBinding::new(slot, window, 2.0, (18000, 120), wide),
         &geo_model(),
     ));
-    present_frame(&mut rt, &mut world, 10.0).expect("上限越えは Err にしない");
+    present_frame(&mut rt, &mut world, ms(10000)).expect("上限越えは Err にしない");
     assert!(!rt.is_attached(&actor), "上限を越える面は作らない");
     assert!(
         slot_visual(&world).is_none(),

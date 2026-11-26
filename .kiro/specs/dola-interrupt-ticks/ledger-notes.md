@@ -183,3 +183,9 @@
 ## 4.6
 
 - 外したテスト・分かれ道・ログは無い。変える前後の期待: `choice_anchor_tests::hit_area_stops_at_what_has_been_revealed`（覗く時刻 `shown − 0.5` 秒が shown=0 で負になり長さの型で書けないので、合図の時刻を 1000 ms へずらし `ms(1000*shown + 500)` で覗く。期待の表は同じ）。`state_reveal_tests::visible_glyphs_progress_with_duration_derived_interval`（±0.01 秒の余白の近似 → 境目のちょうどの値 `ms(1049)`→1・`ms(1050)`→2・`ms(1099)`→2・`ms(1100)`→3 と `reveal_times_of == [1000,1050,1100] ms`）。「全部が現れている時刻」（100.0・42.0・`f64::MAX` など）→ `TimeSpan::MAX`。ほかは秒 → `ms(..)`。
+
+## 4.7
+
+- 外したテスト・分かれ道・ログは無い。外した丸め: `actor_lookahead_tests.rs` の `Rig::play` の、実数の誤差を吸うためだけのミリ秒の格子への丸め（判定の時刻はちょうどの `[start_time, start_time + duration]`）。
+- 変える前後の期待: `actor_box_present_tests::unpresented_or_unrevealed_boxes_are_not_shown`（時刻 −1.0 で 1 字も見えない確かめ → 字を 1000 ms に置く場の fixture で `ms(999)` は空・`ms(1000)` ちょうどで載る）。ほかは秒 → `ms(..)`、手で組む合図は `TalkCue::scheduled(..)`、`{t:.2}` の表示は文字の形 `{t}`。
+- `cargo test -p areka-emo-text --lib` は 1198 passed。

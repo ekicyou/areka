@@ -7,6 +7,7 @@
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
+use dola::{TimeSpan, time::testing::ms};
 
 use super::box_sync_tests::fixture;
 use super::test_support::text;
@@ -24,16 +25,16 @@ const IMAGE: (u32, u32) = (120, 40);
 /// 行の数（あふれて古い行が押し出される）。
 const LINES: usize = 8;
 /// 全部の字が見えている時刻。
-const DONE: f64 = 100.0;
+const DONE: TimeSpan = ms(100000);
 
 /// 1 行に 1 つずつ選択肢を置き、改行で区切った台本（`LINES` 行）。
 fn choice_lines(actor: &str) -> Vec<TalkCue> {
     let mut cues = Vec::new();
     for i in 0..LINES {
-        let at = i as f64;
+        let at = ms(1000 * i as u32);
         cues.push(choice_cue(actor, at, &format!("On{i}"), "はい", &[]));
         if i + 1 < LINES {
-            cues.push(cue(actor, at + 0.5, CueCommand::NewLine { ratio: 1.0 }));
+            cues.push(cue(actor, at + ms(500), CueCommand::NewLine { ratio: 1.0 }));
         }
     }
     cues
@@ -175,8 +176,8 @@ fn new_visible_text_forgets_manual_in_the_same_frame() {
     present_frame(&mut rt, &mut world, DONE).expect("手動の位置の提示");
     assert!(is_manual(&rt, &place));
 
-    rt.apply_cue(&cue("0", DONE + 1.0, CueCommand::Text("あ".into())));
-    present_frame(&mut rt, &mut world, DONE + 10.0).expect("字が増えたフレーム");
+    rt.apply_cue(&cue("0", DONE + ms(1000), CueCommand::Text("あ".into())));
+    present_frame(&mut rt, &mut world, DONE + ms(10_000)).expect("字が増えたフレーム");
     assert!(!is_manual(&rt, &place), "見える字が増えたので手動を捨てた");
 }
 

@@ -8,6 +8,8 @@
 
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 use dola::cue::{CueCommand, CuePayload};
+use dola::time::testing::{at_ms, ms};
+use dola::{TimePoint, TimeSpan};
 
 use super::box_sync_tests::layout;
 use super::lookahead_tests::{
@@ -234,9 +236,9 @@ fn choice_highlight_and_click_ranges_come_from_the_judged_rows() {
 /// 2 本目の台本（初回起動トークと同じ分かれ方で、字が違う）。
 const NEXT_TALK: &str = "\\1イイジャン？\\_w[450]‥\\_w[150]‥\\_w[150]ええと。";
 /// 2 本目のトークの刻印（1 本目の後）。
-const NEXT_ANCHOR: f64 = ANCHOR + 50.0;
+const NEXT_ANCHOR: TimePoint = at_ms(150_000);
 /// 中断の後に「時刻だけ進めた」とする時刻（1 本目の台本がとうに出終わっている時刻）。
-const LATER: f64 = 10.0;
+const LATER: TimeSpan = ms(10_000);
 
 /// 初回起動トークを最初の「‥」が出終わったところで止める（以後 1 本目は `tick` しない）。
 /// 止めるまでの行の列は通しと同じで、時刻だけ進めても変わらず、2 本目の再生機を登録だけして
