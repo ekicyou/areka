@@ -221,7 +221,7 @@
   - _Dispatch: mechanical — 欄の型を設計が与える_
   - _Requirements: 4.6, 14.6_
 
-- [ ] 3.5 (P) areka-sakura の本体: 契約・作者の単位の縁・刻み・再生を型へ付け替える
+- [x] 3.5 (P) areka-sakura の本体: 契約・作者の単位の縁・刻み・再生を型へ付け替える
   - 契約の再公開に、合図の欄の型（時刻・長さ・符号つきの差）を足す。テストの組み立ては本番の道から再公開しない
   - 作者のミリ秒を長さへ変える 1 本の関数、`Instruction::Wait` のちょうどの変え方（1 ms 未満を切り捨てる継ぎを消す）、時間切れの指令の符号つきの差を置く
   - 刻みのメッセージを時刻の型にし、トークのスレッドは受けた時刻をそのまま再生機へ渡し、最初の刻みを台本の起点に押す。有限でない刻みを弾く分かれ道を消す（記録に書く事として報告に挙げる）。前半は、同じ時刻の刻みの守りを残す
@@ -808,3 +808,4 @@
 - 2.12: `resume` の戻り値は、まだ終わりの期限との早い方を取らない（8.1）。`tests/cue/sheet_test.rs:180` の `stamping_absolute_start_time_leaves_relative_times_untouched` は期待の値が誤り（相対の終わりは `ms(500)` が正しく、`ms(1000)` ではない。1aaf136a3 で入った）。2.14 の締めで直す。runtime のテストのうち `src/runtime/{instance_manager,loop_controller}/tests.rs` も 2.13 の持ち物。
 - 2.13: `LoopOffset::Scalar(v)` は 0 から v の幅で引く待ち（main からの意味・設計 964 行）。決まった値の待ちは `Range{min == max}` で書く。
 - 3.4: `crates/areka-talk/src/origin.rs` の `//!` の「`dola::time` の型と `std` のみ」は、origin.rs 自身が dola を使わないので「`std` のみ」が正しい。12.2 で拾う。
+- 3.5: areka-sakura のテストの組み立て `menu_horizon()` は `TimeSpan`（起点からの隔たり 350 ms）。`ChoiceWaiting.display_end` は `TimePoint` なので、3.8 は「起点の時刻 + `menu_horizon()`」と比べる。`compile_test_support.rs:64-65` の 2 件は 3.7 が直す。

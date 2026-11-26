@@ -104,3 +104,11 @@
 ## 3.4
 
 - 外したテスト・分かれ道・ログは無い。欄の名前を替えた: `ChoiceWaiting.display_end_elapsed_secs: f64` → `display_end: TimePoint`、`timeout_directive_secs: Option<f64>` → `timeout_directive: Option<TimeDelta>`。areka-talk は本番の依存に dola を引く（説明の「依存 0」を改めた）。
+
+## 3.5
+
+- 取り除いた分かれ道とログ: `drive.rs` の `on_tick` の有限でない刻みの守りと、その `error!`（"non-finite Tick ignored; schedule not advanced"）。外した継ぎ: `compile.rs` の Wait の 1 ms 未満の切り捨てと、`ms_to_secs`・`text_playback_ms`。
+- 足した分かれ道: `CuePlayer::from_sheet` が `Err` の時、`error!` を出してその台詞を中断として終える（起点を押した直後なので届かない）。
+- 振る舞いの変化: 1 ms 未満の `Instruction::Wait` が 100ns の格子でちょうど残る（今の parser は整数のミリ秒しか作らないので本番の値は変わらない）。`ChoiceTimeoutDirective::Secs(f64)` → `Delta(TimeDelta)`。
+- 変える前後の期待（`duration.rs` の中のテスト）: `char_count_times_nominal_ms_in_seconds` → `char_count_times_nominal_ms`（実数の秒 → `ms(250)`）。`empty_text_has_zero_duration`（0.0 → `TimeSpan::ZERO`）・`counts_clusters_not_bytes_or_utf16_units`（`ms(150)`）・`zwj_sequence_counts_as_one_cluster`（`ms(50)`）。足したテスト `unrepresentable_millis_stick_to_the_max`。
+- 3.8 で外す見込み: `drive_delivery_tests.rs::non_finite_tick_is_ignored_and_playback_survives`。`compile_sheet_tests.rs::compiled_start_times_are_finite_non_negative_non_decreasing` の有限の主張と `compile_choice_timeout_tests.rs` の `is_finite` は型で表せない。
