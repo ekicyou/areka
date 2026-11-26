@@ -50,7 +50,7 @@
   - _Dispatch: standard — 口は設計が与え、アダプタと上限の確かめの実装が残る_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 6.6, 6.7, 17.6_
 
-- [ ] 1.5 全体テストに、Windows でない target の検査の段を足す
+- [x] 1.5 全体テストに、Windows でない target の検査の段を足す
   - 段 `dola toml feature tests` の直後に、段 `dola non-windows check`（target の追加と、`cargo check -p dola --features toml --target x86_64-unknown-linux-gnu -j 4`）を足す
   - その段のコマンドを 1 度、手で回して通る。`cargo test -p dola` と `cargo test -p dola --features toml` も、古い口のテストごと緑である
   - _Dispatch: mechanical — 足す段の中身を設計が与える_
