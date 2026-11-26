@@ -18,6 +18,7 @@ pub use delta::TimeDelta;
 pub use point::TimePoint;
 pub use scale::TimeScale;
 pub use span::TimeSpan;
+pub use text::TimeParseError;
 
 // shortcut: clock.rs has no `now` yet; name `now` here and drop the allow once it exists.
 #[cfg(windows)]
