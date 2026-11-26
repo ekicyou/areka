@@ -8,16 +8,17 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use areka_emo_compose::{PartKey, PatternState};
 use areka_sakura::ActorKey;
+use dola::TimePoint;
 
 use super::part_calls::run_part_calls;
 use super::{ClockKey, Label, PartAnim, progress, unwrite};
 use crate::calls::CallOutcome;
 use crate::state::Slot;
 use crate::table::LoopAnimation;
-use crate::timeline::{FrameStatus, LoopRng, frame_at};
+use crate::timeline::{FrameStatus, LoopRng, elapsed_since, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
-/// `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を返す（無ければ `at_ms` を見え始めの時刻と
+/// `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を返す（無ければ `at` を見え始めの時刻と
 /// して構える。呼び手は構えてある部品を先に外す）。3 語を持たない部品は `None`＝状態も記録も生まれない。
 pub(super) fn arm_part<'s>(
     armed: &'s mut BTreeMap<PartKey, Armed>,
@@ -25,7 +26,7 @@ pub(super) fn arm_part<'s>(
     scope: &ActorKey,
     slot: Slot,
     part: PartKey,
-    at_ms: u64,
+    at: TimePoint,
     open: bool,
 ) -> Option<&'s mut Armed> {
     if !anims.iter().any(|a| a.trigger.is_word()) {
@@ -36,18 +37,18 @@ pub(super) fn arm_part<'s>(
             scope = scope.as_str(),
             slot = ?slot,
             part = %Label(part),
-            at_ms,
+            %at,
             "seriko: part trigger 部品が見えた（引き金を構えた）"
         );
-        Armed::arm(at_ms, open, None)
+        Armed::arm(at, open, None)
     }))
 }
 
 /// 部品 `part` の 3 語の animation を開始の時刻の順（同じ時刻は番号の順）に、その時刻までの部品の
 /// 働きのコマを当ててから判定し、始まるものの時計を判定が返した開始の時刻（`runonce` は見え始め・
-/// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`at_ms` ではない）で作る。一番上の
+/// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`at` ではない）で作る。一番上の
 /// `fire_top_triggers` と同じ形。始まった animation・働きのコマの結果・呼び出しで始まった
-/// animation の番号を返す（`at_ms` までのコマを置くのは呼び手）。
+/// animation の番号を返す（`at` までのコマを置くのは呼び手）。
 ///
 /// 「再生中か」は、開始の時刻までの働きのコマを当てた後の時計で、開始の時刻に測る: 時計がその時刻に
 /// まだ終わり（負の番号で停止・末尾）でなければ再生中。呼び出しが止めた再生は再生中で
@@ -67,47 +68,39 @@ pub(super) fn fire_part_triggers<'a>(
     pattern: &mut PatternState,
     anims: &'a [LoopAnimation],
     (scope, slot, part): (&ActorKey, Slot, PartKey),
-    at_ms: u64,
+    at: TimePoint,
     talk: Option<&TalkWindow<'_>>,
     pick: &mut LoopRng,
 ) -> (Vec<&'a LoopAnimation>, CallOutcome, Vec<u32>) {
-    let mut due: Vec<(u64, &LoopAnimation)> = anims
+    let mut due: Vec<(TimePoint, &LoopAnimation)> = anims
         .iter()
         .filter(|a| a.trigger.is_word())
-        .filter_map(|a| state.next_start(a, at_ms, talk).map(|at| (at, a)))
+        .filter_map(|a| state.next_start(a, at, talk).map(|at| (at, a)))
         .collect();
     due.sort_by_key(|&(at, a)| (at, a.id));
     let (mut started, mut outcome, mut called) = (Vec::new(), CallOutcome::default(), Vec::new());
-    for (started_at_ms, anim) in due {
+    for (started_at, anim) in due {
         let (early, by_call) = run_part_calls(
-            clocks,
-            stopped,
-            pattern,
-            scope,
-            slot,
-            part,
-            anims,
-            started_at_ms,
-            pick,
+            clocks, stopped, pattern, scope, slot, part, anims, started_at, pick,
         );
         outcome = outcome.then(early);
         called.extend(by_call);
         let key = (part, anim.id);
         let prev = match clocks.get(&key) {
-            Some(&PartAnim::Playing { started_at_ms, .. }) => Some(started_at_ms),
+            Some(&PartAnim::Playing { started_at, .. }) => Some(started_at),
             _ => None,
         };
         let playing = prev.is_some_and(|p| {
-            p != started_at_ms
+            p != started_at
                 && matches!(
-                    frame_at(&anim.frames, started_at_ms.saturating_sub(p)),
+                    frame_at(&anim.frames, elapsed_since(started_at, p)),
                     FrameStatus::Pending | FrameStatus::Active(_)
                 )
         });
-        if !state.commit(anim, started_at_ms, playing) {
+        if !state.commit(anim, started_at, playing) {
             continue;
         }
-        if prev != Some(started_at_ms) {
+        if prev != Some(started_at) {
             if prev.is_some() {
                 progress(
                     clocks,
@@ -117,7 +110,7 @@ pub(super) fn fire_part_triggers<'a>(
                     slot,
                     part,
                     anim,
-                    started_at_ms,
+                    started_at,
                 );
             }
             // 前の再生のコマは外す＝鳴り直した後は新しい再生の経過だけで決まる。
@@ -125,19 +118,19 @@ pub(super) fn fire_part_triggers<'a>(
             clocks.insert(
                 key,
                 PartAnim::Playing {
-                    started_at_ms,
+                    started_at,
                     acts_through: None,
                 },
             );
         }
-        log_fired(anim, started_at_ms, scope, slot, Some(&Label(part)));
+        log_fired(anim, started_at, scope, slot, Some(&Label(part)));
         started.push(anim);
     }
     (started, outcome, called)
 }
 
 /// 2 段目（新しく見えた部品 1 つ）: [`arm_part`] で構え、[`fire_part_triggers`] で判定し、何か
-/// 始まったら働きのコマを `at_ms` まで当てる。始まった animation と呼び出しで始まった animation（呼び手が
+/// 始まったら働きのコマを `at` まで当てる。始まった animation と呼び出しで始まった animation（呼び手が
 /// 欄へ置く）と、働きのコマの結果を返す。何も始まらなければ `None`。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn judge_part<'a>(
@@ -148,11 +141,11 @@ pub(super) fn judge_part<'a>(
     pattern: &mut PatternState,
     anims: &'a [LoopAnimation],
     (scope, slot, part): (&ActorKey, Slot, PartKey),
-    (at_ms, open): (u64, bool),
+    (at, open): (TimePoint, bool),
     talk: Option<&TalkWindow<'_>>,
     pick: &mut LoopRng,
 ) -> Option<(Vec<&'a LoopAnimation>, CallOutcome)> {
-    let state = arm_part(armed, anims, scope, slot, part, at_ms, open)?;
+    let state = arm_part(armed, anims, scope, slot, part, at, open)?;
     let who = (scope, slot, part);
     let (mut heads, early, mut called) = fire_part_triggers(
         state,
@@ -162,16 +155,15 @@ pub(super) fn judge_part<'a>(
         pattern,
         anims,
         who,
-        at_ms,
+        at,
         talk,
         pick,
     );
     if heads.is_empty() {
         return None;
     }
-    let (late, by_call) = run_part_calls(
-        clocks, stopped, pattern, scope, slot, part, anims, at_ms, pick,
-    );
+    let (late, by_call) =
+        run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
     called.extend(by_call);
     heads.extend(anims.iter().filter(|a| called.contains(&a.id)));
     Some((heads, early.then(late)))

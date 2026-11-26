@@ -3,29 +3,29 @@
 use areka_sakura::ActorKey;
 use dola::TimePoint;
 
-use super::top_calls::{put_top_always, put_visible, run_top_calls};
+use super::top_calls::{put_top_always, put_visible, run_top_calls, start_top_always};
 use super::{
-    LoopRuntime, SerikoLoopConfig, arm_slot, fire_top_triggers, glyph_wall_ms, revealed_at,
-    slot_binds, start_top_always, talk_window, top_kinds,
+    LoopRuntime, SerikoLoopConfig, arm_slot, fire_top_triggers, glyph_wall, revealed_at,
+    slot_binds, talk_window, top_kinds,
 };
 use crate::output::DisplayCommand;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::LoopTrigger;
-use crate::timeline::{FrameStatus, frame_at};
+use crate::timeline::{FrameStatus, elapsed_since, frame_at};
 
 impl LoopRuntime {
     /// 面の切り替え・着せ替えの変化の直後に呼ぶ。
     ///
     /// 繰り返しの経路を通す表（[`AnimationTable::is_continuous`]）で、`scope` の `slot` の面が
     /// 進行の対象（[`ScopeStates::stage_slots`]・バルーンは知らせの面も）なら、保持している
-    /// [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
+    /// [`PatternState`] の写しを出来事の時刻 `at`（無ければ直前の刻みの時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
     /// [`PartClocks::refresh`]（見えている `always` の時計を作る・回数つきの見えなくなった時計を捨てる・
     /// 抽選の時計と抽選の乱数は触らない（働きのコマの始め・止めと選びの乱数を除く））で作り直す。
     /// `commit_pattern` が変化を返したらその `Show` を返す。
     /// 面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計と、部品の 3 語の時計・引き金の
     /// 状態を捨てて何も返さない（[`PartClocks::drop_hidden`]）。
     /// バルーンの窓が閉じていれば時計を作らない（回数つきは捨てる）。
-    /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at_ms` も
+    /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at` も
     /// 無ければ時計を作らない（次の刻みで生まれる）。
     ///
     /// 引き金: 構える条件を満たす面に
@@ -38,7 +38,7 @@ impl LoopRuntime {
         &mut self,
         scope: &ActorKey,
         slot: Slot,
-        at_ms: Option<TimePoint>,
+        at: Option<TimePoint>,
         states: &mut ScopeStates,
     ) -> Option<DisplayCommand> {
         let LoopRuntime {
@@ -75,7 +75,7 @@ impl LoopRuntime {
             parts.drop_hidden(scope, slot, table);
             return None;
         };
-        let at_ms = at_ms.or(*last_seen);
+        let at = at.or(*last_seen);
         let mut pattern = states.current_pattern(scope, slot).clone();
         let mut shift = Default::default();
         let key = (scope.clone(), slot);
@@ -83,10 +83,10 @@ impl LoopRuntime {
         let talks = table.has_talk();
         // 引き金: 構える条件を満たす面でだけ構える（面に入った・時刻が分からなければ構えない）。文字は
         // この出来事の時刻までに現れた数の次から数える。
-        let revealed = at_ms
+        let revealed = at
             .filter(|_| talks && open)
             .map(|at| revealed_at(epoch, feeds, scope, at));
-        let state = at_ms
+        let state = at
             .filter(|_| has_trigger || talks)
             .map(|at| arm_slot(armed, &key, sid, open, at, revealed));
         // 文字の窓（刻みと同じ形・部品も借りる）。窓が在るのは時刻が分かるときだけ。
@@ -94,9 +94,16 @@ impl LoopRuntime {
             .as_ref()
             .and_then(|state| state.talk_window_bounds())
             .zip(revealed);
-        let wall_ms = |glyph| glyph_wall_ms(epoch, feeds.get(scope), glyph, at_ms.unwrap_or(0));
-        let window = talk_window(bounds, &wall_ms);
-        if let Some(at) = at_ms {
+        let wall = |glyph| {
+            glyph_wall(
+                epoch,
+                feeds.get(scope),
+                glyph,
+                at.unwrap_or(TimePoint::ZERO),
+            )
+        };
+        let window = talk_window(bounds, &wall);
+        if let Some(at) = at {
             // 頭のコマを置く `always` 以外の再生（鳴らした引き金と呼び出しで始まったもの）。
             let mut heads = Vec::new();
             // 3 語を刻みと同じく出来事の時刻まで判定し、頭のコマをこの評価の絵に載せる（待ちの在る頭は
@@ -149,7 +156,7 @@ impl LoopRuntime {
                 let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) else {
                     continue;
                 };
-                let elapsed = at.saturating_sub(p.started_at_ms);
+                let elapsed = elapsed_since(at, p.started_at);
                 if matches!(anim.trigger, LoopTrigger::Always { .. }) {
                     put_top_always(&mut pattern, anim, elapsed);
                 } else if heads.contains(&anim.id) {
@@ -173,7 +180,7 @@ impl LoopRuntime {
                 sid,
                 slot_binds(states, scope, slot),
                 table,
-                at_ms,
+                at,
                 open,
                 window.as_ref(),
                 pick_rng,

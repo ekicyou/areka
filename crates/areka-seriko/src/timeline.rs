@@ -1,7 +1,7 @@
 //! timeline: 抽選境界・1/N 判定・経過時刻→現在コマの決定論純関数コア。
 //!
 //! 全関数が純粋（引数のみに依存・I/O なし・スレッド／GPU／実時間非依存）。時刻と乱数は注入シーム
-//! （`LoopRng`・`u64` 経過時刻）で受け取り、実 entropy 源・実クロックを評価経路から排除する。
+//! （`LoopRng`・`TimePoint` の時刻と `TimeSpan` の経過）で受け取り、実 entropy 源・実クロックを評価経路から排除する。
 //! これにより注入 tick＋注入乱数で全分岐を決定論的にテストできる。
 //!
 //! # 構成
@@ -9,14 +9,14 @@
 //! - [`seeded_rng`]／[`should_fire`] — SplitMix64 の純粋 PRNG と 1/N 抽選。
 //! - [`LotteryBoundary`] — 1000ms 絶対グリッドの跨ぎ検出（毎秒抽選の写像・catch-up 1 回）。
 //!   ghost [`crate`] 外の `BoundarySchedule` と同じ「1 回だけ発火・次境界へスナップ」政策。
-//! - [`frame_at`]／[`FrameStatus`] — 再生開始からの経過 `elapsed_ms` に対する現在コマ判定
+//! - [`frame_at`]／[`FrameStatus`] — 再生開始からの経過 `elapsed` に対する現在コマ判定
 //!   （累積 wait デッドライン列・`-1` 停止・末尾残留のデファクト 2 点を焼き込む）。
 //! - [`lap_of`]／[`always_at`]／[`AlwaysView`] — `always`（手書きと動く絵の子）の繰り返しの計算
 //!   （経過を周期で割る・丸めない）。
 
 use crate::table::{FrameAct, LoopFrame};
-use dola::TimeSpan;
-use std::num::{NonZeroU32, NonZeroU64};
+use dola::{TimePoint, TimeSpan};
+use std::num::NonZeroU32;
 
 /// 乱数注入シーム（クロック注入と同型）。`[0, bound)` の一様整数を返す。
 pub type LoopRng = Box<dyn FnMut(u32) -> u32 + Send>;
@@ -47,39 +47,45 @@ pub fn should_fire(k: u32, rng: &mut LoopRng) -> bool {
 
 /// 1000ms 絶対グリッド境界（毎秒抽選の写像・catch-up 1 回）。
 pub(crate) struct LotteryBoundary {
-    next_boundary_ms: u64,
+    next_boundary: TimePoint,
 }
 
 /// 1 秒（1000ms）グリッド。ghost `BoundarySchedule` と同じ絶対グリッド整列（毎秒抽選の写像）。
 const LOTTERY_GRID: TimeSpan = TimeSpan::from_millis(1000);
 
-/// `LOTTERY_GRID_MS` の倍数のうち `now_ms` より厳密に大きい最小値（例: 0→1000・1000→2000・1500→2000）。
-fn next_boundary_strictly_after(now_ms: u64) -> u64 {
-    (now_ms / LOTTERY_GRID_MS + 1) * LOTTERY_GRID_MS
+/// `LOTTERY_GRID` の倍数のうち `now` より厳密に大きい最小値（例: 0→1000ms・1000ms→2000ms・1500ms→2000ms）。
+fn next_boundary_strictly_after(now: TimePoint) -> TimePoint {
+    let grid = LOTTERY_GRID.as_ticks();
+    TimePoint::from_ticks((now.as_ticks().div_euclid(grid) + 1).saturating_mul(grid))
 }
 
 impl LotteryBoundary {
-    /// `now_ms` より厳密に未来の次境界（1000 の倍数）から開始する。
+    /// `now` より厳密に未来の次境界（1000ms の倍数）から開始する。
     ///
-    /// `now_ms` がちょうど境界上でも次の境界へ進める（起動直後の即時発火を避け、常に「次はまだ来て
+    /// `now` がちょうど境界上でも次の境界へ進める（起動直後の即時発火を避け、常に「次はまだ来て
     /// いない未来の境界」を保つ不変条件・ghost `BoundarySchedule::starting_at` と同一政策）。
-    pub fn starting_at(now_ms: u64) -> Self {
+    pub fn starting_at(now: TimePoint) -> Self {
         LotteryBoundary {
-            next_boundary_ms: next_boundary_strictly_after(now_ms),
+            next_boundary: next_boundary_strictly_after(now),
         }
     }
 
-    /// `now_ms` が次境界へ到達済みなら **1 回だけ** `true`（複数跨ぎでも 1 回＝catch-up）＋次境界へスナップ。
+    /// `now` が次境界へ到達済みなら **1 回だけ** `true`（複数跨ぎでも 1 回＝catch-up）＋次境界へスナップ。
     ///
-    /// 到達済みなら次デッドラインを `now_ms` より厳密に未来のグリッド倍数へスナップするため、複数境界を
+    /// 到達済みなら次デッドラインを `now` より厳密に未来のグリッド倍数へスナップするため、複数境界を
     /// 跨いでいてもバーストで打ち返さない（catch-up＝抽選 1 回・ghost `BoundarySchedule::poll` と同一政策）。
-    pub fn poll(&mut self, now_ms: u64) -> bool {
-        if now_ms < self.next_boundary_ms {
+    pub fn poll(&mut self, now: TimePoint) -> bool {
+        if now < self.next_boundary {
             return false;
         }
-        self.next_boundary_ms = next_boundary_strictly_after(now_ms);
+        self.next_boundary = next_boundary_strictly_after(now);
         true
     }
+}
+
+/// `start` から `now` までの経過（`now` が前なら 0）。
+pub(crate) fn elapsed_since(now: TimePoint, start: TimePoint) -> TimeSpan {
+    now.span_since(start).unwrap_or(TimeSpan::ZERO)
 }
 
 /// 経過時刻に対する現在コマ判定。
@@ -95,17 +101,17 @@ pub enum FrameStatus {
     FinishedResidual(usize),
 }
 
-/// 経過時刻 `elapsed_ms` に対する現在コマを判定する（累積 wait デッドライン列）。
+/// 経過時刻 `elapsed` に対する現在コマを判定する（累積 wait デッドライン列）。
 ///
-/// コマ k のデッドライン `t_k = Σ_{j<=k} wait_ms[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
-/// 現在 index は `t_k <= elapsed_ms` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
+/// コマ k のデッドライン `t_k = Σ_{j<=k} wait[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
+/// 現在 index は `t_k <= elapsed` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
 /// [`FrameStatus::Pending`]。i 以下に負の描くコマ（[`stop_frame`]）が在れば [`FrameStatus::Stopped`]
 /// （`-1` の後に待ち 0 のコマが続いても、刻みが `-1` の短い窓を飛び越えても止まる・method/x/y 無視。
 /// `-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
 /// （末尾残留・恒久）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
-pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
-    match current_frame_index(frames, elapsed_ms) {
+pub fn frame_at(frames: &[LoopFrame], elapsed: TimeSpan) -> FrameStatus {
+    match current_frame_index(frames, elapsed) {
         None => FrameStatus::Pending,
         Some(i) => {
             if stop_frame(frames, i).is_some() {
@@ -120,20 +126,26 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
 }
 
 /// 経過を周期で割った「何周目か（0 始まり）」と「その周の頭からの経過」（丸めない）。
-pub(crate) fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
-    (elapsed_ms / period_ms.get(), elapsed_ms % period_ms.get())
+///
+/// 周期は正（表を組む所が 0 の周期を落とす）。
+pub(crate) fn lap_of(elapsed: TimeSpan, period: TimeSpan) -> (u64, TimeSpan) {
+    debug_assert!(period > TimeSpan::ZERO, "周期 0 は表を組む所で落とす");
+    let (e, p) = (elapsed.as_ticks(), period.as_ticks().max(1));
+    // どちらも 0 以上なので、商も余りも 0 以上。
+    let in_lap = TimeSpan::try_from_ticks(e % p).unwrap_or(TimeSpan::ZERO);
+    ((e / p) as u64, in_lap)
 }
 
-/// 累積 wait デッドライン `t_k <= elapsed_ms` を満たす最大のコマ index（誰も満たさなければ `None`）。
+/// 累積 wait デッドライン `t_k <= elapsed` を満たす最大のコマ index（誰も満たさなければ `None`）。
 ///
 /// [`frame_at`]・[`always_at`] と、`Stopped` の負 surface 値を warn! 用に取り出す一番上・部品の再生が
 /// 共有する唯一の選び方。デッドラインは単調非減少ゆえ、超過した時点で走査を打ち切る。
-pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Option<usize> {
-    let mut acc: u64 = 0;
+pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed: TimeSpan) -> Option<usize> {
+    let mut acc = TimeSpan::ZERO;
     let mut current: Option<usize> = None;
     for (i, f) in frames.iter().enumerate() {
-        acc = acc.saturating_add(u64::from(f.wait_ms));
-        if acc <= elapsed_ms {
+        acc = acc + f.wait;
+        if acc <= elapsed {
             current = Some(i);
         } else {
             break;
@@ -169,9 +181,9 @@ pub(crate) enum AlwaysView {
     Frame(usize),
 }
 
-/// 経過 `elapsed_ms` における `always` の今のコマ。
+/// 経過 `elapsed` における `always` の今のコマ。
 ///
-/// `period_ms` は 1 周の長さ、`laps` は合計の回数（`None` は終わりなし）。手書きの `always` と動く絵の
+/// `period` は 1 周の長さ、`laps` は合計の回数（`None` は終わりなし）。手書きの `always` と動く絵の
 /// 子は同じこの関数を通り、違いは表が渡す値だけ。開始からの経過だけで決まる（状態・乱数・丸めなし）。
 ///
 /// - 回数つきで経過が「周期 × N」以上なら最後のコマ。
@@ -180,14 +192,14 @@ pub(crate) enum AlwaysView {
 /// - 負の番号の描くコマ（絵を指すコマは除く）に居る間は何も出さない（働きのコマの `-1` は止めない）。
 pub(crate) fn always_at(
     frames: &[LoopFrame],
-    period_ms: NonZeroU64,
+    period: TimeSpan,
     laps: Option<NonZeroU32>,
-    elapsed_ms: u64,
+    elapsed: TimeSpan,
 ) -> AlwaysView {
     let Some(last) = frames.len().checked_sub(1) else {
         return AlwaysView::Nothing;
     };
-    let (lap, in_lap) = lap_of(elapsed_ms, period_ms);
+    let (lap, in_lap) = lap_of(elapsed, period);
     let index = if laps.is_some_and(|n| lap >= u64::from(n.get())) {
         Some(last)
     } else {
@@ -205,19 +217,19 @@ pub(crate) fn always_at(
     }
 }
 
-/// `always` の経過 `elapsed_ms` で欄に出す答え（[`always_at`] の今のコマが働きのコマなら、その周の
+/// `always` の経過 `elapsed` で欄に出す答え（[`always_at`] の今のコマが働きのコマなら、その周の
 /// 最後の描くコマ。周の頭から働きのコマなら前の周の最後の描くコマ）。`None` は描くコマがまだ無い
 /// （1 周目の頭から働きのコマ）＝欄を外す。一番上と部品が共有する。
 pub(crate) fn always_visible(
     frames: &[LoopFrame],
-    period_ms: NonZeroU64,
+    period: TimeSpan,
     laps: Option<NonZeroU32>,
-    elapsed_ms: u64,
+    elapsed: TimeSpan,
 ) -> Option<AlwaysView> {
-    let AlwaysView::Frame(i) = always_at(frames, period_ms, laps, elapsed_ms) else {
+    let AlwaysView::Frame(i) = always_at(frames, period, laps, elapsed) else {
         return Some(AlwaysView::Nothing);
     };
-    let previous_lap = (elapsed_ms >= period_ms.get()).then(|| frames.len() - 1);
+    let previous_lap = (elapsed >= period).then(|| frames.len() - 1);
     let d =
         visible_frame(frames, i).or_else(|| previous_lap.and_then(|l| visible_frame(frames, l)))?;
     Some(
@@ -242,6 +254,7 @@ mod tests {
     use super::*;
     // 1 コマ（method/x/y は frame_at では無視されるため既定 Overlay/0）。
     use crate::test_support::draw_frame as frame;
+    use dola::time::testing::{at_ms, ms};
 
     // ── seeded_rng / should_fire ─────────────────────────────────────────────
 
@@ -328,55 +341,55 @@ mod tests {
     /// `starting_at` は now より厳密に未来の次境界（1000 の倍数）を起点にする。
     #[test]
     fn starting_at_sets_strictly_future_boundary() {
-        let mut b = LotteryBoundary::starting_at(2347);
-        assert!(!b.poll(2999), "3000 未満は非跨ぎ");
-        assert!(b.poll(3000), "3000 到達で跨ぎ");
+        let mut b = LotteryBoundary::starting_at(at_ms(2347));
+        assert!(!b.poll(at_ms(2999)), "3000 未満は非跨ぎ");
+        assert!(b.poll(at_ms(3000)), "3000 到達で跨ぎ");
 
         // ちょうど境界上でも次の境界へ進む（即時発火を避ける）。
-        let mut b = LotteryBoundary::starting_at(1000);
+        let mut b = LotteryBoundary::starting_at(at_ms(1000));
         assert!(
-            !b.poll(1000),
+            !b.poll(at_ms(1000)),
             "起点ちょうど境界上は即時発火しない（次境界は 2000）"
         );
-        assert!(!b.poll(1999), "2000 未満は非跨ぎ");
-        assert!(b.poll(2000), "2000 到達で跨ぎ");
+        assert!(!b.poll(at_ms(1999)), "2000 未満は非跨ぎ");
+        assert!(b.poll(at_ms(2000)), "2000 到達で跨ぎ");
     }
 
     /// 非跨ぎは `false`・境界ちょうどで `true`・跨いだら次境界へスナップ。
     #[test]
     fn poll_fires_once_on_boundary_and_snaps() {
-        let mut b = LotteryBoundary::starting_at(0);
-        assert!(!b.poll(0), "0 は非跨ぎ");
-        assert!(!b.poll(999), "999 は非跨ぎ");
-        assert!(b.poll(1000), "1000 ちょうどで発火");
+        let mut b = LotteryBoundary::starting_at(at_ms(0));
+        assert!(!b.poll(at_ms(0)), "0 は非跨ぎ");
+        assert!(!b.poll(at_ms(999)), "999 は非跨ぎ");
+        assert!(b.poll(at_ms(1000)), "1000 ちょうどで発火");
         assert!(
-            !b.poll(1000),
+            !b.poll(at_ms(1000)),
             "同一時刻の再 poll は再発火しない（スナップ済み）"
         );
-        assert!(!b.poll(1999), "1999 は非跨ぎ");
-        assert!(b.poll(2000), "2000 で発火");
+        assert!(!b.poll(at_ms(1999)), "1999 は非跨ぎ");
+        assert!(b.poll(at_ms(2000)), "2000 で発火");
     }
 
     /// 複数境界を一気に跨いでも発火は **1 回**（catch-up）＋ now より厳密未来へスナップ。
     #[test]
     fn poll_collapses_multiple_missed_boundaries_into_one() {
-        let mut b = LotteryBoundary::starting_at(0);
+        let mut b = LotteryBoundary::starting_at(at_ms(0));
         // 0 → 5500 へ一気に進む＝1000,2000,3000,4000,5000 の 5 境界を跨ぐが 1 回だけ true。
-        assert!(b.poll(5500), "複数跨ぎでも 1 回だけ発火（catch-up）");
+        assert!(b.poll(at_ms(5500)), "複数跨ぎでも 1 回だけ発火（catch-up）");
         // 次境界は 5500 より厳密未来の 6000 へスナップ済み＝中間境界は再送されない。
-        assert!(!b.poll(5500), "同一時刻の再 poll は発火しない");
-        assert!(!b.poll(5999), "5999 は非跨ぎ");
-        assert!(b.poll(6000), "6000 で次の発火");
+        assert!(!b.poll(at_ms(5500)), "同一時刻の再 poll は発火しない");
+        assert!(!b.poll(at_ms(5999)), "5999 は非跨ぎ");
+        assert!(b.poll(at_ms(6000)), "6000 で次の発火");
     }
 
     /// catch-up 後の以降の poll は再び定刻扱いに戻る（1 秒刻みで 1 回ずつ）。
     #[test]
     fn poll_returns_to_regular_cadence_after_catchup() {
-        let mut b = LotteryBoundary::starting_at(0);
-        assert!(b.poll(3200), "3200 で catch-up 発火（次境界 4000）");
-        assert!(b.poll(4000), "4000 で定刻発火");
-        assert!(b.poll(5000), "5000 で定刻発火");
-        assert!(!b.poll(5500), "5500 は非跨ぎ");
+        let mut b = LotteryBoundary::starting_at(at_ms(0));
+        assert!(b.poll(at_ms(3200)), "3200 で catch-up 発火（次境界 4000）");
+        assert!(b.poll(at_ms(4000)), "4000 で定刻発火");
+        assert!(b.poll(at_ms(5000)), "5000 で定刻発火");
+        assert!(!b.poll(at_ms(5500)), "5500 は非跨ぎ");
     }
 
     // ── frame_at: 基本経路 ───────────────────────────────────────────────────
@@ -384,77 +397,77 @@ mod tests {
     /// 先頭 wait > 0 のとき、デッドライン未到達は `Pending`（まだ何も出さない）。
     #[test]
     fn frame_at_pending_before_first_deadline() {
-        let frames = vec![frame(100, 40), frame(101, 40)];
+        let frames = vec![frame(100, ms(40)), frame(101, ms(40))];
         // t = [40, 80]。0..39 は Pending。
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Pending);
-        assert_eq!(frame_at(&frames, 39), FrameStatus::Pending);
+        assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Pending);
+        assert_eq!(frame_at(&frames, ms(39)), FrameStatus::Pending);
         // 40 ちょうどで先頭コマへ。
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Active(0));
+        assert_eq!(frame_at(&frames, ms(40)), FrameStatus::Active(0));
     }
 
     /// 先頭 wait == 0 のときは elapsed 0 で即先頭コマ（Pending を経ない）。
     #[test]
     fn frame_at_leading_zero_wait_shows_frame0_immediately() {
-        let frames = vec![frame(100, 0), frame(101, 40), frame(102, 40)];
+        let frames = vec![frame(100, ms(0)), frame(101, ms(40)), frame(102, ms(40))];
         // t = [0, 40, 80]。
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 39), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1));
-        assert_eq!(frame_at(&frames, 79), FrameStatus::Active(1));
+        assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Active(0));
+        assert_eq!(frame_at(&frames, ms(39)), FrameStatus::Active(0));
+        assert_eq!(frame_at(&frames, ms(40)), FrameStatus::Active(1));
+        assert_eq!(frame_at(&frames, ms(79)), FrameStatus::Active(1));
         // 末尾（非負）＝FinishedResidual。
-        assert_eq!(frame_at(&frames, 80), FrameStatus::FinishedResidual(2));
+        assert_eq!(frame_at(&frames, ms(80)), FrameStatus::FinishedResidual(2));
     }
 
     /// 累積 wait デッドラインの境界値（t_k ちょうど／t_k−1／t_k+1）を全て檻に入れる。
     #[test]
     fn frame_at_cumulative_deadline_boundary_values() {
         // waits 10/20/30 → t = [10, 30, 60]。全て非負・末尾は FinishedResidual。
-        let frames = vec![frame(1, 10), frame(2, 20), frame(3, 30)];
+        let frames = vec![frame(1, ms(10)), frame(2, ms(20)), frame(3, ms(30))];
 
         assert_eq!(
-            frame_at(&frames, 9),
+            frame_at(&frames, ms(9)),
             FrameStatus::Pending,
             "t_0−1 は Pending"
         );
         assert_eq!(
-            frame_at(&frames, 10),
+            frame_at(&frames, ms(10)),
             FrameStatus::Active(0),
             "t_0 ちょうどで Active(0)"
         );
         assert_eq!(
-            frame_at(&frames, 11),
+            frame_at(&frames, ms(11)),
             FrameStatus::Active(0),
             "t_0+1 は Active(0)"
         );
 
         assert_eq!(
-            frame_at(&frames, 29),
+            frame_at(&frames, ms(29)),
             FrameStatus::Active(0),
             "t_1−1 は Active(0)"
         );
         assert_eq!(
-            frame_at(&frames, 30),
+            frame_at(&frames, ms(30)),
             FrameStatus::Active(1),
             "t_1 ちょうどで Active(1)"
         );
         assert_eq!(
-            frame_at(&frames, 31),
+            frame_at(&frames, ms(31)),
             FrameStatus::Active(1),
             "t_1+1 は Active(1)"
         );
 
         assert_eq!(
-            frame_at(&frames, 59),
+            frame_at(&frames, ms(59)),
             FrameStatus::Active(1),
             "t_2−1 は Active(1)"
         );
         assert_eq!(
-            frame_at(&frames, 60),
+            frame_at(&frames, ms(60)),
             FrameStatus::FinishedResidual(2),
             "t_2 ちょうどで末尾残留"
         );
         assert_eq!(
-            frame_at(&frames, 61),
+            frame_at(&frames, ms(61)),
             FrameStatus::FinishedResidual(2),
             "t_2+1 も末尾残留"
         );
@@ -466,18 +479,26 @@ mod tests {
     #[test]
     fn frame_at_kero_real_sequence_stops_on_negative_tail() {
         // emo2 kero 実測: frames 2106(wait0)/2110(wait40)/-1(wait80)。t = [0, 40, 120]。
-        let frames = vec![frame(2106, 0), frame(2110, 40), frame(-1, 80)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0), "0 で 2106");
-        assert_eq!(frame_at(&frames, 39), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1), "40 で 2110");
-        assert_eq!(frame_at(&frames, 119), FrameStatus::Active(1));
+        let frames = vec![frame(2106, ms(0)), frame(2110, ms(40)), frame(-1, ms(80))];
         assert_eq!(
-            frame_at(&frames, 120),
+            frame_at(&frames, ms(0)),
+            FrameStatus::Active(0),
+            "0 で 2106"
+        );
+        assert_eq!(frame_at(&frames, ms(39)), FrameStatus::Active(0));
+        assert_eq!(
+            frame_at(&frames, ms(40)),
+            FrameStatus::Active(1),
+            "40 で 2110"
+        );
+        assert_eq!(frame_at(&frames, ms(119)), FrameStatus::Active(1));
+        assert_eq!(
+            frame_at(&frames, ms(120)),
             FrameStatus::Stopped,
             "120 で -1 → 停止"
         );
         assert_eq!(
-            frame_at(&frames, 100_000),
+            frame_at(&frames, ms(100_000)),
             FrameStatus::Stopped,
             "-1 停止は恒久"
         );
@@ -487,26 +508,34 @@ mod tests {
     #[test]
     fn frame_at_sakura_real_sequence_finishes_residual_permanently() {
         // emo2 sakura 実測: frames 1412(wait0)/1411(wait150)/1410(wait22)。t = [0, 150, 172]。全て非負。
-        let frames = vec![frame(1412, 0), frame(1411, 150), frame(1410, 22)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0), "0 で 1412");
-        assert_eq!(frame_at(&frames, 149), FrameStatus::Active(0));
+        let frames = vec![
+            frame(1412, ms(0)),
+            frame(1411, ms(150)),
+            frame(1410, ms(22)),
+        ];
         assert_eq!(
-            frame_at(&frames, 150),
+            frame_at(&frames, ms(0)),
+            FrameStatus::Active(0),
+            "0 で 1412"
+        );
+        assert_eq!(frame_at(&frames, ms(149)), FrameStatus::Active(0));
+        assert_eq!(
+            frame_at(&frames, ms(150)),
             FrameStatus::Active(1),
             "150 で 1411"
         );
-        assert_eq!(frame_at(&frames, 171), FrameStatus::Active(1));
+        assert_eq!(frame_at(&frames, ms(171)), FrameStatus::Active(1));
         // t_2 = 172: 末尾（非負）→ FinishedResidual(2)。
         assert_eq!(
-            frame_at(&frames, 172),
+            frame_at(&frames, ms(172)),
             FrameStatus::FinishedResidual(2),
             "172 で最終コマ 1410 残留"
         );
         // 恒久: 任意に大きな経過でも FinishedResidual(2) のまま（残留）。
         assert_eq!(
-            frame_at(&frames, u64::MAX),
+            frame_at(&frames, TimeSpan::MAX),
             FrameStatus::FinishedResidual(2),
-            "u64::MAX 経過でも末尾残留は不変（恒久）"
+            "TimeSpan::MAX 経過でも末尾残留は不変（恒久）"
         );
     }
 
@@ -514,20 +543,20 @@ mod tests {
     #[test]
     fn frame_at_single_nonneg_frame_is_finished_residual() {
         // wait0 単一コマ。t = [0]。
-        let frames = vec![frame(500, 0)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::FinishedResidual(0));
+        let frames = vec![frame(500, ms(0))];
+        assert_eq!(frame_at(&frames, ms(0)), FrameStatus::FinishedResidual(0));
         assert_eq!(
-            frame_at(&frames, u64::MAX),
+            frame_at(&frames, TimeSpan::MAX),
             FrameStatus::FinishedResidual(0),
             "恒久"
         );
 
         // 先頭 wait > 0 の単一コマ: 到達前は Pending、到達後は残留。
-        let frames = vec![frame(500, 30)];
-        assert_eq!(frame_at(&frames, 29), FrameStatus::Pending);
-        assert_eq!(frame_at(&frames, 30), FrameStatus::FinishedResidual(0));
+        let frames = vec![frame(500, ms(30))];
+        assert_eq!(frame_at(&frames, ms(29)), FrameStatus::Pending);
+        assert_eq!(frame_at(&frames, ms(30)), FrameStatus::FinishedResidual(0));
         assert_eq!(
-            frame_at(&frames, 1_000_000),
+            frame_at(&frames, ms(1_000_000)),
             FrameStatus::FinishedResidual(0)
         );
     }
@@ -535,24 +564,28 @@ mod tests {
     /// 単一コマ・`-1` → 到達後は即 `Stopped` 恒久。
     #[test]
     fn frame_at_single_negative_frame_is_stopped() {
-        let frames = vec![frame(-1, 0)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Stopped);
-        assert_eq!(frame_at(&frames, u64::MAX), FrameStatus::Stopped, "恒久");
+        let frames = vec![frame(-1, ms(0))];
+        assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Stopped);
+        assert_eq!(
+            frame_at(&frames, TimeSpan::MAX),
+            FrameStatus::Stopped,
+            "恒久"
+        );
     }
 
     /// `-1` 以外の負値も `Stopped`（負値一般で停止・-1 と他負値の区別＋warn! は LoopRuntime 責務）。
     #[test]
     fn frame_at_any_negative_surface_id_is_stopped() {
-        let frames = vec![frame(100, 0), frame(-2, 40), frame(101, 40)];
+        let frames = vec![frame(100, ms(0)), frame(-2, ms(40)), frame(101, ms(40))];
         // t = [0, 40, 80]。中間コマが -2。
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
+        assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Active(0));
         assert_eq!(
-            frame_at(&frames, 40),
+            frame_at(&frames, ms(40)),
             FrameStatus::Stopped,
             "-2 も負値ゆえ Stopped"
         );
         assert_eq!(
-            frame_at(&frames, 80),
+            frame_at(&frames, ms(80)),
             FrameStatus::Stopped,
             "-2 の先の 101 へは進まない"
         );
@@ -561,15 +594,19 @@ mod tests {
     /// wait 0 連鎖: 全 wait 0 のとき elapsed 0 で末尾（最大 index）が現在コマ。
     #[test]
     fn frame_at_all_zero_waits_selects_last_index() {
-        let frames = vec![frame(1, 0), frame(2, 0), frame(3, 0)];
+        let frames = vec![frame(1, ms(0)), frame(2, ms(0)), frame(3, ms(0))];
         // t = [0, 0, 0]。elapsed 0 で t_k <= 0 を満たす最大 k = 2（末尾）。
         assert_eq!(
-            frame_at(&frames, 0),
+            frame_at(&frames, ms(0)),
             FrameStatus::FinishedResidual(2),
             "全 0 wait は末尾が現在コマ"
         );
         // -1 が末尾に含まれる wait 0 連鎖 → Stopped。
-        let frames = vec![frame(1, 0), frame(2, 0), frame(-1, 0)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Stopped, "末尾 -1 → 停止");
+        let frames = vec![frame(1, ms(0)), frame(2, ms(0)), frame(-1, ms(0))];
+        assert_eq!(
+            frame_at(&frames, ms(0)),
+            FrameStatus::Stopped,
+            "末尾 -1 → 停止"
+        );
     }
 }

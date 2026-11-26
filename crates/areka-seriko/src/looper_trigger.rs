@@ -2,7 +2,7 @@
 //!
 //! [`LoopRuntime`](super::LoopRuntime) の刻みと面の切り替えが呼ぶ自由関数を置く: 引き金の状態を構えて
 //! 窓の開け閉めを写す（[`arm_slot`]）・一番上の `runonce`／`periodic`／`talk` を判定して再生を始める
-//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`revealed_at`]・[`glyph_wall_ms`]・
+//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`revealed_at`]・[`glyph_wall`]・
 //! [`restart_talk`]・[`settle_talk`]）。「いつ始めるか」の判定は `trigger.rs`、文字が現れる時刻の式は
 //! `talk.rs`、始まった再生のコマの進み方は親（抽選の再生と同じ経路）が持ち、ここは配線だけ。
 //!
@@ -25,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
+use dola::{TimePoint, TimeSpan};
 
 use super::top_calls::{StoppedAlways, run_top_calls};
 use super::{Playback, SlotPlayback, put_top_play};
@@ -32,14 +33,14 @@ use crate::calls::CallOutcome;
 use crate::state::Slot;
 use crate::table::LoopAnimation;
 use crate::talk::{TalkEpoch, TalkFeed};
-use crate::timeline::{FrameStatus, LoopRng, frame_at};
+use crate::timeline::{FrameStatus, LoopRng, elapsed_since, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
-/// `key` の面の引き金の状態を返す。無ければ `at_ms` を見え始めの時刻として構え（面に入った）、在れば
-/// 窓の開け閉めだけを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（`runonce` の印は
+/// `key` の面の引き金の状態を返す。無ければ `at` を見え始めの時刻として構え（面に入った）、在れば
+/// 窓の開け閉めだけを写す: 閉じたら隠し、開いたら `at` を新しい起点にして現す（`runonce` の印は
 /// 残るので開き直しでは鳴らない）。
 ///
-/// `revealed` は `at_ms` までにそのスコープで現れた文字の数（[`revealed_at`]）で、`talk` はその次の
+/// `revealed` は `at` までにそのスコープで現れた文字の数（[`revealed_at`]）で、`talk` はその次の
 /// 文字から数える（面に入るたび・窓が開くたびに数え直す）。文字を数えない面（表に `talk` が
 /// 無い・窓が閉じている）では `None` を渡す。
 ///
@@ -49,13 +50,13 @@ pub(super) fn arm_slot<'a>(
     key: &(ActorKey, Slot),
     surface_id: u32,
     open: bool,
-    at_ms: u64,
+    at: TimePoint,
     revealed: Option<u64>,
 ) -> &'a mut Armed {
     match armed.entry(key.clone()) {
         Entry::Occupied(entry) => {
             let state = entry.into_mut();
-            state.follow(open, at_ms, revealed);
+            state.follow(open, at, revealed);
             state
         }
         Entry::Vacant(entry) => {
@@ -63,17 +64,17 @@ pub(super) fn arm_slot<'a>(
                 scope = key.0.as_str(),
                 slot = ?key.1,
                 surface_id,
-                at_ms,
+                %at,
                 "seriko: trigger 面に入った（引き金を構えた）"
             );
-            entry.insert(Armed::arm(at_ms, open, revealed))
+            entry.insert(Armed::arm(at, open, revealed))
         }
     }
 }
 
 /// 一番上の 3 語の animation `anims` を開始の時刻の順（同じ時刻は番号の順）に、その時刻までの働きの
 /// コマを当ててから判定し、始まるものを `playback` に入れる（開始の時刻は判定が返した時刻＝`runonce`
-/// は見え始め・`periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`now_ms` ではない）。`talk` は文字の窓 `talk` が在る
+/// は見え始め・`periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、`now` ではない）。`talk` は文字の窓 `talk` が在る
 /// ときだけ判定され、文字の数えはここでは進めない（進めるのは刻みの最後の [`settle_talk`]）。
 ///
 /// 返すのは 3 つ: 始まった（animation, 開始の時刻）の列・当てた働きのコマの結果（[`CallOutcome`]）・
@@ -101,104 +102,104 @@ pub(super) fn fire_top_triggers<'a>(
     warned_negative: &mut HashSet<(ActorKey, Slot, u32)>,
     key: &(ActorKey, Slot),
     anims: impl Iterator<Item = &'a LoopAnimation>,
-    now_ms: u64,
+    now: TimePoint,
     talk: Option<&TalkWindow<'_>>,
     (stopped, all, pick): (&mut StoppedAlways, &[LoopAnimation], &mut LoopRng),
-) -> (Vec<(&'a LoopAnimation, u64)>, CallOutcome, Vec<u32>) {
+) -> (Vec<(&'a LoopAnimation, TimePoint)>, CallOutcome, Vec<u32>) {
     // 開始の時刻の順（同じ時刻は番号の順）に、その時刻までの働きのコマを当ててから決める（呼び出しが
     // 止めた・始めた再生を見て決める・時刻の順を崩さない）。
-    let mut due: Vec<(u64, &LoopAnimation)> = anims
-        .filter_map(|anim| state.next_start(anim, now_ms, talk).map(|at| (at, anim)))
+    let mut due: Vec<(TimePoint, &LoopAnimation)> = anims
+        .filter_map(|anim| state.next_start(anim, now, talk).map(|at| (at, anim)))
         .collect();
     due.sort_by_key(|&(at, anim)| (at, anim.id));
     let mut fired = Vec::new();
     let (mut outcome, mut called) = (CallOutcome::default(), Vec::new());
-    for (started_at_ms, anim) in due {
+    for (started_at, anim) in due {
         let (early, started) =
-            run_top_calls(playback, pattern, stopped, key, all, started_at_ms, pick);
+            run_top_calls(playback, pattern, stopped, key, all, started_at, pick);
         outcome = outcome.then(early);
         called.extend(started);
         let prev = playback.get(key).and_then(|pb| pb.get(&anim.id)).copied();
         // 呼び出しがちょうど開始の時刻に始めた再生は、鳴らした扱いで入れ替えない（頭のコマを当て済み）。
         let playing = prev.is_some_and(|p| {
-            p.started_at_ms != started_at_ms
+            p.started_at != started_at
                 && matches!(
-                    frame_at(&anim.frames, started_at_ms.saturating_sub(p.started_at_ms)),
+                    frame_at(&anim.frames, elapsed_since(started_at, p.started_at)),
                     FrameStatus::Pending | FrameStatus::Active(_)
                 )
         });
-        if !state.commit(anim, started_at_ms, playing) {
+        if !state.commit(anim, started_at, playing) {
             continue;
         }
-        if prev.is_none_or(|p| p.started_at_ms != started_at_ms) {
+        if prev.is_none_or(|p| p.started_at != started_at) {
             if let Some(p) = prev {
-                let elapsed = started_at_ms.saturating_sub(p.started_at_ms);
+                let elapsed = elapsed_since(started_at, p.started_at);
                 put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
             }
             playback.entry(key.clone()).or_default().insert(
                 anim.id,
                 Playback {
-                    started_at_ms,
+                    started_at,
                     acts_through: None,
                 },
             );
         }
-        log_fired(anim, started_at_ms, &key.0, key.1, None);
-        fired.push((anim, started_at_ms));
+        log_fired(anim, started_at, &key.0, key.1, None);
+        fired.push((anim, started_at));
     }
     (fired, outcome, called)
 }
 
-/// スコープ `scope` で時刻 `at_ms` までに現れた文字の数（序数で数える）。文字がまだ 1 つも届いて
+/// スコープ `scope` で時刻 `at` までに現れた文字の数（序数で数える）。文字がまだ 1 つも届いて
 /// いないスコープは 0（届いた最初の文字が序数 0 になる）。
 pub(super) fn revealed_at(
     epoch: &TalkEpoch,
     feeds: &HashMap<ActorKey, TalkFeed>,
     scope: &ActorKey,
-    at_ms: u64,
+    at: TimePoint,
 ) -> u64 {
     // 列が在れば起点の見積もりも在る（文字を積む前に必ず起点を見積もる）。
     feeds
         .get(scope)
-        .zip(epoch.talk_time(at_ms))
-        .map_or(0, |(feed, t_s)| feed.revealed_until(t_s))
+        .zip(epoch.talk_time(at))
+        .map_or(0, |(feed, t)| feed.revealed_until(t))
 }
 
-/// 序数 `glyph` の文字が現れた壁時刻（ms）。文字の窓の「序数 → 壁時刻」の写しの中身。
+/// 序数 `glyph` の文字が現れた壁時刻。文字の窓の「序数 → 壁時刻」の写しの中身。
 ///
 /// 窓が尋ねる序数は必ず列に在る（モジュールの doc の決まり）。万一無ければ決まりの破れなので、
-/// `warn!` を残して刻みの時刻 `now_ms` で代える（落とさない・黙って時刻を作らない）。開発の
+/// `warn!` を残して刻みの時刻 `now` で代える（落とさない・黙って時刻を作らない）。開発の
 /// ビルドでも同じ道を通る（止めない）。
-pub(super) fn glyph_wall_ms(
+pub(super) fn glyph_wall(
     epoch: &TalkEpoch,
     feed: Option<&TalkFeed>,
     glyph: u64,
-    now_ms: u64,
-) -> u64 {
-    let at_ms = feed
+    now: TimePoint,
+) -> TimePoint {
+    let at = feed
         .and_then(|feed| feed.time_of(glyph))
-        .and_then(|r_s| epoch.wall_ms(r_s));
-    at_ms.unwrap_or_else(|| {
+        .and_then(|r| epoch.wall(r));
+    at.unwrap_or_else(|| {
         tracing::warn!(
             glyph,
-            now_ms,
+            %now,
             "seriko: trigger talk の区切りの文字が文字の列に無い（刻みの時刻で代える）"
         );
-        now_ms
+        now
     })
 }
 
-/// 消去の知らせ（台本の秒 `at_s`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
+/// 消去の知らせ（台本の時刻 `at`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
 /// 初期化し、そのスコープの数えを列の文字の総数に揃える（捨てた序数は次の塊の文字に振り直される）。
 pub(super) fn restart_talk(
     feed: &mut TalkFeed,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
     scope: &ActorKey,
-    at_s: f64,
+    at: TimeSpan,
 ) {
-    feed.restart_chain(at_s);
+    feed.restart_chain(at);
     // 残ったのは消去の時刻までに現れた文字だけなので、これが列の文字の総数。
-    let total = feed.revealed_until(at_s);
+    let total = feed.revealed_until(at);
     for ((_, _), state) in armed.iter_mut().filter(|((s, _), _)| s == scope) {
         state.realign_talk(total);
     }
@@ -214,13 +215,13 @@ pub(super) fn settle_talk(
     epoch: &TalkEpoch,
     feeds: &mut HashMap<ActorKey, TalkFeed>,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
-    now_ms: u64,
+    now: TimePoint,
 ) {
-    let Some(t_s) = epoch.talk_time(now_ms) else {
+    let Some(t) = epoch.talk_time(now) else {
         return;
     };
     for (scope, feed) in feeds.iter_mut() {
-        let now_seen = feed.revealed_until(t_s);
+        let now_seen = feed.revealed_until(t);
         for ((_, _), state) in armed.iter_mut().filter(|((s, _), _)| s == scope) {
             state.advance_talk(now_seen);
         }

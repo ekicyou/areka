@@ -303,7 +303,7 @@
   - _Dispatch: standard — 縁の 3 か所の書き換えと時計の型の差し替え_
   - _Requirements: 7.1, 7.4, 17.3_
 
-- [ ] 4.2 (P) areka-seriko のループと部品の芯を型へ付け替える
+- [x] 4.2 (P) areka-seriko のループと部品の芯を型へ付け替える
   - アニメの時刻と長さを型で持ち、口パクの字の時刻を 1 字ごとの間隔の 1 本の関数で求める（前半は `cue.at` を引いた台本の時刻のまま。ミリ秒への丸めは無くなる）
   - 触る量の小さい 1,000 行に近いループの本体（887 行）の行を増やさない
   - `cargo check -p areka-seriko --all-targets` の誤りの一覧に、この家族のファイルの分が 0 件である
@@ -812,3 +812,4 @@
 - 3.6: 1 字ごとの間隔は `areka_sakura::reveal::chunk_reveal_offsets(prev_since_chunk_start: Option<TimeDelta>, duration: TimeSpan, count: usize) -> impl Iterator<Item = TimeSpan>`（塊の頭からの隔たり）。areka-sakura の中のテストは 3.7・3.8 の後に回す（3.6 の 12 本は仮の crate で緑）。
 - 3.9: kanade の `src/schedule/mod.rs:30` の `#[cfg(test)] use dola::{TimePoint, time::testing::at_ms};` は 3.10 のテストが使う前提（使わなければ 3.10 で外す。3.12 で警告 0 を見る）。kanade の共有の組み立ては `tests/kanade/choice_test_test_support.rs` の `CHOICE_DISPLAY_END`／`CHOICE_DEADLINE: TimePoint`、`establish_choice_wait` の `directive: Option<TimeDelta>`、`common_recording::tick(harness, now: TimePoint)`、`common_bounded::drive_ticks_until_disconnect(.., first_tick_second: i64, ..)`。
 - 4.1: `crates/areka-seriko/src/looper.rs` は 4.1 の口の付け替えで 887 → 892 行。4.2 は終える時に 887 行以下へ戻す。`timeline.rs` の `lap_of` などは周期で割るので、4.2 は 0 の周期で panic しない形にするか前提を `debug_assert!` で示す。`timeline.rs:56` の説明が `LOTTERY_GRID_MS` を名指している（4.2 で直す）。`table.rs` は 969 行。seriko の組み立て: `cue(at: TimeSpan, ..)`・`text(at: TimeSpan, ..)`（1 字 `ms(50)`）・`part_playing(TimePoint)`・`draw_frame(id, TimeSpan)`・`emote_cue(TimeSpan, ..)`・`ClockRig::{send, tick, hear}(TimePoint, ..)`・looper_test_support の `switch(.., at: TimePoint)`・`started(..) -> Option<TimePoint>`（`Playback.started_at` へ改名待ち）・tests/common の `run_core(.., ticks: &[TimePoint], ..)`。
+- 4.2: seriko の改名（4.3・4.4 が追う）: `glyph_wall_ms` → `glyph_wall`、`TalkEpoch::wall_ms` → `wall`、`TalkWindow.wall_ms` → `wall`（`&dyn Fn(u64) -> TimePoint`）、`Playback.started_at_ms` → `started_at`、`CallOutcome.shift: Option<(TimePoint, i64, i64)>`、timeline の `frame_at`・`current_frame_index`・`always_at`・`always_visible` は経過を `TimeSpan` で受け、`lap_of` は `(u64, TimeSpan)`、新しい `timeline::elapsed_since(now, start) -> TimeSpan`。`lap_of` は `debug_assert!(period > ZERO)` を持つので、テストで周期 0 の `Always` を組まない。

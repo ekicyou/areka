@@ -154,3 +154,11 @@
 - 外したテスト・分かれ道・ログは無い。ログの欄: `send_tick` の debug `now_ms` → `now`、settle の warn `wait_ms` → `wait`、配送の失敗の error に `fire_time` を足した（Display）。
 - 変える前後の期待: `settle_tests::wait_over_the_cap_stops_at_the_cap`（字面 `"wait_ms=600001"` → `wait=` を `FromStr` で読んで `ms(600_001)` と比べる）・`settle_time_is_the_longest_runonce`（整数 → `ms(want)`）。table.rs の中のテストと table_always・table_film・table_trigger・table_calls・table_calls_check の期待は同じ値を `ms(..)`／`at_ms(..)` へ写した。
 - 型: `LoopTrigger::Always/Periodic` の周期は `NonZeroU64` → `TimeSpan`（0 は表を組む所で落とす）。seriko の時計は `TimePoint` を返す（ミリ秒への丸めの元が無くなる）。settle は軸 0 で `TalkCue::scheduled(ZERO, ZERO, ..)` を組む。
+
+## 4.2
+
+- 外したテストは無い。取り除いた分かれ道: `TalkFeed::push_chunk` の実数の式（`r = max(prev + duration/count, at)`）と `count == 0` の早い return（1 字ごとの間隔の関数に替えた）・`TalkEpoch::wall_ms` の「最も近い 1 ms へ丸める」・`TalkEpoch` の実数の起点。
+- ログの欄（Display）: trigger の `log_fired` `started_at_ms` → `started_at`、呼び出しの始め・同じ時刻の 2 度目の開始・引き金を構えた debug `at_ms` → `at`、区切りの文字の warn と非単調な刻みの debug `now_ms` → `now`、`last_seen` は Display。
+- 振る舞いの変化: `calls.rs` の `just_after`（印の次の時刻 +1 ms → +100ns）・区切りの文字の壁時刻がミリ秒の丸めの無いちょうどの値・割り切れない長さの塊の字の時刻は実数の式から 100ns 未満だけ違う（本番の字数 × 50 ms は今と同じ）。
+- 変える前後の期待（timeline.rs の中のテスト）: `starting_at_sets_strictly_future_boundary`・`poll_*` の 4 本・`frame_at_*` を `at_ms`／`ms` へ写した。`u64::MAX` の経過 → `TimeSpan::MAX`。talk_tests の `wall_ms` の丸めの期待は 4.3 が書き直す。
+- 移した関数: `start_top_always`（looper.rs → looper_calls.rs。looper.rs は 857 行）。

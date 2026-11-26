@@ -34,19 +34,19 @@
 //! 末尾での保持の記録は `advance` だけが出す。`always` の時計の誕生と破棄は、生まれた・捨てたところで出す。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
 
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
-use dola::TimePoint;
+use dola::{TimePoint, TimeSpan};
 
 use crate::calls::CallOutcome;
 use crate::looper::{log_play_end, pattern_frame};
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
 use crate::timeline::{
-    AlwaysView, FrameStatus, LoopRng, always_visible, current_frame_index, frame_at, should_fire,
-    stop_frame, visible_frame,
+    AlwaysView, FrameStatus, LoopRng, always_visible, current_frame_index, elapsed_since, frame_at,
+    should_fire, stop_frame, visible_frame,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -122,7 +122,7 @@ pub(crate) struct PartClocks {
     order: Vec<usize>,
 }
 
-/// 時計 1 本を `now_ms` で見た答え（`advance` と `refresh` で共有）。
+/// 時計 1 本を `now` で見た答え（`advance` と `refresh` で共有）。
 enum Look {
     /// 時計が無いか、先頭の待ちの前（コマ無し）。
     Nothing,
@@ -134,12 +134,12 @@ enum Look {
     Stopped { surface_id: i64 },
 }
 
-fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
+fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now: TimePoint) -> Look {
     match clock {
         None => Look::Nothing,
         Some(PartAnim::Residual { frame_index }) => Look::Frame(frame_index),
-        Some(PartAnim::Playing { started_at_ms, .. }) => {
-            let elapsed = now_ms.saturating_sub(started_at_ms);
+        Some(PartAnim::Playing { started_at, .. }) => {
+            let elapsed = elapsed_since(now, started_at);
             match frame_at(&anim.frames, elapsed) {
                 FrameStatus::Pending => Look::Nothing,
                 FrameStatus::Active(i) => Look::Frame(i),
@@ -220,19 +220,19 @@ fn drop_transient_where(
     });
 }
 
-/// `always` の経過 `elapsed_ms` の答えを欄へ書く: 経過 0 のコマと同じなら載せない／
+/// `always` の経過 `elapsed` の答えを欄へ書く: 経過 0 のコマと同じなら載せない／
 /// コマならコマ（絵を指すなら子の欄）／何も出さないなら、経過 0 のコマが在るときだけ「消えている」。
 fn write_always(
     pattern: &mut PatternState,
     part: PartKey,
     anim: &LoopAnimation,
-    period_ms: NonZeroU64,
+    period: TimeSpan,
     laps: Option<NonZeroU32>,
-    elapsed_ms: u64,
+    elapsed: TimeSpan,
 ) {
     // 働きのコマは前の描くコマを残す。`None` は欄に置かない。
-    let rest = always_visible(&anim.frames, period_ms, laps, 0);
-    match always_visible(&anim.frames, period_ms, laps, elapsed_ms) {
+    let rest = always_visible(&anim.frames, period, laps, TimeSpan::ZERO);
+    match always_visible(&anim.frames, period, laps, elapsed) {
         now if now == rest => {}
         None => {}
         Some(AlwaysView::Frame(i)) => write(pattern, part, anim, i),
@@ -245,24 +245,24 @@ fn write_always(
     }
 }
 
-/// `always` の時計の開始の時刻。時計が無ければ `at_ms` で作る（生まれたら `debug!`）。`at_ms` が
+/// `always` の時計の開始の時刻。時計が無ければ `at` で作る（生まれたら `debug!`）。`at` が
 /// 無い（時刻が分からない）ときは作らず `None`（経過 0＝欄に載せない）。
 fn always_start(
     clocks: &mut BTreeMap<ClockKey, PartAnim>,
     key: ClockKey,
-    at_ms: Option<u64>,
+    at: Option<TimePoint>,
     scope: &ActorKey,
     slot: Slot,
     finite: bool,
-) -> Option<u64> {
-    if let Some(PartAnim::Playing { started_at_ms, .. }) = clocks.get(&key) {
-        return Some(*started_at_ms);
+) -> Option<TimePoint> {
+    if let Some(PartAnim::Playing { started_at, .. }) = clocks.get(&key) {
+        return Some(*started_at);
     }
-    let at = at_ms?;
+    let at = at?;
     clocks.insert(
         key,
         PartAnim::Playing {
-            started_at_ms: at,
+            started_at: at,
             acts_through: None,
         },
     );
@@ -436,7 +436,7 @@ fn unwrite(pattern: &mut PatternState, part: PartKey, id: u32) {
     }
 }
 
-/// 時計 1 本を `now_ms` まで進めて欄へ書く（刻みの進行。抽選の animation も 3 語も同じ）: 再生中なら
+/// 時計 1 本を `now` まで進めて欄へ書く（刻みの進行。抽選の animation も 3 語も同じ）: 再生中なら
 /// 経過から今のコマ・`-1` の無い末尾に着いたら最後のコマを保つ時計へ移す・負の番号のコマに着いたら
 /// 時計を消す。コマを書いたら真（時計が無い・先頭の待ちの前・止まったは偽）。
 #[allow(clippy::too_many_arguments)]
@@ -448,7 +448,7 @@ fn progress(
     slot: Slot,
     part: PartKey,
     anim: &LoopAnimation,
-    now_ms: u64,
+    now: TimePoint,
 ) -> bool {
     let key = (part, anim.id);
     let label = Label(part);
@@ -456,7 +456,7 @@ fn progress(
     // 同じ）。
     let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
     // 開始からの経過で今のコマを決める（見えなかった間も進んでいた扱い）。
-    match look(anim, clocks.get(&key).copied(), now_ms) {
+    match look(anim, clocks.get(&key).copied(), now) {
         Look::Nothing => false,
         Look::Frame(i) => {
             write(pattern, part, anim, i);
@@ -533,7 +533,7 @@ impl PartClocks {
         surface_id: u32,
         binds: &BindSet,
         table: &AnimationTable,
-        now_ms: u64,
+        now: TimePoint,
         crossed: bool,
         open: bool,
         talk: Option<&TalkWindow<'_>>,
@@ -584,7 +584,7 @@ impl PartClocks {
                     pattern,
                     anims,
                     who,
-                    (now_ms, open),
+                    (now, open),
                     talk,
                     pick,
                 ) else {
@@ -603,7 +603,7 @@ impl PartClocks {
                         slot,
                         part,
                         anim,
-                        now_ms,
+                        now,
                     );
                 }
                 return true;
@@ -626,7 +626,7 @@ impl PartClocks {
             // 構えてあった部品の 3 語は、ここで開始の時刻の順に働きのコマと揃えて判定する（呼び出しが
             // 止めた・始めた再生を見て決める・一番上と同じ順）。
             if let Some(state) = armed.get_mut(&part) {
-                state.follow(open, now_ms, None);
+                state.follow(open, now, None);
                 let (_, early, _) = fire_part_triggers(
                     state,
                     clocks,
@@ -635,7 +635,7 @@ impl PartClocks {
                     pattern,
                     anims,
                     (scope, slot, part),
-                    now_ms,
+                    now,
                     talk,
                     pick,
                 );
@@ -644,7 +644,7 @@ impl PartClocks {
             // 抽選と `always` の前に働きのコマを今の時刻まで当てる（今の時刻に始まる再生に、それより前の
             // 呼び出しを当てない。抽選は呼び出しが始めた・止めた再生を見て引く・一番上と同じ順）。
             let (outcome, _) = run_part_calls(
-                clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
+                clocks, stopped, pattern, scope, slot, part, anims, now, pick,
             );
             shift = shift.then(outcome);
             for &i in order.iter() {
@@ -658,7 +658,7 @@ impl PartClocks {
                     // 窓が閉じている間と、呼び出しで止めた間は作らない（無ければ経過 0）。
                     Gate::Always { laps } => {
                         if !stopped.contains(&key) {
-                            let at = open.then_some(now_ms);
+                            let at = open.then_some(now);
                             always_start(clocks, key, at, scope, slot, laps.is_some());
                         }
                         continue;
@@ -671,12 +671,12 @@ impl PartClocks {
                 // 再生中と見なさない（見え直した刻みで抽選に戻る）。
                 let clock = clocks.get(&key).copied();
                 let playing = matches!(clock, Some(PartAnim::Playing { .. }))
-                    && matches!(look(anim, clock, now_ms), Look::Nothing | Look::Frame(_));
+                    && matches!(look(anim, clock, now), Look::Nothing | Look::Frame(_));
                 if crossed && open && !playing && should_fire(k, rng) {
                     clocks.insert(
                         key,
                         PartAnim::Playing {
-                            started_at_ms: now_ms,
+                            started_at: now,
                             acts_through: None,
                         },
                     );
@@ -691,7 +691,7 @@ impl PartClocks {
             }
             // 抽選と `always` がこの刻みの時刻に始めた再生の頭の働きのコマを当てる。
             let (outcome, _) = run_part_calls(
-                clocks, stopped, pattern, scope, slot, part, anims, now_ms, pick,
+                clocks, stopped, pattern, scope, slot, part, anims, now, pick,
             );
             shift = shift.then(outcome);
             for &i in order.iter() {
@@ -705,7 +705,7 @@ impl PartClocks {
                         slot,
                         part,
                         anim,
-                        now_ms,
+                        now,
                     );
                 }
             }
