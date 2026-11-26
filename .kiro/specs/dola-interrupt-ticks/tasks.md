@@ -157,7 +157,7 @@
   - _Dispatch: standard — 形は設計が与え、時刻の求め方の書き換えが残る_
   - _Requirements: 5.2, 5.3, 5.4, 5.10, 9.4, 9.7_
 
-- [ ] 2.12 (P) storyboard の runtime を、倍率の写しと時刻の型で動かす
+- [x] 2.12 (P) storyboard の runtime を、倍率の写しと時刻の型で動かす
   - 開始・刻み・止める・戻す・終わりの期限を時刻の型で受け、経った長さと台本の時刻（前向きの写し）・引き金の予定の時刻（逆の写し）・周回の終わりを、設計の式で求める。1 周の長さは共有の 1 本の関数で求める
   - 終わりの予定の時刻を「決まっていれば全体の終わり・決まっていなければ `None`」の 1 つの意味にする。周回の後の待ちを中の列挙で表し、無限大の番兵を使わない。出来事の直前は 100ns 手前で行う
   - 終わらないループの長さの確かめを、1 周の長さと下限（1,000,000）の整数の比べにする
@@ -805,3 +805,4 @@
 - 2.9: 2.10 が直すテストは `tests/validation/schema_test.rs`（`invalid_numbers_are_rejected` の 4 件・`all_violations_are_collected`・`negative_scalar_loop_offset_reports_one_error`・`base_doc`）、`tests/runtime/loop_offset_test/loop_offset_validation.rs`（`v14_negative_min_error`・`v15_negative_max_error`・`v15_negative_scalar_error`・NaN の 3 本ほか）、`tests/validation/transition_test/transition_v13_nan.rs`、`tests/general/**`、`tests/trigger/{serde_test,validation_test}.rs`、`tests/runtime/loop_offset_test/loop_offset_serde.rs`。`tests/compile/boundary_test.rs` の NaN／負の delay・duration・trigger_start_offset のテスト（`invalid_delay_and_duration_are_rejected_before_compile`・`nan_delay_that_bypassed_overlap_check_is_rejected`・`between_nan_delay_is_rejected`・`nan_trigger_start_offset_is_rejected`・`toml_non_finite_numbers_are_rejected_by_validate` の時間の欄）はコンパイルの家族＝2.11 の持ち物。`compile/resolve.rs:266` の説明（有限・符号は validate が見る）は 2.11 で直す。
 - 2.10: 境界の外で実数の秒の時間の値が残るテストは、2.11（`tests/compile/**`・`tests/trigger/compile_test.rs`）と 2.13（`tests/runtime/conflict_resolution_test/**`・`runtime/facade_test/diff_delivery.rs`・`runtime/loop_offset_test/loop_offset_compile.rs`・`tests/trigger/runtime_test.rs`）の持ち物。`tests/general/time_range_test.rs` は `compile_storyboard(&doc, "sb")` の 2 引数で呼ぶ（2.11 が開始の時刻を外す）。
 - 2.11: `src/runtime/facade.rs:192` が `compile_validated(doc, name, base_time)` で引き金の子を 0 でない開始の時刻でコンパイルしている。2.12 は子を `start(name, TimePoint)` の起点で始め、子の区間と引き金を「起点＋隔たり」で求める。`tests/compile/start_shift_test.rs` は 2.12 の口 `start(name, TimePoint)`・`tick(TimePoint)`・`StartResult.end_time: Option<TimePoint>`・`TriggerResult::Started { start_result, .. }` に頼る。
+- 2.12: `resume` の戻り値は、まだ終わりの期限との早い方を取らない（8.1）。`tests/cue/sheet_test.rs:180` の `stamping_absolute_start_time_leaves_relative_times_untouched` は期待の値が誤り（相対の終わりは `ms(500)` が正しく、`ms(1000)` ではない。1aaf136a3 で入った）。2.14 の締めで直す。runtime のテストのうち `src/runtime/{instance_manager,loop_controller}/tests.rs` も 2.13 の持ち物。

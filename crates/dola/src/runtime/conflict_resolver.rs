@@ -7,6 +7,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
+use crate::time::TimePoint;
 
 use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
@@ -21,7 +22,7 @@ use super::types::{EvaluatedValue, RuntimeError};
 pub(crate) fn resolve_conflicts_excluding(
     new_group_id: u64,
     compiled: &CompiledStoryboard,
-    start_time: f64,
+    start_time: TimePoint,
     timeline_manager: &mut TimelineManager,
     instance_manager: &mut InstanceManager,
     subscription_manager: &mut SubscriptionManager,

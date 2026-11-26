@@ -3,12 +3,13 @@
 use std::rc::Rc;
 
 use crate::DolaError;
+use crate::time::{TimePoint, TimeSpan};
 use crate::value::DynamicValue;
 
-/// 無限ループ許可の最小周期（秒）。
+/// 無限ループ許可の最小の 1 周の長さ（0.1 秒）。
 /// 時刻が飛んだ tick で進める周回の数に上限を作る（トリガーを持つループの重さは
 /// `loop_controller::process_loops` の注）。
-pub(crate) const MIN_LOOP_DURATION: f64 = 0.1;
+pub(crate) const MIN_LOOP_DURATION: TimeSpan = TimeSpan::from_millis(100);
 
 /// 評価済み変数値（補間計算の出力）。
 ///
@@ -53,9 +54,12 @@ pub enum RuntimeError {
     ZeroDurationWithLoop { storyboard: String },
     /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
     #[error(
-        "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
+        "storyboard '{storyboard}' has too short duration ({duration}) for infinite loop (min: {MIN_LOOP_DURATION})"
     )]
-    TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
+    TooShortDurationWithInfiniteLoop {
+        storyboard: String,
+        duration: TimeSpan,
+    },
     /// コンパイルエラー
     #[error("compile error: {0:?}")]
     CompileError(Vec<DolaError>),
@@ -78,9 +82,9 @@ impl From<Vec<DolaError>> for RuntimeError {
 pub struct StartResult {
     /// 実行インスタンスの一意識別子
     pub group_id: u64,
-    /// 正常再生した場合の終了予定時刻（f64秒）。
-    /// 無限ループでも 1 周分の終了時刻。
-    pub end_time: f64,
+    /// 再生の全体の終わりの時刻。その時に決まっていなければ None
+    /// （終わらないループ・周回の間の待ちを、これから周回ごとに引くループ）。
+    pub end_time: Option<TimePoint>,
     /// 競合解決で影響を受けた既存 group_id のリスト。
     /// 競合がなければ空。
     pub affected_group_ids: Vec<u64>,
@@ -163,7 +167,7 @@ mod tests {
     fn start_result_has_affected_group_ids() {
         let result = StartResult {
             group_id: 1,
-            end_time: 5.0,
+            end_time: Some(TimePoint::from_ticks(50_000_000)),
             affected_group_ids: vec![2, 3],
         };
         assert_eq!(result.affected_group_ids, vec![2, 3]);

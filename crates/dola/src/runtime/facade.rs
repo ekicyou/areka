@@ -2,10 +2,12 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+use crate::DolaError;
 use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_all, compile_validated};
 use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
+use crate::time::{TimeDelta, TimePoint, TimeSpan};
 
 use super::conflict_resolver;
 use super::instance_manager::{InstanceManager, StoryboardInstance, TriggerState};
@@ -24,8 +26,8 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 /// let mut rt = DolaRuntime::new();
 /// let opacity_id = rt.subscribe("opacity");
 /// rt.load_document(doc)?;
-/// let result = rt.start("fade_in", 0.0)?;
-/// rt.tick(0.5);
+/// let result = rt.start("fade_in", TimePoint::ZERO)?;
+/// rt.tick(TimePoint::ZERO + TimeSpan::from_millis(500));
 /// let changes = rt.last_result();
 /// ```
 pub struct DolaRuntime {
@@ -70,9 +72,8 @@ impl DolaRuntime {
         compile_all(&doc).map_err(RuntimeError::CompileError)?;
         // 周回の長さの規則も読み込みで確かめ、読み込めた文書が start で落ちないようにする
         for name in doc.storyboard.keys() {
-            let compiled =
-                compile_validated(&doc, name, 0.0).map_err(RuntimeError::CompileError)?;
-            loop_duration(name, &compiled)?;
+            let compiled = compile_validated(&doc, name).map_err(RuntimeError::CompileError)?;
+            lap_length(name, &compiled)?;
         }
         self.document = Some(doc);
         self.timeline_manager.release_unused_intern_values();
@@ -83,7 +84,11 @@ impl DolaRuntime {
     ///
     /// 同じ変数に生きた項目を持つ古いインスタンスは、`start_time` が未来でも呼んだ時点で
     /// 競合として扱う。
-    pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError> {
+    pub fn start(
+        &mut self,
+        name: &str,
+        start_time: TimePoint,
+    ) -> Result<StartResult, RuntimeError> {
         self.start_internal(name, start_time, &BTreeSet::new())
     }
 
@@ -94,54 +99,65 @@ impl DolaRuntime {
     fn start_internal(
         &mut self,
         name: &str,
-        start_time: f64,
+        start_time: TimePoint,
         skip_conflict_gids: &BTreeSet<u64>,
     ) -> Result<StartResult, RuntimeError> {
-        // セグメントは常に相対時間 0.0 起点で構築する。壁時計時刻への変換は loop_start_time で行う
-        let (mut compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
-
-        // 無限ループでも1周分の end_time を設定する
-        let end_time = start_time + loop_duration;
+        // セグメントは storyboard の頭からの隔たりで持つ。絶対の時刻は loop_start からの経った長さで求める
+        let (mut compiled, lap_length) = self.compile_and_validate(name)?;
 
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
         let (lo_min, lo_max, lo_easing) = match &compiled.loop_offset {
-            Some(LoopOffset::Scalar(v)) => {
-                (Some(0.0), *v, EasingFunction::Named(EasingName::Linear))
-            }
+            Some(LoopOffset::Scalar(v)) => (
+                Some(TimeSpan::ZERO),
+                *v,
+                EasingFunction::Named(EasingName::Linear),
+            ),
             Some(LoopOffset::Range(r)) => (Some(r.min), r.max, r.easing.clone()),
-            None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
+            None => (
+                None,
+                TimeSpan::ZERO,
+                EasingFunction::Named(EasingName::Linear),
+            ),
         };
 
-        // group_id は単調増加の採番で既存の鍵と衝突しない
-        let trigger_states = (0..compiled.triggers.len())
-            .map(|trigger_index| TriggerState {
+        let lap_script = TimeDelta::from(compiled.total_base_duration);
+        let trigger_states = compiled
+            .triggers
+            .iter()
+            .enumerate()
+            .map(|(trigger_index, trigger)| TriggerState {
                 trigger_index,
+                // 内か外かは台本の軸で比べる。内なら発火の時刻は周回の終わりを越えない
+                lap_offset: (trigger.fire_time <= lap_script)
+                    .then(|| compiled.time_scale.first_reaching(trigger.fire_time))
+                    .flatten(),
                 fired: false,
             })
             .collect();
-        self.instance_manager.instances_mut().insert(
-            group_id,
-            StoryboardInstance {
-                storyboard_name: name.to_string(),
-                state: InstanceState::Created,
-                interruption_policy: compiled.interruption_policy,
-                time_scale: compiled.time_scale,
-                pause_accumulated: 0.0,
-                pause_start: None,
-                loop_count: compiled.loop_count,
-                loops_completed: 0,
-                finish_deadline: None,
-                end_time,
-                loop_start_time: start_time,
-                loop_duration,
-                loop_offset_min: lo_min,
-                loop_offset_max: lo_max,
-                loop_offset_easing: lo_easing,
-                trigger_states,
-            },
-        );
+        let instance = StoryboardInstance {
+            storyboard_name: name.to_string(),
+            state: InstanceState::Created,
+            interruption_policy: compiled.interruption_policy,
+            time_scale: compiled.time_scale,
+            pause_accumulated: TimeDelta::ZERO,
+            pause_start: None,
+            loop_count: compiled.loop_count,
+            loops_completed: 0,
+            finish_deadline: None,
+            loop_start: start_time,
+            lap_length,
+            loop_offset_min: lo_min,
+            loop_offset_max: lo_max,
+            loop_offset_easing: lo_easing,
+            trigger_states,
+        };
+        let end_time = instance.planned_end();
+        // group_id は単調増加の採番で既存の鍵と衝突しない
+        self.instance_manager
+            .instances_mut()
+            .insert(group_id, instance);
 
         let affected = conflict_resolver::resolve_conflicts_excluding(
             group_id,
@@ -173,12 +189,11 @@ impl DolaRuntime {
         })
     }
 
-    /// 成功時は（コンパイル結果, 1周分の実時間 loop_duration）を返す。
+    /// 成功時は（コンパイル結果, 1 周の経った長さ）を返す。
     fn compile_and_validate(
         &self,
         name: &str,
-        base_time: f64,
-    ) -> Result<(CompiledStoryboard, f64), RuntimeError> {
+    ) -> Result<(CompiledStoryboard, TimeSpan), RuntimeError> {
         let doc = self
             .document
             .as_ref()
@@ -188,22 +203,26 @@ impl DolaRuntime {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
-        let compiled =
-            compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
+        let compiled = compile_validated(doc, name).map_err(RuntimeError::CompileError)?;
 
         // load_document が同じ規則を通しているので、ここでは落ちない
-        let loop_duration = loop_duration(name, &compiled)?;
-        Ok((compiled, loop_duration))
+        let lap_length = lap_length(name, &compiled)?;
+        Ok((compiled, lap_length))
     }
 
     /// 一時停止。
-    pub fn pause(&mut self, group_id: u64, current_time: f64) -> Result<(), RuntimeError> {
-        self.instance_manager.pause(group_id, current_time)
+    pub fn pause(&mut self, group_id: u64, now: TimePoint) -> Result<(), RuntimeError> {
+        self.instance_manager.pause(group_id, now)
     }
 
-    /// 再開 — 再計算した end_time を返却。
-    pub fn resume(&mut self, group_id: u64, current_time: f64) -> Result<f64, RuntimeError> {
-        self.instance_manager.resume(group_id, current_time)
+    /// 再開。戻した後の、再生の全体の終わりの時刻を返す。決まっていなければ None
+    /// （`StartResult.end_time` と同じ意味）。
+    pub fn resume(
+        &mut self,
+        group_id: u64,
+        now: TimePoint,
+    ) -> Result<Option<TimePoint>, RuntimeError> {
+        self.instance_manager.resume(group_id, now)
     }
 
     /// 最終値ジャンプ終了（Conclude）。
@@ -231,10 +250,9 @@ impl DolaRuntime {
 
     /// 遅延 Conclude。
     ///
-    /// `deadline` は呼び出し側が `clock::now() + offset_secs` として計算した
-    /// 絶対時刻。`tick()` 内で `current_time >= deadline` の
+    /// `deadline` は `tick()` に渡す時刻と同じ物差しの絶対時刻。`tick()` 内で `now >= deadline` の
     /// タイミングで Conclude 相当の処理を実行する。
-    pub fn finish(&mut self, group_id: u64, deadline: f64) -> Result<(), RuntimeError> {
+    pub fn finish(&mut self, group_id: u64, deadline: TimePoint) -> Result<(), RuntimeError> {
         let instance = self.instance_manager.get(group_id)?;
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
@@ -263,11 +281,11 @@ impl DolaRuntime {
     // 2 フェーズ API
     // =========================================================================
 
-    /// Phase 1: 内部状態を current_time まで進行し、結果を内部フィールドに格納。
+    /// Phase 1: 内部状態を now まで進行し、結果を内部フィールドに格納。
     ///
     /// `TimedSchedule::tick()` と対称な設計。
-    pub fn tick(&mut self, current_time: f64) {
-        self.last_update_result = self.update_internal(current_time);
+    pub fn tick(&mut self, now: TimePoint) {
+        self.last_update_result = self.update_internal(now);
     }
 
     /// Phase 2: 直前の tick() 結果を読み取り専用で返す。
@@ -287,24 +305,26 @@ impl DolaRuntime {
 
     /// 差分更新の内部実装。
     ///
-    /// 0〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
+    /// 0〜2 を、now までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
     /// 同じ時刻では 0 → 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
     /// 0. トリガーなしの無限のループを、その時刻より前に終わる周回まで進める
     /// 1. finish deadline 到達インスタンスは Conclude 相当
     ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
-    /// 2. 自然終了検知（その時刻 >= end_time の Playing インスタンス）
+    /// 2. 自然終了検知（その時刻が周回の終わり以後の Playing インスタンス）
     ///
-    /// 最後に、出来事に入れない無限のループ（トリガーなし）を current_time まで進めてから、
+    /// 最後に、出来事に入れない無限のループ（トリガーなし）を now まで進めてから、
     /// 購読変数の評価と差分検出を行う。
-    fn update_internal(&mut self, current_time: f64) -> UpdateResult {
+    fn update_internal(&mut self, now: TimePoint) -> UpdateResult {
         // 時刻の順に回すのは、子を起こす順がぶつかる子の勝ち負けを決めるから。
         // 1 コマずつ回したときと同じ順になる
         let mut trigger_results = Vec::new();
         let mut rng = rand::rng();
-        while let Some(t) = self.next_event_time().filter(|&t| t <= current_time) {
-            // Step 0: トリガーなしの無限のループを t より前に終わる周回まで進める（60fps の前のコマと同じ周回にする）。
-            // ほかの Playing の end_time は出来事なので t 以上で、ここでは動かない。t ちょうどの周回は Step 2 で
-            self.process_loop_ends(t.next_down(), &mut rng);
+        while let Some(t) = self.next_event_time().filter(|&t| t <= now) {
+            // Step 0: トリガーなしの無限のループを t の 100ns 手前までに終わる周回まで進める（60fps の前のコマと同じ周回にする）。
+            // ほかの Playing の周回の終わりは出来事なので t 以上で、ここでは動かない。t ちょうどの周回は Step 2 で
+            if let Some(before) = t.checked_add_delta(TimeDelta::from_ticks(-1)) {
+                self.process_loop_ends(before, &mut rng);
+            }
             for gid in self.instance_manager.check_finish_deadlines(t) {
                 self.conclude_internal(gid);
             }
@@ -312,14 +332,14 @@ impl DolaRuntime {
             trigger_results.extend(self.process_triggers(t));
             self.process_loop_ends(t, &mut rng);
         }
-        self.process_loop_ends(current_time, &mut rng);
+        self.process_loop_ends(now, &mut rng);
 
         // 評価と差分検出は同じ周回で行う
         let timeline_manager = &mut self.timeline_manager;
         let instances = self.instance_manager.instances();
         let changes = self
             .subscription_manager
-            .diff_and_update(|name| timeline_manager.evaluate(name, current_time, instances));
+            .diff_and_update(|name| timeline_manager.evaluate(name, now, instances));
 
         UpdateResult {
             changes,
@@ -334,10 +354,9 @@ impl DolaRuntime {
     /// 次の出来事の時刻: finish の期限・Playing のまだ起きていないトリガー（周回の長さの内）・
     /// 周回の終わりの最小。トリガーなしの無限のループの周回の終わりは入れない: 自然には終わらず、
     /// 出来事の時刻ごとに `process_loop_ends` がその時刻まで進めるので、1 周ずつ回さなくてよい。
-    /// NaN の時刻は `f64::min` が捨てる（NaN の期限は起きない）
-    fn next_event_time(&self) -> Option<f64> {
-        let mut next: Option<f64> = None;
-        let mut take = |t: f64| next = Some(next.map_or(t, |n| n.min(t)));
+    fn next_event_time(&self) -> Option<TimePoint> {
+        let mut next: Option<TimePoint> = None;
+        let mut take = |t: TimePoint| next = Some(next.map_or(t, |n| n.min(t)));
         for (gid, inst) in self.instance_manager.instances() {
             if let Some(deadline) = inst.finish_deadline {
                 take(deadline);
@@ -345,29 +364,32 @@ impl DolaRuntime {
             if inst.state != InstanceState::Playing {
                 continue;
             }
-            if inst.loop_count != -1 || !inst.trigger_states.is_empty() {
-                take(inst.end_time);
+            if (inst.loop_count != -1 || !inst.trigger_states.is_empty())
+                && let Some(end) = inst.lap_end()
+            {
+                take(end);
             }
-            if let Some(triggers) = self.trigger_store.get(gid) {
+            if self.trigger_store.contains_key(gid) {
                 for ts in inst.trigger_states.iter().filter(|ts| !ts.fired) {
-                    if let Some(wall) =
-                        trigger_wall_time(inst, triggers[ts.trigger_index].fire_time)
-                    {
+                    if let Some(wall) = trigger_wall_time(inst, ts) {
                         take(wall);
                     }
                 }
             }
         }
-        next.filter(|t| !t.is_nan())
+        next
     }
 
     /// `time` までに周回の終わった Playing のインスタンスを進め、終わったものを Conclude する
-    fn process_loop_ends(&mut self, time: f64, rng: &mut impl rand::Rng) {
+    fn process_loop_ends(&mut self, time: TimePoint, rng: &mut impl rand::Rng) {
         let loop_results: Vec<(u64, LoopAction)> = self
             .instance_manager
             .instances_mut()
             .iter_mut()
-            .filter(|(_, inst)| inst.state == InstanceState::Playing && time >= inst.end_time)
+            .filter(|(_, inst)| {
+                inst.state == InstanceState::Playing
+                    && inst.lap_end().is_some_and(|end| time >= end)
+            })
             .map(|(gid, inst)| (*gid, loop_controller::process_loops(inst, time, rng)))
             .collect();
         for (gid, action) in loop_results {
@@ -383,10 +405,10 @@ impl DolaRuntime {
     /// 1 回の発火で印が立ち、印を戻すのは Step 2 の周回だけなので、2 回目からは新しく起きた子の
     /// トリガーしか集まらない。トリガーの循環は検証が拒むので、繰り返しは
     /// ストーリーボードの数 + 1 回で止まる。
-    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+    fn process_triggers(&mut self, now: TimePoint) -> Vec<TriggerResult> {
         let mut results = Vec::new();
         loop {
-            let fired = self.fire_due_triggers(current_time);
+            let fired = self.fire_due_triggers(now);
             if fired.is_empty() {
                 return results;
             }
@@ -395,15 +417,15 @@ impl DolaRuntime {
     }
 
     /// Playing 状態のインスタンスに紐づくトリガーを走査し、
-    /// 発火条件（current_time >= 発火時刻 かつ 未発火）を満たすものを
+    /// 発火条件（now >= 発火時刻 かつ 未発火）を満たすものを
     /// fire-and-forget で子ストーリーボードとして開始する（1 回分）。
-    fn fire_due_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+    fn fire_due_triggers(&mut self, now: TimePoint) -> Vec<TriggerResult> {
         // 借用を分離するため、発火対象を先に Vec へ集約する
         struct PendingTrigger {
             parent_group_id: u64,
             trigger_index: usize,
             target_storyboard: String,
-            child_start_time: f64,
+            child_start_time: TimePoint,
             source_storyboard: String,
         }
 
@@ -429,10 +451,11 @@ impl DolaRuntime {
                         triggers.len()
                     );
                     let trigger = &triggers[ts.trigger_index];
-                    if let Some(wall_fire_time) = trigger_wall_time(inst, trigger.fire_time)
-                        && current_time >= wall_fire_time
+                    if let Some(wall_fire_time) = trigger_wall_time(inst, ts)
+                        && now >= wall_fire_time
                     {
-                        let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
+                        let child_start =
+                            wall_fire_time + trigger.start_offset.unwrap_or(TimeDelta::ZERO);
                         pending.push(PendingTrigger {
                             parent_group_id: *gid,
                             trigger_index: ti,
@@ -498,17 +521,12 @@ impl DolaRuntime {
     }
 }
 
-/// トリガーの壁時計の発火時刻。周回の長さより後ろのトリガーは None（親の周回が先に終わる）。
-///
-/// fire_time は 0.0 起点で compile した周回内の相対時刻で、壁時計の時刻は評価の式
-/// calculate_effective_time の逆: loop_start_time + pause_accumulated + fire_time / time_scale。
-/// 周回を飛ばした tick でも 1 コマずつ回したときと同じにするため、内か外かは時刻でなく長さで比べる。
-/// end_time は別の式（一時停止・待ちを足し込む）なので、丸めで 1 ulp 後ろへずれた周回の終わりちょうどの
-/// トリガーが Step 2 で消えないよう end_time で抑える
-fn trigger_wall_time(inst: &StoryboardInstance, fire_time: f64) -> Option<f64> {
-    let offset = fire_time / inst.time_scale;
-    (offset <= inst.loop_duration)
-        .then(|| (inst.loop_start_time + inst.pause_accumulated + offset).min(inst.end_time))
+/// トリガーの壁時計の発火時刻: 周回の起点 + 発火の台本の時刻に届く最初の経った長さ。
+/// 周回の長さより後ろのトリガーは None（親の周回が先に終わる）。
+fn trigger_wall_time(inst: &StoryboardInstance, trigger: &TriggerState) -> Option<TimePoint> {
+    trigger
+        .lap_offset
+        .map(|offset| inst.loop_start + inst.pause_accumulated + offset)
 }
 
 impl Default for DolaRuntime {
@@ -517,25 +535,28 @@ impl Default for DolaRuntime {
     }
 }
 
-/// 1 周分の実時間。無限のループの周回が 0 か `MIN_LOOP_DURATION` 未満なら拒む。
-fn loop_duration(name: &str, compiled: &CompiledStoryboard) -> Result<f64, RuntimeError> {
-    // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
-    // 割った結果が有限であることはコンパイルが確かめる
-    let duration = compiled.total_base_duration / compiled.time_scale;
+/// 1 周の経った長さ。無限のループの周回が 0 か `MIN_LOOP_DURATION` 未満なら拒む。
+fn lap_length(name: &str, compiled: &CompiledStoryboard) -> Result<TimeSpan, RuntimeError> {
+    // 表せない 1 周はコンパイルが拒むので、ここでは落ちない
+    let lap = compiled.lap_length().ok_or_else(|| {
+        RuntimeError::CompileError(vec![DolaError::LoopDurationOutOfRange {
+            location: format!("storyboard '{name}'"),
+        }])
+    })?;
     if compiled.loop_count == -1 {
-        if duration == 0.0 {
+        if lap == TimeSpan::ZERO {
             return Err(RuntimeError::ZeroDurationWithLoop {
                 storyboard: name.to_string(),
             });
         }
-        if duration < MIN_LOOP_DURATION {
+        if lap < MIN_LOOP_DURATION {
             return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
                 storyboard: name.to_string(),
-                duration,
+                duration: lap,
             });
         }
     }
-    Ok(duration)
+    Ok(lap)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::compile::{CompiledSegment, CompiledStoryboard, VariableTypeHint};
+use crate::time::{TimeDelta, TimePoint};
 
 use super::instance_manager::StoryboardInstance;
 use super::interpolator::{Interpolator, ObjectInternPool};
@@ -102,11 +103,11 @@ impl TimelineManager {
     ///   始まっていない項目（未来の start・start_offset の子）は、全部が始まっていないときだけ from を出す
     /// - 最後のセグメントを過ぎた変数は、インスタンスが生きている間は最後の値を保つ
     ///   （項目を消すのは `remove_entries` だけ）
-    /// - Pause 中のインスタンスは pause 開始時点の effective_time で固定
+    /// - Pause 中のインスタンスは pause 開始時点の台本の時刻で固定
     pub fn evaluate(
         &mut self,
         variable_name: &str,
-        current_time: f64,
+        now: TimePoint,
         instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> Option<EvaluatedValue> {
         let timeline = self.timelines.get_mut(variable_name)?;
@@ -123,13 +124,16 @@ impl TimelineManager {
                 continue;
             };
 
-            let effective_time = value_time(current_time, instance);
+            let effective_time = value_time(now, instance);
             // 周回を 1 回でも終えたインスタンスは始まった扱い（2 周目の先頭の遅れの中でも）
             let started = instance.loops_completed > 0
                 || entry
                     .segments
                     .first()
-                    .is_some_and(|s| effective_time >= s.start_time);
+                    .is_some_and(|s| match effective_time {
+                        ValueTime::At(t) => t >= s.start_time,
+                        ValueTime::AfterLastSegment => true,
+                    });
             let key = (started, entry.group_id);
 
             if best_value.as_ref().is_some_and(|(best, _)| key <= *best) {
@@ -181,11 +185,11 @@ impl TimelineManager {
         self.timelines.get(variable_name)
     }
 
-    /// group_id に属する全変数の値を start_time 時点で評価する（Cancel/Trim 戦略用）。
+    /// group_id に属する全変数の値を now 時点で評価する（Cancel/Trim 戦略用）。
     pub(crate) fn evaluate_all_for_group(
         &mut self,
         group_id: u64,
-        current_time: f64,
+        now: TimePoint,
         instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
@@ -193,7 +197,7 @@ impl TimelineManager {
             None => return HashMap::new(),
         };
 
-        let effective_time = value_time(current_time, instance);
+        let effective_time = value_time(now, instance);
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
@@ -215,7 +219,7 @@ impl TimelineManager {
     pub(crate) fn collect_current_segment_final_values(
         &mut self,
         group_id: u64,
-        current_time: f64,
+        now: TimePoint,
         instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
@@ -223,7 +227,7 @@ impl TimelineManager {
             None => return HashMap::new(),
         };
 
-        let effective_time = value_time(current_time, instance);
+        let effective_time = value_time(now, instance);
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
@@ -241,25 +245,25 @@ impl TimelineManager {
     }
 }
 
-/// effective_time を計算する。
-///
-/// `effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale`
-/// Pause 中は pause 開始時点で固定。
-pub(crate) fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
-    // pause_start は Paused の間だけある（pause が遷移と同時に入れ、resume が取る）。あればそこで時計を止める
-    let now = instance.pause_start.unwrap_or(current_time);
-    let raw_time = now - instance.loop_start_time - instance.pause_accumulated;
-    // time_scale は再生速度倍率（2.0 で 2 倍速）
-    raw_time * instance.time_scale
+/// 台本の時刻（経った長さの前向きの写し）。Pause 中は pause 開始時点で固定。
+pub(crate) fn calculate_effective_time(now: TimePoint, instance: &StoryboardInstance) -> TimeDelta {
+    instance.time_scale.forward(instance.elapsed(now))
 }
 
-/// 値を出す実効時刻。周回の後の待ち（次の起点の前＝負）は、前の周回の最後の値を保つ。
-fn value_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
-    let t = calculate_effective_time(current_time, instance);
-    if instance.loops_completed > 0 && t < 0.0 {
-        f64::INFINITY
+/// 値を出す台本の時刻。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ValueTime {
+    At(TimeDelta),
+    /// 周回の後の待ち（次の周回の始まりの前）。前の周回の最後の値を保つ
+    AfterLastSegment,
+}
+
+fn value_time(now: TimePoint, instance: &StoryboardInstance) -> ValueTime {
+    let t = calculate_effective_time(now, instance);
+    if instance.loops_completed > 0 && t.is_negative() {
+        ValueTime::AfterLastSegment
     } else {
-        t
+        ValueTime::At(t)
     }
 }
 
@@ -268,11 +272,14 @@ fn value_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
 /// セグメントが無いときだけ `None`。最後のセグメントを過ぎたら最後の値を返す。
 fn evaluate_segments(
     entry: &TimelineEntry,
-    effective_time: f64,
+    effective_time: ValueTime,
     intern_pool: &mut ObjectInternPool,
 ) -> Option<EvaluatedValue> {
     let segments = &entry.segments;
     let last_seg = segments.last()?;
+    let ValueTime::At(effective_time) = effective_time else {
+        return Some(entry.value_at(last_seg, 1.0, intern_pool));
+    };
 
     let mut prev: Option<&CompiledSegment> = None;
     for seg in segments {
@@ -285,9 +292,10 @@ fn evaluate_segments(
         }
         prev = Some(seg);
 
-        let duration = seg.end_time - seg.start_time;
-        if duration > 0.0 && effective_time < seg.end_time {
-            let progress_t = (effective_time - seg.start_time) / duration;
+        if effective_time < seg.end_time
+            && let Some(progress_t) =
+                (effective_time - seg.start_time).ratio_of(seg.end_time - seg.start_time)
+        {
             return Some(entry.value_at(seg, progress_t, intern_pool));
         }
     }
@@ -295,14 +303,14 @@ fn evaluate_segments(
     Some(entry.value_at(last_seg, 1.0, intern_pool))
 }
 
-/// effective_time 時点でアクティブなセグメントを検索する。未開始セグメントはスキップする。
+/// 台本の時刻でアクティブなセグメントを検索する。未開始セグメントはスキップする。
 fn find_active_segment(
     segments: &[CompiledSegment],
-    effective_time: f64,
+    effective_time: ValueTime,
 ) -> Option<&CompiledSegment> {
-    if segments.is_empty() {
-        return None;
-    }
+    let ValueTime::At(effective_time) = effective_time else {
+        return segments.last();
+    };
 
     let mut active: Option<&CompiledSegment> = None;
 
@@ -311,15 +319,10 @@ fn find_active_segment(
             break;
         }
 
-        let duration = seg.end_time - seg.start_time;
-        if duration <= 0.0 {
-            if effective_time >= seg.start_time {
-                active = Some(seg);
-            }
-        } else if effective_time < seg.end_time {
-            return Some(seg);
-        } else {
+        if seg.end_time <= seg.start_time || effective_time >= seg.end_time {
             active = Some(seg);
+        } else {
+            return Some(seg);
         }
     }
 
