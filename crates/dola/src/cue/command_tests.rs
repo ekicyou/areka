@@ -1,4 +1,5 @@
 use super::*;
+use crate::time::testing::{delta_ms, ms};
 
 #[test]
 fn barrier_kind_clone_debug_partial_eq() {
@@ -37,7 +38,9 @@ fn domain_types_serde_roundtrip() {
     let parsed: CueCommand = serde_json::from_str(&json).unwrap();
     assert_eq!(cmd, parsed);
 
-    let barrier = BarrierKind::WaitForChoice { timeout: Some(3.0) };
+    let barrier = BarrierKind::WaitForChoice {
+        timeout: Some(delta_ms(3000)),
+    };
     let json = serde_json::to_string(&barrier).unwrap();
     let parsed: BarrierKind = serde_json::from_str(&json).unwrap();
     assert_eq!(barrier, parsed);
@@ -166,15 +169,16 @@ fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
     // 待ち時間は envelope 側 `Cue.duration` が保持する。
     let cue = Cue {
         actor: ActorKey::from("0"),
-        start_time: 1.0,
+        start_time: ms(1000),
         payload: CueCommand::Wait.into(),
-        duration: 0.5,
+        duration: ms(500),
     };
     let parsed: Cue = serde_json::from_str(&serde_json::to_string(&cue).unwrap()).unwrap();
     assert_eq!(parsed.payload, CueCommand::Wait.into());
-    assert_eq!(parsed.start_time, 1.0);
+    assert_eq!(parsed.start_time, ms(1000));
     assert_eq!(
-        parsed.duration, 0.5,
+        parsed.duration,
+        ms(500),
         "Wait の時間は envelope duration が担う"
     );
 }
@@ -350,7 +354,9 @@ fn cue_payload_and_cue_serde_roundtrip() {
             command: "fade".to_string(),
             params: DynamicValue::Null,
         }),
-        CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: Some(3.0) }),
+        CuePayload::Barrier(BarrierKind::WaitForChoice {
+            timeout: Some(delta_ms(3000)),
+        }),
     ];
     for payload in payloads {
         let json = serde_json::to_string(&payload).unwrap();
@@ -361,9 +367,9 @@ fn cue_payload_and_cue_serde_roundtrip() {
     // Cue 全体（PartialEq 非導出のためフィールドごとに検証）
     let cue = Cue {
         actor: ActorKey::from("sakura"),
-        start_time: 1.5,
+        start_time: ms(1500),
         payload: CueCommand::Text("hello".into()).into(),
-        duration: 0.0,
+        duration: TimeSpan::ZERO,
     };
     let json = serde_json::to_string(&cue).unwrap();
     let parsed: Cue = serde_json::from_str(&json).unwrap();
@@ -379,20 +385,22 @@ fn cue_payload_and_cue_serde_roundtrip() {
 fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
     // 再生時間フィールドを持たない旧シリアライズ資産（3 フィールド）を読み込むと
     // duration=0（瞬時）として従来どおり解釈できる（後方互換）。
-    let legacy = r#"{"actor":"0","start_time":0.0,"payload":{"Command":{"Text":"hi"}}}"#;
+    let legacy = r#"{"actor":"0","start_time":0,"payload":{"Command":{"Text":"hi"}}}"#;
     let parsed: Cue = serde_json::from_str(legacy).unwrap();
     assert_eq!(parsed.actor, ActorKey::from("0"));
-    assert_eq!(parsed.start_time, 0.0);
+    assert_eq!(parsed.start_time, TimeSpan::ZERO);
     assert_eq!(parsed.payload, CueCommand::Text("hi".into()).into());
     assert_eq!(
-        parsed.duration, 0.0,
+        parsed.duration,
+        TimeSpan::ZERO,
         "duration 欠落の旧資産は 0（瞬時）として復元されねばならない"
     );
 
     // Barrier ペイロード（duration 非該当）の旧資産も同様に読める。
-    let legacy_barrier = r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":"WaitForInput"}}"#;
+    let legacy_barrier =
+        r#"{"actor":"0","start_time":10000000,"payload":{"Barrier":"WaitForInput"}}"#;
     let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
-    assert_eq!(parsed.duration, 0.0);
+    assert_eq!(parsed.duration, TimeSpan::ZERO);
 }
 
 #[test]
@@ -400,9 +408,9 @@ fn cue_duration_roundtrip_preserves_value() {
     // 新規往復では duration の値が保たれ、既存ペイロードのワイヤ形は変わらない。
     let cue = Cue {
         actor: ActorKey::from("sakura"),
-        start_time: 1.5,
+        start_time: ms(1500),
         payload: CueCommand::Text("hello".into()).into(),
-        duration: 0.25,
+        duration: ms(250),
     };
     let json = serde_json::to_string(&cue).unwrap();
     assert!(
@@ -415,7 +423,7 @@ fn cue_duration_roundtrip_preserves_value() {
     assert_eq!(parsed.actor, cue.actor);
     assert_eq!(parsed.start_time, cue.start_time);
     assert_eq!(parsed.payload, cue.payload);
-    assert_eq!(parsed.duration, 0.25);
+    assert_eq!(parsed.duration, ms(250));
 }
 
 #[test]
@@ -465,23 +473,27 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
         // 瞬時（明示的 0）
         let instant = Cue {
             actor: ActorKey::from("sakura"),
-            start_time: 0.0,
+            start_time: TimeSpan::ZERO,
             payload: payload.clone(),
-            duration: 0.0,
+            duration: TimeSpan::ZERO,
         };
         let parsed: Cue = serde_json::from_str(&serde_json::to_string(&instant).unwrap()).unwrap();
-        assert_eq!(parsed.duration, 0.0, "瞬時 cue は明示的 0 を保持する");
+        assert_eq!(
+            parsed.duration,
+            TimeSpan::ZERO,
+            "瞬時 cue は明示的 0 を保持する"
+        );
         assert_eq!(parsed.payload, instant.payload);
 
         // 時間占有（不透明秒数）
         let timed = Cue {
             actor: ActorKey::from("sakura"),
-            start_time: 0.0,
+            start_time: TimeSpan::ZERO,
             payload,
-            duration: 1.25,
+            duration: ms(1250),
         };
         let parsed: Cue = serde_json::from_str(&serde_json::to_string(&timed).unwrap()).unwrap();
-        assert_eq!(parsed.duration, 1.25);
+        assert_eq!(parsed.duration, ms(1250));
         assert_eq!(parsed.payload, timed.payload);
     }
 }

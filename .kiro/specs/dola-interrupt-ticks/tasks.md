@@ -88,7 +88,7 @@
   - _Dispatch: standard — 互いに呼び合う本体を 1 人で通す付け替え_
   - _Requirements: 4.1, 4.4, 7.6, 13.1_
 
-- [ ] 2.4 (P) cue の型の単体テストを、ちょうどの 100ns の値へ写して直す
+- [x] 2.4 (P) cue の型の単体テストを、ちょうどの 100ns の値へ写して直す
   - 期待の値を、比べを緩めずに、ちょうどの値へ写す。表せない入力だけを確かめていた物は外し、記録に書く事として報告に挙げる
   - そのテストのファイルが `cargo check -p dola --all-targets` で誤り 0 件で、dola の本体が組める時に緑である
   - _Boundary: cue の単体テスト（型）_
@@ -799,3 +799,4 @@
 - 2.1: コンパイルの `checked_add` のあふれは、error.rs を触らずに、今在る `TimeOutOfDocumentRange { location, field }` を使う（`InvalidNumber` の `value: f64` は整数の和のあふれに合わない）。dola の結合テストは `dola::time::testing` を使えない（自分を dev-dependency に持たない）ので、`TimeSpan::from_millis` などの公開の const fn で組む。各タスクの記録に書く事は、進行役が `ledger-notes.md` に控える。
 - 2.2: `CueError::OriginNotStamped` は `cue/runtime.rs` に置き `cue/mod.rs` で再公開済み。`to_talk_schedule` は `Result` を返す。2.3 は schedule.rs の `with_horizon(origin: TimePoint, horizon: TimeSpan)`・`Entry<TimeSpan>` へ替えれば sheet.rs の 3 件が消える。schedule.rs の `sum_on_ms_grid` の呼び出し 3 か所と説明、runtime.rs の `from_sheet`（`Result` を受ける・説明「dispatch 刻印まで 0.0」）は 2.3 が直す。
 - 2.3: dola の結合テストの組み立て（`tests/cue/test_support.rs`）は名前と引数の順を変えず `TimeSpan` を受ける。`pub(crate) const fn ms(u32) -> TimeSpan` がある（例: `text(0.5, "b", 0.0)` → `text(ms(500), "b", ms(0))`）。時刻の表の 128 ビットの起点は後半（8.2）。
+- 2.4: `command_tests.rs` の `cue_duration_defaults_to_zero_for_legacy_serialized_data` の名前とコメント（「旧シリアライズ資産」「後方互換」）と 488 行の「不透明秒数」は古い言い方のまま。中身は「duration の欄が無い時は 0」。12.2 の説明の直しで拾う。

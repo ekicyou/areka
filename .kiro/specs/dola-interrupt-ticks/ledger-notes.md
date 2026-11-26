@@ -21,3 +21,7 @@
 - 取り除いた分かれ道（`cue/schedule.rs`）: `insert`・`insert_each` の「隔たりは 0 以上」の `debug_assert`（型が保証する）・−0.0 を +0.0 にそろえる `total_cmp` の並べ替え（安定な `sort_by_key(Reverse(offset))` に替えた。同じ瞬間の FIFO は変わらない）・NaN を「届いた」に倒す `>` の否定の比べと `#[allow(clippy::neg_cmp_op_on_partial_ord)]`・`sum_on_ms_grid` の 3 か所（到達・完了・`occupancy_horizon`）。取り除いたログは無い。
 - 外す見込みのテスト（2.4・2.5 が外す。NaN の時刻・隔たりは型で作れない）: `schedule/tests.rs` の `tick_with_nan_time_delivers_all_pending_payloads`・`tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers`・`insert_nan_offset_fires_debug_assert_in_debug_builds`。
 - 変える前後の期待: `CuePlayer::from_sheet` に起点の押されていない台本 → 前は起点 0 として動く、後は `Err(CueError::OriginNotStamped)`。`carrier_cue_builds_canonical_carrier_at_zero` → 前は `at == 0.0`・`duration == 0.0`、後は `fire_time == TimePoint::ZERO`・`at`・`duration` が `TimeSpan::ZERO`。到達の判定 → 前は `sum_on_ms_grid(起点, 隔たり) > 今` の否定、後は `起点 + 隔たり <= 今` の整数の比べ。
+
+## 2.4
+
+- 外したテスト・分かれ道・ログは無い。変える前後の期待（実数の秒 → ちょうどの 100ns の値）: `domain_types_serde_roundtrip`・`cue_payload_and_cue_serde_roundtrip`（時間切れ 3.0 → `delta_ms(3000)`）、`wait_carries_no_action_and_time_lives_in_envelope_duration`・`cue_duration_roundtrip_preserves_value`・`duration_is_uniform_envelope_field_across_all_payloads`（秒 → `ms(..)`）、`cue_duration_defaults_to_zero_for_legacy_serialized_data`（JSON の秒 → 100ns の整数）。
