@@ -490,7 +490,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.1, 7.7_
 
-- [ ] 6.6 (P) 先進坑を付け替える
+- [x] 6.6 (P) 先進坑を付け替える
   - 先進坑の古い側の時刻を型で書き、そのワークスペースで `cargo check` が 1 度通る
   - _Boundary: 先進坑_
   - _Depends: 2.14_

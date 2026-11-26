@@ -274,3 +274,7 @@
 ## 6.5
 
 - 外したテスト・分かれ道・ログ・変わった期待は無い（`thread_roles_tests.rs` の `NEVER_FIRES` → `TimeSpan`、`offline_dump/render_tests.rs` の `settle_time` の期待 → `TimeSpan`、例 `emo-present` の `CYCLE_INTERVAL_SECS: f64` → `CYCLE_INTERVAL: TimeSpan`・`next_switch_at: TimePoint`）。例の表示「2.5 秒周期」が文字の形「2.5000000 秒周期」になった。
+
+## 6.6
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（先進坑の `q7-vertical/src/old_side.rs` の `SETTLED` → `TimeSpan::from_millis(100_000)`、合図は `TalkCue::scheduled`）。先進坑のワークスペースで `cargo check` が通る。

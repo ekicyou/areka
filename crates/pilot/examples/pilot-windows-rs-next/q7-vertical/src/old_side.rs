@@ -11,7 +11,7 @@ use areka_emo_text::actor::{
 };
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::parse_str;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
@@ -32,7 +32,7 @@ pub const IMAGE: (u32, u32) = (320, 260);
 /// validrect の内側への寄せ（4 辺とも 5 px）。面は (IMAGE.0-10, IMAGE.1-10)。
 pub const VALIDRECT_INSET: u32 = 5;
 /// 全グリフが出そろう十分に後の時刻（本線の試験の `SETTLED` と同じ）。
-const SETTLED: f64 = 100.0;
+const SETTLED: TimeSpan = TimeSpan::from_millis(100_000);
 
 /// 本線の試験の `model_with` と同じ行で、縦書き（右から左）のバルーン定義の文字列を組む。
 fn balloon_descript() -> String {
@@ -90,12 +90,13 @@ pub fn draw(text: &str) -> Result<Shot, String> {
         TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE),
         ResolvedBalloonText::resolve(&model, IMAGE),
     );
-    rt.apply_cue(&TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: CueCommand::Text(text.to_owned()),
-        duration: 0.0,
-    });
+    rt.apply_cue(&TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        actor.clone(),
+        CueCommand::Text(text.to_owned()),
+        TimeSpan::ZERO,
+    ));
     present_frame(&mut rt, &mut world, SETTLED).map_err(|e| format!("present_frame: {e:?}"))?;
 
     let surface = rt.surface(&actor).ok_or("装着した actor の供給面が無い")?;
