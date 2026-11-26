@@ -25,7 +25,9 @@
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
-use dola::{TimeSpan, time::testing::ms};
+use dola::TimePoint;
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 
 use super::test_support::{balloon, choice, com_world, cue, fake_resolver, geo_model, instant};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
@@ -38,7 +40,7 @@ use crate::wrap::WrapMode;
 const IMAGE: (u32, u32) = (240, 160);
 
 /// 全部の字が見える十分に後の時刻。
-const SETTLED: TimeSpan = ms(100000);
+const SETTLED: TimePoint = TimePoint::MAX;
 
 /// 台本を当てて装着し、時刻 `at` の 1 フレーム目（作り直し 1 回）まで進めた組。
 struct Rig {
@@ -48,11 +50,11 @@ struct Rig {
 }
 
 impl Rig {
-    fn new(script: &[TalkCue], at: TimeSpan) -> Rig {
+    fn new(script: &[TalkCue], at: TimePoint) -> Rig {
         Rig::with_wrap(script, at, WrapMode::CharByChar)
     }
 
-    fn with_wrap(script: &[TalkCue], at: TimeSpan, wrap: WrapMode) -> Rig {
+    fn with_wrap(script: &[TalkCue], at: TimePoint, wrap: WrapMode) -> Rig {
         let (world, window, slot) = com_world();
         let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
         for cue in script {
@@ -75,12 +77,12 @@ impl Rig {
     }
 
     /// 文節の折り返しで装着し、時刻 `at` の 1 フレーム目まで進めた組（先読みが無いので届いた字で区切る）。
-    fn budoux(script: &[TalkCue], at: TimeSpan) -> Rig {
+    fn budoux(script: &[TalkCue], at: TimePoint) -> Rig {
         Rig::with_wrap(script, at, WrapMode::BudouxWordWrap)
     }
 
     /// 時刻 `at` の 1 フレームを回し、届いた字の区切り直しの回数の累計を返す。
-    fn break_runs(&mut self, at: TimeSpan) -> u32 {
+    fn break_runs(&mut self, at: TimePoint) -> u32 {
         self.frame(at);
         self.rt
             .surfaces
@@ -91,7 +93,7 @@ impl Rig {
     }
 
     /// 時刻 `at` の 1 フレームを回し、作り直しの回数の累計を返す。
-    fn frame(&mut self, at: TimeSpan) -> u32 {
+    fn frame(&mut self, at: TimePoint) -> u32 {
         present_frame(&mut self.rt, &mut self.world, at).expect("フレーム");
         self.rt
             .frame_rebuilds(&self.place)
@@ -105,10 +107,14 @@ fn instant_text(body: &str) -> TalkCue {
 
 #[test]
 fn unchanged_second_frame_does_not_rebuild() {
-    let mut rig = Rig::new(&[instant_text("アヒル"), choice("0", "A")], SETTLED);
-    assert_eq!(rig.frame(SETTLED), 1, "何も変えないフレームは作り直さない");
+    let mut rig = Rig::new(&[instant_text("アヒル"), choice("0", "A")], at_ms(1_000));
     assert_eq!(
-        rig.frame(SETTLED + ms(1000)),
+        rig.frame(at_ms(1_000)),
+        1,
+        "何も変えないフレームは作り直さない"
+    );
+    assert_eq!(
+        rig.frame(at_ms(2_000)),
         1,
         "時刻だけ進んでも見える字が同じなら作り直さない"
     );
@@ -119,9 +125,13 @@ fn more_visible_glyphs_rebuild() {
     // 再生時間つきの字（1 字 0.05 秒）: t=0 で 1 字、t=0.06 で 2 字が見える。
     let mut rig = Rig::new(
         &[cue("0", ms(0), CueCommand::Text("アヒル".into()))],
-        TimeSpan::ZERO,
+        TimePoint::ZERO,
     );
-    assert_eq!(rig.frame(ms(60)), 2, "見える字が増えたフレームで作り直す");
+    assert_eq!(
+        rig.frame(at_ms(60)),
+        2,
+        "見える字が増えたフレームで作り直す"
+    );
 }
 
 #[test]
@@ -229,16 +239,16 @@ fn read_back_is_the_same_with_and_without_the_memo() {
         cue("0", ms(0), CueCommand::Text("アヒル".into())),
         choice("0", "A"),
     ];
-    let mut kept = Rig::new(&script, TimeSpan::ZERO);
-    let mut dropped = Rig::new(&script, TimeSpan::ZERO);
+    let mut kept = Rig::new(&script, TimePoint::ZERO);
+    let mut dropped = Rig::new(&script, TimePoint::ZERO);
     let actor = ActorKey::from("0");
-    let steps: [(TimeSpan, Option<usize>); 6] = [
-        (TimeSpan::ZERO, None),
-        (ms(60), None),
-        (ms(60), Some(0)),
-        (ms(200), Some(0)),
-        (ms(200), None),
-        (ms(200), None),
+    let steps: [(TimePoint, Option<usize>); 6] = [
+        (TimePoint::ZERO, None),
+        (at_ms(60), None),
+        (at_ms(60), Some(0)),
+        (at_ms(200), Some(0)),
+        (at_ms(200), None),
+        (at_ms(200), None),
     ];
     for (at, hover) in steps {
         for rig in [&mut kept, &mut dropped] {
@@ -271,15 +281,23 @@ fn read_back_is_the_same_with_and_without_the_memo() {
 fn more_visible_glyphs_reuse_the_breaks() {
     let mut rig = Rig::budoux(
         &[cue("0", ms(0), CueCommand::Text("アヒルの子".into()))],
-        TimeSpan::ZERO,
+        TimePoint::ZERO,
     );
     assert_eq!(
-        rig.break_runs(TimeSpan::ZERO),
+        rig.break_runs(TimePoint::ZERO),
         1,
         "装着のフレームで 1 度区切る"
     );
-    assert_eq!(rig.frame(ms(60)), 2, "見える字が増えたので配置は作り直す");
-    assert_eq!(rig.break_runs(ms(200)), 1, "項目が同じなら区切り直さない");
+    assert_eq!(
+        rig.frame(at_ms(60)),
+        2,
+        "見える字が増えたので配置は作り直す"
+    );
+    assert_eq!(
+        rig.break_runs(at_ms(200)),
+        1,
+        "項目が同じなら区切り直さない"
+    );
 }
 
 #[test]
@@ -309,11 +327,11 @@ fn read_back_is_the_same_with_and_without_the_break_memo() {
         ms(0),
         CueCommand::Text("アヒルの子とカモメ".into()),
     )];
-    let mut kept = Rig::budoux(&script, TimeSpan::ZERO);
-    let mut dropped = Rig::budoux(&script, TimeSpan::ZERO);
+    let mut kept = Rig::budoux(&script, TimePoint::ZERO);
+    let mut dropped = Rig::budoux(&script, TimePoint::ZERO);
     let actor = ActorKey::from("0");
     let place = dropped.place.clone();
-    for (step, at) in [ms(60), ms(200), ms(300), SETTLED, SETTLED]
+    for (step, at) in [at_ms(60), at_ms(200), at_ms(300), SETTLED, SETTLED]
         .into_iter()
         .enumerate()
     {

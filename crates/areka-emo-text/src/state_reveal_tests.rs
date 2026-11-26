@@ -1,5 +1,6 @@
 use super::test_support::{cue, cue_dur, items_of, reveal_times_of};
 use super::*;
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 // ── r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
@@ -12,7 +13,7 @@ fn reveal_times_follow_duration_derived_interval_from_chunk_start() {
     state.apply_cue(&cue("0", ms(1000), CueCommand::Text("アヒル".into())));
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![ms(1000), ms(1250), ms(1500)]
+        vec![at_ms(1000), at_ms(1250), at_ms(1500)]
     );
 }
 
@@ -22,12 +23,12 @@ fn visible_glyphs_progress_one_by_one_with_injected_time() {
     state.apply_cue(&cue("0", ms(1000), CueCommand::Text("アヒル".into())));
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, TimeSpan::ZERO), 0);
-    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 1); // r_0 <= t で可視
-    assert_eq!(state.visible_glyphs(&actor, ms(1240)), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(1250)), 2);
-    assert_eq!(state.visible_glyphs(&actor, ms(1500)), 3);
-    assert_eq!(state.visible_glyphs(&actor, TimeSpan::MAX), 3); // 末尾到達後は飽和
+    assert_eq!(state.visible_glyphs(&actor, TimePoint::ZERO), 0);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 1); // r_0 <= t で可視
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1240)), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1250)), 2);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1500)), 3);
+    assert_eq!(state.visible_glyphs(&actor, TimePoint::MAX), 3); // 末尾到達後は飽和
 }
 
 /// 250ms の倍数でない配送 duration でも進行する。duration=150ms・N=3 → interval=50ms ちょうどで、
@@ -44,15 +45,15 @@ fn visible_glyphs_progress_with_duration_derived_interval() {
 
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![ms(1000), ms(1050), ms(1100)]
+        vec![at_ms(1000), at_ms(1050), at_ms(1100)]
     );
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, ms(990)), 0);
-    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(1049)), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(1050)), 2); // r_1 = 1050ms
-    assert_eq!(state.visible_glyphs(&actor, ms(1099)), 2);
-    assert_eq!(state.visible_glyphs(&actor, ms(1100)), 3); // r_2 = 1100ms
+    assert_eq!(state.visible_glyphs(&actor, at_ms(990)), 0);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1049)), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1050)), 2); // r_1 = 1050ms
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1099)), 2);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1100)), 3); // r_2 = 1100ms
 }
 
 // ── at は下限（それより早く可視化しない）・後続 chunk が未来なら待つ ──
@@ -66,14 +67,14 @@ fn glyphs_never_visible_before_chunk_start() {
     // chunk 2 の r は max(250ms+250ms, 10000ms)=10000ms 起点——前 chunk 完了済みでも 10000ms まで待つ。
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![TimeSpan::ZERO, ms(250), ms(10000), ms(10250)]
+        vec![TimePoint::ZERO, at_ms(250), at_ms(10000), at_ms(10250)]
     );
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, ms(5000)), 2);
-    assert_eq!(state.visible_glyphs(&actor, ms(9990)), 2);
-    assert_eq!(state.visible_glyphs(&actor, ms(10000)), 3);
-    assert_eq!(state.visible_glyphs(&actor, ms(10250)), 4);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(5000)), 2);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(9990)), 2);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(10000)), 3);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(10250)), 4);
 }
 
 /// 直前 chunk が未リビールでも、リビールカーソルは配送 duration が定める
@@ -88,20 +89,20 @@ fn reveal_cursor_chases_tail_when_next_chunk_start_is_earlier() {
     assert_eq!(
         reveal_times_of(&state, "0"),
         vec![
-            TimeSpan::ZERO,
-            ms(250),
-            ms(500),
-            ms(750),
-            ms(1000),
-            ms(1250)
+            TimePoint::ZERO,
+            at_ms(250),
+            at_ms(500),
+            at_ms(750),
+            at_ms(1000),
+            at_ms(1250)
         ]
     );
     // items はリビール中の追記も即時に 6 グリフ（未リビール分も保持＝無損失）。
     assert_eq!(items_of(&state, "0").len(), 6);
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, ms(900)), 4); // chunk 境界で加速しない
-    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 5);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(900)), 4); // chunk 境界で加速しない
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 5);
 }
 
 /// リビール時刻列は常に単調非減少（RevealSchedule の不変条件）。
@@ -131,7 +132,7 @@ fn line_break_takes_no_reveal_slot() {
     // 改行マーカーは reveal 枠（interval）を消費しない: c は max(250ms+250ms, 250ms)=500ms。
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![TimeSpan::ZERO, ms(250), ms(500), ms(750)]
+        vec![TimePoint::ZERO, at_ms(250), at_ms(500), at_ms(750)]
     );
 }
 
@@ -144,14 +145,14 @@ fn clear_during_reveal_discards_unrevealed_and_resets_pacing() {
     state.apply_cue(&cue("0", ms(300), CueCommand::Clear)); // r_2/r_3 未リビールのまま消去
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, ms(300)), 0);
-    assert_eq!(state.visible_glyphs(&actor, TimeSpan::MAX), 0);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(300)), 0);
+    assert_eq!(state.visible_glyphs(&actor, TimePoint::MAX), 0);
 
     // 新 chunk は旧 tail（750ms）でなく自身の at=500ms から: r = [500ms, 750ms]。
     state.apply_cue(&cue("0", ms(500), CueCommand::Text("xy".into())));
-    assert_eq!(reveal_times_of(&state, "0"), vec![ms(500), ms(750)]);
-    assert_eq!(state.visible_glyphs(&actor, ms(400)), 0);
-    assert_eq!(state.visible_glyphs(&actor, ms(500)), 1);
+    assert_eq!(reveal_times_of(&state, "0"), vec![at_ms(500), at_ms(750)]);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(400)), 0);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(500)), 1);
 }
 
 // ── 境界: 空テキスト・未知 actor・複数 chunk 連結 ──
@@ -162,19 +163,25 @@ fn empty_text_cue_adds_no_reveal_times() {
     state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("ab".into())));
     state.apply_cue(&cue("0", ms(500), CueCommand::Text("".into())));
 
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(250)]);
+    assert_eq!(
+        reveal_times_of(&state, "0"),
+        vec![TimePoint::ZERO, at_ms(250)]
+    );
     // 空 chunk は tail も動かさない: 次 chunk は通常式のまま。
     state.apply_cue(&cue("0", ms(500), CueCommand::Text("c".into())));
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![TimeSpan::ZERO, ms(250), ms(500)]
+        vec![TimePoint::ZERO, at_ms(250), at_ms(500)]
     );
 }
 
 #[test]
 fn visible_glyphs_of_unknown_actor_is_zero() {
     let state = TextLayerState::default();
-    assert_eq!(state.visible_glyphs(&ActorKey::from("9"), TimeSpan::MAX), 0);
+    assert_eq!(
+        state.visible_glyphs(&ActorKey::from("9"), TimePoint::MAX),
+        0
+    );
 }
 
 /// 可視数は actor 独立（他 actor のリビール進行に影響されない）。
@@ -184,9 +191,9 @@ fn visible_glyphs_are_independent_per_actor() {
     state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("abcd".into())));
     state.apply_cue(&cue("1", ms(1000), CueCommand::Text("xy".into())));
 
-    assert_eq!(state.visible_glyphs(&ActorKey::from("0"), ms(500)), 3);
-    assert_eq!(state.visible_glyphs(&ActorKey::from("1"), ms(500)), 0);
-    assert_eq!(state.visible_glyphs(&ActorKey::from("1"), ms(1000)), 1);
+    assert_eq!(state.visible_glyphs(&ActorKey::from("0"), at_ms(500)), 3);
+    assert_eq!(state.visible_glyphs(&ActorKey::from("1"), at_ms(500)), 0);
+    assert_eq!(state.visible_glyphs(&ActorKey::from("1"), at_ms(1000)), 1);
 }
 
 // ══ 服従契約の縮退と honor no-op ══
@@ -208,11 +215,11 @@ fn zero_duration_reveals_all_glyphs_simultaneously_at_cue_at() {
     // reveal 時刻は全て cue.at（interval=0 ゆえ max(prev+0, at)=at）。
     assert_eq!(
         reveal_times_of(&state, "0"),
-        vec![ms(1000), ms(1000), ms(1000)]
+        vec![at_ms(1000), at_ms(1000), at_ms(1000)]
     );
-    assert_eq!(state.visible_glyphs(&actor, ms(990)), 0);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(990)), 0);
     assert_eq!(
-        state.visible_glyphs(&actor, ms(1000)),
+        state.visible_glyphs(&actor, at_ms(1000)),
         3,
         "D=0＋N=3 は全グリフが cue.at で同時可視"
     );
@@ -235,9 +242,12 @@ fn empty_text_with_nonzero_duration_adds_nothing_and_never_divides() {
 
     // 追記なし・reveal 時刻も増えない（0 割りせず panic もしない）。
     assert_eq!(items_of(&state, "0").len(), 2, "空テキストは追記しない");
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(250)]);
+    assert_eq!(
+        reveal_times_of(&state, "0"),
+        vec![TimePoint::ZERO, at_ms(250)]
+    );
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, TimeSpan::MAX), 2);
+    assert_eq!(state.visible_glyphs(&actor, TimePoint::MAX), 2);
 }
 
 /// honor no-op: 担当外の cue（Emote／Wait）は action を無視するのみで、
@@ -274,7 +284,10 @@ fn non_relevant_cue_adds_no_local_delay_to_following_text_reveal() {
     // 1 つ目 "あ"(N=1,dur250ms) の r_0=0・tail=0 → "い"(N=1,dur250ms) r = max(0+250ms, 500ms)=500ms。
     assert_eq!(
         reveal_times_of(&experiment, "0"),
-        vec![TimeSpan::ZERO, ms(500)]
+        vec![TimePoint::ZERO, at_ms(500)]
     );
-    assert_eq!(experiment.visible_glyphs(&ActorKey::from("0"), ms(500)), 2);
+    assert_eq!(
+        experiment.visible_glyphs(&ActorKey::from("0"), at_ms(500)),
+        2
+    );
 }

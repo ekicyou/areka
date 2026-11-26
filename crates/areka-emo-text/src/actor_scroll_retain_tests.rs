@@ -30,7 +30,7 @@ use areka_parsers::balloon::{
 };
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
-use dola::{TimeSpan, time::testing::ms};
+use dola::{TimePoint, TimeSpan, time::testing::ms};
 
 use super::test_support::{
     REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, physical, read_back,
@@ -95,7 +95,7 @@ fn oracle_frame(
     world: &mut World,
     cues: &[TalkCue],
     actor: &ActorKey,
-    t: TimeSpan,
+    t: TimePoint,
     k: f32,
 ) -> Vec<u8> {
     let (window, slot) = spawn_reserved_slot(world);
@@ -144,7 +144,7 @@ fn drive_lap(k: f32, frame_period: TimeSpan, cues: &[TalkCue], t_end: TimeSpan) 
         + 2;
     let mut checked = 0usize;
     for step in 1..=steps {
-        let t = frame_period.mul_div(step, 1);
+        let t = TimePoint::ZERO + frame_period.mul_div(step, 1);
         present_frame(&mut rt, &mut world, t).expect("提示フレーム");
         let live = read_back(&rt, &actor);
         assert_eq!(

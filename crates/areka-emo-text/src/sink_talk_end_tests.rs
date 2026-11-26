@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::rc::Rc;
 
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TimePoint};
 use log_capture_kit::count_levels;
 use tracing::Level;
 
@@ -169,6 +169,7 @@ fn drain_with_choices() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, EmoTextS
     talk.emit(choice("0", "a"));
     talk.emit(choice("1", "b"));
     pump_until_idle();
+    runtime.borrow_mut().advance(TimePoint::MAX);
     (runtime, original, talk)
 }
 

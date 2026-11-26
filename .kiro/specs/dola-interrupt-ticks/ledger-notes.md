@@ -346,3 +346,9 @@
 
 - 消したテスト・分かれ道・ログは無い。足したログ: `EmoTextSink::origin_set` が送れない時の `error!` 1 行、借用中に知らせを受け取れない時の `Err` の文。
 - 足したテスト: `actor_held_tests.rs` の 6 本（E より後の字だけ動く・前へ動いた字は E に寄る・知らせより前に届いた合図の字も動く・全部の場所の字が動く・知らせの後の合図は E を待つ・受け口は置き直しの知らせだけを送る）。緑は 10.4 で確かめる。
+
+## 10.4（後半）
+
+- 消したテスト・分かれ道・ログ・assert は無い。`lib.rs` の `PURE_SOURCES` に `actor_held.rs`・`actor_held_tests.rs` を載せた（90→92）。
+- 「`spawn_emo_text` に入れた合図はその場で当たる」→「`advance` の後に当たる」へ変えた期待: `sink::talk_end_tests` の 3 本（補助 `drain_with_choices` が `advance(TimePoint::MAX)` を呼ぶ）、`actor::sink_probe_tests::drain_reports_missing_box_once_and_not_for_present_box`（pump の直後は知らせ 0 件の assert を足す）、`actor::tests::preview_rehearses_once_and_applied_cues_count_clears`（pump の直後は `number == 0` の assert を足す）、`actor::runtime_frame_tests` の 3 本（期待の値は元のまま）、`actor_lookahead_tests`（`Rig::lines` が各時刻で `advance(t)`）。
+- 「全部が現れている時刻」は `TimePoint::MAX`。後に有限の時刻のフレームが来る所は有限の時刻にした: `actor_frame_memo_tests::unchanged_second_frame_does_not_rebuild`（1 s→2 s）、`actor_lookahead_shapes_tests` の `LATER`（110 s）。ほかは型だけの直し（フレームの `ms` → `at_ms`、字の時刻の期待 `Vec<TimeSpan>` → `Vec<TimePoint>`）。

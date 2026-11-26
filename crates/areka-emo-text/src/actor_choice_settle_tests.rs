@@ -15,7 +15,8 @@
 //! 読み戻しが同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use dola::{TimeSpan, time::testing::ms};
+use dola::TimePoint;
+use dola::time::testing::ms;
 
 use super::test_support::{balloon, choice, instant};
 use crate::place::PlaceKey;
@@ -332,7 +333,7 @@ use super::{ResolvedBalloonText, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
 
 /// 全部の文字が見えている時刻。
-const LATE: TimeSpan = ms(10000);
+const LATE: TimePoint = TimePoint::MAX;
 
 /// 済んだ行の通しの檻。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
 ///

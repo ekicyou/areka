@@ -7,7 +7,8 @@ use crate::layout::WrapPlan;
 use crate::region::ScaleContract;
 use crate::state::{TextLayerConfig, TextLayerState};
 use areka_sakura::contract::ActorKey;
-use dola::TimeSpan;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 // ════ 目視診断（PNG ダンプ・#[ignore]） ════
@@ -228,23 +229,23 @@ fn diag_dump_horizontal_pngs() {
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム回す）。dump は目標時刻通過時。
     let dt = ms(20);
-    let mut dump_times: Vec<TimeSpan> = vec![
-        ms(350),
-        ms(1100),
-        ms(1900),
-        ms(2020),
-        ms(2100),
-        ms(2300),
-        ms(2600),
-        ms(3000),
+    let mut dump_times: Vec<TimePoint> = vec![
+        at_ms(350),
+        at_ms(1100),
+        at_ms(1900),
+        at_ms(2020),
+        at_ms(2100),
+        at_ms(2300),
+        at_ms(2600),
+        at_ms(3000),
     ];
     eprintln!(
         "[diag] out_dir={out_dir} pitch={pitch} region_h={} reveal_interval={}",
         region.bottom() - region.top(),
         ms(50)
     );
-    let mut t = TimeSpan::ZERO;
-    while t <= ms(3050) {
+    let mut t = TimePoint::ZERO;
+    while t <= at_ms(3050) {
         let (visible, lines, canvas, window) =
             state_frame(&state, &actor, t, region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("diag", &canvas, &window, font, mode, &contract);

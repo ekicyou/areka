@@ -3,10 +3,11 @@
 //! 実 GPU（`com_world` の `GraphicsCore`・WUC の Compositor）で面を作り、窓の `Children` の並び・
 //! 描いた画素の読み戻し・拡大率 1.5 の位置と大きさ・当たりのマスク・押下の届き方を見る。
 
+use dola::TimePoint;
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::MarkerImage;
-use areka_sakura::contract::{ActorKey, TimeSpan};
+use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
@@ -27,7 +28,7 @@ use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
 
 /// 全部の文字が見えている時刻。
-const LATE: TimeSpan = TimeSpan::MAX;
+const LATE: TimePoint = TimePoint::MAX;
 
 /// 塗りつぶしの絵（乗算済み BGRA・α は `alpha`・色は白）。
 fn solid(w: u32, h: u32, alpha: u8) -> Arc<MarkerImage> {

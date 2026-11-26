@@ -4,7 +4,8 @@
 //! 有無が変わった次の提示で矢印が合うこと、モデルを替えると置き場が替わり古い印の面が窓の子から
 //! 消えること、α < 0.5 の画素で当たらないこと。箱の足りない番号の埋め方は純粋な引き当てで見る。
 
-use dola::{TimeSpan, time::testing::ms};
+use dola::TimePoint;
+use dola::time::testing::ms;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -32,7 +33,7 @@ use crate::state::TextLayerConfig;
 /// 小さいバルーン（既定の 12px の字で 2〜3 行しか入らない）。
 const IMAGE: (u32, u32) = (120, 40);
 /// 全部の字が見えている時刻。
-const DONE: TimeSpan = ms(100000);
+const DONE: TimePoint = TimePoint::MAX;
 
 /// 塗りつぶしの絵（乗算済み BGRA）。
 fn solid(w: u32, h: u32, alpha: u8) -> Arc<MarkerImage> {

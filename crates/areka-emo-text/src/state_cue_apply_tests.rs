@@ -1,3 +1,4 @@
+use dola::time::testing::at_ms;
 use log_capture_kit::count_levels;
 use tracing::Level;
 
@@ -238,7 +239,10 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
         }]
     );
     // reveal も Text と同じ時刻式で拡張される（duration=2×250ms → interval=250ms）。
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(250)]);
+    assert_eq!(
+        reveal_times_of(&state, "0"),
+        vec![TimePoint::ZERO, at_ms(250)]
+    );
 }
 
 /// 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、`ChoiceSpan` は配送順に並び
@@ -286,7 +290,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     });
 
     assert_eq!(items_of(&state, "0"), &[TextItem::glyph("あ")]);
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO]);
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimePoint::ZERO]);
     // 空範囲スパンが記録される（start==end==1＝現グリフ末尾）。
     assert_eq!(
         choices_of(&state, "0"),
@@ -370,8 +374,11 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
             },
         ]
     );
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO]);
-    assert_eq!(state.visible_glyphs(&ActorKey::from("0"), TimeSpan::MAX), 1);
+    assert_eq!(reveal_times_of(&state, "0"), vec![TimePoint::ZERO]);
+    assert_eq!(
+        state.visible_glyphs(&ActorKey::from("0"), TimePoint::MAX),
+        1
+    );
     assert!(choices_of(&state, "0").is_empty());
     assert_eq!(level_count(&events, Level::WARN), 0);
 }
@@ -427,8 +434,8 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     );
 
     let actor = ActorKey::from("0");
-    for i in 0..30u32 {
-        let t = ms(50 * i);
+    for i in 0..30i64 {
+        let t = at_ms(50 * i);
         assert_eq!(
             experiment.visible_glyphs(&actor, t),
             control.visible_glyphs(&actor, t),

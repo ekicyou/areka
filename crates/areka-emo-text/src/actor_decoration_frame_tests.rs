@@ -7,7 +7,8 @@
 // `render`）へ戻すと赤になる（各テストの「較正」を参照）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use dola::{TimeSpan, time::testing::ms};
+use dola::TimePoint;
+use dola::time::testing::ms;
 use log_capture_kit::capture;
 
 use super::test_support::{com_world, cue, geo_model, opaque_count, text};
@@ -19,7 +20,7 @@ use crate::state::test_support::font;
 const IMAGE: (u32, u32) = (240, 160);
 
 /// 全グリフが出そろう十分に後の注入時刻（reveal を待たない）。
-const SETTLED: TimeSpan = ms(100000);
+const SETTLED: TimePoint = TimePoint::MAX;
 
 fn newline() -> TalkCue {
     cue("0", ms(0), CueCommand::NewLine { ratio: 1.0 })

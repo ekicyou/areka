@@ -4,6 +4,7 @@
 //! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
 //! 空か差し込み口だけでよい。COM は使わない。
 
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 use std::path::PathBuf;
 
@@ -241,7 +242,7 @@ fn box_at_the_integer_max_site_warns_once_and_keeps_its_hit_rect_upright() {
             "({x}, {y}): 上限で止まった端はサーフェスの画像より大きい＝はみ出す"
         );
 
-        rt.refresh_shown_boxes(&[key], ms(10000));
+        rt.refresh_shown_boxes(&[key], at_ms(10000));
         let [shown] = rt.shown_boxes(&ActorKey::from("0")) else {
             panic!("({x}, {y}): 文字の出ている箱 a が 1 つ載る")
         };

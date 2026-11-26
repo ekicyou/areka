@@ -1,4 +1,5 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 use super::test_support::{
@@ -66,7 +67,7 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示フレーム");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示フレーム");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 2, "選択肢数と同数のヒット行が並ぶ");
     assert_eq!(rows[0].ordinal, 0);
@@ -94,7 +95,7 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
         .draw_stats(&actor)
         .expect("draw_stats")
         .draw_text_layout_calls;
-    present_frame(&mut rt, &mut world, ms(10000)).expect("NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("NoChange 再提示");
     let calls_after = rt
         .draw_stats(&actor)
         .expect("draw_stats")
@@ -136,7 +137,7 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示フレーム");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示フレーム");
 
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 2, "選択肢 2 つぶんのヒット行");
@@ -180,7 +181,7 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
         TextSlotBinding::new(slot, window, 1.0, image, image),
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示フレーム");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示フレーム");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3);
     assert_eq!(
@@ -215,7 +216,7 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
         0,
         "字下げ前は空白"
     );
-    present_frame(&mut rt, &mut world, ms(10000)).expect("NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("NoChange 再提示");
     let bytes2 = read_back(&rt, &actor);
     assert_eq!(bytes, bytes2, "決定論");
 }
@@ -233,7 +234,7 @@ fn present_with_no_choices_yields_empty_choice_hit_rows() {
         TextSlotBinding::new(slot, window, 1.0, image, image),
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示フレーム");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示フレーム");
     assert!(
         rt.choice_hit_rows(&actor).is_empty(),
         "選択肢スパンの無い actor は提示後もヒット行が空（decorate/derive とも恒等）"
@@ -280,7 +281,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
             .draw_text_layout_calls
     };
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("ベースライン提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（ダーティ限定を測る台）");
     let base_bytes = read_back(&rt, &actor);
@@ -292,7 +293,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     let base_calls = calls(&rt);
 
     rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover on 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover on 提示");
     let hover_calls = calls(&rt);
     let hover_delta = hover_calls - base_calls;
     assert_eq!(
@@ -318,7 +319,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     );
 
     // 決定論（NoChange 再提示）: 同一状態の再 present は再描画せずバイト同一。
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover NoChange 再提示");
     assert_eq!(
         calls(&rt),
         hover_calls,
@@ -332,7 +333,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     let steady_calls = calls(&rt);
 
     rt.inject_choice_hover(&actor, None);
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover off 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover off 提示");
     let off_calls = calls(&rt);
     let off_delta = off_calls - steady_calls;
     assert_eq!(
@@ -348,7 +349,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     );
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
-    present_frame(&mut rt, &mut world, ms(10000)).expect("off NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("off NoChange 再提示");
     let off_bytes2 = read_back(&rt, &actor);
     assert_eq!(
         off_bytes, off_bytes2,
@@ -439,7 +440,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
             .draw_text_layout_calls
     };
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("ベースライン提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（hover 行限定を測る台）");
     let base = read_back(&rt, &actor);
@@ -460,7 +461,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let base_calls = calls(&rt);
 
     rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover on 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover on 提示");
     let hover_calls = calls(&rt);
     let hover_delta = hover_calls - base_calls;
     assert_eq!(
@@ -509,7 +510,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     );
 
     // 決定論（NoChange 再提示）: 同一状態の再 present は再描画せずバイト同一。
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover NoChange 再提示");
     assert_eq!(
         calls(&rt),
         hover_calls,
@@ -520,7 +521,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let steady_calls = calls(&rt);
 
     rt.inject_choice_hover(&actor, None);
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover off 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover off 提示");
     let off_delta = calls(&rt) - steady_calls;
     assert_eq!(
         off_delta, 1,
@@ -540,7 +541,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     );
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
-    present_frame(&mut rt, &mut world, ms(10000)).expect("off NoChange 再提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("off NoChange 再提示");
     let off2 = read_back(&rt, &actor);
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }
@@ -656,7 +657,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     };
     let read = |rt: &TextLayerRuntime| -> Vec<u8> { read_back(rt, &actor) };
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("ベースライン提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 2, "2 選択肢＝2 ヒット行");
     assert_eq!(
@@ -677,7 +678,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     );
 
     rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover 0 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover 0 提示");
     let first = read(&rt);
     assert!(
         fill_in_row(&first, &rows[0]) > 0,
@@ -695,7 +696,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     );
 
     rt.inject_choice_hover(&actor, Some(1));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover 1 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover 1 提示");
     let moved = read(&rt);
     assert!(
         fill_in_row(&moved, &rows[1]) > 0,
@@ -709,7 +710,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     );
 
     rt.inject_choice_hover(&actor, None);
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover 解除提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover 解除提示");
     let off = read(&rt);
     let left_over = fill_total(&off);
     assert_eq!(

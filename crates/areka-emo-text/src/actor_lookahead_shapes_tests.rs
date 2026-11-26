@@ -7,9 +7,9 @@
 //! 先渡しがバルーンの装着・箱の束より先に届く起動直後の順を見る。
 
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
+use dola::TimePoint;
 use dola::cue::{CueCommand, CuePayload};
-use dola::time::testing::{at_ms, ms};
-use dola::{TimePoint, TimeSpan};
+use dola::time::testing::at_ms;
 
 use super::box_sync_tests::layout;
 use super::lookahead_tests::{
@@ -29,7 +29,7 @@ fn walk_places(rig: &Rig, talk: &mut Talk, places: &[PlaceKey]) -> Vec<Vec<Stage
         for (stages, place) in out.iter_mut().zip(places) {
             stages.push(Stage {
                 time: t,
-                rows: rig.rows(place, t),
+                rows: rig.rows(place, talk.at(t)),
             });
         }
     }
@@ -171,7 +171,7 @@ fn choice_highlight_and_click_ranges_come_from_the_judged_rows() {
     let mut covered_at_end = String::new();
     for t in talk.times.clone() {
         talk.tick(t);
-        let lines = rig.lines(&place, t);
+        let lines = rig.lines(&place, talk.at(t));
         let rt = rig.runtime.borrow();
         let resolved = &rt.layout_input[&place];
         let spans = rt
@@ -238,7 +238,7 @@ const NEXT_TALK: &str = "\\1イイジャン？\\_w[450]‥\\_w[150]‥\\_w[150]�
 /// 2 本目のトークの刻印（1 本目の後）。
 const NEXT_ANCHOR: TimePoint = at_ms(150_000);
 /// 中断の後に「時刻だけ進めた」とする時刻（1 本目の台本がとうに出終わっている時刻）。
-const LATER: TimeSpan = ms(10_000);
+const LATER: TimePoint = at_ms(110_000);
 
 /// 初回起動トークを最初の「‥」が出終わったところで止める（以後 1 本目は `tick` しない）。
 /// 止めるまでの行の列は通しと同じで、時刻だけ進めても変わらず、2 本目の再生機を登録だけして
@@ -261,7 +261,7 @@ fn an_interrupted_talk_keeps_its_rows_and_the_next_talk_lays_out_on_its_own() {
         first.tick(t);
         until_stop.push(Stage {
             time: t,
-            rows: rig.rows(&place, t),
+            rows: rig.rows(&place, first.at(t)),
         });
     }
     drop(first);
@@ -322,7 +322,7 @@ fn a_late_font_height_does_not_move_the_first_glyph() {
     let mut seen = Vec::new();
     for t in talk.times.clone() {
         talk.tick(t);
-        let lines = rig.lines(&place, t);
+        let lines = rig.lines(&place, talk.at(t));
         if let Some((line, glyph)) = lines.iter().find_map(|l| l.glyphs.first().map(|g| (l, g))) {
             seen.push((
                 t,

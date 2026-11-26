@@ -1,5 +1,6 @@
 use super::TextSlotBinding;
 use bevy_ecs::prelude::World;
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 /// image px 原寸は**導出せず透過する**。
@@ -89,7 +90,7 @@ fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
     );
 
     let lines = rt
-        .arrange_for_test(&PlaceKey::balloon(&actor), &FixedMetrics, ms(10000))
+        .arrange_for_test(&PlaceKey::balloon(&actor), &FixedMetrics, at_ms(10000))
         .expect("配置の入力と状態のある場所は行の列を返す");
     let glyphs: usize = lines.iter().map(|line| line.glyphs.len()).sum();
     assert_eq!(glyphs, 3, "出終わった時刻には届いた 3 字がすべて並ぶ");
@@ -97,7 +98,7 @@ fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
         rt.arrange_for_test(
             &PlaceKey::balloon(&ActorKey::from("1")),
             &FixedMetrics,
-            ms(10_000)
+            at_ms(10_000)
         )
         .is_none(),
         "配置の入力の無い場所は None"
@@ -155,6 +156,14 @@ fn preview_rehearses_once_and_applied_cues_count_clears() {
         sink.emit(c);
     }
     pump_until_idle();
+    assert_eq!(
+        runtime.borrow().lookahead.number(&balloon),
+        0,
+        "届いただけでは数えない（当てるのはフレームの頭）"
+    );
+    runtime
+        .borrow_mut()
+        .advance(areka_sakura::contract::TimePoint::MAX);
     assert_eq!(
         runtime.borrow().lookahead.number(&balloon),
         2,

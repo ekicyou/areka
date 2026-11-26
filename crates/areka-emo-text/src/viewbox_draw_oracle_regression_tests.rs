@@ -8,8 +8,9 @@ use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
-use dola::TimeSpan;
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
+use dola::{TimePoint, TimeSpan};
 
 /// 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・行送り
 /// pitch 30px＝字の丈 28 ＋ 行間 2・validrect 320×122・**実 DWriteMetrics**・
@@ -60,7 +61,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
     let total_glyphs = 6 + 10 + 8 + 9 * 2;
     let mut scrolled_frames = 0;
     for step in 0..=(total_glyphs + 2) {
-        let t = REVEAL_INTERVAL.mul_div(step, 1) + ms(1);
+        let t = TimePoint::ZERO + REVEAL_INTERVAL.mul_div(step, 1) + ms(1);
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, t, &region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("前方", &canvas, &window, &font, mode, &contract);
@@ -89,8 +90,8 @@ fn diag_line_boundary_dropout_vs_oracle() {
     // present_at(earlier t_mid) で行うパターン）を検証する: 大 t（スクロール済み）から
     // 小 t（未スクロール）へ戻したとき、viewbox が un-scroll を正しく扱い oracle と一致するか。
     // viewbox は前方スクロール前提ゆえ、後方でスクロールアウト行の再露出を取りこぼすと diverge。
-    let big_t = REVEAL_INTERVAL.mul_div(total_glyphs + 5, 1);
-    for &back_t in &[big_t, ms(50), ms(300), ms(100), ms(500)] {
+    let big_t = TimePoint::ZERO + REVEAL_INTERVAL.mul_div(total_glyphs + 5, 1);
+    for &back_t in &[big_t, at_ms(50), at_ms(300), at_ms(100), at_ms(500)] {
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, back_t, &region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("後方", &canvas, &window, &font, mode, &contract);

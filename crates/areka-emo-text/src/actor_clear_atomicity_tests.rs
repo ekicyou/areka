@@ -1,4 +1,5 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 use super::test_support::{
@@ -28,11 +29,11 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示（population）");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示（population）");
     assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "Clear 前はヒット行 2");
     assert!(rt.choice_active(&actor), "Clear 前は choice_active=true");
     rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover 提示");
 
     rt.apply_cue(&cue("0", ms(11000), CueCommand::Clear));
     assert!(
@@ -46,11 +47,11 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
 
     // 提示の後もヒット行が空のままなのは
     // `clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic` が見る。
-    present_frame(&mut rt, &mut world, ms(12000)).expect("Clear 後フレーム");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("Clear 後フレーム");
 
     rt.apply_cue(&choice_cue("0", ms(13000), "OnA", "あか", &["a"]));
     rt.apply_cue(&choice_cue("0", ms(13200), "OnB", "あお", &["b"]));
-    present_frame(&mut rt, &mut world, ms(20000)).expect("新選択肢提示");
+    present_frame(&mut rt, &mut world, at_ms(20000)).expect("新選択肢提示");
     let rows = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 2, "新選択肢集合のヒット行は 2");
     assert_eq!(rows[0].id, "OnA", "新選択肢のみ（前選択肢は残らない・5.3）");
@@ -61,7 +62,7 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
     // Clear が hover を既に None にしていれば再提示は NoChange。古い hover が残っていれば
     // 再提示で剥がれて画素が減る。
     rt.inject_choice_hover(&actor, None);
-    present_frame(&mut rt, &mut world, ms(20000)).expect("None 再提示");
+    present_frame(&mut rt, &mut world, at_ms(20000)).expect("None 再提示");
     let after_none = read(&rt);
     assert_eq!(
         after_new, after_none,
@@ -94,7 +95,7 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示（population）");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示（population）");
     assert_eq!(
         rt.choice_hit_rows(&a0).len(),
         1,
@@ -107,7 +108,7 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     );
     rt.inject_choice_hover(&a0, Some(0));
     rt.inject_choice_hover(&a1, Some(0));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("hover 提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("hover 提示");
 
     rt.apply_cue(&cue("0", ms(11000), CueCommand::ClearAll));
     for a in [&a0, &a1] {
@@ -120,11 +121,11 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
             "ClearAll は全 actor の choice_active=false（5.1）"
         );
     }
-    present_frame(&mut rt, &mut world, ms(12000)).expect("ClearAll 後フレーム");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("ClearAll 後フレーム");
 
     rt.apply_cue(&choice_cue("0", ms(13000), "N0", "あか", &["a"]));
     rt.apply_cue(&choice_cue("1", ms(13000), "N1", "あお", &["b"]));
-    present_frame(&mut rt, &mut world, ms(20000)).expect("新選択肢提示");
+    present_frame(&mut rt, &mut world, at_ms(20000)).expect("新選択肢提示");
     let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize { opaque_count(&read_back(rt, a)) };
     assert_eq!(
         rt.choice_hit_rows(&a0).len(),
@@ -140,7 +141,7 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     let after_new_1 = read(&rt, &a1);
     rt.inject_choice_hover(&a0, None);
     rt.inject_choice_hover(&a1, None);
-    present_frame(&mut rt, &mut world, ms(20000)).expect("None 再提示");
+    present_frame(&mut rt, &mut world, at_ms(20000)).expect("None 再提示");
     assert_eq!(
         read(&rt, &a0),
         after_new_0,
@@ -173,7 +174,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示（population）");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示（population）");
     let base_rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(base_rows.len(), 2, "Clear 前はヒット行 2");
     assert!(rt.choice_active(&actor), "Clear 前は choice_active=true");
@@ -193,7 +194,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     }
 
     rt.apply_cue(&cue("0", ms(11000), CueCommand::Clear));
-    present_frame(&mut rt, &mut world, ms(12000)).expect("FullClear フレーム提示");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("FullClear フレーム提示");
 
     // FullClear は描画 0 件の全域リセットなので、供給面は全域透明（選択肢行の帯のインクも消える）。
     let cleared_bytes = read_back(&rt, &actor);
@@ -230,7 +231,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
 
     rt.apply_cue(&choice_cue("0", ms(0), "OnYes", "はい", &["r0"]));
     rt.apply_cue(&choice_cue("0", ms(200), "OnNo", "いいえ", &["r1"]));
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示（集合1 population）");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示（集合1 population）");
     let old_rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(old_rows.len(), 2, "集合1 はヒット行 2");
     assert_eq!(
@@ -247,7 +248,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
 
     rt.apply_cue(&cue("0", ms(11000), CueCommand::ClearAll));
 
-    present_frame(&mut rt, &mut world, ms(12000)).expect("FullClear フレーム提示");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("FullClear フレーム提示");
     let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
         opaque_count(&cleared_bytes),
@@ -257,7 +258,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
 
     rt.apply_cue(&choice_cue("0", ms(13000), "OnA", "あか", &["a"]));
     rt.apply_cue(&choice_cue("0", ms(13200), "OnB", "あお", &["b"]));
-    present_frame(&mut rt, &mut world, ms(20000)).expect("提示（集合2）");
+    present_frame(&mut rt, &mut world, at_ms(20000)).expect("提示（集合2）");
 
     let new_rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(new_rows.len(), 2, "集合2 はヒット行 2（新集合のみ）");
@@ -308,7 +309,7 @@ fn hit_rows_carry_the_kind_of_their_span() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示");
     let mut kinds: Vec<(usize, SpanKind)> = rt
         .choice_hit_rows(&actor)
         .iter()
@@ -345,7 +346,7 @@ fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("提示");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("提示");
     let kinds: Vec<SpanKind> = rt.choice_hit_rows(&actor).iter().map(|r| r.kind).collect();
     assert_eq!(kinds, vec![SpanKind::Anchor], "消去の前は当たりの行 1");
     assert!(rt.hit_active(&actor), "消去の前は押せる範囲がある");
@@ -358,7 +359,7 @@ fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
     assert!(!rt.hit_active(&actor), "消去で押せる範囲が無くなる");
 
     // 消去の後の提示でも戻らない。
-    present_frame(&mut rt, &mut world, ms(12000)).expect("消去の後の提示");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("消去の後の提示");
     assert!(rt.choice_hit_rows(&actor).is_empty());
     assert!(!rt.hit_active(&actor));
 }

@@ -5,6 +5,7 @@
 
 use super::test_support::{cue_dur, items_of, reveal_times_of};
 use super::*;
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 
 /// 家族（ZWJ で結んだ列）: 👨 ZWJ 👩 ZWJ 👧
@@ -49,14 +50,17 @@ fn text_cue_of_family_and_flag_yields_two_whole_items() {
         &[TextItem::glyph(FAMILY), TextItem::glyph(FLAG_JP)]
     );
     // 間隔は 1000ms ÷ 2 = 500ms。
-    assert_eq!(reveal_times_of(&state, "0"), vec![TimeSpan::ZERO, ms(500)]);
+    assert_eq!(
+        reveal_times_of(&state, "0"),
+        vec![TimePoint::ZERO, at_ms(500)]
+    );
 
     let actor = ActorKey::from("0");
-    assert_eq!(state.visible_glyphs(&actor, TimeSpan::ZERO), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(250)), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(490)), 1);
-    assert_eq!(state.visible_glyphs(&actor, ms(500)), 2);
-    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 2);
+    assert_eq!(state.visible_glyphs(&actor, TimePoint::ZERO), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(250)), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(490)), 1);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(500)), 2);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 2);
 }
 
 /// 6 形のそれぞれが 1 アイテム・1 時刻で積まれる（途中の段に部品が見えない）。
@@ -78,7 +82,7 @@ fn each_of_six_forms_is_one_item_revealed_at_one_time() {
         );
         assert_eq!(
             reveal_times_of(&state, "0"),
-            vec![TimeSpan::ZERO],
+            vec![TimePoint::ZERO],
             "{form:?} は 1 つの段で出なければならない"
         );
     }
@@ -102,12 +106,12 @@ fn six_forms_in_one_cue_yield_six_items_in_order() {
     assert_eq!(
         reveal_times_of(&state, "0"),
         vec![
-            TimeSpan::ZERO,
-            ms(250),
-            ms(500),
-            ms(750),
-            ms(1000),
-            ms(1250)
+            TimePoint::ZERO,
+            at_ms(250),
+            at_ms(500),
+            at_ms(750),
+            at_ms(1000),
+            at_ms(1250)
         ]
     );
 }

@@ -176,6 +176,6 @@ fn existing_readers_return_balloon_place_values() {
         glyphs(&["ふ"])
     );
     assert!(state.actor_state(&key("1")).is_none());
-    assert_eq!(state.visible_glyphs(&key("0"), TimeSpan::MAX), 1);
-    assert_eq!(state.visible_glyphs(&key("1"), TimeSpan::MAX), 0);
+    assert_eq!(state.visible_glyphs(&key("0"), TimePoint::MAX), 1);
+    assert_eq!(state.visible_glyphs(&key("1"), TimePoint::MAX), 0);
 }

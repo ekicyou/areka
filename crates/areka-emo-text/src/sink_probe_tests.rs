@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BoxName;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint};
 use dola::cue::{CueFinding, CueProbe, CueSink};
 use log_capture_kit::count_levels;
 
@@ -117,6 +117,12 @@ fn drain_reports_missing_box_once_and_not_for_present_box() {
         sink.emit_with(select("a"), &present);
         sink.emit_with(select("無い箱"), &missing);
         pump_until_idle();
+        assert_eq!(
+            *missing_found.lock().expect("findings lock"),
+            vec![],
+            "届いただけでは当てないので知らせない"
+        );
+        runtime.borrow_mut().advance(TimePoint::MAX);
 
         assert_eq!(
             *present_found.lock().expect("findings lock"),

@@ -15,6 +15,7 @@
 //!
 //! 「違う画素」の述語は、同じ台本を 2 度撮って 1 バイトも違わないこと（較正）を先に確かめる。
 
+use dola::TimePoint;
 use dola::{TimeSpan, time::testing::ms};
 use std::cell::RefCell;
 
@@ -50,7 +51,7 @@ const PITCH: f32 = 30.0;
 /// 確かめる拡大率。
 const SCALES: [f32; 3] = [1.0, 1.25, 1.5];
 /// 全部の字が見えている時刻。
-const LATE: TimeSpan = ms(100000);
+const LATE: TimePoint = TimePoint::MAX;
 /// インクとみなす α の下限（`decoration_readback_test` と同じ二値化）。
 const INK_ALPHA_MIN: u8 = 128;
 
@@ -242,7 +243,7 @@ fn shoot_described(descript: &str, image: (u32, u32), k: f32, script: &[CueComma
 }
 
 /// 普通のバルーンへ cue 列を流し、時刻 `frames` の順にフレームを提示して、最後の面を読み戻す。
-fn shoot_frames(image: (u32, u32), k: f32, cues: &[TalkCue], frames: &[TimeSpan]) -> Shot {
+fn shoot_frames(image: (u32, u32), k: f32, cues: &[TalkCue], frames: &[TimePoint]) -> Shot {
     shoot_frames_described(BALLOON, image, k, cues, frames)
 }
 
@@ -252,7 +253,7 @@ fn shoot_frames_described(
     image: (u32, u32),
     k: f32,
     cues: &[TalkCue],
-    frames: &[TimeSpan],
+    frames: &[TimePoint],
 ) -> Shot {
     with_slot(|world, reserved| shoot_frames_in(world, reserved, descript, image, k, cues, frames))
 }
@@ -264,7 +265,7 @@ fn shoot_frames_in(
     image: (u32, u32),
     k: f32,
     cues: &[TalkCue],
-    frames: &[TimeSpan],
+    frames: &[TimePoint],
 ) -> Shot {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -594,12 +595,12 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
             for mark in [Mark::Author, Mark::Anchor] {
                 let what = format!("k={k} 面 {image:?} {mark:?}");
                 let (cues, end) = timed(&bottom(mark));
-                let frames: Vec<TimeSpan> = (1..=end
+                let frames: Vec<TimePoint> = (1..=end
                     .as_ticks()
                     .unsigned_abs()
                     .div_ceil(STEP.as_ticks().unsigned_abs())
                     + 2)
-                    .map(|i| STEP.mul_div(i, 1))
+                    .map(|i| TimePoint::ZERO + STEP.mul_div(i, 1))
                     .collect();
                 let whole = shoot_frames(image, k, &cues, &[LATE]);
                 // 較正: 最下行の途中の時刻の面は最後の面と違う（最下行が何フレームかに分けて出る）。
@@ -607,9 +608,10 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
                     image,
                     k,
                     &cues,
-                    &[end
-                        .checked_sub(STEP.mul_div(3, 2))
-                        .expect("最下行は 75 ms より長い")],
+                    &[TimePoint::ZERO
+                        + end
+                            .checked_sub(STEP.mul_div(3, 2))
+                            .expect("最下行は 75 ms より長い")],
                 );
                 assert!(
                     midway != whole,

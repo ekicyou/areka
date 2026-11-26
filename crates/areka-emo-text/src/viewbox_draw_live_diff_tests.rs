@@ -9,6 +9,7 @@ use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 use dola::{TimePoint, TimeSpan};
 
@@ -134,7 +135,7 @@ impl LiveDiffRig {
     /// 注入時刻 `t` で state から可視 prefix→純粋レイアウト→canvas/window を導き、オラクルと
     /// viewbox を**同一入力**で描いて read_back を byte 比較する。`expect_opaque` で content
     /// フレーム（非透明 > 0）／Clear フレーム（全域透明）を区別し、空面同士の vacuous な一致を排除する。
-    fn checkpoint(&mut self, label: &str, t: TimeSpan, expect_opaque: bool) -> VisibleWindow {
+    fn checkpoint(&mut self, label: &str, t: TimePoint, expect_opaque: bool) -> VisibleWindow {
         let (_, _, canvas, window) = state_frame(
             &self.state,
             &self.actor,
@@ -179,7 +180,7 @@ impl LiveDiffRig {
     /// （小数アキュムレータで |committed − pos| ≤ 0.5 ⇒ 確定 content 位置差 ≤ ceil(0.5×k)）。
     /// k≠1.0 の実 GPU 描画経路（小数アキュムレータ→whole-pixel blit→実描画→readback）を実際に
     /// 走らせて検証する（従来 k=1.0 でしか走っていなかった経路）。返り値は VisibleWindow。
-    fn checkpoint_block_tol(&mut self, label: &str, t: TimeSpan, tol: u32) -> VisibleWindow {
+    fn checkpoint_block_tol(&mut self, label: &str, t: TimePoint, tol: u32) -> VisibleWindow {
         let (_, lines, canvas, window) = state_frame(
             &self.state,
             &self.actor,
@@ -281,7 +282,7 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     ld.apply_text(ms(0), "い");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "う");
-    let w = ld.checkpoint("あふれ前", ms(10000), true);
+    let w = ld.checkpoint("あふれ前", at_ms(10000), true);
     assert_eq!(
         (w.first_visible_line, w.block_offset),
         (0, 0.0),
@@ -291,7 +292,7 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     // ② スクロール発火直後（4 行目であふれ・可視窓が初めて移動）。
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "え");
-    let w = ld.checkpoint("スクロール発火直後", ms(20000), true);
+    let w = ld.checkpoint("スクロール発火直後", at_ms(20000), true);
     assert!(
         w.first_visible_line >= 1,
         "あふれ発火で可視窓が移動する（先頭可視行 ≥ 1）: {w:?}"
@@ -306,7 +307,7 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     ld.apply_text(ms(0), "お");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "か");
-    let w = ld.checkpoint("連続スクロール", ms(30000), true);
+    let w = ld.checkpoint("連続スクロール", at_ms(30000), true);
     assert!(
         w.first_visible_line >= 2,
         "連続スクロールで可視窓が複数行進む（先頭可視行 ≥ 2）: {w:?}"
@@ -314,7 +315,7 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
 
     // ④ Clear 直後（両方式の Clear 適用点を経由・全域透明）。
     ld.apply_clear(ms(0));
-    let w = ld.checkpoint("Clear 直後", ms(40000), false);
+    let w = ld.checkpoint("Clear 直後", at_ms(40000), false);
     assert_eq!(
         w.first_visible_line, 0,
         "Clear 後は既定窓（先頭可視行 0）: {w:?}"
@@ -324,7 +325,7 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     ld.apply_text(ms(0), "ら");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "り");
-    let w = ld.checkpoint("Clear 後再追記", ms(50000), true);
+    let w = ld.checkpoint("Clear 後再追記", at_ms(50000), true);
     assert_eq!(
         w.first_visible_line, 0,
         "短い再追記はあふれない（先頭可視行 0）: {w:?}"
@@ -368,12 +369,12 @@ fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol
     ld.apply_text(ms(0), "い");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "う");
-    ld.checkpoint_block_tol("k≠1 あふれ前", ms(10000), tol);
+    ld.checkpoint_block_tol("k≠1 あふれ前", at_ms(10000), tol);
 
     // ② スクロール発火直後。
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "え");
-    let w = ld.checkpoint_block_tol("k≠1 スクロール発火", ms(20000), tol);
+    let w = ld.checkpoint_block_tol("k≠1 スクロール発火", at_ms(20000), tol);
     assert!(
         w.first_visible_line >= 1,
         "k≠1 あふれ発火で可視窓が移動: {w:?}"
@@ -384,7 +385,7 @@ fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol
     ld.apply_text(ms(0), "お");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "か");
-    let w = ld.checkpoint_block_tol("k≠1 連続スクロール", ms(30000), tol);
+    let w = ld.checkpoint_block_tol("k≠1 連続スクロール", at_ms(30000), tol);
     assert!(
         w.first_visible_line >= 2,
         "k≠1 連続スクロールで可視窓が複数行進む: {w:?}"
@@ -466,7 +467,7 @@ fn run_live_diff_emoji_scenario(mode: WritingMode, image: (u32, u32)) {
     ld.apply_text(ms(0), "あ");
     ld.apply_newline(ms(0));
     ld.apply_text(ms(0), "今日は家族👨‍👩‍👧と😀");
-    let w = ld.checkpoint("絵文字の台詞", ms(10000), true);
+    let w = ld.checkpoint("絵文字の台詞", at_ms(10000), true);
     assert_eq!(w.first_visible_line, 0, "送りの前は先頭可視行 0: {w:?}");
     assert_emoji_colored(&ld, "絵文字の台詞");
 
@@ -475,7 +476,7 @@ fn run_live_diff_emoji_scenario(mode: WritingMode, image: (u32, u32)) {
         ld.apply_newline(ms(0));
         ld.apply_text(ms(0), s);
     }
-    let w = ld.checkpoint("絵文字の行が送られた後", ms(20000), true);
+    let w = ld.checkpoint("絵文字の行が送られた後", at_ms(20000), true);
     assert_eq!(
         w.first_visible_line, 1,
         "送りは 1 行だけで、絵文字の行（2 行目）が先頭可視行になる: {w:?}"
@@ -551,8 +552,8 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム）。各フレームで byte 比較。
     let mut checked_opaque = false;
-    let mut t = TimeSpan::ZERO;
-    while t <= ms(3050) {
+    let mut t = TimePoint::ZERO;
+    while t <= at_ms(3050) {
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, t, region, mode, font.height, &metrics);
         let (ob, vb) = pair.render(

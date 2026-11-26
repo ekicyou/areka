@@ -1,9 +1,10 @@
+use dola::time::testing::at_ms;
 use dola::time::testing::ms;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_parsers::balloon::{Font, FontColor, Origin, ValidRect};
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TimePoint};
 use bevy_ecs::prelude::World;
 use wintf::ecs::{GraphicsCommandList, VisualGraphics};
 
@@ -56,6 +57,7 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
         sink.close();
 
         pump_until_idle();
+        runtime.borrow_mut().advance(TimePoint::MAX);
 
         {
             let rt = runtime.borrow();
@@ -70,9 +72,9 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
                 "グリフ 3＋改行マーカー 1 が追記される"
             );
             // 注入時刻でのリビール進行（reveal interval=0.05〔duration 由来〕・丸め安全マージン付き時刻）。
-            assert_eq!(rt.state().visible_glyphs(&actor, ms(0)), 1);
-            assert_eq!(rt.state().visible_glyphs(&actor, ms(60)), 2);
-            assert_eq!(rt.state().visible_glyphs(&actor, ms(110)), 3);
+            assert_eq!(rt.state().visible_glyphs(&actor, at_ms(0)), 1);
+            assert_eq!(rt.state().visible_glyphs(&actor, at_ms(60)), 2);
+            assert_eq!(rt.state().visible_glyphs(&actor, at_ms(110)), 3);
         }
 
         // 送信元（sink）は生存したまま＝終了は Close（Ok(Break)）経路のみでありうる。
@@ -105,6 +107,7 @@ fn dropping_all_sinks_terminates_drain_cleanly_after_applying_queued_cues() {
         drop(sink2);
 
         pump_until_idle();
+        runtime.borrow_mut().advance(TimePoint::MAX);
 
         let rt = runtime.borrow();
         let actor = ActorKey::from("1");
@@ -169,6 +172,7 @@ fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
         "失敗後の後続 cue 適用と Close 終了は error ログを伴わない"
     );
 
+    runtime.borrow_mut().advance(TimePoint::MAX);
     let rt = runtime.borrow();
     let actor = ActorKey::from("0");
     let state = rt
@@ -195,8 +199,8 @@ fn present_frame_accumulates_and_skips_unresolved_actor_with_warn_once() {
     let mut world = World::new(); // COM 資源なし——未解決 skip は資源に触れない
 
     let ((), warns, errors) = with_log_cage(|| {
-        present_frame(&mut rt, &mut world, ms(0)).expect("未解決 actor は skip＝frame は Ok");
-        present_frame(&mut rt, &mut world, ms(100)).expect("再試行フレームも Ok");
+        present_frame(&mut rt, &mut world, at_ms(0)).expect("未解決 actor は skip＝frame は Ok");
+        present_frame(&mut rt, &mut world, at_ms(100)).expect("再試行フレームも Ok");
     });
     assert_eq!(
         warns, 1,
@@ -232,7 +236,7 @@ fn present_frame_reports_device_error_without_panic_when_resources_missing() {
         ResolvedBalloonText::resolve(&geo_model(), (60, 40)),
     );
 
-    let (result, _warns, errors) = with_log_cage(|| present_frame(&mut rt, &mut world, ms(0)));
+    let (result, _warns, errors) = with_log_cage(|| present_frame(&mut rt, &mut world, at_ms(0)));
     let err = result.err().expect("COM 資源不在は Err（panic しない）");
     assert!(
         matches!(err, crate::TextLayerError::Device { .. }),
@@ -259,7 +263,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
 
-    present_frame(&mut rt, &mut world, ms(0)).expect("未解決 skip フレーム");
+    present_frame(&mut rt, &mut world, at_ms(0)).expect("未解決 skip フレーム");
     assert!(!rt.is_attached(&actor));
 
     let image = (120u32, 60u32);
@@ -269,7 +273,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
         binding,
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
-    present_frame(&mut rt, &mut world, ms(0)).expect("装着フレーム");
+    present_frame(&mut rt, &mut world, at_ms(0)).expect("装着フレーム");
     assert!(rt.is_attached(&actor), "登録後の再試行で装着される");
 
     let vg = world
@@ -287,14 +291,14 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     assert!(n1 > 0, "t=0.0 で 1 グリフ目が可視（非透明ピクセルあり）");
 
     let entities_after_attach = world.entities().len();
-    present_frame(&mut rt, &mut world, ms(60)).expect("フレーム t=0.06");
+    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=0.06");
     let n2 = read(&rt);
     assert!(
         n2 > n1,
         "t=0.06 で 2 グリフ目まで可視（ピクセル単調増加）: {n1} -> {n2}"
     );
 
-    present_frame(&mut rt, &mut world, ms(110)).expect("フレーム t=0.11");
+    present_frame(&mut rt, &mut world, at_ms(110)).expect("フレーム t=0.11");
     let n3 = read(&rt);
     assert!(n3 > n2, "t=0.11 で 3 グリフ目まで可視: {n2} -> {n3}");
 
@@ -302,7 +306,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let place = crate::place::PlaceKey::balloon(&actor);
     let rebuilds = rt.frame_rebuilds(&place).expect("装着済みの描き手");
     assert_eq!(rebuilds, 3, "字が増えた 3 フレームで作り直す");
-    present_frame(&mut rt, &mut world, ms(120)).expect("入力が同じフレーム");
+    present_frame(&mut rt, &mut world, at_ms(120)).expect("入力が同じフレーム");
     assert_eq!(
         rt.frame_rebuilds(&place),
         Some(rebuilds),
@@ -321,7 +325,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     );
 
     rt.apply_cue(&cue("0", ms(150), CueCommand::Clear));
-    present_frame(&mut rt, &mut world, ms(200)).expect("Clear 後フレーム");
+    present_frame(&mut rt, &mut world, at_ms(200)).expect("Clear 後フレーム");
     assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
 }
 
@@ -349,7 +353,7 @@ fn draw_stats_readable_after_present_frame() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(0)).expect("装着フレーム");
+    present_frame(&mut rt, &mut world, at_ms(0)).expect("装着フレーム");
     let stats = rt
         .draw_stats(&actor)
         .expect("装着済み actor の draw_stats は Some");
@@ -364,7 +368,7 @@ fn draw_stats_readable_after_present_frame() {
 
     // 後続フレームでリビールが進むと現在行を描き直し、累計が増える（累計は減らないので
     // 「前以上」では次のフレームで何も描かなくても通る）。
-    present_frame(&mut rt, &mut world, ms(60)).expect("フレーム t=0.06");
+    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=0.06");
     let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
     assert!(
         stats2.draw_text_layout_calls > stats.draw_text_layout_calls,
@@ -433,7 +437,7 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
         ResolvedBalloonText::resolve(&geo_model(), image),
     );
 
-    present_frame(&mut rt, &mut world, ms(10000)).expect("装着＋描画フレーム");
+    present_frame(&mut rt, &mut world, at_ms(10000)).expect("装着＋描画フレーム");
     let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize { opaque_count(&read_back(rt, a)) };
     assert!(read(&rt, &sakura) > 0, "actor 0 にインクが載る");
     assert!(read(&rt, &kero) > 0, "actor 1 にインクが載る");
@@ -441,7 +445,7 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
     let kero_fc0 = rt.draw_stats(&kero).expect("draw_stats(1)").full_clears;
 
     rt.apply_cue(&cue("0", ms(11000), CueCommand::ClearAll));
-    present_frame(&mut rt, &mut world, ms(12000)).expect("ClearAll 後フレーム");
+    present_frame(&mut rt, &mut world, at_ms(12000)).expect("ClearAll 後フレーム");
     assert_eq!(
         read(&rt, &sakura),
         0,

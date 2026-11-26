@@ -166,15 +166,15 @@ impl Rig {
     }
 
     /// 場所の行の列（本番の提示と同じ `arrange_lines` に決まった字幅を渡す）。状態が無ければ空。
-    pub(super) fn lines(&self, place: &PlaceKey, t: TimeSpan) -> Vec<PositionedLine> {
-        self.runtime
-            .borrow_mut()
-            .arrange_for_test(place, &FixedMetrics, t)
+    pub(super) fn lines(&self, place: &PlaceKey, t: TimePoint) -> Vec<PositionedLine> {
+        let mut rt = self.runtime.borrow_mut();
+        rt.advance(t);
+        rt.arrange_for_test(place, &FixedMetrics, t)
             .unwrap_or_default()
     }
 
     /// 場所の行ごとの字の並び。
-    pub(super) fn rows(&self, place: &PlaceKey, t: TimeSpan) -> Vec<Vec<String>> {
+    pub(super) fn rows(&self, place: &PlaceKey, t: TimePoint) -> Vec<Vec<String>> {
         row_texts(&self.lines(place, t))
     }
 }
@@ -195,6 +195,11 @@ pub(super) struct Talk {
 }
 
 impl Talk {
+    /// トークの頭から `t` 後のフレームの時刻。
+    pub(super) fn at(&self, t: TimeSpan) -> TimePoint {
+        self.anchor + t
+    }
+
     /// トークの頭から `t` 秒の絶対時刻で `tick` し、UI の待ち行列を汲み出す。
     pub(super) fn tick(&mut self, t: TimeSpan) {
         self.player.tick(self.anchor + t);
@@ -263,7 +268,7 @@ pub(super) fn walk_injecting(
         }
         stages.push(Stage {
             time: t,
-            rows: rig.rows(&place, t),
+            rows: rig.rows(&place, ANCHOR + t),
         });
     }
     stages
@@ -651,7 +656,7 @@ fn walk_with_windows(
     let mut windows = Vec::new();
     for t in talk.times.clone() {
         talk.tick(t);
-        let lines = rig.lines(&place, t);
+        let lines = rig.lines(&place, ANCHOR + t);
         let window = {
             let runtime = rig.runtime.borrow();
             let resolved = runtime.layout_input.get(&place).expect("装着済みの場所");

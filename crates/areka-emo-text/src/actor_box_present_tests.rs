@@ -5,7 +5,9 @@
 //! 確かめは `tests/box_attach_test.rs`）。箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
-use dola::{TimeSpan, time::testing::ms};
+use dola::TimePoint;
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 
 use super::box_sync_tests::{Fixture, fixture, layout, select};
 use super::test_support::{
@@ -19,7 +21,7 @@ use crate::place::{PlaceKey, TextPlace};
 use crate::state::{SpanKind, TextLayerConfig};
 
 /// 全部の文字が見えている時刻。
-const LATE: TimeSpan = ms(10000);
+const LATE: TimePoint = TimePoint::MAX;
 
 fn actor() -> ActorKey {
     ActorKey::from("0")
@@ -94,9 +96,9 @@ fn unpresented_or_unrevealed_boxes_are_not_shown() {
     g.rt.apply_cue(&cue("0", ms(1000), CueCommand::Text("あ".into())));
     g.sync(Some(2.0));
     let a = [g.key(0, "a")];
-    g.rt.refresh_shown_boxes(&a, ms(999));
+    g.rt.refresh_shown_boxes(&a, at_ms(999));
     assert_eq!(shown(&g), vec![], "まだ 1 字も見えていない");
-    g.rt.refresh_shown_boxes(&a, ms(1000));
+    g.rt.refresh_shown_boxes(&a, at_ms(1000));
     assert_eq!(
         shown(&g).into_iter().map(|s| s.0).collect::<Vec<_>>(),
         vec!["a".to_owned()],

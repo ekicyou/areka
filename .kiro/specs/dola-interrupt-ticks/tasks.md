@@ -629,7 +629,7 @@
   - _Dispatch: standard — 決まりは設計が与え、列の順の中で当てる実装が残る_
   - _Requirements: 12.4, 12.5, 12.9_
 
-- [ ] 10.4 (P) areka-emo-text の `src` のテストを、列とフレームの時刻の形へ直す
+- [x] 10.4 (P) areka-emo-text の `src` のテストを、列とフレームの時刻の形へ直す
   - 状態の決まりだけを確かめるテストは当てる関数を直に呼び、列を通すテストは合図を入れて進める口に時刻を渡す形にする。「全部が現れている時刻」を時刻の型の端で書く
   - そのファイルが誤り 0 件で、10.2・10.3 が足したテストを含めて `cargo test -p areka-emo-text --lib` が緑である
   - _Boundary: areka-emo-text src のテスト_
@@ -829,3 +829,4 @@
 - 10.1: emo-text の提示の口は `frame_now: TimePoint`。下で壊れる呼び出し: areka-runtime `frame/scale_text.rs:238,250`・`balloon_visibility_phase.rs:306`・`frame_balloon_runtime_test_support.rs:60`（10.10・10.11）、areka-input `balloon_test_support.rs:322`・`balloon_choice_settle_tests.rs:151`・`balloon_pressed_tests.rs:81`（10.15）、本体 `runtime_tests/frame_shell_box_integration_tests.rs:310`（10.16）、先進坑 `q7-vertical/src/old_side.rs:100`（10.16 か締め）。
 - 10.2: emo-text の新しい口 `TextLayerRuntime::advance(frame_now) -> Option<TimePoint>`（`actor_held.rs`）。受け取りは `held::receive_msg` が列へ足し `tick_wake::mark(PRESENT)` を立てる。10.3 が `TextMsg::Origin`・`EmoTextSink::origin_set` の送り・`Held::Origin` を足す。10.10 が runtime のフレームの頭で `advance` を呼ぶ。10.16 が本体の `AREKA_PRODUCERS` に `actor_held.rs` の行と木の根に areka-emo-text を足す。12.2 が wintf の `tick_wake.rs` の頭の一覧の `PRESENT` の行を直す。
 - 10.3: `actor_held.rs`・`actor_held_tests.rs`（10.2 で足した）が lib.rs の `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` のどちらにも無い。10.4 で載せる（`every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる）。
+- 10.4: 「全部が現れている時刻」に `TimePoint::MAX` を使うと、その後のフレームが時刻を逆へ戻す所がある。後にフレームが続く所は有限の遅い時刻にする（10.5 以降の追従でも同じ）。
