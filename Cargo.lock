@@ -260,6 +260,7 @@ dependencies = [
  "areka-seriko",
  "areka-sylphya",
  "bevy_ecs",
+ "dola",
  "log-capture-kit",
  "tracing",
  "windows",

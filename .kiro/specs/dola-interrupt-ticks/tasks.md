@@ -454,7 +454,7 @@
 
 - [ ] 6. 段 5: areka-input・areka-session・本体・先進坑を付け替える
 
-- [ ] 6.1 areka-input を付け替える
+- [x] 6.1 areka-input を付け替える
   - `[dev-dependencies]` に、機能 `test-support` を付けた dola の行を足す。本番が時刻の型を名指す時は、areka-sakura の契約から名指す
   - 手で組む合図と提示を書くテストを新しい形にする
   - `cargo test -p areka-input` が緑である

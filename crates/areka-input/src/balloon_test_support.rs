@@ -19,10 +19,11 @@ use areka_parsers::balloon::{
 };
 use areka_runtime::balloon_hover::BalloonHover;
 use areka_sakura::TalkId;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint};
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::world::World;
+use dola::time::testing::ms;
 use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Point, Visual, Window};
@@ -130,7 +131,7 @@ pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) ->
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         runtime,
-        TalkClock::new(Arc::new(|| 0.0)),
+        TalkClock::new(Arc::new(|| TimePoint::ZERO)),
         synth_boot_assets(),
     )
 }
@@ -146,7 +147,7 @@ pub(crate) fn runtime_wiring_showing_talk(talk_id: TalkId) -> RuntimeWiring {
         lifecycle_rx,
         mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         empty_runtime(),
-        TalkClock::new(Arc::new(|| 0.0)),
+        TalkClock::new(Arc::new(|| TimePoint::ZERO)),
         synth_boot_assets(),
     );
     lifecycle_tx
@@ -169,16 +170,17 @@ pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRun
 
 /// 選択肢スパン `\q[はい,OnYes]` 1 つを載せる合図。
 pub(crate) fn choice_cue(actor: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Choice {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
+        ms(0),
+        ActorKey::from(actor),
+        CueCommand::Choice {
             id: "OnYes".into(),
             text: "はい".into(),
             references: Vec::new(),
         },
-        duration: 0.0,
-    }
+        ms(0),
+    )
 }
 
 /// アンカーの範囲 1 つ（`\_a[x]あい\_a`）を作る合図の列。
@@ -191,11 +193,14 @@ pub(crate) fn anchor_cues(actor: &str) -> [TalkCue; 3] {
         CueCommand::Text("あい".into()),
         CueCommand::AnchorEnd,
     ]
-    .map(|command| TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
+    .map(|command| {
+        TalkCue::scheduled(
+            TimePoint::ZERO,
+            ms(0),
+            ActorKey::from(actor),
+            command,
+            ms(0),
+        )
     })
 }
 
@@ -314,7 +319,7 @@ pub(crate) fn gpu_balloon_world(
         TextSlotBinding::new(slot, window, scale, surface, image),
         ResolvedBalloonText::resolve(&plain_model(origin), image),
     );
-    present_frame(&mut rt.borrow_mut(), &mut world, 10.0).expect("提示");
+    present_frame(&mut rt.borrow_mut(), &mut world, ms(10_000)).expect("提示");
     (gpu, world, window)
 }
 

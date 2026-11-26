@@ -254,3 +254,7 @@
 ## 5.7
 
 - 段 4 の締め: `cargo test -p areka-runtime` は 1080 passed・0 failed・3 ignored（5.6 のレビューで今のコードの上で回した）。
+
+## 6.1
+
+- 外したテスト・分かれ道・ログ・変わった期待は無い（手で組む合図を `TalkCue::scheduled` へ、`present_frame` の秒 → `ms(..)`、テストの時計は `TimePoint::ZERO`）。`cargo test -p areka-input` は 294 passed。

@@ -44,3 +44,5 @@ areka-emo-atlas = { path = "../areka-emo-atlas" }
 # runtime と配置のテストの支えを入力のテストにだけ開ける。本番の表の同じ依存に機能を足すだけ。
 areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
 areka-placement = { path = "../areka-placement", features = ["test-support"] }
+# テストの時刻の組み立て（`dola::time::testing` の `ms`）を使う。
+dola = { path = "../dola", features = ["test-support"] }

@@ -4,6 +4,7 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
+use dola::time::testing::ms;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -77,7 +78,7 @@ fn rig() -> Rig {
                 down: Some(arrow()),
             },
         );
-        present_frame(&mut rt, &mut world, 100.0).expect("矢印を出す提示");
+        present_frame(&mut rt, &mut world, ms(100_000)).expect("矢印を出す提示");
     }
     let marker = runtime
         .borrow()
