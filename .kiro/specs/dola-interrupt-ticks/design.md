@@ -6,7 +6,7 @@
 
 **Users**: dola の使い手（areka の各エンジンと wintf）と、この土台の上に高速再生基盤・並走・値を時間で変える口を建てる開発者。
 
-**Impact**: dola の公開の口から `f64` の秒が消える。本番の時計は 1 本になり、`GetTickCount64` と QPC の秒は読まれなくなる。受け手（文字の層・seriko・バルーンの寿命の時計）は起点を見積もらず、再生機が知らせた値を読む。台本の中身は、受け手に届いた時でなく、合図の発火時刻に効く。
+**Impact**: dola の公開の口から `f64` の秒が消える。本番の時計は 1 本になり、`GetTickCount64` と QPC の秒は読まれなくなる。受け手（文字の層・seriko・バルーンの寿命の時計）は起点を見積もらず、起点を持たない。受け取った物を、合図が運ぶ絶対の発火時刻で持つ。台本の中身は、受け手に届いた時でなく、合図の発火時刻に効く。
 
 大前提（要件 18）: 同じ起点を持つ台本は、どの受け手でも同じタイミングで再生される。dola は「受け取った現在の時刻」から再生の位置を求めるだけで、その時刻がどう刻まれたかを問わず、受け取った時刻を覚えもしない。刻みが運ぶ時刻は、刻み役が起きた時に読んだ時計の値のままである（格子の値へ寄せない・先読みして配らない）。
 
@@ -18,7 +18,7 @@
 - 本番の「今」を 1 本の時計から読む。
 - 倍率が 1 でない時の出来事の判定と、逆向きに求めた時刻が食い違わない事と、どの出来事も本当の時刻より前に「届いた」と判定しない事を、構造で保証する。
 - 起点の置き直し（前へも後ろへも）・知らせ・絶対の発火時刻の口を、後で作り直さずに済む形で入れる。
-- 台本の中身が効く時刻を、合図の発火時刻にする（届いた時刻にしない）。フレームが見せる物を、台本と、起点の知らせの列と、フレームの時刻だけで決める。
+- 台本の中身が効く時刻を、合図の発火時刻にする（届いた時刻にしない）。フレームが見せる物を、届いた合図の発火時刻と、置き直しの知らせと、フレームの時刻だけで決める。受け手は、起点も台本の時刻も持たない。
 - 遅れて届いた合図の追い付き方を、受け手ごとに決める。
 - 並行のサブエージェントで進められる段取りを、設計が持つ。
 
@@ -39,7 +39,7 @@
 - 使い手の追従: `wintf`・`areka-talk`・`areka-sakura`・`areka-kanade`・`areka-seriko`・`areka-emo-text`・`areka-ghost`・`areka-runtime`・`areka-input`・`areka-session`・本体 `areka`・先進坑。
 - 時計の結線: ghost の刻み役（seriko を進める刻み役を含む）・`FrameTime`・`TalkClock`。
 - 1 字ごとの間隔の式（文字の層と seriko が呼ぶ 1 本の関数）。
-- 台本の中身が効く時刻の決まり（発火時刻に効く）と、フレームで評価する受け手が、届いた物を時刻が来るまで持つ列（`areka_sakura::held`。文字の層とバルーンの寿命の時計が使う）。
+- 台本の中身が効く時刻の決まり（発火時刻に効く）と、受け手が受け取った物を絶対の時刻で持つ決まり（起点を持たない）と、フレームで評価する受け手が、届いた物を時刻が来るまで持つ列（`areka_sakura::held`。文字の層とバルーンの寿命の時計が使う）。
 - 受け手ごとの追い付き方の決まり（文字の層・seriko・バルーンの寿命の時計・姿を変える指令の受け口・storyboard の層の値と引き金）。
 - storyboard の層の、止めた再生を戻すときの時間の数え方。
 - 全体テストの、Windows でない target の検査の段。dola の README・`tech.md`・`structure.md`・替えた所のコードの説明。
@@ -67,7 +67,9 @@
 - `TalkCue` の欄・`CueSink` の口・`OriginNotice` の中身を変える時。
 - `CueSheet` の直列化の形を変える時。
 - 時刻の表の「取り出す時に発火時刻を決める」「知らせと合図を起きた順に配る」「最初の起点を、どの合図よりも前に知らせる」の決まりを変える時。
-- 知らせの受け方の決まり（効く時刻から先に効く・その前に起きた事は書き換えない）を変える時（`areka_sakura::held` を使う受け手と seriko の両方が確かめ直す）。
+- 受け手が、受け取った物を絶対の時刻で持つ（起点を持たない）決まりを変える時。
+- 知らせの受け方の決まり（効く時刻より後の時刻だけを、動いた長さだけ動かす・効く時刻以前の物は書き換えない・最初の起点の知らせでは何もしない）を変える時（文字の層・バルーンの寿命の時計・seriko が確かめ直す）。
+- 届いた物を持つ列の決まり（届いた順・頭の物が待つ間は後ろも待つ・時刻を持たない物は前の物に続く）を変える時（`areka_sakura::held` を使う 2 つの受け手が確かめ直す）。
 - 1 字ごとの間隔の式（`areka_sakura::reveal`）を変える時（文字の層と seriko の両方が確かめ直す）。
 - 公開の道 `dola::time` を変える時（中身を dola の下の crate へ移すだけなら、道は変わらないので当たらない）。
 
@@ -151,15 +153,17 @@ graph TB
 | D9 | 合図の形 | `TalkCue` に `fire_time: TimePoint` を足す。`at` は `TimeSpan`（台本の時刻）。先渡しの合図の `fire_time` は、その時の起点での予定の値。時刻の表の中では、発火時刻を持たない型（`PendingCue`）で持ち、`TalkCue` は出口（取り出しと先渡し）でだけ組む | 文字の層の空回しは、先渡しの合図を配られる合図と同じ道で当てる。受け口へ渡す型を分けると、同じ道を通せない。表の中の項目は、発火時刻がまだ決まっていないので、その欄を持たない型にして、古い値を持つ合図を作れなくする |
 | D10 | 時刻の表 | 取り出し口は `pop_due`（1 件ずつ）だけ。`tick`＋`ready` は無くす。起点は中で 128 ビットで持つ | 取り出しごとに起点を置き直せる（要件 11 の 6）。溜めが無いので、同じ時刻の刻み直しは、守り無しで「何も届かない」「置き直した分だけ届く」になる（要件 11 の 9・10）。トークのスレッドの同じ時刻の守りも要らなくなり、取り除く。型の下の端でも比べが変わらない（要件 11 の 12） |
 | D11 | 置き直しの口 | `reanchor(now, at, script_time)`（時刻 `at` が台本の時刻 `script_time` である）と `shift_origin(now, delta)`（負は前へ）。どちらも、呼び手の現在の時刻 `now` を受ける。`now` は、置き直しが効く時刻になる。起点が変わったら `OriginNotice`（効く時刻・新しい起点・前の起点）を返し、変わらなければ何も返さない | 置き直しは、絶対の時刻の上の出来事である。「いつから効くか」が無いと、遅れてまとめて受けた受け手は、その前に起きた事と後に起きる事を分けられない。dola は「今」を覚えないので、効く時刻は呼び手が渡す。動いた長さは「新しい起点 − 前の起点」で求まるので、運ばない。ノベルの作り直しの使い方は、この 2 つの言い方で全部書ける（「使い手の居ない口の確かめ」の節） |
-| D12 | 再生機 | `step`（1 件）と `tick`（届く分の全部）。受け口を登録する時に、その受け口へ最初の起点を知らせる（どの合図よりも前）。置き直しで起点が変わるたびに、全部の受け口へ `origin_set` を登録順に配る | 最初の起点 → 合図 → 置き直しの知らせ → 合図の順が、呼んだ順のまま受け口に着く（要件 12 の 2）。最初の起点を合図から導かせないので、合図がまだ 1 つも届いていない間も、受け手は起点を知っている |
-| D13 | 受け手の起点 | 受け手は、起点を知らせだけから読む。合図の `fire_time − at` から導かない。フレームで評価する受け手（文字の層・バルーンの寿命の時計）は、知らせと合図を届いた順のまま 1 本の列に持ち、列が起点を持つ（`areka_sakura::held`）。`TalkClock` は「今」を読む口だけを持ち、起点を持たない。seriko は起点を持たず、字の現れる時刻を絶対の時刻で持つ | 起点の出どころを 1 つにする（要件 12 の 9・18 の 2）。知らせを合図と同じ列に並べると、起点が替わる時と、合図が効く時の前後が、列の順で決まる。起点を列の外に別に持つと、起点だけが先に替わり、まだ効いていない合図と食い違う |
-| D14 | 口パク | 1 回の刻みで越えた区切りを、古い順に全部、それぞれの字が現れた時刻で判定する。口パクは、自分の刻みの細かさまで合えば足りる物として扱い、決まりを増やさない | 結果が、刻みの細かさと届く遅れに依らない（要件 18 の 1）。「いちばん新しい 1 つだけ」を判定する決まりは、刻みの取り方で口の動きが変わる。土台は正確な時刻を渡すが、どれだけ厳しく合わせるかは、中身の種類ごとに決める（「受け手ごとの追い付き方」の節） |
+| D12 | 再生機 | `step`（1 件）と `tick`（届く分の全部）。受け口を登録する時に、その受け口へ最初の起点を知らせる（どの合図よりも前）。置き直しで起点が変わるたびに、全部の受け口へ `origin_set` を登録順に配る | 最初の起点 → 合図 → 置き直しの知らせ → 合図の順が、呼んだ順のまま受け口に着く（要件 12 の 2）。最初の起点の知らせは、起点を知らせるだけの物で、置き直しではない。起点を使う受け口は、合図を待たずに起点を知れる。areka の受け手は、絶対の時刻で持つので、これを使わない（D13） |
+| D13 | 受け手の時刻の持ち方 | どの受け手も、受け取った物を絶対の時刻で持ち、起点も台本の時刻も持たない。合図の時刻は `cue.fire_time`、字の現れる時刻は `cue.fire_time`＋塊の頭からの隔たり、寿命の事実（表示の終わり・期限）も絶対の時刻。フレームで評価する受け手（文字の層・バルーンの寿命の時計）は、それをフレームの時刻と比べる。最初の起点の知らせでは、何もしない。`TalkClock` は「今」を読む口だけを持つ | 起点を持つ所が受け手ごとに在ると、受け手どうしで起点が食い違う（別の線で物を受ける 2 つの受け手は、同じフレームで別の起点を持ちうる）。持たなければ、食い違う物が無い。最初の起点の知らせを待つ物も無くなり、前の再生の残りの字も、どの受け手でも同じ絶対の時刻に現れる（要件 12 の 8・12 の 9・18 の 2） |
+| D14 | 口パク | 1 回の刻みで越えた区切りを、古い順に全部、それぞれの字が現れた時刻で判定する。口パクは、自分の刻みの細かさまで合えば足りる物として扱い、決まりを増やさない | 結果が、刻みの細かさと、合図がまとまって届いた事に依らない（要件 12 の 7・18 の 6）。「いちばん新しい 1 つだけ」を判定する決まりは、刻みの取り方で口の動きが変わる。土台は正確な時刻を渡すが、どれだけ厳しく合わせるかは、中身の種類ごとに決める（「受け手ごとの追い付き方」の節） |
 | D15 | 時計の結線 | 刻み役（seriko を進める刻み役を含む）・`FrameTime`・`TalkClock` の既定の時計は、同じ 1 つの関数。kanade と seriko は時計を持たず、渡された時刻（刻み・合図の発火時刻・窓の知らせの時刻）だけで動く | 要件 17。seriko が合図を処理する時に時計を読むと、届いた時刻が姿に出る（D17） |
-| D16 | 段取り | 継ぎを置かない。前半は型の付け替え（合図と刻みの形は最後の形）、後半は振る舞い | 要件 9 の 1（付け替えで変わらない）と 9 の 6（変えた所）を、別々の確かめで示す（「Migration Strategy」） |
-| D17 | 中身が効く時刻 | 姿を変える中身は、届いた時でなく、合図の発火時刻に効く。フレームで評価する受け手は、届いた合図を列に持ち、フレームの時刻がその合図の時刻に届いた時に、届いた順に当てる（字と、字のほかの指令を、同じ決まりで）。seriko は、届いた時に当てるが、出来事の時刻に合図の `fire_time` を使う。その場で効く現実の働き（7 つの変更の受け口）は、届いた順にその場で当てる | 届いた時に当てると、フレームの時刻が合図の発火時刻より前のフレームで、まだ来ていない中身が見える。受け手ごとに届く時刻が違えば、姿も違う（要件 18 の 1）。現実の働きは、遅れる評価の時計を持たず、届くのは必ず発火時刻より後なので、届いた時に当てても「発火時刻より前に効く」事が無い |
+| D16 | 段取り | 継ぎを置かない。前半は型の付け替え、後半は振る舞い。dola の口と、crate をまたいで運ぶ合図・刻み・選択待ちの知らせの形は、前半で最後の形にする。受け手の側の口（文字の層の提示と読み口・寿命の知らせ・`TalkClock`・seriko の時計と窓の知らせ）は、前半で型を替え、後半でもう一度替わる | 要件 9 の 1（付け替えで変わらない）と 9 の 6（変えた所）を、別々の確かめで示す。受け手の側の口は、起点を見積もる作りの口なので、見積もりをやめる後半でなければ、最後の形にならない（「Migration Strategy」） |
+| D17 | 中身が効く時刻 | 姿を変える中身は、届いた時でなく、合図の発火時刻に効く。フレームで評価する受け手は、届いた合図を列に持ち、フレームの時刻がその合図の発火時刻に届いた時に、届いた順に当てる（字と、字のほかの指令を、同じ決まりで）。seriko は、届いた時に当てるが、出来事の時刻に合図の `fire_time` を使う。その場で効く現実の働き（7 つの変更の受け口）は、届いた順にその場で当てる | 届いた時に当てると、フレームの時刻が合図の発火時刻より前のフレームで、まだ来ていない中身が見える。受け手ごとに届く時刻が違えば、姿も違う（要件 18 の 1）。現実の働きは、遅れる評価の時計を持たず、届くのは必ず発火時刻より後なので、届いた時に当てても「発火時刻より前に効く」事が無い |
 | D18 | 区切りを解く口 | `resolve_click`・`resolve_choice` は時刻を受けず、時刻に依る事を何も決めない。区切りを外す（選択肢の溜めを空にする）だけ。届いた物を配る事と完了は、呼び手が次に呼ぶ `step`／`tick(now)` が決める | 時刻の表は時刻を覚えない。解く口が完了を決めるには、覚えた時刻が要る。解く口を時刻に依らなくすると、時刻に依る判定の入口は `step` の 1 つになる。本番の呼び手は、解いた直後に、最後に受けた時刻のまま `tick` を呼ぶので、遅れない |
-| D19 | 終わりの予定の時刻 | `StartResult.end_time` と `resume` の戻り値の意味は 1 つ: その時に決まっているなら、再生の全体の終わりの時刻。決まっていなければ `None`（終わらないループ・周回の間の待ちを、これから周回ごとに引くループ）。今の周回の終わりは、中の値 | 同じ欄が、ループの種類で「全体の終わり」と「今の周回の終わり」に分かれると、受け取った側は欄だけでは意味を読めない |
+| D19 | 終わりの予定の時刻 | `StartResult.end_time` と `resume` の戻り値の意味は 1 つ: その時に決まっているなら、再生の全体の終わりの時刻。決まっていなければ `None`（終わらないループ・周回の間の待ちを、これから周回ごとに引くループ）。終わりの期限（`finish`）が置いてあれば、それと早い方。今の周回の終わりは、中の値 | 同じ欄が、ループの種類で「全体の終わり」と「今の周回の終わり」に分かれると、受け取った側は欄だけでは意味を読めない |
 | D20 | コンパイルの結果 | `compile_storyboard` は開始の時刻を受けない。コンパイルの結果は、storyboard の頭からの隔たり（台本の軸）だけを持つ。絶対の時刻が storyboard の層へ入る所は `DolaRuntime::start(name, start_time)` の 1 つ | 絶対の時刻は、いつも「起点＋隔たり」で作る（cue の層の `CueSheet` と同じ形）。コンパイルの結果に絶対の時刻を焼くと、止めて戻すたび・周回のたびに全部を書き直す事になり、倍率が 1 でない時は、ずらすだけでは足りない。「起点＋隔たり」なら、動くのは起点だけで、1 つのコンパイルの結果が、どの開始の時刻にも使える |
+| D21 | 置き直しの知らせを当てる順 | 受け手は、置き直しの知らせを、合図と同じ「届いた順」の中で当てる。seriko は、届いた時に当てる。フレームで評価する受け手は、合図と同じ列に並べ、列に入れる時刻を、効く時刻にする | 知らせが動かすのは、それより前に届いた物である。文字の層は、字の現れる時刻を、合図を当てる時に積むので、前に届いた合図を全部当ててからでなければ、動かす相手がそろわない。届いた順に当てれば、合図をいつ当てたか（フレームの巡り）に依らず、どの受け手も同じ時刻を持つ。知らせの後に届いた合図（新しい起点での発火時刻を持つ）も、効く時刻より前のフレームでは当たらない |
+| D22 | どこまで見えるか | 字がどこまで見えるかは、字の現れる時刻とフレームの時刻だけで求める。「見せた字の数」を覚えない | 時刻だけで決まる値である（要件 18 の 6）。覚えると、姿が「どのフレームを回したか」に依り、後ろへ動かす知らせが遅れて着いた受け手は、動いた長さの間ずっと、時刻どおりに受けた受け手と食い違う。覚えなければ、食い違いは、知らせが着くまでの間だけで終わる（「知らせの受け方」の節の限界） |
 
 ## File Structure Plan
 
@@ -206,9 +210,10 @@ crates/dola/tests/cue/
 
 crates/areka-sakura/src/reveal.rs        # 新: 1 字ごとの間隔の式（文字の層と seriko が呼ぶ）
 crates/areka-sakura/src/reveal_tests.rs  # 新: 上の単体テスト
-crates/areka-sakura/src/held.rs          # 新: 届いた物を時刻が来るまで持つ列（文字の層とバルーンの寿命の時計が使う）
+crates/areka-sakura/src/held.rs          # 新: 届いた物を、届いた順のまま、絶対の時刻が来るまで持つ列（文字の層とバルーンの寿命の時計が使う）
 crates/areka-sakura/src/held_tests.rs    # 新: 上の単体テスト
 crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所と、フレームごとに当てる口（advance）
+crates/areka-runtime/src/balloon_visibility_held.rs   # 新: 寿命の知らせを列に持つ所と、フレームごとに時刻の来た物を取り出す口
 .kiro/specs/dola-interrupt-ticks/migration-ledger.md   # 新: 記録（外したテスト・取り除いた分かれ道・変える前後の期待・締めの検索）
 ```
 
@@ -222,7 +227,7 @@ crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所�
 |---|---|
 | 時刻のモジュール・型（段 0・先） | `src/time/{mod.rs, point.rs, span.rs, delta.rs, convert.rs, scale.rs, text.rs}` と隣のテスト・`src/lib.rs`（`pub mod time;` の 1 行）。`mod.rs` は、子の宣言の全部（下の家族の分も）を先に書く |
 | 時刻のモジュール・時計と縁（段 0） | `src/time/{clock.rs, testing.rs, serde_ticks.rs, serde_secs.rs}` と隣のテスト・`crates/dola/Cargo.toml`（機能 `Win32_System_WindowsProgramming` を足す・`docs.rs` の既定の target）・`tools/test-all.ps1`（検査の段） |
-| 土台（段 1・先） | `crates/dola/Cargo.toml`（`Win32_System_Performance` を外す）・`src/lib.rs`（古い再公開を外す）・`src/error.rs`・`src/compile/types.rs`・`src/runtime/mod.rs`（`clock` を外す）・`src/runtime/clock.rs`（消す） |
+| 土台（段 1・先） | `crates/dola/Cargo.toml`（`Win32_System_Performance` を外す）・`src/lib.rs`（古い再公開を外す）・`src/error.rs`・`src/compile/types.rs`・`src/runtime/mod.rs`（`clock` を外す）・`src/runtime/clock.rs`（消す）・`tests/trigger/common/mod.rs`（文書を組む共有の手助け） |
 | cue の本体（先） | `src/cue/{command.rs, schedule.rs, sheet.rs, runtime.rs, sink.rs, mod.rs, test_support.rs, test_support_tests.rs}`・`tests/cue/test_support.rs` |
 | cue の単体テスト | `src/cue/command_tests.rs`／`src/cue/schedule/tests.rs`（2 人に割れる） |
 | cue の結合テスト | `tests/cue/sheet_test.rs`／`tests/cue/{sheet_sort_test.rs, schedule_test.rs}`／`tests/cue/{runtime_test_*_tests.rs, sink_test.rs}`（3 人に割れる） |
@@ -236,6 +241,7 @@ crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所�
 - `src/error.rs`: 「文書の型と検査」（消える variant・`LoopOffsetRangeInverted` の型・文書の値の上限の variant）と「コンパイル」（`LoopDurationOutOfRange`）の両方が要る。variant の足し引きの全部を、土台の家族が 1 度で替える。後の家族は、このファイルを編集しない。`src/error.rs` の中のテスト（表示の字面）も、土台の家族が直す。
 - `src/compile/types.rs`: コンパイルの結果の型と、1 周の長さを求める 1 本の関数（`CompiledStoryboard::lap_length`）を置く。「コンパイル」と「runtime の芯」の両方が呼ぶので、土台の家族が先に置く。`CompiledStoryboard.start_time` の欄を消すのも、ここである（`compile_storyboard` の引数を消すのは「コンパイル」の家族。呼ぶ所は「コンパイル」と「runtime の芯」と「文書の型と検査」のテストに在り、それぞれの家族が自分のファイルの呼び出しを直す）。
 - `src/time/mod.rs`: 段 0 の 2 つの家族が要る。型の家族が、子の宣言と再公開の全部を先に書き、時計と縁の家族は編集しない。
+- `tests/trigger/common/mod.rs`: 秒の実数で文書を組む手助けで、「文書の型と検査」（`validation_test.rs`）・「コンパイル」（`compile_test.rs`）・「runtime の芯」（`runtime_test.rs`）のテストが使う。土台の家族が、型で組む形へ先に替え、後の家族は編集しない。
 
 触らない: `src/easing.rs`・`src/runtime/interpolator/mod.rs`・`src/runtime/subscription_manager/*`・`src/value.rs`・`src/variable.rs`。
 
@@ -251,7 +257,7 @@ crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所�
 | | コンパイルのテスト | `src/compile_*_tests.rs` |
 | | 再生のテスト | `src/drive_*_tests.rs` |
 | | 受け手の決まりのテスト | `src/{reveal_tests.rs, held_tests.rs}` |
-| `areka-kanade` | 本体と組み立て（先） | `Cargo.toml`（dola を足す）・`src/{msg.rs, lib.rs, actor.rs}`・`src/schedule/{types.rs, choice.rs, close.rs, change.rs, events.rs, steady.rs, mod.rs}`・`tests/kanade/*_test_support.rs` |
+| `areka-kanade` | 本体と組み立て（先） | `Cargo.toml`（dola を足す）・`src/{msg.rs, lib.rs, actor.rs}`・`src/schedule/{types.rs, choice.rs, close.rs, change.rs, events.rs, steady.rs, mod.rs}`・`tests/kanade/*_test_support.rs`・`tests/kanade/common/**` |
 | | `src` のテスト | `src/**/*_tests.rs` |
 | | 結合テスト | `tests/kanade/**` |
 | `areka-seriko` | 時計と表の縁（先） | `src/{actor.rs, actor_bind.rs, table.rs, table_calls.rs, settle.rs}`・`src/{lib_test_support.rs, actor_test_support.rs}`・`tests/common/mod.rs` |
@@ -263,13 +269,13 @@ crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所�
 | `areka-ghost` | 刻み役と時計（先） | `Cargo.toml`（dola を本番の依存へ足す）・`src/{ticker.rs, ticker_tests.rs, runtime.rs, config.rs, runtime_choice_wake_tests.rs}` |
 | | dispatcher | `src/{dispatcher.rs, dispatcher_*_tests.rs}` |
 | | 受け口と結合テスト | `src/{sink.rs, prop_sink.rs, prop_get_sink.rs, test_support.rs, translate_wiring_e2e_tests.rs}`・`tests/**` |
-| `areka-runtime` | 土台と結線（先） | `src/{lib.rs, talk_clock.rs, talk_lifecycle.rs, shell_carry.rs, balloon_visibility_wait.rs, hover_inject.rs}`・`src/{frame_test_support.rs, consumer_ledger_test_support.rs, balloon_visibility_test_support.rs, balloon_visibility_phase_test_support.rs, frame_balloon_runtime_test_support.rs}`・`src/{talk_lifecycle_tests.rs, talk_lifecycle_signals_tests.rs, seriko_clock_tests.rs}` |
+| `areka-runtime` | 土台と結線（先） | `src/{lib.rs, talk_clock.rs, talk_lifecycle.rs, shell_carry.rs, balloon_visibility_wait.rs, hover_inject.rs}`・`src/frame.rs`（後半: 進める相を足す）・`src/frame/wiring.rs`（後半: 寿命の列の欄）・`src/{frame_test_support.rs, consumer_ledger_test_support.rs, balloon_visibility_test_support.rs, balloon_visibility_phase_test_support.rs, frame_balloon_runtime_test_support.rs}`・`src/{talk_lifecycle_tests.rs, talk_lifecycle_signals_tests.rs, seriko_clock_tests.rs}` |
 | | バルーンの判断 | `src/{balloon_visibility.rs, balloon_visibility_decision.rs, balloon_visibility_tests.rs, balloon_visibility_box_tests.rs, balloon_visibility_timeout_*}` |
-| | バルーンの相 | `src/balloon_visibility_phase*`（組み立てを除く） |
+| | バルーンの相 | `src/balloon_visibility_phase*`（組み立てを除く）・`src/balloon_visibility_held.rs`（後半） |
 | | バルーンの通し | `src/{balloon_visibility_choice_wait_tests.rs, balloon_visibility_lifecycle_e2e_tests.rs, balloon_visibility_talk_end*}` |
 | | 変更の受け口 | `src/{change_cue*, move_cue*, reload_cue*, switch_cue*, zorder_cue*, zorder_wiring*, window_state_cue*, user_break_cue*}`・`src/frame/window_state_tests.rs` |
 | | フレーム | `src/frame/{scale_text.rs, status_report.rs}`・`src/frame_*_tests.rs`・`src/{strict_judges_tests.rs, film_playback_e2e_tests.rs}` |
-| `areka-input` | 全部 | `src/balloon_test_support.rs`・`TalkCue {` と `present_frame(` を書くテスト |
+| `areka-input` | 全部 | `Cargo.toml`（`[dev-dependencies]` に dola を足す）・`src/user_break.rs`（後半: 利用者の中断の知らせに時刻を付ける）・`src/balloon_test_support.rs`・`TalkCue {` と `present_frame(` を書くテスト |
 | `areka-session` | 全部 | `src/{runtime_boot.rs, runtime_boot_tests.rs, boot_config.rs, ghost_switch_test_support.rs, shell_balloon_switch_session_lap_test_support.rs}`・時計を差し込むテスト |
 | 本体 `areka` | 5 つに割れる | `src/runtime_tests/**`／`src/session_tests/**`／`src/mcp/**`／`src/{install, update}/*_cue*`・`src/thread_roles_tests.rs`／`examples/emo-present/**` |
 | 先進坑 | 1 か所 | `crates/pilot/examples/pilot-windows-rs-next/q7-vertical/src/old_side.rs` |
@@ -277,7 +283,8 @@ crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所�
 **依存の行を足す `Cargo.toml`**: どれも、その crate の「先」の家族が持つ。
 
 - 本番の依存に dola を足す: `areka-talk`・`areka-kanade`・`areka-ghost`（`areka-ghost` は今 `[dev-dependencies]` にだけ在る）。
-- テストで `at_ms`・`ms`・`delta_ms` を使う crate は、`[dev-dependencies]` の dola に機能 `test-support` を付ける（dola の今の機能で、正準のキャリアの合図の組み立てと同じ機能。`areka-seriko`・`areka-ghost`・`areka-runtime` は今も付けている）。
+- テストで `at_ms`・`ms`・`delta_ms` を使う crate は、`[dev-dependencies]` に、機能 `test-support` を付けた dola の行を持つ（dola の今の機能で、正準のキャリアの合図の組み立てと同じ機能）。今も在るのは `areka-seriko`・`areka-ghost`・`areka-runtime`。足すのは `wintf`・`areka-sakura`・`areka-kanade`・`areka-emo-text`・`areka-input` である（`areka-input` は、本番では dola を引かないので、`[dev-dependencies]` にだけ足す）。`areka-talk` は、テストが時刻を書かないので、足さない。`areka-session` と本体は、dola を直に引いていて、機能は `areka-runtime` の機能 `test-support` を通して付く（`areka-runtime` の `Cargo.toml` の `dola/test-support`）。
+- dola を直に引かない crate（`areka-input`）の本番のコードが、時刻の型を名指す時は、`areka_sakura::contract` から名指す。`contract.rs` は、dola の cue の型と一緒に、その欄の型である `TimePoint`・`TimeSpan`・`TimeDelta` を再公開する（`TalkCue` を名指せる道から、その欄の型も名指せる）。テストの組み立て（`dola::time::testing`）は、本番の道からは再公開しない。
 
 **道具と文書**
 
@@ -324,7 +331,7 @@ sequenceDiagram
 - `tick(now)` は、`step(now)` を `Delivered` が返る間くり返すだけである。置き直しを挟まない呼び手は `tick` を呼ぶ。
 - 区切りで止まっている間・最初の刻みの前でも、`reanchor`／`shift_origin` は受け付ける。完了の後と、起点が変わらない置き直しは、何も知らせない（`None` を返す）。
 
-### 起点が受け手へ届く道（後半の後）
+### 時刻が受け手へ届く道（後半の後）
 
 ```mermaid
 sequenceDiagram
@@ -339,21 +346,20 @@ sequenceDiagram
     Disp->>TalkT: SakuraMsg Tick now
     Note over TalkT: 最初の刻みの時刻を台本の起点に押す
     TalkT->>Player: register_sink
-    Player->>Text: origin_set 最初の起点
-    Player->>Seriko: origin_set 最初の起点
+    Note over Player: 最初の起点の知らせは受け口が受けて何も送らない
     TalkT->>Player: tick now
-    Player->>Text: emit 合図
+    Player->>Text: emit 合図 fire_time つき
     Note over Text: 届いた順のまま列に持つ
-    Player->>Seriko: emit 合図
+    Player->>Seriko: emit 合図 fire_time つき
     Note over Seriko: 出来事の時刻は合図の fire_time
     Frame->>Text: advance frame_now
-    Note over Text: 時刻の来た知らせと合図を順に当てる
-    Text-->>Frame: このフレームの台本の時刻
+    Note over Text: fire_time の来た合図を届いた順に当てる
 ```
 
 - 刻みが運ぶ値は、刻み役が起きた時に読んだ時計の値のままで、dispatcher も トークのスレッドも変えない。
-- 受け手は、起点を知らせだけから読む。届いた時刻も、合図の `fire_time − at` も、起点の計算に使わない。
-- 文字の層は、届いた時には当てない。フレームの時刻が来た物だけを、フレームごとに当てる。seriko は、届いた時に当てるが、時計を読まずに、合図の `fire_time` を出来事の時刻にする。
+- 受け手は、起点を持たない。合図の `fire_time`（再生機が、取り出した時の起点＋相対で決めた絶対の時刻）を、そのまま使う。届いた時刻は、時刻の計算に使わない。
+- 文字の層は、届いた時には当てない。フレームの時刻が `fire_time` に届いた物だけを、フレームごとに、届いた順に当てる。seriko は、届いた時に当てるが、時計を読まずに、合図の `fire_time` を出来事の時刻にする。
+- 最初の起点の知らせ（前の起点が無い）は、受け口が受けて、何も送らない。置き直しの知らせ（前の起点が在る）だけを、合図と同じ線で、届いた順のまま受け手へ送る。
 
 ## Requirements Traceability
 
@@ -397,11 +403,11 @@ sequenceDiagram
 | 11.9, 11.10, 11.11 | 同じ時刻の刻み直し・置き直さない時 | `TimedSchedule`・`areka-sakura` | 溜めを持たない取り出し・`drive.rs` は同じ時刻の刻みを読み飛ばさない | — |
 | 11.12 | 型の下の端（届き方が変わらない） | `TimedSchedule` | 中の 128 ビットの起点 | — |
 | 12.1, 12.2, 12.3 | 知らせ（最初の起点と置き直し） | `CuePlayer`・`CueSink` | `origin_set(OriginNotice)`・`register_sink` の最初の起点 | 刻みの中の順 |
-| 12.4, 12.5, 12.8, 12.9, 12.10 | 文字の層の時計とバルーンの寿命 | `areka_sakura::held`・`areka-emo-text`・`areka-runtime` | `HeldQueue`・`advance(frame_now) -> Option<TimeDelta>`・「知らせの受け方」の節 | 起点が届く道 |
-| 12.6, 12.7 | seriko | `areka-seriko` | `TalkFeed`（絶対の時刻）・`SerikoMsg::OriginSet`・口パクの決まり | 起点が届く道 |
+| 12.4, 12.5, 12.8, 12.9, 12.10 | 文字の層とバルーンの寿命（絶対の時刻で持ち、起点を持たない） | `areka_sakura::held`・`areka-emo-text`・`areka-runtime` | `HeldQueue`・`advance(frame_now)`・`TalkLifecycleSignal`（絶対の時刻）・「知らせの受け方」の節 | 時刻が届く道 |
+| 12.6, 12.7 | seriko | `areka-seriko` | `TalkFeed`（絶対の時刻）・`SerikoMsg::OriginSet`・口パクの決まり | 時刻が届く道 |
 | 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7 | 絶対の発火時刻 | `TimedSchedule`・`CuePlayer`・`TalkCue`・`PendingCue` | `Due::Payload { fire_time, at, .. }`・`PendingCue::fire`・`TalkCue::fire_time` | 刻みの中の順 |
-| 14.1, 14.2, 14.4, 14.5 | 絶対の刻み | `areka-ghost`・`areka-sakura` | `SakuraMsg::Tick(TimePoint)` | 起点が届く道 |
-| 14.3, 17.8 | 最初の刻みを起点に押す | `areka-sakura` | `drive.rs` の最初の刻み | 起点が届く道 |
+| 14.1, 14.2, 14.4, 14.5 | 絶対の刻み | `areka-ghost`・`areka-sakura` | `SakuraMsg::Tick(TimePoint)` | 時刻が届く道 |
+| 14.3, 17.8 | 最初の刻みを起点に押す | `areka-sakura` | `drive.rs` の最初の刻み | 時刻が届く道 |
 | 14.6 | 表示の終わりを換算せずに渡す | `areka-talk`・`areka-ghost`・`areka-kanade` | `ChoiceWaiting { display_end: TimePoint, .. }` | — |
 | 14.7, 17.1, 17.2, 17.4 | 時計の統一 | `areka-ghost`・`areka-seriko`・`areka-runtime` | 刻み役の時計（seriko を進める刻み役を含む）。seriko は渡された時刻だけで動く | — |
 | 15.1, 15.2, 15.3, 15.5 | 1 本で終える | 段取り | 「Migration Strategy」 | 全体 |
@@ -412,7 +418,7 @@ sequenceDiagram
 | 17.3, 17.5, 17.7 | kanade の型・締め切り・`OnSecondChange` | `areka-kanade` | 「areka-kanade」の節 | — |
 | 17.6, 17.10 | 眠り | 時刻の土台・テスト | 時計の説明・偽の時計を止めるテスト | — |
 | 17.9 | 台本の道とフレームの時刻が同じ物差し | 全部 | `TimePoint` | — |
-| 18.1, 18.2 | 再生の位置は台本と起点と今だけで決まる | `CuePlayer`・受け手 | D13・D14・D17・D18 | — |
+| 18.1, 18.2 | 再生の位置は台本と起点と今だけで決まる | `CuePlayer`・受け手 | D13・D14・D17・D18・D21・D22 | — |
 | 18.3, 18.4 | 過ぎた起点・まだ来ていない起点 | `CuePlayer`・`areka_sakura::held` | `pop_due`・`HeldQueue::pop_due` | — |
 | 18.5, 18.6, 18.7 | 追い付き方・中身が効く時刻 | 受け手の全部 | 「受け手ごとの追い付き方」の節・「知らせの受け方」の節 | — |
 
@@ -472,6 +478,8 @@ impl TimePoint {
 }
 impl TimeSpan {
     pub const ZERO: Self; pub const MAX: Self;
+    /// 100ns の数から作る。負なら Err（TimeRangeError::Negative）。
+    pub const fn try_from_ticks(ticks: i64) -> Result<Self, TimeRangeError>;
     pub const fn as_ticks(self) -> i64;
     pub fn checked_add(self, other: TimeSpan) -> Option<Self>;
     pub fn checked_sub(self, other: TimeSpan) -> Option<Self>;
@@ -503,6 +511,7 @@ impl From<TimeSpan> for TimeDelta { /* 値は変わらない */ }
 - 負になりうる引き算は `TimeDelta` を返す。0 へ張り付ける引き算は置かない（負を黙って 0 にしない）。
 - 張り付いた値は、型の普通の端の値である。「終わりが無い」は `Option` で表し、端の値と取り違えない。
 - `Default` は 0（`FrameTime` の `Default` と、直列化の既定の長さ 0 に使う）。
+- `TimeSpan::try_from_ticks` は、公開の口である。100ns の数は型の物差しそのもので、型から読む口（`as_ticks`）と対になる。直列化の読み込み（`serde_ticks`）も、同じ変え方を通る。ミリ秒に載らない値（1 字ごとの間隔の 333,333 など）を書くテストも、この口で書く。`TimePoint`・`TimeDelta` の `from_ticks` は、負も普通の値なので、失敗が無い。
 
 #### 作者が書く単位からの変え方（`convert.rs`）
 
@@ -832,7 +841,7 @@ pub trait CueSink {
 
 - **`step`**: 待ちの状態と完了の後は進まない。`pop_due` が中身（`PendingCue`）と発火時刻と相対の時刻を返したら、`PendingCue::fire` で `TalkCue` を組み、選択肢なら `pending_choices` へ積み、全部の受け口へ登録順に `emit` して `Delivered`。区切りなら待ちの状態へ移って `Barrier`。何も届いていなければ、完了を確かめて `Completed` か `Idle`。時刻に依る事（どれが届いたか・完了したか）を決めるのは、この口だけである。
 - **最初の起点**: `register_sink` は、登録する受け口へ、まず `origin_set(OriginNotice::first(その時の起点))` を、次に先渡し（`preview`）を渡してから、登録の列へ足す。`emit` は登録済みの受け口にしか行かないので、最初の起点は、その受け口へのどの合図よりも前に着く。本番の呼び手（`drive.rs`）は、最初の刻みで台本の起点を押し、再生機を作り、受け口を登録してから `tick` を呼ぶ。だから、登録が再生の始まりである。後から登録された受け口は、登録の時の起点（置き直しの後なら、置き直した後の起点）を、最初の起点として受ける。
-- **最初の起点の効く時刻**: 起点そのものである（「台本の時刻 0 から先、この起点である」）。起点より前の時刻は、この台本にとって「始まる前」で、受け手は、前の再生の起点が在れば、起点の時刻が来るまで、それを使い続ける（「知らせの受け方」の節）。
+- **最初の起点の知らせは、起点を知らせるだけの物である**: 置き直しではない（前の起点が無い）。欄 `effective_at` には、起点そのものを入れる（「台本の時刻 0 から先、この起点である」）。起点を使う受け口（後の spec の、流れを進める所など）は、合図を待たずに起点を知れる。areka の受け手（文字の層・seriko・バルーンの寿命の時計）は、絶対の時刻で持つので、この知らせでは何もしない。どの受け手も、この知らせの効く時刻を待って、何かを止める事をしない（「知らせの受け方」の節）。
 - **順**: `emit` と `origin_set` は、呼ばれたその場で、登録順に全部の受け口へ配る。溜めない。だから「最初の起点 → 置き直しの前に取り出した合図 → 置き直しの知らせ → 置き直しの後に取り出した合図」の順が、受け口に着く順になる。
 - **置き直し**: `reanchor`／`shift_origin` は、呼び手の `now` をそのまま時刻の表へ渡し、返った `OriginNotice` を全部の受け口へ配って、同じ物を返す。起点が変わらなければ、何も配らない。再生機は `now` を覚えない。
 - **区切りを解く口は、時刻に依らない**: `resolve_click`・`resolve_choice` は、時刻を受けず、時刻に依る事を何も決めない。する事は、区切りを外して再生中の状態へ戻す事（`resolve_choice` は、選択肢の溜めを空にする事も）だけである。区切りの後ろの項目を配る事と、完了は、呼び手が次に呼ぶ `step`／`tick(now)` が決める。解いた直後に「もう占有の終わりを過ぎていたら完了にする」処理（今の `settle_completion_after_resolve`。時刻の表が覚えた時刻で完了を確かめる）は、無くなる。時刻の表は時刻を覚えないので、解く口には、完了を決める材料が無い。
@@ -954,6 +963,7 @@ pub struct StartResult {
   - 決まっている時: 1 回だけの再生（今の周回の終わり）。周回の間の待ちが無い有限のループ（残りの周回の数 × 1 周の長さを足した、最後の周回の終わり）。周回の間の待ちが決まった値の有限のループ（下限と上限が等しい。残りの待ちも足す）。待ちを引くループでも、最後の周回に入った後（もう引く待ちが無い）。
   - 決まっていない時: 終わらないループ。周回の間の待ちを周回ごとに乱数で引くループで、まだ引いていない待ちが残っている時（待ちは、周回が終わるたびに引く。`LoopOffset::Scalar(v)` は 0 から v までの幅なので、v が 0 でなければ、ここに入る）。求める和が型の範囲を越える時（回り込ませない。その再生は、延ばせなくなった周回で終わる）。
   - 止めている間は、戻す時刻がまだ無いので、終わりの時刻を言えるのは `resume` の戻り値からである。
+  - 終わりの期限（`finish`）が置いてある時の `resume` の戻り値は、期限と、上の「決まっている時」の終わりの時刻の、早い方である（終わりの時刻が決まっていなければ、期限）。再生は、どちらか早い方で終わるからである。終わらないループも、期限を置いた後は、終わりの時刻が決まっている。`StartResult.end_time` は、開始の時には期限がまだ無いので、期限を含まない。
   - 欄の意味を、ループの種類で「全体の終わり」と「今の周回の終わり」に分けない。同じ欄を受け取った側が、ループの種類を知らずに読める。
 - **終わらないループの長さの確かめ**: 長さ 0 と下限は、どちらも 1 周の長さ `lap_length`（`G(全体の長さ)`）で比べる。`lap_length` が 0 なら `ZeroDurationWithLoop`（全体の長さが 0 の時だけ）、`lap_length < MIN_LOOP_DURATION`（1,000,000）なら `TooShortDurationWithInfiniteLoop`。`lap_length` がちょうど 1,000,000 なら始まる（例: 倍率 0.5 で全体の長さ 500,000。全体の長さ 499,999 なら 1 周は 999,998 で、拒む）。比べは整数で、境は 1 刻みの単位でちょうどである。
 - **経った長さ**: `e = (止まっていれば since、そうでなければ now) − loop_start − pause_accumulated`。**台本の時刻**: `F(e)`。区間の境・引き金・周回の終わりの判定は、全部この 2 つを通す。
@@ -1019,32 +1029,19 @@ pub fn chunk_reveal_offsets(
 ) -> impl Iterator<Item = TimeSpan>;
 
 // areka-sakura/src/held.rs
-/// 届いた物が、いつ当たるか。
-pub enum HeldAt {
-    /// 台本の時刻。フレームの時刻が「起点＋この隔たり」に届いた時に当たる（合図に使う）。
-    Script(TimeSpan),
-    /// 絶対の時刻。台本の外の出来事（トークの終わりなど）に使う。
-    Absolute(TimePoint),
-    /// 自分の時刻を持たない。前の物が全部当たった時に当たる。
-    InOrder,
-}
-/// 列から出た 1 件。
-pub enum Released<T> {
-    Item(T),
-    /// 起点が替わった。before は、効く時刻の、替わる前の起点での台本の時刻（替わる前の起点が無ければ None）。
-    Origin { notice: OriginNotice, before: Option<TimeDelta> },
-}
-/// フレームで評価する受け手が、届いた物を、届いた順のまま、時刻が来るまで持つ列。今の起点も持つ。
+/// フレームで評価する受け手が、届いた物を、届いた順のまま、時刻が来るまで持つ列。
+/// 起点も台本の時刻も持たない。
 pub struct HeldQueue<T> { /* … */ }
 impl<T> HeldQueue<T> {
-    /// 列の後ろへ足す。起点の知らせを 1 つも受けていない列は、Script の物を受け取らない（偽を返す）。
-    pub fn push(&mut self, at: HeldAt, item: T) -> bool;
-    pub fn push_origin(&mut self, notice: OriginNotice);
-    /// frame_now までに時刻の来た、列の頭の 1 件。頭の物の時刻が来ていなければ None（後ろの物を先に出さない）。
-    pub fn pop_due(&mut self, frame_now: TimePoint) -> Option<Released<T>>;
-    /// 今の起点（出した最後の知らせの起点）での、frame_now の台本の時刻。起点がまだ無ければ None。
-    /// 負は「台本が始まる前」。
-    pub fn script_time(&self, frame_now: TimePoint) -> Option<TimeDelta>;
+    pub fn new() -> Self;
+    /// 列の後ろへ足す。at は、その物が効く絶対の時刻。None は「自分の時刻を持たない」（前の物に続く）。
+    pub fn push(&mut self, at: Option<TimePoint>, item: T);
+    /// 列の頭の物の時刻が来ていれば（at が frame_now 以前、または at が None）、取り出す。
+    /// 来ていなければ None（後ろの物を先に出さない）。
+    pub fn pop_due(&mut self, frame_now: TimePoint) -> Option<T>;
+    /// 列の頭の物が待っている時刻（列が空か、頭の物が時刻を持たなければ None）。
+    pub fn waiting_until(&self) -> Option<TimePoint>;
+    pub fn is_empty(&self) -> bool;
 }
 ```
 
@@ -1058,12 +1055,13 @@ impl<T> HeldQueue<T> {
   - 例（割り切れない長さ）: 長さ 1,000,000（100 ms）・3 字。頭から始まる塊の隔たりは 0・333,333・666,667（実数は 0・333,333.3…・666,666.6…）。次の塊の頭が 1,000,000 後ろで、同じ長さと字数なら、`p = −333,333` で続く塊になり、隔たりは 0・333,334・666,667（差は 0・+67ns・+33ns）。
   - 例（ちょうど中間）: 長さ 10,000・32 字（間隔 312.5）。頭から始まる塊の最後の字は 9,688（実数は 9,687.5）。次の塊の頭が 10,000 後ろで、同じ長さと字数なら、`p = −312` で続く塊になり、隔たりは 0・313・625（実数は 0・312.5・625）。前の字が塊の頭と同じ時刻（`p = 0`）なら、隔たりは 312・625（実数は 312.5・625）。
   - 本番の文字の長さは「字数 × 50 ms」（`duration.rs`）で割り切れるので、本番の値は今と等しい。
-  - 文字の層は `cue.at + 隔たり`、seriko は `cue.fire_time + 隔たり` として持つ。式は 1 本で、写しは無い。
-- **届いた物を持つ列（`held.rs`・後半）**: フレームで評価する受け手が使う、1 本の決まりである。文字の層（合図・先渡し・トークの印）とバルーンの寿命の時計（寿命の知らせ）が、同じ型を使う。置き場は、1 字ごとの間隔の式と同じ理由で `areka-sakura` にする（受け手の全部が引いていて、受け手の側の決まりを置く所）。dola には置かない。再生機は時刻と起点を配るまでを持ち、受け取った物をいつ当てるかは受け手の側の決まりだからである。
-  - 列は、届いた順を変えない。`pop_due(frame_now)` は、頭の物の時刻が来ていれば出し、来ていなければ `None` を返す。頭の物を飛ばして、後ろの物を先に出す事は無い。
-  - 時刻が来たかの判定: 合図（`Script(at)`）は「今の起点＋`at` ≤ `frame_now`」。知らせは「`effective_at` ≤ `frame_now`」。絶対の時刻の物（`Absolute(t)`）は「`t` ≤ `frame_now`」。時刻を持たない物（`InOrder`）は、頭に来た時。
-  - 知らせを出す時に、列の起点が替わる。出す前に、効く時刻の、替わる前の起点での台本の時刻（`before`）を求めて、一緒に返す。受け手は、それを使って「効く時刻までに起きた事」を確かめる（「知らせの受け方」の節）。
-  - 起点の知らせを 1 つも受けていない列に、合図（`Script`）が来た時は、いつ当たるかを決められない。再生機は、最初の起点をどの合図よりも前に知らせるので、本番では起きない。起きたら（再生機を通さずに合図だけを入れた時）、列は受け取らず（`push` が偽を返す）、受け手が `error!` を出して、その合図を捨てる。黙って時刻を作らず、後ろの物を詰まらせない。
+  - 文字の層も seriko も、字の現れる時刻を `cue.fire_time + 隔たり`（絶対の時刻）として持つ。`prev_since_chunk_start` は、前の字の現れる時刻（絶対の時刻）から `cue.fire_time` を引いた差である（前半の間は、どちらも台本の時刻で、`cue.at` を引く）。式は 1 本で、写しは無い。「前の字」は、今と同じに、文字の層では同じ場所（普通のバルーンか箱）の前の字、seriko では同じスコープの前の字である。
+- **届いた物を持つ列（`held.rs`・後半）**: フレームで評価する受け手が使う、1 本の決まりである。文字の層（合図・置き直しの知らせ・先渡し・トークの印）とバルーンの寿命の時計（寿命の知らせ）が、同じ型を使う。
+  - 列は、届いた順を変えない。`pop_due(frame_now)` は、頭の物の時刻が来ていれば出し、来ていなければ `None` を返す。頭の物を飛ばして、後ろの物を先に出す事は無い（台本の順に効く）。
+  - 時刻が来たかの判定は 1 つ: 「その物の絶対の時刻 ≤ `frame_now`」。時刻を持たない物（`None`）は、頭に来た時に出る（前の物に続く）。
+  - 列は、起点も台本の時刻も持たない。入れる時刻は、入れる側が決めた絶対の時刻である（合図は `cue.fire_time`・置き直しの知らせは効く時刻・現実の出来事は、それが起きた時の時計の読み）。「起点の知らせをまだ受けていない列」という状態は無く、合図を受け取れない時も無い。
+  - `waiting_until()` は、頭の物が待っている時刻を返す。呼び手が、その時刻に次のフレームを起こす予約に使う（「areka-runtime」の節）。
+  - 2 つの受け手の小さい列に分けずに、1 つの型にする。列の決まり（届いた順・頭の物が待つ間は後ろも待つ・時刻を持たない物は前の物に続く）は、2 つの受け手が同じに守らなければならない決まりで、変える時は両方を確かめ直す（Revalidation Triggers）。決まりを書く所と、そのテストを、1 つにする。1 字ごとの間隔の式（`reveal.rs`）と同じ扱いである。置き場も、同じ理由で `areka-sakura` にする（受け手の全部が引いていて、受け手の側の決まりを置く所）。dola には置かない。再生機は時刻を配るまでを持ち、受け取った物をいつ当てるかは、受け手の側の決まりだからである。
   - 時計も窓も `World` も見ない、純粋な型である。テストは、列に物を入れ、時刻を渡して、出て来る順を見る。
 - **刻み**: トークのスレッドは、受けた `TimePoint` をそのまま再生機へ渡す。最初の刻みの時刻を台本の起点に押す（今の `drive.rs` の作りのまま）。有限でない刻みを弾く分かれ道と、その `error!` は消える。
 - **同じ時刻の刻みの守りは、取り除く（後半）**: 今の `drive.rs` は、再生中に受けた刻みの時刻が前の刻み以下なら、再生機へ渡さずに読み飛ばす（`debug!` を 1 行）。この守りは、時刻の表の溜めが同じ項目を 2 度配らないための物である。`pop_due` は溜めを持たず、同じ時刻でも前の時刻でも、まだ取り出していない「届いた項目」だけを返す（無ければ何も返さない）。守りに働きが無くなるので、分かれ道と `debug!` を取り除き、受けた刻みは全部 `player.tick` へ渡す。
@@ -1074,6 +1072,8 @@ impl<T> HeldQueue<T> {
   - 前半の間は、時刻の表が `tick`＋`ready` のままなので、守りは残す。取り除くのは、時刻の表を `pop_due` に替えた後である。
 - **`ChoiceWaiting`**: `display_end` は `player.occupancy_horizon()` をそのまま入れる。
 - **前半と後半**: 前半は、dispatcher が送る値の意味を今のまま（台詞の最初の刻みからの隔たり）にして、型だけ替える。後半で、刻みが運ぶ絶対の時刻をそのまま送る。
+  - 前半の間、`SakuraMsg::Tick(TimePoint)` と `ChoiceWaiting.display_end: TimePoint` は、時刻の型に「台詞の最初の刻みからの隔たり」を入れて運ぶ。台本の起点は 0 で、合図の `fire_time` は `at` と同じ値になる。型の意味（時計と同じ物差しの時刻）と値が合わないのは、前半の間だけである。dispatcher が、表示の終わりに `base_now` を足し戻して kanade へ渡す。
+  - 後半の 2 で、値が時計の読みになり、`base_now` は消える。消えた事は、締めの検索（`base_now`）で確かめる。
 
 #### areka-kanade
 
@@ -1119,7 +1119,8 @@ impl<T> HeldQueue<T> {
   - 合図が遅れて届いた時（`fire_time` が、もう済ませた刻みの時刻より前）は、始めたアニメが、過ぎた分だけコマの進んだ姿で出る。刻みの時刻が `fire_time` より前の間（合図が、その時刻の刻みより先に処理された時）は、始めたアニメは、最初のコマの前として扱う。
   - 出来事の時刻が合図だけで決まるので、`always` と `runonce` のコマと、口パクの数え始めは、合図がいつ処理されたかに依らない。
   - 面を画面に出す指令（`DisplayCommand`）そのものは、届いた時にその場で出す。seriko は、届いた合図を、遅れる評価の時計で待たせない。合図が届くのは、必ず発火時刻より後である（再生機は、今が発火時刻に届くまで取り出さない）。
-- **知らせ（後半）**: `SerikoSink::origin_set` は `SerikoMsg::OriginSet(OriginNotice)` を合図と同じ口へ積む（順が保たれる）。seriko は起点を持たないので、最初の起点の知らせ（前の起点が無い）では、何も動かさない。置き直しの知らせでは、全部の `TalkFeed` の字の現れる時刻を、「知らせの受け方」の節の決まりで動かす（効く時刻より後の字だけを、動いた長さだけ動かす）。始まったアニメの始まりの時刻・面が見え始めた時刻・数え済みの字の数は、動かさない（効く時刻より前に起きた事である）。
+- **知らせ（後半）**: `SerikoSink::origin_set` は、置き直しの知らせ（前の起点が在る物）だけを、`SerikoMsg::OriginSet(OriginNotice)` として合図と同じ口へ積む（順が保たれる）。最初の起点の知らせ（前の起点が無い）は、受け口が受けて、何も送らない。seriko は起点を持たない。置き直しの知らせは、届いた時に当て、全部の `TalkFeed` の字の現れる時刻を、「知らせの受け方」の節の決まりで動かす（効く時刻より後の字だけを、動いた長さだけ動かす）。始まったアニメの始まりの時刻・面が見え始めた時刻・数え済みの字の数は、動かさない（もう起きた事である）。
+- **定義の差し替えの依頼（`SerikoMsg::Replace`）**: シェル・バルーンの定義の差し替えは、台本の合図ではなく、フレームの差し替えの相が起こす、その場で効く現実の働きである。時刻を運ばない。届いた時に当て、面を出し直す指令も、その場で出す。差し替えた後の引き金は、次の刻みの時刻で構える（今の作りのまま）。どの刻みになるかは、依頼が届いた時で決まる。台本の時刻に合わせる物ではないので、7 つの変更の受け口と同じ種類として扱う（「受け手ごとの追い付き方」の表）。
 - **消去**: `Clear`／`ClearAll` は、現れる時刻が `cue.fire_time` より後の字を捨てる（絶対の時刻どうしの比べ）。
 - **窓の知らせ（`SerikoSink::send_stage`。後半）**: 台本の合図ではなく、表示の層の窓の事実（開いた・閉じた・面・世代）を、フレームが見て送る物である。時刻は、それを見たフレームの時刻（`FrameTime`）にする。`send_stage(note, at: TimePoint)` とし、送り手（`areka-runtime` の `frame/status_report.rs`）が、手に持っている `World` から `FrameTime` を読んで渡す。事実の時刻は、それを見たフレームの時刻であり、送る時に時計を読み直すと、同じフレームの中の処理の進み具合が時刻に出る。`SerikoMsg::Stage { note, at: TimePoint }` の時刻は、いつも在る（時計が無い時の `None` は無くなる）。
 - **書き出しの進め方（`settle.rs`）**: 画面の外で、決まった時刻まで seriko を進めて絵を求める所である。自分の時刻の軸（0 から）を持ち、刻みも合図もその軸で渡す。面を出す合図は `TalkCue::scheduled(TimePoint::ZERO, TimeSpan::ZERO, ..)` で組む（発火時刻は、進め方の軸の 0）。偽の時計（`AtomicU64`）は、読む所が無くなるので消す。
@@ -1130,47 +1131,52 @@ impl<T> HeldQueue<T> {
 
 | Field | Detail |
 |-------|--------|
-| Intent | 届いた物を列に持ち、フレームごとに、時刻の来た物を届いた順に当てる。字の現れる時刻を台本の時刻で持ち、フレームの台本の時刻で現れた数を答える |
+| Intent | 届いた物を、絶対の時刻と一緒に列に持ち、フレームごとに、時刻の来た物を届いた順に当てる。字の現れる時刻を絶対の時刻で持ち、フレームの時刻で現れた数を答える |
 | Requirements | 7.5, 7.10, 12.4, 12.5, 12.9, 12.10, 18.1, 18.2, 18.4, 18.6, 18.7 |
 
 ```rust
 impl TextLayerRuntime {
-    /// フレームの頭で 1 回呼ぶ。frame_now までに時刻の来た物（知らせ・合図・先渡し・トークの印）を、
-    /// 届いた順に当てる。返すのは、このフレームの台本の時刻（起点がまだ無ければ None）。
-    pub fn advance(&mut self, frame_now: TimePoint) -> Option<TimeDelta>;
+    /// フレームの頭で 1 回呼ぶ。frame_now までに時刻の来た物（合図・置き直しの知らせ・先渡し・トークの印）を、
+    /// 届いた順に当てる。返すのは、列の頭の物が待っている時刻（待っている物が無ければ None）。
+    pub fn advance(&mut self, frame_now: TimePoint) -> Option<TimePoint>;
 }
-pub fn present_frame(runtime: &mut TextLayerRuntime, world: &mut World, talk_time: TimeDelta) -> Result<(), TextLayerError>;
+pub fn present_frame(runtime: &mut TextLayerRuntime, world: &mut World, frame_now: TimePoint) -> Result<(), TextLayerError>;
 ```
 
-- `visible_glyphs(&ActorKey, t: TimeDelta)`・`RevealSchedule::times() -> &[TimeSpan]`・`visible(t: TimeDelta)`。
-- 現れた数は「現れる時刻 ≤ t」の数と、「現れた事が確かめてある字の数」（下の「知らせ」）の大きい方。t が負（台本が始まる前）なら、確かめてある字の数だけ。
-- 字の現れる時刻は `cue.at + chunk_reveal_offsets(..)`（台本の時刻）。
-- **届いた物を列に持つ（後半）**: 文字の層は、受け口から届いた物の全部を、`TextLayerRuntime` の中の 1 本の列（`HeldQueue`）に、届いた順のまま持つ。UI のスレッドで受け取った時には、当てない。列を持つ所と `advance` は、新しいファイル `actor_held.rs` に置く。
+- `visible_glyphs(&ActorKey, frame_now: TimePoint)`・`balloon_shown_glyphs(&ActorKey, surface, frame_now: TimePoint)`・`RevealSchedule::times() -> &[TimePoint]`・`visible(frame_now: TimePoint)`。台本の時刻を受ける引数は、どの口にも残らない。
+- 字の現れる時刻は `cue.fire_time + chunk_reveal_offsets(..)`（絶対の時刻）。合図を当てる時に積む。現れた数は「現れる時刻 ≤ フレームの時刻」の数で、それだけである（「見せた字の数」を別に覚えない＝D22）。
+- **届いた物を列に持つ（後半）**: 文字の層は、受け口から届いた物を、`TextLayerRuntime` の中の 1 本の列（`HeldQueue`）に、届いた順のまま持つ。UI のスレッドで受け取った時には、当てない（下の「時刻を持たない物」の、列が空の時を除く）。列を持つ所と `advance` は、新しいファイル `actor_held.rs` に置く。
 
-  | 届く物 | いつ当たるか |
-  |---|---|
-  | 起点の知らせ（`EmoTextSink::origin_set` → `TextMsg::Origin`） | フレームの時刻が、効く時刻に届いた時 |
-  | 合図（字も、字のほかの指令も。確かめの口 `CueProbe` が付いていれば、一緒に持つ） | フレームの台本の時刻が、合図の台本の時刻 `at` に届いた時（`HeldAt::Script(cue.at)`） |
-  | 先渡し（`TextMsg::Upcoming`） | 前の物が全部当たった時（`HeldAt::InOrder`） |
-  | トークの印（選択待ちの始まり・トークの終わり） | 前の物が全部当たった時（`HeldAt::InOrder`） |
+  | 届く物 | 列に入れる時刻 | いつ当たるか |
+  |---|---|---|
+  | 合図（字も、字のほかの指令も。確かめの口 `CueProbe` が付いていれば、一緒に持つ） | `cue.fire_time` | フレームの時刻が、発火時刻に届いた時 |
+  | 置き直しの知らせ（`EmoTextSink::origin_set` → `TextMsg::Origin`。前の起点が在る物だけ） | 効く時刻（`effective_at`） | フレームの時刻が、効く時刻に届いた時 |
+  | 先渡し（`TextMsg::Upcoming`） | 無い | 前の物が全部当たった時 |
+  | トークの印（選択待ちの始まり・トークの終わり） | 無い | 前の物が全部当たった時 |
 
-- **当て方**: `advance(frame_now)` は、`pop_due(frame_now)` が物を返す間、返った順に当てる。合図は、今の「届いた合図を当てる」関数（`TextLayerRuntime::apply_cue`。消去なら描く側の全部を消す求め・選択肢の写しの後始末・箱の写しの刈り込みまで）を、そのまま通す。先渡しは `preview_talk`、トークの印は、今それぞれを受けた時にしている処理を通す。当てる関数の中身は変えない。変わるのは、呼ぶ時だけである。
-- **字と、字のほかの指令は、同じ決まりで効く**: 消去・全部の消去・改行・カーソル・印・書体・アンカーは、字と同じに、フレームの台本の時刻が合図の台本の時刻に届いた時に効く。台本の時刻 3 秒の消去は、台本の時刻が 3 秒に届いたフレームで画面を消し、それより前のフレームでは消さない。
+- **最初の起点の知らせ**: `EmoTextSink::origin_set` は、前の起点が無い知らせを受けても、何も送らない。文字の層は起点を持たず、この知らせを待つ物も無い。
+- **当て方**: `advance(frame_now)` は、`pop_due(frame_now)` が物を返す間、返った順に当てる。合図は、今の「届いた合図を当てる」関数（`TextLayerRuntime::apply_cue`。消去なら描く側の全部を消す求め・選択肢の写しの後始末・箱の写しの刈り込みまで）を通す。先渡しは `preview_talk`、トークの印は、今それぞれを受けた時にしている処理を通す。当てる関数の中身で変わるのは、字の現れる時刻を絶対の時刻で積む事だけである。
+- **字と、字のほかの指令は、同じ決まりで効く**: 消去・全部の消去・改行・カーソル・印・書体・アンカーは、字と同じに、フレームの時刻が合図の発火時刻に届いた時に効く。発火時刻が、届いたフレームの時刻より後の消去は、そのフレームでは画面を消さず、フレームの時刻が発火時刻に届いた最初のフレームで消す。
 - **順は変えない**: 列は届いた順（再生機が配った順＝台本の順）を保ち、頭の物の時刻が来るまで、後ろの物を当てない。同じ時刻の物は、台本の順に当たる。
-- **先渡しと先読みの配置**: 先渡し（これから届く合図の全部）は、時刻を使わない空回しで、区間ごとの全文を先に求める物である。空回しは「その時の状態の写し」から始め、区間の番号は「先渡しを当ててからの消去の数」で数える。だから、先渡しは、前の台詞の合図が全部当たった後・その台詞の最初の合図の前に、当てなければならない。列の順が、それを保つ（再生機は、受け口の登録の時に、最初の起点 → 先渡しの順で渡し、その後に合図を配る）。先渡しを届いた時に当てると、まだ列に残っている前の台詞の消去が、先渡しの後の消去として数えられ、区間の番号がずれる。先渡しは時刻を持たないので、最初の起点の知らせが当たったフレーム（台本の時刻 0 が来たフレーム）で、続けて当たる。空回しと配置の計算は、時刻を見ないので、置き直しで変わらない。
-- **トークの印**: トークの終わりは「全部の場所の選択肢を済みにする」、選択待ちの始まりは「押下で選択肢を済ませてよい」を、文字の層に伝える。どちらも、その前に届いた合図（選択肢の合図）が当たった後でなければ、意味が合わない。列に並べて、順を保つ。
-- **知らせ（起点の置き直し）**: 「知らせの受け方」の節の決まりである。文字の層がする事は、知らせが当たる時（`Released::Origin`）に、全部の場所で「効く時刻までに現れていた字の数」を確かめておく事だけである（`before` 以下の現れる時刻を持つ字の数。場所ごとの `RevealSchedule` が持つ）。字の現れる時刻（台本の時刻）は動かさない。もう当てた指令は戻さない。まだ列に在る合図は、新しい起点で時刻が来た時に当たる。
-- **フレームが見せる物**: あるフレームが見せる物（どの指令まで当たっているか・どの字まで現れているか）は、台本（合図の列）と、起点の知らせの列と、そのフレームの時刻だけで決まる。合図と知らせが、いつ・どうまとまって届いたかに依らない（そのフレームの時刻までに当たる物が、全部届いていれば）。遅れて届いた物は、届いた次のフレームで、過ぎた分が順に全部当たる。
+- **時刻を持たない物**: 先渡しとトークの印は、自分の時刻を持たず、前の物に続く。届いた時に列が空なら（前に届いた物は、全部当たっている）、待つ相手が無いので、その場で当てる。列に物が残っていれば、後ろに並べ、前の物が当たった同じ `advance` の中で当たる。
+  - 先渡し（これから届く合図の全部）は、時刻を使わない空回しで、区間ごとの全文を先に求める物である。空回しは「その時の状態の写し」から始め、区間の番号は「先渡しを当ててからの消去の数」で数える。だから、先渡しは、前の台詞の合図が全部当たった後・その台詞の最初の合図の前に、当てなければならない。列の順が、それを保つ（再生機は、受け口の登録の時に先渡しを渡し、その後に合図を配る）。先渡しを、列に残っている前の台詞の合図より先に当てると、残っている消去が、先渡しの後の消去として数えられ、区間の番号がずれる。空回しと配置の計算は、時刻を見ないので、置き直しで変わらない。
+  - トークの終わりは「全部の場所の選択肢を済みにする」、選択待ちの始まりは「押下で選択肢を済ませてよい」を、文字の層に伝える。どちらも、その前に届いた合図（選択肢の合図）が当たった後でなければ、意味が合わない。
+  - 押下の口（`settle_choices_at`）が読む「選択待ちに入ったか」: 選択待ちの始まりの印が列で待つのは、前に届いた合図がまだ列に在る間（本番では、1 フレームの間）だけである。選択肢の合図がまだ当たっていなければ、選択肢の行は画面に出ていないので、押せない（当たりの行は、最後の提示の写しから読む）。選択肢が画面に出た後に届いた印は、列が空なら、届いた時に当たる。残るのは、選択肢がもう画面に出ていて、その後ろの合図がまだ列で待っている 1 フレームの間の押下である。その押下は、kanade が選択として受け、文字の層は、その場では選択肢を済みにしない。その選択肢は、トークの終わりの印（全部の場所の選択肢を済みにする）で済みになる。
+- **strict の台本の知らせ（`CueProbe`）**: 名前の形の `\b[名前]` の箱が無い事の知らせは、合図を当てる時（`advance`）に出す。箱を探すのは、当てる時の状態だからである。知らせの口は、台本の位置とゴーストの名を自分で持ち、どのスレッドから呼ばれても、記録を 1 件書くだけである。トークのスレッドが、終わりの前に残りの控えを記録する事（`drive.rs` の `finish_strict`）との前後は、今も決まっていない（文字の層は、UI のスレッドで後から知らせる）。記録の順は約束しない。記録は台本の位置を持つので、読む側は位置で並べる。
+- **置き直しの知らせ**: 「知らせの受け方」の節の決まりである。知らせが当たる時に、全部の場所の `RevealSchedule` の、効く時刻より後の時刻を、動いた長さだけ動かす（効く時刻より前になる時刻は、効く時刻にする）。効く時刻以前の時刻と、もう当てた指令は、書き換えない。動かす決まりは順を保つので、時刻の列は、減らない並びのままである。
+- **フレームが見せる物**: あるフレームが見せる物（どの指令まで当たっているか・どの字まで現れているか）は、届いた物（合図と置き直しの知らせ）と、そのフレームの時刻だけで決まる。それが、いつ・どうまとまって届いたかに依らない（そのフレームの時刻までに当たる物が、全部届いていれば）。遅れて届いた物は、届いた次のフレームで、過ぎた分が順に全部当たる。
 - **フレームの時刻は戻らない**: `advance` に渡す時刻は、`FrameTime`（1 本の時計の読み）で、前のフレームより前にならない。前の時刻を渡されても、当てた物は戻さない。
-- **読み口**: 文字の層の状態を読む口（現れた字の数・消した回数・選択肢の有無・当たりの行）は、最後の `advance` までに当たった物の状態を返す。画面に出ている物と、読み口の答えは、同じフレームの物である。
-- **前半**: 列は入れない。届いた合図をその場で当てる今の作りのまま、型だけ替える。
-- テストの「全部が現れている時刻」は、大きい実数でなく `TimeDelta::MAX` で書く。状態の決まりだけを確かめるテストは、今と同じに、当てる関数を直に呼ぶ。列を通すテストは、起点の知らせ → 合図の順に入れて、`advance` に時刻を渡す。
+- **読み口**: 文字の層の状態を読む口（現れた字の数・消した回数・選択肢の有無・当たりの行）は、その時までに当たった物の状態を返す。合図と置き直しの知らせは `advance` でだけ当たるので、画面に出ている物と、読み口の答えは、同じフレームの物である。
+- **列を空にする口は、置かない**: 台詞の中断・置き換えと、実行系だけを起こし直す読み直し（文字の層と結線は残る）では、列に残っている物を捨てない。配られた合図の発火時刻は、配った刻みの時刻以前なので、残っている物は、次のフレームで時刻が来て当たる。中断された台詞の、もう配られた合図が当たる事と、その字が現れ続ける事は、今と同じである（次の、内容の在る台本の頭の全部の消去が消す）。ゴーストの切り替えと、窓を作り直す読み直しは、今と同じに、文字の層と結線ごと作り直すので、列も一緒に無くなる。
+- **次のフレームを起こす**: `advance` が、待っている時刻を返した時は、呼び手（`areka-runtime`）が、その時刻に次のフレームを起こす予約を置く（「areka-runtime」の節）。
+- **前半**: 列は入れない。届いた合図をその場で当てる今の作りのまま、型だけ替える。字の現れる時刻は台本の時刻（`TimeSpan`）で持ち、提示と読み口は台本の時刻（今の、0 への寄せのまま 0 以上なので `TimeSpan`）を受ける。この口は、後半でもう一度替わる（D16）。
+- テストの「全部が現れている時刻」は、大きい実数でなく `TimePoint::MAX` で書く（前半の間は `TimeSpan::MAX`）。状態の決まりだけを確かめるテストは、今と同じに、当てる関数を直に呼ぶ。列を通すテストは、合図を入れて、`advance` に時刻を渡す。
 
 #### areka-runtime
 
 | Field | Detail |
 |-------|--------|
-| Intent | フレームの頭で文字の層を進めて、そのフレームの台本の時刻を得る。バルーンの寿命の時計が同じ台本の時刻を読む。手で組む合図と窓の知らせに、フレームの時刻を付ける |
+| Intent | フレームの頭で文字の層を進める。文字の相と可視性の相が、同じ状態を、同じフレームの時刻で読む。バルーンの寿命の時計が、寿命の事実を絶対の時刻で持つ。手で組む合図と窓の知らせに、フレームの時刻を付ける |
 | Requirements | 7.4, 7.9, 8.2, 8.3, 12.4, 12.8, 12.9, 12.10, 17.1, 17.9, 18.1, 18.2, 18.4, 18.7 |
 
 ```rust
@@ -1179,26 +1185,65 @@ impl TalkClock {
     /// 今の時刻（差し込まれた時計の読み）。
     pub fn now(&self) -> TimePoint;
 }
+
+pub enum TalkLifecycleSignal {
+    /// そのトークの最初の合図が配られた。at は、その合図の発火時刻。
+    TalkStarted { at: TimePoint, talk_id: Option<TalkId> },
+    /// 表示の終わり（発火時刻＋長さ）の、それまでの最大が上がった。at は、上げた合図の発火時刻。
+    DisplayEndAt { at: TimePoint, end: TimePoint },
+    /// 待ち時間の指定。at は、その合図の発火時刻。
+    BalloonTimeout { at: TimePoint, timeout: TalkTimeout },
+    /// 選択肢が出た。at は、その合図の発火時刻。
+    ChoiceShown { at: TimePoint },
+    /// 置き直しの知らせ（前の起点が在る物だけ）。
+    OriginMoved(OriginNotice),
+    /// トークの受け口が落ちた。at は、落ちた時の時計の読み。
+    TalkEnded { at: TimePoint },
+    /// 利用者の中断。at は、押下を受けた時の時計の読み。
+    UserBreak { at: TimePoint },
+}
+impl TalkLifecycleSignal {
+    /// 列に入れる時刻（この知らせが効く絶対の時刻。OriginMoved は効く時刻）。
+    pub fn at(&self) -> TimePoint;
+}
+
+/// フレームの頭で、文字の層を進める相。
+pub fn run_text_advance_phase(wiring: &mut RuntimeWiring, world: &mut World, frame_now_override: Option<TimePoint>);
+pub fn run_text_phase(wiring: &mut RuntimeWiring, world: &mut World, frame_now_override: Option<TimePoint>);
 ```
 
 - 既定の時計は `dola::time::now`（`FrameTime` と同じ関数）。seriko を進める刻み役と、ghost の刻み役の既定の時計も同じ関数で、`GetTickCount64` を読む `tick_count_ms` は消す。この spec が替える所に、ほかの時計は足さない。
-- **`TalkClock` は起点を持たない（後半）**: `TalkClock` は「今」を読む口だけを持つ。起点は、受け手の列（文字の層の列・バルーンの寿命の列）が、知らせから持つ。合図を見て起点を見積もる `observe_cue`・台本の時刻を返す口・合図を見るために文字の層の受け口を包んでいた `ClockedTextSink` は、消す（文字の層の受け口は、知らせを自分で受ける）。要件が言う「文字の層の時計」の台本の時刻は、文字の層の `advance` が返す値である。
-- **フレームの台本の時刻（後半）**: フレームの頭の 1 か所（`frame/scale_text.rs` の、台本の時刻を求める所）が、`FrameTime` を読み、文字の層の `advance(frame_now)` を 1 回呼ぶ。返った台本の時刻を、そのフレームの文字の相が使う。可視性の相は、同じフレームの時刻で寿命の列を進め、その列の台本の時刻を使う（下。2 つの列は同じ起点を持つので、同じ値である）。`advance` は、2 つの相より前に、1 フレームに 1 回だけ呼ぶ（可視性の相が読む字の数と、文字の相が描く字が、同じ状態から出る）。文字の層が借りられないフレーム（ほかの処理が持っている）は、進めず、そのフレームは台本の時刻が無い物として 2 つの相を見送る（今の「起点が無い」と同じ扱い）。テストは、フレームの時刻を外から渡す（`run_text_phase(.., frame_now_override: Option<TimePoint>)`）。
-- **0 に丸めない**: 台本の時刻は、負を返す（起点が、今のフレームの時刻より後ろに置かれた時）。負の間は、新しく現れる字は無く、バルーンの寿命の計りも進まない。最初の起点の知らせは、起点の時刻から効くので、フレームの時刻が起点に届くまでは、前の再生の起点のまま（1 つも無ければ、台本の時刻が無い）である。
-- **バルーンの寿命（後半）**: 寿命の知らせ（`TalkLifecycleSignal`）も、文字の層と同じ型の列（`HeldQueue`）で持ち、可視性の相が、フレームの時刻の来た物から、届いた順に当てる。寿命の知らせを届いた時に当てると、次の台詞の知らせ（表示の終わり・待ちの指定）が、フレームの時刻が起点に届く前に効き、前の台詞の台本の時刻と比べられる。
-  - 受け口（`BalloonLifecycleSink`）は、知らせごとに、当たる時刻を付けて送る: 合図から作る知らせ（トークの始まり・表示の終わり・待ちの指定・選択肢が出た）は、その合図の台本の時刻（`HeldAt::Script(cue.at)`）。トークの終わりは、受け口が落ちた時の時計の読み（`TalkClock::now()`。`HeldAt::Absolute`）。起点の知らせは、`origin_set` で受けた物をそのまま送る。
-  - `TalkLifecycleSignal::DisplayEndAt(TimeSpan)`（`cue.at + cue.duration` の整数の和）・`TalkEnded { at: TimePoint }`（絶対の時刻。当てる時に、列の起点で台本の時刻へ直す）。トークの終わりは、台本の中身ではなく、再生が終わった・中断されたという現実の出来事なので、時刻は、それが起きた時の時計の読みである。
-  - 判断（`decide`・`decide_timeout`）は台本の時刻（`TimeDelta`）で行う。台本の時刻は、寿命の列の `script_time(frame_now)` である。文字の層の列と寿命の列は、同じ知らせを同じ順に受け、同じフレームの時刻で進むので、同じ起点を持つ（要件 12 の 8）。期限は `実効の表示の終わり + 待ち`、切れたかは `今 ≥ 期限`。待ちは `TimeSpan`（既定 30 秒・`\![set,balloontimeout,ミリ秒]` と環境変数は、読む縁で 1 回だけ変える）。「まだ見ていない」は `Option` で表す（負の無限大の番兵を使わない）。有限でない終わりを捨てる分かれ道と `warn!` は消える。
-  - 置き直しの知らせが当たった時: 表示の終わりと期限（台本の時刻）は動かさない。その後のフレームは、新しい起点での台本の時刻と比べる。もう下した判断（時間切れで閉じた）は戻さない。
-- **起こしの待ち**: `visibility_wake` が `Instant` の締め切りへ渡す残りは、`(期限 − 今)` が正の時だけ `to_std()` で渡す（`Instant` の側は範囲の外）。
-- `hover_inject`: 周期は `TimeSpan`、何周目かは整数の割り算。0 の周期は「無し」（今の「正でない周期は無し」と同じ）。
+- **`TalkClock` に残る物（後半）**: `TalkClock` は「今」を読む口だけを持つ。起点も、台本の時刻を返す口も持たない。残す理由は 2 つである。現実の出来事に時刻を付ける 2 つの所（トークの受け口が落ちた時＝トークのスレッド、利用者の押下を受けた時＝UI のスレッド）が、同じ 1 つの差し込める時計を読む。テストが、その時計を偽の時計に替える。合図を見て起点を見積もる `observe_cue`・台本の時刻を返す口（`talk_time`・`now_talk_time`）・合図を見るために文字の層の受け口を包んでいた `ClockedTextSink`・台本の時刻を求める `resolve_talk_time` は、消す。
+- **判定の時刻は、フレームの時刻である（後半）**: 文字の相と可視性の相は、`FrameTime` をそのまま受け、文字の層と寿命の時計が持つ絶対の時刻と比べる。台本の時刻を求める所は無い。フレームの時刻を求める関数は 1 本（`resolve_frame_now(frame_now_override, world) -> Option<TimePoint>`。テストの値が在ればそれ、無ければ `FrameTime`、どちらも無ければ `None`）で、3 つの相（進める相・可視性の相・文字の相）が同じ関数を呼ぶ。
+- **`advance` を呼ぶ所（後半）**: `frame_system` の中で、`RuntimeWiring` を取り出した直後・作業領域の同期と装着の相より前に、進める相（`run_text_advance_phase`）を置く。1 フレームに 1 回だけである。今は、合図がフレームの外（UI のスレッドのメッセージの取り出し）で当たるので、フレームのどの相も、合図が当たった後の文字の層の状態を見ている。文字の層に触る相（装着・取り出し・差し替え・可視性・文字の拡大率・文字）の全部が、進めた後の状態を見るように、どの相よりも前に置く。可視性の相（文字の相より前に在る）が読む字の数と、文字の相が描く字は、同じ状態・同じフレームの時刻から出る。
+  - 文字の層が借りられないフレーム（ほかの処理が持っている）は、進めず、`error!` を出す（同じ縮みが続く間は 1 回）。列の物は、次のフレームで当たる。可視性の相と文字の相は、今の決まり（借りられなければ、そのフレームの観測と提示を見送る）のままである。
+  - フレームの時刻が無い世界（`FrameTime` もテストの値も無い）では、進めない（今の「時刻が無いフレームは描かない」と同じ）。
+  - 文字の相は、フレームの時刻が在れば `present_frame` を呼ぶ。「起点がまだ無いので見送る」分かれ道は無くなる（合図が 1 つも当たっていない間は、状態が空で、描く物が無い）。
+- **次のフレームを起こす（後半）**: フレームは、起こす旗が立った時だけ回る。時刻の来ていない物が列に残った時は、その時刻に起こす予約を置く。
+  - 文字の層の列: `advance` が、待っている時刻 `t` を返したら、進める相が `tick_wake::arm_deadline(Instant::now() + 残り)` を置く。残りは `t − フレームの時刻` を `to_std()` で渡す（`Instant` の側は範囲の外）。
+  - 寿命の列: 列の頭の物が待っている時刻（`waiting_until()`）を、期限と同じ予約（`visibility_wake`）に入れ、早い方で起こす。
+  - 字がまだ現れ切っていない間の予約（`reveal_pending`）は、今と同じに、最後の字の現れる時刻とフレームの時刻を比べて、次の画面の更新を予約する。
+  - 本番では、合図が届くのは発火時刻より後なので、列に物が残るのは、フレームの時刻を読んだ後に刻まれた合図が、そのフレームの間に届いた時（1 フレームの間）だけである。
+- **0 に丸めない**: 判定は、絶対の時刻どうしの比べである。フレームの時刻が合図の発火時刻より前の間は、その合図は当たらず、字も現れず、寿命の知らせも効かない。
+- **バルーンの寿命（後半）**: 寿命の時計は、寿命の事実を絶対の時刻で持つ。起点を持たない。
+  - 受け口（`BalloonLifecycleSink`）は、知らせごとに、効く時刻を付けて送る（上の型）。合図から作る知らせ（トークの始まり・表示の終わり・待ちの指定・選択肢が出た）は、その合図の発火時刻。表示の終わりの値は `cue.fire_time + cue.duration`（整数の和）。トークの終わりは、受け口が落ちた時の時計の読み（`TalkClock::now()`）。台本の中身ではなく、再生が終わった・中断されたという現実の出来事だからである。時計の読みは必ず在るので、「止まった時刻が無い」分かれ道（`TalkEnd::TimeUnknown`・その時の起点の採り方・`warn!`）は消える。
+  - 利用者の中断（`UserBreak`）は、UI のスレッドの押下の口（`areka-input` の `user_break.rs`）が、押下を受けた時の時計の読みを付けて、同じ線へ送る。押下の口は、結線の時に渡された `TalkClock` の複製を読む。列には、ほかの知らせと同じに、届いた順に並ぶ。フレームの時刻は、押下より後に同じスレッドで読むので、次のフレームでは必ず時刻が来ている。本物の時計では、どの知らせの時刻も、それを送った時より後にならないので、押下より前に届いた知らせが、列の頭で押下を待たせる事は無い。
+  - 可視性の相は、線から取り出した知らせを、届いた順のまま列（`HeldQueue`）に足し、フレームの時刻が来た物を、頭から順に判断へ渡す（新しいファイル `balloon_visibility_held.rs`）。**知らせが効くのは、フレームの時刻が、その知らせの時刻に届いた最初のフレームである**（頭の物が待つ間は、後ろも待つ）。寿命の線（`std::sync::mpsc`）は、フレームの中で取り出すので、フレームの時刻を読んだ後に刻まれた合図の知らせが、同じフレームで届く事が在る。その知らせは、時刻がまだ来ていないので、次のフレームで効く。
+  - トークの終わりを数える通し番号（`talk_ends`。位置の指令の線との、届いた順の突き合わせに使う）は、今と同じに、線から取り出した時に数える。届いた順を数える物で、時刻で待たせる物ではない。
+  - 判断（`decide`・`decide_timeout`）は、フレームの時刻（`TimePoint`）で行う。表示の終わり・トークの終わりの時刻・期限は、どれも `TimePoint`。期限は `実効の表示の終わり + 待ち`、切れたかは `フレームの時刻 ≥ 期限`。待ちは `TimeSpan`（既定 30 秒・`\![set,balloontimeout,ミリ秒]` と環境変数は、読む縁で 1 回だけ変える）。「まだ見ていない」は `Option` で表す（負の無限大の番兵を使わない）。有限でない終わりを捨てる分かれ道と `warn!`・負の終わりを 0 に寄せる所は、消える。
+  - **現れた字の数の出どころ**: 可視性の相が読む字の数は、文字の層の状態（そのフレームの頭の、進める相が進めた物）を、同じフレームの時刻で読んだ値である（`balloon_shown_glyphs(actor, surface, frame_now)`）。文字の相も、同じ状態を、同じ時刻で描く。寿命の時計は、字の数を自分では持たない。
+  - **2 本の線**: 寿命の線と文字の線は別の線なので、同じ合図から出た物が、片方にだけ先に届くフレームが在る。その時も、2 つの相が読む字の数は同じで、時刻の基準も同じ（フレームの時刻）である。受け手が起点を持たないので、線ごとに起点が食い違う事が無い。先に届いた寿命の知らせ（トークの始まり・表示の終わり）は、自分の時刻が来ていれば効き、文字の層の合図は、届いた次のフレームで当たる。「片方の線が 1 フレーム先に届く」事は、今の作りにも在る（寿命の線はフレームの中で、文字の線はフレームの外で受ける）。
+  - **置き直しの知らせ**: 受け口は、`origin_set` で受けた知らせのうち、前の起点が在り、そのトークの最初の合図より後の物だけを、`OriginMoved` として同じ線へ送る（最初の合図より前には、受け手は、そのトークの物を何も持っていない）。受け口は、覚えている表示の終わりの最大も、同じ決まりで動かす（動かさないと、前へ動いた後の合図の終わりが「最大を越えない」と判定されて、送られない）。可視性の相は、知らせが当たる時に、持っている表示の終わりが効く時刻より後なら、動いた長さだけ動かす（効く時刻より前になるなら、効く時刻にする）。期限は動かさない。期限が在るのは、トークの終わりが効いた後だけで、その時の表示の終わりから作った物であり、置き直しの知らせは、トークが終わる前にしか届かない。もう下した判断（時間切れで閉じた）は、戻さない。
+  - 列を空にする口は、置かない（文字の層の列と同じ。寿命の列は結線が持ち、結線ごと作り直す時にだけ無くなる）。
+- **起こしの待ち**: `visibility_wake` が `Instant` の締め切りへ渡す残りは、`(期限 − フレームの時刻)` が正の時だけ `to_std()` で渡す（`Instant` の側は範囲の外）。
+- `hover_inject`: 周期は `TimeSpan`、時刻はフレームの時刻（`TimePoint`）で、何周目かは、時刻の 100ns の数を周期で割った整数。0 の周期は「無し」（今の「正でない周期は無し」と同じ）。前半の間は、台本の時刻（`TimeSpan`）を受ける。
 - **手で組む合図（`shell_carry.rs`。後半）**: ghost の読み直しの後に、前の面と着せ替えを seriko へ出し直す所である。台本の合図ではなく、フレームの中の装着の処理が起こす出来事なので、時刻は、出し直しを行うフレームの時刻（`FrameTime`）にする。`replay` は、手に持っている `World` から `FrameTime` を読み、`TalkCue::scheduled(フレームの時刻, TimeSpan::ZERO, ..)` で組む。seriko は、その `fire_time` を出来事の時刻にする（「areka-seriko」の節）。`FrameTime` の無い世界（wintf は、世界を作る時に必ず置く）では、`error!` を出して、出し直さない（黙って時刻を作らない）。窓の知らせ（`frame/status_report.rs`）も、同じに `FrameTime` を読んで付ける。
 - **7 つの変更の受け口**（`change_cue`・`move_cue`・`reload_cue`・`switch_cue`・`user_break_cue`・`window_state_cue`・`zorder_cue`）は、届いた順に、その場で当てる。合図の時刻は読まない。取り込みの行のほか、本番は変わらない。これらは、フレームで描く状態ではなく、その場で効く現実の働き（ゴーストの切り替え・窓を動かす・読み直す・重なりの順ほか）である。合図が届くのは、必ず発火時刻より後である（再生機は、今が発火時刻に届くまで取り出さず、届くまでには、さらに時間が経つ）。遅れる評価の時計を持たないので、届いた時に当てても、発火時刻より前に効く事が無い。大前提（発火時刻より前に効かない・台本の順に効く）と食い違わない。
-- 前半は、`TalkClock` の見積もり（最大を取る）・`ClockedTextSink`・寿命の知らせを届いた時に当てる作りを、型だけ替えて残す。
+- 前半は、`TalkClock` の見積もり（最大を取る）・`ClockedTextSink`・寿命の知らせを届いた時に当てる作りを、型だけ替えて残す（寿命の知らせの時刻は、台本の時刻の `TimeSpan`）。`TalkClock` の口と `TalkLifecycleSignal` の形は、後半でもう一度替わる（D16）。
 
 #### areka-input・areka-session・本体・先進坑
 
-- 本番で時刻が流れる所は無い。替えるのは、`TalkClock::new` へ渡す時計・`FrameTime(..)` を書く所・手で組む `TalkCue`・`present_frame(..)`・偽の時計（`TickerConfig`・`LoopTickerConfig`・前半の間の `SerikoClock`）・`MonotonicMs` を書くテスト。文字の層へ合図を直に入れて画面を確かめるテストは、後半で、起点の知らせを先に入れて `advance` を呼ぶ形へ直す（共有の組み立てに 1 つ置く）。
+- 本番で時刻が流れる所は、`areka-input` の利用者の中断の知らせ（後半。押下を受けた時の時計の読みを付ける＝`src/user_break.rs`）だけである。時刻の型は `areka_sakura::contract` から名指す。ほかに替えるのは、`TalkClock::new` へ渡す時計・`FrameTime(..)` を書く所・手で組む `TalkCue`・`present_frame(..)`・偽の時計（`TickerConfig`・`LoopTickerConfig`・前半の間の `SerikoClock`）・`MonotonicMs` を書くテスト。文字の層へ合図を直に入れて画面を確かめるテストは、後半で、合図を入れて `advance(フレームの時刻)` を呼ぶ形へ直す（共有の組み立てに 1 つ置く）。
 - 先進坑（`q7-vertical/src/old_side.rs`）は全体テストが組まない。替えた後に、そのワークスペースで `cargo check` を 1 回通す。
 
 ### 受け手ごとの追い付き方
@@ -1207,12 +1252,13 @@ impl TalkClock {
 
 | 受け手 | 中身の種類 | 決まり |
 |---|---|---|
-| 文字の層の字 | 積もって姿を作る物（字は、当てる時に積む）と、時刻だけで決まる値（どこまで見えるか） | 合図は、フレームの台本の時刻が合図の台本の時刻に届いた時に当たる。当たると、その塊の字の全部が、字ごとの現れる時刻（台本の時刻）と一緒に積まれる。どこまで見えるかは、フレームの台本の時刻で求めるだけ。遅れて届いたタイプライターの合図は、現れる時刻がもう過ぎている字（例えば最初の 5 字）が、当たったフレームで一度に全部現れ、残りの字は、それぞれの現れる時刻に、元の間隔のまま現れる。1 字ずつ追い掛ける途中の姿は作らない |
-| 文字の層の、字のほかの指令（消去・改行・カーソル・印・書体・アンカー） | 積もって姿を作る物 | 字と同じ決まりで、フレームの台本の時刻が合図の台本の時刻に届いた時に、届いた順に当てる。遅れて届いた物は、次のフレームで、過ぎた分が順に全部当たる。届いた時には当てない |
+| 文字の層の字 | 積もって姿を作る物（字は、当てる時に積む）と、時刻だけで決まる値（どこまで見えるか） | 合図は、フレームの時刻が合図の発火時刻に届いた時に当たる。当たると、その塊の字の全部が、字ごとの現れる時刻（絶対の時刻）と一緒に積まれる。どこまで見えるかは、フレームの時刻で求めるだけ。遅れて届いたタイプライターの合図は、現れる時刻がもう過ぎている字が、当たったフレームで一度に全部現れ、残りの字は、それぞれの現れる時刻に、元の間隔のまま現れる（1 字 50 ms の塊が 250 ms 遅れて届けば、発火時刻から 0・50・100・150・200 ms の 5 字が一度に現れる。フレームの時刻がちょうど 250 ms 後なら、6 字目も現れる）。1 字ずつ追い掛ける途中の姿は作らない |
+| 文字の層の、字のほかの指令（消去・改行・カーソル・印・書体・アンカー） | 積もって姿を作る物 | 字と同じ決まりで、フレームの時刻が合図の発火時刻に届いた時に、届いた順に当てる。遅れて届いた物は、次のフレームで、過ぎた分が順に全部当たる。届いた時には当てない |
 | seriko の口パク（`talk` の引き金） | その瞬間にだけ意味を持つ物 | 下の決まり |
 | seriko の、姿を変える指令（`\s`・着せ替え・バルーンの面） | 積もって姿を作る物 | 届いた順に全部当てる。出来事の時刻は、合図の発火時刻である: その時刻までの字の区切りを先に判定し、その時刻を、始めるアニメ（`always`・`runonce`）の始まり・面が見え始めた時刻・口パクの数え始めにする。遅れて届いたら、始めたアニメは、過ぎた分だけコマの進んだ姿で出る |
-| バルーンの寿命の時計 | 時刻だけで決まる値（寿命の知らせは、積もって姿を作る物） | 寿命の知らせは、フレームの台本の時刻が、元の合図の台本の時刻に届いた時に、届いた順に当てる。表示の終わりと期限は台本の時刻で持つ。尽きたかは、今の台本の時刻で求めるだけ |
+| バルーンの寿命の時計 | 時刻だけで決まる値（寿命の知らせは、積もって姿を作る物） | 寿命の知らせは、フレームの時刻が、知らせの時刻（元の合図の発火時刻。トークの終わりと利用者の中断は、それが起きた時の時計の読み）に届いた時に、届いた順に当てる。表示の終わりと期限は、絶対の時刻で持つ。尽きたかは、フレームの時刻と比べるだけ |
 | その場で効く現実の働き（7 つの変更の受け口） | 積もって姿を作る物 | 届いた順に、その場で全部当てる。合図の時刻は読まない。合図が届くのは必ず発火時刻より後で、遅れる評価の時計を持たないので、発火時刻より前に効く事が無い |
+| seriko の定義の差し替えの依頼（`SerikoMsg::Replace`） | その場で効く現実の働き | 時刻を運ばない。届いた時に当て、差し替えた後の引き金は、次の刻みの時刻で構える。どの刻みになるかは、届いた時で決まる（台本の時刻に合わせる物ではない） |
 | 手で組む合図（読み直しの後の、面と着せ替えの出し直し）と、窓の知らせ | 積もって姿を作る物 | 時刻は、それを行う・見るフレームの時刻。seriko は、姿を変える指令と同じ決まりで当てる |
 | storyboard の層の値 | 時刻だけで決まる値 | 今の時刻の値を求めるだけ |
 | storyboard の層の引き金 | その瞬間にだけ意味を持つ物 | 過ぎた引き金を時刻の順に全部起こす。子は、刻みの時刻でなく、引き金の予定の時刻（＋開始のずらし）で始める（今の作りのまま） |
@@ -1231,45 +1277,62 @@ impl TalkClock {
 
 **どれだけ厳しく時刻に合わせるかは、中身の種類ごとに決める**: 時刻の土台は、どの受け手にも正確な時刻（合図の発火時刻・起点の知らせの効く時刻）を渡す。受け手が、それにどれだけ厳しく従うかは、中身の種類ごとに決める。
 
-- 字と、字のほかの指令（文字の層）・バルーンの寿命は、フレームの時刻だけで決まる（上の表）。
-- 口パクは、きっちり合わせなくてよい中身である。自分の刻み（seriko の刻み）の細かさまで合えば足りる。だから、決まりは上の 3 つだけにして、増やさない。次の時は、結果が 1 刻みの幅で違ってよい: 合図や知らせが、その時刻の刻みより後に届いた時（seriko は、もう済ませた刻みの判定をやり直さない）。再生が終わった直後の区切りを、遅れて判定した時。
-- 口パクのテストは、その細かさより細かい一致を求めない。確かめるのは、「同じ時刻の列を、届く順とまとまりを変えて与えても、刻みを済ませる前に合図と知らせが届いていれば、結果が同じ」事と、決まりの 3 つである。合図が刻みより後に届いた時の、1 刻みより細かい一致は、テストにしない。
+- 字と、字のほかの指令（文字の層）・バルーンの寿命は、届いた物と、フレームの時刻だけで決まる（上の表）。届くのが遅れた時の限界は、「知らせの受け方」の節に書く。
+- 口パクは、きっちり合わせなくてよい中身である。seriko が、その時刻の刻みを済ませる前に、合図と知らせが届いていれば、同じ結果になれば足りる。だから、決まりは上の 3 つだけにして、増やさない。seriko は、もう済ませた刻みの判定をやり直さないので、次の時は、結果が違ってよい。
+  1. 合図が、その発火時刻より後の刻みを済ませてから届いた時。その字の区切りは、届いた後の最初の刻みで、字の現れた時刻を始まりとして判定される（始まりが過去なので、コマが進んだ姿で出る）。済ませた刻みの間に、同じアニメの別の再生が始まっていれば、見送られる区切りが変わる。
+  2. 後ろへ d だけ動かす置き直しの知らせが、効く時刻より後の刻みを済ませてから届いた時。済ませた刻みが数えた区切りは、前の時刻のまま判定済みで、数えを戻さないので、動いた後の時刻では鳴らない。その区切りの口パクの始まりは、時刻どおりに受けた seriko より、d だけ早い。違いの大きさは、刻みの幅でなく、動いた長さ d で決まる。違うのは、効く時刻から、知らせが届くまでに済ませた刻みが数えた区切りだけである。
+  3. 再生が終わった直後の区切りを、遅れて判定した時。
+- 口パクのテストは、それより細かい一致を求めない。確かめるのは、「同じ時刻の列を、届く順とまとまりを変えて与えても、刻みを済ませる前に合図と知らせが届いていれば、結果が同じ」事と、決まりの 3 つである。合図や知らせが、その時刻の刻みより後に届いた時の一致は、テストにしない。
 - 後の spec が足す中身の種類（音・舞台・値を時間で変える口）は、それぞれ、自分がどれだけ厳しく合わせるかを書く。この spec は、その種類の決まりを先に決めない。
 
 ### 知らせの受け方
 
-起点の知らせ（`OriginNotice`）を受けた受け手の決まり。置き直しは、絶対の時刻の上の出来事である。
+起点の知らせ（`OriginNotice`）を受けた受け手の決まり。文字の層・バルーンの寿命の時計・seriko の、どれにも同じ決まりである。受け手は、受け取った物を絶対の時刻で持ち、起点を持たない（D13）。
 
-**決まり**: 知らせは、効く時刻（`effective_at`）から先に効く。効く時刻より前に起きた事は、書き換えない。効く時刻から先は、台本の時刻を「今 − 新しい起点」とする。
+**最初の起点の知らせ（前の起点が無い）**: 起点を知らせるだけの物で、置き直しではない。受け手は、何も動かさず、何も待たせない。受け口が受けて、受け手へは送らない。受け手の持つ時刻は、合図の `fire_time` から作った絶対の時刻なので、次の再生が始まっても、前の再生の物の時刻は変わらない。
 
-| 物 | 効く時刻より前に起きていた | まだ起きていなかった |
+**置き直しの知らせ（前の起点が在る）**: 動いた長さを d（新しい起点 − 前の起点）、効く時刻を E とする。受け手は、持っている時刻 T のそれぞれを、次のとおりにする。
+
+1. T が E 以前なら、書き換えない。
+2. T が E より後なら、T + d にする。T + d が E より前になる時（前へ動いた時）は、E にする。
+
+もう起きた事（当てた指令・判定した口パクの区切り・下した寿命の判断）は、戻さない。
+
+| 受け手 | 持っている時刻（決まりを当てる物） | 戻さない物 |
 |---|---|---|
-| 字 | 現れたままにする。後ろへ動いて、新しい台本の時刻が、その字の現れる時刻より前に戻っても、消さない | 新しい起点での時刻に現れる。前へ動いて、その時刻が効く時刻より前になる字は、効く時刻に一度に現れる。後ろへ動いたら、その分だけ遅く現れる |
-| 字のほかの指令（文字の層） | 当てたままにする（消した物を戻さない） | 新しい起点で、時刻が来た時に当たる。前へ動いて、時刻がもう来ている物は、効く時刻のフレームで、届いた順に当たる |
-| 口パクの区切り | 判定し直さない。始まったアニメの始まりの時刻は動かさない | 動いた後の、字の現れる時刻で判定する |
-| バルーンの寿命 | もう下した判断は戻さない | 表示の終わりと期限（台本の時刻）は動かさず、新しい起点での台本の時刻と比べる |
+| 文字の層 | 字の現れる時刻（当てた合図の字） | 当てた指令（消した物を戻さない） |
+| seriko | 字の現れる時刻（`TalkFeed`） | 判定した区切り・数えた字の数・始まったアニメの始まりの時刻・面が見え始めた時刻 |
+| バルーンの寿命の時計 | 表示の終わり（受け口が覚えている最大も） | 期限（トークが終わった後にだけ在る）・トークの終わりの時刻・下した判断 |
 
-**文字の層とバルーンの寿命（台本の時刻で持つ受け手）**: 知らせを、合図と同じ列（`HeldQueue`）に、届いた順のまま並べる。
+- **合図の発火時刻は、動かない**: 置き直しの前に取り出した合図の発火時刻は、どれも効く時刻以前である（再生機は、今が発火時刻に届くまで取り出さず、置き直しに渡す現在の時刻は、その前の取り出しに渡した時刻以上である＝「`TimedSchedule`」の節の前提）。だから、列に残っている合図と、合図から作った寿命の知らせの時刻は、決まりの 1 に当たり、動かない。動くのは、合図の発火時刻より先へ延びる時刻（字の現れる時刻・表示の終わり）である。前提が破れた呼び方でも、受け手は、同じ決まりを、届いた順と、運ばれた時刻だけで当てるので、結果は届き方に依らない。
+- **どの再生の物かを分けない**: 受け手は、持っている時刻を、再生ごとに分けない（合図にも知らせにも、再生を分ける印は無い）。中断された台詞の、まだ現れていない字も、効く時刻より後なら、同じ長さだけ動く。文字の層も seriko も同じ決まりなので、食い違わない。寿命の時計の表示の終わりは、トークの始まりで捨てるので、そのトークの物だけが動く。
 
-1. 知らせは、フレームの時刻が効く時刻に届いた時に当たる。その前のフレームは、前の起点のままである。
-2. 知らせより前に届いた合図は、列の中で知らせより前に在るので、先に当たる（前の起点で）。知らせより後に届いた合図は、知らせの後に当たる（新しい起点で）。
-3. 知らせが当たる時に、効く時刻の、前の起点での台本の時刻（`before`）以下の現れる時刻を持つ字を、「現れた字」として確かめておく。それから起点を替える。
-4. その後のフレームは、台本の時刻を「フレームの時刻 − 新しい起点」とする。字の現れる時刻と、列に残っている合図の台本の時刻は、書き換えない（台本の時刻は、置き直しで変わらない）。
-5. だから、前へ動いた時は、効く時刻のフレームで、新しい台本の時刻がもう届いている字が一度に現れ、時刻の来ている合図が、届いた順に当たる。後ろへ動いた時は、まだ現れていない字と、まだ当てていない合図が、新しい台本の時刻が届くまで待つ。
+**当てる順（D21）**: 知らせは、合図と同じ線で、届いた順のまま受け手へ届く。受け手は、届いた順の中で当てる。
 
-**seriko（絶対の時刻で持つ受け手）**: 知らせは、合図と同じ口に届いた順に並び、届いた時に当てる。動いた長さを d（新しい起点 − 前の起点）、効く時刻を E とする。
+- seriko: 届いた時に当てる（合図も、届いた時に、字の現れる時刻を積む）。
+- 文字の層とバルーンの寿命の時計（フレームで評価する受け手）: 知らせを、合図と同じ列に並べる。列に入れる時刻は、効く時刻 E である。フレームの時刻が E に届いたフレームで、前に届いた物が全部当たった後に、当たる。
+  - 届いた時に当てない理由の 1 つ目: 文字の層は、字の現れる時刻を、合図を当てる時に積む。知らせより前に届いた合図が、まだ当たっていなければ、その字の時刻は、まだ無い。知らせを先に当てると、その字は動かず、合図を先に当てていた受け手と食い違う。列の順に当てれば、どの受け手でも、「届いた順に全部当てた」のと同じ時刻になる（seriko が届いた時に当てた結果とも、同じである）。
+  - 理由の 2 つ目: 知らせの後に届く合図は、新しい起点での発火時刻を持つ。前へ動いた後は、その発火時刻が E より前の事が在る。その合図は、E より前のフレームで当たってはならない（E より前は、前の起点が効いていて、その合図の時刻は来ていない）。知らせを E で待たせると、列の順が、それを保つ。
+  - 知らせそのものは、E より前のフレームで当てても、見える物を変えない。動くのは E より後の時刻だけで、動いた後も E 以後だから、E より前のフレームの時刻から見れば、動く前も後も「まだ来ていない」である。E で待たせる必要が在るのは、知らせの後ろに並ぶ物である。
+  - 知らせが列の頭で待つのは、フレームの時刻が E に届くまでである。E は、置き直しを呼んだ時の現在の時刻なので、本番では、届いた時にもう過ぎている。最初の起点の知らせ（効く時刻が、先の時刻になりうる）は、列に入らない。
 
-1. 字の現れる時刻 T が E 以前の字は、動かさない。
-2. T が E より後の字は、T + d にする。T + d が E より前になる字（前へ動いた時）は、E にする。
-3. 最初の起点の知らせ（前の起点が無い）は、何も動かさない。
+**どの受け手も、同じ時刻を持つ**: 文字の層と seriko は、同じ式（`cue.fire_time + chunk_reveal_offsets(..)`）で字の現れる時刻を積み、同じ決まりを、届いた順の同じ所で当てる。だから、同じ字は、同じ絶対の時刻を持つ（1 つのスコープの字が、2 つの場所へ重なって出る時だけは、「前の字」の取り方の違いで、今と同じに違いうる）。起点から時刻を求め直す所が、どの受け手にも無い。
 
-**2 つの持ち方は、同じ時刻を指す**: 文字の層の「台本の時刻が、字の現れる時刻 r に届く」時刻は「新しい起点 + r」で、これは、seriko の「前の起点 + r + d」と等しい。効く時刻より前に現れていた字は、どちらも動かさない。前へ動いて、新しい時刻が効く時刻より前になる字は、どちらも、効く時刻に現れる。
+**届き方に依らない**: 受け手 A が、合図と知らせを、それぞれの時刻に受け、受け手 B が、同じ物を、遅れて、まとめて受けたとする。どちらも、使うのは「届いた順」と「合図と知らせが運ぶ時刻」だけで、届いた時刻を使わない。同じフレームの時刻で比べると、そのフレームの時刻までに当たる物が両方に届いていれば、A と B は、同じ字が現れ、同じ指令が当たり、同じ時刻を持つ。B が全部を受けた後は、どのフレームの時刻でも同じである。口パクは、「どれだけ厳しく時刻に合わせるか」のとおり、刻みを済ませる前に合図と知らせが届いていれば、同じである。
 
-**届き方に依らない**: 受け手 A が、合図と知らせを、それぞれの時刻に受け、受け手 B が、同じ物を、遅れて、まとめて受けたとする。どちらの決まりも、使うのは「届いた順」と「合図と知らせが運ぶ時刻」だけで、届いた時刻を使わない。B が全部を受けた後の時刻で比べると、A と B は、同じ字が現れ、同じ指令が当たり、同じ起点を持つ。文字の層とバルーンの寿命は、フレームの時刻だけで決まるので、どのフレームでも同じである。口パクは、上の「どれだけ厳しく時刻に合わせるか」のとおり、刻みを済ませる前に合図と知らせが届いていれば、同じである。
+**知らせが、効く時刻より後に着いた時の限界**: 知らせは、置き直しを呼んだスレッドから受け手へ運ばれるので、効く時刻 E より後のフレームを回してから着く事が在る（本番では、フレーム 1 つ分）。受け手は、着くまで、置き直しを知らない。
 
-**前の再生と、次の再生の間**: 次の台本の最初の起点の知らせは、その起点の時刻から効く。フレームの時刻が、まだその起点に届いていないフレームは、前の再生の起点のままで、前の再生の姿を見せる（次の台本の物は、何も見せない）。起点に届いたフレームで、起点が替わり、次の台本の、台本の時刻 0 の合図（内容の在る台本は、頭の全部の消去）が当たる。受け手は、合図が届くのを待たずに、次の起点を知っている。前の再生の、まだ現れていなかった字は、新しい起点での台本の時刻で現れる（内容の在る台本は頭で全部を消すので、残るのは、内容の無い台本が続いた時だけである）。
+- 前へ動かす知らせ: 着いた次のフレームで、時刻の来た字が一度に現れ、後ろの合図が順に当たる。遅れるだけで、戻る物は無い。
+- 後ろへ動かす知らせ: E より後で、着く前の最後のフレームの時刻以前の字は、着く前のフレームが、もう見せている。知らせを当てると、その字の時刻は d だけ後ろへ動き、フレームの時刻がそこへ届くまで、見えなくなる。約束するのは、次の事である。
+  - 知らせを当てた後のフレームは、どれも、時刻どおりに受けた受け手と同じ字を見せる（どこまで見えるかは、時刻だけで決まる値である＝D22）。
+  - 食い違うのは、E から、知らせが着くまでの間のフレームだけである（その間は、着く前の時刻のまま見せる）。見せてから隠れる字は、E より後で、着く前の最後のフレームの時刻以前の字に限る。
+  - 「見せた字は隠さない」決まりにはしない。そうすると、見せた字は、動いた長さ d の間ずっと、時刻どおりに受けた受け手より先に出たままになり、食い違いが、届く遅れでなく d で決まる。
+- バルーンの寿命の時計: 表示の終わりは、トークが終わるまで判断に使わないので、遅れて着いても、判断は変わらない。
+- 口パク: 「どれだけ厳しく時刻に合わせるか」の 2 のとおり（違いは、動いた長さ d で決まる）。
 
-**列が待つのは、頭の物だけである**: 列は順を変えないので、頭の物の時刻が来るまで、後ろの物は当たらない。本番では、合図が届くのは発火時刻より後で、置き直しの効く時刻は呼び手の現在の時刻なので、頭の物の時刻は、届いた時にはもう過ぎているか、フレーム 1 つの内に来る。起点を先の時刻に置いた台本（まだ始まっていない台本）を、起点が来る前に捨てて、次の台本を始める使い方は、この spec に無い。その使い方では、捨てた台本の最初の起点の知らせが、起点の時刻が来るまで列の頭に残る。その使い方を足す spec が、捨てた再生の残りを列から外す口を足す（列の型の口を足すだけで、知らせと合図の形は変えない）。
+**前の再生と、次の再生の間**: 次の台本の物は、その合図の発火時刻が来るまで、どの受け手にも効かない。それまでのフレームは、前の再生の姿を見せる。前の再生の、まだ現れていなかった字（中断された台詞の残り）は、文字の層でも seriko でも、元の絶対の時刻に現れる。次の台本が、内容の在る台本なら、頭の全部の消去が、その発火時刻に残りを消す。合図の無い台本は、再生機を作らず、知らせも合図も出ない（`drive.rs` の、空の台本の分かれ道）。頭の全部の消去を持たないのは、後始末の合図だけの台本で、その時は、前の再生の残りの字が、元の時刻のまま現れ続ける（今と同じ）。
+
+**列が待つのは、頭の物だけである**: 列は順を変えないので、頭の物の時刻が来るまで、後ろの物は当たらない。列に入る時刻は、合図の発火時刻・置き直しの効く時刻・現実の出来事の時計の読みで、どれも、本物の時計では、送った時より後にならない。だから、頭の物は、届いた時にはもう時刻が来ているか、フレーム 1 つの内に来る。起点を先の時刻に置いた台本は、起点が来るまで合図を配らないので、列に何も入れない。その台本を、起点が来る前に置き直しても・捨てても、列の頭に、待つ物は残らない。
 
 ### 手で組む合図の時刻
 
@@ -1342,9 +1405,11 @@ impl TalkClock {
 | 完了の後の置き直し | 何もせず `None`。呼び手が、完了しているか（`is_completed()`）を見て、ログを出す |
 | 起点が変わらない置き直し | 失敗ではない。何も変えず、知らせも出さず、`None` |
 | 区切りで止まっていないのに、解く口を呼んだ | 今と同じ（`resolve_click` は何もしない・`resolve_choice` は `None`）。解く口は、完了を決めない |
-| 起点の知らせを 1 つも受けていない受け手に、合図が来た（再生機を通さずに、合図だけを入れた） | 列は受け取らない。受け手が `error!` を出して、その合図を捨てる。黙って時刻を作らない。本番では、再生機が最初の起点を先に知らせるので起きない |
+| 時刻の来ていない物が、受け手の列に残った | 失敗ではない。その時刻に、次のフレームを起こす予約を置く |
+| 置き直しの知らせが、効く時刻より後のフレームを回してから着いた | 失敗ではない。着いた後のフレームから、動いた後の時刻で判定する（「知らせの受け方」の節の限界） |
+| UI のスレッドで文字の層が借りられず、届いた物を列に足せなかった | 今と同じ。`Err` を返し、基盤が `error!` を出して続ける（その物は失われる） |
 | 手で組む合図・窓の知らせを送る時に、`FrameTime` が世界に無い | `error!` を出して、送らない（wintf は、世界を作る時に必ず置く） |
-| 文字の層が借りられないフレーム（ほかの処理が持っている） | そのフレームは進めず、台本の時刻が無い物として、文字の相と可視性の相を見送る。列の物は、次のフレームで当たる |
+| 文字の層が借りられないフレーム（ほかの処理が持っている） | そのフレームは進めず、`error!` を出す（同じ縮みが続く間は 1 回）。可視性の相と文字の相は、今の決まりのとおり、そのフレームの観測と提示を見送る。列の物は、次のフレームで当たる |
 
 - パニックは足さない。ログ無しで失敗を捨てる道は作らない。
 - 型で表せなくなった入力（NaN・無限大）のための本番の分かれ道と、そこでだけ出していたログは、分かれ道ごと取り除き、記録に書く。
@@ -1355,7 +1420,7 @@ impl TalkClock {
 
 ### Unit Tests
 
-- **型と丸め**（1.3〜1.6・3.2〜3.4・3.8）: 足し引きの結果の型・端での張り付きと `checked_*` の `None`・`from_millis` のちょうどの値・秒からの丸め（1 つ手前・ちょうど中間・1 つ先）・有限でない値と負の `Err`・符号つきのミリ秒の端の張り付き・`TryFrom<Duration>`（100ns の倍数はちょうど・49ns と 50ns と 51ns の端数の丸め・範囲の外だけが `Err`）。
+- **型と丸め**（1.3〜1.6・3.2〜3.4・3.8）: 足し引きの結果の型・端での張り付きと `checked_*` の `None`・`from_millis` のちょうどの値・秒からの丸め（1 つ手前・ちょうど中間・1 つ先）・有限でない値と負の `Err`・符号つきのミリ秒の端の張り付き・`TryFrom<Duration>`（100ns の倍数はちょうど・49ns と 50ns と 51ns の端数の丸め・範囲の外だけが `Err`）・`TimeSpan::try_from_ticks`（0 と正は作れる・負は `Err`）。
 - **倍率の写し**（5.6・5.11・3.6）:
   - 食い違わない事: いくつもの倍率（1・0.5・2・1/3・1e-6・1e6）と台本の時刻について、`G(s) − 1`・`G(s)`・`G(s) + 1` の 3 点で「`e ≥ G(s)`」と「`F(e) ≥ s`」が同じである事。F が減らない事。倍率 1 が恒等である事。届かない時の `None`。
   - 届く前に「届いた」にならない事（決まった期待の値）: 倍率 0.1 で `G(1) = 10`・`G(1,000,000) = 10,000,000`。倍率 0.25 で `G(1,000,000) = 4,000,000`・`G(1,000,001) = 4,000,004`。倍率 0.3 で `G(3) = 10`・`G(300,000) = 1,000,000`・`G(1,000,000) = 3,333,334`。倍率 0.5 で `G(500,000) = 1,000,000`・`G(1,000,001) = 2,000,002`。倍率 2 で `G(1,000,000) = 500,000`・`G(1,000,001) = 500,001`。倍率 3 で `G(3) = 1`・`G(1,000,000) = 333,334`。
@@ -1366,15 +1431,17 @@ impl TalkClock {
 - **時計**（2.2・2.4）: 続けて読んだ値が戻らない事・OS の関数の値と同じ物差しである事（前後で挟む）。
 - **文字の形**（7.8）: `Display` と `FromStr` の往復が、端の値を含めて等しい事。
 - **時刻の表**（4.4・11.2〜11.12・13.1・13.4・13.6）: ちょうどの刻みで届く・起点より前の刻みで届かない・置き直しの後に新しい起点で届く・1 件ずつ取り出して間で置き直す・区切りの間の置き直し・同じ時刻の 2 度目（置き直し無しは 0 件・前への置き直しの後は新しい分だけ）・何度置き直しても落とさず 2 度届けず順を保つ・下の端を越える置き直しで結果が変わらない・遅れた刻みでも発火時刻が「起点＋相対」・置き直しが返す知らせの中身（効く時刻は渡した現在の時刻・新しい起点・前の起点）・起点が変わらない置き直しは `None`。
-- **届いた物を持つ列**（12.4・12.9・12.10・18.1・18.4）: 頭の物の時刻が来るまで、後ろの物を出さない・合図は「起点＋`at` ≤ フレームの時刻」で出る・知らせは効く時刻で出て、起点が替わり、`before` が前の起点での台本の時刻である・同じ効く時刻の知らせは、届いた順に全部出る・起点より前のフレームの時刻では、合図が出ず、台本の時刻が負か無い・起点の知らせを 1 つも受けていない列は、合図を受け取らない・絶対の時刻の物と、時刻を持たない物の出方・同じ物の列を、1 つずつ入れても、まとめて入れても、同じフレームの時刻で、同じ物が同じ順に出る。
+- **届いた物を持つ列**（12.4・12.10・18.1・18.4）: 頭の物の時刻が来るまで、後ろの物を出さない（後ろの物の時刻が、先に来ていても）・時刻がフレームの時刻以前の物が、届いた順に出る・ちょうどの時刻で出る・時刻を持たない物は、前の物が出た同じ呼び出しで出る・列の頭に在る、時刻を持たない物は、すぐ出る・`waiting_until` が、待っている頭の物の時刻を返し、空なら `None` を返す・同じ物の列を、1 つずつ入れても、まとめて入れても、同じフレームの時刻で、同じ物が同じ順に出る。
 - **コンパイルの結果**（5.2・5.4）: 区間と引き金の時刻が、storyboard の頭からの隔たりである事。同じコンパイルの結果を、違う開始の時刻で始めても、値と引き金が、開始の時刻の差だけずれて同じである事。
-- **終わりの予定の時刻**（5.5）: 1 回だけの再生・待ちの無い有限のループ（最後の周回の終わり）・待ちが決まった値の有限のループ・待ちを引く有限のループ（`None`。最後の周回に入った後の `resume` は、終わりの時刻を返す）・終わらないループ（`None`）。止めて戻した後の値が、止めていた長さだけ後ろへずれる事。
+- **終わりの予定の時刻**（5.5）: 1 回だけの再生・待ちの無い有限のループ（最後の周回の終わり）・待ちが決まった値の有限のループ・待ちを引く有限のループ（`None`。最後の周回に入った後の `resume` は、終わりの時刻を返す）・終わらないループ（`None`）。止めて戻した後の値が、止めていた長さだけ後ろへずれる事。終わりの期限を置いた後の `resume` が、期限と終わりの時刻の早い方を返す事（終わらないループは、期限）。
 - **止めて戻す**（10.1〜10.5）: 戻した直後の値が止めた時点の値と等しい・止めている間はどの時刻でも同じ値・止めた時刻より前で戻しても続く・`transition` で止める／戻す道が `Err`・止めている間に終わりの期限が来たら、その刻みで終わりの値になり、期限の前は止めた時点の値のまま。
 - **1 字ごとの間隔**（7.10・9.8）: 今の式を有理数で誤差なく計算した値と比べる。割り切れない長さ（100 ms を 3 字。頭から始まる塊は 0・333,333・666,667、続く塊は 0・333,334・666,667）・ちょうど中間（長さ 10,000 を 32 字。頭から始まる塊の最後の字は 9,688、続く塊は 0・313・625、`p = 0` なら 312・625）・続く塊の最後の字が `p + duration` ちょうど・前の字が遠くて頭から始まる塊（`p × count + duration < 0`）・長さ 0 の塊・字数 0 の塊（何も返さない）。塊を 3 つ以上続けた列（長さと字数を変えて）で、どの字の差も 100ns 未満で、隔たりが減らない事。割り切れる長さ（字数 × 50 ms）で、今の値と等しい事。
-- **口パク**（12.7・18.6）: 1 回の刻みで区切りを 3 つ越えた時の再生の始まりが、1 つずつ越えた時と同じ・同じ時刻の字では 1 回・再生中の区切りは見送る。確かめるのは、刻みを済ませる前に合図と知らせが届いている時の一致までで、1 刻みより細かい一致（合図が、その時刻の刻みより後に届いた時）は、テストにしない。
+- **口パク**（12.7・18.6）: 1 回の刻みで区切りを 3 つ越えた時の再生の始まりが、1 つずつ越えた時と同じ・同じ時刻の字では 1 回・再生中の区切りは見送る。確かめるのは、刻みを済ませる前に合図と知らせが届いている時の一致までで、合図や知らせが、その時刻の刻みより後に届いた時の一致は、テストにしない。
 - **seriko の、姿を変える指令**（18.1・18.6・18.7）: 面の切り替えの合図を、発火時刻のすぐ後に処理しても、何刻みか後に処理しても、`always` と `runonce` のコマ（発火時刻からの経った長さで決まる）と、口パクの数え始め（発火時刻までに現れた字の数）が同じ。発火時刻までの字の区切りが、替える前の面で先に判定される。着せ替え・バルーンの面・手で組んだ合図・窓の知らせも、渡した時刻が出来事の時刻になる。
-- **seriko の知らせ**（12.6）: 効く時刻以前の字は動かない・後の字は動いた長さだけ動く・前へ動いて効く時刻より前になる字は、効く時刻になる・最初の起点の知らせでは何も動かない。
-- **文字の層の、時刻の来た合図を当てる口**（12.5・18.1・18.6）: 台本の時刻 3 秒の消去が、3 秒より前のフレームでは効かず、3 秒に届いたフレームで効く（改行・カーソル・書体・アンカー・印も同じ）・同じ時刻の合図が台本の順に当たる・遅れて届いた合図が、次のフレームで順に全部当たる・先渡しが、前の台詞の合図の後・その台詞の最初の合図の前に当たり、区間の番号がずれない・トークの終わりの印が、選択肢の合図の後に当たる。
+- **seriko の知らせ**（12.6）: 効く時刻以前の字は動かない・後の字は動いた長さだけ動く・前へ動いて効く時刻より前になる字は、効く時刻になる・続けて 2 回（後ろへ動かして、前へ戻す）・受け口は、最初の起点の知らせを送らない。
+- **文字の層の、時刻の来た合図を当てる口**（12.10・18.1・18.4・18.6）: 発火時刻が 3 秒後の消去が、それより前のフレームでは効かず、フレームの時刻が発火時刻に届いたフレームで効く（改行・カーソル・書体・アンカー・印も同じ）・届いたフレームの時刻より後の発火時刻を持つ合図が、そのフレームでは当たらず、`advance` が、その時刻を返す・同じ時刻の合図が台本の順に当たる・遅れて届いた合図が、次のフレームで順に全部当たる・1 字 50 ms の塊が 250 ms 遅れて届くと、過ぎた字が一度に現れ、残りが元の間隔で現れる・先渡しが、前の台詞の合図の後・その台詞の最初の合図の前に当たり、区間の番号がずれない・トークの終わりの印が、選択肢の合図の後に当たる・列が空の時に届いた先渡しと印が、その場で当たる・画面に出た選択肢への押下が、選択待ちの始まりの印の後なら、選択肢を済みにする。
+- **文字の層の、置き直しの知らせ**（12.4・12.5）: 効く時刻以前の字は動かない・後の字は動いた長さだけ動く・前へ動いて効く時刻より前になる字は、効く時刻に現れる・知らせより前に届いて、まだ当たっていない合図の字も、当てた後に動く（合図を先に当てた時と、同じ時刻になる）・知らせの後に届いた合図が、効く時刻より前のフレームで当たらない・受け口は、最初の起点の知らせを送らない。
+- **バルーンの寿命**（12.8・12.10・18.1）: 知らせが、フレームの時刻が知らせの時刻に届いたフレームで効く（その前のフレームでは効かない）・表示の終わりと期限が絶対の時刻で、フレームの時刻と比べて切れる・置き直しの知らせで、効く時刻より後の表示の終わりだけが動き、期限は動かない・受け口が、覚えている最大を同じ決まりで動かす（前へ動いた後の合図の終わりが送られる）・そのトークの最初の合図より前の置き直しの知らせは、送られない・利用者の中断が、取り出したフレームで効く・トークの終わりが、時計の読みを運ぶ。
 
 ### Integration Tests
 
@@ -1383,8 +1450,15 @@ impl TalkClock {
 - **再生機**（12.1〜12.3・13.2〜13.7・18.3・18.4）: 受け口が、登録の時に、どの合図よりも前に、最初の起点（効く時刻は起点・前の起点は無い）を受ける・後から登録された受け口は、登録の時の起点を受ける・置き直しの前の合図 → 知らせ → 後の合図の順・知らせの効く時刻が、置き直しに渡した現在の時刻である・起点が変わらない置き直しでは、知らせが出ない・知らせの口を上書きしない受け口の動きが変わらない・起点が過ぎた台本で、過ぎた合図が全部、順に、それぞれの発火時刻で届く・起点が来ていない台本で何も届かない・包む受け口（`StrictTap`）が知らせを中へ通す・先渡しの後に置き直すと、`emit` の `fire_time` が新しい起点＋`at` で、先渡しで見せた値と置き直しの分だけ違う（置き直さなければ等しい）。
 - **区切りを解く口**（2.8・18.1）: 解いただけでは、何も配られず、完了にもならない・解いた直後に、同じ時刻で `tick` を呼ぶと、区切りの後ろの届いた項目が配られ、占有の終わりを過ぎていれば、新しい刻みを待たずに完了する・トークのスレッド（`drive.rs`）を通して、選択を解いたその場で完了の知らせが出る（今のテストの、呼び手から見える期待のまま）。
 - **絶対の刻み**（14.1〜14.7・11.9・11.10）: dispatcher が、刻みの時刻を変えずに送る（台詞ごとの値に依らない）・最初の刻みが起点になる・起点の置き直しが無い再生で、合図の届く刻みと順が変わらない・`ChoiceWaiting` の表示の終わりが換算無しで kanade へ着く・トークのスレッドへ同じ時刻と前の時刻の刻みを送っても、何も 2 度届かない（守りを取り除いた後も、今のテストの期待のまま）・トークのスレッドが、同じ時刻の刻みを再生機まで渡す（再生機の `tick` が、同じ時刻で 2 度呼ばれる）。
-- **受け手の追従**（12.4〜12.10）: 知らせの効く時刻から先、台本の時刻が長さと向きのとおりに動く（効く時刻より前のフレームは、前の起点のまま）・効く時刻より前に現れた字は、後ろへ動いても現れたまま・まだ現れていない字が、新しい起点に付いて来る（前へ動いて時刻の来ている字は、効く時刻のフレームで一度に現れる）・まだ当てていない合図が、新しい起点で時刻の来た時に当たる・バルーンの寿命が同じ台本の時刻を読む・最初の合図が届く前から、受け手が起点を知っている・「今」が起点より前の時に、その台本の字が現れず、指令も当たらない・合図の届く時刻を揺らしても、フレームが見せる物が変わらない・次の台本の起点に届く前のフレームは、前の再生の姿のままである。
-- **どこで再生しても同じ**（18.5・18.7）: 同じ台本・同じ起点・同じ時刻の列を、2 組の受け手へ、届く順と届く時刻を変えて与える（片方は、それぞれの時刻に・片方は、遅れてまとめて）。台本には、字・消去と改行・面の切り替え・待ちの指定を入れる。同じ観測の時刻で、字の現れた数・当たった指令（文字の層の状態）・口パクの再生の始まり・面の切り替えで始まったアニメのコマ・バルーンの寿命の判断が等しい。
+- **受け手の追従**（12.4〜12.10）:
+  - 置き直しの知らせの後、まだ現れていない字が、動いた長さと向きのとおりに動く（効く時刻より前のフレームは、変わらない）・効く時刻以前に現れた字は、後ろへ動いても現れたまま・前へ動いて時刻の来ている字は、効く時刻のフレームで一度に現れる・文字の層と seriko が、同じ字に、同じ絶対の時刻を持つ。
+  - バルーンの寿命が、文字の層と同じフレームの時刻で判断し、同じフレームの文字の層の状態から字の数を読む・寿命の線と文字の線の、片方にだけ先に届いたフレームで、可視性の相が読む字の数と、文字の相が描く字が同じである。
+  - フレームの時刻が発火時刻より前の時に、その合図の字が現れず、指令も当たらない・合図の届く時刻を揺らしても、フレームが見せる物が変わらない・次の台本の合図の発火時刻に届く前のフレームは、前の再生の姿のままである。
+  - 起点が先の時刻の台本を、最初の刻みの前に置き直して刻むと、文字の層・寿命の時計・seriko のどれも、起点の時刻を待たずに、置き直した後の発火時刻で当たる。
+  - 中断された台詞の残りの字が、後始末の合図だけの台本が続いても、文字の層と seriko で、同じ絶対の時刻に現れる。
+  - 後ろへ動かす知らせが、効く時刻より後のフレームを回してから着いた時、着いた後のフレームが、時刻どおりに受けた受け手と同じ字を見せる。
+  - 時刻の来ていない物が列に残ったフレームが、その時刻に起こす予約を置く。
+- **どこで再生しても同じ**（18.5・18.7）: 同じ台本・同じ起点・同じ時刻の列を、2 組の受け手へ、届く順と届く時刻を変えて与える（片方は、それぞれの時刻に・片方は、遅れてまとめて）。台本には、字・消去と改行・面の切り替え・待ちの指定を入れる。同じ観測の時刻で、字の現れた数・当たった指令（文字の層の状態）・口パクの再生の始まり・面の切り替えで始まったアニメのコマ・バルーンの寿命の判断が等しい（口パクは、刻みを済ませる前に合図と知らせが届いている列で比べる）。
   - 置き直しをはさむ列を足す: 途中で、前へ動かす置き直し（まだ現れていない字の一部が、効く時刻に一度に現れる）と、後ろへ動かす置き直し（もう現れた字は現れたまま・残りが遅れる）を 1 回ずつ入れる。片方の受け手は、合図と知らせをそれぞれの時刻に受け、片方は、全部を遅れてまとめて受ける。全部を受けた後の観測の時刻のどれでも、上の物が等しい。文字の層とバルーンの寿命は、途中の観測の時刻（効く時刻の前と後）でも等しい。
   - 文字の層は、フレームの時刻が合図の発火時刻より前の観測（合図が先に届いている）でも、その合図の中身を見せない。
 - **眠り**（17.6・17.10）: 偽の時計を止めている間に、kanade の締め切り・台本の再生・seriko のコマが進まない。時計を動かすと、止めた所から続く。
@@ -1394,8 +1468,9 @@ impl TalkClock {
 ### 締めの検査
 
 - **公開の口に `f64` の秒が無い**（15.4）: dola（`dola::time` を含む）の `pub` の欄・引数・戻り値に出る `f64` を全部挙げ、次の物だけである事を記録する: 倍率（`time_scale`・`TimeScale`）・進み具合と比（`ratio_of`・`mul_unit`）・時間で変わる値そのもの・イージングの引数・作者が書く単位から変える口の引数（`try_from_secs_f64` の `secs`）。秒の実数を返す `pub` の口（戻り値と欄）は 0 件である（`as_secs_f64` の名前の口が、dola に無い事も検索で確かめる）。
-- **残っていない物の検索**（2.6・8.4・15.5・17.2）: `sum_on_ms_grid`・`runtime::clock`・`GetTickCount64`・`MonotonicMs`・`QueryPerformance`（dola の中）・`SerikoClock`・`ClockedTextSink`・`settle_completion_after_resolve`・`compile_storyboard` の 3 つ目の引数・実数の秒と型を行き来するだけの口。どれも 0 件。0 件と書く前に、検索の式が、在ると分かっている字に当たる事を確かめる。
-- **届いた時に当てる所が残っていない事**（18.1）: 文字の層の受け口（UI のスレッドで受け取る所）が、状態を当てる関数を直に呼んでいない事・seriko が時計を読む所が無い事を、検索で確かめる。
+- **残っていない物の検索**（2.6・8.4・15.5・17.2）: `sum_on_ms_grid`・`runtime::clock`・`GetTickCount64`・`MonotonicMs`・`QueryPerformance`（dola の中）・`SerikoClock`・`ClockedTextSink`・`TalkEpoch`・`observe_cue`・`resolve_talk_time`・`now_talk_time`・`base_now`・`TimeUnknown`・`settle_completion_after_resolve`・`compile_storyboard` の 3 つ目の引数・実数の秒と型を行き来するだけの口。どれも 0 件。0 件と書く前に、検索の式が、在ると分かっている字に当たる事を確かめる。
+- **届いた時に当てる所が残っていない事**（18.1）: 文字の層の、UI のスレッドで受け取る所が、合図と置き直しの知らせを、状態を当てる関数へ直に渡していない事（時刻を持たない物を、列が空の時に当てる所を除く）・seriko が時計を読む所が無い事を、検索で確かめる。
+- **受け手が起点を持たない事**（12.9・18.2）: 文字の層・バルーンの寿命の時計・seriko・`TalkClock` に、起点を持つ欄と、台本の時刻を受ける・返す口（`talk_time` の名前の引数を含む）が無い事を、検索で確かめる。
 - 結果は `migration-ledger.md` に書く。
 
 ## Migration Strategy
@@ -1449,8 +1524,10 @@ graph TB
 ### 継ぎを置かない・前半と後半
 
 - **継ぎを置かない**: 実数の秒から型へ黙って変わる仮の変換は、置かない。そういう変換が在ると、まだ替えていない呼び出しが丸めつきで通り、替え残しがコンパイルの誤りに出ない。置かなければ、要件 15 の 5 は「置かなかった」で満たせる。
-- **前半（型の付け替え）**: 下の crate から上へ、型を替える。合図と刻みの形は、前半で最後の形まで替える（`TalkCue` の `fire_time`・`SakuraMsg::Tick(TimePoint)`・`ChoiceWaiting` の欄・`CueSheet` の起点の `Option`）。値の意味と振る舞いは変えない: dispatcher は今の「台詞の最初の刻みからの隔たり」を送り、`TalkClock` と seriko は今の見積もりのまま、文字の層は届いた合図をその場で当てるまま、seriko は合図を処理する時に時計を読むまま、時刻の表は今の `tick`＋`ready` のまま、`fire_time` は台本の起点＋`at` を入れる。storyboard の層の口の形（`compile_storyboard` から開始の時刻を外す事・終わりの予定の時刻の意味）は、前半で最後の形にする（全部の呼び出しを、前半で 1 度だけ書き直す）。
-- **後半（振る舞い）**: 止めて戻す・時刻の表の取り出しと置き直し（表の項目を `PendingCue` へ替える事を含む）・起点の知らせ（最初の起点と置き直し）・取り出す時の発火時刻・区切りを解く口を時刻に依らなくする事・トークのスレッドの同じ時刻の守りを取り除く事・絶対の刻み・知らせから起点を読む受け手・届いた物を時刻が来るまで持つ列（文字の層とバルーンの寿命）・seriko の出来事の時刻を発火時刻にする事と、時計を外す事・手で組む合図と窓の知らせの時刻・口パクの決まり。
+- **前半（型の付け替え）**: 下の crate から上へ、型を替える。dola の口と、crate をまたいで運ぶ合図・刻み・選択待ちの知らせの形は、前半で最後の形まで替える（`TalkCue` の `fire_time`・`SakuraMsg::Tick(TimePoint)`・`ChoiceWaiting` の欄・`CueSheet` の起点の `Option`）。値の意味と振る舞いは変えない: dispatcher は今の「台詞の最初の刻みからの隔たり」を送り、`TalkClock` と seriko は今の見積もりのまま、文字の層は届いた合図をその場で当てるまま、seriko は合図を処理する時に時計を読むまま、時刻の表は今の `tick`＋`ready` のまま、`fire_time` は台本の起点＋`at` を入れる。storyboard の層の口の形（`compile_storyboard` から開始の時刻を外す事・終わりの予定の時刻の意味）は、前半で最後の形にする（全部の呼び出しを、前半で 1 度だけ書き直す）。
+  - **前半の間、時刻の型に、時計の物差しでない値が入る所**: dispatcher が送る刻みは「台詞の最初の刻みからの隔たり」のままなので、`SakuraMsg::Tick(TimePoint)`・台本の起点（0）・合図の `fire_time`（`at` と同じ値）・`ChoiceWaiting.display_end: TimePoint` は、時刻の型に、その隔たりを入れて運ぶ。型の意味（時計と同じ物差しの時刻）と値が合わないのは、前半の間だけである。後半の 2 で、値が時計の読みになり、dispatcher の `base_now` は消える（締めの検索で確かめる）。
+  - **後半でもう一度替わる口**: 受け手の側の口は、前半では、今の意味（台本の時刻・見積もりの起点・seriko の時計）のまま型だけを替え、後半で、もう一度替わる。当たるのは、文字の層の `present_frame`・`visible_glyphs`・`balloon_shown_glyphs`・`RevealSchedule`・`run_text_phase` の時刻の引数、`TalkLifecycleSignal` の形、`TalkClock` の口、`SerikoClock` と `spawn_seriko_clocked`、`SerikoMsg::Stage` と `send_stage`、`hover_inject` の時刻である。これらを名指すテストのファイルは、前半と後半の 2 度、触る（後半の見込みに入れてある）。
+- **後半（振る舞い）**: 止めて戻す・時刻の表の取り出しと置き直し（表の項目を `PendingCue` へ替える事を含む）・起点の知らせ（最初の起点と置き直し）・取り出す時の発火時刻・区切りを解く口を時刻に依らなくする事・トークのスレッドの同じ時刻の守りを取り除く事・絶対の刻み・受け手が、受け取った物を絶対の時刻で持つ事（起点の見積もりをやめ、起点を持たない）・届いた物を時刻が来るまで持つ列（文字の層とバルーンの寿命）・置き直しの知らせの受け方・フレームの頭で文字の層を進める事・seriko の出来事の時刻を発火時刻にする事と、時計を外す事・手で組む合図と窓の知らせの時刻・口パクの決まり。
 - **分ける理由**: 要件 9 の 1（付け替えで結果が変わらない）と 9 の 6（変えた所の前後の期待）を、別々の確かめで示すためである。前半の終わりの全体テストは「ミリ秒の格子に載る入力と、表せる入力について、同じ入力から同じ結果」を示し、後半のテストは、変えた所を名指しで示す。
 - **前半の全体テストが示す事と、示さない事**: 前半の全体テストは、既存のテストの期待を、ちょうどの 100ns の値へ写して通す。示すのは、既存のテストが使う入力（ミリ秒の格子に載る時刻・表せる値）について、結果が変わらない事である。下の「前半に入る、振る舞いの変化」は、型を替えると一緒に入る変化で、前半の全体テストが「変わらない」と示す範囲の外に在る。どれも、変える前の期待と変えた後の期待を、テストの名前で記録に名指しする（記録の 3）。
 - **前半に入る、振る舞いの変化**（型と一緒に入り、後半へ分けられない物）:
@@ -1485,11 +1562,11 @@ graph TB
 | 4 | `areka-runtime`。土台と結線を先に、その後に 5 家族 | 1 → 5 | 赤 | 同上 | 7 |
 | 5 | `areka-input` → `areka-session` → 本体（5 家族）・先進坑 | 1 → 5 | 本体が済めば緑 | `cargo test -p <crate>`。先進坑はそのワークスペースで `cargo check` | 5 |
 | 6 | 前半の締め: 残っていない物の検索・記録・**全体テスト 1 回目** | 1 | 緑 | `pwsh -NoProfile -File tools/test-all.ps1 -Format` | 1 |
-| 7 | 後半。順は下 | 2〜3 | 緑のまま | 要件ごとのテストと `cargo test -p <crate>` | 16 |
+| 7 | 後半。順は下 | 2〜3 | 順の 1〜3 は緑のまま。4 は赤（`areka-emo-text`・`areka-seriko` の本体が口を替えてから、`areka-runtime`・`areka-input`・`areka-session`・本体の直しが済むまで）。5 は緑 | 緑の間は、要件ごとのテストと `cargo test -p <crate>`。4 の赤の間は、`cargo test -p areka-sakura`・`-p areka-emo-text`・`-p areka-seriko`（下の crate は、自分だけで緑になる）と、上の crate の `cargo check -p <crate> --all-targets` の誤りの一覧 | 20〜24 |
 | 8 | 文書と締めの検査 | 2 | 緑 | 検索の結果を記録へ | 3 |
 | 完了 | **全体テスト 2 回目** | — | 緑 | `/kiro-complete` の全体テスト（`tools/test-all.ps1 -Format -License`・アーカイブの後の 1 回） | — |
 
-- **赤の間**（段 1 の始まりから段 5 の終わりまで）: `cargo build --workspace`・全体の clippy・`tools/test-all.ps1` は通らない。使える確かめは、crate ごとの `cargo test -p`（下の crate が緑なら組める）・`cargo check -p <crate> --all-targets`・`cargo fmt`。コミットの時に組む仕掛けは無いので、赤の間もブランチへコミットできる。
+- **赤の間**（段 1 の始まりから段 5 の終わりまでと、段 7 の順の 4 の間）: `cargo build --workspace`・全体の clippy・`tools/test-all.ps1` は通らない。使える確かめは、crate ごとの `cargo test -p`（下の crate が緑なら組める）・`cargo check -p <crate> --all-targets`・`cargo fmt`。コミットの時に組む仕掛けは無いので、赤の間もブランチへコミットできる。
 - **段の入口**: 上の段の作業者は、下の段が緑になる前から編集を始めてよい。確かめは、下の段の crate が `cargo test -p` で緑になってから。
 - **組む確かめは 1 本ずつ**: 並行にできるのは編集で、`cargo` を回す確かめは同じ時に 1 本だけにする（同じ `target` の錠と、重いビルドを同時に走らせない決まり）。
 - **全体テストは 2 回**: 段 6 と完了の時だけ。途中の確かめは crate ごとに絞る。
@@ -1498,11 +1575,11 @@ graph TB
 
 1. **止めて戻す**（dola の中だけ・要件 10）と、**時刻の表と再生機**（`pop_due`・現在の時刻を受ける `reanchor` と `shift_origin`・`OriginNotice`・`step`・`origin_set` と、登録の時の最初の起点・取り出す時の発火時刻・時刻に依らない解く口・要件 11・12 の 1〜3・13）。2 つは別のファイルで、並べられる。時刻の表の `tick`＋`ready` を使う既存のテストは、同じ確かめのまま、取り出しを集める手助けを通す形へ直す（期待は変えない）。解く口だけで完了を期待していたテストは、解く → `tick` へ直す（記録の 3）。dola の外に、時刻の表の口を直に呼ぶ所は無い。受け手は、まだ知らせを読まないので（既定は何もしない）、ここまででワークスペースは緑である。
 2. **絶対の刻み**（dispatcher・`drive.rs`・`ChoiceWaiting` の値の意味・要件 14・17 の 8）と、**`drive.rs` の同じ時刻の守りを取り除く事**（要件 11 の 9・10。1 の `pop_due` の後でなければならない）。受け手が見積もりのままでも、テストは緑である。
-3. **受け手の列の型**（`areka-sakura` の `held.rs` と、その単体テスト・要件 12 の 4・18 の 1）。足すだけで、4 の 2 つの家族が使う。1 の `OriginNotice` の後でなければならない。2 と並べられる。
-4. **知らせから起点を読む受け手**。3 つは別の crate で、並べられる。2 と 3 の後でなければならない（刻みが相対のままだと、起点は 0 で、本物の時計の「今」と合わない）。
-   - 文字の層（`areka-emo-text`）: 届いた物を列に持ち、`advance` で当てる。受け口が知らせを受ける。
-   - seriko（`areka-seriko`）: 字の現れる時刻を絶対の時刻で持つ・知らせ・姿を変える指令の出来事の時刻を発火時刻にする・窓の知らせが時刻を受ける・書き出しの進め方・時計を外す・口パクの決まり。
-   - 結線とバルーンの寿命（`areka-runtime`）: フレームの頭で `advance` を呼ぶ・`TalkClock` から起点を外し、`ClockedTextSink` を消す・寿命の知らせを列で持つ・手で組む合図と窓の知らせに `FrameTime` を付ける。この家族は、上の 2 つの口（`advance`・`send_stage` の時刻の引数）を使うので、2 つの本体の後に確かめる。`areka-input`・`areka-session`・本体の、文字の層へ合図を直に入れるテストと、`spawn_seriko_clocked` を呼ぶ所の直しも、ここに続ける。
+3. **受け手の列の型**（`areka-sakura` の `held.rs` と、その単体テスト・要件 12 の 4・18 の 1）。足すだけで、4 の 2 つの家族が使う。時刻の型だけを使うので、1・2 と並べられる。
+4. **絶対の時刻で持つ受け手**。3 つは別の crate で、編集は並べられる。1・2・3 の後でなければならない（刻みが相対のままだと、合図の `fire_time` は時計の物差しに載らず、フレームの時刻と比べられない）。ここは赤になる。文字の層と seriko の本体が口を替えてから、結線と、その上の crate の直しが済むまで、上の crate は組めない。
+   - 文字の層（`areka-emo-text`）: 届いた物を列に持ち、`advance` で当てる。字の現れる時刻を絶対の時刻で積む。提示と読み口が、フレームの時刻を受ける。受け口が、置き直しの知らせを送る。
+   - seriko（`areka-seriko`）: 字の現れる時刻を絶対の時刻で持つ・置き直しの知らせ・姿を変える指令の出来事の時刻を発火時刻にする・窓の知らせが時刻を受ける・書き出しの進め方・時計を外す・口パクの決まり。
+   - 結線とバルーンの寿命（`areka-runtime`）: フレームの頭に、進める相を置く・`TalkClock` から起点を外し、`ClockedTextSink` を消す・寿命の知らせを絶対の時刻で運び、列で持つ・判断をフレームの時刻で行う・次のフレームを起こす予約・手で組む合図と窓の知らせに `FrameTime` を付ける。この家族は、上の 2 つの口（`advance`・提示と読み口・`send_stage` の時刻の引数）を使うので、2 つの本体の後に確かめる。`areka-input`（利用者の中断の知らせの時刻を含む）・`areka-session`・本体の、文字の層へ合図を直に入れるテストと、`spawn_seriko_clocked` を呼ぶ所の直しも、ここに続ける。
 5. **全体の成り立ちのテスト**（要件 18 の 5・7＝置き直しをはさむ列を含む、眠り＝17 の 6・10、`OnSecondChange`＝17 の 7）。
 
 ### 先に替える共有のファイル
@@ -1516,14 +1593,17 @@ graph TB
 | `dola` | `src/cue/*`（本体の全部）・`src/cue/test_support.rs` | 互いに呼び合う。`carrier_cue` は外の 35 ファイルが名前で使う |
 | `dola` | `tests/cue/test_support.rs` | 引数の形で、結合テストの書き方が決まる |
 | `dola` | `src/compile/types.rs` | コンパイルの側と runtime の側の両方が読む。1 周の長さを求める 1 本の関数（`CompiledStoryboard::lap_length`）も、ここに置く |
+| `dola` | `tests/trigger/common/mod.rs` | 文書を組む手助け。3 つの家族のテスト（`compile_test.rs`・`runtime_test.rs`・`validation_test.rs`）が使う。持ち主は、土台の家族 |
 | `areka-talk` | `Cargo.toml`・`src/lib.rs` | `areka-sakura`・`areka-kanade`・`areka-ghost` が使う |
 | `areka-kanade`・`areka-ghost` | `Cargo.toml`（dola の行） | その crate のほかの家族が、`dola::time` を取り込む |
-| `areka-sakura` | `contract.rs`・`duration.rs`・`reveal.rs` | 上の crate の全部が受ける |
+| `areka-sakura` | `contract.rs`（時刻の型の再公開を含む）・`duration.rs`・`reveal.rs` | 上の crate の全部が受ける |
+| `wintf`・`areka-sakura`・`areka-kanade`・`areka-emo-text`・`areka-input` | `Cargo.toml` の `[dev-dependencies]` の、機能 `test-support` を付けた dola の行 | その crate のテストの家族が、テストの組み立て（`at_ms`・`ms`・`delta_ms`）を使う。持ち主は、その crate の「先」の家族（`areka-input` は 1 家族） |
 | `areka-sakura` | `held.rs`（後半） | `areka-emo-text` と `areka-runtime` が使う |
-| `areka-emo-text` | `actor_held.rs` の `advance`・`sink.rs` の知らせの口（後半） | `areka-runtime` のフレームの頭と、上の crate のテストが呼ぶ |
+| `areka-emo-text` | `actor_held.rs` の `advance`・提示と読み口の時刻の引数・`sink.rs` の知らせの口（後半） | `areka-runtime` のフレームの頭と、上の crate のテストが呼ぶ |
+| `areka-runtime` | `talk_lifecycle.rs` の知らせの形・`talk_clock.rs`（後半） | 判断・相・通しの家族と、`areka-input` の押下の口が使う |
 | `areka-seriko` | `actor.rs` の `send_stage` の時刻の引数と、時計を外した起動の口（後半） | `areka-runtime`・`areka-session`・本体が呼ぶ |
 | `wintf` | `ecs/graphics/core.rs` | wintf の中の 3 家族と、上の crate が読む |
-| `areka-seriko`・`areka-emo-text`・`areka-kanade` | 共有の組み立て（`*_test_support.rs`・`tests/common/mod.rs`・`tests/support/*`） | テストの家族が使う |
+| `areka-seriko`・`areka-emo-text`・`areka-kanade` | 共有の組み立て（`*_test_support.rs`・`tests/common/mod.rs`・`tests/support/*`・`areka-kanade` の `tests/kanade/common/**`） | テストの家族が使う |
 | `areka-runtime` | 「土台と結線」の家族 | ほかの家族と上の crate が使う |
 | `areka-input`・`areka-session` | `*_test_support.rs` | 本体が使う |
 
@@ -1535,17 +1615,17 @@ graph TB
 - 全面を触る物（分ける前提で段取りを組む）: `wintf` の `typewriter/tests.rs`（944）・`areka-seriko` の `looper_tests.rs`（975）・`parts_tests.rs`（975）・`parts_trigger_tests.rs`（906）・`looper_talk_tests.rs`（861）・`areka-ghost` の `dispatcher_choice_tests.rs`（908）・dola の `tests/trigger/runtime_test.rs`（854）。
 - 触る量が小さい物（行を増やさない。増えるなら先に分ける）: `areka-ghost` の `tests/ghost/inproc_e2e_test.rs`（964）・`areka-kanade` の `schedule/events.rs`（941）・`schedule/steady.rs`（926）・`actor.rs`（873）・`areka-runtime` の `frame_test_support.rs`（939）・`balloon_visibility_phase.rs`（848）・`balloon_visibility_tests.rs`（847）・`areka-emo-text` の `lookahead_tests.rs`（901）・`actor.rs`（873）・`actor_present.rs`（866）・`areka-seriko` の `looper.rs`（887）・本体の `runtime_tests/spine_conformance_lap_tests.rs`（862）。
 - 行を増やさない手立ての 1 つ: テストの決まった時刻は、`dola::time::testing` の 1 語の組み立て（`at_ms`・`ms`・`delta_ms`）で書ける。この組み立てを置く理由は行数ではない（「文字の形と、テストの組み立て」の節）。
-- 新しく足す物は、新しいファイルへ置く（置き直しのテスト・要件 18 のテスト・文字の層の列と `advance`＝`actor_held.rs`・受け手の列の型＝`held.rs` ほか）。`areka-emo-text` の `actor.rs`（873）と `actor_present.rs`（866）には、列の中身を足さない。
+- 新しく足す物は、新しいファイルへ置く（置き直しのテスト・要件 18 のテスト・文字の層の列と `advance`＝`actor_held.rs`・寿命の列＝`balloon_visibility_held.rs`・受け手の列の型＝`held.rs` ほか）。`areka-emo-text` の `actor.rs`（873）と `actor_present.rs`（866）と、`areka-runtime` の `balloon_visibility_phase.rs`（848）には、列の中身を足さない。
 
 ### 記録
 
 `.kiro/specs/dola-interrupt-ticks/migration-ledger.md` に、次の 4 つを書く。
 
 1. **外したテストと理由**（9.4・9.5・9.7）: 表せない入力だけを確かめていた物（`compile_storyboard` の開始の時刻に NaN を渡す物を含む）・ミリ秒の格子の継ぎを確かめていた物・丸めそのものを確かめていた物・確かめていた事そのものが無くなった物（コンパイルの開始の時刻を足す事・`result.start_time`）。置き換えた先のテストの名前も書く。
-2. **取り除いた本番の分かれ道とログ**（7.9）: 有限でない刻み・有限でない終わり・NaN の周期・`base_now`・時計が無い時の合図と、時計が無い時の窓の知らせ（seriko）・トークのスレッドの同じ時刻の守り（`drive.rs` の `debug!`）・解いた直後に完了を確かめる処理（`settle_completion_after_resolve`）・cue の長さの clamp・storyboard の文書の検査の決まり（有限・0 以上・`LoopOffsetNegativeMin`／`Max`）・起点の見積もり（`TalkClock::observe_cue`・`ClockedTextSink`・seriko の `TalkEpoch`）・seriko の時計（`SerikoClock`・`spawn_seriko_clocked`・合図を処理する時刻を読む口）ほか。
+2. **取り除いた本番の分かれ道とログ**（7.9）: 有限でない刻み・有限でない終わり・NaN の周期・`base_now`・時計が無い時の合図と、時計が無い時の窓の知らせ（seriko）・トークのスレッドの同じ時刻の守り（`drive.rs` の `debug!`）・解いた直後に完了を確かめる処理（`settle_completion_after_resolve`）・cue の長さの clamp・storyboard の文書の検査の決まり（有限・0 以上・`LoopOffsetNegativeMin`／`Max`）・起点の見積もり（`TalkClock::observe_cue`・`ClockedTextSink`・seriko の `TalkEpoch`）・台本の時刻を求める所（`resolve_talk_time`・`TalkClock` の台本の時刻の口・起点がまだ無いフレームを見送る分かれ道）・止まった時刻が無い時の分かれ道（`TalkEnd::TimeUnknown` と、その `warn!`）・負の表示の終わりを 0 に寄せる所・seriko の時計（`SerikoClock`・`spawn_seriko_clocked`・合図を処理する時刻を読む口）ほか。
 3. **変える前の期待と、変えた後の期待**（9.6）: テストの名前で名指しする。前半と後半を分けて書く。
    - 前半に入る物（「継ぎを置かない・前半と後半」の節の一覧の全部）: 時計の出どころ（眠り・`OnSecondChange`・分解能・境の格子の 0 の位置・seriko のミリ秒への丸め）・1 字ごとの間隔の式・ミリ秒の格子に載らない時刻の足し算・台本の起点の `Option` と `from_sheet` の `Err`・表せない値を直していた所（cue の長さの clamp・時間切れの NaN と無限大）・storyboard の文書の失敗の出る所（検査から読み込みへ）・文書の値の上限・文書の秒の丸め・倍率が 1 でない再生の出来事の時刻・終わらないループの下限の境・終わりの予定の時刻の意味・出来事の直前の時刻・wintf の作者の秒・`Instruction::Wait` の 1 ms 未満・ログの欄・コンパイルの開始の時刻。
-   - 後半に入る物: 止めて戻す・時刻の表の取り出しと置き直し・区切りを解く口（解いただけでは完了にならない）・トークのスレッドの同じ時刻の守り・起点の見積もり（知らせから読む。最初の合図の前から起点を知っている）・刻みの値・口パクの決まり・「今」が起点より前の時の扱い・文字の層の、字のほかの指令が効く時（届いた時から、台本の時刻が来たフレームへ）・先渡しとトークの印が当たる時・バルーンの寿命の知らせが効く時・トークの終わりの時刻（台本の時刻から、絶対の時刻へ）・seriko の、姿を変える指令の出来事の時刻（合図を処理する時の時計の読みから、発火時刻へ）・窓の知らせと、手で組む合図の時刻（フレームの時刻）・書き出しの進め方の合図の時刻。
+   - 後半に入る物: 止めて戻す・時刻の表の取り出しと置き直し・区切りを解く口（解いただけでは完了にならない）・トークのスレッドの同じ時刻の守り・起点の見積もり（やめる。受け手は起点を持たず、合図の発火時刻で持つ）・刻みの値・口パクの決まり・フレームの時刻が発火時刻より前の時の扱い（0 に丸めない）・文字の層の、字のほかの指令が効く時（届いた時から、フレームの時刻が発火時刻に届いたフレームへ）・先渡しとトークの印が当たる時・バルーンの寿命の知らせが効く時と、その時刻（台本の時刻から、絶対の時刻へ。トークの終わりと利用者の中断は、時計の読み）・文字の相が、合図が 1 つも当たっていない間も提示を呼ぶ事・`hover_inject` の時刻（台本の時刻から、フレームの時刻へ）・seriko の、姿を変える指令の出来事の時刻（合図を処理する時の時計の読みから、発火時刻へ）・窓の知らせと、手で組む合図の時刻（フレームの時刻）・書き出しの進め方の合図の時刻。
 4. **締めの検査の結果**（15.4・15.5・17.2）。
 
 ## Open Questions
@@ -1554,6 +1634,6 @@ graph TB
 
 ## Supporting References
 
-- 調べの控えと、案の比べ: `research.md`（14 章が設計の段の分・16 章が設計の討議で決まった事）。
+- 調べの控えと、案の比べ: `research.md`（14 章が設計の段の分・16 章が設計の討議で決まった事・17 章が 2 回目の検証の後に決まった事）。
 - ノベルの作り直しの使い方: `doc/ideas/novel-redesign-2026-11-20/00-architecture.md`・`01-playback-control.md`・`02-parallel.md`・`04-sound.md`・`07-timed-values.md`。
 - 完了の関門: `.kiro/steering/workflow.md`（全体テストは、アーカイブの後の 1 回）。
