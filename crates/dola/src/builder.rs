@@ -136,15 +136,19 @@ impl Default for StoryboardBuilder {
 mod tests {
     use super::*;
     use crate::storyboard::LoopOffset;
+    use crate::time::TimeSpan;
 
     // Builder API の他のテストは `tests/general/builder_test.rs` にある。
 
     #[test]
     fn storyboard_builder_loop_offset_set() {
         let sb = StoryboardBuilder::new()
-            .loop_offset(LoopOffset::Scalar(1.5))
+            .loop_offset(LoopOffset::Scalar(TimeSpan::from_millis(1500)))
             .build();
-        assert_eq!(sb.loop_offset, Some(LoopOffset::Scalar(1.5)));
+        assert_eq!(
+            sb.loop_offset,
+            Some(LoopOffset::Scalar(TimeSpan::from_millis(1500)))
+        );
     }
 
     #[test]

@@ -128,7 +128,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 4.5, 9.1, 9.2_
 
-- [ ] 2.9 (P) storyboard の文書の定義の型と検査を、型で持つ
+- [x] 2.9 (P) storyboard の文書の定義の型と検査を、型で持つ
   - 遅れ・長さ・周回のずらし・キーフレームのずらし・引き金のずらしの欄を、設計の表の型にし、秒のアダプタを付ける（読む縁で 1 回だけ変える）。倍率は実数のまま
   - 検査から「長さが有限で 0 以上」の決まりと負の周回のずらしの誤りを消し、文書の定義の型の時間の欄の全部を見て上限を越える値を拒む（`DolaDocumentBuilder::build` と `compile_storyboard` が検査を通す）
   - `StoryboardBuilder` を型で書く形にする
@@ -802,3 +802,4 @@
 - 2.4: `command_tests.rs` の `cue_duration_defaults_to_zero_for_legacy_serialized_data` の名前とコメント（「旧シリアライズ資産」「後方互換」）と 488 行の「不透明秒数」は古い言い方のまま。中身は「duration の欄が無い時は 0」。12.2 の説明の直しで拾う。
 - 2.6〜2.13 の dola の結合テストは、lib が組めるまで型の検査に届かない（`cargo check --all-targets` の誤り 0 件は「まだ見られていない」）。2.14 の締めで初めて型と実行の誤りが出る。
 - 2.7: `tests/cue/schedule_test.rs` は設計の表で 2.7 の持ち物で、済んでいる。2.8 は `runtime_test*.rs` と `sink_test.rs` だけを持つ。
+- 2.9: 2.10 が直すテストは `tests/validation/schema_test.rs`（`invalid_numbers_are_rejected` の 4 件・`all_violations_are_collected`・`negative_scalar_loop_offset_reports_one_error`・`base_doc`）、`tests/runtime/loop_offset_test/loop_offset_validation.rs`（`v14_negative_min_error`・`v15_negative_max_error`・`v15_negative_scalar_error`・NaN の 3 本ほか）、`tests/validation/transition_test/transition_v13_nan.rs`、`tests/general/**`、`tests/trigger/{serde_test,validation_test}.rs`、`tests/runtime/loop_offset_test/loop_offset_serde.rs`。`tests/compile/boundary_test.rs` の NaN／負の delay・duration・trigger_start_offset のテスト（`invalid_delay_and_duration_are_rejected_before_compile`・`nan_delay_that_bypassed_overlap_check_is_rejected`・`between_nan_delay_is_rejected`・`nan_trigger_start_offset_is_rejected`・`toml_non_finite_numbers_are_rejected_by_validate` の時間の欄）はコンパイルの家族＝2.11 の持ち物。`compile/resolve.rs:266` の説明（有限・符号は validate が見る）は 2.11 で直す。

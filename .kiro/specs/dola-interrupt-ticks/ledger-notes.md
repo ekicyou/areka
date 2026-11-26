@@ -47,3 +47,10 @@
 
 - 外したテスト・分かれ道・ログは無い。足したテスト: `from_sheet_rejects_sheet_without_stamped_origin`。
 - 変える前後の期待: `broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time`（起点 100.0 秒 → `at_ms(100_000)`、期待の合図に発火時刻 100,000／100,500／101,500 ms を足した）。`is_completed_is_gated_by_occupancy_horizon_for_trailing_wait`（`absolute_end_time() - 0.01` → 終わりの 1 刻み手前、`end == at_ms(950)` を足した）。`occupancy_horizon_returns_anchor_plus_relative_horizon`（102.5 秒 → `at_ms(102_500)`、`sheet.absolute_end_time()` と `Some(..)` で比べる）。`occupancy_horizon_matches_completion_threshold`（1 刻み手前 `at_ms(11_999)` で未完了を足した）。ほかは型だけ替えた。起点の無かった台本は起点 0 を押して組む。
+
+## 2.9
+
+- 取り除いた本番の分かれ道（`validate/rules.rs`）: `validate_transition_numbers` の delay・duration の「有限で 0 以上」（`InvalidNumber`）・`validate_numbers` の loop_offset・loop_offset.min／max・offset・trigger_start_offset の「有限」（`InvalidNumber`）・`validate_loop_offset` の `LoopOffsetNegativeMin`／`Max`。取り除いたログは無い。
+- 足した分かれ道: 文書の時間の欄の全部（名前つきとインラインの transition の delay・duration、loop_offset の Scalar と Range の min・max、`KeyframeRef::WithOffset.offset`、`trigger_start_offset`）を文書の値の上限で見て `TimeOutOfDocumentRange` にする。
+- 変える前後の期待: `builder.rs` の `storyboard_builder_loop_offset_set`（`Scalar(1.5)` → `Scalar(TimeSpan::from_millis(1500))`）。
+- untagged の `LoopOffset` は、負の値や上限を越える値の読み込みの失敗の文が「data did not match any variant of untagged enum」になる（テストは失敗した事を見る）。
