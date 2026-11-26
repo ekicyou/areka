@@ -25,3 +25,9 @@
 ## 2.4
 
 - 外したテスト・分かれ道・ログは無い。変える前後の期待（実数の秒 → ちょうどの 100ns の値）: `domain_types_serde_roundtrip`・`cue_payload_and_cue_serde_roundtrip`（時間切れ 3.0 → `delta_ms(3000)`）、`wait_carries_no_action_and_time_lives_in_envelope_duration`・`cue_duration_roundtrip_preserves_value`・`duration_is_uniform_envelope_field_across_all_payloads`（秒 → `ms(..)`）、`cue_duration_defaults_to_zero_for_legacy_serialized_data`（JSON の秒 → 100ns の整数）。
+
+## 2.5
+
+- 外したテスト（NaN の時刻・隔たりは型で作れない）: `tick_with_nan_time_delivers_all_pending_payloads`・`tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers`・`insert_nan_offset_fires_debug_assert_in_debug_builds`（節「非有限時刻の境界」ごと）。
+- 外したテスト: `rounds_down_value_really_rounds_down_when_subtracted` と定数 `ROUNDS_DOWN`（実数の引き算で手前へ落ちる事が前提。整数の足し算に丸めが無い）。守っていた「ちょうどの刻みで届く」は `payload_is_delivered_at_exact_absolute_fire_time_and_not_one_tick_before` が引き継ぐ。
+- 変える前後の期待: `payload_is_delivered_at_exact_absolute_fire_time` → `..._and_not_one_tick_before` へ改名し、1 刻み手前で届かない事を足した。`completion_is_reached_at_exact_occupancy_horizon` に 1 刻み手前で未完了を足した。`choice_barrier_with_negative_timeout_stops_on_arrival` の時間切れ −0.001 秒 → `delta_ms(-1)`。ほかの入力は秒 → `at_ms`・`ms`・`delta_ms` のちょうどの値。
