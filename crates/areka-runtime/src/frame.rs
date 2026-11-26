@@ -138,11 +138,9 @@ use self::drain_resnap::{
 };
 use self::drain_resnap::{finalize_chain_once, realign_chain_once, resnap_shell_targets};
 use self::scale_text::reconcile_reported_sizes;
-// バルーン可視性の相（兄弟モジュール `runtime::balloon_visibility`）が注入時刻の解決に用いる
-// ための再輸出。可視性の相と text 相が**同一の**時刻契約を共有することが要る——可視性の相は
-// `visible_glyphs(actor, t)` でリビール済みグリフ数を観測し、text 相は同じ `t` で描画するため、
-// 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
-pub(super) use self::scale_text::resolve_talk_time;
+// 時刻の解決の純判断を決定論の檻（`frame_drain_text_tests`）から引くための再輸出。
+#[cfg(test)]
+use self::scale_text::resolve_talk_time;
 // 窓を全部閉じるとき（`app_exit::close_windows_for_restart`）に外す、窓の一式に属する控え。
 pub use self::zorder_drain::ZOrderAbsentReports;
 

@@ -439,7 +439,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.1, 7.7_
 
-- [ ] 5.6 (P) areka-runtime のフレームを型へ付け替える
+- [x] 5.6 (P) areka-runtime のフレームを型へ付け替える
   - 文字の拡大率と状態の報告とフレームのテストを型で書く
   - このタスクのファイルについて、`cargo check -p areka-runtime --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-runtime フレーム_
@@ -817,3 +817,4 @@
 - 4.9: areka-ghost の `src/runtime_tests.rs`・`src/shiori_wiring_empty_tests.rs`・`src/prop_get_sink_tests.rs` は設計の家族の表に名前が無いが、`MonotonicMs` などで組めない。4.11（受け口と結合テスト）が持つ。
 - 5.1: areka-runtime の改名は本体 `areka` の `frame_balloon_timeout_notice_e2e_tests.rs`・`frame_shell_box_integration_tests.rs`（`configured_timeout_secs`）も追う（段 5）。5.1 が balloon_visibility.rs の型の定義（`DEFAULT_BALLOON_TIMEOUT: TimeSpan`・`VisibilityLogEvent`・`MeasurementOrigin`・`TalkEnd::At`・状態の `display_end`／`deadline`）と decision.rs の `decide(Option<TimeSpan>, TimeSpan)` の頭を先に替えた。5.2 は `apply_lifecycle_signals` の本体（3 件）と判断のテストを持つ。`balloon_visibility_forget_tests.rs`・`balloon_visibility_user_break_tests.rs` は 5.2 の持ち物。balloon_visibility.rs:96 の unused の警告は 5.2 の後に消える。
 - 5.3: `balloon_visibility_phase.rs` は `resolve_talk_time(None, ..)` を呼ばず `frame_now.and_then(|now| clock.talk_time(now))` を直に書く（同じ式）。`frame.rs:145` の `pub(super) use scale_text::resolve_talk_time` は未使用の警告が出る。5.6 が残すか外すかを決める（`frame_drain_text_tests.rs` が使う）。`balloon_visibility_decision.rs:20` の説明と phase.rs:91 の「text 相と同一の解決経路」は 5.6 の後に合わせる。
+- 5.6: `frame/scale_text.rs:194` の `resolve_talk_time` の説明「可視性の相も同じ関数で解決する」は事実と合わない（5.3 から相は同じ式を直に書く）。12.2 で直す。本体 `areka` の `runtime_tests/spine_*` が `run_text_phase(.., Some(10.0))`・`Some(0.30)` を渡している（段 5 の 6.3 で直す）。

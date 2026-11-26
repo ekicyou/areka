@@ -5,6 +5,7 @@ use tracing::{debug, error, info, warn};
 
 use areka_emo_text::actor::present_frame;
 use areka_sakura::ActorKey;
+use dola::{TimePoint, TimeSpan};
 use wintf::ecs::FrameTime;
 use wintf::ecs::world::tick_wake;
 
@@ -192,10 +193,10 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
 ///
 /// 可視性の相（`runtime::balloon_visibility`）も同じ関数で `now_talk_time` を解決するので、可視性が観測するグリフ数と text 相が描く文字は同じ注入時刻に立つ。
 pub(crate) fn resolve_talk_time(
-    override_: Option<f64>,
-    frame_now: Option<f64>,
+    override_: Option<TimeSpan>,
+    frame_now: Option<TimePoint>,
     clock: &TalkClock,
-) -> Option<f64> {
+) -> Option<TimeSpan> {
     match override_ {
         Some(t) => Some(t),
         None => frame_now.and_then(|now| clock.talk_time(now)),
@@ -211,7 +212,10 @@ pub(crate) fn resolve_talk_time(
 /// 「時刻が引ける＝進行中」ではないことに注意する。`TalkClock` の起点は一度立つとプロセスの
 /// 終わりまで残るため、`talk_time` が `Some` であることは発話が続いている証拠にならない。
 /// 進行中かどうかを決めるのは**まだ現れていない文字が在るか**だけである。
-pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_time: f64) -> bool {
+pub(super) fn reveal_pending<'a>(
+    reveals: impl Iterator<Item = &'a [TimeSpan]>,
+    talk_time: TimeSpan,
+) -> bool {
     reveals
         .filter_map(|times| times.last())
         .any(|&last| last > talk_time)
@@ -223,7 +227,7 @@ pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_
 pub fn run_text_phase(
     wiring: &mut RuntimeWiring,
     world: &mut World,
-    talk_time_override: Option<f64>,
+    talk_time_override: Option<TimeSpan>,
 ) {
     // 本番の frame 時刻源（headless では不在）。override が Some なら resolve_talk_time が優先採用する。
     let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
@@ -234,7 +238,7 @@ pub fn run_text_phase(
     if let Err(e) = present_frame(&mut runtime, world, talk_time) {
         error!(
             error = %e,
-            talk_time,
+            talk_time = %talk_time,
             "runtime text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }

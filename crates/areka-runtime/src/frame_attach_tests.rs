@@ -439,6 +439,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     use super::super::talk_lifecycle::BalloonLifecycleSink;
     use areka_sakura::sysvar::SystemVarSnapshot;
     use dola::cue::CuePlayer;
+    use dola::{TimePoint, TimeSpan};
 
     // wire_runtime と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -453,26 +454,26 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
 
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let horizon = compiled.sheet.absolute_end_time();
+    let sheet = compiled.sheet.with_absolute_start_time(TimePoint::ZERO);
+    let horizon = sheet.relative_end();
     assert!(
-        horizon > 0.0,
+        horizon > TimeSpan::ZERO,
         "前提: 台本の占有終端は正（台本が空なら本檻は空虚になる）"
     );
 
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).expect("起点を刻んだ台本");
     player.register_sink(Box::new(BalloonLifecycleSink::new(
         lifecycle_tx,
         wiring.clock.clone(),
     )));
 
     // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
-    let mut tick_points: Vec<f64> = compiled
-        .sheet
+    let mut tick_points: Vec<TimePoint> = sheet
         .cues()
         .iter()
-        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .map(|cue| sheet.absolute_fire_time(cue).expect("起点を刻んだ台本"))
         .collect();
-    tick_points.push(horizon);
+    tick_points.push(sheet.absolute_end_time().expect("起点を刻んだ台本"));
     for at in tick_points {
         player.tick(at);
     }
@@ -484,7 +485,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
         "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
     );
 
-    let ends: Vec<f64> = signals
+    let ends: Vec<TimeSpan> = signals
         .iter()
         .filter_map(|signal| match signal {
             TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
@@ -720,12 +721,13 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     );
 
     let actor = ActorKey::from("0");
-    runtime.borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: CueCommand::Emote { key: "0".into() },
-        duration: 0.0,
-    });
+    runtime.borrow_mut().apply_cue(&TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        actor.clone(),
+        CueCommand::Emote { key: "0".into() },
+        dola::TimeSpan::ZERO,
+    ));
     let destination = runtime.borrow().state().destination(&actor);
     assert!(
         matches!(&destination, areka_emo_text::place::TextPlace::Box(name) if name.as_str() == "talk"),

@@ -4,6 +4,9 @@ use wintf::ecs::Point;
 use crate::move_cue::MoveDirective;
 use crate::talk_clock::{controllable_clock, set_now};
 
+use dola::TimeSpan;
+use dola::time::testing::{at_ms, ms};
+
 use super::shared_test_support::wiring;
 use super::test_support::{
     all_shown, capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, zero_clock,
@@ -79,22 +82,22 @@ fn resolve_talk_time_override_wins_else_clock_else_none() {
     let clock_unset = zero_clock();
 
     assert_eq!(
-        resolve_talk_time(Some(5.0), Some(999.0), &clock_unset),
-        Some(5.0),
+        resolve_talk_time(Some(ms(5_000)), Some(at_ms(999_000)), &clock_unset),
+        Some(ms(5_000)),
         "override は最優先で採用（frame_now は無視）"
     );
     assert_eq!(
-        resolve_talk_time(Some(5.0), None, &clock_unset),
-        Some(5.0),
+        resolve_talk_time(Some(ms(5_000)), None, &clock_unset),
+        Some(ms(5_000)),
         "override は frame_now 不在でも採用"
     );
 
     let (now, clock) = controllable_clock();
-    set_now(&now, 100.0);
-    clock.observe_cue(0.0); // epoch = 100.0 - 0.0 = 100.0
+    set_now(&now, at_ms(100_000));
+    clock.observe_cue(TimeSpan::ZERO); // epoch = 100 s - 0 s = 100 s
     assert_eq!(
-        resolve_talk_time(None, Some(105.0), &clock),
-        Some(5.0),
+        resolve_talk_time(None, Some(at_ms(105_000)), &clock),
+        Some(ms(5_000)),
         "override 無しは clock.talk_time(frame_now)（105-100=5）"
     );
 
@@ -105,7 +108,7 @@ fn resolve_talk_time_override_wins_else_clock_else_none() {
     );
 
     assert_eq!(
-        resolve_talk_time(None, Some(105.0), &clock_unset),
+        resolve_talk_time(None, Some(at_ms(105_000)), &clock_unset),
         None,
         "epoch 未確立は None（talk 未到達）"
     );
@@ -124,7 +127,7 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     // FrameTime 資源を持たない素の World（override 経路と skip 経路の双方を踏む）。
     let mut world = World::new();
 
-    run_text_phase(&mut wiring, &mut world, Some(2.0));
+    run_text_phase(&mut wiring, &mut world, Some(ms(2_000)));
 
     run_text_phase(&mut wiring, &mut world, None);
 
