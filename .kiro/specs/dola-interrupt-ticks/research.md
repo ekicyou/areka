@@ -415,6 +415,8 @@ brief の古くなった所（今のコードと合わない）: 「`BarrierKind
 
 ## 6. 設計で決めること
 
+（14 章で決めた）
+
 どう作るかの決め。開発者への問いではない。
 
 1. **型と時計の置き場**: dola の中の 1 か所か、下の小さい crate か。`areka-talk` は依存 0 の約束を持ち、kanade は dola を引いていない。`ChoiceWaiting` の欄を型で持つか、素の整数で持つかも、ここで決まる。
@@ -532,6 +534,8 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 
 ## 11. 設計で調べること
 
+（調べた結果は 14 章）
+
 - `GetTickCount64` と `QueryUnbiasedInterruptTimePrecise` の進み方の違い（眠りの間を数えるか・0 の時点）。一般の知識では、`GetTickCount64` は眠りの間も数える。コードでも文書でも確かめていない。5 章の決め 1 の ⑴ の断りの文に要る。
 - Windows でない target の `cargo check -p dola` が、今の `Cargo.lock` と道具で通るか（5 章の決め 12）。
 - docs.rs の既定の target と、公開の文書から時計の関数が抜ける事（一般の知識・未確認）。
@@ -542,6 +546,8 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 - 設計の前に: main に合わせ直し、同じ時に走らせない相手が走っていない事と、先に着地した spec が dola に足した口が無い事を数える。
 
 ## 12. 設計フェーズへの勧め
+
+（14 章で改めた）
 
 - 作り方は 7 章の案 C、段取りは 8.4 の案 2 を出発点にする。
 - 先に 5 章の 12 件を要件の討議で決める。決め 1〜5 は、型の数・追従する crate の数・触るファイルの数を動かす。（13 章で改めた）
@@ -680,6 +686,8 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 
 ### 13.10 設計で決める事（足す分）
 
+（14 章で決めた）
+
 1. 型の置き場（6 章の 1 と同じ決め）: `dola` に置いて kanade・`areka-talk`・`areka-ghost` に辺を足すか、下の小さい crate か（13.8）。
 2. 偽の時計の形: `TickerConfig.clock`・`LoopTickerConfig.clock`・`SerikoClock` を「時刻を返す関数」にする。テストの数字は、ミリ秒の整数から時刻と長さを作る 1 語の組み立てで書く（1,000 行に近いファイルの手当て）。
 3. 長さを OS の待ちの `std::time::Duration` へ写す 1 か所と、その丸めの向き（切り上げなら、早く起きて空回りしない）。
@@ -711,3 +719,192 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 | 計 | | | **60〜62**（決め 4 を ⑴ にすると +3〜4） |
 
 8.5 の 50〜53 から、kanade（+2）・ghost の刻み役（+1）・seriko の時計（+2）・結線とテストの時計（+1）・後半の読む側と眠り（+2）・検査の段（+1）・決め 5 が ⑴ に決まった分（−2 の見込みが消えた）で増えた。規模は XL のまま、リスクは高のまま（10 章）で、新しく加わる危うさは ⑹ 1,000 行に近い seriko の 5 本（うち 2 本は残り 25 行）と kanade の 3 本 ⑺ 眠りの振る舞いの変化を、決定論のテストでは偽の時計の上でしか示せない事。
+
+## 14. 設計の段の調べと決め
+
+設計の段で調べた事と、決めた事。1〜13 章のうち、この章と食い違う所は、この章が改める。決めの本文は `design.md` に在り、ここには、比べた案と根拠を残す。
+
+案は、設計として必然かどうかで選んだ。タスクの数・触るファイルの数・外すテストの数は、段取りを組むための見込みとしてだけ書く。
+
+### 14.1 要約
+
+- **Feature**: `dola-interrupt-ticks`
+- **Discovery Scope**: Complex Integration（今の仕組みの土台の作り直しと、ワークスペースの全体の追従）。調べは full。
+- **Key Findings**:
+  - 時刻の型と時計は、dola を引かない crate でも要る（`areka-kanade`・`areka-talk`・`areka-ghost` の本番と、後の `instant-to-interrupt-ticks` が触る `shiori-host32-host`・`areka-nar`・`areka-emo-present`・`areka-actor` ほか）。置き場は dola の下が正しい。
+  - 起点は 0 より前になる。時刻の表だけでなく、起点を持つ受け手の全部がそれを表せなければならない。
+  - 今の口パクの決まり（1 回の刻みでは、いちばん新しい区切りの 1 回だけ）は、刻みの細かさで結果が変わる。大前提（要件 18 の 1）と両立しない。
+  - 時刻の表の「進め終えてから配る」形と溜めは、取り出しごとの置き直しと両立しない。溜めを無くすと、同じ時刻の刻み直しの決まり（要件 11 の 9・10）は、守りを書かずに成り立つ。
+  - 倍率の写しは、逆を「前向きの写しが届く最小の値」と定義すれば、丸めの向きを合わせる工夫が要らない。
+
+### 14.2 調べの記録
+
+#### main との隔たり
+
+- **Context**: 設計の前に、同じ時に走らせない相手が dola に口を足していないかを確かめる（要件の申し送りの 10）。
+- **Findings**: `origin/main` を取り寄せて比べた。ブランチの頭より先の main のコミットは 0。`crates/dola` に触るコミットも 0。先に着地した spec が dola に足した口は無い。
+- **Implications**: 2 章の数は、そのまま設計の前提に使える。
+
+#### Windows でない target での検査
+
+- **Context**: 要件 15 の 8 の段が、今の `Cargo.lock` と道具で通るか（11 章）。
+- **Findings**: `cargo check -p dola --target aarch64-unknown-linux-gnu` は、今の dola で通る（依存は serde・thiserror・interpolation・rand で、リンクは要らない）。この機械に入っている Windows でない target は `aarch64-unknown-linux-gnu`・`wasm32-unknown-unknown`・`wasm32-wasip1`。全体テストは i686 の target を `rustup target add` の段で入れている（`tools/test-all.ps1` の `add i686 target`）。
+- **Implications**: 段は `rustup target add x86_64-unknown-linux-gnu` と `cargo check -p dola --features toml --target x86_64-unknown-linux-gnu` で作れる。CI は `rustup` を持つので、同じ段が通る。
+
+#### OS の関数
+
+- **Findings**: `windows` 0.62.2 の `Win32::System::WindowsProgramming` に `pub unsafe fn QueryUnbiasedInterruptTimePrecise() -> u64` が在る（ソースで確かめた）。失敗を返さない。ワークスペースは今、`windows` の機能で OS の関数を呼んでいる（束縛を自分で書く形ではない）。
+- **Implications**: 時刻の土台の crate に、機能 `Win32_System_WindowsProgramming` を足す。dola は時計を持たなくなるので、`windows` の依存（`Win32_System_Performance`）を外す。眠りの間を数えない事は OS の文書の定義で、機械を眠らせる確かめはしない（要件 17 の 10）。
+
+#### 「今」を読む crate
+
+- **Context**: 型と時計の置き場（6 章の 1・13.8）。
+- **Findings**: 本番のコードに `Instant::now` を書く crate は、`wintf`（14 ファイル）・本体（10）・`areka-runtime`（6）・`areka-session`（6）・`real-run-kit`（4）・`areka-input`（3）・`shiori-host32-host`（3）・`areka-actor`・`areka-emo-present`・`areka-emo-text`・`areka-ghost`・`areka-nar`・`areka-placement`・`areka-sakura`・`areka-sylphya`・`areka-user-data`（各 1）。このうち dola を引くのは `wintf`・本体・`areka-runtime`・`areka-session`・`areka-emo-text`・`areka-sakura` だけ。`instant-to-interrupt-ticks` の brief は、`shiori-host32-host`・`areka-nar`・`areka-emo-present` を In に挙げ、32 ビットの補助プロセスを議題に挙げている。
+- **Implications**: 時計が dola の中に在ると、SHIORI の受け皿やインストールの部品が、時計を読むためだけに dola（serde・rand・interpolation を連れる）を引く事になる。
+
+#### 時刻の表と再生機の、dola の外の使い手
+
+- **Findings**: dola の外で `TimedSchedule` と `to_talk_schedule` の字が出るのは、説明の文だけ（`areka-sakura/src/lib.rs`・`compile.rs`・`drive_delivery_tests.rs`・`areka-runtime/src/talk_lifecycle_tests.rs`）。口を直に呼ぶ所は 0。`CueSheet::absolute_end_time`・`absolute_fire_time` は、`areka-sakura/src/compile.rs:548`（本番）とテスト約 30 か所が呼ぶ（テストの大半は、起点を押していない台本の「相対の終わり」として使っている）。
+- **Implications**: 時刻の表の口の形を替えても、dola の外は壊れない。起点を `Option` にすると、起点を押さずに `absolute_end_time` を呼ぶテストは、相対の終わり（`relative_end`）か、起点を押す形へ直る。
+
+#### 受け口の実装
+
+- **Findings**: `CueSink` の実装は本番 19・テスト 20 余り。ほかの受け口を包む物は 2 つ（`areka-sakura` の `StrictTap`・`areka-runtime` の `ClockedTextSink`）。合図の時刻を読む本番の受け手は、文字の層（`at` と `duration`）・`ClockedTextSink`（`at`）・`BalloonLifecycleSink`（`at` と `duration`）・seriko（`at` と `duration`）と、ログだけの `LogSink`。7 つの変更の受け口は読まない。
+- **Implications**: 知らせの口（既定が何もしない）を足す時、包む 2 つは中へ通さなければならない。
+
+#### 文字の層の先渡し
+
+- **Findings**: 文字の層は、先渡しの合図を、配られる合図と同じ関数（`apply_cue`）へ、空回しの写しの上で当てる（`areka-emo-text/src/lookahead.rs`・`state.rs` の `rehearsal_copy`）。時刻は使わない。
+- **Implications**: 先渡しの合図と、配られる合図の型を分けると、同じ関数を通せない。型は 1 つにし、先渡しの発火時刻は「その時の起点での予定の値」とする。
+
+#### seriko の口パクの今の決まり
+
+- **Context**: 要件 12 の 7 と、6 章の 8。
+- **Findings**（`areka-seriko/src/trigger.rs:128-141`・`looper_trigger.rs:110-145`・`trigger_tests.rs:363-461`）:
+  - 1 回の刻みで判定するのは、越えた区切りのうち、いちばん新しい 1 つだけ。手前の区切りは捨て、次の刻みへ持ち越さない（`talk_boundaries_crossed_in_one_window_fire_once_at_the_latest`）。
+  - 再生の始まりは、刻みの時刻でなく、区切りの字が現れた時刻。過去なら、過ぎた分だけコマを進める。
+  - その時刻に再生中なら、見送る。見送った区切りは戻らない（`talk_boundary_reached_while_playing_is_skipped_for_good`）。
+  - 数えは前へしか進まない。
+- **Implications**: 区切り B1（時刻 T1）と B2（T2）を、細かい刻みで 1 つずつ越えると「T1 で始まり、T2 で再生中なら見送る」。粗い刻みでまとめて越えると「B2 だけを判定して T2 で始まる」。再生の長さが区切りの間より長い時、2 つの結果は違う。同じ台本を受けた 2 つの受け手の口の姿が、刻みの取り方で分かれる。
+
+#### seriko の合図の時刻と、起点
+
+- **Findings**: seriko は、届いた全部の種類の合図で起点の見積もりを動かす（`looper.rs:382`）。本番で合図を手で組む 2 か所（`areka-runtime/src/shell_carry.rs` の着せ替えの運び・`areka-seriko/src/settle.rs` の書き出し）は、`at` 0・長さ 0 の合図を seriko へ直に入れる。台本の途中で着せ替えの運びが走ると、起点の見積もりが動きうる（コードの読み。固定するテストは無い）。台詞を中断した直後の消去は、新しい台詞の 0 秒と、前の台詞の秒を比べている（`seriko-talk-clock-fidelity` の brief の件 3）。
+- **Implications**: seriko が字の現れる時刻を絶対の時刻で持てば、起点を持つ必要が無い。手で組んだ合図は字を運ばないので、何も動かさない。消去は絶対の時刻どうしの比べになり、台詞をまたいでも正しい。
+
+#### ノベルの作り直しの文書
+
+- **Findings**: `doc/ideas/novel-redesign-2026-11-20/` の `00`・`01`・`02`・`04`・`07`・`91`・`92`・`93` を読んだ。文書が dola に求める言い方は 2 つ: 「今 `now` が、相対の時刻 `rel` である」ように起点を置く（`01` 5.2）と、「その合図の長さだけ起点を前へ動かす」（`00` 4.1）。置き直しは、区切りで止まったままでも要る（`01` 5.7）。置く時刻は「今」でない事が在る（音の終わりの時刻＝`04` 5.4）。並走の流れは、流れごとの時刻の表と起点を持ち、再生機を通さない（`02` 6.3）。合図を配り・知らせを出し・区切りを解く所は、主の流れと並走で同じ 1 本にする（`91` の 2）。文書どうしで食い違う所（値を時間で変える変化の始まり）は、`00` と `93` が後の決めである。
+- **Implications**: 置き直しの口は、時刻の表に置く（再生機だけに置かない）。口の形は「時刻と台本の時刻の組」と「動かす長さ」の 2 つ。1 つずつ当てた結果は、`design.md` の「使い手の居ない口の確かめ」の表。
+
+### 14.3 案の比べ
+
+| 案 | 中身 | 良い所 | 悪い所 |
+|---|---|---|---|
+| 置き場 A | 時刻の型と時計を dola の中（`dola::time`）に置く | crate が増えない | dola を使わない crate が、時計と型のためだけに dola を引く。`areka-talk` は依存を持たない約束の crate で、`areka-kanade` は cue の語彙を知らない作りである |
+| 置き場 B（採る） | dola の下の小さい crate に置き、dola が再公開する | 依存の向きが正しい。std だけで組める | crates.io へ出す crate が 1 つ増える（開発者に確かめる） |
+| 型 A | 時刻を符号なし（`u64`）で持つ | OS の関数の戻りの型と同じ | 0 より前の起点を表せない。起点を持つ所の全部に、別の型が要る |
+| 型 B（採る） | 時刻を符号つき（`i64`）で持つ | 起点を 1 つの型で表せる。TOML の整数に全部の値が書ける | 表せる上の端が半分になる（約 2 万 9 千年） |
+| 時刻の表 A | `tick`＋`ready` を残し、置き直しの時に溜めを空にする | 今の口の形が残る | 取り出しごとに置き直す場所が無い。同じ時刻の刻み直しの守りと、溜めを空にする処理が、置き直しのたびに絡む |
+| 時刻の表 B（採る） | 取り出し口を 1 件ずつの `pop_due` だけにする | 置き直しを挟める。守りが要らない | 既存の単体テストは、取り出しを集める手助けを通す形へ直る（確かめる中身は変わらない） |
+| 再生機 A | `tick_with(now, 合図ごとに呼ぶ関数)` で、関数が置き直しを返す | 1 回の呼び出しで済む | 呼び戻しの型が口に出る。並走の流れを進める所が、同じ形を使えない |
+| 再生機 B（採る） | `step`（1 件）と `tick`（全部） | 時刻の表の `pop_due` と同じ形。置き直しは、呼び手がいつもの口を呼ぶだけ | — |
+| 起点の読み方 A | 受け手の全部が、知らせの口だけから起点を受ける（最初の起点も知らせる） | 口が 1 本 | 合図が運ぶ発火時刻と、同じ事を 2 度運ぶ。要件 12 の 9 は、発火時刻から読むと言う |
+| 起点の読み方 B（採る） | 文字の層の時計は `fire_time − at` と知らせ。seriko は絶対の時刻で持つ | 見積もりが無い。seriko は起点を持たない | 文字の層の時計は、台詞をまたいで起点を持ち続ける（今と同じ） |
+
+### 14.4 設計の決め
+
+#### 決め: 時刻の土台の置き場
+
+- **Context**: 6 章の 1・13.8・13.10 の 1。
+- **Alternatives Considered**: 14.3 の置き場 A と B。
+- **Selected Approach**: B。仮の名は `dola-time`。dola は `dola::time` として型と関数を再公開する（「今」を読む関数の定義は 1 つ）。直列化のアダプタは dola が持ち、土台の crate は serde を引かない。
+- **Rationale**: 14.2 の「今を読む crate」。この spec の後、時刻の土台の仕様は動かさない。後で置き場を移すと、土台を使う全部の crate の依存を付け替える事になる。
+- **Trade-offs**: crates.io へ出す crate が増える。次の公開の時に、新しい名前の初回の公開の手順が要る。
+- **Follow-up**: 設計の討議で、開発者に確かめる（`design.md` の未決 1）。名前も、その時に決める。
+
+#### 決め: 型の中身と範囲の端
+
+- **Selected Approach**: `TimePoint`・`TimeDelta` は `i64`、`TimeSpan` は 0 以上の `i64`。足し引きの演算子は端で張り付き、`checked_*` は `None` を返す。「終わりが無い」は `Option`。
+- **Rationale**: 0 より前の起点（14.3 の型 A と B）。選択待ちの時間切れは、作者のミリ秒が `i64` の端まで来て、今も端へ張り付けている。パニックは致命に限る決まりである。
+- **Follow-up**: 設計の討議で、符号つきにする事を確かめる（未決 2）。
+
+#### 決め: 丸め
+
+- **Selected Approach**: 最も近い 100ns。ちょうど中間は 0 から遠い側。作者の単位・比の掛け算・倍率の掛け算の全部で同じ。
+- **Rationale**: 負の台本の時刻（起点より前）でも、0 を挟んで対称になる。
+
+#### 決め: 倍率の写し
+
+- **Context**: 2.3 の ★1〜★6。★1 と ★2 は逆の対で、今は「周回の終わりの時刻で抑える」継ぎで食い違いを隠している。
+- **Alternatives Considered**:
+  1. 逆を `s ÷ k` の丸めで求め、丸めの向きを前向きと合わせる。
+  2. 逆を「前向きの写しが届く最小の値」と定義し、前向きの写しだけを使って求める。
+- **Selected Approach**: 2。
+- **Rationale**: 1 は、実数の掛け算と割り算の丸めが 2 段に重なるので、向きを合わせても、端の 1 つで食い違う入力が残りうる。2 は、定義から食い違わない（前向きの写しが減らない事だけを使う）。
+- **Trade-offs**: 逆を求めるのに、前向きの写しを数回から数十回呼ぶ。引き金の予定の時刻は、開始の時に求めて持つ。
+
+#### 決め: 直列化
+
+- **Selected Approach**: `CueSheet` は 100ns の整数。storyboard の文書は秒。文書の時間の値は、往復がちょうどになる範囲（2^51 の 100ns＝約 7 年）までを読む。
+- **Rationale**: 100ns の整数 n を秒の実数で書いて読み戻すと、誤差は n × 2^-52 ほどで、n が 2^51 より小さければ、最も近い整数は n に戻る。範囲を切ると、要件 6 の 7（読む → 書く → 読むで等しい）が、どの値でも成り立つ。
+
+#### 決め: 台本の起点の印
+
+- **Context**: 6 章の 11。今は 0.0 が「押されていない」の印である。
+- **Alternatives Considered**:
+  1. 既定の 0 を印として残す。
+  2. `Option<TimePoint>` にし、押されていない台本から再生機を作れなくする。
+- **Selected Approach**: 2。
+- **Rationale**: 0 は普通の時刻である。1 だと、起点を押し忘れた台本は「起点がずっと昔」と読まれ、全部の合図が最初の刻みで一度に配られる（要件 18 の 3 の追い付き）。ログ無しの失敗の道になる。
+
+#### 決め: 合図の形と先渡し
+
+- **Selected Approach**: `TalkCue` に `fire_time` を足す。`at` の名前は残し、型で区別する（要件 4 の 5）。先渡しの発火時刻は、その時の起点での予定の値。手で組む所は `TalkCue::scheduled` を通す。
+- **Rationale**: 14.2 の「文字の層の先渡し」。
+
+#### 決め: 口パクの決まり
+
+- **Context**: 要件 12 の 7・18 の 1・18 の 6。14.2 の「seriko の口パクの今の決まり」。
+- **Alternatives Considered**:
+  1. 今の決まりを保つ（いちばん新しい区切りの 1 回だけ）。
+  2. 越えた区切りを古い順に全部、それぞれの字が現れた時刻で判定する。
+- **Selected Approach**: 2。
+- **Rationale**: 2 は、細かい刻みで 1 つずつ越えた時の結果を、粗い刻みでも作る。口の姿が、台本と起点と今だけで決まる。同じ時刻に現れた字（`\_q` の区間）では、1 と同じ結果になる（最初の区切りで始まり、後ろは再生中で見送られる）。「越えた分を積まない」の意図（まとめて越えても、再生を重ねない）は、2 でも保たれる。
+- **Trade-offs**: 時刻の違う区切りをまとめて越えた時の結果が、今と変わる。固定しているテストは、変える前後の期待として記録する。
+- **Follow-up**: 要件 12 の 7 の字面は「今の決まりで」である。設計の討議で確かめる（未決 3）。
+
+#### 決め: 段取り
+
+- **Context**: 8.4・13.11。
+- **Selected Approach**: 8.4 の案 2（継ぎ無し・前半と後半）。前半で、合図と刻みの形を最後の形まで替える。
+- **Rationale**: 要件 9 の 1（付け替えで結果が変わらない）と 9 の 6（変えた所）を、別々の確かめで示すため。継ぎを置かないのは、黙って通る変換が、替え残しをコンパイルの誤りから隠すため。
+- **Follow-up**: 段ごとの家族の分け方と確かめは、`design.md` の「Migration Strategy」と「File Structure Plan」。
+
+### 14.5 まとめ直し
+
+- **同じ問題の言い換え**: 「起点の置き直しが、もう配った合図に効く」（要件 12）・「受け手が起点を見積もらない」（要件 12 の 9）・「遅れて届いた合図の追い付き」（要件 18）は、同じ 1 つの事である: 受け手は、再生機が押した時刻（発火時刻と、起点の動き）だけを使う。3 つを別々の仕組みにせず、`fire_time` と `origin_moved` の 2 つで作る。
+- **在る物を使う**: 1 字ごとの間隔は、`seriko-talk-clock-fidelity` の brief が挙げる 2 つの向き（1 本の関数を両方が呼ぶ・写しを比べるテスト）のうち、1 本の関数にする。置き場は、両方が今も引いている `areka-sakura`（1 字の長さを決める `duration.rs` の隣）。時計は OS の関数をそのまま使い、自前の起点も倍率も持たない。
+- **無くす物**: `sum_on_ms_grid`・時刻の表の溜めと同じ時刻の守り・長さの clamp・NaN を「届いた」に倒す比べ・seriko の `TalkEpoch` とミリ秒への丸め・dispatcher の `base_now` と逆の写し・kanade の `MonotonicMs`・dola の `runtime/clock.rs`・「周回の終わりの時刻で抑える」継ぎ・無限大の番兵。
+- **足さない物**: 次に届く時刻の照会・区切りの台本の時刻の照会・早送りが済んだ事の知らせ・速さの状態。どれも、この spec の要件に無く、後の spec が、口の形を変えずに足せる。
+
+### 14.6 リスクと手当て
+
+- 前半の間、全体テストが使えない — 段ごとに、下の crate が `cargo test -p` で緑である事を、次の段の入口にする。全体テストは、前半の締めと完了の 2 回。
+- 丸めの決まりを誤ると、ちょうどの刻みの届き方が変わる — 丸めを 1 つの crate の 2 つのファイル（`convert.rs`・`scale.rs`）に閉じ、整数の境（1 つ手前・ちょうど・1 つ先）のテストを置く。
+- 知らせの口を、包む受け口が中へ通し忘れる — 既定が「何もしない」なので、コンパイルでは止まらない。包む受け口ごとに、通る事のテストを置く。
+- 口パクの決まりを変えると、固定しているテストが赤になる — 変える前後の期待を記録に名指しで書く。同じ時刻の字では結果が変わらない事を、テストで示す。
+- 1,000 行に近いファイル — テストの数字を 1 語の組み立てで書き、越える見込みのファイルは、先に主題ごとに分ける。
+- 眠りの振る舞いは、偽の時計の上でしか示せない — 偽の時計を止める決定論のテストと、時計の関数の説明で示す（要件 17 の 10）。
+- 時刻の土台の crate の名前が、crates.io で取れない — 名前は仮で、設計の討議で決める。
+
+### 14.7 読んだ手引き
+
+- `.claude/skills/kiro-spec-design/rules/` の `design-principles.md`・`design-discovery-full.md`・`design-synthesis.md`・`design-review-gate.md`。境界を先に書く事・依存の向きを 1 つに決める事・まとめ直しの 3 つの見方（同じ問題の言い換え・在る物を使う・無くす）を使った。
+- `.kiro/steering/` の `tech.md`（dola の依存・全体テストの段・出す crate の一覧）・`structure.md`（テストのファイルの接続の決まり・1,000 行）・`workflow.md`（完了の関門）。
+
+### 14.8 参照
+
+- `windows` 0.62.2 の `src/Windows/Win32/System/WindowsProgramming/mod.rs`（`QueryUnbiasedInterruptTimePrecise`）。
+- `doc/ideas/novel-redesign-2026-11-20/`（`00-architecture.md` 4.1〜4.3・`01-playback-control.md` 5.2〜5.9・`02-parallel.md` 6.3〜6.12・`04-sound.md` 5.4・`07-timed-values.md` 5.3〜5.9・`91-validation-seams.md`・`92-validation-code.md`）。
+- `.kiro/specs/instant-to-interrupt-ticks/brief.md`・`.kiro/specs/seriko-talk-clock-fidelity/brief.md`。
