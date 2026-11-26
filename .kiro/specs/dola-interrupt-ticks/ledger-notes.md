@@ -304,3 +304,7 @@
 
 - 取り除いた物: `CuePlayer` の仮の欄 `last_tick` と `settle_completion_after_resolve`（区切りを解いた直後に完了を確かめる分かれ道）。ログは無かった。外したテストは無い。解くだけで完了を期待していたテストは 0 本（どれも元から解く → 刻むの形）。dola の外の呼び出しの直しは 0 件（`areka-sakura/src/drive.rs` の `on_resolve_choice` は解いた直後に刻むので、選択を解いたその場で完了する振る舞いは同じ）。
 - 足した口とテスト: `step(now) -> StepOutcome`・`reanchor`・`shift_origin`・`origin`・`CueSink::origin_set`（既定は何もしない）。登録の時に最初の起点の知らせ → 先渡しの順に渡す。テスト `step_advances_one_item_per_call`・`reanchor_after_completion_is_ignored`。空の 4 本（`tests/cue/runtime_test_{reanchor,fire_time,origin_notice,late_delivery}_tests.rs`）の `mod` の行は `tests/cue/runtime_test.rs` に置いた。
+
+## 8.4（後半）
+
+- 足したテスト: `runtime_test_reanchor_tests.rs`（`moving_origin_earlier_delivers_later_cues_sooner`・`moving_origin_later_delays_remaining_cues`・`each_take_out_uses_the_origin_at_that_moment`・`reanchor_during_a_barrier_applies_after_it_is_resolved`・`origin_later_than_now_delivers_nothing_until_it_arrives`・`unchanged_origin_returns_none`・`first_notice_has_no_previous`）、`runtime_test_fire_time_tests.rs`（`fire_time_is_origin_at_take_out_plus_relative`・`already_delivered_fire_times_do_not_change_on_later_reorigin`・`late_tick_does_not_change_fire_time`・`preview_then_reorigin_then_take_out_differs_by_exactly_the_delta`・`preview_equals_emit_when_not_reoriginated`）。外した物・変えた期待は無い。
