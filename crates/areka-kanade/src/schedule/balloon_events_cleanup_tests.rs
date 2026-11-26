@@ -19,11 +19,12 @@ use super::tests::{
     steady_none,
 };
 use crate::msg::{
-    CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
+    CloseReason, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
     ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::{Action, State};
 use crate::talk::{TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 
 /// 完了の前に持たせる控えの組。
 #[derive(Debug, Clone, Copy)]
@@ -275,7 +276,7 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
         let (actions, ev) = feed_all(
             &mut s,
             vec![Input::Tick {
-                now: MonotonicMs(1_000_000),
+                now: at_ms(1_000_000),
             }],
         );
         assert!(
@@ -299,12 +300,7 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
 #[test]
 fn translate_transport_failure_drops_the_break_note_with_one_talk_gone_line() {
     let mut s = steady_none();
-    feed(
-        &mut s,
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
-    );
+    feed(&mut s, Input::Tick { now: at_ms(2_000) });
     let actions = reply_value(&mut s, ORIGINAL, "OnSecondChange");
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
     let Phase::Steady {

@@ -10,6 +10,7 @@ use crate::schedule::log_capture::{
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, TermCause, step};
 use crate::talk::{StartTalk, TalkEndReason};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 // ============================================================
@@ -27,7 +28,7 @@ fn steady_waiting(
     talk_id: TalkId,
     next_id: u64,
     script: &str,
-    deadline: Option<MonotonicMs>,
+    deadline: Option<TimePoint>,
 ) -> State {
     let mut s = steady_with_ledger(talk_id, next_id, &["OnMenu"], ChoicePhase::Waiting);
     match &mut s.phase {
@@ -48,14 +49,8 @@ fn steady_waiting(
 #[test]
 fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
     let script = r"\0えらんでね\q[はい,OnMenu]\e";
-    let s = steady_waiting(TalkId(3), 6, script, Some(MonotonicMs(32_000)));
-    let (next, actions, ev) = step_capturing(
-        s,
-        Input::Tick {
-            now: MonotonicMs(32_000),
-        },
-        &config(),
-    );
+    let s = steady_waiting(TalkId(3), 6, script, Some(at_ms(32_000)));
+    let (next, actions, ev) = step_capturing(s, Input::Tick { now: at_ms(32_000) }, &config());
     assert_eq!(
         actions.len(),
         1,
@@ -81,7 +76,7 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
     );
     assert_eq!(
         next.last_now,
-        Some(MonotonicMs(32_000)),
+        Some(at_ms(32_000)),
         "発行有無に依らず last_now は進む（既存規律）"
     );
     // OnChoiceTimeout の GET にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
@@ -101,14 +96,8 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
 /// 境界: `now > deadline`（Tick が期限を跨いだ）でも到達（`>=` 判定）。
 #[test]
 fn choice_timeout_fires_when_tick_overshoots_deadline() {
-    let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
-    let (next, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(33_000),
-        },
-        &config(),
-    );
+    let s = steady_waiting(TalkId(3), 6, r"\e", Some(at_ms(32_000)));
+    let (next, actions) = step(s, Input::Tick { now: at_ms(33_000) }, &config());
     let (id, _) = expect_get_call(&actions[0]);
     assert_eq!(id, "OnChoiceTimeout");
     assert!(matches!(
@@ -120,14 +109,8 @@ fn choice_timeout_fires_when_tick_overshoots_deadline() {
 /// 境界: `now < deadline`（1ms 手前）では発行せず、通常の周期送出を続ける。
 #[test]
 fn choice_timeout_does_not_fire_before_deadline() {
-    let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
-    let (next, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(31_999),
-        },
-        &config(),
-    );
+    let s = steady_waiting(TalkId(3), 6, r"\e", Some(at_ms(32_000)));
+    let (next, actions) = step(s, Input::Tick { now: at_ms(31_999) }, &config());
     assert_eq!(actions.len(), 1);
     match &actions[0] {
         Action::ShioriRequest(ShioriCall::Notify { id, .. }) => {
@@ -151,14 +134,8 @@ fn choice_timeout_does_not_fire_before_deadline() {
 fn choice_timeout_never_fires_for_indefinite_deadline() {
     let cfg = config();
     let mut s = steady_waiting(TalkId(3), 6, r"\e", None);
-    for now in [1_000_u64, 60_000, u64::MAX] {
-        let (next, actions) = step(
-            s,
-            Input::Tick {
-                now: MonotonicMs(now),
-            },
-            &cfg,
-        );
+    for now in [at_ms(1_000), at_ms(60_000), TimePoint::MAX] {
+        let (next, actions) = step(s, Input::Tick { now }, &cfg);
         assert_eq!(actions.len(), 1, "無期限でも周期送出は続く（Req7.6）");
         match &actions[0] {
             Action::ShioriRequest(ShioriCall::Notify { id, status, .. }) => {
@@ -181,22 +158,10 @@ fn choice_timeout_never_fires_for_indefinite_deadline() {
 #[test]
 fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
     let cfg = config();
-    let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
-    let (fired, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(32_000),
-        },
-        &cfg,
-    );
+    let s = steady_waiting(TalkId(3), 6, r"\e", Some(at_ms(32_000)));
+    let (fired, actions) = step(s, Input::Tick { now: at_ms(32_000) }, &cfg);
     assert_eq!(expect_get_call(&actions[0]).0, "OnChoiceTimeout");
-    let (next, resumed) = step(
-        fired,
-        Input::Tick {
-            now: MonotonicMs(33_000),
-        },
-        &cfg,
-    );
+    let (next, resumed) = step(fired, Input::Tick { now: at_ms(33_000) }, &cfg);
     assert_eq!(
         resumed.len(),
         1,
@@ -318,14 +283,8 @@ fn choice_timeout_no_content_cancels_choice() {
 fn choice_after_timeout_cancel_is_rejected() {
     let cfg = config();
     // 1) 期限到達 → OnChoiceTimeout。
-    let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
-    let (s1, fired) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(32_000),
-        },
-        &cfg,
-    );
+    let s = steady_waiting(TalkId(3), 6, r"\e", Some(at_ms(32_000)));
+    let (s1, fired) = step(s, Input::Tick { now: at_ms(32_000) }, &cfg);
     assert_eq!(expect_get_call(&fired[0]).0, "OnChoiceTimeout");
     // 2) 204 → CancelChoice（選択待ち解除）。
     let (s2, cancelled) = step(
@@ -383,13 +342,7 @@ fn tick_after_timeout_cancel_drops_choosing() {
         },
         &cfg,
     );
-    let (_next, tick_actions) = step(
-        cancelled,
-        Input::Tick {
-            now: MonotonicMs(40_000),
-        },
-        &cfg,
-    );
+    let (_next, tick_actions) = step(cancelled, Input::Tick { now: at_ms(40_000) }, &cfg);
     assert_eq!(
         status_wire(&tick_actions[0]),
         Some("talking".to_string()),
@@ -747,8 +700,8 @@ fn choice_happy_path_emits_no_error_level_logs() {
             Input::ChoiceWaiting {
                 talk_id: TalkId(3),
                 choice_ids: vec!["OnMenu".to_string()],
-                display_end: MonotonicMs(10_000),
-                timeout_directive_secs: None,
+                display_end: at_ms(10_000),
+                timeout_directive: None,
             },
             &cfg,
         );

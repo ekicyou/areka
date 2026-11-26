@@ -7,6 +7,7 @@ use crate::msg::ShioriCall;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::StartTalk;
+use dola::time::testing::at_ms;
 
 // --- A. 棄却分岐: すべて状態不変・Action なし ---
 
@@ -535,7 +536,7 @@ fn canonical_value_at_first_stage_skips_the_remaining_stage() {
 /// 自発トーク抑止は既存 pump 分岐の構造だけで成立する（新しい抑止機構を作らない）。
 #[test]
 fn tick_during_choice_waiting_notifies_with_talking_and_choosing() {
-    let now = MonotonicMs(1_000);
+    let now = at_ms(1_000);
     let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
     let (next, actions) = step(s, Input::Tick { now }, &config());
     assert_eq!(actions.len(), 1, "選択待ち中も周期イベントは 1 件発行する");
@@ -602,13 +603,7 @@ fn tick_after_choice_resolution_drops_choosing() {
         resolved.choice.is_none(),
         "解決で帳簿が消える（Req6.2 の源）"
     );
-    let (_next, tick_actions) = step(
-        resolved,
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-        &cfg,
-    );
+    let (_next, tick_actions) = step(resolved, Input::Tick { now: at_ms(1_000) }, &cfg);
     assert_eq!(
         status_wire(&tick_actions[0]),
         Some("talking".to_string()),

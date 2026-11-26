@@ -12,8 +12,8 @@
 use super::*;
 use crate::change::{GapLeft, RaiseOutcome, ShioriMethod};
 use crate::msg::{
-    ChoiceInput, CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall,
-    ShioriFailure, ShioriOutcome,
+    ChoiceInput, CloseReason, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure,
+    ShioriOutcome,
 };
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::steady::test_support::expect_get_call;
@@ -21,6 +21,7 @@ use crate::schedule::translate_test_support::config as cfg;
 use crate::schedule::translate_test_support::{change_request, steady_none};
 use crate::schedule::{ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, TermCause, step};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// 再生中のトークの番号（`steady_some` が使う）。
@@ -72,14 +73,7 @@ fn unmarked_request_while_playing_reaches_at_the_end_of_the_talk() {
     assert!(s.talk_gap.is_some(), "決まる前に取り出しても見張りは続く");
 
     // 再生中の Tick（pump は再生中でも回る）では決まらない。
-    let s = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(1_500),
-        },
-        &cfg(),
-    )
-    .0;
+    let s = step(s, Input::Tick { now: at_ms(1_500) }, &cfg()).0;
     assert_waiting(&s, "Tick の後");
 
     let mut s = done_of(s, TALK, TalkEndReason::Ended, false).0;
@@ -589,8 +583,8 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
         Input::ChoiceWaiting {
             talk_id: MARKED,
             choice_ids: vec!["OnMenu".to_string()],
-            display_end: MonotonicMs(1_000),
-            timeout_directive_secs: None,
+            display_end: at_ms(1_000),
+            timeout_directive: None,
         },
         &cfg(),
     );
@@ -641,16 +635,10 @@ fn choice_timeout_release_of_the_marked_talk_is_completed() {
     s.choice = Some(ChoiceState {
         talk_id: MARKED,
         candidates: vec!["OnMenu".to_string()],
-        deadline: Some(MonotonicMs(2_000)),
+        deadline: Some(at_ms(2_000)),
         phase: ChoicePhase::Waiting,
     });
-    let (s, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
-        &cfg(),
-    );
+    let (s, actions) = step(s, Input::Tick { now: at_ms(2_000) }, &cfg());
     assert_eq!(expect_get_call(&actions[0]).0, "OnChoiceTimeout");
     let (s, actions) = reply(s, ShioriOutcome::NoContent, "OnChoiceTimeout");
     assert!(

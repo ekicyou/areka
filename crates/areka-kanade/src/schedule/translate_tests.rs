@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::change::ShioriMethod;
-use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriFaultKind};
+use crate::msg::{CloseReason, EventId, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate_test_support::config as cfg;
@@ -12,6 +12,7 @@ use crate::schedule::translate_test_support::{change_request, pass_translate, st
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 fn choice_source() -> EventId {
@@ -229,9 +230,7 @@ fn non_reply_input_does_not_take_the_note() {
         reply_source: Some(stale_source()),
         ..steady(None)
     };
-    let input = Input::Tick {
-        now: MonotonicMs(600),
-    };
+    let input = Input::Tick { now: at_ms(600) };
     assert_eq!(before(&mut s, &input).source, None);
     assert_eq!(s.reply_source, Some(stale_source()));
 }

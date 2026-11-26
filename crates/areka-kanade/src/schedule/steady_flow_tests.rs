@@ -4,6 +4,7 @@ use crate::msg::{MouseButton, MouseEventKind, MouseInput, ShioriCall};
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkEndReason};
+use dola::time::testing::at_ms;
 
 /// Action 列に OnSecondChange の ShioriRequest が一切ないことを検証する（ゲート閉）。
 fn assert_no_second_change(actions: &[Action]) {
@@ -26,7 +27,7 @@ fn assert_no_second_change(actions: &[Action]) {
 
 #[test]
 fn steady_none_tick_emits_get_and_updates_last_now() {
-    let now = MonotonicMs(7_200_000); // 2 hours。
+    let now = at_ms(7_200_000); // 2 hours。
     let (next, actions) = step(steady_none(5), Input::Tick { now }, &config());
     assert!(matches!(next.phase, Phase::Steady { talk: None }));
     assert_eq!(
@@ -46,7 +47,7 @@ fn steady_none_tick_emits_get_and_updates_last_now() {
 
 #[test]
 fn steady_some_tick_emits_notify() {
-    let now = MonotonicMs(3_600_000); // 1 hour。
+    let now = at_ms(3_600_000); // 1 hour。
     let (next, actions) = step(steady_some(TalkId(3), 6), Input::Tick { now }, &config());
     match next.phase {
         Phase::Steady {
@@ -73,7 +74,7 @@ fn steady_some_tick_emits_notify() {
 
 #[test]
 fn steady_none_tick_with_pending_close_begins_handshake() {
-    let now = MonotonicMs(1_000);
+    let now = at_ms(1_000);
     let mut s = steady_none(5);
     s.pending_close = Some(CloseReason::User { scope: 0 });
     let (next, actions) = step(s, Input::Tick { now }, &config());
@@ -102,13 +103,7 @@ fn boot_phase_tick_emits_no_second_change() {
         phase: Phase::BootMain,
         ..State::initial()
     };
-    let (_next, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-        &config(),
-    );
+    let (_next, actions) = step(s, Input::Tick { now: at_ms(1_000) }, &config());
     // boot::step は pump を発行しない（ゲートは Steady に閉じている）。
     assert_no_second_change(&actions);
 }
@@ -121,13 +116,7 @@ fn close_pending_tick_emits_no_second_change() {
         phase: Phase::ClosePending,
         ..State::initial()
     };
-    let (_next, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-        &config(),
-    );
+    let (_next, actions) = step(s, Input::Tick { now: at_ms(1_000) }, &config());
     // close::step は ClosePending の Tick で last_now を更新するだけ（pump しない）——OnSecondChange が出ないことを検証。
     assert_no_second_change(&actions);
 }
@@ -142,13 +131,7 @@ fn close_talk_wait_tick_emits_no_second_change() {
         next_talk_id: 3,
         ..State::initial()
     };
-    let (_next, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-        &config(),
-    );
+    let (_next, actions) = step(s, Input::Tick { now: at_ms(1_000) }, &config());
     assert_no_second_change(&actions);
 }
 
@@ -432,7 +415,7 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
     assert!(actions.is_empty(), "TalkDone 自体は副作用なし");
 
     // 復帰後の次 Tick で pump（GET）が再開することを確認。
-    let now = MonotonicMs(9_000);
+    let now = at_ms(9_000);
     let (after, tick_actions) = step(next, Input::Tick { now }, &config());
     assert!(matches!(after.phase, Phase::Steady { talk: None }));
     assert_eq!(tick_actions.len(), 1);

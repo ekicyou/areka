@@ -1,13 +1,14 @@
 //! `script:` の選択肢を受け付けた後の結末のテスト（最上位の `schedule::step` から通す）。
 
 use super::super::test_support::{choice_input_of, config, expect_get_call, steady_with_ledger};
-use crate::msg::{MonotonicMs, ShioriOutcome};
+use crate::msg::ShioriOutcome;
 use crate::schedule::balloon_events::ShownTalk;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate::Translated;
 use crate::schedule::{Action, ActiveTalk, ChoicePhase, Input, Phase, step};
 use crate::talk::{ScriptOrigin, TalkId};
 use areka_talk::SecurityLevel;
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// `\q[バルーンを閉じる,script:\e]` を選ぶと、SHIORI のイベントも翻訳も起こさず、
@@ -125,15 +126,15 @@ fn nested_script_choice_runs_two_stages() {
         Input::ChoiceWaiting {
             talk_id: TalkId(6),
             choice_ids: vec!["script:その３はない".to_string()],
-            display_end: MonotonicMs(1_000),
-            timeout_directive_secs: None,
+            display_end: at_ms(1_000),
+            timeout_directive: None,
         },
         &config(),
     );
     assert!(
         matches!(
             actions.as_slice(),
-            [Action::ArmChoiceWake(MonotonicMs(31_000))]
+            [Action::ArmChoiceWake(t)] if *t == at_ms(31_000)
         ),
         "待ちの知らせは期限の起こしの頼みだけを出す"
     );

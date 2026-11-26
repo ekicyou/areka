@@ -1,4 +1,5 @@
 use super::*;
+use dola::time::testing::at_ms;
 
 use crate::schedule::translate_test_support::config;
 
@@ -83,7 +84,7 @@ fn baseware_version_is_notify_with_version_and_name() {
 #[test]
 fn on_second_change_playable_is_get_ref3_one() {
     // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空。
-    let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot::INACTIVE);
+    let call = on_second_change(at_ms(7_200_000), &ExecutionSnapshot::INACTIVE);
     assert_eq!(
         call_status(&call),
         None,
@@ -105,7 +106,7 @@ fn on_second_change_playable_is_get_ref3_one() {
 #[test]
 fn on_second_change_not_playable_is_notify_ref3_zero() {
     // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking。
-    let call = on_second_change(MonotonicMs(3_600_000), &talking());
+    let call = on_second_change(at_ms(3_600_000), &talking());
     assert_eq!(
         call_status(&call),
         Some("talking".to_string()),
@@ -128,7 +129,7 @@ fn on_second_change_not_playable_is_notify_ref3_zero() {
 fn on_second_change_ref0_truncates_toward_zero() {
     // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
     let (_, references, _) = expect_get(on_second_change(
-        MonotonicMs(3_599_999),
+        at_ms(3_599_999),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(references[0], "0");
@@ -472,8 +473,8 @@ fn every_construction_function_returns_an_allowed_static_id() {
         ),
         on_ghost_changed(&from, "master", &snap),
         baseware_version(&cfg, &snap),
-        on_second_change(MonotonicMs(0), &snap),
-        on_second_change(MonotonicMs(0), &talking()),
+        on_second_change(at_ms(0), &snap),
+        on_second_change(at_ms(0), &talking()),
         on_close(CloseReason::User { scope: 0 }, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),

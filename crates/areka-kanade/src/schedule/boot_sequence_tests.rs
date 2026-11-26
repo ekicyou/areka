@@ -7,6 +7,7 @@ use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 use crate::talk::TalkId;
+use dola::time::testing::at_ms;
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 
@@ -548,8 +549,6 @@ fn boot_version_talkdone_interrupted_is_treated_as_ended() {
 
 #[test]
 fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
-    use crate::msg::MonotonicMs;
-
     let cfg = config();
     let s = super::test_support::boot_until_version_with_greeting(&cfg, Some(CloseReason::System));
     let s = assert_boot_version_talkdone_accepted(s, crate::talk::TalkEndReason::Ended, &cfg);
@@ -574,13 +573,7 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
     ));
     assert_eq!(s.pending_close.map(CloseReason::as_ref_str), Some("system"));
 
-    let (s, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-        &cfg,
-    );
+    let (s, actions) = step(s, Input::Tick { now: at_ms(1_000) }, &cfg);
     assert_eq!(
         actions.len(),
         1,

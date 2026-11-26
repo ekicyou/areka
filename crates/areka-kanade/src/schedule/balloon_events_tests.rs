@@ -9,10 +9,11 @@
 use super::super::{Input, Phase, step};
 use super::ShownTalk;
 use super::done_tests::done;
-use crate::msg::{MonotonicMs, ShioriOutcome};
+use crate::msg::ShioriOutcome;
 use crate::schedule::translate_test_support::change_request;
 use crate::schedule::{Action, State};
 use crate::talk::{ScriptOrigin, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 
 pub(super) use crate::schedule::translate_test_support::config as cfg;
 
@@ -25,7 +26,7 @@ pub(super) const FINAL: &str = "\\0最終の台本\\e";
 pub(super) fn steady_none() -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
+        last_now: Some(at_ms(1_000)),
         next_talk_id: 5,
         ..State::initial()
     }
@@ -77,13 +78,8 @@ pub(super) fn reply_and_start(s: &mut State, origin: &'static str, final_script:
 }
 
 /// 毎秒のポンプの応答で `ORIGINAL` を返し、翻訳の結果 `final_script` で再生を始める。
-pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> TalkId {
-    feed(
-        s,
-        Input::Tick {
-            now: MonotonicMs(now),
-        },
-    );
+pub(super) fn start_translated(s: &mut State, now: i64, final_script: &str) -> TalkId {
+    feed(s, Input::Tick { now: at_ms(now) });
     reply_and_start(s, "OnSecondChange", final_script)
 }
 
@@ -123,12 +119,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
         timeout_pending: false,
     });
 
-    feed(
-        &mut s,
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
-    );
+    feed(&mut s, Input::Tick { now: at_ms(2_000) });
     let actions = reply_value(&mut s, ORIGINAL, "OnSecondChange");
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
     assert_eq!(

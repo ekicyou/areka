@@ -2,6 +2,7 @@ use super::test_support::{choice_input_of, config, expect_get_call, expect_ledge
 use super::*;
 use crate::schedule::log_capture::{assert_logged, capture};
 use crate::schedule::step;
+use dola::time::testing::{at_ms, delta_ms};
 use tracing::Level;
 
 // ============================================================
@@ -12,41 +13,54 @@ use tracing::Level;
 // 期限ちょうどに `OnChoiceTimeout` を出す。時刻は注入値だけで決まり、実時間を待たない。
 
 /// 表示の終わり 10,001・指令 `secs` の選択待ちの通知（トーク 3 番・候補 `OnMenu`）。
-fn choice_waiting(secs: f64) -> Input {
+fn choice_waiting(directive: TimeDelta) -> Input {
     Input::ChoiceWaiting {
         talk_id: TalkId(3),
         choice_ids: vec!["OnMenu".to_string()],
-        display_end: MonotonicMs(10_001),
-        timeout_directive_secs: Some(secs),
+        display_end: at_ms(10_001),
+        timeout_directive: Some(directive),
     }
 }
 
 /// 指令 0.5 秒の選択待ちを作った `Steady{Some}`（期限 10,501）。
 fn waiting_until_10_501() -> State {
-    let (s, _) = step(steady_some(TalkId(3), 4), choice_waiting(0.5), &config());
+    let (s, _) = step(
+        steady_some(TalkId(3), 4),
+        choice_waiting(delta_ms(500)),
+        &config(),
+    );
     s
 }
 
-fn due(now: u64) -> Input {
-    Input::ChoiceTimeoutDue {
-        now: MonotonicMs(now),
-    }
+fn due(now: i64) -> Input {
+    Input::ChoiceTimeoutDue { now: at_ms(now) }
 }
 
 /// 期限つきの帳簿を作った時に `ArmChoiceWake(期限)` を 1 つだけ返し、無効化の指令（0・-1）では返さない。
 #[test]
 fn choice_waiting_with_a_deadline_asks_for_a_wake_at_the_deadline() {
-    let (_, actions) = step(steady_some(TalkId(3), 4), choice_waiting(0.5), &config());
+    let (_, actions) = step(
+        steady_some(TalkId(3), 4),
+        choice_waiting(delta_ms(500)),
+        &config(),
+    );
     assert!(
         matches!(
             actions.as_slice(),
-            [Action::ArmChoiceWake(MonotonicMs(10_501))]
+            [Action::ArmChoiceWake(t)] if *t == at_ms(10_501)
         ),
         "期限 10,501 の起こしの頼みが 1 つだけ出る"
     );
-    for secs in [0.0, -1.0] {
-        let (next, actions) = step(steady_some(TalkId(3), 4), choice_waiting(secs), &config());
-        assert!(actions.is_empty(), "無期限（指令 {secs}）は頼みを出さない");
+    for directive in [delta_ms(0), delta_ms(-1_000)] {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 4),
+            choice_waiting(directive),
+            &config(),
+        );
+        assert!(
+            actions.is_empty(),
+            "無期限（指令 {directive}）は頼みを出さない"
+        );
         assert!(
             expect_ledger(&next).deadline.is_none(),
             "帳簿は無期限で立つ"
@@ -62,7 +76,7 @@ fn the_deadline_notice_fires_exactly_at_the_deadline() {
     assert!(matches!(expect_ledger(&s).phase, ChoicePhase::Waiting));
     assert_eq!(
         s.last_now,
-        Some(MonotonicMs(500)),
+        Some(at_ms(500)),
         "知らせは last_now を動かさない"
     );
 
@@ -75,13 +89,7 @@ fn the_deadline_notice_fires_exactly_at_the_deadline() {
         ChoicePhase::TimeoutInFlight
     ));
 
-    let (_, actions) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(11_000),
-        },
-        &config(),
-    );
+    let (_, actions) = step(s, Input::Tick { now: at_ms(11_000) }, &config());
     for a in &actions {
         if let Action::ShioriRequest(ShioriCall::Get { id, .. }) = a {
             assert_ne!(id.as_str(), "OnChoiceTimeout", "二度目の時間切れは出ない");

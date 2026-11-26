@@ -27,7 +27,10 @@ use crate::msg::{ChoiceInput, ShioriCall};
 #[cfg(test)]
 use crate::status::ExecutionSnapshot;
 #[cfg(test)]
-use dola::{TimePoint, time::testing::at_ms};
+use dola::{
+    TimePoint,
+    time::testing::{at_ms, delta_ms},
+};
 
 /// アンカーの選択の受理と 2 段の送出（帳簿なし・段の記憶だけ）。
 pub(crate) mod anchor;

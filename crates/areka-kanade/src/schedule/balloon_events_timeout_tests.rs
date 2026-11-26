@@ -12,9 +12,10 @@ use super::done_tests::{
 use super::tests::{
     FINAL, ORIGINAL, feed, finish, reply_value, start_translated, steady_after_talk, steady_none,
 };
-use crate::msg::{CloseReason, MonotonicMs};
+use crate::msg::CloseReason;
 use crate::schedule::Action;
 use crate::talk::{TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// 時間切れの知らせ。
@@ -117,12 +118,7 @@ fn d2_next_talk_playing_refuses_the_old_notice() {
 #[test]
 fn d2_notice_while_next_talk_awaits_translation_is_refused_not_held() {
     let (mut s, old) = steady_after_talk();
-    feed(
-        &mut s,
-        Input::Tick {
-            now: MonotonicMs(3_000),
-        },
-    );
+    feed(&mut s, Input::Tick { now: at_ms(3_000) });
     let actions = reply_value(&mut s, ORIGINAL, "OnSecondChange");
     assert!(
         matches!(actions.as_slice(), [Action::Translate(_)]),

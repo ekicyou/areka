@@ -136,3 +136,7 @@
 - 書き替えたテスト: `choice_deadline_tiny_positive_is_immediate_not_indefinite` → `choice_deadline_smallest_positive_is_not_indefinite`（1e-9 秒・期待 1,000 ms → 100ns・期待 `at_ms(1000)` + 1 刻み）・`choice_deadline_positive_adds_seconds` → `choice_deadline_positive_adds_directive`・`choice_deadline_saturates_on_extreme_values`（`INFINITY`／`1e300` → `TimeDelta::MAX`、期待 `u64::MAX` → `TimePoint::MAX`）・`choice_deadline_negative_is_indefinite`（`NEG_INFINITY` → `TimeDelta::MIN`、−0.001 → 1 刻みの負）。
 - ログの欄: `deadline_ms`→`deadline`・`overshoot_ms`→`overshoot`・`display_end_ms`→`display_end`・`timeout_directive_secs`→`timeout_directive`・`now_ms`→`now`（Display で出す）。
 - `OnSecondChange` の Reference0: 「ミリ秒 ÷ 3,600,000」→「100ns の数 ÷ 36,000,000,000」（`at_ms` で書いた値なら時の数は同じ）。
+
+## 3.10
+
+- 外したテスト・分かれ道・ログは無い。変える前後の期待（名前は変えていない）: `MonotonicMs(n)` → `at_ms(n)`。`msg_tests::kanade_config_new_supplies_documented_defaults`（`close_talk_deadline_ms == 30_000` → `close_talk_deadline == ms(30_000)`、`choice_timeout_default` も同じ）。`schedule_tests::choice_waiting_deadline_follows_dd8_directive_mapping`（指令の秒 → `delta_ms`、期待 `Option<TimePoint>`）。`choice_timeout_never_fires_for_indefinite_deadline`（`u64::MAX` → `TimePoint::MAX`）。`schedule_log_firing_tests::info_choice_waiting_established_logs_candidate_count_and_deadline`（欄 `deadline_ms` → `deadline`、期待 `"Some(32000)"` → 文字の形 `Some(32.0000000)`）。

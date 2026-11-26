@@ -5,7 +5,7 @@
 //! 返った台本の翻訳の Reference と strict の印もここで縛る。
 
 use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
-use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome};
+use crate::msg::{CloseReason, EventId, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::events::{SourceEvent, on_translate};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
@@ -19,6 +19,7 @@ use crate::schedule::{
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 fn notify(event: &str, refs: &[&str], strict: Option<bool>) -> Input {
@@ -173,7 +174,7 @@ fn no_value_or_empty_keeps_the_current_talk() {
         state.choice = Some(ChoiceState {
             talk_id: TalkId(9),
             candidates: vec![CHOICE_ID.to_string()],
-            deadline: Some(MonotonicMs(1_000)),
+            deadline: Some(at_ms(1_000)),
             phase: ChoicePhase::Waiting,
         });
         let mut out = None;
@@ -227,7 +228,7 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
     state.choice = Some(ChoiceState {
         talk_id: TalkId(9),
         candidates: vec![CHOICE_ID.to_string()],
-        deadline: Some(MonotonicMs(1_000)),
+        deadline: Some(at_ms(1_000)),
         phase: ChoicePhase::Waiting,
     });
     let cfg = config();

@@ -268,7 +268,7 @@
   - _Dispatch: standard — 形は設計が与え、期限と Reference0 の書き換えが残る_
   - _Requirements: 4.6, 14.6, 17.1, 17.3, 17.5, 17.7_
 
-- [ ] 3.10 (P) areka-kanade の `src` のテストを直す
+- [x] 3.10 (P) areka-kanade の `src` のテストを直す
   - 期待の値を時刻の型で書き、ログの欄の名前の変化（`now_ms` → `now` ほか）に合わせる
   - そのファイルが誤り 0 件である
   - _Boundary: areka-kanade src のテスト_

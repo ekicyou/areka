@@ -4,13 +4,14 @@
 //! 送らせ、その台詞の応答を入れ、翻訳の結果を入れ直して、最後に出る再生の開始の出どころを見る。
 //! 外からの台本は入力そのもので始まる。
 
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 use super::super::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use super::super::sstp::NOTIFY_ORIGIN;
 use super::super::translate::Translated;
 use super::super::{Action, Input, step};
-use crate::msg::{MonotonicMs, ShioriOutcome};
+use crate::msg::ShioriOutcome;
 use crate::schedule::translate_test_support::{config as cfg, steady_none as steady};
 use crate::talk::ScriptOrigin;
 use areka_talk::SecurityLevel;
@@ -52,9 +53,7 @@ fn ghost_talk(
     translate_level: SecurityLevel,
 ) -> (ScriptOrigin, Vec<CapturedEvent>) {
     let (actions, ev) = run(vec![
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
+        Input::Tick { now: at_ms(2_000) },
         reply(reply_level, "OnSecondChange"),
         translated(translate_level),
     ]);
@@ -136,9 +135,7 @@ fn shown_talk_keeps_the_final_origin_after_translation() {
     let cfg = cfg();
     let mut state = steady();
     for input in [
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
+        Input::Tick { now: at_ms(2_000) },
         reply(SecurityLevel::Local, "OnSecondChange"),
         translated(SecurityLevel::External),
     ] {

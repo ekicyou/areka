@@ -5,18 +5,19 @@
 //! `mouse_input_in_non_steady_phases_is_ignored` が固定する）。
 
 use super::*;
-use crate::msg::{CloseReason, MonotonicMs, ShioriFailure, ShioriOutcome};
+use crate::msg::{CloseReason, ShioriFailure, ShioriOutcome};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate_test_support::{config, only_get};
 use crate::schedule::{ActiveTalk, Input, Phase, step};
 use crate::talk::TalkId;
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// 定常（話していない）。
 fn steady_none() -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: 7,
         ..State::initial()
     }

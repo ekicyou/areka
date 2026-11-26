@@ -4,7 +4,7 @@
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
 use super::{SEND_ORIGIN, accepts};
-use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{CloseReason, EventId, ShioriCall, ShioriOutcome};
 use crate::schedule::events::{on_translate_sstp, sstp_notify};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::ScriptSource;
@@ -18,6 +18,7 @@ use crate::schedule::{
 };
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// 任意の名前の GET は `EventId::Sstp` で、渡された Reference をそのまま載せる。
@@ -305,7 +306,7 @@ fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
     state.choice = Some(ChoiceState {
         talk_id: TalkId(9),
         candidates: vec![CHOICE_ID.to_string()],
-        deadline: Some(MonotonicMs(1_000)),
+        deadline: Some(at_ms(1_000)),
         phase: ChoicePhase::Waiting,
     });
     let cfg = config();

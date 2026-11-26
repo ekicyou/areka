@@ -9,9 +9,10 @@ use super::super::balloon_events::BreakNote;
 use super::super::{
     Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
-use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall};
+use crate::msg::{KanadeConfig, ShioriCall};
 use crate::schedule::translate_test_support::config;
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 use log_capture::{logged_once, step_capturing};
 use tracing::Level;
 
@@ -19,7 +20,7 @@ use tracing::Level;
 fn with_phase(phase: Phase) -> State {
     State {
         phase,
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: 6,
         ..State::initial()
     }
@@ -56,7 +57,7 @@ fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
             "CloseTalkWait",
             with_phase(Phase::CloseTalkWait {
                 talk_id,
-                deadline: Some(MonotonicMs(30_500)),
+                deadline: Some(at_ms(30_500)),
             }),
         ),
     ]
@@ -145,11 +146,7 @@ fn user_break_without_playing_talk_stops_nothing() {
             "{label}: 終了の保留を作らない"
         );
         assert_eq!(next.next_talk_id, 6, "{label}: 採番しない");
-        assert_eq!(
-            next.last_now,
-            Some(MonotonicMs(500)),
-            "{label}: 時刻を動かさない"
-        );
+        assert_eq!(next.last_now, Some(at_ms(500)), "{label}: 時刻を動かさない");
         let logged = logged_once(&ev, Level::DEBUG, "balloon_break_no_talk");
         assert_eq!(
             logged.fields.get("reason").map(String::as_str),
@@ -400,7 +397,7 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
     waiting.choice = Some(ChoiceState {
         talk_id: TalkId(3),
         candidates: vec!["OnMenu".to_string()],
-        deadline: Some(MonotonicMs(32_000)),
+        deadline: Some(at_ms(32_000)),
         phase: ChoicePhase::Waiting,
     });
 
@@ -422,13 +419,7 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
     );
 
     // 完了通知の**前**に期限を過ぎた刻みが届いても、時間切れは出ない。
-    let (before_done, tick_actions) = step(
-        accepted,
-        Input::Tick {
-            now: MonotonicMs(40_000),
-        },
-        &cfg,
-    );
+    let (before_done, tick_actions) = step(accepted, Input::Tick { now: at_ms(40_000) }, &cfg);
     assert_no_choice_timeout(&tick_actions, "完了通知の前の刻み");
     assert!(before_done.choice.is_none(), "刻みは帳簿を復活させない");
 
@@ -443,13 +434,7 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
         &cfg,
     );
     assert_no_choice_timeout(&done_actions, "完了通知そのもの");
-    let (_next, late_tick) = step(
-        after_done,
-        Input::Tick {
-            now: MonotonicMs(50_000),
-        },
-        &cfg,
-    );
+    let (_next, late_tick) = step(after_done, Input::Tick { now: at_ms(50_000) }, &cfg);
     assert_no_choice_timeout(&late_tick, "完了通知の後の刻み");
 }
 
@@ -556,13 +541,7 @@ fn reserved_quit_without_user_break_does_not_end_the_ghost() {
 fn next_tick_after_user_break_asks_for_the_next_talk() {
     let cfg = config();
     let (returned, _) = step(after_user_break(&cfg), interrupted(false), &cfg);
-    let (_next, actions) = step(
-        returned,
-        Input::Tick {
-            now: MonotonicMs(41_000),
-        },
-        &cfg,
-    );
+    let (_next, actions) = step(returned, Input::Tick { now: at_ms(41_000) }, &cfg);
     assert!(
         matches!(
             actions.as_slice(),
@@ -582,7 +561,7 @@ fn user_break_during_the_farewell_talk_ends_the_ghost() {
     let (accepted, actions) = step(
         with_phase(Phase::CloseTalkWait {
             talk_id: TalkId(3),
-            deadline: Some(MonotonicMs(30_500)),
+            deadline: Some(at_ms(30_500)),
         }),
         Input::UserBreak {
             scope: 0,
