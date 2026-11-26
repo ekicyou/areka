@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use crate::easing::EasingFunction;
 use crate::storyboard::{InterruptionPolicy, LoopOffset};
+use crate::time::{TimeDelta, TimeScale, TimeSpan};
 use crate::transition::TransitionValue;
 
 /// コンパイル済みストーリーボードのルート構造体
@@ -16,12 +17,10 @@ use crate::transition::TransitionValue;
 pub struct CompiledStoryboard {
     /// 元のストーリーボード名
     pub storyboard_name: String,
-    /// コンパイル起点の開始時刻（f64秒）
-    pub start_time: f64,
     /// 変数名 → コンパイル済みタイムライン
     pub timelines: BTreeMap<String, CompiledVariableTimeline>,
     /// 再生速度倍率（ランタイム適用、事前適用なし）
-    pub time_scale: f64,
+    pub time_scale: TimeScale,
     /// ループ回数（1 = 1回再生、n≥2 = n回再生、-1 = 無限ループ）
     pub loop_count: i32,
     /// 割り込み終了戦略
@@ -29,9 +28,18 @@ pub struct CompiledStoryboard {
     /// ループオフセット定義（省略可能）
     pub loop_offset: Option<LoopOffset>,
     /// ベース合計再生時間 time_scale未適用 全タイムラインの最大値
-    pub total_base_duration: f64,
+    pub total_base_duration: TimeSpan,
     /// トリガーリスト（fire_time 順ソート済み）
     pub triggers: Vec<CompiledTrigger>,
+}
+
+impl CompiledStoryboard {
+    /// 1 周の経った長さ（倍率の写しで全体の長さに届く最初の長さ）。表せなければ `None`。
+    pub fn lap_length(&self) -> Option<TimeSpan> {
+        self.time_scale
+            .first_reaching(self.total_base_duration.into())
+            .and_then(TimeDelta::to_span)
+    }
 }
 
 /// 変数ごとのセグメント列とランタイムヒント
@@ -41,8 +49,8 @@ pub struct CompiledVariableTimeline {
     pub variable_type: VariableTypeHint,
     /// セグメント配列（時刻順ソート済み、重複なし）
     pub segments: Vec<CompiledSegment>,
-    /// このタイムラインのベース再生時間（最終セグメント end_time - コンパイルの起点 start_time。先頭の遅れを含む）
-    pub base_duration: f64,
+    /// このタイムラインのベース再生時間（最終セグメントの end_time。storyboard の頭からの隔たりで、先頭の遅れを含む）
+    pub base_duration: TimeDelta,
     /// 値域下限 f64/i64のみ
     pub min_value: Option<f64>,
     /// 値域上限 f64/i64のみ
@@ -52,11 +60,11 @@ pub struct CompiledVariableTimeline {
 /// 単一トランジションセグメントの全情報
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledSegment {
-    /// セグメント開始時刻（絶対時刻、f64秒）
-    pub start_time: f64,
-    /// セグメント終了時刻（絶対時刻、f64秒）
+    /// セグメント開始時刻（storyboard の頭からの隔たり。頭より前にも置ける）
+    pub start_time: TimeDelta,
+    /// セグメント終了時刻（storyboard の頭からの隔たり）
     /// 即時遷移の場合は start_time と等しい
-    pub end_time: f64,
+    pub end_time: TimeDelta,
     /// 開始値
     pub from_value: TransitionValue,
     /// 終了値
@@ -80,12 +88,12 @@ pub enum VariableTypeHint {
 /// コンパイル済みトリガー情報
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledTrigger {
-    /// トリガー発火時刻（絶対時刻、f64秒）
-    pub fire_time: f64,
+    /// トリガー発火時刻（storyboard の頭からの隔たり）
+    pub fire_time: TimeDelta,
     /// 対象ストーリーボード名
     pub target_storyboard: String,
-    /// 開始オフセット（fire_time + start_offset = 子SBの start_time）
-    pub start_offset: Option<f64>,
+    /// 開始オフセット（発火の時刻 + start_offset = 子SBを始める時刻）
+    pub start_offset: Option<TimeDelta>,
     /// 元エントリのインデックス（デバッグ用）
     pub source_entry_index: usize,
 }

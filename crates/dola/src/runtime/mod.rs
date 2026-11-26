@@ -12,8 +12,5 @@ mod subscription_manager;
 mod timeline_manager;
 mod types;
 
-#[cfg(target_os = "windows")]
-pub mod clock;
-
 pub use facade::DolaRuntime;
 pub use types::{EvaluatedValue, RuntimeError, StartResult, TriggerResult, UpdateResult};

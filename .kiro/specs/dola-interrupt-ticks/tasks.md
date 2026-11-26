@@ -58,7 +58,7 @@
 
 - [ ] 2. 段 1: dola の公開の口を時刻の型へ付け替える（前半・ここから赤）
 
-- [ ] 2.1 土台の家族: 誤りの型・コンパイルの結果の型・古い時計と共有の手助けを替える
+- [x] 2.1 土台の家族: 誤りの型・コンパイルの結果の型・古い時計と共有の手助けを替える
   - 誤りの型の variant の足し引きの全部（消える数の誤りと負の周回のずらし・`LoopOffsetRangeInverted` を長さの型で・文書の値の上限の誤り・1 周の長さが表せない誤り）を 1 度で替え、表示の字面のテストも直す。後のタスクは、このファイルを編集しない
   - コンパイルの結果の型の時刻の欄を、storyboard の頭からの隔たり（符号つきの差）と長さの型にし、開始の時刻の欄を消し、1 周の長さを求める 1 本の関数（`lap_length`）を置く。説明の「絶対時刻」を「頭からの隔たり」へ直す
   - `runtime::clock` を消し、`Win32_System_Performance` の機能を外し、dola の頭の古い再公開を外す
@@ -796,3 +796,4 @@
 
 - 1.1: `now` の再公開は `time/mod.rs` と `lib.rs` の `#[cfg(windows)] #[allow(unused_imports)] pub use …clock::*;`（`shortcut:` のコメントつき）の仮の形。1.4 が `now` を置く時に、2 か所の `allow` とコメントを消し、`pub use clock::now;`／`pub use time::now;` の名前の形へ替える。`serde_ticks`・`serde_secs` は `pub(crate) mod`。秒の丸めは「`secs × 1e7` の f64 の積を round（中間は 0 から遠い側）」。
 - 1.4: `serde_ticks`・`serde_secs` は `pub(crate)` で、`time/mod.rs` の宣言に `#[allow(dead_code)]` と `shortcut:` のコメントがある。欄をアダプタへ付け替えるタスク（2.2・2.9）が外す。`Option` の欄は `#[serde(with = ..., default)]`（cue の欄はさらに `skip_serializing_if = "Option::is_none"`）が要る。上限の検査は `serde_secs::within_document_range(ticks) -> bool` を呼ぶ。Windows でない検査は、入っている aarch64-unknown-linux-gnu で見た（x86_64-unknown-linux-gnu は未導入）。
+- 2.1: コンパイルの `checked_add` のあふれは、error.rs を触らずに、今在る `TimeOutOfDocumentRange { location, field }` を使う（`InvalidNumber` の `value: f64` は整数の和のあふれに合わない）。dola の結合テストは `dola::time::testing` を使えない（自分を dev-dependency に持たない）ので、`TimeSpan::from_millis` などの公開の const fn で組む。各タスクの記録に書く事は、進行役が `ledger-notes.md` に控える。

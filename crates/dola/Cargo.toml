@@ -22,7 +22,7 @@ workspace = true
 optional = true
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_System_Performance", "Win32_System_WindowsProgramming"] }
+windows = { workspace = true, features = ["Win32_System_WindowsProgramming"] }
 
 [dev-dependencies]
 serde_json = "1"
