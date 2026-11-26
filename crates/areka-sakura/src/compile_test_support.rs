@@ -61,8 +61,16 @@ pub(super) fn assert_clear_all_prefix_and_rest(cues: &[Cue]) -> &[Cue] {
         &CueCommand::ClearAll,
         "先頭 cue は ClearAll"
     );
-    assert_eq!(cues[0].start_time, 0.0, "ClearAll の start_time は 0.0");
-    assert_eq!(cues[0].duration, 0.0, "ClearAll の duration は 0.0");
+    assert_eq!(
+        cues[0].start_time,
+        TimeSpan::ZERO,
+        "ClearAll の start_time は 0"
+    );
+    assert_eq!(
+        cues[0].duration,
+        TimeSpan::ZERO,
+        "ClearAll の duration は 0"
+    );
     // ClearAll は単一前置（内容側に重複しない・スコープ数に依らず 1 件）。barrier/routing の
     // 非 Command cue（choice 台本の末尾 barrier 等）は ClearAll ではあり得ないため走査から除く。
     assert!(

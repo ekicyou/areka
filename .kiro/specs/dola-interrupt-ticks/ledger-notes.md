@@ -116,3 +116,10 @@
 ## 3.6
 
 - 外したテスト・分かれ道・ログは無い。足した関数 `areka_sakura::reveal::chunk_reveal_offsets` と隣のテスト 12 本。割り切れる長さ（字数 × 50 ms）では今の値と同じ（`production_length_matches_current_values`）。割り切れない長さでは、どの字も今の実数の式の値から 100ns 未満だけ動く（`chained_chunks_keep_error_below_one_tick_and_never_go_back` ほか）。今の実数の式（emo-text の `extend_chunk`・seriko の `push_chunk`）の置き換えは 4.2・4.5。
+
+## 3.7
+
+- 外した確かめ: `compiled_start_times_are_finite_non_negative_non_decreasing` → `compiled_start_times_are_non_decreasing`（有限・非負は型が保証する。非減少と同じ時刻の確かめは残した）。`compile_choice_timeout_tests.rs` の補助 `parse` の `is_finite`。
+- 改名（実数のビットの比べ → ちょうどの型の値）: `start_times_sit_on_the_millisecond_grid` → `start_times_accumulate_exactly`・`wait_duration_is_on_the_ms_grid` → `wait_duration_is_exact`・`integer_ms_round_trips_through_secs` → `integer_ms_is_exact`。
+- 変える前後の期待: `ChoiceTimeoutDirective::Secs(..)` → `Delta(delta_ms(..))`、桁あふれの行は `Delta(TimeDelta::MAX/MIN)`。`trailing_explicit_wait_remains_in_sheet_and_extends_extent`（実数の和 0.9500000000000001 → `ms(950)`）。起点を押していない台本は `absolute_end_time()` → `relative_end()`。
+- 足したテスト: `compile_arm_tests.rs::sysvar_after_text_starts_at_the_preceding_offset`。

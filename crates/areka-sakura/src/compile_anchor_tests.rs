@@ -68,13 +68,13 @@ fn is_anchor(cue: &Cue) -> bool {
 }
 
 /// 台本の占有の終わり（`max(start_time + duration)`）。
-fn horizon(compiled: &CompiledTalk) -> f64 {
+fn horizon(compiled: &CompiledTalk) -> TimeSpan {
     compiled
         .sheet
         .cues()
         .iter()
         .map(|cue| cue.start_time + cue.duration)
-        .fold(0.0, f64::max)
+        .fold(TimeSpan::ZERO, TimeSpan::max)
 }
 
 /// 4 つの形（ID だけ・引数付き・`On` 始まり・閉じ）と空の ID が、記述順のまま開きと閉じの
@@ -117,7 +117,7 @@ fn anchor_cues_take_no_time_and_do_not_shift_the_others() {
         ["text:あ", "begin:x:", "text:い", "end", "text:う"]
     );
     for cue in cues.iter().filter(|cue| is_anchor(cue)) {
-        assert_eq!(cue.duration, 0.0, "アンカーの合図は 0 秒");
+        assert_eq!(cue.duration, TimeSpan::ZERO, "アンカーの合図は 0 秒");
     }
     assert_eq!(cues[1].start_time, cues[2].start_time, "開きは「い」の頭");
     assert_eq!(
@@ -167,7 +167,7 @@ fn reopened_anchor_is_closed_before_the_new_open() {
         ["begin:x:", "text:あ", "end", "begin:y:", "text:い", "end"]
     );
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    assert_eq!(cues[2].duration, 0.0, "足した閉じも 0 秒");
+    assert_eq!(cues[2].duration, TimeSpan::ZERO, "足した閉じも 0 秒");
     assert_eq!(
         cues[2].start_time, cues[3].start_time,
         "足した閉じは新しい開きと同じ時刻（並びは開きの前）"
@@ -191,7 +191,11 @@ fn unclosed_anchor_is_closed_at_the_end_of_the_scan() {
             "script = {script:?}"
         );
         let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-        assert_eq!(cues[2].duration, 0.0, "足した閉じも 0 秒（{script:?}）");
+        assert_eq!(
+            cues[2].duration,
+            TimeSpan::ZERO,
+            "足した閉じも 0 秒（{script:?}）"
+        );
         assert_eq!(
             cues[2].start_time,
             horizon(&compiled),

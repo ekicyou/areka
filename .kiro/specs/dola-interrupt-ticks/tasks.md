@@ -240,7 +240,7 @@
   - _Dispatch: standard, effort high — 式は設計が与えるが、塊の分かれと丸めの端に注意が要る_
   - _Requirements: 7.10, 9.8_
 
-- [ ] 3.7 (P) areka-sakura のコンパイルのテストを直す
+- [x] 3.7 (P) areka-sakura のコンパイルのテストを直す
   - 期待の値を、ちょうどの値へ写す
   - このタスクのファイルについて、`cargo check -p areka-sakura --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-sakura コンパイルのテスト_

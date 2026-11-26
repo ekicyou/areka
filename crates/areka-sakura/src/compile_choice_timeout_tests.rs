@@ -2,9 +2,9 @@
 //!
 //! 固定するのは 4 点:
 //!
-//! 1. 読み取りの表の**全行**（欄なし・空欄→既定、整数→秒、前後の空白・`+`・余分な欄、
-//!    正負の桁あふれ→飽和、それ以外→読めない）。結果の秒は常に有限。
-//! 2. 整数 N のミリ秒を秒にして 1000 倍して丸めると N に戻る（往復で端数の誤差がない）。
+//! 1. 読み取りの表の**全行**（欄なし・空欄→既定、整数→ミリ秒の差、前後の空白・`+`・余分な欄、
+//!    正負の桁あふれ→飽和、それ以外→読めない）。
+//! 2. 整数 N のミリ秒は、ちょうど N ミリ秒の差になる（端数の誤差がない）。
 //! 3. 台本の文字列から、選択待ちの区切りに入る値（各場合・位置と回数・終わりのタグ）。
 //! 4. 指定の有無と値（読めない値を含む）で、区切りの値以外の cue の内容と時刻が変わらないこと
 //!    （選択肢の無い台本では区切りも出ない・転記はそのまま）。
@@ -13,6 +13,8 @@ use super::test_support::{assert_cues_eq, barrier_of, compile};
 use super::{
     BarrierKind, ChoiceTimeoutDirective, Cue, CueCommand, CuePayload, parse_choice_timeout,
 };
+use dola::TimeDelta;
+use dola::time::testing::delta_ms;
 
 /// 先頭の `"choicetimeout"` に続く欄を並べた `raw_args` を作る。
 fn args(fields: &[&str]) -> Vec<String> {
@@ -22,36 +24,32 @@ fn args(fields: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// 読み取り結果を返し、`Secs` なら値が有限であることも確かめる。
+/// 読み取り結果を返す。
 fn parse(fields: &[&str]) -> ChoiceTimeoutDirective {
-    let got = parse_choice_timeout(&args(fields));
-    if let ChoiceTimeoutDirective::Secs(v) = got {
-        assert!(v.is_finite(), "{fields:?} → 有限でない秒 {v}");
-    }
-    got
+    parse_choice_timeout(&args(fields))
 }
 
 #[test]
 fn reading_table_every_row() {
-    use ChoiceTimeoutDirective::{Default, Secs, Unreadable};
+    use ChoiceTimeoutDirective::{Default, Delta, Unreadable};
     let rows: &[(&[&str], ChoiceTimeoutDirective)] = &[
         // 欄なし・空欄 → 既定
         (&[], Default),
         (&[""], Default),
         (&[" "], Default),
-        // 正の値 → 秒
-        (&["500"], Secs(500.0 / 1000.0)),
-        // 0・負 → そのままの秒（無期限の判定は kanade・正規化しない）
-        (&["0"], Secs(0.0)),
-        (&["-1"], Secs(-1.0 / 1000.0)),
-        (&["-5"], Secs(-5.0 / 1000.0)),
+        // 正の値 → 差
+        (&["500"], Delta(delta_ms(500))),
+        // 0・負 → そのままの差（無期限の判定は kanade・正規化しない）
+        (&["0"], Delta(delta_ms(0))),
+        (&["-1"], Delta(delta_ms(-1))),
+        (&["-5"], Delta(delta_ms(-5))),
         // 前後の空白・`+`・余分な欄
-        (&[" 500 "], Secs(500.0 / 1000.0)),
-        (&["+500"], Secs(500.0 / 1000.0)),
-        (&["500", "x"], Secs(500.0 / 1000.0)),
+        (&[" 500 "], Delta(delta_ms(500))),
+        (&["+500"], Delta(delta_ms(500))),
+        (&["500", "x"], Delta(delta_ms(500))),
         // 桁あふれ → 飽和
-        (&["99999999999999999999"], Secs(i64::MAX as f64 / 1000.0)),
-        (&["-99999999999999999999"], Secs(i64::MIN as f64 / 1000.0)),
+        (&["99999999999999999999"], Delta(TimeDelta::MAX)),
+        (&["-99999999999999999999"], Delta(TimeDelta::MIN)),
         // 整数として読めない
         (&["abc"], Unreadable),
         (&["1.5"], Unreadable),
@@ -64,13 +62,14 @@ fn reading_table_every_row() {
 }
 
 #[test]
-fn integer_ms_round_trips_through_secs() {
+fn integer_ms_is_exact() {
     for n in [1_i64, 999, 1000, 1001, 30000, 2147483647] {
         let field = n.to_string();
-        let ChoiceTimeoutDirective::Secs(secs) = parse(&[&field]) else {
-            panic!("{n} が秒として読めない");
-        };
-        assert_eq!((secs * 1000.0).round() as i64, n, "{n} ms の往復");
+        assert_eq!(
+            parse(&[&field]),
+            ChoiceTimeoutDirective::Delta(delta_ms(n)),
+            "{n} ms"
+        );
     }
 }
 
@@ -95,7 +94,7 @@ fn barrier_count(cues: &[Cue]) -> usize {
 }
 
 /// 選択肢を含む台本の、選択待ちの区切りに入る値。区切りは最後の cue にちょうど 1 個。
-fn choice_timeout_of(script: &str) -> Option<f64> {
+fn choice_timeout_of(script: &str) -> Option<TimeDelta> {
     let cues = cues_of(script);
     assert_eq!(barrier_count(&cues), 1, "{script}: 区切りはちょうど 1 個");
     match barrier_of(cues.last().expect("cue がある")) {
@@ -156,25 +155,25 @@ fn without_directive(cues: &[Cue]) -> Vec<Cue> {
 fn script_directive_sets_choice_barrier_timeout() {
     let set = |v: &str| format!(r"\![set,choicetimeout,{v}]");
     let omitted = r"\![set,choicetimeout]";
-    let rows: Vec<(String, Option<f64>, &str)> = vec![
+    let rows: Vec<(String, Option<TimeDelta>, &str)> = vec![
         // 指定なし → 未指定
         (format!(r"{CHOICES}\e"), None, "指定なし"),
-        // 正の値 → 秒
+        // 正の値 → 差
         (
             format!(r"{}{CHOICES}\e", set("500")),
-            Some(500.0 / 1000.0),
+            Some(delta_ms(500)),
             "500",
         ),
-        // 0・-1・他の負 → そのままの秒（無期限の判定は kanade）
-        (format!(r"{}{CHOICES}\e", set("0")), Some(0.0), "0"),
+        // 0・-1・他の負 → そのままの差（無期限の判定は kanade）
+        (format!(r"{}{CHOICES}\e", set("0")), Some(delta_ms(0)), "0"),
         (
             format!(r"{}{CHOICES}\e", set("-1")),
-            Some(-1.0 / 1000.0),
+            Some(delta_ms(-1)),
             "-1",
         ),
         (
             format!(r"{}{CHOICES}\e", set("-5")),
-            Some(-5.0 / 1000.0),
+            Some(delta_ms(-5)),
             "-5",
         ),
         // 省略・空欄 → 既定
@@ -183,13 +182,13 @@ fn script_directive_sets_choice_barrier_timeout() {
         // 選択肢の後ろ → 前に書いたときと同じ
         (
             format!(r"{CHOICES}{}\e", set("700")),
-            Some(700.0 / 1000.0),
+            Some(delta_ms(700)),
             "選択肢の後ろ",
         ),
         // 複数回 → 最後が勝つ・最後が省略なら既定
         (
             format!(r"{}{CHOICES}{}\e", set("500"), set("700")),
-            Some(700.0 / 1000.0),
+            Some(delta_ms(700)),
             "500→700",
         ),
         (
@@ -210,7 +209,7 @@ fn script_directive_sets_choice_barrier_timeout() {
         ),
         (
             format!(r"{}{CHOICES}\e{}", set("500"), set("700")),
-            Some(500.0 / 1000.0),
+            Some(delta_ms(500)),
             r"\e の前 500・後ろ 700",
         ),
         // 読めない値 → 既定
@@ -220,18 +219,18 @@ fn script_directive_sets_choice_barrier_timeout() {
         // 読めない → 読める
         (
             format!(r"{}{CHOICES}{}\e", set("abc"), set("700")),
-            Some(700.0 / 1000.0),
+            Some(delta_ms(700)),
             "abc→700",
         ),
         // 正負の桁あふれ → 飽和
         (
             format!(r"{}{CHOICES}\e", set("99999999999999999999")),
-            Some(i64::MAX as f64 / 1000.0),
+            Some(TimeDelta::MAX),
             "正の桁あふれ",
         ),
         (
             format!(r"{}{CHOICES}\e", set("-99999999999999999999")),
-            Some(i64::MIN as f64 / 1000.0),
+            Some(TimeDelta::MIN),
             "負の桁あふれ",
         ),
     ];
@@ -285,7 +284,7 @@ fn reader_is_reachable_from_the_crate_root() {
     use crate::{ChoiceTimeoutDirective as Root, parse_choice_timeout as root_parse};
     assert_eq!(root_parse(&args(&["abc"])), Root::Unreadable);
     assert_eq!(root_parse(&args(&[])), Root::Default);
-    assert_eq!(root_parse(&args(&["500"])), Root::Secs(0.5));
+    assert_eq!(root_parse(&args(&["500"])), Root::Delta(delta_ms(500)));
 }
 
 /// **警告**: 読めない時間の欄は compile の中で WARN `choice_timeout_unreadable` を

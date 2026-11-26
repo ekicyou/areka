@@ -12,6 +12,7 @@ use crate::drive::test_support::RecordingSink;
 use crate::strict::{DetectionPoint, StrictJudges};
 use areka_parsers::sakura::{MARKER_COMMAND, parse, parse_noted};
 use dola::cue::CuePlayer;
+use dola::time::testing::at_ms;
 
 /// 拾う `\!` は `open`・`set`・`move`（`move` の第 1 引数 `nosuch` だけは拾わない）と、
 /// 受け手の表で文字の層が拾う印 `*`。
@@ -232,9 +233,10 @@ fn delivered(script: &str) -> (Vec<(String, Option<&str>)>, StrictTrace) {
     let (compiled, trace) = strict(script, &FakeJudges);
     let sink = RecordingSink::new();
     let records = sink.records();
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    let sheet = compiled.sheet.clone().with_absolute_start_time(at_ms(0));
+    let mut player = CuePlayer::from_sheet(&sheet).expect("起点を押した台本");
     player.register_sink(Box::new(sink));
-    player.tick(1.0e9);
+    player.tick(at_ms(1_000_000_000));
     let cues = records.lock().unwrap().clone();
     assert_eq!(cues.len(), trace.cue_spans.len(), "配られた数と位置の数");
     let shaped = cues

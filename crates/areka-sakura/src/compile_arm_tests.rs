@@ -5,6 +5,7 @@ use super::*;
 use crate::duration::text_playback_duration;
 use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
+use dola::time::testing::ms;
 
 /// バルーン面切替命令の引数を解釈・変換せず値のまま `BalloonSurface{key}` へ
 /// バイト完全一致で転写する（不透明写像）。名前形（非 ASCII）・数値形・非表示
@@ -234,7 +235,11 @@ fn cursor_double_empty_still_emits() {
         },
         "双方空の Cursor も欠落させず発行（区別保持・R3.5）"
     );
-    assert_eq!(cues[0].duration, 0.0, "Cursor は瞬時（duration 0）");
+    assert_eq!(
+        cues[0].duration,
+        TimeSpan::ZERO,
+        "Cursor は瞬時（duration 0）"
+    );
 }
 
 // ── barrier 発行の檻（move・GenericCommand・SystemVar の写像は下の決定論檻が担う） ──
@@ -281,9 +286,13 @@ fn talk_with_choice_appends_single_barrier_after_all_choices() {
         &BarrierKind::WaitForChoice { timeout: None },
         "barrier は末尾・WaitForChoice{{timeout:None}}（R2.2/2.6）"
     );
-    // barrier は最終 offset（choice が瞬時なので 0.0）・duration 0.0。
-    assert_eq!(cues[2].start_time, 0.0, "barrier は最終 offset（R2.2）");
-    assert_eq!(cues[2].duration, 0.0, "barrier の duration は 0.0");
+    // barrier は最終 offset（choice が瞬時なので 0）・duration 0。
+    assert_eq!(
+        cues[2].start_time,
+        TimeSpan::ZERO,
+        "barrier は最終 offset（R2.2）"
+    );
+    assert_eq!(cues[2].duration, TimeSpan::ZERO, "barrier の duration は 0");
 }
 
 /// テキスト先行のメニューでも barrier は全 choice cue より後（テキスト再生完了後の最終 offset）へ
@@ -303,7 +312,7 @@ fn barrier_is_placed_at_final_offset_after_leading_text() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     // Text / Choice / Barrier の 3 件。
     assert_eq!(cues.len(), 3);
-    let d = text_playback_duration("ab"); // 0.1s
+    let d = text_playback_duration("ab");
     // choice は text 再生完了後に発行され（start_time=D）、barrier はさらにその後（最終 offset=D）。
     assert!(matches!(command_of(&cues[0]), CueCommand::Text(_)));
     assert!(matches!(command_of(&cues[1]), CueCommand::Choice { .. }));
@@ -394,24 +403,29 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
     ]);
 
     // 期待は全 sheet（冒頭 ClearAll＋内容 5 件＋末尾 barrier ＝ 7 件）。ClearAll のみ scope "0"
-    // （production は `emit(0, ..)` で前置）、内容と barrier は現在 scope "1"。全 at=0.0/duration=0.0。
+    // （production は `emit(0, ..)` で前置）、内容と barrier は現在 scope "1"。全て at=0・duration=0。
     let expected: Vec<Cue> = vec![
-        emit(0, 0.0, 0.0, CueCommand::ClearAll),
+        emit(0, TimeSpan::ZERO, TimeSpan::ZERO, CueCommand::ClearAll),
         emit(
             1,
-            0.0,
-            0.0,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
             CueCommand::Choice {
                 id: "Onおしゃべり頻度メニュー".into(),
                 text: "おしゃべり頻度".into(),
                 references: vec![],
             },
         ),
-        emit(1, 0.0, 0.0, CueCommand::NewLine { ratio: 1.0 }),
         emit(
             1,
-            0.0,
-            0.0,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
+            CueCommand::NewLine { ratio: 1.0 },
+        ),
+        emit(
+            1,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
             CueCommand::Choice {
                 id: "Onエモの位置調整メニュー".into(),
                 text: "エモの位置調整".into(),
@@ -420,8 +434,8 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
         ),
         emit(
             1,
-            0.0,
-            0.0,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
             CueCommand::Cursor {
                 x: "5em".into(),
                 y: "2lh".into(),
@@ -429,15 +443,20 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
         ),
         emit(
             1,
-            0.0,
-            0.0,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
             CueCommand::Choice {
                 id: "Onメニュー閉じる".into(),
                 text: "閉じる".into(),
                 references: vec![],
             },
         ),
-        emit(1, 0.0, 0.0, BarrierKind::WaitForChoice { timeout: None }),
+        emit(
+            1,
+            TimeSpan::ZERO,
+            TimeSpan::ZERO,
+            BarrierKind::WaitForChoice { timeout: None },
+        ),
     ];
 
     let cues = compiled.sheet.cues();
@@ -453,13 +472,18 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
         );
     }
 
-    // at 整列: 全命令が瞬時ゆえ全 start_time は 0.0（完全整列・単調非減少の退化形）。
+    // at 整列: 全命令が瞬時ゆえ全 start_time は 0（完全整列・単調非減少の退化形）。
     for (i, cue) in cues.iter().enumerate() {
         assert_eq!(
-            cue.start_time, 0.0,
-            "index {i} の start_time は 0.0（at 整列）"
+            cue.start_time,
+            TimeSpan::ZERO,
+            "index {i} の start_time は 0（at 整列）"
         );
-        assert_eq!(cue.duration, 0.0, "index {i} は瞬時（duration 0）");
+        assert_eq!(
+            cue.duration,
+            TimeSpan::ZERO,
+            "index {i} は瞬時（duration 0）"
+        );
     }
 
     // scope 帰属: 冒頭 ClearAll のみ "0"、内容＋barrier は エモ "1"。
@@ -550,7 +574,11 @@ fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
         "1",
         "`\\1` の話者スコープがキャリア cue へ actor \"1\" として転写される（R5）"
     );
-    assert_eq!(cues[0].duration, 0.0, "汎用キャリアは瞬時（duration 0）");
+    assert_eq!(
+        cues[0].duration,
+        TimeSpan::ZERO,
+        "汎用キャリアは瞬時（duration 0）"
+    );
     // move は `\q` でないため barrier を伴わない。
     assert!(
         compiled
@@ -598,7 +626,8 @@ fn unknown_and_bare_carrier_forms_are_emitted_not_dropped() {
     );
     for (i, cue) in cues.iter().enumerate() {
         assert_eq!(
-            cue.duration, 0.0,
+            cue.duration,
+            TimeSpan::ZERO,
             "index {i} のキャリアは瞬時（duration 0）"
         );
     }
@@ -629,7 +658,7 @@ fn sysvar_expansion_from_snapshot_is_deterministic() {
         "値ありスナップショットは当該値の Text へ展開（R7.1）"
     );
     let d = text_playback_duration("アヒル"); // 3 クラスタ × 50ms
-    assert_eq!(cues[0].start_time, 0.0);
+    assert_eq!(cues[0].start_time, TimeSpan::ZERO);
     assert_eq!(
         cues[0].duration, d,
         "duration = text_playback_duration(展開文字列)（R7.2）"
@@ -697,4 +726,33 @@ fn raw_is_dropped_with_one_warning() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 1, "Raw は合図を作らない");
     assert_eq!(command_of(&cues[0]), &CueCommand::Text("hi".into()));
+}
+
+/// 前に Text があるとき、SystemVar の展開 Text はその前の offset から始まり、後続はそこへ展開分の D を足した時刻になる。
+#[test]
+fn sysvar_after_text_starts_at_the_preceding_offset() {
+    let mut vars = SystemVarSnapshot::default();
+    vars.insert("username", "アヒル");
+    let compiled = super::compile(
+        &[
+            Instruction::Text("ab".into()),
+            Instruction::SystemVar("username".into()),
+            Instruction::Surface(SurfaceArg::new("1".into())),
+        ],
+        &vars,
+    );
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    assert_eq!(cues.len(), 3, "Text・展開 Text・Emote の 3 件");
+    assert_eq!(command_of(&cues[1]), &CueCommand::Text("アヒル".into()));
+    assert_eq!(
+        cues[1].start_time,
+        ms(100),
+        "展開 Text は直前の offset から"
+    );
+    assert_eq!(cues[1].duration, text_playback_duration("アヒル"));
+    assert_eq!(
+        cues[2].start_time,
+        ms(100) + text_playback_duration("アヒル"),
+        "後続は offset + 展開分の D"
+    );
 }
