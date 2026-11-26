@@ -11,11 +11,9 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
 
-/// `base` を初回 Tick で刻み（続けて `extra_ticks` を打ち）、`ChoiceWaiting` を投函して、
-/// kanade へ転送された 1 通を返す。
+/// `ticks` を順に打ってから `ChoiceWaiting` を投函して、kanade へ転送された 1 通を返す。
 fn relay_choice_waiting(
-    base: TimePoint,
-    extra_ticks: &[TimePoint],
+    ticks: &[TimePoint],
     display_end: TimePoint,
     timeout_directive: Option<TimeDelta>,
 ) -> KanadeMsg {
@@ -24,8 +22,7 @@ fn relay_choice_waiting(
     let talk_id = TalkId(906);
     occupy(&mut fx.state, talk_id, probe);
 
-    fx.feed(DispatcherMsg::Tick { now: base });
-    for now in extra_ticks {
+    for now in ticks {
         fx.feed(DispatcherMsg::Tick { now: *now });
     }
 
@@ -48,18 +45,17 @@ fn relay_choice_waiting(
     msg
 }
 
-/// 表示の終わり＝`base_now` ＋ 通知の隔たり。`base_now` は Tick 中継の起点（初回 Tick の
-/// `now`）で、後続 Tick でも通知時刻でもない。候補 id 列とタイムアウト指令は無改変で運ばれる。
+/// 表示の終わりは、通知の値（絶対の時刻）を換算せずに kanade へ渡す。先に受けた刻みの時刻に
+/// 依らない。候補 id 列とタイムアウト指令も無改変で運ばれる。
 ///
-/// 隔たり 356.7ms はミリ秒の格子に載らないので、ミリ秒へ丸める実装なら落ちる。
-/// 後続 Tick(9_000) を起点に取る実装なら 9_356.7ms になって落ちる。
+/// 4_356.7ms はミリ秒の格子に載らないので、ミリ秒へ丸める実装なら落ちる。
+/// 最初の刻み(4_000) を足す実装なら 8_356.7ms になって落ちる。
 #[test]
-fn choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade() {
-    const OFFSET_TICKS: i64 = 3_567_000;
+fn choice_waiting_forwards_display_end_unchanged_to_kanade() {
+    let display_end_in = TimePoint::from_ticks(at_ms(4_000).as_ticks() + 3_567_000);
     match relay_choice_waiting(
-        at_ms(4_000),
-        &[at_ms(9_000)],
-        TimePoint::from_ticks(OFFSET_TICKS),
+        &[at_ms(4_000), at_ms(9_000)],
+        display_end_in,
         Some(delta_ms(12_000)),
     ) {
         KanadeMsg::ChoiceWaiting {
@@ -75,9 +71,8 @@ fn choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade(
                 "候補 id 列は表示順のまま無改変で運ばれる"
             );
             assert_eq!(
-                display_end,
-                TimePoint::from_ticks(at_ms(4_000).as_ticks() + OFFSET_TICKS),
-                "base_now(4_000ms) + 356.7ms を丸めずに足す（後続 Tick 9_000 起点ではない）"
+                display_end, display_end_in,
+                "通知の表示の終わりを丸めず換算せずに渡す"
             );
             assert_eq!(
                 timeout_directive,
@@ -88,17 +83,13 @@ fn choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade(
         _ => unreachable!("ChoiceWaiting を投函したので ChoiceWaiting が届く"),
     }
 
-    match relay_choice_waiting(at_ms(4_000), &[], at_ms(1_250), None) {
+    match relay_choice_waiting(&[at_ms(4_000)], at_ms(5_250), None) {
         KanadeMsg::ChoiceWaiting {
             display_end,
             timeout_directive,
             ..
         } => {
-            assert_eq!(
-                display_end,
-                at_ms(5_250),
-                "base_now(4_000) + 隔たり 1_250 = 5_250"
-            );
+            assert_eq!(display_end, at_ms(5_250), "通知の 5_250 がそのまま着く");
             assert_eq!(
                 timeout_directive, None,
                 "未指定（None＝下流既定値へ委譲）も無改変で運ばれる"
@@ -157,35 +148,17 @@ fn choice_waiting_with_mismatched_or_empty_slot_is_discarded_as_stale() {
     );
 }
 
-/// Tick の前に通知が出ることは本来ない（通知は tick 駆動のバリア到達で出る）。それでも起点の欠如を
-/// 黙って埋めず `warn` で記録し、kanade へは転送しない（作った起点で誤った deadline を配らない）。
+/// 転送は dispatcher が受けた刻みに依らないので、刻みを 1 つも受けていなくても通知はそのまま着く。
 #[test]
-fn choice_waiting_before_any_tick_is_defended_with_warning_and_not_forwarded() {
-    let mut fx = state_fixture();
-    let (probe, _obs_rx) = spawn_probe_talk();
-    let talk_id = TalkId(908);
-    occupy(&mut fx.state, talk_id, probe);
-
-    let events = capture(|| {
-        fx.feed(DispatcherMsg::ChoiceWaiting(ChoiceWaiting {
-            talk_id,
-            choice_ids: vec!["a".to_string()],
-            display_end: at_ms(500),
-            timeout_directive: None,
-        }));
-    });
-    assert_logged_event(
-        &events,
-        Level::WARN,
-        "areka_ghost::dispatcher",
-        "choice_waiting_stale",
-    );
-    assert!(
-        fx.kanade_rx.try_recv().is_err(),
-        "起点未確定の通知は kanade へ転送しない"
-    );
-
-    release(&mut fx.state);
+fn choice_waiting_before_any_tick_is_forwarded_unchanged() {
+    match relay_choice_waiting(&[], at_ms(500), None) {
+        KanadeMsg::ChoiceWaiting { display_end, .. } => assert_eq!(
+            display_end,
+            at_ms(500),
+            "刻みを受ける前の通知も、表示の終わりを換算せずに渡す"
+        ),
+        _ => unreachable!("ChoiceWaiting を投函したので ChoiceWaiting が届く"),
+    }
 }
 
 /// kanade が既に停止していると転送の `send` は失敗する。dispatcher は黙って捨てず `debug` で
@@ -204,11 +177,6 @@ fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_
     let talk_id = TalkId(910);
     occupy(&mut state, talk_id, probe);
 
-    // base_now を刻み、換算アームまで届かせる（warn の防御枝にしない）。
-    assert_eq!(
-        state.handle(DispatcherMsg::Tick { now: at_ms(3_000) }),
-        ControlFlow::Continue(())
-    );
     drop(kanade_rx);
 
     let events = capture(|| {
@@ -239,7 +207,7 @@ fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_
 }
 
 /// 実 talk が選択待ちバリアへ到達すると `ChoiceWaiting` が dispatcher 経由で kanade へ届き、
-/// `display_end` は base_now ＋ 台本由来の占有 horizon（tick 時刻ではない）になる。続く
+/// `display_end` は最初の刻み（台本の起点）＋ 台本由来の占有 horizon（tick 時刻ではない）になる。続く
 /// `ResolveChoice` は talk のバリアを解き、menu ケースなのでその場で完了して
 /// `TalkDone{Ended}` が kanade へ届く。
 #[test]
@@ -258,7 +226,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
     let talk_id = TalkId(931);
     tx.send(DispatcherMsg::Start(StartTalk::new(talk_id, MENU_SCRIPT)))
         .expect("send Start(menu)");
-    // base_now=1_000 を刻み、elapsed 0.5 で区切り 0.35 に届いて選択待ちになる。
+    // 最初の刻み 1_000 が台本の起点になり、1_500 で区切り 0.35 に届いて選択待ちになる。
     tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
         .expect("send Tick(base)");
     tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
@@ -279,7 +247,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
             assert_eq!(
                 display_end,
                 at_ms(1_350),
-                "base_now(1_000) + 占有 horizon 350ms。**tick 時刻 1_500 ではない**"
+                "起点 1_000 + 占有 horizon 350ms。**tick 時刻 1_500 ではない**"
             );
             assert_eq!(
                 timeout_directive, None,

@@ -434,6 +434,42 @@ fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon()
     handle.actor.join().expect("body は正常終了する");
 }
 
+/// 最初の刻みが台本の起点になり、表示の終わりは「その起点＋占有の終わり」の絶対の時刻で着く。
+/// 起点 7_000 と占有の終わり 350ms がどちらも 0 でないので、起点を落とす実装（350ms）も、
+/// 刻みの時刻を入れる実装（7_500）も落ちる。
+#[test]
+fn choice_waiting_display_end_is_first_tick_origin_plus_horizon() {
+    let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+    let (tx, rx) = mpsc::channel::<TalkCue>();
+    let handle = spawn_talk(
+        StartTalk::new(TalkId(825), MENU_SCRIPT.to_string()),
+        done_tx,
+        one_sink(ChannelSink { tx }),
+        SystemVarSnapshot::default(),
+        None,
+    );
+
+    let origin = at_ms(7_000);
+    handle.inbox.send(SakuraMsg::Tick(origin)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(7_500))).unwrap();
+    recv_until_choice(&rx);
+
+    match done_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("barrier 成立で ChoiceWaiting が届くべき")
+    {
+        TalkNotice::ChoiceWaiting(waiting) => {
+            assert_eq!(waiting.display_end, origin + menu_horizon());
+        }
+        other => panic!("最初に届くのは ChoiceWaiting: {other:?}"),
+    }
+
+    handle.inbox.send(SakuraMsg::Close).unwrap();
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("Close で中断 ACK");
+    assert_eq!(done.reason, TalkEndReason::Interrupted);
+    handle.actor.join().expect("body は正常終了する");
+}
+
 /// **解決後に再通知されない**: 通知 → 有効 id の `ResolveChoice` → `TalkDone{Ended}` の
 /// **ちょうど 2 通**が同一ポートを因果順で流れ、3 通目は存在しない（ポート disconnect で確定）。
 ///

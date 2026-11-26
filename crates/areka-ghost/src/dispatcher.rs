@@ -34,7 +34,7 @@ pub enum DispatcherMsg {
     Start(StartTalk),
     /// per-talk transient からの完了通知。
     Done(TalkDone),
-    /// ticker からの時刻前進（active talk の最初の刻みからの隔たりへ換算して中継）。
+    /// ticker からの時刻前進（運ぶ時刻を変えずに active talk へ中継）。
     Tick { now: TimePoint },
     /// 停止規約の Close（active talk を終了させてから停止）。
     Close,
@@ -98,8 +98,6 @@ struct ActiveTalk {
     talk_id: TalkId,
     /// per-talk transient への投函端＋join ハンドル。
     handle: TalkHandle,
-    /// この talk に対する最初の `Tick` を観測した時刻（隔たりの起点）。
-    base_now: Option<TimePoint>,
 }
 
 /// dispatcher body の状態（`Option<ActiveTalk>` が単一 slot）。
@@ -176,7 +174,7 @@ impl DispatcherState {
     /// `ResolveChoice` 受領。
     ///
     /// 現行 slot と `talk_id` が一致するときのみ、選択肢 ID を無改変で `SakuraMsg::ResolveChoice{id}` として
-    /// talk へ転送する。バリアを解くだけで talk の同一性も時刻起点も変えないので、slot と `base_now` は
+    /// talk へ転送する。バリアを解くだけで talk の同一性も時刻起点も変えないので、slot は
     /// 不変（バリア状態を dispatcher 側に複製しない）。
     ///
     /// 不一致・slot 空は stale（既に差し替わった／終了した選択待ち宛の遅延指示）として
@@ -244,42 +242,20 @@ impl DispatcherState {
 
     /// `ChoiceWaiting` 受領。
     ///
-    /// 一致時のみ、talk が通知した占有 horizon（最初の刻みからの隔たり）に `base_now` を足し戻して
-    /// 刻みと同じ物差しの時刻へ換算し、`KanadeMsg::ChoiceWaiting` として kanade へ転送する。
-    /// `base_now` は [`on_tick`](Self::on_tick) が刻印した Tick 中継の起点で、新しい時間基準は作らない。タイムアウト指令は写像せず素通しする
-    /// （deadline 写像は kanade）。
-    ///
-    /// `base_now` 未確定（初回 Tick 前）は通知が tick 駆動のバリア到達で出る以上あり得ないが、
-    /// 起点をでっち上げて誤った deadline を配らないよう、`choice_waiting_stale` の warn で記録して転送しない。
-    /// 不一致・slot 空は同じ名前の info で棄却する。
+    /// 一致時のみ、talk が通知した表示の終わり（再生機の占有の終わり・刻みと同じ物差しの絶対の時刻）と
+    /// タイムアウト指令を換算せずに `KanadeMsg::ChoiceWaiting` として kanade へ転送する（deadline 写像は kanade）。
+    /// 不一致・slot 空は `choice_waiting_stale` の info で棄却する。
     fn on_choice_waiting(&mut self, waiting: ChoiceWaiting) -> ControlFlow<()> {
-        let base_now = match self.active.as_ref() {
-            Some(active) if active.talk_id == waiting.talk_id => active.base_now,
-            _ => {
-                tracing::info!(
-                    event = "choice_waiting_stale",
-                    talk_id = waiting.talk_id.0,
-                    choice_count = waiting.choice_ids.len(),
-                    current_talk_id = ?self.current_talk_id().map(|t| t.0),
-                    "stale ChoiceWaiting discarded (slot already replaced or empty)"
-                );
-                return ControlFlow::Continue(());
-            }
-        };
-
-        let Some(base) = base_now else {
-            tracing::warn!(
+        if self.current_talk_id() != Some(waiting.talk_id) {
+            tracing::info!(
                 event = "choice_waiting_stale",
                 talk_id = waiting.talk_id.0,
-                display_end = %waiting.display_end,
-                "ChoiceWaiting arrived before the first Tick anchored base_now; dropping forward \
-                 (structurally unreachable — refusing to invent a time origin)"
+                choice_count = waiting.choice_ids.len(),
+                current_talk_id = ?self.current_talk_id().map(|t| t.0),
+                "stale ChoiceWaiting discarded (slot already replaced or empty)"
             );
             return ControlFlow::Continue(());
-        };
-
-        // Tick 中継（`ZERO + (now - base)`）の逆写像。
-        let display_end = base + (waiting.display_end - TimePoint::ZERO);
+        }
 
         let talk_id = waiting.talk_id;
         if self
@@ -287,7 +263,7 @@ impl DispatcherState {
             .send(KanadeMsg::ChoiceWaiting {
                 talk_id,
                 choice_ids: waiting.choice_ids,
-                display_end,
+                display_end: waiting.display_end,
                 timeout_directive: waiting.timeout_directive,
             })
             .is_err()
@@ -327,11 +303,7 @@ impl DispatcherState {
 
         let strict = strict_hooks_for(&start, self.strict.as_ref());
         let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars, strict);
-        self.active = Some(ActiveTalk {
-            talk_id,
-            handle,
-            base_now: None,
-        });
+        self.active = Some(ActiveTalk { talk_id, handle });
         ControlFlow::Continue(())
     }
 
@@ -358,18 +330,16 @@ impl DispatcherState {
         ControlFlow::Continue(())
     }
 
-    /// `Tick{now}` 受領: active があれば、その talk の初回 tick で `base_now` を確定（隔たり 0 の起点）し、
-    /// 以降 `ZERO + (now - base)` を `SakuraMsg::Tick` として中継する。active が無ければ何もしない。
-    fn on_tick(&mut self, now: TimePoint) -> ControlFlow<()> {
-        if let Some(active) = self.active.as_mut() {
-            let base = *active.base_now.get_or_insert(now);
-            let elapsed = TimePoint::ZERO + now.span_since(base).unwrap_or_default();
-            if active.handle.inbox.send(SakuraMsg::Tick(elapsed)).is_err() {
-                tracing::debug!(
-                    talk_id = active.talk_id.0,
-                    "active talk inbox disconnected; dropping Tick relay (talk already ended)"
-                );
-            }
+    /// `Tick{now}` 受領: active があれば `now` を変えずに `SakuraMsg::Tick` として中継する
+    /// （台本の起点は talk が最初の刻みで押す）。active が無ければ何もしない。
+    fn on_tick(&self, now: TimePoint) -> ControlFlow<()> {
+        if let Some(active) = self.active.as_ref()
+            && active.handle.inbox.send(SakuraMsg::Tick(now)).is_err()
+        {
+            tracing::debug!(
+                talk_id = active.talk_id.0,
+                "active talk inbox disconnected; dropping Tick relay (talk already ended)"
+            );
         }
         ControlFlow::Continue(())
     }

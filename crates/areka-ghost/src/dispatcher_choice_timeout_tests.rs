@@ -15,7 +15,7 @@ fn script_with_choice_timeout(value: &str) -> String {
 }
 
 /// 指定 `1234` の台本を dispatcher に流すと、kanade への選択待ちの知らせは表示の終わり
-/// `1_350`（base_now 1_000＋区切り 0.35 s）・指令 `Some` で届く。
+/// `1_350`（起点の最初の刻み 1_000＋区切り 0.35 s）・指令 `Some` で届く。
 ///
 /// 対になるテストは kanade の `choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234`
 /// （境の値 `1234`）。片方だけ境の値を変えたら、もう片方も合わせること。
@@ -38,7 +38,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
         script_with_choice_timeout("1234"),
     )))
     .expect("send Start(choicetimeout 1234)");
-    // base_now=1_000 を刻み、elapsed 0.5 で区切り 0.35 に届いて選択待ちになる。
+    // 最初の刻み 1_000 が台本の起点になり、1_500 で区切り 0.35 に届いて選択待ちになる。
     tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
         .expect("send Tick(base)");
     tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
@@ -59,7 +59,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
             assert_eq!(
                 display_end,
                 at_ms(1_350),
-                "表示の終わりは base_now(1_000)＋区切り 0.35s（tick 時刻 1_500 ではない）"
+                "表示の終わりは起点 1_000＋区切り 0.35s（tick 時刻 1_500 ではない）"
             );
             assert_eq!(
                 timeout_directive,

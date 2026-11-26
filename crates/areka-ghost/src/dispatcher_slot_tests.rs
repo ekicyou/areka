@@ -1,8 +1,8 @@
-use super::choice_tests::close_and_join;
+use super::choice_tests::{close_and_join, occupy, release, spawn_probe_talk, state_fixture};
 use super::*;
 use crate::test_support::{RecordingSink, test_system_vars};
 use areka_sakura::contract::{CueCommand, TalkCue, TalkEndReason};
-use dola::time::testing::{at_ms, delta_ms};
+use dola::time::testing::{at_ms, delta_ms, ms};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -117,7 +117,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     )))
     .expect("send Start(B)");
 
-    // B の占有 horizon=0.40 を跨ぐ elapsed 0.5 まで進めて完走させる（base_now は最初の Tick の now）。
+    // B の占有 horizon=0.40 を跨ぐ elapsed 0.5 まで進めて完走させる（最初の Tick の now が台本の起点）。
     tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
         .expect("send Tick(base)");
     tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
@@ -283,11 +283,10 @@ fn tick_relay_releases_only_the_cues_due_at_each_elapsed_time() {
     );
 }
 
-/// dispatcher は最初の `Tick{now}` を隔たり 0 の起点として記録し、以降 `ZERO + (now - base)` を
-/// `SakuraMsg::Tick` として active talk へ中継する。換算の値そのものは `choice_tests` の
-/// `resolve_choice_relays_id_…` が縛り、ここは実 talk で順と自然終端を見る。
+/// dispatcher は `Tick{now}` を変えずに active talk へ中継し、talk は最初の刻みを台本の起点に押す。
+/// 合図は「起点＋台本の時刻」の絶対の発火時刻で届き、届く刻みと順は相対の刻みの時と同じ。
 #[test]
-fn tick_relay_converts_absolute_now_to_offset_from_first_tick() {
+fn tick_relay_forwards_absolute_now_and_first_tick_becomes_origin() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
     let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
     let surface = RecordingSink::new();
@@ -313,25 +312,26 @@ fn tick_relay_converts_absolute_now_to_offset_from_first_tick() {
                 .recv_timeout(Duration::from_secs(5))
                 .expect("due な Text 発火は届くこと");
             if cue.command == CueCommand::Text(want.into()) {
-                return cue;
+                return cue.fire_time;
             }
         }
     };
+    let origin = at_ms(5_000);
 
-    // 初回 tick は elapsed=0.0 が起点で、FIRST までが due。
-    tx.send(DispatcherMsg::Tick { now: at_ms(5_000) })
-        .expect("send first Tick (anchors base_now)");
-    recv_text("FIRST");
+    // 初回 tick 5_000 が台本の起点で、FIRST までが due。
+    tx.send(DispatcherMsg::Tick { now: origin })
+        .expect("send first Tick (becomes the sheet origin)");
+    assert_eq!(recv_text("FIRST"), origin, "FIRST は起点ちょうどに発火する");
 
     // elapsed=0.5 で SECOND まで due。
     tx.send(DispatcherMsg::Tick { now: at_ms(5_500) })
         .expect("send second Tick (elapsed 0.5)");
-    recv_text("SECOND");
+    assert_eq!(recv_text("SECOND"), origin + ms(450));
 
     // elapsed=1.1 で THIRD が due。
     tx.send(DispatcherMsg::Tick { now: at_ms(6_100) })
         .expect("send third Tick (elapsed 1.1)");
-    recv_text("THIRD");
+    assert_eq!(recv_text("THIRD"), origin + ms(1_050));
 
     // elapsed=1.4 は占有 horizon=1.30 を超え、自然終端する（末尾テキストの D を落とさない）。
     tx.send(DispatcherMsg::Tick { now: at_ms(6_400) })
@@ -349,6 +349,37 @@ fn tick_relay_converts_absolute_now_to_offset_from_first_tick() {
     }
 
     close_and_join(&tx, handle);
+}
+
+/// 中継する時刻は受けた刻みだけで決まり、talk ごとの値（その talk の最初の刻み）に依らない。
+/// slot を別の talk に差し替えた後の最初の刻みも、0 に直さずに運ぶ時刻のまま中継される。
+#[test]
+fn tick_relay_does_not_depend_on_per_talk_first_tick() {
+    let mut fx = state_fixture();
+    let relayed = |rx: &mpsc::Receiver<SakuraMsg>| match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(SakuraMsg::Tick(t)) => t,
+        _ => panic!("talk へ SakuraMsg::Tick が中継されるべき"),
+    };
+
+    let (first, first_rx) = spawn_probe_talk();
+    occupy(&mut fx.state, TalkId(41), first);
+    fx.feed(DispatcherMsg::Tick { now: at_ms(3_000) });
+    fx.feed(DispatcherMsg::Tick { now: at_ms(3_050) });
+    assert_eq!(
+        (relayed(&first_rx), relayed(&first_rx)),
+        (at_ms(3_000), at_ms(3_050))
+    );
+    release(&mut fx.state);
+
+    let (second, second_rx) = spawn_probe_talk();
+    occupy(&mut fx.state, TalkId(42), second);
+    fx.feed(DispatcherMsg::Tick { now: at_ms(3_100) });
+    assert_eq!(
+        relayed(&second_rx),
+        at_ms(3_100),
+        "次の talk の最初の刻みも運ぶ時刻のまま"
+    );
+    release(&mut fx.state);
 }
 
 /// talk が自然完了すると `KanadeMsg::TalkDone` が正しい `talk_id`/`reason` で kanade へ届き、

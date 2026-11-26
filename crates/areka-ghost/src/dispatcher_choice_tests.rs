@@ -7,14 +7,14 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
 
-// ── 選択系 3 アームの中継意味論と時刻換算 ──
+// ── 選択系 3 アームの中継意味論 ──
 //
 // - 同期 state の檻（[`state_fixture`]＋[`spawn_probe_talk`]）: [`DispatcherState::handle`] を
 //   テストスレッド上で直接駆動し、talk スタンドインが受けた [`SakuraMsg`] をそのまま突合する。
 //   棄却・防御アームのログは [`capture`](crate::test_log_capture::capture) で見る。捕捉窓は
 //   呼出スレッド局所で actor スレッドのログは載らないので、ログの語彙はこの段でしか固定できない。
 // - actor e2e の檻（[`spawn_dispatcher`]＋実 talk）: 実再生層を通した往復（選択待ち成立通知の
-//   表示の終わりの換算・解決による再開・Close funnel の中断 ACK 帰還）を固定する。
+//   表示の終わり・解決による再開・Close funnel の中断 ACK 帰還）を固定する。
 
 /// 中継先 talk のスタンドイン（probe）。dispatcher が送った [`SakuraMsg`] を観測チャンネルへ
 /// 素通しするだけの actor で、実再生を挟まないので中継の送出内容をそのまま突合できる。
@@ -85,13 +85,9 @@ impl StateFixture {
     }
 }
 
-/// slot へ talk スタンドインを据える（`base_now` は Tick が未着なら `None`）。
+/// slot へ talk スタンドインを据える。
 pub(super) fn occupy(state: &mut DispatcherState, talk_id: TalkId, handle: TalkHandle) {
-    state.active = Some(ActiveTalk {
-        talk_id,
-        handle,
-        base_now: None,
-    });
+    state.active = Some(ActiveTalk { talk_id, handle });
 }
 
 /// slot に残ったスタンドインを畳む。
@@ -122,15 +118,15 @@ pub(super) fn close_and_join(tx: &mpsc::Sender<DispatcherMsg>, handle: ActorHand
 pub(super) const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 
 /// 現行 slot と `talk_id` が一致する `ResolveChoice` は `SakuraMsg::ResolveChoice{id}` として
-/// talk へ無改変で転送され、slot と `base_now` は動かない。kanade へは何も出さない。
+/// talk へ無改変で転送され、slot は動かない。kanade へは何も出さない。
 #[test]
-fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
+fn resolve_choice_relays_id_to_matching_talk_without_touching_slot() {
     let mut fx = state_fixture();
     let (probe, obs_rx) = spawn_probe_talk();
     let talk_id = TalkId(901);
     occupy(&mut fx.state, talk_id, probe);
 
-    // Tick で base_now を刻み、中継が起点を動かさないことと、最初の刻みからの隔たりへの換算を見る。
+    // 刻みは最初の刻みからの隔たりへ直さず、運ぶ時刻のまま中継される。
     fx.feed(DispatcherMsg::Tick { now: at_ms(7_000) });
     fx.feed(DispatcherMsg::Tick { now: at_ms(7_500) });
     let relayed = || match obs_rx.recv_timeout(Duration::from_secs(5)) {
@@ -139,8 +135,8 @@ fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
     };
     assert_eq!(
         (relayed(), relayed()),
-        (at_ms(0), at_ms(500)),
-        "初回 Tick は隔たり 0（base_now 刻印）・500ms 後は隔たり 500ms として中継される"
+        (at_ms(7_000), at_ms(7_500)),
+        "刻みは運ぶ絶対の時刻のまま中継される（初回を 0 に直さない）"
     );
 
     fx.feed(DispatcherMsg::ResolveChoice {
@@ -160,11 +156,6 @@ fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
         fx.state.current_talk_id(),
         Some(talk_id),
         "解決の中継で slot は解放されない（talk は継続する）"
-    );
-    assert_eq!(
-        fx.state.active.as_ref().and_then(|a| a.base_now),
-        Some(at_ms(7_000)),
-        "解決の中継で base_now（Tick 中継の起点）は動かない"
     );
     assert!(
         fx.kanade_rx.try_recv().is_err(),

@@ -580,7 +580,7 @@
 
 - [ ] 9. 後半の 2・3: 絶対の刻みと、受け手の列の型
 
-- [ ] 9.1 刻みを絶対の時刻のまま送る
+- [x] 9.1 刻みを絶対の時刻のまま送る
   - dispatcher が、刻みの時刻を変えずにトークのスレッドへ送り、`base_now`・逆の写しの丸め・`base_now` が無い時の `warn!` の分かれ道を消す（記録に書く事として報告に挙げる）
   - 選択待ちの知らせの表示の終わりに再生機の占有の終わりをそのまま入れ、換算無しで kanade へ写す
   - dispatcher が台詞ごとの値に依らず刻みを送る事・最初の刻みが起点になる事・置き直しの無い再生で合図の届く刻みと順が変わらない事・表示の終わりが換算無しで着く事を確かめ、`cargo test -p areka-ghost` と `cargo test -p areka-sakura` が緑である
@@ -823,3 +823,4 @@
 - 8.1: `crates/dola/tests/runtime/facade_test/update_flow.rs:37` のコメント「pause_start 時点の値」は古い（12.2 で「止めた時刻の値」に直す）。
 - 8.2: `CuePlayer` に仮の欄 `last_tick: TimePoint` があり `settle_completion_after_resolve` が使う。8.3 はこの欄と `settle_completion_after_resolve` を必ず消す（解く口は時刻に依らない）。8.3 に残る物: `step`／`StepOutcome`、再生機の `reanchor`／`shift_origin`／`origin`、`CueSink::origin_set`、登録の時の最初の起点の知らせ、完了の後の置き直しの無視。`crates/dola/src/runtime/facade.rs:285,293` の「`TimedSchedule::tick()`／`ready()` と対称」と `tests/cue/runtime_test_*` の「冪等再 tick」は古い言い方。
 - 8.3: 新しい再生機の結合テスト 4 本の入口は `crates/dola/tests/cue/runtime_test.rs`（`tests/cue.rs` ではない）。「冪等再 tick」の古い言い方が `runtime_test_broadcast_tests.rs:151`・`runtime_test_choice_delivery_tests.rs:92,112` に残る（12.2）。
+- 9.1: `base_now` の語が `crates/areka/src/runtime_tests/spine_talk_close_tests.rs` の 84・109・142 行のコメントに残る（12.2 で直す。12.3 の検索の前に）。

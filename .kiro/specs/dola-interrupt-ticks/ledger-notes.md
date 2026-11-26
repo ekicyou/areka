@@ -316,3 +316,9 @@
 ## 8.6（後半）
 
 - 足した口とテスト: `StrictTap` の `origin_set` が中の全部の受け口へ登録順に通す。テスト `strict_tap.rs::origin_set_passes_through_to_inner_sinks`。外した物・変えた期待は無い。
+
+## 9.1（後半）
+
+- 取り除いた物: 欄 `ActiveTalk.base_now`・`on_tick` の `ZERO + now.span_since(base)` の換算・`on_choice_waiting` の逆の写し `base + (display_end - ZERO)`・`base_now` が無い時の `warn!`（event=`choice_waiting_stale`、"ChoiceWaiting arrived before the first Tick anchored base_now"）の分かれ道（同じ名前の info の棄却は残した）。
+- 改名と変える前後の期待: `resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base` → `..._without_touching_slot`（中継された刻み (0, 500 ms) → (7,000, 7,500) のまま）。`tick_relay_converts_absolute_now_to_offset_from_first_tick` → `tick_relay_forwards_absolute_now_and_first_tick_becomes_origin`（合図の発火時刻が絶対の時刻）。`choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade` → `choice_waiting_forwards_display_end_unchanged_to_kanade`（「`base_now` + 隔たり」→ 受けた値のまま）。`choice_waiting_before_any_tick_is_defended_with_warning_and_not_forwarded` → `choice_waiting_before_any_tick_is_forwarded_unchanged`（warn を出して転送しない → そのまま転送）。`choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_continues`（前置きの刻みを外した、期待は同じ）。
+- 足したテスト: `dispatcher_slot_tests::tick_relay_does_not_depend_on_per_talk_first_tick`・`drive_choice_tests::choice_waiting_display_end_is_first_tick_origin_plus_horizon`。
