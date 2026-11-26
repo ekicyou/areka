@@ -1,13 +1,30 @@
 //! cue のテストが共有する道具（合図を作る補助と、配られた合図を記録する受け手）。
 
-use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, TalkCue};
-use dola::time::TimeSpan;
+use dola::cue::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, Due, PendingCue, TalkCue,
+    TimedSchedule,
+};
+use dola::time::{TimePoint, TimeSpan};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 /// ミリ秒の長さ（起点からの隔たり・cue の長さを書く補助）。
 pub(crate) const fn ms(millis: u32) -> TimeSpan {
     TimeSpan::from_millis(millis)
+}
+
+/// `now` までに届いた合図を、届く物が無くなるか区切りに着くまで取り出して集める。
+pub(crate) fn drain(schedule: &mut TimedSchedule<PendingCue>, now: TimePoint) -> Vec<TalkCue> {
+    let mut taken = Vec::new();
+    while let Some(Due::Payload {
+        fire_time,
+        at,
+        payload,
+    }) = schedule.pop_due(now)
+    {
+        taken.push(payload.fire(fire_time, at));
+    }
+    taken
 }
 
 /// バリア cue を作る補助（Barrier ペイロードは presentation でなく duration 0）。

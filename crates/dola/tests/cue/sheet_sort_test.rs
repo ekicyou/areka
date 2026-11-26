@@ -2,6 +2,7 @@
 //!
 //! 台本は開始時刻の昇順に安定ソートされ、同じ瞬間の合図は台本の順のまま予定へ入る。
 
+use crate::test_support::drain;
 use dola::cue::{ActorKey, Cue, CueCommand, CuePayload, CueSheet, to_talk_schedule};
 use dola::time::{TimePoint, TimeSpan};
 
@@ -59,11 +60,11 @@ fn equal_start_time_keeps_script_order_through_schedule() {
     .with_absolute_start_time(TimePoint::from_ticks(0));
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(TimePoint::from_ticks(0));
-    let ready: Vec<&str> = schedule.ready().iter().map(|c| label(&c.command)).collect();
+    let ready = drain(&mut schedule, TimePoint::from_ticks(0));
+    let ready: Vec<&str> = ready.iter().map(|c| label(&c.command)).collect();
     assert_eq!(ready, ["a", "b", "c", "d"]);
 
-    schedule.tick(TimePoint::from_ticks(10_000));
-    let ready: Vec<&str> = schedule.ready().iter().map(|c| label(&c.command)).collect();
+    let ready = drain(&mut schedule, TimePoint::from_ticks(10_000));
+    let ready: Vec<&str> = ready.iter().map(|c| label(&c.command)).collect();
     assert_eq!(ready, ["e"]);
 }

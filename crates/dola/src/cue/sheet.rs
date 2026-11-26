@@ -1,7 +1,7 @@
 //! CueSheet — 自己完結した台本（起点＋起点からの隔たりのコマンド列）と、
 //! 時刻の表への canonical 変換 `to_talk_schedule`。
 
-use super::command::{Cue, CuePayload, TalkCue};
+use super::command::{Cue, CuePayload, PendingCue};
 use super::runtime::CueError;
 use super::schedule::{Entry, TimedSchedule};
 use crate::time::{TimePoint, TimeSpan};
@@ -62,7 +62,7 @@ impl CueSheet {
 
     /// 台本の絶対の終わり（起点＋[`relative_end`](Self::relative_end)）。起点が無ければ `None`。
     ///
-    /// 変換した予定の [`TimedSchedule::occupancy_horizon`] と常に等しい。
+    /// 変換した予定の [`TimedSchedule::occupancy_horizon`] と、起点を置き直すまで等しい。
     pub fn absolute_end_time(&self) -> Option<TimePoint> {
         self.absolute_start_time
             .map(|origin| origin + self.relative_end())
@@ -91,18 +91,18 @@ impl CueSheet {
     }
 }
 
-/// 台本 [`CueSheet`] を時刻の表 [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
+/// 台本 [`CueSheet`] を時刻の表 [`TimedSchedule`]`<`[`PendingCue`]`>` へ変換する
 /// **唯一の canonical 変換**。起点の押されていない台本は `Err(CueError::OriginNotStamped)`。
 ///
 /// - 表の起点は台本の起点。各 cue の `start_time` はエントリの隔たりとして**そのまま**
 ///   保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
-/// - 合図の発火時刻は「台本の起点＋`start_time`」（[`TalkCue::scheduled`]）。
+/// - 中身は発火時刻を持たない [`PendingCue`]。発火時刻は、取り出す時の起点＋`start_time` で決まる。
 /// - 同じ隔たりの合図は [`CueSheet::cues`] の記述順（FIFO）。
 /// - 占有の終わりは [`CueSheet::relative_end`]。表の完了は配り終えた時でなく、占有の終わりで決まる。
 ///
 /// ペイロード写像: [`CuePayload::Command`] → [`Entry::Payload`]、
 /// [`CuePayload::Barrier`] → [`Entry::Barrier`]。
-pub fn to_talk_schedule(sheet: &CueSheet) -> Result<TimedSchedule<TalkCue>, CueError> {
+pub fn to_talk_schedule(sheet: &CueSheet) -> Result<TimedSchedule<PendingCue>, CueError> {
     let origin = sheet
         .absolute_start_time()
         .ok_or(CueError::OriginNotStamped)?;
@@ -112,13 +112,11 @@ pub fn to_talk_schedule(sheet: &CueSheet) -> Result<TimedSchedule<TalkCue>, CueE
     schedule.insert_each(sheet.cues().iter().map(|cue| match &cue.payload {
         CuePayload::Command(command) => Entry::Payload(
             cue.start_time,
-            TalkCue::scheduled(
-                origin,
-                cue.start_time,
-                cue.actor.clone(),
-                command.clone(),
-                cue.duration,
-            ),
+            PendingCue {
+                actor: cue.actor.clone(),
+                command: command.clone(),
+                duration: cue.duration,
+            },
         ),
         CuePayload::Barrier(kind) => Entry::Barrier(cue.start_time, kind.clone()),
     }));

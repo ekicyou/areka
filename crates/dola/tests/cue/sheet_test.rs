@@ -2,7 +2,7 @@
 //!
 //! 昇順ソート・起点の保存・先頭待ち保存・占有の終わりを、ちょうどの 100ns の値で検証する。
 
-use crate::test_support::{barrier, ms, text, wait};
+use crate::test_support::{barrier, drain, ms, text, wait};
 use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CueError, CuePayload, CueSheet, to_talk_schedule,
 };
@@ -210,23 +210,19 @@ fn to_talk_schedule_preserves_leading_wait() {
     .with_absolute_start_time(TimePoint::ZERO);
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(pt(400));
+    let ready = drain(&mut schedule, pt(400));
     assert!(
-        schedule.ready().is_empty(),
+        ready.is_empty(),
         "400ms では先頭 Wait(at=500ms) は未 due（食われていない）"
     );
-    schedule.tick(pt(500));
-    assert_eq!(schedule.ready().len(), 1, "500ms で先頭 Wait が due");
-    assert_eq!(
-        schedule.ready()[0].at,
-        ms(500),
-        "相対 start_time が保存される"
-    );
-    assert!(matches!(schedule.ready()[0].command, CueCommand::Wait));
+    let ready = drain(&mut schedule, pt(500));
+    assert_eq!(ready.len(), 1, "500ms で先頭 Wait が due");
+    assert_eq!(ready[0].at, ms(500), "相対 start_time が保存される");
+    assert!(matches!(ready[0].command, CueCommand::Wait));
 }
 
 /// 有限・非負の duration は envelope へそのまま運ばれる（無変形）。
-/// 同一 at は記述順（FIFO）で `ready()` に並ぶ。
+/// 同一 at は記述順（FIFO）で取り出される。
 #[test]
 fn to_talk_schedule_carries_duration_untransformed() {
     let durations = [
@@ -245,8 +241,7 @@ fn to_talk_schedule_carries_duration_untransformed() {
     let sheet = CueSheet::new(cues).with_absolute_start_time(TimePoint::ZERO);
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(TimePoint::ZERO);
-    let ready = schedule.ready();
+    let ready = drain(&mut schedule, TimePoint::ZERO);
     assert_eq!(ready.len(), durations.len(), "全 cue が due（同一 at=0）");
     for (i, &d) in durations.iter().enumerate() {
         assert_eq!(
@@ -307,8 +302,7 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
             }])
             .with_absolute_start_time(TimePoint::ZERO);
             let mut schedule = to_talk_schedule(&sheet).unwrap();
-            schedule.tick(TimePoint::ZERO);
-            let ready = schedule.ready();
+            let ready = drain(&mut schedule, TimePoint::ZERO);
             assert_eq!(ready.len(), 1);
             assert_eq!(
                 ready[0].duration, duration,
@@ -326,8 +320,7 @@ fn to_talk_schedule_carries_wait_duration_without_action() {
         .with_absolute_start_time(TimePoint::ZERO);
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(TimePoint::ZERO);
-    let ready = schedule.ready();
+    let ready = drain(&mut schedule, TimePoint::ZERO);
     assert_eq!(ready.len(), 1);
     assert_eq!(ready[0].command, CueCommand::Wait, "action は持たない");
     assert_eq!(
@@ -348,9 +341,7 @@ fn to_talk_schedule_routes_barrier_not_skipping() {
     .with_absolute_start_time(TimePoint::ZERO);
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(pt(1000));
-
-    let ready = schedule.ready();
+    let ready = drain(&mut schedule, pt(1000));
     assert_eq!(ready.len(), 1, "Barrier 手前の Command のみ配信");
     assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
     assert!(
@@ -368,20 +359,16 @@ fn to_talk_schedule_anchors_schedule_at_absolute_start_time() {
         .with_absolute_start_time(pt(100_000));
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(pt(50_000));
-    assert!(schedule.ready().is_empty());
-    schedule.tick(pt(100_000));
-    assert!(schedule.ready().is_empty());
-    schedule.tick(pt(100_499));
-    assert!(schedule.ready().is_empty(), "1ms 手前では届かない");
-    schedule.tick(pt(100_500));
-    assert_eq!(schedule.ready().len(), 1);
-    assert_eq!(
-        schedule.ready()[0].at,
-        ms(500),
-        "相対 start_time は不変で運ばれる"
-    );
-    assert_eq!(schedule.ready()[0].fire_time, pt(100_500));
+    let ready = drain(&mut schedule, pt(50_000));
+    assert!(ready.is_empty());
+    let ready = drain(&mut schedule, pt(100_000));
+    assert!(ready.is_empty());
+    let ready = drain(&mut schedule, pt(100_499));
+    assert!(ready.is_empty(), "1ms 手前では届かない");
+    let ready = drain(&mut schedule, pt(100_500));
+    assert_eq!(ready.len(), 1);
+    assert_eq!(ready[0].at, ms(500), "相対 start_time は不変で運ばれる");
+    assert_eq!(ready[0].fire_time, pt(100_500));
 }
 
 /// 末尾に待ちを持つ台本を注入時刻で駆動したとき、全 cue の配送完了時点ではまだ未完了と判定され、
@@ -395,16 +382,19 @@ fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
     .with_absolute_start_time(TimePoint::ZERO);
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(pt(150));
+    drain(&mut schedule, pt(150));
     assert_eq!(schedule.remaining(), 0, "全 entry を配り終えた");
     assert!(
-        !schedule.is_completed(),
+        !schedule.is_completed_at(pt(150)),
         "配送完了時点では占有の終わり（950ms）未到達ゆえ未完了（早期終了しない）"
     );
-    schedule.tick(pt(949));
-    assert!(!schedule.is_completed(), "占有の終わりの 1ms 前は未完了");
-    schedule.tick(pt(950));
-    assert!(schedule.is_completed(), "占有の終わり到達で完了");
+    drain(&mut schedule, pt(949));
+    assert!(
+        !schedule.is_completed_at(pt(949)),
+        "占有の終わりの 1ms 前は未完了"
+    );
+    drain(&mut schedule, pt(950));
+    assert!(schedule.is_completed_at(pt(950)), "占有の終わり到達で完了");
 }
 
 /// 変換した予定の完了時刻は、台本のみから導ける `absolute_end_time()` に一致する。
@@ -421,10 +411,10 @@ fn to_talk_schedule_completes_exactly_at_sheet_absolute_end_time() {
 
     let mut schedule = to_talk_schedule(&sheet).unwrap();
     assert_eq!(schedule.occupancy_horizon(), end);
-    schedule.tick(pt(10_749));
-    assert!(!schedule.is_completed());
-    schedule.tick(end);
-    assert!(schedule.is_completed());
+    drain(&mut schedule, pt(10_749));
+    assert!(!schedule.is_completed_at(pt(10_749)));
+    drain(&mut schedule, end);
+    assert!(schedule.is_completed_at(end));
 }
 
 /// 空台本は時間を占有しない＝起点の時刻で即完了。
@@ -432,8 +422,11 @@ fn to_talk_schedule_completes_exactly_at_sheet_absolute_end_time() {
 fn to_talk_schedule_of_empty_sheet_is_immediately_completed() {
     let sheet = CueSheet::new(vec![]).with_absolute_start_time(TimePoint::ZERO);
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(TimePoint::ZERO);
-    assert!(schedule.is_completed(), "空台本は占有の長さ 0 で即完了");
+    drain(&mut schedule, TimePoint::ZERO);
+    assert!(
+        schedule.is_completed_at(TimePoint::ZERO),
+        "空台本は占有の長さ 0 で即完了"
+    );
     assert_eq!(schedule.remaining(), 0);
 }
 
@@ -463,12 +456,15 @@ fn end_time_and_occupancy_horizon_are_exact() {
 fn completes_exactly_at_end() {
     let sheet = ms_sheet().with_absolute_start_time(pt(1000));
     let mut schedule = to_talk_schedule(&sheet).unwrap();
-    schedule.tick(pt(1150));
+    drain(&mut schedule, pt(1150));
     assert_eq!(schedule.remaining(), 0, "合図はその刻みで届く");
-    schedule.tick(pt(1949));
-    assert!(!schedule.is_completed(), "終わりの 1 ms 前は未完了");
-    schedule.tick(pt(1950));
-    assert!(schedule.is_completed(), "終わりの刻みで完了");
+    drain(&mut schedule, pt(1949));
+    assert!(
+        !schedule.is_completed_at(pt(1949)),
+        "終わりの 1 ms 前は未完了"
+    );
+    drain(&mut schedule, pt(1950));
+    assert!(schedule.is_completed_at(pt(1950)), "終わりの刻みで完了");
 
     assert_eq!(sheet.absolute_fire_time(&sheet.cues()[0]), Some(pt(1150)));
     assert_eq!(sheet.absolute_end_time(), Some(pt(1950)));

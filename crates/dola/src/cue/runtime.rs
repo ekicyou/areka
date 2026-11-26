@@ -31,8 +31,8 @@
 //! - **中断/破棄**: 専用の口は持たない。上流が player を捨てれば以降の配送は無い（Close funnel
 //!   自体は上流 sakura の領分）。
 
-use super::command::{BarrierKind, CueCommand, TalkCue};
-use super::schedule::TimedSchedule;
+use super::command::{BarrierKind, CueCommand, PendingCue, TalkCue};
+use super::schedule::{Due, TimedSchedule};
 use super::sheet::{CueSheet, to_talk_schedule};
 use super::sink::CueSink;
 use crate::time::TimePoint;
@@ -75,22 +75,16 @@ pub enum CuePlayerState {
     Completed,
 }
 
-/// tick 内でバリア到達を判定した結果（`schedule` の借用を跨がないための中間表現）。
-enum BarrierReached {
-    /// クリック/入力待ち → `WaitingForInput` へ停止。
-    Input,
-    /// 選択肢待ち → `WaitingForChoice` へ停止。
-    Choice,
-}
-
 /// cue 再生の受動的注入時刻ランタイム。
 ///
-/// 内部に canonical 変換 [`to_talk_schedule`] が組んだ [`TimedSchedule`]`<`[`TalkCue`]`>` を
+/// 内部に canonical 変換 [`to_talk_schedule`] が組んだ [`TimedSchedule`]`<`[`PendingCue`]`>` を
 /// 保持し、その上に再生状態機械（[`CuePlayerState`]）・選択肢先積み（[`PendingChoice`]）・
 /// バリア解決 seam を載せる。
 pub struct CuePlayer {
     /// 時刻管理の中核（canonical 変換が組む・占有 horizon 保持）。
-    schedule: TimedSchedule<TalkCue>,
+    schedule: TimedSchedule<PendingCue>,
+    /// 最後に受けた刻みの時刻（区切りを解いた直後の完了の確かめに使う）。
+    last_tick: TimePoint,
     /// 現在の再生状態。
     state: CuePlayerState,
     /// 選択肢バリアの手前で蓄積された選択肢データ（解決照合専用バッグ・配送列とは別軸）。
@@ -121,8 +115,10 @@ impl CuePlayer {
     /// `Err(CueError::OriginNotStamped)`。
     /// 変換は**この 1 本のみ**——`CueSheet→schedule` の二重実装を作らない。
     pub fn from_sheet(sheet: &CueSheet) -> Result<Self, CueError> {
+        let schedule = to_talk_schedule(sheet)?;
         Ok(Self {
-            schedule: to_talk_schedule(sheet)?,
+            last_tick: schedule.origin(),
+            schedule,
             state: CuePlayerState::Playing,
             pending_choices: Vec::new(),
             sinks: Vec::new(),
@@ -147,7 +143,11 @@ impl CuePlayer {
     pub fn register_sink(&mut self, mut sink: Box<dyn CueSink>) {
         // ponytail: 登録のたびに列を写す（受け手 1 つにつき 1 回）。受け手は十数個・合図は
         // 多くて数百なので足りる。重くなったら再生機に 1 度だけ作って持たせる形へ替える。
-        let upcoming: Vec<TalkCue> = self.schedule.pending_payloads().cloned().collect();
+        let upcoming: Vec<TalkCue> = self
+            .schedule
+            .pending_payloads()
+            .map(|(fire_time, at, cue)| cue.clone().fire(fire_time, at))
+            .collect();
         sink.preview(&upcoming);
         self.sinks.push(sink);
     }
@@ -166,8 +166,8 @@ impl CuePlayer {
 
     /// 注入時刻でランタイムを進める。
     ///
-    /// `current_time` は絶対時刻（スケジュールの起点と同じ物差し）。内部 [`TimedSchedule::tick`] に
-    /// 委譲し、到達済み cue を全 sink へ配る。`Choice`
+    /// `current_time` は絶対時刻（スケジュールの起点と同じ物差し）。内部 [`TimedSchedule::pop_due`] で
+    /// 届いた cue を 1 件ずつ取り出し、発火時刻を付けて全 sink へ配る。`Choice`
     /// も他 cue と**順序を保って配送列へ合流**しつつ、解決照合用に
     /// [`pending_choices`](Self::pending_choices) へも積む（配送列＝表示の真実源／バッグ＝照合の
     /// 真実源＝責務二分）。バリア到達（`WaitForInput`/`WaitForChoice`）で待機状態へ遷移して**停止**し、
@@ -178,67 +178,42 @@ impl CuePlayer {
     /// （早期 return）。再開は外部解決 seam
     /// （[`resolve_click`](Self::resolve_click)/[`resolve_choice`](Self::resolve_choice)）が担う。
     pub fn tick(&mut self, current_time: TimePoint) {
-        // 待機中・完了後は進行しない（バリア seam の外部解決/占有終了で確定した状態を保持）。
         if !matches!(self.state, CuePlayerState::Playing) {
             return;
         }
+        self.last_tick = current_time;
 
-        // schedule が本 tick で実際に前進したか（entry を pop したか）の判定材料。
-        // schedule は前進時のみ ready_buffer を clear→再収集し entries を pop する（remaining 減少）。
-        // 冪等な再 tick は early-return で ready_buffer を据え置く（remaining
-        // 不変）ため、この差分で「新規に配送可能になった cue」だけを broadcast できる（下記参照）。
-        let remaining_before = self.schedule.remaining();
-        self.schedule.tick(current_time);
-
-        // Choice は他 cue（改行/カーソル/テキスト等）と**順序を保って配送列へ
-        // 合流**する（配送列から隠さない）。schedule の安定 FIFO をそのまま配るゆえ、
-        // `\q \n \q \_l \q` の交互配置が broadcast 列に現れる。
-
-        // broadcast fan-out ＋ 選択肢バッグ積み: 準備完了した cue を、登録された**全** sink へ選別
-        // なく配る。あわせて Choice cue は解決照合用に pending_choices へ積む
-        // （責務二分＝配送列は表示の単一真実源／バッグは照合の単一真実源）。両者とも schedule
-        // が前進して entry を pop した tick（remaining 減少）に限り実行し、冪等再 tick
-        // の early-return（remaining 不変・ready_buffer 据え置き）では実行しない——これにより各 cue は
-        // 生涯 1 回のみ配送され、各 Choice は生涯 1 回のみバッグへ積まれる（同一時刻の再 tick で
-        // 二重積みしない＝「bag 内容は tick 列に不変」をゲート内側化で構造保証）。バリア到達で待機へ
-        // 遷移する場合も、バリア**手前**の cue はここで既に配り・積み済み（barrier match より前）。
-        if self.schedule.remaining() < remaining_before {
-            for cue in self.schedule.ready() {
-                if let CueCommand::Choice { id, .. } = &cue.command {
-                    self.pending_choices.push(PendingChoice { id: id.clone() });
+        // Choice は他 cue と順序を保って配送列へ合流しつつ、解決照合用のバッグへも積む。
+        // 取り出した物は表に残らないので、各 cue は生涯 1 回だけ配られ、1 回だけ積まれる。
+        while let Some(due) = self.schedule.pop_due(current_time) {
+            match due {
+                Due::Payload {
+                    fire_time,
+                    at,
+                    payload,
+                } => {
+                    let cue = payload.fire(fire_time, at);
+                    if let CueCommand::Choice { id, .. } = &cue.command {
+                        self.pending_choices.push(PendingChoice { id: id.clone() });
+                    }
+                    for sink in self.sinks.iter_mut() {
+                        sink.emit(cue.clone());
+                    }
                 }
-                for sink in self.sinks.iter_mut() {
-                    sink.emit(cue.clone());
+                // 注: `WaitForChoice` の手前に選択肢が 1 件も無い台本は不正だが、待機状態は
+                // 観測可能（`state`＋空の `pending_choices`）で、上流が player を捨てて抜ける。
+                Due::Barrier(kind) => {
+                    self.state = match kind {
+                        BarrierKind::WaitForInput => CuePlayerState::WaitingForInput,
+                        BarrierKind::WaitForChoice { .. } => CuePlayerState::WaitingForChoice,
+                    };
+                    return;
                 }
             }
         }
 
-        // バリア到達判定。`current_barrier()` の借用を閉じてから状態を書き換えるため、
-        // 必要な分類だけを所有値（`BarrierReached`）へ写し取る。match は BarrierKind を
-        // 網羅する（catch-all を置かない）ため、将来 variant 追加時にコンパイラが強制更新する。
-        let reached = self.schedule.current_barrier().map(|kind| match kind {
-            BarrierKind::WaitForInput => BarrierReached::Input,
-            BarrierKind::WaitForChoice { .. } => BarrierReached::Choice,
-        });
-        match reached {
-            Some(BarrierReached::Input) => {
-                self.state = CuePlayerState::WaitingForInput;
-                return;
-            }
-            Some(BarrierReached::Choice) => {
-                // 注: `WaitForChoice` バリアの手前に選択肢が 1 件も無い（`pending_choices` 空）
-                // 台本は不正だが、待機状態は観測可能（`state`＋空の `pending_choices`）であり、
-                // 上流が player を捨てて抜けるゆえ黙って詰まる（silent dead-end）にはならない。
-                self.state = CuePlayerState::WaitingForChoice;
-                return;
-            }
-            None => {}
-        }
-
-        // 占有終了検出: 全 entry 消費済み・バリアなし・かつ現在時刻が占有 horizon 到達。
-        // entry 枯渇（＝最後の cue の配送時刻）だけでは完了とせず、末尾 Wait・最終 Text の
-        // duration を含む占有 horizon 到達で初めて Completed とする（早期終了しない）。
-        if self.schedule.is_completed() {
+        // 配り終えただけでは完了とせず、占有の終わりに届いて初めて Completed とする。
+        if self.schedule.is_completed_at(current_time) {
             self.state = CuePlayerState::Completed;
         }
     }
@@ -285,7 +260,7 @@ impl CuePlayer {
     /// バリア解除後、後続 cue が存在せず現在時刻が既に horizon を越えている場合に、
     /// 次の tick を待たずその場で完了状態にする。
     fn settle_completion_after_resolve(&mut self) {
-        if self.schedule.is_completed() {
+        if self.schedule.is_completed_at(self.last_tick) {
             self.state = CuePlayerState::Completed;
         }
     }

@@ -528,7 +528,7 @@
   - _Dispatch: standard — 状態の型と数え方の書き換え_
   - _Requirements: 5.5, 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 8.2 (P) 時刻の表を、1 件ずつ取り出し、起点を置き直せる形にする
+- [x] 8.2 (P) 時刻の表を、1 件ずつ取り出し、起点を置き直せる形にする
   - 表の項目を発火時刻を持たない合図の中身にし、取り出し口を 1 件ずつ（届いた中身と、取り出した時の起点で決めた発火時刻と、台本の時刻、または区切り）にする。溜めを持たない
   - 起点を中で 128 ビットで持ち、比べも 128 ビットで行う。現在の時刻を受ける 2 つの置き直しの口が、起点が変わったら知らせ（効く時刻・新しい起点・前の起点）を返し、変わらなければ何も返さない。区切りの間も起点は動く
   - 完了を状態で持たず、その時の起点で答える。占有の終わりは起点と一緒に動く。台本から表への変換は、起点の押されていない台本で `Err`
@@ -821,3 +821,4 @@
 - 6.3: 本体 `areka` の `src/offline_dump/render_tests.rs`（217・228・249 行で `TimeSpan` が要る）はどのタスクの一覧にも無い。6.5 が持つ。
 - 6.5: 例 `emo-present` の `state.rs:87` の説明「（秒）」と `emo-present.rs:179` の `{CYCLE_INTERVAL} 秒周期`（文字の形で 2.5000000 と出る）は 12.2 で直す。
 - 8.1: `crates/dola/tests/runtime/facade_test/update_flow.rs:37` のコメント「pause_start 時点の値」は古い（12.2 で「止めた時刻の値」に直す）。
+- 8.2: `CuePlayer` に仮の欄 `last_tick: TimePoint` があり `settle_completion_after_resolve` が使う。8.3 はこの欄と `settle_completion_after_resolve` を必ず消す（解く口は時刻に依らない）。8.3 に残る物: `step`／`StepOutcome`、再生機の `reanchor`／`shift_origin`／`origin`、`CueSink::origin_set`、登録の時の最初の起点の知らせ、完了の後の置き直しの無視。`crates/dola/src/runtime/facade.rs:285,293` の「`TimedSchedule::tick()`／`ready()` と対称」と `tests/cue/runtime_test_*` の「冪等再 tick」は古い言い方。

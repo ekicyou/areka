@@ -293,3 +293,9 @@
 - 置き換えたテスト: `instance_manager::tests::transition_playing_to_paused` → `transition_cannot_pause_playing_instance`（前は Ok、後は `Err`）・`transition_paused_to_playing` → `transition_cannot_resume_paused_instance`（同）。改名（期待は同じ）: `resume_with_time_before_pause_start_shrinks_end_time` → `resume_with_time_before_pause_time_shrinks_end_time`・`effective_time_paused_frozen_at_pause_start` → `effective_time_paused_frozen_at_pause_time`。`try_transition_table` の Playing → Paused・Paused → Playing を true → false。
 - 振る舞いの変化: 終わりの期限を置いた後の `resume` の戻り値（前は `planned_end()` だけ、後は期限との早い方。終わりが決まらなければ期限）。
 - 足したテスト（`tests/runtime/facade_test/update_flow.rs` の `pause_resume_cycle`）: `value_right_after_resume_continues_from_pause_point`・`paused_value_is_the_same_at_any_time_and_does_not_end`・`resume_before_pause_time_continues_from_pause_point`・`finish_deadline_takes_effect_while_paused`・`resume_returns_deadline_when_it_is_earlier_than_end`・`resume_returns_end_when_it_is_earlier_than_deadline`・`resume_of_endless_loop_returns_deadline`。
+
+## 8.2（後半）
+
+- 取り除いた分かれ道: 時刻の表の `tick`／`ready`／`ready_buffer`／`current_time`／`is_completed`、同じ時刻の刻み直しの守り、起点より前の刻みを先に返す守り、区切りを解く時に溜めを空にする処理。再生機の `BarrierReached` と「残りが減った時だけ配る」門。ログは触っていない。
+- 改名と変える前後の期待: `tick_idempotent_same_time` → `take_twice_at_same_time_delivers_once`（前は同じ時刻の 2 度目も同じ中身が `ready()` に残った、後は 2 度目は 0 件＝溜めが無い）。`notify_barrier_resolved_noop_when_no_barrier`（前は解いた後も `ready()` が "x" のまま、後は解く → 取り出しで "x"、もう一度解いて残り 0）。`is_completed()` を見ていたテスト（単体 `remaining_and_is_completed`・`with_horizon_*` 2 本・`occupancy_horizon_matches_is_completed_threshold`・`completion_is_reached_at_exact_occupancy_horizon`、結合 `sheet_test.rs` の 5 本）は直前の刻みの時刻を `is_completed_at` へ渡す（期待は同じ）。外したテストは無い。
+- 足したテスト（`src/cue/schedule/reorigin_tests.rs` の 21 本）: 取り出し・遅れた刻み・同じ時刻の 2 度目・前／後ろへの置き直し・取り出しの間の置き直し・区切りの間・落とさず 2 度届けず順を保つ・型の下の端を越える起点・知らせの中身・変わらない置き直し・占有の終わりと完了が起点と一緒に動く・先渡しの照会。

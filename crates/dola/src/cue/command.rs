@@ -324,6 +324,33 @@ impl TalkCue {
     }
 }
 
+/// 時刻の表の中の、まだ取り出していない合図の中身（発火時刻の欄を持たない）。
+///
+/// 発火時刻は取り出す時の起点で決まるので、表の中に居る間はまだ無い。台本の時刻は、
+/// 時刻の表の項目の相対の時刻が持つ。
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingCue {
+    /// 対象演者の識別子（話者スコープ）。
+    pub actor: ActorKey,
+    /// 演出コマンド。
+    pub command: CueCommand,
+    /// この cue の presentation 占有の長さ — [`Cue::duration`] の無変形複写。
+    pub duration: TimeSpan,
+}
+
+impl PendingCue {
+    /// 発火時刻と台本の時刻を付けて、受け口へ渡す合図にする。
+    pub fn fire(self, fire_time: TimePoint, at: TimeSpan) -> TalkCue {
+        TalkCue {
+            fire_time,
+            at,
+            actor: self.actor,
+            command: self.command,
+            duration: self.duration,
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "command_tests.rs"]
 mod tests;
