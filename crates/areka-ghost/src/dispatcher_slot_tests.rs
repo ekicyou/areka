@@ -2,6 +2,7 @@ use super::choice_tests::close_and_join;
 use super::*;
 use crate::test_support::{RecordingSink, test_system_vars};
 use areka_sakura::contract::{CueCommand, TalkCue, TalkEndReason};
+use dola::time::testing::{at_ms, delta_ms};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -64,8 +65,8 @@ fn choice_waiting_converts_to_dispatcher_msg_without_loss() {
     let waiting = ChoiceWaiting {
         talk_id: TalkId(201),
         choice_ids: vec!["a".to_string(), "b".to_string()],
-        display_end_elapsed_secs: 1.25,
-        timeout_directive_secs: Some(12.0),
+        display_end: at_ms(1_250),
+        timeout_directive: Some(delta_ms(12_000)),
     };
     match DispatcherMsg::from(waiting.clone()) {
         DispatcherMsg::ChoiceWaiting(got) => assert_eq!(got, waiting),
@@ -76,8 +77,8 @@ fn choice_waiting_converts_to_dispatcher_msg_without_loss() {
     let unspecified = ChoiceWaiting {
         talk_id: TalkId(202),
         choice_ids: Vec::new(),
-        display_end_elapsed_secs: 0.0,
-        timeout_directive_secs: None,
+        display_end: at_ms(0),
+        timeout_directive: None,
     };
     match DispatcherMsg::from(unspecified.clone()) {
         DispatcherMsg::ChoiceWaiting(got) => assert_eq!(got, unspecified),
@@ -117,14 +118,10 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     .expect("send Start(B)");
 
     // B の占有 horizon=0.40 を跨ぐ elapsed 0.5 まで進めて完走させる（base_now は最初の Tick の now）。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_000),
-    })
-    .expect("send Tick(base)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_500),
-    })
-    .expect("send Tick(base+500ms)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
+        .expect("send Tick(base)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
+        .expect("send Tick(base+500ms)");
 
     let done = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -185,14 +182,10 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     .expect("send manual stale Done(A)");
 
     // 占有 horizon=0.40 を跨ぐ elapsed 0.5 で B を完走させる。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(2_000),
-    })
-    .expect("send Tick(base)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(2_500),
-    })
-    .expect("send Tick(base+500ms)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(2_000) })
+        .expect("send Tick(base)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(2_500) })
+        .expect("send Tick(base+500ms)");
 
     let done = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -248,7 +241,7 @@ const THREE_TEXTS: &str = r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e";
 /// `THREE_TEXTS` を起動して刻み `ticks` を送り、dispatcher を閉じて join してから届いた Text を順に返す。
 /// Close は talk を join してから dispatcher を止めるので、join の後は刻みの発火が出揃っており、
 /// 「まだ出ない」を `try_recv` の競りに頼らず見られる。
-fn texts_after_ticks(ticks: &[u64]) -> Vec<String> {
+fn texts_after_ticks(ticks: &[i64]) -> Vec<String> {
     let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
     let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
     let (tx, handle) = spawn_dispatcher(
@@ -266,10 +259,8 @@ fn texts_after_ticks(ticks: &[u64]) -> Vec<String> {
     )))
     .expect("send Start");
     for &now in ticks {
-        tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(now),
-        })
-        .expect("send Tick");
+        tx.send(DispatcherMsg::Tick { now: at_ms(now) })
+            .expect("send Tick");
     }
     close_and_join(&tx, handle);
     text_rx
@@ -292,11 +283,11 @@ fn tick_relay_releases_only_the_cues_due_at_each_elapsed_time() {
     );
 }
 
-/// dispatcher は最初の `Tick{now}` を経過秒 0.0 の起点として記録し、以降 `(now - base) / 1000.0` 秒を
-/// `SakuraMsg::Tick(f64)` として active talk へ中継する。換算の値そのものは `choice_tests` の
+/// dispatcher は最初の `Tick{now}` を隔たり 0 の起点として記録し、以降 `ZERO + (now - base)` を
+/// `SakuraMsg::Tick` として active talk へ中継する。換算の値そのものは `choice_tests` の
 /// `resolve_choice_relays_id_…` が縛り、ここは実 talk で順と自然終端を見る。
 #[test]
-fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
+fn tick_relay_converts_absolute_now_to_offset_from_first_tick() {
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
     let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
     let surface = RecordingSink::new();
@@ -328,31 +319,23 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
     };
 
     // 初回 tick は elapsed=0.0 が起点で、FIRST までが due。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(5_000),
-    })
-    .expect("send first Tick (anchors base_now)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(5_000) })
+        .expect("send first Tick (anchors base_now)");
     recv_text("FIRST");
 
     // elapsed=0.5 で SECOND まで due。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(5_500),
-    })
-    .expect("send second Tick (elapsed 0.5)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(5_500) })
+        .expect("send second Tick (elapsed 0.5)");
     recv_text("SECOND");
 
     // elapsed=1.1 で THIRD が due。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(6_100),
-    })
-    .expect("send third Tick (elapsed 1.1)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(6_100) })
+        .expect("send third Tick (elapsed 1.1)");
     recv_text("THIRD");
 
     // elapsed=1.4 は占有 horizon=1.30 を超え、自然終端する（末尾テキストの D を落とさない）。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(6_400),
-    })
-    .expect("send fourth Tick (elapsed 1.4 ≥ horizon 1.30)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(6_400) })
+        .expect("send fourth Tick (elapsed 1.4 ≥ horizon 1.30)");
 
     let done = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -391,15 +374,11 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         r"\s[9]hello\_w[100]world\e",
     )))
     .expect("send Start(C)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(9_000),
-    })
-    .expect("send Tick(base)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(9_000) })
+        .expect("send Tick(base)");
     // C の占有 horizon=0.60 を跨ぐ elapsed 0.7。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(9_700),
-    })
-    .expect("send Tick(base+700ms)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(9_700) })
+        .expect("send Tick(base+700ms)");
 
     let done_c = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -419,14 +398,10 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     )))
     .expect("send Start(D)");
     // D の占有 horizon=0.25 を跨ぐ base(10_000)＋elapsed 0.3 の 2 tick。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(10_000),
-    })
-    .expect("send Tick(base) for D");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(10_300),
-    })
-    .expect("send Tick(base+300ms) for D");
+    tx.send(DispatcherMsg::Tick { now: at_ms(10_000) })
+        .expect("send Tick(base) for D");
+    tx.send(DispatcherMsg::Tick { now: at_ms(10_300) })
+        .expect("send Tick(base+300ms) for D");
 
     let done_d = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -515,10 +490,8 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         r"\s[0]%username\e",
     )))
     .expect("send Start(1)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_000),
-    })
-    .expect("send Tick for talk 1");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
+        .expect("send Tick for talk 1");
     recv_text("user1");
     assert_eq!(
         calls.load(Ordering::SeqCst),
@@ -531,10 +504,8 @@ fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
         r"\s[0]%username\e",
     )))
     .expect("send Start(2)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(2_000),
-    })
-    .expect("send Tick for talk 2");
+    tx.send(DispatcherMsg::Tick { now: at_ms(2_000) })
+        .expect("send Tick for talk 2");
     recv_text("user2");
     assert_eq!(
         calls.load(Ordering::SeqCst),

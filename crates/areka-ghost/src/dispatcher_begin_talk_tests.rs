@@ -4,6 +4,7 @@ use super::choice_tests::close_and_join;
 use super::*;
 use crate::test_support::test_system_vars;
 use areka_sakura::contract::{ScriptOrigin, TalkCue};
+use dola::time::testing::at_ms;
 use std::sync::{Arc, Mutex, mpsc};
 
 /// 受け口の 1 つの出来事（どの受け口か・何が起きたか・その複製が受け持つ番号）。
@@ -91,10 +92,8 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         r"\s[1]A\_w[2500]A_END\e",
     )))
     .expect("send Start(A)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_000),
-    })
-    .expect("send Tick(A)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
+        .expect("send Tick(A)");
 
     // B で置き換える。B は Close（join する）で落とす。自然完了は join しないので落ちの時点が決まらない。
     tx.send(DispatcherMsg::Start(StartTalk::new(
@@ -102,10 +101,8 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         r"\s[2]B\_w[2500]B_END\e",
     )))
     .expect("send Start(B)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(2_000),
-    })
-    .expect("send Tick(B)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(2_000) })
+        .expect("send Tick(B)");
 
     close_and_join(&tx, handle);
 

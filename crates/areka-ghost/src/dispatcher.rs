@@ -17,12 +17,13 @@ use std::ops::ControlFlow;
 use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
-use areka_kanade::{AnchorInput, ChoiceInput, KanadeMsg, MonotonicMs};
+use areka_kanade::{AnchorInput, ChoiceInput, KanadeMsg};
 use areka_sakura::contract::{
     ChoiceWaiting, CueSink, SakuraMsg, StartTalk, TalkCommand, TalkDone, TalkHandle, TalkId,
 };
 use areka_sakura::drive::spawn_talk;
 use areka_sakura::strict::StrictHooks;
+use dola::TimePoint;
 
 use crate::runtime::SystemVarSource;
 use crate::sink::BootCueSink;
@@ -33,8 +34,8 @@ pub enum DispatcherMsg {
     Start(StartTalk),
     /// per-talk transient からの完了通知。
     Done(TalkDone),
-    /// ticker からの時刻前進（active talk の経過秒へ換算して中継）。
-    Tick { now: MonotonicMs },
+    /// ticker からの時刻前進（active talk の最初の刻みからの隔たりへ換算して中継）。
+    Tick { now: TimePoint },
     /// 停止規約の Close（active talk を終了させてから停止）。
     Close,
     /// kanade からの選択待ちバリア解決指示。`talk_id` は stale ガード用、`id` は選択肢 ID。
@@ -97,8 +98,8 @@ struct ActiveTalk {
     talk_id: TalkId,
     /// per-talk transient への投函端＋join ハンドル。
     handle: TalkHandle,
-    /// この talk に対する最初の `Tick` を観測した時刻（経過秒換算の起点）。
-    base_now: Option<MonotonicMs>,
+    /// この talk に対する最初の `Tick` を観測した時刻（隔たりの起点）。
+    base_now: Option<TimePoint>,
 }
 
 /// dispatcher body の状態（`Option<ActiveTalk>` が単一 slot）。
@@ -243,10 +244,9 @@ impl DispatcherState {
 
     /// `ChoiceWaiting` 受領。
     ///
-    /// 一致時のみ、talk が通知した占有 horizon（絶対 elapsed 秒）を
-    /// `display_end_ms = base_now + round(display_end_elapsed_secs * 1000)` で単調 ms へ換算し、
-    /// `KanadeMsg::ChoiceWaiting` として kanade へ転送する。`base_now` は [`on_tick`](Self::on_tick) が
-    /// 刻印した Tick 中継の起点で、新しい時間基準は作らない。タイムアウト指令は写像せず素通しする
+    /// 一致時のみ、talk が通知した占有 horizon（最初の刻みからの隔たり）に `base_now` を足し戻して
+    /// 刻みと同じ物差しの時刻へ換算し、`KanadeMsg::ChoiceWaiting` として kanade へ転送する。
+    /// `base_now` は [`on_tick`](Self::on_tick) が刻印した Tick 中継の起点で、新しい時間基準は作らない。タイムアウト指令は写像せず素通しする
     /// （deadline 写像は kanade）。
     ///
     /// `base_now` 未確定（初回 Tick 前）は通知が tick 駆動のバリア到達で出る以上あり得ないが、
@@ -271,18 +271,15 @@ impl DispatcherState {
             tracing::warn!(
                 event = "choice_waiting_stale",
                 talk_id = waiting.talk_id.0,
-                display_end_elapsed_secs = waiting.display_end_elapsed_secs,
+                display_end = %waiting.display_end,
                 "ChoiceWaiting arrived before the first Tick anchored base_now; dropping forward \
                  (structurally unreachable — refusing to invent a time origin)"
             );
             return ControlFlow::Continue(());
         };
 
-        // Tick 中継（`(now - base) / 1000.0` 秒）の逆写像。四捨五入は ms への丸め。
-        let display_end = MonotonicMs(
-            base.0
-                .saturating_add((waiting.display_end_elapsed_secs * 1000.0).round() as u64),
-        );
+        // Tick 中継（`ZERO + (now - base)`）の逆写像。
+        let display_end = base + (waiting.display_end - TimePoint::ZERO);
 
         let talk_id = waiting.talk_id;
         if self
@@ -291,7 +288,7 @@ impl DispatcherState {
                 talk_id,
                 choice_ids: waiting.choice_ids,
                 display_end,
-                timeout_directive_secs: waiting.timeout_directive_secs,
+                timeout_directive: waiting.timeout_directive,
             })
             .is_err()
         {
@@ -361,18 +358,13 @@ impl DispatcherState {
         ControlFlow::Continue(())
     }
 
-    /// `Tick{now}` 受領: active があれば、その talk の初回 tick で `base_now` を確定（elapsed=0.0 起点）し、
-    /// 以降 `(now - base) / 1000.0` 秒を `SakuraMsg::Tick(f64)` として中継する。active が無ければ何もしない。
-    fn on_tick(&mut self, now: MonotonicMs) -> ControlFlow<()> {
+    /// `Tick{now}` 受領: active があれば、その talk の初回 tick で `base_now` を確定（隔たり 0 の起点）し、
+    /// 以降 `ZERO + (now - base)` を `SakuraMsg::Tick` として中継する。active が無ければ何もしない。
+    fn on_tick(&mut self, now: TimePoint) -> ControlFlow<()> {
         if let Some(active) = self.active.as_mut() {
             let base = *active.base_now.get_or_insert(now);
-            let elapsed_seconds = now.0.saturating_sub(base.0) as f64 / 1000.0;
-            if active
-                .handle
-                .inbox
-                .send(SakuraMsg::Tick(elapsed_seconds))
-                .is_err()
-            {
+            let elapsed = TimePoint::ZERO + now.span_since(base).unwrap_or_default();
+            if active.handle.inbox.send(SakuraMsg::Tick(elapsed)).is_err() {
                 tracing::debug!(
                     talk_id = active.talk_id.0,
                     "active talk inbox disconnected; dropping Tick relay (talk already ended)"
@@ -470,6 +462,12 @@ mod choice_tests;
 #[cfg(test)]
 #[path = "dispatcher_choice_timeout_tests.rs"]
 mod choice_timeout_tests;
+#[cfg(test)]
+#[path = "dispatcher_choice_waiting_tests.rs"]
+mod choice_waiting_tests;
+#[cfg(test)]
+#[path = "dispatcher_selection_tests.rs"]
+mod selection_tests;
 #[cfg(test)]
 #[path = "dispatcher_slot_tests.rs"]
 mod slot_tests;

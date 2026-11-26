@@ -1,6 +1,7 @@
 use super::choice_tests::close_and_join;
 use super::*;
 use crate::test_support::{RecordingSink, test_system_vars};
+use dola::time::testing::{at_ms, delta_ms};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -38,14 +39,10 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
     )))
     .expect("send Start(choicetimeout 1234)");
     // base_now=1_000 を刻み、elapsed 0.5 で区切り 0.35 に届いて選択待ちになる。
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_000),
-    })
-    .expect("send Tick(base)");
-    tx.send(DispatcherMsg::Tick {
-        now: MonotonicMs(1_500),
-    })
-    .expect("send Tick(base+500ms)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
+        .expect("send Tick(base)");
+    tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
+        .expect("send Tick(base+500ms)");
 
     match kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -55,19 +52,19 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
             talk_id: got,
             choice_ids,
             display_end,
-            timeout_directive_secs,
+            timeout_directive,
         } => {
             assert_eq!(got, talk_id);
             assert_eq!(choice_ids, vec!["targetA".to_string()]);
             assert_eq!(
                 display_end,
-                MonotonicMs(1_350),
+                at_ms(1_350),
                 "表示の終わりは base_now(1_000)＋区切り 0.35s（tick 時刻 1_500 ではない）"
             );
             assert_eq!(
-                timeout_directive_secs,
-                Some(1.234),
-                "台本の `1234`（ミリ秒）が秒の指令として kanade の入口まで届く"
+                timeout_directive,
+                Some(delta_ms(1_234)),
+                "台本の `1234`（ミリ秒）が長さの指令として kanade の入口まで届く"
             );
         }
         _ => unreachable!("区切りで最初に届くのは ChoiceWaiting"),

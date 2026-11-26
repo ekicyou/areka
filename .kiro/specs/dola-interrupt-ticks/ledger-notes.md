@@ -201,3 +201,10 @@
 - 取り除いた分かれ道: 関数 `real_clock`（`GetTickCount64` の読み取りとその `// SAFETY:`）・`duration_to_millis` のミリ秒への切り捨て。外したテスト・ログは無い（catch-up と disconnected の info の文言は同じ）。
 - 時計の出どころが替わる事による本番の変化（決定論のテストは偽の時計なので結果は同じ）: 眠り（前は眠りの間も数え、復帰で大きく跳んで `ticker catch-up` の info を出し、過ぎた選択待ちの期限は復帰してすぐ `ChoiceTimeoutDue` を送った → 後は眠りを数えず、跳ばず、期限は眠りの分だけ後ろへずれる）。`OnSecondChange`（Reference0 へ渡る値が眠りを含まない時刻になり、眠った機械では時の数が前より小さい）。分解能（前は OS の刻み約 15.6 ms ごと → 後は 100ns の単位で、残りの時間も 100ns ちょうどの `Duration`）。境の格子の 0 の位置（前は起動からの時刻 → 後は眠りを含まない割り込みの時刻の 0。刻み役どうしは同じ格子）。
 - 変える前後の期待: `ticker_tests.rs` を `at_ms`・`ms` へ写した（`next_deadline_ms` → `next_deadline`）。`wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one` に「1 刻み先なら 100ns」を足した。`poll_skips_multiple_missed_boundaries_and_fires_only_once`・`spawn_loop_ticker_catch_up_delivers_the_current_clock` は期待は同じで、説明の「サスペンド復帰」を「処理の大幅な遅れ」に直した。
+
+## 4.10
+
+- 取り除いた本番の分かれ道: 選択待ちの表示の終わりをミリ秒へ四捨五入する所（`(secs*1000).round() as u64`）。今は丸めずに 100ns で足し戻す。設計の「前半に入る振る舞いの変化」の一覧に無い変化なので、記録の 3 に足す。`base_now` が無い時の `warn!` は前半では残す（9.1 で消す）。
+- ログの欄: `choice_waiting_stale` の `warn!` の `display_end_elapsed_secs`（秒の実数）→ `display_end`（Display）。外したテストは無い。
+- 分けたファイル: `dispatcher_choice_tests.rs`（908 行）→ `dispatcher_choice_tests.rs`・`dispatcher_choice_waiting_tests.rs`・`dispatcher_selection_tests.rs`（テスト 15 本のまま）。
+- 改名と変える前後の期待: `choice_waiting_converts_elapsed_secs_to_ms_from_the_tick_base_and_forwards_to_kanade` → `choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade`（前は 4,000 + round(356.7) = 4,357 と 4,000 + round(1,250.4) = 5,250 で丸めを両側から挟んだ。後は 4,000 ms + 356.7 ms を丸めずに足す・`at_ms(1_250)` → `at_ms(5_250)`、指令 `Some(12.0)` → `Some(delta_ms(12_000))`）。`tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick` → `tick_relay_converts_absolute_now_to_offset_from_first_tick`。`resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base`（`(0.0, 0.5)` → `(at_ms(0), at_ms(500))`）。`script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive`（`Some(1.234)` → `Some(delta_ms(1_234))`）。
