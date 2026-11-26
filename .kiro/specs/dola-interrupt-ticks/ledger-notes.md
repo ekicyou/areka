@@ -144,3 +144,7 @@
 ## 3.11
 
 - 外したテスト・分かれ道・ログは無い。変える前後の期待（名前は変えていない）: 刻みの時刻 `MonotonicMs(n)`・整数 → `at_ms(n)`。`CHOICE_DEADLINE_MS ± x` → `CHOICE_DEADLINE ± ms(..)`。`choice_test_timeout_directive_tests` の指令 `Some(1.234)`・`Some(0.0)`・`Some(-0.001)` → `delta_ms(1_234)`・`delta_ms(0)`・`delta_ms(-1)`。`close_test_handshake_tests` の `close_talk_deadline_ms = u64::MAX`・`5_000` → `close_talk_deadline = TimeSpan::MAX`・`ms(5_000)`。`status_query_test` の欄 `timeout_directive_secs` → `timeout_directive`。
+
+## 3.12
+
+- 段 2 の締め: `cargo test -p wintf`（lib 1607 passed・22 ignored ほか全部緑）・`-p areka-talk`（14）・`-p areka-sakura`（161）・`-p areka-kanade`（651 + 77）が 1 本ずつ緑。`cargo build -p wintf --examples` 可。整形の検査は緑。clippy の警告はこの spec が触ったファイルに新しく足した物は無い（`wintf/examples/typewriter_demo.rs` の `needless_update` 2 件は付け替えの前から在る）。

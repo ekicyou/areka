@@ -284,7 +284,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 3.12 段 2 を締める
+- [x] 3.12 段 2 を締める
   - `cargo test -p wintf`・`-p areka-talk`・`-p areka-sakura`・`-p areka-kanade` が、1 本ずつ回して緑である
   - 赤が出たら、そのテストの家族へ戻して直し、絞った確かめで緑を示す
   - _Dispatch: mechanical — 確かめを回すだけ_
