@@ -49,7 +49,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 }
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
-/// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用）。
+/// `talk_time` は注入時刻（台本の時刻・実時間 sleep 不使用）。
 ///
 /// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形
 /// スクロール描画（COM）→ 変化ありのフレームだけ供給面を提示（Present のみ）」を駆動する:
@@ -69,7 +69,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 pub fn present_frame(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
-    talk_time: f64,
+    talk_time: dola::TimeSpan,
 ) -> Result<(), TextLayerError> {
     // 再追従が捨てた描き手を差し込み口から外す（World はここで初めて持つ）。
     for (render, slot) in std::mem::take(&mut runtime.retired_renders) {
@@ -115,13 +115,13 @@ pub fn present_frame(
                 if runtime.unresolved_warned.insert(place.clone()) {
                     warn!(
                         actor = %actor,
-                        talk_time,
+                        %talk_time,
                         "actor の装着先（予約スロット）が未解決——状態を蓄積し描画をスキップして次フレームで再試行する"
                     );
                 } else {
                     debug!(
                         actor = %actor,
-                        talk_time,
+                        %talk_time,
                         "actor の装着先が未解決のまま——蓄積継続・描画スキップ・次フレーム再試行"
                     );
                 }
@@ -209,7 +209,7 @@ fn present_actor(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
     place: &PlaceKey,
-    talk_time: f64,
+    talk_time: dola::TimeSpan,
     marker_err: &mut Option<TextLayerError>,
 ) -> Result<bool, TextLayerError> {
     let actor = &place.actor;
@@ -717,7 +717,7 @@ pub(super) fn arrange_lines(
     resolved: &ResolvedBalloonText,
     metrics: &dyn GlyphMetrics,
     breaks: &mut BreakMemo,
-    talk_time: f64,
+    talk_time: dola::TimeSpan,
 ) -> Option<Vec<PositionedLine>> {
     let arrived = state.place_state(place)?;
     let visible = arrived.reveal().visible(talk_time);

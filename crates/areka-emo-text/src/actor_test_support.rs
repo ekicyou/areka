@@ -11,11 +11,12 @@ use areka_parsers::balloon::{
     WordWrapPoint,
 };
 use areka_parsers::shell::{parse, parse_boxes};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
+use dola::time::testing::ms;
 use log_capture_kit::{CapturedEvent, capture};
 use windows::System::DispatcherQueueController;
 use windows::UI::Composition::Compositor;
@@ -38,24 +39,39 @@ use crate::state::TextItem;
 
 // ── テスト土台 ──
 
-/// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
-/// Text cue へ `N × REVEAL_INTERVAL` の duration を焼き込んで interval=0.05 の進行を得る
-/// （進行の観測は安全マージン付き時刻 0.06/0.11 で行う）。
-pub(crate) const REVEAL_INTERVAL: f64 = 0.05;
+/// 1 字の reveal 間隔。reveal は配送 duration 由来ゆえ、Text cue へ `N × REVEAL_INTERVAL` の
+/// duration を焼き込んで 1 字 50 ms の進行を得る。
+pub(crate) const REVEAL_INTERVAL: TimeSpan = ms(50);
 
-/// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込む
-/// （reveal interval=0.05）。他コマンドは瞬時（duration=0）。
-pub(crate) fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    let duration = match &command {
-        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
-    };
-    TalkCue {
+/// `N` 字ぶんの配送 duration（`N × REVEAL_INTERVAL`）。
+pub(crate) fn reveal_duration(text: &str) -> TimeSpan {
+    REVEAL_INTERVAL.mul_div(areka_sakura::cluster::cluster_count(text) as u64, 1)
+}
+
+/// 起点 0 の台本の `at` の cue。
+pub(crate) fn cue_at(
+    actor: &str,
+    at: TimeSpan,
+    command: CueCommand,
+    duration: TimeSpan,
+) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(actor),
+        ActorKey::from(actor),
         command,
         duration,
-    }
+    )
+}
+
+/// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込む。
+/// 他コマンドは瞬時（duration=0）。
+pub(crate) fn cue(actor: &str, at: TimeSpan, command: CueCommand) -> TalkCue {
+    let duration = match &command {
+        CueCommand::Text(t) => reveal_duration(t),
+        _ => TimeSpan::ZERO,
+    };
+    cue_at(actor, at, command, duration)
 }
 
 /// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
@@ -213,17 +229,19 @@ pub(crate) fn opaque_count(bytes: &[u8]) -> usize {
 // ══ 選択肢契約 API（inject_choice_hover／choice_hit_rows／choice_active・純粋・COM 不要） ══
 
 /// 選択肢テキストを載せる Choice cue（duration はクラスタ数×REVEAL_INTERVAL・[`cue`] と同じ流儀）。
-pub(crate) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Choice {
-            id: id.into(),
-            text: text.into(),
-            references: refs.iter().map(|s| s.to_string()).collect(),
-        },
-        duration: areka_sakura::cluster::cluster_count(text) as f64 * REVEAL_INTERVAL,
-    }
+pub(crate) fn choice_cue(
+    actor: &str,
+    at: TimeSpan,
+    id: &str,
+    text: &str,
+    refs: &[&str],
+) -> TalkCue {
+    let command = CueCommand::Choice {
+        id: id.into(),
+        text: text.into(),
+        references: refs.iter().map(|s| s.to_string()).collect(),
+    };
+    cue_at(actor, at, command, reveal_duration(text))
 }
 
 // ══ 提示パイプラインとヒット行スナップショット配線（COM・headless） ══
@@ -372,11 +390,11 @@ pub(crate) fn fake_resolver() -> SurfaceKeyResolver {
 }
 
 pub(crate) fn emote(actor: &str, key: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
+    cue(actor, TimeSpan::ZERO, CueCommand::Emote { key: key.into() })
 }
 
 pub(crate) fn text(actor: &str, t: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(t.into()))
+    cue(actor, TimeSpan::ZERO, CueCommand::Text(t.into()))
 }
 
 /// actor の場所 `place` に届いた文字の項目（場所が無ければ空）。
@@ -393,12 +411,7 @@ pub(crate) fn items_at(rt: &TextLayerRuntime, actor: &str, place: TextPlace) -> 
 
 /// 時刻 0・配送 duration 0 の cue（reveal を待たずに全部見える）。
 pub(crate) fn instant(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
+    cue_at(actor, TimeSpan::ZERO, command, TimeSpan::ZERO)
 }
 
 /// 本文が id と同じ、参照なしの瞬時の選択肢（作るのは `state::test_support::choice`）。

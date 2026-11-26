@@ -1,35 +1,38 @@
 use super::*;
-use areka_sakura::contract::FONT_TAG_CARRIER;
+use areka_sakura::contract::{FONT_TAG_CARRIER, TimePoint};
+use dola::time::testing::ms;
 
-/// FP 丸めに依存しない reveal 間隔（0.25 は 2 の冪＝正確表現）。duration 駆動 reveal では
-/// `interval = duration / N` ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むことで
-/// interval=0.25 の決定論的リビール時刻列を得る（期待リビール時刻は実装と同一の `D/N` 算術で成立する）。
-pub(super) const REVEAL_INTERVAL: f64 = 0.25;
+/// 1 字の reveal 間隔。Text cue へ `N × REVEAL_INTERVAL` の duration を焼き込むと、字の時刻が
+/// この間隔のちょうどの倍数になる（100ns で割り切れる）。
+pub(super) const REVEAL_INTERVAL: TimeSpan = ms(250);
 
 /// テスト用 cue 生成ヘルパ。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込み
 /// （reveal interval=0.25）、他コマンドは瞬時（duration=0）とする。明示的な duration を
 /// 与えたい縮退（D=0／空テキスト）・honor no-op 檻は [`cue_dur`] を使う。
-pub(super) fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+pub(super) fn cue(actor: &str, at: TimeSpan, command: CueCommand) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
+        CueCommand::Text(t) => {
+            REVEAL_INTERVAL.mul_div(areka_sakura::cluster::cluster_count(t) as u64, 1)
+        }
+        _ => TimeSpan::ZERO,
     };
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration,
-    }
+    cue_dur(actor, at, duration, command)
 }
 
 /// 明示 duration 版の cue ヘルパ（D=0 の縮退・空テキストの 0 割り回避・honor no-op 檻用）。
-pub(super) fn cue_dur(actor: &str, at: f64, duration: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
+pub(super) fn cue_dur(
+    actor: &str,
+    at: TimeSpan,
+    duration: TimeSpan,
+    command: CueCommand,
+) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(actor),
+        ActorKey::from(actor),
         command,
         duration,
-    }
+    )
 }
 
 /// actor の items を取得する（未生成なら panic ＝テスト失敗として扱う）。
@@ -42,7 +45,7 @@ pub(super) fn items_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [TextI
 
 // ══ typewriter リビール進行（注入時刻駆動） ══
 
-pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<f64> {
+pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<TimeSpan> {
     state
         .actor_state(&ActorKey::from(actor))
         .expect("actor state should exist")
@@ -57,7 +60,7 @@ pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<f64> {
 pub(crate) fn font(actor: &str, tokens: &[&str]) -> TalkCue {
     cue(
         actor,
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::command_carrier(
             FONT_TAG_CARRIER,
             tokens.iter().map(|t| (*t).to_owned()).collect(),
@@ -67,14 +70,14 @@ pub(crate) fn font(actor: &str, tokens: &[&str]) -> TalkCue {
 
 /// 文字の cue（時刻 0）。
 pub(crate) fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(s.into()))
+    cue(actor, TimeSpan::ZERO, CueCommand::Text(s.into()))
 }
 
 /// アンカーを開く合図（時刻 0・再生時間 0）。
 pub(crate) fn open(actor: &str, id: &str, references: &[&str]) -> TalkCue {
     cue(
         actor,
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::AnchorBegin {
             id: id.to_owned(),
             references: references.iter().map(|r| (*r).to_owned()).collect(),
@@ -84,14 +87,14 @@ pub(crate) fn open(actor: &str, id: &str, references: &[&str]) -> TalkCue {
 
 /// アンカーを閉じる合図（時刻 0・再生時間 0）。
 pub(crate) fn close(actor: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::AnchorEnd)
+    cue(actor, TimeSpan::ZERO, CueCommand::AnchorEnd)
 }
 
 /// 選択肢の合図（時刻 0・再生時間 0・参照なし）。
 pub(crate) fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
     cue(
         actor,
-        0.0,
+        TimeSpan::ZERO,
         CueCommand::Choice {
             id: id.to_owned(),
             text: s.to_owned(),

@@ -16,7 +16,7 @@ use areka_emo_text::state::{TextItem, TextLayerConfig, TextLayerState};
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue};
+use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue, TimePoint};
 use log_capture_kit::{CapturedEvent, LineFormat, capture, format_line};
 use sample_ghost_kit::SampleRoot;
 use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
@@ -123,12 +123,13 @@ pub fn command_cues(script: &str) -> Vec<TalkCue> {
         .cues()
         .iter()
         .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
+            CuePayload::Command(cmd) => Some(TalkCue::scheduled(
+                TimePoint::ZERO,
+                c.start_time,
+                c.actor.clone(),
+                cmd.clone(),
+                c.duration,
+            )),
             _ => None,
         })
         .collect();

@@ -112,7 +112,8 @@ impl EmoTextSink {
             self.tx.send(msg)
         {
             tracing::error!(
-                at = lost.at,
+                at = %lost.at,
+                fire_time = %lost.fire_time,
                 actor = ?lost.actor,
                 command = ?lost.command,
                 "EmoTextSink::emit: cue delivery failed (UI text drain stopped); \
@@ -205,6 +206,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
+    use dola::time::testing::ms;
     use log_capture_kit::count_levels;
 
     use super::{EmoTextSink, TextMsg, handle_text_msg_with};
@@ -300,7 +302,7 @@ mod tests {
     #[test]
     fn handle_text_msg_delivers_cue_and_continues() {
         let delivered = std::cell::RefCell::new(None);
-        let sent = cue("0", 1.5, CueCommand::Text("アヒル".into()));
+        let sent = cue("0", ms(1500), CueCommand::Text("アヒル".into()));
         let result = handle_text_msg_with::<String>(
             TextMsg::Cue(sent.clone()),
             |c, _| {
@@ -323,7 +325,7 @@ mod tests {
     #[test]
     fn handle_text_msg_propagates_cue_failure_as_err() {
         let result = handle_text_msg_with(
-            TextMsg::Cue(cue("0", 0.0, CueCommand::Clear)),
+            TextMsg::Cue(cue("0", ms(0), CueCommand::Clear)),
             |_, _| -> Result<(), String> { Err("delivery failed".into()) },
             |_| Ok(()),
             |_| Ok(()),
@@ -342,9 +344,9 @@ mod tests {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let mut sink2 = sink.clone();
 
-            let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
-            let c1 = cue("1", 0.1, CueCommand::NewLine { ratio: 1.0 });
-            let c2 = cue("0", 0.2, CueCommand::Clear);
+            let c0 = cue("0", ms(0), CueCommand::Text("アヒルや".into()));
+            let c1 = cue("1", ms(100), CueCommand::NewLine { ratio: 1.0 });
+            let c2 = cue("0", ms(200), CueCommand::Clear);
             sink.emit(c0.clone());
             sink2.emit(c1.clone());
             sink.emit(c2.clone());
@@ -375,7 +377,7 @@ mod tests {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let sink2 = sink.clone();
 
-            let c0 = cue("0", 0.0, CueCommand::Text("残置 cue".into()));
+            let c0 = cue("0", ms(0), CueCommand::Text("残置 cue".into()));
             sink.emit(c0.clone());
 
             // Close は送らない＝終了は全送信元切断（channel closed）経路のみでありうる。
@@ -403,9 +405,9 @@ mod tests {
         let ((), counts) = count_levels(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(Some("poison"));
 
-            let before = cue("0", 0.0, CueCommand::Text("前".into()));
-            let bad = cue("0", 0.1, CueCommand::Text("poison".into()));
-            let after = cue("0", 0.2, CueCommand::Text("後".into()));
+            let before = cue("0", ms(0), CueCommand::Text("前".into()));
+            let bad = cue("0", ms(100), CueCommand::Text("poison".into()));
+            let after = cue("0", ms(200), CueCommand::Text("後".into()));
             sink.emit(before.clone());
             sink.emit(bad);
             sink.emit(after.clone());
@@ -442,8 +444,8 @@ mod tests {
 
         // 停止後の emit×2＋close×1: panic せず、各呼び出しが error 1 件のみ。
         let ((), counts) = count_levels(|| {
-            sink.emit(cue("0", 1.0, CueCommand::Text("届かない".into())));
-            sink.emit(cue("0", 1.1, CueCommand::Clear));
+            sink.emit(cue("0", ms(1000), CueCommand::Text("届かない".into())));
+            sink.emit(cue("0", ms(1100), CueCommand::Clear));
             sink.close();
         });
         assert_eq!(
@@ -457,7 +459,7 @@ mod tests {
     /// `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
     #[test]
     fn handle_text_msg_with_routes_upcoming_and_propagates_failure() {
-        let list = vec![cue("0", 0.0, CueCommand::Text("アヒル".into()))];
+        let list = vec![cue("0", ms(0), CueCommand::Text("アヒル".into()))];
         let got = std::cell::RefCell::new(None);
         let result = handle_text_msg_with::<String>(
             TextMsg::Upcoming(list.clone()),
@@ -486,8 +488,8 @@ mod tests {
         let ((), _events) = capture_checked(|| {
             let (mut sink, records) = spawn_message_drain("emo-text-preview-test");
 
-            let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
-            let c1 = cue("0", 0.1, CueCommand::Clear);
+            let c0 = cue("0", ms(0), CueCommand::Text("アヒルや".into()));
+            let c1 = cue("0", ms(100), CueCommand::Clear);
             sink.preview(&[c0.clone(), c1.clone()]);
             sink.emit(c0.clone());
             sink.emit(c1.clone());
@@ -516,7 +518,7 @@ mod tests {
         assert!(terminated.load(Ordering::SeqCst), "前提: drain は停止済み");
 
         let ((), counts) = count_levels(|| {
-            sink.preview(&[cue("0", 1.0, CueCommand::Text("届かない".into()))]);
+            sink.preview(&[cue("0", ms(1000), CueCommand::Text("届かない".into()))]);
         });
         assert_eq!(
             counts.error, 1,

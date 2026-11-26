@@ -638,7 +638,7 @@ impl TextLayerRuntime {
         &mut self,
         place: &PlaceKey,
         metrics: &dyn crate::layout::GlyphMetrics,
-        talk_time: f64,
+        talk_time: dola::TimeSpan,
     ) -> Option<Vec<crate::layout::PositionedLine>> {
         let resolved = self.layout_input.get(place)?;
         present::arrange_lines(

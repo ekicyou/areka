@@ -330,7 +330,7 @@
   - _Dispatch: mechanical — 分けて期待の値を写す_
   - _Requirements: 7.7, 9.1, 15.7_
 
-- [ ] 4.5 (P) areka-emo-text の本体と組み立て: 字の現れる時刻を型で持つ
+- [x] 4.5 (P) areka-emo-text の本体と組み立て: 字の現れる時刻を型で持つ
   - 字の現れる時刻を 1 字ごとの間隔の 1 本の関数で積み、前半は台本の時刻（長さの型）で持つ。提示と読み口は台本の時刻を受ける（後半でもう一度替わる）
   - ログの欄を文字の形で出す。`[dev-dependencies]` に、機能 `test-support` を付けた dola の行を足す
   - 1,000 行に近い actor（873 行）と提示（866 行）の行を増やさない
@@ -813,3 +813,4 @@
 - 3.9: kanade の `src/schedule/mod.rs:30` の `#[cfg(test)] use dola::{TimePoint, time::testing::at_ms};` は 3.10 のテストが使う前提（使わなければ 3.10 で外す。3.12 で警告 0 を見る）。kanade の共有の組み立ては `tests/kanade/choice_test_test_support.rs` の `CHOICE_DISPLAY_END`／`CHOICE_DEADLINE: TimePoint`、`establish_choice_wait` の `directive: Option<TimeDelta>`、`common_recording::tick(harness, now: TimePoint)`、`common_bounded::drive_ticks_until_disconnect(.., first_tick_second: i64, ..)`。
 - 4.1: `crates/areka-seriko/src/looper.rs` は 4.1 の口の付け替えで 887 → 892 行。4.2 は終える時に 887 行以下へ戻す。`timeline.rs` の `lap_of` などは周期で割るので、4.2 は 0 の周期で panic しない形にするか前提を `debug_assert!` で示す。`timeline.rs:56` の説明が `LOTTERY_GRID_MS` を名指している（4.2 で直す）。`table.rs` は 969 行。seriko の組み立て: `cue(at: TimeSpan, ..)`・`text(at: TimeSpan, ..)`（1 字 `ms(50)`）・`part_playing(TimePoint)`・`draw_frame(id, TimeSpan)`・`emote_cue(TimeSpan, ..)`・`ClockRig::{send, tick, hear}(TimePoint, ..)`・looper_test_support の `switch(.., at: TimePoint)`・`started(..) -> Option<TimePoint>`（`Playback.started_at` へ改名待ち）・tests/common の `run_core(.., ticks: &[TimePoint], ..)`。
 - 4.2: seriko の改名（4.3・4.4 が追う）: `glyph_wall_ms` → `glyph_wall`、`TalkEpoch::wall_ms` → `wall`、`TalkWindow.wall_ms` → `wall`（`&dyn Fn(u64) -> TimePoint`）、`Playback.started_at_ms` → `started_at`、`CallOutcome.shift: Option<(TimePoint, i64, i64)>`、timeline の `frame_at`・`current_frame_index`・`always_at`・`always_visible` は経過を `TimeSpan` で受け、`lap_of` は `(u64, TimeSpan)`、新しい `timeline::elapsed_since(now, start) -> TimeSpan`。`lap_of` は `debug_assert!(period > ZERO)` を持つので、テストで周期 0 の `Always` を組まない。
+- 4.5: emo-text の組み立ての口: `cue(actor, at: TimeSpan, cmd)`・`cue_dur(actor, at, duration: TimeSpan, cmd)`・`choice_cue(actor, at: TimeSpan, ..)`・`REVEAL_INTERVAL: TimeSpan`（state 側 `ms(250)`・actor 側 `ms(50)`）・`reveal_times_of -> Vec<TimeSpan>`・`apply_fixture_script(at: [TimeSpan; 4], interval: TimeSpan)`・`state_frame(t: TimeSpan)`・actor_test_support の `reveal_duration(text)`・`cue_at(actor, at, cmd, duration)`・tests/support の `cue(actor, at: TimeSpan, cmd, interval: TimeSpan)`。どの合図も起点 0 なので前半は `fire_time == at`。`state.rs:277` の「`extend_chunk` の max が保証」と `state_test_support.rs:10` の「interval=0.25」は古い言い方（12.2 で拾う）。

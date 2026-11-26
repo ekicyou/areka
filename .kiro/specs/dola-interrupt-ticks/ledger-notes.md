@@ -174,3 +174,8 @@
 - 外したテスト・分かれ道・ログは無い。分けたファイル: `parts_tests.rs`（975 行）→ `parts_tests.rs`・`parts_refresh_tests.rs`、`parts_trigger_tests.rs`（906 行）→ `parts_trigger_tests.rs`・`parts_trigger_talk_tests.rs`。テストは 156 本（lib 全体 545）のまま。
 - 変える前後の期待: `parts_calls_tests::part_refresh_judges_periodic_before_applying_calls`（欄の字面 `started_at_ms=1000` → `started_at=` の文字の形）。ほかは秒・ミリ秒の整数を `ms`／`at_ms` へ写した（振る舞いの変わった期待は無い）。`balloon_hide` の `Duration::from_millis(50).as_secs_f64()` → `at_ms(50)`。
 - seriko の締め: `cargo test -p areka-seriko` は lib 545・結合テスト全部緑。
+
+## 4.5
+
+- 外したテスト・分かれ道は無い。取り除いたログの欄: `state.rs` の Text と Choice の debug! の `interval`（実数の間隔そのものが無くなった）。足したログの欄: 受け口の配送の失敗の error に `fire_time`。ほかの時刻の欄は Display。
+- 字の時刻の式: 実数の `interval` と `max(prev + interval, chunk_start)` → `chunk_reveal_offsets`（割り切れる長さでは値は同じ）。`sink.rs` の中のテストは秒 → `ms(..)` へ写した。

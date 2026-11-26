@@ -73,3 +73,5 @@ log-capture-kit = { path = "../log-capture-kit" }
 # テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
 # log-capture-kit と同じく [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
+# テストで時刻・長さをミリ秒の 1 語で書く組み立て（`dola::time::testing`）。
+dola = { path = "../dola", features = ["test-support"] }
