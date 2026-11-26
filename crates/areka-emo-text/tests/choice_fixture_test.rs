@@ -21,6 +21,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use dola::time::testing::ms;
 use support::fixture::{command_cues, read_balloon_file, read_script_file};
 use support::{
     Band, assert_hover_band, dump_png_on_white, fill_pixels_in_rect, make_world_with_gpu,
@@ -199,11 +200,11 @@ fn choice_cue(id: &str, text: &str, references: &str) -> TalkCue {
         text: text.into(),
         references: vec![references.into()],
     };
-    support::cue("0", 0.0, command, 0.0)
+    support::cue("0", ms(0), command, ms(0))
 }
 
 fn newline_cue() -> TalkCue {
-    support::cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }, 0.0)
+    support::cue("0", ms(0), CueCommand::NewLine { ratio: 1.0 }, ms(0))
 }
 
 /// Observable: cursor.* 指定 fixture を**実フォント（Yu Gothic UI）**で解決し、4 項目メニュー
@@ -236,7 +237,7 @@ fn real_font_menu_hover_render_dumps_png() {
     }
 
     // 全リビール済みフレーム（t 大）。hover 前も選択肢テキストが描かれる。
-    present_frame(&mut rt, &mut world, 100.0).expect("ベースライン提示");
+    present_frame(&mut rt, &mut world, ms(100000)).expect("ベースライン提示");
     let rows: Vec<ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), MENU.len(), "4 選択肢＝4 ヒット行");
 
@@ -254,7 +255,7 @@ fn real_font_menu_hover_render_dumps_png() {
     // 窓に切られて緑のまま）。ordinal 1 なら帯の上端は行送り 1 つぶん下（y24）にあり、窓はその
     // 4 画素上から見られる。
     rt.inject_choice_hover(&actor, Some(1));
-    present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
+    present_frame(&mut rt, &mut world, ms(100000)).expect("hover 提示");
     let hover = read_back(&rt, &actor);
 
     // read_back は validrect-local なので、窓物理のヒット矩形から validrect 原点を差し引く。

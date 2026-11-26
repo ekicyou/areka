@@ -39,6 +39,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use dola::time::testing::ms;
 use support::{
     Band, assert_hover_band, dump_png_on_white, fill_pixels_in_rect, make_world_with_gpu,
     opaque_count, read_back, spawn_reserved_slot, surface_size, to_canvas_local,
@@ -234,7 +235,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     }
 
     // 全リビール済みフレーム（t 大）。hover 前も選択肢テキストが描かれる。
-    present_frame(&mut rt, &mut world, 100.0).expect("ベースライン提示");
+    present_frame(&mut rt, &mut world, ms(100000)).expect("ベースライン提示");
     let rows: Vec<ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
 
     // (a) ヒット行が実台本の 3 項目を id／label で反映する（distinct ordinal＝項目数）。
@@ -282,7 +283,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // 縦範囲の検査で確かめられない。ordinal 1 の帯の上端は行送り 1 つぶんと寄せの分だけ下にあり、
     // 窓はその 4 画素上から見られる。
     rt.inject_choice_hover(&actor, Some(1));
-    present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
+    present_frame(&mut rt, &mut world, ms(100000)).expect("hover 提示");
     let hover = read_back(&rt, &actor);
 
     // read_back（canvas-local）を probe するため、窓物理ヒット矩形から validrect 原点（×k=1.0）を差し引く。

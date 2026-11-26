@@ -189,3 +189,9 @@
 - 外したテスト・分かれ道・ログは無い。外した丸め: `actor_lookahead_tests.rs` の `Rig::play` の、実数の誤差を吸うためだけのミリ秒の格子への丸め（判定の時刻はちょうどの `[start_time, start_time + duration]`）。
 - 変える前後の期待: `actor_box_present_tests::unpresented_or_unrevealed_boxes_are_not_shown`（時刻 −1.0 で 1 字も見えない確かめ → 字を 1000 ms に置く場の fixture で `ms(999)` は空・`ms(1000)` ちょうどで載る）。ほかは秒 → `ms(..)`、手で組む合図は `TalkCue::scheduled(..)`、`{t:.2}` の表示は文字の形 `{t}`。
 - `cargo test -p areka-emo-text --lib` は 1198 passed。
+
+## 4.8
+
+- 外したテスト・分かれ道・ログは無い。変える前後の期待: 秒 → `ms(..)` を 1 対 1 で写した（`pipeline_test::typewriter_reveal_drives_layout_and_window_through_the_pipeline`・`clear_mid_reveal_resets_visibility_and_window_through_the_pipeline` の期待表、`box_attach_test` の `LATE`、`viewbox_scroll_test` の `FULLY_REVEALED`、`decoration_readback` の `SETTLED` ほか）。
+- 例: `last_click_time` の番兵 −10.0 → `Option<TimePoint>`、`WATCHDOG_SECS` → `WATCHDOG: TimeSpan`、`CYCLE_SECS` → `CYCLE`、ログと panic の文 `{t:.1}s` → 文字の形 `{t}`。例は公開の `TimeSpan::from_millis` を使う（テストの組み立てを使わない）。
+- emo-text の締め: `cargo test -p areka-emo-text` は lib 1198 と結合テスト全部緑、例が組める。

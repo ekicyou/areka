@@ -113,7 +113,7 @@ use areka_emo_text::viewbox_draw::DrawStats;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimePoint, TimeSpan};
 use areka_sakura::duration::text_playback_duration;
 
 // `examples/` 直下に置くと Cargo が別のサンプルターゲットとして拾うため、サブディレクトリへ置いて
@@ -137,7 +137,7 @@ use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
 use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
 use self::scenario::{
-    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG_SECS, stage_cues,
+    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG, stage_cues,
 };
 use self::setup::{
     balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,

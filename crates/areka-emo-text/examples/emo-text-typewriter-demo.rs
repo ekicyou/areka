@@ -3,7 +3,7 @@
 //! # emo-text-typewriter-demo — バルーン＋タイプライター表示のインタラクティブデモ
 //!
 //! emo2 fixture のバルーン枠を実表示し、挨拶テキストを **実時間タイプライター**
-//! （配送 duration 由来の interval＝`CHAR_WAIT` 秒/グリフ・注入時刻＝フレーム経過時間で駆動）で表示する。
+//! （配送 duration 由来の interval＝`CHAR_WAIT`/グリフ・注入時刻＝フレーム経過時間で駆動）で表示する。
 //! テキストは表示しきったあと少し間を置いて全消去し、繰り返す（ループ）。
 //!
 //! **バルーンをダブルクリックするとデモが終了する**（`OnPointerPressed` の bubble 相で
@@ -49,7 +49,7 @@ use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 
 // 文字の層の例と同じ検体の読みと組み立てを引く（写しを持たない）。子は上の `use` 束縛を
 // `use super::{…};` で引く。`examples/` 直下に置くと別のターゲットになるので子のフォルダから引く。
@@ -80,10 +80,10 @@ fn lines() -> [&'static str; 3] {
     }
 }
 
-/// 見やすいタイプ速度（秒/グリフ・既定 0.05 より遅く）。
-const CHAR_WAIT: f64 = 0.12;
-/// 1 サイクル長（タイプ完了＋余韻・秒）。超えたら Clear して打ち直す。
-const CYCLE_SECS: f64 = 5.0;
+/// 見やすいタイプ速度（1 グリフあたり・既定 50ms より遅く）。
+const CHAR_WAIT: TimeSpan = TimeSpan::from_millis(120);
+/// 1 サイクル長（タイプ完了＋余韻）。超えたら Clear して打ち直す。
+const CYCLE: TimeSpan = TimeSpan::from_millis(5000);
 /// バルーン窓の初期位置（物理 px・スクリーン座標）。
 const BALLOON_POS: (i32, i32) = (360, 220);
 
@@ -91,18 +91,13 @@ fn actor() -> ActorKey {
     ActorKey::from("0")
 }
 /// デモ用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
-/// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる。
-fn cue(at: f64, command: CueCommand) -> TalkCue {
+/// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT の typewriter 進行になる。
+fn cue(at: TimeSpan, command: CueCommand) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * CHAR_WAIT,
-        _ => 0.0,
+        CueCommand::Text(t) => CHAR_WAIT.mul_div(areka_sakura::cluster::cluster_count(t) as u64, 1),
+        _ => TimeSpan::ZERO,
     };
-    TalkCue {
-        at,
-        actor: actor(),
-        command,
-        duration,
-    }
+    TalkCue::scheduled(TimePoint::ZERO, at, actor(), command, duration)
 }
 
 /// ダブルクリック終了要求（`OnPointerPressed` が立て、駆動 system が回収して窓を閉じる）。
@@ -120,7 +115,7 @@ struct Demo {
     /// GPU 資源を待ち始めた時刻（届かないまま上限を過ぎたら準備の失敗）。
     gpu_wait_start: Option<std::time::Instant>,
     /// 現サイクルのタイプ開始フレーム時刻。
-    cycle_start: f64,
+    cycle_start: TimePoint,
     /// 現サイクルの cue を流し終えたか。
     fed: bool,
     /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`）。
@@ -185,7 +180,7 @@ fn build_and_spawn(world: &mut World) {
         ))),
         attached: false,
         gpu_wait_start: None,
-        cycle_start: 0.0,
+        cycle_start: TimePoint::ZERO,
         fed: false,
         present_err_logged: false,
     });
@@ -265,7 +260,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
     demo.cycle_start = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
+        .unwrap_or(TimePoint::ZERO);
     demo.attached = true;
     info!("emo-text-typewriter-demo: 装着・結線完了 — タイプライター開始（ダブルクリックで終了）");
 }
@@ -275,17 +270,32 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     let now = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
-    let t = now - demo.cycle_start;
+        .unwrap_or(TimePoint::ZERO);
+    let t = now.span_since(demo.cycle_start).unwrap_or(TimeSpan::ZERO);
 
     if !demo.fed {
         let mut rt = demo.runtime.borrow_mut();
         let [line1, line2, line3] = lines();
-        rt.apply_cue(&cue(0.0, CueCommand::Text(line1.into())));
-        rt.apply_cue(&cue(0.0, CueCommand::NewLine { ratio: 1.0 }));
-        rt.apply_cue(&cue(0.0, CueCommand::Text(line2.into())));
-        rt.apply_cue(&cue(0.0, CueCommand::NewLine { ratio: 1.0 }));
-        rt.apply_cue(&cue(0.0, CueCommand::Text(line3.into())));
+        rt.apply_cue(&cue(
+            TimeSpan::from_millis(0),
+            CueCommand::Text(line1.into()),
+        ));
+        rt.apply_cue(&cue(
+            TimeSpan::from_millis(0),
+            CueCommand::NewLine { ratio: 1.0 },
+        ));
+        rt.apply_cue(&cue(
+            TimeSpan::from_millis(0),
+            CueCommand::Text(line2.into()),
+        ));
+        rt.apply_cue(&cue(
+            TimeSpan::from_millis(0),
+            CueCommand::NewLine { ratio: 1.0 },
+        ));
+        rt.apply_cue(&cue(
+            TimeSpan::from_millis(0),
+            CueCommand::Text(line3.into()),
+        ));
         demo.fed = true;
     }
 
@@ -302,7 +312,7 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
         }
     }
 
-    if t > CYCLE_SECS {
+    if t > CYCLE {
         demo.runtime
             .borrow_mut()
             .apply_cue(&cue(t, CueCommand::Clear));

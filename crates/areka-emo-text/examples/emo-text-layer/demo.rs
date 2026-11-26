@@ -1,7 +1,7 @@
 use super::{
     ActorKey, AtlasTable, BalloonModel, DWriteMetrics, EmoPresenter, EmoTextSink, EmoWorld, Entity,
-    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerConfig, TextLayerRuntime, World,
-    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, info,
+    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerConfig, TextLayerRuntime, TimePoint,
+    World, balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, info,
 };
 
 /// \0（sakura）バルーン窓の初期位置（物理 px・スクリーン座標）。
@@ -41,8 +41,8 @@ pub(super) struct Demo {
     pub(super) metrics: Option<DWriteMetrics>,
     /// 供給面（validrect）の物理寸。
     pub(super) dims: (u32, u32),
-    /// talk 開始のフレーム時刻（秒）。
-    pub(super) talk_start: f64,
+    /// talk 開始のフレーム時刻。
+    pub(super) talk_start: TimePoint,
     /// 現在のステージ（0..7）。
     pub(super) stage: usize,
     /// 現ステージの cue を sink へ流し終えたか。
@@ -55,7 +55,7 @@ pub(super) struct Demo {
     /// ダブルクリック検出用: 直前フレームの左ボタン押下状態（rising edge 抽出）。
     pub(super) prev_lbutton: bool,
     /// ダブルクリック検出用: 直近クリック（rising edge）のフレーム時刻（連続 2 クリックの間隔判定）。
-    pub(super) last_click_time: f64,
+    pub(super) last_click_time: Option<TimePoint>,
     /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`・以後は `warn!`）。
     pub(super) present_err_logged: bool,
     /// `--hold` の watchdog 超過を `error!` で残し終えたか（hold は窓を閉じないので 1 回だけ）。
@@ -108,14 +108,14 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         resolved: None,
         metrics: None,
         dims: (0, 0),
-        talk_start: 0.0,
+        talk_start: TimePoint::ZERO,
         stage: 0,
         fed: false,
         obs: Observations::default(),
         finished: false,
         hold,
         prev_lbutton: false,
-        last_click_time: -10.0,
+        last_click_time: None,
         present_err_logged: false,
         watchdog_logged: false,
     });

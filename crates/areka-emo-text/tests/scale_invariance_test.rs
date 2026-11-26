@@ -22,7 +22,8 @@ use areka_emo_text::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan
 use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
 use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_parsers::balloon::BalloonModel;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimeSpan};
+use dola::time::testing::ms;
 
 // ── テスト土台 ──────────────────────────────────────────────────────────────
 
@@ -42,10 +43,10 @@ fn model(
 
 /// reveal 間隔（0.25＝2 の冪・正確表現）。Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
 /// （pipeline_test.rs と同方針）。
-const REVEAL_INTERVAL: f64 = 0.25;
+const REVEAL_INTERVAL: TimeSpan = ms(250);
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+fn cue(actor: &str, at: TimeSpan, command: CueCommand) -> TalkCue {
     support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
@@ -157,9 +158,9 @@ fn horizontal_layout_decision_in_image_space() {
     let mut state = TextLayerState::default();
     for c in [
         // 10 グリフ: x=36 起点・8 個目は 316+40=356 > 351 で自動折返し（7＋3）。
-        cue("0", 0.0, CueCommand::Text("あいうえおかきくけこ".into())),
-        cue("0", 2.5, CueCommand::NewLine { ratio: 1.0 }),
-        cue("0", 2.5, CueCommand::Text("さし".into())),
+        cue("0", ms(0), CueCommand::Text("あいうえおかきくけこ".into())),
+        cue("0", ms(2500), CueCommand::NewLine { ratio: 1.0 }),
+        cue("0", ms(2500), CueCommand::Text("さし".into())),
     ] {
         state.apply_cue(&c);
     }
@@ -168,7 +169,7 @@ fn horizontal_layout_decision_in_image_space() {
         .actor_state(&actor)
         .map(|s| s.items().to_vec())
         .unwrap_or_default();
-    let visible = state.visible_glyphs(&actor, 10.0);
+    let visible = state.visible_glyphs(&actor, ms(10_000));
     let lines = LayoutEngine::layout(
         &items,
         visible,

@@ -356,7 +356,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 9.1_
 
-- [ ] 4.8 (P) areka-emo-text の結合テストと例を直す
+- [x] 4.8 (P) areka-emo-text の結合テストと例を直す
   - 期待の値を型で書く
   - このタスクのファイルについて、`cargo check -p areka-emo-text --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-emo-text 結合テストと例_

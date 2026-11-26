@@ -21,6 +21,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use dola::time::testing::ms;
 use support::fixture::{assert_real_font_present, balloon_metrics};
 use support::{
     Band, assert_hover_band, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
@@ -130,11 +131,11 @@ fn canon_metrics() -> DWriteMetrics {
 // ══ cue（全リビール済みフレームで読む・duration を焼くのは Text だけで選択肢は 0） ══════
 
 fn text_cue(text: &str) -> TalkCue {
-    support::cue("0", 0.0, CueCommand::Text(text.into()), 0.05)
+    support::cue("0", ms(0), CueCommand::Text(text.into()), ms(50))
 }
 
 fn newline_cue() -> TalkCue {
-    support::cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }, 0.0)
+    support::cue("0", ms(0), CueCommand::NewLine { ratio: 1.0 }, ms(0))
 }
 
 fn choice_cue(id: &str, text: &str) -> TalkCue {
@@ -143,7 +144,7 @@ fn choice_cue(id: &str, text: &str) -> TalkCue {
         text: text.into(),
         references: vec![id.to_ascii_lowercase()],
     };
-    support::cue("0", 0.0, command, 0.0)
+    support::cue("0", ms(0), command, ms(0))
 }
 
 /// cue 列を装着済み runtime へ流し、全リビール済みの時刻で 1 フレーム提示する。
@@ -151,7 +152,7 @@ fn present_cues(rt: &mut TextLayerRuntime, world: &mut World, cues: &[TalkCue]) 
     for cue in cues {
         rt.apply_cue(cue);
     }
-    present_frame(rt, world, 100.0).expect("提示");
+    present_frame(rt, world, ms(100000)).expect("提示");
 }
 
 /// 装着済み runtime を組む（供給面は validrect 寸のみを覆う）。
@@ -397,7 +398,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
 
     for (ordinal, (_, label)) in CHOICES.iter().enumerate() {
         rt.inject_choice_hover(&actor, Some(ordinal));
-        present_frame(&mut rt, &mut world, 100.0).expect("ホバー提示");
+        present_frame(&mut rt, &mut world, ms(100000)).expect("ホバー提示");
         let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
         // 窓は帯の上端を基準に上下へ SCAN_MARGIN ずつ開ける（下端は次の行の帯の上端 ＋ SCAN_MARGIN）。
