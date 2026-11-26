@@ -7,10 +7,20 @@
 
 use tracing::Level;
 
+use super::super::test_support::ms;
 use super::super::{MeasurementDiscardReason, SuppressionKinds};
 use super::test_support::visibility_lines;
 use super::*;
-use log_capture_kit::{ExpectField, capture};
+use dola::TimeSpan;
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
+
+/// 記録の時刻の欄を `FromStr` で読む。
+fn span_field(event: &CapturedEvent, name: &str) -> TimeSpan {
+    event
+        .expect_field(name)
+        .parse()
+        .expect("時刻の欄は TimeSpan の書式")
+}
 
 /// 選択肢つきでないトークの起点の採り方 3 つは同じ欄の語で分かれ、止まった時刻を採ったときだけ起点の時刻の欄が載る。
 /// 止まった時刻が届かなかったことは警告で残す。
@@ -18,19 +28,19 @@ use log_capture_kit::{ExpectField, capture};
 fn measurement_origin_is_written_with_its_level_and_fields() {
     let logs = vec![
         VisibilityLogEvent::MeasurementStarted {
-            origin: MeasurementOrigin::StoppedAt(4.5),
-            display_end: 10.0,
-            deadline: 34.5,
+            origin: MeasurementOrigin::StoppedAt(ms(4500)),
+            display_end: ms(10000),
+            deadline: ms(34500),
         },
         VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: 10.0,
-            deadline: 40.0,
+            display_end: ms(10000),
+            deadline: ms(40000),
         },
         VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::StopTimeMissing,
-            display_end: 10.0,
-            deadline: 40.0,
+            display_end: ms(10000),
+            deadline: ms(40000),
         },
     ];
 
@@ -43,12 +53,12 @@ fn measurement_origin_is_written_with_its_level_and_fields() {
     assert_eq!(stopped.level, Level::INFO);
     assert_eq!(stopped.expect_field("origin"), "\"stopped_at\"");
     assert_eq!(
-        stopped.expect_field("stopped_at"),
-        "4.5",
+        span_field(stopped, "stopped_at"),
+        ms(4500),
         "起点の時刻も載せる"
     );
-    assert_eq!(stopped.expect_field("display_end"), "10.0");
-    assert_eq!(stopped.expect_field("deadline"), "34.5");
+    assert_eq!(span_field(stopped, "display_end"), ms(10000));
+    assert_eq!(span_field(stopped, "deadline"), ms(34500));
 
     let display_end = lines[1];
     assert_eq!(display_end.level, Level::INFO);
@@ -62,8 +72,8 @@ fn measurement_origin_is_written_with_its_level_and_fields() {
         "止まった時刻が届かなかったのは縮退（終端を起点にして表示を保持する）"
     );
     assert_eq!(missing.expect_field("origin"), "\"stop_time_missing\"");
-    assert_eq!(missing.expect_field("display_end"), "10.0");
-    assert_eq!(missing.expect_field("deadline"), "40.0");
+    assert_eq!(span_field(missing, "display_end"), ms(10000));
+    assert_eq!(span_field(missing, "deadline"), ms(40000));
     assert_eq!(missing.field("stopped_at"), None);
 }
 
@@ -74,14 +84,14 @@ fn measurement_origin_is_written_with_its_level_and_fields() {
 fn choice_talk_origins_are_written_with_their_level_and_fields() {
     let logs = vec![
         VisibilityLogEvent::MeasurementStarted {
-            origin: MeasurementOrigin::ChoiceWaitEndedAt(60.0),
-            display_end: 2.0,
-            deadline: 90.0,
+            origin: MeasurementOrigin::ChoiceWaitEndedAt(ms(60000)),
+            display_end: ms(2000),
+            deadline: ms(90000),
         },
         VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::ChoiceWaitEndTimeMissing,
-            display_end: 2.0,
-            deadline: 100.0,
+            display_end: ms(2000),
+            deadline: ms(100000),
         },
     ];
 
@@ -94,9 +104,9 @@ fn choice_talk_origins_are_written_with_their_level_and_fields() {
     assert_eq!(ended.level, Level::INFO);
     assert!(ended.message().contains("タイムアウト計測を開始"));
     assert_eq!(ended.expect_field("origin"), "\"choice_wait_ended_at\"");
-    assert_eq!(ended.expect_field("stopped_at"), "60.0");
-    assert_eq!(ended.expect_field("display_end"), "2.0");
-    assert_eq!(ended.expect_field("deadline"), "90.0");
+    assert_eq!(span_field(ended, "stopped_at"), ms(60000));
+    assert_eq!(span_field(ended, "display_end"), ms(2000));
+    assert_eq!(span_field(ended, "deadline"), ms(90000));
 
     let missing = lines[1];
     assert_eq!(
@@ -108,7 +118,7 @@ fn choice_talk_origins_are_written_with_their_level_and_fields() {
         missing.expect_field("origin"),
         "\"choice_wait_end_time_missing\""
     );
-    assert_eq!(missing.expect_field("deadline"), "100.0");
+    assert_eq!(span_field(missing, "deadline"), ms(100000));
     assert_eq!(missing.field("stopped_at"), None);
 }
 
@@ -145,23 +155,23 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
         },
         VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: 4.0,
-            deadline: 34.0,
+            display_end: ms(4000),
+            deadline: ms(34000),
         },
         VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::TalkStarted,
-            deadline: 34.0,
+            deadline: ms(34000),
         },
         VisibilityLogEvent::MeasurementRestarted {
-            now: 40.0,
-            deadline: 70.0,
+            now: ms(40000),
+            deadline: ms(70000),
         },
         VisibilityLogEvent::TimeoutSuppressed {
             kinds: SuppressionKinds {
                 dragging: false,
                 hover: true,
             },
-            deadline: 34.0,
+            deadline: ms(34000),
         },
         VisibilityLogEvent::DisplayEndSignalMissing,
         VisibilityLogEvent::Transition {
@@ -176,11 +186,11 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
         },
         VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::DisplayEndAdvanced,
-            deadline: 34.0,
+            deadline: ms(34000),
         },
         VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::NoVisibleScope,
-            deadline: 34.0,
+            deadline: ms(34000),
         },
     ];
 
@@ -198,13 +208,13 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
     assert_eq!(lines[1].expect_field("visible"), "false");
 
     assert_eq!(lines[2].level, Level::INFO);
-    assert_eq!(lines[2].expect_field("display_end"), "4.0");
-    assert_eq!(lines[2].expect_field("deadline"), "34.0");
+    assert_eq!(span_field(lines[2], "display_end"), ms(4000));
+    assert_eq!(span_field(lines[2], "deadline"), ms(34000));
 
     assert_eq!(lines[3].expect_field("reason"), "\"talk_started\"");
 
-    assert_eq!(lines[4].expect_field("talk_time"), "40.0");
-    assert_eq!(lines[4].expect_field("deadline"), "70.0");
+    assert_eq!(span_field(lines[4], "talk_time"), ms(40000));
+    assert_eq!(span_field(lines[4], "deadline"), ms(70000));
 
     assert_eq!(lines[5].level, Level::INFO);
     assert_eq!(lines[5].expect_field("hover"), "true");

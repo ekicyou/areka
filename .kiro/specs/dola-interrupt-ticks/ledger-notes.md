@@ -232,3 +232,8 @@
 - 取り除いた分かれ道: `balloon_visibility_decision.rs` の `DisplayEndAt` の `end.max(0.0)`（負・非数を 0 へ寄せる所）とその説明。
 - 外したテスト（`balloon_visibility_tests.rs` の「端の値」の節）: `a_negative_display_end_is_rounded_up_to_zero_before_anchoring`・`a_non_number_display_end_is_rounded_up_to_zero_before_anchoring`・`a_non_number_current_time_never_expires_the_measurement`（どれも型で書けない入力。時刻の分からないフレームで満了させない事は `balloon_visibility_timeout_suppression_cases.rs` の場合 ⑾ と `no_measurement_starts_in_frames_without_time` が押さえる）。
 - 変える前後の期待: `parse_accepts_positive_milliseconds`（`"18446744073709551615"` を受け入れ側から外し、`parse_rejects_zero_negative_non_numeric_and_overflow` に「長さの型の範囲を越える」として足した。9 → 10 件）。採った値の記録の欄 `timeout_secs`／`default_secs` → `timeout`／`default`（"30.0" → "30.0000000"、`FromStr` で読んで比べる）。改名 `configured_timeout_secs_reads_env_once_and_is_stable` → `configured_timeout_reads_env_once_and_is_stable`。ほかは秒 → `ms`／`delta_ms`。
+
+## 5.3
+
+- 取り除いた分かれ道: `visibility_wake` の `!remaining.is_finite()` の守りとその説明。外したテスト: `balloon_visibility_phase_wake_tests.rs::non_finite_deadline_arms_nothing`（無限大・NaN の期限と今は型で書けない。期限か今が無い場合は `no_measurement_arms_nothing` が押さえる）。
+- 変える前後の期待: 起こしのテストは秒 → `ms(..)`、`Duration::from_secs_f64(x)` → `Duration::from_millis(..)`、上限の確かめは `ms(u32::MAX)` と `MAX_WAIT == 1 時間`。`DisplayEndAt(2/5/3 秒)` → `Some(ms(5000))`。記録のテストは欄の字面（"4.5"・"10.0"）→ `FromStr` で読んで `ms(..)` と比べる。ログの欄 `stopped_at`・`display_end`・`deadline`・`talk_time` は Display。`MAX_WAIT_SECS: f64` → `MAX_WAIT: Duration`。

@@ -18,10 +18,12 @@ use tracing::Level;
 
 use super::super::BalloonVisibilityState;
 use super::super::test_support::box_layout;
+use super::super::test_support::ms;
 use super::test_support::attach_headless;
 use super::test_support::{runtime, world_at};
 use super::*;
 use areka_placement::spawn::CharWindowMarker;
+use dola::time::testing::at_ms;
 use log_capture_kit::capture;
 use wintf::ecs::WindowDragging;
 
@@ -125,7 +127,7 @@ fn missing_box_hover_record_means_no_hover_and_is_logged_once() {
 /// 記録が無ければ、箱に文字が出ていない限り何も記録しない。
 #[test]
 fn collection_settles_the_box_hover_before_observing() {
-    let mut world = world_at(0.0);
+    let mut world = world_at(at_ms(0));
     world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
@@ -138,7 +140,7 @@ fn collection_settles_the_box_hover_before_observing() {
             &runtime,
             &mut world,
             &[0],
-            Some(0.0),
+            Some(ms(0)),
             Vec::new(),
             &mut state,
         )
@@ -158,7 +160,7 @@ fn collection_settles_the_box_hover_before_observing() {
         &runtime,
         &mut world,
         &[0],
-        Some(0.0),
+        Some(ms(0)),
         Vec::new(),
         &mut state,
     );
@@ -181,7 +183,7 @@ fn collection_settles_the_box_hover_before_observing() {
 /// 箱に文字が出ていない scope では、シェルの窓のドラッグはドラッグ中に数えない。
 #[test]
 fn shell_window_drag_without_box_text_is_not_dragging() {
-    let mut world = world_at(0.0);
+    let mut world = world_at(at_ms(0));
     world.insert_non_send(BalloonHover::default());
     world.spawn((CharWindowMarker { scope: 0 }, WindowDragging));
     let mut presenter = EmoPresenter::new();
@@ -194,7 +196,7 @@ fn shell_window_drag_without_box_text_is_not_dragging() {
         &runtime,
         &mut world,
         &[0],
-        Some(0.0),
+        Some(ms(0)),
         Vec::new(),
         &mut state,
     );
@@ -273,7 +275,7 @@ fn a_dragged_shell_window_past_the_scope_limit_does_not_hold_scope_zero() {
 
 /// 隠す発行 1 件を流し、窓を隠した scope と、箱を隠す印を立てた actor を返す。
 fn issue_hide(trigger: VisibilityTrigger, latch: bool) -> (Vec<u32>, Vec<String>) {
-    let mut world = world_at(0.0);
+    let mut world = world_at(at_ms(0));
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
     let runtime = runtime();
@@ -350,7 +352,7 @@ fn hiding_forgets_the_manual_position() {
     use crate::frame::balloon_runtime_test_support::{balloon_is_manual, manual_balloon_runtime};
     for trigger in [VisibilityTrigger::Timeout, VisibilityTrigger::Clear] {
         let (_permit, _gpu_world, runtime) = manual_balloon_runtime("0");
-        let mut world = world_at(0.0);
+        let mut world = world_at(at_ms(0));
         let mut presenter = EmoPresenter::new();
         attach_headless(&mut presenter, &mut world, 0);
         issue_actions(

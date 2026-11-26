@@ -17,17 +17,18 @@
 // =============================================================================
 
 use dola::cue::{CueCommand, TalkCue};
+use dola::{TimePoint, TimeSpan};
 
-use super::super::test_support::{hidden_log, hide, show, shown_log};
+use super::super::test_support::{hidden_log, hide, ms, show, shown_log};
 use super::test_support::{attach_headless, runtime};
 use super::*;
 
 /// 待ち時間（秒）。短い固定値を引数で渡す（環境変数・既定値に依らない）。
-const TIMEOUT: f64 = 2.0;
+const TIMEOUT: TimeSpan = ms(2000);
 
 /// 前の台詞（5 文字・1 文字 0.25 秒・占有終端 1.25）。
 const PREV_TEXT: &str = "あいうえお";
-const PREV_END: f64 = 1.25;
+const PREV_END: TimeSpan = ms(1250);
 
 /// 1 フレームの結果（行動の列と、遷移の記録の列）。
 type FrameOutcome = (Vec<VisibilityAction>, Vec<VisibilityLogEvent>);
@@ -68,14 +69,14 @@ impl Rig {
     }
 
     /// cue を文字の層へ投函し、合図を添えて 1 フレーム回す。
-    fn frame(&mut self, now: Option<f64>, signals: &[TalkLifecycleSignal], cues: &[TalkCue]) {
+    fn frame(&mut self, now: Option<TimeSpan>, signals: &[TalkLifecycleSignal], cues: &[TalkCue]) {
         self.step(now, signals, cues, false);
     }
 
     /// 文字の層を借りたまま 1 フレーム回す（観測なしのフレーム）。
     fn frame_unobservable(
         &mut self,
-        now: Option<f64>,
+        now: Option<TimeSpan>,
         signals: &[TalkLifecycleSignal],
         cues: &[TalkCue],
     ) {
@@ -84,7 +85,7 @@ impl Rig {
 
     fn step(
         &mut self,
-        now: Option<f64>,
+        now: Option<TimeSpan>,
         signals: &[TalkLifecycleSignal],
         cues: &[TalkCue],
         hold_runtime: bool,
@@ -145,25 +146,26 @@ impl Rig {
 // cue・合図・期待の組み立て
 // ---------------------------------------------------------------------------
 
-fn cue(scope: u32, at: f64, command: CueCommand, duration: f64) -> TalkCue {
-    TalkCue {
+fn cue(scope: u32, at: TimeSpan, command: CueCommand, duration: TimeSpan) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(scope.to_string()),
+        ActorKey::from(scope.to_string()),
         command,
         duration,
-    }
+    )
 }
 
-fn text(scope: u32, at: f64, body: &str, duration: f64) -> TalkCue {
+fn text(scope: u32, at: TimeSpan, body: &str, duration: TimeSpan) -> TalkCue {
     cue(scope, at, CueCommand::Text(body.into()), duration)
 }
 
 fn clear_all() -> TalkCue {
-    cue(0, 0.0, CueCommand::ClearAll, 0.0)
+    cue(0, ms(0), CueCommand::ClearAll, ms(0))
 }
 
 /// 新しい台詞の合図（本番の表示の合図の受け口と同じく、会話開始の後に占有終端を添える）。
-fn talk_started(end: f64) -> [TalkLifecycleSignal; 2] {
+fn talk_started(end: TimeSpan) -> [TalkLifecycleSignal; 2] {
     [
         TalkLifecycleSignal::TalkStarted { talk_id: None },
         TalkLifecycleSignal::DisplayEndAt(end),
@@ -171,13 +173,13 @@ fn talk_started(end: f64) -> [TalkLifecycleSignal; 2] {
 }
 
 /// トークの終わりの合図（止まった時刻＝占有終端。時間切れの計測はこれが届いてから始まる）。
-fn ended(at: f64) -> TalkLifecycleSignal {
+fn ended(at: TimeSpan) -> TalkLifecycleSignal {
     TalkLifecycleSignal::TalkEnded { at: Some(at) }
 }
 
 /// 台詞の始まり（全消去の後に scope 0 の文字）。
-fn new_talk(body: &str, duration: f64) -> [TalkCue; 2] {
-    [clear_all(), text(0, 0.0, body, duration)]
+fn new_talk(body: &str, duration: TimeSpan) -> [TalkCue; 2] {
+    [clear_all(), text(0, ms(0), body, duration)]
 }
 
 /// 何も出ないフレーム。
@@ -208,14 +210,18 @@ fn hidden(scopes: &[u32], trigger: VisibilityTrigger) -> FrameOutcome {
 /// 前の台詞を表示 → 占有終端の後に満了して隠れる → 何も来ないフレームを重ねる。
 fn shown_then_timed_out(rig: &mut Rig) -> Vec<FrameOutcome> {
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
     rig.frame(Some(PREV_END), &[ended(PREV_END)], &[]);
-    rig.frame(Some(PREV_END + TIMEOUT), &[], &[]);
-    rig.frame(Some(4.0), &[], &[]);
-    rig.frame(Some(5.0), &[], &[]);
+    rig.frame(
+        Some(PREV_END.checked_add(TIMEOUT).expect("範囲内")),
+        &[],
+        &[],
+    );
+    rig.frame(Some(ms(4000)), &[], &[]);
+    rig.frame(Some(ms(5000)), &[], &[]);
     vec![
         shown(0),
         quiet(),
@@ -228,12 +234,12 @@ fn shown_then_timed_out(rig: &mut Rig) -> Vec<FrameOutcome> {
 /// 前の台詞の 2 文字目で利用者が中断 → 止めた台詞の残りが時刻の進行で見えるようになる。
 fn shown_then_broken(rig: &mut Rig) -> Vec<FrameOutcome> {
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
-    rig.frame(Some(0.25), &[TalkLifecycleSignal::UserBreak], &[]);
-    rig.frame(Some(0.75), &[], &[]); // 4 文字
+    rig.frame(Some(ms(250)), &[TalkLifecycleSignal::UserBreak], &[]);
+    rig.frame(Some(ms(750)), &[], &[]); // 4 文字
     rig.frame(Some(PREV_END), &[], &[]); // 5 文字（掛け金で出ない）
     vec![
         shown(0),
@@ -253,8 +259,12 @@ fn one_glyph_talk_reappears_after_timeout() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_timed_out(&mut rig);
 
-    rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &new_talk("ん", ms(250)),
+    );
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([shown(0), quiet()]);
 
     assert_eq!(
@@ -269,8 +279,12 @@ fn one_glyph_talk_reappears_after_user_break() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_broken(&mut rig);
 
-    rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &new_talk("ん", ms(250)),
+    );
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([shown(0), quiet()]);
 
     assert_eq!(
@@ -284,16 +298,20 @@ fn one_glyph_talk_reappears_after_user_break() {
 fn one_glyph_talk_reappears_after_balloon_switch() {
     let mut rig = Rig::new(&[0]);
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
     rig.frame(Some(PREV_END), &[], &[]);
     rig.switch_balloon(0);
-    rig.frame(Some(1.5), &[], &[]); // 前の文字は見えたまま
-    rig.frame(Some(2.0), &[], &[]);
-    rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(Some(ms(1500)), &[], &[]); // 前の文字は見えたまま
+    rig.frame(Some(ms(2000)), &[], &[]);
+    rig.frame(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &new_talk("ん", ms(250)),
+    );
+    rig.frame(Some(ms(250)), &[], &[]);
 
     let expected = vec![shown(0), quiet(), quiet(), quiet(), shown(0), quiet()];
     assert_eq!(
@@ -308,8 +326,8 @@ fn instant_short_talk_reappears_after_timeout() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_timed_out(&mut rig);
 
-    rig.frame(Some(0.0), &talk_started(0.0), &new_talk("はい", 0.0));
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(Some(ms(0)), &talk_started(ms(0)), &new_talk("はい", ms(0)));
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([shown(0), quiet()]);
 
     assert_eq!(
@@ -324,26 +342,26 @@ fn instant_short_talk_reappears_after_timeout() {
 fn mid_talk_clear_and_glyph_reappear_hidden_scope() {
     let mut rig = Rig::new(&[0, 1]);
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
     rig.frame(
-        Some(1.25),
-        &[TalkLifecycleSignal::DisplayEndAt(2.0)],
-        &[text(1, 1.25, "かきく", 0.75)],
+        Some(ms(1250)),
+        &[TalkLifecycleSignal::DisplayEndAt(ms(2000))],
+        &[text(1, ms(1250), "かきく", ms(750))],
     );
     rig.hide_externally(0);
-    rig.frame(Some(1.75), &[], &[]);
+    rig.frame(Some(ms(1750)), &[], &[]);
     rig.frame(
-        Some(2.0),
-        &[TalkLifecycleSignal::DisplayEndAt(2.25)],
+        Some(ms(2000)),
+        &[TalkLifecycleSignal::DisplayEndAt(ms(2250))],
         &[
-            cue(0, 2.0, CueCommand::Clear, 0.0),
-            text(0, 2.0, "ん", 0.25),
+            cue(0, ms(2000), CueCommand::Clear, ms(0)),
+            text(0, ms(2000), "ん", ms(250)),
         ],
     );
-    rig.frame(Some(2.25), &[], &[]);
+    rig.frame(Some(ms(2250)), &[], &[]);
 
     let expected = vec![shown(0), shown(1), quiet(), shown(0), quiet()];
     assert_eq!(
@@ -359,10 +377,14 @@ fn reappears_on_next_observed_frame_after_unobservable_frames() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_timed_out(&mut rig);
 
-    rig.frame_unobservable(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
+    rig.frame_unobservable(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &new_talk("ん", ms(250)),
+    );
     rig.frame(None, &[], &[]);
-    rig.frame(Some(0.1), &[], &[]);
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(Some(ms(100)), &[], &[]);
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([quiet(), quiet(), shown(0), quiet()]);
 
     assert_eq!(
@@ -381,13 +403,13 @@ fn reappears_when_talk_started_signal_precedes_clear_frame() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_timed_out(&mut rig);
 
-    rig.frame(Some(0.0), &talk_started(0.0), &[]);
+    rig.frame(Some(ms(0)), &talk_started(ms(0)), &[]);
     rig.frame(
-        Some(0.1),
-        &[TalkLifecycleSignal::DisplayEndAt(0.25)],
-        &new_talk("ん", 0.25),
+        Some(ms(100)),
+        &[TalkLifecycleSignal::DisplayEndAt(ms(250))],
+        &new_talk("ん", ms(250)),
     );
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([quiet(), shown(0), quiet()]);
 
     assert_eq!(
@@ -407,9 +429,13 @@ fn clear_before_signal_after_user_break_reappears_on_first_glyph() {
     let mut rig = Rig::new(&[0]);
     let mut expected = shown_then_broken(&mut rig);
 
-    rig.frame(Some(0.0), &[], &[clear_all()]);
-    rig.frame(Some(0.0), &talk_started(0.25), &[text(0, 0.0, "ん", 0.25)]);
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(Some(ms(0)), &[], &[clear_all()]);
+    rig.frame(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &[text(0, ms(0), "ん", ms(250))],
+    );
+    rig.frame(Some(ms(250)), &[], &[]);
     expected.extend([quiet(), shown(0), quiet()]);
 
     assert_eq!(
@@ -423,13 +449,17 @@ fn clear_before_signal_after_user_break_reappears_on_first_glyph() {
 fn visible_balloon_keeps_showing_through_clear_and_glyph() {
     let mut rig = Rig::new(&[0]);
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
     rig.frame(Some(PREV_END), &[], &[]);
-    rig.frame(Some(0.0), &talk_started(0.25), &new_talk("ん", 0.25));
-    rig.frame(Some(0.25), &[], &[]);
+    rig.frame(
+        Some(ms(0)),
+        &talk_started(ms(250)),
+        &new_talk("ん", ms(250)),
+    );
+    rig.frame(Some(ms(250)), &[], &[]);
 
     let expected = vec![shown(0), quiet(), quiet(), quiet()];
     assert_eq!(
@@ -444,23 +474,23 @@ fn visible_balloon_keeps_showing_through_clear_and_glyph() {
 fn scope_without_glyph_after_clear_stays_hidden() {
     let mut rig = Rig::new(&[0, 1]);
     rig.frame(
-        Some(0.0),
+        Some(ms(0)),
         &talk_started(PREV_END),
-        &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
+        &[clear_all(), text(0, ms(0), PREV_TEXT, PREV_END)],
     );
     rig.frame(
-        Some(1.25),
-        &[TalkLifecycleSignal::DisplayEndAt(2.0)],
-        &[text(1, 1.25, "かきく", 0.75)],
+        Some(ms(1250)),
+        &[TalkLifecycleSignal::DisplayEndAt(ms(2000))],
+        &[text(1, ms(1250), "かきく", ms(750))],
     );
-    rig.frame(Some(2.0), &[], &[]);
+    rig.frame(Some(ms(2000)), &[], &[]);
     rig.frame(
-        Some(0.0),
-        &talk_started(1.0),
-        &[clear_all(), text(1, 0.0, "さしすせ", 1.0)],
+        Some(ms(0)),
+        &talk_started(ms(1000)),
+        &[clear_all(), text(1, ms(0), "さしすせ", ms(1000))],
     );
-    rig.frame(Some(0.25), &[], &[]);
-    rig.frame(Some(1.0), &[], &[]);
+    rig.frame(Some(ms(250)), &[], &[]);
+    rig.frame(Some(ms(1000)), &[], &[]);
 
     let expected = vec![
         shown(0),
