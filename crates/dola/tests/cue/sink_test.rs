@@ -6,6 +6,7 @@ use dola::DynamicValue;
 use dola::cue::{
     ActorKey, CueCommand, CueFinding, CueProbe, CueSink, CueTarget, TalkCue, cue_target_of,
 };
+use dola::time::{TimePoint, TimeSpan};
 use std::sync::{Arc, Mutex};
 
 /// 全 `CueCommand` variant を単一権威 `cue_target_of` に通し、写像表どおりの配送先へ
@@ -113,10 +114,11 @@ fn default_emit_with_emits_once_and_reports_nothing() {
 
     let mut sink = Recorder(Vec::new());
     let cue = TalkCue {
-        at: 0.5,
+        fire_time: TimePoint::from_ticks(5_000_000),
+        at: TimeSpan::from_millis(500),
         actor: ActorKey::from("0"),
         command: CueCommand::Text("hello".into()),
-        duration: 1.0,
+        duration: TimeSpan::from_millis(1000),
     };
     sink.emit_with(cue.clone(), &probe);
 

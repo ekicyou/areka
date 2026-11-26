@@ -2,8 +2,9 @@
 //!
 //! WaitForInput・WaitForChoice の停止と外部解決、非待機での no-op を収める。
 
-use super::{BarrierKind, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
-use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
+use super::{BarrierKind, CueCommand, CuePlayer, CuePlayerState, TalkCue, at_ms, sheet_at_zero};
+use crate::test_support::{barrier, choice, logged_commands, ms, recording_sink, text};
+use dola::cue::{CueError, CueSheet};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -22,12 +23,12 @@ fn logged_has_text(log: &Rc<RefCell<Vec<TalkCue>>>, s: &str) -> bool {
 #[test]
 fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
     // before@0.0 → Barrier(WaitForInput)@0.1 → after@0.2。
-    let sheet = CueSheet::new(vec![
-        text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput),
-        text(0.2, "after", 0.0),
+    let sheet = sheet_at_zero(vec![
+        text(ms(0), "before", ms(0)),
+        barrier(ms(100), BarrierKind::WaitForInput),
+        text(ms(200), "after", ms(0)),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
     assert_eq!(
@@ -37,7 +38,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
     );
 
     // 全時刻を跨ぐ tick を送るが、バリアで停止するため before までしか配送されない。
-    player.tick(10.0);
+    player.tick(at_ms(10000));
     assert_eq!(
         player.state(),
         &CuePlayerState::WaitingForInput,
@@ -62,7 +63,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
     );
 
     // 待機中に更に tick を送っても再生は進まない（after は依然配送されない）。
-    player.tick(20.0);
+    player.tick(at_ms(20000));
     assert_eq!(
         player.state(),
         &CuePlayerState::WaitingForInput,
@@ -79,7 +80,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
     );
 
     player.resolve_click();
-    player.tick(20.0);
+    player.tick(at_ms(20000));
     assert!(
         logged_has_text(&log, "after"),
         "解決通知の後、after が配送される（再開の証）"
@@ -102,17 +103,17 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
 #[test]
 fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
     // Choice(a)@0.0, Choice(b)@0.0 → Barrier(WaitForChoice)@0.1 → picked@0.2。
-    let sheet = CueSheet::new(vec![
-        choice(0.0, "a", "選択A"),
-        choice(0.0, "b", "選択B"),
-        barrier(0.1, BarrierKind::WaitForChoice { timeout: None }),
-        text(0.2, "picked", 0.0),
+    let sheet = sheet_at_zero(vec![
+        choice(ms(0), "a", "選択A"),
+        choice(ms(0), "b", "選択B"),
+        barrier(ms(100), BarrierKind::WaitForChoice { timeout: None }),
+        text(ms(200), "picked", ms(0)),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(10.0);
+    player.tick(at_ms(10000));
     assert_eq!(
         player.state(),
         &CuePlayerState::WaitingForChoice,
@@ -158,7 +159,7 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
         player.pending_choices().is_empty(),
         "解決で先積み選択肢はクリアされる"
     );
-    player.tick(20.0);
+    player.tick(at_ms(20000));
     assert!(
         logged_has_text(&log, "picked"),
         "選択肢解決の後、picked が配送される（再開の証）"
@@ -173,8 +174,8 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
 /// 非待機状態での解決通知は no-op（Playing のまま何も壊さない）。
 #[test]
 fn resolve_on_non_waiting_state_is_noop() {
-    let sheet = CueSheet::new(vec![text(0.0, "only", 0.0)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "only", ms(0))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
 
     // まだ tick 前＝Playing。resolve_click は no-op。
     player.resolve_click();
@@ -194,13 +195,13 @@ fn resolve_on_non_waiting_state_is_noop() {
 /// 状態も先積みの選択肢も変えない。
 #[test]
 fn resolve_click_is_noop_while_waiting_for_choice() {
-    let sheet = CueSheet::new(vec![
-        choice(0.0, "a", "選択A"),
-        barrier(0.1, BarrierKind::WaitForChoice { timeout: None }),
-        text(0.2, "picked", 0.0),
+    let sheet = sheet_at_zero(vec![
+        choice(ms(0), "a", "選択A"),
+        barrier(ms(100), BarrierKind::WaitForChoice { timeout: None }),
+        text(ms(200), "picked", ms(0)),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-    player.tick(10.0);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
+    player.tick(at_ms(10000));
     assert_eq!(player.state(), &CuePlayerState::WaitingForChoice);
     let before = player.pending_choices().to_vec();
 
@@ -215,5 +216,15 @@ fn resolve_click_is_noop_while_waiting_for_choice() {
         player.pending_choices(),
         before.as_slice(),
         "先積みの選択肢は変わらない"
+    );
+}
+
+/// 起点の刻印が無い台本からは再生機を組めない（起点 0 として黙って動かない）。
+#[test]
+fn from_sheet_rejects_sheet_without_stamped_origin() {
+    let sheet = CueSheet::new(vec![text(ms(0), "only", ms(0))]);
+    assert_eq!(
+        CuePlayer::from_sheet(&sheet).err(),
+        Some(CueError::OriginNotStamped)
     );
 }

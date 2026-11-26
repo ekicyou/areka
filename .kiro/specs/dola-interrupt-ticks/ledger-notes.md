@@ -42,3 +42,8 @@
 
 - 外したテスト（`tests/cue/sheet_sort_test.rs`）: `sort_with_many_nan_follows_total_order`（NaN の開始時刻は型で作れない。補助の `assert_total_order`・`black_box`・`Ordering` も消した）→ 置き換え `sort_many_cues_is_ascending_and_stable`（同じ瞬間 3 件ずつ・降順 24 組が昇順かつ安定に並ぶ）。並べる前の入力を時刻の表に並べさせる部分は、単体テストの `insert_each_matches_per_entry_insert_including_equal_time_fifo`・`insert_same_offset_payloads_delivered_fifo` が確かめる。`negative_zero_keeps_script_order`（−0.0 が無い）→ 置き換え `equal_start_time_keeps_script_order_through_schedule`。
 - 外したテスト（`tests/cue/schedule_test.rs`）: `player_emits_cue_at_sheet_absolute_fire_time`（定数 `ROUNDS_DOWN = 2.5999999999999996` と起点 100.0 の実数の丸めの継ぎが前提）→ 置き換え `player_emits_cue_exactly_at_sheet_absolute_fire_time`（ミリ秒の格子の外の隔たり 25,999,999 で、1 刻み手前では配られず、ちょうどで配られる）。
+
+## 2.8
+
+- 外したテスト・分かれ道・ログは無い。足したテスト: `from_sheet_rejects_sheet_without_stamped_origin`。
+- 変える前後の期待: `broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time`（起点 100.0 秒 → `at_ms(100_000)`、期待の合図に発火時刻 100,000／100,500／101,500 ms を足した）。`is_completed_is_gated_by_occupancy_horizon_for_trailing_wait`（`absolute_end_time() - 0.01` → 終わりの 1 刻み手前、`end == at_ms(950)` を足した）。`occupancy_horizon_returns_anchor_plus_relative_horizon`（102.5 秒 → `at_ms(102_500)`、`sheet.absolute_end_time()` と `Some(..)` で比べる）。`occupancy_horizon_matches_completion_threshold`（1 刻み手前 `at_ms(11_999)` で未完了を足した）。ほかは型だけ替えた。起点の無かった台本は起点 0 を押して組む。

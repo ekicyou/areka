@@ -1,7 +1,11 @@
 //! broadcast 配送・占有終了検知（`is_completed`）・中断（`stop`）・sink 登録の檻。
 
-use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
-use crate::test_support::{barrier, logged_commands, recording_sink, text, wait};
+use super::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue, at_ms,
+    sheet_at_zero,
+};
+use crate::test_support::{barrier, logged_commands, ms, recording_sink, text, wait};
+use dola::time::{TimePoint, TimeSpan};
 use std::rc::Rc;
 
 /// **観測可能な完了条件**: 1 つの台本を複数の登録済み sink へ流すと、
@@ -17,19 +21,19 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     let sheet = CueSheet::new(vec![
         Cue {
             actor: actor.clone(),
-            start_time: 0.0,
+            start_time: TimeSpan::ZERO,
             payload: CueCommand::Emote {
                 key: "smile".into(),
             }
             .into(),
-            duration: 0.5,
+            duration: ms(500),
         },
-        text(0.5, "hello", 1.0),
-        wait(1.5, 0.25),
+        text(ms(500), "hello", ms(1000)),
+        wait(ms(1500), ms(250)),
     ])
-    .with_absolute_start_time(100.0);
+    .with_absolute_start_time(at_ms(100_000));
 
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log_a, sink_a) = recording_sink();
     let (log_b, sink_b) = recording_sink();
     let (log_c, sink_c) = recording_sink();
@@ -38,9 +42,9 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     player.register_sink(sink_c);
 
     // 絶対時刻（アンカー 100.0 ＋ 相対 offset）で駆動する。
-    player.tick(100.0); // Emote@rel0.0
-    player.tick(100.5); // Text@rel0.5
-    player.tick(101.5); // Wait@rel1.5
+    player.tick(at_ms(100_000)); // Emote@rel0.0
+    player.tick(at_ms(100_500)); // Text@rel0.5
+    player.tick(at_ms(101_500)); // Wait@rel1.5
 
     let a = log_a.borrow().clone();
     let b = log_b.borrow().clone();
@@ -53,24 +57,27 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     // Balloon 担当の Text も、Shell 担当の Emote も、選別なく全 sink へ broadcast される。
     let expected = vec![
         TalkCue {
-            at: 0.0,
+            fire_time: at_ms(100_000),
+            at: TimeSpan::ZERO,
             actor: actor.clone(),
             command: CueCommand::Emote {
                 key: "smile".into(),
             },
-            duration: 0.5,
+            duration: ms(500),
         },
         TalkCue {
-            at: 0.5,
+            fire_time: at_ms(100_500),
+            at: ms(500),
             actor: actor.clone(),
             command: CueCommand::Text("hello".into()),
-            duration: 1.0,
+            duration: ms(1000),
         },
         TalkCue {
-            at: 1.5,
+            fire_time: at_ms(101_500),
+            at: ms(1500),
             actor: actor.clone(),
             command: CueCommand::Wait,
-            duration: 0.25,
+            duration: ms(250),
         },
     ];
     assert_eq!(
@@ -84,16 +91,16 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
 /// （待機中・解決跨ぎで before を二重配送しない）。
 #[test]
 fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
-    let sheet = CueSheet::new(vec![
-        text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput),
-        text(0.2, "after", 0.0),
+    let sheet = sheet_at_zero(vec![
+        text(ms(0), "before", ms(0)),
+        barrier(ms(100), BarrierKind::WaitForInput),
+        text(ms(200), "after", ms(0)),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(10.0);
+    player.tick(at_ms(10000));
     assert_eq!(player.state(), &CuePlayerState::WaitingForInput);
     assert_eq!(
         logged_commands(&log),
@@ -102,11 +109,11 @@ fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
     );
 
     // 待機中の tick では after は配送されない（バリアが保持される）。
-    player.tick(20.0);
+    player.tick(at_ms(20000));
     assert_eq!(log.borrow().len(), 1, "待機中は after を配送しない");
 
     player.resolve_click();
-    player.tick(20.0);
+    player.tick(at_ms(20000));
     assert_eq!(
         logged_commands(&log),
         vec![
@@ -121,21 +128,21 @@ fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
 /// （配送は schedule 前進時のみ）。
 #[test]
 fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "a", ms(0)), text(ms(500), "b", ms(0))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(0.0);
-    player.tick(0.0); // 同一時刻の再 tick は再配送しない（冪等）。
+    player.tick(at_ms(0));
+    player.tick(at_ms(0)); // 同一時刻の再 tick は再配送しない（冪等）。
     assert_eq!(
         log.borrow().len(),
         1,
         "同一時刻の再 tick で a を二重配送しない"
     );
 
-    player.tick(0.5);
-    player.tick(0.5);
+    player.tick(at_ms(500));
+    player.tick(at_ms(500));
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("a".into()), CueCommand::Text("b".into())],
@@ -148,14 +155,12 @@ fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
 /// 到達で初めて true になる（配送 ≠ 再生完了・早期終了しない）。
 #[test]
 fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
-    let d = 0.15_f64;
-    let wait_dur = 0.8_f64;
-    let sheet = CueSheet::new(vec![text(0.0, "bye", d), wait(d, wait_dur)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "bye", ms(150)), wait(ms(150), ms(800))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(d);
+    player.tick(at_ms(150));
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("bye".into()), CueCommand::Wait],
@@ -166,11 +171,12 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
         "配送完了（entry 枯渇）時点では占有 horizon 未到達ゆえ未完了（早期終了しない・R2.5）"
     );
 
-    player.tick(sheet.absolute_end_time() - 0.01);
-    assert!(!player.is_completed(), "horizon 直前は未完了");
+    let end = sheet.absolute_end_time().unwrap();
+    assert_eq!(end, at_ms(950));
+    player.tick(TimePoint::from_ticks(end.as_ticks() - 1));
+    assert!(!player.is_completed(), "horizon の 1 刻み手前は未完了");
 
-    // 占有 horizon（150 ms＋800 ms）到達で初めて完了通知が出る。Tick の式 `n as f64 / 1000.0` の値で見る。
-    player.tick(950.0 / 1000.0);
+    player.tick(end);
     assert!(
         player.is_completed(),
         "占有 horizon（末尾 Wait の duration 端）到達で初めて is_completed() が true"
@@ -181,14 +187,13 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
 /// 到達まで `is_completed()` は false（最終 Text の duration を終端で落とさない）。
 #[test]
 fn is_completed_is_gated_by_final_text_duration() {
-    let d = 0.5_f64;
-    let sheet = CueSheet::new(vec![text(0.0, "bye", d)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "bye", ms(500))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
     // 最終 Text の配送時刻（0.0）到達 — 配り終えたが再生（duration）は未完。
-    player.tick(0.0);
+    player.tick(at_ms(0));
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("bye".into())],
@@ -199,7 +204,7 @@ fn is_completed_is_gated_by_final_text_duration() {
         "最終 Text の配送時点では duration 端未到達ゆえ未完了"
     );
 
-    player.tick(sheet.absolute_end_time());
+    player.tick(sheet.absolute_end_time().unwrap());
     assert!(
         player.is_completed(),
         "最終 Text の duration 端到達で is_completed() が true"
@@ -210,12 +215,12 @@ fn is_completed_is_gated_by_final_text_duration() {
 /// （b）が受け手へ届かない。
 #[test]
 fn dropping_player_halts_further_delivery() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "a", ms(0)), text(ms(500), "b", ms(0))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(0.0);
+    player.tick(at_ms(0));
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("a".into())],
@@ -239,16 +244,16 @@ fn dropping_player_halts_further_delivery() {
 /// sink 未登録でも broadcast は破綻しない（配送先 0 個は 0 回 emit・完了判定は独立に成立）。
 #[test]
 fn tick_with_no_registered_sinks_still_advances_and_completes() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let sheet = sheet_at_zero(vec![text(ms(0), "a", ms(0)), text(ms(500), "b", ms(0))]);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
 
-    player.tick(0.0);
+    player.tick(at_ms(0));
     assert_eq!(
         player.state(),
         &CuePlayerState::Playing,
         "b 未到達ゆえ Playing"
     );
-    player.tick(sheet.absolute_end_time());
+    player.tick(sheet.absolute_end_time().unwrap());
     assert!(
         player.is_completed(),
         "sink 未登録でも占有 horizon 到達で完了する（配送先 0 個でも破綻しない）"
