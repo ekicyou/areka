@@ -250,3 +250,7 @@
 
 - 外したテスト・分かれ道・変わった期待は無い（単位を写しただけ。`strict_judges_tests.rs` の 1 刻み 1e9 秒 → `TimeSpan::from_millis(u32::MAX)`。台本は数時間に収まるので 1 刻みで流れ切る）。ログの欄 `talk_time` は Display。`frame.rs` の `resolve_talk_time` の再公開は `#[cfg(test)]`。
 - areka-runtime は組める: `cargo test -p areka-runtime` は 1080 passed・3 ignored。
+
+## 5.7
+
+- 段 4 の締め: `cargo test -p areka-runtime` は 1080 passed・0 failed・3 ignored（5.6 のレビューで今のコードの上で回した）。

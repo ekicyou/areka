@@ -447,7 +447,7 @@
   - _Dispatch: mechanical — 形の追従と期待の写し_
   - _Requirements: 7.1, 7.7, 9.1_
 
-- [ ] 5.7 段 4 を締める
+- [x] 5.7 段 4 を締める
   - `cargo test -p areka-runtime` が緑である
   - _Dispatch: mechanical — 確かめを回すだけ_
   - _Requirements: 7.1, 7.7, 9.1_
