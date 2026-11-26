@@ -78,7 +78,7 @@
   - _Dispatch: standard — 型の形は設計が与え、直列化と並べ替えの直しが残る_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.9, 13.2, 13.7_
 
-- [ ] 2.3 (P) cue の本体: 時刻の表・再生機・受け口・正準のキャリアの合図を型へ付け替える
+- [x] 2.3 (P) cue の本体: 時刻の表・再生機・受け口・正準のキャリアの合図を型へ付け替える
   - 時刻の表は、今の 2 段の口（進める＋配る）のまま、時刻と長さを型にし、届いたかを「起点＋相対 ≤ 今」の整数の比べにする（ちょうどの刻みで届く）
   - 再生機の `from_sheet` は、起点の押されていない台本で `Err(OriginNotStamped)` を返す。受け口の口の形は前半では変えない（起点の知らせは後半）
   - 正準のキャリアの合図の組み立てと、結合テストの共有の組み立てを、呼び方を変えずに新しい型で組む
@@ -798,3 +798,4 @@
 - 1.4: `serde_ticks`・`serde_secs` は `pub(crate)` で、`time/mod.rs` の宣言に `#[allow(dead_code)]` と `shortcut:` のコメントがある。欄をアダプタへ付け替えるタスク（2.2・2.9）が外す。`Option` の欄は `#[serde(with = ..., default)]`（cue の欄はさらに `skip_serializing_if = "Option::is_none"`）が要る。上限の検査は `serde_secs::within_document_range(ticks) -> bool` を呼ぶ。Windows でない検査は、入っている aarch64-unknown-linux-gnu で見た（x86_64-unknown-linux-gnu は未導入）。
 - 2.1: コンパイルの `checked_add` のあふれは、error.rs を触らずに、今在る `TimeOutOfDocumentRange { location, field }` を使う（`InvalidNumber` の `value: f64` は整数の和のあふれに合わない）。dola の結合テストは `dola::time::testing` を使えない（自分を dev-dependency に持たない）ので、`TimeSpan::from_millis` などの公開の const fn で組む。各タスクの記録に書く事は、進行役が `ledger-notes.md` に控える。
 - 2.2: `CueError::OriginNotStamped` は `cue/runtime.rs` に置き `cue/mod.rs` で再公開済み。`to_talk_schedule` は `Result` を返す。2.3 は schedule.rs の `with_horizon(origin: TimePoint, horizon: TimeSpan)`・`Entry<TimeSpan>` へ替えれば sheet.rs の 3 件が消える。schedule.rs の `sum_on_ms_grid` の呼び出し 3 か所と説明、runtime.rs の `from_sheet`（`Result` を受ける・説明「dispatch 刻印まで 0.0」）は 2.3 が直す。
+- 2.3: dola の結合テストの組み立て（`tests/cue/test_support.rs`）は名前と引数の順を変えず `TimeSpan` を受ける。`pub(crate) const fn ms(u32) -> TimeSpan` がある（例: `text(0.5, "b", 0.0)` → `text(ms(500), "b", ms(0))`）。時刻の表の 128 ビットの起点は後半（8.2）。

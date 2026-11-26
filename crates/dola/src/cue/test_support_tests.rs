@@ -3,8 +3,9 @@ use super::*;
 #[test]
 fn carrier_cue_builds_canonical_carrier_at_zero() {
     let cue = carrier_cue("1", "move", &["-353", "40"]);
-    assert_eq!(cue.at, 0.0);
-    assert_eq!(cue.duration, 0.0);
+    assert_eq!(cue.fire_time, TimePoint::ZERO);
+    assert_eq!(cue.at, TimeSpan::ZERO);
+    assert_eq!(cue.duration, TimeSpan::ZERO);
     assert_eq!(cue.actor, ActorKey::from("1"));
     assert_eq!(
         cue.command,

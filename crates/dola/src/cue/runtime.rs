@@ -35,6 +35,7 @@ use super::command::{BarrierKind, CueCommand, TalkCue};
 use super::schedule::TimedSchedule;
 use super::sheet::{CueSheet, to_talk_schedule};
 use super::sink::CueSink;
+use crate::time::TimePoint;
 
 /// cue の層の誤り。
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -115,16 +116,17 @@ impl std::fmt::Debug for CuePlayer {
 impl CuePlayer {
     /// 台本 [`CueSheet`] から構築する（唯一の canonical 変換 [`to_talk_schedule`] を内部で通す）。
     ///
-    /// 台本の [`absolute_start_time`](CueSheet::absolute_start_time)（dispatch 刻印まで 0.0）が
-    /// スケジュールのアンカーへ流れ、各 cue の相対 `start_time`＋duration がそのまま保存される。
+    /// 台本の [`absolute_start_time`](CueSheet::absolute_start_time) がスケジュールの起点へ流れ、
+    /// 各 cue の相対 `start_time`＋duration がそのまま保存される。起点の押されていない台本は
+    /// `Err(CueError::OriginNotStamped)`。
     /// 変換は**この 1 本のみ**——`CueSheet→schedule` の二重実装を作らない。
-    pub fn from_sheet(sheet: &CueSheet) -> Self {
-        Self {
-            schedule: to_talk_schedule(sheet),
+    pub fn from_sheet(sheet: &CueSheet) -> Result<Self, CueError> {
+        Ok(Self {
+            schedule: to_talk_schedule(sheet)?,
             state: CuePlayerState::Playing,
             pending_choices: Vec::new(),
             sinks: Vec::new(),
-        }
+        })
     }
 
     // ── sink 登録（broadcast 配送先） ──
@@ -164,7 +166,7 @@ impl CuePlayer {
 
     /// 注入時刻でランタイムを進める。
     ///
-    /// `current_time` は絶対時刻（スケジュールのアンカー基準）。内部 [`TimedSchedule::tick`] に
+    /// `current_time` は絶対時刻（スケジュールの起点と同じ物差し）。内部 [`TimedSchedule::tick`] に
     /// 委譲し、到達済み cue を全 sink へ配る。`Choice`
     /// も他 cue と**順序を保って配送列へ合流**しつつ、解決照合用に
     /// [`pending_choices`](Self::pending_choices) へも積む（配送列＝表示の真実源／バッグ＝照合の
@@ -175,7 +177,7 @@ impl CuePlayer {
     /// 待機中（`WaitingForInput`/`WaitingForChoice`）・完了後（`Completed`）は進行しない
     /// （早期 return）。再開は外部解決 seam
     /// （[`resolve_click`](Self::resolve_click)/[`resolve_choice`](Self::resolve_choice)）が担う。
-    pub fn tick(&mut self, current_time: f64) {
+    pub fn tick(&mut self, current_time: TimePoint) {
         // 待機中・完了後は進行しない（バリア seam の外部解決/占有終了で確定した状態を保持）。
         if !matches!(self.state, CuePlayerState::Playing) {
             return;
@@ -305,7 +307,7 @@ impl CuePlayer {
         matches!(self.state, CuePlayerState::Completed)
     }
 
-    /// 占有 horizon の**絶対時刻**（アンカー ＋ 相対 horizon・duration 権威）。
+    /// 占有 horizon の**絶対時刻**（起点 ＋ 相対 horizon・duration 権威）。
     ///
     /// 内部 [`TimedSchedule::occupancy_horizon`] へ委譲する照会口であり、
     /// [`is_completed`](Self::is_completed) が閾値として見ているのと**同一**の horizon を返す
@@ -314,7 +316,7 @@ impl CuePlayer {
     ///
     /// 値は [`tick`](Self::tick) の進行では変化しない（配送位置でなく占有区間の終端を指す）。
     /// 選択肢バリアで停止中（`WaitingForChoice`）でも照会できる。
-    pub fn occupancy_horizon(&self) -> f64 {
+    pub fn occupancy_horizon(&self) -> TimePoint {
         self.schedule.occupancy_horizon()
     }
 

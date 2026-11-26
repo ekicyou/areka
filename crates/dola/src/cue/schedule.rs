@@ -6,24 +6,25 @@
 use std::fmt::Debug;
 
 use super::command::BarrierKind;
+use crate::time::{TimePoint, TimeSpan};
 
 // ============================================================================
 // Entry<T> — エントリの型レベル 2 種分離
 // ============================================================================
 
 /// エントリの型レベル 2 種分離。
-/// f64 = スケジュール開始からの相対オフセット（0 ベース）。
+/// 長さ = スケジュールの起点からの隔たり。
 #[derive(Clone, Debug)]
 pub enum Entry<T> {
     /// 時刻付きデータペイロード（実行すべきコマンド）
-    Payload(f64, T),
+    Payload(TimeSpan, T),
     /// 時刻付きバリア（進行停止点、TimedSchedule が消費）
-    Barrier(f64, BarrierKind),
+    Barrier(TimeSpan, BarrierKind),
 }
 
 impl<T> Entry<T> {
     /// エントリの時刻オフセットを取得する。
-    pub fn offset(&self) -> f64 {
+    pub fn offset(&self) -> TimeSpan {
         match self {
             Entry::Payload(t, _) => *t,
             Entry::Barrier(t, _) => *t,
@@ -38,12 +39,12 @@ impl<T> Entry<T> {
 /// 0 ベース相対オフセットの汎用配信エンジン。
 ///
 /// `Entry<T>` により Payload / Barrier を型レベルで 2 種分離する。
-/// ジェネリクス T は Payload(f64, T) のみに適用される。
+/// ジェネリクス T は Payload(TimeSpan, T) のみに適用される。
 /// Barrier(BarrierKind) は T に関わらず固定型。
 #[derive(Debug)]
 pub struct TimedSchedule<T> {
-    /// 絶対時刻での開始時刻
-    start_time: f64,
+    /// 起点（台本の時刻 0 の絶対の時刻）
+    start_time: TimePoint,
     /// 降順ソート（0 ベース相対オフセット）。末尾 pop で O(1) 消費。
     entries: Vec<Entry<T>>,
     /// tick() で収集した Payload
@@ -52,11 +53,10 @@ pub struct TimedSchedule<T> {
     current_barrier: Option<BarrierKind>,
     /// 前回 tick の絶対時刻（構築の直後はアンカー `start_time`）。
     ///
-    /// 到達・完了の判定はすべて「アンカー＋相対」の足し算で作った絶対時刻とこの値を
+    /// 到達・完了の判定はすべて「起点＋相対」の整数の足し算で作った絶対時刻とこの値を
     /// 比べる（絶対の発火時刻の定義 [`CueSheet::absolute_fire_time`](crate::cue::CueSheet::absolute_fire_time)
-    /// と同じ形）。「現在時刻−アンカー」の引き算で相対へ戻すと、丸めでその時刻ちょうどの
-    /// tick が届かないことがあるため、引き算は使わない。
-    current_time: f64,
+    /// と同じ形）。ちょうどその時刻の tick で届く。
+    current_time: TimePoint,
     /// 占有終了 horizon（相対オフセット・0 ベース）。台本の全 cue の
     /// `max(start_time + duration)` を canonical 変換が焼き込む。
     ///
@@ -65,47 +65,38 @@ pub struct TimedSchedule<T> {
     /// この horizon に達して初めて**占有終了＝完了とみなす（末尾 Wait・最終 Text の
     /// duration を終端で落とさない・早期終了しない）。
     ///
-    /// テストの手組みの `new` の既定は 0.0。`current_time` は常にアンカー以上（`tick` の手前ガード）
-    /// ゆえ horizon=0.0 は `current_time >= start_time + horizon` を常に満たし、
-    /// [`is_completed`](Self::is_completed) は「entries 枯渇かつ barrier なし」の
-    /// 旧挙動に一致する（手組みスケジュールの後方互換）。
-    horizon: f64,
+    /// テストの手組みの `new` の既定は 0。`current_time` は常に起点以上（`tick` の手前ガード）
+    /// ゆえ horizon=0 は `current_time >= start_time + horizon` を常に満たし、
+    /// [`is_completed`](Self::is_completed) は「entries 枯渇かつ barrier なし」と一致する。
+    horizon: TimeSpan,
 }
 
 impl<T: Clone + Debug> TimedSchedule<T> {
-    /// 絶対時刻 `start_time` でスケジュールを構築（占有 horizon は 0.0 既定）。
+    /// 起点 `origin` でスケジュールを構築（占有 horizon は 0）。
     #[cfg(test)]
-    pub(crate) fn new(start_time: f64) -> Self {
-        Self::with_horizon(start_time, 0.0)
+    pub(crate) fn new(origin: TimePoint) -> Self {
+        Self::with_horizon(origin, TimeSpan::ZERO)
     }
 
-    /// 絶対時刻 `start_time` と占有 horizon（相対）を指定してスケジュールを構築。
+    /// 起点 `origin` と占有 horizon（起点からの隔たり）を指定してスケジュールを構築。
     ///
     /// canonical 変換（[`crate::cue::to_talk_schedule`]）が台本の占有 horizon を焼き込むために
-    /// 使う。手組みスケジュール（テストの手組みの `new`）は horizon=0.0 で旧挙動を保つ。
-    pub fn with_horizon(start_time: f64, horizon: f64) -> Self {
+    /// 使う。手組みスケジュール（テストの手組みの `new`）は horizon=0。
+    pub fn with_horizon(origin: TimePoint, horizon: TimeSpan) -> Self {
         Self {
-            start_time,
+            start_time: origin,
             entries: Vec::new(),
             ready_buffer: Vec::new(),
             current_barrier: None,
-            current_time: start_time,
+            current_time: origin,
             horizon,
         }
     }
 
-    /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）。
+    /// エントリを時刻順ソート維持で挿入（起点からの隔たり）。
     /// 降順ソートを維持する。テストの手組み用（本番は `insert_each`）。
-    ///
-    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する
-    /// （`schedule/tests.rs` が確かめる）。
     #[cfg(test)]
     pub(crate) fn insert(&mut self, entry: Entry<T>) {
-        debug_assert!(
-            entry.offset() >= 0.0,
-            "Entry offset must be non-negative: {}",
-            entry.offset()
-        );
         // 降順ソート: 大きいオフセットが先頭、小さいオフセットが末尾
         let offset = entry.offset();
         let pos = self.entries.partition_point(|e| e.offset() > offset);
@@ -118,17 +109,9 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// （昇順の台本なら既に降順の 1 本の並びで、ソートは 1 回の走査で済む）。
     pub fn insert_each(&mut self, entries: impl IntoIterator<Item = Entry<T>>) {
         let mut all: Vec<Entry<T>> = entries.into_iter().collect();
-        for entry in &all {
-            debug_assert!(
-                entry.offset() >= 0.0,
-                "Entry offset must be non-negative: {}",
-                entry.offset()
-            );
-        }
         all.reverse();
         all.append(&mut self.entries);
-        // −0.0 を +0.0 にそろえた全順序の降順（同じ瞬間を FIFO に保つ）
-        all.sort_by(|a, b| (b.offset() + 0.0).total_cmp(&(a.offset() + 0.0)));
+        all.sort_by_key(|entry| std::cmp::Reverse(entry.offset()));
         self.entries = all;
     }
 
@@ -136,20 +119,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 
     /// Phase 1: 新たな時刻を入力としてランタイムの時刻を進める。
     ///
-    /// `current_time` は絶対時刻。各エントリの到達は `start_time + オフセット` の絶対時刻と
-    /// 比べて判定する（相対へ引き戻さない・`current_time` 欄の説明を参照）。
+    /// `current_time` は絶対時刻。各エントリは「起点＋隔たり ≤ `current_time`」で届く
+    /// （相対へ引き戻さない・`current_time` 欄の説明を参照）。
     ///
     /// 時刻到達済みの Payload を `ready_buffer` に蒐集しながら進行。Barrier 到達（外部解決が
     /// 必要）または末尾到達で停止。冪等（同一時刻の再呼び出し安全）。
-    ///
-    /// NOTE: `current_time`（または start_time）が NaN の場合、下の全ガード
-    /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
-    /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
-    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。
-    /// `schedule/tests.rs` の `tick_with_nan_time_delivers_all_pending_payloads` が確かめる）。
-    // 到達の比べは NaN を「届いた」に倒すため、わざと `>` の否定で書く
-    #[allow(clippy::neg_cmp_op_on_partial_ord)]
-    pub fn tick(&mut self, current_time: f64) {
+    pub fn tick(&mut self, current_time: TimePoint) {
         if current_time < self.start_time {
             return;
         }
@@ -169,7 +144,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         let start_time = self.start_time;
         while let Some(entry) = self
             .entries
-            .pop_if(|e| !(sum_on_ms_grid(start_time, e.offset()) > current_time))
+            .pop_if(|e| start_time + e.offset() <= current_time)
         {
             match entry {
                 Entry::Payload(_, payload) => {
@@ -235,26 +210,26 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     ///
     /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time` と `horizon` の和。
     ///
-    /// horizon=0.0（テストの手組みの `new` 既定）では `current_time >= start_time` が常に真ゆえ
-    /// 「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
+    /// horizon=0（テストの手組みの `new` 既定）では `current_time >= start_time` が常に真ゆえ
+    /// 「entries 枯渇かつ barrier なし」と一致する。
     pub fn is_completed(&self) -> bool {
         self.entries.is_empty()
             && self.current_barrier.is_none()
-            && self.current_time >= sum_on_ms_grid(self.start_time, self.horizon)
+            && self.current_time >= self.occupancy_horizon()
     }
 }
 
 /// ペイロード型 T に依存しない照会（エントリを触らないため `Clone + Debug` 境界を要さない）。
 impl<T> TimedSchedule<T> {
-    /// 占有終了 horizon の**絶対時刻** = アンカー `start_time` と相対 horizon の和（`sum_on_ms_grid`）。
+    /// 占有終了 horizon の**絶対時刻** = 起点と相対 horizon の整数の和。
     ///
     /// [`is_completed`](Self::is_completed) が閾値として見ている占有区間の終端を、
     /// 上位層が絶対時刻として照会するための口。値は [`tick`](Self::tick) の
     /// 進行では変化しない。[`crate::cue::to_talk_schedule`] で組んだ予定では、台本の
     /// [`CueSheet::absolute_end_time`](crate::cue::CueSheet::absolute_end_time) と同じ値になる
-    /// （両方が同じ相対の終わりの関数と同じ和を使う。非有限・負の長さも同じ clamp を通る）。
-    pub fn occupancy_horizon(&self) -> f64 {
-        sum_on_ms_grid(self.start_time, self.horizon)
+    /// （両方が同じ [`CueSheet::relative_end`](crate::cue::CueSheet::relative_end) と同じ和を使う）。
+    pub fn occupancy_horizon(&self) -> TimePoint {
+        self.start_time + self.horizon
     }
 }
 
