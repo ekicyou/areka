@@ -1,10 +1,10 @@
 use super::test_support::onclose_get_index;
 use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT,
-    Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, TalkId,
-    drive_ticks_until_disconnect, events, expected_call, expected_unload,
-    resumed_get_after_active_window, send, spawn_harness_gated,
+    Fixture, KanadeConfig, KanadeMsg, QuitPolicy, TalkId, drive_ticks_until_disconnect, events,
+    expected_call, expected_unload, resumed_get_after_active_window, send, spawn_harness_gated,
 };
+use dola::time::testing::at_ms;
 
 // ============================================================================
 // シナリオ 5・6: 挨拶 active 中の Tick → NOTIFYと、挨拶 TalkDone → GET pump 再開
@@ -54,7 +54,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     send(&harness, KanadeMsg::Boot);
 
     // 挨拶 active 中の Tick（now=1h）→ OnSecondChange NOTIFY（Ref3=0・talking）。
-    let notify_now = MonotonicMs(3_600_000); // 1h → Ref0="1"。
+    let notify_now = at_ms(3_600_000); // 1h → Ref0="1"。
     send(&harness, KanadeMsg::Tick { now: notify_now });
 
     let expected_notify = expected_call(events::on_second_change(
@@ -105,7 +105,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
         "active 窓の後に pump 再開 GET が現れるはず（挨拶 TalkDone が slot と照合された証左）",
     );
     let expected_shape = expected_call(events::on_second_change(
-        MonotonicMs(0),
+        at_ms(0),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(
@@ -195,7 +195,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     // (A) 挨拶が active（`Steady{Some(挨拶)}`）であることを、Tick が NOTIFY（Ref3=0・talking）を出すことで
     //     確認する。`Steady{Some}` の Tick は `pending_close` を消化しない（NOTIFY 発行のみ・維持）ため、
     //     この Tick は握手を進めず「挨拶が今なお active・close は繰延中」という状態を可視化するだけである。
-    let notify_now = MonotonicMs(3_600_000); // 1h → Ref0="1"。
+    let notify_now = at_ms(3_600_000); // 1h → Ref0="1"。
     send(&harness, KanadeMsg::Tick { now: notify_now });
 
     let expected_notify = expected_call(events::on_second_change(

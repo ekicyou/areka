@@ -5,15 +5,16 @@
 //! をその時刻で返し、毎秒の `Tick` を送らずに `OnChoiceTimeout` が出ることを見る。時刻は注入値だけで、
 //! 待ちは期限付きの `recv_timeout` だけ（実時刻は読まない）。
 
+use dola::TimePoint;
 use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
 use std::time::Duration;
 
 use super::test_support::{
-    CANONICAL_CHOICE_ID, CHOICE_DEADLINE_MS, choice_get_ids, establish_choice_wait,
+    CANONICAL_CHOICE_ID, CHOICE_DEADLINE, choice_get_ids, establish_choice_wait,
 };
 use super::{
-    CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, TalkDone,
-    TalkEndReason, TalkId, spawn_harness_gated,
+    CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, TalkDone, TalkEndReason,
+    TalkId, spawn_harness_gated,
 };
 
 /// 起こしの頼みが届くまでの待ちの上限（殻が止まったときに檻が詰まらないための期限）。
@@ -29,7 +30,7 @@ const WAKE_RECV_BOUND: Duration = Duration::from_secs(10);
 /// - 頼みが 2 つ以上届くと、殻が止まった後の受け端に残りが見えて落ちる。
 #[test]
 fn kanade_asks_the_ticker_and_fires_on_the_deadline_notice() {
-    let (wake_tx, wake_rx) = mpsc::channel::<MonotonicMs>();
+    let (wake_tx, wake_rx) = mpsc::channel::<TimePoint>();
     let config = KanadeConfig {
         choice_wake: Some(wake_tx),
         ..KanadeConfig::new("master", "1.0.0")
@@ -53,11 +54,7 @@ fn kanade_asks_the_ticker_and_fires_on_the_deadline_notice() {
         Err(RecvTimeoutError::Timeout) => panic!("選択待ちを作ったのに起こしの頼みが届かない"),
         Err(RecvTimeoutError::Disconnected) => panic!("起こしの線が頼みの前に切れた"),
     };
-    assert_eq!(
-        at,
-        MonotonicMs(CHOICE_DEADLINE_MS),
-        "頼みの時刻は選択待ちの期限のはず"
-    );
+    assert_eq!(at, CHOICE_DEADLINE, "頼みの時刻は選択待ちの期限のはず");
 
     tx.send(KanadeMsg::ChoiceTimeoutDue { now: at })
         .expect("send ChoiceTimeoutDue");

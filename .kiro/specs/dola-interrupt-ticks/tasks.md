@@ -276,7 +276,7 @@
   - _Dispatch: mechanical — 期待の値を写すだけ_
   - _Requirements: 7.7, 7.8, 9.1_
 
-- [ ] 3.11 (P) areka-kanade の結合テストを直す
+- [x] 3.11 (P) areka-kanade の結合テストを直す
   - 期待の値を時刻の型で書く
   - このタスクのファイルについて、`cargo check -p areka-kanade --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-kanade 結合テスト_

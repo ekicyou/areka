@@ -15,6 +15,7 @@
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, StartTalk, TalkId, events, resources,
 };
+use dola::time::testing::at_ms;
 
 use super::common::{
     CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, QuitPolicy,
@@ -45,8 +46,8 @@ fn drive_full_run() {
     send(&harness, KanadeMsg::Boot);
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。OnSecondChange は 204 基調ゆえ talk なし。
-    for i in 1..=3u64 {
-        tick(&harness, i * 1_000);
+    for i in 1..=3i64 {
+        tick(&harness, at_ms(i * 1_000));
     }
 
     // close 指示（active talk なしなら即握手・boot 挨拶完了後に握手）。握手は OnClose GET→別れの Value→close talk。

@@ -4,6 +4,8 @@ use super::{
     Fixture, KanadeConfig, KanadeMsg, QuitPolicy, RecordedCall, events, expected_call,
     expected_translate, expected_unload, send, spawn_harness, spawn_harness_gated, tick,
 };
+use dola::TimeSpan;
+use dola::time::testing::{at_ms, ms};
 
 // ============================================================================
 // シナリオ 1: 別れの台詞は `\-` 無しで終わっても終了する
@@ -14,7 +16,7 @@ use super::{
 /// （2026-09-20 の開発者裁定: 別れの台詞が `\-` 無しで終わっても終了する）。
 ///
 /// Tick を 1 本も送らないので `last_now` は None のまま＝握手入口の deadline も None のままで、
-/// 再生完了待ちの上限は永久に設定されない（`close_talk_deadline_ms` も `u64::MAX` にしてある）。
+/// 再生完了待ちの上限は永久に設定されない（`close_talk_deadline` も `TimeSpan::MAX` にしてある）。
 /// ゆえに終了へ至る道は TalkDone の腕しか無く、期限超過（シナリオ 3）との取り違えが起き得ない。
 ///
 /// # 非空虚性
@@ -30,7 +32,7 @@ fn farewell_talk_without_quit_tag_still_terminates() {
     // 再生完了待ちの上限を実質無限にする。終了が期限超過ではなく TalkDone の腕で起きることを
     // 一意にするための封じ（期限超過はシナリオ 3 の担当）。
     let mut config = KanadeConfig::new("master", "1.0.0");
-    config.close_talk_deadline_ms = u64::MAX;
+    config.close_talk_deadline = TimeSpan::MAX;
 
     // quit_flags: close talk（index 0・挨拶なし boot ゆえ先頭 StartTalk）=false＝`Ended` で終わる
     // ＝台本が `\-` に辿り着かなかった場合そのものである。
@@ -181,7 +183,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
 // シナリオ 3: 再生完了待ちの時間超過
 // ============================================================================
 
-/// close talk の TalkDone が来ないまま `close_talk_deadline_ms` を超える Tick が届くと、kanade は
+/// close talk の TalkDone が来ないまま `close_talk_deadline` を超える Tick が届くと、kanade は
 /// DeadlineExceeded を検出して終了系列を継続する（TalkDone 不着でも join 成功＝宙吊りなし）。
 ///
 /// # 駆動（保留ハーネスで close talk の TalkDone を差し止める）
@@ -198,9 +200,9 @@ fn silent_close_on_204_terminates_without_extra_events() {
 ///   join が期限超過して panic する（＝このテスト自体が落ちる）。
 #[test]
 fn close_talk_deadline_exceeded_terminates_without_talkdone() {
-    // close_talk_deadline_ms を小さく差し替える（既定 30s では大きすぎる）。
+    // close_talk_deadline を小さく差し替える（既定 30s では大きすぎる）。
     let mut config = KanadeConfig::new("master", "1.0.0");
-    config.close_talk_deadline_ms = 5_000;
+    config.close_talk_deadline = ms(5_000);
 
     // 挨拶なし boot（without_boot_greeting）で boot→Steady{None} へ直行させ、CloseRequest を確実に
     // `Steady{None}` の即握手にする（挨拶 talk の TalkDone との競合を断つ）。close talk（受領 index 0・挨拶
@@ -216,7 +218,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     send(&harness, KanadeMsg::Boot);
 
     // Tick(now=1s): last_now=Some(1s) を確定（握手入口 deadline 基準を Some にする）。
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
 
     // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk・保留）。
     // CloseTalkWait 進入時に deadline=1s+5s=6s が確定する。
@@ -228,7 +230,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     );
 
     // Tick(now=100s): deadline(6s)を大きく超過 → DeadlineExceeded → Unload → StopSelf。
-    tick(&harness, 100_000);
+    tick(&harness, at_ms(100_000));
 
     // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する
     // （保留は解放しない＝kanade 停止後は releaser の recv_closed 安全弁が片づける）。
@@ -273,7 +275,7 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 
     // 起動して定常運転へ落ち着かせる（boot 系列は Boot 処理内で同期完走する）。
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
 
     // 強制終了指示 → 終了系列へ直行。
     send(

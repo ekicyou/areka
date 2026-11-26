@@ -15,6 +15,7 @@
 //! 本番の線の層（`shiori::real` の `handle_call` → `Shiori3Client::get` → `build_request`）は ID で
 //! 分岐しないので、同じ形の呼出からは同じ見出しが出る。
 
+use dola::time::testing::at_ms;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -24,8 +25,8 @@ use areka_actor::reply_channel;
 use areka_kanade::{
     ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, CloseReason, ExecutionSnapshot,
     ExecutionStatus, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
-    MonotonicMs, MouseButton, MouseEventKind, ShioriCall, ShioriFailure, ShioriFault, ShioriMethod,
-    ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId, TranslateSeams, events,
+    MouseButton, MouseEventKind, ShioriCall, ShioriFailure, ShioriFault, ShioriMethod, ShioriMsg,
+    ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId, TranslateSeams, events,
     spawn_kanade_translating,
 };
 use shiori_host32_host::{Charset, Method, RequestHeaders, ShioriRequest, build_request};
@@ -315,17 +316,8 @@ fn inputs_during_translate_wait_run_after_start_under_talking_rules() {
         ),
         (
             "tick",
-            || {
-                vec![KanadeMsg::Tick {
-                    now: MonotonicMs(1_000),
-                }]
-            },
-            || {
-                vec![call(events::on_second_change(
-                    MonotonicMs(1_000),
-                    &talking(),
-                ))]
-            },
+            || vec![KanadeMsg::Tick { now: at_ms(1_000) }],
+            || vec![call(events::on_second_change(at_ms(1_000), &talking()))],
         ),
         (
             "close",
@@ -416,9 +408,7 @@ fn one_on_translate_per_script_and_none_for_no_content_or_empty() {
         ("OnMouseMove", ""),
     ]));
     rig.send(KanadeMsg::Boot);
-    rig.send(KanadeMsg::Tick {
-        now: MonotonicMs(1_000),
-    });
+    rig.send(KanadeMsg::Tick { now: at_ms(1_000) });
     rig.send(mouse_move());
     rig.send(talk_done(1)); // 空の台詞の再生（talk 1）を終えて定常へ戻す。
     rig.send(double_click());

@@ -34,9 +34,7 @@
 //! ほかに、終了の指示のスコープが `OnClose` の References に届く檻（`close_test_scope_references_tests.rs`）と
 //! 停止通知の檻 3 本（`close_test_stop_notify_tests.rs`）がある。
 
-use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,
-};
+use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, TalkId, events};
 
 use super::common::{
     CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, QuitPolicy,

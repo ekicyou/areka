@@ -27,11 +27,12 @@
 //!    系列へ入り、停止通知は「通信が切れた」の種類で届く。応答の期限切れの腕は、無期限の受信
 //!    （`recv`）が期限切れを返さないので届かず、ここでは固定しない。
 
+use dola::time::testing::at_ms;
 use std::sync::mpsc;
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, MonotonicMs,
-    ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone, TalkEndReason, TalkId,
+    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, ShioriDownKind,
+    ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone, TalkEndReason, TalkId,
 };
 
 use log_capture_kit::install_global_capture_all;
@@ -213,7 +214,7 @@ fn shiori_down_case(
     );
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
 
     send(
         &harness,
@@ -267,7 +268,7 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     );
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
 
     // 未知 talk_id の再生完了通知を注入（採番されていない 9999・reason=Ended）。現 Phase 維持で無害。
     send(
@@ -341,9 +342,7 @@ fn all_command_senders_dropped_terminates_normally_without_hang() {
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     harness
         .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
+        .send(KanadeMsg::Tick { now: at_ms(1_000) })
         .expect("send settle Tick");
 
     let SinklessHarness {
@@ -493,7 +492,7 @@ fn error_response_at_conversation_get_continues_as_no_content() {
 
     send(&harness, KanadeMsg::Boot);
     for i in 1..=2 {
-        tick(&harness, i * 1_000);
+        tick(&harness, at_ms(i * 1_000));
     }
     send(
         &harness,

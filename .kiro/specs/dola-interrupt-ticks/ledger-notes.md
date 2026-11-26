@@ -140,3 +140,7 @@
 ## 3.10
 
 - 外したテスト・分かれ道・ログは無い。変える前後の期待（名前は変えていない）: `MonotonicMs(n)` → `at_ms(n)`。`msg_tests::kanade_config_new_supplies_documented_defaults`（`close_talk_deadline_ms == 30_000` → `close_talk_deadline == ms(30_000)`、`choice_timeout_default` も同じ）。`schedule_tests::choice_waiting_deadline_follows_dd8_directive_mapping`（指令の秒 → `delta_ms`、期待 `Option<TimePoint>`）。`choice_timeout_never_fires_for_indefinite_deadline`（`u64::MAX` → `TimePoint::MAX`）。`schedule_log_firing_tests::info_choice_waiting_established_logs_candidate_count_and_deadline`（欄 `deadline_ms` → `deadline`、期待 `"Some(32000)"` → 文字の形 `Some(32.0000000)`）。
+
+## 3.11
+
+- 外したテスト・分かれ道・ログは無い。変える前後の期待（名前は変えていない）: 刻みの時刻 `MonotonicMs(n)`・整数 → `at_ms(n)`。`CHOICE_DEADLINE_MS ± x` → `CHOICE_DEADLINE ± ms(..)`。`choice_test_timeout_directive_tests` の指令 `Some(1.234)`・`Some(0.0)`・`Some(-0.001)` → `delta_ms(1_234)`・`delta_ms(0)`・`delta_ms(-1)`。`close_test_handshake_tests` の `close_talk_deadline_ms = u64::MAX`・`5_000` → `close_talk_deadline = TimeSpan::MAX`・`ms(5_000)`。`status_query_test` の欄 `timeout_directive_secs` → `timeout_directive`。

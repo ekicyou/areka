@@ -53,9 +53,9 @@
 //!   `steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
-    events, resources,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, StartTalk, TalkId, events, resources,
 };
+use dola::time::testing::at_ms;
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
@@ -74,7 +74,7 @@ use super::common::{
 /// sakura が受領する talk は「（発生し得る）steady talk・close talk」の順のみ。quit_flags はこの順で
 /// quit を割り当てる。close talk が末尾に来るよう十分な false を前置し、末尾に唯一の true（close talk）
 /// を置くこと。
-fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Driven {
+fn drive_steady(fixture: Fixture, tick_count: i64, quit_flags: Vec<bool>) -> Driven {
     let harness = spawn_harness(
         KanadeConfig::new("master", "1.0.0"),
         fixture,
@@ -85,7 +85,7 @@ fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Dri
 
     // 時刻は注入 Tick のみで進行させる。
     for i in 1..=tick_count {
-        tick(&harness, i * 1_000);
+        tick(&harness, at_ms(i * 1_000));
     }
 
     send(
@@ -134,7 +134,7 @@ fn steady_no_content_produces_no_start_talk() {
 
     // 204 の間も pump の問い合わせ（OnSecondChange GET・Ref3=1）は現に発行されている。
     let first_get = expected_call(events::on_second_change(
-        MonotonicMs(1_000),
+        at_ms(1_000),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert!(
@@ -206,7 +206,7 @@ fn sporadic_value_starts_unique_talk() {
 
     // steady talk は OnSecondChange GET（Ref3=1）から起きた: events 表から導出した GET が記録列に現れる。
     let expected_get = expected_call(events::on_second_change(
-        MonotonicMs(1_000),
+        at_ms(1_000),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert!(
@@ -272,8 +272,8 @@ fn active_talk_tick_emits_notify_ref3_zero() {
     );
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(1_000));
+    tick(&harness, at_ms(2_000));
     gate.release_all();
     send(
         &harness,
@@ -299,7 +299,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
     // Ref3=0 と Status: talking は同一スナップショットから出るので、events 導出の NOTIFY
     // （now=2s・talk_active=true）と一致する記録が現れる。
     let expected_notify = expected_call(events::on_second_change(
-        MonotonicMs(2_000),
+        at_ms(2_000),
         &ExecutionSnapshot {
             talk_active: true,
             ..ExecutionSnapshot::INACTIVE
@@ -361,9 +361,9 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
     );
 
     // Ref0（now/3_600_000）を 1→2→3 と異ならせ、順序を構造的に検証する。
-    let now1 = MonotonicMs(3_600_000); // 1h → Ref0="1"
-    let now2 = MonotonicMs(2 * 3_600_000); // 2h → Ref0="2"
-    let now3 = MonotonicMs(3 * 3_600_000); // 3h → Ref0="3"
+    let now1 = at_ms(3_600_000); // 1h → Ref0="1"
+    let now2 = at_ms(2 * 3_600_000); // 2h → Ref0="2"
+    let now3 = at_ms(3 * 3_600_000); // 3h → Ref0="3"
 
     send(&harness, KanadeMsg::Boot);
     send(&harness, KanadeMsg::Tick { now: now1 });
@@ -461,8 +461,8 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     );
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(1_000));
+    tick(&harness, at_ms(2_000));
     gate.release_all();
 
     // 復帰前（Steady{Some}）の Tick は NOTIFY のみで、復帰後の GET(occ1) が Value を返して終了を駆動する。
@@ -496,7 +496,7 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     let resumed_get = resumed_get_after_active_window(&recorded)
         .expect("active 窓の後に pump 再開 GET が現れるはず（Req 4.4）");
     let expected_shape = expected_call(events::on_second_change(
-        MonotonicMs(0),
+        at_ms(0),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(

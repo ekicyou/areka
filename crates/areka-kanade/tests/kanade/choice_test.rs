@@ -20,9 +20,9 @@
 //! 終了は Fault 経路が駆動する）、kanade の期限付き join 成功をもって全記録の確定点とする。
 //!
 //! # 期限（deadline）の作り方——実時刻を一切読まない
-//! 注入する `ChoiceWaiting` は `timeout_directive_secs: None`（＝既定値
-//! `CHOICE_TIMEOUT_DEFAULT_MS` へ委譲）で、起点は `display_end = CHOICE_DISPLAY_END_MS` ゆえ
-//! 期限は `CHOICE_DEADLINE_MS` である。したがって**注入 Tick の `now` を選ぶだけ**で期限の手前／
+//! 注入する `ChoiceWaiting` は `timeout_directive: None`（＝既定値
+//! `choice_timeout_default` へ委譲）で、起点は `display_end = CHOICE_DISPLAY_END` ゆえ
+//! 期限は `CHOICE_DEADLINE` である。したがって**注入 Tick の `now` を選ぶだけ**で期限の手前／
 //! 到達を作り分けられる（実時間待機も `Instant` 読み取りも一切ない）。
 //! 群 1〜4 は期限より手前の Tick しか注入しないためタイムアウト経路へは構造上到達せず、群 5 が
 //! 期限手前 → 期限到達の 2 点を注入してタイムアウトのみを踏む。
@@ -30,7 +30,7 @@
 use std::sync::mpsc::Sender;
 
 use areka_kanade::{
-    ChoiceInput, CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
+    ChoiceInput, CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MouseButton,
     MouseEventKind, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
 };
 
