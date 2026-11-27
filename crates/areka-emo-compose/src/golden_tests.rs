@@ -31,14 +31,8 @@ mod frame_extent_tests;
 #[path = "golden_tests_plan_order_tests.rs"]
 mod plan_order_tests;
 #[cfg(test)]
-#[path = "golden_tests_surface0_base_tests.rs"]
-mod surface0_base_tests;
-#[cfg(test)]
 #[path = "golden_tests_surface1000_bind_tests.rs"]
 mod surface1000_bind_tests;
 #[cfg(test)]
 #[path = "golden_tests_test_support.rs"]
 mod test_support;
-#[cfg(test)]
-#[path = "golden_tests_trim_equivalence_tests.rs"]
-mod trim_equivalence_tests;

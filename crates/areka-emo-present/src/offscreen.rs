@@ -94,3 +94,7 @@ mod tests;
 #[cfg(test)]
 #[path = "draw_methods_warp_tests.rs"]
 mod draw_methods_warp_tests;
+
+#[cfg(test)]
+#[path = "offscreen_emo2_tests.rs"]
+mod emo2_tests;

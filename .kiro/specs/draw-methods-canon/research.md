@@ -490,3 +490,36 @@ for k in sys.argv[1:]:
 
 - まとめの節の変換が回転を持ち、中に世界で軸に沿う矩形の切り抜きが在る形（子が逆に回っているとき）は、中の `PushAxisAlignedClip` が局所では軸に沿わないので外接矩形で切る。emo の使い方（拡大と平行移動だけ）では起きない。
 - `VisualGroup` を外しただけ（ほかに何も変えない）の回は版が上がらない。節を作り直す使い方（タスク 6.2）では親子の変化で組み直される。
+
+## 16. `overlay` だけの面の CPU と WARP の差（2026-11-28・タスク 6.5・要件 8.1・研究の項目 R2）
+
+### 16.1 測り方
+
+- 検体は emo2 の実物の絵（`load_shell_target`＋`WicDecoderArm`・焼きの誤り 0 件）。同じ面の表と索引表を、今の CPU の合成（`Composer::compose`）と画面の外の描き手（`OffscreenRenderer::warp()`）で描き、色の 4 成分ごとの差の最大と、差のある画素の数を数えた。
+- テストは `crates/areka-emo-present/src/offscreen_emo2_tests.rs` の `emo2_overlay_only_warp_differs_from_the_cpu_compose_by_at_most_one`（差の最大 1 以内を固める）。数は `cargo test -p areka-emo-present --lib offscreen::emo2_tests -- --nocapture` の `R2` の行で読む。
+- 着せ替えの既定は `descript.txt` の `bindgroup*.default,1`（1100・1207・1302・1500・1800）。まばたきは既定に 1400 を足し、`PatternState` の 1400 の欄にコマ（1412・1411・1410）を載せた。
+
+### 16.2 答え
+
+| 場面 | 原寸 | α>0 の画素 | 半透明の画素 | 差の最大 | 差のある画素 |
+|---|---|---|---|---|---|
+| surface0 | 434×687 | 140,525 | 11,860 | 0 | 0 |
+| surface1000 着せ替え（既定） | 382×547 | 81,829 | 4,446 | 0 | 0 |
+| surface1000 着せ替え（1101・1200・1305・1501） | 382×547 | 71,842 | 4,041 | 0 | 0 |
+| まばたき 1412 | 382×547 | 81,829 | 4,353 | 0 | 0 |
+| まばたき 1411 | 382×547 | 81,829 | 4,353 | 0 | 0 |
+| まばたき 1410 | 382×547 | 81,829 | 4,353 | 0 | 0 |
+
+- 6 場面とも全部の画素がバイトで一致した（半透明の縁が重なる所を含む）。CPU の `div255` の SourceOver と WARP の丸めは、等倍・整数の位置の `overlay` では差が出ない。要件 8.1 の「差 1 以内」は余裕をもって満たす。
+- まばたきの 3 コマは互いに違う絵になることもテストが確かめている（目の部品は不透明の顔の内側なので α>0 の数は同じ）。
+
+### 16.3 移した見本（要件 9.6・design の取り下げと移しの表）
+
+| 移す前（`areka-emo-compose`） | 移した先（`areka-emo-present/src/offscreen_emo2_tests.rs`・WARP・±1） |
+|---|---|
+| `golden_tests_surface0_base_tests.rs` の `surface0_element0_single_layer_equals_inserted_image` | 同名。挿入した 37×29 の傾斜の絵と各成分 ±1 |
+| `golden_tests_trim_equivalence_tests.rs` の `surface0_trimmed_composite_equals_untrimmed_placement` | 同名。切り詰めの記録（原寸・`trim_offset`・uv）を確かめ、原画像と各成分 ±1 |
+| `golden_tests_surface1000_bind_tests.rs` の `surface1000_bind_count_overlap_point_sampling` | 同名。部品だけが覆う点の色と α、不透明の画素の数の増え方 |
+
+- 移す前の 2 ファイルは消し、`golden_tests_surface1000_bind_tests.rs` には外形と空の着せ替えのテスト（計画の値へ書き直す側・タスク 7.6）だけを残した。
+- 差を測るテストは CPU の合成を呼ぶので、CPU の合成の口を外すタスク 7.6 で一緒に取り下げる。
