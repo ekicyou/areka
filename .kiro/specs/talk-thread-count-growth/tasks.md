@@ -115,5 +115,8 @@
   - _Depends: 3.3, 4.2, 6_
   - _Dispatch: standard — 実機の手順を回し、ログから本数を数えて突き合わせる_
   - _Requirements: 1.5, 4.4, 7.8_
+
+## Implementation Notes
+
 - 完了時にその場で解決: tools/perf/README.md の「1 スレッド 1 行」を畳んだ合計の行も含む文に直した。
 - 完了時にその場で解決: 名簿の差がプロセスの差を越えると名簿外の残りが 0 で止まる検体 registry_over_process を perf-rank の自己テストに足した（消した Rust の delta が見ていた飽和の場合）。
