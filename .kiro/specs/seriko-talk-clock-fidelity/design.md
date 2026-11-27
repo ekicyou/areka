@@ -154,8 +154,9 @@ crates/areka-runtime/src/
 - `crates/areka-seriko/src/looper.rs` — `SerikoLoopConfig` に `text_routing: TextRouting`（`disabled()` は空）。`observe_cue` が `&SurfaceResolver` を受け、配線は `looper_trigger.rs` の自由関数へ渡す。`talk_window` の欄の名。`on_tick` の構成の分解に新しい欄。`replace_text_routing`・門が開いたときの種まき・門が閉じたときに列と行き先を捨てる。新しい兄弟のテストを宣言する。
 - `looper.rs`（今 855 行）は 1,000 行以下を保つため、合図の振り分けと揃えの本体を `looper_trigger.rs`（今 218 行・「文字の列と数えの世話」の置き場）に置き、`looper.rs` には門と委ねる口だけを足す。
 - `crates/areka-seriko/src/looper_trigger.rs` — 合図を字の列へ当てる自由関数 `observe_talk_cue`（文字・選択肢・印・`\s`・名前の形の `\b`・消去・全消去）と、`restart_talk` を「捨てた序数の列で全部の数えを揃える」形に。シェルの切替で箱の場所の字を捨てる `rebase_talk_boxes`。モジュールの doc の決まりを「数えた字の数を保つ」に直す。
+- `crates/areka-seriko/src/state.rs` — `ScopeStates` のスコープごとの状態に、文字の層の規則での `\s` の答えを控える欄 `text_surface: Option<SurfaceKeyOutcome>` を足す（まだ `\s` が届いていなければ無し・`Unresolved` は控えを変えない・シェルの切替の戻り先も同じ欄へ当てる）。表示のために今も `\s` ごとに通る経路での書き込み 1 回だけで、門に関わらず保つ。
 - `crates/areka-seriko/src/resolve.rs` — `SurfaceTarget::for_text(self, surface_ids: &BTreeSet<u32>) -> SurfaceKeyOutcome`（文字の層の規則の唯一の置き場）。
-- `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell` に `text_routing: TextRouting`。`dispatch_message` は `observe_cue(&cue, resolver)`。差し替えの殻はシェルの差し替えで `replace_text_routing(text_routing, &fallback, &states)` を呼び、どちらの差し替えでも門が開いたら種を蒔かせる。
+- `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell` に `text_routing: TextRouting`。`dispatch_message` は `observe_cue(&cue, resolver)`。`\s` の経路で `ScopeStates` の `text_surface` を控える。シェルの差し替えでは `text_routing` を「次の箱の表」として預かり、箱の表が効いた知らせ `SerikoMsg::TextRoutingApplied { at }` を受けたときに `replace_text_routing(at, &fallback, &states)` で入れ替える。どちらの差し替えでも門が閉から開へ替わったら、控えから行き先を決め直させる。
 - `crates/areka-seriko/src/lib.rs` — `pub use talk::TextRouting;`。
 - `crates/areka-seriko/src/settle.rs` — 構成を直に組む所に `text_routing: TextRouting::default()`。
 - 既存のテストの追従（振る舞いの期待は変えず、型の欄だけ）:
@@ -169,7 +170,7 @@ crates/areka-runtime/src/
 **areka-runtime**
 - `crates/areka-runtime/src/shell_box_assets.rs` — `ShellBoxAssets::text_routing(&self) -> TextRouting`（`box_index(&self.layout)` と `surface_ids` の写し）。`resolve_for_text` の本体を `resolver.resolve(key).for_text(surface_ids)` の 1 行にする（既存のテストはそのまま通る）。
 - `crates/areka-runtime/src/lib.rs` — 起動の `SerikoLoopConfig` に `text_routing: boxes.text_routing()`（`boxes` を装着の束へ動かす前に組む）。「seriko は読まない」の注を直す。`#[cfg(test)] mod receivers_follow_place_tests;` を足す。
-- `crates/areka-runtime/src/frame/switch.rs` — `SwapBuilt::Shell` を割る所で `SerikoReplace::Shell` に `text_routing: assets.boxes.text_routing()`（箱の束を後始末へ動かす前）。
+- `crates/areka-runtime/src/frame/switch.rs` — `SwapBuilt::Shell` を割る所で `SerikoReplace::Shell` に `text_routing: assets.boxes.text_routing()`（箱の束を後始末へ動かす前）。`finish_shell` で文字の層へ箱の束を渡す（`boxes.hand_to`）フレームに、1 本の時計から時刻を 1 つ読み、その時刻を `SerikoMsg::TextRoutingApplied { at }` で seriko へ送る（`SerikoReplace::Shell` は `commit` で先に出るので、効いた時刻は後から届ける）。
 - `crates/areka-runtime/src/same_script_test_support.rs` — `seriko_config()` に欄を足す。構成を受け取る `seriko_at` の変種（対のテストが箱のシェルの構成を渡す）。
 - `crates/areka-runtime/src/film_playback_e2e_tests.rs` — 構成を直に組む 3 か所に欄を足す。
 
@@ -257,7 +258,7 @@ stateDiagram-v2
 | 3.3 | 部品は見え始めより前に始めない | Armed | `next_starts` の `.max(since)` を保つ | ― |
 | 3.4 | 2 つ越えは古い順・同じ時刻は 1 つ | Armed・TalkFeed | 列は時刻の順なので序数の順＝時刻の順 | ― |
 | 3.5 | 既存のテストを緑に保つ | 全部 | 既存のテスト | ― |
-| 4.1 | `talk` の無いシェルで仕事を増やさない | LoopRuntime | `has_talk` の門・種まきは門が開いたときだけ | ― |
+| 4.1 | `talk` の無いシェルで仕事を増やさない | LoopRuntime | `has_talk` の門（字の合図を写さない）・`\s` の答えの控えは表示の経路での書き込み 1 回だけ | ― |
 | 4.2 | 新しい時計・丸め・1 刻み遅らせを持ち込まない | TalkFeed・LoopRuntime | 合図の時刻・刻みの時刻だけを使う | ― |
 | 4.3 | 抽選の乱数の並び・`runonce`・`periodic` を変えない | Armed・LoopRuntime | 変えた経路は乱数を読まない | ― |
 | 4.4 | 記録の出し先と文言・水準を変えない | trigger・LoopRuntime | `log_fired` は触らない・新しい経路は記録しない | ― |
@@ -424,7 +425,7 @@ impl TalkFeed {
     // 消去（捨てた序数を昇順で返す）
     pub(crate) fn restart_chain(&mut self, at: TimePoint) -> Vec<u64>; // 行き先の場所だけ
     pub(crate) fn restart_all(&mut self, at: TimePoint, routing: &TextRouting) -> Vec<u64>; // 全部の場所・行き先を既定へ
-    pub(crate) fn rebase_boxes(&mut self, after: TimePoint, routing: &TextRouting, candidates: &[u32]) -> Vec<u64>;
+    pub(crate) fn rebase_boxes(&mut self, at: TimePoint, routing: &TextRouting, candidates: &[u32]) -> Vec<u64>;
     // 今と同じ
     pub(crate) fn shift_after(&mut self, effective_at: TimePoint, delta: TimeDelta);
     pub(crate) fn revealed_until(&self, t: TimePoint) -> u64;
@@ -527,8 +528,8 @@ impl Armed {
 ##### State Management（seriko の行き先と門）
 
 - 行き先の状態はスコープの `TalkFeed` が持ち、門（`has_talk`）が閉じると字の列と一緒に捨てる（今の `feeds.clear()` と同じ）。`TextRouting` そのものは門に関わらず `LoopRuntime` が持ち続ける（差し替えのたびに置き換える・種まきと門が開いた後の行き先に使う）。
-- **門が開いた直後の種まき**（仮定 1）: 差し替えで門が閉から開へ替わったとき、`ScopeStates` の各スコープの今のシェルの面の番号（`TextRouting.surface_ids` に在るものだけ・非表示や無い番号は「無し」）で `seed_surface` を呼び、行き先を既定にする。起動の時に門が開いているときは種を蒔かない（文字の層も `\s` が届くまで番号を持たない）。
-- **門が開いたままのシェルの切替**（仮定 2）: `replace_text_routing(routing, &fallback, &states)` は、各スコープで `rebase_boxes(after, routing, candidates)` を呼ぶ: 箱の場所の字のうち `after`（最後の刻みの時刻・まだ刻みが無ければ全部）より後に現れる物を捨て、箱の場所の前の字を無しにし、新しい表で `reset`、`fallback_outcome` が在れば `follow_surface`。捨てた序数でそのスコープの数えを揃える。文字の層の `set_box_index`（箱の場所の字を捨て、行き先を既定へ）→ `fall_back_box_surfaces` と同じ順。
+- **門が開いた直後の決め直し**: 差し替えで門が閉から開へ替わったとき、各スコープで `ScopeStates` の控え `text_surface` を `follow_surface` に当てて行き先を決める（控えが無ければ番号無し＝普通のバルーン・文字の層が `\s` を受けていない状態と同じ）。控えは文字の層と同じ規則（`SurfaceTarget::for_text`）で作るので、門が閉じていた間の `\s` も文字の層と同じ答えになる。門が閉じている間は字の列も行き先も作らない。
+- **シェルの切替のときの箱の字**: 切替が効く時刻は、文字の層が新しい箱の表を受ける（`boxes.hand_to`）フレームで 1 本の時計から読む 1 つの時刻 `at`。seriko は `SerikoMsg::TextRoutingApplied { at }` を受けたときに、各スコープで `rebase_boxes(at, routing, candidates)` を呼ぶ: 箱の場所の字のうち `at` より後に現れる物を捨て（`at` までに現れた字は画面に出たので数えに残す）、箱の場所の前の字を無しにし、新しい表で `reset`、`fallback_outcome` が在れば `follow_surface`。捨てた序数でそのスコープの数えを揃える。文字の層の `set_box_index`（箱の場所の字を捨て、行き先を既定へ）→ `fall_back_box_surfaces` と同じ順・同じ時刻。刻みの境目には寄せない。
 
 ### 文書（6.1〜6.5）
 
@@ -585,10 +586,10 @@ impl Armed {
 
 - 決め・調べの記録は `research.md`（§1〜§8 はギャップ分析と要件の討議、§9 は設計の段）。
 
-## Open Questions（設計の討議へ）
+## 設計の討議の決め（2026-11-27・推奨どおり一括承認）
 
-1. **門が閉じている間の行き先と、門が開いたときの種まき**: 要件 4.1 に従い、どの表にも `talk` が無い間は `\s` も追わない。門が開いた差し替えの直後は seriko の表示中の面の番号から種を蒔く（仮定 1）。文字の層と食い違いうるのは ⑴ そのスコープにまだ 1 度も `\s` が届いていない（文字の層は番号無し＝普通のバルーン、seriko の種は表示中の面）⑵ 前に面の表に無い番号へ `\s` した、の 2 つで、どちらも「`talk` の無いシェルから箱と `talk` の在るシェルへ、台詞の途中に切り替えた」ときだけ。代わりの形は「門に関わらず `\s` だけは追う」（`\s` の合図 1 つにつき表の書き込み 1 回が増える＝要件 4.1 の字面から外れる）。
-2. **シェルの切替のときの箱の場所の字**: 文字の層は箱の場所の字を描き済みの物も含めて捨てる。seriko は最後の刻みの時刻より後に現れる箱の字を捨て、箱の場所の前の字を無しにする（仮定 2・要件は切替に黙る）。代わりの形は「捨てない（前の字だけ無しにする）」で、画面に出ない箱の字でも口が動く。
-3. **印を数えに入れないことの SSP での確かめ（要件 2.8）**: 設計の段では測っていない。測るには `talk` を持つシェルで SSP の口のコマの時刻を字ごとに見る必要があり、画面の操作の順取りと、ウェーブの兄弟への知らせが要る。下書きは要件の討議の決め（印は数えない）のまま。測るかどうか・いつ測るかを決めたい。
-4. **場所をまたぐ字の序数を「時刻の順」とすること**: 2 つの場所の字が届いた順と時刻の順が食い違うとき、数える順を時刻の順にした（「数値分の文字がくるごとに」を、その時刻までに現れた字の数と読む）。別の場所の合図が遅れて届き、その字がもう数えた字より早い時刻だと、差し込みで数え済みの序数が 1 つずれ、その区切りの開始の時刻がもう過ぎた字の時刻になる（数えた数は正しい）。届いた順で数える形は、時刻が前後する字で区切りの時刻が逆転するので採らなかった。
-5. **`areka-emo-compose` の `lib.rs` の重なり**: 新しい型の宣言を `lib.rs` に 2 行足す（クレートの今の形）。`draw-methods-canon` も新しいモジュールを足すなら隣り合う行になる。代わりの形は `boxes.rs` の子のモジュールにして `areka_emo_compose::boxes::…` で引く（`lib.rs` に触らず `boxes.rs` に 2 行）。どちらで兄弟と突き合わせるかを決めたい。
+1. **門が閉じている間の行き先**: seriko の表示の側が今も `\s` ごとに通る経路（`ScopeStates`）に、文字の層の規則での答えを 1 欄控え、門が開いたらそこから行き先を決め直す（上の「門が開いた直後の決め直し」）。要件 4.1 は「字の合図を写す仕事と刻みごとの仕事を増やさない」と明確にした。
+2. **シェルの切替のときの箱の字**: 文字の層が箱の表を受けるフレームの時刻 `at` を `SerikoMsg::TextRoutingApplied` で seriko へ届け、両方が同じ時刻で切る（上の「シェルの切替のときの箱の字」）。
+3. **印を数えに入れないことの SSP での確かめ**: 測る。`talk,4` に長く残る overlay を付けた試しの面で `あ\![*]いう`（字 3・印を入れれば 4）を流し、直後に `dump_surface` で overlay の有無を見る（比べに `あいうえ`＝鳴る・`あいう`＝鳴らない）。SSP の MCP の `dump_surface` は呼ぶたびに絵を 1 枚撮るだけで字ごとのコマの時刻は拾えないので、「鳴ったかどうか」が後に残る形で測る。SSP に面を足すことと reload は、その場で開発者の許しを得てから。数えに入ると分かったら要件の決めへ戻る。
+4. **場所をまたぐ字の序数**: 時刻の順（届いた順は区切りの時刻が逆転する）。遅れて届いた早い字の差し込みで、その区切りの開始がもう過ぎた字の時刻になりうる（数えた数は正しい）。
+5. **`areka-emo-compose` の `lib.rs`**: 宣言の 2 行を足す（クレートの今の形）。`draw-methods-canon` と隣り合う行になっても行の和で取り込める。共有のノートに一言を残す。

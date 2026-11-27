@@ -86,7 +86,7 @@
 
 #### Acceptance Criteria
 
-1. While 表示中のシェルとバルーンのどの表にも `talk` が無い間, the seriko shall 合図ごと・刻みごとの仕事を増やさない（どの表にも `talk` が無ければ字の合図を写さない、今の門を保つ）。
+1. While 表示中のシェルとバルーンのどの表にも `talk` が無い間, the seriko shall 字の合図を写す仕事と刻みごとの仕事を増やさない（どの表にも `talk` が無ければ字の合図を写さない、今の門を保つ。表示のために今も `\s` ごとに通る経路で、文字の層の規則での答えを 1 欄控える書き込みは除く）。
 2. The seriko shall 新しい時計を持ち込まず、時刻を刻みの境目へ丸めず、口の開始を 1 刻み遅らせる形で直さない。
 3. The seriko shall 本 spec の直しの前後で、抽選の引き金（`random`・`bind+random`・`sometimes`・`rarely`）の乱数の消費の並び（`audit-seriko` の後の並び）と、`runonce`・`periodic` の振る舞いを変えない。
 4. The seriko shall 引き金を鳴らした記録の出し先（`areka_seriko::trigger`）と文言の形を変えず、`talk` の記録を字ごと・刻みごとに増やさない（控えめな水準 `debug!` のまま）。
