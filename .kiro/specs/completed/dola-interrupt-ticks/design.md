@@ -214,7 +214,7 @@ crates/areka-sakura/src/held.rs          # 新: 届いた物を、届いた順�
 crates/areka-sakura/src/held_tests.rs    # 新: 上の単体テスト
 crates/areka-emo-text/src/actor_held.rs  # 新: 文字の層が列を持つ所と、フレームごとに当てる口（advance）
 crates/areka-runtime/src/balloon_visibility_held.rs   # 新: 寿命の知らせを列に持つ所と、フレームごとに時刻の来た物を取り出す口
-.kiro/specs/dola-interrupt-ticks/migration-ledger.md   # 新: 記録（外したテスト・取り除いた分かれ道・変える前後の期待・締めの検索）
+.kiro/specs/completed/dola-interrupt-ticks/migration-ledger.md   # 新: 記録（外したテスト・取り除いた分かれ道・変える前後の期待・締めの検索）
 ```
 
 ### Modified Files
@@ -1630,7 +1630,7 @@ graph TB
 
 ### 記録
 
-`.kiro/specs/dola-interrupt-ticks/migration-ledger.md` に、次の 4 つを書く。
+`.kiro/specs/completed/dola-interrupt-ticks/migration-ledger.md` に、次の 4 つを書く。
 
 1. **外したテストと理由**（9.4・9.5・9.7）: 表せない入力だけを確かめていた物（`compile_storyboard` の開始の時刻に NaN を渡す物を含む）・ミリ秒の格子の継ぎを確かめていた物・丸めそのものを確かめていた物・確かめていた事そのものが無くなった物（コンパイルの開始の時刻を足す事・`result.start_time`）。置き換えた先のテストの名前も書く。
 2. **取り除いた本番の分かれ道とログ**（7.9）: 有限でない刻み・有限でない終わり・NaN の周期・`base_now`・時計が無い時の合図と、時計が無い時の窓の知らせ（seriko）・トークのスレッドの同じ時刻の守り（`drive.rs` の `debug!`）・解いた直後に完了を確かめる処理（`settle_completion_after_resolve`）・cue の長さの clamp・storyboard の文書の検査の決まり（有限・0 以上・`LoopOffsetNegativeMin`／`Max`）・起点の見積もり（`TalkClock::observe_cue`・`ClockedTextSink`・seriko の `TalkEpoch`）・台本の時刻を求める所（`resolve_talk_time`・`TalkClock` の台本の時刻の口・起点がまだ無いフレームを見送る分かれ道）・止まった時刻が無い時の分かれ道（`TalkEnd::TimeUnknown` と、その `warn!`）・負の表示の終わりを 0 に寄せる所・seriko の時計（`SerikoClock`・`spawn_seriko_clocked`・合図を処理する時刻を読む口）ほか。

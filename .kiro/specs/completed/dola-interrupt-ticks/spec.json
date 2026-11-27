@@ -1,9 +1,9 @@
 {
   "feature_name": "dola-interrupt-ticks",
   "created_at": "2026-11-26T09:39:12Z",
-  "updated_at": "2026-11-26T15:05:10Z",
+  "updated_at": "2026-11-27T06:31:50Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-27T06:31:50Z"
     }
   },
   "ready_for_implementation": false
