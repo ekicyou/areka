@@ -79,7 +79,7 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
 pub const FLAT_STATIC_NAMES: [&str; 3] = ["selfname", "selfname2", "keroname"];
 
 /// `names` で起動したなら積まれない静的名（[`FLAT_STATIC_NAMES`] のうち
-/// [`derive_flat_statics`] に無いもの）。読み直しはこれを鏡像から消し、起動時と同じ状態にする
+/// [`derive_flat_statics`] に無いもの）。読み直しはこれを sylphya から消し、起動時と同じ状態にする
 /// （ukadoc は名前が無いときの値を定めない）。
 pub fn absent_flat_statics(names: &GhostNames) -> Vec<String> {
     let flat = derive_flat_statics(names);
@@ -113,10 +113,10 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
 
 /// boot 系列の sylphya アクターを起動する（本番の置き場の口＝[`areka_sylphya::store::fs_backend`]）。
 ///
-/// `roots` は層別 profile root（ghost/shell/app/balloon）。起動時に全スコープを寛容ロードして
-/// 初期鏡像へ投影する（不在スコープは空扱い）。書き込みは呼び手の `persist_put` と、`boot` の
+/// `roots` は層別 profile root（ghost/shell/app/balloon）。番人が層ごとの sylphya.sqlite を開き、
+/// 覚える値はそこから読む（ファイルの無い層は空扱い）。書き込みは呼び手の `persist_put` と、`boot` の
 /// profile の根の作成（`runtime.rs` の step 2b）が行う。返る [`SylphyaParts`] の reader は
-/// 結線直後から無待機で読める。
+/// 結線直後から読める。
 ///
 /// `failures` は保存の失敗の受け口。`Some` なら保存が失敗するたびに中身を 1 件送る。
 pub fn spawn_ghost_sylphya(
@@ -183,10 +183,10 @@ pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) 
 
 /// `FromSylphya` provider を構築する（reader＋自 asker を捕捉・`talk_snapshot` → [`SystemVarSnapshot`]）。
 ///
-/// dispatcher が talk 起動ごとに一度呼び出す（凍結像の刻印点）。呼び出し時点の鏡像から
+/// dispatcher が talk 起動ごとに一度呼び出す（凍結像の刻印点）。呼び出し時点の読み口から
 /// [`SylphyaReader::talk_snapshot`]（値実在フラット名のみの `BTreeMap`）を取り、各名→値を
 /// sakura 所有の [`SystemVarSnapshot`] へ insert 写像して返す。sakura の契約（`SystemVarSnapshot`・
-/// 値源優先・既定値唯一定義点）は無改変で、変わるのは **スナップショットの源**（sylphya 鏡像）だけ。
+/// 値源優先・既定値唯一定義点）は無改変で、変わるのは **スナップショットの源**（sylphya の読み口）だけ。
 pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
     let ctx = AskerContext { asker };
     Box::new(move || {
@@ -432,7 +432,7 @@ mod tests {
                 .expect("provider produced a snapshot")
                 .get("selfname"),
             Some("さくら"),
-            "provider 像は sylphya 鏡像由来（publish した selfname が載る）"
+            "provider 像は sylphya 読み口由来（publish した selfname が載る）"
         );
 
         parts.publisher.close();

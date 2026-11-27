@@ -155,7 +155,7 @@ pub(crate) fn boot_monitor_snapshot(
 ///
 /// `restore_merged_placements`（`load_restored_state` → `restore_and_judge` → `apply_balloon_limit` →
 /// `restored_scope_marks`）を檻に入れ、
-/// 植えた sylphya.toml の保存位置が既定位置に優先して merge 済み placements の char_pos へ載ること／
+/// 植えた古い記憶のファイルの保存位置（取り込まれる）が既定位置に優先して merge 済み placements の char_pos へ載ること／
 /// 永続不在なら既定 placement に恒等であることを証明する（＝spawn される窓の初期位置が保存位置に
 /// なる結線の証明）。
 #[cfg(test)]

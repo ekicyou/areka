@@ -350,15 +350,17 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Unified Property System Crate（sylphya）
 **Location**: `/crates/areka-sylphya/`
 **Purpose**: 「名前で引ける値」の**唯一の解決機構**（`areka-P0-sylphya` 2026-07-24 完了）。%フラット名前空間と点付きプロパティ木を**単一名前空間の 2 つの窓**として提供し、%環境変数解決器／専用永続ストア／`ShioriHostSink` プロパティストアの 3 箱分裂を解消した。
-**Architecture**: **掲示板（マテリアライズド・ビュー）＋単一同期アクター** — 読みは共有読みハンドル（epoch 交換の不変スナップショット）で**同期・無待機**、供給（publish／SET 中継／永続書込）は古典スレッド 1 本の同期アクターが所有。同期読み経路でのクロスアクター pull 照会は禁止。
+**Architecture**: **鍵の表が住み場所を決める KVS の口＋番人のアクター** — 鍵の表（`keytable.rs`）が鍵ごとに住み場所（速い値・メモリーの sqlite・ファイルの sqlite）を 1 つ決める。ファイルの sqlite は層（App／Ghost／Shell／Balloon）の置き場ごとに 1 つ（`sylphya.sqlite`）で、重ね読みはバルーン→シェル→ゴースト→アプリの順。接続は番人のアクターが 1 本だけ持ち、読みも書きも番人への問い合わせで通る。速い値だけは登録した取っ手から番人を通らずに読める（毎フレームの読みはここ）。同期の読みの経路から別のアクターへ問い合わせる形は禁止。
 **Modules**:
 - `key.rs` - 正準 key `PropPath`／セレクタ 5 形パーサ（正準文字列化 `to_canonical_string()` が**唯一の権威**）
 - `vocab/` - 語彙台帳（`flat.rs` 26 トークン／`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論＋記録用のサウンドプロパティ名 18（書き込みの仕分けは読まない）／`shiori_resource.rs` 159 項目）＝**完全語彙を第一級保持**し未導出は縮退シームで管理
-- `mirror.rs` / `reader.rs` / `value.rs` / `asker.rs` - 不変鏡像（per-asker/global 区画・epoch 単調増加）と `SylphyaReader`（`resolve_flat`／`resolve_dotted`／`talk_snapshot`）・問い合わせ元コンテキスト第一級
-- `pull.rs` - 動く値の口（`PullShape`・`PullSource`・`SylphyaReader::register_pull`）。鏡像のどちらの区画にも無い点付きの名前だけを、外から名前の形に登録した読み手に読まれた時に聞く。読み手は待たない・遅れない読み取りに限る（`mcp-scope-rect-property` 2026-10-23。窓の矩形の読み手は `crates/areka-session/src/ghost_session_scope_rect.rs`）
-- `actor.rs` - `SylphyaMsg` envelope・**純関数中核 `SylphyaCore::apply`**（判断分岐を集約・受信ループは薄い配線）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
-- `persist/` - 層別スコープ（App/Ghost/Shell/Balloon）×TOML（`format-version`）×原子的書込（temp→rename）×寛容読取 3 段×4 key 族
-**Dependencies**: **std・thiserror・tracing・toml・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
+- `keytable.rs` / `kvs.rs` / `fast.rs` - 鍵の表（`KEY_TABLE`・`rule_of`・`validate`）／KVS の口（`Kvs`・`KvsDirect`・`WriteOutcome`）／速い住み場所（`FastTable`・`FastValue`・`FastHome`・登録の表）
+- `reader.rs` / `value.rs` / `asker.rs` - `SylphyaReader`（`resolve_flat`／`resolve_dotted`／`talk_snapshot`）と、問い合わせ元コンテキスト第一級
+- `pull.rs` - 動く値の口（`PullShape`・`PullSource`・`SylphyaReader::register_pull`）。ほかのどの住み場所にも無い点付きの名前だけを、外から名前の形に登録した読み手に読まれた時に聞く。読み手は待たない・遅れない読み取りに限る（`mcp-scope-rect-property` 2026-10-23。窓の矩形の読み手は `crates/areka-session/src/ghost_session_scope_rect.rs`）
+- `guardian.rs` / `actor.rs` - 番人のアクターの受信の輪（起動・保留の列・失敗の中継）／`SylphyaMsg` envelope・**純関数中核 `apply`**（判断分岐を集約）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
+- `store/` - 層の記憶の sqlite（`backend.rs` の `StoreBackend`・`fs_backend()`／`locate.rs` 置き場→ファイルの名前／`schema.rs` 表の形と形の版／`read.rs` 重ね読み／`write.rs` 1 層 1 トランザクションの書き／`import.rs` 古い `sylphya.toml` の一度だけの取り込み）。**`rusqlite` を綴るのはここだけ**
+- `persist/` - 型（`PersistScope`・`PersistKey`・`PersistFailure`・`PersistOutcome`）と型つきの包み・`format.rs`（取り込み用の TOML の読みだけ）・`withhold.rs`（読み取り専用の走りで書くのを控える旗）
+**Dependencies**: **std・thiserror・tracing・toml（取り込みの読みだけ）・rusqlite・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
 **Consumers**: `areka-ghost`（結線・静的構成 publish・provider `SystemVarWiring::FromSylphya`）／`crates/areka` bin。`areka-kanade` は **sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）
 
 ### Actor Convention Crate（areka-actor）

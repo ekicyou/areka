@@ -175,7 +175,7 @@
   - _Dispatch: mechanical — 文の中身を設計が与えている_
   - _Requirements: 13.2_
 
-- [ ] 7.2 (P) 説明書・構造の文書・互換の文書・コメントを新しい作りへ合わせる
+- [x] 7.2 (P) 説明書・構造の文書・互換の文書・コメントを新しい作りへ合わせる
   - `dist/README.txt` の「■ 記憶の置き場」と「■ 起動オプション」の `readonly` を、設計の説明書の節の項目どおりに書く
   - `structure.md` の sylphya の節と、記憶の読み書きに触れる `areka-ghost`・`areka-session` の文を書き直す。`doc/COMPAT_ARCHITECTURE.md` の記憶の記録の前後の文を直す
   - コメントの中の `sylphya.toml` の名前だけを直す 3 ファイルを直す（`crates/areka-placement/src/lib.rs` は触らない）

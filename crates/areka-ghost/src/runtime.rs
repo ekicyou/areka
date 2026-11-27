@@ -146,7 +146,7 @@ pub struct GhostRuntime {
     ticker_handle: Option<ActorHandle>,
     /// sylphya（統一プロパティシステム）供給端。shutdown の `Close` 送出に使う。
     sylphya_publisher: SylphyaPublisher,
-    /// sylphya 読み口（provider と同じ鏡像を共有する）。
+    /// sylphya 読み口（provider と同じ番人へ聞く）。
     sylphya_reader: SylphyaReader,
     /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
     sylphya_handle: ActorHandle,
@@ -185,7 +185,7 @@ pub struct GhostParts {
     pub ticker: Option<Sender<TickerMsg>>,
     /// sylphya 供給端（`Close` 送出）。
     pub sylphya: SylphyaPublisher,
-    /// sylphya 読み口（provider と同じ鏡像を共有する）。
+    /// sylphya 読み口（provider と同じ番人へ聞く）。
     pub sylphya_reader: SylphyaReader,
     /// 全 `ActorHandle`。
     pub handles: GhostHandles,
@@ -273,7 +273,7 @@ impl GhostRuntime {
 
     /// 動作中のゴーストの名前（`mount.names`）を替え、静的プロパティ（`selfname` ほか・
     /// `baseware.*`）を新しい名前で出し直す（descript の読み直し）。
-    /// 新しい名前が定義しない静的な名前は先に鏡像から消す（新しい descript で起動したのと同じ状態）。
+    /// 新しい名前が定義しない静的な名前は先に sylphya から消す（新しい descript で起動したのと同じ状態）。
     pub fn set_names(&mut self, names: GhostNames) {
         tracing::info!(
             target: "ghost-runtime",
@@ -486,10 +486,10 @@ impl GhostRuntime {
 
 /// 起動記録ゲート。
 ///
-/// sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、[`KanadeConfig`] の
+/// sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から記憶を引き、[`KanadeConfig`] の
 /// 初回起動系フィールドを解決して返す。読むだけで、panic しない。
 ///
-/// 1. `areka.boot.count`（正準文字列は [`PersistKey::BootCount`]）が鏡像に存在すれば
+/// 1. `areka.boot.count`（正準文字列は [`PersistKey::BootCount`]）が記憶に在れば
 ///    `first_boot=false`、なければ `true`。値は数値として読まず、存在だけを見る。
 /// 2. `areka.vanish.count` を u32 として読んで `config.vanish_count` へ。不在は 0、非数値は
 ///    warn して 0（起動は止めない）。

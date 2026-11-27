@@ -331,7 +331,7 @@ use areka_sylphya::{
 };
 
 /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
-/// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる。seed が空なら記録なしのケース。
+/// `parts.reader` は `resolve_dotted_str` により seed 値を観測できる。seed が空なら記録なしのケース。
 fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
     let shared: Arc<dyn StoreBackend> = MemBackend::new();
     let roots = ScopeRoots {
