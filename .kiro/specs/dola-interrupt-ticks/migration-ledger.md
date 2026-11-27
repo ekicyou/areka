@@ -2,7 +2,7 @@
 
 この記録は、時刻を `f64` の秒から 100ns の整数の型（`TimePoint`・`TimeSpan`・`TimeDelta`）へ替えた移行の、外した物・変えた物・確かめた物を残す。節の分け方は設計の「記録」に従う。
 
-- 前半（段 0〜5・タスク 1.1〜6.7）の分を、7.1 が書いた。後半（段 7〜8）の分は、12.3 が各節の「後半」に足す。
+- 前半（段 0〜5・タスク 1.1〜6.7）の分を、7.1 が書いた。後半（段 7〜8・タスク 8.1〜12.2）の分を、12.3 が各節の「後半」に書いた。
 - 数字の書き方: `ms(n)` は n ミリ秒の長さ、`at_ms(n)` は時計の 0 から n ミリ秒の時刻、`delta_ms(n)` は符号つきの n ミリ秒の差。「1 刻み」は 100ns。
 
 ## 1. 外したテストと理由
@@ -69,7 +69,25 @@
 
 ### 1.2 後半
 
-（12.3 が書く）
+後半で外したテストは、どれも、確かめていた事そのものが無くなった物（起点の見積もり・seriko の時計・台本の時刻の口・止まった時刻が無い枝）である。期待を変えて残した物は 3.4 に書く。dola（8.1〜8.6）・areka-ghost（9.1）・areka-sakura（9.2・9.3）・areka-emo-text（10.1〜10.5）・areka-input（10.15）・areka-session と本体（10.16）・全体の成り立ちのテスト（11.1〜11.3）で外したテストは 0 本。
+
+| テスト | 理由 | 置き換え先 |
+|---|---|---|
+| areka-seriko `talk_tests::epoch_is_the_largest_now_minus_cue_time` | 起点の見積もり（`TalkEpoch`）だけを見ていた。見積もりを消した（10.6） | 字の時刻は `glyph_times_are_the_fire_time_plus_the_offset_and_keep_sub_millisecond_precision` |
+| areka-seriko `looper_talk_tests::cues_change_nothing_when_the_table_has_no_talk` の起点の assert 2 件・`table_replacement_rebuilds_the_talk_gate` の起点の assert 1 件 | 同上（10.6） | — |
+| areka-seriko `actor_clock_tests.rs` の 5 本（ファイルごと） | 合図を処理する時の時計の読みを出来事の時刻にする事だけを見ていた。seriko の時計を消した（10.7） | `actor_event_time_tests.rs` の 12 本（姿を変える指令の出来事の時刻は発火時刻） |
+| areka-seriko `looper_trigger_tests::runonce_waits_for_the_first_tick_when_no_time_is_known` | 時刻が分からない時の分かれ道（`SerikoMsg::Stage.at` の `None`）が無くなった（10.7） | — |
+| areka-seriko の assert: `looper_parts_tests::refresh_reloads_part_frames_at_last_tick_time` の 1 件・`parts_trigger_tests::refresh_arms_at_the_event_time_and_judges_up_to_it` の 2 件・`parts_always_tests::refresh_creates_always_clock_at_event_time` の 2 件 | どれも時刻が分からない時の分かれ道（10.7） | — |
+| areka-runtime talk_clock の 9 本（`new_talk_rebases_epoch_forward`・`intra_talk_jitter_does_not_lower_epoch`・`fresh_clock_has_no_epoch`・`talk_time_clamps_negative_to_zero`・`clocked_sink_*` の 5 本） | `TalkClock` の起点・台本の時刻の口と `ClockedTextSink` を消した（10.10） | `talk_clock::tests::now_reads_the_injected_clock_and_clones_share_it` |
+| areka-runtime `seriko_clock_tests::ticker_and_seriko_read_the_same_clock`（ファイルごと） | seriko が時計を読まなくなった（10.10） | — |
+| areka-runtime `frame_drain_text_tests::resolve_talk_time_override_wins_else_clock_else_none` | `resolve_talk_time`（台本の時刻を求める所）を消した（10.10） | `frame_text_advance_tests::resolve_frame_now_takes_the_override_then_the_frame_time` |
+| areka-runtime `talk_lifecycle_signals_tests::talk_ended_without_epoch_has_no_time_and_is_logged` | 起点が無い時に時刻無しで終わりを送る枝を消した。終わりは時計の読みを運ぶ（10.11） | — |
+| areka-runtime `talk_lifecycle_signals_tests::talk_clock_now_talk_time_reads_the_injected_clock` | `now_talk_time` を消した（10.11） | `talk_clock::tests::now_reads_the_injected_clock_and_clones_share_it` |
+| areka-runtime `balloon_visibility_talk_end_tests::missing_stop_time_falls_back_to_the_display_end_and_is_recorded` | 止まった時刻が無い枝（`TalkEnd::TimeUnknown`）だけを見ていた（10.13） | — |
+| areka-runtime の assert: `balloon_visibility_phase_log_tests` の `StopTimeMissing`・`ChoiceWaitEndTimeMissing` の事象（`measurement_origin_is_written_with_its_level_and_fields` は 3 → 2 事象、`choice_talk_origins_are_written...` → `choice_talk_origin_is_written_with_its_level_and_fields` は 2 → 1 事象） | その 2 つの起点の種類と `warn!` を消した（10.13） | 残る事象は同じテストが確かめる |
+| areka-runtime の走査の表 `ACTOR_SCAN_SITES` の `frame/scale_text.rs` の行（3 → 2 か所） | `state.actors()` を走査する所が無くなった（10.14） | — |
+
+- テストの足場から外した物: areka-runtime `phase_tests` の `with_talk_epoch`（10.13）、areka-runtime `film_playback_e2e_tests` の偽の時計（`AtomicI64`。`send_stage` に時刻を書いて渡す形へ。値は前の時計の読みと同じ。10.14）。足場 `ClockRig` は時計が無くなったので `ActorRig` へ改名した（10.9）。
 
 ## 2. 取り除いた本番の分かれ道とログ
 
@@ -101,7 +119,22 @@
 
 ### 2.2 後半
 
-（12.3 が書く。設計の「記録」の 2 が挙げる `base_now`・時計が無い時の合図と窓の知らせ（seriko）・`drive.rs` の同じ時刻の守り・`settle_completion_after_resolve`・`TalkClock::observe_cue`・`ClockedTextSink`・`TalkEpoch`・`resolve_talk_time`・`TalkEnd::TimeUnknown` と、その `warn!`・`SerikoClock`・`spawn_seriko_clocked` ほか）
+| crate・所 | 取り除いた分かれ道 | 一緒に取り除いたログ |
+|---|---|---|
+| dola `runtime`（8.1） | 欄 `StoryboardInstance.pause_start`（止めた時刻は `InstanceState::Paused { since }` が持つ）／`try_transition` の Playing → Paused と Paused → Playing（止めるのは `pause`、戻すのは `resume` だけ）／`resume` の `pause_start.take().unwrap_or(now)` の防御 | 無し |
+| dola `cue/schedule.rs`（8.2） | 時刻の表の `tick`・`ready`・`ready_buffer`・`current_time`・`is_completed`（取り出し `pop_due` へ）／同じ時刻の刻み直しの守り／起点より前の刻みを先に返す守り／区切りを解く時に溜めを空にする処理 | 無し |
+| dola `cue/runtime.rs`（8.2・8.3） | 再生機の `BarrierReached` と「残りが減った時だけ配る」門／仮の欄 `last_tick`／`settle_completion_after_resolve`（区切りを解いた直後に完了を確かめる処理） | 無し |
+| areka-ghost dispatcher（9.1） | 欄 `ActiveTalk.base_now`／`on_tick` の `ZERO + now.span_since(base)` の換算／`on_choice_waiting` の逆の写し `base + (display_end - ZERO)`／`base_now` が無い時の分かれ道 | `warn!`（event=`choice_waiting_stale`、"ChoiceWaiting arrived before the first Tick anchored base_now"）。同じ名前の info の棄却は残した |
+| areka-sakura `drive.rs`（9.2） | `on_tick` の `t <= last_tick` の守り（トークのスレッドの同じ時刻の守り）。`last_tick` は受けた時刻の最大 | `debug!` "non-monotonic Tick ignored (backward or equal)" |
+| areka-emo-text `spawn_emo_text`（10.2） | 受け取った場で当てる 3 つの閉包（届いた時に当てる所。受け取りは列に足し、`advance(frame_now)` が当てる） | 無し（借用中の `Err` の文は「適用できない（actor, at）」→「受け取れない（actor, fire_time）」） |
+| areka-seriko `talk.rs`（10.6） | `TalkEpoch`（`observe`・`talk_time`・`wall`。seriko の起点の見積もり）／`observe_cue` の「時計も直前の刻みも無ければ写さない」早い return／`settle_talk` の「起点が無ければ戻る」分かれ道／`revealed_at`・`glyph_wall` の起点との組み合わせ | 無し |
+| areka-seriko の時計（10.7） | 公開の `SerikoClock`・`spawn_seriko_clocked`／`SerikoSink` の時計の欄／`LoopRuntime` の時計の欄・`with_clock`・`event_time`（合図を処理する時刻を読む口）／`SerikoMsg::Stage.at` の `None`（時計が無い時の窓の知らせ）／`LoopRuntime::refresh` の `at.or(last_seen)`・`PartClocks::refresh` の `at: None`（時計が無い時の合図）／`settle.rs` の偽の時計（`AtomicI64`） | 無し |
+| areka-seriko trigger（10.8） | `Armed::next_start` の「越えた区切りのうち最新の 1 つだけ」（`next_starts` で越えた区切りを古い順に全部返す） | 無し |
+| areka-runtime `talk_clock.rs`・結線（10.10） | `TalkClock` の `observe_cue`・`talk_time`・`now_talk_time` と起点の欄 `epoch`／`ClockedTextSink` とその `CueSink`／`scale_text::resolve_talk_time`／起点がまだ無いフレームで文字の相を見送る分かれ道／`reveal_pending` と字が残る間毎回 REARM を立てる所／`lib.rs` の `loop_ticker_config` と `SerikoClock` の使用 | 錠が壊れた時の `error!` 2 行（"TalkClock epoch mutex poisoned in observe_cue…"・"…in talk_time…"） |
+| areka-runtime バルーンの寿命（10.11） | `balloon_visibility.rs` の `TalkEnd` 列挙（`TimeUnknown` を含む。止まった時刻は `talk_end: Option<TimePoint>`）／`MeasurementOrigin::StopTimeMissing`・`ChoiceWaitEndTimeMissing`／`wait.rs` の `effective_display_end` の時刻が無い時の 2 本の枝と引数 `now`／`talk_lifecycle.rs` の `now_talk_time` の呼び出し | `warn!` 3 行（「止まった時刻が届かず、起点＝会話の占有終端」・「選択肢つきのトークで止まった時刻が届かず、起点＝このフレームの現在時刻」・"止まった時刻が取れない（時刻源に起点が無い）——時刻無しで終わりを送る"） |
+
+- 前半で消えていた物（後半の一覧に重ねて挙げない）: 有限でない終わりを捨てる枝・負の表示の終わりを 0 に寄せる所（5.1・5.2）。
+- 足した分かれ道とログ（記録のために挙げる）: areka-emo-text の `EmoTextSink::origin_set` が送れない時の `error!` 1 行と、借用中に置き直しの知らせを受け取れない時の `Err` の文（10.3）／areka-seriko の `SerikoSink::origin_set` が送れない時の `error!` 1 行（10.8）／areka-runtime の `error!(phase, "[text-layer] 文字の層がほかの処理に借りられていて…")`（相ごとに縮み 1 回で 1 行。10.10）・`error!(event="reload_shell_replay_no_frame_time")`・`error!(event="balloon_stage_no_frame_time")`（フレームの時刻が無ければ送らず、台帳も進めない。10.12）。ログの欄の改名は 3.4 に書く。
 
 ## 3. 変える前の期待と、変えた後の期待
 
@@ -164,7 +197,32 @@
 
 ### 3.4 後半
 
-（12.3 が書く）
+設計の「記録」の 3 の後半の一覧の順に書く。後半のテストは、変えた所を名指しで示す（要件 9 の 6）。
+
+1. **止めて戻す**（8.1）: 置き換え `instance_manager::tests::transition_playing_to_paused` → `transition_cannot_pause_playing_instance`・`transition_paused_to_playing` → `transition_cannot_resume_paused_instance`（前は `Ok`、後は `Err`）。`try_transition_table` の Playing → Paused・Paused → Playing は true → false。改名（期待は同じ）: `resume_with_time_before_pause_start_shrinks_end_time` → `resume_with_time_before_pause_time_shrinks_end_time`・`effective_time_paused_frozen_at_pause_start` → `effective_time_paused_frozen_at_pause_time`。終わりの期限を置いた後の `resume` の戻り値は、前は `planned_end()` だけ、後は期限との早い方（終わりが決まらなければ期限）。足したテスト（`tests/runtime/facade_test/update_flow.rs` の `pause_resume_cycle`）: `value_right_after_resume_continues_from_pause_point`・`paused_value_is_the_same_at_any_time_and_does_not_end`・`resume_before_pause_time_continues_from_pause_point`・`finish_deadline_takes_effect_while_paused`・`resume_returns_deadline_when_it_is_earlier_than_end`・`resume_returns_end_when_it_is_earlier_than_deadline`・`resume_of_endless_loop_returns_deadline`。
+2. **時刻の表の取り出しと置き直し**（8.2・8.4・8.6）: `tick_idempotent_same_time` → `take_twice_at_same_time_delivers_once`（前は同じ時刻の 2 度目も同じ中身が `ready()` に残った、後は 2 度目は 0 件＝溜めが無い）。`is_completed()` を見ていたテスト（単体 `remaining_and_is_completed`・`with_horizon_*` の 2 本・`occupancy_horizon_matches_is_completed_threshold`・`completion_is_reached_at_exact_occupancy_horizon`、結合 `sheet_test.rs` の 5 本）は、直前の刻みの時刻を `is_completed_at` へ渡す（期待は同じ）。足したテスト: `src/cue/schedule/reorigin_tests.rs` の 21 本（取り出し・遅れた刻み・同じ時刻の 2 度目・前／後ろへの置き直し・取り出しの間の置き直し・区切りの間・落とさず 2 度届けず順を保つ・型の下の端を越える起点・知らせの中身・変わらない置き直し・占有の終わりと完了が起点と一緒に動く・先渡しの照会）、`tests/cue/runtime_test_reanchor_tests.rs`（`moving_origin_earlier_delivers_later_cues_sooner`・`moving_origin_later_delays_remaining_cues`・`each_take_out_uses_the_origin_at_that_moment`・`reanchor_during_a_barrier_applies_after_it_is_resolved`・`origin_later_than_now_delivers_nothing_until_it_arrives`・`unchanged_origin_returns_none`・`first_notice_has_no_previous`）、`tests/cue/runtime_test_fire_time_tests.rs`（`fire_time_is_origin_at_take_out_plus_relative`・`already_delivered_fire_times_do_not_change_on_later_reorigin`・`late_tick_does_not_change_fire_time`・`preview_then_reorigin_then_take_out_differs_by_exactly_the_delta`・`preview_equals_emit_when_not_reoriginated`）、`strict_tap.rs::origin_set_passes_through_to_inner_sinks`。足した口: `step(now) -> StepOutcome`・`reanchor`・`shift_origin`・`origin`・`CueSink::origin_set`（既定は何もしない）。登録の時に、最初の起点の知らせ → 先渡しの順に渡す（`step_advances_one_item_per_call`・`reanchor_after_completion_is_ignored`）。
+3. **区切りを解く口（解いただけでは完了にならない）**（8.2・8.3・8.5）: `notify_barrier_resolved_noop_when_no_barrier`（前は解いた後も `ready()` が "x" のまま、後は解く → 取り出しで "x"、もう一度解いて残り 0）。解くだけで完了を期待していたテストは 0 本（どれも元から解く → 刻むの形）。dola の外の呼び出しの直しは 0 件（areka-sakura `drive.rs` の `on_resolve_choice` は解いた直後に刻むので、選択を解いたその場で完了する振る舞いは同じ）。足したテスト（`tests/cue/runtime_test_late_delivery_tests.rs`）: `resolve_click_alone_delivers_nothing_and_does_not_complete_then_tick_does_both`・`tick_right_after_resolve_before_the_occupancy_end_delivers_but_does_not_complete`・`resolve_choice_alone_delivers_nothing_and_does_not_complete_then_tick_does_both`・`sheet_whose_origin_is_past_delivers_all_past_cues_in_order_with_own_fire_times`・`sheet_whose_origin_has_not_arrived_delivers_nothing`。起点の知らせ（`tests/cue/runtime_test_origin_notice_tests.rs`）: `first_origin_is_delivered_at_registration_before_any_cue`・`sink_registered_later_gets_the_origin_of_that_moment`・`cue_before_notice_before_cue_after_in_one_log`・`notice_takes_effect_at_the_time_the_caller_passed`・`unchanged_reorigin_emits_no_notice`・`notice_reaches_every_sink_in_registration_order_and_none_after_completion`・`sink_without_origin_set_override_behaves_the_same`。
+4. **トークのスレッドの同じ時刻の守り**（9.2）: 外したテスト・変えた期待は無い（`duplicate_and_backward_tick_do_not_double_fire` はそのまま緑）。足したテスト `drive_delivery_tests::same_time_tick_reaches_player_after_origin_shift`（守りを戻すと赤になる事を確かめた）。
+5. **刻みの値**（9.1）: dispatcher は絶対の時刻をそのまま送る。`resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base` → `..._without_touching_slot`（中継された刻み (0, 500 ms) → (7,000, 7,500) ms のまま）。`tick_relay_converts_absolute_now_to_offset_from_first_tick` → `tick_relay_forwards_absolute_now_and_first_tick_becomes_origin`（合図の発火時刻が絶対の時刻）。`choice_waiting_adds_the_tick_base_back_to_display_end_and_forwards_to_kanade` → `choice_waiting_forwards_display_end_unchanged_to_kanade`（「`base_now` + 隔たり」→ 受けた値のまま）。`choice_waiting_before_any_tick_is_defended_with_warning_and_not_forwarded` → `choice_waiting_before_any_tick_is_forwarded_unchanged`（warn を出して転送しない → そのまま転送）。`choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_continues` は前置きの刻みを外した（期待は同じ）。足したテスト: `dispatcher_slot_tests::tick_relay_does_not_depend_on_per_talk_first_tick`・`drive_choice_tests::choice_waiting_display_end_is_first_tick_origin_plus_horizon`。
+6. **起点の見積もり（やめる。受け手は起点を持たず、合図の発火時刻で持つ）**（9.3・10.1〜10.3・10.6・10.10）: 受け手の列の型 `areka_sakura::held::HeldQueue<T>`（`new`・`push`・`pop_due`・`waiting_until`・`is_empty`）と `held_tests.rs` の 7 本を足した。文字の層の字の現れる時刻は「合図の発火時刻 + 塊の頭からの隔たり」（`TimePoint`）で、提示と読み口はフレームの時刻を受ける。areka-seriko: `talk_tests::wall_time_keeps_sub_millisecond_precision` → `glyph_times_are_the_fire_time_plus_the_offset_and_keep_sub_millisecond_precision`、`actor_talk_tests::cue_that_is_not_text_moves_the_time_origin` → `clear_cue_reaches_the_glyph_list_before_routing`、足した `talk_tests::previous_glyph_time_survives_pruning_the_whole_list`。`interrupt_then_clear_all_at_zero_keeps_the_list_monotone` → `interrupt_then_clear_all_at_the_new_fire_time_...`（全消去を 0 → 発火時刻 600 ms、残る字 1 → 3）、`pruning_keeps_ordinals` の末尾（0 → 6,500 ms）、`looper_talk_tests::new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary`（新しい台詞の頭 2,000 → 1,220 ms、期待 2000/None/2150 → 1220/None/1370）。置き直しの知らせ: areka-emo-text の `actor_held_tests.rs` の 6 本（E より後の字だけ動く・前へ動いた字は E に寄る・知らせより前に届いた合図の字も動く・全部の場所の字が動く・知らせの後の合図は E を待つ・受け口は置き直しの知らせだけを送る）、areka-seriko の `talk::origin_tests` 5 本・`actor::origin_tests` 3 本。
+7. **口パクの決まり**（10.8）: `trigger_tests::talk_boundaries_crossed_in_one_window_fire_once_at_the_latest` → `..._fire_oldest_first_at_each_glyph_time`（7 字見えた刻みで、前は `Some(1250)` の 1 つ、後は `[1100, 1250]`。同じ時刻の字は前も後も 1 回）。足したテスト `looper::mouth_tests` 3 本。
+8. **フレームの時刻が発火時刻より前の時の扱い（0 に丸めない）**（10.1・10.2）: 字の現れる時刻とフレームの時刻は、同じ物差しの時刻どうしで直に比べ、差を 0 に寄せる所は無い。届いたフレームより後の発火時刻の合図は、フレームの時刻がそこへ届くまで列で待つ（`actor_held_tests.rs` の「届いたフレームより後の合図」）。
+9. **文字の層の、字のほかの指令が効く時**（10.2・10.4・10.5）: 届いた時から、フレームの時刻が発火時刻に届いたフレームへ。`actor_held_tests.rs` の 13 本を足した（3 秒後の消去・字のほかの指令・届いたフレームより後の合図・同じ時刻の順・遅れた合図・250 ms 遅れのタイプライター・先渡しの位置・終わりの印・空の時の先渡しと印・選択待ちの後の押下・箱が無い知らせは当てる時・受け取りで当てず旗が立つ・借用中は `Err`）。「`spawn_emo_text` に入れた合図はその場で当たる」→「`advance` の後に当たる」へ変えた期待: `sink::talk_end_tests` の 3 本（補助 `drain_with_choices` が `advance(TimePoint::MAX)` を呼ぶ）・`actor::sink_probe_tests::drain_reports_missing_box_once_and_not_for_present_box`（pump の直後は知らせ 0 件の assert を足した）・`actor::tests::preview_rehearses_once_and_applied_cues_count_clears`（pump の直後は `number == 0` の assert を足した）・`actor::runtime_frame_tests` の 3 本（期待の値は元のまま）・`actor_lookahead_tests`（`Rig::lines` が各時刻で `advance(t)`）。`draw_readback_test::full_path_ink_monotonic_clear_transparent_and_contained_in_validrect`: 前は at=100 ms の字の合図が届いた場で当たり t=0 で「可視 0 で装着」、後は t=0 に字を持たない合図（軸を省いた `\_l`、at=0）だけが当たり、字の合図は列に持たれたまま「可視 0 で装着」（以降の期待は同じ）。`tests/support/mod.rs` の `present_at`（同じ時刻で `advance` → `present_frame`）を足し、`tests/` の提示は全部これを通す。`pipeline_test`・`scale_invariance_test` の時刻の表は `TimeSpan` → `TimePoint`（値は同じ）。「全部が現れている時刻」は `TimePoint::MAX`、後に有限の時刻のフレームが来る所は有限の時刻にした（`actor_frame_memo_tests::unchanged_second_frame_does_not_rebuild` は 1 s → 2 s、`actor_lookahead_shapes_tests` の `LATER` は 110 s）。例 `emo-text-layer` はフレームごとに `advance(ZERO + t)` してから関門を見る。
+10. **先渡しとトークの印が当たる時**（10.2）: 時刻を持たない物（先渡し・選択待ちの始まり・トークの終わり）は、列が空なら受け取った場で、列に物が在ればその後ろで当たる（`actor_held_tests.rs` の「先渡しの位置」「終わりの印」「空の時の先渡しと印」）。
+11. **バルーンの寿命の知らせが効く時と、その時刻**（10.11・10.13・10.15・10.16）: 台本の時刻から絶対の時刻へ。トークの終わりと利用者の中断は時計の読み。寿命の知らせは、フレームの時刻が知らせの時刻に届いた最初のフレームで効く（頭が待つ間は後ろも待つ）。`OriginMoved` を送る（表示の終わりだけを動かし、期限は動かさない）。`talk_ended_carries_the_injected_clock_once_when_dropped`（`TalkEnded { at: Some(ms(1_234)) }` の台本の時刻 → `TalkEnded { at: at_ms(101_234) }` の時計の読み）。`balloon_visibility_choice_wait_tests::timeless_end_starts_from_the_first_measurable_frame` → `end_without_frame_time_waits_for_a_measurable_frame`（前は起点 `ChoiceWaitEndTimeMissing`・満了予定「最初に計測できたフレームの今 70,000 ms + TIMEOUT」、後は起点 `ChoiceWaitEndedAt(STOPPED)`・満了予定 `STOPPED + TIMEOUT`。時刻の無いフレームで計測しない枝は保つ）。利用者の中断: `user_break_tests::accepted_break_sends_exactly_one_to_each_line`・`dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives`（`[UserBreak]` → `[UserBreak { at: at_ms(4_321) }]`）、`user_break_tests::signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged`・`shell_box_handler_tests::talking_left_double_click_on_box_breaks_without_a_shell_double_click`（→ `at: ZERO`）、足した `user_break_tests::break_carries_the_clock_reading_at_each_press`。本体: `frame_shell_box_integration_tests::timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears`（知らせに `at`、`TalkEnded { at: at_ms(5000) }`）・`frame_shell_box_arrow_tests`（`[UserBreak { at: TimePoint::ZERO }]`）。足したテスト: `balloon_visibility::held::tests` 8 本・`talk_lifecycle::origin_tests` 10 本。
+12. **文字の相が、合図が 1 つも当たっていない間も提示を呼ぶ事・借りられないフレームの扱い・予約**（10.10）: 文字の相は、フレームの時刻が在れば `present_frame` を呼ぶ。拡大率の相と文字の相は、文字の層が借りられないと落ちずに見送って REARM。字が残る間の予約は、毎回の画面の更新から、次に現れる字の時刻への `arm_deadline`（最長 1 時間・全部の場所から求める）。`frame_text_scale_tests` の `reveal_pending` の 5 本 → `next_reveal` の 5 本（真偽から「次に現れる字の時刻か `None`」へ）。`run_text_phase_override_reaches_present_frame_without_panic` は `Some(ms(2_000))` → `Some(at_ms(2_000))`。足したテスト: `frame_text_advance_tests` の 7 本・`frame::receiver_wake_tests` の 4 本（11.2）。
+13. **文字の線の受け取りが旗を立てる事**（10.2・10.16）: 受け取りは列に足した後に `PRESENT` の旗を立てる（`actor_held_tests.rs` の「受け取りで当てず旗が立つ」）。旗を立てる所の一覧: 本体の `AREKA_PRODUCERS` に `areka-emo-text/actor_held.rs`（`PRESENT`）、木の走査の根 5 → 6、足したテスト `text_phases_arm_the_deadline`。wintf `tick_wake.rs` の `PRESENT` の行に文字の層の受け取りを足した。areka-emo-text `lib.rs` の `PURE_SOURCES` に `actor_held.rs`・`actor_held_tests.rs` を載せた（90 → 92）。
+14. **`hover_inject` の時刻**（10.10）: 台本の時刻から、毎フレームのフレームの時刻へ。テストは `ms` → `at_ms`（値は同じ）、`cycle_ordinal` は `div_euclid`／`rem_euclid`。
+15. **seriko の、姿を変える指令の出来事の時刻**（10.7）: 合図を処理する時の時計の読みから、発火時刻へ。同じ面の出し直し・変化の無い着せ替えでも、直前の刻みから発火時刻までに絵が進んでいれば合図の時に Show を 1 件出す。遅れて処理した合図は、始まりと構えは発火時刻、置くコマは「発火時刻と直前の刻みの遅い方」の時刻。名前と中身を変えた: `looper_always_tests::top_always_is_born_on_the_tick_when_no_event_time_is_known` → `top_always_is_born_on_the_next_tick_after_a_table_replacement`、`actor_stage_tests::send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone` → `send_stage_carries_the_given_time_and_logs_debug_after_the_actor_is_gone`。元からあるテストで期待の値が変わった物は 0 本。足したテスト `actor_event_time_tests.rs` の 12 本。
+16. **窓の知らせと、手で組む合図の時刻（フレームの時刻）**（10.12）: 読み直しの後の面と着せ替えの出し直しの合図は、起点 `TimePoint::ZERO` からフレームの時刻へ（`TalkCue::scheduled(frame_now, 0, .., 0)`）。窓の知らせは `send_stage(note, frame_now)`。元からあるテストの期待は変わらない。足したテスト: `shell_carry::tests::emitted_cues_fire_at_the_frame_time`・`replay_without_frame_time_logs_an_error_and_sends_no_cue`、`frame::status_report::stage_tests::report_stages_without_frame_time_logs_an_error_and_sends_nothing`・`report_stages_with_frame_time_sends_the_hidden_balloon`。本体の `frame_attach_carry_tests` の 2 本・`status_report_stage_tests::phase_sends_the_stage_even_while_the_runtime_is_busy`・`shell_carry_tests::replay_shows_the_decided_surfaces_and_binds_through_seriko` は World に `FrameTime(at_ms(1_000))` を置く（10.16）。
+17. **書き出しの進め方の合図の時刻**（10.7・10.14）: `settle.rs` は偽の時計を外し、姿を変える合図を軸 0 の発火時刻（`TalkCue::scheduled(ZERO, ZERO, ..)`）で入れて、刻みの時刻だけで進める。`film_playback_e2e_tests` は時計の無い `spawn_seriko` と、`send_stage` に時刻を書いて渡す形（値は前の時計の読みと同じ）。`frame_reset_hold_tests` の知らせは `at: TimePoint::ZERO`。`frame_attach_tests` は `TalkStarted { talk_id: None, .. }`、終端の比べは `sheet.absolute_end_time()`（起点 0 なので値は同じ）。
+
+- 押下の口（10.15）: 結線の時に受けた `TalkClock` の複製（`UserBreakWiring::new(.., clock)`・`wire_user_break(.., clock)`）を押下ごとに読み、`UserBreak { at: clock.now() }` を送る。足場 `balloon_test_support::zero_clock()`、`runtime_wiring_showing_talk` は `FrameTime(ZERO)` を置く。`present_frame` の呼び出しは `ms` → `at_ms`（値は同じ）。
+- 足した共有の組み立て: areka-runtime `session_hooks_test_support.rs`（`SerikoWorld`。10.12）。例 `emo-text-typewriter-demo` は時刻の型だけを直した（10.5）。
+- 上のほかに、上の crate のテストの足場を追わせた所（10.16）: areka-session `runtime_boot.rs` は `ClockedTextSink` を外して `Box::new(text)`。共有の組み立て `SpineHarness::{advance_text, present_text}`（本体 `runtime_tests/spine.rs`）。areka-session `SwitchRig` の Tick の時刻の起点を `dola::now()` にし、フレームの時刻は `max(Tick の時刻, dola::now())`（前は Tick が 0 から、`FrameTime` が実の時計で、占有終端が実時間より前に見えて古いバルーンが隠れた）。`dump_balloon_gpu_tests::speak_words`（「実時間で 2 巡末尾を越えた」→「フレームの時刻が最後の字の時刻に届いた」）・`spine_conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion`（占有終端を `DisplayEndAt.end − TalkStarted.at` で数える）・`strict_judges_tests::play`（吸い出しの後に `advance(TimePoint::MAX)`。`TextMsg::Origin` の腕を足した）。`frame_visibility_integration_tests` の 6 か所・`frame_balloon_timeout_notice_e2e_tests`・`frame_shell_box_integration_tests` の `observe_cue` は消しただけ。先進坑 `old_side.rs` の `SETTLED` は `TimePoint::from_ticks(100 * 10_000_000)`。
+- 全体の成り立ちのテスト（11.1〜11.3。足しただけで、前の期待は無い）: `same_script_everywhere_tests` の 2 本（`the_same_script_looks_the_same_however_it_arrives`・`re_origins_forward_and_backward_look_the_same_however_they_arrive`。実 GPU の足場）、`receivers_follow_tests` の 8 本（先渡しのテストは、先読みの全文で折り返しが決まる前の再生を途中で中断した所で確かめ、持ち越しを外すと赤になる事を一時の改変で確かめた）、共有の足場 `same_script_test_support.rs`、眠り＝areka-kanade `tests/kanade/sleep_test.rs` の 2 本（`choice_deadline_holds_while_clock_is_stopped`・`second_change_hour_comes_from_tick_time`）・areka-sakura `tests/sleep.rs`（`playback_holds_while_clock_is_stopped_and_resumes_from_there`）・areka-seriko `tests/sleep.rs`（`frames_hold_while_clock_is_stopped_and_resume_from_there`）。止まった時計は「同じ時刻を運ぶ刻みが続く事」で表す（3 crate とも時計を読まない）。
+- ログの欄の改名（後半）: areka-emo-text の `at` → `fire_time`・`talk_time` → `frame_now`（10.1）、areka-runtime の `present_frame` の失敗の `talk_time` → `frame_now`（10.10）・`MeasurementRestarted` の `talk_time` → `frame_now`（10.11。ログの欄を読むテストの字面 `"talk_time"` → `"frame_now"`、10.13）。
+- 名前を替えた物（振る舞いは同じ）: dola の `cue_duration_defaults_to_zero_for_legacy_serialized_data` → `cue_duration_defaults_to_zero_when_field_absent`（12.2。3.2 の 7 の名前）。12.2 は説明と文字列だけの直しで、コードの字句は変えていない。
 
 ## 4. 締めの検査の結果
 
@@ -227,7 +285,9 @@ dola の公開の口で `f64` を返す物は `TimeScale::get`（倍率）と `T
 | 3（4.12） | `cargo test -p areka-seriko`（lib 545）・`-p areka-emo-text`（lib 1198・2 ignored）・`-p areka-ghost`（lib 235・ghost 39・ほか 8）が緑。`cargo build -p areka-emo-text --examples` 可 |
 | 4（5.7） | `cargo test -p areka-runtime`（1080 passed・3 ignored） |
 | 5（6.1〜6.7） | `cargo test -p areka-input`（294）・`-p areka-session`（534・3 ignored）・`-p areka`（lib 1263 ほか）が緑。`cargo build -p areka --examples`・`cargo build --workspace` 可。先進坑のワークスペースで `cargo check` が通る |
-| 6（7.2） | 全体テストの 1 回目は 7.2 が回して書く |
+| 6（7.2） | 全体テストの 1 回目（`tools/test-all.ps1 -Format`、コミット `f022cab6c`、排他テストの机を取って 1 回）: 23 段すべて緑（x64 workspace tests 661 秒・dola toml feature tests・dola non-windows check を含む）。整形の差分は出なかった |
+| 7（8.1〜11.3） | `cargo test -p dola --test cue`（8.4・8.5）、`cargo test -p areka-runtime`（10.14 で 1095 通過・0 失敗・3 無視。10.10・10.12 のテストもここで初めて走り緑）ほか、タスクごとの crate のテストが緑 |
+| 8（12.1〜12.3） | 12.3 の `cargo clippy --workspace --all-targets` は誤り 0 件（4.6 の 5）。全体テストの 2 回目は `/kiro-complete` が回す |
 
 - 1,000 行に近いファイルを、育てる前に話題で分けた所（テストの本数は分ける前と同じ）: dola の `tests/trigger/runtime_test.rs`（854 行）→ `runtime_test.rs`・`runtime_loop_test.rs`・`runtime_chain_test.rs`（2.13）／wintf の `wintf/src/ecs/widget/text/typewriter/tests.rs`（944 行）→ 共通の組み立て＋`tests/{talk,events,timeline,cache,draw}.rs`（3.2）／areka-seriko の `looper_tests.rs`（975 行）→ `looper_tests.rs`・`looper_order_tests.rs`・`looper_progress_tests.rs`・`looper_blink_tests.rs`、`looper_talk_tests.rs`（861 行）→ `looper_talk_tests.rs`・`looper_talk_part_tests.rs`（4.3。173 本のまま）、`parts_tests.rs`（975 行）→ `parts_tests.rs`・`parts_refresh_tests.rs`、`parts_trigger_tests.rs`（906 行）→ `parts_trigger_tests.rs`・`parts_trigger_talk_tests.rs`（4.4。156 本のまま）、関数 `start_top_always` を looper.rs（857 行）から looper_calls.rs へ移した（4.2）／areka-ghost の `dispatcher_choice_tests.rs`（908 行）→ `dispatcher_choice_tests.rs`・`dispatcher_choice_waiting_tests.rs`・`dispatcher_selection_tests.rs`（4.10。15 本のまま）。
 
@@ -235,4 +295,68 @@ dola の公開の口で `f64` を返す物は `TimeScale::get`（倍率）と `T
 
 ### 4.6 後半
 
-（12.3 が書く。届いた時に当てる所が残っていない事・受け手が起点を持たない事・公開の口の `f64` の一覧・後半の残っていない物の検索）
+検索は、式が在ると分かっている字に当たる事を、前半の検索と同じ `e37aee1fc`（移行の前）と、前半を終えたコミット `ae0866abc`（7.2・後半の前）の木で先に確かめてから、今の木（`adc85a32f` の上・12.3 の直しを含む）で行った。範囲は、書いた所のほかは `crates/` の下の追跡されたファイルの全部（`vendors/` は入れない）。
+
+#### 1. 残っていない物の検索（設計の「残っていない物の検索」の全部・要件 2.6・8.4・15.5・17.2）
+
+| 検索 | 式（`git grep -n`） | 範囲 | 較正 | 今 |
+|---|---|---|---|---|
+| ミリ秒の格子の継ぎ | `-F 'sum_on_ms_grid'` | `crates` | `e37aee1fc` で 20 行 | 0 |
+| 古い dola の時計 | `-F 'runtime::clock'` | `crates` | `e37aee1fc` で 12 行 | 0 |
+| 古い刻み役の時計 | `-F 'GetTickCount64'` | `crates` | `e37aee1fc` で 14 行 | 0 |
+| ミリ秒の時刻の型 | `-F 'MonotonicMs'` | `crates` | `e37aee1fc` で 418 行 | 0 |
+| dola の中の QPC | `-F 'QueryPerformance'`・`-F 'Win32_System_Performance'` | `crates/dola` | `e37aee1fc` で 7 行・1 行 | 0・0 |
+| seriko の時計 | `-F 'SerikoClock'` | `crates` | `ae0866abc` で 20 行 | 0 |
+| seriko の時計つきの起動 | `-F 'spawn_seriko_clocked'` | `crates` | `ae0866abc` で 20 行 | 0 |
+| 文字の層の受け口を包む見積もり | `-F 'ClockedTextSink'` | `crates` | `ae0866abc` で 31 行 | 0 |
+| seriko の起点の見積もり | `-F 'TalkEpoch'` | `crates` | `ae0866abc` で 14 行 | 0 |
+| `TalkClock` の起点の見積もり | `-F 'observe_cue'` | `crates`（`crates/areka-seriko` を除く） | `ae0866abc` で 29 行（`areka-runtime/src/talk_clock.rs` の `pub fn observe_cue(&self, at: TimeSpan)` を含む 14 行ほか） | 0 |
+| 台本の時刻を求める所 | `-F 'resolve_talk_time'` | `crates` | `ae0866abc` で 13 行 | 0 |
+| `TalkClock` の台本の時刻の口 | `-F 'now_talk_time'` | `crates` | `ae0866abc` で 22 行 | 0 |
+| dispatcher の刻みの基準 | `-F 'base_now'` | `crates` | `ae0866abc` で 34 行 | 0 |
+| 止まった時刻が無い時の分かれ道 | `-F 'TimeUnknown'` | `crates` | `ae0866abc` で 4 行 | 0 |
+| 解いた直後に完了を確かめる処理 | `-F 'settle_completion_after_resolve'` | `crates` | `ae0866abc` で 3 行 | 0 |
+| コンパイルの開始の時刻の引数 | `-E 'compile_storyboard\([^,()]*,[^,()]*,'` と、定義 `pub fn compile_storyboard` の引数の目視 | `crates` | `e37aee1fc` で 62 行 | 0・定義は `(doc, storyboard_name)` の 2 引数 |
+
+- `observe_cue` の名前は、areka-seriko の中に 4 行残る（`looper.rs:320` の `pub(crate) fn observe_cue(&mut self, cue: &TalkCue)` と、`actor.rs:587`・`looper_talk_tests.rs` の呼び出しと説明）。これは `LoopRuntime` が届いた合図の字を、合図の発火時刻から文字の時刻の列へ積む口で、起点を見積もらない（seriko の起点の見積もり `TalkEpoch` は上の行で 0）。設計の検索の的は `TalkClock::observe_cue` なので、範囲から areka-seriko を外して 0 件を確かめた。
+- 実数の秒と型を行き来するだけの口: 4.2 と同じ式（一時ファイルの較正 5 件に 5 件とも当たる事を確かめ直した）で、今の木で当たるのは 4.2 の表と同じ 8 件だけで、増えた物は無い。ミリ秒の値を 10,000 倍して型に載せる式 `-E 'from_ticks\([^)]*\*\s*10_?000\b'` の今の当たり 11 行は、どれもテストの組み立てか決まった時刻（dola の結合テスト・本体の `balloon_visibility_phase_notice_tests.rs` の `END`）で、本番は 0 件。結果: 行き来するだけの口は 0 件（要件 15 の 5）。
+
+#### 2. 届いた時に当てる所が残っていない事（要件 18 の 1）
+
+- 文字の層: 式 `-E '\.apply_cue\(|\.apply_origin_notice\(|\.preview_talk\(|\.note_choice_wait_began\(|\.settle_all_choices\('`、範囲 `crates/areka-emo-text/src` のテストと組み立てを除く物（`':!*tests*' ':!*test_support*'`）。較正: `ae0866abc` で `actor.rs:681`（`rt.apply_cue(&cue)`）・`:700`（`rt.preview_talk`）・`:713`（`rt.note_choice_wait_began`）・`:716`（`rt.settle_all_choices`）の、`spawn_emo_text` の受け取りの閉包の中の 4 行に当たる。今: 当たるのは `actor_held.rs` の `apply_held`（`advance` と、時刻を持たない物を列が空の時に当てる `hold` だけが呼ぶ）の 5 行・`actor.rs:577`（`settle_all_choices` の中の、状態の同じ名前の関数）・`lookahead.rs:41`（先渡しの下稽古の、写しの状態を進める `advance_state`）で、UI のスレッドの受け取り（`actor_held.rs` の `receive_msg`）から状態を当てる関数へ直に渡す所は 0 件。受け取りは `hold(runtime, Some(cue.fire_time), ..)`・`hold(runtime, Some(notice.effective_at), ..)` で列に足し、時刻を持たない物（先渡し・選択待ちの始まり・トークの終わり）だけを列が空の時にその場で当てる。
+- seriko が時計を読む所: 式 `-E 'dola::now|\bnow\(\)|clock\.|Clock\b|GetTickCount|QueryUnbiased|Instant::now|SystemTime'`、範囲 `crates/areka-seriko/src` のテストと組み立てを除く物。較正: `ae0866abc` で 13 行（`actor.rs:144` の `clock: Option<SerikoClock>`・`:193` の `self.clock.as_ref().map(|clock| clock())`・`:333` の `pub type SerikoClock` ほか）。今: 0 件。
+
+#### 3. 受け手が起点を持たない事（要件 12 の 9・18 の 2）
+
+範囲: `crates/areka-emo-text/src`（文字の層）・`crates/areka-seriko/src`（seriko）・`crates/areka-runtime/src/talk_clock.rs`（`TalkClock`）・`crates/areka-runtime/src/balloon_visibility*`（バルーンの寿命の時計）。
+
+| 検索 | 式（`git grep -n -E`） | 較正（`ae0866abc`） | 今 |
+|---|---|---|---|
+| 起点を持つ欄 | `'\b[a-z_]*(origin\|epoch\|base\|anchor)[a-z_]*\s*:\s*[A-Za-z<:]*(TimePoint\|TimeSpan\|TimeDelta)'` | 4 行（`talk_clock.rs:17` の `epoch: Arc<Mutex<Option<TimePoint>>>`・`areka-seriko/src/talk.rs:26` の `epoch: Option<TimePoint>`・テストの組み立ての 2 行） | 2 行。どちらも `actor_lookahead_tests.rs` の、テストが台本を流し始める時刻の引数と欄（受け手の欄ではない）。本番は 0 件 |
+| 台本の時刻を受ける・返す口 | `'\btalk_time\b'` | 70 行 | 0 |
+| 起点の見積もりの型 | `'Epoch\b'` | 14 行 | 0 |
+
+- 似た字で当たって起点でない物（今）: `\bepoch\b` の 35 行は、文字の層の書体の台帳の世代（`fonts.talk_epoch()`、`u64`）と、seriko の差し替えの世代（`SerikoReplace` の `epoch: u64`）。`origin\s*:` の当たりは、文字の層の描く位置（`(f32, f32)`・`Vector2`）と、バルーンの寿命の計測の起点の種類（`MeasurementOrigin`。止まった時刻・表示の終わりのどれから測るかを、絶対の時刻で持つ）。
+- `TalkClock` の欄は `clock: Arc<dyn Fn() -> TimePoint + Send + Sync>` だけで、公開の口は `new` と `now` だけである。
+
+#### 4. 公開の口の `f64`（要件 15 の 4）
+
+式: `git grep -n -w f64 -- crates/dola/src ':!*tests*' ':!*test_*'` の、注釈でない 86 行の全部を読み、公開の型・関数に出る物を挙げた（`pub mod` は `cue`・`runtime`・`time`。ほかのモジュールは `lib.rs` の `pub use` で出る物だけ）。複数行の頭は、`pub fn` の頭を読む式（4.2 の式の `pub` 版）で見て、引数か戻り値に `f64` が在る物 8 件（較正: 2.14 で在ると分かっている `TimeScale::get` と `TimeScale::ratio_of` に当たる）を同じ一覧に合わせた。
+
+| 分け | 口 |
+|---|---|
+| 倍率 | `TimeScale::new(value: f64)`・`TimeScale::get(self) -> f64`・`Storyboard.time_scale: f64`・`StoryboardBuilder::time_scale(scale: f64)` |
+| 進み具合と比 | `TimeSpan::mul_unit(self, ratio: f64)`・`TimeSpan::ratio_of(self, whole) -> Option<f64>` |
+| 時間で変わる値そのもの（変数の値と値域） | `TransitionValue::Scalar(f64)`・`TransitionDef.relative_to: Option<f64>`・`AnimationVariableDef::Float { initial, min, max }`・`DynamicValue::Float(f64)`・`EvaluatedValue::Float(f64)`・`CompiledVariableTimeline.min_value`／`max_value: Option<f64>`・`DolaError::ValueOutOfRange`／`TransitionValueOutOfRange` の `value`・`min`・`max` |
+| イージングの引数 | `ParametricEasing::QuadraticBezier { x0, x1, x2 }`・`CubicBezier { x0, x1, x2, x3 }` |
+| 作者が書く単位から変える口の引数 | `TimeSpan::try_from_secs_f64(secs: f64)`・`TimeDelta::try_from_secs_f64(secs: f64)` |
+
+- `DolaError::InvalidNumber.value: f64` は、数の規則の違反の値を運ぶ。運ぶのは倍率（`time_scale`）・周回の数（`loop_count`）・変数の値（`initial`・`min`・`max`・`from`・`to`・`relative_to`）・イージングの引数（ベジェの点）だけで、時間の欄は前半で読み込みの失敗と `TimeOutOfDocumentRange` へ移った（2.1 の dola `validate/rules.rs` の行）。
+- 公開でない物: `runtime::interpolator` の `interpolate(.., progress_t: f64)`（`#[cfg(test)]`・私的なモジュール）・`TimelineEntry` の欄（`pub(crate)`）・`time/serde_secs.rs` の `to_secs`／`from_secs`（`pub(crate)` のモジュールの私的な関数）。
+- 秒の実数を返す公開の口（戻り値と欄）: 0 件。`f64` を返す公開の関数は `TimeScale::get`（倍率）と `TimeScale::ratio_of`（比）だけで、`f64` の公開の欄に時間の値は無い。名前 `as_secs_f64` は `crates/dola` で 0 件（4.1 の較正つき）。
+
+#### 5. `cargo clippy --workspace --all-targets`
+
+- 誤り 0 件で通った。警告は 212 か所（重ねない数）。
+- この spec が足した警告を、警告の行がこのブランチで書いた行（`git diff -U0` を `main` との分かれ目 `24ddd93a0` と比べた、足した行の番号）に当たるかで照らした。当たった 3 件を直した（コメントは足していない）: `crates/dola/tests/cue/runtime_test_fire_time_tests.rs` の `recorder` の戻り値の型が込み入る（`type_complexity`。8.4 の新しいファイル。`type Shared<T> = Rc<RefCell<Vec<T>>>;` を置いた）、`crates/areka-emo-text/src/state_cluster_tests.rs` の `text.into()`（`useless_conversion`。型の付け替えで折り返した行。同じファイルの同じ形の 1 件も一緒に直した）。直した後の `cargo clippy -p dola -p areka-emo-text --all-targets` で、この 2 つのファイルの警告は 0 件。
+- 残る警告は、どれもこのブランチが書いていない行に在る（`wintf/examples/typewriter_demo.rs` の `needless_update` 2 件と、`pilot` の例の警告は、この spec の前から在る）。この照らし方は、書いていない行で型の付け替えが新しく呼んだ警告を拾わない。

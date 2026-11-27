@@ -42,7 +42,7 @@ fn text_cue_of_family_and_flag_yields_two_whole_items() {
         "0",
         TimeSpan::ZERO,
         ms(1000),
-        CueCommand::Text(text.into()),
+        CueCommand::Text(text),
     ));
 
     assert_eq!(
@@ -97,7 +97,7 @@ fn six_forms_in_one_cue_yield_six_items_in_order() {
         "0",
         TimeSpan::ZERO,
         ms(1500),
-        CueCommand::Text(text.into()),
+        CueCommand::Text(text),
     ));
 
     let expected: Vec<TextItem> = SIX_FORMS.iter().map(|f| TextItem::glyph(f)).collect();
@@ -127,7 +127,7 @@ fn choice_cue_range_counts_clusters() {
         ms(750),
         CueCommand::Choice {
             id: "OnThumbsUp".into(),
-            text: text.into(),
+            text,
             references: vec![],
         },
     ));

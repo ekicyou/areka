@@ -76,11 +76,9 @@ impl CueSink for PreviewRecorder {
     }
 }
 
-fn recorder() -> (
-    Rc<RefCell<Vec<Vec<TalkCue>>>>,
-    Rc<RefCell<Vec<TalkCue>>>,
-    Box<dyn CueSink>,
-) {
+type Shared<T> = Rc<RefCell<Vec<T>>>;
+
+fn recorder() -> (Shared<Vec<TalkCue>>, Shared<TalkCue>, Box<dyn CueSink>) {
     let previews = Rc::new(RefCell::new(Vec::new()));
     let emits = Rc::new(RefCell::new(Vec::new()));
     let sink = Box::new(PreviewRecorder {
