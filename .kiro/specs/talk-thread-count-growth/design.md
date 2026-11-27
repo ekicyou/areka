@@ -142,7 +142,7 @@ tools/perf/
 - `crates/areka/src/perf_thread_report_tests.rs` — 畳んだ行の語彙・綴りと並び・名簿外の残り・`threads=` の固定を足す。`delta` の 3 本を消す。
 - `tools/perf/perf-rank.py` — `ThreadRow` に `exited` を足し、段②の区間の差を系統の合計の差で取る。`thread_delta` は生きた行のスレッド別の表にだけ使う。D8 の規則を全部の役割へ広げる。
 - `tools/perf/README.md` — 段②の箇条（名簿が手放すこと・畳んだ行・`threads=`・差の取り方）を書き直す。
-- `tools/perf/fixtures-loop/rank/tid_reused/case.txt` — note の「Rust の delta と同じ」を今の規則の言葉に直す（期待の出力は変わらない）。
+- `tools/perf/fixtures-loop/rank/tid_reused/case.txt` — note の「Rust の delta と同じ」を系統の合計の差の規則の言葉に直す（期待の出力は変わらない＝設計の検証で、今の 4 つの検体の役割別の値が系統の規則でも同じになることを確かめた）。
 
 ## System Flows
 
@@ -190,6 +190,7 @@ stateDiagram-v2
 - 対の取り方: 起動直後の報告 1 枚の後に 1 対。以後、areka の MCP（`sakurascript`）でトークを 1 つ流し、`get_status` でトークの終わりを見てから、次の報告の 1 枚が出る（ログの `snap=` が 1 つ進む）のを待って、その `threads=` と PowerShell の `(Get-Process -Id <pid>).Threads.Count` を 1 対として記録する。これを 5 回以上。
 - 判定: 名簿の数だけが増え OS の数が増えない →「名簿の項目だけが増える」。OS の数もトークの数だけ増える →「生きたスレッドも増える」。どちらかを数の表とともに `verification/isolation.md` に書く（1.3）。トーク以外で同じ形の増え方を見たら、その起こし方と増え方を同じ記録に書く（1.4）。
 - 数え直し（7.8）: 直した後のビルドで同じ手順にゴーストの切り替えを 1 回足し、`threads=` と OS の数のどちらも回数に比例して増えないこと、`role=actor:sakura-talk-*` の畳んだ行が出てその `exited=` が終わったトークの数と合うことを `verification/signoff.md` に書く。
+- 終わったトークの数の出どころ: `exited=` は MCP で流したトークのほかに、起動の挨拶・切り替えのトーク・時刻やランダムのトークも数えるので、MCP で流した回数とは合わない。名簿の登録の `debug!`（target `wintf::thread_registry`・`role`・`tid`。下の Registry に足す）のうち系統が `actor:sakura-talk-*` の行を走行のログから数え、最後の 1 枚の時点で生きている `sakura-talk-<番号>` の行（`get_status` で喋っている最中なら 1 本）を引いた数を「終わったトークの数」とする。記録には MCP で流した回数と、ログから数えた数の両方を書く（`RUST_LOG` に `wintf::thread_registry=debug` を足す）。
 - 決まり（1.5）: 実機の根・検体・一時フォルダは `target\` の下だけ。排他テストの机と画面の操作はそのタスクの区切りの中だけで持つ。止めるのは自分が起こしたと pid で確かめた `areka.exe` だけ。SSP などが `127.0.0.1:9276` を握っていないかを先に見る。
 
 ### 要件 6 の扱い（生きたスレッドが残っていた場合）
@@ -233,12 +234,12 @@ stateDiagram-v2
 | 6.2 | 再生の振る舞いを変えない | 要件 6 の扱い | — | 要件 6 の扱い |
 | 6.3 | 着地までトークの側に触らない | 要件 6 の扱い | — | 要件 6 の扱い |
 | 6.4 | 残らないなら行わない | 要件 6 の扱い | — | 要件 6 の扱い |
-| 7.1 | 100 本以上で頭打ち | 名簿のテスト | `read_cpu`・`peek_family` | — |
+| 7.1 | 100 本以上で頭打ち | 名簿のテスト | `read_cpu` | — |
 | 7.2 | 畳んだ合計＝最後の CPU の和・減らない | 名簿のテスト | `read_cpu` | — |
 | 7.3 | 使い回しと登録し直し | 名簿のテスト（偽の芯） | `Registry::insert` | — |
 | 7.4 | 報告の行 | 報告器のテスト | 純関数 | — |
 | 7.5 | 区間の差と古いログ | perf-rank の自己テスト | `fixtures-loop/rank/` | — |
-| 7.6 | 消灯でも積み上がらない | 名簿のテスト | `peek_family`（掃除しない） | — |
+| 7.6 | 消灯でも積み上がらない | 名簿のテスト（局所の `Registry`＋`Win32Probe`） | `Registry::insert` だけ | — |
 | 7.7 | 読めない失敗の記録 | 名簿のテスト（偽の芯） | `log-capture-kit` | — |
 | 7.8 | 直した後の実機の数え直し | 実機の確かめ | `verification/signoff.md` | 数え直し |
 
@@ -297,6 +298,8 @@ pub fn thread_has_exited(thread: &OwnedHandle) -> windows::core::Result<bool>;
 - 読み出し（`read`）: 掃除 → 生きた項目ごとに `probe.cpu_times` を錠の中で読み、生きた項目と畳んだ合計（系統名の昇順）を 1 つの組として返す。
 - 系統の名（`role_family`）: 役割名が `^(.+)-[0-9]+$` に合えば `\1-*`、合わなければそのまま（ASCII の数字だけ）。例 `actor:sakura-talk-17` → `actor:sakura-talk-*`、`actor:kanade` → `actor:kanade`。系統の名は登録の口を通らないので語彙の検査（`is_known_role`）には掛けない。
 - 呼び手は走り始めの登録と報告器の周期だけで、描画の刻みの経路には入らない（2.5）。錠の中の Win32 の呼び出しは項目の数（今は 20 前後）× 2 回程度。
+- 記録は錠の外で出す: 掃除は `warn!` に出す中身（tid・role・family・error）を錠の中で集めるだけにし、錠を放してから出す（錠の時間を縮め、名簿の錠と記録の購読者の錠の順の取り合いを作らない）。記録は登録したスレッド（または報告器）の span の中に出るので、対象のスレッドは欄の `tid`・`role` で指す。
+- 登録の `debug!`: 登録が済んだら `debug!`（target `wintf::thread_registry`・`role`・`tid`）を 1 行出す（実機の数え直しで、起きたスレッドの本数をログから数えるため）。
 
 **Dependencies**
 - Inbound: 走り始めの登録の呼び手 5 か所（P0）・報告器（P0）・名簿を読むテスト（P2）
@@ -343,7 +346,6 @@ impl Registry {
     fn read(&mut self, probe: &impl ThreadProbe) -> RegistryReading;
 }
 fn role_family(role: &str) -> String;
-#[cfg(test)] fn peek_family(family: &str) -> (usize, Option<FoldedTotal>); // 掃除しない覗き
 ```
 - Preconditions: `register_current_thread` は登録される当のスレッドが呼ぶ（今と同じ）。
 - Postconditions: `register_current_thread`・`snapshot`・`read_cpu` が返った時点で、その時点より前に終わりを見分けられたスレッドの項目は残っていない（2.1）。項目の数 ≦ 生きている登録済みスレッドの数＋系統の数（2.4）。
@@ -375,6 +377,7 @@ fn role_family(role: &str) -> String;
 - `unregistered_rest` ＝ max(プロセス − 生きた行の合計 − 畳んだ合計, 0)（カーネル・ユーザーそれぞれ）。
 - 本番から呼ばれない `delta` と `#[allow(dead_code)]` を消し、モジュールの説明の「差の取り方は `delta` が権威」を「区間の差は読み手（`perf-rank.py` の段②・自己テストが規則を固定する）が、最後のスナップショットと 60 秒前のものを比べて取る。名簿外の残りはプロセスの差から出す」へ直す（決め D6・未決 1）。
 - 点灯の判定と `start` の前置ガードは変えない（4.7）。
+- 読む順: `read_cpu()` を先に読み、プロセス CPU をその後に読む（プロセスの値が名簿の値より後になるので、名簿外の残りが 0 で止まる向きの食い違いを作らない）。
 
 **Contracts**: Service [x]
 
@@ -414,14 +417,14 @@ pub(crate) fn compose_snapshot(
 
 ##### Batch / Job Contract
 - Trigger: `perf-rank.py rank`（段②）と自己テスト。
-- Input / validation: `perf(thread)` 行の `exited=` は任意の欄。在れば整数でなければ他の欄と同じく exit 4（部分の集計を出さない）。`ThreadRow` に `exited: int | None` を足す。
+- Input / validation: `perf(thread)` 行の `exited=` は任意の欄。在れば整数でなければ他の欄と同じく exit 4（部分の集計を出さない）。`ThreadRow` に `exited: int | None = None` を足す（既定は `None`＝古い行と今の呼び手のまま）。
 - 行の分類: `role == unregistered_rest` → 残りの行。`exited is not None` → 畳んだ行。それ以外 → 生きた行。
 - 系統: `family(role) = re.sub(r"^(.+)-[0-9]+$", r"\1-*", role)`（Rust の `role_family` と同じ規則・全部の役割へ広げる）。畳んだ行の役割名はすでに系統名。
 - 差の基準（`delta`）:
   - 系統の合計 F(s) ＝ その系統の生きた行の `cpu_us` の和 ＋ 畳んだ行の `cpu_us`。系統の区間の CPU ＝ max(F(後) − F(前), 0)。前に無い系統は 0 から。
   - `registry_cpu_s` ＝ 系統の区間の CPU の和。`unregistered_rest_cpu_s` ＝ max(プロセスの差 − 名簿の差, 0)（D7 のまま）。プロセスの差が取れないときは残りの行の TID の差（今のまま）。
   - 役割別の表 ＝ 系統ごとの区間の CPU ＋ 残りの 1 行。
-  - スレッド別の表 ＝ 生きた行と残りの行に今の `thread_delta`（TID で照らす）をかけたもの。畳んだ行はスレッドではないので載せない（未決 5）。
+  - スレッド別の表 ＝ 生きた行と残りの行に今の `thread_delta`（TID で照らす）をかけたもの。畳んだ行はスレッドではないので載せない（未決 5）。畳んだ行は残りの行と同じ `tid=0` を持つので、`thread_delta` に渡す前に前後の両方から畳んだ行を除く（除かないと前の辞書の鍵 0 が重なって残りの行の差が化ける）。
 - 累積の基準（1 枚だけ）: 系統の合計 F(最後) と残りの行の値をそのまま使う。
 - 正しさ: 1 本のスレッドはどのスナップショットでも生きた行か畳んだ行のどちらか一方にだけ入り、累積は減らない。よって F(後) − F(前) は、その系統の各スレッドの「後の値 − 前の値（前に無ければ 0・前より先に終わっていれば 0）」の和に等しく、区間より前の分を足さず、区間の中の分を落とさない（5.1・5.2）。名簿が手放した後の TID の使い回しにも左右されない。
 - 古いログ（畳んだ行が無い・終わったスレッドが最後の値で残り続ける）: 名簿がハンドルを持ち続けたので TID は使い回されておらず、F の差は TID ごとの差の和と同じ値になる（5.3）。今の検体 `full_ok`・`tid_reused`・`talk_threads_folded` の期待の出力は変わらない見込み（変わったら自己テストの差で見て、理由を検体の note に書く）。
@@ -432,6 +435,7 @@ pub(crate) fn compose_snapshot(
 - Integration: `thread_delta` の説明の「Rust の `delta` と同じ意味論の写し」を消し、「スレッド別の表の照らし方」とする。D8 の説明を「系統の規則（名簿の `role_family` と同じ）」へ。
 - Validation: 新しい検体 `thread_exited_in_window` に、⑴ 区間の前から生きていて区間の中で終わったスレッド ⑵ 区間の中で生まれて終わったスレッド ⑶ 区間の前に終わって前後とも畳んだ行に入っているスレッド ⑷ 番号の無い系統（`actor:kanade`）で生きた行と畳んだ行が同じ役割名で並ぶ場面、を入れ、役割別の表・`registry_cpu_s`・`unregistered_rest_cpu_s` を逐語で固定する。古い形のログは今の 3 つの検体が受け持つ（7.5）。
 - Risks: 生きている同じスレッドが区間の中で別の系統へ登録し直すと、その前の分が新しい系統へ移り、古い系統は 0 で止まる（名簿の合計は保たれる）。本番の呼び手で登録し直すものは無い（未決 6）。
+- Risks: 最後の CPU を読めずに手放したスレッドは系統の合計から消えるので、その区間の系統の差が 0 で止まり、同じ系統の他のスレッドの区間の分を呑むことがある。稀で `warn!` に残るので、既知の限りとして README の段②に書く（未決 6 と並べる）。
 
 #### 説明（`tools/perf/README.md` の段②）
 
@@ -484,7 +488,7 @@ pub(crate) fn compose_snapshot(
 
 - 本物のスレッドを 128 本、そのテストだけの系統 `actor:test-<tid>-many-<i>` で順に起こして登録させ、join する。全部の後に `read_cpu()` で、その系統の生きた項目が 0・畳んだ行が 1 つ・`exited` が 128 であること（7.1・2.4）。
 - 同じテストで、各スレッドが自分のハンドルを `duplicate_current_thread_handle` で別に複製して返し、join の後にテストがそれで読んだ最後の CPU の和が、その系統の畳んだ合計に一致すること。16 本ごとに読んだ合計が減らないこと（7.2・3.1・3.6）。
-- 読み出しを 1 度も呼ばずに登録と終わりを繰り返し、各スレッドの登録の直後に `peek_family`（掃除しない覗き）で、その系統の項目が「生きた 1 本＋合計 1 つ」を超えないこと（7.6・2.2）。
+- 局所の `Registry` と本物の `Win32Probe` で、本物のスレッドを順に起こし、各スレッドが `duplicate_current_thread_handle` で自分の `ThreadEntry` を作ってテストへ返し、テストが `insert` だけを呼ぶ（`read` は 1 度も呼ばない）。各 `insert` の直後に、局所の名簿の項目が「生きた 1 本＋合計 1 つ」を超えないこと（7.6・2.2）。プロセス共有の名簿は、同じテストの二進の他のテスト（`tick_bridge`・`monitor`・`runtime`）が `snapshot()` を 5 ms ごとに読んで掃除を起こすので、登録の時の掃除が無い作りでも通ってしまう＝共有の名簿では固定しない。
 - 偽の `ThreadProbe` と局所の `Registry` で: ⑴ 終わったと告げた TID 7 の項目へ別の系統の TID 7 を登録すると、前の CPU が前の系統へ 1 度だけ入り、生きた項目は新しい方だけ ⑵ 生きていると告げた TID 8 の登録し直しでは合計が動かず、生きた項目は 1 つ（7.3・3.4・3.5）。
 - 偽の芯で、終わったが CPU を読めない項目を掃除すると、`log-capture-kit` で tid と役割名つきの `warn!` が捕まり（対照の事象つき）、本数は 1 増え CPU は増えないこと（7.7・3.3）。
 - `role_family` の表: `actor:sakura-talk-17`→`actor:sakura-talk-*`・`actor:kanade`→そのまま・`vblank`→そのまま・`-5`→そのまま・`actor:x-1a`→そのまま（3.2）。
