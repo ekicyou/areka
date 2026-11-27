@@ -61,7 +61,7 @@ pub(super) fn eye_resolver() -> BindResolver {
 }
 
 /// 同期 `handle_message` に、時刻を書いた刻み・合図・窓の知らせを流す足場。
-pub(super) struct ClockRig {
+pub(super) struct ActorRig {
     resolver: SurfaceResolver,
     bind_resolver: BindResolver,
     pub(super) states: ScopeStates,
@@ -70,7 +70,7 @@ pub(super) struct ClockRig {
     records: Arc<Mutex<Vec<DisplayCommand>>>,
 }
 
-impl ClockRig {
+impl ActorRig {
     /// 別名の表なし・着せ替えなしで、統括器を `config` から組む。
     pub(super) fn with_config(config: SerikoLoopConfig) -> Self {
         Self::configured(config, BindResolver::empty(), BindSet::from_ids([]))

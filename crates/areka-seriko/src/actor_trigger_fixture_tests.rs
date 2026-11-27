@@ -95,7 +95,7 @@ fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
 /// 刻みの時刻ではない。
 #[test]
 fn top_surface_fires_runonce_talk_and_periodic() {
-    let mut rig = ClockRig::with_config(config());
+    let mut rig = ActorRig::with_config(config());
     rig.tick(at_ms(1000));
     let first = rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9100"));
     assert_eq!(frames(&first, ONCE), [("0", Some(1700))], "切り替えで鳴る");
@@ -141,7 +141,7 @@ fn top_surface_fires_runonce_talk_and_periodic() {
 /// `talk,2` が 2 文字目の時刻から鳴る。9101 の一番上は 3 語を持たないので、一番上の欄は空のまま。
 #[test]
 fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
-    let mut rig = ClockRig::with_config(config());
+    let mut rig = ActorRig::with_config(config());
     rig.tick(at_ms(1000));
     let (surface, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9101")));
     assert_eq!(surface, 9101);
@@ -173,7 +173,7 @@ fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
 #[test]
 fn surfaces_whose_words_were_refused_stay_still() {
     for (key, surface) in [("9103", 9103), ("9104", 9104)] {
-        let mut rig = ClockRig::with_config(config());
+        let mut rig = ActorRig::with_config(config());
         rig.tick(at_ms(1000));
         let (shown, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", key)));
         assert_eq!(shown, surface);

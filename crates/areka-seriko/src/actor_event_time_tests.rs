@@ -51,20 +51,20 @@ const MOUTHS: &str = "surface0\n{\nanimation0.interval,talk,1\n\
     animation1.pattern1,overlay,-1,60,0,0\n}\n\
     surface601\n{\n}\n";
 
-/// この檻の足場（本体は兄弟の足場 `ClockRig`・着せ替えの名前は (目, 閉) → 5）。
-fn rig(config: SerikoLoopConfig) -> ClockRig {
-    ClockRig::configured(config, eye_resolver(), BindSet::from_ids([]))
+/// この檻の足場（本体は兄弟の足場 `ActorRig`・着せ替えの名前は (目, 閉) → 5）。
+fn rig(config: SerikoLoopConfig) -> ActorRig {
+    ActorRig::configured(config, eye_resolver(), BindSet::from_ids([]))
 }
 
 /// 刻み 1000〜1300 を回し、`late` でなければ刻み 1000 の直後に、`late` なら刻み 1048 の後に `shape`
 /// を処理する（`before` は刻み 1000 の前、`between` は刻み 1000 の直後で `shape` より前に渡す）。刻み
 /// 1064 から後の各刻みの後の `slot` の欄を返す。
 fn drive(
-    rig: &mut ClockRig,
+    rig: &mut ActorRig,
     late: bool,
     slot: Slot,
-    shape: impl FnOnce(&mut ClockRig) -> Vec<DisplayCommand>,
-    mut at_tick: impl FnMut(&mut ClockRig, u32),
+    shape: impl FnOnce(&mut ActorRig) -> Vec<DisplayCommand>,
+    mut at_tick: impl FnMut(&mut ActorRig, u32),
 ) -> Vec<(u32, PatternState)> {
     let mut shape = Some(shape);
     let mut seen = Vec::new();
@@ -397,7 +397,7 @@ const STOP_ALWAYS: &str = "surface0\n{\n\
 
 /// 面 0 を 950 に出し、刻み 960・1000（animation1 が始まり、止めは 1100）・1090（`always` は 102）を
 /// 済ませた足場。
-fn stop_pending() -> ClockRig {
+fn stop_pending() -> ActorRig {
     let (rng, _probe) = crate::looper::tests::counting_rng(&[0]);
     let mut rig = rig(SerikoLoopConfig {
         shell_table: table_of(STOP_ALWAYS),

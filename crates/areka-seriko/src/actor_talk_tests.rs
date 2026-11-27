@@ -45,8 +45,8 @@ fn config() -> SerikoLoopConfig {
     cfg(table_of(FACES), always_fire())
 }
 
-/// この檻の表で組んだ足場（本体は兄弟の足場 `ClockRig`）。
-type Rig = ClockRig;
+/// この檻の表で組んだ足場（本体は兄弟の足場 `ActorRig`）。
+type Rig = ActorRig;
 
 impl Rig {
     fn new() -> Self {

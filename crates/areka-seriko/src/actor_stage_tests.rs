@@ -34,8 +34,8 @@ fn ack(generation: u64) -> DisplayCommand {
     }
 }
 
-/// この檻の足場（本体は兄弟の足場 `ClockRig`）。
-type Rig = ClockRig;
+/// この檻の足場（本体は兄弟の足場 `ActorRig`）。
+type Rig = ActorRig;
 
 impl Rig {
     /// バルーンのスコープ 0 だけに子の表。

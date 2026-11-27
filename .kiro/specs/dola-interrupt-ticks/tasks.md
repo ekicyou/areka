@@ -672,7 +672,7 @@
   - _Dispatch: standard, effort high — 決まりは設計が与えるが、区切りの判定の順を確かに守る_
   - _Requirements: 12.6, 12.7, 18.6_
 
-- [ ] 10.9 (P) areka-seriko の残りのテストを直す
+- [x] 10.9 (P) areka-seriko の残りのテストを直す
   - 時計を外した起動の口と、時刻を書いて渡す刻み・合図・窓の知らせの形へ、テストを直す
   - 10.6〜10.8 が足したテストを含めて、`cargo test -p areka-seriko` が緑である
   - _Boundary: areka-seriko テスト_

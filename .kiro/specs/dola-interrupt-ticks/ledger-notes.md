@@ -380,3 +380,7 @@
 - 取り除いた分かれ道: `Armed::next_start` の「越えた区切りのうち最新の 1 つだけ」（口は `next_starts` で、越えた区切りを古い順に全部返す）。消したテスト・ログは無い。足したログ: `SerikoSink::origin_set` が送れない時の `error!` 1 行。
 - 変える前後の期待: `trigger_tests::talk_boundaries_crossed_in_one_window_fire_once_at_the_latest` → `..._fire_oldest_first_at_each_glyph_time`（7 字見えた刻みで、前は `Some(1250)` の 1 つ、後は `[1100, 1250]`。同じ時刻の字は前も後も 1 回）。ほかの元からあるテストの期待は変わらない。
 - 足したテスト: `talk::origin_tests` 5 本、`looper::mouth_tests` 3 本、`actor::origin_tests` 3 本。
+
+## 10.9（後半）
+
+- テストの形の追従の大半は 10.7 が済ませた（「10.7（後半）」）。ここでは時計の無くなった共有の足場 `ClockRig` を `ActorRig` へ改名しただけ。消したテスト・assert・期待の変化は無い。

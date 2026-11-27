@@ -23,7 +23,7 @@ const STOP_ALWAYS: &str = "surface0\n{\n\
 fn same_surface_reshow_restarts_a_stopped_always_at_the_event_time() {
     let (rng, _probe) = counting_rng(&[0]);
     let table = table_of(STOP_ALWAYS);
-    let mut rig = ClockRig::with_config(SerikoLoopConfig {
+    let mut rig = ActorRig::with_config(SerikoLoopConfig {
         shell_table: table,
         balloon_tables: BTreeMap::new(),
         rng,
@@ -63,7 +63,7 @@ fn shift(x: i64, y: i64) -> DisplayCommand {
 #[test]
 fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
     let (rng, _probe) = counting_rng(&[]);
-    let mut rig = ClockRig::with_config(SerikoLoopConfig {
+    let mut rig = ActorRig::with_config(SerikoLoopConfig {
         shell_table: table_of(RUNONCE_MOVE),
         balloon_tables: BTreeMap::new(),
         rng,

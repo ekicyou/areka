@@ -20,8 +20,8 @@ const MOUTH_FACE: &str = "surface0\n{\n\
 
 const MOUTH: u32 = 0;
 
-fn rig() -> ClockRig {
-    ClockRig::with_config(cfg(table_of(MOUTH_FACE), always_fire()))
+fn rig() -> ActorRig {
+    ActorRig::with_config(cfg(table_of(MOUTH_FACE), always_fire()))
 }
 
 /// 台本の起点が `previous_ms` から `origin_ms` へ、時刻 `effective_ms` に置き直された知らせ。
@@ -34,7 +34,7 @@ fn moved(effective_ms: i64, previous_ms: i64, origin_ms: i64) -> OriginNotice {
 }
 
 /// 面 0 を出し、起点 1000 の台本の 9 文字を届ける。
-fn hear_nine(rig: &mut ClockRig) {
+fn hear_nine(rig: &mut ActorRig) {
     rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "0"));
     rig.hear_fired(at_ms(1000), clear_all());
     rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいうえおかきくけ"));

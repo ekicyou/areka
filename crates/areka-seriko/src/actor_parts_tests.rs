@@ -46,8 +46,8 @@ const NEGATIVE_CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     animation0.pattern1,overlay,-2,500,0,0\n}\n\
     surface101\n{\n}\n";
 
-/// この檻の足場（本体は兄弟の足場 `ClockRig`）。
-type Rig = ClockRig;
+/// この檻の足場（本体は兄弟の足場 `ActorRig`）。
+type Rig = ActorRig;
 
 impl Rig {
     fn from_text(text: &str, static_binds: BindSet) -> Self {
