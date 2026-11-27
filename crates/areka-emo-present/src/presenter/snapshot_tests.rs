@@ -7,14 +7,11 @@
 //! 経路で通す（節の葉は実 GPU で記録する）。
 //! `last_show`・`current_surface_id`・`visible` を書くのは本番の表示成立点そのものである。
 
-use std::sync::Arc;
-
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 use areka_parsers::shell::{AliasKey, DefRef, Shell, SurfaceAlias};
 use bevy_ecs::world::World;
 use tracing::Level;
-use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
     bake_world, bind_overlay_surface, capture, elem, hide_ok, invalidate_ok, native_golden,
@@ -97,20 +94,8 @@ fn show(
     let plan = Composer::new()
         .plan(&t.emo_world, &t.atlas, surface_id, &binds, &pattern)
         .expect("表示の入力の計画は Ok");
-    let mask = Arc::new(AlphaMask::from_pbgra32(
-        composed.bytes(),
-        composed.width(),
-        composed.height(),
-        composed.stride(),
-    ));
-    t.cache.insert(
-        surface_id,
-        binds.clone(),
-        pattern.clone(),
-        plan,
-        composed,
-        mask,
-    );
+    t.cache
+        .insert(surface_id, binds.clone(), pattern.clone(), plan, composed);
 
     show_with_ok(presenter, world, target, surface_id, binds, pattern);
 }

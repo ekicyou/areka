@@ -257,29 +257,30 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
 }
 
 // ============================================================================
-// surface_alpha_hit - SurfaceAlpha の判定
+// surface_alpha_hits - SurfaceAlpha の判定
 // ============================================================================
 
 /// 読めない間の持ち主。`&World` の当たり判定から印を書くため World の外に置く。
 // shortcut: 読めない間に消えた実体の印は残る（数は持ち主の数まで）。持ち主の外しの係で消す必要が出たら部品へ移す。
 static UNREADABLE: Mutex<Option<HashSet<(WorldId, Entity)>>> = Mutex::new(None);
 
-/// `bounds` の左上を原点にした持ち主の物理ピクセルの α で決める（呼び手が bounds の内と確かめ済み）。
-fn surface_alpha_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF) -> bool {
+/// 描画面の持ち主の物理ピクセル (x, y) が当たるか（[`surface_alpha_at`](crate::ecs::surface_alpha_at) の α が 128 以上）。
+///
+/// α < 128・面の外・読めないは当たらない。読めない間は持ち主ごとに最初の 1 回だけ `error!` を残し、
+/// 読めたら（外も含む）印を戻す。クリックの透過と当たりの名前の解決が同じ 1 画素を同じ規則で読むための口。
+pub fn surface_alpha_hits(world: &World, owner: Entity, x: u32, y: u32) -> bool {
     use crate::ecs::graphics::{AlphaRead, surface_alpha_at};
 
-    let x = (point.x - bounds.left).floor() as u32;
-    let y = (point.y - bounds.top).floor() as u32;
-    let read = surface_alpha_at(world, entity, x, y);
-    let key = (world.id(), entity);
+    let read = surface_alpha_at(world, owner, x, y);
+    let key = (world.id(), owner);
     let mut marks = UNREADABLE.lock().unwrap_or_else(|e| e.into_inner());
     let marks = marks.get_or_insert_with(HashSet::new);
     if read == AlphaRead::Unreadable {
         if marks.insert(key) {
             error!(
                 entity = %crate::ecs::graphics::format_entity_name(
-                    entity,
-                    world.get::<bevy_ecs::name::Name>(entity)
+                    owner,
+                    world.get::<bevy_ecs::name::Name>(owner)
                 ),
                 "[hit_test] surface alpha unreadable, no hit"
             );
@@ -407,7 +408,9 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
             }
         }
         HitTestMode::SurfaceAlpha => {
-            if surface_alpha_hit(world, entity, &global.bounds, point) {
+            let x = (point.x - global.bounds.left).floor() as u32;
+            let y = (point.y - global.bounds.top).floor() as u32;
+            if surface_alpha_hits(world, entity, x, y) {
                 RegionHit::Hit(None)
             } else {
                 RegionHit::Miss

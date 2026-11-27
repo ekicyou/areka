@@ -3,15 +3,15 @@
 //! 提示段の**配置層**である。surface entity を wintf の `Visual::on_add` に乗る形で spawn し、以後は
 //! `Arrangement`（**論理寸＝原寸・`scale`＝拡大率 k**）を書く。計画の節は `DrawNodes` が原寸の
 //! まとめの節の下へ写し、面の生成・寸合わせ・変換・描画は wintf（`deferred_surface_creation_system`／
-//! `render_surface`）、当たり判定マスクは hit-test が担い、本型は「visual 構成・z 順・配置・
+//! `render_surface`）、当たりの α は hit-test が描画面の入れ物から読み、本型は「visual 構成・z 順・配置・
 //! 非表示切替」を UI スレッド上で受け持つ。**COM 呼び出しは 0**（純 ECS・失敗経路なし）。
 //!
 //! # 構成（窓あたり）
 //!
 //! 1. **surface entity**: `Visual` ＋ [`logical_arrangement`] ＋ [`OwnSurface`] ＋
-//!    [`HitTest::alpha_mask`] ＋ [`AlphaMaskResource`]。根の命令の列を持たない描画面の持ち主で、
-//!    窓の client の原点に置く。`GlobalArrangement.bounds`（＝原寸 × k・物理寸）が AlphaMask 座標の
-//!    基準になり、wintf の `alpha_mask_hit` が境界に対する比例写像で ÷k を 1 回だけ掛けて原寸マスクを読む。
+//!    [`HitTest::surface_alpha`]。根の命令の列を持たない描画面の持ち主で、窓の client の原点に置く。
+//!    wintf の当たりは `GlobalArrangement.bounds`（＝原寸 × k・物理寸）の左上を原点にした物理ピクセルで
+//!    入れ物の α を読むので、client の物理ピクセルがそのまま入れ物の画素になる（名前の解決も同じ点を読む）。
 //!    根の命令の列を持たないのは、根の命令の列と描画の木の両持ちが変化のたびに全部を描かせるため。
 //! 2. **原寸のまとめの節**（surface entity の唯一の子）: `VisualGroup { SOURCE_OVER }` ＋ 原寸の
 //!    `Arrangement`。描画面の描き直しが k 倍で再生するので、中は原寸で描かれ、閉じるとき k 倍で
@@ -51,8 +51,7 @@ use bevy_ecs::prelude::*;
 
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::{
-    AlphaMaskResource, Arrangement, HitTest, LayoutScale, MixMode, Offset, OwnSurface, Size,
-    Visual, VisualGroup,
+    Arrangement, HitTest, LayoutScale, MixMode, Offset, OwnSurface, Size, Visual, VisualGroup,
 };
 
 use crate::draw_nodes::place;
@@ -89,7 +88,7 @@ pub(crate) fn logical_arrangement(native: (u32, u32), k: ScaleRatio) -> Arrangem
 ///
 /// `pub(crate)`（公開 API ではない）。`EmoPresenter` が target ごとに保持する。
 pub(crate) struct VisualMount {
-    /// `Visual` ＋ `Arrangement` ＋ `OwnSurface` ＋ `HitTest` ＋ `AlphaMaskResource` を持つ
+    /// `Visual` ＋ `Arrangement` ＋ `OwnSurface` ＋ `HitTest` を持つ
     /// 表示 entity（窓の子）。
     surface_entity: Entity,
     /// 原寸のまとめの節（surface entity の唯一の子・計画の節の根）。
@@ -108,10 +107,10 @@ impl VisualMount {
         }
     }
 
-    /// surface entity の `HitTest`: 可視＝αマスク判定・不可視＝判定停止（ポインタ透過）。
+    /// surface entity の `HitTest`: 可視＝入れ物の α の判定・不可視＝判定停止（ポインタ透過）。
     fn surface_hit_test(visible: bool) -> HitTest {
         if visible {
-            HitTest::alpha_mask()
+            HitTest::surface_alpha()
         } else {
             HitTest::none()
         }
@@ -195,7 +194,6 @@ impl VisualMount {
                 logical_arrangement(native, k),
                 OwnSurface,
                 Self::surface_hit_test(initially_visible),
-                AlphaMaskResource::new(),
                 ChildOf(window),
             ))
             .id();
@@ -247,7 +245,7 @@ impl VisualMount {
     ///
     /// **surface entity と text-layer slot の双方**へ同時に及ぶ。`false`: 両者の
     /// `Visual::set_visible(false)` ＋ `HitTest::none()`。`true`: 両者を可視へ戻し、surface は
-    /// `HitTest::alpha_mask()`、slot は `HitTest::bounds()` へ復帰する。
+    /// `HitTest::surface_alpha()`、slot は `HitTest::bounds()` へ復帰する。
     ///
     /// 枠の面だけを不可視にすると文字層が画面に残り、さらにスロットは既定 `Bounds` 判定のまま
     /// ポインタを受け続けるため、両 entity を同時に切り替える。
@@ -287,7 +285,7 @@ impl VisualMount {
         }
     }
 
-    /// `Arrangement`＋`OwnSurface`＋`HitTest`＋`AlphaMaskResource` を持つ表示 entity。
+    /// `Arrangement`＋`OwnSurface`＋`HitTest` を持つ表示 entity。
     pub(crate) fn surface_entity(&self) -> Entity {
         self.surface_entity
     }

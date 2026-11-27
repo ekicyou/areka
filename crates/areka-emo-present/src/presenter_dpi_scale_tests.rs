@@ -389,7 +389,7 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
     assert_eq!(
         on_screen(&presenter, TargetId(0)),
         Some(display_before.clone()),
-        "k が変わっただけで節を作り直している（記録は k を含まない・要件 1.2/5.6）"
+        "k が変わっただけで節を作り直している（記録は k を含まない）"
     );
 
     let t = presenter.targets.get(&TargetId(0)).unwrap();

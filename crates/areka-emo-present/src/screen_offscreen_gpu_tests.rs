@@ -3,17 +3,17 @@
 //! 動く絵の見本でコマ替えを続け、各回に描画面の下の木（原寸のまとめの節と計画の節）を wintf の
 //! 画面の外の口で k＝1 のまま描いて読み、同じ面・同じコマを新しい presenter で 1 回だけ出した木の絵と
 //! 1 バイト単位で比べる。2 回目からのコマ替えが節を作り直さず中身だけを差し替えた（範囲だけ）ことは
-//! 作り直した項の数で確かめる（空の道で緑にしない）。当たりのマスクは今の CPU の答えのまま比べる。
+//! 作り直した項の数で確かめる（空の道で緑にしない）。当たりが読む画面の入れ物の α も、CPU の合成の
+//! α と 0.5 の同じ側に在ることを確かめる。
 
 use super::*;
 
 use windows_numerics::Matrix3x2;
-use wintf::ecs::render_tree_offscreen;
-use wintf::ecs::widget::bitmap_source::AlphaMask;
+use wintf::ecs::{AlphaRead, render_tree_offscreen, surface_alpha_at};
 
 use super::test_support::{
     bake_world, elem, gradient_with_alpha, make_world_with_gpu, mount_entities, native_golden_with,
-    pattern_overlay_at, shell_of, show_with_ok, spawn_window_with_dpi, surface,
+    paint_screen, pattern_overlay_at, shell_of, show_with_ok, spawn_window_with_dpi, surface,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -101,6 +101,19 @@ fn frame_changes_update_the_nodes_in_place_and_match_a_fresh_full_tree_on_real_g
     let mut first_rebuilds = None;
     for &x in &xs {
         show(&mut presenter, &mut world, x);
+        // 画面の外の口は同じ World の節の世界の行列を書き直すので、画面へ先に描く。
+        paint_screen(&mut world);
+        let (surface_entity, _) = mount_entities(&presenter, TARGET);
+        let (w, h) = BASE_SIZE;
+        let screen_alpha: Vec<u8> = (0..h)
+            .flat_map(|py| (0..w).map(move |px| (px, py)))
+            .map(
+                |(px, py)| match surface_alpha_at(&world, surface_entity, px, py) {
+                    AlphaRead::Alpha(a) => a,
+                    other => panic!("コマ x={x} の画面の入れ物 ({px},{py}) が読めない: {other:?}"),
+                },
+            )
+            .collect();
         let shown = render_screen(&mut world, &presenter);
         match first_rebuilds {
             None => first_rebuilds = Some(rebuilds(&presenter)),
@@ -143,18 +156,13 @@ fn frame_changes_update_the_nodes_in_place_and_match_a_fresh_full_tree_on_real_g
             .unwrap_or(0);
         assert!(worst <= 1, "コマ x={x} の絵が CPU の合成と {worst} 違う");
 
-        let (w, h) = BASE_SIZE;
-        let want = AlphaMask::from_pbgra32(&golden, w, h, w * 4);
-        let (surface_entity, _) = mount_entities(&presenter, TARGET);
-        let supplied = world
-            .get::<AlphaMaskResource>(surface_entity)
-            .expect("表示成立後は面に AlphaMaskResource が載る")
-            .mask()
-            .expect("表示成立後はマスクが供給済み");
-        assert_eq!(
-            *supplied, want,
-            "コマ x={x} のマスクが CPU の合成のマスクと違う"
-        );
+        for (i, a) in screen_alpha.iter().enumerate() {
+            assert_eq!(
+                *a >= 128,
+                golden[i * 4 + 3] >= 128,
+                "コマ x={x} の画面の入れ物の画素 {i} の α {a} が CPU の合成と 0.5 の反対側"
+            );
+        }
     }
     assert!(
         first_rebuilds.is_some_and(|n| n > 0),

@@ -1,7 +1,7 @@
-//! 描き直さない時点とマスクの控えの実 GPU のテスト。
+//! 描き直さない時点・マスクの控え・土台の面の付け替えの実 GPU のテスト。
 
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::{BindSet, ComposeMethod, EmoWorld, PatternFrame};
 use wintf::ecs::GraphicsCore;
 
 use areka_parsers::shell::{
@@ -11,8 +11,9 @@ use areka_parsers::shell::{
 use super::test_support::{
     CapturedEvent, FIVE_SHAPES, FIVE_SHAPES_MASK, attach_and_show, bake_world, build_balloon,
     capture, elem, five_shapes_assets, frames, gradient, gradient_with_alpha, hit_generation,
-    load_hit_shell, make_world_with_gpu, mask_pictures_created, name_at, set_window_dpi, shell_of,
-    show_ok, show_with_ok, spawn_window_with_dpi, straight_image, warn_count,
+    load_hit_shell, make_world_with_gpu, mask_pictures_created, name_at, paint_screen,
+    set_window_dpi, shell_of, show_ok, show_with_ok, spawn_window_with_dpi, straight_image,
+    warn_count,
 };
 use super::{EmoPresenter, PatternState, TargetId};
 
@@ -42,8 +43,8 @@ fn repeated_checks_new_bind_keys_and_scale_changes_keep_the_generation() {
     let generation = hit_generation(&presenter, T).expect("描き先がある");
 
     for _ in 0..20 {
-        assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
-        assert_eq!(name_at(&presenter, T, 20, 4), Some("B"));
+        assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("R"));
+        assert_eq!(name_at(&mut world, &presenter, T, 20, 4), Some("B"));
     }
     assert_eq!(hit_generation(&presenter, T), Some(generation));
 
@@ -88,7 +89,7 @@ fn frame_advances_keep_the_generation_and_the_name() {
         steps[0].clone(),
     );
     let generation = hit_generation(&presenter, T).expect("描き先がある");
-    assert_eq!(name_at(&presenter, T, 4, 0), Some("Body"));
+    assert_eq!(name_at(&mut world, &presenter, T, 4, 0), Some("Body"));
 
     for (i, pattern) in steps.iter().enumerate() {
         show_with_ok(
@@ -100,7 +101,11 @@ fn frame_advances_keep_the_generation_and_the_name() {
             pattern.clone(),
         );
         assert_eq!(hit_generation(&presenter, T), Some(generation), "step {i}");
-        assert_eq!(name_at(&presenter, T, 4, 0), Some("Body"), "step {i}");
+        assert_eq!(
+            name_at(&mut world, &presenter, T, 4, 0),
+            Some("Body"),
+            "step {i}"
+        );
     }
 }
 
@@ -160,65 +165,105 @@ fn switching_surfaces_names_the_new_one_and_keeps_mask_pictures_until_a_device_c
     let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     attach_and_show(&mut presenter, &mut world, T, two_region_faces(), 0, 96);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("A"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("A"));
 
     show_binds(&mut presenter, &mut world, 1, 1);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("B"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("B"));
     let kinds = mask_pictures_created(&presenter, T);
     assert_eq!(kinds, 2, "マスクは 2 種類");
 
     for round in 0..6 {
         show_binds(&mut presenter, &mut world, 0, 2 + round);
-        assert_eq!(name_at(&presenter, T, 2, 2), Some("A"), "round {round}");
+        assert_eq!(
+            name_at(&mut world, &presenter, T, 2, 2),
+            Some("A"),
+            "round {round}"
+        );
         show_binds(&mut presenter, &mut world, 1, 2 + round);
-        assert_eq!(name_at(&presenter, T, 2, 2), Some("B"), "round {round}");
+        assert_eq!(
+            name_at(&mut world, &presenter, T, 2, 2),
+            Some("B"),
+            "round {round}"
+        );
     }
     assert_eq!(mask_pictures_created(&presenter, T), kinds);
 
     presenter.refresh_after_device_change(&mut world);
     world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
     presenter.refresh_after_device_change(&mut world);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("B"));
+    // 描画面は装置の作り直しを追う回の次の回に新しい装置で描き直される。
+    paint_screen(&mut world);
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("B"));
     let after_follow = mask_pictures_created(&presenter, T);
     assert_eq!(
         after_follow, 1,
         "追従で捨てた後、表示中の面のぶんだけ作り直された"
     );
     show_binds(&mut presenter, &mut world, 0, 30);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("A"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("A"));
     assert_eq!(mask_pictures_created(&presenter, T), kinds);
 }
 
-/// 同じ寸法の面を巡回して表示し、暖機の後に α マスクの確保が増えるかを数える。
-fn mask_allocs_after_warm_up(assets: (EmoWorld, AtlasTable), surface: u32) -> (u64, u64) {
-    let mut world = make_world_with_gpu();
-    let mut presenter = EmoPresenter::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas) = assets;
-    presenter.attach_target(T, window, emo_world, atlas, 96);
-    let warm = crate::cache::CAPACITY + 1;
-    for i in 0..warm {
-        show_binds(&mut presenter, &mut world, surface, 1 + i as u32);
-    }
-    let warmed = presenter.targets[&T].budget.cumulative().alloc_mask;
-    for i in 0..8 {
-        show_binds(&mut presenter, &mut world, surface, 1 + (warm + i) as u32);
-    }
-    let settled = presenter.targets[&T].budget.cumulative().alloc_mask;
-    (warmed, settled)
+/// 面 0 は左半分が `A`・面 1 は右半分が `B`。面 0 の動き 10 は `base` で面 1 を土台にする。
+fn base_replacing_faces() -> (EmoWorld, AtlasTable) {
+    let body = [
+        "collisionex0,A,rect,0,0,8,16",
+        "animation10.interval,never",
+        "animation10.pattern0,base,1,0,0,0",
+        "}",
+        "surface1",
+        "{",
+        "collisionex0,B,rect,8,0,16,16",
+        "",
+    ]
+    .join("\n");
+    load_hit_shell_two(&body, straight_image(1, 1, |_, _| [0, 0, 0, 255]))
 }
 
 #[test]
-fn the_shown_mask_copy_does_not_add_mask_allocations() {
-    let (warmed, settled) = mask_allocs_after_warm_up(five_shapes_assets(), 0);
-    assert_eq!(settled, warmed, "暖機の後に α マスクの確保が増えた");
+fn a_base_frame_moves_the_regions_and_the_picture_to_the_replacing_surface_and_back() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = EmoPresenter::new();
+    attach_and_show(&mut presenter, &mut world, T, base_replacing_faces(), 0, 96);
+    let picture = |p: &EmoPresenter| {
+        let pic = p.targets[&T].hit_picture.as_ref().expect("描き先がある");
+        (pic.surface_id, pic.base_surface)
+    };
+    assert_eq!(picture(&presenter), (0, 0));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("A"));
+    assert_eq!(name_at(&mut world, &presenter, T, 12, 2), None);
 
-    let plain = load_hit_shell("", (80, 16, gradient(80, 16, 0x15)), Vec::new());
-    assert_eq!(
-        mask_allocs_after_warm_up(plain, 0),
-        (warmed, settled),
-        "当たり判定の有無で α マスクの確保の数が違う"
+    let mut based = PatternState::default();
+    based.set(
+        10,
+        PatternFrame {
+            surface_id: 1,
+            method: ComposeMethod::Base,
+            x: 0,
+            y: 0,
+        },
     );
+    show_with_ok(&mut presenter, &mut world, T, 0, BindSet::default(), based);
+    assert_eq!(presenter.current_surface_id(T), Some(0));
+    assert_eq!(
+        picture(&presenter),
+        (0, 1),
+        "描き先は置き換え先の面の領域で塗る"
+    );
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), None);
+    assert_eq!(name_at(&mut world, &presenter, T, 12, 2), Some("B"));
+
+    show_with_ok(
+        &mut presenter,
+        &mut world,
+        T,
+        0,
+        BindSet::default(),
+        PatternState::default(),
+    );
+    assert_eq!(picture(&presenter), (0, 0), "コマが終われば元の面へ戻る");
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("A"));
+    assert_eq!(name_at(&mut world, &presenter, T, 12, 2), None);
 }
 
 fn problems(events: &[CapturedEvent]) -> usize {
@@ -263,14 +308,18 @@ fn the_color_picture_alpha_decides_inside_a_shape() {
     let mut presenter = EmoPresenter::new();
     attach_and_show(&mut presenter, &mut world, T, faint_five_shapes(), 0, 96);
 
-    assert_eq!(name_at(&presenter, T, 19, 4), Some("B"));
-    assert_eq!(name_at(&presenter, T, 20, 4), None, "α 127 は 0.5 未満");
+    assert_eq!(name_at(&mut world, &presenter, T, 19, 4), Some("B"));
     assert_eq!(
-        name_at(&presenter, T, 21, 4),
+        name_at(&mut world, &presenter, T, 20, 4),
+        None,
+        "α 127 は 0.5 未満"
+    );
+    assert_eq!(
+        name_at(&mut world, &presenter, T, 21, 4),
         Some("B"),
         "α 128 は 0.5 以上"
     );
-    assert_eq!(name_at(&presenter, T, 22, 4), Some("B"));
+    assert_eq!(name_at(&mut world, &presenter, T, 22, 4), Some("B"));
 }
 
 #[test]
@@ -280,7 +329,7 @@ fn outside_the_face_and_nothing_shown_hit_nothing_and_record_nothing() {
     attach_and_show(&mut presenter, &mut world, T, five_shapes_assets(), 0, 96);
     let (names, events) = capture(|| {
         [(-1, 4), (4, -1), (80, 4), (4, 16), (1000, 1000)]
-            .map(|(x, y)| name_at(&presenter, T, x, y))
+            .map(|(x, y)| name_at(&mut world, &presenter, T, x, y))
     });
     assert_eq!(names, [None; 5]);
     assert_eq!(problems(&events), 0, "{events:?}");
@@ -289,7 +338,7 @@ fn outside_the_face_and_nothing_shown_hit_nothing_and_record_nothing() {
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas) = five_shapes_assets();
     idle.attach_target(T, window, emo_world, atlas, 96);
-    let (name, events) = capture(|| name_at(&idle, T, 2, 2).map(str::to_owned));
+    let (name, events) = capture(|| name_at(&mut world, &idle, T, 2, 2).map(str::to_owned));
     assert_eq!(name, None);
     assert_eq!(problems(&events), 0, "{events:?}");
 }
@@ -302,15 +351,16 @@ fn a_discarded_target_warns_once_and_the_next_commit_brings_the_name_back() {
     presenter.targets.get_mut(&T).unwrap().hit_picture = None;
 
     let (names, events) = capture(|| {
-        [(2, 2), (2, 2), (20, 4)].map(|(x, y)| name_at(&presenter, T, x, y).map(str::to_owned))
+        [(2, 2), (2, 2), (20, 4)]
+            .map(|(x, y)| name_at(&mut world, &presenter, T, x, y).map(str::to_owned))
     });
     assert_eq!(names, [None, None, None]);
     assert_eq!(warn_count(&events), 1, "{events:?}");
     assert_eq!(problems(&events), 1, "{events:?}");
 
     show_binds(&mut presenter, &mut world, 0, 1);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
-    assert_eq!(name_at(&presenter, T, 20, 4), Some("B"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("R"));
+    assert_eq!(name_at(&mut world, &presenter, T, 20, 4), Some("B"));
 }
 
 #[test]
@@ -318,14 +368,16 @@ fn a_device_change_follow_up_repaints_and_the_answer_returns() {
     let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     attach_and_show(&mut presenter, &mut world, T, five_shapes_assets(), 0, 96);
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("R"));
 
     presenter.refresh_after_device_change(&mut world);
     world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
     presenter.refresh_after_device_change(&mut world);
+    // 描画面は装置の作り直しを追う回の次の回に新しい装置で描き直される。
+    paint_screen(&mut world);
     assert_eq!(hit_generation(&presenter, T), Some(1), "塗り直された");
-    assert_eq!(name_at(&presenter, T, 2, 2), Some("R"));
-    assert_eq!(name_at(&presenter, T, 20, 4), Some("B"));
+    assert_eq!(name_at(&mut world, &presenter, T, 2, 2), Some("R"));
+    assert_eq!(name_at(&mut world, &presenter, T, 20, 4), Some("B"));
 }
 
 #[test]
@@ -362,10 +414,10 @@ fn one_over_the_bound_warns_once_and_drops_the_head_side() {
     assert_eq!(warn_count(&events), 1, "{events:?}");
     assert_eq!(warns_containing(&events, "上限"), 1, "{events:?}");
 
-    assert_eq!(name_at(&presenter, T, 10, 4), Some("front"));
-    assert_eq!(name_at(&presenter, T, 20, 4), Some("second"));
+    assert_eq!(name_at(&mut world, &presenter, T, 10, 4), Some("front"));
+    assert_eq!(name_at(&mut world, &presenter, T, 20, 4), Some("second"));
     assert_eq!(
-        name_at(&presenter, T, 2, 2),
+        name_at(&mut world, &presenter, T, 2, 2),
         None,
         "越えた先頭の側は当たらない"
     );

@@ -72,7 +72,7 @@ fn presenter_absent_degrades_to_region_none() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
     let wiring = MouseWiring::with_clock(tx, RegionSource::Presenter, stepping_clock(1000, 1000));
 
-    let hit = wiring.resolve_region(None, 3, 100, 200);
+    let hit = wiring.resolve_region(&World::new(), None, 3, 100, 200);
     assert_eq!(
         hit,
         HitRegion {

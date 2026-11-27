@@ -62,7 +62,7 @@ pub(super) fn on_probe_pointer_moved(
     let dy = client.y - s2c_y;
 
     // 解決は目視由来の s2c 点（GetCursorPos 経由）で行う（反トートロジー）。
-    let hit = resolve_hit_region(&boot.presenter, 0, s2c_x as i64, s2c_y as i64);
+    let hit = resolve_hit_region(world, &boot.presenter, 0, s2c_x as i64, s2c_y as i64);
     // 縮約後サーフェス px は presenter の値をそのまま載せる（二重縮約を避けるため probe 側で ÷k しない）。
     let (surface_x, surface_y) = hit.surface_point;
     let region = hit.region.as_deref().unwrap_or("None");

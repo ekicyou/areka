@@ -1,6 +1,6 @@
 //! `FrameTiming`: 表示 1 コマ適用（`apply_show`）の段階別計時と perf サマリ行の emit。
 //!
-//! 表示 1 コマの適用を キャッシュ照会・合成・当たり判定マスク生成・頁と葉の用意・節の写し の 5 段へ刻み、合計と併せて
+//! 表示 1 コマの適用を キャッシュ照会・合成・合成メモへの挿入・頁と葉の用意・節の写し の 5 段へ刻み、合計と併せて
 //! 1 適用 = 1 行の固定スキーマで出す。この行だけが `tools/perf/judge-perf.py`（判定スクリプト）と
 //! コードの間のデータ契約である。
 //!
@@ -22,7 +22,8 @@
 //! - `t_cache_us` `t_compose_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
 //!   全段が常に出る。実行されなかった段は 0 で、判定スクリプトは「段フィールドの欠落」を行単位で検出でき、
 //!   部分集計を黙って出さずに済む
-//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた新規確保／容量成長の計数（供給元は `FrameBudget`）
+//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた新規確保／容量成長の計数（供給元は `FrameBudget`）。
+//!   α マスクは作らないので `alloc_mask` は常に 0（`judge-perf.py` の必須の欄なので欄は残す）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
 //!   （キャッシュ容量の裁定材料）
 //! - `frame`（u32）: この適用が走った tick のフレーム番号。遷移観測チャネル（`wintf::transition`）の
@@ -57,10 +58,10 @@ pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 pub(super) enum Stage {
     /// キャッシュ照会（`ComposeCache::touch`）。
     CacheLookup,
-    /// 合成（`Composer::compose_into` / `compose_into_reusing`）。
+    /// 合成（`Composer::compose_into`）。
     Compose,
-    /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
-    MaskGen,
+    /// 合成メモへの挿入（引き当て時は実行されない・欄の名は `t_mask_us`）。
+    Insert,
     /// 頁の上げと計画の葉の記録（控えに在る分は引くだけ）。
     Upload,
     /// 計画を描画面の節へ写す。
@@ -76,7 +77,7 @@ impl Stage {
         match self {
             Stage::CacheLookup => 0,
             Stage::Compose => 1,
-            Stage::MaskGen => 2,
+            Stage::Insert => 2,
             Stage::Upload => 3,
             Stage::Nodes => 4,
         }
@@ -175,7 +176,7 @@ impl FrameTiming {
         let stage_us = |stage: Stage| -> u64 { duration_us(self.stages[stage.index()]) };
         let t_cache_us = stage_us(Stage::CacheLookup);
         let t_compose_us = stage_us(Stage::Compose);
-        let t_mask_us = stage_us(Stage::MaskGen);
+        let t_mask_us = stage_us(Stage::Insert);
         let t_upload_us = stage_us(Stage::Upload);
         let t_nodes_us = stage_us(Stage::Nodes);
         let t_total_us = as_micros_u64(now.saturating_duration_since(self.started));
@@ -191,10 +192,10 @@ impl FrameTiming {
         } = *ctx;
         let BudgetDelta {
             alloc_compose_dst,
-            alloc_mask,
             alloc_plan,
             node_rebuilds,
         } = allocs;
+        let alloc_mask = 0u32;
 
         // 文言は PERF_LINE_MESSAGE の写し（リテラル必須）。水準・target と共に judge-perf.py との
         // 契約面で、変更は判定スクリプトと計時檻の再検証が要る。

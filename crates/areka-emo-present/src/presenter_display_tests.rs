@@ -6,19 +6,18 @@ use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
     INFO_LINE_MESSAGE, bake_world, bind_overlay_surface, build_assets_with_valid_and_empty,
-    build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu, mask_dims,
-    mount_entities, on_screen, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
+    build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu, mount_entities,
+    on_screen, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
 };
 
-/// skip＋表示不変の回帰檻: 有効 id で表示・マスクを確立後、**解決不能 id** の
+/// skip＋表示不変の回帰檻: 有効 id で表示を確立後、**解決不能 id** の
 /// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
-/// 画面の節（＝画面へ渡っている描画そのもの）、
-/// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
-/// いずれも**適用前と不変**（表示＋マスクを一切乱さない）。
+/// 画面の節（＝画面へ渡っている描画そのもの）、(b) surface entity の `HitTest`（`SurfaceAlpha`）の
+/// いずれも**適用前と不変**（表示も当たりも一切乱さない）。
 ///
-/// 「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
+/// 「skip＝表示器（visual/hit-test）を触らない」を独立・自己完結に固定する。
 #[test]
-fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
+fn invalid_surface_skips_and_leaves_display_and_hit_unchanged() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
 
@@ -47,13 +46,8 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         .mode;
     assert_eq!(
         hit_before,
-        HitTestMode::AlphaMask,
-        "有効表示後は αマスク判定"
-    );
-    let mask_dims_before = mask_dims(&world, surface_entity);
-    assert!(
-        mask_dims_before.is_some(),
-        "有効表示後は AlphaMask が供給済み"
+        HitTestMode::SurfaceAlpha,
+        "有効表示後は入れ物の α の判定"
     );
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
@@ -92,14 +86,8 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     // (b) HitTest 不変（None へ落ちていない＝当たり判定が生きたまま）。
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "無効 id の skip で HitTest が変化した（マスク/当たり判定を乱している）"
-    );
-    // (c) AlphaMaskResource 不変（供給済みマスクが消えていない）。
-    let mask_dims_after = mask_dims(&world, surface_entity);
-    assert_eq!(
-        mask_dims_before, mask_dims_after,
-        "無効 id の skip で AlphaMaskResource が変化した（マスクを乱している）"
+        HitTestMode::SurfaceAlpha,
+        "無効 id の skip で HitTest が変化した（当たり判定を乱している）"
     );
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
@@ -255,7 +243,7 @@ fn extent_too_large_degrades_to_hidden_and_replies_ok() {
 }
 
 /// Hide → 再 ShowSurface 復帰: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋
-/// 装着・節・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::alpha_mask()`）。
+/// 装着・節・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::surface_alpha()`）。
 /// 再表示はキャッシュヒットで再合成せず、`read_back` が初回表示バイトと一致する（キャッシュからの復帰）。
 #[test]
 fn hide_then_reshow_recovers_display_from_cache() {
@@ -274,8 +262,8 @@ fn hide_then_reshow_recovers_display_from_cache() {
         .expect("read_back（初回）失敗");
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "初回表示後は αマスク判定"
+        HitTestMode::SurfaceAlpha,
+        "初回表示後は入れ物の α の判定"
     );
 
     hide_ok(&mut presenter, &mut world, TargetId(0));
@@ -325,8 +313,8 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "再表示後は αマスク判定へ復帰"
+        HitTestMode::SurfaceAlpha,
+        "再表示後は入れ物の α の判定へ復帰"
     );
     assert!(
         presenter.targets.get(&TargetId(0)).unwrap().visible,
@@ -435,8 +423,7 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 ///
 /// # なぜ既存の失敗経路の檻では足りないのか（5.1 → 5.3 の申し送り）
 ///
-/// [`invalid_surface_skips_and_leaves_display_and_mask_unchanged`] は表示バイト・`HitTest`・
-/// `AlphaMaskResource` の不変を見るが、これらはいずれも「失敗した適用は節を差し替えない」ことの
+/// [`invalid_surface_skips_and_leaves_display_and_hit_unchanged`] は表示バイト・`HitTest` の不変を見るが、これらはいずれも「失敗した適用は節を差し替えない」ことの
 /// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても差し替えは起きないので
 /// バイトは 1 つも変わらない。したがって `ComposeCache::take_recycled`（追い出しエントリの容量回収）を
 /// 合成の成否判定より**手前**へ置く誤りは、既存の檻を丸ごとすり抜ける。本檻はスロットそのものを
@@ -459,7 +446,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    let (bytes_before, mask_dims_before) = {
+    let (bytes_before, plan_before) = {
         let entry = presenter
             .targets
             .get(&TargetId(0))
@@ -467,10 +454,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
             .cache
             .get(1000, &BindSet::default(), &PatternState::default())
             .expect("前提: 表示成立でスロットが埋まる");
-        (
-            entry.composed.bytes().to_vec(),
-            (entry.mask.width(), entry.mask.height()),
-        )
+        (entry.composed.bytes().to_vec(), entry.plan.clone())
     };
     assert!(
         bytes_before.iter().any(|&b| b != 0),
@@ -514,9 +498,8 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         "合成失敗でスロットの表示バッファ内容が変化した（失敗した適用が中身を書き換えている）"
     );
     assert_eq!(
-        (entry.mask.width(), entry.mask.height()),
-        mask_dims_before,
-        "合成失敗でスロットのマスクが差し替わった（原子対の片側だけ動いている）"
+        entry.plan, plan_before,
+        "合成失敗でスロットの計画が差し替わった（原子対の片側だけ動いている）"
     );
 
     // 直後の同一入力の適用は成立し、表示も適用前と全バイト一致する。
@@ -569,40 +552,5 @@ fn a_cache_miss_puts_the_plan_into_the_entry_and_a_hit_keeps_the_nodes() {
         on_screen(&presenter, TargetId(0)),
         Some(first),
         "当たりの回に節が作り直されている"
-    );
-}
-
-/// 面の entity から当たりのマスクの資源が外れていると、同じ面の再表示は黙らず `warn!` を 1 件だけ
-/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない）。
-#[test]
-fn reshow_without_alpha_mask_resource_leaves_one_warn() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x18);
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
-    assert!(
-        world
-            .entity_mut(surface_entity)
-            .take::<AlphaMaskResource>()
-            .is_some(),
-        "前提: 1 回目の表示の後は面の entity にマスクの資源が在る"
-    );
-
-    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
-    let warns = events
-        .iter()
-        .filter(|e| {
-            e.level == tracing::Level::WARN
-                && e.message()
-                    .contains("surface entity に AlphaMaskResource が無い")
-        })
-        .count();
-    assert_eq!(
-        warns, 1,
-        "マスクの資源が無い再表示の warn! の件数: {events:?}"
     );
 }

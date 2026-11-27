@@ -16,31 +16,17 @@ fn no_plan() -> DrawPlan {
 // ── ComposedSurface 生成補助 ──────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) で画素を直接焼けないため、
 // 「全透明」は公開 `new(w,h)`、「不透明画素を含む結果」は上流公開 API（atlas bake → EmoWorld →
-// Composer::compose_into）で本物を合成して得る。後者はマスクが composed の bytes 由来であることを
-// 実合成経路で保証する。
+// Composer::compose_into）で本物を合成して得る。
 
-/// 原寸の合成面の bytes からマスクを生成する（マスク生成は呼び手側の責務で、その手順を檻でも踏む）。
-fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
-    Arc::new(AlphaMask::from_pbgra32(
-        composed.bytes(),
-        composed.width(),
-        composed.height(),
-        composed.stride(),
-    ))
-}
-
-/// 「原寸の合成面＋その bytes 由来マスク」の原子対を組んで挿入する。
-///
-/// マスクを別出所から作ると原子対の主張が空虚になるため、生成は必ず `composed` の bytes からのみ行う。
-fn insert_with_mask(
+/// 原寸の合成面を挿入する。
+fn insert_composed(
     cache: &mut ComposeCache,
     surface_id: u32,
     binds: BindSet,
     pattern: PatternState,
     composed: ComposedSurface,
 ) {
-    let mask = mask_of(&composed);
-    cache.insert(surface_id, binds, pattern, no_plan(), composed, mask);
+    cache.insert(surface_id, binds, pattern, no_plan(), composed);
 }
 
 /// 不透明画素と透明画素を**必ず両方**含む本物の合成を、**与えられた出力先へ書き戻す**。
@@ -82,29 +68,6 @@ fn composed_with_opaque_and_transparent() -> ComposedSurface {
     out
 }
 
-/// 合成結果 bytes から最初の不透明（α≧128）・最初の透明（α<128）画素座標を探す。
-fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32)) {
-    let stride = cs.stride();
-    let bytes = cs.bytes();
-    let mut opaque = None;
-    let mut transparent = None;
-    for y in 0..cs.height() {
-        for x in 0..cs.width() {
-            let alpha = bytes[(y * stride + x * 4 + 3) as usize];
-            if alpha >= 128 && opaque.is_none() {
-                opaque = Some((x, y));
-            }
-            if alpha < 128 && transparent.is_none() {
-                transparent = Some((x, y));
-            }
-        }
-    }
-    (
-        opaque.expect("fixture は不透明画素を含む"),
-        transparent.expect("fixture は透明画素を含む"),
-    )
-}
-
 // ── 容量政策の檻用の最小補助 ─────────────────────────────────────────────
 //
 // 既定キー（`BindSet::default()`／`PatternState::default()`）で **surface id だけ**を変える。
@@ -112,7 +75,7 @@ fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32))
 
 /// 既定キーの surface id `id` で挿入する。
 fn insert_id(cache: &mut ComposeCache, id: u32) {
-    insert_with_mask(
+    insert_composed(
         cache,
         id,
         BindSet::default(),
@@ -147,7 +110,7 @@ fn different_binds_on_same_surface_must_miss() {
     let eyes_open = BindSet::from_ids([1101, 1302]);
     let eyes_closed = BindSet::from_ids([1101, 1302, 1400]);
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         eyes_open.clone(),
@@ -169,7 +132,7 @@ fn different_binds_on_same_surface_must_miss() {
 
     // 異なる binds を挿入すると**別エントリ**として共存する（容量 3）。まばたきの
     // 開閉のように行き来する入力で再合成を省けることが、容量 3 の裁定の狙いそのものである。
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         eyes_closed.clone(),
@@ -191,7 +154,7 @@ fn different_binds_on_same_surface_must_miss() {
 
     // **無限堆積はしない**: 異なるキーを入れ続ければ最も古い引き当てから落ちる。
     for extra in [1401_u32, 1402, 1403] {
-        insert_with_mask(
+        insert_composed(
             &mut cache,
             id,
             BindSet::from_ids([1101, 1302, extra]),
@@ -219,7 +182,7 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
     let pattern_b = pattern_overlay_at(2000, 1002, 0, 0);
     assert_ne!(pattern_a, pattern_b, "前提: 2 つの pattern 状態は異なる");
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -238,7 +201,7 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
 
     // 2 つの pattern は**別エントリ**として共存し、それぞれ**自分の絵**を返す（古い絵を返さない）。
     // 外形を変えてあるので、キーだけ通ってエントリが取り違わる形はここで赤になる。
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -270,7 +233,7 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     let binds = BindSet::default();
     let pat = pattern_overlay_at(3000, 5000, 0, 0);
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -289,7 +252,7 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     // 逆向き: 非空 pattern **だけ**を入れた**新しい表**で測る。同じ表へ足すと容量 3 では両方が共存し、
     // 「空と非空が別キーである」という弁別が観測できなくなる（測っているのは弁別であって置換ではない）。
     let mut cache = ComposeCache::new();
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -306,38 +269,6 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     );
 }
 
-/// 呼び手が composed の bytes から作ったマスクが、表示バッファと対で保持され正しく引ける。
-#[test]
-fn mask_from_composed_bytes_is_kept_with_the_entry() {
-    let composed = composed_with_opaque_and_transparent();
-    let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
-    let (w, h) = (composed.width(), composed.height());
-    let binds = BindSet::default();
-
-    let mut cache = ComposeCache::new();
-    insert_with_mask(
-        &mut cache,
-        1000,
-        binds.clone(),
-        PatternState::default(),
-        composed,
-    );
-
-    let got = cache
-        .get(1000, &binds, &PatternState::default())
-        .expect("entry retained");
-    assert_eq!(got.composed.width(), w);
-    assert_eq!(got.composed.height(), h);
-    assert!(
-        got.mask.is_hit(ox, oy),
-        "opaque pixel ({ox},{oy}) must be a hit in the entry mask"
-    );
-    assert!(
-        !got.mask.is_hit(tx, ty),
-        "transparent pixel ({tx},{ty}) must not be a hit"
-    );
-}
-
 /// 変わらず: `invalidate_all` は**保持中の全エントリ**を破棄する（挙動不変）。
 ///
 /// 1 件だけの表では「先頭 1 件しか消さない」実装を通してしまうため、満杯の表で測る。
@@ -347,7 +278,7 @@ fn invalidate_all_clears_every_entry() {
     let binds = BindSet::from_ids([1100]);
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         7,
         binds.clone(),
@@ -377,7 +308,7 @@ fn invalidate_all_clears_every_entry() {
 /// **容量回収を挟んでも承認済み意味論は不変**である。
 ///
 /// 承認済み意味論（容量は 2026-08-15 の裁定で 3）は ⑴上限 3 件のメモ化表 ⑵キー完全一致のみヒット
-/// ⑶表示バッファとマスクの原子対、の 3 点である。`take_recycled` はバッファの容量を回収するだけで
+/// ⑶計画と表示バッファの原子対、の 3 点である。`take_recycled` はバッファの容量を回収するだけで
 /// 政策を変えないため、回収 → 挿入を経ても 3 点とも成立しなければならない。
 #[test]
 fn insert_after_take_recycled_preserves_approved_semantics() {
@@ -387,7 +318,7 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     // 回収は満杯のときだけ成立する。追跡対象（このキー）が最も古い引き当てになるよう先に入れる。
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -403,11 +334,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         (4, 4),
         "回収したエントリは表示バッファを保持している"
     );
-    assert_eq!(
-        (recycled.mask.width(), recycled.mask.height()),
-        (4, 4),
-        "回収したエントリはマスクも対で保持している（原子対のまま出る）"
-    );
     assert!(
         cache.get(id, &binds, &pattern).is_none(),
         "回収されたキーは以後ミスする"
@@ -417,24 +343,15 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "回収は 1 本だけ——残りのエントリは剥がれない"
     );
 
-    // 回収後の挿入。原子対の主張を空虚にしないため、不透明・透明を両方含む本物の合成結果を使う。
+    // 回収後の挿入。
     let composed = composed_with_opaque_and_transparent();
-    let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
     let (w, h) = (composed.width(), composed.height());
-    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), composed);
+    insert_composed(&mut cache, id, binds.clone(), pattern.clone(), composed);
 
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("回収後の挿入でも完全一致キーはヒットする");
     assert_eq!((entry.composed.width(), entry.composed.height()), (w, h));
-    assert!(
-        entry.mask.is_hit(ox, oy),
-        "不透明画素 ({ox},{oy}) は同一エントリのマスクでヒットする（原子対）"
-    );
-    assert!(
-        !entry.mask.is_hit(tx, ty),
-        "透明画素 ({tx},{ty}) は同一エントリのマスクでヒットしない（原子対）"
-    );
 
     assert!(
         cache.get(1001, &binds, &pattern).is_none(),
@@ -488,7 +405,7 @@ fn take_recycled_carries_over_buffer_capacity() {
     let big_ptr = big.bytes().as_ptr();
     let big_len = big.bytes().len();
     assert_eq!(big_len, 64 * 4 * 64, "前提: 追跡対象は 16,384 バイトの確保");
-    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), big);
+    insert_composed(&mut cache, id, binds.clone(), pattern.clone(), big);
     // 回収は満杯のときだけ成立する（容量 3）。追跡対象が最も古い引き当てのまま
     // 残るよう、別キーで表を埋める。
     insert_id(&mut cache, 9001);
@@ -519,8 +436,7 @@ fn take_recycled_carries_over_buffer_capacity() {
         "回収した容量が引き継がれていれば、より小さい出力への書き戻しで再確保は起きない"
     );
 
-    let mask = mask_of(&reused);
-    cache.insert(id, binds.clone(), pattern.clone(), no_plan(), reused, mask);
+    cache.insert(id, binds.clone(), pattern.clone(), no_plan(), reused);
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("再挿入したキーはヒットする");
@@ -547,7 +463,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "未挿入の表からは何も回収できない"
     );
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -580,7 +496,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "回収されたのは最も古い引き当て（このキー）である"
     );
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -682,7 +598,7 @@ fn take_recycled_picks_the_least_recently_used_entry() {
     let mut cache = ComposeCache::new();
     // 外形を変えて「どのエントリが回収されたか」を回収物から直接読めるようにする。
     for (id, side) in [(1000_u32, 4_u32), (1001, 5), (1002, 6)] {
-        insert_with_mask(
+        insert_composed(
             &mut cache,
             id,
             BindSet::default(),
@@ -743,7 +659,7 @@ fn touch_and_get_agree_on_every_key_component() {
     let binds = BindSet::from_ids([1101, 1302]);
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
@@ -789,14 +705,14 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     let pattern = PatternState::default();
 
     // 同一キーで 2 度挿入する。外形を変えて「どちらが返るか」を弁別できるようにする。
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),
         pattern.clone(),
         ComposedSurface::new(4, 4),
     );
-    insert_with_mask(
+    insert_composed(
         &mut cache,
         id,
         binds.clone(),

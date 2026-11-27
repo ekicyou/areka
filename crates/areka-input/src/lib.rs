@@ -135,7 +135,7 @@ impl MouseWiring {
     /// (scope, 窓 client 物理 px) → [`HitRegion`]（当たり判定名＋配信空間の座標）。
     ///
     /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視）。
-    /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`。
+    /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(world, p, scope, x, y)`。
     ///   `presenter` 不在（`RuntimeWiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
     ///   （collision-geometry の消費想定どおり・trace）。このとき `surface_point` は**無変換の
     ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
@@ -156,6 +156,7 @@ impl MouseWiring {
     /// [`plan_and_send_move`]: MouseWiring::plan_and_send_move
     fn resolve_region(
         &self,
+        world: &World,
         presenter: Option<&EmoPresenter>,
         scope: u32,
         x: i64,
@@ -164,7 +165,7 @@ impl MouseWiring {
         match self.region_source {
             RegionSource::Mock(f) => f(scope, x, y),
             RegionSource::Presenter => match presenter {
-                Some(p) => resolve_hit_region(p, scope, x, y),
+                Some(p) => resolve_hit_region(world, p, scope, x, y),
                 None => {
                     tracing::trace!(
                         event = "mouse_region_degrade",
@@ -410,7 +411,7 @@ fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     let presenter = world
         .get_non_send::<RuntimeWiring>()
         .map(RuntimeWiring::presenter);
-    wiring.resolve_region(presenter, scope, x, y)
+    wiring.resolve_region(world, presenter, scope, x, y)
 }
 
 /// キャラ窓のポインタ移動ハンドラ（Bubble のみ処理）。

@@ -8,7 +8,7 @@ use super::{
 // Window creation
 // ---------------------------------------------------------------------------
 
-/// シェル窓 Entity を構築する（WS_POPUP 透過窓・物理 px 採寸・αマスク当たりは emo-surface 子が担う）。
+/// シェル窓 Entity を構築する（WS_POPUP 透過窓・物理 px 採寸・入れ物の α の当たりは emo-surface 子が担う）。
 ///
 /// 表示内容は `EmoPresenter` が
 /// `attach_target`→`apply` で装着する原寸のコマンドリスト（拡大は wintf の `SetTransform`）。窓クライアント寸は
@@ -37,7 +37,7 @@ pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: 
                 }),
                 ..Default::default()
             },
-            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは emo-surface 子（αマスク）が担う。
+            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは emo-surface 子（入れ物の α）が担う。
             HitTest::none(),
             OnPointerPressed(on_shell_pressed),
         ))

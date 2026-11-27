@@ -23,7 +23,7 @@
 //! # 実時間を合否条件に使わない
 //!
 //! `sleep`・スピン・経過ミリ秒の閾値は 1 つも使わない。非 0 を主張するのは
-//! **入力の大きさが決めている段**だけである——合成・マスク生成・表示の記録は
+//! **入力の大きさが決めている段**だけである——合成・表示の記録は
 //! いずれも本檻が選んだ 240×180（原寸 172,800 バイト・k に依らず同じ画素数）を舐める作業であり、
 //! キャッシュ照会段は本檻が渡す 10 万要素の bind 集合の等価比較（400KB の逐語比較）が支配する。
 //! いずれも µs 分解能の 1 目盛りに対して 1 桁以上の余裕があり、「速いマシンなら 0 になる」形の
@@ -222,7 +222,7 @@ fn assert_perf_line_contract(ev: &CapturedEvent) {
 
 /// 段の非 0 を入力の大きさで担保するための native 外形（240×180＝172,800 バイト）。
 ///
-/// 合成・マスク生成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
+/// 合成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
 /// 1 目盛りに対して 1 桁以上の余裕がある（閾値ではなく入力で決める）。
 /// 拡大は wintf の変換行列が掛けるので、舐める量は k に依らない。
 const NATIVE_W: u32 = 240;
@@ -282,13 +282,13 @@ fn attach(
 ///
 /// 引き当てミスの初回適用は **4 段すべてが実行される唯一の入力**である（k の値では段が
 /// 増減しない——拡大は wintf の変換行列が掛けるため経路が分岐しない）。ゆえに
-/// 合成・マスク・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
+/// 合成・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
 /// （照会段の mark は [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が固定する）。同様に
 /// `note_alloc` を 1 つ削ると該当 `alloc_*` が 0 になって RED になる。
 ///
 /// # 殺す誤実装
 ///
-/// - 合成・マスク・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
+/// - 合成・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
 /// - `presenter/budget.rs` の `self.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
 /// - `timing.emit` を成立点から引き剥がす → 隣接判定で RED
 /// - 表示成立点の行の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
@@ -339,18 +339,12 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
 
     // (i) mark の設置位置: ミス経路は 4 段すべてが実行される唯一の入力である。
     //
-    // 照会段（`t_cache_us`）だけは本檻で非 0 を主張しない——ミス経路の照会は空スロットの
-    // 判定で終わり、舐める入力量が無いためである（照会段の mark は
+    // 照会段（`t_cache_us`）と挿入の段（`t_mask_us`）は本檻で非 0 を主張しない——ミス経路の照会は
+    // 空スロットの判定で終わり、挿入は所有の移し替えだけで、どちらも舐める入力量が無いためである（照会段の mark は
     // [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が
     // 10 万要素の bind 集合の逐語比較で固定する）。フィールドの存在自体は
     // [`assert_perf_line_contract`] が集合ちょうどで押さえている。
-    for name in [
-        "t_compose_us",
-        "t_mask_us",
-        "t_upload_us",
-        "t_nodes_us",
-        "t_total_us",
-    ] {
+    for name in ["t_compose_us", "t_upload_us", "t_nodes_us", "t_total_us"] {
         assert_ne!(
             stage_us(&perf, name),
             0,
@@ -366,11 +360,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
         "1",
         "合成先の確保が計数されていない"
     );
-    assert_eq!(
-        field(&perf, "alloc_mask"),
-        "1",
-        "当たり判定マスクの確保が計数されていない"
-    );
+    assert_eq!(field(&perf, "alloc_mask"), "0", "α マスクはもう作らない");
     assert_eq!(
         field(&perf, "alloc_plan"),
         "1",
@@ -387,11 +377,11 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
 }
 
 /// **配線の檻・ヒット経路**: 引き当てが成立した適用では
-/// 合成・マスク生成の 2 段が**厳密に 0**で出て、確保計数も節の作り直しも全て 0 になる。
+/// 合成・挿入の 2 段が**厳密に 0**で出て、確保計数も節の作り直しも全て 0 になる。
 /// 頁と葉の用意と節の写しはヒットでも走る（控えの葉を引き、同じ計画なら節を変えない）。
 ///
 /// 「どの段が 0 になるか」は mark をどの分岐へ置いたかの構造的帰結であり、測定マシンの速度では
-/// 変わらない。`timing.mark(Stage::Compose)`／`timing.mark(Stage::MaskGen)` をミス分岐の外
+/// 変わらない。`timing.mark(Stage::Compose)`／`timing.mark(Stage::Insert)` をミス分岐の外
 /// （無条件）へ移す改変・`note_alloc` をヒット経路でも踏む位置へ移す改変は、いずれもここで
 /// RED になる。
 ///

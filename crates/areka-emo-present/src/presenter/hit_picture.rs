@@ -12,6 +12,8 @@ use crate::hit_shapes::{HIT_SHAPE_LIMIT, hit_shapes};
 #[derive(Debug)]
 pub(super) struct HitPicture {
     pub(super) surface_id: u32,
+    /// 領域を引いた面（`DrawPlan::base_surface`）。
+    pub(super) base_surface: u32,
     /// `HitShapePlan::first`。
     pub(super) first: usize,
     pub(super) target: IdTarget,
@@ -27,20 +29,21 @@ pub(super) struct HitNotes {
 }
 
 impl PresentTarget {
-    /// 描き先が無い・塗ってあるサーフェスが違う・大きさが原寸と違うときだけ塗る。
+    /// 描き先が無い・塗ってある面か土台の面が違う・大きさが原寸と違うときだけ塗る。塗る領域は土台の面の領域。
     /// 失敗は wintf が記録し、描き先を捨てて次の表示の成立でまた試す。
     pub(super) fn paint_hit(
         &mut self,
         core: Option<&GraphicsCore>,
         target_id: TargetId,
         surface_id: u32,
+        base_surface: u32,
         native: (u32, u32),
     ) {
-        if self
-            .hit_picture
-            .as_ref()
-            .is_some_and(|p| p.surface_id == surface_id && p.target.size() == native)
-        {
+        if self.hit_picture.as_ref().is_some_and(|p| {
+            p.surface_id == surface_id
+                && p.base_surface == base_surface
+                && p.target.size() == native
+        }) {
             return;
         }
         let reuse = self
@@ -48,7 +51,7 @@ impl PresentTarget {
             .take()
             .map(|p| p.target)
             .filter(|t| t.size() == native);
-        let regions = self.emo_world.hit_regions(surface_id).unwrap_or_default();
+        let regions = self.emo_world.hit_regions(base_surface).unwrap_or_default();
         if regions.is_empty() {
             return;
         }
@@ -82,6 +85,7 @@ impl PresentTarget {
         self.hit_notes.unreadable.set(false);
         self.hit_picture = Some(HitPicture {
             surface_id,
+            base_surface,
             first: plan.first,
             target,
         });

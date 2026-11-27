@@ -1,9 +1,8 @@
-//! 当たり判定（`ClientHit`・`EmoPresenter::hit_region_client`）——窓 client 物理 px を実適用 k で縮約し
-//! α → ID → 名前で引く判定入口。
+//! 当たり判定（`ClientHit`・`EmoPresenter::hit_region_client`）——窓 client 物理 px の入れ物の α を読み、
+//! 実適用 k で縮約した点の ID → 名前で引く判定入口。
 
-use super::{EmoPresenter, ScaleRatio, TargetId};
-use areka_parsers::shell::Collision;
-use wintf::ecs::IdRead;
+use super::{EmoPresenter, ScaleRatio, TargetId, World};
+use wintf::ecs::{IdRead, surface_alpha_hits};
 
 use super::target::PresentTarget;
 
@@ -47,27 +46,30 @@ impl EmoPresenter {
     ///
     /// # 名前の引き方
     ///
-    /// 縮約した点で表示中の絵の α マスクが立っていない（面の外を含む）か当たり判定の並びが空なら
-    /// `None`。そうでなければ表示の成立点で塗った ID の描き先を 1 点読み、ID を並びの位置へ戻して名前を
-    /// 返す。描き先が読めない・無い・別のサーフェスを塗ったままのときは `None` にして `warn!` を 1 件
-    /// だけ残し、塗り直しが成功するまで繰り返さない。GPU を読むのは α が立つ点だけで、同じ点の読み直しは
-    /// 描き先の控えが答える。
+    /// 今の土台の面（表示中の計画の `base_surface`）の当たり判定の並びが空なら `None`。そうでなければ
+    /// クリックの透過と同じ 1 画素——`world` の描画面の入れ物の、client 物理 px `(x, y)` の α——を読み、
+    /// 128 未満・面の外・読めないなら `None`（読めないはクリックの透過と合わせて読めない間に 1 回だけ
+    /// wintf が `error!`）。それ以上なら縮約した点で表示の成立点で塗った ID の描き先を 1 点読み、ID を並びの位置へ戻して名前を返す。
+    /// 描き先が読めない・無い・別の面を塗ったままのときは `None` にして `warn!` を 1 件だけ残し、塗り直しが
+    /// 成功するまで繰り返さない。同じ点の読み直しは入れ物と描き先の控えが答える。
     ///
     /// # 観測
     ///
     /// k・縮約前座標・縮約後座標・解決 region を `debug!` 1 行で残す。実機サインオフは
     /// `RUST_LOG=areka_emo_present=debug` でこの行を grep して判定する。
-    pub fn hit_region_client(&self, target: TargetId, x: i64, y: i64) -> ClientHit<'_> {
-        // 判定の列は子から持ち込んだ領域が在ればその列。
+    pub fn hit_region_client(
+        &self,
+        world: &World,
+        target: TargetId,
+        x: i64,
+        y: i64,
+    ) -> ClientHit<'_> {
         let t = self.targets.get(&target);
         // 未登録 target は正常縮退。
         let applied = t.and_then(|t| t.applied);
-        let regions = t.and_then(|t| {
-            t.current_surface_id
-                .and_then(|id| t.emo_world.hit_regions(id))
-        });
+        let shown = t.is_some_and(|t| t.current_surface_id.is_some());
 
-        let k = match (applied, regions.is_some()) {
+        let k = match (applied, shown) {
             (Some(k), _) => k,
             // 正常縮退（未登録／未表示）は鳴らさない。
             (None, false) => ScaleRatio::ONE,
@@ -84,9 +86,7 @@ impl EmoPresenter {
         };
 
         let surface_point = (k.unscale_coord(x), k.unscale_coord(y));
-        let region = t
-            .zip(regions)
-            .and_then(|(t, regions)| t.resolve_hit(target, regions, surface_point));
+        let region = t.and_then(|t| t.resolve_hit(world, target, (x, y), surface_point));
 
         tracing::debug!(
             ?target,
@@ -108,22 +108,26 @@ impl EmoPresenter {
 }
 
 impl PresentTarget {
-    fn resolve_hit<'a>(
+    fn resolve_hit(
         &self,
+        world: &World,
         target: TargetId,
-        regions: &'a [Collision],
+        (cx, cy): (i64, i64),
         (sx, sy): (i64, i64),
-    ) -> Option<&'a str> {
+    ) -> Option<&str> {
+        let current = self.current_surface_id?;
+        let base = self.shown_base?;
+        let regions = self.emo_world.hit_regions(base).filter(|r| !r.is_empty())?;
+        if !self.alpha_hits(world, cx, cy) {
+            return None;
+        }
         let (Ok(px), Ok(py)) = (u32::try_from(sx), u32::try_from(sy)) else {
             return None;
         };
-        if !self.shown_mask.as_ref().is_some_and(|m| m.is_hit(px, py)) || regions.is_empty() {
-            return None;
-        }
         let picture = self
             .hit_picture
             .as_ref()
-            .filter(|p| Some(p.surface_id) == self.current_surface_id);
+            .filter(|p| p.surface_id == current && p.base_surface == base);
         let read = picture.map_or(IdRead::Unreadable, |p| p.target.read(px, py));
         match (read, picture) {
             (IdRead::Id(id), Some(picture)) => {
@@ -152,6 +156,14 @@ impl PresentTarget {
                 }
                 None
             }
+        }
+    }
+
+    /// クリックの透過と同じ答え（[`surface_alpha_hits`]）を、入れ物の client 物理 px で。
+    fn alpha_hits(&self, world: &World, x: i64, y: i64) -> bool {
+        match (self.mount.as_ref(), u32::try_from(x), u32::try_from(y)) {
+            (Some(mount), Ok(x), Ok(y)) => surface_alpha_hits(world, mount.surface_entity(), x, y),
+            _ => false,
         }
     }
 }

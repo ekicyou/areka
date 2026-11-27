@@ -100,7 +100,7 @@ fn bind_change_on_same_surface_updates_display() {
 
 /// 同寸・異 id 再 Show ＝ 新面提示 ＋ 文字スロット安定: バルーン target が既に
 /// ある面（1000）を表示中に、**同寸の異なる面 id（3000）**を `ShowSurface` すると——(a) reply Ok・
-/// (b) 可視維持・(c) `HitTest::AlphaMask` 維持・(d) `read_back` が **新面 3000 の golden** と一致
+/// (b) 可視維持・(c) `HitTestMode::SurfaceAlpha` 維持・(d) `read_back` が **新面 3000 の golden** と一致
 /// （新面が実際に提示された証跡）・(e) `text_slot_view()`（slot/window/surface_size/scale）が切替の
 /// 前後で**完全一致**（文字スロットが安定＝TextSlotView が不変）——をすべて満たす。
 ///
@@ -146,8 +146,8 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     );
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "同寸・異 id 再表示後も αマスク判定を維持"
+        HitTestMode::SurfaceAlpha,
+        "同寸・異 id 再表示後も 入れ物の α の判定を維持"
     );
 
     // (d) read_back が新面 3000 の golden と一致（新面が実際に提示された証跡）。

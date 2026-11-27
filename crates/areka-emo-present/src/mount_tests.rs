@@ -4,7 +4,6 @@
 //! |---|---|
 //! | 論理配置 | 論理配置（寸＝原寸・係数＝k・原点 0）と、`Visual::on_add` の連鎖挿入が実際に起きること |
 //! | 連鎖挿入の対照 | 親が窓でなければ連鎖挿入は起きないこと（片方だけでは恒真） |
-//! | 縮約 | 当たり判定で点が **1 回だけ** 縮約されること（二重縮約なし） |
 //! | 同値書き込み | 同値の書き込みでは変更検知が立たないこと |
 //!
 //! z 順の檻は本ファイル、非表示切替の檻は `mount_visibility_tests.rs` に残る。
@@ -13,14 +12,9 @@ use super::*;
 
 use bevy_ecs::hierarchy::Children;
 use wintf::ecs::widget::BrushInherit;
-use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{
-    GlobalArrangement, GraphicsCommandList, HitTestMode, Point, PointF, Rect, SurfaceGraphics,
-    SurfaceGraphicsDirty, VisualGraphics, WindowPos, hit_test_in_window,
+    GraphicsCommandList, HitTestMode, SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics,
 };
-
-// 注意: `wintf::ecs::PhysicalPoint` は pointer 側の別名（整数 `Point`）。
-// ヒットテストが取るのは浮動小数の `PointF` なので、本ファイルでは `PointF` を直接使う。
 
 use super::test_support::{attach_fixture, attach_fixture_under_window};
 
@@ -77,7 +71,7 @@ fn text_slot_is_higher_z_sibling_with_name() {
 /// 窓の子として装着したとき、surface entity が
 ///
 /// 1. 論理配置（`Arrangement` の寸＝原寸・係数＝k・**原点 0**）と表示側の一式
-///    （`OwnSurface`・`HitTest::alpha_mask`・`AlphaMaskResource`）を持ち、根の命令の列を持たず、
+///    （`OwnSurface`・`HitTest::surface_alpha`）を持ち、根の命令の列を持たず、
 /// 2. wintf の `Visual::on_add`（`graphics/visual.rs` `on_visual_add`）の**連鎖挿入**で
 ///    `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` が**既定値のまま**入る
 ///
@@ -127,12 +121,8 @@ fn arrangement_is_logical_native_with_scale_k_and_on_add_chain_runs() {
     );
     assert_eq!(
         world.get::<HitTest>(surface).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "surface entity は αマスク判定"
-    );
-    assert!(
-        world.get::<AlphaMaskResource>(surface).is_some(),
-        "surface entity は αマスクの供給口を持つ"
+        HitTestMode::SurfaceAlpha,
+        "surface entity は入れ物の α の判定"
     );
 
     // --- 3. `Visual::on_add` の連鎖挿入（owner Window 配下でのみ起きる 3 component）。
@@ -213,135 +203,6 @@ fn chain_insertion_requires_owner_window() {
         world.get::<SurfaceGraphicsDirty>(surface).is_none(),
         "窓でない親の下では SurfaceGraphicsDirty は挿さらない"
     );
-}
-
-/// 4×4 の既知マスク（PBGRA32・α は 0 か 255）。`true` の升だけ不透明。
-///
-/// ```text
-///        x=0    x=1    x=2    x=3
-/// y=0  [  T      F      F      T  ]
-/// y=1  [  F      T      F      F  ]
-/// y=2  [  F      F      T      F  ]
-/// y=3  [  T      F      F      T  ]
-/// ```
-///
-/// 対角と四隅を混ぜてあるので、÷k を 1 回しか掛けない写像と 2 回掛ける写像とで
-/// 判定が食い違う点（例: 原寸換算 (3,3) と (1,1)）が存在する。
-const KNOWN_MASK_4X4: [[bool; 4]; 4] = [
-    [true, false, false, true],
-    [false, true, false, false],
-    [false, false, true, false],
-    [true, false, false, true],
-];
-
-/// [`KNOWN_MASK_4X4`] を `AlphaMask`（原寸 4×4）へ焼く。
-fn known_mask() -> AlphaMask {
-    let mut pixels = Vec::with_capacity(4 * 4 * 4);
-    for row in KNOWN_MASK_4X4 {
-        for opaque in row {
-            let a = if opaque { 255u8 } else { 0u8 };
-            pixels.extend_from_slice(&[0, 0, 0, a]);
-        }
-    }
-    AlphaMask::from_pbgra32(&pixels, 4, 4, 4 * 4)
-}
-
-/// 原寸 4×4 のマスクを k=2 の非等倍で配置したとき、クリック透過の判定
-/// （`hit_test_in_window` → `alpha_mask_hit`）が「点を **1 回だけ** 縮約した表」と一致する。
-///
-/// 経路は本番と同じ `evaluate_targets` → `hit_test_in_window` → `hit_test_in_window_ex` → `hit_test_ex` →
-/// `hit_test_entity_ex` → `bounds.contains` → `alpha_mask_hit`。`alpha_mask_hit` は境界に対する比例写像
-/// `⌊(p − left) / (native × k) × native⌋ = ⌊(p − left) / k⌋` を掛けるので、emo 側が点を
-/// 縮約していれば ÷k が二重に効いて判定がずれる。
-///
-/// 期待値は原寸マスクを `⌊client / k⌋` で 1 回だけ読む式で組む。式そのものが誤っていないことは、
-/// 1 回縮約と 2 回縮約とで答えが変わる 2 点をベタ書きで押さえて較正する。
-#[test]
-fn hit_test_reduces_the_point_by_k_exactly_once() {
-    let k = ScaleRatio::new(2, 1).expect("2/1");
-    let native = (4u32, 4u32);
-    // 窓はスクリーン (100, 200) に居る（client → screen の平行移動を経路に含める）。
-    let window_origin = Point { x: 100, y: 200 };
-
-    let mut world = World::new();
-    let window = world
-        .spawn(WindowPos {
-            position: Some(window_origin),
-            ..Default::default()
-        })
-        .id();
-
-    let surface = world
-        .spawn((
-            logical_arrangement(native, k),
-            HitTest::alpha_mask(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-
-    // 窓のスクリーン位置に置いた `GlobalArrangement`（scale 1.0）× 論理配置＝本番と同じ式。
-    let window_global = GlobalArrangement {
-        bounds: Rect {
-            left: window_origin.x as f32,
-            top: window_origin.y as f32,
-            right: window_origin.x as f32,
-            bottom: window_origin.y as f32,
-        },
-        ..GlobalArrangement::default()
-    };
-    let surface_global = window_global * logical_arrangement(native, k);
-    assert_eq!(
-        (surface_global.width(), surface_global.height()),
-        (8.0, 8.0),
-        "境界は原寸 4×4 の k=2 倍＝物理 8×8"
-    );
-
-    let mut mask_resource = AlphaMaskResource::new();
-    mask_resource.set(known_mask());
-    world
-        .entity_mut(surface)
-        .insert((surface_global, mask_resource));
-
-    // --- 較正: 1 回縮約 ⌊c/2⌋ と 2 回縮約 ⌊c/4⌋ とで答えが変わる 2 点をベタ書きで押さえる。
-    // 期待値を後段のループと同じ式から導いていると、式そのものが誤っていても通ってしまう。
-    assert_eq!(
-        hit_test_in_window(&world, window, PointF::new(6.0, 0.0)),
-        Some(surface),
-        "client (6,0)＝原寸 (3,0) は不透明ゆえヒット。÷k が二重なら原寸 (1,0)＝透明で外れる"
-    );
-    assert_eq!(
-        hit_test_in_window(&world, window, PointF::new(4.0, 6.0)),
-        None,
-        "client (4,6)＝原寸 (2,3) は透明ゆえ外れ。÷k が二重なら原寸 (1,1)＝不透明で当たってしまう"
-    );
-
-    // --- 表: client 物理 px の格子全点で「1 回だけ縮約した表」と一致すること。
-    for iy in 0..=16u32 {
-        for ix in 0..=16u32 {
-            // 0.0, 0.5, 1.0, … 8.0（境界 8.0 と半画素を含む）。
-            let (cx, cy) = (ix as f32 * 0.5, iy as f32 * 0.5);
-            // ÷k は **ここ 1 回だけ**。範囲外（境界ちょうどの 8.0）はマスク外＝外れ。
-            let (mx, my) = ((cx / k.as_f32()) as usize, (cy / k.as_f32()) as usize);
-            let hit = mx < 4 && my < 4 && KNOWN_MASK_4X4[my][mx];
-            let expected = if hit { Some(surface) } else { None };
-
-            let actual = hit_test_in_window(&world, window, PointF::new(cx, cy));
-            assert_eq!(
-                actual, expected,
-                "client ({cx},{cy}) → 原寸 ({mx},{my}) の表と一致すべき（÷k は 1 回だけ）"
-            );
-        }
-    }
-
-    // --- 境界の外は当たらない（bounds.contains の早期リターン）。
-    for (cx, cy) in [(-0.5f32, 4.0f32), (8.5, 4.0), (4.0, -0.5), (4.0, 8.5)] {
-        assert_eq!(
-            hit_test_in_window(&world, window, PointF::new(cx, cy)),
-            None,
-            "境界（物理 8×8）の外 ({cx},{cy}) は当たらない"
-        );
-    }
 }
 
 /// surface entity の唯一の子は原寸のまとめの節（`SOURCE_OVER`・原点 0・倍率 1・寸＝原寸）で、

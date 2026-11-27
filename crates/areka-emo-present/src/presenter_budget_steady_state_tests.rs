@@ -12,7 +12,7 @@
 //! 立ち上がりの確保の形も同一**でなければならない。本ファイルが 2 水準を別々の檻で踏むのは
 //! その一致そのものを固定するためである。
 //!
-//! # 固定する 6 点
+//! # 固定する 5 点
 //!
 //! 1. **確保計数の増分 0**: 暖機後の反復で 2 発生点の累積が 1 も動かない
 //! 2. **暖機の形**: 立ち上がりの確保が「実体ごとに一度」の裁定済みの形どおりに
@@ -21,22 +21,11 @@
 //! 3. **交代の実体そのもの**: 前回の合成先席が今回の表示バッファへ回る。同時に生きている 2 つの
 //!    実体の役割入れ替えを主張するので、番地の偶然一致が入り込む余地が無い
 //! 4. **回る実体の集合が閉じている**: 表示バッファ・合成先席はちょうど [`WARMUP`] 種類
-//!    （キャッシュの 3 本＋合成先席 1 本）、マスクも [`WARMUP`] 種類で、そこに新顔が混じらない
-//! 5. **下流供給は共有であって複製でない**（マスクの下流供給は複製しない）:
-//!    `AlphaMaskResource` が握る実体がキャッシュスロットの `Arc` と同一番地であり、
-//!    参照数がちょうど 3（スロット＋下流＋表示中の α マスクの写し）である
-//! 6. **引き当てヒット経路も踏む**（毎コマ経路はヒットを含む）:
+//!    （キャッシュの 3 本＋合成先席 1 本）で、そこに新顔が混じらない
+//! 5. **引き当てヒット経路も踏む**（毎コマ経路はヒットを含む）:
 //!    上の 1〜4 を主張する 2 つの檻は**設計上すべての適用がミスする**。ミスしか踏まない檻だけでは
-//!    `show.rs` 手順 (3)（表示記録の反映＋マスク供給＋可視化＝合成の有無に依らず走る区間）の
-//!    ヒット側が 1 度も動かない。2 つの檻の本体の末尾が
+//!    合成の有無に依らず走る区間のヒット側が 1 度も動かない。2 つの檻の本体の末尾が
 //!    同じキーの再適用を 1 回入れてその穴を塞ぐ
-//!
-//! 5 は本ファイル以前にリポジトリのどこにも檻が無かった。`show.rs` の `set_shared` を `set`
-//! （実体の複製）へ戻しても既存のテストは全て緑のままであり、機序は「`set` は値を**新しい `Arc`**
-//! で包むためキャッシュ側の `Arc` は単独所有のまま `Arc::get_mut` が成功し続け、計数もマスクの
-//! 実体集合も 1 つも動かない」——複製は `Vec` のクローンとして、計数される席の**外**で起きる。
-//! 継ぎ目の両端（wintf の `set_shared` 単体檻・`budget_tests.rs` の手組み Flow 2）はどちらも
-//! 覆われていたのに、`show.rs` がどちらを呼ぶかを言う檻だけが無かった。
 //!
 //! # 「同じ寸法の反復」だけでは再利用を主張できない（過去に何度も踏んだ罠）
 //!
@@ -97,14 +86,10 @@
 //!
 //! # 実時間を合否条件に使わない
 //!
-//! 本ファイルは時刻にも経過にも一切触れない（回数・番地・参照数・画素のみ）。純 x64 の常設テストで
+//! 本ファイルは時刻にも経過にも一切触れない（回数・番地・画素のみ）。純 x64 の常設テストで
 //! あり、環境変数ゲートも `#[ignore]` も持たない。
 
 use super::*;
-
-use std::sync::Arc;
-
-use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::test_support::{build_target_assets, show_with_ok, spawn_window_with_dpi};
 
@@ -126,8 +111,8 @@ use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// 暖機の適用回数＝回る実体の本数。
 ///
-/// 表示バッファと合成先席（キャッシュの 3 本＋席 1 本＝4 本が交代する）・マスク（3 本＋輪番の
-/// 空き 1 枚＝4 本）はいずれも **1 適用ずつずれて**立ち上がるため、全ての実体が定常へ入るまでに
+/// 表示バッファと合成先席・計画（どちらもキャッシュの 3 本＋席 1 本＝4 本が交代する）は
+/// **1 適用ずつずれて**立ち上がるため、全ての実体が定常へ入るまでに
 /// これだけかかる。
 const WARMUP: usize = CACHE_CAPACITY + 1;
 
@@ -160,18 +145,12 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt
 ///
 /// 番地は**同一性の主張にのみ**使う（読み出しはしない）。
 struct Seen {
-    /// 2 発生点の累積計数（`[compose_dst, mask]`）。
+    /// 2 発生点の累積計数（`[compose_dst, plan]`）。
     cumulative: [u64; 2],
     /// 合成先の常設席が抱えるバイト列の先頭位置（**交代後**＝次の適用が合成する器）。
     native: *const u8,
     /// 表示バッファ（キャッシュスロットの表示用サーフェス）の先頭位置。
     display: *const u8,
-    /// キャッシュスロットが握るマスクの実体。
-    mask: *const AlphaMask,
-    /// **下流（`AlphaMaskResource`）が握るマスクの実体**（下流供給の継ぎ目）。
-    supplied: *const AlphaMask,
-    /// スロットのマスクの参照数（共有供給なら 3＝スロット＋下流＋表示中の写し）。
-    mask_refs: usize,
     /// 表示バッファ中の不透明画素数（空実装の偽合格を防ぐ非空性ガード）。
     opaque_pixels: usize,
 }
@@ -180,14 +159,14 @@ struct Seen {
 ///
 /// `binds` はいま適用したキーそのもの——ここでの `cache.get` は必ずヒットする
 /// （ミスしたら「直前の適用がスロットを埋めていない」＝檻の前提が壊れている）。
-fn observe(presenter: &EmoPresenter, world: &World, binds: &BindSet) -> Seen {
+fn observe(presenter: &EmoPresenter, binds: &BindSet) -> Seen {
     let target = presenter
         .targets
         .get(&TargetId(0))
         .expect("装着済み target");
 
     let c = target.budget.cumulative();
-    let cumulative = [c.alloc_compose_dst, c.alloc_mask];
+    let cumulative = [c.alloc_compose_dst, c.alloc_plan];
     let native = target.budget.native_scratch_ptr();
 
     let entry = target
@@ -195,8 +174,6 @@ fn observe(presenter: &EmoPresenter, world: &World, binds: &BindSet) -> Seen {
         .get(1000, binds, &PatternState::default())
         .expect("直前の適用がスロットを埋めている");
     let display = entry.composed.bytes().as_ptr();
-    let mask = Arc::as_ptr(&entry.mask);
-    let mask_refs = Arc::strong_count(&entry.mask);
     let opaque_pixels = entry
         .composed
         .bytes()
@@ -204,24 +181,10 @@ fn observe(presenter: &EmoPresenter, world: &World, binds: &BindSet) -> Seen {
         .filter(|px| px[3] == 0xFF)
         .count();
 
-    let surface_entity = target
-        .mount
-        .as_ref()
-        .expect("表示成立後は mount が生成済み")
-        .surface_entity();
-    let supplied = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .expect("表示成立後は surface entity に AlphaMaskResource が載る")
-        .mask()
-        .expect("表示成立後はマスクが供給済み") as *const AlphaMask;
-
     Seen {
         cumulative,
         native,
         display,
-        mask,
-        supplied,
-        mask_refs,
         opaque_pixels,
     }
 }
@@ -238,7 +201,7 @@ fn apply_and_observe(presenter: &mut EmoPresenter, world: &mut World, i: usize) 
         binds.clone(),
         PatternState::default(),
     );
-    observe(presenter, world, &binds)
+    observe(presenter, &binds)
 }
 
 /// 相異なり（順序は問わない・番地の集合を数えるための補助）。
@@ -252,25 +215,6 @@ fn distinct<T: Ord + Copy>(items: impl Iterator<Item = T>) -> Vec<T> {
 /// 累積計数の差（この適用で起きた確保）。
 fn delta(before: [u64; 2], after: [u64; 2]) -> [u64; 2] {
     [after[0] - before[0], after[1] - before[1]]
-}
-
-/// 下流供給が**共有**（参照カウント増）であって複製でないことを主張する。
-///
-/// `show.rs` が `set_shared` ではなく `set`（実体の複製）を呼ぶと、`AlphaMaskResource` は
-/// スロットとは別の `Arc` を握る——番地が食い違い、スロット側の参照数も 3 から 2 へ落ちる。
-/// 番地と参照数の 2 本立てにしてあるのは、番地の一致が偶然（解放直後の再確保）で成立し得る
-/// 一般論への備えである（ここでは両者が同時に生きているため偶然の余地は無いが、主張の
-/// 独立性を保つ）。
-fn assert_mask_is_shared_not_copied(seen: &Seen, at: &str) {
-    assert_eq!(
-        seen.supplied, seen.mask,
-        "{at}: 当たり判定へ供給したマスクがキャッシュスロットの実体と別物（下流供給が\
-         複製になっている＝Requirement 3.1 の「マスクの下流供給（複製）」が生きている）"
-    );
-    assert_eq!(
-        seen.mask_refs, 3,
-        "{at}: スロットのマスクの参照数が 3 でない（スロット＋下流＋表示中の写しの共有が成立していない）"
-    );
 }
 
 /// 表示バッファに不透明画素が実在することを主張する（中身が空の実装の偽合格を防ぐ）。
@@ -291,16 +235,14 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 /// # 暖機の形
 ///
 /// `[1,1]` が 4 適用ぶん、以後 0。合成先の代金が 4 適用に分かれるのは交代で回る 4 本
-/// （キャッシュの 3 本＋合成先席 1 本）ぶんであり、マスクも同じく 4 本（3 本＋輪番の空き 1 枚）
-/// ぶんである。暖機を 1 適用へ丸めるとこれらが観測の外へ落ち、残りのバッファの成長が黙って隠れる。
+/// （キャッシュの 3 本＋合成先席 1 本）ぶんであり、計画も同じく 4 本ぶんである。暖機を 1 適用へ丸めるとこれらが観測の外へ落ち、残りのバッファの成長が黙って隠れる。
 ///
 /// # 殺す誤実装（変異を実際に当てて、鳴った主張を書き取った）
 ///
 /// 推測で書かない——「同じ寸法の反復では再利用を主張できない」を何度も踏んでいる。
-/// 多くは暖機の形（計数の指紋）で落ちるが、**計数が鳴らない変異が 4 件ある**——変異 B・
-/// `swap_native_scratch` の複写化（どちらも交代関係で落ちる）と、`set` への差し戻し・ヒット経路だけの
-/// `set` への差し戻し（どちらも番地の側で落ちる）。ゆえに番地・交代関係の主張は計数の傍証ではなく、計数では捕まらない形を仕留める
-/// 独立の檻である。
+/// 多くは暖機の形（計数の指紋）で落ちるが、**計数が鳴らない変異が 2 件ある**——変異 B・
+/// `swap_native_scratch` の複写化（どちらも交代関係で落ちる）。ゆえに番地・交代関係の主張は計数の傍証
+/// ではなく、計数では捕まらない形を仕留める独立の檻である。
 ///
 /// - `seat::SurfaceSeat::lend` の冒頭で席を丸ごと作り直す（容量の読み取りより**前**に差し替える
 ///   ので計数へ現れる形）→ 「暖機の確保の形が……から外れている」で RED
@@ -309,13 +251,8 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 /// - 容量回収（`ComposeCache::take_recycled`）が満杯でなくても剥がす → 暖機の形で RED
 /// - `FrameBudget::display_buffer` が回収した `composed` を捨てて空バッファを返す（**変異 A**）
 ///   → 暖機の形で RED
-/// - マスク輪番を止めて毎コマ `AlphaMask::from_pbgra32` する → 暖機の形で RED
 /// - `swap_native_scratch` を複写へ戻す → 交代関係「前回の合成先席が表示バッファへ回っていない」
 ///   で RED
-/// - 下流供給を `set`（実体の複製）へ戻す → [`assert_mask_is_shared_not_copied`] の番地の側で RED
-/// - 下流供給を**ヒット経路のときだけ** `set` へ戻す → 末尾のヒット 1 適用の
-///   [`assert_mask_is_shared_not_copied`] の番地の側で RED（ミスの適用は緑のまま。2026-11-06 に
-///   当てて、2 水準とも「…のヒット経路」で赤になることを確かめた）
 fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     let level = format!("窓 DPI {window_dpi}");
     let mut world = super::test_support::make_world_with_gpu();
@@ -334,7 +271,7 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
         warm_shape,
         vec![[1, 1]; WARMUP],
         "{level}: 暖機の確保の形が Requirement 3.2 の「実体ごとに一度」から外れている\
-         （交代する {WARMUP} 本＋マスク {WARMUP} 本が 1 適用ずつずれて立ち上がる形）"
+         （交代する {WARMUP} 本と計画の {WARMUP} 本が 1 適用ずつずれて立ち上がる形）"
     );
 
     // 実適用 k が窓 DPI から導かれていること（k がキー要素でなくなった今、これを言わないと
@@ -358,7 +295,6 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
         let seen = apply_and_observe(&mut presenter, &mut world, WARMUP + i);
         let at = format!("{level} の基準適用 {i}");
         assert_not_empty(&seen, &at);
-        assert_mask_is_shared_not_copied(&seen, &at);
         assert_ne!(
             seen.native, seen.display,
             "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
@@ -392,15 +328,9 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
         WARMUP,
         "{level}: 交代で回る実体が {WARMUP} 本でない（確保し直している／潰れている）"
     );
-    let known_masks: Vec<*const AlphaMask> = distinct(base.iter().map(|s| s.mask));
-    assert_eq!(
-        known_masks.len(),
-        WARMUP,
-        "{level}: マスク輪番が {WARMUP} 本で回っていない（1 本へ潰れている／新しい実体を作っている）"
-    );
 
     let mut prev_native = base[base.len() - 1].native;
-    let mut prev_mask = base[base.len() - 1].mask;
+    let mut prev_display = base[base.len() - 1].display;
     for i in 0..STEADY {
         let seen = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + i);
         let at = format!("{level} の定常 {i} 回目");
@@ -427,35 +357,25 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
             seen.native, seen.display,
             "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
         );
-        assert!(
-            known_masks.contains(&seen.mask),
-            "{at}: マスクが輪番の {WARMUP} 本のどれでもない（新しい実体を作っている）"
-        );
-        assert_mask_is_shared_not_copied(&seen, &at);
         assert_not_empty(&seen, &at);
 
         prev_native = seen.native;
-        prev_mask = seen.mask;
+        prev_display = seen.display;
     }
 
-    // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。下流供給の 1 文は合成の有無に依らず
-    // 走るので、ミスしか踏まないとこの経路を 1 度も動かさない。ヒットの成立はマスクの実体が
-    // 動かないことで示す（ミスなら輪番が 1 つ進んで同時に生きている別の実体へ移る）。確保増分 0
-    // は単独ではヒットの証拠にならない（定常状態ではミスも 0 件）。次の番号のキーを渡して
-    // ミスにすると「マスクの実体が動いた」で赤になることを較正で確かめた。下流供給をヒット経路の
-    // ときだけ `set` へ戻すと、下の `assert_mask_is_shared_not_copied` が 2 水準とも赤になることも
-    // 当てて確かめた（2026-11-06）。
+    // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。ヒットの成立は表示バッファの実体が
+    // 動かないことで示す（ミスなら交代で同時に生きている別の実体へ移る）。確保増分 0 は単独では
+    // ヒットの証拠にならない（定常状態ではミスも 0 件）。
     let hit = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + STEADY - 1);
     let at = format!("{level} のヒット経路");
     assert_eq!(
-        hit.mask, prev_mask,
-        "{at}: マスクの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない＝以後の主張が空虚）"
+        hit.display, prev_display,
+        "{at}: 表示バッファの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない＝以後の主張が空虚）"
     );
     assert_eq!(
         hit.cumulative, cumulative,
-        "{at}: 確保が起きた（ヒットなら合成もマスク再生成も走らない）"
+        "{at}: 確保が起きた（ヒットなら計画も合成も走らない）"
     );
-    assert_mask_is_shared_not_copied(&hit, &at);
     assert_not_empty(&hit, &at);
 }
 

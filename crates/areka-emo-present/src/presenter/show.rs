@@ -1,5 +1,5 @@
 //! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／計画＋合成・頁と葉の用意・
-//! 装着の遅延生成・節の写し＋配置＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
+//! 装着の遅延生成・節の写し＋配置＋可視化・当たりの描き先の塗り・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{DrawPlan, PlanItem};
@@ -12,12 +12,12 @@ use super::scale_change::{AppliedScale, ScaleChange};
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, stamp_of, surface_line};
 use super::{
-    AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, TargetId, VisibilityOwnership, VisualMount, World, derive_scale,
+    BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState, PresentError,
+    PresentOutcome, TargetId, VisibilityOwnership, VisualMount, World, derive_scale,
 };
 
 impl EmoPresenter {
-    /// `ShowSurface` の適用（キャッシュ引き当て or 計画＋合成 → 頁と葉の用意 → 節の写し・配置の書き込み → マスク同期 → 可視化）。
+    /// `ShowSurface` の適用（キャッシュ引き当て or 計画＋合成 → 頁と葉の用意 → 節の写し・配置の書き込み → 可視化 → 当たりの描き先）。
     ///
     /// 結果は戻り値で返す。応答の口へ送るのは指令の入口（`apply`）だけで、ここは送らない。
     ///
@@ -30,14 +30,14 @@ impl EmoPresenter {
     /// - ミスなら計画を組んで合成する（native 原寸）。`SurfaceNotFound` は `error!` ＋表示不変＋`Err`、
     ///   `EmptyComposition` は `warn!` ＋ Hide 縮退＋`Ok`（外形の上限越えの `ExtentTooLarge` も同じ扱い）。
     /// - 頁の絵と計画の葉を用意する（失敗し得る GPU 呼び出しはここだけ・どの状態にも触れる前）。
-    ///   ミスなら続けてマスクを原寸バイトから 1 回だけ生成し、`cache.insert` へ計画・面・マスクの組で渡す。
-    /// - `mount` 未生成なら遅延生成し、節の写し → 配置（原寸・k）→ マスク → 可視化の順に同一呼び出し内で
+    ///   ミスなら続けて `cache.insert` へ計画と面の組で渡す。
+    /// - `mount` 未生成なら遅延生成し、節の写し → 配置（原寸・k）→ 可視化の順に同一呼び出し内で
     ///   書く。拡大は wintf の描画経路（`render_surface` の `SetTransform`）が `Arrangement.scale`＝k で掛け、
     ///   原寸のまとめの節が原寸で描いてから k 倍で重ねるので、この漏斗は k の値で手順を分岐しない。
     ///
     /// # 毎フレーム経路は再利用席の上を走る
     ///
-    /// ミス経路のバッファ（計画・native 合成先・書き出しの控え・当たり判定マスク）はいずれも [`FrameBudget`] の
+    /// ミス経路のバッファ（計画・native 合成先・書き出しの控え）はいずれも [`FrameBudget`] の
     /// 席か、キャッシュ追い出しエントリの容量回収で回る。定常状態（寸法不変・初回確保後）ではこの
     /// 経路の新規確保は 0 であり、確保が起きた回だけが perf サマリ行の `alloc_*` に現れる。
     ///
@@ -47,7 +47,7 @@ impl EmoPresenter {
     ///
     /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
     /// と mount 遅延生成の初期可視性だけが変わり、それ以外の全手順は所有権に依らず共通（k 導出・合成・
-    /// キャッシュ・節・配置・マスク・`applied`／`native_size`／`last_show`／`pending_resize`・
+    /// キャッシュ・節・配置・`applied`／`native_size`／`last_show`／`pending_resize`・
     /// 下の表示の行）。表示成立点が 1 つであることを崩さないための境界であり、「不可視のまま配置先と面が
     /// 確立する」はこの共通部分がそのまま与える。可視化は [`EmoPresenter::show_target`] が同じ漏斗を
     /// 再通過したうえで付与する。
@@ -97,7 +97,7 @@ impl EmoPresenter {
                 .as_ref()
                 .is_some_and(|(id, b, _)| *id == surface_id && *b == binds);
 
-        // 引き当ては合成入力（id＋binds＋pattern）の完全一致のみヒット。k はキーに参加しない: 計画・面・マスクは
+        // 引き当ては合成入力（id＋binds＋pattern）の完全一致のみヒット。k はキーに参加しない: 計画と面は
         // いずれも原寸で k を含まないので、k だけが変わった適用は同じエントリにヒットし、変換の係数
         // （下の `set_layout`）だけが変わる。pattern は指令が運ぶ現在コマ集合をそのまま透過する。
         //
@@ -108,7 +108,7 @@ impl EmoPresenter {
         let cache_hit = target.cache.touch(surface_id, &binds, &pattern);
         timing.mark(Stage::CacheLookup);
         if !cache_hit {
-            // 計画は画面の節の材料、合成は当たり判定マスクと書き出しの出どころ（どちらも native 原寸・
+            // 計画は画面の節の材料、合成は書き出しの出どころ（どちらも native 原寸・
             // emo-compose は k を知らない）。席を閉包で借りるのは、外形が合成器の内側で決まり、伸長の観測を
             // 席を使い終えた直後にしか置けないため（`FrameBudget::native_scratch` の doc）。
             let planned = target.budget.plan_scratch(|plan| {
@@ -181,7 +181,7 @@ impl EmoPresenter {
         }
 
         // 頁の上げと葉の記録。失敗し得る GPU 呼び出しはここに集約し、節にも合成メモにも触れる前に置く:
-        // ここで失敗すればメモ・節・配置・マスク・可視性・`applied`／`native_size`／`last_show`／
+        // ここで失敗すればメモ・節・配置・可視性・`applied`／`native_size`／`last_show`／
         // `pending_resize` の 1 つも動いていない。
         let plan = if cache_hit {
             &target
@@ -209,36 +209,19 @@ impl EmoPresenter {
             // スロットが空のまま残り、直後の同一入力の適用がヒットせず再合成へ落ちて「失敗時は表示も
             // キャッシュも適用前のまま」が崩れる。
             let recycled = target.cache.take_recycled();
-            // 追い出しエントリの合成面と計画の容量を受け取り、束ねられていたマスクは輪番の空きスロットとして
-            // 下の `regenerate_mask` へ回す。回収が成立しなければ空から始まり、以後の伸長が計数される。
-            let (mut composed, retired_mask, mut plan) =
-                super::budget::FrameBudget::display_buffer(recycled);
+            // 追い出しエントリの合成面と計画の容量を受け取る。回収が成立しなければ空から始まり、以後の
+            // 伸長が計数される。
+            let (mut composed, mut plan) = super::budget::FrameBudget::display_buffer(recycled);
             // 席と回収した容量を交代させる（複写も確保も起きない）。交代後は回収した容量が席に入り、
             // 次の適用はそちらへ計画・合成する。
             target.budget.swap_native_scratch(&mut composed);
             target.budget.swap_plan_scratch(&mut plan);
-            // マスクはこの適用で 1 回だけ原寸バイトから生成する。生成点は `cache.insert` の外＝予算シームの
-            // 輪番で、`retired_mask`（直前の適用で表示に使ったマスク）が次の空きスロットへ回り、代わりに
-            // 前々回のマスク（下流が既に手放して単独所有）が再生成先として取り出される。÷k は wintf の
-            // `alpha_mask_hit` が物理寸の境界に対する比例写像で 1 回だけ掛ける。
-            let mask = target.budget.regenerate_mask(
-                retired_mask,
-                composed.bytes(),
-                composed.width(),
-                composed.height(),
-                composed.stride(),
-            );
-            target.cache.insert(
-                surface_id,
-                binds.clone(),
-                pattern.clone(),
-                plan,
-                composed,
-                mask,
-            );
-            // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）と席の交代（O(1) の入れ替え）を
-            // 含む。旧エントリは `take_recycled` で先に回収済みなので、対の解放 churn はこの区間に無い。
-            timing.mark(Stage::MaskGen);
+            target
+                .cache
+                .insert(surface_id, binds.clone(), pattern.clone(), plan, composed);
+            // `Stage::Insert` の区間は挿入（スロット置換）と席の交代（O(1) の入れ替え）を含む。旧エントリは
+            // `take_recycled` で先に回収済みなので、対の解放 churn はこの区間に無い。
+            timing.mark(Stage::Insert);
         }
 
         // 使えるエントリ（引き当て済み・順序は動かさない `get`）。原寸はエントリの `composed` 外形、物理寸は
@@ -248,6 +231,7 @@ impl EmoPresenter {
             .get(surface_id, &binds, &pattern)
             .expect("直前に引き当て済み");
         let native = (entry.composed.width(), entry.composed.height());
+        let base_surface = entry.plan.base_surface;
         let physical = scale.scaled_extent(native.0, native.1);
 
         // 装着の遅延生成（初回表示・原寸確定後・純 ECS・失敗経路なし）。`WucGraphicsResource`／
@@ -264,8 +248,8 @@ impl EmoPresenter {
             target.mount = Some(mount);
         }
 
-        // 節 → 配置 → マスク同期 → 可視化（同一呼び出し内＝原子入替）。可視化手順だけが所有権で
-        // ゲートされる: `External` の target では表示状態の確立（計画・節・配置・マスク・k・面 id・
+        // 節 → 配置 → 可視化（同一呼び出し内＝原子入替）。可視化手順だけが所有権で
+        // ゲートされる: `External` の target では表示状態の確立（計画・節・配置・k・面 id・
         // 再表示入力・窓寸 reconcile 要求）は全て完了し、可視性の付与だけを行わない。面切替もループ由来の
         // 反復指令も、経路を問わず可視状態を変えない。
         let visualize = matches!(target.ownership, VisibilityOwnership::CommandDriven);
@@ -318,28 +302,17 @@ impl EmoPresenter {
             .filter(|item| matches!(item, PlanItem::GroupBegin { .. }))
             .count() as u32;
         timing.mark(Stage::Nodes);
-        // 配置（原寸・k）: 同値なら書かない。bounds（＝αマスク座標基準・物理寸）は wintf が
+        // 配置（原寸・k）: 同値なら書かない。bounds（＝当たりの α を読む座標の基準・物理寸）は wintf が
         // `GlobalArrangement` へ導く。可視性に依らず常に合わせる——不可視中の更新は安全であり
-        // （`HitTest::none()` 中はマスクが判定に使われない）、ここで揃えておくことが「不可視期間中に
+        // （`HitTest::none()` 中は入れ物の α が判定に使われない）、ここで揃えておくことが「不可視期間中に
         // 生じた変化を取りこぼさない」の土台になる。
         mount.set_layout(world, native, scale);
-        target.shown_mask = Some(entry.mask.clone());
-        if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
-            // 書き出しの控えと同一の原寸 bytes 由来のマスクを hit-test へ供給する。供給は共有参照の受け渡し
-            // （`set_shared`）＝`Arc` の参照カウント増のみで、実体の複製は起きない。
-            mask_res.set_shared(entry.mask.clone());
-        } else {
-            tracing::warn!(
-                ?target_id,
-                entity = ?mount.surface_entity(),
-                "apply(ShowSurface): surface entity に AlphaMaskResource が無い（当たり判定は矩形/前状態）"
-            );
-        }
+        target.shown_base = Some(base_surface);
         if visualize {
             mount.set_visible(world, true);
             target.visible = true;
         }
-        // 可視化後の記録。節・配置・マスクを揃え終えた点＝「描画内容がこの寸で見えるようになった」
+        // 可視化後の記録。節・配置を揃え終えた点＝「描画内容がこの寸で見えるようになった」
         // 瞬間で、判定側はこの行の `t_us` と当該窓の窓書込の `t_us` の差（`visualize_to_write_us`）で
         // 「窓矩形と描画内容が食い違う区間」を測る。条件は upload の記録と同じ 1 つの札を使う
         // （2 度評価すると片方だけが変わる形を作れる）。
@@ -360,6 +333,7 @@ impl EmoPresenter {
             world.get_resource::<GraphicsCore>(),
             target_id,
             surface_id,
+            base_surface,
             native,
         );
         // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点。

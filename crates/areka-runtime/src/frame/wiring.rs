@@ -222,7 +222,7 @@ impl RuntimeWiring {
 
     /// 当たり判定 resolver への読み口。
     ///
-    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。本体の入力の層の `resolve_hit_owned` が [`crate::hit_region::resolve_hit_region`] の第 1 引数（`&EmoPresenter`）へそのまま渡す。所有・可変アクセスは frame 相に閉じたまま。呼び手は `.map(RuntimeWiring::presenter)` の関数パス形で借りるので、`.presenter()` の grep では見つからない。
+    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。本体の入力の層の `resolve_hit_owned` が [`crate::hit_region::resolve_hit_region`] の第 2 引数（`&EmoPresenter`）へそのまま渡す。所有・可変アクセスは frame 相に閉じたまま。呼び手は `.map(RuntimeWiring::presenter)` の関数パス形で借りるので、`.presenter()` の grep では見つからない。
     pub fn presenter(&self) -> &EmoPresenter {
         &self.presenter
     }

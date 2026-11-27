@@ -24,15 +24,17 @@ use areka_parsers::shell::{
     DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, Surface,
 };
 
+use bevy_ecs::schedule::ScheduleLabel;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{Arrangement, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{Arrangement, GlobalArrangement, GraphicsCore, WucGraphicsResource};
 
 // ── GPU/WUC フィクスチャ（wintf の wuc_resource.rs のテストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
 // DQTAT_COM_NONE（apartment 不変）でディスパッチャを組むため、COM を MTA 初期化してから呼ぶ。
 
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
+/// GraphicsCore ＋ WucGraphicsResource を実資源として載せ、画面の描き手の係（`PreRenderSurface`・
+/// `RenderSurface`）を持つ wintf World を組む。当たりは描画面の入れ物の画素を読むので、名前を引く
+/// テストは [`paint_screen`] で画面へ描いてから引く。
 ///
 /// `EmoPresenter` が本番で読むのは `GraphicsCore` だけになった（装着が純 ECS になり
 /// `Compositor` を要さない）。`WucGraphicsResource` は本番同様に載せたままにする——
@@ -46,10 +48,39 @@ pub(super) fn make_world_with_gpu() -> World {
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
 
-    let mut world = World::new();
+    // 画面の描き手の係と、係が読む資源（描画面の生成の数えほか）ごと借りる。
+    let mut world = std::mem::take(wintf::ecs::world::EcsWorld::new().world_mut());
     world.insert_resource(core);
     world.insert_resource(wuc);
     world
+}
+
+/// 画面へ 1 度描く（装置の追従・配置の伝播・描画面の用意・描画の係を本番と同じ順で回す）。
+pub(super) fn paint_screen(world: &mut World) {
+    use wintf::ecs::world::{
+        Composition, Draw, GraphicsSetup, PostLayout, PreRenderSurface, RenderSurface,
+    };
+    world.resource_mut::<wintf::ecs::FrameCount>().0 += 1;
+    world.resource_mut::<wintf::ecs::FrameTime>().0 = dola::now();
+    for schedule in [
+        PostLayout.intern(),
+        GraphicsSetup.intern(),
+        Draw.intern(),
+        PreRenderSurface.intern(),
+        RenderSurface.intern(),
+        Composition.intern(),
+    ] {
+        world.run_schedule(schedule);
+    }
+}
+
+/// 描画面の持ち主の物理ピクセル (x, y) の中心の、当たりが受ける画面の座標。
+pub(super) fn screen_point(world: &World, surface: Entity, x: u32, y: u32) -> wintf::ecs::PointF {
+    let bounds = world
+        .get::<GlobalArrangement>(surface)
+        .expect("描画面の持ち主に配置がある")
+        .bounds;
+    wintf::ecs::PointF::new(bounds.left + x as f32 + 0.5, bounds.top + y as f32 + 0.5)
 }
 
 /// 窓 entity を **`DPI` component 付き**で作る（テスト World 前提）。
@@ -58,8 +89,14 @@ pub(super) fn make_world_with_gpu() -> World {
 /// component を省くと縮退（error! ＋ k=1.0）が「正常系のふり」で緑になってしまうため、
 /// **明示挿入を規律とする**。96 挿入＝恒等 k、192 挿入＝k=2/1。縮退分岐そのものは
 /// `show_surface_without_dpi_component_degrades_to_identity`（DPI 不在専用テスト）で檻に入れる。
+///
+/// 窓は HWND を持たない `Window` の部品だけ（画面には出さない・[`paint_screen`] で描ける）。
 pub(super) fn spawn_window_with_dpi(world: &mut World, dpi: u16) -> Entity {
-    world.spawn(DPI::from_dpi(dpi, dpi)).id()
+    let window = world
+        .spawn((wintf::ecs::Window::default(), DPI::from_dpi(dpi, dpi)))
+        .id();
+    world.flush();
+    window
 }
 
 /// 窓 entity の `DPI` component を差し替える（モニタ跨ぎ移動・表示スケール変更の決定論的代替）。
@@ -254,29 +291,6 @@ pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u3
     )
 }
 
-/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
-pub(super) fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
-
-/// マスクの立っているビット数・落ちているビット数。
-pub(super) fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
-    let mut hits = 0;
-    let mut misses = 0;
-    for y in 0..mask.height() {
-        for x in 0..mask.width() {
-            if mask.is_hit(x, y) {
-                hits += 1;
-            } else {
-                misses += 1;
-            }
-        }
-    }
-    (hits, misses)
-}
-
 /// 表示成立点の行の固定文言（`show.rs` の `info!`・実機サインオフ契約）。
 pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
@@ -454,7 +468,7 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
 }
 
 /// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの計画と絵を、[`build_two_face_assets`]
-/// `(w, h)` の面 3000 の計画と原寸合成へ差し替える（マスクは同じ bytes から作る）。
+/// `(w, h)` の面 3000 の計画と原寸合成へ差し替える。
 ///
 /// キーも原寸も変えず中身だけを差し替えるので、その後の表示が面 3000 になれば presenter は
 /// スロットを引いている（合成し直していれば面 1000 に戻る）。
@@ -482,12 +496,6 @@ pub(super) fn tamper_face_1000_slot(
             &PatternState::default(),
         )
         .expect("面 3000 の合成は Ok");
-    let mask = std::sync::Arc::new(AlphaMask::from_pbgra32(
-        tampered.bytes(),
-        tampered.width(),
-        tampered.height(),
-        tampered.stride(),
-    ));
     presenter
         .targets
         .get_mut(&target)
@@ -499,7 +507,6 @@ pub(super) fn tamper_face_1000_slot(
             PatternState::default(),
             plan,
             tampered,
-            mask,
         );
 }
 

@@ -47,7 +47,7 @@ fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
 
 /// perf サマリ行スキーマの全段フィールド名（`judge-perf.py` の契約面）。
 ///
-/// 段は 5（キャッシュ照会・合成・マスク生成・頁と葉の用意・節の写し）。`t_nodes_us` は `frame` の後ろの欄。リサンプル段は撤去済みで `t_resample_us` は
+/// 段は 5（キャッシュ照会・合成・合成メモへの挿入・頁と葉の用意・節の写し）。`t_nodes_us` は `frame` の後ろの欄。リサンプル段は撤去済みで `t_resample_us` は
 /// 行に現れない。
 const STAGE_FIELDS: [&str; 5] = [
     "t_cache_us",
@@ -102,7 +102,6 @@ fn ctx() -> EmitContext {
 fn allocs() -> BudgetDelta {
     BudgetDelta {
         alloc_compose_dst: 1,
-        alloc_mask: 4,
         alloc_plan: 3,
         node_rebuilds: 5,
     }
@@ -113,7 +112,7 @@ fn allocs() -> BudgetDelta {
 /// 1 適用 = 1 行で、固定文言・debug 水準・全段フィールド常時出現・実行されなかった段は 0、が成立する。
 ///
 /// 注入した [`Instant`] は互いに弁別可能な区間（1ms / 7ms / 2ms・合計 12ms）で組むため、段の取り違え
-/// （cache と compose の入替・total と upload の混同）はすべて RED になる。MaskGen は `mark` を呼ばない
+/// （cache と compose の入替・total と upload の混同）はすべて RED になる。Insert は `mark` を呼ばない
 /// ——これが「実行されなかった段」で、フィールドが消えても 0 以外が出ても RED になる。フィールド名の集合は
 /// ちょうどで固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・その確保計数）が
 /// 行に現れないことも併せて固定する。
@@ -132,7 +131,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     let mut timing = FrameTiming::start_at(t0);
     timing.mark_at(Stage::CacheLookup, t0 + Duration::from_millis(1));
     timing.mark_at(Stage::Compose, t0 + Duration::from_millis(8));
-    // MaskGen は実行されなかった段（mark を呼ばない）。
+    // Insert は実行されなかった段（mark を呼ばない）。
     timing.mark_at(Stage::Upload, t0 + Duration::from_millis(10));
     timing.mark_at(Stage::Nodes, t0 + Duration::from_millis(11));
 
@@ -181,7 +180,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
 
     // 確保計数（値は呼び手から素通し）。
     assert_eq!(field(ev, "alloc_compose_dst"), "1");
-    assert_eq!(field(ev, "alloc_mask"), "4");
+    assert_eq!(field(ev, "alloc_mask"), "0", "α マスクはもう作らない");
     assert_eq!(field(ev, "alloc_plan"), "3");
     assert_eq!(field(ev, "node_rebuilds"), "5");
     assert_eq!(field(ev, "plan_items"), "6");

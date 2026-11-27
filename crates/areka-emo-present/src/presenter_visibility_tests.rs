@@ -15,7 +15,7 @@ use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
     arrangement_of, attach_hit_target, build_target_assets, build_two_face_assets, hide_ok,
-    make_world_with_gpu, mask_dims, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
+    make_world_with_gpu, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
 // ── テスト補助（装着実体の実値を読む）──────────────────────────────────────────────────
@@ -77,8 +77,8 @@ fn assert_entities_visible(world: &World, presenter: &EmoPresenter, target: Targ
             .get::<HitTest>(surface)
             .expect("surface に HitTest")
             .mode,
-        HitTestMode::AlphaMask,
-        "{ctx}: 枠の面が αマスク判定へ復帰していない"
+        HitTestMode::SurfaceAlpha,
+        "{ctx}: 枠の面が 入れ物の α の判定へ復帰していない"
     );
     assert_eq!(
         world.get::<HitTest>(slot).expect("slot に HitTest").mode,
@@ -232,7 +232,7 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         "配置先の物理寸が確立時の k を反映していない"
     );
     assert_eq!(view.scale(), 2.0, "配置先が読む実適用 k が等倍のまま");
-    // 面・マスクは**原寸**で、k は配置の係数としてだけ現れる。
+    // 面は**原寸**で、k は配置の係数としてだけ現れる。
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
         golden,
@@ -247,11 +247,6 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         arrangement_of(&world, surface).1,
         (2.0, 2.0),
         "配置の係数に k が届いていない（等倍のまま確立した）"
-    );
-    assert_eq!(
-        mask_dims(&world, surface),
-        Some(native_size),
-        "αマスクが原寸でない（k 適用後のバイトから作っている）"
     );
 }
 
@@ -322,25 +317,24 @@ fn external_reshow_updates_result_without_becoming_visible() {
 /// 不可視の期間中に表示倍率が変わった後の再指令で、**可視性に依らない
 /// 手順**（k 導出・配置の係数・物理寸の照会値）がすべて新しい倍率へ揃う。
 ///
-/// 可視化の手順以外を所有権でゲートした実装（配置やマスクの更新を可視のときだけ行う等）は、
+/// 可視化の手順以外を所有権でゲートした実装（配置の更新を可視のときだけ行う等）は、
 /// 事後状態だけを見るテストでは捕まらない——初回の確立では装着そのものが正しい外形で配置を
 /// 組むため、配置の更新手順が働くのは**再指令の経路だけ**だからである。ゆえに確立時の値を
 /// 起点として先に主張し、遷移として検査する。
 ///
 /// # 何が動き、何が動かないか
 ///
-/// 動くのは `Arrangement.scale`（＝変換の係数）と物理寸の照会値だけで、**面もマスクも配置の論理寸も
-/// 原寸のまま動かない**。旧正典はこの 3 つが k 倍に伸びることを固定していたので、期待値は正反対に
-/// なった。マスクの不変は「αマスクの更新を落とした」ことと区別できなければ意味が無いため、
+/// 動くのは `Arrangement.scale`（＝変換の係数）と物理寸の照会値だけで、**面も配置の論理寸も
+/// 原寸のまま動かない**。不変は「更新を落とした」ことと区別できなければ意味が無いため、
 /// 係数と照会値が実際に動いていることを同じテストの中で対にして主張する。
 #[test]
-fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mask_native() {
+fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_the_face_native() {
     let (mut world, window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x2A);
     let (surface, _slot) = mount_entities(&presenter, target);
     let native_size = (3, 2);
 
-    // 遷移の起点: 確立時は k=1/1。配置は原寸・係数 1.0 で、マスクも原寸。
+    // 遷移の起点: 確立時は k=1/1。配置は原寸・係数 1.0。
     assert_eq!(
         arrangement_of(&world, surface).0,
         native_size,
@@ -350,11 +344,6 @@ fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mas
         arrangement_of(&world, surface).1,
         (1.0, 1.0),
         "前提: 確立時の係数は等倍"
-    );
-    assert_eq!(
-        mask_dims(&world, surface),
-        Some(native_size),
-        "前提: 確立時に原寸のαマスクが供給されている"
     );
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
@@ -393,7 +382,7 @@ fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mas
         Some(scaled_size),
         "物理寸の照会値が新しい倍率を映していない"
     );
-    // 動かない側: 面・マスク・配置の論理寸はいずれも原寸のまま（k は面に入らない）。
+    // 動かない側: 面・配置の論理寸はいずれも原寸のまま（k は面に入らない）。
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
         golden,
@@ -403,11 +392,6 @@ fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mas
         arrangement_of(&world, surface).0,
         native_size,
         "配置の論理寸へ k を焼き込んでいる（拡大は変換行列の仕事）"
-    );
-    assert_eq!(
-        mask_dims(&world, surface),
-        Some(native_size),
-        "αマスクが k 倍に伸びている（÷k は hit-test 側の比例写像が 1 回だけ掛ける）"
     );
 }
 

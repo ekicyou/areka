@@ -37,7 +37,7 @@ use super::test_support::{
 /// 枠の面と文字層スロットに期待する状態（可視／不可視の 2 値）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Layers {
-    /// 双方可視。surface は αマスク判定・slot は矩形判定（component 未付与時の既定と同値）。
+    /// 双方可視。surface は 入れ物の α の判定・slot は矩形判定（component 未付与時の既定と同値）。
     Visible,
     /// 双方不可視。surface・slot とも当たり判定停止（ポインタ透過）。
     Hidden,
@@ -56,7 +56,7 @@ fn assert_layers(
 ) {
     let (surface, slot) = mount_entities(presenter, target);
     let (want_visible, want_surface_hit, want_slot_hit) = match expected {
-        Layers::Visible => (true, HitTestMode::AlphaMask, HitTestMode::Bounds),
+        Layers::Visible => (true, HitTestMode::SurfaceAlpha, HitTestMode::Bounds),
         Layers::Hidden => (false, HitTestMode::None, HitTestMode::None),
     };
 

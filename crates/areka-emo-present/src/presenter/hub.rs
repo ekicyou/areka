@@ -16,7 +16,7 @@ use super::{
     ReplySender, ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World,
 };
 
-/// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
+/// 指令適用の統括ハブ（合成・キャッシュ・表示・当たり判定の一点結線・UI スレッド専有）。
 ///
 /// target を [`Self::attach_target`] で登録し、[`Self::apply`] で [`PresentCommand`] を適用する。
 /// COM/GPU 資源を内包するため `!Send`（`PhantomData<*const ()>` で型強制）。`unsafe impl Send`
@@ -98,7 +98,7 @@ impl EmoPresenter {
                 failure_note: None,
                 hit_picture: None,
                 hit_masks: HitMasks::default(),
-                shown_mask: None,
+                shown_base: None,
                 hit_notes: HitNotes::default(),
             },
         );
@@ -277,7 +277,7 @@ impl EmoPresenter {
         Self::reply(reply, Ok(()));
     }
 
-    /// `InvalidateCache` の適用: 合成キャッシュ全破棄。表示中バッファ/マスクは反映済みゆえ表示は継続。
+    /// `InvalidateCache` の適用: 合成キャッシュ全破棄。画面の節は写し済みゆえ表示は継続。
     fn apply_invalidate(
         &mut self,
         target_id: TargetId,

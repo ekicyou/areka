@@ -9,8 +9,10 @@ use super::*;
 
 use super::test_support::{
     T, applies, attach, build_balloon, build_target_assets, capture, established, frames, golden,
-    hide, make_world_with_gpu, mount_entities, send, shown, spawn_window_with_dpi,
+    hide, make_world_with_gpu, mount_entities, paint_screen, screen_point, send, shown,
+    spawn_window_with_dpi,
 };
+use wintf::ecs::hit_test_entity;
 
 /// 隠れている対象へコマだけ違う指令を 3 回送ると合成 0 回で、出した絵は最後の指令のコマ。
 /// その間も `last_shown`・`read_back` は成立済みの絵を返す。
@@ -366,14 +368,10 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     let mut world = make_world_with_gpu();
     let mut presenter = shown(&mut world);
     let (w, _) = build_balloon();
-    let mask_hit = |presenter: &EmoPresenter, world: &World, x: u32, y: u32| {
+    let click_hits = |presenter: &EmoPresenter, world: &mut World, x: u32, y: u32| {
+        paint_screen(world);
         let surface = mount_entities(presenter, T).0;
-        world
-            .get::<AlphaMaskResource>(surface)
-            .expect("AlphaMaskResource")
-            .mask()
-            .expect("マスク")
-            .is_hit(x, y)
+        hit_test_entity(world, surface, screen_point(world, surface, x, y))
     };
 
     send(
@@ -387,8 +385,11 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     let size = presenter
         .target_physical_size(T)
         .expect("target_physical_size");
-    assert!(mask_hit(&presenter, &world, 5, 1), "コマ 0 は不透明");
-    assert_eq!(presenter.hit_region_client(T, 5, 1).region, Some("Body"));
+    assert!(click_hits(&presenter, &mut world, 5, 1), "コマ 0 は不透明");
+    assert_eq!(
+        presenter.hit_region_client(&world, T, 5, 1).region,
+        Some("Body")
+    );
 
     send(
         &mut presenter,
@@ -399,10 +400,16 @@ fn frame_changes_keep_the_slot_and_size_and_follow_the_transparency() {
     );
     assert_eq!(presenter.text_slot_view(T), Some(slot));
     assert_eq!(presenter.target_physical_size(T), Some(size));
-    assert!(!mask_hit(&presenter, &world, 5, 1), "コマ 1 の穴が透けない");
-    assert!(mask_hit(&presenter, &world, 4, 0), "穴の外は不透明のまま");
+    assert!(
+        !click_hits(&presenter, &mut world, 5, 1),
+        "コマ 1 の穴が透けない"
+    );
+    assert!(
+        click_hits(&presenter, &mut world, 4, 0),
+        "穴の外は不透明のまま"
+    );
     assert_eq!(
-        presenter.hit_region_client(T, 5, 1).region,
+        presenter.hit_region_client(&world, T, 5, 1).region,
         None,
         "穴は透けるので当たり無し"
     );

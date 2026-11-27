@@ -4,10 +4,6 @@
 //! 表示成立点で更新される状態（`applied`／`native_size`／`last_show`／`pending_resize` ほか）を 1 つの
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に閉じる。
 
-use std::sync::Arc;
-
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-
 use super::budget::FrameBudget;
 use super::hit_picture::{HitNotes, HitPicture};
 use super::scale_change::AppliedScale;
@@ -60,9 +56,9 @@ pub(super) struct PresentTarget {
     /// 毎フレーム経路の確保計数の器。累積カウンタの所有者はここ。target と同じ寿命で適用をまたいで
     /// 存続するので、「ウォームアップ後の N 反復で 1 件も確保が増えていない」を run 全体の累積として
     /// 主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、perf サマリ行の `alloc_*`
-    /// へ載る。再利用席（合成先と計画の常設席・マスクの輪番）も本フィールドが持つ。
+    /// へ載る。再利用席（合成先と計画の常設席）も本フィールドが持つ。
     pub(super) budget: FrameBudget,
-    /// 合成入力（surface id＋bind 集合＋pattern）→ (計画, composed 原寸, mask) の組の**容量 3・LRU** メモ化表。
+    /// 合成入力（surface id＋bind 集合＋pattern）→ (計画, composed 原寸) の組の**容量 3・LRU** メモ化表。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（遅延装着の対象）。
     pub(super) window: Entity,
@@ -205,7 +201,7 @@ pub(super) struct PresentTarget {
     pub(super) hit_picture: Option<HitPicture>,
     /// `region` のマスクの控え（対象の寿命で持つ）。
     pub(super) hit_masks: HitMasks,
-    /// 表示中の α マスク（クリックの透過へ渡したのと同じ実体）。
-    pub(super) shown_mask: Option<Arc<AlphaMask>>,
+    /// 最後に表示が確立した計画の土台の面（`DrawPlan::base_surface`・当たりの領域を引く面）。
+    pub(super) shown_base: Option<u32>,
     pub(super) hit_notes: HitNotes,
 }

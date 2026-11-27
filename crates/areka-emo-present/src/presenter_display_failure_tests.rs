@@ -12,17 +12,17 @@
 //!
 //! [`PresenterState`] の 8 項目である——`visible`／`applied`／`native_size`／`current_surface`／
 //! `pending_resize`／メモの件数と表示中エントリのバイト／画面の節
-//! （＝画面へ渡っている描画）／同 entity の `Arrangement`（配置）と `AlphaMaskResource`（さわり判定）
+//! （＝画面へ渡っている描画）／同 entity の `Arrangement`（配置）と当たりの領域を引く土台の面
 //! ——に加えて、呼出元へ `reply` が `Err(PresentError::Device)` で返り、`error!` が**ちょうど 1 行**出ること。
 //! 判定は「注入前に採った値と厳密に等しい」の 1 本である。
 //!
 //! # 3 場面（それぞれ別の項目に判別力がある）
 //!
-//! - **初回**: 表示が一度も成立していない。成功していれば装着・配置・マスク・メモが**無から生じる**。
+//! - **初回**: 表示が一度も成立していない。成功していれば装着・配置・土台の面・メモが**無から生じる**。
 //!   ここだけが「失敗した適用が装着を作らない」を見られる場面である。
 //! - **同形再表示**: 表示確立後に、**同じ外形の別の面**を別の窓 DPI で試す。成功していれば面 id・
-//!   節・マスク・メモ件数・k・配置の係数・窓寸要求が同時に動く。外形が同じでも中身（α の穴）が
-//!   違う面を使うので、マスクの不変は恒真ではない。
+//!   節・土台の面・メモ件数・k・配置の係数・窓寸要求が同時に動く。外形が同じでも中身（α の穴）が
+//!   違う面を使うので、表示バイトの不変は恒真ではない。
 //! - **Hide 後**: 非表示にしてから試す。ここでだけ `visible`／`current_surface` に判別力がある
 //!   （成功していれば可視へ戻り面 id が入る）。
 //!
@@ -38,8 +38,7 @@
 
 use super::*;
 
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{AlphaMaskResource, Arrangement, Offset, Visual};
+use wintf::ecs::{Arrangement, Offset, Visual};
 
 use crate::display::DisplayFault;
 
@@ -107,9 +106,7 @@ fn fault_marker(at: DisplayFault) -> &'static str {
 /// 面 1000（全不透明）と面 3000（**内側に α=0 の穴**）の `(EmoWorld, AtlasTable)` を返す。
 ///
 /// 穴は内側の 2 画素だけで、外周は全て不透明である。α=0 除外トリムは外周を残すので**合成外形は
-/// 両面とも `FACE_SIZE`**——外形を変えずに、表示バイトとさわり判定マスクの双方を弁別可能にできる。
-/// 共有ヘルパ `build_two_face_assets` の 2 面は**どちらも全不透明**でマスクが同一になるため、
-/// 「マスクが前値のまま」の主張が恒真になってしまう。ここで専用の fixture が要る唯一の理由がそれで、
+/// 両面とも `FACE_SIZE`**——外形を変えずに、表示バイトを弁別可能にできる。
 /// 作り方（atlas bake → `EmoWorld` → `bind_atlas`）は共有ヘルパと同一である。
 fn build_two_face_assets_with_hole() -> (EmoWorld, AtlasTable) {
     let (w, h) = FACE_SIZE;
@@ -156,8 +153,8 @@ struct PresenterState {
     display: Option<Screen>,
     /// 枠の面 entity の配置（offset＋論理寸＋係数 k・未装着なら `None`）。
     arrangement: Option<Arrangement>,
-    /// 枠の面 entity へ供給済みのαマスク（未装着・未供給なら `None`）。
-    mask: Option<AlphaMask>,
+    /// 当たりの領域を引く土台の面（未表示なら `None`）。
+    base: Option<u32>,
 }
 
 /// 装着済みなら枠の面 entity（未装着なら `None`）。
@@ -209,9 +206,7 @@ fn snapshot(presenter: &EmoPresenter, world: &World, target: TargetId) -> Presen
         memo_bytes: presenter.read_back(target).ok(),
         display: on_screen(presenter, target),
         arrangement: entity.and_then(|e| world.get::<Arrangement>(e).copied()),
-        mask: entity
-            .and_then(|e| world.get::<AlphaMaskResource>(e))
-            .and_then(|r| r.mask().cloned()),
+        base: t.and_then(|t| t.shown_base),
     }
 }
 
@@ -350,12 +345,12 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
         "前提: 配置の論理寸は原寸"
     );
     assert_eq!(arr.scale.x, 1.0, "前提: 確立時の係数は等倍");
-    assert!(before.mask.is_some(), "前提: 確立でαマスクが供給済み");
+    assert!(before.base.is_some(), "前提: 確立で土台の面が決まっている");
 }
 
 // ── 場面 ⑴ 初回（装着・メモが無から生じる場面）──────────────────────────
 
-/// **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
+/// **初回の適用**が 4 注入点のどこで失敗しても、装着も配置も土台の面もメモも生じない。
 ///
 /// この場面でだけ「失敗した適用が装着を作らない」が見られる（他の 2 場面は装着済みから始まる）。
 /// 失敗が回収（`take_recycled`）より手前にあることの直接の帰結として、メモの件数は 0 のままである。
@@ -377,7 +372,7 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
             memo_bytes: None,
             display: None,
             arrangement: None,
-            mask: None,
+            base: None,
         },
         "前提: attach しただけの target は何も確定していない"
     );
@@ -413,8 +408,8 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
     );
     assert_eq!(after.entries, 1, "陽性対照: メモが 1 件生じる");
     assert!(
-        after.display.is_some() && after.arrangement.is_some() && after.mask.is_some(),
-        "陽性対照: 成功した初回 ShowSurface は装着・節・配置・マスクを作る"
+        after.display.is_some() && after.arrangement.is_some() && after.base.is_some(),
+        "陽性対照: 成功した初回 ShowSurface は装着・節・配置・土台の面を作る"
     );
 }
 
@@ -422,8 +417,8 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
 
 /// 表示確立後に**同形の別の面**を新しい k で試して失敗しても、前状態が 1 つも動かない。
 ///
-/// 成功していれば面 id・節・マスク・メモ件数・k・配置の係数・窓寸要求が同時に動く場面である。
-/// 2 面は同じ外形で**α の穴だけが違う**ので、表示バイトとマスクの不変は恒真ではない。
+/// 成功していれば面 id・節・土台の面・メモ件数・k・配置の係数・窓寸要求が同時に動く場面である。
+/// 2 面は同じ外形で**α の穴だけが違う**ので、表示バイトの不変は恒真ではない。
 #[test]
 fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     let mut world = make_world_with_gpu();
@@ -463,8 +458,8 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
         "陽性対照: 成功した再表示は節を差し替える"
     );
     assert_ne!(
-        after.mask, before.mask,
-        "陽性対照: 成功した再表示はαマスクを差し替える（同形でもα が違う）"
+        after.base, before.base,
+        "陽性対照: 成功した再表示は土台の面を差し替える"
     );
     assert_eq!(
         after.applied,
@@ -507,7 +502,7 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
     plant_sentinel_offset(&presenter, &mut world, TARGET);
 
     let before = snapshot(&presenter, &world, TARGET);
-    // `Hide` は可視性と現サーフェスだけを落とす（k・原寸・配置・マスク・メモは保持される）。
+    // `Hide` は可視性と現サーフェスだけを落とす（k・原寸・配置・土台の面・メモは保持される）。
     assert_established_baseline(&before, false, None);
 
     let (surface_entity, slot) = mount_entities(&presenter, TARGET);

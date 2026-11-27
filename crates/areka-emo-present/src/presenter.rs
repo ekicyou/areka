@@ -1,10 +1,10 @@
-//! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・マスクの一点結線）。
+//! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・当たりの一点結線）。
 //!
 //! 上流が組んだ部品（`ComposeCache`・`GpuAtlas`・`DrawNodes`・`VisualMount`・emo-compose の
 //! `Composer`）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。計画と合成
 //! そのものは emo-compose、計画 → 節の写しは `draw_nodes.rs`、面の生成・変換・描画は wintf の描画の木、
-//! 当たり判定マスクは wintf hit-test が担い、本型は「指令を受けて、キャッシュ引き当て or 計画＋合成 →
-//! 頁と葉の用意 → 節の写し・配置の書き込み → AlphaMask 同期 → 可視制御」を
+//! クリックの透過は wintf hit-test が描画面の入れ物の α で担い、本型は「指令を受けて、キャッシュ引き当て or 計画＋合成 →
+//! 頁と葉の用意 → 節の写し・配置の書き込み → 可視制御 → 当たりの描き先の塗り」を
 //! **一続きの UI スレッド呼び出し**として結線する。
 //!
 //! # UI スレッドアフィニティ（型で強制）
@@ -17,10 +17,9 @@
 //!
 //! # 原子入替
 //!
-//! 節の写し（`DrawNodes::sync`）・配置（`set_layout`）と当たり判定マスク
-//! （`AlphaMaskResource::set_shared`）の更新は**同一 `apply` 呼び出し内**で連続して起き、hit-test も
-//! 同一 UI スレッドで走るため中間状態は観測不能である。ゆえに surface 切替に伴う「表示とマスクの
-//! 対入替」は構造的に原子化される（別途ロック不要）。
+//! 節の写し（`DrawNodes::sync`）・配置（`set_layout`）と当たりの描き先の塗り（`paint_hit`）は
+//! **同一 `apply` 呼び出し内**で連続して起き、hit-test も同一 UI スレッドで走るため中間状態は観測不能である。
+//! クリックの透過と名前の解決はどちらも描画面の入れ物の同じ 1 画素を読むので、2 つは食い違わない。
 //!
 //! # 失敗経路のログ規律（silent failure 禁止）
 //!
@@ -75,7 +74,7 @@ use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio,
 };
-use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
+use wintf::ecs::{DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
 // `use super::*;` でここから拾うので、非 test ビルドでは `#[cfg(test)]` で畳む（抑止指示を足さない）。
 #[cfg(test)]

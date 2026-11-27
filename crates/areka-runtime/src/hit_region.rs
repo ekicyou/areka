@@ -42,6 +42,7 @@
 //! probe（`examples/collision-probe.rs`）は `areka_runtime::hit_region`・`target_map` を crate の公開面で `use` する（`#[path]` では取り込まない）。
 
 use areka_emo_present::EmoPresenter;
+use bevy_ecs::world::World;
 
 /// 当たり判定の解決結果（region/actor I/O 契約の**正本**）。
 ///
@@ -73,6 +74,8 @@ pub struct HitRegion {
 ///
 /// **shell 窓専用**（target 偶数）。balloon（奇数 target）は扱わない。
 ///
+/// `world` は描画面の入れ物を持つ World（名前の解決はクリックの透過と同じ 1 画素の α を読む）。
+///
 /// 座標 `(x, y)` は当該 shell 窓の **client 物理 px**（k 適用後の実表示画素空間）である。÷k 縮約は
 /// presenter が吸収するため、本関数も呼び手も座標を前処理しない（前処理は二重縮約・冒頭 doc 1/2）。
 /// k=1.0 では縮約が厳密な恒等写像となり、DPI追従導入前の挙動・期待値と完全に一致する。
@@ -89,9 +92,15 @@ pub struct HitRegion {
 /// 必要な、本層で許容される唯一の割当）。`surface_point` は `Copy` ゆえ割当を生まない。
 ///
 /// [`EmoPresenter::hit_region_client`]: areka_emo_present::EmoPresenter::hit_region_client
-pub fn resolve_hit_region(presenter: &EmoPresenter, scope: u32, x: i64, y: i64) -> HitRegion {
+pub fn resolve_hit_region(
+    world: &World,
+    presenter: &EmoPresenter,
+    scope: u32,
+    x: i64,
+    y: i64,
+) -> HitRegion {
     let target = super::target_map::shell_target(scope);
-    let hit = presenter.hit_region_client(target, x, y);
+    let hit = presenter.hit_region_client(world, target, x, y);
     HitRegion {
         scope,
         region: hit.region.map(str::to_owned),
@@ -103,6 +112,7 @@ pub fn resolve_hit_region(presenter: &EmoPresenter, scope: u32, x: i64, y: i64) 
 mod tests {
     use super::*;
     use areka_emo_present::EmoPresenter;
+    use bevy_ecs::world::World;
 
     /// 未表示 scope。`EmoPresenter::new()` ＋ target 未 attach では
     /// 現サーフェス id が解決できず、`resolve_hit_region` は `region: None` を返す。GPU/表示なしで
@@ -114,9 +124,10 @@ mod tests {
     #[test]
     fn unshown_scope_resolves_region_none() {
         let presenter = EmoPresenter::new();
+        let world = World::new();
         // scope・座標は任意（未 attach ゆえ現サーフェス無し→region None）。scope は入力をそのまま反映する。
         for scope in [0u32, 1, 7] {
-            let got = resolve_hit_region(&presenter, scope, 100, 100);
+            let got = resolve_hit_region(&world, &presenter, scope, 100, 100);
             assert_eq!(
                 got,
                 HitRegion {

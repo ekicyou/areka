@@ -3,9 +3,9 @@
 //! `areka-emo-atlas`（1/3・アトラス正本）→ `areka-emo-compose`（2/3・純粋合成）→
 //! 本クレート `areka-emo-present`（3/3・提示段）と連なる emo track の最終段である。
 //! 上流が生成した静的合成済みビットマップ `ComposedSurface` を、wintf の WUC
-//! （Windows.UI.Composition）表示面へアップロード・提示し、当たり判定用 AlphaMask を
-//! ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・
-//! 指令適用・マスク同期」を UI スレッド上で統括する。
+//! （Windows.UI.Composition）表示面へアップロード・提示する。当たりは描画面の入れ物の α を読む。
+//! 合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・指令適用・当たり」を
+//! UI スレッド上で統括する。
 //!
 //! ## 指令 API 契約正本（command-API contract source of truth）
 //!
@@ -51,7 +51,7 @@ pub(crate) mod load_records;
 pub(crate) mod mount;
 /// 画面の外の描き手（`OffscreenRenderer`）。使い捨ての描画の木に計画を写し、原寸の絵に描いて読む。
 pub mod offscreen;
-/// 提示統括（`EmoPresenter`）。計画・キャッシュ・節の写し・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
+/// 提示統括（`EmoPresenter`）。計画・キャッシュ・節の写し・窓装着・当たり判定を UI スレッド上で結線する統括ハブ。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。

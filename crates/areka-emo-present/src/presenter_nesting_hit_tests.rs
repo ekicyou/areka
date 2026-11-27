@@ -9,17 +9,17 @@
 //! 実 GPU の World で親 B を実際に表示して判定する。
 
 use super::super::test_support::{
-    bake_world, gradient, make_world_with_gpu, show_ok, spawn_window_with_dpi,
+    bake_world, gradient, make_world_with_gpu, paint_screen, show_ok, spawn_window_with_dpi,
 };
-use super::super::{EmoPresenter, ScaleRatio, TargetId};
+use super::super::{EmoPresenter, ScaleRatio, TargetId, World};
 
 use areka_parsers::shell::parse;
 
 const FIXTURE: &str =
     include_str!("../../areka-emo-compose/tests/fixtures/surface-nesting/surfaces.txt");
 
-/// 検体の親 B（surface1）を実 GPU の World で表示し、窓の DPI から実適用 k を得た presenter。
-fn presenter_showing_parent_b(dpi: u16) -> EmoPresenter {
+/// 検体の親 B（surface1）を実 GPU の World で表示して画面へ描き、窓の DPI から実適用 k を得た presenter。
+fn presenter_showing_parent_b(dpi: u16) -> (World, EmoPresenter) {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, dpi);
     let images = [
@@ -39,19 +39,20 @@ fn presenter_showing_parent_b(dpi: u16) -> EmoPresenter {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1);
-    presenter
+    paint_screen(&mut world);
+    (world, presenter)
 }
 
 /// 拡大率 1: 窓の座標＝サーフェスの座標。子の Eye・Head が子を置いた位置で引ける。
 #[test]
 fn client_hit_returns_child_region_names_at_scale_1() {
-    let presenter = presenter_showing_parent_b(96);
+    let (world, presenter) = presenter_showing_parent_b(96);
     for (x, y, want) in [
         (100, 55, Some("Eye")), // Eye と Head の重なり（Eye が後ろ＝手前）
         (92, 55, Some("Head")), // Head だけ
         (5, 5, None),           // 親 B は自分の領域を持たない
     ] {
-        let hit = presenter.hit_region_client(TargetId(0), x, y);
+        let hit = presenter.hit_region_client(&world, TargetId(0), x, y);
         assert_eq!(hit.region, want, "client=({x},{y})");
         assert_eq!(hit.surface_point, (x, y), "k=1 は素通し");
     }
@@ -62,14 +63,14 @@ fn client_hit_returns_child_region_names_at_scale_1() {
 #[test]
 fn client_hit_returns_child_region_names_at_scale_2() {
     let k2 = ScaleRatio::new(2, 1).expect("2/1 は構築可能");
-    let presenter = presenter_showing_parent_b(192);
+    let (world, presenter) = presenter_showing_parent_b(192);
     assert_eq!(presenter.applied_ratio(TargetId(0)), Some(k2));
     for (cx, cy, want, point) in [
         (200, 110, Some("Eye"), (100, 55)),
         (184, 110, Some("Head"), (92, 55)),
         (10, 10, None, (5, 5)),
     ] {
-        let hit = presenter.hit_region_client(TargetId(0), cx, cy);
+        let hit = presenter.hit_region_client(&world, TargetId(0), cx, cy);
         assert_eq!(hit.region, want, "client=({cx},{cy})");
         assert_eq!(hit.surface_point, point, "client=({cx},{cy})");
     }

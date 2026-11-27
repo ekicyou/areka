@@ -57,6 +57,7 @@ pub struct OffscreenImage {
 /// 根 `root` の下の木を描く係と同じ順（世界の節を満たす → 組む → 描く）で、透明に塗った `size` の的へ
 /// 描いて乗算済み BGRA で読み戻す。視野は根の `Arrangement.size`、`root_transform` は DIP → 物理。
 /// 窓も WUC も要らない（使い捨ての World でよい）。失敗（装置の失いを含む）は `error!` を残して `Err`。
+/// 節の世界行列と版を書き換えるので、画面に出している World で呼ぶと描く係が変化を取りこぼす（使い捨ての World で呼ぶ）。
 pub fn render_tree_offscreen(
     device: &ID2D1Device,
     world: &mut World,

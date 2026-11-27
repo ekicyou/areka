@@ -6,8 +6,8 @@ use wintf::ecs::GraphicsCore;
 use super::test_support::{
     CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_and_show_hit_target,
     attach_hit_target, build_target_assets, build_two_face_assets, capture, force_applied, hide_ok,
-    make_world_with_gpu, mount_entities, on_screen, set_window_dpi, show_ok, spawn_window_with_dpi,
-    tamper_face_1000_slot,
+    make_world_with_gpu, mount_entities, on_screen, paint_screen, set_window_dpi, show_ok,
+    spawn_window_with_dpi, tamper_face_1000_slot,
 };
 
 // ── applied_scale／refresh_scale───────────────────────────────
@@ -57,8 +57,8 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
 /// (b) `applied_scale` が 2.0、(c) **引き当てが成立する**（`cache_hit=true`＝再合成しない）、
 /// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) メモの原寸バイトは k に依らず同一。
 ///
-/// (c) は観測点の 1 つである。エントリは原寸の面・原寸マスク・原寸の
-/// 節だけを持ち **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
+/// (c) は観測点の 1 つである。エントリは原寸の計画と原寸の合成面だけを持ち
+/// **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
 /// ——「k 変化＝ミス＋再サンプル」だった旧正典と正反対であり、ヒットを主張しなければ静かに
 /// 再合成へ退化しても緑のままになる。
 ///
@@ -564,13 +564,14 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         "前提: T1 は未表示"
     );
 
+    paint_screen(&mut world);
     let ((defensive_hit, defensive_miss, unshown, unregistered), events) = capture(|| {
         // (1) 防御分岐: 面あり・applied なし → 鳴る。
-        let a = presenter.hit_region_client(TargetId(0), 180, 96);
-        let b = presenter.hit_region_client(TargetId(0), 360, 192);
+        let a = presenter.hit_region_client(&world, TargetId(0), 180, 96);
+        let b = presenter.hit_region_client(&world, TargetId(0), 360, 192);
         // (2) 正常縮退: 同一 callsite に対して鳴らない側を同一スコープで観測する。
-        let c = presenter.hit_region_client(TargetId(1), 180, 96);
-        let d = presenter.hit_region_client(TargetId(9), 180, 96);
+        let c = presenter.hit_region_client(&world, TargetId(1), 180, 96);
+        let d = presenter.hit_region_client(&world, TargetId(9), 180, 96);
         (a, b, c, d)
     });
 

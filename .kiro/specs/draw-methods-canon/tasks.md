@@ -192,7 +192,7 @@
   - _Dispatch: standard, effort high — 表示の漏斗の付け替え_
   - _Requirements: 8.1, 8.3, 2.8, 9.6_
 
-- [ ] 7.2 クリックの透過と当たり判定の名前を入れ物の 1 画素へ一緒に付け替える
+- [x] 7.2 クリックの透過と当たり判定の名前を入れ物の 1 画素へ一緒に付け替える
   - 描画面の当たりの形を入れ物の α にし、CPU の α マスクを外す
   - 名前の解決が World を受け取り、入れ物の 1 画素の α が 128 未満・外・読めないなら当たり無し（読めないは読めない間に 1 回 `error!`）、それ以上なら ÷k の点で ID の描き先を読み、今の土台の面の領域の名前を返す。実行時の名前の解決・入力の解決・collision-probe の例が World を渡す
   - 当たりの描き先の塗り直しの鍵を「面・今の土台の面・原寸」にし、塗る領域を今の土台の面の領域にする
@@ -299,3 +299,4 @@
 - 7.1: 絵の上げを外したので、故障の差し込みの点を `GpuAtlas` へ移した（頁の上げの `CreateBitmap`・葉の記録の `CreateCommandList`／`EndDraw`／`Close`）。装置が替わったら `prepare_gpu` が節を消して `GpuAtlas::new_with` で作り直す。控えに外れた回は計画と CPU の合成（`compose_into`・当たりのマスクと書き出しのため）の両方が走る（7.6 まで）。
 - 7.1 → 7.3: (a) `prepare_gpu` は装置が替わると `nodes.reset` が `GpuAtlas::new_with` より先に走り、作り直しが失敗すると画面が空になる（呼ぶ所のコメントと食い違う）。(b) 黒の塗りの葉は `sync` の中で記録するので、途中の失敗で節が半分替わる。黒の塗りの記録も `prepare` に寄せる。
 - 7.1 → 7.2/7.6: コメントの直し残し（presenter_dpi_scale_tests.rs 392 行目の要件番号・presenter/timing.rs 60 行目の `compose_into_reusing`・presenter_keycolor_clickthrough_tests.rs 38 行目の `record_display`）。7.6 の取り下げの理由に display_tests.rs・display_fault_tests.rs を含める。
+- 7.2: クリックの透過と名前の解決は wintf の `surface_alpha_hits`（閾値 128・読めない間に 1 回の `error!`）1 つを通る。CPU の α マスクは外した。perf の行の `alloc_mask`（0）・`t_mask_us`（合成メモへ入れる時間）は judge-perf.py が必須の欄として読むので残した（judge-perf.py の説明の文は 8.3 か 7.6 で直す）。

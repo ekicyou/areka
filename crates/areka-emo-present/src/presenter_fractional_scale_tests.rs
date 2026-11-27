@@ -2,53 +2,27 @@ use super::*;
 
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-
 use super::test_support::{
     arrangement_of, bake_world, bind_overlay_surface, build_target_assets, elem, gradient,
-    gradient_with_alpha, make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities,
-    native_golden, native_golden_with, on_screen, pattern_overlay_at, set_window_dpi, shell_of,
-    show_ok, show_with_ok, solid, spawn_window_with_dpi, surface,
+    make_world_with_gpu, mount_entities, native_golden_with, on_screen, pattern_overlay_at,
+    set_window_dpi, shell_of, show_ok, show_with_ok, solid, spawn_window_with_dpi, surface,
 };
 
-// ── task 6.3: 端数 k（5/4）の表示の作り方・αマスクの由来・縮小方向の自動追従 ───────────────
+// ── 端数 k（5/4）の表示の作り方・縮小方向の自動追従 ───────────────
 // 既存の k≠1 檻は **k=2/1**（整数倍・端数丸めが発火しない）か、k=7/6 の照会 API 群である。
-// ここで足すのは (A) 端数を伴う k での**配置（原寸＋係数）と照会物理寸**、(B) **αマスクの由来**、
-// (C) **縮小方向**の `refresh_scale`——の 3 点。
+// ここで足すのは (A) 端数を伴う k での**配置（原寸＋係数）と照会物理寸**、
+// (B) **縮小方向**の `refresh_scale`——の 2 点。
 //
-// **表示の作り方**: 絵もマスクも常に
+// **表示の作り方**: 絵は常に
 // native 原寸で、拡大は wintf の描画経路（`render_surface` の `SetTransform`）が `Arrangement.scale`
-// ＝k で掛ける。ゆえに (A) は「配置の寸＝原寸・係数＝k・照会値＝丸め権威」の形、(B) は
-// 「マスクは**原寸バイト**由来」（旧 canon の正反対）、(C) は「縮小では係数と照会値だけが変わり、
-// 絵・マスク・節は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
+// ＝k で掛ける。ゆえに (A) は「配置の寸＝原寸・係数＝k・照会値＝丸め権威」の形、
+// (B) は「縮小では係数と照会値だけが変わり、絵・節は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
 // 決定論 golden に取らない（見た目は実機 2 水準サインオフが担う）。
-
-/// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
-///
-/// α は市松に `0xFF`（マスク hit）と `0x20`（閾値 128 未満＝非 hit）を置く。**α=0 を含まない**ため
-/// atlas の α=0 除外トリムは全域を残し、合成外形は正確に `w×h` である。色は α を掛けた
-/// premultiplied 値で焼く（`B,G,R ≤ A` の不変条件を崩さない）。
-///
-/// 全不透明の `build_target_assets` では αマスクが**全ビット 1 の一様マスク**になり、
-/// 「マスク内容が表示に渡した原寸バイト由来か」の検査が空虚になる（寸法しか弁別できない）。
-fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let checker = |x: u32, y: u32| {
-        if (x + y).is_multiple_of(2) {
-            0xFF
-        } else {
-            0x20
-        }
-    };
-    bake_world(
-        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
-        vec![("p.png", w, h, gradient_with_alpha(w, h, salt, checker))],
-    )
-}
 
 /// （**端数を伴う k=5/4 の表示の
 /// 作り方**）: 窓 `DPI`=120（125%）・author_dpi=96 で `ShowSurface` を適用すると——(a) 配置の寸が
 /// native 原寸・係数が 1.25、(b) `read_back` が **native 合成**の独立再現と全バイト一致（k に
-/// 依らない）、(c) αマスクが **原寸**で供給される、(d) 照会物理寸が `scaled_extent(5/4, native)`、
+/// 依らない）、(d) 照会物理寸が `scaled_extent(5/4, native)`、
 /// (e) 窓寸 reconcile 要求も同じ物理寸で積まれる。
 ///
 /// # なぜ k=2/1 の既存檻に加えて 5/4 が要るのか
@@ -58,7 +32,7 @@ fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable
 /// 切り捨て実装（`7`）から数値で弁別できる。実機の常用水準（125%）そのものでもある
 /// （Implementation Notes 4.3 の実測 `k_shell_ratio=ScaleRatio{num:5,den:4}`）。
 #[test]
-fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarters() {
+fn show_surface_keeps_native_display_and_scales_layout_at_k_five_quarters() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 120);
 
@@ -98,13 +72,6 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         "読み戻しが native 合成の独立再現と一致しない（k が画素へ混ざっている）"
     );
 
-    // (c) αマスクは **原寸**で供給される（k 適用後の寸で作る旧 canon はここで落ちる）。
-    assert_eq!(
-        mask_dims(&world, surface_entity),
-        Some(native_size),
-        "αマスク寸が原寸でない（k 倍バイト由来のマスクを載せている）"
-    );
-
     // (d)(e) 照会契約・窓寸 reconcile 要求は丸め権威の物理寸。
     assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.25));
     assert_eq!(
@@ -119,114 +86,15 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     );
 }
 
-/// **αマスクは原寸バイト由来**: α が画素ごとに変わる surface を
-/// k=5/4 で表示すると、表示器へ供給される `AlphaMask` は——(a) 寸法が **native 原寸**（k 適用後の
-/// 物理寸ではない）、(b) **全ビットが「原寸の合成バイト列から独立に組んだマスク」と一致**する。
-///
-/// # マスクは原寸バイト由来である
-///
-/// マスクは原寸で供給され、÷k は wintf の `alpha_mask_hit`
-/// が物理寸の境界に対する比例写像として 1 回だけ掛ける。
-///
-/// # なぜ寸法だけでは足りないのか
-///
-/// `build_target_assets` は α=255 一様ゆえ、そこから作るマスクは**全ビット 1**である。寸法しか
-/// 弁別できず、「別解像度のバイトから作ったマスクを原寸へ縮めた」ような内容の誤りが素通りする。
-/// 本テストは α に 0xFF（hit）と 0x20（閾値 128 未満＝非 hit）を市松に置き、hit/非 hit が
-/// **両方存在すること**を前提として明示検査したうえでビット全走査する。
-///
-/// マスクの**座標契約**（点÷k・ヒット規約）は本 crate の領分ではない（
-/// 当たり判定の側が決める）。ここで固定するのは「表示に渡した原寸バイトと同一・同寸の
-/// マスクが供給される」という emo-present 側の生成契約だけである。
-#[test]
-fn alpha_mask_bits_come_from_native_bytes() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 120);
-
-    let (emo_world, atlas) = build_alpha_varying_assets(8, 6, 0x72);
-    let (probe_world, probe_atlas) = build_alpha_varying_assets(8, 6, 0x72);
-    let k54 = ScaleRatio::new(5, 4).unwrap();
-    let (native_bytes, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (8, 6), "前提: α≠0 ゆえトリムは全域を残す");
-    let physical = k54.scaled_extent(8, 6);
-    assert_eq!(
-        physical,
-        (10, 8),
-        "8×5/4=10・6×5/4=7.5→8（高さは端数・丸め権威）"
-    );
-
-    // 表示に渡されるはずの原寸バイト列から独立にマスクを組む（presenter の内部値の追認ではない）。
-    let expected = AlphaMask::from_pbgra32(
-        &native_bytes,
-        native_size.0,
-        native_size.1,
-        native_size.0 * 4,
-    );
-    // 非空虚性の前提: hit と非 hit が両方在る（全ビット 1 のマスクでは内容比較が空虚になる）。
-    let (hits, misses) = mask_bit_counts(&expected);
-    assert!(
-        hits > 0 && misses > 0,
-        "fixture 前提が崩れた: 期待マスクが一様（hit={hits} miss={misses}）＝内容比較が空虚"
-    );
-
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-
-    // 前提: 表示に渡ったバイトが原寸 golden そのもの（マスクの由来と同一の bytes）。
-    assert_eq!(
-        presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        native_bytes,
-        "読み戻しが原寸の合成バイトと一致しない"
-    );
-
-    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
-    let mask_res = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .expect("surface entity に AlphaMaskResource が無い");
-    let mask = mask_res.mask().expect("表示成立後は αマスクが供給済み");
-
-    // (a) 寸法は native 原寸（物理寸は 10×8）。
-    assert_eq!(
-        (mask.width(), mask.height()),
-        native_size,
-        "αマスク寸が原寸でない"
-    );
-
-    // (b) 全ビット一致（別解像度のバイト由来・引き伸ばし／縮めをここで弾く）。
-    for y in 0..native_size.1 {
-        for x in 0..native_size.0 {
-            assert_eq!(
-                mask.is_hit(x, y),
-                expected.is_hit(x, y),
-                "αマスク ({x},{y}) のビットが原寸の合成バイト由来でない"
-            );
-        }
-    }
-
-    // 配置と照会値は端数 k のまま（マスクが原寸でも表示の大きさは k 倍で決まる）。
-    assert_eq!(
-        arrangement_of(&world, surface_entity),
-        (native_size, (1.25, 1.25)),
-        "配置が「原寸 8×6・係数 1.25」になっていない"
-    );
-    assert_eq!(
-        presenter.target_physical_size(TargetId(0)),
-        Some(physical),
-        "照会物理寸が scaled_extent(5/4, native) と一致しない"
-    );
-}
-
 /// （**DPI 差替 → `refresh_scale` は
 /// 係数だけを変える**）: k=2/1 で表示を確立したのち窓 `DPI` を 192→120（k=2/1→5/4）へ差し替えて
-/// `refresh_scale` を呼ぶと、**変わるのは配置の係数と照会物理寸・報告値だけ**で、絵・αマスク・
+/// `refresh_scale` を呼ぶと、**変わるのは配置の係数と照会物理寸・報告値だけ**で、絵・
 /// 節は原寸のまま据え置かれる（k はキーに参加しないゆえ再合成もしない）。
 ///
 /// # 既存 `refresh_scale_after_dpi_change_reapplies_new_k` との差
 ///
 /// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** で、配置の係数の追従と節の据え置きもそこで
-/// 見ている。本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) **αマスクの寸が原寸の
-/// まま**であること——を足す。
+/// 見ている。本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**——を足す。
 ///
 /// 係数の更新を落とす変異（`set_layout` を再表示経路で呼ばない）は本テストが落とす——初回表示では
 /// `VisualMount::attach` が配置を組むため、`set_layout` が load-bearing なのは再表示経路だけである。
@@ -262,13 +130,8 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         Some(grown),
         "前提: 初回表示の要求を取り出しておく"
     );
-    // 遷移前の絵・マスク寸・節（据え置きの照合基準）。
+    // 遷移前の絵・節（据え置きの照合基準）。
     let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
-    assert_eq!(
-        mask_dims(&world, surface_entity),
-        Some(native_size),
-        "前提: マスクは原寸で供給されている"
-    );
 
     // モニタ跨ぎ移動（200% → 125%）の決定論的代替。
     set_window_dpi(&mut world, window, 120);
@@ -285,16 +148,11 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         "refresh_scale 後の配置の係数が旧 k のまま（余白が残る）"
     );
 
-    // 絵・マスク・節は据え置き（k はキーに参加せず再合成も再記録も起きない）。
+    // 絵・節は据え置き（k はキーに参加せず再合成も再記録も起きない）。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         golden,
         "k 変化で絵が作り直されている（原寸の読み戻しは k に依らない）"
-    );
-    assert_eq!(
-        mask_dims(&world, surface_entity),
-        Some(native_size),
-        "k 変化でマスクの寸が動いている（マスクは原寸で不変）"
     );
     assert_eq!(
         on_screen(&presenter, TargetId(0)),
