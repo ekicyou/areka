@@ -705,7 +705,7 @@
   - _Dispatch: mechanical — 付ける時刻は設計が与える_
   - _Requirements: 17.1, 18.7_
 
-- [ ] 10.13 (P) areka-runtime のバルーンの家族のテストを直す
+- [x] 10.13 (P) areka-runtime のバルーンの家族のテストを直す
   - 判断・相・通しの家族のテストを、絶対の時刻の知らせとフレームの時刻の形へ直す
   - そのファイルが誤り 0 件である
   - _Boundary: areka-runtime バルーンの判断・相・通し_

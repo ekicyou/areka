@@ -406,3 +406,9 @@
 - 読み直しの後の面と着せ替えの出し直しの合図は、起点 `TimePoint::ZERO` からフレームの時刻へ（`TalkCue::scheduled(frame_now, 0, .., 0)`）。窓の知らせは `send_stage(note, frame_now)`。消したテスト・ログは無い。
 - 足したログ: `error!(event="reload_shell_replay_no_frame_time")`、`error!(event="balloon_stage_no_frame_time")`（フレームの時刻が無ければ送らず、台帳も進めない）。
 - 足したテスト: `shell_carry::tests::emitted_cues_fire_at_the_frame_time`・`replay_without_frame_time_logs_an_error_and_sends_no_cue`、`frame::status_report::stage_tests::report_stages_without_frame_time_logs_an_error_and_sends_nothing`・`report_stages_with_frame_time_sends_the_hidden_balloon`。共有の組み立て `session_hooks_test_support.rs`（`SerikoWorld`）。元からあるテストの期待は変わらない。
+
+## 10.13（後半）
+
+- 外したテスト: `balloon_visibility_talk_end_tests::missing_stop_time_falls_back_to_the_display_end_and_is_recorded`（止まった時刻が無い枝だけを見ていた）。外した assert: `balloon_visibility_phase_log_tests` の `StopTimeMissing`・`ChoiceWaitEndTimeMissing` の事象（`measurement_origin_is_written_with_its_level_and_fields` は 3 → 2 事象、`choice_talk_origins_are_written...` → `choice_talk_origin_is_written_with_its_level_and_fields` は 2 → 1 事象）。
+- 据え直し: `balloon_visibility_choice_wait_tests::timeless_end_starts_from_the_first_measurable_frame` → `end_without_frame_time_waits_for_a_measurable_frame`（前は起点 `ChoiceWaitEndTimeMissing`・満了予定「最初に計測できたフレームの今 70000 ms + TIMEOUT」、後は起点 `ChoiceWaitEndedAt(STOPPED)`・満了予定 `STOPPED + TIMEOUT`。時刻の無いフレームで計測しない枝は保つ）。
+- ログの欄を読むテストの字面 `"talk_time"` → `"frame_now"`。`phase_tests` の足場 `with_talk_epoch` を外した。ほかは時刻の型だけ（`TimeSpan` → `TimePoint`、値は同じ）。

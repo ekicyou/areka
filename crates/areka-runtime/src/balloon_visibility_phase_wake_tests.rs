@@ -4,7 +4,7 @@
 //! `crates/areka/src/tick_gate_config_producers_tests.rs` の `balloon_visibility_phase_arms_the_deadline` が見る。
 
 use super::super::BalloonVisibilityState;
-use super::super::test_support::{Frame, TIMEOUT, hovered, ms, seen};
+use super::super::test_support::{Frame, TIMEOUT, at_ms, hovered, ms, seen};
 use super::{MAX_WAIT, VisibilityWake, visibility_wake};
 use std::time::Duration;
 
@@ -12,12 +12,12 @@ use std::time::Duration;
 #[test]
 fn no_measurement_arms_nothing() {
     assert_eq!(
-        visibility_wake(Some(ms(1000)), None, false),
+        visibility_wake(Some(at_ms(1000)), None, false),
         VisibilityWake::None,
         "満了予定が無ければ預けない"
     );
     assert_eq!(
-        visibility_wake(None, Some(ms(5000)), false),
+        visibility_wake(None, Some(at_ms(5000)), false),
         VisibilityWake::None,
         "現在時刻が分からなければ残り時間を出せない"
     );
@@ -32,12 +32,12 @@ fn no_measurement_arms_nothing() {
 #[test]
 fn remaining_time_becomes_the_wait() {
     assert_eq!(
-        visibility_wake(Some(ms(1500)), Some(ms(4000)), false),
+        visibility_wake(Some(at_ms(1500)), Some(at_ms(4000)), false),
         VisibilityWake::After(Duration::from_millis(2500)),
         "残り 2.5 秒"
     );
     assert_eq!(
-        visibility_wake(Some(ms(0)), Some(ms(1)), false),
+        visibility_wake(Some(at_ms(0)), Some(at_ms(1)), false),
         VisibilityWake::After(Duration::from_millis(1)),
         "1 ミリ秒でも残っていれば期限として預ける"
     );
@@ -47,12 +47,12 @@ fn remaining_time_becomes_the_wait() {
 #[test]
 fn due_or_overdue_asks_for_the_next_frame() {
     assert_eq!(
-        visibility_wake(Some(ms(4000)), Some(ms(4000)), false),
+        visibility_wake(Some(at_ms(4000)), Some(at_ms(4000)), false),
         VisibilityWake::Now,
         "ちょうど到来は「来ている」側（判断中核の `now >= deadline` と同じ向き）"
     );
     assert_eq!(
-        visibility_wake(Some(ms(9000)), Some(ms(4000)), false),
+        visibility_wake(Some(at_ms(9000)), Some(at_ms(4000)), false),
         VisibilityWake::Now,
         "超過は次の画面更新で見直す"
     );
@@ -62,7 +62,7 @@ fn due_or_overdue_asks_for_the_next_frame() {
 #[test]
 fn absurdly_distant_deadline_is_capped() {
     assert_eq!(
-        visibility_wake(Some(ms(0)), Some(ms(u32::MAX)), false),
+        visibility_wake(Some(at_ms(0)), Some(at_ms(i64::from(u32::MAX))), false),
         VisibilityWake::After(MAX_WAIT),
         "遠すぎる期限は 1 時間で切って預け直す"
     );
@@ -73,17 +73,17 @@ fn absurdly_distant_deadline_is_capped() {
 #[test]
 fn overdue_while_suppressed_arms_nothing() {
     assert_eq!(
-        visibility_wake(Some(ms(9000)), Some(ms(4000)), true),
+        visibility_wake(Some(at_ms(9000)), Some(at_ms(4000)), true),
         VisibilityWake::None,
         "抑止中の超過"
     );
     assert_eq!(
-        visibility_wake(Some(ms(4000)), Some(ms(4000)), true),
+        visibility_wake(Some(at_ms(4000)), Some(at_ms(4000)), true),
         VisibilityWake::None,
         "抑止中のちょうど到来"
     );
     assert_eq!(
-        visibility_wake(Some(ms(1000)), Some(ms(4000)), true),
+        visibility_wake(Some(at_ms(1000)), Some(at_ms(4000)), true),
         VisibilityWake::After(Duration::from_millis(3000)),
         "抑止中でも期限が先なら残りを預ける"
     );
@@ -92,12 +92,12 @@ fn overdue_while_suppressed_arms_nothing() {
 /// 満了の後もポインタがバルーンの上に残る間は起こさず、外れたフレームで計り直しの期限を預ける。
 #[test]
 fn a_held_timeout_with_the_pointer_still_on_the_balloon_asks_for_no_wake() {
-    let after_timeout = |by: u32| TIMEOUT.checked_add(ms(by)).expect("範囲内");
+    let after_timeout = |by: u32| at_ms(0) + TIMEOUT + ms(by);
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(2, false))])
-        .at(ms(0))
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(ms(0))
+        .ended_at(at_ms(0))
         .run(&mut state);
 
     Frame::new(&[(0, hovered(seen(2, true)))])

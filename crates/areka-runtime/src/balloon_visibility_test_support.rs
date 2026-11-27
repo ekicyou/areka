@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use areka_sakura::TalkId;
 #[cfg(test)]
-pub(super) use dola::time::testing::{delta_ms, ms};
+pub(super) use dola::time::testing::{at_ms, delta_ms, ms};
 use dola::{TimePoint, TimeSpan};
 
 use super::{

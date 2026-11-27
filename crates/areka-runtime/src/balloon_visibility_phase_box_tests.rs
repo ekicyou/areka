@@ -18,7 +18,6 @@ use tracing::Level;
 
 use super::super::BalloonVisibilityState;
 use super::super::test_support::box_layout;
-use super::super::test_support::ms;
 use super::test_support::attach_headless;
 use super::test_support::{runtime, world_at};
 use super::*;
@@ -140,7 +139,7 @@ fn collection_settles_the_box_hover_before_observing() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(0)),
+            Some(at_ms(0)),
             Vec::new(),
             &mut state,
         )
@@ -160,7 +159,7 @@ fn collection_settles_the_box_hover_before_observing() {
         &runtime,
         &mut world,
         &[0],
-        Some(ms(0)),
+        Some(at_ms(0)),
         Vec::new(),
         &mut state,
     );
@@ -196,7 +195,7 @@ fn shell_window_drag_without_box_text_is_not_dragging() {
         &runtime,
         &mut world,
         &[0],
-        Some(ms(0)),
+        Some(at_ms(0)),
         Vec::new(),
         &mut state,
     );

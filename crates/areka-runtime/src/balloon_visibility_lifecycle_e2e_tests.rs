@@ -116,7 +116,6 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         CueCommand::Text("あい".into()),
         ms(500),
     ));
-    wiring.clock.observe_cue(TimeSpan::ZERO);
     // 台本を最後まで流し終えたところで受け口が落ち、トークの終わり（止まった時刻＝占有終端）が
     // 届く。時間切れの計測はこれが届いてから始まる。
     *wall.lock().expect("時計の錠") = TimePoint::ZERO + horizon;
@@ -128,7 +127,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     assert_eq!(
         wiring.balloon_visibility.display_end,
-        Some(horizon),
+        Some(TimePoint::ZERO + horizon),
         "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み）"
     );
 
@@ -143,12 +142,12 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     );
     assert_eq!(
         started[0].expect_field("display_end"),
-        horizon.to_string(),
+        (TimePoint::ZERO + horizon).to_string(),
         "計測の起点は台本の占有終端"
     );
     assert_eq!(
         started[0].expect_field("deadline"),
-        (horizon + timeout).to_string(),
+        (TimePoint::ZERO + horizon + timeout).to_string(),
         "満了予定は「占有終端＋待ち時間」（現在時刻 {now} 起点なら {} になって落ちる）",
         (now.span_since(TimePoint::ZERO).expect("起点以後") + timeout)
     );

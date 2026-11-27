@@ -70,11 +70,11 @@ use dola::TimeDelta;
 // 表の座標系
 // ---------------------------------------------------------------------------
 
-/// 会話の占有終端（talk 相対秒）。表の時刻・信号・満了予定はすべてこの値からの相対で書く。
+/// 会話の占有終端（絶対の時刻）。表の時刻・信号・満了予定はすべてこの値からの相対で書く。
 ///
 /// 0 以外の値にしてあるのは、相対で書いた期待値が絶対時刻の偶然の一致で通らないようにする
 /// ためである。
-const ANCHOR: TimeSpan = ms(12_000);
+const ANCHOR: TimePoint = at_ms(12_000);
 
 /// タイムアウト時間（秒）。各フレームへは [`Frame::timeout`] で渡す。
 ///
@@ -220,8 +220,8 @@ const fn minus(a: TimeDelta, b: TimeDelta) -> TimeDelta {
 }
 
 /// [`ANCHOR`] を足して絶対時刻へ直す。
-fn anchored(rel: TimeDelta) -> TimeSpan {
-    TimeSpan::try_from_ticks(ANCHOR.as_ticks() + rel.as_ticks()).expect("表の時刻は 0 以上")
+fn anchored(rel: TimeDelta) -> TimePoint {
+    ANCHOR + rel
 }
 
 /// 期待記述から、そのフレームの行動列とログ列を組み立てる。
@@ -474,7 +474,7 @@ fn expectation_times_are_anchored_on_the_display_end() {
     );
     assert_ne!(
         ANCHOR,
-        ms(0),
+        at_ms(0),
         "起点が 0 だと相対と絶対の取り違えが検出できない"
     );
     assert_ne!(

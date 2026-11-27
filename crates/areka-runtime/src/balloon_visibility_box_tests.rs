@@ -32,7 +32,7 @@ fn user_break_targets_scopes_showing_only_boxes() {
     ];
     let mut state = BalloonVisibilityState::default();
     let broke = Frame::new(&entries)
-        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
         .run(&mut state);
     assert_eq!(
         broke.actions,
@@ -46,7 +46,7 @@ fn user_break_targets_scopes_showing_only_boxes() {
     // 対照: 箱に文字が出ていなければ、窓の見えている scope だけ。
     let mut state = BalloonVisibilityState::default();
     let plain = Frame::new(&[(0, seen(3, true)), (1, seen(0, false)), (2, seen(0, false))])
-        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
         .run(&mut state);
     assert_eq!(
         plain.actions,
@@ -60,8 +60,11 @@ fn user_break_targets_scopes_showing_only_boxes() {
 fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
     let mut state = BalloonVisibilityState::default();
     let decision = Frame::new(&[(1, boxed(seen(0, false)))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .signal(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
+            talk_id: None,
+        })
         .run(&mut state);
     assert!(decision.actions.is_empty(), "{:?}", decision.actions);
     assert!(decision.logs.is_empty(), "{:?}", decision.logs);
@@ -76,22 +79,22 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
 fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(ms(0))
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(ms(0))
+        .ended_at(at_ms(0))
         .run(&mut state);
     assert!(armed.actions.is_empty(), "箱だけの scope で窓が出た");
     assert_eq!(
         armed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: ms(0),
-            deadline: TIMEOUT,
+            display_end: at_ms(0),
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
 
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -100,11 +103,11 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
 
     // 対照: 箱に文字が出ていなければ計測は立たず、何も隠さない。
     let mut state = BalloonVisibilityState::default();
-    for now in [ms(0), TIMEOUT] {
+    for now in [at_ms(0), at_ms(0) + TIMEOUT] {
         let plain = Frame::new(&[(0, seen(0, false))])
             .at(now)
             .talk_started()
-            .ended_at(ms(0))
+            .ended_at(at_ms(0))
             .run(&mut state);
         assert!(plain.actions.is_empty());
         assert!(plain.logs.is_empty());
@@ -116,13 +119,13 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
 fn hover_on_a_box_holds_the_expired_deadline() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(ms(0))
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(ms(0))
+        .ended_at(at_ms(0))
         .run(&mut state);
 
     let held = Frame::new(&[(0, hovered(boxed(seen(0, false))))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert!(held.actions.is_empty(), "箱の上の滞在で満了が保留されない");
     assert_eq!(
@@ -132,7 +135,7 @@ fn hover_on_a_box_holds_the_expired_deadline() {
                 hover: true,
                 ..SuppressionKinds::default()
             },
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
 }
@@ -143,23 +146,23 @@ fn hover_on_a_box_holds_the_expired_deadline() {
 fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(2, false))])
-        .at(ms(0))
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(ms(0))
+        .ended_at(at_ms(0))
         .run(&mut state);
 
     let cleared = Frame::new(&[(0, boxed(seen(0, true)))])
-        .at(ms(2_000))
+        .at(at_ms(2_000))
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
     assert_eq!(
         state.deadline,
-        Some(TIMEOUT),
+        Some(at_ms(0) + TIMEOUT),
         "箱が出ているのに計測が捨てられた"
     );
 
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -173,14 +176,14 @@ fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
 fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(ms(0))
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(ms(0))
+        .ended_at(at_ms(0))
         .run(&mut state);
 
     let broke = Frame::new(&[(0, boxed(seen(0, false)))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .at(TIMEOUT)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         broke.actions,
@@ -190,7 +193,7 @@ fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
         broke.logs.last(),
         Some(&VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::NoVisibleScope,
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         })
     );
 }
@@ -201,10 +204,13 @@ fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
 fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
     let mut state = BalloonVisibilityState::default();
     let decision = Frame::new(&[(1, boxed(seen(0, false)))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
-        .ended_at(ms(0))
-        .at(ms(0))
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .signal(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
+            talk_id: None,
+        })
+        .ended_at(at_ms(0))
+        .at(at_ms(0))
         .run(&mut state);
     assert!(decision.actions.is_empty(), "{:?}", decision.actions);
     assert!(
@@ -212,8 +218,8 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
             .logs
             .contains(&VisibilityLogEvent::MeasurementStarted {
                 origin: MeasurementOrigin::DisplayEnd,
-                display_end: ms(0),
-                deadline: TIMEOUT,
+                display_end: at_ms(0),
+                deadline: at_ms(0) + TIMEOUT,
             }),
         "掛け金の解けた中断で箱だけの scope が計測から外れた: {:?}",
         decision.logs
@@ -226,21 +232,21 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
 fn an_unobserved_frame_keeps_the_restarted_deadline_while_a_box_is_showing() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .ended_at(ms(0))
-        .at(ms(0))
+        .ended_at(at_ms(0))
+        .at(at_ms(0))
         .run(&mut state);
     Frame::new(&[(0, hovered(boxed(seen(0, false))))])
-        .at(TIMEOUT + ms(5_000))
+        .at(at_ms(0) + TIMEOUT + ms(5_000))
         .run(&mut state);
     Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(ms(50_000))
+        .at(at_ms(50_000))
         .run(&mut state);
 
     let blind = Frame::new(&[(0, unobserved(false))])
-        .at(ms(60_000))
+        .at(at_ms(60_000))
         .run(&mut state);
     let next = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(ms(61_000))
+        .at(at_ms(61_000))
         .run(&mut state);
 
     assert_eq!(
@@ -248,7 +254,7 @@ fn an_unobserved_frame_keeps_the_restarted_deadline_while_a_box_is_showing() {
         (
             VisibilityDecision::default(),
             VisibilityDecision::default(),
-            Some(ms(50_000) + TIMEOUT)
+            Some(at_ms(50_000) + TIMEOUT)
         ),
         "(観測の取れなかったフレームの判断, 次のフレームの判断, 満了予定)"
     );

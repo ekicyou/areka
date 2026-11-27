@@ -10,7 +10,7 @@
 //   ⑸ 非表示の発行（既存漏斗）
 //   ⑹ ログの水準とフィールド
 //
-// GPU も実時間の待機も用いない。時刻は `FrameTime` 資源と `TalkClock` の epoch で注入する。
+// GPU も実時間の待機も用いない。時刻は `FrameTime` 資源で注入する。
 // 表示層は実 `EmoPresenter` を headless に用いる——`attach_target`
 // は GPU 資源を要さず、可視状態の照会（`target_visible`）と非表示の適用（`apply(Hide)`）は
 // そのまま通る。
@@ -25,7 +25,7 @@ use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use tracing::Level;
 
 use super::super::ScopeVisibility;
-use super::super::test_support::ms;
+use super::super::test_support::{SIGNAL_AT, ms};
 use super::test_support::{attach_headless, runtime, visibility_lines, world_at};
 use super::*;
 use crate::frame::shared_test_support::wiring_with;
@@ -47,7 +47,7 @@ struct Harness {
 }
 
 impl Harness {
-    /// epoch 未確立の headless 配線を組む（装着済みバルーンはゼロ件）。
+    /// headless 配線を組む（装着済みバルーンはゼロ件）。
     fn new() -> Self {
         // 待ち時間の確定は**プロセスで一度きり**の記録であり（相はその値を毎フレーム引くだけ）、
         // 最初に相を回したテストの捕捉窓へ紛れ込む。どのテストが先に走るかは並行実行の都合で
@@ -67,12 +67,6 @@ impl Harness {
         self.wiring
             .balloon_models
             .insert(scope, areka_parsers::balloon::parse_str("", None));
-        self
-    }
-
-    /// talk の起点を確立する（`talk_time = frame_now − 0`）。
-    fn with_talk_epoch(self) -> Self {
-        self.wiring.clock.observe_cue(TimeSpan::ZERO);
         self
     }
 
@@ -247,7 +241,7 @@ fn dragging_requires_both_balloon_window_and_drag_marker() {
 /// 「外から消された」と読んで `trigger=explicit` を出してしまう。
 #[test]
 fn failed_show_is_logged_and_rolled_back() {
-    let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
+    let mut harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(at_ms(1000));
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonHover::default());
@@ -298,7 +292,7 @@ fn failed_show_is_logged_and_rolled_back() {
 /// 前フレームとの差分で外因の非表示を検出し、`trigger=explicit` で記録して滞在記録を掃除する。
 #[test]
 fn external_hide_is_logged_as_explicit_and_clears_hover() {
-    let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
+    let mut harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(at_ms(1000));
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonHover::default());
@@ -348,21 +342,33 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 /// 信号は毎フレーム**全件**取り出し、占有終端の畳み込みへ渡す。
 #[test]
 fn lifecycle_signals_are_drained_in_full() {
-    let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
+    let mut harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(at_ms(1000));
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonHover::default());
 
-    harness.signal(TalkLifecycleSignal::TalkStarted { talk_id: None });
-    harness.signal(TalkLifecycleSignal::DisplayEndAt(ms(2000)));
-    harness.signal(TalkLifecycleSignal::DisplayEndAt(ms(5000)));
-    harness.signal(TalkLifecycleSignal::DisplayEndAt(ms(3000)));
+    harness.signal(TalkLifecycleSignal::TalkStarted {
+        at: SIGNAL_AT,
+        talk_id: None,
+    });
+    harness.signal(TalkLifecycleSignal::DisplayEndAt {
+        at: SIGNAL_AT,
+        end: at_ms(2000),
+    });
+    harness.signal(TalkLifecycleSignal::DisplayEndAt {
+        at: SIGNAL_AT,
+        end: at_ms(5000),
+    });
+    harness.signal(TalkLifecycleSignal::DisplayEndAt {
+        at: SIGNAL_AT,
+        end: at_ms(3000),
+    });
 
     harness.frame(&mut world);
 
     assert_eq!(
         harness.wiring.balloon_visibility.display_end,
-        Some(ms(5000)),
+        Some(at_ms(5000)),
         "1 フレームで全件を取り出し、占有終端の最大値まで畳み込む"
     );
     assert!(
@@ -377,7 +383,7 @@ fn lifecycle_signals_are_drained_in_full() {
 /// 記録が 1 回であること・借用が戻れば武装し直すことを見る。
 #[test]
 fn runtime_borrow_failure_yields_no_glyph_observation() {
-    let harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
+    let harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(at_ms(1000));
     world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
@@ -393,7 +399,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(1000)),
+            Some(at_ms(1000)),
             Vec::new(),
             &mut state,
         );
@@ -403,7 +409,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(1000)),
+            Some(at_ms(1000)),
             Vec::new(),
             &mut state,
         );
@@ -431,7 +437,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(1000)),
+            Some(at_ms(1000)),
             Vec::new(),
             &mut state,
         )
@@ -451,7 +457,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
     );
 }
 
-/// 注入時刻が定まらないフレーム（talk 起点未確立）は可視グリフ数を観測しない。
+/// フレームの時刻が無いフレームは可視グリフ数を観測しない。
 ///
 /// グリフ数は注入時刻の関数なので、時刻抜きに「0 文字」と読むと会話開始前の全 scope が
 /// ゼロ下降エッジの手前に置かれてしまう。観測なし＝エッジなしへ倒す。
@@ -495,7 +501,7 @@ fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(0)),
+            Some(at_ms(0)),
             Vec::new(),
             &mut state,
         );
@@ -504,7 +510,7 @@ fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
             &runtime,
             &mut world,
             &[0],
-            Some(ms(0)),
+            Some(at_ms(0)),
             Vec::new(),
             &mut state,
         );
@@ -544,7 +550,7 @@ fn pointer_residency_is_observed_per_scope() {
         &runtime,
         &mut world,
         &[0, 1],
-        Some(ms(0)),
+        Some(at_ms(0)),
         Vec::new(),
         &mut state,
     );
@@ -664,7 +670,7 @@ fn hover_residency_is_cleared_for_hidden_scopes_only() {
 /// 信号の受信端が切断されたら誤りレベルで 1 回だけ記録する。
 #[test]
 fn disconnected_lifecycle_channel_is_logged_once() {
-    let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
+    let mut harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(at_ms(1000));
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonHover::default());
