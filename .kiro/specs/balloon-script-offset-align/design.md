@@ -477,7 +477,7 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 - 3 か所の `[balloon-limit] Clamp` の行に `monitor = LimitMonitor の語`・`script = bool` を足す（7.3）。
 
 **Implementation Notes**
-- Integration: `window_move.rs` は「キャラ窓の矩形 → `work_area_for_window`」の数行を `limit_work_area` の 1 回の呼び出しへ替え、行の差し引きを 0 以下にする（上限の例外のファイル）。既存の `Unresolved` の `warn!` の文と欄は保つ。
+- Integration: `window_move.rs` は「キャラ窓の矩形 → `work_area_for_window`」の数行を `limit_work_area` の 1 回の呼び出しへ替え、行の差し引きを 0 以下にする（上限の例外のファイル）。矩形の組み立て・`is_script_placed` の引き・`Clamp` の 2 つの欄の値は `balloon_limit.rs` の側で作り、`window_move.rs` には呼び出しと戻り値の受け渡しだけを残す（そのままの書きぶりでは欄の分だけ行が増えるため）。既存の `Unresolved` の `warn!` の文と欄は保つ。
 - Risks: 揺れ（Open Question 4・Risks の 1）。
 
 ## Data Models
