@@ -690,7 +690,7 @@
   - _Dispatch: standard, effort high — 相の順と借りられない時の扱いを、設計どおりに結線する_
   - _Requirements: 8.2, 12.12, 12.13, 17.9, 18.2_
 
-- [ ] 10.11 areka-runtime のバルーンの寿命: 寿命の事実を絶対の時刻で持つ
+- [x] 10.11 areka-runtime のバルーンの寿命: 寿命の事実を絶対の時刻で持つ
   - 寿命の知らせが効く絶対の時刻を運ぶ形にする。受け口は、合図から作る知らせに発火時刻を付け、表示の終わりを発火時刻＋長さで求め、トークの終わりに時計の読みを付ける。前の起点が在り、そのトークの最初の合図より後の置き直しの知らせだけを送り、覚えている最大も同じ決まりで動かす
   - 新しいファイルに、可視性の相が知らせを届いた順のまま列に持ち、フレームの時刻が来た物を頭から判断へ渡す口を置く。頭の物が待っている時刻を起こしの予約に入れる。1,000 行に近い相の本体には足さない
   - 判断をフレームの時刻で行い、表示の終わり・トークの終わり・期限を時刻の型、まだ見ていない事を `Option` で表す。止まった時刻が無い分かれ道・有限でない終わりを捨てる分かれ道・負の終わりを 0 に寄せる所を消す（記録に書く事として報告に挙げる）
@@ -832,3 +832,4 @@
 - 10.4: 「全部が現れている時刻」に `TimePoint::MAX` を使うと、その後のフレームが時刻を逆へ戻す所がある。後にフレームが続く所は有限の遅い時刻にする（10.5 以降の追従でも同じ）。
 - 10.7: 遅れて処理した図形の合図で、(発火時刻, 直前の刻み] に止めの働きのコマが在ると、合図の時の絵に止める前のコマが 1 刻みだけ出うる（次の刻みで直る・檻は無い）。
 - 10.10: areka-runtime はまだ組めないので、10.10 のテスト（`frame_text_advance_tests` 7 本・`next_reveal` 5 本）と borrowck は 10.14 で初めて走る。areka-session `runtime_boot.rs:33,82` の `ClockedTextSink` は `Box::new(text)` へ、本体 `runtime_tests` の `observe_cue`/`ClockedTextSink` も 10.16。
+- 10.11: 10.13 へ: 組み立ての口 `Frame::at(TimePoint)`・`display_end`・`ended_at`・`earlier`・定数 `SIGNAL_AT`、`visibility_wake(Option<TimePoint>, Option<TimePoint>, bool)`、知らせの新しい形（`at` を持つ）。消した枝を見ていた `choice_wait_tests:271`・`phase_log_tests:41,92`・`talk_end_tests:203`、欄の字面 `"talk_time"` を読む `phase_log_tests:216`。10.14 へ: `frame_attach_tests:484`・`frame_reset_hold_tests:449`。10.15 へ: areka-input の `UserBreak { at }`。

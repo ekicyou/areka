@@ -2,8 +2,8 @@
 // BalloonLifecycleSink の知らせの檻
 //
 //   ⑴ 配送から受け取った番号が開始の合図に載る（受け取っていなければ無し）
-//   ⑵ 落ちるときの終わりの合図が、注入した時計の台本の時刻で 1 回だけ出る
-//      （合図を送っていない複製は出さない・時計に起点が無ければ時刻は無しで、記録が残る）
+//   ⑵ 落ちるときの終わりの合図が、注入した時計の読みで 1 回だけ出る
+//      （合図を送っていない複製は出さない）
 //   ⑶ `\![set,balloontimeout,時間]` の時間の欄の読み（正・0・負・省略・空・読めない値）と、
 //      他の `\![set,…]` を拾わないこと・拾うたびの 1 行の記録
 //
@@ -48,7 +48,7 @@ fn timeouts(signals: &[TalkLifecycleSignal]) -> Vec<TalkTimeout> {
     signals
         .iter()
         .filter_map(|s| match s {
-            TalkLifecycleSignal::BalloonTimeout(t) => Some(*t),
+            TalkLifecycleSignal::BalloonTimeout { timeout, .. } => Some(*timeout),
             _ => None,
         })
         .collect()
@@ -70,6 +70,7 @@ fn begin_talk_number_rides_on_talk_started() {
     assert_eq!(
         drain(&rx).first(),
         Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
             talk_id: Some(TalkId(7))
         }),
         "番号 7 の複製の開始の合図に 7 が載る"
@@ -82,6 +83,7 @@ fn begin_talk_number_rides_on_talk_started() {
     assert_eq!(
         drain(&rx).first(),
         Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
             talk_id: Some(TalkId(8))
         }),
         "次の複製は前の番号を持ち越さず、自分の番号を載せる"
@@ -99,7 +101,10 @@ fn talk_started_without_begin_talk_has_no_number() {
     sink.emit(text_cue(ms(0), ms(500)));
     assert_eq!(
         drain(&rx).first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None })
+        Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
+            talk_id: None
+        })
     );
 }
 
@@ -107,18 +112,15 @@ fn talk_started_without_begin_talk_has_no_number() {
 // ⑵ 終わりの合図
 // -----------------------------------------------------------------------------
 
-/// 落ちた瞬間の台本の時刻（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
+/// 落ちた瞬間の時計の読み（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
 /// そのトークの合図の最後に並ぶ。
 #[test]
 fn talk_ended_carries_the_injected_clock_once_when_dropped() {
     let (tx, rx) = channel();
     let (now, clock) = controllable_clock();
-    let registered = BalloonLifecycleSink::new(tx, clock.clone());
+    let registered = BalloonLifecycleSink::new(tx, clock);
 
-    // 文字の受け口（ClockedTextSink）が起点を決めた形: 時刻 100 s に at 0 が届いた → 起点 100 s。
     set_now(&now, at_ms(100_000));
-    clock.observe_cue(TimeSpan::ZERO);
-
     let mut sink = talk_sink(&registered, Some(TalkId(3)));
     sink.emit(text_cue(ms(0), ms(2_000)));
     set_now(&now, at_ms(101_234));
@@ -130,13 +132,10 @@ fn talk_ended_carries_the_injected_clock_once_when_dropped() {
         .filter(|s| matches!(s, TalkLifecycleSignal::TalkEnded { .. }))
         .collect();
     assert_eq!(ended.len(), 1, "終わりの合図は 1 回だけ: {signals:?}");
-    let Some(TalkLifecycleSignal::TalkEnded { at: Some(at) }) = signals.last() else {
-        panic!("終わりの合図が最後に時刻つきで並ぶ: {signals:?}");
-    };
     assert_eq!(
-        *at,
-        ms(1_234),
-        "落ちた瞬間の台本の時刻 1.234 s を運ぶ（フレームに丸めない）"
+        signals.last(),
+        Some(&TalkLifecycleSignal::TalkEnded { at: at_ms(101_234) }),
+        "落ちた瞬間の時計の読み 101.234 s を運ぶ（フレームに丸めない）"
     );
 }
 
@@ -146,7 +145,6 @@ fn sink_that_sent_nothing_sends_no_talk_ended() {
     let (tx, rx) = channel();
     let (now, clock) = controllable_clock();
     set_now(&now, at_ms(50_000));
-    clock.observe_cue(TimeSpan::ZERO);
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let silent = talk_sink(&registered, Some(TalkId(1)));
@@ -156,44 +154,6 @@ fn sink_that_sent_nothing_sends_no_talk_ended() {
         drain(&rx),
         vec![],
         "合図を送っていない受け口は終わりの合図も送らない"
-    );
-}
-
-/// 時計に起点が無ければ、終わりの合図は時刻無しで出て、時刻が取れなかったことが記録される。
-#[test]
-fn talk_ended_without_epoch_has_no_time_and_is_logged() {
-    let (tx, rx) = channel();
-    let (_now, clock) = controllable_clock();
-    let registered = BalloonLifecycleSink::new(tx, clock);
-    let mut sink = talk_sink(&registered, Some(TalkId(2)));
-    sink.emit(text_cue(ms(0), ms(500)));
-
-    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || drop(sink));
-
-    assert_eq!(
-        drain(&rx).last(),
-        Some(&TalkLifecycleSignal::TalkEnded { at: None }),
-        "起点の無い時計では時刻無し"
-    );
-    assert_eq!(
-        logs.iter().filter(|l| l.contains("level=WARN")).count(),
-        1,
-        "止まった時刻が取れなかったことを 1 行 WARN で残す: {logs:?}"
-    );
-}
-
-/// 時計の口: 起点があれば今の時刻から台本の時刻を読み、無ければ無し。
-#[test]
-fn talk_clock_now_talk_time_reads_the_injected_clock() {
-    let (now, clock) = controllable_clock();
-    assert_eq!(clock.now_talk_time(), None, "起点が無ければ無し");
-    set_now(&now, at_ms(10_000));
-    clock.observe_cue(ms(500));
-    set_now(&now, at_ms(12_000));
-    assert_eq!(
-        clock.now_talk_time(),
-        Some(ms(2_500)),
-        "12.0 − (10.0 − 0.5) = 2.5"
     );
 }
 

@@ -4,9 +4,8 @@
 //!
 //! バルーンのタイムアウト計測は「スクリプトの表示が終わってから」を起点とする。
 //! ここでいう表示終了は**待機（`\w` 等）を含む台本の占有区間の終端**であって、最後の文字が
-//! 現れた時刻ではない。dola の占有 horizon は `max(cue.at + cue.duration)` で定義されるため、
-//! [`BalloonLifecycleSink`] は broadcast される全 cue を観測して同じ式で最大値を集約し、
-//! その**既知最大が更新されたときだけ** UI へ送る。
+//! 現れた時刻ではない。[`BalloonLifecycleSink`] は broadcast される全 cue の
+//! `fire_time + duration`（絶対の時刻）の最大値を集約し、その**既知最大が更新されたときだけ** UI へ送る。
 //!
 //! # なぜ sink を 1 本足すのか
 //!
@@ -19,8 +18,15 @@
 //! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
 //! 選択肢つきと覚えられるようにする。バリア中はトークの終わりが届かないので計測は立たない。
 //! 中断では起点を占有終端と止まった時刻の早い方にするため（`balloon_visibility.rs` の表）、
-//! 受け口は落ちる瞬間の台本の時刻を [`TalkLifecycleSignal::TalkEnded`] で送る
+//! 受け口は落ちる瞬間の時計の読みを [`TalkLifecycleSignal::TalkEnded`] で送る
 //! （判断の側の採り方は `balloon_visibility_wait.rs`）。
+//!
+//! # 知らせの時刻
+//!
+//! どの知らせも、効く絶対の時刻を運ぶ。合図から作る知らせは、その合図の発火時刻。トークの終わりと
+//! 利用者の中断は、それが起きた時の時計の読み。置き直しの知らせ（前の起点が在り、そのトークの
+//! 最初の合図より後の物）は、効く時刻。可視性の相は、届いた順のまま列に持ち、フレームの時刻が
+//! その時刻に届いたフレームで当てる。
 //!
 //! # 会話境界の自己検出
 //!
@@ -42,8 +48,8 @@ use std::sync::mpsc::Sender;
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use areka_sakura::contract::ScriptOrigin;
-use dola::TimeSpan;
-use dola::cue::{CueCommand, TalkCue};
+use dola::cue::{CueCommand, OriginNotice, TalkCue};
+use dola::{TimePoint, TimeSpan};
 use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
 
@@ -57,7 +63,7 @@ use super::talk_clock::TalkClock;
 /// 台本の順）→ `TalkEnded`。次のトークの `TalkStarted` は必ず前のトークの `TalkEnded` の後に届く
 /// （talk スレッドは受け口を落としてから完了を知らせる）。
 ///
-/// 時刻軸は **台本の時刻**（`TalkClock::talk_time` と同一軸）。
+/// どの知らせも、効く絶対の時刻（[`Self::at`]）を運ぶ（モジュールの「知らせの時刻」）。
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
@@ -66,24 +72,55 @@ use super::talk_clock::TalkClock;
 pub enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
     ///
-    /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う。
-    /// `talk_id` は配送から受け取った番号（受け取っていなければ `None`）。
-    TalkStarted { talk_id: Option<TalkId> },
-    /// 待機を含む占有区間の終端（台本の時刻）。既知最大が更新されたときだけ届く。
-    DisplayEndAt(TimeSpan),
-    /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。
-    BalloonTimeout(TalkTimeout),
+    /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う。`at` はそのトークの最初の
+    /// 合図の発火時刻。`talk_id` は配送から受け取った番号（受け取っていなければ `None`）。
+    TalkStarted {
+        at: TimePoint,
+        talk_id: Option<TalkId>,
+    },
+    /// 待機を含む占有区間の終端 `end`（発火時刻＋長さ）。既知最大が更新されたときだけ届く。
+    /// `at` は上げた合図の発火時刻。
+    DisplayEndAt { at: TimePoint, end: TimePoint },
+    /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。`at` はその合図の
+    /// 発火時刻。
+    BalloonTimeout { at: TimePoint, timeout: TalkTimeout },
     /// このトークで選択肢を出した（選択肢の合図を初めて見たときに 1 回だけ・アンカーは数えない・
-    /// 場所とスコープを問わない）。
-    ChoiceShown,
+    /// 場所とスコープを問わない）。`at` はその合図の発火時刻。
+    ChoiceShown { at: TimePoint },
+    /// 置き直しの知らせ（前の起点が在り、そのトークの最初の合図より後の物だけ）。
+    OriginMoved(OriginNotice),
     /// このトークの受け口が落ちた（最後まで・中断・置き換えのどれでも）。`at` は落ちた瞬間の
-    /// 台本の時刻で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
-    TalkEnded { at: Option<TimeSpan> },
-    /// 利用者がバルーンを左ダブルクリックして再生を中断した。
+    /// 時計の読み。合図を 1 つでも送った複製だけが送る。
+    TalkEnded { at: TimePoint },
+    /// 利用者がバルーンを左ダブルクリックして再生を中断した。`at` は押下を受けた時の時計の読み。
     ///
     /// 送り手は UI スレッドの押下ハンドラで、この信号は `BalloonLifecycleSink` を経由しない。
     /// 受信側は現に出ているバルーンをすべて隠し、次の会話が始まるまで内容では出し直さない。
-    UserBreak,
+    UserBreak { at: TimePoint },
+}
+
+impl TalkLifecycleSignal {
+    /// 列に入れる時刻（この知らせが効く絶対の時刻。`OriginMoved` は効く時刻）。
+    pub fn at(&self) -> TimePoint {
+        match *self {
+            Self::TalkStarted { at, .. }
+            | Self::DisplayEndAt { at, .. }
+            | Self::BalloonTimeout { at, .. }
+            | Self::ChoiceShown { at }
+            | Self::TalkEnded { at }
+            | Self::UserBreak { at } => at,
+            Self::OriginMoved(notice) => notice.effective_at,
+        }
+    }
+}
+
+/// 置き直しの知らせで、持っている時刻 `t` が動く先。効く時刻以前は動かさず、後なら動いた長さだけ
+/// 動かし、効く時刻より前になるなら効く時刻にする（最初の起点の知らせでは動かさない）。
+pub(crate) fn moved_time(notice: &OriginNotice, t: TimePoint) -> TimePoint {
+    match notice.delta() {
+        Some(delta) if t > notice.effective_at => (t + delta).max(notice.effective_at),
+        _ => t,
+    }
 }
 
 /// そのトークの時間切れまでの待ち時間（`\![set,balloontimeout,時間]` の読み）。
@@ -131,7 +168,7 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 /// 会話の表示終了時刻を UI へ届ける broadcast sink（`runtime_sinks` が `GhostBootOptions.sinks` に載せる受け口の 1 本）。
 ///
 /// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
-/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `at + duration` の最大値
+/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `fire_time + duration` の最大値
 /// として定義されるため、種別に依らず全件を集約対象にするのが正しい（名前で拾うのは
 /// `\![set,balloontimeout,…]` の待ち時間の指定だけ）。cue を**観測するのみ**で
 /// `duration` にも会話進行にも触れないため、duration honor 契約へ影響しない。
@@ -140,15 +177,15 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 ///
 /// - Ordering: 単一 `emit` 内で [`TalkLifecycleSignal::TalkStarted`] を先に送るため、FIFO の
 ///   `mpsc` 上でこの talk の全 `DisplayEndAt` に必ず先行する。
-/// - Idempotency: `DisplayEndAt` は既知最大を**狭義に超えた**ときだけ送るので、受信列は狭義単調
-///   増加になる（同値・後退値は送らない）。
+/// - Idempotency: `DisplayEndAt` は既知最大を**狭義に超えた**ときだけ送るので、置き直しの知らせを
+///   挟まない間の受信列は狭義単調増加になる（同値・後退値は送らない）。
 /// - Delivery: 非ブロックの `std::sync::mpsc`。attach 前・受信前はチャネル自身が保留バッファを
 ///   兼ねる。送信失敗（受信端切断）は `warn!` ＋ talk 非破壊——`MoveCueSink` と同一規律で、
 ///   無音破棄でも panic でもない（log-first）。
 pub struct BalloonLifecycleSink {
     /// UI スレッド（frame 相 drain）への送出端。全 clone は単一受信端へ配送する。
     tx: Sender<TalkLifecycleSignal>,
-    /// 落ちた瞬間の台本の時刻を読む時刻源（文字の受け口と共有・起点はそちらが決める）。
+    /// 落ちた瞬間の時計の読みを付ける時計。
     clock: TalkClock,
     /// この複製が受け持つトークの番号（配送が `begin_talk` で渡す・複製ごとに `None` から）。
     talk_id: Option<TalkId>,
@@ -156,7 +193,7 @@ pub struct BalloonLifecycleSink {
     /// 立っていれば合図を 1 つ以上送っている＝落ちるときに `TalkEnded` を送る。
     started: bool,
     /// 既知最大の占有終端。未観測は `None` ゆえ、最初の値は必ず送出される。
-    horizon: Option<TimeSpan>,
+    horizon: Option<TimePoint>,
     /// この talk で [`TalkLifecycleSignal::ChoiceShown`] を送出済みか（複製ごとに `false` から）。
     choice_sent: bool,
 }
@@ -199,7 +236,10 @@ impl BalloonLifecycleSink {
                 "BalloonLifecycleSink: 待ち時間の指定を読んだ"
             );
         }
-        self.send(TalkLifecycleSignal::BalloonTimeout(parsed.timeout));
+        self.send(TalkLifecycleSignal::BalloonTimeout {
+            at: cue.fire_time,
+            timeout: parsed.timeout,
+        });
     }
 
     /// 1 信号を非ブロックで送る。受信端切断は `warn!` ＋継続——talk を殺さない
@@ -241,22 +281,16 @@ impl BootCueSink for BalloonLifecycleSink {
 }
 
 /// 落ちる＝このトークが終わった（最後まで・中断・置き換えのどれでも）。合図を 1 つでも送った
-/// 複製だけが、落ちた瞬間の台本の時刻つきで `TalkEnded` を 1 回送る（登録の原本と cue の
+/// 複製だけが、落ちた瞬間の時計の読みつきで `TalkEnded` を 1 回送る（登録の原本と cue の
 /// 来なかった複製は何も送らない・`NoUserBreakCueSink` の `Drop` と同じ型）。時刻はフレームに
-/// 丸めない。時刻源に起点が無ければ時刻無しで送り、記録を残す。
+/// 丸めない。
 impl Drop for BalloonLifecycleSink {
     fn drop(&mut self) {
-        if !self.started {
-            return;
+        if self.started {
+            self.send(TalkLifecycleSignal::TalkEnded {
+                at: self.clock.now(),
+            });
         }
-        let at = self.clock.now_talk_time();
-        if at.is_none() {
-            warn!(
-                talk_id = ?self.talk_id,
-                "BalloonLifecycleSink: 止まった時刻が取れない（時刻源に起点が無い）——時刻無しで終わりを送る"
-            );
-        }
-        self.send(TalkLifecycleSignal::TalkEnded { at });
     }
 }
 
@@ -267,6 +301,7 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
         if !self.started {
             self.started = true;
             self.send(TalkLifecycleSignal::TalkStarted {
+                at: cue.fire_time,
                 talk_id: self.talk_id,
             });
         }
@@ -276,16 +311,30 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
         // 選択肢の印も同じ理由で送出の成否に依らず立てる。
         if !self.choice_sent && matches!(cue.command, CueCommand::Choice { .. }) {
             self.choice_sent = true;
-            self.send(TalkLifecycleSignal::ChoiceShown);
+            self.send(TalkLifecycleSignal::ChoiceShown { at: cue.fire_time });
         }
 
         // 待機 cue も duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される。
-        let end = cue.at + cue.duration;
+        let end = cue.fire_time + cue.duration;
 
         if self.horizon.is_none_or(|horizon| end > horizon) {
             self.horizon = Some(end);
-            self.send(TalkLifecycleSignal::DisplayEndAt(end));
+            self.send(TalkLifecycleSignal::DisplayEndAt {
+                at: cue.fire_time,
+                end,
+            });
         }
+    }
+
+    /// 前の起点が在り、このトークの最初の合図より後の置き直しの知らせだけを送る（最初の合図より前は、
+    /// 受け手がそのトークの物を何も持っていない）。覚えている最大も同じ決まりで動かす——動かさないと、
+    /// 前へ動いた後の合図の終わりが最大を越えないと判定されて送られない。
+    fn origin_set(&mut self, notice: OriginNotice) {
+        if notice.previous.is_none() || !self.started {
+            return;
+        }
+        self.horizon = self.horizon.map(|horizon| moved_time(&notice, horizon));
+        self.send(TalkLifecycleSignal::OriginMoved(notice));
     }
 }
 
@@ -300,3 +349,7 @@ mod signals_tests;
 #[cfg(test)]
 #[path = "talk_lifecycle_choice_tests.rs"]
 mod choice_tests;
+
+#[cfg(test)]
+#[path = "talk_lifecycle_origin_tests.rs"]
+mod origin_tests;

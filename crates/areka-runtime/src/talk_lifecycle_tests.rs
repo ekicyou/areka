@@ -2,7 +2,7 @@
 // BalloonLifecycleSink 決定論テスト
 //
 //   ⑴ 初回 emit の `TalkStarted` 先行
-//   ⑵ `max(at + duration)` の単調送出（max 集約）
+//   ⑵ `max(fire_time + duration)` の単調送出（max 集約）
 //   ⑶ `Wait` cue の duration が占有終端へ算入されること
 //   ⑷ clone 後の会話境界リセット（per-talk clone による talk 境界の自己検出）
 //
@@ -16,7 +16,7 @@
 use super::*;
 use crate::frame::test_support::{capture_logs, count_level, zero_clock};
 use dola::cue::{ActorKey, CueCommand, CuePayload, CuePlayer, CueSink, TalkCue};
-use dola::time::testing::ms;
+use dola::time::testing::{at_ms, ms};
 use dola::{TimePoint, TimeSpan};
 use std::sync::mpsc::{TryRecvError, channel};
 
@@ -44,14 +44,22 @@ fn drain(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<TalkLifecyc
     rx.try_iter().collect()
 }
 
-fn ends(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<TimeSpan> {
-    drain(rx)
-        .into_iter()
-        .filter_map(|s| match s {
-            TalkLifecycleSignal::DisplayEndAt(h) => Some(h),
-            _ => None,
-        })
-        .collect()
+fn ends(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<TimePoint> {
+    ends_of(&drain(rx))
+}
+
+/// 起点 0・台本の時刻 0 の最初の合図で出る開始の知らせ（番号なし）。
+const STARTED: TalkLifecycleSignal = TalkLifecycleSignal::TalkStarted {
+    at: TimePoint::ZERO,
+    talk_id: None,
+};
+
+/// 発火時刻 0 の合図が上げた表示の終わりの知らせ。
+fn end_from_zero(end: TimePoint) -> TalkLifecycleSignal {
+    TalkLifecycleSignal::DisplayEndAt {
+        at: TimePoint::ZERO,
+        end,
+    }
 }
 
 /// ⑴ per-talk clone の初回 `emit` で `TalkStarted` が 1 回だけ出て、
@@ -67,24 +75,21 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
     let signals = drain(&rx);
     assert_eq!(
         signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+        Some(&STARTED),
         "初回 emit の先頭は TalkStarted（Ordering 契約）: {signals:?}"
     );
     assert_eq!(
-        signals
-            .iter()
-            .filter(|s| **s == TalkLifecycleSignal::TalkStarted { talk_id: None })
-            .count(),
+        signals.iter().filter(|s| **s == STARTED).count(),
         1,
         "TalkStarted は talk につき 1 回のみ: {signals:?}"
     );
     let started_at = signals
         .iter()
-        .position(|s| *s == TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .position(|s| *s == STARTED)
         .expect("TalkStarted が存在する");
     let first_end = signals
         .iter()
-        .position(|s| matches!(s, TalkLifecycleSignal::DisplayEndAt(_)))
+        .position(|s| matches!(s, TalkLifecycleSignal::DisplayEndAt { .. }))
         .expect("DisplayEndAt が存在する");
     assert!(
         started_at < first_end,
@@ -92,7 +97,7 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
     );
 }
 
-/// ⑵ `DisplayEndAt` は `max(at + duration)` が**既知最大を超えたときのみ**
+/// ⑵ `DisplayEndAt` は `max(fire_time + duration)` が**既知最大を超えたときのみ**
 /// 送出され、受信列は単調増加になる。
 #[test]
 fn display_end_is_monotonic_max_of_at_plus_duration() {
@@ -109,7 +114,7 @@ fn display_end_is_monotonic_max_of_at_plus_duration() {
 
     assert_eq!(
         ends,
-        vec![ms(500), ms(2_000), ms(3_000)],
+        vec![at_ms(500), at_ms(2_000), at_ms(3_000)],
         "既知最大の更新時のみ送出され、受信列は単調増加になる"
     );
     assert!(
@@ -135,7 +140,7 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
 
     assert_eq!(
         ends.last().copied(),
-        Some(ms(1_750)),
+        Some(at_ms(1_750)),
         "待機 cue の duration が占有終端へ算入される（最後の文字の時刻 0.5 ではない）: {ends:?}"
     );
 }
@@ -153,7 +158,7 @@ fn horizon_matches_dola_occupancy_definition() {
         wait_cue(ms(150), ms(800)),
         text_cue(ms(150), ms(250)),
     ];
-    let expected = ms(950);
+    let expected = at_ms(950);
 
     for c in cues {
         sink.emit(c);
@@ -180,10 +185,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     let talk1_signals = drain(&rx);
     assert_eq!(
         talk1_signals,
-        vec![
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(ms(2_000)),
-        ],
+        vec![STARTED, end_from_zero(at_ms(2_000)),],
         "1 本目の talk: TalkStarted 先行＋占有終端"
     );
 
@@ -192,10 +194,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     let talk2_signals = drain(&rx);
     assert_eq!(
         talk2_signals,
-        vec![
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(ms(500)),
-        ],
+        vec![STARTED, end_from_zero(at_ms(500)),],
         "2 本目の talk でも TalkStarted が再送され、horizon は前 talk（2.0）を持ち越さない"
     );
 
@@ -205,20 +204,14 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     talk3.emit(text_cue(ms(0), ms(250)));
     assert_eq!(
         drain(&rx),
-        vec![
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(ms(250)),
-        ],
+        vec![STARTED, end_from_zero(at_ms(250)),],
         "emit 済みインスタンスからの clone も会話境界をリセットする"
     );
 
     registered.emit(text_cue(ms(0), ms(100)));
     assert_eq!(
         drain(&rx),
-        vec![
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(ms(100)),
-        ],
+        vec![STARTED, end_from_zero(at_ms(100)),],
         "登録 sink 自身も未 emit 状態から始まる"
     );
 }
@@ -264,10 +257,7 @@ fn instantaneous_talk_still_reports_zero_horizon() {
 
     assert_eq!(
         drain(&rx),
-        vec![
-            TalkLifecycleSignal::TalkStarted { talk_id: None },
-            TalkLifecycleSignal::DisplayEndAt(TimeSpan::ZERO),
-        ],
+        vec![STARTED, end_from_zero(TimePoint::ZERO),],
         "占有終端 0.0 も信号として届く（信号欠落と区別できる）"
     );
 }
@@ -360,11 +350,11 @@ fn play_script(script: &str, sink: Box<dyn CueSink>) -> CompiledTalk {
 }
 
 /// 受信列から `DisplayEndAt` の値だけを順序どおり抜き出す（受信済みスライス版）。
-fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<TimeSpan> {
+fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<TimePoint> {
     signals
         .iter()
         .filter_map(|s| match s {
-            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            TalkLifecycleSignal::DisplayEndAt { end, .. } => Some(*end),
             _ => None,
         })
         .collect()
@@ -423,7 +413,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     let started_positions: Vec<usize> = signals
         .iter()
         .enumerate()
-        .filter(|(_, s)| **s == TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .filter(|(_, s)| **s == STARTED)
         .map(|(i, _)| i)
         .collect();
     assert_eq!(
@@ -434,7 +424,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     let end_positions: Vec<usize> = signals
         .iter()
         .enumerate()
-        .filter(|(_, s)| matches!(s, TalkLifecycleSignal::DisplayEndAt(_)))
+        .filter(|(_, s)| matches!(s, TalkLifecycleSignal::DisplayEndAt { .. }))
         .map(|(i, _)| i)
         .collect();
     assert!(
@@ -445,7 +435,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     let ends = ends_of(&signals);
     assert_eq!(
         ends.last().copied(),
-        Some(expected_end),
+        Some(TimePoint::ZERO + expected_end),
         "待機を含む台本の占有終端が届く（待機の duration を落とすと {non_wait_end} になる）: {ends:?}"
     );
 }
@@ -489,12 +479,12 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     );
     assert_eq!(
         first_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+        Some(&STARTED),
         "1 本目: 会話開始の通知が先行する: {first_signals:?}"
     );
     assert_eq!(
         ends_of(&first_signals).last().copied(),
-        Some(first_end),
+        Some(TimePoint::ZERO + first_end),
         "1 本目: 待機を含む占有終端が届く: {first_signals:?}"
     );
 
@@ -507,12 +497,12 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     );
     assert_eq!(
         second_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+        Some(&STARTED),
         "2 本目: 複製ごとに会話開始の通知が改めて出る: {second_signals:?}"
     );
     assert_eq!(
         ends_of(&second_signals).last().copied(),
-        Some(second_end),
+        Some(TimePoint::ZERO + second_end),
         "2 本目: 前の会話の占有終端（{first_end}）を持ち越さず、自分の終端が届く: {second_signals:?}"
     );
 
@@ -533,7 +523,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let used_ends = ends(&rx);
     assert_eq!(
         used_ends.last().copied(),
-        Some(first_end),
+        Some(TimePoint::ZERO + first_end),
         "前提: 複製元は 1 本目の占有終端まで既知最大を上げてある: {used_ends:?}"
     );
 
@@ -542,12 +532,12 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let third_signals = drain(&rx);
     assert_eq!(
         third_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+        Some(&STARTED),
         "3 本目: 使用済みインスタンスからの複製でも会話開始の通知が出る: {third_signals:?}"
     );
     assert_eq!(
         ends_of(&third_signals).last().copied(),
-        Some(second_end),
+        Some(TimePoint::ZERO + second_end),
         "3 本目: 使用済みインスタンスからの複製でも前の会話の占有終端（{first_end}）を持ち越さない: {third_signals:?}"
     );
 }

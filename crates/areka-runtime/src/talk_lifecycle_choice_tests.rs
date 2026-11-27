@@ -61,7 +61,7 @@ fn run_talk(
 fn count_choice_shown(signals: &[TalkLifecycleSignal]) -> usize {
     signals
         .iter()
-        .filter(|s| matches!(s, TalkLifecycleSignal::ChoiceShown))
+        .filter(|s| matches!(s, TalkLifecycleSignal::ChoiceShown { .. }))
         .count()
 }
 
@@ -86,7 +86,9 @@ fn two_choices_send_choice_shown_once_between_start_and_end() {
     let started = position(&signals, |s| {
         matches!(s, TalkLifecycleSignal::TalkStarted { .. })
     });
-    let shown = position(&signals, |s| matches!(s, TalkLifecycleSignal::ChoiceShown));
+    let shown = position(&signals, |s| {
+        matches!(s, TalkLifecycleSignal::ChoiceShown { .. })
+    });
     let ended = position(&signals, |s| {
         matches!(s, TalkLifecycleSignal::TalkEnded { .. })
     });

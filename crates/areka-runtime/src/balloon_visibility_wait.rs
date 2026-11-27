@@ -5,13 +5,13 @@ use std::sync::OnceLock;
 use tracing::{info, warn};
 
 use areka_sakura::TalkId;
-use dola::TimeSpan;
+use dola::{TimePoint, TimeSpan};
 
 use super::decision::hide_reaches_boxes;
 
 use super::{
     BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT, MeasurementDiscardReason,
-    MeasurementOrigin, SuppressionKinds, TIMEOUT_ENV_KEY, TalkEnd, TalkTimeout, TimeoutSource,
+    MeasurementOrigin, SuppressionKinds, TIMEOUT_ENV_KEY, TalkTimeout, TimeoutSource,
     VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
 };
 
@@ -83,31 +83,25 @@ fn talk_timeout(timeout: TalkTimeout, default: TimeSpan) -> Option<TimeSpan> {
 
 /// 実効の表示終了と起点の採り方を決める。
 ///
-/// トークの終わりが届くまでは `None`（計測を始めない）。
+/// トークの終わりが効くまでは `None`（計測を始めない）。
 ///
 /// - 選択肢つきでないトーク: 占有区間の終端と止まった時刻の早い方で、ちょうど同じなら終端を
-///   採る。時刻が無ければ終端。
+///   採る。
 /// - 選択肢つきのトーク: 止まった時刻（＝選択の待ちが解けた時刻）をそのまま採り、終端とは
 ///   比べない——終端は選択肢を出した所なので、比べると待ちの間に待ち時間を使い切った形になる。
-///   時刻が無ければ `now`（終わりを畳んだ後で計測が成り立つ最初のフレームの現在時刻）。
 fn effective_display_end(
-    display_end: TimeSpan,
-    talk_end: TalkEnd,
+    display_end: TimePoint,
+    talk_end: Option<TimePoint>,
     had_choice: bool,
-    now: TimeSpan,
-) -> Option<(TimeSpan, MeasurementOrigin)> {
-    match (talk_end, had_choice) {
-        (TalkEnd::NotYet, _) => None,
-        (TalkEnd::At(stopped), true) => {
-            Some((stopped, MeasurementOrigin::ChoiceWaitEndedAt(stopped)))
-        }
-        (TalkEnd::TimeUnknown, true) => Some((now, MeasurementOrigin::ChoiceWaitEndTimeMissing)),
-        (TalkEnd::At(stopped), false) if stopped < display_end => {
-            Some((stopped, MeasurementOrigin::StoppedAt(stopped)))
-        }
-        (TalkEnd::At(_), false) => Some((display_end, MeasurementOrigin::DisplayEnd)),
-        (TalkEnd::TimeUnknown, false) => Some((display_end, MeasurementOrigin::StopTimeMissing)),
-    }
+) -> Option<(TimePoint, MeasurementOrigin)> {
+    let stopped = talk_end?;
+    Some(if had_choice {
+        (stopped, MeasurementOrigin::ChoiceWaitEndedAt(stopped))
+    } else if stopped < display_end {
+        (stopped, MeasurementOrigin::StoppedAt(stopped))
+    } else {
+        (display_end, MeasurementOrigin::DisplayEnd)
+    })
 }
 
 /// タイムアウトの計測・抑止・満了を判定し、満了で非表示にする scope と、そのフレームの
@@ -115,15 +109,15 @@ fn effective_display_end(
 pub(super) fn decide_timeout(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<TimeSpan>,
+    frame_now: Option<TimePoint>,
     timeout: TimeSpan,
     broken: &[u32],
     content: &ContentDecisions,
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> (Vec<u32>, Option<TalkId>) {
-    // 現在時刻が分からないフレームは計測に一切触れない（起点未確立）。抑止の持ち越しも
-    // 止めるため、時刻が戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
-    let Some(now) = now_talk_time else {
+    // フレームの時刻が無いフレームは計測に一切触れない。抑止の持ち越しも止めるため、時刻が
+    // 戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
+    let Some(now) = frame_now else {
         return (Vec::new(), None);
     };
     // 文字の観測が取れなかったフレームも同じく触れない。そのフレームは箱の観測も失っていて
@@ -186,7 +180,7 @@ pub(super) fn decide_timeout(
     let wait = talk_timeout(state.talk_timeout, timeout);
     let eligible = match (state.display_end, wait) {
         (Some(end), Some(wait)) if !visible.is_empty() => {
-            effective_display_end(end, state.talk_end, state.talk_had_choice, now)
+            effective_display_end(end, state.talk_end, state.talk_had_choice)
                 .filter(|&(effective, _)| now >= effective)
                 .map(|(effective, origin)| (end, effective, origin, wait))
         }
@@ -212,9 +206,8 @@ pub(super) fn decide_timeout(
     if let Some((display_end, effective, origin, wait)) = eligible
         && state.deadline.is_none()
     {
-        // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
-        // 届かなければ占有終端である（選択肢つきのトークは止まった時刻そのもの・
-        // `effective_display_end`）。正典の起点は「スクリプトの表示が終わってから」。
+        // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方である（選択肢つきの
+        // トークは止まった時刻そのもの・`effective_display_end`）。正典の起点は「スクリプトの表示が終わってから」。
         // 「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム単位で
         // 飛び飛びに入るため、そちらを採ると観測の遅れがそのまま満了のずれになる。中断で終わった
         // トークは止まった時刻が占有終端より早いので、止まった時刻が起点になる。

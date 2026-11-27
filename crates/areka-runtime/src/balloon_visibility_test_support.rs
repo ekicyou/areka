@@ -8,9 +8,9 @@
 use std::collections::BTreeMap;
 
 use areka_sakura::TalkId;
-use dola::TimeSpan;
 #[cfg(test)]
 pub(super) use dola::time::testing::{delta_ms, ms};
+use dola::{TimePoint, TimeSpan};
 
 use super::{
     BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT, GlyphObservation, ScopeObservation,
@@ -25,6 +25,9 @@ pub(super) const TIMEOUT: TimeSpan = DEFAULT_BALLOON_TIMEOUT;
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
+
+/// [`Frame`] が組む合図の時刻（列を通さないので判断に効かない）。
+pub const SIGNAL_AT: TimePoint = TimePoint::ZERO;
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
 /// 消去の回数は 0 で一定。
@@ -135,7 +138,7 @@ pub(super) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObs
 
 /// 1 フレーム分の判断を進める（時刻を与えないため、タイムアウトの評価は行われない）。
 ///
-/// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
+/// 時刻 `None` は本番の「フレームの時刻が無い世界」に対応する。コンテンツ駆動の判定だけを見たい
 /// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
 /// テストのどれかが必ず落ちる。
 #[cfg(test)]
@@ -152,7 +155,7 @@ pub(super) fn step(
 /// （満了境界の直前・直後など）そのものに限り、そこで頭打ちにする。
 pub struct Frame {
     obs: VisibilityObservations,
-    now: Option<TimeSpan>,
+    now: Option<TimePoint>,
     timeout: TimeSpan,
 }
 
@@ -168,8 +171,8 @@ impl Frame {
         }
     }
 
-    /// 現在時刻（台本の時刻）を注入する。
-    pub fn at(mut self, now: TimeSpan) -> Self {
+    /// フレームの時刻を注入する。
+    pub fn at(mut self, now: TimePoint) -> Self {
         self.now = Some(now);
         self
     }
@@ -181,18 +184,21 @@ impl Frame {
     }
 
     /// 会話開始の信号を本フレームに届ける。番号は本番と同じく配送が付けた [`TALK_ID`]。
+    ///
+    /// この組み立ての信号は判断へ直に渡す（列を通らない）ので、信号の時刻（[`SIGNAL_AT`]）は判断に効かない。
     pub fn talk_started(mut self) -> Self {
         self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
             talk_id: Some(TALK_ID),
         });
         self
     }
 
     /// 占有終端の信号を本フレームに届ける。
-    pub fn display_end(mut self, end: TimeSpan) -> Self {
+    pub fn display_end(mut self, end: TimePoint) -> Self {
         self.obs
             .lifecycle
-            .push(TalkLifecycleSignal::DisplayEndAt(end));
+            .push(TalkLifecycleSignal::DisplayEndAt { at: SIGNAL_AT, end });
         self
     }
 
@@ -200,12 +206,12 @@ impl Frame {
     ///
     /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は終端と同じにするので、
     /// 起点は終端のままで満了の時刻は変わらない。
-    pub fn ended_at(self, end: TimeSpan) -> Self {
+    pub fn ended_at(self, end: TimePoint) -> Self {
         let mut frame = self.display_end(end);
         frame
             .obs
             .lifecycle
-            .push(TalkLifecycleSignal::TalkEnded { at: Some(end) });
+            .push(TalkLifecycleSignal::TalkEnded { at: end });
         frame
     }
 
@@ -231,6 +237,6 @@ impl Frame {
 
 /// `t` から `by` だけ前の時刻（満了の直前などを指す）。
 #[cfg(test)]
-pub(super) fn earlier(t: TimeSpan, by: TimeSpan) -> TimeSpan {
-    t.checked_sub(by).expect("固定した時刻は 0 以上")
+pub(super) fn earlier(t: TimePoint, by: TimeSpan) -> TimePoint {
+    t - by
 }

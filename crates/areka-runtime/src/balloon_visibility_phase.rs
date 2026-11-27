@@ -6,9 +6,10 @@
 //!
 //! # 1 フレームの手順
 //!
-//! ⑴ 表示ライフサイクル信号を全件取り出す → ⑵ scope ごとの観測を集める → ⑶ 自分が発行して
+//! ⑴ 表示ライフサイクル信号を全件取り出して列へ足し、フレームの時刻が来た物を頭から取り出す →
+//! ⑵ scope ごとの観測を集める → ⑶ 自分が発行して
 //! いない可視性の変化を前フレームとの差分で検出する → ⑷ [`decide`] を呼び、計測が動いている間は
-//! 満了の時刻に合わせて次の起床を預ける → ⑸ 返った行動を発行する → ⑹ 返った事象をログへ写し、時間切れの知らせがあれば置き場のゴーストの kanade へ
+//! 満了の時刻に、列の頭が待つ間はその時刻に合わせて次の起床を預ける → ⑸ 返った行動を発行する → ⑹ 返った事象をログへ写し、時間切れの知らせがあれば置き場のゴーストの kanade へ
 //! 送る → ⑺ 不可視へ落ちた scope のポインタ滞在記録を掃除する。
 //!
 //! ⑶ が ⑷ より前にあるのは順序の都合ではなく必然である——[`decide`] は自分が積んだ遷移を
@@ -46,6 +47,7 @@ use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{RuntimeWiring, resolve_frame_now};
 use super::super::target_map::{balloon_target, shell_target, window_scope};
+use super::held::{head_wait, take_due};
 use super::{
     BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
     TalkLifecycleSignal, VisibilityAction, VisibilityLogEvent, VisibilityObservations,
@@ -76,6 +78,7 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     let RuntimeWiring {
         presenter,
         lifecycle_rx,
+        lifecycle_held,
         balloon_visibility: state,
         balloon_models,
         talk_ends,
@@ -92,11 +95,13 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     // 待ち時間はプロセスで一度だけ解決する（初回の呼び出しが起動時の 1 行を出す）。
     let timeout = configured_timeout();
 
-    let lifecycle = drain_lifecycle(lifecycle_rx, state);
-    *talk_ends += lifecycle
+    let arrived = drain_lifecycle(lifecycle_rx, state);
+    // 届いた順を数える物なので、時刻で待たせずに線から取り出した時に数える。
+    *talk_ends += arrived
         .iter()
         .filter(|s| matches!(s, TalkLifecycleSignal::TalkEnded { .. }))
         .count() as u64;
+    let lifecycle = take_due(lifecycle_held, arrived, frame_now);
     let observations = collect_observations(
         presenter, &runtime, world, &scopes, frame_now, lifecycle, state,
     );
@@ -114,6 +119,10 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
         VisibilityWake::After(wait) => tick_wake::arm_deadline(Instant::now() + wait),
         VisibilityWake::Now => tick_wake::mark(tick_wake::REARM),
         VisibilityWake::None => {}
+    }
+    // 列の頭の知らせが待つ時刻にも同じ枠で預ける（枠は早い方を残す）。
+    if let Some(wait) = head_wait(lifecycle_held, frame_now) {
+        tick_wake::arm_deadline(Instant::now() + wait.to_std().min(MAX_WAIT));
     }
 
     let issued = issue_actions(
@@ -153,19 +162,19 @@ enum VisibilityWake {
     None,
 }
 
-/// 満了予定と現在時刻と抑止の有無から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
+/// 満了予定とフレームの時刻と抑止の有無から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
 ///
-/// 時刻軸はどちらも台本の時刻である。計測が動いていない（起点未確立・満了予定なし）フレーム
-/// では何も預けない——待つ相手が居ないのに起きても、判断は同じ答えを返すだけである。
+/// 計測が動いていない（フレームの時刻が無い・満了予定なし）フレームでは何も預けない——待つ相手が
+/// 居ないのに起きても、判断は同じ答えを返すだけである。
 fn visibility_wake(
-    now_talk_time: Option<TimeSpan>,
-    deadline: Option<TimeSpan>,
+    frame_now: Option<TimePoint>,
+    deadline: Option<TimePoint>,
     suppressed: bool,
 ) -> VisibilityWake {
-    let (Some(now), Some(deadline)) = (now_talk_time, deadline) else {
+    let (Some(now), Some(deadline)) = (frame_now, deadline) else {
         return VisibilityWake::None;
     };
-    let remaining = deadline.checked_sub(now).filter(|r| *r > TimeSpan::ZERO);
+    let remaining = deadline.span_since(now).filter(|r| *r > TimeSpan::ZERO);
     if let Some(remaining) = remaining {
         VisibilityWake::After(remaining.to_std().min(MAX_WAIT))
     } else if suppressed {
@@ -712,12 +721,6 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
                     deadline = %deadline,
                     "[balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端）"
                 ),
-                MeasurementOrigin::StopTimeMissing => warn!(
-                    origin = origin.as_str(),
-                    display_end = %display_end,
-                    deadline = %deadline,
-                    "[balloon-visibility] タイムアウト計測を開始（止まった時刻が届かず、起点＝会話の占有終端）"
-                ),
                 MeasurementOrigin::ChoiceWaitEndedAt(stopped_at) => info!(
                     origin = origin.as_str(),
                     stopped_at = %stopped_at,
@@ -725,19 +728,13 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
                     deadline = %deadline,
                     "[balloon-visibility] タイムアウト計測を開始（選択肢つきのトーク・起点＝選択の待ちが解けて止まった時刻）"
                 ),
-                MeasurementOrigin::ChoiceWaitEndTimeMissing => warn!(
-                    origin = origin.as_str(),
-                    display_end = %display_end,
-                    deadline = %deadline,
-                    "[balloon-visibility] タイムアウト計測を開始（選択肢つきのトークで止まった時刻が届かず、起点＝このフレームの現在時刻）"
-                ),
             },
             VisibilityLogEvent::MeasurementDiscarded { reason, deadline } => info!(
                 reason = reason.as_str(),
                 deadline = %deadline, "[balloon-visibility] タイムアウト計測を破棄"
             ),
             VisibilityLogEvent::MeasurementRestarted { now, deadline } => info!(
-                talk_time = %now,
+                frame_now = %now,
                 deadline = %deadline, "[balloon-visibility] 抑止が解けたのでタイムアウト計測をやり直した"
             ),
             VisibilityLogEvent::TimeoutSuppressed { kinds, deadline } => info!(

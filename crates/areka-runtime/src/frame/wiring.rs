@@ -17,6 +17,7 @@ use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
+use areka_sakura::held::HeldQueue;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::shell_carry::ShellCarry;
@@ -38,7 +39,7 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
-/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`talk_ends` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
+/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`lifecycle_held`／`balloon_visibility`／`balloon_models`／`talk_ends` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub presenter: EmoPresenter,
@@ -55,10 +56,12 @@ pub struct RuntimeWiring {
     pub(super) move_talk_ends_seen: Cell<u64>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端（バルーン可視性相が消費）。
     ///
-    /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が台本の時刻で FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
+    /// [`super::super::wire_runtime`] が `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す。会話の開始（[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端（[`TalkLifecycleSignal::DisplayEndAt`]）が、効く絶対の時刻つきで FIFO に届く。送り手はもう 1 つあり、UI スレッドの押下ハンドラが送出端の複製から利用者の中断（[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す。
     ///
     /// 取り出しは可視性相の `try_iter` による全件 drain。受信前の信号はチャネル自身が預かるので、attach 前に始まった会話の信号も落ちない。
     pub lifecycle_rx: Receiver<TalkLifecycleSignal>,
+    /// 線から取り出した寿命の知らせを、届いた順のまま時刻が来るまで持つ列（可視性相が足し、取り出す）。
+    pub lifecycle_held: HeldQueue<TalkLifecycleSignal>,
     /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
     ///
     /// [`super::super::wire_runtime`] が `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す。`\![set,zorder,…]`／`\![reset,zorder]` の解釈前のトークン列が到着順に届く。
@@ -158,6 +161,7 @@ impl RuntimeWiring {
             talk_ends: 0,
             move_talk_ends_seen: Cell::new(0),
             lifecycle_rx,
+            lifecycle_held: HeldQueue::new(),
             zorder_rx,
             zorder_ledger: ZOrderGroupLedger::default(),
             window_state: StayOnTopState::default(),

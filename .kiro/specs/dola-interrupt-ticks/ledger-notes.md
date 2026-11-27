@@ -392,3 +392,11 @@
 - 置き換え: `frame_drain_text_tests::resolve_talk_time_override_wins_else_clock_else_none` → `frame_text_advance_tests::resolve_frame_now_takes_the_override_then_the_frame_time`。`frame_text_scale_tests` の `reveal_pending` の 5 本 → `next_reveal` の 5 本（真偽から「次に現れる字の時刻か None」へ）。
 - 足したログ: `error!(phase, "[text-layer] 文字の層がほかの処理に借りられていて…")`（相ごとに縮み 1 回で 1 行）。足したテスト: `talk_clock::tests::now_reads_the_injected_clock_and_clones_share_it`、`frame_text_advance_tests` の 7 本。
 - 振る舞いの変化: 拡大率の相・文字の相は借りられないと見送って REARM、文字の相は合図が当たっていなくてもフレームの時刻が在れば `present_frame`、字が残る間の予約は次に現れる字の時刻への `arm_deadline`（最長 1 時間・全部の場所から求める）、`hover_inject` は毎フレームのフレームの時刻で呼ぶ。期待の変化: `run_text_phase_override_reaches_present_frame_without_panic` は `Some(ms(2_000))` → `Some(at_ms(2_000))`、`hover_inject` のテストは `ms` → `at_ms`（値は同じ）、`cycle_ordinal` は `div_euclid`/`rem_euclid`。
+
+## 10.11（後半）
+
+- 取り除いた分かれ道とログ: `balloon_visibility.rs` の `TalkEnd` 列挙（`TimeUnknown` を含む。止まった時刻は `talk_end: Option<TimePoint>`）、`MeasurementOrigin::StopTimeMissing`・`ChoiceWaitEndTimeMissing` と `warn!` 2 行（「止まった時刻が届かず、起点＝会話の占有終端」「選択肢つきのトークで止まった時刻が届かず、起点＝このフレームの現在時刻」）、`wait.rs` の `effective_display_end` の時刻が無い時の 2 本の枝と引数 `now`、`talk_lifecycle.rs` の `warn!`（"止まった時刻が取れない（時刻源に起点が無い）——時刻無しで終わりを送る"）と `now_talk_time` の呼び出し。有限でない終わりを捨てる枝・負の終わりを 0 に寄せる所は前半の 5.2 で消えていた。
+- 外したテスト: `talk_lifecycle_signals_tests::talk_ended_without_epoch_has_no_time_and_is_logged`、`talk_lifecycle_signals_tests::talk_clock_now_talk_time_reads_the_injected_clock`（10.10 の `talk_clock::tests::now_reads_the_injected_clock_and_clones_share_it` が引き継ぐ）。
+- 変える前後の期待: `talk_ended_carries_the_injected_clock_once_when_dropped`（`TalkEnded { at: Some(ms(1_234)) }` の台本の時刻 → `TalkEnded { at: at_ms(101_234) }` の時計の読み）。ログの欄の改名: `MeasurementRestarted` の `talk_time` → `frame_now`。
+- 振る舞いの変化: 寿命の知らせは、フレームの時刻が知らせの時刻に届いた最初のフレームで効く（頭が待つ間は後ろも待つ）。トークの終わり・利用者の中断は時計の読みを運ぶ。`OriginMoved` を送る（表示の終わりだけを動かし、期限は動かさない）。
+- 足したテスト: `balloon_visibility::held::tests` 8 本、`talk_lifecycle::origin_tests` 10 本。
