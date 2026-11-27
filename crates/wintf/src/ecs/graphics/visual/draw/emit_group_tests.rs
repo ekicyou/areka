@@ -62,13 +62,16 @@ fn destination_in_inside_a_group_does_not_reach_the_parent_pixels() {
         ChildOf(g),
     ));
 
-    let p = render16(&mut world, root);
-
-    pixel_near(&p, BLUE, 6, 6);
-    // まとめの中では青の (0,0)-(4,4) が削られ、親の赤が見える。
-    pixel_near(&p, RED, 2, 2);
-    pixel_near(&p, RED, 10, 10);
-    pixel_near(&p, RED, 14, 14);
+    // 拡大 2 は作業用の絵の道（拡大 1 は不透明度 1 の層の道）。
+    for k in [1u32, 2] {
+        let s = k as f32;
+        let p = render_tree_to_pixels(&mut world, root, 16 * k, 16 * k, Matrix3x2::scale(s, s));
+        pixel_near(&p, BLUE, 6 * k, 6 * k);
+        // まとめの中では青の (0,0)-(4,4) が削られ、親の赤が見える。
+        pixel_near(&p, RED, 2 * k, 2 * k);
+        pixel_near(&p, RED, 10 * k, 10 * k);
+        pixel_near(&p, RED, 14 * k, 14 * k);
+    }
 }
 
 #[test]

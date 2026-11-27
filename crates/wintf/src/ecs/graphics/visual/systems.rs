@@ -16,7 +16,8 @@ use super::promotion_round::{PromotionData, RoundContext, demote_unseen, run_rou
 use super::world_visual::{FillData, ReportedIssues, TreeScan, fill_world_visuals};
 use super::{
     AutoPromotion, DrawCommand, DrawTree, OwnSurface, SurfacePlacement, Visual, VisualDrawContent,
-    VisualTransform, WorldVisual, has_window_ancestor, insert_graphics_parts, wants_own_surface,
+    VisualGroup, VisualTransform, WorldVisual, has_window_ancestor, insert_graphics_parts,
+    wants_own_surface,
 };
 use crate::ecs::graphics::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 use crate::ecs::graphics::systems::{
@@ -173,6 +174,7 @@ pub(crate) fn needs_rebuild(
 pub struct TreeEdits<'w, 's> {
     removed_content: RemovedComponents<'w, 's, VisualDrawContent>,
     removed_transform: RemovedComponents<'w, 's, VisualTransform>,
+    removed_group: RemovedComponents<'w, 's, VisualGroup>,
     removed_parent: RemovedComponents<'w, 's, ChildOf>,
     removed_own: RemovedComponents<'w, 's, OwnSurface>,
     demoted: RemovedComponents<'w, 's, VisualGraphics>,
@@ -184,6 +186,7 @@ impl TreeEdits<'_, '_> {
     pub fn any(&mut self) -> bool {
         self.removed_content.read().count()
             + self.removed_transform.read().count()
+            + self.removed_group.read().count()
             + self.removed_parent.read().count()
             + self.removed_own.read().count()
             + self.demoted.read().count()

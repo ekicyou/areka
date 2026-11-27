@@ -228,6 +228,25 @@ fn tree_edits_catch_promotion_and_demotion() {
     );
 }
 
+/// まとめ（`VisualGroup`）だけを外した回も拾う（版は上がらないので、外れで組み直す）。
+#[test]
+fn tree_edits_catch_group_removal() {
+    let mut world = World::new();
+    let any = world.register_system(|mut edits: TreeEdits| edits.any());
+    let node = world
+        .spawn((
+            Visual::default(),
+            VisualGroup {
+                mix: MixMode::default(),
+            },
+        ))
+        .id();
+    world.run_system(any).unwrap();
+    world.entity_mut(node).remove::<VisualGroup>();
+    assert!(world.run_system(any).unwrap(), "まとめの外れを拾う");
+    assert!(!world.run_system(any).unwrap(), "同じ外れは 1 回だけ");
+}
+
 /// 装置の失いの立ち直りの後に単位矩形が新しい工場の図形で作り直される（外のテストからは見えない欄）。
 /// 立ち直りは `init_graphics_core` と同じく装置の資源を同じ場所で入れ替えて与える。
 #[test]

@@ -353,3 +353,55 @@ fn updated_is_set_only_by_own_changes_not_by_ancestor_motion() {
         "見えない節は数えない"
     );
 }
+
+/// まとめの節の子孫は祖先の層の中と同じく上げない。`SOURCE_OVER` でないまとめの節は自分も
+/// `SOURCE_OVER` でない件と同じ扱い。
+#[test]
+fn group_descendants_are_not_promoted() {
+    use super::promotion_shape::{Ineligible, ShapeInput, check_shape};
+    use windows::Win32::Graphics::Direct2D::Common::{
+        D2D1_COMPOSITE_MODE_SOURCE_ATOP, D2D1_COMPOSITE_MODE_SOURCE_OVER,
+    };
+    for (mix, group_source_over) in [
+        (D2D1_COMPOSITE_MODE_SOURCE_OVER, true),
+        (D2D1_COMPOSITE_MODE_SOURCE_ATOP, false),
+    ] {
+        let mut world = World::new();
+        let root = world.spawn(Visual::default()).id();
+        let g = world
+            .spawn((
+                Visual::default(),
+                WorldVisual::default(),
+                VisualGroup {
+                    mix: MixMode::Composite(mix),
+                },
+                placed(10.0, 10.0, 20.0, 20.0),
+                ChildOf(root),
+            ))
+            .id();
+        let c = world
+            .spawn((
+                Visual::default(),
+                solid_rect_content(rect4()),
+                placed(2.0, 2.0, 4.0, 4.0),
+                ChildOf(g),
+            ))
+            .id();
+        let scan = Filler::new(&mut world).scan(&mut world, root);
+        assert_eq!(entry(&scan, g).source_over, group_source_over, "{mix:?}");
+        assert!(!entry(&scan, g).ancestors.layer, "{mix:?}");
+        assert!(entry(&scan, c).ancestors.layer, "{mix:?}");
+        let idx = scan.entries.iter().position(|e| e.entity == c).unwrap();
+        let input = ShapeInput {
+            scan: &scan,
+            idx,
+            scale: 1.0,
+            host_px: (100, 100),
+        };
+        assert_eq!(
+            check_shape(&input),
+            Err(Ineligible::AncestorLayer),
+            "{mix:?}"
+        );
+    }
+}

@@ -73,12 +73,14 @@ impl PxRect {
 
 /// 項の種類。`Draw { unbounded }` は重ね方が `SOURCE_OVER` でない件（絵を切り抜きまで広げて合成する）と、
 /// 縮める `HIGH_QUALITY_CUBIC` の件（答えが描く範囲で変わる）。どちらも範囲は矩形の切り抜きか全面。
+/// `Group { unbounded }` はまとめ（1 枚を節の変換で描く件と同じ範囲・`unbounded` は重ね方が `SOURCE_OVER` でない）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EntryKind {
     Draw { unbounded: bool },
     ClipRect,
     ClipGeometry,
     Opacity,
+    Group { unbounded: bool },
 }
 
 /// 比べの項。件 1 つ、または層を積む命令 1 つ。
@@ -117,11 +119,12 @@ pub(crate) struct Parent {
 }
 
 impl Parent {
-    /// 番号 `index` の層の項 `layer` の内側。不透明度の層の範囲では切らない。
+    /// 番号 `index` の層の項 `layer` の内側。不透明度の層の範囲では切らない。まとめの中は 1 枚の外へ
+    /// 出ないので、まとめの範囲で両方を切る。
     pub fn inner(&self, index: u32, layer: &DamageEntry) -> Parent {
         let cut = |c: Option<PxRect>| Some(c.map_or(layer.bounds, |c| c.intersect(layer.bounds)));
         let (clip, rect_clip) = match layer.kind {
-            EntryKind::ClipRect => (cut(self.clip), cut(self.rect_clip)),
+            EntryKind::ClipRect | EntryKind::Group { .. } => (cut(self.clip), cut(self.rect_clip)),
             EntryKind::ClipGeometry => (cut(self.clip), self.rect_clip),
             EntryKind::Opacity | EntryKind::Draw { .. } => (self.clip, self.rect_clip),
         };
@@ -147,6 +150,7 @@ const TAG_DRAW: u8 = 0;
 const TAG_CLIP_RECT: u8 = 1;
 const TAG_CLIP_GEOMETRY: u8 = 2;
 const TAG_OPACITY: u8 = 3;
+const TAG_GROUP: u8 = 4;
 
 fn hasher(tag: u8) -> DefaultHasher {
     // `DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる。
@@ -282,16 +286,63 @@ pub(crate) fn item_entry(
     entity.hash(&mut shape);
     version.hash(&mut shape);
     interpolation.0.hash(&mut shape);
-    // 種類を先に混ぜる（重ね方とブレンドは同じ数値を持ち得る・`hash_draw` と同じ）。
-    match mix {
-        MixMode::Composite(c) => (0u8, c.0).hash(&mut shape),
-        MixMode::Blend(b) => (1u8, b.0).hash(&mut shape),
-    }
+    hash_mix(mix, &mut shape);
     Some(DamageEntry {
         id: finish(id, parent.key.map(|k| k.0)),
         shape: finish(shape, parent.key.map(|k| k.1)),
         kind: EntryKind::Draw {
             unbounded: unbounded(mix) || downscaling_hqc(linear, interpolation),
+        },
+        parent: parent.index,
+        end: 0,
+        bounds,
+        exact,
+        linear,
+        origin,
+    })
+}
+
+/// 種類を先に混ぜる（重ね方とブレンドは同じ数値を持ち得る・`hash_draw` と同じ）。
+fn hash_mix(mix: MixMode, h: &mut DefaultHasher) {
+    match mix {
+        MixMode::Composite(c) => (0u8, c.0).hash(h),
+        MixMode::Blend(b) => (1u8, b.0).hash(h),
+    }
+}
+
+/// まとめ 1 つの項。範囲は 1 枚（`local_aabb`）を節の変換で `LINEAR`・`mix` で描く件と同じ
+/// （`SOURCE_OVER` なら 1 枚の外接矩形とにじみの余白、ほかは親の鎖の矩形の切り抜きか全面）。
+pub(crate) fn group_entry(
+    group: &GroupLayer,
+    scale: (f32, f32),
+    parent: &Parent,
+    surface: (u32, u32),
+) -> Option<DamageEntry> {
+    let sheet = group.local_aabb.transform(group.world_mat);
+    let (exact, linear, origin) = physical(sheet, group.world_mat, scale)?;
+    let bounds = item_bounds(
+        exact,
+        linear,
+        D2D1_INTERPOLATION_MODE_LINEAR,
+        group.mix,
+        parent,
+        surface,
+    )?;
+    let mut id = hasher(TAG_GROUP);
+    let mut shape = hasher(TAG_GROUP);
+    for h in [&mut id, &mut shape] {
+        group.entity.hash(h);
+        group.version.hash(h);
+        hash_mix(group.mix, h);
+    }
+    group.world_mat.calc_hash(&mut id);
+    group.local_aabb.calc_hash(&mut id);
+    group.world_aabb.calc_hash(&mut id);
+    Some(DamageEntry {
+        id: finish(id, parent.key.map(|k| k.0)),
+        shape: finish(shape, parent.key.map(|k| k.1)),
+        kind: EntryKind::Group {
+            unbounded: unbounded(group.mix),
         },
         parent: parent.index,
         end: 0,
@@ -360,7 +411,6 @@ pub(crate) fn layer_entry(
 
 /// 描く列 `commands`（`build` の出した列）と描画面の拡大・大きさから比べの項の列を作る。
 /// 項は Pop 以外の命令と 1 対 1（同じ順）。決められない値が 1 つでもあれば `None`。
-/// まとめ（`PushGroup`）を含む列も `None`（その描画面は毎回全部描く）。
 /// 同じ入力からはいつも同じ列。COM を呼ばない。
 pub(crate) fn entries(
     commands: &[DrawCommand],
@@ -404,12 +454,15 @@ pub(crate) fn entries(
             DrawCommand::PushOpacity(l) => {
                 layer(Layer::Opacity(l.opacity), l.entity, l.version, l.world_aabb)?
             }
-            DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity => {
+            DrawCommand::PushGroup(g) => group_entry(g, scale, &parent, surface)?,
+            DrawCommand::PopClipRect
+            | DrawCommand::PopClipGeometry
+            | DrawCommand::PopOpacity
+            | DrawCommand::PopGroup => {
                 let open = stack.pop()?.index?;
                 out[open as usize].end = index;
                 continue;
             }
-            DrawCommand::PushGroup(_) | DrawCommand::PopGroup => return None,
         };
         stack.push(parent.inner(index, &entry));
         out.push(entry);

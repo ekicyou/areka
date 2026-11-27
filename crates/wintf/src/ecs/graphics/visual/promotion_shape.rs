@@ -16,7 +16,7 @@ pub(crate) enum Ineligible {
     LaterContentOverlap,
     /// 部分木の中に手動の持ち主が在る。
     ContainsOwner,
-    /// 祖先の節の不透明度の層（1 未満）か図形の切り抜き（角丸・任意の図形）の中。
+    /// 祖先の節の不透明度の層（1 未満）か図形の切り抜き（角丸・任意の図形）かまとめの中。
     AncestorLayer,
     /// 部分木に `SOURCE_OVER` でない混ぜ方の件が在る。
     NonSourceOver,

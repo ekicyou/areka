@@ -27,6 +27,8 @@ pub use wuc_resource::WucGraphicsResource;
 #[cfg(test)]
 mod composite_damage_tests;
 #[cfg(test)]
+mod composite_group_tests;
+#[cfg(test)]
 mod composite_scroll_tests;
 #[cfg(test)]
 mod composite_tests;

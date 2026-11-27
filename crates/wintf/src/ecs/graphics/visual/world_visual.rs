@@ -203,7 +203,7 @@ impl ClipClass {
 pub(crate) struct AncestorAcc {
     /// 祖先の節の `clamped_opacity` の積。
     pub opacity: f32,
-    /// 祖先に不透明度 1 未満か角丸・任意の図形の切り抜きが在る。
+    /// 祖先に不透明度 1 未満か角丸・任意の図形の切り抜きかまとめの節が在る。
     pub layer: bool,
     /// 祖先の矩形の切り抜きの交わり（親の持ち主の DIP・軸に沿うものだけ）。
     pub rect_clip: Option<Aabb>,
@@ -224,11 +224,19 @@ impl AncestorAcc {
     };
 
     /// 節 `visual`（配置の大きさ `size`・埋めた `world`）の子へ渡す積み重ね。
-    fn under(self, visual: &Visual, size: Size, world: &WorldVisual, source_over: bool) -> Self {
+    fn under(
+        self,
+        visual: &Visual,
+        size: Size,
+        world: &WorldVisual,
+        source_over: bool,
+        group: bool,
+    ) -> Self {
         let opacity = visual.clamped_opacity();
         let mut acc = Self {
             opacity: self.opacity * opacity,
             layer: self.layer
+                || group
                 || opacity < 1.0
                 || matches!(
                     ClipClass::of(visual.clip.as_ref()),
@@ -318,9 +326,11 @@ pub(crate) fn fill_world_visuals(
                 .map_or(Matrix3x2::identity(), |a| a.offset.into());
         let size = arrangement.as_ref().map_or_else(Size::default, |a| a.size);
         let own_clip = ClipClass::of(visual.clip.as_ref());
+        // `SOURCE_OVER` でないまとめは 1 枚を切り抜きまで広げて重ねるので、そうした件と同じ扱い。
         let source_over = content
             .as_ref()
-            .is_none_or(|c| c.mix_mode == MixMode::default());
+            .is_none_or(|c| c.mix_mode == MixMode::default())
+            && group.as_ref().is_none_or(|g| g.mix == MixMode::default());
         let idx = entries.len();
         if wv.is_none() || has_list || has_own {
             let mut w = WorldVisual::from_world_mat(local * parent_world);
@@ -381,7 +391,7 @@ pub(crate) fn fill_world_visuals(
                 || transform.as_ref().is_some_and(|t| t.is_changed())
                 || arrangement.as_ref().is_some_and(|a| a.is_changed()));
         let phase = auto.map_or(Phase::Node, |a| a.rule.phase());
-        let child_acc = acc.under(&visual, size, &w, source_over);
+        let child_acc = acc.under(&visual, size, &w, source_over, group.is_some());
         entries.push(ScanEntry {
             entity: e,
             depth,
