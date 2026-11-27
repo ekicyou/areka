@@ -60,7 +60,7 @@
 ### Allowed Dependencies
 
 - `areka-sylphya` の `[dependencies]`: std・`thiserror`・`tracing`・`toml`（取り込みの読みだけ）・`areka-actor`・**`rusqlite` 0.43.0（`default-features = false`・`bundled`・`cache`）**。上流の areka の crate は引かない（最下層の決まりのまま）。
-- `areka-sylphya` の `[dev-dependencies]`: 今の `log-capture-kit`・`temp-path-kit` に、`areka-user-data` を足す（写しの試験のため。`areka-user-data` は `tracing` だけを引く葉で、`areka-sylphya` を引かない）。
+- `areka-sylphya` の `[dev-dependencies]`: 今の `log-capture-kit`・`temp-path-kit` のまま（足さない）。利用者ごとの置き場への写しの試験は、`areka-user-data` と `areka-sylphya` の両方を既に引いている `areka-session` に置く。
 - 外部のクレートはそのまま使う（フォークも `[patch]` もしない）。SQLite の組み立ての旗も足さない。
 - 速い住み場所の住人の型（`AppliedScale`・`ScaleRatio`）を知るのは `areka-runtime` と `areka-session` だけ。`areka-sylphya` は 64 ビットの値と文字列しか知らない。
 - `windows` クレートを `areka-sylphya` に足さない（長いパスは std の `std::path::absolute` と SQLite の VFS で扱う）。
@@ -154,7 +154,7 @@ graph TB
 |---|---|---|---|
 | D1 | 番人はゴーストごとに 1 本。番人が居ない時点は同期の口（`KvsDirect`） | 今のアクターの寿命のまま。ATTACH の上限（10）が同時に動くゴーストの数を縛らない。書き手が複数の接続になるのは要件の前提 | 4.6・6.1・6.9・10.1・10.2・11.5 |
 | D2 | 層のファイルは、1 回の読み・1 回の書きの間だけ ATTACH する〔仮定 1〕 | ATTACH している間はフォルダの `rename`・削除が拒まれる（試作）。今の `sylphya.toml` は保存の間しか開かれない。別のプロセスの書きが次の読みで見える | 1.10・5.3・5.5 |
-| D3 | ジャーナルは DELETE・`synchronous` は FULL（SQLite の既定のまま・設定しない） | 読み取りだけで作るファイル 0・書けないフォルダで読める、を満たすのは DELETE だけ（試作） | 3.5・6.5・9.1・9.6 |
+| D3 | ジャーナルは DELETE・`synchronous` は FULL（SQLite の既定のまま・設定しない）。接続を開いたら `PRAGMA temp_store = MEMORY` を置く | 読み取りだけで作るファイル 0・書けないフォルダで読める、を満たすのは DELETE だけ（試作）。一時の表をメモリーに置けば、4 つのフォルダの外にファイルを作らないことが作りから出る（一時フォルダは試作で確かめていない） | 3.5・5.3・6.5・9.1・9.6 |
 | D4 | 書きは錠を待たずに試み、`SQLITE_BUSY` は巻き戻す。番人は保留して刻み（10 ミリ秒）ごとにやり直し、1 秒で「書けなかった」にする | 番人が錠の待ちで止まらないので、待っている書きが読みを止めない。時計を差し込めるので試験が眠らない | 6.6・6.7・6.10・14.6・14.11 |
 | D5 | 1 回の書きは、遅らせる `BEGIN` の最初の文を書きにして、1 つの層のファイルだけに錠を取る | `BEGIN IMMEDIATE` は ATTACH した全部の DB に錠を取る（試作） | 6.2・6.3・6.4 |
 | D6 | アプリの層の揮発の値は、名前つきのメモリーの DB（memdb）。生かしておく接続は置き場の口が持つ | 接続を全部閉じると消える（試作）。共有キャッシュは待ちが効かないので使わない | 4.6・11.5・14.10 |
@@ -177,7 +177,7 @@ graph TB
 
 ```
 crates/areka-sylphya/
-├── Cargo.toml                    # rusqlite を足す・dev に areka-user-data を足す
+├── Cargo.toml                    # rusqlite を足す
 └── src/
     ├── lib.rs                    # 宣言と再輸出（頭の説明を書き直す）
     ├── keytable.rs               # 新: 鍵の表（KEY_TABLE・rule_of・validate）
@@ -231,7 +231,9 @@ crates/areka-sylphya/tests/
 - `crates/areka-runtime/src/scope_scale.rs` ［外・要件が先に挙げた］ — `Arc<RwLock<ScopeScaleTable>>` を、`FastTable` 4 つを束ねた取っ手に替える。
 - `crates/areka-runtime/src/frame/scale_notice.rs` ［外・要件が先に挙げた］ — 表の書きを取っ手の `set` に替える（書きの鍵を取らない）。
 - `crates/areka-runtime/src/frame/wiring.rs` ［外・要件が先に挙げた］ — 欄 `scope_scale` と `scope_scale_table()` の型。
-- コメントの中の `sylphya.toml` の名前だけを直すファイル ［外］: `crates/areka-session/src/boot_seam.rs`（158 行目の説明）・`crates/areka-placement/src/lib.rs`（362・759 行目の説明）・`crates/areka-placement/src/follow/drag_follow.rs`（157 行目の注）。コードは変えない。同じウェーブの spec と重なるなら、この 3 つは直さずに残してよい（締めの検査はコメントの行を読まない）。
+- コメントの中の `sylphya.toml` の名前だけを直すファイル ［外］: `crates/areka-session/src/boot_seam.rs`（158 行目の説明）・`crates/areka-placement/src/follow/drag_follow.rs`（157 行目の注）・`crates/log-capture-kit/tests/temp_path_guard_test.rs`（265 行目の注が、消す `persist/io.rs` を名指している）。コードは変えない。`crates/areka-placement/src/lib.rs`（362・759 行目の説明）は直さずに残す（同じウェーブの `balloon-script-offset-align` がこのファイルに宣言の 1 行を足す。締めの検査はコメントの行を読まない）。
+
+**同じウェーブ（C28）との重なり**（2026-11-27 に測った）: ほかの 5 本のブランチは、まだ spec の文書しか変えていない（ソースの変更は 0 ファイル）。5 本の設計・調べの文書に、この設計が触るファイルの名前が「触る」として出るのは `crates/areka-placement/src/lib.rs` の 1 つだけで、上のとおりこちらが触らない。`crates/areka-runtime/src/frame/wiring.rs`・`crates/areka-session/src/{runtime_boot.rs, ghost_session.rs}` は、相手の文書に名前は出るが「変えない」「結線が要らない」と書かれている。`doc/COMPAT_ARCHITECTURE.md` と `dist/README.txt` は別々の行なら許す重なり。実装に入る前に、相手のブランチの変更をもう一度測る。
 
 **根と文書**
 
@@ -241,7 +243,7 @@ crates/areka-sylphya/tests/
 - `.kiro/steering/tech.md` — Key Libraries に rusqlite を足し、toml の行を「取り込みの読みだけ」に直す。
 - `.kiro/steering/structure.md` ［外・要件 12.3］ — sylphya の節（Architecture・Modules・Dependencies）と、`areka-ghost`・`areka-session` の節のうち記憶の読み書きに触れる文。
 - `dist/README.txt` ［外・要件 13］ — 「■ 記憶の置き場」「■ 起動オプション」の `readonly` の説明。
-- `doc/COMPAT_ARCHITECTURE.md` ［外・要件 8.8］ — 記録の語彙の表（足す名前・意味の変わる名前）。
+- `doc/COMPAT_ARCHITECTURE.md` ［外・要件 8.8］ — 今この文書に在る記憶の記録の名前は `memory_write_failed` の 1 か所だけで、意味は変わらない。その前後の文が `sylphya.toml` の作りを説明していれば、そこだけ直す（記録の語彙の正本は、この設計の Monitoring と `structure.md` の sylphya の節）。
 
 **触らない見込み**（呼んでいる口の形が変わらないことをソースで確かめた。組んで確かめるのは実装の段）: `crates/areka-session/src/{ghost_switch.rs, write_failure.rs, readonly.rs, boot_seam.rs, ghost_session_runtime.rs}`・`crates/areka/src/install/desk.rs`・`crates/areka-placement/src/persist_save.rs`・`crates/areka-runtime/src/switch_assets.rs`・`crates/areka/src/mcp/get_property.rs`・`crates/areka-ghost/src/prop_get_sink.rs`・`crates/areka-user-data/src/`（本番）・`crates/real-run-kit/`。
 
@@ -579,6 +581,7 @@ impl MemBackend {
 }
 ```
 
+- `retire_legacy` の「上書きしない」: Windows の `std::fs::rename` は在る行き先を置き換えるので、先に `OpenOptions::create_new` で行き先の名前（`sylphya.toml.imported`、在れば `.imported.1`…）を空のファイルとして取り、取れた名前へ `rename` する（置き換わるのは自分が今作った空のファイルだけ）。名前を取った後・`rename` の前に落ちると空のファイルが残るが、次の回は次の番号を取るので、元のファイルの中身は失わない。
 - Postconditions: `FsBackend::pause` は実時間で眠る（本番の同期の口の取り直し）。`MemBackend::pause` は自分の時計を進めるだけで眠らない。本物のファイルの上で待ちを試す試験のために、`FsBackend` も試験の時計（進めるだけ・眠らない）を受けて作れる（`FsBackend::with_manual_clock()`。本番の `fs_backend()` は実時間の時計）。
 - Invariants: `locate` は `Create` のとき以外、ファイルもフォルダも作らない。
 
@@ -594,7 +597,7 @@ impl MemBackend {
 - **Trigger**: `Store` が、ある層の置き場を初めて読む・書く直前（`Store` の中に「この置き場は済んだ」を覚える。`set_root` で戻る）。起動の前の直読み（前回のゴースト・置き場の並び・窓の位置）もこの道を通るので、取り込みは「読みより前」に済む。
 - **Input / validation**: `StoreBackend::read_legacy` → 今の `parse_toml_str`（壊れている・形の版が違う → 失敗）→ 今の `doc_to_entries` と同じ変換（`import.rs` へ移す）。同じ番号に読める綴りが 2 つ在る鍵は、先に現れた綴りの値を採る。空の文字の起動中の印は無し。知らない表・値・番号に読めない綴りは数だけ数える。
 - **Output / destination**: 層のファイルの `kv` へ `INSERT OR IGNORE`（正規名）、`meta` へ取り込み済みの印。同じトランザクション。書きの錠が取れなければ、置き場の口の時計で 1 秒まで取り直す。控える範囲の中では、`held` に無くファイルにも無い鍵だけを `held` へ入れ、印も `held` に置く（ファイルは作らず、名前も替えない）。
-- **Idempotency & recovery**: 印が在れば値は入れない（名前替えだけを試す）。確定の前に落ちれば何も入っていない。確定の後・名前替えの前に落ちれば、次は印を見て名前替えだけを行う。2 つの areka が同時でも、後の方は印を見て入れない。失敗した層は、`sylphya.toml` が在るかぎり次の起動でまた試す。
+- **Idempotency & recovery**: 印が在れば値は入れない（名前替えだけを試す）。印が在る層にまた `sylphya.toml` が在る場合（古い版へ戻してから、もう一度上げた利用者）も同じで、値は取り込まず、名前だけ替えて info `persist_import_skipped`（置き場・残した名前）を 1 件残す。説明書に「古い版で覚えたことは、もう一度上げても取り込まれない（残したファイルの中に在る）」と書く。確定の前に落ちれば何も入っていない。確定の後・名前替えの前に落ちれば、次は印を見て名前替えだけを行う。2 つの areka が同時でも、後の方は印を見て入れない。失敗した層は、`sylphya.toml` が在るかぎり次の起動でまた試す。
 - 取り込みのほかに `sylphya.toml` を読む所・書く所は無い。`persist/format.rs` は読みの側（`parse_toml_str`・`FormatDoc`・`AxisPair`）だけを残す。
 
 ### アクターと口
@@ -612,6 +615,7 @@ impl MemBackend {
 - 判断は自由な関数 `apply(msg) -> Vec<Effect>` に置く（`SylphyaCore` は消す）。`Set` の 3 つの結果（`RuntimeCommandReserved`・`NotSettable`・`SetDottedPerAsker`）の名前と欄と出る条件は、`areka.*` の 12 行と倍率・DPI の 4 行が `NotSettable` になる点を除いて今と同じ。warn の文も今と同じ場所（`apply`）で出す。
 - 今の効果のうち、写しの区画を名指す 5 つ（`SetFlatPerAsker`・`RemoveFlatPerAsker`・`SetDottedGlobal`・`RemoveDottedGlobal`・`SetDottedPerAsker`）は名前と欄を保ち、行き先を読み替える: ゴースト別の平らな区画＝主の DB の `flat`／全体の区画＝アプリの層の揮発／ゴースト別の点付きの区画＝ゴーストの層の揮発。`PersistPut`・`PersistRemove` は、写しへの効果を出さなくなる（覚える値はファイルの住み場所だけに住む）。
 - 受信の輪の順は System Flows のとおり。列に書きが無い間は、今と同じく受信を待つだけ。
+- `Store::open` が失敗したとき（メモリーの接続を開けない）: 番人は止まらずに起き、error を 1 件残す。以後、読みは値なし、覚える値の書きは `Degraded(Io(理由))`（告知の道へ渡る）、揮発の書きは `Failed(Volatile)` を返す（`spawn_sylphya` の戻り値の形は変えない）。
 - 失敗の中継: 覚える値の書き・消しが `Degraded` になったら、今と同じ受け口へ `PersistFailure` を 1 件送る（返事を待つ呼び手が居ても送る）。揮発の書きの失敗は error を残して返事にだけ載せ、受け口へは送らない。
 - 止まった後: 送り口の投げっぱなしは今と同じ warn で捨てる。読み口の問い合わせは warn を 1 件残して値なし（平らな名前は縮退の決まり）を返す〔仮定 10〕。
 
@@ -701,6 +705,9 @@ impl SylphyaPublisher {
   - `resolve_flat`・`talk_snapshot` は主の DB の `flat` だけを読む（ファイルを開かない）。値が無い平らな名前は、今と同じ縮退の決まりを返す。
   - `set`・`unset` が断るとき: 何も書かず、warn を 1 件残し、`Refused` を返す。投げっぱなしの `SylphyaPublisher::set` は結果を捨てる（呼び出しは成功のまま・今と同じ）。
   - 無い鍵を消す頼みは、何も変えずに `Written`。
+  - 1 回の `put`・`remove` に住み場所の違う鍵が混ざるときは、住み場所ごとの別々の書きとして扱う（全部か 0 かは、同じ層・同じ住み場所の鍵の間だけ）。結果は、どれか 1 つでも失敗なら最初の失敗を返す。
+  - 速い住み場所の鍵は、登録された層にだけ住む。重ね読みはその層の値を返し、別の層を名指しした `get_in` は値なし、別の層を名指しした `set` は `Failed(Volatile)` を返す。
+  - 投げっぱなしの `persist_put` の値は、確定するまで名前で読めない（今は写しへすぐ入る。要件 6.10 の「返す値は、待っている書きの前の値」のとおり。確定を待つ呼び手は、今と同じく `barrier` を使う）。
   - 解けない名前: 読みは warn を残して値なし。名前での書きは、渡された綴りのままの自由な鍵として受ける。
 - Invariants: どの口も、住み場所の名前を引数に取らない。
 
@@ -847,7 +854,7 @@ CREATE TABLE flat (asker TEXT, name TEXT, value TEXT NOT NULL, PRIMARY KEY (aske
 ### Monitoring
 
 - 記録の出所は `areka_sylphya::persist`（今の名前）と `areka_sylphya::store`（新しい）。今ある 4 つの名前（`persist_lock_failed`・`persist_existing_unusable`・`persist_withheld`・`persist_root_dir_withheld`）は名前も水準も変えない。`persist_lock_failed` の意味は「錠のファイルを取れない」から「書きの錠を 1 秒待っても取れない」に替わる。
-- 足す名前: `persist_imported`（info・置き場・入れた数・飛ばした数・知らない表と値の数）・`persist_import_failed`・`persist_import_rename_failed`・`persist_schema_upgraded`（info）・`persist_read_busy`・`persist_readonly_needs_recovery`。
+- 足す名前: `persist_imported`（info・置き場・入れた数・飛ばした数・知らない表と値の数）・`persist_import_skipped`（info・取り込み済みの層にまた `sylphya.toml` が在った）・`persist_import_failed`・`persist_import_rename_failed`・`persist_schema_upgraded`（info）・`persist_read_busy`・`persist_readonly_needs_recovery`。
 - 覚える値の失敗の error には、層・置き場のフォルダ・理由・書けなかった鍵の正規名（型つきの別名の無い鍵も含む）を書く。
 - 語彙の変更は、同じ変更で `doc/COMPAT_ARCHITECTURE.md` と、名前を読む試験を直す。
 - 起動・切り替え・読み直し・終了の場面で今出ている記録は、同じ場面に同じ数だけ出す。取り込みの記録は、取り込みが起きた回にだけ足される〔仮定 11〕。
@@ -873,8 +880,8 @@ CREATE TABLE flat (asker TEXT, name TEXT, value TEXT NOT NULL, PRIMARY KEY (aske
 - `guardian_wait_tests.rs`（本物のファイル） — 別の接続が書きの錠を持つ間に、番人へ覚える値の書きと名前での読みを送る。読みの返事が、書きの返事がまだ無い（`try_recv` が空）うちに届き、値は書きの前の値。時計を 1 秒より先へ進めると書きは `Degraded(Io)` で返り、失敗の受け口に 1 件届く。錠を放した後の書きは `Saved`（6.6・6.7・6.10・14.11）。
 - `guardian_tests.rs` — 書いた後の同じ鍵の読みが、反映待ちなしで書いた後の値を返す（返事を受けた後）／名前を消す口（`RemoveFlat`）の後、3 つの名前が値なし／層を名指ししない書きがゴーストの層の揮発に入り、ほかの問い手から見えず、ファイルが変わらない／アプリの層の揮発の値が、番人を閉じて別の番人を起こした後も読め、ゴースト・シェル・バルーンの層の揮発の値は読めない／シェル・バルーンを付け替えた後、前の層の揮発の値が読めず、覚える値は戻すと読める／走っている番人の置き場のフォルダの名前を替えられる（1.6・4.6・4.7・4.10・11.3〜11.5・14.10）。
 - `store/withhold_tests.rs`（今の `persist/withhold_tests.rs` の後継） — 控える範囲の中の書きは `Withheld`、同じ走りの別の `Store` から同じ値が読め、消した鍵は値なし、置き場のファイルとフォルダの一覧と中身が前と同じ。書けないフォルダに在る記憶を、ファイルを作らずに読む（9.1〜9.6）。
-- `tests/two_process_writers_test.rs`（`areka-sylphya` の結合の試験・1 本） — 試験の実行ファイルが自分を 2 つ起こし直し（環境変数で子の役を知らせる・子の番号は親が渡す）、2 つの子が同じ層のファイルへ決まった数の鍵を 1 つずつ書く。上限に当たった書きは子がやり直す。親は子の終了を待ってから、2 つの子の鍵が全部読めることを判定する（6.1・14.4 の後半）。補助の実行ファイルは足さない。
-- `store/copy_tree_tests.rs` — `areka_user_data::copy_tree_atomic` で記憶のフォルダを写す。写しの元に新しい記憶のファイルだけが在る場合と、別の接続が書きの途中（ジャーナルが在る）の場合に、写した先で「書けた」の値が全部読め、写しの元は名前も中身も変わらない（15.1〜15.3・14.12）。写せないとき（15.4）は今の `app_memory_migrate_failed` の道のままで、`areka-user-data` の今の試験が持つ。
+- `tests/two_process_writers_test.rs`（`areka-sylphya` の結合の試験・1 本） — 試験の実行ファイルが自分を 2 つ起こし直し（環境変数で子の役を知らせる・子の番号は親が渡す）、2 つの子が同じ層のファイルへ決まった数の鍵を 1 つずつ書く。子は `FsBackend::with_manual_clock()` を使い、取り直しの間に実時間で眠らない（`pause` は時計を進めるだけ）。上限に当たった書きは子がやり直す。親は子の終了を待ってから、2 つの子の鍵が全部読めることを判定する（6.1・14.4 の後半）。補助の実行ファイルは足さない。
+- `crates/areka-session/src/memory_copy_tests.rs`（新しい試験のファイル） — `areka_user_data::copy_tree_atomic` で記憶のフォルダを写す。写しの元に新しい記憶のファイルだけが在る場合と、別の接続が書きの途中（ジャーナルが在る）の場合に、写した先で「書けた」の値が全部読め、写しの元は名前も中身も変わらない（15.1〜15.3・14.12）。写せないとき（15.4）は今の `app_memory_migrate_failed` の道のままで、`areka-user-data` の今の試験が持つ。
 - 上の crate の試験（追随） — 完了 `write-failure-notice` の 13 種の行列（`write_failure_sites_tests.rs`）・完了 `readonly-mode` の行列（`readonly_sites_tests.rs`）・`property-name-case-fold` の試験を、判定する中身を変えずに新しい保存の上で通す。書けない場面 4 つ（置き場が無い・OS が拒む・待ちの上限・使えないファイル）が失敗の受け口へ届くことを、`MemBackend` の注ぎ込みで 1 つずつ判定する（8.1・9.7・14.5・14.9）。
 - `crates/areka-session/src/ghost_session_scope_scale_tests.rs`・`crates/areka/src/runtime_tests/frame_scale_notice_integration_tests.rs`（追随） — 4 つの名前で読んだ値と、名前では書けないことが今と同じ。値を持つ場所が 1 つであること（3.8・3.9）。
 
@@ -901,6 +908,10 @@ CREATE TABLE flat (asker TEXT, name TEXT, value TEXT NOT NULL, PRIMARY KEY (aske
 
 - 継ぎ（古い作りと新しい作りを同時に本番で動かす段）は置かない。段 2 と段 3 の間、覚える値は古い保存で書かれ続けるが、どの段も利用者へ出る版ではない（1 本の PR で着地する）。
 - 取り込みは一方向。古い版へ戻す道は説明書に書く（残した `sylphya.toml.imported` を元の名前へ戻す）。
+
+### 残るリスク
+
+- 同じプロセスの 2 つの書き手が切れ目なく書き続けると、待つ側の 1 件が 1 秒の上限に当たりうる（試作 `[f6]`: 400 件中 1 件）。上限に当たった書きは致命の告知になる。今の本番の書きは、ドラッグの確定・起動・切り替えのときだけで切れ目が在る。書き手が増える `multi-ghost-runtime` は、この数を入力にして待ち方を見直す。
 
 ## Open Questions
 
