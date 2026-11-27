@@ -154,7 +154,7 @@
   - _Requirements: 4.7, 4.10, 5.1, 5.2_
 
 - [ ] 6. 倍率と DPI を速い住み場所へ載せ替える
-- [ ] 6.1 (P) 倍率と DPI の共有の表を、速い住み場所の取っ手へ替える
+- [x] 6.1 (P) 倍率と DPI の共有の表を、速い住み場所の取っ手へ替える
   - 鍵のかかる共有の表を、4 つの取っ手（キャラとバルーンの倍率と DPI）を束ねた取っ手に替え、倍率と DPI を 0 以外の 64 ビットへ写す型をこの crate の中に置く
   - 毎フレームの相の書きを取っ手の書きに替え、記録 `scope_scale_table_updated` と、全部書いてからイベントを送る順を変えない
   - セッションの読み手を速い住み場所の実装に替え、4 つの形をゴーストの層で登録する。名前で読んだ値の決まりは今のまま
@@ -264,3 +264,5 @@
 - 4.3: `Store::open` はアプリの層の揮発の DB の `ATTACH` も錠で取り直す（1 つのプロセスで番人が同時に起きると `database is locked` で核が開けず、起動記録が読めなかった）。
 - 4.3（範囲の外・完了の棚卸へ）: 机で回した `cargo test --workspace` は 14660 本が緑・1 本が赤。赤は areka `runtime_tests::spine::conformance_support::stage_tests::close_request_that_lands_during_boot_is_honored_without_any_second_change`（終了の段で 30 秒 Stalled）。単独で 10/10 緑、areka の bin だけで 7/9 緑。この spec の前から同じ試験が負荷の回で赤になる記録がある（`.kiro/specs/zorder-chain-residue/brief.md` の 10-05 の項）。終了の段に記憶の錠の待ちは 0 件。
 - 5.1: `GhostRuntime::set_shell_dir` は今と違うフォルダのときだけシェルの層を付け替える（`\![reload,shell]` は同じフォルダを渡すので揮発の値を保つ）。比べるのは綴りのまま（正規化しない）。
+- 6.1: 倍率と DPI は `ScopeScaleCells`（速い表 4 つ）だけが持つ。`ScopeScaleSource::clear` は 4 つとも捨てるが、本番でゴーストの層を付け替える道は無い（付け替えると次の倍率の変わりまで値なしになる）。
+- 6.1（7.2 へ）: `doc/ukadoc-coverage/ledger/property.toml` の 430・676・773 行の「実装:」の文に古い型の名前 `ScopeScaleTable` が残っている。7.2 で一緒に直す。

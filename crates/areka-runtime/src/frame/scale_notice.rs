@@ -5,7 +5,6 @@
 //! 書き込みと送出の殻は計画をそのまま実行する。
 
 use std::collections::BTreeMap;
-use std::sync::PoisonError;
 use std::sync::mpsc::Sender;
 
 use areka_emo_present::{AppliedScale, ScaleChange};
@@ -33,23 +32,16 @@ pub(super) fn run_scale_notice_phase(wiring: &mut RuntimeWiring, world: &World) 
         return;
     }
     let plan = plan_scale_notices(&changes);
-    {
-        // 毒は前の持ち主の panic で、表の中身は壊れていない（読み手と同じ扱い）。
-        let mut table = wiring
-            .scope_scale
-            .write()
-            .unwrap_or_else(PoisonError::into_inner);
-        for &(scope, window, value) in &plan.writes {
-            table.set(scope, window, value);
-            debug!(
-                event = "scope_scale_table_updated",
-                scope,
-                window = ?window,
-                scaling = %scaling_text(value.ratio),
-                dpi = ?value.dpi_x,
-                "スコープの倍率の表を書いた"
-            );
-        }
+    for &(scope, window, value) in &plan.writes {
+        wiring.scope_scale.set(scope, window, value);
+        debug!(
+            event = "scope_scale_table_updated",
+            scope,
+            window = ?window,
+            scaling = %scaling_text(value.ratio),
+            dpi = ?value.dpi_x,
+            "スコープの倍率の表を書いた"
+        );
     }
     if plan.events.is_empty() {
         return;
