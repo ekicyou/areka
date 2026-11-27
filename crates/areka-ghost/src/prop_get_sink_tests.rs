@@ -6,9 +6,12 @@
 use super::*;
 use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{ScopeRoots, SylphyaInit, SylphyaParts, spawn_sylphya};
+use areka_sylphya::fast::FastHome;
+use areka_sylphya::{
+    PersistScope, PropPath, PullShape, ScopeRoots, SylphyaInit, SylphyaParts, spawn_sylphya,
+};
 use dola::{TimePoint, TimeSpan};
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 use tracing::Level;
 
@@ -20,22 +23,30 @@ fn carrier(name: &str, tokens: &[&str]) -> TalkCue {
     dola::cue::test_support::carrier_cue("0", name, tokens)
 }
 
-/// 点付きの値 2 つ（`baseware.name`・`currentghost.scope.scaling`）を持つ読み口と、受け口と受信端。
+/// 倍率の速い住み場所（倍率はどのスコープも `150,150`）。
+struct ScaleHome;
+
+impl FastHome for ScaleHome {
+    fn read_text(&self, _path: &PropPath) -> Option<String> {
+        Some("150,150".to_string())
+    }
+    fn write_text(&self, _path: &PropPath, _value: &str) -> Result<(), String> {
+        Err("read-only".to_string())
+    }
+    fn clear(&self) {}
+}
+
+/// 点付きの値（`baseware.name`・速い住み場所の `currentghost.scope(*).scaling`）を持つ読み口と、受け口と受信端。
 fn rig() -> (SylphyaParts, PropGetCueSink, Receiver<KanadeMsg>) {
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
-    });
+    let parts = spawn_sylphya(SylphyaInit::new(
+        ScopeRoots::default(),
+        areka_sylphya::store::MemBackend::new(),
+    ));
     parts.publisher.publish_static(
         AskerId::new(ASKER),
         vec![],
         vec![
             ("baseware.name".to_string(), "areka".to_string()),
-            (
-                "currentghost.scope(0).scaling".to_string(),
-                "150,150".to_string(),
-            ),
             ("bad.value".to_string(), "a\r\nb".to_string()),
             ("nul.value".to_string(), "a\0b".to_string()),
         ],
@@ -44,6 +55,11 @@ fn rig() -> (SylphyaParts, PropGetCueSink, Receiver<KanadeMsg>) {
         .publisher
         .barrier()
         .expect("barrier while actor alive");
+    parts.reader.register_fast(
+        PullShape::parse("currentghost.scope(*).scaling").unwrap(),
+        PersistScope::Ghost,
+        Arc::new(ScaleHome),
+    );
     let (tx, rx) = mpsc::channel();
     let sink = PropGetCueSink::new(parts.reader.clone(), AskerId::new(ASKER), tx);
     (parts, sink, rx)

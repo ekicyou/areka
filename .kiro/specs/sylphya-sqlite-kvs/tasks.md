@@ -108,7 +108,7 @@
   - _Dispatch: standard — 口の形を設計が与え、読みの順と分け方を組む_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.7, 4.6, 4.10, 11.1, 11.2, 11.3, 11.4, 11.5, 14.10_
 
-- [ ] 3.4 番人の起動の形の変更を、ワークスペースの呼び手と試験へ通す
+- [x] 3.4 番人の起動の形の変更を、ワークスペースの呼び手と試験へ通す
   - ゴーストの結線が新しい起動の値（置き場と置き場の口）で番人を起こし、差し替えの口の欄を消す
   - 差し替えの口の欄を書く 19 ファイル（28 か所）と、写しから読み口を作る試験を新しい形へ直す（判定する中身は変えない）
   - `crates/areka-placement/src/zorder_property_deferral_tests.rs` の `apply` の呼び方を自由な関数へ直す
@@ -253,3 +253,5 @@
 - 3.2: 番人の試験に「層に初めて書く書き（付ける・取り込み・書き）が全体で 1 秒の上限に当たる」場面が無い（期限は列の頭で共有している）。
 - 3.3: 写し（`MirrorImage`・`SharedMirror`・`SylphyaReader::new(SharedMirror)`）を消した。crate の外で使うのは 3.4 が挙げる試験 3 本だけで、読み口は `spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new())).reader` で作れる。読み口は番人への送り手を持つので、読み口の複製が生きている間は番人が走る（止めるのは `close()` の明示の `Close`）。
 - 3.3: 層を名指ししない `SylphyaMsg::Set` は `apply` の中で全体の `KEY_TABLE` で断るかを決める（番人の差し替えた表に従わない）。行を足した表を `Set` で確かめる試験が要るときは `Set` の腕を表を受ける関数へ切り出す。
+- 3.4: 3.4 の後、番人の書きと古い直の読み書きをまたぐ試験が赤（areka-ghost 7・areka-input 5・areka-placement 37・areka-runtime 6・areka-session 24・areka 29、計 108 本）。どれも番人で書いて古い偽物／`load_scope`／ファイルの中身で読むか、古い `save_scope` で植えて番人で読む形。4.2・4.3 で緑に戻す。
+- 3.4: 倍率と DPI の 4 つの名前は 3.3 から速い住み場所の行で、登録が 6.1 まで無いので、本番では 6.1 までその名前の読みが値なしになる。試験の支えは `register_fast` で試験の `FastHome` を登録して与える（`prop_get_sink_tests.rs`）。

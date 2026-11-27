@@ -2,8 +2,9 @@
 
 use super::test_support::{applied, ratio};
 use super::*;
+use areka_sylphya::store::MemBackend;
 use areka_sylphya::{
-    AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror, parse_dotted,
+    AskerContext, AskerId, DottedResolution, ScopeRoots, SylphyaInit, parse_dotted, spawn_sylphya,
 };
 
 const SHAPES: [&str; 4] = [
@@ -18,7 +19,7 @@ fn name(shape: &str, sel: &str) -> String {
 }
 
 fn reader() -> SylphyaReader {
-    SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())))
+    spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new())).reader
 }
 
 fn resolve(reader: &SylphyaReader, name: &str) -> Option<String> {

@@ -80,11 +80,10 @@ impl PersistStore {
     }
 
     fn spawn(io: Arc<dyn PersistIo + Sync>, roots: ScopeRoots) -> Self {
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedIo(io.clone())),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
         PersistStore {
             io,
             roots,

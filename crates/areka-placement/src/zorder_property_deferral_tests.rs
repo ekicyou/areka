@@ -37,16 +37,16 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
+use areka_sylphya::store::MemBackend;
 use areka_sylphya::vocab::dotted::{
     DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE, SOUND_PROP_NAMES,
 };
 use areka_sylphya::vocab::flat::FLAT_VOCAB;
 use areka_sylphya::vocab::shiori_resource::SHIORI_RESOURCE_IDS;
 use areka_sylphya::{
-    AskerContext, AskerId, DottedResolution, Effect, MirrorImage, SetClass, SharedMirror,
-    SylphyaCore, SylphyaMsg, SylphyaReader, classify_set,
+    AskerContext, AskerId, DottedResolution, Effect, ScopeRoots, SetClass, SylphyaInit, SylphyaMsg,
+    SylphyaReader, apply, classify_set, spawn_sylphya,
 };
 
 // ---------------------------------------------------------------------------
@@ -229,18 +229,19 @@ fn collect_rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
 /// 「引ける名前は引ける」ことを示し、先送りした名前の `NotFound` が
 /// 「読み口が壊れているから何も引けない」ではないことを保証する。
 fn reader_with_one_provided_property() -> SylphyaReader {
-    let mut image = MirrorImage::empty();
-    image
-        .dotted_per_asker
-        .entry(AskerId::new(ASKER))
-        .or_default()
-        .insert("currentghost.name".to_owned(), "Alice".to_owned());
-    SylphyaReader::new(SharedMirror::new(Arc::new(image)))
+    let parts = spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()));
+    parts.publisher.publish_static(
+        AskerId::new(ASKER),
+        Vec::new(),
+        vec![("currentghost.name".to_owned(), "Alice".to_owned())],
+    );
+    parts.publisher.barrier().expect("反映を待てる");
+    parts.reader
 }
 
 /// 名前 `key` へ値を 1 回書き込み、返る効果の列を得る。
 fn set_effects(key: &str, value: &str) -> Vec<Effect> {
-    SylphyaCore::new().apply(&SylphyaMsg::Set {
+    apply(&SylphyaMsg::Set {
         asker: AskerId::new(ASKER),
         key: key.to_owned(),
         value: value.to_owned(),

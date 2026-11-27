@@ -67,11 +67,10 @@ impl Store {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(shared.clone())),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
         Store {
             shared,
             roots,

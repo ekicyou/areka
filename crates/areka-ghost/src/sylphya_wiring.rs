@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 use areka_kanade::resources::{ResourceOutcome, ResourceSink};
 use areka_parsers::package::GhostNames;
 use areka_sakura::contract::SystemVarSnapshot;
-use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{
     AskerContext, AskerId, ScopeRoots, SylphyaInit, SylphyaParts, SylphyaPublisher, SylphyaReader,
     spawn_sylphya_with_failures,
@@ -125,11 +124,7 @@ pub fn spawn_ghost_sylphya(
     failures: Option<std::sync::mpsc::Sender<areka_sylphya::PersistFailure>>,
 ) -> SylphyaParts {
     spawn_sylphya_with_failures(
-        SylphyaInit {
-            roots,
-            io: Box::new(FsPersistIo),
-            runtime_sink: None,
-        },
+        SylphyaInit::new(roots, areka_sylphya::store::fs_backend()),
         failures,
     )
 }

@@ -63,11 +63,10 @@ fn write_and_load(
         );
     }
     let seeded = io.commit_count();
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(io.clone()),
-        runtime_sink: None,
-    });
+    let parts = spawn_sylphya(SylphyaInit::new(
+        roots.clone(),
+        areka_sylphya::store::MemBackend::new(),
+    ));
     let ((), events) = capture(|| write(&parts.publisher));
     parts
         .publisher
@@ -209,15 +208,14 @@ fn read_last_sees_what_record_wrote_on_real_fs() {
     assert_eq!(read_last_ghost(&app_dir), None);
     assert_eq!(read_last_balloon(&ghost_dir), None);
 
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots {
+    let parts = spawn_sylphya(SylphyaInit::new(
+        ScopeRoots {
             app: Some(app_dir.clone()),
             ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
             ..ScopeRoots::default()
         },
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+        areka_sylphya::store::fs_backend(),
+    ));
     let root = root();
     LastUsed {
         ghost: &ghost_at(&root, GhostRoute::Only, "a"),
@@ -422,14 +420,13 @@ fn single_key_writers_touch_only_their_key() {
 
 /// 実 fs の、起動と同じ置き場へ `record_last_shell` で書く（`read_last_shell` が拾う場所）。
 fn remember_shell(ghost_dir: &Path, name: &str) {
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots {
+    let parts = spawn_sylphya(SylphyaInit::new(
+        ScopeRoots {
             ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
             ..ScopeRoots::default()
         },
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+        areka_sylphya::store::fs_backend(),
+    ));
     record_last_shell(&parts.publisher, name);
     parts.publisher.barrier().expect("barrier");
     parts.publisher.close();

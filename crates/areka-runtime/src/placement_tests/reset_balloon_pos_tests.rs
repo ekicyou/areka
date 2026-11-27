@@ -65,11 +65,10 @@ impl Rig {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(io.clone()),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
         let mut world = World::new();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![WA],

@@ -492,11 +492,10 @@ impl SylphyaRig {
             ..ScopeRoots::default()
         };
         let io = SharedFakeIo::new(store.clone());
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(io.clone()),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
         Self {
             parts,
             roots,
@@ -511,11 +510,10 @@ impl SylphyaRig {
             ghost: Some(profile_root),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(FsPersistIo),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::fs_backend(),
+        ));
         Self {
             parts,
             roots,

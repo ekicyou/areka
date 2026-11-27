@@ -341,11 +341,10 @@ fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerI
     if !seed.is_empty() {
         save_scope(PersistScope::Ghost, &roots, &shared, seed);
     }
-    let parts = spawn_sylphya(SylphyaInit {
+    let parts = spawn_sylphya(SylphyaInit::new(
         roots,
-        io: Box::new(shared),
-        runtime_sink: None,
-    });
+        areka_sylphya::store::MemBackend::new(),
+    ));
     (parts, AskerId::new("ghost/gate-asker"))
 }
 

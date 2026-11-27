@@ -137,11 +137,10 @@ impl Rig {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(store.clone()),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
 
         let mut world = World::new();
         // `dispatch_drag_events` が引く資源。

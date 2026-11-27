@@ -20,11 +20,10 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
         ghost: Some(std::path::PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo::new(shared.clone())),
-        runtime_sink: None,
-    });
+    let parts = spawn_sylphya(SylphyaInit::new(
+        roots.clone(),
+        areka_sylphya::store::MemBackend::new(),
+    ));
 
     let mut world = World::new();
     insert_persist_wiring(&mut world, parts.publisher.clone());
@@ -87,11 +86,10 @@ fn last_used_is_deferred_only_for_the_switch_route() {
             ghost: Some(std::path::PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(shared.clone())),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ));
         let ghost = GhostDecision {
             route,
             dir: std::path::PathBuf::from("ghost/B"),

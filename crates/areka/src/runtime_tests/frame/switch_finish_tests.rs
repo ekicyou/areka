@@ -186,11 +186,10 @@ fn rig_on(mut world: World, kind: SkinKind, with_memory: bool, finish: SwapFinis
         old_memory(),
     );
     let sylphya = with_memory.then(|| {
-        spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(store.clone())),
-            runtime_sink: None,
-        })
+        spawn_sylphya(SylphyaInit::new(
+            roots.clone(),
+            areka_sylphya::store::MemBackend::new(),
+        ))
     });
     let (kanade_tx, kanade) = mpsc::channel();
     let mut session = GhostSession::for_test(Some(kanade_tx), PathBuf::from("skins/ghost/A"));
