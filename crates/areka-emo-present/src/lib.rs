@@ -40,6 +40,10 @@ pub mod command;
 /// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
 /// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
 pub(crate) mod display;
+/// 計画を描画の木の節へ写す部品と、重ね方 → D2D の合成モードの写し（`mix_mode_of`）。
+pub(crate) mod draw_nodes;
+/// 装置ごとのアトラスの頁の GPU の絵と葉の命令の列の控え（`GpuAtlas`）。
+pub(crate) mod gpu_atlas;
 /// 当たり判定の並び → ID の形の列（`hit_shapes`）と、`region` のマスクの控え（`HitMasks`）。
 pub(crate) mod hit_shapes;
 /// 読み込みの記録を出すかどうかの口（`LoadRecords`）。読み込みの権威の入口が記録の行を切り替える。
