@@ -45,7 +45,7 @@
 
 ### Allowed Dependencies
 
-- 依存の向きは今のまま: `areka-talk`（std＋dola の時刻）→ `areka-sakura`（contract で再輸出）→ `areka-kanade`／`areka-ghost` → `areka-runtime`／`areka-session`。
+- 依存の向きは今のまま: `areka-talk`（std＋dola の時刻）→ `areka-sakura`（contract で再輸出）と `areka-kanade`（それぞれ直に依存し、`areka-kanade` は `areka-sakura` に依存しない）→ `areka-ghost`（両方に依存）→ `areka-runtime`／`areka-session`。
 - `areka-talk` は std だけで付帯情報の型を持つ（`PathBuf` は std）。fs を読まない。
 - `areka-ghost` の `talk_path` は std の `Path::exists` だけを使う。
 - `areka-session` は付帯情報の型と `talk_path` を `areka-ghost` 経由で使う（`areka-session` の本番の依存に `areka-talk`・`areka-sakura` は無いので、`areka_ghost::sink` が型を再輸出する）。
@@ -111,7 +111,7 @@ graph LR
 - New components rationale: `talk_meta`（出口の規則 1 つ）と `talk_path`（共通の決まり 1 つ）だけ。
 - Steering compliance: `areka-talk` は std だけ・エンジン知識（探す順）を持たない／記録は呼び手が 1 行（`logging.md`）／決定論のテスト・一時フォルダは `target\` の下。
 
-**依存の向き（違反はレビューで誤りとして扱う）**: `areka-talk` → `areka-sakura::contract` → `areka-kanade` → `areka-ghost`（`config.rs`・`sink.rs`・`dispatcher.rs`・`talk_path.rs`）→ `areka-runtime`／`areka-session`。下の層は上の層を引かない。
+**依存の向き（違反はレビューで誤りとして扱う）**: `areka-talk` → `areka-sakura::contract`・`areka-kanade`（並び・互いに依存しない）→ `areka-ghost`（`config.rs`・`sink.rs`・`dispatcher.rs`・`talk_path.rs`）→ `areka-runtime`／`areka-session`。下の層は上の層を引かない。
 
 ### Technology Stack
 
@@ -160,7 +160,7 @@ crates/
 - `crates/areka-session/src/readme.rs` — `ReadmeRequest::Open { dest, runner: TalkRunner }`。`drain_readme_requests` は台本の要求を `opener::submit_for_talk` へ、説明書の要求は今のまま `open_from_world` へ。
 - `crates/areka-session/src/readme/readme_cue.rs` — `#[derive(Clone)]` を外し `BootCueSink` を自分で実装（`clone_box` は送信端だけを写し付帯情報を既定へ戻す・`begin_talk` で実行するゴーストを控える）。開く系の要求に控えた実行するゴーストを載せる。
 - `crates/areka-session/src/readme/opener.rs` — `OpenContext` を `{ runner: TalkRunner, baseware }` に替える。`submit_for_talk(world, dest, runner)` を足し、`submit`（説明書の道）は `GhostSlot` から `TalkRunner` を組む。`existing()` を `talk_path::resolve(…, SearchOrder::MasterOnly)` に置き換え、`OpenFailure` に `EmptyPath`・`NoPlace` を足す。`\![open,explorer,shell|balloon,名前]` の「今のゴーストの中」は `runner.place.root`。
-- テストの支えと、`StartTalk { … }` を直に組むテスト（`areka-kanade` の `schedule/` 8 ファイルと `tests/kanade/common/common_smoke.rs`・`areka-ghost` の `dispatcher_begin_talk_tests.rs`・`dispatcher_strict_tests.rs`・`prop_sink.rs` のテスト・`areka-sakura` の `drive_choice_tests.rs`・`drive_strict_tests.rs`・`areka-runtime/src/strict_judges_tests.rs`・`areka/src/runtime_tests/strict_judges_tests.rs`・`areka-seriko/tests/common/mod.rs`）— `meta: TalkMeta::default()` を足す。`opener_test_support.rs` の `open_context` は `TalkRunner` で組み、`ReadmeRequest::Open`・`OpenContext` を名指す `readme_tests.rs`・`readme_cue_tests.rs`・`opener_tests.rs`・`opener_submit_tests.rs`・`opener_execute_tests.rs` は新しい形に合わせる。`begin_talk` を実装するテストの受け口（`dispatcher_begin_talk_tests.rs`）は引数を足す。
+- テストの支えと、`StartTalk { … }` を直に組むテスト（`areka-kanade` の `schedule/` 8 ファイルと `tests/kanade/common/common_smoke.rs`・`areka-ghost` の `dispatcher_begin_talk_tests.rs`・`dispatcher_strict_tests.rs`・`prop_sink.rs` のテスト・`areka-sakura` の `drive_choice_tests.rs`・`drive_strict_tests.rs`・`areka-runtime/src/strict_judges_tests.rs`・`areka/src/runtime_tests/strict_judges_tests.rs`・`areka-seriko/tests/common/mod.rs`）— `meta: TalkMeta::default()` を足す。`opener_test_support.rs` の `open_context` は `TalkRunner` で組み、`ReadmeRequest::Open`・`OpenContext` を名指す `readme_tests.rs`・`readme_cue_tests.rs`・`opener_tests.rs`・`opener_submit_tests.rs`・`opener_execute_tests.rs` は新しい形に合わせる。`begin_talk` を呼ぶ・実装するテスト（`areka-ghost` の `dispatcher_begin_talk_tests.rs`・`areka-runtime/src/` の `balloon_visibility_choice_wait_tests.rs`・`script_restriction_tests.rs`・`talk_lifecycle_signals_tests.rs`・`user_break_cue_origin_tests.rs`・`crates/areka/src/runtime_tests/frame_balloon_timeout_notice_e2e_tests.rs`）は引数を足す。`ShownTalk { … }` を直に組むテスト（`areka-kanade/src/schedule/` の `balloon_events_done_tests.rs`・`balloon_events_tests.rs`・`steady_choice_script_tests.rs`）は `sender` を足す。
 
 ## System Flows
 
@@ -699,6 +699,6 @@ classDiagram
 ## 設計の議論へ渡すこと（仮定つき）
 
 1. **送り手の型の 3 つ目の値 `TalkSender::Runner`**: 要件の議論は送り手を「`Ghost(名)`｜`Tool(名)`」と決めた。この設計は「実行するゴースト自身」を `Runner` として別に持ち（名は `TalkRunner::name`・`sender_name()` で引ける）、`Ghost(名)` は別のゴースト（要件 2.6）だけに使う。仮定: `Runner` を持つ。理由は、⑴ 実行するゴーストは kanade の定数で出口で押すので、腕が名を知らずに既定値を置ける（運行表の全部の腕へ `KanadeConfig` を通さずに済む形が、出どころの既定 `ScriptOrigin::GHOST` と同じ規律になる）、⑵ 同じ名のゴーストが 2 体居ても「自身か」を名の比べで誤らない。2 値にするなら、送り手の既定を名つきで置くために運行表の腕（`steady.rs`・`steady_choice_script.rs`・`change.rs` の取りやめ・`sstp.rs` の `on_send`）へ `KanadeConfig` を通す。
-2. **出どころ（`ScriptOrigin`）を `TalkMeta` に入れない**: 要件の「付帯情報」は `StartTalk.origin`（今のまま）と `StartTalk.meta`（新しい欄）の組で表し、`begin_talk(talk_id, origin, &meta)` で両方を届ける。仮定: 入れない（入れると `origin` を書き換える今の規則 4 つと、値で比べるテストがすべて動く）。
+2. **出どころ（`ScriptOrigin`）を `TalkMeta` に入れない**（確定・要件の議論で `ScriptOrigin` を今の形と値のまま保つと決めた）: 要件の「付帯情報」は `StartTalk.origin`（今のまま）と `StartTalk.meta`（新しい欄）の組で表し、`begin_talk(talk_id, origin, &meta)` で両方を届ける。
 3. **共通の決まりの置き場は `areka-ghost`（`talk_path.rs`）**: 付帯情報を受ける受け手は `BootCueSink`（`areka-ghost`）を実装するので必ず `areka-ghost` に届く。仮定: `areka-ghost`。`areka-talk` に置く案は、std だけの契約の層に探す順（ukadoc のタグの決まり）と fs の読みを持ち込むので採らない。下流の文字の層（`areka-emo-text`）が付帯情報を受けるときは `areka-ghost` への依存を足すことになる（その spec の判断）。
 4. **置き場を絶対パスにできないとき**: `std::path::absolute` が失敗したら `warn!`（`ghost_place_unresolved`）を 1 行残して置き場を `None` にし、起動は続ける。仮定: 止めない（存在の確かめ済みの ghost/master で失敗は実際には起きない・`listed_name` は同じ失敗で元のパスへ戻すが、置き場は絶対パスでなければならないので `None` に倒す）。
