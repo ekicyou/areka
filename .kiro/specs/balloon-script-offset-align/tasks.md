@@ -132,7 +132,7 @@
   - _Requirements: 8.2, 8.3_
 
 - [ ] 7. 確かめと実機
-- [ ] 7.1 関わるクレートのテストを回し、約束のファイルが変わっていないことを確かめる
+- [x] 7.1 関わるクレートのテストを回し、約束のファイルが変わっていないことを確かめる
   - `areka-placement`・`areka-runtime` のテストと、台帳・文書の検査を回して緑を確かめる
   - 約束の 6 本・`move_cue_args.rs`・`resolver.rs`・`Cargo.toml`・`Cargo.lock` が枝の差分に無く、`window_move.rs` の差し引きの行が 0 以下であることを `git diff --numstat` で確かめる
   - 各タスクの記録に、新しいテストが直しの前に赤だった証跡があることを確かめる
@@ -161,3 +161,4 @@
 - 4.4 の着地前の印は `ScriptBalloonUnsettled { provisional }`（仮の大きさの標準を持つ・設計を合わせて改めた）。寸の変化の据え直しはバルーンのドラッグ中は飛ばす。ドラッグ中の飛ばし・`not_resolved`・解き直しの警告の 3 つはテストで固定していない。
 - 5.1 のずらしの命令を断る警告の `reason` は `OffsetArgReason` の Debug の形（`MissingAxis` など）で出る。向きの腕は `"missing_id"`。
 - 5.3 の呼び手は DPI の相だけ。DPI で変わった寸が drain の後段の `reconcile_reported_sizes`（第 2 経路）で着地すると据え直しは走らない。台本の値のあるスコープはバルーン窓の DPI の巡に書き込みが 2 本（寸と据え直し）になり、`transition_judge_verdict.rs` の `WRITES_PER_WINDOW_MAX = 1` に触れうる。どちらも 7.2 の実機で見る。
+- 7.1 の確かめ（2026-11-28）: `cargo test -p areka-placement` 1092 passed・`-p areka-runtime` 1129 passed（3 ignored）・`-p ukadoc-survey` 526＋105＋5＋5 passed・`-p log-capture-kit --test doc_tree_guard_test` 9 passed・`-p areka consumer_ledger` 4 passed・`cargo fmt --all -- --check` 緑。`git diff --numstat main...HEAD` で約束の 6 本・`move_cue_args.rs`・`resolver.rs`・`Cargo.toml`・`Cargo.lock` は差分なし、`follow/window_move.rs` は 13 追加・14 削除。直しの前の赤の証跡は 2.1〜5.3 の各タスクの実装係の報告にあり、レビューで確かめた（2.3・6 は支えと文書のため形が違う）。
