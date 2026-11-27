@@ -81,7 +81,7 @@
   - _Dispatch: standard — 区間の差の規則と行の分け方を書き換える_
   - _Requirements: 3.2, 5.1, 5.2, 5.3, 7.5_
 
-- [ ] 5.2 区間の途中で畳まれたスレッドの検体を足し、読み手の道具が止まらないことを確かめる
+- [x] 5.2 区間の途中で畳まれたスレッドの検体を足し、読み手の道具が止まらないことを確かめる
   - 新しい検体 `fixtures-loop/rank/thread_exited_in_window/`（`case.txt`・`run.log`・`expected_rank.txt`）に、⑴ 区間の前から生きていて区間の中で終わったスレッド ⑵ 区間の中で生まれて終わったスレッド ⑶ 区間の前に終わって前後とも畳んだ行に入っているスレッド ⑷ 番号の無い系統（`actor:kanade`）で生きた行と畳んだ行が同じ役割名で並ぶ場面、を入れる。行の字面は報告器の行の形（畳んだ行は `tid=0 name=-` と末尾の `exited=`）に合わせる
   - 役割別の表・`registry_cpu_s`・`unregistered_rest_cpu_s` の期待を規則から手で求めて逐語で固定する（区間より前の分を足さず、区間の中の分を落とさない値）
   - `python tools/perf/judge-perf.py --selftest`・`python tools/perf/perf-ledger.py --selftest`・`tools/perf/perf-loop.ps1 selftest` を手を入れずに回す
