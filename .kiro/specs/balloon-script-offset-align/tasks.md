@@ -116,7 +116,7 @@
   - _Dispatch: standard, effort high — フレームの順の保証を frame_system の段で檻に入れる_
   - _Requirements: 1.1, 1.2, 2.6, 2.7_
 
-- [ ] 5.3 DPI の相からバルーン窓の寸の変化で据え直しを呼ぶ
+- [x] 5.3 DPI の相からバルーン窓の寸の変化で据え直しを呼ぶ
   - DPI の相のバルーン窓の腕で、窓の寸の照合の前後の寸が違うときだけ据え直しの口を呼ぶ（毎フレーム比べない）
   - 2 つの画面で、`left` のスコープのバルーン窓の寸だけを DPI の相で書き換えるとバルーンの右端が本体の左端に接したまま・`center` の中央が保たれる・利用者のずらしが残る・押し込んだ後の当て直しで選ぶ画面が変わらない（1 回で止まる）・台本の値の無いスコープは今と bit 同一、のテストが `frame.rs` に宣言する `frame_dpi_balloon_script_tests.rs` で緑になる
   - 5.2 と同じ `frame.rs` にテストの宣言を足すので並走しない
@@ -160,3 +160,4 @@
 - 4.2 の離しの記憶は `is_script_placed` が真のときだけ `script_share` を引く（GhostWindows の無い既存の組み立てを今のまま通すため）。記憶の入れ物の確かめは `crate::persist::finalize_save_tests::Store` を呼ぶだけで使う。
 - 4.4 の着地前の印は `ScriptBalloonUnsettled { provisional }`（仮の大きさの標準を持つ・設計を合わせて改めた）。寸の変化の据え直しはバルーンのドラッグ中は飛ばす。ドラッグ中の飛ばし・`not_resolved`・解き直しの警告の 3 つはテストで固定していない。
 - 5.1 のずらしの命令を断る警告の `reason` は `OffsetArgReason` の Debug の形（`MissingAxis` など）で出る。向きの腕は `"missing_id"`。
+- 5.3 の呼び手は DPI の相だけ。DPI で変わった寸が drain の後段の `reconcile_reported_sizes`（第 2 経路）で着地すると据え直しは走らない。台本の値のあるスコープはバルーン窓の DPI の巡に書き込みが 2 本（寸と据え直し）になり、`transition_judge_verdict.rs` の `WRITES_PER_WINDOW_MAX = 1` に触れうる。どちらも 7.2 の実機で見る。

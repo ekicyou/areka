@@ -427,6 +427,11 @@ mod dpi_reproject_tests;
 #[path = "frame_dpi_reproject_none_tests.rs"]
 mod dpi_reproject_none_tests;
 
+// バルーン窓だけの拡大率の変化で台本のバルーンの位置が保たれる檻。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_balloon_script_tests.rs"]
+mod dpi_balloon_script_tests;
+
 // 収束の保証。
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_balloon_offset_converge_tests.rs"]
