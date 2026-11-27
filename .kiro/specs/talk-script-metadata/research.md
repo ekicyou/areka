@@ -213,3 +213,9 @@
   - 決め 6（置き場が無い）: `TalkRunner.place: Option<GhostPlace>`。`KanadeConfig::new` は `None`、`resolve_kanade_config` は `Some`（絶対にできなければ `warn!` の上で `None`）。
   - 決め 7（解けないときの結果）: `Result<PathBuf, Unresolved>`、`Unresolved` は `Empty`・`NoPlace`・`NotFound { last_tried }`。`resolve` は記録しない。opener は今の `error!`（`open_external_failed`）1 行に、`reason` の語 `empty_path`・`no_place` を足す。
 - **振る舞いの変わる所**: `%X%` が空に展開された `\![open,file]` は今は ghost/master のフォルダを開くが、`EmptyPath` で断る（要件 6.5 の唯一の違い）。空の名前を OS の探索に渡す枝へも落とさない。
+
+## 10. 設計の議論の結論（2026-11-27・全議題を推奨案で確定）
+
+- 送り手は `Runner`・`Ghost(名)`・`Tool(名)` の 3 つの値（腕が名を知らずに既定を置ける・名の比べで自身を判じない）。
+- 共通の決まり `talk_path` は `areka-sakura` に置く（検証の指摘＝`areka-emo-text` は `areka-ghost` に依存しない）。`areka-sakura` の dev 依存に `temp-path-kit` が無く、同じウェーブの約束で `Cargo.toml`・`Cargo.lock` を直さないので、在る無しを述語で受ける `resolve_in` を分けて fs なしで確かめる。実の fs は `areka-session` の opener のテストで確かめる。
+- 置き場を絶対にできないときは `warn!` の 1 行と `None`。

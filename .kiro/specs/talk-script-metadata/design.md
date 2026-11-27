@@ -12,7 +12,7 @@
 
 - 台本を作る所すべてで、付帯情報（実行するゴーストの名・ghost/master と最上位の絶対パス・送り手）がトークの始まりに決まり、トークの終わりまで変わらない。
 - 付帯情報が、そのトークの最初の cue より前に、そのトークの全部の受け手へ届く（前のトークの付帯情報を持ち越さない）。
-- 相対パスを解く決まりが 1 つ（`areka_ghost::talk_path::resolve`）で、探す順 2 通り・絶対パス・`..`・空・置き場が無い・どこにも無いを決定論のテストで固定する。
+- 相対パスを解く決まりが 1 つ（`areka_sakura::talk_path::resolve`）で、探す順 2 通り・絶対パス・`..`・空・置き場が無い・どこにも無いを決定論のテストで固定する。
 - 開く系のタグが付帯情報で解き、ゴーストが 1 体でトークの途中に切り替わらないあいだは前と同じパスを開く（空に展開された `\![open,file]` だけを断る）。
 
 ### Non-Goals
@@ -30,7 +30,7 @@
 - kanade の運行表で付帯情報を埋める規則: 実行するゴーストは `step` の出口で `KanadeConfig` から押す。送り手は台本を作る腕が決める（既定は実行するゴースト自身・MCP の 2 つの入口は道具・選択肢の `script:` は元のトークから写す）。
 - 実行するゴーストの置き場を kanade へ運ぶこと（`KanadeConfig.ghost_place`・`areka-ghost` の `resolve_kanade_config` で埋める）。
 - 受け手へ届ける口 `BootCueSink::begin_talk(talk_id, origin, meta)` と、dispatcher がトークごとに複製へ渡すこと。
-- 相対パスを解く共通の決まり `areka_ghost::talk_path`（`resolve`・`SearchOrder`・`Unresolved`）。記録は持たない（結果だけを返す）。
+- 相対パスを解く共通の決まり `areka_sakura::talk_path`（`resolve`・`resolve_in`・`SearchOrder`・`Unresolved`）。記録は持たない（結果だけを返す）。
 - 開く系のタグの受け口と opener の乗り換え（`ReadmeCueSink` が付帯情報を受けて要求に載せる・opener が付帯情報の実行するゴーストから文脈を組む）。
 
 ### Out of Boundary
@@ -47,8 +47,8 @@
 
 - 依存の向きは今のまま: `areka-talk`（std＋dola の時刻）→ `areka-sakura`（contract で再輸出）と `areka-kanade`（それぞれ直に依存し、`areka-kanade` は `areka-sakura` に依存しない）→ `areka-ghost`（両方に依存）→ `areka-runtime`／`areka-session`。
 - `areka-talk` は std だけで付帯情報の型を持つ（`PathBuf` は std）。fs を読まない。
-- `areka-ghost` の `talk_path` は std の `Path::exists` だけを使う。
-- `areka-session` は付帯情報の型と `talk_path` を `areka-ghost` 経由で使う（`areka-session` の本番の依存に `areka-talk`・`areka-sakura` は無いので、`areka_ghost::sink` が型を再輸出する）。
+- `areka-sakura` の `talk_path` は std だけを使う（在る無しは引数の述語で受け、`resolve` は `Path::exists` を渡す）。`areka-sakura` は文字の層（`areka-emo-text`）を含む受け手のどれからも届く。
+- `areka-session` は付帯情報の型と `talk_path` を `areka-ghost` 経由で使う（`areka-session` の本番の依存に `areka-talk`・`areka-sakura` は無いので、`areka_ghost::sink` が型と `talk_path` を再輸出する）。
 - 新しいクレート・外の依存・機能の追加は 0。
 
 ### Revalidation Triggers
@@ -81,11 +81,13 @@ graph LR
         Arms[schedule arms sender]
         Exit[step exit stamp_runner]
     end
+    subgraph areka_sakura
+        TalkPath[talk_path resolve]
+    end
     subgraph areka_ghost
         Resolve[resolve_kanade_config]
         Disp[dispatcher on_start]
         Sink[BootCueSink begin_talk]
-        TalkPath[talk_path resolve]
     end
     subgraph areka_session
         ReadmeCue[ReadmeCueSink]
@@ -106,12 +108,12 @@ graph LR
 
 **Architecture Integration**:
 - Selected pattern: 既存の「出どころの通り道」に欄を 1 つ足す。実行するゴーストは kanade の定数なので、出口の一括の規則（`talk_origin::stamp` と同じ形）で押す。送り手はトークごとの決めなので、台本を作る腕が決める（`mark_strict` と同じ形）。
-- Domain boundaries: 型は契約の層（`areka-talk`）、埋めるのは運行表（`areka-kanade`）、置き場を作るのと解き方はゴーストの置き場を知る結線の層（`areka-ghost`）、使うのは受け口（`areka-session`）。
+- Domain boundaries: 型は契約の層（`areka-talk`）、埋めるのは運行表（`areka-kanade`）、置き場を作るのはゴーストの置き場を知る結線の層（`areka-ghost`）、解き方はタグを知る再生の層（`areka-sakura`・純粋な関数）、使うのは受け口（`areka-session`）。
 - Existing patterns preserved: 出口の一括の規則・腕の既定値・`begin_talk` の複製の直後の 1 回・受け口の自己選別と送り出し・UI スレッドの外で fs を読む opener。
 - New components rationale: `talk_meta`（出口の規則 1 つ）と `talk_path`（共通の決まり 1 つ）だけ。
 - Steering compliance: `areka-talk` は std だけ・エンジン知識（探す順）を持たない／記録は呼び手が 1 行（`logging.md`）／決定論のテスト・一時フォルダは `target\` の下。
 
-**依存の向き（違反はレビューで誤りとして扱う）**: `areka-talk` → `areka-sakura::contract`・`areka-kanade`（並び・互いに依存しない）→ `areka-ghost`（`config.rs`・`sink.rs`・`dispatcher.rs`・`talk_path.rs`）→ `areka-runtime`／`areka-session`。下の層は上の層を引かない。
+**依存の向き（違反はレビューで誤りとして扱う）**: `areka-talk` → `areka-sakura`（`contract`・`talk_path.rs`）・`areka-kanade`（並び・互いに依存しない）→ `areka-ghost`（`config.rs`・`sink.rs`・`dispatcher.rs`）→ `areka-runtime`／`areka-session`。下の層は上の層を引かない。
 
 ### Technology Stack
 
@@ -135,9 +137,9 @@ crates/
 ├── areka-kanade/src/schedule/
 │   ├── talk_meta.rs            # 新: step の出口で実行するゴーストを押す規則 stamp_runner
 │   └── talk_meta_tests.rs      # 新: 台本を作る所ごとの付帯情報（実行するゴースト・送り手・翻訳の後も保つ）
-├── areka-ghost/src/
-│   ├── talk_path.rs            # 新: 相対パスを解く共通の決まり（resolve・SearchOrder・Unresolved）
-│   └── talk_path_tests.rs      # 新: 探す順 2 通り・絶対・..・空・置き場が無い・どこにも無い・記録 0 件
+├── areka-sakura/src/
+│   ├── talk_path.rs            # 新: 相対パスを解く共通の決まり（resolve・resolve_in・SearchOrder・Unresolved）
+│   └── talk_path_tests.rs      # 新: 在る無しの述語で探す順 2 通り・絶対・..・空・置き場が無い・どこにも無い・記録 0 件（fs を読まない）
 ```
 
 ### Modified Files
@@ -153,9 +155,9 @@ crates/
 - `crates/areka-kanade/src/schedule/steady_choice_script.rs` — 写した送り手を `meta.sender` に入れる。
 - `crates/areka-kanade/src/schedule/boot.rs` — 直に組む 2 か所の `StartTalk` に `meta: TalkMeta::default()`（実行するゴーストは出口で押す）。
 - `crates/areka-ghost/src/config.rs` — `resolve_kanade_config` が `ghost_place` を埋める（ghost/master と最上位を `std::path::absolute`・失敗は `warn!` の上で `None`）。名の作りと最上位の取り方は `listed_ghost_name` と同じ 1 つの手。
-- `crates/areka-ghost/src/sink.rs` — `begin_talk(&mut self, talk_id, origin, meta: &TalkMeta)`。付帯情報の型を再輸出（`areka-session` などの受け手が使う口）。
+- `crates/areka-ghost/src/sink.rs` — `begin_talk(&mut self, talk_id, origin, meta: &TalkMeta)`。付帯情報の型と `talk_path` を再輸出（`areka-session` などの受け手が使う口）。
 - `crates/areka-ghost/src/dispatcher.rs` — `on_start` が複製ごとに `begin_talk(talk_id, origin, &start.meta)`。
-- `crates/areka-ghost/src/lib.rs` — `pub mod talk_path;`。
+- `crates/areka-sakura/src/lib.rs` — `pub mod talk_path;`。
 - `crates/areka-runtime/src/talk_lifecycle.rs`・`crates/areka-runtime/src/user_break_cue.rs` — `begin_talk` の引数に `_meta` を足すだけ（振る舞いは変えない）。
 - `crates/areka-session/src/readme.rs` — `ReadmeRequest::Open { dest, runner: TalkRunner }`。`drain_readme_requests` は台本の要求を `opener::submit_for_talk` へ、説明書の要求は今のまま `open_from_world` へ。
 - `crates/areka-session/src/readme/readme_cue.rs` — `#[derive(Clone)]` を外し `BootCueSink` を自分で実装（`clone_box` は送信端だけを写し付帯情報を既定へ戻す・`begin_talk` で実行するゴーストを控える）。開く系の要求に控えた実行するゴーストを載せる。
@@ -270,7 +272,7 @@ flowchart TD
 | KanadeConfigPlace | 結線（`areka-ghost`） | 置き場を絶対パスで kanade へ運ぶ | 1.3, 1.4, 1.6 | MountModel (P0) | Service |
 | BootCueSinkMeta | 結線 | トークごとに受け手へ渡す口 | 3.3, 4.1, 4.2, 4.3 | dispatcher (P0) | Service |
 | DriveMetaPassThrough | 再生（`areka-sakura`） | 付帯情報を `CueSheet` に入れない | 4.4 | ― | ― |
-| TalkPath | 結線 | 相対パスを解く共通の決まり | 5.1〜5.11 | std fs (P0) | Service |
+| TalkPath | 再生（`areka-sakura`） | 相対パスを解く共通の決まり | 5.1〜5.11 | std fs (P0) | Service |
 | ReadmeCueMeta | 受け口（`areka-session`） | 実行するゴーストを要求に載せる | 3.3, 3.4, 4.2 | BootCueSink (P0) | Service |
 | OpenerForTalk | 受け口 | 付帯情報で文脈を組み共通の決まりで解く | 3.4, 5.9, 5.10, 6.1〜6.6, 7.3 | TalkPath (P0), BootContext (P1) | Service |
 
@@ -485,6 +487,8 @@ pub trait BootCueSink: CueSink + Send {
 
 - `drive.rs` の `on_start` の網羅の分解に `meta: _` を足す（再生の層は運ぶだけで解釈しない）。`CueSheet` と dola は変えない（要件 4.4）。
 
+### 再生の層（areka-sakura）
+
 #### TalkPath
 
 | Field | Detail |
@@ -496,7 +500,7 @@ pub trait BootCueSink: CueSink + Send {
 - 置き場（`Option<&GhostPlace>`）・書かれたパス・探す順の 3 つだけで決まる。今居るゴーストも World も引かない。
 - 記録を出さない（結果だけを返す）。記録は呼んだ受け手が 1 行だけ残す（同じ失敗を 2 行に重ねない）。新しい受け手は `warn!` で、そのタグ・書かれたパス・`Unresolved::reason`・最後に試した候補・`TalkRunner::name` を 1 行に載せる（この spec では開く系の受け口だけが使い、今の `error!` のまま）。
 - 環境変数を展開しない。本体のフォルダを探さない（`SearchOrder` は 2 値）。
-- fs を読むので UI スレッドで呼ばない（開く専用のスレッドなど）。
+- `resolve` は fs を読むので UI スレッドで呼ばない（開く専用のスレッドなど）。在る無しの判定は `resolve_in` の述語に分け、決まりそのものは fs を読まずに確かめる（`areka-sakura` には一時フォルダの道具 `temp-path-kit` が無く、依存は足さない）。
 
 **Contracts**: Service [x]
 
@@ -528,15 +532,23 @@ impl Unresolved {
     pub fn reason(&self) -> &'static str;
 }
 
-/// 書かれたパスを付帯情報の置き場と探す順で解く。
+/// 書かれたパスを付帯情報の置き場と探す順で解く（在る無しは `Path::exists`）。
 pub fn resolve(
     place: Option<&GhostPlace>,
     written: &str,
     order: SearchOrder,
 ) -> Result<PathBuf, Unresolved>;
+
+/// `resolve` の決まりそのもの（在る無しを `exists` で判定する）。
+pub fn resolve_in(
+    place: Option<&GhostPlace>,
+    written: &str,
+    order: SearchOrder,
+    exists: impl Fn(&Path) -> bool,
+) -> Result<PathBuf, Unresolved>;
 ```
 - Preconditions: なし。
-- Postconditions: `Ok(p)` なら `p.exists()` だった。絶対パスの `Ok` は書かれたパスそのもの。相対パスの `Ok` は `place.master.join(written)` か（`MasterThenRoot` のときだけ）`place.root.join(written)`。`Err(NotFound)` の `last_tried` は最後に `exists()` を試したパス。
+- Postconditions: `Ok(p)` なら `exists(p)` が真だった（`resolve` では `p.exists()`）。絶対パスの `Ok` は書かれたパスそのもの。相対パスの `Ok` は `place.master.join(written)` か（`MasterThenRoot` のときだけ）`place.root.join(written)`。`Err(NotFound)` の `last_tried` は最後に `exists` を試したパス。
 - Invariants: 空は置き場の有無・絶対かどうかより先に `Empty`（ghost/master のフォルダそのものを解いたパスにしない）。
 
 ### 受け口（areka-session）
@@ -680,7 +692,7 @@ classDiagram
 ### Unit Tests
 
 - `areka-talk/src/meta_tests.rs`: `TalkMeta::default()` が置き場なし・名は空・送り手 `Runner`。`StartTalk::new` の `meta` が既定値。`sender_name` が `Runner`→実行するゴーストの名・`Ghost(n)`→`n`・`Tool(n)`→`n`（要件 1.6・2.1・2.6）。
-- `areka-ghost/src/talk_path_tests.rs`（要件 5.1〜5.8・5.11）: 絶対パスが在る→そのまま・無い→`NotFound` の候補はそのパス／`MasterOnly` で master に在る→master のパス・無い→`NotFound` の候補は master のパス（最上位に在っても見ない）／`MasterThenRoot` で master に在る→master・master に無く最上位に在る→最上位・どちらにも無い→`NotFound` の候補は最上位のパス／`..\..\shell\master\surface0.png` が最上位の `shell\master` の実在ファイルに解ける／置き場なしの相対→`NoPlace`・置き場なしの絶対→解ける／空→置き場の有無に依らず `Empty`／`resolve` が記録を 1 件も出さない（`log-capture-kit`・要件 5.9）。
+- `areka-sakura/src/talk_path_tests.rs`（要件 5.1〜5.8・5.11・`resolve_in` に在るパスの集合を述語として渡し、fs を読まない）: 絶対パスが在る→そのまま・無い→`NotFound` の候補はそのパス／`MasterOnly` で master に在る→master のパス・無い→`NotFound` の候補は master のパス（最上位に在っても見ない）／`MasterThenRoot` で master に在る→master・master に無く最上位に在る→最上位・どちらにも無い→`NotFound` の候補は最上位のパス／`..\..\shell\master\surface0.png` が繋いだままのパス（正規化しない）で在る判定に当たる／置き場なしの相対→`NoPlace`・置き場なしの絶対→解ける／空→置き場の有無に依らず `Empty`／`resolve` が記録を 1 件も出さない（`log-capture-kit`・要件 5.9）。
 - `areka-ghost/src/config.rs` のテスト: 相対の根で組んだ `MountModel` から `resolve_kanade_config` が絶対の `ghost_place`（master と最上位）を返し、`ghost_name` は前と同じ（要件 1.3・1.4）。
 
 ### Integration Tests
@@ -696,9 +708,9 @@ classDiagram
 
 - `StartTalk { … }` を直に組むテストは `meta: TalkMeta::default()` を足すだけで、確かめる中身は変えない。`begin_talk` を実装するテストの受け口は引数を足す。
 
-## 設計の議論へ渡すこと（仮定つき）
+## 設計の議論で決めたこと
 
-1. **送り手の型の 3 つ目の値 `TalkSender::Runner`**: 要件の議論は送り手を「`Ghost(名)`｜`Tool(名)`」と決めた。この設計は「実行するゴースト自身」を `Runner` として別に持ち（名は `TalkRunner::name`・`sender_name()` で引ける）、`Ghost(名)` は別のゴースト（要件 2.6）だけに使う。仮定: `Runner` を持つ。理由は、⑴ 実行するゴーストは kanade の定数で出口で押すので、腕が名を知らずに既定値を置ける（運行表の全部の腕へ `KanadeConfig` を通さずに済む形が、出どころの既定 `ScriptOrigin::GHOST` と同じ規律になる）、⑵ 同じ名のゴーストが 2 体居ても「自身か」を名の比べで誤らない。2 値にするなら、送り手の既定を名つきで置くために運行表の腕（`steady.rs`・`steady_choice_script.rs`・`change.rs` の取りやめ・`sstp.rs` の `on_send`）へ `KanadeConfig` を通す。
-2. **出どころ（`ScriptOrigin`）を `TalkMeta` に入れない**（確定・要件の議論で `ScriptOrigin` を今の形と値のまま保つと決めた）: 要件の「付帯情報」は `StartTalk.origin`（今のまま）と `StartTalk.meta`（新しい欄）の組で表し、`begin_talk(talk_id, origin, &meta)` で両方を届ける。
-3. **共通の決まりの置き場は `areka-ghost`（`talk_path.rs`）**: 付帯情報を受ける受け手は `BootCueSink`（`areka-ghost`）を実装するので必ず `areka-ghost` に届く。仮定: `areka-ghost`。`areka-talk` に置く案は、std だけの契約の層に探す順（ukadoc のタグの決まり）と fs の読みを持ち込むので採らない。下流の文字の層（`areka-emo-text`）が付帯情報を受けるときは `areka-ghost` への依存を足すことになる（その spec の判断）。
-4. **置き場を絶対パスにできないとき**: `std::path::absolute` が失敗したら `warn!`（`ghost_place_unresolved`）を 1 行残して置き場を `None` にし、起動は続ける。仮定: 止めない（存在の確かめ済みの ghost/master で失敗は実際には起きない・`listed_name` は同じ失敗で元のパスへ戻すが、置き場は絶対パスでなければならないので `None` に倒す）。
+1. **送り手は 3 つの値**（`TalkSender::{Runner, Ghost(String), Tool(String)}`）: 「実行するゴースト自身」を `Runner` として持ち（名は `TalkRunner::name`・`sender_name()` で引く）、`Ghost(名)` は実行するゴーストと別のゴーストだけに使う。腕が名を知らずに既定値を置ける（`ScriptOrigin::GHOST` の既定と同じ規律）・同じ名のゴーストが 2 体居ても名の比べで「自身か」を誤らない。要件の議論の「ゴーストなら名・道具なら名」は `sender_name()` で満たす。
+2. **出どころ（`ScriptOrigin`）を `TalkMeta` に入れない**: 要件の「付帯情報」は `StartTalk.origin`（今のまま）と `StartTalk.meta` の組で表し、`begin_talk(talk_id, origin, &meta)` で両方を届ける。
+3. **共通の決まりは `areka-sakura`（`talk_path.rs`）**: 文字の層（`areka-emo-text`）を含む受け手のどれからも届く層で、タグの決まりを知る純粋な関数の置き場。`areka-ghost` は kanade・sylphya・SHIORI の結線を持つので、下流の文字の層に依存を足させない。`areka-session` へは `areka_ghost::sink` の再輸出で届ける（`Cargo.toml` は直さない）。在る無しは `resolve_in` の述語に分け、`areka-sakura` のテストは fs を読まずに決まりを確かめる（実の fs での解き方は `areka-session` の opener のテストが `temp-path-kit` で確かめる）。下流の受け手が `begin_talk` をどの crate で受けるかは、その spec が決める。
+4. **置き場を絶対パスにできないとき**: `warn!`（`ghost_place_unresolved`）を 1 行残して置き場を `None` にし、起動は続ける（在ることを確かめ済みの ghost/master で失敗は実際には起きない・元のパスへ戻すと置き場が相対になりうる）。
