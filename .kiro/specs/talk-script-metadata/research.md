@@ -186,3 +186,30 @@
 - **決め 6: 置き場が無いことの型での表し方**（要件 1.6・5.7）: 本番の kanade は必ず置き場を持ち、無いのは `KanadeConfig::new` で組む試験の支えだけ。付帯情報の置き場を `Option` にするか、本番の組み立てでは型で必須にして試験の支えだけ別の作り方にするかを設計で決める。
 - **決め 7: 解けなかったときの記録の持ち方**（要件 5.9 を議論の前に直した形）: 共通の決まりは結果（理由と最後に試した候補）だけを返し、記録は呼んだ受け手が 1 行だけ残す。開く系の受け口は今の `error!`（`open_external_failed`）のまま。結果の型の形を設計で決める。
 - **SSP の測り（2026-11-27・SSP の MCP・ゴースト「窓際のぱすたさんDEBUG」）**: `\![open,file,zz_probe_nonexist_ts.txt]` を strict で送った。error の記録は 0 件＝SSP は在らないファイルを黙って捨てる。どこを探したかは記録から読めない。ゴーストの最上位にだけ在るファイルを開かせれば区別できるが、開発者の画面に窓が開くので、議題に回した。
+
+## 9. 設計の段の調べと決め（2026-11-27・`kiro-spec-design`）
+
+- **発見の種類**: 軽い（既存の仕組みの拡張）。外の依存・新しいクレートは無いので外部の調べはしない。読んだ規則: `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`、steering の `structure.md`（crate の層と依存）・`logging.md`（段の表）。
+- **新しく読んだコード**:
+  - `KanadeConfig` は `crates/areka-kanade/src/msg.rs:539` に在る（`config.rs` ではない）。置き場の欄を足すと `msg.rs` に 1 欄増える（`SstpSend`／`SstpNotify` の欄には触れない）。本番で組むのは `resolve_kanade_config` 1 か所で、`runtime.rs` とテストは全部 `..KanadeConfig::new(…)` か結果の欄の書き換えなので、欄を足しても `runtime.rs`・`runtime_tests.rs` は変わらない。
+  - `step` の出口（`schedule/mod.rs:157-170`）は `route` → `talk_origin::stamp` → `translate::after` → `talk_gap::observe` → `balloon_events::settle` → `script_log::record` の順。`talk_origin.rs` の頭書きは「腕は出どころを決めず、ここで一括に付ける」。
+  - `sstp::on_send` は腕の中で `translate::defer` を呼ぶ（翻訳に預けた一括はその `step` の出口を通らず、翻訳の結果の `step` で出る）。`translate::on_done` は台本と出どころだけを書き換える。
+  - kanade の外で `TalkCommand::Start` を作る本番の道は無い（`actor.rs:488` が `step` の一括を写すだけ）。
+  - 運行表の `steady.rs` の `step` と腕は `KanadeConfig` を受けていない（`step(state, input)`）。`change.rs` の取りやめ（`on_yielded_reply`）・`sstp::on_send`・`steady_choice_script::begin` も受けない。
+  - `areka-session` の本番の依存に `areka-talk`・`areka-sakura` は無い（`areka-sakura` は dev 依存だけ）。`areka-ghost` は本番の依存。付帯情報の型は `areka_ghost::sink` から再輸出して届ける。
+  - `ReadmeRequest::Open`・`OpenContext` を名指すのは `areka-session` の `readme.rs`・`readme_tests.rs`・`readme/` の 6 ファイルだけ。`ReadmeCueSink` を組むのは `runtime_boot.rs` と本体のテスト 2 つ（`Box::new(ReadmeCueSink::new(tx))` の形のまま使える）。
+
+### 総合（synthesis）
+
+- **一般化**: 相対パスの解き方は「置き場・書かれたパス・探す順」の 1 つの関数にし、探す順を 2 値の列挙で受ける（開く系は「ghost/master だけ」、下流の `\![set,tasktrayicon]` などは「ghost/master → 最上位」）。実装は要件の 2 通りだけ。
+- **作るか使うか**: std の `Path::join`・`Path::exists`・`std::path::absolute` で足りる（`existing()` と `listed_name` が既に使う手）。新しい依存は要らない。
+- **削ったもの**: 付帯情報の `Arc` 包み（トークは秒の単位で始まり、受け手 13 本の大半は参照を受けるだけ）／受け手ごとの解き方／`resolve` の在る無しの述語の差し込み（fs のテストは `target\` の下で足りる）／開く要求への送り手の運搬（opener は実行するゴーストだけを使う）。
+- **決め（決め 1〜7 の結論）**:
+  - 決め 1（埋める所）: 実行するゴーストは `step` の出口の新しい規則 `talk_meta::stamp_runner` で `KanadeConfig` から押す（`talk_origin::stamp` と同じ規律・作る所が増えても漏れない）。送り手は腕が決める（既定は実行するゴースト自身・`on_send`／`on_notify_reply` は道具・選択肢の `script:` は `ShownTalk` の控えから写す）。案 1-B（全部の腕へ `KanadeConfig` を通す）は採らない。
+  - 決め 2（渡す形）: `begin_talk(talk_id, origin, meta: &TalkMeta)`。`ScriptOrigin` は今のまま別の欄（案 2-B は採らない）。
+  - 決め 3（送り手）: 付帯情報の別の欄 `TalkSender`。値は `Runner`（実行するゴースト自身）・`Ghost(名)`（別のゴースト・この spec では作らない）・`Tool(名)`。要件の議論の「`Ghost(名)`｜`Tool(名)`」に `Runner` を足した形なので、設計の議論の議題にする。道具の名は kanade の定数（`msg.rs` の知らせの欄は変えない）。
+  - 決め 4（共通の決まりの置き場）: `areka-ghost` の `talk_path.rs`。付帯情報を受ける受け手は必ず `BootCueSink`（`areka-ghost`）を実装するので届く。
+  - 決め 5（opener の乗り換え）: 案 5-A。`ReadmeCueSink` が `BootCueSink` を自分で実装し、`ReadmeRequest::Open { dest, runner }` で実行するゴーストを運ぶ。opener は台本の要求を `submit_for_talk` で受けて `GhostSlot` を引かない。説明書の道（`submit`）は今のまま。
+  - 決め 6（置き場が無い）: `TalkRunner.place: Option<GhostPlace>`。`KanadeConfig::new` は `None`、`resolve_kanade_config` は `Some`（絶対にできなければ `warn!` の上で `None`）。
+  - 決め 7（解けないときの結果）: `Result<PathBuf, Unresolved>`、`Unresolved` は `Empty`・`NoPlace`・`NotFound { last_tried }`。`resolve` は記録しない。opener は今の `error!`（`open_external_failed`）1 行に、`reason` の語 `empty_path`・`no_place` を足す。
+- **振る舞いの変わる所**: `%X%` が空に展開された `\![open,file]` は今は ghost/master のフォルダを開くが、`EmptyPath` で断る（要件 6.5 の唯一の違い）。空の名前を OS の探索に渡す枝へも落とさない。
