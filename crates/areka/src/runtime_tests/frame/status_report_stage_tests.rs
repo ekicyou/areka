@@ -71,7 +71,8 @@ fn empty_slot_in_the_phase_keeps_the_ledger() {
 fn phase_sends_the_stage_even_while_the_runtime_is_busy() {
     use super::super::test_support::{headless_wiring_with, zero_clock};
 
-    let world = world_with_seriko();
+    let mut world = world_with_seriko();
+    world.insert_resource(wintf::ecs::FrameTime(dola::time::testing::at_ms(1_000)));
     let mut wiring = headless_wiring_with(std::sync::mpsc::channel().1, zero_clock());
     wiring
         .balloon_models

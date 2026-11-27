@@ -112,7 +112,8 @@ impl GpuRig {
                     last_tick = Some(Instant::now());
                     rig.inject_talk_tick(step_ms);
                 }
-                rig.world.insert_resource(FrameTime(dola::now()));
+                let now = rig.frame_time();
+                rig.world.insert_resource(FrameTime(now));
                 pump_messages();
                 rig.world.run_schedule(Input);
                 rig.world.run_schedule(Update);

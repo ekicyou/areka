@@ -207,7 +207,8 @@ pub struct SwitchRig {
     /// `Update` の段（致命の机の汲み出し）を回す足場は必ず立てる。本番は App の置き場が必ず在り、
     /// 置き場が無いと App スコープの投函が致命の机で終了を招くため。
     app_memory: Rc<Cell<bool>>,
-    /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
+    /// 注入した Tick の合成の時刻（UI の時計 `dola::now` と同じ基準から数える・単調増加・ゴーストを
+    /// またいでも戻さない）。
     talk_clock: dola::TimePoint,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
     sample: RigSample,
@@ -353,7 +354,7 @@ impl SwitchRig {
             boots,
             factory_calls,
             app_memory,
-            talk_clock: dola::TimePoint::ZERO,
+            talk_clock: dola::now(),
             sample,
         }
     }
@@ -603,6 +604,16 @@ impl SwitchRig {
             // 降ろしている最中の dispatcher は閉じていてよい（次の反復で次のゴーストへ届く）。
             let _ = dispatcher.send(DispatcherMsg::Tick { now });
         }
+    }
+
+    /// 巡ごとに `FrameTime` へ置くフレームの時刻: 実の時計と注入した Tick の時刻の遅い方。
+    ///
+    /// 文字の層とバルーンの寿命は、台本の時刻（Tick から決まる合図の発火時刻）と現実の出来事の時刻
+    /// （`TalkClock`＝`dola::now`）を同じ時計で比べ、フレームの時刻が届いた物から当てる。Tick は実時間より
+    /// 先へ進みうるので、どちらにも追い越されない値を置く（実の時計だけだと先へ進んだ台詞の字が
+    /// 実時間が追い付くまで出ない）。
+    pub fn frame_time(&self) -> dola::TimePoint {
+        self.talk_clock.max(dola::now())
     }
 
     /// 台詞の時計を進めずに回す: 通知の相と `Input` の段（登録済みの取り出しの系＝台本の切替要求と

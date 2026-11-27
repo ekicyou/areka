@@ -1,7 +1,7 @@
 use super::test_support::bump_balloon_window_dpi;
 use super::{
     BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, run_dpi_phase,
-    run_text_phase, run_text_scale_phase, shell_target,
+    run_text_scale_phase, shell_target,
 };
 
 /// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
@@ -245,11 +245,7 @@ element1,balloon,talk,10,10
     }
 
     run_text_scale_phase(&mut harness.wiring, &mut harness.world);
-    run_text_phase(
-        &mut harness.wiring,
-        &mut harness.world,
-        Some(dola::time::testing::ms(10_000)),
-    );
+    harness.present_text(dola::time::testing::at_ms(10_000));
     let shown: Vec<String> = harness
         .runtime
         .borrow()
@@ -281,11 +277,7 @@ element1,balloon,talk,10,10
         "前提: 非表示でも差し込み口は残る"
     );
     run_text_scale_phase(&mut harness.wiring, &mut harness.world);
-    run_text_phase(
-        &mut harness.wiring,
-        &mut harness.world,
-        Some(dola::time::testing::ms(10_000)),
-    );
+    harness.present_text(dola::time::testing::at_ms(10_000));
     assert!(
         harness.runtime.borrow().shown_boxes(&actor).is_empty(),
         "絵の番号が無いスコープの箱は、拡大率の相の同期で登録が外れて出なくなる"

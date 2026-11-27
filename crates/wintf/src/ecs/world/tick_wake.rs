@@ -22,7 +22,8 @@
 //!   現れるか」を機械で照合しているので、型名や関数名へ言い換えるとその照合が落ちる
 //!   （wintf 側は `tick_gate_tests.rs`、areka 側は `tick_gate_config_producers_tests.rs`）。
 //! - [`WM_GEOMETRY`] — 幾何・DPI・表示構成・活性化・表示／破棄系メッセージの受理
-//! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）
+//! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）と、
+//!   文字の層の受け取り（`areka-emo-text` の `actor_held.rs`）
 //! - [`ANIM`] — dola アニメータに活性がある
 //! - [`REARM`] — 「まだ仕事がある」ので次の画面更新を予約する（talk 進行中の文字層など）
 //! - [`GRAPHICS`] — 描画基盤が無効・初期化待ち、作り直しや描画の失敗の試し直し

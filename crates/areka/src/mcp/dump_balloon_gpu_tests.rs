@@ -1,13 +1,9 @@
 //! `dump_balloon` の実際の描画を通るテスト（x64 だけ接続）。土台は `dump_surface` の側の
 //! [`crate::mcp::dump_surface::gpu_test_support`]。
 //!
-//! 台本の待ち（`\_w`）と指令は注入する Tick の時刻で届き、字は実時間の台詞の時刻
-//! （巡の時刻−話の起点）で現れる（別の時計）。話の起点は届いた指令ごとの「届いた時刻−指令の時刻」の
-//! 最大で、遅れて届く指令が後へ押す。台詞の字が現れ切ったかは、スコープ 0 の現れる時刻の列が台詞の
-//! 字数だけ揃った（字は届いた分しか列に載らない）時刻 `T` から、列の末尾 `L` だけ実時間が過ぎた
-//! ことで知る: `T` までに届いた指令は起点を `T` より後へ押せず、後から届く指令は自分の時刻（`L` 以上）
-//! までの字を消さないので、台詞の時刻は `L` を越える。巡の途中で届いた指令の分の 1 巡のずれを
-//! 見込み、2 巡続けて越えたら現れ切ったとする。
+//! 台本の待ち（`\_w`）と指令は注入する Tick の時刻で届き、字は「指令の発火時刻＋塊の頭からの隔たり」の
+//! 時刻に、フレームの時刻がそこへ届いたフレームで現れる。台詞の字が現れ切ったかは、スコープ 0 の現れる
+//! 時刻の列が台詞の字数だけ揃い（字は届いた分しか列に載らない）、フレームの時刻が列の末尾に届いたことで知る。
 
 use std::time::Duration;
 
@@ -63,8 +59,8 @@ fn has_ink(bytes: &[u8]) -> bool {
     bytes.as_chunks::<4>().0.iter().any(|p| p[3] != 0)
 }
 
-/// スコープ 0 の、届いた字の数と最後の字が現れる台詞の時刻（秒）。字が 1 つも無ければ `None`。
-fn reveals(world: &World) -> Option<(usize, dola::TimeSpan)> {
+/// スコープ 0 の、届いた字の数と最後の字が現れる時刻。字が 1 つも無ければ `None`。
+fn reveals(world: &World) -> Option<(usize, dola::TimePoint)> {
     let runtime = world.get_non_send::<RuntimeWiring>()?.runtime().borrow();
     let times = runtime
         .state()
@@ -82,16 +78,10 @@ fn speak(gpu: &mut GpuRig, step_ms: u64) -> bool {
 
 /// [`speak`] の字の数を `words` にしたもの（[`WORDS`] でない台詞の待ち）。
 fn speak_words(gpu: &mut GpuRig, step_ms: u64, words: usize) -> bool {
-    // 字の列が揃ったのを見た時刻（`T`）と、前の巡で台詞の時刻が末尾を越えていたか。
-    let mut all_by: Option<dola::TimePoint> = None;
-    let mut past_before = false;
     gpu.frames_until(step_ms, |world| {
-        let Some((_, last)) = reveals(world).filter(|&(n, _)| n == words) else {
-            return false;
-        };
-        let all_by = *all_by.get_or_insert_with(dola::now);
-        let past = world.resource::<FrameTime>().0 - all_by >= dola::TimeDelta::from(last);
-        std::mem::replace(&mut past_before, past) && past
+        reveals(world)
+            .filter(|&(n, _)| n == words)
+            .is_some_and(|(_, last)| world.resource::<FrameTime>().0 >= last)
     })
 }
 

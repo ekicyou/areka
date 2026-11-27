@@ -10,7 +10,7 @@
 // 踏むのはこの檻だけである（相の檻 `balloon_visibility_phase_notice_tests.rs` は判断と送出を
 // 自分で並べて呼ぶ）。
 //
-// 時刻はすべて注入（受け口の時計・`TalkClock` の起点・`FrameTime`）で、満了の直前・ちょうど・
+// 時刻はすべて注入（受け口の時計・`FrameTime`）で、満了の直前・ちょうど・
 // 直後を追い越さない刻みで進める。実時間の待機は用いない。
 // =============================================================================
 
@@ -57,7 +57,7 @@ struct Cage {
 }
 
 impl Cage {
-    /// 檻を組み、装着のフレームまで回す。talk 相対秒＝壁時刻（起点 0）。
+    /// 檻を組み、装着のフレームまで回す。台本の起点は壁時刻の 0。
     fn boot() -> Self {
         let (gpu, mut world, gw) = gpu_frame_world();
         let kanade = seat_ghost(&mut world);
@@ -69,7 +69,6 @@ impl Cage {
             let wall = Arc::clone(&wall);
             Arc::new(move || *wall.lock().expect("時計の錠"))
         });
-        wiring.clock.observe_cue(TimeSpan::ZERO);
         let mut cage = Self {
             world,
             wiring: Some(wiring),

@@ -32,7 +32,7 @@ pub const IMAGE: (u32, u32) = (320, 260);
 /// validrect の内側への寄せ（4 辺とも 5 px）。面は (IMAGE.0-10, IMAGE.1-10)。
 pub const VALIDRECT_INSET: u32 = 5;
 /// 全グリフが出そろう十分に後の時刻（本線の試験の `SETTLED` と同じ）。
-const SETTLED: TimeSpan = TimeSpan::from_millis(100_000);
+const SETTLED: TimePoint = TimePoint::from_ticks(100 * 10_000_000);
 
 /// 本線の試験の `model_with` と同じ行で、縦書き（右から左）のバルーン定義の文字列を組む。
 fn balloon_descript() -> String {

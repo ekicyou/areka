@@ -86,7 +86,7 @@ impl TalkSeen {
             .signals
             .iter()
             .position(|s| matches!(s, TalkLifecycleSignal::TalkStarted { .. }))?;
-        let TalkLifecycleSignal::TalkStarted { talk_id } = self.signals[start] else {
+        let TalkLifecycleSignal::TalkStarted { talk_id, .. } = self.signals[start] else {
             unreachable!("position で TalkStarted を選別済み");
         };
         let ended = self.signals[start..]

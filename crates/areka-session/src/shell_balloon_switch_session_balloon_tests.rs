@@ -233,8 +233,9 @@ fn script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot() {
     let mut looks = LookLog::default();
     let mut balloons = BalloonLog::default();
     let windows = lap.windows.clone();
-    // バルーンの時間切れ（既定 30 秒）は UI の時刻（`FrameTime` と `TalkClock`＝dola の実時間）で
-    // 数えるので、古いバルーンが差し替えの直前まで見えているかの余裕は実時間で 30 秒。
+    // バルーンの時間切れ（既定 30 秒）はフレームの時刻（`SwitchRig::frame_time`＝実の時計と Tick の
+    // 時刻の遅い方）で数える。往復は 1 ms ずつの Tick で回すので、古いバルーンが差し替えの直前まで
+    // 見えているかの余裕はおよそ実時間で 30 秒。
     let ((round_trip, last), events) = capture(|| {
         let round_trip = lap.frames_until(CREEP, |rig| {
             looks.record(look_of(rig, &windows));

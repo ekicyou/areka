@@ -730,7 +730,7 @@
   - _Dispatch: mechanical — 付ける時刻は設計が与える_
   - _Requirements: 12.8, 18.1_
 
-- [ ] 10.16 areka-session と本体を、受け手の新しい口へ直し、旗を立てる所の一覧を直す
+- [x] 10.16 areka-session と本体を、受け手の新しい口へ直し、旗を立てる所の一覧を直す
   - 時計つきの seriko の起動を呼ぶ所と、文字の層へ合図を直に入れるテストを直す（共有の組み立てに 1 つ置く）
   - 本体の旗を立てる所の一覧に文字の層の受け取りの行を足し、木の走査の根に areka-emo-text を足す。wintf の起こしの頭の一覧の `PRESENT` の行に、文字の層の受け取りを足す
   - `cargo test -p areka-session` と `cargo test -p areka` が緑で、`cargo build --workspace` が通る
@@ -835,3 +835,4 @@
 - 10.11: 10.13 へ: 組み立ての口 `Frame::at(TimePoint)`・`display_end`・`ended_at`・`earlier`・定数 `SIGNAL_AT`、`visibility_wake(Option<TimePoint>, Option<TimePoint>, bool)`、知らせの新しい形（`at` を持つ）。消した枝を見ていた `choice_wait_tests:271`・`phase_log_tests:41,92`・`talk_end_tests:203`、欄の字面 `"talk_time"` を読む `phase_log_tests:216`。10.14 へ: `frame_attach_tests:484`・`frame_reset_hold_tests:449`。10.15 へ: areka-input の `UserBreak { at }`。
 - 10.12: 10.16 へ: 本体の `runtime_tests/frame/status_report_stage_tests.rs::phase_sends_the_stage_even_while_the_runtime_is_busy` と `runtime_tests/shell_carry_tests.rs::replay_shows_the_decided_surfaces_and_binds_through_seriko` は世界に FrameTime を置いていないので赤になる。FrameTime を置き、渡した時刻が合図と知らせに載る事も確かめる。
 - 10.15: 10.16 へ: areka-session `runtime_boot.rs` の `ClockedTextSink`（33・82 行）を外す。本体 `runtime_tests/frame_shell_box_arrow_tests.rs:306` の `vec![TalkLifecycleSignal::UserBreak]` を `UserBreak { at: TimePoint::ZERO }` へ。
+- 10.16: GPU の足場（Tick を 100 ms で進める `GpuRig`）ではフレームの時刻が Tick の速さで進むので、バルーンの 30 秒の時間切れが実時間でおよそ 0.3 秒で来る。今の読みは `speak` の後にフレームを回さないので影響しない。

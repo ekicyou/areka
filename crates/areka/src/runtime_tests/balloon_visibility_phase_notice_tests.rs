@@ -14,7 +14,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_kanade::KanadeMsg;
 use areka_sakura::TalkId;
-use dola::TimeSpan;
+use dola::{TimePoint, TimeSpan};
 use tracing::Level;
 
 use super::super::test_support::{Frame, TALK_ID, seen};
@@ -23,9 +23,9 @@ use areka_runtime::frame::shared_test_support::wiring;
 use areka_session::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
-/// 待ち時間（秒）と前の台詞の占有終端（talk 相対秒）。
+/// 待ち時間と前の台詞の占有終端。
 const WAIT: TimeSpan = TimeSpan::from_millis(2_000);
-const END: TimeSpan = TimeSpan::from_millis(1_000);
+const END: TimePoint = TimePoint::from_ticks(1_000 * 10_000);
 
 /// 置き場にゴースト（kanade への送出端を持つか持たないか）を据えた World。
 fn world_with_ghost(kanade: Option<Sender<KanadeMsg>>) -> World {
@@ -60,7 +60,7 @@ fn talk_until_just_before_timeout(state: &mut BalloonVisibilityState, world: &Wo
         state,
         world,
         Frame::new(&[(0, seen(3, false))])
-            .at(TimeSpan::ZERO)
+            .at(TimePoint::ZERO)
             .talk_started()
             .display_end(END),
     );

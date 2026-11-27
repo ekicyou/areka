@@ -77,11 +77,11 @@ use areka_runtime::assets::{
 };
 use areka_runtime::frame::test_support::count_level;
 use areka_runtime::frame::{
-    RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
-    run_text_scale_phase,
+    RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
+    run_text_advance_phase, run_text_phase, run_text_scale_phase,
 };
 use areka_runtime::move_cue::{MoveCueSink, PositionCue};
-use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
+use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::target_map::{balloon_target, shell_target};
 use areka_session::ghost_quit::KanadeNoticeRx;
@@ -324,10 +324,9 @@ impl SpineHarness {
         )));
         let (emo_text_sink, text_pump) = spawn_emo_text(Rc::clone(&runtime));
 
-        // ── talk 時刻源（本番同様 dola clock 注入）＋実 ClockedTextSink<EmoTextSink> ──
+        // ── 現実の出来事に時刻を付ける時計（本番同様 dola clock 注入） ──
         let clock_fn: Arc<dyn Fn() -> dola::TimePoint + Send + Sync> = Arc::new(dola::now);
         let clock = TalkClock::new(clock_fn);
-        let clocked_text_sink = ClockedTextSink::new(emo_text_sink, clock.clone());
 
         // ── mpsc＋PresentBridge→spawn_seriko（実 SurfaceOutput 経路）。SurfaceResolver は
         //    非 Clone ゆえ spawn_seriko が値消費し、RuntimeWiring 側は空 alias のプレースホルダで埋める
@@ -416,7 +415,7 @@ impl SpineHarness {
         let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
 
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動） ──
-        // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
+        // sinks は broadcast 登録先で surface（seriko）／text（EmoTextSink）／move（MoveCueSink）／
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番の `runtime_sinks` のうち先頭 4 本だけを同じ順で・残りは渡さない）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
@@ -427,7 +426,7 @@ impl SpineHarness {
             })),
             vec![
                 Box::new(surface_sink),
-                Box::new(clocked_text_sink),
+                Box::new(emo_text_sink),
                 Box::new(move_sink),
                 Box::new(lifecycle_sink),
             ],
@@ -489,9 +488,20 @@ impl SpineHarness {
         );
     }
 
-    /// 文字層 UI アクターの pending メッセージを headless に drain する（実 ClockedTextSink 経路）。
+    /// 文字層 UI アクターの pending メッセージを headless に drain する（実 EmoTextSink 経路）。
     fn pump_text(&self) {
         pump_until_idle();
+    }
+
+    /// 文字の層を進める相を 1 回回す（`frame_now` までに時刻の来た合図を届いた順に当てる）。
+    fn advance_text(&mut self, frame_now: dola::TimePoint) {
+        run_text_advance_phase(&mut self.wiring, &mut self.world, Some(frame_now));
+    }
+
+    /// 本番のフレームと同じく、文字の層を進める相と文字の相を同じフレームの時刻で 1 回ずつ回す。
+    fn present_text(&mut self, frame_now: dola::TimePoint) {
+        self.advance_text(frame_now);
+        run_text_phase(&mut self.wiring, &mut self.world, Some(frame_now));
     }
 
     /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`）。

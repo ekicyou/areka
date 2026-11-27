@@ -16,7 +16,7 @@
 //   ⑶ 時間切れで箱を隠す印が立ち、箱の文字が消える。
 //   ⑷ `Status` の組へ箱のスコープが載る。
 //
-// 時刻はすべて注入（`FrameTime`＋`TalkClock` の epoch）で、実時間の待機は用いない。
+// 時刻はすべて注入（`FrameTime`）で、実時間の待機は用いない。
 // =============================================================================
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,7 +79,6 @@ impl Cage {
         let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let mut wiring = boot_wiring(present_rx, lifecycle_rx);
-        wiring.clock.observe_cue(dola::TimeSpan::ZERO);
         world.insert_resource(FrameTime(dola::time::testing::at_ms(5000)));
 
         wiring = advance_frame(&mut world, wiring);
@@ -312,7 +311,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
             cage.wiring()
                 .presenter()
                 .current_surface_id(shell_target(0)),
-            dola::time::testing::ms(5_000),
+            dola::time::testing::at_ms(5_000),
         ),
         1,
         "窓に出ているのは箱の無いサーフェスで書いた文字だけ（箱の文字は窓へ混ざらない）"
@@ -354,13 +353,14 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
     let timeout = configured_timeout();
     let mut cage = Cage::boot(SHELL, &[0]);
-    let display_end = dola::time::testing::ms(5_000);
+    let display_end = dola::time::testing::at_ms(5_000);
     // 時間切れの計測はトークの終わりが届いてから始まる。
     for signal in [
-        TalkLifecycleSignal::DisplayEndAt(display_end),
-        TalkLifecycleSignal::TalkEnded {
-            at: Some(display_end),
+        TalkLifecycleSignal::DisplayEndAt {
+            at: display_end,
+            end: display_end,
         },
+        TalkLifecycleSignal::TalkEnded { at: display_end },
     ] {
         cage.lifecycle_tx
             .send(signal)
@@ -389,7 +389,7 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     assert_eq!(balloon_reports(&cage.reports), vec![vec![(0, 0)]]);
 
     cage.world.insert_resource(FrameTime(
-        dola::TimePoint::ZERO + display_end + timeout + dola::time::testing::ms(1_000),
+        display_end + timeout + dola::time::testing::ms(1_000),
     ));
     let events = cage.frame();
     let marked: Vec<&str> = events

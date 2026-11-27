@@ -196,9 +196,11 @@ element1,balloon,a,0,0
                 flow = handle(SakuraMsg::Tick(t));
                 t = t + dola::time::testing::ms(1_000_000_000);
             }
-            // 受け手を落としてトークの終わりまで積み、文字の層の知らせをこのスレッドで捌く。
+            // 受け手を落としてトークの終わりまで積み、文字の層が受け取った物をこのスレッドで全部当てる
+            // （名前の形の `\b` の箱が無い知らせは当てる時に出る）。
             drop(handle);
             pump_until_idle();
+            runtime.borrow_mut().advance(dola::TimePoint::MAX);
         });
         events
             .iter()

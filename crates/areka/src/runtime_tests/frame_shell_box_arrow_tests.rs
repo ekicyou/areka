@@ -303,7 +303,9 @@ fn talking_box_arrow_press_flows_to_the_usual_box_press() {
     assert!(cage.press(up, DoubleClick::Left), "箱の押下として処理した");
     assert_eq!(
         lifecycle_rx.try_iter().collect::<Vec<_>>(),
-        vec![TalkLifecycleSignal::UserBreak],
+        vec![TalkLifecycleSignal::UserBreak {
+            at: dola::TimePoint::ZERO
+        }],
         "表示の側へ中断が届く"
     );
     assert!(

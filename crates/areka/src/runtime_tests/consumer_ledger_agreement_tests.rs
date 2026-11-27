@@ -131,7 +131,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
         (
             lifecycle_rx
                 .try_iter()
-                .any(|s| matches!(s, TalkLifecycleSignal::BalloonTimeout(_))),
+                .any(|s| matches!(s, TalkLifecycleSignal::BalloonTimeout { .. })),
             CommandConsumer::LifecycleSink,
         ),
         (

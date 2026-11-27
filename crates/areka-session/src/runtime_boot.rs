@@ -30,7 +30,7 @@ use areka_runtime::reload_args::ScriptReload;
 use areka_runtime::reload_cue::{ReloadCueSink, wire_reload_rx};
 use areka_runtime::skin_switch::SkinRequestRaw;
 use areka_runtime::switch_cue::SwitchCueSink;
-use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
+use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use areka_runtime::window_state_cue::WindowStateCueSink;
@@ -51,7 +51,7 @@ struct RuntimeLines {
 
 /// 束の複製から sink の列を組む（並びは旗の順序の保証を担うので変えない）。
 ///
-/// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
+/// 1. surface（seriko）2. 文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
 /// 起床旗 PRESENT が文字 cue より先に倒れないため）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
 /// 11. シェル／バルーンの切替 12. 読み直し 13. 常に手前。重なりから後ろはどれも
@@ -79,7 +79,7 @@ fn runtime_sinks(
     let [install_sink, update_sink] = (BodySystems::of(world).cue_sinks)(world);
     let sinks: Vec<Box<dyn BootCueSink>> = vec![
         Box::new(surface),
-        Box::new(ClockedTextSink::new(text, clock.clone())),
+        Box::new(text),
         Box::new(MoveCueSink::new(move_tx)),
         Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)),
         Box::new(ZOrderCueSink::new(zorder_tx)),

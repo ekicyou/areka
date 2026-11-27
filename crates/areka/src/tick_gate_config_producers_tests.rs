@@ -14,15 +14,20 @@
 use areka_runtime::source_text_test_support::code_only;
 use areka_session::crate_source;
 
-/// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
+/// 旗を立てる側（areka-emo-text・areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
 /// 見出しは `crates/` からの相対（crate の名前＋その `src/` の中のパス）である（読み先は読み口
-/// `crate_source!` で引く）。木の走査は本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の
+/// `crate_source!` で引く）。木の走査は本体・`areka-emo-text`・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の
 /// `src` を歩くので、見出しに crate の名前を付けて木の間で取り違えないようにする。
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
-const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
+const AREKA_PRODUCERS: [(&str, &str, &str); 9] = [
+    (
+        "areka-emo-text/actor_held.rs",
+        crate_source!("areka-emo-text", "src/actor_held.rs"),
+        "PRESENT",
+    ),
     (
         "areka-runtime/adapter.rs",
         crate_source!("areka-runtime", "src/adapter.rs"),
@@ -94,6 +99,16 @@ fn balloon_visibility_phase_arms_the_deadline() {
     assert!(
         code.contains("tick_wake::arm_deadline("),
         "balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"
+    );
+}
+
+/// 文字の層を進める相と文字の相も、次に時刻の来る物・次に現れる字の時刻を**期限**で預ける。
+#[test]
+fn text_phases_arm_the_deadline() {
+    let code = code_only(crate_source!("areka-runtime", "src/frame/scale_text.rs"));
+    assert!(
+        code.contains("tick_wake::arm_deadline("),
+        "frame/scale_text.rs: 次の時刻を預ける呼出（tick_wake::arm_deadline(）が無い"
     );
 }
 
@@ -174,10 +189,14 @@ mark(ZORDER);",
     );
 }
 
-/// 本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の `src` を歩く。
-fn walk_roots() -> [(&'static str, PathBuf); 5] {
+/// 本体・`areka-emo-text`・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の `src` を歩く。
+fn walk_roots() -> [(&'static str, PathBuf); 6] {
     [
         ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
+        (
+            "areka-emo-text",
+            areka_session::crate_source_test_support::crate_path("areka-emo-text", "src"),
+        ),
         (
             "areka-runtime",
             areka_session::crate_source_test_support::crate_path("areka-runtime", "src"),
@@ -234,7 +253,7 @@ fn files_marking(flag: &str) -> Vec<String> {
     found
 }
 
-/// 本体・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の木の中で旗を立てている
+/// 本体・`areka-emo-text`・`areka-runtime`・`areka-input`・`areka-session`・`areka-placement` の木の中で旗を立てている
 /// 本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に載っている。
 ///
 /// 逆向きも同時に見る——表の行が現物のどのファイルにも当たらなければ、走査が壊れて
