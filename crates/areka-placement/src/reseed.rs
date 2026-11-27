@@ -35,7 +35,9 @@ use super::persist::apply_restored_placements;
 use super::resolver::{
     Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
-use super::script_balloon::{ScriptBalloonPlacement, overlay_align, overlay_offset};
+use super::script_balloon::{
+    ScriptBalloonPlacement, is_script_placed, overlay_align, overlay_offset,
+};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
 use super::{ScopeWindowPositions, scale_then_merge};
@@ -56,6 +58,7 @@ pub struct BalloonPlacementInputs {
 /// 新しいシェルの見た目の値を走っている窓の部品へ入れ直し、バルーン窓を 1 度置き直す。
 ///
 /// - 標準の位置は [`resolve_standard_scopes`] で解き、利用者のドラッグの記憶を重ねてから入れる。
+/// - 記憶から戻したずらしを使うスコープに台本の値があれば、その分（台本ありの標準 − descript だけの標準）を足す。
 /// - 窓の部品が揃わないスコープは `warn!`（`event = "reseed_skipped"`）を残して読み飛ばし、
 ///   残りのスコープは続ける（差し替えは済んでいるので、配置の値だけが古いまま残る）。
 pub fn apply_shell_descript(
@@ -66,12 +69,20 @@ pub fn apply_shell_descript(
     restored: &[(PersistKey, String)],
 ) {
     let snapshot = monitor_snapshot(world);
-    for StandardScope { running, placement } in
-        resolve_standard_scopes(world, windows, src, balloon)
+    let standard = resolve_standard_scopes(world, windows, src, balloon);
+    let descript = if standard
+        .iter()
+        .any(|s| is_script_placed(world, s.running.char_window))
     {
+        resolve_descript_scopes(world, windows, src, balloon)
+    } else {
+        Vec::new()
+    };
+    for StandardScope { running, placement } in standard {
         let scope = running.input.scope;
         // 1 件を入れて 1 件を返す（`apply_restored_placements` の事後条件）。破れたら黙って進めない。
-        let Some(p) = apply_restored_placements(vec![placement], restored, &snapshot).pop() else {
+        let Some(mut p) = apply_restored_placements(vec![placement], restored, &snapshot).pop()
+        else {
             warn!(
                 event = "reseed_skipped",
                 scope,
@@ -80,6 +91,34 @@ pub fn apply_shell_descript(
             );
             continue;
         };
+        // 記憶は「descript の標準＋利用者のずらし」なので、台本の値の分を足して新しいシェルの台本の基準点に乗せる。
+        if p.balloon_offset_base.dpi.is_none() && is_script_placed(world, running.char_window) {
+            match descript.iter().find(|d| d.placement.scope == scope) {
+                Some(d) => {
+                    let share = PointPx {
+                        x: placement
+                            .balloon_offset
+                            .x
+                            .saturating_sub(d.placement.balloon_offset.x),
+                        y: placement
+                            .balloon_offset
+                            .y
+                            .saturating_sub(d.placement.balloon_offset.y),
+                    };
+                    let shift = |v: PointPx| PointPx {
+                        x: v.x.saturating_add(share.x),
+                        y: v.y.saturating_add(share.y),
+                    };
+                    p.balloon_offset_base.offset = shift(p.balloon_offset_base.offset);
+                    p.balloon_offset = shift(p.balloon_offset);
+                    p.balloon_pos = shift(p.balloon_pos);
+                }
+                None => warn!(
+                    event = "reseed_script_share_unresolved",
+                    scope, "reseed: 台本の値の分を解けないので記憶のずらしをそのまま使う"
+                ),
+            }
+        }
 
         replace_anchor(world, running.char_window, scope, p.anchor);
         reinstall_balloon(world, &running, &p);
