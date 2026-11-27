@@ -358,3 +358,10 @@
 - 消したテスト・分かれ道・ログ・assert は無い。`tests/support/mod.rs` に `present_at`（同じ時刻で `advance` → `present_frame`）を足し、`tests/` の提示は全部これを通す。`pipeline_test`・`scale_invariance_test` の時刻の表は `TimeSpan` → `TimePoint`（値は同じ）。
 - `draw_readback_test::full_path_ink_monotonic_clear_transparent_and_contained_in_validrect`: 前は at=100ms の字の cue が届いた場で当たり、t=0 で「可視 0 で装着」。後は t=0 に字を持たない cue（軸を省いた `\_l`、at=0）だけが当たり、字の cue は列に持たれたまま「可視 0 で装着」。以降の期待は同じ。
 - 例 `emo-text-layer`（`drive.rs`）はフレームごとに `advance(ZERO + t)` してから関門を見る。`emo-text-typewriter-demo` は時刻の型だけ。
+
+## 10.6（後半）
+
+- 取り除いた分かれ道: `TalkEpoch`（`observe`・`talk_time`・`wall`）、`observe_cue` の「時計も直前の刻みも無ければ写さない」早い return（最初の刻みより前に届いた合図も列に積む）、`settle_talk` の「起点が無ければ戻る」分かれ道、`revealed_at`・`glyph_wall` の起点との組み合わせ。消したログは無い。
+- 外したテスト・assert: `talk_tests::epoch_is_the_largest_now_minus_cue_time`（見積もりだけを見ていた）、`looper_talk_tests::cues_change_nothing_when_the_table_has_no_talk` の起点の 2 件、`table_replacement_rebuilds_the_talk_gate` の起点の 1 件。
+- 置き換え: `talk_tests::wall_time_keeps_sub_millisecond_precision` → `glyph_times_are_the_fire_time_plus_the_offset_and_keep_sub_millisecond_precision`、`actor_talk_tests::cue_that_is_not_text_moves_the_time_origin` → `clear_cue_reaches_the_glyph_list_before_routing`。足した: `talk_tests::previous_glyph_time_survives_pruning_the_whole_list`。
+- 変える前後の期待: `interrupt_then_clear_all_at_zero_keeps_the_list_monotone` → `..._at_the_new_fire_time_...`（全消去を 0 → 発火時刻 600 ms、残る字 1 → 3）、`pruning_keeps_ordinals` 末尾（0 → 6500 ms）、`looper_talk_tests::new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary`（新しい台詞の頭 2000 → 1220、期待 2000/None/2150 → 1220/None/1370）。

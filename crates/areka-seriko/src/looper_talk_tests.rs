@@ -2,8 +2,8 @@
 //!
 //! 文字の到着は `observe_cue` の直呼び（偽の文字の到着）、刻みは `on_tick(now)`、面の切り替えは
 //! アクターと同じ順で踏む。時計は手で進める偽物で、どの呼び出しもその直前に時計を合わせる（観測を
-//! 追い越さない）。文字は 1 字 50 ms（cue の再生時間＝文字数×50 ms）で、台本の 0 秒が時計の何 ms かは
-//! 各テストの最初の cue が決める。刻みは文字の現れる時刻ちょうどを避けて置く（秒の端数に寄らない）。
+//! 追い越さない）。文字は 1 字 50 ms（cue の再生時間＝文字数×50 ms）で、cue は届いた時刻に発火した
+//! ものとして渡す。刻みは文字の現れる時刻ちょうどを避けて置く（秒の端数に寄らない）。
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -49,10 +49,17 @@ impl Stage {
         self.rt.on_tick(at_ms(now_ms), &mut self.states)
     }
 
-    /// 時計が `ms` のときに cue が届く。
+    /// 時計が `ms` のときに cue が届く。発火時刻はその時刻（台本の起点は `now_ms − cue.at`）。
     pub(super) fn hear(&mut self, now_ms: i64, cue: TalkCue) {
         self.clock.store(now_ms, Ordering::SeqCst);
-        self.rt.observe_cue(&cue);
+        let fired = TalkCue::scheduled(
+            at_ms(now_ms) - cue.at,
+            cue.at,
+            cue.actor,
+            cue.command,
+            cue.duration,
+        );
+        self.rt.observe_cue(&fired);
     }
 
     /// 時計が `ms` のときに `\0` のシェルの面が `sid` に切り替わる。
@@ -315,20 +322,10 @@ fn cues_change_nothing_when_the_table_has_no_talk() {
 
     let plain = run(NO_TALK);
     assert!(plain.rt.feeds.is_empty(), "文字の列は生まれない");
-    assert_eq!(
-        plain.rt.epoch.talk_time(at_ms(2000)),
-        None,
-        "起点は生まれない"
-    );
     assert_eq!(plain.counted(Slot::Shell), None, "文字の数えは生まれない");
 
     let talking = run(MOUTH);
     assert!(talking.rt.feeds.contains_key(&scope()), "陽性対照");
-    assert_eq!(
-        talking.rt.epoch.talk_time(at_ms(2000)),
-        Some(ms(1000)),
-        "陽性対照"
-    );
     assert_eq!(talking.counted(Slot::Shell), Some((0, 0)), "陽性対照");
 }
 
@@ -347,12 +344,11 @@ fn table_replacement_rebuilds_the_talk_gate() {
 
     st.rt.replace_shell_table(table_of(NO_TALK));
     assert!(st.rt.feeds.is_empty(), "無い表に戻したら捨てる");
-    assert_eq!(st.rt.epoch.talk_time(at_ms(2000)), None);
     st.hear(1000, text(ms(0), "0", NINE));
     assert!(st.rt.feeds.is_empty());
 }
 
-/// 文字が 1 つも届かないうち（起点の見積もりがまだ無いうち）に構えた面でも、最初の台詞の 1 文字目
+/// 文字が 1 つも届かないうちに構えた面でも、最初の台詞の 1 文字目
 /// から数える（最初の cue と 1 文字目は同じ刻みの間に届く）。
 #[test]
 fn surface_armed_before_any_cue_counts_from_the_first_glyph() {
@@ -397,7 +393,7 @@ fn choice_text_counts_and_non_text_cues_do_not() {
     };
     st.hear(1150, cue(ms(150), "0", choice, ms(100)));
     assert_eq!(
-        st.rt.feeds[&scope()].revealed_until(TimeSpan::MAX),
+        st.rt.feeds[&scope()].revealed_until(TimePoint::MAX),
         3,
         "文字 1＋選択肢 2 だけが列に積まれる"
     );
@@ -436,9 +432,9 @@ fn clear_in_mid_talk_drops_unrevealed_glyphs_and_keeps_counting() {
     );
 }
 
-/// 区切りの途中（5 文字）で台詞が中断され、新しい台詞（頭に全消去・台本の 0 秒）が始まる。数えは
-/// 現れた 5 文字に続くので、新しい台詞の 1 文字目（通算 6 文字目）で口が動く。現れなかった残りの
-/// 4 文字は数えない。
+/// 区切りの途中（5 文字）で台詞が中断され、新しい台詞（頭に全消去）が 1220 に始まる。数えは現れた
+/// 5 文字に続くので、新しい台詞の 1 文字目（通算 6 文字目）で口が動く。全消去の発火時刻より後に
+/// 現れるはずだった残りの 4 文字は数えない。
 #[test]
 fn new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary() {
     let mut st = nine_glyphs_from_1000();
@@ -450,15 +446,15 @@ fn new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary() {
         "前提: 5 文字が現れた"
     );
 
-    // 時計 2000 が新しい台詞の 0 秒。6 文字は 2000・2050・…・2250。
-    st.hear(2000, clear_all());
-    st.hear(2000, text(ms(0), "0", "さしすせそた"));
-    st.tick(2010);
-    assert_eq!(st.started(), Some(at_ms(2000)), "新しい台詞の 1 文字目");
-    st.tick(2110);
+    // 時計 1220 が新しい台詞の 0 秒。6 文字は 1220・1270・…・1470。
+    st.hear(1220, clear_all());
+    st.hear(1220, text(ms(0), "0", "さしすせそた"));
+    st.tick(1230);
+    assert_eq!(st.started(), Some(at_ms(1220)), "新しい台詞の 1 文字目");
+    st.tick(1330);
     assert_eq!(st.started(), None, "通算 8 文字");
-    st.tick(2160);
-    assert_eq!(st.started(), Some(at_ms(2150)), "新しい台詞の 4 文字目");
+    st.tick(1380);
+    assert_eq!(st.started(), Some(at_ms(1370)), "新しい台詞の 4 文字目");
 }
 
 /// 刻みの間に面が切り替わり（その時点の 4 文字から数え始める）、次の刻みの前に新しい台詞の全消去が

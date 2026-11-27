@@ -48,7 +48,6 @@ impl LoopRuntime {
             parts,
             last_seen,
             armed,
-            epoch,
             feeds,
             stopped_always,
             shifts,
@@ -85,7 +84,7 @@ impl LoopRuntime {
         // この出来事の時刻までに現れた数の次から数える。
         let revealed = at
             .filter(|_| talks && open)
-            .map(|at| revealed_at(epoch, feeds, scope, at));
+            .map(|at| revealed_at(feeds, scope, at));
         let state = at
             .filter(|_| has_trigger || talks)
             .map(|at| arm_slot(armed, &key, sid, open, at, revealed));
@@ -94,14 +93,7 @@ impl LoopRuntime {
             .as_ref()
             .and_then(|state| state.talk_window_bounds())
             .zip(revealed);
-        let wall = |glyph| {
-            glyph_wall(
-                epoch,
-                feeds.get(scope),
-                glyph,
-                at.unwrap_or(TimePoint::ZERO),
-            )
-        };
+        let wall = |glyph| glyph_wall(feeds.get(scope), glyph, at.unwrap_or(TimePoint::ZERO));
         let window = talk_window(bounds, &wall);
         if let Some(at) = at {
             // 頭のコマを置く `always` 以外の再生（鳴らした引き金と呼び出しで始まったもの）。

@@ -39,7 +39,7 @@ use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-use crate::talk::{TalkEpoch, TalkFeed};
+use crate::talk::TalkFeed;
 use crate::timeline::{
     FrameStatus, LoopRng, LotteryBoundary, current_frame_index, elapsed_since, frame_at,
     seeded_rng, should_fire, stop_frame,
@@ -144,9 +144,6 @@ pub(crate) struct LoopRuntime {
     /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
     /// 在る、または表に `talk` が在る）を満たさない面では生まれない。
     armed: HashMap<(ActorKey, Slot), Armed>,
-    /// 台本の 0 秒に当たる時計の読みの見積もり。
-    /// 表に `talk` が無い間は cue を写さないので空のまま。
-    epoch: TalkEpoch,
     /// スコープごとの、文字が現れる時刻の列。表に `talk` が無い間は空のまま。
     feeds: HashMap<ActorKey, TalkFeed>,
     /// シェルかバルーンのどれかの表に `talk` が在るか（文字の cue を写すかの門）。表を
@@ -311,7 +308,6 @@ impl LoopRuntime {
             parts: PartClocks::default(),
             clock: None,
             armed: HashMap::new(),
-            epoch: TalkEpoch::default(),
             feeds: HashMap::new(),
             has_talk,
             stopped_always: StoppedAlways::new(),
@@ -331,35 +327,30 @@ impl LoopRuntime {
         self.clock.as_ref().map(|clock| clock())
     }
 
-    /// 届いた cue を 1 件、文字の時刻の写しへ渡す。
+    /// 届いた cue を 1 件、文字の時刻の列へ渡す。
     ///
-    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、種類を問わず起点の見積もりを
-    /// 更新し、文字と選択肢の文字をそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の
-    /// 現れなかった文字を捨てる。改行・待ち・`\!` のコマンドは数えない。「今」は時計、無ければ直前の
-    /// 刻みの時刻で、どちらも無ければ写さない（次の cue で起点ができる）。記録は出さない（文字ごとの
-    /// 記録を増やさない）。
+    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、文字と選択肢の文字を合図の
+    /// 発火時刻からそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の発火時刻より後に
+    /// 現れる文字を捨てる。改行・待ち・`\!` のコマンドは数えない。記録は出さない（文字ごとの記録を
+    /// 増やさない）。
     pub(crate) fn observe_cue(&mut self, cue: &TalkCue) {
         if !self.has_talk {
             return;
         }
-        let Some(now) = self.event_time().or(self.last_seen) else {
-            return;
-        };
-        self.epoch.observe(cue.at, now);
         match &cue.command {
             CueCommand::Text(text) | CueCommand::Choice { text, .. } => self
                 .feeds
                 .entry(cue.actor.clone())
                 .or_default()
-                .push_text(cue.at, cue.duration, text),
+                .push_text(cue.fire_time, cue.duration, text),
             CueCommand::Clear => {
                 if let Some(feed) = self.feeds.get_mut(&cue.actor) {
-                    restart_talk(feed, &mut self.armed, &cue.actor, cue.at);
+                    restart_talk(feed, &mut self.armed, &cue.actor, cue.fire_time);
                 }
             }
             CueCommand::ClearAll => {
                 for (scope, feed) in &mut self.feeds {
-                    restart_talk(feed, &mut self.armed, scope, cue.at);
+                    restart_talk(feed, &mut self.armed, scope, cue.fire_time);
                 }
             }
             _ => {}
@@ -434,7 +425,6 @@ impl LoopRuntime {
             warned_negative,
             parts,
             armed,
-            epoch,
             feeds,
             stopped_always,
             shifts,
@@ -466,7 +456,7 @@ impl LoopRuntime {
             let (_, has_trigger) = top_kinds(table, *sid);
             // 文字を数える面（表に `talk` が在り、窓が開いている）の、今現れている文字の数。
             let talks = table.has_talk();
-            let now_seen = (talks && *open).then(|| revealed_at(epoch, feeds, scope, now));
+            let now_seen = (talks && *open).then(|| revealed_at(feeds, scope, now));
             // 引き金の状態は、構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面で
             // だけ持つ。無ければこの刻みの時刻で構え（表の差し替えの後の最初の刻み）、窓の開け閉めを写す。
             let state =
@@ -483,7 +473,7 @@ impl LoopRuntime {
             }
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
             let mut new_pattern = states.current_pattern(scope, *slot).clone();
-            let wall = |glyph| glyph_wall(epoch, feeds.get(scope), glyph, now);
+            let wall = |glyph| glyph_wall(feeds.get(scope), glyph, now);
             let window = talk_window(bounds, &wall);
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める。
@@ -626,7 +616,7 @@ impl LoopRuntime {
             let mut new_pattern =
                 staged_pattern.unwrap_or_else(|| states.current_pattern(scope, *slot).clone());
             // 部品の `talk` が借りるこの面の文字の窓（上の輪と同じ数え）。
-            let wall = |glyph| glyph_wall(epoch, feeds.get(scope), glyph, now);
+            let wall = |glyph| glyph_wall(feeds.get(scope), glyph, now);
             let window = talk_window(bounds, &wall);
 
             // 抽選と `always` がこの刻みの時刻に始めた再生の頭の働きのコマを当てる（コマを置く前＝
@@ -745,7 +735,7 @@ impl LoopRuntime {
 
         // 全部の面が文字の窓を読み終えた: 数えを今現れている数まで進め、数え終えた文字を刈り込む
         // （表に `talk` が無ければ文字の列は空で、何もしない）。
-        settle_talk(epoch, feeds, armed, now);
+        settle_talk(feeds, armed, now);
 
         commands
     }
@@ -808,7 +798,7 @@ impl LoopRuntime {
 
     /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・引き金の状態・部品の時計・warn! 記録を捨てる
     /// （表の差し替えの共通後段）。「どれかの表に `talk` が在るか」も組み直し、
-    /// 無くなったら文字の時刻の写しを捨てる。
+    /// 無くなったら文字の時刻の列を捨てる。
     fn forget_slot_kind(&mut self, slot: Slot) {
         self.playback.retain(|(_, s), _| *s != slot);
         self.armed.retain(|(_, s), _| *s != slot);
@@ -816,7 +806,6 @@ impl LoopRuntime {
         self.parts.clear(slot);
         self.has_talk = any_talk(&self.config);
         if !self.has_talk {
-            self.epoch = TalkEpoch::default();
             self.feeds.clear();
         }
     }

@@ -598,8 +598,7 @@ fn dispatch_message<O: SurfaceOutput>(
         SerikoMsg::Cue(cue) => cue,
     };
 
-    // 文字の時刻の写しへ、種類で振り分ける前に 1 回だけ渡す（文字でない cue も起点の見積もりを動かす。
-    // 表に `talk` が無ければ真偽 1 つで戻る）。
+    // 文字の時刻の列へ、種類で振り分ける前に 1 回だけ渡す（表に `talk` が無ければ真偽 1 つで戻る）。
     loop_runtime.observe_cue(&cue);
 
     // Shell 系のみ本アクターが action する。broadcast で seriko は全 cue を受け取るため、

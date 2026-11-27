@@ -22,6 +22,11 @@ pub(super) fn emote_cue(at: TimeSpan, scope: &str, key: &str) -> TalkCue {
     )
 }
 
+/// `cue` を時刻 `now` に発火した合図に組み直す（台本の起点は `now − cue.at`）。
+pub(super) fn fired(now: TimePoint, cue: TalkCue) -> TalkCue {
+    TalkCue::scheduled(now - cue.at, cue.at, cue.actor, cue.command, cue.duration)
+}
+
 /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
 /// `bindoption` 宣言なし）。
 pub(super) fn arm_bind_resolver() -> BindResolver {
@@ -120,6 +125,11 @@ impl ClockRig {
     /// 時計が `now` のときに cue が届く。
     pub(super) fn hear(&mut self, now: TimePoint, cue: TalkCue) -> Vec<DisplayCommand> {
         self.send(now, SerikoMsg::Cue(cue))
+    }
+
+    /// 時計が `now` のときに、その時刻に発火した cue が届く（[`fired`]）。
+    pub(super) fn hear_fired(&mut self, now: TimePoint, cue: TalkCue) -> Vec<DisplayCommand> {
+        self.hear(now, fired(now, cue))
     }
 
     /// これまでに出た指令の全部。

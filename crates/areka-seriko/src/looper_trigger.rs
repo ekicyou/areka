@@ -25,14 +25,14 @@ use std::collections::{HashMap, HashSet};
 
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
-use dola::{TimePoint, TimeSpan};
+use dola::TimePoint;
 
 use super::top_calls::{StoppedAlways, run_top_calls};
 use super::{Playback, SlotPlayback, put_top_play};
 use crate::calls::CallOutcome;
 use crate::state::Slot;
 use crate::table::LoopAnimation;
-use crate::talk::{TalkEpoch, TalkFeed};
+use crate::talk::TalkFeed;
 use crate::timeline::{FrameStatus, LoopRng, elapsed_since, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
@@ -153,32 +153,20 @@ pub(super) fn fire_top_triggers<'a>(
 /// スコープ `scope` で時刻 `at` までに現れた文字の数（序数で数える）。文字がまだ 1 つも届いて
 /// いないスコープは 0（届いた最初の文字が序数 0 になる）。
 pub(super) fn revealed_at(
-    epoch: &TalkEpoch,
     feeds: &HashMap<ActorKey, TalkFeed>,
     scope: &ActorKey,
     at: TimePoint,
 ) -> u64 {
-    // 列が在れば起点の見積もりも在る（文字を積む前に必ず起点を見積もる）。
-    feeds
-        .get(scope)
-        .zip(epoch.talk_time(at))
-        .map_or(0, |(feed, t)| feed.revealed_until(t))
+    feeds.get(scope).map_or(0, |feed| feed.revealed_until(at))
 }
 
-/// 序数 `glyph` の文字が現れた壁時刻。文字の窓の「序数 → 壁時刻」の写しの中身。
+/// 序数 `glyph` の文字が現れた時刻。文字の窓の「序数 → 時刻」の写しの中身。
 ///
 /// 窓が尋ねる序数は必ず列に在る（モジュールの doc の決まり）。万一無ければ決まりの破れなので、
 /// `warn!` を残して刻みの時刻 `now` で代える（落とさない・黙って時刻を作らない）。開発の
 /// ビルドでも同じ道を通る（止めない）。
-pub(super) fn glyph_wall(
-    epoch: &TalkEpoch,
-    feed: Option<&TalkFeed>,
-    glyph: u64,
-    now: TimePoint,
-) -> TimePoint {
-    let at = feed
-        .and_then(|feed| feed.time_of(glyph))
-        .and_then(|r| epoch.wall(r));
+pub(super) fn glyph_wall(feed: Option<&TalkFeed>, glyph: u64, now: TimePoint) -> TimePoint {
+    let at = feed.and_then(|feed| feed.time_of(glyph));
     at.unwrap_or_else(|| {
         tracing::warn!(
             glyph,
@@ -189,13 +177,13 @@ pub(super) fn glyph_wall(
     })
 }
 
-/// 消去の知らせ（台本の時刻 `at`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
+/// 消去の合図（発火時刻 `at`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
 /// 初期化し、そのスコープの数えを列の文字の総数に揃える（捨てた序数は次の塊の文字に振り直される）。
 pub(super) fn restart_talk(
     feed: &mut TalkFeed,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
     scope: &ActorKey,
-    at: TimeSpan,
+    at: TimePoint,
 ) {
     feed.restart_chain(at);
     // 残ったのは消去の時刻までに現れた文字だけなので、これが列の文字の総数。
@@ -210,18 +198,15 @@ pub(super) fn restart_talk(
 ///
 /// 数えを進めるのを判定より前に置くと、後から読む側（部品）が同じ区切りを見落とす。隠れた面
 /// （閉じたバルーンの窓）は数えを持たないので、刈り込みを止めない。数えが今現れている数より先に
-/// 在る間（起点が前へ飛んだ直後）は、その分の文字を列に残す（刈り込みはどの数え済みも越えない）。
+/// 在る間（数えた字の時刻が後ろへ動いた直後）は、その分の文字を列に残す（刈り込みはどの数え済みも
+/// 越えない）。
 pub(super) fn settle_talk(
-    epoch: &TalkEpoch,
     feeds: &mut HashMap<ActorKey, TalkFeed>,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
     now: TimePoint,
 ) {
-    let Some(t) = epoch.talk_time(now) else {
-        return;
-    };
     for (scope, feed) in feeds.iter_mut() {
-        let now_seen = feed.revealed_until(t);
+        let now_seen = feed.revealed_until(now);
         for ((_, _), state) in armed.iter_mut().filter(|((s, _), _)| s == scope) {
             state.advance_talk(now_seen);
         }

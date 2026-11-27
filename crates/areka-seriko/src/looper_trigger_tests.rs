@@ -742,12 +742,10 @@ fn entering_and_starts_are_logged_and_discards_are_silent() {
 /// 欄を持つ `warn!` を 1 行残す。
 #[test]
 fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
-    let mut epoch = TalkEpoch::default();
-    epoch.observe(ms(0), at_ms(1000));
     let mut feed = TalkFeed::default();
-    feed.push_chunk(ms(0), ms(100), 1);
+    feed.push_chunk(at_ms(1000), ms(100), 1);
     let mut at = None;
-    let logs = capture_logs(|| at = Some(glyph_wall(&epoch, Some(&feed), 5, at_ms(1234))));
+    let logs = capture_logs(|| at = Some(glyph_wall(Some(&feed), 5, at_ms(1234))));
 
     assert_eq!(at, Some(at_ms(1234)));
     let warned = crate::test_support::warns(&logs);

@@ -99,7 +99,7 @@ fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
 fn top_surface_fires_runonce_talk_and_periodic() {
     let mut rig = ClockRig::with_config(config());
     rig.tick(at_ms(1000));
-    let first = rig.hear(at_ms(1000), emote_cue(ms(0), "0", "9100"));
+    let first = rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9100"));
     assert_eq!(frames(&first, ONCE), [("0", Some(1700))], "切り替えで鳴る");
     assert_eq!(frames(&first, MOUTH), [("0", None)]);
     assert_eq!(
@@ -109,8 +109,8 @@ fn top_surface_fires_runonce_talk_and_periodic() {
     );
 
     // 3 文字は 1000・1050・1100。口は 1200 → 80ms で 1202 → 80ms で `-1`。
-    rig.hear(at_ms(1000), clear_all());
-    rig.hear(at_ms(1000), text(ms(0), "0", "あいう"));
+    rig.hear_fired(at_ms(1000), clear_all());
+    rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいう"));
     assert!(rig.tick(at_ms(1090)).is_empty(), "2 文字ではまだ");
     assert_eq!(frames(&rig.tick(at_ms(1120)), MOUTH), [("0", Some(1200))]);
     assert_eq!(
@@ -145,14 +145,14 @@ fn top_surface_fires_runonce_talk_and_periodic() {
 fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
     let mut rig = ClockRig::with_config(config());
     rig.tick(at_ms(1000));
-    let (surface, _, p) = single_show(rig.hear(at_ms(1000), emote_cue(ms(0), "0", "9101")));
+    let (surface, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9101")));
     assert_eq!(surface, 9101);
     assert_eq!(part_frames(&p, PART), [(1, 1701)], "見えた瞬間に `runonce`");
     assert!(top_frames(&p).is_empty());
 
     // 3 文字は 1000・1050・1100。部品の口は 1203 → 100ms で `-1`。
-    rig.hear(at_ms(1000), clear_all());
-    rig.hear(at_ms(1000), text(ms(0), "0", "あいう"));
+    rig.hear_fired(at_ms(1000), clear_all());
+    rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいう"));
     assert!(rig.tick(at_ms(1040)).is_empty(), "1 文字ではまだ");
     let (_, _, p) = single_show(rig.tick(at_ms(1060)));
     assert_eq!(part_frames(&p, PART), [(0, 1203), (1, 1701)]);
@@ -177,12 +177,12 @@ fn surfaces_whose_words_were_refused_stay_still() {
     for (key, surface) in [("9103", 9103), ("9104", 9104)] {
         let mut rig = ClockRig::with_config(config());
         rig.tick(at_ms(1000));
-        let (shown, _, p) = single_show(rig.hear(at_ms(1000), emote_cue(ms(0), "0", key)));
+        let (shown, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", key)));
         assert_eq!(shown, surface);
         assert!(p.is_empty(), "{key}: 切り替えの指令は何も載せない: {p:?}");
 
-        rig.hear(at_ms(1000), clear_all());
-        rig.hear(at_ms(1000), text(ms(0), "0", "あいうえおか"));
+        rig.hear_fired(at_ms(1000), clear_all());
+        rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいうえおか"));
         for now in [1120, 1260, 2990, 3010, 3600].map(at_ms) {
             assert!(rig.tick(now).is_empty(), "{key}: {now}");
         }
@@ -204,9 +204,9 @@ fn spawned_actor_plays_the_three_words_of_the_fixture() {
         Some(Arc::new(|| at_ms(1000))),
     );
     sink.send_tick(at_ms(1000));
-    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "9100"));
-    CueSink::emit(&mut sink, clear_all());
-    CueSink::emit(&mut sink, text(ms(0), "0", "あいう"));
+    CueSink::emit(&mut sink, fired(at_ms(1000), emote_cue(ms(0), "0", "9100")));
+    CueSink::emit(&mut sink, fired(at_ms(1000), clear_all()));
+    CueSink::emit(&mut sink, fired(at_ms(1000), text(ms(0), "0", "あいう")));
     for now in [1120, 1185, 1265, 1310, 3010, 3505].map(at_ms) {
         sink.send_tick(now);
     }
