@@ -40,7 +40,7 @@
   - _Dispatch: standard — 置き場の継ぎ目と URI の変換を新しく組む_
   - _Requirements: 5.4, 7.2, 7.10, 8.6, 8.7, 14.5, 14.6, 14.7, 14.13_
 
-- [ ] 2.2 層を開いたときの検査と形の版を作る
+- [x] 2.2 層を開いたときの検査と形の版を作る
   - 接続を開いたら一時の表をメモリーに置き、SQLite の中の待ちを 0 に固定する
   - 層を付けるたびに、`application_id` と `user_version` で「ファイルの状態と開き方の表」の枡（無い・0 バイト・今の版・古い版・落ちた後のジャーナル・使えない・隣の `sylphya.toml` が壊れている）を、ふつうの走りと読み取りだけの走りの両方で決める
   - 古い版は直しの段を 1 つのトランザクションで順に当てる（今の段は空）。使えない層は上書きせず、warn は置き場ごとに 1 回
@@ -234,3 +234,4 @@
 
 - 2.1: 試験の偽物 `MemBackend::mark_unusable` は `application_id = 1`（公開の `UNUSABLE_APPLICATION_ID`）で「使えないファイル」を作る。areka 自身の `application_id` に 1 を使わない（2.2）。
 - 2.1: 名前替えの失敗の注ぎ込みは偽物にまだ無い。取り込みの試験（2.5）の「名前を替えられない」で足す。
+- 2.2: `mod schema;` の `expect(dead_code)` は 2.3 で呼び始めたら外す。消しだけの書きが何も作らず `Done(Saved)` になる判定と、新しい層の表・`application_id`・`user_version` を置くのは 2.4。`with_legacy` で `LegacyUnusable` にするときの error `persist_import_failed` と、取り込み済みの印の後に `with_legacy` を飛ばすのは 2.5。

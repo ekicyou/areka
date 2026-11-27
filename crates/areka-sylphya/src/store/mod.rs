@@ -2,6 +2,14 @@
 
 mod backend;
 mod locate;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the store core that calls these lands with the layered read"
+    )
+)]
+mod schema;
 
 pub use backend::{
     Access, FsBackend, Located, MemBackend, StoreBackend, UNUSABLE_APPLICATION_ID, WriterHold,
