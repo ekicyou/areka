@@ -3,7 +3,7 @@
 //! `events.rs` の 2 つの組み立て（`sstp_notify`・`on_translate_sstp`）と、受け付けの判定・
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
-use super::{SEND_ORIGIN, accepts};
+use super::{SAKURASCRIPT_TOOL, SEND_ORIGIN, accepts};
 use crate::msg::{CloseReason, EventId, ShioriCall, ShioriOutcome};
 use crate::schedule::events::{on_translate_sstp, sstp_notify};
 use crate::schedule::log_capture::{capture, logged_once};
@@ -357,4 +357,24 @@ fn send_during_the_boot_greeting_is_rejected_and_accepted_after_it() {
     let next = s.next_talk_id;
     let (s, _) = step(s, send("\\h外\\e", None), &cfg);
     assert_playing(&s, next);
+}
+
+/// 外からの台本の送り手は道具 `sakurascript` で、翻訳の後も変わらない。
+#[test]
+fn send_talk_sender_is_the_sakurascript_tool() {
+    let tool = areka_talk::TalkSender::Tool(SAKURASCRIPT_TOOL.into());
+    let (state, _) = step(steady(None), send("\\h外からの台本\\e", None), &config());
+    assert_eq!(deferred_start(&state).meta.sender, tool);
+    let (state, actions) = step(
+        state,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h訳\\e",
+        ))),
+        &config(),
+    );
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::StartTalk(start)] if start.meta.sender == tool
+    ));
+    assert_eq!(state.shown.map(|shown| shown.sender), Some(tool));
 }

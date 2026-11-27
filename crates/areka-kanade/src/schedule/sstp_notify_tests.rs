@@ -4,7 +4,7 @@
 //! 必ず取り出し、空でない台本なら外からの台本と同じ掃除と採番で新しいトークを始める）を固定する。
 //! 返った台本の翻訳の Reference と strict の印もここで縛る。
 
-use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
+use super::{NOTIFY_ORIGIN, NotifyStage, RAISE_EVENT_TOOL, accepts};
 use crate::msg::{CloseReason, EventId, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::events::{SourceEvent, on_translate};
 use crate::schedule::log_capture::{capture, logged_once};
@@ -440,4 +440,32 @@ fn notify_get_status_is_derived_from_the_state() {
         [Action::ShioriRequest(ShioriCall::Get { status, .. })] => assert_eq!(status, &want),
         _ => panic!("GET 1 つのはず"),
     }
+}
+
+/// 外から頼まれたイベントの応答の送り手は道具 `raise_event` で、翻訳の後も変わらない。
+#[test]
+fn notify_reply_sender_is_the_raise_event_tool() {
+    let tool = areka_talk::TalkSender::Tool(RAISE_EVENT_TOOL.into());
+    let (state, _) = notify_then_reply(
+        steady(None),
+        "OnTest",
+        &[],
+        None,
+        ShioriOutcome::Value(
+            "\\h返った台本\\e".to_string(),
+            areka_talk::SecurityLevel::Local,
+        ),
+    );
+    let (state, actions) = step(
+        state,
+        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
+            "\\h訳\\e",
+        ))),
+        &config(),
+    );
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::StartTalk(start)] if start.meta.sender == tool
+    ));
+    assert_eq!(state.shown.map(|shown| shown.sender), Some(tool));
 }

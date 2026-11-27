@@ -6,7 +6,7 @@ use crate::schedule::balloon_events::ShownTalk;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate::Translated;
 use crate::schedule::{Action, ActiveTalk, ChoicePhase, Input, Phase, step};
-use crate::talk::{ScriptOrigin, TalkId};
+use crate::talk::{ScriptOrigin, TalkId, TalkSender};
 use areka_talk::SecurityLevel;
 use dola::time::testing::at_ms;
 use tracing::Level;
@@ -282,6 +282,7 @@ fn shown_as(
         talk_id: shown_talk_id,
         script: "\\0元のトーク\\e".to_string(),
         origin,
+        sender: TalkSender::Runner,
         close_sent: false,
         timeout_sent: false,
         timeout_pending: false,
@@ -388,4 +389,52 @@ fn choice_id_event_reply_is_ghost_even_if_original_was_external() {
     );
     assert_eq!(started, ScriptOrigin::GHOST);
     assert_not_logged(&ev, "script_security_lowered");
+}
+
+/// 選択肢の `script:` は元のトークの送り手を写し、控えも新しいトークの送り手へ置き換わる。
+#[test]
+fn script_choice_copies_sender_of_original_talk() {
+    for sender in [
+        TalkSender::Runner,
+        TalkSender::Tool(crate::schedule::sstp::SAKURASCRIPT_TOOL.into()),
+        TalkSender::Tool(crate::schedule::sstp::RAISE_EVENT_TOOL.into()),
+    ] {
+        let mut s = waiting_after(TalkId(3), ScriptOrigin::MCP_SEND);
+        s.shown.as_mut().expect("控え").sender = sender.clone();
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("script:\\e", "閉じる", &[])),
+            &config(),
+        );
+        let started = actions
+            .iter()
+            .find_map(|action| match action {
+                Action::StartTalk(start) => Some(start.meta.sender.clone()),
+                _ => None,
+            })
+            .expect("再生の開始が出るはず");
+        assert_eq!(started, sender, "元のトークの送り手を写す");
+        assert_eq!(
+            next.shown.as_ref().map(|shown| shown.sender.clone()),
+            Some(sender),
+            "控えは新しいトークの送り手へ置き換わる"
+        );
+    }
+}
+
+/// 元のトークの控えが無いときの送り手は実行するゴースト自身。
+#[test]
+fn script_choice_without_matching_shown_talk_sends_as_runner() {
+    let mut s = waiting_after(TalkId(2), ScriptOrigin::MCP_SEND);
+    s.shown.as_mut().expect("控え").sender =
+        TalkSender::Tool(crate::schedule::sstp::SAKURASCRIPT_TOOL.into());
+    let (_, actions) = step(
+        s,
+        Input::Choice(choice_input_of("script:\\e", "閉じる", &[])),
+        &config(),
+    );
+    assert!(matches!(
+        actions.as_slice(),
+        [.., Action::StartTalk(start)] if start.meta.sender == TalkSender::Runner
+    ));
 }
