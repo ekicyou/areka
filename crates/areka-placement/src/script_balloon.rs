@@ -188,3 +188,7 @@ mod args_tests;
 #[cfg(test)]
 #[path = "script_balloon_overlay_tests.rs"]
 mod overlay_tests;
+
+#[cfg(test)]
+#[path = "script_balloon_test_support.rs"]
+mod test_support;

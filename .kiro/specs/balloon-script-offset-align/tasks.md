@@ -30,7 +30,7 @@
   - _Dispatch: mechanical — 重ねの式と期待値を設計が与える_
   - _Requirements: 2.1, 2.2, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 4.5, 5.6_
 
-- [ ] 2.3 placement の World のテストの組み立てを作る
+- [x] 2.3 placement の World のテストの組み立てを作る
   - 2 つの画面（左に DPI の違う画面）・ゴーストの窓の一式・既定の配置の材料・キャラ窓とバルーン窓の位置と寸を持つ headless の World を組む支えを新しい兄弟ファイルに置く（GPU 無し・画面の一覧は手で組む）
   - 約束の試験の支えは読む・呼ぶだけで使い、変えない
   - 支えで組んだ World で今の標準の位置の解きが動く、という 1 本のテストが緑になる
@@ -154,3 +154,4 @@
 - `cargo clippy -p areka-placement --all-targets -- -D warnings` は既存のコード（areka-parsers の `shell/decode.rs`・placement の既存のファイル 20 件）で赤。各タスクの関門は「触ったファイルに新しい警告が無い」（`--no-deps` で確かめる）。
 - 2.1 の向きの `debug!` の文が「3 つ目以降」と言うが、実際は ID の後（2 つ目以降）の引数を記録している。直すのは任意で、振る舞いは変わらない。
 - 2.2 の `is_script_placed`・`overlay_offset`・`overlay_align` は 3.1・4.1 で呼び手が付くまで dead_code の警告が出る。`relative_saturates` は何もしない実装でも通るので、飽和しない軸が変わることの確かめを足すとよい（任意）。
+- 2.3 の `script_world` は `DefaultPlacementBasis` を World に入れる（入れ物は World だけが持つ）。左の画面の DPI 144 は `MONITORS` にだけあり、窓を左へ動かすテストは窓の `DPI` を自分で入れる。
