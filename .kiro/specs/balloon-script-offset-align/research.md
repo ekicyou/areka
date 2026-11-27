@@ -189,3 +189,52 @@ SSP の MCP（`sakurascript` strict・`get_property`）で、起動中の「窓�
 - **`center`・`bottom` の y**: 本体の窓の上下の端ではなく、別の基準（面の見える範囲か当たりの矩形と見られる）に接する。areka の今の `keyword_balloon_pos` の基準との突き合わせは設計の段で行う。
 - **壊れた値**: SSP は数でない字を 0 として黙って当てる。要件 1.7 は「当てずに警告」＝SSP と違う。討議で決め直し、「当てずに警告」のままとした（§8 に行を足す）。
 - **測っていないもの**: 利用者のドラッグとの重ね方（マウスの操作が要る）・シェルとバルーンの切り替えの後の寿命（検体のゴーストのシェルとバルーンを変えることになる）。設計の段で、画面の操作の机を取ってから測るかを決める。
+
+## 9. 設計の段の調べと決め（2026-11-27・kiro-spec-design）
+
+- **Discovery Scope**: Extension（既存の受け口・標準の位置の解き・押し戻しの関門を伸ばす）＝light discovery。外の依存は無く、Web の調べはしていない。読んだ規則: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、雛形 `.kiro/settings/templates/specs/design.md`・`research.md`、steering の `product.md`・`tech.md`・`structure.md`（1,000 行の上限と兄弟のテストの置き方）・`roadmap.md` の C28 の行。
+
+### 9.1 調べで分かったこと（6 章の持ち越しへの答え）
+
+| 持ち越し | 分かったこと | 設計への効き |
+|---|---|---|
+| 6.5 大きさが決まる前の指令 | `running_scope`（`reseed.rs`）はバルーンの `WindowPos.size` が無いと `balloon_size_unknown` で外す。バルーン窓は spawn で大きさを持つので、窓の一式がある間に外れるのは spawn の直後の仮の状態だけ。キャラ窓の大きさは最初の表示まで仮（`move_hold.rs` の `Landed` が実表示寸の着地を見る） | 2 つの変種は `\![move]` の動かす窓と同じく、キャラ窓の表示が決まるまで預かる。窓があって解けないときは値を持ったまま `script_balloon_place_deferred` |
+| 6.6 同じ巡の見え方 | `frame.rs` の並びは 取り出し（表示の線）→ 差し替え → 可視性 → 窓寸の照合 → … → 再スナップ → move drain。可視性の相と move drain は同じ `frame_system` の中 | 同じ巡で位置を書く＝0 フレーム。可視と位置が画面で同じコマに載るかは段 4 で目で見る（design の Open Question 6） |
+| 6.7 同じウェーブの重なり | `runtime_sink: None` を書く placement のファイルは `follow_test_support.rs`・`persist_finalize_save_tests.rs` だけ。`reseed.rs`・`balloon_drag.rs`・`lib.rs`・`consumer_ledger_test_support.rs` は C28 の他の 5 本の列に無い | roadmap ④ へ 5 ファイルを足し、`move_cue_args.rs`・`resolver.rs` を外す（承認は設計の討議） |
+| `window_move.rs` の上限 | `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表 `OVER_LIMIT_ALLOWED` に載っている（2 件のうち 1 件） | 関門の作業領域を引く数行を 1 回の呼び出しへ替え、差し引きの行を増やさない |
+| 値の持ち主 | `script_alignment.rs` はキャラ窓の Component（`AnchorSource.by_script`）。`balloon_lock.rs` は Resource の帳簿で、起動で据え直す結線が `areka-session/src/ghost_session.rs` にある。`spawn.rs` に `on_remove` の hook の先例 | キャラ窓の Component `ScriptBalloonPlacement`。捨てたスコープの記録は `on_remove` の hook |
+| 起動の関門 | `apply_balloon_limit_one` は spawn の前のデータの変換で World を持たない。台本の値は保存せず、ゴーストの切り替え・読み直しで窓ごと消えるので、起動の時点では必ず無い | 起動の関門は同じ選び方の関数を「台本の値なし」で呼ぶ |
+| `center`・`bottom` の y（8 節） | areka の `keyword_balloon_pos` はキャラ窓の上下の端に接する。SSP は別の基準（本体の窓の上端から 37 px 下・下端と接しない） | areka の今の基準を使い §8 に違いを記録（design の Open Question 3） |
+| 記憶の形 | 記憶の `BalloonOffset` の書き手は `balloon_drag.rs` の 1 か所。`persist::merge_scope` は記憶があれば標準を置き換え、基準を未係留（`dpi: None`）にする | 書く値から台本の値の分を引く（`balloon_drag.rs`）・シェルの切り替えで未係留のスコープに分を足す（`reseed.rs`）。`persist.rs` は変えない |
+
+### 9.2 Synthesis
+
+- **一般化**: 2 つの命令はどちらも「descript の値を台本の値で置き換える 1 層」で、違いは重ねる段（ずらしは換算の前・向きは合流の後）だけ。当て口は私有の 1 本を共に通る。「台本の値の分」は記憶へ書くとき（5.8）・記憶から戻すとき（5.3）・利用者のずらしを新しい値へ載せるとき（2.3・3.9）の 3 か所で同じ式（台本ありの標準 − descript だけの標準）。
+- **作るか使うか**: 新しい幾何・新しい換算・新しい帰属の決まりは作らない。P5・`keyword_balloon_pos`・`scale_then_merge`・`work_area_for_window`・`limit_correction`・`reinstall_balloon`・`rescale_follow_offset` をそのまま使う。新しいのは値の Component・重ねの 2 関数・分の計算・画面の選び方の 1 関数だけ。
+- **削ったもの**: 分を Component に持ち回る形（DPI とバルーンの大きさの変化で古くなり、追随の札を 2 つ持つことになる）をやめ、使う時点で 2 回解く。`move_cue_args.rs` と `resolver.rs` の変更をやめた（読みは placement・式は変えない）。`ScopeConfig`・`ScopePlacement` に欄を足さない。
+
+### 9.3 Design Decisions
+
+#### Decision: 値の持ち主はキャラ窓の Component
+- **Alternatives**: ⑴ キャラ窓の Component（`script_alignment` の型） ⑵ Resource の帳簿（`balloon_lock` の型）。
+- **Selected**: ⑴。寿命（5.1〜5.4・5.7）が窓の生き死にと一致し、ゴーストの切り替えでの据え直しの結線が要らない。スコープの鍵と窓の対応を二重に持たない。
+- **Trade-offs**: 捨てた記録（7.5）は hook で出すので、アプリの終了でも 1 行出る（ゴーストの終わり＝捨てるので意味は合う）。
+
+#### Decision: 重ねは `resolve_standard_scopes` の中・ずらしは換算の前・向きは合流の後（research の案 C）
+- **Alternatives**: 案 A（重ねだけ・利用者のずらしを捨てる）・案 B（追従の値に差を足すだけ）・案 C（A の重ね＋利用者のずらしは差で扱う）。
+- **Selected**: 案 C。3 つの道（シェル・面・初期化）が呼び手を変えずに台本の値を読む。換算・右の符号・`windowposition` の調整量・キーワードの再導出・倍率の追随は今の仕組みのまま効く。
+- **Trade-offs**: 利用者が動かしたスコープとドラッグの離しで 2 回解く。
+
+#### Decision: 利用者のずらしと記憶（決まったこと 3）
+- 追従の値＝台本ありの標準＋利用者のずらし。命令では `今の追従の値 + (新しい標準 − 前の標準)` で据え直す（印のあるスコープだけ）。記憶＝離した相対 − 分。記憶から戻すと記憶＋分。分は使う時点の窓の大きさと DPI で 2 回解いて出す。分を出せないときは記憶へ書かない（台本の分が記憶に入る方を避ける）。
+
+#### Decision: 押し戻しの画面（決まったこと 1）
+- `balloon_limit.rs` に `limit_work_area(snapshot, char_rect, balloon_rect, script)` を 1 つ置き、3 か所が呼ぶ。台本の値の有無は Component の有無。帰属の決まりは `work_area_for_window` のまま。
+
+#### Decision: 2 つの変種は表示を待って預かる
+- 仮の大きさで解くと、右に出すバルーンと `center`・`bottom` の位置が着地の後にずれる。`\![move]` の動かす窓と同じ `settle` を使い、最初の表示の巡に当てる（同じ巡の move drain なので遅れない）。
+
+### 9.4 Risks & Mitigations
+- DPI の境の揺れ — 押し込みの冪等を決定論のテストで固定し、大きさの変化を伴う形は段 4 の実機で見る（design の Open Question 4）。
+- バルーンの窓だけが別の DPI の画面へ移ったときの本体との隙間（左に出すバルーンの幅が変わる） — 段 4 で見る。要件に触れる食い違いは 9.4 で決め直す。
+- `sylphya-sqlite-kvs` が `follow_test_support.rs` の口を変えると、それを読む新しいテストが着地の順で壊れうる — 新しいテストは支えの公開の口だけを使い、組み立ては `script_balloon_test_support.rs` に持つ。
