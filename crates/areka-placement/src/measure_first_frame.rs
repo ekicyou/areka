@@ -2,7 +2,7 @@
 //!
 //! - `probe_animation` は既定（`None`）のまま。焼く段は動く絵の道に入らず、全コマを読まない
 //!   （上限の判定と動く絵の 3 つの `warn!` も採寸の道では起きない）
-//! - `decode` は資産の組み立ての縮め方の段 1・段 2 と同じ順（1 枚目 → 1 枚読み）なので、
+//! - `decode`・`decode_unmultiplied` は資産の組み立ての縮め方の段 1・段 2 と同じ順（1 枚目 → 1 枚読み）なので、
 //!   採寸が焼く絵は資産の 0 番のコマと同じ寸法になる
 //! - 1 枚目が全透明の動く絵は静止画として見えるが、採寸は記録を出さない焼き（`bake_quiet`）を
 //!   通るので、その `warn!` は出ない
@@ -29,6 +29,16 @@ impl<D: ElementDecoder> ElementDecoder for FirstFrameDecoder<'_, D> {
                 .decode_first_frame(path, info)
                 .or_else(|_| self.inner.decode(path)),
             None => self.inner.decode(path),
+        }
+    }
+
+    fn decode_unmultiplied(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
+        match self.inner.probe_animation(path) {
+            Some(info) => self
+                .inner
+                .decode_first_frame_unmultiplied(path, info)
+                .or_else(|_| self.inner.decode_unmultiplied(path)),
+            None => self.inner.decode_unmultiplied(path),
         }
     }
 

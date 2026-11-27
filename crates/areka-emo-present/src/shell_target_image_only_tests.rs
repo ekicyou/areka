@@ -38,6 +38,17 @@ fn decoder(dir: &TempPath, pixels: &[[u8; 4]], has_alpha: bool) -> MemoryDecoder
         pixels.concat(),
         has_alpha,
     );
+    // `use_self_alpha,0` の焼きは乗算しない読みで読む。
+    dec.insert_unmultiplied(
+        dir.child("base.png"),
+        areka_emo_atlas::DecodedImage {
+            width: w,
+            height: 1,
+            stride: w * 4,
+            bgra: pixels.concat(),
+            has_alpha,
+        },
+    );
     dec
 }
 

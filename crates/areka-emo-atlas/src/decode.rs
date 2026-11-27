@@ -182,7 +182,29 @@ pub trait ElementDecoder {
     fn decode_unmultiplied(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
         Err(no_unmultiplied(path))
     }
+
+    /// `decode_frames` と同じ約束で、全コマを色に α を掛けない BGRA8 で読む。
+    /// 既定は `Err`（この読み手は乗算しない読みを持たない）。
+    fn decode_frames_unmultiplied(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        Err(no_unmultiplied(path))
+    }
+
+    /// `decode_first_frame` と同じ約束で、動きの 1 枚目を色に α を掛けない BGRA8 で読む。
+    /// 既定は `Err`（この読み手は乗算しない読みを持たない）。
+    fn decode_first_frame_unmultiplied(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        Err(no_unmultiplied(path))
+    }
 }
+
+type UnmultipliedFrames = (Result<DecodedImage, String>, Result<AnimatedImage, String>);
 
 /// `MemoryDecoder::insert_animated` の登録 1 件。
 struct AnimatedEntry {
@@ -204,6 +226,8 @@ pub struct MemoryDecoder {
     pnas: HashSet<PathBuf>,
     animated: HashMap<PathBuf, AnimatedEntry>,
     unmultiplied: HashMap<PathBuf, DecodedImage>,
+    /// パス→乗算しない（動きの 1 枚目の答え, 全コマの答え）。
+    animated_unmultiplied: HashMap<PathBuf, UnmultipliedFrames>,
 }
 
 impl MemoryDecoder {
@@ -272,14 +296,27 @@ impl MemoryDecoder {
         self.unmultiplied.insert(path.into(), image);
     }
 
-    /// 登録の答えを、パス付きの `Decode` の失敗へ包んで返す。未登録は既定と同じ失敗。
-    fn animated_answer<T: Clone>(
-        &self,
+    /// 動く絵の乗算しない答えを登録する。`first`・`frames` の意味は `insert_animated` と同じで、
+    /// 見出しは `insert_animated` の登録が答える。
+    pub fn insert_animated_unmultiplied(
+        &mut self,
+        path: impl Into<PathBuf>,
+        first: Result<DecodedImage, String>,
+        frames: Result<AnimatedImage, String>,
+    ) {
+        self.animated_unmultiplied
+            .insert(path.into(), (first, frames));
+    }
+
+    /// 登録の答えを、パス付きの `Decode` の失敗へ包んで返す。未登録は `missing` の失敗。
+    fn animated_answer<V, T: Clone>(
+        map: &HashMap<PathBuf, V>,
         path: &Path,
-        pick: impl Fn(&AnimatedEntry) -> &Result<T, String>,
+        missing: fn(&Path) -> DecodeError,
+        pick: impl Fn(&V) -> &Result<T, String>,
     ) -> Result<T, DecodeError> {
-        let Some(entry) = self.animated.get(path) else {
-            return Err(not_animated(path));
+        let Some(entry) = map.get(path) else {
+            return Err(missing(path));
         };
         pick(entry).clone().map_err(|source| DecodeError::Decode {
             path: path.to_path_buf(),
@@ -317,7 +354,7 @@ impl ElementDecoder for MemoryDecoder {
         path: &Path,
         _info: AnimationInfo,
     ) -> Result<AnimatedImage, DecodeError> {
-        self.animated_answer(path, |e| &e.frames)
+        Self::animated_answer(&self.animated, path, not_animated, |e| &e.frames)
     }
 
     fn decode_first_frame(
@@ -325,7 +362,7 @@ impl ElementDecoder for MemoryDecoder {
         path: &Path,
         _info: AnimationInfo,
     ) -> Result<DecodedImage, DecodeError> {
-        self.animated_answer(path, |e| &e.first)
+        Self::animated_answer(&self.animated, path, not_animated, |e| &e.first)
     }
 
     /// 乗算しない絵 → その絵・破損 → `Decode`・`insert` だけ → 既定と同じ失敗・未登録 → `NotFound`。
@@ -337,6 +374,22 @@ impl ElementDecoder for MemoryDecoder {
             return Err(no_unmultiplied(path));
         }
         self.decode(path)
+    }
+
+    fn decode_frames_unmultiplied(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        Self::animated_answer(&self.animated_unmultiplied, path, no_unmultiplied, |e| &e.1)
+    }
+
+    fn decode_first_frame_unmultiplied(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        Self::animated_answer(&self.animated_unmultiplied, path, no_unmultiplied, |e| &e.0)
     }
 }
 

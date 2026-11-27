@@ -1,4 +1,4 @@
-//! `image` クレートで動く絵（APNG・WebP）の全コマ／動きの 1 枚目を読み、乗算済み BGRA へ直す。
+//! `image` クレートで動く絵（APNG・WebP）の全コマ／動きの 1 枚目を読み、乗算済み（または乗算しない）BGRA へ直す。
 //! 本番のソースで `image` の型を綴る唯一のファイル。公開面には `image` の型を出さない
 //! （答えは `decode.rs` の型と `String` の失敗だけ）。
 //!
@@ -26,8 +26,12 @@ struct Opened {
 }
 
 /// 動く絵の全コマを読む。`info` は `sniff` が返した見出し。枚数・寸法が `info` と違えば `Err`。
-/// 最初に読めなかったコマで止める（読めた分だけを返さない）。
-pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedImage, String> {
+/// 最初に読めなかったコマで止める（読めた分だけを返さない）。`premultiplied` が偽なら色に α を掛けない。
+pub(crate) fn read_frames(
+    path: &Path,
+    info: AnimationInfo,
+    premultiplied: bool,
+) -> Result<AnimatedImage, String> {
     let opened = open(path)?;
     let mut frames = Vec::new();
     for (n, frame) in opened.frames.enumerate() {
@@ -42,8 +46,8 @@ pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedIm
             let (numer, denom) = frame.delay().numer_denom_ms();
             delay_ms(numer, denom)
         };
-        let image =
-            to_bgra(frame, info, opened.has_alpha).map_err(|e| format!("frame {n}: {e}"))?;
+        let image = to_bgra(frame, info, opened.has_alpha, premultiplied)
+            .map_err(|e| format!("frame {n}: {e}"))?;
         frames.push(AnimationFrame { image, delay_ms });
     }
     if frames.len() as u64 != u64::from(info.frame_count) {
@@ -61,14 +65,18 @@ pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedIm
 
 /// 動きの 1 枚目だけを読む。コマの並びから最初の 1 つを取って止める（2 枚目以降は解かない）。
 /// `read_frames` と同じ内部の関数を通るので、`read_frames` の 0 番のコマと同じ絵になる。
-pub(crate) fn read_first_frame(path: &Path, info: AnimationInfo) -> Result<DecodedImage, String> {
+pub(crate) fn read_first_frame(
+    path: &Path,
+    info: AnimationInfo,
+    premultiplied: bool,
+) -> Result<DecodedImage, String> {
     let mut opened = open(path)?;
     let frame = opened
         .frames
         .next()
         .ok_or("no animation frame")?
         .map_err(|e| format!("frame 0: {e}"))?;
-    to_bgra(frame, info, opened.has_alpha).map_err(|e| format!("frame 0: {e}"))
+    to_bgra(frame, info, opened.has_alpha, premultiplied).map_err(|e| format!("frame 0: {e}"))
 }
 
 /// 先頭の署名で APNG・WebP の読み手を選んで開く。
@@ -109,8 +117,14 @@ fn opened<D: AnimationDecoder<'static>>(decoder: D, has_alpha: bool) -> Opened {
     }
 }
 
-/// 重ね済みのコマ（乗算していない RGBA・絵の全体）を乗算済み BGRA へ直す。寸法が違えば `Err`。
-fn to_bgra(frame: Frame, info: AnimationInfo, has_alpha: bool) -> Result<DecodedImage, String> {
+/// 重ね済みのコマ（乗算していない RGBA・絵の全体）を BGRA へ直す（`premultiplied` なら乗算する）。
+/// 寸法が違えば `Err`。
+fn to_bgra(
+    frame: Frame,
+    info: AnimationInfo,
+    has_alpha: bool,
+    premultiplied: bool,
+) -> Result<DecodedImage, String> {
     let rgba: RgbaImage = frame.into_buffer();
     let (width, height) = rgba.dimensions();
     if (width, height) != (info.width, info.height) {
@@ -122,7 +136,11 @@ fn to_bgra(frame: Frame, info: AnimationInfo, has_alpha: bool) -> Result<Decoded
     let mut bgra = rgba.into_raw();
     for px in bgra.as_chunks_mut::<4>().0 {
         let [r, g, b, a] = *px;
-        *px = [premultiply(b, a), premultiply(g, a), premultiply(r, a), a];
+        *px = if premultiplied {
+            [premultiply(b, a), premultiply(g, a), premultiply(r, a), a]
+        } else {
+            [b, g, r, a]
+        };
     }
     Ok(DecodedImage {
         width,

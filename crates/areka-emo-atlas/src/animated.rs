@@ -13,10 +13,9 @@ use crate::decode::{
     check_image, pixel_len,
 };
 use crate::limits::{AnimationLimits, Exceeded, judge};
-use crate::normalize::{AlphaRule, apply_to};
 use crate::pack::PackConfig;
 use crate::table::{Animation, AtlasKey, ElementId, LoopCount, Size};
-use crate::trim::{TrimResult, Trimmed, Trimmer};
+use crate::trim::{TrimResult, Trimmed};
 
 /// 鍵 1 つの読み込みの結果。
 pub(crate) enum Loaded {
@@ -30,7 +29,7 @@ pub(crate) enum Loaded {
 }
 
 /// 鍵 1 つを読む。`used` はこの `bake` で既に全コマを載せた動く絵の画素の合計
-/// （足すのは呼び手）。
+/// （足すのは呼び手）。`premultiplied` が偽なら、どの段も色に α を掛けない読みで読む。
 pub(crate) fn load(
     decoder: &impl ElementDecoder,
     path: &Path,
@@ -38,9 +37,10 @@ pub(crate) fn load(
     limits: AnimationLimits,
     cfg: PackConfig,
     used: u64,
+    premultiplied: bool,
 ) -> Loaded {
     let Some(info) = decoder.probe_animation(path) else {
-        return still(decoder, path);
+        return still(decoder, path, premultiplied);
     };
     // 縮める道も同じ寸法で読むので、一辺の上限を越える見出しは縮めずに読めなかった絵にする。
     if let Err(source) = pixel_len(info.width, info.height) {
@@ -56,16 +56,22 @@ pub(crate) fn load(
                 target: "areka_emo_atlas",
                 set = key.set.0,
                 rel_path = key.rel_path.as_str(),
+                kind = ?key.kind,
                 frame_count = info.frame_count,
                 width = info.width,
                 height = info.height,
                 exceeded = exceeded_name(exceeded),
                 "bake: 動く絵が上限を超えたので 1 枚だけ読みます"
             );
-            return shrink(decoder, path, key, info);
+            return shrink(decoder, path, key, info, premultiplied);
         }
     };
-    let checked = decoder.decode_frames(path, info).and_then(|anim| {
+    let frames = if premultiplied {
+        decoder.decode_frames(path, info)
+    } else {
+        decoder.decode_frames_unmultiplied(path, info)
+    };
+    let checked = frames.and_then(|anim| {
         let fits = anim.frames.len() >= 2
             && anim.frames.len() == info.frame_count as usize
             && anim
@@ -106,17 +112,23 @@ pub(crate) fn load(
                 target: "areka_emo_atlas",
                 set = key.set.0,
                 rel_path = key.rel_path.as_str(),
+                kind = ?key.kind,
                 reason = %reason,
                 "bake: 動く絵として読めなかったので 1 枚だけ読みます"
             );
-            shrink(decoder, path, key, info)
+            shrink(decoder, path, key, info, premultiplied)
         }
     }
 }
 
 /// 今までの 1 枚読み。
-fn still(decoder: &impl ElementDecoder, path: &Path) -> Loaded {
-    match decoder.decode(path).and_then(|img| accept(img, path)) {
+fn still(decoder: &impl ElementDecoder, path: &Path, premultiplied: bool) -> Loaded {
+    let img = if premultiplied {
+        decoder.decode(path)
+    } else {
+        decoder.decode_unmultiplied(path)
+    };
+    match img.and_then(|img| accept(img, path)) {
         Ok(img) => Loaded::Still(img),
         Err(e) => Loaded::Failed(e),
     }
@@ -141,21 +153,25 @@ fn shrink(
     path: &Path,
     key: &AtlasKey,
     info: AnimationInfo,
+    premultiplied: bool,
 ) -> Loaded {
-    match decoder
-        .decode_first_frame(path, info)
-        .and_then(|img| accept(img, path))
-    {
+    let first = if premultiplied {
+        decoder.decode_first_frame(path, info)
+    } else {
+        decoder.decode_first_frame_unmultiplied(path, info)
+    };
+    match first.and_then(|img| accept(img, path)) {
         Ok(img) => Loaded::Still(img),
         Err(reason) => {
             tracing::warn!(
                 target: "areka_emo_atlas",
                 set = key.set.0,
                 rel_path = key.rel_path.as_str(),
+                kind = ?key.kind,
                 reason = %reason,
                 "bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます"
             );
-            still(decoder, path)
+            still(decoder, path, premultiplied)
         }
     }
 }
@@ -181,22 +197,21 @@ pub(crate) struct PendingFrames {
 }
 
 impl PendingFrames {
-    /// 0 番のコマを外した動く絵の残りに、0 番のコマで決めた扱い（`rule`）を当てて切り詰める。
-    /// コマごとに決め直さないので、全部のコマが 0 番と同じ側（α・不透明・抜き色）になる。
+    /// 0 番のコマを外した動く絵の残りの各コマを、0 番のコマと同じ `shape` で頁に載せる形にする。
     pub(crate) fn new(
         parent: ElementId,
         key: AtlasKey,
         first_delay_ms: u32,
         rest: Vec<AnimationFrame>,
         loop_count: LoopCount,
-        rule: AlphaRule,
+        shape: impl Fn(DecodedImage) -> TrimResult,
     ) -> Self {
         let mut delays_ms = vec![first_delay_ms];
         let trims = rest
             .into_iter()
             .map(|frame| {
                 delays_ms.push(frame.delay_ms);
-                Trimmer.trim(&apply_to(frame.image, rule))
+                shape(frame.image)
             })
             .collect();
         Self {

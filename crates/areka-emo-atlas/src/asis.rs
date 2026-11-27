@@ -1,11 +1,10 @@
 //! `asis` で参照される絵の集め方と、`asis` 用の絵（乗算せず・透過色を抜かず・縁を切らず・α＝255）の作り方。
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use areka_parsers::shell::same_canonical;
 
-use crate::decode::{DecodeError, DecodedImage, ElementDecoder, check_image};
+use crate::decode::DecodedImage;
 use crate::manifest::{SurfaceSet, surface_ids};
 use crate::table::{Point, Size};
 use crate::trim::{TrimResult, Trimmed};
@@ -59,18 +58,8 @@ pub(crate) fn asis_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)> {
     out
 }
 
-/// `asis` 用の絵を読む。乗算しない読みで読み、読み手の約束を破る答えは断る。
-pub(crate) fn load(decoder: &impl ElementDecoder, path: &Path) -> Result<TrimResult, DecodeError> {
-    let img = decoder.decode_unmultiplied(path)?;
-    check_image(&img).map_err(|source| DecodeError::Decode {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    Ok(picture(img))
-}
-
 /// 乗算しない絵の α を 255 にし、原寸のまま頁に載せる形にする（α＝255 なので乗算済みと同じ色）。
-fn picture(img: DecodedImage) -> TrimResult {
+pub(crate) fn picture(img: DecodedImage) -> TrimResult {
     let original = Size {
         w: img.width,
         h: img.height,

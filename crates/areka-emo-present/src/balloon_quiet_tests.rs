@@ -169,6 +169,16 @@ fn quiet_faces_build_silences_key_color_and_is_equal() {
         vec![10u8, 20, 30, 255, 40, 50, 60, 255],
         false,
     );
+    dec.insert_unmultiplied(
+        dir.path().join("balloons0.png"),
+        areka_emo_atlas::DecodedImage {
+            width: 2,
+            height: 1,
+            stride: 8,
+            bgra: vec![10u8, 20, 30, 255, 40, 50, 60, 255],
+            has_alpha: false,
+        },
+    );
 
     let (emit, emit_events) = capture(|| {
         build_balloon_target_from_faces(dir.path(), &dec, &faces, UseSelfAlpha::Off)

@@ -161,10 +161,7 @@ impl ElementDecoder for WicDecoderArm {
         path: &Path,
         info: AnimationInfo,
     ) -> Result<AnimatedImage, DecodeError> {
-        image_arm::read_frames(path, info).map_err(|source| DecodeError::Decode {
-            path: path.to_path_buf(),
-            source,
-        })
+        with_path(path, image_arm::read_frames(path, info, true))
     }
 
     fn decode_first_frame(
@@ -172,11 +169,31 @@ impl ElementDecoder for WicDecoderArm {
         path: &Path,
         info: AnimationInfo,
     ) -> Result<DecodedImage, DecodeError> {
-        image_arm::read_first_frame(path, info).map_err(|source| DecodeError::Decode {
-            path: path.to_path_buf(),
-            source,
-        })
+        with_path(path, image_arm::read_first_frame(path, info, true))
     }
+
+    fn decode_frames_unmultiplied(
+        &self,
+        path: &Path,
+        info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        with_path(path, image_arm::read_frames(path, info, false))
+    }
+
+    fn decode_first_frame_unmultiplied(
+        &self,
+        path: &Path,
+        info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        with_path(path, image_arm::read_first_frame(path, info, false))
+    }
+}
+
+fn with_path<T>(path: &Path, answer: Result<T, String>) -> Result<T, DecodeError> {
+    answer.map_err(|source| DecodeError::Decode {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// 番号つきの形式（1・2・4・8 ビット）。この集合に入る形式だけパレットを読む。

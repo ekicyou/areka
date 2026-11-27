@@ -12,7 +12,7 @@ use crate::table::LoopCount;
 use crate::test_support::{animated_sample as sample, info, pixel};
 
 fn frames(name: &str, frame_count: u32) -> AnimatedImage {
-    read_frames(&sample(name), info(frame_count))
+    read_frames(&sample(name), info(frame_count), true)
         .unwrap_or_else(|e| panic!("{name} should decode: {e}"))
 }
 
@@ -164,10 +164,10 @@ fn trns_apng_has_alpha_and_premultiplies_the_key() {
 
 #[test]
 fn truncated_apng_fails_all_frames_but_reads_first() {
-    let err = read_frames(&sample("truncated.apng"), info(4)).unwrap_err();
+    let err = read_frames(&sample("truncated.apng"), info(4), true).unwrap_err();
     assert!(err.contains("frame 1"), "{err}");
     // 1 枚目だけの口は 2 枚目以降を解かないので読める
-    let first = read_first_frame(&sample("truncated.apng"), info(4)).unwrap();
+    let first = read_first_frame(&sample("truncated.apng"), info(4), true).unwrap();
     assert_px(&first, 0, 0, RED, 0, "first");
 }
 
@@ -175,8 +175,8 @@ fn truncated_apng_fails_all_frames_but_reads_first() {
 fn deep16_apng_fails_both_entrances() {
     // image の APNG の読み手は 16 ビットを 1 枚目で断る。image の文言は版で変わるので、こちらの文（コマの番号）だけを見る
     for err in [
-        read_frames(&sample("deep16.apng"), info(2)).unwrap_err(),
-        read_first_frame(&sample("deep16.apng"), info(2)).unwrap_err(),
+        read_frames(&sample("deep16.apng"), info(2), true).unwrap_err(),
+        read_first_frame(&sample("deep16.apng"), info(2), true).unwrap_err(),
     ] {
         assert!(err.starts_with("frame 0: "), "{err}");
     }
@@ -186,9 +186,9 @@ fn deep16_apng_fails_both_entrances() {
 fn header_mismatch_fails() {
     let basic = sample("basic.apng");
     // 見出しより多い（4 枚目が出た）・少ない
-    let more = read_frames(&basic, info(3)).unwrap_err();
+    let more = read_frames(&basic, info(3), true).unwrap_err();
     assert!(more.contains("more frames"), "{more}");
-    let fewer = read_frames(&basic, info(5)).unwrap_err();
+    let fewer = read_frames(&basic, info(5), true).unwrap_err();
     assert!(fewer.contains("4 frames"), "{fewer}");
     // 寸法が違う
     let wide = AnimationInfo {
@@ -196,8 +196,8 @@ fn header_mismatch_fails() {
         ..info(4)
     };
     for err in [
-        read_frames(&basic, wide).unwrap_err(),
-        read_first_frame(&basic, wide).unwrap_err(),
+        read_frames(&basic, wide, true).unwrap_err(),
+        read_first_frame(&basic, wide, true).unwrap_err(),
     ] {
         assert!(err.contains("8x8"), "{err}");
     }
@@ -258,8 +258,8 @@ fn header_one_over_max_side_is_refused_before_the_first_frame() {
         frame_count: 2,
     };
     let errs = [
-        read_frames(&path, wide).unwrap_err(),
-        read_first_frame(&path, wide).unwrap_err(),
+        read_frames(&path, wide, true).unwrap_err(),
+        read_first_frame(&path, wide, true).unwrap_err(),
     ];
     let _ = std::fs::remove_file(&path);
     for err in errs {
@@ -270,12 +270,12 @@ fn header_one_over_max_side_is_refused_before_the_first_frame() {
 #[test]
 fn non_apng_webp_and_missing_files_fail() {
     for err in [
-        read_frames(&sample("two_frames.gif"), info(2)).unwrap_err(),
-        read_first_frame(&sample("two_frames.gif"), info(2)).unwrap_err(),
+        read_frames(&sample("two_frames.gif"), info(2), true).unwrap_err(),
+        read_first_frame(&sample("two_frames.gif"), info(2), true).unwrap_err(),
     ] {
         assert!(err.contains("not an APNG or WebP"), "{err}");
     }
-    assert!(read_frames(&sample("no_such_file.apng"), info(2)).is_err());
+    assert!(read_frames(&sample("no_such_file.apng"), info(2), true).is_err());
 }
 
 // ---- 同じ答え ----
@@ -309,7 +309,7 @@ fn first_frame_matches_frame_zero() {
     ];
     for (name, n) in cases {
         let all = frames(name, n);
-        let first = read_first_frame(&sample(name), info(n)).unwrap();
+        let first = read_first_frame(&sample(name), info(n), true).unwrap();
         assert!(same(&first, &all.frames[0].image), "{name}");
     }
 }
@@ -336,4 +336,26 @@ fn premultiply_uses_wic_rounding() {
     assert_eq!(premultiply(1, 127), 0);
     assert_eq!(premultiply(1, 128), 1);
     assert_eq!(premultiply(200, 100), 78);
+}
+
+/// 乗算しない読みは透明な画素の色を残す（乗算済みの読みでは 0 になる）。全コマと 1 枚目で同じ。
+#[test]
+fn unmultiplied_read_keeps_the_colour_of_transparent_pixels() {
+    let path = sample("trns.apng");
+    let straight = read_frames(&path, info(2), false).unwrap();
+    for (n, f) in straight.frames.iter().enumerate() {
+        assert_px(&f.image, 0, 0, [255, 255, 255, 0], 0, &format!("f{n}"));
+        assert_px(&f.image, 7, 7, [RED, BLUE][n], 0, &format!("f{n}"));
+    }
+    let first = read_first_frame(&path, info(2), false).unwrap();
+    assert_eq!(first.bgra, straight.frames[0].image.bgra);
+    let premultiplied = read_frames(&path, info(2), true).unwrap();
+    assert_px(
+        &premultiplied.frames[1].image,
+        0,
+        0,
+        CLEAR,
+        0,
+        "premultiplied f1",
+    );
 }
