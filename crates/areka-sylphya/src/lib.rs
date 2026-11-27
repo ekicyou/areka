@@ -38,6 +38,7 @@
 
 pub mod actor;
 pub mod asker;
+pub mod fast;
 pub mod key;
 pub mod keytable;
 pub mod mirror;
