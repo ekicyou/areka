@@ -2,8 +2,11 @@
 //!
 //! # 何を出すか
 //!
-//! `wintf` のスレッド名簿（`ecs::world::thread_registry`）を舐めて、スレッド 1 本につき
-//! 1 行の `perf(thread)` と、プロセス全体 1 行の `perf(process)` を出す。名簿に載って
+//! `wintf` のスレッド名簿（`ecs::world::thread_registry`）を舐めて、生きているスレッド
+//! 1 本につき 1 行の `perf(thread)` と、プロセス全体 1 行の `perf(process)` を出す。
+//! `perf(process)` の `threads=` は生きている名簿のスレッドの数である。終わったスレッドの
+//! CPU は系統ごとの畳んだ合計の `perf(thread)` 行（`tid=0 name=-`・末尾に `exited=`）で
+//! 毎回出る。名簿に載って
 //! いないスレッド（bevy のタスクプール等）は、プロセス CPU から名簿の合計を引いた差を
 //! `role=unregistered_rest` の**1 行**として必ず出す——観測が黙って消えない形にするため
 //! である。
