@@ -1,7 +1,7 @@
 //! 重ね読み: 層の組と住み場所ごとに SQL を組み、層のファイルは読みの間だけ付ける。
 
 use super::schema::{self, Opened};
-use super::{LOG_TARGET, OP_WAIT, RETRY_STEP, Store};
+use super::{LOG_TARGET, OP_WAIT, RETRY_STEP, Store, held_root};
 use crate::asker::AskerId;
 use crate::key::parse_dotted;
 use crate::keytable::Home;
@@ -152,26 +152,58 @@ impl Store {
         }
     }
 
+    /// 控える範囲の中の層の置き場（控えの DB を付けた後）。付けられなければ記録して `None`。
+    fn held_root_of(&mut self, layer: PersistScope) -> Option<String> {
+        let root = self.roots.root_of(layer)?.clone();
+        if !self.backend.withholds(&root) {
+            return None;
+        }
+        match self.ensure_held() {
+            Ok(()) => Some(held_root(&root)),
+            Err(e) => {
+                tracing::error!(target: LOG_TARGET, error = %e, "held db could not be attached; reading the files only");
+                None
+            }
+        }
+    }
+
     fn read_file(&mut self, key: &str, layers: &[PersistScope]) -> Result<Option<String>, Busy> {
         let (with_table, attached) = self.attach(layers)?;
-        let found = if with_table.is_empty() {
+        let mut params = vec![key.to_owned()];
+        let mut parts = Vec::new();
+        let mut held_roots = Vec::new();
+        for &l in layers {
+            let (o, a) = (layer_order(l), alias(l));
+            let file = with_table.contains(&l);
+            let held = self.held_root_of(l);
+            if let Some(root) = &held {
+                params.push(root.clone());
+                let n = params.len();
+                parts.push(format!(
+                    "SELECT {o} AS o, value FROM held.held WHERE root = ?{n} AND key = ?1 AND value IS NOT NULL"
+                ));
+                if file {
+                    parts.push(format!(
+                        "SELECT {o} AS o, value FROM {a}.kv WHERE key = ?1 AND NOT EXISTS (SELECT 1 FROM held.held WHERE root = ?{n} AND key = ?1)"
+                    ));
+                }
+            } else if file {
+                parts.push(format!("SELECT {o} AS o, value FROM {a}.kv WHERE key = ?1"));
+            }
+            held_roots.push(held);
+        }
+        let found = if parts.is_empty() {
             Ok(None)
         } else {
-            let sql = with_table
-                .iter()
-                .map(|&l| {
-                    format!(
-                        "SELECT {} AS o, value FROM {}.kv WHERE key = ?1",
-                        layer_order(l),
-                        alias(l)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" UNION ALL ");
-            let sql = format!("SELECT o, value FROM ({sql}) ORDER BY o LIMIT 1");
+            let sql = format!(
+                "SELECT o, value FROM ({}) ORDER BY o LIMIT 1",
+                parts.join(" UNION ALL ")
+            );
             match self.conn.prepare_cached(&sql).and_then(|mut stmt| {
-                stmt.query_row([key], |r| Ok((r.get(0)?, r.get(1)?)))
-                    .optional()
+                stmt.query_row(rusqlite::params_from_iter(&params), |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()
             }) {
                 Ok(found) => Ok(found),
                 Err(e) => sql_error(e, key).map(|()| None),
@@ -179,11 +211,32 @@ impl Store {
         };
         self.detach(&attached);
         let found: Option<(i64, String)> = found?;
-        let pending = layers
-            .iter()
-            .take_while(|&&l| found.as_ref().is_none_or(|(o, _)| layer_order(l) < *o))
-            .find_map(|&l| self.pending_value(l, key));
-        Ok(pending.cloned().or(found.map(|(_, value)| value)))
+        for (&l, held) in layers.iter().zip(&held_roots) {
+            if found.as_ref().is_some_and(|(o, _)| layer_order(l) >= *o) {
+                break;
+            }
+            if let Some(root) = held
+                && self.has_held_row(root, key)?
+            {
+                continue;
+            }
+            if let Some(value) = self.pending_value(l, key) {
+                return Ok(Some(value.clone()));
+            }
+        }
+        Ok(found.map(|(_, value)| value))
+    }
+
+    /// 控えの DB にこの鍵の行（消した印も含む）が在るか。
+    fn has_held_row(&self, root: &str, key: &str) -> Result<bool, Busy> {
+        match self
+            .conn
+            .prepare_cached("SELECT 1 FROM held.held WHERE root = ?1 AND key = ?2")
+            .and_then(|mut stmt| stmt.exists([root, key]))
+        {
+            Ok(found) => Ok(found),
+            Err(e) => sql_error(e, key).map(|()| false),
+        }
     }
 
     fn read_memory(
@@ -237,7 +290,34 @@ impl Store {
         };
         self.detach(&attached);
         let mut whole: std::collections::BTreeMap<String, String> = found?.into_iter().collect();
+        let mut held_keys = std::collections::BTreeSet::new();
+        if let Some(root) = self.held_root_of(layer) {
+            let held = self
+                .conn
+                .prepare_cached("SELECT key, value FROM held.held WHERE root = ?1 AND key <> ''")
+                .and_then(|mut stmt| {
+                    stmt.query_map([&root], |r| Ok((r.get(0)?, r.get(1)?)))?
+                        .collect::<rusqlite::Result<Vec<(String, Option<String>)>>>()
+                });
+            let held = match held {
+                Ok(rows) => rows,
+                Err(e) => {
+                    sql_error(e, alias(layer))?;
+                    Vec::new()
+                }
+            };
+            for (key, value) in held {
+                held_keys.insert(key.clone());
+                match value {
+                    Some(value) => whole.insert(key, value),
+                    None => whole.remove(&key),
+                };
+            }
+        }
         for (key, value) in self.pending_layer(layer).into_iter().flatten() {
+            if held_keys.contains(key) {
+                continue;
+            }
             whole.entry(key.clone()).or_insert_with(|| value.clone());
         }
         Ok(whole.into_iter().collect())

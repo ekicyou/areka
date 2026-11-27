@@ -2,7 +2,7 @@
 
 use super::read::{alias, layer_order};
 use super::schema::{self, APPLICATION_ID, Opened};
-use super::{LOG_TARGET, OP_WAIT, RETRY_STEP, Store};
+use super::{LOG_TARGET, OP_WAIT, RETRY_STEP, Store, held_root};
 use crate::asker::AskerId;
 use crate::persist::{
     PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope, ScopeRoots,
@@ -86,6 +86,9 @@ impl Store {
             );
             return write.degraded(None, PersistFailureCause::NoRoot);
         };
+        if self.backend.withholds(root) {
+            return self.withhold_write(write, root);
+        }
         let name = alias(layer);
         let backend = self.backend.clone();
         let mut opened = self.open_imported(layer, root, true);
@@ -151,7 +154,9 @@ impl Store {
             other => {
                 let reason = match other {
                     Opened::Io(reason) => reason,
-                    other => format!("{other:?}"),
+                    Opened::NeedsUpgrade => "読み取りだけの走りでは、古い形の版の記憶のファイルを直せないので書けません".to_owned(),
+                    Opened::NeedsRecovery => "読み取りだけの走りでは、落ちた後のジャーナルが残る記憶のファイルを巻き戻せないので書けません".to_owned(),
+                    _ => "記憶のファイルを作れませんでした".to_owned(),
                 };
                 tracing::error!(
                     target: LOG_TARGET,
@@ -166,6 +171,47 @@ impl Store {
         };
         schema::detach(&self.conn, name);
         attempt
+    }
+
+    /// 控える範囲の中の書き: ファイルに触らず、控えへ（置き場, 鍵, 値／消した印）を書く。
+    fn withhold_write(&mut self, write: &FileWrite, root: &Path) -> WriteAttempt {
+        let result = match self.ensure_held() {
+            Ok(()) => {
+                let result = hold_transaction(&self.conn, write, &held_root(root));
+                if result.is_err()
+                    && !self.conn.is_autocommit()
+                    && let Err(e) = self.conn.execute_batch("ROLLBACK")
+                {
+                    tracing::error!(target: LOG_TARGET, error = %e, "persist withheld rollback failed");
+                }
+                result
+            }
+            Err(e) => Err(Stop::from(e)),
+        };
+        match result {
+            Ok(()) => {
+                tracing::debug!(
+                    target: "areka_sylphya::persist",
+                    event = "persist_withheld",
+                    scope = ?write.layer,
+                    keys = ?write.key_names(),
+                    "persist withheld (read-only run); nothing written"
+                );
+                WriteAttempt::Done(PersistOutcome::Withheld)
+            }
+            Err(Stop::Busy) => WriteAttempt::Busy,
+            Err(Stop::Failed(reason)) => {
+                tracing::error!(
+                    target: LOG_TARGET,
+                    scope = ?write.layer,
+                    path = %root.display(),
+                    error = %reason,
+                    keys = ?write.key_names(),
+                    "persist withheld values could not be kept; reporting Degraded"
+                );
+                write.degraded(Some(root), PersistFailureCause::Io(reason))
+            }
+        }
     }
 
     /// 付けた層へ、遅らせる `BEGIN` → 鍵ごとの更新と消し → 確定。失敗したら巻き戻す。
@@ -334,6 +380,21 @@ fn run_transaction(
         delete.execute([key])?;
     }
     before_commit()?;
+    conn.execute_batch("COMMIT")?;
+    Ok(())
+}
+
+fn hold_transaction(conn: &Connection, write: &FileWrite, root: &str) -> Result<(), Stop> {
+    conn.execute_batch("BEGIN")?;
+    let mut hold = conn.prepare_cached(
+        "INSERT INTO held.held (root, key, value) VALUES (?1, ?2, ?3) ON CONFLICT(root, key) DO UPDATE SET value = excluded.value",
+    )?;
+    for (key, value) in &write.puts {
+        hold.execute(rusqlite::params![root, key, value])?;
+    }
+    for key in &write.removes {
+        hold.execute(rusqlite::params![root, key, None::<&str>])?;
+    }
     conn.execute_batch("COMMIT")?;
     Ok(())
 }

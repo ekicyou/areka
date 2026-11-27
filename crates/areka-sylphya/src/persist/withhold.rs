@@ -70,7 +70,7 @@ pub(crate) fn stage(path: &Path, content: &str) {
     lock().staged.insert(key(path), content.to_owned());
 }
 
-/// 試験の根だけを控える取っ手（落とすと登録と、その根の下の控えを消す）。
+/// 試験の根だけを控える取っ手（落とすと登録と、その根の下の控え（置き場の口の `held` も）を消す）。
 #[must_use]
 pub struct WithholdGuard {
     id: u64,
@@ -95,6 +95,8 @@ impl Drop for WithholdGuard {
         };
         let (_, root) = state.roots.remove(pos);
         state.staged.retain(|k, _| !is_under(k, &root));
+        drop(state);
+        crate::store::forget_held(|path| is_under(&key(path), &root));
     }
 }
 

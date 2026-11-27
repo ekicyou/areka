@@ -3,11 +3,12 @@
 //! `areka-sylphya` でファイルシステムに触れるのは [`FsBackend`] だけ。試験の偽物
 //! [`MemBackend`] は、層のファイルの代わりに名前つきの memdb を指し、本物の sqlite が動く。
 
+use super::OP_WAIT;
 use super::locate::{self, DB_FILE, LEGACY_FILE};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 const LOG_TARGET: &str = "areka_sylphya::store";
@@ -128,17 +129,87 @@ impl MemDbs {
     }
 }
 
+/// 生きている置き場の口の控えの DB（範囲の見張りを落としたときに、その根の下の行を消す先）。
+static HELD_DBS: Mutex<Vec<Weak<Mutex<rusqlite::Connection>>>> = Mutex::new(Vec::new());
+
+/// 控えの DB（置き場の口ごとの memdb）と、それを生かしておく接続。
+struct HeldDb {
+    name: String,
+    _keep: Option<Arc<Mutex<rusqlite::Connection>>>,
+}
+
+impl HeldDb {
+    fn new() -> Self {
+        let n = NEXT_BACKEND.fetch_add(1, Ordering::Relaxed);
+        let name = format!("areka-held-{n}");
+        let open = || -> rusqlite::Result<rusqlite::Connection> {
+            let conn = rusqlite::Connection::open(locate::memdb_uri(&name, Access::Create))?;
+            conn.busy_timeout(OP_WAIT)?;
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS held (root TEXT, key TEXT, value TEXT, PRIMARY KEY (root, key)) WITHOUT ROWID",
+            )?;
+            Ok(conn)
+        };
+        let keep = match open() {
+            Ok(conn) => {
+                let keep = Arc::new(Mutex::new(conn));
+                let mut dbs = lock(&HELD_DBS);
+                dbs.retain(|db| db.strong_count() > 0);
+                dbs.push(Arc::downgrade(&keep));
+                Some(keep)
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: LOG_TARGET,
+                    event = "store_memdb_open_failed",
+                    name = %name,
+                    error = %e,
+                    "held memdb keep-alive connection failed; held values last only while attached"
+                );
+                None
+            }
+        };
+        HeldDb { name, _keep: keep }
+    }
+}
+
+/// 生きている控えの DB の全部から、`under` が真の置き場の行を消す。
+pub(crate) fn forget_held(under: impl Fn(&Path) -> bool) {
+    let dbs: Vec<_> = lock(&HELD_DBS).iter().filter_map(Weak::upgrade).collect();
+    for db in dbs {
+        let conn = lock(&db);
+        let forget = || -> rusqlite::Result<()> {
+            let roots = conn
+                .prepare("SELECT DISTINCT root FROM held")?
+                .query_map([], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            for root in roots.iter().filter(|r| under(Path::new(r))) {
+                conn.execute("DELETE FROM held WHERE root = ?1", [root])?;
+            }
+            Ok(())
+        };
+        if let Err(e) = forget() {
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "store_held_forget_failed",
+                error = %e,
+                "held values under the dropped range could not be discarded"
+            );
+        }
+    }
+}
+
 /// 揮発の DB と控えの DB（どちらも memdb）を、本番と偽物で同じ形に持つ。
 struct Volatile {
     app: MemDbs,
-    held: MemDbs,
+    held: HeldDb,
 }
 
 impl Volatile {
     fn new() -> Self {
         Volatile {
             app: MemDbs::new("appvol"),
-            held: MemDbs::new("held"),
+            held: HeldDb::new(),
         }
     }
 
@@ -147,7 +218,7 @@ impl Volatile {
     }
 
     fn held_uri(&self) -> String {
-        locate::memdb_uri(&self.held.name(None), Access::ReadWrite)
+        locate::memdb_uri(&self.held.name, Access::ReadWrite)
     }
 }
 

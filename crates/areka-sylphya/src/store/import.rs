@@ -3,7 +3,7 @@
 use super::read::alias;
 use super::schema::{self, Opened};
 use super::write::{Stop, create_tables};
-use super::{LOG_TARGET, Store};
+use super::{LOG_TARGET, Store, held_root};
 use crate::persist::{PersistScope, doc_to_entries, format};
 use rusqlite::OptionalExtension;
 use std::collections::BTreeMap;
@@ -79,7 +79,8 @@ impl Store {
             .map(|(key, value)| (key.to_canonical_key(), value))
             .collect();
         if backend.withholds(root) {
-            if opened == (Opened::Attached { fresh: false }) {
+            let with_table = opened == (Opened::Attached { fresh: false });
+            if with_table {
                 match self.marked(name) {
                     Ok(false) => {}
                     Ok(true) => {
@@ -91,10 +92,13 @@ impl Store {
                     }
                 }
             }
-            self.pending
-                .insert(root.to_path_buf(), first_spellings(&entries));
-            self.imports.insert(root.to_path_buf(), Import::Done);
-            return opened;
+            return match self.hold_import(name, root, with_table, &entries) {
+                Ok(()) => {
+                    self.finish(root);
+                    opened
+                }
+                Err(stop) => self.postpone(root, &entries, stop, write, opened),
+            };
         }
         if opened == (Opened::Attached { fresh: false }) {
             match self.marked(name) {
@@ -225,6 +229,47 @@ impl Store {
             && let Err(e) = self.conn.execute_batch("ROLLBACK")
         {
             tracing::error!(target: LOG_TARGET, error = %e, "persist import rollback failed");
+        }
+        result
+    }
+
+    /// 控える範囲の中の取り込み: 控えに無くファイルにも無い鍵だけを控えへ入れ、印も控えに置く。
+    fn hold_import(
+        &mut self,
+        name: &str,
+        root: &Path,
+        with_table: bool,
+        entries: &[(String, String)],
+    ) -> Result<(), Stop> {
+        self.ensure_held()?;
+        let root = held_root(root);
+        let run = || -> Result<(), Stop> {
+            self.conn.execute_batch("BEGIN")?;
+            let marked = self.conn.execute(
+                "INSERT OR IGNORE INTO held.held (root, key, value) VALUES (?1, '', '1')",
+                [&root],
+            )?;
+            if marked > 0 {
+                let mut hold = self.conn.prepare_cached(&if with_table {
+                    format!(
+                        "INSERT OR IGNORE INTO held.held (root, key, value) SELECT ?1, ?2, ?3 WHERE NOT EXISTS (SELECT 1 FROM {name}.kv WHERE key = ?2)"
+                    )
+                } else {
+                    "INSERT OR IGNORE INTO held.held (root, key, value) VALUES (?1, ?2, ?3)".to_owned()
+                })?;
+                for (key, value) in entries {
+                    hold.execute([&root, key, value])?;
+                }
+            }
+            self.conn.execute_batch("COMMIT")?;
+            Ok(())
+        };
+        let result = run();
+        if result.is_err()
+            && !self.conn.is_autocommit()
+            && let Err(e) = self.conn.execute_batch("ROLLBACK")
+        {
+            tracing::error!(target: LOG_TARGET, error = %e, "persist held import rollback failed");
         }
         result
     }

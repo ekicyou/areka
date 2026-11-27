@@ -14,6 +14,7 @@ mod read;
 mod schema;
 mod write;
 
+pub(crate) use backend::forget_held;
 pub use backend::{
     Access, FsBackend, Located, MemBackend, StoreBackend, UNUSABLE_APPLICATION_ID, WriterHold,
     fs_backend,
@@ -44,6 +45,8 @@ pub(crate) struct Store {
     imports: BTreeMap<PathBuf, import::Import>,
     /// 取り込みが錠に当たった置き場の、読んだ（鍵, 値）（重ねの値）。
     pending: BTreeMap<PathBuf, BTreeMap<String, String>>,
+    /// 控えの DB を付けたか（控える範囲の中の層を初めて扱った時点で付け、以後は付けたまま）。
+    held: bool,
 }
 
 impl Store {
@@ -85,6 +88,26 @@ impl Store {
             reported: BTreeSet::new(),
             imports: BTreeMap::new(),
             pending: BTreeMap::new(),
+            held: false,
         })
     }
+
+    /// 控えの DB を付ける（付けていれば何もしない）。
+    fn ensure_held(&mut self) -> rusqlite::Result<()> {
+        if !self.held {
+            self.conn
+                .execute("ATTACH ?1 AS held", [self.backend.held_uri()])?;
+            self.held = true;
+        }
+        Ok(())
+    }
 }
+
+/// 控えの表で置き場を指す文字。
+fn held_root(root: &std::path::Path) -> String {
+    root.to_string_lossy().into_owned()
+}
+
+#[cfg(test)]
+#[path = "withhold_tests.rs"]
+mod withhold_tests;
