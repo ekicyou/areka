@@ -12,7 +12,11 @@
 // 結線 `wire_user_break` と登録 `register_user_break_drain`: 旗の取り出しがポインタの配送より前に登録されていて、押下と同じ巡に届いた
 // 合図がその押下の判定に効く。入力の段は wintf が組んだ本物を使い、押下は本物の配送を通す。
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::mpsc::{self, Receiver};
+
+use dola::time::testing::at_ms;
 
 use areka_kanade::ExecutionStateUpdate;
 use bevy_ecs::entity::Entity;
@@ -22,7 +26,8 @@ use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
 use wintf::ecs::world::EcsWorld;
 
 use super::*;
-use crate::balloon::test_support::{events_named, runtime_wiring_showing_talk};
+use crate::balloon::test_support::{events_named, runtime_wiring_showing_talk, zero_clock};
+use areka_sakura::contract::TimePoint;
 use log_capture_kit::capture;
 
 // ---------------------------------------------------------------- 道具立て
@@ -199,6 +204,14 @@ struct Lines {
     flag_tx: Sender<NoUserBreakSignal>,
     lifecycle_rx: Option<Receiver<TalkLifecycleSignal>>,
     kanade_rx: Option<Receiver<KanadeMsg>>,
+    /// 注入した時計の読み（ミリ秒・押下の前に書き換える）。
+    now_ms: Arc<AtomicI64>,
+}
+
+/// `now_ms` の読みを返す時計。
+fn clock_reading(now_ms: &Arc<AtomicI64>) -> TalkClock {
+    let now_ms = Arc::clone(now_ms);
+    TalkClock::new(Arc::new(move || at_ms(now_ms.load(Ordering::SeqCst))))
 }
 
 impl Lines {
@@ -206,13 +219,20 @@ impl Lines {
         let (flag_tx, flag_rx) = mpsc::channel();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
         let (kanade_tx, kanade_rx) = mpsc::channel();
+        let now_ms = Arc::new(AtomicI64::new(4_321));
         let mut world = World::new();
-        world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+        world.insert_non_send(UserBreakWiring::new(
+            flag_rx,
+            lifecycle_tx,
+            kanade_tx,
+            clock_reading(&now_ms),
+        ));
         Lines {
             world,
             flag_tx,
             lifecycle_rx: Some(lifecycle_rx),
             kanade_rx: Some(kanade_rx),
+            now_ms,
         }
     }
 
@@ -260,7 +280,10 @@ fn accepted_break_sends_exactly_one_to_each_line() {
     let (accepted, events) = capture(|| lines.press(1, DoubleClick::Left, false));
 
     assert!(accepted, "妨げが無ければ受け入れる");
-    assert_eq!(lines.lifecycle(), vec![TalkLifecycleSignal::UserBreak]);
+    assert_eq!(
+        lines.lifecycle(),
+        vec![TalkLifecycleSignal::UserBreak { at: at_ms(4_321) }]
+    );
     let to_kanade = lines.kanade();
     assert_eq!(to_kanade.len(), 1, "運行への要求はちょうど 1 件");
     assert!(
@@ -278,6 +301,23 @@ fn accepted_break_sends_exactly_one_to_each_line() {
     assert_eq!(detected.len(), 1, "検出の記録は 1 行: {events:?}");
     assert_eq!(detected[0].level, Level::TRACE);
     assert_eq!(detected[0].field("scope"), Some("1"));
+}
+
+/// 表示の合図の線へ送る時刻は、押下の時に注入した時計が読んだ値（結線の時の値でも前の押下の値でもない）。
+#[test]
+fn break_carries_the_clock_reading_at_each_press() {
+    let mut lines = Lines::wired();
+    assert!(lines.press(0, DoubleClick::Left, false));
+    lines.now_ms.store(9_000, Ordering::SeqCst);
+    assert!(lines.press(0, DoubleClick::Left, false));
+
+    assert_eq!(
+        lines.lifecycle(),
+        vec![
+            TalkLifecycleSignal::UserBreak { at: at_ms(4_321) },
+            TalkLifecycleSignal::UserBreak { at: at_ms(9_000) },
+        ]
+    );
 }
 
 /// 単押しは中断にせず、検出としても記録しない。同じ窓で左ダブルクリックの検出が見えている
@@ -318,7 +358,10 @@ fn dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives() {
     assert_eq!(failed.len(), 1, "運行へ渡せない旨が 1 行: {events:?}");
     assert_eq!(failed[0].level, Level::ERROR);
     assert_eq!(failed[0].field("scope"), Some("0"));
-    assert_eq!(lines.lifecycle(), vec![TalkLifecycleSignal::UserBreak]);
+    assert_eq!(
+        lines.lifecycle(),
+        vec![TalkLifecycleSignal::UserBreak { at: at_ms(4_321) }]
+    );
 }
 
 /// 結線前の押下は記録だけして何もしない。
@@ -627,7 +670,7 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
     let (kanade_tx, kanade_rx) = mpsc::channel();
     let mut ecs = EcsWorld::new();
     let world = ecs.world_mut();
-    wire_user_break(world, flag_rx, lifecycle_tx, kanade_tx);
+    wire_user_break(world, flag_rx, lifecycle_tx, kanade_tx, zero_clock());
     register_user_break_drain(world);
     let window = world.spawn(OnPointerPressed(press_on_visible_balloon)).id();
     assert!(
@@ -657,7 +700,9 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
     world.run_schedule(Input);
     assert_eq!(
         lifecycle_rx.try_iter().collect::<Vec<_>>(),
-        vec![TalkLifecycleSignal::UserBreak]
+        vec![TalkLifecycleSignal::UserBreak {
+            at: TimePoint::ZERO
+        }]
     );
     assert_eq!(
         kanade_rx
@@ -703,7 +748,7 @@ fn wire_user_break_inserts_the_wiring_without_registering() {
     let (lifecycle_tx, _lifecycle_rx) = mpsc::channel();
     let (kanade_tx, _kanade_rx) = mpsc::channel();
 
-    wire_user_break(&mut world, flag_rx, lifecycle_tx, kanade_tx);
+    wire_user_break(&mut world, flag_rx, lifecycle_tx, kanade_tx, zero_clock());
 
     assert_eq!(input_systems_len(&world), 0, "結線は系を登録しない");
     assert!(
@@ -718,7 +763,7 @@ fn flag_source_connected_is_true_while_the_sender_lives_even_with_an_unread_valu
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, _lifecycle_rx) = mpsc::channel();
     let (kanade_tx, _kanade_rx) = mpsc::channel();
-    let mut wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx);
+    let mut wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx, zero_clock());
     flag_tx.send(NoUserBreakSignal::Enter).unwrap();
 
     assert!(wiring.flag_source_connected(), "送出端が生きている");
@@ -731,7 +776,7 @@ fn flag_source_connected_is_false_after_the_sender_drops_even_with_an_unread_val
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, _lifecycle_rx) = mpsc::channel();
     let (kanade_tx, _kanade_rx) = mpsc::channel();
-    let mut wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx);
+    let mut wiring = UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx, zero_clock());
     flag_tx.send(NoUserBreakSignal::Enter).unwrap();
     drop(flag_tx);
 

@@ -19,6 +19,7 @@ use wintf::ecs::pointer::{DoubleClick, dispatch_pointer_events};
 
 use super::shell_box::{BoxPressVerdict, fold_talking, judge_box_press};
 use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::target_map::balloon_target;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
@@ -36,6 +37,8 @@ pub struct UserBreakWiring {
     lifecycle_tx: Sender<TalkLifecycleSignal>,
     /// 運行（kanade）への送出端の複製。
     kanade: Sender<KanadeMsg>,
+    /// 押下を受けた時刻を読む時計（結線の時に渡された複製）。
+    clock: TalkClock,
     /// 直前の左押下が選択の確定だったか。
     prev_press_selected: bool,
     /// 話している最中か（台詞の始まりで真・終わりで偽）。
@@ -43,11 +46,12 @@ pub struct UserBreakWiring {
 }
 
 impl UserBreakWiring {
-    /// 3 本の線の端から組む（旗は下りた状態・直前の押下の記憶は「確定でない」から始まる）。
+    /// 3 本の線の端と時計から組む（旗は下りた状態・直前の押下の記憶は「確定でない」から始まる）。
     pub fn new(
         flag_rx: Receiver<NoUserBreakSignal>,
         lifecycle_tx: Sender<TalkLifecycleSignal>,
         kanade: Sender<KanadeMsg>,
+        clock: TalkClock,
     ) -> Self {
         Self {
             flag_rx,
@@ -55,6 +59,7 @@ impl UserBreakWiring {
             reported_no_user_break: false,
             lifecycle_tx,
             kanade,
+            clock,
             prev_press_selected: false,
             talking: false,
         }
@@ -203,8 +208,9 @@ pub fn wire_user_break(
     flag_rx: Receiver<NoUserBreakSignal>,
     lifecycle_tx: Sender<TalkLifecycleSignal>,
     kanade: Sender<KanadeMsg>,
+    clock: TalkClock,
 ) {
-    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade));
+    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade, clock));
 }
 
 /// 旗の取り出しを毎巡の入力の段へ登録する（登録だけ・持ち物は置かない）。
@@ -325,7 +331,9 @@ fn shown_talk_id(world: &World) -> Option<TalkId> {
 fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     if wiring
         .lifecycle_tx
-        .send(TalkLifecycleSignal::UserBreak)
+        .send(TalkLifecycleSignal::UserBreak {
+            at: wiring.clock.now(),
+        })
         .is_err()
     {
         tracing::error!(

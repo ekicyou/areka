@@ -29,7 +29,7 @@ use wintf::ecs::{Input, Point, Window};
 use super::*;
 use crate::balloon::test_support::{
     TWO_BOX_SHELL, anchor_cues, anchor_row, box_name, choice_cue, empty_runtime, events_named,
-    headless_runtime_wiring, row,
+    headless_runtime_wiring, row, zero_clock,
 };
 use crate::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
 use crate::pointer_test_support::world_with_wiring;
@@ -40,6 +40,7 @@ use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
+use areka_sakura::contract::TimePoint;
 use log_capture_kit::capture;
 
 /// 箱 a（0,0〜100,50）に当たった写し。選択肢の行は (10,10)〜(90,20) の 1 本。
@@ -108,7 +109,12 @@ impl Fixture {
             },
             Box::new(|| 1000),
         );
-        world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, break_tx));
+        world.insert_non_send(UserBreakWiring::new(
+            flag_rx,
+            lifecycle_tx,
+            break_tx,
+            zero_clock(),
+        ));
         let runtime = empty_runtime();
         wire_balloon_choice(&mut world);
         let entity = world.spawn(CharWindowMarker { scope: 0 }).id();
@@ -248,7 +254,9 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
     assert!(f.pressed(BODY, DoubleClick::Left, on_a(false)), "処理した");
     assert_eq!(
         f.lifecycle_rx.try_iter().collect::<Vec<_>>(),
-        vec![TalkLifecycleSignal::UserBreak]
+        vec![TalkLifecycleSignal::UserBreak {
+            at: TimePoint::ZERO
+        }]
     );
     assert!(matches!(
         f.break_rx.try_iter().collect::<Vec<_>>()[..],

@@ -30,7 +30,7 @@ use areka_runtime::reload_args::ScriptReload;
 use areka_runtime::reload_cue::{ReloadCueSink, wire_reload_rx};
 use areka_runtime::skin_switch::SkinRequestRaw;
 use areka_runtime::switch_cue::SwitchCueSink;
-use areka_runtime::talk_clock::ClockedTextSink;
+use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use areka_runtime::window_state_cue::WindowStateCueSink;
@@ -151,7 +151,7 @@ pub fn boot_runtime(
             return Err(err);
         }
     };
-    install_lines(world, &ghost_root, &runtime, lines);
+    install_lines(world, &ghost_root, &runtime, lines, sources.clock.clone());
     Ok(runtime)
 }
 
@@ -183,6 +183,7 @@ fn install_lines(
     ghost_root: &Path,
     runtime: &GhostRuntime,
     lines: RuntimeLines,
+    clock: TalkClock,
 ) {
     let RuntimeLines {
         readme_rx,
@@ -202,6 +203,7 @@ fn install_lines(
         no_user_break_rx,
         user_break_lifecycle_tx,
         runtime.kanade().clone(),
+        clock,
     );
     wire_reload_rx(world, reload_rx);
 }

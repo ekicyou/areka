@@ -418,3 +418,9 @@
 - 消したテスト・assert は無い。`film_playback_e2e_tests` は時計の無い `spawn_seriko` と、`send_stage` に時刻を書いて渡す形（`AtomicI64` の時計を外した。値は前の時計の読みと同じ）。`frame_reset_hold_tests` の知らせは `at: TimePoint::ZERO`。`frame_attach_tests` は `TalkStarted { talk_id: None, .. }`、終端の比べは `sheet.absolute_end_time()`（起点 0 なので値は同じ）。`strict_judges_tests` に `TextMsg::Origin` の腕。
 - 走査の表 `ACTOR_SCAN_SITES` から `frame/scale_text.rs` を外した（10.10 で `state.actors()` の走査が無くなった。3 → 2 か所）。
 - `cargo test -p areka-runtime` は 1095 通過・0 失敗・3 無視（10.10・10.12 のテストもここで初めて走り緑）。
+
+## 10.15（後半）
+
+- 押下の口は結線の時に受けた `TalkClock` の複製（`UserBreakWiring::new(.., clock)`・`wire_user_break(.., clock)`）を押下ごとに読み、`UserBreak { at: clock.now() }` を送る。消したテスト・assert は無い。
+- 変える前後の期待: `user_break_tests::accepted_break_sends_exactly_one_to_each_line`・`dropped_kanade_receiver_is_recorded_and_lifecycle_still_receives`（`[UserBreak]` → `[UserBreak { at: at_ms(4_321) }]`）、`user_break_tests::signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged`・`shell_box_handler_tests::talking_left_double_click_on_box_breaks_without_a_shell_double_click`（→ `at: ZERO`）。`present_frame` の呼び出しは `ms` → `at_ms`（値は同じ）。
+- 足したテスト: `user_break_tests::break_carries_the_clock_reading_at_each_press`。足場 `balloon_test_support::zero_clock()`、`runtime_wiring_showing_talk` は `FrameTime(ZERO)` を置く。

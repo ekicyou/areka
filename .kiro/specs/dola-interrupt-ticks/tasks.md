@@ -721,7 +721,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.7, 9.6_
 
-- [ ] 10.15 areka-input: 利用者の中断の知らせに、押下を受けた時の時計の読みを付ける
+- [x] 10.15 areka-input: 利用者の中断の知らせに、押下を受けた時の時計の読みを付ける
   - 始めに `cargo test -p areka-runtime` が緑である事を確かめる（10.13・10.14 の締め）
   - 押下の口が、結線の時に渡された `TalkClock` の複製を読み、時刻を付けて寿命の線へ送る
   - 文字の層へ合図を直に入れるテストを、合図を入れて進める口に時刻を渡す形へ直す
@@ -834,3 +834,4 @@
 - 10.10: areka-runtime はまだ組めないので、10.10 のテスト（`frame_text_advance_tests` 7 本・`next_reveal` 5 本）と borrowck は 10.14 で初めて走る。areka-session `runtime_boot.rs:33,82` の `ClockedTextSink` は `Box::new(text)` へ、本体 `runtime_tests` の `observe_cue`/`ClockedTextSink` も 10.16。
 - 10.11: 10.13 へ: 組み立ての口 `Frame::at(TimePoint)`・`display_end`・`ended_at`・`earlier`・定数 `SIGNAL_AT`、`visibility_wake(Option<TimePoint>, Option<TimePoint>, bool)`、知らせの新しい形（`at` を持つ）。消した枝を見ていた `choice_wait_tests:271`・`phase_log_tests:41,92`・`talk_end_tests:203`、欄の字面 `"talk_time"` を読む `phase_log_tests:216`。10.14 へ: `frame_attach_tests:484`・`frame_reset_hold_tests:449`。10.15 へ: areka-input の `UserBreak { at }`。
 - 10.12: 10.16 へ: 本体の `runtime_tests/frame/status_report_stage_tests.rs::phase_sends_the_stage_even_while_the_runtime_is_busy` と `runtime_tests/shell_carry_tests.rs::replay_shows_the_decided_surfaces_and_binds_through_seriko` は世界に FrameTime を置いていないので赤になる。FrameTime を置き、渡した時刻が合図と知らせに載る事も確かめる。
+- 10.15: 10.16 へ: areka-session `runtime_boot.rs` の `ClockedTextSink`（33・82 行）を外す。本体 `runtime_tests/frame_shell_box_arrow_tests.rs:306` の `vec![TalkLifecycleSignal::UserBreak]` を `UserBreak { at: TimePoint::ZERO }` へ。
