@@ -42,7 +42,7 @@ ukadoc の正典（逐語の抜き書き）:
   - 倍率・DPI の値そのもの（`shell-scale-linkage` の表）。この spec は窓の置き場所だけを変える。
   - バルーンの大きさ・面の選び。
   - 台本の値の保存（記憶への書き込み）。同じウェーブ C28 の約束で保存しない形で進める（要件 5.6）。
-  - 方向つきのずらし（`balloon.offsetxl`・`offsetxr`・`offsetxc`・`offsetxb`）と `surfaces.txt` のバルーンのずらしの読み。受け持ちの spec が無いので、要件の段で `/kiro-discovery` で別の spec として起票し、その spec が持つ。この spec は接尾辞の無い descript のずらしだけを台本の向きと相対の指定の基準にする。
+  - 方向つきのずらし（`balloon.offsetxl`・`offsetxr`・`offsetxc`・`offsetxb`）と `surfaces.txt` のバルーンのずらしの読み。別の spec `balloon-directional-offset-keys` が持つ。この spec は接尾辞の無い descript のずらしだけを台本の向きと相対の指定の基準にする。
 - **Adjacent expectations**:
   - descript のずらし・`balloon.alignment` の読み（完了 `descript-window-keys`）と、バルーンの windowposition の調整量の足し（完了 `shell-scale-linkage` ほか）は今のまま使う。
   - 押し戻しは 4 辺の押し込みだけで、反対の側へ並べ替えず、相対の位置（配置のずらし・追従のずらし・記憶の `BalloonOffset`）に焼き付けない（§8 の行）。この決まりは保ち、見る画面だけを要件 6 で決める。
@@ -163,5 +163,5 @@ ukadoc の正典（逐語の抜き書き）:
 3. **利用者のずらしと記憶**（要件 2.3・3.9・5.8）: 命令の前のドラッグも足し続け、向きを変えたらドラッグの分も新しい向きの基準に乗せる。記憶へは台本の値の分を除いて書く（記憶の書き手の形は変えない）。
 4. **引数の読み**（要件 1.4・1.5・1.7）: 軸ごとに `@` の有無を混ぜてよい。片方の軸でも壊れていれば命令ごと当てず警告。`@` だけで数が無い字も壊れた値。ID は大文字と小文字を区別しない。
 5. **小さな確かめ**: `\![execute,resetballoonpos]` とメニューの初期化は利用者のずらしだけを捨て、台本の値は保つ（要件 5.5）。台本の基準点が置き換えるのは descript の `balloon.offsetx/y` だけ（要件 2.5）。`\![lock,balloonmove]` は利用者のドラッグだけを止める（要件 4.6）。
-6. **方向つきのずらしと `surfaces.txt` のずらし**（Boundary Context）: この spec では読まない。受け持ちの spec が無いので `/kiro-discovery` で別の spec として起票する。
+6. **方向つきのずらしと `surfaces.txt` のずらし**（Boundary Context）: この spec では読まない。別の spec `balloon-directional-offset-keys` として起票した。
 7. **SSP の測り**（要件 9.1）: ukadoc が黙っている点（右側と `center`・`bottom` のときの x の符号・ドラッグとの重ね方・切り替えと初期化の後の寿命・`\![set,balloonoffset]` の寿命）を要件の段で SSP の MCP で測り、`research.md` に記録する。食い違ったら要件 9.4 で決め直す。
