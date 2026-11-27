@@ -3,7 +3,7 @@
 
 use super::composite::SurfaceComposite;
 use super::systems::format_entity_name;
-use super::{GraphicsCore, SurfaceGraphics};
+use super::{AutoPromotion, GraphicsCore, Phase, PlacementKind, SurfaceGraphics, SurfacePlacement};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::SystemParam;
@@ -22,6 +22,93 @@ pub enum PixelRead {
     /// 描画面が無い・まだ合成されていない・装置が無いか失われた・GPU の呼び出しが失敗した。
     /// 前の値や透明に化かさない。
     Unreadable,
+}
+
+/// 画面に出ている 1 画素の α の答え（[`surface_alpha_at`]）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlphaRead {
+    /// 8 ビットの α。
+    Alpha(u8),
+    /// 座標が描画面の外。
+    Outside,
+    /// [`PixelRead::Unreadable`] と同じ場合（自動で上げた子孫の入れ物が読めないときも）。
+    Unreadable,
+}
+
+/// 描画面の持ち主の物理ピクセル (x, y) で、画面に出ている α（入れ物と、その下の自動の持ち主の入れ物を重ねた値）。
+///
+/// [`SurfaceReadback::read_pixel`] と同じ判定の順で入れ物から 1 画素をその場で読み、同じ座標・同じ世代は
+/// 控えが答える。自動で上げた子孫（上げた形の相）の入れ物も、その原点から読んで `1-(1-a)(1-b)` で重ねる
+/// （上げられる部分木は `SOURCE_OVER` だけ）。手動の持ち主の下は見ない。
+pub fn surface_alpha_at(world: &World, owner: Entity, x: u32, y: u32) -> AlphaRead {
+    let Some(core) = world
+        .get_resource::<GraphicsCore>()
+        .filter(|c| c.is_valid())
+    else {
+        return AlphaRead::Unreadable;
+    };
+    alpha_in(world, core, owner, x, y)
+}
+
+fn alpha_in(world: &World, core: &GraphicsCore, owner: Entity, x: u32, y: u32) -> AlphaRead {
+    let Some(surface) = world.get::<SurfaceGraphics>(owner).filter(|s| s.is_valid()) else {
+        return AlphaRead::Unreadable;
+    };
+    let mut alpha = match pixel_in(surface.size, surface.composite(), x, y) {
+        Ok(PixelRead::Pixel(p)) => p[3],
+        Ok(PixelRead::Outside) => return AlphaRead::Outside,
+        Ok(PixelRead::Unreadable) => return AlphaRead::Unreadable,
+        Err(err) => {
+            report(core, owner, world.get::<Name>(owner), &err);
+            return AlphaRead::Unreadable;
+        }
+    };
+    let mut stack: Vec<Entity> = children(world, owner).collect();
+    while let Some(entity) = stack.pop() {
+        let Some(placement) = world.get::<SurfacePlacement>(entity) else {
+            if !world
+                .get::<SurfaceGraphics>(entity)
+                .is_some_and(|s| s.is_valid())
+            {
+                stack.extend(children(world, entity));
+            }
+            continue;
+        };
+        let PlacementKind::Auto { origin_px, .. } = placement.0 else {
+            continue;
+        };
+        if !world
+            .get::<AutoPromotion>(entity)
+            .is_some_and(|p| p.rule.phase() == Phase::Active)
+        {
+            continue;
+        }
+        let (Ok(cx), Ok(cy)) = (
+            u32::try_from(i64::from(x) - i64::from(origin_px.0)),
+            u32::try_from(i64::from(y) - i64::from(origin_px.1)),
+        ) else {
+            continue;
+        };
+        match alpha_in(world, core, entity, cx, cy) {
+            AlphaRead::Alpha(a) => alpha = over(alpha, a),
+            AlphaRead::Outside => {}
+            AlphaRead::Unreadable => return AlphaRead::Unreadable,
+        }
+    }
+    AlphaRead::Alpha(alpha)
+}
+
+fn children(world: &World, entity: Entity) -> impl Iterator<Item = Entity> + '_ {
+    world
+        .get::<Children>(entity)
+        .into_iter()
+        .flat_map(|c| c.iter())
+}
+
+/// `1-(1-a)(1-b)` を 8 ビットで（四捨五入）。
+pub(crate) fn over(a: u8, b: u8) -> u8 {
+    let rest = (255 - u32::from(a)) * (255 - u32::from(b));
+    (255 - (rest + 127) / 255) as u8
 }
 
 /// 全体の答え。

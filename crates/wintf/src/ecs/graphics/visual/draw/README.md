@@ -93,6 +93,10 @@
 ## 読み戻し
 `SurfaceReadback` は描画面ごとの入れ物を読む。自動で上げた部分木は自分の描画面の入れ物へ描かれ、親の描画面の読み戻しには載らない（上げ下げで親の読み戻しの画素が変わる）。今の使い手は wintf 自身のテスト（`readback_test`・`composite_systems_test`・`surface_embedding_test` ほか）だけで、上げ下げを確かめるテストは親と自分の描画面の両方を読んで答えを決める。
 
+### 入れ物の α の当たり
+`surface_alpha_at(world, owner, x, y)`（`../../readback.rs`）は、描画面の持ち主の物理ピクセルの α を入れ物から 1 画素その場で読む（前のフレームの値も CPU の α の表も使わない）。答えは `AlphaRead`（`Alpha(a)`・`Outside`・`Unreadable`）。判定の順は `read_pixel` と同じで、同じ座標・同じ世代は控えが答える。持ち主の子孫に上げた形の自動の持ち主が在れば、その入れ物も原点 `origin_px` からの座標で読み、`1-(1-a)(1-b)` で重ねる（上げられる部分木は `SOURCE_OVER` だけ）。用意中の自動の持ち主（まだ親の描画面にも描かれている）と、手動の持ち主の下は重ねない。子孫の入れ物が読めなければ全体が `Unreadable`。
+当たりの形 `HitTestMode::SurfaceAlpha`（`HitTest::surface_alpha()`・`../../../layout/hit_test/mod.rs`）は、点から `GlobalArrangement.bounds` の左上を引いて切り捨てた座標で読み、α が 128 未満・`Outside`・`Unreadable` なら当たらない。読めない間は持ち主ごとに最初の 1 回だけ `error!`（`[hit_test] surface alpha unreadable, no hit`）を残し、読めたら印を戻す。
+
 ## 既定を「描画面なし」へ寄せる道筋
 今の描き方の Visual（`GraphicsCommandList` を持つ）と何も持たない Visual の既定（描画面の持ち主）は、この spec では変えない。新しい描き方の Visual の既定（節）は保ち、自動の上げ下げはその上に足してある。何も持たない Visual（`WorldVisual` が無い Visual・中身の無いまとめ役など）は、今でも `VisualTransform`（恒等でも）を付ければ節になる（上の「節にする Visual」）。既定で節にするには、次の条件がそろう必要がある。
 - 何も持たない Visual にも `WorldVisual` を付け、規則 `wants_own_surface` の答えを節にする（命令の列も `OwnSurface` も無いとき）。

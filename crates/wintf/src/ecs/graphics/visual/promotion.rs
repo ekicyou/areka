@@ -177,3 +177,17 @@ pub struct AutoPromotion {
     /// 用意中に部分の列を描いた回が在るか（次の回に描画面の有無で Ready／Failed を決める）。
     pub(crate) built: bool,
 }
+
+#[cfg(test)]
+impl AutoPromotion {
+    /// 相だけを決めた状態（履歴なし）。
+    pub(crate) fn in_phase(phase: Phase) -> Self {
+        Self {
+            rule: RuleState {
+                phase,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+}

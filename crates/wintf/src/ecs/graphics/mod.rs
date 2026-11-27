@@ -1,7 +1,7 @@
 mod clip;
 mod command_list;
 mod components;
-mod composite;
+pub(crate) mod composite;
 mod core;
 mod damage;
 mod id_target;

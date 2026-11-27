@@ -30,10 +30,12 @@
 //! }
 //! ```
 
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use bevy_ecs::prelude::*;
-use tracing::debug;
+use bevy_ecs::world::WorldId;
+use tracing::{debug, error};
 
 use super::hit_region::HitRegionMap;
 use super::{Arrangement, D2DRect, D2DRectExt, GlobalArrangement};
@@ -75,6 +77,8 @@ pub enum HitTestMode {
     AlphaMask,
     /// 名前付きヒット領域（矩形・多角形・カラーマップ）による部位判定
     NamedRegions,
+    /// 描画面の入れ物の α（[`surface_alpha_at`](crate::ecs::surface_alpha_at)）。α < 128・外・読めないは当たらない
+    SurfaceAlpha,
 }
 
 // ============================================================================
@@ -127,6 +131,13 @@ impl HitTest {
     pub fn named_regions() -> Self {
         Self {
             mode: HitTestMode::NamedRegions,
+        }
+    }
+
+    /// 描画面の入れ物の α によるヒットテスト（実体は描画面の持ち主）
+    pub fn surface_alpha() -> Self {
+        Self {
+            mode: HitTestMode::SurfaceAlpha,
         }
     }
 }
@@ -246,6 +257,40 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
 }
 
 // ============================================================================
+// surface_alpha_hit - SurfaceAlpha の判定
+// ============================================================================
+
+/// 読めない間の持ち主。`&World` の当たり判定から印を書くため World の外に置く。
+// shortcut: 読めない間に消えた実体の印は残る（数は持ち主の数まで）。持ち主の外しの係で消す必要が出たら部品へ移す。
+static UNREADABLE: Mutex<Option<HashSet<(WorldId, Entity)>>> = Mutex::new(None);
+
+/// `bounds` の左上を原点にした持ち主の物理ピクセルの α で決める（呼び手が bounds の内と確かめ済み）。
+fn surface_alpha_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF) -> bool {
+    use crate::ecs::graphics::{AlphaRead, surface_alpha_at};
+
+    let x = (point.x - bounds.left).floor() as u32;
+    let y = (point.y - bounds.top).floor() as u32;
+    let read = surface_alpha_at(world, entity, x, y);
+    let key = (world.id(), entity);
+    let mut marks = UNREADABLE.lock().unwrap_or_else(|e| e.into_inner());
+    let marks = marks.get_or_insert_with(HashSet::new);
+    if read == AlphaRead::Unreadable {
+        if marks.insert(key) {
+            error!(
+                entity = %crate::ecs::graphics::format_entity_name(
+                    entity,
+                    world.get::<bevy_ecs::name::Name>(entity)
+                ),
+                "[hit_test] surface alpha unreadable, no hit"
+            );
+        }
+        return false;
+    }
+    marks.remove(&key);
+    matches!(read, AlphaRead::Alpha(a) if a >= 128)
+}
+
+// ============================================================================
 // hit_test_entity - 単一エンティティヒットテスト
 // ============================================================================
 
@@ -356,6 +401,13 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
         }
         HitTestMode::AlphaMask => {
             if alpha_mask_hit(world, entity, &global.bounds, point) {
+                RegionHit::Hit(None)
+            } else {
+                RegionHit::Miss
+            }
+        }
+        HitTestMode::SurfaceAlpha => {
+            if surface_alpha_hit(world, entity, &global.bounds, point) {
                 RegionHit::Hit(None)
             } else {
                 RegionHit::Miss
@@ -519,3 +571,6 @@ mod tests_ex;
 #[cfg(test)]
 #[path = "hit_test_shared_mask_tests.rs"]
 mod shared_mask_tests;
+
+#[cfg(test)]
+mod surface_alpha_tests;
