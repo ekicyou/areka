@@ -6,6 +6,7 @@
 //! 点灯していない場（テスト既定）で報告スレッドが起きないこともここで押さえる。
 
 use super::*;
+use wintf::ecs::world::thread_registry::{FoldedReading, LiveReading};
 
 /// 行を空白で切り、`名前=値` の**名前**だけを順に取り出す。
 /// 判定スクリプト `tools/perf/judge-perf.py` の `parse_fields` と同じ切り方
@@ -199,7 +200,7 @@ fn an_empty_name_becomes_a_hyphen() {
 }
 
 // ---------------------------------------------------------------------------
-// スナップショット差分（行は累積値・差は読み手が取る）
+// 標本の組み立て
 // ---------------------------------------------------------------------------
 
 fn sample(tid: u32, kernel_us: u64, user_us: u64) -> ThreadSample {
@@ -210,38 +211,6 @@ fn sample(tid: u32, kernel_us: u64, user_us: u64) -> ThreadSample {
         kernel_us,
         user_us,
     }
-}
-
-/// 差分は TID で突き合わせ、前回に無い TID は値をそのまま持つ。
-#[test]
-fn delta_matches_by_tid_and_keeps_new_tids_whole() {
-    let prev = vec![sample(1, 100, 200), sample(2, 10, 20)];
-    let cur = vec![sample(1, 150, 260), sample(2, 10, 20), sample(3, 7, 8)];
-    let d = delta(&prev, &cur);
-    assert_eq!(d.len(), 3);
-    assert_eq!((d[0].tid, d[0].kernel_us, d[0].user_us), (1, 50, 60));
-    assert_eq!((d[1].tid, d[1].kernel_us, d[1].user_us), (2, 0, 0));
-    assert_eq!((d[2].tid, d[2].kernel_us, d[2].user_us), (3, 7, 8));
-}
-
-/// 累積値が巻き戻って見えても（TID 再利用など）負へ回らず 0 で止まる。
-#[test]
-fn delta_saturates_when_a_counter_goes_backwards() {
-    let prev = vec![sample(1, 100, 200)];
-    let cur = vec![sample(1, 40, 200)];
-    let d = delta(&prev, &cur);
-    assert_eq!((d[0].kernel_us, d[0].user_us), (0, 0));
-}
-
-/// 前回に在って今回に無い TID は差分に現れない（名簿は消えないが、
-/// 消えた場合に幽霊の行を作らないことを固定する）。
-#[test]
-fn delta_drops_tids_absent_from_the_current_snapshot() {
-    let prev = vec![sample(1, 1, 1), sample(2, 1, 1)];
-    let cur = vec![sample(2, 3, 4)];
-    let d = delta(&prev, &cur);
-    assert_eq!(d.len(), 1);
-    assert_eq!(d[0].tid, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -441,4 +410,99 @@ fn a_report_thread_that_panicked_before_the_stop_is_recorded_as_a_panic() {
     let ((), events) = log_capture_kit::capture(|| handle.stop_and_report_final());
     let levels: Vec<_> = events.iter().map(|e| e.level).collect();
     assert_eq!(levels, [tracing::Level::ERROR], "{events:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 1 枚の組み立て
+// ---------------------------------------------------------------------------
+
+fn cpu(kernel_100ns: u64, user_100ns: u64) -> CpuTimes {
+    CpuTimes {
+        kernel_100ns,
+        user_100ns,
+    }
+}
+
+fn live(tid: u32, role: &str, cpu: windows::core::Result<CpuTimes>) -> LiveReading {
+    LiveReading {
+        role: role.to_owned(),
+        name: None,
+        tid,
+        cpu,
+    }
+}
+
+#[test]
+fn compose_snapshot_orders_lines_counts_live_items_and_returns_unreadable_tids() {
+    let reading = RegistryReading {
+        live: vec![
+            live(30, "ui", Ok(cpu(100, 200))),
+            live(
+                20,
+                "actor:sakura-talk-2",
+                Err(windows::core::Error::from(
+                    windows::Win32::Foundation::E_FAIL,
+                )),
+            ),
+            live(10, "watchdog", Ok(cpu(10, 20))),
+        ],
+        folded: vec![
+            FoldedReading {
+                family: "actor:sakura-talk-*".to_owned(),
+                cpu: cpu(55, 66),
+                exited: 3,
+            },
+            FoldedReading {
+                family: "actor:kanade".to_owned(),
+                cpu: cpu(19, 29),
+                exited: 1,
+            },
+        ],
+    };
+
+    let composed = compose_snapshot(
+        7,
+        Duration::from_millis(61_500),
+        cpu(10_000, 20_000),
+        reading,
+    );
+
+    assert_eq!(composed.unreadable_tids, vec![20]);
+    let lines = &composed.lines;
+    assert_eq!(lines.len(), 6);
+    assert!(lines[0].starts_with("perf(process):"));
+    assert_eq!(field_value(&lines[0], "threads"), Some("3"));
+    assert_eq!(field_value(&lines[0], "snap"), Some("7"));
+    assert_eq!(field_value(&lines[0], "t_s"), Some("61"));
+    assert_eq!(field_value(&lines[0], "wall_ms"), Some("61500"));
+
+    let tid_role: Vec<_> = lines[1..]
+        .iter()
+        .map(|l| {
+            (
+                field_value(l, "tid").unwrap(),
+                field_value(l, "role").unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        tid_role,
+        vec![
+            ("10", "watchdog"),
+            ("30", "ui"),
+            ("0", "actor:kanade"),
+            ("0", "actor:sakura-talk-*"),
+            ("0", "unregistered_rest"),
+        ]
+    );
+    assert_eq!(field_value(&lines[1], "name"), Some("-"));
+    assert_eq!(field_value(&lines[3], "kernel_us"), Some("1"));
+    assert_eq!(field_value(&lines[3], "user_us"), Some("2"));
+    assert_eq!(field_value(&lines[3], "cpu_us"), Some("3"));
+    assert_eq!(field_value(&lines[3], "exited"), Some("1"));
+    assert_eq!(field_value(&lines[4], "exited"), Some("3"));
+    assert_eq!(field_value(&lines[5], "exited"), None);
+    // 1000 - (1 + 10 + 1 + 5) / 2000 - (2 + 20 + 2 + 6)
+    assert_eq!(field_value(&lines[5], "kernel_us"), Some("983"));
+    assert_eq!(field_value(&lines[5], "user_us"), Some("1970"));
 }

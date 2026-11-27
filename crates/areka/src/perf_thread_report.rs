@@ -16,12 +16,10 @@
 //! スレッドが [`DEFAULT_PERIOD_SEC`] 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` で変更可）と
 //! **終了直前**にスナップショットを出す。費用は ON でも 1 周期に 1 回・スレッド数 ×数 µs。
 //!
-//! # 行は累積値である
+//! # 区間の差は読み手が取る
 //!
-//! `GetThreadTimes`／`GetProcessTimes` が返すのはプロセス開始からの**累積**であり、行に
-//! 出るのもその累積値である。「この区間で誰が重かったか」は読み手が隣り合うスナップ
-//! ショットの差を取って得る（`snap=` で対にする）。差の取り方は [`delta`] が権威で、
-//! 順位表を作る `tools/perf/perf-rank.py` は同じ規則を写す。
+//! 区間の差は読み手（`tools/perf/perf-rank.py` の段②・自己テストが規則を固定する）が
+//! 最後のスナップショットと 60 秒前のものを比べて取る。名簿外の残りはプロセスの差から出す。
 //!
 //! # 壁時計と CPU 時間は混ぜない
 //!
@@ -44,7 +42,7 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
 use wintf::ecs::world::thread_registry::{
-    self, ROLE_PERF_REPORT, ROLE_UNREGISTERED_REST, get_process_times,
+    self, CpuTimes, ROLE_PERF_REPORT, ROLE_UNREGISTERED_REST, RegistryReading, get_process_times,
 };
 
 /// 報告行の tracing target。点灯・消灯はこの target 1 本で決まる。
@@ -139,8 +137,7 @@ pub struct ProcessSample {
     pub kernel_us: u64,
     /// プロセス全体のユーザーモード CPU 時間（µs・累積）。
     pub user_us: u64,
-    /// このスナップショットで名簿から読めたスレッドの本数
-    /// （名簿外の残りは含まない＝`perf(thread)` の行数 − 1 に等しい）。
+    /// そのスナップショットの時点で生きている名簿のスレッドの本数（CPU を読めなかったものも数える）。
     pub threads: usize,
 }
 
@@ -152,7 +149,7 @@ impl ProcessSample {
 }
 
 // ---------------------------------------------------------------------------
-// 純関数（行の組み立て・差分・名簿外の残り・周期）
+// 純関数（行の組み立て・名簿外の残り・1 枚の組み立て・周期）
 // ---------------------------------------------------------------------------
 
 /// 値に含まれる空白を `_` へ潰す（空なら [`PLACEHOLDER`]）。
@@ -176,7 +173,6 @@ fn sanitize(value: &str) -> String {
 /// スレッド 1 本を 1 行へ組む（純関数）。
 ///
 /// フィールドの並びと綴りはここが権威であり、兄弟テストが重複なしと順序を固定する。
-/// 値は**累積**であり、区間の量ではない（[`delta`] を参照）。
 pub fn format_thread_line(snap: u32, t_s: u64, s: &ThreadSample) -> String {
     format!(
         "perf(thread): スレッド別 CPU snap={snap} t_s={t_s} tid={tid} name={name} \
@@ -246,34 +242,73 @@ pub fn compute_unregistered_rest(
     }
 }
 
-/// 2 つのスナップショット（いずれも累積値）の差を取る。
+/// 1 枚の行と、CPU を読めなかった生きた項目の TID。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ComposedSnapshot {
+    pub lines: Vec<String>,
+    pub unreadable_tids: Vec<u32>,
+}
+
+/// 1 枚の行を組む（純関数・Win32 を呼ばない）。
 ///
-/// 突き合わせは TID で行い、前回に無い TID は値をそのまま持つ（その区間で生まれた
-/// スレッド）。前回に在って今回に無い TID は結果に現れない。累積が巻き戻って見えた
-/// 場合（TID の再利用など）は 0 で止める。
-///
-/// 順位表を作る `tools/perf/perf-rank.py` は同じ規則を写すので、意味論はここの
-/// 決定論テストで固定しておく。
-///
-/// 本番経路からは呼ばない（行に出るのは累積値であり、差を取るのは読み手＝解析道具の
-/// 仕事である）。それでも Rust 側に置くのは、**規則の権威を 1 つにする**ため——
-/// perf-rank.py の実装がここの決定論テストと食い違えば、順位表が静かに嘘をつく。
-/// 消費点が本番に無いので `#[allow(dead_code)]` を対で置く（棚卸で見える形）。
-#[allow(dead_code)]
-pub fn delta(prev: &[ThreadSample], cur: &[ThreadSample]) -> Vec<ThreadSample> {
-    cur.iter()
-        .map(|c| {
-            let before = prev.iter().find(|p| p.tid == c.tid);
-            let (k0, u0) = before.map_or((0, 0), |p| (p.kernel_us, p.user_us));
-            ThreadSample {
-                role: c.role.clone(),
-                name: c.name.clone(),
-                tid: c.tid,
-                kernel_us: c.kernel_us.saturating_sub(k0),
-                user_us: c.user_us.saturating_sub(u0),
-            }
+/// 順は `perf(process)` → 生きた行（TID 昇順）→ 畳んだ行（系統名の昇順）→ 名簿外の残り。
+pub(crate) fn compose_snapshot(
+    snap: u32,
+    elapsed: Duration,
+    process: CpuTimes,
+    reading: RegistryReading,
+) -> ComposedSnapshot {
+    let live_count = reading.live.len();
+    let mut samples = Vec::with_capacity(live_count);
+    let mut unreadable_tids = Vec::new();
+    for entry in reading.live {
+        match entry.cpu {
+            Ok(times) => samples.push(ThreadSample {
+                role: entry.role,
+                name: entry.name.unwrap_or_else(|| PLACEHOLDER.to_owned()),
+                tid: entry.tid,
+                kernel_us: times.kernel_us(),
+                user_us: times.user_us(),
+            }),
+            Err(_) => unreadable_tids.push(entry.tid),
+        }
+    }
+    samples.sort_by_key(|s| s.tid);
+    unreadable_tids.sort_unstable();
+
+    let mut folded: Vec<FoldedSample> = reading
+        .folded
+        .into_iter()
+        .map(|f| FoldedSample {
+            family: f.family,
+            kernel_us: f.cpu.kernel_us(),
+            user_us: f.cpu.user_us(),
+            exited: f.exited,
         })
-        .collect()
+        .collect();
+    folded.sort_by(|a, b| a.family.cmp(&b.family));
+
+    let process = ProcessSample {
+        wall_ms: elapsed.as_millis() as u64,
+        kernel_us: process.kernel_us(),
+        user_us: process.user_us(),
+        threads: live_count,
+    };
+    let t_s = elapsed.as_secs();
+
+    let mut lines = Vec::with_capacity(samples.len() + folded.len() + 2);
+    lines.push(format_process_line(snap, t_s, &process));
+    lines.extend(samples.iter().map(|s| format_thread_line(snap, t_s, s)));
+    lines.extend(folded.iter().map(|f| format_folded_line(snap, t_s, f)));
+    lines.push(format_thread_line(
+        snap,
+        t_s,
+        &compute_unregistered_rest(&process, &samples, &folded),
+    ));
+    ComposedSnapshot {
+        lines,
+        unreadable_tids,
+    }
 }
 
 /// 環境変数の値から周期を決める（純関数）。
@@ -432,14 +467,12 @@ fn run(stop: Receiver<()>, done: Sender<()>, period: Duration, started: Instant)
 
 /// スナップショットを 1 枚採って行を出す。
 ///
-/// 出す順は「プロセス 1 行 → 名簿のスレッド（TID 昇順）→ 名簿外の残り 1 行」で固定する
-/// （読み手が 1 枚の切れ目を `unregistered_rest` で見分けられる）。
-///
+/// 名簿を先に、プロセス CPU を後に読む（名簿の値がプロセスの値を追い越さない向きにする）。
 /// プロセス CPU が読めない周は `error!` を残してその 1 枚を諦める——名簿外の残りを
-/// 算出する基準が無く、出した行が嘘になるためである。個々のスレッドが読めない場合は
-/// その項目だけ飛ばし、飛ばした TID を 1 枚につき 1 度の `warn!` に並べる（飛ばした分の
-/// CPU は残りの差へ回るので、合計は保たれる）。
+/// 算出する基準が無く、出した行が嘘になるためである。CPU を読めなかった生きた項目は
+/// 1 枚につき 1 度の `warn!` に並べる（その分の CPU は残りの差へ回るので、合計は保たれる）。
 fn take_and_emit(snap: u32, started: Instant) {
+    let reading = thread_registry::read_cpu();
     let elapsed = started.elapsed();
     let process_times = match get_process_times() {
         Ok(times) => times,
@@ -454,47 +487,18 @@ fn take_and_emit(snap: u32, started: Instant) {
         }
     };
 
-    let mut samples = Vec::new();
-    let mut unreadable: Vec<u32> = Vec::new();
-    for entry in thread_registry::snapshot() {
-        match entry.cpu_times() {
-            Ok(times) => samples.push(ThreadSample {
-                role: entry.role,
-                name: entry.name.unwrap_or_else(|| PLACEHOLDER.to_owned()),
-                tid: entry.tid,
-                kernel_us: times.kernel_us(),
-                user_us: times.user_us(),
-            }),
-            Err(_) => unreadable.push(entry.tid),
-        }
-    }
-    if !unreadable.is_empty() {
+    let composed = compose_snapshot(snap, elapsed, process_times, reading);
+    if !composed.unreadable_tids.is_empty() {
         warn!(
             target: PERF_TARGET,
             snap,
-            tids = ?unreadable,
+            tids = ?composed.unreadable_tids,
             "[perf_thread_report] CPU 時間を読めなかったスレッドがある（その分は unregistered_rest へ回る）"
         );
     }
-    samples.sort_by_key(|s| s.tid);
-
-    let process = ProcessSample {
-        wall_ms: elapsed.as_millis() as u64,
-        kernel_us: process_times.kernel_us(),
-        user_us: process_times.user_us(),
-        threads: samples.len(),
-    };
-    let t_s = elapsed.as_secs();
-
-    emit_line(&format_process_line(snap, t_s, &process));
-    for sample in &samples {
-        emit_line(&format_thread_line(snap, t_s, sample));
+    for line in &composed.lines {
+        emit_line(line);
     }
-    emit_line(&format_thread_line(
-        snap,
-        t_s,
-        &compute_unregistered_rest(&process, &samples, &[]),
-    ));
 }
 
 #[cfg(test)]
