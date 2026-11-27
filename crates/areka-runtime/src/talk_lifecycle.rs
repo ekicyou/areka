@@ -45,7 +45,7 @@
 
 use std::sync::mpsc::Sender;
 
-use areka_ghost::sink::BootCueSink;
+use areka_ghost::sink::{BootCueSink, TalkMeta};
 use areka_sakura::TalkId;
 use areka_sakura::contract::ScriptOrigin;
 use dola::cue::{CueCommand, OriginNotice, TalkCue};
@@ -275,7 +275,7 @@ impl BootCueSink for BalloonLifecycleSink {
     }
 
     // 出どころは使わない。
-    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
+    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin, _meta: &TalkMeta) {
         self.talk_id = Some(talk_id);
     }
 }

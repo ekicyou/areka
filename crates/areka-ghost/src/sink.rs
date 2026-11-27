@@ -17,6 +17,8 @@
 //! 独立インスタンスを取得し、per-talk の `spawn_talk` へ `Vec<Box<dyn CueSink + Send>>` として手渡す
 //! （登録順＝broadcast 順＝決定論）。
 
+pub use areka_talk::{GhostPlace, TalkMeta, TalkRunner, TalkSender};
+
 use areka_sakura::contract::{CueCommand, CueSink, ScriptOrigin, TalkCue, TalkId};
 
 /// `boot` が要求する複製可能 sink。
@@ -33,10 +35,10 @@ pub trait BootCueSink: CueSink + Send {
     /// 自身の複製を trait object として返す（per-talk 複製の口。`Clone` を直接 supertrait に置けないための clone シム）。
     fn clone_box(&self) -> Box<dyn BootCueSink>;
 
-    /// この複製が受け持つトークの番号と出どころ（`StartTalk::origin`）。dispatcher がトークの
-    /// 起動ごとに、複製の直後に 1 回だけ呼ぶ。既定は何もしない——一括の実装に乗る既存の受け口は
-    /// 振る舞いが変わらない。番号や出どころが要る受け口は `Clone` を持たずに本 trait を自分で実装して上書きする。
-    fn begin_talk(&mut self, _talk_id: TalkId, _origin: ScriptOrigin) {}
+    /// この複製が受け持つトークの番号・出どころ（`StartTalk::origin`）・付帯情報（`StartTalk::meta`）。dispatcher が
+    /// トークの起動ごとに、複製の直後・最初の cue より前に 1 回だけ呼ぶ。既定は何もしない——一括の実装に乗る既存の
+    /// 受け口は振る舞いが変わらない。これらが要る受け口は `Clone` を持たずに本 trait を自分で実装して上書きする。
+    fn begin_talk(&mut self, _talk_id: TalkId, _origin: ScriptOrigin, _meta: &TalkMeta) {}
 }
 
 impl<T> BootCueSink for T

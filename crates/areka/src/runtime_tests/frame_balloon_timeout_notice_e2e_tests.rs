@@ -109,7 +109,11 @@ impl Cage {
         let mut lifecycle =
             BalloonLifecycleSink::new(self.lifecycle_tx.clone(), self.wiring().clock.clone())
                 .clone_box();
-        lifecycle.begin_talk(TALK, areka_sakura::contract::ScriptOrigin::GHOST);
+        lifecycle.begin_talk(
+            TALK,
+            areka_sakura::contract::ScriptOrigin::GHOST,
+            &Default::default(),
+        );
         let mut player = CuePlayer::from_sheet(&sheet).expect("起点を刻んだ台本");
         player.register_sink(lifecycle);
         player.register_sink(Box::new(recorded.clone()));
