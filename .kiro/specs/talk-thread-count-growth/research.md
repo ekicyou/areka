@@ -211,3 +211,71 @@
 11. 要件 3.4・7.3 の TID の使い回しの扱い: R1 のとおり名簿がハンドルを持つ間は使い回しが起こらないなら、3.4 は守りとして残し、7.3 の固定は生死の判定を差し替えられる芯で行うか（本物のスレッドでは起こせない）。
 
 要件の議論で決まったこと（設計はこれに従う）: `api.rs` は名簿の側の一部として触ってよい（2）・`threads=` は生きている名簿のスレッドの数で、CPU を読めなかった生きたスレッドも数え、畳んだ行に畳んだ本数（累積）を添える（5）・系統は役割によらず末尾の `-<数字>` を `-*` に畳み、番号の無い役割名はそのまま、畳んだ行は役割名でなく行の形で見分ける（4・6）・古いログは止まらずに読み役割別の CPU を正しく出せばよく、今の道具と逐語で同じには縛らない（7）・実機は MCP でトーク 5 回以上・数え直しにゴーストの切り替えを 1 回足す（10）。
+
+## 8. 設計の段の調べ（2026-11-27・`/kiro-spec-design -y`）
+
+- **Discovery Scope**: Extension（既存の名簿・報告器・順位表の道具の拡張）＝軽い調べ（`design-discovery-light`）。読んだスキル: `kiro-spec-design`（rules の design-principles・discovery-light・synthesis・review-gate）。steering は `logging.md`（`warn!`／`error!` の選び方・`log-capture-kit`）と `structure.md`（兄弟テスト・1,000 行の目安）を使った。
+
+### 8.1 R1 名簿がハンドルを持つ間、OS はその TID を使い回すか
+
+- **結論: 使い回さない**。終わったスレッドのオブジェクトは、開いたハンドルが全部閉じるまで消えず、TID はスレッドのオブジェクトが消えた後でだけ使い回される。
+- 出典:
+  - Microsoft Learn「Terminating a Thread」— 「When a thread terminates, its thread object is not freed until all open handles to the thread are closed.」・終わるとスレッドのオブジェクトは signaled になる。 https://learn.microsoft.com/en-us/windows/win32/procthread/terminating-a-thread
+  - Microsoft Learn「GetCurrentThreadId」— 終わるまでは TID がシステムの中で一意。 https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadid
+  - The Old New Thing（2014-08-22・OpenThread の話）— スレッドのオブジェクトが壊された後に TID が使い回されうる。 https://devblogs.microsoft.com/oldnewthing/20140822-00/?p=173
+  - The Old New Thing（2011-01-07・PID の使い回し）— ID はオブジェクトが在る限り保たれる（プロセスも同じ形）。 https://devblogs.microsoft.com/oldnewthing/20110107-00/?p=11803
+- 含み: 名簿の中での「終わったスレッドの TID を新しいスレッドが使い回す」（要件 3.4）は本物のスレッドでは起こらない。掃除を置き換えの前に回す形で守りとして満たし、7.3 は生死の判定を差し替えられる芯（偽の `ThreadProbe`）で固定する。今の作り（手放さない名簿）で採ったログにも、名簿のスレッドどうしの TID の使い回しは無い（検体 `tid_reused` は作った場面）。
+
+### 8.2 R2 `GetThreadTimes` の終了時刻
+
+- **結論: 頼らない**。文書は「If the thread has not exited, the content of this structure is undefined.」 https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadtimes
+- 同じ文書: ハンドルは `THREAD_QUERY_INFORMATION` か `THREAD_QUERY_LIMITED_INFORMATION` で足りる（今の権限のまま CPU は読める）。
+
+### 8.3 終わりの見分けの口
+
+- `WaitForSingleObject`: ハンドルに `SYNCHRONIZE` が要る。`dwMilliseconds = 0` なら待たずに返る。戻りは `WAIT_OBJECT_0`（signaled）・`WAIT_TIMEOUT`・`WAIT_FAILED`（`GetLastError`）・`WAIT_ABANDONED`（ミューテックスだけ）。 https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
+- `windows` 0.62.2（`Cargo.lock`・workspace の機能に `Win32_System_Threading` が在る）で確かめた: `Win32::System::Threading::WaitForSingleObject(HANDLE, u32) -> WAIT_EVENT`・`THREAD_SYNCHRONIZE = THREAD_ACCESS_RIGHTS(0x0010_0000)`・`GetExitCodeThread`、`Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT, WAIT_FAILED, STILL_ACTIVE}`。wintf の `api.rs` は `Foundation::*` を取り込み済み。**新しい機能も依存も要らない**。
+- `GetExitCodeThread` は「While a thread is executing, its termination status is STILL_ACTIVE」（Terminating a Thread）で、終了コード 259 との区別が付かない。権限を増やさずに済むが、文書の正の方法は signaled の見分け。
+
+### 8.4 R3（スレッドの終わりのフック）
+
+- 採らないので調べを閉じる。本体のスレッドで後始末が走らないことがあり、後始末の時点で読む CPU は最後の値より小さい。登録と読み出しの掃除で足りる。
+
+### 8.5 R4 1 枚の一貫性
+
+- 生きた項目の CPU も錠の中で掃除と同じ時点に読む（C1）。錠の中の呼び出しは項目の数（20 前後）× 2。報告器の周期（既定 60 秒）ごとと、新しいスレッドの登録ごと。刻みの経路の外。
+
+### 8.6 R5 実機の手順
+
+- 対の取り方: トークの終わりを MCP の `get_status` で見て（`crates/areka/src/mcp/get_status.rs`＝kanade の状態の語のカンマ連結）、次の報告の 1 枚（`snap=` が 1 つ進む）を待ってから `threads=` と `(Get-Process -Id <pid>).Threads.Count` を 1 対で控える。`get_status` で終わりが見えない場合は報告を 2 枚待つ形に倒す（設計の未決 8）。
+
+### 8.7 区間の差の規則（P1）の確かめ
+
+- 1 本のスレッドは、どのスナップショットでも生きた行か畳んだ行のどちらか一方にだけ入る（C1 の読み出しと、掃除で外すときに同じ錠の中で合計へ足すことによる）。累積はどちらでも減らない。よって系統の合計の差 F(後) − F(前) は、系統の各スレッドの区間の CPU の和に等しい（区間の前に終わったものは 0・区間の中で生まれて終わったものは全部・区間の中で終わったものは最後の値 − 前の値）。
+- 今の検体を手で追った: `tid_reused`（同じ系統 `actor:sakura-talk-*` の 5 秒 → 1 秒で 0・`ui` 1 秒・残り 2 秒）・`talk_threads_folded`（系統の 0.8 秒）は期待の出力が変わらない。古いログでは TID の使い回しが無いので、系統の差は TID ごとの差の和と同じになる。
+- P2（消えた TID の前の値を差し引く）は、名簿が手放した後に同じ TID を別のスレッドがもらうと、新しいスレッドの差を 0 に止め、古いスレッドの前の値も引けずに系統を膨らませる。P1 にはこの穴が無い。
+- 既知の限り: 生きている同じスレッドが区間の中で別の系統へ登録し直すと、その前の分が新しい系統へ移る（名簿の合計は保たれる）。本番の呼び手で登録し直すものは無い（`thread_roles.rs`・`runtime/mod.rs`・`tick_bridge.rs`・`monitor.rs`・報告器の 5 か所はどれも走り始めに 1 度）。
+
+### 8.8 総合（design-synthesis）
+
+- **一般化**: 要件 2（手放す）・3（畳む）・3.4／3.5（置き換え）は「掃除してから入れる・読む」の 1 つの手順の場合分け。芯 `Registry` の `sweep` 1 つに集め、`insert` と `read` はその後に 1 手足すだけにした。系統の名の規則は役割によらず 1 つ（`^(.+)-[0-9]+$` → `\1-*`）。順位表の D8 もこれへ広げる。
+- **作るか採るか**: OS の列挙（ToolHelp）は機能の追加が要るので要件で外した。スレッドの終わりは OS の signaled の状態をそのまま使う（自前の印は作らない）。
+- **削ったもの**: 本番から呼ばれない Rust の `delta`（規則の権威ではもう無い・設計の未決 1）。`perf(process)` に終わった本数の欄を足すこと（要件の議論で畳んだ行に添える形に決まった）。判定の道具の語彙の見本への追加（判定は行を数えるだけで、触るファイルの約束の外）。生死の判定の失敗を 1 度だけ記録する状態（作りの誤りでしか起きない）。
+
+## 9. 設計の決め（要約・正本は design.md の「設計の決め」）
+
+| 決め | 選んだもの | 採らなかったもの |
+|------|-----------|-----------------|
+| D1 掃除の時点 | 登録と読み出しの両方 | 読み出しだけ（消灯で満たせない）・終わりのフック |
+| D2 終わりの見分け | `WaitForSingleObject(h, 0)`＋`THREAD_SYNCHRONIZE` | 終了時刻（未定義）・終了コード（259 の誤り） |
+| D3 1 枚の一貫性 | 錠の中で掃除と CPU の読みを 1 つの時点に | 世代の番号・1 度だけ渡す行 |
+| D4 畳んだ行 | `perf(thread)` に `exited=` を足す・`tid=0 name=-` | 別の行の種類・値だけの印 |
+| D5 区間の差 | 系統の合計の差（P1） | 消えた TID の差し引き（P2）・最後の行を 1 度（P3） |
+| D6 Rust の `delta` | 消す（規則の正本は perf-rank の自己テスト） | 系統の規則を足して残す |
+
+## 10. 危うさと手当て
+
+- 掃除の費用が登録の錠を延ばす — 項目の数は頭打ち（生きた数＋系統の数）なので、トークの数で延びない。
+- 見分けの失敗が続くと記録が増える — 権限の足し忘れでしか起きない。テストで生きた自スレッドと join したスレッドの両方を見分けて固定する。
+- 古いログの順位表がずれる — 今の検体が逐語で守る。ずれたら自己テストの差で見える。
+- 生きたスレッドも増えていた — トークの側は `talk-script-metadata` の後に回し、spec の中に残す（設計の「要件 6 の扱い」）。
