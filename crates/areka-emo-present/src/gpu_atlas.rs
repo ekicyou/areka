@@ -137,6 +137,11 @@ impl GpuAtlas {
         })
     }
 
+    /// 絵 `element` の原寸（葉が描く局所の範囲）。
+    pub(crate) fn original(&self, element: ElementId) -> areka_emo_atlas::Size {
+        self.atlas.entry(element).original
+    }
+
     /// 頁と葉を作った装置。
     pub(crate) fn device(&self) -> &ID2D1Device {
         &self.device
@@ -219,4 +224,4 @@ fn upload_page(
 
 #[cfg(test)]
 #[path = "gpu_atlas_tests.rs"]
-mod tests;
+pub(crate) mod tests;

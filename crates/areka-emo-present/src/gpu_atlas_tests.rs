@@ -29,7 +29,7 @@ fn page_pixel(x: u32, y: u32) -> [u8; 4] {
 
 /// 6×4 の頁 1 枚に 2 つの絵を載せた表。
 /// 絵 0: 頁の (0,0) 2×2 を原寸 4×3 の (1,1) へ。絵 1: 頁の (3,1) 3×3 を原寸 5×5 の (2,0) へ。
-fn two_picture_atlas() -> AtlasTable {
+pub(crate) fn two_picture_atlas() -> AtlasTable {
     let mut bytes = Vec::new();
     for y in 0..PAGE_H {
         for x in 0..PAGE_W {
@@ -86,7 +86,7 @@ fn two_picture_atlas() -> AtlasTable {
     )
 }
 
-fn warp() -> ID2D1Device {
+pub(crate) fn warp() -> ID2D1Device {
     warp_d2d_device().expect("WARP の装置")
 }
 
