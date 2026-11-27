@@ -1,8 +1,11 @@
 //! 台本のバルーン位置の値（ずらし・向き）の型と引数の読み。
 
-use tracing::debug;
+use bevy_ecs::lifecycle::HookContext;
+use bevy_ecs::prelude::*;
+use bevy_ecs::world::DeferredWorld;
+use tracing::{debug, info};
 
-use crate::config::{BalloonSide, BalloonXMode};
+use crate::config::{BalloonSide, BalloonXMode, ScopeConfig};
 
 /// 台本のずらしの 1 軸。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +131,60 @@ impl ScriptAlign {
     }
 }
 
+/// キャラ窓に付く、そのスコープの台本のバルーン位置の値（欄ごとに独立）。
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[component(on_remove = log_script_balloon_dropped)]
+pub struct ScriptBalloonPlacement {
+    pub scope: usize,
+    pub offset: Option<ScriptOffset>,
+    pub align: Option<ScriptAlign>,
+}
+
+/// 着地の前に台本の値を当てたキャラ窓の印（着地した巡に解き直す）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScriptBalloonUnsettled;
+
+fn log_script_balloon_dropped(world: DeferredWorld, hook: HookContext) {
+    let Some(value) = world.get::<ScriptBalloonPlacement>(hook.entity) else {
+        return;
+    };
+    info!(
+        event = "script_balloon_dropped",
+        scope = value.scope,
+        "台本のバルーン位置の値を捨てた"
+    );
+}
+
+/// 台本の値が効いているか（Component があるか）。
+pub(crate) fn is_script_placed(world: &World, char_window: Entity) -> bool {
+    world.get::<ScriptBalloonPlacement>(char_window).is_some()
+}
+
+/// ずらしを descript の生値へ重ねる（`scale_then_merge` の前に当てる）。
+pub(crate) fn overlay_offset(sc: &mut ScopeConfig, offset: &ScriptOffset) {
+    let (dx, dy) = sc.balloon_offset.unwrap_or((0, 0));
+    let axis = |axis: OffsetAxis, d: i32| match axis {
+        OffsetAxis::Absolute(v) => v,
+        OffsetAxis::Relative(v) => d.saturating_add(v),
+    };
+    let (x, y) = (axis(offset.x, dx), axis(offset.y, dy));
+    sc.balloon_offset = Some((x, y));
+    sc.balloon_offset_descript_x = x;
+}
+
+/// 向きを合流の後の値へ重ねる（`windowposition.x` の語を上書きし返すため後に当てる）。
+pub(crate) fn overlay_align(sc: &mut ScopeConfig, align: &ScriptAlign) {
+    let (side, mode) = align.side_and_mode();
+    if let Some(side) = side {
+        sc.balloon_alignment = side;
+    }
+    sc.balloon_x_mode = mode;
+}
+
 #[cfg(test)]
 #[path = "script_balloon_args_tests.rs"]
 mod args_tests;
+
+#[cfg(test)]
+#[path = "script_balloon_overlay_tests.rs"]
+mod overlay_tests;
