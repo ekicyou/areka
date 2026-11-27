@@ -537,6 +537,7 @@ mod tests {
         let keys = vec![AtlasKey {
             set: SetId(0),
             rel_path: "empty.png".into(),
+            kind: areka_emo_atlas::PictureKind::Normal,
         }];
         let entries = vec![AtlasEntry {
             original: Size { w: 4, h: 4 },
@@ -650,6 +651,7 @@ mod tests {
         let keys = vec![AtlasKey {
             set: SetId(0),
             rel_path: "e.png".into(),
+            kind: areka_emo_atlas::PictureKind::Normal,
         }];
         let entries = vec![AtlasEntry {
             original: Size { w: 1, h: 1 },

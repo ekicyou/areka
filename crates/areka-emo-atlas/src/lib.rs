@@ -21,6 +21,7 @@
 //! - 診断可能なエラー型 — [`BakeError`]・[`DecodeError`]
 
 mod animated;
+mod asis;
 mod bake;
 mod decode;
 mod error;
@@ -63,6 +64,9 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
 /// 動く絵（コマが 2 枚以上の APNG・WebP）は全コマを載せる: 0 番のコマは今までの鍵の
 /// エントリ、2 枚目以降は鍵のエントリが全部並んだ後ろへ（親の番号・コマの番号の昇順で）
 /// 足し、[`AtlasTable::animation`] で引ける。動く絵が無ければ結果は今までと同じ。
+///
+/// `asis` で参照される絵は、乗算せず・透過色を抜かず・縁を切らず・α＝255 の原寸の絵を通常の絵の
+/// 後ろに足し、[`AtlasTable::resolve_asis`] で引ける。[`AtlasTable::resolve`] の答えは変わらない。
 pub fn bake_with_limits(
     sets: &[SurfaceSet<'_>],
     decoder: &impl ElementDecoder,
@@ -135,6 +139,23 @@ fn bake_core(
         let set = &sets[key.set.0 as usize];
 
         let path = set.base_dir.join(&key.rel_path);
+
+        if key.kind == PictureKind::Asis {
+            let picture = match asis::load(decoder, &path) {
+                Ok(picture) => picture,
+                Err(e) => {
+                    errors.push(crate::error::BakeError::Decode(e));
+                    continue;
+                }
+            };
+            let final_id = ElementId(survivor_keys.len() as u32);
+            survivor_keys.push(key.clone());
+            survivor_originals.push(picture.original);
+            if let Some(placed) = picture.placement {
+                placed_items.push((final_id, placed));
+            }
+            continue;
+        }
 
         // 動く絵は 0 番のコマが静止画と同じ道を通り、残りのコマ・待ち時間・繰り返し回数は脇へ取っておく。
         let (decoded, animation, frames_pixels) =
@@ -273,8 +294,8 @@ fn bake_core(
 
 // 成果物契約の正本型。下流 emo-compose はこれらを import する。
 pub use table::{
-    Animation, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, LoopCount, Placement, Point,
-    Rect, SetId, Size,
+    Animation, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, LoopCount, PictureKind,
+    Placement, Point, Rect, SetId, Size,
 };
 
 // デコードポート。既定手段（WIC）を露出せず、trait とデータ型のみ公開。

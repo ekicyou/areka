@@ -265,6 +265,7 @@ fn missing_page_warn_fires_with_element_and_page() {
     let keys = vec![AtlasKey {
         set: SetId(0),
         rel_path: "e.png".into(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     }];
     let entries = vec![AtlasEntry {
         original: Size { w: 1, h: 1 },

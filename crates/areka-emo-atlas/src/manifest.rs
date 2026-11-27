@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use crate::normalize::AlphaParams;
-use crate::table::{AtlasKey, SetId};
+use crate::table::{AtlasKey, PictureKind, SetId};
 
 /// 出所単位の自己完結な入力束（shell で 1 個・balloon で 1 個…複数可）。
 ///
@@ -26,7 +26,8 @@ pub struct SurfaceSet<'a> {
 
 /// マニフェスト＝`ElementId` 順に整列した `AtlasKey` 一覧（採番の正本）。
 pub(crate) struct Manifest {
-    /// index == `ElementId.0`（密・決定的：(SetId 昇順, rel_path 昇順)）。
+    /// index == `ElementId.0`（密・決定的：通常の絵を (SetId 昇順, rel_path 昇順)、その後ろへ
+    /// `asis` 用の絵を同じ順で）。
     pub(crate) keys: Vec<AtlasKey>,
 }
 
@@ -35,7 +36,8 @@ pub(crate) struct ManifestDeriver;
 
 impl ManifestDeriver {
     /// 全セットの全部の面の element パスを重複なく列挙し、(SetId 昇順, 相対パス昇順) で
-    /// `ElementId` を決定的に採番する（golden 安定）。実パスは生成しない（実パス化はデコード段）。
+    /// `ElementId` を決定的に採番する（golden 安定）。`asis` で参照される絵の `asis` 用の鍵は
+    /// 通常の鍵の後ろに同じ順で並ぶ。実パスは生成しない（実パス化はデコード段）。
     pub(crate) fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest {
         let mut keys: BTreeSet<(u32, String)> = BTreeSet::new();
 
@@ -49,11 +51,16 @@ impl ManifestDeriver {
             }
         }
 
-        let keys = keys
+        let normal = keys.into_iter().map(|k| (k, PictureKind::Normal));
+        let asis = crate::asis::asis_paths(sets)
             .into_iter()
-            .map(|(set, rel_path)| AtlasKey {
+            .map(|k| (k, PictureKind::Asis));
+        let keys = normal
+            .chain(asis)
+            .map(|((set, rel_path), kind)| AtlasKey {
                 set: SetId(set),
                 rel_path,
+                kind,
             })
             .collect();
 
@@ -119,7 +126,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
 /// ブレスの見出しの記述子が指す全部の番号（範囲を広げ、`!N`・`!a-b` を引く）。
 ///
 /// 記述子が除外だけのブレスは番号を持たない。包含の範囲の幅は parsers が上限をかける・除外の範囲は広げない。
-fn surface_ids(surface: &areka_parsers::shell::Surface) -> Vec<i64> {
+pub(crate) fn surface_ids(surface: &areka_parsers::shell::Surface) -> Vec<i64> {
     use areka_parsers::shell::AppendTarget;
     let span = |a: u32, b: u32| a.min(b) as i64..=a.max(b) as i64;
     let mut excluded = Vec::new();
@@ -280,14 +287,16 @@ mod tests {
             m.keys[0],
             AtlasKey {
                 set: SetId(0),
-                rel_path: "a.png".into()
+                rel_path: "a.png".into(),
+                kind: PictureKind::Normal,
             }
         );
         assert_eq!(
             m.keys[2],
             AtlasKey {
                 set: SetId(1),
-                rel_path: "z.png".into()
+                rel_path: "z.png".into(),
+                kind: PictureKind::Normal,
             }
         );
 

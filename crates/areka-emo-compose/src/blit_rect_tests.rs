@@ -55,6 +55,7 @@ fn atlas(parts: &[Part]) -> AtlasTable {
         keys.push(AtlasKey {
             set: SetId(0),
             rel_path: format!("e{i}.png"),
+            kind: areka_emo_atlas::PictureKind::Normal,
         });
         let placement = part.map(|(w, h, (tx, ty), _)| Placement {
             page: i as u32,
@@ -501,6 +502,7 @@ fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
     let key = |p: &str| AtlasKey {
         set: SetId(0),
         rel_path: p.into(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     };
     let placed = |page, uv: Rect| AtlasEntry {
         original: Size { w: uv.w, h: uv.h },

@@ -217,6 +217,7 @@ fn crafted_atlas() -> AtlasTable {
     let key = |rel: &str| AtlasKey {
         set: SetId(0),
         rel_path: rel.to_string(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     };
     let entry = |w, h| AtlasEntry {
         original: Size { w, h },

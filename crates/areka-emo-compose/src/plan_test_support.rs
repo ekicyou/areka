@@ -414,6 +414,7 @@ pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> Atla
     let keys = vec![AtlasKey {
         set: SetId(0),
         rel_path: "e.png".into(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     }];
     let entries = vec![AtlasEntry {
         original: Size { w: uv.w, h: uv.h },
@@ -445,6 +446,7 @@ pub(crate) fn two_entry_table(dst_page: AtlasPage, src_page: AtlasPage) -> Atlas
     let keys = ["dst.png", "src.png"].map(|rel| AtlasKey {
         set: SetId(0),
         rel_path: rel.into(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     });
     AtlasTable::new(keys.into(), vec![one(0), one(1)], vec![dst_page, src_page])
 }
