@@ -51,7 +51,7 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
         vec![("selfname".into(), "さくら".into())],
         vec![("baseware.name".into(), "areka".into())],
     );
-    // barrier 復帰 = 上記 publish が鏡像へ反映済み（mpsc FIFO＋直列処理）。
+    // barrier 復帰 = 上記 publish が片づいている（mpsc FIFO＋直列処理）。
     parts
         .publisher
         .barrier()
@@ -125,7 +125,7 @@ fn set_free_key_store_writes_to_host_dotted_region() {
     );
 }
 
-// === SET RuntimeCommand は M1 未配線（鏡像へ書込まない・呼出は非 panic）===
+// === SET RuntimeCommand は M1 未配線（書込まない・呼出は非 panic）===
 
 #[test]
 fn set_runtime_command_vocab_writes_nothing_in_m1() {
@@ -142,7 +142,7 @@ fn set_runtime_command_vocab_writes_nothing_in_m1() {
     );
 }
 
-// === PublishShiori Some/None（None は不在＝既定値縮退・鏡像へ書かない）===
+// === PublishShiori Some/None（None は不在＝既定値縮退・書かない）===
 
 #[test]
 fn publish_shiori_some_sets_flat_none_records_absence() {
@@ -213,16 +213,16 @@ fn persist_put_write_through_commits_to_real_io() {
     );
 }
 
-// === アクター死亡（Close→join）: 送信は SendError（非 panic）・barrier は Err・reader 継続 ===
+// === アクター死亡（Close→join）: 送信は SendError（非 panic）・barrier は Err・読みは縮退 ===
 
 #[test]
-fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
+fn actor_death_via_close_makes_sends_observable_and_reads_degrade() {
     let SylphyaParts {
         reader,
         publisher,
         handle,
     } = spawn_sylphya(init_empty());
-    // 既知値を確立（後で最終鏡像として読めることを確認するため）。
+    // 死後に生前の値が読めないことを確かめるため、先に値を入れておく。
     publisher.publish_static(
         a("ghost/a"),
         vec![("selfname".into(), "生前値".into())],
@@ -254,17 +254,17 @@ fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
         "dead actor barrier must surface ReplyError, not hang"
     );
 
-    // reader は最後に publish された鏡像を保持し続ける（死後投函は反映されない）。
+    // 止まった番人への読みは panic せず、値なし（縮退の決まり）を返す。
     assert_eq!(
         reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-        FlatResolution::Value("生前値".into())
+        FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
     );
 }
 
-// === アクター死亡（panic→join 検出）: join が Panicked・reader は最終鏡像で継続 ===
+// === アクター死亡（panic→join 検出）: join が Panicked・読みは縮退 ===
 
 #[test]
-fn actor_panic_is_detected_by_join_and_reader_continues() {
+fn actor_panic_is_detected_by_join_and_reads_degrade() {
     let SylphyaParts {
         reader,
         publisher,
@@ -277,7 +277,7 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
             panic_on_write: true,
         }),
     ));
-    // 先に既知値を確立（panic 前の最終鏡像）。
+    // 死後に生前の値が読めないことを確かめるため、先に値を入れておく。
     publisher.publish_static(
         a("ghost/a"),
         vec![("selfname".into(), "生前値".into())],
@@ -300,10 +300,10 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         "expected Panicked, got {err:?}"
     );
 
-    // reader は panic 前の最終鏡像を読み続けられる（表示系を殺さない）。
+    // 落ちた番人への読みは panic せず、値なし（縮退の決まり）を返す（表示系を殺さない）。
     assert_eq!(
         reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-        FlatResolution::Value("生前値".into())
+        FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
     );
     // 死亡後の barrier は Err（ハングしない）。
     assert!(
@@ -312,13 +312,12 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
     );
 }
 
-// === reader 無ブロック（構造＋挙動）: アクター処理前でも読みは即確定・大域ロック不在 ===
+// === barrier なしの読み: 値の無い名前は縮退の決まりで返り、複製した reader も同じ ===
 
 #[test]
-fn reader_does_not_block_on_actor_supply() {
+fn reads_without_a_barrier_return_by_the_degrade_rule() {
     let parts = spawn_sylphya(init_empty());
-    // 一切の barrier なしで即読み: 読み経路は鏡像 read lock 内 Arc clone のみで、アクターの
-    // メッセージ処理・チャネル送受信を一切待たない（大域ロック不在）。
+    // barrier なしで読んでも、値の無い名前は縮退の決まりで返る。
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/a"), "username"),
         FlatResolution::Degraded(DegradePolicy::ConsumerDefault)
@@ -329,7 +328,7 @@ fn reader_does_not_block_on_actor_supply() {
             .resolve_dotted_str(&ctx("ghost/a"), "system.none"),
         DottedResolution::NotFound
     );
-    // reader は clone 可（複数消費エンジンが同一鏡像を共有・供給と独立）。
+    // reader は clone 可（複数消費エンジンが同じ番人へ聞く）。
     let reader2 = parts.reader.clone();
     assert_eq!(
         reader2.resolve_flat(&ctx("ghost/a"), "username"),
@@ -358,12 +357,12 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
     }
 }
 
-// === 鍵を消す投函: 記憶から消え、ほかの鍵は残る・像は出さない ===
+// === 鍵を消す投函: 記憶から消え、ほかの鍵は残る ===
 
 #[test]
 fn persist_remove_drops_the_key_from_file_and_keeps_others() {
     let mem = MemBackend::new();
-    let (parts, mirror) = spawn_parts(SylphyaInit::new(ghost_roots(), mem.clone()), None);
+    let parts = spawn_sylphya(SylphyaInit::new(ghost_roots(), mem.clone()));
     let x = PersistKey::BalloonOffset {
         scope: 0,
         axis: Axis::X,
@@ -396,7 +395,6 @@ fn persist_remove_drops_the_key_from_file_and_keeps_others() {
         Some("3"),
         "ほかの鍵は残る"
     );
-    assert_eq!(mirror.load().epoch, 0, "覚える値の書き・消しは像を出さない");
 
     parts.publisher.close();
     parts.handle.join().expect("join");

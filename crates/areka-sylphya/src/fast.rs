@@ -1,11 +1,13 @@
 //! 速い住み場所: ロックなしで読む取っ手と、同じ値を名前で読み書きする口。
 
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use crate::key::PropPath;
+use crate::persist::PersistScope;
+use crate::pull::PullShape;
 
 const SEGMENT_LEN: usize = 16;
 
@@ -148,6 +150,44 @@ pub trait FastHome: Send + Sync {
     fn read_text(&self, path: &PropPath) -> Option<String>;
     fn write_text(&self, path: &PropPath, value: &str) -> Result<(), String>;
     fn clear(&self);
+}
+
+type Registered = (PersistScope, Arc<dyn FastHome>);
+
+/// 名前の形 → （層, 速い住み場所）の表（読み口の複製どうしと番人が分け合う）。
+#[derive(Clone, Default)]
+pub(crate) struct FastRegistry {
+    inner: Arc<RwLock<BTreeMap<PullShape, Registered>>>,
+}
+
+impl FastRegistry {
+    /// 同じ形への 2 度目の登録は前の住み場所を置き換える。
+    pub(crate) fn register(&self, shape: PullShape, layer: PersistScope, home: Arc<dyn FastHome>) {
+        // poison でも表は常に整合な値なので中身で続ける（`PullRegistry` と同じ）。
+        let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        guard.insert(shape, (layer, home));
+    }
+
+    /// 写してから鍵を外す（住み場所を呼ぶのは鍵の外）。
+    pub(crate) fn find(&self, path: &PropPath) -> Option<Registered> {
+        let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
+        guard.get(&PullShape::of(path)).cloned()
+    }
+
+    /// その層に登録された住み場所の値を全部捨てる。
+    pub(crate) fn clear_layer(&self, layer: PersistScope) {
+        let homes: Vec<Arc<dyn FastHome>> = {
+            let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
+            guard
+                .values()
+                .filter(|(at, _)| *at == layer)
+                .map(|(_, home)| home.clone())
+                .collect()
+        };
+        for home in homes {
+            home.clear();
+        }
+    }
 }
 
 #[cfg(test)]

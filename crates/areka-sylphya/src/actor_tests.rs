@@ -60,7 +60,7 @@ fn apply_set_effective_emits_runtime_command_reserved() {
             value: "5".into(),
         }]
     );
-    // RuntimeCommand は鏡像へ書込まない（reserved seam）。
+    // RuntimeCommand はどこにも書き込まない（reserved seam）。
     assert!(!effects.iter().any(|e| matches!(
         e,
         Effect::SetDottedPerAsker { .. } | Effect::SetDottedGlobal { .. }
@@ -136,7 +136,7 @@ fn apply_publish_shiori_none_records_absent_no_default() {
         value: None,
     };
     let effects = apply(&msg);
-    // 204/失敗 → 不在の観測記録のみ。既定値は sakura 所有ゆえ鏡像へ書かない。
+    // 204/失敗 → 不在の観測記録のみ。既定値は sakura 所有ゆえどこにも書き込まない。
     assert_eq!(
         effects,
         vec![Effect::RecordAbsentFlat {

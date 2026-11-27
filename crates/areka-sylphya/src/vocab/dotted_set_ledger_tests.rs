@@ -138,11 +138,11 @@ fn newly_registered_set_keys_are_runtime_command_reserved() {
 /// 記録用の 15 葉と実キー形 3 つの書込分類は変更前と同じで、18 葉と実キー形の参照はすべて見つからない。
 #[test]
 fn record_only_leaves_keep_their_previous_classification() {
+    use crate::store::MemBackend;
     use crate::{
-        AskerContext, AskerId, DottedResolution, MirrorImage, SetClass, SharedMirror,
-        SylphyaReader, classify_set,
+        AskerContext, AskerId, DottedResolution, ScopeRoots, SetClass, SylphyaInit, classify_set,
+        spawn_sylphya,
     };
-    use std::sync::Arc;
 
     let expected: &[(&str, SetClass)] = &[
         ("duration", SetClass::StoreWrite),
@@ -170,11 +170,13 @@ fn record_only_leaves_keep_their_previous_classification() {
         assert_eq!(classify_set(key), *class, "書込分類: {key}");
     }
 
-    let mut image = MirrorImage::empty();
-    image
-        .dotted_global
-        .insert("currentghost.name".into(), "さくら".into());
-    let reader = SylphyaReader::new(SharedMirror::new(Arc::new(image)));
+    let parts = spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()));
+    parts.publisher.publish_static(
+        AskerId::new("ghost/a"),
+        vec![],
+        vec![("currentghost.name".into(), "さくら".into())],
+    );
+    let reader = parts.reader;
     let ctx = AskerContext {
         asker: AskerId::new("ghost/a"),
     };

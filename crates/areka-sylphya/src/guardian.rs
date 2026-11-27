@@ -3,11 +3,12 @@
 //! 覚える値の書き・消し・反映待ちは 1 本の列に並ぶ。列に書きが在る間は受信を 10 ミリ秒で区切り、
 //! 区切りごとに列の頭を待たずに試み直す。読み・揮発の書き・平らな名前・層の付け替えは列を待たない。
 
-use crate::actor::{Effect, SylphyaMsg, SylphyaPublisher, apply};
+use crate::actor::{Effect, SylphyaMsg, SylphyaPublisher, apply, plan_write};
 use crate::asker::AskerId;
-use crate::keytable::{Home, KEY_TABLE, KeyRow, rule_of};
-use crate::kvs::{WriteFailed, WriteOutcome};
-use crate::mirror::{MirrorImage, SharedMirror};
+use crate::fast::FastRegistry;
+use crate::key::parse_dotted;
+use crate::keytable::{Home, KEY_TABLE, KeyRow};
+use crate::kvs::{WriteFailed, WriteOutcome, no_home, outcome_of, split_write};
 use crate::persist::{
     PersistFailure, PersistFailureCause, PersistOutcome, PersistScope, ScopeRoots,
 };
@@ -22,7 +23,7 @@ use std::time::Duration;
 const LOG_TARGET: &str = "areka_sylphya::actor";
 const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
 
-const WAIT_LIMIT: &str =
+pub(crate) const WAIT_LIMIT: &str =
     "ほかの書き手が記憶のファイルを使い続けていて、1 秒待っても書けませんでした";
 const CLOSE_BUSY: &str = "終了のとき、ほかの書き手が記憶のファイルを使っていて書けませんでした";
 
@@ -41,6 +42,13 @@ impl SylphyaInit {
             backend,
             table: KEY_TABLE,
         }
+    }
+
+    /// 鍵の表を試験の表に差し替える。
+    #[cfg(test)]
+    pub(crate) fn with_table(mut self, table: &'static [KeyRow]) -> Self {
+        self.table = table;
+        self
     }
 }
 
@@ -65,25 +73,17 @@ pub fn spawn_sylphya_with_failures(
     init: SylphyaInit,
     failures: Option<Sender<PersistFailure>>,
 ) -> SylphyaParts {
-    spawn_parts(init, failures).0
-}
-
-/// 起動の組み立ての本体。檻が epoch を直接見られるよう、写しの共有の取っ手も返す。
-pub(crate) fn spawn_parts(
-    init: SylphyaInit,
-    failures: Option<Sender<PersistFailure>>,
-) -> (SylphyaParts, SharedMirror) {
-    let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
-    let mirror = shared.clone();
+    let fast = FastRegistry::default();
+    let table = init.table;
+    let shared = fast.clone();
     let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya", move |rx| {
-        Guardian::open(init, mirror, failures).run(rx);
+        Guardian::open(init, shared, failures).run(rx);
     });
-    let parts = SylphyaParts {
-        reader: SylphyaReader::new(shared.clone()),
+    SylphyaParts {
+        reader: SylphyaReader::new(tx.clone(), table, fast),
         publisher: SylphyaPublisher::new(tx),
         handle,
-    };
-    (parts, shared)
+    }
 }
 
 /// 列の 1 件（覚える値の書き・消し、または反映待ち）。
@@ -102,8 +102,7 @@ struct Guardian {
     store: Result<Store, String>,
     backend: Arc<dyn StoreBackend>,
     table: &'static [KeyRow],
-    // shortcut: 読み口がまだ写しを読むので、平らな名前と点付きの区画を写しにも書く。読み口が番人へ聞く形になったら消す。
-    mirror: SharedMirror,
+    fast: FastRegistry,
     failures: Option<Sender<PersistFailure>>,
     queue: VecDeque<Queued>,
     /// 列の頭を最初に試みた時刻（置き場の口の時計）。
@@ -113,7 +112,7 @@ struct Guardian {
 impl Guardian {
     fn open(
         init: SylphyaInit,
-        mirror: SharedMirror,
+        fast: FastRegistry,
         failures: Option<Sender<PersistFailure>>,
     ) -> Self {
         let SylphyaInit {
@@ -125,7 +124,7 @@ impl Guardian {
             store: Store::open(roots, backend.clone()),
             backend,
             table,
-            mirror,
+            fast,
             failures,
             queue: VecDeque::new(),
             head_since: None,
@@ -158,7 +157,6 @@ impl Guardian {
 
     /// 1 通を片づける。返すのは、止まるか。
     fn handle(&mut self, msg: SylphyaMsg) -> bool {
-        let effects = apply(&msg);
         match msg {
             SylphyaMsg::Get {
                 asker,
@@ -197,9 +195,19 @@ impl Guardian {
                     self.queue.push_back(Queued::Barrier(reply));
                 }
             }
-            SylphyaMsg::Write { reply, .. } => self.write(effects, reply),
+            SylphyaMsg::Write {
+                writer,
+                asker,
+                layer,
+                puts,
+                removes,
+                reply,
+            } => {
+                let effects = plan_write(self.table, writer, &asker, layer, &puts, &removes);
+                self.write(effects, reply);
+            }
             SylphyaMsg::Close => return true,
-            _ => self.run_effects(effects),
+            _ => self.run_effects(apply(&msg)),
         }
         false
     }
@@ -247,6 +255,7 @@ impl Guardian {
                     if let Ok(store) = &mut self.store {
                         store.set_root(*layer, root.clone());
                     }
+                    self.fast.clear_layer(*layer);
                 }
                 Effect::RecordAbsentFlat { .. }
                 | Effect::RuntimeCommandReserved { .. }
@@ -257,7 +266,6 @@ impl Guardian {
                 | Effect::Stop => {}
             }
         }
-        self.publish_mirror(&effects);
     }
 
     /// 層を名指しした書き・消し: 揮発の鍵はすぐ書き、ファイルの鍵は受けた時点の置き場で列へ。
@@ -274,53 +282,27 @@ impl Guardian {
                     puts,
                     removes,
                 } => {
-                    let mut file = FileWrite {
+                    let root = self.root_of(layer);
+                    let (file, earlier) = split_write(
+                        self.table,
                         layer,
-                        root: self.root_of(layer),
-                        puts: Vec::new(),
-                        removes: Vec::new(),
-                        typed: Vec::new(),
-                    };
-                    let mut earlier = None;
-                    let entries = puts
-                        .into_iter()
-                        .map(|(key, value)| (key, Some(value)))
-                        .chain(removes.into_iter().map(|key| (key, None)));
-                    for (key, value) in entries {
-                        let failed = match rule_of(self.table, &key).home {
-                            Some(Home::File) => {
-                                match value {
-                                    Some(value) => file.puts.push((key, value)),
-                                    None => file.removes.push(key),
-                                }
-                                None
-                            }
+                        root,
+                        puts,
+                        removes,
+                        |home, key, value| match home {
                             Some(Home::Memory) => {
                                 self.volatile(layer, &asker, &key, value.as_deref()).err()
                             }
-                            Some(Home::Fast) | None => {
-                                tracing::error!(
-                                    target: LOG_TARGET,
-                                    scope = ?layer,
-                                    key = %key,
-                                    "name has no home in the guardian; not written"
-                                );
-                                Some(WriteFailed::Volatile {
-                                    key,
-                                    reason: "この名前の住み場所は番人の中に無いので書けません"
-                                        .to_owned(),
-                                })
-                            }
-                        };
-                        if earlier.is_none() {
-                            earlier = failed;
+                            Some(Home::Fast) => self.fast_write(layer, key, value.as_deref()),
+                            _ => Some(no_home(layer, key)),
+                        },
+                    );
+                    match file {
+                        Some(file) => self.enqueue(file, Some(reply), earlier),
+                        None => {
+                            let _ = reply
+                                .send(earlier.map_or(WriteOutcome::Written, WriteOutcome::Failed));
                         }
-                    }
-                    if file.puts.is_empty() && file.removes.is_empty() {
-                        let _ =
-                            reply.send(earlier.map_or(WriteOutcome::Written, WriteOutcome::Failed));
-                    } else {
-                        self.enqueue(file, Some(reply), earlier);
                     }
                     return;
                 }
@@ -401,16 +383,7 @@ impl Guardian {
     fn attempt(&mut self, write: &FileWrite) -> WriteAttempt {
         match &mut self.store {
             Ok(store) => store.try_write(write),
-            Err(reason) => {
-                tracing::error!(
-                    target: PERSIST_LOG_TARGET,
-                    scope = ?write.layer,
-                    keys = ?key_names(write),
-                    error = %reason,
-                    "persist store not open; reporting Degraded"
-                );
-                WriteAttempt::Done(degraded(write, PersistFailureCause::Io(reason.clone())))
-            }
+            Err(reason) => WriteAttempt::Done(store_not_open(write, reason)),
         }
     }
 
@@ -432,15 +405,7 @@ impl Guardian {
             );
         }
         if let Some(reply) = reply {
-            let result = match (earlier, outcome) {
-                (Some(failed), _) => WriteOutcome::Failed(failed),
-                (None, PersistOutcome::Saved) => WriteOutcome::Written,
-                (None, PersistOutcome::Withheld) => WriteOutcome::Withheld,
-                (None, PersistOutcome::Degraded(failure)) => {
-                    WriteOutcome::Failed(WriteFailed::Persist(failure))
-                }
-            };
-            let _ = reply.send(result);
+            let _ = reply.send(outcome_of(earlier, outcome));
         }
     }
 
@@ -480,60 +445,27 @@ impl Guardian {
         }
     }
 
-    /// 区画を名指す効果を写しへも当てる（実際に変わるときだけ新しい像を出す）。
-    fn publish_mirror(&self, effects: &[Effect]) {
-        let shared = &self.mirror;
-        let mut next: Option<MirrorImage> = None;
-        for effect in effects {
-            match effect {
-                Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .flat_per_asker
-                        .entry(asker.clone())
-                        .or_default()
-                        .insert(name.clone(), value.clone());
-                }
-                Effect::RemoveFlatPerAsker { asker, name } => {
-                    let has = |img: &MirrorImage| {
-                        img.flat_per_asker
-                            .get(asker)
-                            .is_some_and(|flat| flat.contains_key(name))
-                    };
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has)
-                        && let Some(flat) = next
-                            .get_or_insert_with(|| shared.load().successor())
-                            .flat_per_asker
-                            .get_mut(asker)
-                    {
-                        flat.remove(name);
-                    }
-                }
-                Effect::SetDottedGlobal { key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_global
-                        .insert(key.clone(), value.clone());
-                }
-                Effect::RemoveDottedGlobal { key } => {
-                    let has = |img: &MirrorImage| img.dotted_global.contains_key(key);
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has) {
-                        next.get_or_insert_with(|| shared.load().successor())
-                            .dotted_global
-                            .remove(key);
-                    }
-                }
-                Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_per_asker
-                        .entry(asker.clone())
-                        .or_default()
-                        .insert(key.clone(), value.clone());
-                }
-                _ => {}
-            }
-        }
-        if let Some(next) = next {
-            shared.publish(Arc::new(next));
-        }
+    /// 速い住み場所へ名前で書く（登録された層だけ・消しは受けない）。
+    fn fast_write(
+        &self,
+        layer: PersistScope,
+        key: String,
+        value: Option<&str>,
+    ) -> Option<WriteFailed> {
+        let found = parse_dotted(&key)
+            .ok()
+            .and_then(|path| Some((self.fast.find(&path)?, path)));
+        let (home, path) = match found {
+            Some(((at, home), path)) if at == layer => (home, path),
+            _ => return Some(no_home(layer, key)),
+        };
+        let Some(value) = value else {
+            return Some(no_home(layer, key));
+        };
+        home.write_text(&path, value).err().map(|reason| {
+            tracing::error!(target: LOG_TARGET, scope = ?layer, key = %key, error = %reason, "fast value not written");
+            WriteFailed::Volatile { key, reason }
+        })
     }
 }
 
@@ -555,8 +487,20 @@ fn degraded(write: &FileWrite, cause: PersistFailureCause) -> PersistOutcome {
     })
 }
 
+/// 核を開けなかったときの覚える値の書き。
+pub(crate) fn store_not_open(write: &FileWrite, reason: &str) -> PersistOutcome {
+    tracing::error!(
+        target: PERSIST_LOG_TARGET,
+        scope = ?write.layer,
+        keys = ?key_names(write),
+        error = %reason,
+        "persist store not open; reporting Degraded"
+    );
+    degraded(write, PersistFailureCause::Io(reason.to_owned()))
+}
+
 /// 錠に当たったまま諦めた書き（巻き戻し済み・ファイルは変わっていない）。
-fn lock_failed(write: &FileWrite, reason: &str) -> PersistOutcome {
+pub(crate) fn lock_failed(write: &FileWrite, reason: &str) -> PersistOutcome {
     tracing::error!(
         target: PERSIST_LOG_TARGET,
         event = "persist_lock_failed",
@@ -573,3 +517,7 @@ fn lock_failed(write: &FileWrite, reason: &str) -> PersistOutcome {
 #[cfg(test)]
 #[path = "guardian_wait_tests.rs"]
 pub(crate) mod wait_tests;
+
+#[cfg(test)]
+#[path = "guardian_tests.rs"]
+mod tests;
