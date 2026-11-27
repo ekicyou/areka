@@ -568,5 +568,5 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 2. **バルーンだけが DPI の違う画面へ移ったとき**: ukadoc の「接する」を保つ。バルーン窓の寸が DPI の相で変わったら、台本の値のあるスコープは寸の前後の標準の差を追従に足して据え直す（BalloonDpiReanchor）。揺れ止めは入れず、寸だけを書き換えるテストで 1 回で止まることを固定し、実機の段 4 で見る。
 3. **SSP の残りの測り**: 実装の段にタスクを 1 つ立て、画面の操作の机を取り、測るたびに開発者の許しを取って測る。食い違えば要件 9.4 で決め直す。
 4. **`@0,@0` と `none` を書いた後**: 台本の値が効いていると見る（Component は残り、押し戻しはバルーン自身の画面で見続ける）。ukadoc に「descript の既定へ戻す」語は無い。
-5. **`center`・`top`・`bottom` の縦の基準**: areka の今の `keyword_balloon_pos`（キャラ窓の上下の端・`windowposition.x` の語と同じ幾何）のまま。SSP との違い（`research.md` 8 節）を §8 に記録し、SSP の基準を調べて合わせるかは別の spec として起票する。
+5. **`center`・`top`・`bottom` の縦の基準**: areka の今の `keyword_balloon_pos`（キャラ窓の上下の端・`windowposition.x` の語と同じ幾何）のまま。SSP との違い（`research.md` 8 節）を §8 に記録し、SSP の基準を調べて合わせるかは、同じ式を持つ `balloon-directional-offset-keys` の件 2 として渡した。
 6. **roadmap の C28 の行の触るファイル**: 設計の討議で書き換えた（Integration Notes の列）。

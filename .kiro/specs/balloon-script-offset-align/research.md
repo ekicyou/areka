@@ -243,5 +243,5 @@ SSP の MCP（`sakurascript` strict・`get_property`）で、起動中の「窓�
 
 - 検証（`design-validation.md`）の重い点 1（預かるとバルーンが descript の位置で見えてから跳ぶ）は、預からずに届いた巡で当て、着地の前なら印を付けて着地した巡に解き直す形で解いた（状態の持ち方で 0 フレーム）。
 - 重い点 2（バルーンだけが DPI の違う画面へ移ると、左に出すバルーンと本体の隙間が変わる）は、ukadoc の「接する」を保つ側を取った。バルーン窓の寸が DPI の相で変わった時点が分かる（`frame/dpi.rs` の `GhostWindowKind::Balloon` の腕・`reconcile_window_size` の前後の寸）ので、そこから押しで据え直す。
-- `center`・`top`・`bottom` の縦の基準の SSP との違い（8 節）は、この spec では areka の今の幾何のまま §8 に記録し、合わせるかの調べは別の spec へ渡す。
+- `center`・`top`・`bottom` の縦の基準の SSP との違い（8 節）は、この spec では areka の今の幾何のまま §8 に記録し、合わせるかの調べは `balloon-directional-offset-keys` の件 2 へ渡した。
 - 残りの項目は `design.md` の「決まったこと」のとおり。
