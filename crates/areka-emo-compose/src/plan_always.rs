@@ -8,6 +8,7 @@
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Animation, Pattern};
 
+use crate::atlas_bind::asis_picture;
 use crate::method::{ComposeMethod, is_implemented_name};
 use crate::nesting::{FilmId, PartKey, rest_pattern};
 use crate::normalized::Transform;
@@ -17,7 +18,7 @@ use crate::world::EmoWorld;
 
 /// 動く絵の子 `film` の今のコマを 1 枚の命令にする。欄が「載っていない」なら経過 0 のコマ、
 /// 絵の番号が子のコマに無ければ経過 0 のコマ（`debug!`）、「消えている」なら何も。全透明のコマは
-/// 命令にしない。子の定義が無ければ（起きないはず）描かずに `error!`。
+/// `asis` 用の絵が無ければ命令にしない。子の定義が無ければ（起きないはず）描かずに `error!`。
 pub(crate) fn film_op(
     world: &EmoWorld,
     atlas: &AtlasTable,
@@ -50,7 +51,9 @@ pub(crate) fn film_op(
         Cell::Rest | Cell::Frame(_) => rest,
     };
     let element = ElementId(picture);
-    atlas.entry(element).placement.as_ref()?;
+    if atlas.entry(element).placement.is_none() && asis_picture(world.world(), element).is_none() {
+        return None;
+    }
     Some(BlitOp {
         element,
         transform,

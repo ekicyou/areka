@@ -4,7 +4,7 @@ use areka_emo_atlas::ElementId;
 
 use crate::method::ComposeMethod;
 use crate::normalized::Transform;
-use crate::plan::{BlitOp, Extent};
+use crate::plan::Extent;
 
 /// 重ね方（D2D の合成モードへの写しは emo-present の 1 か所）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,12 +53,14 @@ pub enum PlanItem {
         /// 塗る範囲。
         rect: IRect,
     },
-    /// 透明から始まる 1 枚のまとめを開く。
+    /// 透明から始まる 1 枚のまとめを開く。中の項の位置と範囲はまとめの左上からの値。
     GroupBegin {
         /// まとめを置く位置。
         transform: Transform,
         /// まとめ全体の重ね方。
         mix: Mix,
+        /// `replace` の置き換える範囲（入れ子の面の外形）。
+        range: Option<IRect>,
     },
     /// まとめを閉じる。
     GroupEnd,
@@ -87,18 +89,6 @@ pub(crate) fn mix_of(method: &ComposeMethod) -> Option<Mix> {
         ComposeMethod::Reduce => Some(Mix::DestinationIn),
         _ => None,
     }
-}
-
-/// 命令の列を計画の絵の項へ順に写す（描けない語の命令は入れない）。
-pub(crate) fn push_images(items: &mut Vec<PlanItem>, ops: &[BlitOp]) {
-    items.extend(ops.iter().filter_map(|op| {
-        Some(PlanItem::Image {
-            element: op.element,
-            transform: op.transform,
-            mix: mix_of(&op.method)?,
-            range: None,
-        })
-    }));
 }
 
 #[cfg(test)]

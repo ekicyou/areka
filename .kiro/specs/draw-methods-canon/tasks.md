@@ -115,7 +115,7 @@
   - _Dispatch: standard, effort high — 830 行の組み立てに新しい出口を通す_
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 6.3_
 
-- [ ] 5.4 重ね方ごとの計画の規則を組む
+- [x] 5.4 重ね方ごとの計画の規則を組む
   - 層の最初の描くものが在る項は、`asis` 以外を `SourceOver` にする（無い絵の項は数えない）
   - `replace` の範囲を element の位置と縁を切る前の原寸の矩形にする。`asis` は `asis` 用の絵を `SourceOver` で置き、element定義を持つ面を `asis` で部品にするときは外形の黒の塗りの上にまとめで置く
   - 入れ子の面は、中に `SourceOver` でない項が在るか、入れ子を指す語の重ね方が `SourceOver` でないときだけまとめで囲む
@@ -288,3 +288,5 @@
 - 5.3: `mix_of` は `pub(crate)` に戻した。`DrawPlan.base_surface` は 5.5 まで `surface_id`。
 - 5.1 → 5.6: plan.rs の debug の文「非 Overlay method の現在コマ…」と plan_frame_merge_tests.rs の assert の文「非 Overlay コマ」は不正確（今は描けない語だけが入る）。読むテスト plan_issues_tests.rs・plan_nesting_tests.rs と一緒に直す。
 - 5.3 → 7: テストの支えは `plan_of`（命令の列）を残して `draw_plan_of` を足した。7 で `plan_of` を `DrawPlan` に寄せる（設計の File Structure Plan）。
+- 5.4 → 6.2: `PlanItem::GroupBegin` に `range: Option<IRect>` を足した（`Copy` のまとめだけ Some＝入れ子の面の位置と外形）。範囲を持たない `Copy` のまとめは切り抜きの外まで透明を広げる（研究の記録 §15.2）。`range` が Some なら切り抜きの節の中にまとめを置く。まとめの中の項の位置と範囲はまとめの左上から、外は絶対の位置（設計の `PlanItem` の定義の文は古い）。
+- 5.4 → 7: 画素の上限は通常の絵の置き場で数えるので、置き場の無い `asis` の命令は 0 と数えられる。上限を計画へ移すときに描く絵で数える。

@@ -67,6 +67,7 @@ mod plan_always;
 mod plan_bounds;
 mod plan_cap;
 mod plan_issues;
+mod plan_mix;
 pub use plan::BlitOp;
 pub use plan_bounds::{ShellBounds, shell_bounds};
 pub use plan_issues::{ShapeIssue, shape_issues};
@@ -215,8 +216,9 @@ impl Composer {
 
     /// 計画を組む再利用形: `surface_id` の描く順の項の列を `out` へ書く（`out.items` は入口で空にする）。
     ///
-    /// 項は [`compose_into`] と同じ命令列（同じ段・同じ画素の上限）から作るので、順と位置は CPU の
-    /// 合成と同じ。外形は外形の表の答えのまま。失敗は [`compose_into`] と同じ `Err`（記録も同じ）。
+    /// 項は [`compose_into`] と同じ命令列（同じ段・同じ画素の上限）から作るので、描く順は CPU の
+    /// 合成と同じ。重ね方・範囲・まとめは語ごとの規則で決め、まとめの中の位置はまとめの左上から。
+    /// 外形は外形の表の答えのまま。失敗は [`compose_into`] と同じ `Err`（記録も同じ）。
     ///
     /// [`compose_into`]: Composer::compose_into
     pub fn plan_into(
@@ -241,7 +243,7 @@ impl Composer {
         out.surface_id = surface_id;
         out.base_surface = surface_id;
         out.extent = extent;
-        crate::draw_plan::push_images(&mut out.items, &self.ops);
+        crate::plan_mix::push_items(&mut out.items, &self.ops, &self.scratch.marks, world, atlas);
         Ok(())
     }
 

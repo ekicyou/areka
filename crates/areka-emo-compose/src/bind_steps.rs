@@ -13,16 +13,22 @@ use std::collections::{BTreeMap, HashSet};
 use areka_parsers::shell::Interval;
 use bevy_ecs::prelude::Resource;
 
-use crate::method::is_implemented_name;
+use crate::method::{ComposeMethod, is_implemented_name};
 use crate::pattern_word::{PatternWord, call_targets, pattern_word};
 use crate::plan::{Level, PlanScratch, push_direct};
+use crate::plan_mix::NestWord;
 use crate::world::EmoWorld;
 
 /// 着せ替えの手順の 1 段。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BindStep {
-    /// 面 `surface` を pattern の (x, y) に描く。
-    Draw { surface: u32, x: i64, y: i64 },
+    /// 面 `surface` を pattern の (x, y) に語 `word` で描く。
+    Draw {
+        surface: u32,
+        x: i64,
+        y: i64,
+        word: NestWord,
+    },
     /// 同じ面の純 `bind` の animation `target` をこの位置に差し込む。
     Insert { target: u32 },
 }
@@ -63,6 +69,7 @@ impl BindSteps {
                                     surface,
                                     x: p.x,
                                     y: p.y,
+                                    word: NestWord::of(&ComposeMethod::from_name(method)),
                                 })
                             }
                             PatternWord::Insert => {
@@ -161,7 +168,12 @@ pub(crate) fn push_bind_contribution(s: &mut PlanScratch, level: &Level<'_>, a: 
         };
         top.1 += 1;
         match step {
-            BindStep::Draw { surface, x, y } => s.steps.push(level.enter(surface, x, y)),
+            BindStep::Draw {
+                surface,
+                x,
+                y,
+                word,
+            } => s.steps.push(level.enter(surface, x, y, word)),
             BindStep::Insert { target: b } => {
                 if s.claims.get(&b) == Some(&a)
                     && s.done.insert(b)

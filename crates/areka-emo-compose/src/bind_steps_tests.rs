@@ -3,7 +3,9 @@
 use areka_parsers::shell::parse;
 
 use super::BindStep::{Draw, Insert};
+use crate::draw_plan::Mix;
 use crate::log_capture::capture_logs;
+use crate::plan_mix::NestWord;
 use crate::world::EmoWorld;
 
 const SHELL: &str = "\
@@ -42,6 +44,8 @@ animation5.pattern0,overlay,50,0,0,0
 }
 ";
 
+const OVER: NestWord = NestWord::Mix(Mix::SourceOver);
+
 fn world() -> EmoWorld {
     EmoWorld::build(&parse(SHELL))
 }
@@ -56,13 +60,15 @@ fn pure_bind_walks_all_patterns_in_index_order() {
             Draw {
                 surface: 10,
                 x: 1,
-                y: 2
+                y: 2,
+                word: OVER
             },
             Insert { target: 2 },
             Draw {
                 surface: 12,
                 x: 5,
-                y: 6
+                y: 6,
+                word: OVER
             },
         ]
     );
@@ -71,7 +77,8 @@ fn pure_bind_walks_all_patterns_in_index_order() {
         [Draw {
             surface: 20,
             x: 3,
-            y: 4
+            y: 4,
+            word: OVER
         }]
     );
 }
@@ -90,7 +97,8 @@ fn unusable_patterns_are_left_out() {
         [Draw {
             surface: 41,
             x: 0,
-            y: 0
+            y: 0,
+            word: OVER
         }]
     );
 }

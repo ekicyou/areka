@@ -79,6 +79,16 @@ fn asis_patterns_of_normal_and_bind_animations_collect_the_single_picture_of_the
 }
 
 #[test]
+fn asis_element_rows_naming_a_face_collect_its_single_picture_not_the_number() {
+    let surfaces = vec![
+        surface(0, vec![asis_elem(0, "10"), asis_elem(1, "11")]),
+        surface(10, vec![elem(0, "surface10.png")]),
+        surface(11, vec![elem(0, "a.png"), elem(1, "b.png")]),
+    ];
+    assert_eq!(paths_of(&surfaces), ["surface10.png"]);
+}
+
+#[test]
 fn a_face_with_several_pictures_is_drawn_from_its_elements_and_gets_no_asis_picture() {
     let surfaces = vec![
         with_animations(
