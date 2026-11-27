@@ -107,7 +107,7 @@
   - _Dispatch: standard — 正規化の分岐を付け替える_
   - _Requirements: 4.1, 4.4, 5.1, 5.2, 5.3_
 
-- [ ] 5.3 計画を組む口を足し、`overlay` だけで今の CPU の命令と同じ順を出す
+- [x] 5.3 計画を組む口を足し、`overlay` だけで今の CPU の命令と同じ順を出す
   - 今の描く順（層 (i) の静的な element → 層 (ii) の着せ替え・`always`・今のコマを ID の順）から計画の項の列を作る口を公開する。今の CPU の合成の口は 7 で外すまで同じ段から作り続ける
   - 画素の上限の数え方を計画の側の 1 か所へ移し、同じ答えを保つ。外形は外形の求め方の答えをそのまま入れる
   - 計画のテストの支え（`Element` の欄・計画を返す形）を足す
@@ -285,5 +285,6 @@
 - 2.5: 読めない間の 1 回だけの印は process 全体の `static`（`(WorldId, Entity)` の集合）。部品の `AtomicBool` へ移す形が勧め（レビュー）。入れ子の上げた形の座標の基準はテストが無い。
 - 2.5: 並走の cargo の負荷の下で wintf の lib テストの WARP の画素のテスト（emit_layer_tests・emit_blend_tests）が 1 度だけ赤になった（単独と 3 回の回し直しは緑・この変更とは無関係と判定）。
 - 5.1: クローディアの読み込みの檻は 0 行を期待する（「まだ働かない形」の 1 行は hit-id-pass で既に外れていた。要件 10.4・brief の「1 行は残す」の文が古い）。
-- 5.1 → 5.4: `mix_of` は呼び手が入ったら設計どおり `pub(crate)` に戻し、lib.rs の `pub use` から外す。
+- 5.3: `mix_of` は `pub(crate)` に戻した。`DrawPlan.base_surface` は 5.5 まで `surface_id`。
 - 5.1 → 5.6: plan.rs の debug の文「非 Overlay method の現在コマ…」と plan_frame_merge_tests.rs の assert の文「非 Overlay コマ」は不正確（今は描けない語だけが入る）。読むテスト plan_issues_tests.rs・plan_nesting_tests.rs と一緒に直す。
+- 5.3 → 7: テストの支えは `plan_of`（命令の列）を残して `draw_plan_of` を足した。7 で `plan_of` を `DrawPlan` に寄せる（設計の File Structure Plan）。

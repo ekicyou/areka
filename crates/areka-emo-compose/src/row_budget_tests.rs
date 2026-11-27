@@ -142,7 +142,7 @@ fn undrawn_ops_count_no_pixels() {
     ops.push(drawn[0].clone());
     let extent = world.extent(1);
     assert_eq!((extent.w, extent.h), (2, 2), "検体の外形");
-    assert_eq!(crate::blit::cap_pixels(&mut ops, extent, &atlas), 0);
+    assert_eq!(crate::plan_cap::cap_pixels(&mut ops, extent, &atlas), 0);
     assert_eq!(ops.len(), 201);
 }
 

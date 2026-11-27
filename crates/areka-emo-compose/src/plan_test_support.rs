@@ -24,10 +24,11 @@ use bevy_ecs::world::World;
 
 use crate::bind::BindSet;
 use crate::composed::ComposedSurface;
+use crate::draw_plan::{DrawPlan, PlanItem};
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::nesting::NestTable;
-use crate::normalized::SurfaceMaster;
+use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, Extent, PlanScratch, build_plan, derive_ops};
 use crate::world::{AliasMap, EmoWorld, SurfaceIndex};
@@ -43,6 +44,14 @@ pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
         y,
         method: DrawMethod::new("overlay".to_string()),
         options: ElementOptions::new(String::new()),
+    }
+}
+
+/// element 1 本を描画メソッドの語 `method` で書く（ほかの欄は [`elem`] と同じ）。
+pub(crate) fn elem_with_method(layer: u32, path: &str, x: i64, y: i64, method: &str) -> Element {
+    Element {
+        method: DrawMethod::new(method.to_string()),
+        ..elem(layer, path, x, y)
     }
 }
 
@@ -366,6 +375,35 @@ pub(crate) fn plan_of(
         "先祖の積み上げは走査後に空へ戻る"
     );
     (out, result)
+}
+
+/// 描く計画を引く口（[`plan_of`] と並ぶ）: 新しい合成器で `surface_id` の計画を組んで返す。
+pub(crate) fn draw_plan_of(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> Result<DrawPlan, ComposeError> {
+    crate::Composer::new().plan(world, atlas, surface_id, binds, pattern)
+}
+
+/// 計画の絵の項を (絵, 位置) の列で返す（絵の項でない項があれば落とす）。
+pub(crate) fn plan_images(plan: &DrawPlan) -> Vec<(ElementId, Transform)> {
+    plan.items
+        .iter()
+        .map(|item| match item {
+            PlanItem::Image {
+                element, transform, ..
+            } => (*element, *transform),
+            other => panic!("絵の項だけのはず: {other:?}"),
+        })
+        .collect()
+}
+
+/// 命令の列を (絵, 位置) の列で返す（[`plan_images`] と比べる形）。
+pub(crate) fn op_images(ops: &[BlitOp]) -> Vec<(ElementId, Transform)> {
+    ops.iter().map(|op| (op.element, op.transform)).collect()
 }
 
 /// `surface_id` を (x,y) に置く Overlay のコマ（ほかの描き方は `PatternFrame { method, ..frame(..) }`）。

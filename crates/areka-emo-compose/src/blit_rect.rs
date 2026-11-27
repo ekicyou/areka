@@ -8,10 +8,11 @@
 
 use areka_emo_atlas::AtlasTable;
 
-use crate::blit::{Area, op_area, overlay_op};
+use crate::blit::overlay_op;
 use crate::composed::ComposedSurface;
 use crate::method::ComposeMethod;
 use crate::plan::{BlitOp, Extent};
+use crate::plan_cap::{Area, op_area};
 
 /// 合成の仕方の報告（重ね直しの範囲の行が読む）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -4,7 +4,7 @@ use areka_emo_atlas::ElementId;
 
 use crate::method::ComposeMethod;
 use crate::normalized::Transform;
-use crate::plan::Extent;
+use crate::plan::{BlitOp, Extent};
 
 /// 重ね方（D2D の合成モードへの写しは emo-present の 1 か所）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +78,7 @@ pub struct DrawPlan {
 }
 
 /// 語 → 重ね方の 1 か所の写し。描けない語は `None`。
-pub fn mix_of(method: &ComposeMethod) -> Option<Mix> {
+pub(crate) fn mix_of(method: &ComposeMethod) -> Option<Mix> {
     match method {
         ComposeMethod::Overlay | ComposeMethod::Asis | ComposeMethod::Base => Some(Mix::SourceOver),
         ComposeMethod::OverlayFast => Some(Mix::SourceAtop),
@@ -88,6 +88,22 @@ pub fn mix_of(method: &ComposeMethod) -> Option<Mix> {
         _ => None,
     }
 }
+
+/// 命令の列を計画の絵の項へ順に写す（描けない語の命令は入れない）。
+pub(crate) fn push_images(items: &mut Vec<PlanItem>, ops: &[BlitOp]) {
+    items.extend(ops.iter().filter_map(|op| {
+        Some(PlanItem::Image {
+            element: op.element,
+            transform: op.transform,
+            mix: mix_of(&op.method)?,
+            range: None,
+        })
+    }));
+}
+
+#[cfg(test)]
+#[path = "draw_plan_tests.rs"]
+mod plan_tests;
 
 #[cfg(test)]
 mod tests {

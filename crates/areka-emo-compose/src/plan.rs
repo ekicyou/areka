@@ -751,13 +751,13 @@ pub(crate) fn build_plan(
     derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
     // 重ねる画素の数も抑える（命令の数は予算の内でも、大きな絵を何枚も重ねられる）。記録は合成器
     // 1 つにつき根ごとに 1 度（予算と同じ形）。
-    let dropped = crate::blit::cap_pixels(out_ops, extent, atlas);
+    let dropped = crate::plan_cap::cap_pixels(out_ops, extent, atlas);
     if dropped > 0 && scratch.pixels_reported.insert(surface_id) {
         tracing::error!(
             target: "areka_emo_compose",
             surface_id,
             dropped,
-            factor = crate::blit::PIXEL_FACTOR,
+            factor = crate::plan_cap::PIXEL_FACTOR,
             "重ねる画素の数が外形の面積の上限を越えた: 残りの命令を捨てる"
         );
     }

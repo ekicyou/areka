@@ -31,7 +31,7 @@ pub mod method;
 
 pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod draw_plan;
-pub use draw_plan::{DrawPlan, IRect, Mix, PlanItem, mix_of};
+pub use draw_plan::{DrawPlan, IRect, Mix, PlanItem};
 pub mod bind;
 mod bind_steps;
 mod budget;
@@ -65,6 +65,7 @@ mod outline_walk;
 pub mod plan;
 mod plan_always;
 mod plan_bounds;
+mod plan_cap;
 mod plan_issues;
 pub use plan::BlitOp;
 pub use plan_bounds::{ShellBounds, shell_bounds};
@@ -210,6 +211,59 @@ impl Composer {
         );
         std::mem::swap(&mut self.ops, &mut self.base_ops);
         Ok(recompose)
+    }
+
+    /// 計画を組む再利用形: `surface_id` の描く順の項の列を `out` へ書く（`out.items` は入口で空にする）。
+    ///
+    /// 項は [`compose_into`] と同じ命令列（同じ段・同じ画素の上限）から作るので、順と位置は CPU の
+    /// 合成と同じ。外形は外形の表の答えのまま。失敗は [`compose_into`] と同じ `Err`（記録も同じ）。
+    ///
+    /// [`compose_into`]: Composer::compose_into
+    pub fn plan_into(
+        &mut self,
+        out: &mut DrawPlan,
+        world: &EmoWorld,
+        atlas: &AtlasTable,
+        surface_id: u32,
+        binds: &BindSet,
+        pattern: &PatternState,
+    ) -> Result<(), ComposeError> {
+        out.items.clear();
+        let extent = crate::plan::build_plan(
+            &mut self.ops,
+            &mut self.scratch,
+            world,
+            atlas,
+            surface_id,
+            binds,
+            pattern,
+        )?;
+        out.surface_id = surface_id;
+        out.base_surface = surface_id;
+        out.extent = extent;
+        crate::draw_plan::push_images(&mut out.items, &self.ops);
+        Ok(())
+    }
+
+    /// 計画を組む新規割り当て形（[`plan_into`] へ委ねる）。
+    ///
+    /// [`plan_into`]: Composer::plan_into
+    pub fn plan(
+        &mut self,
+        world: &EmoWorld,
+        atlas: &AtlasTable,
+        surface_id: u32,
+        binds: &BindSet,
+        pattern: &PatternState,
+    ) -> Result<DrawPlan, ComposeError> {
+        let mut out = DrawPlan {
+            surface_id,
+            base_surface: surface_id,
+            extent: crate::plan::Extent { w: 0, h: 0 },
+            items: Vec::new(),
+        };
+        self.plan_into(&mut out, world, atlas, surface_id, binds, pattern)?;
+        Ok(out)
     }
 
     /// 新規割り当て形（初回・テスト向け便宜）。

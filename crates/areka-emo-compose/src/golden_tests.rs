@@ -28,6 +28,9 @@ mod determinism_budget_tests;
 #[path = "golden_tests_frame_extent_tests.rs"]
 mod frame_extent_tests;
 #[cfg(test)]
+#[path = "golden_tests_plan_order_tests.rs"]
+mod plan_order_tests;
+#[cfg(test)]
 #[path = "golden_tests_surface0_base_tests.rs"]
 mod surface0_base_tests;
 #[cfg(test)]
