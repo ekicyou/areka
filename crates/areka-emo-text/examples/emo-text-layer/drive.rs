@@ -251,6 +251,8 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
         return;
     }
 
+    // cue は届いただけでは当たらない。フレームの時刻まで進めてから gate を見る。
+    demo.runtime.borrow_mut().advance(TimePoint::ZERO + t);
     {
         let rt = demo.runtime.borrow();
         if !GATE_SAKURA[stage].satisfied(&rt, &actor0())
@@ -263,7 +265,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     let t_check = T_CHECK[stage];
     if t < t_check {
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t) {
             log_present_failure(&mut demo.present_err_logged, &e, "継続提示フレーム");
         }
         return;
@@ -272,7 +274,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     if demo.hold {
         // --hold は目視用: 述語の確かめを飛ばし、提示だけして次のステージへ進む。
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t_check) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t_check) {
             log_present_failure(&mut demo.present_err_logged, &e, "hold の提示フレーム");
         }
     } else {
@@ -322,7 +324,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: Tim
 
     {
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t_check) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t_check) {
             world.resource_mut::<Verdict>().fail(format!(
                 "stage {stage}: present_frame({t_check}) が失敗: {e}"
             ));
@@ -343,7 +345,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: Tim
 
     let layout_of = |actor: &ActorKey| {
         let state = rt.state().actor_state(actor)?;
-        let visible = rt.state().visible_glyphs(actor, t_check);
+        let visible = rt.state().visible_glyphs(actor, TimePoint::ZERO + t_check);
         let lines = LayoutEngine::layout(
             state.items(),
             visible,
@@ -787,7 +789,7 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: TimeSpan) -> (usize, usize, us
     let Some(state) = rt.state().actor_state(actor) else {
         return (0, 0, 0);
     };
-    let visible = rt.state().visible_glyphs(actor, t);
+    let visible = rt.state().visible_glyphs(actor, TimePoint::ZERO + t);
     let lines = LayoutEngine::layout(
         state.items(),
         visible,
@@ -808,7 +810,7 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: TimeSpan) -> (usize, usize, us
 /// 指定注入時刻で `present_frame` を回す（失敗は log-first で Verdict へ記録して継続）。
 fn present_at(demo: &mut Demo, world: &mut World, t: TimeSpan) {
     let mut rt = demo.runtime.borrow_mut();
-    if let Err(e) = present_frame(&mut rt, world, t) {
+    if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t) {
         drop(rt);
         world
             .resource_mut::<Verdict>()

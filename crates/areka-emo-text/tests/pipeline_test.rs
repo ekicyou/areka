@@ -17,7 +17,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
-use dola::time::testing::ms;
+use dola::time::testing::{at_ms, ms};
 use support::fixture::{example_fixture_dir, merged_model};
 use support::pump_until_idle;
 
@@ -30,7 +30,7 @@ use areka_emo_text::region::TextRegion;
 use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimeSpan};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimePoint, TimeSpan};
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
 
@@ -101,7 +101,7 @@ fn run_direct_pipeline(cues: &[TalkCue]) -> TextLayerState {
 #[derive(Clone, Debug, PartialEq)]
 struct Observation {
     actor: ActorKey,
-    t: TimeSpan,
+    t: TimePoint,
     visible: usize,
     lines: Vec<PositionedLine>,
     window: VisibleWindow,
@@ -111,7 +111,7 @@ struct Observation {
 fn observe(
     state: &TextLayerState,
     actors: &[ActorKey],
-    probe_times: &[TimeSpan],
+    probe_times: &[TimePoint],
     region: &TextRegion,
     mode: WritingMode,
     font_height: f32,
@@ -186,7 +186,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_via_channel_an
         cue("1", ms(1750), CueCommand::Text("!".into())),
     ];
     // 注入時刻列（2 の冪グリッド・cue 境界とリビール境界を跨ぐ 13 点）。
-    let probe_times: Vec<TimeSpan> = (0..=12).map(|i| ms(i * 250)).collect();
+    let probe_times: Vec<TimePoint> = (0..=12).map(|i| at_ms(i * 250)).collect();
     let actors = [ActorKey::from("0"), ActorKey::from("1")];
     let region = horizontal_region();
 
@@ -276,15 +276,15 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 改行マーカーは遅延（deferred newline）: 後続の可視グリフが reveal された時点でのみ実体化し、
     // 可視 prefix 末尾より後ろの保留改行は空行を開かず蒸発する。ゆえに末尾に保留改行だけが積まれた時刻ではあふれが発火せず、
     // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる。
-    let expected: &[(TimeSpan, usize, usize, usize, f32)] = &[
-        (ms(0), 1, 1, 0, 0.0),         // r_0=0.0: "あ" のみ・1 行
-        (ms(250), 2, 1, 0, 0.0),       // "あい"・末尾改行は保留（空行を開かない）
-        (ms(500), 3, 2, 0, 0.0),       // "う" 実体化で L1 へ（あい / う）
-        (ms(750), 4, 2, 0, 0.0),       // "うえ"・末尾改行は保留（あい / うえ）
-        (ms(990), 4, 2, 0, 0.0),       // r_4=1.0 の直前——保留のまま 2 行
-        (ms(1000), 5, 3, 0, 0.0), // "お" 実体化（あい / うえ / お・下端 34＝境界ちょうど・非発火）
-        (ms(1500), 6, 4, 1, -12.0), // "か" 実体化で 4 行目（下端 46 > 34）→ あふれ発火
-        (ms(100_000), 6, 4, 1, -12.0), // 末尾到達後は飽和
+    let expected: &[(TimePoint, usize, usize, usize, f32)] = &[
+        (at_ms(0), 1, 1, 0, 0.0),         // r_0=0.0: "あ" のみ・1 行
+        (at_ms(250), 2, 1, 0, 0.0),       // "あい"・末尾改行は保留（空行を開かない）
+        (at_ms(500), 3, 2, 0, 0.0),       // "う" 実体化で L1 へ（あい / う）
+        (at_ms(750), 4, 2, 0, 0.0),       // "うえ"・末尾改行は保留（あい / うえ）
+        (at_ms(990), 4, 2, 0, 0.0),       // r_4=1.0 の直前——保留のまま 2 行
+        (at_ms(1000), 5, 3, 0, 0.0), // "お" 実体化（あい / うえ / お・下端 34＝境界ちょうど・非発火）
+        (at_ms(1500), 6, 4, 1, -12.0), // "か" 実体化で 4 行目（下端 46 > 34）→ あふれ発火
+        (at_ms(100_000), 6, 4, 1, -12.0), // 末尾到達後は飽和
     ];
     for &(t, visible, line_count, first, offset) in expected {
         let got_visible = state.visible_glyphs(&actor, t);
@@ -345,12 +345,12 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     );
 
     // 新 chunk のリビールは自身の at=0.75 起点: r=[0.75, 1.0]。
-    let expected: &[(TimeSpan, usize)] = &[
-        (ms(500), 0),
-        (ms(740), 0),
-        (ms(750), 1),
-        (ms(1000), 2),
-        (ms(100_000), 2),
+    let expected: &[(TimePoint, usize)] = &[
+        (at_ms(500), 0),
+        (at_ms(740), 0),
+        (at_ms(750), 1),
+        (at_ms(1000), 2),
+        (at_ms(100_000), 2),
     ];
     for &(t, visible) in expected {
         assert_eq!(
@@ -363,7 +363,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     // 可視 0 の時刻では行も生まれず、可視窓は既定（描画対象なし）。
     let lines_empty = LayoutEngine::layout(
         &items,
-        state.visible_glyphs(&actor, ms(500)),
+        state.visible_glyphs(&actor, at_ms(500)),
         &region,
         WritingMode::HorizontalTb,
         10.0,
@@ -385,7 +385,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     // 全量リビール後も 1 行に収まり、あふれは発火しない。
     let lines_full = LayoutEngine::layout(
         &items,
-        state.visible_glyphs(&actor, ms(100_000)),
+        state.visible_glyphs(&actor, at_ms(100_000)),
         &region,
         WritingMode::HorizontalTb,
         10.0,
@@ -437,17 +437,17 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
 
     let state = run_channel_pipeline(cues);
     let actors = [ActorKey::from("0")];
-    let probe_times = [ms(1000), ms(10_000)];
+    let probe_times = [at_ms(1000), at_ms(10_000)];
 
     let trace = observe(&state, &actors, &probe_times, &region, mode, 10.0);
 
     let actor = ActorKey::from("0");
     // リビール途中（t=1.0・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
     // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 298 ≥ 36 → 非発火。
-    assert_eq!(state.visible_glyphs(&actor, ms(1000)), 5);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 5);
     let at_1s = trace
         .iter()
-        .find(|o| o.t == ms(1000))
+        .find(|o| o.t == at_ms(1000))
         .expect("t=1.0 の観測");
     assert_eq!(at_1s.lines.len(), 5);
     assert_eq!(
@@ -461,10 +461,10 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
 
     // 全量リビール（t=10.0・可視 27・最終グリフのリビール時刻 6.5）: 27 列目の左端 34 < 36 →
     // 横スクロール発火（vertical_rl＝内容が右へ＝ブロック軸オフセット +12）。
-    assert_eq!(state.visible_glyphs(&actor, ms(10_000)), 27);
+    assert_eq!(state.visible_glyphs(&actor, at_ms(10_000)), 27);
     let at_10s = trace
         .iter()
-        .find(|o| o.t == ms(10_000))
+        .find(|o| o.t == at_ms(10_000))
         .expect("t=10.0 の観測");
     assert_eq!(at_10s.lines.len(), 27);
     assert_eq!(

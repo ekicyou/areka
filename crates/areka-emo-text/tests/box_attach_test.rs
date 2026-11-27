@@ -18,13 +18,14 @@
 mod support;
 
 use dola::time::testing::ms;
+use support::present_at;
 use support::{build_assets, make_world_with_gpu, opaque_count, read_back_at, show_surface};
 
 use std::collections::BTreeMap;
 
 use areka_emo_compose::{BoxLayout, EmoWorld, fold_boxes};
 use areka_emo_present::{EmoPresenter, TargetId};
-use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime, present_frame};
+use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime};
 use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::{SurfaceKeyOutcome, TextLayerConfig};
 use areka_parsers::shell::{parse, parse_boxes};
@@ -193,7 +194,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         .current_surface_id(TargetId(0))
         .expect("前提: 絵 1000 を表示している");
     rt.sync_boxes(&mut world, &[(actor(), Some((view, shown)))]);
-    present_frame(&mut rt, &mut world, LATE).expect("提示フレーム");
+    present_at(&mut rt, &mut world, LATE).expect("提示フレーム");
 
     // ── 並び: 差し込み口 → b（element2）→ a（element1）→ 絵 ──
     let child_of = |place: &PlaceKey| {
@@ -285,7 +286,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         mask_summary(&world, child_b).0,
     );
     rt.apply_cue(&cue(CueCommand::Text("ふむふむ".into())));
-    present_frame(&mut rt, &mut world, ms(11_000)).expect("追記後フレーム");
+    present_at(&mut rt, &mut world, ms(11_000)).expect("追記後フレーム");
     assert!(
         mask_summary(&world, child_b).0 > inside_b,
         "b の追記で b の字の矩形が増える"

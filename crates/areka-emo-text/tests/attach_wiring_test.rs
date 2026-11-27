@@ -13,6 +13,7 @@
 mod support;
 
 use dola::time::testing::ms;
+use support::present_at;
 use support::{
     build_target_assets, make_world_with_gpu, opaque_count, pump_until_idle, read_back,
     show_surface,
@@ -22,7 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_emo_present::{EmoPresenter, TargetId};
-use areka_emo_text::actor::{TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text};
+use areka_emo_text::actor::{TextLayerRuntime, TextSlotBinding, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimeSpan};
@@ -176,7 +177,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     // ── フレーム提示: 両 actor が各自の予約スロットへ装着され、独立に描画される ──
     {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(1000)).expect("提示フレーム（全リビール済み時刻）");
+        present_at(&mut rt, &mut world, ms(1000)).expect("提示フレーム（全リビール済み時刻）");
         assert!(
             rt.is_attached(&sakura),
             "\\0 は target0 のスロットへ装着される"
@@ -224,7 +225,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     {
         let mut rt = runtime.borrow_mut();
         rt.apply_cue(&cue("0", ms(1000), CueCommand::Text("追記も出る".into())));
-        present_frame(&mut rt, &mut world, ms(2000)).expect("追記後フレーム");
+        present_at(&mut rt, &mut world, ms(2000)).expect("追記後フレーム");
     }
     let rt = runtime.borrow();
     let ink0_after = opaque_count(&read_back(&rt, &sakura));
@@ -258,7 +259,7 @@ fn single_actor_attaches_only_to_its_own_target() {
     rt.register_actor_view(kero.clone(), &view1, &model);
 
     rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
-    present_frame(&mut rt, &mut world, ms(1000)).expect("単一 actor フレーム");
+    present_at(&mut rt, &mut world, ms(1000)).expect("単一 actor フレーム");
 
     assert!(
         rt.is_attached(&sakura),
@@ -300,7 +301,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
 
     rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
     rt.apply_cue(&cue("1", ms(0), CueCommand::Text("未結線".into())));
-    present_frame(&mut rt, &mut world, ms(1000)).expect("未登録 actor 混在でも frame は Ok");
+    present_at(&mut rt, &mut world, ms(1000)).expect("未登録 actor 混在でも frame は Ok");
 
     assert!(rt.is_attached(&sakura), "結線済み \\0 は装着される");
     assert!(!rt.is_attached(&kero), "未結線 \\1 は装着されない");
@@ -317,7 +318,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     // 後追い結線（表示確立後の登録）→ 次フレームで再試行が装着する。
     let view1 = presenter.text_slot_view(TargetId(1)).expect("view1");
     rt.register_actor_view(kero.clone(), &view1, &model);
-    present_frame(&mut rt, &mut world, ms(2000)).expect("後追い結線フレーム");
+    present_at(&mut rt, &mut world, ms(2000)).expect("後追い結線フレーム");
     assert!(
         rt.is_attached(&kero),
         "後追い結線の次フレームで \\1 も装着される"
@@ -383,7 +384,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor_view(sakura.clone(), &view, &model);
     rt.apply_cue(&cue("0", ms(0), CueCommand::Text("アヒル".into())));
-    present_frame(&mut rt, &mut world, ms(1000)).expect("k=2 の初回提示（装着）");
+    present_at(&mut rt, &mut world, ms(1000)).expect("k=2 の初回提示（装着）");
     assert_eq!(
         rt.surface(&sakura).expect("装着済み供給面").size(),
         (280, 160),
@@ -479,7 +480,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     // ── 1 回目の装着ログ: physical_size は k=1 の native 寸 ──
     let attach_msg = "テキスト供給面を予約スロットへ装着した";
     let (_, attach_events) =
-        capture(|| present_frame(&mut rt, &mut world, ms(1000)).expect("初回提示（装着）"));
+        capture(|| present_at(&mut rt, &mut world, ms(1000)).expect("初回提示（装着）"));
     let first_attach = expect_one(&attach_events, attach_msg);
     assert_eq!(
         first_attach.level,
@@ -523,7 +524,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
 
     // ── 2 回目の装着ログ: physical_size が新 k 寸（比 = k_new / k_old = 2.0） ──
     let (_, reattach_events) =
-        capture(|| present_frame(&mut rt, &mut world, ms(1000)).expect("再追従後の提示"));
+        capture(|| present_at(&mut rt, &mut world, ms(1000)).expect("再追従後の提示"));
     let second_attach = expect_one(&reattach_events, attach_msg);
     assert_eq!(
         second_attach.expect_field("physical_size"),
@@ -537,7 +538,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
         "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）"
     );
     let (_, idle_events) =
-        capture(|| present_frame(&mut rt, &mut world, ms(1000)).expect("同値 k 後の提示"));
+        capture(|| present_at(&mut rt, &mut world, ms(1000)).expect("同値 k 後の提示"));
     assert!(
         !idle_events.iter().any(|e| e.message().contains(attach_msg)),
         "破棄が挟まらないフレームでは装着 info! は出ない（毎フレーム再生成の禁止）: {idle_events:?}"

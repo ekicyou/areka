@@ -302,7 +302,7 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     {
         let mut rt = demo.runtime.borrow_mut();
         // 最初の 1 回は `error!`（例の失敗は `error!` を残す）・以後は毎フレーム繰り返しうるので `warn!`。
-        if let Err(e) = present_frame(&mut rt, world, t) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t) {
             if demo.present_err_logged {
                 warn!(error = %e, "提示フレームで失敗（次フレーム再試行）");
             } else {

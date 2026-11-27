@@ -637,7 +637,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.7, 9.6_
 
-- [ ] 10.5 (P) areka-emo-text の結合テストと例を、列とフレームの時刻の形へ直す
+- [x] 10.5 (P) areka-emo-text の結合テストと例を、列とフレームの時刻の形へ直す
   - 合図を入れて進める口に時刻を渡す形にし、例を組めるようにする
   - `tests/` の結合テストの入口と例が組めて緑である（`src` のテストは 10.4）
   - _Boundary: areka-emo-text 結合テストと例_

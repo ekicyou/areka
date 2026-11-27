@@ -23,7 +23,7 @@ use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
 use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimeSpan};
-use dola::time::testing::ms;
+use dola::time::testing::{at_ms, ms};
 
 // ── テスト土台 ──────────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ fn horizontal_layout_decision_in_image_space() {
         .actor_state(&actor)
         .map(|s| s.items().to_vec())
         .unwrap_or_default();
-    let visible = state.visible_glyphs(&actor, ms(10_000));
+    let visible = state.visible_glyphs(&actor, at_ms(10_000));
     let lines = LayoutEngine::layout(
         &items,
         visible,

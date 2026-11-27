@@ -23,14 +23,13 @@ mod support;
 
 use dola::time::testing::ms;
 use support::fixture::{assert_real_font_present, balloon_metrics};
+use support::present_at;
 use support::{
     Band, assert_hover_band, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
     to_canvas_local, y_span_where,
 };
 
-use areka_emo_text::actor::{
-    ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
-};
+use areka_emo_text::actor::{ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::layout::GlyphMetrics;
 use areka_emo_text::region::TextRegion;
@@ -152,7 +151,7 @@ fn present_cues(rt: &mut TextLayerRuntime, world: &mut World, cues: &[TalkCue]) 
     for cue in cues {
         rt.apply_cue(cue);
     }
-    present_frame(rt, world, ms(100000)).expect("提示");
+    present_at(rt, world, ms(100000)).expect("提示");
 }
 
 /// 装着済み runtime を組む（供給面は validrect 寸のみを覆う）。
@@ -398,7 +397,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
 
     for (ordinal, (_, label)) in CHOICES.iter().enumerate() {
         rt.inject_choice_hover(&actor, Some(ordinal));
-        present_frame(&mut rt, &mut world, ms(100000)).expect("ホバー提示");
+        present_at(&mut rt, &mut world, ms(100000)).expect("ホバー提示");
         let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
         // 窓は帯の上端を基準に上下へ SCAN_MARGIN ずつ開ける（下端は次の行の帯の上端 ＋ SCAN_MARGIN）。

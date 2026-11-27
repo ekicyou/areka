@@ -32,6 +32,7 @@
 mod support;
 
 use dola::time::testing::ms;
+use support::present_at;
 use support::{
     build_target_assets, make_world_with_gpu, opaque_count, pump_until_idle, read_back,
     show_surface, spawn_reserved_slot,
@@ -42,7 +43,7 @@ use std::rc::Rc;
 
 use areka_emo_present::{EmoPresenter, TargetId};
 use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text,
 };
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::BalloonModel;
@@ -182,16 +183,25 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         .borrow_mut()
         .register_actor_view(actor.clone(), &view, &model);
 
-    // ── セッション 1: 5 グリフ（at=0.1）を実 sink→UI ドレインで状態機械へ ──
+    // ── セッション 1: 省略形の `\_l`（at=0.0）＋5 グリフ（at=0.1）を実 sink→UI ドレインで状態機械へ ──
     let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
+    // 字を持たない cue だけが当たった状態を作り、可視 0 のまま装着される枠を観測する。
+    sink.emit(cue(
+        "0",
+        ms(0),
+        CueCommand::Cursor {
+            x: String::new(),
+            y: String::new(),
+        },
+    ));
     sink.emit(cue("0", ms(100), CueCommand::Text("あいうえお".into())));
     pump_until_idle();
 
-    // 装着フレーム（t=0.0 ＜ at=0.1 → 可視 0）: 装着は成立し、供給面は全域透明。
+    // 装着フレーム（t=0.0 ＜ 字の at=0.1 → 可視 0）: 装着は成立し、供給面は全域透明。
     // 実配線のインク源はテキストのみ＝グリフ未リビールなら面は空。
     {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(0)).expect("装着フレーム（可視 0）");
+        present_at(&mut rt, &mut world, ms(0)).expect("装着フレーム（可視 0）");
         assert!(
             rt.is_attached(&actor),
             "cue 到着済み actor は可視 0 でも装着される"
@@ -221,7 +231,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     let mut counts = vec![0usize];
     for t in [ms(110), ms(160), ms(210), ms(260), ms(310)] {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, t).expect("リビール進行フレーム");
+        present_at(&mut rt, &mut world, t).expect("リビール進行フレーム");
         drop(rt);
         counts.push(opaque_count(&read_back(&runtime.borrow(), &actor)));
     }
@@ -255,7 +265,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     pump_until_idle();
     let before = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(5000)).expect("全リビール済みフレーム（3 行）");
+        present_at(&mut rt, &mut world, ms(5000)).expect("全リビール済みフレーム（3 行）");
         drop(rt);
         read_back(&runtime.borrow(), &actor)
     };
@@ -266,7 +276,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     // 決定論: 同一注入時刻の再提示はバイト一致（全域再描画に差分累積なし）。
     {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(5000)).expect("同一時刻の再提示フレーム");
+        present_at(&mut rt, &mut world, ms(5000)).expect("同一時刻の再提示フレーム");
         drop(rt);
         assert_eq!(
             read_back(&runtime.borrow(), &actor),
@@ -281,7 +291,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     pump_until_idle();
     let after = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(10000)).expect("あふれ後フレーム");
+        present_at(&mut rt, &mut world, ms(10000)).expect("あふれ後フレーム");
         drop(rt);
         read_back(&runtime.borrow(), &actor)
     };
@@ -303,7 +313,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     pump_until_idle();
     {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(12000)).expect("Clear 後フレーム");
+        present_at(&mut rt, &mut world, ms(12000)).expect("Clear 後フレーム");
         drop(rt);
         let rt = runtime.borrow();
         let bytes = read_back(&rt, &actor);
@@ -366,7 +376,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     // ── 述語 1（縦書き）: r = [0.0, 0.05] → t=0.0 で 1 グリフ・t=0.06 で 2 グリフ ──
     let n1 = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(0)).expect("縦書き 1 グリフ目フレーム");
+        present_at(&mut rt, &mut world, ms(0)).expect("縦書き 1 グリフ目フレーム");
         drop(rt);
         opaque_count(&read_back(&runtime.borrow(), &actor))
     };
@@ -390,7 +400,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     }
     let n2 = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(60)).expect("縦書き 2 グリフ目フレーム");
+        present_at(&mut rt, &mut world, ms(60)).expect("縦書き 2 グリフ目フレーム");
         drop(rt);
         opaque_count(&read_back(&runtime.borrow(), &actor))
     };
@@ -402,7 +412,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     // 全リビール（8 列・■×9）＝あふれ前の基準。述語 3 の封じ込め構造も縦書きで成立。
     let before = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(10000)).expect("全リビール済みフレーム（8 列）");
+        present_at(&mut rt, &mut world, ms(10000)).expect("全リビール済みフレーム（8 列）");
         drop(rt);
         read_back(&runtime.borrow(), &actor)
     };
@@ -423,7 +433,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     pump_until_idle();
     let after = {
         let mut rt = runtime.borrow_mut();
-        present_frame(&mut rt, &mut world, ms(20000)).expect("あふれ後フレーム（縦書き）");
+        present_at(&mut rt, &mut world, ms(20000)).expect("あふれ後フレーム（縦書き）");
         drop(rt);
         read_back(&runtime.borrow(), &actor)
     };
@@ -444,7 +454,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     sink.close();
     pump_until_idle();
     let mut rt = runtime.borrow_mut();
-    present_frame(&mut rt, &mut world, ms(22000)).expect("Clear 後フレーム（縦書き）");
+    present_at(&mut rt, &mut world, ms(22000)).expect("Clear 後フレーム（縦書き）");
     drop(rt);
     let bytes = read_back(&runtime.borrow(), &actor);
     assert_eq!(bytes.len(), (VR_SIZE.0 * VR_SIZE.1 * 4) as usize);

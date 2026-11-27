@@ -31,7 +31,9 @@ use dola::time::testing::ms;
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
-use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
+use shared::{
+    make_world_with_gpu, opaque_count, present_at, read_back, spawn_reserved_slot, surface_size,
+};
 
 /// 実フォントの門は `support/fixture.rs` が持つ。期待値の前提になる実フォント
 /// `REAL_FONT` は、プロポーショナルで実物 `emo2-kakukaku` と同じ指定。
@@ -39,9 +41,7 @@ pub(crate) use shared::fixture::{REAL_FONT, assert_real_font_present, font_is_in
 
 mod vertical;
 
-use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
-};
+use areka_emo_text::actor::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue, TimeSpan};
@@ -220,7 +220,7 @@ fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
     for c in script {
         rt.apply_cue(c);
     }
-    present_frame(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
+    present_at(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
 
     let (width, height) = surface_size(&rt, &actor);
     Shot {

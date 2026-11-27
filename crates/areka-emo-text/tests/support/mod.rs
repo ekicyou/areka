@@ -194,6 +194,17 @@ pub fn cue(actor: &str, at: TimeSpan, command: CueCommand, interval: TimeSpan) -
     )
 }
 
+/// 時刻の来た合図を当ててから提示する（`t` は起点 0 の台本の時刻）。本番のフレームの頭と同じ順。
+pub fn present_at(
+    rt: &mut TextLayerRuntime,
+    world: &mut World,
+    t: TimeSpan,
+) -> Result<(), areka_emo_text::TextLayerError> {
+    let now = TimePoint::ZERO + t;
+    rt.advance(now);
+    areka_emo_text::actor::present_frame(rt, world, now)
+}
+
 /// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
 /// （`WM_QUIT` は posted メッセージが尽きた後にのみ配送されるため、drain タスクは queue 済みの
 /// cue を全て処理してから復帰する。決定論・ハングしない）。

@@ -20,13 +20,14 @@
 mod support;
 
 use dola::time::testing::ms;
+use support::present_at;
 use support::{make_world_with_gpu, pump_until_idle, spawn_reserved_slot};
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text,
 };
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
@@ -93,7 +94,7 @@ fn emit_line(sink: &mut EmoTextSink, line_index: usize) {
 /// フレーム提示。後続の `pump_until_idle` の drain handler が runtime を `try_borrow_mut` するので、借用を残さない。
 fn present(runtime: &Rc<RefCell<TextLayerRuntime>>, world: &mut World, t: TimeSpan) {
     let mut rt = runtime.borrow_mut();
-    present_frame(&mut rt, world, t).expect("present_frame");
+    present_at(&mut rt, world, t).expect("present_frame");
 }
 
 /// 装着済み actor の決定論観測統計。

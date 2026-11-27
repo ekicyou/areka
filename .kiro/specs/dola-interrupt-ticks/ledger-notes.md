@@ -352,3 +352,9 @@
 - 消したテスト・分かれ道・ログ・assert は無い。`lib.rs` の `PURE_SOURCES` に `actor_held.rs`・`actor_held_tests.rs` を載せた（90→92）。
 - 「`spawn_emo_text` に入れた合図はその場で当たる」→「`advance` の後に当たる」へ変えた期待: `sink::talk_end_tests` の 3 本（補助 `drain_with_choices` が `advance(TimePoint::MAX)` を呼ぶ）、`actor::sink_probe_tests::drain_reports_missing_box_once_and_not_for_present_box`（pump の直後は知らせ 0 件の assert を足す）、`actor::tests::preview_rehearses_once_and_applied_cues_count_clears`（pump の直後は `number == 0` の assert を足す）、`actor::runtime_frame_tests` の 3 本（期待の値は元のまま）、`actor_lookahead_tests`（`Rig::lines` が各時刻で `advance(t)`）。
 - 「全部が現れている時刻」は `TimePoint::MAX`。後に有限の時刻のフレームが来る所は有限の時刻にした: `actor_frame_memo_tests::unchanged_second_frame_does_not_rebuild`（1 s→2 s）、`actor_lookahead_shapes_tests` の `LATER`（110 s）。ほかは型だけの直し（フレームの `ms` → `at_ms`、字の時刻の期待 `Vec<TimeSpan>` → `Vec<TimePoint>`）。
+
+## 10.5（後半）
+
+- 消したテスト・分かれ道・ログ・assert は無い。`tests/support/mod.rs` に `present_at`（同じ時刻で `advance` → `present_frame`）を足し、`tests/` の提示は全部これを通す。`pipeline_test`・`scale_invariance_test` の時刻の表は `TimeSpan` → `TimePoint`（値は同じ）。
+- `draw_readback_test::full_path_ink_monotonic_clear_transparent_and_contained_in_validrect`: 前は at=100ms の字の cue が届いた場で当たり、t=0 で「可視 0 で装着」。後は t=0 に字を持たない cue（軸を省いた `\_l`、at=0）だけが当たり、字の cue は列に持たれたまま「可視 0 で装着」。以降の期待は同じ。
+- 例 `emo-text-layer`（`drive.rs`）はフレームごとに `advance(ZERO + t)` してから関門を見る。`emo-text-typewriter-demo` は時刻の型だけ。
