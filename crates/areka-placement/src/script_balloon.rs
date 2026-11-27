@@ -3,10 +3,14 @@
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use wintf::ecs::drag::WindowDragging;
 
 use crate::config::{BalloonSide, BalloonXMode, ScopeConfig};
-use crate::reseed::{StandardScope, resolve_descript_scopes, resolve_standard_scopes};
+use crate::face_windowposition::BalloonUserMoved;
+use crate::reseed::{
+    StandardScope, reinstall_balloon, resolve_descript_scopes, resolve_standard_scopes,
+};
 use crate::reset_pos::DefaultPlacementBasis;
 use crate::resolver::PointPx;
 use crate::spawn::GhostWindows;
@@ -235,6 +239,161 @@ pub(crate) fn script_share(world: &World, scope: usize) -> ScriptShare {
         }),
         _ => ScriptShare::Unresolved("not_resolved"),
     }
+}
+
+/// ずらしの命令を `scope` に当て、出ているバルーンを新しい標準の位置へ据え直す。値を持ったら真。
+///
+/// `landed` はそのスコープのキャラ窓の表示が実表示寸へ着地したか（runtime の move drain が答える）。
+pub fn apply_script_balloon_offset(
+    world: &mut World,
+    scope: u32,
+    offset: ScriptOffset,
+    landed: bool,
+) -> bool {
+    apply_script_balloon(world, scope, Command::Offset(offset), landed)
+}
+
+/// 向きの命令を `scope` に当て、出ているバルーンを新しい標準の位置へ据え直す。値を持ったら真。
+///
+/// `landed` はそのスコープのキャラ窓の表示が実表示寸へ着地したか（runtime の move drain が答える）。
+pub fn apply_script_balloon_align(
+    world: &mut World,
+    scope: u32,
+    align: ScriptAlign,
+    landed: bool,
+) -> bool {
+    apply_script_balloon(world, scope, Command::Align(align), landed)
+}
+
+enum Command {
+    Offset(ScriptOffset),
+    Align(ScriptAlign),
+}
+
+impl Command {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Offset(_) => "set,balloonoffset",
+            Self::Align(_) => "set,balloonalign",
+        }
+    }
+}
+
+fn axis_parts(axis: OffsetAxis) -> (&'static str, i32) {
+    match axis {
+        OffsetAxis::Absolute(v) => ("absolute", v),
+        OffsetAxis::Relative(v) => ("relative", v),
+    }
+}
+
+fn apply_script_balloon(world: &mut World, scope: u32, command: Command, landed: bool) -> bool {
+    let name = command.name();
+    let skipped = |reason: &str| {
+        warn!(
+            event = "script_balloon_skipped",
+            scope,
+            command = name,
+            reason,
+            "台本のバルーン位置の命令を当てる窓が無い"
+        );
+        false
+    };
+    let Some(windows) = world.get_resource::<GhostWindows>().cloned() else {
+        return skipped("no_ghost_windows");
+    };
+    let index = scope as usize;
+    let Some(char_window) = windows.char_window(index) else {
+        return skipped("no_char_window");
+    };
+
+    let mut value = world
+        .get::<ScriptBalloonPlacement>(char_window)
+        .cloned()
+        .unwrap_or(ScriptBalloonPlacement {
+            scope: index,
+            offset: None,
+            align: None,
+        });
+    let user_moved = world.entity(char_window).contains::<BalloonUserMoved>();
+    match command {
+        Command::Offset(offset) => {
+            value.offset = Some(offset);
+            let (x_kind, x) = axis_parts(offset.x);
+            let (y_kind, y) = axis_parts(offset.y);
+            info!(
+                event = "script_balloon_offset_set",
+                scope,
+                command = name,
+                x_kind,
+                x,
+                y_kind,
+                y,
+                landed,
+                user_moved,
+                "台本のバルーンのずらしを受けた"
+            );
+        }
+        Command::Align(align) => {
+            let align = match align {
+                ScriptAlign::Unknown(raw) => {
+                    warn!(
+                        event = "script_balloon_align_unknown",
+                        scope,
+                        raw = raw.as_str(),
+                        "台本のバルーンの向きが 6 語のどれでもないので none として当てる"
+                    );
+                    ScriptAlign::None
+                }
+                align => align,
+            };
+            info!(
+                event = "script_balloon_align_set",
+                scope,
+                command = name,
+                align = ?align,
+                landed,
+                user_moved,
+                "台本のバルーンの向きを受けた"
+            );
+            value.align = Some(align);
+        }
+    }
+    world.entity_mut(char_window).insert(value);
+
+    if windows
+        .balloon_window(index)
+        .is_some_and(|b| world.entity(b).contains::<WindowDragging>())
+    {
+        info!(
+            event = "script_balloon_reanchor_skipped",
+            scope,
+            reason = "balloon_dragging",
+            "ドラッグ中のバルーンは値だけを取り替えて置き直さない"
+        );
+        return true;
+    }
+    let deferred = |reason: &str| {
+        warn!(
+            event = "script_balloon_place_deferred",
+            scope,
+            command = name,
+            reason,
+            "台本のバルーン位置の値を持ったまま置き直さない"
+        );
+        true
+    };
+    let Some(basis) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
+        return deferred("no_default_basis");
+    };
+    let Some(StandardScope { running, placement }) =
+        resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
+            .into_iter()
+            .find(|s| s.placement.scope == index)
+    else {
+        return deferred("not_resolved");
+    };
+    reinstall_balloon(world, &running, &placement);
+    true
 }
 
 #[cfg(test)]
