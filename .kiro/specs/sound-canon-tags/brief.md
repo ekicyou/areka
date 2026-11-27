@@ -58,7 +58,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `talk-script-metadata`（v0.2.0・相対パスの基準）・v0.2.0 の dola の時刻の土台（`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`＝待ちを正確に刻む）。
+- **Upstream**: `talk-script-metadata`（v0.2.0・相対パスの基準）・v0.2.0 の dola の時刻の土台（✅ `dola-interrupt-ticks`＝待ちを正確に刻む）。
 - **Downstream**: `parallel-visual-script`（音を鳴らす所）・`sakura-time-directives`（`\![sound,wait]`）・ノベルの音の拡張（受け口の節）・`areka-usage-stats` には関係しない。
 
 ## Existing Spec Touchpoints

@@ -29,6 +29,8 @@ concurrency:
 jobs:
   publish:
     runs-on: windows-latest
+    # 「release を待つ」の LIMIT_MINUTES（120 分）に、後の段のぶんを足した長さ
+    timeout-minutes: 150
     defaults:
       run:
         shell: pwsh
@@ -64,7 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # 待つ長さ（変えるのはこの 2 行だけ）
+          # 待つ長さ（LIMIT_MINUTES を延ばすときは、仕事の timeout-minutes も延ばす）
           $LIMIT_MINUTES = 120
           $POLL_SECONDS = 30
           $tag = "v$env:VERSION"
@@ -129,9 +131,11 @@ jobs:
           }
 
       - name: 道具
+        timeout-minutes: 10
         run: rustup update stable --no-self-update
 
       - name: 公開前の確認
+        timeout-minutes: 30
         run: pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version $env:VERSION
 
       - name: 残りの判定
@@ -150,6 +154,7 @@ jobs:
         uses: rust-lang/crates-io-auth-action@v1
 
       - name: 公開
+        timeout-minutes: 15
         if: steps.pending.outputs.names != ''
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
