@@ -422,6 +422,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     let (display, plan) = FrameBudget::display_buffer(Some(CacheEntry {
         plan: recycled_plan,
         composed,
+        snapshot: Default::default(),
     }));
     assert_eq!(
         plan.items.as_ptr(),

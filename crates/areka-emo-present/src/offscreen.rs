@@ -23,12 +23,7 @@ pub struct OffscreenRenderer {
 impl OffscreenRenderer {
     /// 画面と同じ hardware の装置で作る。
     pub fn hardware() -> Result<Self, PresentError> {
-        let core = GraphicsCore::new().map_err(device_err("GraphicsCore::new(offscreen)", None))?;
-        let device = core
-            .d2d_device()
-            .cloned()
-            .expect("作ったばかりの GraphicsCore は装置を持つ");
-        Ok(Self::on(device))
+        Ok(Self::on(hardware_device()?))
     }
 
     /// WARP の装置（プロセスで 1 つ）で作る。
@@ -85,6 +80,15 @@ impl OffscreenRenderer {
             image.bytes,
         ))
     }
+}
+
+/// 画面と同じ hardware の装置を新しく作る。
+pub(crate) fn hardware_device() -> Result<ID2D1Device, PresentError> {
+    let core = GraphicsCore::new().map_err(device_err("GraphicsCore::new(offscreen)", None))?;
+    Ok(core
+        .d2d_device()
+        .cloned()
+        .expect("作ったばかりの GraphicsCore は装置を持つ"))
 }
 
 #[cfg(test)]

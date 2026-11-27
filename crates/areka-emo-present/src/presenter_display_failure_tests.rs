@@ -567,6 +567,7 @@ fn display_failure_after_a_device_change_keeps_the_previous_atlas_and_nodes() {
     let device_of = |presenter: &EmoPresenter| {
         presenter.targets[&TARGET]
             .gpu
+            .borrow()
             .as_ref()
             .expect("表示確立後は頁の控えが在る")
             .device()

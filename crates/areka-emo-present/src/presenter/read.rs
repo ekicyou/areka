@@ -231,14 +231,13 @@ impl EmoPresenter {
         Some(self.targets.get(&target)?.visible)
     }
 
-    /// target が表示に渡した**原寸の合成バイト列**（表示中エントリの `ComposedSurface`・premultiplied
-    /// BGRA・`stride=width*4`）を返す。
+    /// target が表示に渡した計画の**原寸の絵のバイト列**（premultiplied BGRA・`stride=width*4`）を返す。
     ///
-    /// 表示面（wintf の `CompositionDrawingSurface`）は書き込み専用で読み戻さない。返るのは合成メモが
-    /// 保持する原寸バイト列そのもので、k の値に依らず同一。寿命はメモの寿命に等しいので、消費者は表示
-    /// 直後に読む。失敗はどれも `error!` ＋ `Err`: 未装着は [`PresentError::TargetNotAttached`]・
-    /// 未表示は [`PresentError::NotShown`]・表示中エントリの消失（LRU 追い出し・`InvalidateCache` 後）は
-    /// [`PresentError::EntryEvicted`]。
+    /// [`Self::last_shown`] と同じ絵（合成メモの項の書き出しの控え）で、k の値に依らず同一。寿命はメモの
+    /// 寿命に等しいので、消費者は表示直後に読む。失敗はどれも `error!` ＋ `Err`: 未装着は
+    /// [`PresentError::TargetNotAttached`]・未表示は [`PresentError::NotShown`]・表示中エントリの消失
+    /// （LRU 追い出し・`InvalidateCache` 後）は [`PresentError::EntryEvicted`]・画面の外で描けないのは
+    /// 描き手の失敗。
     pub fn read_back(&self, target: TargetId) -> Result<Vec<u8>, PresentError> {
         let Some(t) = self.targets.get(&target) else {
             tracing::error!(?target, "read_back: 未装着ターゲット");
@@ -253,7 +252,7 @@ impl EmoPresenter {
         };
         // `get` は最近使用順を動かさない（LRU を打ち直すのは `show.rs` の `touch` だけ）。
         match t.cache.get(*surface_id, binds, pattern) {
-            Some(entry) => Ok(entry.composed.bytes().to_vec()),
+            Some(entry) => Ok(t.snapshot(target, entry)?.bytes().to_vec()),
             None => {
                 tracing::error!(
                     ?target,

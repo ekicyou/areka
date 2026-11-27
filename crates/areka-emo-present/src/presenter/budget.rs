@@ -415,7 +415,7 @@ impl FrameBudget {
     pub(super) fn display_buffer(recycled: Option<CacheEntry>) -> (ComposedSurface, DrawPlan) {
         match recycled {
             // 回収するのは確保だけ（新しいエントリの中身は今回の計画と合成が決める）。
-            Some(CacheEntry { plan, composed }) => (composed, plan),
+            Some(CacheEntry { plan, composed, .. }) => (composed, plan),
             None => (ComposedSurface::default(), empty_plan()),
         }
     }

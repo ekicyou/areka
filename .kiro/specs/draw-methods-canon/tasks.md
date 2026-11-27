@@ -210,7 +210,7 @@
   - _Dispatch: standard — 作り直しの点の付け替え_
   - _Requirements: 7.6, 8.3_
 
-- [ ] 7.4 書き出しを画面の外の描き手で原寸に描く
+- [x] 7.4 書き出しを画面の外の描き手で原寸に描く
   - 最後に出した絵の書き出しは、合成メモの項の書き出しの控えを、初めて読まれたとき目標の頁の控えで原寸に描いて満たす。描けなければ `error!` を残し、今の分岐が画面の外の描画の失敗を返す
   - 単独の合成・最後に出した面の合成・読み戻しも同じ描き手を通す。返す型は今のまま、MCP の `dump_surface` の本体には触らない
   - バルーンの書き出しも同じ分岐で同じ絵を読む
@@ -301,3 +301,4 @@
 - 7.1 → 7.2/7.6: コメントの直し残し（presenter_dpi_scale_tests.rs 392 行目の要件番号・presenter/timing.rs 60 行目の `compose_into_reusing`・presenter_keycolor_clickthrough_tests.rs 38 行目の `record_display`）。7.6 の取り下げの理由に display_tests.rs・display_fault_tests.rs を含める。
 - 7.2: クリックの透過と名前の解決は wintf の `surface_alpha_hits`（閾値 128・読めない間に 1 回の `error!`）1 つを通る。CPU の α マスクは外した。perf の行の `alloc_mask`（0）・`t_mask_us`（合成メモへ入れる時間）は judge-perf.py が必須の欄として読むので残した（judge-perf.py の説明の文は 8.3 か 7.6 で直す）。
 - 7.3 → 7.4: 装置が替わると `refresh_after_device_change` が合成メモを全部捨てる（書き出しの控えを空にするの上位集合）。`snapshot` を足すときに、計画は残して控えだけ空にする形へ絞るかを決める。
+- 7.4: 書き出しの控えは `OnceCell<Result<ComposedSurface, String>>`（描けなかった理由も項ごとに控え、読み直しは描き直さず記録も出さない）。`Device` の失敗は `ComposeError::Render` に読み替える。装置が替わると全部の目標の頁の控えを捨て、頁の控えを持たない目標（隠れている・一度も出していない）の書き出しは自分で作った hardware の装置で描いて控える（設計の「画面と同じ装置」から外れる場面・次の表示で画面の装置へ替わる）。MCP の表示済みの道で 1 回描けないときの `error!` は判定・`compose_last_shown`・`fail()` の 3 件（＋装置の呼び出しなら `device_err`）。

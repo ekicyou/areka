@@ -93,7 +93,7 @@ impl EmoPresenter {
                 acked_generation: 0,
                 move_shift: (0, 0),
                 pending_resize: None,
-                gpu: None,
+                gpu: Default::default(),
                 nodes: None,
                 failure_note: None,
                 hit_picture: None,

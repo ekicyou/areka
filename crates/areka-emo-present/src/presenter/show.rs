@@ -194,7 +194,7 @@ impl EmoPresenter {
         };
         prepare_gpu(
             world,
-            &mut target.gpu,
+            target.gpu.get_mut(),
             &target.atlas,
             plan,
             cache_hit,
@@ -289,7 +289,7 @@ impl EmoPresenter {
 
         let mount = target.mount.as_ref().expect("直上で生成済み");
         // 節: 同じ位置の項が等しければ触らない（同一エントリの再適用で版を上げない）。葉は上で記録済み。
-        let gpu = target.gpu.as_mut().expect("直前に用意した");
+        let gpu = target.gpu.get_mut().as_mut().expect("直前に用意した");
         let nodes = target.nodes.as_mut().expect("装着と一緒に作る");
         let rebuilt = nodes.sync(world, gpu, &entry.plan)?;
         target.budget.note_rebuilds(rebuilt);

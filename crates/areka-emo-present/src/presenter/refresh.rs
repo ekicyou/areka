@@ -152,7 +152,7 @@ impl EmoPresenter {
     /// 装置の作り直し・失いへの追従。毎フレーム呼ぶ。
     ///
     /// `Res<GraphicsCore>` の変化の印は作り直しと本当の失いのときだけ立つ。印を見たら全部の
-    /// target の控え（古い装置で閉じた命令の列）を捨て、装置が有効なら見えている target の最後の
+    /// target の控え（古い装置の頁の絵と閉じた命令の列）を捨て、装置が有効なら見えている target の最後の
     /// 表示を出し直す（`refresh_scale` の出し直しの道を倍率の門なしで通す）。無効な間は捨てるだけで、
     /// 作り直しの回にもう一度印が立って出し直す。初めて呼んだ回は印を控えるだけ。
     pub fn refresh_after_device_change(&mut self, world: &mut World) {
@@ -183,6 +183,7 @@ impl EmoPresenter {
         for target in ids {
             if let Some(t) = self.targets.get_mut(&target) {
                 t.discard_hit_gpu();
+                *t.gpu.get_mut() = None;
             }
             self.apply(
                 world,

@@ -4,6 +4,8 @@
 //! 表示成立点で更新される状態（`applied`／`native_size`／`last_show`／`pending_resize` ほか）を 1 つの
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に閉じる。
 
+use std::cell::RefCell;
+
 use super::budget::FrameBudget;
 use super::hit_picture::{HitNotes, HitPicture};
 use super::scale_change::AppliedScale;
@@ -188,8 +190,10 @@ pub(super) struct PresentTarget {
     /// 同寸の再表示では何も置かない。`None` を書き戻して既存の未消費要求を消すこともしない（同寸でも
     /// 「まだ窓へ反映していない要求」は生きているため）。
     pub(super) pending_resize: Option<(u32, u32)>,
-    /// 装置ごとの頁の絵と葉の控え（最初の表示で作り、装置が替わったら作り直す）。
-    pub(super) gpu: Option<GpuAtlas>,
+    /// 装置ごとの頁の絵と葉の控え（最初の表示か書き出しで作り、装置が替わったら捨てる）。
+    ///
+    /// `&self` の書き出しの口も画面の外の描画で葉を記録するので `RefCell` に入れる。
+    pub(super) gpu: RefCell<Option<GpuAtlas>>,
     /// 計画を `mount` のまとめの節の下へ写す部品（`mount` と一緒に作る）。
     pub(super) nodes: Option<DrawNodes>,
     /// **最後に記録した装置の失敗の原因**（`context`・`hresult`）。

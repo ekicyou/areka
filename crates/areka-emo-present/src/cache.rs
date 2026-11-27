@@ -1,5 +1,5 @@
 //! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 描く計画・
-//! 書き出しの控え（原寸の合成面）の組の、容量 3・LRU 置換のメモ化スロット表。
+//! 原寸の合成面・書き出しの控えの組の、容量 3・LRU 置換のメモ化スロット表。
 //!
 //! 上流 `areka-emo-compose` の合成は `(surface_id, BindSet)` の純粋関数なので、キーが合成入力の全体を
 //! 捕捉しないとキャッシュは正しくない（surface id だけをキーにすると、同一 surface で bind 集合だけ
@@ -29,6 +29,8 @@
 //! [`insert`]: ComposeCache::insert
 //! [`invalidate_all`]: ComposeCache::invalidate_all
 
+use std::cell::OnceCell;
+
 use areka_emo_compose::{BindSet, ComposedSurface, DrawPlan, PatternState};
 
 /// キャッシュエントリ＝描く計画と原寸の合成面の原子の組。
@@ -39,8 +41,10 @@ use areka_emo_compose::{BindSet, ComposedSurface, DrawPlan, PatternState};
 pub struct CacheEntry {
     /// 画面の節へ写す描く計画（表示の真実源）。
     pub plan: DrawPlan,
-    /// premultiplied BGRA・native 原寸の合成結果（書き出しの出どころ）。
+    /// premultiplied BGRA・native 原寸の CPU の合成結果（原寸の外形と席の使い回し）。
     pub composed: ComposedSurface,
+    /// 書き出しの控え＝`plan` を画面の外で原寸に描いた絵か、描けなかった理由（初めて読まれたときに満たす）。
+    pub snapshot: OnceCell<Result<ComposedSurface, String>>,
 }
 
 /// キャッシュキー＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）。
@@ -149,7 +153,14 @@ impl ComposeCache {
             binds,
             pattern,
         };
-        self.entries.push((key, CacheEntry { plan, composed }));
+        self.entries.push((
+            key,
+            CacheEntry {
+                plan,
+                composed,
+                snapshot: OnceCell::new(),
+            },
+        ));
     }
 
     /// 合成入力で引き当て、ヒットしたらそのエントリを最近使用の末尾へ引き上げる。戻り値はヒットしたか否か。

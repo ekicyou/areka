@@ -394,3 +394,152 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     assert_eq!(no_ids, None);
     assert!(records.is_empty(), "写しが記録を出した: {records:?}");
 }
+
+/// 合成メモの CPU の絵をわざと黒の 0 にしても、書き出しと読み戻しは計画を画面の外で描いた絵を返す。
+#[test]
+fn last_shown_and_read_back_draw_the_plan_not_the_cpu_picture() {
+    let (mut presenter, mut world) = setup();
+    let expected = golden(&presenter, BASE, &bound(), &animated());
+    let t = presenter.targets.get_mut(&SHOWN).expect("登録済み target");
+    let plan = Composer::new()
+        .plan(&t.emo_world, &t.atlas, BASE, &bound(), &animated())
+        .expect("計画は Ok");
+    let blank = ComposedSurface::from_bytes(4, 3, vec![0; 4 * 3 * 4]);
+    t.cache.insert(BASE, bound(), animated(), plan, blank);
+    show_with_ok(&mut presenter, &mut world, SHOWN, BASE, bound(), animated());
+
+    let (_, picture) = presenter.last_shown(SHOWN).expect("表示の後は Some");
+    assert_eq!(
+        bytes_of(picture.expect("描ける")),
+        (expected.clone(), 4, 3),
+        "書き出しは計画を描いた絵"
+    );
+    assert_eq!(
+        presenter.read_back(SHOWN).expect("読み戻せる"),
+        expected,
+        "読み戻しは書き出しと同じ絵"
+    );
+}
+
+/// 画面の外で描けなければ単体の合成は描けない失敗を返し、`error!` を残す。
+#[test]
+fn compose_alone_returns_render_failure_when_drawing_fails() {
+    let (presenter, _world) = setup();
+    let (result, records) = capture(|| {
+        let _armed = crate::display::arm_display_fault(crate::display::DisplayFault::CreateBitmap);
+        presenter.compose_alone(NEVER_SHOWN, BASE)
+    });
+    assert!(
+        matches!(
+            result,
+            Some(Err(areka_emo_compose::ComposeError::Render {
+                surface: BASE,
+                ..
+            }))
+        ),
+        "描けない失敗: {:?}",
+        result.map(|r| r.map(|c| c.width()))
+    );
+    assert!(
+        records.iter().any(|e| e.level == Level::ERROR),
+        "error! が残る: {records:?}"
+    );
+}
+
+/// 書き出しの控えは表示では描かず、初めて読まれたときに 1 度だけ描いて、以後は同じ絵を返す。
+#[test]
+fn snapshot_is_drawn_on_first_read_only() {
+    let (mut presenter, mut world) = setup();
+    show(
+        &mut presenter,
+        &mut world,
+        SHOWN,
+        BASE,
+        bound(),
+        PatternState::default(),
+    );
+    let entry_snapshot = |p: &EmoPresenter| {
+        p.targets[&SHOWN]
+            .cache
+            .get(BASE, &bound(), &PatternState::default())
+            .expect("表示の項")
+            .snapshot
+            .get()
+            .and_then(|c| c.as_ref().ok())
+            .map(|c| c as *const ComposedSurface)
+    };
+    assert_eq!(entry_snapshot(&presenter), None, "表示では描かない");
+
+    let first = presenter
+        .last_shown(SHOWN)
+        .and_then(|(_, c)| c)
+        .map(|c| c as *const _);
+    assert!(first.is_some(), "初めて読むと描く");
+    assert_eq!(entry_snapshot(&presenter), first, "控えに入る");
+    let again = presenter
+        .last_shown(SHOWN)
+        .and_then(|(_, c)| c)
+        .map(|c| c as *const _);
+    assert_eq!(again, first, "2 度目は同じ控え");
+}
+
+/// 画面の外で描けなければ、書き出しは ID だけを返して `error!` を 1 度だけ残す。同じ項を読み直しても
+/// 描き直さず、同じ失敗を黙って返す。
+#[test]
+fn last_shown_without_picture_when_drawing_fails() {
+    let (mut presenter, mut world) = setup();
+    show(
+        &mut presenter,
+        &mut world,
+        SHOWN,
+        BASE,
+        bound(),
+        PatternState::default(),
+    );
+    *presenter.targets[&SHOWN].gpu.borrow_mut() = None;
+
+    let (shown, records) = capture(|| {
+        let _armed = crate::display::arm_display_fault(crate::display::DisplayFault::CreateBitmap);
+        presenter.last_shown(SHOWN).map(|(id, c)| (id, c.is_some()))
+    });
+    assert_eq!(shown, Some((BASE, false)));
+    assert!(
+        records.iter().any(|e| e.level == Level::ERROR),
+        "error! が残る: {records:?}"
+    );
+    let (again, records) = capture(|| presenter.last_shown(SHOWN).map(|(id, c)| (id, c.is_some())));
+    assert_eq!(again, Some((BASE, false)), "読み直しも同じ失敗");
+    assert!(records.is_empty(), "読み直しで描き直した: {records:?}");
+    assert!(presenter.read_back(SHOWN).is_err(), "読み戻しも同じ失敗");
+}
+
+/// 一度も表示していない target の単体の合成は、初めに作った頁の控えを次の呼び出しでも使う。
+#[test]
+fn compose_alone_keeps_the_atlas_it_built_for_a_never_shown_target() {
+    let (presenter, _world) = setup();
+    let device_of = |p: &EmoPresenter| {
+        p.targets[&NEVER_SHOWN]
+            .gpu
+            .borrow()
+            .as_ref()
+            .map(|g| g.device().clone())
+    };
+    assert!(device_of(&presenter).is_none(), "前提: 頁の控えが無い");
+    let first = presenter
+        .compose_alone(NEVER_SHOWN, BASE)
+        .expect("登録済み");
+    assert!(first.is_ok(), "描ける");
+    let device = device_of(&presenter).expect("作った頁の控えを持つ");
+    let second = presenter
+        .compose_alone(NEVER_SHOWN, BASE)
+        .expect("登録済み");
+    assert_eq!(
+        second.map(|c| bytes_of(&c)),
+        first.map(|c| bytes_of(&c)),
+        "同じ絵"
+    );
+    assert!(
+        device_of(&presenter) == Some(device),
+        "2 度目で頁の控えを作り直した"
+    );
+}

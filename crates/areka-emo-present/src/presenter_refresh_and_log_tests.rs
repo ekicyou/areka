@@ -669,7 +669,7 @@ fn device_recreation_replaces_leaves_with_the_new_device() {
         .expect("新しい装置")
         .clone();
     let t = presenter.targets.get_mut(&TargetId(0)).expect("装着済み");
-    let gpu = t.gpu.as_mut().expect("頁の控え");
+    let gpu = t.gpu.get_mut().as_mut().expect("頁の控え");
     assert!(
         *gpu.device() == device,
         "頁の控えが新しい装置で作り直されていない"
@@ -700,4 +700,42 @@ fn leaves_on_screen(world: &World, screen: &super::test_support::Screen) -> Vec<
         .filter_map(|&e| world.get::<VisualDrawContent>(e))
         .map(|c| c.command_list.clone())
         .collect()
+}
+
+/// 隠れている間に装置が替わっても、最後に見せた絵の描き直しは前の装置で描かない。
+#[test]
+fn device_change_while_hidden_draws_the_export_off_the_old_device() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, golden) = build_target_assets(4, 3, 0x6b);
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    hide_ok(&mut presenter, &mut world, TargetId(0));
+    presenter.refresh_after_device_change(&mut world);
+    let device_of = |presenter: &EmoPresenter| {
+        presenter.targets[&TargetId(0)]
+            .gpu
+            .borrow()
+            .as_ref()
+            .map(|g| g.device().clone())
+    };
+    let old_device = device_of(&presenter).expect("表示の後は頁の控えが在る");
+
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+    presenter.refresh_after_device_change(&mut world);
+
+    assert!(
+        matches!(presenter.last_shown(TargetId(0)), Some((1000, None))),
+        "隠れた target の合成メモは捨てられ、ID だけが残る"
+    );
+    let drawn = presenter
+        .compose_last_shown(TargetId(0))
+        .expect("表示の後は Some")
+        .expect("描き直せる");
+    assert_eq!(drawn.bytes(), golden.as_slice(), "最後に見せた絵");
+    assert!(
+        device_of(&presenter).is_some_and(|d| d != old_device),
+        "前の装置の頁の控えで描いた"
+    );
 }
