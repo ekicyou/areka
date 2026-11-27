@@ -202,3 +202,18 @@
   3. 印が数えに入るかを SSP で測る（`talk,4`・長く残る overlay・`dump_surface`）。
   4. 場所をまたぐ字の序数は時刻の順。
   5. `areka-emo-compose` の `lib.rs` に宣言の 2 行。
+
+## 11. 印が `talk` の数えに入るかの SSP での測り（2026-11-27）
+
+- **測り方**: SSP で起きていたゴースト（窓際のぱすたさんDEBUG・シェルは `ghost_dev` の `debug/pasta-in-windows-debug/shell/master/`）の `surfaces.txt` に、試しの面を一時的に足して shell を reload した。面は `surface9990`（`element0,overlay,pasta/xyz.png,0,0`・`animation0.interval,talk,4`・`animation0.pattern0,overlay,10,0,0,0`・`animation0.pattern1,overlay,10,30000,0,0`）。鳴れば窓の絵（面 10）が約 30 秒重なって残るので、台本の直後に MCP の `dump_surface`（呼ぶたびに今の絵を 1 枚撮る）で鳴ったかどうかが分かる。台本ごとに `\s[0]\s[9990]` で数えを切った。
+- **結果**:
+
+| 台本 | 字の数（印を除く） | 鳴ったか |
+|---|---|---|
+| `あいうえ` | 4 | 鳴った（比べ） |
+| `あいう` | 3 | 鳴らなかった（比べ） |
+| `あ\![*]いう` | 3 | 鳴らなかった（2 回撮って確かめた） |
+| `あ%*いう` | 3 | 鳴らなかった |
+
+- **読み**: SSP は `\![*]`・`%*` のどちらの印も `talk,数値` の数えに入れない。要件の決め（印は時刻の並びに入れるが数えない）と一致する。
+- **後始末**: 測った後に `surfaces.txt` を控え（同じ sha256）へ戻し、shell を reload した。`ghost_dev` の作業ツリーはきれいなまま。
