@@ -9,7 +9,9 @@ use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::super::opener_test_support::{FakeOs, build_ghost_root, dest_of, open_context};
+use super::super::opener_test_support::{
+    FakeOs, build_ghost_root, dest_of, ghost_root, open_context,
+};
 use super::{OpenContext, OpenJob, execute, serve};
 use crate::log_history::{Draft, FieldText, Kind, TARGET_ERROR, draft};
 
@@ -24,7 +26,7 @@ impl Fixture {
         let tmp = TempPath::new("open-ext-execute");
         let root = build_ghost_root(&tmp, ("g", "G"), &[("s", "S")], &[]);
         let ctx = open_context(&root);
-        std::fs::write(ctx.ghost_dir.join("ghost/master/readme.txt"), b"x").unwrap();
+        std::fs::write(ghost_root(&ctx).join("ghost/master/readme.txt"), b"x").unwrap();
         Fixture { _tmp: tmp, ctx }
     }
 
@@ -161,9 +163,7 @@ fn success_logs_one_status_info_with_all_fields_and_no_error() {
     assert_eq!(ev.level, tracing::Level::INFO);
     assert_eq!(val(ev, "event"), Some("open_external"));
     assert_eq!(val(ev, "kind"), Some("editor"));
-    let path = f
-        .ctx
-        .ghost_dir
+    let path = ghost_root(&f.ctx)
         .join("ghost")
         .join("master")
         .join("readme.txt");

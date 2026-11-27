@@ -11,7 +11,7 @@ use temp_path_kit::TempPath;
 
 use super::super::destination::{Destination, Target};
 use super::super::opener_test_support::{
-    FakeOs, build_ghost_root, dest_of, open_context, write_descript,
+    FakeOs, build_ghost_root, dest_of, ghost_root, open_context, write_descript,
 };
 use super::super::os_port::{OsCall, Verb};
 use super::{OpenContext, OpenFailure, expand_env, resolve};
@@ -32,7 +32,7 @@ impl Fixture {
 
     /// `ghost/master`。
     fn master(&self) -> PathBuf {
-        self.ctx.ghost_dir.join("ghost").join("master")
+        ghost_root(&self.ctx).join("ghost").join("master")
     }
 
     /// `ghost/master` の下にファイルを置き、その絶対パスを返す。
@@ -188,6 +188,14 @@ fn missing_path_with_separator_is_not_found() {
 }
 
 #[test]
+fn open_file_expanding_to_empty_is_empty_path() {
+    let f = Fixture::new();
+    let os = FakeOs::default().with_env("AREKA_T_EMPTY", "");
+    let got = f.resolve(&dest_of("open", &["file", "%AREKA_T_EMPTY%"]), &os);
+    assert_eq!(got, Err(OpenFailure::EmptyPath));
+}
+
+#[test]
 fn open_browser_opens_url() {
     let f = Fixture::new();
     let got = f.resolve(
@@ -270,7 +278,7 @@ fn named(kind: &str, name: &str) -> Destination {
 fn named_ghost_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let dir = ctx.ghost_dir.clone();
+    let dir = ghost_root(&ctx).to_path_buf();
     assert_eq!(
         resolve(&named("ghost", "G"), &ctx, &os),
         Ok(want(Verb::Open, &dir, None, None))
@@ -285,7 +293,7 @@ fn named_ghost_by_name_then_folder() {
 fn named_shell_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let shell = |f: &str| ctx.ghost_dir.join("shell").join(f);
+    let shell = |f: &str| ghost_root(&ctx).join("shell").join(f);
     // name の `b` はフォルダ `b` より先にシェル `a` に当たる。
     assert_eq!(
         resolve(&named("shell", "b"), &ctx, &os),
@@ -387,7 +395,7 @@ fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
 #[test]
 fn named_balloon_finds_the_ghost_inner_first() {
     let (_tmp, ctx) = named_fixture();
-    let inner = ctx.ghost_dir.join("balloon").join("BA");
+    let inner = ghost_root(&ctx).join("balloon").join("BA");
     write_descript(&inner, "bb");
     let os = FakeOs::default();
     for want_name in ["bb", "ba", "BA"] {
