@@ -5,7 +5,7 @@
 //! 配置パイプラインの座標・寸法はすべて物理 px 単一通貨とする（論理 DIP・`BoxStyle` は持ち込まない）。
 //!
 //! 依存の向き（この約束が名指すのは `config`・`resolver`・`measure`・`spawn`・`follow`・`diag`
-//! の 6 つの向きだけで、ほかの 21 のモジュール（`test_support` を含む）は互いに広く引き合う）:
+//! の 6 つの向きだけで、ほかの 22 のモジュール（`test_support` を含む）は互いに広く引き合う）:
 //! `config`（areka-parsers・tracing）← `resolver`（std・tracing・wintf の DPI・`config`）←
 //! `measure`（emo-atlas・emo-compose・emo-present のほか、`error`・`descript_window_keys` を引く）←
 //! `spawn`／`follow` と同じ段のモジュール（wintf・bevy_ecs ほか・同じ段どうしは引き合ってよい）←
@@ -60,6 +60,8 @@ pub mod reset_pos;
 pub mod resolver;
 /// 台本からの吸着の向きの変更。
 pub mod script_alignment;
+/// 台本のバルーン位置の値の型と引数の読み。
+pub mod script_balloon;
 pub mod source;
 pub mod spawn;
 /// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と World の側の関数。
