@@ -179,3 +179,26 @@ fn cpu_times_are_readable_for_a_registered_thread_and_for_the_process() {
         process.kernel_100ns + process.user_100ns
     );
 }
+
+#[test]
+fn a_running_thread_is_reported_as_not_exited() {
+    let handle = crate::api::duplicate_current_thread_handle().expect("自スレッドのハンドルの複製");
+    assert!(
+        !crate::api::thread_has_exited(&handle).expect("生きたスレッドの見分けは成功するはず"),
+        "走っている自スレッドは終わっていない"
+    );
+}
+
+#[test]
+fn a_joined_thread_is_reported_as_exited() {
+    let handle = std::thread::Builder::new()
+        .name("wintf-registry-test-exited".to_string())
+        .spawn(|| crate::api::duplicate_current_thread_handle().expect("複製"))
+        .expect("テスト用スレッドの生成は成功するはず")
+        .join()
+        .expect("テスト用スレッドは正常終了するはず");
+    assert!(
+        crate::api::thread_has_exited(&handle).expect("終わったスレッドの見分けは成功するはず"),
+        "join した後の複製ハンドルは終わったと読めるはず"
+    );
+}
