@@ -90,7 +90,7 @@ impl Harness {
     }
 }
 
-/// scope へ可視グリフを流し込む（`at=0.0` から 1 文字 0.25 秒で `text` を見せる）。
+/// scope へ可視グリフを流し込む（`at=0ms` から 1 文字 250 ms で `text` を見せる）。
 fn reveal_text(harness: &Harness, scope: u32, text: &str) {
     harness
         .wiring
@@ -445,7 +445,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
     assert_eq!(
         recovered.scopes[&0].visible_glyphs.map(|g| g.count),
         Some(2),
-        "注入時刻 1.0 では 2 文字ともリビール済み"
+        "注入時刻 1000ms では 2 文字ともリビール済み"
     );
     assert!(
         visibility_lines(&events).is_empty(),

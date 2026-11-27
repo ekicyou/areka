@@ -108,14 +108,14 @@ fn assert_close(actual: f64, expected: f64, var: &str, what: &str) {
     );
 }
 
-/// p1 は 0.9 秒に A、p2 は 0.1 秒に B を起こす。時刻の上で後の A が B を終わらせる
+/// p1 は 900 ms に A、p2 は 100 ms に B を起こす。時刻の上で後の A が B を終わらせる
 #[test]
 fn triggers_in_one_tick_fire_in_time_order() {
     let doc = two_parent_doc(
         parent("a", ms(1000), 1, delta_ms(900), "A"),
         parent("b", ms(1000), 1, delta_ms(100), "B"),
     );
-    // A は 0.9 秒に起き、1.0 秒で 0.1 秒ぶん進む
+    // A は 900 ms に起き、1000 ms で 100 ms ぶん進む
     assert_close(final_x(&doc, &frames_60fps(1000)), 10.02, "x", "60fps");
     assert_close(
         final_x(&doc, &[at_ms(0), at_ms(1000)]),
@@ -125,14 +125,14 @@ fn triggers_in_one_tick_fire_in_time_order() {
     );
 }
 
-/// 周回を飛ばしても、最後に起きるのは時刻の上で最後の A（P1 の 3 周目・2.9 秒）
+/// 周回を飛ばしても、最後に起きるのは時刻の上で最後の A（P1 の 3 周目・2900 ms）
 #[test]
 fn skipped_loop_triggers_fire_in_time_order_across_parents() {
     let doc = two_parent_doc(
         parent("a", ms(1000), 3, delta_ms(900), "A"),
         parent("b", ms(250), 12, delta_ms(0), "B"),
     );
-    // A は 2.9 秒に起き、3.5 秒で 0.6 秒ぶん進む
+    // A は 2900 ms に起き、3500 ms で 600 ms ぶん進む
     assert_close(final_x(&doc, &frames_60fps(3500)), 10.12, "x", "60fps");
     assert_close(
         final_x(&doc, &[at_ms(0), at_ms(3500)]),
@@ -142,7 +142,7 @@ fn skipped_loop_triggers_fire_in_time_order_across_parents() {
     );
 }
 
-/// finish の期限を同じ tick で越えても、期限より前のトリガーは起きる（0.5・1.5 秒の 2 回）
+/// finish の期限を同じ tick で越えても、期限より前のトリガーは起きる（500・1500 ms の 2 回）
 #[test]
 fn triggers_before_finish_deadline_fire_in_the_crossing_tick() {
     let fired = |times: &[TimePoint]| {
@@ -195,12 +195,12 @@ fn loop_end_trigger_fires_after_pause_shift() {
         }
         n
     };
-    // 周回の終わりは 1 周目が 1.2166666 秒・以降 1 秒ずつ
+    // 周回の終わりは 1 周目が 1216.6666 ms・以降 1 秒ずつ
     assert_eq!(fired(&frames_60fps(3500)), 3, "60fps");
     assert_eq!(fired(&[at_ms(200), at_ms(3500)]), 3, "one tick");
 }
 
-/// トリガーを持たない 1 回きりの Never の X（1.2 秒）は、同じ tick の 2.5 秒のトリガーより先に終わる。
+/// トリガーを持たない 1 回きりの Never の X（1200 ms）は、同じ tick の 2500 ms のトリガーより先に終わる。
 /// なので、x を動かす子 C はぶつからずに起きる
 #[test]
 fn finite_loop_end_precedes_later_trigger_in_one_tick() {
@@ -253,7 +253,7 @@ fn finite_loop_end_precedes_later_trigger_in_one_tick() {
     }
 }
 
-/// トリガーなしの無限の L（Cancel・1 秒・x と y を 0→1）は、2.5 秒に起きる子 C（x だけ）とぶつかって終わる。
+/// トリガーなしの無限の L（Cancel・1 秒・x と y を 0→1）は、2500 ms に起きる子 C（x だけ）とぶつかって終わる。
 /// C が触らない y は L の終わりの値（3 周目の半ば・0.5）で止まる。一度に飛ばしても同じ
 #[test]
 fn infinite_loop_is_current_when_trigger_ends_it_in_one_tick() {

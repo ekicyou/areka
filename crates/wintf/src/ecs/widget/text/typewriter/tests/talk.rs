@@ -135,7 +135,7 @@ fn test_typewriter_talk_update_reveals_glyphs_up_to_elapsed() {
     assert_eq!(talk.visible_cluster_count(), 0);
     assert_eq!(talk.state(), TypewriterState::Playing);
 
-    // elapsed=1.5 秒: show_at<=1.5 秒のグリフ1個のみ表示。
+    // elapsed=1500ms: show_at<=1500 ms のグリフ1個のみ表示。
     talk.update(at_ms(1_500), &timeline);
     assert_eq!(talk.visible_cluster_count(), 1);
     assert!((talk.progress() - (1.0 / 3.0)).abs() < f32::EPSILON);
@@ -265,7 +265,7 @@ fn test_typewriter_talk_update_fires_event_at_threshold() {
     assert!(events.is_empty());
     assert_eq!(talk.visible_cluster_count(), 0);
 
-    // elapsed=2.5 秒: FireEvent 通過（発火）するがグリフ(show_at=3 秒)は未達で break。
+    // elapsed=2500ms: FireEvent 通過（発火）するがグリフ(show_at=3 秒)は未達で break。
     let events = talk.update(at_ms(2_500), &timeline);
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].0, target);

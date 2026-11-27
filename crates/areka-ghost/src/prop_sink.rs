@@ -349,7 +349,7 @@ mod tests {
                 .collect()
         }
 
-        /// 初回挨拶台本（`hi\e`）に起動記録の epilogue を付けたもの。horizon（`hi` の再生完了＝0.1s）の
+        /// 初回挨拶台本（`hi\e`）に起動記録の epilogue を付けたもの。horizon（`hi` の再生完了＝100ms）の
         /// 末尾に `areka.prop.set` / `areka.boot.count` / "1" が duration 0 で付く。
         fn first_boot_start() -> StartTalk {
             StartTalk {

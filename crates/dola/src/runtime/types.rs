@@ -6,7 +6,7 @@ use crate::DolaError;
 use crate::time::{TimePoint, TimeSpan};
 use crate::value::DynamicValue;
 
-/// 無限ループ許可の最小の 1 周の長さ（0.1 秒）。
+/// 無限ループ許可の最小の 1 周の長さ（100 ms）。
 /// 時刻が飛んだ tick で進める周回の数に上限を作る（トリガーを持つループの重さは
 /// `loop_controller::process_loops` の注）。
 pub(crate) const MIN_LOOP_DURATION: TimeSpan = TimeSpan::from_millis(100);

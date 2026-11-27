@@ -9,9 +9,9 @@
 //! - 同一 cue 列＋同一注入時刻列→各時刻の可視グリフ数（→可視窓）が一致する。
 //!
 //! パイプラインの各インスタンスは専用スレッド（＝そのインスタンスの UI/pump スレッド）上で実 channel（`spawn_ui`）を駆動し、
-//! cue の emit はワーカースレッドから行う。時刻は常に注入（talk 起点相対秒）で、実時間 sleep／`Instant` は使わない。
+//! cue の emit はワーカースレッドから行う。時刻は常に注入（`TimePoint`）で、実時間 sleep／`Instant` は使わない。
 //!
-//! FP 誤差を排するため reveal 間隔・cue 時刻・注入時刻はすべて 2 の冪（0.25 の倍数）を基本とする。
+//! reveal 間隔・cue 時刻・注入時刻は 250ms の倍数を基本とする。
 //! reveal ペースは配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込む。
 
 #[path = "support/mod.rs"]
@@ -34,8 +34,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimePoint, 
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
 
-/// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むと
-/// interval=0.25 の決定論的リビール時刻列を得る。
+/// reveal 間隔（250ms）。reveal は配送 duration 由来ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むと
+/// 250ms 間隔の決定論的リビール時刻列を得る。
 const REVEAL_INTERVAL: TimeSpan = ms(250);
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
@@ -216,7 +216,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_via_channel_an
         "channel 経由と直結適用で可視化決定が一致する"
     );
 
-    // 絶対値の檻（末尾時刻 t=3.0）: actor 0 は 4 行あふれ→1 行スキップ・オフセット −12。
+    // 絶対値の檻（末尾時刻 t=3000ms）: actor 0 は 4 行あふれ→1 行スキップ・オフセット −12。
     let last_of = |trace: &[Observation], actor: &str| -> Observation {
         trace
             .iter()
@@ -256,7 +256,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_via_channel_an
 ///
 /// 幾何: validrect bottom34・font 10 → 行送り 12（10 + 行間 2）。行構成（全量時）:
 /// L0"あい" L1"うえ" L2"お" L3"か"（top 0/12/24/36・下端 10/22/34/46）。リビール時刻:
-/// r=[0.0, 0.25, 0.5, 0.75, 1.0, 1.5]（reveal interval=0.25・chunk at が下限）。
+/// r=[0, 250, 500, 750, 1000, 1500] ms（reveal 250 ms 間隔・chunk at が下限）。
 #[test]
 fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     let cues = vec![
@@ -275,7 +275,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 期待表: (注入時刻, 可視グリフ数, 行数, 先頭可視行, ブロック軸オフセット)。
     // 改行マーカーは遅延（deferred newline）: 後続の可視グリフが reveal された時点でのみ実体化し、
     // 可視 prefix 末尾より後ろの保留改行は空行を開かず蒸発する。ゆえに末尾に保留改行だけが積まれた時刻ではあふれが発火せず、
-    // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる。
+    // 次のグリフ「か」が reveal される t=1500ms で初めて 4 行目が実体化してあふれる。
     let expected: &[(TimePoint, usize, usize, usize, f32)] = &[
         (at_ms(0), 1, 1, 0, 0.0),         // r_0=0.0: "あ" のみ・1 行
         (at_ms(250), 2, 1, 0, 0.0),       // "あい"・末尾改行は保留（空行を開かない）
@@ -323,7 +323,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
 #[test]
 fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     let cues = vec![
-        // r=[0.0, 0.25, 0.5, 0.75] のうち後半 2 グリフが未リビールの時刻で Clear が届く。
+        // r=[0, 250, 500, 750] ms のうち後半 2 グリフが未リビールの時刻で Clear が届く。
         cue("0", ms(0), CueCommand::Text("あいうえ".into())),
         cue("0", ms(300), CueCommand::Clear),
         cue("0", ms(750), CueCommand::Text("xy".into())),
@@ -344,7 +344,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         "Clear で旧テキストは未リビール分も含め全消去"
     );
 
-    // 新 chunk のリビールは自身の at=0.75 起点: r=[0.75, 1.0]。
+    // 新 chunk のリビールは自身の at=750ms 起点: r=[750, 1000] ms。
     let expected: &[(TimePoint, usize)] = &[
         (at_ms(500), 0),
         (at_ms(740), 0),
@@ -424,8 +424,8 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
     );
     let region = TextRegion::resolve(&merged, (400, 224), mode);
 
-    // 27 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 0.25 グリッド＝
-    // グリフ i のリビール時刻 r_i = 0.25×i（reveal interval=0.25・at が下限）。
+    // 27 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 250 ms 刻み＝
+    // グリフ i のリビール時刻 r_i = 250 ms×i（reveal 250 ms 間隔・at が下限）。
     let mut cues = Vec::new();
     for i in 0..27 {
         let at = ms(i * 250);
@@ -442,13 +442,13 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
     let trace = observe(&state, &actors, &probe_times, &region, mode, 10.0);
 
     let actor = ActorKey::from("0");
-    // リビール途中（t=1.0・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
+    // リビール途中（t=1000ms・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
     // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 298 ≥ 36 → 非発火。
     assert_eq!(state.visible_glyphs(&actor, at_ms(1000)), 5);
     let at_1s = trace
         .iter()
         .find(|o| o.t == at_ms(1000))
-        .expect("t=1.0 の観測");
+        .expect("t=1000ms の観測");
     assert_eq!(at_1s.lines.len(), 5);
     assert_eq!(
         at_1s.window,
@@ -459,13 +459,13 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
         "リビール途中はまだあふれない"
     );
 
-    // 全量リビール（t=10.0・可視 27・最終グリフのリビール時刻 6.5）: 27 列目の左端 34 < 36 →
+    // 全量リビール（t=10000ms・可視 27・最終グリフのリビール時刻 6500ms）: 27 列目の左端 34 < 36 →
     // 横スクロール発火（vertical_rl＝内容が右へ＝ブロック軸オフセット +12）。
     assert_eq!(state.visible_glyphs(&actor, at_ms(10_000)), 27);
     let at_10s = trace
         .iter()
         .find(|o| o.t == at_ms(10_000))
-        .expect("t=10.0 の観測");
+        .expect("t=10000ms の観測");
     assert_eq!(at_10s.lines.len(), 27);
     assert_eq!(
         at_10s.window,

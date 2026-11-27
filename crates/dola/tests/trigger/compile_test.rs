@@ -29,7 +29,7 @@ fn trigger_at_start_fire_time() {
     assert_eq!(compiled.triggers.len(), 1);
     assert_eq!(compiled.triggers[0].target_storyboard, "child");
     assert_eq!(compiled.triggers[0].fire_time, delta_ms(0));
-    // トリガーは total_base_duration に寄与しない（親に変数エントリがないので 0.0）
+    // トリガーは total_base_duration に寄与しない（親に変数エントリがないので 0）
     assert_eq!(compiled.total_base_duration, ms(0));
 }
 
@@ -41,7 +41,7 @@ fn trigger_after_keyframe_fire_time() {
 
     assert_eq!(compiled.triggers.len(), 1);
     assert_eq!(compiled.triggers[0].target_storyboard, "child");
-    // kf1 は 0+1.0 = 1.0 なので fire_time = 1.0
+    // kf1 は 0+1000 = 1000 ms なので fire_time = 1000 ms
     assert_eq!(
         compiled.triggers[0].fire_time,
         delta_ms(1000),
@@ -126,7 +126,7 @@ fn late_trigger_earlier_in_array_sorted_by_fire_time() {
             keyframe: Some("a".to_string()),
             ..Default::default()
         })
-        // entry 1: "a"（2.0）で発火
+        // entry 1: "a"（2000 ms）で発火
         .entry(trigger(
             "child_a",
             Some(dola::KeyframeRef::Single("a".to_string())),

@@ -86,7 +86,7 @@ fn pause_and_resume() {
     let new_end = mgr.resume(1, at_ms(3000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(2000));
-    // 終わりの予定 = 2.0 + 2.0(pause)
+    // 終わりの予定 = 2000 + 2000(pause) ms
     assert_eq!(new_end, Some(at_ms(4000)));
 }
 
@@ -236,10 +236,10 @@ fn resume_with_time_before_pause_time_shrinks_end_time() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.pause(1, at_ms(5000)).unwrap();
 
-    // 止めた時刻より過去の時刻で resume すると止めていた長さ = -2.0 秒
+    // 止めた時刻より過去の時刻で resume すると止めていた長さ = -2000 ms
     let new_end = mgr.resume(1, at_ms(3000)).unwrap();
     assert_eq!(mgr.get(1).unwrap().pause_accumulated, delta_ms(-2000));
-    assert_eq!(new_end, Some(at_ms(0))); // 2.0 + (-2.0)
+    assert_eq!(new_end, Some(at_ms(0))); // 2000 + (-2000) ms
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 

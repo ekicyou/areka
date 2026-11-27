@@ -272,7 +272,7 @@ fn no_measurement_starts_in_frames_without_time() {
 const DISPLAY_END: TimePoint = at_ms(10_000);
 
 /// scope 0 が可視・scope 1 は無発話のまま、満了予定 `TIMEOUT` の計測が立っている状態を作る
-/// （占有終端 0.0 ＋ 既定のタイムアウト）。
+/// （占有終端 0ms ＋ 既定のタイムアウト）。
 fn armed_state() -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, seen(2, false)), (1, seen(0, false))])
@@ -308,7 +308,7 @@ fn armed_state() -> BalloonVisibilityState {
 fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     let mut state = BalloonVisibilityState::default();
 
-    // 会話が始まり、占有終端 10.0 秒が届く。scope 0 が喋って可視になる。
+    // 会話が始まり、占有終端 10000 ms が届く。scope 0 が喋って可視になる。
     let shown = Frame::new(&[(0, seen(3, false))])
         .at(at_ms(1_000))
         .talk_started()

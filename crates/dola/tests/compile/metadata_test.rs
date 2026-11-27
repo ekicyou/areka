@@ -93,7 +93,7 @@ fn base_duration_and_total_base_duration() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // x: 0.0 -> 1.0 (duration 1.0)
+            // x: 0..1000 ms (duration 1.0)
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -105,7 +105,7 @@ fn base_duration_and_total_base_duration() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // y: 0.0 -> 3.0 (duration 3.0)
+            // y: 0..3000 ms (duration 3.0)
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

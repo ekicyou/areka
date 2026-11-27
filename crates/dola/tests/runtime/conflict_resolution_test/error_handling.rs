@@ -63,12 +63,12 @@ mod never_strategy {
         // Update → the Never SB should still be running normally
         rt.tick(at_ms(1000));
         let changes = rt.last_result().changes.clone();
-        // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
+        // sb_never: x at t=1000ms → progress=0.5 of 0→100 = 50.0
         let (_, x_val) = changes
             .iter()
             .find(|(id, _)| *id == x_id)
-            .expect("x of the Never SB is delivered at t=1.0");
-        assert_eq!(*x_val, EvaluatedValue::Float(50.0), "x at t=1.0");
+            .expect("x of the Never SB is delivered at t=1000ms");
+        assert_eq!(*x_val, EvaluatedValue::Float(50.0), "x at t=1000ms");
     }
 }
 
@@ -83,7 +83,7 @@ mod conflict_terminated_parent_triggers {
     /// ここでは公開の API から見て、発火の予定を過ぎても発火も panic もしないことを確かめる。
     #[test]
     fn conflict_terminated_parent_trigger_never_fires() {
-        // parent: opacity 0→100 (2.0s, kf1 at end=2.0) + trigger at kf1 → child
+        // parent: opacity 0→100 (2.0s, kf1 at end=2000 ms) + trigger at kf1 → child
         // interrupt: opacity を操作（親と競合）
         let doc = DolaDocumentBuilder::new("1.0")
             .variable("opacity", float())
@@ -121,11 +121,11 @@ mod conflict_terminated_parent_triggers {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        // 親開始（トリガーは t=2.0 で発火予定）
+        // 親開始（トリガーは t=2000ms で発火予定）
         let r_parent = rt.start("parent", at_ms(0)).unwrap();
         rt.tick(at_ms(500));
 
-        // t=1.0: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
+        // t=1000ms: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
         let r_int = rt.start("interrupt", at_ms(1000)).unwrap();
         assert_eq!(r_int.affected_group_ids, vec![r_parent.group_id]);
 
@@ -181,11 +181,11 @@ mod conflict_terminated_parent_triggers {
 
         rt.start("parent", at_ms(0)).unwrap();
 
-        // t=1.0: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
+        // t=1000ms: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
         // 親は skip_group_ids により競合解決から除外される
         rt.tick(at_ms(1000));
         let result = rt.last_result().clone();
-        assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1.0");
+        assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1000ms");
         match &result.triggered[0] {
             dola::runtime::TriggerResult::Started { start_result, .. } => {
                 assert!(

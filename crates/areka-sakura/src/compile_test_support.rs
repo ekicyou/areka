@@ -48,7 +48,7 @@ pub(super) fn assert_cues_eq<A: Borrow<Cue>, B: Borrow<Cue>>(a: &[A], b: &[B], w
     }
 }
 
-/// 内容 cue を持つ台本は先頭へ単一 `ClearAll`（`start_time=0.0`・`duration=0.0`）を前置する
+/// 内容 cue を持つ台本は先頭へ単一 `ClearAll`（`start_time=0`・`duration=0`）を前置する
 /// その前置を検証しつつ、後続の**内容 cue**のスライスを返すヘルパ
 /// （各テストの ClearAll 前置検証を集約し、内容側の index を保つ）。
 pub(super) fn assert_clear_all_prefix_and_rest(cues: &[Cue]) -> &[Cue] {

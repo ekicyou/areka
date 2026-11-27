@@ -276,7 +276,7 @@ impl RevealSchedule {
 
     /// フレームの時刻での可視グリフ数 `visible(frame_now) = |{ i : r_i <= frame_now }|`。
     ///
-    /// `times` は単調非減少（`extend_chunk` の max が保証）なので二分探索で数える。
+    /// `times` は単調非減少（`extend_chunk` が前の字以降に置く）なので二分探索で数える。
     pub fn visible(&self, frame_now: TimePoint) -> usize {
         self.times.partition_point(|&r| r <= frame_now)
     }
@@ -477,7 +477,7 @@ impl TextLayerState {
     ///
     /// `Text` は追記と同時に per-glyph リビール時刻を `cue.fire_time`（リビール開始の下限）と `duration` から
     /// [`chunk_reveal_offsets`] で確定する。`glyph_count = 0`（空テキスト）は追記しない。
-    /// `duration = 0`（瞬時／後方互換 cue）は全グリフが `cue.fire_time` で同時可視になる。
+    /// `duration = 0`（瞬時の cue）は全グリフが `cue.fire_time` で同時可視になる。
     /// リビール中の後続 cue も即時適用される（本層は cue の `fire_time`／`duration` を読むだけで書き換えない）。
     ///
     /// 戻り値は名前の形の `\b[名前]` の箱が無かった（空回しの写しでない）か（[`Self::route_select`]）。

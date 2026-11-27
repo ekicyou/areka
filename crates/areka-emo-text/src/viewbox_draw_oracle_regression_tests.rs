@@ -51,7 +51,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
 
-    // reveal は配送 duration 由来（interval = duration / N）。全 cue at=0.0 ゆえ、
+    // reveal は配送 duration 由来（interval = duration / N）。全 cue at=0ms ゆえ、
     // Text へ N×REVEAL_INTERVAL を焼き込むと reveal が連続 typewriter 進行する
     // （注入時刻はこの間隔で刻む）。
     // example の共有 fixture フル シナリオ（行1/2/3＋あふれ誘発の短行 9 本でスクロール発火）。

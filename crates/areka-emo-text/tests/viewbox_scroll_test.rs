@@ -1,7 +1,7 @@
 //! 再描画レス・ダーティ限定描画の決定論カウント檻（実 pump 通し）。
 //!
 //! `register_actor` → `present_frame` → `draw_stats` の実配線で、フレーム間の [`DrawStats`] の増分を
-//! 検査する。時刻は常に注入（`talk_time`）で実時間 sleep は使わない。`ViewboxExecutor` 単体の
+//! 検査する。時刻は常に注入（フレームの時刻）で実時間 sleep は使わない。`ViewboxExecutor` 単体の
 //! 露出帯限定描画の檻は `viewbox_draw` の子の `viewbox_draw_*_tests.rs` が持つ。
 //!
 //! 1. 内容・可視窓とも不変のフレームは全統計の増分が 0。
@@ -54,7 +54,7 @@ const FILL_LINES: usize = 8;
 /// 露出帯交差行の上限。増分はダーティ矩形ごとの交差行数の和で数える。
 /// 実測 2（露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行）に 1 の余裕を見て 3。
 const EXPOSURE_BAND_DRAW_BOUND: u64 = 3;
-/// 全 emit グリフが可視な注入時刻（reveal 時刻は ≤ 0.5s）。フレーム間差にリビール進行が混ざらない。
+/// 全 emit グリフが可視な注入時刻（reveal 時刻は ≤ 500ms）。フレーム間差にリビール進行が混ざらない。
 const FULLY_REVEALED: TimeSpan = ms(100_000);
 /// 各行 1 グリフの相異なる全角文字。
 const LINE_GLYPHS: &[char] = &[
@@ -78,7 +78,7 @@ fn model() -> BalloonModel {
     )
 }
 
-/// 1 行（先頭行以外は先に改行マーカー）を emit する。全 cue は at=0.0・duration=0 で即時可視。
+/// 1 行（先頭行以外は先に改行マーカー）を emit する。全 cue は at=0ms・duration=0 で即時可視。
 /// 行末尾に改行を付けず、行構造を「1 行 1 グリフ」に保つ。
 fn emit_line(sink: &mut EmoTextSink, line_index: usize) {
     if line_index > 0 {

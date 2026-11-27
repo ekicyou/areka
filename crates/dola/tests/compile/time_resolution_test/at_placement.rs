@@ -9,7 +9,7 @@ fn at_reference_keyframe() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // Entry 0: x, sequential, keyframe "kf1" ends at 2.0
+            // Entry 0: x, sequential, keyframe "kf1" ends at 2000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -21,7 +21,7 @@ fn at_reference_keyframe() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // Entry 1: y, at "kf1", starts at 2.0
+            // Entry 1: y, at "kf1", starts at 2000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -81,7 +81,7 @@ fn at_with_offset() {
 
     let result = compile_storyboard(&doc, "test").unwrap();
     let tl_y = result.timelines.get("y").unwrap();
-    // kf1 ends at 2.0, offset 0.5 → base_time = 2.5, segment 2.5 -> 3.5
+    // kf1 ends at 2000 ms, offset 500 ms → base_time = 2500 ms, segment 2500 -> 3500 ms
     assert_eq!(tl_y.segments[0].start_time, delta_ms(2500));
     assert_eq!(tl_y.segments[0].end_time, delta_ms(3500));
 }
@@ -94,7 +94,7 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: x 0.0..2.0, kf1 = 2.0
+            // entry 0: x 0..2000 ms, kf1 = 2000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -106,12 +106,12 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: 純粋KF（at なし）→ 直前エントリの keyframe 時刻 2.0 を継承
+            // entry 1: 純粋KF（at なし）→ 直前エントリの keyframe 時刻 2000 ms を継承
             .entry(StoryboardEntry {
                 keyframe: Some("marker".to_string()),
                 ..Default::default()
             })
-            // entry 2: y at marker → 2.0..3.0
+            // entry 2: y at marker → 2000..3000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -176,7 +176,7 @@ fn at_with_offset_multiple_keyframes() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // x: 0..1s → kf_x = 1.0
+            // x: 0..1000 ms → kf_x = 1000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -188,7 +188,7 @@ fn at_with_offset_multiple_keyframes() {
                 keyframe: Some("kf_x".to_string()),
                 ..Default::default()
             })
-            // y: 0..3s → kf_y = 3.0
+            // y: 0..3000 ms → kf_y = 3000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -200,7 +200,7 @@ fn at_with_offset_multiple_keyframes() {
                 keyframe: Some("kf_y".to_string()),
                 ..Default::default()
             })
-            // z: at [kf_x, kf_y] + 0.5 → max(1.0, 3.0) + 0.5 = 3.5
+            // z: at [kf_x, kf_y] + 500 ms → max(1000, 3000) + 500 = 3500 ms
             .entry(StoryboardEntry {
                 variable: Some("z".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -247,7 +247,7 @@ fn at_with_negative_offset() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // kf1 = 2.0, offset -0.5 → segment 1.5..2.5
+            // kf1 = 2000 ms, offset -500 ms → segment 1500..2500 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

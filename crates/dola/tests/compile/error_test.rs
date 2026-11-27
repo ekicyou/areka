@@ -112,13 +112,13 @@ fn between_delay_exceeds_interval() {
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // between kf1 (1.0) and kf2 (2.0) with delay 2.0 → exceeds interval
+            // between kf1 (1000 ms) and kf2 (2000 ms) with delay 2.0 → exceeds interval
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    delay: ms(2000), // exceeds interval (kf2-kf1 = 1.0)
+                    delay: ms(2000), // exceeds interval (kf2-kf1 = 1000 ms)
                     duration: None,
                     ..Default::default()
                 })),
@@ -147,13 +147,13 @@ fn segment_overlap_detected() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // Entry 0: pure KF at start - sets kf_start at time 0.0
+            // Entry 0: pure KF at start - sets kf_start at time 0
             .entry(StoryboardEntry {
                 at: Some(KeyframeRef::Single("start".to_string())),
                 keyframe: Some("kf_start".to_string()),
                 ..Default::default()
             })
-            // Entry 1: x from 0->100, at start, duration 2.0 → 0.0..2.0
+            // Entry 1: x from 0->100, at start, duration 2.0 → 0..2000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -166,7 +166,7 @@ fn segment_overlap_detected() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // Entry 2: x from 50->200, at start, duration 3.0 → 0.0..3.0 (OVERLAP!)
+            // Entry 2: x from 50->200, at start, duration 3.0 → 0..3000 ms (OVERLAP!)
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -213,7 +213,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: x 0.0..1.0, kf1
+            // entry 0: x 0..1000 ms, kf1
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -225,7 +225,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: x 1.0..2.0, kf2
+            // entry 1: x 1000..2000 ms, kf2
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -237,7 +237,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // entry 2: between kf1(1.0)→kf2(2.0) で delay 5.0 → エラー1
+            // entry 2: between kf1(1000 ms)→kf2(2000 ms) で delay 5.0 → エラー1
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

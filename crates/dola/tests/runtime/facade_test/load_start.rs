@@ -23,7 +23,7 @@ mod full_playback_cycle {
         assert_eq!(group_id, 1);
         assert_eq!(end_time, Some(at_ms(1000)));
 
-        // t=0.0: 初回 update — opacity=0.0
+        // t=0ms: 初回 update — opacity=0.0
         rt.tick(at_ms(0));
         let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
@@ -33,7 +33,7 @@ mod full_playback_cycle {
             other => panic!("expected Float, got {other:?}"),
         }
 
-        // t=0.5: 中間値 — opacity≈0.5
+        // t=500ms: 中間値 — opacity≈0.5
         rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
@@ -42,11 +42,14 @@ mod full_playback_cycle {
             other => panic!("expected Float, got {other:?}"),
         }
 
-        // t=1.0: 最終値 — opacity=1.0, 自然終了トリガー
+        // t=1000ms: 最終値 — opacity=1.0, 自然終了トリガー
         rt.tick(at_ms(1000));
         let diff = rt.last_result().changes.clone();
         // 自然終了により conclude_internal が呼ばれ、最終値が配信される
-        assert!(!diff.is_empty(), "expected final value delivery at t=1.0");
+        assert!(
+            !diff.is_empty(),
+            "expected final value delivery at t=1000ms"
+        );
         let opacity_val = diff
             .iter()
             .find(|(id, _)| *id == opacity_id)
@@ -56,7 +59,7 @@ mod full_playback_cycle {
             other => panic!("expected Float, got {other:?}"),
         }
 
-        // t=1.5: 終了後 — 差分なし
+        // t=1500ms: 終了後 — 差分なし
         rt.tick(at_ms(1500));
         let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected empty diff after natural end");
@@ -79,7 +82,7 @@ mod full_playback_cycle {
         assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
     }
 
-    /// 先頭の遅れは長さに入る: delay 0.5・duration 1.0 は 1.5 秒で終わり、t=1.0 は途中。
+    /// 先頭の遅れは長さに入る: delay 0.5・duration 1.0 は 1500 ms で終わり、t=1000ms は途中。
     #[test]
     fn leading_delay_counts_in_storyboard_duration() {
         let mut doc = simple_float_doc("delayed");
@@ -102,7 +105,7 @@ mod full_playback_cycle {
             .changes
             .iter()
             .find(|(id, _)| *id == opacity_id)
-            .expect("opacity at t=1.0");
+            .expect("opacity at t=1000ms");
         match v {
             EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 1e-9, "expected 0.5, got {v}"),
             other => panic!("expected Float, got {other:?}"),

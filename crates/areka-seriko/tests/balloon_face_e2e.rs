@@ -59,7 +59,7 @@ fn balloon_show_is_observed_end_to_end() {
 /// シナリオ2: `\b[-1]`（非表示センチネル）を含む fixture script 直入力で
 /// 「非表示指令」を mock 表示 sink 上に観測する。`\w1`（=50ms）を跨ぐ Tick 時刻で駆動する。
 ///
-/// `\b[2]\w1\b[-1]\e` → Tick(0.0) で `ShowBalloon{2}`、Tick(0.05) で `HideBalloon` を順に観測。
+/// `\b[2]\w1\b[-1]\e` → Tick(0ms) で `ShowBalloon{2}`、Tick(50ms) で `HideBalloon` を順に観測。
 #[test]
 fn balloon_hide_is_observed_end_to_end() {
     let records = run_scenario(r"\b[2]\w1\b[-1]\e", &[at_ms(0), at_ms(50)]);
@@ -100,7 +100,7 @@ fn bare_balloon_matches_bracket_form_end_to_end() {
 
 /// シナリオ4: 同一面への冪等な再指定は表示指令を再発行しない。
 ///
-/// `\b[2]\b[2]\e`（両 cue とも at=0.0）→ Tick(0.0) で両 cue が発火するが、2 件目は per-scope
+/// `\b[2]\b[2]\e`（両 cue とも at=0ms）→ Tick(0ms) で両 cue が発火するが、2 件目は per-scope
 /// 状態不変ゆえ発行が抑止され、`ShowBalloon{2}` はちょうど 1 件のみ観測される（per-scope の冪等ガード）。
 #[test]
 fn same_balloon_twice_emits_once_end_to_end() {
@@ -118,7 +118,7 @@ fn same_balloon_twice_emits_once_end_to_end() {
 
 /// シナリオ5: シェル面切替とバルーン面切替の混在で、双方が独立に記録される。
 ///
-/// `\s[0]\b[2]\e`（両 cue とも at=0.0・記述順 FIFO）→ Tick(0.0) で `\s[0]`（シェル面＝seriko の
+/// `\s[0]\b[2]\e`（両 cue とも at=0ms・記述順 FIFO）→ Tick(0ms) で `\s[0]`（シェル面＝seriko の
 /// `Emote` 経路・数値 "0"→Show(0)）と `\b[2]`（バルーン面＝`BalloonSurface` 早期分岐）が順に
 /// 発火し、`Show{scope:"0", surface_id:0, binds:空}` と `ShowBalloon{scope:"0", surface_id:2}`
 /// が互いに干渉せず送信順どおりに記録される（別 map・別発行）。

@@ -34,7 +34,7 @@ fn remaining_time_becomes_the_wait() {
     assert_eq!(
         visibility_wake(Some(at_ms(1500)), Some(at_ms(4000)), false),
         VisibilityWake::After(Duration::from_millis(2500)),
-        "残り 2.5 秒"
+        "残り 2500 ms"
     );
     assert_eq!(
         visibility_wake(Some(at_ms(0)), Some(at_ms(1)), false),

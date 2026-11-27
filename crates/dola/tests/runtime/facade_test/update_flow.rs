@@ -18,23 +18,23 @@ mod pause_resume_cycle {
 
         let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
-        // t=0.0: 初回
+        // t=0ms: 初回
         rt.tick(at_ms(0));
 
-        // t=0.3: 中間
+        // t=300ms: 中間
         rt.tick(at_ms(300));
         let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty());
         match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "t=0.3: got {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "t=300ms: got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
-        // Pause at (logical) t=0.3
+        // Pause at (logical) t=300ms
         rt.pause(group_id, at_ms(300)).unwrap();
 
-        // t=0.5: Pause 中 — 値が凍結される
-        // Paused 状態では timeline_manager が pause_start 時点の値を返す
+        // t=500ms: Pause 中 — 値が凍結される
+        // Paused 状態では timeline_manager が 止めた時刻の値を返す
         rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         // Paused 中は前回値と同じ → diff 空
@@ -43,18 +43,18 @@ mod pause_resume_cycle {
             "expected no change during pause, got {diff:?}"
         );
 
-        // Resume at logical t=0.5
+        // Resume at logical t=500ms
         let new_end = rt.resume(group_id, at_ms(500)).unwrap();
-        // 終わりの予定は pause 分（0.2s）延長される: 1.0 + 0.2 = 1.2
+        // 終わりの予定は pause 分（200ms）延長される: 1000 + 200 = 1200ms
         assert_eq!(new_end, Some(at_ms(1200)));
 
-        // t=0.7: pause 分 0.2s ずれで effective=0.5
+        // t=700ms: pause 分 200ms ずれで effective=500ms
         rt.tick(at_ms(700));
         let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
-                assert!((*v - 0.5).abs() < 1e-9, "t=0.7 (eff=0.5): got {v}")
+                assert!((*v - 0.5).abs() < 1e-9, "t=700ms (eff=500ms): got {v}")
             }
             other => panic!("expected Float, got {other:?}"),
         }
@@ -193,7 +193,7 @@ mod concurrent_playback {
         assert_eq!(r1.end_time, Some(at_ms(1000)), "fade end_time");
         assert_eq!(r2.end_time, Some(at_ms(2000)), "zoom end_time");
 
-        // t=0.5: opacity=0.5, scale=1.25
+        // t=500ms: opacity=0.5, scale=1.25
         rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
@@ -201,23 +201,23 @@ mod concurrent_playback {
         let (_, opacity) = diff
             .iter()
             .find(|(id, _)| *id == opacity_id)
-            .expect("opacity@0.5");
+            .expect("opacity@500ms");
         let (_, scale) = diff
             .iter()
             .find(|(id, _)| *id == scale_id)
-            .expect("scale@0.5");
-        assert_eq!(*opacity, EvaluatedValue::Float(0.5), "opacity@0.5");
-        assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@0.5");
+            .expect("scale@500ms");
+        assert_eq!(*opacity, EvaluatedValue::Float(0.5), "opacity@500ms");
+        assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@500ms");
 
-        // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
+        // t=1500ms: opacity 終了(→1.0 凍結), scale 中間(→1.75)
         rt.tick(at_ms(1500));
         let diff = rt.last_result().changes.clone();
         // opacity の自然終了 + scale の更新
         let (_, scale) = diff
             .iter()
             .find(|(id, _)| *id == scale_id)
-            .expect("scale@1.5");
-        assert_eq!(*scale, EvaluatedValue::Float(1.75), "scale@1.5");
+            .expect("scale@1500ms");
+        assert_eq!(*scale, EvaluatedValue::Float(1.75), "scale@1500ms");
     }
 }
 
@@ -260,7 +260,7 @@ mod value_hold {
         assert_eq!(tick(&mut rt, 992), Some(EvaluatedValue::Float(0.992)));
         // opacity の最後のセグメントを過ぎても、インスタンスは生きている → 最後の値
         assert_eq!(tick(&mut rt, 1008), Some(EvaluatedValue::Float(1.0)));
-        // t=2.0 で Conclude した後も 1.0 のまま
+        // t=2000ms で Conclude した後も 1.0 のまま
         assert_eq!(tick(&mut rt, 2000), Some(EvaluatedValue::Float(1.0)));
         assert_eq!(tick(&mut rt, 2500), Some(EvaluatedValue::Float(1.0)));
     }

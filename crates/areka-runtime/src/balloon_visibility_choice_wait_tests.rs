@@ -92,7 +92,7 @@ fn no_hide_while_the_choice_wait_is_alive_however_long() {
     }
 }
 
-/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に待ち時間が過ぎたら隠して
+/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60000ms を起点に待ち時間が過ぎたら隠して
 /// 知らせを返す。終わりを観測したフレームの遅れ（`observed_at`）は満了に効かない。
 #[test]
 fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
@@ -329,7 +329,7 @@ fn box_only_scope_follows_the_same_rule() {
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
-/// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60.0 で落とし、届いた合図の列を
+/// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60000ms で落とし、届いた合図の列を
 /// そのまま判断に通すと止まった時刻＋待ち時間で隠れる。
 #[test]
 fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {

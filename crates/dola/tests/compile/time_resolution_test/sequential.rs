@@ -43,7 +43,7 @@ fn simple_sequential_single_variable() {
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(0.0));
     assert_eq!(tl.segments[0].to_value, TransitionValue::Scalar(100.0));
 
-    // Second segment: 1.0 -> 3.0 (sequential, from = previous to)
+    // Second segment: 1000 -> 3000 ms (sequential, from = previous to)
     assert_eq!(tl.segments[1].start_time, delta_ms(1000));
     assert_eq!(tl.segments[1].end_time, delta_ms(3000));
     assert_eq!(tl.segments[1].from_value, TransitionValue::Scalar(100.0));
@@ -75,7 +75,7 @@ fn sequential_with_delay() {
     let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
 
-    // delay = 0.5 → segment 0.5 -> 1.5
+    // delay = 0.5 → segment 500 -> 1500 ms
     assert_eq!(tl.segments[0].start_time, delta_ms(500));
     assert_eq!(tl.segments[0].end_time, delta_ms(1500));
 }
@@ -138,7 +138,7 @@ fn sequential_first_entry_starts_from_head() {
 
     let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
-    // base_time = 0 (頭), segment_start = 0 + 1.0 = 1.0
+    // base_time = 0 (頭), segment_start = 0 + 1000 = 1000 ms
     assert_eq!(tl.segments[0].start_time, delta_ms(1000));
     assert_eq!(tl.segments[0].end_time, delta_ms(3000));
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(10.0));
@@ -228,7 +228,7 @@ fn pure_keyframe_without_at_follows_previous_entry_despite_forward_ref() {
         (segs[0].start_time, segs[0].end_time),
         (delta_ms(5000), delta_ms(6000))
     );
-    // "m" は entry 0 の終わり（6.0）
+    // "m" は entry 0 の終わり（6000 ms）
     assert_eq!(
         (segs[1].start_time, segs[1].end_time),
         (delta_ms(6000), delta_ms(7000))
@@ -284,11 +284,11 @@ fn sequential_from_follows_array_predecessor_not_previous_in_time() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // P: [0,1] 0→5
+            // P: [0,1000] ms 0→5
             .entry(x_entry(Some(0.0), 5.0, ms(0), ms(1000)))
-            // C: P に続き delay 1 で [2,3]
+            // C: P に続き delay 1 で [2000,3000] ms
             .entry(x_entry(None, 9.0, ms(1000), ms(1000)))
-            // A: [1.2,1.7] 5→7（時刻の上では P と C の間）
+            // A: [1200,1700] ms 5→7（時刻の上では P と C の間）
             .entry(StoryboardEntry {
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),

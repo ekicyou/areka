@@ -198,7 +198,7 @@ fn visible_glyphs_are_independent_per_actor() {
 
 // ══ 服従契約の縮退と honor no-op ══
 
-/// 縮退: 配送 duration=0（瞬時／後方互換 cue）かつ N≥1 は interval=0 ゆえ
+/// 縮退: 配送 duration=0（瞬時の cue）かつ N≥1 は interval=0 ゆえ
 /// 全グリフが `cue.at` で**同時**可視になる（決まった刻みで 1 グリフずつ出す実装では
 /// この同時可視は成立しない）。
 #[test]

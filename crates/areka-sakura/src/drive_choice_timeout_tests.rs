@@ -8,7 +8,7 @@ use std::time::Duration;
 
 // ── 時計を一度に進めても選択待ちに入る ──
 //
-// 台本 `\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,X]\e`（区切り＝占有 horizon 0.35）を
+// 台本 `\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,X]\e`（区切り＝占有 horizon 350ms）を
 // `Tick` の次に `Tick` で駆動し、**区切りと指定の時間を一度に越える**。再生層の時刻表が
 // 指定の値で区切りを飛ばすなら、選択待ちの知らせは届かず台本が終わってしまう（この檻が落ちる）。
 
@@ -44,7 +44,7 @@ fn assert_one_step_enters_choice_wait(
             display_end: at_ms(0) + menu_horizon(),
             timeout_directive: expected,
         }),
-        "{directive:?}: 表示の終わりは区切りの時刻（tick 時刻 50.0 ではない）・指令は指定どおり"
+        "{directive:?}: 表示の終わりは区切りの時刻（tick 時刻 50000ms ではない）・指令は指定どおり"
     );
 
     // さらに進めても台本は終わらず、知らせの 2 通目も来ない（区切りを自分で解かない）。

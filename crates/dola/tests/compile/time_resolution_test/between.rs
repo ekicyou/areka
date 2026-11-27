@@ -31,7 +31,7 @@ fn between_placement() {
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // y between kf1 and kf2: from_t=2.0, to_t=5.0
+            // y between kf1 and kf2: from_t=2000 ms, to_t=5000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -75,7 +75,7 @@ fn between_from_start_pseudo_keyframe() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // y between start(0.0) → kf1(2.0)
+            // y between start(0) → kf1(2000 ms)
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -129,7 +129,7 @@ fn between_with_valid_delay() {
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // y between kf1(2.0) → kf2(5.0)、delay 1.0 → 3.0..5.0
+            // y between kf1(2000 ms) → kf2(5000 ms)、delay 1.0 → 3000..5000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

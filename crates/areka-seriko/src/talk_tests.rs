@@ -41,11 +41,11 @@ fn glyph_times_are_the_fire_time_plus_the_offset_and_keep_sub_millisecond_precis
 #[test]
 fn previous_glyph_time_survives_pruning_the_whole_list() {
     let mut feed = TalkFeed::default();
-    // 頭 100 秒・再生時間 1.0・2 文字＝[100.0, 100.5]。
+    // 頭 100000ms・再生時間 1000ms・2 文字＝[100000, 100500] ms。
     feed.push_chunk(at_ms(100_000), ms(1000), 2);
     feed.prune_before(2);
     assert_eq!(feed.time_of(1), None, "列は空");
-    // 頭 100.2 秒・0.5・2 文字＝間隔 0.25: 前の字 100.5＋0.25 から続く。
+    // 頭 100200ms・500ms・2 文字＝間隔 250ms: 前の字 100500ms＋250ms から続く。
     feed.push_chunk(at_ms(100_200), ms(500), 2);
     assert_eq!(times_from(&feed, 2), [at_ms(100_750), at_ms(101_000)]);
 }
@@ -147,7 +147,7 @@ fn clear_drops_unrevealed_characters_and_restarts_at_the_chunk_head() {
     assert_eq!(feed.revealed_until(at_ms(750)), 3 + 2);
 }
 
-/// 中断→新しい台詞の頭の全消去（その発火時刻 0.6 秒）→新しい塊: 前の台詞の現れなかった文字が残らず、
+/// 中断→新しい台詞の頭の全消去（その発火時刻 600 ms）→新しい塊: 前の台詞の現れなかった文字が残らず、
 /// 列は単調のまま。
 #[test]
 fn interrupt_then_clear_all_at_the_new_fire_time_keeps_the_list_monotone() {

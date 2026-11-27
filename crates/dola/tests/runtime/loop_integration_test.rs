@@ -58,23 +58,23 @@ fn loop_count_1_compatible_with_existing_behavior() {
     let StartResult { end_time, .. } = rt.start("fade", at_ms(0)).unwrap();
     assert_eq!(end_time, Some(at_ms(1000)));
 
-    // t=0.0: opacity=0.0
+    // t=0ms: opacity=0.0
     rt.tick(at_ms(0));
     let diff = rt.last_result().changes.clone();
     assert!(!diff.is_empty());
     let v = extract_float(&diff[0].1);
-    assert!(v.abs() < 1e-9, "expected ~0.0 at t=0.0, got {v}");
+    assert!(v.abs() < 1e-9, "expected ~0.0 at t=0ms, got {v}");
 
-    // t=0.5: opacity≈0.5
+    // t=500ms: opacity≈0.5
     rt.tick(at_ms(500));
     let diff = rt.last_result().changes.clone();
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 1e-9, "expected ~0.5 at t=0.5, got {v}");
+    assert!((v - 0.5).abs() < 1e-9, "expected ~0.5 at t=500ms, got {v}");
 
-    // t=1.0: 自然終了
+    // t=1000ms: 自然終了
     rt.tick(at_ms(1000));
     let diff = rt.last_result().changes.clone();
-    assert!(!diff.is_empty(), "expected final value at t=1.0");
+    assert!(!diff.is_empty(), "expected final value at t=1000ms");
     let opacity = diff
         .iter()
         .find(|(id, _)| *id == opacity_id)
@@ -82,7 +82,7 @@ fn loop_count_1_compatible_with_existing_behavior() {
     let v = extract_float(&opacity.1);
     assert!((v - 1.0).abs() < 1e-9, "expected ~1.0, got {v}");
 
-    // t=1.5: 終了後 — 差分なし
+    // t=1500ms: 終了後 — 差分なし
     rt.tick(at_ms(1500));
     let diff = rt.last_result().changes.clone();
     assert!(diff.is_empty(), "expected empty diff after natural end");
@@ -104,42 +104,42 @@ fn finite_loop_3_cycles() {
     // 待ちのない有限のループは全体の終わり（3 周分）が決まっている
     assert_eq!(end_time, Some(at_ms(3000)));
 
-    // 周回1: t=0.0→1.0
+    // 周回1: t=0→1000ms
     rt.tick(at_ms(0)); // opacity=0.0
 
     rt.tick(at_ms(500));
     let diff = rt.last_result().changes.clone(); // 周回1の中間 → opacity≈0.5
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 1e-9, "cycle 1 t=0.5: {v}");
+    assert!((v - 0.5).abs() < 1e-9, "cycle 1 t=500ms: {v}");
 
-    // 周回1→2の遷移 (t=1.25): 周回2 の 0.25s 地点 → opacity ≈ 0.25
+    // 周回1→2の遷移 (t=1250ms): 周回2 の 250ms 地点 → opacity ≈ 0.25
     // 前回値 0.5 → 0.25 なので diff が発生する
     rt.tick(at_ms(1250));
     let diff = rt.last_result().changes.clone();
     assert!(
         !diff.is_empty(),
-        "should report value change at cycle 2 (t=1.25)"
+        "should report value change at cycle 2 (t=1250ms)"
     );
     let v = extract_float(&diff[0].1);
     assert!(
         (v - 0.25).abs() < 1e-9,
-        "cycle 2 t=1.25: expected ~0.25, got {v}"
+        "cycle 2 t=1250ms: expected ~0.25, got {v}"
     );
 
-    // 周回2→3の遷移 (t=2.75): 周回3 の 0.75s 地点 → opacity ≈ 0.75
+    // 周回2→3の遷移 (t=2750ms): 周回3 の 750ms 地点 → opacity ≈ 0.75
     rt.tick(at_ms(2750));
     let diff = rt.last_result().changes.clone();
     assert!(
         !diff.is_empty(),
-        "should report value change at cycle 3 (t=2.75)"
+        "should report value change at cycle 3 (t=2750ms)"
     );
     let v = extract_float(&diff[0].1);
     assert!(
         (v - 0.75).abs() < 1e-9,
-        "cycle 3 t=2.75: expected ~0.75, got {v}"
+        "cycle 3 t=2750ms: expected ~0.75, got {v}"
     );
 
-    // t=3.0: 3周完了 → Conclude (自然終了)
+    // t=3000ms: 3周完了 → Conclude (自然終了)
     rt.tick(at_ms(3000));
     let diff = rt.last_result().changes.clone();
     // 最終値 (opacity=1.0) が配信される
@@ -153,7 +153,7 @@ fn finite_loop_3_cycles() {
         "final value after 3 cycles"
     );
 
-    // t=3.5: 終了後 — 差分なし
+    // t=3500ms: 終了後 — 差分なし
     rt.tick(at_ms(3500));
     let diff = rt.last_result().changes.clone();
     assert!(diff.is_empty(), "expected empty diff after loop completion");
@@ -180,20 +180,20 @@ fn infinite_loop_continues_until_cancel() {
     // 複数周回を進める
     rt.tick(at_ms(0)); // opacity=0.0
 
-    // 周回5の中間地点 t=4.5 → effective ≈ 0.5, opacity ≈ 0.5
+    // 周回5の中間地点 t=4500ms → effective ≈ 500 ms, opacity ≈ 0.5
     rt.tick(at_ms(4500));
     let diff = rt.last_result().changes.clone();
-    assert!(!diff.is_empty(), "should still be playing at t=4.5");
+    assert!(!diff.is_empty(), "should still be playing at t=4500ms");
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 1e-9, "cycle 5 at t=4.5: {v}");
+    assert!((v - 0.5).abs() < 1e-9, "cycle 5 at t=4500ms: {v}");
 
-    // 周回10の 0.25s 地点 t=9.25 → effective ≈ 0.25, opacity ≈ 0.25
+    // 周回10の 250ms 地点 t=9250ms → effective ≈ 250 ms, opacity ≈ 0.25
     // 前回値 ≈0.5 → 0.25 なので diff 発生
     rt.tick(at_ms(9250));
     let diff = rt.last_result().changes.clone();
-    assert!(!diff.is_empty(), "should still be playing at t=9.25");
+    assert!(!diff.is_empty(), "should still be playing at t=9250ms");
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.25).abs() < 1e-9, "cycle 10 at t=9.25: {v}");
+    assert!((v - 0.25).abs() < 1e-9, "cycle 10 at t=9250ms: {v}");
 
     // Cancel で停止
     rt.cancel(group_id).unwrap();
@@ -220,7 +220,7 @@ fn multi_loop_batch_processing() {
 
     rt.tick(at_ms(0));
 
-    // 一度に3周分進める (t=3.5 → 周回4の 0.5s 地点)
+    // 一度に3周分進める (t=3500ms → 周回4の 500ms 地点)
     // loop_count=5 なので、まだ再生中
     rt.tick(at_ms(3500));
     let diff = rt.last_result().changes.clone();
@@ -229,7 +229,7 @@ fn multi_loop_batch_processing() {
         "should still be playing after 3 cycles skip"
     );
 
-    // 残り全体進める: t=5.0 → 5周完了 → Conclude
+    // 残り全体進める: t=5000ms → 5周完了 → Conclude
     rt.tick(at_ms(5000));
     let diff = rt.last_result().changes.clone();
     let (_, val) = diff
@@ -252,7 +252,7 @@ fn multi_loop_batch_processing() {
 // 先頭の遅れは周回ごとにくり返す（長さに入る）
 // =========================================================================
 
-/// delay 0.5・duration 1.0・2 周 → 1 周は 1.5 秒で、2 周目も [1.5,2.0] が遅れ・[2.0,3.0] が遷移。
+/// delay 0.5・duration 1.0・2 周 → 1 周は 1500 ms で、2 周目も [1500,2000] ms が遅れ・[2000,3000] ms が遷移。
 /// 2 周目から遅れを抜いても、長さを遅れの後から数えても落ちる。
 #[test]
 fn leading_delay_repeats_every_loop() {
@@ -281,20 +281,20 @@ fn leading_delay_repeats_every_loop() {
 
     // 1 周目の遷移の中ほど
     let (v, _) = opacity_at(at_ms(1000));
-    assert!((v.expect("t=1.0") - 0.5).abs() < 1e-9, "t=1.0: {v:?}");
+    assert!((v.expect("t=1000ms") - 0.5).abs() < 1e-9, "t=1000ms: {v:?}");
     // 2 周目の遅れの中は 2 周目の from
     let (v, _) = opacity_at(at_ms(1750));
-    assert!(v.expect("t=1.75").abs() < 1e-9, "t=1.75: {v:?}");
+    assert!(v.expect("t=1750ms").abs() < 1e-9, "t=1750ms: {v:?}");
     // 2 周目の遷移の中ほど
     let (v, alive) = opacity_at(at_ms(2500));
-    assert!((v.expect("t=2.5") - 0.5).abs() < 1e-9, "t=2.5: {v:?}");
-    assert!(alive, "t=2.5 はまだ生きている");
-    // 2 周目の終わり 3.0 で終わる
+    assert!((v.expect("t=2500ms") - 0.5).abs() < 1e-9, "t=2500ms: {v:?}");
+    assert!(alive, "t=2500ms はまだ生きている");
+    // 2 周目の終わり 3000 ms で終わる
     let (_, alive) = opacity_at(at_ms(2990));
-    assert!(alive, "t=2.99 はまだ生きている");
+    assert!(alive, "t=2990ms はまだ生きている");
     let (v, alive) = opacity_at(at_ms(3000));
-    assert!((v.expect("t=3.0") - 1.0).abs() < 1e-9, "t=3.0: {v:?}");
-    assert!(!alive, "t=3.0 で終わる");
+    assert!((v.expect("t=3000ms") - 1.0).abs() < 1e-9, "t=3000ms: {v:?}");
+    assert!(!alive, "t=3000ms で終わる");
 }
 
 // =========================================================================
@@ -313,26 +313,26 @@ fn pause_during_loop_resumes_correctly() {
 
     rt.tick(at_ms(0)); // opacity=0.0
 
-    // t=0.5: 周回1の中間 → opacity ≈ 0.5
+    // t=500ms: 周回1の中間 → opacity ≈ 0.5
     rt.tick(at_ms(500));
     let diff = rt.last_result().changes.clone();
     assert!(!diff.is_empty());
     let v = extract_float(&diff[0].1);
     assert!((v - 0.5).abs() < 1e-9, "before pause: {v}");
 
-    // Pause at t=0.5
+    // Pause at t=500ms
     rt.pause(group_id, at_ms(500)).unwrap();
 
-    // t=1.0: Pause 中 → 差分なし
+    // t=1000ms: Pause 中 → 差分なし
     rt.tick(at_ms(1000));
     let diff = rt.last_result().changes.clone();
     assert!(diff.is_empty(), "should freeze during pause");
 
-    // Resume at t=1.0 (0.5s pause)
+    // Resume at t=1000ms (500ms pause)
     let _new_end = rt.resume(group_id, at_ms(1000)).unwrap();
 
     // After resume: effective_time = (current_time - loop_start - pause_accumulated) * time_scale
-    // At t=1.25: (1.25 - 0.0 - 0.5) * 1.0 = 0.75 → opacity ≈ 0.75
+    // At t=1250ms: (1250 - 0 - 500) ms ÷ 1000 ms = 0.75 → opacity ≈ 0.75
     // 前回値 0.5 → 0.75 なので diff 発生
     rt.tick(at_ms(1250));
     let diff = rt.last_result().changes.clone();
@@ -340,24 +340,24 @@ fn pause_during_loop_resumes_correctly() {
     let v = extract_float(&diff[0].1);
     assert!(
         (v - 0.75).abs() < 1e-9,
-        "t=1.25 after pause: expected ~0.75, got {v}"
+        "t=1250ms after pause: expected ~0.75, got {v}"
     );
 
-    // 周回1 → 2 遷移: 1 周目の終わり = 0.0 + 1.0 + pause(0.5) = 1.5
-    // At t=1.75: process_loops が 2 周目を進め、2 周目の終わりは 2.5
-    // effective = (1.75 - 1.0 - 0.5) * 1.0 = 0.25 → opacity ≈ 0.25
+    // 周回1 → 2 遷移: 1 周目の終わり = 0 + 1000 + pause(500) = 1500 ms
+    // At t=1750ms: process_loops が 2 周目を進め、2 周目の終わりは 2500ms
+    // effective = (1750 - 1000 - 500) ms = 250 ms → opacity ≈ 0.25
     // 前回値 0.75 → 0.25 なので diff 発生
     rt.tick(at_ms(1750));
     let diff = rt.last_result().changes.clone();
-    assert!(!diff.is_empty(), "should be in cycle 2 at t=1.75");
+    assert!(!diff.is_empty(), "should be in cycle 2 at t=1750ms");
     let v = extract_float(&diff[0].1);
     assert!(
         (v - 0.25).abs() < 1e-9,
-        "cycle 2 t=1.75: expected ~0.25, got {v}"
+        "cycle 2 t=1750ms: expected ~0.25, got {v}"
     );
 
-    // 3周完了: 全体の終わり 3.5 (0 + 3*1.0 + 0.5) に到達するはず
-    // t=3.5: effective = (3.5 - 2.0 - 0.5) * 1.0 = 1.0 → 周回3終了
+    // 3周完了: 全体の終わり 3500 ms (0 + 3*1000 + 500) に到達するはず
+    // t=3500ms: effective = 3500 - 2000 - 500 = 1000ms → 周回3終了
     rt.tick(at_ms(3500));
     let diff = rt.last_result().changes.clone();
     let (_, val) = diff
@@ -395,7 +395,7 @@ fn cancel_during_loop_stops_immediately() {
 
     rt.tick(at_ms(0));
 
-    // t=5.5: 無限ループ再生中
+    // t=5500ms: 無限ループ再生中
     rt.tick(at_ms(5500));
     let diff = rt.last_result().changes.clone();
     assert!(!diff.is_empty(), "should be playing during infinite loop");

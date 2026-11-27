@@ -65,7 +65,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
         .send(SakuraMsg::Start(start_b))
         .expect("2 本目 Start(B) 投函");
 
-    // A を駆動して自然終端（world 再生完了 horizon=0.60 を跨ぐ Tick(at_ms(1000)) まで）。
+    // A を駆動して自然終端（world 再生完了 horizon=600ms を跨ぐ Tick(at_ms(1000)) まで）。
     handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
     handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
     let done = recv_done(&done_a_rx, Duration::from_secs(5)).expect("A の TalkDone");
@@ -202,7 +202,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
 
 /// 再生途中の中断（Close）で `TalkDone{Interrupted}` がちょうど 1 回返り、未発火分が sink に
 /// 届かないこと。`\s[10]hello\_w[500]world\e`（world は \_w[500] 後）を
-/// 先頭群だけ発火させたところで Close。world（at=0.75）は未発火＝以降届いてはならない。
+/// 先頭群だけ発火させたところで Close。world（at=750ms）は未発火＝以降届いてはならない。
 #[test]
 fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -219,7 +219,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
         None,
     );
 
-    // 初回 Tick(at_ms(0)) 刻印＋at=0.0 群を発火（world は at=0.75・未達）。
+    // 初回 Tick(at_ms(0)) 刻印＋at=0ms 群を発火（world は at=750ms・未達）。
     handle
         .inbox
         .send(SakuraMsg::Tick(at_ms(0)))
@@ -236,7 +236,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     );
     handle.actor.join().expect("body は Break 後に正常終了する");
 
-    // at=0.0 群のみ届き（ClearAll/Emote/hello）、未発火分（world@0.75）は届いていない。
+    // at=0ms 群のみ届き（ClearAll/Emote/hello）、未発火分（world@750ms）は届いていない。
     assert_eq!(
         commands(&records),
         vec![
@@ -277,7 +277,7 @@ fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
         done
     };
 
-    // 末尾だけが違う 2 本を、同じ手順（初回 Tick(at_ms(0)) で刻印し `world`@0.75 の手前で閉じる）で中断する。
+    // 末尾だけが違う 2 本を、同じ手順（初回 Tick(at_ms(0)) で刻印し `world`@750ms の手前で閉じる）で中断する。
     let quit = close_after(r"\s[10]hello\_w[500]world\-", TalkId(103), &[at_ms(0)]);
     assert_eq!(
         quit.reason,
@@ -328,7 +328,7 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
         None,
     );
 
-    // 自然終端まで駆動する（0.0 刻印 → 占有 horizon=0.60 を跨ぐ 1.0）。
+    // 自然終端まで駆動する（0ms 刻印 → 占有 horizon=600ms を跨ぐ 1000ms）。
     handle
         .inbox
         .send(SakuraMsg::Tick(at_ms(0)))
@@ -449,7 +449,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
 /// `\s[10]hello\_w[800]\e` の台本（アンカー 0）:
 ///   ClearAll@0 / Emote{10}@0 / hello@0(dur=D) / Wait@D(dur=0.8)。
 /// 全 cue の配送は Tick(D) で完了する（entry 枯渇）が、占有 horizon＝`D + 0.8` であり、そこへ達する
-/// まで `TalkDone` は発火しない。末尾待ちの 0.8 秒が talk 終端で切り捨てられない（早期終了しない）。
+/// まで `TalkDone` は発火しない。末尾待ちの 800 ms が talk 終端で切り捨てられない（早期終了しない）。
 #[test]
 fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -469,7 +469,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
     let d_hello = text_playback_duration("hello"); // 0.25
     let w = ms(800); // \_w[800]
     let t_wait = at_ms(0) + d_hello; // Wait cue の相対発火時刻
-    let horizon = at_ms(0) + d_hello + w; // 占有 horizon＝末尾 Wait の再生完了時刻（1.05）
+    let horizon = at_ms(0) + d_hello + w; // 占有 horizon＝末尾 Wait の再生完了時刻（1050ms）
     let near_horizon = at_ms(0) + d_hello + ms(400); // horizon 手前（entry 枯渇後・horizon 未満）
 
     // 初回 Tick(at_ms(0)) 刻印。Tick(D) で Wait を配送し **entry を枯渇**、さらに horizon 手前まで前進する
@@ -499,7 +499,7 @@ fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
         "配送完了後も horizon 未達ゆえ talk は駆動継続（早期終了せず TalkDone 未送出）"
     );
 
-    // horizon 到達で初めて完了する（末尾 Wait の 0.8 秒が終端で切り捨てられない）。
+    // horizon 到達で初めて完了する（末尾 Wait の 800 ms が終端で切り捨てられない）。
     handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
     let done = recv_done(&done_rx, Duration::from_secs(5))
         .expect("占有 horizon 到達で TalkDone が発火するべき");
@@ -532,8 +532,8 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
 
     let d_hello = text_playback_duration("hello"); // 0.25
     let d_world = text_playback_duration("world"); // 0.25
-    let t_world = at_ms(0) + d_hello + ms(500); // 末尾テキスト world の配送時刻（0.75）
-    let horizon = t_world + d_world; // world の再生完了時刻＝占有 horizon（1.0）
+    let t_world = at_ms(0) + d_hello + ms(500); // 末尾テキスト world の配送時刻（750ms）
+    let horizon = t_world + d_world; // world の再生完了時刻＝占有 horizon（1000ms）
 
     // 初回 Tick(at_ms(0)) 刻印 → Tick(D_h) で Wait 配送 → Tick(t_world) で末尾 world を配送し entry 枯渇。
     // t_world は末尾テキストの **発火時刻** であって完了時刻ではない（単調 0.0 < 0.25 < 0.75）。
@@ -578,8 +578,8 @@ fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
 /// tick を送り続けると発火する（tick 源は entries 枯渇後も horizon 到達まで tick を送り続ける）。
 /// drive は `is_completed()` 成立で発火する。
 ///
-/// `\s[10]ab\_w[600]\e`（ab=2char→D=0.1・Wait 0.6・horizon=0.7）で、entry 枯渇（0.1）でも、その先の
-/// horizon 手前（0.5）でも、tick を止めれば完了通知は保留され、horizon（0.7）到達で初めて発火する。
+/// `\s[10]ab\_w[600]\e`（ab=2char→D=100ms・Wait 600ms・horizon=700ms）で、entry 枯渇（100ms）でも、その先の
+/// horizon 手前（500ms）でも、tick を止めれば完了通知は保留され、horizon（700ms）到達で初めて発火する。
 #[test]
 fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
@@ -661,7 +661,7 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
 
     let d_hi = text_playback_duration("hi"); // 0.1（末尾 Wait の発火時刻＝entry 枯渇点）
 
-    // 初回 Tick(at_ms(0)) 刻印 → Tick(D) で末尾 Wait 配送＝entry 枯渇（horizon=0.8 の遥か手前）。
+    // 初回 Tick(at_ms(0)) 刻印 → Tick(D) で末尾 Wait 配送＝entry 枯渇（horizon=800ms の遥か手前）。
     handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
     handle.inbox.send(SakuraMsg::Tick(at_ms(0) + d_hi)).unwrap();
     // 発火時刻が horizon 由来である証: entry 枯渇では発火しない（reason が確定していても時刻は別権威）。

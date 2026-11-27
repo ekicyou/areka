@@ -19,7 +19,7 @@ use std::rc::Rc;
 #[test]
 fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     let actor = ActorKey::from("0");
-    // 絶対開始時刻 100.0 を刻印した自己完結台本（アンカーが配送駆動に効くことを具体化する）。
+    // 絶対開始時刻 100000 ms を刻印した自己完結台本（アンカーが配送駆動に効くことを具体化する）。
     let sheet = CueSheet::new(vec![
         Cue {
             actor: actor.clone(),
@@ -43,10 +43,10 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
     player.register_sink(sink_b);
     player.register_sink(sink_c);
 
-    // 絶対時刻（アンカー 100.0 ＋ 相対 offset）で駆動する。
-    player.tick(at_ms(100_000)); // Emote@rel0.0
-    player.tick(at_ms(100_500)); // Text@rel0.5
-    player.tick(at_ms(101_500)); // Wait@rel1.5
+    // 絶対時刻（アンカー 100000 ms ＋ 相対 offset）で駆動する。
+    player.tick(at_ms(100_000)); // Emote@rel 0 ms
+    player.tick(at_ms(100_500)); // Text@rel 500 ms
+    player.tick(at_ms(101_500)); // Wait@rel 1500 ms
 
     let a = log_a.borrow().clone();
     let b = log_b.borrow().clone();
@@ -148,7 +148,7 @@ fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("a".into()), CueCommand::Text("b".into())],
-        "各 cue は生涯 1 回のみ配送される（冪等再 tick で二重配送しない）"
+        "各 cue は生涯 1 回のみ配送される（同じ時刻をもう一度刻んでも二重配送しない）"
     );
 }
 
@@ -194,7 +194,7 @@ fn is_completed_is_gated_by_final_text_duration() {
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    // 最終 Text の配送時刻（0.0）到達 — 配り終えたが再生（duration）は未完。
+    // 最終 Text の配送時刻（0）到達 — 配り終えたが再生（duration）は未完。
     player.tick(at_ms(0));
     assert_eq!(
         logged_commands(&log),

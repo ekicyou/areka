@@ -17,10 +17,10 @@ mod conclude_cancel_finish {
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
-        // t=0.0: 初回
+        // t=0ms: 初回
         rt.tick(at_ms(0));
 
-        // t=0.3 で Conclude
+        // t=300ms で Conclude
         rt.conclude(group_id).unwrap();
 
         // 次の update で最終値 (1.0) が配信される
@@ -52,9 +52,9 @@ mod conclude_cancel_finish {
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
-        // t=0.0: 初回
+        // t=0ms: 初回
         rt.tick(at_ms(0));
-        // t=0.5: 中間値取得
+        // t=500ms: 中間値取得
         rt.tick(at_ms(500));
 
         // Cancel — 現在値凍結
@@ -79,25 +79,25 @@ mod conclude_cancel_finish {
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", at_ms(0)).unwrap();
 
-        // t=0.0
+        // t=0ms
         rt.tick(at_ms(0));
 
-        // finish: deadline = 0.5（t=0.5 で Conclude 相当）
+        // finish: deadline = 500ms（t=500ms で Conclude 相当）
         rt.finish(group_id, at_ms(500)).unwrap();
 
-        // t=0.3: deadline 未到達 → まだ再生中
+        // t=300ms: deadline 未到達 → まだ再生中
         rt.tick(at_ms(300));
         let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff
             .iter()
             .find(|(id, _)| *id == opacity_id)
-            .expect("opacity is delivered while playing at 0.3");
+            .expect("opacity is delivered while playing at 300ms");
         match opacity {
-            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "playing at 0.3: {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "playing at 300ms: {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
-        // t=0.5: deadline 到達 → Conclude 相当で最終値が飛ぶ
+        // t=500ms: deadline 到達 → Conclude 相当で最終値が飛ぶ
         rt.tick(at_ms(500));
         let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff

@@ -89,13 +89,13 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
 
 /// **バッグ並存檻（「bag 内容は tick 列に不変」）**: Choice は配送列へ合流しつつ、
 /// 解決照合用に `pending_choices`（バッグ）へも積まれる（責務二分＝バッグは照合の単一真実源）。
-/// バッグ内容は tick 列に**不変**である——同一時刻の冪等再 tick でバッグは成長しない
+/// バッグ内容は tick 列に**不変**である——同じ時刻をもう一度刻んでもバッグは成長しない
 /// （二重積みしない）。かつバッグの選択肢集合は配送列に現れた Choice 集合と一致する
 /// （同一の選択肢が配送列とバッグの両真実源へ並存する）。
 #[test]
 fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
     // choices を NewLine/Cursor と交互に並べ、末尾に WaitForChoice バリアを置く
-    // （choice ありの台本の正準形）。バリアは 0.5 で、0.4 の tick では未到達。
+    // （choice ありの台本の正準形）。バリアは 500 ms で、400 ms の tick では未到達。
     let sheet = sheet_at_zero(vec![
         choice(ms(0), "a", "選択A"),
         newline(ms(100), 1.0),
@@ -108,8 +108,8 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    // バリア手前（0.4）まで一括配送する。バリア 0.5 未到達ゆえ Playing を維持する
-    // （＝冪等再 tick が state ゲートでなく schedule 前進差分ゲートを通ることを保証する）。
+    // バリア手前（400 ms）まで一括配送する。バリア 500 ms 未到達ゆえ Playing を維持する
+    // （＝同じ時刻をもう一度刻む事が state ゲートでなく schedule 前進差分ゲートを通ることを保証する）。
     player.tick(at_ms(400));
     assert_eq!(
         player.state(),
@@ -130,14 +130,14 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
         "バッグは 3 選択肢を記述順で保持する（照合の単一真実源）"
     );
 
-    // 冪等再 tick（同一時刻を 2 度）: schedule は前進せずバッグも成長しない
+    // 同じ時刻を 2 度刻む: schedule は前進せずバッグも成長しない
     // （bag 内容は tick 列に不変＝二重積みしない）。
     player.tick(at_ms(400));
     player.tick(at_ms(400));
     assert_eq!(
         bag_ids(&player),
         vec!["a", "b", "c"],
-        "冪等再 tick でバッグは二重積みされない（bag 内容は tick 列に不変）"
+        "同じ時刻をもう一度刻んでもバッグは二重積みされない（bag 内容は tick 列に不変）"
     );
 
     let delivered_choice_ids: Vec<String> = log
@@ -159,7 +159,7 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
 /// `pending_choices()` から取得できる（先積みの累積性）。
 #[test]
 fn choices_accumulate_across_ticks_before_choice_barrier() {
-    // Choice(a)@0.0 → Choice(b)@0.1 → Barrier(WaitForChoice)@0.2。
+    // Choice(a)@0ms → Choice(b)@100ms → Barrier(WaitForChoice)@200ms。
     let sheet = sheet_at_zero(vec![
         choice(ms(0), "a", "A"),
         choice(ms(100), "b", "B"),

@@ -18,7 +18,7 @@ mod cancel_strategy {
         );
     }
 
-    /// Cancel は割り込みの時刻（t=0.5）の値で凍る: y の 1 つ目のセグメントの途中の 5.0。
+    /// Cancel は割り込みの時刻（t=500ms）の値で凍る: y の 1 つ目のセグメントの途中の 5.0。
     #[test]
     fn cancel_freezes_at_interrupt_time() {
         assert_eq!(
@@ -38,12 +38,12 @@ mod cancel_strategy {
         let r1 = rt.start("sb_a", at_ms(0)).unwrap();
         assert!(r1.affected_group_ids.is_empty());
 
-        // Start sb_new (operates x only) at t=0.5
+        // Start sb_new (operates x only) at t=500ms
         // → sb_a conflicts on x → Cancel sb_a (both x and y entries removed)
         let r2 = rt.start("sb_new", at_ms(500)).unwrap();
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
-        // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
+        // sb_a's y values should be frozen at t=500ms → 12.5 (progress=0.25 of 0→50)
         rt.tick(at_ms(500));
         let changes = rt.last_result().changes.clone();
         // y should show frozen value, x shows new SB value
@@ -112,7 +112,7 @@ mod conclude_strategy {
 mod trim_strategy {
     use super::super::*;
 
-    /// Trim は割り込みの時刻（t=0.5）で切る: y の 1 つ目のセグメントの途中の 5.0。
+    /// Trim は割り込みの時刻（t=500ms）で切る: y の 1 つ目のセグメントの途中の 5.0。
     #[test]
     fn trim_cuts_at_interrupt_time() {
         assert_eq!(
@@ -165,7 +165,7 @@ mod edge_cases {
 
         rt.start("sb_x", at_ms(0)).unwrap();
 
-        // Update at t=1.0 → x = 50.0
+        // Update at t=1000ms → x = 50.0
         rt.tick(at_ms(1000));
         let changes = rt.last_result().changes.clone();
         let x_val = changes.iter().find(|(id, _)| *id == x_id);
@@ -198,14 +198,14 @@ mod edge_cases {
         // sb_b conflicts with sb_a on x → sb_a was Cancel'd
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
-        // Start sb_new (x) at t=0.5 → conflicts with sb_b (Conclude)
+        // Start sb_new (x) at t=500ms → conflicts with sb_b (Conclude)
         let r3 = rt.start("sb_new", at_ms(500)).unwrap();
         assert_eq!(r3.affected_group_ids, vec![r2.group_id]);
     }
 }
 
-/// a（policy）が x と y を [0,1] で回して周回の間に 2 秒待ち、その待ちの中（t=2.0）で
-/// x だけを触る b に終わらされたとき、t=1.5 から購読した y に届く値。
+/// a（policy）が x と y を [0,1] で回して周回の間に 2 秒待ち、その待ちの中（t=2000ms）で
+/// x だけを触る b に終わらされたとき、t=1500ms から購読した y に届く値。
 fn y_after_interrupt_in_loop_delay(policy: InterruptionPolicy) -> Option<EvaluatedValue> {
     use dola::{EasingFunction, EasingName, LoopOffset, LoopOffsetRange, Storyboard};
     let ramp = |var: &str| linear(var, 0.0, 1.0, ms(1000));
@@ -249,7 +249,7 @@ fn y_after_interrupt_in_loop_delay(policy: InterruptionPolicy) -> Option<Evaluat
 }
 
 /// a（policy）が x を [0,2] で動かし、y を [0,1] で 0→10・[1,2] で 10→30 と 2 セグメントで
-/// 動かす。t=0.5 に x だけを触る b に終わらされたとき、y に届く a の確定値
+/// 動かす。t=500ms に x だけを触る b に終わらされたとき、y に届く a の確定値
 /// （b は y を触らないので、届く y は a の戦略が決めた値だけ）。
 fn y_after_interrupt(policy: InterruptionPolicy) -> EvaluatedValue {
     let doc = DolaDocumentBuilder::new("1.0")

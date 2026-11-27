@@ -176,7 +176,7 @@ fn pause_freezes_value() {
     inst.state = InstanceState::Paused { since: at_ms(500) };
     instances.insert(1, inst);
 
-    // Pause 中は current_time に依らず止めた時刻の値（effective=0.5, progress=0.25）
+    // Pause 中は current_time に依らず止めた時刻の値（effective=500 ms, progress=0.25）
     let val = mgr.evaluate("x", at_ms(10000), &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(25.0)));
 }
@@ -213,7 +213,7 @@ fn effective_time_with_time_scale() {
     inst.time_scale = TimeScale::new(2.0).unwrap();
     instances.insert(1, inst);
 
-    // effective_time=1.0, progress=0.5
+    // effective_time=1000 ms, progress=0.5
     let val = mgr.evaluate("x", at_ms(500), &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(50.0)));
 }
@@ -237,7 +237,7 @@ fn evaluate_removes_entry_when_instance_missing() {
 
 #[test]
 fn evaluate_before_first_segment_returns_from_value() {
-    // delay 付きセグメント（1.0 開始）に未到達なら from_value
+    // delay 付きセグメント（1000 ms 開始）に未到達なら from_value
     let mut mgr = TimelineManager::new();
     let compiled = make_compiled_with_segments("x", vec![float_segment(1000, 2000, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
@@ -367,8 +367,8 @@ fn gap_between_segments_holds_previous_end_value() {
 
 #[test]
 fn not_yet_started_instance_does_not_override_started_one() {
-    // 親（gid 1）が x を 0→1 に 2 秒・子（gid 2）は 1.5 秒に始まって x を 5→6。
-    // 始まる前の子が group_id の大きさで勝つと、t=1.0 で x が子の from の 5 に跳んでいた
+    // 親（gid 1）が x を 0→1 に 2 秒・子（gid 2）は 1500 ms に始まって x を 5→6。
+    // 始まる前の子が group_id の大きさで勝つと、t=1000ms で x が子の from の 5 に跳んでいた
     let mut mgr = TimelineManager::new();
     mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0, 2000));
     mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0, 1000));

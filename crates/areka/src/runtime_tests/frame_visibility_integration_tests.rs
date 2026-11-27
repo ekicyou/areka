@@ -110,7 +110,7 @@ fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 当該 scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻が進むほど文字がリビールされる）。
+/// 当該 scope へ可視グリフを流し込む（`at=0ms` 起点・注入時刻が進むほど文字がリビールされる）。
 fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
     wiring.runtime().borrow_mut().apply_cue(&TalkCue::scheduled(
         dola::TimePoint::ZERO,

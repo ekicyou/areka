@@ -309,7 +309,7 @@ mod tests {
         animator.tick(at_ms(500));
         assert!(
             !animator.last_result().changes.is_empty(),
-            "with_runtime must retain the loaded/started runtime (opacity should change at t=0.5)"
+            "with_runtime must retain the loaded/started runtime (opacity should change at t=500ms)"
         );
     }
 
@@ -355,7 +355,7 @@ mod tests {
     fn tick_advancing_time_replaces_previous_result() {
         // last_result は最新 tick の差分へ置換される（累積ではない）。tick(at_ms(1000)) の後の
         // tick(at_ms(2000)) は値が 1.0 のままなので差分が空になる。
-        // 観測値（probe）: start=0 → t=1.0:[(0,1.0)] / t=2.0:[]。
+        // 観測値（probe）: start=0 → t=1000ms:[(0,1.0)] / t=2000ms:[]。
         let mut animator = started_animator();
 
         animator.tick(at_ms(1000));
@@ -376,7 +376,7 @@ mod tests {
     fn repeated_tick_at_same_value_yields_empty_diff_after_first_delivery() {
         // 差分検出は前回配信値基準（subscription_manager::diff_and_update）。開始前時刻でも
         // 初回 tick は初期値 0.0 を 1 件報告し、同一時刻の再 tick は差分ゼロになる。
-        // 観測値（probe）: start=1 → t=0.5:[(0,0.0)] / 同値再 tick:[]。
+        // 観測値（probe）: start=1 → t=500ms:[(0,0.0)] / 同値再 tick:[]。
         let mut rt = loaded_runtime();
         rt.start("fade_in", at_ms(1000)).unwrap(); // 1.0 開始（0.5 はまだ開始前 ＝ 初期値 0.0）
         let mut animator = DolaAnimator::with_runtime(rt);
@@ -462,16 +462,16 @@ mod tests {
             let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
             assert!(
                 !animator.last_result().changes.is_empty(),
-                "{label} must be ticked by the system at FrameTime(0.5)"
+                "{label} must be ticked by the system at FrameTime(500ms)"
             );
         }
     }
 
     #[test]
     fn tick_system_uses_injected_frame_time_value() {
-        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。start=0 のフェードに FrameTime(0.5) を
+        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。start=0 のフェードに FrameTime(500ms) を
         // 注入すると配信値がその時刻の補間値 0.5 になる。
-        // 観測値（probe）: start=0 → t=0.5:[(0, Float(0.5))]。
+        // 観測値（probe）: start=0 → t=500ms:[(0, Float(0.5))]。
         let mut world = World::new();
         world.insert_resource(FrameTime(at_ms(500)));
         let e = world.spawn(started_animator()).id();
@@ -481,13 +481,13 @@ mod tests {
 
         let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
         let changes = &animator.last_result().changes;
-        assert_eq!(changes.len(), 1, "one opacity change expected at t=0.5");
+        assert_eq!(changes.len(), 1, "one opacity change expected at t=500ms");
         let (var_id, value) = &changes[0];
         assert_eq!(*var_id, 0, "subscribed opacity has variable_id 0");
         match value {
             EvaluatedValue::Float(v) => assert!(
                 (*v - 0.5).abs() < 1e-9,
-                "FrameTime(0.5) must interpolate opacity to 0.5 (system forwards injected time), got {v}"
+                "FrameTime(500ms) must interpolate opacity to 0.5 (system forwards injected time), got {v}"
             ),
             other => panic!("expected Float opacity value, got {other:?}"),
         }

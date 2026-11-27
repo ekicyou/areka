@@ -82,12 +82,12 @@ fn spine_move_cue_drives_window_move_end_to_end() {
         "前提: 移動前の scope1 初期位置（two_scope_placements）"
     );
 
-    // OnBoot talk を Tick 注入で駆動し、各反復で実 frame 相 move drain を回す。move cue は at=0.0 ゆえ talk
+    // OnBoot talk を Tick 注入で駆動し、各反復で実 frame 相 move drain を回す。move cue は at=0 ゆえ talk
     // 起動後の最初の有効 Tick で発火するが、boot→compile→dispatch→broadcast はスレッド群を跨いで非同期に
     // 流れるため、窓が動く（channel→drain→apply 完了）まで有界待機する。打ち切りは [`wait_until_paced`] の進みの
     // 目印（SHIORI の呼び出しの数。move の汲みは数を返さないので足さない）。Tick を入れる輪なので休みは
     // [`wait_until_paced`] が持つ（`areka-runtime` の `spine_wait.rs`）。観測「初期位置からの変位」は
-    // move cue が 1 発のみ＝以降動かない＝ラッチであり、台本は `\w`／`\c` なし（全 cue `at=0.0`）ゆえ
+    // move cue が 1 発のみ＝以降動かない＝ラッチであり、台本は `\w`／`\c` なし（全 cue `at=0`）ゆえ
     // 注入時刻の前進が観測を壊すクラスではない。
     let what = "move cue による対象窓の移動";
     let shiori = harness.shiori_handle.clone();

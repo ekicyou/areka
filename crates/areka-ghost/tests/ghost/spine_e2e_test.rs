@@ -30,11 +30,11 @@ pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60)
 /// Tick を止めて `yield_now` だけで待つ」形は、スレッドスケジューリング次第で**両方向に**壊れる:
 ///
 /// - **注入不足**（引き渡しが速く `now` が talk horizon 未満で止まる）: 挨拶 talk（`\s[0]hello\e`＝`hello` の
-///   0.25s）が完了せず `TalkDone` が出ない。kanade は `Steady{talk: Some(greeting)}` で close を保留し続け、
+///   250ms）が完了せず `TalkDone` が出ない。kanade は `Steady{talk: Some(greeting)}` で close を保留し続け、
 ///   以降 Tick が来ないので**永久に握手が始まらない**（S4 の `Unload` 待ち・S5 の `OnClose` 待ちが 60s 安全弁まで
 ///   空転して落ちる）。
 /// - **注入過多**（引き渡しが遅く、dispatcher の**無制限** inbox に Tick が溜まる）: 溜まった分を一気に drain して
-///   仮想時刻が horizon を飛び越え、初回起動 epilogue cue（`areka.prop.set`@0.25）まで発火してしまう（S1 の
+///   仮想時刻が horizon を飛び越え、初回起動 epilogue cue（`areka.prop.set`@250ms）まで発火してしまう（S1 の
 ///   cue 列アサートが 3 件期待で落ちる）。
 ///
 /// 本ヘルパは待機条件を `done` で明示的に表明させ、仮想時刻は常に単調前進させる。これにより「何を待っているか」と

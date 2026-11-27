@@ -32,7 +32,7 @@ fn make_glyph_timeline(glyph_count: u32, step: TimeSpan) -> TypewriterTimeline {
     }
 }
 
-/// 「おしまい」の 4 文字（0.1 秒おき）→ 1 秒の待ち → 宛先への完了の知らせ。
+/// 「おしまい」の 4 文字（100 ms おき）→ 1 秒の待ち → 宛先への完了の知らせ。
 fn wait_then_fire_timeline(target: Entity) -> TypewriterTimeline {
     let mut timeline = make_glyph_timeline(4, ms(100));
     timeline.full_text = "おしまい".into();

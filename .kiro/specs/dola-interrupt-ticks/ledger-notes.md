@@ -24,7 +24,7 @@
 
 ## 2.4
 
-- 外したテスト・分かれ道・ログは無い。変える前後の期待（実数の秒 → ちょうどの 100ns の値）: `domain_types_serde_roundtrip`・`cue_payload_and_cue_serde_roundtrip`（時間切れ 3.0 → `delta_ms(3000)`）、`wait_carries_no_action_and_time_lives_in_envelope_duration`・`cue_duration_roundtrip_preserves_value`・`duration_is_uniform_envelope_field_across_all_payloads`（秒 → `ms(..)`）、`cue_duration_defaults_to_zero_for_legacy_serialized_data`（JSON の秒 → 100ns の整数）。
+- 外したテスト・分かれ道・ログは無い。変える前後の期待（実数の秒 → ちょうどの 100ns の値）: `domain_types_serde_roundtrip`・`cue_payload_and_cue_serde_roundtrip`（時間切れ 3.0 → `delta_ms(3000)`）、`wait_carries_no_action_and_time_lives_in_envelope_duration`・`cue_duration_roundtrip_preserves_value`・`duration_is_uniform_envelope_field_across_all_payloads`（秒 → `ms(..)`）、`cue_duration_defaults_to_zero_when_field_absent`（JSON の秒 → 100ns の整数）。
 
 ## 2.5
 
@@ -444,3 +444,7 @@
 ## 11.3（後半）
 
 - 足したテスト: areka-kanade `tests/kanade/sleep_test.rs` の 2 本（`choice_deadline_holds_while_clock_is_stopped`・`second_change_hour_comes_from_tick_time`）、areka-sakura `tests/sleep.rs`（`playback_holds_while_clock_is_stopped_and_resumes_from_there`）、areka-seriko `tests/sleep.rs`（`frames_hold_while_clock_is_stopped_and_resume_from_there`）。止まった時計は「同じ時刻を運ぶ刻みが続く事」で表す（3 crate とも時計を読まない）。消したテスト・期待の変化は無い。
+
+## 12.2（後半）
+
+- コメントと文字列だけの直し（コードの字句は不変）。名前を替えたテスト: `cue_duration_defaults_to_zero_for_legacy_serialized_data` → `cue_duration_defaults_to_zero_when_field_absent`。dola の時刻の型を実数の秒で書いた説明は ms へ。残したのは作者が文書に秒で書く値（`serde_secs` の縁）・dola の型でない秒（設定・実時間の計測）・時刻でない実数だけ。

@@ -36,7 +36,7 @@ fn complex_multi_variable_mixed_placement() {
                 keyframe: Some("visible".to_string()),
                 ..Default::default()
             })
-            // Entry 1: x_pos at "visible" → starts at 0.5
+            // Entry 1: x_pos at "visible" → starts at 500 ms
             .entry(StoryboardEntry {
                 variable: Some("x_pos".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -50,7 +50,7 @@ fn complex_multi_variable_mixed_placement() {
                 keyframe: Some("moved".to_string()),
                 ..Default::default()
             })
-            // Entry 2: y_pos between "visible" and "moved" → 0.5..1.5
+            // Entry 2: y_pos between "visible" and "moved" → 500..1500 ms
             .entry(StoryboardEntry {
                 variable: Some("y_pos".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -75,7 +75,7 @@ fn complex_multi_variable_mixed_placement() {
     assert_eq!(result.time_scale.get(), 1.5);
     assert_eq!(result.interruption_policy, InterruptionPolicy::Conclude);
 
-    // opacity: 0.0 -> 0.5
+    // opacity: 0..500 ms
     let tl_opacity = result.timelines.get("opacity").unwrap();
     assert_eq!(tl_opacity.segments.len(), 1);
     assert_eq!(tl_opacity.segments[0].start_time, delta_ms(0));
@@ -84,21 +84,21 @@ fn complex_multi_variable_mixed_placement() {
     assert_eq!(tl_opacity.max_value, Some(1.0));
     assert_eq!(tl_opacity.variable_type, VariableTypeHint::Float);
 
-    // x_pos: at "visible" (0.5) → 0.5..1.5
+    // x_pos: at "visible" (500 ms) → 500..1500 ms
     let tl_x = result.timelines.get("x_pos").unwrap();
     assert_eq!(tl_x.segments.len(), 1);
     assert_eq!(tl_x.segments[0].start_time, delta_ms(500));
     assert_eq!(tl_x.segments[0].end_time, delta_ms(1500));
 
-    // y_pos: between "visible"(0.5) and "moved"(1.5) → 0.5..1.5
+    // y_pos: between "visible"(500 ms) and "moved"(1500 ms) → 500..1500 ms
     let tl_y = result.timelines.get("y_pos").unwrap();
     assert_eq!(tl_y.segments.len(), 1);
     assert_eq!(tl_y.segments[0].start_time, delta_ms(500));
     assert_eq!(tl_y.segments[0].end_time, delta_ms(1500));
 
     // total_base_duration = max of all timelines' base_duration
-    // コンパイルの起点 0.0 から数える（先頭の遅れを含む）
-    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.0=1.5, y_pos: 1.5-0.0=1.5
+    // コンパイルの起点 0 から数える（先頭の遅れを含む）
+    // opacity: 500-0=500, x_pos: 1500-0=1500, y_pos: 1500-0=1500（ms）
     assert_eq!(result.total_base_duration, ms(1500));
 }
 

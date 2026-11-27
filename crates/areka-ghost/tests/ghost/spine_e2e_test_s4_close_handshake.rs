@@ -102,10 +102,10 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     // （kanade↔shiori 同期往復・start-relay・dispatcher・per-talk spawn_talk スレッド・
     // dispatcher 自身の inbox 経由の kanade 転送）を跨ぐため有界スピンで待つ。
     //
-    // **dispatcher への Tick 注入を続けること**: CloseRequest 受領時に挨拶 talk（`hello`＝0.25s）がまだ active なら kanade は
+    // **dispatcher への Tick 注入を続けること**: CloseRequest 受領時に挨拶 talk（`hello`＝250ms）がまだ active なら kanade は
     // 即握手せず `pending_close` を記録して `Steady{Some}` を維持し、挨拶 talk の `TalkDone` 受領時に初めて握手を開始する。
     // その `TalkDone` は仮想時刻が horizon を越えて初めて出るため、Tick を止めて yield だけで待つと「引き渡しが速く `now` が
-    // 0.25s 未満で止まった実行」で永久に握手へ進めず 60s 安全弁まで空転する。
+    // 250ms 未満で止まった実行」で永久に握手へ進めず 60s 安全弁まで空転する。
     // kanade ではなく **dispatcher** へ送るのが要点（kanade 宛 Tick は `Steady` pump として
     // 消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
     super::spin_pumping_ticks(

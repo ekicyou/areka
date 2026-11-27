@@ -118,9 +118,9 @@ mod conflict_detection_boundaries {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        // 既存: 壁時計 [0.0, 2.0]
+        // 既存: 壁時計 [0, 2000] ms
         let r1 = rt.start("fade", at_ms(0)).unwrap();
-        // 新規: 壁時計 [2.0, 4.0] — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
+        // 新規: 壁時計 [2000, 4000] ms — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
         let r2 = rt.start("fade", at_ms(2000)).unwrap();
         assert_eq!(
             r2.affected_group_ids,
@@ -129,7 +129,7 @@ mod conflict_detection_boundaries {
         );
     }
 
-    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5.0 から [5,6]。
+    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5000ms から [5,6]。
     /// 相対の [5,6] と [0,1] は重ならないが、x に A の生きた項目があるので B は拒まれる。
     #[test]
     fn never_blocks_overlap_on_wall_clock() {

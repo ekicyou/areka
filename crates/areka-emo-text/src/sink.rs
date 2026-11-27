@@ -24,7 +24,7 @@ use dola::cue::{CueProbe, OriginNotice};
 /// 「Close より前に積まれた cue は必ず先に処理される」順序保証を channel に委ねる。
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextMsg {
-    /// sakura からの cue（後出し優先で即時適用される）。
+    /// sakura からの cue（受け取りでは列に足し、フレームの頭で `fire_time` の来た物を届いた順に当てる）。
     Cue(TalkCue),
     /// strict の台本の名前の形の `\b[名前]`（[`dola::cue::CueSink::emit_with`] の写し）。`Cue` と同じに捌き、
     /// 箱が見つからなければ口へ知らせる。複製・表示・等しさは口（[`CueProbe`]）の実装に従う。

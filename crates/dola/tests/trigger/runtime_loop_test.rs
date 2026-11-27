@@ -65,12 +65,12 @@ fn trigger_refires_each_loop() {
     rt.load_document(doc).unwrap();
     rt.start("parent", at_ms(0)).unwrap();
 
-    // 周回1: t=1.0 でトリガー発火
+    // 周回1: t=1000ms でトリガー発火
     rt.tick(at_ms(1000));
     let result = rt.last_result().clone();
     assert_eq!(result.triggered.len(), 1, "loop 1: trigger should fire");
 
-    // 周回2: t=2.0 でトリガー再発火
+    // 周回2: t=2000ms でトリガー再発火
     rt.tick(at_ms(2000));
     let result = rt.last_result().clone();
     assert_eq!(result.triggered.len(), 1, "loop 2: trigger should re-fire");
@@ -143,7 +143,7 @@ fn infinite_loop_trigger_fires_each_cycle() {
     }
 }
 
-/// 3 周（1 周 1 秒）の親。`at` は start からの秒で、x を 0→1 で動かす子 "child"（0.2 秒）を起こす
+/// 3 周（1 周 1 秒）の親。`at` は start からの秒で、x を 0→1 で動かす子 "child"（200 ms）を起こす
 pub(super) fn three_loop_trigger_doc(at: TimeDelta) -> dola::DolaDocument {
     let float_var = || AnimationVariableDef::Float {
         initial: 0.0,
@@ -210,7 +210,7 @@ fn skipped_loops_fire_their_triggers() {
             TriggerResult::Error { error, .. } => panic!("trigger failed: {error}"),
         })
         .collect();
-    // 子は 0.5・1.5・2.5 に起き、0.2 秒で終わる
+    // 子は 500・1500・2500 ms に起き、200 ms で終わる
     assert_eq!(
         child_ends,
         vec![Some(at_ms(700)), Some(at_ms(1700)), Some(at_ms(2700))]

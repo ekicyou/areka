@@ -209,7 +209,7 @@ fn text_cue_carries_playback_duration() {
     let compiled = compile(&[Instruction::Text("こんにちは".into())]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 1, "内容は Text cue 1 件のみ");
-    let expected = text_playback_duration("こんにちは"); // 5 char × 50ms = 0.25s
+    let expected = text_playback_duration("こんにちは"); // 5 char × 50ms = 250ms
     assert!(expected > TimeSpan::ZERO, "N>0 の再生時間は正");
     match command_of(&cues[0]) {
         CueCommand::Text(s) => assert_eq!(s, "こんにちは"),
@@ -385,7 +385,7 @@ fn append_epilogue_empty_is_identity() {
     }
 }
 
-/// 空 sheet＋単一 epilogue: `start_time=0`・`duration=0.0`・`actor="0"` の carrier cue 1 個
+/// 空 sheet＋単一 epilogue: `start_time=0`・`duration=0`・`actor="0"` の carrier cue 1 個
 /// （空 sheet の horizon は 0.0）。
 #[test]
 fn append_epilogue_on_empty_sheet_yields_single_cue_at_zero() {
@@ -417,7 +417,7 @@ fn append_epilogue_on_empty_sheet_yields_single_cue_at_zero() {
 }
 
 /// 非空 epilogue: 末尾 offset（`max(start_time+duration)`）へ carrier cue が付加される。
-/// `duration=0.0` かつ horizon が延長されない（zero-duration ゆえ）。
+/// `duration=0` かつ horizon が延長されない（zero-duration ゆえ）。
 #[test]
 fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
     let compiled = compile(&[

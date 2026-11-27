@@ -22,7 +22,7 @@ fn logged_has_text(log: &Rc<RefCell<Vec<TalkCue>>>, s: &str) -> bool {
 /// cue が配送される。占有 horizon 到達で `Completed` へ遷移する。
 #[test]
 fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
-    // before@0.0 → Barrier(WaitForInput)@0.1 → after@0.2。
+    // before@0ms → Barrier(WaitForInput)@100ms → after@200ms。
     let sheet = sheet_at_zero(vec![
         text(ms(0), "before", ms(0)),
         barrier(ms(100), BarrierKind::WaitForInput),
@@ -102,7 +102,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
 /// 到達で WaitingForChoice へ停止し、`resolve_choice` で再開する。
 #[test]
 fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
-    // Choice(a)@0.0, Choice(b)@0.0 → Barrier(WaitForChoice)@0.1 → picked@0.2。
+    // Choice(a)@0ms, Choice(b)@0ms → Barrier(WaitForChoice)@100ms → picked@200ms。
     let sheet = sheet_at_zero(vec![
         choice(ms(0), "a", "選択A"),
         choice(ms(0), "b", "選択B"),

@@ -84,6 +84,6 @@ pub(super) struct EmoBoot {
     pub(super) shell_cycling: bool,
     /// シェル target の現在のまばたき状態（装着直後は `EyesOpen`＝surface1000 初回表示に一致）。
     pub(super) cycle_state: CycleState,
-    /// 次の切替を行う `FrameTime` 絶対時刻（秒）。装着完了時に `now + CYCLE_INTERVAL` で確定する。
+    /// 次の切替を行う `FrameTime` の時刻。装着完了時に `now + CYCLE_INTERVAL` で確定する。
     pub(super) next_switch_at: dola::TimePoint,
 }

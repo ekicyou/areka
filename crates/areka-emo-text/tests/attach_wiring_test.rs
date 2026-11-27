@@ -7,7 +7,7 @@
 //!
 //! - emo-present は読み取り消費のみ（TextSlotView 経由）で改変しない。
 //! - GPU/WUC は headless 実資源（`GraphicsCore::new()`）。
-//! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用。
+//! - 時刻は常に注入（フレームの時刻）・実時間 sleep 不使用。
 
 #[path = "support/mod.rs"]
 mod support;

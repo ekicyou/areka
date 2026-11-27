@@ -387,12 +387,12 @@ fn process_loops_with_delay_prevents_multi_skip() {
         -1,
         ms(1000),
         ms(3000),
-        ms(3000), // fixed 3.0s delay
+        ms(3000), // fixed 3000ms delay
         EasingFunction::Named(EasingName::Linear),
     );
     let mut rng = test_rng();
 
-    // 1 回進めると周回の終わり = 1.0 + 3.0 + 1.0 = 5.0 秒で now を超える
+    // 1 回進めると周回の終わり = 1000 + 3000 + 1000 = 5000 ms で now を超える
     let action = process_loops(&mut inst, at_ms(1500), &mut rng);
     assert_eq!(action, LoopAction::Continue);
     assert_eq!(inst.loops_completed, 1);
@@ -422,12 +422,12 @@ fn process_loops_infinite_with_offset_applies_each_loop() {
         -1,
         ms(1000),
         ms(2000),
-        ms(2000), // fixed 2.0s delay
+        ms(2000), // fixed 2000ms delay
         EasingFunction::Named(EasingName::Linear),
     );
     let mut rng = test_rng();
 
-    // 1 周目の終わり 1.0 → 2 周目は 3.0〜4.0。now = 4.0 は 2 周目の終わりに届き 3 周目は 6.0〜7.0
+    // 1 周目の終わり 1000 ms → 2 周目は 3000〜4000 ms。now = 4000 ms は 2 周目の終わりに届き 3 周目は 6000〜7000 ms
     let action = process_loops(&mut inst, at_ms(4000), &mut rng);
     assert_eq!(action, LoopAction::Continue);
     assert_eq!(inst.loops_completed, 2);

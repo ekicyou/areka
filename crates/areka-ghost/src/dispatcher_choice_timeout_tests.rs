@@ -9,13 +9,13 @@ use std::time::Duration;
 
 /// 選択待ちの台本に時間の指定を足したもの（時間の欄を `value` で差し替える）。
 ///
-/// 区切り（Choice・Barrier）の時刻は 0.35 秒で、指定の有無で変わらない。
+/// 区切り（Choice・Barrier）の時刻は 350 ms で、指定の有無で変わらない。
 fn script_with_choice_timeout(value: &str) -> String {
     format!(r"\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,{value}]\e")
 }
 
 /// 指定 `1234` の台本を dispatcher に流すと、kanade への選択待ちの知らせは表示の終わり
-/// `1_350`（起点の最初の刻み 1_000＋区切り 0.35 s）・指令 `Some` で届く。
+/// `1_350`（起点の最初の刻み 1_000＋区切り 350ms）・指令 `Some` で届く。
 ///
 /// 対になるテストは kanade の `choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234`
 /// （境の値 `1234`）。片方だけ境の値を変えたら、もう片方も合わせること。
@@ -59,7 +59,7 @@ fn script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive() {
             assert_eq!(
                 display_end,
                 at_ms(1_350),
-                "表示の終わりは起点 1_000＋区切り 0.35s（tick 時刻 1_500 ではない）"
+                "表示の終わりは起点 1_000＋区切り 350ms（tick 時刻 1_500 ではない）"
             );
             assert_eq!(
                 timeout_directive,

@@ -67,7 +67,7 @@ pub(super) fn balloon_model(
     )
 }
 
-/// 経路を歩いた 1 段階: 判定の時刻（トークの頭からの秒）と、その時刻の行ごとの字の並び。
+/// 経路を歩いた 1 段階: 判定の時刻（トークの頭からの経過）と、その時刻の行ごとの字の並び。
 #[derive(Clone, Debug)]
 pub(super) struct Stage {
     pub(super) time: TimeSpan,
@@ -543,7 +543,7 @@ fn clear_splits_the_talk_into_independent_sections() {
     );
 }
 
-/// 検査 6 で台本に無い字の合図を流す段階（検査 1 の台本の「イイジャン！」が出終わった t=0.3）。
+/// 検査 6 で台本に無い字の合図を流す段階（検査 1 の台本の「イイジャン！」が出終わった t=300ms）。
 const STRAY_AFTER_STAGE: usize = 1;
 /// 検査 6 で流す台本に無い字。
 const STRAY_TEXT: &str = "ね";

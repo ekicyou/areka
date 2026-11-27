@@ -24,21 +24,21 @@ fn trigger_starts_child_storyboard() {
     let parent_result = rt.start("parent", at_ms(0)).unwrap();
     assert_eq!(parent_result.group_id, 1);
 
-    // t=0.5: 発火前 — トリガーなし
+    // t=500ms: 発火前 — トリガーなし
     rt.tick(at_ms(500));
     let result = rt.last_result().clone();
     assert!(
         result.triggered.is_empty(),
-        "no triggers should fire at t=0.5"
+        "no triggers should fire at t=500ms"
     );
 
-    // t=1.0: kf1 到達 → トリガー発火
+    // t=1000ms: kf1 到達 → トリガー発火
     rt.tick(at_ms(1000));
     let result = rt.last_result().clone();
     assert_eq!(
         result.triggered.len(),
         1,
-        "one trigger should fire at t=1.0"
+        "one trigger should fire at t=1000ms"
     );
     match &result.triggered[0] {
         TriggerResult::Started {
@@ -64,7 +64,7 @@ fn trigger_fires_only_once_per_loop() {
         min: Some(0.0),
         max: Some(1.0),
     };
-    // 親は 2 秒: 0→1（1 秒・kf1）の後に 1→0（1 秒）。トリガーは kf1（1.0）
+    // 親は 2 秒: 0→1（1 秒・kf1）の後に 1→0（1 秒）。トリガーは kf1（1000 ms）
     let parent_sb = StoryboardBuilder::new()
         .entry(StoryboardEntry {
             variable: Some("opacity".to_string()),
@@ -117,12 +117,12 @@ fn trigger_fires_only_once_per_loop() {
     rt.load_document(doc).unwrap();
     rt.start("parent", at_ms(0)).unwrap();
 
-    // t=1.0: 初回発火
+    // t=1000ms: 初回発火
     rt.tick(at_ms(1000));
     let result = rt.last_result().clone();
     assert_eq!(result.triggered.len(), 1);
 
-    // t=1.016（次のフレーム）: 親はまだ走っているが再発火しない
+    // t=1016ms（次のフレーム）: 親はまだ走っているが再発火しない
     rt.tick(at_ms(1016));
     let result = rt.last_result().clone();
     assert!(
@@ -142,9 +142,12 @@ fn trigger_fires_at_parent_start_plus_keyframe() {
     rt.start("parent", at_ms(10000)).unwrap();
 
     rt.tick(at_ms(10900));
-    assert!(rt.last_result().triggered.is_empty(), "not yet at t=10.9");
+    assert!(
+        rt.last_result().triggered.is_empty(),
+        "not yet at t=10900ms"
+    );
     rt.tick(at_ms(11000));
-    assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=11.0");
+    assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=11000ms");
 }
 
 /// 一時停止の間は発火の時刻も後ろへずれる
@@ -161,9 +164,9 @@ fn trigger_fire_time_counts_pause() {
     rt.resume(gid, at_ms(5000)).unwrap();
 
     rt.tick(at_ms(5400));
-    assert!(rt.last_result().triggered.is_empty(), "not yet at t=5.4");
+    assert!(rt.last_result().triggered.is_empty(), "not yet at t=5400ms");
     rt.tick(at_ms(5500));
-    assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=5.5");
+    assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=5500ms");
 }
 
 /// trigger_start_offset の検証
@@ -176,17 +179,17 @@ fn trigger_with_start_offset() {
     rt.load_document(doc).unwrap();
     rt.start("parent", at_ms(0)).unwrap();
 
-    // t=1.0: 発火。子SBの start_time = fire_time(1.0) + offset(0.5) = 1.5
+    // t=1000ms: 発火。子SBの start_time = fire_time(1000ms) + offset(500ms) = 1500ms
     rt.tick(at_ms(1000));
     let result = rt.last_result().clone();
     assert_eq!(result.triggered.len(), 1);
     match &result.triggered[0] {
         TriggerResult::Started { start_result, .. } => {
-            // 子SB end_time = start_time(1.5) + duration(1.0) = 2.5
+            // 子SB end_time = start_time(1500ms) + duration(1000ms) = 2500ms
             assert_eq!(
                 start_result.end_time,
                 Some(at_ms(2500)),
-                "child end_time should be 2.5s"
+                "child end_time should be 2500ms"
             );
         }
         other => panic!("expected Started, got {other:?}"),
@@ -212,7 +215,7 @@ fn trigger_error_on_never_conflict() {
         })),
         ..Default::default()
     };
-    // blocker（Never）が x を 10 秒握る。parent は y を動かし t=1.0 で x を触る child を起こす
+    // blocker（Never）が x を 10 秒握る。parent は y を動かし t=1000ms で x を触る child を起こす
     let doc = DolaDocumentBuilder::new("1.0")
         .variable("x", var())
         .variable("y", var())

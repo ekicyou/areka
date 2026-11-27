@@ -10,7 +10,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: at start+5.0 → 5.0..6.0
+            // entry 0: at start+5.0 → 5000..6000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -26,7 +26,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: sequential → 6.0..7.0（配列の直前のエントリの終わりから継続）
+            // entry 1: sequential → 6000..7000 ms（配列の直前のエントリの終わりから継続）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -57,7 +57,7 @@ fn out_of_order_at_entries_sorted_by_start_time() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: at start+2.0 → 2.0..3.0（後の時刻を先に記述）
+            // entry 0: at start+2.0 → 2000..3000 ms（後の時刻を先に記述）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -73,7 +73,7 @@ fn out_of_order_at_entries_sorted_by_start_time() {
                 keyframe: Some("kf_late".to_string()),
                 ..Default::default()
             })
-            // entry 1: at start → 0.0..1.0
+            // entry 1: at start → 0..1000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

@@ -9,8 +9,8 @@ use std::time::Duration;
 // ── ResolveChoice ハンドラ＋即時 settle の統合檻 ──
 //
 // 共通 fixture: `\s[10]hello\_w[100]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
-//   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25 / Choice@0.35(id=targetA) /
-//   Barrier@0.35（選択待ち）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
+//   ClearAll@0 / Emote{10}@0 / hello@0(D=250ms) / Wait@250ms / Choice@350ms(id=targetA) /
+//   Barrier@350ms（選択待ち）。占有 horizon=350ms。barrier が**最終 horizon 要素**（menu
 //   ケース）ゆえ、Tick で barrier 到達後に解決すると、既に開始からの経過 ≥ horizon
 //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
 
@@ -22,7 +22,7 @@ const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
     // 初回 Tick 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
     handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
-    // Tick: Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
+    // Tick: Wait@250ms・Choice@350ms を配送し barrier@350ms 到達 → WaitingForChoice。
     handle.inbox.send(SakuraMsg::Tick(at_ms(500))).unwrap();
     // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
     recv_until_choice(rx);
@@ -310,7 +310,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         None,
     );
 
-    // Tick 刻印（アンカー 0.0）→ Tick で barrier@0.35 到達＝WaitingForChoice。
+    // Tick 刻印（アンカー 0ms）→ Tick で barrier@350ms 到達＝WaitingForChoice。
     drive_menu_to_barrier(&handle, &rx);
 
     // 通知は barrier 成立の tick で送出される（**追加 Tick を要さない**）。

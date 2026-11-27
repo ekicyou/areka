@@ -121,8 +121,8 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // CloseTalkWait のいずれかにあり、どちらでも下の 2 Tick は last_now を起点に deadline を確定・超過させる。
     //
     // **一方 dispatcher 宛の Tick は注入し続けなければならない**: 握手の起点である挨拶 talk の `TalkDone` は仮想時刻が `hello` の
-    // horizon（0.25s）を越えて初めて出る。dispatcher の帳簿は kanade の `last_now` と独立ゆえ、dispatcher へ Tick を送っても上記
-    // pump 問題は起こらない。`yield_now` だけで待つと、「引き渡しが速く `now` が 0.25s 未満で止まった実行」では TalkDone が
+    // horizon（250ms）を越えて初めて出る。dispatcher の帳簿は kanade の `last_now` と独立ゆえ、dispatcher へ Tick を送っても上記
+    // pump 問題は起こらない。`yield_now` だけで待つと、「引き渡しが速く `now` が 250ms 未満で止まった実行」では TalkDone が
     // 永久に出ず 60s 安全弁まで空転する。
     super::spin_pumping_ticks(
         "S5: OnClose GET was never issued after CloseRequest — the greeting-tracking close \

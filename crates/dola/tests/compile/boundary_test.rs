@@ -178,7 +178,7 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
                 ..Default::default()
             })
             // entry 1: keyframe 省略の遷移エントリ → 暗黙名 "__implicit_1"、
-            // at start+5・duration 0 → kf_time = 5.0
+            // at start+5・duration 0 → kf_time = 5000 ms
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

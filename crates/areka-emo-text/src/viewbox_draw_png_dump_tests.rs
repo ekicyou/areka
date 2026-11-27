@@ -214,9 +214,9 @@ fn diag_dump_horizontal_pngs() {
     );
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
-    // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
-    // あふれ短行 at 2.0）。reveal は配送 duration 由来（interval = duration / N）。Text へ
-    // N×0.05 を焼き込むと各 chunk 内が 1 字 0.05 秒のペースで per-glyph 進行する
+    // 実 example と同一の cue `at` スケジュール（LINE1 at 0 ms・LINE2 at 500 ms・LINE3 at 1200 ms・
+    // あふれ短行 at 2000 ms）。reveal は配送 duration 由来（interval = duration / N）。Text へ
+    // N×50 ms を焼き込むと各 chunk 内が 1 字 50 ms のペースで per-glyph 進行する
     // （chunk 境界は at で gate）。at の分散は実機の reveal タイミングを模す診断ダンプの時間対応。
     // 保留改行は次の可視グリフが reveal されるまで行を開かないので、あふれ発火は改行より後ろの
     // グリフの reveal 時になる。

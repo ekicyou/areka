@@ -122,7 +122,7 @@ fn unchanged_second_frame_does_not_rebuild() {
 
 #[test]
 fn more_visible_glyphs_rebuild() {
-    // 再生時間つきの字（1 字 0.05 秒）: t=0 で 1 字、t=0.06 で 2 字が見える。
+    // 再生時間つきの字（1 字 50 ms）: 0 ms で 1 字、60 ms で 2 字が見える。
     let mut rig = Rig::new(
         &[cue("0", ms(0), CueCommand::Text("アヒル".into()))],
         TimePoint::ZERO,

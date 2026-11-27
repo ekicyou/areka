@@ -23,13 +23,13 @@ fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
 ///
 /// scripted OnBoot talk（`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）は別スレッド群を跨いで
 /// 非同期に流れるため、Tick 注入（`DispatcherMsg::Tick`）と `try_iter` drain を有界ループで交互に
-/// 回し、必要件数が揃うまで進める。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
+/// 回し、必要件数が揃うまで進める。全 cue が `at=0`（`\w` なし）ゆえ最初の
 /// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わないまま進みが
 /// 止まれば、待ちの芯の理由を載せて panic する（hang しない）。
 ///
 /// 打ち切りは [`wait_until_paced`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）。Tick を入れる
 /// 輪なので休みは [`wait_until_paced`] が持つ（`areka-runtime` の `spine_wait.rs`）。
-/// 観測 `received` は累積＝ラッチであり、呼出点の台本はいずれも `\w`／`\c` を含まない（全 cue `at=0.0`）
+/// 観測 `received` は累積＝ラッチであり、呼出点の台本はいずれも `\w`／`\c` を含まない（全 cue `at=0`）
 /// ため、注入時刻の前進が観測を壊すクラスではない。
 fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentCommand> {
     let what = "OnBoot talk の表示指令";

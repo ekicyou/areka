@@ -165,7 +165,7 @@ fn hit_area_stops_at_what_has_been_revealed() {
         vec![line0(4.0), line1(2.0)],
     ];
     for (shown, want) in expected.iter().enumerate() {
-        // 字 i は時刻 1 + i 秒に出るので、時刻 shown + 0.5 秒には shown 字が出ている。
+        // 字 i は時刻 1000 + 1000×i ms に出るので、時刻 1000×shown + 500 ms には shown 字が出ている。
         let (_, rows) = hit(&state, TimePoint::ZERO + ms(1000 * shown as u32 + 500));
         assert_eq!(&rows, want, "出た字 {shown}");
     }

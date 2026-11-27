@@ -19,7 +19,7 @@
 //! （`spawn_emo_text` の実 pump ドレイン・`present_frame` の装着/描画/提示）を通す。
 //!
 //! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・attach_wiring_test と同じ）。時刻は
-//!   常に注入（`talk_time`）・実時間 sleep 不使用。
+//!   常に注入（フレームの時刻）・実時間 sleep 不使用。
 //! - 横書きテストは実 `EmoPresenter` の公開経路（`text_slot_view` →
 //!   `register_actor_view`）で予約スロットへ到達する。
 //! - グリフ更新フレームは供給面の Present のみで完結する（World の entity 数
@@ -81,9 +81,9 @@ fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
-/// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
-/// Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.05 の per-glyph 進行を得る
-/// （進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
+/// reveal 間隔（1 グリフあたり）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
+/// Text cue へ `N × REVEAL_INTERVAL` を焼き込むと 50 ms 間隔の per-glyph 進行を得る
+/// （進行観測は安全マージン付き時刻 110/160/… ms で行う）。
 const REVEAL_INTERVAL: TimeSpan = ms(50);
 
 /// テスト用 cue（共有の間隔つき cue へ本ファイルの間隔を渡す）。
@@ -183,7 +183,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         .borrow_mut()
         .register_actor_view(actor.clone(), &view, &model);
 
-    // ── セッション 1: 省略形の `\_l`（at=0.0）＋5 グリフ（at=0.1）を実 sink→UI ドレインで状態機械へ ──
+    // ── セッション 1: 省略形の `\_l`（at=0ms）＋5 グリフ（at=100ms）を実 sink→UI ドレインで状態機械へ ──
     let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     // 字を持たない cue だけが当たった状態を作り、可視 0 のまま装着される枠を観測する。
     sink.emit(cue(
@@ -197,7 +197,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     sink.emit(cue("0", ms(100), CueCommand::Text("あいうえお".into())));
     pump_until_idle();
 
-    // 装着フレーム（t=0.0 ＜ 字の at=0.1 → 可視 0）: 装着は成立し、供給面は全域透明。
+    // 装着フレーム（t=0ms ＜ 字の at=100ms → 可視 0）: 装着は成立し、供給面は全域透明。
     // 実配線のインク源はテキストのみ＝グリフ未リビールなら面は空。
     {
         let mut rt = runtime.borrow_mut();
@@ -227,7 +227,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         );
     }
 
-    // ── 述語 1: 注入時刻フレームでの単調増加（r = [0.1, 0.15, 0.20, 0.25, 0.30]） ──
+    // ── 述語 1: 注入時刻フレームでの単調増加（r = [100, 150, 200, 250, 300] ms） ──
     let mut counts = vec![0usize];
     for t in [ms(110), ms(160), ms(210), ms(260), ms(310)] {
         let mut rt = runtime.borrow_mut();
@@ -362,7 +362,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         .borrow_mut()
         .register_actor(actor.clone(), binding, resolved);
 
-    // ── セッション 1: 列 0＝■■（at=0.0）＋列 1〜7＝■ 各 1（at=0.5）
+    // ── セッション 1: 列 0＝■■（at=0ms）＋列 1〜7＝■ 各 1（at=500ms）
     //    → 列 i の左端は 120 − 12 − 14i（右上起点・pitch 14）。列 7 は左端 10 ≥ 0 で収まり、
     //    列 8 は左端 −4 < 0 であふれる＝8 列があふれ前の上限 ──
     let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
@@ -373,7 +373,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     }
     pump_until_idle();
 
-    // ── 述語 1（縦書き）: r = [0.0, 0.05] → t=0.0 で 1 グリフ・t=0.06 で 2 グリフ ──
+    // ── 述語 1（縦書き）: r=[0, 50] ms → t=0ms で 1 グリフ・t=60ms で 2 グリフ ──
     let n1 = {
         let mut rt = runtime.borrow_mut();
         present_at(&mut rt, &mut world, ms(0)).expect("縦書き 1 グリフ目フレーム");

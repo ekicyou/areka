@@ -272,7 +272,7 @@ fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
 /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
 /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用して AA ガードの実効性を検証する）。
 ///
-/// 本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み content が完全
+/// 本シナリオは全 cue を `at=0ms` で発行し、各 checkpoint 時点までに追記済み content が完全
 /// リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを伴って実体化し、
 /// あふれは改行の後ろのグリフを追記した checkpoint で発火する。
 fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
@@ -541,8 +541,8 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
     let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
-    // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
-    // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
+    // reveal は配送 duration 由来（interval = duration / N）。Text へ N×50 ms を焼き込むと
+    // 各 chunk 内が 1 字 50 ms のペースで per-glyph 進行する（chunk 境界は at で gate）。
     apply_fixture_script(
         &mut state,
         &actor,

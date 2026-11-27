@@ -71,7 +71,7 @@ fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
                 4,
                 "グリフ 3＋改行マーカー 1 が追記される"
             );
-            // 注入時刻でのリビール進行（reveal interval=0.05〔duration 由来〕・丸め安全マージン付き時刻）。
+            // 注入時刻でのリビール進行（reveal interval=50 ms 〔duration 由来〕・丸め安全マージン付き時刻）。
             assert_eq!(rt.state().visible_glyphs(&actor, at_ms(0)), 1);
             assert_eq!(rt.state().visible_glyphs(&actor, at_ms(60)), 2);
             assert_eq!(rt.state().visible_glyphs(&actor, at_ms(110)), 3);
@@ -285,22 +285,22 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
         "GraphicsCommandList は挿入しない（wintf 描画系と競合しない）"
     );
 
-    // 注入時刻フレームごとの進行（reveal interval=0.05〔duration 由来〕・r=[0.0, 0.05, 0.10]）。
+    // 注入時刻フレームごとの進行（reveal interval=50 ms 〔duration 由来〕・r=[0, 50, 100] ms）。
     let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
     let n1 = read(&rt);
-    assert!(n1 > 0, "t=0.0 で 1 グリフ目が可視（非透明ピクセルあり）");
+    assert!(n1 > 0, "t=0ms で 1 グリフ目が可視（非透明ピクセルあり）");
 
     let entities_after_attach = world.entities().len();
-    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=0.06");
+    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=60ms");
     let n2 = read(&rt);
     assert!(
         n2 > n1,
-        "t=0.06 で 2 グリフ目まで可視（ピクセル単調増加）: {n1} -> {n2}"
+        "t=60ms で 2 グリフ目まで可視（ピクセル単調増加）: {n1} -> {n2}"
     );
 
-    present_frame(&mut rt, &mut world, at_ms(110)).expect("フレーム t=0.11");
+    present_frame(&mut rt, &mut world, at_ms(110)).expect("フレーム t=110ms");
     let n3 = read(&rt);
-    assert!(n3 > n2, "t=0.11 で 3 グリフ目まで可視: {n2} -> {n3}");
+    assert!(n3 > n2, "t=110ms で 3 グリフ目まで可視: {n2} -> {n3}");
 
     // 配置の覚え: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
     let place = crate::place::PlaceKey::balloon(&actor);
@@ -368,8 +368,8 @@ fn draw_stats_readable_after_present_frame() {
 
     // 後続フレームでリビールが進むと現在行を描き直し、累計が増える（累計は減らないので
     // 「前以上」では次のフレームで何も描かなくても通る）。
-    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=0.06");
-    let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
+    present_frame(&mut rt, &mut world, at_ms(60)).expect("フレーム t=60ms");
+    let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=60ms）");
     assert!(
         stats2.draw_text_layout_calls > stats.draw_text_layout_calls,
         "リビールが進んだフレームで描画呼び出しが増える: {} -> {}",

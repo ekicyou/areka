@@ -117,7 +117,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     )))
     .expect("send Start(B)");
 
-    // B の占有 horizon=0.40 を跨ぐ elapsed 0.5 まで進めて完走させる（最初の Tick の now が台本の起点）。
+    // B の占有 horizon=400ms を跨ぐ elapsed 500ms まで進めて完走させる（最初の Tick の now が台本の起点）。
     tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
         .expect("send Tick(base)");
     tx.send(DispatcherMsg::Tick { now: at_ms(1_500) })
@@ -181,7 +181,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     }))
     .expect("send manual stale Done(A)");
 
-    // 占有 horizon=0.40 を跨ぐ elapsed 0.5 で B を完走させる。
+    // 占有 horizon=400ms を跨ぐ elapsed 500ms で B を完走させる。
     tx.send(DispatcherMsg::Tick { now: at_ms(2_000) })
         .expect("send Tick(base)");
     tx.send(DispatcherMsg::Tick { now: at_ms(2_500) })
@@ -234,8 +234,8 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
 }
 
 /// 発火の時刻（broadcast なので text sink も全 cue を受ける）:
-///   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45 / Wait@0.75 / THIRD@1.05。
-///   占有 horizon=1.30（THIRD の再生完了）。
+///   ClearAll@0ms・Emote{5}@0ms・FIRST@0ms / Wait@250ms / SECOND@450ms / Wait@750ms / THIRD@1050ms。
+///   占有 horizon=1300ms（THIRD の再生完了）。
 const THREE_TEXTS: &str = r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e";
 
 /// `THREE_TEXTS` を起動して刻み `ticks` を送り、dispatcher を閉じて join してから届いた Text を順に返す。
@@ -323,19 +323,19 @@ fn tick_relay_forwards_absolute_now_and_first_tick_becomes_origin() {
         .expect("send first Tick (becomes the sheet origin)");
     assert_eq!(recv_text("FIRST"), origin, "FIRST は起点ちょうどに発火する");
 
-    // elapsed=0.5 で SECOND まで due。
+    // 起点から 500 ms で SECOND まで due。
     tx.send(DispatcherMsg::Tick { now: at_ms(5_500) })
-        .expect("send second Tick (elapsed 0.5)");
+        .expect("send second Tick (500 ms after origin)");
     assert_eq!(recv_text("SECOND"), origin + ms(450));
 
-    // elapsed=1.1 で THIRD が due。
+    // 起点から 1_100 ms で THIRD が due。
     tx.send(DispatcherMsg::Tick { now: at_ms(6_100) })
-        .expect("send third Tick (elapsed 1.1)");
+        .expect("send third Tick (1_100 ms after origin)");
     assert_eq!(recv_text("THIRD"), origin + ms(1_050));
 
-    // elapsed=1.4 は占有 horizon=1.30 を超え、自然終端する（末尾テキストの D を落とさない）。
+    // 起点から 1_400 ms は占有 horizon（起点から 1_300 ms）を超え、自然終端する（末尾テキストの D を落とさない）。
     tx.send(DispatcherMsg::Tick { now: at_ms(6_400) })
-        .expect("send fourth Tick (elapsed 1.4 ≥ horizon 1.30)");
+        .expect("send fourth Tick (1_400 ms after origin, past the 1_300 ms horizon)");
 
     let done = kanade_rx
         .recv_timeout(Duration::from_secs(5))
@@ -407,7 +407,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     .expect("send Start(C)");
     tx.send(DispatcherMsg::Tick { now: at_ms(9_000) })
         .expect("send Tick(base)");
-    // C の占有 horizon=0.60 を跨ぐ elapsed 0.7。
+    // C の占有 horizon=600ms を跨ぐ elapsed 700ms。
     tx.send(DispatcherMsg::Tick { now: at_ms(9_700) })
         .expect("send Tick(base+700ms)");
 
@@ -428,7 +428,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
         r"\s[8]again\e",
     )))
     .expect("send Start(D)");
-    // D の占有 horizon=0.25 を跨ぐ base(10_000)＋elapsed 0.3 の 2 tick。
+    // D の占有 horizon=250ms を跨ぐ base(10_000)＋elapsed 300ms の 2 tick。
     tx.send(DispatcherMsg::Tick { now: at_ms(10_000) })
         .expect("send Tick(base) for D");
     tx.send(DispatcherMsg::Tick { now: at_ms(10_300) })

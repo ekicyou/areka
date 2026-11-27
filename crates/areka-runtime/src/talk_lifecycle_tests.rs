@@ -132,7 +132,7 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
     let mut sink = BalloonLifecycleSink::new(tx, zero_clock());
 
-    // 文字 @0.0（D=0.5）→ 待機 @0.5（D=1.25）。占有終端 = 0.5 + 1.25 = 1.75。
+    // 文字 @0ms（D=500ms）→ 待機 @500ms（D=1250ms）。占有終端 = 500 + 1250 = 1750ms。
     sink.emit(text_cue(ms(0), ms(500)));
     sink.emit(wait_cue(ms(500), ms(1_250)));
 
@@ -141,7 +141,7 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
     assert_eq!(
         ends.last().copied(),
         Some(at_ms(1_750)),
-        "待機 cue の duration が占有終端へ算入される（最後の文字の時刻 0.5 ではない）: {ends:?}"
+        "待機 cue の duration が占有終端へ算入される（最後の文字の時刻 500ms ではない）: {ends:?}"
     );
 }
 
@@ -169,7 +169,7 @@ fn horizon_matches_dola_occupancy_definition() {
     assert_eq!(
         ends.last().copied(),
         Some(expected),
-        "最終 horizon は dola の占有終端 0.95 と一致する: {ends:?}"
+        "最終 horizon は dola の占有終端 950ms と一致する: {ends:?}"
     );
 }
 
@@ -195,7 +195,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     assert_eq!(
         talk2_signals,
         vec![STARTED, end_from_zero(at_ms(500)),],
-        "2 本目の talk でも TalkStarted が再送され、horizon は前 talk（2.0）を持ち越さない"
+        "2 本目の talk でも TalkStarted が再送され、horizon は前 talk（2000ms）を持ち越さない"
     );
 
     // 会話境界の状態は clone で必ずリセットされる——emit 済みインスタンスからの clone でも同じ
@@ -229,15 +229,15 @@ fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
     drop(rx);
 
     let logs = capture_logs(|| {
-        sink.emit(text_cue(ms(0), ms(500))); // TalkStarted ＋ DisplayEndAt(0.5) の 2 回
-        sink.emit(wait_cue(ms(500), ms(500))); // DisplayEndAt(1.0)（切断後も horizon は前進する）
+        sink.emit(text_cue(ms(0), ms(500))); // TalkStarted ＋ DisplayEndAt(500ms) の 2 回
+        sink.emit(wait_cue(ms(500), ms(500))); // DisplayEndAt(1000ms)（切断後も horizon は前進する）
     });
 
     assert_eq!(
         count_level(&logs, "WARN"),
         3,
         "切断後の送出失敗は毎回 WARN で記録される（無音破棄でない）。件数 3 は TalkStarted＋\
-         DisplayEndAt(0.5)＋DisplayEndAt(1.0)＝切断後も horizon 集約が前進した証: {logs:?}"
+         DisplayEndAt(500ms)＋DisplayEndAt(1000ms)＝切断後も horizon 集約が前進した証: {logs:?}"
     );
     assert_eq!(
         count_level(&logs, "ERROR"),
@@ -246,7 +246,7 @@ fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
     );
 }
 
-/// 占有終端が 0.0 の talk（瞬時 cue のみ）でも `DisplayEndAt(0.0)` が届く——
+/// 占有終端が 0ms の talk（瞬時 cue のみ）でも `DisplayEndAt(0ms)` が届く——
 /// 「信号が一度も届かない」状態と区別できる形にする。
 #[test]
 fn instantaneous_talk_still_reports_zero_horizon() {
@@ -258,7 +258,7 @@ fn instantaneous_talk_still_reports_zero_horizon() {
     assert_eq!(
         drain(&rx),
         vec![STARTED, end_from_zero(TimePoint::ZERO),],
-        "占有終端 0.0 も信号として届く（信号欠落と区別できる）"
+        "占有終端 0ms も信号として届く（信号欠落と区別できる）"
     );
 }
 
@@ -303,7 +303,7 @@ fn construction_and_clone_emit_nothing() {
 // 続くと、その文字 cue の発火時刻に待機時間が畳み込まれてしまい、待機の duration を
 // 落としても占有終端が変わらない（=待機の検証にならない）。この落とし穴は
 // `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver` の台本
-// `\0あい\w9\1うえ\e` に実在する（末尾の文字 cue の終端 0.65 が待機の終端 0.55 を上回る）。
+// `\0あい\w9\1うえ\e` に実在する（末尾の文字 cue の終端 650ms が待機の終端 550ms を上回る）。
 //
 // 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし）。
 // =============================================================================
@@ -371,7 +371,7 @@ fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<TimePoint> {
 /// | `Text("あい")` | 0.0 | 2 文字 × 50ms = 0.1 | 0.1 |
 /// | `Wait`（`\w9`） | 0.1 | 9 × 50ms = 0.45 | **0.55** |
 ///
-/// 待機が末尾ゆえ占有終端 0.55 は待機だけが決める——待機の duration が落ちれば 0.1 になる。
+/// 待機が末尾ゆえ占有終端 550ms は待機だけが決める——待機の duration が落ちれば 100ms になる。
 #[test]
 fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
@@ -446,7 +446,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 /// （`areka-ghost` の dispatcher）。本檻はその `BootCueSink::clone_box`
 /// をそのまま踏み、2 本の実台本を続けて再生する。
 ///
-/// 2 本目の占有終端（0.05）は 1 本目（0.7）より**小さい**——会話境界が持ち越されると
+/// 2 本目の占有終端（50ms）は 1 本目（700ms）より**小さい**——会話境界が持ち越されると
 /// 2 本目は既知最大を超えられず、占有終端の通知が 1 件も出ない状態になる。
 ///
 /// 3 本目の脚は、1 本目の cue を実際に浴びたインスタンスからの複製を試す。今日の dispatcher は
@@ -463,7 +463,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
     // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。長い待ちは `\_w[ms]` 形。）
     let first_end = millis(5 * CHAR_NOMINAL_MS) + millis(9 * WAIT_UNIT_MS);
-    // 2 本目 `\0あ\e`: 文字 1 × 50ms → 終端 0.05。
+    // 2 本目 `\0あ\e`: 文字 1 × 50ms → 終端 50ms。
     let second_end = millis(CHAR_NOMINAL_MS);
     assert!(
         second_end < first_end,
@@ -507,7 +507,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     );
 
     // 3 本目: 1 本目の cue を実際に浴びたインスタンスから複製する。複製元の既知最大は 0.7 まで
-    // 上がっているため、境界を引き継ぐ複製では 2 本目と同じ台本（終端 0.05）で通知が 1 件も出ない。
+    // 上がっているため、境界を引き継ぐ複製では 2 本目と同じ台本（終端 50ms）で通知が 1 件も出ない。
     let mut used = BalloonLifecycleSink::new(tx, zero_clock());
     for cue in first.sheet.cues() {
         if let CuePayload::Command(command) = &cue.payload {

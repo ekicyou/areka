@@ -68,7 +68,7 @@ fn spawn_tick_last_result_flow() {
     // tick to midpoint
     animator.tick(at_ms(500));
     let len = animator.last_result().changes.len();
-    assert!(len > 0, "Should have opacity change at t=0.5");
+    assert!(len > 0, "Should have opacity change at t=500ms");
 
     // last_result is idempotent
     assert_eq!(len, animator.last_result().changes.len());

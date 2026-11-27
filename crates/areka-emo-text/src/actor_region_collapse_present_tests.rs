@@ -29,7 +29,7 @@ use crate::state::TextLayerConfig;
 const ATTACHED: &str =
     "テキスト供給面を予約スロットへ装着した（ActorRender 不在時のみ・以降は Present のみ）";
 
-/// 数十フレーム（0.1 秒刻み）。
+/// 数十フレーム（100 ms 刻み）。
 const FRAMES: usize = 40;
 
 /// 捕捉窓の中で `f` を走らせ、全部の記録を返す。対照の `error!` 1 件だけが ERROR で、WARN が 0 件で

@@ -7,7 +7,7 @@ use dola::time::testing::ms;
 pub(super) const REVEAL_INTERVAL: TimeSpan = ms(250);
 
 /// テスト用 cue 生成ヘルパ。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込み
-/// （reveal interval=0.25）、他コマンドは瞬時（duration=0）とする。明示的な duration を
+/// （reveal 間隔 250ms）、他コマンドは瞬時（duration=0）とする。明示的な duration を
 /// 与えたい縮退（D=0／空テキスト）・honor no-op 檻は [`cue_dur`] を使う。
 pub(super) fn cue(actor: &str, at: TimeSpan, command: CueCommand) -> TalkCue {
     let duration = match &command {

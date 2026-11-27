@@ -23,10 +23,10 @@ use super::super::test_support::{SIGNAL_AT, at_ms, hidden_log, hide, ms, show, s
 use super::test_support::{attach_headless, runtime};
 use super::*;
 
-/// 待ち時間（秒）。短い固定値を引数で渡す（環境変数・既定値に依らない）。
+/// 待ち時間。短い固定値を引数で渡す（環境変数・既定値に依らない）。
 const TIMEOUT: TimeSpan = ms(2000);
 
-/// 前の台詞（5 文字・1 文字 0.25 秒・占有終端 1.25）。
+/// 前の台詞（5 文字・1 文字 250 ms・占有終端 1250 ms）。
 const PREV_TEXT: &str = "あいうえお";
 const PREV_END: TimeSpan = ms(1250);
 const PREV_END_AT: TimePoint = at_ms(1250);

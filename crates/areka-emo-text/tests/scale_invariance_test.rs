@@ -41,7 +41,7 @@ fn model(
     support::geometry_model(origin, wordwrap, validrect, None, writing_mode)
 }
 
-/// reveal 間隔（0.25＝2 の冪・正確表現）。Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
+/// reveal 間隔（250ms）。Text cue へ `N × REVEAL_INTERVAL` を焼き込むと 250ms 間隔の決定論的リビール時刻列を得る
 /// （pipeline_test.rs と同方針）。
 const REVEAL_INTERVAL: TimeSpan = ms(250);
 
@@ -153,7 +153,7 @@ fn horizontal_layout_decision_in_image_space() {
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,
     );
-    // 同一 cue 列（typewriter 進行込み・reveal interval=0.25）: 自動折返し＋明示改行＋あふれ。
+    // 同一 cue 列（typewriter 進行込み・reveal 250 ms 間隔）: 自動折返し＋明示改行＋あふれ。
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
     for c in [

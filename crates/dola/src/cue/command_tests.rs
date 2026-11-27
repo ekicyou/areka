@@ -382,24 +382,23 @@ fn cue_payload_and_cue_serde_roundtrip() {
 // ── duration（再生時間）envelope 檻 ──
 
 #[test]
-fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
-    // 再生時間フィールドを持たない旧シリアライズ資産（3 フィールド）を読み込むと
-    // duration=0（瞬時）として従来どおり解釈できる（後方互換）。
-    let legacy = r#"{"actor":"0","start_time":0,"payload":{"Command":{"Text":"hi"}}}"#;
-    let parsed: Cue = serde_json::from_str(legacy).unwrap();
+fn cue_duration_defaults_to_zero_when_field_absent() {
+    // duration の欄が無い JSON は duration=0（瞬時）として読める。
+    let without_duration = r#"{"actor":"0","start_time":0,"payload":{"Command":{"Text":"hi"}}}"#;
+    let parsed: Cue = serde_json::from_str(without_duration).unwrap();
     assert_eq!(parsed.actor, ActorKey::from("0"));
     assert_eq!(parsed.start_time, TimeSpan::ZERO);
     assert_eq!(parsed.payload, CueCommand::Text("hi".into()).into());
     assert_eq!(
         parsed.duration,
         TimeSpan::ZERO,
-        "duration 欠落の旧資産は 0（瞬時）として復元されねばならない"
+        "duration の欄が無い JSON は 0（瞬時）として読めねばならない"
     );
 
-    // Barrier ペイロード（duration 非該当）の旧資産も同様に読める。
-    let legacy_barrier =
+    // Barrier ペイロード（duration 非該当）で duration の欄が無い JSON も同様に読める。
+    let barrier_without_duration =
         r#"{"actor":"0","start_time":10000000,"payload":{"Barrier":"WaitForInput"}}"#;
-    let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
+    let parsed: Cue = serde_json::from_str(barrier_without_duration).unwrap();
     assert_eq!(parsed.duration, TimeSpan::ZERO);
 }
 
@@ -485,7 +484,7 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
         );
         assert_eq!(parsed.payload, instant.payload);
 
-        // 時間占有（不透明秒数）
+        // 時間占有（duration が 0 より大きい）
         let timed = Cue {
             actor: ActorKey::from("sakura"),
             start_time: TimeSpan::ZERO,

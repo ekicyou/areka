@@ -7,7 +7,7 @@ use dola::*;
 
 use super::common::{delta_ms, float_var, ms, transition_entry};
 
-/// 倍率 0.5 の親: x は台本の 0.5〜1.5 秒（経った長さで 1〜3 秒）、子の引き金は台本の 0.75 秒
+/// 倍率 0.5 の親: x は台本の 500〜1500 ms （経った長さで 1〜3 秒）、子の引き金は台本の 750 ms
 fn doc() -> DolaDocument {
     let parent = StoryboardBuilder::new()
         .time_scale(0.5)
@@ -83,7 +83,7 @@ fn values_and_triggers_shift_exactly_by_the_start_difference() {
     assert_eq!(
         fired,
         [("child".to_string(), Some(delta_ms(2500)))],
-        "引き金は経った長さ 1.5 秒で 1 度だけ、子は 1 秒で終わる"
+        "引き金は経った長さ 1500 ms で 1 度だけ、子は 1 秒で終わる"
     );
     for start in [TimePoint::from_ticks(370_000_001), TimePoint::from_ticks(1)] {
         assert_eq!(run(start), at_zero, "start {start}");

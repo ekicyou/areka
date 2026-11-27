@@ -135,7 +135,7 @@ fn talk_ended_carries_the_injected_clock_once_when_dropped() {
     assert_eq!(
         signals.last(),
         Some(&TalkLifecycleSignal::TalkEnded { at: at_ms(101_234) }),
-        "落ちた瞬間の時計の読み 101.234 s を運ぶ（フレームに丸めない）"
+        "落ちた瞬間の時計の読み 101234ms を運ぶ（フレームに丸めない）"
     );
 }
 

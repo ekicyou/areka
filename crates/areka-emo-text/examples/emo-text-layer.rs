@@ -2,7 +2,7 @@
 //!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード
-//! cue 列を **注入時刻駆動**（`talk_time`＝フレーム時刻−talk 開始・実時間 sleep 不使用）
+//! cue 列を **注入時刻駆動**（フレームの時刻 `TimePoint` を注入・実時間 sleep 不使用）
 //! で流して、以下を **読み戻し（readback）述語**で自動判定し、最後に PASS/FAIL を 1 行出力する
 //! （終了コード: PASS=0／FAIL=1）。
 //!

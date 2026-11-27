@@ -299,7 +299,7 @@ mod tests {
 
     // ── cycle_ordinal（時刻商→ordinal 系列・純粋・決定論）──────────────────────────
 
-    /// 決定論系列（3 ヒット行・周期 1.0s）: None→0→1→2→None→0→…（スロット数＝count+1＝4）。
+    /// 決定論系列（3 ヒット行・周期 1000ms）: None→0→1→2→None→0→…（スロット数＝count+1＝4）。
     #[test]
     fn cycle_ordinal_series_none_then_each_ordinal_then_wrap() {
         let period = ms(1_000);
@@ -385,7 +385,7 @@ mod tests {
             (ActorKey::from("1"), false, 2), // 非 active → skip
             (ActorKey::from("2"), true, 1),  // active（1 行）
         ];
-        // period 1.0s・frame_time 1.5 → 商1 → スロット1 = ordinal0（両 active actor とも）。
+        // period 1000ms・frame_time 1500ms → 商1 → スロット1 = ordinal0（両 active actor とも）。
         run_hover_inject_with(
             &HoverInjectConfig::Cycle { period: ms(1_000) },
             at_ms(1_500),

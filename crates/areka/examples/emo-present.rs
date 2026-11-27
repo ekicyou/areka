@@ -176,7 +176,7 @@ fn main() -> Result<()> {
     println!("areka emo-present 観測 example");
     println!("================================");
     println!("  シェル窓（target 0）: emo2 surface1000 の着せ替え表情（腕組み・悲しみ眉・‥‥口）");
-    println!("    ＋ まばたきを {CYCLE_INTERVAL} 秒周期で開閉再現（bind 1400 の指令切替）");
+    println!("    ＋ まばたきを {CYCLE_INTERVAL} 周期で開閉再現（bind 1400 の指令切替）");
     println!("  バルーン窓（target 1）: balloons0.png（既定整列＝シェル左・上端揃え）");
     println!("  終了: シェルをダブルクリック");
     println!();

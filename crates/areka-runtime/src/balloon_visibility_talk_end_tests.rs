@@ -26,7 +26,7 @@ fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
         .run(&mut state);
     assert_eq!((waiting.logs, state.deadline), (vec![], None));
 
-    // 止まった時刻 4.0 は終端 10.0 より早いので、起点は止まった時刻。
+    // 止まった時刻 4000ms は終端 10000ms より早いので、起点は止まった時刻。
     let started = Frame::new(&[(0, seen(3, true))])
         .at(at_ms(10500))
         .signal(TalkLifecycleSignal::TalkEnded { at: at_ms(4000) })

@@ -24,7 +24,7 @@ fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
     assert_eq!(
         player.occupancy_horizon(),
         at_ms(102_500),
-        "アンカー 100 秒 ＋ 相対 horizon 2.5 秒 = 102.5 秒"
+        "アンカー 100000 ms ＋ 相対 horizon 2500 ms = 102500 ms"
     );
     assert_eq!(
         Some(player.occupancy_horizon()),
@@ -49,7 +49,7 @@ fn occupancy_horizon_is_observable_while_waiting_for_choice() {
     assert_eq!(
         player.occupancy_horizon(),
         at_ms(51_500),
-        "50 秒 + max(1.0, 1.5) 秒 = 51.5 秒"
+        "50000 ms + max(1000, 1500) ms = 51500 ms"
     );
 
     player.tick(at_ms(51_000));

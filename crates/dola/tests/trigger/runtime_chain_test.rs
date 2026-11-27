@@ -11,7 +11,7 @@ use dola::{
 // E2E テスト
 // ============================================================
 
-/// A（トリガーだけ）→ B（0.5 秒・終わりで C）→ C（0.5 秒）の文書
+/// A（トリガーだけ）→ B（500 ms・終わりで C）→ C（500 ms）の文書
 fn chain_abc_doc() -> dola::DolaDocument {
     let opacity_var = AnimationVariableDef::Float {
         initial: 0.0,
@@ -81,10 +81,10 @@ fn trigger_chain_a_b_c() {
     let a_result = rt.start("sb_a", at_ms(0)).unwrap();
     assert_eq!(a_result.group_id, 1);
 
-    // t=0.0: A はトリガーのみ → B が起動される
+    // t=0ms: A はトリガーのみ → B が起動される
     rt.tick(at_ms(0));
     let result = rt.last_result().clone();
-    assert_eq!(result.triggered.len(), 1, "A should trigger B at t=0.0");
+    assert_eq!(result.triggered.len(), 1, "A should trigger B at t=0ms");
     let b_group_id = match &result.triggered[0] {
         TriggerResult::Started {
             start_result,
@@ -98,10 +98,10 @@ fn trigger_chain_a_b_c() {
     };
     assert!(b_group_id > a_result.group_id);
 
-    // t=0.5: B の kf1 到達 → C が起動される
+    // t=500ms: B の kf1 到達 → C が起動される
     rt.tick(at_ms(500));
     let result = rt.last_result().clone();
-    assert_eq!(result.triggered.len(), 1, "B should trigger C at t=0.5");
+    assert_eq!(result.triggered.len(), 1, "B should trigger C at t=500ms");
     let c_target = match &result.triggered[0] {
         TriggerResult::Started {
             target_storyboard,
@@ -115,18 +115,18 @@ fn trigger_chain_a_b_c() {
     };
     assert!(c_target > b_group_id);
 
-    // t=1.0: C が完了し、opacity の最終値 1.0 が配られる
+    // t=1000ms: C が完了し、opacity の最終値 1.0 が配られる
     rt.tick(at_ms(1000));
     let result = rt.last_result().clone();
     let (_, val) = result
         .changes
         .iter()
         .find(|(id, _)| *id == opacity_id)
-        .expect("C delivers opacity at t=1.0");
-    assert_eq!(*val, EvaluatedValue::Float(1.0), "opacity at t=1.0");
+        .expect("C delivers opacity at t=1000ms");
+    assert_eq!(*val, EvaluatedValue::Float(1.0), "opacity at t=1000ms");
 }
 
-/// 起こした子がその tick で終わっても、子のトリガーは同じ tick で発火する（初めの tick がコマ落ちで 0.6）
+/// 起こした子がその tick で終わっても、子のトリガーは同じ tick で発火する（初めの tick がコマ落ちで 600 ms）
 #[test]
 fn trigger_chain_a_b_c_first_tick_late() {
     let mut rt = DolaRuntime::new();
@@ -134,7 +134,7 @@ fn trigger_chain_a_b_c_first_tick_late() {
     rt.load_document(chain_abc_doc()).unwrap();
     rt.start("sb_a", at_ms(0)).unwrap();
 
-    // B は 0.0〜0.5 でこの tick に終わる。C は B の終わりの 0.5 に始まる
+    // B は 0〜500 ms でこの tick に終わる。C は B の終わりの 500 ms に始まる
     rt.tick(at_ms(600));
     let result = rt.last_result().clone();
     let targets: Vec<&str> = result
@@ -152,9 +152,9 @@ fn trigger_chain_a_b_c_first_tick_late() {
         .changes
         .iter()
         .find(|(id, _)| *id == opacity_id)
-        .expect("C delivers opacity at t=0.6");
+        .expect("C delivers opacity at t=600ms");
     match val {
-        EvaluatedValue::Float(v) => assert!((v - 0.6).abs() < 1e-9, "opacity at t=0.6: {v}"),
+        EvaluatedValue::Float(v) => assert!((v - 0.6).abs() < 1e-9, "opacity at t=600ms: {v}"),
         other => panic!("expected Float, got {other:?}"),
     }
 }
@@ -223,7 +223,7 @@ fn trigger_chain_through_zero_length_child() {
         .changes
         .iter()
         .find(|(id, _)| *id == opacity_id)
-        .expect("C moves opacity at t=0.5");
+        .expect("C moves opacity at t=500ms");
     assert_eq!(*val, EvaluatedValue::Float(0.5));
 }
 
