@@ -1,7 +1,6 @@
 //! 層の記憶のファイルの形・形の版・層を付けたときの検査・直しの段。
 
 use super::{Access, Located, StoreBackend};
-use crate::persist::format;
 use rusqlite::{Connection, ErrorCode, ffi};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -202,24 +201,6 @@ fn upgrade(conn: &Connection, alias: &str, steps: &[Step]) -> Opened {
                 _ => Opened::Io(format!("記憶のファイルを今の形の版へ直せませんでした: {e}")),
             }
         }
-    }
-}
-
-/// 付けた層の隣の `sylphya.toml`（`legacy`・無ければ `None`）が使えなければ、書きを断る形にする。
-///
-/// 使えない新しいファイルの隣の `sylphya.toml` は取り込まないので、ここでも見ない。
-pub(crate) fn with_legacy(opened: Opened, legacy: Option<&str>) -> Opened {
-    match (opened, legacy) {
-        (opened @ (Opened::Missing | Opened::Attached { .. }), Some(content)) => {
-            match format::parse_toml_str(content) {
-                Ok(_) => opened,
-                Err(reason) => Opened::LegacyUnusable {
-                    attached: opened != Opened::Missing,
-                    reason,
-                },
-            }
-        }
-        (opened, _) => opened,
     }
 }
 

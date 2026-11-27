@@ -459,38 +459,3 @@ fn normal_run_rolls_a_hot_journal_back_on_open() {
     drop(conn);
     assert!(!root.join("sylphya.sqlite-journal").exists());
 }
-
-#[test]
-fn broken_legacy_next_to_a_usable_layer_refuses_writes_but_keeps_reads() {
-    let broken = "format-version = [";
-    let other_version = "format-version = 99\n";
-    let fine = "format-version = 1\n";
-    for opened in [Opened::Attached { fresh: false }, Opened::Missing] {
-        let attached = opened != Opened::Missing;
-        assert!(matches!(
-            with_legacy(opened.clone(), Some(broken)),
-            Opened::LegacyUnusable { attached: a, .. } if a == attached
-        ));
-        assert!(matches!(
-            with_legacy(opened.clone(), Some(other_version)),
-            Opened::LegacyUnusable { .. }
-        ));
-        assert_eq!(with_legacy(opened.clone(), Some(fine)), opened);
-        assert_eq!(with_legacy(opened.clone(), None), opened);
-    }
-}
-
-#[test]
-fn legacy_next_to_an_unusable_or_skipped_layer_is_not_looked_at() {
-    for opened in [
-        Opened::Unusable("壊れている".into()),
-        Opened::NeedsUpgrade,
-        Opened::NeedsRecovery,
-        Opened::Io("拒まれた".into()),
-    ] {
-        assert_eq!(
-            with_legacy(opened.clone(), Some("format-version = [")),
-            opened
-        );
-    }
-}

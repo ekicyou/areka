@@ -8,6 +8,7 @@
 )]
 
 mod backend;
+mod import;
 mod locate;
 mod read;
 mod schema;
@@ -20,7 +21,7 @@ pub use backend::{
 
 use crate::persist::ScopeRoots;
 use rusqlite::Connection;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,6 +40,10 @@ pub(crate) struct Store {
     backend: Arc<dyn StoreBackend>,
     /// 読みを飛ばす記録を出した置き場（置き場ごとに 1 回）。
     reported: BTreeSet<PathBuf>,
+    /// 取り込みを見終えた置き場。
+    imports: BTreeMap<PathBuf, import::Import>,
+    /// 取り込みが錠に当たった置き場の、読んだ（鍵, 値）（重ねの値）。
+    pending: BTreeMap<PathBuf, BTreeMap<String, String>>,
 }
 
 impl Store {
@@ -78,6 +83,8 @@ impl Store {
             roots,
             backend,
             reported: BTreeSet::new(),
+            imports: BTreeMap::new(),
+            pending: BTreeMap::new(),
         })
     }
 }

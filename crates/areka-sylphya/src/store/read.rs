@@ -129,19 +129,13 @@ impl Store {
             let Some(root) = self.roots.root_of(layer).cloned() else {
                 continue;
             };
-            match schema::open_layer(
-                &self.conn,
-                self.backend.as_ref(),
-                &root,
-                alias(layer),
-                &mut self.reported,
-            ) {
-                Opened::Attached { fresh } => {
+            match self.open_imported(layer, &root, false) {
+                Opened::Attached { fresh: false }
+                | Opened::LegacyUnusable { attached: true, .. } => {
                     attached.push(layer);
-                    if !fresh {
-                        with_table.push(layer);
-                    }
+                    with_table.push(layer);
                 }
+                Opened::Attached { .. } => attached.push(layer),
                 Opened::Busy => {
                     self.detach(&attached);
                     return Err(Busy);
@@ -174,18 +168,22 @@ impl Store {
                 })
                 .collect::<Vec<_>>()
                 .join(" UNION ALL ");
-            let sql = format!("SELECT value FROM ({sql}) ORDER BY o LIMIT 1");
-            match self
-                .conn
-                .prepare_cached(&sql)
-                .and_then(|mut stmt| stmt.query_row([key], |r| r.get(0)).optional())
-            {
+            let sql = format!("SELECT o, value FROM ({sql}) ORDER BY o LIMIT 1");
+            match self.conn.prepare_cached(&sql).and_then(|mut stmt| {
+                stmt.query_row([key], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .optional()
+            }) {
                 Ok(found) => Ok(found),
                 Err(e) => sql_error(e, key).map(|()| None),
             }
         };
         self.detach(&attached);
-        found
+        let found: Option<(i64, String)> = found?;
+        let pending = layers
+            .iter()
+            .take_while(|&&l| found.as_ref().is_none_or(|(o, _)| layer_order(l) < *o))
+            .find_map(|&l| self.pending_value(l, key));
+        Ok(pending.cloned().or(found.map(|(_, value)| value)))
     }
 
     fn read_memory(
@@ -228,7 +226,7 @@ impl Store {
         let found = if with_table.is_empty() {
             Ok(Vec::new())
         } else {
-            let sql = format!("SELECT key, value FROM {}.kv ORDER BY key", alias(layer));
+            let sql = format!("SELECT key, value FROM {}.kv", alias(layer));
             match self.conn.prepare_cached(&sql).and_then(|mut stmt| {
                 stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
                     .collect::<rusqlite::Result<Vec<_>>>()
@@ -238,7 +236,11 @@ impl Store {
             }
         };
         self.detach(&attached);
-        found
+        let mut whole: std::collections::BTreeMap<String, String> = found?.into_iter().collect();
+        for (key, value) in self.pending_layer(layer).into_iter().flatten() {
+            whole.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+        Ok(whole.into_iter().collect())
     }
 }
 

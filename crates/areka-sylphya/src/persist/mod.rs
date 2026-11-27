@@ -585,7 +585,7 @@ fn remove_toml_path(table: &mut toml::Table, path: &[String]) -> bool {
 }
 
 /// [`FormatDoc`] を `(PersistKey, String)` エントリ列へ変換する（実在値のみ・決定論順）。
-fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, String)> {
+pub(crate) fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, String)> {
     let mut out = Vec::new();
 
     push_axis_family(scope, &mut out, &doc.window, |scope_id, axis| {

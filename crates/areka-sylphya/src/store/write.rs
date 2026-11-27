@@ -38,7 +38,7 @@ fn is_busy(e: &rusqlite::Error) -> bool {
 }
 
 /// 書きの中の失敗（錠に当たった・それ以外の理由）。
-enum Stop {
+pub(super) enum Stop {
     Busy,
     Failed(String),
 }
@@ -88,8 +88,7 @@ impl Store {
         };
         let name = alias(layer);
         let backend = self.backend.clone();
-        let mut opened =
-            schema::open_layer(&self.conn, backend.as_ref(), root, name, &mut self.reported);
+        let mut opened = self.open_imported(layer, root, true);
         if opened == Opened::Missing {
             if write.puts.is_empty() {
                 return WriteAttempt::Done(PersistOutcome::Saved);
@@ -125,7 +124,19 @@ impl Store {
                 }
             },
             Opened::Busy => WriteAttempt::Busy,
-            Opened::Unusable(reason) | Opened::LegacyUnusable { reason, .. } => {
+            Opened::LegacyUnusable { reason, .. } => {
+                tracing::error!(
+                    target: LOG_TARGET,
+                    event = "persist_import_failed",
+                    scope = ?layer,
+                    path = %root.display(),
+                    reason = %reason,
+                    keys = ?write.key_names(),
+                    "sylphya.toml next to the layer unusable; not writing, reporting Degraded"
+                );
+                write.degraded(Some(root), PersistFailureCause::Unusable(reason))
+            }
+            Opened::Unusable(reason) => {
                 tracing::error!(
                     target: LOG_TARGET,
                     event = "persist_existing_unusable",
@@ -256,7 +267,7 @@ impl Store {
         })
     }
 
-    /// 層の置き場を替え、その層の揮発の値を捨てる。
+    /// 層の置き場を替え、その層の揮発の値を捨て、取り込みの覚えを戻す。
     pub(crate) fn set_root(&mut self, layer: PersistScope, root: Option<PathBuf>) {
         if layer != PersistScope::App
             && let Err(e) = self.conn.execute(
@@ -270,6 +281,11 @@ impl Store {
                 error = %e,
                 "volatile values of the re-rooted layer could not be discarded"
             );
+        }
+        let slot = root_slot(&mut self.roots, layer);
+        for forget in [slot.take(), root.clone()].into_iter().flatten() {
+            self.imports.remove(&forget);
+            self.pending.remove(&forget);
         }
         *root_slot(&mut self.roots, layer) = root;
     }
@@ -305,13 +321,7 @@ fn run_transaction(
 ) -> Result<(), Stop> {
     conn.execute_batch("BEGIN")?;
     if fresh {
-        conn.execute_batch(&format!(
-            "CREATE TABLE IF NOT EXISTS {name}.kv (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
-             CREATE TABLE IF NOT EXISTS {name}.meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
-             PRAGMA {name}.application_id = {APPLICATION_ID};
-             PRAGMA {name}.user_version = {};",
-            schema::current_version(schema::STEPS)
-        ))?;
+        create_tables(conn, name)?;
     }
     let mut upsert = conn.prepare_cached(&format!(
         "INSERT INTO {name}.kv (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
@@ -326,6 +336,17 @@ fn run_transaction(
     before_commit()?;
     conn.execute_batch("COMMIT")?;
     Ok(())
+}
+
+/// 新しい層のファイルに表と番号を置く（トランザクションの中で呼ぶ）。
+pub(super) fn create_tables(conn: &Connection, name: &str) -> rusqlite::Result<()> {
+    conn.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS {name}.kv (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+         CREATE TABLE IF NOT EXISTS {name}.meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+         PRAGMA {name}.application_id = {APPLICATION_ID};
+         PRAGMA {name}.user_version = {};",
+        schema::current_version(schema::STEPS)
+    ))
 }
 
 fn root_slot(roots: &mut ScopeRoots, layer: PersistScope) -> &mut Option<PathBuf> {

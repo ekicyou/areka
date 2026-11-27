@@ -282,6 +282,7 @@ pub struct MemBackend {
     layers: MemDbs,
     legacy: Mutex<BTreeMap<PathBuf, BTreeMap<String, String>>>,
     fail_next_write: AtomicBool,
+    fail_next_retire: AtomicBool,
 }
 
 /// 別の書き手が層の DB の書きの錠を持っている間の取っ手（落とすと放す）。
@@ -298,6 +299,7 @@ impl MemBackend {
             layers: MemDbs::new("layer"),
             legacy: Mutex::new(BTreeMap::new()),
             fail_next_write: AtomicBool::new(false),
+            fail_next_retire: AtomicBool::new(false),
         })
     }
 
@@ -313,6 +315,11 @@ impl MemBackend {
     /// 次の 1 回の書きを、OS が拒んだ形で失敗させる。
     pub fn fail_next_write(&self) {
         self.fail_next_write.store(true, Ordering::SeqCst);
+    }
+
+    /// 次の 1 回の古いファイルの名前替えを、OS が拒んだ形で失敗させる。
+    pub fn fail_next_retire(&self) {
+        self.fail_next_retire.store(true, Ordering::SeqCst);
     }
 
     /// その置き場の記憶の DB を、areka のものでない（使えない）形にする。
@@ -374,6 +381,12 @@ impl StoreBackend for MemBackend {
     }
 
     fn retire_legacy(&self, root: &Path) -> std::io::Result<()> {
+        if self.fail_next_retire.swap(false, Ordering::SeqCst) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "試験の偽物が注ぎ込んだ失敗（OS が名前替えを拒んだ）",
+            ));
+        }
         let mut legacy = lock(&self.legacy);
         let Some(files) = legacy.get_mut(root) else {
             return Ok(());
