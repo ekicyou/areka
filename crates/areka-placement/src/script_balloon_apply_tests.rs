@@ -585,6 +585,26 @@ fn balloon_resize_keeps_the_user_shift() {
 }
 
 #[test]
+fn balloon_resize_before_landing_keeps_the_user_shift_after_landing() {
+    let mut w = script_world(&[]);
+    shift_by_user(&mut w);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Center, false);
+    resize_sakura_balloon(&mut w);
+    reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER);
+
+    land_sakura(&mut w);
+    resettle_script_balloons(&mut w.world, &|_| true);
+
+    assert_eq!(
+        follow_of(&w, 0),
+        PointPx {
+            x: (LANDED_W - BALLOON_AFTER.width) / 2 + SHIFT.x,
+            y: -BALLOON_AFTER.height + SHIFT.y,
+        }
+    );
+}
+
+#[test]
 fn balloon_resize_leaves_a_scope_without_script_value_untouched() {
     let mut w = script_world(&[]);
     let c = w.windows.char_window(0).unwrap();

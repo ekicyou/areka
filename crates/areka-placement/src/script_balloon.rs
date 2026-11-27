@@ -562,12 +562,16 @@ pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: Size
         return skipped("not_resolved");
     };
     let user_moved = world.entity(char_window).contains::<BalloonUserMoved>();
+    let provisional = solved.placement.balloon_offset;
     if !reseat(
         world,
         solved,
         user_moved.then_some(prev.placement.balloon_offset),
     ) {
         return skipped("not_resolved");
+    }
+    if let Some(mut marker) = world.get_mut::<ScriptBalloonUnsettled>(char_window) {
+        marker.provisional = provisional;
     }
     info!(
         event = "script_balloon_reanchored",

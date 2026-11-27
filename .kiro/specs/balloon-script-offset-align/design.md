@@ -446,6 +446,7 @@ pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: Size
 ```
 - 呼び手は `crates/areka-runtime/src/frame/dpi.rs` の DPI の相で、`GhostWindowKind::Balloon` の窓の寸が `reconcile_window_size` で変わったとき（`before != after`）だけ。変わった時点が分かるので押しで呼ぶ（毎フレーム比べない）。
 - そのスコープのキャラ窓に Component があるとき、バルーンの寸を `before` にして解いた標準 `S_prev` と `after` で解いた `S_new` の差を `BalloonFollow` の値に足して据え直す（命令の当ての手順 7 と同じ式・利用者のずらしは保つ）。これで `left` の「シェルの左上にバルーンの右上が接する」と `center`・`bottom` の中央が、バルーンだけが DPI の違う画面へ移っても崩れない。
+- 据え直したスコープのキャラ窓に印 `ScriptBalloonUnsettled` があれば、印の `provisional` を `after` で解いた `S_new.balloon_offset` へ取り替える（着地した巡の解き直しが寸の差を二重に足さない）。
 - 据え直した位置は書き込みの関門を通り、`limit_work_area` が新しい矩形で画面を選ぶ。押し込んだ結果は選んだ画面に収まり、その画面の DPI はもう変わらないので、寸の変化と選び直しは 1 回で止まる（揺れ止めは入れない）。
 - そのバルーン窓に `WindowDragging` があれば置き直さず `info!(event = "script_balloon_reanchor_skipped", scope, reason = "balloon_dragging")` で終える（離したときの補正が新しい寸の標準の上に利用者のずらしを据える）。
 - 寸の前後が取れない・標準が解けないときは置き直さず `warn!(event = "script_balloon_reanchor_skipped", scope, reason)`。
@@ -527,6 +528,7 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 | 窓の一式・キャラ窓が無い | 当てない・持たない | `warn!(event = "script_balloon_skipped", scope, command, reason)` |
 | 材料が無い・解けない | 値を持ち、置き直さない | `warn!(event = "script_balloon_place_deferred", scope, command, reason)` |
 | 記憶へ書く分を出せない | 記憶へ書かない | `warn!(event = "balloon_persist_skipped", scope, reason)` |
+| シェルの切り替えで記憶から戻したスコープの descript だけの標準が解けない | 記憶のずらしをそのまま使う | `warn!(event = "reseed_script_share_unresolved", scope)` |
 | 着地した巡の解き直しで材料が無い・解けない | 印を外し、仮の位置のまま置き直さない | `warn!(event = "script_balloon_resettle_skipped", scope, reason)`（`no_default_basis`・`not_resolved`） |
 
 ### Monitoring
