@@ -143,3 +143,5 @@
 - `cargo test -p areka` の `emo2_mcp_get_log_origin_and_strict_over_one_real_boot` は `--ignored` 無しでも走り、i686 の `shiori-host32-helper.exe` が無いと赤になる（実機の起動。この spec の変更とは無関係）。クレートのテストでは除いて判定し、全体テストで確かめる。
 - seriko は印の合図でもスコープの字の列を作る（空の場所に最初に届いた印も、文字の層と同じく前の字を進めるため）。talk.rs の dead_code の expect は `rebase_boxes` の 1 つだけ残り、シェルの差し替えの配線で外す。
 - seriko の actor は次の箱の表を `Option` で最後の 1 つだけ持つ（切替の失敗の後に古い表を当てないため）。`settle_talk` が刻みごとに数えた字を刈り込むので、シェルの切替の揃えが効くのは刻みと知らせのあいだに構え直しがあるときだけ。
+- 設計の「兄弟と重なるファイル」の表は `areka-emo-compose/src/boxes.rs` を触らないとしていたが、`BoxName` の欄を `pub(crate)` にする 1 行だけ触った（同じクレートの兄弟のテストが名前を組むため）。同じウェーブで emo-compose を触る spec と取り込むときはこの 1 行に注意。
+- 最終検証（GO）: `tools/test-all.ps1` は 22 段すべて緑（実機の起動 `emo2_mcp_get_log_origin_and_strict_over_one_real_boot` も緑）。
