@@ -406,3 +406,95 @@ fn named_balloon_finds_the_ghost_inner_first() {
         );
     }
 }
+
+/// 置き場の無い文脈（実行するゴーストの名だけ）。
+fn placeless(ctx: &OpenContext) -> OpenContext {
+    let mut ctx = ctx.clone();
+    ctx.runner.place = None;
+    ctx
+}
+
+#[test]
+fn open_file_without_place_refuses_relative_and_opens_absolute() {
+    let f = Fixture::new();
+    let p = f.file("abs.txt");
+    let ctx = placeless(&f.ctx);
+    let os = FakeOs::default();
+    assert_eq!(
+        resolve(&dest_of("open", &["file", r"sub\rel.txt"]), &ctx, &os),
+        Err(OpenFailure::NoPlace)
+    );
+    assert_eq!(
+        resolve(&dest_of("open", &["file", p.to_str().unwrap()]), &ctx, &os),
+        Ok(want(Verb::Open, &p, None, Some(&f.master())))
+    );
+    let empty = FakeOs::default().with_env("AREKA_T_EMPTY", "");
+    assert_eq!(
+        resolve(&dest_of("open", &["file", "%AREKA_T_EMPTY%"]), &ctx, &empty),
+        Err(OpenFailure::EmptyPath)
+    );
+}
+
+/// browser と mailer は置き場が無くても、環境変数を書いていても綴りのまま渡す。
+#[test]
+fn browser_and_mailer_are_passed_as_written_without_place() {
+    let f = Fixture::new();
+    let ctx = placeless(&f.ctx);
+    let os = FakeOs::default().with_env("AREKA_T_X", "expanded");
+    assert_eq!(
+        resolve(
+            &dest_of("open", &["browser", "http://a/%AREKA_T_X%"]),
+            &ctx,
+            &os
+        ),
+        Ok(want(Verb::Open, "http://a/%AREKA_T_X%", None, None))
+    );
+    assert_eq!(
+        resolve(
+            &dest_of("open", &["mailer", "%AREKA_T_X%@example.com"]),
+            &ctx,
+            &os
+        ),
+        Ok(want(
+            Verb::Open,
+            "mailto:%AREKA_T_X%@example.com",
+            None,
+            None
+        ))
+    );
+}
+
+/// 名前で引く shell は、根の並びに他のゴーストが居ても実行するゴーストの中だけを引く。
+#[test]
+fn named_shell_looks_inside_the_runner_ghost() {
+    let (_tmp, ctx) = named_fixture();
+    let root = ctx.baseware.clone().unwrap().roots()[0].clone();
+    let h = root.ghost_dir("h");
+    write_descript(&h.join("ghost").join("master"), "H");
+    write_descript(&h.join("shell").join("x"), "X");
+    let mut ctx_h = ctx.clone();
+    ctx_h.runner = areka_ghost::sink::TalkRunner {
+        name: "H".to_owned(),
+        place: Some(areka_ghost::sink::GhostPlace {
+            master: h.join("ghost").join("master"),
+            root: h.clone(),
+        }),
+    };
+    let os = FakeOs::default();
+    assert_eq!(
+        resolve(&named("shell", "X"), &ctx_h, &os),
+        Ok(want(Verb::Open, h.join("shell").join("x"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("shell", "a"), &ctx_h, &os),
+        Err(OpenFailure::NoMatch {
+            store: super::super::destination::Store::Shell,
+            name: "a".to_owned()
+        }),
+        "表示中かどうかに関わらず、他のゴーストのシェルは引かない"
+    );
+    assert_eq!(
+        resolve(&named("shell", "x"), &placeless(&ctx_h), &os),
+        Err(OpenFailure::NoPlace)
+    );
+}
