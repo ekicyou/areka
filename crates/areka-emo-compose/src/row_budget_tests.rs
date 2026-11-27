@@ -130,7 +130,7 @@ fn undrawn_ops_count_no_pixels() {
     );
     assert_eq!(drawn.len(), 1, "検体: 絵 1 枚の命令");
     let undrawn = crate::BlitOp {
-        method: ComposeMethod::Replace,
+        method: ComposeMethod::Auto,
         ..drawn[0].clone()
     };
     let outside = crate::BlitOp {

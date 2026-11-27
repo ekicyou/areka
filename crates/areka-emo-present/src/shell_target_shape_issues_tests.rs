@@ -11,14 +11,14 @@ use super::test_support::{decoder_with, warn_lines, write_descript};
 use log_capture_kit::capture;
 
 /// 知らない `animation-sort`・描かないメソッドの pattern（面 0 の animation0）・循環（面 10）・
-/// 両方に当たる pattern（面 0 の animation1 が自分を `replace` で指す）を 1 つずつ持つ。
+/// 両方に当たる pattern（面 0 の animation1 が自分を `auto` で指す）を 1 つずつ持つ。
 const TEXT: &str = concat!(
     "charset,UTF-8\r\n",
     "animation-sort,sideways\r\n",
     "surface0\r\n{\r\n",
     "element0,overlay,base.png,0,0\r\n",
-    "animation0.interval,bind\r\nanimation0.pattern0,replace,20,0,0,0\r\n",
-    "animation1.interval,bind\r\nanimation1.pattern0,replace,0,0,0,0\r\n",
+    "animation0.interval,bind\r\nanimation0.pattern0,auto,20,0,0,0\r\n",
+    "animation1.interval,bind\r\nanimation1.pattern0,auto,0,0,0,0\r\n",
     "}\r\n",
     "surface10\r\n{\r\n",
     "element0,overlay,part.png,0,0\r\n",
@@ -80,8 +80,8 @@ fn load_warns_each_shape_issue_once() {
     let cycle = "shell: pattern の参照が循環するので、先祖へ戻る参照を置かない";
     let mut want = vec![
         format!("{sort}|value=\"sideways\""),
-        format!("{undrawn}|animation_id=0|method=\"replace\"|pattern=0|surface_id=0"),
-        format!("{undrawn}|animation_id=1|method=\"replace\"|pattern=0|surface_id=0"),
+        format!("{undrawn}|animation_id=0|method=\"auto\"|pattern=0|surface_id=0"),
+        format!("{undrawn}|animation_id=1|method=\"auto\"|pattern=0|surface_id=0"),
         format!("{cycle}|animation_id=0|pattern=0|surface_id=10|target=10"),
     ];
     want.sort();

@@ -456,8 +456,8 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 /// bind+random でないもの、または bind+random でも現在の bind 集合に属するもの }`（bind 所属条件は下記）。整列は既存の animation-sort 2 段規則を**変更せず**適用する（画家のアルゴリズム）。
 /// 各 id で現在コマがあれば**コマが静的な寄与（着せ替えの手順・always の経過 0）を置換**する（各コマは
 /// 直前コマをリセットしてベースへ）。コマ・着せ替えの手順・always の経過 0 のいずれも method ゲート
-/// （[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
-/// 非 Overlay は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動）。一番上と部品の段は
+/// （[`ComposeMethod::is_implemented`]）を通し、
+/// 描けない語は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動）。一番上と部品の段は
 /// 読む欄だけが違い、規則は同じ 1 本の経路を通る。
 ///
 /// # bind 非所属コマの合流拒否（最後の砦）
@@ -599,10 +599,10 @@ pub(crate) fn push_direct(
     let surface_id = level.surface_id;
     if let Some(frame) = level.frame(id) {
         if frame.method.is_implemented() {
-            // Overlay: frame.surface_id へ (x,y) 累積で入る（循環は取り出すときの visited 判定）。
+            // 描ける語: frame.surface_id へ (x,y) 累積で入る（循環は取り出すときの visited 判定）。
             steps.push(level.enter(frame.surface_id, frame.x, frame.y));
         } else {
-            // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画。組むたびの
+            // 描けない語: 完全形は保持しつつ非駆動＝当該コマ不描画。組むたびの
             // 知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
             tracing::debug!(
                 target: "areka_emo_compose",

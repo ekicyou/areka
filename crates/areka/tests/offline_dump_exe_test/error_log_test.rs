@@ -13,7 +13,7 @@ const SURFACES: &[&str] = &[
     "{",
     "element0,overlay,base.png,0,0",
     "animation0.interval,bind",
-    "animation0.pattern0,replace,20,0,0,0",
+    "animation0.pattern0,auto,20,0,0,0",
     "}",
     "surface5",
     "{",

@@ -20,8 +20,9 @@ use tracing::debug;
 
 /// ukadoc 由来の合成（描画）メソッド全量列挙。
 ///
-/// emo2 実測で使用されるのは `Overlay` のみ（`add`/`bind` は ukadoc 同義明文により
-/// `Overlay` へ写像）。それ以外は将来拡張のための型シームであり `is_implemented() == false`。
+/// 描けるのは overlay・overlay-fast・interpolate・replace・asis・base・reduce の 7 つ
+/// （`add`/`bind` は ukadoc 同義明文により `Overlay` へ写像）。`blend-*`・`auto`・未知の語は
+/// `is_implemented() == false` で描かない。
 ///
 /// `#[non_exhaustive]` により下流クレートからの網羅 match を禁じ、将来のメソッド追加に
 /// 対する後方互換シームを保つ（本クレート内の網羅 match はテストで許容される）。
@@ -128,10 +129,19 @@ pub enum BlendKind {
 impl ComposeMethod {
     /// このメソッドが実挙動を持つ（実装済みである）か。
     ///
-    /// M1 の実装対象は `Overlay` のみ（emo2 使用分）。それ以外は型シームであり `false`。
-    /// 実際の画素合成は下流 `blit` 実行器が担い、本メソッドは登録簿としての実装状況のみを返す。
+    /// `overlay`・`overlay-fast`・`interpolate`・`replace`・`asis`・`base`・`reduce` の 7 つの意味が真。
+    /// `blend-*`・`auto`・未知の語は偽。今の CPU の転写は真の語をどれも `overlay` として重ねる。
     pub fn is_implemented(&self) -> bool {
-        matches!(self, ComposeMethod::Overlay)
+        matches!(
+            self,
+            ComposeMethod::Overlay
+                | ComposeMethod::OverlayFast
+                | ComposeMethod::Interpolate
+                | ComposeMethod::Replace
+                | ComposeMethod::Asis
+                | ComposeMethod::Base
+                | ComposeMethod::Reduce
+        )
     }
 
     /// 転記層由来のメソッド名文字列を [`ComposeMethod`] へ写像する（写像表準拠）。
@@ -175,12 +185,24 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
 /// [`ComposeMethod::Overlay`] へ写す語（正規化済み・[`known_method`] と [`is_implemented_name`] が共有する）。
 const OVERLAY_WORDS: [&str; 3] = ["overlay", "add", "bind"];
 
+/// 描ける語（正規化済み・[`ComposeMethod::is_implemented`] が真になる綴り）。
+const DRAWABLE_WORDS: [&str; 9] = [
+    "overlay",
+    "add",
+    "bind",
+    "overlayfast",
+    "interpolate",
+    "replace",
+    "asis",
+    "base",
+    "reduce",
+];
+
 /// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
 /// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
-/// 実装済みは `Overlay` だけ（[`ComposeMethod::is_implemented`]）なので、その語と比べる。合成のたびに引かれる
-/// ので確保しない（大文字や `-`・`_` の入った語でも）。
+/// 真になる綴りは [`DRAWABLE_WORDS`]。合成のたびに引かれるので確保しない（大文字や `-`・`_` の入った語でも）。
 pub(crate) fn is_implemented_name(name: &str) -> bool {
-    OVERLAY_WORDS.iter().any(|w| same_canonical(name, w))
+    DRAWABLE_WORDS.iter().any(|w| same_canonical(name, w))
 }
 
 /// 記録を出さずに「この描画メソッドの語が登録簿に在るか」を答える（未知の語なら false）。
@@ -288,17 +310,17 @@ mod tests {
         let _ = name;
     }
 
-    /// `Overlay` のみ実装済み・他はすべて型シーム（未実装）。
+    /// 7 つの意味だけが描ける・`blend-*`・`auto`・未知は型シーム。
     #[test]
-    fn only_overlay_is_implemented() {
+    fn seven_meanings_are_implemented() {
         assert!(ComposeMethod::Overlay.is_implemented());
+        assert!(ComposeMethod::OverlayFast.is_implemented());
+        assert!(ComposeMethod::Interpolate.is_implemented());
+        assert!(ComposeMethod::Replace.is_implemented());
+        assert!(ComposeMethod::Asis.is_implemented());
+        assert!(ComposeMethod::Base.is_implemented());
+        assert!(ComposeMethod::Reduce.is_implemented());
 
-        assert!(!ComposeMethod::OverlayFast.is_implemented());
-        assert!(!ComposeMethod::Interpolate.is_implemented());
-        assert!(!ComposeMethod::Replace.is_implemented());
-        assert!(!ComposeMethod::Asis.is_implemented());
-        assert!(!ComposeMethod::Base.is_implemented());
-        assert!(!ComposeMethod::Reduce.is_implemented());
         assert!(!ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)).is_implemented());
         assert!(!ComposeMethod::Blend(BlendMode::fast(BlendKind::Screen)).is_implemented());
         assert!(!ComposeMethod::Auto.is_implemented());
@@ -378,6 +400,11 @@ mod tests {
             "b-i-n-d",
             "overlayfast",
             "overlay-fast",
+            "Inter-Polate",
+            "REPLACE",
+            "asis",
+            "base",
+            "reduce",
             "overla",
             "overlayy",
             "addd",

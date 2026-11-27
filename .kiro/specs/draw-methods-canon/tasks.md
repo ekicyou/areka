@@ -88,7 +88,7 @@
   - _Requirements: 2.9, 2.5_
 
 - [ ] 5. 合成が描く計画を作る
-- [ ] 5.1 「描けるか」と語 → 重ね方の 1 か所と、計画の型を足す
+- [x] 5.1 「描けるか」と語 → 重ね方の 1 か所と、計画の型を足す
   - 「描けるか」を 7 つの意味（`overlay`・`overlay-fast`・`interpolate`・`replace`・`asis`・`base`・`reduce`）で真にし、門の 9 か所が同じ 1 関数の広がった答えを使う
   - 語 → 重ね方（5 つ）の写しと、計画・項（絵・黒の塗り・まとめの開き・閉じ）・整数の矩形の純粋な値の型を足して公開する
   - 今の CPU の合成の道は、新しく描ける語を 7.6 まで `overlay` として転写する
@@ -284,3 +284,6 @@
 - 2.3 → 2.4: `VisualGroup` を外しただけの回は版が上がらず古い絵が残る（隣の部品と同じく `RemovedComponents` で拾う）。diff.rs の `entries` はまとめを含む列で `None`（全部描く）。作業用の絵の道で中の `DESTINATION_IN` が親に届かないテスト（拡大つきのまとめ）を足すとよい。
 - 2.5: 読めない間の 1 回だけの印は process 全体の `static`（`(WorldId, Entity)` の集合）。部品の `AtomicBool` へ移す形が勧め（レビュー）。入れ子の上げた形の座標の基準はテストが無い。
 - 2.5: 並走の cargo の負荷の下で wintf の lib テストの WARP の画素のテスト（emit_layer_tests・emit_blend_tests）が 1 度だけ赤になった（単独と 3 回の回し直しは緑・この変更とは無関係と判定）。
+- 5.1: クローディアの読み込みの檻は 0 行を期待する（「まだ働かない形」の 1 行は hit-id-pass で既に外れていた。要件 10.4・brief の「1 行は残す」の文が古い）。
+- 5.1 → 5.4: `mix_of` は呼び手が入ったら設計どおり `pub(crate)` に戻し、lib.rs の `pub use` から外す。
+- 5.1 → 5.6: plan.rs の debug の文「非 Overlay method の現在コマ…」と plan_frame_merge_tests.rs の assert の文「非 Overlay コマ」は不正確（今は描けない語だけが入る）。読むテスト plan_issues_tests.rs・plan_nesting_tests.rs と一緒に直す。

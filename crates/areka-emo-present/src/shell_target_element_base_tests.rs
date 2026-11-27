@@ -385,9 +385,8 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 
 /// 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
 /// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
-/// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行は、
-/// surface28 の pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`base` の pattern を
-/// 描けるようにするときは、この期待を更新すること。
+/// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行も 0 件で、
+/// 同じ collision番号の重なりの警告も無い。
 ///
 /// 較正: 読み手の判定を `overlay` だけに戻すと土台が値にならず、部品の大きさだけで描かれて
 /// surface26 は 100×56（surface11 は 71×42）になって赤になる。
@@ -417,17 +416,10 @@ fn claudia_base_surfaces_are_full_size_and_records_are_fixed() {
             "`element0,base` の面の外形が土台の絵の実寸でない"
         );
         assert_eq!(undrawn_count(&events), 0, "claudia に描けない行は無い");
-        // 警告以上は、surface28 の animation100 の `base` の pattern 3 行
-        // だけ。`base` の pattern を描けるようにするときは、この期待を更新すること。
-        // 同じ collision番号の重なりの警告は 0 行。
         assert_eq!(
             warn_lines(&events),
-            (0..3)
-                .map(|p| format!(
-                    "shell: areka が描けない描画メソッドの pattern を描かない|animation_id=100|method=\"base\"|pattern={p}|surface_id=28"
-                ))
-                .collect::<Vec<_>>(),
-            "ほかの警告以上は surface28 の pattern 3 行だけ（同じ番号の重なりの警告は無い）"
+            Vec::<String>::new(),
+            "警告以上の行は無い（同じ番号の重なりの警告も無い）"
         );
     });
 }

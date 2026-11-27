@@ -167,7 +167,7 @@ fn frame_replaces_bind_pattern0() {
     not_drawn.set(
         100,
         PatternFrame {
-            method: ComposeMethod::Reduce,
+            method: ComposeMethod::Auto,
             ..frame(41, 0, 0)
         },
     );
@@ -242,7 +242,7 @@ element0,overlay,eye.png,0,0
         5,
         8,
         PatternFrame {
-            method: ComposeMethod::Replace,
+            method: ComposeMethod::Auto,
             ..frame(7, 0, 0)
         },
     );
@@ -260,7 +260,7 @@ element0,overlay,body.png,0,0
 animation1.interval,bind
 animation1.pattern0,overlay,-1,0,0,0
 animation2.interval,bind
-animation2.pattern0,reduce,3,0,0,0
+animation2.pattern0,auto,3,0,0,0
 animation3.interval,bind
 animation3.pattern0,insert,4,0,0,0
 animation4.interval,bind
@@ -485,7 +485,7 @@ impl Case {
 
 fn not_drawn(surface_id: u32) -> PatternFrame {
     PatternFrame {
-        method: ComposeMethod::Reduce,
+        method: ComposeMethod::Auto,
         ..frame(surface_id, 0, 0)
     }
 }

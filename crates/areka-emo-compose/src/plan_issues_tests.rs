@@ -19,8 +19,8 @@ use crate::world::EmoWorld;
 const TEXT: &str = "charset,UTF-8\r\n\
     surface0\r\n{\r\nelement0,overlay,base.png,0,0\r\n\
     animation0.interval,bind\r\nanimation0.pattern0,overlay,10,0,0,0\r\n\
-    animation1.interval,bind\r\nanimation1.pattern0,replace,20,0,0,0\r\n\
-    animation2.interval,sometimes\r\nanimation2.pattern0,move,0,0,5,5\r\nanimation2.pattern1,start,0,0,0,0\r\nanimation2.pattern2,replace,-1,0,0,0\r\n}\r\n\
+    animation1.interval,bind\r\nanimation1.pattern0,auto,20,0,0,0\r\n\
+    animation2.interval,sometimes\r\nanimation2.pattern0,move,0,0,5,5\r\nanimation2.pattern1,start,0,0,0,0\r\nanimation2.pattern2,auto,-1,0,0,0\r\n}\r\n\
     surface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
     animation0.interval,bind\r\nanimation0.pattern0,overlay,10,0,1,1\r\n}\r\n\
     surface20\r\n{\r\nelement0,overlay,part.png,0,0\r\n}\r\n";
@@ -38,7 +38,7 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
                 surface: 0,
                 animation: 1,
                 pattern: 0,
-                method: "replace".to_string(),
+                method: "auto".to_string(),
             },
             ShapeIssue::Cycle {
                 surface: 10,
@@ -57,7 +57,7 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
 fn cycle_comes_before_undrawn_for_the_same_pattern() {
     let world = EmoWorld::build(&parse(
         "charset,UTF-8\r\nsurface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
-         animation0.interval,bind\r\nanimation0.pattern0,replace,10,0,0,0\r\n}\r\n",
+         animation0.interval,bind\r\nanimation0.pattern0,auto,10,0,0,0\r\n}\r\n",
     ));
     assert_eq!(
         shape_issues(&world),
@@ -72,7 +72,7 @@ fn cycle_comes_before_undrawn_for_the_same_pattern() {
                 surface: 10,
                 animation: 0,
                 pattern: 0,
-                method: "replace".to_string(),
+                method: "auto".to_string(),
             },
         ]
     );
@@ -109,7 +109,7 @@ fn composing_repeatedly_adds_no_warn() {
     pattern.set(
         2,
         PatternFrame {
-            method: ComposeMethod::Replace,
+            method: ComposeMethod::Auto,
             ..frame(20, 0, 0)
         },
     );
@@ -220,5 +220,5 @@ fn unknown_word_without_a_target_is_undrawn_but_known_word_is_not() {
             method: "foo".to_string(),
         }]
     );
-    assert_eq!(issues("replace"), vec![]);
+    assert_eq!(issues("auto"), vec![]);
 }

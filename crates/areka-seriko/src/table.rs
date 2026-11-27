@@ -846,11 +846,11 @@ mod tests {
             "未知→Unknown（原文保持）"
         );
 
-        // 駆動判定は Overlay のみ（下流 method ゲートの土台）。
+        // 駆動判定は 7 つの意味（下流 method ゲートの土台）。
         assert!(frames[0].method.is_implemented());
         assert!(frames[1].method.is_implemented());
         assert!(!frames[2].method.is_implemented());
-        assert!(!frames[3].method.is_implemented());
+        assert!(frames[3].method.is_implemented());
         assert!(!frames[4].method.is_implemented());
     }
 

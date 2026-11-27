@@ -208,9 +208,9 @@ pub(crate) fn overlay_op(
 /// 2. `ops` を順に、合成先の全体を矩形として [`overlay_op`] で重ねる。置き場を先に合成先で
 ///    切るので、画面の外の画素は回らない（負座標・はみ出しのクリップ）。
 ///
-/// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。M1 の実装対象は
-/// [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）のみゆえ、`is_implemented() == false` の
-/// 未実装メソッド命令はパニックせず `debug!`（メソッド名・element id 付き）を発してその命令のみ
+/// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。描ける語は
+/// どれも overlay（＝SourceOver）として重ね、`is_implemented() == false` の
+/// 描けない語の命令はパニックせず `debug!`（メソッド名・element id 付き）を発してその命令のみ
 /// skip し、処理を継続する。
 ///
 /// # 整数専用
@@ -243,9 +243,7 @@ pub(crate) fn execute(
     let dst = out.bytes_mut();
 
     for op in ops {
-        // 未実装メソッド命令はパニックせず debug＋skip して処理を継続する（組むたびの
-        // 知らせなので debug）。M1 の実装対象は
-        // `Overlay`（SourceOver）のみ。`BlitOp` は surface id を保持しないため、
+        // 組むたびの知らせなので debug。`BlitOp` は surface id を保持しないため、
         // 命令化されている行動可能フィールド＝method（＋element id）をログに載せる。
         if !op.method.is_implemented() {
             tracing::debug!(
@@ -581,12 +579,12 @@ mod tests {
             Point { x: 0, y: 0 },
         );
 
-        // overlay 命令（実装済み・着弾 (0,0)）＋ Replace 命令（未実装・別画素 (1,0) を狙う）を混在。
-        // 着弾位置を分けることで「Replace が合成に寄与しない」を画素で直接検出できる（同一画素だと
+        // overlay 命令（実装済み・着弾 (0,0)）＋ Auto 命令（未実装・別画素 (1,0) を狙う）を混在。
+        // 着弾位置を分けることで「Auto が合成に寄与しない」を画素で直接検出できる（同一画素だと
         // 不透明 src の SourceOver が冪等で skip の有無を判別できない）。
         let mixed = vec![
-            op_at(0, 0),                                  // Overlay（実装済み）→ (0,0) に着弾。
-            op_with_method(1, 0, ComposeMethod::Replace), // 未実装 → skip・(1,0) に現れない。
+            op_at(0, 0),                               // Overlay（実装済み）→ (0,0) に着弾。
+            op_with_method(1, 0, ComposeMethod::Auto), // 未実装 → skip・(1,0) に現れない。
         ];
         let mut out_mixed = ComposedSurface::new(0, 0);
         execute(&mut out_mixed, Extent { w: 2, h: 1 }, &mixed, &atlas);
@@ -598,7 +596,7 @@ mod tests {
         assert_eq!(
             out_mixed.bytes(),
             out_only.bytes(),
-            "未実装 Replace は合成に寄与せず overlay のみと同一結果（skip・8.4）"
+            "未実装 Auto は合成に寄与せず overlay のみと同一結果（skip・8.4）"
         );
         assert_eq!(
             px(&out_mixed, 0, 0),
@@ -608,7 +606,7 @@ mod tests {
         assert_eq!(
             px(&out_mixed, 1, 0),
             [0, 0, 0, 0],
-            "未実装 Replace は着弾しない（skip・8.4）"
+            "未実装 Auto は着弾しない（skip・8.4）"
         );
     }
 
@@ -628,13 +626,13 @@ mod tests {
         );
 
         let ops = vec![
-            op_with_method(0, 0, ComposeMethod::Replace),
+            op_with_method(0, 0, ComposeMethod::Auto),
             op_with_method(
                 0,
                 0,
                 ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
             ),
-            op_with_method(0, 0, ComposeMethod::Base),
+            op_with_method(0, 0, ComposeMethod::Unknown("x".into())),
         ];
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);

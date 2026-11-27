@@ -214,8 +214,8 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
     );
 
     let cases = [
-        (ComposeMethod::Replace, "Replace"),
-        (ComposeMethod::Base, "Base"),
+        (ComposeMethod::Auto, "Auto"),
+        (ComposeMethod::Unknown("x".into()), "Unknown"),
         (
             ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
             "Blend",

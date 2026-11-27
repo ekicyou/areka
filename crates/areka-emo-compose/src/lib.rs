@@ -30,6 +30,8 @@ pub use error::ComposeError;
 pub mod method;
 
 pub use method::{BlendKind, BlendMode, ComposeMethod};
+pub mod draw_plan;
+pub use draw_plan::{DrawPlan, IRect, Mix, PlanItem, mix_of};
 pub mod bind;
 mod bind_steps;
 mod budget;

@@ -326,7 +326,7 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
         10,
         100,
         PatternFrame {
-            method: ComposeMethod::Replace,
+            method: ComposeMethod::Auto,
             ..frame(41, 1, 1)
         },
     );
