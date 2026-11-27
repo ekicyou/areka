@@ -140,7 +140,7 @@
   - _Dispatch: mechanical — 決まったコマンドで確かめる_
   - _Requirements: 8.1, 8.4_
 
-- [ ] 7.2 段 4 の実機の確かめ直しとぱすた開発への知らせ
+- [x] 7.2 段 4 の実機の確かめ直しとぱすた開発への知らせ
   - 排他テストの机を持ち、試験の根と検体はワークツリーの `target\` の下。判定の分岐の水準まで `RUST_LOG` を開けて、ぱすたのゴーストを areka で起こす
   - DPI の違う 2 つの画面で MCP の `sakurascript` から `\0\![set,balloonoffset,<隣の画面へ届く x>,0]` を打ち、`currentghost.balloon.scope(0).currentmonitor.dpi` と `currentghost.scope(0).currentmonitor.dpi` を読む。`[balloon-limit] Clamp` の行が出ないか `monitor="balloon"` であること・ぱすたの倍率のずれの台詞が出ないことをログで確かめ、バルーンの窓が別の DPI の画面へ移ったときの大きさの変化と位置の揺れを見る
   - 結果（合否と根拠のログの行）をぱすた開発のセッションへ知らせ、机はすぐ返す
@@ -162,3 +162,5 @@
 - 5.1 のずらしの命令を断る警告の `reason` は `OffsetArgReason` の Debug の形（`MissingAxis` など）で出る。向きの腕は `"missing_id"`。
 - 5.3 の呼び手は DPI の相だけ。DPI で変わった寸が drain の後段の `reconcile_reported_sizes`（第 2 経路）で着地すると据え直しは走らない。台本の値のあるスコープはバルーン窓の DPI の巡に書き込みが 2 本（寸と据え直し）になり、`transition_judge_verdict.rs` の `WRITES_PER_WINDOW_MAX = 1` に触れうる。どちらも 7.2 の実機で見る。
 - 7.1 の確かめ（2026-11-28）: `cargo test -p areka-placement` 1092 passed・`-p areka-runtime` 1129 passed（3 ignored）・`-p ukadoc-survey` 526＋105＋5＋5 passed・`-p log-capture-kit --test doc_tree_guard_test` 9 passed・`-p areka consumer_ledger` 4 passed・`cargo fmt --all -- --check` 緑。`git diff --numstat main...HEAD` で約束の 6 本・`move_cue_args.rs`・`resolver.rs`・`Cargo.toml`・`Cargo.lock` は差分なし、`follow/window_move.rs` は 13 追加・14 削除。直しの前の赤の証跡は 2.1〜5.3 の各タスクの実装係の報告にあり、レビューで確かめた（2.3・6 は支えと文書のため形が違う）。
+- 7.2 の実機（2026-11-28・走り bso72・0733136b6）: 192dpi と 144dpi の 2 画面で ` \![set,balloonoffset,-1000,0]` を打ち、バルーンの DPI 144・本体の DPI 192 を読んだ。scope 0 の `Clamp` は 3 本とも `monitor="balloon" script=true`、倍率のずれの台詞は 0 件、寸は 872×900 → 654×675 の 1 回で位置は揺れない。記録はワークツリーの `target\pasta-verify
+otes-balloon-script.md`。ぱすた開発のセッションへ知らせた。DPI の巡にバルーン窓への書き込みが 4 本（位置は同じ）あり、`WRITES_PER_WINDOW_MAX = 1` の判定には触れうる。
