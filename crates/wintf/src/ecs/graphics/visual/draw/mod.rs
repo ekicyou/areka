@@ -14,6 +14,8 @@ mod emit;
 #[cfg(test)]
 mod emit_blend_tests;
 #[cfg(test)]
+mod emit_group_tests;
+#[cfg(test)]
 mod emit_layer_tests;
 #[cfg(test)]
 mod emit_placement_tests;

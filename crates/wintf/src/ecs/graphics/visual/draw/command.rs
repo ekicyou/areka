@@ -7,7 +7,7 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 
-/// 描く列の 1 命令。push と pop は必ず対で、入れ子になる。同じ節では外から不透明度の層 → 切り抜き。
+/// 描く列の 1 命令。push と pop は必ず対で、入れ子になる。同じ節では外から不透明度の層 → まとめ → 切り抜き。
 ///
 /// 切り抜きの内側の重ね方とブレンドは、矩形・角丸・回転した矩形・任意の図形のどの切り抜きでも、
 /// 切り抜きが無いときと同じく下の画素に効き、切り抜きの外側の画素は変わらない。
@@ -25,6 +25,10 @@ pub enum DrawCommand {
     /// 節と子孫をまとめた 1 枚に不透明度を掛けて重ねる層（透明から始める）。
     PushOpacity(OpacityLayer),
     PopOpacity,
+    /// 節と子孫を透明から始まる 1 枚に描き、閉じるとき節の変換を当てて `mix` で重ねるまとめ（`VisualGroup`）。
+    /// 中の命令の行列と矩形もほかと同じ根からの DIP。
+    PushGroup(GroupLayer),
+    PopGroup,
 }
 
 /// 描く 1 件（節の描く中身を世界の行列で置いたもの）。
@@ -80,5 +84,21 @@ pub struct OpacityLayer {
     /// `Visual::clamped_opacity` の値（0 より大きく 1.0 未満）。
     pub opacity: f32,
     /// 層の中身の範囲（根からの DIP）。節の部分木の世界の外接矩形と、外側の有効な矩形の交わり。
+    pub world_aabb: Aabb,
+}
+
+/// まとめ。
+#[derive(Clone, Debug)]
+pub struct GroupLayer {
+    /// まとめを積んだ節。
+    pub entity: Entity,
+    /// その節の `VisualVersion`（無ければ 0）。
+    pub version: u64,
+    pub mix: MixMode,
+    /// 節の局所→世界（根からの DIP）の変換。逆を持つ（潰れた行列の節は `build` が間引く）。
+    pub world_mat: Matrix3x2,
+    /// 1 枚の範囲（節の局所の DIP・整数へ外向き）。`world_aabb` を局所へ写した外接矩形。
+    pub local_aabb: Aabb,
+    /// 中身の範囲（根からの DIP）。節の部分木の世界の外接矩形と、切り抜きの後の有効な矩形の交わり。
     pub world_aabb: Aabb,
 }

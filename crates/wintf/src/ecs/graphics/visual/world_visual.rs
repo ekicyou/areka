@@ -1,6 +1,7 @@
 use super::promotion::Phase;
 use super::{
-    AutoPromotion, MixMode, OwnSurface, Visual, VisualDrawContent, VisualTransform, VisualVersion,
+    AutoPromotion, MixMode, OwnSurface, Visual, VisualDrawContent, VisualGroup, VisualTransform,
+    VisualVersion,
 };
 use crate::ecs::Size;
 use crate::ecs::common::MAX_ANCESTOR_DEPTH;
@@ -71,6 +72,7 @@ impl Default for WorldVisual {
 /// 節の種類＝`WorldVisual` を持ち、`GraphicsCommandList` と `OwnSurface` を持たない（自動で上げた持ち主も
 /// 節の種類）。ほかは手動の描画面の持ち主。新しい欄は先頭に置く（後ろから数える `..` の形を崩さない）。
 pub(crate) type FillData = (
+    Option<Ref<'static, VisualGroup>>,
     Has<GraphicsCommandList>,
     Has<OwnSurface>,
     Option<&'static AutoPromotion>,
@@ -261,7 +263,7 @@ impl AncestorAcc {
 ///   節の種類なので通り抜ける。
 /// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
 ///   `reported` で、誤りが続く間は 1 回だけにする（止めるは毎回行う）。
-/// - `Visual` か描く中身が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
+/// - `Visual`・描く中身・まとめ（`VisualGroup`）が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
 ///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`
 ///   （描き直しになる）・`transform_origin`（版が余分に上がるだけ）も入る。
 /// - 値が変わった節だけ書く。戻り値「変化あり」は、版の上がり・行列などの変化・節の入り
@@ -291,6 +293,7 @@ pub(crate) fn fill_world_visuals(
         .collect();
     while let Some((e, depth, parent, hidden, acc)) = stack.pop() {
         let Ok((
+            group,
             has_list,
             has_own,
             auto,
@@ -349,7 +352,9 @@ pub(crate) fn fill_world_visuals(
             }
             continue;
         }
-        let bump = visual.is_changed() || content.as_ref().is_some_and(|c| c.is_changed());
+        let bump = visual.is_changed()
+            || content.as_ref().is_some_and(|c| c.is_changed())
+            || group.as_ref().is_some_and(|g| g.is_changed());
         if bump {
             bumped.push(e);
         }

@@ -14,6 +14,7 @@ use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 mod draw;
 mod draw_content;
 mod draw_tree;
+mod group;
 mod placement;
 mod promotion;
 mod promotion_round;
@@ -58,6 +59,7 @@ pub(crate) use draw::{emit, emit_within};
 pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
+pub use group::*;
 #[cfg(test)]
 pub(crate) use placement::PlacementClip;
 pub use placement::SurfacePlacement;

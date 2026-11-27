@@ -360,6 +360,7 @@ pub(crate) fn layer_entry(
 
 /// 描く列 `commands`（`build` の出した列）と描画面の拡大・大きさから比べの項の列を作る。
 /// 項は Pop 以外の命令と 1 対 1（同じ順）。決められない値が 1 つでもあれば `None`。
+/// まとめ（`PushGroup`）を含む列も `None`（その描画面は毎回全部描く）。
 /// 同じ入力からはいつも同じ列。COM を呼ばない。
 pub(crate) fn entries(
     commands: &[DrawCommand],
@@ -408,6 +409,7 @@ pub(crate) fn entries(
                 out[open as usize].end = index;
                 continue;
             }
+            DrawCommand::PushGroup(_) | DrawCommand::PopGroup => return None,
         };
         stack.push(parent.inner(index, &entry));
         out.push(entry);
