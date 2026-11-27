@@ -41,7 +41,7 @@
   - 重ね方の 6 つの意味を、element定義・pattern定義（通常のアニメーション）・着せ替えで描くこと。
   - pattern定義の `base`（通常のアニメーションと着せ替えの pattern0）。コマのサーフェスの当たり判定への切り替え（仮定 3）。
   - 「描ける語か」の門を、語ごとの 1 か所の答えに替えること。描けない語の記録の出し方。
-  - 合成を Direct2D の道へ移し、合成の答えを読む働き（クリックの透過・当たり判定の名前・画像の書き出し・窓を出さない書き出し・バルーンの背景色）を画面と同じ答えへ付け替えること（Requirement 7・分割の候補）。
+  - 合成を Direct2D の道へ移し、合成の答えを読む働き（クリックの透過・当たり判定の名前・画像の書き出し・窓を出さない書き出し）を画面と同じ答えへ付け替えること（Requirement 7）。バルーンの背景色はバルーンのアトラスの頁を読み、シェルの合成の答えを読まないので付け替えない（`crates/areka-runtime/src/balloon_background.rs`）。
   - 決定論のテスト（語ごとの画素）・網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の該当の行・`doc/COMPAT_ARCHITECTURE.md` §8・実機の確かめ。
 - **Out of scope**:
   - `blend-*` の画素の式と、網羅台帳の `blend-*` の 55 行・旧い別名 2 行＝`draw-methods-blend`。この仕様は語を運び、描けない語として記録するところまで。
@@ -55,7 +55,7 @@
   - 上流（どれも完了・決めはそのまま引き継ぐ）: `element-base-method`（語の集合の 1 関数・描けない行の警告・element定義の `base`）・`emo-compose`・`seriko-runtime`・`surface-element-nesting`・`wintf-d2d-composite-rules`（節ごとの重ね方・描画面ごとの入れ物・1 画素と全体の読み戻し・WARP のテスト）・`wintf-visual-tree`・`wintf-visual-damage-redraw`（範囲だけの描き直し）・`hit-id-pass`（当たりの ID の描き先・α 0.5 未満は当たり無し）。
   - `hit-id-pass` の申し送り: α マスクの出どころを替えるときは、クリックの透過と当たり判定の名前の解決を同じ新しい出どころへ一緒に付け替える。
   - 下流: `draw-methods-blend` は、この仕様の読み手と「描けるか」の 1 か所に乗り、読み手に触らずに `blend-*` を描く。`compose-f16-precision`・`element-clipping-option`・`ghost-alias-file` はこの仕様の後。
-  - 同じウェーブ（C28）の約束: 合成の crate の `Cargo.toml` に依存を足さない（`Cargo.lock` の席は `sylphya-sqlite-kvs`）。画像の書き出しの付け替えは `presenter/read.rs` の中で閉じ、本体の `crates/areka/src/mcp/dump_surface.rs` に触らない。wintf に触らない。seriko は `table.rs` のテストの期待 1 か所のほかに触らない。`plan_extent.rs` の本体に触らない。台本の側（`crates/areka-parsers/src/sakura/`・`crates/areka-sakura/`）に触らない。§8 と網羅台帳は別々の行だけ。
+  - 同じウェーブ（C28）の約束: 合成の crate の `Cargo.toml` に依存を足さない（`Cargo.lock` の席は `sylphya-sqlite-kvs`）。画像の書き出しの付け替えは emo-present の `presenter/snapshot.rs`（書き出しの口）と `presenter/read.rs` の中で閉じ、返す値の形（`ComposedSurface` のバイトと寸法）を保って、本体の `crates/areka/src/mcp/dump_surface.rs` に触らない。wintf に触らない。seriko は `table.rs` のテストの期待 1 か所のほかに触らない。`plan_extent.rs` の本体に触らない。台本の側（`crates/areka-parsers/src/sakura/`・`crates/areka-sakura/`）に触らない。§8 と網羅台帳は別々の行だけ。
 
 ## Requirements
 
@@ -143,7 +143,7 @@
 2. When 当たり判定の名前を求めるとき, the areka shall クリックの透過と同じ合成の答えで「不透明度 0.5 未満の点は当たり無し」を確かめ、2 つの判定が同じ点で食い違わないようにする。
 3. When MCP の `dump_surface` でサーフェスの画像を求められたとき, the areka shall 画面に出ている合成の答えと同じ画素を返し、今の応答の形を変えない。
 4. When 窓を出さない書き出し（`--offline-dump`）でサーフェスを書き出すとき, the areka shall 画面に出す合成と同じ規則で描いた画素を書き出す（仮定 9）。
-5. The areka shall バルーンの背景色（`\f[disable]` の文字色に使う色）を今と同じ答えで求める（仮定 10）。
+5. The areka shall バルーンの背景色（`\f[disable]` の文字色に使う色）を、今と同じくバルーンのアトラスの頁の画素から求め、シェルの合成を移しても答えを変えない。
 6. If 合成の答えの画素が読めない, the areka shall `error!` を記録し、クリックの透過と当たり判定の名前を完了 `hit-id-pass` の「読めないとき」の扱いと同じ答えにし、panic にしない。
 
 ### Requirement 8: 今のシェルの見え方と描き直しの範囲
@@ -192,7 +192,7 @@
 7. **element定義のオプションの並び**: brief の「見つけた穴」に従い、`Element` に描画メソッドの欄を足すとき、オプションの並びを運ぶ欄（転記だけ・働きは `element-clipping-option`）も一緒に足すとした。範囲に入れるかは討議で決める。
 8. **最初の element で語の答え**: 正典は「ほとんどのものが `base` と同義」と書くが、全透明のベースに式をそのまま当てると `overlay-fast`・`reduce` は何も描かない。下書きは式をそのまま当てるとした。SSP の MCP で測ってから決める。
 9. **窓を出さない書き出し**: `structure.md` は `offline_dump/` に `wintf` を使わせない。合成を D2D へ移すと、書き出しも同じ規則で描くには emo-present の口を通す（`wintf` を直に使わない）か、CPU の合成を書き出しのために残すかの選択になる。開発者の決め（描画の絵は GPU が前提・CPU 案を推奨に出さない）に従い、同じ D2D の合成の答えを使う形とし、手段は設計で決める。
-10. **バルーンの背景色**: 今はバルーンの面 0 の焼いた絵の原点の画素を読み、シェルの合成の答えは読まない。答えは変わらない見込みとし、出どころを替える要るかは設計で確かめる。
+10. **バルーンの背景色**: （ギャップ分析で解消）バルーンのアトラスの頁の原点の画素を読み、シェルの合成の答えは読まない（`balloon_background.rs:1-40`）。付け替えは要らない（Requirement 7.5）。
 11. **範囲だけの描き直し**: `wintf-visual-damage-redraw` の申し送りどおり、シェルを描画の木へ移すと、まばたきが大きな下地の絵の件に触れて毎回全面の描き直し（`covers_surface`）になる見込み。今の範囲だけの重ね直しの効きを保つには、中身の側が「画素どおり」を申告する仕組みが要るが、wintf に触らない約束があるので、その仕組みの持ち主（この仕様か wintf の別の仕様か）は討議で決める。下書きは「効きを保つ」を要件にした。
 12. **語の比べ方**: element定義は完了 `element-base-method` の決め（完全一致・大文字は描かない・`add`・`bind` は描かない）を保つとした。pattern定義の語は今どおり合成の正規化（大小文字・区切りを無視）を通る。この食い違いを本仕様で揃えるかは討議で決める（揃えると今描けていない大文字の `Overlay` の行の見え方が変わる）。
 13. **WARP のテストの置き場**: wintf の WARP の支え（`emit_test_support.rs` の `warp_device` ほか）は `pub(crate)` で、areka の crate からは使えない。wintf に触らない約束の中で、emo-present の側で WARP の描き手を作るか、wintf の口を公開する別の仕様を先に出すかは設計で決める（答えでタスクとウェーブの約束が変わる）。
