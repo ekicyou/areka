@@ -43,6 +43,7 @@
   - 「描ける語か」の門を、語ごとの 1 か所の答えに替えること。描けない語の記録の出し方。
   - 合成を Direct2D の道へ移し、合成の答えを読む働き（クリックの透過・当たり判定の名前・画像の書き出し・窓を出さない書き出し）を画面と同じ答えへ付け替えること（Requirement 7）。バルーンの背景色はバルーンのアトラスの頁を読み、シェルの合成の答えを読まないので付け替えない（`crates/areka-runtime/src/balloon_background.rs`）。
   - wintf（`crates/wintf/`）の足りない口: クリックの透過を合成の入れ物の 1 画素で決める当たりの形、描画の木を画面の外の絵へ描く口、WARP の描き手でその口を回す足場の公開（Requirement 7.7・7.8）。
+  - wintf の「まとめの節」（透明から始まる 1 枚に描き、重ね方つきで親へ重ねる節）。入れ子の面を 1 枚として重ね（Requirement 2.7・正典「element合成の結果が一枚の画像のように扱われる」）、emo の描画面を原寸で合成してから拡大する（Requirement 8.1・2026-11-27 設計の討議）。
   - 画像の読み手（`crates/areka-emo-atlas`）の `asis` 用の読み（乗算せず・透過色を抜かず・縁を切らない）と、`seriko.use_self_alpha,0` の読みの疑いの確かめと直し（Requirement 2.5・2.9）。
   - 決定論のテスト（語ごとの画素）・網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の該当の行・`doc/COMPAT_ARCHITECTURE.md` §8・実機の確かめ。
 - **Out of scope**:

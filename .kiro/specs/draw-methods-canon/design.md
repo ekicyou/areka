@@ -219,9 +219,9 @@ crates/
 
 | ファイル | 訳 | 本質の理由 |
 |---|---|---|
-| wintf の `visual/group.rs` ほか（まとめの節） | 要件の境界は wintf の足す口を 3 つ（当たりの形・画面の外の口・WARP）に挙げる。入れ子の面を 1 枚にまとめ、重ね方つきで親へ重ねる口が wintf に無い | 正典「element合成の結果が一枚の画像のように扱われる」・開発者の決め「入れ子の面は透明から始まる 1 枚の層」。不透明度の層は 1.0 未満のときだけ積まれ、閉じるときは SourceOver しか持たない（OPEN QUESTION 1） |
-| `areka-runtime/src/hit_region.rs`・`areka-input/src/lib.rs`・collision-probe の例 | 名前の解決が入れ物の画素を読むので `&World` が要る | 7.2（クリックの透過と同じ答え）。`resolve_hit_owned` はもう `&World` を持つ（OPEN QUESTION 2） |
-| `areka-placement/src/measure.rs`・例 4 本・`film_playback_e2e_tests.rs`・`dump_surface_gpu_test_support.rs` | CPU の合成の口 `Composer::compose` を外す | CPU の合成を残すと 7.8（描き方を 2 つ持たない）を破る（OPEN QUESTION 3） |
+| wintf の `visual/group.rs` ほか（まとめの節・討議で足すと確定） | 要件の境界は wintf の足す口を 3 つ（当たりの形・画面の外の口・WARP）に挙げていた（討議の後に要件の境界へ足した）。入れ子の面を 1 枚にまとめ、重ね方つきで親へ重ねる口が wintf に無い | 正典「element合成の結果が一枚の画像のように扱われる」・開発者の決め「入れ子の面は透明から始まる 1 枚の層」。不透明度の層は 1.0 未満のときだけ積まれ、閉じるときは SourceOver しか持たない（OPEN QUESTION 1） |
+| `areka-runtime/src/hit_region.rs`・`areka-input/src/lib.rs`・collision-probe の例（討議で確定・C28 と重なり 0） | 名前の解決が入れ物の画素を読むので `&World` が要る | 7.2（クリックの透過と同じ答え）。`resolve_hit_owned` はもう `&World` を持つ（OPEN QUESTION 2） |
+| `areka-placement/src/measure.rs`・例 4 本・`film_playback_e2e_tests.rs`・`dump_surface_gpu_test_support.rs`（討議で確定・C28 と重なり 0） | CPU の合成の口 `Composer::compose` を外す | CPU の合成を残すと 7.8（描き方を 2 つ持たない）を破る（OPEN QUESTION 3） |
 
 ## System Flows
 
@@ -514,7 +514,7 @@ impl EmoWorld {
 pub struct VisualGroup { pub mix: MixMode }
 ```
 - 節にする（描画面の持ち主にしない）。同じ節の不透明度の層と切り抜きの外側に積む順は「不透明度 → まとめ → 切り抜き」。
-- 描き方の約束: 中は透明から始まる（`D2D1_LAYER_OPTIONS1_NONE` と同じ答え）・中の重ね方は中で先に描いた画素にだけ効く・閉じるとき `mix` で親へ重なる。`SOURCE_OVER` なら不透明度 1 の層で足りる。それ以外は中間の絵を通す（命令の列か作業用の絵かは R1 の WARP の測りで決める・答えは同じ約束）。
+- 描き方の約束: 中は透明から始まる（`D2D1_LAYER_OPTIONS1_NONE` と同じ答え）・中の重ね方は中で先に描いた画素にだけ効く・中は節の局所の座標（変換の前）の解像度で描き、閉じるとき節の変換を当てて `mix` で親へ重なる（emo の描画面の原寸のまとめが「原寸で合成してから k 倍」をこれで得る）。`SOURCE_OVER` なら不透明度 1 の層で足りる。それ以外は中間の絵を通す（命令の列か作業用の絵かは R1 の WARP の測りで決める・答えは同じ約束）。
 - 差分の範囲: `SOURCE_OVER` なら部分木の範囲、それ以外は囲む矩形の切り抜きか全面（`SOURCE_OVER` でない件と同じ）。自動の上げ下げ: まとめの節の中は上げない（`ancestor_layer` と同じ・上げると層の外へ出て答えが変わる）。
 
 #### OffscreenRender
@@ -538,7 +538,7 @@ pub fn surface_alpha_at(world: &World, owner: Entity, x: u32, y: u32) -> AlphaRe
 pub enum HitTestMode { None, Bounds, AlphaMask, NamedRegions, SurfaceAlpha }
 impl HitTest { pub fn surface_alpha() -> Self; }
 ```
-- 入れ物から 1 画素をその場で読む（前のフレームの値・CPU の α の表を使わない・7.7）。同じ座標・同じ世代は控えが答える。自動で上げた子孫の持ち主は画面で同じ点に重なるので、その入れ物も読み、α を `1-(1-a)(1-b)` で重ねる（上げられる部分木は `SOURCE_OVER` だけ）。
+- 入れ物から 1 画素をその場で読む（前のフレームの値・CPU の α の表を使わない・7.7）。同じ座標・同じ世代は控えが答える。emo の描画面の下はまとめの節 1 つで包む（下の「mount」）ので、まとめの中は自動で上げられず、画面の絵は `emo-surface` の入れ物 1 枚に揃う。一般の持ち主で自動で上げた子孫が在るときは、その入れ物も読み、α を `1-(1-a)(1-b)` で重ねる（上げられる部分木は `SOURCE_OVER` だけ・wintf の一般の約束）。
 - 当たりの腕: `GlobalArrangement.bounds` から持ち主の物理ピクセルへ直し、`Alpha(a)` が `a < 128` なら当たらない（0.5 未満は透過・7.1）。`Outside` は当たらない。`Unreadable` は当たらない（`hit-id-pass` の「読めないときは当たり無し」・7.6）＋読めない間の最初の 1 回だけ `error!`（読めたら印を戻す）。
 - UI スレッドで同期（`WM_NCHITTEST` とクリックの透過の係）。1 画素の待ちは中央値 516 µs（`wintf-d2d-composite-rules` の測り）。頻度の測りは R4。
 
@@ -591,7 +591,7 @@ impl OffscreenRenderer {
 #### Presenter の変更
 
 - **show**（8.3）: `composer.plan_into` → 合成メモへ計画を入れる → `GpuAtlas` を用意 → `DrawNodes::sync`（`emo-surface` の下）→ `paint_hit`（鍵が変わったときだけ）。CPU の α マスク・表示の絵の席・`record_display` は無い。`ComposeError` の扱い（`EmptyComposition`・`ExtentTooLarge`・`SurfaceNotFound`）は今のまま。
-- **mount**: `emo-surface` は `OwnSurface`・`Visual`・`Arrangement{0, k, native}`・`HitTest::surface_alpha()`（または `none`）・`ChildOf(window)`。根の命令の列を持たない（根の命令の列と描画の木の両持ちは変化のたびに全部になるため）。`emo-surface` は窓の client の原点に置く（名前の解決が client 物理ピクセルをそのまま持ち主の物理ピクセルとして読む前提・テストで固める）。
+- **mount**: `emo-surface` は `OwnSurface`・`Visual`・`Arrangement{0, k, native}`・`HitTest::surface_alpha()`（または `none`）・`ChildOf(window)`。根の命令の列を持たない（根の命令の列と描画の木の両持ちは変化のたびに全部になるため）。`emo-surface` の唯一の子は**原寸のまとめの節**（`VisualGroup { mix: SOURCE_OVER }`・原寸の座標・k 倍の変換）で、計画の節は全部その下に置く。今と同じ「原寸で合成してから拡大」になり、k が整数でないときも重なった縁と隣り合う部品の境が今と同じ答えになる（8.1・継ぎ目を出さない）。まとめの中は自動で上げられないので、画面の絵は `emo-surface` の入れ物 1 枚に揃い、書き出し・当たりの読みと食い違わない。まとめの節は原寸の解像度で中を描き、閉じるときに k 倍で親へ重ねる（wintf の約束）。`emo-surface` は窓の client の原点に置く（名前の解決が client 物理ピクセルをそのまま持ち主の物理ピクセルとして読む前提・テストで固める）。
 - **hit**（4.5・7.2・7.6）: `hit_region_client(&self, world: &World, target, x, y)`。`surface_alpha_at(world, emo_surface, x, y)` が 128 未満・外・読めない → `None`（読めないは `error!` を読めない間に 1 回）。それ以上なら ÷k の点で ID の描き先を読み、`hit_regions(base_surface)` の名前を返す。`resolve_hit_region(world, presenter, scope, x, y)`（runtime）と `resolve_hit_owned`（input）が `world` を渡す。
 - **hit_picture**（4.5）: `HitPicture { surface_id, base_surface, first, target }`。鍵が `(surface_id, base_surface, native)` で同じなら塗り直さない。塗る領域は `hit_regions(base_surface)`。
 - **snapshot・read**（7.3）: 型は今のまま。`last_shown` は合成メモの項の `snapshot: OnceCell<ComposedSurface>` を、初めて読まれたとき `OffscreenRenderer::render_plan`（目標の `GpuAtlas`）で原寸に描いて満たし、その参照を返す。描けなければ `error!` を残して `Some((id, None))`（`dump_surface.rs` の今の分岐が `compose_last_shown` を呼び、その `Err(ComposeError::Render{..})` を返す）。`compose_alone`・`compose_last_shown` は新しい `Composer` の計画を `render_plan` で描く。`read_back` は `last_shown` と同じ絵のバイト。
@@ -649,7 +649,7 @@ impl OffscreenRenderer {
 
 ### GPU-presence Tests（実 GPU）
 
-- `screen_offscreen_gpu_tests.rs`（7.3・7.8・9.3）: k＝1 で画面の入れ物（`SurfaceReadback::read_all`）と `last_shown` の答えのバイト一致。まばたきの 1 コマを替えたときの入れ物と、同じ状態を新しく全部描いた入れ物のバイト一致（範囲だけ＝全部）。
+- `screen_offscreen_gpu_tests.rs`（7.3・7.8・9.3）: k＝1 で画面の入れ物（`SurfaceReadback::read_all`）と `last_shown` の答えのバイト一致。k＝1.25 で、画面の入れ物と「原寸の答えを k 倍した絵」が一致し、隣り合う部品の境に継ぎ目（α の落ち込み）が無い。まばたきの 1 コマを替えたときの入れ物と、同じ状態を新しく全部描いた入れ物のバイト一致（範囲だけ＝全部）。
 - `surface_alpha_hit_tests.rs`（7.1・7.2・7.6・9.4）: `reduce` で抜いた点・`replace` で透明に上書きした点・透過色の点で、`HitTestMode::SurfaceAlpha` が透過し、`hit_region_client` が `None`。不透明な点では両方が当たる。読めない（装置なし）で両方が当たり無し＋`error!` 1 件。wintf の `surface_alpha_tests.rs`（自動の持ち主の重ね）。
 - `presenter_hit_picture_tests.rs`: `base` のコマで領域と ID の描き先が置き換え先の面になり、終われば戻る（4.5・4.6）。
 
@@ -680,7 +680,7 @@ impl OffscreenRenderer {
 
 ## Performance & Scalability
 
-- 今の 1 回: CPU の範囲の重ね直し＋原寸の絵を毎回 `CreateBitmap`＋根の命令の列が替わるので wintf は全部（`RootList`）。移した後: 計画＋節の差し替え＋wintf の合成。まばたきの節は下地の大きな絵の節と交わるので `CoversSurface` で全部になる見込み（今と同じく全部・上げは無くなる）。測りで確かめる（8.2）。
+- 今の 1 回: CPU の範囲の重ね直し＋原寸の絵を毎回 `CreateBitmap`＋根の命令の列が替わるので wintf は全部（`RootList`）。移した後: 計画＋節の差し替え＋wintf の合成。まばたきの節は下地の大きな絵の節と交わるので `CoversSurface` で全部になる見込み（今と同じく全部・毎回の上げは無くなる）。原寸のまとめの節の中は自動で上げないので、まばたきのコマを別の描画面へ上げる効きは使わない。測りで確かめる（8.2）。
 - 頁の上げは装置ごとに 1 度。葉の命令の列は `ElementId` ごとに 1 度。
 - 当たりの 1 画素の読みは UI スレッドで 0.3〜0.8 ms 待つ。同じ座標・同じ世代は 0。`always` のアニメーション中にカーソルを窓の上で止めると、世代が替わるたびに 1 回読む。
 
@@ -700,20 +700,20 @@ impl OffscreenRenderer {
 - **R2**: CPU の `div255` の SourceOver と D2D（WARP）の差の最大（8.1）。
 - **R3**: 更新の所要の前後（8.2）。
 - **R4**: 当たりの 1 画素の読みの頻度と待ち。
-- **R5**: k が整数でないとき、element ごとに拡大して描く答えと、今の「原寸で合成してから拡大」の答えの差（隣り合う部品の継ぎ目）。
+- **R5**: （討議で解消）k が整数でないときは原寸のまとめの節で「原寸で合成してから拡大」を保つ。実装ではまとめの節の中間の絵の解像度が原寸になることを WARP と実 GPU で確かめる。
 
 ### 設計の討議へ渡す問い（OPEN QUESTIONS・仮定つき）
 
-1. **wintf のまとめの節（`VisualGroup`）**: 要件の境界が挙げる wintf の口 3 つの外。仮定＝足す（入れ子の面を 1 枚にして重ね方つきで重ねる口が wintf に無く、不透明度の層は 1.0 未満でしか積まれず SourceOver でしか閉じない）。代わりの道＝emo-present が入れ子の面を命令の列 1 本に記録して葉にする（中の重ね方が列の中だけに効くかは R1 次第）。
-2. **名前の解決に `&World` を渡す**: `areka-runtime/src/hit_region.rs`・`areka-input/src/lib.rs`・collision-probe の例を触る（C28 の触る表の外）。仮定＝渡す（`resolve_hit_owned` は既に `&World` を持つ）。
-3. **CPU の合成の口 `Composer::compose` を外す**: `areka-placement/src/measure.rs`（寸法は計画の外形から）・例 4 本・`film_playback_e2e_tests.rs`・`dump_surface_gpu_test_support.rs` を触る。仮定＝外して付け替える（残すと描き方が 2 つになる）。
+1. **（討議で確定・足す）wintf のまとめの節（`VisualGroup`）**: 入れ子の面と、emo の描画面の原寸の包みの両方に使う。 要件の境界が挙げる wintf の口 3 つの外。仮定＝足す（入れ子の面を 1 枚にして重ね方つきで重ねる口が wintf に無く、不透明度の層は 1.0 未満でしか積まれず SourceOver でしか閉じない）。代わりの道＝emo-present が入れ子の面を命令の列 1 本に記録して葉にする（中の重ね方が列の中だけに効くかは R1 次第）。
+2. **（討議で確定・渡す。C28 のほかの 5 本と重なり 0）名前の解決に `&World` を渡す**: `areka-runtime/src/hit_region.rs`・`areka-input/src/lib.rs`・collision-probe の例を触る（C28 の触る表の外）。仮定＝渡す（`resolve_hit_owned` は既に `&World` を持つ）。
+3. **（討議で確定・外して付け替える。C28 と重なり 0）CPU の合成の口 `Composer::compose` を外す**: `areka-placement/src/measure.rs`（寸法は計画の外形から）・例 4 本・`film_playback_e2e_tests.rs`・`dump_surface_gpu_test_support.rs` を触る。仮定＝外して付け替える（残すと描き方が 2 つになる）。
 4. **読めないときのクリックの透過**: 要件 7.6 のとおり当たり無し（クリックは下の窓へ）。装置を失っている間はゴーストを押せない。仮定＝要件のまま＋`error!` を読めない間に 1 回。
-5. **k が整数でないときの継ぎ目（R5）**: element ごとに拡大して描くので、隣り合う部品の縁が今（原寸で合成してから拡大）と違いうる。仮定＝葉を LINEAR の `DrawBitmap` で描き、k＝1.25 で継ぎ目の有無を実 GPU で確かめる。継ぎ目が出るなら、面の根を原寸のまとめにして拡大する形（wintf のまとめの節の解像度の指定）を議題にする。
+5. **（討議で確定・原寸のまとめの節で包む。Presenter の mount）k が整数でないときの継ぎ目（R5）**: 以下は下書きの文。 element ごとに拡大して描くので、隣り合う部品の縁が今（原寸で合成してから拡大）と違いうる。仮定＝葉を LINEAR の `DrawBitmap` で描き、k＝1.25 で継ぎ目の有無を実 GPU で確かめる。継ぎ目が出るなら、面の根を原寸のまとめにして拡大する形（wintf のまとめの節の解像度の指定）を議題にする。
 6. **「最初の element」の決め方**: （SSP で測って解消）描くものが在る最初の項（仮定 A・§12）。
 7. **置き換えの `base` が重なるとき**: （SSP で測って解消）描く順の後が勝つ（仮定 B・§12）。
 8. **`base` のコマが無い面・`-1` を指すとき**: （SSP で測って解消）置き換えず何も描かない（仮定 C・§12）。
-9. **動く絵の `asis` と `use_self_alpha,0`**: 仮定＝動く絵の読みの腕が出す乗算しない各コマから同じ規則で作る（`decode_unmultiplied` は最初のコマだけなので、動く絵の腕に同じ読みを足す）。
+9. **（討議で確定・仮定どおり）動く絵の `asis` と `use_self_alpha,0`**: 仮定＝動く絵の読みの腕が出す乗算しない各コマから同じ規則で作る（`decode_unmultiplied` は最初のコマだけなので、動く絵の腕に同じ読みを足す）。
 10. **`last_shown` の控え**: 仮定＝合成メモの項に `OnceCell<ComposedSurface>` を持ち、初めて読まれたとき原寸に描いて満たす（`dump_surface.rs` を触らずに型を保つ）。
-11. **バルーンも節で描く**: 同じ `apply_show` を通るので一緒に移る。仮定＝移す（語は `overlay` だけで見え方は ±1）。
+11. **（討議で確定・移す）バルーンも節で描く**: 同じ `apply_show` を通るので一緒に移る。仮定＝移す（語は `overlay` だけで見え方は ±1）。
 12. **更新の所要の測り（8.2・R3）**: 検体＝emo2 の surface0 のまばたき 1 コマ・k＝1 と 1.25・`apply_show` から wintf の合成の終わりまで。今より重ければ止めて「画素どおり」の申告を議題にする。
 13. **当たりの 1 画素の読みの頻度（R4）**: 決め ⑶ のとおりその場で読む。`always` のアニメーション中にカーソルを止めていると世代ごとに 0.3〜0.8 ms 待つ。仮定＝受け入れ、測って記録する。
