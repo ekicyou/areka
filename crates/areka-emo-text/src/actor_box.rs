@@ -80,10 +80,7 @@ impl TextLayerRuntime {
         self.lookahead.forget_boxes();
         self.lookahead_rev += 1;
 
-        let index: BTreeMap<u32, Vec<BoxName>> = layout
-            .surfaces()
-            .map(|(id, placements)| (id, placements.iter().map(|p| p.name.clone()).collect()))
-            .collect();
+        let index = areka_emo_compose::box_index(&layout);
         // 置き場所の表は名前のブレスが採られたものだけを載せる（`fold_boxes`）ので、定義は必ず引ける。
         // 同じ名前が幾つのサーフェスに在っても解くのは 1 度。
         let names: BTreeSet<&BoxName> = index.values().flatten().collect();

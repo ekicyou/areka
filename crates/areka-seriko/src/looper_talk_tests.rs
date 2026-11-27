@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 
+use areka_sakura::CueCommand;
 use dola::time::testing::{at_ms, ms};
 
 use super::test_support::{cell, note_balloon, started, switch};
@@ -49,7 +50,8 @@ impl Stage {
             cue.command,
             cue.duration,
         );
-        self.rt.observe_cue(&fired);
+        self.rt
+            .observe_cue(&fired, &crate::SurfaceResolver::new(BTreeMap::new()));
     }
 
     /// 発火時刻 `now_ms` に `\0` のシェルの面が `sid` に切り替わる。
@@ -73,7 +75,7 @@ impl Stage {
         cell(&self.states, Slot::Shell, 0)
     }
 
-    /// `\0` の `slot` の面の文字の数え（数え始めの序数, 数え済みの序数）。
+    /// `\0` の `slot` の面の文字の数え（数えた字の数, 数え済みの序数）。
     pub(super) fn counted(&self, slot: Slot) -> Option<(u64, u64)> {
         self.rt
             .armed
@@ -171,7 +173,7 @@ fn glyph_count_restarts_when_the_surface_changes() {
     let mut st = nine_glyphs_from_1000();
     st.tick(1060);
     st.show(1, 1060);
-    assert_eq!(st.counted(Slot::Shell), Some((2, 2)), "2 文字が現れている");
+    assert_eq!(st.counted(Slot::Shell), Some((0, 2)), "2 文字が現れている");
 
     st.tick(1110);
     assert_eq!(st.started(), None, "古い面の数えなら 3 文字目で鳴っていた");
@@ -260,6 +262,7 @@ fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     note(&mut st, false, 1000);
     st.tick(1000);
@@ -274,7 +277,7 @@ fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
 
     // 1160 に開く: 4 文字（1000〜1150）が現れている。そこから 3 文字目は 7 文字目（1300）。
     note(&mut st, true, 1160);
-    assert_eq!(st.counted(Slot::Balloon), Some((4, 4)));
+    assert_eq!(st.counted(Slot::Balloon), Some((0, 4)));
     st.tick(1260);
     assert_eq!(started(&st.rt, Slot::Balloon, 0), None);
     st.tick(1310);
@@ -430,7 +433,7 @@ fn new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary() {
     st.tick(1210);
     assert_eq!(
         st.counted(Slot::Shell),
-        Some((0, 5)),
+        Some((5, 5)),
         "前提: 5 文字が現れた"
     );
 
@@ -455,7 +458,7 @@ fn clear_all_right_after_arming_between_ticks_counts_the_new_talk_from_its_head(
     st.show(1, 1160);
     assert_eq!(
         st.counted(Slot::Shell),
-        Some((4, 4)),
+        Some((0, 4)),
         "前提: 4 文字が現れている"
     );
 
@@ -492,9 +495,9 @@ fn slot_with_talk_only_on_a_part_still_counts_glyphs() {
     st.hear(1000, text(ms(0), "0", NINE));
 
     st.tick(1120);
-    assert_eq!(st.counted(Slot::Shell), Some((0, 3)));
+    assert_eq!(st.counted(Slot::Shell), Some((3, 3)));
     st.tick(1260);
-    assert_eq!(st.counted(Slot::Shell), Some((0, 6)));
+    assert_eq!(st.counted(Slot::Shell), Some((6, 6)));
     assert!(st.rt.playback.is_empty(), "一番上では何も始まらない");
     let feed = &st.rt.feeds[&scope()];
     assert_eq!(feed.time_of(5), None, "数え終えた文字は刈り込む");

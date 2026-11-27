@@ -103,6 +103,7 @@ fn ticks_add_no_warn() {
             balloon_tables: BTreeMap::new(),
             rng: Box::new(|_| 0),
             pick_rng: crate::seeded_rng(0),
+            text_routing: crate::TextRouting::default(),
         });
         let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1, 2])));
         let scope = areka_sakura::ActorKey::from("0");

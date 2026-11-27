@@ -15,7 +15,7 @@ use crate::world::{EmoWorld, Records};
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BoxName(String);
+pub struct BoxName(pub(crate) String);
 
 impl BoxName {
     /// 名前の原文。
