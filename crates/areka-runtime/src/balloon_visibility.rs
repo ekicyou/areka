@@ -25,21 +25,22 @@
 //!
 //! # 会話終了後のタイムアウト
 //!
-//! 計測はトークの終わりの合図（`TalkEnded`）が届いてから始める。満了予定の起点は
+//! 計測はトークの終わりの合図（`TalkEnded`）が効いてから始める。満了予定の起点は
 //! **実効の表示終了**で、トークの種類で採り方が分かれる。
 //!
 //! | トークの終わり | 選択肢つきでないトーク | 選択肢つきのトーク（`ChoiceShown` が届いた） |
 //! |---|---|---|
 //! | 未着 | 計測しない | 計測しない（選択の待ちの間はここに居る） |
-//! | 止まった時刻あり | 占有終端と止まった時刻の早い方 | 止まった時刻（`origin=choice_wait_ended_at`） |
-//! | 時刻なし | 占有終端（`origin=stop_time_missing`） | 計測が成り立つ最初のフレームの現在時刻（`origin=choice_wait_end_time_missing`） |
+//! | 止まった時刻 | 占有終端と止まった時刻の早い方 | 止まった時刻（`origin=choice_wait_ended_at`） |
+//!
+//! 表示の終わり・止まった時刻・満了予定は、どれも絶対の時刻で、フレームの時刻と比べる。
+//! 知らせは、フレームの時刻がその知らせの時刻に届いたフレームで効く（`balloon_visibility_held.rs`）。
 //!
 //! 正典のカウント起点「スクリプトの表示が終わってから」に一致させるため、初期の確立式は
 //! `満了予定 = 実効の表示終了 ＋ このトークの待ち時間（既定は既定時間）`
 //! であって、「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム
 //! 単位で飛び飛びに入るため、後者では観測の遅れがそのまま満了のずれになる。現在時刻を起点に
-//! 取り直すのは抑止が解けた瞬間と、選択肢つきのトークで止まった時刻が届かなかったとき
-//! （本番では起きない縮退）だけである。
+//! 取り直すのは抑止が解けた瞬間だけである。
 //!
 //! 選択肢つきのトークでは占有終端（選択肢を出した所）と比べない。選択の待ちは区切り（台本の
 //! 最後）で解けるまでトークを終わらせないので、待ちの間は計測の手前で止まり、待ちが解けた
@@ -54,12 +55,12 @@
 //! 計測は占有終端とトークの終わりの両方の信号が揃って初めて立つ。
 //!
 //! 判断が迷う場面では常に**表示を保持する側**へ倒す——占有終端かトークの終わりの信号が届かない
-//! 間は計測を始めず、現在時刻が分からないフレームと文字の観測が取れなかったフレームは計測に
+//! 間は計測を始めず、フレームの時刻が無いフレームと文字の観測が取れなかったフレームは計測に
 //! 触れず、抑止中の超過は保留し続ける。
 //! 唯一の例外が抑止の観測不能で、これは**抑止なし**として扱う——観測が取れないことを抑止と読むと、
 //! 消えないまま固着する側へ倒れるためである。
 //!
-//! 待ち時間そのものの既定値（30 秒）は [`DEFAULT_BALLOON_TIMEOUT_SECS`] ただ 1 箇所で定義し、
+//! 待ち時間そのものの既定値（30 秒）は [`DEFAULT_BALLOON_TIMEOUT`] ただ 1 箇所で定義し、
 //! 実機サインオフで満了を観測するための短縮を環境変数 `AREKA_BALLOON_TIMEOUT_MS` で受ける。
 //! 判断中核 [`decide`] は待ち時間を引数で受け取るだけで、環境変数にも既定値にも依存しない。
 //!
@@ -80,25 +81,28 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::TalkId;
+use dola::{TimePoint, TimeSpan};
 
 use super::talk_lifecycle::{TalkLifecycleSignal, TalkTimeout};
 
 #[path = "balloon_visibility_decision.rs"]
 mod decision;
+#[path = "balloon_visibility_held.rs"]
+mod held;
 #[path = "balloon_visibility_wait.rs"]
 mod wait;
 
 use decision::decide;
 use decision::hide_reaches_boxes;
-pub use wait::configured_timeout_secs;
+pub use wait::configured_timeout;
 #[cfg(test)]
-use wait::{parse_timeout_ms, resolve_timeout_secs};
+use wait::{parse_timeout_ms, resolve_timeout};
 
-/// バルーンを非表示にするまでの既定の待ち時間（秒）。**この値の定義箇所はここ 1 つだけ**
+/// バルーンを非表示にするまでの既定の待ち時間。**この値の定義箇所はここ 1 つだけ**
 /// （同じ数値を複数箇所へ散らさない）。
 ///
 /// 30 秒は正典が沈黙する領域の areka 裁量であり、互換対応表へ記録する対象である。
-const DEFAULT_BALLOON_TIMEOUT_SECS: f64 = 30.0;
+const DEFAULT_BALLOON_TIMEOUT: TimeSpan = TimeSpan::from_millis(30_000);
 
 /// 既定の待ち時間を短縮するための環境変数名。
 ///
@@ -109,7 +113,7 @@ const TIMEOUT_ENV_KEY: &str = "AREKA_BALLOON_TIMEOUT_MS";
 /// 採用した待ち時間がどこから来たか（ログの `source` フィールド）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TimeoutSource {
-    /// [`DEFAULT_BALLOON_TIMEOUT_SECS`]（環境変数が未設定、または不正で縮退した場合）。
+    /// [`DEFAULT_BALLOON_TIMEOUT`]（環境変数が未設定、または不正で縮退した場合）。
     Default,
     /// 環境変数 [`TIMEOUT_ENV_KEY`] による短縮指定。
     Env,
@@ -222,20 +226,20 @@ enum VisibilityLogEvent {
     /// タイムアウト計測を開始した（占有終端・満了予定・起点の採り方）。
     MeasurementStarted {
         origin: MeasurementOrigin,
-        display_end: f64,
-        deadline: f64,
+        display_end: TimePoint,
+        deadline: TimePoint,
     },
     /// タイムアウト計測を破棄した（理由と破棄した満了予定）。
     MeasurementDiscarded {
         reason: MeasurementDiscardReason,
-        deadline: f64,
+        deadline: TimePoint,
     },
-    /// 抑止の解除に伴い計測をやり直した（起点＝現在時刻・満了予定）。
-    MeasurementRestarted { now: f64, deadline: f64 },
+    /// 抑止の解除に伴い計測をやり直した（起点＝フレームの時刻・満了予定）。
+    MeasurementRestarted { now: TimePoint, deadline: TimePoint },
     /// 抑止が成立しているため非表示を見送った（抑止 1 回につき 1 件）。
     TimeoutSuppressed {
         kinds: SuppressionKinds,
-        deadline: f64,
+        deadline: TimePoint,
     },
     /// 可視コンテンツが現れたのに会話の表示終了信号が 1 件も届いていない
     /// （会話 1 回。表示は保持したまま記録だけ残す）。
@@ -250,18 +254,13 @@ enum VisibilityLogEvent {
 /// 記録の語に「中断」は使わない——最後まで流れたトークでも止まった時刻が終端より早く読まれうる。
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MeasurementOrigin {
-    /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（talk 相対秒）を採った。
-    StoppedAt(f64),
+    /// 止まった時刻が占有区間の終端より早かったので、止まった時刻を採った。
+    StoppedAt(TimePoint),
     /// 占有区間の終端を採った（止まった時刻が終端以後）。
     DisplayEnd,
-    /// 止まった時刻が届かなかった（時刻源が起点を持たない）ので、占有区間の終端を採った。
-    StopTimeMissing,
-    /// 選択肢つきのトークで、選択の待ちが解けた＝止まった時刻（talk 相対秒）を採った
+    /// 選択肢つきのトークで、選択の待ちが解けた＝止まった時刻を採った
     /// （占有区間の終端とは比べない）。
-    ChoiceWaitEndedAt(f64),
-    /// 選択肢つきのトークで止まった時刻が届かなかったので、終わりを畳んだ後で計測が成り立った
-    /// 最初のフレームの現在時刻を採った（表示を保持する側の縮退・本番では起きない）。
-    ChoiceWaitEndTimeMissing,
+    ChoiceWaitEndedAt(TimePoint),
 }
 
 impl MeasurementOrigin {
@@ -270,23 +269,9 @@ impl MeasurementOrigin {
         match self {
             MeasurementOrigin::StoppedAt(_) => "stopped_at",
             MeasurementOrigin::DisplayEnd => "display_end",
-            MeasurementOrigin::StopTimeMissing => "stop_time_missing",
             MeasurementOrigin::ChoiceWaitEndedAt(_) => "choice_wait_ended_at",
-            MeasurementOrigin::ChoiceWaitEndTimeMissing => "choice_wait_end_time_missing",
         }
     }
-}
-
-/// 表示の側が知るトークの終わり。
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-enum TalkEnd {
-    /// まだ届いていない（時間切れの計測を始めない）。
-    #[default]
-    NotYet,
-    /// 届いた。受け口が落ちた瞬間の talk 相対秒。
-    At(f64),
-    /// 届いたが、時刻源が起点を持たず時刻が無い。
-    TimeUnknown,
 }
 
 /// 判断中核が配線層へ依頼する行動。
@@ -428,14 +413,14 @@ struct ObservationFailureLogged {
 pub struct BalloonVisibilityState {
     /// scope ごとのエッジ検出状態。観測された scope の分だけ生える。
     per_scope: BTreeMap<u32, ScopeVisibility>,
-    /// 現在の会話の占有終端（talk 相対秒・表示終了信号の最大値）。`None` は信号未着。
-    display_end: Option<f64>,
-    /// 非表示の満了予定（talk 相対秒）。`None` は計測なし。
-    deadline: Option<f64>,
+    /// 現在の会話の占有終端（表示終了信号の最大値・置き直しの知らせで動く）。`None` は信号未着。
+    display_end: Option<TimePoint>,
+    /// 非表示の満了予定。`None` は計測なし。
+    deadline: Option<TimePoint>,
     /// いまバルーンに出ている台詞のトークの番号（会話開始の信号で置き換える）。
     talk_id: Option<TalkId>,
-    /// トークの終わり（会話開始の信号で `NotYet` へ戻す）。
-    talk_end: TalkEnd,
+    /// トークの止まった時刻（会話開始の信号で `None` へ戻す）。`None` はまだ見ていない。
+    talk_end: Option<TimePoint>,
     /// このトークの待ち時間（会話開始の信号で `Default` へ戻す・到着順に上書き）。
     talk_timeout: TalkTimeout,
     /// このトークで選択肢を出した（`ChoiceShown` で立て、会話開始の信号で戻す）。

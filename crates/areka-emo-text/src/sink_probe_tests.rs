@@ -3,6 +3,7 @@
 //! 受け口 [`EmoTextSink::emit_with`] は名前の形の `\b` だけ [`TextMsg::ProbedCue`] を積み、UI の取り出し
 //! （[`spawn_emo_text`]）は箱が見つからず空回しの写しでもないときだけ 1 回知らせる。実 channel・実 pump。
 
+use dola::TimeSpan;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
@@ -10,7 +11,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BoxName;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint};
 use dola::cue::{CueFinding, CueProbe, CueSink};
 use log_capture_kit::count_levels;
 
@@ -36,7 +37,11 @@ fn index() -> BTreeMap<u32, Vec<BoxName>> {
 }
 
 fn select(key: &str) -> TalkCue {
-    cue("0", 0.0, CueCommand::BalloonSurface { key: key.into() })
+    cue(
+        "0",
+        TimeSpan::ZERO,
+        CueCommand::BalloonSurface { key: key.into() },
+    )
 }
 
 /// 知らせを積む口と、積まれた知らせ。
@@ -64,7 +69,7 @@ fn emit_with_wraps_only_name_form_balloon_cues() {
 
     let named = select("a");
     let numbered = select("0");
-    let text = cue("0", 0.0, CueCommand::Text("あ".into()));
+    let text = cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into()));
     sink.emit_with(named.clone(), &probe);
     sink.emit_with(numbered.clone(), &probe);
     sink.emit_with(text.clone(), &probe);
@@ -112,6 +117,12 @@ fn drain_reports_missing_box_once_and_not_for_present_box() {
         sink.emit_with(select("a"), &present);
         sink.emit_with(select("無い箱"), &missing);
         pump_until_idle();
+        assert_eq!(
+            *missing_found.lock().expect("findings lock"),
+            vec![],
+            "届いただけでは当てないので知らせない"
+        );
+        runtime.borrow_mut().advance(TimePoint::MAX);
 
         assert_eq!(
             *present_found.lock().expect("findings lock"),

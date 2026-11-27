@@ -5,6 +5,7 @@
 //! - Stage 2 IR (TimelineItem): 内部タイムライン（グリフ単位に分解済み）
 
 use bevy_ecs::prelude::*;
+use dola::TimeSpan;
 
 // ============================================================
 // Stage 1 IR - 外部インターフェース
@@ -16,7 +17,7 @@ use bevy_ecs::prelude::*;
 pub enum TypewriterToken {
     /// 表示するテキスト
     Text(String),
-    /// ウェイト（f64秒単位、Windows Animation API互換）
+    /// ウェイト（作者が書く秒。時間表を組む時に長さへ変える）
     Wait(f64),
     /// イベント発火（対象エンティティの TypewriterEvent を設定）
     FireEvent {
@@ -75,15 +76,15 @@ pub enum TimelineItem {
     Glyph {
         /// クラスタインデックス
         cluster_index: u32,
-        /// デフォルトウェイト後の累積時刻
-        show_at: f64,
+        /// 開始から現れるまでの長さ
+        show_at: TimeSpan,
     },
     /// ウェイト
     Wait {
-        /// ウェイト秒数
-        duration: f64,
-        /// ウェイト開始時刻
-        start_at: f64,
+        /// ウェイトの長さ
+        duration: TimeSpan,
+        /// 開始からウェイトの始まりまでの長さ
+        start_at: TimeSpan,
     },
     /// イベント発火
     FireEvent {
@@ -91,8 +92,8 @@ pub enum TimelineItem {
         target: Entity,
         /// 発火するイベント
         event: TypewriterEventKind,
-        /// 発火時刻
-        fire_at: f64,
+        /// 開始から発火までの長さ
+        fire_at: TimeSpan,
     },
 }
 
@@ -105,4 +106,19 @@ pub struct TypewriterTimeline {
     pub items: Vec<TimelineItem>,
     /// 総クラスタ数
     pub total_cluster_count: u32,
+}
+
+impl TypewriterTimeline {
+    /// 行程の終わり（最後に済む項目の、開始からの長さ）。項目が無ければ 0。
+    pub fn end(&self) -> TimeSpan {
+        self.items
+            .iter()
+            .map(|item| match item {
+                TimelineItem::Glyph { show_at, .. } => *show_at,
+                TimelineItem::Wait { start_at, duration } => *start_at + *duration,
+                TimelineItem::FireEvent { fire_at, .. } => *fire_at,
+            })
+            .max()
+            .unwrap_or(TimeSpan::ZERO)
+    }
 }

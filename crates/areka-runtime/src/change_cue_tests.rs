@@ -108,12 +108,13 @@ fn not_ours_is_benign_skip_without_warning() {
 #[test]
 fn non_carrier_cue_is_benign_skip() {
     let (mut sink, rx) = sink();
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("アヒル".into()),
-        duration: 0.0,
-    });
+    sink.emit(TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("アヒル".into()),
+        dola::TimeSpan::ZERO,
+    ));
     assert_eq!(rx.try_iter().count(), 0);
 }
 

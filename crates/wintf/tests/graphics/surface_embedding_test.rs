@@ -8,6 +8,8 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
+use dola::TimePoint;
+use dola::time::testing::{at_ms, ms};
 use windows::UI::Composition::{
     CompositionGeometricClip, CompositionRoundedRectangleGeometry, ContainerVisual,
     Visual as WucVisual,
@@ -528,7 +530,7 @@ struct Promoted {
     a: Entity,
     p: Entity,
     /// 次の回の時刻。
-    t: f64,
+    t: TimePoint,
     /// A の中の点・B の中の点（R の描画面の物理ピクセル）。
     a_px: (u32, u32),
     b_px: (u32, u32),
@@ -575,13 +577,13 @@ fn promoted(s: f32) -> Promoted {
     owner_global(world, root, s, 64.0, 64.0);
     owner_global(world, p, s, 4.0, 4.0);
 
-    let mut t = 0.0;
+    let mut t = at_ms(0);
     let mut stages = Vec::new();
     for _ in 0..40 {
         world.insert_resource(FrameTime(t));
         world.get_mut::<VisualDrawContent>(a).unwrap().set_changed();
         frame(world);
-        t += 0.125;
+        t = t + ms(125);
         let on_parent = draws(world, root, a);
         if world
             .get::<VisualGraphics>(a)
@@ -690,7 +692,7 @@ fn auto_promoted_node_moves_between_surfaces_and_wuc_children() {
             for _ in 0..40 {
                 world.insert_resource(FrameTime(t));
                 frame(world);
-                t += 0.125;
+                t = t + ms(125);
                 if draws(world, root, a) {
                     assert_eq!(
                         wuc_children(&rv),

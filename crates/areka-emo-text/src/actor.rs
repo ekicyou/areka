@@ -17,7 +17,6 @@ use areka_emo_present::TextSlotView;
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::strict::DetectionPoint;
 use bevy_ecs::entity::Entity;
 use tracing::debug;
 
@@ -28,7 +27,7 @@ use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
 use crate::scroll_marker::{PlaceScroll, ResolvedMarkerPlacement, StopReason};
-use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
+use crate::sink::{EmoTextSink, TextMsg};
 use crate::state::{SpanKind, SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
@@ -213,7 +212,7 @@ pub type SurfaceKeyResolver = Box<dyn Fn(&str) -> SurfaceKeyOutcome>;
 ///
 /// - cue 適用（[`apply_cue`](Self::apply_cue)）は純粋状態の更新のみで World に触れない。
 /// - World への装着・描画はフレーム提示ステップ（[`present_frame`]）が担う。
-/// - 時刻は常に注入（`talk_time`）——内部で `Instant::now()` を読まない。
+/// - 時刻は常に注入（`frame_now`）——内部で `Instant::now()` を読まない。
 pub struct TextLayerRuntime {
     /// 純粋状態機械（actor 別・cue 列→行/グリフ状態）。
     state: TextLayerState,
@@ -320,6 +319,8 @@ pub struct TextLayerRuntime {
     /// この文字の層が最後に見た `GraphicsCore` の変化の時刻（`actor_present.rs` の
     /// `drop_renders_after_device_change` の控え・文字の層ごと）。
     seen_graphics: Option<bevy_ecs::change_detection::Tick>,
+    /// 届いた物の列（届いた順・`actor_held.rs` が足し、[`advance`](Self::advance) が当てる）。
+    held: areka_sakura::held::HeldQueue<held::Held>,
 }
 
 /// 作れなかった文字の面の覚えの中身（[`TextLayerRuntime`] の `surface_failed`）。
@@ -371,6 +372,7 @@ impl TextLayerRuntime {
             retired_renders: Vec::new(),
             surface_failed: HashMap::new(),
             seen_graphics: None,
+            held: areka_sakura::held::HeldQueue::new(),
         }
     }
 
@@ -638,7 +640,7 @@ impl TextLayerRuntime {
         &mut self,
         place: &PlaceKey,
         metrics: &dyn crate::layout::GlyphMetrics,
-        talk_time: f64,
+        frame_now: dola::TimePoint,
     ) -> Option<Vec<crate::layout::PositionedLine>> {
         let resolved = self.layout_input.get(place)?;
         present::arrange_lines(
@@ -649,7 +651,7 @@ impl TextLayerRuntime {
             resolved,
             metrics,
             &mut present::BreakMemo::default(),
-            talk_time,
+            frame_now,
         )
     }
 }
@@ -657,14 +659,11 @@ impl TextLayerRuntime {
 /// 結線 API（UI スレッド＝pump スレッドから呼ぶ）:
 /// `spawn_ui` で UI ドレインを起動し、受信口 [`EmoTextSink`] と drain の join ハンドルを返す。
 ///
-/// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
-/// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
-/// 先渡し（`TextMsg::Upcoming`）は `preview_talk` へ渡す。選択待ちの始まり
-/// （`TextMsg::ChoiceWaitBegan`）は押下の口を開き、トークの終わり（`TextMsg::TalkEnded`）は
-/// 全部の場所の選択肢を済みにして口を閉じる（先渡しも口を閉じる）。
+/// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、届いた物を当てずに
+/// 列へ足す（`actor_held.rs`）。当てるのはフレームの頭の [`TextLayerRuntime::advance`] である。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（error ログなし）。
-/// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する。
+/// 受け取りの失敗（runtime 借用競合）は `Err` 戻し→基盤が `error!`＋継続する。
 ///
 /// # 前提
 ///
@@ -674,57 +673,7 @@ pub fn spawn_emo_text(
     runtime: Rc<RefCell<TextLayerRuntime>>,
 ) -> (EmoTextSink, wintf_winmsg_executor::JoinHandle<()>) {
     let (tx, handle) = areka_actor::spawn_ui("emo-text", move |msg: TextMsg| {
-        handle_text_msg_with(
-            msg,
-            |cue, probe| match runtime.try_borrow_mut() {
-                Ok(mut rt) => {
-                    let box_missing = rt.apply_cue(&cue);
-                    drop(rt);
-                    // 名前の形の `\b` の箱が無い＝strict の台本へ 1 回知らせる。
-                    if let (true, Some(probe)) = (box_missing, probe) {
-                        probe.report(DetectionPoint::BalloonBoxMissing.finding());
-                    }
-                    Ok(())
-                }
-                // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
-                // 基盤の error!＋継続に乗せる（当該 cue は失われる）。
-                Err(_) => Err(format!(
-                    "TextLayerRuntime が借用中のため cue を適用できない（actor={}, at={}）——当該 cue は失われる",
-                    cue.actor, cue.at
-                )),
-            },
-            |upcoming| match runtime.try_borrow_mut() {
-                Ok(mut rt) => {
-                    // 次のトークの先渡し＝前のトークの選択待ちは終わっている。
-                    rt.close_choice_wait();
-                    rt.preview_talk(&upcoming);
-                    Ok(())
-                }
-                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（そのトークは先渡し無し・
-                // 文節の折り返しでは warn が出る）。
-                Err(_) => Err(format!(
-                    "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
-                    upcoming.len()
-                )),
-            },
-            |mark| match runtime.try_borrow_mut() {
-                Ok(mut rt) => {
-                    if mark == TextMsg::ChoiceWaitBegan {
-                        rt.note_choice_wait_began();
-                    } else {
-                        // トークの終わり: 全部の場所の選択肢を済みにし、押下の口を閉じる。
-                        rt.settle_all_choices();
-                        rt.close_choice_wait();
-                    }
-                    Ok(())
-                }
-                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（終わりなら、その
-                // トークの選択肢は次の台詞の頭で消える）。
-                Err(_) => Err(format!(
-                    "TextLayerRuntime が借用中のためトークの印を適用できない（{mark:?}）"
-                )),
-            },
-        )
+        held::receive_msg(&runtime, msg)
     });
     (EmoTextSink::new(tx), handle)
 }
@@ -734,6 +683,9 @@ mod attach;
 
 #[path = "actor_box.rs"]
 mod boxes;
+
+#[path = "actor_held.rs"]
+mod held;
 
 #[path = "actor_present.rs"]
 mod present;

@@ -536,7 +536,7 @@ pub(crate) fn remembered(
 ///   される。記録 sink を **1 本（`LogSink`）だけ**にし、もう一方を破棄専用の
 ///   `DiscardSink` で埋めることで cue ごと 1 回ログへ正す。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
-///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
+///   `kanade_interval=1000ms`／実クロック `dola::now`）で駆動する。
 ///
 /// `app_profile_dir`（App スコープの sylphya profile root）は呼び手が渡す（本番の fallback の腕は結線の
 /// 入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の

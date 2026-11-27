@@ -143,6 +143,7 @@ mod long_script {
                             *m.entry("Upcoming.cues").or_default() += cues.len();
                             "Upcoming"
                         }
+                        TextMsg::Origin(_) => "Origin",
                         TextMsg::Close => "Close",
                         TextMsg::TalkEnded => "TalkEnded",
                         TextMsg::ChoiceWaitBegan => "ChoiceWaitBegan",
@@ -167,10 +168,10 @@ mod long_script {
                         ..StartTalk::new(TalkId(1), &*script)
                     };
                     let mut flow = handle(SakuraMsg::Start(start));
-                    let mut t = 0.0;
+                    let mut t = dola::TimePoint::ZERO;
                     while flow.is_continue() {
                         flow = handle(SakuraMsg::Tick(t));
-                        t += 1e9;
+                        t = t + dola::TimeSpan::from_millis(u32::MAX);
                     }
                 });
                 let records = events.iter().filter(|e| e.target == RECORD_TARGET).count();

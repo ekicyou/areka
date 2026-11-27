@@ -30,33 +30,33 @@ fn complex_multi_variable_mixed_placement() {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
                     easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    duration: Some(0.5),
+                    duration: Some(ms(500)),
                     ..Default::default()
                 })),
                 keyframe: Some("visible".to_string()),
                 ..Default::default()
             })
-            // Entry 1: x_pos at "visible" → starts at 0.5
+            // Entry 1: x_pos at "visible" → starts at 500 ms
             .entry(StoryboardEntry {
                 variable: Some("x_pos".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
                     easing: Some(EasingFunction::Named(EasingName::QuadraticOut)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("visible".to_string())),
                 keyframe: Some("moved".to_string()),
                 ..Default::default()
             })
-            // Entry 2: y_pos between "visible" and "moved" → 0.5..1.5
+            // Entry 2: y_pos between "visible" and "moved" → 500..1500 ms
             .entry(StoryboardEntry {
                 variable: Some("y_pos".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    duration: Some(999.0), // ignored for between
+                    duration: Some(ms(999000)), // ignored for between
                     ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
@@ -69,38 +69,37 @@ fn complex_multi_variable_mixed_placement() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "entrance", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "entrance").unwrap();
 
     assert_eq!(result.storyboard_name, "entrance");
-    assert_eq!(result.start_time, 0.0);
-    assert_eq!(result.time_scale, 1.5);
+    assert_eq!(result.time_scale.get(), 1.5);
     assert_eq!(result.interruption_policy, InterruptionPolicy::Conclude);
 
-    // opacity: 0.0 -> 0.5
+    // opacity: 0..500 ms
     let tl_opacity = result.timelines.get("opacity").unwrap();
     assert_eq!(tl_opacity.segments.len(), 1);
-    assert_eq!(tl_opacity.segments[0].start_time, 0.0);
-    assert_eq!(tl_opacity.segments[0].end_time, 0.5);
+    assert_eq!(tl_opacity.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl_opacity.segments[0].end_time, delta_ms(500));
     assert_eq!(tl_opacity.min_value, Some(0.0));
     assert_eq!(tl_opacity.max_value, Some(1.0));
     assert_eq!(tl_opacity.variable_type, VariableTypeHint::Float);
 
-    // x_pos: at "visible" (0.5) → 0.5..1.5
+    // x_pos: at "visible" (500 ms) → 500..1500 ms
     let tl_x = result.timelines.get("x_pos").unwrap();
     assert_eq!(tl_x.segments.len(), 1);
-    assert_eq!(tl_x.segments[0].start_time, 0.5);
-    assert_eq!(tl_x.segments[0].end_time, 1.5);
+    assert_eq!(tl_x.segments[0].start_time, delta_ms(500));
+    assert_eq!(tl_x.segments[0].end_time, delta_ms(1500));
 
-    // y_pos: between "visible"(0.5) and "moved"(1.5) → 0.5..1.5
+    // y_pos: between "visible"(500 ms) and "moved"(1500 ms) → 500..1500 ms
     let tl_y = result.timelines.get("y_pos").unwrap();
     assert_eq!(tl_y.segments.len(), 1);
-    assert_eq!(tl_y.segments[0].start_time, 0.5);
-    assert_eq!(tl_y.segments[0].end_time, 1.5);
+    assert_eq!(tl_y.segments[0].start_time, delta_ms(500));
+    assert_eq!(tl_y.segments[0].end_time, delta_ms(1500));
 
     // total_base_duration = max of all timelines' base_duration
-    // コンパイルの起点 0.0 から数える（先頭の遅れを含む）
-    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.0=1.5, y_pos: 1.5-0.0=1.5
-    assert_eq!(result.total_base_duration, 1.5);
+    // コンパイルの起点 0 から数える（先頭の遅れを含む）
+    // opacity: 500-0=500, x_pos: 1500-0=1500, y_pos: 1500-0=1500（ms）
+    assert_eq!(result.total_base_duration, ms(1500));
 }
 
 #[test]
@@ -140,7 +139,7 @@ fn all_variable_types_mixed() {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -152,7 +151,7 @@ fn all_variable_types_mixed() {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(10.0)),
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -174,7 +173,7 @@ fn all_variable_types_mixed() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "mixed", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "mixed").unwrap();
 
     assert_eq!(
         result.timelines.get("opacity").unwrap().variable_type,
@@ -224,7 +223,7 @@ fn builder_to_compile_flow() {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
                 easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                duration: Some(0.5),
+                duration: Some(ms(500)),
                 ..Default::default()
             },
         )
@@ -242,12 +241,12 @@ fn builder_to_compile_flow() {
         .build()
         .unwrap();
 
-    let compiled = compile_storyboard(&doc, "show", 0.0).unwrap();
+    let compiled = compile_storyboard(&doc, "show").unwrap();
     assert_eq!(compiled.storyboard_name, "show");
     let tl = compiled.timelines.get("alpha").unwrap();
     assert_eq!(tl.segments.len(), 1);
-    assert_eq!(tl.segments[0].start_time, 0.0);
-    assert_eq!(tl.segments[0].end_time, 0.5);
+    assert_eq!(tl.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl.segments[0].end_time, delta_ms(500));
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(0.0));
     assert_eq!(tl.segments[0].to_value, TransitionValue::Scalar(1.0));
     assert_eq!(
@@ -260,8 +259,8 @@ fn builder_to_compile_flow() {
 fn empty_storyboard_compiles() {
     let doc = make_doc(vec![], vec![], "empty", StoryboardBuilder::new().build());
 
-    let result = compile_storyboard(&doc, "empty", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "empty").unwrap();
     assert_eq!(result.timelines.len(), 0);
-    assert_eq!(result.total_base_duration, 0.0);
+    assert_eq!(result.total_base_duration, ms(0));
     assert_eq!(result.storyboard_name, "empty");
 }

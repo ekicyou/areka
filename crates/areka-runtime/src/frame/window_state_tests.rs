@@ -216,17 +216,23 @@ fn entities_outside_registry_are_untouched() {
 // ---------------------------------------------------------------------------
 
 /// 台本を本番と同じ解析と組み立てで cue にし、受け口を登録した再生器を返す（`end` は台本の終わり）。
-fn player_for(script: &str, tx: Sender<WindowStateDirective>) -> (dola::cue::CuePlayer, f64) {
+fn player_for(
+    script: &str,
+    tx: Sender<WindowStateDirective>,
+) -> (dola::cue::CuePlayer, dola::TimePoint) {
     let instructions = areka_parsers::sakura::parse(script);
     let compiled = areka_sakura::compile(
         &instructions,
         &areka_sakura::sysvar::SystemVarSnapshot::default(),
     );
-    let mut player = dola::cue::CuePlayer::from_sheet(&compiled.sheet);
+    let sheet = compiled
+        .sheet
+        .with_absolute_start_time(dola::TimePoint::ZERO);
+    let mut player = dola::cue::CuePlayer::from_sheet(&sheet).expect("起点を押した台本");
     player.register_sink(Box::new(crate::window_state_cue::WindowStateCueSink::new(
         tx,
     )));
-    (player, compiled.sheet.absolute_end_time())
+    (player, sheet.absolute_end_time().expect("起点を押した台本"))
 }
 
 /// 台本を最後まで再生してから取り出しの相を 1 回回す。
@@ -285,7 +291,7 @@ fn script_stopped_before_the_directive_leaves_the_state() {
     let (mut state, tx) = state_with_channel();
     let (mut world, all) = world_with_windows();
     let (mut player, _) = player_for(SCRIPT, tx.clone());
-    player.tick(0.0);
+    player.tick(dola::TimePoint::ZERO);
     // 中断は本番（`drive.rs`）と同じく player を捨てる形。
     drop(player);
     run_window_state_phase(&mut state, &mut world);

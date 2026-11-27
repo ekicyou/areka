@@ -1,7 +1,9 @@
 use super::{
-    CallMethod, ChoiceInput, ExecutionSnapshot, KanadeMsg, MonotonicMs, RecordedCall, Sender,
-    TalkCommand, TalkId,
+    CallMethod, ChoiceInput, ExecutionSnapshot, KanadeMsg, RecordedCall, Sender, TalkCommand,
+    TalkId,
 };
+use dola::time::testing::at_ms;
+use dola::{TimeDelta, TimePoint};
 
 /// `On` 始まりの任意名選択肢 ID（emo2 `menu.pasta` 実物と同形の日本語イベント名）。
 pub(super) const NAMED_CHOICE_ID: &str = "Onおしゃべり頻度メニュー";
@@ -21,18 +23,21 @@ pub(super) fn choice_references() -> Vec<String> {
     vec!["ref-a".to_string(), "ref-b".to_string()]
 }
 
-/// 注入 `ChoiceWaiting` の表示完了時刻（[`establish_choice_wait`] が投函する値）。
-pub(super) const CHOICE_DISPLAY_END_MS: u64 = 1_000;
+const CHOICE_DISPLAY_END_MS: i64 = 1_000;
 
-/// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default_ms`）。
+/// 注入 `ChoiceWaiting` の表示完了時刻（[`establish_choice_wait`] が投函する値）。
+pub(super) const CHOICE_DISPLAY_END: TimePoint = at_ms(CHOICE_DISPLAY_END_MS);
+
+/// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default`）のミリ秒。
 ///
-/// `timeout_directive_secs: None`（未指定）のとき kanade が加算する値の**期待値**である。
+/// `timeout_directive: None`（未指定）のとき kanade が加算する値の**期待値**である。
 /// 檻はこの値を config から読まず独立に置く——実装側の既定値が動けば群 5 の 2 点注入
 /// （期限手前で非発火・期限到達で発火）が両方向とも落ちる（値そのものの固定）。
-const CHOICE_TIMEOUT_DEFAULT_MS: u64 = 30_000;
+const CHOICE_TIMEOUT_DEFAULT_MS: i64 = 30_000;
 
 /// 注入 `ChoiceWaiting` から導かれる期限（`display_end + 既定値`）。
-pub(super) const CHOICE_DEADLINE_MS: u64 = CHOICE_DISPLAY_END_MS + CHOICE_TIMEOUT_DEFAULT_MS;
+pub(super) const CHOICE_DEADLINE: TimePoint =
+    at_ms(CHOICE_DISPLAY_END_MS + CHOICE_TIMEOUT_DEFAULT_MS);
 
 /// カスケード段・タイムアウト GET が帯びる運行状態（active talk＋選択待ち継続中＝`talking,choosing`）。
 ///
@@ -61,25 +66,23 @@ pub(super) fn choice_input(id: &str) -> ChoiceInput {
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ Tick1（`OnSecondChange` GET Value → steady talk id=1・
 /// TalkDone は保留）→ `ChoiceWaiting{talk_id:1, candidates}`。以降は `Steady{Some(1)}` かつ帳簿
 /// `Waiting` であり、`KanadeMsg::Choice` の受領検証（talk_id 一致・候補集合一致）を通過できる。
-/// `directive` は台本の時間の指令（`timeout_directive_secs`）。`None` は未指定＝既定値へ委譲する。
+/// `directive` は台本の時間の指令（`timeout_directive`）。`None` は未指定＝既定値へ委譲する。
 pub(super) fn establish_choice_wait(
     sender: &Sender<KanadeMsg>,
     candidates: &[&str],
-    directive: Option<f64>,
+    directive: Option<TimeDelta>,
 ) {
     sender.send(KanadeMsg::Boot).expect("send Boot");
     sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
+        .send(KanadeMsg::Tick { now: at_ms(1_000) })
         .expect("send Tick 1");
     sender
         .send(KanadeMsg::ChoiceWaiting {
             talk_id: TalkId(1),
             choice_ids: candidates.iter().map(|s| s.to_string()).collect(),
-            display_end: MonotonicMs(CHOICE_DISPLAY_END_MS),
-            // None＝未指定は既定値へ委譲（期限は CHOICE_DEADLINE_MS）。
-            timeout_directive_secs: directive,
+            display_end: CHOICE_DISPLAY_END,
+            // None＝未指定は既定値へ委譲（期限は CHOICE_DEADLINE）。
+            timeout_directive: directive,
         })
         .expect("send ChoiceWaiting");
 }

@@ -14,9 +14,10 @@ use crate::schedule::translate_test_support::{
 };
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
+use dola::time::testing::at_ms;
 use tracing::Level;
 
-const D: u64 = 30_000;
+const D: i64 = 30_000;
 
 fn req(origin: ChangeOrigin, raise_event: bool) -> ChangeRequest {
     ChangeRequest {
@@ -29,7 +30,7 @@ fn req(origin: ChangeOrigin, raise_event: bool) -> ChangeRequest {
 fn steady() -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
+        last_now: Some(at_ms(1_000)),
         next_talk_id: 5,
         ..State::initial()
     }
@@ -78,7 +79,7 @@ fn talking(script: &str) -> (State, TalkId) {
     assert_eq!(talk_id, TalkId(5));
     assert_eq!(
         deadline,
-        Some(MonotonicMs(1_000 + D)),
+        Some(at_ms(1_000 + D)),
         "期限は終了の握手と同じ上限"
     );
     assert!(
@@ -109,7 +110,7 @@ fn close_talking() -> (State, TalkId) {
     let Phase::ChangeCloseTalkWait { talk_id, deadline } = s.phase else {
         panic!("OnClose の台本で ChangeCloseTalkWait へ進むはず");
     };
-    assert_eq!(deadline, Some(MonotonicMs(1_000 + D)));
+    assert_eq!(deadline, Some(at_ms(1_000 + D)));
     assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
     assert_eq!(script_of(&s), None, "OnGhostChanging が 204 なら台本は無し");
     (s, talk_id)
@@ -256,7 +257,7 @@ fn changing_script_past_deadline_unloads() {
     let (s, actions) = step(
         s,
         Input::Tick {
-            now: MonotonicMs(1_000 + D - 1),
+            now: at_ms(1_000 + D - 1),
         },
         &cfg(),
     );
@@ -266,7 +267,7 @@ fn changing_script_past_deadline_unloads() {
         out = Some(step(
             s,
             Input::Tick {
-                now: MonotonicMs(1_000 + D),
+                now: at_ms(1_000 + D),
             },
             &cfg(),
         ))
@@ -291,7 +292,7 @@ fn farewell_after_204_unloads_on_end_quit_and_deadline() {
     let (s, actions) = step(
         s,
         Input::Tick {
-            now: MonotonicMs(1_000 + D),
+            now: at_ms(1_000 + D),
         },
         &cfg(),
     );
@@ -359,16 +360,10 @@ fn deadline_is_armed_on_first_tick_when_entered_without_time() {
         s.phase,
         Phase::ChangeTalkWait { deadline: None, .. }
     ));
-    let (s, _) = step(
-        s,
-        Input::Tick {
-            now: MonotonicMs(500),
-        },
-        &cfg(),
-    );
+    let (s, _) = step(s, Input::Tick { now: at_ms(500) }, &cfg());
     assert!(matches!(
         s.phase,
-        Phase::ChangeTalkWait { deadline: Some(d), .. } if d == MonotonicMs(500 + D)
+        Phase::ChangeTalkWait { deadline: Some(d), .. } if d == at_ms(500 + D)
     ));
 }
 

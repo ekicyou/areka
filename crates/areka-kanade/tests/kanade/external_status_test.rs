@@ -13,9 +13,10 @@
 
 use areka_actor::reply_channel;
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg, MonotonicMs,
-    OnlineCounter, events, resources::ResourceOutcome,
+    CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg, OnlineCounter,
+    events, resources::ResourceOutcome,
 };
+use dola::time::testing::at_ms;
 
 use super::common::{
     DEFAULT_TIMEOUT, Fixture, QuitPolicy, binding, expected_call, expected_unload, pumps, send,
@@ -51,12 +52,12 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
             binding(1, 0),
         ])),
     );
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
     send(
         &harness,
         KanadeMsg::ExecutionState(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])),
     );
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(2_000));
     send(
         &harness,
         KanadeMsg::ExecutionState(ExecutionStateUpdate::Balloons(Vec::new())),
@@ -65,12 +66,12 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
         &harness,
         KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(true)),
     );
-    tick(&harness, 3_000);
+    tick(&harness, at_ms(3_000));
     send(
         &harness,
         KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(false)),
     );
-    tick(&harness, 4_000);
+    tick(&harness, at_ms(4_000));
     send(
         &harness,
         KanadeMsg::CloseRequest {
@@ -88,27 +89,27 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
     };
     let expected = [
         events::on_second_change(
-            MonotonicMs(1_000),
+            at_ms(1_000),
             &ExecutionSnapshot {
                 balloons: vec![binding(0, 2), binding(1, 0)],
                 ..ExecutionSnapshot::INACTIVE
             },
         ),
         events::on_second_change(
-            MonotonicMs(2_000),
+            at_ms(2_000),
             &ExecutionSnapshot {
                 balloons: vec![binding(0, 0)],
                 ..talking.clone()
             },
         ),
         events::on_second_change(
-            MonotonicMs(3_000),
+            at_ms(3_000),
             &ExecutionSnapshot {
                 no_user_break: true,
                 ..talking.clone()
             },
         ),
-        events::on_second_change(MonotonicMs(4_000), &talking),
+        events::on_second_change(at_ms(4_000), &talking),
     ];
     assert_eq!(
         pumps(&recorded).into_iter().cloned().collect::<Vec<_>>(),
@@ -155,8 +156,8 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("barrier ResourceQuery answered after Boot");
     drop(guard);
-    tick(&harness, 1_000);
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(1_000));
+    tick(&harness, at_ms(2_000));
     send(
         &harness,
         KanadeMsg::CloseRequest {
@@ -201,7 +202,7 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
     assert_eq!(
         *pumps[0],
         expected_call(events::on_second_change(
-            MonotonicMs(1_000),
+            at_ms(1_000),
             &ExecutionSnapshot::INACTIVE
         )),
         "守り手を落とした後の次の Tick から online は載らないはず: {recorded:?}"

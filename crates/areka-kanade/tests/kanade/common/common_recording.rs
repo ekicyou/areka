@@ -3,9 +3,10 @@
 //! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use areka_kanade::{
-    BalloonBinding, ExecutionSnapshot, ExecutionStatus, KanadeMsg, MonotonicMs, ShioriCall,
-    TalkCommand, events,
+    BalloonBinding, ExecutionSnapshot, ExecutionStatus, KanadeMsg, ShioriCall, TalkCommand, events,
 };
+
+use dola::TimePoint;
 
 use super::Harness;
 
@@ -164,13 +165,8 @@ pub fn send(harness: &Harness, msg: KanadeMsg) {
 }
 
 /// kanade の受信箱へ `Tick` を 1 通送る。
-pub fn tick(harness: &Harness, now: u64) {
-    send(
-        harness,
-        KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        },
-    );
+pub fn tick(harness: &Harness, now: TimePoint) {
+    send(harness, KanadeMsg::Tick { now });
 }
 
 /// 偽の sakura が受けた指示 1 件を比べられる形へ写す（`TalkCommand` は `PartialEq` を持たない）。

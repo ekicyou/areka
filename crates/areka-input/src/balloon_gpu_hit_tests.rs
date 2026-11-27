@@ -5,7 +5,8 @@ use std::rc::Rc;
 
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::SpanKind;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint};
+use dola::time::testing::ms;
 
 use super::test_support::{
     bubble_move, capture_logs, empty_runtime, gpu_balloon_world, headless_runtime_wiring,
@@ -17,16 +18,17 @@ use super::{BalloonWiring, hit_choice_row, on_balloon_pointer_moved, on_balloon_
 fn runtime_with_choices(choices: &[(&str, &str)]) -> Rc<RefCell<TextLayerRuntime>> {
     let rt = empty_runtime();
     for (id, text) in choices {
-        rt.borrow_mut().apply_cue(&TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Choice {
+        rt.borrow_mut().apply_cue(&TalkCue::scheduled(
+            TimePoint::ZERO,
+            ms(0),
+            ActorKey::from("0"),
+            CueCommand::Choice {
                 id: (*id).into(),
                 text: (*text).into(),
                 references: Vec::new(),
             },
-            duration: 0.0,
-        });
+            ms(0),
+        ));
     }
     rt
 }

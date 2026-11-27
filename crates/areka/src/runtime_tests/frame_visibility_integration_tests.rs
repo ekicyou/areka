@@ -11,7 +11,7 @@
 // 表示層の可視化（`show_target`）は「表示が一度も確立していない」と必ず失敗するため、確立が
 // 成立する実 attach を通さない限り、以下の性質はどれも観測できない。
 //
-// 時刻はすべて注入（`FrameTime` 資源＋`TalkClock` の epoch）で、実時間の待機・スリープ・
+// 時刻はすべて注入（`FrameTime` 資源）で、実時間の待機・スリープ・
 // 反復回数のみによる有界化は 1 つも用いない。
 // =============================================================================
 
@@ -110,14 +110,15 @@ fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 当該 scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻が進むほど文字がリビールされる）。
+/// 当該 scope へ可視グリフを流し込む（`at=0ms` 起点・注入時刻が進むほど文字がリビールされる）。
 fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
-    wiring.runtime().borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope.to_string()),
-        command: CueCommand::Text(text.into()),
-        duration: text.chars().count() as f64 * 0.25,
-    });
+    wiring.runtime().borrow_mut().apply_cue(&TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from(scope.to_string()),
+        CueCommand::Text(text.into()),
+        dola::TimeSpan::from_millis(text.chars().count() as u32 * 250),
+    ));
 }
 
 /// 窓 entity の `DPI` を現在値と必ず異なる実機水準（96／192）へ差し替え、その新 DPI を返す。
@@ -290,8 +291,7 @@ fn show_transition_lands_the_new_window_size_within_the_same_frame() {
     );
 
     // 可視コンテンツを置く（表示の唯一の契機）。時刻は注入のみ。
-    wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(1.0));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1000)));
     reveal_text(&wiring, 0, "あい");
 
     // フレーム 3: 表示へ遷移し、その表示が積んだ窓寸要求が同一フレームで窓へ届く。
@@ -327,7 +327,7 @@ fn show_transition_lands_the_new_window_size_within_the_same_frame() {
 /// はいずれも**装着時点**の 1 点だけを見る。本番は毎フレームすべての相が回るため、装着後の
 /// どこかの相が可視化してしまう欠陥は 1 点観測では捕まらない——ここが全フレームの掃引を担う。
 ///
-/// 時刻は最初のフレームから注入しておく（`FrameTime`＋epoch）。時刻が定まらない間だけ不可視、
+/// 時刻は最初のフレームから注入しておく（`FrameTime`）。時刻が定まらない間だけ不可視、
 /// という当たり判定の緩い緑を避けるためである。
 ///
 /// # 非空虚性
@@ -342,8 +342,7 @@ fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible()
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
 
     // 起点から時刻を注入しておく（可視グリフ数が観測できるフレームでも不可視であることを見る）。
-    wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(0.5));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(500)));
 
     for frame in 1..=4u32 {
         wiring = advance_frame(&mut world, wiring);
@@ -365,7 +364,7 @@ fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible()
 
     // 非空虚性: 可視コンテンツを置けば当該 scope **だけ**が可視になる。
     reveal_text(&wiring, 0, "あい");
-    world.insert_resource(FrameTime(1.0));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1000)));
     wiring = advance_frame(&mut world, wiring);
     assert_eq!(
         wiring.presenter.target_visible(balloon_target(0)),
@@ -414,14 +413,14 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
     );
 
     // 可視グリフを生まない cue（改行）だけを置く。
-    wiring.runtime().borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("1"),
-        command: CueCommand::NewLine { ratio: 1.0 },
-        duration: 0.0,
-    });
-    wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(1.0));
+    wiring.runtime().borrow_mut().apply_cue(&TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from("1"),
+        CueCommand::NewLine { ratio: 1.0 },
+        dola::TimeSpan::ZERO,
+    ));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1000)));
 
     // フレーム 2: 文字層が配置先へ供給面を装着する。
     wiring = advance_frame(&mut world, wiring);
@@ -487,8 +486,7 @@ fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
-    wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(0.5));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(500)));
 
     // 装着のフレーム: 何も見えていない＝空の組は「最後に届けた組」と同じなので送らない。
     wiring = advance_frame(&mut world, wiring);
@@ -499,7 +497,7 @@ fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
 
     // scope 0 が見えたフレームで 1 回だけ届く（番号は表示層の現サーフェス＝面 0）。
     reveal_text(&wiring, 0, "あい");
-    world.insert_resource(FrameTime(1.0));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1000)));
     wiring = advance_frame(&mut world, wiring);
     assert_eq!(
         wiring.presenter.target_visible(balloon_target(0)),
@@ -544,8 +542,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     let (_old_present_tx, old_present_rx) = mpsc::channel::<PresentCommand>();
     let (_old_lifecycle_tx, old_lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut old_wiring = boot_wiring(old_present_rx, old_lifecycle_rx);
-    old_wiring.clock.observe_cue(0.0);
-    world.insert_resource(FrameTime(1.0));
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1000)));
     old_wiring = advance_frame(&mut world, old_wiring);
     reveal_text(&old_wiring, 0, "あい");
     old_wiring = advance_frame(&mut world, old_wiring);
@@ -570,7 +567,6 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
-    wiring.clock.observe_cue(0.0);
 
     wiring = advance_frame(&mut world, wiring);
     assert!(

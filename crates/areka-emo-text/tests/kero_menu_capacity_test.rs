@@ -20,6 +20,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use dola::time::testing::ms;
 use support::fixture::{
     assert_real_font_present, balloon_metrics, command_cues, emo2_balloon_root, menu_script,
     state_of,
@@ -461,9 +462,9 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     let actor = ActorKey::from("0");
     state.apply_cue(&support::cue(
         "0",
-        0.0,
+        ms(0),
         areka_sakura::contract::CueCommand::Text(text.clone()),
-        0.0,
+        ms(0),
     ));
 
     for kind in [WrapKind::CharByChar, WrapKind::Segmented] {

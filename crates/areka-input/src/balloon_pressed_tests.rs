@@ -4,6 +4,7 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
+use dola::time::testing::at_ms;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -23,7 +24,7 @@ use wintf::ecs::{Point, Window};
 
 use super::super::test_support::{
     capture_logs, headless_runtime_wiring, insert_wiring, left_press, newer_by_one,
-    runtime_with_active_choice,
+    runtime_with_active_choice, zero_clock,
 };
 use super::super::{BalloonWiring, ChoiceSelection, dispatch_selection};
 use super::on_balloon_pointer_pressed;
@@ -77,7 +78,7 @@ fn rig() -> Rig {
                 down: Some(arrow()),
             },
         );
-        present_frame(&mut rt, &mut world, 100.0).expect("矢印を出す提示");
+        present_frame(&mut rt, &mut world, at_ms(100_000)).expect("矢印を出す提示");
     }
     let marker = runtime
         .borrow()
@@ -97,6 +98,7 @@ fn rig() -> Rig {
         flag_rx,
         mpsc::channel().0,
         mpsc::channel().0,
+        zero_clock(),
     ));
     Rig {
         world,
@@ -228,6 +230,7 @@ fn finished_talking_follows_the_talk_signals() {
         flag_rx,
         mpsc::channel().0,
         mpsc::channel().0,
+        zero_clock(),
     ));
     assert!(super::finished_talking(&world));
     flag_tx.send(NoUserBreakSignal::TalkStarted).unwrap();

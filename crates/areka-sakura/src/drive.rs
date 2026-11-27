@@ -35,7 +35,7 @@ use std::sync::mpsc::Sender;
 use crate::compile::{compile, compile_strict};
 use crate::contract::{
     ChoiceWaiting, CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason,
-    TalkHandle, TalkId,
+    TalkHandle, TalkId, TimePoint,
 };
 use crate::strict::StrictHooks;
 use crate::strict_tap::{StrictLedger, StrictTap};
@@ -136,7 +136,7 @@ enum TalkPhase {
     Armed {
         /// talk 相関 ID（全出力へ対応付け）。
         talk_id: TalkId,
-        /// コンパイル済み台本（アンカー未刻印＝0.0・初回 Tick で刻印する）。
+        /// コンパイル済み台本（アンカー未刻印・初回 Tick で刻印する）。
         sheet: CueSheet,
         /// コンパイル時点で確定した終端理由（自然終端で返す reason）。
         end: TalkEndReason,
@@ -149,8 +149,8 @@ enum TalkPhase {
         player: CuePlayer,
         /// 終端理由（自然終端で返す reason）。
         end: TalkEndReason,
-        /// 直前に処理した `Tick` の時刻（単調・冪等ガード用）。
-        last_tick: f64,
+        /// 受けた `Tick` の時刻の最大値（区切りが解けたときに同じ時刻で `tick` し直すのに使う）。
+        last_tick: TimePoint,
     },
 }
 
@@ -272,34 +272,21 @@ where
         ControlFlow::Continue(())
     }
 
-    /// `Tick(t)` 受領: 有限・単調ガードの後、cue 再生ランタイムへ委譲する。
+    /// `Tick(t)` 受領: cue 再生ランタイムへ委譲する。
     ///
     /// - **初回 `Tick`（`Armed`）**: `t` を絶対開始時刻としてアンカー刻印し、刻印済み台本から
     ///   [`CuePlayer`] を構築、両演者 sink を broadcast 登録して `player.tick(t)`。以降の cue
     ///   絶対発火時刻は `t + 相対 start_time`。
-    /// - **以降の `Tick`（`Driving`）**: 単調ガード後 `player.tick(t)`（broadcast は CuePlayer 内）。
+    /// - **以降の `Tick`（`Driving`）**: `player.tick(t)`（broadcast は CuePlayer 内）。
     ///
     /// いずれも [`CuePlayer::is_completed`]（占有 horizon gated）が真なら `TalkDone{end}` を
     /// 送出し `Break`（自然終端・entry 枯渇でなく horizon 到達で完了）。
     ///
-    /// # ガード（受信ループは殺さない）
-    ///
-    /// - **非有限**（`NaN`/`±inf`）: dola の NaN 全量配信ハザードを遮断し、かつ NaN による
-    ///   アンカー刻印を防ぐため、値（`tick`）を `tracing::error!` で記録し
-    ///   `schedule` を一切進めず `Continue`（phase 不変・talk は終端させない）。
-    /// - **逆行/同値**（`Driving` の `last_tick` に対し `t <= last_tick`）: `tracing::debug!` の
-    ///   no-op で `Continue`。初回 `Tick`（`Armed`）は比較対象が無く必ず通過する（先頭 `at=0`
-    ///   発火を殺さないため 0.0 で初期化しない）。
+    /// 受けた `Tick` は同値・逆行も含めすべて再生機へ渡す（冪等は再生機の責務）。`last_tick` は
+    /// 受けた時刻の最大値を保つ。
     ///
     /// 状態未確定（`Idle`＝`Start` 未受領・投函経路上は非到達の防御枝）なら no-op で `Continue`。
-    fn on_tick(&mut self, t: f64) -> ControlFlow<()> {
-        // 非有限ガード: schedule を進めず記録＋error ログ、ループは継続。
-        // NaN/±inf アンカー刻印もここで塞ぐ（刻印前の初回 Tick も本ガードを通す）。
-        if !t.is_finite() {
-            tracing::error!(tick = t, "non-finite Tick ignored; schedule not advanced");
-            return ControlFlow::Continue(());
-        }
-
+    fn on_tick(&mut self, t: TimePoint) -> ControlFlow<()> {
         // phase を所有権ごと取り出して分岐する（終端時は Idle のまま・継続時は書き戻す）。
         match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
             TalkPhase::Idle => {
@@ -315,7 +302,18 @@ where
                 // 初回 Tick: dispatch 刻印（アンカー＝初回注入時刻 t）。相対 start_time は
                 // 書き換えず、その上にアンカーが載る。刻印済み台本から CuePlayer を構築する。
                 let sheet = sheet.with_absolute_start_time(t);
-                let mut player = CuePlayer::from_sheet(&sheet);
+                let mut player = match CuePlayer::from_sheet(&sheet) {
+                    Ok(player) => player,
+                    Err(e) => {
+                        tracing::error!(talk_id = talk_id.0, error = %e, "cue player not built; ending talk");
+                        self.send_done(
+                            talk_id,
+                            TalkEndReason::Interrupted,
+                            end == TalkEndReason::Quit,
+                        );
+                        return ControlFlow::Break(());
+                    }
+                };
                 // 演者 sink を broadcast 登録（register 順: surface, text）。strict の talk は
                 // 実の sink を全部覆いへ入れ、覆い 1 つを登録する（覆いが登録順のまま配る）。
                 match (self.strict_arm.take(), &self.strict_ledger) {
@@ -342,23 +340,8 @@ where
                 end,
                 last_tick,
             } => {
-                // 単調ガード（逆行/同値は no-op・冪等）。phase を書き戻して Continue。
-                if t <= last_tick {
-                    tracing::debug!(
-                        prev = last_tick,
-                        t,
-                        "non-monotonic Tick ignored (backward or equal)"
-                    );
-                    self.phase = TalkPhase::Driving {
-                        talk_id,
-                        player,
-                        end,
-                        last_tick,
-                    };
-                    return ControlFlow::Continue(());
-                }
                 player.tick(t);
-                self.settle_after_tick(talk_id, player, end, t)
+                self.settle_after_tick(talk_id, player, end, t.max(last_tick))
             }
         }
     }
@@ -375,7 +358,7 @@ where
         talk_id: TalkId,
         mut player: CuePlayer,
         end: TalkEndReason,
-        last_tick: f64,
+        last_tick: TimePoint,
     ) -> ControlFlow<()> {
         if player.is_completed() {
             // 自然終端: player を drop（残り無し）。phase は Idle のまま。高々 1 回機構。
@@ -431,7 +414,7 @@ where
             .iter()
             .map(|choice| choice.id.clone())
             .collect();
-        let timeout_directive_secs = match player.current_barrier() {
+        let timeout_directive = match player.current_barrier() {
             Some(BarrierKind::WaitForChoice { timeout }) => *timeout,
             other => {
                 // 非到達（`WaitingForChoice` は `WaitForChoice` バリアでのみ成立する）。黙って
@@ -444,19 +427,19 @@ where
                 None
             }
         };
-        let display_end_elapsed_secs = player.occupancy_horizon();
+        let display_end = player.occupancy_horizon();
 
         let waiting = ChoiceWaiting {
             talk_id,
             choice_ids,
-            display_end_elapsed_secs,
-            timeout_directive_secs,
+            display_end,
+            timeout_directive,
         };
         tracing::info!(
             talk_id = talk_id.0,
             choice_count = waiting.choice_ids.len(),
-            display_end_elapsed_secs,
-            ?timeout_directive_secs,
+            display_end = %display_end,
+            timeout_directive = ?timeout_directive.map(tracing::field::display),
             "choice barrier reached; notifying ChoiceWaiting"
         );
         if self.done.send(D::from(waiting)).is_err() {

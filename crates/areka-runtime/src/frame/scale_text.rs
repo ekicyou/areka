@@ -1,10 +1,14 @@
-//! 文字層 k 追従フェーズ＋text フェーズ（[`run_text_scale_phase`]・[`run_text_phase`] ほか）。
+//! 文字の層を進める相・文字層 k 追従フェーズ・text フェーズ（[`run_text_advance_phase`]・[`run_text_scale_phase`]・[`run_text_phase`] ほか）。
+
+use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
-use areka_emo_text::actor::present_frame;
+use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_sakura::ActorKey;
+use dola::{TimePoint, TimeSpan};
 use wintf::ecs::FrameTime;
 use wintf::ecs::world::tick_wake;
 
@@ -15,9 +19,90 @@ use areka_placement::spawn::GhostWindows;
 use crate::target_map::window_scope;
 
 use super::{
-    GhostWindowKind, RuntimeWiring, ScaleReportSource, TalkClock, balloon_target,
-    reconcile_window_size, shell_target,
+    GhostWindowKind, RuntimeWiring, ScaleReportSource, balloon_target, reconcile_window_size,
+    shell_target,
 };
+
+/// 文字の層を借りられなかった事を、相ごとに、縮みが続く間は 1 回だけ記録するための覚え。
+#[derive(Debug, Default)]
+pub(crate) struct TextLayerBusyLogged {
+    advance: bool,
+    scale: bool,
+    text: bool,
+}
+
+/// 文字の層を借りられるか。借りられなければ（ほかの処理が持っている）、縮みの始まりだけ `error!` を
+/// 出し、次の画面の更新を予約して `false` を返す。借りられれば覚えを倒して `true`。
+///
+/// 相の中で借りるのは自分だけなので、頭で 1 度確かめれば相の終わりまで借りられる。
+fn text_layer_free(runtime: &RefCell<TextLayerRuntime>, logged: &mut bool, phase: &str) -> bool {
+    if runtime.try_borrow_mut().is_ok() {
+        *logged = false;
+        return true;
+    }
+    if !std::mem::replace(logged, true) {
+        error!(
+            phase,
+            "[text-layer] 文字の層がほかの処理に借りられていて、このフレームの仕事を見送る（次の画面の更新で再試行・同じ縮みの間は記録 1 回）"
+        );
+    }
+    tick_wake::mark(tick_wake::REARM);
+    false
+}
+
+/// 桁外れに遠い起こしの頭打ち（1 時間・可視性の相と同じ）。起きた相が預け直すので、見える物は変わらない。
+const MAX_WAKE_WAIT: Duration = Duration::from_secs(3600);
+
+/// `at` に次のフレームを起こすまでの待ち（純判断）。`at` が `frame_now` 以前なら `None`（次の画面の更新で足りる）。
+pub(super) fn wake_after(at: TimePoint, frame_now: TimePoint) -> Option<Duration> {
+    at.span_since(frame_now)
+        .filter(|remaining| *remaining > TimeSpan::ZERO)
+        .map(|remaining| remaining.to_std().min(MAX_WAKE_WAIT))
+}
+
+/// `at` に次のフレームを起こす予約を置く（預けられる期限は最も早い 1 つだけなので、相が走るたびに預け直す）。
+fn arm_wake_at(at: TimePoint, frame_now: TimePoint) {
+    match wake_after(at, frame_now) {
+        Some(wait) => tick_wake::arm_deadline(Instant::now() + wait),
+        None => tick_wake::mark(tick_wake::REARM),
+    }
+}
+
+/// フレームの時刻（テストの値が在ればそれ、無ければ `FrameTime`、どちらも無ければ `None`）。
+///
+/// 進める相・可視性の相・文字の相がこの 1 本を呼ぶので、3 つの相は同じフレームの時刻で文字の層を読む。
+pub(crate) fn resolve_frame_now(
+    frame_now_override: Option<TimePoint>,
+    world: &World,
+) -> Option<TimePoint> {
+    frame_now_override.or_else(|| world.get_resource::<FrameTime>().map(|ft| ft.0))
+}
+
+/// 文字の層を進める相（フレームの頭で 1 回）: フレームの時刻までに時刻の来た物を、届いた順に当てる。
+///
+/// 列の頭の物が待っている時刻が在れば、その時刻に次のフレームを起こす予約を置く。フレームの時刻が無い
+/// 世界と、文字の層を借りられないフレームでは進めず、次の画面の更新を予約する（列の物は残り、次の
+/// フレームで当たる）。
+pub fn run_text_advance_phase(
+    wiring: &mut RuntimeWiring,
+    world: &mut World,
+    frame_now_override: Option<TimePoint>,
+) {
+    let Some(frame_now) = resolve_frame_now(frame_now_override, world) else {
+        tick_wake::mark(tick_wake::REARM);
+        return;
+    };
+    if !text_layer_free(
+        &wiring.runtime,
+        &mut wiring.text_busy_logged.advance,
+        "advance",
+    ) {
+        return;
+    }
+    if let Some(waiting) = wiring.runtime.borrow_mut().advance(frame_now) {
+        arm_wake_at(waiting, frame_now);
+    }
+}
 
 /// 文字層 k 追従フェーズ（毎フレーム）: 装着済み balloon scope の文字層 binding を presenter の現適用 k へ合わせ直す。戻り値は実際に binding を再構築した scope（昇順・観測用。本番の [`frame_system`] は捨てる）。
 ///
@@ -40,6 +125,8 @@ use super::{
 ///
 /// # 縮退
 ///
+/// 文字の層を借りられなければ（ほかの処理が持っている）、このフレームは何もせず、`error!`（同じ縮みの間は 1 回）を出して次の画面の更新を予約する。
+///
 /// `text_slot_view` が `None`（初回 `ShowSurface` が未成立）なら再追従できず skip する。毎フレーム走査ゆえ `warn!` は scope ごとに一度だけ（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）で、view が取れた時点で再武装する。`Hide` は `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を保持する）ので、不可視はこの経路に落ちない。
 ///
 /// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは `balloon_models` の持つ装着済みの scope。panic しない。
@@ -54,10 +141,14 @@ pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Ve
         balloon_models,
         text_scale_warned,
         unconnected_text,
+        text_busy_logged,
         ..
     } = wiring;
 
     let mut refreshed = Vec::new();
+    if !text_layer_free(runtime, &mut text_busy_logged.scale, "text-scale") {
+        return refreshed;
+    }
     // BTreeMap ではなく HashMap ゆえ列挙順は不定。観測（戻り値）と warn 順を決定論にするため昇順化する。
     let mut scopes: Vec<u32> = balloon_models.keys().copied().collect();
     scopes.sort_unstable();
@@ -180,74 +271,51 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
     }
 }
 
-/// `talk_time` 解決の純判断（override 優先→`clock.talk_time(frame_now)`→`None`）。
+/// 次に現れる字の時刻（全部の場所の、`frame_now` より後の現れる時刻の最も早い物・純判断）。
 ///
-/// [`run_text_phase`] の分岐条件を GPU/時刻 I/O 抜きの決定論檻へ切り出した純関数:
-/// - `override_` が `Some(t)`（テスト注入経路）→ `Some(t)`（`frame_now`／`clock` は無視・最優先）。
-/// - `override_` が `None`（本番経路）→ `frame_now` が `Some(now)` なら `clock.talk_time(now)`、
-///   `frame_now` が `None`（`FrameTime` 資源不在＝headless）なら `None`。
-/// - いずれも `clock` の epoch 未確立（talk 未到達）なら `talk_time` が `None` を返すため `None`。
-///
-/// 戻り値 `None` は「今フレームは描くものがない（`present_frame` を呼ばない）」を意味する。
-///
-/// 可視性の相（`runtime::balloon_visibility`）も同じ関数で `now_talk_time` を解決するので、可視性が観測するグリフ数と text 相が描く文字は同じ注入時刻に立つ。
-pub(crate) fn resolve_talk_time(
-    override_: Option<f64>,
-    frame_now: Option<f64>,
-    clock: &TalkClock,
-) -> Option<f64> {
-    match override_ {
-        Some(t) => Some(t),
-        None => frame_now.and_then(|now| clock.talk_time(now)),
-    }
-}
-
-/// 発話の文字がまだ現れ切っていないか（純判断・時計にも GPU にも触れない）。
-///
-/// 引数は actor ごとのリビール時刻列（`RevealSchedule::times()`）で、単調非減少ゆえ末尾が
-/// 「その actor の最後の文字が現れる時刻」である。1 人でもそれが現在時刻より後なら、この発話は
-/// **まだ進行中**——次の画面更新でも文字が増える。
-///
-/// 「時刻が引ける＝進行中」ではないことに注意する。`TalkClock` の起点は一度立つとプロセスの
-/// 終わりまで残るため、`talk_time` が `Some` であることは発話が続いている証拠にならない。
-/// 進行中かどうかを決めるのは**まだ現れていない文字が在るか**だけである。
-pub(super) fn reveal_pending<'a>(reveals: impl Iterator<Item = &'a [f64]>, talk_time: f64) -> bool {
+/// 引数は場所ごとの字の現れる時刻の列（`RevealSchedule::times()`・減らない並び）。字が現れ切っていれば `None`。
+pub(super) fn next_reveal<'a>(
+    reveals: impl Iterator<Item = &'a [TimePoint]>,
+    frame_now: TimePoint,
+) -> Option<TimePoint> {
     reveals
-        .filter_map(|times| times.last())
-        .any(|&last| last > talk_time)
+        .filter_map(|times| times.get(times.partition_point(|&t| t <= frame_now)))
+        .copied()
+        .min()
 }
 
-/// 文字の相: `talk_time` が定まるフレームでのみ `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
+/// 文字の相: フレームの時刻で `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
 ///
-/// `talk_time` は [`resolve_talk_time`] で解決する。`None`（epoch 未確立、または `FrameTime` 不在かつ override なし）なら描くものがないので `present_frame` を呼ばず skip する。`present_frame` の `Err` は失敗源で log 済みなので、他 actor を巻き込まず次フレームの再試行に委ねる。
+/// フレームの時刻が無ければ描かない。文字の層を借りられなければ、そのフレームは描かず、次の画面の更新を
+/// 予約する。まだ現れていない字が在れば、次に現れる字の時刻に次のフレームを起こす予約を置く。
 pub fn run_text_phase(
     wiring: &mut RuntimeWiring,
     world: &mut World,
-    talk_time_override: Option<f64>,
+    frame_now_override: Option<TimePoint>,
 ) {
-    // 本番の frame 時刻源（headless では不在）。override が Some なら resolve_talk_time が優先採用する。
-    let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
-    let Some(talk_time) = resolve_talk_time(talk_time_override, frame_now, &wiring.clock) else {
+    let Some(frame_now) = resolve_frame_now(frame_now_override, world) else {
         return;
     };
+    if !text_layer_free(&wiring.runtime, &mut wiring.text_busy_logged.text, "text") {
+        return;
+    }
     let mut runtime = wiring.runtime.borrow_mut();
-    if let Err(e) = present_frame(&mut runtime, world, talk_time) {
+    if let Err(e) = present_frame(&mut runtime, world, frame_now) {
         error!(
             error = %e,
-            talk_time,
+            frame_now = %frame_now,
             "runtime text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }
-    // 発話が進行中なら次の画面更新を予約する（`REARM`）。現れ切ったら止める——放置中まで回り続けさせないため。
-    if reveal_pending(
+    if let Some(next) = next_reveal(
         runtime
             .state()
-            .actors()
+            .places()
             .map(|(_, state)| state.reveal().times()),
-        talk_time,
+        frame_now,
     ) {
-        tick_wake::mark(tick_wake::REARM);
+        arm_wake_at(next, frame_now);
     }
     // 実機サインオフ用の hover 注入。present_frame の後に駆動し、choice_active／choice_hit_rows が当該フレームの提示を反映した状態で巡回注入する。env（`AREKA_CHOICE_HOVER_INJECT`）未設定なら no-op。
-    super::hover_inject::drive(&mut runtime, talk_time);
+    super::hover_inject::drive(&mut runtime, frame_now);
 }

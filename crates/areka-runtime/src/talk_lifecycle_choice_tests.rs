@@ -14,12 +14,13 @@ use dola::cue::{ActorKey, CueCommand, TalkCue};
 use std::sync::mpsc::{Receiver, channel};
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
+    TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        ActorKey::from(actor),
         command,
-        duration: 0.0,
-    }
+        dola::TimeSpan::ZERO,
+    )
 }
 
 fn choice(actor: &str, id: &str) -> TalkCue {
@@ -60,7 +61,7 @@ fn run_talk(
 fn count_choice_shown(signals: &[TalkLifecycleSignal]) -> usize {
     signals
         .iter()
-        .filter(|s| matches!(s, TalkLifecycleSignal::ChoiceShown))
+        .filter(|s| matches!(s, TalkLifecycleSignal::ChoiceShown { .. }))
         .count()
 }
 
@@ -85,7 +86,9 @@ fn two_choices_send_choice_shown_once_between_start_and_end() {
     let started = position(&signals, |s| {
         matches!(s, TalkLifecycleSignal::TalkStarted { .. })
     });
-    let shown = position(&signals, |s| matches!(s, TalkLifecycleSignal::ChoiceShown));
+    let shown = position(&signals, |s| {
+        matches!(s, TalkLifecycleSignal::ChoiceShown { .. })
+    });
     let ended = position(&signals, |s| {
         matches!(s, TalkLifecycleSignal::TalkEnded { .. })
     });

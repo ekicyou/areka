@@ -12,6 +12,7 @@ mod easing;
 mod error;
 pub mod runtime;
 mod storyboard;
+pub mod time;
 mod transition;
 mod validate;
 mod value;
@@ -29,6 +30,9 @@ pub use storyboard::{
     BetweenKeyframes, InterruptionPolicy, KeyframeNames, KeyframeRef, LoopOffset, LoopOffsetRange,
     Storyboard, StoryboardEntry,
 };
+#[cfg(windows)]
+pub use time::now;
+pub use time::{TimeDelta, TimePoint, TimeScale, TimeSpan};
 #[cfg(feature = "toml")]
 pub use toml::{de::Error as TomlReadError, ser::Error as TomlWriteError};
 pub use transition::{TransitionDef, TransitionRef, TransitionValue};

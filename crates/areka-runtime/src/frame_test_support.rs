@@ -131,9 +131,9 @@ pub fn count_level(logs: &[String], level: &str) -> usize {
     logs.iter().filter(|l| l.contains(&needle)).count()
 }
 
-/// epoch を確立しない固定クロック（drain 系テストは talk_time を使わない）。
+/// 時刻 0 を返す固定の時計（drain 系テストは時計の読みを使わない）。
 pub fn zero_clock() -> TalkClock {
-    TalkClock::new(Arc::new(|| 0.0))
+    TalkClock::new(Arc::new(|| dola::TimePoint::ZERO))
 }
 
 /// headless な `RuntimeWiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を

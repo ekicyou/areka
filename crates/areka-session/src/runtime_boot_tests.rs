@@ -17,7 +17,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostBootError, GhostRuntime, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, MonotonicMs, ShioriBackend};
+use areka_kanade::{BootOrigin, CloseReason, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
 
@@ -73,7 +73,7 @@ fn rig() -> Rig {
         sources: CueSinkSources {
             surface,
             text,
-            clock: TalkClock::new(Arc::new(dola::runtime::clock::now)),
+            clock: TalkClock::new(Arc::new(dola::now)),
             move_tx,
             lifecycle_tx,
             zorder_tx,
@@ -250,15 +250,15 @@ fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreak
         .get_non_send::<UserBreakWiring>()
         .expect("成功で中断の持ち物が据わる");
     let mut signals = Vec::new();
-    let mut clock_ms = 0;
+    let mut clock = dola::TimePoint::ZERO;
     let mut last_tick: Option<Instant> = None;
     let reached = wait_until("OnBoot の Leave", Progress::Unknown, || {
         if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
             last_tick = Some(Instant::now());
-            clock_ms += TICK_STEP_MS;
-            let _ = runtime.dispatcher().send(DispatcherMsg::Tick {
-                now: MonotonicMs(clock_ms),
-            });
+            clock = clock + dola::TimeSpan::from_millis(TICK_STEP_MS as u32);
+            let _ = runtime
+                .dispatcher()
+                .send(DispatcherMsg::Tick { now: clock });
         }
         signals.extend(wiring.flag_rx().try_iter());
         signals.contains(&NoUserBreakSignal::Leave)

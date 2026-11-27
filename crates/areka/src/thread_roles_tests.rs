@@ -17,7 +17,7 @@ use wintf::ecs::world::thread_registry::is_known_role;
 
 /// テスト中にティッカーが 1 度も発火しないよう十分長く取った周期。
 /// 停止は `TickerMsg::Close` で行うので、待たされることはない。
-const NEVER_FIRES: Duration = Duration::from_secs(3600);
+const NEVER_FIRES: dola::TimeSpan = dola::TimeSpan::from_millis(3_600_000);
 
 /// 名簿に当該役割名が現れるまで待つ。現れれば `true`。
 fn wait_for_role(role: &str, limit: Duration) -> bool {

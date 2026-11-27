@@ -98,7 +98,7 @@ mod runtime_error_tests {
     fn too_short_duration_with_infinite_loop_display() {
         let err = RuntimeError::TooShortDurationWithInfiniteLoop {
             storyboard: "spin".to_string(),
-            duration: 0.05,
+            duration: dola::TimeSpan::from_millis(50),
         };
         let msg = format!("{err}");
         assert!(
@@ -106,11 +106,11 @@ mod runtime_error_tests {
             "should contain storyboard name: {msg}"
         );
         assert!(
-            msg.contains("0.050"),
-            "should contain duration (3 digits): {msg}"
+            msg.contains("0.0500000"),
+            "should contain duration (7 digits): {msg}"
         );
         assert!(
-            msg.contains("0.1"),
+            msg.contains("min: 0.1000000"),
             "should contain MIN_LOOP_DURATION: {msg}"
         );
     }

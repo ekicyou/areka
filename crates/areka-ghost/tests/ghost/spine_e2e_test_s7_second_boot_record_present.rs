@@ -93,7 +93,7 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
 
     // OnBoot の挨拶が dispatcher の active slot に載って発火するまで、Tick 注入で橋渡し（S1 と同技法・
     // 単調増加する `now` の注入のみ・sleep 不使用・`yield_now` で他スレッドへ実行機会を譲る）。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     super::spin_pumping_ticks(
         "S7: OnBoot 挨拶 cue が発火しない — 記録あり起動が OnBoot から始まっていない（gate 退行で OnFirstBoot GET により backend が panic した可能性も含む）",
         &mut now,

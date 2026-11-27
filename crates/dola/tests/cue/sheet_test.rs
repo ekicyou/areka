@@ -1,9 +1,26 @@
-//! CueSheet 構築と canonical 変換 to_talk_schedule のユニットテスト。
+//! CueSheet 構築と canonical 変換 to_talk_schedule の結合テスト。
 //!
-//! 昇順ソート・絶対アンカー保存・先頭待ち保存・duration clamp・占有 horizon を検証する。
+//! 昇順ソート・起点の保存・先頭待ち保存・占有の終わりを、ちょうどの 100ns の値で検証する。
 
-use crate::test_support::{barrier, text, wait};
-use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, to_talk_schedule};
+use crate::test_support::{barrier, drain, ms, text, wait};
+use dola::cue::{
+    ActorKey, BarrierKind, Cue, CueCommand, CueError, CuePayload, CueSheet, to_talk_schedule,
+};
+use dola::time::{TimePoint, TimeSpan};
+
+/// 起点 0 からのミリ秒の時刻。
+fn pt(millis: i64) -> TimePoint {
+    TimePoint::from_ticks(millis * 10_000)
+}
+
+fn clear(start_time: TimeSpan) -> Cue {
+    Cue {
+        actor: ActorKey::from("a"),
+        start_time,
+        payload: CueCommand::Clear.into(),
+        duration: TimeSpan::ZERO,
+    }
+}
 
 // ============================================================================
 // CueSheet 構築テスト
@@ -12,18 +29,13 @@ use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, to
 #[test]
 fn cue_sheet_sorts_by_start_time() {
     let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 3.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        text(1.0, "first", 0.0),
-        text(2.0, "second", 0.0),
+        clear(ms(3000)),
+        text(ms(1000), "first", TimeSpan::ZERO),
+        text(ms(2000), "second", TimeSpan::ZERO),
     ]);
 
-    let times: Vec<f64> = sheet.cues().iter().map(|c| c.start_time).collect();
-    assert_eq!(times, vec![1.0, 2.0, 3.0]);
+    let times: Vec<TimeSpan> = sheet.cues().iter().map(|c| c.start_time).collect();
+    assert_eq!(times, vec![ms(1000), ms(2000), ms(3000)]);
 }
 
 #[test]
@@ -35,39 +47,19 @@ fn cue_sheet_empty() {
 
 #[test]
 fn cue_sheet_len() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 0.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("b"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
+    let sheet = CueSheet::new(vec![clear(TimeSpan::ZERO), clear(ms(1000))]);
     assert_eq!(sheet.cues().len(), 2);
     assert!(!sheet.is_empty());
 }
 
 #[test]
 fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
-    // CueSheet::new は安定ソート — 同時刻 Cue は記述順を保持する
     let sheet = CueSheet::new(vec![
-        text(1.0, "first", 0.0),
-        text(1.0, "second", 0.0),
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 0.5,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
+        text(ms(1000), "first", TimeSpan::ZERO),
+        text(ms(1000), "second", TimeSpan::ZERO),
+        clear(ms(500)),
     ]);
 
-    // 0.5 が先頭、同時刻 1.0 の 2 件は記述順
     assert!(matches!(
         sheet.cues()[0].payload,
         CuePayload::Command(CueCommand::Clear)
@@ -82,41 +74,17 @@ fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
 }
 
 // ============================================================================
-// 非有限 start_time の境界
-// ============================================================================
-
-#[test]
-fn cue_sheet_new_with_nan_start_time_does_not_panic() {
-    // 特性化: NaN の start_time はソート比較で Equal 扱い（unwrap_or）となるため
-    // CueSheet::new は panic せず、全 Cue が保持される（位置は規定されない）。
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 2.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        text(f64::NAN, "nan", 0.0),
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-    assert_eq!(sheet.cues().len(), 3);
-}
-
-// ============================================================================
 // 自己完結した絶対時刻台本（absolute_start_time）テスト
 // ============================================================================
 
-/// 絶対開始時刻を刻印していない台本のアンカーは 0.0（既定）。
+/// 起点を押していない台本は、起点も絶対の時刻も持たない。
 #[test]
-fn cue_sheet_absolute_start_time_defaults_to_zero() {
-    let sheet = CueSheet::new(vec![text(1.0, "hi", 0.25)]);
+fn unstamped_sheet_has_no_absolute_times() {
+    let sheet = CueSheet::new(vec![text(ms(1000), "hi", ms(250))]);
 
-    assert_eq!(sheet.absolute_start_time(), 0.0);
+    assert_eq!(sheet.absolute_start_time(), None);
+    assert_eq!(sheet.absolute_fire_time(&sheet.cues()[0]), None);
+    assert_eq!(sheet.absolute_end_time(), None);
 }
 
 /// 各 cue の絶対発火時刻は台本のみから `absolute_start_time + start_time` で導ける。
@@ -125,257 +93,170 @@ fn absolute_fire_time_of_every_cue_derives_from_sheet_alone() {
     let sheet = CueSheet::new(vec![
         Cue {
             actor: ActorKey::from("a"),
-            start_time: 0.0,
+            start_time: TimeSpan::ZERO,
             payload: CueCommand::ClearAll.into(),
-            duration: 0.0,
+            duration: TimeSpan::ZERO,
         },
-        text(0.5, "hello", 0.25),
+        text(ms(500), "hello", ms(250)),
         Cue {
             actor: ActorKey::from("a"),
-            start_time: 2.25,
+            start_time: ms(2250),
             payload: CueCommand::Emote { key: "3".into() }.into(),
-            duration: 0.0,
+            duration: TimeSpan::ZERO,
         },
     ])
-    .with_absolute_start_time(100.0);
+    .with_absolute_start_time(pt(100_000));
 
-    let fired: Vec<f64> = sheet
+    let fired: Vec<Option<TimePoint>> = sheet
         .cues()
         .iter()
         .map(|cue| sheet.absolute_fire_time(cue))
         .collect();
 
-    // アンカー 100.0 ＋ 相対 start_time（相対値は変換されない）
-    assert_eq!(fired, vec![100.0, 100.5, 102.25]);
+    assert_eq!(
+        fired,
+        vec![Some(pt(100_000)), Some(pt(100_500)), Some(pt(102_250))]
+    );
 }
 
 /// talk の絶対終了時刻は `absolute_start_time + max(start_time + duration)`。
 ///
-/// 「最後に発火する cue」でも「最大 start_time」でもなく**占有区間の最大端**であることを
+/// 「最後に発火する cue」でも「最大 start_time」でもなく占有区間の最大端であることを
 /// 固定する（最長 duration を持つ cue が末尾でない配置で検証）。
 #[test]
 fn absolute_end_time_is_max_of_start_plus_duration_not_last_cue_start() {
     let sheet = CueSheet::new(vec![
-        // 1.0 + 5.0 = 6.0 が最大端（末尾 cue ではない）
-        text(1.0, "long", 5.0),
-        // 3.0 + 0.5 = 3.5（最大 start_time だが最大端ではない）
-        wait(3.0, 0.5),
+        text(ms(1000), "long", ms(5000)),
+        wait(ms(3000), ms(500)),
     ])
-    .with_absolute_start_time(10.0);
+    .with_absolute_start_time(pt(10_000));
 
-    assert_eq!(sheet.absolute_end_time(), 16.0);
+    assert_eq!(sheet.absolute_end_time(), Some(pt(16_000)));
 }
 
 /// 末尾の純粋 Wait cue の duration は絶対終了時刻へ算入される（早期終了しない）。
 #[test]
 fn absolute_end_time_includes_trailing_wait_duration() {
-    let sheet =
-        CueSheet::new(vec![text(0.0, "bye", 0.15), wait(0.15, 2.0)]).with_absolute_start_time(50.0);
+    let sheet = CueSheet::new(vec![
+        text(TimeSpan::ZERO, "bye", ms(150)),
+        wait(ms(150), ms(2000)),
+    ])
+    .with_absolute_start_time(pt(50_000));
 
-    // 末尾 Wait の発火時刻（50.15）でなく、その duration の終端（52.15）
-    assert_eq!(sheet.absolute_end_time(), 52.15);
+    assert_eq!(sheet.absolute_end_time(), Some(pt(52_150)));
 }
 
 /// 空台本は時間を占有しない＝絶対終了時刻はアンカーそのもの。
 #[test]
 fn absolute_end_time_of_empty_sheet_is_the_anchor() {
-    let sheet = CueSheet::new(vec![]).with_absolute_start_time(7.5);
+    let sheet = CueSheet::new(vec![]).with_absolute_start_time(pt(7_500));
 
-    assert_eq!(sheet.absolute_end_time(), 7.5);
+    assert_eq!(sheet.absolute_end_time(), Some(pt(7_500)));
 }
 
 /// 刻印は相対時刻を書き換えない（cue の相対 start_time / duration は不変）。
 #[test]
 fn stamping_absolute_start_time_leaves_relative_times_untouched() {
     let cues = vec![
-        text(0.0, "x", 0.5),
+        text(TimeSpan::ZERO, "x", ms(500)),
         Cue {
             actor: ActorKey::from("a"),
-            start_time: 0.5,
+            start_time: ms(500),
             payload: CueCommand::NewLine { ratio: 1.0 }.into(),
-            duration: 0.0,
+            duration: TimeSpan::ZERO,
         },
     ];
     let unstamped = CueSheet::new(cues.clone());
-    let stamped = CueSheet::new(cues).with_absolute_start_time(1234.5);
+    let stamped = CueSheet::new(cues).with_absolute_start_time(pt(1_234_500));
 
-    let rel = |s: &CueSheet| -> Vec<(f64, f64)> {
+    let rel = |s: &CueSheet| -> Vec<(TimeSpan, TimeSpan)> {
         s.cues()
             .iter()
             .map(|c| (c.start_time, c.duration))
             .collect()
     };
     assert_eq!(rel(&stamped), rel(&unstamped));
-    assert_eq!(stamped.absolute_start_time(), 1234.5);
-    // 同一台本でもアンカーが違えば絶対時刻だけがずれる（相対は共有）
-    assert_eq!(
-        stamped.absolute_end_time() - unstamped.absolute_end_time(),
-        1234.5
-    );
-}
-
-// ============================================================================
-// serde テスト
-// ============================================================================
-
-/// `absolute_start_time` は `#[serde(default)]`＝アンカーを持たない JSON は 0.0。
-#[test]
-fn cue_sheet_deserializes_without_absolute_start_time_as_zero() {
-    let json = r#"{"cues":[
-        {"actor":"sakura","start_time":0.0,"payload":{"Command":{"Text":"hi"}}}
-    ]}"#;
-    let sheet: CueSheet = serde_json::from_str(json).unwrap();
-
-    assert_eq!(sheet.absolute_start_time(), 0.0);
-    assert_eq!(sheet.cues().len(), 1);
-    assert_eq!(sheet.absolute_end_time(), 0.0);
-}
-
-/// 刻印済みアンカーは roundtrip を跨いで保存される（自己完結台本の搬送）。
-#[test]
-fn cue_sheet_serde_roundtrip_preserves_absolute_start_time() {
-    let sheet = CueSheet::new(vec![Cue {
-        actor: ActorKey::from("sakura"),
-        start_time: 0.5,
-        payload: CueCommand::Text("hello".into()).into(),
-        duration: 0.25,
-    }])
-    .with_absolute_start_time(42.0);
-
-    let json = serde_json::to_string(&sheet).unwrap();
-    let parsed: CueSheet = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(parsed.absolute_start_time(), 42.0);
-    assert_eq!(parsed.absolute_fire_time(&parsed.cues()[0]), 42.5);
-    assert_eq!(parsed.absolute_end_time(), 42.75);
-}
-
-#[test]
-fn cue_sheet_serde_roundtrip() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 0.0,
-            payload: CueCommand::Text("hello".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("kero"),
-            start_time: 1.0,
-            payload: CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: Some(3.0) }),
-            duration: 0.0,
-        },
-    ]);
-
-    let json = serde_json::to_string(&sheet).unwrap();
-    let parsed: CueSheet = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.cues().len(), 2);
-    assert_eq!(parsed.cues()[0].actor.as_str(), "sakura");
-    assert_eq!(parsed.cues()[1].actor.as_str(), "kero");
+    assert_eq!(stamped.absolute_start_time(), Some(pt(1_234_500)));
+    assert_eq!(stamped.absolute_end_time(), Some(pt(1_234_500) + ms(500)));
+    assert_eq!(unstamped.relative_end(), ms(500));
 }
 
 // ============================================================================
 // canonical 変換 to_talk_schedule
 //
-// 台本→時刻スケジュールへの**唯一の変換**で、dola ingress の単一権威。
-// 絶対アンカー（absolute_start_time）＋相対 start_time を保存し、同一 at は記述順（FIFO）、
-// duration を有限・非負へ clamp（envelope と horizon の両方に適用）、占有 horizon を保持して
-// is_completed を占有終了で判定する。
+// 台本→時刻スケジュールへの唯一の変換で、dola ingress の単一権威。
+// 起点＋相対 start_time を保存し、同一 at は記述順（FIFO）、占有の終わりを保持して
+// is_completed を占有終了で判定する。起点の押されていない台本は Err。
 // ============================================================================
 
+/// 起点の押されていない台本は変換できない。
+#[test]
+fn to_talk_schedule_of_unstamped_sheet_is_origin_not_stamped() {
+    let sheet = CueSheet::new(vec![text(TimeSpan::ZERO, "hi", TimeSpan::ZERO)]);
+
+    assert!(matches!(
+        to_talk_schedule(&sheet),
+        Err(CueError::OriginNotStamped)
+    ));
+}
+
 /// 先頭に待ちを持つ台本を変換しても待ちが消えない（相対 start_time を保存）。
-///
-/// canonical 変換は相対時刻をそのまま保つため、先頭 Wait(at=0.5) は 0.5 で due になる
-/// （min 正規化で 0 へ食う旧実装と異なり、食われない）。
 #[test]
 fn to_talk_schedule_preserves_leading_wait() {
-    let sheet = CueSheet::new(vec![wait(0.5, 0.5), text(1.0, "hi", 0.0)]);
+    let sheet = CueSheet::new(vec![
+        wait(ms(500), ms(500)),
+        text(ms(1000), "hi", TimeSpan::ZERO),
+    ])
+    .with_absolute_start_time(TimePoint::ZERO);
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(0.4);
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    let ready = drain(&mut schedule, pt(400));
     assert!(
-        schedule.ready().is_empty(),
-        "0.4 では先頭 Wait(at=0.5) は未 due（食われていない）"
+        ready.is_empty(),
+        "400ms では先頭 Wait(at=500ms) は未 due（食われていない）"
     );
-    schedule.tick(0.5);
-    assert_eq!(schedule.ready().len(), 1, "0.5 で先頭 Wait が due");
-    assert_eq!(schedule.ready()[0].at, 0.5, "相対 start_time が保存される");
-    assert!(matches!(schedule.ready()[0].command, CueCommand::Wait));
+    let ready = drain(&mut schedule, pt(500));
+    assert_eq!(ready.len(), 1, "500ms で先頭 Wait が due");
+    assert_eq!(ready[0].at, ms(500), "相対 start_time が保存される");
+    assert!(matches!(ready[0].command, CueCommand::Wait));
 }
 
-/// 非有限（NaN/±inf）・負の duration は 0 へ clamp され、envelope と horizon の
-/// **両方**へ clamp 後の値が反映される（dola ingress の単一権威）。
+/// 有限・非負の duration は envelope へそのまま運ばれる（無変形）。
+/// 同一 at は記述順（FIFO）で取り出される。
 #[test]
-fn to_talk_schedule_clamps_non_finite_and_negative_duration_into_envelope_and_horizon() {
-    let bad = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -3.0];
-    let cues: Vec<Cue> = bad
-        .iter()
-        .enumerate()
-        // start_time は 0,1,2,3
-        .map(|(i, &d)| text(i as f64, &format!("t{i}"), d))
-        .collect();
-    let sheet = CueSheet::new(cues);
-
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(100.0); // 全 due
-    let ready = schedule.ready();
-    assert_eq!(ready.len(), 4);
-    for cue in ready {
-        assert_eq!(
-            cue.duration, 0.0,
-            "非有限/負の duration は envelope で 0 へ clamp される"
-        );
-    }
-
-    // horizon も clamp 後（各 start_time+0）の max=3.0。clamp が horizon にも適用されて
-    // いなければ +inf の cue で horizon=∞ となり tick(100) では完了しない（load-bearing）。
-    assert!(
-        schedule.is_completed(),
-        "horizon も clamp 後の値ゆえ tick(100) で占有終了に達し完了する"
-    );
-}
-
-/// 有限・非負の duration は clamp 恒等ゆえ envelope へ**ビット等価**で運ばれる
-/// （無変形）。同一 at は記述順（FIFO）で `ready()` に並ぶ。
-#[test]
-fn to_talk_schedule_carries_finite_duration_untransformed() {
+fn to_talk_schedule_carries_duration_untransformed() {
     let durations = [
-        0.0_f64,
-        0.05,
-        0.25,
-        1.0 / 3.0,
-        12.345_678_9,
-        f64::MIN_POSITIVE,
+        TimeSpan::ZERO,
+        ms(50),
+        ms(250),
+        TimeSpan::try_from_ticks(3_333_333).unwrap(),
+        TimeSpan::try_from_ticks(123_456_789).unwrap(),
+        TimeSpan::try_from_ticks(1).unwrap(),
     ];
     let cues: Vec<Cue> = durations
         .iter()
         .enumerate()
-        // 同一 at=0.0 → FIFO 記述順
-        .map(|(i, &d)| text(0.0, &format!("t{i}"), d))
+        .map(|(i, &d)| text(TimeSpan::ZERO, &format!("t{i}"), d))
         .collect();
-    let sheet = CueSheet::new(cues);
+    let sheet = CueSheet::new(cues).with_absolute_start_time(TimePoint::ZERO);
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(0.0);
-    let ready = schedule.ready();
-    assert_eq!(ready.len(), durations.len(), "全 cue が due（同一 at=0.0）");
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    let ready = drain(&mut schedule, TimePoint::ZERO);
+    assert_eq!(ready.len(), durations.len(), "全 cue が due（同一 at=0）");
     for (i, &d) in durations.iter().enumerate() {
         assert_eq!(
             ready[i].command,
             CueCommand::Text(format!("t{i}")),
             "同一 at 群は記述順（FIFO）で並ぶ"
         );
-        assert_eq!(
-            ready[i].duration.to_bits(),
-            d.to_bits(),
-            "duration={d} は envelope へビット等価で運ばれる（無変形）"
-        );
-        assert_eq!(ready[i].at, 0.0, "発火時刻も無変形で運ぶ");
+        assert_eq!(ready[i].duration, d, "duration は無変形で運ばれる");
+        assert_eq!(ready[i].at, TimeSpan::ZERO, "発火の隔たりも無変形で運ぶ");
+        assert_eq!(ready[i].fire_time, TimePoint::ZERO);
         assert_eq!(ready[i].actor, ActorKey::from("0"), "演者も無変形で運ぶ");
     }
 }
 
-/// 搬送体の duration は**コマンド種別を問わない一律フィールド**。全 13 variant が
+/// 搬送体の duration はコマンド種別を問わない一律フィールド。全 variant が
 /// 瞬時（明示的 0）・時間占有の双方を canonical 変換で運べる。
 #[test]
 fn to_talk_schedule_duration_uniform_across_every_command_variant() {
@@ -412,20 +293,19 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
     ];
 
     for command in commands {
-        for duration in [0.0_f64, 1.25] {
+        for duration in [TimeSpan::ZERO, ms(1250)] {
             let sheet = CueSheet::new(vec![Cue {
                 actor: ActorKey::from("0"),
-                start_time: 0.0,
+                start_time: TimeSpan::ZERO,
                 payload: CuePayload::Command(command.clone()),
                 duration,
-            }]);
-            let mut schedule = to_talk_schedule(&sheet);
-            schedule.tick(0.0);
-            let ready = schedule.ready();
+            }])
+            .with_absolute_start_time(TimePoint::ZERO);
+            let mut schedule = to_talk_schedule(&sheet).unwrap();
+            let ready = drain(&mut schedule, TimePoint::ZERO);
             assert_eq!(ready.len(), 1);
             assert_eq!(
-                ready[0].duration.to_bits(),
-                duration.to_bits(),
+                ready[0].duration, duration,
                 "{command:?} の搬送体も duration を一律に保持する"
             );
             assert_eq!(ready[0].command, command, "command は無変形で運ばれる");
@@ -436,33 +316,32 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
 /// 純粋な待ち（`CueCommand::Wait`）の時間も搬送体の duration が運ぶ（action は空）。
 #[test]
 fn to_talk_schedule_carries_wait_duration_without_action() {
-    let sheet = CueSheet::new(vec![wait(0.0, 0.5)]);
+    let sheet = CueSheet::new(vec![wait(TimeSpan::ZERO, ms(500))])
+        .with_absolute_start_time(TimePoint::ZERO);
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(0.0);
-    let ready = schedule.ready();
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    let ready = drain(&mut schedule, TimePoint::ZERO);
     assert_eq!(ready.len(), 1);
     assert_eq!(ready[0].command, CueCommand::Wait, "action は持たない");
     assert_eq!(
-        ready[0].duration, 0.5,
+        ready[0].duration,
+        ms(500),
         "Wait の時間は搬送体の duration が運ぶ（コマンド埋め込みでない）"
     );
 }
 
-/// Barrier ペイロードは skip されず Entry::Barrier へ
-/// **経路づけ**られる。
+/// Barrier ペイロードは skip されず Entry::Barrier へ経路づけられる。
 #[test]
 fn to_talk_schedule_routes_barrier_not_skipping() {
     let sheet = CueSheet::new(vec![
-        text(0.0, "keep", 0.0),
-        barrier(0.2, BarrierKind::WaitForInput),
-        text(0.3, "after", 0.0),
-    ]);
+        text(TimeSpan::ZERO, "keep", TimeSpan::ZERO),
+        barrier(ms(200), BarrierKind::WaitForInput),
+        text(ms(300), "after", TimeSpan::ZERO),
+    ])
+    .with_absolute_start_time(TimePoint::ZERO);
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(1.0);
-
-    let ready = schedule.ready();
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    let ready = drain(&mut schedule, pt(1000));
     assert_eq!(ready.len(), 1, "Barrier 手前の Command のみ配信");
     assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
     assert!(
@@ -472,144 +351,121 @@ fn to_talk_schedule_routes_barrier_not_skipping() {
     assert_eq!(schedule.remaining(), 1, "Barrier 後の after は未配信");
 }
 
-/// 変換は `absolute_start_time` をスケジュールのアンカー（絶対時刻）に用いる。
-/// 相対 start_time は不変で運ばれる（アンカー＋相対＝絶対発火時刻）。
+/// 変換は `absolute_start_time` をスケジュールの起点に用いる。
+/// 相対 start_time は不変で運ばれる（起点＋相対＝絶対発火時刻）。
 #[test]
 fn to_talk_schedule_anchors_schedule_at_absolute_start_time() {
-    let sheet = CueSheet::new(vec![text(0.5, "hi", 0.0)]).with_absolute_start_time(100.0);
+    let sheet = CueSheet::new(vec![text(ms(500), "hi", TimeSpan::ZERO)])
+        .with_absolute_start_time(pt(100_000));
 
-    let mut schedule = to_talk_schedule(&sheet);
-    // アンカー未満は noop（絶対時刻駆動）。
-    schedule.tick(50.0);
-    assert!(schedule.ready().is_empty());
-    // アンカー到達直後（offset 0）でも cue は at=0.5 ゆえ未 due。
-    schedule.tick(100.0);
-    assert!(schedule.ready().is_empty());
-    schedule.tick(100.5);
-    assert_eq!(schedule.ready().len(), 1);
-    assert_eq!(
-        schedule.ready()[0].at,
-        0.5,
-        "相対 start_time は不変で運ばれる"
-    );
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    let ready = drain(&mut schedule, pt(50_000));
+    assert!(ready.is_empty());
+    let ready = drain(&mut schedule, pt(100_000));
+    assert!(ready.is_empty());
+    let ready = drain(&mut schedule, pt(100_499));
+    assert!(ready.is_empty(), "1ms 手前では届かない");
+    let ready = drain(&mut schedule, pt(100_500));
+    assert_eq!(ready.len(), 1);
+    assert_eq!(ready[0].at, ms(500), "相対 start_time は不変で運ばれる");
+    assert_eq!(ready[0].fire_time, pt(100_500));
 }
 
-/// 末尾に待ちを持つ台本を注入時刻で駆動したとき、全 cue の**配送完了時点**では
-/// まだ未完了と判定され、**占有終了 horizon** 到達で初めて完了と判定される（早期終了しない）。
+/// 末尾に待ちを持つ台本を注入時刻で駆動したとき、全 cue の配送完了時点ではまだ未完了と判定され、
+/// 占有の終わり到達で初めて完了と判定される（早期終了しない）。
 #[test]
 fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
-    // Text@0(dur D) → Wait@D(dur 0.8)。占有 horizon = D+0.8。
-    let d = 0.15_f64;
-    let wait_dur = 0.8_f64;
-    let sheet = CueSheet::new(vec![text(0.0, "bye", d), wait(d, wait_dur)]);
+    let sheet = CueSheet::new(vec![
+        text(TimeSpan::ZERO, "bye", ms(150)),
+        wait(ms(150), ms(800)),
+    ])
+    .with_absolute_start_time(TimePoint::ZERO);
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(d);
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    drain(&mut schedule, pt(150));
     assert_eq!(schedule.remaining(), 0, "全 entry を配り終えた");
     assert!(
-        !schedule.is_completed(),
-        "配送完了時点では占有 horizon（D+0.8）未到達ゆえ未完了（早期終了しない）"
+        !schedule.is_completed_at(pt(150)),
+        "配送完了時点では占有の終わり（950ms）未到達ゆえ未完了（早期終了しない）"
     );
-    // horizon 直前でもまだ未完了。horizon は ms の格子で数えた 0.95（素の和 0.9500000000000001 では tick しない）。
-    schedule.tick(0.94);
-    assert!(!schedule.is_completed(), "占有 horizon 直前は未完了");
-    schedule.tick(0.95);
-    assert!(schedule.is_completed(), "占有 horizon 到達で完了");
+    drain(&mut schedule, pt(949));
+    assert!(
+        !schedule.is_completed_at(pt(949)),
+        "占有の終わりの 1ms 前は未完了"
+    );
+    drain(&mut schedule, pt(950));
+    assert!(schedule.is_completed_at(pt(950)), "占有の終わり到達で完了");
 }
 
-/// 変換したスケジュールの完了時刻は、台本のみから導ける `absolute_end_time()` に一致する
-/// （相対 horizon ＝ `absolute_end_time - absolute_start_time`）。
+/// 変換した予定の完了時刻は、台本のみから導ける `absolute_end_time()` に一致する。
 #[test]
 fn to_talk_schedule_completes_exactly_at_sheet_absolute_end_time() {
-    let sheet =
-        CueSheet::new(vec![text(0.0, "hi", 0.25), wait(0.25, 0.5)]).with_absolute_start_time(10.0);
+    let sheet = CueSheet::new(vec![
+        text(TimeSpan::ZERO, "hi", ms(250)),
+        wait(ms(250), ms(500)),
+    ])
+    .with_absolute_start_time(pt(10_000));
 
-    // 台本のみから導ける絶対終了時刻＝10.0 + max(0.25, 0.75) = 10.75。
-    let end = sheet.absolute_end_time();
-    assert_eq!(end, 10.75);
+    let end = sheet.absolute_end_time().unwrap();
+    assert_eq!(end, pt(10_750));
 
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(end - 0.001);
-    assert!(!schedule.is_completed());
-    schedule.tick(end);
-    assert!(schedule.is_completed());
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    assert_eq!(schedule.occupancy_horizon(), end);
+    drain(&mut schedule, pt(10_749));
+    assert!(!schedule.is_completed_at(pt(10_749)));
+    drain(&mut schedule, end);
+    assert!(schedule.is_completed_at(end));
 }
 
-/// 空台本は時間を占有しない＝どの時刻でも即完了（horizon 0.0・アンカー既定 0.0）。
+/// 空台本は時間を占有しない＝起点の時刻で即完了。
 #[test]
 fn to_talk_schedule_of_empty_sheet_is_immediately_completed() {
-    let sheet = CueSheet::new(vec![]);
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(0.0);
-    assert!(schedule.is_completed(), "空台本は占有 horizon 0.0 で即完了");
+    let sheet = CueSheet::new(vec![]).with_absolute_start_time(TimePoint::ZERO);
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    drain(&mut schedule, TimePoint::ZERO);
+    assert!(
+        schedule.is_completed_at(TimePoint::ZERO),
+        "空台本は占有の長さ 0 で即完了"
+    );
     assert_eq!(schedule.remaining(), 0);
 }
 
 // ============================================================================
-// 時刻の和を ms の格子に載せる・台本の終わりと予定の占有の終わりの 1 本化
+// 台本の終わりと予定の占有の終わりの 1 本化（ちょうどの 100ns の値）
 // ============================================================================
 
 /// 150 ms に始まる 800 ms の合図 1 つの台本。
-fn ms_grid_sheet() -> CueSheet {
-    CueSheet::new(vec![wait(150.0 / 1000.0, 800.0 / 1000.0)])
+fn ms_sheet() -> CueSheet {
+    CueSheet::new(vec![wait(ms(150), ms(800))])
 }
 
-/// 格子に載る始まりと長さの終わりは 950 ms を秒にした値そのもの（0.9500000000000001 でない）。
+/// 台本の終わりと予定へ焼き込む占有の終わりは、950 ms の整数の値そのもの。
 #[test]
-fn end_time_of_ms_grid_cues_is_exact() {
+fn end_time_and_occupancy_horizon_are_exact() {
+    let sheet = ms_sheet().with_absolute_start_time(TimePoint::ZERO);
+    assert_eq!(sheet.relative_end(), ms(950));
+    assert_eq!(sheet.absolute_end_time(), Some(pt(950)));
     assert_eq!(
-        ms_grid_sheet().absolute_end_time().to_bits(),
-        (950.0_f64 / 1000.0).to_bits()
+        to_talk_schedule(&sheet).unwrap().occupancy_horizon(),
+        pt(950)
     );
 }
 
-/// 予定へ焼き込む占有の終わりも同じ値。
+/// アンカー 1000ms の台本は、ちょうどの刻みで届き、ちょうど完了する。
 #[test]
-fn occupancy_horizon_matches_ms_grid_end() {
-    let horizon = to_talk_schedule(&ms_grid_sheet()).occupancy_horizon();
-    assert_eq!(horizon.to_bits(), (950.0_f64 / 1000.0).to_bits());
-}
-
-/// アンカー 1.0 の台本は、Tick の式の値（n / 1000）でちょうど届き、ちょうど完了する。
-#[test]
-fn completes_exactly_at_ms_grid_end() {
-    let sheet = ms_grid_sheet().with_absolute_start_time(1.0);
-    let mut schedule = to_talk_schedule(&sheet);
-    schedule.tick(1150.0 / 1000.0);
-    assert_eq!(schedule.remaining(), 0, "合図はその ms の刻みで届く");
-    schedule.tick(1949.0 / 1000.0);
-    assert!(!schedule.is_completed(), "終わりの 1 ms 前は未完了");
-    schedule.tick(1950.0 / 1000.0);
-    assert!(schedule.is_completed(), "終わりの ms の刻みで完了");
-
-    let fire = sheet.absolute_fire_time(&sheet.cues()[0]);
-    assert_eq!(fire.to_bits(), (1150.0_f64 / 1000.0).to_bits());
-    assert_eq!(
-        sheet.absolute_end_time().to_bits(),
-        (1950.0_f64 / 1000.0).to_bits()
+fn completes_exactly_at_end() {
+    let sheet = ms_sheet().with_absolute_start_time(pt(1000));
+    let mut schedule = to_talk_schedule(&sheet).unwrap();
+    drain(&mut schedule, pt(1150));
+    assert_eq!(schedule.remaining(), 0, "合図はその刻みで届く");
+    drain(&mut schedule, pt(1949));
+    assert!(
+        !schedule.is_completed_at(pt(1949)),
+        "終わりの 1 ms 前は未完了"
     );
-}
+    drain(&mut schedule, pt(1950));
+    assert!(schedule.is_completed_at(pt(1950)), "終わりの刻みで完了");
 
-/// 格子に載らない値は丸めず、f64 の和そのもの。
-#[test]
-fn off_grid_values_keep_plain_sum() {
-    let sheet = CueSheet::new(vec![wait(0.1234567, 0.3)]);
-    assert_eq!(
-        sheet.absolute_end_time().to_bits(),
-        (0.1234567_f64 + 0.3).to_bits()
-    );
-}
-
-/// 非有限や負の長さでも、台本の終わりと予定の占有の終わりは同じ clamp を通って等しい。
-#[test]
-fn end_time_equals_occupancy_horizon_for_non_finite_durations() {
-    for duration in [f64::NAN, f64::INFINITY, -3.0] {
-        let sheet = CueSheet::new(vec![wait(0.5, duration)]).with_absolute_start_time(2.0);
-        let horizon = to_talk_schedule(&sheet).occupancy_horizon();
-        assert_eq!(
-            sheet.absolute_end_time().to_bits(),
-            horizon.to_bits(),
-            "duration {duration}"
-        );
-    }
+    assert_eq!(sheet.absolute_fire_time(&sheet.cues()[0]), Some(pt(1150)));
+    assert_eq!(sheet.absolute_end_time(), Some(pt(1950)));
 }

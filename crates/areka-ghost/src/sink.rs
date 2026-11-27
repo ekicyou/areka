@@ -69,7 +69,8 @@ impl CueSink for LogSink {
         tracing::info!(
             target: "ghost-sink",
             event = "emit",
-            at = cue.at,
+            fire_time = %cue.fire_time,
+            at = %cue.at,
             actor = %cue.actor,
             command_kind = command_kind(&cue.command),
             "talk cue emitted (production default LogSink)"
@@ -122,6 +123,7 @@ fn command_kind(command: &CueCommand) -> &'static str {
 mod tests {
     use super::*;
     use areka_sakura::contract::ActorKey;
+    use dola::{TimePoint, TimeSpan};
     use log_capture_kit::CapturedEvent as CanonicalEvent;
     // `actor` は `%cue.actor`（Display 経由）で `record_debug` に届くので `field_str` では落ちる。
     use crate::test_log_capture::label_of;
@@ -136,7 +138,7 @@ mod tests {
     struct CapturedEvent {
         target: String,
         level: Level,
-        at: Option<f64>,
+        at: Option<TimeSpan>,
         actor: Option<String>,
         command_kind: Option<String>,
     }
@@ -144,13 +146,12 @@ mod tests {
     impl CapturedEvent {
         /// 共有機構の正準イベントから、本テストが照合する形へ変換する。
         ///
-        /// `at` は `f64` 値ゆえ `Visit` の既定実装で `record_debug` へ落ち、その `{:?}` は `1.5`／`3.25` のような
-        /// 十進表記になる。ここで `f64` へ戻す（数値でない値が載っていれば `None` になり、テストは落ちる）。
+        /// `at` は `Display` の字面（7 桁の秒）で載るので、`FromStr` で型へ戻す（読めない値なら `None` になり、テストは落ちる）。
         fn from_canonical(ev: &CanonicalEvent) -> Self {
             Self {
                 target: ev.target.clone(),
                 level: ev.level,
-                at: label_of(ev, "at").and_then(|value| value.parse::<f64>().ok()),
+                at: label_of(ev, "at").and_then(|value| value.parse::<TimeSpan>().ok()),
                 actor: label_of(ev, "actor"),
                 command_kind: label_of(ev, "command_kind"),
             }
@@ -165,20 +166,25 @@ mod tests {
             .collect()
     }
 
-    fn sample_cue(at: f64, actor: &str, command: CueCommand) -> TalkCue {
-        TalkCue {
+    fn sample_cue(at: TimeSpan, actor: &str, command: CueCommand) -> TalkCue {
+        TalkCue::scheduled(
+            TimePoint::ZERO,
             at,
-            actor: ActorKey::from(actor),
+            ActorKey::from(actor),
             command,
-            duration: 0.0,
-        }
+            TimeSpan::ZERO,
+        )
     }
 
     /// `CueSink::emit` が構造化ログを 1 件発火し、`at`／`actor`／`command_kind` が期待どおり載ることを検証する。
     #[test]
     fn emit_logs_structured_event_with_at_actor_and_command_kind() {
         let mut sink = LogSink::new();
-        let cue = sample_cue(1.5, "0", CueCommand::Text("hello".into()));
+        let cue = sample_cue(
+            TimeSpan::from_millis(1500),
+            "0",
+            CueCommand::Text("hello".into()),
+        );
 
         let events = capture(|| {
             CueSink::emit(&mut sink, cue.clone());
@@ -188,7 +194,7 @@ mod tests {
         let event = &events[0];
         assert_eq!(event.target, "ghost-sink");
         assert_eq!(event.level, Level::INFO);
-        assert_eq!(event.at, Some(1.5));
+        assert_eq!(event.at, Some(TimeSpan::from_millis(1500)));
         assert_eq!(event.actor.as_deref(), Some("0"));
         assert_eq!(event.command_kind.as_deref(), Some("Text"));
     }
@@ -197,7 +203,11 @@ mod tests {
     #[test]
     fn emit_logs_structured_event_for_newline_cue() {
         let mut sink = LogSink::new();
-        let cue = sample_cue(3.25, "1", CueCommand::NewLine { ratio: 1.0 });
+        let cue = sample_cue(
+            TimeSpan::from_millis(3250),
+            "1",
+            CueCommand::NewLine { ratio: 1.0 },
+        );
 
         let events = capture(|| {
             CueSink::emit(&mut sink, cue.clone());
@@ -206,7 +216,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.target, "ghost-sink");
-        assert_eq!(event.at, Some(3.25));
+        assert_eq!(event.at, Some(TimeSpan::from_millis(3250)));
         assert_eq!(event.actor.as_deref(), Some("1"));
         assert_eq!(event.command_kind.as_deref(), Some("NewLine"));
     }

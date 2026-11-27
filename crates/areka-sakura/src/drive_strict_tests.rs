@@ -9,6 +9,7 @@ use super::*;
 use crate::contract::{CueCommand, TalkCue};
 use crate::strict::{DetectionPoint, RECORD_TARGET, StrictJudges};
 use dola::cue::CueProbe;
+use dola::time::testing::at_ms;
 use log_capture_kit::CapturedEvent;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -120,9 +121,9 @@ fn records_in_cue_order_and_tail_at_natural_end() {
                 .handle(SakuraMsg::Start(start(MIDDLE_AND_TAIL, true)))
                 .is_continue()
         );
-        assert!(driver.handle(SakuraMsg::Tick(0.0)).is_continue());
+        assert!(driver.handle(SakuraMsg::Tick(at_ms(0))).is_continue());
         assert!(dones(&rx).is_empty());
-        assert!(driver.handle(SakuraMsg::Tick(100.0)).is_break());
+        assert!(driver.handle(SakuraMsg::Tick(at_ms(100000))).is_break());
     });
     // 全消し → `\![nosuch]` の記録 → `\![nosuch]` の合図 → あ → 待ち → 終わりで `\x`。
     assert_eq!(
@@ -161,7 +162,7 @@ fn interrupt_drops_the_rest() {
     let (mut driver, rx) = driver(windowless(), Some(hooks()));
     let ((), events) = log_capture_kit::capture(|| {
         let _ = driver.handle(SakuraMsg::Start(start(MIDDLE_AND_TAIL, true)));
-        let _ = driver.handle(SakuraMsg::Tick(0.0));
+        let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
         assert!(driver.handle(SakuraMsg::Close).is_break());
     });
     // 時刻 0 の合図（全消し・`\![nosuch]`・あ）まで。待ちの後ろの `\x` は記録しない。
@@ -188,8 +189,8 @@ fn choice_wait_records_the_rest_and_close_keeps_it() {
     let (mut driver, rx) = driver(windowless(), Some(hooks()));
     let ((), events) = log_capture_kit::capture(|| {
         let _ = driver.handle(SakuraMsg::Start(start("\\q[題,ID]\\x", true)));
-        let _ = driver.handle(SakuraMsg::Tick(0.0));
-        let _ = driver.handle(SakuraMsg::Tick(100.0));
+        let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
+        let _ = driver.handle(SakuraMsg::Tick(at_ms(100000)));
     });
     assert!(
         rx.try_iter()
@@ -225,8 +226,8 @@ fn not_strict_keeps_the_current_path() {
         let (mut driver, rx) = driver(vec![Box::new(sink), Box::new(TraceSink)], hooks);
         let ((), events) = log_capture_kit::capture(|| {
             let _ = driver.handle(SakuraMsg::Start(start("\\s[99]\\![nosuch]あ\\x", strict)));
-            let _ = driver.handle(SakuraMsg::Tick(0.0));
-            let _ = driver.handle(SakuraMsg::Tick(100.0));
+            let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
+            let _ = driver.handle(SakuraMsg::Tick(at_ms(100000)));
         });
         assert_eq!(records(&events), [], "strict={strict}");
         assert_eq!(*with_probe.lock().unwrap(), 0, "strict={strict}");
@@ -246,8 +247,8 @@ fn probe_records_at_the_cue_place_of_the_played_script() {
     // 翻訳の後の台本（元は `\s[99]う`）。
     let ((), events) = log_capture_kit::capture(|| {
         let _ = driver.handle(SakuraMsg::Start(start("やくした\\s[99]う", true)));
-        let _ = driver.handle(SakuraMsg::Tick(0.0));
-        let _ = driver.handle(SakuraMsg::Tick(100.0));
+        let _ = driver.handle(SakuraMsg::Tick(at_ms(0)));
+        let _ = driver.handle(SakuraMsg::Tick(at_ms(100000)));
     });
     assert_eq!(
         records(&events),
@@ -280,8 +281,8 @@ fn late_report_records_the_place_computed_on_the_talk_thread() {
         SystemVarSnapshot::default(),
         Some(hooks()),
     );
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(100.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(100000))).unwrap();
     super::test_support::recv_done(&rx, Duration::from_secs(5)).expect("自然に終わる");
     handle.actor.join().expect("body は正常終了する");
 

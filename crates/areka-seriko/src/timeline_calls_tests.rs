@@ -6,7 +6,7 @@
 use super::*;
 use crate::table::FrameAct;
 use areka_emo_compose::ComposeMethod;
-use std::num::NonZeroU64;
+use dola::time::testing::ms;
 
 // 描くコマ。
 use crate::test_support::draw_frame as draw;
@@ -15,7 +15,7 @@ use crate::test_support::draw_frame as draw;
 fn act(act: FrameAct, surface_id: i64, wait_ms: u32) -> LoopFrame {
     LoopFrame {
         act,
-        ..draw(surface_id, wait_ms)
+        ..draw(surface_id, ms(wait_ms))
     }
 }
 
@@ -29,15 +29,19 @@ fn start(target: u32) -> FrameAct {
 /// `move,-1,…` が今のコマでも止まらない（`-1` で止まるのは描くコマだけ）。
 #[test]
 fn move_with_minus_one_does_not_stop() {
-    let frames = vec![draw(10, 0), act(FrameAct::Move, -1, 50), draw(11, 50)];
-    assert_eq!(frame_at(&frames, 50), FrameStatus::Active(1));
-    assert_eq!(frame_at(&frames, 100), FrameStatus::FinishedResidual(2));
+    let frames = vec![
+        draw(10, ms(0)),
+        act(FrameAct::Move, -1, 50),
+        draw(11, ms(50)),
+    ];
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::Active(1));
+    assert_eq!(frame_at(&frames, ms(100)), FrameStatus::FinishedResidual(2));
     // 末尾の働きのコマも止まらず残る。
-    let frames = vec![draw(10, 0), act(FrameAct::Move, -1, 50)];
-    assert_eq!(frame_at(&frames, 50), FrameStatus::FinishedResidual(1));
+    let frames = vec![draw(10, ms(0)), act(FrameAct::Move, -1, 50)];
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::FinishedResidual(1));
     // 描くコマの -1 は止まる。
-    let frames = vec![draw(10, 0), draw(-1, 50)];
-    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    let frames = vec![draw(10, ms(0)), draw(-1, ms(50))];
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::Stopped);
 }
 
 /// `move` や呼び出しのコマが今のコマでも、前の描くコマが選ばれる（`base,2` を含む）。
@@ -45,13 +49,13 @@ fn move_with_minus_one_does_not_stop() {
 fn action_frame_keeps_the_previous_draw_frame() {
     let base = LoopFrame {
         method: ComposeMethod::Base,
-        ..draw(2, 0)
+        ..draw(2, ms(0))
     };
     let frames = vec![
         base,
         act(FrameAct::Move, -1, 50),
         act(start(3), 0, 0),
-        draw(7, 50),
+        draw(7, ms(50)),
         act(FrameAct::Inert, 5, 0),
     ];
     assert_eq!(visible_frame(&frames, 0), Some(0));
@@ -70,7 +74,11 @@ fn action_frame_keeps_the_previous_draw_frame() {
 /// 描くコマが前に無ければ欄が外れる（None）。
 #[test]
 fn no_draw_frame_clears_the_slot() {
-    let frames = vec![act(FrameAct::Move, -1, 0), act(start(1), 0, 0), draw(7, 50)];
+    let frames = vec![
+        act(FrameAct::Move, -1, 0),
+        act(start(1), 0, 0),
+        draw(7, ms(50)),
+    ];
     assert_eq!(visible_frame(&frames, 0), None);
     assert_eq!(visible_frame(&frames, 1), None);
     assert_eq!(visible_frame(&frames, 2), Some(2));
@@ -80,9 +88,16 @@ fn no_draw_frame_clears_the_slot() {
 /// `always` でも働きのコマの `-1` は何も出さない扱いにしない（その周の絵が残る）。
 #[test]
 fn always_action_frame_with_minus_one_is_a_frame() {
-    let frames = vec![draw(10, 0), act(FrameAct::Move, -1, 50), draw(11, 50)];
-    let period = NonZeroU64::new(100).unwrap();
-    assert_eq!(always_at(&frames, period, None, 60), AlwaysView::Frame(1));
+    let frames = vec![
+        draw(10, ms(0)),
+        act(FrameAct::Move, -1, 50),
+        draw(11, ms(50)),
+    ];
+    let period = ms(100);
+    assert_eq!(
+        always_at(&frames, period, None, ms(60)),
+        AlwaysView::Frame(1)
+    );
     assert_eq!(visible_frame(&frames, 1), Some(0));
 }
 
@@ -90,30 +105,38 @@ fn always_action_frame_with_minus_one_is_a_frame() {
 /// 欄に置くはずのコマが `-1` だから・ukadoc pattern の項）。
 #[test]
 fn minus_one_followed_by_zero_wait_action_frame_stops() {
-    let frames = vec![draw(100, 0), draw(-1, 50), act(FrameAct::Inert, 0, 0)];
-    assert_eq!(frame_at(&frames, 49), FrameStatus::Active(0));
-    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
     let frames = vec![
-        draw(100, 0),
-        draw(-1, 50),
-        act(start(3), 0, 0),
-        draw(101, 50),
+        draw(100, ms(0)),
+        draw(-1, ms(50)),
+        act(FrameAct::Inert, 0, 0),
     ];
-    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    assert_eq!(frame_at(&frames, ms(49)), FrameStatus::Active(0));
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::Stopped);
+    let frames = vec![
+        draw(100, ms(0)),
+        draw(-1, ms(50)),
+        act(start(3), 0, 0),
+        draw(101, ms(50)),
+    ];
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::Stopped);
     // 描くコマが前に無い働きのコマは止めない（欄を外すだけ）。
-    let frames = vec![act(start(3), 0, 0), draw(101, 50)];
-    assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
+    let frames = vec![act(start(3), 0, 0), draw(101, ms(50))];
+    assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Active(0));
 }
 
 /// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
 /// ukadoc「サーフェス番号に-1でそのアニメーションの停止」）。
 #[test]
 fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
-    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];
-    assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
-    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
-    assert_eq!(frame_at(&frames, u64::MAX), FrameStatus::Stopped, "恒久");
+    let frames = vec![draw(100, ms(0)), draw(-1, ms(50)), draw(101, ms(0))];
+    assert_eq!(frame_at(&frames, ms(0)), FrameStatus::Active(0));
+    assert_eq!(frame_at(&frames, ms(50)), FrameStatus::Stopped);
+    assert_eq!(
+        frame_at(&frames, TimeSpan::MAX),
+        FrameStatus::Stopped,
+        "恒久"
+    );
     // 刻みが `-1` の短い窓 [50,55) を飛び越えても止まる。
-    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 5)];
-    assert_eq!(frame_at(&frames, 60), FrameStatus::Stopped);
+    let frames = vec![draw(100, ms(0)), draw(-1, ms(50)), draw(101, ms(5))];
+    assert_eq!(frame_at(&frames, ms(60)), FrameStatus::Stopped);
 }

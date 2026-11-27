@@ -260,6 +260,7 @@ dependencies = [
  "areka-seriko",
  "areka-sylphya",
  "bevy_ecs",
+ "dola",
  "log-capture-kit",
  "tracing",
  "windows",
@@ -272,6 +273,7 @@ version = "0.1.0"
 dependencies = [
  "areka-actor",
  "areka-talk",
+ "dola",
  "log-capture-kit",
  "shiori-host32-host",
  "shiori-host32-ipc",
@@ -469,6 +471,9 @@ dependencies = [
 [[package]]
 name = "areka-talk"
 version = "0.1.0"
+dependencies = [
+ "dola",
+]
 
 [[package]]
 name = "areka-update"

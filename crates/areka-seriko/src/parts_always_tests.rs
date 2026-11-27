@@ -4,6 +4,8 @@
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
 use areka_emo_compose::{BindSet, PatternState};
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 
 use super::PartClocks;
 use super::tests::{cell_of, count};
@@ -17,7 +19,7 @@ fn tick(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
-    now_ms: u64,
+    now: TimePoint,
     crossed: bool,
     rng: &mut LoopRng,
 ) -> PatternState {
@@ -27,22 +29,22 @@ fn tick(
         table,
         top,
         &BindSet::default(),
-        now_ms,
+        now,
         crossed,
         rng,
         &empty,
     )
 }
 
-/// 一番上 `top` のシェルの面で出来事の直後の `refresh` を時刻 `at_ms` で回し、部品の欄を作り直した絵を返す。
+/// 一番上 `top` のシェルの面で出来事の直後の `refresh` を時刻 `at` で回し、部品の欄を作り直した絵を返す。
 fn refresh(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
-    at_ms: Option<u64>,
+    at: TimePoint,
 ) -> PatternState {
     let empty = PatternState::default();
-    super::tests::refresh_at(clocks, table, top, &BindSet::default(), at_ms, &empty)
+    super::tests::refresh_at(clocks, table, top, &BindSet::default(), at, &empty)
 }
 
 /// 一番上 0 と 1 が子 100 を置き、2 は何も置かない。100 の `always` は 101（待ち 0＝経過 0）→
@@ -66,24 +68,24 @@ fn always_part_is_born_without_rng_and_rest_frame_is_not_written() {
     let mut clocks = PartClocks::default();
 
     // 見えない間は時計が無い。
-    let p = tick(&mut clocks, &table, 2, 500, true, &mut rng);
+    let p = tick(&mut clocks, &table, 2, at_ms(500), true, &mut rng);
     assert!(p.is_empty());
     assert_eq!(clocks.clock(&scope(), 100, 0), None);
 
-    let p = tick(&mut clocks, &table, 0, 1000, true, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1000), true, &mut rng);
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
-        playing(1000),
+        playing(at_ms(1000)),
         "見えた時刻で生まれる"
     );
     assert_eq!(cell_of(&p, 100), None, "経過 0 と同じコマは載せない");
     assert!(p.is_empty());
 
-    let p = tick(&mut clocks, &table, 0, 1100, false, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1100), false, &mut rng);
     assert_eq!(cell_of(&p, 100), Some(None), "`-1` の間は消えている");
-    let p = tick(&mut clocks, &table, 0, 1250, true, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1250), true, &mut rng);
     assert_eq!(cell_of(&p, 100), Some(Some(102)));
-    let p = tick(&mut clocks, &table, 0, 1300, false, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1300), false, &mut rng);
     assert_eq!(cell_of(&p, 100), None, "周の頭は経過 0 と同じ");
     assert!(p.is_empty());
 
@@ -98,52 +100,44 @@ fn always_in_child_does_not_rewind_when_parent_switches() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    tick(&mut clocks, &table, 0, 1000, true, &mut rng);
-    let p = tick(&mut clocks, &table, 1, 1210, false, &mut rng);
+    tick(&mut clocks, &table, 0, at_ms(1000), true, &mut rng);
+    let p = tick(&mut clocks, &table, 1, at_ms(1210), false, &mut rng);
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "別の親でも続き");
-    assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
+    assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
 
-    let p = tick(&mut clocks, &table, 2, 1220, false, &mut rng);
+    let p = tick(&mut clocks, &table, 2, at_ms(1220), false, &mut rng);
     assert!(p.is_empty());
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
-        playing(1000),
+        playing(at_ms(1000)),
         "終わりなしは捨てない"
     );
-    let p = tick(&mut clocks, &table, 0, 1350, false, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1350), false, &mut rng);
     assert_eq!(
         cell_of(&p, 100),
         None,
         "見えなかった間も進んでいる（1350 は 2 周目の頭）"
     );
-    let p = tick(&mut clocks, &table, 0, 1410, false, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1410), false, &mut rng);
     assert_eq!(cell_of(&p, 100), Some(None));
-    assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
+    assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
 }
 
 /// 出来事の直後の `refresh` は、見えている `always` の時計が無ければ出来事の時刻で作り（経過 0＝欄に
-/// 載せない）、在れば今のコマを書く。時刻が分からない（`None`）ときは作らない。
+/// 載せない）、在れば今のコマを書く。
 #[test]
 fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
     let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let p = refresh(&mut clocks, &table, 0, None);
-    assert!(p.is_empty());
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        None,
-        "時刻が分からなければ作らない"
-    );
-
-    let p = refresh(&mut clocks, &table, 0, Some(1000));
+    let p = refresh(&mut clocks, &table, 0, at_ms(1000));
     assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
-    assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
+    assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
 
-    let p = refresh(&mut clocks, &table, 1, Some(1200));
+    let p = refresh(&mut clocks, &table, 1, at_ms(1200));
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
-    assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
-    tick(&mut clocks, &table, 0, 1250, true, &mut rng);
+    assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
+    tick(&mut clocks, &table, 0, at_ms(1250), true, &mut rng);
     assert_eq!(probe.lock().unwrap().calls, 0, "乱数を引かない");
 }
 
@@ -162,7 +156,10 @@ fn always_beside_random_does_not_change_the_draws() {
         let table = table_of(text);
         let (mut rng, probe) = counting_rng(&[1, 1, 1]);
         let mut clocks = PartClocks::default();
-        for (i, at) in [1000u64, 1100, 1200].into_iter().enumerate() {
+        for (i, at) in [at_ms(1000), at_ms(1100), at_ms(1200)]
+            .into_iter()
+            .enumerate()
+        {
             tick(&mut clocks, &table, 0, at, i != 1, &mut rng);
         }
         probe.lock().unwrap().calls
@@ -189,8 +186,8 @@ fn blank_survives_when_a_part_hidden_in_the_same_tick_is_dropped() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    tick(&mut clocks, &table, 0, 1000, true, &mut rng);
-    let p = tick(&mut clocks, &table, 0, 1100, false, &mut rng);
+    tick(&mut clocks, &table, 0, at_ms(1000), true, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1100), false, &mut rng);
     assert_eq!(cell_of(&p, 100), Some(None), "消えているが残る");
     assert_eq!(cell_of(&p, 200), Some(Some(201)));
 }
@@ -202,7 +199,7 @@ fn always_clock_birth_is_debug_logged_once() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
     let lines = capture_logs(|| {
-        for at in [1000u64, 1100, 1200] {
+        for at in [at_ms(1000), at_ms(1100), at_ms(1200)] {
             tick(&mut clocks, &table, 0, at, false, &mut rng);
         }
     });

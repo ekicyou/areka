@@ -239,9 +239,9 @@ impl LapRig {
                     last_tick = Some(Instant::now());
                     rig.inject_talk_tick(ticks.step_ms);
                 }
-                // 台詞の文字の現れとバルーンの表示を UI が決める時刻（`TalkClock` と同じ dola の時計）。
-                rig.world
-                    .insert_resource(FrameTime(dola::runtime::clock::now()));
+                // 台詞の文字の現れとバルーンの表示を UI が決める時刻。
+                let now = rig.frame_time();
+                rig.world.insert_resource(FrameTime(now));
                 pump_messages();
                 rig.world.run_schedule(Input);
                 rig.world.run_schedule(Update);

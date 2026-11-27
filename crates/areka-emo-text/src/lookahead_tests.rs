@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::{EmoWorld, fold_boxes};
 use areka_parsers::shell::{parse, parse_boxes};
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue, TimePoint};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
@@ -16,6 +16,7 @@ use crate::look::LookLayers;
 use crate::place::TextPlace;
 use crate::segment::segment_plan;
 use crate::state::TextItem;
+use dola::time::testing::ms;
 
 /// 箱の構成: サーフェス 0 は element1=a・element2=b（既定は a）。
 const SHELL: &str = "\
@@ -60,16 +61,11 @@ fn resolve(key: &str) -> SurfaceKeyOutcome {
         .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show)
 }
 
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
+fn cue(actor: &str, at: dola::TimeSpan, command: CueCommand) -> TalkCue {
+    TalkCue::scheduled(TimePoint::ZERO, at, ActorKey::from(actor), command, ms(0))
 }
 
-fn text(actor: &str, at: f64, s: &str) -> TalkCue {
+fn text(actor: &str, at: dola::TimeSpan, s: &str) -> TalkCue {
     cue(actor, at, CueCommand::Text(s.to_owned()))
 }
 
@@ -77,7 +73,7 @@ fn text(actor: &str, at: f64, s: &str) -> TalkCue {
 fn font(actor: &str, tokens: &[&str]) -> TalkCue {
     cue(
         actor,
-        0.0,
+        ms(0),
         CueCommand::command_carrier(
             FONT_TAG_CARRIER,
             tokens.iter().map(|t| (*t).to_owned()).collect(),
@@ -140,16 +136,16 @@ fn rehearsal_destinations_match_production() {
     let mut state = boxed_state();
     let resolve: &dyn Fn(&str) -> SurfaceKeyOutcome = &resolve;
     // 前のトークの字（頭の全消去で消える）。
-    advance_state(&mut state, Some(resolve), &text("0", 0.0, "まえ"));
+    advance_state(&mut state, Some(resolve), &text("0", ms(0), "まえ"));
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        cue("0", 0.0, CueCommand::Emote { key: "0".into() }),
-        text("0", 0.1, "あい"),
-        cue("0", 0.2, CueCommand::BalloonSurface { key: "b".into() }),
-        text("0", 0.3, "うえ"),
-        cue("0", 0.4, CueCommand::NewLine { ratio: 1.0 }),
-        text("0", 0.5, "お"),
-        text("1", 0.6, "かき"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        cue("0", ms(0), CueCommand::Emote { key: "0".into() }),
+        text("0", ms(100), "あい"),
+        cue("0", ms(200), CueCommand::BalloonSurface { key: "b".into() }),
+        text("0", ms(300), "うえ"),
+        cue("0", ms(400), CueCommand::NewLine { ratio: 1.0 }),
+        text("0", ms(500), "お"),
+        text("1", ms(600), "かき"),
     ];
     let mut look = TalkLookahead::default();
     look.install(&state, Some(resolve), &talk);
@@ -181,10 +177,10 @@ fn section_numbers_split_on_clears_and_survive_place_creation() {
     let actor = ActorKey::from("0");
     let balloon = PlaceKey::balloon(&actor);
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        text("0", 0.1, "あ"),
-        cue("0", 0.2, CueCommand::Clear),
-        text("0", 0.3, "い"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        text("0", ms(100), "あ"),
+        cue("0", ms(200), CueCommand::Clear),
+        text("0", ms(300), "い"),
     ];
     // 空回しの出発点には場所が無い（全消去は状態の消去の回数を進めない）。
     let mut state = TextLayerState::default();
@@ -234,9 +230,9 @@ fn sections_carry_over_until_replaced_or_cleared() {
     let mut look = TalkLookahead::default();
 
     let first = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        text("0", 0.1, "あい"),
-        text("1", 0.2, "かき"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        text("0", ms(100), "あい"),
+        text("1", ms(200), "かき"),
     ];
     assert_eq!(
         look.install(&state, None, &first),
@@ -254,7 +250,10 @@ fn sections_carry_over_until_replaced_or_cleared() {
     );
 
     // 2 本目は頭の全消去なしで本体側に足し、相方側を `\c` で消す。
-    let second = [text("0", 1.0, "さし"), cue("1", 1.1, CueCommand::Clear)];
+    let second = [
+        text("0", ms(1000), "さし"),
+        cue("1", ms(1100), CueCommand::Clear),
+    ];
     // 求めた区間は本体側の 1 つだけ（持ち越した相方側の区間は数えない）。
     assert_eq!(
         look.install(&state, None, &second),
@@ -329,9 +328,9 @@ fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
 
     // 一致（対照）: 全文は「あ」→ 太字 →「い」、届いたのは「あ」まで。区切りは初めて要ったときに 1 度。
     let talk = [
-        text("0", 0.0, "あ"),
+        text("0", ms(0), "あ"),
         font("0", &["bold", "1"]),
-        text("0", 0.1, "い"),
+        text("0", ms(100), "い"),
     ];
     let mut look = TalkLookahead::default();
     look.install(&TextLayerState::default(), None, &talk);
@@ -364,22 +363,22 @@ fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
     let cases: [(&str, Vec<TalkCue>, Vec<TalkCue>, usize, usize); 3] = [
         (
             "字の列",
-            vec![text("0", 0.0, "あい")],
-            vec![text("0", 0.0, "かき")],
+            vec![text("0", ms(0), "あい")],
+            vec![text("0", ms(0), "かき")],
             0,
             2,
         ),
         (
             "字ごとの装飾番号",
             talk.to_vec(),
-            vec![font("0", &["bold", "1"]), text("0", 0.0, "あ")],
+            vec![font("0", &["bold", "1"]), text("0", ms(0), "あ")],
             1,
             1,
         ),
         (
             "装飾の表",
-            vec![font("0", &["bold", "1"]), text("0", 0.0, "あい")],
-            vec![font("0", &["italic", "1"]), text("0", 0.0, "あ")],
+            vec![font("0", &["bold", "1"]), text("0", ms(0), "あい")],
+            vec![font("0", &["italic", "1"]), text("0", ms(0), "あ")],
             2,
             1,
         ),
@@ -425,8 +424,8 @@ fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
     // 先渡しが無い・区間ごと・場所ごと・字の無い場所。
     let kero = place("1", TextPlace::Balloon);
     let mut look = TalkLookahead::default();
-    let glyph = arrive(&[text("0", 0.0, "か")]);
-    let no_glyph = arrive(&[cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 })]);
+    let glyph = arrive(&[text("0", ms(0), "か")]);
+    let no_glyph = arrive(&[cue("0", ms(0), CueCommand::NewLine { ratio: 1.0 })]);
     assert!(no_glyph.glyph_styles().is_empty() && !no_glyph.items().is_empty());
     let (answers, events) = capture(|| {
         let mut answers = Vec::new();
@@ -438,7 +437,7 @@ fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
         // 別の場所は別に 1 度。
         answers.push(is_full(&look.basis(&kero, &glyph)));
         // `\c` で区間が進めば、同じ場所でも次の区間で 1 度。
-        look.note_cue(&cue("0", 0.0, CueCommand::Clear), &sakura);
+        look.note_cue(&cue("0", ms(0), CueCommand::Clear), &sakura);
         answers.push(is_full(&look.basis(&sakura, &glyph)));
         answers.push(is_full(&look.basis(&sakura, &glyph)));
         answers
@@ -470,10 +469,10 @@ fn install_carries_the_warned_mark_only_with_the_carried_section() {
     let sakura = place("0", TextPlace::Balloon);
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
-    let first = [text("0", 0.0, "あ")];
+    let first = [text("0", ms(0), "あ")];
     look.install(&state, None, &first);
     // 先渡しに無い字が届く（食い違い）。
-    deliver(&mut look, &mut state, None, &[text("0", 0.0, "か")]);
+    deliver(&mut look, &mut state, None, &[text("0", ms(0), "か")]);
 
     let count = |look: &mut TalkLookahead, state: &TextLayerState| {
         let arrived = content(state, &sakura);
@@ -493,8 +492,8 @@ fn install_carries_the_warned_mark_only_with_the_carried_section() {
     assert_eq!(count(&mut look, &state), 0, "持ち越した区間の印は残る");
 
     // 足す先渡し: 今の状態（「か」）から求め直す。そこへまた先渡しに無い字が届く。
-    look.install(&state, None, &[text("0", 1.0, "う")]);
-    deliver(&mut look, &mut state, None, &[text("0", 1.0, "さ")]);
+    look.install(&state, None, &[text("0", ms(1000), "う")]);
+    deliver(&mut look, &mut state, None, &[text("0", ms(1000), "さ")]);
     assert_eq!(
         count(&mut look, &state),
         1,
@@ -511,7 +510,7 @@ fn rehearsal_is_silent_and_production_warns_are_unchanged() {
     let talk = [
         cue(
             "0",
-            0.0,
+            ms(0),
             CueCommand::Choice {
                 id: "OnPick".to_owned(),
                 text: String::new(),
@@ -520,14 +519,14 @@ fn rehearsal_is_silent_and_production_warns_are_unchanged() {
         ),
         cue(
             "0",
-            0.1,
+            ms(100),
             CueCommand::BalloonSurface {
                 key: "nobox".to_owned(),
             },
         ),
         font("0", &["bold", "yes"]),
         font("0", &["sub", "1"]),
-        text("0", 0.2, "あ"),
+        text("0", ms(200), "あ"),
     ];
     let messages = |events: &[CapturedEvent]| -> Vec<String> {
         warns(events)
@@ -586,16 +585,16 @@ fn forget_boxes_drops_box_sections_and_counts_only() {
     let mut state = boxed_state();
     let resolve: &dyn Fn(&str) -> SurfaceKeyOutcome = &resolve;
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        cue("0", 0.0, CueCommand::Emote { key: "0".into() }),
-        text("0", 0.1, "あ"),
-        cue("0", 0.2, CueCommand::Clear),
-        text("0", 0.3, "い"),
-        cue("0", 0.4, CueCommand::BalloonSurface { key: "b".into() }),
-        text("0", 0.5, "う"),
-        text("1", 0.6, "か"),
-        cue("1", 0.7, CueCommand::Clear),
-        text("1", 0.8, "き"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        cue("0", ms(0), CueCommand::Emote { key: "0".into() }),
+        text("0", ms(100), "あ"),
+        cue("0", ms(200), CueCommand::Clear),
+        text("0", ms(300), "い"),
+        cue("0", ms(400), CueCommand::BalloonSurface { key: "b".into() }),
+        text("0", ms(500), "う"),
+        text("1", ms(600), "か"),
+        cue("1", ms(700), CueCommand::Clear),
+        text("1", ms(800), "き"),
     ];
     let mut look = TalkLookahead::default();
     look.install(&state, Some(resolve), &talk);
@@ -614,7 +613,7 @@ fn forget_boxes_drops_box_sections_and_counts_only() {
         "前提: 頭の全消去と途中の \\c"
     );
     // 箱 b に warn 済みの印を付けておく（食い違う字を聞く）。
-    let stray = arrive(&[text("0", 0.0, "さ")]);
+    let stray = arrive(&[text("0", ms(0), "さ")]);
     let (_, marked) = capture(|| is_full(&look.basis(&b, &stray)));
     assert_eq!(warns(&marked).len(), 1, "前提: 箱の場所の印");
 
@@ -696,10 +695,10 @@ fn reinstall_after_attaching_look_keeps_full_basis() {
     let actor = ActorKey::from("0");
     let balloon = PlaceKey::balloon(&actor);
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        text("0", 0.1, "あ"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        text("0", ms(100), "あ"),
         font("0", &["bold", "1"]),
-        text("0", 0.2, "い"),
+        text("0", ms(200), "い"),
     ];
     let run = |reinstall: bool| {
         let mut state = TextLayerState::default();
@@ -728,9 +727,9 @@ fn reinstall_after_attaching_look_keeps_full_basis() {
 fn reinstall_after_box_layout_rehearses_into_boxes() {
     let resolve: &dyn Fn(&str) -> SurfaceKeyOutcome = &resolve;
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        cue("0", 0.0, CueCommand::Emote { key: "0".into() }),
-        text("0", 0.1, "あい"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        cue("0", ms(0), CueCommand::Emote { key: "0".into() }),
+        text("0", ms(100), "あい"),
     ];
     let run = |reinstall: bool| {
         let mut state = TextLayerState::default();
@@ -761,12 +760,12 @@ fn reinstall_midway_keeps_counts_and_earlier_sections() {
     let actor = ActorKey::from("0");
     let balloon = PlaceKey::balloon(&actor);
     let talk = [
-        cue("0", 0.0, CueCommand::ClearAll),
-        text("0", 0.1, "あ"),
-        cue("0", 0.2, CueCommand::Clear),
-        text("0", 0.3, "い"),
+        cue("0", ms(0), CueCommand::ClearAll),
+        text("0", ms(100), "あ"),
+        cue("0", ms(200), CueCommand::Clear),
+        text("0", ms(300), "い"),
         font("0", &["bold", "1"]),
-        text("0", 0.4, "う"),
+        text("0", ms(400), "う"),
     ];
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
@@ -775,7 +774,7 @@ fn reinstall_midway_keeps_counts_and_earlier_sections() {
     let earlier = look.sections[&(balloon.clone(), 1)].content.clone();
     state.set_look_layers(&actor, attached_layers());
     // 食い違う字を聞いて今の区間に warn 済みの印を付ける（やり直しは印を消す）。
-    let stray = arrive(&[text("0", 0.0, "さ")]);
+    let stray = arrive(&[text("0", ms(0), "さ")]);
     let stray_warns = |look: &mut TalkLookahead| {
         let (full, events) = capture(|| is_full(&look.basis(&balloon, &stray)));
         assert!(!full, "前提: 食い違う");
@@ -825,7 +824,7 @@ fn reinstall_keeps_current_content_where_nothing_is_added() {
     let actor = ActorKey::from("0");
     let sakura = PlaceKey::balloon(&actor);
     let kero = place("1", TextPlace::Balloon);
-    let talk = [text("0", 0.0, "あ"), text("1", 0.1, "か")];
+    let talk = [text("0", ms(0), "あ"), text("1", ms(100), "か")];
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
     look.install(&state, None, &talk);
@@ -853,7 +852,7 @@ fn reinstall_keeps_current_content_where_nothing_is_added() {
 #[test]
 fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
     let actor = ActorKey::from("0");
-    let talk = [text("0", 0.0, "あ"), text("0", 0.1, "い")];
+    let talk = [text("0", ms(0), "あ"), text("0", ms(100), "い")];
     let run = |first: TalkCue| {
         let mut state = TextLayerState::default();
         let mut look = TalkLookahead::default();
@@ -871,7 +870,7 @@ fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
         "対照: やり直しが全文を変える"
     );
     assert_eq!(
-        run(text("0", 0.0, "か")),
+        run(text("0", ms(0), "か")),
         (false, true),
         "列に無い合図で列を捨て、やり直しは何も変えない"
     );
@@ -884,8 +883,8 @@ fn marker_cue_counts_as_added_content() {
     let sakura = PlaceKey::balloon(&ActorKey::from("0"));
     let kero = place("1", TextPlace::Balloon);
     let talk = [
-        cue("0", 0.0, CueCommand::command_carrier("*", vec![])),
-        text("1", 0.1, "かき"),
+        cue("0", ms(0), CueCommand::command_carrier("*", vec![])),
+        text("1", ms(100), "かき"),
     ];
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();

@@ -17,7 +17,7 @@ use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 /// host-32 IPC 有界 e2e の壁時計安全弁（ハング検出器）。兄弟 e2e 規約（inproc/real_pasta/
-/// snapshot_capture = 60s）へ整合。意味論 deadline は MonotonicMs 仮想時間で注入されるため
+/// snapshot_capture = 60s）へ整合。意味論 deadline は 合成の時刻で注入されるため
 /// この壁時計値はテスト意味論に影響せず、workspace 並列負荷の飢餓による偽赤のみを防ぐ。
 pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -30,11 +30,11 @@ pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60)
 /// Tick を止めて `yield_now` だけで待つ」形は、スレッドスケジューリング次第で**両方向に**壊れる:
 ///
 /// - **注入不足**（引き渡しが速く `now` が talk horizon 未満で止まる）: 挨拶 talk（`\s[0]hello\e`＝`hello` の
-///   0.25s）が完了せず `TalkDone` が出ない。kanade は `Steady{talk: Some(greeting)}` で close を保留し続け、
+///   250ms）が完了せず `TalkDone` が出ない。kanade は `Steady{talk: Some(greeting)}` で close を保留し続け、
 ///   以降 Tick が来ないので**永久に握手が始まらない**（S4 の `Unload` 待ち・S5 の `OnClose` 待ちが 60s 安全弁まで
 ///   空転して落ちる）。
 /// - **注入過多**（引き渡しが遅く、dispatcher の**無制限** inbox に Tick が溜まる）: 溜まった分を一気に drain して
-///   仮想時刻が horizon を飛び越え、初回起動 epilogue cue（`areka.prop.set`@0.25）まで発火してしまう（S1 の
+///   仮想時刻が horizon を飛び越え、初回起動 epilogue cue（`areka.prop.set`@250ms）まで発火してしまう（S1 の
 ///   cue 列アサートが 3 件期待で落ちる）。
 ///
 /// 本ヘルパは待機条件を `done` で明示的に表明させ、仮想時刻は常に単調前進させる。これにより「何を待っているか」と
@@ -44,8 +44,8 @@ pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60)
 /// 台本外の `OnSecondChange` NOTIFY を誘発する）。
 pub(crate) fn spin_pumping_ticks(
     what: &str,
-    now: &mut u64,
-    mut send_tick: impl FnMut(u64),
+    now: &mut i64,
+    mut send_tick: impl FnMut(i64),
     mut done: impl FnMut() -> bool,
 ) {
     let deadline = std::time::Instant::now() + BOUND;
@@ -77,11 +77,11 @@ pub(crate) fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
 /// dispatcher へ `Tick{now}` を 1 本送る閉包（[`spin_pumping_ticks`] の `send_tick` に渡す）。
 pub(crate) fn dispatcher_tick(
     dispatcher: &std::sync::mpsc::Sender<areka_ghost::dispatcher::DispatcherMsg>,
-) -> impl FnMut(u64) + '_ {
+) -> impl FnMut(i64) + '_ {
     move |now| {
         dispatcher
             .send(areka_ghost::dispatcher::DispatcherMsg::Tick {
-                now: areka_kanade::MonotonicMs(now),
+                now: dola::time::testing::at_ms(now),
             })
             .expect("dispatcher actor should still be alive while driving the talk");
     }

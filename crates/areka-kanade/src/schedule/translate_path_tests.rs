@@ -85,10 +85,8 @@ impl Drive {
     ///
     /// 前提づくりは出口の規則に頼らない（翻訳の行動が出なければ、その一括の再生の開始をそのまま
     /// 使う）。規則を外したとき、各経路は前提ではなく自分の腕の確かめで赤になる。
-    fn start_talk(&mut self, now: u64, shown: &str) -> TalkId {
-        self.feed(Input::Tick {
-            now: MonotonicMs(now),
-        });
+    fn start_talk(&mut self, now: i64, shown: &str) -> TalkId {
+        self.feed(Input::Tick { now: at_ms(now) });
         let mut actions = self.reply(
             ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
             "OnSecondChange",
@@ -115,7 +113,7 @@ fn kind(action: &Action) -> String {
         Action::Notice(_) => "Notice".to_string(),
         Action::ResourceOutcome { .. } => "ResourceOutcome".to_string(),
         Action::Translate(_) => "Translate".to_string(),
-        Action::ArmChoiceWake(at) => format!("ArmChoiceWake:{}", at.0),
+        Action::ArmChoiceWake(at) => format!("ArmChoiceWake:{at}"),
     }
 }
 
@@ -360,9 +358,7 @@ fn ghost_change_yielded() -> (Drive, &'static str) {
 /// 経路 4: 毎秒のポンプで `OnSecondChange` を GET した（再生中のトークなし）。
 fn steady_pump() -> (Drive, &'static str) {
     let mut d = Drive::new(steady_none(), cfg());
-    d.feed(Input::Tick {
-        now: MonotonicMs(2_000),
-    });
+    d.feed(Input::Tick { now: at_ms(2_000) });
     (d, "OnSecondChange")
 }
 
@@ -389,8 +385,8 @@ fn choosing() -> Drive {
     d.feed(Input::ChoiceWaiting {
         talk_id,
         choice_ids: vec![CHOICE_ID.to_string()],
-        display_end: MonotonicMs(2_000),
-        timeout_directive_secs: Some(5.0),
+        display_end: at_ms(2_000),
+        timeout_directive: Some(delta_ms(5_000)),
     });
     assert!(d.s.choice.is_some(), "選択待ちの帳簿が立つ");
     d
@@ -411,9 +407,7 @@ fn choice_cascade() -> (Drive, &'static str) {
 /// 経路 5: 選択待ちが期限に達し、`OnChoiceTimeout` を送った。
 fn choice_timeout() -> (Drive, &'static str) {
     let mut d = choosing();
-    d.feed(Input::Tick {
-        now: MonotonicMs(7_000),
-    });
+    d.feed(Input::Tick { now: at_ms(7_000) });
     (d, "OnChoiceTimeout")
 }
 

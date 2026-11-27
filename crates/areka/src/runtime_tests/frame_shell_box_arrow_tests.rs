@@ -26,6 +26,7 @@ use areka_input::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use areka_input::{MouseWiring, RegionSource, on_char_pointer_pressed};
 use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
+use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 use super::*;
@@ -244,8 +245,12 @@ fn finished_box_arrow_press_scrolls_and_is_not_a_click() {
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
     let (kanade_tx, kanade_rx) = mpsc::channel();
-    cage.world
-        .insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    cage.world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        lifecycle_tx,
+        kanade_tx,
+        TalkClock::new(std::sync::Arc::new(|| dola::TimePoint::ZERO)),
+    ));
     drop(flag_tx);
 
     let up = cage.arrow_point(MarkerKind::Up);
@@ -285,8 +290,12 @@ fn talking_box_arrow_press_flows_to_the_usual_box_press() {
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
     let (kanade_tx, kanade_rx) = mpsc::channel();
-    cage.world
-        .insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+    cage.world.insert_non_send(UserBreakWiring::new(
+        flag_rx,
+        lifecycle_tx,
+        kanade_tx,
+        TalkClock::new(std::sync::Arc::new(|| dola::TimePoint::ZERO)),
+    ));
     flag_tx.send(NoUserBreakSignal::TalkStarted).unwrap();
     drain_no_user_break_signals(&mut cage.world);
 
@@ -294,7 +303,9 @@ fn talking_box_arrow_press_flows_to_the_usual_box_press() {
     assert!(cage.press(up, DoubleClick::Left), "箱の押下として処理した");
     assert_eq!(
         lifecycle_rx.try_iter().collect::<Vec<_>>(),
-        vec![TalkLifecycleSignal::UserBreak],
+        vec![TalkLifecycleSignal::UserBreak {
+            at: dola::TimePoint::ZERO
+        }],
         "表示の側へ中断が届く"
     );
     assert!(

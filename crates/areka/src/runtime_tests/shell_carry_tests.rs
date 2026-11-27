@@ -73,6 +73,7 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/A")).with_seriko_sink(sink),
     )));
+    world.insert_resource(wintf::ecs::FrameTime(dola::time::testing::at_ms(1_000)));
 
     replay(
         &world,

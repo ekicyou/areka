@@ -38,7 +38,7 @@ fn post_and_drain(
     let ((), events) = capture(|| {
         write(world);
         publisher.barrier().expect("記憶の書き手は生きている");
-        world.insert_resource(FrameTime(dola::runtime::clock::now()));
+        world.insert_resource(FrameTime(dola::now()));
         world.run_schedule(Update);
     });
     events

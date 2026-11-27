@@ -24,11 +24,11 @@ use std::collections::BTreeMap;
 use areka_emo_compose::BindSet;
 use areka_seriko::{BIND_COMMAND, BindChoicePolicy, BindResolver, DefaultBinds, scope_namespace};
 use bevy_ecs::world::World;
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use tracing::{info, warn};
+use dola::{DynamicValue, TimePoint, TimeSpan};
+use tracing::{error, info, warn};
 
-use super::frame::RuntimeWiring;
+use super::frame::{RuntimeWiring, resolve_frame_now};
 use super::session_hooks::SessionHooks;
 use super::target_map::shell_target;
 use areka_placement::descript_window_keys::{fallback_candidates, first_existing};
@@ -284,6 +284,13 @@ pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, Carrie
         return;
     };
     let mut sink = sink.clone();
+    let Some(frame_now) = resolve_frame_now(None, world) else {
+        error!(
+            event = "reload_shell_replay_no_frame_time",
+            "フレームの時刻が無いので、読み直しの前の面を出し直せない"
+        );
+        return;
+    };
     for (scope, decided) in binds {
         for r in &decided.replays {
             info!(
@@ -331,15 +338,16 @@ pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, Carrie
             ),
         }
     }
-    emit_binds(&mut sink, binds);
-    emit_shows(&mut sink, shows);
+    emit_binds(&mut sink, frame_now, binds);
+    emit_shows(&mut sink, frame_now, shows);
 }
 
-/// 出す面ごとに `\s[面]` と同じ合図（時刻 0・長さ 0）を送る（出さないものは送らない）。
-pub(crate) fn emit_shows(sink: &mut impl CueSink, shows: &[(u32, CarriedShow)]) {
+/// 出す面ごとに `\s[面]` と同じ合図（起点はフレームの時刻・at 0・長さ 0）を送る（出さないものは送らない）。
+pub(crate) fn emit_shows(sink: &mut impl CueSink, origin: TimePoint, shows: &[(u32, CarriedShow)]) {
     for &(scope, show) in shows {
         if let Some(id) = show.surface() {
             sink.emit(cue(
+                origin,
                 scope,
                 CueCommand::Emote {
                     key: id.to_string(),
@@ -349,8 +357,12 @@ pub(crate) fn emit_shows(sink: &mut impl CueSink, shows: &[(u32, CarriedShow)]) 
     }
 }
 
-/// 出し直す着せ替えごとに `\![bind,カテゴリ,パーツ,1|0]` と同じ合図（時刻 0・長さ 0）を送る。
-pub(crate) fn emit_binds(sink: &mut impl CueSink, binds: &[(u32, CarriedBinds)]) {
+/// 出し直す着せ替えごとに `\![bind,カテゴリ,パーツ,1|0]` と同じ合図（起点はフレームの時刻・at 0・長さ 0）を送る。
+pub(crate) fn emit_binds(
+    sink: &mut impl CueSink,
+    origin: TimePoint,
+    binds: &[(u32, CarriedBinds)],
+) {
     for (scope, decided) in binds {
         for r in &decided.replays {
             let params = [
@@ -362,6 +374,7 @@ pub(crate) fn emit_binds(sink: &mut impl CueSink, binds: &[(u32, CarriedBinds)])
             .map(|t| DynamicValue::String(t.to_owned()))
             .collect();
             sink.emit(cue(
+                origin,
                 *scope,
                 CueCommand::Custom {
                     command: BIND_COMMAND.to_owned(),
@@ -372,13 +385,14 @@ pub(crate) fn emit_binds(sink: &mut impl CueSink, binds: &[(u32, CarriedBinds)])
     }
 }
 
-fn cue(scope: u32, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope.to_string()),
+fn cue(origin: TimePoint, scope: u32, command: CueCommand) -> TalkCue {
+    TalkCue::scheduled(
+        origin,
+        TimeSpan::ZERO,
+        ActorKey::from(scope.to_string()),
         command,
-        duration: 0.0,
-    }
+        TimeSpan::ZERO,
+    )
 }
 
 #[cfg(test)]

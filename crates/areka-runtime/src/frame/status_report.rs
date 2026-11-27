@@ -26,7 +26,7 @@ use areka_seriko::StageNote;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
-use super::RuntimeWiring;
+use super::{RuntimeWiring, resolve_frame_now};
 use crate::session_hooks::SessionHooks;
 use crate::target_map::balloon_target;
 
@@ -144,11 +144,18 @@ pub fn report_stages(
             })
         })
         .collect();
+    let Some(frame_now) = resolve_frame_now(None, world) else {
+        error!(
+            event = "balloon_stage_no_frame_time",
+            "フレームの時刻が無いので、窓の知らせを seriko へ送らない"
+        );
+        return;
+    };
     let sink = (SessionHooks::of(world).seriko_sink)(world);
     report_stage_observed(
         ledger,
         &observed,
-        sink.map(|sink| |note| sink.send_stage(note)),
+        sink.map(|sink| move |note| sink.send_stage(note, frame_now)),
     );
 }
 

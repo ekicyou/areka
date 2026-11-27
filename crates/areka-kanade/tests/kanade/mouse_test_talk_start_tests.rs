@@ -4,6 +4,7 @@ use super::{
     MouseEventKind, QuitPolicy, TalkId, events, expected_call, expected_unload, send,
     spawn_harness, spawn_harness_gated, tick,
 };
+use dola::time::testing::at_ms;
 
 /// マウス GET へ注入する撫で talk スクリプト（cage 7・`Steady{None}` からの起動）。
 const FIXED_MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
@@ -146,7 +147,7 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
     );
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
     send(
         &harness,
         KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))),

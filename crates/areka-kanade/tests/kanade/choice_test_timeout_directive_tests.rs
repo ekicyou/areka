@@ -1,4 +1,4 @@
-//! 台本の時間の指令（`\![set,choicetimeout,N]` が運ぶ `timeout_directive_secs`）を受けた kanade が、
+//! 台本の時間の指令（`\![set,choicetimeout,N]` が運ぶ `timeout_directive`）を受けた kanade が、
 //! 指令どおりの期限で `OnChoiceTimeout` を出すことを外側から確かめる檻。
 //!
 //! 選択待ちは共有の補助関数 `establish_choice_wait` に指令を渡して作る（Boot → `Tick(1_000)` で
@@ -6,27 +6,34 @@
 //! 実時刻も sleep も読まない。
 
 use super::test_support::{
-    CANONICAL_CHOICE_ID, CHOICE_DISPLAY_END_MS, cascading_snapshot, choice_get_ids, command_tags,
+    CANONICAL_CHOICE_ID, CHOICE_DISPLAY_END, cascading_snapshot, choice_get_ids, command_tags,
     establish_choice_wait,
 };
 use super::{
     CallMethod, CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
-    MonotonicMs, QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
-    expected_call, position_of, pumps, spawn_harness_gated,
+    QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId, events, expected_call,
+    position_of, pumps, spawn_harness_gated,
 };
+use dola::time::testing::{delta_ms, ms};
+use dola::{TimeDelta, TimePoint};
 
 /// 境の値（ミリ秒）。台本 `\![set,choicetimeout,1234]` の `N`。対になる ghost のテストと共有する。
-const BOUNDARY_MS: u64 = 1_234;
+const BOUNDARY_MS: i64 = 1_234;
 
 /// 既定の時間切れ（30 秒）を越えた先の時刻。無効化の指令がここでも閉じないことを見る。
-const PAST_DEFAULT_MS: u64 = CHOICE_DISPLAY_END_MS + 60_000;
+fn past_default() -> TimePoint {
+    CHOICE_DISPLAY_END + ms(60_000)
+}
 
 /// 選択待ちを指令付きで作り、`ticks` を順に注入し、最後に中断の完了と close で終わらせる。
 ///
 /// 終わらせ方は時間切れが出た場合も出なかった場合も同じ注入列にする: `TalkDone{Interrupted}`
 /// （mock sakura は再生層を持たないので檻が直接注入する）で `Steady{None}` へ戻し、`CloseRequest`
 /// で即座に close 握手（別れ talk quit:true）を走らせる。kanade の期限付き join の成功を記録の確定点とする。
-fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>, Vec<TalkCommand>) {
+fn run_choice_wait(
+    directive: Option<TimeDelta>,
+    ticks: &[TimePoint],
+) -> (Vec<RecordedCall>, Vec<TalkCommand>) {
     // OnChoiceTimeout は未注入＝204（時間切れなら CancelChoice が出る）。
     let fixture = Fixture::quitting()
         .without_boot_greeting()
@@ -42,10 +49,7 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
     let tx = &harness.sender;
     establish_choice_wait(tx, &[CANONICAL_CHOICE_ID], directive);
     for &now in ticks {
-        tx.send(KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        })
-        .expect("send Tick");
+        tx.send(KanadeMsg::Tick { now }).expect("send Tick");
     }
     tx.send(KanadeMsg::TalkDone(TalkDone {
         talk_id: TalkId(1),
@@ -64,12 +68,12 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
     (recorded, commands)
 }
 
-/// **指令 `Some(1.234)` の期限の両側**: 表示の終わり `1_000` から
+/// **指令 `Some(delta_ms(1_234))` の期限の両側**: 表示の終わり `1_000` から
 /// ＋1233 ms の Tick では時間切れが出ず、＋1234 ms ちょうどの Tick で `OnChoiceTimeout` が出る。
 ///
 /// 対になるテストは ghost の `script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive`
-/// （境の値 `1234`）。あちらは台本 `\![set,choicetimeout,1234]` が kanade の入口で `Some(1.234)` に
-/// なることを、こちらはその `Some(1.234)` が「表示の終わり＋1234 ms」ちょうどの期限になることを示し、
+/// （境の値 `1234`）。あちらは台本 `\![set,choicetimeout,1234]` が kanade の入口で `Some(delta_ms(1_234))` に
+/// なることを、こちらはその `Some(delta_ms(1_234))` が「表示の終わり＋1234 ms」ちょうどの期限になることを示し、
 /// 2 本の合成で「台本から期限まで通し」になる。片方だけ境の値を変えたら、もう片方も合わせること。
 ///
 /// # 弁別
@@ -80,10 +84,10 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
 ///   204 で `CancelChoice` が出る（同じ経路）。
 #[test]
 fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
-    let just_before = CHOICE_DISPLAY_END_MS + BOUNDARY_MS - 1;
-    let deadline = CHOICE_DISPLAY_END_MS + BOUNDARY_MS;
+    let just_before = CHOICE_DISPLAY_END + ms(BOUNDARY_MS as u32) - ms(1);
+    let deadline = CHOICE_DISPLAY_END + ms(BOUNDARY_MS as u32);
     let (recorded, commands) =
-        run_choice_wait(Some(BOUNDARY_MS as f64 / 1000.0), &[just_before, deadline]);
+        run_choice_wait(Some(delta_ms(BOUNDARY_MS)), &[just_before, deadline]);
 
     assert_eq!(
         choice_get_ids(&recorded),
@@ -142,7 +146,7 @@ fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
 /// ＋60,000 ms の Tick が期限の判定に届いていることを同じ檻の中で示し、0 件の主張を空振りでなくする。
 #[test]
 fn choice_timeout_directive_zero_and_negative_never_fire_even_past_default() {
-    let (control, control_commands) = run_choice_wait(None, &[PAST_DEFAULT_MS]);
+    let (control, control_commands) = run_choice_wait(None, &[past_default()]);
     assert_eq!(
         choice_get_ids(&control),
         vec!["OnChoiceTimeout"],
@@ -153,8 +157,8 @@ fn choice_timeout_directive_zero_and_negative_never_fire_even_past_default() {
         "対照: 時間切れ 204 で解除指示が出るはず: {control_commands:?}"
     );
 
-    for directive in [Some(0.0), Some(-0.001)] {
-        let (recorded, commands) = run_choice_wait(directive, &[PAST_DEFAULT_MS]);
+    for directive in [Some(delta_ms(0)), Some(delta_ms(-1))] {
+        let (recorded, commands) = run_choice_wait(directive, &[past_default()]);
         assert!(
             choice_get_ids(&recorded).is_empty(),
             "指令 {directive:?} では＋60,000 ms でも時間切れが出ないはず: {recorded:?}"

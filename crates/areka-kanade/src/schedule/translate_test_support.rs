@@ -9,8 +9,9 @@ use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, current_talk_id, phase_label, step,
 };
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{ChoiceInput, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{ChoiceInput, KanadeConfig, ShioriCall, ShioriOutcome};
 use crate::talk::TalkId;
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// `step` の返り値の一括が翻訳の行動 1 つだけなら、結果を台詞そのまま（`Ok(script)`）で入れ直して
@@ -81,7 +82,7 @@ pub(crate) fn active(talk_id: u64, origin: &'static str) -> Option<ActiveTalk> {
 pub(crate) fn steady(talk: Option<ActiveTalk>) -> State {
     State {
         phase: Phase::Steady { talk },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: 10,
         ..State::initial()
     }
@@ -91,7 +92,7 @@ pub(crate) fn steady(talk: Option<ActiveTalk>) -> State {
 pub(crate) fn steady_none() -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
+        last_now: Some(at_ms(1_000)),
         next_talk_id: 5,
         ..State::initial()
     }
@@ -99,7 +100,7 @@ pub(crate) fn steady_none() -> State {
 
 /// 定常でない相の状態を 1 つずつ（次の番号 10・ほかは初期値）。外からの入口が受け付けない表の行。
 pub(crate) fn non_steady_states() -> Vec<(&'static str, State)> {
-    let deadline = Some(MonotonicMs(9_000));
+    let deadline = Some(at_ms(9_000));
     let talk_id = TalkId(9);
     [
         ("Idle", Phase::Idle),
@@ -235,15 +236,7 @@ pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
 /// 帳簿の掃除を外すとこの 2 つが赤になる。
 pub(crate) fn assert_no_choice_events_follow(state: State, cfg: &KanadeConfig) {
     let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Tick {
-                now: MonotonicMs(60_000),
-            },
-            cfg,
-        ))
-    });
+    let events = capture(|| out = Some(step(state, Input::Tick { now: at_ms(60_000) }, cfg)));
     let (state, tick) = out.unwrap();
     assert_eq!(choice_event_count(&tick), 0, "時間切れのイベントを送らない");
     assert_not_logged(&events, "choice_timeout_ledger_stale");

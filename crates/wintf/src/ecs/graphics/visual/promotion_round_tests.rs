@@ -7,6 +7,8 @@ use std::collections::HashSet;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::SystemState;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -35,10 +37,10 @@ fn rule(phase: Phase) -> RuleState {
         return s;
     }
     for k in 0..PROMOTE_COUNT {
-        s.step(k as f64 * 0.125, true, OK, SurfaceReadiness::Pending);
+        s.step(at_ms(k as i64 * 125), true, OK, SurfaceReadiness::Pending);
     }
     if phase == Phase::Active {
-        s.step(1.0, false, OK, SurfaceReadiness::Ready);
+        s.step(at_ms(1000), false, OK, SurfaceReadiness::Ready);
     }
     assert_eq!(s.phase(), phase);
     s
@@ -61,7 +63,7 @@ pub(super) fn world_scan(world: &mut World, entries: Vec<ScanEntry>) -> TreeScan
     s
 }
 
-pub(super) fn ctx(now: f64) -> RoundContext {
+pub(super) fn ctx(now: TimePoint) -> RoundContext {
     RoundContext {
         now: Some(now),
         device_ready: true,
@@ -112,13 +114,20 @@ pub(super) fn feed(
     world: &mut World,
     s: &mut TreeScan,
     idx: &[usize],
-    start: f64,
+    start: TimePoint,
     n: usize,
 ) -> RoundPlan {
     only_updated(s, idx);
     let mut last = None;
     for k in 0..n {
-        last = Some(round(world, s, &ctx(start + k as f64 * 0.125)).0);
+        last = Some(
+            round(
+                world,
+                s,
+                &ctx(start + dola::time::testing::ms(k as u32 * 125)),
+            )
+            .0,
+        );
     }
     last.unwrap()
 }
@@ -194,9 +203,9 @@ fn updates_under_an_auto_owner_count_for_the_owner() {
             ],
         );
         only_updated(&mut s, if b_updates { &[1] } else { &[] });
-        round(&mut world, &mut s, &ctx(3.9));
+        round(&mut world, &mut s, &ctx(at_ms(3900)));
         only_updated(&mut s, &[]);
-        let (plan, _) = round(&mut world, &mut s, &ctx(4.5));
+        let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(4500)));
         assert_eq!(ph(&world, ent(&s, 0)), expect);
         assert!(untouched(&world, ent(&s, 1)), "帰属した子の規則は呼ばない");
         if expect == Phase::Node {
@@ -218,7 +227,7 @@ fn only_updated_nodes_and_auto_owners_are_decided() {
         ],
     );
     only_updated(&mut s, &[1]);
-    round(&mut world, &mut s, &ctx(0.0));
+    round(&mut world, &mut s, &ctx(at_ms(0)));
     assert!(
         untouched(&world, ent(&s, 0)),
         "更新の無い節の規則は呼ばない"
@@ -240,7 +249,7 @@ fn no_decision_without_frame_time() {
     only_updated(&mut s, &[1]);
     let none = RoundContext {
         now: None,
-        ..ctx(0.0)
+        ..ctx(at_ms(0))
     };
     for _ in 0..PROMOTE_COUNT {
         round(&mut world, &mut s, &none);
@@ -266,7 +275,7 @@ fn ancestor_wins_when_both_would_promote_on_the_same_frame() {
             node(2, 12.0, 12.0, 16.0, 16.0),
         ],
     );
-    feed(&mut world, &mut s, &[1], 0.0, PROMOTE_COUNT);
+    feed(&mut world, &mut s, &[1], at_ms(0), PROMOTE_COUNT);
     assert_eq!(ph(&world, ent(&s, 1)), Phase::Preparing);
 
     let mut world = World::new();
@@ -277,7 +286,7 @@ fn ancestor_wins_when_both_would_promote_on_the_same_frame() {
             node(2, 12.0, 12.0, 16.0, 16.0),
         ],
     );
-    let plan = feed(&mut world, &mut s, &[0, 1], 0.0, PROMOTE_COUNT);
+    let plan = feed(&mut world, &mut s, &[0, 1], at_ms(0), PROMOTE_COUNT);
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Preparing);
     assert_eq!(
         ph(&world, ent(&s, 1)),
@@ -301,11 +310,11 @@ fn auto_owners_inside_a_new_promotion_are_absorbed() {
         ],
     );
     let b = ent(&s, 1);
-    let plan = feed(&mut world, &mut s, &[0], 1.0, PROMOTE_COUNT - 1);
+    let plan = feed(&mut world, &mut s, &[0], at_ms(1000), PROMOTE_COUNT - 1);
     assert_eq!(ph(&world, b), Phase::Active);
     assert_eq!(plan.host_visited, ents(&s, &[0]));
     world.clear_trackers();
-    let plan = feed(&mut world, &mut s, &[0], 1.875, 1);
+    let plan = feed(&mut world, &mut s, &[0], at_ms(1875), 1);
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Preparing);
     assert_eq!(ph(&world, b), Phase::Node);
     assert!(
@@ -339,7 +348,7 @@ fn preparing_waits_for_the_drawn_surface_then_activates() {
         world.entity_mut(a).insert(VisualTransform::default());
         // 回 N: 3 部品がまだ無い。待つ。部分は親の列にだけ在り、部分の列は描かない。
         world.clear_trackers();
-        let (plan, written) = round(&mut world, &mut s, &ctx(1.0));
+        let (plan, written) = round(&mut world, &mut s, &ctx(at_ms(1000)));
         assert_eq!(ph(&world, a), Phase::Preparing);
         assert!(
             !world
@@ -357,7 +366,7 @@ fn preparing_waits_for_the_drawn_surface_then_activates() {
         assert_eq!(written, HashSet::from([a]));
         // 回 N+1: 3 部品が入った（描画面はまだ作られていない＝無効）。部分の列をまだ描いていないので待つ。
         world.entity_mut(a).insert(SurfaceGraphics::default());
-        let (plan, _) = round(&mut world, &mut s, &ctx(1.1));
+        let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(1100)));
         assert_eq!(
             ph(&world, a),
             Phase::Preparing,
@@ -375,7 +384,7 @@ fn preparing_waits_for_the_drawn_surface_then_activates() {
             None
         };
         // 回 N+2: 描いた次の回に描画面が有効なら上げた（親の列から部分が外れる）。無効なら節へ戻す。
-        let (plan, _) = round(&mut world, &mut s, &ctx(1.2));
+        let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(1200)));
         assert!(!world.get::<AutoPromotion>(a).unwrap().built);
         if created {
             assert_eq!(ph(&world, a), Phase::Active);
@@ -406,7 +415,7 @@ fn preparing_demotes_when_the_surface_failed_or_the_device_is_gone() {
         world.get_mut::<AutoPromotion>(a).unwrap().built = true;
         let c = RoundContext {
             device_ready,
-            ..ctx(1.0)
+            ..ctx(at_ms(1000))
         };
         let (plan, written) = round(&mut world, &mut s, &c);
         assert_eq!(ph(&world, a), Phase::Node);
@@ -426,10 +435,10 @@ fn promotion_is_skipped_without_device_then_taken_with_it() {
         ..ctx(now)
     };
     for k in 0..PROMOTE_COUNT {
-        round(&mut world, &mut s, &no_device(k as f64 * 0.125));
+        round(&mut world, &mut s, &no_device(at_ms(k as i64 * 125)));
     }
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Node);
-    round(&mut world, &mut s, &ctx(1.0));
+    round(&mut world, &mut s, &ctx(at_ms(1000)));
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Preparing);
 }
 
@@ -439,7 +448,7 @@ fn hidden_auto_owner_demotes_and_empty_subtree_is_not_promoted() {
     let mut hidden = phased(node(1, 10.0, 10.0, 20.0, 20.0), Phase::Active);
     hidden.visible = false;
     let mut s = world_scan(&mut world, vec![hidden]);
-    let (plan, _) = round(&mut world, &mut s, &ctx(1.5));
+    let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(1500)));
     assert_eq!(
         ph(&world, ent(&s, 0)),
         Phase::Node,
@@ -450,7 +459,7 @@ fn hidden_auto_owner_demotes_and_empty_subtree_is_not_promoted() {
     // 描く中身の無い部分木は頻繁でも上げない（0×0 の描画面を作らない）。
     let mut world = World::new();
     let mut s = world_scan(&mut world, vec![node(1, 0.0, 0.0, 0.0, 0.0)]);
-    feed(&mut world, &mut s, &[0], 0.0, PROMOTE_COUNT);
+    feed(&mut world, &mut s, &[0], at_ms(0), PROMOTE_COUNT);
     assert_eq!(ph(&world, ent(&s, 0)), Phase::Node);
 }
 
@@ -476,13 +485,13 @@ fn placements_are_written_on_change_and_recorded() {
         clip,
     };
     let rect = PlacementClip::Rect(Aabb::new(0.0, 0.0, 50.0, 50.0));
-    let (_, written) = round(&mut world, &mut s, &ctx(1.0));
+    let (_, written) = round(&mut world, &mut s, &ctx(at_ms(1000)));
     assert_eq!(placement(&world, o), Some(embedded(0.5, rect)));
     assert_eq!(placement(&world, top), None, "根の直下の持ち主には書かない");
     assert_eq!(written, HashSet::from([o]));
 
     world.clear_trackers();
-    let (_, written) = round(&mut world, &mut s, &ctx(1.1));
+    let (_, written) = round(&mut world, &mut s, &ctx(at_ms(1100)));
     assert!(
         !world
             .entity(o)
@@ -495,7 +504,7 @@ fn placements_are_written_on_change_and_recorded() {
 
     // 祖先の変化はその回に書き直す。
     s.entries[1].ancestors.opacity = 0.25;
-    round(&mut world, &mut s, &ctx(1.2));
+    round(&mut world, &mut s, &ctx(at_ms(1200)));
     assert!(
         world
             .entity(o)
@@ -508,7 +517,7 @@ fn placements_are_written_on_change_and_recorded() {
     // 祖先の角丸の切り抜きは 1 つの矩形に合わせられない。見えない祖先は可視を偽にする。
     s.entries[0].own_clip = ClipClass::Rounded;
     s.entries[1].visible = false;
-    round(&mut world, &mut s, &ctx(1.3));
+    round(&mut world, &mut s, &ctx(at_ms(1300)));
     assert_eq!(
         placement(&world, o),
         Some(PlacementKind::Embedded {
@@ -533,16 +542,16 @@ fn auto_owner_placement_follows_the_extent_and_regrows_on_overflow() {
         origin_px: (8, 8),
         size_px,
     };
-    let (_, written) = round(&mut world, &mut s, &ctx(1.5));
+    let (_, written) = round(&mut world, &mut s, &ctx(at_ms(1500)));
     assert_eq!(placement(&world, a), Some(auto((14, 14))));
     assert_eq!(written, HashSet::from([a]));
     // はみ出したら決め直す。
     s.entries[0].world.content_world_aabb = Aabb::new(10.0, 10.0, 30.0, 20.0);
-    round(&mut world, &mut s, &ctx(1.6));
+    round(&mut world, &mut s, &ctx(at_ms(1600)));
     assert_eq!(placement(&world, a), Some(auto((24, 14))));
     // 縮むほうは追わない。
     s.entries[0].world.content_world_aabb = Aabb::new(10.0, 10.0, 12.0, 12.0);
-    let (plan, _) = round(&mut world, &mut s, &ctx(1.7));
+    let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(1700)));
     assert_eq!(placement(&world, a), Some(auto((24, 14))));
     assert_eq!(plan.segments[0].origin.px, (8, 8));
     assert_eq!(plan.segments[0].origin.size_px, (24, 14));
@@ -566,7 +575,7 @@ fn split_keeps_active_out_of_the_host_list_and_preparing_in_both() {
     world
         .entity_mut(ent(&s, 2))
         .insert(SurfaceGraphics::default());
-    let (plan, written) = round(&mut world, &mut s, &ctx(1.5));
+    let (plan, written) = round(&mut world, &mut s, &ctx(at_ms(1500)));
     assert_eq!(plan.host_visited, ents(&s, &[2, 3]));
     assert_eq!(
         segs(&plan),

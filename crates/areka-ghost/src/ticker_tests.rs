@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::run_bounded;
+use dola::time::testing::{at_ms, ms};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -7,32 +8,48 @@ use std::sync::{Arc, Mutex};
 
 #[test]
 fn next_grid_multiple_strictly_after_computes_smallest_future_multiple() {
-    assert_eq!(next_grid_multiple_strictly_after(1000, 0), 1000);
-    assert_eq!(next_grid_multiple_strictly_after(1000, 999), 1000);
-    assert_eq!(next_grid_multiple_strictly_after(1000, 1000), 2000);
-    assert_eq!(next_grid_multiple_strictly_after(1000, 1500), 2000);
-    assert_eq!(next_grid_multiple_strictly_after(50, 149), 150);
+    assert_eq!(
+        next_grid_multiple_strictly_after(ms(1000), at_ms(0)),
+        at_ms(1000)
+    );
+    assert_eq!(
+        next_grid_multiple_strictly_after(ms(1000), at_ms(999)),
+        at_ms(1000)
+    );
+    assert_eq!(
+        next_grid_multiple_strictly_after(ms(1000), at_ms(1000)),
+        at_ms(2000)
+    );
+    assert_eq!(
+        next_grid_multiple_strictly_after(ms(1000), at_ms(1500)),
+        at_ms(2000)
+    );
+    assert_eq!(
+        next_grid_multiple_strictly_after(ms(50), at_ms(149)),
+        at_ms(150)
+    );
 }
 
 #[test]
 fn starting_at_sets_first_deadline_strictly_after_now() {
-    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-    assert_eq!(schedule.next_deadline_ms, 1000);
+    let schedule = BoundarySchedule::starting_at(ms(1000), at_ms(0));
+    assert_eq!(schedule.next_deadline, at_ms(1000));
 
     // ちょうど境界上でも次の境界へ進む（起動直後の即時発火を避ける）。
-    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(1000));
-    assert_eq!(schedule.next_deadline_ms, 2000);
+    let schedule = BoundarySchedule::starting_at(ms(1000), at_ms(1000));
+    assert_eq!(schedule.next_deadline, at_ms(2000));
 }
 
 #[test]
 fn starting_at_aligns_to_absolute_grid_not_relative_to_spawn_time() {
     // クロックがグリッド非整列値（2347ms）で起動しても、最初の締切は
-    // 「起動時刻+interval」（3347）ではなく OS クロック絶対グリッド上の
+    // 「起動時刻+interval」（3347）ではなく時計の絶対グリッド上の
     // 次の境界（3000）へ整列する——将来の複数 ticker インスタンスが
     // 共有機構なしで同一グリッドへ自然同期するための不変条件。
-    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(2347));
+    let schedule = BoundarySchedule::starting_at(ms(1000), at_ms(2347));
     assert_eq!(
-        schedule.next_deadline_ms, 3000,
+        schedule.next_deadline,
+        at_ms(3000),
         "絶対グリッド整列: 2347ms 起動でも次境界は 3000（3347 ではない）"
     );
 }
@@ -40,28 +57,22 @@ fn starting_at_aligns_to_absolute_grid_not_relative_to_spawn_time() {
 #[test]
 #[should_panic(expected = "positive")]
 fn starting_at_panics_on_zero_interval() {
-    let _ = BoundarySchedule::starting_at(Duration::from_millis(0), MonotonicMs(0));
+    let _ = BoundarySchedule::starting_at(ms(0), at_ms(0));
 }
 
 #[test]
 fn remaining_counts_down_to_zero_at_boundary() {
-    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-    assert_eq!(
-        schedule.remaining(MonotonicMs(0)),
-        Duration::from_millis(1000)
-    );
-    assert_eq!(
-        schedule.remaining(MonotonicMs(400)),
-        Duration::from_millis(600)
-    );
-    assert_eq!(schedule.remaining(MonotonicMs(1000)), Duration::ZERO);
-    assert_eq!(schedule.remaining(MonotonicMs(1500)), Duration::ZERO);
+    let schedule = BoundarySchedule::starting_at(ms(1000), at_ms(0));
+    assert_eq!(schedule.remaining(at_ms(0)), Duration::from_millis(1000));
+    assert_eq!(schedule.remaining(at_ms(400)), Duration::from_millis(600));
+    assert_eq!(schedule.remaining(at_ms(1000)), Duration::ZERO);
+    assert_eq!(schedule.remaining(at_ms(1500)), Duration::ZERO);
 }
 
 #[test]
 fn poll_does_not_fire_before_boundary() {
-    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-    let result = schedule.poll(MonotonicMs(999));
+    let mut schedule = BoundarySchedule::starting_at(ms(1000), at_ms(0));
+    let result = schedule.poll(at_ms(999));
     assert_eq!(
         result,
         BoundaryPoll {
@@ -70,13 +81,13 @@ fn poll_does_not_fire_before_boundary() {
         }
     );
     // 未到達の poll は状態を変えない。
-    assert_eq!(schedule.next_deadline_ms, 1000);
+    assert_eq!(schedule.next_deadline, at_ms(1000));
 }
 
 #[test]
 fn poll_fires_exactly_once_on_time_and_advances_one_boundary() {
-    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-    let result = schedule.poll(MonotonicMs(1000));
+    let mut schedule = BoundarySchedule::starting_at(ms(1000), at_ms(0));
+    let result = schedule.poll(at_ms(1000));
     assert_eq!(
         result,
         BoundaryPoll {
@@ -84,10 +95,10 @@ fn poll_fires_exactly_once_on_time_and_advances_one_boundary() {
             catch_up: false
         }
     );
-    assert_eq!(schedule.next_deadline_ms, 2000);
+    assert_eq!(schedule.next_deadline, at_ms(2000));
 
     // 次の境界も定刻どおりなら catch-up にならない。
-    let result = schedule.poll(MonotonicMs(2000));
+    let result = schedule.poll(at_ms(2000));
     assert_eq!(
         result,
         BoundaryPoll {
@@ -95,14 +106,14 @@ fn poll_fires_exactly_once_on_time_and_advances_one_boundary() {
             catch_up: false
         }
     );
-    assert_eq!(schedule.next_deadline_ms, 3000);
+    assert_eq!(schedule.next_deadline, at_ms(3000));
 }
 
 #[test]
 fn poll_skips_multiple_missed_boundaries_and_fires_only_once() {
-    // サスペンド復帰等を模す: 次境界(1000)を大幅に過ぎた 8200 まで一気に進む。
-    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-    let result = schedule.poll(MonotonicMs(8200));
+    // 処理の大幅な遅れを模す: 次境界(1000)を大幅に過ぎた 8200 まで一気に進む。
+    let mut schedule = BoundarySchedule::starting_at(ms(1000), at_ms(0));
+    let result = schedule.poll(at_ms(8200));
     assert_eq!(
         result,
         BoundaryPoll {
@@ -112,10 +123,10 @@ fn poll_skips_multiple_missed_boundaries_and_fires_only_once() {
     );
     // 次デッドラインは 8200 より厳密に未来のグリッド倍数（9000）へスナップ済み
     // ＝ 2000, 3000, ..., 8000 の中間境界はすべてスキップされ再送されない。
-    assert_eq!(schedule.next_deadline_ms, 9000);
+    assert_eq!(schedule.next_deadline, at_ms(9000));
 
     // スキップ後の以降の呼出は再び定刻扱いに戻る。
-    let result = schedule.poll(MonotonicMs(9000));
+    let result = schedule.poll(at_ms(9000));
     assert_eq!(
         result,
         BoundaryPoll {
@@ -123,24 +134,21 @@ fn poll_skips_multiple_missed_boundaries_and_fires_only_once() {
             catch_up: false
         }
     );
-    assert_eq!(schedule.next_deadline_ms, 10000);
+    assert_eq!(schedule.next_deadline, at_ms(10000));
 }
 
 #[test]
 fn poll_50ms_base_interval_grid_matches_dispatcher_default() {
-    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(50), MonotonicMs(0));
-    assert_eq!(
-        schedule.remaining(MonotonicMs(0)),
-        Duration::from_millis(50)
-    );
-    let result = schedule.poll(MonotonicMs(50));
+    let mut schedule = BoundarySchedule::starting_at(ms(50), at_ms(0));
+    assert_eq!(schedule.remaining(at_ms(0)), Duration::from_millis(50));
+    let result = schedule.poll(at_ms(50));
     assert!(result.fired && !result.catch_up);
-    assert_eq!(schedule.next_deadline_ms, 100);
+    assert_eq!(schedule.next_deadline, at_ms(100));
 }
 
 // ---- アクター統合層: spawn_ticker ----
 
-/// 決定論的な `Fn`-backed clock を `Arc<Mutex<u64>>` 経由で包み、テストスレッドから
+/// 決定論的な `Fn`-backed clock を `Arc<Mutex<i64>>` 経由で包み、テストスレッドから
 /// 任意に「時刻」を進められるようにするヘルパ。
 ///
 /// `spawn_ticker` は起動直後に `start_now = clock()` を1回読んでから境界を初期化する
@@ -151,23 +159,23 @@ fn poll_50ms_base_interval_grid_matches_dispatcher_default() {
 /// 通知する——テストはこの通知を受けてから時計を書き換えることで、
 /// 「起動時刻の読取は必ず旧い値を観測する」ことを決定論的に保証できる。
 fn shared_clock(
-    value: Arc<Mutex<u64>>,
+    value: Arc<Mutex<i64>>,
     started_tx: mpsc::Sender<()>,
-) -> Box<dyn Fn() -> MonotonicMs + Send> {
+) -> Box<dyn Fn() -> TimePoint + Send> {
     let notified = std::sync::atomic::AtomicBool::new(false);
     Box::new(move || {
         let v = *value.lock().expect("clock mutex poisoned");
         if !notified.swap(true, std::sync::atomic::Ordering::SeqCst) {
             let _ = started_tx.send(());
         }
-        MonotonicMs(v)
+        at_ms(v)
     })
 }
 
 #[test]
 fn spawn_ticker_delivers_kanade_and_dispatcher_ticks_on_injected_clock() {
     struct TestDispatcherMsg {
-        now: MonotonicMs,
+        now: TimePoint,
     }
     impl From<Tick> for TestDispatcherMsg {
         fn from(tick: Tick) -> Self {
@@ -175,12 +183,12 @@ fn spawn_ticker_delivers_kanade_and_dispatcher_ticks_on_injected_clock() {
         }
     }
 
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
 
     let config = TickerConfig {
-        base_interval: Duration::from_millis(50),
-        kanade_interval: Duration::from_millis(1000),
+        base_interval: ms(50),
+        kanade_interval: ms(1000),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -201,13 +209,13 @@ fn spawn_ticker_delivers_kanade_and_dispatcher_ticks_on_injected_clock() {
     let dispatcher_tick = dispatcher_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("dispatcher should receive a tick once clock reaches a 50ms boundary");
-    assert_eq!(dispatcher_tick.now, MonotonicMs(1000));
+    assert_eq!(dispatcher_tick.now, at_ms(1000));
 
     let kanade_tick = kanade_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("kanade should receive a tick once clock reaches the 1000ms boundary");
     match kanade_tick {
-        KanadeMsg::Tick { now } => assert_eq!(now, MonotonicMs(1000)),
+        KanadeMsg::Tick { now } => assert_eq!(now, at_ms(1000)),
         _ => unreachable!("only Tick is sent by ticker"),
     }
 
@@ -232,11 +240,11 @@ fn spawn_ticker_stops_on_control_channel_disconnect() {
         }
     }
 
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, _started_rx) = mpsc::channel::<()>();
     let config = TickerConfig {
-        base_interval: Duration::from_millis(50),
-        kanade_interval: Duration::from_millis(1000),
+        base_interval: ms(50),
+        kanade_interval: ms(1000),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -268,11 +276,11 @@ fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
         }
     }
 
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
     let config = TickerConfig {
-        base_interval: Duration::from_millis(50),
-        kanade_interval: Duration::from_millis(1000),
+        base_interval: ms(50),
+        kanade_interval: ms(1000),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -297,7 +305,7 @@ fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
         .recv_timeout(Duration::from_secs(5))
         .expect("kanade must keep receiving ticks even though dispatcher disconnected");
     match kanade_tick {
-        KanadeMsg::Tick { now } => assert_eq!(now, MonotonicMs(1000)),
+        KanadeMsg::Tick { now } => assert_eq!(now, at_ms(1000)),
         _ => unreachable!("only Tick is sent by ticker"),
     }
 
@@ -317,22 +325,29 @@ fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
 
 #[test]
 fn wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one() {
-    assert_eq!(wake_remaining(None, MonotonicMs(10_001)), Duration::MAX);
-    // 丸めず ms ちょうど。
+    assert_eq!(wake_remaining(None, at_ms(10_001)), Duration::MAX);
+    // 丸めず 100ns ちょうど。
     assert_eq!(
-        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_001)),
+        wake_remaining(
+            Some(TimePoint::from_ticks(at_ms(10_001).as_ticks() + 1)),
+            at_ms(10_001)
+        ),
+        Duration::from_nanos(100)
+    );
+    assert_eq!(
+        wake_remaining(Some(at_ms(10_501)), at_ms(10_001)),
         Duration::from_millis(500)
     );
     assert_eq!(
-        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_500)),
+        wake_remaining(Some(at_ms(10_501)), at_ms(10_500)),
         Duration::from_millis(1)
     );
     assert_eq!(
-        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_501)),
+        wake_remaining(Some(at_ms(10_501)), at_ms(10_501)),
         Duration::ZERO
     );
     assert_eq!(
-        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(12_000)),
+        wake_remaining(Some(at_ms(10_501)), at_ms(12_000)),
         Duration::ZERO
     );
 }
@@ -349,8 +364,8 @@ fn the_ticker_sends_one_deadline_notice_to_kanade() {
     // 時計は 10,501 に止めたまま（どの刻みの境界にも届かない＝Tick は 1 通も出ない）。
     let (started_tx, started_rx) = mpsc::channel::<()>();
     let config = TickerConfig {
-        base_interval: Duration::from_millis(50),
-        kanade_interval: Duration::from_millis(1000),
+        base_interval: ms(50),
+        kanade_interval: ms(1000),
         clock: shared_clock(Arc::new(Mutex::new(10_501)), started_tx),
     };
     let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
@@ -361,14 +376,14 @@ fn the_ticker_sends_one_deadline_notice_to_kanade() {
         .expect("ticker should read the clock once at startup");
 
     stop_tx
-        .send(TickerMsg::from(MonotonicMs(10_501)))
+        .send(TickerMsg::from(at_ms(10_501)))
         .expect("send WakeKanadeAt");
 
     match kanade_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("kanade should receive the deadline notice")
     {
-        KanadeMsg::ChoiceTimeoutDue { now } => assert_eq!(now, MonotonicMs(10_501)),
+        KanadeMsg::ChoiceTimeoutDue { now } => assert_eq!(now, at_ms(10_501)),
         _ => unreachable!("only ChoiceTimeoutDue is due on a stopped clock"),
     }
     // 頼みは 1 回だけ: 50 ms の刻みで何度も目を覚ましても 2 通目は来ない。
@@ -393,7 +408,7 @@ fn the_ticker_sends_one_deadline_notice_to_kanade() {
 fn spawn_loop_ticker_ignores_wake_kanade_at() {
     let (started_tx, _started_rx) = mpsc::channel::<()>();
     let config = LoopTickerConfig {
-        interval: Duration::from_millis(16),
+        interval: ms(16),
         clock: shared_clock(Arc::new(Mutex::new(0)), started_tx),
     };
     let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(|_tick: Tick| {});
@@ -401,7 +416,7 @@ fn spawn_loop_ticker_ignores_wake_kanade_at() {
 
     // 読み飛ばして動き続け、Close で止まる。
     stop_tx
-        .send(TickerMsg::WakeKanadeAt(MonotonicMs(0)))
+        .send(TickerMsg::WakeKanadeAt(at_ms(0)))
         .expect("send WakeKanadeAt");
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
@@ -420,16 +435,16 @@ fn spawn_loop_ticker_ignores_wake_kanade_at() {
 #[test]
 fn loop_ticker_config_default_is_16ms() {
     let config = LoopTickerConfig::default();
-    assert_eq!(config.interval, Duration::from_millis(16));
+    assert_eq!(config.interval, ms(16));
 }
 
 #[test]
 fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
 
     let config = LoopTickerConfig {
-        interval: Duration::from_millis(16),
+        interval: ms(16),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -453,7 +468,7 @@ fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
     let tick = tick_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("deliver should be called once the clock reaches a 16ms boundary");
-    assert_eq!(tick.now, MonotonicMs(16));
+    assert_eq!(tick.now, at_ms(16));
 
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
@@ -469,11 +484,11 @@ fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
 
 #[test]
 fn spawn_loop_ticker_catch_up_delivers_the_current_clock() {
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
 
     let config = LoopTickerConfig {
-        interval: Duration::from_millis(16),
+        interval: ms(16),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -488,14 +503,14 @@ fn spawn_loop_ticker_catch_up_delivers_the_current_clock() {
         .recv_timeout(Duration::from_secs(5))
         .expect("loop ticker should read the clock once at startup");
 
-    // 0 から 100 まで一気に進める＝16,32,48,64,80,96 の 6 境界を跨ぐ（サスペンド復帰等）。
+    // 0 から 100 まで一気に進める＝16,32,48,64,80,96 の 6 境界を跨ぐ（処理の大幅な遅れ）。
     // 1 回だけは純粋層の `poll_skips_multiple_missed_boundaries_and_fires_only_once` が縛る。
     *clock_value.lock().expect("lock") = 100;
 
     let tick = tick_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("catch-up must deliver a tick with the current clock");
-    assert_eq!(tick.now, MonotonicMs(100));
+    assert_eq!(tick.now, at_ms(100));
 
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
@@ -511,10 +526,10 @@ fn spawn_loop_ticker_catch_up_delivers_the_current_clock() {
 
 #[test]
 fn spawn_loop_ticker_stops_on_close() {
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, _started_rx) = mpsc::channel::<()>();
     let config = LoopTickerConfig {
-        interval: Duration::from_millis(16),
+        interval: ms(16),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 
@@ -536,10 +551,10 @@ fn spawn_loop_ticker_stops_on_close() {
 
 #[test]
 fn spawn_loop_ticker_stops_on_control_channel_disconnect() {
-    let clock_value = Arc::new(Mutex::new(0u64));
+    let clock_value = Arc::new(Mutex::new(0i64));
     let (started_tx, _started_rx) = mpsc::channel::<()>();
     let config = LoopTickerConfig {
-        interval: Duration::from_millis(16),
+        interval: ms(16),
         clock: shared_clock(Arc::clone(&clock_value), started_tx),
     };
 

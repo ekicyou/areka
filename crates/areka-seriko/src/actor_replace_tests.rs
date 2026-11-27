@@ -12,6 +12,7 @@ use areka_emo_compose::BindSet;
 use areka_parsers::shell::Interval;
 use areka_sakura::ActorKey;
 use dola::cue::CueSink;
+use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
 
 /// 別名 1 件（`key` → `id`）の解決層。
@@ -65,9 +66,9 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
         out,
     );
 
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // Show 2100
-    sink.send_tick(0);
-    sink.send_tick(1000); // 古い表で発火（2106）
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "通常")); // Show 2100
+    sink.send_tick(at_ms(0));
+    sink.send_tick(at_ms(1000)); // 古い表で発火（2106）
     CueSink::emit(&mut sink, arm_on_cue("0")); // 動的な着せ替え {1100,1207,1302}
 
     let new = table_single(2100, 0, Interval::Random { k: 4 }, &[(3000, 0)]);
@@ -82,9 +83,9 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
         },
         no_facts()
     ));
-    sink.send_tick(1150); // 古い表なら 2110 が出る時刻
-    sink.send_tick(2000); // 新しい表で発火（3000）
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "笑顔")); // 新しい別名表で引ける
+    sink.send_tick(at_ms(1150)); // 古い表なら 2110 が出る時刻
+    sink.send_tick(at_ms(2000)); // 新しい表で発火（3000）
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "笑顔")); // 新しい別名表で引ける
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -155,19 +156,19 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
         out,
     );
 
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "通常"));
     CueSink::emit(
         &mut sink,
         cue(
-            0.0,
+            ms(0),
             "0",
             CueCommand::BalloonSurface { key: "5".into() },
-            0.0,
+            ms(0),
         ),
     );
-    CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 はシェルだけ（非表示）
-    sink.send_tick(0);
-    sink.send_tick(1000); // シェルのループが発火（2106）
+    CueSink::emit(&mut sink, emote_cue(ms(0), "1", "-1")); // scope 1 はシェルだけ（非表示）
+    sink.send_tick(at_ms(0));
+    sink.send_tick(at_ms(1000)); // シェルのループが発火（2106）
     CueSink::emit(&mut sink, arm_on_cue("0"));
 
     assert!(sink.send_replace(
@@ -177,7 +178,7 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
         },
         no_facts()
     ));
-    sink.send_tick(1150); // シェルのループは続く（2110）
+    sink.send_tick(at_ms(1150)); // シェルのループは続く（2110）
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -230,7 +231,7 @@ fn balloon_replace_reports_unseen_scopes_from_new_tables_with_surface_zero() {
         out,
     );
 
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // seriko が見たのは scope 0 だけ
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "通常")); // seriko が見たのは scope 0 だけ
     assert!(sink.send_replace(
         SerikoReplace::Balloon {
             epoch: 3,
@@ -306,8 +307,8 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
         out,
     );
 
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // scope 0 は面 2100
-    CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 は非表示
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "通常")); // scope 0 は面 2100
+    CueSink::emit(&mut sink, emote_cue(ms(0), "1", "-1")); // scope 1 は非表示
     assert!(sink.send_replace(
         SerikoReplace::Shell {
             epoch: 4,
@@ -326,7 +327,7 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
         no_facts()
     ));
     // 今の面が 5 になっていれば、同じ面の再指定は冪等で出ない。
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
+    CueSink::emit(&mut sink, emote_cue(ms(0), "0", "通常"));
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 

@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_emo_compose::{ComposeMethod, EmoWorld, PatternWord, call_targets, pattern_word};
 use areka_parsers::shell::{Animation, Interval, Pattern};
+use dola::TimeSpan;
 
 use crate::table::{LoopAnimation, LoopFrame};
 
@@ -57,7 +58,7 @@ pub(crate) fn loop_frame(p: &Pattern) -> LoopFrame {
                 picture: None,
                 method: ComposeMethod::from_name(p.method.as_str()),
                 act: FrameAct::Draw,
-                wait_ms: p.wait,
+                wait: TimeSpan::from_millis(p.wait),
                 x: p.x,
                 y: p.y,
             };
@@ -69,16 +70,16 @@ pub(crate) fn loop_frame(p: &Pattern) -> LoopFrame {
         PatternWord::Insert => FrameAct::Inert,
         PatternWord::Move => FrameAct::Move,
     };
-    let (wait_ms, x, y) = match act {
-        FrameAct::Move => (p.wait, p.x, p.y),
-        _ => (0, 0, 0),
+    let (wait, x, y) = match act {
+        FrameAct::Move => (TimeSpan::from_millis(p.wait), p.x, p.y),
+        _ => (TimeSpan::ZERO, 0, 0),
     };
     LoopFrame {
         surface_id: p.surface_id,
         picture: None,
         method: ComposeMethod::Unknown(p.method.as_str().into()),
         act,
-        wait_ms,
+        wait,
         x,
         y,
     }
@@ -172,7 +173,7 @@ pub(crate) fn check_calls(world: &EmoWorld, table: &mut BTreeMap<u32, Vec<LoopAn
                             .and_then(|l| l.frames.get_mut(i))
                         {
                             f.act = FrameAct::Inert;
-                            (f.wait_ms, f.x, f.y) = (0, 0, 0);
+                            (f.wait, f.x, f.y) = (TimeSpan::ZERO, 0, 0);
                         }
                     }
                     PatternWord::Move => {}

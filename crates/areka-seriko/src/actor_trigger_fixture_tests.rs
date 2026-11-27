@@ -4,8 +4,7 @@
 //! 面の切り替え・文字・刻みを届いた順に流して、出てくる指令のコマで確かめる。固定するのは「読み手・
 //! 表・アクターが検体について同じ答えを出す」ことだけで、境目の計算は下の層の檻が固定している。
 //!
-//! 時計は手で進める偽物で、どのメッセージもその直前に時計を合わせる（観測を追い越さない）。文字は
-//! 1 字 50 ms。刻みは文字の現れる時刻・コマの替わる時刻ちょうどを避けて置く。
+//! 刻みと合図には時刻を書いて渡す。文字は 1 字 50 ms。刻みは文字の現れる時刻・コマの替わる時刻ちょうどを避けて置く。
 
 use super::test_support::*;
 use super::*;
@@ -14,9 +13,9 @@ use crate::output::{DisplayCommand, MockSurfaceOutput};
 use crate::test_support::{count, part_frames, table_of};
 use areka_emo_compose::{BindSet, EmoWorld};
 use dola::cue::CueSink;
+use dola::time::testing::{at_ms, ms};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 /// 検体の本文（面 9100〜9104。役の表は同じフォルダの `README.md`）。
 const FIXTURE: &str = include_str!("../tests/fixtures/trigger-intervals/surfaces.txt");
@@ -96,9 +95,9 @@ fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
 /// 刻みの時刻ではない。
 #[test]
 fn top_surface_fires_runonce_talk_and_periodic() {
-    let mut rig = ClockRig::with_config(config());
-    rig.tick(1000);
-    let first = rig.hear(1000, emote_cue(0.0, "0", "9100"));
+    let mut rig = ActorRig::with_config(config());
+    rig.tick(at_ms(1000));
+    let first = rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9100"));
     assert_eq!(frames(&first, ONCE), [("0", Some(1700))], "切り替えで鳴る");
     assert_eq!(frames(&first, MOUTH), [("0", None)]);
     assert_eq!(
@@ -108,23 +107,23 @@ fn top_surface_fires_runonce_talk_and_periodic() {
     );
 
     // 3 文字は 1000・1050・1100。口は 1200 → 80ms で 1202 → 80ms で `-1`。
-    rig.hear(1000, clear_all());
-    rig.hear(1000, text(0.0, "0", "あいう"));
-    assert!(rig.tick(1090).is_empty(), "2 文字ではまだ");
-    assert_eq!(frames(&rig.tick(1120), MOUTH), [("0", Some(1200))]);
+    rig.hear_fired(at_ms(1000), clear_all());
+    rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいう"));
+    assert!(rig.tick(at_ms(1090)).is_empty(), "2 文字ではまだ");
+    assert_eq!(frames(&rig.tick(at_ms(1120)), MOUTH), [("0", Some(1200))]);
     assert_eq!(
-        frames(&rig.tick(1185), MOUTH),
+        frames(&rig.tick(at_ms(1185)), MOUTH),
         [("0", Some(1202))],
         "開始は 3 文字目の 1100（刻みの 1120 から数えれば 1200 まで 1 枚目のまま）"
     );
-    let closed = rig.tick(1265);
+    let closed = rig.tick(at_ms(1265));
     assert_eq!(frames(&closed, MOUTH), [("0", None)], "`-1` で口を消す");
     assert_eq!(frames(&closed, ONCE), [("0", Some(1700))], "キラリは 300ms");
-    assert_eq!(frames(&rig.tick(1310), ONCE), [("0", None)]);
+    assert_eq!(frames(&rig.tick(at_ms(1310)), ONCE), [("0", None)]);
 
     // 面に入ったのは 1000。紅は 1600 → 500ms で `-1`。
-    assert!(rig.tick(2990).is_empty(), "2 秒はまだ");
-    let lap = rig.tick(3010);
+    assert!(rig.tick(at_ms(2990)).is_empty(), "2 秒はまだ");
+    let lap = rig.tick(at_ms(3010));
     assert_eq!(frames(&lap, CHEEK), [("0", Some(1600))]);
     assert_eq!(
         frames(&lap, ONCE),
@@ -132,7 +131,7 @@ fn top_surface_fires_runonce_talk_and_periodic() {
         "`runonce` は 2 回目が無い"
     );
     assert_eq!(
-        frames(&rig.tick(3505), CHEEK),
+        frames(&rig.tick(at_ms(3505)), CHEEK),
         [("0", None)],
         "開始は周の境目の 3000（刻みの 3010 から数えれば 3510 まで出たまま）"
     );
@@ -142,27 +141,27 @@ fn top_surface_fires_runonce_talk_and_periodic() {
 /// `talk,2` が 2 文字目の時刻から鳴る。9101 の一番上は 3 語を持たないので、一番上の欄は空のまま。
 #[test]
 fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
-    let mut rig = ClockRig::with_config(config());
-    rig.tick(1000);
-    let (surface, _, p) = single_show(rig.hear(1000, emote_cue(0.0, "0", "9101")));
+    let mut rig = ActorRig::with_config(config());
+    rig.tick(at_ms(1000));
+    let (surface, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", "9101")));
     assert_eq!(surface, 9101);
     assert_eq!(part_frames(&p, PART), [(1, 1701)], "見えた瞬間に `runonce`");
     assert!(top_frames(&p).is_empty());
 
     // 3 文字は 1000・1050・1100。部品の口は 1203 → 100ms で `-1`。
-    rig.hear(1000, clear_all());
-    rig.hear(1000, text(0.0, "0", "あいう"));
-    assert!(rig.tick(1040).is_empty(), "1 文字ではまだ");
-    let (_, _, p) = single_show(rig.tick(1060));
+    rig.hear_fired(at_ms(1000), clear_all());
+    rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいう"));
+    assert!(rig.tick(at_ms(1040)).is_empty(), "1 文字ではまだ");
+    let (_, _, p) = single_show(rig.tick(at_ms(1060)));
     assert_eq!(part_frames(&p, PART), [(0, 1203), (1, 1701)]);
     assert!(top_frames(&p).is_empty());
-    let (_, _, p) = single_show(rig.tick(1155));
+    let (_, _, p) = single_show(rig.tick(at_ms(1155)));
     assert_eq!(
         part_frames(&p, PART),
         [(1, 1701)],
         "開始は 2 文字目の 1050（刻みの 1060 から数えれば 1160 まで出たまま）"
     );
-    let (_, _, p) = single_show(rig.tick(1310));
+    let (_, _, p) = single_show(rig.tick(at_ms(1310)));
     assert!(part_frames(&p, PART).is_empty(), "`runonce` は 300ms");
     assert!(top_frames(&p).is_empty());
 }
@@ -174,39 +173,38 @@ fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
 #[test]
 fn surfaces_whose_words_were_refused_stay_still() {
     for (key, surface) in [("9103", 9103), ("9104", 9104)] {
-        let mut rig = ClockRig::with_config(config());
-        rig.tick(1000);
-        let (shown, _, p) = single_show(rig.hear(1000, emote_cue(0.0, "0", key)));
+        let mut rig = ActorRig::with_config(config());
+        rig.tick(at_ms(1000));
+        let (shown, _, p) = single_show(rig.hear_fired(at_ms(1000), emote_cue(ms(0), "0", key)));
         assert_eq!(shown, surface);
         assert!(p.is_empty(), "{key}: 切り替えの指令は何も載せない: {p:?}");
 
-        rig.hear(1000, clear_all());
-        rig.hear(1000, text(0.0, "0", "あいうえおか"));
-        for now in [1120, 1260, 2990, 3010, 3600] {
+        rig.hear_fired(at_ms(1000), clear_all());
+        rig.hear_fired(at_ms(1000), text(ms(0), "0", "あいうえおか"));
+        for now in [1120, 1260, 2990, 3010, 3600].map(at_ms) {
             assert!(rig.tick(now).is_empty(), "{key}: {now}");
         }
     }
 }
 
-/// 本物のアクター（別スレッド・`CueSink` から届く cue）でも 9100 の 3 語が鳴る。時計は 1000 に
-/// 止めたままなので、cue はどれも 1000 に届いたことになる（刻みは自分の時刻を運ぶ）。
+/// 本物のアクター（別スレッド・`CueSink` から届く cue）でも 9100 の 3 語が鳴る。cue はどれも 1000 に
+/// 発火する（刻みは自分の時刻を運ぶ）。
 #[test]
 fn spawned_actor_plays_the_three_words_of_the_fixture() {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) = spawn_seriko_clocked(
+    let (mut sink, handle) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         config(),
         out,
-        Some(Arc::new(|| 1000)),
     );
-    sink.send_tick(1000);
-    CueSink::emit(&mut sink, emote_cue(0.0, "0", "9100"));
-    CueSink::emit(&mut sink, clear_all());
-    CueSink::emit(&mut sink, text(0.0, "0", "あいう"));
-    for now in [1120, 1185, 1265, 1310, 3010, 3505] {
+    sink.send_tick(at_ms(1000));
+    CueSink::emit(&mut sink, fired(at_ms(1000), emote_cue(ms(0), "0", "9100")));
+    CueSink::emit(&mut sink, fired(at_ms(1000), clear_all()));
+    CueSink::emit(&mut sink, fired(at_ms(1000), text(ms(0), "0", "あいう")));
+    for now in [1120, 1185, 1265, 1310, 3010, 3505].map(at_ms) {
         sink.send_tick(now);
     }
     sink.close().expect("Close を送れること");

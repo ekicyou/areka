@@ -2,7 +2,7 @@ use shiori_host32_host::ExitKind;
 
 use super::{
     LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness, capture_logs,
-    run_text_phase, wait_until,
+    wait_until,
 };
 
 // ===========================================================================
@@ -69,7 +69,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     // ── (2) Tick 注入の疎通（ghost スタック生存・時刻は注入だけで進める） ──
     harness.inject_dispatcher_tick(1);
 
-    // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける
+    // ── 実 EmoTextSink の UI ドレインが headless に pump できることを裏付ける
     //    （pending なし／ありに関わらず panic しない）。 ──
     harness.pump_text();
 
@@ -92,14 +92,13 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 // 先渡しが本番の鎖を通って文字の層へ届く
 // ===========================================================================
 
-/// 観測可能な完了条件: 本番の鎖（トークごとの写し →
-/// 時刻の受け手の飾り `ClockedTextSink` → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
+/// 観測可能な完了条件: 本番の鎖（トークごとの写し → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
 /// 文字の層が先渡しを受け取った `debug!` 行が 1 件以上あり、「先渡しが無い」の warn が 0 件である。
 ///
 /// 「先渡しが無い」の warn は文節の折り返しのバルーンで字を出すときだけ出る。この検査の土台の
 /// バルーン（emo2-kakukaku）は `budoux_newline,1` を持つので、装着してから字を提示すれば warn の
 /// 分岐を踏む。それでも warn 0 件は「出なかった」ことしか言えないので、判定の主は受け取りの行が
-/// 1 件以上あること（飾りが先渡しを内側へ通さないと受け取りが 0 件になり、warn も 1 件出て赤になる）。
+/// 1 件以上あること（受け手が先渡しを通さないと受け取りが 0 件になり、warn も 1 件出て赤になる）。
 ///
 /// 文字の層の受け手の吸い出しはテストスレッド（＝UI pump スレッド）で回るので、捕捉は
 /// このスレッドの `capture_logs` で足りる。先渡しはトークの初回 Tick で登録されるとき別スレッドから
@@ -128,7 +127,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
             logs.extend(capture_logs(|| {
                 harness.inject_dispatcher_tick(now);
                 harness.pump_text();
-                run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+                harness.present_text(dola::time::testing::at_ms(10_000));
             }));
             now += 10;
             seen.set(logs.len() as u64);
@@ -146,7 +145,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     assert!(
         logs.iter()
             .any(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った")),
-        "先渡しの受け取り（「先渡しを受け取った」の debug! 行）が文字の層に現れない——飾り（ClockedTextSink）か受け手（EmoTextSink）が先渡しを通していない: {logs:?}"
+        "先渡しの受け取り（「先渡しを受け取った」の debug! 行）が文字の層に現れない——受け手（EmoTextSink）が先渡しを通していない: {logs:?}"
     );
     assert!(
         presented_after_text,

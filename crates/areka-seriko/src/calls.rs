@@ -7,16 +7,17 @@
 
 use crate::table::{FrameAct, LoopAnimation, LoopTrigger};
 use crate::timeline::LoopRng;
+use dola::{TimePoint, TimeSpan};
 use std::collections::{BTreeSet, HashSet};
 
 /// 再生中の表を Calls から見る口（一番上は面の段の再生と欄、部品は部品の時計と欄）。
 pub(crate) trait CallPlays {
     /// 再生中なら (開始の時刻, 働きのコマを当て終えた時刻)。終わって最後のコマを残したものは数えない。
-    fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)>;
+    fn playing(&self, animation: u32) -> Option<(TimePoint, Option<TimePoint>)>;
     /// 当て終えた印をこの値にする（戻さない決まりは [`run_calls`] が受け持つ）。
-    fn set_acts_through(&mut self, animation: u32, through_ms: u64);
-    /// 開始の時刻 `at_ms` で頭から始める（今の再生は置き換え、当て終えた印は無しに戻す）。
-    fn start(&mut self, animation: u32, at_ms: u64);
+    fn set_acts_through(&mut self, animation: u32, through: TimePoint);
+    /// 開始の時刻 `at` で頭から始める（今の再生は置き換え、当て終えた印は無しに戻す）。
+    fn start(&mut self, animation: u32, at: TimePoint);
     /// 再生と欄を外す（`-1` と同じ）。`always` が真なら止めた `always` の印を付ける。
     fn stop(&mut self, animation: u32, always: bool);
     /// 再生中の animation の番号。
@@ -27,7 +28,7 @@ pub(crate) trait CallPlays {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct CallOutcome {
     /// この刻みで最後に当たった move（時刻・x・y）。無ければ `None`。
-    pub shift: Option<(u64, i64, i64)>,
+    pub shift: Option<(TimePoint, i64, i64)>,
 }
 
 impl CallOutcome {
@@ -43,24 +44,24 @@ impl CallOutcome {
 
 /// 待ち行列の 1 件: (予定の時刻, animation, pattern の位置, その再生の開始の時刻)。
 /// 組の比べ方がそのまま当てる順（時刻・animation・pattern の昇順）になる。
-type Due = (u64, u32, usize, u64);
+type Due = (TimePoint, u32, usize, TimePoint);
 
-/// 前の刻みから `now_ms` までに来た働きのコマを予定の時刻の順に当てる。
+/// 前の刻みから `now` までに来た働きのコマを予定の時刻の順に当てる。
 ///
-/// `now_ms` より後に始まった再生（合図の時刻で始めた再生は刻みより僅かに後になりうる）は、何も当てず
-/// 次の刻みを待つ。事後条件: 予定の時刻が `now_ms` 以下の
-/// 働きのコマはすべて当て終え、再生中の全部の当て終えた印が `max(前の印, now_ms)` になる（合図の時刻が
+/// `now` より後に始まった再生（合図の時刻で始めた再生は刻みより僅かに後になりうる）は、何も当てず
+/// 次の刻みを待つ。事後条件: 予定の時刻が `now` 以下の
+/// 働きのコマはすべて当て終え、再生中の全部の当て終えた印が `max(前の印, now)` になる（合図の時刻が
 /// 前の刻みより前でも印を戻さない＝同じコマを 2 度当てない）。選びは `pick` だけを引く。
 pub(crate) fn run_calls<'a>(
     plays: &mut impl CallPlays,
     animation_of: impl Fn(u32) -> Option<&'a LoopAnimation>,
-    now_ms: u64,
+    now: TimePoint,
     pick: &mut LoopRng,
 ) -> CallOutcome {
     // 再生ごとに次の 1 件だけを入れ、取り出したらその次を入れる（入れる数は当てる数と同じ）。
     let mut queue = BTreeSet::new();
     for id in plays.playing_ids() {
-        push_next(&mut queue, &*plays, &animation_of, id, None, now_ms);
+        push_next(&mut queue, &*plays, &animation_of, id, None, now);
     }
     let mut outcome = CallOutcome::default();
     // 1 つの時刻の中で呼び出しが始めた animation（巡回の止め）。
@@ -90,13 +91,13 @@ pub(crate) fn run_calls<'a>(
                     if already || !started.insert(target) {
                         tracing::debug!(
                             animation = target,
-                            at_ms = at,
+                            %at,
                             "seriko calls: 同じ時刻に 2 度目の開始ゆえ何もしない（要件 5.2）"
                         );
                         continue;
                     }
                     plays.start(target, at);
-                    push_next(&mut queue, &*plays, &animation_of, target, None, now_ms);
+                    push_next(&mut queue, &*plays, &animation_of, target, None, now);
                 }
             }
             FrameAct::Stop { targets, pick_one } => {
@@ -115,21 +116,14 @@ pub(crate) fn run_calls<'a>(
         }
         // 止めた・やり直した再生の続きは入れない（やり直しは自分の頭を入れ済み）。
         if plays.playing(id).map(|(s, _)| s) == Some(start) {
-            push_next(
-                &mut queue,
-                &*plays,
-                &animation_of,
-                id,
-                Some((at, k)),
-                now_ms,
-            );
+            push_next(&mut queue, &*plays, &animation_of, id, Some((at, k)), now);
         }
     }
     for id in plays.playing_ids() {
         let through = plays
             .playing(id)
             .and_then(|(_, t)| t)
-            .map_or(now_ms, |t| t.max(now_ms));
+            .map_or(now, |t| t.max(now));
         plays.set_acts_through(id, through);
     }
     outcome
@@ -154,8 +148,8 @@ fn push_next<'a>(
     plays: &impl CallPlays,
     animation_of: &impl Fn(u32) -> Option<&'a LoopAnimation>,
     id: u32,
-    after: Option<(u64, usize)>,
-    now: u64,
+    after: Option<(TimePoint, usize)>,
+    now: TimePoint,
 ) {
     if let (Some((start, through)), Some(anim)) = (plays.playing(id), animation_of(id))
         && let Some((at, k)) = next_due(anim, start, through, after, now)
@@ -170,45 +164,54 @@ fn push_next<'a>(
 /// 出す（長く空いても仕事はコマの数だけ・時刻は丸めない）。
 fn next_due(
     anim: &LoopAnimation,
-    start: u64,
-    through: Option<u64>,
-    after: Option<(u64, usize)>,
-    now: u64,
-) -> Option<(u64, usize)> {
+    start: TimePoint,
+    through: Option<TimePoint>,
+    after: Option<(TimePoint, usize)>,
+    now: TimePoint,
+) -> Option<(TimePoint, usize)> {
     let (period, last_lap, repeats) = match anim.trigger {
-        LoopTrigger::Always { period_ms, laps } => (
-            period_ms.get(),
+        LoopTrigger::Always { period, laps } => (
+            period,
             laps.map_or(u64::MAX, |n| u64::from(n.get()) - 1),
             true,
         ),
-        _ => (1, 0, false),
+        _ => (TimeSpan::ZERO, 0, false),
     };
-    let mut best: Option<(u64, usize)> = None;
-    let mut cum: u64 = 0;
+    // 繰り返さない再生は周 0 だけを取る（1 で割れば、開始より後の時刻は周 1 になって外れる）。
+    let divisor = period.as_ticks().max(1) as u64;
+    let mut best: Option<(TimePoint, usize)> = None;
+    let mut cum = TimeSpan::ZERO;
     for (k, f) in anim.frames.iter().enumerate() {
-        cum = cum.saturating_add(u64::from(f.wait_ms));
+        cum = cum + f.wait;
         match f.act {
             FrameAct::Draw if f.surface_id < 0 && !repeats => break,
             FrameAct::Draw | FrameAct::Inert => continue,
             _ => {}
         }
         // このコマが取れる一番早い時刻（印より後・`after` より後）。
-        let mut min_at = through.map_or(start, |t| t.saturating_add(1));
+        let mut min_at = through.map_or(start, just_after);
         if let Some((a, k0)) = after {
-            min_at = min_at.max(if k > k0 { a } else { a.saturating_add(1) });
+            min_at = min_at.max(if k > k0 { a } else { just_after(a) });
         }
-        let first = start.saturating_add(cum);
-        let lap = min_at.saturating_sub(first).div_ceil(period);
+        let first = start + cum;
+        let lap = (min_at - first)
+            .to_span()
+            .map_or(0, |d| (d.as_ticks() as u64).div_ceil(divisor));
         if lap > last_lap {
             continue;
         }
-        let at = first.saturating_add(lap.saturating_mul(period));
+        let at = first + period.mul_div(lap, 1);
         let due = at <= now && through.is_none_or(|t| at > t) && after.is_none_or(|a| (at, k) > a);
         if due && best.is_none_or(|b| (at, k) < b) {
             best = Some((at, k));
         }
     }
     best
+}
+
+/// `t` の次の時刻（100ns 後）。
+fn just_after(t: TimePoint) -> TimePoint {
+    TimePoint::from_ticks(t.as_ticks().saturating_add(1))
 }
 
 #[cfg(test)]

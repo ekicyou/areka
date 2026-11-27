@@ -17,12 +17,13 @@
 //! 成功すれば `Box<dyn ShioriBackend>`（実体は `ShioriConnection`）を返し、失敗は `Err(String)`
 //! （→ `ShioriDown`）で返す。
 
+use dola::time::testing::at_ms;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriBackend, ShioriConnection,
-    spawn_kanade, spawn_shiori_actor,
+    CloseReason, KanadeConfig, KanadeMsg, ShioriBackend, ShioriConnection, spawn_kanade,
+    spawn_shiori_actor,
 };
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow, spawn};
@@ -195,10 +196,10 @@ fn real_helper_boot_pump_close_completes() {
     let sakura = spawn_mock_sakura(talk_rx, kanade_inbox_tx.clone(), QuitPolicy::Fixed(true));
 
     kanade_inbox_tx.send(KanadeMsg::Boot).expect("send Boot");
-    for i in 1..=3u64 {
+    for i in 1..=3i64 {
         kanade_inbox_tx
             .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
+                now: at_ms(i * 1_000),
             })
             .expect("send Tick");
     }

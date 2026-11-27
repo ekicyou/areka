@@ -3,6 +3,7 @@
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで箱の表を作る（検体は読まない）。COM は使わない。
 
+use dola::time::testing::ms;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -66,7 +67,7 @@ fn without_resolver_emote_never_leaves_balloon() {
         );
         assert_eq!(rt.state().current_surface(&actor), None, "番号も持たない");
     }
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("あ".into())));
     assert_eq!(
         items_at(&rt, "0", TextPlace::Balloon),
         vec![TextItem::glyph("あ")]
@@ -87,7 +88,7 @@ fn with_resolver_emote_routes_to_first_box_of_surface() {
         "surface0 の先頭は a"
     );
     assert_eq!(rt.state().current_surface(&actor), Some(0));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("あ".into())));
     assert_eq!(items_at(&rt, "0", boxed("a")), vec![TextItem::glyph("あ")]);
     assert_eq!(
         items_at(&rt, "0", TextPlace::Balloon),
@@ -138,7 +139,7 @@ fn choice_active_sees_every_place_of_the_scope() {
     let actor = ActorKey::from("0");
 
     rt.apply_cue(&emote("0", "0"));
-    rt.apply_cue(&choice_cue("0", 0.0, "ID", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", ms(0), "ID", "はい", &[]));
     assert!(
         rt.state()
             .actor_state(&actor)
@@ -148,7 +149,7 @@ fn choice_active_sees_every_place_of_the_scope() {
     assert!(rt.choice_active(&actor), "箱の場所の選択肢も数える");
     assert!(!rt.choice_active(&ActorKey::from("1")), "別のスコープは偽");
 
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Clear));
     assert!(!rt.choice_active(&actor), "\\c で箱を消すと偽");
 }
 
@@ -166,14 +167,14 @@ fn anchor_only_scope_is_hit_active_but_not_choice_active() {
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&cue(
         "0",
-        0.0,
+        ms(0),
         CueCommand::AnchorBegin {
             id: "x".into(),
             references: vec![],
         },
     ));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::AnchorEnd));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("あ".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::AnchorEnd));
     let box_a = PlaceKey {
         actor: actor.clone(),
         place: boxed("a"),
@@ -197,7 +198,7 @@ fn anchor_only_scope_is_hit_active_but_not_choice_active() {
     assert!(rt.hit_active(&actor), "アンカーも押せる範囲");
     assert!(!rt.hit_active(&ActorKey::from("1")), "別のスコープは偽");
 
-    rt.apply_cue(&choice_cue("0", 0.0, "ID", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", ms(0), "ID", "はい", &[]));
     assert!(rt.choice_active(&actor), "選択肢が加われば真");
     assert!(rt.hit_active(&actor));
 }
@@ -221,7 +222,7 @@ fn clear_drops_hover_of_the_destination_place_only() {
     );
 
     rt.apply_cue(&emote("0", "0"));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Clear));
     assert_eq!(
         rt.choice_hover.get(&box_a),
         None,
@@ -234,7 +235,7 @@ fn clear_drops_hover_of_the_destination_place_only() {
     );
 
     rt.apply_cue(&emote("0", "2"));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Clear));
     assert_eq!(
         rt.choice_hover.get(&PlaceKey::balloon(&actor)),
         None,

@@ -53,7 +53,7 @@ element定義の並びは 体 → 目 → 眉 → 髪飾り → 口（element4�
 
 ## 決定論のテスト
 
-`crates/areka-seriko/src/actor_trigger_fixture_tests.rs` が、この `surfaces.txt` を本物の読み手で読み、表を組み、偽の時計のアクターへサーフェスの切り替え・文字・刻みを流して、出てくるコマと上の記録の件数を判定する。emo2 の `surfaces.txt` の末尾へ書き足した本文でも件数が同じこと、番号が emo2 と当たらないこと、指している絵が emo2 に全部在ることも同じファイルが判定する。
+`crates/areka-seriko/src/actor_trigger_fixture_tests.rs` が、この `surfaces.txt` を本物の読み手で読み、表を組み、アクターへ時刻を書いたサーフェスの切り替え・文字・刻みを流して、出てくるコマと上の記録の件数を判定する。emo2 の `surfaces.txt` の末尾へ書き足した本文でも件数が同じこと、番号が emo2 と当たらないこと、指している絵が emo2 に全部在ることも同じファイルが判定する。
 
 ## 実機の確かめ
 

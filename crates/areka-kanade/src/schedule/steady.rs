@@ -22,10 +22,10 @@
 use super::choice::{CascadePlan, choice_deadline, plan_cascade};
 use super::{Action, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State, events};
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriCall,
-    ShioriOutcome,
+    ChoiceInput, CloseReason, KanadeConfig, MouseEventKind, MouseInput, ShioriCall, ShioriOutcome,
 };
 use crate::talk::{ScriptOrigin, TalkDone, TalkId};
+use dola::{TimeDelta, TimePoint};
 
 #[path = "steady_choice_script.rs"]
 mod choice_script;
@@ -154,8 +154,8 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
 ///
 /// # 期限の確定
 /// タイムアウト指令から期限への写像は [`choice_deadline`] が単一の入口として持つ（本層で
-/// 再実装しない）。`None`＝未指定は `config.choice_timeout_default_ms` へ委譲し、`v <= 0.0` は
-/// 無効化＝無期限（`deadline: None`）、`v > 0.0` は明示秒指定である。無効化でも**帳簿自体は
+/// 再実装しない）。`None`＝未指定は `config.choice_timeout_default` へ委譲し、0 以下は
+/// 無効化＝無期限（`deadline: None`）、正は明示の長さ指定である。無効化でも**帳簿自体は
 /// 確立する**——計測を開始しないだけで選択待ちは無期限に継続する。
 ///
 /// # 確立後の状態
@@ -167,8 +167,8 @@ pub(super) fn on_choice_waiting(
     mut state: State,
     talk_id: TalkId,
     choice_ids: Vec<String>,
-    display_end: MonotonicMs,
-    timeout_directive_secs: Option<f64>,
+    display_end: TimePoint,
+    timeout_directive: Option<TimeDelta>,
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
     let active_talk_id = match &state.phase {
@@ -194,17 +194,17 @@ pub(super) fn on_choice_waiting(
     }
     let deadline = choice_deadline(
         display_end,
-        timeout_directive_secs,
-        config.choice_timeout_default_ms,
+        timeout_directive,
+        config.choice_timeout_default,
     );
     tracing::info!(
         target: "kanade",
         event = "choice_waiting_established",
         talk_id = talk_id.0,
         choice_count = choice_ids.len(),
-        deadline_ms = ?deadline.map(|d| d.0),
-        display_end_ms = display_end.0,
-        timeout_directive_secs = ?timeout_directive_secs,
+        deadline = ?deadline.map(tracing::field::display),
+        display_end = %display_end,
+        timeout_directive = ?timeout_directive.map(tracing::field::display),
         "選択待ち帳簿を確立——以降の選択確定を受理可能（C4 規則 4・期限写像は DD-8）"
     );
     state.choice = Some(ChoiceState {
@@ -386,7 +386,7 @@ fn on_cascade_reply(
     mut state: State,
     old_talk_id: TalkId,
     candidates: Vec<String>,
-    deadline: Option<MonotonicMs>,
+    deadline: Option<TimePoint>,
     choice_id: String,
     next: Option<CascadeNext>,
     outcome: ShioriOutcome,
@@ -530,14 +530,14 @@ pub(super) fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 /// 改修で崩れた瞬間に無言で誤送出しないための最終防御だからである。到達したら不変条件の破れを
 /// 意味するので、発火せず warn で残し、その場で帳簿を消して通常 Tick へ譲る（消さないと選択待ちが
 /// 黙って無期限になり、毎秒同じ枝を通り続ける）。
-fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec<Action>> {
+fn fire_choice_timeout_if_due(state: &mut State, now: TimePoint) -> Option<Vec<Action>> {
     let ledger = state.choice.as_ref()?;
     if !matches!(ledger.phase, ChoicePhase::Waiting) {
         return None;
     }
     // 無期限（`None`）は計測を開始しない。期限つきは `>=` で到達判定。
     let deadline = ledger.deadline?;
-    if now.0 < deadline.0 {
+    if now < deadline {
         return None;
     }
     let ledger_talk_id = ledger.talk_id;
@@ -550,8 +550,8 @@ fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec
                 target: "kanade",
                 event = "choice_timeout_ledger_stale",
                 talk_id = ledger_talk_id.0,
-                deadline_ms = deadline.0,
-                now_ms = now.0,
+                deadline = %deadline,
+                now = %now,
                 "現行トークと一致しない選択待ち帳簿——タイムアウトを発火せず帳簿を消して通常 Tick へ"
             );
             super::clear_choice_ledger(state, "choice_timeout_ledger_stale");
@@ -569,8 +569,8 @@ fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec
         target: "kanade",
         event = "choice_timeout_fired",
         talk_id = ledger_talk_id.0,
-        deadline_ms = deadline.0,
-        now_ms = now.0,
+        deadline = %deadline,
+        now = %now,
         "選択待ちが期限に到達——OnChoiceTimeout を発行し当該周期の pump を止める（C4 規則 5・Req7.3）"
     );
     let snapshot = state.snapshot();
@@ -659,14 +659,14 @@ fn on_timeout_reply(
 ///
 /// 判定は [`fire_choice_timeout_if_due`] をその時刻でそのまま呼ぶ（`on_tick` と同じ判定・二重には
 /// 出ない）。出なければ（帳簿が無い・選択が先に済んだ・期限の前）trace だけで空。`last_now` も pump も触らない。
-pub(super) fn on_choice_timeout_due(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
+pub(super) fn on_choice_timeout_due(mut state: State, now: TimePoint) -> (State, Vec<Action>) {
     if let Some(actions) = fire_choice_timeout_if_due(&mut state, now) {
         return (state, actions);
     }
     tracing::trace!(
         target: "kanade",
         event = "choice_timeout_due_not_fired",
-        now_ms = now.0,
+        now = %now,
         "選択待ちの期限の知らせ——時間切れに当たらず何もしない"
     );
     (state, Vec::new())
@@ -681,7 +681,7 @@ pub(super) fn on_choice_timeout_due(mut state: State, now: MonotonicMs) -> (Stat
 /// - `talk: None` かつ `pending_close` あり → close 握手開始（OnClose GET・ClosePending へ）。
 /// - `talk: None` かつ `pending_close` なし → OnSecondChange **GET**（Ref3=1・pump 問い合わせ）。
 /// - `talk: Some` → OnSecondChange **NOTIFY**（Ref3=0・応答無視・pending_close は消化しない）。
-fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
+fn on_tick(mut state: State, now: TimePoint) -> (State, Vec<Action>) {
     state.last_now = Some(now);
     // 選択タイムアウトは pump に先行する。発火した周期は pump を発行しない。
     if let Some(actions) = fire_choice_timeout_if_due(&mut state, now) {

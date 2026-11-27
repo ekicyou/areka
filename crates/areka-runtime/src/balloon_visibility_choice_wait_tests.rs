@@ -11,7 +11,7 @@
 //   ⑶ 終わりの後の滞在は保留し、離れた時刻から既定の長さで測り直す
 //   ⑷ 次の会話の開始で選択肢つきでないトークの規則へ戻る
 //   ⑸ このトークの待ち時間の指定（ミリ秒・なし）が選択肢つきのトークにも効く
-//   ⑹ 時刻なしの終わりは、計測が成り立つ最初のフレームの現在時刻が起点（記録の語）
+//   ⑹ フレームの時刻が無いフレームでは計測せず、時刻の分かる最初のフレームで止まった時刻を起点に立つ
 //   ⑺ 箱にだけ文字が出ている scope も同じ
 //   ⑻ 受け口に cue を流して落とし、届いた合図の列を判断に通す通しの 1 本
 // =============================================================================
@@ -21,26 +21,31 @@ use std::sync::{Arc, Mutex};
 
 use areka_ghost::sink::BootCueSink;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::at_ms;
+use dola::{TimePoint, TimeSpan};
 
 use super::test_support::*;
 use super::*;
 use crate::talk_clock::TalkClock;
 use crate::talk_lifecycle::BalloonLifecycleSink;
 
-/// 占有区間の終端（選択肢を出した所・talk 相対秒）。
-const DISPLAY_END: f64 = 2.0;
+/// 占有区間の終端（選択肢を出した所）。
+const DISPLAY_END: TimePoint = at_ms(2000);
 
-/// 選択の待ちが解けて受け口が落ちた時刻（talk 相対秒）。
-const STOPPED: f64 = 60.0;
+/// 占有区間の長さ（起点 0 からの [`DISPLAY_END`]）。
+const DISPLAY_SPAN: TimeSpan = ms(2000);
+
+/// 選択の待ちが解けて受け口が落ちた時刻。
+const STOPPED: TimePoint = at_ms(60000);
 
 /// 選択肢つきのトークを始め、バルーンを出したところまで進めた状態を返す。
 fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     let shown = Frame::new(&[(0, scope)])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
         .display_end(DISPLAY_END)
-        .signal(TalkLifecycleSignal::ChoiceShown)
+        .signal(TalkLifecycleSignal::ChoiceShown { at: SIGNAL_AT })
         .run(&mut state);
     assert!(
         state.talk_had_choice,
@@ -53,11 +58,15 @@ fn choice_talk_shown(scope: ScopeObservation) -> BalloonVisibilityState {
 }
 
 /// 止まった時刻つきのトークの終わり。
-fn ended(at: Option<f64>) -> TalkLifecycleSignal {
+fn ended(at: TimePoint) -> TalkLifecycleSignal {
     TalkLifecycleSignal::TalkEnded { at }
 }
 
-fn started(origin: MeasurementOrigin, display_end: f64, deadline: f64) -> VisibilityLogEvent {
+fn started(
+    origin: MeasurementOrigin,
+    display_end: TimePoint,
+    deadline: TimePoint,
+) -> VisibilityLogEvent {
     VisibilityLogEvent::MeasurementStarted {
         origin,
         display_end,
@@ -69,7 +78,12 @@ fn started(origin: MeasurementOrigin, display_end: f64, deadline: f64) -> Visibi
 #[test]
 fn no_hide_while_the_choice_wait_is_alive_however_long() {
     let mut state = choice_talk_shown(seen(3, false));
-    for now in [DISPLAY_END, DISPLAY_END + TIMEOUT, 1_000.0, 100_000.0] {
+    for now in [
+        DISPLAY_END,
+        DISPLAY_END + TIMEOUT,
+        at_ms(1000000),
+        at_ms(100000000),
+    ] {
         let decision = Frame::new(&[(0, seen(3, true))]).at(now).run(&mut state);
         assert!(decision.actions.is_empty(), "{now}: {decision:?}");
         assert!(decision.logs.is_empty(), "{now}: {decision:?}");
@@ -78,25 +92,25 @@ fn no_hide_while_the_choice_wait_is_alive_however_long() {
     }
 }
 
-/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60.0 を起点に待ち時間が過ぎたら隠して
+/// ⑵ 選んだ・選択肢の時間切れ・中断のどれでも、止まった時刻 60000ms を起点に待ち時間が過ぎたら隠して
 /// 知らせを返す。終わりを観測したフレームの遅れ（`observed_at`）は満了に効かない。
 #[test]
 fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
     // (名前, 終わりを観測したフレームの現在時刻)
-    let rows: [(&str, f64); 3] = [
+    let rows: [(&str, TimePoint); 3] = [
         ("選んだ（応答は新しい台詞を始めない）", STOPPED),
         (
             "選択肢の時間切れ（OnChoiceTimeout の応答は台詞を始めない）",
-            STOPPED + 1.0,
+            STOPPED + ms(1000),
         ),
-        ("中断（台本の中断・割り込み）", STOPPED + 15.0),
+        ("中断（台本の中断・割り込み）", STOPPED + ms(15000)),
     ];
     let mut failures = Vec::new();
     for (name, observed_at) in rows {
         let mut state = choice_talk_shown(seen(3, false));
         let start = Frame::new(&[(0, seen(3, true))])
             .at(observed_at)
-            .signal(ended(Some(STOPPED)))
+            .signal(ended(STOPPED))
             .run(&mut state);
         let expected_start = vec![started(
             MeasurementOrigin::ChoiceWaitEndedAt(STOPPED),
@@ -108,7 +122,7 @@ fn choice_talk_expires_from_the_stop_time_in_every_way_the_wait_ends() {
         }
 
         let before = Frame::new(&[(0, seen(3, true))])
-            .at(STOPPED + TIMEOUT - 0.25)
+            .at(earlier(STOPPED + TIMEOUT, ms(250)))
             .run(&mut state);
         if !before.actions.is_empty() || before.timeout_notice.is_some() {
             failures.push(format!("{name}: 止まった時刻＋待ち時間の直前で {before:?}"));
@@ -133,7 +147,7 @@ fn hover_holds_and_the_measurement_restarts_from_leaving() {
     let mut state = choice_talk_shown(seen(3, false));
     Frame::new(&[(0, seen(3, true))])
         .at(STOPPED)
-        .signal(ended(Some(STOPPED)))
+        .signal(ended(STOPPED))
         .run(&mut state);
 
     let held = Frame::new(&[(0, hovered(seen(3, true)))])
@@ -151,7 +165,7 @@ fn hover_holds_and_the_measurement_restarts_from_leaving() {
         }]
     );
 
-    let left_at = STOPPED + TIMEOUT + 5.0;
+    let left_at = STOPPED + TIMEOUT + ms(5000);
     let left = Frame::new(&[(0, seen(3, true))])
         .at(left_at)
         .run(&mut state);
@@ -179,23 +193,23 @@ fn next_talk_start_reverts_to_the_ordinary_rule() {
     let mut state = choice_talk_shown(seen(3, false));
     let next = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED)
-        .signal(ended(Some(STOPPED)))
+        .signal(ended(STOPPED))
         .talk_started()
-        .display_end(STOPPED + 5.0)
+        .display_end(STOPPED + ms(5000))
         .run(&mut state);
     assert!(!state.talk_had_choice, "次の開始で印が戻る");
     assert!(next.logs.is_empty(), "{next:?}");
 
     let reply_end = Frame::new(&[(0, seen(5, true))])
-        .at(STOPPED + 20.0)
-        .signal(ended(Some(STOPPED + 20.0)))
+        .at(STOPPED + ms(20000))
+        .signal(ended(STOPPED + ms(20000)))
         .run(&mut state);
     assert_eq!(
         reply_end.logs,
         vec![started(
             MeasurementOrigin::DisplayEnd,
-            STOPPED + 5.0,
-            STOPPED + 5.0 + TIMEOUT,
+            STOPPED + ms(5000),
+            STOPPED + ms(5000) + TIMEOUT,
         )]
     );
 }
@@ -206,21 +220,22 @@ fn per_talk_wait_setting_applies_to_choice_talks() {
     let mut millis = choice_talk_shown(seen(3, false));
     let start = Frame::new(&[(0, seen(3, true))])
         .at(STOPPED)
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Millis(
-            5_000,
-        )))
-        .signal(ended(Some(STOPPED)))
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::After(ms(5_000)),
+        })
+        .signal(ended(STOPPED))
         .run(&mut millis);
     assert_eq!(
         start.logs,
         vec![started(
             MeasurementOrigin::ChoiceWaitEndedAt(STOPPED),
             DISPLAY_END,
-            STOPPED + 5.0,
+            STOPPED + ms(5000),
         )]
     );
     let expired = Frame::new(&[(0, seen(3, true))])
-        .at(STOPPED + 5.0)
+        .at(STOPPED + ms(5000))
         .run(&mut millis);
     assert_eq!(
         expired.actions,
@@ -228,12 +243,15 @@ fn per_talk_wait_setting_applies_to_choice_talks() {
     );
 
     let mut never = choice_talk_shown(seen(3, false));
-    for now in [STOPPED, STOPPED + TIMEOUT, 10_000.0] {
+    for now in [STOPPED, STOPPED + TIMEOUT, at_ms(10000000)] {
         let mut frame = Frame::new(&[(0, seen(3, true))]).at(now);
         if now == STOPPED {
             frame = frame
-                .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Never))
-                .signal(ended(Some(STOPPED)));
+                .signal(TalkLifecycleSignal::BalloonTimeout {
+                    at: SIGNAL_AT,
+                    timeout: TalkTimeout::Never,
+                })
+                .signal(ended(STOPPED));
         }
         let decision = frame.run(&mut never);
         assert!(decision.actions.is_empty(), "{now}: {decision:?}");
@@ -241,30 +259,26 @@ fn per_talk_wait_setting_applies_to_choice_talks() {
     }
 }
 
-/// ⑹ 時刻なしの終わりは、終わりを畳んだ後で計測が成り立つ最初のフレームの現在時刻が起点。
-/// 時刻の分からないフレームでは計測しない。
+/// ⑹ フレームの時刻が無いフレームでは、トークの終わりが届いても計測しない。時刻の分かる最初の
+/// フレームで、止まった時刻を起点に計測が立つ。
 #[test]
-fn timeless_end_starts_from_the_first_measurable_frame() {
+fn end_without_frame_time_waits_for_a_measurable_frame() {
     let mut state = choice_talk_shown(seen(3, false));
     let unknown_now = Frame::new(&[(0, seen(3, true))])
-        .signal(ended(None))
+        .signal(ended(STOPPED))
         .run(&mut state);
     assert!(unknown_now.logs.is_empty(), "{unknown_now:?}");
     assert_eq!(state.deadline, None);
 
-    let first = 70.0;
+    let first = at_ms(70000);
     let start = Frame::new(&[(0, seen(3, true))]).at(first).run(&mut state);
     assert_eq!(
         start.logs,
         vec![started(
-            MeasurementOrigin::ChoiceWaitEndTimeMissing,
+            MeasurementOrigin::ChoiceWaitEndedAt(STOPPED),
             DISPLAY_END,
-            first + TIMEOUT,
+            STOPPED + TIMEOUT,
         )]
-    );
-    assert_eq!(
-        MeasurementOrigin::ChoiceWaitEndTimeMissing.as_str(),
-        "choice_wait_end_time_missing"
     );
     assert_eq!(
         MeasurementOrigin::ChoiceWaitEndedAt(STOPPED).as_str(),
@@ -272,7 +286,7 @@ fn timeless_end_starts_from_the_first_measurable_frame() {
     );
 
     let expired = Frame::new(&[(0, seen(3, true))])
-        .at(first + TIMEOUT)
+        .at(STOPPED + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -285,13 +299,13 @@ fn timeless_end_starts_from_the_first_measurable_frame() {
 fn box_only_scope_follows_the_same_rule() {
     let mut state = choice_talk_shown(boxed(seen(0, false)));
     let waiting = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(STOPPED - 1.0)
+        .at(earlier(STOPPED, ms(1000)))
         .run(&mut state);
     assert!(waiting.actions.is_empty(), "{waiting:?}");
 
     let start = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(STOPPED)
-        .signal(ended(Some(STOPPED)))
+        .signal(ended(STOPPED))
         .run(&mut state);
     assert_eq!(
         start.logs,
@@ -302,7 +316,7 @@ fn box_only_scope_follows_the_same_rule() {
         )]
     );
     let before = Frame::new(&[(0, boxed(seen(0, false)))])
-        .at(STOPPED + TIMEOUT - 0.25)
+        .at(earlier(STOPPED + TIMEOUT, ms(250)))
         .run(&mut state);
     assert!(before.actions.is_empty(), "{before:?}");
     let expired = Frame::new(&[(0, boxed(seen(0, false)))])
@@ -315,42 +329,42 @@ fn box_only_scope_follows_the_same_rule() {
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
-/// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60.0 で落とし、届いた合図の列を
+/// ⑻ 通し: 受け口に cue（文字 → 選択肢）を流し、止まった時刻 60000ms で落とし、届いた合図の列を
 /// そのまま判断に通すと止まった時刻＋待ち時間で隠れる。
 #[test]
 fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
-    let wall = Arc::new(Mutex::new(0.0_f64));
+    let wall = Arc::new(Mutex::new(TimePoint::ZERO));
     let wall_reader = Arc::clone(&wall);
     let clock = TalkClock::new(Arc::new(move || *wall_reader.lock().expect("時計")));
-    // 起点は文字の受け口が観測で決める（本番は `ClockedTextSink`）。壁時刻 0.0 の cue で 0 起点。
-    clock.observe_cue(0.0);
     let (tx, rx) = channel();
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let mut sink: Box<dyn BootCueSink> = registered.clone_box();
     sink.begin_talk(TALK_ID, areka_sakura::contract::ScriptOrigin::GHOST);
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("どれ？".into()),
-        duration: DISPLAY_END,
-    });
-    sink.emit(TalkCue {
-        at: DISPLAY_END,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Choice {
+    sink.emit(TalkCue::scheduled(
+        TimePoint::ZERO,
+        TimeSpan::ZERO,
+        ActorKey::from("0"),
+        CueCommand::Text("どれ？".into()),
+        DISPLAY_SPAN,
+    ));
+    sink.emit(TalkCue::scheduled(
+        TimePoint::ZERO,
+        DISPLAY_SPAN,
+        ActorKey::from("0"),
+        CueCommand::Choice {
             id: "OnA".into(),
             text: "はい".into(),
             references: vec![],
         },
-        duration: 0.0,
-    });
+        TimeSpan::ZERO,
+    ));
     let during_wait: Vec<TalkLifecycleSignal> = rx.try_iter().collect();
 
     *wall.lock().expect("時計") = STOPPED;
     drop(sink);
     let at_end: Vec<TalkLifecycleSignal> = rx.try_iter().collect();
-    assert_eq!(at_end, vec![ended(Some(STOPPED))], "較正: 落ちた時刻つき");
+    assert_eq!(at_end, vec![ended(STOPPED)], "較正: 落ちた時刻つき");
 
     let mut state = BalloonVisibilityState::default();
     let mut shown = Frame::new(&[(0, seen(3, false))]).at(DISPLAY_END);
@@ -361,7 +375,7 @@ fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     assert!(state.talk_had_choice, "較正: 選択肢の合図が届いている");
 
     let waiting = Frame::new(&[(0, seen(3, true))])
-        .at(STOPPED - 1.0)
+        .at(earlier(STOPPED, ms(1000)))
         .run(&mut state);
     assert!(waiting.actions.is_empty(), "待ちの間に隠した: {waiting:?}");
 
@@ -380,7 +394,7 @@ fn sink_signals_drive_the_decision_to_expire_from_the_stop_time() {
     );
 
     let before = Frame::new(&[(0, seen(3, true))])
-        .at(STOPPED + TIMEOUT - 0.25)
+        .at(earlier(STOPPED + TIMEOUT, ms(250)))
         .run(&mut state);
     assert!(before.actions.is_empty(), "{before:?}");
     let expired = Frame::new(&[(0, seen(3, true))])

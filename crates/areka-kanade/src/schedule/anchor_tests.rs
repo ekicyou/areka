@@ -4,18 +4,19 @@
 //! 通すテストは `anchor_step_tests.rs` に置く。
 
 use super::*;
-use crate::msg::{MonotonicMs, ShioriCall, ShioriFailure};
+use crate::msg::{ShioriCall, ShioriFailure};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate_test_support::{config, only_get};
 use crate::schedule::{ActiveTalk, Input, step};
 use crate::talk::TalkId;
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 /// 定常（話していない）。
 fn steady_none() -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: 7,
         ..State::initial()
     }

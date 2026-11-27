@@ -1,10 +1,12 @@
 //! ストーリーボード実行インスタンスの状態管理。
 
 use crate::InterruptionPolicy;
+use crate::time::TimePoint;
 
 /// 実行インスタンスの状態（ランタイム内部専用）
 ///
 /// 7バリアント: Created → Playing ⇄ Paused → 終了状態（4種）。
+/// Playing と Paused の行き来は `InstanceManager::pause`／`resume` だけが行う（`try_transition` は拒む）。
 /// 終了状態は `InterruptionPolicy` の同名戦略に1対1対応する（Never 除く）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstanceState {
@@ -12,8 +14,8 @@ pub enum InstanceState {
     Created,
     /// 再生中
     Playing,
-    /// 一時停止中
-    Paused,
+    /// 一時停止中。`since` は止めた時刻
+    Paused { since: TimePoint },
     /// Conclude 戦略で終了（最終値ジャンプ / 自然終了）
     Concluded,
     /// Cancel 戦略で終了（現在値凍結）
@@ -39,10 +41,7 @@ impl InstanceState {
     pub fn try_transition(&self, target: InstanceState) -> Result<InstanceState, InstanceState> {
         match (self, &target) {
             (Self::Created, InstanceState::Playing) => Ok(target),
-            (Self::Playing, InstanceState::Paused) => Ok(target),
-            // Resume
-            (Self::Paused, InstanceState::Playing) => Ok(target),
-            (Self::Playing | Self::Paused, t) if t.is_terminal() => Ok(target),
+            (Self::Playing | Self::Paused { .. }, t) if t.is_terminal() => Ok(target),
             _ => Err(*self),
         }
     }
@@ -68,6 +67,7 @@ impl InstanceState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::time::testing::at_ms;
 
     // InstanceState 状態遷移テスト
 
@@ -75,11 +75,19 @@ mod tests {
         use super::*;
         use InstanceState::*;
 
-        const STATES: [InstanceState; 7] = [
-            Created, Playing, Paused, Concluded, Cancelled, Trimmed, Compressed,
-        ];
+        fn states() -> [InstanceState; 7] {
+            [
+                Created,
+                Playing,
+                Paused { since: at_ms(0) },
+                Concluded,
+                Cancelled,
+                Trimmed,
+                Compressed,
+            ]
+        }
 
-        /// 7×7 の 49 組すべての期待（行＝遷移元・列＝遷移先、並びは STATES）。
+        /// 7×7 の 49 組すべての期待（行＝遷移元・列＝遷移先、並びは states()）。
         /// 許す組は Ok(遷移先)、ほかは Err(遷移元)。
         #[test]
         fn try_transition_table() {
@@ -87,16 +95,16 @@ mod tests {
             const ALLOWED: [[bool; 7]; 7] = [
                 //       Created Playing Paused Concluded Cancelled Trimmed Compressed
                 /* Created    */ [false, true,  false, false, false, false, false],
-                /* Playing    */ [false, false, true,  true,  true,  true,  true ],
-                /* Paused     */ [false, true,  false, true,  true,  true,  true ],
+                /* Playing    */ [false, false, false, true,  true,  true,  true ],
+                /* Paused     */ [false, false, false, true,  true,  true,  true ],
                 /* Concluded  */ [false, false, false, false, false, false, false],
                 /* Cancelled  */ [false, false, false, false, false, false, false],
                 /* Trimmed    */ [false, false, false, false, false, false, false],
                 /* Compressed */ [false, false, false, false, false, false, false],
             ];
             let mut checked = 0;
-            for (from, row) in STATES.iter().zip(ALLOWED) {
-                for (to, allowed) in STATES.iter().zip(row) {
+            for (from, row) in states().iter().zip(ALLOWED) {
+                for (to, allowed) in states().iter().zip(row) {
                     let expected = if allowed { Ok(*to) } else { Err(*from) };
                     assert_eq!(from.try_transition(*to), expected, "{from:?} -> {to:?}");
                     checked += 1;
@@ -113,7 +121,7 @@ mod tests {
         fn terminal_states() {
             assert!(!InstanceState::Created.is_terminal());
             assert!(!InstanceState::Playing.is_terminal());
-            assert!(!InstanceState::Paused.is_terminal());
+            assert!(!InstanceState::Paused { since: at_ms(0) }.is_terminal());
             assert!(InstanceState::Concluded.is_terminal());
             assert!(InstanceState::Cancelled.is_terminal());
             assert!(InstanceState::Trimmed.is_terminal());

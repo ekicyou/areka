@@ -23,7 +23,7 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
@@ -177,20 +177,32 @@ pub fn geometry_model(
 
 // ══ 指令とポンプ ═════════════════════════════════════════════════════════════════════════
 
-/// テスト用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
+/// テスト用 cue（起点 0 の台本の `at`）。reveal は配送 duration 由来ゆえ、Text cue へ
 /// `N × interval` を焼き込むと per-glyph の間隔 `interval` を得る。他のコマンドは瞬時
-/// （duration=0）。`interval = 0.0` なら全グリフが `at` で即時に見える。
-pub fn cue(actor: &str, at: f64, command: CueCommand, interval: f64) -> TalkCue {
+/// （duration=0）。`interval` が 0 なら全グリフが `at` で即時に見える。
+pub fn cue(actor: &str, at: TimeSpan, command: CueCommand, interval: TimeSpan) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * interval,
-        _ => 0.0,
+        CueCommand::Text(t) => interval.mul_div(t.chars().count() as u64, 1),
+        _ => TimeSpan::ZERO,
     };
-    TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(actor),
+        ActorKey::from(actor),
         command,
         duration,
-    }
+    )
+}
+
+/// 時刻の来た合図を当ててから提示する（`t` は起点 0 の台本の時刻）。本番のフレームの頭と同じ順。
+pub fn present_at(
+    rt: &mut TextLayerRuntime,
+    world: &mut World,
+    t: TimeSpan,
+) -> Result<(), areka_emo_text::TextLayerError> {
+    let now = TimePoint::ZERO + t;
+    rt.advance(now);
+    areka_emo_text::actor::present_frame(rt, world, now)
 }
 
 /// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump

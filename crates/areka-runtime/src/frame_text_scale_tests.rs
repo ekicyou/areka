@@ -270,59 +270,70 @@ fn frame_system_runs_dpi_phase_without_writes_when_unattached() {
     }
 }
 
-// ── 発話が進行中かの純判断（reveal_pending） ──
+// ── 次に現れる字の時刻の純判断（next_reveal） ──
 //
-// 「次の画面更新でも文字が増えるか」だけを決める引き算である。時計にも表示層にも触れない。
-// どこで呼ぶか（text 相の末尾）は字面検査が受け持つ。
+// 文字の相が次のフレームを起こす時刻を決める。時計にも表示層にも触れない。
 
-use super::scale_text::reveal_pending;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 
-/// 描く相手が 1 人も居なければ進行中ではない。
+use super::scale_text::next_reveal;
+
+/// 描く相手が 1 人も居なければ起こさない。
 #[test]
-fn no_actor_is_not_in_progress() {
-    let none: [&[f64]; 0] = [];
-    assert!(!reveal_pending(none.iter().copied(), 0.0));
+fn no_place_has_no_next_reveal() {
+    let none: [&[TimePoint]; 0] = [];
+    assert_eq!(next_reveal(none.iter().copied(), at_ms(0)), None);
 }
 
-/// 文字が現れ切っていれば進行中ではない——時刻起点が残っていても予約しない。
+/// 字が現れ切っていれば起こさない。ちょうど最後の字の時刻は「現れ済み」側（現れた数の数え方と同じ向き）。
 #[test]
-fn fully_revealed_text_is_not_in_progress() {
-    let times: [&[f64]; 1] = [&[0.0, 0.1, 0.2]];
-    assert!(
-        !reveal_pending(times.iter().copied(), 0.3),
-        "最後の文字より後の時刻では進行中ではない"
-    );
-    assert!(
-        !reveal_pending(times.iter().copied(), 0.2),
-        "ちょうど最後の文字が現れる時刻は「現れ済み」側（可視数の数え方と同じ向き）"
-    );
+fn fully_revealed_text_has_no_next_reveal() {
+    let times: [&[TimePoint]; 1] = [&[at_ms(0), at_ms(100), at_ms(200)]];
+    assert_eq!(next_reveal(times.iter().copied(), at_ms(300)), None);
+    assert_eq!(next_reveal(times.iter().copied(), at_ms(200)), None);
 }
 
-/// まだ現れていない文字が 1 つでもあれば進行中である。
+/// まだ現れていない字が在れば、フレームの時刻より後の最初の字の時刻に起こす。
 #[test]
-fn pending_glyph_makes_it_in_progress() {
-    let times: [&[f64]; 1] = [&[0.0, 0.1, 0.2]];
-    assert!(reveal_pending(times.iter().copied(), 0.19));
-    assert!(reveal_pending(times.iter().copied(), 0.0));
-}
-
-/// 相手が複数居るときは 1 人でも進行中なら進行中（他が現れ切っていても止めない）。
-#[test]
-fn any_actor_still_revealing_counts() {
-    let times: [&[f64]; 2] = [&[0.0, 0.1], &[0.0, 5.0]];
-    assert!(
-        reveal_pending(times.iter().copied(), 1.0),
-        "片方が現れ切っていても、もう片方が残っていれば進行中"
+fn next_reveal_is_the_first_glyph_after_the_frame() {
+    let times: [&[TimePoint]; 1] = [&[at_ms(0), at_ms(100), at_ms(200)]];
+    assert_eq!(
+        next_reveal(times.iter().copied(), at_ms(-50)),
+        Some(at_ms(0))
     );
-    assert!(
-        !reveal_pending(times.iter().copied(), 5.0),
-        "全員が現れ切ったら止まる"
+    assert_eq!(
+        next_reveal(times.iter().copied(), at_ms(100)),
+        Some(at_ms(200))
+    );
+    assert_eq!(
+        next_reveal(times.iter().copied(), at_ms(190)),
+        Some(at_ms(200))
     );
 }
 
-/// 時刻列が空の相手（cue 未着・`Clear` 直後）は判断に加わらない。
+/// 場所が複数なら、全部の場所の中で最も早い字の時刻（現れ切った場所は加わらない）。
+#[test]
+fn next_reveal_is_the_earliest_over_all_places() {
+    let times: [&[TimePoint]; 3] = [
+        &[at_ms(0), at_ms(100)],
+        &[at_ms(0), at_ms(5_000)],
+        &[at_ms(1_200), at_ms(1_250)],
+    ];
+    assert_eq!(
+        next_reveal(times.iter().copied(), at_ms(1_000)),
+        Some(at_ms(1_200))
+    );
+    assert_eq!(
+        next_reveal(times.iter().copied(), at_ms(1_250)),
+        Some(at_ms(5_000))
+    );
+    assert_eq!(next_reveal(times.iter().copied(), at_ms(5_000)), None);
+}
+
+/// 時刻の列が空の場所（合図がまだ当たっていない・`Clear` の直後）は判断に加わらない。
 #[test]
 fn empty_schedule_is_ignored() {
-    let times: [&[f64]; 2] = [&[], &[]];
-    assert!(!reveal_pending(times.iter().copied(), 0.0));
+    let times: [&[TimePoint]; 2] = [&[], &[]];
+    assert_eq!(next_reveal(times.iter().copied(), at_ms(0)), None);
 }

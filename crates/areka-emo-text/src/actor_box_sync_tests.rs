@@ -10,6 +10,7 @@ use areka_emo_compose::{BoxLayout, BoxPlacement};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
+use dola::time::testing::ms;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
@@ -72,7 +73,7 @@ pub(super) fn layout() -> BoxLayout {
 pub(super) fn select(actor: &str, name: &str) -> TalkCue {
     cue(
         actor,
-        0.0,
+        ms(0),
         CueCommand::BalloonSurface {
             key: name.to_owned(),
         },

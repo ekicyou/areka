@@ -439,6 +439,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     use super::super::talk_lifecycle::BalloonLifecycleSink;
     use areka_sakura::sysvar::SystemVarSnapshot;
     use dola::cue::CuePlayer;
+    use dola::{TimePoint, TimeSpan};
 
     // wire_runtime と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -453,41 +454,43 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
 
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
     let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
-    let horizon = compiled.sheet.absolute_end_time();
+    let sheet = compiled.sheet.with_absolute_start_time(TimePoint::ZERO);
+    let horizon = sheet.relative_end();
     assert!(
-        horizon > 0.0,
+        horizon > TimeSpan::ZERO,
         "前提: 台本の占有終端は正（台本が空なら本檻は空虚になる）"
     );
 
-    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).expect("起点を刻んだ台本");
     player.register_sink(Box::new(BalloonLifecycleSink::new(
         lifecycle_tx,
         wiring.clock.clone(),
     )));
 
     // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
-    let mut tick_points: Vec<f64> = compiled
-        .sheet
+    let mut tick_points: Vec<TimePoint> = sheet
         .cues()
         .iter()
-        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .map(|cue| sheet.absolute_fire_time(cue).expect("起点を刻んだ台本"))
         .collect();
-    tick_points.push(horizon);
+    tick_points.push(sheet.absolute_end_time().expect("起点を刻んだ台本"));
     for at in tick_points {
         player.tick(at);
     }
 
     let signals = wiring.drain_lifecycle_signals();
-    assert_eq!(
-        signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+    assert!(
+        matches!(
+            signals.first(),
+            Some(TalkLifecycleSignal::TalkStarted { talk_id: None, .. })
+        ),
         "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
     );
 
-    let ends: Vec<f64> = signals
+    let ends: Vec<TimePoint> = signals
         .iter()
         .filter_map(|signal| match signal {
-            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            TalkLifecycleSignal::DisplayEndAt { end, .. } => Some(*end),
             _ => None,
         })
         .collect();
@@ -497,7 +500,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     );
     assert_eq!(
         ends.last().copied(),
-        Some(horizon),
+        sheet.absolute_end_time(),
         "最後に届く占有終端は台本の占有区間の終端と一致する"
     );
 }
@@ -580,7 +583,6 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
 /// この結線層が守るものなので見張りもここに置く。
 const ACTOR_SCAN_SITES: &[&str] = &[
     "crates/areka-emo-text/src/actor_present.rs",
-    "crates/areka-runtime/src/frame/scale_text.rs",
     "crates/areka-runtime/src/hover_inject.rs",
 ];
 
@@ -596,8 +598,8 @@ const ACTOR_SCAN_SITES: &[&str] = &[
 /// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
 ///
 /// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
-/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 3 点のうち供給面を
-/// 割り当てるのは `present_frame` だけで、他の 2 点は読むだけである。
+/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 2 点のうち供給面を
+/// 割り当てるのは `present_frame` だけで、`hover_inject` は読むだけである。
 #[test]
 fn every_production_scan_of_the_actor_map_is_registered() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -720,12 +722,13 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     );
 
     let actor = ActorKey::from("0");
-    runtime.borrow_mut().apply_cue(&TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: CueCommand::Emote { key: "0".into() },
-        duration: 0.0,
-    });
+    runtime.borrow_mut().apply_cue(&TalkCue::scheduled(
+        dola::TimePoint::ZERO,
+        dola::TimeSpan::ZERO,
+        actor.clone(),
+        CueCommand::Emote { key: "0".into() },
+        dola::TimeSpan::ZERO,
+    ));
     let destination = runtime.borrow().state().destination(&actor);
     assert!(
         matches!(&destination, areka_emo_text::place::TextPlace::Box(name) if name.as_str() == "talk"),

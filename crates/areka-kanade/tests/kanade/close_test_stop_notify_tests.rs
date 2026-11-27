@@ -15,6 +15,7 @@
 //!    数えるには全スレッド捕捉の窓口が要り、その利用は別表への登録を伴うため、観測点を
 //!    「同じ関数を呼出スレッドで直に叩く」側へ寄せてある。
 
+use dola::time::testing::at_ms;
 use std::sync::mpsc;
 
 use areka_kanade::{KanadeNotice, KanadeStopCause};
@@ -49,7 +50,7 @@ fn force_quit_delivers_exactly_one_stop_notification_with_the_forced_cause() {
     let (harness, stop_rx) = harness_with_stop_channel(Fixture::default());
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
     send(
         &harness,
         KanadeMsg::ForceQuit {

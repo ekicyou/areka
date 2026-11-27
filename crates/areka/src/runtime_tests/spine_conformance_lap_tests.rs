@@ -134,7 +134,9 @@ struct LapObserved {
     talks_started: usize,
     /// 現在の talk を最初に観測した注入時刻（占有終端の起点）。
     talk_base_ms: Option<u64>,
-    /// 現在の talk の占有終端（ms・報告された既知最大）。
+    /// 現在の talk の最初の合図の発火時刻（占有終端を talk の頭からの長さへ直す起点）。
+    talk_started_at: Option<dola::TimePoint>,
+    /// 現在の talk の占有終端（talk の頭からの ms・報告された既知最大）。
     talk_horizon_ms: u64,
     /// 位置調整の対象窓の現在位置（`run_move_drain_phase` 適用後）。
     move_target_pos: Option<Point>,
@@ -222,22 +224,30 @@ impl StageSink for LapSink<'_> {
             for signal in self.harness.wiring.drain_lifecycle_signals() {
                 match signal {
                     // 会話境界（talk 起動ごとに 1 回）。占有終端の計測をここでやり直す。
-                    TalkLifecycleSignal::TalkStarted { .. } => {
+                    TalkLifecycleSignal::TalkStarted { at, .. } => {
                         observed.talks_started += 1;
                         observed.talk_base_ms = Some(self.last_inject_ms);
+                        observed.talk_started_at = Some(at);
                         observed.talk_horizon_ms = 0;
                     }
-                    // 占有終端（talk 相対秒・既知最大が更新されたときだけ届く）。
-                    TalkLifecycleSignal::DisplayEndAt(seconds) => {
-                        let reported = horizon_ms(seconds);
+                    // 占有終端（絶対の時刻・既知最大が更新されたときだけ届く）。
+                    TalkLifecycleSignal::DisplayEndAt { end, .. } => {
+                        let start = observed
+                            .talk_started_at
+                            .expect("TalkStarted は DisplayEndAt に先行する");
+                        let reported = horizon_ms(
+                            end.span_since(start)
+                                .expect("占有終端は talk の最初の合図より後"),
+                        );
                         observed.talk_horizon_ms = observed.talk_horizon_ms.max(reported);
                         observed.max_horizon_ms = observed.max_horizon_ms.max(reported);
                     }
                     // 利用者の中断は押下の線から届くもので、本テストは押下を作らない。
-                    TalkLifecycleSignal::UserBreak => {}
-                    // 待ち時間の指定・選択肢を出した・会話の終わりは本テストの観測の対象外。
-                    TalkLifecycleSignal::BalloonTimeout(_)
-                    | TalkLifecycleSignal::ChoiceShown
+                    TalkLifecycleSignal::UserBreak { .. } => {}
+                    // 待ち時間の指定・選択肢を出した・置き直し・会話の終わりは本テストの観測の対象外。
+                    TalkLifecycleSignal::BalloonTimeout { .. }
+                    | TalkLifecycleSignal::ChoiceShown { .. }
+                    | TalkLifecycleSignal::OriginMoved(_)
                     | TalkLifecycleSignal::TalkEnded { .. } => {}
                 }
             }
@@ -262,13 +272,9 @@ impl StageSink for LapSink<'_> {
     }
 }
 
-/// 占有終端（talk 相対秒）をミリ秒へ切り上げる。
-fn horizon_ms(seconds: f64) -> u64 {
-    if seconds <= 0.0 {
-        0
-    } else {
-        (seconds * 1_000.0).ceil() as u64
-    }
+/// 占有終端（talk の頭からの長さ）をミリ秒へ切り上げる。
+fn horizon_ms(end: dola::TimeSpan) -> u64 {
+    (end.as_ticks() as u64).div_ceil(10_000)
 }
 
 // ===========================================================================
@@ -708,9 +714,12 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     //     `menu.pasta` は選択肢を `エモ：`（scope1）へ置くので、台本がそれを scope0 へ写し
     //     違えても 3 列は緑のままになる。scope を持つ観測点は文字層の選択状態
     //     （`crates/areka-emo-text/src/actor.rs` の `choice_active`）だけなので、ここで 1 度
-    //     読んで写しの正しさを固定する。`pump_text` は文字層 UI アクターの drain だけを行い、
-    //     交信も表示指令も 1 件も増やさない（`spine.rs`）。
+    //     読んで写しの正しさを固定する。`pump_text` は文字層 UI アクターの drain だけ、`advance_text` は
+    //     最後に注入した時刻までに時刻の来た合図を当てるだけを行い、交信も表示指令も 1 件も増やさない
+    //     （`spine.rs`）。
     sink.harness.pump_text();
+    sink.harness
+        .advance_text(dola::time::testing::at_ms(sink.last_inject_ms as i64));
     {
         let rt = sink.harness.runtime.borrow();
         let (on_sakura, on_kero) = (

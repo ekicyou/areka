@@ -258,7 +258,10 @@ mod tests {
         assert_eq!(config.shell_name, "SomeShellName");
         assert_eq!(config.baseware_name, "areka");
         assert_eq!(config.baseware_version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(config.close_talk_deadline_ms, 30_000);
+        assert_eq!(
+            config.close_talk_deadline,
+            dola::TimeSpan::from_millis(30_000)
+        );
     }
 
     /// シェルの descript の鍵は一覧と同じく大小を無視して読む。

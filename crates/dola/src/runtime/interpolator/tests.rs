@@ -1,10 +1,11 @@
 use super::*;
+use crate::time::TimeDelta;
 use std::collections::BTreeMap;
 
 fn make_segment(from: f64, to: f64, easing: Option<EasingFunction>) -> CompiledSegment {
     CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Scalar(from),
         to_value: TransitionValue::Scalar(to),
         easing,
@@ -107,8 +108,8 @@ fn integer_exact() {
 #[test]
 fn object_before_end() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("a".to_string())),
         to_value: TransitionValue::Dynamic(DynamicValue::String("b".to_string())),
         easing: None,
@@ -124,8 +125,8 @@ fn object_before_end() {
 #[test]
 fn object_at_end() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("a".to_string())),
         to_value: TransitionValue::Dynamic(DynamicValue::String("b".to_string())),
         easing: None,
@@ -221,8 +222,8 @@ fn intern_pool_returns_distinct_rc_for_different_values() {
 #[test]
 fn interpolate_with_pool_shares_rc_across_calls() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("a".to_string())),
         to_value: TransitionValue::Dynamic(DynamicValue::String("b".to_string())),
         easing: None,
@@ -249,8 +250,8 @@ fn nan_object_value_is_interned_once() {
         DynamicValue::Float(f64::NAN),
     )]));
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(nan_obj.clone()),
         to_value: TransitionValue::Dynamic(nan_obj),
         easing: None,
@@ -266,8 +267,8 @@ fn nan_object_value_is_interned_once() {
 #[test]
 fn interpolate_without_pool_allocates_fresh_rc() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("a".to_string())),
         to_value: TransitionValue::Dynamic(DynamicValue::String("b".to_string())),
         easing: None,
@@ -291,8 +292,8 @@ fn interpolate_without_pool_allocates_fresh_rc() {
 #[test]
 fn float_interpolation_from_dynamic_float_and_integer() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::Float(10.0)),
         to_value: TransitionValue::Dynamic(DynamicValue::Integer(20)),
         easing: None,
@@ -305,8 +306,8 @@ fn float_interpolation_from_dynamic_float_and_integer() {
 fn float_interpolation_non_numeric_dynamic_falls_back_to_zero() {
     // 非数値 Dynamic は 0.0 にフォールバックする
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("oops".to_string())),
         to_value: TransitionValue::Scalar(100.0),
         easing: None,
@@ -384,8 +385,8 @@ fn nan_progress_saturates_to_zero_for_integer() {
 #[test]
 fn nan_progress_returns_from_value_for_object() {
     let seg = CompiledSegment {
-        start_time: 0.0,
-        end_time: 1.0,
+        start_time: TimeDelta::ZERO,
+        end_time: TimeDelta::from_ticks(10_000_000),
         from_value: TransitionValue::Dynamic(DynamicValue::String("a".to_string())),
         to_value: TransitionValue::Dynamic(DynamicValue::String("b".to_string())),
         easing: None,

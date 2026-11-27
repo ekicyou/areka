@@ -7,10 +7,11 @@
 
 use super::translate_test_support::pass_translate;
 use super::{Action, ActiveTalk, Input, Phase, State, TermCause, step};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs};
+use crate::msg::{CloseReason, KanadeConfig};
 use crate::schedule::translate_test_support::config;
 use crate::status::{BalloonBinding, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::at_ms;
 
 fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
     BalloonBinding {
@@ -515,7 +516,7 @@ fn farewell_reply(label: &str, requests: &[&str]) -> (State, Vec<Action>) {
     };
     let start = State {
         external: full_copy(),
-        last_now: Some(MonotonicMs(1_000)),
+        last_now: Some(at_ms(1_000)),
         ..steady_idle()
     };
     let mut next = step(start, trigger, &config());
@@ -621,7 +622,7 @@ fn farewell_talk_drops_talking_after_every_ending() {
             step(state, done(talk_id, TalkEndReason::Interrupted), &config())
         }),
         ("上限超過", |state, _| {
-            let now = MonotonicMs(1_000 + config().close_talk_deadline_ms);
+            let now = at_ms(1_000) + config().close_talk_deadline;
             step(state, Input::Tick { now }, &config())
         }),
     ];

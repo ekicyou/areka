@@ -5,6 +5,8 @@ use areka_emo_compose::{
     Cell, ComposeMethod, EmoWorld, FilmId, PartKey, PatternFrame, PatternState,
 };
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::ms;
+use dola::{TimePoint, TimeSpan};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use crate::parts::PartAnim;
@@ -120,31 +122,32 @@ pub(crate) fn warns(logs: &[String]) -> Vec<&String> {
     logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
-/// 台本の `at` 秒の、スコープ `scope` への合図（再生時間は `duration` 秒）。
-pub(crate) fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {
-    TalkCue {
+/// 起点 0 の台本の `at` の、スコープ `scope` への合図（再生時間は `duration`）。
+pub(crate) fn cue(at: TimeSpan, scope: &str, command: CueCommand, duration: TimeSpan) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(scope),
+        ActorKey::from(scope),
         command,
         duration,
-    }
+    )
 }
 
-/// 台本の `at` 秒に始まる文字の cue（1 字 50 ms）。
-pub(crate) fn text(at: f64, scope: &str, s: &str) -> TalkCue {
-    let duration = s.chars().count() as f64 * 0.05;
+/// 台本の `at` に始まる文字の cue（1 字 50 ms）。
+pub(crate) fn text(at: TimeSpan, scope: &str, s: &str) -> TalkCue {
+    let duration = ms(50).mul_div(s.chars().count() as u64, 1);
     cue(at, scope, CueCommand::Text(s.into()), duration)
 }
 
-/// 台詞の頭に前置される全消去（台本の 0 秒）。
+/// 台詞の頭に前置される全消去（台本の 0）。
 pub(crate) fn clear_all() -> TalkCue {
-    cue(0.0, "0", CueCommand::ClearAll, 0.0)
+    cue(TimeSpan::ZERO, "0", CueCommand::ClearAll, TimeSpan::ZERO)
 }
 
 /// 時刻 `at` に始まった部品の再生中。
-pub(crate) fn part_playing(at: u64) -> Option<PartAnim> {
+pub(crate) fn part_playing(at: TimePoint) -> Option<PartAnim> {
     Some(PartAnim::Playing {
-        started_at_ms: at,
+        started_at: at,
         acts_through: None,
     })
 }
@@ -167,13 +170,13 @@ pub(crate) fn one_frame_pattern(anim_id: u32, surface_id: u32) -> PatternState {
 }
 
 /// 面 `surface_id` を描く 1 コマ（絵なし・`Overlay`・オフセットなし）。
-pub(crate) fn draw_frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
+pub(crate) fn draw_frame(surface_id: i64, wait: TimeSpan) -> LoopFrame {
     LoopFrame {
         surface_id,
         picture: None,
         method: ComposeMethod::Overlay,
         act: FrameAct::Draw,
-        wait_ms,
+        wait,
         x: 0,
         y: 0,
     }

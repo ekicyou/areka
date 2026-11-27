@@ -1,109 +1,83 @@
-//! talk: 文字が現れる時刻の写し。
+//! talk: 文字が現れる時刻の列。
 //!
 //! `talk,数値` の引き金は「数値分の文字がバルーンに現れた時刻」で鳴る。その時刻を、文字の層と同じ式で
-//! seriko の時計の上に写す。時計は持たず、渡された時計の読み（ms）から見積もるだけ。
+//! 絶対の時刻として持つ。時計も起点も持たない。
 //!
-//! - [`TalkEpoch`]: 台本の 0 秒が seriko の時計の何 ms に当たるか（起点）の見積もり。届いた cue ごとに
-//!   「今 − cue の時刻」の最大を取る（文字の層の時刻源 `TalkClock::observe_cue` と同じ式）。
-//! - [`TalkFeed`]: スコープ 1 つの「i 文字目が現れる台本の秒」の列。塊（文字の cue 1 件）ごとに
-//!   `r_i = max(r_{i−1} + 1 字の間隔, 塊の頭)` で積む（文字の層の `RevealSchedule::extend_chunk` と
-//!   同じ式・同じ計算の順）。序数は塊をまたいで続き、消去は現れなかった文字を捨てる。
-//!
-//! 文字の時刻は台本の秒（`f64`）のまま持ち、壁時刻（ms）へは読むときに写す（1 字の間隔の端数を
-//! 失わない）。文字の層の式が変わったら、ここも同じに変える（写しであって、共有ではない）。
+//! [`TalkFeed`]: スコープ 1 つの「i 文字目が現れる時刻」の列。塊（文字の cue 1 件）ごとに、合図の発火
+//! 時刻を塊の頭として、文字の層と同じ 1 本の式（[`chunk_reveal_offsets`]）で積む。序数は塊をまたいで
+//! 続き、消去は現れなかった文字を捨てる。
 
 use std::collections::VecDeque;
 
 use areka_sakura::cluster::cluster_count;
-
-/// 台本の 0 秒に当たる seriko の時計の読み（起点・ms）の見積もり。プロセスに 1 つ。
-#[derive(Default)]
-pub(crate) struct TalkEpoch {
-    /// 起点（ms・端数つき）。cue が 1 つも届いていなければ `None`。
-    epoch_ms: Option<f64>,
-}
-
-impl TalkEpoch {
-    /// 届いた cue ごと（種類を問わない）に呼ぶ: `起点 = max(起点, 今 − cue の時刻)`。
-    ///
-    /// 新しいトークは届く時刻が前へ飛ぶので起点も前へ飛び、同じトークの中で早めに届いた cue
-    /// （より小さい「今 − cue の時刻」）は最大に負けて起点を戻さない。
-    pub(crate) fn observe(&mut self, at_s: f64, now_ms: u64) {
-        let candidate = now_ms as f64 - at_s * 1000.0;
-        self.epoch_ms = Some(
-            self.epoch_ms
-                .map_or(candidate, |epoch| epoch.max(candidate)),
-        );
-    }
-
-    /// 今の台本の秒（起点より前は 0・起点が無ければ `None`）。
-    pub(crate) fn talk_time(&self, now_ms: u64) -> Option<f64> {
-        self.epoch_ms
-            .map(|epoch| ((now_ms as f64 - epoch) / 1000.0).max(0.0))
-    }
-
-    /// 台本の秒を壁時刻（ms）に写す。最も近い 1 ms へ丸める（時計の分解能より細かい値を持てない
-    /// ための写しで、刻みの境目への丸めではない。切り捨てないので、浮動小数の誤差で 1 ms 手前に
-    /// ならない）。起点が無ければ `None`。
-    pub(crate) fn wall_ms(&self, r_s: f64) -> Option<u64> {
-        self.epoch_ms
-            .map(|epoch| (epoch + r_s * 1000.0).round() as u64)
-    }
-}
+use areka_sakura::reveal::chunk_reveal_offsets;
+use dola::{TimeDelta, TimePoint, TimeSpan};
 
 /// スコープ 1 つの文字の時刻の列（序数は塊をまたいで連続）。
 #[derive(Default)]
 pub(crate) struct TalkFeed {
     /// `times` の先頭の文字の序数（刈り込んだ分だけ進む）。
     base: u64,
-    /// 文字が現れる台本の秒（単調非減少）。
-    times: VecDeque<f64>,
+    /// 文字が現れる時刻（単調非減少）。
+    times: VecDeque<TimePoint>,
     /// 直前の文字の時刻（消去で `None` に戻る＝次の塊は塊の頭から）。刈り込みでは変わらない。
-    last: Option<f64>,
+    last: Option<TimePoint>,
 }
 
 impl TalkFeed {
     /// 文字の cue 1 件（台詞の文字・選択肢の文字）を、書記素クラスタの数だけ積む。
-    pub(crate) fn push_text(&mut self, at_s: f64, duration_s: f64, text: &str) {
-        self.push_chunk(at_s, duration_s, cluster_count(text));
+    pub(crate) fn push_text(&mut self, fire_time: TimePoint, duration: TimeSpan, text: &str) {
+        self.push_chunk(fire_time, duration, cluster_count(text));
     }
 
-    /// 塊 1 つ（頭 `at_s`・再生時間 `duration_s`・`count` 文字）を積む。
+    /// 塊 1 つ（頭＝合図の発火時刻 `fire_time`・再生時間 `duration`・`count` 文字）を積む。
     ///
-    /// 1 字の間隔は `duration_s / count`、文字の時刻は「前の文字＋間隔」と塊の頭の大きい方
-    /// （前の文字が無ければ塊の頭）。`count == 0` は何もしない（割らない）。`duration_s` は cue の
-    /// 入口で有限・非負に揃えてある前提で、列は単調のまま。
-    pub(crate) fn push_chunk(&mut self, at_s: f64, duration_s: f64, count: usize) {
-        if count == 0 {
-            return;
-        }
-        let interval = duration_s / count as f64;
-        for _ in 0..count {
-            let r = self.last.map_or(at_s, |prev| (prev + interval).max(at_s));
+    /// 文字の時刻は文字の層と同じ [`chunk_reveal_offsets`] で求める（前の文字は直前の塊の最後の文字）。
+    /// `count == 0` は何も積まない。
+    pub(crate) fn push_chunk(&mut self, fire_time: TimePoint, duration: TimeSpan, count: usize) {
+        let prev = self.last.map(|last| last - fire_time);
+        for offset in chunk_reveal_offsets(prev, duration, count) {
+            let r = fire_time + offset;
             self.times.push_back(r);
             self.last = Some(r);
         }
     }
 
-    /// 消去の知らせ（台本の秒 `at_s`）: その時刻までに現れていない文字を捨て、次の塊を塊の頭から
-    /// 始めさせる。
+    /// 消去の合図（発火時刻 `at`）: その時刻より後に現れる文字を捨て、次の塊を塊の頭から始めさせる。
     ///
     /// 文字の層は消去で未表示の文字ごと列を空にするので、現れなかった文字で口は動かない。残る文字は
-    /// `at_s` 以前、次の塊の頭は `at_s` 以後なので、列は単調のまま（新しい台詞の頭の全消去は
-    /// 台本の 0 秒で届き、中断された前の台詞の残りをここで捨てる）。
-    pub(crate) fn restart_chain(&mut self, at_s: f64) {
+    /// `at` 以前、次の塊の頭は `at` 以後なので、列は単調のまま（中断された前の台詞の残りは、新しい
+    /// 台詞の頭の全消去でここで捨てる）。
+    pub(crate) fn restart_chain(&mut self, at: TimePoint) {
         self.times
-            .truncate(self.times.partition_point(|&r| r <= at_s));
+            .truncate(self.times.partition_point(|&r| r <= at));
         self.last = None;
     }
 
-    /// 台本の秒 `t_s` までに現れた文字の数（序数で数える・ちょうどの時刻の文字は現れている）。
-    pub(crate) fn revealed_until(&self, t_s: f64) -> u64 {
-        self.base + self.times.partition_point(|&r| r <= t_s) as u64
+    /// 置き直しの知らせ: 効く時刻 `effective_at` より後の時刻（列の文字と「前の字の時刻」の欄）を
+    /// `delta` だけ動かし、効く時刻より前になる物は効く時刻にする。効く時刻以前の時刻は書き換えない
+    /// （列は単調のまま・刈り込んだ文字の序数はそのまま）。
+    pub(crate) fn shift_after(&mut self, effective_at: TimePoint, delta: TimeDelta) {
+        let shift = |t: TimePoint| {
+            if t > effective_at {
+                (t + delta).max(effective_at)
+            } else {
+                t
+            }
+        };
+        for t in &mut self.times {
+            *t = shift(*t);
+        }
+        self.last = self.last.map(shift);
     }
 
-    /// 序数 `g` の文字が現れる台本の秒（刈り込み済み・まだ無い序数は `None`）。
-    pub(crate) fn time_of(&self, g: u64) -> Option<f64> {
+    /// 時刻 `t` までに現れた文字の数（序数で数える・ちょうどの時刻の文字は現れている）。
+    pub(crate) fn revealed_until(&self, t: TimePoint) -> u64 {
+        self.base + self.times.partition_point(|&r| r <= t) as u64
+    }
+
+    /// 序数 `g` の文字が現れる時刻（刈り込み済み・まだ無い序数は `None`）。
+    pub(crate) fn time_of(&self, g: u64) -> Option<TimePoint> {
         let index = usize::try_from(g.checked_sub(self.base)?).ok()?;
         self.times.get(index).copied()
     }
@@ -117,6 +91,10 @@ impl TalkFeed {
         self.base += count as u64;
     }
 }
+
+#[cfg(test)]
+#[path = "talk_origin_tests.rs"]
+mod origin_tests;
 
 #[cfg(test)]
 #[path = "talk_tests.rs"]

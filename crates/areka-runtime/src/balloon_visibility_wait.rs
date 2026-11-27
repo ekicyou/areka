@@ -5,31 +5,32 @@ use std::sync::OnceLock;
 use tracing::{info, warn};
 
 use areka_sakura::TalkId;
+use dola::{TimePoint, TimeSpan};
 
 use super::decision::hide_reaches_boxes;
 
 use super::{
-    BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT_SECS,
-    MeasurementDiscardReason, MeasurementOrigin, SuppressionKinds, TIMEOUT_ENV_KEY, TalkEnd,
-    TalkTimeout, TimeoutSource, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
+    BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT, MeasurementDiscardReason,
+    MeasurementOrigin, SuppressionKinds, TIMEOUT_ENV_KEY, TalkTimeout, TimeoutSource,
+    VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
 };
 
-/// 環境変数の値から短縮指定のミリ秒を読み取る純関数（環境変数へ触れない・単体テスト可能）。
+/// 環境変数の値から短縮指定のミリ秒を長さへ読み取る純関数（環境変数へ触れない・単体テスト可能）。
 ///
 /// - `None`／空／空白のみ → `None`（指定なし＝既定を使う。本番の既定経路なので無音）。
-/// - 周辺の空白を落とした**正の**整数 → `Some(ms)`。
-/// - `0`・負値・非数・`u64` の範囲超過 → `warn!` の上で `None`（既定へ縮退）。
+/// - 周辺の空白を落とした**正の**整数 → そのミリ秒の長さ。
+/// - `0`・負値・非数・`u64` の範囲超過・長さの型に収まらない値 → `warn!` の上で `None`（既定へ縮退）。
 ///
 /// `0` を受理しないのは、会話の表示終了と同時にバルーンが消えてしまい、実機サインオフで
 /// 「既定時間の経過で消える」ことを観測できなくなるためである。`u64::from_str` が負号・小数点・非数字・範囲超過をいずれも `Err`
 /// にするため、それらは自然に不正側へ落ちる。
-pub(super) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
+pub(super) fn parse_timeout_ms(value: Option<&str>) -> Option<TimeSpan> {
     let trimmed = value.map(str::trim)?;
     if trimmed.is_empty() {
         return None;
     }
-    match trimmed.parse::<u64>() {
-        Ok(ms) if ms > 0 => Some(ms),
+    match trimmed.parse::<u64>().map(TimeSpan::try_from_millis) {
+        Ok(Ok(span)) if span > TimeSpan::ZERO => Some(span),
         _ => {
             warn!(
                 env = TIMEOUT_ENV_KEY,
@@ -45,69 +46,62 @@ pub(super) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
 ///
 /// 記録は採用値・供給源・既定値の 3 つを同じ 1 行に載せる。短縮して満了を観測している最中
 /// でも「短縮していない既定値が 30 秒であること」を同じ行から確かめられるようにするためである。
-pub(super) fn resolve_timeout_secs(value: Option<&str>) -> (f64, TimeoutSource) {
-    let (secs, source) = match parse_timeout_ms(value) {
-        Some(ms) => (ms as f64 / 1000.0, TimeoutSource::Env),
-        None => (DEFAULT_BALLOON_TIMEOUT_SECS, TimeoutSource::Default),
+pub(super) fn resolve_timeout(value: Option<&str>) -> (TimeSpan, TimeoutSource) {
+    let (timeout, source) = match parse_timeout_ms(value) {
+        Some(span) => (span, TimeoutSource::Env),
+        None => (DEFAULT_BALLOON_TIMEOUT, TimeoutSource::Default),
     };
     info!(
         env = TIMEOUT_ENV_KEY,
-        timeout_secs = secs,
+        timeout = %timeout,
         source = source.as_str(),
-        default_secs = DEFAULT_BALLOON_TIMEOUT_SECS,
+        default = %DEFAULT_BALLOON_TIMEOUT,
         "[balloon-visibility] バルーン非表示までの待ち時間を確定"
     );
-    (secs, source)
+    (timeout, source)
 }
 
-/// 採用する待ち時間（秒）を返す。環境変数はプロセスで**一度だけ**読む。
+/// 採用する待ち時間を返す。環境変数はプロセスで**一度だけ**読む。
 ///
 /// 記録もこの初回の解決 1 回きりで、毎フレームの呼び出しでは何も起きない
 /// （常時出力でログを埋めない）。
-pub fn configured_timeout_secs() -> f64 {
-    static RESOLVED: OnceLock<f64> = OnceLock::new();
-    *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
+pub fn configured_timeout() -> TimeSpan {
+    static RESOLVED: OnceLock<TimeSpan> = OnceLock::new();
+    *RESOLVED.get_or_init(|| resolve_timeout(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
 }
 
-/// このトークの待ち時間（秒）を決める。
+/// このトークの待ち時間を決める。
 ///
-/// 既定は引数で渡された値（30 秒か環境変数。決め方は変えない）。ミリ秒の指定は環境変数と同じ式
-/// （1,000 で 1 回割る）で秒へ写し、丸めない。`None` は時間切れで隠さない。
-fn talk_timeout_secs(timeout: TalkTimeout, default_secs: f64) -> Option<f64> {
+/// 既定は引数で渡された値（30 秒か環境変数。決め方は変えない）。`None` は時間切れで隠さない。
+fn talk_timeout(timeout: TalkTimeout, default: TimeSpan) -> Option<TimeSpan> {
     match timeout {
-        TalkTimeout::Default => Some(default_secs),
-        TalkTimeout::Millis(ms) => Some(ms as f64 / 1000.0),
+        TalkTimeout::Default => Some(default),
+        TalkTimeout::After(span) => Some(span),
         TalkTimeout::Never => None,
     }
 }
 
 /// 実効の表示終了と起点の採り方を決める。
 ///
-/// トークの終わりが届くまでは `None`（計測を始めない）。
+/// トークの終わりが効くまでは `None`（計測を始めない）。
 ///
 /// - 選択肢つきでないトーク: 占有区間の終端と止まった時刻の早い方で、ちょうど同じなら終端を
-///   採る。時刻が無ければ終端。
+///   採る。
 /// - 選択肢つきのトーク: 止まった時刻（＝選択の待ちが解けた時刻）をそのまま採り、終端とは
 ///   比べない——終端は選択肢を出した所なので、比べると待ちの間に待ち時間を使い切った形になる。
-///   時刻が無ければ `now`（終わりを畳んだ後で計測が成り立つ最初のフレームの現在時刻）。
 fn effective_display_end(
-    display_end: f64,
-    talk_end: TalkEnd,
+    display_end: TimePoint,
+    talk_end: Option<TimePoint>,
     had_choice: bool,
-    now: f64,
-) -> Option<(f64, MeasurementOrigin)> {
-    match (talk_end, had_choice) {
-        (TalkEnd::NotYet, _) => None,
-        (TalkEnd::At(stopped), true) => {
-            Some((stopped, MeasurementOrigin::ChoiceWaitEndedAt(stopped)))
-        }
-        (TalkEnd::TimeUnknown, true) => Some((now, MeasurementOrigin::ChoiceWaitEndTimeMissing)),
-        (TalkEnd::At(stopped), false) if stopped < display_end => {
-            Some((stopped, MeasurementOrigin::StoppedAt(stopped)))
-        }
-        (TalkEnd::At(_), false) => Some((display_end, MeasurementOrigin::DisplayEnd)),
-        (TalkEnd::TimeUnknown, false) => Some((display_end, MeasurementOrigin::StopTimeMissing)),
-    }
+) -> Option<(TimePoint, MeasurementOrigin)> {
+    let stopped = talk_end?;
+    Some(if had_choice {
+        (stopped, MeasurementOrigin::ChoiceWaitEndedAt(stopped))
+    } else if stopped < display_end {
+        (stopped, MeasurementOrigin::StoppedAt(stopped))
+    } else {
+        (display_end, MeasurementOrigin::DisplayEnd)
+    })
 }
 
 /// タイムアウトの計測・抑止・満了を判定し、満了で非表示にする scope と、そのフレームの
@@ -115,15 +109,15 @@ fn effective_display_end(
 pub(super) fn decide_timeout(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<f64>,
-    timeout_secs: f64,
+    frame_now: Option<TimePoint>,
+    timeout: TimeSpan,
     broken: &[u32],
     content: &ContentDecisions,
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> (Vec<u32>, Option<TalkId>) {
-    // 現在時刻が分からないフレームは計測に一切触れない（起点未確立）。抑止の持ち越しも
-    // 止めるため、時刻が戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
-    let Some(now) = now_talk_time else {
+    // フレームの時刻が無いフレームは計測に一切触れない。抑止の持ち越しも止めるため、時刻が
+    // 戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
+    let Some(now) = frame_now else {
         return (Vec::new(), None);
     };
     // 文字の観測が取れなかったフレームも同じく触れない。そのフレームは箱の観測も失っていて
@@ -183,10 +177,10 @@ pub(super) fn decide_timeout(
     // 計測が成り立つ条件: 占有終端が確立し、トークの終わりが届き、このトークの待ち時間が
     // 「なし」でなく、現在時刻が実効の表示終了に達し、消す対象が居ること。占有終端かトークの
     // 終わりが未着の間は計測を始めない＝表示を保持する。
-    let wait_secs = talk_timeout_secs(state.talk_timeout, timeout_secs);
-    let eligible = match (state.display_end, wait_secs) {
+    let wait = talk_timeout(state.talk_timeout, timeout);
+    let eligible = match (state.display_end, wait) {
         (Some(end), Some(wait)) if !visible.is_empty() => {
-            effective_display_end(end, state.talk_end, state.talk_had_choice, now)
+            effective_display_end(end, state.talk_end, state.talk_had_choice)
                 .filter(|&(effective, _)| now >= effective)
                 .map(|(effective, origin)| (end, effective, origin, wait))
         }
@@ -212,9 +206,8 @@ pub(super) fn decide_timeout(
     if let Some((display_end, effective, origin, wait)) = eligible
         && state.deadline.is_none()
     {
-        // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
-        // 届かなければ占有終端である（選択肢つきのトークは止まった時刻そのもの・
-        // `effective_display_end`）。正典の起点は「スクリプトの表示が終わってから」。
+        // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方である（選択肢つきの
+        // トークは止まった時刻そのもの・`effective_display_end`）。正典の起点は「スクリプトの表示が終わってから」。
         // 「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム単位で
         // 飛び飛びに入るため、そちらを採ると観測の遅れがそのまま満了のずれになる。中断で終わった
         // トークは止まった時刻が占有終端より早いので、止まった時刻が起点になる。
@@ -233,7 +226,6 @@ pub(super) fn decide_timeout(
     let Some(deadline) = state.deadline else {
         return (Vec::new(), None);
     };
-    // 非数の現在時刻はどちらの比較も偽になり、満了しない側（表示を保持する側）へ倒れる。
     let expired = now >= deadline;
     if !expired {
         return (Vec::new(), None);

@@ -1,5 +1,7 @@
 //! Dola のバリデーション・コンパイルエラー型
 
+use crate::time::TimeSpan;
+
 /// Dola バリデーションエラー
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum DolaError {
@@ -104,18 +106,12 @@ pub enum DolaError {
         entry_index: usize,
         reason: String,
     },
-    /// loop_offset.min が負値 (V14)
-    #[error("loop_offset.min is negative in storyboard '{storyboard}': {value}")]
-    LoopOffsetNegativeMin { storyboard: String, value: f64 },
-    /// loop_offset.max が負値 (V15)
-    #[error("loop_offset.max is negative in storyboard '{storyboard}': {value}")]
-    LoopOffsetNegativeMax { storyboard: String, value: f64 },
     /// loop_offset の min > max (V16)
     #[error("loop_offset range inverted in storyboard '{storyboard}': min {min} > max {max}")]
     LoopOffsetRangeInverted {
         storyboard: String,
-        min: f64,
-        max: f64,
+        min: TimeSpan,
+        max: TimeSpan,
     },
     /// トリガー自己参照 (V14t)
     #[error(
@@ -157,6 +153,20 @@ pub enum DolaError {
         /// 例 "duration"
         field: String,
         value: f64,
+    },
+    /// 時間の値が文書の値の上限（絶対値 2^51 刻み未満）を越える
+    #[error("Time out of document range in {location}: {field}")]
+    TimeOutOfDocumentRange {
+        /// 例 "storyboard 'fade' entry 2"・"transition 'slide'"
+        location: String,
+        /// 例 "delay"
+        field: String,
+    },
+    /// 1 周の経った長さが時刻の型で表せない
+    #[error("Loop duration out of range in {location}")]
+    LoopDurationOutOfRange {
+        /// 例 "storyboard 'fade'"
+        location: String,
     },
 }
 
@@ -313,29 +323,13 @@ mod tests {
     #[test]
     fn display_loop_offset_variants() {
         assert_eq!(
-            DolaError::LoopOffsetNegativeMin {
-                storyboard: s("sb"),
-                value: -1.0,
-            }
-            .to_string(),
-            "loop_offset.min is negative in storyboard 'sb': -1"
-        );
-        assert_eq!(
-            DolaError::LoopOffsetNegativeMax {
-                storyboard: s("sb"),
-                value: -2.5,
-            }
-            .to_string(),
-            "loop_offset.max is negative in storyboard 'sb': -2.5"
-        );
-        assert_eq!(
             DolaError::LoopOffsetRangeInverted {
                 storyboard: s("sb"),
-                min: 3.0,
-                max: 1.0,
+                min: TimeSpan::try_from_secs_f64(3.0).unwrap(),
+                max: TimeSpan::try_from_secs_f64(1.0).unwrap(),
             }
             .to_string(),
-            "loop_offset range inverted in storyboard 'sb': min 3 > max 1"
+            "loop_offset range inverted in storyboard 'sb': min 3.0000000 > max 1.0000000"
         );
     }
 
@@ -386,6 +380,25 @@ mod tests {
             }
             .to_string(),
             "Invalid number in storyboard 'sb' entry 0: duration = -3"
+        );
+    }
+
+    #[test]
+    fn display_time_variants() {
+        assert_eq!(
+            DolaError::TimeOutOfDocumentRange {
+                location: s("storyboard 'sb' entry 0"),
+                field: s("delay"),
+            }
+            .to_string(),
+            "Time out of document range in storyboard 'sb' entry 0: delay"
+        );
+        assert_eq!(
+            DolaError::LoopDurationOutOfRange {
+                location: s("storyboard 'sb'"),
+            }
+            .to_string(),
+            "Loop duration out of range in storyboard 'sb'"
         );
     }
 

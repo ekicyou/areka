@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::time::{TimeDelta, TimePoint, TimeSpan};
 use crate::value::DynamicValue;
 
 // ============================================================================
@@ -81,8 +82,16 @@ pub enum BarrierKind {
     WaitForInput,
     /// 選択肢待ち
     ///
-    /// `timeout`（秒）は上位層へ運ぶ指令で、`TimedSchedule` はこれで区切りを飛ばしも解きもしない。
-    WaitForChoice { timeout: Option<f64> },
+    /// `timeout` は上位層へ運ぶ指令で、`TimedSchedule` はこれで区切りを飛ばしも解きもしない。
+    /// 0 と負も、そのまま運ぶ。
+    WaitForChoice {
+        #[serde(
+            with = "crate::time::serde_ticks",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        timeout: Option<TimeDelta>,
+    },
 }
 
 // ============================================================================
@@ -242,34 +251,28 @@ impl From<BarrierKind> for CuePayload {
 // 個別演出指示
 // ============================================================================
 
-/// 個々の演出指示（相対時刻）。
+/// 個々の演出指示（起点からの隔たり）。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Cue {
     /// 対象演者の識別子
     pub actor: ActorKey,
-    /// CueSheet 開始時点からの相対秒数
-    pub start_time: f64,
+    /// 台本の起点からの隔たり
+    #[serde(with = "crate::time::serde_ticks")]
+    pub start_time: TimeSpan,
     /// 演出ペイロード（コマンド / バリア）
     pub payload: CuePayload,
-    /// この cue の presentation 占有時間（秒）。
+    /// この cue の presentation 占有の長さ。
     ///
     /// 全表現者が action を処理するか否かに関わらず honor する（duration honor 契約）。
-    /// 後続 cue の絶対時刻はこの分だけ上流（sakura compile）で焼き込まれるため、
+    /// 後続 cue の時刻はこの分だけ上流（sakura compile）で焼き込まれるため、
     /// 表現者はこの値から新たなローカル遅延を生じさせてはならない（二重待ち禁止）。
     ///
-    /// 全 presentation cue が本フィールドを保持し、時間を占有しない瞬時コマンドは
-    /// **明示的な 0** を持つ。
-    /// `#[serde(default)]` により、本フィールドを持たない旧シリアライズ資産は 0 として
-    /// 従来どおり解釈される（既存 variant のワイヤ形は不変）。
+    /// 時間を占有しない瞬時コマンドは**明示的な 0** を持つ。欄の無い資産は 0 として読む。
     ///
-    /// 値は**不透明な秒数**であり、dola は SakuraScript 固有の意味論
-    /// （1 文字あたりのウェイト値等）を内包しない——算出は上流（sakura）の責務。
-    ///
-    /// 注: `CuePayload::Barrier`（動的停止点）は
-    /// presentation でなく duration 概念が本質的に非該当のため、静的 duration
-    /// タイムラインの外に置かれる（envelope としては一律にフィールドを持ち値は 0）。
-    #[serde(default)]
-    pub duration: f64,
+    /// dola は SakuraScript 固有の意味論（1 文字あたりのウェイト値等）を内包しない——算出は
+    /// 上流（sakura）の責務。`CuePayload::Barrier`（動的停止点）は静的な占有の外に置かれ、値は 0。
+    #[serde(with = "crate::time::serde_ticks", default)]
+    pub duration: TimeSpan,
 }
 
 // ============================================================================
@@ -286,18 +289,66 @@ pub struct Cue {
 /// 関わらず [`Self::duration`] を honor する（duration honor 契約）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct TalkCue {
-    /// 発火時刻（f64 秒＝dola ドメイン）。上流が確定した値をそのまま運ぶ（導出しない）。
-    pub at: f64,
+    /// 絶対の発火時刻（台本の起点＋[`Self::at`]）。
+    pub fire_time: TimePoint,
+    /// 台本の起点からの隔たり（台本の時刻）。
+    pub at: TimeSpan,
     /// 対象演者の識別子（話者スコープ）。
     pub actor: ActorKey,
     /// 演出コマンド（action の種別のみ・時間は本 envelope の `duration` が担う）。
     pub command: CueCommand,
-    /// この cue の presentation 占有時間（秒）— [`Cue::duration`] の無変形複写。
+    /// この cue の presentation 占有の長さ — [`Cue::duration`] の無変形複写。
     ///
     /// 全演者が action 可否に関わらず honor する。後続 cue の発火時刻は上流で既に
     /// この分だけ焼き込まれているため、演者はこの値から**新たなローカル遅延を
     /// 生じさせてはならない**（二重待ち禁止）。瞬時コマンドは明示的な 0 を持つ。
-    pub duration: f64,
+    pub duration: TimeSpan,
+}
+
+impl TalkCue {
+    /// 起点 `origin` の台本の、台本の時刻 `at` の合図（`fire_time` は `origin + at`）。
+    pub fn scheduled(
+        origin: TimePoint,
+        at: TimeSpan,
+        actor: ActorKey,
+        command: CueCommand,
+        duration: TimeSpan,
+    ) -> Self {
+        Self {
+            fire_time: origin + at,
+            at,
+            actor,
+            command,
+            duration,
+        }
+    }
+}
+
+/// 時刻の表の中の、まだ取り出していない合図の中身（発火時刻の欄を持たない）。
+///
+/// 発火時刻は取り出す時の起点で決まるので、表の中に居る間はまだ無い。台本の時刻は、
+/// 時刻の表の項目の相対の時刻が持つ。
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingCue {
+    /// 対象演者の識別子（話者スコープ）。
+    pub actor: ActorKey,
+    /// 演出コマンド。
+    pub command: CueCommand,
+    /// この cue の presentation 占有の長さ — [`Cue::duration`] の無変形複写。
+    pub duration: TimeSpan,
+}
+
+impl PendingCue {
+    /// 発火時刻と台本の時刻を付けて、受け口へ渡す合図にする。
+    pub fn fire(self, fire_time: TimePoint, at: TimeSpan) -> TalkCue {
+        TalkCue {
+            fire_time,
+            at,
+            actor: self.actor,
+            command: self.command,
+            duration: self.duration,
+        }
+    }
 }
 
 #[cfg(test)]

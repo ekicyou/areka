@@ -2,7 +2,7 @@
 //!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード
-//! cue 列を **注入時刻駆動**（`talk_time`＝フレーム時刻−talk 開始・実時間 sleep 不使用）
+//! cue 列を **注入時刻駆動**（フレームの時刻 `TimePoint` を注入・実時間 sleep 不使用）
 //! で流して、以下を **読み戻し（readback）述語**で自動判定し、最後に PASS/FAIL を 1 行出力する
 //! （終了コード: PASS=0／FAIL=1）。
 //!
@@ -113,7 +113,7 @@ use areka_emo_text::viewbox_draw::DrawStats;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue, TimePoint, TimeSpan};
 use areka_sakura::duration::text_playback_duration;
 
 // `examples/` 直下に置くと Cargo が別のサンプルターゲットとして拾うため、サブディレクトリへ置いて
@@ -137,7 +137,7 @@ use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
 use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
 use self::scenario::{
-    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG_SECS, stage_cues,
+    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG, stage_cues,
 };
 use self::setup::{
     balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,

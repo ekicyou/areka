@@ -10,8 +10,8 @@ use std::sync::LazyLock;
 pub(super) const SHELL_INITIAL_X: i32 = 400;
 pub(super) const SHELL_INITIAL_Y: i32 = 200;
 
-/// まばたき開閉の周期（秒）。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする。
-pub(super) const CYCLE_INTERVAL_SECS: f64 = 2.5;
+/// まばたき開閉の周期。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする。
+pub(super) const CYCLE_INTERVAL: dola::TimeSpan = dola::TimeSpan::from_millis(2500);
 
 /// 本 example が両 target へ与える**作者基準 DPI**（ukadoc 正典既定の 96）。
 ///

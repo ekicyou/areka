@@ -161,12 +161,13 @@ element1,balloon,a,0,0
                 ..ShellBoxAssets::default()
             }
             .hand_to(&mut runtime.borrow_mut(), &mut World::new());
-            runtime.borrow_mut().apply_cue(&TalkCue {
-                at: 0.0,
-                actor: ActorKey::from("0"),
-                command: CueCommand::Emote { key: "0".into() },
-                duration: 0.0,
-            });
+            runtime.borrow_mut().apply_cue(&TalkCue::scheduled(
+                dola::TimePoint::ZERO,
+                dola::TimeSpan::ZERO,
+                ActorKey::from("0"),
+                CueCommand::Emote { key: "0".into() },
+                dola::TimeSpan::ZERO,
+            ));
             let (text, _drain) = spawn_emo_text(Rc::clone(&runtime));
             // 表情の受け口: 今のシェルとバルーンの事実を入れる。
             let (surface, _seriko) = spawn_seriko(
@@ -190,14 +191,16 @@ element1,balloon,a,0,0
                 ..StartTalk::new(TalkId(1), script)
             };
             let mut flow = handle(SakuraMsg::Start(start));
-            let mut t = 0.0;
-            while flow.is_continue() && t < 1e7 {
+            let mut t = dola::TimePoint::ZERO;
+            while flow.is_continue() && t < dola::time::testing::at_ms(10_000_000_000) {
                 flow = handle(SakuraMsg::Tick(t));
-                t += 1e6;
+                t = t + dola::time::testing::ms(1_000_000_000);
             }
-            // 受け手を落としてトークの終わりまで積み、文字の層の知らせをこのスレッドで捌く。
+            // 受け手を落としてトークの終わりまで積み、文字の層が受け取った物をこのスレッドで全部当てる
+            // （名前の形の `\b` の箱が無い知らせは当てる時に出る）。
             drop(handle);
             pump_until_idle();
+            runtime.borrow_mut().advance(dola::TimePoint::MAX);
         });
         events
             .iter()

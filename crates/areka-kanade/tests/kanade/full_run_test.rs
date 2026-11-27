@@ -2,7 +2,7 @@
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
 //! 起動指示から毎秒 Tick 数回・close 指示・終了完了までの運行全体を単一の `#[test]` で
-//! 駆動する。時刻は注入した [`MonotonicMs`] Tick のみで進行させ（実時間 sleep なし・
+//! 駆動する。時刻は注入した `TimePoint` の Tick のみで進行させ（実時間 sleep なし・
 //! mock 即応・全 join は期限付き）、以下 3 点を単一の合否として検証する:
 //!
 //! - (a) 起動系列が正典順序で発火したこと（NOTIFY／GET の別・Reference 構成込み）。
@@ -15,6 +15,7 @@
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, StartTalk, TalkId, events, resources,
 };
+use dola::time::testing::at_ms;
 
 use super::common::{
     CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, QuitPolicy,
@@ -45,8 +46,8 @@ fn drive_full_run() {
     send(&harness, KanadeMsg::Boot);
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。OnSecondChange は 204 基調ゆえ talk なし。
-    for i in 1..=3u64 {
-        tick(&harness, i * 1_000);
+    for i in 1..=3i64 {
+        tick(&harness, at_ms(i * 1_000));
     }
 
     // close 指示（active talk なしなら即握手・boot 挨拶完了後に握手）。握手は OnClose GET→別れの Value→close talk。

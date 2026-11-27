@@ -1,12 +1,13 @@
 use super::test_support::{
-    CANONICAL_CHOICE_ID, CHOICE_DEADLINE_MS, FIXED_CHOICE_SCRIPT, cascading_snapshot,
-    choice_get_ids, choice_gets, choice_input, command_tags, establish_choice_wait,
+    CANONICAL_CHOICE_ID, CHOICE_DEADLINE, FIXED_CHOICE_SCRIPT, cascading_snapshot, choice_get_ids,
+    choice_gets, choice_input, command_tags, establish_choice_wait,
 };
 use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
-    KanadeMsg, MonotonicMs, QuitPolicy, TalkDone, TalkEndReason, TalkId, events, expected_call,
-    expected_unload, position_of, pumps, send, spawn_harness_gated, tick,
+    KanadeMsg, QuitPolicy, TalkDone, TalkEndReason, TalkId, events, expected_call, expected_unload,
+    position_of, pumps, send, spawn_harness_gated, tick,
 };
+use dola::time::testing::ms;
 
 // ============================================================================
 // 群 5: タイムアウト（期限到達・204 解除・以降棄却／Value 置換再生）
@@ -17,14 +18,14 @@ use super::{
 /// **解除後に到着する `Choice` が棄却される**。
 ///
 /// # 駆動（決定的・sleep なし・実時刻を読まない）
-/// active talk 窓（id=1・保留）で `ChoiceWaiting` を確立すると期限は [`CHOICE_DEADLINE_MS`] になる。
+/// active talk 窓（id=1・保留）で `ChoiceWaiting` を確立すると期限は [`CHOICE_DEADLINE`] になる。
 /// 注入する Tick は次の 4 本だけで、いずれも `now` は檻が与える論理値である:
 ///
-/// 1. `Tick(CHOICE_DISPLAY_END_MS)`（[`establish_choice_wait`] 内）: steady talk を起こす。
-/// 2. `Tick(CHOICE_DEADLINE_MS - 1)`: **期限手前**——タイムアウトは発火せず通常 pump（NOTIFY）。
-/// 3. `Tick(CHOICE_DEADLINE_MS)`: **期限到達**——`OnChoiceTimeout` GET を発行し、この周期は pump を
+/// 1. `Tick(CHOICE_DISPLAY_END)`（[`establish_choice_wait`] 内）: steady talk を起こす。
+/// 2. `Tick(CHOICE_DEADLINE - ms(1))`: **期限手前**——タイムアウトは発火せず通常 pump（NOTIFY）。
+/// 3. `Tick(CHOICE_DEADLINE)`: **期限到達**——`OnChoiceTimeout` GET を発行し、この周期は pump を
 ///    発行しない。mock は当該 id へ未注入ゆえ 204 を返し、`CancelChoice` が発行される。
-/// 4. `Tick(CHOICE_DEADLINE_MS + 1_000)`: `TalkDone{Interrupted}` 注入後の pump——`Steady{None}` へ
+/// 4. `Tick(CHOICE_DEADLINE + ms(1_000))`: `TalkDone{Interrupted}` 注入後の pump——`Steady{None}` へ
 ///    復帰していれば **GET**（Ref3="1"・Status ヘッダなし）になる。
 ///
 /// mock sakura は再生層を持たず `CancelChoice` を記録するだけなので、Close funnel の帰結である
@@ -32,7 +33,7 @@ use super::{
 /// `Steady{None}` 復帰後の `CloseRequest`（→別れ talk quit:true）で駆動する。保留は解放しない。
 ///
 /// # 非空虚性・discriminative 性
-/// - **期限の両側**を注入して既定値 `CHOICE_TIMEOUT_DEFAULT_MS` そのものを固定する:
+/// - **期限の両側**を注入して既定値 `choice_timeout_default` そのものを固定する:
 ///   手前（2）では発火せず `talking,choosing` の NOTIFY pump が出る・到達（3）で初めて発火する。
 ///   既定値が大きくなれば (3) でも発火せず `OnChoiceTimeout` が現れない。小さくなれば (2) で
 ///   発火し、**記録順が `OnChoiceTimeout` → NOTIFY pump へ逆転**したうえ (2) の pump から
@@ -72,9 +73,9 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
 
     // (2) 期限手前の Tick——発火しない（既定値の下限を固定する）。
-    tick(&harness, CHOICE_DEADLINE_MS - 1);
+    tick(&harness, CHOICE_DEADLINE - ms(1));
     // (3) 期限到達の Tick——OnChoiceTimeout GET を発行し pump は出さない。
-    tick(&harness, CHOICE_DEADLINE_MS);
+    tick(&harness, CHOICE_DEADLINE);
     // 解除直後（現行トークはまだ active）の選択確定——解除側の掃除点だけで棄却されるはず。
     // この 1 本目は `TalkDone{Interrupted}` の掃除に**先行する**ため、解除で帳簿を
     // 消し損ねる退行を単独で弁別する（後述の 2 本目だけでは 2 つの掃除点が互いを覆い隠す）。
@@ -92,7 +93,7 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
         }),
     );
     // (4) 復帰後の pump——Steady{None} なら GET（Ref3=1）になる。
-    tick(&harness, CHOICE_DEADLINE_MS + 1_000);
+    tick(&harness, CHOICE_DEADLINE + ms(1_000));
     // 2 本目の選択確定——`Steady{None}` 復帰後に到着する遅延通知（同じく棄却されるはず）。
     send(
         &harness,
@@ -143,7 +144,7 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
     // (3') 既定値そのものの固定: 期限**手前**の Tick では発火していない。
     //      観測面は 2 点——(i) その pump がまだ `talking,choosing` を帯びる（帳簿が Waiting のまま）、
     //      (ii) 記録順が [手前の NOTIFY pump] → [OnChoiceTimeout] である。既定値が
-    //      CHOICE_TIMEOUT_DEFAULT_MS より小さければ手前の Tick で発火し、この 2 点が両方とも破れる。
+    //      choice_timeout_default より小さければ手前の Tick で発火し、この 2 点が両方とも破れる。
     assert_eq!(
         pump_calls[1].status,
         Some("talking,choosing".to_string()),
@@ -174,7 +175,7 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
     // (5) `TalkDone{Interrupted}` で `Steady{None}` へ復帰した——復帰後の pump が GET（Ref3=1・
     //     Status ヘッダなし）であることが観測面。
     let expected_resumed = expected_call(events::on_second_change(
-        MonotonicMs(CHOICE_DEADLINE_MS + 1_000),
+        CHOICE_DEADLINE + ms(1_000),
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(
@@ -222,7 +223,7 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     );
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
-    tick(&harness, CHOICE_DEADLINE_MS);
+    tick(&harness, CHOICE_DEADLINE);
 
     let Driven {
         recorded,

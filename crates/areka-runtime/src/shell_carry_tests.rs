@@ -304,3 +304,78 @@ fn decide_binds_carries_a_dynamic_wear_and_shed_over_edited_defaults() {
     );
     assert!(edited.dropped.is_empty());
 }
+
+struct Recorded(Vec<TalkCue>);
+
+impl CueSink for Recorded {
+    fn emit(&mut self, cue: TalkCue) {
+        self.0.push(cue);
+    }
+}
+
+/// 出し直しの合図は、渡されたフレームの時刻を発火時刻にし、at と長さは 0 のまま。
+#[test]
+fn emitted_cues_fire_at_the_frame_time() {
+    let frame_now = TimePoint::from_ticks(123_456_789);
+    let mut sink = Recorded(Vec::new());
+    emit_shows(&mut sink, frame_now, &[(0, CarriedShow::Carried(3))]);
+    emit_binds(
+        &mut sink,
+        frame_now,
+        &[(
+            1,
+            CarriedBinds {
+                replays: vec![wear("服", "B", true)],
+                dropped: vec![],
+            },
+        )],
+    );
+    assert_eq!(sink.0.len(), 2);
+    for cue in &sink.0 {
+        assert_eq!(cue.fire_time, frame_now);
+        assert_eq!(cue.at, TimeSpan::ZERO);
+        assert_eq!(cue.duration, TimeSpan::ZERO);
+    }
+}
+
+/// 置き場のゴーストの seriko は在るがフレームの時刻が無ければ、`reload_shell_replay_no_frame_time`
+/// の `error!` を 1 件残し、決め方の記録も合図も出さない。
+#[test]
+fn replay_without_frame_time_logs_an_error_and_sends_no_cue() {
+    let seriko = crate::session_hooks::test_support::SerikoWorld::new();
+    let ((), events) = log_capture_kit::capture(|| {
+        replay(
+            &seriko.world,
+            &[(0, CarriedShow::Carried(3))],
+            &[(
+                0,
+                CarriedBinds {
+                    replays: vec![wear("服", "B", true)],
+                    dropped: vec![],
+                },
+            )],
+        );
+    });
+    let count = |level, name: &str| {
+        events
+            .iter()
+            .filter(|e| e.level == level && e.field_str("event") == Some(name))
+            .count()
+    };
+    assert_eq!(
+        count(tracing::Level::ERROR, "reload_shell_replay_no_frame_time"),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        count(tracing::Level::INFO, "reload_shell_restored"),
+        0,
+        "{events:?}"
+    );
+    assert_eq!(
+        count(tracing::Level::INFO, "reload_shell_bind_restored"),
+        0,
+        "{events:?}"
+    );
+    assert!(seriko.finish().is_empty());
+}

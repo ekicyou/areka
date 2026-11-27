@@ -257,7 +257,7 @@ fn no_measurement_starts_in_frames_without_time() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(at_ms(0))
         .run(&mut state);
     step(&mut state, &[(0, seen(3, true))]);
 
@@ -268,17 +268,17 @@ fn no_measurement_starts_in_frames_without_time() {
 // 満了予定の起点と満了境界
 // ---------------------------------------------------------------------------
 
-/// 会話の占有終端（talk 相対秒）。
-const DISPLAY_END: f64 = 10.0;
+/// 会話の占有終端。
+const DISPLAY_END: TimePoint = at_ms(10_000);
 
 /// scope 0 が可視・scope 1 は無発話のまま、満了予定 `TIMEOUT` の計測が立っている状態を作る
-/// （占有終端 0.0 ＋ 既定のタイムアウト）。
+/// （占有終端 0ms ＋ 既定のタイムアウト）。
 fn armed_state() -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, seen(2, false)), (1, seen(0, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(at_ms(0))
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)], "前提: 表示が起きていない");
     assert_eq!(
@@ -287,15 +287,15 @@ fn armed_state() -> BalloonVisibilityState {
             shown_log(0),
             VisibilityLogEvent::MeasurementStarted {
                 origin: MeasurementOrigin::DisplayEnd,
-                display_end: 0.0,
-                deadline: TIMEOUT,
+                display_end: at_ms(0),
+                deadline: at_ms(0) + TIMEOUT,
             }
         ],
         "前提: 計測の開始が記録されていない"
     );
     assert_eq!(
         state.deadline,
-        Some(TIMEOUT),
+        Some(at_ms(0) + TIMEOUT),
         "前提: 満了予定が立っていない"
     );
     state
@@ -308,9 +308,9 @@ fn armed_state() -> BalloonVisibilityState {
 fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     let mut state = BalloonVisibilityState::default();
 
-    // 会話が始まり、占有終端 10.0 秒が届く。scope 0 が喋って可視になる。
+    // 会話が始まり、占有終端 10000 ms が届く。scope 0 が喋って可視になる。
     let shown = Frame::new(&[(0, seen(3, false))])
-        .at(1.0)
+        .at(at_ms(1_000))
         .talk_started()
         .ended_at(DISPLAY_END)
         .run(&mut state);
@@ -319,7 +319,9 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
 
     // 計測が成り立つ最初の観測が占有終端から 25 秒遅れて訪れる。現在時刻を起点にすると
     // 満了予定は 65.0 になり、以下の 40.0 の期待が成り立たなくなる。
-    let armed = Frame::new(&[(0, seen(3, true))]).at(35.0).run(&mut state);
+    let armed = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(35_000))
+        .run(&mut state);
     assert!(armed.actions.is_empty(), "計測開始と同時に非表示が起きた");
     assert_eq!(
         armed.logs,
@@ -333,7 +335,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
 
     // 満了予定の直前は不成立。
     let before = Frame::new(&[(0, seen(3, true))])
-        .at(DISPLAY_END + TIMEOUT - 0.1)
+        .at(earlier(DISPLAY_END + TIMEOUT, ms(100)))
         .run(&mut state);
     assert!(before.actions.is_empty(), "満了予定の直前で非表示が起きた");
     assert!(before.logs.is_empty(), "遷移が無いのにログが出た");
@@ -354,7 +356,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
 
     // 満了後のフレームは無音（同じ非表示を撃ち直さない）。
     let after = Frame::new(&[(0, seen(3, false))])
-        .at(DISPLAY_END + TIMEOUT + 1.0)
+        .at(DISPLAY_END + TIMEOUT + ms(1_000))
         .run(&mut state);
     assert!(after.actions.is_empty(), "満了後に非表示が再発行された");
     assert!(after.logs.is_empty(), "満了後にログが出た");
@@ -370,16 +372,16 @@ fn timeout_hides_every_visible_scope_and_leaves_the_silent_ones() {
         (1, seen(0, false)),
         (2, seen(0, false)),
     ])
-    .at(0.0)
+    .at(at_ms(0))
     .talk_started()
-    .ended_at(0.0)
+    .ended_at(at_ms(0))
     .run(&mut state);
     Frame::new(&[(0, seen(2, true)), (1, seen(4, false)), (2, seen(0, false))])
-        .at(1.0)
+        .at(at_ms(1_000))
         .run(&mut state);
 
     let expired = Frame::new(&[(0, seen(2, true)), (1, seen(4, true)), (2, seen(0, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -401,7 +403,7 @@ fn a_scope_shown_in_the_same_frame_is_not_hidden_by_the_expired_deadline() {
     let mut state = armed_state();
 
     let mixed = Frame::new(&[(0, seen(2, true)), (1, seen(3, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         mixed.actions,
@@ -426,7 +428,7 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
 
     // ポインタが滞在したまま満了予定に達する。
     let held = Frame::new(&[(0, hovered(seen(2, true))), (1, seen(0, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert!(held.actions.is_empty(), "抑止中に満了で非表示が起きた");
     assert_eq!(
@@ -436,14 +438,18 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
                 hover: true,
                 ..SuppressionKinds::default()
             },
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
-    assert_eq!(state.deadline, Some(TIMEOUT), "保留のはずが計測が消えた");
+    assert_eq!(
+        state.deadline,
+        Some(at_ms(0) + TIMEOUT),
+        "保留のはずが計測が消えた"
+    );
 
     // 抑止が続く間の超過は無音のまま保留し続ける。
     let still_held = Frame::new(&[(0, hovered(seen(2, true))), (1, seen(0, false))])
-        .at(TIMEOUT + 1.0)
+        .at(at_ms(0) + TIMEOUT + ms(1_000))
         .run(&mut state);
     assert!(still_held.actions.is_empty(), "抑止中に非表示が起きた");
     assert!(
@@ -453,7 +459,7 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
 
     // 解除。その瞬間に積み残しの満了で消さず、現在時刻を起点に取り直す。
     let released = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT + 2.0)
+        .at(at_ms(0) + TIMEOUT + ms(2_000))
         .run(&mut state);
     assert!(
         released.actions.is_empty(),
@@ -462,19 +468,19 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
     assert_eq!(
         released.logs,
         vec![VisibilityLogEvent::MeasurementRestarted {
-            now: TIMEOUT + 2.0,
-            deadline: TIMEOUT + 2.0 + TIMEOUT,
+            now: at_ms(0) + TIMEOUT + ms(2_000),
+            deadline: at_ms(0) + TIMEOUT + ms(2_000) + TIMEOUT,
         }]
     );
 
     // 取り直した満了予定の直前・直後。
     let before = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT + 2.0 + TIMEOUT - 0.1)
+        .at(earlier(at_ms(0) + TIMEOUT + ms(2_000) + TIMEOUT, ms(100)))
         .run(&mut state);
     assert!(before.actions.is_empty(), "取り直した満了の直前で消えた");
 
     let expired = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT + 2.0 + TIMEOUT)
+        .at(at_ms(0) + TIMEOUT + ms(2_000) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -489,7 +495,7 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
 fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
     let mut dragged = armed_state();
     let held_by_drag = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .dragging()
         .run(&mut dragged);
     assert!(
@@ -503,14 +509,14 @@ fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
                 dragging: true,
                 ..SuppressionKinds::default()
             },
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
 
     // 滞在は可視の scope に限って効く。
     let mut hovered_state = armed_state();
     let expired = Frame::new(&[(0, seen(2, true)), (1, hovered(seen(0, false)))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut hovered_state);
     assert_eq!(
         expired.actions,
@@ -525,12 +531,12 @@ fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
 fn release_in_the_first_eligible_frame_starts_the_measurement_from_the_display_end() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
         .display_end(DISPLAY_END)
         .run(&mut state);
     let held = Frame::new(&[(0, hovered(seen(2, true)))])
-        .at(DISPLAY_END - 5.0)
+        .at(earlier(DISPLAY_END, ms(5_000)))
         .run(&mut state);
     assert_eq!(
         (held, state.prev_suppressed, state.deadline),
@@ -539,7 +545,7 @@ fn release_in_the_first_eligible_frame_starts_the_measurement_from_the_display_e
     );
 
     let started = Frame::new(&[(0, seen(2, true))])
-        .at(DISPLAY_END + 2.0)
+        .at(DISPLAY_END + ms(2_000))
         .ended_at(DISPLAY_END)
         .run(&mut state);
 
@@ -570,7 +576,7 @@ fn unobservable_suppression_inputs_are_treated_as_not_suppressed() {
         (0, suppression_unobserved(seen(2, true))),
         (1, suppression_unobserved(seen(0, false))),
     ])
-    .at(TIMEOUT)
+    .at(at_ms(0) + TIMEOUT)
     .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -593,7 +599,7 @@ fn talk_started_discards_the_measurement_and_keeps_the_glyph_history() {
     let mut state = armed_state();
 
     let restarted = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(2.0)
+        .at(at_ms(2_000))
         .talk_started()
         .run(&mut state);
     assert!(restarted.actions.is_empty(), "会話開始で発行が起きた");
@@ -601,7 +607,7 @@ fn talk_started_discards_the_measurement_and_keeps_the_glyph_history() {
         restarted.logs,
         vec![VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::TalkStarted,
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
     assert_eq!(state.display_end, None, "占有終端が破棄されていない");
@@ -609,13 +615,13 @@ fn talk_started_discards_the_measurement_and_keeps_the_glyph_history() {
 
     // 破棄前の満了予定を過ぎても消えない。
     let past = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT + 1.0)
+        .at(at_ms(0) + TIMEOUT + ms(1_000))
         .run(&mut state);
     assert!(past.actions.is_empty(), "破棄した満了予定で非表示が起きた");
 
     // グリフ数の履歴が残っているため、全消去はゼロへの下降として成立する。
     let cleared = Frame::new(&[(0, seen(0, true)), (1, seen(0, false))])
-        .at(TIMEOUT + 2.0)
+        .at(at_ms(0) + TIMEOUT + ms(2_000))
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
 }
@@ -629,22 +635,22 @@ fn display_end_raised_into_the_future_discards_the_deadline() {
     let mut state = armed_state();
 
     let raised = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(5.0)
-        .ended_at(50.0)
+        .at(at_ms(5_000))
+        .ended_at(at_ms(50_000))
         .run(&mut state);
     assert!(raised.actions.is_empty(), "占有終端の更新で発行が起きた");
     assert_eq!(
         raised.logs,
         vec![VisibilityLogEvent::MeasurementDiscarded {
             reason: MeasurementDiscardReason::DisplayEndAdvanced,
-            deadline: TIMEOUT,
+            deadline: at_ms(0) + TIMEOUT,
         }]
     );
     assert_eq!(state.deadline, None);
 
     // 破棄前の満了予定では消えない。
     let old_deadline = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert!(
         old_deadline.actions.is_empty(),
@@ -653,19 +659,19 @@ fn display_end_raised_into_the_future_discards_the_deadline() {
 
     // 新しい占有終端を起点に立て直る。
     let rearmed = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(50.0)
+        .at(at_ms(50_000))
         .run(&mut state);
     assert_eq!(
         rearmed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: 50.0,
-            deadline: 50.0 + TIMEOUT,
+            display_end: at_ms(50_000),
+            deadline: at_ms(50_000) + TIMEOUT,
         }]
     );
 
     let expired = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(50.0 + TIMEOUT)
+        .at(at_ms(50_000) + TIMEOUT)
         .run(&mut state);
     assert_eq!(
         expired.actions,
@@ -679,7 +685,7 @@ fn clearing_every_balloon_discards_the_measurement() {
     let mut state = armed_state();
 
     let cleared = Frame::new(&[(0, seen(0, true)), (1, seen(0, false))])
-        .at(2.0)
+        .at(at_ms(2_000))
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
     assert_eq!(
@@ -688,7 +694,7 @@ fn clearing_every_balloon_discards_the_measurement() {
             hidden_log(0, VisibilityTrigger::Clear),
             VisibilityLogEvent::MeasurementDiscarded {
                 reason: MeasurementDiscardReason::NoVisibleScope,
-                deadline: TIMEOUT,
+                deadline: at_ms(0) + TIMEOUT,
             }
         ]
     );
@@ -696,7 +702,7 @@ fn clearing_every_balloon_discards_the_measurement() {
 
     // 破棄は 1 回だけ（不可視のまま時が進んでもログは出ない）。
     let quiet = Frame::new(&[(0, seen(0, false)), (1, seen(0, false))])
-        .at(3.0)
+        .at(at_ms(3_000))
         .run(&mut state);
     assert!(quiet.logs.is_empty(), "破棄のログが繰り返された");
 }
@@ -712,7 +718,7 @@ fn no_measurement_starts_while_the_display_end_signal_is_absent() {
     let mut state = BalloonVisibilityState::default();
 
     let shown = Frame::new(&[(0, seen(3, false)), (1, seen(0, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .run(&mut state);
     assert_eq!(shown.actions, vec![show(0)]);
     assert_eq!(
@@ -722,7 +728,7 @@ fn no_measurement_starts_while_the_display_end_signal_is_absent() {
 
     // 既定時間を大きく超えても保持する（起点不明を理由に任意の時点で消さない）。
     let long_after = Frame::new(&[(0, seen(3, true)), (1, seen(0, false))])
-        .at(TIMEOUT * 10.0)
+        .at(at_ms(300_000))
         .run(&mut state);
     assert!(
         long_after.actions.is_empty(),
@@ -733,115 +739,8 @@ fn no_measurement_starts_while_the_display_end_signal_is_absent() {
 
     // 別の scope が喋り出しても記録は繰り返さない（会話につき 1 回）。
     let second = Frame::new(&[(0, seen(3, true)), (1, seen(2, false))])
-        .at(TIMEOUT * 10.0 + 1.0)
+        .at(at_ms(301_000))
         .run(&mut state);
     assert_eq!(second.actions, vec![show(1)]);
     assert_eq!(second.logs, vec![shown_log(1)], "記録が 2 回目も出た");
-}
-
-// ---------------------------------------------------------------------------
-// 端の値（占有終端の丸めと、現在時刻が数でない場合）
-// ---------------------------------------------------------------------------
-
-/// 負の占有終端は下限 0.0 へ丸めてから起点にする。丸めが無ければ満了予定はその分だけ手前へ
-/// ずれ、早く消える側へ倒れる。
-///
-/// 送出側は全 cue が負時刻の台本でしか負値を出さないが、丸めの有無で満了予定が動く以上、
-/// 判断中核の側で押さえる。
-#[test]
-fn a_negative_display_end_is_rounded_up_to_zero_before_anchoring() {
-    let mut state = BalloonVisibilityState::default();
-
-    let armed = Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
-        .talk_started()
-        .ended_at(-5.0)
-        .run(&mut state);
-    assert_eq!(armed.actions, vec![show(0)]);
-    assert_eq!(
-        armed.logs,
-        vec![
-            shown_log(0),
-            VisibilityLogEvent::MeasurementStarted {
-                origin: MeasurementOrigin::DisplayEnd,
-                display_end: 0.0,
-                deadline: TIMEOUT,
-            }
-        ],
-        "負の占有終端がそのまま起点になった"
-    );
-    assert_eq!(state.display_end, Some(0.0));
-
-    // 丸めが無ければ満了予定は TIMEOUT - 5.0 で、この直前フレームで既に消えている。
-    let before = Frame::new(&[(0, seen(2, true))])
-        .at(TIMEOUT - 0.1)
-        .run(&mut state);
-    assert!(before.actions.is_empty(), "満了予定の直前で非表示が起きた");
-
-    let expired = Frame::new(&[(0, seen(2, true))])
-        .at(TIMEOUT)
-        .run(&mut state);
-    assert_eq!(
-        expired.actions,
-        vec![hide(&[0], VisibilityTrigger::Timeout)]
-    );
-}
-
-/// 数でない占有終端も同じ丸めで 0.0 になる。丸めが無いと以後どの時刻とも比較が成り立たず、
-/// 計測が二度と始まらない（消えないまま固着する側へ倒れる）。
-///
-/// 送出側は非有限値を記録付きで捨てるためここへは届かないが、丸めの担保は判断中核の責任である。
-#[test]
-fn a_non_number_display_end_is_rounded_up_to_zero_before_anchoring() {
-    let mut state = BalloonVisibilityState::default();
-
-    let armed = Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
-        .talk_started()
-        .ended_at(f64::NAN)
-        .run(&mut state);
-    assert_eq!(
-        armed.logs,
-        vec![
-            shown_log(0),
-            VisibilityLogEvent::MeasurementStarted {
-                origin: MeasurementOrigin::DisplayEnd,
-                display_end: 0.0,
-                deadline: TIMEOUT,
-            }
-        ],
-        "数でない占有終端で計測が立たなくなった"
-    );
-    assert_eq!(state.display_end, Some(0.0));
-
-    let expired = Frame::new(&[(0, seen(2, true))])
-        .at(TIMEOUT)
-        .run(&mut state);
-    assert_eq!(
-        expired.actions,
-        vec![hide(&[0], VisibilityTrigger::Timeout)]
-    );
-}
-
-/// 現在時刻が数でないフレームでは満了させない（表示を保持する側へ倒す）。計測そのものは
-/// 壊さず、時刻が数に戻ったフレームで通常どおり満了する。
-#[test]
-fn a_non_number_current_time_never_expires_the_measurement() {
-    let mut state = armed_state();
-
-    let blind = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(f64::NAN)
-        .run(&mut state);
-    assert!(blind.actions.is_empty(), "数でない現在時刻で非表示が起きた");
-    assert!(blind.logs.is_empty(), "数でない現在時刻でログが出た");
-    assert_eq!(state.deadline, Some(TIMEOUT), "満了予定が壊された");
-
-    // 較正: 上の空が「もう消えるものが無い」で成り立つ恒真でないことを押さえる。
-    let expired = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
-        .at(TIMEOUT)
-        .run(&mut state);
-    assert_eq!(
-        expired.actions,
-        vec![hide(&[0], VisibilityTrigger::Timeout)]
-    );
 }

@@ -3,7 +3,7 @@
 use dola::*;
 use std::collections::BTreeMap;
 
-use super::common::{float_var, make_doc_with_storyboard};
+use super::common::{float_var, make_doc_with_storyboard, ms};
 
 #[test]
 fn validate_failure_passthrough() {
@@ -14,7 +14,7 @@ fn validate_failure_passthrough() {
         storyboard: BTreeMap::new(),
     };
 
-    let result = compile_storyboard(&doc, "test", 0.0);
+    let result = compile_storyboard(&doc, "test");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert!(
@@ -32,7 +32,7 @@ fn undefined_storyboard_error() {
         storyboard: BTreeMap::new(),
     };
 
-    let result = compile_storyboard(&doc, "nonexistent", 0.0);
+    let result = compile_storyboard(&doc, "nonexistent");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert!(errs.iter().any(
@@ -52,7 +52,7 @@ fn keyframe_cycle_detection() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("kf1".to_string())),
@@ -64,7 +64,7 @@ fn keyframe_cycle_detection() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("kf0".to_string())),
@@ -74,7 +74,7 @@ fn keyframe_cycle_detection() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0);
+    let result = compile_storyboard(&doc, "test");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert!(
@@ -95,7 +95,7 @@ fn between_delay_exceeds_interval() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
@@ -106,19 +106,19 @@ fn between_delay_exceeds_interval() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // between kf1 (1.0) and kf2 (2.0) with delay 2.0 → exceeds interval
+            // between kf1 (1000 ms) and kf2 (2000 ms) with delay 2.0 → exceeds interval
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    delay: 2.0, // exceeds interval (kf2-kf1 = 1.0)
+                    delay: ms(2000), // exceeds interval (kf2-kf1 = 1000 ms)
                     duration: None,
                     ..Default::default()
                 })),
@@ -132,7 +132,7 @@ fn between_delay_exceeds_interval() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0);
+    let result = compile_storyboard(&doc, "test");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert!(errs.iter().any(
@@ -147,32 +147,32 @@ fn segment_overlap_detected() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // Entry 0: pure KF at start - sets kf_start at time 0.0
+            // Entry 0: pure KF at start - sets kf_start at time 0
             .entry(StoryboardEntry {
                 at: Some(KeyframeRef::Single("start".to_string())),
                 keyframe: Some("kf_start".to_string()),
                 ..Default::default()
             })
-            // Entry 1: x from 0->100, at start, duration 2.0 → 0.0..2.0
+            // Entry 1: x from 0->100, at start, duration 2.0 → 0..2000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(2.0),
+                    duration: Some(ms(2000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("start".to_string())),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // Entry 2: x from 50->200, at start, duration 3.0 → 0.0..3.0 (OVERLAP!)
+            // Entry 2: x from 50->200, at start, duration 3.0 → 0..3000 ms (OVERLAP!)
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(50.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(3.0),
+                    duration: Some(ms(3000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("start".to_string())),
@@ -182,7 +182,7 @@ fn segment_overlap_detected() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0);
+    let result = compile_storyboard(&doc, "test");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert!(errs.iter().any(
@@ -213,37 +213,37 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: x 0.0..1.0, kf1
+            // entry 0: x 0..1000 ms, kf1
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: x 1.0..2.0, kf2
+            // entry 1: x 1000..2000 ms, kf2
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None,
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
             })
-            // entry 2: between kf1(1.0)→kf2(2.0) で delay 5.0 → エラー1
+            // entry 2: between kf1(1000 ms)→kf2(2000 ms) で delay 5.0 → エラー1
             .entry(StoryboardEntry {
                 variable: Some("y".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    delay: 5.0,
+                    delay: ms(5000),
                     ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
@@ -259,7 +259,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(10.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("kf3".to_string())),
@@ -269,7 +269,7 @@ fn multiple_errors_accumulated_with_unresolvable_downstream_keyframe() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0);
+    let result = compile_storyboard(&doc, "test");
     assert!(result.is_err());
     let errs = result.unwrap_err();
     assert_eq!(errs.len(), 2, "both errors should be collected: {errs:?}");
@@ -304,7 +304,7 @@ fn unresolved_previous_entry_cascades_to_next_pure_keyframe() {
             .build(),
     );
 
-    let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errs = compile_storyboard(&doc, "test").unwrap_err();
     let indices: Vec<usize> = errs
         .iter()
         .map(|e| match e {
@@ -338,7 +338,7 @@ fn relative_to_out_of_range_is_rejected() {
                 variable: Some("opacity".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     relative_to: Some(0.8),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -346,7 +346,7 @@ fn relative_to_out_of_range_is_rejected() {
             .build(),
     );
 
-    let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errs = compile_storyboard(&doc, "test").unwrap_err();
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -376,7 +376,7 @@ fn keyframe_cycle_lists_only_cycle_members() {
             .build(),
     );
 
-    let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errs = compile_storyboard(&doc, "test").unwrap_err();
     assert_eq!(
         errs,
         vec![DolaError::KeyframeCycle {
@@ -390,7 +390,7 @@ fn keyframe_cycle_lists_only_cycle_members() {
 #[test]
 fn overlap_error_points_to_offending_entry_in_name_order() {
     let float = float_var();
-    let seg = |var: &str, delay: f64, duration: f64| StoryboardEntry {
+    let seg = |var: &str, delay: TimeSpan, duration: TimeSpan| StoryboardEntry {
         variable: Some(var.to_string()),
         transition: Some(TransitionRef::Inline(TransitionDef {
             to: Some(TransitionValue::Scalar(1.0)),
@@ -407,14 +407,14 @@ fn overlap_error_points_to_offending_entry_in_name_order() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            .entry(seg("b", 0.0, 2.0))
-            .entry(seg("b", 0.0, 1.0))
-            .entry(seg("a", 0.0, 2.0))
-            .entry(seg("a", 1.0, 1.0))
+            .entry(seg("b", ms(0), ms(2000)))
+            .entry(seg("b", ms(0), ms(1000)))
+            .entry(seg("a", ms(0), ms(2000)))
+            .entry(seg("a", ms(1000), ms(1000)))
             .build(),
     );
 
-    let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    let errs = compile_storyboard(&doc, "test").unwrap_err();
     let got: Vec<(usize, bool)> = errs
         .iter()
         .map(|e| match e {

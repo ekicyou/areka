@@ -18,11 +18,10 @@
 pub enum SakuraMsg {
     /// talk 起動（spawn_talk が spawn 直後に自己投函する。外部からは送らない）。
     Start(StartTalk),
-    /// 時刻前進（注入式）。**talk 起点からの経過秒・0 起点・単調非減少・有限**。
+    /// 時刻前進（注入式）。最初の刻みの時刻が台本の起点になる。
     ///
-    /// 本番は areka-ghost の dispatcher（`dispatcher.rs` の `on_tick`）が、ticker の送る
-    /// 単調なミリ秒（既定は `GetTickCount64`）から talk 起点の elapsed を算出して送る（スコープ外シーム）。
-    Tick(f64),
+    /// 本番は areka-ghost の dispatcher（`dispatcher.rs` の `on_tick`）が送る（スコープ外シーム）。
+    Tick(TimePoint),
     /// kanade からの中断（単一 Close funnel）。areka-actor 停止規約の Close 相当。
     Close,
     /// 選択解決。選択待ち（barrier）で止まった talk へ、選ばれた選択肢 id を
@@ -60,6 +59,9 @@ pub use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueSink, CueTarget, TalkCue,
     cue_target_of,
 };
+
+// 合図の欄の型。テストの組み立て（`dola::time::testing`）は本番の道から再公開しない。
+pub use dola::time::{TimeDelta, TimePoint, TimeSpan};
 
 // ── `\f` 文字装飾の運搬名 ──
 

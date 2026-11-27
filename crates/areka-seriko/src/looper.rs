@@ -31,17 +31,18 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use dola::cue::OriginNotice;
+use dola::{TimePoint, TimeSpan};
 
-use crate::actor::SerikoClock;
 use crate::calls::CallOutcome;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-use crate::talk::{TalkEpoch, TalkFeed};
+use crate::talk::TalkFeed;
 use crate::timeline::{
-    FrameStatus, LoopRng, LotteryBoundary, current_frame_index, frame_at, seeded_rng, should_fire,
-    stop_frame,
+    FrameStatus, LoopRng, LotteryBoundary, current_frame_index, elapsed_since, frame_at,
+    seeded_rng, should_fire, stop_frame,
 };
 use crate::trigger::{Armed, TalkWindow};
 
@@ -49,13 +50,15 @@ use crate::trigger::{Armed, TalkWindow};
 #[path = "looper_trigger.rs"]
 mod top_trigger;
 use top_trigger::{
-    arm_slot, fire_top_triggers, glyph_wall_ms, restart_talk, revealed_at, settle_talk,
+    arm_slot, fire_top_triggers, glyph_wall, restart_talk, revealed_at, settle_talk,
 };
 
 // 一番上の面の働きのコマの配線と、描くコマの置き方。
 #[path = "looper_calls.rs"]
 mod top_calls;
-use top_calls::{Shifts, StoppedAlways, put_top_always, put_visible, run_top_calls};
+use top_calls::{
+    Shifts, StoppedAlways, put_top_always, put_visible, run_top_calls, start_top_always,
+};
 
 // 台本の合図の後の作り直し（`refresh`）。
 #[path = "looper_refresh.rs"]
@@ -103,13 +106,13 @@ impl SerikoLoopConfig {
     }
 }
 
-/// 1 本の再生中アニメの再生状態（開始絶対時刻のみ・経過は tick の `now_ms` との差で算出）。
+/// 1 本の再生中アニメの再生状態（開始絶対時刻のみ・経過は tick の `now` との差で算出）。
 #[derive(Debug, Clone, Copy)]
 struct Playback {
-    /// 再生開始絶対時刻（ms）。`frame_at` へ渡す経過＝`now_ms - started_at_ms`。
-    started_at_ms: u64,
+    /// 再生開始絶対時刻。`frame_at` へ渡す経過＝`now - started_at`。
+    started_at: TimePoint,
     /// 働きのコマを当て終えた時刻（まだなら `None`）。
-    acts_through: Option<u64>,
+    acts_through: Option<TimePoint>,
 }
 
 /// per-slot の再生中アニメ表（animation id → [`Playback`]）。`frame_at` が `Pending`/`Active` のエントリが
@@ -126,24 +129,18 @@ pub(crate) struct LoopRuntime {
     boundary: Option<LotteryBoundary>,
     /// per-(scope, slot) の再生中アニメ表（どのエントリが再生中かは [`SlotPlayback`] のとおり）。
     playback: HashMap<(ActorKey, Slot), SlotPlayback>,
-    /// 直前 tick の `now_ms`（単調性ガード用・非単調 tick は無視する）。
-    last_seen: Option<u64>,
+    /// 直前 tick の `now`（単調性ガード用・非単調 tick は無視する）。
+    last_seen: Option<TimePoint>,
     /// `-1` 以外の負 surface に対する warn! を (scope, slot, anim id) ごとに 1 回だけ発火するための記録
     /// （初回のみ warn!）。
     warned_negative: HashSet<(ActorKey, Slot, u32)>,
     /// 部品の時計。面の表が
     /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない。
     parts: PartClocks,
-    /// 刻みと同じ時計。台本の合図を処理する
-    /// ときに読む（[`LoopRuntime::event_ms`]）。無ければ出来事の時刻は直前の刻みの時刻。
-    clock: Option<SerikoClock>,
     /// 一番上の面の引き金の状態。面に入ったときに
     /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
     /// 在る、または表に `talk` が在る）を満たさない面では生まれない。
     armed: HashMap<(ActorKey, Slot), Armed>,
-    /// 台本の 0 秒に当たる時計の読みの見積もり。
-    /// 表に `talk` が無い間は cue を写さないので空のまま。
-    epoch: TalkEpoch,
     /// スコープごとの、文字が現れる時刻の列。表に `talk` が無い間は空のまま。
     feeds: HashMap<ActorKey, TalkFeed>,
     /// シェルかバルーンのどれかの表に `talk` が在るか（文字の cue を写すかの門）。表を
@@ -165,43 +162,6 @@ pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
         method: f.method.clone(),
         x: f.x,
         y: f.y,
-    }
-}
-
-/// 一番上 `surface_id` の `always` に再生が無ければ `at_ms` で作る（乱数を引かない）。
-/// 呼び出しで止めた印のあるものは作らない。
-fn start_top_always(
-    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
-    stopped: &StoppedAlways,
-    table: &AnimationTable,
-    scope: &ActorKey,
-    slot: Slot,
-    surface_id: u32,
-    at_ms: u64,
-) {
-    for anim in table.animations(surface_id) {
-        if !matches!(anim.trigger, LoopTrigger::Always { .. })
-            || stopped.contains(&(scope.clone(), slot, anim.id))
-        {
-            continue;
-        }
-        let slot_playback = playback.entry((scope.clone(), slot)).or_default();
-        if slot_playback.contains_key(&anim.id) {
-            continue;
-        }
-        slot_playback.insert(
-            anim.id,
-            Playback {
-                started_at_ms: at_ms,
-                acts_through: None,
-            },
-        );
-        tracing::debug!(
-            scope = scope.as_str(),
-            slot = ?slot,
-            animation_id = anim.id,
-            "seriko: loop 一番上の always の再生が生まれた"
-        );
     }
 }
 
@@ -236,13 +196,13 @@ fn any_talk(config: &SerikoLoopConfig) -> bool {
 /// 文字の窓の数え（(数え始め, 数え済み), 今現れている数）と序数 → 壁時刻の写しから窓を組む。
 fn talk_window<'a>(
     bounds: Option<((u64, u64), u64)>,
-    wall_ms: &'a dyn Fn(u64) -> u64,
+    wall: &'a dyn Fn(u64) -> TimePoint,
 ) -> Option<TalkWindow<'a>> {
     bounds.map(|((base, prev_seen), now_seen)| TalkWindow {
         base,
         prev_seen,
         now_seen,
-        wall_ms,
+        wall,
     })
 }
 
@@ -268,7 +228,7 @@ fn put_top_play(
     warned_negative: &mut HashSet<(ActorKey, Slot, u32)>,
     key: &(ActorKey, Slot),
     anim: &LoopAnimation,
-    elapsed: u64,
+    elapsed: TimeSpan,
 ) {
     let (scope, slot, anim_id) = (&key.0, key.1, anim.id);
     let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
@@ -343,9 +303,7 @@ impl LoopRuntime {
             last_seen: None,
             warned_negative: HashSet::new(),
             parts: PartClocks::default(),
-            clock: None,
             armed: HashMap::new(),
-            epoch: TalkEpoch::default(),
             feeds: HashMap::new(),
             has_talk,
             stopped_always: StoppedAlways::new(),
@@ -353,50 +311,43 @@ impl LoopRuntime {
         }
     }
 
-    /// 時計つきにする（[`crate::actor::spawn_seriko_clocked`] の起動とテストの注入の口）。
-    pub(crate) fn with_clock(mut self, clock: Option<SerikoClock>) -> Self {
-        self.clock = clock;
-        self
-    }
-
-    /// 台本の合図を処理する今の時刻（時計が無ければ `None`＝[`LoopRuntime::refresh`] が直前の刻みの
-    /// 時刻を使う）。
-    pub(crate) fn event_ms(&self) -> Option<u64> {
-        self.clock.as_ref().map(|clock| clock())
-    }
-
-    /// 届いた cue を 1 件、文字の時刻の写しへ渡す。
+    /// 届いた cue を 1 件、文字の時刻の列へ渡す。
     ///
-    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、種類を問わず起点の見積もりを
-    /// 更新し、文字と選択肢の文字をそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の
-    /// 現れなかった文字を捨てる。改行・待ち・`\!` のコマンドは数えない。「今」は時計、無ければ直前の
-    /// 刻みの時刻で、どちらも無ければ写さない（次の cue で起点ができる）。記録は出さない（文字ごとの
-    /// 記録を増やさない）。
+    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、文字と選択肢の文字を合図の
+    /// 発火時刻からそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の発火時刻より後に
+    /// 現れる文字を捨てる。改行・待ち・`\!` のコマンドは数えない。記録は出さない（文字ごとの記録を
+    /// 増やさない）。
     pub(crate) fn observe_cue(&mut self, cue: &TalkCue) {
         if !self.has_talk {
             return;
         }
-        let Some(now_ms) = self.event_ms().or(self.last_seen) else {
-            return;
-        };
-        self.epoch.observe(cue.at, now_ms);
         match &cue.command {
             CueCommand::Text(text) | CueCommand::Choice { text, .. } => self
                 .feeds
                 .entry(cue.actor.clone())
                 .or_default()
-                .push_text(cue.at, cue.duration, text),
+                .push_text(cue.fire_time, cue.duration, text),
             CueCommand::Clear => {
                 if let Some(feed) = self.feeds.get_mut(&cue.actor) {
-                    restart_talk(feed, &mut self.armed, &cue.actor, cue.at);
+                    restart_talk(feed, &mut self.armed, &cue.actor, cue.fire_time);
                 }
             }
             CueCommand::ClearAll => {
                 for (scope, feed) in &mut self.feeds {
-                    restart_talk(feed, &mut self.armed, scope, cue.at);
+                    restart_talk(feed, &mut self.armed, scope, cue.fire_time);
                 }
             }
             _ => {}
+        }
+    }
+
+    /// 置き直しの知らせを、全部のスコープの文字の列へ当てる（[`TalkFeed::shift_after`]）。数え済みの
+    /// 序数・始まった再生・見え始めの時刻は、もう起きた事なので動かさない。最初の起点の知らせ（前の
+    /// 起点が無い）では何もしない。
+    pub(crate) fn apply_origin_notice(&mut self, notice: &OriginNotice) {
+        let Some(delta) = notice.delta() else { return };
+        for feed in self.feeds.values_mut() {
+            feed.shift_after(notice.effective_at, delta);
         }
     }
 
@@ -434,26 +385,30 @@ impl LoopRuntime {
     /// 数えた数・今現れている数・文字が現れた壁時刻の写し）を 1 つ作り、一番上の `talk` を同じ判定に
     /// 掛ける（開始の時刻は区切りの文字が現れた時刻）。数えを進めて文字の列を刈り込むのは、全部の面が
     /// 窓を読み終えた刻みの最後（[`settle_talk`]）。
-    pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
+    pub(crate) fn on_tick(
+        &mut self,
+        now: TimePoint,
+        states: &mut ScopeStates,
+    ) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen
-            && now_ms < last
+            && now < last
         {
             tracing::debug!(
-                now_ms,
-                last_seen = last,
+                %now,
+                last_seen = %last,
                 "seriko: loop 非単調 tick を無視（防御・実クロックでは非発生・要件 1.2）"
             );
             return Vec::new();
         }
-        self.last_seen = Some(now_ms);
+        self.last_seen = Some(now);
 
         // 境界跨ぎ判定（最初の観測 tick で遅延初期化＝起動直後は発火しない）。boundary の借用はここで閉じる。
         let crossed = {
             let boundary = self
                 .boundary
-                .get_or_insert_with(|| LotteryBoundary::starting_at(now_ms));
-            boundary.poll(now_ms)
+                .get_or_insert_with(|| LotteryBoundary::starting_at(now));
+            boundary.poll(now)
         };
 
         // 以降は config（表・rng）／playback／warned_negative を独立フィールドとして分離借用する
@@ -464,7 +419,6 @@ impl LoopRuntime {
             warned_negative,
             parts,
             armed,
-            epoch,
             feeds,
             stopped_always,
             shifts,
@@ -496,11 +450,11 @@ impl LoopRuntime {
             let (_, has_trigger) = top_kinds(table, *sid);
             // 文字を数える面（表に `talk` が在り、窓が開いている）の、今現れている文字の数。
             let talks = table.has_talk();
-            let now_seen = (talks && *open).then(|| revealed_at(epoch, feeds, scope, now_ms));
+            let now_seen = (talks && *open).then(|| revealed_at(feeds, scope, now));
             // 引き金の状態は、構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面で
             // だけ持つ。無ければこの刻みの時刻で構え（表の差し替えの後の最初の刻み）、窓の開け閉めを写す。
-            let state = (has_trigger || talks)
-                .then(|| arm_slot(armed, &key, *sid, *open, now_ms, now_seen));
+            let state =
+                (has_trigger || talks).then(|| arm_slot(armed, &key, *sid, *open, now, now_seen));
             // 文字の窓の数え（面 1 つに刻み 1 回。一番上と部品が同じ窓を読むので、数えを進めるのは刻みの
             // 最後＝先に進めると後で読む側が区切りを見落とす）。
             let bounds = state
@@ -513,8 +467,8 @@ impl LoopRuntime {
             }
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
             let mut new_pattern = states.current_pattern(scope, *slot).clone();
-            let wall_ms = |glyph| glyph_wall_ms(epoch, feeds.get(scope), glyph, now_ms);
-            let window = talk_window(bounds, &wall_ms);
+            let wall = |glyph| glyph_wall(feeds.get(scope), glyph, now);
+            let window = talk_window(bounds, &wall);
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める。
             let mut early = CallOutcome::default();
@@ -528,7 +482,7 @@ impl LoopRuntime {
                     warned_negative,
                     &key,
                     anims,
-                    now_ms,
+                    now,
                     window.as_ref(),
                     (stopped_always, all, pick_rng),
                 );
@@ -539,7 +493,7 @@ impl LoopRuntime {
                 stopped_always,
                 &key,
                 table.animations(*sid),
-                now_ms,
+                now,
                 pick_rng,
             );
             staged.push((Some(new_pattern), early.then(calls), bounds));
@@ -587,7 +541,7 @@ impl LoopRuntime {
                         .and_then(|pb| pb.get(&anim.id))
                         .is_some_and(|p| {
                             matches!(
-                                frame_at(&anim.frames, now_ms.saturating_sub(p.started_at_ms)),
+                                frame_at(&anim.frames, elapsed_since(now, p.started_at)),
                                 FrameStatus::Pending | FrameStatus::Active(_)
                             )
                         });
@@ -599,7 +553,7 @@ impl LoopRuntime {
                         playback.entry(key).or_default().insert(
                             anim.id,
                             Playback {
-                                started_at_ms: now_ms,
+                                started_at: now,
                                 acts_through: None,
                             },
                         );
@@ -650,14 +604,14 @@ impl LoopRuntime {
             // 一番上の `always` は抽選を待たず、再生が無ければこの刻みの時刻で始まる。
             // 窓が閉じている間は作らない。
             if has_always && *open {
-                start_top_always(playback, stopped_always, table, scope, *slot, *sid, now_ms);
+                start_top_always(playback, stopped_always, table, scope, *slot, *sid, now);
             }
             // 再発火したアニメは playback を持つので下の進行で frame_at のみに従い更新される＝残留の即時クリア。
             let mut new_pattern =
                 staged_pattern.unwrap_or_else(|| states.current_pattern(scope, *slot).clone());
             // 部品の `talk` が借りるこの面の文字の窓（上の輪と同じ数え）。
-            let wall_ms = |glyph| glyph_wall_ms(epoch, feeds.get(scope), glyph, now_ms);
-            let window = talk_window(bounds, &wall_ms);
+            let wall = |glyph| glyph_wall(feeds.get(scope), glyph, now);
+            let window = talk_window(bounds, &wall);
 
             // 抽選と `always` がこの刻みの時刻に始めた再生の頭の働きのコマを当てる（コマを置く前＝
             // 呼ばれて始まった相手の今のコマもこの刻みに載る）。
@@ -667,7 +621,7 @@ impl LoopRuntime {
                 stopped_always,
                 &key,
                 table.animations(*sid),
-                now_ms,
+                now,
                 pick_rng,
             );
             let mut shift = early.then(calls);
@@ -682,12 +636,12 @@ impl LoopRuntime {
                 let started_at = playback
                     .get(&key)
                     .and_then(|pb| pb.get(&anim_id))
-                    .map(|p| p.started_at_ms);
+                    .map(|p| p.started_at);
                 let Some(started_at) = started_at else {
                     continue;
                 };
                 // 出来事の時刻で生まれた再生は刻みより僅かに後に始まりうるので 0 で止める。
-                let elapsed = now_ms.saturating_sub(started_at);
+                let elapsed = elapsed_since(now, started_at);
 
                 let Some(anim) = table.animations(*sid).iter().find(|a| a.id == anim_id) else {
                     // 防御: 表に無い（surface 変化直後の齟齬等）→ playback もコマも落とす。
@@ -753,7 +707,7 @@ impl LoopRuntime {
                     *sid,
                     slot_binds(states, scope, *slot),
                     table,
-                    now_ms,
+                    now,
                     crossed,
                     *open,
                     window.as_ref(),
@@ -775,7 +729,7 @@ impl LoopRuntime {
 
         // 全部の面が文字の窓を読み終えた: 数えを今現れている数まで進め、数え終えた文字を刈り込む
         // （表に `talk` が無ければ文字の列は空で、何もしない）。
-        settle_talk(epoch, feeds, armed, now_ms);
+        settle_talk(feeds, armed, now);
 
         commands
     }
@@ -838,7 +792,7 @@ impl LoopRuntime {
 
     /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・引き金の状態・部品の時計・warn! 記録を捨てる
     /// （表の差し替えの共通後段）。「どれかの表に `talk` が在るか」も組み直し、
-    /// 無くなったら文字の時刻の写しを捨てる。
+    /// 無くなったら文字の時刻の列を捨てる。
     fn forget_slot_kind(&mut self, slot: Slot) {
         self.playback.retain(|(_, s), _| *s != slot);
         self.armed.retain(|(_, s), _| *s != slot);
@@ -846,7 +800,6 @@ impl LoopRuntime {
         self.parts.clear(slot);
         self.has_talk = any_talk(&self.config);
         if !self.has_talk {
-            self.epoch = TalkEpoch::default();
             self.feeds.clear();
         }
     }
@@ -859,11 +812,20 @@ mod always_tests;
 #[path = "looper_balloon_tests.rs"]
 mod balloon_tests;
 #[cfg(test)]
+#[path = "looper_blink_tests.rs"]
+mod blink_tests;
+#[cfg(test)]
 #[path = "looper_calls_tests.rs"]
 mod calls_tests;
 #[cfg(test)]
 #[path = "looper_film_count_tests.rs"]
 mod film_count_tests;
+#[cfg(test)]
+#[path = "looper_mouth_tests.rs"]
+mod mouth_tests;
+#[cfg(test)]
+#[path = "looper_order_tests.rs"]
+mod order_tests;
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 pub(crate) mod parts_emo2_tests;
@@ -871,8 +833,14 @@ pub(crate) mod parts_emo2_tests;
 #[path = "looper_parts_tests.rs"]
 mod parts_tests;
 #[cfg(test)]
+#[path = "looper_progress_tests.rs"]
+mod progress_tests;
+#[cfg(test)]
 #[path = "looper_replace_tests.rs"]
 mod replace_tests;
+#[cfg(test)]
+#[path = "looper_talk_part_tests.rs"]
+mod talk_part_tests;
 #[cfg(test)]
 #[path = "looper_talk_tests.rs"]
 mod talk_tests;

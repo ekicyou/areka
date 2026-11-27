@@ -118,7 +118,7 @@ impl DolaAnimator {
     ///
     /// 通常は `tick_dola_animators` System から呼び出される。
     /// 消費者が直接呼び出す必要はない。
-    pub fn tick(&mut self, current_time: f64) {
+    pub fn tick(&mut self, current_time: dola::TimePoint) {
         self.runtime.tick(current_time);
     }
 
@@ -215,7 +215,9 @@ mod tests {
     use bevy_ecs::schedule::Schedule;
     use bevy_ecs::system::RunSystemOnce;
     use bevy_ecs::world::World;
+    use dola::TimeSpan;
     use dola::runtime::{DolaRuntime, EvaluatedValue};
+    use dola::time::testing::{at_ms, ms};
     use dola::{
         AnimationVariableDef, DolaDocumentBuilder, InterruptionPolicy, StoryboardBuilder,
         StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
@@ -238,7 +240,7 @@ mod tests {
                 TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 },
             )
@@ -264,7 +266,7 @@ mod tests {
     /// 0.0 時点で `fade_in` を開始済みの `DolaAnimator` を返すヘルパー。
     fn started_animator() -> DolaAnimator {
         let mut rt = loaded_runtime();
-        rt.start("fade_in", 0.0).unwrap();
+        rt.start("fade_in", at_ms(0)).unwrap();
         DolaAnimator::with_runtime(rt)
     }
 
@@ -304,10 +306,10 @@ mod tests {
         // runtime() 経由で評価可能であること（購読済み変数が tick で変化する）。
         let animator = started_animator();
         let mut animator = animator;
-        animator.tick(0.5);
+        animator.tick(at_ms(500));
         assert!(
             !animator.last_result().changes.is_empty(),
-            "with_runtime must retain the loaded/started runtime (opacity should change at t=0.5)"
+            "with_runtime must retain the loaded/started runtime (opacity should change at t=500ms)"
         );
     }
 
@@ -319,10 +321,10 @@ mod tests {
             "before tick(): last_result must be empty"
         );
 
-        animator.tick(0.5);
+        animator.tick(at_ms(500));
         assert!(
             !animator.last_result().changes.is_empty(),
-            "after tick(0.5): opacity change must be present"
+            "after tick(at_ms(500)): opacity change must be present"
         );
     }
 
@@ -330,7 +332,7 @@ mod tests {
     fn last_result_is_idempotent_across_repeated_reads() {
         // tick 後の last_result は次の tick まで何度読んでも同一（冪等）。
         let mut animator = started_animator();
-        animator.tick(0.5);
+        animator.tick(at_ms(500));
 
         let first_len = animator.last_result().changes.len();
         let second_len = animator.last_result().changes.len();
@@ -351,22 +353,22 @@ mod tests {
 
     #[test]
     fn tick_advancing_time_replaces_previous_result() {
-        // last_result は最新 tick の差分へ置換される（累積ではない）。tick(1.0) の後の
-        // tick(2.0) は値が 1.0 のままなので差分が空になる。
-        // 観測値（probe）: start=0 → t=1.0:[(0,1.0)] / t=2.0:[]。
+        // last_result は最新 tick の差分へ置換される（累積ではない）。tick(at_ms(1000)) の後の
+        // tick(at_ms(2000)) は値が 1.0 のままなので差分が空になる。
+        // 観測値（probe）: start=0 → t=1000ms:[(0,1.0)] / t=2000ms:[]。
         let mut animator = started_animator();
 
-        animator.tick(1.0);
+        animator.tick(at_ms(1000));
         assert_eq!(
             animator.last_result().changes.len(),
             1,
-            "tick(1.0) must deliver the opacity end value once"
+            "tick(at_ms(1000)) must deliver the opacity end value once"
         );
 
-        animator.tick(2.0);
+        animator.tick(at_ms(2000));
         assert!(
             animator.last_result().changes.is_empty(),
-            "tick(2.0) settles at the same value: last_result is replaced by the latest (empty-diff) tick, not accumulated"
+            "tick(at_ms(2000)) settles at the same value: last_result is replaced by the latest (empty-diff) tick, not accumulated"
         );
     }
 
@@ -374,19 +376,19 @@ mod tests {
     fn repeated_tick_at_same_value_yields_empty_diff_after_first_delivery() {
         // 差分検出は前回配信値基準（subscription_manager::diff_and_update）。開始前時刻でも
         // 初回 tick は初期値 0.0 を 1 件報告し、同一時刻の再 tick は差分ゼロになる。
-        // 観測値（probe）: start=1 → t=0.5:[(0,0.0)] / 同値再 tick:[]。
+        // 観測値（probe）: start=1 → t=500ms:[(0,0.0)] / 同値再 tick:[]。
         let mut rt = loaded_runtime();
-        rt.start("fade_in", 1.0).unwrap(); // 1.0 開始（0.5 はまだ開始前 ＝ 初期値 0.0）
+        rt.start("fade_in", at_ms(1000)).unwrap(); // 1.0 開始（0.5 はまだ開始前 ＝ 初期値 0.0）
         let mut animator = DolaAnimator::with_runtime(rt);
 
-        animator.tick(0.5);
+        animator.tick(at_ms(500));
         assert_eq!(
             animator.last_result().changes.len(),
             1,
             "first tick delivers the initial value (0.0) once, even before start_time"
         );
 
-        animator.tick(0.5); // 同一時刻 → 同一値 → 前回配信と一致
+        animator.tick(at_ms(500)); // 同一時刻 → 同一値 → 前回配信と一致
         assert!(
             animator.last_result().changes.is_empty(),
             "re-ticking the same time yields no diff (value unchanged from last delivery)"
@@ -433,7 +435,7 @@ mod tests {
         // DolaAnimator エンティティゼロでも FrameTime さえあれば System は
         // パニックせず走る（Query が空でループ本体が実行されないだけ）。
         let mut world = World::new();
-        world.insert_resource(FrameTime(0.5));
+        world.insert_resource(FrameTime(at_ms(500)));
 
         let mut schedule = tick_schedule();
         schedule.run(&mut world); // パニックしないこと自体が契約
@@ -448,7 +450,7 @@ mod tests {
     fn tick_system_drives_all_animators_from_frame_time() {
         // 実 System が複数エンティティすべてを Res<FrameTime> の時刻で一括 tick する。
         let mut world = World::new();
-        world.insert_resource(FrameTime(0.5));
+        world.insert_resource(FrameTime(at_ms(500)));
 
         let e1 = world.spawn(started_animator()).id();
         let e2 = world.spawn(started_animator()).id();
@@ -460,18 +462,18 @@ mod tests {
             let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
             assert!(
                 !animator.last_result().changes.is_empty(),
-                "{label} must be ticked by the system at FrameTime(0.5)"
+                "{label} must be ticked by the system at FrameTime(500ms)"
             );
         }
     }
 
     #[test]
     fn tick_system_uses_injected_frame_time_value() {
-        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。start=0 のフェードに FrameTime(0.5) を
+        // System が tick へ渡す時刻は Res<FrameTime>.0 そのもの。start=0 のフェードに FrameTime(500ms) を
         // 注入すると配信値がその時刻の補間値 0.5 になる。
-        // 観測値（probe）: start=0 → t=0.5:[(0, Float(0.5))]。
+        // 観測値（probe）: start=0 → t=500ms:[(0, Float(0.5))]。
         let mut world = World::new();
-        world.insert_resource(FrameTime(0.5));
+        world.insert_resource(FrameTime(at_ms(500)));
         let e = world.spawn(started_animator()).id();
 
         let mut schedule = tick_schedule();
@@ -479,13 +481,13 @@ mod tests {
 
         let mut animator = world.get_mut::<DolaAnimator>(e).unwrap();
         let changes = &animator.last_result().changes;
-        assert_eq!(changes.len(), 1, "one opacity change expected at t=0.5");
+        assert_eq!(changes.len(), 1, "one opacity change expected at t=500ms");
         let (var_id, value) = &changes[0];
         assert_eq!(*var_id, 0, "subscribed opacity has variable_id 0");
         match value {
             EvaluatedValue::Float(v) => assert!(
                 (*v - 0.5).abs() < 1e-9,
-                "FrameTime(0.5) must interpolate opacity to 0.5 (system forwards injected time), got {v}"
+                "FrameTime(500ms) must interpolate opacity to 0.5 (system forwards injected time), got {v}"
             ),
             other => panic!("expected Float opacity value, got {other:?}"),
         }
@@ -495,7 +497,7 @@ mod tests {
     /// 記録する（dola は `TriggerResult::Error` を返すだけ・記録は呼び手の境目）。
     #[test]
     fn trigger_error_is_logged() {
-        let ramp = |variable: &str, duration: f64| StoryboardEntry {
+        let ramp = |variable: &str, duration: TimeSpan| StoryboardEntry {
             variable: Some(variable.into()),
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
@@ -518,7 +520,7 @@ mod tests {
                 "blocker",
                 StoryboardBuilder::new()
                     .interruption_policy(InterruptionPolicy::Never)
-                    .entry(ramp("x", 10.0))
+                    .entry(ramp("x", ms(10_000)))
                     .build(),
             )
             .storyboard(
@@ -526,7 +528,7 @@ mod tests {
                 StoryboardBuilder::new()
                     .entry(StoryboardEntry {
                         keyframe: Some("kf1".into()),
-                        ..ramp("y", 1.0)
+                        ..ramp("y", ms(1000))
                     })
                     .entry(StoryboardEntry {
                         trigger_storyboard: Some("child".into()),
@@ -537,17 +539,17 @@ mod tests {
             )
             .storyboard(
                 "child",
-                StoryboardBuilder::new().entry(ramp("x", 1.0)).build(),
+                StoryboardBuilder::new().entry(ramp("x", ms(1000))).build(),
             )
             .build()
             .unwrap();
         let mut rt = DolaRuntime::new();
         rt.load_document(doc).unwrap();
-        rt.start("blocker", 0.0).unwrap();
-        rt.start("parent", 0.0).unwrap();
+        rt.start("blocker", at_ms(0)).unwrap();
+        rt.start("parent", at_ms(0)).unwrap();
 
         let mut world = World::new();
-        world.insert_resource(FrameTime(1.0));
+        world.insert_resource(FrameTime(at_ms(1000)));
         world.spawn(DolaAnimator::with_runtime(rt));
         // 捕捉は今のスレッドだけを見るので、係を同じスレッドで 1 度回す
         let (ran, events) = log_capture_kit::capture(|| world.run_system_once(tick_dola_animators));

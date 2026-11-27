@@ -13,8 +13,9 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
     GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
 };
-use areka_kanade::{KanadeConfig, KanadeMsg, MonotonicMs};
+use areka_kanade::{KanadeConfig, KanadeMsg};
 use areka_parsers::charset::DefaultEncoding;
+use dola::time::testing::at_ms;
 
 /// S3: helper 死活検出——scripted `status()` をシナリオ途中で `Exited(Abnormal)` へ差し
 /// 替え、`runtime.kanade()` へ Tick を 1 回注入するだけで（Steady pump が発行する
@@ -73,7 +74,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // 起動の列の最後の記録（basewareversion・6 本目・shiori アクタースレッド 1 hop）は別スレッドの競走で、順序は
     // 保証されない。実測では cue の側が遅いことがほとんどだが構造的な保証ではないため、件数は下の有界待ちで
     // 待ってから数える。
-    let mut now: u64 = 1;
+    let mut now: i64 = 1;
     super::spin_pumping_ticks(
         "S3: surface cue never fired after repeated Tick — boot talk did not reach dispatcher's active slot",
         &mut now,
@@ -121,7 +122,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     runtime
         .kanade()
         .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000_000),
+            now: at_ms(1_000_000),
         })
         .expect("kanade actor should still be alive to receive the liveness-detecting Tick");
 

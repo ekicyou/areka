@@ -21,7 +21,7 @@
 //! | `OnFirstBoot` | GET | Ref0=`vanish_count` の 10 進（記録が無ければ `"0"`） |
 //! | `OnBoot` | GET | Ref0=`config.shell_name`（前回落ちたときだけ Ref1〜5=空・Ref6=`halt`・Ref7=落ちたゴースト名） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
-//! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
+//! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now の 100ns の数 / 36_000_000_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
 //! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka_session::reload` が渡す列のまま） |
 //! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし） |
@@ -84,13 +84,13 @@
 //! | `OnBalloonScaling` | GET（汎用の入口） | Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま） |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
-use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
+use crate::msg::{CloseReason, EventId, KanadeConfig, MouseButton, ShioriCall};
 use crate::request_origin::RequestOrigin;
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
-/// `OnSecondChange` Ref0 の除数（ミリ秒→時。正典: OS 連続起動時間 hour）。
-const MS_PER_HOUR: u64 = 3_600_000;
+/// `OnSecondChange` Ref0 の除数（100ns の数→時。正典: OS 連続起動時間 hour）。
+const TICKS_PER_HOUR: i64 = 36_000_000_000;
 
 /// Ref1（見切れ）の M1 固定値。
 // SEAM: 実測供給時は ExecutionSnapshot の geometry から導出する。
@@ -457,7 +457,7 @@ pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> 
 /// `talk_playable = !snapshot.talk_active` ゆえ「Ref3=`"1"` かつ `Status: talking`」
 /// という不整合の組み合わせは構造的に発生しない。
 ///
-/// - Ref0: `now_ms / 3_600_000` の 10 進文字列（正典: OS 連続起動時間 hour）。
+/// - Ref0: `now` の 100ns の数 / 36_000_000_000 の 10 進文字列（正典: OS 連続起動時間 hour・眠りの間は数えない）。
 /// - Ref1: [`REF1_OFFSCREEN_M1`]（見切れ・emo 領分ゆえ M1 固定）。
 /// - Ref2: [`REF2_OVERLAP_M1`]（重なり・同上）。
 /// - Ref3: talk 再生可否——`talk_playable==true` なら `"1"`（GET・status 空）、`false` なら
@@ -465,9 +465,9 @@ pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> 
 ///
 /// talk 再生中（再生不能時）は NOTIFY（Ref3=0）で発行し、返却スクリプトは構造的に
 /// 破棄される（active talk 中に Value が届く経路を発生源から塞ぐ）。
-pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub fn on_second_change(now: dola::TimePoint, snapshot: &ExecutionSnapshot) -> ShioriCall {
     let talk_playable = !snapshot.talk_active;
-    let hours = (now.0 / MS_PER_HOUR).to_string();
+    let hours = (now.as_ticks() / TICKS_PER_HOUR).to_string();
     let ref3 = if talk_playable { "1" } else { "0" };
     let references = vec![
         hours,

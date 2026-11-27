@@ -10,29 +10,29 @@ fn sequential_after_at_placement_continues_from_segment_end() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: at start+5.0 → 5.0..6.0
+            // entry 0: at start+5.0 → 5000..6000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 5.0,
+                    offset: delta_ms(5000),
                 }),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: sequential → 6.0..7.0（配列の直前のエントリの終わりから継続）
+            // entry 1: sequential → 6000..7000 ms（配列の直前のエントリの終わりから継続）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None,
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
@@ -41,11 +41,11 @@ fn sequential_after_at_placement_continues_from_segment_end() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
-    assert_eq!(tl.segments[1].start_time, 6.0);
-    assert_eq!(tl.segments[1].end_time, 7.0);
+    assert_eq!(tl.segments[1].start_time, delta_ms(6000));
+    assert_eq!(tl.segments[1].end_time, delta_ms(7000));
     assert_eq!(tl.segments[1].from_value, TransitionValue::Scalar(100.0));
 }
 
@@ -57,29 +57,29 @@ fn out_of_order_at_entries_sorted_by_start_time() {
         vec![],
         "test",
         StoryboardBuilder::new()
-            // entry 0: at start+2.0 → 2.0..3.0（後の時刻を先に記述）
+            // entry 0: at start+2.0 → 2000..3000 ms（後の時刻を先に記述）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("start".to_string()),
-                    offset: 2.0,
+                    offset: delta_ms(2000),
                 }),
                 keyframe: Some("kf_late".to_string()),
                 ..Default::default()
             })
-            // entry 1: at start → 0.0..1.0
+            // entry 1: at start → 0..1000 ms
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    duration: Some(1.0),
+                    duration: Some(ms(1000)),
                     ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("start".to_string())),
@@ -89,11 +89,11 @@ fn out_of_order_at_entries_sorted_by_start_time() {
             .build(),
     );
 
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let result = compile_storyboard(&doc, "test").unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments.len(), 2);
-    assert_eq!(tl.segments[0].start_time, 0.0);
-    assert_eq!(tl.segments[0].end_time, 1.0);
-    assert_eq!(tl.segments[1].start_time, 2.0);
-    assert_eq!(tl.segments[1].end_time, 3.0);
+    assert_eq!(tl.segments[0].start_time, delta_ms(0));
+    assert_eq!(tl.segments[0].end_time, delta_ms(1000));
+    assert_eq!(tl.segments[1].start_time, delta_ms(2000));
+    assert_eq!(tl.segments[1].end_time, delta_ms(3000));
 }

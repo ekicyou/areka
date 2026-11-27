@@ -5,11 +5,11 @@
 //! - `termination_strategy` … 各終了戦略（Cancel/Conclude/Trim/Compress）+ 混在ケース
 //! - `error_handling` … Never 戦略のエラーパスと終了経路の特性化
 
-use crate::support::{float, linear};
+use crate::support::{at_ms, float, linear, ms};
 use dola::runtime::{DolaRuntime, EvaluatedValue, RuntimeError};
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, InterruptionPolicy, StoryboardBuilder,
-    StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
+    StoryboardEntry, TimeSpan, TransitionDef, TransitionRef, TransitionValue,
 };
 
 mod conflict_detection;
@@ -35,7 +35,7 @@ fn make_doc_with_policy(sb_name: &str, policy: InterruptionPolicy) -> DolaDocume
             sb_name,
             StoryboardBuilder::new()
                 .interruption_policy(policy)
-                .entry(linear("opacity", 0.0, 100.0, 2.0))
+                .entry(linear("opacity", 0.0, 100.0, ms(2000)))
                 .build(),
         )
         .build()
@@ -53,29 +53,29 @@ fn make_multi_sb_doc() -> DolaDocument {
         .storyboard(
             "sb_a",
             sb(InterruptionPolicy::Cancel)
-                .entry(linear("x", 0.0, 100.0, 2.0))
-                .entry(linear("y", 0.0, 50.0, 2.0))
+                .entry(linear("x", 0.0, 100.0, ms(2000)))
+                .entry(linear("y", 0.0, 50.0, ms(2000)))
                 .build(),
         )
         // sb_b: Conclude policy, x: 200→300 in 2.0s
         .storyboard(
             "sb_b",
             sb(InterruptionPolicy::Conclude)
-                .entry(linear("x", 200.0, 300.0, 2.0))
+                .entry(linear("x", 200.0, 300.0, ms(2000)))
                 .build(),
         )
         // sb_c: Trim policy, x: 500→600 in 2.0s
         .storyboard(
             "sb_c",
             sb(InterruptionPolicy::Trim)
-                .entry(linear("x", 500.0, 600.0, 2.0))
+                .entry(linear("x", 500.0, 600.0, ms(2000)))
                 .build(),
         )
         // sb_new: x: 0→10 in 1.0s (これが新規に start されて、上記と競合する)
         .storyboard(
             "sb_new",
             StoryboardBuilder::new()
-                .entry(linear("x", 0.0, 10.0, 1.0))
+                .entry(linear("x", 0.0, 10.0, ms(1000)))
                 .build(),
         )
         .build()
@@ -93,23 +93,23 @@ fn make_never_doc() -> DolaDocument {
             "sb_never",
             StoryboardBuilder::new()
                 .interruption_policy(InterruptionPolicy::Never)
-                .entry(linear("x", 0.0, 100.0, 2.0))
+                .entry(linear("x", 0.0, 100.0, ms(2000)))
                 .build(),
         )
         // sb_new: x: 0→10 in 1.0s
         .storyboard(
             "sb_new",
             StoryboardBuilder::new()
-                .entry(linear("x", 0.0, 10.0, 1.0))
+                .entry(linear("x", 0.0, 10.0, ms(1000)))
                 .build(),
         )
         // sb_multi: x,y,z を同時に操作（部分競合テスト用）
         .storyboard(
             "sb_multi",
             StoryboardBuilder::new()
-                .entry(linear("x", 0.0, 10.0, 1.0))
-                .entry(linear("y", 0.0, 20.0, 1.0))
-                .entry(linear("z", 0.0, 30.0, 1.0))
+                .entry(linear("x", 0.0, 10.0, ms(1000)))
+                .entry(linear("y", 0.0, 20.0, ms(1000)))
+                .entry(linear("z", 0.0, 30.0, ms(1000)))
                 .build(),
         )
         .build()

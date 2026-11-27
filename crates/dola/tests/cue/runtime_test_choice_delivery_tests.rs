@@ -1,20 +1,23 @@
 //! 選択肢の配送列合流とバッグ並存の檻。
 
-use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet};
-use crate::test_support::{barrier, choice, logged_commands, recording_sink};
+use super::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, at_ms, sheet_at_zero,
+};
+use crate::test_support::{barrier, choice, logged_commands, ms, recording_sink};
+use dola::time::TimeSpan;
 
 /// 改行 cue を作る補助（`\n` 相当・配送列で選択肢と交互配置される非選択肢 cue）。
-fn newline(start_time: f64, ratio: f32) -> Cue {
+fn newline(start_time: TimeSpan, ratio: f32) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
         payload: CueCommand::NewLine { ratio }.into(),
-        duration: 0.0,
+        duration: TimeSpan::ZERO,
     }
 }
 
 /// カーソル cue を作る補助（`\_l` 相当・配送列で選択肢と交互配置される非選択肢 cue）。
-fn cursor(start_time: f64, x: &str, y: &str) -> Cue {
+fn cursor(start_time: TimeSpan, x: &str, y: &str) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -23,7 +26,7 @@ fn cursor(start_time: f64, x: &str, y: &str) -> Cue {
             y: y.into(),
         }
         .into(),
-        duration: 0.0,
+        duration: TimeSpan::ZERO,
     }
 }
 
@@ -40,18 +43,18 @@ fn cursor(start_time: f64, x: &str, y: &str) -> Cue {
 #[test]
 fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
     // \q \n \q \_l \q に相当（記述順で配送列へ順序保存されることを固定）。
-    let sheet = CueSheet::new(vec![
-        choice(0.0, "a", "選択A"),
-        newline(0.1, 1.0),
-        choice(0.2, "b", "選択B"),
-        cursor(0.3, "5em", "2lh"),
-        choice(0.4, "c", "選択C"),
+    let sheet = sheet_at_zero(vec![
+        choice(ms(0), "a", "選択A"),
+        newline(ms(100), 1.0),
+        choice(ms(200), "b", "選択B"),
+        cursor(ms(300), "5em", "2lh"),
+        choice(ms(400), "c", "選択C"),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    player.tick(10.0);
+    player.tick(at_ms(10000));
 
     let expected = vec![
         CueCommand::Choice {
@@ -86,28 +89,28 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
 
 /// **バッグ並存檻（「bag 内容は tick 列に不変」）**: Choice は配送列へ合流しつつ、
 /// 解決照合用に `pending_choices`（バッグ）へも積まれる（責務二分＝バッグは照合の単一真実源）。
-/// バッグ内容は tick 列に**不変**である——同一時刻の冪等再 tick でバッグは成長しない
+/// バッグ内容は tick 列に**不変**である——同じ時刻をもう一度刻んでもバッグは成長しない
 /// （二重積みしない）。かつバッグの選択肢集合は配送列に現れた Choice 集合と一致する
 /// （同一の選択肢が配送列とバッグの両真実源へ並存する）。
 #[test]
 fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
     // choices を NewLine/Cursor と交互に並べ、末尾に WaitForChoice バリアを置く
-    // （choice ありの台本の正準形）。バリアは 0.5 で、0.4 の tick では未到達。
-    let sheet = CueSheet::new(vec![
-        choice(0.0, "a", "選択A"),
-        newline(0.1, 1.0),
-        choice(0.2, "b", "選択B"),
-        cursor(0.3, "5em", "2lh"),
-        choice(0.4, "c", "選択C"),
-        barrier(0.5, BarrierKind::WaitForChoice { timeout: None }),
+    // （choice ありの台本の正準形）。バリアは 500 ms で、400 ms の tick では未到達。
+    let sheet = sheet_at_zero(vec![
+        choice(ms(0), "a", "選択A"),
+        newline(ms(100), 1.0),
+        choice(ms(200), "b", "選択B"),
+        cursor(ms(300), "5em", "2lh"),
+        choice(ms(400), "c", "選択C"),
+        barrier(ms(500), BarrierKind::WaitForChoice { timeout: None }),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
     let (log, sink) = recording_sink();
     player.register_sink(sink);
 
-    // バリア手前（0.4）まで一括配送する。バリア 0.5 未到達ゆえ Playing を維持する
-    // （＝冪等再 tick が state ゲートでなく schedule 前進差分ゲートを通ることを保証する）。
-    player.tick(0.4);
+    // バリア手前（400 ms）まで一括配送する。バリア 500 ms 未到達ゆえ Playing を維持する
+    // （＝同じ時刻をもう一度刻む事が state ゲートでなく schedule 前進差分ゲートを通ることを保証する）。
+    player.tick(at_ms(400));
     assert_eq!(
         player.state(),
         &CuePlayerState::Playing,
@@ -127,14 +130,14 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
         "バッグは 3 選択肢を記述順で保持する（照合の単一真実源）"
     );
 
-    // 冪等再 tick（同一時刻を 2 度）: schedule は前進せずバッグも成長しない
+    // 同じ時刻を 2 度刻む: schedule は前進せずバッグも成長しない
     // （bag 内容は tick 列に不変＝二重積みしない）。
-    player.tick(0.4);
-    player.tick(0.4);
+    player.tick(at_ms(400));
+    player.tick(at_ms(400));
     assert_eq!(
         bag_ids(&player),
         vec!["a", "b", "c"],
-        "冪等再 tick でバッグは二重積みされない（bag 内容は tick 列に不変）"
+        "同じ時刻をもう一度刻んでもバッグは二重積みされない（bag 内容は tick 列に不変）"
     );
 
     let delivered_choice_ids: Vec<String> = log
@@ -156,15 +159,15 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
 /// `pending_choices()` から取得できる（先積みの累積性）。
 #[test]
 fn choices_accumulate_across_ticks_before_choice_barrier() {
-    // Choice(a)@0.0 → Choice(b)@0.1 → Barrier(WaitForChoice)@0.2。
-    let sheet = CueSheet::new(vec![
-        choice(0.0, "a", "A"),
-        choice(0.1, "b", "B"),
-        barrier(0.2, BarrierKind::WaitForChoice { timeout: None }),
+    // Choice(a)@0ms → Choice(b)@100ms → Barrier(WaitForChoice)@200ms。
+    let sheet = sheet_at_zero(vec![
+        choice(ms(0), "a", "A"),
+        choice(ms(100), "b", "B"),
+        barrier(ms(200), BarrierKind::WaitForChoice { timeout: None }),
     ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
+    let mut player = CuePlayer::from_sheet(&sheet).unwrap();
 
-    player.tick(0.0);
+    player.tick(at_ms(0));
     assert_eq!(
         player.state(),
         &CuePlayerState::Playing,
@@ -180,7 +183,7 @@ fn choices_accumulate_across_ticks_before_choice_barrier() {
         "0.0 で選択肢 a が先積みされる"
     );
 
-    player.tick(0.1);
+    player.tick(at_ms(100));
     assert_eq!(
         player
             .pending_choices()
@@ -196,7 +199,7 @@ fn choices_accumulate_across_ticks_before_choice_barrier() {
         "0.1 でもまだ Playing"
     );
 
-    player.tick(0.2);
+    player.tick(at_ms(200));
     assert_eq!(
         player.state(),
         &CuePlayerState::WaitingForChoice,

@@ -86,7 +86,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
         Box::new(UpdateCueSink::new(update_tx)),
         Box::new(BalloonLifecycleSink::new(
             lifecycle_tx,
-            TalkClock::new(Arc::new(|| 0.0)),
+            TalkClock::new(Arc::new(|| dola::TimePoint::ZERO)),
         )),
         Box::new(ReloadCueSink::new(reload_tx)),
         Box::new(WindowStateCueSink::new(window_state_tx)),
@@ -131,7 +131,7 @@ fn reached(name: &str, args: &[&str]) -> Vec<CommandConsumer> {
         (
             lifecycle_rx
                 .try_iter()
-                .any(|s| matches!(s, TalkLifecycleSignal::BalloonTimeout(_))),
+                .any(|s| matches!(s, TalkLifecycleSignal::BalloonTimeout { .. })),
             CommandConsumer::LifecycleSink,
         ),
         (

@@ -15,11 +15,11 @@ use super::*;
 fn shown_and_measuring() -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(5, false)), (1, seen(3, false))])
-        .ended_at(1.0)
-        .at(0.5)
+        .ended_at(at_ms(1_000))
+        .at(at_ms(500))
         .run(&mut state);
     Frame::new(&[(0, seen(5, true)), (1, seen(3, true))])
-        .at(2.0)
+        .at(at_ms(2_000))
         .run(&mut state);
     state
 }
@@ -35,7 +35,7 @@ fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
     state.forget_scope(0);
     let after = (state.per_scope.clone(), state.deadline);
     let next = Frame::new(&[(0, seen(5, false)), (1, seen(3, true))])
-        .at(2.5)
+        .at(at_ms(2_500))
         .run(&mut state);
     let next = (next, state.deadline);
 
@@ -50,9 +50,9 @@ fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
             ([(0, kept(5, true)), (1, kept(3, true))].into(), true),
             (
                 [(0, kept(5, false)), (1, kept(3, true))].into(),
-                Some(1.0 + TIMEOUT)
+                Some(at_ms(1_000) + TIMEOUT)
             ),
-            (VisibilityDecision::default(), Some(1.0 + TIMEOUT)),
+            (VisibilityDecision::default(), Some(at_ms(1_000) + TIMEOUT)),
         ),
         "(忘れる前 (scope の記憶, 計測中), 忘れた後 (scope の記憶, 満了予定), 次のフレーム (判断, 満了予定))"
     );
@@ -64,24 +64,27 @@ fn forget_scope_drops_visibility_but_keeps_glyphs_and_measurement() {
 fn forget_scope_keeps_the_restarted_deadline_while_a_box_is_showing() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, boxed(seen(5, false)))])
-        .ended_at(0.0)
-        .at(0.0)
+        .ended_at(at_ms(0))
+        .at(at_ms(0))
         .run(&mut state);
     Frame::new(&[(0, hovered(boxed(seen(5, true))))])
-        .at(TIMEOUT + 10.0)
+        .at(at_ms(0) + TIMEOUT + ms(10_000))
         .run(&mut state);
     Frame::new(&[(0, boxed(seen(5, true)))])
-        .at(100.0)
+        .at(at_ms(100_000))
         .run(&mut state);
 
     state.forget_scope(0);
     let next = Frame::new(&[(0, boxed(seen(5, false)))])
-        .at(110.0)
+        .at(at_ms(110_000))
         .run(&mut state);
 
     assert_eq!(
         (next, state.deadline),
-        (VisibilityDecision::default(), Some(100.0 + TIMEOUT)),
+        (
+            VisibilityDecision::default(),
+            Some(at_ms(100_000) + TIMEOUT)
+        ),
         "(差し替えの次のフレームの判断, 満了予定)"
     );
 }

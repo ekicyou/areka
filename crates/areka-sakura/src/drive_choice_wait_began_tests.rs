@@ -1,6 +1,7 @@
 use super::test_support::NEG_WINDOW;
 use super::*;
 use crate::contract::{CueCommand, TalkCue, TalkId};
+use dola::time::testing::at_ms;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
@@ -79,10 +80,10 @@ fn not_cue(event: &Event) -> bool {
 fn choice_wait_began_follows_choice_waiting_once_per_talk() {
     let (handle, rx) = spawn(r"\s[10]hello\_w[100]\q[選択A,targetA]\e", 840);
 
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(500))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(5000))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(50000))).unwrap();
     let waiting = drain(&rx, NEG_WINDOW);
     let order: Vec<Event> = waiting.iter().filter(|e| not_cue(e)).cloned().collect();
     assert_eq!(
@@ -128,8 +129,8 @@ fn choice_wait_began_waits_for_trailing_wait_to_elapse() {
     let (handle, rx) = spawn(r"\s[10]\q[選択A,targetA]\_w[1000]", 841);
 
     // 選択肢は at=0 で届くが、後ろの 1 秒の待ちの途中ではまだ選択待ちでない。
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(500))).unwrap();
     let before = drain(&rx, NEG_WINDOW);
     assert!(
         before
@@ -143,7 +144,7 @@ fn choice_wait_began_waits_for_trailing_wait_to_elapse() {
     );
 
     // 待ちが明ける tick で選択待ちに入る。
-    handle.inbox.send(SakuraMsg::Tick(2.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(2000))).unwrap();
     let after: Vec<Event> = drain(&rx, NEG_WINDOW).into_iter().filter(not_cue).collect();
     assert_eq!(after, vec![Event::ChoiceWaiting, Event::WaitBegan]);
 
@@ -155,8 +156,8 @@ fn choice_wait_began_waits_for_trailing_wait_to_elapse() {
 #[test]
 fn script_without_choices_never_announces_choice_wait() {
     let (handle, rx) = spawn(r"\s[10]hello\e", 842);
-    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(0))).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(at_ms(1000))).unwrap();
     handle.actor.join().expect("body は正常終了する");
     let events = drain(&rx, Duration::from_millis(50));
     assert!(

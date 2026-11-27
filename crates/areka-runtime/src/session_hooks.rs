@@ -69,3 +69,7 @@ pub const NO_BODY: SessionHooks = SessionHooks {
     reload_skin_applied: |_, _, _| false,
     skin_phase_ended: |_, _, _| {},
 };
+
+#[cfg(test)]
+#[path = "session_hooks_test_support.rs"]
+pub(crate) mod test_support;

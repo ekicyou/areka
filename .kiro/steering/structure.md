@@ -246,11 +246,11 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
   - `variable.rs` - アニメーション変数定義
   - `value.rs` - 動的値
   - `builder.rs` - Builder API
-  - `playback.rs` - 再生状態
+  - `time/` - 時刻の土台。`point.rs`（`TimePoint`＝時計の上の 1 点）／`span.rs`（`TimeSpan`＝負にならない長さ）／`delta.rs`（`TimeDelta`＝符号つきの差）／`scale.rs`（`TimeScale`＝再生の倍率）／`convert.rs`（作者の単位〔ミリ秒・`Duration`・秒の実数〕からの変換と丸め・`TimeRangeError`）／`text.rs`（秒の小数 7 桁の文字の形・`TimeParseError`）／`clock.rs`（`dola::now()`＝`QueryUnbiasedInterruptTimePrecise`・Windows の時だけ）／`serde_secs.rs`（storyboard の欄＝秒・文書の値の上限は 100ns の数の絶対値が 2^51 未満）／`serde_ticks.rs`（cue の欄＝100ns の整数）／`testing.rs`（機能 `test-support`・テスト用の組み立て）。単位は全部 100ns の整数
   - `validate/` - バリデーション（`rules.rs` 等）
   - `error.rs` - エラー型
   - `compile/` - 解決・型変換（`resolve.rs`, `types.rs`）
-  - `cue/` - **cue 再生の唯一のエンジン**（`completed/areka-P0-cue-playback-duration` で統合）。`command.rs`（`Cue` envelope＝**一律 `duration: f64`**・`CueCommand` 10 variant・配送エンベロープ `TalkCue`）／`sheet.rs`（`CueSheet`＝`absolute_start_time` 付き**自己完結絶対時刻台本**＋canonical 変換 `to_talk_schedule` **1 本**＋duration の ingress clamp）／`schedule.rs`（`TimedSchedule`＋占有 horizon・`is_completed` は entry 枯渇 **かつ** horizon 到達）／`runtime.rs`（**`CuePlayer`**＝受動的注入時刻ランタイム・状態機械・バリア seam・Choice 先積み・**broadcast fan-out**）／`sink.rs`（**`CueSink`** 単一出力契約＋`cue_target_of` relevance 単一権威）。**受動ライブラリ**（スレッド/channel を持たず、アクター化は上流 sakura の領分）
+  - `cue/` - **cue 再生の唯一のエンジン**。`command.rs`（`Cue` envelope＝`duration: TimeSpan`・`CueCommand`・配送エンベロープ `TalkCue`＝発火時刻 `fire_time: TimePoint` と起点からの隔たり `at: TimeSpan`・`TalkCue::scheduled` が手で組む唯一の入口）／`sheet.rs`（`CueSheet`＝`absolute_start_time: Option<TimePoint>` の起点＋起点からの隔たりの台本・canonical 変換 `to_talk_schedule` **1 本**）／`schedule.rs`＋`schedule/`（`TimedSchedule`＝起点を置き直せる時刻の表・占有 horizon・`is_completed` は項目の枯渇 **かつ** horizon 到達）／`runtime.rs`（**`CuePlayer`**＝受動的注入時刻ランタイム・`tick(TimePoint)`・状態機械・バリア seam・Choice 先積み・**broadcast fan-out**・起点が押されていない台本は `CueError::OriginNotStamped`）／`sink.rs`（**`CueSink`** 単一出力契約＋`cue_target_of` relevance 単一権威）／`test_support.rs`（機能 `test-support`）。**受動ライブラリ**（スレッド/channel を持たず、時刻は呼び手が注入する。アクター化は上流 sakura の領分）
   - `runtime/` - 実行系。ファサード、インスタンス管理、補間、購読管理、タイムライン、ループ制御をサブディレクトリモジュールに分割（`instance_manager/`, `interpolator/`, `subscription_manager/`, `timeline_manager/`, `loop_controller/` 等）
 - `tests/` - テスト
 
@@ -268,7 +268,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 > - **`super::`／相対の intra-doc リンクは指す先が変わる**。doc コメントは項目本文の内側にあるため、直すと「本文がバイト単位で不変」という純移動の証明が崩れる。`cargo doc` はゲートではないので**一律未修正が正解**。
 > - **純移動であることは機械的に証明できる**——移設前ファイルを `git show <base>:<path>` で取り出し、属性と先行コメント塊つきの最上位項目へ括弧の釣り合いで分解して、移設後の連結と 1 対 1 突合する。許容してよい差分は「クレート内可視性キーワードの付与」と「意味の変わらない整形の折り返し」だけである。
 
-**Dependencies**: `serde` ＋任意の機能 `toml`（`toml`） ＋ `interpolation`, `rand`（`windows` は Windows ターゲットだけ・`runtime/clock.rs`）
+**Dependencies**: `serde` ＋任意の機能 `toml`（`toml`） ＋ `thiserror`, `interpolation`, `rand`（`windows` は Windows ターゲットだけ・`time/clock.rs`）
 
 ### Application Binary Crate
 **Location**: `/crates/areka/`  

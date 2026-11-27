@@ -11,12 +11,13 @@ use std::collections::{HashMap, HashSet};
 
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
+use dola::{TimePoint, TimeSpan};
 
 use super::{LoopRuntime, Playback, SlotPlayback, pattern_frame};
 use crate::calls::{CallOutcome, CallPlays, run_calls};
 use crate::output::DisplayCommand;
 use crate::state::Slot;
-use crate::table::{LoopAnimation, LoopTrigger};
+use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
 use crate::timeline::{AlwaysView, LoopRng, always_visible, visible_frame};
 
 /// 止めた `always` の印（スコープ, 面の段, animation）。印がある間は始め直さず、面を出したときに消す。
@@ -95,23 +96,23 @@ struct TopPlays<'a> {
 
 impl CallPlays for TopPlays<'_> {
     // 終わって最後のコマを残した再生は進行が表から外しているので、表に在れば再生中。
-    fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)> {
+    fn playing(&self, animation: u32) -> Option<(TimePoint, Option<TimePoint>)> {
         self.plays
             .get(&animation)
-            .map(|p| (p.started_at_ms, p.acts_through))
+            .map(|p| (p.started_at, p.acts_through))
     }
 
-    fn set_acts_through(&mut self, animation: u32, through_ms: u64) {
+    fn set_acts_through(&mut self, animation: u32, through: TimePoint) {
         if let Some(p) = self.plays.get_mut(&animation) {
-            p.acts_through = Some(through_ms);
+            p.acts_through = Some(through);
         }
     }
 
-    fn start(&mut self, animation: u32, at_ms: u64) {
+    fn start(&mut self, animation: u32, at: TimePoint) {
         self.plays.insert(
             animation,
             Playback {
-                started_at_ms: at_ms,
+                started_at: at,
                 acts_through: None,
             },
         );
@@ -122,7 +123,7 @@ impl CallPlays for TopPlays<'_> {
             scope = self.key.0.as_str(),
             slot = ?self.key.1,
             animation_id = animation,
-            at_ms,
+            %at,
             "seriko: 呼び出しで再生を始めた（頭から・要件 3.1）"
         );
     }
@@ -148,7 +149,7 @@ impl CallPlays for TopPlays<'_> {
     }
 }
 
-/// 一番上の面の段 `key` の働きのコマを `now_ms` まで当てる。結果と、呼び出しで始まった animation の
+/// 一番上の面の段 `key` の働きのコマを `now` まで当てる。結果と、呼び出しで始まった animation の
 /// 番号を返す（合図の更新はそのコマを置く）。再生が 1 つも無ければ何もしない。
 pub(super) fn run_top_calls(
     playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
@@ -156,7 +157,7 @@ pub(super) fn run_top_calls(
     stopped: &mut StoppedAlways,
     key: &(ActorKey, Slot),
     anims: &[LoopAnimation],
-    now_ms: u64,
+    now: TimePoint,
     pick: &mut LoopRng,
 ) -> (CallOutcome, Vec<u32>) {
     let Some(plays) = playback.get_mut(key) else {
@@ -169,12 +170,7 @@ pub(super) fn run_top_calls(
         key,
         started: Vec::new(),
     };
-    let outcome = run_calls(
-        &mut top,
-        |id| anims.iter().find(|a| a.id == id),
-        now_ms,
-        pick,
-    );
+    let outcome = run_calls(&mut top, |id| anims.iter().find(|a| a.id == id), now, pick);
     (outcome, top.started)
 }
 
@@ -186,22 +182,59 @@ pub(super) fn put_visible(pattern: &mut PatternState, anim: &LoopAnimation, i: u
     }
 }
 
-/// 一番上の `always` の経過 `elapsed_ms` の答えを欄へ置く: 経過 0 の答えと同じなら載せない／
+/// 一番上の `always` の経過 `elapsed` の答えを欄へ置く: 経過 0 の答えと同じなら載せない／
 /// コマならコマ／何も出さないなら「消えている」。再生は末尾でも負の番号でも捨てない（周の頭へ戻って続く）。
 ///
 /// 今のコマが働きのコマなら、その周の最後の描くコマを置く。周の頭から働きのコマなら前の周の最後の
 /// 描くコマを残し、1 周目なら欄を外す。
-pub(super) fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, elapsed_ms: u64) {
-    let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
+pub(super) fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, elapsed: TimeSpan) {
+    let LoopTrigger::Always { period, laps } = anim.trigger else {
         return;
     };
     let frames = &anim.frames;
     // `None` は「欄を外す」（描くコマがまだ無い）。
-    let view = |elapsed: u64| always_visible(frames, period_ms, laps, elapsed);
-    match view(elapsed_ms) {
-        now if now == view(0) => pattern.remove(anim.id),
+    let view = |elapsed: TimeSpan| always_visible(frames, period, laps, elapsed);
+    match view(elapsed) {
+        now if now == view(TimeSpan::ZERO) => pattern.remove(anim.id),
         Some(AlwaysView::Frame(i)) => pattern.set(anim.id, pattern_frame(&frames[i])),
         Some(AlwaysView::Nothing) => pattern.set_blank(anim.id),
         None => pattern.remove(anim.id),
+    }
+}
+
+/// 一番上 `surface_id` の `always` に再生が無ければ `at` で作る（乱数を引かない）。
+/// 呼び出しで止めた印のあるものは作らない。
+pub(super) fn start_top_always(
+    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    stopped: &StoppedAlways,
+    table: &AnimationTable,
+    scope: &ActorKey,
+    slot: Slot,
+    surface_id: u32,
+    at: TimePoint,
+) {
+    for anim in table.animations(surface_id) {
+        if !matches!(anim.trigger, LoopTrigger::Always { .. })
+            || stopped.contains(&(scope.clone(), slot, anim.id))
+        {
+            continue;
+        }
+        let slot_playback = playback.entry((scope.clone(), slot)).or_default();
+        if slot_playback.contains_key(&anim.id) {
+            continue;
+        }
+        slot_playback.insert(
+            anim.id,
+            Playback {
+                started_at: at,
+                acts_through: None,
+            },
+        );
+        tracing::debug!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            animation_id = anim.id,
+            "seriko: loop 一番上の always の再生が生まれた"
+        );
     }
 }

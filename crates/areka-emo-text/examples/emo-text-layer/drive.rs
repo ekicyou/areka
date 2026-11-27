@@ -2,8 +2,8 @@ use super::{
     ActorKey, CueSink, DWriteMetrics, Demo, DrawStats, EXPOSURE_BAND_DRAW_BOUND, FrameTime,
     GATE_KERO, GATE_SAKURA, GetAsyncKeyState, GetCursorPos, GlyphMetrics, GraphicsCore,
     LayoutEngine, POINT, Rc, ResolvedBalloonText, T_CHECK, TargetId, TextLayerConfig,
-    TextSlotBinding, VK_LBUTTON, Verdict, WATCHDOG_SECS, WindowHandle, WindowPos, World, WrapPlan,
-    WritingMode, actor0, actor1, band_ink, block_extent, error, gpu_ready, info,
+    TextSlotBinding, TimePoint, TimeSpan, VK_LBUTTON, Verdict, WATCHDOG, WindowHandle, WindowPos,
+    World, WrapPlan, WritingMode, actor0, actor1, band_ink, block_extent, error, gpu_ready, info,
     inline_extent_first_band, opaque_count, present_frame, setup_abort, show_balloon,
     spawn_emo_text, stage_cues, warn,
 };
@@ -22,7 +22,7 @@ fn poll_double_click_quit(demo: &mut Demo, world: &World) -> bool {
     let now = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
+        .unwrap_or(TimePoint::ZERO);
     // SAFETY: GetAsyncKeyState は現在のボタン状態（high bit＝押下中）を読むだけ（副作用なし）。
     let down = ((unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) }) as u16 & 0x8000) != 0;
     let rising = down && !demo.prev_lbutton;
@@ -31,11 +31,14 @@ fn poll_double_click_quit(demo: &mut Demo, world: &World) -> bool {
         return false;
     }
     if !cursor_over_demo_window(demo, world) {
-        demo.last_click_time = -10.0; // 窓外クリックは double 判定の起点にしない。
+        demo.last_click_time = None; // 窓外クリックは double 判定の起点にしない。
         return false;
     }
-    let is_double = (now - demo.last_click_time) <= 0.4;
-    demo.last_click_time = now;
+    let is_double = demo
+        .last_click_time
+        .and_then(|prev| now.span_since(prev))
+        .is_some_and(|gap| gap <= TimeSpan::from_millis(400));
+    demo.last_click_time = Some(now);
     is_double
 }
 
@@ -176,7 +179,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
     demo.talk_start = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
+        .unwrap_or(TimePoint::ZERO);
     demo.attached = true;
     info!("emo-text-layer: 装着・結線完了 — 注入時刻駆動のシナリオを開始する");
 }
@@ -212,14 +215,14 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     let now = world
         .get_resource::<FrameTime>()
         .map(|ft| ft.0)
-        .unwrap_or(0.0);
-    let t = now - demo.talk_start;
+        .unwrap_or(TimePoint::ZERO);
+    let t = now.span_since(demo.talk_start).unwrap_or(TimeSpan::ZERO);
 
     // watchdog: 進行不能（drain 停止等）を観測する。自動判定では FAIL で打ち切り、
     // `--hold` は自分で閉じないので `error!` を 1 回だけ残して窓は開けたままにする。
-    if t > WATCHDOG_SECS {
+    if t > WATCHDOG {
         let msg = format!(
-            "watchdog 超過（stage={} t={t:.1}s）——シナリオが進行しない",
+            "watchdog 超過（stage={} t={t}）——シナリオが進行しない",
             demo.stage
         );
         if !demo.hold {
@@ -248,6 +251,8 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
         return;
     }
 
+    // cue は届いただけでは当たらない。フレームの時刻まで進めてから gate を見る。
+    demo.runtime.borrow_mut().advance(TimePoint::ZERO + t);
     {
         let rt = demo.runtime.borrow();
         if !GATE_SAKURA[stage].satisfied(&rt, &actor0())
@@ -260,7 +265,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     let t_check = T_CHECK[stage];
     if t < t_check {
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t) {
             log_present_failure(&mut demo.present_err_logged, &e, "継続提示フレーム");
         }
         return;
@@ -269,7 +274,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     if demo.hold {
         // --hold は目視用: 述語の確かめを飛ばし、提示だけして次のステージへ進む。
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t_check) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t_check) {
             log_present_failure(&mut demo.present_err_logged, &e, "hold の提示フレーム");
         }
     } else {
@@ -306,7 +311,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
 }
 
 /// チェックポイント本体: `present_frame(t_check)` → readback → ステージ別述語。
-fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64) {
+fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: TimeSpan) {
     let (w, h) = demo.dims;
     let resolved = demo.resolved.as_ref().expect("attach 完了後は Some");
     let mode = resolved.mode;
@@ -319,7 +324,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
 
     {
         let mut rt = demo.runtime.borrow_mut();
-        if let Err(e) = present_frame(&mut rt, world, t_check) {
+        if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t_check) {
             world.resource_mut::<Verdict>().fail(format!(
                 "stage {stage}: present_frame({t_check}) が失敗: {e}"
             ));
@@ -340,7 +345,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
 
     let layout_of = |actor: &ActorKey| {
         let state = rt.state().actor_state(actor)?;
-        let visible = rt.state().visible_glyphs(actor, t_check);
+        let visible = rt.state().visible_glyphs(actor, TimePoint::ZERO + t_check);
         let lines = LayoutEngine::layout(
             state.items(),
             visible,
@@ -726,7 +731,7 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
 /// リビールのプラトー（可視グリフ数が一定＝typewriter 非進行の区間）の代表点。
 struct RevealPlateau {
     /// プラトー中心の注入時刻（端点で行が完成している安全点）。
-    t_mid: f64,
+    t_mid: TimeSpan,
     /// このプラトーでの先頭可視行 index。
     fvl: usize,
     /// このプラトーでの可視行数（`lines.len() - first_visible_line`）。
@@ -735,29 +740,29 @@ struct RevealPlateau {
 
 /// プラトー走査の起点（短行が 1 本も流入していない時刻＝長い行だけが出そろった時点）。
 /// 短行の cue は `at = 2.0` に注入されるので、その手前に採る。
-const PLATEAU_START: f64 = 1.95;
+const PLATEAU_START: TimeSpan = TimeSpan::from_millis(1950);
 /// プラトー走査の終点。13 本目の短行は 3.2 に開いて 3.3 に完成するので、最後のプラトー
 /// （全リビール後）まで拾えるよう 0.05 秒の余裕を採る。
-const PLATEAU_END: f64 = 3.35;
+const PLATEAU_END: TimeSpan = TimeSpan::from_millis(3350);
 
 /// あふれ短行リビール区間 `[PLATEAU_START, PLATEAU_END]` を細かく走査し、可視グリフ数が一定の
 /// 各プラトー（typewriter 非進行区間）の中心時刻と可視窓を列挙する
 /// （純粋 layout・GPU present 不使用・決定論）。
 fn enumerate_reveal_plateaus(demo: &Demo, actor: &ActorKey) -> Vec<RevealPlateau> {
-    const STEP: f64 = 0.005;
-    const START: f64 = PLATEAU_START;
-    const END: f64 = PLATEAU_END;
+    const STEP: TimeSpan = TimeSpan::from_millis(5);
+    const START: TimeSpan = PLATEAU_START;
+    const END: TimeSpan = PLATEAU_END;
     let mut out = Vec::new();
     let mut t = START;
     let (mut cur_vc, mut cur_fvl, mut cur_vlc) = reveal_probe(demo, actor, t);
     let mut plateau_start = t;
     let mut prev = t;
     while t < END {
-        t += STEP;
+        t = t + STEP;
         let (vc, fvl, vlc) = reveal_probe(demo, actor, t);
         if vc != cur_vc {
             out.push(RevealPlateau {
-                t_mid: (plateau_start + prev) / 2.0,
+                t_mid: (plateau_start + prev).mul_div(1, 2),
                 fvl: cur_fvl,
                 vlc: cur_vlc,
             });
@@ -769,7 +774,7 @@ fn enumerate_reveal_plateaus(demo: &Demo, actor: &ActorKey) -> Vec<RevealPlateau
         prev = t;
     }
     out.push(RevealPlateau {
-        t_mid: (plateau_start + prev) / 2.0,
+        t_mid: (plateau_start + prev).mul_div(1, 2),
         fvl: cur_fvl,
         vlc: cur_vlc,
     });
@@ -778,13 +783,13 @@ fn enumerate_reveal_plateaus(demo: &Demo, actor: &ActorKey) -> Vec<RevealPlateau
 
 /// 純粋 layout から `(visible_glyphs, first_visible_line, visible_line_count)` を導出する
 /// （プラトー検出用・GPU present 不使用・決定論）。
-fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) {
+fn reveal_probe(demo: &Demo, actor: &ActorKey, t: TimeSpan) -> (usize, usize, usize) {
     let rt = demo.runtime.borrow();
     let resolved = demo.resolved.as_ref().expect("attach 完了後は Some");
     let Some(state) = rt.state().actor_state(actor) else {
         return (0, 0, 0);
     };
-    let visible = rt.state().visible_glyphs(actor, t);
+    let visible = rt.state().visible_glyphs(actor, TimePoint::ZERO + t);
     let lines = LayoutEngine::layout(
         state.items(),
         visible,
@@ -803,9 +808,9 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) 
 }
 
 /// 指定注入時刻で `present_frame` を回す（失敗は log-first で Verdict へ記録して継続）。
-fn present_at(demo: &mut Demo, world: &mut World, t: f64) {
+fn present_at(demo: &mut Demo, world: &mut World, t: TimeSpan) {
     let mut rt = demo.runtime.borrow_mut();
-    if let Err(e) = present_frame(&mut rt, world, t) {
+    if let Err(e) = present_frame(&mut rt, world, TimePoint::ZERO + t) {
         drop(rt);
         world
             .resource_mut::<Verdict>()

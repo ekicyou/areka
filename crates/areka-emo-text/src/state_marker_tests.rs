@@ -14,7 +14,11 @@ use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
 fn marker(actor: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::command_carrier("*", vec![]))
+    cue(
+        actor,
+        TimeSpan::ZERO,
+        CueCommand::command_carrier("*", vec![]),
+    )
 }
 
 fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
@@ -34,7 +38,7 @@ fn marker_before_choice_is_one_glyph_and_the_choice_starts_after_it() {
         marker("0"),
         cue(
             "0",
-            0.0,
+            TimeSpan::ZERO,
             CueCommand::Choice {
                 id: "X1".into(),
                 text: "晴れてる".into(),
@@ -66,7 +70,7 @@ fn two_markers_are_two_glyphs_with_reveal_and_style() {
 /// `\c` で印も消える。
 #[test]
 fn clear_removes_the_marker() {
-    let state = applied(&[marker("0"), cue("0", 0.0, CueCommand::Clear)]);
+    let state = applied(&[marker("0"), cue("0", TimeSpan::ZERO, CueCommand::Clear)]);
     assert!(glyph_texts(&state, "0").is_empty());
 }
 
@@ -76,7 +80,7 @@ fn anchor_range_covers_the_marker_but_the_title_does_not() {
     let state = applied(&[
         cue(
             "0",
-            0.0,
+            TimeSpan::ZERO,
             CueCommand::AnchorBegin {
                 id: "ID".into(),
                 references: Vec::new(),
@@ -84,7 +88,7 @@ fn anchor_range_covers_the_marker_but_the_title_does_not() {
         ),
         marker("0"),
         text("0", "本文"),
-        cue("0", 0.0, CueCommand::AnchorEnd),
+        cue("0", TimeSpan::ZERO, CueCommand::AnchorEnd),
     ]);
     let spans = spans(&state, "0");
     assert_eq!(spans.len(), 1);
@@ -124,7 +128,7 @@ fn layout(state: &TextLayerState, region: &TextRegion, mode: WritingMode) -> Vec
 /// 行の送り 12）に「あ」3 行と印だけの行を足すと、1 行ぶん送られる。
 #[test]
 fn a_marker_only_line_scrolls_into_the_window() {
-    let newline = || cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 });
+    let newline = || cue("0", TimeSpan::ZERO, CueCommand::NewLine { ratio: 1.0 });
     let state = applied(&[
         text("0", "あ"),
         newline(),

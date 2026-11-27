@@ -7,6 +7,7 @@
 // （`spawn_emo_text` の UI ドレイン）へ選択待ちの始まりを積んで、このスレッドの待ち行列を汲んでから押す。
 // =============================================================================
 
+use dola::time::testing::at_ms;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -147,7 +148,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     assert!(rt.borrow().hit_active(&actor), "アンカーは押せるまま");
 
     // 次の提示で写しを作り直しても済んだ行は戻らない。同じ座標の 2 回目は選択を作らず、WARN も出さない。
-    present_frame(&mut rt.borrow_mut(), &mut world, 10.0).expect("済んだ後の提示");
+    present_frame(&mut rt.borrow_mut(), &mut world, at_ms(10_000)).expect("済んだ後の提示");
     let logs = capture_logs(|| {
         assert!(
             !on_balloon_pointer_pressed(&mut world, window, window, &left_press(x, y)),

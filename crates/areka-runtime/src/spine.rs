@@ -327,7 +327,7 @@ pub use self::wait::{
 /// このスレッドの待ち行列に積まれた伝言を全部汲み、尽きたところで抜ける有界の汲み出し
 /// （`WM_QUIT` は積まれた伝言が尽きた後に届く）。
 ///
-/// 実 `ClockedTextSink<EmoTextSink>` の UI の汲み出し（`spawn_emo_text` の汲み出しのアクター）を
+/// 実 `EmoTextSink` の UI の汲み出し（`spawn_emo_text` の汲み出しのアクター）を
 /// 窓なしで進める定石。受け手が生きている間は何度でも呼べる。
 pub fn pump_until_idle() {
     // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。

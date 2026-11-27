@@ -28,6 +28,7 @@ type Shown = Vec<(String, u32, Vec<u32>)>;
 fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> Shown {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     areka_session::hooks::install(&mut world);
+    world.insert_resource(FrameTime(dola::time::testing::at_ms(1_000)));
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let carry = carry(&assets);

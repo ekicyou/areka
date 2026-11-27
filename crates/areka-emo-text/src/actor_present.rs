@@ -49,7 +49,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 }
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
-/// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用）。
+/// `frame_now` はフレームの時刻（注入・実時間 sleep 不使用）。
 ///
 /// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形
 /// スクロール描画（COM）→ 変化ありのフレームだけ供給面を提示（Present のみ）」を駆動する:
@@ -69,7 +69,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 pub fn present_frame(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
-    talk_time: f64,
+    frame_now: dola::TimePoint,
 ) -> Result<(), TextLayerError> {
     // 再追従が捨てた描き手を差し込み口から外す（World はここで初めて持つ）。
     for (render, slot) in std::mem::take(&mut runtime.retired_renders) {
@@ -102,7 +102,7 @@ pub fn present_frame(
         let actor = &place.actor;
         // 印の面の失敗はその場所の矢印だけを出さない（文字・箱の写し・当たりの写しは成功と同じ）。
         let mut marker_err = None;
-        let result = present_actor(runtime, world, place, talk_time, &mut marker_err);
+        let result = present_actor(runtime, world, place, frame_now, &mut marker_err);
         if let Some(e) = marker_err {
             first_err.get_or_insert(e);
         }
@@ -115,13 +115,13 @@ pub fn present_frame(
                 if runtime.unresolved_warned.insert(place.clone()) {
                     warn!(
                         actor = %actor,
-                        talk_time,
+                        %frame_now,
                         "actor の装着先（予約スロット）が未解決——状態を蓄積し描画をスキップして次フレームで再試行する"
                     );
                 } else {
                     debug!(
                         actor = %actor,
-                        talk_time,
+                        %frame_now,
                         "actor の装着先が未解決のまま——蓄積継続・描画スキップ・次フレーム再試行"
                     );
                 }
@@ -135,7 +135,7 @@ pub fn present_frame(
         }
     }
     // 文字の出ている箱の四角の写しを、このフレームの提示の結果で作り直す。
-    runtime.refresh_shown_boxes(&presented, talk_time);
+    runtime.refresh_shown_boxes(&presented, frame_now);
     match first_err {
         Some(e) => Err(e),
         None => Ok(()),
@@ -209,7 +209,7 @@ fn present_actor(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
     place: &PlaceKey,
-    talk_time: f64,
+    frame_now: dola::TimePoint,
     marker_err: &mut Option<TextLayerError>,
 ) -> Result<bool, TextLayerError> {
     let actor = &place.actor;
@@ -399,7 +399,7 @@ fn present_actor(
         // present_frame は state 由来の場所だけを渡す——防御的に空フレーム扱い。
         return Ok(true);
     };
-    let visible = actor_state.reveal().visible(talk_time);
+    let visible = actor_state.reveal().visible(frame_now);
     let spans = actor_state.choices();
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し）。済んだ選択肢を指す強調は
     // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない）。
@@ -431,7 +431,7 @@ fn present_actor(
                 resolved,
                 &render.metrics,
                 &mut render.break_memo,
-                talk_time,
+                frame_now,
             ) else {
                 // 直前で状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
                 return Ok(true);
@@ -717,10 +717,10 @@ pub(super) fn arrange_lines(
     resolved: &ResolvedBalloonText,
     metrics: &dyn GlyphMetrics,
     breaks: &mut BreakMemo,
-    talk_time: f64,
+    frame_now: dola::TimePoint,
 ) -> Option<Vec<PositionedLine>> {
     let arrived = state.place_state(place)?;
-    let visible = arrived.reveal().visible(talk_time);
+    let visible = arrived.reveal().visible(frame_now);
     // 配置に使う内容（字の列・装飾）と折返し計画。1 字ずつ（CharByChar）は今の呼び方のまま
     // 区切りを計算せず、区間の全文にも触れない。文節（BudouxWordWrap）は
     // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表）で、そうでなければ

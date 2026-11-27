@@ -1,7 +1,10 @@
 //! 先渡し（`CueSink::preview`）の檻: 中身・時点・途中登録・既定の実装の受け手の `emit` 列。
 
-use super::{BarrierKind, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue};
-use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
+use super::{
+    BarrierKind, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue, at_ms,
+    sheet_at_zero,
+};
+use crate::test_support::{barrier, choice, logged_commands, ms, recording_sink, text};
 
 /// 受け手が受け取ったものを届いた順に残す記録。
 #[derive(Clone, Debug, PartialEq)]
@@ -54,36 +57,36 @@ fn emits(log: &Rc<RefCell<Vec<Event>>>) -> Vec<TalkCue> {
 
 /// 区切り（入力待ち・選択待ち）を挟んだ台本。同じ時刻の合図を複数含む。
 fn sheet() -> CueSheet {
-    CueSheet::new(vec![
-        text(0.0, "a", 0.1),
-        text(0.0, "b", 0.1),
-        barrier(0.2, BarrierKind::WaitForInput),
-        text(0.3, "c", 0.1),
-        choice(0.4, "x", "X"),
-        barrier(0.5, BarrierKind::WaitForChoice { timeout: None }),
-        text(0.6, "d", 0.1),
+    sheet_at_zero(vec![
+        text(ms(0), "a", ms(100)),
+        text(ms(0), "b", ms(100)),
+        barrier(ms(200), BarrierKind::WaitForInput),
+        text(ms(300), "c", ms(100)),
+        choice(ms(400), "x", "X"),
+        barrier(ms(500), BarrierKind::WaitForChoice { timeout: None }),
+        text(ms(600), "d", ms(100)),
     ])
 }
 
 /// 台本の全体を最後まで歩かせる（区切りは外から解く）。
 fn drive_to_end(player: &mut CuePlayer) {
-    player.tick(0.0);
-    player.tick(0.1);
-    player.tick(0.2);
+    player.tick(at_ms(0));
+    player.tick(at_ms(100));
+    player.tick(at_ms(200));
     player.resolve_click();
-    player.tick(0.3);
-    player.tick(0.4);
-    player.tick(0.5);
+    player.tick(at_ms(300));
+    player.tick(at_ms(400));
+    player.tick(at_ms(500));
     player.resolve_choice("x");
-    player.tick(0.6);
-    player.tick(0.7);
+    player.tick(at_ms(600));
+    player.tick(at_ms(700));
 }
 
 /// 先渡しの中身は、これから `emit` で届く合図の全部（配る順）。選択待ちの後ろを含み、
 /// 区切りを含まない。
 #[test]
 fn preview_carries_every_upcoming_cue_in_delivery_order() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let (log, sink) = preview_sink();
     player.register_sink(sink);
 
@@ -118,7 +121,7 @@ fn preview_carries_every_upcoming_cue_in_delivery_order() {
 /// 先渡しは最初の `emit` より前に届く。
 #[test]
 fn preview_arrives_before_first_emit() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let (log, sink) = preview_sink();
     player.register_sink(sink);
     drive_to_end(&mut player);
@@ -136,20 +139,20 @@ fn preview_arrives_before_first_emit() {
 /// 途中で登録した受け手には、まだ配っていない残りだけが渡る。
 #[test]
 fn late_registered_sink_previews_only_the_rest() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let (early_log, early) = preview_sink();
     player.register_sink(early);
-    player.tick(0.0);
-    player.tick(0.2);
+    player.tick(at_ms(0));
+    player.tick(at_ms(200));
     player.resolve_click();
-    player.tick(0.3); // c まで配り済み
+    player.tick(at_ms(300)); // c まで配り済み
 
     let (late_log, late) = preview_sink();
     player.register_sink(late);
-    player.tick(0.4);
-    player.tick(0.5);
+    player.tick(at_ms(400));
+    player.tick(at_ms(500));
     player.resolve_choice("x");
-    player.tick(0.6);
+    player.tick(at_ms(600));
 
     let late_preview = previews(&late_log);
     assert_eq!(late_preview.len(), 1);
@@ -169,7 +172,7 @@ fn late_registered_sink_previews_only_the_rest() {
 /// 先渡しを上書きしない受け手（既定の実装）に届く `emit` の列は変わらない。
 #[test]
 fn default_preview_sink_emits_unchanged() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let (plain_log, plain) = recording_sink();
     let (preview_log, previewing) = preview_sink();
     player.register_sink(plain);
@@ -203,7 +206,7 @@ impl CueSink for ChoiceWaitSink {
 /// `announce_choice_wait` は登録された全部の受け手へ、登録順に 1 回ずつ配る。
 #[test]
 fn announce_choice_wait_reaches_every_sink_once_in_registration_order() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let log = Rc::new(RefCell::new(Vec::new()));
     for id in 0..3 {
         player.register_sink(Box::new(ChoiceWaitSink {
@@ -223,7 +226,7 @@ fn announce_choice_wait_reaches_every_sink_once_in_registration_order() {
 /// 隣の受け手への配りも止めない。
 #[test]
 fn default_choice_wait_began_does_nothing() {
-    let mut player = CuePlayer::from_sheet(&sheet());
+    let mut player = CuePlayer::from_sheet(&sheet()).unwrap();
     let (plain_log, plain) = recording_sink();
     let log = Rc::new(RefCell::new(Vec::new()));
     player.register_sink(plain);
@@ -231,7 +234,7 @@ fn default_choice_wait_began_does_nothing() {
         id: 7,
         log: log.clone(),
     }));
-    player.tick(0.0);
+    player.tick(at_ms(0));
     let before = plain_log.borrow().clone();
 
     player.announce_choice_wait();

@@ -14,13 +14,13 @@ fn no_conflict_when_different_variables() {
         .storyboard(
             "sb_x",
             StoryboardBuilder::new()
-                .entry(linear("x", 0.0, 100.0, 2.0))
+                .entry(linear("x", 0.0, 100.0, ms(2000)))
                 .build(),
         )
         .storyboard(
             "sb_y",
             StoryboardBuilder::new()
-                .entry(linear("y", 0.0, 100.0, 2.0))
+                .entry(linear("y", 0.0, 100.0, ms(2000)))
                 .build(),
         )
         .build()
@@ -31,11 +31,11 @@ fn no_conflict_when_different_variables() {
     let _y_id = rt.subscribe("y");
     rt.load_document(doc).unwrap();
 
-    let r1 = rt.start("sb_x", 0.0).unwrap();
+    let r1 = rt.start("sb_x", at_ms(0)).unwrap();
     assert!(r1.affected_group_ids.is_empty());
 
     // sb_y は変数 y のみ → 変数 x と競合しない
-    let r2 = rt.start("sb_y", 0.5).unwrap();
+    let r2 = rt.start("sb_y", at_ms(500)).unwrap();
     assert!(r2.affected_group_ids.is_empty());
 }
 
@@ -46,7 +46,7 @@ fn no_conflict_when_no_existing_instances() {
     let _opacity_id = rt.subscribe("opacity");
     rt.load_document(doc).unwrap();
 
-    let result = rt.start("fade", 0.0).unwrap();
+    let result = rt.start("fade", at_ms(0)).unwrap();
     assert!(result.affected_group_ids.is_empty());
 }
 
@@ -57,11 +57,11 @@ fn conflict_detected_on_same_variable() {
     let _opacity_id = rt.subscribe("opacity");
     rt.load_document(doc).unwrap();
 
-    let r1 = rt.start("fade", 0.0).unwrap();
+    let r1 = rt.start("fade", at_ms(0)).unwrap();
     assert!(r1.affected_group_ids.is_empty());
 
     // 2nd start on same variable → conflict with group_id 1
-    let r2 = rt.start("fade", 0.5).unwrap();
+    let r2 = rt.start("fade", at_ms(500)).unwrap();
     assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 }
 
@@ -72,12 +72,12 @@ fn no_conflict_after_natural_end() {
     let _opacity_id = rt.subscribe("opacity");
     rt.load_document(doc).unwrap();
 
-    let _r1 = rt.start("fade", 0.0).unwrap();
+    let _r1 = rt.start("fade", at_ms(0)).unwrap();
     // 自然終了を発生させる
-    rt.tick(3.0);
+    rt.tick(at_ms(3000));
 
     // 新規 start → 競合なし（前のインスタンスは終了済み）
-    let r2 = rt.start("fade", 3.0).unwrap();
+    let r2 = rt.start("fade", at_ms(3000)).unwrap();
     assert!(r2.affected_group_ids.is_empty());
 }
 
@@ -95,16 +95,16 @@ mod conflict_detection_boundaries {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("fade", 0.0).unwrap();
-        rt.tick(0.5);
-        rt.pause(r1.group_id, 0.5).unwrap();
+        let r1 = rt.start("fade", at_ms(0)).unwrap();
+        rt.tick(at_ms(500));
+        rt.pause(r1.group_id, at_ms(500)).unwrap();
 
         // Paused 中でも同一変数の新規 start は競合し、終了戦略が適用される
-        let r2 = rt.start("fade", 1.0).unwrap();
+        let r2 = rt.start("fade", at_ms(1000)).unwrap();
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
         // Cancel 済みインスタンスへの resume は InvalidGroupId（削除済み）
         assert!(matches!(
-            rt.resume(r1.group_id, 1.5),
+            rt.resume(r1.group_id, at_ms(1500)),
             Err(RuntimeError::InvalidGroupId(_))
         ));
     }
@@ -118,10 +118,10 @@ mod conflict_detection_boundaries {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        // 既存: 壁時計 [0.0, 2.0]
-        let r1 = rt.start("fade", 0.0).unwrap();
-        // 新規: 壁時計 [2.0, 4.0] — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
-        let r2 = rt.start("fade", 2.0).unwrap();
+        // 既存: 壁時計 [0, 2000] ms
+        let r1 = rt.start("fade", at_ms(0)).unwrap();
+        // 新規: 壁時計 [2000, 4000] ms — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
+        let r2 = rt.start("fade", at_ms(2000)).unwrap();
         assert_eq!(
             r2.affected_group_ids,
             vec![r1.group_id],
@@ -129,7 +129,7 @@ mod conflict_detection_boundaries {
         );
     }
 
-    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5.0 から [5,6]。
+    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5000ms から [5,6]。
     /// 相対の [5,6] と [0,1] は重ならないが、x に A の生きた項目があるので B は拒まれる。
     #[test]
     fn never_blocks_overlap_on_wall_clock() {
@@ -142,7 +142,7 @@ mod conflict_detection_boundaries {
                         from: Some(TransitionValue::Scalar(0.0)),
                         to: Some(TransitionValue::Scalar(1.0)),
                         delay,
-                        duration: Some(1.0),
+                        duration: Some(ms(1000)),
                         ..Default::default()
                     })),
                     ..Default::default()
@@ -151,16 +151,16 @@ mod conflict_detection_boundaries {
         };
         let doc = DolaDocumentBuilder::new("1.0")
             .variable("x", float())
-            .storyboard("a", x_sb(InterruptionPolicy::Never, 5.0))
-            .storyboard("b", x_sb(InterruptionPolicy::Conclude, 0.0))
+            .storyboard("a", x_sb(InterruptionPolicy::Never, ms(5000)))
+            .storyboard("b", x_sb(InterruptionPolicy::Conclude, TimeSpan::ZERO))
             .build()
             .unwrap();
         let mut rt = DolaRuntime::new();
         let _x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
-        let a = rt.start("a", 0.0).unwrap();
-        match rt.start("b", 5.0) {
+        let a = rt.start("a", at_ms(0)).unwrap();
+        match rt.start("b", at_ms(5000)) {
             Err(RuntimeError::Conflict {
                 conflicting_group_ids,
             }) => assert_eq!(conflicting_group_ids, vec![a.group_id]),
@@ -175,7 +175,7 @@ mod conflict_detection_boundaries {
         let make_sb = |vars: &[&str]| {
             let mut b = StoryboardBuilder::new().interruption_policy(InterruptionPolicy::Cancel);
             for v in vars {
-                b = b.entry(linear(v, 0.0, 100.0, 2.0));
+                b = b.entry(linear(v, 0.0, 100.0, ms(2000)));
             }
             b.build()
         };
@@ -194,12 +194,12 @@ mod conflict_detection_boundaries {
         rt.load_document(doc).unwrap();
 
         // gid1: x のみ、gid2: y のみ（変数が異なるため共存）
-        let r1 = rt.start("sb_x", 0.0).unwrap();
-        let r2 = rt.start("sb_y", 0.0).unwrap();
+        let r1 = rt.start("sb_x", at_ms(0)).unwrap();
+        let r2 = rt.start("sb_y", at_ms(0)).unwrap();
         assert!(r2.affected_group_ids.is_empty());
 
         // sb_xy は x・y 両方を操作 → 両インスタンスと競合
-        let r3 = rt.start("sb_xy", 0.5).unwrap();
+        let r3 = rt.start("sb_xy", at_ms(500)).unwrap();
         assert_eq!(r3.affected_group_ids, vec![r1.group_id, r2.group_id]);
     }
 }

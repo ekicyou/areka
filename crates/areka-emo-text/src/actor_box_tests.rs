@@ -4,6 +4,8 @@
 //! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
 //! 空か差し込み口だけでよい。COM は使わない。
 
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 use std::path::PathBuf;
 
 use areka_sakura::contract::{ActorKey, CueCommand};
@@ -171,10 +173,10 @@ fn hide_flag_is_per_scope_and_cleared_at_the_head_of_a_talk() {
     assert!(rt.hidden_boxes.contains(&zero));
     assert!(!rt.hidden_boxes.contains(&one), "別のスコープには立たない");
 
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Clear));
     assert!(rt.hidden_boxes.contains(&zero), "\\c では下ろさない");
 
-    rt.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::ClearAll));
     assert!(!rt.hidden_boxes.contains(&zero), "台詞の頭で下ろす");
 }
 
@@ -240,7 +242,7 @@ fn box_at_the_integer_max_site_warns_once_and_keeps_its_hit_rect_upright() {
             "({x}, {y}): 上限で止まった端はサーフェスの画像より大きい＝はみ出す"
         );
 
-        rt.refresh_shown_boxes(&[key], 10.0);
+        rt.refresh_shown_boxes(&[key], at_ms(10000));
         let [shown] = rt.shown_boxes(&ActorKey::from("0")) else {
             panic!("({x}, {y}): 文字の出ている箱 a が 1 つ載る")
         };

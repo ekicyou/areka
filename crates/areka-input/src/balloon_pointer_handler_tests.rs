@@ -22,7 +22,7 @@ use wintf::ecs::pointer::{Phase, PointerState};
 
 use super::test_support::{
     bubble_move, capture_logs, empty_runtime, headless_runtime_wiring, insert_wiring, left_press,
-    runtime_with_active_choice,
+    runtime_with_active_choice, zero_clock,
 };
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
@@ -484,6 +484,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
         flag_rx,
         mpsc::channel().0,
         mpsc::channel().0,
+        zero_clock(),
     ));
 
     let ev = Phase::Bubble(PointerState {

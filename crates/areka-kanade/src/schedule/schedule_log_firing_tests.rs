@@ -64,11 +64,9 @@ fn error_close_deadline_exceeded_logs() {
     let ev = run_step(
         state_in(Phase::CloseTalkWait {
             talk_id: TalkId(7),
-            deadline: Some(MonotonicMs(1_000)),
+            deadline: Some(at_ms(1_000)),
         }),
-        Input::Tick {
-            now: MonotonicMs(2_000),
-        },
+        Input::Tick { now: at_ms(2_000) },
     );
     assert_logged(&ev, Level::ERROR, "close_deadline_exceeded");
 }
@@ -111,12 +109,7 @@ fn warn_unexpected_reply_logs() {
 #[test]
 fn warn_input_after_terminate_logs() {
     // 終了系列（Stopped）で受領した非横断入力（Tick）→ dispatch_phase input_after_terminate。
-    let ev = run_step(
-        state_in(Phase::Stopped),
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-    );
+    let ev = run_step(state_in(Phase::Stopped), Input::Tick { now: at_ms(1_000) });
     assert_logged(&ev, Level::WARN, "input_after_terminate");
 }
 
@@ -127,12 +120,7 @@ fn warn_input_after_terminate_logs() {
 #[test]
 fn warn_boot_input_ignored_logs() {
     // boot フェーズ（BootInit）+ boot 無関係入力（Tick）→ dispatch_phase→boot::step _ アーム。
-    let ev = run_step(
-        state_in(Phase::BootInit),
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
-    );
+    let ev = run_step(state_in(Phase::BootInit), Input::Tick { now: at_ms(1_000) });
     assert_logged(&ev, Level::WARN, "boot_input_ignored");
 }
 
@@ -148,9 +136,7 @@ fn warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk() {
                 script: String::new(),
             }),
         }),
-        Input::Tick {
-            now: MonotonicMs(1_000),
-        },
+        Input::Tick { now: at_ms(1_000) },
     );
     assert_logged(&ev, Level::WARN, "boot_input_ignored");
     assert_not_logged(&ev, "boot_talk_done");
@@ -229,12 +215,7 @@ fn warn_steady_phase_unexpected_logs() {
     // steady::step に非 Steady Phase（BootMain）が届いた場合の防御。ルーティング上
     // 到達不能ゆえ steady::step を直接駆動して検証する。
     let ev = capture(|| {
-        let _ = steady::step(
-            state_in(Phase::BootMain),
-            Input::Tick {
-                now: MonotonicMs(1_000),
-            },
-        );
+        let _ = steady::step(state_in(Phase::BootMain), Input::Tick { now: at_ms(1_000) });
     });
     assert_logged(&ev, Level::WARN, "steady_phase_unexpected");
 }
@@ -304,9 +285,7 @@ fn warn_close_phase_unexpected_logs() {
     let ev = capture(|| {
         let _ = close::step(
             state_in(Phase::Steady { talk: None }),
-            Input::Tick {
-                now: MonotonicMs(1_000),
-            },
+            Input::Tick { now: at_ms(1_000) },
             &cfg,
         );
     });
@@ -326,9 +305,7 @@ fn warn_change_phase_unexpected_logs() {
         actions = Some(
             change::step(
                 state_in(Phase::Steady { talk: None }),
-                Input::Tick {
-                    now: MonotonicMs(1_000),
-                },
+                Input::Tick { now: at_ms(1_000) },
                 &cfg,
             )
             .1,
@@ -576,8 +553,8 @@ fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
         Input::ChoiceWaiting {
             talk_id: TalkId(5),
             choice_ids: vec!["OnMenu".to_string(), "choice1".to_string()],
-            display_end: MonotonicMs(2_000),
-            timeout_directive_secs: None,
+            display_end: at_ms(2_000),
+            timeout_directive: None,
         },
     );
     let established = logged_once(&ev, Level::INFO, "choice_waiting_established");
@@ -587,8 +564,8 @@ fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
         "候補数がログフィールドに載る。\n捕捉={established:#?}"
     );
     assert_eq!(
-        established.fields.get("deadline_ms").map(String::as_str),
-        Some("Some(32000)"),
+        established.fields.get("deadline").map(String::as_str),
+        Some(format!("Some({})", at_ms(32_000)).as_str()),
         "写像済みの期限がログフィールドに載る。\n捕捉={established:#?}"
     );
 }
@@ -601,13 +578,13 @@ fn info_choice_waiting_established_logs_indefinite_deadline() {
         Input::ChoiceWaiting {
             talk_id: TalkId(5),
             choice_ids: vec!["OnMenu".to_string()],
-            display_end: MonotonicMs(2_000),
-            timeout_directive_secs: Some(-1.0),
+            display_end: at_ms(2_000),
+            timeout_directive: Some(delta_ms(-1_000)),
         },
     );
     let established = logged_once(&ev, Level::INFO, "choice_waiting_established");
     assert_eq!(
-        established.fields.get("deadline_ms").map(String::as_str),
+        established.fields.get("deadline").map(String::as_str),
         Some("None"),
         "無効化指令は無期限として記録される。\n捕捉={established:#?}"
     );
@@ -630,8 +607,8 @@ fn warn_choice_waiting_stale_logs() {
             Input::ChoiceWaiting {
                 talk_id,
                 choice_ids: vec!["OnMenu".to_string()],
-                display_end: MonotonicMs(2_000),
-                timeout_directive_secs: None,
+                display_end: at_ms(2_000),
+                timeout_directive: None,
             },
         );
         assert_logged(&ev, Level::WARN, "choice_waiting_stale");
@@ -762,29 +739,14 @@ fn a_stale_choice_ledger_is_warned_once_and_cleared() {
     state.choice = Some(ChoiceState {
         talk_id: TalkId(5),
         candidates: vec!["OnMenu".to_string()],
-        deadline: Some(MonotonicMs(1_500)),
+        deadline: Some(at_ms(1_500)),
         phase: ChoicePhase::Waiting,
     });
     let cfg = config();
     let mut out = None;
     let ev = capture(|| {
-        let (next, _) = step(
-            state,
-            Input::Tick {
-                now: MonotonicMs(2_000),
-            },
-            &cfg,
-        );
-        out = Some(
-            step(
-                next,
-                Input::Tick {
-                    now: MonotonicMs(3_000),
-                },
-                &cfg,
-            )
-            .0,
-        );
+        let (next, _) = step(state, Input::Tick { now: at_ms(2_000) }, &cfg);
+        out = Some(step(next, Input::Tick { now: at_ms(3_000) }, &cfg).0);
     });
     logged_once(&ev, Level::WARN, "choice_timeout_ledger_stale");
     assert!(

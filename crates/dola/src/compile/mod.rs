@@ -12,12 +12,13 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
+use crate::time::{TimeDelta, TimeScale, TimeSpan};
 use crate::transition::{TransitionDef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
 use resolve::*;
 
-/// 有限の数どうしの和があふれて inf になった時刻・値を `InvalidNumber` として積む
+/// 有限の数どうしの和があふれて inf になった値を `InvalidNumber` として積む
 /// （validate の数値の規則は数を 1 つずつしか見ない）。
 fn push_if_overflowed(
     errors: &mut Vec<DolaError>,
@@ -38,8 +39,8 @@ fn push_if_overflowed(
 /// 時刻の決まった、値を埋める前のセグメント
 struct PendingSegment<'d> {
     entry_idx: usize,
-    start_time: f64,
-    end_time: f64,
+    start_time: TimeDelta,
+    end_time: TimeDelta,
     trans_def: &'d TransitionDef,
     /// at も between も無い連結の遷移か
     sequential: bool,
@@ -53,11 +54,12 @@ struct PendingSegment<'d> {
 /// - doc は整形式の DolaDocument（内部で validate() を実行するため、
 ///   呼び出し側の事前バリデーションは不要）
 /// - storyboard_name は doc.storyboard に存在する名前
-/// - start_time >= 0.0
 ///
 /// # Postconditions
-/// - 成功時: CompiledStoryboard 内の全セグメントは絶対時刻を持ち、
-///   各タイムラインのセグメントは時刻順ソート済みで重複なし
+/// - 成功時: CompiledStoryboard 内の全セグメントとトリガーの時刻は storyboard の頭からの隔たりで、
+///   開始の時刻に依らない。各タイムラインのセグメントは時刻順ソート済みで重複なし
+/// - 時刻の和が型の範囲を越えれば `TimeOutOfDocumentRange`、1 周の長さが表せなければ
+///   `LoopDurationOutOfRange`
 /// - 失敗時: `Vec<DolaError>` にすべてのエラーを収集して返却
 ///
 /// # Invariants
@@ -66,14 +68,13 @@ struct PendingSegment<'d> {
 pub fn compile_storyboard(
     doc: &DolaDocument,
     storyboard_name: &str,
-    start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // doc は外部入力（JSON/TOML）か Builder の由来だが、どの経路でも compile_validated の前に
     // ここか compile_all で必ず validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
     // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
     // トリガー循環の検出も再帰を持たない（どちらも明示のスタックか反復）。
     doc.validate()?;
-    compile_validated(doc, storyboard_name, start_time)
+    compile_validated(doc, storyboard_name)
 }
 
 /// 検証の後に全ストーリーボードをコンパイルにかける（読み込みと `DolaDocumentBuilder::build`）。
@@ -82,7 +83,7 @@ pub(crate) fn compile_all(doc: &DolaDocument) -> Result<(), Vec<DolaError>> {
     let errors: Vec<DolaError> = doc
         .storyboard
         .keys()
-        .filter_map(|name| compile_validated(doc, name, 0.0).err())
+        .filter_map(|name| compile_validated(doc, name).err())
         .flatten()
         .collect();
     if errors.is_empty() {
@@ -97,7 +98,6 @@ pub(crate) fn compile_all(doc: &DolaDocument) -> Result<(), Vec<DolaError>> {
 pub(crate) fn compile_validated(
     doc: &DolaDocument,
     storyboard_name: &str,
-    start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     let sb = doc.storyboard.get(storyboard_name).ok_or_else(|| {
         vec![DolaError::CompileError {
@@ -123,17 +123,17 @@ pub(crate) fn compile_validated(
     };
 
     // keyframe_name → resolved time
-    let mut keyframe_times: HashMap<String, f64> = HashMap::new();
-    keyframe_times.insert("start".to_string(), start_time);
+    let mut keyframe_times: HashMap<String, TimeDelta> = HashMap::new();
+    keyframe_times.insert("start".to_string(), TimeDelta::ZERO);
 
     // variable_name → (定義, 時刻の決まったセグメント)。名前の順で重なりを報告する。
     // 値（from/to）は時刻の順に並べた後の Step 5 で埋める
     type VarSegments<'d> = (&'d AnimationVariableDef, Vec<PendingSegment<'d>>);
     let mut var_segments: BTreeMap<&str, VarSegments> = BTreeMap::new();
     // entry_index → segment end_time（連結の遷移が配列上の直前のエントリに続くため）
-    let mut entry_segment_end: HashMap<usize, f64> = HashMap::new();
+    let mut entry_segment_end: HashMap<usize, TimeDelta> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
-    let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
+    let mut entry_keyframe_time: HashMap<usize, TimeDelta> = HashMap::new();
     let mut triggers: Vec<CompiledTrigger> = Vec::new();
 
     // SAFETY: topological_sort の成功時 result は 0..entry_count（= sb.entry.len()）の
@@ -150,13 +150,12 @@ pub(crate) fn compile_validated(
                 storyboard_name,
                 entry_idx,
                 entry,
-                start_time,
+                "fire_time",
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
             );
             if let Some(t) = fire_time {
-                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "fire_time", t);
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
 
@@ -175,13 +174,12 @@ pub(crate) fn compile_validated(
                 storyboard_name,
                 entry_idx,
                 entry,
-                start_time,
+                "keyframe_time",
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
             );
             if let Some(t) = kf_time {
-                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "keyframe_time", t);
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
             }
@@ -211,7 +209,6 @@ pub(crate) fn compile_validated(
             entry_idx,
             entry,
             trans_def,
-            start_time,
             &keyframe_times,
             last_end_time,
             &mut errors,
@@ -221,14 +218,6 @@ pub(crate) fn compile_validated(
             Some(t) => t,
             None => continue,
         };
-        // 始まりは終わり以下なので、終わりが有限なら始まりも有限
-        push_if_overflowed(
-            &mut errors,
-            storyboard_name,
-            entry_idx,
-            "end_time",
-            segment_end,
-        );
 
         keyframe_times.insert(kf_name, kf_time);
         entry_keyframe_time.insert(entry_idx, kf_time);
@@ -255,13 +244,8 @@ pub(crate) fn compile_validated(
     let mut timelines: BTreeMap<String, CompiledVariableTimeline> = BTreeMap::new();
 
     for (var_name, (var_def, mut segments)) in var_segments {
-        // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
         // 同じ始まりは配列の順（連結の直前のエントリは配列で先）
-        segments.sort_by(|a, b| {
-            (a.start_time + 0.0)
-                .total_cmp(&(b.start_time + 0.0))
-                .then(a.entry_idx.cmp(&b.entry_idx))
-        });
+        segments.sort_by_key(|s| (s.start_time, s.entry_idx));
 
         // from/to を時刻の順に埋める。from を省いたとき、連結の遷移は配列上の直前のエントリ、
         // at・between は時刻の上で直前のセグメントの to を取る。どちらもこの並びで先に埋まっている
@@ -339,11 +323,11 @@ pub(crate) fn compile_validated(
         }
         let segments: Vec<CompiledSegment> = compiled.into_iter().map(|(_, s)| s).collect();
 
-        // 長さはコンパイルの起点から数える（先頭の遅れを含む）。
+        // 長さは頭から数える（先頭の遅れを含む）。
         // 最後のセグメントより後のトリガーは長さに足さない。
         let base_duration = segments
             .last()
-            .map_or(0.0, |last| last.end_time - start_time);
+            .map_or(TimeDelta::ZERO, |last| last.end_time);
 
         let variable_type = build_variable_type_hint(var_def);
         let (min_value, max_value) = extract_min_max(var_def);
@@ -364,36 +348,40 @@ pub(crate) fn compile_validated(
         return Err(errors);
     }
 
+    // 頭より前で終わるタイムライン（負の隔たり）は長さに足さない
     let total_base_duration = timelines
         .values()
-        .map(|tl| tl.base_duration)
-        .fold(0.0_f64, f64::max);
-    // 有限の長さも小さい time_scale で割ると inf になり、インスタンスが終わらない
-    // （ランタイムは同じ割り算で 1 周の実時間を出す。読み込みの compile_all でここを通る）
-    let loop_duration = total_base_duration / sb.time_scale;
-    if !loop_duration.is_finite() {
+        .filter_map(|tl| tl.base_duration.to_span())
+        .max()
+        .unwrap_or(TimeSpan::ZERO);
+    let location = || format!("storyboard '{storyboard_name}'");
+    // validate() が先に拒む値で、ここへは来ない
+    let Some(time_scale) = TimeScale::new(sb.time_scale) else {
         return Err(vec![DolaError::InvalidNumber {
-            location: format!("storyboard '{storyboard_name}'"),
-            field: "loop_duration".to_string(),
-            value: loop_duration,
+            location: location(),
+            field: "time_scale".to_string(),
+            value: sb.time_scale,
         }]);
-    }
+    };
 
-    triggers.sort_by(|a, b| {
-        (a.fire_time + 0.0)
-            .total_cmp(&(b.fire_time + 0.0))
-            .then(a.source_entry_index.cmp(&b.source_entry_index))
-    });
+    triggers.sort_by_key(|t| (t.fire_time, t.source_entry_index));
 
-    Ok(CompiledStoryboard {
+    let compiled = CompiledStoryboard {
         storyboard_name: storyboard_name.to_string(),
-        start_time,
         timelines,
-        time_scale: sb.time_scale,
+        time_scale,
         loop_count: sb.loop_count,
         interruption_policy: sb.interruption_policy,
         loop_offset: sb.loop_offset.clone(),
         total_base_duration,
         triggers,
-    })
+    };
+    // 小さい time_scale では、1 周の経った長さが型の範囲を越え、インスタンスが終わらない
+    // （読み込みの compile_all でここを通る）
+    if compiled.lap_length().is_none() {
+        return Err(vec![DolaError::LoopDurationOutOfRange {
+            location: location(),
+        }]);
+    }
+    Ok(compiled)
 }

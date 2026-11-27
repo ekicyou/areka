@@ -61,8 +61,8 @@ mod document_builder_tests {
                     to: Some(TransitionValue::Scalar(1.0)),
                     relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::QuadraticInOut)),
-                    delay: 0.0,
-                    duration: Some(1.5),
+                    delay: TimeSpan::ZERO,
+                    duration: Some(TimeSpan::from_millis(1500)),
                 },
             )
             .storyboard(
@@ -97,8 +97,8 @@ mod document_builder_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         ..Default::default()
                     })
@@ -142,8 +142,8 @@ mod storyboard_builder_tests {
                     to: Some(TransitionValue::Scalar(1.0)),
                     relative_to: None,
                     easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
+                    delay: TimeSpan::ZERO,
+                    duration: Some(TimeSpan::from_millis(1000)),
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()

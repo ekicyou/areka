@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::easing::{EasingFunction, EasingName};
+use crate::time::{TimeDelta, TimeSpan};
 use crate::transition::TransitionRef;
 
 fn default_easing_linear() -> EasingFunction {
@@ -11,13 +12,13 @@ fn default_easing_linear() -> EasingFunction {
 /// ループオフセット定義（短縮形 / オブジェクト形式）。
 ///
 /// 各ループ周回間にランダムな待機時間を挿入する。
-/// - 短縮形: 数値 → `max` として解釈（`min=0.0`, `easing=linear`）
+/// - 短縮形: 数値 → `max` として解釈（`min=0`, `easing=linear`）
 /// - オブジェクト形式: `{ min, max, easing }` で詳細指定
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LoopOffset {
-    /// 短縮形: 数値 → max として解釈（min=0.0, easing=linear）
-    Scalar(f64),
+    /// 短縮形: 数値（秒） → max として解釈（min=0, easing=linear）
+    Scalar(#[serde(with = "crate::time::serde_secs")] TimeSpan),
     /// オブジェクト形式: { min, max, easing }
     Range(LoopOffsetRange),
 }
@@ -25,11 +26,12 @@ pub enum LoopOffset {
 /// ループオフセット範囲定義
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LoopOffsetRange {
-    /// 最小待機時間（f64秒、デフォルト 0.0）
-    #[serde(default)]
-    pub min: f64,
-    /// 最大待機時間（f64秒、必須）
-    pub max: f64,
+    /// 最小待機時間（文書では秒、デフォルト 0）
+    #[serde(with = "crate::time::serde_secs", default)]
+    pub min: TimeSpan,
+    /// 最大待機時間（文書では秒、必須）
+    #[serde(with = "crate::time::serde_secs")]
+    pub max: TimeSpan,
     /// イージング関数（デフォルト: linear）
     #[serde(default = "default_easing_linear")]
     pub easing: EasingFunction,
@@ -116,9 +118,13 @@ pub struct StoryboardEntry {
     /// トリガー対象ストーリーボード名
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger_storyboard: Option<String>,
-    /// トリガー開始オフセット（トリガー発火時刻 + offset = 子SBの start_time）
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger_start_offset: Option<f64>,
+    /// トリガー開始オフセット（文書では秒・負も可。トリガー発火時刻 + offset = 子SBの start_time）
+    #[serde(
+        with = "crate::time::serde_secs",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub trigger_start_offset: Option<TimeDelta>,
 }
 
 /// キーフレーム起点指定（`at` フィールド用）
@@ -138,9 +144,9 @@ pub enum KeyframeRef {
     WithOffset {
         /// キーフレーム名指定（文字列または配列）
         keyframes: KeyframeNames,
-        /// キーフレーム時刻からの時間オフセット（f64秒、デフォルト 0.0）
-        #[serde(default)]
-        offset: f64,
+        /// キーフレーム時刻からの時間オフセット（文書では秒・負も可、デフォルト 0）
+        #[serde(with = "crate::time::serde_secs", default)]
+        offset: TimeDelta,
     },
 }
 

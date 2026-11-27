@@ -172,6 +172,8 @@ mod tests {
     const PURE_SOURCES: &[(&str, &str)] = &[
         ("actor_attach.rs", include_str!("actor_attach.rs")),
         ("actor_present.rs", include_str!("actor_present.rs")),
+        ("actor_held.rs", include_str!("actor_held.rs")),
+        ("actor_held_tests.rs", include_str!("actor_held_tests.rs")),
         (
             "actor_frame_memo_tests.rs",
             include_str!("actor_frame_memo_tests.rs"),
@@ -497,7 +499,7 @@ mod tests {
     #[test]
     fn pure_layer_modules_have_no_windows_imports() {
         // 走査面が痩せても述語は緑のままなので、母数を固定して「黙って減る」経路を塞ぐ。
-        assert_eq!(PURE_SOURCES.len(), 90, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 92, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

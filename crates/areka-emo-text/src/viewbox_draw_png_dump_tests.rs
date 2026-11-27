@@ -7,6 +7,9 @@ use crate::layout::WrapPlan;
 use crate::region::ScaleContract;
 use crate::state::{TextLayerConfig, TextLayerState};
 use areka_sakura::contract::ActorKey;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 
 // ════ 目視診断（PNG ダンプ・#[ignore]） ════
 //
@@ -211,24 +214,38 @@ fn diag_dump_horizontal_pngs() {
     );
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
-    // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
-    // あふれ短行 at 2.0）。reveal は配送 duration 由来（interval = duration / N）。Text へ
-    // N×0.05 を焼き込むと各 chunk 内が 1 字 0.05 秒のペースで per-glyph 進行する
+    // 実 example と同一の cue `at` スケジュール（LINE1 at 0 ms・LINE2 at 500 ms・LINE3 at 1200 ms・
+    // あふれ短行 at 2000 ms）。reveal は配送 duration 由来（interval = duration / N）。Text へ
+    // N×50 ms を焼き込むと各 chunk 内が 1 字 50 ms のペースで per-glyph 進行する
     // （chunk 境界は at で gate）。at の分散は実機の reveal タイミングを模す診断ダンプの時間対応。
     // 保留改行は次の可視グリフが reveal されるまで行を開かないので、あふれ発火は改行より後ろの
     // グリフの reveal 時になる。
-    apply_fixture_script(&mut state, &actor, [0.0, 0.5, 1.2, 2.0], 0.05);
+    apply_fixture_script(
+        &mut state,
+        &actor,
+        [ms(0), ms(500), ms(1200), ms(2000)],
+        ms(50),
+    );
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム回す）。dump は目標時刻通過時。
-    let dt = 0.02f64;
-    let mut dump_times: Vec<f64> = vec![0.35, 1.10, 1.90, 2.02, 2.10, 2.30, 2.60, 3.00];
+    let dt = ms(20);
+    let mut dump_times: Vec<TimePoint> = vec![
+        at_ms(350),
+        at_ms(1100),
+        at_ms(1900),
+        at_ms(2020),
+        at_ms(2100),
+        at_ms(2300),
+        at_ms(2600),
+        at_ms(3000),
+    ];
     eprintln!(
         "[diag] out_dir={out_dir} pitch={pitch} region_h={} reveal_interval={}",
         region.bottom() - region.top(),
-        0.05
+        ms(50)
     );
-    let mut t = 0.0f64;
-    while t <= 3.05 {
+    let mut t = TimePoint::ZERO;
+    while t <= at_ms(3050) {
         let (visible, lines, canvas, window) =
             state_frame(&state, &actor, t, region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("diag", &canvas, &window, font, mode, &contract);
@@ -253,18 +270,18 @@ fn diag_dump_horizontal_pngs() {
                 }
             }
             eprintln!(
-                "[diag] t={t:.2}(target {target:.2}) visible={visible} lines={} fvl={} \
+                "[diag] t={t}(target {target}) visible={visible} lines={} fvl={} \
                  block_off={:.1} diff_rows={diff_rows} viewbox_bottom_ink_y={vb_bottom:?} (面高={h})",
                 lines.len(),
                 window.first_visible_line,
                 window.block_offset
             );
             eprintln!("[diag]   欠け行(oracle有/viewbox空) y,画素数 = {miss_rows:?}");
-            let ms = (target * 100.0).round() as u32;
+            let centis = (target.as_ticks() / 100_000) as u32;
             for (tag, bytes) in [("viewbox", &vb), ("oracle", &ob)] {
                 let rgba = diag_composite_rgba(bytes, w, h, pitch);
                 let png = diag_encode_png_rgba(&rgba, w, h);
-                let path = format!("{out_dir}/diag_h_{tag}_t{ms:03}.png");
+                let path = format!("{out_dir}/diag_h_{tag}_t{centis:03}.png");
                 std::fs::write(&path, &png).expect("PNG 書き込み");
                 eprintln!("[diag]   saved {path}");
             }
@@ -300,12 +317,12 @@ fn diag_dump_horizontal_pngs() {
                     }
                 }
                 let png = diag_encode_png_rgba(&rgba, w, h);
-                let path = format!("{out_dir}/diag_h_DIFF_t{ms:03}.png");
+                let path = format!("{out_dir}/diag_h_DIFF_t{centis:03}.png");
                 std::fs::write(&path, &png).expect("PNG 書き込み");
                 eprintln!("[diag]   saved {path} (赤=viewbox欠け・青=過剰)");
             }
         }
-        t += dt;
+        t = t + dt;
     }
 }
 

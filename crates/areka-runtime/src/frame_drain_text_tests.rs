@@ -2,7 +2,8 @@ use std::sync::mpsc;
 use wintf::ecs::Point;
 
 use crate::move_cue::MoveDirective;
-use crate::talk_clock::{controllable_clock, set_now};
+
+use dola::time::testing::at_ms;
 
 use super::shared_test_support::wiring;
 use super::test_support::{
@@ -70,52 +71,11 @@ fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
     );
 }
 
-/// text 判断: `resolve_talk_time` は override 優先→`clock.talk_time`→`None` を返す。
-///
-/// GPU/時刻 I/O 抜きの純関数として 4 経路を決定論檻へ入れる: override 勝ち（frame_now 無視）・
-/// override 無し×epoch 確立×frame_now 有り＝差分・frame_now 不在＝None・epoch 未確立＝None。
-#[test]
-fn resolve_talk_time_override_wins_else_clock_else_none() {
-    let clock_unset = zero_clock();
-
-    assert_eq!(
-        resolve_talk_time(Some(5.0), Some(999.0), &clock_unset),
-        Some(5.0),
-        "override は最優先で採用（frame_now は無視）"
-    );
-    assert_eq!(
-        resolve_talk_time(Some(5.0), None, &clock_unset),
-        Some(5.0),
-        "override は frame_now 不在でも採用"
-    );
-
-    let (now, clock) = controllable_clock();
-    set_now(&now, 100.0);
-    clock.observe_cue(0.0); // epoch = 100.0 - 0.0 = 100.0
-    assert_eq!(
-        resolve_talk_time(None, Some(105.0), &clock),
-        Some(5.0),
-        "override 無しは clock.talk_time(frame_now)（105-100=5）"
-    );
-
-    assert_eq!(
-        resolve_talk_time(None, None, &clock),
-        None,
-        "frame_now 不在は None（present_frame を呼ばない）"
-    );
-
-    assert_eq!(
-        resolve_talk_time(None, Some(105.0), &clock_unset),
-        None,
-        "epoch 未確立は None（talk 未到達）"
-    );
-}
-
 /// text smoke（no panic）: `run_text_phase` は override で `present_frame` へ到達し、
 /// override 無し×`FrameTime` 不在では skip する（いずれも panic しない）。
 ///
 /// 登録 actor の無い空 `TextLayerRuntime` に対し `present_frame` は `Ok(())` で即復帰する
-/// （GPU 不要・upstream 契約）。override=Some(2.0) で present_frame を踏み、override=None かつ
+/// （GPU 不要・upstream 契約）。override=Some(2 秒) で present_frame を踏み、override=None かつ
 /// `FrameTime` 資源なしで skip することを、panic なし＋ runtime 再借用可で担保する。
 #[test]
 fn run_text_phase_override_reaches_present_frame_without_panic() {
@@ -124,7 +84,7 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     // FrameTime 資源を持たない素の World（override 経路と skip 経路の双方を踏む）。
     let mut world = World::new();
 
-    run_text_phase(&mut wiring, &mut world, Some(2.0));
+    run_text_phase(&mut wiring, &mut world, Some(at_ms(2_000)));
 
     run_text_phase(&mut wiring, &mut world, None);
 

@@ -13,6 +13,7 @@
 //! 観測は「続けて書いた文字の見た目」（[`now`]）を主にする。箱の場所は最初の指令か空でない
 //! 写しのときに生まれるので、場所の状態を直に覗くより、利用者に見えるものを確かめる方が確かである。
 
+use dola::TimeSpan;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -364,7 +365,7 @@ fn balloon_to_closed_box_to_balloon_by_surface() {
 fn talk_starting_in_closed_box_leaves_to_an_empty_spec() {
     let mut state = state();
     show(&mut state, "0", 1);
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     assert_eq!(state.destination(&key("0")), bx("x"));
     assert_eq!(shared(&state, "0"), TextPlace::Balloon);
     blue(&mut state, "0");
@@ -385,7 +386,7 @@ fn clear_all_leaves_no_spec_anywhere() {
     blue(&mut state, "0");
     show(&mut state, "1", 1);
     font(&mut state, "1", &["disable"]);
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     assert!(
         state.actors.len() >= 4,
         "a・x・普通のバルーン 2 つの場所がある"
@@ -406,7 +407,7 @@ fn clear_all_leaves_no_spec_anywhere() {
 fn spec_written_in_default_scope_box_after_clear_all_survives_switch() {
     let mut state = state();
     show(&mut state, "0", 0);
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     red(&mut state, "0"); // 行き先 a で書く
     show(&mut state, "0", 2);
     assert_eq!(now(&mut state, "0").color, RED);

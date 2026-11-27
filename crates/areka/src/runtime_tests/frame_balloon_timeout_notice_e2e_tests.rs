@@ -10,7 +10,7 @@
 // 踏むのはこの檻だけである（相の檻 `balloon_visibility_phase_notice_tests.rs` は判断と送出を
 // 自分で並べて呼ぶ）。
 //
-// 時刻はすべて注入（受け口の時計・`TalkClock` の起点・`FrameTime`）で、満了の直前・ちょうど・
+// 時刻はすべて注入（受け口の時計・`FrameTime`）で、満了の直前・ちょうど・
 // 直後を追い越さない刻みで進める。実時間の待機は用いない。
 // =============================================================================
 
@@ -21,8 +21,9 @@ use areka_kanade::{ExecutionStateUpdate, KanadeMsg};
 use areka_sakura::TalkId;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use dola::cue::{CuePlayer, CueSink};
+use dola::{TimePoint, TimeSpan};
 
-use areka_runtime::balloon_visibility::configured_timeout_secs;
+use areka_runtime::balloon_visibility::configured_timeout;
 use areka_runtime::talk_clock::TalkClock;
 use areka_runtime::talk_lifecycle::BalloonLifecycleSink;
 
@@ -46,7 +47,7 @@ struct Cage {
     world: World,
     /// フレームの間だけ world へ預けるので `Option` で持つ。
     wiring: Option<RuntimeWiring>,
-    wall: Arc<Mutex<f64>>,
+    wall: Arc<Mutex<TimePoint>>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     kanade: mpsc::Receiver<KanadeMsg>,
     _present_tx: mpsc::Sender<PresentCommand>,
@@ -56,19 +57,18 @@ struct Cage {
 }
 
 impl Cage {
-    /// 檻を組み、装着のフレームまで回す。talk 相対秒＝壁時刻（起点 0）。
+    /// 檻を組み、装着のフレームまで回す。台本の起点は壁時刻の 0。
     fn boot() -> Self {
         let (gpu, mut world, gw) = gpu_frame_world();
         let kanade = seat_ghost(&mut world);
         let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let mut wiring = boot_wiring(present_rx, lifecycle_rx);
-        let wall = Arc::new(Mutex::new(0.0_f64));
+        let wall = Arc::new(Mutex::new(TimePoint::ZERO));
         wiring.clock = TalkClock::new({
             let wall = Arc::clone(&wall);
             Arc::new(move || *wall.lock().expect("時計の錠"))
         });
-        wiring.clock.observe_cue(0.0);
         let mut cage = Self {
             world,
             wiring: Some(wiring),
@@ -79,7 +79,7 @@ impl Cage {
             _gw: gw,
             _gpu: gpu,
         };
-        cage.frame_at(0.0);
+        cage.frame_at(TimePoint::ZERO);
         assert_eq!(
             cage.wiring().balloon_model_scopes(),
             vec![0u32, 1],
@@ -98,25 +98,25 @@ impl Cage {
     ///
     /// 受け口は配送と同じ形（登録の原本を複製し、番号を渡す）で組む。配られた cue は文字の層へ
     /// 当て、壁時刻を占有終端まで進めてから受け口を落とす（止まった時刻＝占有終端）。
-    fn play(&mut self, script: &str) -> f64 {
+    fn play(&mut self, script: &str) -> TimePoint {
         let compiled = areka_sakura::compile(
             &areka_parsers::sakura::parse(script),
             &SystemVarSnapshot::default(),
         );
-        let horizon = compiled.sheet.absolute_end_time();
+        let sheet = compiled.sheet.with_absolute_start_time(TimePoint::ZERO);
+        let horizon = sheet.absolute_end_time().expect("起点を刻んだ台本");
         let recorded = Recorded::default();
         let mut lifecycle =
             BalloonLifecycleSink::new(self.lifecycle_tx.clone(), self.wiring().clock.clone())
                 .clone_box();
         lifecycle.begin_talk(TALK, areka_sakura::contract::ScriptOrigin::GHOST);
-        let mut player = CuePlayer::from_sheet(&compiled.sheet);
+        let mut player = CuePlayer::from_sheet(&sheet).expect("起点を刻んだ台本");
         player.register_sink(lifecycle);
         player.register_sink(Box::new(recorded.clone()));
-        let mut ticks: Vec<f64> = compiled
-            .sheet
+        let mut ticks: Vec<TimePoint> = sheet
             .cues()
             .iter()
-            .map(|cue| compiled.sheet.absolute_fire_time(cue))
+            .filter_map(|cue| sheet.absolute_fire_time(cue))
             .collect();
         ticks.push(horizon);
         for at in ticks {
@@ -133,7 +133,7 @@ impl Cage {
     }
 
     /// 注入した時刻で本番の相順を 1 フレーム回し、その間のログを返す。
-    fn frame_at(&mut self, now: f64) -> Vec<CapturedEvent> {
+    fn frame_at(&mut self, now: TimePoint) -> Vec<CapturedEvent> {
         self.world.insert_resource(FrameTime(now));
         let wiring = self.wiring.take().expect("結線は檻が持っている");
         let (wiring, events) = capture(|| advance_frame(&mut self.world, wiring));
@@ -161,7 +161,7 @@ impl Cage {
 
 /// 台詞を出して終わらせ、`deadline` の直前・ちょうど・直後を回す。ちょうどのフレームで隠れて
 /// 受け口が受けた番号の知らせが 1 通だけ届き、その前後では届かないことを主張する。
-fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
+fn expire_at(cage: &mut Cage, horizon: TimePoint, deadline: TimePoint) {
     cage.frame_at(horizon);
     assert_eq!(
         cage.visible(),
@@ -170,7 +170,7 @@ fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
     );
     assert_eq!(cage.notices(), vec![], "出たフレームでは送らない");
 
-    cage.frame_at(deadline - 0.001);
+    cage.frame_at(deadline - TimeSpan::from_millis(1));
     assert_eq!(cage.visible(), Some(true), "満了の直前は隠さない");
     assert_eq!(cage.notices(), vec![], "満了の直前は送らない");
 
@@ -192,7 +192,7 @@ fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
     assert_eq!(notified.len(), 1, "送った記録が 1 行: {events:?}");
     assert_eq!(notified[0].expect_field("talk_id"), TALK.0.to_string());
 
-    cage.frame_at(deadline + 1.0);
+    cage.frame_at(deadline + TimeSpan::from_millis(1_000));
     assert_eq!(cage.notices(), vec![], "隠した後のフレームは送らない");
 }
 
@@ -201,20 +201,20 @@ fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
 #[test]
 fn timeout_after_a_real_talk_sends_the_sink_number_through_the_real_phase() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
-    let timeout_secs = configured_timeout_secs();
+    let timeout = configured_timeout();
     let mut cage = Cage::boot();
     let horizon = cage.play(r"\0あい\e");
-    expire_at(&mut cage, horizon, horizon + timeout_secs);
+    expire_at(&mut cage, horizon, horizon + timeout);
 }
 
 /// `\![set,balloontimeout,…]` を含む台詞では、そのトークの満了の時刻が指定の値へ動く。
 /// 直前で隠れずちょうどで隠れるので、既定の待ち時間のままなら（既定が長くても短くても）落ちる。
 #[test]
 fn balloontimeout_in_the_talk_moves_the_expiry_of_that_talk() {
-    let timeout_secs = configured_timeout_secs();
-    let wait = 1234.0 / 1000.0;
+    let timeout = configured_timeout();
+    let wait = TimeSpan::from_millis(1234);
     assert_ne!(
-        wait, timeout_secs,
+        wait, timeout,
         "前提: 指定の値は既定の待ち時間と違う（同じなら本檻は何も弁別しない）"
     );
     let mut cage = Cage::boot();

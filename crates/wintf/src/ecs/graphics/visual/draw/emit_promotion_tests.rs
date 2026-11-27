@@ -267,11 +267,11 @@ fn assert_frames_match(s: f32) {
     let mut state: SystemState<(Commands, Query<PromotionData>)> = SystemState::new(&mut world);
     let mut reported = ReportedIssues::default();
     let mut phases = Vec::new();
-    for k in 0..80 {
-        let t = k as f64 * 0.125;
+    for k in 0..80i64 {
+        let t = dola::time::testing::at_ms(k * 125);
         let mut scan = tree_scan(&mut world, root);
         for e in &mut scan.entries {
-            e.updated = e.entity == p && t < 1.5;
+            e.updated = e.entity == p && t < dola::time::testing::at_ms(1500);
         }
         let ctx = RoundContext {
             now: Some(t),

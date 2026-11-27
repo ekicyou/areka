@@ -7,6 +7,7 @@ use areka_sakura::contract::FONT_TAG_CARRIER;
 
 use super::test_support::cue;
 use super::*;
+use dola::time::testing::ms;
 
 fn count(state: &TextLayerState, actor: &str) -> u64 {
     state.clear_count(&ActorKey::from(actor))
@@ -16,21 +17,21 @@ fn count(state: &TextLayerState, actor: &str) -> u64 {
 #[test]
 fn clear_advances_only_the_named_scope() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
-    state.apply_cue(&cue("1", 0.0, CueCommand::Text("い".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())));
+    state.apply_cue(&cue("1", TimeSpan::ZERO, CueCommand::Text("い".into())));
     assert_eq!(count(&state, "0"), 0);
 
-    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Clear));
     assert_eq!(count(&state, "0"), 1);
     assert_eq!(count(&state, "1"), 0);
 
-    state.apply_cue(&cue("0", 0.6, CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(600), CueCommand::Clear));
     assert_eq!(count(&state, "0"), 2);
     assert_eq!(count(&state, "1"), 0);
 
     // 状態の無い scope への `Clear` は、その scope の状態を作って回数を 1 にする。
     assert!(state.actor_state(&ActorKey::from("2")).is_none());
-    state.apply_cue(&cue("2", 0.7, CueCommand::Clear));
+    state.apply_cue(&cue("2", ms(700), CueCommand::Clear));
     assert_eq!(count(&state, "2"), 1);
     assert_eq!(count(&state, "0"), 2);
     assert_eq!(count(&state, "1"), 0);
@@ -40,11 +41,11 @@ fn clear_advances_only_the_named_scope() {
 #[test]
 fn clear_all_advances_every_existing_scope_and_leaves_stateless_at_zero() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
-    state.apply_cue(&cue("1", 0.0, CueCommand::Text("い".into())));
-    state.apply_cue(&cue("1", 0.1, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())));
+    state.apply_cue(&cue("1", TimeSpan::ZERO, CueCommand::Text("い".into())));
+    state.apply_cue(&cue("1", ms(100), CueCommand::Clear));
 
-    state.apply_cue(&cue("0", 0.5, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", ms(500), CueCommand::ClearAll));
     assert_eq!(count(&state, "0"), 1);
     assert_eq!(count(&state, "1"), 2);
     assert_eq!(count(&state, "2"), 0);
@@ -52,7 +53,7 @@ fn clear_all_advances_every_existing_scope_and_leaves_stateless_at_zero() {
 
     // 状態の無いところへの全消去でも、回数の無い scope は 0 のまま。
     let mut empty = TextLayerState::default();
-    empty.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    empty.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     assert_eq!(count(&empty, "0"), 0);
 }
 
@@ -60,7 +61,7 @@ fn clear_all_advances_every_existing_scope_and_leaves_stateless_at_zero() {
 #[test]
 fn other_cues_do_not_move_the_count() {
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
     assert_eq!(count(&state, "0"), 1);
 
     let others = [
@@ -80,7 +81,7 @@ fn other_cues_do_not_move_the_count() {
         CueCommand::Wait,
     ];
     for (i, command) in others.into_iter().enumerate() {
-        state.apply_cue(&cue("0", 0.1 * (i + 1) as f64, command));
+        state.apply_cue(&cue("0", ms(100 * (i as u32 + 1)), command));
         assert_eq!(count(&state, "0"), 1, "cue {i} が回数を動かした");
         assert_eq!(
             count(&state, "1"),
@@ -94,13 +95,13 @@ fn other_cues_do_not_move_the_count() {
 #[test]
 fn mixed_clear_sequence_yields_these_counts() {
     let sequence = vec![
-        cue("0", 0.0, CueCommand::Text("あ".into())),
-        cue("1", 0.1, CueCommand::Text("い".into())),
-        cue("0", 0.2, CueCommand::Clear),
-        cue("1", 0.3, CueCommand::ClearAll),
-        cue("2", 0.4, CueCommand::Clear),
-        cue("0", 0.5, CueCommand::Text("う".into())),
-        cue("0", 0.6, CueCommand::ClearAll),
+        cue("0", TimeSpan::ZERO, CueCommand::Text("あ".into())),
+        cue("1", ms(100), CueCommand::Text("い".into())),
+        cue("0", ms(200), CueCommand::Clear),
+        cue("1", ms(300), CueCommand::ClearAll),
+        cue("2", ms(400), CueCommand::Clear),
+        cue("0", ms(500), CueCommand::Text("う".into())),
+        cue("0", ms(600), CueCommand::ClearAll),
     ];
     let mut a = TextLayerState::default();
     for c in &sequence {
@@ -124,9 +125,9 @@ fn scope_readers_read_the_ordinary_balloon_place() {
     use crate::place::{PlaceKey, TextPlace};
 
     let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
-    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
-    state.apply_cue(&cue("0", 0.6, CueCommand::Text("う".into())));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Text("あい".into())));
+    state.apply_cue(&cue("0", ms(500), CueCommand::Clear));
+    state.apply_cue(&cue("0", ms(600), CueCommand::Text("う".into())));
 
     let actor = ActorKey::from("0");
     let key = PlaceKey::balloon(&actor);

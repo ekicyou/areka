@@ -2,8 +2,25 @@
 
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry,
-    TransitionDef, TransitionRef, TransitionValue,
+    TimeDelta, TimePoint, TimeSpan, TransitionDef, TransitionRef, TransitionValue,
 };
+
+const ONE_SEC: TimeSpan = TimeSpan::from_millis(1000);
+
+/// ミリ秒の値の時刻。
+pub const fn at_ms(ms: i64) -> TimePoint {
+    TimePoint::from_ticks(ms * 10_000)
+}
+
+/// ミリ秒の値の長さ。
+pub const fn ms(ms: u32) -> TimeSpan {
+    TimeSpan::from_millis(ms)
+}
+
+/// ミリ秒の値の符号つきの差。
+pub const fn delta_ms(ms: i64) -> TimeDelta {
+    TimeDelta::from_ticks(ms * 10_000)
+}
 
 /// 最小の有効ドキュメント（変数 opacity + トランジション fade_t + ストーリーボード）
 pub fn minimal_trigger_doc(parent_name: &str, child_name: &str) -> DolaDocument {
@@ -25,7 +42,7 @@ pub fn minimal_trigger_doc(parent_name: &str, child_name: &str) -> DolaDocument 
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(ONE_SEC),
                 ..Default::default()
             })),
             ..Default::default()
@@ -46,7 +63,7 @@ pub fn minimal_trigger_doc(parent_name: &str, child_name: &str) -> DolaDocument 
 pub fn timed_trigger_doc(
     parent_name: &str,
     child_name: &str,
-    trigger_offset: Option<f64>,
+    trigger_offset: Option<TimeDelta>,
 ) -> DolaDocument {
     let opacity_var = AnimationVariableDef::Float {
         initial: 0.0,
@@ -60,7 +77,7 @@ pub fn timed_trigger_doc(
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                duration: Some(1.0),
+                duration: Some(ONE_SEC),
                 ..Default::default()
             })),
             keyframe: Some("kf1".to_string()),
@@ -80,7 +97,7 @@ pub fn timed_trigger_doc(
             transition: Some(TransitionRef::Inline(TransitionDef {
                 from: Some(TransitionValue::Scalar(1.0)),
                 to: Some(TransitionValue::Scalar(0.0)),
-                duration: Some(1.0),
+                duration: Some(ONE_SEC),
                 ..Default::default()
             })),
             ..Default::default()

@@ -1,8 +1,11 @@
 //! balloon_visibility の子: 見える・隠すの判断（`decide` と、ライフサイクル信号・利用者の中断・内容の増減の判定）。
 
+use dola::{TimePoint, TimeSpan};
+
+use super::super::talk_lifecycle::moved_time;
 use super::wait::decide_timeout;
 use super::{
-    BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility, TalkEnd,
+    BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility,
     TalkLifecycleSignal, TalkTimeout, VisibilityAction, VisibilityDecision, VisibilityLogEvent,
     VisibilityObservations, VisibilityTrigger,
 };
@@ -10,34 +13,27 @@ use super::{
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
 ///
 /// 判定は 4 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始・占有
-/// 終端・待ち時間の指定・選択肢の表示・トークの終わり・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
+/// 終端・待ち時間の指定・選択肢の表示・置き直し・トークの終わり・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
 /// ⑷ タイムアウトの計測・抑止・満了。⑵ が ⑶ より前にあるのは、中断で隠した scope を ⑶ 以降が
 /// 不可視として扱うためである。⑷ が最後にあるのは、満了で消す対象が「本フレームの発行を
 /// 反映したあとに可視である scope」だからである。
 ///
-/// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
-/// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
-/// 名乗ると、表示を失う側へ倒れるためである。
+/// `frame_now` はフレームの時刻（`resolve_frame_now`）。`None`（フレームの時刻が無い世界）の
+/// フレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を名乗ると、
+/// 表示を失う側へ倒れるためである。`obs.lifecycle` は、このフレームで時刻の来た知らせ（届いた順）。
 pub(super) fn decide(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<f64>,
-    timeout_secs: f64,
+    frame_now: Option<TimePoint>,
+    timeout: TimeSpan,
 ) -> VisibilityDecision {
     let mut logs: Vec<VisibilityLogEvent> = Vec::new();
 
-    let broke = apply_lifecycle_signals(state, obs, now_talk_time, &mut logs);
+    let broke = apply_lifecycle_signals(state, obs, frame_now, &mut logs);
     let broken = decide_user_break(state, obs, broke, &mut logs);
     let content = decide_content(state, obs, &broken, &mut logs);
-    let (timed_out, timeout_notice) = decide_timeout(
-        state,
-        obs,
-        now_talk_time,
-        timeout_secs,
-        &broken,
-        &content,
-        &mut logs,
-    );
+    let (timed_out, timeout_notice) =
+        decide_timeout(state, obs, frame_now, timeout, &broken, &content, &mut logs);
 
     // 並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で固定する。中断と次の会話の
     // 開始が同じフレームに届くと中断で隠した scope を表示し直すので、その組だけは順序に意味がある
@@ -108,15 +104,15 @@ pub(super) fn hide_reaches_boxes(trigger: VisibilityTrigger, break_latch: bool) 
 fn apply_lifecycle_signals(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
-    now_talk_time: Option<f64>,
+    frame_now: Option<TimePoint>,
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> bool {
     let mut broke = false;
     for signal in &obs.lifecycle {
         match *signal {
-            TalkLifecycleSignal::TalkStarted { talk_id } => {
+            TalkLifecycleSignal::TalkStarted { talk_id, .. } => {
                 state.talk_id = talk_id;
-                state.talk_end = TalkEnd::NotYet;
+                state.talk_end = None;
                 state.talk_timeout = TalkTimeout::Default;
                 state.talk_had_choice = false;
                 if let Some(deadline) = state.deadline.take() {
@@ -131,17 +127,13 @@ fn apply_lifecycle_signals(
                 // `per_scope.last_glyphs` は**保持する**。直後に届く全消去の観測がゼロへの
                 // 下降エッジとして読まれ、会話冒頭の全非表示を導く。
             }
-            TalkLifecycleSignal::UserBreak => {
+            TalkLifecycleSignal::UserBreak { .. } => {
                 // 本フレームで出ているバルーンをすべて隠し、次の会話が始まるまで内容では
                 // 出し直さない。
                 broke = true;
                 state.break_latch = true;
             }
-            TalkLifecycleSignal::DisplayEndAt(end) => {
-                // 送出側の畳み込み種（`talk_lifecycle.rs` の `horizon` の初期値）は負の無限大であり、非有限値は
-                // 送出側で弾かれるが負の有限値は通る。下限 0.0 で丸めて、起点が負へ回った分だけ
-                // 早く消える側へ倒れる乖離を断つ（非数もこの丸めで 0.0 になる）。
-                let end = end.max(0.0);
+            TalkLifecycleSignal::DisplayEndAt { end, .. } => {
                 let raised = state.display_end.is_none_or(|known| end > known);
                 if !raised {
                     continue;
@@ -150,7 +142,7 @@ fn apply_lifecycle_signals(
 
                 // 満了予定はトークの終わりの後にしか立たず、`talk_lifecycle.rs` の約束では終わりの後に
                 // 占有終端は届かない。約束に反して届いたときに黙って延ばさず、破棄して立て直させる。
-                if let Some(now) = now_talk_time
+                if let Some(now) = frame_now
                     && end > now
                     && let Some(deadline) = state.deadline.take()
                 {
@@ -160,17 +152,22 @@ fn apply_lifecycle_signals(
                     });
                 }
             }
-            TalkLifecycleSignal::BalloonTimeout(timeout) => {
+            TalkLifecycleSignal::BalloonTimeout { timeout, .. } => {
                 // 待ち時間の指定は到着順に上書きし、最後に届いた値が残る。計測は
                 // トークの終わりの後にしか立たず、終わりの後には指定が届かないので、立っている
                 // 計測を捨てる相手は構造上無い。
                 state.talk_timeout = timeout;
             }
-            TalkLifecycleSignal::ChoiceShown => {
+            TalkLifecycleSignal::ChoiceShown { .. } => {
                 state.talk_had_choice = true;
             }
+            TalkLifecycleSignal::OriginMoved(notice) => {
+                // 動かすのは表示の終わりだけ。期限はトークの終わりの後にだけ在り、置き直しの知らせは
+                // トークが終わる前にしか届かない。
+                state.display_end = state.display_end.map(|end| moved_time(&notice, end));
+            }
             TalkLifecycleSignal::TalkEnded { at } => {
-                state.talk_end = at.map_or(TalkEnd::TimeUnknown, TalkEnd::At);
+                state.talk_end = Some(at);
             }
         }
     }

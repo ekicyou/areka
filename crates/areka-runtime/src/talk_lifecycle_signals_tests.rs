@@ -2,8 +2,8 @@
 // BalloonLifecycleSink の知らせの檻
 //
 //   ⑴ 配送から受け取った番号が開始の合図に載る（受け取っていなければ無し）
-//   ⑵ 落ちるときの終わりの合図が、注入した時計の talk 相対秒で 1 回だけ出る
-//      （合図を送っていない複製は出さない・時計に起点が無ければ時刻は無しで、記録が残る）
+//   ⑵ 落ちるときの終わりの合図が、注入した時計の読みで 1 回だけ出る
+//      （合図を送っていない複製は出さない）
 //   ⑶ `\![set,balloontimeout,時間]` の時間の欄の読み（正・0・負・省略・空・読めない値）と、
 //      他の `\![set,…]` を拾わないこと・拾うたびの 1 行の記録
 //
@@ -16,16 +16,19 @@ use crate::talk_clock::{controllable_clock, set_now};
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::{at_ms, ms};
+use dola::{TimePoint, TimeSpan};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
-fn text_cue(at: f64, duration: f64) -> TalkCue {
-    TalkCue {
+fn text_cue(at: TimeSpan, duration: TimeSpan) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text("あ".into()),
+        ActorKey::from("0"),
+        CueCommand::Text("あ".into()),
         duration,
-    }
+    )
 }
 
 fn drain(rx: &Receiver<TalkLifecycleSignal>) -> Vec<TalkLifecycleSignal> {
@@ -45,7 +48,7 @@ fn timeouts(signals: &[TalkLifecycleSignal]) -> Vec<TalkTimeout> {
     signals
         .iter()
         .filter_map(|s| match s {
-            TalkLifecycleSignal::BalloonTimeout(t) => Some(*t),
+            TalkLifecycleSignal::BalloonTimeout { timeout, .. } => Some(*timeout),
             _ => None,
         })
         .collect()
@@ -63,10 +66,11 @@ fn begin_talk_number_rides_on_talk_started() {
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let mut first = talk_sink(&registered, Some(TalkId(7)));
-    first.emit(text_cue(0.0, 0.5));
+    first.emit(text_cue(ms(0), ms(500)));
     assert_eq!(
         drain(&rx).first(),
         Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
             talk_id: Some(TalkId(7))
         }),
         "番号 7 の複製の開始の合図に 7 が載る"
@@ -75,10 +79,11 @@ fn begin_talk_number_rides_on_talk_started() {
     drain(&rx);
 
     let mut second = talk_sink(&registered, Some(TalkId(8)));
-    second.emit(text_cue(0.0, 0.5));
+    second.emit(text_cue(ms(0), ms(500)));
     assert_eq!(
         drain(&rx).first(),
         Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
             talk_id: Some(TalkId(8))
         }),
         "次の複製は前の番号を持ち越さず、自分の番号を載せる"
@@ -93,10 +98,13 @@ fn talk_started_without_begin_talk_has_no_number() {
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let mut sink = talk_sink(&registered, None);
-    sink.emit(text_cue(0.0, 0.5));
+    sink.emit(text_cue(ms(0), ms(500)));
     assert_eq!(
         drain(&rx).first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None })
+        Some(&TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
+            talk_id: None
+        })
     );
 }
 
@@ -104,21 +112,18 @@ fn talk_started_without_begin_talk_has_no_number() {
 // ⑵ 終わりの合図
 // -----------------------------------------------------------------------------
 
-/// 落ちた瞬間の talk 相対秒（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
+/// 落ちた瞬間の時計の読み（注入した時計の値そのもの・丸めない）で、終わりの合図が 1 回だけ出て、
 /// そのトークの合図の最後に並ぶ。
 #[test]
 fn talk_ended_carries_the_injected_clock_once_when_dropped() {
     let (tx, rx) = channel();
     let (now, clock) = controllable_clock();
-    let registered = BalloonLifecycleSink::new(tx, clock.clone());
+    let registered = BalloonLifecycleSink::new(tx, clock);
 
-    // 文字の受け口（ClockedTextSink）が起点を決めた形: 壁 100.0 に at 0.0 が届いた → 起点 100.0。
-    set_now(&now, 100.0);
-    clock.observe_cue(0.0);
-
+    set_now(&now, at_ms(100_000));
     let mut sink = talk_sink(&registered, Some(TalkId(3)));
-    sink.emit(text_cue(0.0, 2.0));
-    set_now(&now, 101.234);
+    sink.emit(text_cue(ms(0), ms(2_000)));
+    set_now(&now, at_ms(101_234));
     drop(sink);
 
     let signals = drain(&rx);
@@ -127,12 +132,10 @@ fn talk_ended_carries_the_injected_clock_once_when_dropped() {
         .filter(|s| matches!(s, TalkLifecycleSignal::TalkEnded { .. }))
         .collect();
     assert_eq!(ended.len(), 1, "終わりの合図は 1 回だけ: {signals:?}");
-    let Some(TalkLifecycleSignal::TalkEnded { at: Some(at) }) = signals.last() else {
-        panic!("終わりの合図が最後に時刻つきで並ぶ: {signals:?}");
-    };
-    assert!(
-        (at - 1.234).abs() < 1e-9,
-        "落ちた瞬間の talk 相対秒 1.234 を運ぶ（フレームに丸めない）: {at}"
+    assert_eq!(
+        signals.last(),
+        Some(&TalkLifecycleSignal::TalkEnded { at: at_ms(101_234) }),
+        "落ちた瞬間の時計の読み 101234ms を運ぶ（フレームに丸めない）"
     );
 }
 
@@ -141,8 +144,7 @@ fn talk_ended_carries_the_injected_clock_once_when_dropped() {
 fn sink_that_sent_nothing_sends_no_talk_ended() {
     let (tx, rx) = channel();
     let (now, clock) = controllable_clock();
-    set_now(&now, 50.0);
-    clock.observe_cue(0.0);
+    set_now(&now, at_ms(50_000));
     let registered = BalloonLifecycleSink::new(tx, clock);
 
     let silent = talk_sink(&registered, Some(TalkId(1)));
@@ -155,41 +157,6 @@ fn sink_that_sent_nothing_sends_no_talk_ended() {
     );
 }
 
-/// 時計に起点が無ければ、終わりの合図は時刻無しで出て、時刻が取れなかったことが記録される。
-#[test]
-fn talk_ended_without_epoch_has_no_time_and_is_logged() {
-    let (tx, rx) = channel();
-    let (_now, clock) = controllable_clock();
-    let registered = BalloonLifecycleSink::new(tx, clock);
-    let mut sink = talk_sink(&registered, Some(TalkId(2)));
-    sink.emit(text_cue(0.0, 0.5));
-
-    let ((), logs) = capture_lines(LineFormat::LevelTargetFields, || drop(sink));
-
-    assert_eq!(
-        drain(&rx).last(),
-        Some(&TalkLifecycleSignal::TalkEnded { at: None }),
-        "起点の無い時計では時刻無し"
-    );
-    assert_eq!(
-        logs.iter().filter(|l| l.contains("level=WARN")).count(),
-        1,
-        "止まった時刻が取れなかったことを 1 行 WARN で残す: {logs:?}"
-    );
-}
-
-/// 時計の口: 起点があれば今の壁時刻から talk 相対秒を読み、無ければ無し。
-#[test]
-fn talk_clock_now_talk_time_reads_the_injected_clock() {
-    let (now, clock) = controllable_clock();
-    assert_eq!(clock.now_talk_time(), None, "起点が無ければ無し");
-    set_now(&now, 10.0);
-    clock.observe_cue(0.5);
-    set_now(&now, 12.0);
-    let t = clock.now_talk_time().expect("起点がある");
-    assert!((t - 2.5).abs() < 1e-9, "12.0 − (10.0 − 0.5) = 2.5: {t}");
-}
-
 // -----------------------------------------------------------------------------
 // ⑶ 待ち時間の指定
 // -----------------------------------------------------------------------------
@@ -198,9 +165,9 @@ fn talk_clock_now_talk_time_reads_the_injected_clock() {
 #[test]
 fn parse_balloon_timeout_reads_every_shape_of_the_value() {
     let cases: &[(Option<&str>, TalkTimeout, bool)] = &[
-        (Some("3000"), TalkTimeout::Millis(3000), false),
-        (Some("1"), TalkTimeout::Millis(1), false),
-        (Some(" 250 "), TalkTimeout::Millis(250), false),
+        (Some("3000"), TalkTimeout::After(ms(3_000)), false),
+        (Some("1"), TalkTimeout::After(ms(1)), false),
+        (Some(" 250 "), TalkTimeout::After(ms(250)), false),
         (Some("0"), TalkTimeout::Never, false),
         (Some("-1"), TalkTimeout::Never, false),
         (Some("-5000"), TalkTimeout::Never, false),
@@ -209,6 +176,8 @@ fn parse_balloon_timeout_reads_every_shape_of_the_value() {
         (Some("abc"), TalkTimeout::Default, true),
         (Some("1.5"), TalkTimeout::Default, true),
         (Some("99999999999999999999999"), TalkTimeout::Default, true),
+        // i64 には収まるが長さの型（100ns の数が i64）に収まらないミリ秒。
+        (Some("1000000000000000"), TalkTimeout::Default, true),
     ];
     for (value, timeout, unreadable) in cases {
         assert_eq!(
@@ -242,7 +211,7 @@ fn sink_picks_only_set_balloontimeout() {
     assert_eq!(
         timeouts(&drain(&rx)),
         vec![
-            TalkTimeout::Millis(3000),
+            TalkTimeout::After(ms(3_000)),
             TalkTimeout::Never,
             TalkTimeout::Default
         ],

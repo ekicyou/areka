@@ -32,6 +32,9 @@ pub(super) fn on_bind<O: SurfaceOutput>(
         return;
     }
 
+    // 出来事の時刻は合図の発火時刻。そこまでの区切りを今の着せ替えで判定してから替える。
+    let at = cue.fire_time;
+    let caught = loop_runtime.catch_up(&cue.actor, Slot::Shell, at, states);
     // 形ごとの当て方は `apply_bind_directive`（パーツ 1 つずつ `apply_named_bind`）。ここは記録と発行だけ。
     let mut last_changed: Option<DisplayCommand> = None;
     for applied in apply_bind_directive(states, bind_resolver, &cue.actor, &directive) {
@@ -99,10 +102,12 @@ pub(super) fn on_bind<O: SurfaceOutput>(
 
     if let Some(command) = last_changed {
         // 途中の姿は出さず、最後の集合で 1 件だけ。部品のコマを載せ直した Show があればそれを出す。
-        let at_ms = loop_runtime.event_ms();
         let command = loop_runtime
-            .refresh(&cue.actor, Slot::Shell, at_ms, states)
+            .refresh(&cue.actor, Slot::Shell, at, states)
             .unwrap_or(command);
+        emit_display(out, command);
+    } else if let Some(command) = caught {
+        // 着せ替えが変わらなくても、発火時刻まで進めた絵は出す。
         emit_display(out, command);
     }
 }

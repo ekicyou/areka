@@ -64,7 +64,7 @@ fn same_box_name_in_different_scopes_holds_separate_text() {
 fn clear_empties_only_destination_box_and_returns_to_write_start() {
     let mut state = written();
     let before = state.clone();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
 
     assert!(state.place_state(&at("0", boxed("b"))).unwrap().is_empty());
     for (actor, place) in [
@@ -96,7 +96,7 @@ fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
     // 箱の無い構成: 箱の場所は作らない。
     let mut plain = TextLayerState::default();
     write(&mut plain, "0", "ふ");
-    plain.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    plain.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
     assert!(plain.actor_state(&key("0")).unwrap().is_empty());
     assert_eq!(plain.clear_count(&key("0")), 1);
     write(&mut plain, "0", "へ");
@@ -108,7 +108,7 @@ fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
     // 箱を持つ構成で行き先が普通のバルーン: 普通のバルーンだけを消し、箱の文字は残す。
     let mut state = written();
     show(&mut state, "0", 3);
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::Clear));
     assert!(state.actor_state(&key("0")).unwrap().is_empty());
     assert_eq!(state.clear_count(&key("0")), 1);
     assert_eq!(place_items(&state, "0", boxed("a")), glyphs(&["あ"]));
@@ -120,7 +120,7 @@ fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
 #[test]
 fn clear_all_empties_every_place_of_every_scope() {
     let mut state = written();
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     let places: Vec<(PlaceKey, bool)> = state
         .places()
         .map(|(k, s)| (k.clone(), s.is_empty()))
@@ -176,6 +176,6 @@ fn existing_readers_return_balloon_place_values() {
         glyphs(&["ふ"])
     );
     assert!(state.actor_state(&key("1")).is_none());
-    assert_eq!(state.visible_glyphs(&key("0"), f64::MAX), 1);
-    assert_eq!(state.visible_glyphs(&key("1"), f64::MAX), 0);
+    assert_eq!(state.visible_glyphs(&key("0"), TimePoint::MAX), 1);
+    assert_eq!(state.visible_glyphs(&key("1"), TimePoint::MAX), 0);
 }

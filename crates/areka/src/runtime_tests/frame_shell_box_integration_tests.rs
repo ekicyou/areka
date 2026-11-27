@@ -16,7 +16,7 @@
 //   ⑶ 時間切れで箱を隠す印が立ち、箱の文字が消える。
 //   ⑷ `Status` の組へ箱のスコープが載る。
 //
-// 時刻はすべて注入（`FrameTime`＋`TalkClock` の epoch）で、実時間の待機は用いない。
+// 時刻はすべて注入（`FrameTime`）で、実時間の待機は用いない。
 // =============================================================================
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,7 +25,7 @@ use areka_emo_compose::{BindSet, EmoWorld, PatternState, fold_boxes};
 use areka_parsers::shell::{parse, parse_boxes};
 
 use areka_input::shell_box::ShellBoxHover;
-use areka_runtime::balloon_visibility::configured_timeout_secs;
+use areka_runtime::balloon_visibility::configured_timeout;
 use areka_runtime::shell_box_assets::ShellBoxAssets;
 use areka_runtime::target_map::shell_target;
 
@@ -79,8 +79,7 @@ impl Cage {
         let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let mut wiring = boot_wiring(present_rx, lifecycle_rx);
-        wiring.clock.observe_cue(0.0);
-        world.insert_resource(FrameTime(5.0));
+        world.insert_resource(FrameTime(dola::time::testing::at_ms(5000)));
 
         wiring = advance_frame(&mut world, wiring);
         assert_eq!(
@@ -145,12 +144,16 @@ impl Cage {
 
     /// 本番の adapter が流すのと同じ形で、scope の文字の層へ cue を当てる（時刻 0 起点）。
     fn cue(&self, scope: u32, command: CueCommand) {
-        self.wiring().runtime().borrow_mut().apply_cue(&TalkCue {
-            at: 0.0,
-            actor: ActorKey::from(scope.to_string()),
-            command,
-            duration: 0.0,
-        });
+        self.wiring()
+            .runtime()
+            .borrow_mut()
+            .apply_cue(&TalkCue::scheduled(
+                dola::TimePoint::ZERO,
+                dola::TimeSpan::ZERO,
+                ActorKey::from(scope.to_string()),
+                command,
+                dola::TimeSpan::ZERO,
+            ));
     }
 
     fn surface(&self, scope: u32, key: &str) {
@@ -308,7 +311,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
             cage.wiring()
                 .presenter()
                 .current_surface_id(shell_target(0)),
-            5.0,
+            dola::time::testing::at_ms(5_000),
         ),
         1,
         "窓に出ているのは箱の無いサーフェスで書いた文字だけ（箱の文字は窓へ混ざらない）"
@@ -348,15 +351,16 @@ fn scopes_are_judged_separately() {
 #[test]
 fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
-    let timeout_secs = configured_timeout_secs();
+    let timeout = configured_timeout();
     let mut cage = Cage::boot(SHELL, &[0]);
-    let display_end = 5.0;
+    let display_end = dola::time::testing::at_ms(5_000);
     // 時間切れの計測はトークの終わりが届いてから始まる。
     for signal in [
-        TalkLifecycleSignal::DisplayEndAt(display_end),
-        TalkLifecycleSignal::TalkEnded {
-            at: Some(display_end),
+        TalkLifecycleSignal::DisplayEndAt {
+            at: display_end,
+            end: display_end,
         },
+        TalkLifecycleSignal::TalkEnded { at: display_end },
     ] {
         cage.lifecycle_tx
             .send(signal)
@@ -384,8 +388,9 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     );
     assert_eq!(balloon_reports(&cage.reports), vec![vec![(0, 0)]]);
 
-    cage.world
-        .insert_resource(FrameTime(display_end + timeout_secs + 1.0));
+    cage.world.insert_resource(FrameTime(
+        display_end + timeout + dola::time::testing::ms(1_000),
+    ));
     let events = cage.frame();
     let marked: Vec<&str> = events
         .iter()

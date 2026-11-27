@@ -62,8 +62,8 @@ mod edge_case_tests {
                                     x3: 1.0,
                                 },
                             )),
-                            delay: 0.0,
-                            duration: Some(2.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(2000)),
                         })),
                         ..Default::default()
                     })
@@ -99,7 +99,7 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 2.0,
+                            delay: TimeSpan::from_millis(2000),
                             duration: None, // instant transition after delay
                         })),
                         ..Default::default()
@@ -131,8 +131,8 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::Single("start".to_string())),
                         ..Default::default()
@@ -164,8 +164,8 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("a".to_string()),
                         ..Default::default()
@@ -177,8 +177,8 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("b".to_string()),
                         ..Default::default()
@@ -190,8 +190,8 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(3.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::Multiple(vec![
                             "a".to_string(),
@@ -226,8 +226,8 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(1.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         keyframe: Some("visible".to_string()),
                         ..Default::default()
@@ -239,12 +239,12 @@ mod edge_case_tests {
                             to: Some(TransitionValue::Scalar(2.0)),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         at: Some(KeyframeRef::WithOffset {
                             keyframes: KeyframeNames::Single("visible".to_string()),
-                            offset: 0.5,
+                            offset: TimeDelta::from_millis_saturating(500),
                         }),
                         ..Default::default()
                     })
@@ -287,7 +287,7 @@ mod edge_case_tests {
                             }))),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
+                            delay: TimeSpan::ZERO,
                             duration: None,
                         })),
                         ..Default::default()
@@ -342,8 +342,8 @@ mod edge_case_tests {
                             ))),
                             relative_to: None,
                             easing: None,
-                            delay: 0.0,
-                            duration: Some(1.0),
+                            delay: TimeSpan::ZERO,
+                            duration: Some(TimeSpan::from_millis(1000)),
                         })),
                         ..Default::default()
                     })

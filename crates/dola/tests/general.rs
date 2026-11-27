@@ -5,3 +5,5 @@ mod builder_test;
 mod core_types_test;
 #[path = "general/integration_test/mod.rs"]
 mod integration_test;
+#[path = "general/time_range_test.rs"]
+mod time_range_test;

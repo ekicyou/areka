@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
+use areka_kanade::{BootOrigin, CloseReason, KanadeNotice};
 #[cfg(test)]
 use areka_kanade::{ShioriBackend, ShioriUnblock};
 use bevy_ecs::schedule::Schedules;
@@ -207,8 +207,9 @@ pub struct SwitchRig {
     /// `Update` の段（致命の机の汲み出し）を回す足場は必ず立てる。本番は App の置き場が必ず在り、
     /// 置き場が無いと App スコープの投函が致命の机で終了を招くため。
     app_memory: Rc<Cell<bool>>,
-    /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
-    talk_clock_ms: u64,
+    /// 注入した Tick の合成の時刻（UI の時計 `dola::now` と同じ基準から数える・単調増加・ゴーストを
+    /// またいでも戻さない）。
+    talk_clock: dola::TimePoint,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
     sample: RigSample,
 }
@@ -353,7 +354,7 @@ impl SwitchRig {
             boots,
             factory_calls,
             app_memory,
-            talk_clock_ms: 0,
+            talk_clock: dola::now(),
             sample,
         }
     }
@@ -587,13 +588,13 @@ impl SwitchRig {
     ///
     /// dispatcher は Tick を届いた順に消化し、再生中の台詞へ「その台詞が最初に見た Tick からの経過」と
     /// して渡すだけで、合成の締切も後戻りする状態も持たない。だから足場の時計が相手の処理より先へ
-    /// 進んでも、増えるのは順番待ちの列だけで、合成の締切（kanade の `close_talk_deadline_ms` ＝
+    /// 進んでも、増えるのは順番待ちの列だけで、合成の締切（kanade の `close_talk_deadline` ＝
     /// 30,000 ms）だけが切れる赤は作らない。これが「追い越しうる時刻には頭打ちを置く」
     /// （`spine_wait.rs`）の例外である理由で、時計の先行の檻（`ghost_switch_talk_clock_tests.rs`）が
     /// 固定する。kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
     pub fn inject_talk_tick(&mut self, step_ms: u64) {
-        self.talk_clock_ms += step_ms;
-        let now = MonotonicMs(self.talk_clock_ms);
+        self.talk_clock = self.talk_clock + dola::TimeSpan::from_millis(step_ms as u32);
+        let now = self.talk_clock;
         if let Some(dispatcher) = self
             .world
             .get_non_send::<GhostSlot>()
@@ -603,6 +604,16 @@ impl SwitchRig {
             // 降ろしている最中の dispatcher は閉じていてよい（次の反復で次のゴーストへ届く）。
             let _ = dispatcher.send(DispatcherMsg::Tick { now });
         }
+    }
+
+    /// 巡ごとに `FrameTime` へ置くフレームの時刻: 実の時計と注入した Tick の時刻の遅い方。
+    ///
+    /// 文字の層とバルーンの寿命は、台本の時刻（Tick から決まる合図の発火時刻）と現実の出来事の時刻
+    /// （`TalkClock`＝`dola::now`）を同じ時計で比べ、フレームの時刻が届いた物から当てる。Tick は実時間より
+    /// 先へ進みうるので、どちらにも追い越されない値を置く（実の時計だけだと先へ進んだ台詞の字が
+    /// 実時間が追い付くまで出ない）。
+    pub fn frame_time(&self) -> dola::TimePoint {
+        self.talk_clock.max(dola::now())
     }
 
     /// 台詞の時計を進めずに回す: 通知の相と `Input` の段（登録済みの取り出しの系＝台本の切替要求と

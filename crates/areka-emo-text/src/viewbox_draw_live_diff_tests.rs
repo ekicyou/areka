@@ -9,6 +9,9 @@ use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
+use dola::{TimePoint, TimeSpan};
 
 // ════ live-diff pixel 等価主檻 ════
 //
@@ -95,41 +98,44 @@ impl LiveDiffRig {
         self.state.apply_cue(cue);
     }
 
-    fn apply_text(&mut self, at: f64, s: &str) {
-        let cue = TalkCue {
+    fn apply_text(&mut self, at: TimeSpan, s: &str) {
+        let cue = TalkCue::scheduled(
+            TimePoint::ZERO,
             at,
-            actor: self.actor.clone(),
-            command: CueCommand::Text(s.to_owned()),
-            duration: 0.0,
-        };
+            self.actor.clone(),
+            CueCommand::Text(s.to_owned()),
+            TimeSpan::ZERO,
+        );
         self.apply(&cue);
     }
 
     /// 改行マーカー（ratio 1.0）の cue を適用する。
-    fn apply_newline(&mut self, at: f64) {
-        let cue = TalkCue {
+    fn apply_newline(&mut self, at: TimeSpan) {
+        let cue = TalkCue::scheduled(
+            TimePoint::ZERO,
             at,
-            actor: self.actor.clone(),
-            command: CueCommand::NewLine { ratio: 1.0 },
-            duration: 0.0,
-        };
+            self.actor.clone(),
+            CueCommand::NewLine { ratio: 1.0 },
+            TimeSpan::ZERO,
+        );
         self.apply(&cue);
     }
 
-    fn apply_clear(&mut self, at: f64) {
-        let cue = TalkCue {
+    fn apply_clear(&mut self, at: TimeSpan) {
+        let cue = TalkCue::scheduled(
+            TimePoint::ZERO,
             at,
-            actor: self.actor.clone(),
-            command: CueCommand::Clear,
-            duration: 0.0,
-        };
+            self.actor.clone(),
+            CueCommand::Clear,
+            TimeSpan::ZERO,
+        );
         self.apply(&cue);
     }
 
     /// 注入時刻 `t` で state から可視 prefix→純粋レイアウト→canvas/window を導き、オラクルと
     /// viewbox を**同一入力**で描いて read_back を byte 比較する。`expect_opaque` で content
     /// フレーム（非透明 > 0）／Clear フレーム（全域透明）を区別し、空面同士の vacuous な一致を排除する。
-    fn checkpoint(&mut self, label: &str, t: f64, expect_opaque: bool) -> VisibleWindow {
+    fn checkpoint(&mut self, label: &str, t: TimePoint, expect_opaque: bool) -> VisibleWindow {
         let (_, _, canvas, window) = state_frame(
             &self.state,
             &self.actor,
@@ -174,7 +180,7 @@ impl LiveDiffRig {
     /// （小数アキュムレータで |committed − pos| ≤ 0.5 ⇒ 確定 content 位置差 ≤ ceil(0.5×k)）。
     /// k≠1.0 の実 GPU 描画経路（小数アキュムレータ→whole-pixel blit→実描画→readback）を実際に
     /// 走らせて検証する（従来 k=1.0 でしか走っていなかった経路）。返り値は VisibleWindow。
-    fn checkpoint_block_tol(&mut self, label: &str, t: f64, tol: u32) -> VisibleWindow {
+    fn checkpoint_block_tol(&mut self, label: &str, t: TimePoint, tol: u32) -> VisibleWindow {
         let (_, lines, canvas, window) = state_frame(
             &self.state,
             &self.actor,
@@ -266,17 +272,17 @@ fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
 /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
 /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用して AA ガードの実効性を検証する）。
 ///
-/// 本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み content が完全
+/// 本シナリオは全 cue を `at=0ms` で発行し、各 checkpoint 時点までに追記済み content が完全
 /// リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを伴って実体化し、
 /// あふれは改行の後ろのグリフを追記した checkpoint で発火する。
 fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     // ① あふれ前（3 行・可視窓は不動）。
-    ld.apply_text(0.0, "あ");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "い");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "う");
-    let w = ld.checkpoint("あふれ前", 10.0, true);
+    ld.apply_text(ms(0), "あ");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "い");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "う");
+    let w = ld.checkpoint("あふれ前", at_ms(10000), true);
     assert_eq!(
         (w.first_visible_line, w.block_offset),
         (0, 0.0),
@@ -284,9 +290,9 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     );
 
     // ② スクロール発火直後（4 行目であふれ・可視窓が初めて移動）。
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "え");
-    let w = ld.checkpoint("スクロール発火直後", 20.0, true);
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "え");
+    let w = ld.checkpoint("スクロール発火直後", at_ms(20000), true);
     assert!(
         w.first_visible_line >= 1,
         "あふれ発火で可視窓が移動する（先頭可視行 ≥ 1）: {w:?}"
@@ -297,29 +303,29 @@ fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     );
 
     // ③ 連続スクロール（さらに 2 行追記・複数回スクロール）。
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "お");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "か");
-    let w = ld.checkpoint("連続スクロール", 30.0, true);
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "お");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "か");
+    let w = ld.checkpoint("連続スクロール", at_ms(30000), true);
     assert!(
         w.first_visible_line >= 2,
         "連続スクロールで可視窓が複数行進む（先頭可視行 ≥ 2）: {w:?}"
     );
 
     // ④ Clear 直後（両方式の Clear 適用点を経由・全域透明）。
-    ld.apply_clear(0.0);
-    let w = ld.checkpoint("Clear 直後", 40.0, false);
+    ld.apply_clear(ms(0));
+    let w = ld.checkpoint("Clear 直後", at_ms(40000), false);
     assert_eq!(
         w.first_visible_line, 0,
         "Clear 後は既定窓（先頭可視行 0）: {w:?}"
     );
 
     // ⑤ Clear 後再追記（新規 content が全域ダーティで復帰）。
-    ld.apply_text(0.0, "ら");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "り");
-    let w = ld.checkpoint("Clear 後再追記", 50.0, true);
+    ld.apply_text(ms(0), "ら");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "り");
+    let w = ld.checkpoint("Clear 後再追記", at_ms(50000), true);
     assert_eq!(
         w.first_visible_line, 0,
         "短い再追記はあふれない（先頭可視行 0）: {w:?}"
@@ -358,28 +364,28 @@ fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol
     let mut ld = LiveDiffRig::new_scaled(mode, image, k);
 
     // ① あふれ前（3 行）。
-    ld.apply_text(0.0, "あ");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "い");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "う");
-    ld.checkpoint_block_tol("k≠1 あふれ前", 10.0, tol);
+    ld.apply_text(ms(0), "あ");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "い");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "う");
+    ld.checkpoint_block_tol("k≠1 あふれ前", at_ms(10000), tol);
 
     // ② スクロール発火直後。
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "え");
-    let w = ld.checkpoint_block_tol("k≠1 スクロール発火", 20.0, tol);
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "え");
+    let w = ld.checkpoint_block_tol("k≠1 スクロール発火", at_ms(20000), tol);
     assert!(
         w.first_visible_line >= 1,
         "k≠1 あふれ発火で可視窓が移動: {w:?}"
     );
 
     // ③ 連続スクロール。
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "お");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "か");
-    let w = ld.checkpoint_block_tol("k≠1 連続スクロール", 30.0, tol);
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "お");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "か");
+    let w = ld.checkpoint_block_tol("k≠1 連続スクロール", at_ms(30000), tol);
     assert!(
         w.first_visible_line >= 2,
         "k≠1 連続スクロールで可視窓が複数行進む: {w:?}"
@@ -458,19 +464,19 @@ fn live_diff_proportional_font_matches_oracle_byte_for_byte() {
 /// 描く筋と、絵文字が窓の外へ出て比べる画素に入らない筋を排す）。
 fn run_live_diff_emoji_scenario(mode: WritingMode, image: (u32, u32)) {
     let mut ld = LiveDiffRig::new(mode, image);
-    ld.apply_text(0.0, "あ");
-    ld.apply_newline(0.0);
-    ld.apply_text(0.0, "今日は家族👨‍👩‍👧と😀");
-    let w = ld.checkpoint("絵文字の台詞", 10.0, true);
+    ld.apply_text(ms(0), "あ");
+    ld.apply_newline(ms(0));
+    ld.apply_text(ms(0), "今日は家族👨‍👩‍👧と😀");
+    let w = ld.checkpoint("絵文字の台詞", at_ms(10000), true);
     assert_eq!(w.first_visible_line, 0, "送りの前は先頭可視行 0: {w:?}");
     assert_emoji_colored(&ld, "絵文字の台詞");
 
     // あと 2 行足して 4 行目であふれさせる。
     for s in ["い", "う"] {
-        ld.apply_newline(0.0);
-        ld.apply_text(0.0, s);
+        ld.apply_newline(ms(0));
+        ld.apply_text(ms(0), s);
     }
-    let w = ld.checkpoint("絵文字の行が送られた後", 20.0, true);
+    let w = ld.checkpoint("絵文字の行が送られた後", at_ms(20000), true);
     assert_eq!(
         w.first_visible_line, 1,
         "送りは 1 行だけで、絵文字の行（2 行目）が先頭可視行になる: {w:?}"
@@ -535,14 +541,19 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
     let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
-    // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
-    // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
-    apply_fixture_script(&mut state, &actor, [0.0, 0.5, 1.2, 2.0], 0.05);
+    // reveal は配送 duration 由来（interval = duration / N）。Text へ N×50 ms を焼き込むと
+    // 各 chunk 内が 1 字 50 ms のペースで per-glyph 進行する（chunk 境界は at で gate）。
+    apply_fixture_script(
+        &mut state,
+        &actor,
+        [ms(0), ms(500), ms(1200), ms(2000)],
+        ms(50),
+    );
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム）。各フレームで byte 比較。
     let mut checked_opaque = false;
-    let mut t = 0.0f64;
-    while t <= 3.05 {
+    let mut t = TimePoint::ZERO;
+    while t <= at_ms(3050) {
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, t, region, mode, font.height, &metrics);
         let (ob, vb) = pair.render(
@@ -558,13 +569,13 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
             let diff_rows = diff_rows(&ob, &vb, w, h);
             panic!(
                 "Yu Gothic UI 実 fixture で viewbox が oracle と diverge（行下端はみ出しインクの切り落とし・D2）: \
-                 t={t:.2} visible={visible} 相違行 y={diff_rows:?}"
+                 t={t} visible={visible} 相違行 y={diff_rows:?}"
             );
         }
         if visible > 0 {
             checked_opaque |= opaque_count(&vb) > 0;
         }
-        t += 0.02;
+        t = t + ms(20);
     }
     assert!(
         checked_opaque,

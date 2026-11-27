@@ -19,6 +19,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use dola::time::testing::ms;
 use support::fixture::read_balloon_file;
 
 use std::collections::BTreeMap;
@@ -99,7 +100,7 @@ fn runtime() -> TextLayerRuntime {
 // ── 台本（指令の列） ──
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    support::cue(actor, 0.0, command, 0.0)
+    support::cue(actor, ms(0), command, ms(0))
 }
 
 fn s(actor: &str, id: &str) -> TalkCue {

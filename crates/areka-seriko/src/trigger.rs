@@ -17,21 +17,23 @@
 //! - `talk`: 数え始めから数値分の文字ごとの区切りを、刻み 1 回分の文字の窓（[`TalkWindow`]）が
 //!   越えた判定で鳴る。開始の時刻は区切りの文字が現れた時刻そのもの（判定の時刻ではない・見え始め
 //!   より前なら見え始め）。
-//!   1 回の窓で区切りを 2 つ以上越えても最新の 1 つだけ。数えは判定の後に
-//!   [`Armed::advance_talk`] で進め、再生中に越えた区切りは後から鳴らない。
+//!   1 回の窓で区切りを 2 つ以上越えたら、越えた区切りを古い順に全部、それぞれの開始の時刻で判定する
+//!   （同じ時刻に重なった区切りは 1 つ）。数えは判定の後に [`Armed::advance_talk`] で進め、再生中に
+//!   越えた区切りは後から鳴らない。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::ActorKey;
+use dola::TimePoint;
 
 use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
-use crate::timeline::lap_of;
+use crate::timeline::{elapsed_since, lap_of};
 
 /// 面（一番上の面、または見えている部品 1 つ）が見え始めてからの引き金の状態。
 pub(crate) struct Armed {
-    /// 見えている間の起点（ms）。隠れている（バルーンの窓が閉じている）間は `None`。
-    visible_since: Option<u64>,
+    /// 見えている間の起点。隠れている（バルーンの窓が閉じている）間は `None`。
+    visible_since: Option<TimePoint>,
     /// `runonce` を鳴らした animation の番号（この状態が在る間は 2 度と鳴らさない）。
     fired: BTreeSet<u32>,
     /// `periodic` の animation ごとに、最後に判定した周（載っていなければ 0＝まだ）。
@@ -56,8 +58,8 @@ pub(crate) struct TalkWindow<'a> {
     pub(crate) prev_seen: u64,
     /// 今見えている文字の序数。
     pub(crate) now_seen: u64,
-    /// 序数 → 壁時刻（ms・最も近い 1 ms へ丸める）。
-    pub(crate) wall_ms: &'a dyn Fn(u64) -> u64,
+    /// 序数 → 壁時刻。
+    pub(crate) wall: &'a dyn Fn(u64) -> TimePoint,
 }
 
 impl Armed {
@@ -65,9 +67,9 @@ impl Armed {
     ///
     /// `revealed` は今現れている文字の序数で、`talk` はここから 0 と数える（`None` なら数えを
     /// 持たない＝表に `talk` が無い面・窓が閉じている面・部品）。
-    pub(crate) fn arm(at_ms: u64, open: bool, revealed: Option<u64>) -> Armed {
+    pub(crate) fn arm(at: TimePoint, open: bool, revealed: Option<u64>) -> Armed {
         Armed {
-            visible_since: open.then_some(at_ms),
+            visible_since: open.then_some(at),
             fired: BTreeSet::new(),
             last_lap: BTreeMap::new(),
             talk: revealed.map(TalkCursor::starting_at),
@@ -84,77 +86,90 @@ impl Armed {
     /// 窓が開いた: 起点を置き直す（`periodic` の周は 0 から・`talk` は `revealed` を 0 と数え直す）。
     ///
     /// `revealed` は [`Armed::arm`] と同じ。
-    pub(crate) fn show(&mut self, at_ms: u64, revealed: Option<u64>) {
-        self.visible_since = Some(at_ms);
+    pub(crate) fn show(&mut self, at: TimePoint, revealed: Option<u64>) {
+        self.visible_since = Some(at);
         self.last_lap.clear();
         self.talk = revealed.map(TalkCursor::starting_at);
     }
 
-    /// 在る状態へ窓の開け閉めを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（同じなら
+    /// 在る状態へ窓の開け閉めを写す: 閉じたら隠し、開いたら `at` を新しい起点にして現す（同じなら
     /// 何もしない＝隠す・現すは 1 回ずつ）。`revealed` は [`Armed::arm`] と同じ。
-    pub(crate) fn follow(&mut self, open: bool, at_ms: u64, revealed: Option<u64>) {
+    pub(crate) fn follow(&mut self, open: bool, at: TimePoint, revealed: Option<u64>) {
         match (open, self.visible_since.is_some()) {
-            (true, false) => self.show(at_ms, revealed),
+            (true, false) => self.show(at, revealed),
             (false, true) => self.hide(),
             _ => {}
         }
     }
 
-    /// 今の判定で `anim` を始めるなら、何時に始まったことにするかを返す（再生中かは見ず、状態も変えない）。
+    /// 今の判定で `anim` を始めるなら、何時に始まったことにするかを、古い順に返す（再生中かは見ず、状態も
+    /// 変えない）。
     ///
-    /// 隠れている間は始めない。返すのは判定の時刻 `now_ms` でなく開始の時刻（`runonce` は見え始め・
+    /// 隠れている間は始めない。返すのは判定の時刻 `now` でなく開始の時刻（`runonce` は見え始め・
     /// `periodic` は周の境目・`talk` は区切りの文字が現れた時刻で、見え始めより前なら見え始め）。
+    /// `runonce`・`periodic` は多くて 1 つ。`talk` は窓が越えた区切りの全部（同じ時刻は 1 つ）で、呼び手が
+    /// 1 つずつ、その時刻に再生中かを測って決める。
     /// 呼び手は開始の時刻の順に並べ、その時刻までの働きのコマを当ててから、その時刻に再生中かを測って [`Armed::commit`] で決める。その時刻
     /// ちょうどに終わった再生は再生中でないので、長さが周期ちょうどの animation も毎周鳴り、遅れた刻みが
     /// 見た境目も、その時刻に再生中だったなら飛ばす。`talk` は `talk`（文字の
     /// 窓）が無ければ始めず、数えはここでは進めない（窓 1 つを一番上と部品の何本もの animation が読むので、
     /// 進めるのは全部の判定の後の [`Armed::advance_talk`]）。抽選の引き金と `always` はここへ来ない前提で、
     /// 来ても何も返さない。
-    pub(crate) fn next_start(
+    pub(crate) fn next_starts(
         &self,
         anim: &LoopAnimation,
-        now_ms: u64,
+        now: TimePoint,
         talk: Option<&TalkWindow<'_>>,
-    ) -> Option<u64> {
-        let since = self.visible_since?;
+    ) -> Vec<TimePoint> {
+        let Some(since) = self.visible_since else {
+            return Vec::new();
+        };
         match anim.trigger {
-            LoopTrigger::Runonce => (!self.fired.contains(&anim.id)).then_some(since),
-            LoopTrigger::Periodic { period_ms } => {
-                let (lap, _) = lap_of(now_ms.saturating_sub(since), period_ms);
+            LoopTrigger::Runonce => (!self.fired.contains(&anim.id))
+                .then_some(since)
+                .into_iter()
+                .collect(),
+            LoopTrigger::Periodic { period } => {
+                let (lap, _) = lap_of(elapsed_since(now, since), period);
                 // 周の数は経過を周期で割った商なので、掛け戻しは今の時刻を超えない。
                 (lap > self.last_lap.get(&anim.id).copied().unwrap_or(0))
-                    .then(|| since + lap * period_ms.get())
+                    .then(|| since + period.mul_div(lap, 1))
+                    .into_iter()
+                    .collect()
             }
             LoopTrigger::Talk { every } => {
-                let window = talk?;
+                let Some(window) = talk else {
+                    return Vec::new();
+                };
                 let every = u64::from(every.get());
-                // 今見えている数が数え始めより手前（消去で切り詰められた刻み）なら、越えた区切りは 0。
+                // k 番目の区切りの文字の序数は base + k × every − 1。今見えている数が数え始めより手前
+                // （消去で切り詰められた刻み）なら、越えた区切りは 0。前の判定までに数え済みの区切り
+                // （序数が prev_seen より前）は鳴らし済みか見送り済み。今見えている数が減った刻みも外れる。
                 let crossed = window.now_seen.saturating_sub(window.base) / every;
-                if crossed == 0 {
-                    return None;
-                }
-                // 越えた区切りのうち最新の文字の序数（今見えている数を超えない）。前の判定までに
-                // 数え済みなら鳴らし済みか見送り済み。今見えている数が減った刻みも、ここで外れる。
+                let first = window.prev_seen.saturating_sub(window.base) / every + 1;
                 // 見え始めより前には始めない（その刻みで新しく見えた部品は、見えた時刻に始まる）。
-                let glyph = window.base + crossed * every - 1;
-                (glyph >= window.prev_seen).then(|| (window.wall_ms)(glyph).max(since))
+                let mut starts: Vec<TimePoint> = (first..=crossed)
+                    .map(|k| (window.wall)(window.base + k * every - 1).max(since))
+                    .collect();
+                // 字の時刻は単調なので、同じ時刻の区切りは隣り合う（最初の 1 つで始め、後ろは再生中）。
+                starts.dedup();
+                starts
             }
             LoopTrigger::Random { .. }
             | LoopTrigger::BindRandom { .. }
             | LoopTrigger::Always { .. }
-            | LoopTrigger::CallOnly => None,
+            | LoopTrigger::CallOnly => Vec::new(),
         }
     }
 
-    /// [`Armed::next_start`] が返した `at` で決める（`playing` はその時刻に同じ animation が再生中か）。
+    /// [`Armed::next_starts`] が返した `at` で決める（`playing` はその時刻に同じ animation が再生中か）。
     /// 再生中でなければ真を返す。再生中でも `periodic` は周の数えを進め、`runonce` は印を付ける（見送った
     /// 回は後から鳴らない＝過ぎた時刻で鳴り直して働きのコマを 2 度当てない）。
-    pub(crate) fn commit(&mut self, anim: &LoopAnimation, at: u64, playing: bool) -> bool {
-        if let (LoopTrigger::Periodic { period_ms }, Some(since)) =
-            (anim.trigger, self.visible_since)
+    pub(crate) fn commit(&mut self, anim: &LoopAnimation, at: TimePoint, playing: bool) -> bool {
+        if let (LoopTrigger::Periodic { period }, Some(since)) = (anim.trigger, self.visible_since)
         {
             self.last_lap
-                .insert(anim.id, at.saturating_sub(since) / period_ms.get());
+                .insert(anim.id, lap_of(elapsed_since(at, since), period).0);
         }
         if anim.trigger == LoopTrigger::Runonce {
             self.fired.insert(anim.id);
@@ -181,8 +196,8 @@ impl Armed {
             let dropped = cursor.seen.saturating_sub(total);
             cursor.seen -= dropped;
             // ponytail: 数え始めの序数が捨てられた数より小さいと 0 で止まり、数えた数が減る（次の区切りが
-            // 遅れる）。数え済みが列を超えるのは、刻みの間に構えた直後（数えた数 0）と、起点の見積もりが
-            // 前へ動いて現れた数が減って見える間に消去が届いたとき。後の場合にここへ届くと区切りが 1 回
+            // 遅れる）。数え済みが列を超えるのは、刻みの間に構えた直後（数えた数 0）と、字の時刻が後ろへ
+            // 動いて現れた数が減って見える間に消去が届いたとき。後の場合にここへ届くと区切りが 1 回
             // 遅れる。届くようなら数え始めを符号つきにする。
             cursor.base = cursor.base.saturating_sub(dropped);
         }
@@ -208,7 +223,7 @@ impl LoopTrigger {
 /// 文言の「part 」を足す（一番上と部品で同じ行の形）。3 語でない引き金は記録しない。
 pub(crate) fn log_fired(
     anim: &LoopAnimation,
-    started_at_ms: u64,
+    started_at: TimePoint,
     scope: &ActorKey,
     slot: Slot,
     part: Option<&dyn std::fmt::Display>,
@@ -222,7 +237,7 @@ pub(crate) fn log_fired(
             slot = ?slot,
             part,
             animation_id = anim.id,
-            started_at_ms,
+            %started_at,
             "seriko: {who}trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
         ),
         LoopTrigger::Periodic { .. } => tracing::info!(
@@ -230,7 +245,7 @@ pub(crate) fn log_fired(
             slot = ?slot,
             part,
             animation_id = anim.id,
-            started_at_ms,
+            %started_at,
             "seriko: {who}trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
         ),
         LoopTrigger::Talk { .. } => tracing::debug!(
@@ -238,7 +253,7 @@ pub(crate) fn log_fired(
             slot = ?slot,
             part,
             animation_id = anim.id,
-            started_at_ms,
+            %started_at,
             "seriko: {who}trigger talk を鳴らした（再生開始・先頭コマから・要件 4.1）"
         ),
         _ => {}

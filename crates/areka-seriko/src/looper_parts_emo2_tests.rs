@@ -19,15 +19,16 @@ use crate::bind::build_static_bindset;
 use crate::resolve::SurfaceTarget;
 use crate::state::ApplyOutcome;
 use areka_emo_compose::{ComposeMethod, PatternState};
+use dola::time::testing::{at_ms, ms};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// 乱数の種（本番と同じ `seeded_rng`）。
 const SEED: u64 = 20_261_004;
 /// 回す長さ（ms）。`\1` のまばたきが何度も発火する長さ。
-const RUN_MS: u64 = 60_000;
+const RUN_MS: i64 = 60_000;
 /// この時刻を越えた最初の刻みの前に、`\1` を 10 → 2200 へ切り替える（2210 側も回すため）。
-const SWITCH_MS: u64 = 30_000;
+const SWITCH_MS: i64 = 30_000;
 
 /// 実物の emo2 のシェルの表（本番と同じ `EmoWorld::build` → `AnimationTable::from_world`）。
 pub(crate) fn emo2_shell_table() -> AnimationTable {
@@ -53,8 +54,13 @@ fn counting_seeded_rng(seed: u64) -> (LoopRng, Arc<AtomicUsize>) {
 }
 
 /// 33〜67ms の決まった揺らぎを持つ「普通の」刻みの間隔（880ms には遠く届かない）。
-fn step_ms(i: u64) -> u64 {
-    33 + (i * 13) % 35
+fn step(i: u64) -> TimeSpan {
+    ms(33 + (i * 13 % 35) as u32)
+}
+
+/// 行の頭に書く時刻（ミリ秒の整数。期待の行はこの形で採ってある）。
+fn ms_text(t: TimePoint) -> i64 {
+    t.as_ticks() / ms(1).as_ticks()
 }
 
 /// 発行された `Show` 1 件を `"時刻 scope 面 [animation:コマ ...]"` の 1 行にする。
@@ -62,7 +68,7 @@ fn step_ms(i: u64) -> u64 {
 /// コマは emo2 では全部 overlay・位置 0,0 なのでここで確かめ、行には番号だけを残す。
 /// `PatternState` が一番上のコマ以外を何も運んでいないことも、走査で組み直した値との
 /// 等しさで確かめる（部品の欄が入った後に、普通の刻みで部品のコマが載らないことの檻）。
-fn show_line(now_ms: u64, cmd: &DisplayCommand, binds: &areka_emo_compose::BindSet) -> String {
+fn show_line(now: TimePoint, cmd: &DisplayCommand, binds: &areka_emo_compose::BindSet) -> String {
     let DisplayCommand::Show {
         scope,
         surface_id,
@@ -86,7 +92,8 @@ fn show_line(now_ms: u64, cmd: &DisplayCommand, binds: &areka_emo_compose::BindS
     }
     assert_eq!(&rebuilt, pattern, "一番上のコマ以外を運ばない");
     format!(
-        "{now_ms} {} {surface_id} [{}]",
+        "{} {} {surface_id} [{}]",
+        ms_text(now),
         scope.as_str(),
         frames.join(" ")
     )
@@ -109,10 +116,10 @@ fn emo2_normal_ticks_match_head_shows_and_rng_calls() {
 
     let mut lines = Vec::new();
     let mut switched = false;
-    let mut now = 0;
+    let mut now = at_ms(0);
     let mut i = 0;
-    while now <= RUN_MS {
-        if !switched && now > SWITCH_MS {
+    while now <= at_ms(RUN_MS) {
+        if !switched && now > at_ms(SWITCH_MS) {
             // actor の Emote の扱い（apply が Changed なら発行し、その slot の再生を捨てる）と同じ手順。
             if let ApplyOutcome::Changed(cmd) = states.apply(&kero, SurfaceTarget::Show(2200)) {
                 lines.push(format!("switch {}", show_line(now, &cmd, &binds)));
@@ -123,7 +130,7 @@ fn emo2_normal_ticks_match_head_shows_and_rng_calls() {
         for cmd in rt.on_tick(now, &mut states) {
             lines.push(show_line(now, &cmd, &binds));
         }
-        now += step_ms(i);
+        now = now + step(i);
         i += 1;
     }
 
@@ -241,7 +248,7 @@ fn scripted_rng(values: &'static [u32]) -> (LoopRng, Arc<AtomicUsize>) {
 ///
 /// 行は `"時刻 scope 面 [animation:コマ ...] 部品:[animation:コマ ...]"`。部品の欄は
 /// `PatternState::part` で 2106・2110 を引く（emo2 で pattern定義が指す `\1` 側の部品の全部）。
-fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, usize) {
+fn run_kero(ticks: &[TimePoint], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, usize) {
     let (rng, calls) = rng;
     let mut rt = LoopRuntime::new(cfg(emo2_shell_table(), rng));
     let mut states = crate::test_support::empty_states();
@@ -262,7 +269,8 @@ fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, us
                     .join(" ")
             };
             let mut line = format!(
-                "{now} {} {surface_id} [{}]",
+                "{} {} {surface_id} [{}]",
+                ms_text(now),
                 scope.as_str(),
                 frames(&mut pattern.iter())
             );
@@ -288,11 +296,11 @@ fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, us
 #[test]
 fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
     // 端: 境界 2000 の刻みで 2110 が見えている。
-    const EDGE: &[u64] = &[0, 1960, 2000, 2079, 2080, 3000, 3040];
+    let edge = [0, 1960, 2000, 2079, 2080, 3000, 3040].map(at_ms);
     // 比べる相手: 同じ境界を跨ぐが、跨ぐ刻み（2080）ではまばたきが終わっていて 2110 が見えない。
-    const CONTROL: &[u64] = &[0, 1960, 2080, 3000, 3040];
+    let control_ticks = [0, 1960, 2080, 3000, 3040].map(at_ms);
 
-    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 1, 0]));
+    let (control, control_calls) = run_kero(&control_ticks, scripted_rng(&[0, 1, 0]));
     assert_eq!(
         control,
         [
@@ -310,7 +318,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
     );
 
     // 当たり: 2000 の部品の抽選が 0 を引く。
-    let (hit, hit_calls) = run_kero(EDGE, scripted_rng(&[0, 0, 0]));
+    let (hit, hit_calls) = run_kero(&edge, scripted_rng(&[0, 0, 0]));
     assert_eq!(
         hit,
         [
@@ -329,7 +337,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
     assert_eq!(hit_calls, 3, "一番上の 2 回に部品の抽選の 1 回だけ多い");
 
     // 外れ: 2000 の部品の抽選が 1 を引く。乱数の 1 回の上乗せは同じで、絵は前と同じ。
-    let (miss, miss_calls) = run_kero(EDGE, scripted_rng(&[0, 1, 0]));
+    let (miss, miss_calls) = run_kero(&edge, scripted_rng(&[0, 1, 0]));
     assert_eq!(
         miss,
         [

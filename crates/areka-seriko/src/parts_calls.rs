@@ -10,12 +10,13 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use areka_emo_compose::{PartKey, PatternState};
 use areka_sakura::ActorKey;
+use dola::TimePoint;
 
 use super::{ClockKey, Label, PartAnim, PartClocks, progress, unwrite, write_always};
 use crate::calls::{CallOutcome, CallPlays, run_calls};
 use crate::state::Slot;
 use crate::table::{FrameAct, LoopAnimation, LoopTrigger};
-use crate::timeline::LoopRng;
+use crate::timeline::{LoopRng, elapsed_since};
 
 /// 部品 1 つの時計と欄を Calls へ貸す口。
 struct PartPlays<'a> {
@@ -30,30 +31,30 @@ struct PartPlays<'a> {
 }
 
 impl CallPlays for PartPlays<'_> {
-    fn playing(&self, animation: u32) -> Option<(u64, Option<u64>)> {
+    fn playing(&self, animation: u32) -> Option<(TimePoint, Option<TimePoint>)> {
         match self.clocks.get(&(self.part, animation)) {
             Some(&PartAnim::Playing {
-                started_at_ms,
+                started_at,
                 acts_through,
-            }) => Some((started_at_ms, acts_through)),
+            }) => Some((started_at, acts_through)),
             _ => None,
         }
     }
 
-    fn set_acts_through(&mut self, animation: u32, through_ms: u64) {
+    fn set_acts_through(&mut self, animation: u32, through: TimePoint) {
         if let Some(PartAnim::Playing { acts_through, .. }) =
             self.clocks.get_mut(&(self.part, animation))
         {
-            *acts_through = Some(through_ms);
+            *acts_through = Some(through);
         }
     }
 
-    fn start(&mut self, animation: u32, at_ms: u64) {
+    fn start(&mut self, animation: u32, at: TimePoint) {
         let key = (self.part, animation);
         self.clocks.insert(
             key,
             PartAnim::Playing {
-                started_at_ms: at_ms,
+                started_at: at,
                 acts_through: None,
             },
         );
@@ -64,7 +65,7 @@ impl CallPlays for PartPlays<'_> {
             slot = ?self.slot,
             part = %Label(self.part),
             animation_id = animation,
-            at_ms,
+            %at,
             "seriko: part 呼び出しで再生を始めた（頭から・要件 3.1・3.8）"
         );
     }
@@ -95,7 +96,7 @@ impl CallPlays for PartPlays<'_> {
     }
 }
 
-/// 部品 `part` の働きのコマを `now_ms` まで当てる。結果と、呼び出しで始まった animation の番号を返す。
+/// 部品 `part` の働きのコマを `now` まで当てる。結果と、呼び出しで始まった animation の番号を返す。
 /// 働きのコマを持たない部品は何もしない（当てるものが無い・当て終えた印も付けない）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_part_calls(
@@ -106,7 +107,7 @@ pub(super) fn run_part_calls(
     slot: Slot,
     part: PartKey,
     anims: &[LoopAnimation],
-    now_ms: u64,
+    now: TimePoint,
     pick: &mut LoopRng,
 ) -> (CallOutcome, Vec<u32>) {
     let acts = |a: &LoopAnimation| {
@@ -129,13 +130,13 @@ pub(super) fn run_part_calls(
     let outcome = run_calls(
         &mut plays,
         |id| anims.iter().find(|a| a.id == id),
-        now_ms,
+        now,
         pick,
     );
     (outcome, plays.started)
 }
 
-/// 時計 1 本の今のコマを `now_ms` で欄へ置く: `always` は周の答え（時計が無ければ経過 0＝載せない）、
+/// 時計 1 本の今のコマを `now` で欄へ置く: `always` は周の答え（時計が無ければ経過 0＝載せない）、
 /// ほかは刻みの進行（[`progress`]）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn place(
@@ -146,9 +147,9 @@ pub(super) fn place(
     slot: Slot,
     part: PartKey,
     anim: &LoopAnimation,
-    now_ms: u64,
+    now: TimePoint,
 ) {
-    let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
+    let LoopTrigger::Always { period, laps } = anim.trigger else {
         progress(
             clocks,
             warned_negative,
@@ -157,13 +158,13 @@ pub(super) fn place(
             slot,
             part,
             anim,
-            now_ms,
+            now,
         );
         return;
     };
-    if let Some(&PartAnim::Playing { started_at_ms, .. }) = clocks.get(&(part, anim.id)) {
-        let elapsed = now_ms.saturating_sub(started_at_ms);
-        write_always(pattern, part, anim, period_ms, laps, elapsed);
+    if let Some(&PartAnim::Playing { started_at, .. }) = clocks.get(&(part, anim.id)) {
+        let elapsed = elapsed_since(now, started_at);
+        write_always(pattern, part, anim, period, laps, elapsed);
     }
 }
 

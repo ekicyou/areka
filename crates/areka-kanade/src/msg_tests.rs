@@ -1,6 +1,7 @@
 //! 知らせの型（[`KanadeMsg`]・[`ShioriCall`] ほか）のテスト。
 
 use super::*;
+use dola::time::testing::ms;
 
 /// `Send + 'static` を型検査で強制する静的アサーション。
 fn assert_send_static<T: Send + 'static>() {}
@@ -15,7 +16,7 @@ fn kanade_and_shiori_msgs_are_send_static() {
     assert_send_static::<ShioriFailure>();
     assert_send_static::<KanadeConfig>();
     assert_send_static::<CloseReason>();
-    assert_send_static::<MonotonicMs>();
+    assert_send_static::<TimePoint>();
     assert_send_static::<MouseInput>();
     assert_send_static::<MouseEventKind>();
     assert_send_static::<MouseButton>();
@@ -81,10 +82,11 @@ fn kanade_config_new_supplies_documented_defaults() {
     assert_eq!(config.shell_name, "master");
     assert_eq!(config.baseware_version, "1.0.0");
     assert_eq!(config.baseware_name, "areka");
-    assert_eq!(config.close_talk_deadline_ms, 30_000);
+    assert_eq!(config.close_talk_deadline, ms(30_000));
     assert_eq!(
-        config.choice_timeout_default_ms, 30_000,
-        "choice_timeout_default_ms default must be 30_000 (Req 7.8・DD-8)"
+        config.choice_timeout_default,
+        ms(30_000),
+        "choice_timeout_default default must be 30 s (Req 7.8・DD-8)"
     );
     assert!(
         config.first_boot,

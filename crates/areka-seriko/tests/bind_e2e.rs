@@ -28,6 +28,8 @@
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{BindResolver, DisplayCommand};
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 use std::sync::{Arc, Mutex};
 
 mod common;
@@ -97,7 +99,7 @@ fn show(surface_id: u32, ids: impl IntoIterator<Item = u32>) -> DisplayCommand {
 /// `text_sink`。
 fn run_with_text_sink(
     script: &str,
-    ticks: &[f64],
+    ticks: &[TimePoint],
     text_sink: Box<dyn CueSink + Send>,
 ) -> Vec<DisplayCommand> {
     run_core(
@@ -110,7 +112,7 @@ fn run_with_text_sink(
 }
 
 /// bind のみを観測する（text スロットは破棄）薄いラッパ。
-fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
+fn run_scenario(script: &str, ticks: &[TimePoint]) -> Vec<DisplayCommand> {
     run_with_text_sink(script, ticks, Box::new(NullTextSink))
 }
 
@@ -138,7 +140,7 @@ fn mustselect_bind_resolver() -> BindResolver {
 /// 静的既定集合は非 目 の口 id 1 本のみ `{1207}`（初回の 目 着衣がクリーンな add になり、かつ
 /// 排他置換で外れない「保持されるべき地」を観測できる）。bind 名前解決層は
 /// [`mustselect_bind_resolver`]。text スロットは破棄（bind の表示発行のみ観測）。
-fn run_mustselect_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
+fn run_mustselect_scenario(script: &str, ticks: &[TimePoint]) -> Vec<DisplayCommand> {
     run_core(
         BindSet::from_ids([1207]),
         mustselect_bind_resolver(),
@@ -166,7 +168,7 @@ fn multiple_bind_resolver() -> BindResolver {
 ///
 /// 静的既定集合は髪飾り以外の口 id 1 本のみ `{1207}`（着衣が clean add になり、かつ共存の
 /// 「保持されるべき地」も同時に観測できる）。text スロットは破棄（bind の表示発行のみ観測）。
-fn run_multiple_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
+fn run_multiple_scenario(script: &str, ticks: &[TimePoint]) -> Vec<DisplayCommand> {
     run_core(
         BindSet::from_ids([1207]),
         multiple_bind_resolver(),
@@ -178,12 +180,12 @@ fn run_multiple_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
 
 /// シナリオ1: on の bind 積算と Show 再発行を mock 上で観測する。
 ///
-/// `\s[1000]\![bind,腕,伸び,0]\e` を Tick(0.0) で駆動すると、`\s[1000]` が静的既定集合を載せた
+/// `\s[1000]\![bind,腕,伸び,0]\e` を Tick(0ms) で駆動すると、`\s[1000]` が静的既定集合を載せた
 /// Show を発行し（`{1100,1207}`）、続く `\![bind,腕,伸び,0]`（腕/伸び→1100 を off）が集合から 1100 を
 /// 除いた新集合 `{1207}` で**現 surface(1000) を再発行**する（表示発行列に期待どおりの差分が現れる）。
 #[test]
 fn bind_off_reissues_show_with_updated_set_end_to_end() {
-    let records = run_scenario(r"\s[1000]\![bind,腕,伸び,0]\e", &[0.0]);
+    let records = run_scenario(r"\s[1000]\![bind,腕,伸び,0]\e", &[at_ms(0)]);
     assert_eq!(
         records,
         vec![show(1000, [1100, 1207]), show(1000, [1207])],
@@ -193,11 +195,14 @@ fn bind_off_reissues_show_with_updated_set_end_to_end() {
 
 /// シナリオ2: off→on の復帰で集合が既定へ戻り、その都度 Show が再発行される。
 ///
-/// `\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,1]\e` を Tick(0.0) で駆動すると、off が 1100 を除いて
+/// `\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,1]\e` を Tick(0ms) で駆動すると、off が 1100 を除いて
 /// `{1207}` で再発行し、続く on が 1100 を戻して `{1100,1207}` で再発行する（積算保持）。
 #[test]
 fn bind_off_then_on_round_trips_and_reissues_end_to_end() {
-    let records = run_scenario(r"\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,1]\e", &[0.0]);
+    let records = run_scenario(
+        r"\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,1]\e",
+        &[at_ms(0)],
+    );
     assert_eq!(
         records,
         vec![
@@ -211,12 +216,15 @@ fn bind_off_then_on_round_trips_and_reissues_end_to_end() {
 
 /// シナリオ3（冪等）: 同一 off の再指定は集合不変ゆえ再発行しない。
 ///
-/// `\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,0]\e` を Tick(0.0) で駆動すると、1 回目の off で
+/// `\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,0]\e` を Tick(0ms) で駆動すると、1 回目の off で
 /// `{1207}` を再発行し、2 回目の off は結果集合が同値（1100 は既に不在）ゆえ **Show を追加しない**
 /// （表示発行列は 2 件のまま・冪等ガード）。
 #[test]
 fn bind_off_twice_is_idempotent_no_third_show_end_to_end() {
-    let records = run_scenario(r"\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,0]\e", &[0.0]);
+    let records = run_scenario(
+        r"\s[1000]\![bind,腕,伸び,0]\![bind,腕,伸び,0]\e",
+        &[at_ms(0)],
+    );
     assert_eq!(
         records,
         vec![show(1000, [1100, 1207]), show(1000, [1207])],
@@ -226,12 +234,12 @@ fn bind_off_twice_is_idempotent_no_third_show_end_to_end() {
 
 /// シナリオ4: 解決不能な bind は表示発行を増やさない（ログ事象として skip）。
 ///
-/// `\s[1000]\![bind,未知,パーツ,1]\e` を Tick(0.0) で駆動すると、`\s[1000]` の初回 Show のみが記録され、
+/// `\s[1000]\![bind,未知,パーツ,1]\e` を Tick(0ms) で駆動すると、`\s[1000]` の初回 Show のみが記録され、
 /// 宣言に無い `(未知,パーツ)` の bind は `resolve==None` で `error!`＋skip・状態不変となり **Show が
 /// 増えない**（表示発行列は 1 件のまま）。これが核心的判別（解決不能で発行が増えないこと）。
 #[test]
 fn unresolvable_bind_does_not_grow_display_list_end_to_end() {
-    let records = run_scenario(r"\s[1000]\![bind,未知,パーツ,1]\e", &[0.0]);
+    let records = run_scenario(r"\s[1000]\![bind,未知,パーツ,1]\e", &[at_ms(0)]);
     assert_eq!(
         records,
         vec![show(1000, [1100, 1207])],
@@ -247,18 +255,18 @@ fn unresolvable_bind_does_not_grow_display_list_end_to_end() {
 /// (b) text 側 sink は `Text("アヒルやアヒル")` cue を無変形で受信する——間に割り込んだ bind の
 ///     `Custom` cue が text ストリームを差し替え・破壊していない。
 ///
-/// テキスト cue は再生時間（6 文字×50ms=0.3s）を持つため、占有 horizon（0.3）を跨ぐ Tick(1.0) まで
+/// テキスト cue は再生時間（6 文字×50ms=300ms）を持つため、占有 horizon（300ms）を跨ぐ Tick(1000ms) まで
 /// 進めて自然終端させる（同期チェーンは他シナリオと同一・sleep 不使用）。
 #[test]
 fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
     let text_sink = RecordingTextSink::new();
     let text_records = text_sink.records();
 
-    // 初回 Tick(0.0) で at=0 群（ClearAll/Emote/bind/Text）を発火、Tick(1.0) で text 占有 horizon
-    // （0.3）を跨いで自然終端させる。
+    // 初回 Tick(0ms) で at=0 群（ClearAll/Emote/bind/Text）を発火、Tick(1000ms) で text 占有 horizon
+    // （300ms）を跨いで自然終端させる。
     let seriko_records = run_with_text_sink(
         r"\s[1000]\![bind,腕,伸び,0]アヒルやアヒル\e",
-        &[0.0, 1.0],
+        &[at_ms(0), at_ms(1000)],
         Box::new(text_sink),
     );
 
@@ -288,7 +296,7 @@ fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
 
 /// シナリオ6（排他置換 e2e）: 同一 mustselect カテゴリへ off なしで連続着衣する
 /// 列が、常に高々 1 パーツのみ有効な着せ替え集合を載せた表示発行になる（旧パーツが消え新パーツのみ・
-/// 「置換」）ことを、注入 Tick(0.0) だけで貫通観測する。
+/// 「置換」）ことを、注入 Tick(0ms) だけで貫通観測する。
 ///
 /// `\s[1000]\![bind,目,笑顔,1]\![bind,目,ジトー,1]\![bind,目,静観,1]\e`（実 emo2 の目＝笑顔→ジトー→
 /// 静観 の遷移を模す）を駆動すると:
@@ -304,7 +312,7 @@ fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
 fn mustselect_sequence_replaces_prior_part_end_to_end() {
     let records = run_mustselect_scenario(
         r"\s[1000]\![bind,目,笑顔,1]\![bind,目,ジトー,1]\![bind,目,静観,1]\e",
-        &[0.0],
+        &[at_ms(0)],
     );
     assert_eq!(
         records,
@@ -321,7 +329,7 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
 /// シナリオ7（mustselect 対比）: 既定（Default＝非宣言）カテゴリ（紅）のパーツは
 /// 明示 on で載り、明示 off で外れる（解除可）——mustselect の「脱衣は無視（解除不可）」との対比。
 ///
-/// `\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e` を Tick(0.0) で駆動すると:
+/// `\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e` を Tick(0ms) で駆動すると:
 /// - `\s[1000]` が既定 `{1207}` を発行、
 /// - 紅=差し（1600）on → 当該カテゴリに他パーツが無いので排他置換の結果は `{1207,1600}`、
 /// - 紅=差し（1600）off → 既定は解除可ゆえ除去され `{1207}` へ戻る。
@@ -330,8 +338,10 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
 /// mustselect（脱衣無視）との唯一の差である。
 #[test]
 fn default_category_explicit_on_then_off_removes_part_end_to_end() {
-    let records =
-        run_mustselect_scenario(r"\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e", &[0.0]);
+    let records = run_mustselect_scenario(
+        r"\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e",
+        &[at_ms(0)],
+    );
     assert_eq!(
         records,
         vec![
@@ -346,7 +356,7 @@ fn default_category_explicit_on_then_off_removes_part_end_to_end() {
 /// シナリオ8（クロスカテゴリ独立）: mustselect カテゴリ内の排他置換は、別カテゴリ
 /// （既定＝非宣言の紅）で着衣済みのパーツを巻き込まない（カテゴリ境界を越えて外さない）。
 ///
-/// `\s[1000]\![bind,紅,差し,1]\![bind,目,笑顔,1]\![bind,目,静観,1]\e` を Tick(0.0) で駆動すると:
+/// `\s[1000]\![bind,紅,差し,1]\![bind,目,笑顔,1]\![bind,目,静観,1]\e` を Tick(0ms) で駆動すると:
 /// - `\s[1000]` が既定 `{1207}` を発行、
 /// - 紅=差し（1600）on → `{1207,1600}`、
 /// - 目=笑顔（1303）on → クリーン add で `{1207,1600,1303}`、
@@ -358,7 +368,7 @@ fn default_category_explicit_on_then_off_removes_part_end_to_end() {
 fn mustselect_replace_does_not_drop_other_category_end_to_end() {
     let records = run_mustselect_scenario(
         r"\s[1000]\![bind,紅,差し,1]\![bind,目,笑顔,1]\![bind,目,静観,1]\e",
-        &[0.0],
+        &[at_ms(0)],
     );
     assert_eq!(
         records,
@@ -375,7 +385,7 @@ fn mustselect_replace_does_not_drop_other_category_end_to_end() {
 /// シナリオ9（複数可の貫通共存錨）: `multiple` 明示宣言のカテゴリでは、同一
 /// カテゴリの 2 パーツが**両方 bind されたまま**表示まで貫通する（既定の排他置換を受けない）。
 ///
-/// `\s[1000]\![bind,髪飾り,花,1]\![bind,髪飾り,リボン,1]\e` を Tick(0.0) で駆動すると:
+/// `\s[1000]\![bind,髪飾り,花,1]\![bind,髪飾り,リボン,1]\e` を Tick(0ms) で駆動すると:
 /// - `\s[1000]` が静的既定 `{1207}` を載せた Show を発行、
 /// - 髪飾り=花（1700）着衣 → clean add で `{1207,1700}`、
 /// - 髪飾り=リボン（1701）着衣 → **複数可ゆえ加算**で `{1207,1700,1701}`（1700 は外れない）。
@@ -386,7 +396,7 @@ fn mustselect_replace_does_not_drop_other_category_end_to_end() {
 fn multiple_category_two_parts_coexist_end_to_end() {
     let records = run_multiple_scenario(
         r"\s[1000]\![bind,髪飾り,花,1]\![bind,髪飾り,リボン,1]\e",
-        &[0.0],
+        &[at_ms(0)],
     );
     assert_eq!(
         records,

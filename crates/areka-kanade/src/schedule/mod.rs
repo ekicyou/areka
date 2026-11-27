@@ -23,9 +23,14 @@ use crate::status::ExecutionStateUpdate;
 use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkEndReason, TalkId};
 // テストの `use super::*` が引くテスト専用の名前。
 #[cfg(test)]
-use crate::msg::{ChoiceInput, MonotonicMs, ShioriCall};
+use crate::msg::{ChoiceInput, ShioriCall};
 #[cfg(test)]
 use crate::status::ExecutionSnapshot;
+#[cfg(test)]
+use dola::{
+    TimePoint,
+    time::testing::{at_ms, delta_ms},
+};
 
 /// アンカーの選択の受理と 2 段の送出（帳簿なし・段の記憶だけ）。
 pub(crate) mod anchor;
@@ -220,14 +225,14 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
             talk_id,
             choice_ids,
             display_end,
-            timeout_directive_secs,
+            timeout_directive,
         } => match state.phase {
             Phase::Steady { .. } => steady::on_choice_waiting(
                 state,
                 talk_id,
                 choice_ids,
                 display_end,
-                timeout_directive_secs,
+                timeout_directive,
                 config,
             ),
             _ => {
@@ -291,7 +296,7 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
                 tracing::trace!(
                     target: "kanade",
                     event = "choice_timeout_due_ignored",
-                    now_ms = now.0,
+                    now = %now,
                     phase = phase_label(&state.phase),
                     "非 Steady の相に届いた選択待ちの期限の知らせ——何もしない"
                 );

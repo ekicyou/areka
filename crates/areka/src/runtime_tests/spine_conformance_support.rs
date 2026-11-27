@@ -22,7 +22,7 @@ use super::{
 };
 use areka_emo_present::PresentCommand;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::{ChoiceInput, CloseReason, KanadeMsg, MonotonicMs, MouseInput};
+use areka_kanade::{ChoiceInput, CloseReason, KanadeMsg, MouseInput};
 
 // 進行状態の記録（第 2 系統）の型と本体は、書き込む台本の SHIORI と同じ所（`areka-runtime` の `spine`）に
 // 1 つだけ置き、ここから出し直す。
@@ -289,7 +289,7 @@ pub(super) trait StageSink {
 
 impl StageSink for SpineHarness {
     fn inject(&mut self, injection: &Injection, now_ms: u64) -> Result<(), Inbox> {
-        let now = MonotonicMs(now_ms);
+        let now = dola::time::testing::at_ms(now_ms as i64);
         let kanade = |msg| self.ghost.kanade().send(msg).map_err(|_| Inbox::Kanade);
         match injection {
             Injection::KanadeTick => kanade(KanadeMsg::Tick { now }),

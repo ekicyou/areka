@@ -1,6 +1,6 @@
 //! 入れ子の部品の刻みと合図で働きのコマを当てる結合のテスト。部品の中の `start` と `stop` が一番上と同じ規則で働く。
 //!
-//! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now_ms)`、乱数は
+//! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now)`、乱数は
 //! 注入列で、どちらも決定論。
 
 use crate::looper::LoopRuntime;
@@ -11,6 +11,8 @@ use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
 use crate::test_support::{capture_logs, empty_states, part_frames, scope, table_of};
 use crate::timeline::LoopRng;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 
 /// 部品の中の絵の面（中身は空）。
 const SURFACES: &str = "surface1\n{\n}\nsurface101\n{\n}\nsurface102\n{\n}\n\
@@ -39,10 +41,10 @@ fn part_cell(states: &ScopeStates, id: u32) -> Option<u32> {
 }
 
 /// 面を `sid` へ切り替える（アクターと同じ順・出来事の時刻は `at_ms`）。
-fn switch(rt: &mut LoopRuntime, states: &mut ScopeStates, sid: u32, at_ms: u64) {
+fn switch(rt: &mut LoopRuntime, states: &mut ScopeStates, sid: u32, at: TimePoint) {
     states.apply(&scope(), SurfaceTarget::Show(sid));
     rt.on_surface_changed(&scope(), Slot::Shell);
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms), states);
+    rt.refresh(&scope(), Slot::Shell, at, states);
 }
 
 /// 「．さくら」の形を部品の中に: 抽選で動く animation2 が `alternativestart,(0,1)` で呼ぶ。
@@ -65,17 +67,17 @@ fn alternativestart_inside_a_part_starts_the_pick_at_call_time() {
     for (pick, target, other) in [(0, 0, 1), (1, 1, 0)] {
         let (lottery, probe) = counting_rng(&[0]);
         let (mut rt, mut states) = shown(ALTERNATIVE, lottery, pick);
-        rt.on_tick(0, &mut states);
-        rt.on_tick(1000, &mut states); // animation2 が 1000 に始まる。呼び出しは 1200。
+        rt.on_tick(at_ms(0), &mut states);
+        rt.on_tick(at_ms(1000), &mut states); // animation2 が 1000 に始まる。呼び出しは 1200。
         assert_eq!(part_cell(&states, target), None);
 
-        rt.on_tick(1500, &mut states); // 遅れた刻み: 相手は 1200 に始まり、経過 300 で 2 枚目。
+        rt.on_tick(at_ms(1500), &mut states); // 遅れた刻み: 相手は 1200 に始まり、経過 300 で 2 枚目。
         assert_eq!(part_cell(&states, target), Some(102 + 9 * target));
         assert_eq!(part_cell(&states, other), None);
         assert_eq!(part_cell(&states, 2), Some(120), "呼んだ側は前の絵を残す");
         assert_eq!(probe.lock().unwrap().calls, 1, "選びは抽選の乱数を引かない");
 
-        rt.on_tick(2500, &mut states); // 相手の経過 1300: 3 枚目。
+        rt.on_tick(at_ms(2500), &mut states); // 相手の経過 1300: 3 枚目。
         assert_eq!(part_cell(&states, target), Some(101 + 9 * target));
     }
 }
@@ -98,6 +100,7 @@ fn stop_inside_a_part_looks_the_same_as_minus_one() {
         let (lottery, _probe) = counting_rng(&[0, 0]);
         let (mut rt, mut states) = shown(anims, lottery, 0);
         [0, 1000, 1200, 1300, 1400]
+            .map(at_ms)
             .map(|t| {
                 let cmds = rt.on_tick(t, &mut states);
                 (cmds, states.current_pattern(&scope(), Slot::Shell).clone())
@@ -130,13 +133,13 @@ fn stopped_always_inside_a_part_stays_stopped_until_the_surface_is_shown() {
         animation1.pattern1,stop,0\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shown(STOP_ALWAYS, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(950, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(950), &mut states);
     assert_eq!(part_cell(&states, 0), Some(101), "always は 0 から回る");
-    rt.on_tick(1000, &mut states); // animation1 が始まる。止めは 1100。
-    rt.on_tick(1100, &mut states);
+    rt.on_tick(at_ms(1000), &mut states); // animation1 が始まる。止めは 1100。
+    rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(part_cell(&states, 0), None);
-    for t in [1150, 1250, 2500, 3000] {
+    for t in [at_ms(1150), at_ms(1250), at_ms(2500), at_ms(3000)] {
         rt.on_tick(t, &mut states);
         assert_eq!(part_cell(&states, 0), None, "{t} でも止まったまま");
     }
@@ -148,9 +151,9 @@ fn stopped_always_inside_a_part_stays_stopped_until_the_surface_is_shown() {
         !rt.on_surface_shown(&scope(), Slot::Shell),
         "消す印はもう無い"
     );
-    rt.on_tick(3050, &mut states); // 3050 に頭から: 最初の待ちの前は何も出さない。
+    rt.on_tick(at_ms(3050), &mut states); // 3050 に頭から: 最初の待ちの前は何も出さない。
     assert_eq!(part_cell(&states, 0), None);
-    rt.on_tick(3160, &mut states);
+    rt.on_tick(at_ms(3160), &mut states);
     assert_eq!(part_cell(&states, 0), Some(101), "3050 から 110 ms");
 }
 
@@ -166,7 +169,7 @@ fn refresh_applies_part_calls_at_the_event_time() {
         animation1.pattern1,overlay,111,500,0,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(CALLER, lottery, 0);
-    rt.refresh(&scope(), Slot::Shell, Some(700), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(700), &mut states);
     assert_eq!(part_cell(&states, 1), Some(110), "呼ばれた相手の頭のコマ");
     assert_eq!(
         part_cell(&states, 0),
@@ -174,7 +177,7 @@ fn refresh_applies_part_calls_at_the_event_time() {
         "1 周目の頭が働きのコマなら欄を外す"
     );
     // 周ごとの呼び出しで相手は 800・…・1200 に頭からやり直す。呼んだ側は周の頭（前の周の 120）。
-    rt.on_tick(1250, &mut states);
+    rt.on_tick(at_ms(1250), &mut states);
     assert_eq!(part_cell(&states, 1), Some(110));
     assert_eq!(part_cell(&states, 0), Some(120));
 }
@@ -192,14 +195,14 @@ fn called_never_clock_survives_while_the_part_is_hidden() {
         animation2.pattern1,start,0\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shown(CALLED, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    rt.on_tick(1300, &mut states); // 1200 に animation0 が始まる。
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    rt.on_tick(at_ms(1300), &mut states); // 1200 に animation0 が始まる。
     assert_eq!(part_cell(&states, 0), Some(101));
-    switch(&mut rt, &mut states, 1, 1400); // 部品 100 は見えない。
-    rt.on_tick(1500, &mut states);
+    switch(&mut rt, &mut states, 1, at_ms(1400)); // 部品 100 は見えない。
+    rt.on_tick(at_ms(1500), &mut states);
     assert_eq!(part_cell(&states, 0), None);
-    switch(&mut rt, &mut states, 0, 2500); // また見える: 1200 からの経過 1300 で 2 枚目。
+    switch(&mut rt, &mut states, 0, at_ms(2500)); // また見える: 1200 からの経過 1300 で 2 枚目。
     assert_eq!(part_cell(&states, 0), Some(102));
 }
 
@@ -211,10 +214,10 @@ fn move_inside_a_part_becomes_the_character_shift() {
         animation0.pattern1,move,0,100,0,9\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shown(MOVE, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
-        rt.on_tick(1100, &mut states),
+        rt.on_tick(at_ms(1100), &mut states),
         vec![crate::DisplayCommand::MoveShift {
             scope: scope(),
             x: 0,
@@ -234,9 +237,9 @@ fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
         animation1.pattern0,overlay,110,0,0,0\n";
     let (lottery, _probe) = counting_rng(&[0, 0]);
     let (mut rt, mut states) = shown(ENDING, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
-    rt.on_tick(2000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(at_ms(2000), &mut states);
     assert_eq!(
         part_cell(&states, 1),
         Some(110),
@@ -257,11 +260,11 @@ fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
         animation1.pattern1,overlay,111,500,0,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(PERIODIC, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states); // periodic は 1000 に鳴る。start,1 は 2000。
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states); // periodic は 1000 に鳴る。start,1 は 2000。
     assert_eq!(part_cell(&states, 0), Some(101));
     assert_eq!(part_cell(&states, 1), None);
-    rt.on_tick(2000, &mut states);
+    rt.on_tick(at_ms(2000), &mut states);
     assert_eq!(part_cell(&states, 1), Some(110), "前の回の start,1");
     assert_eq!(part_cell(&states, 0), Some(101), "回を飛ばさず頭から");
 }
@@ -281,15 +284,15 @@ fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
         animation2.pattern1,stop,1\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(LATE, lottery, 0);
-    rt.on_tick(0, &mut states); // 部品 100 が見え、2 が 0 に鳴る。
-    rt.on_tick(3100, &mut states); // 1 は 2000・stop,1 は 2470・0 は 3000。
+    rt.on_tick(at_ms(0), &mut states); // 部品 100 が見え、2 が 0 に鳴る。
+    rt.on_tick(at_ms(3100), &mut states); // 1 は 2000・stop,1 は 2470・0 は 3000。
     assert_eq!(part_cell(&states, 1), None, "2470 に止まる");
     assert_eq!(part_cell(&states, 0), Some(120), "0 は 3000 に始まる");
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 3000,
-            acts_through: Some(3100)
+            started_at: at_ms(3000),
+            acts_through: Some(at_ms(3100))
         }),
         "3000 に始め、3100 まで当てた"
     );
@@ -307,16 +310,16 @@ fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary(
         animation2.pattern1,stop,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(STOPPED, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1100, &mut states); // 0 は 1000 に鳴る（2500 まで続く見込み）。
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1100), &mut states); // 0 は 1000 に鳴る（2500 まで続く見込み）。
     assert_eq!(part_cell(&states, 0), Some(120));
-    rt.on_tick(2100, &mut states); // stop,0 は 1970・次の周は 2000。
+    rt.on_tick(at_ms(2100), &mut states); // stop,0 は 1970・次の周は 2000。
     assert_eq!(part_cell(&states, 0), Some(120), "2000 に頭から");
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
         Some(PartAnim::Playing {
-            started_at_ms: 2000,
-            acts_through: Some(2100)
+            started_at: at_ms(2000),
+            acts_through: Some(at_ms(2100))
         }),
         "2000 に始め、2100 まで当てた"
     );
@@ -337,8 +340,8 @@ fn part_trigger_play_acts_before_later_calls_of_other_plays() {
         animation2.pattern1,stop,1\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(ORDER, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1500, &mut states); // 0 は 1000・start,1 は 1100・stop,1 は 1300。
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1500), &mut states); // 0 は 1000・start,1 は 1100・stop,1 は 1300。
     assert_eq!(part_cell(&states, 1), None, "1300 に止まる");
     assert_eq!(part_cell(&states, 0), Some(120), "0 は 1000 から続く");
 }
@@ -356,7 +359,7 @@ fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(AT_ARM, lottery, 0);
     let lines = capture_logs(|| {
-        for t in [0, 500, 1000] {
+        for t in [at_ms(0), at_ms(500), at_ms(1000)] {
             rt.on_tick(t, &mut states);
         }
     });
@@ -383,8 +386,8 @@ fn part_lottery_sees_a_play_started_by_an_earlier_call() {
         animation1.pattern1,overlay,111,5000,0,0\n";
     let (lottery, probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shown(ANIMS, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1050, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1050), &mut states);
     assert_eq!(part_cell(&states, 1), Some(110));
     assert_eq!(probe.lock().unwrap().calls, 0, "1 は 980 から再生中");
 }
@@ -405,13 +408,13 @@ fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
         animation1.pattern4,overlay,120,5000,0,0\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shown(ANIMS, lottery, 0);
-    for t in [0, 1000, 1100] {
+    for t in [at_ms(0), at_ms(1000), at_ms(1100)] {
         rt.on_tick(t, &mut states);
     }
     assert_eq!(part_cell(&states, 0), None, "前提: 1050 に止まる");
     assert!(rt.on_surface_shown(&scope(), Slot::Shell));
-    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
-    rt.on_tick(1300, &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(1170), &mut states);
+    rt.on_tick(at_ms(1300), &mut states);
     assert_eq!(
         part_cell(&states, 0),
         Some(102),
@@ -431,10 +434,10 @@ fn part_refresh_judges_periodic_before_applying_calls() {
         animation1.pattern1,overlay,111,500,0,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(ANIMS, lottery, 0);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(500, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(500), &mut states);
     let logs = capture_logs(|| {
-        rt.refresh(&scope(), Slot::Shell, Some(1010), &mut states);
+        rt.refresh(&scope(), Slot::Shell, at_ms(1010), &mut states);
     });
     let fired: Vec<_> = logs
         .iter()
@@ -442,9 +445,10 @@ fn part_refresh_judges_periodic_before_applying_calls() {
         .collect();
     assert_eq!(fired.len(), 1, "{logs:?}");
     assert!(
-        fired[0].contains("animation_id=1") && fired[0].contains("started_at_ms=1000"),
+        fired[0].contains("animation_id=1")
+            && fired[0].contains(&format!("started_at={}", at_ms(1000))),
         "境目 1000 に始まった（始まらなかったのではない）: {fired:?}"
     );
-    rt.on_tick(1100, &mut states);
+    rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(part_cell(&states, 1), None, "1000 に始まり 1005 に止まる");
 }

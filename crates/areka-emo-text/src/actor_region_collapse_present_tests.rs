@@ -10,6 +10,8 @@
 
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 use log_capture_kit::CapturedEvent;
 use wintf::ecs::{Arrangement, VisualGraphics};
 
@@ -27,7 +29,7 @@ use crate::state::TextLayerConfig;
 const ATTACHED: &str =
     "テキスト供給面を予約スロットへ装着した（ActorRender 不在時のみ・以降は Present のみ）";
 
-/// 数十フレーム（0.1 秒刻み）。
+/// 数十フレーム（100 ms 刻み）。
 const FRAMES: usize = 40;
 
 /// 捕捉窓の中で `f` を走らせ、全部の記録を返す。対照の `error!` 1 件だけが ERROR で、WARN が 0 件で
@@ -48,7 +50,8 @@ fn attach_messages(events: &[CapturedEvent]) -> usize {
 
 fn frames(rt: &mut TextLayerRuntime, world: &mut World) {
     for i in 0..FRAMES {
-        present_frame(rt, world, 0.1 * (i + 1) as f64).expect("潰れた場所があっても提示は Ok");
+        present_frame(rt, world, at_ms(100 * (i as i64 + 1)))
+            .expect("潰れた場所があっても提示は Ok");
     }
 }
 
@@ -60,8 +63,8 @@ fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
     let slot1 = add_child_slot(&mut world, window, "emo-text-layer-slot-1");
     let (small, other) = (ActorKey::from("1"), ActorKey::from("0"));
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&cue("1", 0.0, CueCommand::Text("あいう".into())));
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("えお".into())));
+    rt.apply_cue(&cue("1", ms(0), CueCommand::Text("あいう".into())));
+    rt.apply_cue(&cue("0", ms(0), CueCommand::Text("えお".into())));
     rt.register_actor_binding(
         small.clone(),
         TextSlotBinding::new(slot1, window, 1.0, IMAGE, IMAGE),
@@ -99,9 +102,9 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
     let actor = ActorKey::from("1");
     let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&choice_cue("1", 0.0, "OnYes", "はい", &["r0"]));
+    rt.apply_cue(&choice_cue("1", ms(0), "OnYes", "はい", &["r0"]));
     rt.register_actor_binding(actor.clone(), binding, &model(HEALTHY_BALLOON));
-    present_frame(&mut rt, &mut world, 1.0).expect("描く");
+    present_frame(&mut rt, &mut world, at_ms(1000)).expect("描く");
     assert!(world.get::<VisualGraphics>(slot).is_some(), "描いた前提");
     assert!(!rt.choice_hit_rows(&actor).is_empty(), "当たり行がある前提");
 
@@ -120,7 +123,7 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
 
     assert!(rt.refresh_actor_binding(&actor, binding, &model(HEALTHY_BALLOON)));
     let events = quiet(|| {
-        present_frame(&mut rt, &mut world, 5.0).expect("戻った次のフレーム");
+        present_frame(&mut rt, &mut world, at_ms(5000)).expect("戻った次のフレーム");
     });
     assert_eq!(
         attach_messages(&events),
@@ -156,7 +159,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
         rt.apply_cue(&text("0", "あ"));
         rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((shell, 0)))]);
     };
-    rt.apply_cue(&cue("1", 0.0, CueCommand::Text("えお".into())));
+    rt.apply_cue(&cue("1", ms(0), CueCommand::Text("えお".into())));
     rt.register_actor_binding(
         scope1.clone(),
         TextSlotBinding::new(slot1, window, 1.0, (120, 60), (120, 60)),
@@ -164,7 +167,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
     );
 
     speak(&mut rt, &mut world, SHELL_HEALTHY);
-    present_frame(&mut rt, &mut world, 1.0).expect("描く");
+    present_frame(&mut rt, &mut world, at_ms(1000)).expect("描く");
     let drawn = first_box_key(&rt);
     let child = rt
         .surface_at(&drawn)
@@ -190,7 +193,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
 
     speak(&mut rt, &mut world, SHELL_HEALTHY);
     let events = quiet(|| {
-        present_frame(&mut rt, &mut world, 5.0).expect("戻った次のフレーム");
+        present_frame(&mut rt, &mut world, at_ms(5000)).expect("戻った次のフレーム");
     });
     assert_eq!(
         attach_messages(&events),

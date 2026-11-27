@@ -9,7 +9,7 @@ use std::time::Duration;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_sakura::{
     ActorKey, ChoiceWaiting, CueCommand, CueSink, SakuraMsg, ScriptOrigin, StartTalk,
-    SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId, spawn_talk,
+    SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId, TimePoint, TimeSpan, spawn_talk,
 };
 use areka_seriko::{
     BindResolver, DefaultBinds, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SerikoSink,
@@ -17,13 +17,15 @@ use areka_seriko::{
 };
 
 /// テスト用の Shell 系 `TalkCue`（`Emote{key}`・at/actor 込み）を組む。
-pub fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
-    TalkCue {
+/// 起点は 0、表情切替は瞬時（明示的 0）。
+pub fn emote_cue(at: TimeSpan, scope: &str, key: &str) -> TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(scope),
-        command: CueCommand::Emote { key: key.into() },
-        duration: 0.0, // 表情切替は瞬時（明示的 0）。
-    }
+        ActorKey::from(scope),
+        CueCommand::Emote { key: key.into() },
+        TimeSpan::ZERO,
+    )
 }
 
 /// emo2 検体の `shell/master/surfaces.txt`（検体の窓口から得る）。
@@ -117,7 +119,7 @@ pub fn run_core(
     static_binds: BindSet,
     resolver: BindResolver,
     script: &str,
-    ticks: &[f64],
+    ticks: &[TimePoint],
     text_sink: Box<dyn CueSink + Send>,
 ) -> Vec<DisplayCommand> {
     let out = MockSurfaceOutput::new();

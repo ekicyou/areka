@@ -11,8 +11,6 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -23,20 +21,22 @@ use areka_emo_present::presenter::VisibilityOwnership;
 use areka_emo_present::{EmoPresenter, PresentCommand, load_shell_target};
 use areka_sakura::ActorKey;
 use areka_seriko::{
-    AnimationTable, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoClock, SerikoLoopConfig,
-    SerikoSink, StageNote, SurfaceOutput, SurfaceResolver, seeded_rng, spawn_seriko_clocked,
+    AnimationTable, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SerikoSink,
+    StageNote, SurfaceOutput, SurfaceResolver, seeded_rng, spawn_seriko,
 };
 use bevy_ecs::world::World;
+use dola::TimeSpan;
 use dola::cue::{CueCommand, CueSink, TalkCue};
+use dola::time::testing::at_ms;
 use wintf::ecs::{DPI, GraphicsCore, WucGraphicsResource};
 
 use crate::adapter::PresentBridge;
 use crate::target_map::balloon_target;
 
 /// 合図を処理する時計の始まり（ミリ秒）。
-const START: u64 = 1_000;
+const START: i64 = 1_000;
 /// 刻みの間隔（本番の既定と同じ 16 ms）。
-const STEP: u64 = 16;
+const STEP: i64 = 16;
 
 const RED: [u8; 4] = [255, 0, 0, 255];
 const BLUE: [u8; 4] = [0, 0, 255, 255];
@@ -55,26 +55,25 @@ fn fixture(sub: &str) -> PathBuf {
 }
 
 fn cue(scope: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
+    TalkCue::scheduled(
+        at_ms(START),
+        TimeSpan::ZERO,
+        ActorKey::from(scope),
         command,
-        duration: 0.0,
-    }
+        TimeSpan::ZERO,
+    )
 }
 
 fn spawn<O: SurfaceOutput + Send + 'static>(
     config: SerikoLoopConfig,
     out: O,
-    clock: SerikoClock,
 ) -> (SerikoSink, areka_actor::ActorHandle) {
-    spawn_seriko_clocked(
+    spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         config,
         out,
-        Some(clock),
     )
 }
 
@@ -88,10 +87,10 @@ fn run(
 ) -> Vec<DisplayCommand> {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) = spawn(config, out, Arc::new(|| START));
+    let (mut sink, handle) = spawn(config, out);
     sink.emit(cue(scope, command));
     for k in 1..=ticks {
-        sink.send_tick(START + STEP * k);
+        sink.send_tick(at_ms(START + STEP * k as i64));
     }
     sink.close().expect("Close を送れる");
     handle.join().expect("Close で正常終了する");
@@ -404,9 +403,6 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
         .set_visibility_ownership(t, VisibilityOwnership::External)
         .expect("set_visibility_ownership");
 
-    let now = Arc::new(AtomicU64::new(START));
-    let source = Arc::clone(&now);
-    let clock: SerikoClock = Arc::new(move || source.load(Ordering::SeqCst));
     let config = SerikoLoopConfig {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(
@@ -417,7 +413,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
         pick_rng: seeded_rng(0),
     };
     let (tx, rx) = mpsc::channel();
-    let (mut sink, handle) = spawn(config, PresentBridge::new(tx), clock);
+    let (mut sink, handle) = spawn(config, PresentBridge::new(tx));
     let note = |open: bool, generation: u64| StageNote::Balloon {
         scope: ActorKey::from("0"),
         open,
@@ -434,8 +430,8 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     assert_eq!(presenter.stage_generation(t), Some(1));
 
     // 開いた知らせ（世代 1）→ 刻み 1120 で 2 番（経過 120）。届いた順に流す。
-    sink.send_stage(note(true, 1));
-    sink.send_tick(START + 120);
+    sink.send_stage(note(true, 1), at_ms(START));
+    sink.send_tick(at_ms(START + 120));
     let ack = recv(&rx);
     assert_eq!(race.classify(&ack), Arrival::Ack(1), "合図が先");
     presenter.apply(&mut world, ack);
@@ -455,8 +451,8 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     );
 
     // seriko はまだ出番を知らない: 刻み 1180 で 2 周目の経過 0（Y）、1290 で 2 番（①）。
-    sink.send_tick(START + 180);
-    sink.send_tick(START + 290);
+    sink.send_tick(at_ms(START + 180));
+    sink.send_tick(at_ms(START + 290));
 
     // 隠す。閉じた知らせを送り、隠れている間に Y が着く（預かるだけ・読む口は成立済みの 2 番）。
     presenter.apply(
@@ -466,8 +462,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
             reply: None,
         },
     );
-    now.store(START + 300, Ordering::SeqCst);
-    sink.send_stage(note(false, 1));
+    sink.send_stage(note(false, 1), at_ms(START + 300));
     let held = recv(&rx);
     assert_eq!(race.classify(&held), Arrival::Show(Pic::Rest), "Y");
     presenter.apply(&mut world, held);
@@ -482,10 +477,9 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     presenter.show_target(&mut world, t).expect("show_target");
     assert_eq!(presenter.stage_generation(t), Some(2));
     assert_eq!(race.shown(&presenter), Pic::Rest, "出し直しは経過 0");
-    now.store(START + 310, Ordering::SeqCst);
-    sink.send_stage(note(true, 2));
-    sink.send_tick(START + 350);
-    sink.send_tick(START + 420);
+    sink.send_stage(note(true, 2), at_ms(START + 310));
+    sink.send_tick(at_ms(START + 350));
+    sink.send_tick(at_ms(START + 420));
     sink.close().expect("Close を送れる");
     handle.join().expect("Close で正常終了する");
 

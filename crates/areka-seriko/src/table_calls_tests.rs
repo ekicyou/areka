@@ -3,6 +3,8 @@
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
 use areka_emo_compose::ComposeMethod;
+use dola::TimeSpan;
+use dola::time::testing::ms;
 
 use super::FrameAct;
 use crate::table::LoopTrigger;
@@ -59,8 +61,9 @@ fn each_word_gets_its_act_and_wait() {
             &FrameAct::Inert,
         ]
     );
-    let waits: Vec<u32> = anim.frames.iter().map(|f| f.wait_ms).collect();
-    assert_eq!(waits, vec![50, 0, 0, 0, 0, 0, 0, 0, 40, 0]);
+    let waits: Vec<TimeSpan> = anim.frames.iter().map(|f| f.wait).collect();
+    let want: Vec<TimeSpan> = [50, 0, 0, 0, 0, 0, 0, 0, 40, 0].map(ms).into();
+    assert_eq!(waits, want);
     let mv = &anim.frames[8];
     assert_eq!((mv.x, mv.y), (0, 10), "move は X・Y をそのまま持つ");
     let draw = &anim.frames[0];

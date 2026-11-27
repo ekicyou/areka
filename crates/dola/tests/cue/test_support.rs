@@ -1,21 +1,44 @@
 //! cue のテストが共有する道具（合図を作る補助と、配られた合図を記録する受け手）。
 
-use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, TalkCue};
+use dola::cue::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, Due, PendingCue, TalkCue,
+    TimedSchedule,
+};
+use dola::time::{TimePoint, TimeSpan};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// ミリ秒の長さ（起点からの隔たり・cue の長さを書く補助）。
+pub(crate) const fn ms(millis: u32) -> TimeSpan {
+    TimeSpan::from_millis(millis)
+}
+
+/// `now` までに届いた合図を、届く物が無くなるか区切りに着くまで取り出して集める。
+pub(crate) fn drain(schedule: &mut TimedSchedule<PendingCue>, now: TimePoint) -> Vec<TalkCue> {
+    let mut taken = Vec::new();
+    while let Some(Due::Payload {
+        fire_time,
+        at,
+        payload,
+    }) = schedule.pop_due(now)
+    {
+        taken.push(payload.fire(fire_time, at));
+    }
+    taken
+}
+
 /// バリア cue を作る補助（Barrier ペイロードは presentation でなく duration 0）。
-pub(crate) fn barrier(start_time: f64, kind: BarrierKind) -> Cue {
+pub(crate) fn barrier(start_time: TimeSpan, kind: BarrierKind) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
         payload: CuePayload::Barrier(kind),
-        duration: 0.0,
+        duration: TimeSpan::ZERO,
     }
 }
 
 /// テキスト cue を作る補助。
-pub(crate) fn text(start_time: f64, s: &str, duration: f64) -> Cue {
+pub(crate) fn text(start_time: TimeSpan, s: &str, duration: TimeSpan) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -25,7 +48,7 @@ pub(crate) fn text(start_time: f64, s: &str, duration: f64) -> Cue {
 }
 
 /// 選択肢 cue を作る補助（WaitForChoice の前に先積みされる）。
-pub(crate) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
+pub(crate) fn choice(start_time: TimeSpan, id: &str, s: &str) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -35,7 +58,7 @@ pub(crate) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
             references: vec![],
         }
         .into(),
-        duration: 0.0,
+        duration: TimeSpan::ZERO,
     }
 }
 
@@ -53,7 +76,7 @@ impl CueSink for RecordingSink {
 }
 
 /// 待ちの cue を作る補助。
-pub(crate) fn wait(start_time: f64, duration: f64) -> Cue {
+pub(crate) fn wait(start_time: TimeSpan, duration: TimeSpan) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,

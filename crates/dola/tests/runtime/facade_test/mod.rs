@@ -11,11 +11,11 @@
 
 use std::collections::BTreeMap;
 
-use crate::support::linear;
+use crate::support::{at_ms, linear, ms};
 use dola::runtime::{DolaRuntime, EvaluatedValue, RuntimeError, StartResult};
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry,
-    TransitionDef, TransitionRef, TransitionValue,
+    TimeSpan, TransitionDef, TransitionRef, TransitionValue,
 };
 
 mod diff_delivery;
@@ -43,7 +43,7 @@ fn simple_float_doc(sb_name: &str) -> DolaDocument {
         .storyboard(
             sb_name,
             StoryboardBuilder::new()
-                .entry(linear("opacity", 0.0, 1.0, 1.0))
+                .entry(linear("opacity", 0.0, 1.0, ms(1000)))
                 .build(),
         )
         .build()
@@ -59,14 +59,14 @@ fn dual_variable_doc() -> DolaDocument {
         .storyboard(
             "fade",
             StoryboardBuilder::new()
-                .entry(linear("opacity", 0.0, 1.0, 1.0))
+                .entry(linear("opacity", 0.0, 1.0, ms(1000)))
                 .build(),
         )
         // zoom: scale 1→2 in 2.0s
         .storyboard(
             "zoom",
             StoryboardBuilder::new()
-                .entry(linear("scale", 1.0, 2.0, 2.0))
+                .entry(linear("scale", 1.0, 2.0, ms(2000)))
                 .build(),
         )
         .build()

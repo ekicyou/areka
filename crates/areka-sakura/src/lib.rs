@@ -13,7 +13,7 @@
 //! - **compile**（純粋コンパイル）: `&[Instruction]` → `CompiledTalk{sheet, end}`。
 //!   clock・sink・talk_id・アクターを知らない決定的な写像層。
 //! - **drive**（per-talk transient アクター駆動）: 刻印済み `CueSheet` から dola の受動ランタイム
-//!   [`dola::cue::CuePlayer`] を構築し、注入時刻（`Tick(f64)`）で駆動して全 cue を演者 sink 群へ
+//!   [`dola::cue::CuePlayer`] を構築し、注入時刻（`Tick(TimePoint)`）で駆動して全 cue を演者 sink 群へ
 //!   **broadcast** し、`TalkDone` を返す。配送・状態機械・完了判定は dola へ委譲する。
 //!
 //! 出力契約は演者非依存の**単一トレイト** [`dola::cue::CueSink`]（`contract` が re-export）で、
@@ -24,7 +24,7 @@
 //! ## 写像の正本
 //!
 //! 本クレートは `Instruction` → cue ドメインの**写像（マッピング）の正本**である
-//! （scope→`ActorKey`・`Surface`→`Emote`・テキスト系→`Text`/`NewLine`/`Clear`・`at`＝f64 秒）。
+//! （scope→`ActorKey`・`Surface`→`Emote`・テキスト系→`Text`/`NewLine`/`Clear`・`at`＝台本の起点からの隔たり）。
 //! **cue の型自体の正本は dola** が所有し、本クレートは消費する。
 //!
 //! wintf には依存しない（headless）。`std::time::Instant` は本クレートに一切現れない。
@@ -35,6 +35,8 @@ pub mod compile;
 pub mod contract;
 pub mod drive;
 pub mod duration;
+pub mod held;
+pub mod reveal;
 pub mod strict;
 pub(crate) mod strict_tap;
 pub mod sysvar;

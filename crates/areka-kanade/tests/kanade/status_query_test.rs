@@ -11,8 +11,9 @@
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::{
     ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus,
-    KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,
+    KanadeConfig, KanadeMsg, TalkId, events,
 };
+use dola::time::testing::at_ms;
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, Driven, Fixture, Harness, QuitPolicy, RecordedCall, binding,
@@ -100,14 +101,14 @@ fn run_k1(ask: bool) -> Run {
         ])),
     );
     ask_here(&harness, ask, &mut answers); // ④ バルーン
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
     ask_here(&harness, ask, &mut answers); // ⑤ 再生中（完了は保留）
     send(
         &harness,
         KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(false)),
     );
     ask_here(&harness, ask, &mut answers); // ⑥ 中断の無効化（偽）・再生中
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(2_000));
     send(
         &harness,
         KanadeMsg::CloseRequest {
@@ -124,19 +125,19 @@ fn run_k2(ask: bool) -> Run {
     let mut answers = Vec::new();
 
     send(&harness, KanadeMsg::Boot);
-    tick(&harness, 1_000);
+    tick(&harness, at_ms(1_000));
     ask_here(&harness, ask, &mut answers); // ① 再生中（バルーンの知らせなし）
     send(
         &harness,
         KanadeMsg::ChoiceWaiting {
             talk_id: TalkId(1),
             choice_ids: vec![CHOICE_ID.to_string()],
-            display_end: MonotonicMs(1_000),
-            timeout_directive_secs: None,
+            display_end: at_ms(1_000),
+            timeout_directive: None,
         },
     );
     ask_here(&harness, ask, &mut answers); // ② 選択待ち
-    tick(&harness, 2_000);
+    tick(&harness, at_ms(2_000));
     send(
         &harness,
         KanadeMsg::Choice(ChoiceInput {
@@ -210,7 +211,7 @@ fn k1_answers_follow_boot_balloon_no_user_break_and_talking() {
     assert_eq!(
         *pumps[1],
         expected_call(events::on_second_change(
-            MonotonicMs(2_000),
+            at_ms(2_000),
             &ExecutionSnapshot {
                 talk_active: true,
                 balloons: vec![binding(0, 0), binding(1, 0)],

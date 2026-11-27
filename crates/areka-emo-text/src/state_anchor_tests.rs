@@ -87,15 +87,15 @@ fn newline_and_decoration_between_join_only_characters() {
     let state = applied(&[
         open("0", "x", &[]),
         text("0", "あ"),
-        cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }),
+        cue("0", TimeSpan::ZERO, CueCommand::NewLine { ratio: 1.0 }),
         cue(
             "0",
-            0.0,
+            TimeSpan::ZERO,
             CueCommand::command_carrier(FONT_TAG_CARRIER, vec!["bold".into(), "1".into()]),
         ),
         cue(
             "0",
-            0.0,
+            TimeSpan::ZERO,
             CueCommand::Cursor {
                 x: "10".into(),
                 y: String::new(),
@@ -265,7 +265,7 @@ fn clear_drops_the_ranges_and_the_open_mark() {
     let state = applied(&[
         open("0", "x", &[]),
         text("0", "あ"),
-        cue("0", 0.0, CueCommand::Clear),
+        cue("0", TimeSpan::ZERO, CueCommand::Clear),
         choice("0", "OnYes", "はい"),
         text("0", "う"),
     ]);
@@ -284,7 +284,7 @@ fn clear_of_another_scope_keeps_the_open_range() {
     let state = applied(&[
         open("0", "x", &[]),
         text("0", "あ"),
-        cue("1", 0.0, CueCommand::Clear),
+        cue("1", TimeSpan::ZERO, CueCommand::Clear),
         text("0", "い"),
     ]);
     assert_eq!(spans(&state, "0"), vec![anchor(0, "x", "あい", 0..2)]);
@@ -299,7 +299,7 @@ fn clear_all_drops_every_range_and_the_open_mark() {
         close("1"),
         open("0", "x", &[]),
         text("0", "あ"),
-        cue("0", 0.0, CueCommand::ClearAll),
+        cue("0", TimeSpan::ZERO, CueCommand::ClearAll),
         choice("0", "OnYes", "はい"),
         text("0", "う"),
     ]);

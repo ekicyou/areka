@@ -37,8 +37,8 @@ use crate::actor_sstp::{FirstReply, SstpReply, first_reply_of};
 use crate::actor_stop::{handoff_of, notify_stop, send_notice, stop_cause_of};
 use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome, TalkGap};
 use crate::msg::{
-    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, MonotonicMs, ShioriCall, ShioriFailure,
-    ShioriMsg, ShioriOutcome,
+    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, ShioriCall, ShioriFailure, ShioriMsg,
+    ShioriOutcome,
 };
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
@@ -168,12 +168,12 @@ pub fn spawn_kanade_translating(
                     talk_id,
                     choice_ids,
                     display_end,
-                    timeout_directive_secs,
+                    timeout_directive,
                 } => Input::ChoiceWaiting {
                     talk_id,
                     choice_ids,
                     display_end,
-                    timeout_directive_secs,
+                    timeout_directive,
                 },
                 KanadeMsg::UserBreak { scope, talk_id } => Input::UserBreak { scope, talk_id },
                 KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
@@ -478,7 +478,7 @@ fn execute_batch(
     stop_sink: Option<&Sender<KanadeNotice>>,
     term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
     seams: &TranslateSeams,
-    choice_wake: Option<&Sender<MonotonicMs>>,
+    choice_wake: Option<&Sender<dola::TimePoint>>,
 ) -> BatchResult {
     let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
     let mut translated: Option<TranslateResult> = None;
@@ -498,7 +498,7 @@ fn execute_batch(
                 if let Some(wake) = choice_wake
                     && wake.send(at).is_err()
                 {
-                    tracing::warn!(target: "kanade", event = "choice_wake_send_failed", at = at.0, "起こしの頼みを送れない——期限は毎秒の Tick が拾う");
+                    tracing::warn!(target: "kanade", event = "choice_wake_send_failed", at = %at, "起こしの頼みを送れない——期限は毎秒の Tick が拾う");
                 }
             }
             Action::ShioriRequest(call) => {

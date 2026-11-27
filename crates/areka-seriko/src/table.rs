@@ -51,7 +51,9 @@
 
 use std::collections::BTreeMap;
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
+
+use dola::TimeSpan;
 
 use areka_emo_compose::{
     ComposeMethod, EmoWorld, FilmId, FilmSheet, FilmSkip, NestTable, PartKey, is_always_interval,
@@ -77,17 +79,17 @@ pub enum LoopTrigger {
     },
     /// `interval,always`・動く絵の子: そのサーフェスである間ずっと繰り返す（抽選しない）。
     Always {
-        /// 1 周の長さ（手書きは待ち時間の合計・子はコマの待ち時間の合計）。
-        period_ms: NonZeroU64,
+        /// 1 周の長さ（0 より長い。手書きは待ち時間の合計・子はコマの待ち時間の合計）。
+        period: TimeSpan,
         /// 合計の回数（`None` は終わりなし。手書きは常に `None`）。
         laps: Option<NonZeroU32>,
     },
     /// `interval,runonce`: 面に切り替わった瞬間に 1 回。
     Runonce,
-    /// `interval,periodic,秒`: 面に切り替わった時刻を起点に `period_ms` ごと。
+    /// `interval,periodic,秒`: 面に切り替わった時刻を起点に `period` ごと。
     Periodic {
-        /// 周期（秒 × 1000・丸めなし。採録済みは `>= 1000`）。
-        period_ms: NonZeroU64,
+        /// 周期（書かれた秒そのまま。採録済みは 1 秒以上）。
+        period: TimeSpan,
     },
     /// `interval,talk,文字数`: `every` 文字が現れるごと。
     Talk {
@@ -99,7 +101,7 @@ pub enum LoopTrigger {
     CallOnly,
 }
 
-/// 1 コマ（method は構築時解決済みの完全形・`wait_ms` は 1ms 単位）。
+/// 1 コマ（method は構築時解決済みの完全形）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoopFrame {
     /// コマの参照 surface id。負値センチネルを保持する（`-1` 停止・他負値は非駆動）。
@@ -111,8 +113,8 @@ pub struct LoopFrame {
     /// コマの働き（描くコマか働きのコマか）。働きのコマは
     /// 描く面を持たない（`method` は記録なしの `Unknown`・`picture` は `None`）。
     pub act: FrameAct,
-    /// 前コマからこのコマへの遅延（1ms 単位）。
-    pub wait_ms: u32,
+    /// 前コマからこのコマへの遅延。
+    pub wait: TimeSpan,
     /// コマの X オフセット。
     pub x: i64,
     /// コマの Y オフセット。
@@ -159,6 +161,11 @@ pub struct AnimationTable {
     has_triggers: bool,
     /// `talk` を 1 本以上採ったか。
     has_talk: bool,
+}
+
+/// コマの待ちの合計（`always` の 1 周）。
+pub(crate) fn total_wait(frames: &[LoopFrame]) -> TimeSpan {
+    frames.iter().fold(TimeSpan::ZERO, |sum, f| sum + f.wait)
 }
 
 /// `talk`／`periodic` の数値が正の整数として読めなかった animation を採らない記録（表を組むときに
@@ -220,9 +227,11 @@ impl AnimationTable {
                     // 読み手は 1 以上だけを型へ写すが、型は 0 を持てるので 0 は無効の数値として扱う。
                     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#periodic_2c_6570_5024:1
                     areka_parsers::shell::Interval::Periodic { secs } => {
-                        match NonZeroU64::new(u64::from(*secs) * 1000) {
-                            Some(period_ms) => Some(LoopTrigger::Periodic { period_ms }),
-                            None => {
+                        match TimeSpan::try_from_millis(u64::from(*secs) * 1000) {
+                            Ok(period) if period > TimeSpan::ZERO => {
+                                Some(LoopTrigger::Periodic { period })
+                            }
+                            _ => {
                                 warn_invalid_number(surface_id, anim.id, "periodic,0");
                                 continue;
                             }
@@ -333,27 +342,24 @@ impl AnimationTable {
                     None => {
                         // 待ち時間の合計が 0 の `always` は止まらない繰り返しになるので採らない
                         // （絵は合成が経過 0 として描く）。
-                        let total: u64 = frames.iter().map(|f| u64::from(f.wait_ms)).sum();
-                        let Some(period_ms) = NonZeroU64::new(total) else {
+                        let period = total_wait(&frames);
+                        if period == TimeSpan::ZERO {
                             tracing::warn!(
                                 surface_id,
                                 animation_id = anim.id,
                                 "seriko table: always の待ち時間の合計が 0 ゆえ非採録（1 周だけ評価した絵のまま・要件 4.6）"
                             );
                             continue;
-                        };
-                        LoopTrigger::Always {
-                            period_ms,
-                            laps: None,
                         }
+                        LoopTrigger::Always { period, laps: None }
                     }
                 };
 
                 // 3 語を採ったことを語と数値つきで 1 回残す（数値は書かれたまま・`runonce` は数値なし）。
                 let adopted: Option<(&str, Option<u64>)> = match trigger {
                     LoopTrigger::Runonce => Some(("runonce", None)),
-                    LoopTrigger::Periodic { period_ms } => {
-                        Some(("periodic", Some(period_ms.get() / 1000)))
+                    LoopTrigger::Periodic { period } => {
+                        Some(("periodic", Some(period.to_std().as_secs())))
                     }
                     LoopTrigger::Talk { every } => Some(("talk", Some(u64::from(every.get())))),
                     LoopTrigger::Random { .. }
@@ -386,37 +392,43 @@ impl AnimationTable {
         // 待ち時間（pattern 0 は 0）、周期はコマの待ち時間の合計、回数はファイルの値。
         let mut films: BTreeMap<FilmId, LoopAnimation> = BTreeMap::new();
         for sheet in sheets {
-            let total: u64 = sheet.delays_ms.iter().map(|&d| u64::from(d)).sum();
-            let Some(period_ms) = NonZeroU64::new(total) else {
+            let waits = std::iter::once(0)
+                .chain(sheet.delays_ms.iter().copied())
+                .map(TimeSpan::from_millis);
+            let frames: Vec<LoopFrame> = sheet
+                .frames
+                .iter()
+                .zip(waits)
+                .map(|(&picture, wait)| LoopFrame {
+                    // 絵を指すコマはサーフェスを指さない（番号の経路へ渡っても何も描かない値）。
+                    surface_id: -1,
+                    picture: Some(picture),
+                    method: ComposeMethod::Overlay,
+                    act: FrameAct::Draw,
+                    wait,
+                    x: 0,
+                    y: 0,
+                })
+                .collect();
+            // 周期は最後のコマの待ちも含む（コマ i の待ちは pattern i+1 が持つので、frames からは数えない）。
+            let period = sheet
+                .delays_ms
+                .iter()
+                .fold(TimeSpan::ZERO, |sum, &d| sum + TimeSpan::from_millis(d));
+            if period == TimeSpan::ZERO {
                 // 分解の検査が合計 0 を落とすので起きないはず（記録の無い失敗の経路を作らない）。
                 tracing::warn!(
                     path = sheet.path.as_str(),
                     "seriko table: 動く絵の子の待ち時間の合計が 0 ゆえ非採録（1 枚目の絵のまま）"
                 );
                 continue;
-            };
-            let waits = std::iter::once(0).chain(sheet.delays_ms.iter().copied());
-            let frames = sheet
-                .frames
-                .iter()
-                .zip(waits)
-                .map(|(&picture, wait_ms)| LoopFrame {
-                    // 絵を指すコマはサーフェスを指さない（番号の経路へ渡っても何も描かない値）。
-                    surface_id: -1,
-                    picture: Some(picture),
-                    method: ComposeMethod::Overlay,
-                    act: FrameAct::Draw,
-                    wait_ms,
-                    x: 0,
-                    y: 0,
-                })
-                .collect();
+            }
             films.insert(
                 sheet.id,
                 LoopAnimation {
                     id: 0,
                     trigger: LoopTrigger::Always {
-                        period_ms,
+                        period,
                         laps: sheet.laps,
                     },
                     frames,
@@ -565,6 +577,7 @@ mod tests {
     use areka_parsers::shell::{
         Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
     };
+    use dola::time::testing::ms;
 
     /// コマ 1 本（index/method/surface_id/wait/x/y）。
     fn pat(index: u32, method: &str, surface_id: i64, wait: u32, x: i64, y: i64) -> Pattern {
@@ -679,11 +692,11 @@ mod tests {
             vec![2106, 2110, -1],
             "index 昇順で 2106→2110→-1（停止センチネル保持）"
         );
-        let kero_waits: Vec<u32> = kero_anims[0].frames.iter().map(|f| f.wait_ms).collect();
+        let kero_waits: Vec<TimeSpan> = kero_anims[0].frames.iter().map(|f| f.wait).collect();
         assert_eq!(
             kero_waits,
-            vec![0, 40, 80],
-            "wait は 1ms 単位で保持（要件 4.5）"
+            vec![ms(0), ms(40), ms(80)],
+            "wait は書かれたミリ秒のまま"
         );
 
         // sakura: 1 アニメ・BindRandom{4}・index 昇順 1/2/3。
@@ -882,9 +895,8 @@ mod tests {
                 LoopTrigger::Random { k } | LoopTrigger::BindRandom { k } => {
                     assert!(k >= 1, "採録アニメの k は >= 1");
                 }
-                LoopTrigger::Always { period_ms, .. } => {
-                    let total: u64 = anim.frames.iter().map(|f| u64::from(f.wait_ms)).sum();
-                    assert_eq!(period_ms.get(), total, "周期は待ちの合計");
+                LoopTrigger::Always { period, .. } => {
+                    assert_eq!(period, total_wait(&anim.frames), "周期は待ちの合計");
                 }
                 // この検体は 3 語を書いていない（型が 0 を持てないので確かめる値も無い）。
                 LoopTrigger::Runonce

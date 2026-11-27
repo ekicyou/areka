@@ -9,6 +9,7 @@
 //! 対照を添えてある。
 
 use super::*;
+use dola::TimeSpan;
 
 // ══════════════════════ 戻す操作の公開・記録の 1 度化 ══════════════════════
 
@@ -108,7 +109,7 @@ fn the_talk_start_reaches_the_same_reset_result() {
     let mut by_clear_all = state_with_look_and_unowned();
     let mut by_call = state_with_look_and_unowned();
 
-    by_clear_all.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    by_clear_all.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
     by_call.reset_decoration(None);
 
     assert_eq!(
@@ -276,7 +277,7 @@ fn the_record_returns_after_the_talk_starts_again() {
         let mut state = TextLayerState::default();
         state.apply_cue(&font("0", &["bold", "yes"]));
         state.apply_cue(&font("0", &["bold", "yes"]));
-        state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+        state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
         state.apply_cue(&font("0", &["bold", "yes"]));
         state.apply_cue(&font("0", &["bold", "yes"]));
     });
@@ -362,7 +363,7 @@ fn the_script_record_returns_after_the_talk_starts_again() {
         let mut state = TextLayerState::default();
         state.apply_cue(&font("0", &["sup", "1"]));
         state.apply_cue(&text("0", "あ"));
-        state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+        state.apply_cue(&cue("0", TimeSpan::ZERO, CueCommand::ClearAll));
         state.apply_cue(&font("0", &["sup", "1"]));
         state.apply_cue(&text("0", "い"));
     });

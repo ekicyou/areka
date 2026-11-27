@@ -8,7 +8,8 @@
 use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
 
-use areka_kanade::{CloseReason, KanadeMsg, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeMsg, ShioriBackend};
+use dola::time::testing::at_ms;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
@@ -154,12 +155,10 @@ fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
             close_sent = true;
         }
         // 初回の起動は起動の記録だけのトークを再生するので、再生の側にも時刻を送る。
-        let _ = runtime.dispatcher().send(DispatcherMsg::Tick {
-            now: MonotonicMs(now),
-        });
-        let _ = runtime.kanade().send(KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        });
+        let _ = runtime
+            .dispatcher()
+            .send(DispatcherMsg::Tick { now: at_ms(now) });
+        let _ = runtime.kanade().send(KanadeMsg::Tick { now: at_ms(now) });
         now += 1000;
         std::thread::sleep(Duration::from_millis(5));
     }

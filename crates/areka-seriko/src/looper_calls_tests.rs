@@ -1,5 +1,6 @@
 //! 一番上とバルーンの面の刻みと合図で働きのコマを当てる結合のテスト。
 
+use dola::time::testing::at_ms;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -67,17 +68,17 @@ fn alternativestart_starts_the_pick_from_head_at_call_time_in_the_same_show() {
         let (lottery, probe) = counting_rng(&[0]);
         let (picker, bounds) = pick_rng(pick);
         let (mut rt, mut states) = shell_shown(SAKURA, lottery, picker);
-        assert!(rt.on_tick(0, &mut states).is_empty());
-        rt.on_tick(1000, &mut states); // animation2 が 1000 に始まる。呼び出しは 1200。
+        assert!(rt.on_tick(at_ms(0), &mut states).is_empty());
+        rt.on_tick(at_ms(1000), &mut states); // animation2 が 1000 に始まる。呼び出しは 1200。
         assert_eq!(started(&rt, Slot::Shell, target), None);
 
-        let cmds = rt.on_tick(1500, &mut states); // 遅れた刻み
+        let cmds = rt.on_tick(at_ms(1500), &mut states); // 遅れた刻み
         assert_eq!(
             *bounds.lock().unwrap(),
             vec![2],
             "並び (0,1) の全部から選ぶ"
         );
-        assert_eq!(started(&rt, Slot::Shell, target), Some(1200));
+        assert_eq!(started(&rt, Slot::Shell, target), Some(at_ms(1200)));
         assert_eq!(started(&rt, Slot::Shell, other), None);
         // 経過 300 ≥ 200 で相手の 2 枚目が同じ刻みに載る。
         assert_eq!(cell(&states, Slot::Shell, target), Some(101 + 10 * target));
@@ -105,7 +106,7 @@ fn adding_a_never_animation_keeps_the_lottery() {
         (0..=20_000)
             .step_by(250)
             .map(|t| {
-                rt.on_tick(t, &mut states);
+                rt.on_tick(at_ms(t), &mut states);
                 started(&rt, Slot::Shell, 2)
             })
             .collect::<Vec<_>>()
@@ -136,7 +137,7 @@ fn stop_looks_the_same_as_minus_one() {
         let (mut rt, mut states) = shell_shown(text, lottery, seeded_rng(0));
         [0, 1000, 1200, 1300, 1400]
             .map(|t| {
-                let cmds = rt.on_tick(t, &mut states);
+                let cmds = rt.on_tick(at_ms(t), &mut states);
                 (
                     cmds,
                     states.current_pattern(&scope(), Slot::Shell).clone(),
@@ -162,14 +163,14 @@ fn stopped_always_stays_stopped_until_the_surface_is_shown() {
         animation1.pattern1,stop,0\n}\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shell_shown(STOP_ALWAYS, lottery, seeded_rng(0));
-    rt.on_tick(0, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(0));
-    rt.on_tick(1000, &mut states); // animation1 が始まる。止めは 1100。
-    rt.on_tick(1100, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(0)));
+    rt.on_tick(at_ms(1000), &mut states); // animation1 が始まる。止めは 1100。
+    rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None);
     assert_eq!(cell(&states, Slot::Shell, 0), None);
     for t in [1200, 2500, 3000] {
-        rt.on_tick(t, &mut states);
+        rt.on_tick(at_ms(t), &mut states);
         assert_eq!(started(&rt, Slot::Shell, 0), None, "{t} でも止まったまま");
     }
     assert!(rt.on_surface_shown(&scope(), Slot::Shell), "印を消した");
@@ -177,8 +178,8 @@ fn stopped_always_stays_stopped_until_the_surface_is_shown() {
         !rt.on_surface_shown(&scope(), Slot::Shell),
         "消す印はもう無い"
     );
-    rt.on_tick(3050, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(3050));
+    rt.on_tick(at_ms(3050), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(3050)));
 }
 
 /// 合図の時刻の更新でも頭のコマを置く前に当てる。`always` の周の頭が働きのコマなら、前の周の最後の
@@ -195,16 +196,16 @@ fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw()
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(CALLER, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    let shown = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40).expect("Show");
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(40));
+    let shown = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(40)).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(40)));
     let DisplayCommand::Show { pattern, .. } = shown else {
         panic!("Show を期待: {shown:?}");
     };
     assert_eq!(pattern.get(1).map(|f| f.surface_id), Some(110));
     assert_eq!(pattern.get(0), None, "1 周目の頭の働きのコマは絵を重ねない");
 
-    rt.on_tick(150, &mut states); // 2 周目の頭（140）の start がもう 1 度当たる。
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(140));
+    rt.on_tick(at_ms(150), &mut states); // 2 周目の頭（140）の start がもう 1 度当たる。
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(140)));
     assert_eq!(
         cell(&states, Slot::Shell, 0),
         Some(120),
@@ -228,12 +229,16 @@ fn periodic_start_applies_its_head_call_in_the_same_tick() {
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 1), None, "切り替えでは鳴らない");
 
-    rt.on_tick(1150, &mut states); // periodic は 1030 に鳴り、100 ms で終わる。
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(1030), "鳴った時刻に呼ぶ");
+    rt.on_tick(at_ms(1150), &mut states); // periodic は 1030 に鳴り、100 ms で終わる。
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(1030)),
+        "鳴った時刻に呼ぶ"
+    );
     assert_eq!(cell(&states, Slot::Shell, 1), Some(110));
 }
 
@@ -250,10 +255,10 @@ fn balloon_surface_applies_calls_the_same_way() {
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    rt.on_tick(1500, &mut states);
-    assert_eq!(started(&rt, Slot::Balloon, 1), Some(1200));
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    rt.on_tick(at_ms(1500), &mut states);
+    assert_eq!(started(&rt, Slot::Balloon, 1), Some(at_ms(1200)));
     assert_eq!(cell(&states, Slot::Balloon, 1), Some(111));
     assert_eq!(cell(&states, Slot::Balloon, 2), Some(120));
 }
@@ -300,9 +305,9 @@ fn shifts_of(cmds: &[DisplayCommand]) -> Vec<(i64, i64)> {
 fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_shown() {
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shell_shown(MOVES, lottery, seeded_rng(0));
-    rt.on_tick(0, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
     // (刻みの時刻, Show の数, ずれ)
-    type Step = (u64, usize, &'static [(i64, i64)]);
+    type Step = (i64, usize, &'static [(i64, i64)]);
     let expect: [Step; 6] = [
         (1000, 1, &[]),
         (1100, 0, &[(3, 5)]),
@@ -312,12 +317,12 @@ fn move_shift_is_emitted_when_it_changes_and_reset_only_when_the_surface_is_show
         (1500, 1, &[]),
     ];
     for (t, shows, want) in expect {
-        let cmds = rt.on_tick(t, &mut states);
+        let cmds = rt.on_tick(at_ms(t), &mut states);
         assert_eq!(shifts_of(&cmds), want, "{t}: {cmds:?}");
         assert_eq!(cmds.len() - want.len(), shows, "{t} の Show: {cmds:?}");
     }
     assert!(
-        rt.on_tick(1600, &mut states).is_empty(),
+        rt.on_tick(at_ms(1600), &mut states).is_empty(),
         "止まっても戻さない"
     );
     assert!(rt.take_shifts().is_empty());
@@ -348,10 +353,10 @@ fn balloon_surface_emits_the_balloon_shift() {
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
-        rt.on_tick(1100, &mut states),
+        rt.on_tick(at_ms(1100), &mut states),
         vec![DisplayCommand::MoveShiftBalloon {
             scope: scope(),
             x: 3,
@@ -379,7 +384,7 @@ fn runonce_move_applied_at_the_event_time_is_queued() {
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(RUNONCE, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(40));
     assert_eq!(
         rt.take_shifts(),
         vec![DisplayCommand::MoveShift {
@@ -388,7 +393,7 @@ fn runonce_move_applied_at_the_event_time_is_queued() {
             y: 4
         }]
     );
-    rt.on_tick(200, &mut states);
+    rt.on_tick(at_ms(200), &mut states);
     assert!(rt.take_shifts().is_empty(), "同じコマを 2 度当てない");
 }
 
@@ -430,10 +435,10 @@ fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
     let (lottery, _probe) = counting_rng(&[0]);
     let (picker, _) = pick_rng(0);
     let (mut rt, mut states) = shell_shown(text, lottery, picker);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 0), Some(100));
-    rt.on_tick(1050, &mut states);
+    rt.on_tick(at_ms(1050), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 0), None, "-1 で欄が外れる");
     assert_eq!(started(&rt, Slot::Shell, 0), None, "再生は止まる");
 }
@@ -458,9 +463,9 @@ fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
         let (picker, _) = pick_rng(0);
         let (mut rt, mut states) = shell_shown(&text, lottery, picker);
         let lines = crate::test_support::capture_logs(|| {
-            rt.on_tick(0, &mut states);
-            rt.on_tick(1000, &mut states);
-            rt.on_tick(1050, &mut states);
+            rt.on_tick(at_ms(0), &mut states);
+            rt.on_tick(at_ms(1000), &mut states);
+            rt.on_tick(at_ms(1050), &mut states);
         });
         let warned: Vec<_> = lines
             .iter()
@@ -488,10 +493,10 @@ fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     let (lottery, probe) = counting_rng(&[0, 0]);
     let (picker, _) = pick_rng(0);
     let (mut rt, mut states) = shell_shown(text, lottery, picker);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
-    rt.on_tick(2000, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(2000));
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(at_ms(2000), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(2000)));
     assert_eq!(
         probe.lock().unwrap().calls,
         2,
@@ -499,7 +504,7 @@ fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
     );
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(2000),
+        Some(at_ms(2000)),
         "同じ時刻に始め直す"
     );
 }
@@ -519,13 +524,21 @@ fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1100, &mut states); // periodic は 1030 に鳴る。start,1 は 2030。
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
-    rt.on_tick(2030, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "前の回の start,1");
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030), "回を飛ばさない");
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    rt.on_tick(at_ms(1100), &mut states); // periodic は 1030 に鳴る。start,1 は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(1030)));
+    rt.on_tick(at_ms(2030), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        Some(at_ms(2030)),
+        "前の回の start,1"
+    );
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(at_ms(2030)),
+        "回を飛ばさない"
+    );
 }
 
 /// 先に当てる段の呼び出しが、引き金の始める animation をちょうど開始の時刻に始めたときは、その再生を
@@ -546,13 +559,13 @@ fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
     let mut rt = LoopRuntime::new(config(SELF_CALL, lottery, picker));
     let mut states = empty_states();
     let logs = capture_logs(|| {
-        rt.on_tick(0, &mut states);
-        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-        rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
+        rt.on_tick(at_ms(0), &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+        rt.on_tick(at_ms(1100), &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
         assert_eq!(bounds.lock().unwrap().len(), 1);
-        rt.on_tick(2030, &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
+        rt.on_tick(at_ms(2030), &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
     });
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(2030)));
     assert_eq!(
         bounds.lock().unwrap().len(),
         2,
@@ -583,12 +596,12 @@ fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(LATE, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    assert_eq!(started(&rt, Slot::Shell, 2), Some(30));
-    rt.on_tick(3100, &mut states); // 1 は 2030・stop,1 は 2500・0 は 3030。
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 2), Some(at_ms(30)));
+    rt.on_tick(at_ms(3100), &mut states); // 1 は 2030・stop,1 は 2500・0 は 3030。
     assert_eq!(started(&rt, Slot::Shell, 1), None, "2500 に止まる");
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(3030));
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(3030)));
 }
 
 /// 引き金の「再生中か」は、開始の時刻までの働きのコマを当てた後で測る（2000 に止められた 0 は
@@ -605,12 +618,12 @@ fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(STOPPED, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1100, &mut states); // 0 は 1030 に鳴る（2530 まで続く見込み）。
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
-    rt.on_tick(2100, &mut states); // stop,0 は 2000・次の周は 2030。
-    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    rt.on_tick(at_ms(1100), &mut states); // 0 は 1030 に鳴る（2530 まで続く見込み）。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(1030)));
+    rt.on_tick(at_ms(2100), &mut states); // stop,0 は 2000・次の周は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(at_ms(2030)));
 }
 
 /// 窓が開いた刻みに生まれた一番上の `always` に、それより前の時刻の呼び出しは当たらない（閉じている
@@ -637,25 +650,25 @@ fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
     let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
     note(&mut states, false);
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    assert_eq!(started(&rt, Slot::Balloon, 1), Some(1000), "前提");
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    assert_eq!(started(&rt, Slot::Balloon, 1), Some(at_ms(1000)), "前提");
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
         "前提: 閉じている間は生まれない"
     );
     note(&mut states, true);
-    rt.on_tick(1050, &mut states);
+    rt.on_tick(at_ms(1050), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
-        Some(1050),
+        Some(at_ms(1050)),
         "1030 の stop,0 は当たらない"
     );
-    rt.on_tick(1100, &mut states);
+    rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
-        Some(1050),
+        Some(at_ms(1050)),
         "止めた印も付かない"
     );
 }
@@ -674,10 +687,10 @@ fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
     let (lottery, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(config(TEXT, lottery, seeded_rng(0)));
     let mut states = empty_states();
-    rt.on_tick(0, &mut states);
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
-    rt.on_tick(1050, &mut states);
-    assert_eq!(started(&rt, Slot::Shell, 1), Some(1010));
+    rt.on_tick(at_ms(0), &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(30)).expect("Show");
+    rt.on_tick(at_ms(1050), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(at_ms(1010)));
     assert_eq!(probe.lock().unwrap().calls, 0, "1 は 1010 から再生中");
 }
 
@@ -697,15 +710,15 @@ fn earlier_stop_does_not_hit_an_always_restarted_by_reshow() {
         animation1.pattern4,overlay,120,5000,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[0]);
     let (mut rt, mut states) = shell_shown(TEXT, lottery, seeded_rng(0));
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    rt.on_tick(1100, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "前提: 1050 に止まる");
     assert!(rt.on_surface_shown(&scope(), Slot::Shell));
-    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(1170), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 0),
-        Some(1170),
+        Some(at_ms(1170)),
         "1150 の stop,0 は当たらない"
     );
 }

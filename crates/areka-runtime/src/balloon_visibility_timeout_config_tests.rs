@@ -12,6 +12,7 @@
 // 待機・反復回数のみによる有界化も用いない。
 // =============================================================================
 
+use dola::time::testing::ms;
 use tracing::Level;
 
 use super::*;
@@ -28,7 +29,8 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 #[test]
 fn default_timeout_is_thirty_seconds() {
     assert_eq!(
-        DEFAULT_BALLOON_TIMEOUT_SECS, 30.0,
+        DEFAULT_BALLOON_TIMEOUT,
+        ms(30_000),
         "既定のタイムアウト時間は 30 秒"
     );
 }
@@ -51,7 +53,7 @@ fn timeout_env_key_is_areka_namespaced() {
 #[test]
 fn parse_unset_or_blank_is_unspecified_and_silent() {
     let ((blank, calibration), events) = capture(|| {
-        let blank: Vec<Option<u64>> = [None, Some(""), Some("   "), Some("\t")]
+        let blank: Vec<Option<TimeSpan>> = [None, Some(""), Some("   "), Some("\t")]
             .into_iter()
             .map(parse_timeout_ms)
             .collect();
@@ -84,7 +86,7 @@ fn parse_unset_or_blank_is_unspecified_and_silent() {
 #[test]
 fn parse_accepts_positive_milliseconds() {
     let (adopted, events) = capture(|| {
-        ["1", "5000", " 5000 ", "\t30000\n", "18446744073709551615"]
+        ["1", "5000", " 5000 ", "\t30000\n"]
             .into_iter()
             .map(|value| parse_timeout_ms(Some(value)))
             .collect::<Vec<_>>()
@@ -93,11 +95,10 @@ fn parse_accepts_positive_milliseconds() {
     assert_eq!(
         adopted,
         vec![
-            Some(1),
-            Some(5000),
-            Some(5000),
-            Some(30_000),
-            Some(u64::MAX)
+            Some(ms(1)),
+            Some(ms(5_000)),
+            Some(ms(5_000)),
+            Some(ms(30_000))
         ],
         "正の整数ミリ秒（周辺空白トリム込み）は採用する"
     );
@@ -111,7 +112,7 @@ fn parse_accepts_positive_milliseconds() {
 #[test]
 fn parse_rejects_zero_negative_non_numeric_and_overflow() {
     // (指定, 不正と判ずる理由)
-    let cases: [(&str, &str); 9] = [
+    let cases: [(&str, &str); 10] = [
         ("0", "0 は正ではない"),
         (" 0 ", "空白を落としても 0 は正ではない"),
         ("-1", "負値"),
@@ -120,6 +121,10 @@ fn parse_rejects_zero_negative_non_numeric_and_overflow() {
         ("5000ms", "単位付きは非数"),
         ("1.5", "小数は非数"),
         ("5 000", "内部の空白は非数"),
+        (
+            "18446744073709551615",
+            "u64 に収まっても長さの型の範囲を超える",
+        ),
         ("18446744073709551616", "u64 の範囲を超える"),
     ];
 
@@ -158,9 +163,9 @@ fn parse_rejects_zero_negative_non_numeric_and_overflow() {
 /// 環境変数なしでは既定 30 秒を採り、供給源を `default` として 1 行記録する。
 #[test]
 fn resolve_without_env_adopts_default_and_records_source() {
-    let ((secs, source), events) = capture(|| resolve_timeout_secs(None));
+    let ((timeout, source), events) = capture(|| resolve_timeout(None));
 
-    assert_eq!(secs, DEFAULT_BALLOON_TIMEOUT_SECS, "既定 30 秒を採る");
+    assert_eq!(timeout, DEFAULT_BALLOON_TIMEOUT, "既定 30 秒を採る");
     assert_eq!(source, TimeoutSource::Default, "供給源は既定");
 
     let recorded = expect_one(&events, "[balloon-visibility]");
@@ -170,13 +175,13 @@ fn resolve_without_env_adopts_default_and_records_source() {
         "供給源を記録する: {recorded:?}"
     );
     assert_eq!(
-        recorded.expect_field("timeout_secs"),
-        "30.0",
+        recorded.expect_field("timeout").parse::<TimeSpan>().ok(),
+        Some(ms(30_000)),
         "採用値を記録する"
     );
     assert_eq!(
-        recorded.expect_field("default_secs"),
-        "30.0",
+        recorded.expect_field("default").parse::<TimeSpan>().ok(),
+        Some(ms(30_000)),
         "短縮の有無に依らず既定値を併記する"
     );
     assert_eq!(
@@ -189,9 +194,9 @@ fn resolve_without_env_adopts_default_and_records_source() {
 /// 正の指定は短縮として採用し、供給源を `env` として記録する。
 #[test]
 fn resolve_with_positive_env_shortens_and_records_source() {
-    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some("5000")));
+    let ((timeout, source), events) = capture(|| resolve_timeout(Some("5000")));
 
-    assert_eq!(secs, 5.0, "5000ms は 5 秒");
+    assert_eq!(timeout, ms(5_000), "5000ms は 5 秒");
     assert_eq!(source, TimeoutSource::Env, "供給源は環境変数");
 
     let recorded = expect_one(&events, "[balloon-visibility]");
@@ -201,13 +206,13 @@ fn resolve_with_positive_env_shortens_and_records_source() {
         "供給源を記録する: {recorded:?}"
     );
     assert_eq!(
-        recorded.expect_field("timeout_secs"),
-        "5.0",
+        recorded.expect_field("timeout").parse::<TimeSpan>().ok(),
+        Some(ms(5_000)),
         "短縮後の採用値"
     );
     assert_eq!(
-        recorded.expect_field("default_secs"),
-        "30.0",
+        recorded.expect_field("default").parse::<TimeSpan>().ok(),
+        Some(ms(30_000)),
         "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる"
     );
 }
@@ -216,10 +221,10 @@ fn resolve_with_positive_env_shortens_and_records_source() {
 #[test]
 fn resolve_with_invalid_env_warns_and_degrades_to_default() {
     let value = "abc";
-    let ((secs, source), events) = capture(|| resolve_timeout_secs(Some(value)));
+    let ((timeout, source), events) = capture(|| resolve_timeout(Some(value)));
 
     assert_eq!(
-        secs, DEFAULT_BALLOON_TIMEOUT_SECS,
+        timeout, DEFAULT_BALLOON_TIMEOUT,
         "{value:?}: 既定 30 秒へ縮退する"
     );
     assert_eq!(source, TimeoutSource::Default, "{value:?}: 供給源は既定");
@@ -235,7 +240,10 @@ fn resolve_with_invalid_env_warns_and_degrades_to_default() {
         recorded.expect_field("source").contains("default"),
         "{value:?}: 縮退後の供給源は既定: {recorded:?}"
     );
-    assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
+    assert_eq!(
+        recorded.expect_field("timeout").parse::<TimeSpan>().ok(),
+        Some(DEFAULT_BALLOON_TIMEOUT)
+    );
 }
 
 /// 供給源の表記は実機サインオフの文字列検索に使う語である。
@@ -249,17 +257,16 @@ fn timeout_source_labels_are_grep_vocabulary() {
 // 読み取り口（env は 1 回だけ読む）
 // ---------------------------------------------------------------------------
 
-/// [`configured_timeout_secs`] は解決結果をプロセス寿命で 1 度だけ確定し、以後は解決し直さない。
+/// [`configured_timeout`] は解決結果をプロセス寿命で 1 度だけ確定し、以後は解決し直さない。
 ///
 /// 解決し直すと毎フレーム採用値の記録が出る。プロセス大域の環境変数は書き換えない（並行して走る
 /// 他テストを壊さないため）。捕捉は呼んだスレッドの窓なので、ほかのテストの記録と混ざらない。
 #[test]
-fn configured_timeout_secs_reads_env_once_and_is_stable() {
-    let expected = resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0;
+fn configured_timeout_reads_env_once_and_is_stable() {
+    let expected = resolve_timeout(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0;
 
-    let first = configured_timeout_secs();
-    let ((second, third), events) =
-        capture(|| (configured_timeout_secs(), configured_timeout_secs()));
+    let first = configured_timeout();
+    let ((second, third), events) = capture(|| (configured_timeout(), configured_timeout()));
 
     assert_eq!(first, expected, "環境変数の解決結果を採る");
     assert_eq!((second, third), (first, first), "2 度目以降も同じ値");

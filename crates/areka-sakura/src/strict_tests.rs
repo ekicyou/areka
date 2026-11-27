@@ -241,14 +241,14 @@ fn read_note_point_every_note() {
 /// `choicetimeout` だけが `ChoiceTimeoutUnreadable`、ほかは点なし。
 #[test]
 fn command_point_six_cases() {
-    use crate::compile::ChoiceTimeoutDirective::{Default, Secs, Unreadable};
+    use crate::compile::ChoiceTimeoutDirective::{Default, Delta, Unreadable};
     use DetectionPoint::{ChoiceTimeoutUnreadable, CommandUnhandled};
     let rows = [
         (false, None, Some(CommandUnhandled)),
         (false, Some(Unreadable), Some(CommandUnhandled)),
         (true, None, None),
         (true, Some(Default), None),
-        (true, Some(Secs(0.5)), None),
+        (true, Some(Delta(dola::time::testing::delta_ms(500))), None),
         (true, Some(Unreadable), Some(ChoiceTimeoutUnreadable)),
     ];
     for (handled, choice_timeout, point) in rows {

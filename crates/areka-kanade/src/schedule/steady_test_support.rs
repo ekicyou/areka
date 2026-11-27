@@ -1,12 +1,13 @@
 use super::*;
 use crate::schedule::ActiveTalk;
 pub(super) use crate::schedule::translate_test_support::config;
+use dola::time::testing::at_ms;
 
 /// Steady{talk: None}（pending_close なし）を時刻 500・任意採番で構築する。
 pub(super) fn steady_none(next_id: u64) -> State {
     State {
         phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: next_id,
         ..State::initial()
     }
@@ -22,7 +23,7 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
                 script: String::new(),
             }),
         },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: next_id,
         ..State::initial()
     }
@@ -53,7 +54,7 @@ pub(super) fn steady_with_ledger(
     s.choice = Some(ChoiceState {
         talk_id,
         candidates: candidates.iter().map(|c| c.to_string()).collect(),
-        deadline: Some(MonotonicMs(32_000)),
+        deadline: Some(at_ms(32_000)),
         phase,
     });
     s

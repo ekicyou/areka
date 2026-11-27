@@ -5,12 +5,13 @@
 
 use super::{PLAIN_LABEL, SSTP_SEND_LABEL, TARGET, event_label};
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput,
-    ShioriCall, ShioriFailure, ShioriOutcome,
+    ChoiceInput, CloseReason, KanadeConfig, MouseButton, MouseEventKind, MouseInput, ShioriCall,
+    ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::log_capture::capture;
 use crate::schedule::{Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, step};
 use crate::talk::TalkId;
+use dola::time::testing::at_ms;
 use tracing::Level;
 
 const GHOST: &str = "えもこ";
@@ -26,7 +27,7 @@ fn config() -> KanadeConfig {
 fn steady(talk: Option<ActiveTalk>) -> State {
     State {
         phase: Phase::Steady { talk },
-        last_now: Some(MonotonicMs(500)),
+        last_now: Some(at_ms(500)),
         next_talk_id: 10,
         ..State::initial()
     }
@@ -136,13 +137,7 @@ fn boot_greeting_is_logged_once_as_ghost_onboot() {
 #[test]
 fn steady_spontaneous_talk_is_logged_once() {
     let records = script_records(|| {
-        let (s, actions) = step(
-            steady(None),
-            Input::Tick {
-                now: MonotonicMs(1500),
-            },
-            &config(),
-        );
+        let (s, actions) = step(steady(None), Input::Tick { now: at_ms(1500) }, &config());
         assert_eq!(last_get(&actions), "OnSecondChange");
         answer(s, "\\h自発\\e", "\\h訳した自発\\e");
     });
@@ -184,7 +179,7 @@ fn choice_script_is_logged_once_as_plain_ghost() {
     state.choice = Some(ChoiceState {
         talk_id: TalkId(3),
         candidates: vec!["script:\\h選んだ\\e".to_string()],
-        deadline: Some(MonotonicMs(32_000)),
+        deadline: Some(at_ms(32_000)),
         phase: ChoicePhase::Waiting,
     });
     let records = script_records(|| {
@@ -268,13 +263,7 @@ fn close_greeting_is_logged_once_as_ghost_onclose() {
 #[test]
 fn translate_transport_failure_logs_nothing() {
     let records = script_records(|| {
-        let (s, _) = step(
-            steady(None),
-            Input::Tick {
-                now: MonotonicMs(1500),
-            },
-            &config(),
-        );
+        let (s, _) = step(steady(None), Input::Tick { now: at_ms(1500) }, &config());
         let (s, actions) = reply(
             s,
             ShioriOutcome::Value("\\h自発\\e".to_string(), areka_talk::SecurityLevel::Local),
@@ -294,13 +283,7 @@ fn translate_transport_failure_logs_nothing() {
 #[test]
 fn empty_script_talk_logs_nothing() {
     let records = script_records(|| {
-        let (s, _) = step(
-            steady(None),
-            Input::Tick {
-                now: MonotonicMs(1500),
-            },
-            &config(),
-        );
+        let (s, _) = step(steady(None), Input::Tick { now: at_ms(1500) }, &config());
         let (_, actions) = reply(
             s,
             ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),

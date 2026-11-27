@@ -6,6 +6,7 @@ use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, ParametricEasing};
 use crate::error::DolaError;
 use crate::storyboard::{KeyframeNames, KeyframeRef, LoopOffset};
+use crate::time::serde_secs::within_document_range;
 use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
@@ -25,7 +26,7 @@ pub(super) fn validate_schema_version(doc: &DolaDocument, errors: &mut Vec<DolaE
     }
 }
 
-/// 数値の規則: 有限・符号・範囲を外れた値を全部 `InvalidNumber` として集める
+/// 数値の規則: 有限・符号・範囲を外れた実数を全部 `InvalidNumber`、文書の値の上限を越える時間を全部 `TimeOutOfDocumentRange` として集める
 ///
 /// NaN は比べが全部偽になり、ほかの規則（V12・V14〜V16・重なりの検査）を素通りするので、ここで拒む。
 pub(super) fn validate_numbers(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
@@ -63,23 +64,11 @@ pub(super) fn validate_numbers(doc: &DolaDocument, errors: &mut Vec<DolaError>) 
         );
         match &sb.loop_offset {
             Some(LoopOffset::Scalar(v)) => {
-                push_unless(errors, &location, "loop_offset", *v, v.is_finite())
+                push_unless_in_range(errors, &location, "loop_offset", v.as_ticks())
             }
             Some(LoopOffset::Range(r)) => {
-                push_unless(
-                    errors,
-                    &location,
-                    "loop_offset.min",
-                    r.min,
-                    r.min.is_finite(),
-                );
-                push_unless(
-                    errors,
-                    &location,
-                    "loop_offset.max",
-                    r.max,
-                    r.max.is_finite(),
-                );
+                push_unless_in_range(errors, &location, "loop_offset.min", r.min.as_ticks());
+                push_unless_in_range(errors, &location, "loop_offset.max", r.max.as_ticks());
                 validate_easing_numbers(&location, "loop_offset.easing", &r.easing, errors);
             }
             None => {}
@@ -87,10 +76,10 @@ pub(super) fn validate_numbers(doc: &DolaDocument, errors: &mut Vec<DolaError>) 
         for (idx, entry) in sb.entry.iter().enumerate() {
             let location = format!("storyboard '{sb_name}' entry {idx}");
             if let Some(KeyframeRef::WithOffset { offset, .. }) = &entry.at {
-                push_unless(errors, &location, "offset", *offset, offset.is_finite());
+                push_unless_in_range(errors, &location, "offset", offset.as_ticks());
             }
             if let Some(v) = entry.trigger_start_offset {
-                push_unless(errors, &location, "trigger_start_offset", v, v.is_finite());
+                push_unless_in_range(errors, &location, "trigger_start_offset", v.as_ticks());
             }
             if let Some(TransitionRef::Inline(def)) = &entry.transition {
                 validate_transition_numbers(&location, def, errors);
@@ -100,10 +89,9 @@ pub(super) fn validate_numbers(doc: &DolaDocument, errors: &mut Vec<DolaError>) 
 }
 
 fn validate_transition_numbers(location: &str, def: &TransitionDef, errors: &mut Vec<DolaError>) {
-    let d = def.delay;
-    push_unless(errors, location, "delay", d, d.is_finite() && d >= 0.0);
+    push_unless_in_range(errors, location, "delay", def.delay.as_ticks());
     if let Some(d) = def.duration {
-        push_unless(errors, location, "duration", d, d.is_finite() && d >= 0.0);
+        push_unless_in_range(errors, location, "duration", d.as_ticks());
     }
     for (field, value) in [("from", &def.from), ("to", &def.to)] {
         if let Some(TransitionValue::Scalar(v)) = value {
@@ -155,6 +143,15 @@ fn push_unless(errors: &mut Vec<DolaError>, location: &str, field: &str, value: 
             location: location.to_string(),
             field: field.to_string(),
             value,
+        });
+    }
+}
+
+fn push_unless_in_range(errors: &mut Vec<DolaError>, location: &str, field: &str, ticks: i64) {
+    if !within_document_range(ticks) {
+        errors.push(DolaError::TimeOutOfDocumentRange {
+            location: location.to_string(),
+            field: field.to_string(),
         });
     }
 }
@@ -408,42 +405,19 @@ pub(super) fn validate_transition_type_constraints(
     }
 }
 
-/// loop_offset バリデーション（NaN は `validate_numbers` が拒む）
+/// loop_offset の範囲の逆転の検証
 pub(super) fn validate_loop_offset(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
     errors: &mut Vec<DolaError>,
 ) {
-    let lo = match &sb.loop_offset {
-        Some(lo) => lo,
-        None => return,
-    };
-
-    let (min, max) = match lo {
-        LoopOffset::Scalar(v) => (0.0, *v),
-        LoopOffset::Range(r) => (r.min, r.max),
-    };
-
-    if min < 0.0 {
-        errors.push(DolaError::LoopOffsetNegativeMin {
-            storyboard: sb_name.to_string(),
-            value: min,
-        });
-    }
-
-    if max < 0.0 {
-        errors.push(DolaError::LoopOffsetNegativeMax {
-            storyboard: sb_name.to_string(),
-            value: max,
-        });
-    }
-
-    // Scalar は min が 0 なので、逆転は負の max として上で報告済み
-    if matches!(lo, LoopOffset::Range(_)) && min > max {
+    if let Some(LoopOffset::Range(r)) = &sb.loop_offset
+        && r.min > r.max
+    {
         errors.push(DolaError::LoopOffsetRangeInverted {
             storyboard: sb_name.to_string(),
-            min,
-            max,
+            min: r.min,
+            max: r.max,
         });
     }
 }

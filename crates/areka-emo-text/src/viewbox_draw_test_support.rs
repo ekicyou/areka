@@ -17,7 +17,7 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_sakura::cluster::{cluster_count, clusters};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use bevy_ecs::prelude::World;
 use sample_ghost_kit::SampleRoot;
 use std::path::PathBuf;
@@ -223,22 +223,20 @@ pub(super) fn region_extent(region: &TextRegion) -> (u32, u32) {
 
 /// example の共有の台本（行 1「おっはよー！」・行 2「めっちゃええ朝やん！」・行 3「今日もいくでー！」・
 /// あふれを起こす短い行「ほな」9 本）を `state` へ積む。`at` は行 1・行 2・行 3・短い行の各 cue の
-/// 時刻（行の前の改行も同じ時刻）。reveal は配送 duration 由来（interval = duration / N）なので、
+/// 時刻（行の前の改行も同じ時刻）。reveal は配送 duration 由来なので、
 /// Text へ字数 × `interval` を焼き込むと 1 字ずつ `interval` の間隔で見える。
 pub(super) fn apply_fixture_script(
     state: &mut TextLayerState,
     actor: &ActorKey,
-    at: [f64; 4],
-    interval: f64,
+    at: [TimeSpan; 4],
+    interval: TimeSpan,
 ) {
-    let cue = |at: f64, command: CueCommand| TalkCue {
-        at,
-        actor: actor.clone(),
-        duration: match &command {
-            CueCommand::Text(t) => cluster_count(t) as f64 * interval,
-            _ => 0.0,
-        },
-        command,
+    let cue = |at: TimeSpan, command: CueCommand| {
+        let duration = match &command {
+            CueCommand::Text(t) => interval.mul_div(cluster_count(t) as u64, 1),
+            _ => TimeSpan::ZERO,
+        };
+        TalkCue::scheduled(TimePoint::ZERO, at, actor.clone(), command, duration)
     };
     let newline = || CueCommand::NewLine { ratio: 1.0 };
     state.apply_cue(&cue(at[0], CueCommand::Text("おっはよー！".into())));
@@ -273,7 +271,7 @@ pub(crate) fn layout_frame(
 pub(super) fn state_frame(
     state: &TextLayerState,
     actor: &ActorKey,
-    t: f64,
+    t: TimePoint,
     region: &TextRegion,
     mode: WritingMode,
     font_height: f32,

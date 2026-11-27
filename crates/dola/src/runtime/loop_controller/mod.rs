@@ -4,6 +4,7 @@ use rand::Rng;
 use rand::RngExt;
 
 use crate::easing::EasingFunction;
+use crate::time::{TimePoint, TimeSpan};
 
 use super::instance_manager::StoryboardInstance;
 use super::interpolator::apply_easing;
@@ -40,29 +41,33 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
 /// uniform `[0,1]` → easing → `[0,1]` へクランプ → `[min, max]` へ写す。
 /// `min == max` の場合は固定遅延を返す。
 pub(crate) fn generate_delay(
-    min: f64,
-    max: f64,
+    min: TimeSpan,
+    max: TimeSpan,
     easing: &EasingFunction,
     rng: &mut impl Rng,
-) -> f64 {
+) -> TimeSpan {
     if min == max {
         return min;
     }
     let t: f64 = rng.random_range(0.0..1.0);
-    // Back・Elastic・ベジェは [0,1] の外を出す。そのままだと待ちが min を割り、負なら tick が戻らない
+    // Back・Elastic・ベジェは [0,1] の外を出す。そのままだと待ちが min を割る
     let eased = apply_easing(t, Some(easing)).clamp(0.0, 1.0);
-    min + eased * (max - min)
+    // max < min は validate が拒む（LoopOffsetRangeInverted）
+    let width = max.checked_sub(min).unwrap_or(TimeSpan::ZERO);
+    min + width.mul_unit(eased)
 }
 
 /// 周回進行: 待ちを先に求め、次の周回を待ちの後に置く。
 ///
 /// - `loops_completed += 1`
 /// - `delay` = `loop_offset_min.is_some()` なら `generate_delay(...)`・無ければ 0
-/// - `loop_start_time = 前の end_time + delay - pause_accumulated`
+/// - `loop_start = 前の周回の終わり + delay - pause_accumulated`
 ///   （評価で一時停止の累計を足し戻すと壁時計の起点になる）
-/// - `end_time = 前の end_time + loop_duration + delay`
 /// - 全 `trigger_states` の `fired = false` にリセット
-pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng) {
+///
+/// 次の周回の始まりか終わりが型の範囲を越えるなら、周回を延ばせないので false。
+pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng) -> bool {
+    let lap_end = instance.lap_end();
     instance.loops_completed += 1;
 
     let delay = match instance.loop_offset_min {
@@ -72,38 +77,41 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
             &instance.loop_offset_easing,
             rng,
         ),
-        None => 0.0,
+        None => TimeSpan::ZERO,
     };
-    instance.loop_start_time = instance.end_time + delay - instance.pause_accumulated;
-    instance.end_time += instance.loop_duration + delay;
 
     // 周回ごとに再発火できるようにする
     for ts in &mut instance.trigger_states {
         ts.fired = false;
     }
+
+    let Some(next_start) = lap_end
+        .and_then(|end| end.checked_add(delay))
+        .and_then(|t| t.checked_add_delta(-instance.pause_accumulated))
+    else {
+        return false;
+    };
+    instance.loop_start = next_start;
+    instance.lap_end().is_some()
 }
 
 /// 1つのインスタンスのループ処理を実行する。
 ///
-/// `current_time >= end_time` の場合、while ループで全終了済み周回を処理し
+/// `now` が周回の終わり以後の場合、while ループで全終了済み周回を処理し
 /// （トリガーを持つインスタンスは 1 周だけ）、各周回について `loops_completed` を
 /// インクリメントして継続可否を判定する。
-/// 遅延が `end_time` に加算されるため、複数周回の一括スキップは自然に抑制される。
-///
-/// # Arguments
-/// - `instance`: 対象インスタンスの可変参照
-/// - `current_time`: 現在時刻
-/// - `rng`: 乱数生成器
+/// 遅延が周回の終わりに加算されるため、複数周回の一括スキップは自然に抑制される。
 ///
 /// # Returns
 /// - `LoopAction::Continue`: ループ継続またはループ対象外
 /// - `LoopAction::Conclude`: ループ完了 — 呼び出し側で `conclude_internal()` を実行
 pub(crate) fn process_loops(
     instance: &mut StoryboardInstance,
-    current_time: f64,
+    now: TimePoint,
     rng: &mut impl Rng,
 ) -> LoopAction {
-    if current_time < instance.end_time {
+    let lap_ended = |inst: &StoryboardInstance| inst.lap_end().is_some_and(|end| now >= end);
+    if !lap_ended(instance) {
         return LoopAction::Continue;
     }
 
@@ -111,29 +119,28 @@ pub(crate) fn process_loops(
         return LoopAction::Conclude;
     }
 
-    // 反復回数は (current_time - end_time) / 周回長 に比例する。無限ループ（loop_count == -1）は
-    // MIN_LOOP_DURATION（0.1s）が周回長の下限なので停止はするが、巨大な時刻ジャンプ（壁時計補正等）では
+    // 反復回数は (now - 周回の終わり) / 周回長 に比例する。無限ループ（loop_count == -1）は
+    // MIN_LOOP_DURATION（100 ms）が周回長の下限なので停止はするが、巨大な時刻ジャンプ（壁時計補正等）では
     // 反復が膨大になり得る。上限キャップや剰余スキップは外部から観測できる挙動
-    // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない。
-    // トリガーなしの無限のループは出来事に入らず、1 周は数を足すだけ（0.1s の周回で 8 時間飛んでも約 29 万回の軽い反復）。
+    // （loops_completed / loop_start / 乱数消費）を変えるため入れない。
+    // トリガーなしの無限のループは出来事に入らず、1 周は数を足すだけ（100 ms の周回で 8 時間飛んでも約 29 万回の軽い反復）。
     // shortcut: トリガーなしの有限のループは周回の終わりごとに tick の出来事になり、1 周ごとに全部のインスタンスを見る
-    // （0.01s × 100 万周を一度に飛ばすと約 75ms・ほかに無限のループが 10 個あると約 0.16 秒。直しの前は約 1.2ms）。
+    // （10 ms × 100 万周を一度に飛ばすと約 75ms・ほかに無限のループが 10 個あると約 0.16 秒。直しの前は約 1.2ms）。
     // 大きな loop_count の文書が本番に入ったら、next_event_time で最後の周回の終わりの下限だけを出来事にする。
     // shortcut: トリガーを持つループは 1 周ずつ戻り、飛ばした周回ごとに子を 1 つ起こす
-    // （コンパイル・競合の解決・Conclude と TriggerResult 1 件）。0.1s の周回で 8 時間飛ぶと
+    // （コンパイル・競合の解決・Conclude と TriggerResult 1 件）。100 ms の周回で 8 時間飛ぶと
     // 1 回の tick に約 0.67 秒・28.8 万件。トリガーを使う文書が本番に入ったら飛ばす周回の子の扱いを決め直す。
-    while current_time >= instance.end_time {
-        let before = instance.end_time;
-        advance_loop(instance, rng);
+    while lap_ended(instance) {
+        let extended = advance_loop(instance, rng);
 
-        // どの待ちを引いても時刻が進まない周回は、残りの周回もこの瞬間に終わる:
-        // 長さ 0・待ちなしの有限のループと、足しても丸めで消えるほど end_time が大きいとき
-        // （呼び出し側が巨大な start_time を渡したとき）。乱数の待ちが 0 を引いただけなら続ける
+        // どの待ちを引いても時刻が進まない周回（長さ 0・待ちなしの有限のループ）は、残りの周回も
+        // この瞬間に終わる。乱数の待ちが 0 を引いただけなら続ける
         let max_delay = instance
             .loop_offset_min
-            .map_or(0.0, |_| instance.loop_offset_max);
+            .map_or(TimeSpan::ZERO, |_| instance.loop_offset_max);
         if !should_continue_loop(instance)
-            || before + (instance.loop_duration + max_delay) <= before
+            || !extended
+            || instance.lap_length + max_delay == TimeSpan::ZERO
         {
             return LoopAction::Conclude;
         }

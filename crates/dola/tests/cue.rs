@@ -3,6 +3,8 @@
 mod runtime_test;
 #[path = "cue/schedule_test.rs"]
 mod schedule_test;
+#[path = "cue/sheet_serde_test.rs"]
+mod sheet_serde_test;
 #[path = "cue/sheet_sort_test.rs"]
 mod sheet_sort_test;
 #[path = "cue/sheet_test.rs"]

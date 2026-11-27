@@ -617,7 +617,7 @@ pub fn boot_with_origin(
     // 注入するテストなので `None` のまま）。
     let choice_wake_rx = match options.ticker {
         TickerMode::Real(_) => {
-            let (wake_tx, wake_rx) = mpsc::channel::<areka_kanade::MonotonicMs>();
+            let (wake_tx, wake_rx) = mpsc::channel::<dola::TimePoint>();
             config.choice_wake = Some(wake_tx);
             Some(wake_rx)
         }
@@ -727,9 +727,9 @@ pub fn boot_with_origin(
         TickerMode::Disabled => (None, None),
     };
     // 起こしの中継（kanade の頼み → `TickerMsg::WakeKanadeAt`）は刻み役の起動の後につなぐ。
-    let choice_wake_relay_handle = choice_wake_rx.zip(ticker_tx.clone()).map(|(rx, tx)| {
-        spawn_relay::<areka_kanade::MonotonicMs, TickerMsg>("choice-wake-relay", rx, tx)
-    });
+    let choice_wake_relay_handle = choice_wake_rx
+        .zip(ticker_tx.clone())
+        .map(|(rx, tx)| spawn_relay::<dola::TimePoint, TickerMsg>("choice-wake-relay", rx, tx));
 
     // kanade は直前に spawn したばかりなので生きているはずだが、送出に失敗しても panic せず記録だけ残す。
     if kanade_tx.send(KanadeMsg::Boot).is_err() {

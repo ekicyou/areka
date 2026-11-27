@@ -3,12 +3,13 @@ use super::steady::test_support::assert_shiori;
 use super::*;
 use crate::msg::{MouseEventKind, MouseInput, ShioriFailure};
 use crate::schedule::translate_test_support::config;
+use dola::TimeDelta;
 use tracing::Level;
 
 pub(super) fn state_in(phase: Phase) -> State {
     State {
         phase,
-        last_now: Some(MonotonicMs(1_000)),
+        last_now: Some(at_ms(1_000)),
         next_talk_id: 5,
         ..State::initial()
     }
@@ -390,14 +391,14 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
 fn choice_waiting_of(
     talk_id: TalkId,
     choice_ids: &[&str],
-    display_end: MonotonicMs,
-    timeout_directive_secs: Option<f64>,
+    display_end: TimePoint,
+    timeout_directive: Option<TimeDelta>,
 ) -> Input {
     Input::ChoiceWaiting {
         talk_id,
         choice_ids: choice_ids.iter().map(|s| s.to_string()).collect(),
         display_end,
-        timeout_directive_secs,
+        timeout_directive,
     }
 }
 
@@ -410,7 +411,7 @@ fn choice_waiting_of(
 fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     let (next, actions) = step(
         state_in(steady_with_talk(TalkId(5))),
-        choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], MonotonicMs(2_000), None),
+        choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], at_ms(2_000), None),
         &config(),
     );
     assert!(
@@ -426,14 +427,14 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     );
     assert_eq!(
         ledger.deadline,
-        Some(MonotonicMs(32_000)),
+        Some(at_ms(32_000)),
         "未指定は既定 30_000ms を起点へ加算（DD-8）"
     );
     assert!(matches!(ledger.phase, ChoicePhase::Waiting));
     assert!(
         matches!(
             actions.as_slice(),
-            [Action::ArmChoiceWake(MonotonicMs(32_000))]
+            [Action::ArmChoiceWake(t)] if *t == at_ms(32_000)
         ),
         "帳簿確立は期限の起こしの頼みだけを出す"
     );
@@ -445,16 +446,16 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
 /// であり、帳簿自体は確立される（計測を開始しないだけで選択待ちは継続する）。
 #[test]
 fn choice_waiting_deadline_follows_dd8_directive_mapping() {
-    let display_end = MonotonicMs(2_000);
-    let cases: [(Option<f64>, Option<MonotonicMs>); 5] = [
-        // 未指定＝既定へ委譲（config.choice_timeout_default_ms = 30_000）。
-        (None, Some(MonotonicMs(32_000))),
+    let display_end = at_ms(2_000);
+    let cases: [(Option<TimeDelta>, Option<TimePoint>); 5] = [
+        // 未指定＝既定へ委譲（config.choice_timeout_default = 30 s）。
+        (None, Some(at_ms(32_000))),
         // 無効化＝無期限。
-        (Some(0.0), None),
-        (Some(-1.0), None),
+        (Some(delta_ms(0)), None),
+        (Some(delta_ms(-1_000)), None),
         // 明示秒指定（既定値は関与しない）。
-        (Some(5.0), Some(MonotonicMs(7_000))),
-        (Some(2.5), Some(MonotonicMs(4_500))),
+        (Some(delta_ms(5_000)), Some(at_ms(7_000))),
+        (Some(delta_ms(2_500)), Some(at_ms(4_500))),
     ];
     for (directive, expected) in cases {
         let (next, _) = step(
@@ -477,7 +478,7 @@ fn choice_waiting_deadline_follows_dd8_directive_mapping() {
 fn choice_waiting_with_mismatched_talk_id_does_not_establish_ledger() {
     let (next, actions) = step(
         state_in(steady_with_talk(TalkId(5))),
-        choice_waiting_of(TalkId(999), &["OnMenu"], MonotonicMs(2_000), None),
+        choice_waiting_of(TalkId(999), &["OnMenu"], at_ms(2_000), None),
         &config(),
     );
     assert!(
@@ -493,7 +494,7 @@ fn choice_waiting_with_mismatched_talk_id_does_not_establish_ledger() {
 fn choice_waiting_without_active_talk_does_not_establish_ledger() {
     let (next, actions) = step(
         state_in(Phase::Steady { talk: None }),
-        choice_waiting_of(TalkId(5), &["OnMenu"], MonotonicMs(2_000), None),
+        choice_waiting_of(TalkId(5), &["OnMenu"], at_ms(2_000), None),
         &config(),
     );
     assert!(matches!(next.phase, Phase::Steady { talk: None }));
@@ -522,7 +523,7 @@ fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
         let before = std::mem::discriminant(&phase);
         let (next, actions) = step(
             state_in(phase),
-            choice_waiting_of(TalkId(5), &["OnMenu"], MonotonicMs(2_000), None),
+            choice_waiting_of(TalkId(5), &["OnMenu"], at_ms(2_000), None),
             &config(),
         );
         assert_eq!(
@@ -542,18 +543,18 @@ fn stale_choice_waiting_leaves_existing_ledger_untouched() {
     s.choice = Some(ChoiceState {
         talk_id: TalkId(5),
         candidates: vec!["existing".to_string()],
-        deadline: Some(MonotonicMs(9_000)),
+        deadline: Some(at_ms(9_000)),
         phase: ChoicePhase::Waiting,
     });
     let (next, actions) = step(
         s,
-        choice_waiting_of(TalkId(999), &["OnMenu"], MonotonicMs(2_000), None),
+        choice_waiting_of(TalkId(999), &["OnMenu"], at_ms(2_000), None),
         &config(),
     );
     let ledger = next.choice.expect("既存帳簿は棄却で消えない");
     assert_eq!(ledger.talk_id, TalkId(5));
     assert_eq!(ledger.candidates, vec!["existing".to_string()]);
-    assert_eq!(ledger.deadline, Some(MonotonicMs(9_000)));
+    assert_eq!(ledger.deadline, Some(at_ms(9_000)));
     assert!(actions.is_empty());
 }
 

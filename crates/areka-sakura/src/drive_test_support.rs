@@ -1,5 +1,5 @@
 use super::*;
-use crate::contract::{CueCommand, TalkCue};
+use crate::contract::{CueCommand, TalkCue, TimeSpan};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -131,10 +131,9 @@ pub(super) const MENU3_SCRIPT: &str = concat!(
     r"\q[閉じる,Onメニュー閉じる]",
 );
 
-/// `\s[10]hello\_w[100]\q[..]` の区切りの時刻（hello の D ＋ `\_w[100]`＝0.35）。
-/// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
-pub(super) fn menu_horizon() -> f64 {
-    text_playback_duration("hello") + crate::duration::ms_to_secs(100)
+/// `\s[10]hello\_w[100]\q[..]` の区切りの、台本の起点からの隔たり（hello の D ＋ `\_w[100]`＝350 ms）。
+pub(super) fn menu_horizon() -> TimeSpan {
+    text_playback_duration("hello") + crate::duration::ms_to_span(100)
 }
 
 /// Choice の合図が届くまで受け取る（区切りの到達を決定的に待つ）。

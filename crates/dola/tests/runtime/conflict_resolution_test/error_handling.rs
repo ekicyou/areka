@@ -13,10 +13,10 @@ mod never_strategy {
         let _x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("sb_never", 0.0).unwrap();
+        let r1 = rt.start("sb_never", at_ms(0)).unwrap();
         assert!(r1.affected_group_ids.is_empty());
 
-        let result = rt.start("sb_new", 0.5);
+        let result = rt.start("sb_new", at_ms(500));
         match result {
             Err(RuntimeError::Conflict {
                 conflicting_group_ids,
@@ -38,10 +38,10 @@ mod never_strategy {
         let _z_id = rt.subscribe("z");
         rt.load_document(doc).unwrap();
 
-        rt.start("sb_never", 0.0).unwrap();
+        rt.start("sb_never", at_ms(0)).unwrap();
 
         // Start sb_multi (x, y, z) → conflict on x → entire start fails
-        let result = rt.start("sb_multi", 0.5);
+        let result = rt.start("sb_multi", at_ms(500));
         assert!(
             matches!(result, Err(RuntimeError::Conflict { .. })),
             "partial conflict should reject entire start"
@@ -55,20 +55,20 @@ mod never_strategy {
         let x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
-        rt.start("sb_never", 0.0).unwrap();
+        rt.start("sb_never", at_ms(0)).unwrap();
 
-        let result = rt.start("sb_new", 0.5);
+        let result = rt.start("sb_new", at_ms(500));
         assert!(result.is_err());
 
         // Update → the Never SB should still be running normally
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let changes = rt.last_result().changes.clone();
-        // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
+        // sb_never: x at t=1000ms → progress=0.5 of 0→100 = 50.0
         let (_, x_val) = changes
             .iter()
             .find(|(id, _)| *id == x_id)
-            .expect("x of the Never SB is delivered at t=1.0");
-        assert_eq!(*x_val, EvaluatedValue::Float(50.0), "x at t=1.0");
+            .expect("x of the Never SB is delivered at t=1000ms");
+        assert_eq!(*x_val, EvaluatedValue::Float(50.0), "x at t=1000ms");
     }
 }
 
@@ -83,7 +83,7 @@ mod conflict_terminated_parent_triggers {
     /// ここでは公開の API から見て、発火の予定を過ぎても発火も panic もしないことを確かめる。
     #[test]
     fn conflict_terminated_parent_trigger_never_fires() {
-        // parent: opacity 0→100 (2.0s, kf1 at end=2.0) + trigger at kf1 → child
+        // parent: opacity 0→100 (2.0s, kf1 at end=2000 ms) + trigger at kf1 → child
         // interrupt: opacity を操作（親と競合）
         let doc = DolaDocumentBuilder::new("1.0")
             .variable("opacity", float())
@@ -93,7 +93,7 @@ mod conflict_terminated_parent_triggers {
                     .interruption_policy(InterruptionPolicy::Cancel)
                     .entry(StoryboardEntry {
                         keyframe: Some("kf1".to_string()),
-                        ..linear("opacity", 0.0, 100.0, 2.0)
+                        ..linear("opacity", 0.0, 100.0, ms(2000))
                     })
                     .entry(StoryboardEntry {
                         trigger_storyboard: Some("child".to_string()),
@@ -105,13 +105,13 @@ mod conflict_terminated_parent_triggers {
             .storyboard(
                 "child",
                 StoryboardBuilder::new()
-                    .entry(linear("opacity", 100.0, 0.0, 1.0))
+                    .entry(linear("opacity", 100.0, 0.0, ms(1000)))
                     .build(),
             )
             .storyboard(
                 "interrupt",
                 StoryboardBuilder::new()
-                    .entry(linear("opacity", 0.0, 50.0, 1.0))
+                    .entry(linear("opacity", 0.0, 50.0, ms(1000)))
                     .build(),
             )
             .build()
@@ -121,16 +121,16 @@ mod conflict_terminated_parent_triggers {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        // 親開始（トリガーは t=2.0 で発火予定）
-        let r_parent = rt.start("parent", 0.0).unwrap();
-        rt.tick(0.5);
+        // 親開始（トリガーは t=2000ms で発火予定）
+        let r_parent = rt.start("parent", at_ms(0)).unwrap();
+        rt.tick(at_ms(500));
 
-        // t=1.0: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
-        let r_int = rt.start("interrupt", 1.0).unwrap();
+        // t=1000ms: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
+        let r_int = rt.start("interrupt", at_ms(1000)).unwrap();
         assert_eq!(r_int.affected_group_ids, vec![r_parent.group_id]);
 
         // 発火予定時刻を過ぎても、終了済みの親のトリガーは発火しない
-        rt.tick(2.5);
+        rt.tick(at_ms(2500));
         let result = rt.last_result().clone();
         assert!(
             result.triggered.is_empty(),
@@ -138,7 +138,7 @@ mod conflict_terminated_parent_triggers {
             result.triggered
         );
         // さらに後続 update でも発火・panic しない
-        rt.tick(5.0);
+        rt.tick(at_ms(5000));
         let result = rt.last_result().clone();
         assert!(result.triggered.is_empty());
     }
@@ -156,9 +156,9 @@ mod conflict_terminated_parent_triggers {
                 StoryboardBuilder::new()
                     .entry(StoryboardEntry {
                         keyframe: Some("kf1".to_string()),
-                        ..linear("opacity", 0.0, 1.0, 1.0)
+                        ..linear("opacity", 0.0, 1.0, ms(1000))
                     })
-                    .entry(linear("opacity", 1.0, 0.0, 1.0))
+                    .entry(linear("opacity", 1.0, 0.0, ms(1000)))
                     .entry(StoryboardEntry {
                         trigger_storyboard: Some("child".to_string()),
                         at: Some(KeyframeRef::Single("kf1".to_string())),
@@ -169,7 +169,7 @@ mod conflict_terminated_parent_triggers {
             .storyboard(
                 "child",
                 StoryboardBuilder::new()
-                    .entry(linear("opacity", 0.5, 0.7, 1.0))
+                    .entry(linear("opacity", 0.5, 0.7, ms(1000)))
                     .build(),
             )
             .build()
@@ -179,13 +179,13 @@ mod conflict_terminated_parent_triggers {
         let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
-        rt.start("parent", 0.0).unwrap();
+        rt.start("parent", at_ms(0)).unwrap();
 
-        // t=1.0: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
+        // t=1000ms: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
         // 親は skip_group_ids により競合解決から除外される
-        rt.tick(1.0);
+        rt.tick(at_ms(1000));
         let result = rt.last_result().clone();
-        assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1.0");
+        assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1000ms");
         match &result.triggered[0] {
             dola::runtime::TriggerResult::Started { start_result, .. } => {
                 assert!(

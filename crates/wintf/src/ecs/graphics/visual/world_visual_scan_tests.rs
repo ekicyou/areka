@@ -264,13 +264,21 @@ fn auto_promoted_owner_subtree_is_walked_through() {
     {
         let mut a = world.get_mut::<AutoPromotion>(p).unwrap();
         let mut last = Verdict::Stay;
-        for i in 0..8 {
-            last = a
-                .rule
-                .step(i as f64 * 0.1, true, || Ok(()), SurfaceReadiness::Pending);
+        for i in 0..8i64 {
+            last = a.rule.step(
+                dola::time::testing::at_ms(i * 100),
+                true,
+                || Ok(()),
+                SurfaceReadiness::Pending,
+            );
         }
         assert_eq!(last, Verdict::Prepare);
-        let v = a.rule.step(0.8, false, || Ok(()), SurfaceReadiness::Ready);
+        let v = a.rule.step(
+            dola::time::testing::at_ms(800),
+            false,
+            || Ok(()),
+            SurfaceReadiness::Ready,
+        );
         assert_eq!(v, Verdict::Activate);
     }
     let scan = Filler::new(&mut world).scan(&mut world, root);

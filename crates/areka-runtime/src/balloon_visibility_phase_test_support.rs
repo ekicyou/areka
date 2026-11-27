@@ -37,7 +37,7 @@ pub(in crate::balloon_visibility) fn attach_headless(
 
 /// 描画の時刻だけを持つ World。
 #[cfg(test)]
-pub(super) fn world_at(frame_now: f64) -> World {
+pub(super) fn world_at(frame_now: dola::TimePoint) -> World {
     let mut world = World::new();
     world.insert_resource(FrameTime(frame_now));
     world

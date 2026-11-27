@@ -6,6 +6,8 @@
 
 use areka_emo_compose::{BindSet, FilmId, PartKey, PatternState};
 use areka_sakura::ActorKey;
+use dola::TimePoint;
+use dola::time::testing::at_ms;
 
 use super::tests::count;
 use super::{PartAnim, PartClocks};
@@ -48,7 +50,7 @@ fn tick_at(
     scope: &ActorKey,
     slot: Slot,
     top: u32,
-    now_ms: u64,
+    now: TimePoint,
     rng: &mut LoopRng,
 ) -> PatternState {
     let mut p = PatternState::default();
@@ -58,7 +60,7 @@ fn tick_at(
         top,
         &BindSet::default(),
         table,
-        now_ms,
+        now,
         true,
         true,
         None,
@@ -73,10 +75,10 @@ fn tick(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
-    now_ms: u64,
+    now: TimePoint,
     rng: &mut LoopRng,
 ) -> PatternState {
-    tick_at(clocks, table, &scope(), Slot::Shell, top, now_ms, rng)
+    tick_at(clocks, table, &scope(), Slot::Shell, top, now, rng)
 }
 
 fn clock(clocks: &PartClocks, slot: Slot, film: FilmId) -> Option<PartAnim> {
@@ -90,16 +92,16 @@ fn film_clock_is_born_when_it_becomes_visible() {
     let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    let p = tick(&mut clocks, &table, 2, 500, &mut rng);
+    let p = tick(&mut clocks, &table, 2, at_ms(500), &mut rng);
     assert!(p.is_empty());
     assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), None);
 
-    let p = tick(&mut clocks, &table, 0, 1000, &mut rng);
-    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
+    let p = tick(&mut clocks, &table, 0, at_ms(1000), &mut rng);
+    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(at_ms(1000)));
     assert!(p.is_empty(), "1 枚目は経過 0 と同じ");
-    let p = tick(&mut clocks, &table, 0, 1100, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1100), &mut rng);
     assert_eq!(film_picture(&p, ENDLESS), Some(11));
-    let p = tick(&mut clocks, &table, 0, 1300, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1300), &mut rng);
     assert!(p.is_empty(), "2 周目の頭は 1 枚目");
     assert_eq!(probe.lock().unwrap().calls, 0, "子は乱数を引かない");
 }
@@ -112,22 +114,22 @@ fn endless_film_continues_across_surfaces_and_while_hidden() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    tick(&mut clocks, &table, 0, 1000, &mut rng);
-    let p = tick(&mut clocks, &table, 1, 1150, &mut rng);
+    tick(&mut clocks, &table, 0, at_ms(1000), &mut rng);
+    let p = tick(&mut clocks, &table, 1, at_ms(1150), &mut rng);
     assert_eq!(
         film_picture(&p, ENDLESS),
         Some(11),
         "同じ絵を置く別のサーフェスで続き"
     );
 
-    let p = tick(&mut clocks, &table, 2, 1160, &mut rng);
+    let p = tick(&mut clocks, &table, 2, at_ms(1160), &mut rng);
     assert!(p.is_empty());
     assert_eq!(
         clock(&clocks, Slot::Shell, ENDLESS),
-        playing(1000),
+        playing(at_ms(1000)),
         "終わりなしは捨てない"
     );
-    let p = tick(&mut clocks, &table, 0, 1250, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1250), &mut rng);
     assert_eq!(
         film_picture(&p, ENDLESS),
         Some(12),
@@ -142,12 +144,12 @@ fn film_in_child_surface_does_not_rewind() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    let p = tick(&mut clocks, &table, 4, 1000, &mut rng);
+    let p = tick(&mut clocks, &table, 4, at_ms(1000), &mut rng);
     assert!(p.is_empty());
-    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
-    let p = tick(&mut clocks, &table, 4, 1100, &mut rng);
+    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(at_ms(1000)));
+    let p = tick(&mut clocks, &table, 4, at_ms(1100), &mut rng);
     assert_eq!(film_picture(&p, ENDLESS), Some(11));
-    let p = tick(&mut clocks, &table, 0, 1200, &mut rng);
+    let p = tick(&mut clocks, &table, 0, at_ms(1200), &mut rng);
     assert_eq!(
         film_picture(&p, ENDLESS),
         Some(12),
@@ -163,11 +165,11 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
     let mut clocks = PartClocks::default();
 
     let lines = capture_logs(|| {
-        tick(&mut clocks, &table, 3, 1000, &mut rng);
-        let p = tick(&mut clocks, &table, 3, 1100, &mut rng);
+        tick(&mut clocks, &table, 3, at_ms(1000), &mut rng);
+        let p = tick(&mut clocks, &table, 3, at_ms(1100), &mut rng);
         assert_eq!(film_picture(&p, ONCE), Some(21));
 
-        let p = tick(&mut clocks, &table, 2, 1150, &mut rng);
+        let p = tick(&mut clocks, &table, 2, at_ms(1150), &mut rng);
         assert!(p.is_empty());
         assert_eq!(
             clock(&clocks, Slot::Shell, ONCE),
@@ -175,14 +177,14 @@ fn finite_film_is_dropped_when_hidden_and_restarts_from_head() {
             "見えなくなって捨てた"
         );
 
-        let p = tick(&mut clocks, &table, 3, 1500, &mut rng);
+        let p = tick(&mut clocks, &table, 3, at_ms(1500), &mut rng);
         assert_eq!(
             clock(&clocks, Slot::Shell, ONCE),
-            playing(1500),
+            playing(at_ms(1500)),
             "戻ると頭から"
         );
         assert!(p.is_empty(), "頭＝経過 0");
-        let p = tick(&mut clocks, &table, 3, 1600, &mut rng);
+        let p = tick(&mut clocks, &table, 3, at_ms(1600), &mut rng);
         assert_eq!(film_picture(&p, ONCE), Some(21));
     });
     let debug = |needle: &str| count(&lines, &["level=DEBUG", needle, "part=film:20"]);
@@ -206,17 +208,17 @@ fn finite_film_continuously_visible_keeps_going_and_stays_stopped() {
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
 
-    tick(&mut clocks, &table, 3, 1000, &mut rng);
-    let p = tick(&mut clocks, &table, 1, 1100, &mut rng);
+    tick(&mut clocks, &table, 3, at_ms(1000), &mut rng);
+    let p = tick(&mut clocks, &table, 1, at_ms(1100), &mut rng);
     assert_eq!(film_picture(&p, ONCE), Some(21));
     assert_eq!(
         clock(&clocks, Slot::Shell, ONCE),
-        playing(1000),
+        playing(at_ms(1000)),
         "始め直さない"
     );
-    let p = tick(&mut clocks, &table, 3, 5000, &mut rng);
+    let p = tick(&mut clocks, &table, 3, at_ms(5000), &mut rng);
     assert_eq!(film_picture(&p, ONCE), Some(21), "最後のコマで止まったまま");
-    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1000));
+    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(at_ms(1000)));
 }
 
 /// スコープごと・面の種類ごとに別の時計。片方で捨てても他は残る。
@@ -233,24 +235,32 @@ fn clocks_are_separate_per_scope_and_face_kind() {
         &scope(),
         Slot::Shell,
         3,
-        1000,
+        at_ms(1000),
         &mut rng,
     );
-    tick_at(&mut clocks, &table, &other, Slot::Shell, 3, 1050, &mut rng);
+    tick_at(
+        &mut clocks,
+        &table,
+        &other,
+        Slot::Shell,
+        3,
+        at_ms(1050),
+        &mut rng,
+    );
     tick_at(
         &mut clocks,
         &table,
         &scope(),
         Slot::Balloon,
         3,
-        1080,
+        at_ms(1080),
         &mut rng,
     );
-    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1000));
-    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(1080));
+    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(at_ms(1000)));
+    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(at_ms(1080)));
     assert_eq!(
         clocks.clock_at(&other, Slot::Shell, PartKey::Film(ONCE), 0),
-        playing(1050)
+        playing(at_ms(1050))
     );
 
     // シェルの面で見えなくなっても、バルーンの面と別のスコープの時計は残る。
@@ -260,14 +270,14 @@ fn clocks_are_separate_per_scope_and_face_kind() {
         &scope(),
         Slot::Shell,
         2,
-        1100,
+        at_ms(1100),
         &mut rng,
     );
     assert_eq!(clock(&clocks, Slot::Shell, ONCE), None);
-    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(1080));
+    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(at_ms(1080)));
     assert_eq!(
         clocks.clock_at(&other, Slot::Shell, PartKey::Film(ONCE), 0),
-        playing(1050)
+        playing(at_ms(1050))
     );
     let p = tick_at(
         &mut clocks,
@@ -275,7 +285,7 @@ fn clocks_are_separate_per_scope_and_face_kind() {
         &scope(),
         Slot::Balloon,
         3,
-        1180,
+        at_ms(1180),
         &mut rng,
     );
     assert_eq!(film_picture(&p, ONCE), Some(21));
@@ -294,7 +304,7 @@ fn drop_finite_drops_only_finite_clocks_of_that_container() {
         &scope(),
         Slot::Shell,
         1,
-        1000,
+        at_ms(1000),
         &mut rng,
     );
     tick_at(
@@ -303,16 +313,16 @@ fn drop_finite_drops_only_finite_clocks_of_that_container() {
         &scope(),
         Slot::Balloon,
         1,
-        1000,
+        at_ms(1000),
         &mut rng,
     );
-    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1000));
-    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
+    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(at_ms(1000)));
+    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(at_ms(1000)));
 
     clocks.drop_finite(&scope(), Slot::Shell, &table);
     assert_eq!(clock(&clocks, Slot::Shell, ONCE), None);
-    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(1000));
-    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(1000));
+    assert_eq!(clock(&clocks, Slot::Shell, ENDLESS), playing(at_ms(1000)));
+    assert_eq!(clock(&clocks, Slot::Balloon, ONCE), playing(at_ms(1000)));
 
     // 次に見えた刻みで頭から生まれる。
     tick_at(
@@ -321,8 +331,8 @@ fn drop_finite_drops_only_finite_clocks_of_that_container() {
         &scope(),
         Slot::Shell,
         1,
-        1700,
+        at_ms(1700),
         &mut rng,
     );
-    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(1700));
+    assert_eq!(clock(&clocks, Slot::Shell, ONCE), playing(at_ms(1700)));
 }

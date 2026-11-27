@@ -32,7 +32,7 @@ fn a_user_break_hides_every_visible_scope_in_one_action() {
     );
 
     let broken = Frame::new(&[(0, seen(3, true)), (1, seen(2, true)), (2, seen(0, false))])
-        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
         .run(&mut state);
     assert_eq!(
         broken.actions,
@@ -59,7 +59,7 @@ fn a_broken_scope_is_carried_over_as_invisible() {
     );
 
     Frame::new(&[(0, seen(3, true))])
-        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
         .run(&mut state);
     assert!(
         !state.per_scope[&0].prev_visible,
@@ -80,7 +80,7 @@ fn glyphs_growing_after_a_user_break_show_again_only_once_the_next_talk_starts()
     step(&mut state, &[(0, seen(3, false))]);
     assert_eq!(
         Frame::new(&[(0, seen(3, true))])
-            .signal(TalkLifecycleSignal::UserBreak)
+            .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
             .run(&mut state)
             .actions,
         vec![hide(&[0], VisibilityTrigger::UserBreak)],
@@ -115,8 +115,11 @@ fn a_user_break_and_the_next_talk_in_the_same_round_hide_then_show() {
     step(&mut state, &[(0, seen(3, false))]);
 
     let d = Frame::new(&[(0, seen(5, true))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .signal(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
+            talk_id: None,
+        })
         .run(&mut state);
     assert_eq!(
         d.actions,
@@ -138,20 +141,20 @@ fn a_user_break_and_the_next_talk_in_the_same_round_hide_then_show() {
 fn a_deadline_reached_after_a_user_break_produces_no_action() {
     let mut state = BalloonVisibilityState::default();
     let armed = Frame::new(&[(0, seen(2, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .ended_at(0.0)
+        .ended_at(at_ms(0))
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)], "前提: 表示が起きていない");
     assert_eq!(
         state.deadline,
-        Some(TIMEOUT),
+        Some(at_ms(0) + TIMEOUT),
         "前提: 満了予定が立っていない"
     );
 
     let broken = Frame::new(&[(0, seen(2, true))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .at(1.0)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .at(at_ms(1_000))
         .run(&mut state);
     assert_eq!(
         broken.actions,
@@ -163,14 +166,14 @@ fn a_deadline_reached_after_a_user_break_produces_no_action() {
             hidden_log(0, VisibilityTrigger::UserBreak),
             VisibilityLogEvent::MeasurementDiscarded {
                 reason: MeasurementDiscardReason::NoVisibleScope,
-                deadline: TIMEOUT,
+                deadline: at_ms(0) + TIMEOUT,
             }
         ]
     );
     assert_eq!(state.deadline, None, "隠した後も計測が残っている");
 
     let expired = Frame::new(&[(0, seen(2, false))])
-        .at(TIMEOUT)
+        .at(at_ms(0) + TIMEOUT)
         .run(&mut state);
     assert!(
         expired.actions.is_empty(),
@@ -187,8 +190,8 @@ fn suppression_does_not_hold_back_a_user_break() {
     step(&mut state, &[(0, seen(3, false))]);
 
     let broken = Frame::new(&[(0, hovered(seen(3, true)))])
-        .signal(TalkLifecycleSignal::UserBreak)
-        .at(1.0)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
+        .at(at_ms(1_000))
         .dragging()
         .run(&mut state);
     assert_eq!(

@@ -32,6 +32,8 @@ windows-core = { workspace = true }
 windows-numerics = { workspace = true }
 
 [dev-dependencies]
+# テストが時刻の組み立て（at_ms など）を dola の test-support から引く。
+dola = { workspace = true, features = ["test-support"] }
 # テストの実行ファイルの落ちの報告の本体。テスト専用の leaf で、[dependencies] へは置かない。
 crash-report-kit = { path = "../crash-report-kit" }
 human-panic = { workspace = true }

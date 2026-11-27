@@ -7,6 +7,8 @@
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
+use dola::TimePoint;
+use dola::{TimeSpan, time::testing::ms};
 
 use super::box_sync_tests::fixture;
 use super::test_support::text;
@@ -24,16 +26,19 @@ const IMAGE: (u32, u32) = (120, 40);
 /// 行の数（あふれて古い行が押し出される）。
 const LINES: usize = 8;
 /// 全部の字が見えている時刻。
-const DONE: f64 = 100.0;
+const DONE: TimePoint = TimePoint::MAX;
+
+/// 台本の合図を置く時刻（起点からの隔たり）。
+const DONE_AT: TimeSpan = ms(100000);
 
 /// 1 行に 1 つずつ選択肢を置き、改行で区切った台本（`LINES` 行）。
 fn choice_lines(actor: &str) -> Vec<TalkCue> {
     let mut cues = Vec::new();
     for i in 0..LINES {
-        let at = i as f64;
+        let at = ms(1000 * i as u32);
         cues.push(choice_cue(actor, at, &format!("On{i}"), "はい", &[]));
         if i + 1 < LINES {
-            cues.push(cue(actor, at + 0.5, CueCommand::NewLine { ratio: 1.0 }));
+            cues.push(cue(actor, at + ms(500), CueCommand::NewLine { ratio: 1.0 }));
         }
     }
     cues
@@ -156,11 +161,11 @@ fn clear_and_clear_all_forget_manual() {
     rt.scroll_manual_at(&p1, ScrollDir::Older, 2);
     assert!(is_manual(&rt, &p0) && is_manual(&rt, &p1));
 
-    rt.apply_cue(&cue("0", DONE, CueCommand::Clear));
+    rt.apply_cue(&cue("0", DONE_AT, CueCommand::Clear));
     assert!(!is_manual(&rt, &p0), "`\\c` は今の行き先の手動を捨てる");
     assert!(is_manual(&rt, &p1), "ほかのスコープの手動は残る");
 
-    rt.apply_cue(&cue("0", DONE, CueCommand::ClearAll));
+    rt.apply_cue(&cue("0", DONE_AT, CueCommand::ClearAll));
     assert!(!is_manual(&rt, &p1), "台詞の頭は全部の場所の手動を捨てる");
 }
 
@@ -175,8 +180,8 @@ fn new_visible_text_forgets_manual_in_the_same_frame() {
     present_frame(&mut rt, &mut world, DONE).expect("手動の位置の提示");
     assert!(is_manual(&rt, &place));
 
-    rt.apply_cue(&cue("0", DONE + 1.0, CueCommand::Text("あ".into())));
-    present_frame(&mut rt, &mut world, DONE + 10.0).expect("字が増えたフレーム");
+    rt.apply_cue(&cue("0", DONE_AT + ms(1000), CueCommand::Text("あ".into())));
+    present_frame(&mut rt, &mut world, DONE).expect("字が増えたフレーム");
     assert!(!is_manual(&rt, &place), "見える字が増えたので手動を捨てた");
 }
 

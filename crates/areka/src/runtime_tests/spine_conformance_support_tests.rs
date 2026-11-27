@@ -22,8 +22,7 @@ use super::{
 };
 use super::{Progress, RecordedStatus, ScriptedShioriBackend, ShioriBackend, SpineHarness};
 use areka_kanade::{
-    ChoiceInput, CloseReason, ExecutionSnapshot, MonotonicMs, MouseEventKind, MouseInput,
-    ShioriCall,
+    ChoiceInput, CloseReason, ExecutionSnapshot, MouseEventKind, MouseInput, ShioriCall,
 };
 
 /// 檻の偽物が注入を記録するときの種別名。
@@ -734,8 +733,8 @@ fn status_ledger_reads_choosing_where_references_cannot() {
     };
 
     // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由） ──
-    let talking_call = areka_kanade::events::on_second_change(MonotonicMs(0), &talking);
-    let choosing_call = areka_kanade::events::on_second_change(MonotonicMs(0), &choosing);
+    let talking_call = areka_kanade::events::on_second_change(dola::TimePoint::ZERO, &talking);
+    let choosing_call = areka_kanade::events::on_second_change(dola::TimePoint::ZERO, &choosing);
     assert_eq!(
         call_references(&talking_call),
         call_references(&choosing_call),
@@ -748,7 +747,7 @@ fn status_ledger_reads_choosing_where_references_cannot() {
         .notify("OnSecondChange", Ok(()))
         .notify("OnSecondChange", Ok(()))
         .build();
-    let idle_call = areka_kanade::events::on_second_change(MonotonicMs(0), &idle);
+    let idle_call = areka_kanade::events::on_second_change(dola::TimePoint::ZERO, &idle);
     drive_call(&mut backend, &idle_call);
     drive_call(&mut backend, &talking_call);
     drive_call(&mut backend, &choosing_call);

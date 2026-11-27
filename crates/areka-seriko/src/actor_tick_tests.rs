@@ -7,6 +7,7 @@ use crate::looper::tests::{
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::BindSet;
 use areka_parsers::shell::{Animation, Interval};
+use dola::time::testing::{at_ms, ms};
 
 // Tick 経路（`SerikoMsg::Tick`・`send_tick`・`handle_message` の Tick 腕・`on_surface_changed` の連動）の檻。
 // Tick と乱数を注入して決定論にする（sleep は使わない）。表は looper.rs の檻と同じ `from_world` で組む。
@@ -27,14 +28,14 @@ fn tick_with_no_shown_slot_is_complete_no_op() {
     let records = out.records();
 
     // 起動 tick と境界跨ぎ tick の双方が完全 no-op（表示中 slot が無いため）。
-    for now in [0_u64, 1000, 5000] {
+    for now in [0, 1000, 5000].map(at_ms) {
         let flow = handle_message(
             &resolver,
             &BindResolver::empty(),
             &mut states,
             &mut loop_runtime,
             &mut out,
-            SerikoMsg::Tick { now_ms: now },
+            SerikoMsg::Tick { now },
         );
         assert_eq!(flow, ControlFlow::Continue(()), "Tick は常に処理継続");
     }
@@ -65,7 +66,7 @@ fn tick_boundary_cross_emits_show_carrying_pattern() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Tick { now_ms: 0 },
+        SerikoMsg::Tick { now: at_ms(0) },
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
@@ -79,7 +80,7 @@ fn tick_boundary_cross_emits_show_carrying_pattern() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Tick { now_ms: 1000 },
+        SerikoMsg::Tick { now: at_ms(1000) },
     );
     assert_eq!(flow, ControlFlow::Continue(()), "Tick は処理継続");
 
@@ -128,7 +129,7 @@ fn send_tick_after_actor_stopped_logs_debug_no_panic() {
     handle.join().expect("Close で正常終了する");
 
     let logs = capture_text(|| {
-        sink.send_tick(1234);
+        sink.send_tick(at_ms(1234));
     });
     assert!(
         logs.contains("level=DEBUG"),
@@ -187,7 +188,7 @@ fn emote_surface_change_resets_loop_playback() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Tick { now_ms: 0 },
+        SerikoMsg::Tick { now: at_ms(0) },
     );
     let _ = handle_message(
         &resolver,
@@ -195,7 +196,7 @@ fn emote_surface_change_resets_loop_playback() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Tick { now_ms: 1000 },
+        SerikoMsg::Tick { now: at_ms(1000) },
     );
 
     // Emote で surface20 へ切替（apply Changed → emit Show{20,空} → on_surface_changed で playback 除去）。
@@ -205,7 +206,7 @@ fn emote_surface_change_resets_loop_playback() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Cue(emote_cue(1.0, "0", "20")),
+        SerikoMsg::Cue(emote_cue(ms(1000), "0", "20")),
     );
 
     // 境界を跨がない後続 tick（1050・次境界は 2000）。playback がリセット済みなら無発行。
@@ -215,7 +216,7 @@ fn emote_surface_change_resets_loop_playback() {
         &mut states,
         &mut loop_runtime,
         &mut out,
-        SerikoMsg::Tick { now_ms: 1050 },
+        SerikoMsg::Tick { now: at_ms(1050) },
     );
 
     let recorded = records.lock().expect("records mutex poisoned");

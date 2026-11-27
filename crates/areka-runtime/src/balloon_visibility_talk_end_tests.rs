@@ -15,26 +15,28 @@ use super::*;
 fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .display_end(10.0)
+        .display_end(at_ms(10000))
         .run(&mut state);
 
     // 占有終端を過ぎても、トークの終わりが無ければ計測は立たない。
-    let waiting = Frame::new(&[(0, seen(3, true))]).at(10.0).run(&mut state);
+    let waiting = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(10000))
+        .run(&mut state);
     assert_eq!((waiting.logs, state.deadline), (vec![], None));
 
-    // 止まった時刻 4.0 は終端 10.0 より早いので、起点は止まった時刻。
+    // 止まった時刻 4000ms は終端 10000ms より早いので、起点は止まった時刻。
     let started = Frame::new(&[(0, seen(3, true))])
-        .at(10.5)
-        .signal(TalkLifecycleSignal::TalkEnded { at: Some(4.0) })
+        .at(at_ms(10500))
+        .signal(TalkLifecycleSignal::TalkEnded { at: at_ms(4000) })
         .run(&mut state);
-    let deadline = 4.0 + TIMEOUT;
+    let deadline = at_ms(4000) + TIMEOUT;
     assert_eq!(
         started.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
-            origin: MeasurementOrigin::StoppedAt(4.0),
-            display_end: 10.0,
+            origin: MeasurementOrigin::StoppedAt(at_ms(4000)),
+            display_end: at_ms(10000),
             deadline,
         }]
     );
@@ -44,7 +46,7 @@ fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
     );
 
     let before = Frame::new(&[(0, seen(3, true))])
-        .at(deadline - 0.001)
+        .at(earlier(deadline, ms(1)))
         .run(&mut state);
     assert_eq!((before.actions, before.timeout_notice), (vec![], None));
     let expired = Frame::new(&[(0, seen(3, true))])
@@ -57,57 +59,68 @@ fn measurement_waits_for_talk_end_and_anchors_on_the_earlier_stop_time() {
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 }
 
-/// トークの待ち時間の指定はミリ秒を 1,000 で割った秒に写し、「なし」なら計測しない。次の会話の
+/// トークの待ち時間の指定はミリ秒をそのまま長さにし、「なし」なら計測しない。次の会話の
 /// 開始で既定へ戻る。
 #[test]
 fn talk_timeout_replaces_the_wait_until_the_next_talk() {
     let mut state = BalloonVisibilityState::default();
     let started = Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Never))
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Millis(
-            1234,
-        )))
-        .ended_at(2.0)
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::Never,
+        })
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::After(ms(1234)),
+        })
+        .ended_at(at_ms(2000))
         .run(&mut state);
     assert_eq!(started.actions, vec![show(0)]);
-    let measured = Frame::new(&[(0, seen(3, true))]).at(2.0).run(&mut state);
+    let measured = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(2000))
+        .run(&mut state);
     assert_eq!(
         measured.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
             origin: MeasurementOrigin::DisplayEnd,
-            display_end: 2.0,
-            deadline: 2.0 + 1234.0 / 1000.0,
+            display_end: at_ms(2000),
+            deadline: at_ms(2000) + ms(1234),
         }],
-        "最後に届いた指定が残り、ミリ秒は丸めずに秒へ写す"
+        "最後に届いた指定が残り、ミリ秒は丸めずに長さになる"
     );
 
     // 次の会話で「なし」が指定されると、終わっても計測しない。
     Frame::new(&[(0, seen(3, true))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Never))
-        .ended_at(1.0)
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::Never,
+        })
+        .ended_at(at_ms(1000))
         .run(&mut state);
-    let never = Frame::new(&[(0, seen(3, true))]).at(500.0).run(&mut state);
+    let never = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(500000))
+        .run(&mut state);
     assert_eq!((never.actions, state.deadline), (vec![], None));
 
     // さらに次の会話は既定の待ち時間へ戻る。
     Frame::new(&[(0, seen(3, true))])
-        .at(1.0)
+        .at(at_ms(1000))
         .talk_started()
-        .ended_at(1.0)
+        .ended_at(at_ms(1000))
         .run(&mut state);
-    assert_eq!(state.deadline, Some(1.0 + TIMEOUT));
+    assert_eq!(state.deadline, Some(at_ms(1000) + TIMEOUT));
 }
 
 /// 時間切れの計測が立つまで、表示だけを済ませた状態を作る（scope 0 に 3 文字・既定の待ち時間）。
 /// トークの終わりは占有終端 `end` と同じ時刻で届く。
-fn shown_and_ended(end: f64) -> BalloonVisibilityState {
+fn shown_and_ended(end: TimePoint) -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
         .ended_at(end)
         .run(&mut state);
@@ -125,26 +138,26 @@ fn shown_and_ended(end: f64) -> BalloonVisibilityState {
 /// 起点の記録は計測を始めたフレームに 1 件だけ出て、満了は直前で起きずちょうどで起きる。
 #[test]
 fn origin_is_the_stop_time_only_when_it_precedes_the_display_end() {
-    const END: f64 = 10.0;
+    const END: TimePoint = at_ms(10000);
     let cases = [
         (
-            END - 0.001,
-            MeasurementOrigin::StoppedAt(END - 0.001),
-            END - 0.001,
+            earlier(END, ms(1)),
+            MeasurementOrigin::StoppedAt(earlier(END, ms(1))),
+            earlier(END, ms(1)),
         ),
         (END, MeasurementOrigin::DisplayEnd, END),
-        (END + 0.001, MeasurementOrigin::DisplayEnd, END),
+        (END + ms(1), MeasurementOrigin::DisplayEnd, END),
     ];
     for (stopped, origin, effective) in cases {
         let mut state = BalloonVisibilityState::default();
         Frame::new(&[(0, seen(3, false))])
-            .at(0.0)
+            .at(at_ms(0))
             .talk_started()
             .display_end(END)
             .run(&mut state);
         let started = Frame::new(&[(0, seen(3, true))])
-            .at(10.5)
-            .signal(TalkLifecycleSignal::TalkEnded { at: Some(stopped) })
+            .at(at_ms(10500))
+            .signal(TalkLifecycleSignal::TalkEnded { at: stopped })
             .run(&mut state);
         let deadline = effective + TIMEOUT;
         assert_eq!(
@@ -158,7 +171,7 @@ fn origin_is_the_stop_time_only_when_it_precedes_the_display_end() {
         );
 
         let before = Frame::new(&[(0, seen(3, true))])
-            .at(deadline - 0.001)
+            .at(earlier(deadline, ms(1)))
             .run(&mut state);
         assert_eq!(
             (before.actions, before.logs, before.timeout_notice),
@@ -177,43 +190,6 @@ fn origin_is_the_stop_time_only_when_it_precedes_the_display_end() {
     }
 }
 
-/// トークの終わりに時刻が無ければ終端を起点にし、そのことを起点の記録に残す。
-#[test]
-fn missing_stop_time_falls_back_to_the_display_end_and_is_recorded() {
-    let mut state = BalloonVisibilityState::default();
-    Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
-        .talk_started()
-        .display_end(10.0)
-        .run(&mut state);
-    let started = Frame::new(&[(0, seen(3, true))])
-        .at(10.0)
-        .signal(TalkLifecycleSignal::TalkEnded { at: None })
-        .run(&mut state);
-    let deadline = 10.0 + TIMEOUT;
-    assert_eq!(
-        started.logs,
-        vec![VisibilityLogEvent::MeasurementStarted {
-            origin: MeasurementOrigin::StopTimeMissing,
-            display_end: 10.0,
-            deadline,
-        }]
-    );
-
-    let before = Frame::new(&[(0, seen(3, true))])
-        .at(deadline - 0.001)
-        .run(&mut state);
-    assert_eq!((before.actions, before.logs), (vec![], vec![]));
-    let expired = Frame::new(&[(0, seen(3, true))])
-        .at(deadline)
-        .run(&mut state);
-    assert_eq!(
-        expired.actions,
-        vec![hide(&[0], VisibilityTrigger::Timeout)]
-    );
-    assert_eq!(expired.timeout_notice, Some(TALK_ID));
-}
-
 // ---------------------------------------------------------------------------
 // トークごとの待ち時間
 // ---------------------------------------------------------------------------
@@ -225,27 +201,28 @@ fn positive_talk_timeout_hides_exactly_at_its_own_deadline() {
     let both = |a: bool| [(0, seen(3, a)), (1, seen(2, a))];
     let mut state = BalloonVisibilityState::default();
     Frame::new(&both(false))
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Millis(
-            3000,
-        )))
-        .ended_at(5.0)
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::After(ms(3000)),
+        })
+        .ended_at(at_ms(5000))
         .run(&mut state);
-    let started = Frame::new(&both(true)).at(5.0).run(&mut state);
-    assert_eq!(state.deadline, Some(8.0));
+    let started = Frame::new(&both(true)).at(at_ms(5000)).run(&mut state);
+    assert_eq!(state.deadline, Some(at_ms(8000)));
     assert_eq!(started.timeout_notice, None);
 
-    let before = Frame::new(&both(true)).at(7.999).run(&mut state);
+    let before = Frame::new(&both(true)).at(at_ms(7999)).run(&mut state);
     assert_eq!((before.actions, before.timeout_notice), (vec![], None));
-    let expired = Frame::new(&both(true)).at(8.0).run(&mut state);
+    let expired = Frame::new(&both(true)).at(at_ms(8000)).run(&mut state);
     assert_eq!(
         expired.actions,
         vec![hide(&[0, 1], VisibilityTrigger::Timeout)]
     );
     assert_eq!(expired.timeout_notice, Some(TALK_ID));
 
-    let after = Frame::new(&both(false)).at(8.001).run(&mut state);
+    let after = Frame::new(&both(false)).at(at_ms(8001)).run(&mut state);
     assert_eq!(
         (after.actions, after.logs, after.timeout_notice),
         (vec![], vec![], None),
@@ -259,21 +236,25 @@ fn positive_talk_timeout_hides_exactly_at_its_own_deadline() {
 fn never_given_last_keeps_the_balloon_and_raises_no_notice() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Millis(
-            3000,
-        )))
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Never))
-        .ended_at(2.0)
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::After(ms(3000)),
+        })
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::Never,
+        })
+        .ended_at(at_ms(2000))
         .run(&mut state);
-    let default_deadline = 2.0 + TIMEOUT;
+    let default_deadline = at_ms(2000) + TIMEOUT;
     let instants = [
-        2.0,
-        2.0 + 3.0,
-        default_deadline - 0.001,
+        at_ms(2000),
+        at_ms(2000) + ms(3000),
+        earlier(default_deadline, ms(1)),
         default_deadline,
-        default_deadline + 0.001,
+        default_deadline + ms(1),
     ];
     for now in instants {
         let frame = Frame::new(&[(0, seen(3, true))]).at(now).run(&mut state);
@@ -292,38 +273,45 @@ fn never_given_last_keeps_the_balloon_and_raises_no_notice() {
 fn restart_after_suppression_uses_the_talk_timeout() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .talk_started()
-        .signal(TalkLifecycleSignal::BalloonTimeout(TalkTimeout::Millis(
-            2000,
-        )))
-        .ended_at(1.0)
+        .signal(TalkLifecycleSignal::BalloonTimeout {
+            at: SIGNAL_AT,
+            timeout: TalkTimeout::After(ms(2000)),
+        })
+        .ended_at(at_ms(1000))
         .run(&mut state);
     Frame::new(&[(0, seen(3, true))])
-        .at(1.0)
+        .at(at_ms(1000))
         .dragging()
         .run(&mut state);
-    assert_eq!(state.deadline, Some(3.0));
+    assert_eq!(state.deadline, Some(at_ms(3000)));
 
     let held = Frame::new(&[(0, seen(3, true))])
-        .at(3.0)
+        .at(at_ms(3000))
         .dragging()
         .run(&mut state);
     assert_eq!((held.actions, held.timeout_notice), (vec![], None));
 
-    let restarted = Frame::new(&[(0, seen(3, true))]).at(10.0).run(&mut state);
+    let restarted = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(10000))
+        .run(&mut state);
     assert_eq!(
         restarted.logs,
         vec![VisibilityLogEvent::MeasurementRestarted {
-            now: 10.0,
-            deadline: 12.0,
+            now: at_ms(10000),
+            deadline: at_ms(12000),
         }]
     );
     assert_eq!(restarted.timeout_notice, None);
 
-    let before = Frame::new(&[(0, seen(3, true))]).at(11.999).run(&mut state);
+    let before = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(11999))
+        .run(&mut state);
     assert_eq!((before.actions, before.timeout_notice), (vec![], None));
-    let expired = Frame::new(&[(0, seen(3, true))]).at(12.0).run(&mut state);
+    let expired = Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(12000))
+        .run(&mut state);
     assert_eq!(
         expired.actions,
         vec![hide(&[0], VisibilityTrigger::Timeout)]
@@ -339,12 +327,12 @@ fn restart_after_suppression_uses_the_talk_timeout() {
 /// 計測を捨てた）なら知らせは立たない。
 #[test]
 fn notice_is_not_raised_when_the_balloon_goes_for_another_reason() {
-    let deadline = 2.0 + TIMEOUT;
+    let deadline = at_ms(2000) + TIMEOUT;
 
-    let mut state = shown_and_ended(2.0);
+    let mut state = shown_and_ended(at_ms(2000));
     let broke = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
-        .signal(TalkLifecycleSignal::UserBreak)
+        .signal(TalkLifecycleSignal::UserBreak { at: SIGNAL_AT })
         .run(&mut state);
     assert_eq!(
         broke.actions,
@@ -352,14 +340,14 @@ fn notice_is_not_raised_when_the_balloon_goes_for_another_reason() {
     );
     assert_eq!(broke.timeout_notice, None, "利用者の中断");
 
-    let mut state = shown_and_ended(2.0);
+    let mut state = shown_and_ended(at_ms(2000));
     let cleared = Frame::new(&[(0, seen(0, true))])
         .at(deadline)
         .run(&mut state);
     assert_eq!(cleared.actions, vec![hide(&[0], VisibilityTrigger::Clear)]);
     assert_eq!(cleared.timeout_notice, None, "内容の消去");
 
-    let mut state = shown_and_ended(2.0);
+    let mut state = shown_and_ended(at_ms(2000));
     let next = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
         .talk_started()
@@ -381,12 +369,17 @@ fn notice_is_not_raised_when_the_balloon_goes_for_another_reason() {
 fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(3, false))])
-        .at(0.0)
-        .signal(TalkLifecycleSignal::TalkStarted { talk_id: None })
-        .ended_at(2.0)
+        .at(at_ms(0))
+        .signal(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
+            talk_id: None,
+        })
+        .ended_at(at_ms(2000))
         .run(&mut state);
-    Frame::new(&[(0, seen(3, true))]).at(2.0).run(&mut state);
-    let deadline = 2.0 + TIMEOUT;
+    Frame::new(&[(0, seen(3, true))])
+        .at(at_ms(2000))
+        .run(&mut state);
+    let deadline = at_ms(2000) + TIMEOUT;
     let expired = Frame::new(&[(0, seen(3, true))])
         .at(deadline)
         .run(&mut state);
@@ -406,16 +399,17 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
     // 次のトークは番号 8 で始まり、時間切れの知らせはその番号で立つ。
     let next_id = TalkId(8);
     Frame::new(&[(0, seen(0, false))])
-        .at(0.0)
+        .at(at_ms(0))
         .signal(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
             talk_id: Some(next_id),
         })
         .run(&mut state);
     Frame::new(&[(0, seen(4, false))])
-        .at(1.0)
-        .ended_at(1.0)
+        .at(at_ms(1000))
+        .ended_at(at_ms(1000))
         .run(&mut state);
-    let next_deadline = 1.0 + TIMEOUT;
+    let next_deadline = at_ms(1000) + TIMEOUT;
     let next = Frame::new(&[(0, seen(4, true))])
         .at(next_deadline)
         .run(&mut state);

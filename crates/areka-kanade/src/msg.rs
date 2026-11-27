@@ -7,6 +7,7 @@
 //!
 //! # 依存規律（Allowed Dependencies）
 //! 本ファイルが依存するのは `std`・`areka_actor::ReplySender`・`areka_talk::SecurityLevel`・
+//! `dola::time` の型・
 //! `thiserror`（[`ShioriFailure`] の導出）と、クレート内の語彙
 //! （[`crate::talk`]・[`crate::change`]・[`crate::online`]・[`crate::status`]・
 //! [`crate::sstp`]・[`crate::anchor_input`]・[`crate::request_origin`]・
@@ -25,11 +26,7 @@ use crate::online::{self, OnlineCounter};
 use crate::schedule::resources::ResourceOutcome;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
-
-/// 単調ミリ秒（注入時刻）。本番結線は OS 起動からの経過 ms（GetTickCount64 相当）を
-/// 注入する想定（OnSecondChange Ref0 が正典と一致する）。テストは任意の単調値。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MonotonicMs(pub u64);
+use dola::{TimeDelta, TimePoint, TimeSpan};
 
 /// close 指示の理由（ukadoc OnClose Ref0 への写像: User→"user"・System→"system"）。
 ///
@@ -200,10 +197,10 @@ pub enum KanadeMsg {
     /// boot 運行の開始指示（Idle 以外では warn!＋無視）。
     Boot,
     /// 1 秒相当の Tick（時刻同梱）。pump 駆動と close 期限判定を兼ねる。
-    Tick { now: MonotonicMs },
+    Tick { now: TimePoint },
     /// 選択待ちの期限の知らせ。刻み役が選択待ちの期限で 1 回だけ送る。`Tick` と違い
     /// OnSecondChange を出さない（`last_now` も pump も動かさない）。
-    ChoiceTimeoutDue { now: MonotonicMs },
+    ChoiceTimeoutDue { now: TimePoint },
     /// sakura（mock sink 含む）からの再生完了通知。
     TalkDone(crate::talk::TalkDone),
     /// 通常 close 指示（OnClose 握手を開始・終了権限は SHIORI 側）。
@@ -226,20 +223,19 @@ pub enum KanadeMsg {
     Anchor(crate::anchor_input::AnchorInput),
     /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分。
     ///
-    /// 真実源は再生層（duration 権威直結）だが、**dispatcher が `base_now` で
-    /// 経過秒 → 単調 ms へ換算済み**の値を投函する（時間基準を新設しない）。
-    /// deadline 写像（`timeout_directive_secs` の 3 値語彙 → 期限）は kanade の領分であり
-    /// この境界では行わない。
+    /// 真実源は再生層（duration 権威直結）で、表示の終わりは刻みと同じ物差しの時刻で届く
+    /// （時間基準を新設しない）。deadline 写像（`timeout_directive` の 3 値語彙 → 期限）は
+    /// kanade の領分であり、この境界では行わない。
     ChoiceWaiting {
         /// 選択待ちに入った talk（stale ガード用）。
         talk_id: crate::talk::TalkId,
         /// 候補選択肢 ID 列（照合用・表示順を保存する）。
         choice_ids: Vec<String>,
-        /// トーク表示完了時刻。dispatcher が `base_now` で ms へ換算済み。
-        display_end: MonotonicMs,
-        /// バリアのタイムアウト指令（秒・3 値語彙）。`None`＝未指定（既定値へ委譲）・
-        /// `Some(v <= 0.0)`＝無効化・`Some(v > 0.0)`＝明示秒指定。写像は kanade。
-        timeout_directive_secs: Option<f64>,
+        /// トーク表示完了の時刻（刻みと同じ物差し）。
+        display_end: TimePoint,
+        /// バリアのタイムアウト指令（3 値語彙）。`None`＝未指定（既定値へ委譲）・
+        /// `Some(d <= 0)`＝無効化・`Some(d > 0)`＝明示の長さ指定。写像は kanade。
+        timeout_directive: Option<TimeDelta>,
     },
     /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。additive 増分。
     ///
@@ -547,8 +543,8 @@ pub struct KanadeConfig {
     pub baseware_version: String,
     /// basewareversion Ref1（既定 "areka"）。
     pub baseware_name: String,
-    /// close talk 再生完了待ち上限（既定 30_000・DD 表参照）。
-    pub close_talk_deadline_ms: u64,
+    /// close talk 再生完了待ち上限（既定 30 秒・DD 表参照）。
+    pub close_talk_deadline: TimeSpan,
     /// 初回起動ゲート（既定 true＝現行挙動不変・値源は ghost boot の BootCount 存在判定）。
     pub first_boot: bool,
     /// OnFirstBoot Reference0 に渡す永続 vanish 回数（既定 0）。
@@ -556,11 +552,11 @@ pub struct KanadeConfig {
     /// 初回挨拶トーク末尾へ添付する汎用 epilogue（既定空＝何も添付しない）。
     /// kanade は内容を解釈しない（不透明搬送・sylphya 非依存の維持）。
     pub first_boot_epilogue: Vec<EpilogueCommand>,
-    /// 選択肢タイムアウト既定値 ms（既定 30_000）。
+    /// 選択肢タイムアウト既定値（既定 30 秒）。
     ///
-    /// バリアの `timeout_directive_secs` が `None`（未指定）のときに委譲される単一の既定値。
+    /// バリアの `timeout_directive` が `None`（未指定）のときに委譲される単一の既定値。
     /// 正典（ukadoc）は数値を規定していないため areka 裁量で定め、対応表へ記録する。
-    pub choice_timeout_default_ms: u64,
+    pub choice_timeout_default: TimeSpan,
     /// 起動の由来（既定 `Plain`＝ふつうの起動）。起動の根と `OnBoot` の Ref6/7 を決める。
     pub boot_origin: BootOrigin,
     /// シェルのフォルダ名（`OnGhostChanged` の Ref7・既定は `shell_name` の写し）。
@@ -573,14 +569,14 @@ pub struct KanadeConfig {
     /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（既定 `None`）。`Some` なら殻が期限の
     /// 時刻を送り、刻み役がその時刻に [`KanadeMsg::ChoiceTimeoutDue`] を返す。`None` なら毎秒の
     /// `Tick` が期限を拾う。結線は `areka-ghost` の runtime が刻み役の本物のときだけ入れる。
-    pub choice_wake: Option<std::sync::mpsc::Sender<MonotonicMs>>,
+    pub choice_wake: Option<std::sync::mpsc::Sender<TimePoint>>,
 }
 
 impl KanadeConfig {
     /// 既定値つき構成を生成する。
     ///
-    /// `baseware_name` は `"areka"`・`close_talk_deadline_ms` は `30_000`（DD 表）・
-    /// `choice_timeout_default_ms` は `30_000`。
+    /// `baseware_name` は `"areka"`・`close_talk_deadline` は 30 秒（DD 表）・
+    /// `choice_timeout_default` は 30 秒。
     /// `shell_name` / `baseware_version` は結線側固有ゆえ引数で受ける。
     pub fn new(shell_name: impl Into<String>, baseware_version: impl Into<String>) -> Self {
         let shell_name = shell_name.into();
@@ -589,11 +585,11 @@ impl KanadeConfig {
             shell_name,
             baseware_version: baseware_version.into(),
             baseware_name: "areka".to_string(),
-            close_talk_deadline_ms: 30_000,
+            close_talk_deadline: TimeSpan::from_millis(30_000),
             first_boot: true,
             vanish_count: 0,
             first_boot_epilogue: Vec::new(),
-            choice_timeout_default_ms: 30_000,
+            choice_timeout_default: TimeSpan::from_millis(30_000),
             boot_origin: BootOrigin::Plain,
             online: &online::PROCESS,
             ghost_name: String::new(),

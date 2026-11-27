@@ -13,7 +13,7 @@
 //! 呼び手が既定値・起点時刻を渡す形にしてある（config への依存を純関数へ持ち込まない）。
 
 use super::events;
-use crate::msg::MonotonicMs;
+use dola::{TimeDelta, TimePoint, TimeSpan};
 
 /// 選択肢 ID から決まる発火段列。
 ///
@@ -73,44 +73,30 @@ pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
 /// タイムアウト指令から選択待ちの期限を写す。
 ///
 /// # 引数
-/// - `display_end`: 起点＝当該トークの表示完了時刻（duration 権威から dispatcher が換算済み）。
-/// - `timeout_directive_secs`: バリアの生の指令値（`BarrierKind::WaitForChoice{timeout}`）。
-/// - `default_ms`: 未指定時に委譲する既定値。呼び手が `KanadeConfig::choice_timeout_default_ms`
+/// - `display_end`: 起点＝当該トークの表示完了時刻（duration 権威・刻みと同じ物差し）。
+/// - `timeout_directive`: バリアの生の指令値（`BarrierKind::WaitForChoice{timeout}`）。
+/// - `default`: 未指定時に委譲する既定値。呼び手が `KanadeConfig::choice_timeout_default`
 ///   を渡す（config 依存を純関数へ持ち込まないための引数化）。
 ///
 /// # 写像（3 値語彙。入口値は単一で、既定値かどうかで規律を変えない）
 /// | 指令 | 意味 | 戻り値 |
 /// |---|---|---|
-/// | `None` | 未指定（既定へ委譲） | `Some(display_end + default_ms)` |
-/// | `Some(v)`, `v <= 0.0` | 無効化 | `None`（無期限・計測を開始しない） |
-/// | `Some(v)`, `v > 0.0` | 明示秒指定 | `Some(display_end + v*1000 ms)` |
+/// | `None` | 未指定（既定へ委譲） | `Some(display_end + default)` |
+/// | `Some(d)`, `d <= 0` | 無効化 | `None`（無期限・計測を開始しない） |
+/// | `Some(d)`, `d > 0` | 明示の長さ指定 | `Some(display_end + d)` |
 ///
 /// 戻り値の `None` は「期限なし＝無期限に選択待ちを継続する」を表す。引数の `None`（未指定）とは
-/// 意味が異なる点に注意（引数 `None` は既定値加算へ写る）。
-///
-/// # 端数と極端値
-/// - 秒→ミリ秒は `v * 1000.0` を [`f64::round`]（四捨五入・端数 0.5 は絶対値の大きい側）で丸める。
-///   `0.0005` 秒のような既に正の微小値は 0ms へ丸まり得るが、戻り値は `Some` のまま（即時期限）で
-///   あり、無期限（`None`）とは区別される。
-/// - `f64::INFINITY` や u64 を超える巨大値は飽和キャストと [`u64::saturating_add`] で
-///   [`u64::MAX`] に留まり、オーバーフローしない。
-/// - `f64::NAN` は 3 値語彙の外にあるため、無効化と同じ無期限（`None`）へ畳む。
-///   NaN は `v <= 0.0` にも `v > 0.0` にも一致しない（順序が部分的）ため、
-///   [`f64::is_nan`] による明示判定を無効化アームへ併記して決定論を構造で固定する。
+/// 意味が異なる点に注意（引数 `None` は既定値加算へ写る）。足し算は時刻の型の端へ張り付く。
 pub(crate) fn choice_deadline(
-    display_end: MonotonicMs,
-    timeout_directive_secs: Option<f64>,
-    default_ms: u64,
-) -> Option<MonotonicMs> {
-    let elapsed_ms = match timeout_directive_secs {
-        // 未指定＝既定へ委譲。
-        None => default_ms,
-        // 0／負値＝無効化＝無期限。語彙外の NaN も同じ側へ畳む。
-        Some(v) if v.is_nan() || v <= 0.0 => return None,
-        // 明示秒指定。飽和キャストにより INFINITY・巨大値は u64::MAX へ留まる。
-        Some(v) => (v * 1000.0).round() as u64,
-    };
-    Some(MonotonicMs(display_end.0.saturating_add(elapsed_ms)))
+    display_end: TimePoint,
+    timeout_directive: Option<TimeDelta>,
+    default: TimeSpan,
+) -> Option<TimePoint> {
+    match timeout_directive {
+        None => Some(display_end + default),
+        Some(d) if d <= TimeDelta::ZERO => None,
+        Some(d) => Some(display_end + d),
+    }
 }
 
 #[cfg(test)]
@@ -167,28 +153,30 @@ mod tests {
 
     // === choice_deadline: 3 値語彙 ===
 
-    const DEFAULT_MS: u64 = 30_000;
+    use dola::time::testing::{at_ms, delta_ms, ms};
+
+    const DEFAULT: TimeSpan = ms(30_000);
 
     /// `None`＝未指定→既定値加算。
     #[test]
     fn choice_deadline_none_delegates_to_default() {
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), None, DEFAULT_MS),
-            Some(MonotonicMs(31_000))
+            choice_deadline(at_ms(1_000), None, DEFAULT),
+            Some(at_ms(31_000))
         );
         // 起点 0 でも規律は同一。
         assert_eq!(
-            choice_deadline(MonotonicMs(0), None, DEFAULT_MS),
-            Some(MonotonicMs(30_000))
+            choice_deadline(at_ms(0), None, DEFAULT),
+            Some(at_ms(30_000))
         );
     }
 
-    /// 既定値以外の `default_ms` でも同一規律で動く（入口値は単一）。
+    /// 既定値以外の `default` でも同一規律で動く（入口値は単一）。
     #[test]
     fn choice_deadline_none_uses_supplied_default_verbatim() {
         assert_eq!(
-            choice_deadline(MonotonicMs(500), None, 1_234),
-            Some(MonotonicMs(1_734))
+            choice_deadline(at_ms(500), None, ms(1_234)),
+            Some(at_ms(1_734))
         );
     }
 
@@ -196,12 +184,7 @@ mod tests {
     #[test]
     fn choice_deadline_zero_is_indefinite() {
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(0.0), DEFAULT_MS),
-            None
-        );
-        // 負のゼロも 0 と同値（`-0.0 > 0.0` は偽）。
-        assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(-0.0), DEFAULT_MS),
+            choice_deadline(at_ms(1_000), Some(TimeDelta::ZERO), DEFAULT),
             None
         );
     }
@@ -210,90 +193,56 @@ mod tests {
     #[test]
     fn choice_deadline_negative_is_indefinite() {
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(-1.0), DEFAULT_MS),
+            choice_deadline(at_ms(1_000), Some(delta_ms(-1_000)), DEFAULT),
             None
         );
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(-0.001), DEFAULT_MS),
+            choice_deadline(at_ms(1_000), Some(TimeDelta::from_ticks(-1)), DEFAULT),
             None
         );
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(f64::NEG_INFINITY), DEFAULT_MS),
+            choice_deadline(at_ms(1_000), Some(TimeDelta::MIN), DEFAULT),
             None
         );
     }
 
-    /// 正値は明示秒指定＝起点＋秒*1000ms。
+    /// 正値は明示の長さ指定＝起点＋指令。
     #[test]
-    fn choice_deadline_positive_adds_seconds() {
+    fn choice_deadline_positive_adds_directive() {
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(5.0), DEFAULT_MS),
-            Some(MonotonicMs(6_000))
+            choice_deadline(at_ms(1_000), Some(delta_ms(5_000)), DEFAULT),
+            Some(at_ms(6_000))
         );
-        // 既定値は正値指定に一切関与しない（別の default_ms でも結果不変）。
+        // 既定値は正値指定に一切関与しない（別の default でも結果不変）。
         assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(5.0), 999_999),
-            Some(MonotonicMs(6_000))
+            choice_deadline(at_ms(1_000), Some(delta_ms(5_000)), ms(999_999)),
+            Some(at_ms(6_000))
         );
     }
 
-    /// 端数: 秒→ms は四捨五入で丸める（丸め規則の固定）。
+    /// 最小の正値（100ns）も `Some` であり無期限とは区別される。
     #[test]
-    fn choice_deadline_rounds_fractional_seconds_half_away_from_zero() {
-        // 0.5 秒 → 500ms（割り切れる小数）。
+    fn choice_deadline_smallest_positive_is_not_indefinite() {
         assert_eq!(
-            choice_deadline(MonotonicMs(0), Some(0.5), DEFAULT_MS),
-            Some(MonotonicMs(500))
-        );
-        // 1.2345 秒 → 1234.5ms → 1235ms（0.5 は絶対値の大きい側へ）。
-        assert_eq!(
-            choice_deadline(MonotonicMs(0), Some(1.2345), DEFAULT_MS),
-            Some(MonotonicMs(1_235))
-        );
-        // 1.2344 秒 → 1234.4ms → 1234ms（切り下げ側）。
-        assert_eq!(
-            choice_deadline(MonotonicMs(0), Some(1.2344), DEFAULT_MS),
-            Some(MonotonicMs(1_234))
+            choice_deadline(at_ms(1_000), Some(TimeDelta::from_ticks(1)), DEFAULT),
+            Some(TimePoint::from_ticks(at_ms(1_000).as_ticks() + 1))
         );
     }
 
-    /// 端数境界: 0ms へ丸まる微小な正値も `Some`（即時期限）であり無期限とは区別される。
-    #[test]
-    fn choice_deadline_tiny_positive_is_immediate_not_indefinite() {
-        assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(1e-9), DEFAULT_MS),
-            Some(MonotonicMs(1_000))
-        );
-    }
-
-    /// 極端値: 無限大・巨大値・起点飽和のいずれもオーバーフローせず u64::MAX に留まる。
+    /// 極端値: 巨大な指令・起点の端のいずれも回り込まず時刻の型の端に留まる。
     #[test]
     fn choice_deadline_saturates_on_extreme_values() {
         assert_eq!(
-            choice_deadline(MonotonicMs(0), Some(f64::INFINITY), DEFAULT_MS),
-            Some(MonotonicMs(u64::MAX))
+            choice_deadline(at_ms(0), Some(TimeDelta::MAX), DEFAULT),
+            Some(TimePoint::MAX)
         );
         assert_eq!(
-            choice_deadline(MonotonicMs(0), Some(1e300), DEFAULT_MS),
-            Some(MonotonicMs(u64::MAX))
-        );
-        // 起点側が既に最大でも加算で回り込まない。
-        assert_eq!(
-            choice_deadline(MonotonicMs(u64::MAX), Some(1.0), DEFAULT_MS),
-            Some(MonotonicMs(u64::MAX))
+            choice_deadline(TimePoint::MAX, Some(delta_ms(1_000)), DEFAULT),
+            Some(TimePoint::MAX)
         );
         assert_eq!(
-            choice_deadline(MonotonicMs(u64::MAX), None, DEFAULT_MS),
-            Some(MonotonicMs(u64::MAX))
-        );
-    }
-
-    /// 語彙外の NaN は無期限（`None`）へ畳む（決定論的な既定の読み）。
-    #[test]
-    fn choice_deadline_nan_is_indefinite() {
-        assert_eq!(
-            choice_deadline(MonotonicMs(1_000), Some(f64::NAN), DEFAULT_MS),
-            None
+            choice_deadline(TimePoint::MAX, None, DEFAULT),
+            Some(TimePoint::MAX)
         );
     }
 }

@@ -23,6 +23,7 @@ pub fn manual_balloon_runtime(
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
     use bevy_ecs::hierarchy::ChildOf;
     use dola::cue::{CueCommand, TalkCue};
+    use dola::{TimePoint, TimeSpan};
     use wintf::ecs::Visual;
 
     // 途中で panic しても許可が装置より後に捨てられるよう、許可を先に束ねる。
@@ -43,17 +44,25 @@ pub fn manual_balloon_runtime(
         TextSlotBinding::new(slot, window, 1.0, image, image),
         ResolvedBalloonText::resolve(&areka_parsers::balloon::parse_str("", None), image),
     );
-    let cue = |at: f64, command: CueCommand| TalkCue {
-        at,
-        actor: key.clone(),
-        command,
-        duration: 0.0,
+    let cue = |at_ms: u32, command: CueCommand| {
+        TalkCue::scheduled(
+            TimePoint::ZERO,
+            TimeSpan::from_millis(at_ms),
+            key.clone(),
+            command,
+            TimeSpan::ZERO,
+        )
     };
     for i in 0..8 {
-        rt.apply_cue(&cue(i as f64, CueCommand::Text("あ".into())));
-        rt.apply_cue(&cue(i as f64 + 0.5, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&cue(i * 1_000, CueCommand::Text("あ".into())));
+        rt.apply_cue(&cue(i * 1_000 + 500, CueCommand::NewLine { ratio: 1.0 }));
     }
-    present_frame(&mut rt, &mut world, 100.0).expect("提示フレーム");
+    present_frame(
+        &mut rt,
+        &mut world,
+        TimePoint::ZERO + TimeSpan::from_millis(100_000),
+    )
+    .expect("提示フレーム");
     assert_eq!(
         rt.scroll_manual_at(&PlaceKey::balloon(&key), ScrollDir::Older, 1),
         ScrollChange::Started,

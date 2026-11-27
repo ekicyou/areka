@@ -12,11 +12,14 @@ repository.workspace = true
 [dependencies]
 areka-actor = { path = "../areka-actor" }
 areka-talk = { path = "../areka-talk" }
+dola = { path = "../dola" }
 shiori-host32-host = { path = "../shiori-host32-host" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# テストの時刻の組み立て（`dola::time::testing` の `at_ms`・`ms`・`delta_ms`）を使う。
+dola = { path = "../dola", features = ["test-support"] }
 # shiori/real.rs のテストと結合テスト 2 本（idle_pump_test・real_helper_test）が IPC の型を
 # 組み立てるための workspace path dep（本体 import は shiori-host32-host 経由・host32 境界は real.rs に閉じる）。
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }

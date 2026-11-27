@@ -1,8 +1,9 @@
 //! 刻みと表の差し替えに部品の時計をつなぐ檻。
 //!
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
-//! 刻みは `on_tick(now_ms)`、乱数は注入列で、どちらも決定論。
+//! 刻みは `on_tick(now)`、乱数は注入列で、どちらも決定論。
 
+use dola::time::testing::{at_ms, ms};
 use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{BindSet, PatternState};
@@ -54,11 +55,11 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(0));
 
-    rt.on_tick(0, &mut states);
-    let cmds = rt.on_tick(1000, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
+    let cmds = rt.on_tick(at_ms(1000), &mut states);
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
-        playing(1000),
+        playing(at_ms(1000)),
         "境界で部品が発火"
     );
     assert_eq!(cmds.len(), 1, "部品のコマが載った Show が 1 件");
@@ -67,7 +68,7 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     // 面の切り替え: 一番上の再生だけ捨て、部品の時計はそのまま。
     states.apply(&scope, SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope, Slot::Shell);
-    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(1000));
+    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(at_ms(1000)));
 
     // シェルの表の差し替え: 部品の時計を捨てる。
     states.rebase_shell(crate::DefaultBinds::uniform(BindSet::default()));
@@ -86,44 +87,42 @@ fn refresh_reloads_part_frames_at_last_tick_time() {
     let scope = ActorKey::from("0");
 
     assert_eq!(
-        rt.refresh(&scope, Slot::Shell, None, &mut states),
+        rt.refresh(&scope, Slot::Shell, at_ms(0), &mut states),
         None,
         "表示中でない"
     );
     states.apply(&scope, SurfaceTarget::Show(0));
-    assert_eq!(
-        rt.refresh(&scope, Slot::Shell, None, &mut states),
-        None,
-        "刻みが来ていない"
-    );
 
-    rt.on_tick(0, &mut states);
-    rt.on_tick(1000, &mut states);
-    rt.on_tick(1600, &mut states); // 経過 600 → 102
+    rt.on_tick(at_ms(0), &mut states);
+    rt.on_tick(at_ms(1000), &mut states);
+    rt.on_tick(at_ms(1600), &mut states); // 経過 600 → 102
     assert_eq!(probe.lock().unwrap().calls, 1);
 
     // 子を置いていない面へ: 載せる部品が無い。
     states.apply(&scope, SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope, Slot::Shell);
-    assert_eq!(rt.refresh(&scope, Slot::Shell, None, &mut states), None);
+    assert_eq!(
+        rt.refresh(&scope, Slot::Shell, at_ms(1600), &mut states),
+        None
+    );
 
     // 戻る: 切り替えの Show は空のコマ。refresh が 1600 の時点の 102 を載せた Show を返す。
     states.apply(&scope, SurfaceTarget::Show(0));
     rt.on_surface_changed(&scope, Slot::Shell);
     let cmd = rt
-        .refresh(&scope, Slot::Shell, None, &mut states)
+        .refresh(&scope, Slot::Shell, at_ms(1600), &mut states)
         .expect("部品のコマを載せた Show");
     let (sid, pattern) = show_of(&cmd);
     assert_eq!(sid, 0);
     assert_eq!(part_frames(pattern, 100), vec![(0, 102)]);
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
-        playing(1000),
+        playing(at_ms(1000)),
         "時計は書き換えない"
     );
     assert_eq!(probe.lock().unwrap().calls, 1, "乱数を呼ばない");
     assert_eq!(
-        rt.refresh(&scope, Slot::Shell, None, &mut states),
+        rt.refresh(&scope, Slot::Shell, at_ms(1600), &mut states),
         None,
         "同じ内容は二度出さない"
     );
@@ -150,12 +149,12 @@ fn table_without_animated_parts_never_enters_part_path() {
     states.apply(&scope, SurfaceTarget::Show(0));
 
     let mut shows = 0;
-    let mut now = 0;
-    while now <= 6000 {
-        if now == 3050 {
+    let mut now = at_ms(0);
+    while now <= at_ms(6000) {
+        if now == at_ms(3050) {
             states.apply(&scope, SurfaceTarget::Show(1));
             rt.on_surface_changed(&scope, Slot::Shell);
-            assert_eq!(rt.refresh(&scope, Slot::Shell, None, &mut states), None);
+            assert_eq!(rt.refresh(&scope, Slot::Shell, now, &mut states), None);
         }
         for cmd in rt.on_tick(now, &mut states) {
             assert!(
@@ -165,7 +164,7 @@ fn table_without_animated_parts_never_enters_part_path() {
             shows += 1;
         }
         assert!(has_no_parts(states.current_pattern(&scope, Slot::Shell)));
-        now += 50;
+        now = now + ms(50);
     }
 
     assert!(rt.parts.is_empty(), "部品の時計に 1 度も触らない");
@@ -207,9 +206,9 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
     states.apply(&kero, SurfaceTarget::Show(0));
     states.apply(&sakura, SurfaceTarget::Show(0));
 
-    rt.on_tick(0, &mut states);
+    rt.on_tick(at_ms(0), &mut states);
     assert!(bounds.lock().unwrap().is_empty(), "境界の前は引かない");
-    let cmds = rt.on_tick(1000, &mut states);
+    let cmds = rt.on_tick(at_ms(1000), &mut states);
 
     assert_eq!(*bounds.lock().unwrap(), vec![2, 2, 3, 4, 5, 3, 4, 5]);
     assert_eq!(cmds.len(), 2);
@@ -234,21 +233,21 @@ fn hidden_surface_lets_the_part_runonce_fire_again_on_return() {
     );
     let scope = ActorKey::from("0");
 
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
-    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(1000));
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1000)).expect("Show");
+    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(at_ms(1000)));
     assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 101)]);
 
-    switch(&mut rt, &mut states, SurfaceTarget::Hide, 1100).expect("Hide");
+    switch(&mut rt, &mut states, SurfaceTarget::Hide, at_ms(1100)).expect("Hide");
     assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), None, "時計を捨てる");
     assert!(
         rt.parts.armed_parts(&scope, Slot::Shell).is_empty(),
         "引き金の状態も捨てる"
     );
 
-    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1200).expect("Show");
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1200)).expect("Show");
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
-        playing(1200),
+        playing(at_ms(1200)),
         "戻った時刻でもう 1 回"
     );
     assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 101)]);
@@ -271,18 +270,18 @@ fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
     );
     let scope = ActorKey::from("0");
 
-    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
-    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(1000));
-    assert_eq!(part_clock(&rt, Slot::Shell, 101, 0), playing(1000));
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1000)).expect("Show");
+    assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), playing(at_ms(1000)));
+    assert_eq!(part_clock(&rt, Slot::Shell, 101, 0), playing(at_ms(1000)));
 
     let mut cmd = None;
     let logs = capture_logs(|| {
-        cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(1), 1100);
+        cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(1), at_ms(1100));
     });
     let cmd = cmd.expect("1 へ");
     assert_eq!(
         part_clock(&rt, Slot::Shell, 100, 0),
-        playing(1000),
+        playing(at_ms(1000)),
         "見え続けた部品は鳴らし直さない"
     );
     assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 110)]);
@@ -298,8 +297,8 @@ fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
 
     // 再生を終えた後も、構え直していないのでもう鳴らない。
     let later = capture_logs(|| {
-        rt.on_tick(1400, &mut states);
-        rt.on_tick(1500, &mut states);
+        rt.on_tick(at_ms(1400), &mut states);
+        rt.on_tick(at_ms(1500), &mut states);
     });
     assert_eq!(part_clock(&rt, Slot::Shell, 100, 0), None);
     assert_eq!(

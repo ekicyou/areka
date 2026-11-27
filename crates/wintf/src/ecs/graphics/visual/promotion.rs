@@ -1,24 +1,25 @@
 //! 自動の上げ下げの判断の純粋な規則と、その状態の部品 [`AutoPromotion`]。
 //!
-//! 時刻は f64 秒のまま丸めずに比べる。前の回より戻った時刻は前の回の値として扱い（経過 0）、
+//! 時刻は 1 本の時計の時刻（`TimePoint`）で、保つ長さは `TimeSpan`。前の回より戻った時刻は前の回の値として扱い（経過 0）、
 //! 同じ時刻の複数の更新は 1 回に数える。ログの水準は読まない（同じ入力から同じ答え）。
 
 use std::collections::VecDeque;
 
 use bevy_ecs::prelude::*;
+use dola::{TimeDelta, TimePoint, TimeSpan};
 
 use super::promotion_shape::Ineligible;
 
 /// 上げるのに要る更新の回数。
 pub(crate) const PROMOTE_COUNT: usize = 8;
-/// その回数を数える直近の実時間（秒）。
-pub(crate) const PROMOTE_WINDOW_SECS: f64 = 1.0;
-/// 戻すのに要る更新の無い実時間（秒）。
-pub(crate) const DEMOTE_QUIET_SECS: f64 = 3.0;
-/// 上げた後、落ち着きで戻さない実時間（秒）。
-pub(crate) const HOLD_AFTER_PROMOTE_SECS: f64 = 3.0;
-/// 戻した後（即時の戻しも）、上げない実時間（秒）。
-pub(crate) const HOLD_AFTER_DEMOTE_SECS: f64 = 3.0;
+/// その回数を数える直近の実時間。
+pub(crate) const PROMOTE_WINDOW: TimeSpan = TimeSpan::from_millis(1000);
+/// 戻すのに要る更新の無い実時間。
+pub(crate) const DEMOTE_QUIET: TimeSpan = TimeSpan::from_millis(3000);
+/// 上げた後、落ち着きで戻さない実時間。
+pub(crate) const HOLD_AFTER_PROMOTE: TimeSpan = TimeSpan::from_millis(3000);
+/// 戻した後（即時の戻しも）、上げない実時間。
+pub(crate) const HOLD_AFTER_DEMOTE: TimeSpan = TimeSpan::from_millis(3000);
 
 /// 節の上げ下げの相。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -64,11 +65,11 @@ pub(crate) enum Verdict {
 pub(crate) struct RuleState {
     phase: Phase,
     /// 今の相に入った時刻。`None` は履歴を掛けない（初めから・初期化の後）。
-    since: Option<f64>,
+    since: Option<TimePoint>,
     /// 前の回の時刻（単調にした値）。
-    last_now: Option<f64>,
+    last_now: Option<TimePoint>,
     /// 直近 `PROMOTE_COUNT` 回の更新の時刻（古い順）。
-    updates: VecDeque<f64>,
+    updates: VecDeque<TimePoint>,
 }
 
 impl RuleState {
@@ -77,17 +78,17 @@ impl RuleState {
     }
 
     /// 時刻を単調にする（前の回より戻ったら前の回の値）。
-    fn monotonic(&mut self, now: f64) -> f64 {
+    fn monotonic(&mut self, now: TimePoint) -> TimePoint {
         let t = self.last_now.map_or(now, |p| now.max(p));
         self.last_now = Some(t);
         t
     }
 
-    fn held(&self, t: f64, hold: f64) -> bool {
-        self.since.is_some_and(|s| t - s < hold)
+    fn held(&self, t: TimePoint, hold: TimeSpan) -> bool {
+        self.since.is_some_and(|s| t - s < TimeDelta::from(hold))
     }
 
-    fn enter(&mut self, phase: Phase, t: f64) {
+    fn enter(&mut self, phase: Phase, t: TimePoint) {
         self.phase = phase;
         self.since = Some(t);
     }
@@ -95,7 +96,7 @@ impl RuleState {
     /// 1 回ぶん進める。`shape` は上げる・保つ判断に要るときだけ呼ぶ（純粋な関数を渡す）。
     pub(crate) fn step(
         &mut self,
-        now: f64,
+        now: TimePoint,
         updated: bool,
         shape: impl FnOnce() -> Result<(), Ineligible>,
         surface: SurfaceReadiness,
@@ -110,8 +111,8 @@ impl RuleState {
         let verdict = match self.phase {
             Phase::Node => {
                 let frequent = self.updates.len() == PROMOTE_COUNT
-                    && t - self.updates[0] <= PROMOTE_WINDOW_SECS;
-                if !frequent || self.held(t, HOLD_AFTER_DEMOTE_SECS) {
+                    && t - self.updates[0] <= TimeDelta::from(PROMOTE_WINDOW);
+                if !frequent || self.held(t, HOLD_AFTER_DEMOTE) {
                     Verdict::Stay
                 } else {
                     match shape() {
@@ -132,8 +133,8 @@ impl RuleState {
                     let quiet = self
                         .updates
                         .back()
-                        .is_none_or(|&u| t - u >= DEMOTE_QUIET_SECS);
-                    if quiet && !self.held(t, HOLD_AFTER_PROMOTE_SECS) {
+                        .is_none_or(|&u| t - u >= TimeDelta::from(DEMOTE_QUIET));
+                    if quiet && !self.held(t, HOLD_AFTER_PROMOTE) {
                         Verdict::Demote(DemoteReason::Quiet)
                     } else {
                         Verdict::Stay
@@ -151,7 +152,7 @@ impl RuleState {
     }
 
     /// 祖先が上がった回の吸い込み（即時の戻し・上げの履歴を掛ける）。節のままなら何もしない。
-    pub(crate) fn absorb(&mut self, now: f64) -> Verdict {
+    pub(crate) fn absorb(&mut self, now: TimePoint) -> Verdict {
         if self.phase == Phase::Node {
             return Verdict::Stay;
         }

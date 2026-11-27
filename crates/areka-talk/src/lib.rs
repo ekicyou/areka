@@ -2,13 +2,15 @@
 //! ／[`TalkCommand`] / [`ChoiceWaiting`]）。
 //!
 //! kanade（③運行）と sakura（④再生）の間で交わす talk 起動〜完了契約の唯一の物理定義。
-//! 依存ゼロ・`std` のみに依存する（`areka-actor` 型・host32 型・エンジン知識を持ち込まない）。
+//! `dola::time` の型と `std` のみに依存する（`areka-actor` 型・host32 型・エンジン知識を持ち込まない）。
 //!
 //! 中断理由（[`TalkEndReason`]）は通常終了・quit・中断の 3 値。選択待ちバリアの解決指示は
 //! [`TalkCommand`]（再生層の正規入力経路）で運び、選択待ち成立の事実と表示完了時刻は
 //! [`ChoiceWaiting`] で再生層から返す。変換アダプタによる二重定義は作らない。
 //!
-//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）も依存ゼロのここに置く。
+//! 台本とイベントの出どころの語彙（[`ScriptOrigin`] ほか）もここに置く。
+
+use dola::{TimeDelta, TimePoint};
 
 mod origin;
 
@@ -95,18 +97,18 @@ pub struct ChoiceWaiting {
     pub talk_id: TalkId,
     /// 候補選択肢 ID 列（照合用・表示順を保存する）。
     pub choice_ids: Vec<String>,
-    /// トーク表示完了時刻（talk 経過秒・占有 horizon ＝ duration 権威）。
+    /// トーク表示完了の絶対の時刻（占有の終わり・duration 権威）。
     ///
     /// タイムアウト計測の起点はこの値であり、再生層以外の時間基準を導入しない。
-    pub display_end_elapsed_secs: f64,
-    /// バリアのタイムアウト指令（秒）。語彙は 3 値:
+    pub display_end: TimePoint,
+    /// バリアのタイムアウト指令。語彙は 3 値:
     ///
     /// - `None` — 未指定。下流の既定値へ委譲する。
-    /// - `Some(v)`（`v <= 0.0`）— 無効化。計測せず選択待ちを無期限に継続する。
-    /// - `Some(v)`（`v > 0.0`）— 明示秒指定。
+    /// - `Some(d)`（`d` が 0 以下）— 無効化。計測せず選択待ちを無期限に継続する。
+    /// - `Some(d)`（`d` が正）— 明示の長さ指定。
     ///
     /// この層では写像も既定値の適用も行わない（指令をそのまま搬送する）。
-    pub timeout_directive_secs: Option<f64>,
+    pub timeout_directive: Option<TimeDelta>,
 }
 
 /// 終端理由 3 値。

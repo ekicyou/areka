@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::easing::EasingFunction;
+use crate::time::TimeSpan;
 use crate::value::DynamicValue;
 
 /// トランジションの開始値・終了値を表す型
@@ -37,12 +38,16 @@ pub struct TransitionDef {
     /// イージング種別（f64/i64 のみ。Object には適用不可）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub easing: Option<EasingFunction>,
-    /// トランジション前待機時間（f64秒、デフォルト 0）
-    #[serde(default)]
-    pub delay: f64,
-    /// 遷移持続時間（f64秒、省略時は即時遷移）
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub duration: Option<f64>,
+    /// トランジション前待機時間（文書では秒、デフォルト 0）
+    #[serde(with = "crate::time::serde_secs", default)]
+    pub delay: TimeSpan,
+    /// 遷移持続時間（文書では秒、省略時は即時遷移）
+    #[serde(
+        with = "crate::time::serde_secs",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub duration: Option<TimeSpan>,
 }
 
 /// トランジション参照（ハイブリッド: 名前文字列 or インライン定義）

@@ -21,6 +21,8 @@ use areka_sakura::contract::{ActorKey, CueCommand};
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::prelude::World;
 use dola::cue::{CuePayload, CuePlayer, CueSink, TalkCue};
+use dola::time::testing::at_ms;
+use dola::{TimePoint, TimeSpan};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{balloon_model_of, capture_checked, pump_until_idle};
@@ -33,7 +35,7 @@ use crate::state::TextLayerConfig;
 // ── 経路を歩く支え ──
 
 /// 刻印する絶対の開始時刻。0 でない値にして、絶対の時刻と相対の時刻の取り違えを拾う。
-pub(super) const ANCHOR: f64 = 100.0;
+pub(super) const ANCHOR: TimePoint = at_ms(100_000);
 /// 字の丈（`FixedMetrics` では全角 1 字の送り幅＝字の丈）。
 const FONT_HEIGHT: u32 = 20;
 /// 欄の幅: 全角 9 字（180）が入り、10 字目（200）が入らない値。
@@ -65,10 +67,10 @@ pub(super) fn balloon_model(
     )
 }
 
-/// 経路を歩いた 1 段階: 判定の時刻（トークの頭からの秒）と、その時刻の行ごとの字の並び。
+/// 経路を歩いた 1 段階: 判定の時刻（トークの頭からの経過）と、その時刻の行ごとの字の並び。
 #[derive(Clone, Debug)]
 pub(super) struct Stage {
-    pub(super) time: f64,
+    pub(super) time: TimeSpan,
     pub(super) rows: Vec<Vec<String>>,
 }
 
@@ -128,27 +130,21 @@ impl Rig {
 
     /// 台本を `parse` → `compile` → 刻印（`anchor`）→ `from_sheet` し、受け口を登録して汲み出す
     /// （`Staged`・`AllAtOnce` はここで先渡しが届く）。`tick` はまだしない。
-    pub(super) fn play(&self, script: &str, anchor: f64, delivery: Delivery) -> Talk {
+    pub(super) fn play(&self, script: &str, anchor: TimePoint, delivery: Delivery) -> Talk {
         let talk = areka_sakura::compile(
             &areka_parsers::sakura::parse(script),
             &SystemVarSnapshot::default(),
         );
-        let mut times: Vec<f64> = talk
+        let mut times: Vec<TimeSpan> = talk
             .sheet
             .cues()
             .iter()
-            // 終わりも ms の格子で出す。秒の足し算は格子から外れ、次の合図の開始と食い違う。
-            .flat_map(|c| {
-                let ms = |s: f64| (s * 1000.0).round() as u64;
-                [
-                    c.start_time,
-                    (ms(c.start_time) + ms(c.duration)) as f64 / 1000.0,
-                ]
-            })
+            .flat_map(|c| [c.start_time, c.start_time + c.duration])
             .collect();
-        times.sort_by(f64::total_cmp);
+        times.sort();
         times.dedup();
-        let mut player = CuePlayer::from_sheet(&talk.sheet.with_absolute_start_time(anchor));
+        let mut player = CuePlayer::from_sheet(&talk.sheet.with_absolute_start_time(anchor))
+            .expect("刻印済みの台本");
         let sink = self.sink.clone();
         if delivery == Delivery::WithoutPreview {
             player.register_sink(Box::new(EmitOnly(sink)));
@@ -170,15 +166,15 @@ impl Rig {
     }
 
     /// 場所の行の列（本番の提示と同じ `arrange_lines` に決まった字幅を渡す）。状態が無ければ空。
-    pub(super) fn lines(&self, place: &PlaceKey, t: f64) -> Vec<PositionedLine> {
-        self.runtime
-            .borrow_mut()
-            .arrange_for_test(place, &FixedMetrics, t)
+    pub(super) fn lines(&self, place: &PlaceKey, t: TimePoint) -> Vec<PositionedLine> {
+        let mut rt = self.runtime.borrow_mut();
+        rt.advance(t);
+        rt.arrange_for_test(place, &FixedMetrics, t)
             .unwrap_or_default()
     }
 
     /// 場所の行ごとの字の並び。
-    pub(super) fn rows(&self, place: &PlaceKey, t: f64) -> Vec<Vec<String>> {
+    pub(super) fn rows(&self, place: &PlaceKey, t: TimePoint) -> Vec<Vec<String>> {
         row_texts(&self.lines(place, t))
     }
 }
@@ -194,13 +190,18 @@ fn row_texts(lines: &[PositionedLine]) -> Vec<Vec<String>> {
 /// 刻印済みの再生機 1 つと、その台本の判定の時刻（トークの頭からの秒・昇順）。
 pub(super) struct Talk {
     player: CuePlayer,
-    anchor: f64,
-    pub(super) times: Vec<f64>,
+    anchor: TimePoint,
+    pub(super) times: Vec<TimeSpan>,
 }
 
 impl Talk {
+    /// トークの頭から `t` 後のフレームの時刻。
+    pub(super) fn at(&self, t: TimeSpan) -> TimePoint {
+        self.anchor + t
+    }
+
     /// トークの頭から `t` 秒の絶対時刻で `tick` し、UI の待ち行列を汲み出す。
-    pub(super) fn tick(&mut self, t: f64) {
+    pub(super) fn tick(&mut self, t: TimeSpan) {
         self.player.tick(self.anchor + t);
         pump_until_idle();
     }
@@ -257,16 +258,17 @@ pub(super) fn walk_injecting(
             talk.tick(t);
         }
         if let Some((_, command)) = stray.take_if(|(at, _)| *at == i) {
-            rig.emit(TalkCue {
-                at: t,
-                actor: actor.clone(),
+            rig.emit(TalkCue::scheduled(
+                ANCHOR,
+                t,
+                actor.clone(),
                 command,
-                duration: 0.0,
-            });
+                TimeSpan::ZERO,
+            ));
         }
         stages.push(Stage {
             time: t,
-            rows: rig.rows(&place, t),
+            rows: rig.rows(&place, ANCHOR + t),
         });
     }
     stages
@@ -541,7 +543,7 @@ fn clear_splits_the_talk_into_independent_sections() {
     );
 }
 
-/// 検査 6 で台本に無い字の合図を流す段階（検査 1 の台本の「イイジャン！」が出終わった t=0.3）。
+/// 検査 6 で台本に無い字の合図を流す段階（検査 1 の台本の「イイジャン！」が出終わった t=300ms）。
 const STRAY_AFTER_STAGE: usize = 1;
 /// 検査 6 で流す台本に無い字。
 const STRAY_TEXT: &str = "ね";
@@ -654,7 +656,7 @@ fn walk_with_windows(
     let mut windows = Vec::new();
     for t in talk.times.clone() {
         talk.tick(t);
-        let lines = rig.lines(&place, t);
+        let lines = rig.lines(&place, ANCHOR + t);
         let window = {
             let runtime = rig.runtime.borrow();
             let resolved = runtime.layout_input.get(&place).expect("装着済みの場所");

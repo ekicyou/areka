@@ -3,9 +3,10 @@ use super::test_support::{
 };
 use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, Fixture, KanadeConfig, KanadeMsg,
-    MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload, position_of,
-    pumps, send, spawn_harness_gated, tick,
+    QuitPolicy, RecordedCall, events, expected_call, expected_unload, position_of, pumps, send,
+    spawn_harness_gated, tick,
 };
+use dola::time::testing::at_ms;
 
 /// active talk のみ（選択待ちは終了済み）の運行状態＝`talking` 単独。
 fn talking_only_snapshot() -> ExecutionSnapshot {
@@ -51,14 +52,14 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
     );
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
-    // Tick2: 選択待ち中の周期リクエスト（期限 CHOICE_DEADLINE_MS より手前）。
-    tick(&harness, 2_000);
+    // Tick2: 選択待ち中の周期リクエスト（期限 CHOICE_DEADLINE より手前）。
+    tick(&harness, at_ms(2_000));
     send(
         &harness,
         KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
     );
     // Tick3: 解決後の周期リクエスト（同じ active talk 窓・choosing だけが消えているはず）。
-    tick(&harness, 3_000);
+    tick(&harness, at_ms(3_000));
     send(
         &harness,
         KanadeMsg::CloseRequest {
@@ -84,7 +85,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
 
     // (2) 選択待ち中の pump: NOTIFY・Ref3="0"・Status は複合値 `talking,choosing`。
     let expected_choosing = expected_call(events::on_second_change(
-        MonotonicMs(2_000),
+        at_ms(2_000),
         &cascading_snapshot(),
     ));
     assert_eq!(
@@ -103,7 +104,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
 
     // (3) 解決後の pump: 同じ active talk 窓のまま `choosing` だけが消える。
     let expected_resolved = expected_call(events::on_second_change(
-        MonotonicMs(3_000),
+        at_ms(3_000),
         &talking_only_snapshot(),
     ));
     assert_eq!(

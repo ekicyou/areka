@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dola::cue::{CueProbe, CueSink, TalkCue};
+use dola::cue::{CueProbe, CueSink, OriginNotice, TalkCue};
 
 use crate::strict::{CharCursor, DetectionPoint, Place, record};
 
@@ -124,11 +124,56 @@ impl CueSink for StrictTap {
         }
     }
 
+    fn origin_set(&mut self, notice: OriginNotice) {
+        for sink in self.sinks.iter_mut() {
+            sink.origin_set(notice);
+        }
+    }
+
     /// 選択待ちの区切りは列の末尾だけなので、再生は台本の全部の命令に届いている。
     fn choice_wait_began(&mut self) {
         self.ledger.borrow_mut().finish();
         for sink in self.sinks.iter_mut() {
             sink.choice_wait_began();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+    use dola::TimePoint;
+
+    struct OriginLog(Arc<Mutex<Vec<OriginNotice>>>);
+
+    impl CueSink for OriginLog {
+        fn emit(&mut self, _cue: TalkCue) {}
+
+        fn origin_set(&mut self, notice: OriginNotice) {
+            self.0.lock().unwrap().push(notice);
+        }
+    }
+
+    /// 起点の知らせは覆いを通り抜けて中の sink へ、値そのままで登録順に届く。
+    #[test]
+    fn origin_set_passes_through_to_inner_sinks() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let ledger = Rc::new(RefCell::new(StrictLedger::new("g".into(), "", Vec::new())));
+        let mut tap = StrictTap::new(
+            vec![
+                Box::new(OriginLog(Arc::clone(&seen))),
+                Box::new(OriginLog(Arc::clone(&seen))),
+            ],
+            Vec::new(),
+            "",
+            ledger,
+        );
+        let notice = OriginNotice::first(TimePoint::from_ticks(1_234_567));
+
+        tap.origin_set(notice);
+
+        assert_eq!(*seen.lock().unwrap(), vec![notice, notice]);
     }
 }

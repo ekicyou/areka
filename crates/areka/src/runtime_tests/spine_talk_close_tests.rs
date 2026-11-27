@@ -2,8 +2,8 @@ use std::cell::Cell;
 
 use super::test_support::{boot_finished, opaque_count, variant_name};
 use super::{
-    ActorKey, PresentCommand, Progress, RecordedCall, SpineHarness, run_text_phase, shell_target,
-    wait_until, wait_until_paced,
+    ActorKey, PresentCommand, Progress, RecordedCall, SpineHarness, shell_target, wait_until,
+    wait_until_paced,
 };
 
 // ===========================================================================
@@ -11,8 +11,7 @@ use super::{
 //
 // `SpineHarness`＋観測ヘルパの上に構築する。S2 は実 sink 経路の末端
 // （seriko→shell 面切替の実描画 readback／emo-text typewriter の `present_frame` 駆動→
-// text 供給面 readback）まで観測境界を延ばす。時刻は注入 Tick と
-// 注入 talk_time で決まる・実 GPU（MTA）・x64 完結。
+// text 供給面 readback）まで観測境界を延ばす。時刻は注入 Tick で決まる・実 GPU（MTA）・x64 完結。
 // ===========================================================================
 
 /// 装着済み balloon text actor の供給面（emo-text `TextLayerRuntime::surface`）の非透明画素数。
@@ -36,8 +35,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// (1) 受信 `PresentCommand` 列に `ShowSurface{shell_target(0), surface_id:2100}` が現れ、apply 後の
 /// shell readback が**非表示から surface2100 の実描画へ遷移**すること（初回面表示の実描画・
 /// シェルは初回 `\s` まで非表示ゆえ attach 時の初期 surface0 baseline は無い）、
-/// (2) テキスト cue の typewriter リビールを注入 `talk_time` の階段値で駆動し、text 供給面の
-/// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0.0）全透明・`Clear`（at=1.40）後の
+/// (2) テキスト cue の typewriter リビールを注入した時刻の階段値で駆動し、text 供給面の
+/// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0ms）全透明・`Clear`（at=1400ms）後の
 /// 全域透明を檻に入れる。
 ///
 /// # 二段配送で単一 talk 内のリビール→Clear を分離（talk_clock 既知制約に整合）
@@ -46,9 +45,9 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// `r_i=max(r_{i-1}+interval, at)`（`interval = cue.duration / N`・配送 duration 由来）確定、
 /// `Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
 /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
-/// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由）を振って観測し（Phase 1）、その後
-/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=0.05+D+1.00=1.40・D=0.35）超へ進めて Clear を
-/// 配送し全消去を観測する（Phase 2）。台本の `\_w[50]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
+/// Clear 未配送」のバッファに注入した時刻（clock 非経由）を振って観測し（Phase 1）、その後
+/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=50ms+D+1000ms=1400ms・D=350ms）超へ進めて Clear を
+/// 配送し全消去を観測する（Phase 2）。台本の `\_w[50]`（Text at=50ms）により t=0ms は先頭グリフ r_0=50ms 未達で全透明。単調
 /// 述語の適用範囲を単一 talk 内（Clear 配送前のリビール区間）に限定することで、talk 跨ぎの epoch
 /// リベース逆行（talk_clock 既知制約）を対象外にする。`present_frame` は
 /// 各 t で全域再描画（残渣なし・決定論）ゆえ、注入 t に対し `opaque_count` は `visible(t)` の
@@ -63,8 +62,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// draw_readback_test の単体檻に委ねる。
 #[test]
 fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
-    // \s[2100]（シェル面切替・actor "0"）→ \_w[50] 後にテキスト（typewriter・at=0.05・再生時間
-    // D=7 文字×50ms=0.35s）→ \_w[1000] 後に \c（Clear・at=1.05+D=1.40）。Text と Clear の間に大きな
+    // \s[2100]（シェル面切替・actor "0"）→ \_w[50] 後にテキスト（typewriter・at=50ms・再生時間
+    // D=7 文字×50ms=350ms）→ \_w[1000] 後に \c（Clear・at=1050ms+D=1400ms）。Text と Clear の間に大きな
     // 待ちを置き、二段配送（Text のみ→Clear）で「単一 talk 内のリビール」→「Clear の全消去」を
     // 分離できるようにする。
     let mut harness = SpineHarness::boot(r"\s[2100]\_w[50]アヒルやアヒル\_w[1000]\c\e");
@@ -81,12 +80,12 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     );
 
     // ── Phase 1: シェル面指令（\s[2100]）＋テキスト cue **のみ**を配送する。dispatcher は active talk へ
-    //    最初に届いた Tick の now を base に焼き（dispatcher.rs `on_tick`: `base_now.get_or_insert(now)`）、
-    //    以降 elapsed=(now−base)/1000 秒で start_time 順に cue を解放する。本台本の実タイムラインは
-    //    Emote@0.0 → Wait@0.0(d=0.05) → Text@0.05(d=D) → Wait@0.05+D(d=1.00) → **Clear@1.05+D**。
+    //    最初に届いた Tick の時刻を talk の起点に焼き、
+    //    以降は起点からの隔たりで start_time 順に cue を解放する。本台本の実タイムラインは
+    //    Emote@0ms → Wait@0ms(d=50ms) → Text@50ms(d=D) → Wait@50ms+D(d=1000ms) → **Clear@1050ms+D**。
     //    D は areka-sakura の `duration::text_playback_duration`（文字数×`CHAR_NOMINAL_MS`=50ms）で、
     //    `compile.rs` は Text cue に対しても `offset += D` を進める（後続 cue はテキスト再生完了後へ整列）。
-    //    「アヒルやアヒル」＝7 文字ゆえ **D=0.35s・Clear@1.40s**。Clear は**配送即時にバッファ全消去**
+    //    「アヒルやアヒル」＝7 文字ゆえ **D=350ms・Clear@1400ms**。Clear は**配送即時にバッファ全消去**
     //    （時刻ゲートではない・state.rs apply_cue）ゆえ、観測したい Text 到達より先に Clear を解放させて
     //    はならない。よって注入模擬時刻は Clear 境界の手前で**頭打ち**にし、頭打ち後は時刻を据え置いた
     //    まま実 async をポンプし続ける（ループ上限は「何回ポンプするか」の意味しか持たない）。壁時計
@@ -94,10 +93,10 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    そのものが壊れるため。 ──
     // base 起点の固定: base は「active talk がある状態で処理した最初の Tick の now」なので、talk 起動を
     // 観測する（＝cue 由来の指令が rx に現れる）まで now を据え置く。これで base は TICK_BASE_MS 近傍に
-    // 焼かれ、頭打ち後の elapsed が Text@0.05 に十分届くことも同時に保証される。
+    // 焼かれ、頭打ち後の elapsed が Text@50ms に十分届くことも同時に保証される。
     const TICK_BASE_MS: u64 = 5;
-    // 頭打ち値: base≥0 ゆえ elapsed≤(TICK_MAX_MS−0)/1000＝1.040s < Clear@1.40s（余裕 0.36s・無条件に
-    // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 0.05+文字数×0.05+1.00 で動くので、
+    // 頭打ち値: base≥0 ゆえ elapsed≤TICK_MAX_MS−0＝1040ms < Clear@1400ms（余裕 360ms・無条件に
+    // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 50ms+文字数×50ms+1000ms で動くので、
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
     // ポンプ回数の上限は待ちの芯の打ち切り（下）で与える。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり、
@@ -106,17 +105,17 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     let mut now = TICK_BASE_MS;
     // ── 注入時刻の扱いは 2 段（talk 起動を観測するまで据え置く ＋ 頭打ち） ─────────────
     //
-    //  (1) **talk 起動を観測するまで `now` を進めない**。dispatcher の `base_now` は「talk が active に
-    //      なった後の初回 Tick」で確定する（areka-ghost `dispatcher.rs::on_tick`）ため、観測前に進めた
+    //  (1) **talk 起動を観測するまで `now` を進めない**。talk の起点は「talk が active に
+    //      なった後の初回 Tick」で確定するため、観測前に進めた
     //      分は base に呑まれて無意味な一方、観測が遅れたときだけ elapsed を余計に進めてしまう。
-    //      `\s[2100]` は Emote@0.0＝elapsed 0.0 で due ゆえ、`now` 据え置きのまま必ず到達する。
-    //  (2) 観測後は 5ms/反復で進めるが **[`TICK_MAX_MS`] で頭打ち**にする。Text（at=0.05）は確実に
-    //      解放され、**Clear（at=1.40・上のタイムライン導出を参照）**へは構造的に到達しないので、
+    //      `\s[2100]` は Emote@0 ms ＝elapsed 0ms で due ゆえ、`now` 据え置きのまま必ず到達する。
+    //  (2) 観測後は 5ms/反復で進めるが **[`TICK_MAX_MS`] で頭打ち**にする。Text（at=50ms）は確実に
+    //      解放され、**Clear（at=1400ms・上のタイムライン導出を参照）**へは構造的に到達しないので、
     //      リビール観測がどれだけ遅れても条件が不成立へ倒れない＝レースが消える。
     //
-    // **Clear 時刻の導出**: Clear は `at=1.05` ではなく、`compile.rs` が Text cue に対しても
-    // `offset += D` を進める分（D＝文字数×50ms＝0.35s）を足した **1.40s**。実測は掃引で確定
-    // （頭打ち 1.395s＝緑／1.405s＝赤）。頭打ち値は真の境界 1.40s の手前に置く。
+    // **Clear 時刻の導出**: Clear は `at=1050ms` ではなく、`compile.rs` が Text cue に対しても
+    // `offset += D` を進める分（D＝文字数×50ms＝350ms）を足した **1400ms**。実測は掃引で確定
+    // （頭打ち 1395ms＝緑／1405ms＝赤）。頭打ち値は真の境界 1400ms の手前に置く。
     //
     // 打ち切りは待ちの芯（[`wait_until_paced`]）が決める（頭打ち後は反復が仕事量を表さないため回数では
     // 区切らない）。進みの目印は SHIORI の呼び出しの数（受け口は死活の問い合わせを記録しない）と
@@ -132,22 +131,22 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
         Progress::Count(&probe),
         || {
             if talk_started {
-                // 小刻みに進め、テキスト到達（at=0.05）を解放する（頭打ちゆえ Clear@1.40 へ届かない）。
+                // 小刻みに進め、テキスト到達（at=50ms）を解放する（頭打ちゆえ Clear@1400ms へ届かない）。
                 now = (now + 5).min(TICK_MAX_MS);
             }
             harness.inject_dispatcher_tick(now);
             show_cmds.extend(harness.wiring.drain_received());
             shown.set(show_cmds.len() as u64);
             if !talk_started {
-                // この talk 由来の Emote@0.0 が present まで抜けた＝base_now は据え置き値で確定済み。
+                // この talk 由来の Emote@0ms が present まで抜けた＝talk の起点は据え置いた時刻で確定済み。
                 talk_started = show_cmds.iter().any(|c| {
                     matches!(c, PresentCommand::ShowSurface { target, surface_id, .. }
                         if *target == shell_target(0) && *surface_id == 2100)
                 });
             }
             harness.pump_text();
-            // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
-            run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+            // テキスト cue 到達確認: 完全リビール域 t=300ms で非透明になれば runtime へ流入済み。
+            harness.present_text(dola::time::testing::at_ms(300));
             // 文字の面は最初に描く文字が届いた present で作られるので、作られる前は「まだ」と読む。
             let attached = harness.runtime.borrow().is_attached(&actor);
             talk_started && attached && text_surface_opaque(&harness, &actor) > 0
@@ -202,51 +201,53 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     );
 
     // ── (2) typewriter: Clear 未配送（テキストのみの単一 talk バッファ）に対し注入
-    //    talk_time 階段で present_frame を駆動し、text 供給面の opaque_count が単調非減少であること・
-    //    pre-reveal（t=0.0＜先頭グリフ r_0=0.05）が全透明であることを固定する。 ──
-    let staircase: Vec<f64> = (0..=18).map(|i| i as f64 * 0.05).collect(); // 0.00,0.05,...,0.90
+    //    時刻の階段で present_frame を駆動し、text 供給面の opaque_count が単調非減少であること・
+    //    pre-reveal（t=0ms ＜先頭グリフ r_0=50ms）が全透明であることを固定する。 ──
+    let staircase: Vec<dola::TimePoint> = (0..=18)
+        .map(|i| dola::time::testing::at_ms(i * 50))
+        .collect(); // 0.00,0.05,...,0.90
     let mut counts: Vec<usize> = Vec::with_capacity(staircase.len());
     for &t in &staircase {
-        run_text_phase(&mut harness.wiring, &mut harness.world, Some(t));
+        harness.present_text(t);
         counts.push(text_surface_opaque(&harness, &actor));
     }
     assert_eq!(
         counts[0], 0,
-        "S2: pre-reveal（t=0.0＜先頭グリフ r_0=0.05）は text 供給面が全透明（opaque_count==0）: {counts:?}"
+        "S2: pre-reveal（t=0ms ＜先頭グリフ r_0=50ms）は text 供給面が全透明（opaque_count==0）: {counts:?}"
     );
     for i in 1..counts.len() {
         assert!(
             counts[i] >= counts[i - 1],
-            "S2: typewriter の opaque_count は単一 talk 内で単調非減少（注入 talk_time 階段）: {counts:?}"
+            "S2: typewriter の opaque_count は単一 talk 内で単調非減少（注入した時刻の階段）: {counts:?}"
         );
     }
     assert!(
         *counts.last().expect("staircase は非空") > 0,
-        "S2: リビールが実際に進行し text が描画される（末尾 t=0.90 で非全透明・非空虚な檻）: {counts:?}"
+        "S2: リビールが実際に進行し text が描画される（末尾 t=900ms で非全透明・非空虚な檻）: {counts:?}"
     );
 
-    // ── Phase 2＋Clear 後全域透明: dispatcher elapsed を Clear（at=1.40）超へ進めて Clear を
+    // ── Phase 2＋Clear 後全域透明: dispatcher elapsed を Clear（at=1400ms）超へ進めて Clear を
     //    配送する。Clear は配送即時にバッファを全消去する（state.rs apply_cue）ため、Clear 配送後は
-    //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
-    //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
+    //    どの注入した時刻でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
+    //    present_frame(2000ms)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
     //    打ち切りは [`wait_until_paced`] の進みの目印（SHIORI の呼び出しの数。Clear は文字の層へ届き、表示の
     //    指令として汲む物が無いので足さない）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
     let what = "S2: Clear cue の runtime への到達";
     let calls = || shiori.call_count();
     wait_until_paced(what, Progress::Count(&calls), || {
-        now += 50; // 大きめに進め Clear（at=1.40s・上のタイムライン導出）を配送させる
+        now += 50; // 大きめに進め Clear（at=1400ms・上のタイムライン導出）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
-        run_text_phase(&mut harness.wiring, &mut harness.world, Some(2.0));
+        harness.present_text(dola::time::testing::at_ms(2_000));
         text_surface_opaque(&harness, &actor) == 0
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}: \\_w[1000]\\c の配送が完了しない"));
-    // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去）。
-    run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+    // Clear 配送後は「リビール済みだった」区間の時刻（talk 起点から 300 ms）でも全域透明（Clear の全消去）。
+    harness.present_text(dola::time::testing::at_ms(300));
     assert_eq!(
         text_surface_opaque(&harness, &actor),
         0,
-        "S2: Clear 配送後は t=0.30（リビール域）でも text 供給面が全域透明（Clear の全消去）"
+        "S2: Clear 配送後は t=300ms（リビール域）でも text 供給面が全域透明（Clear の全消去）"
     );
 
     harness.shutdown_bounded();

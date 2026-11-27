@@ -5,6 +5,9 @@
 //! 確かめは `tests/box_attach_test.rs`）。箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
+use dola::TimePoint;
+use dola::time::testing::at_ms;
+use dola::time::testing::ms;
 
 use super::box_sync_tests::{Fixture, fixture, layout, select};
 use super::test_support::{
@@ -18,7 +21,7 @@ use crate::place::{PlaceKey, TextPlace};
 use crate::state::{SpanKind, TextLayerConfig};
 
 /// 全部の文字が見えている時刻。
-const LATE: f64 = 10.0;
+const LATE: TimePoint = TimePoint::MAX;
 
 fn actor() -> ActorKey {
     ActorKey::from("0")
@@ -84,18 +87,30 @@ fn unpresented_or_unrevealed_boxes_are_not_shown() {
         vec!["a".to_owned()],
         "提示した箱だけ"
     );
-    f.rt.refresh_shown_boxes(&only_a, -1.0);
-    assert_eq!(shown(&f), vec![], "まだ 1 字も見えていない");
     let balloon = [PlaceKey::balloon(&actor())];
     f.rt.refresh_shown_boxes(&balloon, LATE);
     assert_eq!(shown(&f), vec![], "普通のバルーンの場所は箱ではない");
+
+    let mut g = fixture();
+    g.show("0");
+    g.rt.apply_cue(&cue("0", ms(1000), CueCommand::Text("あ".into())));
+    g.sync(Some(2.0));
+    let a = [g.key(0, "a")];
+    g.rt.refresh_shown_boxes(&a, at_ms(999));
+    assert_eq!(shown(&g), vec![], "まだ 1 字も見えていない");
+    g.rt.refresh_shown_boxes(&a, at_ms(1000));
+    assert_eq!(
+        shown(&g).into_iter().map(|s| s.0).collect::<Vec<_>>(),
+        vec!["a".to_owned()],
+        "1 字目は出た時刻ちょうどに見える"
+    );
 }
 
 /// `\c` は今の行き先の箱だけを写しから外す。他の箱はそのまま。
 #[test]
 fn clear_drops_only_the_destination_box() {
     let mut f = two_boxes_shown();
-    f.rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    f.rt.apply_cue(&cue("0", ms(0), CueCommand::Clear));
     assert_eq!(
         shown(&f).into_iter().map(|s| s.0).collect::<Vec<_>>(),
         vec!["a".to_owned()],
@@ -134,7 +149,7 @@ fn only_the_picture_number_drops_boxes_from_the_snapshot() {
 #[test]
 fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
     let mut f = two_boxes_shown();
-    f.rt.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
+    f.rt.apply_cue(&cue("0", ms(0), CueCommand::ClearAll));
     assert_eq!(shown(&f), vec![], "台詞の頭");
 
     let mut f = two_boxes_shown();
@@ -260,8 +275,8 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     // スコープ 0 は箱 a（サーフェス 0・(10,20)）へ、スコープ 1 は同じ定義を普通のバルーンとして。
     rt.apply_cue(&emote("0", "0"));
     for scope in ["0", "1"] {
-        rt.apply_cue(&choice_cue(scope, 0.0, "OnYes", "はい", &["r0"]));
-        rt.apply_cue(&choice_cue(scope, 0.2, "OnNo", "いいえ", &["r1"]));
+        rt.apply_cue(&choice_cue(scope, ms(0), "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&choice_cue(scope, ms(200), "OnNo", "いいえ", &["r1"]));
     }
     let shell_image = (200u32, 300u32);
     let shell_physical = (300u32, 450u32);

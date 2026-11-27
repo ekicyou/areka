@@ -2,7 +2,7 @@
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、close
 //! 握手の 4 シナリオを個別の `#[test]` として決定的に観測する（実時間 sleep なし・時刻は注入
-//! [`MonotonicMs`] Tick のみ・全 join は期限付き）:
+//! `TimePoint` の Tick のみ・全 join は期限付き）:
 //!
 //! 1. **別れの台詞は `\-` 無しで終わっても終了する**: OnClose が別れの Value を
 //!    返し、close talk の TalkDone が quit:false（＝`Ended`）でも、kanade は定常運転へ戻らず
@@ -34,9 +34,7 @@
 //! ほかに、終了の指示のスコープが `OnClose` の References に届く檻（`close_test_scope_references_tests.rs`）と
 //! 停止通知の檻 3 本（`close_test_stop_notify_tests.rs`）がある。
 
-use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,
-};
+use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, TalkId, events};
 
 use super::common::{
     CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, QuitPolicy,

@@ -1,5 +1,6 @@
 use super::{
-    ActorKey, CueCommand, LINE1, LINE2, LINE3, TalkCue, TextLayerRuntime, text_playback_duration,
+    ActorKey, CueCommand, LINE1, LINE2, LINE3, TalkCue, TextLayerRuntime, TimePoint, TimeSpan,
+    text_playback_duration,
 };
 
 // ---------------------------------------------------------------------------
@@ -17,8 +18,8 @@ use super::{
 // - 縦書き（vertical 変種）の列容量: 列 i の左端 = 356 − 28 − 30i ≥ 36 →
 //   i = 0..9 の **10 列**（= `floor((320 − 28) / 30) + 1`）。
 
-/// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
-pub(super) const WATCHDOG_SECS: f64 = 30.0;
+/// シナリオ全体の watchdog（talk 起点相対・超過は FAIL）。
+pub(super) const WATCHDOG: TimeSpan = TimeSpan::from_millis(30_000);
 
 /// \1（kero）の台詞（7 グリフ・複数 actor 振り分けの観測対象）。
 const KERO_LINE: &str = "朝から元気だね";
@@ -43,7 +44,15 @@ const OVERFLOW_LINES: usize = 13;
 /// stage 4 以降: 短行は `at = 2.0` から 1 行 0.1 秒（2 文字 × `CHAR_NOMINAL_MS` 50ms）で順にリビールされ、
 /// 13 本のリビールは 3.3 秒に終わる。以降は 0.1 秒刻みで、C5 のチェック 3.4 → \0 の Clear 注入 3.5 →
 /// C6 のチェック 3.6 → \1 の Clear 注入 3.7 → C7 のチェック 3.8。
-pub(super) const T_CHECK: [f64; 7] = [0.12, 0.35, 1.1, 1.8, 3.4, 3.6, 3.8];
+pub(super) const T_CHECK: [TimeSpan; 7] = [
+    TimeSpan::from_millis(120),
+    TimeSpan::from_millis(350),
+    TimeSpan::from_millis(1100),
+    TimeSpan::from_millis(1800),
+    TimeSpan::from_millis(3400),
+    TimeSpan::from_millis(3600),
+    TimeSpan::from_millis(3800),
+];
 
 /// DrawStats 檻: 1 行/列スクロールフレームの `DrawTextLayout` 増分の tight bound。
 ///
@@ -128,43 +137,76 @@ pub(super) const GATE_KERO: [Gate; 7] = [
 /// `duration / グリフ数` と導かれる（`state.rs` の `RevealSchedule`）。`duration = 0` は「全グリフが `at` で同時に可視」なので、
 /// typewriter の進行を観測するここでは本番と同じ `text_playback_duration`（1 文字あたり
 /// `CHAR_NOMINAL_MS` = 50ms）を使う。テキスト以外の cue（改行・Clear）は瞬時ゆえ 0。
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+fn cue(actor: &str, at: TimeSpan, command: CueCommand) -> TalkCue {
     let duration = match &command {
         CueCommand::Text(text) => text_playback_duration(text),
-        _ => 0.0,
+        _ => TimeSpan::ZERO,
     };
-    TalkCue {
+    TalkCue::scheduled(
+        TimePoint::ZERO,
         at,
-        actor: ActorKey::from(actor),
+        ActorKey::from(actor),
         command,
         duration,
-    }
+    )
 }
 
 /// ステージごとに sink へ流す cue 列（`at` は注入時刻＝リビール開始の下限）。
 pub(super) fn stage_cues(stage: usize) -> Vec<TalkCue> {
     match stage {
-        0 => vec![cue("0", 0.0, CueCommand::Text(LINE1.into()))],
+        0 => vec![cue(
+            "0",
+            TimeSpan::from_millis(0),
+            CueCommand::Text(LINE1.into()),
+        )],
         1 => Vec::new(),
         2 => vec![
-            cue("0", 0.5, CueCommand::NewLine { ratio: 1.0 }),
-            cue("0", 0.5, CueCommand::Text(LINE2.into())),
+            cue(
+                "0",
+                TimeSpan::from_millis(500),
+                CueCommand::NewLine { ratio: 1.0 },
+            ),
+            cue(
+                "0",
+                TimeSpan::from_millis(500),
+                CueCommand::Text(LINE2.into()),
+            ),
         ],
         3 => vec![
-            cue("0", 1.2, CueCommand::NewLine { ratio: 1.0 }),
-            cue("0", 1.2, CueCommand::Text(LINE3.into())),
-            cue("1", 1.2, CueCommand::Text(KERO_LINE.into())),
+            cue(
+                "0",
+                TimeSpan::from_millis(1200),
+                CueCommand::NewLine { ratio: 1.0 },
+            ),
+            cue(
+                "0",
+                TimeSpan::from_millis(1200),
+                CueCommand::Text(LINE3.into()),
+            ),
+            cue(
+                "1",
+                TimeSpan::from_millis(1200),
+                CueCommand::Text(KERO_LINE.into()),
+            ),
         ],
         4 => {
             let mut cues = Vec::with_capacity(OVERFLOW_LINES * 2);
             for _ in 0..OVERFLOW_LINES {
-                cues.push(cue("0", 2.0, CueCommand::NewLine { ratio: 1.0 }));
-                cues.push(cue("0", 2.0, CueCommand::Text(SHORT_LINE.into())));
+                cues.push(cue(
+                    "0",
+                    TimeSpan::from_millis(2000),
+                    CueCommand::NewLine { ratio: 1.0 },
+                ));
+                cues.push(cue(
+                    "0",
+                    TimeSpan::from_millis(2000),
+                    CueCommand::Text(SHORT_LINE.into()),
+                ));
             }
             cues
         }
-        5 => vec![cue("0", 3.5, CueCommand::Clear)],
-        6 => vec![cue("1", 3.7, CueCommand::Clear)],
+        5 => vec![cue("0", TimeSpan::from_millis(3500), CueCommand::Clear)],
+        6 => vec![cue("1", TimeSpan::from_millis(3700), CueCommand::Clear)],
         _ => Vec::new(),
     }
 }

@@ -27,10 +27,13 @@
 #[path = "../support/mod.rs"]
 mod shared;
 
+use dola::time::testing::ms;
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
-use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
+use shared::{
+    make_world_with_gpu, opaque_count, present_at, read_back, spawn_reserved_slot, surface_size,
+};
 
 /// 実フォントの門は `support/fixture.rs` が持つ。期待値の前提になる実フォント
 /// `REAL_FONT` は、プロポーショナルで実物 `emo2-kakukaku` と同じ指定。
@@ -38,12 +41,10 @@ pub(crate) use shared::fixture::{REAL_FONT, assert_real_font_present, font_is_in
 
 mod vertical;
 
-use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
-};
+use areka_emo_text::actor::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue, TimeSpan};
 use bevy_ecs::prelude::World;
 
 // ══ 台本と描画環境の定数 ═══════════════════════════════════════════════════════════════
@@ -61,7 +62,7 @@ pub(crate) const FONT_HEIGHT: u32 = 28;
 pub(crate) const IMAGE: (u32, u32) = (320, 200);
 
 /// 全グリフが出そろう十分に後の注入時刻（reveal を待たない＝実時間 sleep 不使用）。
-const SETTLED: f64 = 100.0;
+const SETTLED: TimeSpan = ms(100_000);
 
 /// 装飾の差を見る 1 行（仮名・カタカナ・漢字・英字を混ぜ、字形の差が出やすい形にする）。
 ///
@@ -121,7 +122,7 @@ pub(crate) fn model(writing_mode: Option<&str>) -> BalloonModel {
 // ══ cue（`\f` は再生時間 0 の汎用キャリア） ════════════════════════════════════════════
 
 fn cue(command: CueCommand) -> TalkCue {
-    shared::cue("0", 0.0, command, 0.0)
+    shared::cue("0", ms(0), command, ms(0))
 }
 
 /// `\f[トークン…]` を運ぶ cue（`state.rs` が名前で自己選別して装飾へ届く）。
@@ -219,7 +220,7 @@ fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
     for c in script {
         rt.apply_cue(c);
     }
-    present_frame(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
+    present_at(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
 
     let (width, height) = surface_size(&rt, &actor);
     Shot {

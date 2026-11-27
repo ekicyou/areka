@@ -12,10 +12,11 @@ use super::tests::{
 };
 use super::{ShownTalk, after_talk_done};
 use crate::change::{CancelReason, GapRaise, KanadeNotice, ShioriMethod};
-use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{CloseReason, ShioriCall, ShioriOutcome};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::{Action, State};
 use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId};
+use dola::time::testing::{at_ms, delta_ms};
 use tracing::Level;
 
 /// 完了の知らせを組む。
@@ -268,16 +269,11 @@ fn b1_choice_timeout_release_sends_no_balloon_break() {
         Input::ChoiceWaiting {
             talk_id: talk,
             choice_ids: vec!["OnMenu".to_string()],
-            display_end: MonotonicMs(3_000),
-            timeout_directive_secs: Some(1.0),
+            display_end: at_ms(3_000),
+            timeout_directive: Some(delta_ms(1_000)),
         },
     );
-    let actions = feed(
-        &mut s,
-        Input::Tick {
-            now: MonotonicMs(10_000),
-        },
-    );
+    let actions = feed(&mut s, Input::Tick { now: at_ms(10_000) });
     assert_eq!(
         gets(&actions).iter().map(|(id, _)| *id).collect::<Vec<_>>(),
         vec!["OnChoiceTimeout"],

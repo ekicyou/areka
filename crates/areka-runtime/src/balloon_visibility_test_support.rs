@@ -8,20 +8,26 @@
 use std::collections::BTreeMap;
 
 use areka_sakura::TalkId;
+#[cfg(test)]
+pub(super) use dola::time::testing::{at_ms, delta_ms, ms};
+use dola::{TimePoint, TimeSpan};
 
 use super::{
-    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
+    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT, GlyphObservation, ScopeObservation,
     TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
 #[cfg(test)]
 use super::{VisibilityAction, VisibilityLogEvent, VisibilityTrigger};
 
-/// タイムアウト時間（秒）。[`Frame::new`] の既定と同じ値。
+/// タイムアウト時間。[`Frame::new`] の既定と同じ値。
 #[cfg(test)]
-pub(super) const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
+pub(super) const TIMEOUT: TimeSpan = DEFAULT_BALLOON_TIMEOUT;
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
 pub const TALK_ID: TalkId = TalkId(1);
+
+/// [`Frame`] が組む合図の時刻（列を通さないので判断に効かない）。
+pub const SIGNAL_AT: TimePoint = TimePoint::ZERO;
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
 /// 消去の回数は 0 で一定。
@@ -132,7 +138,7 @@ pub(super) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObs
 
 /// 1 フレーム分の判断を進める（時刻を与えないため、タイムアウトの評価は行われない）。
 ///
-/// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
+/// 時刻 `None` は本番の「フレームの時刻が無い世界」に対応する。コンテンツ駆動の判定だけを見たい
 /// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
 /// テストのどれかが必ず落ちる。
 #[cfg(test)]
@@ -149,59 +155,63 @@ pub(super) fn step(
 /// （満了境界の直前・直後など）そのものに限り、そこで頭打ちにする。
 pub struct Frame {
     obs: VisibilityObservations,
-    now: Option<f64>,
-    timeout_secs: f64,
+    now: Option<TimePoint>,
+    timeout: TimeSpan,
 }
 
 impl Frame {
     /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウトは既定時間・抑止なし・信号なし）。
     ///
-    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（同じ数値を複数箇所へ散らさない）。
+    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT`] から引く（同じ数値を複数箇所へ散らさない）。
     pub fn new(entries: &[(u32, ScopeObservation)]) -> Self {
         Self {
             obs: observations(entries),
             now: None,
-            timeout_secs: DEFAULT_BALLOON_TIMEOUT_SECS,
+            timeout: DEFAULT_BALLOON_TIMEOUT,
         }
     }
 
-    /// 現在時刻（talk 相対秒）を注入する。
-    pub fn at(mut self, now: f64) -> Self {
+    /// フレームの時刻を注入する。
+    pub fn at(mut self, now: TimePoint) -> Self {
         self.now = Some(now);
         self
     }
 
-    /// タイムアウト時間（秒）を指定する。
-    pub fn timeout(mut self, timeout_secs: f64) -> Self {
-        self.timeout_secs = timeout_secs;
+    /// タイムアウト時間を指定する。
+    pub fn timeout(mut self, timeout: TimeSpan) -> Self {
+        self.timeout = timeout;
         self
     }
 
     /// 会話開始の信号を本フレームに届ける。番号は本番と同じく配送が付けた [`TALK_ID`]。
+    ///
+    /// この組み立ての信号は判断へ直に渡す（列を通らない）ので、信号の時刻（[`SIGNAL_AT`]）は判断に効かない。
     pub fn talk_started(mut self) -> Self {
         self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted {
+            at: SIGNAL_AT,
             talk_id: Some(TALK_ID),
         });
         self
     }
 
     /// 占有終端の信号を本フレームに届ける。
-    pub fn display_end(mut self, end: f64) -> Self {
+    pub fn display_end(mut self, end: TimePoint) -> Self {
         self.obs
             .lifecycle
-            .push(TalkLifecycleSignal::DisplayEndAt(end));
+            .push(TalkLifecycleSignal::DisplayEndAt { at: SIGNAL_AT, end });
         self
     }
 
     /// 占有終端とトークの終わり（止まった時刻＝占有終端）を本フレームに一緒に届ける。
     ///
-    /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
-    /// するので、起点は終端のままで満了の時刻は変わらない。
-    pub fn ended_at(self, end: f64) -> Self {
+    /// 時間切れの計測はトークの終わりが届いてから始まる。止まった時刻は終端と同じにするので、
+    /// 起点は終端のままで満了の時刻は変わらない。
+    pub fn ended_at(self, end: TimePoint) -> Self {
         let mut frame = self.display_end(end);
-        frame.obs.lifecycle.push(TalkLifecycleSignal::TalkEnded {
-            at: Some(end.max(0.0)),
-        });
+        frame
+            .obs
+            .lifecycle
+            .push(TalkLifecycleSignal::TalkEnded { at: end });
         frame
     }
 
@@ -221,6 +231,12 @@ impl Frame {
 
     /// 判断を 1 フレーム進める。
     pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
-        decide(state, &self.obs, self.now, self.timeout_secs)
+        decide(state, &self.obs, self.now, self.timeout)
     }
+}
+
+/// `t` から `by` だけ前の時刻（満了の直前などを指す）。
+#[cfg(test)]
+pub(super) fn earlier(t: TimePoint, by: TimeSpan) -> TimePoint {
+    t - by
 }

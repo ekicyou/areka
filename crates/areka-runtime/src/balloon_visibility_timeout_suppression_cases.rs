@@ -4,8 +4,9 @@
 // 表の読み方・記述語の意味・分けた理由は走査側 `balloon_visibility_timeout_suppression_tests.rs` にある。
 // =============================================================================
 
+use super::super::test_support::delta_ms;
 use super::super::{MeasurementDiscardReason, SuppressionKinds};
-use super::{After, Case, EPS, Expect, LATE, Now, Row, Signal, TIMEOUT, Watch};
+use super::{After, Case, EPS, Expect, LATE, Now, Row, Signal, TIMEOUT, Watch, minus, plus};
 
 pub(super) const CASES: &[Case] = &[
     // ⑴⒀ 占有終端は既知の最大より後退しない。
@@ -18,10 +19,10 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             // 会話が始まり、占有終端が届く。現在時刻はまだ占有終端より手前。
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -32,17 +33,17 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
             },
             // 既知の最大より手前の占有終端が届く。状態は一切動かない。
             Row {
-                signals: &[Signal::DisplayEnd(-4.0)],
+                signals: &[Signal::DisplayEnd(delta_ms(-4_000))],
                 scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(LATE + 1.0),
+                now: Now::At(plus(LATE, delta_ms(1_000))),
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
@@ -51,7 +52,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 0, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(LATE + 2.0),
+                now: Now::At(plus(LATE, delta_ms(2_000))),
                 expect: &[
                     Expect::Cleared(&[0]),
                     Expect::Discarded {
@@ -66,11 +67,11 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 2, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(LATE + 3.0),
+                now: Now::At(plus(LATE, delta_ms(3_000))),
                 expect: &[
                     Expect::Shown(0),
                     Expect::Started {
-                        display_end: 0.0,
+                        display_end: delta_ms(0),
                         deadline: TIMEOUT,
                     },
                 ],
@@ -81,7 +82,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 2, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT - EPS),
+                now: Now::At(minus(TIMEOUT, EPS)),
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
@@ -104,10 +105,10 @@ pub(super) const CASES: &[Case] = &[
         name: "占有終端の引き上げが現在時刻を越えなければ計測は生きたまま",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -117,17 +118,17 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
             },
             // 占有終端が引き上がるが、引き上げ先は現在時刻より手前。
             Row {
-                signals: &[Signal::DisplayEnd(LATE - 2.0)],
+                signals: &[Signal::DisplayEnd(minus(LATE, delta_ms(2_000)))],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(LATE + 1.0),
+                now: Now::At(plus(LATE, delta_ms(1_000))),
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
@@ -136,7 +137,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT - EPS),
+                now: Now::At(minus(TIMEOUT, EPS)),
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
@@ -160,7 +161,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[Signal::TalkStarted],
                 scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
                 after: &[After::NoDeadline],
             },
@@ -169,7 +170,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off), (1, 2, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-4.0),
+                now: Now::At(delta_ms(-4_000)),
                 expect: &[Expect::Shown(1)],
                 after: &[After::NoDeadline],
             },
@@ -178,7 +179,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[Signal::TalkStarted],
                 scopes: &[(0, 0, true, Watch::Off), (1, 0, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(-3.0),
+                now: Now::At(delta_ms(-3_000)),
                 expect: &[Expect::Cleared(&[0, 1])],
                 after: &[After::NoDeadline],
             },
@@ -187,16 +188,16 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 4, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-2.0),
+                now: Now::At(delta_ms(-2_000)),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
                 after: &[After::NoDeadline],
             },
             // 遅れて占有終端とトークの終わりが届く。現在時刻はまだそこへ達していない。
             Row {
-                signals: &[Signal::Ended(0.0)],
+                signals: &[Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 4, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-1.0),
+                now: Now::At(delta_ms(-1_000)),
                 expect: &[],
                 after: &[After::NoDeadline],
             },
@@ -206,7 +207,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -226,10 +227,10 @@ pub(super) const CASES: &[Case] = &[
         name: "抑止の記録は満了後にだけ出て、抑止のたびに武装し直る",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -239,7 +240,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -249,7 +250,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
-                now: Now::At(TIMEOUT - EPS),
+                now: Now::At(minus(TIMEOUT, EPS)),
                 expect: &[],
                 after: &[After::Deadline(TIMEOUT)],
             },
@@ -273,27 +274,33 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 1.0),
+                now: Now::At(plus(TIMEOUT, delta_ms(1_000))),
                 expect: &[Expect::Restarted {
-                    now: TIMEOUT + 1.0,
-                    deadline: TIMEOUT + 1.0 + TIMEOUT,
+                    now: plus(TIMEOUT, delta_ms(1_000)),
+                    deadline: plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT),
                 }],
-                after: &[After::Deadline(TIMEOUT + 1.0 + TIMEOUT)],
+                after: &[After::Deadline(plus(
+                    plus(TIMEOUT, delta_ms(1_000)),
+                    TIMEOUT,
+                ))],
             },
             // 二度目の抑止。記録も二度目が出る。
             Row {
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 1.0 + TIMEOUT),
+                now: Now::At(plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT)),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: false,
                         hover: true,
                     },
-                    deadline: TIMEOUT + 1.0 + TIMEOUT,
+                    deadline: plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT),
                 }],
-                after: &[After::Deadline(TIMEOUT + 1.0 + TIMEOUT)],
+                after: &[After::Deadline(plus(
+                    plus(TIMEOUT, delta_ms(1_000)),
+                    TIMEOUT,
+                ))],
             },
         ],
     },
@@ -309,7 +316,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[Signal::TalkStarted],
                 scopes: &[(0, 3, false, Watch::On)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
                 after: &[After::NoDeadline],
             },
@@ -318,7 +325,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(-4.0),
+                now: Now::At(delta_ms(-4_000)),
                 expect: &[],
                 after: &[After::NoDeadline],
             },
@@ -327,7 +334,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT * 2.0),
+                now: Now::At(delta_ms(40_000)),
                 expect: &[],
                 after: &[After::NoDeadline],
             },
@@ -338,10 +345,10 @@ pub(super) const CASES: &[Case] = &[
         name: "同時に成立した抑止は 1 件へ全種別が載り、一部の観測不能は残りを殺さない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -351,7 +358,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -376,12 +383,15 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 1.0),
+                now: Now::At(plus(TIMEOUT, delta_ms(1_000))),
                 expect: &[Expect::Restarted {
-                    now: TIMEOUT + 1.0,
-                    deadline: TIMEOUT + 1.0 + TIMEOUT,
+                    now: plus(TIMEOUT, delta_ms(1_000)),
+                    deadline: plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT),
                 }],
-                after: &[After::Deadline(TIMEOUT + 1.0 + TIMEOUT)],
+                after: &[After::Deadline(plus(
+                    plus(TIMEOUT, delta_ms(1_000)),
+                    TIMEOUT,
+                ))],
             },
             // 滞在の観測が取れないが、ドラッグ中は観測できている。抑止は成立し、
             // 記録の種別はドラッグだけが立つ。
@@ -389,15 +399,18 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Blind), (1, 0, false, Watch::Off)],
                 dragging: true,
-                now: Now::At(TIMEOUT + 1.0 + TIMEOUT),
+                now: Now::At(plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT)),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: true,
                         hover: false,
                     },
-                    deadline: TIMEOUT + 1.0 + TIMEOUT,
+                    deadline: plus(plus(TIMEOUT, delta_ms(1_000)), TIMEOUT),
                 }],
-                after: &[After::Deadline(TIMEOUT + 1.0 + TIMEOUT)],
+                after: &[After::Deadline(plus(
+                    plus(TIMEOUT, delta_ms(1_000)),
+                    TIMEOUT,
+                ))],
             },
         ],
     },
@@ -410,10 +423,10 @@ pub(super) const CASES: &[Case] = &[
         name: "本フレームに表示した scope への滞在は抑止になる",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -423,7 +436,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -456,10 +469,10 @@ pub(super) const CASES: &[Case] = &[
         name: "本フレームに全消去で消した scope への滞在は抑止にならない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off), (1, 2, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0), Expect::Shown(1)],
                 after: &[After::NoDeadline],
             },
@@ -469,7 +482,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -499,10 +512,10 @@ pub(super) const CASES: &[Case] = &[
         name: "現在時刻が分からないフレームでは抑止の持ち越しを書き換えない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[Expect::Shown(0)],
                 after: &[After::NoDeadline],
             },
@@ -512,7 +525,7 @@ pub(super) const CASES: &[Case] = &[
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
-                    display_end: 0.0,
+                    display_end: delta_ms(0),
                     deadline: TIMEOUT,
                 }],
                 after: &[After::Deadline(TIMEOUT)],
@@ -546,12 +559,15 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 2.0),
+                now: Now::At(plus(TIMEOUT, delta_ms(2_000))),
                 expect: &[Expect::Restarted {
-                    now: TIMEOUT + 2.0,
-                    deadline: TIMEOUT + 2.0 + TIMEOUT,
+                    now: plus(TIMEOUT, delta_ms(2_000)),
+                    deadline: plus(plus(TIMEOUT, delta_ms(2_000)), TIMEOUT),
                 }],
-                after: &[After::Deadline(TIMEOUT + 2.0 + TIMEOUT)],
+                after: &[After::Deadline(plus(
+                    plus(TIMEOUT, delta_ms(2_000)),
+                    TIMEOUT,
+                ))],
             },
         ],
     },
@@ -565,10 +581,10 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             // 占有終端は届いたが、この時点で可視コンテンツは 1 つも無い。
             Row {
-                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(delta_ms(0))],
                 scopes: &[(0, 0, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(-5.0),
+                now: Now::At(delta_ms(-5_000)),
                 expect: &[],
                 after: &[After::NoDeadline],
             },
@@ -578,11 +594,11 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 1.0),
+                now: Now::At(plus(TIMEOUT, delta_ms(1_000))),
                 expect: &[
                     Expect::Shown(0),
                     Expect::Started {
-                        display_end: 0.0,
+                        display_end: delta_ms(0),
                         deadline: TIMEOUT,
                     },
                 ],
@@ -593,7 +609,7 @@ pub(super) const CASES: &[Case] = &[
                 signals: &[],
                 scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
-                now: Now::At(TIMEOUT + 2.0),
+                now: Now::At(plus(TIMEOUT, delta_ms(2_000))),
                 expect: &[Expect::TimedOut(&[0])],
                 after: &[After::NoDeadline, After::PrevVisible(0, false)],
             },

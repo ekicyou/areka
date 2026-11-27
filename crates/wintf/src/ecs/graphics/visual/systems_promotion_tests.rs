@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows_numerics::Matrix3x2;
 
-const DT: f64 = 0.125;
+const DT: dola::TimeSpan = dola::time::testing::ms(125);
 
 fn rect(l: f32, t: f32, r: f32, b: f32) -> D2D_RECT_F {
     D2D_RECT_F {
@@ -86,7 +86,7 @@ fn owner_with_nodes(world: &mut World) -> (Entity, Entity) {
 }
 
 /// 時刻 `t` の 1 回。`bump` なら `a` の描く中身を更新する。
-fn frame(world: &mut World, t: f64, bump: Option<Entity>) {
+fn frame(world: &mut World, t: dola::TimePoint, bump: Option<Entity>) {
     world.insert_resource(FrameTime(t));
     if let Some(a) = bump {
         world.get_mut::<VisualDrawContent>(a).unwrap().set_changed();
@@ -114,7 +114,7 @@ fn frequent_node_promotes_leaves_parent_and_returns_when_quiet() {
     let mut ecs = device_world();
     let world = ecs.world_mut();
     let (owner, a) = owner_with_nodes(world);
-    let mut t = 0.0;
+    let mut t = dola::time::testing::at_ms(0);
     let mut seen = Vec::new();
     for _ in 0..12 {
         frame(world, t, Some(a));
@@ -137,7 +137,7 @@ fn frequent_node_promotes_leaves_parent_and_returns_when_quiet() {
             );
             assert!(world.get::<SurfacePlacement>(a).is_some(), "置き場が在る");
         }
-        t += DT;
+        t = t + DT;
     }
     assert_eq!(seen, vec![Phase::Node, Phase::Preparing, Phase::Active]);
 
@@ -150,7 +150,7 @@ fn frequent_node_promotes_leaves_parent_and_returns_when_quiet() {
             break;
         }
         assert!(!draws(world, owner, a));
-        t += DT;
+        t = t + DT;
     }
     assert!(back.is_some(), "落ち着けば戻る");
     assert!(draws(world, owner, a), "戻した回に親の列へ戻る");
@@ -166,11 +166,11 @@ fn auto_owner_missing_from_every_scan_demotes() {
     let mut ecs = device_world();
     let world = ecs.world_mut();
     let (owner, a) = owner_with_nodes(world);
-    let mut t = 0.0;
+    let mut t = dola::time::testing::at_ms(0);
     while phase(world, a) != Phase::Active {
-        assert!(t < 3.0, "上がらない");
+        assert!(t < dola::time::testing::at_ms(3000), "上がらない");
         frame(world, t, Some(a));
-        t += DT;
+        t = t + DT;
     }
     let window = world.get::<ChildOf>(owner).unwrap().parent();
     world.entity_mut(a).insert(ChildOf(window));
@@ -214,7 +214,7 @@ fn nested_owner_placement_does_not_flap_with_two_roots() {
         placed(1.0, 1.0, 4.0, 4.0),
         ChildOf(inner),
     ));
-    frame(world, 0.0, None);
+    frame(world, dola::time::testing::at_ms(0), None);
     let tick = |w: &World| {
         w.entity(inner)
             .get_ref::<SurfacePlacement>()
@@ -222,10 +222,10 @@ fn nested_owner_placement_does_not_flap_with_two_roots() {
             .last_changed()
             .get()
     };
-    frame(world, DT, None);
+    frame(world, dola::time::testing::at_ms(125), None);
     let first = tick(world);
     for k in 2..6 {
-        frame(world, k as f64 * DT, None);
+        frame(world, dola::time::testing::at_ms(k as i64 * 125), None);
         assert_eq!(tick(world), first, "置き場を毎回外して付け直さない");
     }
     assert!(world.get::<DrawTree>(inner).is_some(), "内の根も組む");
@@ -243,10 +243,10 @@ fn auto_owner_surface_takes_placement_size_and_regrows() {
     let mut ecs = device_world();
     let world = ecs.world_mut();
     let (_, a) = owner_with_nodes(world);
-    let mut t = 0.0;
+    let mut t = dola::time::testing::at_ms(0);
     let mut saw_preparing = false;
     while phase(world, a) != Phase::Active {
-        assert!(t < 3.0, "上がらない");
+        assert!(t < dola::time::testing::at_ms(3000), "上がらない");
         frame(world, t, Some(a));
         // 用意中の最初の回は 3 部品がまだ無い（次の回に付く）。
         if phase(world, a) == Phase::Preparing
@@ -256,7 +256,7 @@ fn auto_owner_surface_takes_placement_size_and_regrows() {
             saw_preparing = true;
             assert_eq!(s.size, size, "用意中も置き場の大きさ");
         }
-        t += DT;
+        t = t + DT;
     }
     assert!(saw_preparing);
     let before = auto_size(world, a).expect("置き場");
@@ -293,11 +293,11 @@ fn demotion_frame_does_not_recreate_the_discarded_surface() {
     let mut ecs = device_world();
     let world = ecs.world_mut();
     let (_, a) = owner_with_nodes(world);
-    let mut t = 0.0;
+    let mut t = dola::time::testing::at_ms(0);
     while phase(world, a) != Phase::Active {
-        assert!(t < 3.0, "上がらない");
+        assert!(t < dola::time::testing::at_ms(3000), "上がらない");
         frame(world, t, Some(a));
-        t += DT;
+        t = t + DT;
     }
     let stats = |w: &World| {
         let s = w.resource::<SurfaceCreationStats>();
@@ -308,7 +308,7 @@ fn demotion_frame_does_not_recreate_the_discarded_surface() {
         // 配置の変化の印を毎回立てる（戻した回にも作る係の対象に入る）
         world.get_mut::<GlobalArrangement>(a).unwrap().set_changed();
         frame(world, t, None);
-        t += DT;
+        t = t + DT;
         if phase(world, a) == Phase::Node {
             break;
         }

@@ -24,8 +24,9 @@ use super::{
     steady, to_unloading_quit,
 };
 use crate::change::{CancelReason, ChangeRequest, KanadeNotice, ShioriMethod};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
+use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
+use dola::TimePoint;
 
 /// 受理した切替の帳簿（[`super::State::change`]）。
 ///
@@ -303,7 +304,7 @@ fn on_talk_wait(
     mut state: State,
     input: Input,
     config: &KanadeConfig,
-    (talk_id, deadline, closing): (TalkId, Option<MonotonicMs>, bool),
+    (talk_id, deadline, closing): (TalkId, Option<TimePoint>, bool),
 ) -> (State, Vec<Action>) {
     match input {
         Input::TalkDone(done) if done.reason == TalkEndReason::Interrupted => {
@@ -317,12 +318,12 @@ fn on_talk_wait(
             state.last_now = Some(now);
             match talk_wait_tick(deadline, now, config) {
                 TalkWaitTick::Armed(d) => {
-                    tracing::info!(target: "kanade", event = "change_deadline_armed", talk_id = talk_id.0, deadline_ms = d.0, "送り出しの台詞の最初の Tick——再生完了待ちの上限を設定");
+                    tracing::info!(target: "kanade", event = "change_deadline_armed", talk_id = talk_id.0, deadline = %d, "送り出しの台詞の最初の Tick——再生完了待ちの上限を設定");
                     state.phase = talk_wait(closing, talk_id, Some(d));
                     (state, Vec::new())
                 }
-                TalkWaitTick::Exceeded { overshoot_ms } => {
-                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot_ms, "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
+                TalkWaitTick::Exceeded { overshoot } => {
+                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot = %overshoot, "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
                     state.phase = Phase::Unloading {
                         cause: TermCause::DeadlineExceeded,
                     };
@@ -435,7 +436,7 @@ fn on_yielded_reply(mut state: State, input: Input, reason: CloseReason) -> (Sta
 }
 
 /// 台詞の完了待ちの相（`closing` なら切替の `OnClose` の台詞）。
-fn talk_wait(closing: bool, talk_id: TalkId, deadline: Option<MonotonicMs>) -> Phase {
+fn talk_wait(closing: bool, talk_id: TalkId, deadline: Option<TimePoint>) -> Phase {
     if closing {
         Phase::ChangeCloseTalkWait { talk_id, deadline }
     } else {

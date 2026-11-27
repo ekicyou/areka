@@ -10,6 +10,7 @@
 use areka_emo_compose::PatternState;
 use areka_sakura::ActorKey;
 use areka_seriko::DisplayCommand;
+use dola::time::testing::ms;
 
 mod common;
 use common::*;
@@ -33,12 +34,12 @@ fn idempotent_repeat_surface_no_reemit() {
         emo2_resolver(),
         binds.clone(),
         [
-            emote_cue(0.0, "0", "2100"), // 初回 Show(2100)
-            emote_cue(1.0, "0", "通常"), // 通常→[2100]＝同一状態・再発行なし
-            emote_cue(2.0, "0", "2100"), // 同一 id 再指定・再発行なし
-            emote_cue(3.0, "0", "-1"),   // Hide（Changed）
-            emote_cue(4.0, "0", "-1"),   // 既に Hidden・再発行なし
-            emote_cue(5.0, "0", "2200"), // 別 surface（Changed）
+            emote_cue(ms(0), "0", "2100"),    // 初回 Show(2100)
+            emote_cue(ms(1000), "0", "通常"), // 通常→[2100]＝同一状態・再発行なし
+            emote_cue(ms(2000), "0", "2100"), // 同一 id 再指定・再発行なし
+            emote_cue(ms(3000), "0", "-1"),   // Hide（Changed）
+            emote_cue(ms(4000), "0", "-1"),   // 既に Hidden・再発行なし
+            emote_cue(ms(5000), "0", "2200"), // 別 surface（Changed）
         ],
     );
 
@@ -84,9 +85,9 @@ fn unresolved_mixed_still_processes_following() {
         emo2_resolver(),
         binds.clone(),
         [
-            emote_cue(0.0, "0", "2100"),           // 有効
-            emote_cue(1.0, "0", "存在しない別名"), // 未解決＝skip
-            emote_cue(2.0, "0", "2200"),           // 有効（継続の証跡）
+            emote_cue(ms(0), "0", "2100"),              // 有効
+            emote_cue(ms(1000), "0", "存在しない別名"), // 未解決＝skip
+            emote_cue(ms(2000), "0", "2200"),           // 有効（継続の証跡）
         ],
     );
 
@@ -129,8 +130,8 @@ fn emo2_alias_single_and_multi_classification() {
         emo2_resolver(),
         binds.clone(),
         [
-            emote_cue(0.0, "0", "通常"), // 単一候補 [2100]→2100
-            emote_cue(1.0, "1", "静観"), // 複数候補 [2106,2206]→先頭 2106
+            emote_cue(ms(0), "0", "通常"),    // 単一候補 [2100]→2100
+            emote_cue(ms(1000), "1", "静観"), // 複数候補 [2106,2206]→先頭 2106
         ],
     );
 
@@ -173,10 +174,10 @@ fn cue_sequence_emits_expected() {
         emo2_resolver(),
         binds.clone(),
         [
-            emote_cue(0.0, "0", "2100"), // 数値
-            emote_cue(1.0, "0", "静観"), // alias（複数 id→先頭）
-            emote_cue(2.0, "0", "-1"),   // 非表示
-            emote_cue(3.0, "1", "10"),   // 別スコープ・数値
+            emote_cue(ms(0), "0", "2100"),    // 数値
+            emote_cue(ms(1000), "0", "静観"), // alias（複数 id→先頭）
+            emote_cue(ms(2000), "0", "-1"),   // 非表示
+            emote_cue(ms(3000), "1", "10"),   // 別スコープ・数値
         ],
     );
 

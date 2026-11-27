@@ -50,7 +50,7 @@ fn font_is_zero_duration_carrier_between_neighbours() {
 
     // (2) 並び順は書き出し位置の転写で保たれる: 直前 Text の再生完了＝Font＝直後 Text の開始。
     let boundary = text_playback_duration("ab");
-    assert_eq!(cues[0].start_time, 0.0);
+    assert_eq!(cues[0].start_time, TimeSpan::ZERO);
     assert_eq!(cues[0].duration, boundary);
     assert_eq!(
         cues[1].start_time, boundary,
@@ -62,7 +62,7 @@ fn font_is_zero_duration_carrier_between_neighbours() {
     );
 
     // (1) 再生時間 0（非 0 を与える誤りはここで赤になる）。
-    assert_eq!(cues[1].duration, 0.0, "装飾の命令の再生時間は 0");
+    assert_eq!(cues[1].duration, TimeSpan::ZERO, "装飾の命令の再生時間は 0");
 
     // (2') 運搬形は typed variant でなく 1 本の汎用キャリア。
     assert_eq!(
@@ -87,7 +87,7 @@ fn font_arg_shapes_are_carried_verbatim() {
         let compiled = compile(&[Instruction::Font { args: want.clone() }]);
         let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
         assert_eq!(cues.len(), 1, "Font 単独でも cue を 1 件生成する: {want:?}");
-        assert_eq!(cues[0].duration, 0.0, "再生時間は 0: {want:?}");
+        assert_eq!(cues[0].duration, TimeSpan::ZERO, "再生時間は 0: {want:?}");
         assert_eq!(
             font_tokens(&cues[0]),
             Some(want.clone()),
@@ -140,7 +140,7 @@ fn font_does_not_change_other_cue_timings() {
             .cues()
             .iter()
             .map(|c| c.start_time + c.duration)
-            .fold(0.0_f64, f64::max)
+            .fold(TimeSpan::ZERO, TimeSpan::max)
     };
     assert_eq!(horizon(&without), horizon(&with), "台本の占有時間は不変");
 }
