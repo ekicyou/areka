@@ -431,3 +431,7 @@
 - 一覧: `AREKA_PRODUCERS` に `areka-emo-text/actor_held.rs`（`PRESENT`）、木の走査の根 5 → 6（areka-emo-text）、テスト `text_phases_arm_the_deadline` を足した。wintf `tick_wake.rs` の `PRESENT` の行に文字の層の受け取り。
 - 足場の直し: areka-session `SwitchRig` の Tick の時刻の起点を `dola::now()` にし、フレームの時刻は `max(Tick の時刻, dola::now())`（前は Tick が 0 から、FrameTime が実の時計で、占有終端が実時間より前に見えて古いバルーンが隠れた）。
 - 変える前後の期待: `frame_shell_box_integration_tests::timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears`（知らせに `at`、`TalkEnded { at: at_ms(5000) }`）、`frame_shell_box_arrow_tests`（`[UserBreak { at: TimePoint::ZERO }]`）、`dump_balloon_gpu_tests::speak_words`（「実時間で 2 巡末尾を越えた」→「フレームの時刻が最後の字の時刻に届いた」）、`spine_conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion`（占有終端を `DisplayEndAt.end − TalkStarted.at` で数える）、`strict_judges_tests::play`（吸い出しの後に `advance(TimePoint::MAX)`）、`frame_attach_carry_tests` の 2 本・`status_report_stage_tests::phase_sends_the_stage_even_while_the_runtime_is_busy`・`shell_carry_tests::replay_shows_the_decided_surfaces_and_binds_through_seriko`（World に `FrameTime(at_ms(1_000))`）。`frame_visibility_integration_tests` 6 か所・`frame_balloon_timeout_notice_e2e_tests`・`frame_shell_box_integration_tests` の `observe_cue` は消しただけ。先進坑 `old_side.rs` の `SETTLED` は `TimePoint::from_ticks(100 * 10_000_000)`。
+
+## 11.1（後半）
+
+- 足したテスト: `same_script_everywhere_tests` の 2 本（`the_same_script_looks_the_same_however_it_arrives`・`re_origins_forward_and_backward_look_the_same_however_they_arrive`。実 GPU の足場）。消したテスト・期待の変化は無い。
