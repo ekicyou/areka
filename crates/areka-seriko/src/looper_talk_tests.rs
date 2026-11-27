@@ -260,6 +260,7 @@ fn closed_balloon_window_counts_nothing_and_recounts_on_open() {
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     note(&mut st, false, 1000);
     st.tick(1000);

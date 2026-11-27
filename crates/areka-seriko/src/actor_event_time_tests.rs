@@ -232,6 +232,7 @@ fn balloon_cue_starts_always_at_its_fire_time_however_late_it_is_processed() {
             balloon_tables: BTreeMap::from([(ActorKey::from("0"), table_of(TOP_ALWAYS))]),
             rng: always_fire(),
             pick_rng: crate::seeded_rng(0),
+            text_routing: crate::TextRouting::default(),
         });
         drive(
             &mut rig,
@@ -282,6 +283,7 @@ fn window_notice_uses_the_time_it_carries() {
             balloon_tables: BTreeMap::from([(ActorKey::from("0"), table_of(TOP_ALWAYS))]),
             rng: always_fire(),
             pick_rng: crate::seeded_rng(0),
+            text_routing: crate::TextRouting::default(),
         });
         let note = |open| StageNote::Balloon {
             scope: ActorKey::from("0"),
@@ -404,6 +406,7 @@ fn stop_pending() -> ActorRig {
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     rig.hear(cue(ms(950), "0", emote("0"), TimeSpan::ZERO));
     for t in [960, 1000, 1090] {

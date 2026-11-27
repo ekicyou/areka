@@ -198,6 +198,7 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH_ON_PART))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     note(&mut st, false, 1000);
     st.tick(1000);

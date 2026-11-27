@@ -535,6 +535,7 @@ pub fn wire_runtime(
         balloon_tables,
         rng: seeded_rng(seed),
         pick_rng: seeded_rng(pick_seed),
+        text_routing: boxes.text_routing(),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済みゆえ spawn_seriko の戻り値を直接 surface sink として束へ載せる。
@@ -564,7 +565,7 @@ pub fn wire_runtime(
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない）。
         shell_author_dpi,
         balloon_author_dpi,
-        // 箱の束は装着の相が文字の層へ渡す（seriko は読まない）。
+        // 箱の束は装着の相が文字の層へ渡す（seriko へ渡す箱の材料は上で組み済み）。
         boxes,
         // シェルのカーソルも装着の相が箱の束の隣で入れる。
         cursors,

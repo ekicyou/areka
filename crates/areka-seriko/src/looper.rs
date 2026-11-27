@@ -39,7 +39,7 @@ use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-use crate::talk::TalkFeed;
+use crate::talk::{TalkFeed, TextRouting};
 use crate::timeline::{
     FrameStatus, LoopRng, LotteryBoundary, current_frame_index, elapsed_since, frame_at,
     seeded_rng, should_fire, stop_frame,
@@ -89,6 +89,8 @@ pub struct SerikoLoopConfig {
     /// 呼び出しの選び（`alternative*`）の乱数注入シーム。抽選の `rng` とは別にし、選びが抽選の
     /// 乱数を引かないようにする。
     pub pick_rng: LoopRng,
+    /// 文字の層と同じ箱の材料（箱の無いシェルでは空）。
+    pub text_routing: TextRouting,
 }
 
 impl SerikoLoopConfig {
@@ -102,6 +104,7 @@ impl SerikoLoopConfig {
             balloon_tables: BTreeMap::new(),
             rng: seeded_rng(0),
             pick_rng: seeded_rng(0),
+            text_routing: TextRouting::default(),
         }
     }
 }
@@ -429,6 +432,7 @@ impl LoopRuntime {
             balloon_tables,
             rng,
             pick_rng,
+            text_routing: _,
         } = config;
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性）。
         // `BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。

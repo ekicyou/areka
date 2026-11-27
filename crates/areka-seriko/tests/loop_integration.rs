@@ -199,6 +199,7 @@ fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng: areka_seriko::seeded_rng(0),
+        text_routing: areka_seriko::TextRouting::default(),
     }
 }
 

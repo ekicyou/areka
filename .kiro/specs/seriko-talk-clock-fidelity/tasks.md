@@ -60,7 +60,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 3.3, 3.4, 4.3, 4.5, 4.6, 5.1_
 
 - [ ] 3. 箱の材料を seriko へ届け、合図を字の列へ当てる
-- [ ] 3.1 起動の構成に箱の材料の欄を足し、起動で文字の層と同じ材料を渡す
+- [x] 3.1 起動の構成に箱の材料の欄を足し、起動で文字の層と同じ材料を渡す
   - seriko のループの構成に箱の材料の欄を足す（無効の構成では空）
   - 結線の側の箱の束に、箱の表（共有の導き方）と面の表に在る番号から箱の材料を組む口を 1 つだけ置き、文字の層向けの `\s` の解決を、2.2 の口を呼ぶ 1 行にする
   - 起動で、箱の束を装着の束へ動かす前に材料を組んで構成へ入れ、「seriko は読まない」の注を直す
@@ -140,3 +140,4 @@
 - `areka-emo-text` は `--no-deps` でも clippy が赤（rustc 1.100 の新しい lint・触っていないファイルだけ）。この spec では変えたファイルに lint が無いことで判定する。
 - `areka-seriko` の talk.rs で合図の配線前の 6 つの口に `#[cfg_attr(not(test), expect(dead_code, …))]` を付けた。配線したら外す（外さないと expect が満たされず警告になる）。clippy `--no-deps` は触っていない output.rs・state.rs の `doc_nested_refdefs` で赤（既存）。
 - seriko の数えの境界の組は `(base, seen)` から `(counted, seen)` へ替わった。既存のテストの境界の assert は同じ値の言い替えで、`realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed` の早い場合だけ (0,0)→(2,0)（0 で止まって数えた字を失う不具合の直し）。
+- `cargo test -p areka` の `emo2_mcp_get_log_origin_and_strict_over_one_real_boot` は `--ignored` 無しでも走り、i686 の `shiori-host32-helper.exe` が無いと赤になる（実機の起動。この spec の変更とは無関係）。クレートのテストでは除いて判定し、全体テストで確かめる。

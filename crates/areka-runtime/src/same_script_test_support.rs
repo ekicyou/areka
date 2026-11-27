@@ -160,6 +160,7 @@ fn seriko_config() -> SerikoLoopConfig {
         balloon_tables: BTreeMap::new(),
         rng: seeded_rng(0),
         pick_rng: seeded_rng(0),
+        text_routing: areka_seriko::TextRouting::default(),
     }
 }
 

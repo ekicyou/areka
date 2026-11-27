@@ -24,6 +24,7 @@ fn runtime(shell: AnimationTable) -> LoopRuntime {
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     })
 }
 
@@ -192,6 +193,7 @@ fn runtime_of(text: &str, rng: LoopRng) -> LoopRuntime {
         balloon_tables: BTreeMap::from([(scope(), table)]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     })
 }
 
