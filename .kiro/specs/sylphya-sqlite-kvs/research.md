@@ -258,3 +258,200 @@
 - crates.io の rusqlite の版の一覧: https://crates.io/api/v1/crates/rusqlite
 - SQLite の VFS の説明（`win32`・`win32-longpath` の長さの上限）: https://www.sqlite.org/vfs.html
 - SQLite の WAL の説明（ネットワークの置き場・読み取り専用・複数の ATTACH の原子性）: https://www.sqlite.org/wal.html
+
+---
+
+# Research & Design Decisions（設計の段・2026-11-27）
+
+> ここから下は `/kiro-spec-design` の調べと決めの記録。上の 1〜11 節（ギャップ分析）は書き換えていない。
+> 使ったスキル: `kiro-spec-design` とその `rules/`（`design-principles.md`・`design-discovery-full.md`・`design-synthesis.md`・`design-review-gate.md`）。ほかのスキルは使っていない。
+
+## Summary
+
+- **Feature**: `sylphya-sqlite-kvs`
+- **Discovery Scope**: Complex Integration（full discovery。ワークスペースで初めての sqlite・同じファイルへ複数の接続と複数のプロセスが書く保証を新しく組む）
+- **Key Findings**:
+  - rusqlite 0.43.0（libsqlite3-sys 0.40.0・SQLite 3.54.1 を同梱）は x64 と aarch64 の MSVC で警告なく組め、この repo の `deny.toml`・`about.toml` を通る。
+  - 接続が層のファイルを ATTACH している間、そのフォルダは名前を替えられない（os error 5）。今の `sylphya.toml` は保存の間しか開かれないので、**層のファイルは操作の間だけ ATTACH する**形にしないと、バルーンやゴーストの入れ直し（フォルダの `rename`）と「フォルダを消せば初めから」が退行する。
+  - `BEGIN IMMEDIATE` は ATTACH した全部の DB に書きの錠を取る。1 つの層だけに錠を取るには、遅らせる `BEGIN` の最初の文を書きにする。待ちを 0 にして `SQLITE_BUSY` を受け、番人が保留してやり直す形なら、待っている書きが読みを止めない（要件 6.10）。
+  - 読み取りだけで開いて 1 つもファイルを作らないのは、ロールバックのジャーナル（`journal_mode=DELETE`・既定）だけ。WAL は読むだけでも `-shm`・`-wal` を作って残し、書けないフォルダでは開けない。
+  - 260 文字を超える置き場は、SQLite へ素のパスを渡すと開けない（今の std の保存は通る）。`\\?\` を頭に付けたパスを `file:` の URI にし、`vfs=win32-longpath` を選べば、UTF-8 で 1,040 バイトを超える置き場まで読み書きできる。
+
+## Research Log
+
+試作は `target\proto-sqlite-kvs\`（ワークスペースの外の単独の cargo プロジェクト・`[workspace]` を空で持つ）に置いた。走らせた記録は同じフォルダの `run1.log`・`run2.log`。コマンドはどれもそのフォルダで打った。
+
+### (a) rusqlite の版・2 つの形の組み上がり・ライセンスと勧告
+
+- **Context**: 起票の確かめは 0.40.2。crates.io は 0.43.0 まで進んでいた（要件 12.3・12.4）。
+- **打ったもの**:
+  - `Cargo.toml` の依存: `rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }`
+  - `cargo build -j 4` と `cargo build -j 4 --target aarch64-pc-windows-msvc`
+  - repo の `deny.toml` を写して `cargo deny check licenses advisories`
+  - `cargo about generate -c ..\..\about.toml ..\..\about.hbs -o about-out.md`
+- **Findings**:
+  - どちらの形も警告 0 で組めた（`select sqlite_version()` は `3.54.1`）。aarch64 は組めることまで（実行は確かめていない＝要件 12.4 のとおり）。
+  - `cargo deny`: `advisories ok, licenses ok`（出た警告は「この試作では出会わなかった許可・見逃し」だけ）。
+  - `cargo about`: 成功。足されるクレートのライセンスは MIT と Zlib（`foldhash`）で、どちらも `about.toml`・`deny.toml` の許可に在る。
+  - 依存の木は 14 クレート。ワークスペースの `Cargo.lock` に無いのは 7 つ（`rusqlite`・`libsqlite3-sys`・`hashlink`・`fallible-iterator`・`fallible-streaming-iterator`・`pkg-config`・`vcpkg`）。`bitflags`・`smallvec`・`cc`・`hashbrown`・`foldhash`・`find-msvc-tools`・`shlex` は既に在る（版は `cargo update` の結果で決まる）。
+  - 既定の機能（`ffi-sqlite-wasm-rs`）は切った。wasm 用の `sqlite-wasm-rs` を `Cargo.lock` に入れないため。`cache` は準備済みの文の使い回し（`prepare_cached`）に要る。
+  - rusqlite 0.43.0 の `rust-version` は 1.89.0（この机は 1.100.0）。
+- **Implications**: 版は 0.43.0 に決める。`deny.toml` は変えずに済む見込み（確かめるだけ）。
+
+### (b) メモリーの DB を、同じプロセスの中の複数の接続で分け合う
+
+- **Context**: アプリの層の揮発の値は areka が終わるまで持ち、どのゴーストからも見える（要件討議の決め 1）。番人をゴーストごとに置くなら、接続をまたいで見えるメモリーの DB が要る。
+- **Findings**（`run2.log` の `[b1]`〜`[b3]`）:
+  - **memdb の VFS**（`ATTACH 'file:/名前?vfs=memdb'`）: 2 本目の接続から同じ値が読めた。1 本目を閉じても残り、全部の接続を閉じると消える（3 本目は `no such table`）。＝生かしておく接続が 1 本要る。
+  - memdb の錠はファイルより厳しい: ほかの接続が書きのトランザクションを開いている間は、読みも `SQLITE_BUSY` になる（ファイルは、書き手が RESERVED を持っていても読める）。
+  - **共有キャッシュ**（`file:名前?mode=memory&cache=shared`）: 分け合えるが、ぶつかると `SQLITE_LOCKED`（表の錠・ext 262）が返り、待ちの仕組み（busy）が効かない。
+  - ATTACH は、その時点の表の形を読み込む。後からほかの接続が表を作ると、次の文の準備で読み直す（ただし相手が書いている最中は読み直せず `no such table` になる）＝ATTACH した接続は自分で `CREATE TABLE IF NOT EXISTS` を打つ。
+- **Implications**: アプリの層の揮発の値と、読み取りだけの走りの控えは、memdb の名前つきの DB に置く。生かしておく接続は置き場の口（`StoreBackend`）が持つ。memdb は「待っている書きが読みを止めない」（要件 14.11）の試験の土台には使えない（その試験は `target\` の下の本物のファイルで行う）。共有キャッシュは採らない。
+
+### (c) ジャーナルの形と、作るファイル 0 の読み取りだけ
+
+- **Findings**（`[c1]`〜`[c4]`・書けないフォルダは `icacls <dir> /deny <user>:(OI)(CI)(WD,AD,WEA,WA,DC)` で作り、確かめの後に `/remove:d` で戻した）:
+  - **DELETE（既定）**: 書きのトランザクションの間だけ `<名前>-journal` が在り、確定で消える。`synchronous` の既定は 2（FULL）。`mode=ro` で ATTACH して読んでも、フォルダの一覧は変わらない。書けないフォルダでも `mode=ro` で読めた（作ったファイル 0）。書こうとすると `SQLITE_READONLY`。
+  - **WAL**: 開いている間は `-shm`・`-wal` が在り、書き手が閉じると消える。`mode=ro` で読むと `-shm`（32,768 バイト）と `-wal`（0 バイト）を作り、閉じても残る。書けないフォルダでは `mode=ro` で開けない（`unable to open database file`）。`immutable=1` を足せば読めるが、ほかの書き手が居る場面では使えない。
+  - **落ちた後のジャーナル**（子プロセスが書きの途中で `exit`）: `-journal` が残る。`mode=ro` の ATTACH は `SQLITE_READONLY_ROLLBACK`（ext 776）で失敗し、ファイルは変わらない。書ける形で開くと自動で巻き戻り、確定済みの値だけが読め、`-journal` は消える。DB とジャーナルを一緒に別のフォルダへ写して開いても同じ（要件 15.2 の根拠）。
+- **Implications**: ジャーナルの形は DELETE のまま（何も設定しない）。付随のファイルは `sylphya.sqlite-journal` の 1 つで、書きの間だけ在る。読み取りだけの走りで、落ちた後のジャーナルが残っている層は、その走りでは読めない（巻き戻すにはファイルを変える必要がある）＝記録を残して値なしで続ける（設計の討議へ）。
+
+### (d) 開く・ATTACH する・読むだけで空のファイルができるか
+
+- **Findings**（`[d1]`〜`[d3]`）: 無いファイルを既定の旗で ATTACH すると、その時点で 0 バイトのファイルができる（`Connection::open` も同じ）。`mode=rw`・`mode=ro` で無いファイルを ATTACH すると `SQLITE_CANTOPEN` で、ファイルはできない。
+- **Implications**: 層のファイルは、在るときだけ `mode=rw`（読み取りだけの走りは `mode=ro`）で ATTACH する。`mode=rwc` で作るのは、その層へ初めて覚える値を書くときだけ（要件 5.5・9.1）。0 バイトのファイルは「空」と読む（作りかけで落ちた跡）。
+
+### (e) 260 文字を超える置き場と日本語の名前
+
+- **Findings**（`[e1]`〜`[e4]`）:
+  - 日本語の名前の置き場（短いパス）: 主の接続でも ATTACH（素のパス・URI）でも読み書きできた。
+  - **今の保存の物差し**: 406 文字の置き場（日本語を含む）で、今の `FsPersistIo` と同じ手順（`create_dir_all`・錠のファイル・一時ファイル・`rename`・読み）を std で行うと通る。803 文字（UTF-8 で 1,131 バイト）でも通る。＝要件 8.6 の退行に数える置き場である。
+  - 素の長いパスは、既定の VFS でも `win32-longpath` でも開けない（主の接続・ATTACH とも `unable to open database file`）。
+  - `\\?\` を頭に付けたパスなら、既定の VFS で 417 文字まで読み書きできた（ジャーナルもできて消えた）。803 文字（1,131 バイト）は既定の VFS では開けず、`vfs=win32-longpath` を選ぶと開けた。
+  - URI の形: `file:` の後に `\\?\…` のパスを置き、`%`・`?`・`#`・`\` を `%25`・`%3F`・`%23`・`%5C` に置き換える。`?vfs=win32-longpath&mode=ro|rw|rwc` を足す。短いパスも同じ形で通る。
+- **Implications**: 置き場のパスは、絶対パスにして `\\?\`（UNC は `\\?\UNC\`）を付け、上の URI の形で渡す。VFS はいつも `win32-longpath`。UTF-16 として正しくない名前（対にならないサロゲート）のフォルダは、SQLite が UTF-8 でしかパスを受けないので開けない（今の std の保存は通る）＝設計の討議へ。ネットワークの共有フォルダと取り外しのできる媒体は確かめていない（要件討議の決め 6 のとおり）。
+
+### (f) 書きの錠と待ち（複数の接続・複数のプロセス）
+
+- **Findings**（`[f1]`〜`[f7]`・待ちの設定は `busy_timeout(0)`）:
+  - `BEGIN IMMEDIATE`（と `BEGIN EXCLUSIVE`）は、ATTACH した全部の DB に錠を取る。文を 1 つも打っていなくても、ほかの接続の別の層への書きが `SQLITE_BUSY` になる。
+  - 遅らせる `BEGIN` の最初の文を書きにすると、錠はその層のファイルだけに掛かる。ほかの接続から、別の層は書け、同じ層の書きはすぐ（0.2 ミリ秒）`SQLITE_BUSY` になり、同じ層の読みは前の値を返す。
+  - 確定（`COMMIT`）は、読み手が共有の錠を持っている間は `SQLITE_BUSY` になり、トランザクションは開いたまま残る（巻き戻すか、やり直す）。
+  - **眠らずに「待ちの上限を越えた」を作る**: 別の接続に書きの錠を持たせ、書きの試みが `Busy` を返すのを見てから、差し込んだ時計を 1 秒より先へ進める。錠が持たれている限り結果は「上限を越えた」に決まる。錠を放してからの試みは通る。
+  - 同じプロセスの 2 つのスレッドが、切れ目なく 200 個ずつ書くと、片方の 1 つの書きが 1 秒待っても錠を取れないことがあった（2 回走らせて 2 回とも 1 件）。Windows のファイルの錠は順番を守らず、取り直しの間隔（ミリ秒）より錠の空く間（マイクロ秒）が短いため。2 つのプロセスで同じことをすると、取りこぼしは 0 件（400 行）。
+  - ATTACH も表の形を読むので、ほかの書き手が確定している瞬間は `SQLITE_BUSY` になる（待ちを 0 にしていた試作の子プロセスが 1 回落ちた）。
+- **Implications**: 書きは「`busy_timeout(0)` → `BEGIN` → 書き → `COMMIT`」で、`SQLITE_BUSY` は巻き戻して「まだ書けない」を返す。番人はそれを保留してやり直し、同期の口は置き場の口の時計で待つ。ATTACH と読みは上限つきで待つ。別のプロセスの試験は、書き手が切れ目なく書く形にしない（「書けた」で返った書きが全部残ることを判定し、上限に当たった書きは試験の側でやり直す）。
+
+### 操作の間だけ ATTACH するときの費用
+
+- **打ったもの**: `cargo build -j 4 --release` と `proto-sqlite-kvs.exe bench`（4 つの層のファイルを持つ根で 500 回）。
+- **Findings**: 4 つの層を ATTACH → 重ね読み 1 回 → DETACH で 1 回 1.45 ミリ秒。ATTACH したままの重ね読みは 1 回 0.21 ミリ秒。確定（`synchronous=FULL`）は 1 回 6.0 ミリ秒。ATTACH している間のフォルダの `rename` は os error 5、DETACH した後は通る。
+- **Implications**: 名前での読みは毎フレームの道に無い（ギャップ分析 2.2 節＝本番の 6 か所）。1 回 1.5 ミリ秒は受け入れ、フォルダを掴まない形を採る。トークの始めの写し（平らな名前）はメモリーの表だけを読むので、この費用も払わない。
+
+### 確かめていないこと
+
+- aarch64 での実行・ネットワークの共有フォルダ・取り外しのできる媒体（どれも要件討議で「確かめない」と決めた範囲）。
+- UTF-16 として正しくない名前のフォルダ（SQLite の API の形から開けないと読んだだけで、動かしていない）。
+- SQLite の説明書のページ（下の References）は、この段では読み直していない。挙動はすべて上の試作で確かめた。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 番人をプロセスに 1 本 | 1 本の接続に、アプリと全部のゴーストの層を ATTACH する | 同じプロセスの中の書き手が 1 人になり、揮発の値を分け合う仕組みが要らない | ATTACH の上限 10 に対し、ゴースト 1 体で 3 つ使う＝同時に動かせるゴーストが 3 体までになる。1 体の書きの待ちが全員の読みに響く。今のアクターの寿命（ゴーストごと）を作り直す | `multi-ghost-runtime` を縛るので採らない |
+| 番人をゴーストごと＋同期の口 | ゴーストごとの番人が接続 1 本。番人が居ない時点は、呼んだスレッドの上で同じ読み書きを行う同期の口 | 今のアクターの寿命のまま。ゴーストの層の揮発の値は接続を閉じれば消える。書き手が何人でも sqlite の錠が守る（要件 6.1・6.9 がそのまま成り立つ） | アプリの層の揮発の値を接続の間で分け合う DB（memdb）が要る | **採る** |
+| 番人をゴーストごと＋アプリの番人 | 上と同じで、番人が居ない時点の読み書きを別のアクターが受ける | 口がアクターだけになる | UI スレッドは結果を待つので待ち時間は変わらず、スレッドが 1 本増えるだけ。起動の前に別のゴーストの層を読む場面（前回のバルーン・シェル・窓の位置）も受けることになる | 採らない |
+| 層のファイルを ATTACH したままにする | 番人が起きている間、4 つの層を ATTACH しておく | 読みが 1 回 0.2 ミリ秒 | フォルダの `rename`・削除が拒まれる（バルーンの入れ直し・利用者がフォルダを消す・試験が置き場を差し替える） | 採らない |
+| 層のファイルを操作の間だけ ATTACH する | 読み・書きのたびに、要る層だけを ATTACH して終わったら DETACH する | 今の `sylphya.toml` と同じく、保存の間しかファイルを掴まない。別のプロセスが書いた値が次の読みで見える（要件 1.10）が作りから出る | 読みが 1 回 1.5 ミリ秒 | **採る** |
+
+## Design Decisions
+
+### Decision: 番人はゴーストごとに 1 本、番人が居ない時点は同期の口
+
+- **Context**: ギャップ分析 11 節の 1。要件 10.1・10.2 の読み書きは、ゴーストを起こす前・降ろした直後に、アプリの層と「これから起こすゴースト」の層に対して起きる。
+- **Alternatives Considered**: 上の表の 1〜3 行。
+- **Selected Approach**: 接続と層の ATTACH・読み・書きの試みを持つ同期の核 `Store` を 1 つ作り、番人のアクターはそれを 1 つ持つ。番人が居ない時点の呼び手は、同じ `Store` を呼んだスレッドの上で開いて使う（`KvsDirect` と、型つきの鍵の包み `load_scope`・`save_scope`・`remove_scope_keys`）。
+- **Rationale**: 読み書きの決まり（層・待ち・知らせ・控え・取り込み）が `Store` の 1 か所に集まる。書き手が複数の接続になることは要件 6.1 の前提で、sqlite の錠が受け持つ。
+- **Trade-offs**: UI スレッドの直書きは、今と同じく確定（約 6 ミリ秒）と待ち（最大 1 秒）を自分で待つ。
+- **Follow-up**: `multi-ghost-runtime` が着地したら、アプリの層の書きの集め方を見直す（今の形でも値は消えない）。
+
+### Decision: 層のファイルは操作の間だけ ATTACH する
+
+- **Context**: brief の案 A は「接続に 4 つの層のファイルを ATTACH し、重ね読みは SQL 1 回」。試作で、ATTACH している間はフォルダを動かせないと分かった。
+- **Selected Approach**: 接続は 1 本のまま、メモリーの DB（主の DB・アプリの層の揮発・控え）だけを付けっぱなしにし、層のファイルは 1 回の読み・1 回の書きの間だけ ATTACH する。重ね読みは今までどおり SQL 1 回。
+- **Rationale**: 要件 5 の目的（記憶の置き場の考え方が変わらない）と、`areka-nar` の入れ直し（フォルダの `rename`）を守る。要件 1.10 が作りから出る。
+- **Trade-offs**: 読み 1 回が 0.2 → 1.5 ミリ秒。
+- **Follow-up**: 設計の討議で確かめる（brief の文字どおりの形からの違い）。
+
+### Decision: ジャーナルは DELETE・ディスクへ流す強さは FULL（どちらも SQLite の既定）
+
+- **Context**: 要件 3.5・6.5・9.1・9.6・13.1。
+- **Selected Approach**: `journal_mode` も `synchronous` も設定しない（既定＝DELETE・FULL）。
+- **Rationale**: 読み取りだけで作るファイル 0・書けないフォルダで読める、を満たすのは DELETE だけ（試作 c）。FULL は「書けた」で返った時点でディスクに在る。
+- **Trade-offs**: 確定の瞬間（数ミリ秒）は、ほかの接続の読みが待つ。WAL なら待たないが、要件 9 を満たせない。
+
+### Decision: 書きは待たずに試み、番人が保留してやり直す
+
+- **Context**: 要件 6.6・6.7・6.10・14.11。
+- **Selected Approach**: 書きの試み（`Store::try_write`）は錠を待たない。`SQLITE_BUSY` は巻き戻して `Busy` を返す。番人はその書きを列に置き、刻み（10 ミリ秒）ごとにやり直し、置き場の口の時計で 1 秒を越えたら「書けなかった」にする。列に書きが在る間も、読みと揮発の書きは受ける。
+- **Rationale**: 番人が錠の待ちで止まらないので、読みが待たされない。時計が差し込めるので、上限の試験が眠らずに決まる。
+- **Trade-offs**: 待っている書きより後に届いた、別の層への覚える値の書きも列で待つ（順を 1 本にするため）。
+
+### Decision: 控えは名前つきのメモリーの DB に置く（鍵の単位・消した印つき）
+
+- **Context**: 要件 9。今の控えは「パス → ファイルの中身」。
+- **Alternatives Considered**: ⑴ 層を初めて開いた時点のファイルの中身をメモリーへ写し、その写しの上で動く（SQL が 1 通りで済む。ただし別の areka が後から書いた値が見えず、要件 1.10 を読み取りだけの走りで満たさない）⑵ 控えを鍵の単位の重ね書きにし、ファイルは毎回読む。
+- **Selected Approach**: ⑵。表は `(置き場, 鍵) → 値`、値が NULL の行は「この走りで消した」。その層の読みは、控えに行が在ればそれ、無ければファイル。
+- **Trade-offs**: 重ね読みの SQL に、控えを見る形が増える。
+
+### Decision: 偽物の保存は、memdb の上で動く本物の sqlite
+
+- **Context**: ギャップ分析 11 節の 8・要件 14.5・14.9。今の `FakePersistIo` は 27 ファイルが使う。
+- **Alternatives Considered**: ⑴ 鍵の単位の保存の口（trait）を挟み、偽物はメモリーの表にする（重ね読み・トランザクションが偽物では動かない）⑵ いつも `target\` の下の本物のファイル（失敗の注ぎ込みに別の口が要り、上の crate の試験がファイルシステムに頼る）⑶ 置き場の口（層の置き場 → DB の在りか・古いファイルの読みと名前替え・時計）を差し替え、偽物は memdb の名前つきの DB を指す。
+- **Selected Approach**: ⑶。`MemBackend` は、次の書きを OS の失敗にする・置き場を「使えない」にする・書きの錠を持つ・時計を進める、の 4 つの注ぎ込みを持つ。
+- **Rationale**: 偽物の上でも SQL・層・トランザクションは本物が動く。
+- **Trade-offs**: memdb は書きの最中の読みを止める（試作 b）ので、要件 14.11 の試験だけは本物のファイルで行う。
+
+### Decision: 速い住み場所の取っ手は、原子の値の表（`FastTable`）
+
+- **Context**: ギャップ分析 11 節の 4・要件 3.1〜3.3・3.8・3.9。`areka-sylphya` は上流を引けない（`AppliedScale` は `areka-emo-present`）。足してよい外部の依存は rusqlite だけ。
+- **Alternatives Considered**: ⑴ `RwLock`（今の形・開発者の言う「ロックなし」に当たらない）⑵ 原子の `Arc` の入れ替え（std に無い・`arc-swap` は足せない）⑶ seqlock（`unsafe` が要る）⑷ 鍵ごとの `AtomicU64`。
+- **Selected Approach**: ⑷。`FastTable<V>` は「鍵（u32）→ 64 ビットに収まる値」の表で、読みは原子の読みだけ。中身は `OnceLock` でつないだ固定長の区画（safe な Rust・std だけ）。型と文字列の行き来は `FastHome`（名前の形 1 つぶん）が持ち、住人の型を知る crate が実装して読み口へ登録する。
+- **Rationale**: 倍率（分子・分母で 64 ビット）と DPI（16 ビット）は、名前が別々の 4 つの鍵で、どれも 64 ビットに収まる。
+- **Trade-offs**: 倍率と DPI は別々の原子の値なので、2 つを続けて読むと、書き手の 2 つの書きの間を見ることがありうる（名前 1 つの読みは 1 つの値だけを読むので割れない）。
+
+### Decision: `PersistKey` は 10 種の型つきの別名として残し、保存の鍵は正規名にする
+
+- **Context**: ギャップ分析 11 節の 2・要件 2.9・ウェーブの約束。
+- **Selected Approach**: ファイルの表の鍵は正規名の文字列。`PersistKey` は今の 10 種だけを表し、`to_canonical_key` と逆向きの `from_canonical_key` で正規名と行き来する。新しい覚える鍵は鍵の表の 1 行だけで足り、列挙には足さない。`PersistFailure.keys` は型つきの別名を持つ鍵だけを運び、記録（error）には全部の鍵の正規名を書く。
+- **Trade-offs**: 表の行だけの鍵が書けなかったとき、告知の「覚えられなかったもの」は層の語（例「ゴーストの記憶」）になる（`remembered_text` の、鍵が空のときの枝）。
+
+### Decision: 取り込みの印はファイルの中・同じ鍵の 2 つの綴りは先の綴り
+
+- **Context**: ギャップ分析 11 節の 5・要件 7。
+- **Selected Approach**: 取り込みと「取り込み済み」の印（`meta` の表の 1 行）を 1 つのトランザクションに入れ、その後で `sylphya.toml` を `sylphya.toml.imported`（在れば `.imported.1`・`.imported.2`…）へ名前を替える。値は `INSERT OR IGNORE`（新しい記憶のファイルに在る鍵は変えない）。`"0"` と `"00"` のように同じ番号に読める綴りが 2 つ在れば、今の直読みと同じく先の綴り（文字の順）を採る。
+- **Rationale**: 名前替えの前に落ちても、次の起動は印を見て取り込みを飛ばす（二重に入らず、古い値へ戻らない）。先の綴りは、利用者が今の版の起動で目にしている値（起動の決め・窓の位置）。
+
+### Synthesis（まとめ直し）
+
+- **Generalization**: 「アクターを通らない読み書き」「番人の読み書き」「取り込み」「控え」「偽物の保存」は、どれも「層の置き場に対する 1 回の読み／1 回の書き」の変形。同期の核 `Store` と置き場の口 `StoreBackend` の 2 つにまとめた。速い住み場所の住人（倍率と DPI）と、外の一次情報源から取る読み手（窓の矩形）は、どちらも「名前の形 → 外の crate が登録する物」で、登録の仕組みを同じ形にそろえる。
+- **Build vs. Adopt**: 保存と錠と原子性は sqlite に任せる（自前の錠のファイル・門・一時ファイルは消す）。長いパスは SQLite の VFS `win32-longpath` を使う。速い住み場所は std の原子と `OnceLock` で組む（外部の依存を足せないため）。
+- **Simplification**: アプリの番人のアクターは置かない（同期の口で足りる）。WAL・共有キャッシュ・接続の使い回しの仕組みは持たない。形の版の直しの段は今は空（版 1 だけ）で、直しの仕組みだけを置く。`mirror.rs` と `persist/io.rs` は消す。
+
+## Risks & Mitigations
+
+- 書き手が切れ目なく書くと、待つ側が 1 秒の上限に当たりうる（試作 f）— 本番の書き手は起動・切替・ドラッグの確定のときだけ書く。別のプロセスの試験は負荷の形にしない。
+- 読み取りだけの走りで、前の走りが書きの途中で落ちていた層は読めない — 記録を残して値なしで続ける。ふつうの起動を 1 回すれば巻き戻る。設計の討議に上げる。
+- UTF-16 として正しくない名前のフォルダは開けない — 要件 8.7 の道（記録と告知）へ渡す。要件 8.6 の退行に数えるかを設計の討議に上げる。
+- 利用者ごとの置き場への写しの最中に、別の areka が写しの元へ書いていると、写した DB が半端になりうる — 写しの元（実行ファイルの隣）と写す先（利用者ごとの置き場）を同時に使う 2 つの areka は、置き場の決め方が違う起動どうしに限られる。この spec では手当てしない（今の `sylphya.toml` の写しは名前替えで守られていた点が違う）。設計の討議に上げる。
+- 取り込みは一度きり — 取り込みと印を 1 つのトランザクションに入れ、落ちた場合・名前を替えられない場合・2 つの areka が同時の場合を試験で固定する（要件 14.3）。
+- ほかの道具が層のファイルを開いて長く錠を持つと、読みが最大 1 秒待ち、越えると値なしになる — 記録（error）を残す。
+
+## References
+
+- crates.io の rusqlite: https://crates.io/crates/rusqlite — 版 0.43.0・機能の一覧（`cargo info rusqlite` で読んだ）
+- SQLite の URI のファイル名（`mode`・`vfs`・`immutable`）: https://www.sqlite.org/uri.html
+- SQLite のファイルの錠（SHARED・RESERVED・PENDING・EXCLUSIVE）: https://www.sqlite.org/lockingv3.html
+- SQLite のトランザクション（`BEGIN IMMEDIATE`・遅らせる `BEGIN`）: https://www.sqlite.org/lang_transaction.html
+- SQLite の ATTACH: https://www.sqlite.org/lang_attach.html
+- SQLite の共有キャッシュ（使わないことを勧めている）: https://www.sqlite.org/sharedcache.html
