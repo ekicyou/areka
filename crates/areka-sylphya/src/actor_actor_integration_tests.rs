@@ -1,9 +1,13 @@
 use super::*;
 use crate::asker::{AskerContext, AskerId};
-use crate::persist::{Axis, FakePersistIo, PersistKey, PersistScope, ScopeRoots};
+use crate::guardian::wait_tests::{Hooked, ask};
+use crate::keytable::Home;
+use crate::persist::{Axis, PersistKey, PersistScope, ScopeRoots};
+use crate::store::{FileWrite, MemBackend, Store, StoreBackend};
 use crate::value::{DottedResolution, FlatResolution};
 use crate::vocab::DegradePolicy;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 fn ctx(id: &str) -> AskerContext {
     AskerContext {
@@ -15,12 +19,26 @@ fn a(id: &str) -> AskerId {
     AskerId::new(id)
 }
 
-/// 空 roots＋fake IO で起動する（本番結線を模した最小 init）。
-fn init_empty() -> SylphyaInit {
-    SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
+/// 空 roots＋偽物の置き場の口で起動する（本番結線を模した最小 init）。
+fn ghost_roots() -> ScopeRoots {
+    ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
     }
+}
+
+/// 番人とは別の核で、ゴーストの層のファイルを読む。
+fn read_ghost_file(backend: Arc<dyn StoreBackend>, key: &str) -> Option<String> {
+    Store::open(ghost_roots(), backend).unwrap().read(
+        &a("ghost/a"),
+        key,
+        Some(PersistScope::Ghost),
+        Home::File,
+    )
+}
+
+fn init_empty() -> SylphyaInit {
+    SylphyaInit::new(ScopeRoots::default(), MemBackend::new())
 }
 
 // === 配線: spawn → publish → barrier → read（barrier がフェンス）===
@@ -51,49 +69,36 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
     );
 }
 
-// === 起動時ロード: publish なしで永続復元値が読める（init 投影・reader 無ブロックも兼ねる）===
+// === 起動の前にファイルに在る値が、番人への読みで読める ===
 
 #[test]
-fn initial_load_projects_persist_into_dotted_without_publish() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::X,
-                },
-                "100".into(),
-            ),
-            (PersistKey::BootCount, "7".into()),
+fn values_already_in_the_file_are_read_through_the_guardian() {
+    let mem = MemBackend::new();
+    let roots = ghost_roots();
+    let mut seed = Store::open(roots.clone(), mem.clone()).unwrap();
+    let _ = seed.try_write(&FileWrite {
+        layer: PersistScope::Ghost,
+        root: roots.ghost.clone(),
+        puts: vec![
+            ("areka.window.scope(0).x".into(), "100".into()),
+            ("areka.boot.count".into(), "7".into()),
         ],
-    );
-    let parts = spawn_sylphya(SylphyaInit {
-        roots,
-        io: Box::new(io),
+        removes: Vec::new(),
+        typed: Vec::new(),
     });
+    let parts = spawn_sylphya(SylphyaInit::new(roots, mem));
 
-    // publish も barrier もせず即読み: 初期像は spawn 内で同期構築済みゆえレースなく見える
-    // （＝読み経路はアクター処理を一切待たない）。
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(0).x"),
-        DottedResolution::Value("100".into())
-    );
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("7".into())
-    );
+    for (key, value) in [
+        ("areka.window.scope(0).x", "100"),
+        ("areka.boot.count", "7"),
+    ] {
+        assert_eq!(
+            ask(&parts.publisher, a("ghost/a"), None, key, Home::File).as_deref(),
+            Some(value)
+        );
+    }
+    parts.publisher.close();
+    parts.handle.join().expect("join");
 }
 
 // === SET StoreWrite が host 点付き区画へ反映（自由 key）===
@@ -185,15 +190,8 @@ fn barrier_fences_all_prior_messages_last_write_wins() {
 
 #[test]
 fn persist_put_write_through_commits_to_real_io() {
-    let shared = std::sync::Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(shared.clone()),
-    });
+    let mem = MemBackend::new();
+    let parts = spawn_sylphya(SylphyaInit::new(ghost_roots(), mem.clone()));
     parts.publisher.persist_put(
         PersistScope::Ghost,
         vec![
@@ -201,18 +199,17 @@ fn persist_put_write_through_commits_to_real_io() {
             (PersistKey::VanishCount, "2".into()),
         ],
     );
-    // barrier 復帰 = put の write-through 保存（save_scope）まで完了。
+    // barrier 復帰 = put の書きが確定済み。
     parts.publisher.barrier().expect("barrier");
 
-    // アクターと同じ store を別ハンドルの load_scope で観測（実 IO 通過の証明）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
-    assert!(
-        loaded.contains(&(PersistKey::BootCount, "5".into())),
-        "write-through が実 IO へ確定していない: {loaded:?}"
+    // 番人とは別の核で観測（ファイルへ確定した証明）。
+    assert_eq!(
+        read_ghost_file(mem.clone(), "areka.boot.count").as_deref(),
+        Some("5")
     );
-    assert!(
-        loaded.contains(&(PersistKey::VanishCount, "2".into())),
-        "write-through が実 IO へ確定していない: {loaded:?}"
+    assert_eq!(
+        read_ghost_file(mem, "areka.vanish.count").as_deref(),
+        Some("2")
     );
 }
 
@@ -264,17 +261,6 @@ fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
     );
 }
 
-/// 確定で必ず panic する IO（アクター death by panic を決定論的に誘発する）。
-struct PanicIo;
-impl crate::persist::PersistIo for PanicIo {
-    fn read(&self, _path: &std::path::Path) -> std::io::Result<Option<String>> {
-        Ok(None)
-    }
-    fn commit(&self, _path: &std::path::Path, _content: &str) -> std::io::Result<()> {
-        panic!("injected persist commit panic");
-    }
-}
-
 // === アクター死亡（panic→join 検出）: join が Panicked・reader は最終鏡像で継続 ===
 
 #[test]
@@ -283,13 +269,14 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         reader,
         publisher,
         handle,
-    } = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        },
-        io: Box::new(PanicIo),
-    });
+    } = spawn_sylphya(SylphyaInit::new(
+        ghost_roots(),
+        Arc::new(Hooked {
+            inner: MemBackend::new(),
+            volatile_uri: None,
+            panic_on_write: true,
+        }),
+    ));
     // 先に既知値を確立（panic 前の最終鏡像）。
     publisher.publish_static(
         a("ghost/a"),
@@ -375,18 +362,8 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
 
 #[test]
 fn persist_remove_drops_the_key_from_file_and_keeps_others() {
-    let shared = std::sync::Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let (parts, mirror) = spawn_parts(
-        SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(shared.clone()),
-        },
-        None,
-    );
+    let mem = MemBackend::new();
+    let (parts, mirror) = spawn_parts(SylphyaInit::new(ghost_roots(), mem.clone()), None);
     let x = PersistKey::BalloonOffset {
         scope: 0,
         axis: Axis::X,
@@ -408,10 +385,16 @@ fn persist_remove_drops_the_key_from_file_and_keeps_others() {
         .persist_remove(PersistScope::Ghost, vec![x, y]);
     parts.publisher.barrier().expect("barrier");
 
+    for key in [
+        "areka.balloon.offset.scope(0).x",
+        "areka.balloon.offset.scope(0).y",
+    ] {
+        assert_eq!(read_ghost_file(mem.clone(), key), None, "記憶から消える");
+    }
     assert_eq!(
-        load_scope(PersistScope::Ghost, &roots, &shared),
-        vec![(PersistKey::BootCount, "3".into())],
-        "記憶からも消え、ほかの鍵は残る"
+        read_ghost_file(mem, "areka.boot.count").as_deref(),
+        Some("3"),
+        "ほかの鍵は残る"
     );
     assert_eq!(mirror.load().epoch, 0, "覚える値の書き・消しは像を出さない");
 

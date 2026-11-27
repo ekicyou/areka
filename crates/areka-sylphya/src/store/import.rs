@@ -333,6 +333,10 @@ impl Store {
         self.pending.get(root)?.get(key)
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the typed wrappers move onto the store later")
+    )]
     pub(super) fn pending_layer(&self, layer: PersistScope) -> Option<&BTreeMap<String, String>> {
         self.pending.get(self.roots.root_of(layer)?)
     }

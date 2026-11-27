@@ -1,7 +1,8 @@
 use super::*;
 use crate::asker::AskerId;
 use crate::mirror::SharedMirror;
-use crate::persist::{FakePersistIo, ScopeRoots};
+use crate::persist::ScopeRoots;
+use crate::store::MemBackend;
 
 fn a(id: &str) -> AskerId {
     AskerId::new(id)
@@ -13,10 +14,7 @@ fn a(id: &str) -> AskerId {
 /// 返す `(shared, publisher, handle)` の `shared` は初期像 epoch 0。以降のアクター publish で
 /// epoch は単調増加する。
 fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor::ActorHandle) {
-    let init = SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-    };
+    let init = SylphyaInit::new(ScopeRoots::default(), MemBackend::new());
     let (parts, shared) = spawn_parts(init, None);
     (shared, parts.publisher, parts.handle)
 }
@@ -165,10 +163,7 @@ fn epoch_advance_is_deterministic_over_iterations() {
 fn send_after_death_logs_warn_not_silent() {
     use crate::test_log_capture::{assert_logged, capture};
 
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-    });
+    let parts = spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()));
     // 正典終了経路で確実に畳む（join 復帰 = body return = rx drop 済み = 以降 send は SendError）。
     parts.publisher.close();
     parts

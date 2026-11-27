@@ -17,23 +17,14 @@ use crate::key::parse_dotted;
 pub use crate::keytable::classify_set;
 use crate::keytable::{ByName, Home, KEY_TABLE, Refusal, rule_of};
 use crate::kvs::WriteOutcome;
-use crate::mirror::{MirrorImage, SharedMirror};
-use crate::persist::{
-    PersistFailure, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope,
-    remove_scope_keys, save_scope,
-};
-use crate::reader::SylphyaReader;
+use crate::persist::{PersistKey, PersistScope};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 /// ログ target（固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
-
-/// 永続の失敗まわりのログ target（`persist` と同じ名）。
-const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
 
 /// sylphya アクター宛メッセージ封筒（`areka-actor` envelope 規約）。
 ///
@@ -494,59 +485,15 @@ fn canonicalize_or_raw(key: &str) -> String {
 }
 
 // ============================================================================
-// アクター起動・Publisher・Barrier（薄い配線）
+// 送り口（受信の輪は `guardian.rs`）
 // ============================================================================
 //
-// 掲示板（マテリアライズド・ビュー）モデルの **供給側単独所有者**。[`apply`]
-// （判断分岐の自由な関数）が返す効果列 [`Effect`] を、単一のアクタースレッドが
-// 直列に実行する: copy-on-write で後継 [`MirrorImage`] を組み立て・[`SharedMirror::publish`]
-// で swap し（single-writer）・[`PersistSave`](Effect::PersistSave) を注入 [`PersistIo`] で
-// write-through 保存し・[`Barrier`](Effect::Barrier) の
-// reply を返し・[`Stop`](Effect::Stop) で受信ループを畳む。
-//
-// ## areka-actor 5 規約
-//
-// 1. **inbox = 単一 `Receiver<SylphyaMsg>`**: [`spawn_actor`](areka_actor::spawn_actor) が
-//    内部生成した `Receiver` を body が単独所有する（送信端は [`SylphyaPublisher`] が保持）。
-// 2. **停止 = `Close`（即時停止・drain せず破棄）**: [`Effect::Stop`] でループを即 `return`。
-//    積み残しは `Receiver` の drop で破棄される。
-// 3. **unbounded**: `std::sync::mpsc::channel`（[`spawn_actor`] 内）＝無限バッファ。
-// 4. **panic はバグ観測として join 検出**: body の panic は [`ActorHandle::join`] が
-//    [`ActorError::Panicked`](areka_actor::ActorError) へ写像する（本モジュールは握り潰さない）。
-// 5. **拡張機構を足さない**: レジストリ・監督・stop_flag を持たない素の thread spawn。
-//
-// ## barrier フェンス
-//
-// inbox は mpsc FIFO・アクターは直列処理ゆえ、[`SylphyaPublisher::barrier`] の reply が
-// 復帰した時点で、それ以前に **同一送信端** から投函した全メッセージの効果は鏡像へ反映済み
-// （publish は各メッセージ処理内で barrier reply 送信より前に行われる）。
-//
-// ## アクター死亡の観測
-//
-// アクター停止（`Close` 処理後の `return`／panic による unwind）で body が `Receiver` を drop
-// すると、以降の送信端 `send` は `SendError` を返す。[`SylphyaPublisher`] の fire-and-forget
-// メソッドはこれを **warn 記録して縮退**（panic しない）、[`barrier`](SylphyaPublisher::barrier)
-// は [`ReplyError::Dropped`](areka_actor::ReplyError) を返す（＝送信端で死亡を観測可能）。
-// 読み手（[`SylphyaReader`]）は最後に publish された鏡像を保持し続けるため、供給停止後も
-// 最終鏡像で読み続行できる（表示系を殺さない）。
+// 停止した番人への投函は panic せず、fire-and-forget は warn で捨て、反映待ちは
+// `ReplyError::Dropped` を返す（送信端で停止を観測できる）。
 
-/// [`spawn_sylphya`] の起動パラメータ。
-pub struct SylphyaInit {
-    /// 層別永続スコープの保存先ルート（不在スコープは寛容ロードで空扱い）。
-    pub roots: ScopeRoots,
-    /// 永続 IO シーム（起動時ロード＋write-through 保存に使用・アクターへ移送）。
-    pub io: Box<dyn PersistIo>,
-}
-
-/// [`spawn_sylphya`] の返却物（読み口・送信端・join ハンドルの三点セット）。
-pub struct SylphyaParts {
-    /// 同期・無待機の読み口（複数消費エンジンへ clone 可）。
-    pub reader: SylphyaReader,
-    /// 変異投函の送信端（clone 可・複数供給者が共有）。
-    pub publisher: SylphyaPublisher,
-    /// アクタースレッドの join ハンドル（shutdown 時に join して panic を観測）。
-    pub handle: areka_actor::ActorHandle,
-}
+#[cfg(test)]
+pub(crate) use crate::guardian::spawn_parts;
+pub use crate::guardian::{SylphyaInit, SylphyaParts, spawn_sylphya, spawn_sylphya_with_failures};
 
 /// 変異投函の送信端（`areka-actor` envelope 規約）。
 ///
@@ -560,6 +507,10 @@ pub struct SylphyaPublisher {
 }
 
 impl SylphyaPublisher {
+    pub(crate) fn new(tx: Sender<SylphyaMsg>) -> Self {
+        SylphyaPublisher { tx }
+    }
+
     /// ①静的構成層を publish する（フラットは per-asker・点付きは大域区画へ着地）。
     pub fn publish_static(
         &self,
@@ -634,248 +585,21 @@ impl SylphyaPublisher {
 
     /// 停止規約: `Close` を投函する（正典終了経路）。
     ///
-    /// アクターは [`Effect::Stop`] で受信ループを即畳む（積み残しは破棄）。停止済みへの
-    /// 再送は warn＋縮退（panic しない）。停止完了は [`SylphyaParts::handle`] の join で待つ。
+    /// 番人は列に残った書きを 1 回ずつ待たずに試みてから止まる（受信の箱の積み残しは破棄）。
+    /// 停止済みへの再送は warn＋縮退（panic しない）。停止完了は [`SylphyaParts::handle`] の join で待つ。
     pub fn close(&self) {
         self.send(SylphyaMsg::Close);
     }
 
     /// fire-and-forget 投函の共通経路。アクター死亡時は `SendError` を **warn 記録して縮退**
     /// （panic しない）。
-    fn send(&self, msg: SylphyaMsg) {
+    pub(crate) fn send(&self, msg: SylphyaMsg) {
         if self.tx.send(msg).is_err() {
             tracing::warn!(
                 target: LOG_TARGET,
                 "sylphya actor stopped; message dropped (SendError, degrading without panic)"
             );
         }
-    }
-}
-
-/// sylphya アクターを起動する。
-///
-/// 起動時に全永続スコープを寛容ロードして初期鏡像へ投影し（[`build_initial_image`]）、その像を
-/// [`SharedMirror`] へ封じてから供給アクターを spawn する。初期像の構築は本関数（＝アクター
-/// スレッド生成 **前**）で同期実行するため、返す [`SylphyaReader`] は結線直後から永続復元値を
-/// 無待機で読める（single-writer 不変を破らない——構築中は書き手が本スレッド 1 つのみで、
-/// 以降の書き手はアクタースレッド 1 つのみ・両者は時間的に重ならない）。
-///
-/// アクターは `areka-actor` の 5 規約（inbox 単一・`Close` 即時停止・unbounded・panic は
-/// join 検出・拡張機構なし）に載る素のスレッド 1 本で、[`apply`] の効果列を直列
-/// 実行する（single-writer）。結線（どの供給者が何を publish するか）は呼び出し側の領分。
-pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
-    spawn_sylphya_with_failures(init, None)
-}
-
-/// [`spawn_sylphya`] の派生（[`SylphyaInit`] に欄を足さない）。`failures` が `Some` なら、投函の保存が `Degraded` になるたびに中身を 1 件送る
-/// （成功では送らない）。アクターは直列なので、同じ書き手の失敗は投函の順に届く。
-pub fn spawn_sylphya_with_failures(
-    init: SylphyaInit,
-    failures: Option<Sender<PersistFailure>>,
-) -> SylphyaParts {
-    spawn_parts(init, failures).0
-}
-
-/// 起動の組み立ての本体（本番の [`spawn_sylphya_with_failures`] と epoch の檻が共に通る）。
-/// 檻が epoch を直接見られるよう、部品と共に鏡像の共有の写しも返す。
-pub(crate) fn spawn_parts(
-    init: SylphyaInit,
-    failures: Option<Sender<PersistFailure>>,
-) -> (SylphyaParts, SharedMirror) {
-    let SylphyaInit { roots, io } = init;
-
-    let initial = build_initial_image(&roots, io.as_ref());
-    let shared = SharedMirror::new(Arc::new(initial));
-
-    let actor_shared = shared.clone();
-    let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya", move |rx| {
-        run_actor(rx, actor_shared, roots, io, failures);
-    });
-
-    let parts = SylphyaParts {
-        reader: SylphyaReader::new(shared.clone()),
-        publisher: SylphyaPublisher { tx },
-        handle,
-    };
-    (parts, shared)
-}
-
-/// 全永続スコープを寛容ロードし、初期鏡像（epoch 0）の大域点付き区画へ `areka.*` 正準 key で
-/// 投影する。
-///
-/// root 不在・読取障害・破損はすべて [`load_scope`] が空へ縮退する（panic なし）。
-/// 投影先は大域区画（[`MirrorImage::dotted_global`]）——永続は層スコープ別であって asker 別
-/// ではなく、reader の per-asker → global 解決順で global 側に載る（[`PersistKey::to_canonical_key`]
-/// と reader/persist の往復整合）。
-fn build_initial_image(roots: &ScopeRoots, io: &dyn PersistIo) -> MirrorImage {
-    let mut img = MirrorImage::empty();
-    for scope in [
-        PersistScope::App,
-        PersistScope::Ghost,
-        PersistScope::Shell,
-        PersistScope::Balloon,
-    ] {
-        for (key, value) in load_scope(scope, roots, io) {
-            img.dotted_global.insert(key.to_canonical_key(), value);
-        }
-    }
-    img
-}
-
-/// アクター受信ループ本体（薄い配線・単一スレッド直列処理）。
-///
-/// 各メッセージにつき: [`apply`] で効果列を算出 → copy-on-write 後継像へ変異効果を
-/// 適用 → 実変異があれば [`SharedMirror::publish`]（single-writer）→ [`Effect::PersistSave`] を
-/// write-through 保存 → barrier の reply を返す → [`Effect::Stop`] で `return`。
-/// 全 `Sender` drop（Disconnected）でも正常 `return`（areka-actor 停止規約）。
-fn run_actor(
-    rx: std::sync::mpsc::Receiver<SylphyaMsg>,
-    shared: SharedMirror,
-    roots: ScopeRoots,
-    io: Box<dyn PersistIo>,
-    failures: Option<Sender<PersistFailure>>,
-) {
-    loop {
-        let msg = match rx.recv() {
-            Ok(msg) => msg,
-            // 全 Sender drop（Disconnected）→ 正常終了（areka-actor 停止規約）。
-            Err(_) => return,
-        };
-
-        let effects = apply(&msg);
-
-        // copy-on-write 後継像は書き換える 5 つの枝が初めて要るときだけ作る（反映待ち・停止・
-        // 書けない名前・204 の記録・保存だけの知らせでは複製しない）。
-        // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
-        let mut next: Option<MirrorImage> = None;
-        let mut stop = false;
-
-        for effect in effects {
-            match effect {
-                Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .flat_per_asker
-                        .entry(asker)
-                        .or_default()
-                        .insert(name, value);
-                }
-                Effect::RemoveFlatPerAsker { asker, name } => {
-                    // 実際に消えるときだけ後継像を出す（epoch は実変化に対応する）。
-                    let has = |img: &MirrorImage| {
-                        img.flat_per_asker
-                            .get(&asker)
-                            .is_some_and(|flat| flat.contains_key(&name))
-                    };
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has)
-                        && let Some(flat) = next
-                            .get_or_insert_with(|| shared.load().successor())
-                            .flat_per_asker
-                            .get_mut(&asker)
-                    {
-                        flat.remove(&name);
-                    }
-                }
-                Effect::SetDottedGlobal { key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_global
-                        .insert(key, value);
-                }
-                Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_per_asker
-                        .entry(asker)
-                        .or_default()
-                        .insert(key, value);
-                }
-                Effect::RecordAbsentFlat { .. } => {
-                    // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有）。
-                    // apply 側で debug 記録済み（二重ログにしない）。
-                }
-                Effect::PersistSave { scope, entries } => {
-                    // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
-                    // error!＋Degraded で縮退（panic しない）——ここは失敗を受け口へ中継。
-                    let outcome = save_scope(scope, &roots, io.as_ref(), entries);
-                    forward_failure(scope, outcome, failures.as_ref());
-                }
-                Effect::RemoveDottedGlobal { key } => {
-                    // 実際に消えるときだけ後継像を出す（RemoveFlatPerAsker と同じ形）。
-                    let has = |img: &MirrorImage| img.dotted_global.contains_key(&key);
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has) {
-                        next.get_or_insert_with(|| shared.load().successor())
-                            .dotted_global
-                            .remove(&key);
-                    }
-                }
-                Effect::PersistRemove { scope, keys } => {
-                    // 失敗は remove_scope_keys が error!＋Degraded で記録済み。受け口へ中継する。
-                    let outcome = remove_scope_keys(scope, &roots, io.as_ref(), keys);
-                    forward_failure(scope, outcome, failures.as_ref());
-                }
-                Effect::RuntimeCommandReserved { .. }
-                | Effect::NotSettable { .. }
-                | Effect::Refused { .. } => {
-                    // 断る名前: 書込なし（apply 側 warn 済み・呼出は Ok）。
-                }
-                Effect::Write { .. } | Effect::SetLayerRoot { .. } => {
-                    // shortcut: 鏡像の輪は置き場を持たず書けない。番人の輪に替わるまでの間だけ。
-                    tracing::warn!(
-                        target: LOG_TARGET,
-                        "store write or re-root reached the mirror loop; dropped (no store)"
-                    );
-                }
-                Effect::Barrier => {
-                    // reply は msg 側から後段で返す（全効果適用＝publish 後にフェンス到達）。
-                }
-                Effect::Stop => {
-                    stop = true;
-                }
-            }
-        }
-
-        // 実変異があった時のみ publish（epoch は実変化に対応・barrier reply より前に確定）。
-        if let Some(next) = next {
-            shared.publish(Arc::new(next));
-        }
-
-        // reply 送信（reply 端は msg が所有・効果適用＝反映完了の後に返す）。
-        match msg {
-            SylphyaMsg::Barrier { reply } => {
-                let _ = reply.send(());
-            }
-            SylphyaMsg::Get { .. }
-            | SylphyaMsg::GetFlat { .. }
-            | SylphyaMsg::TalkSnapshot { .. }
-            | SylphyaMsg::Write { .. } => {
-                // 返信端を落とす: 問い手は ReplyError::Dropped で観測する。
-                tracing::warn!(
-                    target: LOG_TARGET,
-                    "store query reached the mirror loop; reply dropped (no store)"
-                );
-            }
-            _ => {}
-        }
-
-        if stop {
-            return;
-        }
-    }
-}
-
-/// 保存・消しの `Degraded` を失敗の受け口へ中継する（成功・受け口なしは何もしない）。
-fn forward_failure(
-    scope: PersistScope,
-    outcome: PersistOutcome,
-    failures: Option<&Sender<PersistFailure>>,
-) {
-    if let (PersistOutcome::Degraded(failure), Some(failures)) = (outcome, failures)
-        && failures.send(failure).is_err()
-    {
-        // 失敗そのものは保存の側が記録済み。受け手が落ちていても続ける。
-        tracing::warn!(
-            target: PERSIST_LOG_TARGET,
-            scope = ?scope,
-            "persist failure receiver closed; failure not forwarded (continuing)"
-        );
     }
 }
 
@@ -901,7 +625,7 @@ mod barrier_within_tests;
 /// アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
 /// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
 ///
-/// 全て純 x64（[`FakePersistIo`]・実 FS なし・時計なし）。同期は **barrier／join** で取り、
+/// 全て純 x64（偽物の置き場の口 `MemBackend`・実 FS なし・時計なし）。同期は **barrier／join** で取り、
 /// `thread::sleep` を一切使わない。barrier が「それ以前の投函が反映済み」を保証するので、
 /// read はレースなく確定する。
 #[cfg(test)]
@@ -911,7 +635,7 @@ mod actor_integration_tests;
 /// アクター 決定論単体テスト群（criterion-mapped cage）。
 ///
 /// `apply` の SET 分類と publish 後の epoch 単調増加、アクター系・SET 系の判断分岐を決定論檻として
-/// 集約する。全て x64 純粋（[`FakePersistIo`]・実 FS/実時計/実 SHIORI なし）で、同期は **barrier／join** のみ
+/// 集約する。全て x64 純粋（偽物の置き場の口 `MemBackend`・実 FS/実時計/実 SHIORI なし）で、同期は **barrier／join** のみ
 /// （`thread::sleep` 皆無・スレッド配線が flake しない）。既存の強い檻は重複させず、監査で判明
 /// した 2 つの空隙を補う:
 ///

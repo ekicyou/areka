@@ -1,11 +1,4 @@
 //! 記憶の sqlite の住み場所（置き場の口・層を開いたときの検査・重ね読み）。
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the guardian and the direct KVS that call the store core land later"
-    )
-)]
 
 mod backend;
 mod import;
@@ -19,6 +12,7 @@ pub use backend::{
     Access, FsBackend, Located, MemBackend, StoreBackend, UNUSABLE_APPLICATION_ID, WriterHold,
     fs_backend,
 };
+pub(crate) use write::{FileWrite, WriteAttempt};
 
 use crate::persist::ScopeRoots;
 use rusqlite::Connection;
@@ -90,6 +84,10 @@ impl Store {
             pending: BTreeMap::new(),
             held: false,
         })
+    }
+
+    pub(crate) fn roots(&self) -> &ScopeRoots {
+        &self.roots
     }
 
     /// 控えの DB を付ける（付けていれば何もしない）。
