@@ -20,13 +20,13 @@
 
 use crate::asker::AskerId;
 use crate::key::parse_dotted;
+pub use crate::keytable::classify_set;
 use crate::mirror::{MirrorImage, SharedMirror};
 use crate::persist::{
     PersistFailure, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope,
     remove_scope_keys, save_scope,
 };
 use crate::reader::SylphyaReader;
-use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
@@ -120,61 +120,12 @@ pub trait RuntimeCommandSink: Send {
 /// 対応する [`Effect`] へ写る。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SetClass {
-    /// SET 有効群の正準語彙（[`SET_EFFECTIVE`] 登録）→ 運行コマンド書込（M1 未配線・warn＋記録のみ）。
+    /// SET 有効群の正準語彙（[`crate::vocab::dotted::SET_EFFECTIVE`] 登録）→ 運行コマンド書込（M1 未配線・warn＋記録のみ）。
     RuntimeCommand,
     /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映。
     StoreWrite,
     /// SET 無効な正準語彙 → 書込なし・呼出は Ok（正典沈黙の areka 裁量・対応表記録）。
     NotSettable,
-}
-
-/// SET 対象 key を 3 分岐へ分類する純関数（no I/O・決定論）。
-///
-/// ## 「正準語彙」の判定述語
-///
-/// key が次のいずれかを満たすとき **正準語彙** とみなす:
-///
-/// 1. [`SET_EFFECTIVE`] に半角の英字の大小を区別せず一致（SET 有効群・前後の空白は削らない）
-///    → [`SetClass::RuntimeCommand`]（最優先判定）。表は小文字だけなので `MENU` も `menu` と同じ。
-/// 2. （1 でなく）[`parse_dotted`] が成功し、**根セグメント名が [`DOTTED_ROOTS`] に属する**、
-///    または **葉セグメント名が [`GENERIC_PROP_NAMES`] に属する** → 正準語彙かつ SET 無効
-///    → [`SetClass::NotSettable`]。
-/// 3. 上記いずれでもない（自由/カスタム dotted key、または parse 不能 key）→ [`SetClass::StoreWrite`]。
-///
-/// parse 不能 key は正準語彙表に載り得ない（表は全て parse 可能）ため、決定論的に自由 key
-/// （StoreWrite）へ落とす（無音失敗なし——[`SylphyaCore::apply`] の StoreWrite アームが正準化失敗を
-/// warn 記録し、生 key を host 区画へ retain する）。SET 有効群を最優先で判定するため、
-/// `menu`/`sakura.bind.menu` 等（[`SET_EFFECTIVE`] と [`GENERIC_PROP_NAMES`] の双方に載る名）は
-/// RuntimeCommand に確定する（二重帰属の曖昧さを排除）。
-pub fn classify_set(key: &str) -> SetClass {
-    if SET_EFFECTIVE
-        .iter()
-        .any(|(k, _)| k.eq_ignore_ascii_case(key))
-    {
-        return SetClass::RuntimeCommand;
-    }
-    if is_canonical_vocab(key) {
-        return SetClass::NotSettable;
-    }
-    SetClass::StoreWrite
-}
-
-/// key が正準語彙か（根 ∈ [`DOTTED_ROOTS`] ∨ 葉 ∈ [`GENERIC_PROP_NAMES`]）。parse 不能は非正準。
-fn is_canonical_vocab(key: &str) -> bool {
-    match parse_dotted(key) {
-        Ok(path) => {
-            let root_canonical = path
-                .segs
-                .first()
-                .is_some_and(|s| DOTTED_ROOTS.contains(&s.name.as_str()));
-            let leaf_canonical = path
-                .segs
-                .last()
-                .is_some_and(|s| GENERIC_PROP_NAMES.contains(&s.name.as_str()));
-            root_canonical || leaf_canonical
-        }
-        Err(_) => false,
-    }
 }
 
 /// [`SylphyaCore::apply`] が返す純粋な効果（判断の出力・変異意図）。

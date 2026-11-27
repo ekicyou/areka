@@ -39,6 +39,7 @@
 pub mod actor;
 pub mod asker;
 pub mod key;
+pub mod keytable;
 pub mod mirror;
 pub mod persist;
 pub mod pull;

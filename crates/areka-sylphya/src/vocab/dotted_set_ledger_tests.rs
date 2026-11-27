@@ -202,6 +202,7 @@ fn record_only_leaves_keep_their_previous_classification() {
 #[test]
 fn classifier_source_does_not_reference_the_record_only_table() {
     let sources: &[(&str, &str)] = &[
+        ("keytable.rs", include_str!("../keytable.rs")),
         ("actor.rs", include_str!("../actor.rs")),
         ("actor_tests.rs", include_str!("../actor_tests.rs")),
         (
@@ -224,7 +225,7 @@ fn classifier_source_does_not_reference_the_record_only_table() {
     // 較正: 探し方が生きていることを、仕分けが実際に読む表の名前で示す。
     assert!(
         sources[0].1.matches("GENERIC_PROP_NAMES").count() >= 1,
-        "較正失敗: actor.rs に GENERIC_PROP_NAMES が見つからない（読み込み対象を取り違えている）"
+        "較正失敗: keytable.rs に GENERIC_PROP_NAMES が見つからない（読み込み対象を取り違えている）"
     );
 }
 
