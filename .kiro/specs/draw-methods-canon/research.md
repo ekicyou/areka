@@ -345,3 +345,112 @@
 3. 名前の解決に `&World` を渡すための `areka-runtime/src/hit_region.rs`・`areka-input/src/lib.rs`、CPU の合成の口を外すための `areka-placement/src/measure.rs`・例・テストの支えに触る（C28 のほかの 5 本は触らない＝重なり 0）。
 4. バルーンの絵も節で描く（同じ `apply_show` を通る）。
 5. 動く絵の `asis` と `use_self_alpha,0` は、動く絵の読みの腕に乗算しない各コマの読みを足して同じ規則で作る。
+
+## 14. 移す前の更新の所要（2026-11-27・タスク 1.1・要件 8.2・9.3・研究の項目 R3）
+
+移した後（タスク 8.3）は、この節の手順を変えずに測り直し、下の表と並べる。
+
+### 14.1 検体と条件
+
+- **検体**: emo2 の TargetId(0)（本体）が起動時に出す surface1000 のまばたき（`animation1400`。`bind+random,4`・コマ 1412→1411（150ms）→1410（22ms））と、同じ枠のまばたきの別の形 `animation1402`（ジトー目のときに bind で替わる）。tasks.md・design.md の「surface0 のまばたき」はこれを指す。emo2 の surface0 は `element0,overlay,surface0.png` の 1 枚だけで、まばたきが無い。
+- **k**: この機械のモニタは 2 面とも 192 dpi（200%）。Windows の表示設定は変えず、検体の写しの shell `descript.txt` の末尾に `seriko.dpi` を 1 行足して k を作る。
+  - k＝1: `seriko.dpi,192`（記録の `k_shell_ratio=ScaleRatio { num: 1, den: 1 }`）。
+  - k≈1.25 の代わり: `seriko.dpi,154`＝**k＝192/154＝96/77≈1.2468**（記録の `k=1.246753215789795`・`k_shell_ratio=ScaleRatio { num: 96, den: 77 }`）。192 dpi のモニタでは、ちょうど 1.25 になる整数の `seriko.dpi` が無い（153.6 が要る）。ちょうど 1.25 は表示の拡大率を 125%（120 dpi）にすれば作れるが、Windows の表示設定を変えることになるので取らない。
+  - バルーンは既定の 96 dpi のまま（`k_balloon=2.0`）。
+- **実行体**: `target\release\areka.exe`（release・2026-11-27 21:19 に建てた。そのときの作業木は HEAD `f7d1336b` に、別のタスクの未コミットの wintf の変更（`offscreen.rs` ほか。描く係の道には触らない）が乗った状態）と、`target\release\shiori-host32-helper.exe`（i686 の release を建てて写した。これが無いと SHIORI の接続が失敗し、起動から約 10 秒で exit=1 になる）。実 SHIORI があり、発話もある。
+- **回数**: k ごとに 3 回、1 回 60 秒（`AREKA_APP_SMOKE_EXIT_MS=60000`）。6 回とも exit=0。各回の前に cargo/rustc が無いことを待って確かめた。走っている間も 2 秒ごとに見て、6 回ともビルドとの重なりは無かった（`build_overlap=False`）。
+- **環境変数**（`crates/real-run-kit/src/launch.rs` の `child_command` と同じ）: 回ごとに空の `AREKA_ROOT`・`AREKA_PROFILE_DIR`（`target\dmc-perf\run-<k>-<i>\root`・`\profile`）、`AREKA_MCP_PORT=47391`、`AREKA_NO_ALERT=1`、`NO_COLOR=1`、`PASTA_DEBUG=0`、`RUST_LOG=info,areka_emo_present=debug,wintf::damage=debug`。引数はゴーストの根とバルーンの根の絶対パス。
+
+### 14.2 読む記録の行
+
+- `perf(apply_show): 段階別計時`（`areka_emo_present::presenter::timing`・debug）のうち `target_id=TargetId(0) surface_id=1000` の行。欄は `t_compose_us`（CPU の重ね直し）・`t_mask_us`・`t_upload_us`（原寸の絵の上げ＋表示の記録）・`t_total_us`（`apply_show` 全体）。`cache_hit` の真偽で分ける。
+- その行の後の最初の `[render_surface] damage`（target `wintf::damage`・debug）のうち、本体の描画面のもの。欄は `compose_us`・`present_us`・`mode`・`reason`。`entity` は本体・相方・バルーンとも `emo-surface` なので、`surface_area` で本体を選ぶ（表示の行の `scaled_w×scaled_h` との差が 1% 以内のもの）。
+  - k≈1.2468 では、表示の行が 476×682（324,632）なのに対し、wintf の描画面は 325,314（477×682）。幅の丸めが 1 画素違う。
+- **まばたきのコマ**: `seriko: loop 抽選発火` の行（`scope="0"`・`animation_id=1400` か `1402`）から 250ms 以内の上の適用。それ以外の TargetId(0)/1000 の適用（発話の表情の bind の替え）は「表情の替え」として別に数える。
+
+### 14.3 移す前の所要（中央値・µs）
+
+| k | 種類 | cache_hit | 件数 | `t_compose_us` | `t_mask_us` | `t_upload_us` | `t_total_us` | wintf `compose_us` | wintf `present_us` | wintf の描き方 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | まばたき | false | 13 | 307 | 218 | 263 | 2,249 | 99 | 60 | 全部（`root_list`） |
+| 1 | まばたき | true | 3 | 0 | 0 | 0 | 528 | 146 | 109 | 全部（`root_list`） |
+| 1 | 表情の替え | false | 19 | 1,760 | 309 | 318 | 3,509 | 84 | 68 | 全部（`first`・`root_list`） |
+| 192/154≈1.2468 | まばたき | false | 14 | 252 | 182.5 | 233.5 | 2,349 | 85.5 | 53 | 全部（`root_list`） |
+| 192/154≈1.2468 | まばたき | true | 24 | 0 | 0 | 0 | 298.5 | 95 | 66 | 全部（`root_list`） |
+| 192/154≈1.2468 | 表情の替え | false | 18 | 1,358 | 196.5 | 248 | 2,417.5 | 80 | 74.5 | 全部（`first`・`root_list`） |
+
+- まばたきの 1 コマの更新の所要（`t_total_us`＋wintf の `compose_us`＋`present_us` の中央値の和）は次のとおり。8.3 はこの値と比べる。
+  - k＝1: 外れ（cache_hit=false）約 2,408µs・当たり（cache_hit=true）約 783µs。
+  - k≈1.2468: 外れ約 2,488µs・当たり約 460µs。
+- wintf の側は、まばたきの回も毎回「全部」を描いた（`mode="full"`・`reason="root_list"`）。範囲だけになった回は 0 件。§3 の 8.2 の行（今も wintf は毎回全部を描く）の実測の裏付けになる。
+- 発火の数は 3 回の走行の和で、k＝1 が 7 回、k≈1.2468 が 13 回（1400 と 1402 の和）。件数が少ないので、8.3 も同じ 60 秒×3 回で測り、件数を並べて書く。
+
+### 14.4 測り直しの道具（そのまま写して使う・作業木の外に置く）
+
+検体の写しの作り方（PowerShell）: 検体は `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る `folder=`。
+
+```powershell
+$w='<作業木の絶対パス>'; $src="$w\target\nar-samples\manual\emo2\ghost\emo2"
+foreach($k in @(@('k1',192),@('k125',154))){ $d="$w\target\dmc-perf\$($k[0])\emo2"; if(Test-Path $d){Remove-Item -Recurse -Force $d}; New-Item -ItemType Directory -Force (Split-Path $d)|Out-Null; Copy-Item -Recurse $src $d; Add-Content -Encoding utf8 "$d\shell\master\descript.txt" "`r`nseriko.dpi,$($k[1])" }
+```
+
+走らせ方（PowerShell・`-Runs 3 -ExitMs 60000`）:
+
+```powershell
+param([int]$Runs = 3, [int]$ExitMs = 60000, [string[]]$Ks = @('k1','k125'))
+$w = '<作業木の絶対パス>'; $exe = "$w\target\release\areka.exe"; $base = "$w\target\dmc-perf"
+foreach ($k in $Ks) { for ($i = 1; $i -le $Runs; $i++) {
+    while (Get-Process cargo, rustc -ErrorAction SilentlyContinue) { Start-Sleep 10 }
+    $run = "$base\run-$k-$i"; if (Test-Path $run) { Remove-Item -Recurse -Force $run }
+    New-Item -ItemType Directory -Force "$run\root", "$run\profile" | Out-Null
+    $ghost = "$base\$k\emo2"
+    $env:AREKA_ROOT = "$run\root"; $env:AREKA_PROFILE_DIR = "$run\profile"; $env:AREKA_MCP_PORT = '47391'
+    $env:AREKA_NO_ALERT = '1'; $env:NO_COLOR = '1'; $env:PASTA_DEBUG = '0'; $env:AREKA_APP_SMOKE_EXIT_MS = "$ExitMs"
+    $env:RUST_LOG = 'info,areka_emo_present=debug,wintf::damage=debug'; Remove-Item env:AREKA_USER_ROOT -ErrorAction SilentlyContinue
+    $p = Start-Process -FilePath $exe -ArgumentList "`"$ghost`"", "`"$ghost\balloon\emo2-kakukaku`"" -RedirectStandardOutput "$run\run.log" -RedirectStandardError "$run\run.stderr.log" -NoNewWindow -PassThru
+    $overlap = $false; $deadline = (Get-Date).AddMilliseconds($ExitMs + 60000)
+    while (-not $p.WaitForExit(2000)) { if (Get-Process cargo, rustc -ErrorAction SilentlyContinue) { $overlap = $true }
+        if ((Get-Date) -gt $deadline) { Stop-Process -Id $p.Id -Force; break } }
+    Write-Output "done $k $i exit=$($p.ExitCode) build_overlap=$overlap" } }
+```
+
+読み方（Python 3 の標準だけ・`python <これ>.py k1 k125`）:
+
+```python
+import re, sys, statistics as st, glob, os
+from datetime import datetime
+base = r'<作業木の絶対パス>\target\dmc-perf'
+kv = re.compile(r'(\w+)=("[^"]*"|\S+)')
+def fields(l): return {k: v.strip('"') for k, v in kv.findall(l)}
+def ts(l): return datetime.fromisoformat(l[:26])
+def med(xs): return st.median(xs) if xs else None
+for k in sys.argv[1:]:
+    rows = {'blink': [], 'other': []}; fires = 0
+    for log in sorted(glob.glob(os.path.join(base, f'run-{k}-*', 'run.log'))):
+        L = open(log, encoding='utf-8', errors='replace').read().splitlines()
+        area = next(int(f['scaled_w']) * int(f['scaled_h']) for f in (fields(l) for l in L if '表示・マスクを更新' in l and 'TargetId(0)' in l))
+        last_fire = None
+        for i, l in enumerate(L):
+            if '抽選発火' in l and 'scope="0"' in l and re.search(r'animation_id=14(00|02)\b', l):
+                last_fire = ts(l); fires += 1
+            if 'perf(apply_show)' in l:
+                f = fields(l)
+                if f.get('target_id') != 'TargetId(0)' or f.get('surface_id') != '1000': continue
+                d = next((fields(m) for m in L[i + 1:i + 40] if '[render_surface] damage' in m
+                          and abs(int(fields(m)['surface_area']) - area) <= area // 100), None)
+                kind = 'blink' if last_fire and 0 <= (ts(l) - last_fire).total_seconds() <= 0.25 else 'other'
+                rows[kind].append((f, d))
+    print(k, 'fires', fires)
+    for kind, rs in rows.items():
+        for hit in ('false', 'true'):
+            sel = [(f, d) for f, d in rs if f['cache_hit'] == hit]
+            if not sel: continue
+            ds = [d for _, d in sel if d]
+            out = {c: med([int(f[c]) for f, _ in sel]) for c in ('t_compose_us', 't_mask_us', 't_upload_us', 't_total_us')}
+            out.update(n=len(sel), paired=len(ds), compose_us=med([int(d['compose_us']) for d in ds]),
+                       present_us=med([int(d['present_us']) for d in ds]), modes=sorted({(d['mode'], d['reason']) for d in ds}))
+            print(k, kind, 'cache_hit=' + hit, out)
+```
+
+- 8.3 では「移した後」の `areka.exe` を建て直してから、同じ写し・同じ道具・同じ回数で測る。移した後は `t_compose_us`（CPU の重ね直し）が無くなる見込みなので、比べるのは 1 コマの和（`t_total_us`＋`compose_us`＋`present_us`）。
+- この回の記録（`target\dmc-perf\run-{k1,k125}-{1..3}\run.log`）は作業木の `target\` の下にあり、消えることがある。表の数が正本になる。

@@ -10,7 +10,7 @@
 ## Tasks
 
 - [ ] 1. 移す前の測り
-- [ ] 1.1 移す前の更新の所要と表示の記録を測って残す
+- [x] 1.1 移す前の更新の所要と表示の記録を測って残す
   - emo2 の surface0 のまばたき 1 コマの更新の所要（`apply_show` の CPU の重ね直し＋絵の上げ＋wintf の合成の `compose_us`・`present_us`）を、k＝1 と k＝1.25 で、同じ手順で繰り返して測る
   - 手順（検体・回数・読む記録の行）と中央値を spec の研究の記録に書き、後の 8.3 が同じ手順で測り直せる形にする
   - 完了の状態: 研究の記録に「移す前」の所要の表（k＝1・1.25）と測りの手順が載っている
@@ -274,3 +274,9 @@
   - _Depends: 8.1, 8.2_
   - _Dispatch: standard — 実機の手順と記録の読み_
   - _Requirements: 10.3, 7.1, 7.3_
+
+## Implementation Notes
+
+- 1.1: emo2 の surface0 にはまばたきが無い。所要の検体は TargetId(0)・surface1000・animation1400（研究の記録 §14）。8.3 も同じ検体で測る。
+- 1.1: この機械のモニタは 192 dpi で k＝1.25 ちょうどは作れない。写した descript に `seriko.dpi,154` を足した k＝192/154≈1.2468 を代わりにする。release の実機の走行は `target\release\shiori-host32-helper.exe`（i686 の release を建てて写す）が無いと起動に失敗する。
+- 3.1: 3.1 から 5.1 までのあいだ、`replace`・`blend-*` などの行は画像の element定義になり `overlay` として描かれる（移す途中だけの形）。
