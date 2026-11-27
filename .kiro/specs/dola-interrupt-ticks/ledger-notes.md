@@ -435,3 +435,8 @@
 ## 11.1（後半）
 
 - 足したテスト: `same_script_everywhere_tests` の 2 本（`the_same_script_looks_the_same_however_it_arrives`・`re_origins_forward_and_backward_look_the_same_however_they_arrive`。実 GPU の足場）。消したテスト・期待の変化は無い。
+
+## 11.2（後半）
+
+- 足したテスト: `receivers_follow_tests` の 8 本、`frame::receiver_wake_tests` の 4 本。共有の足場 `same_script_test_support.rs`（11.1 の足場を移した。11.1 の期待は変わらない）。消したテスト・期待の変化は無い。
+- 先渡しのテストは、先読みの全文で折り返しが決まる前の再生（emo2 の `budoux_newline`）を途中で中断した所で確かめ、持ち越しを外すと赤になる事を一時の改変で確かめた（戻した）。

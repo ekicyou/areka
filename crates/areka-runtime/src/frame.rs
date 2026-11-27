@@ -448,3 +448,7 @@ mod text_scale_tests;
 #[cfg(test)]
 #[path = "frame_text_advance_tests.rs"]
 mod text_advance_tests;
+
+#[cfg(test)]
+#[path = "frame_receiver_wake_tests.rs"]
+mod receiver_wake_tests;

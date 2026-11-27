@@ -86,6 +86,14 @@ mod film_playback_e2e_tests;
 #[cfg(test)]
 mod same_script_everywhere_tests;
 
+// 台本を本物の再生機で刻み、文字の層・バルーンの寿命・seriko の受け手へ与える足場。
+#[cfg(test)]
+mod same_script_test_support;
+
+// 受け手どうしは、置き直し・遅れた知らせ・次の台本・中断の後も追従する。
+#[cfg(test)]
+mod receivers_follow_tests;
+
 // タグ入口の結線の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
