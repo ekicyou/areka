@@ -152,3 +152,44 @@
 4. 箱の字は数える。箱が描かれていない間も数える。
 5. 実機の確かめは要件にしない。
 6. 後ろへ動いてから捨てられた字は数えに残す（要件 1.3）。
+
+## 9. 設計の段の調べと決め（2026-11-27）
+
+> 進め方: 軽い調べ（既存の仕組みの拡張）。`kiro-spec-design` の規則（設計の原則・軽い調べ・まとめ・設計の関門）だけを使った。外部の依存は足さないので外の調べはしていない。
+
+### 9.1 調べたこと
+
+- **50 ms の食い違いの確かめ（§3.2 の 2・§3.3）**: `areka_sakura::reveal::chunk_reveal_offsets` の本文と、コンパイラが選択肢・`\!` の汎用の合図（印 `\![*]`・`%*` を含む）を長さ 0・書き出しの時刻を進めずに出すこと（`compile.rs` の `Instruction::Choice`・`Instruction::GenericCommand`）を読み、手で求め直した。`\s[10]\q[はい,yes]\s[0]つづき` は seriko が T+50・T+100・T+150、文字の層が T・T+50・T+100（口が 50 ms 遅い）。`あ\![*]いう` は文字の層が「い」100・「う」150、seriko が 50・100（口が 50 ms 早い）。どちらも §3 の見立てどおり。テストは回していない（設計の対のテストが赤で確かめる）。
+- **`\s` の答えの同じさ（§6 の 3）**: 文字の層の閉包は `ShellBoxAssets` の別名の写しから seriko と同じ `SurfaceResolver` を組み、面の表に無い番号を「解決できない」にする（`shell_box_assets.rs` の `resolve_for_text`）。seriko の表示は面の表で絞らず `Show(id)` を当てる。行き先を求めるときは前者の規則が要るので、規則を seriko の `SurfaceTarget::for_text` へ移し、文字の層の閉包もそれを呼ぶ形にした。seriko は面の番号の集合も要る（シェルの差し替えでは `ShellSurfaceFallback.surface_ids` に在るが、起動の構成には無い）。
+- **箱の表を渡す所（§6 の 4）**: `SerikoLoopConfig { … }` を直に組む所は本番 2（`areka-runtime/src/lib.rs`・seriko の `settle.rs`）とテスト 20 ファイル（seriko 17・runtime 2・本体 1）。`SerikoReplace::Shell { … }` を直に組む所は本番 1（`frame/switch.rs`）とテスト 3。`observe_cue` を直に呼ぶテストは `looper_talk_tests.rs` だけ。`TalkWindow` を直に組むテストは `trigger_tests.rs`・`parts_trigger_tests.rs`。
+- **兄弟のセッションの触るファイル**: `draw-methods-canon`（`claude/kiro-start-draw-methods-canon-bee12e` の requirements・research）は emo-compose の多くのファイル・emo-present・emo-atlas・seriko の `table.rs` のテストの期待・runtime の `frame/wiring.rs`・`balloon_background.rs`・本体の書き出し・wintf。`talk-script-metadata`（`claude/kiro-start-talk-script-metadata-54c924`）は `areka-sakura` の `drive.rs`・`contract.rs`・`areka-ghost` の `config.rs`・`areka-session` の readme と起動・`StartTalk { … }` を組むテスト（seriko の `tests/common/mod.rs` を含む）。重なりうるのは emo-compose の `lib.rs` の宣言の行だけ。
+- **文字の層の行き先が始まる時**: 文字の層の行き先の番号は `\s` が届くまで「無し」（普通のバルーン）。`set_box_layout` は装着の相とシェルの切替で必ず呼ばれる（`frame/attach.rs`・`frame/switch.rs` の `hand_to`）。seriko も起動の時は番号を持たないので同じになる。
+- **SSP での印の数え（§6 の 2・要件 2.8）**: 測っていない。`talk` を持つシェルで口のコマの時刻を字ごとに見る必要があり、画面の操作の順取りと兄弟への知らせが要るため、設計の討議の議題に回した。
+
+### 9.2 まとめ（一般化・作るか使うか・削る）
+
+- **一般化**: 件 5 と印の件は「seriko の前の字が文字の層の前の字と違う」という同じ問題の 2 つの形。前の字を場所ごとに持ち、印を「前の字だけを進め、序数を作らない字」として扱えば、どちらも同じ式の同じ入力で解ける。件 8 と場所だけの消去も「捨てた字の序数の列で数えを揃える」1 つの形にまとまる（総数で揃える形は、捨てる字が列の末尾に並ぶときだけ成り立つ特別な場合）。
+- **作るか使うか**: 外の物で置き換えられる所は無い。行き先の規則は今の `state_route.rs` を下のクレートへ移すだけで、新しい規則を作らない。
+- **削る**: 新しい合図・新しい受け口は作らない（箱の表は今の差し替えの依頼と起動の構成に欄を 1 つ足すだけ）。行き先の状態は seriko の字の列が持ち、別の表を作らない。emo-text に新しいファイルを足さない。`TalkFeed` の `push_chunk`・`push_text`・`restart_chain` の名と引数を保ち、場所が 1 つの既存のテストを変えずに通す。
+
+### 9.3 決め
+
+| 決め | 選んだ形 | 選ばなかった形と理由 |
+|---|---|---|
+| 件 8 の型 | 1-A: `TalkCursor { seen, counted }`。揃えは `seen` を捨てた分だけ下げ、`counted` に触れない | 1-B（数え始めを符号つき）は同じ答えだが、符号つきと符号なしの混ざる式が残る。1-C は §4.1 のとおり採れない |
+| 共有の型の置き場 | `areka-emo-compose` の新しいファイル `text_route.rs`（`BoxName`・`BoxLayout` の持ち主・両方が依存済み） | `areka-sakura` は台本の層で箱を知らず、置くと台本の層が描画の層へ依存する |
+| 型の形 | スコープ 1 つの `TextRoute`（鍵の表は呼び手）。`TextPlace`・`SurfaceKeyOutcome` も同じ所へ移し、emo-text は名を再び出す | 鍵の表まで持つ型は `ActorKey`（`areka-sakura`）が要り、emo-compose に依存が増える |
+| 場所をまたぐ序数 | スコープで 1 本・時刻の順 | 届いた順は、時刻が前後する字で区切りの時刻が逆転する |
+| 印 | 行き先の場所の前の字だけを進め、序数を作らない（要件の討議の決め） | 序数を作って数えない印を付けると、数えと序数の決まりが 2 本になる |
+| `\s` の答え | `SurfaceTarget::for_text` を seriko に置き、文字の層の閉包も呼ぶ | runtime に残すと seriko から呼べず、2 つ目の写しになる |
+| 名前の形の `\b` の見分け | `TextRoute::is_box_key` を両方が呼ぶ（emo-text の `state.rs` の腕の条件 1 行） | seriko で同じ条件を書き写すと写しが増える |
+| 印の見分け | seriko は `areka_parsers::sakura::MARKER_COMMAND` と名前で比べる（seriko が `bind` を見分けるのと同じ形） | emo-text の `is_marker_carrier` は seriko から呼べない。`areka-sakura` へ出すと兄弟の `lib.rs` と重なりうる |
+| 門が閉じている間 | `\s` も追わない。門が開いた差し替えの直後に seriko の表示中の面から種を蒔く（仮定・設計の議題 1） | 門に関わらず追う形は要件 4.1 の字面から外れる |
+| シェルの切替 | 最後の刻みの時刻より後に現れる箱の字を捨て、箱の場所の前の字を無しにし、行き先を既定と戻り先へ（仮定・設計の議題 2） | 捨てない形は、画面に出ない箱の字で口が動く |
+| 振り分けの置き場 | `looper_trigger.rs`（`looper.rs` は 855 行で 1,000 行の手前） | `looper.rs` に置くと上限に近づく |
+
+### 9.4 危うさ
+
+- `SerikoLoopConfig`・`SerikoReplace::Shell` の欄の追加は、直に組む所を全部直すまでビルドが通らない（直す所は設計の File Structure Plan に全部挙げた）。
+- 遅れて届いた早い字の差し込みで、数え済みの序数が 1 つずれうる（設計の議題 4）。
+- emo-compose の `lib.rs` の宣言の行が `draw-methods-canon` と隣り合いうる（設計の議題 5）。
