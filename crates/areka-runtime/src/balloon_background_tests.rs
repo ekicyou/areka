@@ -21,7 +21,9 @@ use super::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake,
 };
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+use areka_parsers::shell::{
+    AppendTarget, DrawMethod, Element, ElementOptions, ElementPath, Surface,
+};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::path::Path;
 
@@ -54,6 +56,8 @@ fn surface(id: u32, rel: &str) -> Surface {
             path: ElementPath::new(rel.to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }],
         collisions: Vec::new(),
         animations: Vec::new(),

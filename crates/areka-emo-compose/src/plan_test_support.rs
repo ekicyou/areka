@@ -16,8 +16,8 @@ use areka_emo_atlas::{
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend,
-    parse,
+    DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, SortOrder, Surface,
+    SurfaceAppend, parse,
 };
 use bevy_ecs::component::Component;
 use bevy_ecs::world::World;
@@ -41,6 +41,8 @@ pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 

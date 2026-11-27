@@ -69,7 +69,7 @@ pub struct Surface {
     pub animations: Vec<Animation>,
 }
 
-/// element定義の `overlay` と `base` の行 elementN,overlay,PATH,X,Y（`base` も同じ値）。
+/// element定義の画像の行 elementN,語,PATH,X,Y[,オプション…]。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     /// element の N（レイヤインデックス）。
@@ -80,6 +80,26 @@ pub struct Element {
     pub x: i64,
     /// Y 座標。
     pub y: i64,
+    /// 書かれた描画メソッドの語の原文。
+    pub method: DrawMethod,
+    /// 座標の後の並びの原文（無ければ空）。
+    pub options: ElementOptions,
+}
+
+/// element定義の座標の後の並びの原文（意味は下流が読む）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct ElementOptions(String);
+
+impl ElementOptions {
+    /// 無加工のオプションの並びを保持する `ElementOptions` を構築する。
+    pub fn new(inner: String) -> Self {
+        ElementOptions(inner)
+    }
+
+    /// オプションの並びの原文を読み取る。
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// element 画像パスの opaque 中身（読込・検証しない）。

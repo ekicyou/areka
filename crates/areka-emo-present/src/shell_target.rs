@@ -33,7 +33,8 @@ use areka_emo_compose::{
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
-    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellText, Surface,
+    AppendTarget, BoxDefinition, CursorBrace, DrawMethod, Element, ElementOptions, ElementPath,
+    Shell, ShellText, Surface,
 };
 
 use crate::balloon::face_digits_of;
@@ -871,6 +872,8 @@ fn base_image_surface(id: u32, file: &str) -> Surface {
             path: ElementPath::new(file.to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }],
         collisions: Vec::new(),
         animations: Vec::new(),

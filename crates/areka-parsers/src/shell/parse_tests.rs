@@ -9,8 +9,8 @@
 
 use super::model::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias,
-    SurfaceAppend,
+    DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, Surface,
+    SurfaceAlias, SurfaceAppend,
 };
 use super::{ShellIssue, parse, parse_all};
 
@@ -83,6 +83,8 @@ smile,[0,1,2]
                 path: ElementPath::new("body.png".to_string()),
                 x: 10,
                 y: 20,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             }],
             collisions: vec![Collision {
                 index: 0,

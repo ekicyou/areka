@@ -21,7 +21,7 @@ use areka_emo_compose::{
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface,
+    DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, Surface,
 };
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -276,6 +276,8 @@ pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 
@@ -618,6 +620,8 @@ fn balloon_element(layer: u32, path: &str, x: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y: 0,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 

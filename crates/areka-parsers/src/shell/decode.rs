@@ -30,8 +30,9 @@ use super::element_method_words::is_image_element_method;
 use super::lexer::{Token, heading_text};
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
-    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
-    RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementOptions, ElementPath,
+    Interval, Pattern, RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 
 /// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計・今のブレスの見出し・積んだ崩れ。
@@ -194,6 +195,8 @@ fn decode_elements(body: &[Vec<String>], reading: &mut Reading) -> Vec<Element> 
                 path: ElementPath::new(field_string(fields, 2)),
                 x: field_i64(fields, 3),
                 y: field_i64(fields, 4),
+                method: DrawMethod::new(field_string(fields, 1)),
+                options: ElementOptions::new(fields.get(5..).unwrap_or_default().join(",")),
             });
         }
     }
@@ -715,3 +718,8 @@ mod pattern_target_tests;
 #[cfg(test)]
 #[path = "decode_collisionex_tests.rs"]
 mod collisionex_tests;
+
+/// element定義の語とオプションの並びの原文を固定する兄弟テスト。
+#[cfg(test)]
+#[path = "decode_element_method_tests.rs"]
+mod element_method_tests;

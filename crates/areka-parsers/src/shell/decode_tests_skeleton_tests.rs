@@ -1,6 +1,8 @@
 //! decode スケルトンの骨格挙動とブロックディスパッチ優先順位。
 
-use super::{AppendTarget, Element, ElementPath, Shell, Surface, decode, lex};
+use super::{
+    AppendTarget, DrawMethod, Element, ElementOptions, ElementPath, Shell, Surface, decode, lex,
+};
 
 /// 空入力 → 空 `Shell`・非パニック。
 #[test]
@@ -53,6 +55,8 @@ fn surface_zero_block_extracts_id_zero() {
                 path: ElementPath::new("surface0.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             }],
             collisions: vec![],
             animations: vec![],

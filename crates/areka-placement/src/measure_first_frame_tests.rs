@@ -10,7 +10,9 @@ use areka_emo_atlas::{
     DecodedImage, ElementDecoder, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake,
     bake_quiet, bake_with_limits,
 };
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+use areka_parsers::shell::{
+    AppendTarget, DrawMethod, Element, ElementOptions, ElementPath, Surface,
+};
 
 use super::first_frame::FirstFrameDecoder;
 use crate::test_support::animated_image::{frames, image, info};
@@ -178,6 +180,8 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
             path: ElementPath::new("anim.png".to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }],
         collisions: Vec::new(),
         animations: Vec::new(),

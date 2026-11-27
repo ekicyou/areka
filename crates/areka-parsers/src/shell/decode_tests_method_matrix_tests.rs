@@ -1,6 +1,6 @@
 //! method 忠実転記の完全マトリクス。
 
-use super::{decode, lex};
+use super::{DrawMethod, decode, lex};
 
 /// 未知メソッドトークン（`frobnicate`）は妥当性を判定されず method に原文のまま運ばれ、
 /// 行は落とされない（parser は語彙の可否を判定しない）。
@@ -125,7 +125,17 @@ element1,overlay,mouth.png,1,2
 ";
     let as_overlay = input.replace(",base,", ",overlay,");
     assert_ne!(input, as_overlay, "書き替えが空振りしている");
-    assert_eq!(decode(lex(input)), decode(lex(&as_overlay)));
+    let mut decoded = decode(lex(input));
+    for e in decoded
+        .surfaces
+        .iter_mut()
+        .map(|s| &mut s.elements)
+        .chain(decoded.appends.iter_mut().map(|a| &mut a.elements))
+        .flatten()
+    {
+        e.method = DrawMethod::new("overlay".to_string());
+    }
+    assert_eq!(decoded, decode(lex(&as_overlay)));
 
     // 較正: base の行を除いた文面より、element がちょうど base の行の数（5）だけ多い。
     let base_lines = input.matches(",base,").count();
