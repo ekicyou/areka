@@ -381,13 +381,23 @@ pub(crate) fn seriko_at(
     ticks: &[TimePoint],
     at: TimePoint,
 ) -> Option<(u32, PatternState)> {
+    seriko_with(seriko_config(), played, ticks, at)
+}
+
+/// [`seriko_at`] を、構成 `config` で作った seriko で行う。
+pub(crate) fn seriko_with(
+    config: SerikoLoopConfig,
+    played: &Played,
+    ticks: &[TimePoint],
+    at: TimePoint,
+) -> Option<(u32, PatternState)> {
     let out = MockSurfaceOutput::new();
     let records = out.records();
     let (mut sink, actor) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
-        seriko_config(),
+        config,
         out,
     );
     let mut next = 0;

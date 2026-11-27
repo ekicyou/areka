@@ -94,6 +94,10 @@ mod same_script_test_support;
 #[cfg(test)]
 mod receivers_follow_tests;
 
+// 字の場所をまたぐ台詞と印を含む台詞でも、文字の層と seriko は同じ字に同じ時刻を持つ。
+#[cfg(test)]
+mod receivers_follow_place_tests;
+
 // タグ入口の結線の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
