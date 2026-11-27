@@ -446,6 +446,7 @@ dependencies = [
  "bevy_ecs",
  "dola",
  "log-capture-kit",
+ "rusqlite",
  "sample-ghost-kit",
  "shiori-host32-host",
  "temp-path-kit",
