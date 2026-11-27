@@ -2,7 +2,7 @@
 
 > 設計は `design.md`（「設計の議論で決めたこと」の決め 1〜8 を含む）、調べの記録は `research.md`。直すのは名簿（`crates/wintf/src/ecs/world/thread_registry.rs` と Win32 の口 `crates/wintf/src/api.rs`）・報告器（`crates/areka/src/perf_thread_report.rs`）・順位表の道具（`tools/perf/perf-rank.py` と検体）・説明（`tools/perf/README.md`）だけ。トークの側のファイル（`crates/areka-sakura/src/drive.rs`・`crates/areka-ghost/src/dispatcher.rs`）は、タスク 6 が `talk-script-metadata` の着地の後に要ると決まったときのほかは読むだけ。走り始めのフック（`crates/areka/src/thread_roles.rs`）と名簿へ登録する他の呼び手も読むだけ。`Cargo.toml` の機能・依存は足さない。テストは実装と同じディレクトリの兄弟のファイル（今の `*_tests.rs`）に置く。コードのコメントとテストの名前に spec・要件の番号・タスクの番号を書かない。実機の根・検体・一時フォルダはワークツリーの `target\` の下だけ。
 
-- [ ] 1. 実機で、報告の数と OS から数えたスレッドの数を並べて切り分ける
+- [x] 1. 実機で、報告の数と OS から数えたスレッドの数を並べて切り分ける
   - 直す前の今の HEAD の debug ビルドの `areka.exe` を使う（名簿・報告器に手を入れたビルドで数えない）。走らせる前に `netstat -ano` で `127.0.0.1:9276` を握るプロセスが無いことを確かめ、あれば持ち主のセッションに降ろしてもらう
   - emo2 を短い絶対パスで、実機の根と一時フォルダをワークツリーの `target\` の下に置き、`AREKA_PERF_THREAD_REPORT_SEC=10`・`RUST_LOG` に `areka::perf=debug` で起こす。排他テストの机と画面の操作はこのタスクの中だけで持ち、終わったらすぐ返す
   - 起動直後の報告 1 枚の後に 1 対、以後は areka の MCP の `sakurascript` でトークを 1 つ流し、`get_status` でトークの終わりを見てから次の 1 枚（`snap=` が 1 つ進む）を待ち、その `threads=` と PowerShell の `(Get-Process -Id <pid>).Threads.Count` を 1 対として記録する。これを 5 回以上。`get_status` で終わりが見えなければ 1 枚を 2 つ待つ形に倒す。areka にスレッドを列挙する機能は足さない
