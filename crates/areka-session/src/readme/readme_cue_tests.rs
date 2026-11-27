@@ -2,12 +2,15 @@
 
 use super::*;
 use crate::readme::destination::{Destination, OpenKind, classify, link_destinations};
+use areka_ghost::sink::{BootCueSink, GhostPlace, TalkMeta, TalkRunner};
+use areka_kanade::talk::{ScriptOrigin, TalkId};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use areka_runtime::consumer_ledger::test_support::carrier_cue;
 use areka_runtime::frame::test_support::count_level;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use dola::{DynamicValue, TimePoint, TimeSpan};
 use log_capture_kit::{LineFormat, capture_lines};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
@@ -68,9 +71,63 @@ fn bare_open_without_selector_is_benign_skip() {
 #[test]
 fn clone_reaches_the_same_receiver() {
     let (sink, rx) = sink();
-    let mut clone = sink.clone();
+    let mut clone = sink.clone_box();
     clone.emit(carrier_cue("open", &["readme"]));
     assert_eq!(rx.try_iter().count(), 1, "複製からの送出も同じ受信端へ届く");
+}
+
+fn runner(name: &str) -> TalkRunner {
+    TalkRunner {
+        name: name.into(),
+        place: Some(GhostPlace {
+            master: PathBuf::from(format!(r"C:\ghosts\{name}\ghost\master")),
+            root: PathBuf::from(format!(r"C:\ghosts\{name}")),
+        }),
+    }
+}
+
+fn begin(sink: &mut dyn BootCueSink, runner: TalkRunner) {
+    let meta = TalkMeta {
+        runner,
+        ..TalkMeta::default()
+    };
+    sink.begin_talk(TalkId(1), ScriptOrigin::GHOST, &meta);
+}
+
+fn sent_runners(rx: &Receiver<ReadmeRequest>) -> Vec<TalkRunner> {
+    rx.try_iter()
+        .map(|req| match req {
+            ReadmeRequest::Open { runner, .. } => runner,
+            ReadmeRequest::Readme => panic!("開く系の cue が説明書の要求として送られた"),
+        })
+        .collect()
+}
+
+/// 複製ごとに begin_talk で受けた実行するゴーストを、開く要求に取り違えずに載せる。
+#[test]
+fn each_clone_carries_its_own_talk_runner() {
+    let (original, rx) = sink();
+    let mut a = original.clone_box();
+    let mut b = original.clone_box();
+    begin(a.as_mut(), runner("a"));
+    begin(b.as_mut(), runner("b"));
+
+    a.emit(carrier_cue("open", &["file", "x"]));
+    assert_eq!(sent_runners(&rx), vec![runner("a")]);
+    b.emit(carrier_cue("open", &["file", "x"]));
+    assert_eq!(sent_runners(&rx), vec![runner("b")]);
+}
+
+/// 複製の直後（begin_talk の前）は既定の実行するゴーストで、前のトークのものを持ち越さない。
+#[test]
+fn clone_box_does_not_carry_over_the_previous_runner() {
+    let (original, rx) = sink();
+    let mut first = original.clone_box();
+    begin(first.as_mut(), runner("a"));
+    let mut next = first.clone_box();
+
+    next.emit(carrier_cue("open", &["file", "x"]));
+    assert_eq!(sent_runners(&rx), vec![TalkRunner::default()]);
 }
 
 // ---------------------------------------------------------------- 開く系
@@ -79,7 +136,7 @@ fn clone_reaches_the_same_receiver() {
 fn sent_destinations(rx: &Receiver<ReadmeRequest>) -> Vec<Destination> {
     rx.try_iter()
         .map(|req| match req {
-            ReadmeRequest::Open(dest) => dest,
+            ReadmeRequest::Open { dest, .. } => dest,
             ReadmeRequest::Readme => panic!("開く系の cue が説明書の要求として送られた"),
         })
         .collect()
@@ -172,7 +229,7 @@ fn sink_agrees_with_link_destinations() {
     let sent: Vec<Destination> = rx
         .try_iter()
         .filter_map(|req| match req {
-            ReadmeRequest::Open(dest) => Some(dest),
+            ReadmeRequest::Open { dest, .. } => Some(dest),
             ReadmeRequest::Readme => None,
         })
         .collect();

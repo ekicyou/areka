@@ -23,8 +23,11 @@ pub enum ReadmeRequest {
     /// 中身を持たないのは、開くファイルが要求ごとではなく起動時に決まるからである
     /// （引数付きの `\![open,readme,種類,名前]` は送出側が警告して捨てる）。
     Readme,
-    /// 開く系の行き先（受け口が規則で分類済み）。
-    Open(destination::Destination),
+    /// 開く系の行き先と、そのトークの実行するゴースト。
+    Open {
+        dest: destination::Destination,
+        runner: areka_ghost::sink::TalkRunner,
+    },
 }
 
 /// 台本の説明書の要求の綴り（記録の `tag`）。
@@ -204,7 +207,7 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
     for request in take_pending(world) {
         match request {
             ReadmeRequest::Readme => open_from_world(world, SCRIPT_README_TAG),
-            ReadmeRequest::Open(dest) => opener::submit(world, dest),
+            ReadmeRequest::Open { dest, .. } => opener::submit(world, dest),
         }
     }
 }

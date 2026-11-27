@@ -35,7 +35,10 @@ fn with_opener(world: &mut World, ghost_dir: PathBuf) -> Receiver<OpenJob> {
 
 /// 開く系の行き先（`\j` の URL）。
 fn url_request(url: &str) -> ReadmeRequest {
-    ReadmeRequest::Open(super::opener_test_support::dest_url(url))
+    ReadmeRequest::Open {
+        dest: super::opener_test_support::dest_url(url),
+        runner: areka_ghost::sink::TalkRunner::default(),
+    }
 }
 
 /// 指定した出来事の行だけを拾う。
@@ -82,7 +85,7 @@ fn register_readme_drain_keeps_an_existing_opener() {
     let jobs = with_opener(&mut world, PathBuf::from("C:\\ghosts\\sample"));
 
     register_readme_drain(&mut world);
-    let ReadmeRequest::Open(dest) = url_request("https://example.com/") else {
+    let ReadmeRequest::Open { dest, .. } = url_request("https://example.com/") else {
         unreachable!("url_request は Open を返す");
     };
     opener::submit(&world, dest);
