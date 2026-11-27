@@ -12,7 +12,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use areka_emo_compose::{BindSet, PatternState};
+use areka_emo_compose::{BindSet, PatternState, SurfaceKeyOutcome};
 use areka_sakura::ActorKey;
 
 use crate::bind::{DefaultBinds, accumulate};
@@ -149,6 +149,8 @@ pub struct ScopeStates {
     pattern_states: HashMap<(ActorKey, Slot), PatternState>,
     /// 窓の知らせで覚えたバルーンの窓（[`ScopeStates::note_stage`]）。
     balloon_windows: HashMap<ActorKey, BalloonWindow>,
+    /// スコープごとの、文字の層の規則での最後の `\s` の答え（`Unresolved` は控えない）。
+    text_surfaces: HashMap<ActorKey, SurfaceKeyOutcome>,
 }
 
 impl ScopeStates {
@@ -166,7 +168,28 @@ impl ScopeStates {
             // 空で起動。未格納の (scope, slot) は current_pattern が空を返す。
             pattern_states: HashMap::new(),
             balloon_windows: HashMap::new(),
+            text_surfaces: HashMap::new(),
         }
+    }
+
+    /// 文字の層向けの `\s` の答えを控える。`Unresolved` は控えを変えない。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "サーフェス指令の経路が呼ぶまで未使用")
+    )]
+    pub(crate) fn note_text_surface(&mut self, scope: &ActorKey, outcome: SurfaceKeyOutcome) {
+        if outcome != SurfaceKeyOutcome::Unresolved {
+            self.text_surfaces.insert(scope.clone(), outcome);
+        }
+    }
+
+    /// 控えた文字の層向けの `\s` の答え。まだ届いていなければ `None`。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "門が開いたときの決め直しが呼ぶまで未使用")
+    )]
+    pub(crate) fn text_surface(&self, scope: &ActorKey) -> Option<SurfaceKeyOutcome> {
+        self.text_surfaces.get(scope).copied()
     }
 
     /// 1 つの解決済み surface 指令を対象スコープへ適用する（1 cue = 1 scope）。
@@ -693,3 +716,6 @@ mod surface_tests;
 #[cfg(test)]
 #[path = "state_test_support.rs"]
 mod test_support;
+#[cfg(test)]
+#[path = "state_text_surface_tests.rs"]
+mod text_surface_tests;
