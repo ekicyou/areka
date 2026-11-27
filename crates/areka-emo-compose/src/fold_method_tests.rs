@@ -212,7 +212,7 @@ fn extent_of_a_base_frame_is_the_target_surface() {
     assert_eq!(compute_extent(&world, &atlas, 10), Extent { w: 70, h: 50 });
 }
 
-/// 着せ替えの pattern0 の `base` は (0,0) に、pattern1 の `base` は書いた XY に積まれる。
+/// 着せ替えの pattern0 の `base` は層 (i) を (0,0) で置き換え、pattern1 の `base` は書いた XY に積まれる。
 #[test]
 fn bind_steps_read_the_normalized_patterns() {
     let atlas = bake_gray(&[("base.png", (40, 30)), ("big.png", (60, 50))]);
@@ -239,5 +239,5 @@ fn bind_steps_read_the_normalized_patterns() {
     .iter()
     .map(|op| op.transform.offset())
     .collect();
-    assert_eq!(offsets, vec![(0, 0), (0, 0), (10, 0)]);
+    assert_eq!(offsets, vec![(0, 0), (10, 0)]);
 }

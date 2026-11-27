@@ -55,6 +55,7 @@ pub mod world;
 pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod atlas_bind;
 pub mod base_image;
+mod base_surface;
 pub use base_image::{BaseImageReport, SurfaceImages};
 pub mod boxes;
 pub use boxes::{
@@ -64,6 +65,7 @@ pub mod fold;
 mod outline_walk;
 pub mod plan;
 mod plan_always;
+mod plan_base;
 mod plan_bounds;
 mod plan_cap;
 mod plan_issues;
@@ -241,7 +243,7 @@ impl Composer {
             pattern,
         )?;
         out.surface_id = surface_id;
-        out.base_surface = surface_id;
+        out.base_surface = self.scratch.root_base.unwrap_or(surface_id);
         out.extent = extent;
         crate::plan_mix::push_items(&mut out.items, &self.ops, &self.scratch.marks, world, atlas);
         Ok(())

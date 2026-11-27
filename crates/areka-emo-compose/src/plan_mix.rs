@@ -21,12 +21,15 @@ use crate::world::EmoWorld;
 pub(crate) enum NestWord {
     Mix(Mix),
     Asis,
+    /// 土台を置き換える pattern定義の `base`（置き換えた先は `SourceOver` と同じに描く）。
+    Base,
 }
 
 impl NestWord {
     pub(crate) fn of(method: &ComposeMethod) -> NestWord {
         match method {
             ComposeMethod::Asis => NestWord::Asis,
+            ComposeMethod::Base => NestWord::Base,
             // 描けない語の element定義の子の面は、今の CPU の合成と同じく平らに重ねる。
             other => NestWord::Mix(mix_of(other).unwrap_or(Mix::SourceOver)),
         }
@@ -163,7 +166,9 @@ pub(crate) fn push_items(
                         items.push(PlanItem::Fill { rect: outline });
                         Some((Mix::SourceOver, None))
                     }
-                    NestWord::Asis => inner[k].not_over.then_some((Mix::SourceOver, None)),
+                    NestWord::Asis | NestWord::Base => {
+                        inner[k].not_over.then_some((Mix::SourceOver, None))
+                    }
                     NestWord::Mix(_) if !inner[k].drawn => None,
                     NestWord::Mix(mix) => {
                         let mix = if first { Mix::SourceOver } else { mix };

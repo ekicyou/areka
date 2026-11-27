@@ -123,6 +123,8 @@ pub(crate) struct PlanScratch {
     /// 合成の失敗（`SurfaceNotFound`・`EmptyComposition`・`ExtentTooLarge`）を記録済みの面（`reported` と
     /// 同じ形）。表示の側は失敗をコマ替えのたびに呼び直すので、`error!` は合成器 1 つにつき面ごとに 1 度。
     failed_reported: HashSet<u32>,
+    /// 根の段の層 (i) を置き換えた `base` の面（計画の土台の面の欄）。
+    pub(crate) root_base: Option<u32>,
 }
 
 impl Default for PlanScratch {
@@ -143,6 +145,7 @@ impl Default for PlanScratch {
             reported: HashSet::new(),
             pixels_reported: HashSet::new(),
             failed_reported: HashSet::new(),
+            root_base: None,
         }
     }
 }
@@ -185,7 +188,12 @@ impl PlanScratch {
         let start = self.steps.len();
         self.frames.push(FrameMark { start, read: start });
         push_static_element_ops(self, level);
+        let mid = self.steps.len();
         push_bind_layer(self, level);
+        let base = crate::plan_base::replace_root(self, level, start, mid);
+        if level.is_top_level {
+            self.root_base = base;
+        }
     }
 }
 
@@ -401,6 +409,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
     s.steps.clear();
     s.frames.clear();
     s.marks.clear();
+    s.root_base = None;
     let records = if s.reported.contains(&root) {
         Records::Quiet
     } else {
@@ -501,7 +510,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 ///
 /// `binds` は全段で同じものを参照するが、参照先の bind animation は「その surface の `animations` に
 /// 定義され `binds` に含まれる」もののみが有効（emo2 の bind パーツ surface は bind を持たない）。
-fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
+pub(crate) fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
     let (master, surface_id) = (level.master, level.surface_id);
     // 番号 → 添字の表（同じ番号の animation は畳み込みで 1 つ・先勝ち＝最初の 1 つを指す）。
     s.anims.clear();
