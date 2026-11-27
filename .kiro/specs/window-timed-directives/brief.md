@@ -64,7 +64,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: v0.2.0 の時刻の土台（`dola-interrupt-ticks` → `talk-anchor-interrupt-ticks`）。完了済みの `areka-P0-move-canon`・`shell-scale-linkage`・`areka-P0-window-link-directives`（組にした窓は一緒に動く）。
+- **Upstream**: v0.2.0 の時刻の土台（✅ `dola-interrupt-ticks`）。完了済みの `areka-P0-move-canon`・`shell-scale-linkage`・`areka-P0-window-link-directives`（組にした窓は一緒に動く）。
 - **Downstream**: `element-animation-easing`（`--easing` を添える。同 brief の議題 1 は「先に別の spec を立てる」で決着）・`shell-balloon-scale-setting`（表示倍率 × タグの倍率）・`currentghost-property-others`（途中の値を返すかどうか）・台本「席替え」。
 
 ## Existing Spec Touchpoints
