@@ -378,6 +378,58 @@ fn undrawable_warning_repeats_once_per_load() {
     assert_eq!(twice, 2 * once, "読み込み 2 回でちょうど 2 倍");
 }
 
+/// `blend-*` と旧い別名の行は、見出しを展開せず 1 行 1 件の `warn!`（見出し・element番号・書かれた語）で、
+/// 読み込み 2 回でちょうど 2 倍。
+#[test]
+fn blend_line_warns_once_per_line_with_heading_element_and_written_word() {
+    let text = concat!(
+        "charset,UTF-8\n",
+        "surface0-3\n{\n",
+        "element0,base,body.png,0,0\n",
+        "element1,blend-multiply,face.png,1,1\n",
+        "}\n",
+        "surface.append0-9\n{\n",
+        "element2,overlaymultiply,face.png,1,1\n",
+        "}\n",
+    );
+    let undrawn_lines = |events: &[CapturedEvent]| -> Vec<String> {
+        warn_lines(events)
+            .into_iter()
+            .filter(|l| l.starts_with(UNDRAWN_WARN))
+            .collect()
+    };
+    assert_eq!(
+        undrawn_lines(&load_events(text, 1)),
+        vec![
+            format!(
+                "{UNDRAWN_WARN}|element=\"1\"|heading=\"surface0-3\"|method=\"blend-multiply\""
+            ),
+            format!(
+                "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface.append0-9\"|method=\"overlaymultiply\""
+            ),
+        ]
+    );
+    assert_eq!(undrawn_count(&load_events(text, 2)), 4);
+}
+
+/// 描ける重ね方の語の行は描けない行として記録しない。
+#[test]
+fn drawable_compose_words_warn_nothing() {
+    let text = concat!(
+        "charset,UTF-8\n",
+        "surface0\n{\n",
+        "element0,base,body.png,0,0\n",
+        "element1,overlay-fast,face.png,1,1\n",
+        "element2,overlayfast,face.png,1,1\n",
+        "element3,interpolate,face.png,1,1\n",
+        "element4,replace,face.png,1,1\n",
+        "element5,asis,face.png,1,1\n",
+        "element6,reduce,face.png,1,1\n",
+        "}\n",
+    );
+    assert_eq!(undrawn_count(&load_events(text, 1)), 0);
+}
+
 // ── 無改変のクローディア────────────────────────────────────
 
 /// クローディアの surface6・11・26 の外形（土台の絵 `surface0.png`／`surface10.png` の実寸）。

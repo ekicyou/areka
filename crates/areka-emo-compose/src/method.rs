@@ -201,7 +201,7 @@ const DRAWABLE_WORDS: [&str; 9] = [
 /// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
 /// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
 /// 真になる綴りは [`DRAWABLE_WORDS`]。合成のたびに引かれるので確保しない（大文字や `-`・`_` の入った語でも）。
-pub(crate) fn is_implemented_name(name: &str) -> bool {
+pub fn is_implemented_name(name: &str) -> bool {
     DRAWABLE_WORDS.iter().any(|w| same_canonical(name, w))
 }
 

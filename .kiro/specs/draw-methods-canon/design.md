@@ -155,17 +155,16 @@ crates/
 **読み手（areka-parsers）**
 - `src/shell/model.rs` — `Element` に `method: DrawMethod`・`options: ElementOptions` を足す。
 - `src/shell/decode.rs` — `is_image_element_method` を `element_method.rs` の表へ委ね、`decode_elements` が語と座標の後の並びを運ぶ。
-- `src/shell/undrawn.rs` — 述語の参照先だけ（同じ 1 関数で外す・1.4）。
+- `src/shell/undrawn.rs`・`src/shell/parse.rs` — 述語の参照先（同じ 1 関数で外す・1.4）。行の型を `ElementLine` に改め、画像の element定義の行も原文のまま（見出しを展開せず）`ShellText.image_elements` へ写す。`undrawn` の中身は変えない（6.2）。
 - `src/shell/mod.rs` — `element_method` を足す。
 - `Element` を直に組むテスト 8 ファイル（`boxes_tests.rs`・`decode_charset_tests.rs`・`decode_tests_element_collision_tests.rs`・`decode_tests_lenient_input_tests.rs`・`decode_tests_skeleton_tests.rs`・`decode_tests_transcription_gap_tests.rs`・`parse_tests.rs`・`validation_tests.rs`）— 欄 2 つの機械的な直し。
 
 **合成（areka-emo-compose）**
-- `src/method.rs` — `is_implemented`・`is_implemented_name` を 7 つの意味（`Overlay`・`OverlayFast`・`Interpolate`・`Replace`・`Asis`・`Base`・`Reduce`）で真にする。
+- `src/method.rs` — `is_implemented`・`is_implemented_name` を 7 つの意味（`Overlay`・`OverlayFast`・`Interpolate`・`Replace`・`Asis`・`Base`・`Reduce`）で真にする。`is_implemented_name` を公開し、読み込みの入口が element定義の行の「描けるか」を引く（6.1・6.2）。
 - `src/lib.rs` — `Composer::plan_into`／`plan` を公開し、`compose`・`compose_into`・`compose_into_reusing`・`Recompose` を外す。`DrawPlan`・`PlanItem`・`Mix` を公開。
 - `src/plan.rs` — 出力を `PlanItem` の列に替え、`push_direct` の `base` の分岐と段の後処理を `plan_base.rs`・`plan_mix.rs` へ渡す（830 行なので式は足さない）。
 - `src/fold.rs` — `normalize_element` が `Element.method` から `ComposeMethod` を引く（element定義の `base` は `Overlay`・5.1）。
 - `src/bind_steps.rs` — 着せ替えの pattern0 以外の `base` を `Overlay` へ読み替える（4.4）。
-- `src/plan_issues.rs` — element定義の描けない語（`blend-*`）の記録 `ShapeIssue::UndrawnElement` を足す（6.2）。
 - `src/nesting.rs`・`src/plan_always.rs`・`src/plan_bounds.rs` — 門は同じ 1 関数のまま（答えが広がる）。
 - `src/atlas_bind.rs` — `asis` 用の絵の `ElementId` の結び付け。
 - `src/world.rs` — `EmoWorld::current_base_surface` を足す（中身は `base_surface.rs`）。
@@ -191,7 +190,7 @@ crates/
 - `src/presenter/refresh.rs` — 装置が替わったら `GpuAtlas` と節を作り直す。
 - `src/presenter/hub.rs`・`src/presenter.rs` — 目標の欄（`shown_mask` を外し `gpu_atlas`・`nodes` を足す）。
 - `src/display.rs` — `record_display`（CPU の絵の上げ）を外す。故障の差し込みは `GpuAtlas` の頁の上げへ移す。
-- `src/shell_target.rs` — `base_image_surface` の `Element` の欄だけ（933 行・ほかは触らない）。
+- `src/shell_target.rs` — `base_image_surface` の `Element` の欄と、`image_elements` のうち `is_implemented_name` が偽の行を今の element定義の記録と同じ `warn!` に流すこと（6.2）。
 - テスト: `presenter_test_support.rs`・`presenter_hit_test_support.rs`・`presenter_partial_recompose_gpu_tests.rs`・`presenter_keycolor_clickthrough_tests.rs`・`presenter_hit_picture_tests.rs`・`display_gpu_tests.rs`・`shell_target_element_base_tests.rs`（クローディアの 3 行・10.4）ほか、CPU の絵に頼るもの（取り下げと移しの表）。
 
 **wintf**
@@ -317,7 +316,7 @@ graph LR
 | 5.2 | 着せ替えの `add`・`bind` は `overlay` | Mix | `OVERLAY_WORDS` | — |
 | 5.3 | `move` と呼ぶ語は今のまま | PlanBuilder | 変えない | — |
 | 6.1 | 「描けるか」は 1 か所 | Method | `is_implemented` | — |
-| 6.2 | 描けない語は読み込み 1 回 1 行 1 件 | PlanIssues・shell_target の出口 | `ShapeIssue::UndrawnElement`・`UndrawnPattern` | — |
+| 6.2 | 描けない語は読み込み 1 回 1 行 1 件 | PlanIssues・shell_target の出口 | `ShellText.image_elements`・`is_implemented_name`・`UndrawnPattern` | — |
 | 6.3 | 合成のたびは `debug!` 以下 | PlanBuilder | 既存の `debug!` | — |
 | 6.4 | 描けるようになった語は記録しない | Method・PlanIssues | 同上 | — |
 | 7.1 | 画面の α が 0.5 未満なら透過 | SurfaceAlpha（wintf） | `HitTestMode::SurfaceAlpha` | 当たり |
@@ -480,7 +479,7 @@ impl EmoWorld {
 
 #### PlanIssues
 
-- `ShapeIssue::UndrawnElement { surface_id, element: u32, method: String }` を足し、`blend-*` の element定義の行を読み込み 1 回につき 1 行 1 件にする。文面は今の element定義の記録（`shell_target.rs` の「areka が描けない描画メソッドの element定義を描かない」）と同じ語・同じ欄（6.2）。読み手の描けない行（未知の語・大文字・`add`・`bind`・`auto`）は今の出口のまま。描けるようになった語の行と pattern は記録しない（6.4）。
+- element定義の行は畳んだ面の表からは数えない（見出しを展開すると 1 行が面の数だけになり、旧い別名の書かれた語も失う）。読み手の転記 `ShellText.image_elements`（見出し・element番号・書かれた語の原文・見出しは展開しない）のうち `is_implemented_name` が偽の行（`blend-*`・旧い別名）を、読み込みの入口が今の element定義の記録（「areka が描けない描画メソッドの element定義を描かない」・欄 `heading`・`element`・`method`）と同じ `warn!` で読み込み 1 回につき 1 行 1 件出す（6.2）。読み手の描けない行（未知の語・大文字・`add`・`bind`・`auto`）は今の出口のまま。描けるようになった語の行と pattern は記録しない（6.4）。`ShapeIssue` は pattern定義の記録だけを持つ。
 
 ### atlas
 
@@ -638,7 +637,7 @@ impl OffscreenRenderer {
 - `element_method_tests.rs`: 表の全部の綴りが画像の element定義・大文字／未知／`add`／`bind`／`auto` は描けない行・3 つの転記が全部の行をちょうど 1 つに分ける（1.1〜1.5・9.5）。`Element.options` が原文のまま（1.6）。
 - `draw_plan_tests.rs`・`plan_mix_tests.rs`: 語ごとの `Mix`・最初の項の読み替え（`asis` は除く）・`replace` の範囲＝原寸の矩形・入れ子の `asis` の黒の `Fill`＋まとめ・まとめの要否・ID の順（3.3）・`BLEND_ELEMENT_WORDS` と `from_name` の照合（2.x・3.x）。
 - `plan_base_tests.rs`・`base_surface_tests.rs`: `base` のコマで層 (i) が置き換わる・XY を無視・着せ替えの pattern0 だけ・終われば元・無い／`-1`・複数（4.1〜4.7）。
-- `plan_issues_tests.rs`: `blend-*` の element定義の行が読み込み 1 回 1 行 1 件・描けるようになった語は 0 件・文面（6.2〜6.4・9.5）。`areka-seriko/src/table.rs` の `base` の期待（10.5）。
+- `shell_target_element_base_tests.rs`: `blend-*`・旧い別名の element定義の行が展開する見出し（`surface0-3`・`surface.append0-9`）でも読み込み 1 回 1 行 1 件・書かれた語のまま・描けるようになった語は 0 件・文面（6.2・6.4・9.5）。`plan_issues_tests.rs`: 描けるようになった語の pattern は 0 件・合成を繰り返しても warn は増えない（6.3・6.4）。`areka-seriko/src/table.rs` の `base` の期待（10.5）。
 - atlas: `asis` 用の絵が原寸・透過色の画素が本来の色・α＝255・参照されない絵には作らない。`use_self_alpha,0` の半透明の画素が乗算しない色（2.5・2.9）。
 
 ### Integration Tests（WARP・±1）

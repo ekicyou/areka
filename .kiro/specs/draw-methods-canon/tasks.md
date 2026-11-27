@@ -131,7 +131,7 @@
   - _Dispatch: standard — 置き換えの段と判定の共有を組む_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 4.7_
 
-- [ ] 5.6 描けない語の記録を直す
+- [x] 5.6 描けない語の記録を直す
   - `blend-*` の element定義の行を、読み込み 1 回につき 1 行 1 件の `warn!` にする記録の種類を足す（文面は今の element定義の記録と同じ語・同じ欄）
   - 描けるようになった語の行と pattern定義は記録しない。合成のたびの記録は `debug!` のまま
   - 完了の状態: 記録の文面と件数（1 行 1 件・描けるようになった語は 0 件・同じシェルの合成を繰り返しても増えない）がテストで緑
@@ -293,3 +293,4 @@
 - 5.5: `base` の置き換えは計画と CPU の命令の両方に入る（同じ段から作る）。指す面が無い・`-1`・今の道の上の面を指す `base` は置き換えず、後のそれが前の有効な `base` に勝たない（仮定 C）。
 - 5.5 → 7.2: `EmoWorld::current_base_surface` は呼ぶたびに小さな作業場を作る。当たりの名前の解決では表示の段が持つ `DrawPlan.base_surface` を先に使い、計画が手元に無い所だけで呼ぶ。
 - 6.3 → 7.4: `OffscreenRenderer::render_plan(gpu, plan)` は self を取らない関連関数（設計は `&mut self`）。7.4 は目標の `GpuAtlas` を渡して描く。`sync` の `Device` を `ComposeError::Render` へ読み替えるかは 7.4 で決める。
+- 5.6: `blend-*` の記録は設計の型（世界の面ごとの `UndrawnElement`）でなく、読み手の転記の側の見出しを展開しない行（`ShellText.image_elements`）から、今の element定義の記録と同じ文面・欄で出す（要件 6.2 の「1 行 1 件・どの語か」が設計の型と食い違ったため・設計は直した）。`UndrawnElementLine` は `ElementLine` に改めた。

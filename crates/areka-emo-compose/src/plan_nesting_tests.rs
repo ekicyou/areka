@@ -332,7 +332,7 @@ fn part_frames_go_through_the_same_bind_and_method_rules() {
     );
     let (ops, logs) = compose_with(text, &[], 0, &BindSet::from_ids([100]), &replace);
     assert_eq!(ops, vec![("body.png", 0, 0), ("eye.png", 20, 30)]);
-    assert!(logs.contains("非 Overlay method の現在コマ"), "{logs}");
+    assert!(logs.contains("描けない語の現在コマ"), "{logs}");
 }
 
 /// 多段の内側の部品のコマも使い、部品の欄のコマは、その部品が出ている段の絵だけを変える。

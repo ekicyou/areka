@@ -53,11 +53,11 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     assert_eq!(
         ops_to_paths(&out, &map),
         vec!["base.png"],
-        "非 Overlay コマは不描画・pattern0 も置換で不描画（残るは base）"
+        "描けない語のコマは不描画・pattern0 も置換で不描画（残るは base）"
     );
     assert!(
         logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
-        "非 Overlay コマは DEBUG（組むたびの知らせ）: {logs}"
+        "描けない語のコマは DEBUG（組むたびの知らせ）: {logs}"
     );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(
@@ -99,7 +99,7 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     assert_eq!(
         ops_to_paths(&out, &map),
         vec!["base.png"],
-        "非 Overlay pattern0 は不描画（残るは base）"
+        "描けない語の pattern0 は不描画（残るは base）"
     );
     // 描かない語は読み込みのときに着せ替えの手順から外れ（記録は `shape_issues` が 1 度だけ）、
     // 合成のたびには語を引き直さない。

@@ -81,4 +81,4 @@ pub use model::{
 pub use parse::{ShellText, parse, parse_all};
 pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};
 pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
-pub use undrawn::{UndrawnElementLine, parse_undrawn_elements};
+pub use undrawn::{ElementLine, parse_undrawn_elements};

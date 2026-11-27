@@ -129,7 +129,7 @@ fn composing_repeatedly_adds_no_warn() {
         !logs.contains("level=WARN"),
         "合成は warn を出さない: {logs}"
     );
-    for kind in ["循環", "非 Overlay method の現在コマ"] {
+    for kind in ["循環", "描けない語の現在コマ"] {
         assert!(
             logs.lines()
                 .any(|l| l.contains("level=DEBUG") && l.contains(kind)),
@@ -221,4 +221,53 @@ fn unknown_word_without_a_target_is_undrawn_but_known_word_is_not() {
         }]
     );
     assert_eq!(issues("auto"), vec![]);
+}
+
+/// 描けるようになった語（重ね方の語・`base`）の pattern定義は数えない。
+#[test]
+fn drawable_pattern_words_are_not_issues() {
+    for method in [
+        "overlay",
+        "overlay-fast",
+        "overlayfast",
+        "interpolate",
+        "replace",
+        "asis",
+        "reduce",
+        "base",
+    ] {
+        let world = EmoWorld::build(&parse(&format!(
+            "surface0\n{{\nelement0,overlay,base.png,0,0\n\
+             animation0.interval,sometimes\nanimation0.pattern0,{method},20,0,0,0\n}}\n\
+             surface20\n{{\nelement0,overlay,part.png,0,0\n}}\n"
+        )));
+        assert_eq!(shape_issues(&world), vec![], "{method}");
+    }
+}
+
+/// `blend-*` の部品を持つ面を何度組んでも warn は出ず、知らせは debug に留まる。
+#[test]
+fn composing_blend_element_repeatedly_adds_no_warn() {
+    let (world, atlas) = world_of(
+        "charset,UTF-8\r\nsurface0\r\n{\r\nelement0,overlay,base.png,0,0\r\n\
+         element1,blend-multiply,part.png,0,0\r\n}\r\n",
+    );
+    let binds = BindSet::from_ids([0]);
+    let pattern = PatternState::default();
+    let mut composer = Composer::new();
+    let logs = capture_logs(|| {
+        for _ in 0..3 {
+            composer
+                .compose(&world, &atlas, 0, &binds, &pattern)
+                .expect("組める");
+        }
+    });
+    assert!(
+        !logs.contains("level=WARN"),
+        "合成は warn を出さない: {logs}"
+    );
+    assert!(
+        logs.lines().any(|l| l.contains("level=DEBUG")),
+        "描かない部品は debug に残る: {logs}"
+    );
 }

@@ -651,7 +651,7 @@ pub(crate) fn push_direct(
                 surface_id,
                 animation_id = id,
                 method = ?frame.method,
-                "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
+                "描けない語の現在コマ: 不描画 skip（完全形保持・非駆動）"
             );
         }
         return false;

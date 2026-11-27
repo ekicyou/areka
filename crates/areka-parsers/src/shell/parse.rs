@@ -1,4 +1,4 @@
-//! 公開 facade（parse・parse_all）— 1 回の字句分けから 4 つの結果と崩れを返す純粋関数。
+//! 公開 facade（parse・parse_all）— 1 回の字句分けから 5 つの結果と崩れを返す純粋関数。
 //!
 //! デコード済みの surfaces.txt 文字列を 1 回だけ字句に分け（`lexer::lex`）、閉じたブレスの列を
 //! 画像の読み手（`decode::decode_token` → `Shell`）・箱・描けない行・cursorブレスの転記へ 1 本の輪で渡し、
@@ -16,7 +16,7 @@ use super::cursor::{CursorBrace, cursor_brace};
 use super::decode::{Reading, decode_token, empty_shell};
 use super::lexer::{Token, lex};
 use super::model::{Shell, ShellIssue};
-use super::undrawn::{UndrawnElementLine, undrawn_lines};
+use super::undrawn::{ElementLine, undrawn_lines};
 
 /// 1 回の読みの結果（`parse_all`）。4 つの公開の読み手はこの射影。
 #[derive(Clone, Debug, PartialEq)]
@@ -26,14 +26,16 @@ pub struct ShellText {
     /// 箱に関わるブレスの転記（`parse_boxes` と同じ）。
     pub boxes: Vec<BoxDefinition>,
     /// 描けない element定義の行（`parse_undrawn_elements` と同じ）。
-    pub undrawn: Vec<UndrawnElementLine>,
+    pub undrawn: Vec<ElementLine>,
+    /// 画像の element定義の行（原文のまま・見出しは展開しない・登場順）。
+    pub image_elements: Vec<ElementLine>,
     /// cursorブレスの転記（`parse_cursor_braces` と同じ）。
     pub cursor_braces: Vec<CursorBrace>,
     /// 読みで飛ばした・区切り直した崩れ（登場順）。記録は読み込む側が出す。
     pub issues: Vec<ShellIssue>,
 }
 
-/// デコード済み surfaces.txt 文字列を 1 回だけ字句に分け、4 つの結果と崩れを返す純粋関数（失敗しない）。
+/// デコード済み surfaces.txt 文字列を 1 回だけ字句に分け、5 つの結果と崩れを返す純粋関数（失敗しない）。
 pub fn parse_all(input: &str) -> ShellText {
     let tokens = lex(input);
     let mut shell = empty_shell();
@@ -42,13 +44,14 @@ pub fn parse_all(input: &str) -> ShellText {
     let mut box_reading = Reading::default();
     let mut boxes = Vec::new();
     let mut undrawn = Vec::new();
+    let mut image_elements = Vec::new();
     let mut cursor_braces = Vec::new();
     for token in &tokens {
         decode_token(&mut shell, token, &mut reading);
         match token {
             Token::Brace { header, body } => {
                 boxes.extend(transcribe_block(header, body, &mut box_reading));
-                undrawn_lines(header, body, &mut undrawn);
+                undrawn_lines(header, body, &mut undrawn, &mut image_elements);
                 cursor_braces.extend(cursor_brace(header, body));
             }
             Token::TopLevel(_) => {}
@@ -69,6 +72,7 @@ pub fn parse_all(input: &str) -> ShellText {
         shell,
         boxes,
         undrawn,
+        image_elements,
         cursor_braces,
         issues: reading.issues,
     }

@@ -2,10 +2,10 @@
 //!
 //! 検体ファイルは読まず、テストの中に surfaces.txt の文面を持つ。
 
-use super::{BoxDefinition, UndrawnElementLine, parse, parse_boxes, parse_undrawn_elements};
+use super::{BoxDefinition, ElementLine, parse, parse_boxes, parse_undrawn_elements};
 
-fn undrawn(heading: &str, element: &str, method: &str) -> UndrawnElementLine {
-    UndrawnElementLine {
+fn undrawn(heading: &str, element: &str, method: &str) -> ElementLine {
+    ElementLine {
         heading: heading.to_string(),
         element: element.to_string(),
         method: method.to_string(),
@@ -251,6 +251,6 @@ element1,frobnicate,open2.png,0,0
 fn surface_alias_brace_gives_no_undrawn_line() {
     assert_eq!(
         parse_undrawn_elements("surface.alias\n{\nelement0,add,x.png,0,0\n}\n"),
-        Vec::<UndrawnElementLine>::new()
+        Vec::<ElementLine>::new()
     );
 }
