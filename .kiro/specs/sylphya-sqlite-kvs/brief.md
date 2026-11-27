@@ -105,19 +105,21 @@ areka の値の持ち方が、置き場によってばらばらである。覚�
   - 起票の理由: 直すには sylphya に消す口（書き換えの電文に「無い」を表す形）が要り、本 spec が作り直す KVS の口と重なる。読み直しの側は消す口ができれば名前の段から「無い」を渡すだけ。
   - 確かめ方: descript の 3 行を消して読み直し、`get_property` が 3 つとも値なしを返すこと。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-- **前提の変化**: 上流の `readonly-mode`（10-24・書かない継ぎ目は `crates/areka-sylphya/src/persist/withhold.rs` の「書くのを控えた」結末）と `property-name-case-fold`（10-23・名前の英字の大小を区別せずに引く）は着地した＝Current State の「大小文字を区別する」と Out の「大小文字を区別しない読み」は古い。`multi-ghost-runtime` は未着地（着地していれば合わせる、のまま）。
-- **触るファイル**: `crates/areka-sylphya/` 全体・本体の `boot_resolve.rs`（769 行）・`placement/persist.rs`（930＝上限の近く）・`roots/mod.rs`・`roots/edit.rs`・`areka-ghost` の `sylphya_wiring.rs`（423）・`runtime.rs`（829）・根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・`tech.md`（rusqlite を足す＝依存の席を使う）。
-- **規模**: L（18〜24）に、上の追記の件 1（名前を消す口）で 1 つ増える。20 を超えても削らない（本文どおり）。
-- **先に要るもの（見直しと crate 分けを含む）**: 見直しは台帳の `audit-sylphya-actor`・`audit-placement-core`・`audit-areka-app`（`boot_resolve.rs`）・`audit-ghost-catalog` に、**`audit-areka-install-update` を足す**（`roots/` はその受け持ち）。crate 分けは `placement-crate-split` が `placement/persist.rs` を別の crate へ、`session-module-gather` → `session-crate-split` が `boot_resolve.rs` と置き場の並びの芯 `roots/mod.rs` を動かす＝6 本の後。
-- **優先度の区分**: A（開発者「sqliteベースへの移行を検討せよ」）。
-- **要件定義のモデル**: Fable（鍵と層で読み書きする新しい口を本体・`areka-ghost`・MCP が使う＝前例の無い公開の契約。複数のプロセスが同じファイルへ書くときの順と消えない保証を新しく組む）。
-- **分割の案**: なし（`mcp-set-property` を一度切り出した）。
-- **見つけた穴・古くなった記述**: Current State の行番号がずれた（中身は同じ）: 共有の写し `mirror.rs:74`・読み口 `reader.rs:63,93,127`・`SylphyaPublisher` は `actor.rs:467`・`apply` は `:264`・`classify_set` は `:141`・`PersistKey` は `persist/mod.rs:124`・`to_canonical_key` は `:173`・`save_scope` は `:288`・`FakePersistIo` は `persist/io.rs:156`・`boot_resolve.rs:369,445`・`placement/persist.rs:326`。
-
 ## 追記（2026-11-06 `audit-sylphya-actor` の要件の討議で回された件）
 
 `audit-sylphya-actor` の audit の指摘のうち、ウェーブ C18 の約束（3 つのクレートの公開の形を変えない）のために、その spec では直せない 2 件をこの spec へ回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 3）。作り直しの中で消す。
 
 - **件 1（audit #10）**: `RuntimeCommandSink`・`SylphyaInit::runtime_sink`（`crates/areka-sylphya/src/actor.rs`）は本番で一度も `Some` にならない差し替えの口。範囲の外の 32 か所は全部 `None`。型と欄を消し、`Effect::RuntimeCommandReserved` の枝は `warn!` を出して何もしない枝にする。panic の檻は別の道具で作り直す。
 - **件 2（audit #21）**: `SylphyaCore`（`actor.rs`）は状態を持たない型。`apply` を自由な関数にする。`crates/areka-placement`（元 `crates/areka/src/placement/`）の `zorder_property_deferral_tests.rs` の呼び手も直す。
+
+## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
+
+- **前提の変化**: 見直しの `audit-sylphya-actor`・`audit-placement-core`・`audit-areka-app`・`audit-ghost-catalog`・`audit-areka-install-update` と本体の crate 分けは全部着地した。上流の `readonly-mode`（書かない継ぎ目は `crates/areka-sylphya/src/persist/withhold.rs`）と `property-name-case-fold`（名前の英字の大小を区別せずに引く）も着地済み＝Current State の「大小文字を区別する」と Out の「大小文字を区別しない読み」は古い。`multi-ghost-runtime` は未着地（着地していれば合わせる、のまま）。sqlite はワークスペースにまだ無い。crate の依存は今も thiserror・tracing・toml・`areka-actor` だけで、wintf・dola を引かない。
+- **触るファイル**: `crates/areka-sylphya/` の全部（本番 約 5.2k 行・一番大きいのは `actor.rs` 891・`persist/mod.rs` 687）と `Cargo.toml`。アクターを通らない今の読み書き＝`crates/areka-session/src/boot_resolve.rs`（759・365 行目の前回の名前の読み・441 行目のアプリ層への直書き）・`crates/areka-session/src/roots/mod.rs`（49）・`crates/areka/src/roots/edit.rs`（427）・`crates/areka-placement/src/persist.rs`（676・284 行目の位置の読み）。アクターをつなぐ所＝`crates/areka-ghost/src/{sylphya_wiring.rs 476, runtime.rs 785, prop_sink.rs 479}`。11-06 の追記の件 1（使われない差し替えの口を消す）で `runtime_sink: None` を書く 14 ファイル（本番は `sylphya_wiring.rs`・`prop_sink.rs` の 2 つ・残りはテストとテストの手助け）、同じ追記の件 2（`apply` を自由な関数に）で `crates/areka-placement/src/zorder_property_deferral_tests.rs`。根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・`tech.md`（rusqlite を足す＝1 ウェーブに 1 本だけの依存の席を使う）。文字の層の新しいファイルの席は使わない。上限の近くのファイルは無い。覚える値の鍵の型 `PersistKey` と書き口 `SylphyaPublisher` の形を保てば、鍵を使うだけの `crates/areka-session/src/{ghost_switch.rs, alert.rs}`・本体の `install/desk.rs`・配置と実行系の `persist_save.rs`・`switch_assets.rs` などは触らずに済む＝保つことを設計の約束にする。
+- **規模**: 20〜26 タスク（起票の 18〜24 に、10-22 の追記の件 1〔名前を消す口〕と 11-06 の追記の件 1・2〔差し替えの口を消す・`apply` を自由な関数に〕の分）。20 を超えても削らない（本文どおり・`mcp-set-property` を一度切り出した）。
+- **先に要るもの**: 無し（見直しと crate 分けは全部済んだ）。
+- **同じウェーブに置けない相手**: `ghost-switch-balloon-fallback`（`crates/areka-session/src/boot_resolve.rs`）。あちらが `boot_resolve.rs` を避けると決め方を 1 か所にまとめた作りが曲がり、こちらが避けると記憶の直読みを新しい口へ移せない＝約束では外せないので別のウェーブ。`talk-script-metadata` とは `crates/areka-ghost/src/runtime.rs` があちらの約束で外れる。`instant-to-interrupt-ticks`（`persist/io.rs` と依存の席）は C28 に入れない。後のウェーブの `shiori4-api`（`runtime.rs`・依存の席）・`mcp-set-property`（この spec の上に乗る）とも別。
+- **優先度の区分**: A（開発者「sqliteベースへの移行を検討せよ」）。
+- **要件定義のモデル**: Fable。当たる物差しは「並行と順の保証を新しく組む」だけ＝ゴーストごとのアクターがそれぞれ接続を持ち、UI スレッドの直書きも加わって、同じアプリ層のファイルへ何人も書く。今の作り（TOML を丸ごと書き直す）にはこの保証が無く、`BEGIN IMMEDIATE` と待ち・1 回のトランザクションで 1 つの層だけに書く決まり・ATTACH をトランザクションの外で打つ順・書けない置き場での開き方を、この spec で新しく決める。読み書きの口は今のアクターの形に乗る置き換えなので、公開の契約の物差しには当たらない。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: Current State の「ホストの受け口のアプリ層専用の 1 本（`shiori_host.rs:199`）」は無くなった（アクターはゴースト 1 体につき 1 本＝`crates/areka-ghost/src/sylphya_wiring.rs` の `spawn_ghost_sylphya`・`runtime.rs` の 609 行目）。覚える鍵は 9 種類から 10 種類になった（窓の隣り合いの印 `WindowAdjacent`）。アクターを通らない読み書きの道は `crates/areka/src/{boot_resolve.rs, placement/persist.rs, roots/mod.rs}` から上の crate へ移った。行の番号＝共有の写し `mirror.rs:69`・`SylphyaPublisher` は `actor.rs:507`・`apply` は `:287`・`classify_set` は `:149`・`PersistKey` は `persist/mod.rs:123`・`to_canonical_key` は `:172`・`load_scope` は `:239`・`save_scope` は `:300`・`FakePersistIo` は `persist/io.rs:241`。追記の件 2 の呼び手の道 `crates/areka-placement`（元 `crates/areka/src/placement/`）は今も正しい。

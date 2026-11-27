@@ -28,7 +28,7 @@ areka には COM の `IShioriFactory`／`IShiori`／`IShioriHost`（`crates/shio
 
 **areka の今**
 - 本番は `ShioriWiring::Helper` に固定（`crates/areka/src/boot_config.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）。進行役（kanade）の共通の口 `ShioriBackend`（`crates/areka-kanade/src/shiori/real.rs`）がイベント名と番号付きの Reference の並びを受け、`crates/shiori-host32-host/src/shiori3.rs` が SHIORI/3.0 のテキストを組む。
-- COM の面 `crates/shiori-abi/`（依存元は `crates/areka`・`crates/areka-ghost`・`crates/shiori4-testdll`）。`IShioriHost` の実装は 3 つあり、どれも本番に届かない（`crates/areka/src/shiori_host.rs` の `ShioriHostSink`＝プロパティは sylphya 接続・env で有効にするデモだけ／`crates/areka-ghost/src/shiori_inproc.rs` の `InProcHost`＝孤立した表／Helper の経路＝口なし）。
+- COM の面 `crates/shiori-abi/`（依存元は `crates/areka-ghost`・`crates/shiori4-testdll`）。`IShioriHost` の実装は 2 つあり、どれも本番に届かない（`crates/areka-ghost/src/shiori_inproc.rs` の `InProcHost`＝孤立した表／Helper の経路＝口なし）。本体の `crates/areka/src/shiori_host.rs` の `ShioriHostSink` と env で有効にするデモは、見直し `audit-areka-app`・`audit-areka-install-update` で消えた。
 - `ShioriWiring::InProc`（x64 の DLL を同じプロセスに読む）を通るのはテスト用の `crates/shiori4-testdll` だけ。descript.txt から選ぶ道は無い。
 - `doc/shiori/fragments/` は封筒（`_shared.toml`・JSON-RPC 2.0）と、イベントと資源の目録（446 項目）の 2 つ。目録は `crates/ukadoc-survey/src/evidence/resolve.rs` が読む。封筒を読むコードは無い。
 - `doc/COMPAT_ARCHITECTURE.md` §5 と `.kiro/steering/roadmap.md` の技術の要約は「SHIORI 内部唯一 ABI＝`IShiori`（COM, HSTRING/UTF-16）」のまま。
@@ -100,7 +100,7 @@ areka のセッション（SHIORI4:areka）が、ベースウェアの実装者�
 ## 開発者の決定（2026-10-23）
 開発者「areka の立場としては、COM-SHIORI インターフェースの作りかけのものはもう排除しちゃって、shiori4 に完全移行するつもりで考えてほしい。shiori4 の ABI なら、Windows 以外でもそのまま動きますので」。
 
-1. **COM の面を消し、shiori4 へ完全に移る**。`crates/shiori-abi/` と `crates/shiori4-testdll/` を消し、`IShioriHost` の 3 つの実装（`crates/areka/src/shiori_host.rs` の `ShioriHostSink`・`crates/areka-ghost/src/shiori_inproc.rs` の `InProcHost`・env で有効にするデモ）も消す。テスト用の v4 DLL は `shiori4::Ghost` で作り直す。
+1. **COM の面を消し、shiori4 へ完全に移る**。`crates/shiori-abi/` と `crates/shiori4-testdll/` を消し、`IShioriHost` の残りの実装（`crates/areka-ghost/src/shiori_inproc.rs` の `InProcHost` と Helper の経路）も消す。テスト用の v4 DLL は `shiori4::Ghost` で作り直す。
 2. **JSON-RPC の封筒もやめる**（COM の原案と同時に作った紙の契約なので、同じ決定に含めた）。`doc/shiori/fragments/_shared.toml` の封筒は「v4 のペイロード＝SHIORI/3.0 のヘッダ部分（正本は shiori4）」へ書き換える。目録（events・resources）は `ukadoc-survey` が読むので残す。
 3. **SHIORI の実体は別プロセスで動かす**（開発者・同日「arekaにだけ影響する設計上の大きな要件を出します。SHIORIの実体は別プロセスで動かすこと。これは、SHIORI3がブリッジで動いているのと、同じような環境で動いて欲しいためです。プロセスが同じだと、カレントディレクトリなどのシステム環境の影響を受けたり、pythonなどのプロセスでグローバル環境を持つランタイムが使いにくいため。あとプロセス分離は最近のアーキテクチャのトレンドでもあります」）。v4 の DLL も同じプロセスに読まない。shiori4 の ABI は変わらない（ホストがどのプロセスで DLL を読むかは ABI の外）。
    - **製品は別プロセスだけ**（開発者・同日。「別プロセスの版と同じプロセスの版を 2 つ作るか…でも設計者が混乱しそう」への推奨を承認）。同じプロセスで SHIORI を動かす道は、設定の項目も選ぶ道も作らない。理由: 2 つあると「同じ環境で動く」という決定の狙いが崩れ（カレントディレクトリ・プロセス全体の状態が版で違う）、試験と不具合の切り分けも倍になる。速さの得（問い合わせの IPC の往復が要らない）は小さい見込み（未計測）。

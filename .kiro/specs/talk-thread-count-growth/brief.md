@@ -74,14 +74,15 @@
 
 B（バグ。長く起動したまま喋り続けると、トークの数だけスレッドか名簿の項目と OS のハンドルが積み上がり、報告の数も実際と食い違う）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-- **前提の変化**: コードは起票のときのまま（スレッド名簿 `crates/wintf/src/ecs/world/thread_registry.rs` の `register_current_thread` と `snapshot`・報告器 `crates/areka/src/perf_thread_report.rs`・トークのスレッドを起こす `spawn_talk`〔`crates/areka-sakura/src/drive.rs`〕・自然に終わったトークを join せずに落とす `on_done`〔`crates/areka-ghost/src/dispatcher.rs`〕）。10-19 の後、どれにも変更は入っていない。
-- **触るファイル**: 名簿（185 行）・報告器（469）・走り始めのフック `crates/areka/src/thread_roles.rs`（82・読むだけの見込み）。トークの側を直すときだけ `drive.rs`（655）・`dispatcher.rs`（510）。名簿の項目の出し方を変えると、報告の行（`threads=` と名簿外の残り）を読む `tools/perf/perf-rank.py` も合わせて直す。
+## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
+
+- **前提の変化**: 原因の所は今も起票のときのまま。スレッド名簿 `crates/wintf/src/ecs/world/thread_registry.rs` の `register_current_thread`（136 行目〜）は、同じスレッドの番号が登録し直したときだけ古い項目を外す（169 行目）ので、終わったスレッドの項目と複製したハンドルが残り続ける。報告器 `crates/areka/src/perf_thread_report.rs` は名簿の項目の数を `threads=` に出す。見直し `audit-areka-app` が報告器の止め方の記録の扱いを直し、`dola-interrupt-ticks` が台本の刻みを絶対の時刻にしたが、どちらも項目の残り方とトークのスレッドの終わり方には触れていない。トークのスレッドは今も、自然に終わると `crates/areka-sakura/src/drive.rs` が `Break` を返して抜け、`crates/areka-ghost/src/dispatcher.rs` の `on_done`（312 行目）が持ち手を join せずに落とす（切り離し）。読む限り、スレッドそのものは終わって名簿だけが増える見立てが強い（確かめは最初のタスクの OS からの数え）。
+- **触るファイル**: 名簿（185 行）・報告器（464）・走り始めのフック `crates/areka/src/thread_roles.rs`（81・読むだけの見込み）・報告の行を読む `tools/perf/perf-rank.py`（819・名簿の項目の出し方を変えたときだけ）。トークの側を直すときだけ `drive.rs`（619）・`dispatcher.rs`（446）。上限の近くのファイルは無い。
 - **規模**: S〜M（5〜10）のまま。
-- **先に要るもの（見直しと crate 分けを含む）**: 本文の「Upstream: なし」は古い。2026-10-22 の並びで次の見直しの後に置いた: `audit-wintf-graphics-world`（名簿）・`audit-areka-app`（報告器・`thread_roles.rs`）・`audit-parsers-sakura`（`drive.rs`）・`audit-ghost-catalog`（`dispatcher.rs`）。台帳の `audit-tools-scripts`（`tools/perf/` の外を受け持つ）は触るファイルに当たらない（外す候補）。`perf-rank.py` を直すなら代わりに `audit-tools-perf-judge`。crate 分け: 報告器と `thread_roles.rs` は本体に残る（`session-module-gather` の「集めないもの」）が、`audit-areka-app` が `session-crate-split` の後なので 6 本の後になる。
-- **優先度の区分**: B（長く起動したまま喋るとトークの数だけ項目と OS のハンドルが積み上がる）。
-- **要件定義のモデル**: Opus。
+- **先に要るもの**: 無し（見直しと crate 分けは全部済んだ）。
+- **同じウェーブに置けない相手**: `instant-to-interrupt-ticks`（報告器の時計）。トークの側を直すことになったら `talk-script-metadata`（`dispatcher.rs`・`drive.rs`）・`talk-fast-forward`。同じウェーブに並べるなら「この spec は名簿と報告器（と `perf-rank.py`）だけを直し、OS から数えて生きたスレッドが残ると分かったら、トークの側の直しは `talk-script-metadata` の着地の後に回す」を約束にする（上の見立てのとおりなら設計は曲がらない）。依存は足さない。
+- **優先度の区分**: B（長く起動したまま喋るとトークの数だけ項目と OS のハンドルが積み上がり、報告の数も実際と食い違う）。
+- **要件定義のモデル**: Opus（切り分けの結果で直す所が決まるだけで、新しい並行の設計は要らない）。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 上の「Upstream: なし」だけ。
-- **`audit-tools-perf-judge` で直した分（2026-11-15）**: 研究の #4・#22・#63 は perf-rank の中だけで直した（Rust は触っていない）。#4＝差の基準の名簿外の残りを `max(プロセスの差 − 名簿の行の差の合計, 0)` で出す（設計 D7・TID の照らし方は `delta` のまま）・#22＝役割別の表だけ `actor:…-<数字>` を `-*` に畳む（D8）・#63＝`perf(process)` は `snap` と `cpu_us` だけを読む（`threads=` を変えても順位表は止まらない）。
-- **申し送り（audit-tools-perf-judge より・2026-11-15）**: `crates/areka/src/perf_thread_report.rs:22-24` の注記「読み手は隣り合う snapshot の差を取る」は古い（perf-rank は 60 秒前の snapshot と比べ、名簿外の残りは設計 D7 でプロセスの差から出す）。こちらは `crates/` に触れない約束なので直していない。
+- **`audit-tools-perf-judge` で直した分**: 研究の #4・#22・#63 は perf-rank の中だけで直した（Rust は触っていない）。#4＝差の基準の名簿外の残りを `max(プロセスの差 − 名簿の行の差の合計, 0)` で出す（設計 D7・TID の照らし方は `delta` のまま）・#22＝役割別の表だけ `actor:…-<数字>` を `-*` に畳む（D8）・#63＝`perf(process)` は `snap` と `cpu_us` だけを読む（`threads=` を変えても順位表は止まらない）。
+- **見つけた穴・古くなった記述**: 本文の「Upstream: なし」は今は正しい。報告器の 21〜23 行目の説明「読み手が隣り合うスナップショットの差を取って得る」は古い（perf-rank は 60 秒前のスナップショットと比べ、名簿外の残りは上の D7 でプロセスの差から出す）＝この spec で直す。Constraints の「今の版は v0.1.0」「ウェーブ C9」は古い（今の版は v0.2.0）。

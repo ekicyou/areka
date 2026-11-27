@@ -136,18 +136,21 @@
 - `surface12.png`・`surface22.png` は全部が透明な絵で、`base` で別の面を土台に描く前提の作り。前回は焼き込みの「全透明」の WARN を作者の誤りとして数から外したが、`base` の土台と読むのが正しい。今のままでは面 12・22 を出すと何も描かれない見込み（この 1 回では面 12・22 は出ていない）。
 - 直した後の確かめ: 「．さくら」で面 12・22 を出し（`\s[12]`・`\s[22]`）、`base` の面が描かれ WARN が 0 になること。`move` が付くので `seriko-pattern-calls` と並べて見る。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
 
-- 前提の変化（棚卸㉔の後）: D2D の道に決まり（10-15）、先に `wintf-visual-tree`（10-21）が入った＝この spec は emo の合成を描画の木の節（element ごとに重ね方つき）へ移す側。合成の段は着地が続いて変わった＝`seriko-pattern-calls`（`move` を受けた・`bind_steps.rs`・`pattern_word.rs`）・`areka-P0-offline-surface-dump`（窓を出さずに面を PNG に書く `crates/areka/src/offline_dump/` が CPU の合成 `Composer` を直に使う・`plan_bounds.rs`・`plan_issues.rs`）・`animated-surface-log-flood`（変わった矩形だけ重ね直す `blit_rect.rs`）。D2D へ移すとき、この重ね直しの効きを失わないこと（`wintf-visual-damage-redraw` を先か同じ頃に）。
-- 「描ける語か」の門は 7 か所から 8 か所（7 ファイル）になった＝`plan.rs` 1・`nesting.rs` 2・`plan_always.rs` 1・`blit.rs` 1・`bind_steps.rs` 1・`plan_bounds.rs` 1・`plan_issues.rs` 1（どれも `method.rs` の `is_implemented`／`is_implemented_name`）。`Element` を直書きするファイルは 39 から 44（`areka-emo-compose` 17・`areka-parsers` 11・`areka-emo-atlas` 6・`areka-emo-present` 5・`areka-emo-text` 3・`areka` 2＝`emo2_boot/balloon_background_tests.rs`・`placement/measure_first_frame_tests.rs`）。
-- CPU の画素に頼る読み手は 5 つ＝当たりの α マスク（`crates/areka-emo-present/src/presenter/budget.rs`・`cache.rs`）・MCP の `dump_surface`（`presenter/read.rs`）・バルーンの背景色（`crates/areka/src/emo2_boot/balloon_background.rs`）・窓を出さない書き出し（`crates/areka/src/offline_dump/render.rs`・10-15 の節より後に増えた）。
-- 触るファイル: 分割の節のものに、上の門の 3 ファイル・emo の表示（`crates/areka-emo-present/src/display.rs` 238 行・`mount.rs` 317 行）・上の 5 つの読み手・合成の見本 `crates/areka-emo-compose/src/golden_tests*.rs`（WARP の見本へ移すなら）。`crates/areka-seriko/src/table.rs` は 929 行（期待 1 か所だけ・858〜862 行目）。wintf には触らない約束のまま。
-- 規模: D2D の道で初めて見積もると 20〜25 タスク（読み手の欄・語の対応・合成を節の木へ・表示の付け替え・門 8 か所・pattern定義の `base`・5 つの読み手・見本の移し替え・警告の洪水・台帳・実機）。
-- 先に要るもの: `wintf-d2d-composite-rules`（とその前の `wintf-visual-tree`）。列の中の順は「`element-clipping-option` の後」から「前」へ（D2D の道では `--clipping` を節の切り抜きで描くので、節の木へ移すこの spec が先）。見直しは台帳の `audit-emo-compose`・`audit-seriko`・`audit-parsers-sakura`・`audit-emo-present` に、`audit-emo-atlas`・`audit-emo-text-state-actor`（`Element` の直書き）・`audit-emo2-boot-spine`（`balloon_background*`）・`audit-placement-core`（`measure_first_frame_tests.rs`）・`audit-areka-app`（`offline_dump/`）を足す。本体の crate 分けは `placement-crate-split`（placement を移す）・`runtime-module-untangle`・`runtime-crate-split`（`emo2_boot` を移す）・`session-crate-split`（`offline_dump` の参照を書き換える）の後＝6 本の鎖の終わりの後。同じウェーブに置けない相手＝`collisionex-regions`・`hit-id-pass`・`compose-f16-precision`・`element-clipping-option`・`draw-methods-blend`（v0.2.0 の中）。
-- 優先度の区分: A のまま（開発者 10-05「残りの描画メソッドは起票」「Direct2D が支える全部に対応できるよう wintf も含めて広げる」）。
-- 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝CPU の合成を残して 5 つの読み手の出どころにするか、全部を GPU の読み戻しへ替えるか）。
-- 分割の案: 一度切り出した spec なので、20 を少し越える程度では分けない。要件で 22 を越えたら、5 つの読み手の付け替え（`presenter/{budget,read}.rs`・`cache.rs`・`balloon_background.rs`・`offline_dump/render.rs`）を後の 1 本（名前の例 `emo-pixel-readback`）へ出す。後ろの 1 本が本体（`crates/areka`）の分をほぼ全部持つので、この spec の待ちが軽くなる。
-- 見つけた穴・古くなった記述: `element-clipping-option` も `Element` に欄を足す＝同じ 44 ファイルをもう一度触る。この spec が描画メソッドの欄と一緒にオプションの並びの欄（転記だけ）を足せば、あちらは触り直さずに済む。
+- **前提の変化**: 待っていた見直し（`audit-emo-compose`・`audit-seriko`・`audit-parsers-sakura`・`audit-emo-present`・`audit-emo-atlas`・`audit-emo-text-state-actor`・`audit-emo2-boot-spine`・`audit-placement-core`・`audit-areka-app`）と本体の分け直し、wintf の `wintf-d2d-composite-rules`・`wintf-visual-damage-redraw`・`wintf-surface-auto-promotion`、当たりの `hit-id-pass` は全部済んだ。描ける語は今も `overlay` だけ。合成の側は D2D の道で、emo の合成を描画の木の節（element ごとに重ね方つき）へ移す。変わった矩形だけ重ね直す今の効き（`blit_rect.rs`）は失わない。
+- **「描ける語か」の門**: 9 か所・7 ファイル＝`crates/areka-emo-compose/src/` の `plan.rs` 601 行目・`nesting.rs` 196・308・`plan_always.rs` 76・`blit.rs` 121・250・`bind_steps.rs` 60・`plan_bounds.rs` 154・`plan_issues.rs` 75（どれも `method.rs` の `is_implemented`／`is_implemented_name`）。
+- **`Element` を直に組むファイル**: 見直しでテストの組み立てが共有の支えへ寄ったので 17 ファイル（7 crate）に減った＝`crates/areka-parsers/src/shell/` の 10・compose の `plan_test_support.rs`・atlas の `test_support.rs`・emo-present の `shell_target.rs`（933 行＝上限の近く）と `presenter_test_support.rs`・emo-text の `tests/support/mod.rs`・`crates/areka-placement/src/measure_first_frame_tests.rs`・`crates/areka-runtime/src/balloon_background_tests.rs`。
+- **CPU の画素に頼る読み手の今の場所**: 当たりの α マスク（`crates/areka-emo-present/src/presenter/budget.rs`・`cache.rs`）とそれを使う名前の解決（`presenter/hit.rs`・下の申し送り）・画像の書き出し（`presenter/read.rs`）・バルーンの背景色（`crates/areka-runtime/src/balloon_background.rs`）・窓を出さない書き出し（`crates/areka/src/offline_dump/render.rs`）。
+- **触るファイル**: 読み手 `crates/areka-parsers/src/shell/{model,decode,undrawn}.rs`・合成 `crates/areka-emo-compose/src/{method,fold,normalized,plan 830 行,plan_always,nesting,blit,bind_steps,plan_bounds,plan_issues,blit_rect}.rs` と見本 `golden_tests*.rs`・表示 `crates/areka-emo-present/src/{display,mount}.rs`・上の読み手と 17 ファイル・`crates/areka-seriko/src/table.rs`（969 行＝上限の近く・850〜854 行目の期待を直すだけ）・`shell_target_element_base_tests.rs`（申し送り）・台帳 `assets.toml`・§8。新しいソースのファイルは compose か emo-present に足す（emo-text には足さない）。wintf には触らない。
+- **規模**: 18〜24 タスク（`Element` の直しが減った分だけ下げた）。
+- **先に要るもの**: 無し。
+- **同じウェーブに置けない相手**: `balloon-text-visual-tree`（emo-present の `mount.rs`・emo-text の `tests/support/mod.rs`＝欄を足せば必ず直すので約束で外せない）。後ろの `element-clipping-option`・`draw-methods-blend`・`compose-f16-precision`・`ghost-alias-file`（`decode.rs`・`fold.rs`・`shell_target.rs`）は列のとおり後。
+- **約束が要る所**: ① 合成の crate（`crates/areka-emo-compose/Cargo.toml`）に wintf を足さず、D2D の命令の列はもう wintf を使う emo-present で組む＝`Cargo.toml`・`Cargo.lock` に触らない（`sylphya-sqlite-kvs` が依存の席を使う）。② 画像の書き出しの付け替えは `presenter/read.rs` の中で閉じ、MCP の入口 `crates/areka/src/mcp/dump_surface.rs` に触らない（`instant-to-interrupt-ticks` が触る）。どちらも設計を曲げない。
+- **優先度の区分**: A（開発者が残りの描画メソッドの起票と、Direct2D が支える全部への対応を頼んだ）。
+- **要件定義のモデル**: Opus。骨組みの分かれ目（CPU の合成を残して読み手の出どころにするか、全部を GPU の読み戻しへ替えるか）は、描画と当たりの絵は GPU が前提という開発者の決めと、先に入った前例（`wintf-d2d-composite-rules` の節ごとの重ね方と 1 画素の読み戻し・`hit-id-pass` の GPU の ID の描き先 `presenter/hit_picture.rs`）で決まっている。新しい crate の境目も、並行や順序の保証の新しい設計も無い。
+- **分割の案**: 一度切り出した spec なので、20 を少し越える程度では分けない。要件で 22 を越えたら、5 つの読み手の付け替えを後の 1 本（名前の例 `emo-pixel-readback`）へ出す。
+- **見つけた穴**: `element-clipping-option` も `Element` に欄を足す＝この spec が描画メソッドの欄と一緒にオプションの並びの欄（転記だけ）を足せば、あちらは同じ 17 ファイルを触り直さずに済む。
 
 ## 申し送り（wintf-visual-damage-redraw より・2026-11-14）
 
