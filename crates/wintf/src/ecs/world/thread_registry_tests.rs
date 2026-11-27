@@ -249,3 +249,163 @@ fn a_joined_thread_is_reported_as_exited() {
         "join した後の複製ハンドルは終わったと読めるはず"
     );
 }
+
+use std::collections::HashMap;
+
+struct FakeProbe {
+    exited: HashMap<u32, bool>,
+    cpu: HashMap<u32, CpuTimes>,
+}
+
+impl FakeProbe {
+    fn new() -> Self {
+        Self {
+            exited: HashMap::new(),
+            cpu: HashMap::new(),
+        }
+    }
+
+    fn alive(mut self, tid: u32) -> Self {
+        self.exited.insert(tid, false);
+        self
+    }
+
+    fn exited(mut self, tid: u32, kernel_100ns: u64, user_100ns: u64) -> Self {
+        self.exited.insert(tid, true);
+        self.cpu.insert(
+            tid,
+            CpuTimes {
+                kernel_100ns,
+                user_100ns,
+            },
+        );
+        self
+    }
+
+    fn cpu_for(mut self, tid: u32, kernel_100ns: u64, user_100ns: u64) -> Self {
+        self.cpu.insert(
+            tid,
+            CpuTimes {
+                kernel_100ns,
+                user_100ns,
+            },
+        );
+        self
+    }
+
+    fn exited_unreadable(mut self, tid: u32) -> Self {
+        self.exited.insert(tid, true);
+        self
+    }
+}
+
+impl ThreadProbe for FakeProbe {
+    fn has_exited(&self, entry: &ThreadEntry) -> Result<bool> {
+        Ok(self.exited[&entry.tid])
+    }
+
+    fn cpu_times(&self, entry: &ThreadEntry) -> Result<CpuTimes> {
+        self.cpu
+            .get(&entry.tid)
+            .copied()
+            .ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_FAIL))
+    }
+}
+
+fn fake_entry(role: &str, tid: u32) -> ThreadEntry {
+    ThreadEntry {
+        role: role.to_owned(),
+        name: None,
+        tid,
+        handle: Arc::new(
+            crate::api::duplicate_current_thread_handle().expect("自スレッドのハンドルの複製"),
+        ),
+    }
+}
+
+#[test]
+fn a_reused_tid_after_exit_folds_the_old_cpu_into_the_old_family_once() {
+    let mut registry = Registry::new();
+    let none = registry.insert(
+        fake_entry("actor:sakura-talk-1", 7),
+        &FakeProbe::new().alive(7),
+    );
+    assert!(none.is_empty());
+
+    let gone = FakeProbe::new().exited(7, 30, 12);
+    let notes = registry.insert(fake_entry("ui", 7), &gone);
+    assert!(notes.is_empty(), "{notes:?}");
+
+    let alive = FakeProbe::new().alive(7).cpu_for(7, 100, 100);
+    let (reading, notes) = registry.read(&alive);
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(
+        reading.folded,
+        vec![FoldedReading {
+            family: "actor:sakura-talk-*".to_owned(),
+            cpu: CpuTimes {
+                kernel_100ns: 30,
+                user_100ns: 12
+            },
+            exited: 1,
+        }],
+        "前の系統へ前の CPU が 1 度だけ入るはず"
+    );
+    assert_eq!(reading.live.len(), 1, "生きた項目は新しい方だけ");
+    assert_eq!(reading.live[0].role, "ui");
+    assert_eq!(reading.live[0].tid, 7);
+
+    let (again, _) = registry.read(&alive);
+    assert_eq!(again.folded, reading.folded, "読み直しても二重に入らない");
+}
+
+#[test]
+fn re_registering_a_live_tid_moves_neither_the_total_nor_the_count() {
+    let mut registry = Registry::new();
+    let probe = FakeProbe::new().alive(8);
+    registry.insert(fake_entry("actor:sakura-talk-1", 8), &probe);
+    registry.insert(fake_entry("actor:sakura-talk-2", 8), &probe);
+
+    assert!(registry.folded.is_empty(), "{:?}", registry.folded);
+    assert_eq!(registry.live.len(), 1);
+    assert_eq!(registry.live[0].role, "actor:sakura-talk-2");
+}
+
+#[test]
+fn an_exited_entry_with_unreadable_cpu_warns_with_tid_and_role_and_adds_only_the_count() {
+    let mut registry = Registry::new();
+    registry.insert(
+        fake_entry("actor:sakura-talk-5", 9),
+        &FakeProbe::new().alive(9),
+    );
+
+    let probe = FakeProbe::new().exited_unreadable(9);
+    let ((), events) = log_capture_kit::capture(|| {
+        tracing::warn!(target: "wintf::thread_registry_test_control", "control");
+        let notes = registry.sweep(&probe);
+        emit_notes(notes)
+    });
+
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.target == "wintf::thread_registry" && e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert_eq!(warns[0].field("tid"), Some("9"), "{events:?}");
+    assert_eq!(
+        warns[0].field("role"),
+        Some("actor:sakura-talk-5"),
+        "{events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| e.target == "wintf::thread_registry_test_control"),
+        "対照の事象が捕まらないなら捕捉が働いていない: {events:?}"
+    );
+
+    let total = registry.folded["actor:sakura-talk-*"];
+    assert_eq!(total.exited, 1);
+    assert_eq!((total.kernel_100ns, total.user_100ns), (0, 0));
+    assert!(registry.live.is_empty());
+}
