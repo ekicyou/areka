@@ -66,7 +66,7 @@ impl Rig {
             (since / ms(50).as_ticks()) as u64 + 1
         };
         let window = TalkWindow {
-            base: 0,
+            counted: self.seen,
             prev_seen: self.seen,
             now_seen,
             wall: &glyph_time,

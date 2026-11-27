@@ -7,12 +7,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{AlphaParams, ElementDecoder};
-use areka_emo_compose::{BoxLayout, BoxName};
+use areka_emo_compose::{BoxLayout, BoxName, box_index};
 use areka_emo_present::balloon_marker::{ARROW_FAMILY, MarkerPair, resolve_marker_pair};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::{SurfaceFallback, SurfaceKeyOutcome};
 use areka_sakura::ActorKey;
-use areka_seriko::{SurfaceResolver, SurfaceTarget};
+use areka_seriko::{SurfaceResolver, TextRouting};
 use bevy_ecs::world::World;
 
 /// 文字の層へ渡す箱の束（シェル 1 つぶん）。既定値は箱の無いシェル（空の表・探す場所なし）。
@@ -35,6 +35,14 @@ pub struct ShellBoxAssets {
 }
 
 impl ShellBoxAssets {
+    /// seriko へ渡す箱の材料（箱の表と面の表に在る番号）を組む。
+    pub fn text_routing(&self) -> TextRouting {
+        TextRouting {
+            boxes: box_index(&self.layout),
+            surface_ids: self.surface_ids.clone(),
+        }
+    }
+
     /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。箱の配置の直後に戻り先の引き直しを呼ぶ。`\s` の解決の閉包は、別名の写しから
     /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（`resolve_for_text`）。
     pub fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
@@ -122,11 +130,7 @@ pub(crate) fn resolve_for_text(
     surface_ids: &BTreeSet<u32>,
     key: &str,
 ) -> SurfaceKeyOutcome {
-    match resolver.resolve(key) {
-        SurfaceTarget::Show(id) if surface_ids.contains(&id) => SurfaceKeyOutcome::Show(id),
-        SurfaceTarget::Hide => SurfaceKeyOutcome::Hide,
-        SurfaceTarget::Show(_) | SurfaceTarget::Unresolved => SurfaceKeyOutcome::Unresolved,
-    }
+    resolver.resolve(key).for_text(surface_ids)
 }
 
 #[cfg(test)]
