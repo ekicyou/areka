@@ -334,9 +334,9 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     assert_eq!(code.matches(write).count(), 1, "原寸の更新点が 1 つでない");
 
     let prepare_at = at("prepare_gpu(");
-    // 引数 8 つの後で `?` の早期復帰になる。
+    // 引数 7 つの後で `?` の早期復帰になる。
     assert_eq!(
-        lines[prepare_at + 9],
+        lines[prepare_at + 8],
         ")?;",
         "頁と葉の用意の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
     );

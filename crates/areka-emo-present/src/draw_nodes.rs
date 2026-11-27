@@ -10,7 +10,7 @@ use windows::Win32::Graphics::Direct2D::Common::{
     D2D1_COMPOSITE_MODE_SOURCE_ATOP, D2D1_COMPOSITE_MODE_SOURCE_COPY,
     D2D1_COMPOSITE_MODE_SOURCE_OVER,
 };
-use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_LINEAR;
+use windows::Win32::Graphics::Direct2D::{D2D1_INTERPOLATION_MODE_LINEAR, ID2D1Device};
 use wintf::ecs::{
     Arrangement, ClipShape, HitTest, LayoutScale, MixMode, Offset, Size, Visual, VisualDrawContent,
     VisualGroup, VisualTransform,
@@ -35,6 +35,8 @@ pub(crate) fn mix_mode_of(mix: Mix) -> D2D1_COMPOSITE_MODE {
 pub(crate) struct DrawNodes {
     root: Entity,
     slots: Vec<Slot>,
+    /// 節の葉を記録した装置（替われば残す節の葉も差し替える）。
+    device: Option<ID2D1Device>,
 }
 
 /// 計画の 1 項と、それを写した節（`clip` は範囲の切り抜きの節・`node` はその中の節）。
@@ -49,10 +51,13 @@ impl DrawNodes {
         Self {
             root,
             slots: Vec::new(),
+            device: None,
         }
     }
 
     /// 計画を根の下の節へ写し、作り直した項の数を返す。同じ位置の項が等しければ節を変えない（版を上げない）。
+    ///
+    /// `gpu` の装置が前の写しと違えば、残す節の葉も `gpu` の物へ差し替える。
     pub(crate) fn sync(
         &mut self,
         world: &mut World,
@@ -66,11 +71,12 @@ impl DrawNodes {
             .take_while(|(slot, item)| shape(&slot.item) == shape(item))
             .count();
         self.drop_from(world, keep);
+        let relink = self.device.as_ref() != Some(gpu.device());
         let mut parents = vec![self.root];
         for (i, item) in plan.items.iter().enumerate() {
             if i < keep {
-                if self.slots[i].item != *item {
-                    update(world, gpu, &mut self.slots[i], item)?;
+                if relink || self.slots[i].item != *item {
+                    update(world, gpu, &mut self.slots[i], item, relink)?;
                 }
             } else {
                 let parent = *parents.last().expect("根は消えない");
@@ -86,6 +92,7 @@ impl DrawNodes {
                 _ => {}
             }
         }
+        self.device = Some(gpu.device().clone());
         Ok(plan.items.len() - keep)
     }
 
@@ -103,11 +110,6 @@ impl DrawNodes {
             .flat_map(|s| [s.clip, s.node])
             .flatten()
             .collect()
-    }
-
-    /// 節を全部消す（次の写しで全部作り直す）。
-    pub(crate) fn reset(&mut self, world: &mut World) {
-        self.drop_from(world, 0);
     }
 
     fn drop_from(&mut self, world: &mut World, keep: usize) {
@@ -195,12 +197,13 @@ fn spawn(
     })
 }
 
-/// 形の同じ項の中身だけを差し替える（等しい部品は書かないので版は上がらない）。
+/// 形の同じ項の中身だけを差し替える（等しい部品は書かないので版は上がらない）。`relink` は装置が替わった回。
 fn update(
     world: &mut World,
     gpu: &mut GpuAtlas,
     slot: &mut Slot,
     item: &PlanItem,
+    relink: bool,
 ) -> Result<(), PresentError> {
     let node = slot.node;
     match *item {
@@ -216,7 +219,7 @@ fn update(
         }
         PlanItem::Fill { rect } => {
             let same_size = matches!(slot.item, PlanItem::Fill { rect: old } if (old.w, old.h) == (rect.w, rect.h));
-            if !same_size {
+            if relink || !same_size {
                 let content = fill_content(gpu, rect)?;
                 set(world, node, content);
             }
@@ -290,7 +293,7 @@ fn image_parts(
 }
 
 fn fill_content(gpu: &mut GpuAtlas, rect: IRect) -> Result<VisualDrawContent, PresentError> {
-    let list = gpu.black_fill(IRect { x: 0, y: 0, ..rect })?;
+    let list = gpu.fill((rect.w, rect.h))?.clone();
     Ok(VisualDrawContent::new_ex(
         Aabb::new(0.0, 0.0, rect.w as f32, rect.h as f32),
         list,

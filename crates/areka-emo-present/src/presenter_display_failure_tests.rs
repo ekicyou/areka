@@ -1,11 +1,11 @@
 //! 頁の上げと葉の記録（`GpuAtlas`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
-//! ことを、**注入点 × 3 場面**で固定する実行テスト。
+//! ことを、**注入点 × 4 場面**で固定する実行テスト。
 //!
 //! # 失敗点と前状態の集合
 //!
 //! 失敗点は頁の上げの `CreateBitmap` と葉の記録の 3 点（`CreateCommandList`／`EndDraw`／`Close`）で、
 //! その位置は**節にも容量回収（`take_recycled`）にも触れる前**である。頁は最初の表示で上がり、同じ
-//! 装置のあいだは上げ直さないので、`CreateBitmap` は初回の場面でだけ踏まれる。手前なので保たれる範囲は広い——
+//! 装置のあいだは上げ直さないので、`CreateBitmap` は初回と装置が替わった後の場面でだけ踏まれる。手前なので保たれる範囲は広い——
 //! 失敗した適用は合成メモを 1 件も増やさず、追い出しも起こさない。ゆえに前状態の集合に**メモの件数**と表示中エントリのバイトが入る。
 //!
 //! # 何を「前の状態」と呼ぶか（記録の失敗は回収より手前）
@@ -16,7 +16,7 @@
 //! ——に加えて、呼出元へ `reply` が `Err(PresentError::Device)` で返り、`error!` が**ちょうど 1 行**出ること。
 //! 判定は「注入前に採った値と厳密に等しい」の 1 本である。
 //!
-//! # 3 場面（それぞれ別の項目に判別力がある）
+//! # 4 場面（それぞれ別の項目に判別力がある）
 //!
 //! - **初回**: 表示が一度も成立していない。成功していれば装着・配置・土台の面・メモが**無から生じる**。
 //!   ここだけが「失敗した適用が装着を作らない」を見られる場面である。
@@ -25,6 +25,8 @@
 //!   違う面を使うので、表示バイトの不変は恒真ではない。
 //! - **Hide 後**: 非表示にしてから試す。ここでだけ `visible`／`current_surface` に判別力がある
 //!   （成功していれば可視へ戻り面 id が入る）。
+//! - **装置が替わった後**: 確立後に `GraphicsCore` を入れ替えてから試す。ここでだけ確立後の頁の
+//!   上げに判別力がある（失敗しても前の装置の頁の控えと節が残る）。
 //!
 //! いずれの場面も**注入前の具体値を明示的に assert してから**注入し、末尾に**陽性対照**（同じ指令を
 //! 注入なしで流すと当該項目が実際に動く）を置く。これが無いと「もともと何も動かない場面を見ていた」
@@ -38,7 +40,7 @@
 
 use super::*;
 
-use wintf::ecs::{Arrangement, Offset, Visual};
+use wintf::ecs::{Arrangement, GraphicsCore, Offset, Visual};
 
 use crate::display::DisplayFault;
 
@@ -551,10 +553,69 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
     );
 }
 
+// ── 場面 ⑷ 装置が替わった後（頁を上げ直す場面）────────────────────────────
+
+/// 装置が替わった後の適用が頁の上げ・葉の記録のどこで失敗しても、前の装置の頁の控えも節も前状態も
+/// 動かない。
+///
+/// 確立後に `CreateBitmap` を踏むのはこの場面だけ（同じ装置のあいだは頁を上げ直さない）。成功すれば
+/// 節を消さずに葉だけが新しい装置の物へ替わる。
+#[test]
+fn display_failure_after_a_device_change_keeps_the_previous_atlas_and_nodes() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = established_then_dpi_moved(&mut world);
+    let device_of = |presenter: &EmoPresenter| {
+        presenter.targets[&TARGET]
+            .gpu
+            .as_ref()
+            .expect("表示確立後は頁の控えが在る")
+            .device()
+            .clone()
+    };
+    let old_device = device_of(&presenter);
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+
+    let before = snapshot(&presenter, &world, TARGET);
+    assert_established_baseline(&before, true, Some(ESTABLISHED_ID));
+
+    for at in ALL_DISPLAY_FAULTS {
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        assert_injected_failure(&err, &events, at);
+        assert_eq!(
+            snapshot(&presenter, &world, TARGET),
+            before,
+            "{at:?} の失敗で装置が替わった後の前状態が書き換わった"
+        );
+        assert!(
+            device_of(&presenter) == old_device,
+            "{at:?} の失敗で頁の控えを捨てた"
+        );
+    }
+
+    // ── 陽性対照 ───────────────────────────────────────────────────────
+    show_ok(&mut presenter, &mut world, TARGET, ATTEMPTED_ID);
+    let after = snapshot(&presenter, &world, TARGET);
+    assert_eq!(after.current_surface, Some(ATTEMPTED_ID));
+    let new_device = world
+        .resource::<GraphicsCore>()
+        .d2d_device()
+        .expect("新しい装置")
+        .clone();
+    assert!(
+        device_of(&presenter) == new_device,
+        "陽性対照: 成功した適用は頁の控えを新しい装置で作り直す"
+    );
+    assert_eq!(
+        after.display.map(|d| d.nodes),
+        before.display.map(|d| d.nodes),
+        "陽性対照: 同じ形の計画は節を消さずに葉だけを差し替える"
+    );
+}
+
 // ── 被覆の番人 ─────────────────────────────────────────────────────────
 
-/// 4 注入点 × 3 場面の「4」が互いに異なる 4 点であることを実行時に固定する（「3」は上の `#[test]`
-/// 3 本そのもの・件数は配列の型 `[_; 4]` が決める）。
+/// 4 注入点 × 4 場面の注入点の「4」が互いに異なる 4 点であることを実行時に固定する（場面の「4」は上の `#[test]`
+/// 4 本そのもの・件数は配列の型 `[_; 4]` が決める）。
 ///
 /// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] の
 /// 1 つを別の点の重複に替える改変はコンパイルを通ってしまい、被覆だけが静かに減る。

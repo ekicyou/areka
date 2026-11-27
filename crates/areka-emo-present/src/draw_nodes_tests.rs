@@ -3,7 +3,7 @@ use super::*;
 use areka_emo_compose::plan::Extent;
 use bevy_ecs::hierarchy::Children;
 
-use crate::gpu_atlas::tests::{two_picture_atlas, warp};
+use crate::gpu_atlas::tests::{another_warp, two_picture_atlas, warp};
 
 #[test]
 fn each_mix_maps_to_its_d2d_composite_mode() {
@@ -237,6 +237,31 @@ fn same_plan_twice_keeps_every_node_untouched() {
         Vec::<Entity>::new(),
         "版を上げる書き込みが無い"
     );
+}
+
+#[test]
+fn a_new_device_relinks_every_leaf_and_keeps_the_nodes() {
+    let mut bed = Bed::new();
+    bed.sync(mixed_items());
+    let before = bed.order();
+    bed.gpu = GpuAtlas::new(&another_warp(), &two_picture_atlas()).expect("GpuAtlas");
+
+    bed.sync(mixed_items());
+
+    assert_eq!(bed.order(), before, "実体は作り直さない");
+    let mut checked = 0;
+    for slot in &bed.nodes.slots {
+        let expected = match slot.item {
+            PlanItem::Image { element, .. } => bed.gpu.leaf(element).expect("葉").clone(),
+            PlanItem::Fill { rect } => bed.gpu.fill((rect.w, rect.h)).expect("塗り").clone(),
+            _ => continue,
+        };
+        let node = slot.node.expect("葉の節");
+        let content = bed.world.get::<VisualDrawContent>(node).expect("描く中身");
+        assert_eq!(content.command_list, expected, "{:?}", slot.item);
+        checked += 1;
+    }
+    assert_eq!(checked, 5, "絵 4 つと塗り 1 つ");
 }
 
 #[test]

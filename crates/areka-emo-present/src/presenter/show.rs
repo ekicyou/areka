@@ -195,7 +195,6 @@ impl EmoPresenter {
         prepare_gpu(
             world,
             &mut target.gpu,
-            target.nodes.as_mut(),
             &target.atlas,
             plan,
             cache_hit,
@@ -430,16 +429,15 @@ impl EmoPresenter {
     }
 }
 
-/// 頁の絵と計画の葉を用意する。装置が替わっていたら控えを作り直し、古い装置の葉を持つ節を消す。
+/// 頁の絵と計画の葉を用意する。装置が替わっていたら新しい装置で控えを作り、計画の葉を全部記録できて
+/// から前の控えと替える（失敗すれば前の控えのまま・節の葉の差し替えは写しの段）。
 ///
 /// 装置が無いとき、合成メモに当たった適用は控えの葉のまま節を写す（その計画の葉はその控えで記録
 /// 済み）。外れた適用は表示を記録できない。
 /// `note` は同じ原因の装置の失敗の続きを `debug!` にまとめる控え（失敗の原因を書き、成立点が空にする）。
-#[allow(clippy::too_many_arguments)]
 fn prepare_gpu(
     world: &mut World,
     gpu: &mut Option<GpuAtlas>,
-    nodes: Option<&mut DrawNodes>,
     atlas: &AtlasTable,
     plan: &DrawPlan,
     cache_hit: bool,
@@ -480,15 +478,11 @@ fn prepare_gpu(
         }
         e
     };
-    if !gpu.as_ref().is_some_and(|g| *g.device() == device) {
-        if let Some(nodes) = nodes {
-            nodes.reset(world);
-        }
-        *gpu = None;
-        *gpu = Some(GpuAtlas::new_with(&device, atlas, repeat).map_err(|e| remember(note, e))?);
+    if let Some(gpu) = gpu.as_mut().filter(|g| *g.device() == device) {
+        return gpu.prepare(plan, repeat).map_err(|e| remember(note, e));
     }
-    gpu.as_mut()
-        .expect("直前に用意した")
-        .prepare(plan, repeat)
-        .map_err(|e| remember(note, e))
+    let mut fresh = GpuAtlas::new_with(&device, atlas, repeat).map_err(|e| remember(note, e))?;
+    fresh.prepare(plan, repeat).map_err(|e| remember(note, e))?;
+    *gpu = Some(fresh);
+    Ok(())
 }

@@ -1,7 +1,8 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use wintf::ecs::GraphicsCore;
+use windows::Win32::Graphics::Direct2D::ID2D1CommandList;
+use wintf::ecs::{GraphicsCore, VisualDrawContent};
 
 use super::test_support::{
     CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_and_show_hit_target,
@@ -631,36 +632,72 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     );
 }
 
-/// 装置の作り直し: `GraphicsCore` を入れ替えた後の
-/// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
-/// 立たない回は何もしない（列はそのまま）。
+/// 装置の作り直し: `GraphicsCore` を入れ替えた後の `refresh_after_device_change` は、節を消さずに
+/// 葉を新しい装置の物へ差し替えて出し直す。印が立たない回は何もしない（葉はそのまま）。
 #[test]
-fn device_recreation_rerecords_display_list() {
+fn device_recreation_replaces_leaves_with_the_new_device() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5a);
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let list_of =
-        |presenter: &EmoPresenter| on_screen(presenter, TargetId(0)).expect("表示成立後は節が在る");
-    let before = list_of(&presenter);
+    let before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
+    let leaves_before = leaves_on_screen(&world, &before);
+    assert!(!leaves_before.is_empty(), "前提: 葉を持つ節が在る");
 
     // 初回は印を控えるだけ・2 回目は印が立っていないので何もしない。
     presenter.refresh_after_device_change(&mut world);
     presenter.refresh_after_device_change(&mut world);
     assert_eq!(
-        list_of(&presenter),
-        before,
-        "装置が変わっていないのに出し直した"
+        leaves_on_screen(&world, &before),
+        leaves_before,
+        "装置が変わっていないのに葉を差し替えた"
     );
 
     world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
     presenter.refresh_after_device_change(&mut world);
-    assert_ne!(
-        list_of(&presenter),
-        before,
-        "装置を作り直した後も古い装置の命令の列のまま（控えを捨てて出し直していない）"
+    let after = on_screen(&presenter, TargetId(0)).expect("出し直し後も節が在る");
+    assert_eq!(
+        after, before,
+        "装置の作り直しで節を作り直した（葉だけを差し替える）"
+    );
+
+    let device = world
+        .resource::<GraphicsCore>()
+        .d2d_device()
+        .expect("新しい装置")
+        .clone();
+    let t = presenter.targets.get_mut(&TargetId(0)).expect("装着済み");
+    let gpu = t.gpu.as_mut().expect("頁の控え");
+    assert!(
+        *gpu.device() == device,
+        "頁の控えが新しい装置で作り直されていない"
+    );
+    let want: Vec<_> = after
+        .items
+        .iter()
+        .filter_map(|item| match *item {
+            areka_emo_compose::PlanItem::Image { element, .. } => {
+                Some(gpu.leaf(element).expect("新しい装置の葉").clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        leaves_on_screen(&world, &after),
+        want,
+        "節の葉が新しい装置の頁の控えの葉でない"
     );
     assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
+}
+
+/// 節が持つ葉（描く中身の命令の列）を節の順に読む。
+fn leaves_on_screen(world: &World, screen: &super::test_support::Screen) -> Vec<ID2D1CommandList> {
+    screen
+        .nodes
+        .iter()
+        .filter_map(|&e| world.get::<VisualDrawContent>(e))
+        .map(|c| c.command_list.clone())
+        .collect()
 }

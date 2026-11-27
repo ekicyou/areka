@@ -91,7 +91,7 @@ pub(crate) fn warp() -> ID2D1Device {
 }
 
 /// プロセスで共有の WARP とは別の、もう 1 つの WARP の装置（装置の替わりを作る）。
-fn another_warp() -> ID2D1Device {
+pub(crate) fn another_warp() -> ID2D1Device {
     let d3d = d3d11_create_device(
         None,
         D3D_DRIVER_TYPE_WARP,

@@ -202,7 +202,7 @@
   - _Dispatch: standard — 境をまたぐ口の形の付け替え_
   - _Requirements: 4.5, 4.6, 7.1, 7.2, 7.6, 7.7_
 
-- [ ] 7.3 装置の替わりと故障の差し込みを節の道へ移す
+- [x] 7.3 装置の替わりと故障の差し込みを節の道へ移す
   - 装置が替わったら頁の控えを作り直し、節の葉を差し替え、合成メモの書き出しの控えを空にする
   - 故障の差し込みを絵の上げから頁の上げへ移す
   - 完了の状態: 装置を替えるテストで次の表示が新しい装置の葉で描かれ、故障の差し込みのテストが頁の上げで緑
@@ -300,3 +300,4 @@
 - 7.1 → 7.3: (a) `prepare_gpu` は装置が替わると `nodes.reset` が `GpuAtlas::new_with` より先に走り、作り直しが失敗すると画面が空になる（呼ぶ所のコメントと食い違う）。(b) 黒の塗りの葉は `sync` の中で記録するので、途中の失敗で節が半分替わる。黒の塗りの記録も `prepare` に寄せる。
 - 7.1 → 7.2/7.6: コメントの直し残し（presenter_dpi_scale_tests.rs 392 行目の要件番号・presenter/timing.rs 60 行目の `compose_into_reusing`・presenter_keycolor_clickthrough_tests.rs 38 行目の `record_display`）。7.6 の取り下げの理由に display_tests.rs・display_fault_tests.rs を含める。
 - 7.2: クリックの透過と名前の解決は wintf の `surface_alpha_hits`（閾値 128・読めない間に 1 回の `error!`）1 つを通る。CPU の α マスクは外した。perf の行の `alloc_mask`（0）・`t_mask_us`（合成メモへ入れる時間）は judge-perf.py が必須の欄として読むので残した（judge-perf.py の説明の文は 8.3 か 7.6 で直す）。
+- 7.3 → 7.4: 装置が替わると `refresh_after_device_change` が合成メモを全部捨てる（書き出しの控えを空にするの上位集合）。`snapshot` を足すときに、計画は残して控えだけ空にする形へ絞るかを決める。

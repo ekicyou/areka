@@ -34,6 +34,7 @@ pub(crate) struct GpuAtlas {
     atlas: AtlasTable,
     pages: Vec<ID2D1Bitmap1>,
     leaves: Vec<Option<ID2D1CommandList>>,
+    fills: Vec<((u32, u32), ID2D1CommandList)>,
     #[cfg(test)]
     uploads: u32,
     #[cfg(test)]
@@ -71,6 +72,7 @@ impl GpuAtlas {
             uploads: pages.len() as u32,
             pages,
             leaves: vec![None; atlas.len()],
+            fills: Vec::new(),
             #[cfg(test)]
             recordings: 0,
         })
@@ -81,14 +83,47 @@ impl GpuAtlas {
         self.leaf_with(element, None)
     }
 
-    /// 計画の絵の葉を前もって全部記録する（節を触る前に、失敗し得る記録を済ませる）。
+    /// 計画の絵と黒の塗りの葉を前もって全部記録する（節を触る前に、失敗し得る記録を済ませる）。
     pub(crate) fn prepare(&mut self, plan: &DrawPlan, repeat: Repeat) -> Result<(), PresentError> {
         for item in &plan.items {
-            if let PlanItem::Image { element, .. } = item {
-                self.leaf_with(*element, repeat)?;
+            match *item {
+                PlanItem::Image { element, .. } => {
+                    self.leaf_with(element, repeat)?;
+                }
+                PlanItem::Fill { rect } => {
+                    self.fill_with((rect.w, rect.h), repeat)?;
+                }
+                _ => {}
             }
         }
         Ok(())
+    }
+
+    /// 原点から `size` の矩形を黒の不透明で塗る葉（大きさごとに 1 度だけ記録する）。
+    pub(crate) fn fill(&mut self, size: (u32, u32)) -> Result<&ID2D1CommandList, PresentError> {
+        self.fill_with(size, None)
+    }
+
+    fn fill_with(
+        &mut self,
+        size: (u32, u32),
+        repeat: Repeat,
+    ) -> Result<&ID2D1CommandList, PresentError> {
+        let i = match self.fills.iter().position(|(s, _)| *s == size) {
+            Some(i) => i,
+            None => {
+                let rect = IRect {
+                    x: 0,
+                    y: 0,
+                    w: size.0,
+                    h: size.1,
+                };
+                let list = self.black_fill_with(rect, repeat)?;
+                self.fills.push((size, list));
+                self.fills.len() - 1
+            }
+        };
+        Ok(&self.fills[i].1)
     }
 
     fn leaf_with(
@@ -137,8 +172,17 @@ impl GpuAtlas {
     }
 
     /// `rect` を黒の不透明で塗る閉じた命令の列。
+    #[cfg(test)]
     pub(crate) fn black_fill(&mut self, rect: IRect) -> Result<ID2D1CommandList, PresentError> {
-        self.record(None, |dc| {
+        self.black_fill_with(rect, None)
+    }
+
+    fn black_fill_with(
+        &mut self,
+        rect: IRect,
+        repeat: Repeat,
+    ) -> Result<ID2D1CommandList, PresentError> {
+        self.record(repeat, |dc| {
             let brush = dc
                 .create_solid_color_brush(
                     &D2D1_COLOR_F {
@@ -149,7 +193,7 @@ impl GpuAtlas {
                     },
                     None,
                 )
-                .map_err(device_err("CreateSolidColorBrush(black fill)", None))?;
+                .map_err(device_err("CreateSolidColorBrush(black fill)", repeat))?;
             let (x, y) = (rect.x as f32, rect.y as f32);
             dc.fill_rectangle(
                 &D2D_RECT_F {
