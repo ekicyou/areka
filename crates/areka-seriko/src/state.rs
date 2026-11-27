@@ -343,6 +343,28 @@ impl ScopeStates {
         outcomes
     }
 
+    /// シェルの差し替えの戻り先を控えた `\s` の答えへ当てる: 控えの番号が新しいシェルに無ければ、候補の
+    /// 最初に在る番号（無ければ非表示）へ替える（文字の層の戻り先と同じ答え）。番号の集合が空なら替えない。
+    pub(crate) fn fall_back_text_surfaces(&mut self, fallback: &ShellSurfaceFallback) {
+        if fallback.surface_ids.is_empty() {
+            return;
+        }
+        for (scope, outcome) in &mut self.text_surfaces {
+            let SurfaceKeyOutcome::Show(current) = *outcome else {
+                continue;
+            };
+            let candidates = fallback
+                .candidates
+                .get(scope)
+                .map_or(&[][..], Vec::as_slice);
+            match decide(current, candidates, &fallback.surface_ids) {
+                SurfaceKeep::Keep => {}
+                SurfaceKeep::FallBack(to) => *outcome = SurfaceKeyOutcome::Show(to),
+                SurfaceKeep::Hide => *outcome = SurfaceKeyOutcome::Hide,
+            }
+        }
+    }
+
     /// バルーンの定義の差し替え。
     ///
     /// バルーン側のパターンの進行だけを消す。今の面・着せ替え・シェル側のパターンは保つ。

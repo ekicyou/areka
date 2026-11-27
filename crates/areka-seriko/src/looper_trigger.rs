@@ -2,7 +2,7 @@
 //!
 //! [`LoopRuntime`](super::LoopRuntime) の刻みと面の切り替えが呼ぶ自由関数を置く: 引き金の状態を構えて
 //! 窓の開け閉めを写す（[`arm_slot`]）・一番上の `runonce`／`periodic`／`talk` を判定して再生を始める
-//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`observe_talk_cue`]・[`seed_feeds`]・
+//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`observe_talk_cue`]・[`seed_feeds`]・[`rebase_talk_boxes`]・
 //! [`revealed_at`]・[`glyph_wall`]・[`settle_talk`]）。「いつ始めるか」の判定は `trigger.rs`、文字が現れる時刻の式は
 //! `talk.rs`、始まった再生のコマの進み方は親（抽選の再生と同じ経路）が持ち、ここは配線だけ。
 //!
@@ -240,6 +240,24 @@ pub(super) fn seed_feeds(
             Some(SurfaceKeyOutcome::Unresolved) | None => continue,
         };
         feed_of(feeds, &scope).seed_surface(routing, surface);
+    }
+}
+
+/// シェルの切替: 各スコープで箱の場所の `at` より後の字を捨て、新しい表で行き先を決め直し（今の番号が
+/// 新しいシェルに無ければ戻り先へ）、捨てた序数でそのスコープの全部の数えを揃える。
+pub(super) fn rebase_talk_boxes(
+    feeds: &mut HashMap<ActorKey, TalkFeed>,
+    armed: &mut HashMap<(ActorKey, Slot), Armed>,
+    routing: &TextRouting,
+    at: TimePoint,
+    fallback: &crate::ShellSurfaceFallback,
+) {
+    for (scope, feed) in feeds.iter_mut() {
+        let candidates = fallback
+            .candidates
+            .get(scope)
+            .map_or(&[][..], Vec::as_slice);
+        realign_scope(armed, scope, &feed.rebase_boxes(at, routing, candidates));
     }
 }
 

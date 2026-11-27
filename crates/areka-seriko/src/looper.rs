@@ -51,7 +51,8 @@ use crate::trigger::{Armed, TalkWindow};
 #[path = "looper_trigger.rs"]
 mod top_trigger;
 use top_trigger::{
-    arm_slot, fire_top_triggers, glyph_wall, observe_talk_cue, revealed_at, seed_feeds, settle_talk,
+    arm_slot, fire_top_triggers, glyph_wall, observe_talk_cue, rebase_talk_boxes, revealed_at,
+    seed_feeds, settle_talk,
 };
 
 // 一番上の面の働きのコマの配線と、描くコマの置き方。
@@ -335,6 +336,19 @@ impl LoopRuntime {
     /// 表の差し替えで門が開いた直後に呼ぶ: 控えた `\s` の答えから各スコープの字の行き先を決め直す。
     pub(crate) fn seed_talk_routes(&mut self, states: &ScopeStates) {
         seed_feeds(&mut self.feeds, &self.config.text_routing, states);
+    }
+
+    /// 文字の層が新しい箱の表を受けた時刻 `at` で箱の材料を入れ替え、各スコープの箱の場所の字を切り直す
+    /// （[`rebase_talk_boxes`]）。
+    pub(crate) fn replace_text_routing(
+        &mut self,
+        at: TimePoint,
+        routing: TextRouting,
+        fallback: &crate::ShellSurfaceFallback,
+    ) {
+        self.config.text_routing = routing;
+        let routing = &self.config.text_routing;
+        rebase_talk_boxes(&mut self.feeds, &mut self.armed, routing, at, fallback);
     }
 
     /// 置き直しの知らせを、全部のスコープの文字の列へ当てる（[`TalkFeed::shift_after`]）。数え済みの
@@ -846,7 +860,7 @@ mod replace_tests;
 mod talk_part_tests;
 #[cfg(test)]
 #[path = "looper_talk_route_tests.rs"]
-mod talk_route_tests;
+pub(crate) mod talk_route_tests;
 #[cfg(test)]
 #[path = "looper_talk_tests.rs"]
 mod talk_tests;

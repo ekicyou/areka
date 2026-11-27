@@ -87,6 +87,10 @@ pub enum SerikoMsg {
     ///
     /// 合図と同じ口を通るので、届いた順のまま、届いた時に文字の時刻の列へ当てる。
     OriginSet(OriginNotice),
+    /// 文字の層が新しいシェルの箱の表を受けた時刻 `at`（[`SerikoSink::send_text_routing_applied`]）。
+    ///
+    /// シェルの差し替えで預かった箱の材料をこの時刻で入れ替える。
+    TextRoutingApplied { at: TimePoint },
     /// 明示の停止の口（[`SerikoSink::close`]・今はテストが使う）。本番は送り手を全部 drop して止める。
     Close,
 }
@@ -108,6 +112,8 @@ pub enum SerikoReplace {
         shell_table: AnimationTable,
         /// 今の面が新しいシェルに無いときの戻り先。
         fallback: crate::ShellSurfaceFallback,
+        /// 新しいシェルの箱の材料（[`SerikoMsg::TextRoutingApplied`] が届いたときに効く）。
+        text_routing: crate::TextRouting,
     },
     /// バルーンの定義（スコープごとのバルーンのアニメ表）。
     Balloon {
@@ -192,6 +198,19 @@ impl SerikoSink {
             tracing::debug!(
                 msg = ?err.0,
                 "seriko: inbox が消失; 窓の知らせを配送できず破棄した（shutdown 中の期待事象）"
+            );
+        }
+    }
+
+    /// 文字の層が新しいシェルの箱の表を受けた時刻 `at` を inbox へ送る。
+    ///
+    /// 受信端消失（アクター停止後）は shutdown 中の期待事象ゆえ [`SerikoSink::send_tick`] と同じく
+    /// `debug!` で観測して戻る。
+    pub fn send_text_routing_applied(&self, at: TimePoint) {
+        if self.tx.send(SerikoMsg::TextRoutingApplied { at }).is_err() {
+            tracing::debug!(
+                at = %at,
+                "seriko: inbox が消失; 箱の表が効いた知らせを配送できず破棄した（shutdown 中の期待事象）"
             );
         }
     }
@@ -335,8 +354,24 @@ where
         let mut bind_resolver = bind_resolver;
         // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要）。
         let mut loop_runtime = LoopRuntime::new(loop_config);
+        // 最後のシェルの差し替えで預かり、文字の層が箱の表を受けた知らせで効く箱の材料。進行中の切替は
+        // 1 つだけなので、知らせはいつも最後の差し替えの物（届かずに終わった切替の材料は次の差し替えが
+        // 上書きする）。
+        let mut next_routing = None;
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
             // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
+            if let SerikoMsg::TextRoutingApplied { at } = msg {
+                match next_routing.take() {
+                    Some((routing, fallback)) => {
+                        loop_runtime.replace_text_routing(at, routing, &fallback);
+                    }
+                    None => tracing::error!(
+                        at = %at,
+                        "seriko: シェルの差し替えを経ずに箱の表が効いた知らせが届いたので捨てる（箱の材料は不変）"
+                    ),
+                }
+                return Ok(ControlFlow::Continue(()));
+            }
             if let SerikoMsg::Replace(replace) = msg {
                 // 順序: 定義 → スコープの状態 → ループの表 → 合図 1 件。
                 // `extra` は合図に必ず載せるスコープ（バルーンは新しい表の鍵＝装着の全スコープ）。
@@ -348,6 +383,7 @@ where
                         bind_resolver: new_bind_resolver,
                         shell_table,
                         fallback,
+                        text_routing,
                     } => {
                         resolver = new_resolver;
                         bind_resolver = new_bind_resolver;
@@ -356,9 +392,11 @@ where
                         for outcome in states.fall_back_shell_surfaces(&fallback) {
                             log_shell_fallback(&outcome);
                         }
+                        states.fall_back_text_surfaces(&fallback);
                         if loop_runtime.replace_shell_table(shell_table) {
                             loop_runtime.seed_talk_routes(&states);
                         }
+                        next_routing = Some((text_routing, fallback));
                         (epoch, RebaseKind::Shell, Vec::new())
                     }
                     SerikoReplace::Balloon {
@@ -573,6 +611,13 @@ fn dispatch_message<O: SurfaceOutput>(
             tracing::error!(
                 ?replace,
                 "seriko: 差し替えの依頼が殻を経ずに届いたので捨てる（定義は不変）"
+            );
+            return ControlFlow::Continue(());
+        }
+        SerikoMsg::TextRoutingApplied { at } => {
+            tracing::error!(
+                at = %at,
+                "seriko: 箱の表が効いた知らせが殻を経ずに届いたので捨てる（箱の材料は不変）"
             );
             return ControlFlow::Continue(());
         }

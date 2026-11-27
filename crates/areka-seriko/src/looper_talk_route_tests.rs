@@ -28,7 +28,7 @@ size,80,40
 }
 ";
 
-const SURFACES: &str = "\
+pub(crate) const SURFACES: &str = "\
 surface0
 {
 animation0.interval,talk,3
@@ -65,11 +65,11 @@ element2,balloon,kami,0,60
 }
 ";
 
-fn shell_text(surfaces: &str) -> String {
+pub(crate) fn shell_text(surfaces: &str) -> String {
     format!("{BOXES}{surfaces}")
 }
 
-fn routing() -> TextRouting {
+pub(crate) fn routing() -> TextRouting {
     let text = shell_text(SURFACES);
     let world = EmoWorld::build(&parse(&text));
     let (layout, report) = fold_boxes(&parse_boxes(&text), &BTreeMap::new(), &world);
@@ -298,4 +298,86 @@ fn actor_surface_path_keeps_the_text_answer_regardless_of_the_gate() {
         "面 7 は面の表に無いので控えを変えない"
     );
     assert!(rt.feeds.is_empty(), "門が閉じているので字の列は作らない");
+}
+
+/// 時刻 1000 に普通のバルーンへ「かきくけ」（1000・1050・1100・1150）、1020 に `fuda` へ「あいう」
+/// （1020・1070・1120）。時刻の順は 1000・1020・1050・1070・1100・1120・1150 で、1050 で 1 回目の口が
+/// 鳴る（1130 まで）。
+fn speak_in_both_places(rig: &mut Rig) {
+    rig.hear(1000, surface("0"));
+    rig.hear(1000, text(ms(0), "0", "かきくけ"));
+    rig.tick(1010);
+    rig.hear(1020, surface("10"));
+    rig.hear(1020, text(ms(0), "0", "あいう"));
+    rig.tick(1030);
+    rig.tick(1060);
+    assert_eq!(rig.started(), Some(at_ms(1050)), "3 字目は 1050");
+}
+
+fn apply_box_table(rig: &mut Rig, at: i64) {
+    rig.rt.replace_text_routing(
+        at_ms(at),
+        routing(),
+        &crate::ShellSurfaceFallback::default(),
+    );
+}
+
+/// 箱の表が効いた時刻 1060 の知らせが、1080 の刻みで `fuda` の 1070 を数えた後に届く: 1070 は数えたまま、
+/// まだ現れていない `fuda` の 1120 だけを捨てる。6 字目は普通のバルーンの 1150（1120 を残せば 6 字目は
+/// 1 回目の口の再生中で見送り、数えた 1070 を失えば 6 字目が来ない）。
+#[test]
+fn late_box_table_keeps_the_counted_box_glyph_and_drops_the_rest() {
+    let mut rig = Rig::shown(SURFACES, 10);
+    speak_in_both_places(&mut rig);
+    rig.tick(1080);
+
+    apply_box_table(&mut rig, 1060);
+
+    rig.tick(1140);
+    assert_eq!(rig.started(), None, "1 回目の口は 1130 に終わった");
+    rig.tick(1160);
+    assert_eq!(rig.started(), Some(at_ms(1150)), "6 字目は 1150");
+}
+
+/// 1060 の刻みの後、箱の表が効いた時刻 1075 より前に現れた `fuda` の 1070 は残して数え、1120 だけを
+/// 捨てる。6 字目は普通のバルーンの 1150（箱の字を時刻によらず全部捨てれば 6 字目が来ない）。
+#[test]
+fn box_glyph_before_the_effective_time_is_kept_and_counted() {
+    let mut rig = Rig::shown(SURFACES, 10);
+    speak_in_both_places(&mut rig);
+
+    apply_box_table(&mut rig, 1075);
+
+    rig.tick(1080);
+    rig.tick(1140);
+    assert_eq!(rig.started(), None, "1 回目の口は 1130 に終わった");
+    rig.tick(1160);
+    assert_eq!(rig.started(), Some(at_ms(1150)), "6 字目は 1150");
+}
+
+/// 1010 の刻みの後、1060 に面 0 へ替えて数え直す（1060 までに現れた 4 字の次から）。箱の表が効いた
+/// 時刻 1040 の知らせがその後に届くと、`fuda` の 1050・1100 を捨て、数え済みを捨てた分だけ下げる:
+/// 残る普通のバルーンの 1100・1150・1200 を数えて 1200 で鳴る（下げなければ 1200 が 2 字目になり、
+/// 捨てなければ `fuda` の 1100 で 3 字目の 1150 に鳴る）。
+#[test]
+fn box_table_after_a_recount_realigns_the_count_to_the_dropped_glyphs() {
+    let mut rig = Rig::shown(SURFACES, 10);
+    rig.hear(1000, surface("10"));
+    rig.hear(1000, text(ms(0), "0", "あいう"));
+    rig.hear(1000, surface("0"));
+    rig.hear(1000, text(ms(0), "0", "かきくけこ"));
+    rig.tick(1010);
+    switch(
+        &mut rig.rt,
+        &mut rig.states,
+        SurfaceTarget::Show(0),
+        at_ms(1060),
+    );
+
+    apply_box_table(&mut rig, 1040);
+
+    rig.tick(1160);
+    assert_eq!(rig.started(), None, "数え直してから 2 字");
+    rig.tick(1210);
+    assert_eq!(rig.started(), Some(at_ms(1200)), "3 字目は 1200");
 }

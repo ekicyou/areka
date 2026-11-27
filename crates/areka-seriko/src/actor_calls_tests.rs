@@ -113,6 +113,7 @@ fn shell_replace_resets_the_shift_after_the_rebased() {
             bind_resolver: BindResolver::empty(),
             shell_table: table_of(MOVE),
             fallback: crate::ShellSurfaceFallback::default(),
+            text_routing: crate::TextRouting::default(),
         },
         no_facts()
     ));
