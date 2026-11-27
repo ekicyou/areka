@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::store::{Access, Located, MemBackend, StoreBackend};
 use bevy_ecs::world::World;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
@@ -40,32 +41,65 @@ pub fn with_com_initialized<F: FnOnce()>(f: F) {
 #[path = "test_support_com_tests.rs"]
 mod com_tests;
 
-/// 共有の偽の保存先（アクターへ渡す分と、`load_scope` で観測する分が同じストアを指す）。
-/// clone は同じストアと同じ commit の数を共有する。
+/// 書きの回数を数える共有の偽の置き場の口（アクターへ渡す分と、`load_scope` で観測する分が同じ置き場を指す）。
+/// clone は同じ置き場と同じ書きの回数を共有する。
 #[derive(Clone)]
-pub struct SharedFakeIo {
-    store: Arc<FakePersistIo>,
-    commits: Arc<AtomicUsize>,
+pub struct CountingBackend {
+    inner: Arc<MemBackend>,
+    writes: Arc<AtomicUsize>,
 }
-impl SharedFakeIo {
-    pub fn new(store: Arc<FakePersistIo>) -> Self {
+impl Default for CountingBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl CountingBackend {
+    pub fn new() -> Self {
         Self {
-            store,
-            commits: Arc::default(),
+            inner: MemBackend::new(),
+            writes: Arc::default(),
         }
     }
-    /// この口（と clone）を通った commit の回数。
+    /// アクターと直の読み書きへ渡す置き場の口（同じ置き場と同じ数え手を共有する）。
+    pub fn backend(&self) -> Arc<dyn StoreBackend> {
+        Arc::new(self.clone())
+    }
+    /// この口（と clone）を通って確定した書きの回数。
     pub fn commit_count(&self) -> usize {
-        self.commits.load(Ordering::SeqCst)
+        self.writes.load(Ordering::SeqCst)
     }
 }
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.store.read(path)
+impl StoreBackend for CountingBackend {
+    fn locate(&self, root: &Path, access: Access) -> std::io::Result<Located> {
+        self.inner.locate(root, access)
     }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.commits.fetch_add(1, Ordering::SeqCst);
-        self.store.commit(path, content)
+    fn ensure_dir(&self, root: &Path) -> std::io::Result<()> {
+        self.inner.ensure_dir(root)
+    }
+    fn read_legacy(&self, root: &Path) -> std::io::Result<Option<String>> {
+        self.inner.read_legacy(root)
+    }
+    fn retire_legacy(&self, root: &Path) -> std::io::Result<()> {
+        self.inner.retire_legacy(root)
+    }
+    fn withholds(&self, root: &Path) -> bool {
+        self.inner.withholds(root)
+    }
+    fn volatile_uri(&self, app_root: Option<&Path>) -> String {
+        self.inner.volatile_uri(app_root)
+    }
+    fn held_uri(&self) -> String {
+        self.inner.held_uri()
+    }
+    fn now(&self) -> Duration {
+        self.inner.now()
+    }
+    fn pause(&self, span: Duration) {
+        self.inner.pause(span)
+    }
+    fn before_write(&self, root: &Path) -> std::io::Result<()> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        self.inner.before_write(root)
     }
 }
 

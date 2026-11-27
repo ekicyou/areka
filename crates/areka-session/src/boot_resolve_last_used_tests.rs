@@ -6,13 +6,12 @@
 //! ワークツリーの `target\` の下の一時の置き場へ書く。
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use areka_ghost::BasewareRoot;
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_placement::test_support::SharedFakeIo;
+use areka_placement::test_support::CountingBackend;
 use areka_runtime::spine::join_bounded;
-use areka_sylphya::persist::{FakePersistIo, FsPersistIo};
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -44,12 +43,13 @@ type Loaded = (
 );
 
 /// fake の置き場へ `seed` を Ghost スコープに置いてから `write` を実 publisher へ投函し、
-/// barrier 後に App・Ghost の 2 スコープを読み戻す。2 つ目は書き手（アクター）が commit した回数。
+/// barrier 後に App・Ghost の 2 スコープを読み戻す。2 つ目は書き手（アクター）が書いた回数。
 fn write_and_load(
     seed: Vec<(PersistKey, String)>,
     write: impl FnOnce(&SylphyaPublisher),
 ) -> (Loaded, usize) {
-    let io = SharedFakeIo::new(Arc::new(FakePersistIo::new()));
+    let counter = CountingBackend::new();
+    let io = counter.backend();
     let roots = ScopeRoots {
         app: Some(PathBuf::from("/app")),
         ghost: Some(PathBuf::from("/g")),
@@ -62,11 +62,8 @@ fn write_and_load(
             "記憶の種を書けない"
         );
     }
-    let seeded = io.commit_count();
-    let parts = spawn_sylphya(SylphyaInit::new(
-        roots.clone(),
-        areka_sylphya::store::MemBackend::new(),
-    ));
+    let seeded = counter.commit_count();
+    let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), io.clone()));
     let ((), events) = capture(|| write(&parts.publisher));
     parts
         .publisher
@@ -76,7 +73,7 @@ fn write_and_load(
     let ghost_scope = load_scope(PersistScope::Ghost, &roots, &io);
     parts.publisher.close();
     join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
-    ((app, ghost_scope, events), io.commit_count() - seeded)
+    ((app, ghost_scope, events), counter.commit_count() - seeded)
 }
 
 /// `record` を投函して読み戻す（前から在る記憶なし）。
@@ -315,7 +312,7 @@ fn session_mark_writers_warn_once_when_they_cannot_write() {
     };
     // 前提の確認: この置き場への保存は本当に縮退する。
     assert!(matches!(
-        save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
+        save_scope(PersistScope::App, &roots, &fs_backend(), vec![]),
         PersistOutcome::Degraded(_)
     ));
     let cases: [(&str, &str, Box<dyn Fn()>); 4] = [

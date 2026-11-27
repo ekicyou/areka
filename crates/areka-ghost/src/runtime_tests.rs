@@ -325,7 +325,7 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
 
 // ---- apply_boot_record_gate 単体 ----
 
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{
     PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, save_scope, spawn_sylphya,
 };
@@ -333,7 +333,7 @@ use areka_sylphya::{
 /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
 /// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる。seed が空なら記録なしのケース。
 fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
-    let shared = Arc::new(FakePersistIo::new());
+    let shared: Arc<dyn StoreBackend> = MemBackend::new();
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/gate-ghost")),
         ..ScopeRoots::default()
@@ -341,10 +341,7 @@ fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerI
     if !seed.is_empty() {
         save_scope(PersistScope::Ghost, &roots, &shared, seed);
     }
-    let parts = spawn_sylphya(SylphyaInit::new(
-        roots,
-        areka_sylphya::store::MemBackend::new(),
-    ));
+    let parts = spawn_sylphya(SylphyaInit::new(roots, shared));
     (parts, AskerId::new("ghost/gate-asker"))
 }
 
@@ -471,13 +468,13 @@ fn gate_vanish_count_non_numeric_degrades_zero() {
 
 // ---- 終了時フラッシュの統合檻 ----
 
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{Axis, load_scope};
 
-/// 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、`PersistWiring` の clone 送信端（UI スレッド
+/// 本番の置き場の口（temp dir）上の実 sylphya アクターへ、`PersistWiring` の clone 送信端（UI スレッド
 /// 常駐端の代役）から `barrier` を挟まずに複数回 `persist_put` を投函し（同一 scope の last-write-wins）、
 /// その後 runtime 側 publisher から `barrier()`→`close()`→アクター `join` を駆動する。join 後に
-/// `<ghost root>/sylphya.toml` を `load_scope` で読み戻し、clone 投函の最終値が反映されていることを確認する。
+/// ghost root の記憶を `load_scope` で読み戻し、clone 投函の最終値が反映されていることを確認する。
 ///
 /// - write-through＋mpsc FIFO close: clone と runtime 側 publisher は同一 mpsc 送信端を共有するので、
 ///   clone が投函した put は後続の `Close`（Stop で積み残し破棄）より先に処理され、close→join を経れば
@@ -568,7 +565,7 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     );
 
     // ファイルの最終値が clone 投函の last-write-wins と等しい。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+    let loaded = load_scope(PersistScope::Ghost, &roots, &fs_backend());
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {

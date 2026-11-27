@@ -11,9 +11,8 @@ use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
-use areka_placement::test_support::SharedFakeIo;
 use areka_placement::test_support::give_fake_handles;
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use log_capture_kit::CapturedEvent;
 use std::path::PathBuf;
@@ -85,21 +84,18 @@ pub(super) fn persisted_after(
     world: &mut World,
     act: impl FnOnce(&mut World),
 ) -> Vec<(PersistKey, String)> {
-    let shared = Arc::new(FakePersistIo::new());
+    let shared: Arc<dyn StoreBackend> = MemBackend::new();
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    let parts = spawn_sylphya(SylphyaInit::new(
-        roots.clone(),
-        areka_sylphya::store::MemBackend::new(),
-    ));
+    let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), shared.clone()));
     world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     act(world);
     parts.publisher.barrier().expect("barrier が返る");
-    let stored = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo::new(shared));
+    let stored = load_scope(PersistScope::Ghost, &roots, &shared);
     parts.publisher.close();
     crate::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
     stored

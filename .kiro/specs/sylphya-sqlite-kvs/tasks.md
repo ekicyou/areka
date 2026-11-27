@@ -127,7 +127,7 @@
   - _Dispatch: standard — 載せ替えと消しの範囲を設計が与えている_
   - _Requirements: 10.1, 10.2, 12.5_
 
-- [ ] 4.2 番人が居ない時点の本番の読み書きを、新しい置き場の口へ移す
+- [x] 4.2 番人が居ない時点の本番の読み書きを、新しい置き場の口へ移す
   - 前回のゴーストの読み・アプリの置き場の書き・置き場の並びの読み書き・窓の位置の復元・ゴーストの記憶のフォルダを先に作る所を、プロセスに 1 つの置き場の口へ替える
   - 起動中の印を消すのは消す口で行い、記録の名前と結果の分け方、呼ぶ時点を変えない。「実行系が動いていない間だけ」の注を消す
   - 直した 5 か所と同じファイルの中の試験を、新しい口で読む形へ直す
@@ -258,3 +258,6 @@
 - 4.1: 4.1 の後、4.2 まではワークスペースが組めない（古い保存の口の型を使う所: areka 13・areka-placement 14・areka-session 7・areka-runtime 7・areka-ghost 5・areka-emo-present 5・areka-input 1 ファイル、areka-emo-text の `examples/emo-text-layer/fixture.rs`・`tests/staysee_balloon_fixture/faces.rs`・`tests/support/fixture.rs`）。areka-emo-present と areka-emo-text は 4.2 の支えの一覧に無いが、同じく差し替える。
 - 4.1: `ensure_root_dir(dir, backend: &Arc<dyn StoreBackend>)`。本番の呼び手は `&fs_backend()` を渡す。
 - 4.1: 型つきの包みの「錠を 1 秒待っても取れない」と `remove_scope_keys` の失敗に直の試験が無い。4.2・4.3 で `MemBackend::hold_writer`・`fail_next_write` で 1 本ずつ足すとよい。
+- 4.2: 4.2 の後に残る赤 8 本（4.3 で直す）: areka-placement `prepare_never_reads_or_writes_the_saved_state`、areka-session `session_mark_writers_warn_once_when_they_cannot_write`・`clear_degraded_foretells_crash_only_when_mark_remains`・`session_mark::tests::clear_mark_unwritable_tells_running_once`・`ghost_switch::balloon_tests` 2 本、areka `write_failure_sites_tests::every_write_kind_reaches_the_desk`（行「印を消す」）・`boot_config_balloon_tests::boot_with_argv_balloon_reads_no_ghost_balloon_keys`。印を消す行は、消しだけの書きがファイルの無い層で `Saved` になる（設計どおり）ので「印が在る層を書けなくする」形に植え直す。balloon の 2 本は前提の読みが先に取り込み、後で植えた toml が名前替えだけになる。
+- 4.2: 試験の支えの `SharedFakeIo` は `areka_placement::test_support::CountingBackend`（`MemBackend` を包み `before_write` を数える）に替えた。`PersistStore::file_text()` は `load_scope(Ghost)` の Debug の文を返す（名前は残した）。
+- 4.2: 古い `sylphya.toml` にだけ印が在る置き場で `clear_session_mark` が取り込んでから消す道に試験が無い。4.3 で 1 本足す。

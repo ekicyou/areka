@@ -107,7 +107,7 @@ impl CueSink for PropSetCueSink {
 mod tests {
     use super::*;
     use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-    use areka_sylphya::persist::FakePersistIo;
+    use areka_sylphya::store::{MemBackend, StoreBackend};
     use areka_sylphya::{
         PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
@@ -118,17 +118,18 @@ mod tests {
 
     use dola::cue::test_support::carrier_cue;
 
-    /// ghost root 付きの共有 FakeIo の sylphya（書込を別ハンドルで観測する）。
-    fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, Arc<FakePersistIo>) {
-        let shared = Arc::new(FakePersistIo::new());
+    /// ghost root 付きの共有の偽の置き場の sylphya（書込を同じ置き場の口で観測する）。
+    fn spawn_with_shared_io() -> (
+        areka_sylphya::SylphyaParts,
+        ScopeRoots,
+        Arc<dyn StoreBackend>,
+    ) {
+        let shared: Arc<dyn StoreBackend> = MemBackend::new();
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit::new(
-            roots.clone(),
-            areka_sylphya::store::MemBackend::new(),
-        ));
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), shared.clone()));
         (parts, roots, shared)
     }
 

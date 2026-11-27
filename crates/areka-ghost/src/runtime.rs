@@ -588,17 +588,18 @@ pub fn boot_with_origin(
         balloon: None,
     };
 
-    // 新規ゴーストでは ghost profile root が無く、初回の Ghost スコープ commit が
+    // 新規ゴーストでは ghost profile root が無く、初回の Ghost スコープの書きが
     // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。先に作る
-    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する）。失敗しても boot は止めない。
+    // （書きの時にも作り直す）。失敗しても boot は止めない。
     if let Some(ghost_root) = scope_roots.ghost.as_ref()
-        && let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)
+        && let Err(err) =
+            areka_sylphya::persist::ensure_root_dir(ghost_root, &areka_sylphya::store::fs_backend())
     {
         tracing::warn!(
             target: "ghost-boot",
             path = %ghost_root.display(),
             error = %err,
-            "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+            "ghost profile root の作成に失敗——継続（書きの時に作り直す）"
         );
     }
 

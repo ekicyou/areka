@@ -111,7 +111,7 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
     AskerId::new(shiori_dir.to_string_lossy().into_owned())
 }
 
-/// boot 系列の sylphya アクターを起動する（本番 IO＝[`FsPersistIo`]・運行 sink 未配線＝M1）。
+/// boot 系列の sylphya アクターを起動する（本番の置き場の口＝[`areka_sylphya::store::fs_backend`]）。
 ///
 /// `roots` は層別 profile root（ghost/shell/app/balloon）。起動時に全スコープを寛容ロードして
 /// 初期鏡像へ投影する（不在スコープは空扱い）。書き込みは呼び手の `persist_put` と、`boot` の
@@ -397,7 +397,7 @@ mod tests {
     fn provider_snapshot_emits_fixed_debug_log() {
         use crate::test_log_capture::{assert_logged, capture};
 
-        // 空 roots（全 None）で sylphya を起動——FsPersistIo だが root 不在で FS を一切触らない
+        // 空 roots（全 None）で sylphya を起動——本番の置き場の口だが root 不在で FS を一切触らない
         // （load_scope は root 不在→空縮退・決定論）。selfname を publish して asker 区画へ着地させる。
         let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
         let asker = AskerId::new("ghost/provider-log-cage");

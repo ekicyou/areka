@@ -10,7 +10,7 @@ use wintf::ecs::{Point, WindowHandle, WindowPos};
 use super::{MonitorSnapshot, project_anchor};
 use crate::resolver::RectPx;
 pub(super) use crate::shared_test_support::assert_no_event;
-use crate::test_support::SharedFakeIo;
+use crate::test_support::CountingBackend;
 pub(crate) use crate::test_support::zorder_pair_deferred::code_only;
 pub(super) use crate::test_support::{contained, point};
 use log_capture_kit::CapturedEvent;
@@ -332,7 +332,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, FsPersistIo, PersistIo};
+use areka_sylphya::store::{StoreBackend, fs_backend};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
@@ -478,46 +478,41 @@ pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
 pub(super) struct SylphyaRig {
     pub(super) parts: SylphyaParts,
     roots: ScopeRoots,
-    reader: Box<dyn PersistIo>,
-    /// 偽の記憶のときだけ: アクターへ渡した口の clone（commit の回数を数える）。
-    fake_io: Option<SharedFakeIo>,
+    backend: Arc<dyn StoreBackend>,
+    /// 偽の記憶のときだけ: アクターへ渡した口の clone（書きの回数を数える）。
+    fake_io: Option<CountingBackend>,
 }
 
 impl SylphyaRig {
     /// 偽の記憶（共有ストア・Ghost の根は `/g`）。
     pub(super) fn fake() -> Self {
-        let store = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let io = SharedFakeIo::new(store.clone());
-        let parts = spawn_sylphya(SylphyaInit::new(
-            roots.clone(),
-            areka_sylphya::store::MemBackend::new(),
-        ));
+        let io = CountingBackend::new();
+        let backend = io.backend();
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), backend.clone()));
         Self {
             parts,
             roots,
-            reader: Box::new(SharedFakeIo::new(store)),
+            backend,
             fake_io: Some(io),
         }
     }
 
-    /// 実ファイル（`FsPersistIo`）。`profile_root` は Ghost スコープの保存先。
+    /// 実ファイル（本番の置き場の口）。`profile_root` は Ghost スコープの保存先。
     pub(super) fn over_fs(profile_root: PathBuf) -> Self {
         let roots = ScopeRoots {
             ghost: Some(profile_root),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit::new(
-            roots.clone(),
-            areka_sylphya::store::fs_backend(),
-        ));
+        let backend = fs_backend();
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), backend.clone()));
         Self {
             parts,
             roots,
-            reader: Box::new(FsPersistIo),
+            backend,
             fake_io: None,
         }
     }
@@ -535,10 +530,10 @@ impl SylphyaRig {
             .publisher
             .barrier()
             .expect("barrier should resolve while actor is alive");
-        load_scope(PersistScope::Ghost, &self.roots, self.reader.as_ref())
+        load_scope(PersistScope::Ghost, &self.roots, &self.backend)
     }
 
-    /// 投函済みの保存が書き終わってから、記憶へ commit した回数（偽の記憶のときだけ）。
+    /// 投函済みの保存が書き終わってから、記憶へ書いた回数（偽の記憶のときだけ）。
     pub(super) fn commit_count(&self) -> usize {
         self.parts
             .publisher
@@ -576,7 +571,6 @@ pub(super) fn plant_minimal_ghost(label: &str) -> (TempPath, PathBuf, PathBuf) {
     )
     .expect("write ghost descript");
     std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-    // FsPersistIo::commit は親ディレクトリを作らないため、書込先を先に用意する。
     let profile_root = profile_areka_root(&ghost_master);
     std::fs::create_dir_all(&profile_root).expect("create profile/areka");
     (temp, root, profile_root)

@@ -7,7 +7,7 @@ use super::*;
 use std::sync::{Arc, Mutex};
 
 use areka_kanade::ChangedFrom;
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistScope, ScopeRoots, save_scope};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
@@ -65,7 +65,7 @@ pub(super) fn write_returning_ghost(root: &std::path::Path) {
     save_scope(
         PersistScope::Ghost,
         &roots,
-        &FsPersistIo,
+        &fs_backend(),
         vec![(PersistKey::BootCount, "1".to_string())],
     );
 }

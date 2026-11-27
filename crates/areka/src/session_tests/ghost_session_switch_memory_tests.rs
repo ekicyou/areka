@@ -7,7 +7,7 @@
 //! 書き手を処理し切っているので柵を掛けない。判定は集めてから 1 回・降ろすのは必ず有界に行う。
 
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, load_scope};
 
 use super::fallback_tests::{B_NAME, default_ghost, fallback_rig};
@@ -46,7 +46,7 @@ fn ghost_memory(rig: &SwitchRig, folder: &str) -> GhostMemory {
         )),
         ..ScopeRoots::default()
     };
-    let entries = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+    let entries = load_scope(PersistScope::Ghost, &roots, &fs_backend());
     let find = |key: PersistKey| {
         entries
             .iter()

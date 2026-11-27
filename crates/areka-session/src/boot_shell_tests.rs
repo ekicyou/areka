@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
@@ -92,7 +92,7 @@ fn remember_shell(ghost_dir: &Path, folder: &str) {
                 ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
                 ..ScopeRoots::default()
             },
-            &FsPersistIo,
+            &fs_backend(),
             vec![(PersistKey::LastShell, folder.to_owned())],
         ),
         PersistOutcome::Saved,

@@ -130,13 +130,13 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 
 /// 保存→復元 往復値等価の END-TO-END 統合檻。
 ///
-/// 実 `FsPersistIo`＋temp dir に置いた**最小解決可能ゴースト**へ、save 側（DragEnd 観測点
-/// →`PersistWiring`→実アクター→`sylphya.toml`）と restore 側（`load_restored_state`
+/// 本番の置き場の口＋temp dir に置いた**最小解決可能ゴースト**へ、save 側（DragEnd 観測点
+/// →`PersistWiring`→実アクター→記憶のファイル）と restore 側（`load_restored_state`
 /// →`apply_restored_placements`）を実ファイルシステム越しに結線し、キャラ位置・バルーン
 /// オフセットが値等価で往復すること、および同居する無関係 key（`BootCount`）が save で
 /// 破壊されないことを決定論固定する。
 ///
-/// これまでの follow.rs 檻は `FakePersistIo`（インメモリ）で「投函→load_scope」の
+/// これまでの follow.rs 檻は `MemBackend`（インメモリ）で「投函→load_scope」の
 /// 送信端 FIFO を証明したが、本檻は**実 FS 書込＋mount 解決経由の実読出**で往復全体
 /// （save→file→resolve→load→merge）を一本の檻に収める。
 ///
@@ -167,7 +167,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     // shiori.dir は resolve が root/ghost/master へ解決する（persist_io_wiring_tests.rs の load_restored_state_reads_planted_sylphya_toml が証明）。
     let (_temp, root, profile_root) = plant_minimal_ghost("follow-round-trip-e2e-8-2");
 
-    // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
+    // --- save 側 sylphya（本番の置き場の口・実 FS 往復）------------------------------
     let rig = SylphyaRig::over_fs(profile_root);
 
     // 無関係 key を DragEnd save に**先立って**植える（read-modify-write の温存対象）。
@@ -256,7 +256,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         "保存値は char 左上基準の生 offset（Bottom でも char_size を混ぜない）"
     );
 
-    // 実アクターと同一 roots・実 FsPersistIo で読み戻し、保存 entries を直接確認（往復の中間証拠）。
+    // 実アクターと同一 roots・本番の置き場の口で読み戻し、保存 entries を直接確認（往復の中間証拠）。
     // 保存 x は**原点＝下端中央**基準（左上 1427 ＋ w/2=217 → 1644）。
     let loaded = rig.saved();
     assert!(
@@ -392,7 +392,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
     // --- fixture: 最小解決可能ゴースト（往復の檻と同型）------------------------
     let (_temp, root, profile_root) = plant_minimal_ghost("follow-dragend-no-dragging-state-repro");
 
-    // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
+    // --- save 側 sylphya（本番の置き場の口・実 FS 往復）------------------------------
     let rig = SylphyaRig::over_fs(profile_root);
 
     // work area 下端 1200・単一モニタ。両スコープの Bottom 吸着 y を確定する。

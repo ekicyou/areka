@@ -5,7 +5,7 @@ use std::path::Path;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_runtime::spine::RecordedCall;
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 
 use crate::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
@@ -39,7 +39,7 @@ pub fn put_memory(ghost: &Path, folder: &str) {
                 ghost: Some(profile_areka_root(&ghost.join("ghost").join("master"))),
                 ..ScopeRoots::default()
             },
-            &FsPersistIo,
+            &fs_backend(),
             vec![(PersistKey::LastBalloon, folder.to_owned())],
         ),
         PersistOutcome::Saved,
