@@ -11,8 +11,6 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -23,8 +21,8 @@ use areka_emo_present::presenter::VisibilityOwnership;
 use areka_emo_present::{EmoPresenter, PresentCommand, load_shell_target};
 use areka_sakura::ActorKey;
 use areka_seriko::{
-    AnimationTable, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoClock, SerikoLoopConfig,
-    SerikoSink, StageNote, SurfaceOutput, SurfaceResolver, seeded_rng, spawn_seriko_clocked,
+    AnimationTable, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SerikoSink,
+    StageNote, SurfaceOutput, SurfaceResolver, seeded_rng, spawn_seriko,
 };
 use bevy_ecs::world::World;
 use dola::TimeSpan;
@@ -69,15 +67,13 @@ fn cue(scope: &str, command: CueCommand) -> TalkCue {
 fn spawn<O: SurfaceOutput + Send + 'static>(
     config: SerikoLoopConfig,
     out: O,
-    clock: SerikoClock,
 ) -> (SerikoSink, areka_actor::ActorHandle) {
-    spawn_seriko_clocked(
+    spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         areka_seriko::DefaultBinds::uniform(BindSet::default()),
         BindResolver::empty(),
         config,
         out,
-        Some(clock),
     )
 }
 
@@ -91,7 +87,7 @@ fn run(
 ) -> Vec<DisplayCommand> {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) = spawn(config, out, Arc::new(|| at_ms(START)));
+    let (mut sink, handle) = spawn(config, out);
     sink.emit(cue(scope, command));
     for k in 1..=ticks {
         sink.send_tick(at_ms(START + STEP * k as i64));
@@ -407,9 +403,6 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
         .set_visibility_ownership(t, VisibilityOwnership::External)
         .expect("set_visibility_ownership");
 
-    let now = Arc::new(AtomicI64::new(START));
-    let source = Arc::clone(&now);
-    let clock: SerikoClock = Arc::new(move || at_ms(source.load(Ordering::SeqCst)));
     let config = SerikoLoopConfig {
         shell_table: AnimationTable::empty(),
         balloon_tables: BTreeMap::from([(
@@ -420,7 +413,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
         pick_rng: seeded_rng(0),
     };
     let (tx, rx) = mpsc::channel();
-    let (mut sink, handle) = spawn(config, PresentBridge::new(tx), clock);
+    let (mut sink, handle) = spawn(config, PresentBridge::new(tx));
     let note = |open: bool, generation: u64| StageNote::Balloon {
         scope: ActorKey::from("0"),
         open,
@@ -437,7 +430,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     assert_eq!(presenter.stage_generation(t), Some(1));
 
     // 開いた知らせ（世代 1）→ 刻み 1120 で 2 番（経過 120）。届いた順に流す。
-    sink.send_stage(note(true, 1));
+    sink.send_stage(note(true, 1), at_ms(START));
     sink.send_tick(at_ms(START + 120));
     let ack = recv(&rx);
     assert_eq!(race.classify(&ack), Arrival::Ack(1), "合図が先");
@@ -469,8 +462,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
             reply: None,
         },
     );
-    now.store(START + 300, Ordering::SeqCst);
-    sink.send_stage(note(false, 1));
+    sink.send_stage(note(false, 1), at_ms(START + 300));
     let held = recv(&rx);
     assert_eq!(race.classify(&held), Arrival::Show(Pic::Rest), "Y");
     presenter.apply(&mut world, held);
@@ -485,8 +477,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     presenter.show_target(&mut world, t).expect("show_target");
     assert_eq!(presenter.stage_generation(t), Some(2));
     assert_eq!(race.shown(&presenter), Pic::Rest, "出し直しは経過 0");
-    now.store(START + 310, Ordering::SeqCst);
-    sink.send_stage(note(true, 2));
+    sink.send_stage(note(true, 2), at_ms(START + 310));
     sink.send_tick(at_ms(START + 350));
     sink.send_tick(at_ms(START + 420));
     sink.close().expect("Close を送れる");

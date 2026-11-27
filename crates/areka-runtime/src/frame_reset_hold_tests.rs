@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Sender};
 
 use areka_emo_present::NeverShown;
+use dola::TimePoint;
 use wintf::ecs::Point;
 
 use crate::balloon_visibility::run_balloon_visibility_phase;
@@ -446,7 +447,10 @@ fn talk_rig() -> (
     let (life_tx, life_rx) = mpsc::channel();
     wiring.lifecycle_rx = life_rx;
     life_tx
-        .send(TalkLifecycleSignal::TalkStarted { talk_id: None })
+        .send(TalkLifecycleSignal::TalkStarted {
+            at: TimePoint::ZERO,
+            talk_id: None,
+        })
         .expect("送出は成功する");
     (harness, tx, life_tx, wiring)
 }
@@ -463,7 +467,9 @@ fn talk_round(
 
 fn end_talk(life_tx: &Sender<TalkLifecycleSignal>) {
     life_tx
-        .send(TalkLifecycleSignal::TalkEnded { at: None })
+        .send(TalkLifecycleSignal::TalkEnded {
+            at: TimePoint::ZERO,
+        })
         .expect("送出は成功する");
 }
 

@@ -713,7 +713,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.7, 9.6_
 
-- [ ] 10.14 (P) areka-runtime のフレームと変更の受け口のテストを直す
+- [x] 10.14 (P) areka-runtime のフレームと変更の受け口のテストを直す
   - フレーム・変更の受け口のテストを、進める相とフレームの時刻の形へ直す
   - このタスクのファイルについて、`cargo check -p areka-runtime --all-targets` の誤りの一覧に自分のファイルの分が 0 件である（crate の全体の緑は、段の締めで確かめる）
   - _Boundary: areka-runtime フレーム・変更の受け口_

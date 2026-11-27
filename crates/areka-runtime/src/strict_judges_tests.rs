@@ -143,6 +143,7 @@ mod long_script {
                             *m.entry("Upcoming.cues").or_default() += cues.len();
                             "Upcoming"
                         }
+                        TextMsg::Origin(_) => "Origin",
                         TextMsg::Close => "Close",
                         TextMsg::TalkEnded => "TalkEnded",
                         TextMsg::ChoiceWaitBegan => "ChoiceWaitBegan",

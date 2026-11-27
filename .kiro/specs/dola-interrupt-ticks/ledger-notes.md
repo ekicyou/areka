@@ -412,3 +412,9 @@
 - 外したテスト: `balloon_visibility_talk_end_tests::missing_stop_time_falls_back_to_the_display_end_and_is_recorded`（止まった時刻が無い枝だけを見ていた）。外した assert: `balloon_visibility_phase_log_tests` の `StopTimeMissing`・`ChoiceWaitEndTimeMissing` の事象（`measurement_origin_is_written_with_its_level_and_fields` は 3 → 2 事象、`choice_talk_origins_are_written...` → `choice_talk_origin_is_written_with_its_level_and_fields` は 2 → 1 事象）。
 - 据え直し: `balloon_visibility_choice_wait_tests::timeless_end_starts_from_the_first_measurable_frame` → `end_without_frame_time_waits_for_a_measurable_frame`（前は起点 `ChoiceWaitEndTimeMissing`・満了予定「最初に計測できたフレームの今 70000 ms + TIMEOUT」、後は起点 `ChoiceWaitEndedAt(STOPPED)`・満了予定 `STOPPED + TIMEOUT`。時刻の無いフレームで計測しない枝は保つ）。
 - ログの欄を読むテストの字面 `"talk_time"` → `"frame_now"`。`phase_tests` の足場 `with_talk_epoch` を外した。ほかは時刻の型だけ（`TimeSpan` → `TimePoint`、値は同じ）。
+
+## 10.14（後半）
+
+- 消したテスト・assert は無い。`film_playback_e2e_tests` は時計の無い `spawn_seriko` と、`send_stage` に時刻を書いて渡す形（`AtomicI64` の時計を外した。値は前の時計の読みと同じ）。`frame_reset_hold_tests` の知らせは `at: TimePoint::ZERO`。`frame_attach_tests` は `TalkStarted { talk_id: None, .. }`、終端の比べは `sheet.absolute_end_time()`（起点 0 なので値は同じ）。`strict_judges_tests` に `TextMsg::Origin` の腕。
+- 走査の表 `ACTOR_SCAN_SITES` から `frame/scale_text.rs` を外した（10.10 で `state.actors()` の走査が無くなった。3 → 2 か所）。
+- `cargo test -p areka-runtime` は 1095 通過・0 失敗・3 無視（10.10・10.12 のテストもここで初めて走り緑）。

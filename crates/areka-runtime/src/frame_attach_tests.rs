@@ -479,16 +479,18 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     }
 
     let signals = wiring.drain_lifecycle_signals();
-    assert_eq!(
-        signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+    assert!(
+        matches!(
+            signals.first(),
+            Some(TalkLifecycleSignal::TalkStarted { talk_id: None, .. })
+        ),
         "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
     );
 
-    let ends: Vec<TimeSpan> = signals
+    let ends: Vec<TimePoint> = signals
         .iter()
         .filter_map(|signal| match signal {
-            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            TalkLifecycleSignal::DisplayEndAt { end, .. } => Some(*end),
             _ => None,
         })
         .collect();
@@ -498,7 +500,7 @@ fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     );
     assert_eq!(
         ends.last().copied(),
-        Some(horizon),
+        sheet.absolute_end_time(),
         "最後に届く占有終端は台本の占有区間の終端と一致する"
     );
 }
@@ -581,7 +583,6 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
 /// この結線層が守るものなので見張りもここに置く。
 const ACTOR_SCAN_SITES: &[&str] = &[
     "crates/areka-emo-text/src/actor_present.rs",
-    "crates/areka-runtime/src/frame/scale_text.rs",
     "crates/areka-runtime/src/hover_inject.rs",
 ];
 
@@ -597,8 +598,8 @@ const ACTOR_SCAN_SITES: &[&str] = &[
 /// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
 ///
 /// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
-/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 3 点のうち供給面を
-/// 割り当てるのは `present_frame` だけで、他の 2 点は読むだけである。
+/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 2 点のうち供給面を
+/// 割り当てるのは `present_frame` だけで、`hover_inject` は読むだけである。
 #[test]
 fn every_production_scan_of_the_actor_map_is_registered() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
