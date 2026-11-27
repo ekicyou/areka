@@ -98,7 +98,7 @@
   - _Dispatch: mechanical — 設計の表どおりの型と写し・期待の直し_
   - _Requirements: 1.2, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 5.2, 6.1, 6.4, 10.4, 10.5_
 
-- [ ] 5.2 element定義の語・pattern定義の `base`・着せ替えの読み替えを正規化で 1 度だけ決める
+- [x] 5.2 element定義の語・pattern定義の `base`・着せ替えの読み替えを正規化で 1 度だけ決める
   - element定義の正規化が値の語から合成の語を引く（element定義の `base` は `overlay`）
   - pattern定義の `base` の読み替え（XY を 0・置き換えの印）を pattern の正規化で 1 度だけ行い、今のコマ・着せ替えの pattern0・`always` の休みのコマ・入れ子の面のコマ・shell の外形・外形の求め方がその結果を読むだけにする
   - 着せ替えの pattern0 以外の `base` を `overlay` に読み替える。`move` と呼ぶ語は今のまま
