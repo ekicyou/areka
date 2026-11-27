@@ -27,12 +27,15 @@
 //! 共有する 1 軸のクランプ（[`clamp_axis`]）だけに依存する純関数であり、wintf／bevy_ecs を import しない。
 //! 起動時関門 [`apply_balloon_limit`] だけは [`MonitorSnapshot`]（bevy Resource derive だが
 //! headless 構築可）と [`work_area_for_window`] を消費してよい——決定論性は保たれ、
-//! 檻は headless で成立する。
+//! 檻は headless で成立する。書き込みの関門と離したときの補正のための [`limit_work_area_in`]
+//! だけは World から台本の値の有無と `MonitorSnapshot` を引く。
 
+use bevy_ecs::prelude::{Entity, World};
 use tracing::{info, warn};
 
 use super::follow::{MonitorSnapshot, rect_at, work_area_for_window};
 use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
+use super::script_balloon::is_script_placed;
 
 // =============================================================================
 // 観測タグ（以降の全関門が本モジュールの定数を共有する）
@@ -157,6 +160,22 @@ pub(crate) fn limit_work_area(
         (char_rect, LimitMonitor::Shell)
     };
     work_area_for_window(snapshot, rect).map(|area| (area, monitor))
+}
+
+/// 書き込みの関門と離したときの補正が見る作業領域・画面の種類・台本の値の有無を World から引く。
+///
+/// 台本の値の有無はキャラ窓の Component で決め、バルーンの矩形は `pos`×`size` で組む。
+pub(crate) fn limit_work_area_in(
+    world: &World,
+    char_window: Entity,
+    char_rect: RectPx,
+    pos: PointPx,
+    size: SizePx,
+) -> Option<(RectPx, LimitMonitor, bool)> {
+    let script = is_script_placed(world, char_window);
+    let snapshot = world.get_resource::<MonitorSnapshot>()?;
+    limit_work_area(snapshot, char_rect, rect_at(pos, size), script)
+        .map(|(area, monitor)| (area, monitor, script))
 }
 
 // =============================================================================

@@ -246,6 +246,10 @@ mod apply_tests;
 mod args_tests;
 
 #[cfg(test)]
+#[path = "script_balloon_lifetime_tests.rs"]
+mod lifetime_tests;
+
+#[cfg(test)]
 #[path = "script_balloon_overlay_tests.rs"]
 mod overlay_tests;
 

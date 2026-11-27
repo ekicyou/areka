@@ -15,8 +15,7 @@ use super::{
     BalloonLimit, BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold,
     GhostWindows, MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind,
     WindowMoveRecord, apply_visibility_guard, diag, follow_balloon, limit_correction,
-    project_anchor, rect_at, rederive_keyword_balloon_offset, transition_diag,
-    work_area_for_window,
+    limit_work_area_in, project_anchor, rect_at, rederive_keyword_balloon_offset, transition_diag,
 };
 
 /// UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し）。
@@ -899,19 +898,19 @@ fn log_window_move(
 /// これで被覆される）、`None` なら対象の現 `WindowPos.size`。**位置が動かず寸だけが
 /// 変わる書込**も、これで内包判定に掛かる。
 ///
-/// # 基準領域はキャラ窓の帰属モニタ
+/// # 基準領域は台本の値の有無で選ぶ
 ///
 /// [`BalloonWindowMarker::scope`] → [`GhostWindows`]（scope→窓 entity の正本）→
-/// キャラ窓 entity → その `WindowPos` 矩形 → [`work_area_for_window`] の順で引く。
-/// **帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は 1 bit も変えない**
-/// ——既存関数へキャラ窓矩形を渡すだけである。バルーン窓自身の帰属で引かないのは、
+/// キャラ窓 entity → その `WindowPos` 矩形を組み、[`limit_work_area_in`] へ渡す。
+/// 台本の値の無いスコープはキャラ窓の帰属モニタで見る。バルーン窓自身の帰属で引かないのは、
 /// はみ出したバルーンが隣モニタへ帰属して基準が振動するのを避けるためで、正典
-/// 「シェルが居る画面の中に維持する」の素直な読みでもある。
+/// 「シェルが居る画面の中に維持する」の素直な読みでもある。台本の値のあるスコープだけは
+/// 書き込もうとする矩形の帰属モニタで見る（本体と別の画面にバルーンを置けるように）。
 ///
 /// # 可視性状態を**入力に持たない**
 ///
-/// 本関門が読むのは上記の 6 つ（`BalloonLimit`／`BalloonWindowMarker`／
-/// `GhostWindows`／キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`）
+/// 本関門が読むのは上記と台本の値（`BalloonLimit`／`BalloonWindowMarker`／`GhostWindows`／
+/// キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`／`ScriptBalloonPlacement`）
 /// だけで、可視性を表す状態は**ひとつも含まない**（そもそもバルーンの可視性は
 /// `areka_runtime::balloon_visibility` が表示層で所有し、placement の World には無い）。
 /// ゆえに非表示中の書込も可視中とまったく同一に補正され、「次に可視となった時点で
@@ -1011,11 +1010,9 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    // 帰属規則は既存関数のまま（キャラ窓矩形を渡すだけ）。
-    let area = world
-        .get_resource::<MonitorSnapshot>()
-        .and_then(|snapshot| work_area_for_window(snapshot, char_rect));
-    let Some(area) = area else {
+    let Some((area, monitor, script)) =
+        limit_work_area_in(world, char_window, char_rect, proposed, target_size)
+    else {
         warn!(
             entity = ?window,
             scope,
@@ -1042,6 +1039,8 @@ fn apply_balloon_limit_gate(
         to = ?corrected,
         balloon_size = ?target_size,
         work_area = ?area,
+        monitor = monitor.as_str(),
+        script,
         "{BALLOON_LIMIT_CLAMP_TAG} runtime 関門: バルーン窓の書込位置を作業領域内へ補正した（寸・可視性・Z 順には触れない）"
     );
     corrected
