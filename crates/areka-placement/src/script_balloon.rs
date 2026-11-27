@@ -6,6 +6,10 @@ use bevy_ecs::world::DeferredWorld;
 use tracing::{debug, info};
 
 use crate::config::{BalloonSide, BalloonXMode, ScopeConfig};
+use crate::reseed::{StandardScope, resolve_descript_scopes, resolve_standard_scopes};
+use crate::reset_pos::DefaultPlacementBasis;
+use crate::resolver::PointPx;
+use crate::spawn::GhostWindows;
 
 /// 台本のずらしの 1 軸。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,6 +184,62 @@ pub(crate) fn overlay_align(sc: &mut ScopeConfig, align: &ScriptAlign) {
     }
     sc.balloon_x_mode = mode;
 }
+
+/// 台本の値の分（台本ありの標準 − descript だけの標準）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScriptShare {
+    /// 台本の値が無い（分は 0）。
+    NotPlaced,
+    /// キャラ窓の左上からの相対の差（物理 px・今の表示 DPI）。
+    Share(PointPx),
+    /// 解けなかった理由。
+    Unresolved(&'static str),
+}
+
+/// そのスコープの台本の値の分を、今の窓の大きさと DPI で解く。
+pub(crate) fn script_share(world: &World, scope: usize) -> ScriptShare {
+    let Some(windows) = world.get_resource::<GhostWindows>() else {
+        return ScriptShare::Unresolved("no_ghost_windows");
+    };
+    let Some(char_window) = windows.char_window(scope) else {
+        return ScriptShare::Unresolved("no_char_window");
+    };
+    if !is_script_placed(world, char_window) {
+        return ScriptShare::NotPlaced;
+    }
+    let Some(basis) = world.get_resource::<DefaultPlacementBasis>() else {
+        return ScriptShare::Unresolved("no_default_basis");
+    };
+    let offset_of = |solved: Vec<StandardScope>| {
+        solved
+            .into_iter()
+            .find(|s| s.placement.scope == scope)
+            .map(|s| s.placement.balloon_offset)
+    };
+    let script = offset_of(resolve_standard_scopes(
+        world,
+        windows,
+        &basis.source,
+        &basis.balloon,
+    ));
+    let descript = offset_of(resolve_descript_scopes(
+        world,
+        windows,
+        &basis.source,
+        &basis.balloon,
+    ));
+    match (script, descript) {
+        (Some(a), Some(b)) => ScriptShare::Share(PointPx {
+            x: a.x.saturating_sub(b.x),
+            y: a.y.saturating_sub(b.y),
+        }),
+        _ => ScriptShare::Unresolved("not_resolved"),
+    }
+}
+
+#[cfg(test)]
+#[path = "script_balloon_apply_tests.rs"]
+mod apply_tests;
 
 #[cfg(test)]
 #[path = "script_balloon_args_tests.rs"]
