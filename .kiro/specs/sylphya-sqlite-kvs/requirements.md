@@ -35,16 +35,16 @@
 | 覚える鍵 | 型の決まった 10 種（窓の位置・バルーンの相対位置・起動の回数・vanish の回数・前回のゴースト・前回のバルーン・前回のシェル・起動中の印・置き場の並び・窓の隣り合いの印）。正規名は `areka.*` | `crates/areka-sylphya/src/persist/mod.rs` の `PersistKey`・`to_canonical_key` |
 | 覚える値のファイル | 層ごとの `<置き場>\sylphya.toml`。書くたびに読んで重ねて丸ごと書く（一時ファイルから名前替え） | 同 `save_scope`・`update_scope`・`persist/io.rs` の `FsPersistIo` |
 | 層の置き場 | アプリ＝アプリの記憶の置き場・ゴースト＝`<ゴースト>\ghost\master\profile\areka\`・シェル＝`<シェル>\profile\areka\`・バルーン＝無し（`None`） | `crates/areka-ghost/src/runtime.rs` の `ScopeRoots` を組む所・`sylphya_wiring.rs` の `profile_areka_root` |
-| 層の重ね | 4 つの層を読んだ値は全部が同じ区画（`dotted_global`）に入る。上書きの順の決まりは無い | `crates/areka-sylphya/src/actor.rs` の起動時の読み・`mirror.rs` の `MirrorImage` |
+| 層の重ね | 4 つの層を読んだ値は全部が同じ区画（`dotted_global`）に入る。起動のときはアプリ → ゴースト → シェル → バルーンの順に入れるので後の層が勝つが、書きは層を見ずに同じ区画を上書きする＝書いた後は最後に書いた層が勝つ（層の順の決まりは無い） | `crates/areka-sylphya/src/actor.rs` の起動時の読み・`mirror.rs` の `MirrorImage` |
 | 読みの口 | 共有の写し（`SharedMirror`）を待たずに読む。点付きの名前は「ゴースト別の区画 → 全体の区画 → 外の一次情報源から取る読み手（`PullSource`）」の順。平らな名前（`%username` など）はゴースト別。トークごとに凍った写しを取る | `reader.rs` の `resolve_dotted`・`resolve_flat`・`talk_snapshot`・`pull.rs` |
 | 書きの口 | アクターへ投げっぱなし（`publish_static`・`remove_flat`・`publish_shiori`・`set`・`persist_put`・`persist_remove`）。結果は返らず、保存の失敗だけが受け口へ届く | `actor.rs` の `SylphyaPublisher`・`spawn_sylphya_with_failures` |
 | SET の分かれ方 | SET 有効群 25 件＝記録（warn）だけで何も書かない／正準の語彙（根の枝 10 本・汎用の名前 17 種）＝書かない／それ以外＝ゴースト別の区画へ書く（揮発） | `actor.rs` の `classify_set`・`vocab/dotted.rs` |
 | アクターの数 | ゴースト 1 体につき 1 本。アプリ・ゴースト・シェルの 3 つの層を起動のときに読む | `sylphya_wiring.rs` の `spawn_ghost_sylphya` |
 | アクターを通らない読み書き | 前回のゴースト名の読みと起動中の印の読み書き（`crates/areka-session/src/boot_resolve.rs` の `read_last`・`save_app`）・窓の位置の起動時の読み（`crates/areka-placement/src/persist.rs`）・置き場の並びの読み（`crates/areka-session/src/roots/mod.rs`）と書き（`crates/areka/src/roots/edit.rs`） | 各ファイルの `load_scope`／`save_scope` の呼び出し |
-| 同時の書き | 同じプロセスの中は門（`SAVE_GATE`）、別のプロセスとは錠のファイル（`sylphya.toml.lock`・最大 1 秒待つ）で、読んで重ねて書く間を直列にしている。UI スレッドの直書きは「ゴーストの実行系が動いていない間だけ」という呼び手の決まりも持つ | `persist/mod.rs` の `update_scope`・`persist/io.rs` の `lock_for_update`・`boot_resolve.rs` の「起動中の印」の注 |
+| 同時の書き | 同じプロセスの中は門（`SAVE_GATE`）、別のプロセスとは錠のファイル（`sylphya.toml.lock`）で、読んで重ねて書く間を直列にしている。待ちの上限は 1 秒の定数だが、1 回の保存の中で錠・既存の読みの取り直し・名前替えの取り直しの 3 か所に使うので、1 回の書きは最大で約 3 秒待ちうる（プロセスの中の門には上限が無い）。UI スレッドの直書きは「ゴーストの実行系が動いていない間だけ」という呼び手の決まりも持つ | `persist/mod.rs` の `update_scope`・`persist/io.rs` の `lock_for_update`・`boot_resolve.rs` の「起動中の印」の注 |
 | 書けなかったとき | 記録（error）を残し、`PersistOutcome::Degraded(PersistFailure)` が告知の道へ届く。書けないことは致命（起動の時点なら起動を止める・途中なら終了してから告知・終了コード 1） | 完了 `write-failure-notice`・`crates/areka-session/src/alert.rs` |
 | 読み取りだけの走り | 書きを控えへ入れ、走る間だけ読み返せる。ファイルもフォルダも作らない | `persist/withhold.rs`・完了 `readonly-mode` |
-| 説明書・告知の文 | `dist/README.txt` の「■ 記憶の置き場」は置き場を 3 か所と書く。記憶のファイルが使えないときの告知の文は `sylphya.toml` の名前を出す | `dist/README.txt`・`alert.rs` の `MEMORY_FILE_FIX` |
+| 説明書・告知の文 | `dist/README.txt` の「■ 記憶の置き場」は置き場を 3 か所と書き、「今の版には、シェルの記憶を作る操作はありません」と書く（ファイルの名前は出さない）。`sylphya.toml` の名前を出す利用者向けの文は 5 つ＝直し方の文 1 つと、告知の本文に出る理由の文 4 つ | `dist/README.txt`・`alert.rs` の `MEMORY_FILE_FIX`・`persist/mod.rs`・`persist/io.rs`・`persist/format.rs` の理由の文 |
 
 ### brief から変わっていた事実（要件の段で見つけた）
 
@@ -52,6 +52,9 @@
 - **同時に書いても片方が消える穴は、門と錠で塞がっている**: brief の Problem の「2 者が同時に書くと片方が消える」は、上の表の「同時の書き」の門と錠が入る前の記述。今残っているのは、ファイルを丸ごと書き直す形・錠を 1 秒待って取れなければ致命になること・UI スレッドの側の呼び手の決まり、の 3 つ。要件 6 は「今の保証を新しい保存でも保ち、呼び手の決まりに頼らない」と読み替えた（議題 9）。
 - **読みの口には、外の一次情報源から取る読み手（`PullSource`）が足されている**（`currentghost.scope(*).rect` と倍率・`crates/areka-session/src/ghost_session_scope_rect.rs`・`ghost_session_scope_scale.rs`）。brief の Current State に無い。ECS の値を名前で読む道は今これが担う（要件 3.6）。
 - **告知の文が `sylphya.toml` の名前を持つ**（`alert.rs` の `MEMORY_FILE_FIX`）。brief は `alert.rs` を「触らずに済む」に数えているが、文は直す（要件 13.2）。
+- **名前で書く口（`SylphyaPublisher::set`）を呼ぶ本番のコードは無い**: SHIORI の SetProperty は in-proc の受け口が自前の表に入れて返すだけで sylphya へ届かず（`crates/areka-ghost/src/shiori_inproc.rs`）、台本の `\![set,property,…]` も開いていない。要件 11.4〜11.7 と議題 10 が言う「今の見え方」は、今は試験が固定している見え方。
+- **覚える鍵のうち 2 つは、名前の綴りで書かれている**: cue `areka.prop.set`（`crates/areka-ghost/src/prop_sink.rs`）が `areka.boot.count`・`areka.vanish.count` の綴りを受けてゴーストの層へ書く（送り手は起動記録の締めの命令）。要件 2.7 の「決まった書き手」に数えるかは議題 10。
+- **壊れた `sylphya.toml` は、今は次の書きで致命の告知になる**（`persist/mod.rs` の `update_scope` の「既にある記憶のファイルが使えない」の枝）。要件 7.5 の仮定（記録だけで既定値で動く）は今より緩む（議題 5）。
 
 ### 何を変えるか
 
@@ -255,7 +258,7 @@
 
 1. The areka shall 本番で一度も使われない差し替えの口（`RuntimeCommandSink` の型と `runtime_sink` の欄）を消し、`runtime_sink: None` を書く所を 0 か所にする。SET 有効群への書きの見え方は要件 11.6 のまま。
 2. The areka shall 判断の純粋な関数 `apply` を、状態を持たない型（`SylphyaCore`）のメソッドでなく自由な関数にし、呼び手（`crates/areka-placement/src/zorder_property_deferral_tests.rs` を含む）を直す。判断の結果は変えない。
-3. The areka shall 足す外部の依存を rusqlite（SQLite を同梱する形）の 1 本だけにし、第三者の告知（`THIRD-PARTY-NOTICES.md`）・ライセンスと勧告の確かめ（`deny.toml` の下の `cargo deny check`）・依存の表（`tech.md`）を同じ変更で合わせる。
+3. The areka shall 足す外部の依存を rusqlite（SQLite を同梱する形）の 1 本だけにし、第三者の告知（`THIRD-PARTY-NOTICES.md`）・ライセンスと勧告の確かめ（`deny.toml` の下の `cargo deny check`）・依存の表（`tech.md`）・crate の説明（`structure.md` の sylphya の節＝読みの決まり・依存の一覧・`persist/` の説明）を同じ変更で合わせる。
 4. The areka shall 配布の 2 つの形（x64・arm64）で、警告を足さずに組める。arm64 は組めることまでを確かめ、実行は確かめない（議題 8 の仮定）。
 5. The areka shall `sylphya.toml` を読む道を、取り込み（要件 7）のためだけに残す（取り込みのほかに `sylphya.toml` を読む所・書く所は 0 か所）。
 
@@ -265,8 +268,8 @@
 
 #### Acceptance Criteria
 
-1. The areka shall 説明書 `dist/README.txt` の「■ 記憶の置き場」を、置き場 4 か所（バルーンの記憶を足す）・新しい記憶のファイルの名前（付随してできるファイルを含む）・`sylphya.toml` を一度だけ取り込んで名前を変えて残すこと・残した元のファイルの名前、に合わせて書き直す。
-2. The areka shall 記憶のファイルが使えないときの告知の文と直し方の文（今は `sylphya.toml` の名前を出す）を、新しい記憶のファイルの名前に合わせる。告知の場面の数と出る条件は変えない。
+1. The areka shall 説明書 `dist/README.txt` の「■ 記憶の置き場」を、置き場 4 か所（バルーンの記憶を足す）・新しい記憶のファイルの名前（付随してできるファイルを含む）・`sylphya.toml` を一度だけ取り込んで名前を変えて残すこと・残した元のファイルの名前、に合わせて書き直す。「今の版には、シェルの記憶を作る操作はありません」の文も、シェルの層・バルーンの層の扱い（要件 5.5）に合わせる。
+2. The areka shall 記憶のファイルが使えないときの告知の文と直し方の文（今 `sylphya.toml` の名前を出す 5 つの文＝直し方の文 1 つと理由の文 4 つ）を、新しい記憶のファイルの名前に合わせる。告知の場面の数と出る条件は変えない。
 3. The areka shall 説明書に、古い版の areka へ戻すと新しい版で覚えたことは読まれないこと、名前を変えて残した元のファイルを元の名前へ戻せば古い版がそれを読むことを書く（議題 5 の仮定）。
 4. The areka shall 説明書の「■ 起動オプション」の `readonly` の説明の「書かない物」を、新しい記憶のファイルとバルーンの記憶を含む形に合わせる。
 
