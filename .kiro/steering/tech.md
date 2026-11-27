@@ -52,7 +52,10 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **toml** (1, feature: `toml`): `DolaDocument` の TOML の読み書きの入口（`DolaDocument::from_toml_str`・`to_toml_string`・2026-11-13 `dola-yaml-backend`）。既定の機能は無い。ほかの書式は serde の導出で利用者が選ぶ。`serde_json` は開発専用の依存
 - **interpolation** (0.3.0): イージング・補間計算の基盤（`easing.rs`, `runtime/interpolator/`）
 - **rand** (0.10): アニメーション系の乱数生成
-- **windows** (0.62・`cfg(windows)` のときだけ・`Win32_System_Performance`): `runtime/clock.rs` の `clock::now()`（OS 起動からの高精度時刻＝`QueryPerformanceCounter`）。ターゲット限定の依存にして、dola のほかの部分をプラットフォーム非依存に保つ
+- **windows** (0.62・`cfg(windows)` のときだけ・`Win32_System_WindowsProgramming`): `time/clock.rs` の `dola::now()`（`QueryUnbiasedInterruptTimePrecise`＝眠りの間を数えない 100ns 刻みの時刻・本番の「今」を読む唯一の入口）。ターゲット限定の依存にして、dola のほかの部分（時刻・長さ・符号つきの差の型、作者の単位からの変換、直列化）はプラットフォーム非依存に保つ
+- **thiserror**（ワークスペースの版）: `TimeRangeError`・`TimeParseError` などの誤りの型
+- **機能 `test-support`**（既定は無効）: `dola::time::testing`（テスト用の時刻の組み立て）と `dola::cue::test_support` を開く。使う側は `[dev-dependencies]` からだけ有効にする（本番のコードと examples は使わない）
+- **dola を引く crate**: `wintf`・`areka-sakura`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka-talk`・`areka-ghost`・`areka-runtime`・`areka-session`・`areka` は dola を本番の依存（`[dependencies]`）で引き、刻み・締め切り・台本の時刻を dola の型（`TimePoint`・`TimeSpan`・`TimeDelta`）で持つ。`areka-input` は `[dev-dependencies]` でだけ引き、型は `areka_sakura::contract` の再輸出で名指す。時刻を組み立てるテストのある crate は `[dev-dependencies]` で `test-support` を引く（`areka-session` は `areka-runtime` の機能 `test-support` を通して得る）
 
 ## Development Standards
 
@@ -84,6 +87,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない（通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない）
 - **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる（段 `dola toml feature tests` は検体を使わないので取り寄せが赤でも回る）。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
 - **段 `dola toml feature tests`**（`cargo test -p dola --features toml --no-fail-fast -j 4`・`x64 workspace tests` の直後・ネットを使わない）: 全体テストは任意の機能を有効にしないので、`dola` の機能 `toml` の下のテスト（TOML の往復と境界）を名指しで回す（2026-11-13 `dola-yaml-backend`）
+- **段 `dola non-windows check`**（`rustup target add x86_64-unknown-linux-gnu` のあと `cargo check -p dola --features toml --target x86_64-unknown-linux-gnu -j 4`・段 `dola toml feature tests` の直後）: Windows でない target で dola がコンパイルできることを確かめる。時刻の型・変換・直列化が Windows の API に依らないことを示す（`dola::now()` は Windows の target にだけ在る）
 
 #### テストの待ちと、負荷の下で許す赤（申し開き・2026-10-09 `areka-P0-ghost-session-test-load-flake`）
 
