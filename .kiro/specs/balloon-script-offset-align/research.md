@@ -238,3 +238,10 @@ SSP の MCP（`sakurascript` strict・`get_property`）で、起動中の「窓�
 - DPI の境の揺れ — 押し込みの冪等を決定論のテストで固定し、大きさの変化を伴う形は段 4 の実機で見る（design の Open Question 4）。
 - バルーンの窓だけが別の DPI の画面へ移ったときの本体との隙間（左に出すバルーンの幅が変わる） — 段 4 で見る。要件に触れる食い違いは 9.4 で決め直す。
 - `sylphya-sqlite-kvs` が `follow_test_support.rs` の口を変えると、それを読む新しいテストが着地の順で壊れうる — 新しいテストは支えの公開の口だけを使い、組み立ては `script_balloon_test_support.rs` に持つ。
+
+## 10. 設計の討議で決めたこと（2026-11-27）
+
+- 検証（`design-validation.md`）の重い点 1（預かるとバルーンが descript の位置で見えてから跳ぶ）は、預からずに届いた巡で当て、着地の前なら印を付けて着地した巡に解き直す形で解いた（状態の持ち方で 0 フレーム）。
+- 重い点 2（バルーンだけが DPI の違う画面へ移ると、左に出すバルーンと本体の隙間が変わる）は、ukadoc の「接する」を保つ側を取った。バルーン窓の寸が DPI の相で変わった時点が分かる（`frame/dpi.rs` の `GhostWindowKind::Balloon` の腕・`reconcile_window_size` の前後の寸）ので、そこから押しで据え直す。
+- `center`・`top`・`bottom` の縦の基準の SSP との違い（8 節）は、この spec では areka の今の幾何のまま §8 に記録し、合わせるかの調べは別の spec へ渡す。
+- 残りの項目は `design.md` の「決まったこと」のとおり。
