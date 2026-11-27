@@ -46,7 +46,7 @@
   - _Dispatch: mechanical — 設計が口の形と控えの規則を与え、解決の型と状態の型へ口と欄を足すだけ_
   - _Requirements: 2.1, 4.1_
 
-- [ ] 2.3 seriko の数えを「数えた字の数」を持つ形にし、消去の後の揃え方を直す
+- [x] 2.3 seriko の数えを「数えた字の数」を持つ形にし、消去の後の揃え方を直す
   - 数えに「数え済みの序数」と「構えてから数えた字の数」を持たせ、構える・現すときは今現れている数と 0 から始める
   - 進めるときは、序数が増えたときだけ数えた字の数をその差だけ足す
   - 消去の後の揃えは、捨てた序数のうち数え済みより前の数だけ数え済みの序数を下げ、数えた字の数は変えない。前に無ければ何もしない。数えを持たない面では何もせず記録もしない
@@ -139,3 +139,4 @@
 - `TextRoute::reset` は既定へ直に戻す。`\f` の持ち運びは呼び手（文字の層）が普通のバルーンを起点に行う。
 - `areka-emo-text` は `--no-deps` でも clippy が赤（rustc 1.100 の新しい lint・触っていないファイルだけ）。この spec では変えたファイルに lint が無いことで判定する。
 - `areka-seriko` の talk.rs で合図の配線前の 6 つの口に `#[cfg_attr(not(test), expect(dead_code, …))]` を付けた。配線したら外す（外さないと expect が満たされず警告になる）。clippy `--no-deps` は触っていない output.rs・state.rs の `doc_nested_refdefs` で赤（既存）。
+- seriko の数えの境界の組は `(base, seen)` から `(counted, seen)` へ替わった。既存のテストの境界の assert は同じ値の言い替えで、`realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed` の早い場合だけ (0,0)→(2,0)（0 で止まって数えた字を失う不具合の直し）。

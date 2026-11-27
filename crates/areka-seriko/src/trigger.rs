@@ -19,7 +19,8 @@
 //!   より前なら見え始め）。
 //!   1 回の窓で区切りを 2 つ以上越えたら、越えた区切りを古い順に全部、それぞれの開始の時刻で判定する
 //!   （同じ時刻に重なった区切りは 1 つ）。数えは判定の後に [`Armed::advance_talk`] で進め、再生中に
-//!   越えた区切りは後から鳴らない。
+//!   越えた区切りは後から鳴らない。消去で字が捨てられても、数えた字の数は減らない
+//!   （[`Armed::realign_talk`]）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,16 +45,16 @@ pub(crate) struct Armed {
 
 /// スコープの文字の序数の数え。
 pub(crate) struct TalkCursor {
-    /// 構えた時点で現れていた文字の序数（ここから 0 と数える）。
-    base: u64,
-    /// 最後の判定までに数えた序数（単調非減少）。
+    /// 最後の判定までに数えた序数（列の序数・消去で捨てた分だけ下がる）。
     seen: u64,
+    /// 構えてから数えた字の数（単調非減少）。
+    counted: u64,
 }
 
 /// 1 回の判定で `talk` に渡す文字の窓（面ごとに刻み 1 回作る・部品も同じ窓を使う）。
 pub(crate) struct TalkWindow<'a> {
-    /// 数え始めの序数（ここから 0 と数える）。
-    pub(crate) base: u64,
+    /// 前の判定までに数えた字の数。
+    pub(crate) counted: u64,
     /// 前の判定までに数えた序数。
     pub(crate) prev_seen: u64,
     /// 今見えている文字の序数。
@@ -142,14 +143,16 @@ impl Armed {
                     return Vec::new();
                 };
                 let every = u64::from(every.get());
-                // k 番目の区切りの文字の序数は base + k × every − 1。今見えている数が数え始めより手前
-                // （消去で切り詰められた刻み）なら、越えた区切りは 0。前の判定までに数え済みの区切り
-                // （序数が prev_seen より前）は鳴らし済みか見送り済み。今見えている数が減った刻みも外れる。
-                let crossed = window.now_seen.saturating_sub(window.base) / every;
-                let first = window.prev_seen.saturating_sub(window.base) / every + 1;
+                // 今見えている数が減った刻みは何も数えない。k 番目の区切りは k × every 字目で、
+                // k × every − 1 ≥ counted なので序数は prev_seen 以後。
+                let now_counted = window.counted + window.now_seen.saturating_sub(window.prev_seen);
+                let first = window.counted / every + 1;
                 // 見え始めより前には始めない（その刻みで新しく見えた部品は、見えた時刻に始まる）。
-                let mut starts: Vec<TimePoint> = (first..=crossed)
-                    .map(|k| (window.wall)(window.base + k * every - 1).max(since))
+                let mut starts: Vec<TimePoint> = (first..=now_counted / every)
+                    .map(|k| {
+                        (window.wall)(window.prev_seen + (k * every - 1 - window.counted))
+                            .max(since)
+                    })
                     .collect();
                 // 字の時刻は単調なので、同じ時刻の区切りは隣り合う（最初の 1 つで始め、後ろは再生中）。
                 starts.dedup();
@@ -182,30 +185,28 @@ impl Armed {
     /// 数えは単調: 今見えている数が減った刻み（消去で切り詰められた・起点が前へ飛んだ）は進めない。
     /// 数えを持たない状態（部品・表に `talk` が無い面）では何もしない。
     pub(crate) fn advance_talk(&mut self, now_seen: u64) {
-        if let Some(cursor) = &mut self.talk {
-            cursor.seen = cursor.seen.max(now_seen);
+        if let Some(cursor) = &mut self.talk
+            && now_seen > cursor.seen
+        {
+            cursor.counted += now_seen - cursor.seen;
+            cursor.seen = now_seen;
         }
     }
 
-    /// 消去の知らせの後に呼ぶ: 文字の列が `total` 文字まで切り詰められた（捨てられた序数は次に届く
-    /// 文字に振り直される）。数え済みの序数が `total` を超えていたら、数えた文字の数（数え済み −
-    /// 数え始め）を保ったまま数え済みを `total` に揃える。揃えないと、次に届く文字が「数え済み」に
-    /// 埋もれて区切りを越えても鳴らない。超えていなければ何もしない。
-    pub(crate) fn realign_talk(&mut self, total: u64) {
+    /// 消去の知らせの後に呼ぶ: `dropped`（捨てた字の序数・昇順）のうち数え済みより前の数だけ数え済みの
+    /// 序数を下げる（捨てた序数は次に届く字に振り直されるので、揃えないと次の字が数え済みに埋もれる）。
+    /// 数えた字の数は変えない。前に無ければ何もしない。数えを持たなければ何もしない。
+    pub(crate) fn realign_talk(&mut self, dropped: &[u64]) {
         if let Some(cursor) = &mut self.talk {
-            let dropped = cursor.seen.saturating_sub(total);
-            cursor.seen -= dropped;
-            // ponytail: 数え始めの序数が捨てられた数より小さいと 0 で止まり、数えた数が減る（次の区切りが
-            // 遅れる）。数え済みが列を超えるのは、刻みの間に構えた直後（数えた数 0）と、字の時刻が後ろへ
-            // 動いて現れた数が減って見える間に消去が届いたとき。後の場合にここへ届くと区切りが 1 回
-            // 遅れる。届くようなら数え始めを符号つきにする。
-            cursor.base = cursor.base.saturating_sub(dropped);
+            cursor.seen -= dropped.partition_point(|&g| g < cursor.seen) as u64;
         }
     }
 
-    /// 文字の窓を組むための（数え始めの序数, 数え済みの序数）。数えを持たなければ `None`。
+    /// 文字の窓を組むための（数えた字の数, 数え済みの序数）。数えを持たなければ `None`。
     pub(crate) fn talk_window_bounds(&self) -> Option<(u64, u64)> {
-        self.talk.as_ref().map(|cursor| (cursor.base, cursor.seen))
+        self.talk
+            .as_ref()
+            .map(|cursor| (cursor.counted, cursor.seen))
     }
 }
 
@@ -264,8 +265,8 @@ impl TalkCursor {
     /// `revealed` 文字が現れている時点から数え始める。
     fn starting_at(revealed: u64) -> TalkCursor {
         TalkCursor {
-            base: revealed,
             seen: revealed,
+            counted: 0,
         }
     }
 }
@@ -273,3 +274,7 @@ impl TalkCursor {
 #[cfg(test)]
 #[path = "trigger_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "trigger_realign_tests.rs"]
+mod realign_tests;

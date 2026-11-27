@@ -193,13 +193,13 @@ fn any_talk(config: &SerikoLoopConfig) -> bool {
     config.shell_table.has_talk() || config.balloon_tables.values().any(AnimationTable::has_talk)
 }
 
-/// 文字の窓の数え（(数え始め, 数え済み), 今現れている数）と序数 → 壁時刻の写しから窓を組む。
+/// 文字の窓の数え（(数えた字の数, 数え済み), 今現れている数）と序数 → 壁時刻の写しから窓を組む。
 fn talk_window<'a>(
     bounds: Option<((u64, u64), u64)>,
     wall: &'a dyn Fn(u64) -> TimePoint,
 ) -> Option<TalkWindow<'a>> {
-    bounds.map(|((base, prev_seen), now_seen)| TalkWindow {
-        base,
+    bounds.map(|((counted, prev_seen), now_seen)| TalkWindow {
+        counted,
         prev_seen,
         now_seen,
         wall,

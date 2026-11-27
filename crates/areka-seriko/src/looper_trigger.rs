@@ -14,8 +14,9 @@
 //!
 //! - 構える・現すときは、その時刻までに現れた文字の数から数え始める（[`revealed_at`]）。
 //! - 刻みの最後に数えを今現れている数まで進め、列はそこまでしか刈り込まない（[`settle_talk`]）。
-//! - 消去の知らせでは、列を切り詰めた直後に数えを列の総数に揃える（[`restart_talk`]・数えた文字の数は
-//!   保つ）。
+//! - 消去の知らせでは、列を切り詰めた直後に、捨てた序数のうち数え済みより前の数だけ数え済みを下げる
+//!   （[`restart_talk`]）。数えた字の数は保つ（消去の前に数えた字は、字の時刻が後ろへ動いた後に
+//!   捨てられた字も数えたまま）。
 //!
 //! だから文字の窓が尋ねる序数（前の判定までの数え済み以後・今現れている数より前）は必ず列に在り、
 //! 消去の後に届く文字は必ず「まだ数えていない文字」として数えられる（新しい台詞の頭で口が止まらない）。
@@ -181,18 +182,16 @@ pub(super) fn glyph_wall(feed: Option<&TalkFeed>, glyph: u64, now: TimePoint) ->
 }
 
 /// 消去の合図（発火時刻 `at`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
-/// 初期化し、そのスコープの数えを列の文字の総数に揃える（捨てた序数は次の塊の文字に振り直される）。
+/// 初期化し、捨てた序数の列でそのスコープの全部の数えを揃える（捨てた序数は次の塊の文字に振り直される）。
 pub(super) fn restart_talk(
     feed: &mut TalkFeed,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
     scope: &ActorKey,
     at: TimePoint,
 ) {
-    feed.restart_chain(at);
-    // 残ったのは消去の時刻までに現れた文字だけなので、これが列の文字の総数。
-    let total = feed.revealed_until(at);
+    let dropped = feed.restart_chain(at);
     for ((_, _), state) in armed.iter_mut().filter(|((s, _), _)| s == scope) {
-        state.realign_talk(total);
+        state.realign_talk(&dropped);
     }
 }
 
