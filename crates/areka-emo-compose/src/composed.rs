@@ -33,6 +33,17 @@ impl ComposedSurface {
         }
     }
 
+    /// 描いた絵の乗算済み BGRA（`len == width * 4 * height`）をそのまま包む。
+    pub fn from_bytes(width: u32, height: u32, bytes: Vec<u8>) -> Self {
+        debug_assert_within_extent(width, height);
+        debug_assert_eq!(bytes.len(), byte_len(width, height));
+        ComposedSurface {
+            width,
+            height,
+            bytes,
+        }
+    }
+
     /// 幅（画素）。
     pub fn width(&self) -> u32 {
         self.width

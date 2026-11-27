@@ -50,6 +50,8 @@ pub(crate) mod hit_shapes;
 pub(crate) mod load_records;
 /// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール（公開 API ではない）。
 pub(crate) mod mount;
+/// 画面の外の描き手（`OffscreenRenderer`）。使い捨ての描画の木に計画を写し、原寸の絵に描いて読む。
+pub mod offscreen;
 /// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
@@ -72,6 +74,7 @@ pub mod shell_target;
 pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
+pub use offscreen::OffscreenRenderer;
 pub use presenter::{AppliedScale, ClientHit, EmoPresenter, NeverShown, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 pub use shell_target::{ShellLoadError, ShellTarget, load_shell_target, load_shell_target_quiet};

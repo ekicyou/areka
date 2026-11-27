@@ -32,13 +32,6 @@ pub(crate) fn mix_mode_of(mix: Mix) -> D2D1_COMPOSITE_MODE {
 }
 
 /// 計画を根の下の節へ写す。画面と画面の外が同じ写しを使う。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "表示の段と画面の外の描き手から呼ばれるまで本番の呼び手が無い"
-    )
-)]
 pub(crate) struct DrawNodes {
     root: Entity,
     slots: Vec<Slot>,
@@ -51,13 +44,6 @@ struct Slot {
     node: Option<Entity>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "表示の段と画面の外の描き手から呼ばれるまで本番の呼び手が無い"
-    )
-)]
 impl DrawNodes {
     pub(crate) fn new(root: Entity) -> Self {
         Self {
@@ -310,7 +296,7 @@ fn rect_place(r: IRect) -> Arrangement {
     place(r.x, r.y, r.w, r.h)
 }
 
-fn place(x: i64, y: i64, w: u32, h: u32) -> Arrangement {
+pub(crate) fn place(x: i64, y: i64, w: u32, h: u32) -> Arrangement {
     Arrangement {
         offset: Offset {
             x: x as f32,

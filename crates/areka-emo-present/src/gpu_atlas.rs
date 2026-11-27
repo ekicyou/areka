@@ -1,8 +1,4 @@
 //! 装置ごとのアトラスの頁の GPU の絵と、絵ごとの葉の命令の列の控え（`GpuAtlas`）。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "表示の段から呼ばれるまで本番の呼び手が無い")
-)]
 
 use std::mem::ManuallyDrop;
 
@@ -140,6 +136,11 @@ impl GpuAtlas {
     /// 絵 `element` の原寸（葉が描く局所の範囲）。
     pub(crate) fn original(&self, element: ElementId) -> areka_emo_atlas::Size {
         self.atlas.entry(element).original
+    }
+
+    /// `atlas` がこの控えを作った表（またはその写し）か。
+    pub(crate) fn is_for(&self, atlas: &AtlasTable) -> bool {
+        std::ptr::eq(self.atlas.pages(), atlas.pages())
     }
 
     /// 頁と葉を作った装置。

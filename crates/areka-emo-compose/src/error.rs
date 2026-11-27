@@ -41,4 +41,7 @@ pub enum ComposeError {
         area = crate::plan::MAX_AREA
     )]
     ExtentTooLarge { surface: u32, w: u32, h: u32 },
+    /// 計画を画面の外の絵へ描けなかった（装置の失いを含む）。
+    #[error("surface {surface} could not be rendered off-screen: {reason}")]
+    Render { surface: u32, reason: String },
 }
