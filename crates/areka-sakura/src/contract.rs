@@ -46,6 +46,9 @@ pub use areka_talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndRea
 // 出どころの語彙（正本=areka-talk・受け口の areka が直接の依存なしで使う）。
 pub use areka_talk::{ScriptOrigin, SecurityLevel, SstpKind};
 
+// 付帯情報の型（正本=areka-talk）。
+pub use areka_talk::{GhostPlace, TalkMeta, TalkRunner, TalkSender};
+
 // ── 再輸出（二重定義しない） ──
 //
 // システム変数展開の消費側契約型（正本は `crate::sysvar`）を re-export し、下流は安定パス

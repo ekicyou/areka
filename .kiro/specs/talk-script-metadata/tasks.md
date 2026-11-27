@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 土台: 付帯情報の型と、kanade と受け手への通り道
-- [ ] 1.1 台本の付帯情報の型を足し、台本の開始に欄を持たせる
+- [x] 1.1 台本の付帯情報の型を足し、台本の開始に欄を持たせる
   - 契約の層に、実行するゴースト（名と置き場）・置き場（ghost/master と最上位）・送り手（実行するゴースト自身／別のゴースト／道具）・それらをまとめた付帯情報の型を足し、再生の層の契約から再輸出する
   - 台本の開始に付帯情報の欄を足す。既定は「置き場が無い・名は空・送り手は実行するゴースト自身」で、今ある作り方（`StartTalk::new`）はこの既定を入れる
   - 再生の層の分解は付帯情報を受け取って捨てる（時刻の表には入れない）
@@ -108,3 +108,6 @@
   - ゴーストの実行時の組み立て（`runtime.rs`・`runtime_tests.rs`）・Cargo の定義・dola の時刻の表・MCP の宛先の決め方（`mcp/resolve.rs`）・kanade の知らせの `SstpSend`／`SstpNotify` の欄に差分が無いことを差分で確かめる
   - _Dispatch: mechanical — 決まったコマンドと差分の確認_
   - _Requirements: 4.4, 7.1, 7.2_
+
+## Implementation Notes
+- 既存のテストの多くは `..StartTalk::new(...)` で組むので、`StartTalk` に欄を足しても直に組む 6 か所しか直す所が出ない（コンパイルの誤りで全部見つかる）。clippy の `-D warnings` は `--no-deps` を付けないと areka-parsers の `collapsible_if`、areka-kanade の tests の `doc_nested_refdefs`（どちらも前からあるもの）で赤になる。
