@@ -125,6 +125,40 @@ pub(crate) fn limit_correction(pos: PointPx, size: SizePx, area: RectPx) -> Opti
     if clamped == pos { None } else { Some(clamped) }
 }
 
+/// 押し戻しの関門が見た作業領域の画面の種類。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LimitMonitor {
+    Shell,
+    Balloon,
+}
+
+impl LimitMonitor {
+    /// 記録の `monitor` の欄に出す語。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Shell => "shell",
+            Self::Balloon => "balloon",
+        }
+    }
+}
+
+/// 押し戻しの関門が見る作業領域と画面の種類を選ぶ。
+///
+/// `script` が真ならバルーンの矩形、偽ならキャラ窓の矩形を [`work_area_for_window`] へ渡す。
+pub(crate) fn limit_work_area(
+    snapshot: &MonitorSnapshot,
+    char_rect: RectPx,
+    balloon_rect: RectPx,
+    script: bool,
+) -> Option<(RectPx, LimitMonitor)> {
+    let (rect, monitor) = if script {
+        (balloon_rect, LimitMonitor::Balloon)
+    } else {
+        (char_rect, LimitMonitor::Shell)
+    };
+    work_area_for_window(snapshot, rect).map(|area| (area, monitor))
+}
+
 // =============================================================================
 // 起動時関門
 // =============================================================================
@@ -153,9 +187,9 @@ pub(crate) fn limit_correction(pos: PointPx, size: SizePx, area: RectPx) -> Opti
 ///
 /// # 基準モニタ
 ///
-/// 内包判定の基準はバルーン窓ではなく**キャラ窓**が属するモニタの作業領域である。
-/// 帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は
-/// [`work_area_for_window`] の既存規則をそのまま呼ぶだけで、ここでは変えない。
+/// 内包判定の基準は [`limit_work_area`] が台本の値なしで選ぶ**キャラ窓**の帰属モニタの
+/// 作業領域である。帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は
+/// [`work_area_for_window`] の既存規則のままで、ここでは変えない。
 ///
 /// # 縮退
 ///
@@ -185,9 +219,14 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
         return p;
     }
 
-    // 基準は**キャラ窓**の帰属モニタ（バルーン窓ではない）。
-    let char_rect = rect_at(p.char_pos, p.char_size);
-    let Some(area) = work_area_for_window(snapshot, char_rect) else {
+    // 起動の時点では台本の値がまだ無いので、本体の画面で見る。
+    let script = false;
+    let Some((area, monitor)) = limit_work_area(
+        snapshot,
+        rect_at(p.char_pos, p.char_size),
+        rect_at(p.balloon_pos, p.balloon_size),
+        script,
+    ) else {
         warn!(
             scope = p.scope,
             context = BALLOON_LIMIT_BOOT_CONTEXT,
@@ -212,6 +251,8 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
         to = ?corrected,
         balloon_size = ?p.balloon_size,
         work_area = ?area,
+        monitor = monitor.as_str(),
+        script,
         "{BALLOON_LIMIT_CLAMP_TAG} 起動時関門: バルーン表示位置を作業領域内へ補正した（balloon_offset は生値のまま）"
     );
     // 表示位置のみ。`balloon_offset` には触れない（焼き付けない）。
@@ -222,6 +263,9 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
 #[cfg(test)]
 #[path = "balloon_limit_gate_tests.rs"]
 mod gate_tests;
+#[cfg(test)]
+#[path = "balloon_limit_monitor_tests.rs"]
+mod monitor_tests;
 #[cfg(test)]
 #[path = "balloon_limit_push_tests.rs"]
 mod push_tests;
