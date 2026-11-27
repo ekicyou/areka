@@ -358,6 +358,11 @@ mod move_hold_tests;
 #[path = "frame_move_hold_balloon_script_tests.rs"]
 mod move_hold_balloon_script_tests;
 
+// 台本のバルーンの基準点の指令が move drain からバルーンの位置まで届く檻。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_balloon_script_drain_tests.rs"]
+mod balloon_script_drain_tests;
+
 #[cfg(test)]
 #[path = "frame_reset_hold_test_support.rs"]
 pub mod reset_hold_test_support;

@@ -27,7 +27,9 @@ use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_posi
 use areka_placement::reset_pos::reset_window_positions;
 use areka_placement::resolver::{PointPx, SizePx};
 use areka_placement::script_alignment::apply_script_alignment;
-use areka_placement::script_balloon::{apply_script_balloon_align, apply_script_balloon_offset};
+use areka_placement::script_balloon::{
+    apply_script_balloon_align, apply_script_balloon_offset, resettle_script_balloons,
+};
 use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_reset_sticky, apply_set_sticky,
@@ -211,6 +213,7 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
         &landed,
         world.get_resource::<StickyGroupLedger>(),
     );
+    resettle_script_balloons(world, &|scope| landed.shown_ratio(scope).is_some());
     for cue in ready {
         let directive = match cue {
             PositionCue::Move(directive) => directive,
