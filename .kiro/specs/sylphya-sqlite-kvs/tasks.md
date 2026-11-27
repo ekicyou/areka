@@ -3,7 +3,7 @@
 > 組み替えは design.md の Migration Strategy の段の順に進め、どのタスクの後も `areka-sylphya` の試験が通る形で止める。ワークスペース全体が組めるのは 3.4 の後、古い保存が消えて全体の試験が通るのは 4.3 の後。
 
 - [ ] 1. 土台: 依存と、鍵の表と速い住み場所
-- [ ] 1.1 rusqlite を足し、依存の確かめを通す
+- [x] 1.1 rusqlite を足し、依存の確かめを通す
   - 着手の前に、同じウェーブ（C28）の兄弟ブランチのソースの変更を測り直し、この spec が触るファイルとの重なりが設計の記述（`crates/areka-placement/src/lib.rs` だけ・こちらは触らない）から増えていないことを確かめる
   - 根の `[workspace.dependencies]` と `areka-sylphya` の `[dependencies]` に rusqlite 0.43.0（`default-features = false`・`bundled`・`cache`）を足し、`Cargo.lock` を更新する
   - `THIRD-PARTY-NOTICES.md` を `cargo about generate` で作り直し、`deny.toml` を変えずに `cargo deny check` が通る

@@ -13,6 +13,7 @@ repository.workspace = true
 thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = { workspace = true }
+rusqlite = { workspace = true }
 areka-actor = { path = "../areka-actor" }
 
 [dev-dependencies]
