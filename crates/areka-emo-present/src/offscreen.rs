@@ -90,3 +90,7 @@ impl OffscreenRenderer {
 #[cfg(test)]
 #[path = "offscreen_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "draw_methods_warp_tests.rs"]
+mod draw_methods_warp_tests;
