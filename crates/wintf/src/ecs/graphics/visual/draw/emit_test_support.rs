@@ -297,8 +297,13 @@ pub(crate) fn render_tree_to_pixels(
     h: u32,
     root_transform: Matrix3x2,
 ) -> Pixels {
-    let commands = tree_commands(world, root, None);
-    replay_to_pixels(&commands, w, h, root_transform)
+    let image =
+        crate::ecs::render_tree_offscreen(warp_device(), world, root, (w, h), root_transform)
+            .expect("画面の外へ描く");
+    Pixels {
+        width: image.width,
+        bytes: image.bytes,
+    }
 }
 
 /// 根 `root` の下の木を組んだ描く列。`viewport` が `None` なら本番と同じ根の `Arrangement.size`。

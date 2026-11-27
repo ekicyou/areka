@@ -124,8 +124,7 @@ pub struct TreeScan {
 }
 
 impl TreeScan {
-    /// 見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く（本番は 1 回の判断の分け方を使う）。
-    #[cfg(test)]
+    /// 見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く（画面は 1 回の判断の分け方を使う）。
     pub(crate) fn visible_nodes(&self) -> impl Iterator<Item = (Entity, usize)> + '_ {
         self.entries
             .iter()

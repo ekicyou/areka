@@ -35,6 +35,8 @@ mod damage_tests;
 #[cfg(test)]
 mod id_target_tests;
 #[cfg(test)]
+mod offscreen_tests;
+#[cfg(test)]
 mod readback_tests;
 #[cfg(test)]
 mod tests;

@@ -4,9 +4,11 @@ use std::collections::HashSet;
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemState;
 use tracing::{error, trace};
+use windows::Win32::Foundation::E_UNEXPECTED;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
-use windows::Win32::Graphics::Direct2D::ID2D1Geometry;
+use windows::Win32::Graphics::Direct2D::{ID2D1Factory, ID2D1Geometry};
 
 use super::draw::builder::{NodeData, TreeFrame, build};
 use super::promotion::Phase;
@@ -425,4 +427,63 @@ fn write_tree(
             });
         }
     }
+}
+
+/// 根 `root` の下の見える節を、描く係と同じ順（`fill_world_visuals` → `build`）で 1 本の描く列にする
+/// （画面の外へ描く口が使う・自動の上げ下げはしない）。視野は根の `Arrangement.size`。
+pub(crate) fn offscreen_tree_commands(
+    world: &mut World,
+    root: Entity,
+    factory: &ID2D1Factory,
+) -> windows::core::Result<Vec<DrawCommand>> {
+    let param_error = |e: bevy_ecs::system::SystemParamValidationError| {
+        windows::core::Error::new(E_UNEXPECTED, e.to_string())
+    };
+    let top = world
+        .get::<Children>(root)
+        .map(|c| c.to_vec())
+        .unwrap_or_default();
+    let name = world.get::<Name>(root).cloned();
+    let mut scan = TreeScan::default();
+    let mut fill: SystemState<Query<FillData>> = SystemState::new(world);
+    fill_world_visuals(
+        root,
+        name.as_ref(),
+        &mut fill.get_mut(world).map_err(param_error)?,
+        false,
+        &top,
+        false,
+        &mut scan,
+        &mut ReportedIssues::default(),
+    );
+    let visited: Vec<_> = scan.visible_nodes().collect();
+    let size = world
+        .get::<Arrangement>(root)
+        .map(|a| a.size)
+        .unwrap_or_default();
+    // SAFETY: Windows API 境界。
+    let unit_rect: ID2D1Geometry = unsafe {
+        factory.CreateRectangleGeometry(&D2D_RECT_F {
+            left: 0.0,
+            top: 0.0,
+            right: 1.0,
+            bottom: 1.0,
+        })
+    }?
+    .into();
+    let mut nodes: SystemState<Query<NodeData>> = SystemState::new(world);
+    let mut out = Vec::new();
+    build(
+        &mut out,
+        factory,
+        &unit_rect,
+        Aabb::new(0.0, 0.0, size.width, size.height),
+        &nodes.get(world).map_err(param_error)?,
+        &TreeFrame::Root {
+            root,
+            root_name: name.as_ref(),
+        },
+        &visited,
+    );
+    Ok(out)
 }
