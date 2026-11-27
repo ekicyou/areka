@@ -212,7 +212,7 @@ fn close_before_commit_arrives_spawns_no_window() {
     );
 }
 
-/// emo2 の複製のシェルの descript に `seriko.sticky-window` を書き足し、窓を準備して投函し、窓が
+/// emo2 の複製のシェルの descript に 1 行（`seriko.sticky-window`・`kero.balloon.dontmove` ほか）を書き足し、窓を準備して投函し、窓が
 /// 生えるまで `Input` 段を回す。戻り値は窓が生えた後の World と、回したあいだの記録。
 fn boot_windows_with_descript_line(line: &str) -> (World, Vec<log_capture_kit::CapturedEvent>) {
     // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。

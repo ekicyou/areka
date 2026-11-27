@@ -85,15 +85,16 @@
   - 起点の直し方で「seriko の時計を文字の層と同じ時計に揃える」を選ぶなら、揃える先は QPC でなく割り込み時刻（`QueryUnbiasedInterruptTimePrecise`）にする（後で 2 度替えないため）。ただし `dola-interrupt-ticks` の型はまだ無いので、型の新設はこの spec でしない。
   - 「起点を 1 か所で見積もって両方へ配る」を選ぶなら、その 1 か所は `talk-anchor-interrupt-ticks` で「押された起点を読む」に置き換わる前提で、置き場を選ぶ。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-- **前提の変化**: 2026-10-15 の聞き取りで、この spec は時刻の土台（`dola-interrupt-ticks` → `talk-anchor-interrupt-ticks`）の後へ回った。起点の件（1・2）は `talk-anchor-interrupt-ticks` が「押された起点を読む」形で引き取る。上の Constraints の「先に要るものは `seriko-trigger-intervals` の着地だけ」と、申し送りの「区分 B で先に着地する見込み」は古い。コードの目印（seriko の文字の時刻の写し `TalkFeed::restart_chain`・数えを揃える `realign_talk` とその `ponytail:` の印・seriko の時計 `crates/areka/src/emo2_boot/mod.rs` の `tick_count_ms`・文字の層の `RevealSchedule::extend_chunk`・時刻源 `TalkClock::observe_cue`）は今もある。
-- **触るファイル**: seriko の `talk.rs`（123 行）・`trigger.rs`（193）・`looper.rs`（993＝上限の近く・テストは兄弟のファイルへ）・`looper_trigger.rs`（230）。式を共有の関数にするなら文字の層の `crates/areka-emo-text/src/state.rs`（772）、比べるテストを本体に置くなら emo2_boot の側（`mod.rs` 833・`talk_clock.rs` 502）。
-- **規模**: 起点を引き取ってもらうので S〜M（5〜8：写しの見張り・中断の直後の数え落とし・6 と 7 のテスト・8 の天井）。
-- **先に要るもの（見直しと crate 分けを含む）**: 見直し `audit-seriko`・`audit-emo-text-state-actor`・`audit-emo2-boot-spine`（台帳と同じ）。本体の emo2_boot は crate 分けの `runtime-module-untangle`（名前を runtime へ）と `runtime-crate-split`（別の crate へ）が動かす＝emo2_boot に触るなら `placement-crate-split` からの 3 本の後。機能の先は `talk-anchor-interrupt-ticks`（その前に `dola-interrupt-ticks`）と、同じ seriko のファイルを触る `seriko-trigger-lottery-gaps`。
-- **優先度の区分**: B（中断の直後に口パクの数えを落とす・写しを見張るテストが無い）。
-- **要件定義のモデル**: Opus に改める（時計と起点の持ち主の判断は `talk-anchor-interrupt-ticks` へ移った。残りは今の刻みの上の数えの直しとテスト）。
-- **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 上の 2 か所。`talk-anchor-interrupt-ticks` の brief の隣の spec の節の「`seriko-talk-clock-fidelity`（区分 B・先に着地する見込み）」も同じく古い。
-
 ## 2026-11-06 棚卸㉟で拾った申し送り（audit-seriko から）
 - 完了した `audit-seriko` で、トリガーの記録の出し先が `areka_seriko::looper::top_trigger`・`parts::part_trigger` から `areka_seriko::trigger` に変わった。また、同じ刻で面が切り替わるときの `pick_rng` の引く順が変わった。どちらも「v0.2.0 の seriko の spec の注に残す」と audit-seriko の tasks.md（完了の棚卸へ渡すもの）が決めていたが、どの brief にも書かれていなかったので、時刻の土台を直すこの spec の要件の段で前提として読む（文書だけの申し送り・区分 C）。
+
+## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
+- **前提の変化**: 着地した `dola-interrupt-ticks`（`talk-anchor-interrupt-ticks` の範囲を含む）が、時計を 1 本にし（`GetTickCount64` は本番から消えた）、文字の層と seriko が起点を見積もらず、合図が運ぶ絶対の発火時刻から字の時刻を求める形にした。上の「残っている件」の 1〜4・6・7 はこれで済んだ: 1・2＝seriko の字の列（`crates/areka-seriko/src/talk.rs` の `TalkFeed`）は時計も起点も持たない。3＝消去は絶対の時刻で比べるので前の台詞の現れた字を捨てない（`talk_tests.rs` の中断の後の全消去・`looper_talk_tests.rs` の中断の後の新しい台詞のテスト）。4＝字の時刻の式は 1 本の関数（`crates/areka-sakura` の `reveal::chunk_reveal_offsets`）を文字の層（`crates/areka-emo-text/src/state.rs`）と seriko の両方が呼ぶ＝写しではない。6＝部品が見えた刻みの中の区切りは見え始めの時刻から始める（`parts_trigger_talk_tests.rs`）。7＝1 回の刻みで越えた区切りは合図からの配線を通して古い順に判定する（`looper_mouth_tests.rs`）。本文の `emo2_boot/` のパスも古い（時刻源は `crates/areka-runtime/src/talk_clock.rs` で、起点を持たない時計だけになった）。
+- **残る件**: ⑴ 件 8＝数えを揃える関数（`crates/areka-seriko/src/trigger.rs` の `realign_talk`・`ponytail:` の印）の 0 で止まる天井。届く道は今もある（起点の置き直しの知らせが効く時刻より遅れて届くと、もう現れた字が後ろへ動いて現れた数が減って見える。その間に消去が届く）。⑵ 件 5＝字の列の単位の違い（seriko はスコープごと・`crates/areka-seriko/src/looper.rs` の `feeds`、文字の層はスコープ × 文字の場所ごと）。直すか、差が出ない理由を記録して閉じるかを要件で決める。⑶ 上の audit-seriko の申し送り（記録の出し先の名前と乱数の引く順）を要件の前提として読む。
+- **触るファイル**: `trigger.rs`（275 行）と兄弟の `trigger_tests.rs`。件 5 を直すなら `looper.rs`（855・上限まで余裕あり）と `looper_talk_tests.rs`。`talk.rs`（101）・`looper_trigger.rs`（218）・emo-text の `state.rs`・`talk_clock.rs` には触らない見込み。新しい依存も emo-text の新しいファイルも無い。
+- **規模**: S（2〜4 タスク）。
+- **先に要るもの**: 機能の上で先に要る spec は無い（頭）。roadmap の「`seriko-trigger-lottery-gaps` の後」は、同じ `trigger.rs`・`trigger_tests.rs`（件 5 を直すなら `looper.rs`）を触るためのファイルの順だけで、あちらの直しを使うわけではない＝あちらと同じウェーブに置かなければ先に走れる。今のウェーブの 4 本（`draw-methods-canon` は seriko の `table.rs` の期待だけ・ほかの 3 本は seriko に触らない）とは重ならない。
+- **優先度の区分**: B（数えた字が減って次の口パクが 1 回遅れうる）。
+- **要件定義のモデル**: Opus（今の刻みの上の数えの直しとテストだけ。Constraints の「Fable」は古い）。
+- **分割の案**: 無し。小さすぎるなら、件 8・件 5 を `seriko-trigger-lottery-gaps` へ件として移してこの spec を閉じる手もある（ただしあちらは今の版の外）。
+- **見つけた穴・古くなった記述**: Constraints の「先に要るものは `seriko-trigger-intervals` の着地だけ」「要件定義のモデル: Fable」「規模 M」、申し送りの「区分 B で先に着地する見込み」、Scope・Boundary の起点と時計の項（`emo2_boot/mod.rs` の `seriko_clock`）は古い。roadmap の台帳の行（378 行目）の Problem の列も、済んだ 1〜4・6・7 を並べたまま。

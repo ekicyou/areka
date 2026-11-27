@@ -184,7 +184,7 @@ pub type BootRuntimeFn = fn(
 /// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立）の失敗を
 /// `#[from]` 変換で集約する。呼び手（`wire_runtime`／`classify_wiring_error`）が
 /// `MountError::StartPointMissing` 系＝想定内 `warn!`・他＝`error!` に分類して `wired=false` を
-/// 返し（`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ倒し、
+/// 返し（`ghost_session::boot_ghost` は `LogSink` 1 本と `DiscardSink` 1 本のフォールバック boot へ倒し、
 /// `ghost_session::boot_ghost_strict` は `Err` を返す）、本型はバリアントを観測可能にするのみ
 /// （panic せず `Err` を返す）。
 ///
@@ -265,7 +265,7 @@ impl From<ShellLoadError> for BootWiringError {
 ///
 /// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（不成立時は `None`）。
 /// - `seriko`: seriko アクターの [`areka_actor::ActorHandle`]（不成立時は `None`）。
-/// - `wired`: 実 sink 結線が成立したか（`false` の帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
+/// - `wired`: 実 sink 結線が成立したか（`false` の帰結は呼び手が決める: `boot_ghost` は `LogSink` 1 本と `DiscardSink` 1 本の
 ///   フォールバックへ倒し、`boot_ghost_strict` は `Err` を返す）。
 /// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（不成立時 `None`）。
 /// - `seriko_sink`: seriko の送り手の複製（不成立時 `None`・持ち主は `GhostSession` だけ）。
@@ -392,7 +392,7 @@ const _: fn() = || {
 ///    引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送。シェルは引数 `shell`＝配置の準備が
 ///    決めた起動のシェルで、手順5 の起動へも同じ値を渡す）。`Err` は `classify_wiring_error`
 ///    （起点不在＝`warn!`・他＝`error!`）の上 `wired=false` を呼び手へ返す
-///    （`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ
+///    （`ghost_session::boot_ghost` は `LogSink` 1 本と `DiscardSink` 1 本のフォールバック boot へ
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提）。
@@ -417,7 +417,7 @@ const _: fn() = || {
 ///
 /// # 失敗（log-first・panic しない）
 /// いずれの手順の失敗も `warn!`／`error!`＋`RuntimeOutcome{ ghost: None, seriko: None,
-/// wired: false }` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 boot へ倒し、
+/// wired: false }` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink` 1 本と `DiscardSink` 1 本の boot へ倒し、
 /// `ghost_session::boot_ghost_strict` は `Err` を返す）。boot の前に
 /// 起こした seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
@@ -431,7 +431,7 @@ pub fn wire_runtime(
     default_surfaces: &DefaultSurfaces,
     boot_runtime: BootRuntimeFn,
 ) -> RuntimeOutcome {
-    /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
+    /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink` 1 本と `DiscardSink` 1 本の
     /// boot へ倒し、`boot_ghost_strict` は `Err` を返す）。
     fn fallback() -> RuntimeOutcome {
         RuntimeOutcome {

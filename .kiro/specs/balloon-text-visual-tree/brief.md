@@ -86,18 +86,18 @@
 - 要件定義のモデル: Opus。
 - 分割の案: 上限を超えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る。
 
-## 2026-11-20 棚卸㊵の再測定（main 67e0c70e）
-- **前提の変化**: `audit-test-kits`（11-19）が `tests/attach_wiring_test.rs` の記録の捕まえの写しを消し、共有の `log_capture_kit::{ExpectField, expect_one}` を使う形にした＝前の節の「並べるなら、どちらかが触らない約束」は要らなくなった。`audit-emo2-boot-spine`（11-19）は `areka-emo-text` の `actor.rs`・`sink.rs` とテストの数行を直したが、触るファイル（`surface.rs`・`surface_window_child.rs`・`marker_surface.rs`・`viewbox_draw*.rs`・`actor_present.rs`）と `mount.rs`・wintf の `com/`・`ecs/graphics/` は動いていない。`frame/drain_resnap.rs` は `audit-placement-follow-residue` の説明の文の書き換えだけ。
-- **触るファイル**: 前の見立てのまま＝`crates/areka-emo-text/src/{surface.rs 960, surface_window_child.rs 236, marker_surface.rs 356, viewbox_draw*.rs（render 835）, actor_present.rs 872, actor_scroll.rs, draw.rs, lib.rs}` と兄弟のテスト・`tests/support/mod.rs`・`tests/attach_wiring_test.rs`・`crates/areka-emo-present/src/mount.rs`・`crates/areka-runtime/src/frame/{attach 502, wiring 459, scale_text 327, drain_resnap 759}.rs` と `frame_{attach,drain_text,text_scale}_tests.rs`・本体 `runtime_tests/frame_attach_carry_tests.rs`・本体 `mcp/dump_balloon.rs`（216）。使い手が 0 になれば wintf の `com/dxgi.rs`・`com/wuc.rs` のテスト（216〜242 行）・`areka-emo-text/Cargo.toml` 28 行の説明。文字の区画を `OwnSurface` で持ち主にするか自動の上げ下げに任せるかは要件で決める（前の節のまま）。
+## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
+- **前提の変化**: 待っていた見直し（`audit-emo2-boot-frame`・`audit-areka-install-update`）は済み、`wintf-surface-auto-promotion` も済んだ＝文字の区画の描画面は、自分で持ち主にする形と自動の上げ下げに任せる形のどちらも取れる（要件で決める）。文字の層のコードは動いていない＝自前のスワップチェーンの使い手は今も `crates/areka-emo-text/src/surface.rs` 356 行目だけ。配置の側はもう箱の文字の面の名前を読まない（名前を書く所は `surface_window_child.rs` 160 行目の 1 か所）＝名前と置き場は要件で自由に決めてよい。
+- **触るファイル**: emo-text の `src/{surface 937 行, surface_window_child 233, marker_surface 354, actor_present 866, actor_scroll 182, draw 792, actor, lib 577}.rs`（`actor.rs` は文字の面を渡す口）・`src/viewbox_draw*.rs`（`viewbox_draw_render.rs` 809・テストの `viewbox_draw_decoration_tests.rs` 966 行＝上限の近く）・`tests/support/mod.rs`・`tests/attach_wiring_test.rs`・試しの見本 `examples/emo-text-layer/drive.rs`（827・文字の面を読み戻して確かめている）・`crates/areka-emo-present/src/mount.rs`・`crates/areka-runtime/src/frame/{attach 477, wiring 363, scale_text 321, drain_resnap 770}.rs` と `frame_{attach,drain_text,text_scale}_tests.rs`・本体の `crates/areka/src/mcp/dump_balloon.rs`（背景・文字の面・印の面を別々に読み戻して重ねている）と `runtime_tests/frame_attach_carry_tests.rs`。使い手が 0 になれば wintf の `com/dxgi.rs`・`com/wuc.rs`（テスト 203〜222 行目）。
+- **席**: emo-text に新しいソースのファイルを足す 1 本だけの席を使う（`surface.rs` は上限の近く）。依存は足さない。
 - **規模**: L（16〜20 タスク）のまま。
-- **先に要るもの**: 見直し `audit-emo2-boot-frame`（結線の 4 ファイルの持ち主・未完了＝「v0.2.0 の作り直しと重なる見直しは先に」）。働きの依存は無し。
-- **`session-module-gather` との C24**: 向こうは `mcp/dump_balloon.rs` を書き換えない（引くのは `super::dump_surface`・`super::resolve` だけで、集めるモジュールを引かない）＝`dump_balloon.rs` では重ならない。ただし本体の `runtime_tests/frame_attach_carry_tests.rs` 17 行（`crate::ghost_session::{GhostSession, GhostSlot}`）は向こうがパスを直す＝同じウェーブに並べるなら、この spec がこのファイルに触らない約束が要る（触るなら向こうの後）。
-- **同じウェーブに置けない相手**: `audit-emo2-boot-frame`（待つ）・`window-resetwindowpos-hold`（`drain_resnap.rs`）・`balloon-script-offset-align`（`drain_resnap.rs` の見込み）・`balloon-flip-ssp-review`（案 ⑶ で `other_chars.rs` を外すなら）。`hit-id-pass` とは挙げたファイルでは 0（向こうは emo-present の `presenter/{hit,budget}.rs`・`cache.rs` と wintf の `layout/hit_region/`・`widget/bitmap_source/alpha_mask.rs`・新しい ID の描き先）＝並べるなら、両方の設計で emo-present と wintf の `ecs/graphics/` の触り方を突き合わせる。
-- **配置とのつながり（まだ開いた穴）**: 名前 `emo-text-box-surface` は `surface_window_child.rs` 163 行・`crates/areka-placement/src/follow/other_chars.rs` 36 行（定数 `TEXT_BOX_SURFACE_NAME`）・`follow_other_chars_tests.rs` 99 行の 3 か所に字で書いてあり、共有の定数が無い。箱の文字の面の置き場や名前を変えると、表示している窓の判定が黙って変わる＝要件の段で、名前と置き場を保つか、共有の印へ寄せるかを決める。
-- **席**: emo-text に新しいファイルを足す 1 本だけの席（`lib.rs` の一覧・1,000 行の近くの 3 ファイルに足せない）。
-- **優先度の区分**: A（開発者 2026-11-14「本来、バルーンが使うはず。使ってないなら使うべきですね」）。版は v0.2.0。
-- **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`、節の下の持ち主の前例も wintf に入った。新しい境目や並行の保証は作らない）。
-- **分割の案**: 上限を越えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る（起票時のまま）。
+- **先に要るもの**: 無し。
+- **同じウェーブに置けない相手**: `draw-methods-canon`（`mount.rs`・`tests/support/mod.rs`）・`instant-to-interrupt-ticks`（`dump_balloon.rs` の所要時間 194 行目・`scale_text.rs` の締め切り 66 行目・供給面を消すなら `com/wuc.rs`）。後ろの `compose-f16-precision`（`surface.rs`・`draw.rs`・`dump_balloon.rs`・`com/`）・`talk-anchor-interrupt-ticks`（`examples/emo-text-layer/drive.rs`）は列のとおり後。`sylphya-sqlite-kvs`・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata` とは 0（talk の 2 本の `drive.rs`・`actor.rs`・`sink.rs` は別の crate のもの）。
+- **約束の案**: `scale_text.rs` は結線の入口（`connect_balloon_text`・`text_slot_view`）の形を保てば触らずに済み、`com/dxgi.rs`・`com/wuc.rs` は消すのを後へ回せば触らずに済む（どちらも設計を曲げない）。`dump_balloon.rs` は文字が描画の木へ入ると読み戻しの形が変わるので避けられない＝`instant-to-interrupt-ticks` とは約束で外せない。
+- **優先度の区分**: A（開発者が、バルーンも描画の木を使うべきと言った）。版は v0.2.0。
+- **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`、節の下の持ち主と自動の上げ下げの前例も wintf に入った。新しい境目や並行の保証は作らない）。
+- **分割の案**: 上限を越えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る。
+- **古くなった記述**: Current State の行数（`surface.rs` 960→937・`actor_present.rs` 872→866・`viewbox_draw_render.rs` 835→809・`draw.rs` 804→792）と、結線の場所 `crates/areka/src/runtime/frame/`（今は `crates/areka-runtime/src/frame/`）。Upstream の `wintf-visual-damage-redraw` は完了済み。
 
 ## 申し送り（balloon-flip-ssp-review より・2026-11-21）
 - **変わった事実**: バルーンの押し込みを押し込みだけにしたので、`crates/areka-placement/src/follow/other_chars.rs` から `shown_char_rects`・`is_shown`・定数 `TEXT_BOX_SURFACE_NAME` が外れた。同時に `follow_other_chars_tests.rs` の `shown_char_rects` の檻も外れた。名前 `emo-text-box-surface` を字で書く所は、いまは `crates/areka-emo-text/src/surface_window_child.rs` の 1 か所だけ。
