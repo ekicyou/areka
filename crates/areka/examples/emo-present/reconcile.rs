@@ -1,7 +1,7 @@
 use super::{
-    AUTHOR_DPI, CYCLE_INTERVAL, ComposeError, ComposedSurface, DPI, EmoBoot, EmoPresenter, Entity,
-    FrameTime, Point, SHELL_INITIAL_X, SHELL_INITIAL_Y, ScalePolicy, ScaleRatio, SizeI, TargetId,
-    WindowPos, World, compute_balloon_pos, derive_scale,
+    AUTHOR_DPI, CYCLE_INTERVAL, ComposedSurface, DPI, EmoBoot, EmoPresenter, Entity, FrameTime,
+    Point, PresentError, SHELL_INITIAL_X, SHELL_INITIAL_Y, ScalePolicy, ScaleRatio, SizeI,
+    TargetId, WindowPos, World, compute_balloon_pos, derive_scale,
 };
 
 // ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ fn reconcile_window_size(
 /// 起動時 golden バイト一致 assert。
 ///
 /// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（表示に渡した**原寸の合成バイト列**）
-/// で取得し、`Composer::compose` が返す golden [`ComposedSurface`] のバイト列
+/// で取得し、画面の外の描き手（[`areka_emo_present::OffscreenRenderer::hardware`]）が同じ面を描いた golden [`ComposedSurface`] のバイト列
 /// （[`ComposedSurface::bytes`]）と **完全一致**（full byte equality）することを検証する。
 /// # golden に k を掛けない
 ///
@@ -192,7 +192,7 @@ fn reconcile_window_size(
 ///
 /// # 正当な非表示のスキップ
 ///
-/// golden 合成に失敗した場合、または表示に渡した合成面が無い（`read_back` が
+/// golden を描けなかった場合、または表示に渡した合成面が無い（`read_back` が
 /// [`areka_emo_present::PresentError`] を返す・未表示や EmptyComposition degradation 等）の場合は、`panic` せず
 /// warn ログを出してスキップする（表示すべきものが正当に無いだけで観測失敗ではない）。通常の emo2 fixture は
 /// 両 target とも表示するため assert が走る。
@@ -204,7 +204,7 @@ pub(super) fn assert_startup_golden(
     world: &World,
     window: Entity,
     target: TargetId,
-    golden: std::result::Result<ComposedSurface, ComposeError>,
+    golden: std::result::Result<ComposedSurface, PresentError>,
     label: &str,
 ) {
     let golden = match golden {
@@ -213,7 +213,7 @@ pub(super) fn assert_startup_golden(
             tracing::warn!(
                 ?target,
                 error = %e,
-                "emo-present: golden 合成に失敗 — {label} の起動時 golden assert をスキップ"
+                "emo-present: golden を描けない — {label} の起動時 golden assert をスキップ"
             );
             return;
         }

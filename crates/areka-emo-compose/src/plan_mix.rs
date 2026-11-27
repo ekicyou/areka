@@ -30,7 +30,7 @@ impl NestWord {
         match method {
             ComposeMethod::Asis => NestWord::Asis,
             ComposeMethod::Base => NestWord::Base,
-            // 描けない語の element定義の子の面は、今の CPU の合成と同じく平らに重ねる。
+            // 描けない語で指された子の面は、語で外さず中身を `SourceOver` で平らに重ねる。
             other => NestWord::Mix(mix_of(other).unwrap_or(Mix::SourceOver)),
         }
     }
@@ -245,6 +245,13 @@ fn walk(
         match event {
             Event::Op(i, op) => {
                 let Some(mut mix) = mix_of(&op.method) else {
+                    // 組むたびの知らせなので debug（`BlitOp` は surface id を持たない）。
+                    tracing::debug!(
+                        target: "areka_emo_compose",
+                        method = ?op.method,
+                        element = op.element.0,
+                        "描けない合成メソッドの命令を計画に入れない"
+                    );
                     continue;
                 };
                 let mut element = op.element;

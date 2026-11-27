@@ -1,4 +1,4 @@
-//! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／計画＋合成・頁と葉の用意・
+//! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／計画・頁と葉の用意・
 //! 装着の遅延生成・節の写し＋配置＋可視化・当たりの描き先の塗り・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
 use areka_emo_atlas::AtlasTable;
@@ -17,7 +17,7 @@ use super::{
 };
 
 impl EmoPresenter {
-    /// `ShowSurface` の適用（キャッシュ引き当て or 計画＋合成 → 頁と葉の用意 → 節の写し・配置の書き込み → 可視化 → 当たりの描き先）。
+    /// `ShowSurface` の適用（キャッシュ引き当て or 計画 → 頁と葉の用意 → 節の写し・配置の書き込み → 可視化 → 当たりの描き先）。
     ///
     /// 結果は戻り値で返す。応答の口へ送るのは指令の入口（`apply`）だけで、ここは送らない。
     ///
@@ -25,19 +25,19 @@ impl EmoPresenter {
     /// - 未装着なら `error!` ＋ `Err(TargetNotAttached)`。
     /// - 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
     ///   component 不在は `None` のまま渡して k=1.0 への縮退へ落とす）。k はキー要素ではない: 合成入力
-    ///   （surface id＋bind 集合＋pattern）が完全一致するヒットなら再合成しないし、k だけが変わった適用も
+    ///   （surface id＋bind 集合＋pattern）が完全一致するヒットなら計画を組み直さないし、k だけが変わった適用も
     ///   ヒットする。
-    /// - ミスなら計画を組んで合成する（native 原寸）。`SurfaceNotFound` は `error!` ＋表示不変＋`Err`、
+    /// - ミスなら計画を組む（native 原寸）。`SurfaceNotFound` は `error!` ＋表示不変＋`Err`、
     ///   `EmptyComposition` は `warn!` ＋ Hide 縮退＋`Ok`（外形の上限越えの `ExtentTooLarge` も同じ扱い）。
     /// - 頁の絵と計画の葉を用意する（失敗し得る GPU 呼び出しはここだけ・どの状態にも触れる前）。
-    ///   ミスなら続けて `cache.insert` へ計画と面の組で渡す。
+    ///   ミスなら続けて `cache.insert` へ計画を渡す。
     /// - `mount` 未生成なら遅延生成し、節の写し → 配置（原寸・k）→ 可視化の順に同一呼び出し内で
     ///   書く。拡大は wintf の描画経路（`render_surface` の `SetTransform`）が `Arrangement.scale`＝k で掛け、
     ///   原寸のまとめの節が原寸で描いてから k 倍で重ねるので、この漏斗は k の値で手順を分岐しない。
     ///
     /// # 毎フレーム経路は再利用席の上を走る
     ///
-    /// ミス経路のバッファ（計画・native 合成先・書き出しの控え）はいずれも [`FrameBudget`] の
+    /// ミス経路の計画は [`FrameBudget`] の
     /// 席か、キャッシュ追い出しエントリの容量回収で回る。定常状態（寸法不変・初回確保後）ではこの
     /// 経路の新規確保は 0 であり、確保が起きた回だけが perf サマリ行の `alloc_*` に現れる。
     ///
@@ -46,7 +46,7 @@ impl EmoPresenter {
     /// # 可視化手順だけが所有権でゲートされる
     ///
     /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
-    /// と mount 遅延生成の初期可視性だけが変わり、それ以外の全手順は所有権に依らず共通（k 導出・合成・
+    /// と mount 遅延生成の初期可視性だけが変わり、それ以外の全手順は所有権に依らず共通（k 導出・計画・
     /// キャッシュ・節・配置・`applied`／`native_size`／`last_show`／`pending_resize`・
     /// 下の表示の行）。表示成立点が 1 つであることを崩さないための境界であり、「不可視のまま配置先と面が
     /// 確立する」はこの共通部分がそのまま与える。可視化は [`EmoPresenter::show_target`] が同じ漏斗を
@@ -108,9 +108,9 @@ impl EmoPresenter {
         let cache_hit = target.cache.touch(surface_id, &binds, &pattern);
         timing.mark(Stage::CacheLookup);
         if !cache_hit {
-            // 計画は画面の節の材料、合成は書き出しの出どころ（どちらも native 原寸・
-            // emo-compose は k を知らない）。席を閉包で借りるのは、外形が合成器の内側で決まり、伸長の観測を
-            // 席を使い終えた直後にしか置けないため（`FrameBudget::native_scratch` の doc）。
+            // 計画は画面の節の材料で書き出しの出どころ（native 原寸・emo-compose は k を知らない）。席を閉包で
+            // 借りるのは、計画の大きさが合成器の内側で決まり、伸長の観測を席を使い終えた直後にしか置けないため
+            // （`FrameBudget::plan_scratch` の doc）。
             let planned = target.budget.plan_scratch(|plan| {
                 target.composer.plan_into(
                     plan,
@@ -121,20 +121,8 @@ impl EmoPresenter {
                     &pattern,
                 )
             });
-            let composed = planned.and_then(|()| {
-                target.budget.native_scratch(|scratch| {
-                    target.composer.compose_into(
-                        scratch,
-                        &target.emo_world,
-                        &target.atlas,
-                        surface_id,
-                        &binds,
-                        &pattern,
-                    )
-                })
-            });
             timing.mark(Stage::Compose);
-            match composed {
+            match planned {
                 Ok(()) => {}
                 Err(
                     e @ (ComposeError::EmptyComposition(_) | ComposeError::ExtentTooLarge { .. }),
@@ -204,32 +192,29 @@ impl EmoPresenter {
         timing.mark(Stage::Upload);
 
         if !cache_hit {
-            // 容量回収は計画・合成・記録の成功後に限る（`take_recycled` の契約）。失敗し得る位置で呼ぶと
-            // スロットが空のまま残り、直後の同一入力の適用がヒットせず再合成へ落ちて「失敗時は表示も
+            // 容量回収は計画と記録の成功後に限る（`take_recycled` の契約）。失敗し得る位置で呼ぶと
+            // スロットが空のまま残り、直後の同一入力の適用がヒットせず計画の組み直しへ落ちて「失敗時は表示も
             // キャッシュも適用前のまま」が崩れる。
             let recycled = target.cache.take_recycled();
-            // 追い出しエントリの合成面と計画の容量を受け取る。回収が成立しなければ空から始まり、以後の
-            // 伸長が計数される。
-            let (mut composed, mut plan) = super::budget::FrameBudget::display_buffer(recycled);
-            // 席と回収した容量を交代させる（複写も確保も起きない）。交代後は回収した容量が席に入り、
-            // 次の適用はそちらへ計画・合成する。
-            target.budget.swap_native_scratch(&mut composed);
+            // 追い出しエントリの計画の容量を受け取り、席と交代させる（複写も確保も起きない）。回収が
+            // 成立しなければ空から始まり、以後の伸長が計数される。
+            let mut plan = super::budget::FrameBudget::recycled_plan(recycled);
             target.budget.swap_plan_scratch(&mut plan);
             target
                 .cache
-                .insert(surface_id, binds.clone(), pattern.clone(), plan, composed);
+                .insert(surface_id, binds.clone(), pattern.clone(), plan);
             // `Stage::Insert` の区間は挿入（スロット置換）と席の交代（O(1) の入れ替え）を含む。旧エントリは
             // `take_recycled` で先に回収済みなので、対の解放 churn はこの区間に無い。
             timing.mark(Stage::Insert);
         }
 
-        // 使えるエントリ（引き当て済み・順序は動かさない `get`）。原寸はエントリの `composed` 外形、物理寸は
+        // 使えるエントリ（引き当て済み・順序は動かさない `get`）。原寸は計画の外形、物理寸は
         // 丸め権威の式 1 つ（`scaled_extent`）で導く。照会値（`target_physical_size`）と同じ式で同じ値になる。
         let entry = target
             .cache
             .get(surface_id, &binds, &pattern)
             .expect("直前に引き当て済み");
-        let native = (entry.composed.width(), entry.composed.height());
+        let native = (entry.plan.extent.w, entry.plan.extent.h);
         let base_surface = entry.plan.base_surface;
         let physical = scale.scaled_extent(native.0, native.1);
 
@@ -360,9 +345,9 @@ impl EmoPresenter {
             });
             target.scale_baseline = Some(now);
         }
-        // いま表示に使ったエントリ由来の原寸をそのまま写す。合成した回か否かで分岐させると、「insert 済みの
+        // いま表示に使ったエントリ由来の原寸をそのまま写す。計画を組んだ回か否かで分岐させると、「insert 済みの
         // まま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する。容量 3 ではヒットしたエントリが
-        // 直前の挿入とは限らないので、エントリの `composed` 外形から読む。
+        // 直前の挿入とは限らないので、エントリの計画の外形から読む。
         target.native_size = Some(native);
         // 合成キーの安定ハッシュ（perf サマリ行の `key_hash`）は `last_show` への move の直前に取る。全段の
         // `mark` が済んだ後なので、この走査（借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。

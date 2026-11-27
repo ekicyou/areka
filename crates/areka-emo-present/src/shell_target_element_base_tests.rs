@@ -27,7 +27,7 @@ use super::*;
 use std::path::PathBuf;
 
 use areka_emo_atlas::{MemoryDecoder, WicDecoderArm};
-use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
+use areka_emo_compose::{BindSet, ComposeError, PatternState};
 use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
@@ -80,15 +80,14 @@ fn bake(text: &str, files: &[&str], images: &[Image]) -> ShellTarget {
 /// 面 1 枚を素の状態（有効 bind もコマも無い）で合成し、外形と画素列にする。
 fn snapshot(target: &ShellTarget, id: u32) -> Snapshot {
     let world = target.build_world();
-    Composer::new()
-        .compose(
-            &world,
-            target.atlas(),
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .map(|s| (s.width(), s.height(), s.bytes().to_vec()))
+    super::test_support::render(
+        &world,
+        target.atlas(),
+        id,
+        &BindSet::default(),
+        &PatternState::default(),
+    )
+    .map(|s| (s.width(), s.height(), s.bytes().to_vec()))
 }
 
 /// 合成結果の 1 画素を引く（`stride` は幅×4 の詰めた並び）。

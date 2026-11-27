@@ -30,7 +30,7 @@ use super::*;
 use std::path::PathBuf;
 
 use areka_emo_atlas::MemoryDecoder;
-use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, PatternState};
+use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, PatternState};
 use areka_parsers::shell::parse;
 
 use super::test_support::{CapturedEvent, insert_solid, layer0_path, pixel};
@@ -130,7 +130,7 @@ fn compose(
     world: &EmoWorld,
     id: u32,
 ) -> Result<ComposedSurface, ComposeError> {
-    Composer::new().compose(
+    super::test_support::render(
         world,
         target.atlas(),
         id,

@@ -9,7 +9,7 @@ use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
-use crate::composed::ComposedSurface;
+
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan::compute_extent;
@@ -78,13 +78,12 @@ fn world_from(text: String) -> (EmoWorld, AtlasTable) {
     (bound_world(&parse(&text), &[], &atlas), atlas)
 }
 
-/// 面 0 を合成する（命令列は合成器の作業場から写して返す）。
+/// 面 0 を計画する（命令列は合成器の作業場から写して返す）。
 fn compose(composer: &mut Composer, world: &EmoWorld, atlas: &AtlasTable) -> Vec<crate::BlitOp> {
-    let mut out = ComposedSurface::new(0, 0);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     composer
-        .compose_into(&mut out, world, atlas, 0, &binds, &pattern)
-        .expect("合成できる");
+        .plan(world, atlas, 0, &binds, &pattern)
+        .expect("計画できる");
     composer.ops.clone()
 }
 
@@ -255,19 +254,11 @@ fn insert_chain_composes_on_a_small_stack() {
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
     let world = bound_world(&parse(&text), &[], &atlas);
     on_small_stack(|| {
-        let mut out = ComposedSurface::new(0, 0);
         let binds = BindSet::from_ids(0..=LAST);
         let mut composer = Composer::new();
         composer
-            .compose_into(
-                &mut out,
-                &world,
-                &atlas,
-                0,
-                &binds,
-                &PatternState::default(),
-            )
-            .expect("合成できる");
+            .plan(&world, &atlas, 0, &binds, &PatternState::default())
+            .expect("計画できる");
         assert_eq!(composer.ops.len(), 2, "面 0 の絵と、連鎖の先の面 1 の絵");
     });
 }
@@ -427,7 +418,7 @@ fn extent_over_the_area_limit_is_too_large() {
         let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
         let world = bound_world(&parse(&text), &[], &atlas);
         let (binds, pattern) = (BindSet::default(), PatternState::default());
-        crate::plan_test_support::plan_of(&world, &atlas, 0, &binds, &pattern).1
+        crate::plan_test_support::ops_and_extent(&world, &atlas, 0, &binds, &pattern).1
     };
     assert_eq!(plan(16384, 2), Ok(crate::plan::Extent { w: 16384, h: 2 }));
     assert_eq!(

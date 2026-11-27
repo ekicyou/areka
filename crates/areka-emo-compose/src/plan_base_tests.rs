@@ -9,7 +9,7 @@ use crate::bind::BindSet;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_test_support::{
-    bake_atlas, bound_world, draw_plan_of, frame, id_to_path, named_ops, op_images, plan_images,
+    bake_atlas, bound_world, frame, id_to_path, named_ops, op_images, ops_and_extent, plan_images,
     plan_of,
 };
 use crate::world::EmoWorld;
@@ -75,8 +75,8 @@ fn planned(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<(&'static str, i64, i64)>, u32) {
-    let (ops, _) = plan_of(world, atlas, top, binds, pattern);
-    let plan = draw_plan_of(world, atlas, top, binds, pattern).expect("計画を組める");
+    let (ops, _) = ops_and_extent(world, atlas, top, binds, pattern);
+    let plan = plan_of(world, atlas, top, binds, pattern).expect("計画を組める");
     assert_eq!(plan_images(&plan), op_images(&ops), "計画と命令の列が同じ");
     assert_eq!(
         plan.base_surface,

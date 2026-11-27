@@ -133,7 +133,12 @@ impl GpuAtlas {
     ) -> Result<&ID2D1CommandList, PresentError> {
         let slot = element.0 as usize;
         if self.leaves[slot].is_none() {
-            let placement = self.atlas.entry(element).placement.clone();
+            let placement = self
+                .atlas
+                .entry(element)
+                .placement
+                .clone()
+                .filter(|p| self.page_holds(element, p));
             let list = self.record(repeat, |dc| {
                 let Some(p) = placement else {
                     return Ok(());
@@ -221,6 +226,31 @@ impl GpuAtlas {
     /// 頁と葉を作った装置。
     pub(crate) fn device(&self) -> &ID2D1Device {
         &self.device
+    }
+
+    /// 置き場 `p` の頁が在り、uv がその頁に収まるか。収まらなければ `warn!` を残す（その絵は描かない）。
+    /// 表（`AtlasTable::new`）は uv と頁を照らさないので、葉を記録する手前で信じずに確かめる。
+    fn page_holds(&self, element: ElementId, p: &areka_emo_atlas::Placement) -> bool {
+        let Some(page) = self.atlas.page(p.page) else {
+            tracing::warn!(
+                element = element.0,
+                page = p.page,
+                "アトラスの頁が存在しない: 絵を描かない"
+            );
+            return false;
+        };
+        let uv = &p.uv_rect;
+        let fits = uv.x as u64 + uv.w as u64 <= page.width as u64
+            && uv.y as u64 + uv.h as u64 <= page.height as u64;
+        if !fits {
+            tracing::warn!(
+                element = element.0,
+                page = p.page,
+                uv = ?uv,
+                "uv が頁に収まらない: 絵を描かない"
+            );
+        }
+        fits
     }
 
     #[cfg(test)]

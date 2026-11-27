@@ -101,7 +101,6 @@ fn ctx() -> EmitContext {
 
 fn allocs() -> BudgetDelta {
     BudgetDelta {
-        alloc_compose_dst: 1,
         alloc_plan: 3,
         node_rebuilds: 5,
     }
@@ -179,7 +178,11 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     assert_eq!(field(ev, "key_hash"), format!("{}", 0xdead_beef_u64));
 
     // 確保計数（値は呼び手から素通し）。
-    assert_eq!(field(ev, "alloc_compose_dst"), "1");
+    assert_eq!(
+        field(ev, "alloc_compose_dst"),
+        "0",
+        "CPU の合成先はもう無い"
+    );
     assert_eq!(field(ev, "alloc_mask"), "0", "α マスクはもう作らない");
     assert_eq!(field(ev, "alloc_plan"), "3");
     assert_eq!(field(ev, "node_rebuilds"), "5");

@@ -7,9 +7,9 @@
 /// 合成結果（premultiplied BGRA・`Send` 所有・無変換で WUC upload / AlphaMask 生成可能）。
 ///
 /// 内部フィールドは opaque。不変条件として `bytes.len() == width * 4 * height`・画素は常に premultiplied BGRA を保つ。
-/// [`new`] は全 0（全透明）バッファを確保して構築し、下流 `blit` が転写で埋める。
+/// 描いた絵は下流（画面の外の描き手）が [`from_bytes`] で包む。
 ///
-/// [`new`]: ComposedSurface::new
+/// [`from_bytes`]: ComposedSurface::from_bytes
 #[derive(Debug, Clone, Default)]
 pub struct ComposedSurface {
     width: u32,
@@ -22,7 +22,7 @@ impl ComposedSurface {
     /// 指定サイズの全透明（全 0）premultiplied BGRA サーフェスを確保する。
     ///
     /// `bytes.len() = width * 4 * height` を満たす 0 埋めバッファを割り当てる。
-    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下で
+    /// 幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下で
     /// あること（`stride()` を u32 であふれさせない・debug で確かめる）。
     pub fn new(width: u32, height: u32) -> Self {
         debug_assert_within_extent(width, height);
@@ -68,72 +68,6 @@ impl ComposedSurface {
     /// バイト列を所有ごと取り出す（複製なしの受け渡し）。
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
-    }
-
-    /// バイト列**そのものの確保量**（`Vec::capacity`・バイト）。
-    ///
-    /// 消費側（`areka-emo-present` の `FrameBudget`）が「この呼び出しで確保が起きたか」を
-    /// **厳密に**観測するための口である。`Vec` の容量は再確保でしか増えず縮みもしないため、
-    /// 呼び出しの前後で読み比べれば「増えた＝確保した／変わらない＝確保していない」が
-    /// 過大にも過小にもならずに決まる。
-    ///
-    /// [`bytes`] の長さ（`stride * height`）とは別物である——長さは外形が決めるが、容量は
-    /// 「これまでに到達した最大」を保つ。**役割ではなく実体に紐づく**値ゆえ、バッファが
-    /// 複数本で入れ替わる経路（キャッシュの追い出しバッファを回して使う形）でも、器側で
-    /// 到達済み寸法を覚える必要が無くなる。
-    ///
-    /// [`bytes`]: ComposedSurface::bytes
-    pub fn bytes_capacity(&self) -> usize {
-        self.bytes.capacity()
-    }
-
-    /// バッファを `w×h`（行の幅 `w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
-    ///
-    /// 既存の `Vec<u8>` 容量を**再利用**する（毎フレーム経路のゼロアロケーション）:
-    /// 必要バイト数が現容量以下なら再割り当てせず `truncate`＋`resize`／不足時のみ伸長する。
-    /// クリアは全 0 上書き（前フレームの残像が混ざらない）。blit 実行器（[`crate::blit`]）が
-    /// 転写前に呼び、以後 [`bytes_mut`] へ premultiplied BGRA を書き込む。
-    ///
-    /// # 公開している理由（消費者）
-    ///
-    /// `areka-emo-present` の予算のテストが席を `w×h` へ合わせるために直に呼ぶ。本番の合成先
-    /// （`compose_into` → [`crate::blit`]）が通るのは**まさにこのメソッド**である。
-    ///
-    /// 幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下であること（[`new`] と同じく debug で確かめる）。
-    ///
-    /// [`new`]: ComposedSurface::new
-    ///
-    /// [`bytes_mut`]: ComposedSurface::bytes_mut
-    pub fn resize_and_clear(&mut self, width: u32, height: u32) {
-        debug_assert_within_extent(width, height);
-        let len = byte_len(width, height);
-        self.width = width;
-        self.height = height;
-        // 容量再利用: 既存要素を 0 で埋め直し、長さを len へ合わせる（>len は捨て・<len は 0 追加）。
-        // Vec::resize は容量が足りれば再割り当てしない。
-        self.bytes.clear();
-        self.bytes.resize(len, 0u8);
-    }
-
-    /// `width×height` へ合わせ、中身を `src`（同じ寸法の premultiplied BGRA）の写しにする。
-    ///
-    /// 矩形の重ね直し（[`crate::blit_rect`]）が前の絵を土台に敷くときに使う。0 で埋めてから
-    /// 全部を上書きする 2 度書きを避ける（容量は [`resize_and_clear`] と同じく使い回す）。
-    ///
-    /// [`resize_and_clear`]: ComposedSurface::resize_and_clear
-    pub(crate) fn resize_from(&mut self, width: u32, height: u32, src: &[u8]) {
-        debug_assert_eq!(src.len(), byte_len(width, height));
-        self.width = width;
-        self.height = height;
-        self.bytes.clear();
-        self.bytes.extend_from_slice(src);
-    }
-
-    /// premultiplied BGRA バイト列の可変参照（`len == stride * height`）。
-    ///
-    /// blit 実行器が転写先として書き込む（本クレート内専用）。
-    pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
-        &mut self.bytes
     }
 }
 
@@ -186,7 +120,7 @@ mod tests {
     #[test]
     #[cfg(debug_assertions)]
     #[should_panic(expected = "外形の上限")]
-    fn resize_beyond_max_extent_is_rejected() {
-        ComposedSurface::new(0, 0).resize_and_clear(crate::plan::MAX_EXTENT + 1, 0);
+    fn new_beyond_max_extent_is_rejected() {
+        ComposedSurface::new(crate::plan::MAX_EXTENT + 1, 0);
     }
 }

@@ -155,7 +155,7 @@ fn build_plan_absent_surface_is_surface_not_found() {
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
 
     let binds = BindSet::default();
-    let (ops, result) = plan_of(&world, &atlas, 9999, &binds, &PatternState::default());
+    let (ops, result) = ops_and_extent(&world, &atlas, 9999, &binds, &PatternState::default());
 
     assert_eq!(
         result,
@@ -188,7 +188,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::default();
-    let (ops, result) = plan_of(&world, &atlas, 3000, &binds, &PatternState::default());
+    let (ops, result) = ops_and_extent(&world, &atlas, 3000, &binds, &PatternState::default());
 
     let extent = result.expect("全透明でもエラーにせず Ok（要件 6.6）");
     assert!(
@@ -223,7 +223,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::default();
-    let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+    let (ops, result) = ops_and_extent(&world, &atlas, 1000, &binds, &PatternState::default());
 
     let extent = result.expect("空 BindSet でも正常（描画可能命令ゼロは失敗でない・要件 6.6）");
     assert!(
@@ -257,7 +257,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     );
 
     let binds = BindSet::default();
-    let (ops, result) = plan_of(&world, &atlas, 7000, &binds, &PatternState::default());
+    let (ops, result) = ops_and_extent(&world, &atlas, 7000, &binds, &PatternState::default());
 
     assert_eq!(
         result,
@@ -320,7 +320,7 @@ fn plan_with_errors(
     let mut result = None;
     let logs = crate::log_capture::capture_logs(|| {
         result = Some(
-            plan_of(
+            ops_and_extent(
                 world,
                 atlas,
                 top,
@@ -334,7 +334,7 @@ fn plan_with_errors(
 }
 
 /// pattern を (100000, 100000) に置く純 `bind` の面は、外形が約 100000×100000（約 40 GB）になる。
-/// 合成は確保の前に `ExtentTooLarge` を返し、出力先の絵の容量は 0 のまま・`error!` は 1 行。
+/// 計画は確保の前に `ExtentTooLarge` を返し、出力先の項の列の容量は 0 のまま・`error!` は 1 行。
 #[test]
 fn far_bind_pattern_fails_without_allocating() {
     let atlas = bake_gray(&[("base.png", (4, 4)), ("part.png", (4, 4))]);
@@ -351,13 +351,18 @@ fn far_bind_pattern_fails_without_allocating() {
         h: 100_004,
     };
 
-    // 計画の段で止まることを先に見る（直しが無いと下の合成が約 40 GB を確保しにいく）。
+    // 外形の段で止まることを先に見る（描き手は計画の外形の絵を確保する）。
     let (planned, errors) = plan_with_errors(&world, &atlas, 1000);
     assert_eq!(planned, Err(too_large()));
     assert_eq!(errors, 1, "error! は 1 行");
 
-    let mut out = crate::ComposedSurface::new(0, 0);
-    let composed = crate::Composer::new().compose_into(
+    let mut out = crate::DrawPlan {
+        surface_id: 0,
+        base_surface: 0,
+        extent: crate::plan::Extent { w: 0, h: 0 },
+        items: Vec::new(),
+    };
+    let planned = crate::Composer::new().plan_into(
         &mut out,
         &world,
         &atlas,
@@ -365,8 +370,8 @@ fn far_bind_pattern_fails_without_allocating() {
         &BindSet::from_ids([1]),
         &PatternState::default(),
     );
-    assert_eq!(composed, Err(too_large()));
-    assert_eq!(out.bytes_capacity(), 0, "絵は確保しない");
+    assert_eq!(planned, Err(too_large()));
+    assert_eq!(out.items.capacity(), 0, "項の列は確保しない");
 }
 
 /// element定義の子を `u32::MAX + 10` の位置に置く面は、`u32` への切り詰めで小さな外形に化けず

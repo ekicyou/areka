@@ -96,15 +96,15 @@ fn load_shell_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u
     let atlas = target.atlas().clone();
     let emo_world = target.build_world();
 
-    // surface0 を一度合成して窓の物理 px 外形を得る。
-    let (w, h) = match Composer::new().compose(
+    // surface0 の計画の外形から窓の物理 px 外形を得る。
+    let (w, h) = match Composer::new().plan(
         &emo_world,
         &atlas,
         0,
         &BindSet::default(),
         &PatternState::default(),
     ) {
-        Ok(cs) => (cs.width(), cs.height()),
+        Ok(plan) => (plan.extent.w, plan.extent.h),
         Err(e) => {
             tracing::error!(error = %e, "emo-present: shell surface0 の採寸合成に失敗");
             return None;
@@ -130,14 +130,14 @@ fn build_balloon_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable
         }
     };
 
-    let (w, h) = match Composer::new().compose(
+    let (w, h) = match Composer::new().plan(
         &emo_world,
         &atlas,
         0,
         &BindSet::default(),
         &PatternState::default(),
     ) {
-        Ok(cs) => (cs.width(), cs.height()),
+        Ok(plan) => (plan.extent.w, plan.extent.h),
         Err(e) => {
             tracing::error!(error = %e, "emo-present: balloon surface0 の採寸合成に失敗");
             return None;

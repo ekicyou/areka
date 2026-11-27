@@ -19,8 +19,8 @@
 //!   fixture は `sakura.balloon.alignment,left` を持つが offsetx/offsety は**無い**ため、実際に走るのは
 //!   **既定整列**（バルーン右端＝シェル左端・上端揃え）の算出配置である。
 //! - **起動時 golden バイト一致 assert**: 各 target の初回 `apply(ShowSurface)`
-//!   直後に `EmoPresenter::read_back` で表示中エントリの **native 原寸バイト列**を読み、直接合成した
-//!   golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に panic）する。
+//!   直後に `EmoPresenter::read_back` で表示中エントリの **native 原寸バイト列**を読み、画面の外の描き手
+//!   （画面と同じ hardware の装置）で描いた golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に panic）する。
 //!   拡大は GPU 変換の領分ゆえ golden に k は掛けず、**k に依らず同一バイト・同一長**である。
 //!   表示に渡した合成面が正当に無ければ warn してスキップする。詳細は `assert_startup_golden` を参照。
 //! - **窓 client 寸の k reconcile**: 各 `apply` の直後に
@@ -37,7 +37,7 @@
 //! # DPI 表示契約
 //!
 //! 窓サイズは `BoxStyle`/taffy 論理レイアウトを経由せず、**合成結果の物理 px を `WindowPos.size` へ
-//! 直接与える**。表示経路は compose（native 原寸）→ コマンドリストへ原寸記録 → wintf の
+//! 直接与える**。表示経路は計画（native 原寸）→ 描画の節へ原寸記録 → wintf の
 //! `render_surface` が `SetTransform` で **×k**（k＝窓 DPI ÷ author_dpi）であり、窓 DPI が
 //! author_dpi と異なれば表示は k 倍される（k=1.0 は「窓 DPI ＝ author_dpi」という一水準にすぎない）。
 //!
@@ -106,12 +106,10 @@ use wintf::ecs::{
 use wintf::*;
 
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
-use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio,
-};
+use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::{
-    EmoPresenter, PresentCommand, ScalePolicy, TargetId, build_balloon_target, derive_scale,
-    load_shell_target,
+    EmoPresenter, OffscreenRenderer, PresentCommand, PresentError, ScalePolicy, TargetId,
+    build_balloon_target, derive_scale, load_shell_target,
 };
 
 // `#[path]` 必須: 素の `mod fixture;` は `examples/fixture.rs` を探しに行き、そこにファイルがあれば

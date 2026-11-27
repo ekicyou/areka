@@ -56,9 +56,9 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
 /// k=1/1 で表示を確立したのち窓 `DPI` を
 /// 192 へ差し替えて `refresh_scale` を呼ぶと——(a) 戻り値が `scaled_extent(2/1, native)`、
 /// (b) `applied_scale` が 2.0、(c) **引き当てが成立する**（`cache_hit=true`＝再合成しない）、
-/// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) メモの原寸バイトは k に依らず同一。
+/// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) 読み戻しの原寸バイトは k に依らず同一。
 ///
-/// (c) は観測点の 1 つである。エントリは原寸の計画と原寸の合成面だけを持ち
+/// (c) は観測点の 1 つである。エントリは原寸の計画だけを持ち
 /// **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
 /// ——「k 変化＝ミス＋再サンプル」だった旧正典と正反対であり、ヒットを主張しなければ静かに
 /// 再合成へ退化しても緑のままになる。
@@ -408,11 +408,23 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
 fn refresh_scale_failure_keeps_previous_display_and_k() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x94);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x94);
 
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let entry_plan = |presenter: &EmoPresenter| {
+        presenter
+            .targets
+            .get(&TargetId(0))
+            .unwrap()
+            .cache
+            .get(1000, &BindSet::default(), &PatternState::default())
+            .expect("失敗でメモの表示中エントリが消えた（前表示維持の違反）")
+            .plan
+            .clone()
+    };
+    let plan_before = entry_plan(&presenter);
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         Some((4, 3)),
@@ -427,7 +439,7 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     // これ以降 `read_back` は使えない——読み戻しはメモを `last_show` のキーで引く形になったため、
     // 注入そのものが「表示中エントリが引けない」状態を作ってしまう（前表示が失われたのではなく、
     // 注入した偽のキーで引いているだけである）。前表示の維持は ⑴ 画面へ渡っている節
-    // （画面の節）と ⑵ メモに残る**本物のキー**のエントリのバイト、の 2 つで読む。
+    // （画面の節）と ⑵ メモに残る**本物のキー**のエントリの計画、の 2 つで読む。
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -457,17 +469,9 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         "失敗したのに画面へ渡している節が差し替わった（前表示維持の違反）"
     );
     assert_eq!(
-        presenter
-            .targets
-            .get(&TargetId(0))
-            .unwrap()
-            .cache
-            .get(1000, &BindSet::default(), &PatternState::default())
-            .expect("失敗でメモの表示中エントリが消えた（前表示維持の違反）")
-            .composed
-            .bytes(),
-        native_golden.as_slice(),
-        "失敗したのにメモの原寸バイトが変わった（前表示維持の違反）"
+        entry_plan(&presenter),
+        plan_before,
+        "失敗したのにメモの計画が変わった（前表示維持の違反）"
     );
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),

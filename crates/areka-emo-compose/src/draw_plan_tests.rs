@@ -10,8 +10,8 @@ use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan_test_support::{
-    bake_atlas, bound_world, draw_plan_of, elem, elem_with_method, errors, frame, id_to_path,
-    named_ops, op_images, plan_images, plan_of, shell_of, surface,
+    bake_atlas, bound_world, elem, elem_with_method, errors, frame, id_to_path, named_ops,
+    op_images, ops_and_extent, plan_images, plan_of, shell_of, surface,
 };
 use crate::world::EmoWorld;
 use crate::{Composer, DrawPlan};
@@ -65,8 +65,8 @@ fn layered_surface_plan_matches_cpu_ops() {
     let binds = BindSet::from_ids([10]);
     let mut pattern = PatternState::default();
     pattern.set(30, frame(5, 7, 8));
-    let (ops, extent) = plan_of(&world, &atlas, 0, &binds, &pattern);
-    let plan = draw_plan_of(&world, &atlas, 0, &binds, &pattern).expect("計画を組める");
+    let (ops, extent) = ops_and_extent(&world, &atlas, 0, &binds, &pattern);
+    let plan = plan_of(&world, &atlas, 0, &binds, &pattern).expect("計画を組める");
 
     let map = id_to_path(&atlas, RELS);
     assert_eq!(
@@ -106,7 +106,7 @@ fn plan_into_rebuilds_from_empty() {
     composer
         .plan_into(&mut out, &world, &atlas, 0, &binds, &pattern)
         .expect("計画を組める");
-    let (ops, _) = plan_of(&world, &atlas, 0, &binds, &pattern);
+    let (ops, _) = ops_and_extent(&world, &atlas, 0, &binds, &pattern);
     assert_eq!(plan_images(&out), op_images(&ops));
     assert_eq!(out.items.len(), 4, "着せ替え 10 の項が残らない");
 }
@@ -123,7 +123,7 @@ fn plan_keeps_the_pixel_limit_of_the_cpu_ops() {
     let atlas = bake_atlas(Path::new("shell/master"), &["a.png"]);
     let world = bound_world(&parse(&text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
-    let (ops, _) = plan_of(&world, &atlas, 0, &binds, &pattern);
+    let (ops, _) = ops_and_extent(&world, &atlas, 0, &binds, &pattern);
     assert_eq!(ops.len(), 64, "検体: CPU の命令は頭の 64 枚");
     let mut composer = Composer::new();
     let mut plan = None;
@@ -151,9 +151,9 @@ fn undrawable_element_is_not_a_plan_item() {
     let atlas = bake_atlas(Path::new("shell/master"), &["a.png", "b.png"]);
     let world = bound_world(&shell, &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
-    let (ops, _) = plan_of(&world, &atlas, 0, &binds, &pattern);
+    let (ops, _) = ops_and_extent(&world, &atlas, 0, &binds, &pattern);
     assert_eq!(ops.len(), 2, "検体: {word} の命令も積まれる");
-    let plan = draw_plan_of(&world, &atlas, 0, &binds, &pattern).expect("計画を組める");
+    let plan = plan_of(&world, &atlas, 0, &binds, &pattern).expect("計画を組める");
     assert_eq!(plan_images(&plan), op_images(&ops[..1]));
 }
 
@@ -163,7 +163,7 @@ fn missing_surface_fails_like_compose() {
     let (world, atlas) = layered();
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     assert_eq!(
-        draw_plan_of(&world, &atlas, 99, &binds, &pattern),
+        plan_of(&world, &atlas, 99, &binds, &pattern),
         Err(ComposeError::SurfaceNotFound(99))
     );
 }

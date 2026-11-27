@@ -274,3 +274,71 @@ fn page_upload_failure_logs_error_and_returns_device_error() {
         .count();
     assert_eq!(errors, 1, "失敗は error! を 1 行残す");
 }
+
+/// 頁の無い置き場・頁をはみ出す uv の絵は、葉を空で記録して `warn!`（絵と頁の番号つき）を残す（パニックしない）。
+#[test]
+fn leaf_of_a_picture_outside_its_page_is_empty_and_warns() {
+    let entry = |page, uv| AtlasEntry {
+        original: Size { w: 2, h: 2 },
+        placement: Some(Placement {
+            page,
+            uv_rect: uv,
+            trim_offset: Point { x: 0, y: 0 },
+        }),
+    };
+    let key = |p: &str| AtlasKey {
+        set: SetId(0),
+        rel_path: p.into(),
+        kind: PictureKind::Normal,
+    };
+    let page = AtlasPage {
+        width: 2,
+        height: 2,
+        stride: 8,
+        bytes: Arc::from(vec![255u8; 16]),
+    };
+    let atlas = AtlasTable::new(
+        vec![key("a.png"), key("b.png")],
+        vec![
+            entry(
+                5,
+                Rect {
+                    x: 0,
+                    y: 0,
+                    w: 2,
+                    h: 2,
+                },
+            ),
+            entry(
+                0,
+                Rect {
+                    x: 1,
+                    y: 0,
+                    w: 2,
+                    h: 2,
+                },
+            ),
+        ],
+        vec![page],
+    );
+    let device = warp();
+    let mut gpu = GpuAtlas::new(&device, &atlas).expect("GpuAtlas");
+
+    for (element, needle) in [(0, "頁が存在しない"), (1, "uv が頁に収まらない")] {
+        let (list, events) = capture(|| gpu.leaf(ElementId(element)).cloned());
+        let list = list.expect("壊れた置き場でも葉は記録する");
+        assert!(
+            read_back(&device, &list, 2, 2).iter().all(|&b| b == 0),
+            "絵 {element}: 何も描かない"
+        );
+        let warns: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN && e.message().contains(needle))
+            .collect();
+        assert_eq!(warns.len(), 1, "絵 {element}: {events:?}");
+        assert_eq!(
+            warns[0].field("element"),
+            Some(element.to_string().as_str())
+        );
+    }
+}

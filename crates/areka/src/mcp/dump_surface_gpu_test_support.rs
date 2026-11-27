@@ -17,12 +17,12 @@ use std::time::{Duration, Instant};
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{BindSet, Composer, PatternState};
+use areka_emo_compose::{BindSet, PatternState};
 use areka_emo_present::balloon::{
     build_balloon_target, load_scope_balloon_model, resolve_balloon_faces,
 };
 use areka_emo_present::shell_target::load_shell_target;
-use areka_emo_present::{PresentCommand, TargetId};
+use areka_emo_present::{OffscreenRenderer, PresentCommand, TargetId};
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
@@ -247,39 +247,41 @@ impl GpuRig {
     }
 
     /// A のシェル（`shell/master`）を表示の経路と同じ読み込みで組み、`surface_id` を着せ替えなし・
-    /// アニメーションなしで合成した絵の、乗算を戻した 8 ビット RGBA と（幅, 高さ）。
+    /// アニメーションなしで画面の外の描き手（画面と同じ hardware の装置）が描いた絵の、乗算を戻した 8 ビット RGBA と（幅, 高さ）。
     pub(in crate::mcp) fn composed_rgba(&self, surface_id: u32) -> (u32, u32, Vec<u8>) {
         let shell_dir = self.rig.root.ghost_dir("A").join("shell").join("master");
         let decoder = WicDecoderArm::new().expect("WIC の復号器");
         let target = load_shell_target(&shell_dir, &decoder).expect("A のシェルを読める");
-        let pic = Composer::new()
-            .compose(
+        let pic = OffscreenRenderer::hardware()
+            .expect("画面と同じ hardware の装置")
+            .render(
                 &target.build_world(),
                 target.atlas(),
                 surface_id,
                 &BindSet::default(),
                 &PatternState::default(),
             )
-            .expect("合成できる");
+            .expect("描ける");
         (pic.width(), pic.height(), unpremultiply(pic.bytes()))
     }
 
     /// 装着の相と同じ読み込みで `scope` のバルーンを組み、面 0（装着で表示を確立する面）を
-    /// 合成した絵の、乗算済み BGRA のままの画素と（幅, 高さ）。
+    /// 画面の外の描き手（画面と同じ hardware の装置）が描いた絵の、乗算済み BGRA のままの画素と（幅, 高さ）。
     pub(in crate::mcp) fn balloon_composed(&self, scope: u32) -> (u32, u32, Vec<u8>) {
         let dir = self.rig.root.balloon_dir(BALLOON);
         let decoder = WicDecoderArm::new().expect("WIC の復号器");
         let (world, atlas) =
             build_balloon_target(&dir, &decoder, scope).expect("A のバルーンを読める");
-        let pic = Composer::new()
-            .compose(
+        let pic = OffscreenRenderer::hardware()
+            .expect("画面と同じ hardware の装置")
+            .render(
                 &world,
                 &atlas,
                 0,
                 &BindSet::default(),
                 &PatternState::default(),
             )
-            .expect("合成できる");
+            .expect("描ける");
         (pic.width(), pic.height(), pic.bytes().to_vec())
     }
 

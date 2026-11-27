@@ -1,26 +1,26 @@
-//! 決定性と再合成予算の fixture テーマ。
+//! 決定性と計画の予算の fixture テーマ。
 
 use super::test_support::{
-    build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,
-    shell_master_dir, surface1000_bind_parts,
+    build_atlas_for_surface1000, parse_emo2_shell, plan_surface1000, shell_master_dir,
+    surface1000_bind_parts,
 };
-use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
-use crate::plan_test_support::{bound_world, plan_of};
+use super::{BindSet, Composer, EmoWorld, PatternState, SetId};
+use crate::plan_test_support::{bound_world, ops_and_extent};
 
 // ============================================================================
-// 決定性と再合成予算の fixture 検証テスト。
+// 決定性と計画の予算の fixture 検証テスト。
 //
-// composer_tests.rs は toy surface で決定性・buffer 再利用を固定する。ここは **emo2 fixture の本体
+// composer_tests.rs は toy surface で決定性・計画の使い回しを固定する。ここは **emo2 fixture の本体
 // surface（surface1000＋実 bind 群）**を入力に、次の項目を
 // fixture レベルで固定する:
-//   1. **再合成予算**: 同一 surface1000＋同一 BindSet を 1 つの Composer・1 つの out で反復
-//      compose_into し、out バッファの先頭ポインタ・長さと命令列・作業場の列の容量が初回から変わらない
-//      ことを **容量不変 assert** で固定する（同じ Composer の繰り返しが同じバイトを出すことも併せて）。
-//      外形は束縛のときに作った外形の表から引くので、合成の中で外形をたどらない。
+//   1. **計画の予算**: 同一 surface1000＋同一 BindSet を 1 つの Composer・1 つの計画で反復
+//      plan_into し、計画の項の列の先頭と容量・命令列・作業場の列の容量が初回から変わらない
+//      ことを **容量不変 assert** で固定する（同じ Composer の繰り返しが同じ計画を出すことも併せて）。
+//      外形は束縛のときに作った外形の表から引くので、計画の中で外形をたどらない。
 //   2. **命令数**: surface1000＋有効 bind 集合（3 本・1 本・0 本）で計画を建て、`ops.len()` が
 //      **描画層数（＝解決した有効 bind 数）**に等しいことを assert する（1 つの検体の等値で、線形の証明ではない）。
-//   3. **決定性**: 独立した 2 つの合成器の compose がバイト等価（bytes＋width＋height＋stride）で
-//      あることを固定する。surface1000（複数 bind の入れ子 flatten を含む最も内容の濃い経路）を主対象とする。
+//   3. **決定性**: 独立した 2 つの合成器の計画が等しいことを固定する。surface1000（複数 bind の入れ子
+//      flatten を含む最も内容の濃い経路）を主対象とする。
 //
 // すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし）。surface1000 の bind パーツ
 // 土台（surface1000_bind_parts / build_atlas_for_surface1000）を使う。
@@ -35,53 +35,45 @@ fn surface1000_full_bindset() -> BindSet {
     BindSet::from_ids(surface1000_bind_parts().iter().map(|p| p.anim_id))
 }
 
-/// 決定性: emo2 surface1000＋固定 BindSet を 2 回 compose → バイト完全等価。
+/// 決定性: emo2 surface1000＋固定 BindSet を 2 回計画 → 等しい計画。
 ///
 /// 最も内容の濃い経路（静的 element ゼロ・複数有効 bind の入れ子 surface flatten＋animation-sort）
-/// で、独立した 2 つの `Composer` による 2 回の合成が width/height/stride/bytes すべてで一致する
-/// ことを固定する。非空 bind 集合ゆえ結果は非空（全透明でない）で、決定性 assert は空虚でない。
+/// で、独立した 2 つの `Composer` による 2 回の計画が一致することを固定する。非空 bind 集合ゆえ計画は
+/// 項を持ち、決定性 assert は空虚でない。
 #[test]
-fn surface1000_compose_is_byte_deterministic() {
+fn surface1000_plan_is_deterministic() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
     let binds = surface1000_full_bindset();
 
-    let first = compose_surface1000(&shell, &atlas, &binds);
-    let second = compose_surface1000(&shell, &atlas, &binds);
+    let first = plan_surface1000(&shell, &atlas, &binds);
+    let second = plan_surface1000(&shell, &atlas, &binds);
 
-    assert_eq!(first.width(), second.width(), "決定性: 幅一致");
-    assert_eq!(first.height(), second.height(), "決定性: 高さ一致");
-    assert_eq!(first.stride(), second.stride(), "決定性: stride 一致");
     assert_eq!(
-        first.bytes(),
-        second.bytes(),
-        "同一入力（surface1000＋固定 BindSet）→ 2 回合成はバイト等価（要件 10.1）"
+        first, second,
+        "同一入力（surface1000＋固定 BindSet）→ 2 回の計画は等しい"
     );
-
-    // 非空虚性: 非空 bind 集合ゆえ結果は非空（α>0 の画素が存在する）。全透明同士の空虚一致でない。
     assert!(
-        opaque_pixel_count(&first) > 0,
-        "非空 bind 集合の合成結果は非空（決定性 assert は空虚でない）"
+        !first.items.is_empty(),
+        "非空 bind 集合の計画は項を持つ（決定性 assert は空虚でない）"
     );
 }
 
-/// 再合成予算: emo2 surface1000 の反復 compose_into。
+/// 計画の予算: emo2 surface1000 の反復 plan_into。
 ///
 /// **容量不変 assert**を採る。#[global_allocator] を差し替えるやり方はプロセス全体を
-/// 汚染し既存テストを不安定化しうるため採らない。初回 compose_into でバッファ／スクラッチが確定した後、
+/// 汚染し既存テストを不安定化しうるため採らない。初回 plan_into で計画／スクラッチが確定した後、
 /// 後続呼び出しで
-///   ① out.bytes() の**先頭ポインタが不変**（realloc が起きれば移動する＝再割り当てなしの直接証拠）、
-///   ② out.bytes() の**長さが不変**（外形一定ゆえ resize が伸長を起こさない。バッファは
-///      `bytes()` がスライスを返すため容量は観測できないが、①のポインタ不変が realloc 不在を担保する）、
-///   ③ Composer 内部 `ops` スクラッチの**容量が単調・非成長**（毎フレーム clear+push で再利用）、
-///   ④ Composer の作業場（`PlanScratch`）の全部の列と集合の**容量が非成長**（入れ子 flatten の
+///   ① 計画の項の列の**先頭ポインタと容量が不変**（realloc が起きれば移動する＝再割り当てなしの直接証拠）、
+///   ② Composer 内部 `ops` スクラッチの**容量が非成長**（毎回 clear+push で再利用）、
+///   ③ Composer の作業場（`PlanScratch`）の全部の列と集合の**容量が非成長**（入れ子 flatten の
 ///      祖先スタック・段の積み荷・層 (ii) の id などの再利用。この検体で使う 6 つは 0 でないことも見る）、
-///   ⑤ 絵のバイトと命令数が初回と同じ（同じ Composer の繰り返しでも決定的）、
-/// を反復ループ全域で固定する。外形は束縛のときの表から引くので、合成の中で外形をたどらない。
-/// realloc する実装ならポインタ／容量が動いて破れる。入力が変わるときの確保の有無は確かめていない。
+///   ④ 計画と命令数が初回と同じ（同じ Composer の繰り返しでも決定的）、
+/// を反復ループ全域で固定する。外形は束縛のときの表から引くので、計画の中で外形をたどらない。
+/// 入力が変わるときの確保の有無は確かめていない。
 #[test]
-fn surface1000_recompose_capacities_do_not_grow() {
+fn surface1000_replan_capacities_do_not_grow() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
@@ -90,11 +82,11 @@ fn surface1000_recompose_capacities_do_not_grow() {
     let world = bound_world(&shell, &[], &atlas);
 
     let mut composer = Composer::new();
-    let mut out = ComposedSurface::new(0, 0);
+    let mut out = plan_surface1000(&shell, &atlas, &BindSet::default());
 
-    // ウォームアップ（初回）: バッファ／スクラッチのサイズがここで確定する。
+    // ウォームアップ（初回）: 計画／スクラッチの大きさがここで確定する。
     composer
-        .compose_into(
+        .plan_into(
             &mut out,
             &world,
             &atlas,
@@ -102,11 +94,11 @@ fn surface1000_recompose_capacities_do_not_grow() {
             &binds,
             &PatternState::default(),
         )
-        .expect("初回 compose_into は Ok");
+        .expect("初回 plan_into は Ok");
 
-    let ptr0 = out.bytes().as_ptr();
-    let len0 = out.bytes().len();
-    let bytes0 = out.bytes().to_vec();
+    let ptr0 = out.items.as_ptr();
+    let cap0 = out.items.capacity();
+    let plan0 = out.clone();
     let ops_len0 = composer.ops.len();
     let ops_cap0 = composer.ops.capacity();
     let caps0 = composer.scratch.capacities();
@@ -125,7 +117,7 @@ fn surface1000_recompose_capacities_do_not_grow() {
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
         composer
-            .compose_into(
+            .plan_into(
                 &mut out,
                 &world,
                 &atlas,
@@ -133,40 +125,30 @@ fn surface1000_recompose_capacities_do_not_grow() {
                 &binds,
                 &PatternState::default(),
             )
-            .unwrap_or_else(|e| panic!("反復 {iter} 回目の compose_into は Ok: {e:?}"));
+            .unwrap_or_else(|e| panic!("反復 {iter} 回目の plan_into は Ok: {e:?}"));
 
         assert_eq!(
-            out.bytes().as_ptr(),
+            out.items.as_ptr(),
             ptr0,
-            "反復 {iter}: out バッファ先頭ポインタ不変＝realloc なし（要件 10.3）"
+            "反復 {iter}: 計画の項の列の先頭ポインタ不変＝realloc なし"
         );
-        assert_eq!(
-            out.bytes().len(),
-            len0,
-            "反復 {iter}: バッファ長不変（外形一定）"
-        );
-        assert!(
-            out.bytes() == bytes0,
-            "反復 {iter}: 絵は初回とバイト等価（要件 10.1）"
-        );
+        assert_eq!(out.items.capacity(), cap0, "反復 {iter}: 項の列の容量不変");
+        assert_eq!(out, plan0, "反復 {iter}: 計画は初回と等しい");
         assert_eq!(composer.ops.len(), ops_len0, "反復 {iter}: 命令数は決定的");
         assert_eq!(
             composer.ops.capacity(),
             ops_cap0,
-            "反復 {iter}: ops スクラッチ容量が非成長（clear+push 再利用・要件 10.3）"
+            "反復 {iter}: ops スクラッチ容量が非成長（clear+push 再利用）"
         );
         assert_eq!(
             composer.scratch.capacities(),
             caps0,
-            "反復 {iter}: 作業場の全部の列と集合の容量が非成長（再利用・要件 10.3）"
+            "反復 {iter}: 作業場の全部の列と集合の容量が非成長（再利用）"
         );
     }
 
-    // 結果は依然非空（定常状態でも実合成が起きている＝空実装で容量安定を偽装していない）。
-    assert!(
-        opaque_pixel_count(&out) > 0,
-        "反復後も非空（定常状態で現に合成している）"
-    );
+    // 計画は項を持つ（定常状態でも現に計画している＝空実装で容量安定を偽装していない）。
+    assert!(!out.items.is_empty(), "反復後も計画は項を持つ");
 }
 
 /// 外形の表: 束縛の前は表が無く外形 0×0＝`EmptyComposition`（今までの前提どおり）。束縛すると
@@ -180,7 +162,8 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
     let atlas = build_atlas_for_surface1000(&shell, &shell_master_dir());
     let binds = surface1000_full_bindset();
     let mut world = EmoWorld::build(&shell);
-    let plan = |world: &EmoWorld| plan_of(world, &atlas, 1000, &binds, &PatternState::default()).1;
+    let plan =
+        |world: &EmoWorld| ops_and_extent(world, &atlas, 1000, &binds, &PatternState::default()).1;
     assert_eq!(
         plan(&world),
         Err(ComposeError::EmptyComposition(1000)),
@@ -210,7 +193,7 @@ fn surface1000_instruction_count_equals_bound_layers() {
 
     let world = bound_world(&shell, &[], &atlas);
 
-    let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+    let (ops, result) = ops_and_extent(&world, &atlas, 1000, &binds, &PatternState::default());
     result.expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
 
     assert_eq!(
@@ -229,11 +212,11 @@ fn surface1000_instruction_count_equals_bound_layers() {
     }
 
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
-    let (ops1, result) = plan_of(&world, &atlas, 1000, &one, &PatternState::default());
+    let (ops1, result) = ops_and_extent(&world, &atlas, 1000, &one, &PatternState::default());
     result.expect("単一 bind でも Ok");
     assert_eq!(ops1.len(), 1, "有効 bind 1 本 → 命令 1 本（層数に線形）");
 
-    let (ops0, result) = plan_of(
+    let (ops0, result) = ops_and_extent(
         &world,
         &atlas,
         1000,

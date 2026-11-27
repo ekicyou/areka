@@ -100,7 +100,7 @@ fn invalid_surface_skips_and_leaves_display_and_hit_unchanged() {
 /// **`Ok(())`**（`Err` ではない）で、target は Hidden へ縮退（`Visual` 不可視＋`HitTest::none()`）し、
 /// 0×0 の節を作ろうとして panic しない（既存のメモと節は破棄されず保持）。
 ///
-/// 前段で `Composer::compose(7000)` が `EmptyComposition(7000)` を返すことを直接確認し、退化経路が
+/// 前段で `Composer::plan(7000)` が `EmptyComposition(7000)` を返すことを直接確認し、退化経路が
 /// 「不在 surface（SurfaceNotFound）」ではなく「存在するが 0×0」であることを固定する。
 #[test]
 fn empty_composition_degrades_to_hidden_and_replies_ok() {
@@ -112,7 +112,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     // 前提固定: 7000 は「存在するが外形 0×0」＝EmptyComposition（SurfaceNotFound ではない）。
     {
         let mut composer = Composer::new();
-        let direct = composer.compose(
+        let direct = composer.plan(
             &emo_world,
             &atlas,
             7000,
@@ -209,7 +209,7 @@ fn extent_too_large_degrades_to_hidden_and_replies_ok() {
         ]),
         vec![("p.png", 5, 4, gradient(5, 4, 0x22))],
     );
-    let direct = Composer::new().compose(
+    let direct = Composer::new().plan(
         &emo_world,
         &atlas,
         1000,
@@ -446,7 +446,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    let (bytes_before, plan_before) = {
+    let plan_before = {
         let entry = presenter
             .targets
             .get(&TargetId(0))
@@ -454,11 +454,11 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
             .cache
             .get(1000, &BindSet::default(), &PatternState::default())
             .expect("前提: 表示成立でスロットが埋まる");
-        (entry.composed.bytes().to_vec(), entry.plan.clone())
+        entry.plan.clone()
     };
     assert!(
-        bytes_before.iter().any(|&b| b != 0),
-        "前提: スロットの表示バッファは非退化（全 0 でない）"
+        !plan_before.items.is_empty(),
+        "前提: スロットの計画は非退化（項がある）"
     );
     let display_before = presenter
         .read_back(TargetId(0))
@@ -491,15 +491,10 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
          置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は\
          引き当てに失敗して毎回再合成へ落ちる",
     );
-    // 中身も適用前のまま（対の片側だけ差し替わっていない）。
-    assert_eq!(
-        entry.composed.bytes(),
-        bytes_before.as_slice(),
-        "合成失敗でスロットの表示バッファ内容が変化した（失敗した適用が中身を書き換えている）"
-    );
+    // 中身も適用前のまま。
     assert_eq!(
         entry.plan, plan_before,
-        "合成失敗でスロットの計画が差し替わった（原子対の片側だけ動いている）"
+        "合成失敗でスロットの計画が差し替わった（失敗した適用が中身を書き換えている）"
     );
 
     // 直後の同一入力の適用は成立し、表示も適用前と全バイト一致する。

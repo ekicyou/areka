@@ -2,12 +2,11 @@
 //!
 //! emo2 fixture のパス解決・surfaces.txt パース・
 //! surface1000 の bind パーツ土台（`BindPart` / `surface1000_bind_parts` /
-//! `build_atlas_for_surface1000` / `compose_surface1000`）・不透明画素の計数を集約する。
+//! `build_atlas_for_surface1000` / `plan_surface1000`）を集約する。
 //! 単一テーマからしか参照されないヘルパは各テーマファイル側へ残してある。
 
 use super::{
-    AtlasTable, BindSet, ComposedSurface, Composer, MemoryDecoder, Path, PathBuf, PatternState,
-    Shell,
+    AtlasTable, BindSet, Composer, DrawPlan, MemoryDecoder, Path, PathBuf, PatternState, Shell,
 };
 
 /// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
@@ -112,24 +111,10 @@ pub(super) fn bake_emo2(shell: &Shell, base: &Path, dec: &MemoryDecoder) -> Atla
     crate::plan_test_support::bake_surfaces(&shell.surfaces, base, dec).table
 }
 
-/// surface1000 を有効 bind 集合で合成した結果を得る（world 構築＋bind_atlas＋compose）。
-pub(super) fn compose_surface1000(
-    shell: &Shell,
-    atlas: &AtlasTable,
-    binds: &BindSet,
-) -> ComposedSurface {
+/// surface1000 を有効 bind 集合で計画した結果を得る（world 構築＋bind_atlas＋plan）。
+pub(super) fn plan_surface1000(shell: &Shell, atlas: &AtlasTable, binds: &BindSet) -> DrawPlan {
     let world = crate::plan_test_support::bound_world(shell, &[], atlas);
     Composer::new()
-        .compose(&world, atlas, 1000, binds, &PatternState::default())
-        .expect("surface1000 の合成は Ok（surface 存在＋静的外形非ゼロ・要件 6.6）")
-}
-
-/// α>0 の画素数を数える（非空虚性・重なり量の要点指標）。
-pub(super) fn opaque_pixel_count(s: &ComposedSurface) -> usize {
-    s.bytes()
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .filter(|px| px[3] > 0)
-        .count()
+        .plan(&world, atlas, 1000, binds, &PatternState::default())
+        .expect("surface1000 の計画は Ok（surface 存在＋静的外形非ゼロ）")
 }

@@ -523,3 +523,45 @@ for k in sys.argv[1:]:
 
 - 移す前の 2 ファイルは消し、`golden_tests_surface1000_bind_tests.rs` には外形と空の着せ替えのテスト（計画の値へ書き直す側・タスク 7.6）だけを残した。
 - 差を測るテストは CPU の合成を呼ぶので、CPU の合成の口を外すタスク 7.6 で一緒に取り下げる。
+
+## 17. CPU の合成の口を外したときに取り下げ・移したテスト（2026-11-28・タスク 7.6・要件 7.8・9.6）
+
+CPU の合成の口（`Composer::compose`・`compose_into`・`compose_into_reusing`・`Recompose`）・CPU の転写（`blit.rs`）・範囲の重ね直し（`blit_rect.rs`）・合成の所要の例を外した。描き方は計画と節（画面）・画面の外の描き手（書き出し・`--offline-dump`・WARP のテスト）の 1 つだけになる。
+
+### 17.1 ファイルごと取り下げたもの
+
+| ファイル | タスク | 理由 |
+|---|---|---|
+| `areka-emo-compose/src/blit.rs`（中のテスト） | 7.6 | CPU の転写の式（整数の乗算済み SourceOver・`trim_offset`・切り抜き）を固めるだけで、転写と一緒に消える。重ね方の画素は `draw_methods_warp_tests.rs`（WARP・±1）が持つ |
+| `areka-emo-compose/src/blit_transparent_alpha_tests.rs` | 7.6 | CPU の転写の透明・半透明の画素の扱いを固めるだけ。同じ点は WARP の見本が持つ |
+| `areka-emo-compose/src/blit_rect.rs`・`blit_rect_tests.rs` | 7.6 | CPU の範囲の重ね直しといちからの合成のバイト一致の檻。範囲だけ＝全部は wintf の差分の計画と `screen_offscreen_gpu_tests.rs`（8.1）が持つ |
+| `areka-emo-compose/examples/compose_timing.rs` | 7.6 | CPU の合成の所要を測る例。移した後の所要は §14 と同じ手順（8.3）で測る |
+| `areka-emo-present/src/presenter_partial_recompose_tests.rs` | 7.1 | CPU の範囲の重ね直しの檻（表示の道が CPU の絵を持たなくなった） |
+| `areka-emo-present/src/presenter_partial_recompose_gpu_tests.rs` | 7.1 | 範囲だけ上げた絵と全部上げた絵の一致の檻。入れ物の一致の檻（`screen_offscreen_gpu_tests.rs`・8.1 で広げる）へ移した |
+| `areka-emo-present/src/display_fault_tests.rs` | 7.1 | 表示の絵の上げ（`record_display`）の故障の差し込みの檻。上げが無くなり、故障の差し込みは頁の上げ（`GpuAtlas`）へ移した（7.3） |
+| `areka-emo-present/src/display_tests.rs` | 7.1 | 表示の絵の上げの檻。上げを外し、残る外形の檻は `mount_extent_tests.rs` へ名を改めて残した |
+
+### 17.2 ファイルの中で取り下げたテスト
+
+| ファイル | テスト | 理由 |
+|---|---|---|
+| `areka-emo-present/src/offscreen_emo2_tests.rs` | `emo2_overlay_only_warp_differs_from_the_cpu_compose_by_at_most_one` | CPU の合成と WARP の差を測る R2 の測りで、CPU の合成と一緒に消える。答えは §16 に残り、見本は同じファイルの WARP の 3 本が持つ |
+| `areka-emo-present/src/offscreen_tests.rs` | `warp_overlay_only_matches_the_cpu_compose_within_one` | 画面の外の描き手を CPU の合成と比べる檻。hardware と WARP の一致（±1）の檻に書き直した |
+| `areka-emo-present/src/presenter/budget_tests.rs` | `the_compose_destination_seat_is_allocated_once_and_then_lent_again` | CPU の合成先の常設席だけを固める檻で、席と一緒に消える（perf の行の `alloc_compose_dst` は必須の欄なので 0 のまま出す） |
+
+### 17.3 書き直し・付け替えたもの
+
+| 移す前 | 移した先 |
+|---|---|
+| `composer_tests.rs` の画素の点（結線・保持しない・空の pattern・コマの置き換え・ascend の順） | 同じファイルで計画の項の (画像, 位置) の列と外形の値へ |
+| `composer_tests.rs` の `compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one`（CPU の合成先のクリア） | `plan_into_a_used_plan_equals_a_fresh_one`（使い回した計画を組み直すと新しい計画と等しい） |
+| `golden_tests_determinism_budget_tests.rs`（バイトの決定性・合成先の容量） | 計画の決定性・計画の項の列と作業場の容量の不変 |
+| `golden_tests_surface1000_bind_tests.rs` の空の着せ替え（全透明） | 項が 0・外形が着せ替えに依らない |
+| `nesting_fixture_tests.rs`・`boxes_nesting_tests.rs`・`plan_issues_tests.rs`・`plan_bounds_tests.rs`・`plan_always_tests.rs`・`walk_limits_tests.rs`・`plan_extent_tests.rs` | 計画の項の位置・計画の一致・外形・作業場の容量へ |
+| `log_firing_tests.rs` の描けない語の `debug!`（`blit::execute`） | 計画の項を作る口（`plan_mix::push_items`）の `debug!` |
+| `log_firing_tests.rs` の頁が無い置き場の `warn!`（`blit::execute`） | `GpuAtlas` の葉の記録の `warn!`（頁が無い・uv が頁に収まらない）。`gpu_atlas_tests.rs` の `leaf_of_a_picture_outside_its_page_is_empty_and_warns` |
+| `work_limits_tests.rs` の画素の上限（いちからと範囲の重ね直し） | 計画の項の数（頭の 64 枚・記録は合成器 1 つにつき根ごとに 1 行） |
+| `row_budget_tests.rs` の `cap_pixels` | 同じ口。`asis` の命令は描く `asis` 用の絵の置き場で数える（`asis_ops_count_the_pixels_of_the_asis_picture`） |
+| `presenter/budget_tests.rs`・`cache_tests.rs` の回収した CPU の表示の絵の容量の引き継ぎ | 回収した計画の項の列の容量の引き継ぎ（`the_recycled_plan_hands_back_the_recycled_allocation_unchanged`・`take_recycled_carries_over_plan_capacity`） |
+| emo-present の合成メモの CPU の絵（`CacheEntry.composed`）を読む檻 | 計画（`entry.plan`）の一致・原寸は `plan.extent`・画素は画面の外の描き手（WARP） |
+| `dump_surface` のテストの支え・コマの再生の E2E・例（emo-present・文字の層・pilot）・配置の寸法 | 寸法は `Composer::plan` の外形、画素は `OffscreenRenderer` |

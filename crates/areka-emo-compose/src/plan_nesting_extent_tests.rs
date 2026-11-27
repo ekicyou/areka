@@ -12,7 +12,7 @@ use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_gray, bound_world, frame, plan_of};
+use crate::plan_test_support::{bake_gray, bound_world, frame, ops_and_extent};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -43,7 +43,13 @@ fn plan(
     let mut planned = None;
     let logs = capture_logs(|| {
         let world = bound_world(&parse(text), &[], &atlas);
-        planned = Some(plan_of(&world, &atlas, top, &BindSet::default(), pattern));
+        planned = Some(ops_and_extent(
+            &world,
+            &atlas,
+            top,
+            &BindSet::default(),
+            pattern,
+        ));
     });
     let (ops, result) = planned.unwrap();
     (result, ops, logs)

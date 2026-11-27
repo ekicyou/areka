@@ -354,11 +354,11 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
         );
     }
 
-    // (iv) alloc_* は実 FrameBudget 由来。ミスの初回適用は発生点 2 をどちらも 1 回ずつ踏む。
+    // (iv) alloc_* は実 FrameBudget 由来。ミスの初回適用は計画の席を 1 回踏む。CPU の合成先は無いので 0。
     assert_eq!(
         field(&perf, "alloc_compose_dst"),
-        "1",
-        "合成先の確保が計数されていない"
+        "0",
+        "CPU の合成先はもう無い"
     );
     assert_eq!(field(&perf, "alloc_mask"), "0", "α マスクはもう作らない");
     assert_eq!(

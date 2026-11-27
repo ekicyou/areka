@@ -6,90 +6,46 @@
 //!
 //! # 交代は拡大率で分岐しない
 //!
-//! 合成先席と表示バッファの交代（`FrameBudget::swap_native_scratch`）は `show.rs` のミス経路で
-//! **無条件に**走る——表示へ載せるのは原寸そのものであり、CPU で画素を拡大する段が経路から
-//! 消えたためである。ゆえに**窓 DPI が 96（k 恒等）でも 192（k=2/1）でも、回る実体の本数も
-//! 立ち上がりの確保の形も同一**でなければならない。本ファイルが 2 水準を別々の檻で踏むのは
-//! その一致そのものを固定するためである。
+//! 計画の席と合成メモの計画の交代（`FrameBudget::swap_plan_scratch`）は `show.rs` のミス経路で
+//! **無条件に**走る——計画は原寸で、拡大は描画の係数だけが持つ。ゆえに**窓 DPI が 96（k 恒等）でも
+//! 192（k=2/1）でも、回る実体の本数も立ち上がりの確保の形も同一**でなければならない。本ファイルが
+//! 2 水準を別々の檻で踏むのはその一致そのものを固定するためである。
 //!
 //! # 固定する 5 点
 //!
-//! 1. **確保計数の増分 0**: 暖機後の反復で 2 発生点の累積が 1 も動かない
-//! 2. **暖機の形**: 立ち上がりの確保が「実体ごとに一度」の裁定済みの形どおりに
-//!    現れて 0 へ落ちる。**1 適用へ丸めない**——回る実体は 1 適用ずつずれて伸びるため、
-//!    暖機を 1 適用と決め打つと残りの成長が黙って隠れる
-//! 3. **交代の実体そのもの**: 前回の合成先席が今回の表示バッファへ回る。同時に生きている 2 つの
-//!    実体の役割入れ替えを主張するので、番地の偶然一致が入り込む余地が無い
-//! 4. **回る実体の集合が閉じている**: 表示バッファ・合成先席はちょうど [`WARMUP`] 種類
-//!    （キャッシュの 3 本＋合成先席 1 本）で、そこに新顔が混じらない
-//! 5. **引き当てヒット経路も踏む**（毎コマ経路はヒットを含む）:
-//!    上の 1〜4 を主張する 2 つの檻は**設計上すべての適用がミスする**。ミスしか踏まない檻だけでは
-//!    合成の有無に依らず走る区間のヒット側が 1 度も動かない。2 つの檻の本体の末尾が
-//!    同じキーの再適用を 1 回入れてその穴を塞ぐ
+//! 1. **確保計数の増分 0**: 暖機後の反復で累積が 1 も動かない
+//! 2. **暖機の形**: 立ち上がりの確保が「実体ごとに一度」の形どおりに現れて 0 へ落ちる。
+//!    **1 適用へ丸めない**——回る実体は 1 適用ずつずれて伸びるため、暖機を 1 適用と決め打つと
+//!    残りの成長が黙って隠れる
+//! 3. **交代の実体そのもの**: 前回の計画の席が今回キャッシュへ挿す計画へ回る。同時に生きている
+//!    2 つの実体の役割入れ替えを主張するので、番地の偶然一致が入り込む余地が無い
+//! 4. **回る実体の集合が閉じている**: 計画はちょうど [`WARMUP`] 種類（キャッシュの 3 本＋席 1 本）で、
+//!    そこに新顔が混じらない
+//! 5. **引き当てヒット経路も踏む**: 上の 1〜4 を主張する檻は設計上すべての適用がミスするので、
+//!    本体の末尾が同じキーの再適用を 1 回入れてヒット側を動かす
 //!
-//! # 「同じ寸法の反復」だけでは再利用を主張できない（過去に何度も踏んだ罠）
+//! # 「同じ大きさの反復」だけでは再利用を主張できない
 //!
-//! 毎回まっさらに確保する実装は、同じ寸法の反復では毎回**同じ容量**に着地するため容量比較を
+//! 毎回まっさらに確保する実装は、同じ大きさの反復では毎回**同じ容量**に着地するため容量比較を
 //! 素通りする。ゆえに本ファイルの再利用主張は必ず ⑴実体の番地 ⑵累積計数の据え置き の 2 本立てで
 //! 書き、番地の一致は計数の据え置きと**必ず対で**主張する（番地は解放直後の再確保で偶然一致し
-//! 得るため単独では証拠にならない）。
-//!
-//! # 番地の主張はどこまで効くか（実測・登記）
-//!
-//! 上の但し書きは一般論ではなく、本ファイルに**実際に開いていた（一部は今も開いている）穴**で
-//! ある。番地だけが頼りになりうる変異——実体を作り直す形——を 2 種類当てて実測した
-//! （走らせ方は `cargo test -p areka-emo-present --lib`・全走・既定の並列度。各変異 4 走）。
-//! **走ごとの赤の回数（x/y）を書くのは本節の表だけである**——他の節は自分のどの assert が鳴るかを
-//! 質的に書き、回数が要るときはここを見る。
-//!
-//! - **変異 A**: `presenter/budget.rs` の `FrameBudget::display_buffer` が回収した `composed` を
-//!   捨てて `ComposedSurface::default()` を返す
-//! - **変異 B**: `presenter/budget.rs` の `seat::SurfaceSeat::lend` で、**容量を読んだ直後・
-//!   閉包へ貸す直前**に `self.surface` を `ComposedSurface::default()` へ差し替える
-//!   （読み取りより後に置くのが要点で、前に置くと計数へ現れて A と同じ形になる）
-//!
-//! | 変異 | 検出器（檻・assert の文言） | 何を見ているか | 赤の走数 |
-//! |---|---|---|---|
-//! | A | 本ファイル 2 水準の檻の「暖機の確保の形が……」 | 計数 | 4/4 |
-//! | A | `presenter/budget_tests.rs` の `the_warm_up_allocates_once_per_rotating_buffer_then_settles` ほか | 計数・外形 | 4/4 |
-//! | A | `presenter_budget_equivalence_tests.rs` の器の本数 | 番地 | 4/4 |
-//! | B | `presenter/budget_tests.rs` の `a_smaller_extent_and_the_regrowth_allocate_nothing` | 計数 | 4/4 |
-//! | B | `presenter/budget_tests.rs` の `the_compose_destination_seat_is_allocated_once_and_then_lent_again` | 番地 | 4/4 |
-//! | B | 本ファイルの交代関係「前回の合成先席が表示バッファへ回っていない」 | 同時に生きている 2 実体の関係 | 4/4 |
-//!
-//! **変異 A は容量 3 の実装で計数側へ移った。** 出所は `FrameBudget` が到達済み寸法
-//! （高水位）を器のフィールドで覚えるのをやめ、**実体そのものの `Vec` 容量**を呼び出しの前後で
-//! 読み比べる形になったことである（`presenter/budget.rs` 冒頭の「何をもって確保したと数えるか」）。
-//! 回収バッファを捨てて空を返せば容量 0 から伸びるので、必ず 1 件計数される。
-//!
-//! **変異 B は計数では捕まらない。** 理由は、容量の読み取りが**貸し出しの前**に行われるため、
-//! 貸し出しの最中に実体を差し替えると「前の実体の容量」と「新しい実体が伸びた後の容量」を
-//! 比べることになり、両者が一致すれば増えたと判定されないからである。決定論的に殺すのは
-//! ⑴縮小 → 再拡大の檻（新しい実体は容量 0 から始まるので再拡大で必ず計数される）⑵席単体の
-//! 番地の檻 ⑶本ファイルの交代関係、の 3 本である。
-//!
-//! # 再計測の手順（信用ではなく測り直しで確かめる）
-//!
-//! 変異 A は `presenter/budget.rs` の `FrameBudget::display_buffer` へ、変異 B は同ファイルの
-//! `seat::SurfaceSeat::lend` へ、上の定義どおりに当てる。走らせ方は
-//! `cargo test -p areka-emo-present --lib`（全走）で、**赤になった檻の一覧を毎走まるごと記録する**
-//! （上の表は 1 本ずつ絞り込むのではなく全走の失敗一覧から作った）。計数で死ぬ主張は 1 走で
-//! 決まるが、番地の主張は走ごとに揺れるため最低 4 走して赤の回数で読む。
+//! 得るため単独では証拠にならない）。席の実体だけを貸し出しの最中に差し替える変異は容量の読み比べに
+//! 現れないので、交代関係の番地の主張がそれを仕留める。
 //!
 //! [`FrameBudget`]: super::budget::FrameBudget
 //!
 //! # 中身が空の実装で偽の合格を出さない
 //!
-//! すべての反復で表示バッファに**不透明画素が実在すること**を併せて確認し、加えて読み戻しが
-//! 非ゼロであることを 1 度確かめる。0×0 や真っ黒を回し続ける実装は「確保が起きない」を空虚に
-//! 満たしてしまうため、その口を閉じる。
+//! すべての反復で計画に項が在ることを併せて確認し、加えて読み戻しが非ゼロであることを 1 度確かめる。
 //!
 //! # 実時間を合否条件に使わない
 //!
-//! 本ファイルは時刻にも経過にも一切触れない（回数・番地・画素のみ）。純 x64 の常設テストで
-//! あり、環境変数ゲートも `#[ignore]` も持たない。
+//! 本ファイルは時刻にも経過にも一切触れない（回数・番地・画素のみ）。環境変数ゲートも `#[ignore]` も
+//! 持たない。
 
 use super::*;
+
+use areka_emo_compose::PlanItem;
 
 use super::test_support::{build_target_assets, show_with_ok, spawn_window_with_dpi};
 
@@ -111,9 +67,8 @@ use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// 暖機の適用回数＝回る実体の本数。
 ///
-/// 表示バッファと合成先席・計画（どちらもキャッシュの 3 本＋席 1 本＝4 本が交代する）は
-/// **1 適用ずつずれて**立ち上がるため、全ての実体が定常へ入るまでに
-/// これだけかかる。
+/// 計画（キャッシュの 3 本＋席 1 本＝4 本が交代する）は **1 適用ずつずれて**立ち上がるため、
+/// 全ての実体が定常へ入るまでにこれだけかかる。
 const WARMUP: usize = CACHE_CAPACITY + 1;
 
 /// 定常状態の観測反復数。
@@ -122,7 +77,7 @@ const STEADY: usize = 8;
 /// 巡回適用の n 回目に使う bind 集合（引き当てを毎回外すための異なるキー）。
 ///
 /// surface 1000 は `animations` を 1 件も持たないため、bind 集合は `build_plan` の走査対象に
-/// 一度も現れない——**合成結果にも外形にも影響しない**。ゆえに「毎回ミスするが毎回同じ絵・同じ
+/// 一度も現れない——**計画にも外形にも影響しない**。ゆえに「毎回ミスするが毎回同じ絵・同じ
 /// 寸法」という、定常状態の観測にちょうど要る入力になる。
 fn binds_at(i: usize) -> BindSet {
     let id = 1 + (i % ROTATING_KEYS) as u32;
@@ -132,7 +87,7 @@ fn binds_at(i: usize) -> BindSet {
 /// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
 ///
 /// `window_dpi` は導かれる k（96 なら恒等・192 なら 2/1）を決めるだけで、**毎コマ経路の
-/// バッファの回り方は変えない**（交代は無条件）。
+/// 計画の回り方は変えない**（交代は無条件）。
 fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt: u8) {
     let window = spawn_window_with_dpi(world, window_dpi);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, salt);
@@ -145,14 +100,14 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, window_dpi: u16, salt
 ///
 /// 番地は**同一性の主張にのみ**使う（読み出しはしない）。
 struct Seen {
-    /// 2 発生点の累積計数（`[compose_dst, plan]`）。
-    cumulative: [u64; 2],
-    /// 合成先の常設席が抱えるバイト列の先頭位置（**交代後**＝次の適用が合成する器）。
-    native: *const u8,
-    /// 表示バッファ（キャッシュスロットの表示用サーフェス）の先頭位置。
-    display: *const u8,
-    /// 表示バッファ中の不透明画素数（空実装の偽合格を防ぐ非空性ガード）。
-    opaque_pixels: usize,
+    /// 計画の席の確保の累積計数。
+    cumulative: u64,
+    /// 計画の席が抱える項の列の先頭位置（**交代後**＝次の適用が計画を組む器）。
+    seat: *const PlanItem,
+    /// キャッシュスロットの計画の項の列の先頭位置。
+    inserted: *const PlanItem,
+    /// スロットの計画の項の数（空実装の偽合格を防ぐ非空性ガード）。
+    items: usize,
 }
 
 /// 直前の適用が残した状態を読み取る。
@@ -165,27 +120,15 @@ fn observe(presenter: &EmoPresenter, binds: &BindSet) -> Seen {
         .get(&TargetId(0))
         .expect("装着済み target");
 
-    let c = target.budget.cumulative();
-    let cumulative = [c.alloc_compose_dst, c.alloc_plan];
-    let native = target.budget.native_scratch_ptr();
-
     let entry = target
         .cache
         .get(1000, binds, &PatternState::default())
         .expect("直前の適用がスロットを埋めている");
-    let display = entry.composed.bytes().as_ptr();
-    let opaque_pixels = entry
-        .composed
-        .bytes()
-        .chunks_exact(4)
-        .filter(|px| px[3] == 0xFF)
-        .count();
-
     Seen {
-        cumulative,
-        native,
-        display,
-        opaque_pixels,
+        cumulative: target.budget.cumulative().alloc_plan,
+        seat: target.budget.planned().items.as_ptr(),
+        inserted: entry.plan.items.as_ptr(),
+        items: entry.plan.items.len(),
     }
 }
 
@@ -212,47 +155,30 @@ fn distinct<T: Ord + Copy>(items: impl Iterator<Item = T>) -> Vec<T> {
     v
 }
 
-/// 累積計数の差（この適用で起きた確保）。
-fn delta(before: [u64; 2], after: [u64; 2]) -> [u64; 2] {
-    [after[0] - before[0], after[1] - before[1]]
-}
-
-/// 表示バッファに不透明画素が実在することを主張する（中身が空の実装の偽合格を防ぐ）。
+/// スロットの計画に項が在ることを主張する（中身が空の実装の偽合格を防ぐ）。
 fn assert_not_empty(seen: &Seen, at: &str) {
     assert!(
-        seen.opaque_pixels > 0,
-        "{at}: 表示バッファに不透明画素が 1 つも無い（空を回して「確保が起きない」を\
-         空虚に満たしている）"
+        seen.items > 0,
+        "{at}: スロットの計画に項が 1 つも無い（空を回して「確保が起きない」を空虚に満たしている）"
     );
 }
 
 /// 定常アロケーション 0 と交代の回転を 1 水準ぶん検査する（下の 2 本の檻の本体）。
 ///
 /// **窓 DPI（＝導かれる k）で分岐しない**のがこの関数の存在理由である。2 つの檻が同じ本体を
-/// 別の水準で呼び、同じ形を要求することで「交代が拡大率で分岐しない」が
-/// 檻の構造そのものになる。
+/// 別の水準で呼び、同じ形を要求することで「交代が拡大率で分岐しない」が檻の構造そのものになる。
 ///
 /// # 暖機の形
 ///
-/// `[1,1]` が 4 適用ぶん、以後 0。合成先の代金が 4 適用に分かれるのは交代で回る 4 本
-/// （キャッシュの 3 本＋合成先席 1 本）ぶんであり、計画も同じく 4 本ぶんである。暖機を 1 適用へ丸めるとこれらが観測の外へ落ち、残りのバッファの成長が黙って隠れる。
+/// `1` が 4 適用ぶん、以後 0。代金が 4 適用に分かれるのは交代で回る 4 本（キャッシュの 3 本＋席 1 本）
+/// ぶんである。暖機を 1 適用へ丸めるとこれらが観測の外へ落ち、残りの計画の成長が黙って隠れる。
 ///
-/// # 殺す誤実装（変異を実際に当てて、鳴った主張を書き取った）
+/// # 殺す誤実装
 ///
-/// 推測で書かない——「同じ寸法の反復では再利用を主張できない」を何度も踏んでいる。
-/// 多くは暖機の形（計数の指紋）で落ちるが、**計数が鳴らない変異が 2 件ある**——変異 B・
-/// `swap_native_scratch` の複写化（どちらも交代関係で落ちる）。ゆえに番地・交代関係の主張は計数の傍証
-/// ではなく、計数では捕まらない形を仕留める独立の檻である。
-///
-/// - `seat::SurfaceSeat::lend` の冒頭で席を丸ごと作り直す（容量の読み取りより**前**に差し替える
-///   ので計数へ現れる形）→ 「暖機の確保の形が……から外れている」で RED
-/// - 席の実体だけ差し替える（冒頭「番地の主張はどこまで効くか」の**変異 B**）→ 計数の主張は鳴らない。
-///   決定論的に殺すのは下の交代関係と `budget_tests.rs` の 2 本である
 /// - 容量回収（`ComposeCache::take_recycled`）が満杯でなくても剥がす → 暖機の形で RED
-/// - `FrameBudget::display_buffer` が回収した `composed` を捨てて空バッファを返す（**変異 A**）
-///   → 暖機の形で RED
-/// - `swap_native_scratch` を複写へ戻す → 交代関係「前回の合成先席が表示バッファへ回っていない」
-///   で RED
+/// - `FrameBudget::recycled_plan` が回収した計画を捨てて空の計画を返す → 暖機の形で RED
+/// - 席の実体だけを貸し出しの最中に差し替える → 計数は鳴らない。交代関係で RED
+/// - `swap_plan_scratch` を複写へ戻す → 交代関係「前回の席がキャッシュへ回っていない」で RED
 fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     let level = format!("窓 DPI {window_dpi}");
     let mut world = super::test_support::make_world_with_gpu();
@@ -260,21 +186,21 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
     attach(&mut presenter, &mut world, window_dpi, salt);
 
     // 暖機: 立ち上がりの確保が「実体ごとに一度」の形で現れて 0 へ落ちる。
-    let mut prev = [0_u64; 2];
-    let mut warm_shape: Vec<[u64; 2]> = Vec::new();
+    let mut prev = 0_u64;
+    let mut warm_shape: Vec<u64> = Vec::new();
     for i in 0..WARMUP {
         let seen = apply_and_observe(&mut presenter, &mut world, i);
-        warm_shape.push(delta(prev, seen.cumulative));
+        warm_shape.push(seen.cumulative - prev);
         prev = seen.cumulative;
     }
     assert_eq!(
         warm_shape,
-        vec![[1, 1]; WARMUP],
-        "{level}: 暖機の確保の形が Requirement 3.2 の「実体ごとに一度」から外れている\
-         （交代する {WARMUP} 本と計画の {WARMUP} 本が 1 適用ずつずれて立ち上がる形）"
+        vec![1; WARMUP],
+        "{level}: 暖機の確保の形が「実体ごとに一度」から外れている\
+         （交代する {WARMUP} 本が 1 適用ずつずれて立ち上がる形）"
     );
 
-    // 実適用 k が窓 DPI から導かれていること（k がキー要素でなくなった今、これを言わないと
+    // 実適用 k が窓 DPI から導かれていること（k がキー要素でない今、これを言わないと
     // 2 水準のレーンが同じ k で走る恒真に化ける）。
     assert_eq!(
         presenter.applied_ratio(TargetId(0)),
@@ -296,8 +222,8 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
         let at = format!("{level} の基準適用 {i}");
         assert_not_empty(&seen, &at);
         assert_ne!(
-            seen.native, seen.display,
-            "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
+            seen.seat, seen.inserted,
+            "{at}: 席とスロットの計画が同一実体（交代が成立していない）"
         );
         base.push(seen);
     }
@@ -308,29 +234,28 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
             "{level}: 基準の適用 {i} で確保が起きた（暖機が終わっていない＝以後の比較が空虚）"
         );
     }
-    // 交代の実体そのもの: 前回の合成先席が今回の表示バッファへ回る（複写化するとここが崩れる）。
-    // 同時に生きている 2 実体の役割入れ替えゆえ、番地の偶然一致が入り込む余地が無い。
+    // 交代の実体そのもの: 前回の席が今回スロットへ挿す計画へ回る（複写化するとここが崩れる）。
     for i in 1..base.len() {
         assert_eq!(
-            base[i].display,
-            base[i - 1].native,
-            "{level} 基準 {i}: 前回の合成先席が表示バッファへ回っていない（swap になっていない）"
+            base[i].inserted,
+            base[i - 1].seat,
+            "{level} 基準 {i}: 前回の席がスロットへ回っていない（swap になっていない）"
         );
     }
-    // 回る実体の集合。合成先席と表示バッファは同じ 4 本を役割を替えながら巡る。
-    let known_buffers: Vec<*const u8> = distinct(
+    // 回る実体の集合。席とスロットの計画は同じ 4 本を役割を替えながら巡る。
+    let known: Vec<*const PlanItem> = distinct(
         base.iter()
-            .map(|s| s.native)
-            .chain(base.iter().map(|s| s.display)),
+            .map(|s| s.seat)
+            .chain(base.iter().map(|s| s.inserted)),
     );
     assert_eq!(
-        known_buffers.len(),
+        known.len(),
         WARMUP,
         "{level}: 交代で回る実体が {WARMUP} 本でない（確保し直している／潰れている）"
     );
 
-    let mut prev_native = base[base.len() - 1].native;
-    let mut prev_display = base[base.len() - 1].display;
+    let mut prev_seat = base[base.len() - 1].seat;
+    let mut prev_inserted = base[base.len() - 1].inserted;
     for i in 0..STEADY {
         let seen = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + i);
         let at = format!("{level} の定常 {i} 回目");
@@ -339,65 +264,56 @@ fn assert_steady_run_rotates_and_allocates_nothing(window_dpi: u16, salt: u8) {
             seen.cumulative, cumulative,
             "{at}: 累積計数が動いた（定常状態で確保が起きている）"
         );
-        // 次の番地と交代関係の主張は、計数では捕まらない変異 B（席の実体だけの差し替え）を
-        // 仕留める（冒頭「番地の主張はどこまで効くか」）。計数の裏取りではない。
         assert!(
-            known_buffers.contains(&seen.native),
-            "{at}: 合成先席が既知の {WARMUP} 本のどれでもない（確保し直している）"
+            known.contains(&seen.seat),
+            "{at}: 席が既知の {WARMUP} 本のどれでもない（確保し直している）"
         );
         assert!(
-            known_buffers.contains(&seen.display),
-            "{at}: 表示バッファが既知の {WARMUP} 本のどれでもない（回収した容量で回っていない）"
+            known.contains(&seen.inserted),
+            "{at}: スロットの計画が既知の {WARMUP} 本のどれでもない（回収した容量で回っていない）"
         );
         assert_eq!(
-            seen.display, prev_native,
-            "{at}: 前回の合成先席が表示バッファへ回っていない（複写化・交代の消失）"
+            seen.inserted, prev_seat,
+            "{at}: 前回の席がスロットへ回っていない（複写化・交代の消失）"
         );
         assert_ne!(
-            seen.native, seen.display,
-            "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
+            seen.seat, seen.inserted,
+            "{at}: 席とスロットの計画が同一実体（交代が成立していない）"
         );
         assert_not_empty(&seen, &at);
 
-        prev_native = seen.native;
-        prev_display = seen.display;
+        prev_seat = seen.seat;
+        prev_inserted = seen.inserted;
     }
 
-    // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。ヒットの成立は表示バッファの実体が
+    // ヒット経路: 直前の適用と**同じ**キーをもう一度渡す。ヒットの成立はスロットの計画の実体が
     // 動かないことで示す（ミスなら交代で同時に生きている別の実体へ移る）。確保増分 0 は単独では
     // ヒットの証拠にならない（定常状態ではミスも 0 件）。
     let hit = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + STEADY - 1);
     let at = format!("{level} のヒット経路");
     assert_eq!(
-        hit.display, prev_display,
-        "{at}: 表示バッファの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない＝以後の主張が空虚）"
+        hit.inserted, prev_inserted,
+        "{at}: スロットの計画の実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない）"
     );
     assert_eq!(
         hit.cumulative, cumulative,
-        "{at}: 確保が起きた（ヒットなら計画も合成も走らない）"
+        "{at}: 確保が起きた（ヒットなら計画は組まない）"
     );
     assert_not_empty(&hit, &at);
 }
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// **非等倍・k=2/1**: 拡大率が 2 倍でも、毎コマ経路は
-/// 等倍とまったく同じ 4 本の交代で回り、定常状態の確保は 0 である。
-///
-/// 窓 DPI が 2 倍でも CPU でリサンプルする段は無く、**非等倍に固有の器は 1 つも無い**
-/// ——それを固定するのが本檻の役割である（下の等倍の檻と同じ本体を呼ぶ）。
+/// **非等倍・k=2/1**: 拡大率が 2 倍でも、毎コマ経路は等倍とまったく同じ 4 本の交代で回り、
+/// 定常状態の確保は 0 である（下の等倍の檻と同じ本体を呼ぶ）。
 #[test]
-fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
+fn a_steady_scaled_run_reuses_every_plan_and_allocates_nothing() {
     assert_steady_run_rotates_and_allocates_nothing(192, 0xD1);
 }
 
-/// **等倍**・100% 表示の一般条件: 拡大率が等倍でも
-/// 定常状態の確保は 0 で、合成先席と表示バッファは**ちょうど 4 本の実体を回し続ける**
-/// （キャッシュの 3 本＋合成先席 1 本）。
-///
-/// 上の非等倍の檻と**同一の本体**を窓 DPI だけ変えて呼ぶ。2 本が同じ形を要求することが
-/// 「交代は拡大率で分岐しない」の観測形である。
+/// **等倍**: 拡大率が等倍でも定常状態の確保は 0 で、計画は**ちょうど 4 本の実体を回し続ける**
+/// （キャッシュの 3 本＋席 1 本）。上の非等倍の檻と**同一の本体**を窓 DPI だけ変えて呼ぶ。
 #[test]
-fn a_steady_identity_run_rotates_through_exactly_four_buffers_and_allocates_nothing() {
+fn a_steady_identity_run_rotates_through_exactly_four_plans_and_allocates_nothing() {
     assert_steady_run_rotates_and_allocates_nothing(96, 0xD2);
 }

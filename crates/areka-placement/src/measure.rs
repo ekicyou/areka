@@ -2,7 +2,7 @@
 //!
 //! 起動（`ghost_session`・`runtime`）と同じ中身の公開 API 経路（シェル読み込みの権威。
 //! 起動は `load_shell_target`・採寸は記録を出さない
-//! `areka_emo_present::shell_target::load_shell_target_quiet` → `ShellTarget::take_world` → `Composer::compose`）で、各スコープの初期 surface と
+//! `areka_emo_present::shell_target::load_shell_target_quiet` → `ShellTarget::take_world` → `Composer::plan`）で、各スコープの初期 surface と
 //! そのスコープが解決したバルーン面 0 を bind なし合成し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
@@ -437,7 +437,7 @@ fn measure_balloon_surface0(
     compose_size(composer, &world, &atlas, 0).map_err(balloon_err)
 }
 
-/// `surface_id` を bind なし（`BindSet::default()`）で合成し原寸（物理 px）を返す。
+/// `surface_id` を bind なし（`BindSet::default()`）で計画し、その外形を原寸（物理 px）で返す。
 ///
 /// 失敗（surface 不在・空合成・0 寸・i32 変換不能）は理由文字列で返し、
 /// warn/error への昇格と scope 帰属は呼び手が決める。
@@ -448,8 +448,8 @@ fn compose_size(
     surface_id: u32,
 ) -> Result<SizePx, String> {
     // 静的採寸経路なので SERIKO ループは駆動せず、空 pattern（`PatternState::default()`）で合成する。
-    let composed = composer
-        .compose(
+    let plan = composer
+        .plan(
             world,
             atlas,
             surface_id,
@@ -457,7 +457,7 @@ fn compose_size(
             &PatternState::default(),
         )
         .map_err(|e| format!("surface {surface_id} の合成失敗: {e}"))?;
-    let (w, h) = (composed.width(), composed.height());
+    let (w, h) = (plan.extent.w, plan.extent.h);
     if w == 0 || h == 0 {
         return Err(format!("surface {surface_id} の合成外形が 0 寸: {w}x{h}"));
     }

@@ -124,14 +124,14 @@ pub(super) struct PresentTarget {
     /// [`ScaleRatio::scaled_extent`] 1 本）。表示中エントリが追い出された後（`InvalidateCache`・LRU）も
     /// 照会契約が画面の絵の原寸を返し続けるため、エントリとは別にここへ写しを持つ。
     ///
-    /// 更新点は `applied` と同じ表示成立点 1 箇所で、書き込む値は「今回合成したか」に依らず常に、いま
-    /// 表示に使ったキャッシュエントリの `composed` の外形（[`CacheEntry::composed`]・原寸）。今回合成した
+    /// 更新点は `applied` と同じ表示成立点 1 箇所で、書き込む値は「今回計画を組んだか」に依らず常に、いま
+    /// 表示に使ったキャッシュエントリの計画の外形（[`CacheEntry::plan`]・原寸）。今回計画を組んだ
     /// 回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した場合に「画面の絵と
     /// 別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。原寸がエントリの中に在る（挿入時の
     /// 別フィールドではない）のは、容量が 3 で「保持しているエントリ＝直前に挿入したエントリ」が
     /// 成り立たないため。
     ///
-    /// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
+    /// [`CacheEntry::plan`]: crate::cache::CacheEntry::plan
     pub(super) native_size: Option<(u32, u32)>,
     /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
     ///

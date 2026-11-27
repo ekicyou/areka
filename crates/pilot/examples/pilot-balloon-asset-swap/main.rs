@@ -39,8 +39,8 @@ use wintf::ecs::{
 };
 
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
-use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
-use areka_emo_present::build_balloon_target;
+use areka_emo_compose::{BindSet, ComposedSurface, EmoWorld, PatternState};
+use areka_emo_present::{OffscreenRenderer, build_balloon_target};
 use sample_ghost_kit::SampleRoot;
 
 /// 上限時間の環境変数（本体 `areka` の smoke と同じ名前）。
@@ -117,16 +117,19 @@ fn build_assets(
         build_balloon_target(dir, decoder, 0)
             .map_err(|e| format!("{name} の資産の構築に失敗（{}）: {e}", dir.display()))
     };
-    let compose = |name: &str, (world, atlas): &(EmoWorld, AtlasTable), surface_id: u32| {
-        let face = Composer::new()
-            .compose(
+    // 画面と同じ hardware の装置で描く（画面の写しと同じ画素から標本点を選ぶため）。
+    let mut renderer =
+        OffscreenRenderer::hardware().map_err(|e| format!("画面の外の描き手を作れない: {e}"))?;
+    let mut compose = |name: &str, (world, atlas): &(EmoWorld, AtlasTable), surface_id: u32| {
+        let face = renderer
+            .render(
                 world,
                 atlas,
                 surface_id,
                 &BindSet::default(),
                 &PatternState::default(),
             )
-            .map_err(|e| format!("{name} の面 {surface_id} の合成に失敗: {e}"))?;
+            .map_err(|e| format!("{name} の面 {surface_id} を描けない: {e}"))?;
         if face.width() == 0 || face.height() == 0 {
             return Err(format!("{name} の面 {surface_id} の合成外形が 0 寸"));
         }

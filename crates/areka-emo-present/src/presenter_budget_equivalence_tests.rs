@@ -1,51 +1,37 @@
-//! 新旧経路のバイト等価の檻（presenter 経由）。
+//! 使い回しの席の上を走る本番経路と、まっさらな便宜経路の等価の檻（presenter 経由）。
 //!
 //! # 何を突き合わせるのか
 //!
-//! 本ファイルは実 `apply_show` が合成メモへ載せた**表示バイト**を、同一入力を
-//! テスト側で独立に辿った**便宜経路**——`Composer::compose`（**原寸**）——と 1 バイト単位で突き合わせる
-//! （`test_support::native_golden_with` がその合成そのものである）。
+//! 実 `apply_show` が合成メモへ載せた**計画**を、同一入力をテスト側で独立に組んだ `Composer::plan` と
+//! 突き合わせ、読み戻しの**表示バイト**を画面の外の描き手（WARP）で描いた便宜経路の絵
+//! （`test_support::native_golden_with`）と突き合わせる。
 //!
 //! # 期待値は拡大率に依らない
 //!
-//! presenter が抱えるのは原寸バイトそのもので、拡大は wintf の描画経路（`Arrangement.scale`
-//! ＝D2D 変換行列）が掛ける。ゆえに期待値は窓 DPI がいくつでも**同一の 1 組**であり、CPU で
-//! 画素を拡大する段は経路のどこにも無い。窓 DPI を 3 通り（96／192／120＝k 恒等・整数倍・端数）
-//! 踏むのは、**k が表示バイトに 1 ビットも影響しない**ことを固定するためである。
+//! presenter が抱えるのは原寸の計画で、拡大は wintf の描画経路（まとめの節の変換）が掛ける。ゆえに
+//! 期待値は窓 DPI がいくつでも**同一の 1 組**である。窓 DPI を 3 通り（96／192／120＝k 恒等・整数倍・端数）
+//! 踏むのは、**k が計画にも読み戻しにも 1 ビットも影響しない**ことを固定するためである。
 //!
 //! # 2 つの経路の唯一の差＝**出力先が使い回しかどうか**（ここが本檻の検出力の源）
 //!
-//! 便宜経路は毎回まっさらな `ComposedSurface` へ合成する。本番経路は
-//! **キャッシュ追い出しエントリから回収したバッファ**へ書く——そこには**直前のコマの絵が
-//! 丸ごと残っている**（`ComposeCache::take_recycled` はバイト列を保ったままエントリを渡し、
-//! `FrameBudget::display_buffer` がそれをそのまま返し、交代で合成先席に入る）。ゆえに
-//! 「直前の内容を持つ器へ合成しても結果が変わらない」（`compose_into` の全面上書き）が崩れた
-//! 瞬間、両者は食い違う。
-//!
-//! 残留が実際に在ることは 2 点で確かめる: ⑴巡回して適用する 4 面の**表示バイトが互いに異なる**こと（検体の檻 `the_rotating_face_fixture_differs_in_bytes`）
-//! ⑵暖機後の表示バッファの番地が回り続けている（＝いま書いている器に直前の別の面の絵が入って
-//! いた）こと（本檻）。⑵ が崩れたら本檻はそこで止まり、⑴ が崩れたら検体の檻が赤になる。
-//!
-//! # 本檻が捕まえられない残留の形（実測で判明した限界）
-//!
-//! 「出力の一部の領域を**毎回同じように**書き落とす」変異は、外形が変わらない定常状態では
-//! **本檻を素通りする**。書き落とされた領域は誰にも書かれないまま 0 であり続けるため、
-//! 使い回しの器の側もまっさらな器の側も同じ 0 になるからである。合成そのものの網羅は
-//! `areka-emo-compose` の合成 golden が持つ。本檻が固有に捕まえるのは **presenter 層の配線**
-//! ——回収したバッファを合成先席へ渡し損ねる・交代を落とす——である。
+//! 便宜経路は毎回まっさらな計画を組む。本番経路は**キャッシュ追い出しエントリから回収した計画**へ書く
+//! ——そこには**直前の別の面の項が丸ごと残っている**（`ComposeCache::take_recycled` は項の列を保ったまま
+//! エントリを渡し、`FrameBudget::recycled_plan` がそれをそのまま返し、交代で計画の席に入る）。ゆえに
+//! 「直前の内容を持つ器へ組んでも結果が変わらない」（`plan_into` の全面書き直し）が崩れた瞬間、
+//! 両者は食い違う。残留が実際に在ることは、暖機後の計画の番地が回り続けていることで確かめる。
 //!
 //! # 空の実装で偽の合格を出さない
 //!
-//! 表示バイトに不透明画素と半透明画素が実在することを確かめる。全透明を回す実装は「バイト等価」を
+//! 期待の絵に不透明画素と半透明画素が実在することを確かめる。全透明を回す実装は「等価」を
 //! 空虚に満たしてしまう。
 //!
-//! # 実時間を合否条件に使わない／純 x64 常設
+//! # 実時間を合否条件に使わない
 //!
 //! 判定量はバイト・外形・番地だけである。環境変数ゲートも `#[ignore]` も持たない。
 
 use super::*;
 
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, DrawPlan};
 
 use super::test_support::{
     bake_world, elem, gradient_with_alpha, make_world_with_gpu, native_golden_with, shell_of,
@@ -91,7 +77,7 @@ fn face_at(i: usize) -> u32 {
 ///
 /// - α は `0xFF` と `0x20` の 2 値で、**α=0 を含まない**。
 ///   ゆえに atlas の α=0 除外トリムは全域を残し、合成外形は全面とも正確に `w×h` である
-///   （＝表示バッファの外形が面をまたいで動かず、回収がそのまま成立する）。
+///   （＝計画の外形が面をまたいで動かず、回収がそのまま成立する）。
 /// - 面ごとに α の市松の**位相**と色の salt を変えてあるので、表示バイトは互いに別物になる。
 /// - 色は α を掛けた premultiplied 値で焼く（`B,G,R ≤ A` の不変条件を崩さない）。
 fn build_alpha_varying_faces(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
@@ -124,7 +110,9 @@ fn build_alpha_varying_faces(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
 
 /// 1 面ぶんの便宜経路の期待値（**原寸**・k を含まない）。
 struct Expected {
-    /// 原寸の合成バイト。
+    /// まっさらな合成器で組んだ計画。
+    plan: DrawPlan,
+    /// 原寸の描いた絵のバイト。
     bytes: Vec<u8>,
     /// 原寸の外形。
     extent: (u32, u32),
@@ -139,7 +127,20 @@ fn expected_of(emo_world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Expected {
         &BindSet::default(),
         &PatternState::default(),
     );
-    Expected { bytes, extent }
+    let plan = Composer::new()
+        .plan(
+            emo_world,
+            atlas,
+            id,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
+        .expect("便宜経路の計画は Ok");
+    Expected {
+        plan,
+        bytes,
+        extent,
+    }
 }
 
 /// 巡回する 4 面ぶんの期待値を、presenter が握るのと**別の実体**で作る。
@@ -165,13 +166,12 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// **使い回しバッファの上を走る本番経路**の表示バイトが、
-/// まっさらな出力先を使う便宜経路と 1 バイトも違わない。**窓 DPI 3 水準で同じ 1 組の期待値**に
-/// 一致する（k は表示バイトに現れない）。
+/// **使い回しの計画の上を走る本番経路**の計画が、まっさらな便宜経路と 1 項も違わず、読み戻しの
+/// 表示バイトも便宜経路の絵と同じ。**窓 DPI 3 水準で同じ 1 組の期待値**に一致する（k は現れない）。
 ///
 /// 4 面を巡回適用する。合成キャッシュは容量 3ゆえ**巡回長 4 > 容量 3** で毎回ミスし、
-/// 最も古い引き当てのエントリが追い出されてその表示バッファが回収され、交代で合成先席に入る
-/// ——**いま合成している器には別の面の絵が入っている**。便宜経路との差はこの一点だけである。
+/// 最も古い引き当てのエントリが追い出されてその計画が回収され、交代で計画の席に入る
+/// ——**いま組んでいる器には別の面の項が入っている**。便宜経路との差はこの一点だけである。
 ///
 /// **2 面の交互適用では成立しない**（容量 3 では 2 面とも表に収まり 3 適用目からヒットになる）。
 /// ミス経路の檻がヒット経路の檻へ黙って化けるのを防ぐため、下の主張 7 で「毎適用がミスである」
@@ -179,10 +179,10 @@ fn assert_expected_is_not_empty(e: &Expected, at: &str) {
 ///
 /// # 主張の内訳
 ///
-/// 1. 表示バッファの外形・全バイトが便宜経路と一致（毎適用）
-/// 4. `read_back` も同じバイト（表示に載っているメモの中身・各水準で 1 度）
-/// 5. 非空虚性: 不透明画素が在る（期待値の側の hit と非 hit の同居は fixture の檻が持つ）
-/// 6. 残留の実在: 暖機後の表示バッファの番地が
+/// 1. 計画の外形・全項が便宜経路と一致（毎適用）
+/// 4. `read_back` が便宜経路の絵と同じバイト（表示に載っているメモの中身・各水準で 1 度）
+/// 5. 非空虚性: 期待の絵に不透明画素と半透明画素が在る（fixture の檻）
+/// 6. 残留の実在: 暖機後の計画の番地が
 ///    交代する 4 本の中で回り続けている（＝使い回しが成立している）
 /// 7. **ミス経路であることの陽性対照**: 定常の各適用の前に、その面がスロットに無い（在ればヒットになる）
 #[test]
@@ -201,8 +201,8 @@ fn the_budget_path_produces_the_same_display_bytes_as_a_fresh_buffer_path() {
         let mut presenter = EmoPresenter::new();
         presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-        // 暖機後の表示バッファの番地（使い回しの証拠として集める）。
-        let mut steady_display_ptrs: Vec<*const u8> = Vec::new();
+        // 暖機後の計画の番地（使い回しの証拠として集める）。
+        let mut steady_plan_ptrs: Vec<*const areka_emo_compose::PlanItem> = Vec::new();
 
         for i in 0..WARMUP + STEADY {
             let id = face_at(i);
@@ -236,30 +236,19 @@ fn the_budget_path_produces_the_same_display_bytes_as_a_fresh_buffer_path() {
                 .get(id, &BindSet::default(), &PatternState::default())
                 .expect("直前の適用がスロットを埋めている");
 
-            // ⑴ 表示バイト。
+            // ⑴ 計画。
             assert_eq!(
-                (entry.composed.width(), entry.composed.height()),
+                (entry.plan.extent.w, entry.plan.extent.h),
                 want.extent,
-                "{at}: 表示バッファの外形が便宜経路と違う（原寸のはず）"
+                "{at}: 計画の外形が便宜経路と違う（原寸のはず）"
             );
             assert_eq!(
-                entry.composed.bytes(),
-                want.bytes.as_slice(),
-                "{at}: 表示バイトが便宜経路と 1 バイト以上違う（使い回しバッファの残留が\
-                 混ざっている疑い）"
-            );
-            // ⑸ 非空虚性（本番側の実バイトについても毎回見る）。
-            assert!(
-                entry
-                    .composed
-                    .bytes()
-                    .chunks_exact(4)
-                    .any(|px| px[3] == 0xFF),
-                "{at}: 表示バッファに不透明画素が 1 つも無い（空を回している）"
+                entry.plan, want.plan,
+                "{at}: 計画が便宜経路と違う（使い回しの計画の残留が混ざっている疑い）"
             );
 
             if i >= WARMUP {
-                steady_display_ptrs.push(entry.composed.bytes().as_ptr());
+                steady_plan_ptrs.push(entry.plan.items.as_ptr());
             }
         }
 
@@ -271,22 +260,22 @@ fn the_budget_path_produces_the_same_display_bytes_as_a_fresh_buffer_path() {
             "{at_dpi}: 読み戻しが便宜経路と違う（表示に載っているのが別の絵）"
         );
 
-        // ⑹ 残留の実在: 暖機後の表示バッファは**交代する本数**の器を回している。
+        // ⑹ 残留の実在: 暖機後の計画は**交代する本数**の器を回している。
         //
         // 器が毎回新品なら定常の番地は毎回別物になり、ここで止まる——そのとき「使い回しの上でも
         // バイトが等しい」という上の主張は何も観測していなかったことになる。番地は**残留経路が
         // 実在することの証拠**として読むのであって、バイト等価の合否そのものではない
         // （合否はあくまで上のバイト比較である）。
         //
-        // 回る器は **k に依らず** キャッシュの 3 本＋合成先席の 1 本＝4 本である（交代は拡大率で
-        // 分岐しない・`show.rs` の `swap_native_scratch` は無条件）。
+        // 回る器は **k に依らず** キャッシュの 3 本＋計画の席の 1 本＝4 本である（交代は拡大率で
+        // 分岐しない・`show.rs` の `swap_plan_scratch` は無条件）。
         let circulating = CACHE_CAPACITY + 1;
-        let mut distinct = steady_display_ptrs.clone();
+        let mut distinct = steady_plan_ptrs.clone();
         distinct.sort_unstable();
         distinct.dedup();
         assert!(
             distinct.len() <= circulating,
-            "{at_dpi}: 定常状態の表示バッファが {} 種類の器に散っている（回収が成立しておらず、\
+            "{at_dpi}: 定常状態の計画が {} 種類の器に散っている（回収が成立しておらず、\
              使い回しの上での等価を観測できていない）",
             distinct.len()
         );
@@ -294,16 +283,16 @@ fn the_budget_path_produces_the_same_display_bytes_as_a_fresh_buffer_path() {
 }
 
 /// **同一入力の反復＝ヒット経路を含む**: 同じ面を続けて適用しても、
-/// 表示バイトは便宜経路と一致し続ける。
+/// 計画と読み戻しは便宜経路と一致し続ける。
 ///
 /// 上の檻は設計上すべての適用がミスする（面を毎回変える）。ミスしか踏まない檻だけでは、ヒット経路が
 /// 1 度も動かないまま「毎コマ経路は全て覆った」と言えてしまう。
 ///
-/// ヒットが実際に成立したことは**表示バッファの実体が動かないこと**で示す（ミスなら回収した別の
-/// バッファへ移る）。暖機の直後に置く 1 回目の適用が**ミスである**ことも同時に確かめる——
+/// ヒットが実際に成立したことは**計画の実体が動かないこと**で示す（ミスなら回収した別の
+/// 計画へ移る）。暖機の直後に置く 1 回目の適用が**ミスである**ことも同時に確かめる——
 /// 巡回長がキャッシュ容量より大きいので、暖機の一巡で面 [`FACE_A`] は既に追い出されている。
 #[test]
-fn repeating_the_same_surface_keeps_the_display_bytes_equivalent() {
+fn repeating_the_same_surface_keeps_the_plan_and_bytes_equivalent() {
     // 期待値は窓 DPI に依らず 1 組。
     let (probe_world, probe_atlas) = build_alpha_varying_faces(NATIVE_W, NATIVE_H);
     let want = expected_of(&probe_world, &probe_atlas, FACE_A);
@@ -334,7 +323,7 @@ fn repeating_the_same_surface_keeps_the_display_bytes_equivalent() {
             "{at_dpi}: 1 回目の適用の前から面がスロットに在る（ヒットとの対照が空虚になる）"
         );
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
-        let missed_display = {
+        let missed_plan = {
             let target = presenter
                 .targets
                 .get(&TargetId(0))
@@ -343,7 +332,7 @@ fn repeating_the_same_surface_keeps_the_display_bytes_equivalent() {
                 .cache
                 .get(FACE_A, &BindSet::default(), &PatternState::default())
                 .expect("直前の適用がスロットを埋めている");
-            entry.composed.bytes().as_ptr()
+            entry.plan.items.as_ptr()
         };
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
         let target = presenter
@@ -355,19 +344,18 @@ fn repeating_the_same_surface_keeps_the_display_bytes_equivalent() {
             .get(FACE_A, &BindSet::default(), &PatternState::default())
             .expect("直前の適用がスロットを埋めている");
         assert_eq!(
-            entry.composed.bytes().as_ptr(),
-            missed_display,
-            "{at_dpi}: 表示バッファの実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない）"
+            entry.plan.items.as_ptr(),
+            missed_plan,
+            "{at_dpi}: 計画の実体が動いた＝引き当てがミスしている（ヒット経路を観測できていない）"
         );
         assert_eq!(
-            (entry.composed.width(), entry.composed.height()),
+            (entry.plan.extent.w, entry.plan.extent.h),
             want.extent,
-            "{at_dpi}: ヒット経路の表示外形が便宜経路と違う"
+            "{at_dpi}: ヒット経路の外形が便宜経路と違う"
         );
         assert_eq!(
-            entry.composed.bytes(),
-            want.bytes.as_slice(),
-            "{at_dpi}: ヒット経路の表示バイトが便宜経路と違う"
+            entry.plan, want.plan,
+            "{at_dpi}: ヒット経路の計画が便宜経路と違う"
         );
         assert_eq!(
             presenter.read_back(TargetId(0)).expect("read_back 失敗"),

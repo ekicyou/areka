@@ -2,7 +2,7 @@
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
-use crate::plan_test_support::{bound_world, opaque_wxh, plan_of};
+use crate::plan_test_support::{bound_world, opaque_wxh, ops_and_extent};
 use areka_parsers::shell::AppendTarget;
 
 // ============================================================================
@@ -58,7 +58,7 @@ fn emo2_blink_binds_are_statically_inactive() {
     let world = bound_world(&shell, &[], &atlas);
 
     // [1302] のみ（目/通常・pattern0 あり）。
-    let (ops_base, result) = plan_of(
+    let (ops_base, result) = ops_and_extent(
         &world,
         &atlas,
         1000,
@@ -68,7 +68,7 @@ fn emo2_blink_binds_are_statically_inactive() {
     result.expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
-    let (ops_blink, result) = plan_of(
+    let (ops_blink, result) = ops_and_extent(
         &world,
         &atlas,
         1000,
@@ -78,7 +78,7 @@ fn emo2_blink_binds_are_statically_inactive() {
     result.expect("まばたき込みでも Ok");
 
     // [1302,1403]（純 `bind` の 1403 だけを足す）。
-    let (ops_pure, result) = plan_of(
+    let (ops_pure, result) = ops_and_extent(
         &world,
         &atlas,
         1000,
@@ -170,7 +170,7 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     }
     // 閉じ目の面 1412 そのものを合成すると命令が生じる（静的に描けば上檻の命令列が実際に伸びる）。
     let world = bound_world(&shell, &[], &atlas);
-    let (ops_1412, result) = plan_of(
+    let (ops_1412, result) = ops_and_extent(
         &world,
         &atlas,
         1412,

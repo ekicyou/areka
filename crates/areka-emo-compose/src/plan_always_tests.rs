@@ -178,10 +178,10 @@ fn top_always_draws_rest_pattern_when_cell_is_empty() {
 }
 
 /// 経過 0 の pattern の描画メソッドが大文字や `-`・`_` の入った語（`Over-Lay`）でも描き、
-/// 同じ合成器で繰り返し合成しても命令列と作業場の容量は伸びない（語の比べは合成のたびに引かれる）。
+/// 同じ合成器で繰り返し計画しても命令列と作業場の容量は伸びない（語の比べは計画のたびに引かれる）。
 #[test]
-fn always_with_uppercase_method_recomposes_without_growing() {
-    use crate::{ComposedSurface, Composer};
+fn always_with_uppercase_method_replans_without_growing() {
+    use crate::{Composer, DrawPlan};
 
     let text = format!(
         "surface0\n{{\nelement0,overlay,body.png,0,0\nanimation0.interval,always\n\
@@ -193,11 +193,14 @@ fn always_with_uppercase_method_recomposes_without_growing() {
         compose(&world, &atlas, 0, &pattern).0,
         vec![op("body.png", 0, 0), op("a.png", 3, 4)]
     );
-    let (mut composer, mut out) = (Composer::new(), ComposedSurface::new(0, 0));
+    let mut composer = Composer::new();
+    let mut out: DrawPlan = composer
+        .plan(&world, &atlas, 0, &BindSet::default(), &pattern)
+        .expect("計画できる");
     let mut run = || {
         composer
-            .compose_into(&mut out, &world, &atlas, 0, &BindSet::default(), &pattern)
-            .expect("合成できる");
+            .plan_into(&mut out, &world, &atlas, 0, &BindSet::default(), &pattern)
+            .expect("計画できる");
         (
             composer.ops.len(),
             composer.ops.capacity(),

@@ -1,6 +1,6 @@
 //! `FrameTiming`: 表示 1 コマ適用（`apply_show`）の段階別計時と perf サマリ行の emit。
 //!
-//! 表示 1 コマの適用を キャッシュ照会・合成・合成メモへの挿入・頁と葉の用意・節の写し の 5 段へ刻み、合計と併せて
+//! 表示 1 コマの適用を キャッシュ照会・計画・合成メモへの挿入・頁と葉の用意・節の写し の 5 段へ刻み、合計と併せて
 //! 1 適用 = 1 行の固定スキーマで出す。この行だけが `tools/perf/judge-perf.py`（判定スクリプト）と
 //! コードの間のデータ契約である。
 //!
@@ -22,8 +22,8 @@
 //! - `t_cache_us` `t_compose_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
 //!   全段が常に出る。実行されなかった段は 0 で、判定スクリプトは「段フィールドの欠落」を行単位で検出でき、
 //!   部分集計を黙って出さずに済む
-//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた新規確保／容量成長の計数（供給元は `FrameBudget`）。
-//!   α マスクは作らないので `alloc_mask` は常に 0（`judge-perf.py` の必須の欄なので欄は残す）
+//! - `alloc_compose_dst` `alloc_mask`（u32）: CPU の合成先も α マスクも持たないので常に 0
+//!   （`judge-perf.py` の必須の欄なので欄は残す）。確保の計数は `alloc_plan`（供給元は `FrameBudget`）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
 //!   （キャッシュ容量の裁定材料）
 //! - `frame`（u32）: この適用が走った tick のフレーム番号。遷移観測チャネル（`wintf::transition`）の
@@ -58,7 +58,7 @@ pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 pub(super) enum Stage {
     /// キャッシュ照会（`ComposeCache::touch`）。
     CacheLookup,
-    /// 合成（`Composer::compose_into`）。
+    /// 計画（`Composer::plan_into`・欄の名は `t_compose_us`）。
     Compose,
     /// 合成メモへの挿入（引き当て時は実行されない・欄の名は `t_mask_us`）。
     Insert,
@@ -191,11 +191,10 @@ impl FrameTiming {
             plan_groups,
         } = *ctx;
         let BudgetDelta {
-            alloc_compose_dst,
             alloc_plan,
             node_rebuilds,
         } = allocs;
-        let alloc_mask = 0u32;
+        let (alloc_compose_dst, alloc_mask) = (0u32, 0u32);
 
         // 文言は PERF_LINE_MESSAGE の写し（リテラル必須）。水準・target と共に judge-perf.py との
         // 契約面で、変更は判定スクリプトと計時檻の再検証が要る。

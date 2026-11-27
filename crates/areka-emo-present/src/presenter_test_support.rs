@@ -1,9 +1,7 @@
 //! presenter 系テストモジュールが共有する補助（フィクスチャ・期待値・ログ捕捉）。
 //!
-//! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（`Arrangement.scale`
-//! ＝D2D 変換行列）が持つので、presenter が抱えるバイト列は k に依らず `Composer::compose` の
-//! 出力そのものになった。ゆえに本 module の golden 生成は拡大率を引数に取らず、CPU リサンプラを
-//! 一切呼ばない。
+//! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（まとめの節の変換）が
+//! 持つので、本 module の golden は画面の外の描き手で原寸に描き、拡大率を引数に取らない。
 
 use super::*;
 
@@ -104,7 +102,7 @@ pub(super) fn set_window_dpi(world: &mut World, window: Entity, dpi: u16) {
     world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
 }
 
-/// `build_target_assets` と同一入力の **native 合成**バイト列とその外形（表示の golden）。
+/// `build_target_assets` と同一入力を画面の外の描き手（WARP）で原寸に描いたバイト列とその外形（表示の golden）。
 ///
 /// presenter が抱えるのは原寸バイトそのもので、拡大は描画側の係数に移った。ゆえに golden は
 /// 窓 DPI がいくつであっても同一であり、拡大率を引数に取らない。「読み戻しが偶然それらしい
@@ -131,10 +129,10 @@ pub(super) fn native_golden_with(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<u8>, (u32, u32)) {
-    let mut composer = Composer::new();
-    let native = composer
-        .compose(emo_world, atlas, surface_id, binds, pattern)
-        .expect("golden 用の native 合成は Ok");
+    let native = crate::OffscreenRenderer::warp()
+        .expect("WARP の描き手")
+        .render(emo_world, atlas, surface_id, binds, pattern)
+        .expect("golden 用の native の描画は Ok");
     (native.bytes().to_vec(), (native.width(), native.height()))
 }
 
@@ -295,8 +293,7 @@ pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u3
 pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
 // ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
-// `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
-// 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
+// 画素は上流公開 API（atlas bake → EmoWorld）で本物を組み、画面の外の描き手で描いて得る。
 
 pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
     Element {
@@ -402,7 +399,7 @@ pub(crate) fn bake_world(
 }
 
 /// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の `(EmoWorld, AtlasTable)`
-/// と、同一入力を `Composer::compose` で直接合成した golden バイト列を返す。
+/// と、同一入力を画面の外の描き手で描いた golden バイト列を返す。
 ///
 /// α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は正確に `w×h`。golden は presenter が
 /// 内部で辿るのと同一の world/atlas から作るため、readback とのバイト一致が二重に決定論的になる。
@@ -419,7 +416,7 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
 /// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
 ///
 /// surface 7000 は plan_extent_tests.rs の `build_plan_no_layers_degenerate_is_empty_composition`
-/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::compose` が
+/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::plan` が
 /// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
 /// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
 /// ないため、退化は「定義層皆無 → 0×0」の経路で作る。
@@ -467,8 +464,8 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
     (world, atlas, golden_1000, golden_3000)
 }
 
-/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの計画と絵を、[`build_two_face_assets`]
-/// `(w, h)` の面 3000 の計画と原寸合成へ差し替える。
+/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの計画を、[`build_two_face_assets`]
+/// `(w, h)` の面 3000 の計画へ差し替える。
 ///
 /// キーも原寸も変えず中身だけを差し替えるので、その後の表示が面 3000 になれば presenter は
 /// スロットを引いている（合成し直していれば面 1000 に戻る）。
@@ -487,27 +484,12 @@ pub(super) fn tamper_face_1000_slot(
             &PatternState::default(),
         )
         .expect("面 3000 の計画は Ok");
-    let tampered = Composer::new()
-        .compose(
-            &world,
-            &atlas,
-            3000,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("面 3000 の合成は Ok");
     presenter
         .targets
         .get_mut(&target)
         .expect("装着済み target")
         .cache
-        .insert(
-            1000,
-            BindSet::default(),
-            PatternState::default(),
-            plan,
-            tampered,
-        );
+        .insert(1000, BindSet::default(), PatternState::default(), plan);
 }
 
 /// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を重ね位置 `(x, y)` で持つ非空 `PatternState`。

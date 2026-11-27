@@ -182,7 +182,7 @@ fn a_cache_hit_through_apply_show_promotes_the_entry_to_most_recently_used() {
 /// 容量 3 の裁定はこの一点のためにある——まばたきのように数コマを行き来する列で、直前だけでなく
 /// **数コマ前の面**にも命中することが命中率 0.0% → 56.2% の中身である。
 ///
-/// ヒットが成立したことは**表示バッファの実体が動かないこと**で示す（ミスなら交代で同時に生きている
+/// ヒットが成立したことは**スロットの計画の実体が動かないこと**で示す（ミスなら交代で同時に生きている
 /// 別の実体へ移るため、番地の偶然一致が入り込む余地が無い）。
 #[test]
 fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
@@ -196,8 +196,8 @@ fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
             .cache
             .get(SURFACE, &key(n), &PatternState::default())
             .expect("保持されているキー")
-            .composed
-            .bytes()
+            .plan
+            .items
             .as_ptr()
     };
 
@@ -212,7 +212,7 @@ fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
     assert_eq!(
         display_of(&presenter, 1),
         before,
-        "2 コマ前の面の再表示で表示バッファの実体が動いた＝引き当てがミスしている\
+        "2 コマ前の面の再表示でスロットの計画の実体が動いた＝引き当てがミスしている\
          （容量 3 の裁定が期待した命中が成立していない）"
     );
 }

@@ -118,16 +118,17 @@ fn composing_repeatedly_adds_no_warn() {
     let logs = capture_logs(|| {
         for _ in 0..3 {
             for id in [0, 10] {
-                let out = composer
-                    .compose(&world, &atlas, id, &binds, &pattern)
-                    .expect("組める");
-                shots.push((out.width(), out.height(), out.bytes().to_vec()));
+                shots.push(
+                    composer
+                        .plan(&world, &atlas, id, &binds, &pattern)
+                        .expect("組める"),
+                );
             }
         }
     });
     assert!(
         !logs.contains("level=WARN"),
-        "合成は warn を出さない: {logs}"
+        "計画は warn を出さない: {logs}"
     );
     for kind in ["循環", "描けない語の現在コマ"] {
         assert!(
@@ -136,8 +137,8 @@ fn composing_repeatedly_adds_no_warn() {
             "{kind} は debug に残る: {logs}"
         );
     }
-    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ絵（決定性）");
-    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ絵（決定性）");
+    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ計画（決定性）");
+    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ計画（決定性）");
 }
 
 /// 面 0 が面 1 を置き（element定義と pattern定義）、面 1 の `move` が面 0 を指しても循環でない。
@@ -182,23 +183,24 @@ fn composing_unknown_sort_repeatedly_adds_no_warn() {
     let mut shots = Vec::new();
     let logs = capture_logs(|| {
         for _ in 0..3 {
-            let out = composer
-                .compose(&world, &atlas, 0, &binds, &pattern)
-                .expect("組める");
-            shots.push(out.bytes().to_vec());
+            shots.push(
+                composer
+                    .plan(&world, &atlas, 0, &binds, &pattern)
+                    .expect("組める"),
+            );
         }
     });
     assert!(
         !logs.contains("level=WARN"),
-        "合成は warn を出さない: {logs}"
+        "計画は warn を出さない: {logs}"
     );
     assert!(
         logs.lines()
             .any(|l| l.contains("level=DEBUG") && l.contains("未知の animation-sort")),
         "知らない sort は debug に残る: {logs}"
     );
-    assert_eq!(shots[0], shots[1], "絵は毎回同じ");
-    assert_eq!(shots[0], shots[2], "絵は毎回同じ");
+    assert_eq!(shots[0], shots[1], "計画は毎回同じ");
+    assert_eq!(shots[0], shots[2], "計画は毎回同じ");
 }
 
 /// 先の無い（負の番号の）pattern は、未知の語なら描かない pattern に数え、知っている語なら数えない。
@@ -258,13 +260,13 @@ fn composing_blend_element_repeatedly_adds_no_warn() {
     let logs = capture_logs(|| {
         for _ in 0..3 {
             composer
-                .compose(&world, &atlas, 0, &binds, &pattern)
+                .plan(&world, &atlas, 0, &binds, &pattern)
                 .expect("組める");
         }
     });
     assert!(
         !logs.contains("level=WARN"),
-        "合成は warn を出さない: {logs}"
+        "計画は warn を出さない: {logs}"
     );
     assert!(
         logs.lines().any(|l| l.contains("level=DEBUG")),

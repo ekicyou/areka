@@ -3,7 +3,7 @@
 //!
 //! # 合成メモの当たりで「表示」を成立させる方法
 //!
-//! 同じ入力の計画と合成結果を先に target の合成メモへ入れ、**本物の `ShowSurface` 指令**を当たりの
+//! 同じ入力の計画を先に target の合成メモへ入れ、**本物の `ShowSurface` 指令**を当たりの
 //! 経路で通す（節の葉は実 GPU で記録する）。
 //! `last_show`・`current_surface_id`・`visible` を書くのは本番の表示成立点そのものである。
 
@@ -88,14 +88,11 @@ fn show(
     pattern: PatternState,
 ) {
     let t = presenter.targets.get_mut(&target).expect("登録済み target");
-    let composed = Composer::new()
-        .compose(&t.emo_world, &t.atlas, surface_id, &binds, &pattern)
-        .expect("表示の入力の合成は Ok");
     let plan = Composer::new()
         .plan(&t.emo_world, &t.atlas, surface_id, &binds, &pattern)
         .expect("表示の入力の計画は Ok");
     t.cache
-        .insert(surface_id, binds.clone(), pattern.clone(), plan, composed);
+        .insert(surface_id, binds.clone(), pattern.clone(), plan);
 
     show_with_ok(presenter, world, target, surface_id, binds, pattern);
 }
@@ -395,17 +392,16 @@ fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
     assert!(records.is_empty(), "写しが記録を出した: {records:?}");
 }
 
-/// 合成メモの CPU の絵をわざと黒の 0 にしても、書き出しと読み戻しは計画を画面の外で描いた絵を返す。
+/// 書き出しと読み戻しは、合成メモの計画を画面の外で描いた絵を返す。
 #[test]
-fn last_shown_and_read_back_draw_the_plan_not_the_cpu_picture() {
+fn last_shown_and_read_back_draw_the_cached_plan() {
     let (mut presenter, mut world) = setup();
     let expected = golden(&presenter, BASE, &bound(), &animated());
     let t = presenter.targets.get_mut(&SHOWN).expect("登録済み target");
     let plan = Composer::new()
         .plan(&t.emo_world, &t.atlas, BASE, &bound(), &animated())
         .expect("計画は Ok");
-    let blank = ComposedSurface::from_bytes(4, 3, vec![0; 4 * 3 * 4]);
-    t.cache.insert(BASE, bound(), animated(), plan, blank);
+    t.cache.insert(BASE, bound(), animated(), plan);
     show_with_ok(&mut presenter, &mut world, SHOWN, BASE, bound(), animated());
 
     let (_, picture) = presenter.last_shown(SHOWN).expect("表示の後は Some");

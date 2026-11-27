@@ -27,24 +27,25 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
     (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
-/// どの面の合成の絵の大きさも外形の右下を超えない。
+/// どの面の計画の外形も外形の右下を超えない。
 fn assert_every_surface_fits(world: &EmoWorld, atlas: &AtlasTable, b: ShellBounds) {
     let mut composer = Composer::new();
     for id in world.surface_ids() {
-        let out = composer
-            .compose(
+        let e = composer
+            .plan(
                 world,
                 atlas,
                 id,
                 &BindSet::default(),
                 &PatternState::default(),
             )
-            .unwrap_or_else(|e| panic!("surface{id} が合成できない: {e:?}"));
+            .unwrap_or_else(|e| panic!("surface{id} が計画できない: {e:?}"))
+            .extent;
         assert!(
-            out.width() as i64 <= b.right as i64 && out.height() as i64 <= b.bottom as i64,
-            "surface{id} の絵 {}x{} が外形 {b:?} の右下を超える",
-            out.width(),
-            out.height()
+            e.w as i64 <= b.right as i64 && e.h as i64 <= b.bottom as i64,
+            "surface{id} の外形 {}x{} が外形 {b:?} の右下を超える",
+            e.w,
+            e.h
         );
     }
 }

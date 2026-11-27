@@ -226,7 +226,7 @@
   - _Dispatch: standard — 書き出しの経路の付け替え_
   - _Requirements: 7.4, 7.8_
 
-- [ ] 7.6 CPU の合成の口を外し、呼ぶ所と見本を付け替える
+- [x] 7.6 CPU の合成の口を外し、呼ぶ所と見本を付け替える
   - 配置の寸法を計画の外形から取り、例（emo-present の例・文字の層の例・pilot の例）・コマの再生の E2E テスト・`dump_surface` のテストの支え・窓を出さない書き出しのテストの CPU の合成の呼び出しを、計画か画面の外の描き手へ付け替える
   - CPU の転写・範囲の重ね直し・CPU の合成の口・合成の所要の例を外す。取り下げの表のとおり、CPU の転写だけを固めるテストを取り下げ、決定論・外形・静的な項の数の見本を計画の値のテストへ書き直し、記録・上限・作業の上限のテストを計画の口へ付け替える
   - 取り下げたテストのファイルごとの理由を研究の記録に残す
@@ -302,3 +302,5 @@
 - 7.2: クリックの透過と名前の解決は wintf の `surface_alpha_hits`（閾値 128・読めない間に 1 回の `error!`）1 つを通る。CPU の α マスクは外した。perf の行の `alloc_mask`（0）・`t_mask_us`（合成メモへ入れる時間）は judge-perf.py が必須の欄として読むので残した（judge-perf.py の説明の文は 8.3 か 7.6 で直す）。
 - 7.3 → 7.4: 装置が替わると `refresh_after_device_change` が合成メモを全部捨てる（書き出しの控えを空にするの上位集合）。`snapshot` を足すときに、計画は残して控えだけ空にする形へ絞るかを決める。
 - 7.4: 書き出しの控えは `OnceCell<Result<ComposedSurface, String>>`（描けなかった理由も項ごとに控え、読み直しは描き直さず記録も出さない）。`Device` の失敗は `ComposeError::Render` に読み替える。装置が替わると全部の目標の頁の控えを捨て、頁の控えを持たない目標（隠れている・一度も出していない）の書き出しは自分で作った hardware の装置で描いて控える（設計の「画面と同じ装置」から外れる場面・次の表示で画面の装置へ替わる）。MCP の表示済みの道で 1 回描けないときの `error!` は判定・`compose_last_shown`・`fail()` の 3 件（＋装置の呼び出しなら `device_err`）。
+- 7.6: CPU の合成の口（`compose`・`compose_into`・`compose_into_reusing`・blit・blit_rect・合成の所要の例）を外した。取り下げの理由は研究の記録 §17。画素の上限は `asis` の表に載る絵を語を問わず `asis` 用の絵で数える。`GpuAtlas::page_holds`（頁の外の絵は `warn!` で空の葉）を足した。perf の行の `alloc_compose_dst`・`alloc_mask` は 0、`t_compose_us` は計画を組む時間。
+- 7.6 → 8.x: `doc/ukadoc-coverage/ledger/assets.toml` の本文に `blit::execute`（もう無い）を挙げる所が 61 か所残る。報告の作り直しを伴うので 8.5 か validate-impl か完了の文書の段で直す。

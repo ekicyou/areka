@@ -1,8 +1,8 @@
 use super::{
     AUTHOR_DPI, Added, BalloonWindowMarker, BindSet, CYCLE_INTERVAL, ClickThroughRegistryHandle,
-    Composer, EmoBoot, Entity, FrameTime, GraphicsCore, NonSend, Or, PatternState, PresentCommand,
-    Query, ShellWindowMarker, TargetId, WindowHandle, With, World, WucGraphicsResource,
-    assert_startup_golden, reconcile_present_sizes,
+    EmoBoot, Entity, FrameTime, GraphicsCore, NonSend, OffscreenRenderer, Or, PatternState,
+    PresentCommand, Query, ShellWindowMarker, TargetId, WindowHandle, With, World,
+    WucGraphicsResource, assert_startup_golden, reconcile_present_sizes,
 };
 
 // ---------------------------------------------------------------------------
@@ -59,16 +59,18 @@ pub(super) fn boot_present_system(world: &mut World) {
         .expect("直上で存在確認済み");
 
     if let Some((emo_world, atlas)) = boot.shell_assets.take() {
-        // 起動時 golden: 初回表示は Surface0（surface_id=0・bind 無し）ゆえ、その surface を直接合成した
-        // ComposedSurface を golden として先に採取する。attach_target がアセットを move 消費するため、
-        // 合成は move の前に行う。
-        let shell_golden = Composer::new().compose(
-            &emo_world,
-            &atlas,
-            0,
-            &BindSet::default(),
-            &PatternState::default(),
-        );
+        // 起動時 golden: 初回表示は Surface0（surface_id=0・bind 無し）ゆえ、その surface を画面の外の
+        // 描き手（画面と同じ hardware の装置）で描いた ComposedSurface を golden として先に採取する。
+        // attach_target がアセットを move 消費するため、描くのは move の前に行う。
+        let shell_golden = OffscreenRenderer::hardware().and_then(|mut r| {
+            r.render(
+                &emo_world,
+                &atlas,
+                0,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+        });
         boot.presenter.attach_target(
             TargetId(0),
             boot.shell_window,
@@ -111,13 +113,15 @@ pub(super) fn boot_present_system(world: &mut World) {
 
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
         // バルーンの初回表示は surface_id=0・bind 無し。attach_target が move 消費する前に golden を採取する。
-        let balloon_golden = Composer::new().compose(
-            &emo_world,
-            &atlas,
-            0,
-            &BindSet::default(),
-            &PatternState::default(),
-        );
+        let balloon_golden = OffscreenRenderer::hardware().and_then(|mut r| {
+            r.render(
+                &emo_world,
+                &atlas,
+                0,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+        });
         boot.presenter.attach_target(
             TargetId(1),
             boot.balloon_window,

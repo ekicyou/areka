@@ -78,13 +78,13 @@ fn the_variety_ghost_loads_with_the_shell_loader_without_a_window() {
         .into_iter()
         .filter(|&id| id != fixture::EMPTY)
     {
-        let pic = composer
-            .compose(&world, target.atlas(), id, &binds, &pattern)
+        let plan = composer
+            .plan(&world, target.atlas(), id, &binds, &pattern)
             .unwrap_or_else(|e| panic!("面 {id} は組める: {e:?}"));
-        assert!(pic.width() > 0 && pic.height() > 0, "面 {id} の絵が空");
+        assert!(plan.extent.w > 0 && plan.extent.h > 0, "面 {id} の外形が空");
     }
     let (empty, events) =
-        capture(|| composer.compose(&world, target.atlas(), fixture::EMPTY, &binds, &pattern));
+        capture(|| composer.plan(&world, target.atlas(), fixture::EMPTY, &binds, &pattern));
     assert!(
         matches!(empty, Err(ComposeError::EmptyComposition(id)) if id == fixture::EMPTY),
         "中身の無い面の合成は失敗する: {empty:?}"

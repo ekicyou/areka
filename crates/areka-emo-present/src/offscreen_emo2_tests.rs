@@ -1,17 +1,14 @@
-//! emo2 の `overlay` だけの面を WARP で描いた画素の見本と、CPU の合成との差の測り。
+//! emo2 の `overlay` だけの面を WARP で描いた画素の見本。
 
 use std::path::PathBuf;
 
 use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, Point, SetId, Size, SurfaceSet, UseSelfAlpha,
-    WicDecoderArm, bake,
+    AlphaParams, MemoryDecoder, PackConfig, Point, SetId, Size, SurfaceSet, UseSelfAlpha, bake,
 };
-use areka_emo_compose::{ComposeMethod, PatternFrame};
 use areka_parsers::shell::{AppendTarget, Shell};
 
 use super::*;
-use crate::shell_target::load_shell_target;
-use crate::shell_target::test_support::{EMO2, with_com_initialized};
+use crate::shell_target::test_support::EMO2;
 
 fn emo2_master() -> PathBuf {
     EMO2.folder().join("shell").join("master")
@@ -53,23 +50,6 @@ fn warp_render(
         .expect("WARP で描く")
 }
 
-/// 色の各成分の差の最大と、差のある画素の数。
-fn diff(got: &ComposedSurface, want: &ComposedSurface) -> (u8, usize) {
-    assert_eq!(
-        (got.width(), got.height(), got.stride()),
-        (want.width(), want.height(), want.stride()),
-        "原寸"
-    );
-    let pixels = |s: &ComposedSurface| s.bytes().as_chunks::<4>().0.to_vec();
-    pixels(got)
-        .iter()
-        .zip(pixels(want))
-        .fold((0, 0), |(max, n), (g, w)| {
-            let d = (0..4).map(|c| g[c].abs_diff(w[c])).max().unwrap_or(0);
-            (max.max(d), n + usize::from(d > 0))
-        })
-}
-
 fn assert_bytes_within_one(got: &ComposedSurface, want: &[u8]) {
     for (i, (g, w)) in got.bytes().iter().zip(want).enumerate() {
         assert!(g.abs_diff(*w) <= 1, "{i} バイト目: WARP {g}・見本 {w}");
@@ -89,86 +69,6 @@ fn alpha_count(s: &ComposedSurface) -> usize {
         .iter()
         .filter(|p| p[3] > 0)
         .count()
-}
-
-/// 本物の emo2 の絵で、surface0・surface1000 の着せ替え・まばたきのコマを CPU と WARP で描き、
-/// 差の最大を出す（`--nocapture` で読む）。`overlay` だけなので各成分の差は 1 以内。
-#[test]
-fn emo2_overlay_only_warp_differs_from_the_cpu_compose_by_at_most_one() {
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("WIC");
-        let target = load_shell_target(&emo2_master(), &dec).expect("emo2 のシェル");
-        assert!(
-            target.bake_errors().is_empty(),
-            "{:?}",
-            target.bake_errors()
-        );
-        let world = target.build_world();
-        let atlas = target.atlas();
-
-        let dress = [1100, 1207, 1302, 1500, 1800];
-        let blinking = BindSet::from_ids(dress.into_iter().chain([1400]));
-        let blink = |surface_id| {
-            let mut p = PatternState::default();
-            p.set(
-                1400,
-                PatternFrame {
-                    surface_id,
-                    method: ComposeMethod::Overlay,
-                    x: 0,
-                    y: 0,
-                },
-            );
-            p
-        };
-        let cases = [
-            ("surface0", 0, BindSet::default(), PatternState::default()),
-            (
-                "surface1000 着せ替え（既定）",
-                1000,
-                BindSet::from_ids(dress),
-                PatternState::default(),
-            ),
-            (
-                "surface1000 着せ替え（1101・1200・1305・1501）",
-                1000,
-                BindSet::from_ids([1101, 1200, 1305, 1501]),
-                PatternState::default(),
-            ),
-            ("まばたき 1412", 1000, blinking.clone(), blink(1412)),
-            ("まばたき 1411", 1000, blinking.clone(), blink(1411)),
-            ("まばたき 1410", 1000, blinking.clone(), blink(1410)),
-        ];
-        let mut answers = Vec::new();
-        for (name, surface, binds, pattern) in &cases {
-            let cpu = Composer::new()
-                .compose(&world, atlas, *surface, binds, pattern)
-                .expect("CPU の合成");
-            let warp = warp_render(&world, atlas, *surface, binds, pattern);
-            let (max, n) = diff(&warp, &cpu);
-            let half = cpu
-                .bytes()
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .filter(|p| p[3] != 0 && p[3] != 255)
-                .count();
-            eprintln!(
-                "R2 {name}: {}x{} 差の最大 {max}・差のある画素 {n}/{}・α>0 {}・半透明 {half}",
-                cpu.width(),
-                cpu.height(),
-                cpu.width() * cpu.height(),
-                alpha_count(&cpu)
-            );
-            assert!(alpha_count(&cpu) > 0, "{name}: 描くものがある");
-            assert!(max <= 1, "{name}: 差の最大 {max}");
-            answers.push(cpu.bytes().to_vec());
-        }
-        assert!(
-            answers[3] != answers[4] && answers[4] != answers[5],
-            "まばたきのコマごとに絵が替わる"
-        );
-    });
 }
 
 /// 座標から作る不透明の傾斜（位置のずれも見える）。

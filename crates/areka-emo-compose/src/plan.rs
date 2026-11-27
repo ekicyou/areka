@@ -795,7 +795,12 @@ pub(crate) fn build_plan(
     derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
     // 重ねる画素の数も抑える（命令の数は予算の内でも、大きな絵を何枚も重ねられる）。記録は合成器
     // 1 つにつき根ごとに 1 度（予算と同じ形）。
-    let dropped = crate::plan_cap::cap_pixels(out_ops, extent, atlas);
+    let empty = std::collections::HashMap::new();
+    let asis = world
+        .world()
+        .get_resource::<crate::atlas_bind::AsisPictures>()
+        .map_or(&empty, |a| &a.0);
+    let dropped = crate::plan_cap::cap_pixels(out_ops, extent, atlas, asis);
     if dropped > 0 {
         // 切った所から始まる入れ子は中身を捨てたので開かない（閉じていない段は計画の終わりで閉じる）。
         let kept = out_ops.len();

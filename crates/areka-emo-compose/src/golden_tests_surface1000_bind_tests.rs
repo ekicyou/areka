@@ -4,15 +4,15 @@
 //! emo2 の surface1000 は静的 element を一切持たず、可視パーツが着せ替えの animation（`interval,bind`
 //! の各 pattern0 が 1100 系パーツ surface を overlay 参照・まばたきの 1400 は `bind+random`）で構成される「着せ替え
 //! base surface」である。これは中核ケース＝静的 element ゼロでも有効 bind 集合が
-//! あれば非空ビットマップになる surface。ここでは空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、
+//! あれば描く項を持つ surface。ここでは空 BindSet → 描く項ゼロだが、
 //! 外形は bind 非依存の静的量（全部の bind の描くコマの原寸の和集合）ゆえ非ゼロで、bind を全部入れたときと
 //! 同じことを固める。bind の画素の点は WARP の見本（`areka-emo-present` の `offscreen_emo2_tests.rs`）が持つ。
 //! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし）。
 
 use super::BindSet;
 use super::test_support::{
-    build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,
-    shell_master_dir, surface1000_bind_parts,
+    build_atlas_for_surface1000, parse_emo2_shell, plan_surface1000, shell_master_dir,
+    surface1000_bind_parts,
 };
 use areka_parsers::shell::AppendTarget;
 
@@ -63,40 +63,25 @@ fn surface1000_is_all_bind_no_static_elements() {
     }
 }
 
-/// 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
+/// 空 BindSet → 描く項ゼロだが外形は非ゼロ。
 ///
-/// surface1000 は静的 element ゼロゆえ、空 BindSet では描画可能命令が一切生まれず、合成結果は
-/// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
+/// surface1000 は静的 element ゼロゆえ、空 BindSet では描く項が一切生まれない。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
 /// の描くコマの原寸の和集合）ゆえ、パーツ画像を挿入した以上は非ゼロで、代表 bind 3 本（1100/1200/1302）を
 /// 入れたときと同じ。これは「全 bind surface でも外形が安定（bind on/off でサイズ不変）」を実データで固定する。
 #[test]
-fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
+fn surface1000_empty_bindset_has_no_items_with_nonzero_extent() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
 
-    let out = compose_surface1000(&shell, &atlas, &BindSet::default());
-
+    let empty = plan_surface1000(&shell, &atlas, &BindSet::default());
     assert!(
-        out.width() > 0 && out.height() > 0,
+        empty.extent.w > 0 && empty.extent.h > 0,
         "外形は bind 非依存で非ゼロ"
     );
-    assert_eq!(
-        out.stride(),
-        out.width() * 4,
-        "premultiplied BGRA stride 契約"
-    );
 
-    let full = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
-    assert_eq!(
-        (out.width(), out.height()),
-        (full.width(), full.height()),
-        "外形は有効 bind に依らない"
-    );
-
-    assert_eq!(
-        opaque_pixel_count(&out),
-        0,
-        "空 BindSet では全画素が透明（α>0 の画素が存在しない・要件 5.4）"
-    );
+    let full = plan_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
+    assert_eq!(empty.extent, full.extent, "外形は有効 bind に依らない");
+    assert!(empty.items.is_empty(), "空 BindSet では描く項が無い");
+    assert_eq!(full.items.len(), 3, "対照: 3 本の bind は 3 項を描く");
 }

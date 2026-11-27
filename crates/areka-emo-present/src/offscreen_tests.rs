@@ -65,55 +65,49 @@ fn assert_within_one(got: &ComposedSurface, want: &ComposedSurface) {
         let (x, y) = (px as u32 % want.width(), px as u32 / want.width());
         assert!(
             g.abs_diff(*w) <= 1,
-            "({x},{y}) 成分 {ch}: 画面の外 {g}・CPU {w}"
+            "({x},{y}) 成分 {ch}: hardware {g}・WARP {w}"
         );
     }
 }
 
-fn cpu_answer(world: &EmoWorld, atlas: &AtlasTable) -> ComposedSurface {
-    let cpu = Composer::new()
-        .compose(
+fn render(
+    renderer: &mut OffscreenRenderer,
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+) -> ComposedSurface {
+    renderer
+        .render(
             world,
             atlas,
             SURFACE,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("CPU の合成");
+        .expect("画面の外へ描く")
+}
+
+#[test]
+fn hardware_overlay_only_matches_warp_within_one() {
+    let (world, atlas) = overlay_only();
+    let want = render(
+        &mut OffscreenRenderer::warp().expect("WARP の描き手"),
+        &world,
+        &atlas,
+    );
     assert!(
-        cpu.bytes().chunks(4).any(|p| p[3] != 0 && p[3] != 255),
+        want.bytes().chunks(4).any(|p| p[3] != 0 && p[3] != 255),
         "見本に半透明の画素がある"
     );
     assert!(
-        cpu.bytes().chunks(4).any(|p| p[3] == 0),
+        want.bytes().chunks(4).any(|p| p[3] == 0),
         "見本に透明の画素がある"
     );
-    cpu
-}
-
-fn render_with(mut renderer: OffscreenRenderer) {
-    let (world, atlas) = overlay_only();
-    let want = cpu_answer(&world, &atlas);
-    let got = renderer
-        .render(
-            &world,
-            &atlas,
-            SURFACE,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("画面の外へ描く");
+    let got = render(
+        &mut OffscreenRenderer::hardware().expect("hardware の描き手"),
+        &world,
+        &atlas,
+    );
     assert_within_one(&got, &want);
-}
-
-#[test]
-fn warp_overlay_only_matches_the_cpu_compose_within_one() {
-    render_with(OffscreenRenderer::warp().expect("WARP の描き手"));
-}
-
-#[test]
-fn hardware_overlay_only_matches_the_cpu_compose_within_one() {
-    render_with(OffscreenRenderer::hardware().expect("hardware の描き手"));
 }
 
 #[test]

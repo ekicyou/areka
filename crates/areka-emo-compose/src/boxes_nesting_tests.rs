@@ -9,11 +9,11 @@ use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::parse;
 
 use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement};
-use crate::Composer;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
 use crate::plan_test_support::bound_world;
 use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
+use crate::{Composer, DrawPlan};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -187,25 +187,24 @@ fn atlas() -> AtlasTable {
     bake_atlas_sized(Path::new("shell/master"), &specs)
 }
 
-fn compose(text: &str, top: u32) -> (u32, u32, Vec<u8>) {
+fn plan(text: &str, top: u32) -> DrawPlan {
     let atlas = atlas();
     let world = bound_world(&parse(text), &[], &atlas);
-    let out = Composer::new()
-        .compose(
+    Composer::new()
+        .plan(
             &world,
             &atlas,
             top,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("合成できる");
-    (out.width(), out.height(), out.bytes().to_vec())
+        .expect("計画できる")
 }
 
-/// 子 5 は画像（q）・サーフェス（6 の r）・箱を持つ。親 0 で見ても子 5 を一番上で見ても、合成は
+/// 子 5 は画像（q）・サーフェス（6 の r）・箱を持つ。親 0 で見ても子 5 を一番上で見ても、計画は
 /// 箱の行が無いときと同じで、子の画像とサーフェスは描かれる。
 #[test]
-fn child_images_and_surfaces_compose_the_same_with_or_without_its_box() {
+fn child_images_and_surfaces_plan_the_same_with_or_without_its_box() {
     let box_line = "element3,balloon,a,0,0";
     let text = format!(
         "balloon.a\n{{\nsize,10,10\n}}\n\
@@ -216,13 +215,15 @@ fn child_images_and_surfaces_compose_the_same_with_or_without_its_box() {
     let plain = without(&text, box_line);
 
     for top in [0, 5] {
-        assert_eq!(compose(&text, top), compose(&plain, top), "top {top}");
+        assert_eq!(plan(&text, top), plan(&plain, top), "top {top}");
     }
-    let (w, h, bytes) = compose(&text, 0);
-    assert_eq!((w, h), (10, 6), "子 5 とその子 6 まで外形に入る");
-    for value in [40, 120, 200] {
-        assert!(bytes.contains(&value), "色 {value} が描かれる");
-    }
+    let drawn = plan(&text, 0);
+    assert_eq!(
+        (drawn.extent.w, drawn.extent.h),
+        (10, 6),
+        "子 5 とその子 6 まで外形に入る"
+    );
+    assert_eq!(drawn.items.len(), 3, "p・q・r が描かれる");
 
     let (layout, issues) = fold(&text);
     assert!(

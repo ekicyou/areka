@@ -34,7 +34,7 @@ use super::*;
 
 use crate::presenter::test_support::pattern_overlay_at;
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{BindSet, ComposedSurface, Composer, PatternState};
+use areka_emo_compose::{BindSet, ComposedSurface, PatternState};
 
 use super::test_support::{
     konnoyayame_shell_dir, pixel, r_post_and_komainu_shell_dir, with_com_initialized,
@@ -66,8 +66,7 @@ fn compose(
     id: u32,
     patterns: &PatternState,
 ) -> ComposedSurface {
-    Composer::new()
-        .compose(world, target.atlas(), id, &BindSet::default(), patterns)
+    super::test_support::render(world, target.atlas(), id, &BindSet::default(), patterns)
         .unwrap_or_else(|e| panic!("面 {id} は合成できる: {e}"))
 }
 

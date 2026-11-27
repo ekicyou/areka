@@ -3,8 +3,8 @@
 //! 動く絵の見本でコマ替えを続け、各回に描画面の下の木（原寸のまとめの節と計画の節）を wintf の
 //! 画面の外の口で k＝1 のまま描いて読み、同じ面・同じコマを新しい presenter で 1 回だけ出した木の絵と
 //! 1 バイト単位で比べる。2 回目からのコマ替えが節を作り直さず中身だけを差し替えた（範囲だけ）ことは
-//! 作り直した項の数で確かめる（空の道で緑にしない）。当たりが読む画面の入れ物の α も、CPU の合成の
-//! α と 0.5 の同じ側に在ることを確かめる。
+//! 作り直した項の数で確かめる（空の道で緑にしない）。当たりが読む画面の入れ物の α も、画面の外の
+//! 描き手（WARP）の見本の α と 0.5 の同じ側に在ることを確かめる。
 
 use super::*;
 
@@ -86,7 +86,7 @@ fn rebuilds(presenter: &EmoPresenter) -> u64 {
 }
 
 /// コマ替えのたびに、描画面の下の木の絵が同じ状態を新しく全部写した木の絵と同じで、2 回目からは
-/// 節を作り直さない。絵は今の CPU の合成と色の各成分の差 1 以内。
+/// 節を作り直さない。絵は画面の外の描き手（WARP）の見本と色の各成分の差 1 以内。
 #[test]
 fn frame_changes_update_the_nodes_in_place_and_match_a_fresh_full_tree_on_real_gpu() {
     let mut world = make_world_with_gpu();
@@ -154,13 +154,13 @@ fn frame_changes_update_the_nodes_in_place_and_match_a_fresh_full_tree_on_real_g
             .map(|(a, b)| a.abs_diff(*b))
             .max()
             .unwrap_or(0);
-        assert!(worst <= 1, "コマ x={x} の絵が CPU の合成と {worst} 違う");
+        assert!(worst <= 1, "コマ x={x} の絵が WARP の見本と {worst} 違う");
 
         for (i, a) in screen_alpha.iter().enumerate() {
             assert_eq!(
                 *a >= 128,
                 golden[i * 4 + 3] >= 128,
-                "コマ x={x} の画面の入れ物の画素 {i} の α {a} が CPU の合成と 0.5 の反対側"
+                "コマ x={x} の画面の入れ物の画素 {i} の α {a} が WARP の見本と 0.5 の反対側"
             );
         }
     }

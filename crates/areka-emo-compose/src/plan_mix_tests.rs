@@ -15,8 +15,8 @@ use crate::method::ComposeMethod;
 use crate::normalized::Transform;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_test_support::{
-    bake_surfaces, bound_world, draw_plan_of, elem, frame, insert_film_2x2, opaque_wxh, solid,
-    surface, transparent_wxh,
+    bake_surfaces, bound_world, elem, frame, insert_film_2x2, opaque_wxh, plan_of, solid, surface,
+    transparent_wxh,
 };
 use crate::world::EmoWorld;
 
@@ -89,7 +89,7 @@ impl Scene {
     }
 
     fn plan(&self, surface: u32, binds: &BindSet, pattern: &PatternState) -> DrawPlan {
-        draw_plan_of(&self.world, &self.atlas, surface, binds, pattern).expect("計画を組める")
+        plan_of(&self.world, &self.atlas, surface, binds, pattern).expect("計画を組める")
     }
 
     fn still(&self, surface: u32) -> Vec<PlanItem> {

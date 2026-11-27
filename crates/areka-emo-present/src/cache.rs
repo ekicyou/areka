@@ -1,5 +1,5 @@
 //! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 描く計画・
-//! 原寸の合成面・書き出しの控えの組の、容量 3・LRU 置換のメモ化スロット表。
+//! 書き出しの控えの組の、容量 3・LRU 置換のメモ化スロット表。
 //!
 //! 上流 `areka-emo-compose` の合成は `(surface_id, BindSet)` の純粋関数なので、キーが合成入力の全体を
 //! 捕捉しないとキャッシュは正しくない（surface id だけをキーにすると、同一 surface で bind 集合だけ
@@ -11,19 +11,19 @@
 //! （25 分の長時間走行・命中率 0.0%）。実走行の適用列を LRU で再生した命中率は 1→0.0%／2→10.5%／
 //! 3→56.2%／4→56.5%／8→57.6%／64→68.5% で、膝は 3（emo2 のまばたきが 3 コマの繰り返しのため）。
 //! この数字は LRU 再生で得たので、置換方式を変えると根拠が成り立たない。全保持は、pattern 状態込みの
-//! キー空間が走行全体で 100 個規模（実測 103 個）になり堆積するので採らない。メモリは 1 対象あたり
-//! 原寸 3 件ぶん（例: 382×547×4＝835,816 バイト × 3）。
+//! キー空間が走行全体で 100 個規模（実測 103 個）になり堆積するので採らない。書き出しの控えは読まれた
+//! 項だけが原寸の絵を持つ（例: 382×547×4＝835,816 バイト）。
 //!
 //! # 表示スケール k はキーに参加しない
 //!
-//! [`CacheEntry::plan`] と [`CacheEntry::composed`] は native 原寸で、拡大率 k は wintf の描画経路
-//! （`render_surface` の `SetTransform`）が変換行列で掛ける。
+//! [`CacheEntry::plan`] と [`CacheEntry::snapshot`] は native 原寸で、拡大率 k は wintf の描画経路
+//! （まとめの節の変換）が掛ける。
 //! よって DPI 変化で k だけが変わった適用は同じエントリにヒットし（再合成しない）、k は無効化の契機にもならない。
 //!
 //! # 責務
 //!
-//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。GPU に触れない。ミス時の計画・合成は
-//! 提示段（`presenter`）の責務で、[`insert`] は計画と合成面を同時に受け取るので組は崩れない。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
+//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。GPU に触れない。ミス時の計画と書き出しの
+//! 描画は提示段（`presenter`）の責務。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
 //! 無効化はアトラス再構築・ghost 再読込用の [`invalidate_all`] のみ。
 //!
 //! [`insert`]: ComposeCache::insert
@@ -33,16 +33,13 @@ use std::cell::OnceCell;
 
 use areka_emo_compose::{BindSet, ComposedSurface, DrawPlan, PatternState};
 
-/// キャッシュエントリ＝描く計画と原寸の合成面の原子の組。
+/// キャッシュエントリ＝描く計画と書き出しの控えの組。
 ///
-/// 2 つは同じ合成入力から作る。1 エントリへ束ねてあるので、surface 切替に伴う組の入替は表の操作 1 回で原子的に起きる。
-/// 原寸の外形は `composed.width()`／`composed.height()` で、別フィールドに持たない。
+/// 原寸の外形は `plan.extent` で、別フィールドに持たない。
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
     /// 画面の節へ写す描く計画（表示の真実源）。
     pub plan: DrawPlan,
-    /// premultiplied BGRA・native 原寸の CPU の合成結果（原寸の外形と席の使い回し）。
-    pub composed: ComposedSurface,
     /// 書き出しの控え＝`plan` を画面の外で原寸に描いた絵か、描けなかった理由（初めて読まれたときに満たす）。
     pub snapshot: OnceCell<Result<ComposedSurface, String>>,
 }
@@ -107,16 +104,16 @@ impl ComposeCache {
         self.entries.len()
     }
 
-    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が計画と合成面の確保を
+    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が計画の確保を
     /// 使い回すための口）。
     ///
     /// 空きがあるあいだは `None` を返し表に触れない（生きているエントリを剥がすと命中率が落ちる）。
     /// 暖機中は回収が成立せず、呼び手が新しいバッファを起こす。
     ///
-    /// # 呼出は合成成功後に限る
+    /// # 呼出は計画と記録の成功後に限る
     ///
-    /// 合成が失敗し得る位置で呼ぶと、失敗時に生きているエントリが 1 件消えたまま残り、
-    /// 「合成失敗時の表示・キャッシュは適用前のまま」が壊れる。呼び手（`presenter/show.rs` のミス経路）が
+    /// 失敗し得る位置で呼ぶと、失敗時に生きているエントリが 1 件消えたまま残り、
+    /// 「失敗時の表示・キャッシュは適用前のまま」が壊れる。呼び手（`presenter/show.rs` のミス経路）が
     /// 守る契約で、本層は成否を知り得ないので強制しない。
     pub fn take_recycled(&mut self) -> Option<CacheEntry> {
         if self.entries.len() < CAPACITY {
@@ -125,12 +122,12 @@ impl ComposeCache {
         Some(self.entries.remove(0).1)
     }
 
-    /// 描く計画と原寸の合成面を、合成入力鍵の原子の組として挿入し、最近使用の末尾へ置く。
+    /// 描く計画を合成入力鍵で挿入し（書き出しの控えは空）、最近使用の末尾へ置く。
     ///
     /// 同一キーが在れば対ごと置き換える。満杯で新しいキーなら最も古い 1 件を捨てる（捨てるだけなので、
     /// 確保を回収したい呼び手は先に [`take_recycled`] を呼ぶ）。
     ///
-    /// `plan` と `composed` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
+    /// `plan` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
     ///
     /// [`take_recycled`]: ComposeCache::take_recycled
     pub fn insert(
@@ -139,7 +136,6 @@ impl ComposeCache {
         binds: BindSet,
         pattern: PatternState,
         plan: DrawPlan,
-        composed: ComposedSurface,
     ) {
         // 同一キーの再挿入は席を外し、以下の push で末尾へ戻す。
         if let Some(at) = self.position(surface_id, &binds, &pattern) {
@@ -157,7 +153,6 @@ impl ComposeCache {
             key,
             CacheEntry {
                 plan,
-                composed,
                 snapshot: OnceCell::new(),
             },
         ));
@@ -187,7 +182,7 @@ impl ComposeCache {
     ///
     /// 同一適用内の再照会（`show.rs` の装着・反映の直前・`read.rs` の読み戻し）と観測（檻）がこの口を使うので、
     /// 読み取りが置換順を書き換えてはならない。surface id・bind 集合・pattern 状態のいずれかが 1 ビットでも
-    /// 違えばミス（呼び手は再合成する）。表示スケール k は判定に関与しない。
+    /// 違えばミス（呼び手は計画を組み直す）。表示スケール k は判定に関与しない。
     ///
     /// [`touch`]: ComposeCache::touch
     pub fn get(

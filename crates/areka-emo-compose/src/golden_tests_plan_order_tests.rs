@@ -3,7 +3,7 @@
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{BindSet, MemoryDecoder, PatternState};
 use crate::plan_test_support::{
-    bound_world, draw_plan_of, frame, op_images, opaque_wxh, plan_images, plan_of,
+    bound_world, frame, op_images, opaque_wxh, ops_and_extent, plan_images, plan_of,
 };
 use crate::{Mix, PlanItem};
 
@@ -33,9 +33,9 @@ fn emo2_plan_matches_cpu_ops() {
         (1000, dress, blink),
     ];
     for (id, binds, pattern) in &cases {
-        let (ops, extent) = plan_of(&world, &atlas, *id, binds, pattern);
+        let (ops, extent) = ops_and_extent(&world, &atlas, *id, binds, pattern);
         assert!(!ops.is_empty(), "検体: 面 {id} は命令を持つ");
-        let plan = draw_plan_of(&world, &atlas, *id, binds, pattern).expect("計画を組める");
+        let plan = plan_of(&world, &atlas, *id, binds, pattern).expect("計画を組める");
         assert_eq!(plan_images(&plan), op_images(&ops), "面 {id}");
         assert_eq!(plan.extent, extent.expect("外形"), "面 {id}");
         assert!(
@@ -50,8 +50,8 @@ fn emo2_plan_matches_cpu_ops() {
             "面 {id}: overlay だけ"
         );
     }
-    let (with_blink, _) = plan_of(&world, &atlas, 1000, &cases[2].1, &cases[2].2);
-    let (without, _) = plan_of(&world, &atlas, 1000, &cases[1].1, &cases[1].2);
+    let (with_blink, _) = ops_and_extent(&world, &atlas, 1000, &cases[2].1, &cases[2].2);
+    let (without, _) = ops_and_extent(&world, &atlas, 1000, &cases[1].1, &cases[1].2);
     assert_ne!(
         op_images(&with_blink),
         op_images(&without),

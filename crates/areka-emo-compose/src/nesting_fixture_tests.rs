@@ -1,10 +1,10 @@
 //! 検体を読み手から合成まで通す。
 //!
-//! `tests/fixtures/surface-nesting/` の surfaces.txt を 解析 → 面の表 → 焼く → 合成 の順に通す。
+//! `tests/fixtures/surface-nesting/` の surfaces.txt を 解析 → 面の表 → 焼く → 計画 の順に通す。
 //! 焼く一覧は本番の入口（`areka-emo-present` の `build_shell_target_with_boxes`）と同じ形
 //! （数字だけの element定義を外し、使う `surface<数字>.png` を層 0 の面として足す）で組む。
 //! 画像は `MemoryDecoder` に、検体の PNG の見出し（IHDR）から読んだ原寸の単色を入れる
-//! （ファイルごとに色を変え、合成の画素で「どの絵か」を見分ける）。
+//! （計画の項はファイル名で「どの絵か」を見分ける）。
 
 use std::path::PathBuf;
 
@@ -13,12 +13,14 @@ use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::plan_test_support::{bake_surfaces, elem, image_map, opaque_wxh, png_size, px, surface};
-use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
+use crate::plan_test_support::{
+    bake_surfaces, elem, id_to_path, image_map, named_plan, opaque_wxh, png_size, surface,
+};
+use crate::{BindSet, Composer, DrawPlan, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
-/// 検体の絵と、冒頭の説明に書いた原寸と、合成で見分ける色（B, G, R）。
+/// 検体の絵と、冒頭の説明に書いた原寸と、焼く単色（B, G, R）。
 const FILES: &[(&str, u32, u32, [u8; 3])] = &[
     ("body.png", 100, 200, [128, 128, 128]),
     ("eye.png", 20, 10, [255, 0, 0]),
@@ -41,7 +43,7 @@ fn file(name: &str) -> &'static (&'static str, u32, u32, [u8; 3]) {
         .unwrap_or_else(|| panic!("{name} は検体の絵の一覧に無い"))
 }
 
-/// 合成の画素として見える色（不透明の premultiplied BGRA）。
+/// 焼く単色（不透明の premultiplied BGRA）。
 fn color(name: &str) -> [u8; 4] {
     let [b, g, r] = file(name).3;
     [b, g, r, 255]
@@ -129,16 +131,24 @@ fn load(text: &str) -> Loaded {
     }
 }
 
-fn compose(loaded: &Loaded, top: u32) -> ComposedSurface {
-    Composer::new()
-        .compose(
+/// `top` の計画と、その絵の項の (画像の名前, X, Y) の列。
+fn plan(loaded: &Loaded, top: u32) -> (DrawPlan, Vec<(&'static str, i64, i64)>) {
+    let plan = Composer::new()
+        .plan(
             &loaded.world,
             &loaded.atlas,
             top,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .unwrap_or_else(|e| panic!("surface{top} の合成に失敗した: {e:?}"))
+        .unwrap_or_else(|e| panic!("surface{top} の計画に失敗した: {e:?}"));
+    let names: Vec<&'static str> = FILES
+        .iter()
+        .map(|f| f.0)
+        .filter(|n| loaded.atlas.resolve(SetId(0), n).is_some())
+        .collect();
+    let named = named_plan(&plan, &id_to_path(&loaded.atlas, &names));
+    (plan, named)
 }
 
 /// 検体の PNG は冒頭の説明どおりの原寸を見出しに持つ（以下の画素の座標はこの原寸で数える）。
@@ -185,33 +195,33 @@ fn removing_any_planted_line_breaks_the_count() {
 fn every_parent_contains_the_shared_child_image() {
     let loaded = load(FIXTURE);
     // 親 A: 子 10 を (20,30)。
-    let s0 = compose(&loaded, 0);
-    assert_eq!(px(&s0, 25, 35), color("eye.png"));
-    assert_eq!(px(&s0, 19, 35), color("body.png"));
-    // 親 B: 子 10 を (90,50)。親の画像（幅 100）の右へはみ出した所も描かれる。
-    let s1 = compose(&loaded, 1);
-    assert_eq!((s1.width(), s1.height()), (110, 200));
-    assert_eq!(px(&s1, 105, 55), color("eye.png"));
-    assert_eq!(px(&s1, 89, 55), color("body.png"));
+    let (_, s0) = plan(&loaded, 0);
+    assert_eq!(s0[0], ("body.png", 0, 0));
+    assert!(s0.contains(&("eye.png", 20, 30)), "{s0:?}");
+    // 親 B: 子 10 を (90,50)。親の画像（幅 100）の右へはみ出した所も外形に入る。
+    let (p1, s1) = plan(&loaded, 1);
+    assert_eq!((p1.extent.w, p1.extent.h), (110, 200));
+    assert_eq!(s1[..2], [("body.png", 0, 0), ("eye.png", 90, 50)]);
     // 親 C: element0 が子 10（surface2.png は使われない）・ブレスの無い子 11 を (50,50)。
-    let s2 = compose(&loaded, 2);
-    assert_eq!((s2.width(), s2.height()), (62, 62));
-    assert_eq!(px(&s2, 5, 5), color("eye.png"));
-    assert_eq!(px(&s2, 55, 55), color("surface11.png"));
-    assert_eq!(px(&s2, 30, 30), [0, 0, 0, 0], "surface2.png は描かれない");
+    let (p2, s2) = plan(&loaded, 2);
+    assert_eq!((p2.extent.w, p2.extent.h), (62, 62));
+    assert_eq!(
+        s2,
+        [("eye.png", 0, 0), ("surface11.png", 50, 50)],
+        "surface2.png は描かれない"
+    );
 }
 
-/// 3 段目（32）の絵は各段の位置の和に出る。part.png（10x10）の右下の角で見る:
-/// 30・31 は 32 の右下の角を覆わないので、そこが part.png の色なのは 32 だけのため。
+/// 3 段目（32）の絵は各段の位置の和に出る。
 #[test]
 fn third_level_image_is_at_the_sum_of_every_offset() {
     let loaded = load(FIXTURE);
-    // 親 A: 30 を (5,5)・31 を (3,4)・32 を (2,1) → 32 は (10,10)〜(20,20)。
-    let s0 = compose(&loaded, 0);
-    assert_eq!(px(&s0, 19, 19), color("part.png"));
-    assert_eq!(px(&s0, 20, 20), color("body.png"));
-    // 親 B: surface.append1 が 30 を (60,100) → 32 は (65,105)〜(75,115)。
-    let s1 = compose(&loaded, 1);
-    assert_eq!(px(&s1, 74, 114), color("part.png"));
-    assert_eq!(px(&s1, 75, 115), color("body.png"));
+    // 親 A: 30 を (5,5)・31 を (3,4)・32 を (2,1) → 32 は (10,10)。
+    let (_, s0) = plan(&loaded, 0);
+    for at in [(5, 5), (8, 9), (10, 10)] {
+        assert!(s0.contains(&("part.png", at.0, at.1)), "{at:?}: {s0:?}");
+    }
+    // 親 B: surface.append1 が 30 を (60,100) → 32 は (65,105)。
+    let (_, s1) = plan(&loaded, 1);
+    assert!(s1.contains(&("part.png", 65, 105)), "{s1:?}");
 }

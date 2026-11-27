@@ -410,14 +410,13 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         .get(1000, &BindSet::default(), &PatternState::default())
         .expect("k が変わってもキーは同じ＝同じエントリが引ける");
     assert_eq!(
-        (entry.composed.width(), entry.composed.height()),
+        (entry.plan.extent.w, entry.plan.extent.h),
         native_size,
-        "エントリの外形は原寸（k 適用済みの面を持たない）"
+        "エントリの外形は原寸（k 適用済みの計画を持たない）"
     );
     assert_eq!(
-        entry.composed.bytes(),
-        golden_3000.as_slice(),
-        "k 変化でエントリの絵が差し替わっている（再合成が走った）"
+        entry.plan.surface_id, 3000,
+        "k 変化でエントリの計画が差し替わっている（計画を組み直した）"
     );
 }
 
@@ -447,9 +446,9 @@ fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld,
 /// 「合成した回だけ `native_size` を書く」実装ではここが RED になる——戻り先の面（4×3）と直前に
 /// 出していた面（6×5）は**原寸が違う**ため、書き忘れは古い 6×5 として観測される。同寸の面で
 /// 往復しても取り違えは観測できないので、寸法の異なる 2 面を使う。エントリと同じ入れ物に在る
-/// 原寸（[`CacheEntry::composed`] の外形）を表示成立点で**無条件に**写す実装だけが緑になる。
+/// 原寸（[`CacheEntry::plan`] の外形）を表示成立点で**無条件に**写す実装だけが緑になる。
 ///
-/// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
+/// [`CacheEntry::plan`]: crate::cache::CacheEntry::plan
 ///
 /// # 「`insert` 済みのまま失敗」の状態は作れない
 ///
@@ -484,9 +483,9 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
             .get(1000, &BindSet::default(), &PatternState::default())
             .expect("容量 3 ゆえ 1 回目のエントリが残る＝次の同一入力は必ずヒットする（本テストの前提）");
         assert_eq!(
-            (entry.composed.width(), entry.composed.height()),
+            (entry.plan.extent.w, entry.plan.extent.h),
             (4, 3),
-            "native 原寸はエントリの面の外形そのもの（別フィールドで二重に持たない・要件 5.1）"
+            "native 原寸はエントリの計画の外形そのもの（別フィールドで二重に持たない）"
         );
     }
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
