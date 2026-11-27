@@ -409,3 +409,84 @@ fn an_exited_entry_with_unreadable_cpu_warns_with_tid_and_role_and_adds_only_the
     assert_eq!((total.kernel_100ns, total.user_100ns), (0, 0));
     assert!(registry.live.is_empty());
 }
+
+fn sum_total_100ns(reading: &RegistryReading, family: &str) -> u64 {
+    folded_with_family(reading, family)
+        .iter()
+        .map(|f| f.cpu.total_100ns())
+        .sum()
+}
+
+#[test]
+fn many_sequential_threads_fold_into_one_family_total_that_matches_the_last_cpu() {
+    const COUNT: usize = 128;
+    let prefix = unique_role("many");
+    let family = format!("{prefix}-*");
+    let mut last_sum = 0u64;
+    let mut previous_total = 0u64;
+
+    for i in 0..COUNT {
+        let role = format!("{prefix}-{i}");
+        let own = std::thread::Builder::new()
+            .name(format!("wintf-registry-test-many-{i}"))
+            .spawn(move || {
+                register_current_thread(role).expect("別スレッドの登録も成功する");
+                crate::api::duplicate_current_thread_handle().expect("自分のハンドルの複製")
+            })
+            .expect("テスト用スレッドの生成は成功するはず")
+            .join()
+            .expect("テスト用スレッドは正常終了するはず");
+        last_sum += crate::api::get_thread_times(&own)
+            .expect("終わったスレッドの最後の CPU")
+            .total_100ns();
+
+        if (i + 1) % 16 == 0 {
+            let total = sum_total_100ns(&read_cpu(), &family);
+            assert!(
+                total >= previous_total,
+                "畳んだ合計は減らないはず: {total} < {previous_total}"
+            );
+            previous_total = total;
+        }
+    }
+
+    let reading = read_cpu();
+    assert!(
+        reading
+            .live
+            .iter()
+            .all(|live| !live.role.starts_with(&prefix)),
+        "全部 join した後は生きた項目が 0 のはず"
+    );
+    let folded = folded_with_family(&reading, &family);
+    assert_eq!(folded.len(), 1, "畳んだ合計は系統に 1 つ: {folded:?}");
+    assert_eq!(folded[0].exited, COUNT as u64);
+    assert_eq!(
+        folded[0].cpu.total_100ns(),
+        last_sum,
+        "畳んだ合計は join の後に読んだ最後の CPU の和と一致するはず"
+    );
+}
+
+#[test]
+fn inserting_many_exited_threads_never_grows_the_local_registry_past_one_live_and_one_total() {
+    let mut registry = Registry::new();
+    for i in 0..128 {
+        let entry = std::thread::spawn(move || ThreadEntry {
+            role: format!("actor:local-many-{i}"),
+            name: None,
+            tid: get_current_thread_id(),
+            handle: Arc::new(
+                crate::api::duplicate_current_thread_handle().expect("自分のハンドルの複製"),
+            ),
+        })
+        .join()
+        .expect("テスト用スレッドは正常終了するはず");
+
+        registry.insert(entry, &Win32Probe);
+
+        assert!(registry.live.len() <= 1, "{:?}", registry.live);
+        assert!(registry.folded.len() <= 1, "{:?}", registry.folded);
+    }
+    assert_eq!(registry.folded["actor:local-many-*"].exited, 127);
+}
