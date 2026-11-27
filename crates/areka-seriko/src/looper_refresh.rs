@@ -125,13 +125,14 @@ impl LoopRuntime {
         heads.extend(called);
         if open {
             start_top_always(playback, stopped_always, table, scope, slot, sid, at);
+            // 置くのは `now` の絵なので、働きのコマも `now` まで当てる（遅れて処理した合図）。
             let (top, called) = run_top_calls(
                 playback,
                 &mut pattern,
                 stopped_always,
                 &key,
                 table.animations(sid),
-                at,
+                now,
                 pick_rng,
             );
             shift = shift.then(top);

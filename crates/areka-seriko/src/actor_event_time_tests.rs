@@ -477,3 +477,221 @@ fn stop_before_the_fire_time_is_shown_on_an_unchanged_bind_cue() {
     )));
     assert_eq!(top_cell(&shown, 0), None, "{shown:?}");
 }
+
+/// 一番上 0: animation0 は [`FAST_ALWAYS`] と同じ `always`、animation1 は `runonce` で 10ms 後に 120 を出し、
+/// 同時に animation0 を止める。
+const RUNONCE_STOPS_ALWAYS: &str = "surface0\n{\n\
+    animation0.interval,always\n\
+    animation0.pattern0,overlay,101,0,0,0\n\
+    animation0.pattern1,overlay,102,20,0,0\n\
+    animation0.pattern2,overlay,103,20,0,0\n\
+    animation0.pattern3,overlay,104,20,0,0\n\
+    animation1.interval,runonce\n\
+    animation1.pattern0,overlay,120,10,0,0\n\
+    animation1.pattern1,stop,0\n}\n\
+    surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\nsurface104\n{\n}\nsurface120\n{\n}\n";
+
+/// 遅れて処理した面の切り替えは、発火時刻 1020 と直前の刻み 1048 の間（1030）の止めも当てた絵を出す:
+/// 刻み 1000 の直後に処理して刻み 1048 まで進めた欄と同じ（止めた `always` は欄に無い）。
+#[test]
+fn late_surface_cue_applies_a_stop_between_its_fire_time_and_the_last_tick() {
+    let config = || cfg(table_of(RUNONCE_STOPS_ALWAYS), always_fire());
+    let mut soon = rig(config());
+    soon.tick(at_ms(1000));
+    soon.hear(script_cue(emote("0")));
+    for t in [1016, 1032, 1048] {
+        soon.tick(at_ms(t));
+    }
+    let due = soon
+        .states
+        .current_pattern(&ActorKey::from("0"), Slot::Shell)
+        .clone();
+    assert_eq!(top_cell(&due, 0), None, "前提: {due:?}");
+    assert_eq!(top_cell(&due, 1), Some(120), "前提: {due:?}");
+
+    let mut late = rig(config());
+    for t in [1000, 1016, 1032, 1048] {
+        late.tick(at_ms(t));
+    }
+    let (_, _, shown) = single_show(late.hear(script_cue(emote("0"))));
+    assert_eq!(shown, due, "処理した時の指令は止めを当てた絵");
+}
+
+/// 一番上 0 は着せ替え 5 で子 100 を出す。100 は [`RUNONCE_STOPS_ALWAYS`] の一番上と同じ 2 つを持つ。
+const BIND_RUNONCE_STOPS_ALWAYS: &str = "surface0\n{\nanimation5.interval,bind\n\
+    animation5.pattern0,overlay,100,0,0,0\n}\n\
+    surface100\n{\n\
+    animation0.interval,always\n\
+    animation0.pattern0,overlay,101,0,0,0\n\
+    animation0.pattern1,overlay,102,20,0,0\n\
+    animation0.pattern2,overlay,103,20,0,0\n\
+    animation0.pattern3,overlay,104,20,0,0\n\
+    animation1.interval,runonce\n\
+    animation1.pattern0,overlay,120,10,0,0\n\
+    animation1.pattern1,stop,0\n}\n\
+    surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\nsurface104\n{\n}\nsurface120\n{\n}\n";
+
+/// 面 0 を出してから、発火時刻 1020 の着せ替え（5 を着る）を刻み 1000 の直後に処理して刻み 1048 まで
+/// 進めた欄と、刻み 1048 の後に処理した指令の欄を返す。
+fn soon_and_late_bind(table: &str) -> (PatternState, PatternState) {
+    let config = || cfg(table_of(table), always_fire());
+    let bind = || {
+        fired(
+            at_ms(FIRE.into()),
+            carrier_cue("0", "bind", &["目", "閉", "1"]),
+        )
+    };
+    let mut soon = rig(config());
+    soon.hear(cue(ms(0), "0", emote("0"), TimeSpan::ZERO));
+    soon.tick(at_ms(1000));
+    soon.hear(bind());
+    for t in [1016, 1032, 1048] {
+        soon.tick(at_ms(t));
+    }
+    let due = soon
+        .states
+        .current_pattern(&ActorKey::from("0"), Slot::Shell)
+        .clone();
+    let mut late = rig(config());
+    late.hear(cue(ms(0), "0", emote("0"), TimeSpan::ZERO));
+    for t in [1000, 1016, 1032, 1048] {
+        late.tick(at_ms(t));
+    }
+    let (_, _, shown) = single_show(late.hear(bind()));
+    (due, shown)
+}
+
+/// 部品 100 の欄に絵 `surface_id` が載っているか。
+fn part_shows(pattern: &PatternState, surface_id: u32) -> bool {
+    part_frames(pattern, 100)
+        .iter()
+        .any(|&(_, s)| s == surface_id)
+}
+
+/// 遅れて処理した着せ替えも、発火時刻 1020 と直前の刻み 1048 の間（1030）の部品の止めを当てた絵を出す。
+#[test]
+fn late_bind_cue_applies_a_part_stop_between_its_fire_time_and_the_last_tick() {
+    let (due, shown) = soon_and_late_bind(BIND_RUNONCE_STOPS_ALWAYS);
+    assert!(!part_shows(&due, 102), "前提: {due:?}");
+    assert!(part_shows(&due, 120), "前提: {due:?}");
+    assert_eq!(shown, due, "処理した時の指令は部品の止めを当てた絵");
+}
+
+/// 子 100: animation0 は `always` で 5ms 後（1025）に animation1 を止める。animation1 は `runonce` で
+/// 10ms 後（1030）に 120 を出し animation0 を止める。
+const BIND_ALWAYS_STOPS_RUNONCE_FIRST: &str = "surface0
+{
+animation5.interval,bind
+    animation5.pattern0,overlay,100,0,0,0
+}
+    surface100
+{
+    animation0.interval,always
+    animation0.pattern0,overlay,101,0,0,0
+    animation0.pattern1,overlay,102,5,0,0
+    animation0.pattern2,stop,1
+    animation0.pattern3,overlay,103,200,0,0
+    animation1.interval,runonce
+    animation1.pattern0,overlay,120,10,0,0
+    animation1.pattern1,stop,0
+}
+    surface101
+{
+}
+surface102
+{
+}
+surface103
+{
+}
+surface120
+{
+}
+";
+
+/// 新しく見えた部品の `always` の (発火時刻, 直前の刻み] の働きのコマは、同じ時刻に鳴る `runonce` の働きの
+/// コマと時刻の順に当たる: 1025 に止められた animation1 は 1030 に animation0 を止めない。
+#[test]
+fn late_bind_cue_applies_part_actions_in_time_order_with_a_runonce_it_rings() {
+    let (due, shown) = soon_and_late_bind(BIND_ALWAYS_STOPS_RUNONCE_FIRST);
+    assert!(part_shows(&due, 102), "前提: {due:?}");
+    assert!(!part_shows(&due, 120), "前提: {due:?}");
+    assert_eq!(shown, due, "処理した時の指令は時刻の順に働きを当てた絵");
+}
+
+/// 子 100（引き金なし）: animation0 は [`FAST_ALWAYS`] と同じ `always`、animation1 は `always` で 10ms 後
+/// （1030）に 120 を出し animation0 を止める。
+const BIND_ALWAYS_STOPS_ALWAYS: &str = "surface0
+{
+animation5.interval,bind
+    animation5.pattern0,overlay,100,0,0,0
+}
+    surface100
+{
+    animation0.interval,always
+    animation0.pattern0,overlay,101,0,0,0
+    animation0.pattern1,overlay,102,20,0,0
+    animation0.pattern2,overlay,103,20,0,0
+    animation0.pattern3,overlay,104,20,0,0
+    animation1.interval,always
+    animation1.pattern0,overlay,120,10,0,0
+    animation1.pattern1,stop,0
+    animation1.pattern2,overlay,121,200,0,0
+}
+    surface101
+{
+}
+surface102
+{
+}
+surface103
+{
+}
+surface104
+{
+}
+    surface120
+{
+}
+surface121
+{
+}
+";
+
+/// 引き金の無い部品でも、遅れて処理した着せ替えは (発火時刻, 直前の刻み] の `always` の止めを当てた絵を出す。
+#[test]
+fn late_bind_cue_applies_a_stop_by_a_part_always_without_triggers() {
+    let (due, shown) = soon_and_late_bind(BIND_ALWAYS_STOPS_ALWAYS);
+    assert!(!part_shows(&due, 102), "前提: {due:?}");
+    assert!(part_shows(&due, 120), "前提: {due:?}");
+    assert_eq!(shown, due, "処理した時の指令は部品の止めを当てた絵");
+}
+
+/// [`BIND_ALWAYS_STOPS_ALWAYS`] の子 100 に、字が来ないので鳴らない `talk` の animation2 を足したもの。
+const BIND_ALWAYS_STOPS_ALWAYS_WITH_TALK: &str = "surface0\n{\nanimation5.interval,bind\n\
+    animation5.pattern0,overlay,100,0,0,0\n}\n\
+    surface100\n{\n\
+    animation0.interval,always\n\
+    animation0.pattern0,overlay,101,0,0,0\n\
+    animation0.pattern1,overlay,102,20,0,0\n\
+    animation0.pattern2,overlay,103,20,0,0\n\
+    animation0.pattern3,overlay,104,20,0,0\n\
+    animation1.interval,always\n\
+    animation1.pattern0,overlay,120,10,0,0\n\
+    animation1.pattern1,stop,0\n\
+    animation1.pattern2,overlay,121,200,0,0\n\
+    animation2.interval,talk,1\n\
+    animation2.pattern0,overlay,130,0,0,0\n}\n\
+    surface101\n{\n}\nsurface102\n{\n}\nsurface103\n{\n}\nsurface104\n{\n}\n\
+    surface120\n{\n}\nsurface121\n{\n}\nsurface130\n{\n}\n";
+
+/// 引き金を持つが何も鳴らない部品でも、遅れて処理した着せ替えは (発火時刻, 直前の刻み] の `always` の
+/// 止めを当てた絵を出す。
+#[test]
+fn late_bind_cue_applies_a_part_stop_when_its_triggers_ring_nothing() {
+    let (due, shown) = soon_and_late_bind(BIND_ALWAYS_STOPS_ALWAYS_WITH_TALK);
+    assert!(!part_shows(&due, 102), "前提: {due:?}");
+    assert!(part_shows(&due, 120), "前提: {due:?}");
+    assert!(!part_shows(&due, 130), "前提: {due:?}");
+    assert_eq!(shown, due, "処理した時の指令は部品の止めを当てた絵");
+}

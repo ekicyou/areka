@@ -837,3 +837,4 @@
 - 10.15: 10.16 へ: areka-session `runtime_boot.rs` の `ClockedTextSink`（33・82 行）を外す。本体 `runtime_tests/frame_shell_box_arrow_tests.rs:306` の `vec![TalkLifecycleSignal::UserBreak]` を `UserBreak { at: TimePoint::ZERO }` へ。
 - 10.16: GPU の足場（Tick を 100 ms で進める `GpuRig`）ではフレームの時刻が Tick の速さで進むので、バルーンの 30 秒の時間切れが実時間でおよそ 0.3 秒で来る。今の読みは `speak` の後にフレームを回さないので影響しない。
 - 締めの検証（kiro-validate-impl）: 全体テスト 23 段緑・横断の検証は Critical/Important 0。Minor 3 件（facade.rs の消えた口への言及 2 行・seriko の assert の文の要件番号・design.md のファイルの道）を直した。境界の外で触った `.kiro/specs/talk-anchor-interrupt-ticks/brief.md`（要件の討議の申し送り）は次の `/kiro-next` で拾う。
+- 完了時にその場で解決: 10.7 の限界（遅れて処理した図形・着せ替えの合図で、(発火時刻, 直前の刻み] の止めが 1 刻みだけ当たらない）を直した。一番上は `always` を始めた後の働きを直前の刻みまで当て、部品は引き金の段で判定した後に直前の刻みまで当てて欄を置き直す（`actor_event_time_tests.rs` に檻 5 本）。

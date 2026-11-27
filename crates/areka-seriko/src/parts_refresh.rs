@@ -91,13 +91,19 @@ impl PartClocks {
         };
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
+            // 2 段目（新しく見えた部品の構え）を通る部品か。
+            let judged_late = matches!(part, PartKey::Surface(_))
+                && table.has_triggers()
+                && !armed.contains_key(&part)
+                && anims.iter().any(|a| a.trigger.is_word());
             if let Phase::Trigger = phase {
                 // 構えてあった部品は 1 段目が時刻の順に判定済み。ここは新しく見えた部品だけを構える。
-                if armed.contains_key(&part) {
+                if !judged_late {
                     return false;
                 }
                 let who = (scope, slot, part);
-                let Some((heads, outcome)) = judge_part(
+                let mut heads = Vec::new();
+                if let Some((started, outcome)) = judge_part(
                     armed,
                     clocks,
                     stopped,
@@ -108,14 +114,23 @@ impl PartClocks {
                     (at, open),
                     talk,
                     pick,
-                ) else {
-                    return false;
-                };
+                ) {
+                    shift = shift.then(outcome);
+                    heads = started;
+                }
+                // 1 段目が `at` で止めた働きのコマを、鳴らした再生と時刻の順に揃えて `now` まで当て、
+                // `now` の絵を置き直す（遅れて処理した合図）。
+                let (outcome, called) = run_part_calls(
+                    clocks, stopped, pattern, scope, slot, part, anims, now, pick,
+                );
                 shift = shift.then(outcome);
-                for anim in heads {
-                    // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
-                    unwrite(pattern, part, anim.id);
-                    put(clocks, pattern, part, anim, now);
+                for anim in anims {
+                    let head = heads.iter().any(|h| h.id == anim.id) || called.contains(&anim.id);
+                    if head || !matches!(gate(anim, binds), Gate::Off) {
+                        // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
+                        unwrite(pattern, part, anim.id);
+                        put(clocks, pattern, part, anim, now);
+                    }
                 }
                 return true;
             }
@@ -158,9 +173,12 @@ impl PartClocks {
                     );
                 }
             }
-            // 始めた `always` の頭の働きのコマを当てる（頭のコマを置く前）。
-            let (outcome, _) =
-                run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+            // 始めた `always` の頭の働きのコマを当てる（頭のコマを置く前）。置くのは `now` の絵なので
+            // `now` まで当てる。2 段目で鳴る部品は、鳴る再生より先に (at, now] を当てないよう `at` で止める。
+            let until = if judged_late { at } else { now };
+            let (outcome, _) = run_part_calls(
+                clocks, stopped, pattern, scope, slot, part, anims, until, pick,
+            );
             shift = shift.then(outcome);
             for &i in order.iter() {
                 let anim = &anims[i];
