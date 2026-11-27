@@ -2,7 +2,7 @@
 
 > 設計（`design.md`）の部品名で書く。新しいテストは全部、本番ファイルの中に書かず同じディレクトリの兄弟ファイルに置き、接続宣言（`mod ...;`）だけを本番ファイルに足す。同じウェーブ C28 の約束で `crates/areka-placement/src/persist.rs`・`follow_test_support.rs`・`persist_finalize_save_tests.rs`・`crates/areka-runtime/src/frame_persist_test_support.rs`・`move_cue_apply_move_tests.rs`・`placement_tests/reset_balloon_pos_tests.rs` は読む・呼ぶだけで変えない。`crates/areka-runtime/src/move_cue_args.rs`・`crates/areka-placement/src/resolver.rs`・`Cargo.toml`・`Cargo.lock` にも触らない。新しいテストは判断の分かれ目ごとに、本番の直しを入れる前に赤になることを確かめてから緑にする（要件 8.1）。runtime の新しいテストのファイルは今の型どおり `frame_*.rs` の名前で `crates/areka-runtime/src/frame.rs` に `#[path]` で宣言する（`move_cue` のテストは `move_cue.rs` に宣言する）。
 
-- [ ] 1. SSP の残りの測り
+- [x] 1. SSP の残りの測り
   - 実装の前に測り、決めと食い違えば先に決め直す（食い違いが実装の形を変えるため、最初に置く）
   - 利用者のドラッグとの重ね方（命令の前のドラッグ・向きを変えたとき・命令の後のドラッグが次の起動に台本の分を持ち越すか）と、シェルとバルーンの切り替えの後の台本の値の寿命を、SSP の MCP と画面の操作で測る
   - 進行役が測るたびに開発者の許しを取り、排他テストの机（画面の操作）をこのタスクの間だけ持つ。試験の根と検体はワークツリーの `target\` の下だけに置く
@@ -126,7 +126,7 @@
 
 - [ ] 6. 台帳と文書
   - 網羅台帳の `\![set,balloonoffset,x,y]` と `\![set,balloonalign,ID]` の 2 行を実装済みにし、持ち主をこの spec に、根拠の場所（当て口・受け手の表・テストのファイル）を書く
-  - `doc/COMPAT_ARCHITECTURE.md` §8 に、台本の基準点の寿命・シェルとバルーンの切り替え・`\![execute,resetballoonpos]` との関係・押し戻しの画面・軸ごとの相対と絶対・SSP と違う壊れた値の扱い・`center`・`bottom` の縦の基準の SSP との違いを別々の行で足し、「バルーンだけが作業領域からはみ出すとき」の行を画面の選び方に合わせて改める
+  - `doc/COMPAT_ARCHITECTURE.md` §8 に、台本の基準点の寿命・シェルとバルーンの切り替え・`\![execute,resetballoonpos]` との関係・押し戻しの画面・軸ごとの相対と絶対・SSP と違う壊れた値の扱い・シェルの読み直しで SSP が台本の向きだけを落とし areka は両方を保つ違い（`research.md` 8.1 節）・`center`・`bottom` の縦の基準の SSP との違いを別々の行で足し、「バルーンだけが作業領域からはみ出すとき」の行を画面の選び方に合わせて改める
   - 網羅台帳の既存の検査と文書の置き場の照合のテストが緑になる
   - _Dispatch: mechanical — 書く中身を要件と設計が与える_
   - _Requirements: 8.2, 8.3_
