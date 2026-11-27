@@ -156,7 +156,7 @@ crates/areka-runtime/src/
 - `crates/areka-seriko/src/looper_trigger.rs` — 合図を字の列へ当てる自由関数 `observe_talk_cue`（文字・選択肢・印・`\s`・名前の形の `\b`・消去・全消去）と、`restart_talk` を「捨てた序数の列で全部の数えを揃える」形に。シェルの切替で箱の場所の字を捨てる `rebase_talk_boxes`。モジュールの doc の決まりを「数えた字の数を保つ」に直す。
 - `crates/areka-seriko/src/state.rs` — `ScopeStates` のスコープごとの状態に、文字の層の規則での `\s` の答えを控える欄 `text_surface: Option<SurfaceKeyOutcome>` を足す（まだ `\s` が届いていなければ無し・`Unresolved` は控えを変えない・シェルの切替の戻り先も同じ欄へ当てる）。表示のために今も `\s` ごとに通る経路での書き込み 1 回だけで、門に関わらず保つ。
 - `crates/areka-seriko/src/resolve.rs` — `SurfaceTarget::for_text(self, surface_ids: &BTreeSet<u32>) -> SurfaceKeyOutcome`（文字の層の規則の唯一の置き場）。
-- `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell` に `text_routing: TextRouting`。`dispatch_message` は `observe_cue(&cue, resolver)`。`\s` の経路で `ScopeStates` の `text_surface` を控える。シェルの差し替えでは `text_routing` を「次の箱の表」として預かり、箱の表が効いた知らせ `SerikoMsg::TextRoutingApplied { at }` を受けたときに `replace_text_routing(at, &fallback, &states)` で入れ替える。どちらの差し替えでも門が閉から開へ替わったら、控えから行き先を決め直させる。
+- `crates/areka-seriko/src/actor.rs` — `SerikoReplace::Shell` に `text_routing: TextRouting`。`dispatch_message` は `observe_cue(&cue, resolver)`。`\s` の経路で `ScopeStates` の `text_surface` を控える。シェルの差し替えでは `text_routing` を「次の箱の表」として預かり、箱の表が効いた知らせ `SerikoMsg::TextRoutingApplied { at }` を受けたときに `replace_text_routing(at, routing, &fallback)` で入れ替える（預かるのは最後の差し替えの 1 つだけ・戻り先の答えは字の列の行き先が持つ番号へ当てる）。どちらの差し替えでも門が閉から開へ替わったら、控えから行き先を決め直させる。
 - `crates/areka-seriko/src/lib.rs` — `pub use talk::TextRouting;`。
 - `crates/areka-seriko/src/settle.rs` — 構成を直に組む所に `text_routing: TextRouting::default()`。
 - 既存のテストの追従（振る舞いの期待は変えず、型の欄だけ）:

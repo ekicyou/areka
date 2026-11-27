@@ -145,3 +145,6 @@
 - seriko の actor は次の箱の表を `Option` で最後の 1 つだけ持つ（切替の失敗の後に古い表を当てないため）。`settle_talk` が刻みごとに数えた字を刈り込むので、シェルの切替の揃えが効くのは刻みと知らせのあいだに構え直しがあるときだけ。
 - 設計の「兄弟と重なるファイル」の表は `areka-emo-compose/src/boxes.rs` を触らないとしていたが、`BoxName` の欄を `pub(crate)` にする 1 行だけ触った（同じクレートの兄弟のテストが名前を組むため）。同じウェーブで emo-compose を触る spec と取り込むときはこの 1 行に注意。
 - 最終検証（GO）: `tools/test-all.ps1` は 22 段すべて緑（実機の起動 `emo2_mcp_get_log_origin_and_strict_over_one_real_boot` も緑）。
+- 完了時にその場で解決: `areka-emo-text/src/sink.rs` の名前の形の `\b` の見分けを `TextRoute::is_box_key` に替えた（同じ式の写しが残っていた）。
+- 完了時にその場で解決: design.md の actor の項の `replace_text_routing` の署名を実装（`at, routing, &fallback`・最後の 1 つだけ預かる）に合わせた。
+- 完了時の棚卸: その場で解決 2 件・申し送り 1 件（clippy 1.100 の残りを `clippy-199-lints` の brief へ）・起票 0 件。シェルの切替の 2 段の間（seriko が新しい解決器を受けてから箱の表の知らせが届くまで）に届いた `\s` だけ、seriko と文字の層の答えが食い違いうる。切替は 1 フレームの中で済み、知らせで決め直すので起票しない。
