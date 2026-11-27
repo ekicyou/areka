@@ -5,7 +5,7 @@ use crate::asker::AskerId;
 use crate::guardian::{WAIT_LIMIT, lock_failed, store_not_open};
 use crate::key::parse_dotted;
 use crate::keytable::{Home, KEY_TABLE, KeyRow, rule_of};
-use crate::persist::{PersistFailure, PersistOutcome, PersistScope, ScopeRoots};
+use crate::persist::{PersistFailure, PersistKey, PersistOutcome, PersistScope, ScopeRoots};
 use crate::reader::SylphyaReader;
 use crate::store::{FileWrite, OP_WAIT, RETRY_STEP, Store, StoreBackend, WriteAttempt};
 use std::path::PathBuf;
@@ -222,23 +222,28 @@ impl KvsDirect {
             return earlier.map_or(WriteOutcome::Written, WriteOutcome::Failed);
         };
         let outcome = match guard.as_mut() {
-            Ok(store) => {
-                let start = self.backend.now();
-                loop {
-                    match store.try_write(&file) {
-                        WriteAttempt::Done(outcome) => break outcome,
-                        WriteAttempt::Busy
-                            if self.backend.now().saturating_sub(start) <= OP_WAIT =>
-                        {
-                            self.backend.pause(RETRY_STEP);
-                        }
-                        WriteAttempt::Busy => break lock_failed(&file, WAIT_LIMIT),
-                    }
-                }
-            }
+            Ok(store) => write_within_wait(store, self.backend.as_ref(), &file),
             Err(reason) => store_not_open(&file, reason),
         };
         outcome_of(earlier, outcome)
+    }
+}
+
+/// 錠に当たる間は置き場の口の時計で期限まで取り直して書く（呼んだスレッドの上）。
+pub(crate) fn write_within_wait(
+    store: &mut Store,
+    backend: &dyn StoreBackend,
+    file: &FileWrite,
+) -> PersistOutcome {
+    let start = backend.now();
+    loop {
+        match store.try_write(file) {
+            WriteAttempt::Done(outcome) => return outcome,
+            WriteAttempt::Busy if backend.now().saturating_sub(start) <= OP_WAIT => {
+                backend.pause(RETRY_STEP);
+            }
+            WriteAttempt::Busy => return lock_failed(file, WAIT_LIMIT),
+        }
     }
 }
 
@@ -284,6 +289,13 @@ pub(crate) fn split_write(
             }
         }
     }
+    file.typed = file
+        .puts
+        .iter()
+        .map(|(key, _)| key)
+        .chain(&file.removes)
+        .filter_map(|key| PersistKey::from_canonical_key(key))
+        .collect();
     let file = (!file.puts.is_empty() || !file.removes.is_empty()).then_some(file);
     (file, earlier)
 }

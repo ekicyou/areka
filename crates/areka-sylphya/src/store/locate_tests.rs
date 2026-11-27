@@ -1,5 +1,4 @@
 use super::*;
-use crate::persist::{FsPersistIo, PersistIo};
 use crate::store::{Located, fs_backend};
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -118,11 +117,8 @@ fn write_reopen_read_at(root: &Path) {
     }
 
     let legacy = root.join("sylphya.toml");
-    FsPersistIo.commit(&legacy, "[areka]\n").unwrap();
-    assert_eq!(
-        FsPersistIo.read(&legacy).unwrap().as_deref(),
-        Some("[areka]\n")
-    );
+    std::fs::write(&legacy, "[areka]\n").unwrap();
+    assert_eq!(std::fs::read_to_string(&legacy).unwrap(), "[areka]\n");
 }
 
 #[test]

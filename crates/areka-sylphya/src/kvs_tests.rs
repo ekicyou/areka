@@ -89,3 +89,28 @@ fn a_direct_write_behind_a_lock_retries_with_pause_and_gives_up_after_one_second
     );
     assert_eq!(kvs.get(BOOT).as_deref(), Some("2"));
 }
+
+#[test]
+fn a_failed_file_write_carries_the_typed_keys_of_the_canonical_names() {
+    let mem = MemBackend::new();
+    let kvs = open(&mem);
+    mem.fail_next_write();
+    let outcome = kvs.put(
+        PersistScope::Ghost,
+        &[(BOOT, "1"), ("areka.window.scope(0).x", "5"), (FREE, "on")],
+    );
+    let WriteOutcome::Failed(WriteFailed::Persist(failure)) = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        failure.keys,
+        vec![
+            PersistKey::BootCount,
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: crate::persist::Axis::X
+            },
+        ],
+        "型つきの鍵の無い名前は載らない"
+    );
+}

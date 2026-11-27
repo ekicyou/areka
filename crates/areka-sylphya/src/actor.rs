@@ -218,14 +218,14 @@ pub enum Effect {
         /// フラット名（% 抜き）。
         name: String,
     },
-    /// 永続 put（write-through の保存側）。受信ループが [`crate::persist::save_scope`] を実行する。
+    /// 永続 put（覚える値の書き）。番人が型つきの鍵を正規名にして列へ入れる。
     PersistSave {
         /// スコープ。
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
     },
-    /// 永続の鍵を消す（記憶の側）。実行は [`crate::persist::remove_scope_keys`] を呼ぶ。
+    /// 永続の鍵を消す（記憶の側）。番人が型つきの鍵を正規名にして列へ入れる。
     PersistRemove {
         /// スコープ。
         scope: PersistScope,

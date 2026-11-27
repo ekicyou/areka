@@ -119,7 +119,7 @@
   - _Requirements: 2.10, 4.8, 12.1, 12.2_
 
 - [ ] 4. 型つきの包みと、番人が居ない時点の読み書き
-- [ ] 4.1 型つきの包み 3 本を核の上へ載せ替え、古い保存を消す
+- [x] 4.1 型つきの包み 3 本を核の上へ載せ替え、古い保存を消す
   - 3 つの関数の名前と戻り値を保ち、引数を置き場の口に替えて核の上で読む・書く・消す。正規名から型つきの鍵へ戻す関数と、記憶のフォルダを先に作る関数（控える範囲では作らない）を置く
   - 古い保存の口と偽物と錠のファイル、TOML への書き、「パス → 中身」の控えを消し、控えは範囲の旗だけを残す
   - 失敗の理由の文を、今の文のまま核の中の対応する失敗へ移す（新しい文は 7.1）
@@ -255,3 +255,6 @@
 - 3.3: 層を名指ししない `SylphyaMsg::Set` は `apply` の中で全体の `KEY_TABLE` で断るかを決める（番人の差し替えた表に従わない）。行を足した表を `Set` で確かめる試験が要るときは `Set` の腕を表を受ける関数へ切り出す。
 - 3.4: 3.4 の後、番人の書きと古い直の読み書きをまたぐ試験が赤（areka-ghost 7・areka-input 5・areka-placement 37・areka-runtime 6・areka-session 24・areka 29、計 108 本）。どれも番人で書いて古い偽物／`load_scope`／ファイルの中身で読むか、古い `save_scope` で植えて番人で読む形。4.2・4.3 で緑に戻す。
 - 3.4: 倍率と DPI の 4 つの名前は 3.3 から速い住み場所の行で、登録が 6.1 まで無いので、本番では 6.1 までその名前の読みが値なしになる。試験の支えは `register_fast` で試験の `FastHome` を登録して与える（`prop_get_sink_tests.rs`）。
+- 4.1: 4.1 の後、4.2 まではワークスペースが組めない（古い保存の口の型を使う所: areka 13・areka-placement 14・areka-session 7・areka-runtime 7・areka-ghost 5・areka-emo-present 5・areka-input 1 ファイル、areka-emo-text の `examples/emo-text-layer/fixture.rs`・`tests/staysee_balloon_fixture/faces.rs`・`tests/support/fixture.rs`）。areka-emo-present と areka-emo-text は 4.2 の支えの一覧に無いが、同じく差し替える。
+- 4.1: `ensure_root_dir(dir, backend: &Arc<dyn StoreBackend>)`。本番の呼び手は `&fs_backend()` を渡す。
+- 4.1: 型つきの包みの「錠を 1 秒待っても取れない」と `remove_scope_keys` の失敗に直の試験が無い。4.2・4.3 で `MemBackend::hold_writer`・`fail_next_write` で 1 本ずつ足すとよい。

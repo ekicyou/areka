@@ -4,7 +4,8 @@ use super::read::alias;
 use super::schema::{self, Opened};
 use super::write::{Stop, create_tables};
 use super::{LOG_TARGET, Store, held_root};
-use crate::persist::{PersistScope, doc_to_entries, format};
+use crate::persist::format::{self, AxisPair, FormatDoc};
+use crate::persist::{Axis, PersistKey, PersistScope};
 use rusqlite::OptionalExtension;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -66,7 +67,9 @@ impl Store {
                 return self.fail(
                     root,
                     opened,
-                    format!("記憶のファイル sylphya.toml を読めませんでした: {e}"),
+                    format!(
+                        "記憶のファイル sylphya.toml を読めないので、中身を消さないように書くのをやめました（{e}）"
+                    ),
                 );
             }
         };
@@ -333,12 +336,85 @@ impl Store {
         self.pending.get(root)?.get(key)
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the typed wrappers move onto the store later")
-    )]
     pub(super) fn pending_layer(&self, layer: PersistScope) -> Option<&BTreeMap<String, String>> {
         self.pending.get(self.roots.root_of(layer)?)
+    }
+}
+
+/// [`FormatDoc`] を `(PersistKey, String)` エントリ列へ変換する（実在値のみ・決定論順）。
+fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, String)> {
+    let mut out = Vec::new();
+
+    push_axis_family(scope, &mut out, &doc.window, |scope_id, axis| {
+        PersistKey::WindowPos {
+            scope: scope_id,
+            axis,
+        }
+    });
+    push_axis_family(scope, &mut out, &doc.balloon_offset, |scope_id, axis| {
+        PersistKey::BalloonOffset {
+            scope: scope_id,
+            axis,
+        }
+    });
+
+    if let Some(v) = &doc.boot_count {
+        out.push((PersistKey::BootCount, v.clone()));
+    }
+    if let Some(v) = &doc.vanish_count {
+        out.push((PersistKey::VanishCount, v.clone()));
+    }
+    for (key, value) in [
+        (PersistKey::LastGhost, &doc.last_ghost),
+        (PersistKey::LastBalloon, &doc.last_balloon),
+        (PersistKey::LastShell, &doc.last_shell),
+        (PersistKey::LastRunning, &doc.last_running),
+        (PersistKey::BasewareRoots, &doc.baseware_roots),
+    ] {
+        if let Some(v) = value {
+            out.push((key, v.clone()));
+        }
+    }
+    for (id, v) in &doc.window_adjacent {
+        let Ok(scope_id) = id.parse::<u32>() else {
+            tracing::debug!(
+                target: LOG_TARGET,
+                ?scope,
+                raw_id = %id,
+                "persist scope id is not a u32; skipping entry (tolerant)"
+            );
+            continue;
+        };
+        out.push((PersistKey::WindowAdjacent { scope: scope_id }, v.clone()));
+    }
+
+    out
+}
+
+/// window / balloon-offset の軸族 1 つをエントリ列へ展開する（非数値 ID は寛容 skip）。
+fn push_axis_family(
+    scope: PersistScope,
+    out: &mut Vec<(PersistKey, String)>,
+    map: &std::collections::BTreeMap<String, AxisPair>,
+    make: impl Fn(u32, Axis) -> PersistKey,
+) {
+    for (id, pair) in map {
+        // typed スコープは u32。format 層は不透明文字列を許すので、非数値 ID は載せられない。
+        let Ok(scope_id) = id.parse::<u32>() else {
+            tracing::debug!(
+                target: LOG_TARGET,
+                ?scope,
+                raw_id = %id,
+                "persist scope id is not a u32; skipping entry (tolerant)"
+            );
+            continue;
+        };
+        if let Some(x) = &pair.x {
+            out.push((make(scope_id, Axis::X), x.clone()));
+        }
+        if let Some(y) = &pair.y {
+            out.push((make(scope_id, Axis::Y), y.clone()));
+        }
     }
 }
 

@@ -1,10 +1,7 @@
 use crate::asker::AskerId;
 use crate::keytable::Home;
 use crate::persist::withhold::WithholdGuard;
-use crate::persist::{
-    FakePersistIo, PersistFailureCause, PersistIo, PersistOutcome, PersistScope, ScopeRoots,
-    load_scope,
-};
+use crate::persist::{PersistFailureCause, PersistOutcome, PersistScope, ScopeRoots, format};
 use crate::store::write::{FileWrite, WriteAttempt};
 use crate::store::{Access, FsBackend, Located, MemBackend, Store, StoreBackend};
 use crate::test_log_capture::capture;
@@ -66,12 +63,9 @@ fn unusable(attempt: WriteAttempt) {
     );
 }
 
-/// 今の読み（`load_scope`）が同じ `sylphya.toml` から返す（正規名, 値）の並び。
+/// 上げる前の版の読みが同じ `sylphya.toml` から返していた（正規名, 値）の並び。
 fn load_scope_reads(toml: &str) -> Vec<(String, String)> {
-    let io = FakePersistIo::new();
-    let root = PathBuf::from(r"C:\偽の置き場\import-expected");
-    io.commit(&root.join("sylphya.toml"), toml).unwrap();
-    load_scope(GHOST, &roots_at(&root), &io)
+    super::doc_to_entries(GHOST, &format::parse_toml_str(toml).unwrap().0)
         .into_iter()
         .map(|(key, value)| (key.to_canonical_key(), value))
         .collect()

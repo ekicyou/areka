@@ -89,10 +89,6 @@ impl Store {
     }
 
     /// 1 つの層のファイルの全部の（鍵, 値）（鍵の順）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the typed wrappers move onto the store later")
-    )]
     pub(crate) fn read_layer(&mut self, layer: PersistScope) -> Vec<(String, String)> {
         self.retry(alias(layer), |s| s.read_whole(layer))
             .unwrap_or_default()
@@ -278,10 +274,6 @@ impl Store {
         }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the typed wrappers move onto the store later")
-    )]
     fn read_whole(&mut self, layer: PersistScope) -> Result<Vec<(String, String)>, Busy> {
         let (with_table, attached) = self.attach(std::slice::from_ref(&layer))?;
         let found = if with_table.is_empty() {
