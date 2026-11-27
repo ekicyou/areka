@@ -415,6 +415,25 @@ fn read_that_meets_a_lock_retries_then_gives_up_after_the_wait() {
 }
 
 #[test]
+fn open_that_meets_the_app_volatile_lock_retries_until_the_wait() {
+    let mem = MemBackend::new();
+    let roots = fake_roots("open-busy");
+    let first = Store::open(roots.clone(), mem.clone()).unwrap();
+    let locker = Connection::open(mem.volatile_uri(roots.app.as_deref())).unwrap();
+    locker.execute_batch("BEGIN EXCLUSIVE").unwrap();
+    let start = mem.now();
+    assert!(Store::open(roots.clone(), mem.clone()).is_err());
+    assert!(
+        mem.now() - start > OP_WAIT,
+        "開くのも置き場の口の時計で 1 秒を越えるまで取り直す"
+    );
+
+    locker.execute_batch("COMMIT").unwrap();
+    assert!(Store::open(roots, mem.clone()).is_ok());
+    drop(first);
+}
+
+#[test]
 fn read_layer_returns_every_pair_of_that_layer_only() {
     let mem = MemBackend::new();
     let roots = fake_roots("whole");

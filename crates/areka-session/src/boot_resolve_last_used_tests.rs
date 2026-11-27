@@ -297,15 +297,15 @@ fn switch_drop_writes_default_and_mark_at_once() {
     assert_one_event(&events, "switch_drop_recorded", tracing::Level::INFO);
 }
 
-/// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手（切替の降ろした直後は印あり・argv の
+/// 書けないとき（App の置き場の記憶のファイルが使えない）: 3 つの書き手（切替の降ろした直後は印あり・argv の
 /// 印なしの 2 通り）はそれぞれ `warn!` 1 件で戻り、
 /// 成功の info は出ない。
 #[test]
 fn session_mark_writers_warn_once_when_they_cannot_write() {
     let tmp = TempPath::new("boot-resolve-session-mark-degraded");
     let app_dir = tmp.child("app-profile");
-    std::fs::create_dir_all(app_dir.parent().unwrap()).unwrap();
-    std::fs::write(&app_dir, "not a dir").unwrap();
+    std::fs::create_dir_all(&app_dir).unwrap();
+    std::fs::write(app_dir.join("sylphya.sqlite"), "not a database").unwrap();
     let roots = ScopeRoots {
         app: Some(app_dir.clone()),
         ..ScopeRoots::default()

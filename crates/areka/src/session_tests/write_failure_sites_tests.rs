@@ -269,7 +269,14 @@ fn every_write_kind_reaches_the_desk() {
         got,
     ));
 
-    // 印を消す: 後始末が失敗を受け、告知を選ぶ口が失敗を返す（終了コード 1）。
+    // 印を消す: 後始末が失敗を受け、告知を選ぶ口が失敗を返す（終了コード 1）。消しだけの書きは
+    // 記憶のファイルの無い置き場では何も書かずに済むので、印の在る記憶のファイルを読み取り専用にする。
+    writable(&app);
+    areka_session::boot_resolve::write_session_mark(&app, "A").expect("印を書く");
+    let memory = app.join("sylphya.sqlite");
+    let mut permissions = std::fs::metadata(&memory).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&memory, permissions.clone()).unwrap();
     let (verdict, failed) = settle_session_mark(
         &MarkInputs {
             app_profile_dir: app.clone(),
@@ -283,6 +290,13 @@ fn every_write_kind_reaches_the_desk() {
             shiori_cut: false,
         },
     );
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "Windows のファイルの読み取り専用の属性を戻す"
+    )]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&memory, permissions).unwrap();
+    unwritable(&app);
     assert_eq!(verdict, areka_session::session_mark::MarkVerdict::Clear);
     let told = tell_at_close(None, failed.clone(), None, true);
     judged.push((

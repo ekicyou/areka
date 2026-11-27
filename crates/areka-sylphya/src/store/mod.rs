@@ -51,16 +51,23 @@ impl Store {
                 "CREATE TABLE main.vol (layer INTEGER, asker TEXT, key TEXT, value TEXT NOT NULL, PRIMARY KEY (layer, asker, key)) WITHOUT ROWID;
                  CREATE TABLE main.flat (asker TEXT, name TEXT, value TEXT NOT NULL, PRIMARY KEY (asker, name)) WITHOUT ROWID;",
             )?;
-            conn.execute(
-                "ATTACH ?1 AS appvol",
-                [backend.volatile_uri(roots.app.as_deref())],
-            )?;
-            // 別の核がアプリの層の揮発へ書いている間は錠に当たるので、期限まで取り直す。
+            // 別の核がアプリの層の揮発へ書いている間は、付けるのも表を作るのも錠に当たるので、期限まで取り直す。
             let start = backend.now();
+            let mut attached = false;
             loop {
-                match conn.execute_batch(
-                    "CREATE TABLE IF NOT EXISTS appvol.kv (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID",
-                ) {
+                let mut step = || -> rusqlite::Result<()> {
+                    if !attached {
+                        conn.execute(
+                            "ATTACH ?1 AS appvol",
+                            [backend.volatile_uri(roots.app.as_deref())],
+                        )?;
+                        attached = true;
+                    }
+                    conn.execute_batch(
+                        "CREATE TABLE IF NOT EXISTS appvol.kv (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID",
+                    )
+                };
+                match step() {
                     Err(rusqlite::Error::SqliteFailure(f, _))
                         if f.code == rusqlite::ErrorCode::DatabaseBusy
                             && backend.now().saturating_sub(start) <= OP_WAIT =>

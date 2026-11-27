@@ -234,6 +234,63 @@ fn an_os_refusal_degrades_with_dir_keys_and_reason() {
 }
 
 #[test]
+fn a_writer_lock_held_past_the_wait_degrades_and_keeps_the_old_value() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("lock-limit");
+    let save = |value: &str| {
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &backend,
+            vec![(PersistKey::BootCount, value.into())],
+        )
+    };
+    assert_eq!(save("1"), PersistOutcome::Saved);
+    let hold = mem.hold_writer(roots.ghost.as_ref().unwrap());
+    let start = mem.now();
+    let PersistOutcome::Degraded(failure) = save("2") else {
+        panic!("錠を取れない書きは縮退する");
+    };
+    assert!(mem.now() - start > crate::store::OP_WAIT);
+    assert_eq!(
+        (failure.dir, failure.keys),
+        (roots.ghost.clone(), vec![PersistKey::BootCount])
+    );
+    drop(hold);
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        vec![(PersistKey::BootCount, "1".into())]
+    );
+}
+
+#[test]
+fn a_refused_removal_degrades_and_keeps_the_key() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("remove-refusal");
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &backend,
+        vec![(PersistKey::LastRunning, "印".into())],
+    );
+    mem.fail_next_write();
+    let PersistOutcome::Degraded(failure) = remove_scope_keys(
+        PersistScope::Ghost,
+        &roots,
+        &backend,
+        vec![PersistKey::LastRunning],
+    ) else {
+        panic!("消せない消しは縮退する");
+    };
+    assert_eq!(failure.keys, vec![PersistKey::LastRunning]);
+    assert!(matches!(failure.cause, PersistFailureCause::Io(_)));
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        vec![(PersistKey::LastRunning, "印".into())]
+    );
+}
+
+#[test]
 fn an_unusable_memory_file_degrades_as_unusable() {
     let (mem, backend) = mem();
     let roots = ghost_roots("unusable");

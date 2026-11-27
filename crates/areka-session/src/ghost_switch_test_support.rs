@@ -391,11 +391,29 @@ impl SwitchRig {
         to
     }
 
-    /// `ghost` に起動記録とバルーンの記憶（`[last] balloon`＝フォルダ名）を書く（[`SwitchRig::plant_boot_record`]
+    /// `ghost` に起動記録とバルーンの記憶（フォルダ名）を記憶の口で書く（[`SwitchRig::plant_boot_record`]
     /// を置き換える）。
     #[cfg(test)]
     pub(crate) fn plant_last_balloon(&self, ghost: &str, folder: &str) {
-        self.write_boot_record(ghost, &format!("[last]\nballoon = \"{folder}\"\n"));
+        let root = areka_ghost::sylphya_wiring::profile_areka_root(
+            &self.root.ghost_dir(ghost).join("ghost").join("master"),
+        );
+        assert_eq!(
+            areka_sylphya::save_scope(
+                areka_sylphya::PersistScope::Ghost,
+                &areka_sylphya::ScopeRoots {
+                    ghost: Some(root),
+                    ..areka_sylphya::ScopeRoots::default()
+                },
+                &areka_sylphya::store::fs_backend(),
+                vec![
+                    (areka_sylphya::PersistKey::BootCount, "1".to_owned()),
+                    (areka_sylphya::PersistKey::LastBalloon, folder.to_owned()),
+                ],
+            ),
+            areka_sylphya::PersistOutcome::Saved,
+            "{ghost} の記憶を書けない"
+        );
     }
 
     /// `ghost` の `profile/areka/sylphya.toml` に起動記録と `rest` を書く。
