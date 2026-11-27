@@ -3,7 +3,6 @@ use crate::output::MockSurfaceOutput;
 use areka_emo_compose::{BindSet, PatternState};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // テストの道具は層をまたぐ受け口の 1 か所の定義。
@@ -61,8 +60,7 @@ pub(super) fn eye_resolver() -> BindResolver {
     ))
 }
 
-/// 同期 `handle_message` に cue と刻みを流す足場（統括器に手で進める偽の時計を注入する）。どの
-/// メッセージもその直前に時計を合わせる（観測を追い越さない）。
+/// 同期 `handle_message` に、時刻を書いた刻み・合図・窓の知らせを流す足場。
 pub(super) struct ClockRig {
     resolver: SurfaceResolver,
     bind_resolver: BindResolver,
@@ -70,7 +68,6 @@ pub(super) struct ClockRig {
     rt: LoopRuntime,
     out: MockSurfaceOutput,
     records: Arc<Mutex<Vec<DisplayCommand>>>,
-    clock: Arc<AtomicI64>,
 }
 
 impl ClockRig {
@@ -85,26 +82,20 @@ impl ClockRig {
         bind_resolver: BindResolver,
         static_binds: BindSet,
     ) -> Self {
-        let clock = Arc::new(AtomicI64::new(0));
-        let read = Arc::clone(&clock);
         let out = MockSurfaceOutput::new();
         let records = out.records();
         Self {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             bind_resolver,
             states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
-            rt: LoopRuntime::new(config).with_clock(Some(Arc::new(move || {
-                TimePoint::from_ticks(read.load(Ordering::SeqCst))
-            }))),
+            rt: LoopRuntime::new(config),
             out,
             records,
-            clock,
         }
     }
 
-    /// 時計が `now` のときに `msg` が届く。そのメッセージで出た指令を返す。
-    pub(super) fn send(&mut self, now: TimePoint, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        self.clock.store(now.as_ticks(), Ordering::SeqCst);
+    /// `msg` が届く。そのメッセージで出た指令を返す。
+    pub(super) fn send(&mut self, msg: SerikoMsg) -> Vec<DisplayCommand> {
         let before = self.records.lock().unwrap().len();
         let flow = handle_message(
             &self.resolver,
@@ -119,17 +110,17 @@ impl ClockRig {
     }
 
     pub(super) fn tick(&mut self, now: TimePoint) -> Vec<DisplayCommand> {
-        self.send(now, SerikoMsg::Tick { now })
+        self.send(SerikoMsg::Tick { now })
     }
 
-    /// 時計が `now` のときに cue が届く。
-    pub(super) fn hear(&mut self, now: TimePoint, cue: TalkCue) -> Vec<DisplayCommand> {
-        self.send(now, SerikoMsg::Cue(cue))
+    /// cue が届く。
+    pub(super) fn hear(&mut self, cue: TalkCue) -> Vec<DisplayCommand> {
+        self.send(SerikoMsg::Cue(cue))
     }
 
-    /// 時計が `now` のときに、その時刻に発火した cue が届く（[`fired`]）。
+    /// 時刻 `now` に発火した cue が届く（[`fired`]）。
     pub(super) fn hear_fired(&mut self, now: TimePoint, cue: TalkCue) -> Vec<DisplayCommand> {
-        self.hear(now, fired(now, cue))
+        self.hear(fired(now, cue))
     }
 
     /// これまでに出た指令の全部。

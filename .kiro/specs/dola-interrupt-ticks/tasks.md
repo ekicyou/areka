@@ -654,7 +654,7 @@
   - _Dispatch: standard — 字の時刻の持ち方の書き換え_
   - _Requirements: 7.10, 12.9, 18.2_
 
-- [ ] 10.7 (P) areka-seriko: 姿を変える指令の出来事の時刻を発火時刻にし、時計を外す
+- [x] 10.7 (P) areka-seriko: 姿を変える指令の出来事の時刻を発火時刻にし、時計を外す
   - 面の切り替え・着せ替え・バルーンの面を届いた順に当て、出来事の時刻を合図の発火時刻にする（その時刻までの字の区切りを先に判定し、始めるアニメの始まり・面が見え始めた時刻・口パクの数え始めにする）
   - seriko の時計・時計つきの起動の口・ループの実行の時計の欄・合図を処理する時刻を読む口を消す（記録に書く事として報告に挙げる）。窓の知らせの送り口が時刻を受ける。書き出しの進め方は自分の軸の 0 で合図を組み、偽の時計を消す
   - 隣の新しいテストで、設計の Unit Tests の「seriko の、姿を変える指令」の全部（発火時刻のすぐ後でも何刻みか後でも、`always` と `runonce` のコマと口パクの数え始めが同じ・発火時刻までの区切りが替える前の面で判定される・着せ替え・バルーンの面・手で組んだ合図・窓の知らせ）を書き、自分のファイルの分が `cargo check -p areka-seriko --all-targets` で誤り 0 件である（緑は 10.9 で確かめる）
@@ -830,3 +830,4 @@
 - 10.2: emo-text の新しい口 `TextLayerRuntime::advance(frame_now) -> Option<TimePoint>`（`actor_held.rs`）。受け取りは `held::receive_msg` が列へ足し `tick_wake::mark(PRESENT)` を立てる。10.3 が `TextMsg::Origin`・`EmoTextSink::origin_set` の送り・`Held::Origin` を足す。10.10 が runtime のフレームの頭で `advance` を呼ぶ。10.16 が本体の `AREKA_PRODUCERS` に `actor_held.rs` の行と木の根に areka-emo-text を足す。12.2 が wintf の `tick_wake.rs` の頭の一覧の `PRESENT` の行を直す。
 - 10.3: `actor_held.rs`・`actor_held_tests.rs`（10.2 で足した）が lib.rs の `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` のどちらにも無い。10.4 で載せる（`every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる）。
 - 10.4: 「全部が現れている時刻」に `TimePoint::MAX` を使うと、その後のフレームが時刻を逆へ戻す所がある。後にフレームが続く所は有限の遅い時刻にする（10.5 以降の追従でも同じ）。
+- 10.7: 遅れて処理した図形の合図で、(発火時刻, 直前の刻み] に止めの働きのコマが在ると、合図の時の絵に止める前のコマが 1 刻みだけ出うる（次の刻みで直る・檻は無い）。

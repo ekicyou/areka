@@ -20,14 +20,13 @@ use crate::trigger::TalkWindow;
 
 impl PartClocks {
     /// 面の切り替え・着せ替えの変化の直後（出来事の時刻 `at`）に、抽選せずに `pattern` の部品の欄を
-    /// 作り直す。見える部品の求め方は `advance` と同じ。見えている `always` の時計が無ければ `at` で
-    /// 作り、見えなくなった部品の回数
-    /// つきの時計と 3 語の時計（と引き金の状態）を捨てる。3 語は刻みと同じ形（`talk` は面の文字の窓
+    /// 作り直す（置くのは `now` の時刻の絵）。見える部品の求め方は `advance` と同じ。見えている `always`
+    /// の時計が無ければ `at` で作り、見えなくなった部品の回数つきの時計と 3 語の時計（と引き金の状態）を
+    /// 捨てる。3 語は刻みと同じ形（`talk` は面の文字の窓
     /// `talk`）で `at` まで判定する（新しく見えた部品の `runonce` は `at` で鳴る）。抽選の animation の
     /// 時計は書き換えない（働きのコマが始めた・止めた時計を除く。末尾に着いたコマ・負の番号のコマも、時計を
     /// 移さず・消さずに、出す・出さないだけを決める）。`bind+random` で `binds` に無い animation の
-    /// コマは書かない（時計を消すのは次の `advance`）。`at` が無い（刻みが 1 度も来て
-    /// いない）ときは時計を作らず、経過 0 の時刻で読む。`open` が偽なら `advance` と同じく時計を
+    /// コマは書かない（時計を消すのは次の `advance`）。`open` が偽なら `advance` と同じく時計を
     /// 作らず、回数つきの時計と 3 語の時計を全部捨てて、引き金の状態を隠す。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn refresh(
@@ -37,7 +36,7 @@ impl PartClocks {
         surface_id: u32,
         binds: &BindSet,
         table: &AnimationTable,
-        at: Option<TimePoint>,
+        (at, now): (TimePoint, TimePoint),
         open: bool,
         talk: Option<&TalkWindow<'_>>,
         pick: &mut LoopRng,
@@ -64,9 +63,8 @@ impl PartClocks {
             armed,
             stopped,
         } = &mut *container;
-        let now = at.unwrap_or(TimePoint::ZERO);
         // 窓が閉じている間は時計を作らない（今ある時計を読むだけ）。
-        let create_at = at.filter(|_| open);
+        let create_at = open.then_some(at);
         let mut shift = CallOutcome::default();
         // 時計を書き換えずに今のコマを読んで置く（`always` は周の答え・時計が無ければ載せない）。
         let put = |clocks: &BTreeMap<ClockKey, PartAnim>,
@@ -94,11 +92,10 @@ impl PartClocks {
         let step = |phase: Phase, part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             if let Phase::Trigger = phase {
-                // 時刻が分からなければ構えない（次の刻みが、その時刻で構える）。構えてあった部品は
-                // 1 段目が時刻の順に判定済み。ここは新しく見えた部品だけを構える。
-                let Some(at) = at.filter(|_| !armed.contains_key(&part)) else {
+                // 構えてあった部品は 1 段目が時刻の順に判定済み。ここは新しく見えた部品だけを構える。
+                if armed.contains_key(&part) {
                     return false;
-                };
+                }
                 let who = (scope, slot, part);
                 let Some((heads, outcome)) = judge_part(
                     armed,
@@ -118,7 +115,7 @@ impl PartClocks {
                 for anim in heads {
                     // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。
                     unwrite(pattern, part, anim.id);
-                    put(clocks, pattern, part, anim, at);
+                    put(clocks, pattern, part, anim, now);
                 }
                 return true;
             }
@@ -126,28 +123,26 @@ impl PartClocks {
             // 構えてあった部品の 3 語も刻みと同じく、出来事の時刻まで働きのコマと時刻の順に揃えて判定し、
             // 働きのコマを出来事の時刻まで当ててから `always` を始める（出来事の時刻に始まる再生に、
             // それより前の呼び出しを当てない）。
-            if let Some(at) = at {
-                if let Some(state) = armed.get_mut(&part) {
-                    state.follow(open, at, None);
-                    let who = (scope, slot, part);
-                    let (_, early, _) = fire_part_triggers(
-                        state,
-                        clocks,
-                        stopped,
-                        warned_negative,
-                        pattern,
-                        anims,
-                        who,
-                        at,
-                        talk,
-                        pick,
-                    );
-                    shift = shift.then(early);
-                }
-                let (outcome, _) =
-                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
-                shift = shift.then(outcome);
+            if let Some(state) = armed.get_mut(&part) {
+                state.follow(open, at, None);
+                let who = (scope, slot, part);
+                let (_, early, _) = fire_part_triggers(
+                    state,
+                    clocks,
+                    stopped,
+                    warned_negative,
+                    pattern,
+                    anims,
+                    who,
+                    at,
+                    talk,
+                    pick,
+                );
+                shift = shift.then(early);
             }
+            let (outcome, _) =
+                run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+            shift = shift.then(outcome);
             for &i in order.iter() {
                 let anim = &anims[i];
                 if let Gate::Always { laps } = gate(anim, binds)
@@ -164,11 +159,9 @@ impl PartClocks {
                 }
             }
             // 始めた `always` の頭の働きのコマを当てる（頭のコマを置く前）。
-            if let Some(at) = at {
-                let (outcome, _) =
-                    run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
-                shift = shift.then(outcome);
-            }
+            let (outcome, _) =
+                run_part_calls(clocks, stopped, pattern, scope, slot, part, anims, at, pick);
+            shift = shift.then(outcome);
             for &i in order.iter() {
                 let anim = &anims[i];
                 if !matches!(gate(anim, binds), Gate::Off) {

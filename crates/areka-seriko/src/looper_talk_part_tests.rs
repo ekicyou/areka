@@ -7,7 +7,6 @@ use crate::test_support::{
     capture_logs, clear_all, count, part_frames, part_playing, scope, table_of, text,
 };
 use dola::time::testing::{at_ms, ms};
-use std::sync::atomic::Ordering;
 
 // ── 部品の `talk`: 部品は文字の数えを持たず、面の文字の窓を借りる ──────────────
 
@@ -292,9 +291,8 @@ fn refresh_judges_talk_and_advances_the_count() {
     let mut st = nine_glyphs_from_1000();
     st.tick(1090);
     let logs = capture_logs(|| {
-        st.clock.store(1120, Ordering::SeqCst);
         st.rt
-            .refresh(&scope(), Slot::Shell, Some(at_ms(1120)), &mut st.states);
+            .refresh(&scope(), Slot::Shell, at_ms(1120), &mut st.states);
         assert_eq!(
             st.started(),
             Some(at_ms(1100)),

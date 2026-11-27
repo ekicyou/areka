@@ -4,8 +4,7 @@
 //! 面の切り替え・文字・刻みを届いた順に流して、出てくる指令のコマで確かめる。固定するのは「読み手・
 //! 表・アクターが検体について同じ答えを出す」ことだけで、境目の計算は下の層の檻が固定している。
 //!
-//! 時計は手で進める偽物で、どのメッセージもその直前に時計を合わせる（観測を追い越さない）。文字は
-//! 1 字 50 ms。刻みは文字の現れる時刻・コマの替わる時刻ちょうどを避けて置く。
+//! 刻みと合図には時刻を書いて渡す。文字は 1 字 50 ms。刻みは文字の現れる時刻・コマの替わる時刻ちょうどを避けて置く。
 
 use super::test_support::*;
 use super::*;
@@ -17,7 +16,6 @@ use dola::cue::CueSink;
 use dola::time::testing::{at_ms, ms};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 /// 検体の本文（面 9100〜9104。役の表は同じフォルダの `README.md`）。
 const FIXTURE: &str = include_str!("../tests/fixtures/trigger-intervals/surfaces.txt");
@@ -189,19 +187,18 @@ fn surfaces_whose_words_were_refused_stay_still() {
     }
 }
 
-/// 本物のアクター（別スレッド・`CueSink` から届く cue）でも 9100 の 3 語が鳴る。時計は 1000 に
-/// 止めたままなので、cue はどれも 1000 に届いたことになる（刻みは自分の時刻を運ぶ）。
+/// 本物のアクター（別スレッド・`CueSink` から届く cue）でも 9100 の 3 語が鳴る。cue はどれも 1000 に
+/// 発火する（刻みは自分の時刻を運ぶ）。
 #[test]
 fn spawned_actor_plays_the_three_words_of_the_fixture() {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) = spawn_seriko_clocked(
+    let (mut sink, handle) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         config(),
         out,
-        Some(Arc::new(|| at_ms(1000))),
     );
     sink.send_tick(at_ms(1000));
     CueSink::emit(&mut sink, fired(at_ms(1000), emote_cue(ms(0), "0", "9100")));

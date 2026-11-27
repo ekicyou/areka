@@ -1,13 +1,10 @@
 //! 一番上の面の `talk` の檻と、その面の文字の窓を借りる部品の `talk` の檻（ファイルの後ろ）。
 //!
 //! 文字の到着は `observe_cue` の直呼び（偽の文字の到着）、刻みは `on_tick(now)`、面の切り替えは
-//! アクターと同じ順で踏む。時計は手で進める偽物で、どの呼び出しもその直前に時計を合わせる（観測を
-//! 追い越さない）。文字は 1 字 50 ms（cue の再生時間＝文字数×50 ms）で、cue は届いた時刻に発火した
+//! アクターと同じ順で踏む。どの呼び出しにも時刻を書いて渡す。文字は 1 字 50 ms（cue の再生時間＝文字数×50 ms）で、cue は届いた時刻に発火した
 //! ものとして渡す。刻みは文字の現れる時刻ちょうどを避けて置く（秒の端数に寄らない）。
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
 
 use dola::time::testing::{at_ms, ms};
 
@@ -19,22 +16,17 @@ use crate::test_support::{
     capture_logs, clear_all, count, cue, empty_states, scope, table_of, text,
 };
 
-/// 偽の時計つきのランタイムと、まだ何も表示していない状態。
+/// ランタイムと、まだ何も表示していない状態。
 pub(super) struct Stage {
     pub(super) rt: LoopRuntime,
     pub(super) states: ScopeStates,
-    pub(super) clock: Arc<AtomicI64>,
 }
 
 impl Stage {
     pub(super) fn new(config: SerikoLoopConfig) -> Stage {
-        let clock = Arc::new(AtomicI64::new(0));
-        let read = Arc::clone(&clock);
         Stage {
-            rt: LoopRuntime::new(config)
-                .with_clock(Some(Arc::new(move || at_ms(read.load(Ordering::SeqCst))))),
+            rt: LoopRuntime::new(config),
             states: empty_states(),
-            clock,
         }
     }
 
@@ -45,13 +37,11 @@ impl Stage {
     }
 
     pub(super) fn tick(&mut self, now_ms: i64) -> Vec<DisplayCommand> {
-        self.clock.store(now_ms, Ordering::SeqCst);
         self.rt.on_tick(at_ms(now_ms), &mut self.states)
     }
 
-    /// 時計が `ms` のときに cue が届く。発火時刻はその時刻（台本の起点は `now_ms − cue.at`）。
+    /// 時刻 `now_ms` に発火した cue が届く（台本の起点は `now_ms − cue.at`）。
     pub(super) fn hear(&mut self, now_ms: i64, cue: TalkCue) {
-        self.clock.store(now_ms, Ordering::SeqCst);
         let fired = TalkCue::scheduled(
             at_ms(now_ms) - cue.at,
             cue.at,
@@ -62,9 +52,8 @@ impl Stage {
         self.rt.observe_cue(&fired);
     }
 
-    /// 時計が `ms` のときに `\0` のシェルの面が `sid` に切り替わる。
+    /// 発火時刻 `now_ms` に `\0` のシェルの面が `sid` に切り替わる。
     pub(super) fn show(&mut self, sid: u32, now_ms: i64) {
-        self.clock.store(now_ms, Ordering::SeqCst);
         switch(
             &mut self.rt,
             &mut self.states,
@@ -204,7 +193,7 @@ fn text_of_one_scope_does_not_move_another_scope() {
     st.states.apply(&other, SurfaceTarget::Show(0));
     st.rt.on_surface_changed(&other, Slot::Shell);
     st.rt
-        .refresh(&other, Slot::Shell, Some(at_ms(1000)), &mut st.states);
+        .refresh(&other, Slot::Shell, at_ms(1000), &mut st.states);
 
     for now in [1060, 1120, 1190, 1295, 1410] {
         st.tick(now);
@@ -254,12 +243,11 @@ fn hidden_scope_keeps_no_state_and_counts_from_its_return() {
     assert_eq!(st.started(), Some(at_ms(1400)));
 }
 
-/// 時計が `ms` のときに、バルーンの窓が開いた（`open`）か閉じたことを知らせ、その場で評価する。
+/// 時刻 `now_ms` に、バルーンの窓が開いた（`open`）か閉じたことを知らせ、その場で評価する。
 pub(super) fn note(st: &mut Stage, open: bool, now_ms: i64) {
-    st.clock.store(now_ms, Ordering::SeqCst);
     note_balloon(&mut st.states, open, 0);
     st.rt
-        .refresh(&scope(), Slot::Balloon, Some(at_ms(now_ms)), &mut st.states);
+        .refresh(&scope(), Slot::Balloon, at_ms(now_ms), &mut st.states);
 }
 
 /// バルーンの面の `talk`: 窓が閉じている間は数えも再生も持たず、文字の列も溜めない。開いたら

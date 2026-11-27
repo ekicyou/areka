@@ -33,7 +33,6 @@ use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use dola::{TimePoint, TimeSpan};
 
-use crate::actor::SerikoClock;
 use crate::calls::CallOutcome;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
@@ -137,9 +136,6 @@ pub(crate) struct LoopRuntime {
     /// 部品の時計。面の表が
     /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない。
     parts: PartClocks,
-    /// 刻みと同じ時計。台本の合図を処理する
-    /// ときに読む（[`LoopRuntime::event_time`]）。無ければ出来事の時刻は直前の刻みの時刻。
-    clock: Option<SerikoClock>,
     /// 一番上の面の引き金の状態。面に入ったときに
     /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
     /// 在る、または表に `talk` が在る）を満たさない面では生まれない。
@@ -306,25 +302,12 @@ impl LoopRuntime {
             last_seen: None,
             warned_negative: HashSet::new(),
             parts: PartClocks::default(),
-            clock: None,
             armed: HashMap::new(),
             feeds: HashMap::new(),
             has_talk,
             stopped_always: StoppedAlways::new(),
             shifts: Shifts::default(),
         }
-    }
-
-    /// 時計つきにする（[`crate::actor::spawn_seriko_clocked`] の起動とテストの注入の口）。
-    pub(crate) fn with_clock(mut self, clock: Option<SerikoClock>) -> Self {
-        self.clock = clock;
-        self
-    }
-
-    /// 台本の合図を処理する今の時刻（時計が無ければ `None`＝[`LoopRuntime::refresh`] が直前の刻みの
-    /// 時刻を使う）。
-    pub(crate) fn event_time(&self) -> Option<TimePoint> {
-        self.clock.as_ref().map(|clock| clock())
     }
 
     /// 届いた cue を 1 件、文字の時刻の列へ渡す。

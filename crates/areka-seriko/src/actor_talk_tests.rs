@@ -4,7 +4,7 @@
 //! のは受け口の配線（届いた cue が種類を問わず文字の列へ渡ること）と、スコープ・表示／非表示の
 //! 振り分けだけ。区切りの計算・消去・刈り込みは `looper_talk_tests.rs` が固定している。
 //!
-//! 時計は手で進める偽物で、どのメッセージもその直前に時計を合わせる（観測を追い越さない）。cue は
+//! 刻みと合図には時刻を書いて渡す。cue は
 //! 届いた時刻に発火したものとして渡す（[`fired`]）。文字は 1 字 50 ms。刻みは文字の現れる時刻ちょうどを
 //! 避けて置く。
 
@@ -18,7 +18,6 @@ use areka_sakura::CueCommand;
 use dola::cue::CueSink;
 use dola::time::testing::{at_ms, ms};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 /// 面 0: 一番上に `talk,3` の口（animation 0＝601 → 40ms で 602 → 40ms で `-1`）。
 /// 面 1: 一番上に `talk,3` の口（animation 0＝601 → 40ms で `-1`）と `runonce`（animation 1＝701 →
@@ -254,18 +253,17 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
 }
 
 /// 本物のアクター（別スレッド・`CueSink` から届く cue）でも、届いた文字で口のコマが出る。cue はどれも
-/// 1000 に発火し、時計も 1000 に止めたまま（刻みは自分の時刻を運ぶ）。
+/// 1000 に発火する（刻みは自分の時刻を運ぶ）。
 #[test]
 fn spawned_actor_moves_the_mouth_for_text_arriving_through_the_sink() {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) = spawn_seriko_clocked(
+    let (mut sink, handle) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
         config(),
         out,
-        Some(Arc::new(|| at_ms(1000))),
     );
     sink.send_tick(at_ms(1000));
     CueSink::emit(&mut sink, fired(at_ms(1000), emote_cue(ms(0), "0", "0")));

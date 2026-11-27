@@ -113,7 +113,7 @@ fn runonce_stays_silent_on_same_surface_and_dress_change() {
         states.apply_bind(&scope(), 7, true),
         BindApplyOutcome::Changed(_)
     ));
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(340)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(340), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "着せ替えでは鳴らない");
     rt.on_tick(at_ms(350), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None);
@@ -153,25 +153,6 @@ fn runonce_replays_on_return_and_after_hidden() {
         Some(at_ms(900)),
         "非表示から戻ったら鳴る"
     );
-}
-
-/// 出来事の時刻が分からない（時計も刻みもまだ無い）ときは構えず、次の刻みの時刻で鳴る。
-#[test]
-fn runonce_waits_for_the_first_tick_when_no_time_is_known() {
-    let (mut rt, mut states) = shell_runtime(TRIGGERS);
-    states.apply(&scope(), SurfaceTarget::Show(0));
-    rt.on_surface_changed(&scope(), Slot::Shell);
-    rt.refresh(&scope(), Slot::Shell, None, &mut states);
-    assert!(rt.armed.is_empty(), "時刻が無ければ構えない");
-
-    let cmds = rt.on_tick(at_ms(1000), &mut states);
-    assert_eq!(
-        started(&rt, Slot::Shell, 0),
-        Some(at_ms(1000)),
-        "刻みの時刻で鳴る"
-    );
-    assert_eq!(cmds.len(), 1, "同じ刻みで頭のコマを出す");
-    assert_eq!(cell(&states, Slot::Shell, 0), Some(301));
 }
 
 /// `periodic` は切り替わった瞬間には鳴らず、出来事の時刻を起点に数値秒ちょうどの境目で鳴る。開始は
@@ -611,7 +592,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
 
     // 閉じる（出来事 1500）: 起点 1000 の境目 2000・3000 では鳴らない。
     note(&mut states, false);
-    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1500)), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, at_ms(1500), &mut states);
     rt.on_tick(at_ms(2100), &mut states);
     rt.on_tick(at_ms(3100), &mut states);
     assert_eq!(
@@ -622,7 +603,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
 
     // 開き直す（出来事 3200）。
     note(&mut states, true);
-    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(3200)), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, at_ms(3200), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
@@ -775,7 +756,7 @@ fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(1000)).expect("Show");
     rt.on_tick(at_ms(1500), &mut states);
     let logs = capture_logs(|| {
-        rt.refresh(&scope(), Slot::Shell, Some(at_ms(2010)), &mut states);
+        rt.refresh(&scope(), Slot::Shell, at_ms(2010), &mut states);
         rt.on_tick(at_ms(2100), &mut states);
     });
     assert_eq!(
@@ -802,7 +783,7 @@ fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
     assert_eq!(cell(&states, Slot::Shell, 0), Some(302), "前の周の残り");
     assert_eq!(started(&rt, Slot::Shell, 0), None);
 
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(2010)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(2010), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 0),
         Some(at_ms(2000)),
@@ -834,7 +815,7 @@ fn refresh_clears_the_leftover_frame_when_the_called_head_is_stopped() {
     rt.on_tick(at_ms(30), &mut states);
     assert_eq!(cell(&states, Slot::Shell, 1), Some(111), "前の再生の残り");
 
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(200)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(200), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 1),
         Some(at_ms(60)),

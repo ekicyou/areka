@@ -44,7 +44,7 @@ fn part_cell(states: &ScopeStates, id: u32) -> Option<u32> {
 fn switch(rt: &mut LoopRuntime, states: &mut ScopeStates, sid: u32, at: TimePoint) {
     states.apply(&scope(), SurfaceTarget::Show(sid));
     rt.on_surface_changed(&scope(), Slot::Shell);
-    rt.refresh(&scope(), Slot::Shell, Some(at), states);
+    rt.refresh(&scope(), Slot::Shell, at, states);
 }
 
 /// 「．さくら」の形を部品の中に: 抽選で動く animation2 が `alternativestart,(0,1)` で呼ぶ。
@@ -169,7 +169,7 @@ fn refresh_applies_part_calls_at_the_event_time() {
         animation1.pattern1,overlay,111,500,0,0\n";
     let (lottery, _probe) = counting_rng(&[]);
     let (mut rt, mut states) = shown(CALLER, lottery, 0);
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(700)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(700), &mut states);
     assert_eq!(part_cell(&states, 1), Some(110), "呼ばれた相手の頭のコマ");
     assert_eq!(
         part_cell(&states, 0),
@@ -413,7 +413,7 @@ fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
     }
     assert_eq!(part_cell(&states, 0), None, "前提: 1050 に止まる");
     assert!(rt.on_surface_shown(&scope(), Slot::Shell));
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(1170)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(1170), &mut states);
     rt.on_tick(at_ms(1300), &mut states);
     assert_eq!(
         part_cell(&states, 0),
@@ -437,7 +437,7 @@ fn part_refresh_judges_periodic_before_applying_calls() {
     rt.on_tick(at_ms(0), &mut states);
     rt.on_tick(at_ms(500), &mut states);
     let logs = capture_logs(|| {
-        rt.refresh(&scope(), Slot::Shell, Some(at_ms(1010)), &mut states);
+        rt.refresh(&scope(), Slot::Shell, at_ms(1010), &mut states);
     });
     let fired: Vec<_> = logs
         .iter()

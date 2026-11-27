@@ -662,7 +662,7 @@ pub(super) fn refresh_at(
     table: &AnimationTable,
     top: u32,
     binds: &BindSet,
-    at: Option<TimePoint>,
+    at: TimePoint,
     top_pattern: &PatternState,
 ) -> PatternState {
     let mut pattern = top_pattern.clone();
@@ -672,7 +672,7 @@ pub(super) fn refresh_at(
         top,
         binds,
         table,
-        at,
+        (at, at),
         true,
         None,
         &mut crate::seeded_rng(0),

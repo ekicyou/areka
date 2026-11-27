@@ -14,7 +14,6 @@ use crate::test_support::{film_picture, scope};
 use areka_emo_compose::{BindSet, FilmId};
 use areka_sakura::CueCommand;
 use dola::time::testing::{at_ms, ms};
-use std::sync::Arc;
 
 fn stage(open: bool, generation: u64, at: TimePoint) -> SerikoMsg {
     SerikoMsg::Stage {
@@ -24,7 +23,7 @@ fn stage(open: bool, generation: u64, at: TimePoint) -> SerikoMsg {
             face: 1,
             generation,
         },
-        at: Some(at),
+        at,
     }
 }
 
@@ -73,7 +72,7 @@ fn count_acks(cmds: &[DisplayCommand]) -> usize {
 fn rig_running() -> Rig {
     let mut rig = Rig::films();
     assert_eq!(
-        rig.send(at_ms(1000), stage(true, 1, at_ms(1000))),
+        rig.send(stage(true, 1, at_ms(1000))),
         vec![ack(1)],
         "最初の出番: 合図だけ（経過 0 は欄に載らない）"
     );
@@ -90,7 +89,7 @@ fn rig_running() -> Rig {
 fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
     let mut rig = rig_running();
 
-    let cmds = rig.send(at_ms(1150), stage(true, 2, at_ms(1150)));
+    let cmds = rig.send(stage(true, 2, at_ms(1150)));
     assert_eq!(cmds.len(), 2, "合図と指令の 2 件: {cmds:?}");
     assert_eq!(cmds[0], ack(2), "合図が先");
     assert_eq!(film(&cmds[1], ONCE), None, "回数つきは経過 0 へ戻る");
@@ -109,34 +108,17 @@ fn newer_generation_acks_first_then_restarts_finite_clocks_at_the_note_time() {
 fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
     let mut rig = rig_running();
 
-    assert!(
-        rig.send(at_ms(1150), stage(true, 1, at_ms(1150)))
-            .is_empty(),
-        "同じ世代"
-    );
-    assert!(
-        rig.send(at_ms(1160), stage(true, 0, at_ms(1160)))
-            .is_empty(),
-        "古い世代"
-    );
+    assert!(rig.send(stage(true, 1, at_ms(1150))).is_empty(), "同じ世代");
+    assert!(rig.send(stage(true, 0, at_ms(1160))).is_empty(), "古い世代");
     let cmds = rig.tick(at_ms(1200));
     assert_eq!(cmds.len(), 1, "{cmds:?}");
     assert_eq!(film(&cmds[0], ENDLESS), Some(12));
     assert_eq!(film(&cmds[0], ONCE), Some(21), "回数つきは 1000 からの続き");
 
     // 古い知らせで覚えた世代が戻らない: 1 を飛ばして 2 が来たら合図が出る。
-    assert_eq!(
-        rig.send(at_ms(1210), stage(true, 2, at_ms(1210)))[0],
-        ack(2)
-    );
-    assert!(
-        rig.send(at_ms(1220), stage(true, 1, at_ms(1220)))
-            .is_empty()
-    );
-    assert!(
-        rig.send(at_ms(1230), stage(true, 2, at_ms(1230)))
-            .is_empty()
-    );
+    assert_eq!(rig.send(stage(true, 2, at_ms(1210)))[0], ack(2));
+    assert!(rig.send(stage(true, 1, at_ms(1220))).is_empty());
+    assert!(rig.send(stage(true, 2, at_ms(1230))).is_empty());
 }
 
 /// 閉じた知らせは合図を出さず回数つきを捨てる。知らせだけでは `HideBalloon`・`Hide` を出さない
@@ -145,20 +127,20 @@ fn same_or_older_generation_sends_no_ack_and_keeps_finite_clocks() {
 fn closed_note_drops_finite_clocks_and_notes_never_hide() {
     let mut rig = rig_running();
 
-    let cmds = rig.send(at_ms(1150), stage(false, 1, at_ms(1150)));
+    let cmds = rig.send(stage(false, 1, at_ms(1150)));
     assert_eq!(count_acks(&cmds), 0, "閉じた知らせに合図は無い: {cmds:?}");
     assert_eq!(cmds.len(), 1, "回数つきの欄が経過 0 へ戻る 1 件: {cmds:?}");
     assert_eq!(film(&cmds[0], ONCE), None);
     assert_eq!(film(&cmds[0], ENDLESS), Some(11), "終わりなしは残る");
 
-    let cmds = rig.send(at_ms(1500), stage(true, 2, at_ms(1500)));
+    let cmds = rig.send(stage(true, 2, at_ms(1500)));
     assert_eq!(cmds.first(), Some(&ack(2)), "次の出番は合図が先: {cmds:?}");
     let cmds = rig.tick(at_ms(1650));
     assert_eq!(film(&cmds[0], ONCE), Some(21), "回数つきは 1500 から");
 
-    rig.send(at_ms(1700), stage(false, 2, at_ms(1700)));
-    rig.send(at_ms(1800), stage(true, 3, at_ms(1800)));
-    rig.send(at_ms(1900), stage(true, 3, at_ms(1900)));
+    rig.send(stage(false, 2, at_ms(1700)));
+    rig.send(stage(true, 3, at_ms(1800)));
+    rig.send(stage(true, 3, at_ms(1900)));
     assert!(
         rig.all().iter().all(|c| !matches!(
             c,
@@ -180,19 +162,18 @@ fn flows_without_notes_emit_no_stage_ack() {
         pick_rng: crate::seeded_rng(0),
     });
     rig.tick(at_ms(0));
-    rig.hear(
-        at_ms(0),
-        cue(ms(0), "0", CueCommand::Emote { key: "0".into() }, ms(0)),
-    );
-    rig.hear(
-        at_ms(0),
-        cue(
-            ms(0),
-            "0",
-            CueCommand::BalloonSurface { key: "1".into() },
-            ms(0),
-        ),
-    );
+    rig.hear(cue(
+        ms(0),
+        "0",
+        CueCommand::Emote { key: "0".into() },
+        ms(0),
+    ));
+    rig.hear(cue(
+        ms(0),
+        "0",
+        CueCommand::BalloonSurface { key: "1".into() },
+        ms(0),
+    ));
     for i in 1..=100 {
         rig.tick(at_ms(i * 40));
     }
@@ -211,10 +192,12 @@ fn flows_without_notes_emit_no_stage_ack() {
     // emo2 のシェルだけの流れも同じ。
     let mut rig = Rig::with_config(cfg(emo2_shell_table(), always_fire()));
     rig.tick(at_ms(0));
-    rig.hear(
-        at_ms(0),
-        cue(ms(0), "0", CueCommand::Emote { key: "0".into() }, ms(0)),
-    );
+    rig.hear(cue(
+        ms(0),
+        "0",
+        CueCommand::Emote { key: "0".into() },
+        ms(0),
+    ));
     for i in 1..=100 {
         rig.tick(at_ms(i * 40));
     }
@@ -222,14 +205,13 @@ fn flows_without_notes_emit_no_stage_ack() {
     assert_eq!(count_acks(&rig.all()), 0);
 }
 
-/// 時計つきの起動の `send_stage` は送るときの時計の値を載せ、実のアクターが合図を先に出す。
-/// 受け手が消えた後の `send_stage` は `debug!` で捨てる。
+/// `send_stage` は渡した時刻を載せ、実のアクターが合図を先に出す。受け手が消えた後の `send_stage` は
+/// `debug!` で捨てる。
 #[test]
-fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
-    let clock: SerikoClock = Arc::new(|| at_ms(1000));
+fn send_stage_carries_the_given_time_and_logs_debug_after_the_actor_is_gone() {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (sink, handle) = spawn_seriko_clocked(
+    let (sink, handle) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
         crate::DefaultBinds::uniform(BindSet::from_ids([])),
         BindResolver::empty(),
@@ -240,15 +222,17 @@ fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
             pick_rng: crate::seeded_rng(0),
         },
         out,
-        Some(clock),
     );
     sink.send_tick(at_ms(900));
-    sink.send_stage(StageNote::Balloon {
-        scope: scope(),
-        open: true,
-        face: 1,
-        generation: 1,
-    });
+    sink.send_stage(
+        StageNote::Balloon {
+            scope: scope(),
+            open: true,
+            face: 1,
+            generation: 1,
+        },
+        at_ms(1000),
+    );
     sink.send_tick(at_ms(1050));
     sink.send_tick(at_ms(1100));
     sink.close().expect("Close を送れること");
@@ -263,12 +247,15 @@ fn send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone() {
     );
 
     let logs = capture_text(|| {
-        sink.send_stage(StageNote::Balloon {
-            scope: scope(),
-            open: false,
-            face: 1,
-            generation: 1,
-        })
+        sink.send_stage(
+            StageNote::Balloon {
+                scope: scope(),
+                open: false,
+                face: 1,
+                generation: 1,
+            },
+            at_ms(1100),
+        )
     });
     assert!(
         logs.contains("level=DEBUG") && logs.contains("窓の知らせを配送できず破棄した"),

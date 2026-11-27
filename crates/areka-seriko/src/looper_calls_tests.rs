@@ -715,7 +715,7 @@ fn earlier_stop_does_not_hit_an_always_restarted_by_reshow() {
     rt.on_tick(at_ms(1100), &mut states);
     assert_eq!(started(&rt, Slot::Shell, 0), None, "前提: 1050 に止まる");
     assert!(rt.on_surface_shown(&scope(), Slot::Shell));
-    rt.refresh(&scope(), Slot::Shell, Some(at_ms(1170)), &mut states);
+    rt.refresh(&scope(), Slot::Shell, at_ms(1170), &mut states);
     assert_eq!(
         started(&rt, Slot::Shell, 0),
         Some(at_ms(1170)),

@@ -13,24 +13,16 @@ pub(super) fn shell_runtime(text: &str) -> (LoopRuntime, ScopeStates) {
     (LoopRuntime::new(cfg(table_of(text), rng)), empty_states())
 }
 
-/// アクターの面の切り替えと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` → `refresh`）で
-/// 踏む（出来事の時刻は `at`）。面が変わらなければ、同じ面の出し直しで始め直す絵も出さずに `None`。
+/// アクターの面の切り替えと同じ順（`catch_up` → `apply` → `on_surface_shown` → `on_surface_changed` →
+/// `refresh`）で踏む（出来事の時刻は `at`）。面が変わらなければ、同じ面の出し直しで始め直す絵も出さずに
+/// `None`。
 pub(super) fn switch(
     rt: &mut LoopRuntime,
     states: &mut ScopeStates,
     target: SurfaceTarget,
     at: TimePoint,
 ) -> Option<DisplayCommand> {
-    switch_at(rt, states, target, Some(at))
-}
-
-/// [`switch`] の出来事の時刻を `Option` で渡す形（`None`＝時計の無い起動と同じく直前の刻みの時刻）。
-pub(super) fn switch_at(
-    rt: &mut LoopRuntime,
-    states: &mut ScopeStates,
-    target: SurfaceTarget,
-    at: Option<TimePoint>,
-) -> Option<DisplayCommand> {
+    let _ = rt.catch_up(&scope(), Slot::Shell, at, states);
     let outcome = states.apply(&scope(), target);
     rt.on_surface_shown(&scope(), Slot::Shell);
     let ApplyOutcome::Changed(cmd) = outcome else {

@@ -108,7 +108,7 @@ fn ticks_add_no_warn() {
         let scope = areka_sakura::ActorKey::from("0");
         states.apply(&scope, SurfaceTarget::Show(10));
         rt.on_surface_changed(&scope, Slot::Shell);
-        rt.refresh(&scope, Slot::Shell, Some(at_ms(0)), &mut states);
+        rt.refresh(&scope, Slot::Shell, at_ms(0), &mut states);
         (0..10_000)
             .step_by(100)
             .flat_map(|now| rt.on_tick(at_ms(now), &mut states))

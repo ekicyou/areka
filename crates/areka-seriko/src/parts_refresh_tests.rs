@@ -67,7 +67,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     // 時計が 1 本も無いうちは欄が空になる（前の写しの欄も消える）。
     let mut stale = PatternState::default();
     stale.set_part(100, 0, overlay(999));
-    assert!(refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(900)), &stale).is_empty());
+    assert!(refresh_at(&mut clocks, &table, 0, &b, at_ms(900), &stale).is_empty());
 
     tick(
         &mut clocks,
@@ -86,7 +86,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     for _ in 0..3 {
         assert!(
             part_frames(
-                &refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(1000)), &top),
+                &refresh_at(&mut clocks, &table, 0, &b, at_ms(1000), &top),
                 100
             )
             .is_empty(),
@@ -97,7 +97,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     for _ in 0..3 {
         assert_eq!(
             part_frames(
-                &refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(1060)), &stale),
+                &refresh_at(&mut clocks, &table, 0, &b, at_ms(1060), &stale),
                 100
             ),
             vec![(0, 101)],
@@ -109,13 +109,13 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
         // 末尾の時刻: コマは出すが時計は `Playing` のまま。
         assert_eq!(
             part_frames(
-                &refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(1100)), &top),
+                &refresh_at(&mut clocks, &table, 0, &b, at_ms(1100), &top),
                 100
             ),
             vec![(0, 102)]
         );
         // 見えない面では何も書かない。
-        assert!(refresh_at(&mut clocks, &table, 1, &b, Some(at_ms(1100)), &stale).is_empty());
+        assert!(refresh_at(&mut clocks, &table, 1, &b, at_ms(1100), &stale).is_empty());
         assert_eq!(clocks.clock(&scope(), 100, 0), playing);
     }
     assert_eq!(
@@ -146,7 +146,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     for _ in 0..3 {
         assert_eq!(
             part_frames(
-                &refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(1500)), &top),
+                &refresh_at(&mut clocks, &table, 0, &b, at_ms(1500), &top),
                 100
             ),
             vec![(0, 102)]
@@ -198,7 +198,7 @@ fn peek_does_not_write_inactive_bind_random_frames() {
     );
     assert_eq!(
         part_frames(
-            &refresh_at(&mut clocks, &table, 0, &on, Some(at_ms(1050)), &top),
+            &refresh_at(&mut clocks, &table, 0, &on, at_ms(1050), &top),
             100
         ),
         vec![(5, 101), (6, 103)]
@@ -207,7 +207,7 @@ fn peek_does_not_write_inactive_bind_random_frames() {
     // 外した直後: 5 のコマは書かず、`random` の 6 は書く。5 の時計は残る。
     assert_eq!(
         part_frames(
-            &refresh_at(&mut clocks, &table, 0, &off, Some(at_ms(1050)), &top),
+            &refresh_at(&mut clocks, &table, 0, &off, at_ms(1050), &top),
             100
         ),
         vec![(6, 103)]
@@ -270,7 +270,7 @@ fn clear_drops_clocks_of_every_scope() {
             &table,
             0,
             &b,
-            Some(at_ms(1060)),
+            at_ms(1060),
             &PatternState::default()
         )
         .is_empty()
@@ -418,8 +418,8 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
             &top,
         );
         for _ in 0..3 {
-            refresh_at(&mut clocks, &table, 0, &on, Some(at_ms(1100)), &top);
-            refresh_at(&mut clocks, &table, 0, &off, Some(at_ms(1100)), &top);
+            refresh_at(&mut clocks, &table, 0, &on, at_ms(1100), &top);
+            refresh_at(&mut clocks, &table, 0, &off, at_ms(1100), &top);
         }
         tick(
             &mut clocks,
@@ -571,7 +571,7 @@ fn call_only_part_keeps_and_advances_an_existing_clock_without_starting_itself()
     assert_eq!(clocks.clock(&scope(), 100, 0), part_playing(at_ms(1000)));
 
     // 抽選も作り直しも同じ時計を読む（`refresh` も欄を書く）。
-    let p = refresh_at(&mut clocks, &table, 0, &b, Some(at_ms(1110)), &top);
+    let p = refresh_at(&mut clocks, &table, 0, &b, at_ms(1110), &top);
     assert_eq!(part_frames(&p, 100), vec![(0, 102)]);
     assert_eq!(
         calls(&probe),

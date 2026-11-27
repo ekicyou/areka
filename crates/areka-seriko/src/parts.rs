@@ -246,7 +246,7 @@ fn write_always(
 }
 
 /// `always` の時計の開始の時刻。時計が無ければ `at` で作る（生まれたら `debug!`）。`at` が
-/// 無い（時刻が分からない）ときは作らず `None`（経過 0＝欄に載せない）。
+/// 無い（窓が閉じている）ときは作らず `None`（経過 0＝欄に載せない）。
 fn always_start(
     clocks: &mut BTreeMap<ClockKey, PartAnim>,
     key: ClockKey,

@@ -41,7 +41,7 @@ fn refresh(
     clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
-    at: Option<TimePoint>,
+    at: TimePoint,
 ) -> PatternState {
     let empty = PatternState::default();
     super::tests::refresh_at(clocks, table, top, &BindSet::default(), at, &empty)
@@ -124,25 +124,17 @@ fn always_in_child_does_not_rewind_when_parent_switches() {
 }
 
 /// 出来事の直後の `refresh` は、見えている `always` の時計が無ければ出来事の時刻で作り（経過 0＝欄に
-/// 載せない）、在れば今のコマを書く。時刻が分からない（`None`）ときは作らない。
+/// 載せない）、在れば今のコマを書く。
 #[test]
 fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
     let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let p = refresh(&mut clocks, &table, 0, None);
-    assert!(p.is_empty());
-    assert_eq!(
-        clocks.clock(&scope(), 100, 0),
-        None,
-        "時刻が分からなければ作らない"
-    );
-
-    let p = refresh(&mut clocks, &table, 0, Some(at_ms(1000)));
+    let p = refresh(&mut clocks, &table, 0, at_ms(1000));
     assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
 
-    let p = refresh(&mut clocks, &table, 1, Some(at_ms(1200)));
+    let p = refresh(&mut clocks, &table, 1, at_ms(1200));
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(at_ms(1000)));
     tick(&mut clocks, &table, 0, at_ms(1250), true, &mut rng);

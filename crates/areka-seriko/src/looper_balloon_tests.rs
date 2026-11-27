@@ -42,7 +42,7 @@ fn open_window_births_child_clock_on_noted_face() {
 
     note(&mut states, true, 0);
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(600)), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, at_ms(600), &mut states),
         None
     );
     assert_eq!(
@@ -75,7 +75,7 @@ fn closed_window_births_no_clock_and_only_endless_clocks_advance() {
     note(&mut states, false, 1);
     assert!(rt.on_tick(at_ms(1000), &mut states).is_empty());
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1000)), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, at_ms(1000), &mut states),
         None
     );
     assert_eq!(
@@ -143,13 +143,13 @@ fn balloon_hide_cue_drops_finite_clocks() {
     rt.on_tick(at_ms(0), &mut states);
     states.apply_balloon(&scope(), SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope(), Slot::Balloon);
-    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(100)), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, at_ms(100), &mut states);
     assert_eq!(clock(&rt, Slot::Balloon, ONCE), playing(at_ms(100)));
 
     states.apply_balloon(&scope(), SurfaceTarget::Hide);
     rt.on_surface_changed(&scope(), Slot::Balloon);
     assert_eq!(
-        rt.refresh(&scope(), Slot::Balloon, Some(at_ms(150)), &mut states),
+        rt.refresh(&scope(), Slot::Balloon, at_ms(150), &mut states),
         None
     );
     assert_eq!(clock(&rt, Slot::Balloon, ONCE), None);
@@ -217,7 +217,7 @@ fn closed_window_births_no_top_always_playback() {
         None,
         "閉じている間の刻みでは生まれない"
     );
-    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1100)), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, at_ms(1100), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         None,
@@ -225,7 +225,7 @@ fn closed_window_births_no_top_always_playback() {
     );
 
     note(&mut states, true, 0);
-    rt.refresh(&scope(), Slot::Balloon, Some(at_ms(1200)), &mut states);
+    rt.refresh(&scope(), Slot::Balloon, at_ms(1200), &mut states);
     assert_eq!(
         started(&rt, Slot::Balloon, 0),
         Some(at_ms(1200)),

@@ -8,7 +8,7 @@
 use areka_emo_compose::FilmId;
 use dola::time::testing::at_ms;
 
-use super::test_support::switch_at;
+use super::test_support::switch;
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
@@ -36,7 +36,7 @@ fn shown() -> (LoopRuntime, ScopeStates) {
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
     let mut states = empty_states();
     assert!(rt.on_tick(at_ms(0), &mut states).is_empty());
-    switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("面 0 の表示の指令");
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), at_ms(0)).expect("面 0 の表示の指令");
     (rt, states)
 }
 

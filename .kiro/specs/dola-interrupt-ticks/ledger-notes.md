@@ -365,3 +365,12 @@
 - 外したテスト・assert: `talk_tests::epoch_is_the_largest_now_minus_cue_time`（見積もりだけを見ていた）、`looper_talk_tests::cues_change_nothing_when_the_table_has_no_talk` の起点の 2 件、`table_replacement_rebuilds_the_talk_gate` の起点の 1 件。
 - 置き換え: `talk_tests::wall_time_keeps_sub_millisecond_precision` → `glyph_times_are_the_fire_time_plus_the_offset_and_keep_sub_millisecond_precision`、`actor_talk_tests::cue_that_is_not_text_moves_the_time_origin` → `clear_cue_reaches_the_glyph_list_before_routing`。足した: `talk_tests::previous_glyph_time_survives_pruning_the_whole_list`。
 - 変える前後の期待: `interrupt_then_clear_all_at_zero_keeps_the_list_monotone` → `..._at_the_new_fire_time_...`（全消去を 0 → 発火時刻 600 ms、残る字 1 → 3）、`pruning_keeps_ordinals` 末尾（0 → 6500 ms）、`looper_talk_tests::new_talk_after_an_interrupt_moves_the_mouth_at_its_first_boundary`（新しい台詞の頭 2000 → 1220、期待 2000/None/2150 → 1220/None/1370）。
+
+## 10.7（後半）
+
+- 消した公開の口と欄: `areka_seriko::SerikoClock`、`spawn_seriko_clocked`、`SerikoSink` の時計の欄、`LoopRuntime` の時計の欄・`with_clock`・`event_time`、`SerikoMsg::Stage.at` の `None`、`LoopRuntime::refresh` の `at.or(last_seen)` の分かれ道、`PartClocks::refresh` の `at: None` の分かれ道、settle.rs の偽の時計（`AtomicI64`）。消したログは無い。
+- 消したテスト: `actor_clock_tests.rs` の 5 本（時計の読みを出来事の時刻にする事だけを見ていた）、`looper_trigger_tests::runonce_waits_for_the_first_tick_when_no_time_is_known`。外した assert: `looper_parts_tests::refresh_reloads_part_frames_at_last_tick_time` の 1 件、`parts_trigger_tests::refresh_arms_at_the_event_time_and_judges_up_to_it` の 2 件、`parts_always_tests::refresh_creates_always_clock_at_event_time` の 2 件（どれも時刻が分からない時の分かれ道）。
+- 名前と中身を変えた: `looper_always_tests::top_always_is_born_on_the_tick_when_no_event_time_is_known` → `top_always_is_born_on_the_next_tick_after_a_table_replacement`、`actor_stage_tests::send_stage_carries_the_clock_and_logs_debug_after_the_actor_is_gone` → `send_stage_carries_the_given_time_and_logs_debug_after_the_actor_is_gone`。
+- 足したテスト: `actor_event_time_tests.rs` の 12 本（姿を変える指令の 7 本と、遅れた合図の絵・発火時刻の前の止めの 5 本）。元からあるテストで期待の値が変わったものは 0 本。
+- 振る舞いの変化: 同じ面の出し直し・変化の無い着せ替えでも、直前の刻みから発火時刻までに絵が進んでいれば合図の時に Show を 1 件出す。遅れて処理した合図は、始まりと構えは発火時刻、置くコマは「発火時刻と直前の刻みの遅い方」の時刻。
+- 後のタスクへ: areka-runtime の `lib.rs`（`SerikoClock`・`spawn_seriko_clocked`・`loop_ticker_config(&SerikoClock)`）、`frame/status_report.rs:151`（`send_stage` に時刻）、`film_playback_e2e_tests.rs`、`seriko_clock_tests.rs`、`assets.rs:145` の説明。

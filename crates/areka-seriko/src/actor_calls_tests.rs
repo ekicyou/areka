@@ -29,7 +29,7 @@ fn same_surface_reshow_restarts_a_stopped_always_at_the_event_time() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    rig.hear(at_ms(0), emote_cue(ms(0), "0", "0"));
+    rig.hear(emote_cue(ms(0), "0", "0"));
     rig.tick(at_ms(10));
     rig.tick(at_ms(1000)); // animation1 が始まる。止めは 1100。
     assert_eq!(frames(&rig.tick(at_ms(1100)), 0), vec![("0", None)]);
@@ -39,10 +39,7 @@ fn same_surface_reshow_restarts_a_stopped_always_at_the_event_time() {
     );
 
     // 始めの絵は経過 0 の絵と同じなので、合図では何も出ない。
-    assert!(
-        rig.hear(at_ms(2500), emote_cue(ms(2500), "0", "0"))
-            .is_empty()
-    );
+    assert!(rig.hear(emote_cue(ms(2500), "0", "0")).is_empty());
     // 合図の時刻 2500 から 150 ms＝2 枚目（刻みの時刻で始めたなら経過 0 で何も出ない）。
     assert_eq!(frames(&rig.tick(at_ms(2650)), 0), vec![("0", Some(102))]);
 }
@@ -73,7 +70,7 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
         pick_rng: crate::seeded_rng(0),
     });
     rig.tick(at_ms(0));
-    let cmds = rig.hear(at_ms(10), emote_cue(ms(0), "0", "0"));
+    let cmds = rig.hear_fired(at_ms(10), emote_cue(ms(0), "0", "0"));
     assert_eq!(cmds.len(), 2, "{cmds:?}");
     assert!(matches!(
         cmds[0],
@@ -82,10 +79,7 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
     assert_eq!(cmds[1], shift(2, 4));
     // 2 枚目の絵（120）だけ・同じ値のずれは繰り返さない。
     assert_eq!(frames(&rig.tick(at_ms(200)), 0), vec![("0", Some(120))]);
-    assert_eq!(
-        rig.hear(at_ms(300), emote_cue(ms(300), "0", "0")),
-        vec![shift(0, 0)]
-    );
+    assert_eq!(rig.hear(emote_cue(ms(300), "0", "0")), vec![shift(0, 0)]);
 }
 
 /// シェルの差し替え（`Rebased`）も面を出す合図: 全スコープのずれを 0 へ戻し、合図の後に (0, 0) を出す。

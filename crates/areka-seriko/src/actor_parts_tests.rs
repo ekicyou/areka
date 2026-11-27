@@ -56,14 +56,14 @@ impl Rig {
         Self::configured(cfg(table, always_fire()), eye_resolver(), static_binds)
     }
 
-    /// 時計が `now` のときに `\0\s[key]`。
+    /// 時刻 `now` に発火した `\0\s[key]`。
     fn surface(&mut self, now: TimePoint, key: &str) -> Vec<DisplayCommand> {
-        self.hear(now, emote_cue(ms(0), "0", key))
+        self.hear_fired(now, emote_cue(ms(0), "0", key))
     }
 
-    /// 時計が `now` のときに `\0\![bind,目,閉,on]`。
+    /// 時刻 `now` に発火した `\0\![bind,目,閉,on]`。
     fn bind_eye(&mut self, now: TimePoint, on: &str) -> Vec<DisplayCommand> {
-        self.hear(now, carrier_cue("0", "bind", &["目", "閉", on]))
+        self.hear_fired(now, carrier_cue("0", "bind", &["目", "閉", on]))
     }
 }
 
