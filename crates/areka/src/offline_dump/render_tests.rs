@@ -1,12 +1,12 @@
 //! `render.rs` の試験（下地の画素・大きさと位置・2 度で同じ・ファイルの名前と書き出し）。
 //!
 //! 検体は `offline_dump_test_support::variety_shell`（土台 16×8・負の座標の絵が -2,-2）。期待の絵は
-//! 画面と同じ入力（同じ面・同じ着せ替え・`settle_surface` の同じ状態）で `Composer::compose` した絵を
-//! 試験の側で 1 画素ずつ `(-left, -top)` に置いて作る。
+//! 画面と同じ入力（同じ面・同じ着せ替え・`settle_surface` の同じ状態）で hardware の
+//! `OffscreenRenderer` が描いた絵を、試験の側で 1 画素ずつ `(-left, -top)` に置いて作る。
 
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{BindSet, Composer, EmoWorld, shell_bounds};
-use areka_emo_present::{ShellTarget, load_shell_target};
+use areka_emo_compose::{BindSet, EmoWorld, shell_bounds};
+use areka_emo_present::{OffscreenRenderer, ShellTarget, load_shell_target};
 use areka_seriko::{AnimationTable, settle_surface, settle_time};
 use dola::TimeSpan;
 use log_capture_kit::capture;
@@ -57,7 +57,7 @@ fn load(label: &str) -> Loaded {
 impl Loaded {
     fn render(&self, binds: &BindSet, id: u32) -> Result<Vec<u8>, RenderError> {
         render_surface(
-            &mut Composer::new(),
+            &mut renderer(),
             &self.world,
             self.target.atlas(),
             &self.table,
@@ -70,7 +70,7 @@ impl Loaded {
 
     fn png(&self, binds: &BindSet, id: u32) -> Vec<u8> {
         render_png(
-            &mut Composer::new(),
+            &mut renderer(),
             &self.world,
             self.target.atlas(),
             &self.table,
@@ -85,7 +85,7 @@ impl Loaded {
     /// 面 `id` をスコープ `scope` で `dir` へ頭の文字列 `prefix` で書く。
     fn write(&self, scope: u32, id: u32, dir: &Path, prefix: &str) -> Result<PathBuf, RenderError> {
         write_surface(
-            &mut Composer::new(),
+            &mut renderer(),
             &self.world,
             self.target.atlas(),
             &self.table,
@@ -101,8 +101,8 @@ impl Loaded {
     /// 画面と同じ入力で組んだ絵を、下地の `(-left, -top)` に 1 画素ずつ置いた期待の絵。
     fn expected(&self, binds: &BindSet, id: u32) -> Vec<u8> {
         let pattern = settle_surface(&self.table, 0, binds, id);
-        let pic = Composer::new()
-            .compose(&self.world, self.target.atlas(), id, binds, &pattern)
+        let pic = renderer()
+            .render(&self.world, self.target.atlas(), id, binds, &pattern)
             .unwrap_or_else(|e| panic!("面 {id} は組める: {e:?}"));
         let (cw, ch) = (self.canvas.width as usize, self.canvas.height as usize);
         let (ox, oy) = (-self.canvas.left as usize, -self.canvas.top as usize);
@@ -124,6 +124,10 @@ impl Loaded {
     }
 }
 
+fn renderer() -> OffscreenRenderer {
+    OffscreenRenderer::hardware().expect("hardware の描き手を作れる")
+}
+
 /// 中身の無い面を除く検体の面。
 fn drawable() -> impl Iterator<Item = u32> {
     fixture::VARIETY_SURFACES
@@ -140,7 +144,7 @@ const GRAY: [u8; 4] = [128, 128, 128, 255];
 const RED: [u8; 4] = [0, 0, 255, 255];
 const BLUE: [u8; 4] = [255, 0, 0, 255];
 
-/// 下地の画素は、同じ面・同じ着せ替え・同じ状態で合成した絵を `(-left,-top)` に置いたものと同じ。
+/// 下地の画素は、同じ面・同じ着せ替え・同じ状態で描いた絵を `(-left,-top)` に置いたものと同じ。
 #[test]
 fn pixels_are_the_screen_composition_placed_at_minus_left_top() {
     let shell = load("offline-render-pixels");
@@ -272,17 +276,17 @@ fn rendering_twice_gives_the_same_bytes() {
     }
 }
 
-/// 合成の失敗は合成の error 1 行に info を足すだけで、`RenderError::Compose`。
+/// 描き手の失敗は描き手の error 1 行に info を足すだけで、`RenderError::Render`。
 #[test]
-fn compose_failure_adds_only_info() {
-    let shell = load("offline-render-compose-failure");
+fn render_failure_adds_only_info() {
+    let shell = load("offline-render-failure");
     let (got, events) = capture(|| shell.render(&default_binds(), fixture::EMPTY));
-    assert!(matches!(got, Err(RenderError::Compose)), "{got:?}");
+    assert!(matches!(got, Err(RenderError::Render)), "{got:?}");
     let errors = events
         .iter()
         .filter(|e| e.level == tracing::Level::ERROR)
         .count();
-    assert_eq!(errors, 1, "error は合成の 1 行だけ: {events:?}");
+    assert_eq!(errors, 1, "error は描き手の 1 行だけ: {events:?}");
     assert!(
         crate::session_tests::levels_of(&events, "offline_dump_surface_skipped")
             .contains(&tracing::Level::INFO),

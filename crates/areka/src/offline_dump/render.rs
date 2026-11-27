@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, Composer, EmoWorld, ShellBounds};
+use areka_emo_compose::{BindSet, EmoWorld, ShellBounds};
+use areka_emo_present::OffscreenRenderer;
 use areka_seriko::{AnimationTable, settle_surface};
 
 use crate::png_image;
@@ -47,8 +48,8 @@ pub(crate) const DEFAULT_PREFIX: &str = "surface";
 /// 面 1 つを描けなかったわけ。
 #[derive(Debug)]
 pub(crate) enum RenderError {
-    /// 合成が `Err` を返した（記録は合成が出している）。
-    Compose,
+    /// 描き手が `Err` を返した（記録は描き手が出している）。
+    Render,
     /// 組んだ絵が下地からはみ出した（作りの誤り）。
     CanvasOverflow,
     /// PNG のファイルを書けなかった（記録は [`write_surface`] が出している）。
@@ -58,11 +59,11 @@ pub(crate) enum RenderError {
     ),
 }
 
-/// 面 1 つを時点 T まで画面と同じ道で進め、画面と同じ入力の形で合成し、下地の `(-left, -top)` に
+/// 面 1 つを時点 T まで画面と同じ道で進め、画面と同じ入力の形で描き手が描き、下地の `(-left, -top)` に
 /// 置いた乗算済み BGRA を返す（テストが画素を見る口）。
 #[allow(clippy::too_many_arguments)] // 走りが持つ部品をそのまま渡す口の形
 pub(crate) fn render_surface(
-    composer: &mut Composer,
+    renderer: &mut OffscreenRenderer,
     world: &EmoWorld,
     atlas: &AtlasTable,
     table: &AnimationTable,
@@ -72,17 +73,17 @@ pub(crate) fn render_surface(
     canvas: &Canvas,
 ) -> Result<Vec<u8>, RenderError> {
     let pattern = settle_surface(table, scope, binds, surface_id);
-    // 画面の面の表示と同じ入力（world・atlas・面・着せ替え・面の状態）で組む。
-    let pic = match composer.compose(world, atlas, surface_id, binds, &pattern) {
+    // 画面の面の表示と同じ入力（world・atlas・面・着せ替え・面の状態）で描く。
+    let pic = match renderer.render(world, atlas, surface_id, binds, &pattern) {
         Ok(pic) => pic,
         Err(_) => {
-            // 合成が error を出しているので、ここは info だけ（1 つの誤りは 1 行）。
+            // 描き手が error を出しているので、ここは info だけ（1 つの誤りは 1 行）。
             tracing::info!(
                 event = "offline_dump_surface_skipped",
                 surface = surface_id,
                 "[offline_dump] 面を組めなかったので、この面を飛ばします"
             );
-            return Err(RenderError::Compose);
+            return Err(RenderError::Render);
         }
     };
     let (x0, y0) = (
@@ -115,7 +116,7 @@ pub(crate) fn render_surface(
 /// [`render_surface`] の絵を MCP と同じ `png_image::encode_png` で PNG のバイト列にする。
 #[allow(clippy::too_many_arguments)] // render_surface と同じ口
 pub(crate) fn render_png(
-    composer: &mut Composer,
+    renderer: &mut OffscreenRenderer,
     world: &EmoWorld,
     atlas: &AtlasTable,
     table: &AnimationTable,
@@ -125,7 +126,7 @@ pub(crate) fn render_png(
     canvas: &Canvas,
 ) -> Result<Vec<u8>, RenderError> {
     let bgra = render_surface(
-        composer, world, atlas, table, binds, scope, surface_id, canvas,
+        renderer, world, atlas, table, binds, scope, surface_id, canvas,
     )?;
     Ok(png_image::encode_png(&bgra, canvas.width, canvas.height))
 }
@@ -140,7 +141,7 @@ pub(crate) fn png_path(output_dir: &Path, prefix: &str, surface_id: u32) -> Path
 /// 作らない。同じ名前は置き換える。書けなければ error 1 行。
 #[allow(clippy::too_many_arguments)] // render_surface の口に出力先と頭の文字列を足した形
 pub(crate) fn write_surface(
-    composer: &mut Composer,
+    renderer: &mut OffscreenRenderer,
     world: &EmoWorld,
     atlas: &AtlasTable,
     table: &AnimationTable,
@@ -152,7 +153,7 @@ pub(crate) fn write_surface(
     prefix: &str,
 ) -> Result<PathBuf, RenderError> {
     let png = render_png(
-        composer, world, atlas, table, binds, scope, surface_id, canvas,
+        renderer, world, atlas, table, binds, scope, surface_id, canvas,
     )?;
     let path = png_path(output_dir, prefix, surface_id);
     let written = std::fs::create_dir_all(output_dir).and_then(|()| std::fs::write(&path, png));
