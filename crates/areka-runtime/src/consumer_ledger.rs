@@ -58,7 +58,8 @@ type LedgerKey = (String, Option<String>);
 pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`・`\![set,alignmenttodesktop,方向]`
     /// （`alignmentondesktop` も同じ）・`\![set,sticky-window,…]`・`\![reset,sticky-window]`・
-    /// `\![execute,resetballoonpos]`・`\![lock,balloonmove]`・`\![unlock,balloonmove]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
+    /// `\![execute,resetballoonpos]`・`\![lock,balloonmove]`・`\![unlock,balloonmove]`・`\![set,balloonoffset,x,y]`・
+    /// `\![set,balloonalign,ID]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1
@@ -365,6 +366,9 @@ const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
         // バルーンの動かせない指定。
         ("lock", Some("balloonmove"), MoveSink),
         ("unlock", Some("balloonmove"), MoveSink),
+        // 台本のバルーンの基準点。
+        ("set", Some("balloonoffset"), MoveSink),
+        ("set", Some("balloonalign"), MoveSink),
         // 常に手前の指令。第 2 引数の読み分けは受け口が持つ。
         ("set", Some("windowstate"), WindowStateSink),
         (

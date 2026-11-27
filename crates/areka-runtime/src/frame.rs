@@ -353,6 +353,11 @@ mod work_area_resnap_hold_tests;
 #[path = "frame_move_hold_tests.rs"]
 mod move_hold_tests;
 
+// 台本のバルーンの基準点の指令の預かりの檻。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_hold_balloon_script_tests.rs"]
+mod move_hold_balloon_script_tests;
+
 #[cfg(test)]
 #[path = "frame_reset_hold_test_support.rs"]
 pub mod reset_hold_test_support;

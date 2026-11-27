@@ -18,6 +18,9 @@ use tracing::{debug, warn};
 use wintf::ecs::world::tick_wake;
 
 use areka_placement::script_alignment::{AlignmentWord, parse_alignment_word};
+use areka_placement::script_balloon::{
+    ScriptAlign, ScriptOffset, parse_balloon_align, parse_balloon_offset,
+};
 
 #[path = "move_cue_args.rs"]
 mod args;
@@ -52,6 +55,11 @@ pub enum PositionCue {
     /// `\![lock,balloonmove]`（`locked: true`）／`\![unlock,balloonmove]`（`false`）——実行者のスコープの
     /// バルーンを利用者のドラッグで動かさない指定を当てる・解く（`areka_placement::balloon_lock`）。
     BalloonMoveLock { scope: u32, locked: bool },
+    /// `\![set,balloonoffset,x,y]`——実行者のスコープのバルーンの基準点のずらしを台本の値にする
+    /// （`areka_placement::script_balloon`）。
+    SetBalloonOffset { scope: u32, offset: ScriptOffset },
+    /// `\![set,balloonalign,ID]`——実行者のスコープのバルーンの向きを台本の値にする。
+    SetBalloonAlign { scope: u32, align: ScriptAlign },
 }
 
 /// `\![move]` の 1 件の意味。
@@ -192,7 +200,7 @@ pub enum Axis {
 ///
 /// 担当判定は本 sink が自らの（コマンド名, 第 1 引数）の組のリテラルで行う——`move` は名前だけで、
 /// ほかは `(execute, resetwindowpos)`・`(execute, resetballoonpos)`・`(set|reset, sticky-window)`・
-/// `(set, alignmenttodesktop|alignmentondesktop)`・`(lock|unlock, balloonmove)` の組で選ぶ。dola は
+/// `(set, alignmenttodesktop|alignmentondesktop|balloonoffset|balloonalign)`・`(lock|unlock, balloonmove)` の組で選ぶ。dola は
 /// コマンド名の語彙も名前写像 API も持たず、`MoveCueSink` は中央権威表に依存せず自己選別する。
 /// 「1 コマンド出現に高々 1 担当」の一意性は結線層（areka）の消費者台帳が保証する
 /// （dola の権威表ではない）。
@@ -281,6 +289,38 @@ impl dola::cue::CueSink for MoveCueSink {
                 if let Some(scope) = actor_scope(&cue, &format!("set,{selector}")) {
                     let word = parse_alignment_word(&tokens[1..]);
                     self.send(PositionCue::SetAlignment { scope, word });
+                }
+                return;
+            }
+            ("set", Some("balloonoffset")) => {
+                if let Some(scope) = actor_scope(&cue, "set,balloonoffset") {
+                    match parse_balloon_offset(&tokens[1..]) {
+                        Ok(offset) => self.send(PositionCue::SetBalloonOffset { scope, offset }),
+                        Err(e) => warn!(
+                            event = "script_balloon_rejected",
+                            scope,
+                            command = "set,balloonoffset",
+                            raw = ?e.raw,
+                            reason = ?e.reason,
+                            "MoveCueSink: 読めないずらしは送らない（両軸とも今のまま）"
+                        ),
+                    }
+                }
+                return;
+            }
+            ("set", Some("balloonalign")) => {
+                if let Some(scope) = actor_scope(&cue, "set,balloonalign") {
+                    match parse_balloon_align(&tokens[1..]) {
+                        Some(align) => self.send(PositionCue::SetBalloonAlign { scope, align }),
+                        None => warn!(
+                            event = "script_balloon_rejected",
+                            scope,
+                            command = "set,balloonalign",
+                            raw = ?&tokens[1..],
+                            reason = "missing_id",
+                            "MoveCueSink: ID の無い向きの命令は送らない"
+                        ),
+                    }
                 }
                 return;
             }
@@ -374,3 +414,7 @@ mod move_severity_log_tests;
 #[cfg(test)]
 #[path = "move_cue_balloon_lock_tests.rs"]
 mod balloon_lock_tests;
+
+#[cfg(test)]
+#[path = "move_cue_balloon_script_tests.rs"]
+mod balloon_script_tests;

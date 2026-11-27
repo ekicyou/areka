@@ -27,6 +27,7 @@ use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_posi
 use areka_placement::reset_pos::reset_window_positions;
 use areka_placement::resolver::{PointPx, SizePx};
 use areka_placement::script_alignment::apply_script_alignment;
+use areka_placement::script_balloon::{apply_script_balloon_align, apply_script_balloon_offset};
 use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_reset_sticky, apply_set_sticky,
@@ -238,6 +239,16 @@ pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
             // 台本の lock・unlock。記録は関数の中。
             PositionCue::BalloonMoveLock { scope, locked } => {
                 apply_script_balloon_lock(world, scope, locked);
+                continue;
+            }
+            PositionCue::SetBalloonOffset { scope, offset } => {
+                let landed = landed.shown_ratio(scope).is_some();
+                apply_script_balloon_offset(world, scope, offset, landed);
+                continue;
+            }
+            PositionCue::SetBalloonAlign { scope, align } => {
+                let landed = landed.shown_ratio(scope).is_some();
+                apply_script_balloon_align(world, scope, align, landed);
                 continue;
             }
         };
