@@ -440,3 +440,7 @@
 
 - 足したテスト: `receivers_follow_tests` の 8 本、`frame::receiver_wake_tests` の 4 本。共有の足場 `same_script_test_support.rs`（11.1 の足場を移した。11.1 の期待は変わらない）。消したテスト・期待の変化は無い。
 - 先渡しのテストは、先読みの全文で折り返しが決まる前の再生（emo2 の `budoux_newline`）を途中で中断した所で確かめ、持ち越しを外すと赤になる事を一時の改変で確かめた（戻した）。
+
+## 11.3（後半）
+
+- 足したテスト: areka-kanade `tests/kanade/sleep_test.rs` の 2 本（`choice_deadline_holds_while_clock_is_stopped`・`second_change_hour_comes_from_tick_time`）、areka-sakura `tests/sleep.rs`（`playback_holds_while_clock_is_stopped_and_resumes_from_there`）、areka-seriko `tests/sleep.rs`（`frames_hold_while_clock_is_stopped_and_resume_from_there`）。止まった時計は「同じ時刻を運ぶ刻みが続く事」で表す（3 crate とも時計を読まない）。消したテスト・期待の変化は無い。

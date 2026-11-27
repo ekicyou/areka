@@ -755,7 +755,7 @@
   - _Dispatch: standard — 受け手をまたぐ結合テスト_
   - _Requirements: 12.4, 12.5, 12.8, 12.9, 12.11, 12.12, 12.13, 12.14, 18.4_
 
-- [ ] 11.3 (P) 眠りと `OnSecondChange` を確かめる
+- [x] 11.3 (P) 眠りと `OnSecondChange` を確かめる
   - areka-kanade・areka-sakura・areka-seriko の、それぞれの結合テストの入口に新しいテストのファイルを置き（areka-runtime には触らない）、偽の時計を止めている間に、kanade の締め切り・台本の再生・seriko のコマが進まず、動かすと止めた所から続く事を確かめる
   - `OnSecondChange` の時の値が、刻みの時刻から求めた値である事を確かめる
   - 上の確かめが緑である
