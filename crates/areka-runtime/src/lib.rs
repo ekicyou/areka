@@ -96,9 +96,6 @@ mod frame_schedule_tests;
 #[cfg(test)]
 mod wire_tests;
 
-#[cfg(test)]
-mod seriko_clock_tests;
-
 // 本体を引かず、配置と runtime だけを使うテストと判定器の置き場。
 #[cfg(test)]
 mod placement_tests;
@@ -120,8 +117,7 @@ use areka_ghost::{GhostBootError, ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, KanadeNotice};
 use areka_parsers::package::MountError;
 use areka_seriko::{
-    AnimationTable, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
-    spawn_seriko_clocked,
+    AnimationTable, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng, spawn_seriko,
 };
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -148,7 +144,7 @@ pub struct CueSinkSources {
     pub surface: SerikoSink,
     /// 文字の層の送り手（Clone）。
     pub text: EmoTextSink,
-    /// `ClockedTextSink`／`BalloonLifecycleSink` が共有する台本の時計。
+    /// 現実の出来事に時刻を付ける時計（`BalloonLifecycleSink` と利用者の中断の口が同じ時計を読む）。
     pub clock: TalkClock,
     /// `\![move]` の線の送出端（受信端は `RuntimeWiring`）。
     pub move_tx: Sender<PositionCue>,
@@ -388,10 +384,10 @@ const _: fn() = || {
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提）。
-/// 3. [`TalkClock::new`]（`dola::now` 注入・`ClockedTextSink::new` は`areka-session` の `src/runtime_boot.rs` が組む）。
+/// 3. [`TalkClock::new`]（`dola::now` 注入）。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
-///    `RuntimeWiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
-///    **SurfaceResolver 突き合わせ**: `resolver`（非 Clone）は `spawn_seriko_clocked`
+///    `RuntimeWiring` と共有）／[`spawn_seriko`]（seriko は時計を持たず、刻み・合図・窓の知らせが運ぶ時刻で動く）。
+///    **SurfaceResolver 突き合わせ**: `resolver`（非 Clone）は `spawn_seriko`
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`RuntimeWiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動（引数 `boot_runtime`＝[`BootRuntimeFn`]）
@@ -465,7 +461,7 @@ pub fn wire_runtime(
     let clock_fn: Arc<dyn Fn() -> dola::TimePoint + Send + Sync> = Arc::new(dola::now);
     let clock = TalkClock::new(clock_fn);
 
-    // SurfaceResolver の突き合わせ: resolver（非 Clone）は spawn_seriko_clocked が値消費し、
+    // SurfaceResolver の突き合わせ: resolver（非 Clone）は spawn_seriko が値消費し、
     // static_binds（Clone）は clone して seriko と RuntimeWiring の双方へ配る。RuntimeWiring 側
     // BootAssets の resolver は attach で読まれないため空 alias 表のプレースホルダで埋める
     // （実 resolver は seriko が保持）。
@@ -529,18 +525,15 @@ pub fn wire_runtime(
         pick_rng: seeded_rng(pick_seed),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
-    // `CueSink` を実装し `#[derive(Clone)]` 済みゆえ spawn_seriko_clocked の戻り値を直接 surface sink として束へ載せる。
+    // `CueSink` を実装し `#[derive(Clone)]` 済みゆえ spawn_seriko の戻り値を直接 surface sink として束へ載せる。
     // `bind_resolver`（実名前解決表）を seriko の起動へ値渡しで配線する。bind cue（`\![bind]`）の
     // 着せ替え名解決はこの実表が担う。
-    // 刻みと seriko が読む時計。台本の時計 `clock`（`TalkClock`）と同じ関数。
-    let seriko_clock: SerikoClock = Arc::new(dola::now);
-    let (surface_sink, seriko_handle) = spawn_seriko_clocked(
+    let (surface_sink, seriko_handle) = spawn_seriko(
         resolver,
         static_binds.clone(),
         bind_resolver.clone(),
         loop_config,
         bridge,
-        Some(Arc::clone(&seriko_clock)),
     );
     let wiring_assets = BootAssets {
         shells,
@@ -621,12 +614,11 @@ pub fn wire_runtime(
     wiring.attach_window_state_rx(window_state_rx);
     world.insert_non_send(wiring);
 
-    // SERIKO ループ ticker 起動: 16ms で、seriko と
-    // 同じ時計 `seriko_clock`（[`loop_ticker_config`]）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
+    // SERIKO ループ ticker 起動: 既定の 16ms・時計 `dola::now`（`TalkClock` と同じ関数）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
     // へ届ける。ghost の loop ticker は seriko を一切知らず、クロージャがその継ぎ目（依存方向: areka が
     // ghost の spawn_loop_ticker を seriko の SerikoSink へ結線・ghost→seriko 依存は張らない）。
     let (loop_ticker_stop, _loop_ticker_handle) = spawn_loop_ticker(
-        loop_ticker_config(&seriko_clock),
+        LoopTickerConfig::default(),
         Box::new(move |tick: Tick| {
             tick_sink.send_tick(tick.now);
         }),
@@ -642,15 +634,6 @@ pub fn wire_runtime(
         loop_ticker: Some(loop_ticker_stop),
         seriko_sink: Some(session_sink),
         sources: Some(sources),
-    }
-}
-
-/// SERIKO ループの刻みの構成を、seriko と同じ時計から組む（周期は既定のまま）。
-fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
-    let clock = Arc::clone(clock);
-    LoopTickerConfig {
-        clock: Box::new(move || clock()),
-        ..LoopTickerConfig::default()
     }
 }
 

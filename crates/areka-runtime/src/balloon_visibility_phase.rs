@@ -34,17 +34,17 @@ use areka_kanade::KanadeMsg;
 use areka_sakura::{ActorKey, TalkId};
 use bevy_ecs::prelude::{Entity, With};
 use bevy_ecs::world::World;
-use dola::TimeSpan;
+use dola::{TimePoint, TimeSpan};
 use tracing::{error, info, warn};
+use wintf::ecs::WindowDragging;
 use wintf::ecs::world::tick_wake;
-use wintf::ecs::{FrameTime, WindowDragging};
 
 use crate::balloon_hover::BalloonHover;
 use crate::session_hooks::SessionHooks;
 use crate::shell_box_hover::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-use super::super::frame::RuntimeWiring;
+use super::super::frame::{RuntimeWiring, resolve_frame_now};
 use super::super::target_map::{balloon_target, shell_target, window_scope};
 use super::{
     BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
@@ -78,7 +78,6 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
         lifecycle_rx,
         balloon_visibility: state,
         balloon_models,
-        clock,
         talk_ends,
         ..
     } = wiring;
@@ -88,9 +87,8 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
     let mut scopes: Vec<u32> = balloon_models.keys().copied().collect();
     scopes.sort_unstable();
 
-    // 注入時刻は text 相と**同一の**解決経路（override 無し＝本番）。
-    let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
-    let now_talk_time = frame_now.and_then(|now| clock.talk_time(now));
+    // 進める相・文字の相と同じ関数でフレームの時刻を求める（override 無し＝本番）。
+    let frame_now = resolve_frame_now(None, world);
     // 待ち時間はプロセスで一度だけ解決する（初回の呼び出しが起動時の 1 行を出す）。
     let timeout = configured_timeout();
 
@@ -100,25 +98,19 @@ pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut Worl
         .filter(|s| matches!(s, TalkLifecycleSignal::TalkEnded { .. }))
         .count() as u64;
     let observations = collect_observations(
-        presenter,
-        &runtime,
-        world,
-        &scopes,
-        now_talk_time,
-        lifecycle,
-        state,
+        presenter, &runtime, world, &scopes, frame_now, lifecycle, state,
     );
 
     // 外因の遷移は `decide` が `prev_visible` を上書きする**前**に読む（モジュール doc の ⑶）。
     let mut hidden = log_external_transitions(state, &observations);
 
-    let decision = decide(state, &observations, now_talk_time, timeout);
+    let decision = decide(state, &observations, frame_now, timeout);
 
     // 待ち時間の予約: タイムアウト計測が動いている間だけ、満了の時刻に合わせて
     // 次の起床を預ける。預けられる期限は最も早い 1 つだけで、到来すると倒れる——だから
     // 待っている限り**本相が走るたびに預け直す**。1 度預けて済ませると、後から預けられた
     // 別の期限に押し出されたときに黙って落ちる。
-    match visibility_wake(now_talk_time, state.deadline, state.prev_suppressed) {
+    match visibility_wake(frame_now, state.deadline, state.prev_suppressed) {
         VisibilityWake::After(wait) => tick_wake::arm_deadline(Instant::now() + wait),
         VisibilityWake::Now => tick_wake::mark(tick_wake::REARM),
         VisibilityWake::None => {}
@@ -230,7 +222,7 @@ fn collect_observations(
     runtime: &Rc<RefCell<TextLayerRuntime>>,
     world: &mut World,
     scopes: &[u32],
-    now_talk_time: Option<TimeSpan>,
+    frame_now: Option<TimePoint>,
     lifecycle: Vec<TalkLifecycleSignal>,
     state: &mut BalloonVisibilityState,
 ) -> VisibilityObservations {
@@ -290,7 +282,7 @@ fn collect_observations(
         observed.insert(
             scope,
             ScopeObservation {
-                // グリフ数は注入時刻の関数である。時刻が定まらないフレーム（talk 起点未確立）は
+                // グリフ数はフレームの時刻の関数である。時刻が無いフレーム（`FrameTime` の無い世界）は
                 // 観測できない＝エッジなしとして扱う（`decide` のタイムアウト評価も同じ理由で休む）。
                 // 判断中核は「表示終了信号が 1 件も無いのに可視コンテンツが現れた」ことの記録を現在時刻が
                 // 分かるフレームでしか作らないが、現在時刻が無ければ表示のエッジ自体が立たないので
@@ -301,16 +293,17 @@ fn collect_observations(
                 // 数は普通のバルーンの窓に今出ている文字の数（シェルの窓がいま表示している絵に
                 // 箱があれば 0）。箱のある絵では窓を出さず、箱の無い絵へ替わると出る。絵の番号は
                 // 表示層から引き、台本の `\s` の受け取りには従わない。
-                visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
-                    GlyphObservation {
+                visible_glyphs: runtime
+                    .as_ref()
+                    .zip(frame_now)
+                    .map(|(rt, t)| GlyphObservation {
                         count: rt.balloon_shown_glyphs(
                             actor,
                             presenter.current_surface_id(shell_target(scope)),
                             t,
                         ),
                         clear_count: rt.state().clear_count(actor),
-                    }
-                }),
+                    }),
                 visible,
                 hover: combine_hover(
                     hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),

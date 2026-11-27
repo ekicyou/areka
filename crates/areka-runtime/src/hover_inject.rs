@@ -2,8 +2,8 @@
 //!
 //! 実ポインタに依存せず、env ゲート駆動で済んでいない選択肢を持つ actor のハイライトを周期巡回させる有界導線。
 //! `AREKA_CHOICE_HOVER_INJECT` が **未設定/空/不正なら完全 no-op（本番既定）**。`cycle`＝既定周期
-//! 700ms・`cycle:<ms>`＝指定周期。text phase の frame clock（`TalkClock::talk_time` と同じ時刻源）で
-//! 駆動し、注入時刻の商（time÷period の整数商）で `None→0→1→…→None→…` を巡回する——**実時間 sleep を
+//! 700ms・`cycle:<ms>`＝指定周期。text phase のフレームの時刻で
+//! 駆動し、時刻の商（時刻の 100ns の数÷周期の整数商）で `None→0→1→…→None→…` を巡回する——**実時間 sleep を
 //! 使わず**決定論的な ordinal 系列を再現する。actor ごとに注入の番号が変わったフレームでだけ `info!`
 //! （`RUST_LOG` grep サインオフ材料）。
 //!
@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_sakura::ActorKey;
-use dola::TimeSpan;
+use dola::{TimePoint, TimeSpan};
 use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
 
@@ -90,22 +90,21 @@ pub fn parse_hover_inject(value: Option<&str>) -> HoverInjectConfig {
 
 /// 巡回 ordinal の純判定（実時間 sleep なし・時刻商で決定論巡回）。
 ///
-/// `frame_time`（台本の時刻）を `period` で割った整数商を、`ordinal_count + 1`
+/// `frame_time`（フレームの時刻）の 100ns の数を `period` で割った整数商を、`ordinal_count + 1`
 /// スロット（スロット0＝`None`・スロット`k`(1..=count)＝`Some(k-1)`）で巡回させる。
 /// `ordinal_count == 0`（ヒット行未 population 等）はスロット数 1＝常に `None`。0 の `period` は
 /// `None`（parse 段で弾かれるが純関数を total に保つ）。
 pub fn cycle_ordinal(
-    frame_time: TimeSpan,
+    frame_time: TimePoint,
     period: TimeSpan,
     ordinal_count: usize,
 ) -> Option<usize> {
     if period == TimeSpan::ZERO {
         return None;
     }
-    // 時刻商（実時間 sleep なし・注入時刻÷周期の整数商）。どちらも 0 以上。
-    let quotient = (frame_time.as_ticks() / period.as_ticks()) as u64;
-    let slots = ordinal_count as u64 + 1;
-    let step = quotient % slots;
+    let quotient = frame_time.as_ticks().div_euclid(period.as_ticks());
+    let slots = ordinal_count as i64 + 1;
+    let step = quotient.rem_euclid(slots);
     if step == 0 {
         None
     } else {
@@ -121,7 +120,7 @@ pub fn cycle_ordinal(
 /// （非 active はスキップし、`logged` の覚えも消す）、`logged` に覚えた前の番号と違うときだけ `info!` する。
 pub fn run_hover_inject_with(
     config: &HoverInjectConfig,
-    frame_time: TimeSpan,
+    frame_time: TimePoint,
     actors: &[(ActorKey, bool, usize)],
     logged: &mut BTreeMap<ActorKey, Option<usize>>,
     mut inject: impl FnMut(&ActorKey, Option<usize>),
@@ -160,7 +159,7 @@ pub fn run_hover_inject_with(
 pub fn run_hover_inject(
     config: &HoverInjectConfig,
     runtime: &mut TextLayerRuntime,
-    frame_time: TimeSpan,
+    frame_time: TimePoint,
     logged: &mut BTreeMap<ActorKey, Option<usize>>,
 ) {
     if matches!(config, HoverInjectConfig::Disabled) {
@@ -189,9 +188,8 @@ fn config() -> &'static HoverInjectConfig {
 /// `frame/scale_text.rs` の `run_text_phase`（present_frame の後）から駆動する結線口。
 ///
 /// env 未設定/無効なら [`run_hover_inject`] は [`HoverInjectConfig::Disabled`] で完全 no-op
-/// （`inject_choice_hover` を一度も呼ばない・本番既定）。`frame_time` は text phase が解決した
-/// `talk_time`（`TalkClock::talk_time` と同源）。
-pub fn drive(runtime: &mut TextLayerRuntime, frame_time: TimeSpan) {
+/// （`inject_choice_hover` を一度も呼ばない・本番既定）。`frame_time` は text phase のフレームの時刻。
+pub fn drive(runtime: &mut TextLayerRuntime, frame_time: TimePoint) {
     let config = config();
     // 注入が有効な間は周期巡回を進めるために毎画面更新で回る必要があるので、次の画面更新を
     // 予約する。無効（本番既定）なら旗も立てない。
@@ -208,7 +206,7 @@ pub fn drive(runtime: &mut TextLayerRuntime, frame_time: TimeSpan) {
 mod tests {
     use std::cell::{Cell, RefCell};
 
-    use dola::time::testing::ms;
+    use dola::time::testing::{at_ms, ms};
 
     use super::*;
 
@@ -318,8 +316,8 @@ mod tests {
         ];
         for (q, want) in expected.iter().enumerate() {
             // 周期内の任意点で同一（商が同じ）: 境界と中央 +0.5 の両方で確かめる。
-            let head = q as u32 * 1_000;
-            for t in [ms(head), ms(head + 500)] {
+            let head = q as i64 * 1_000;
+            for t in [at_ms(head), at_ms(head + 500)] {
                 assert_eq!(
                     cycle_ordinal(t, period, count),
                     *want,
@@ -332,9 +330,9 @@ mod tests {
     /// ヒット行 0 件（未 population）→ スロット数 1＝常に None（周期に依らず）。
     #[test]
     fn cycle_ordinal_zero_rows_is_always_none() {
-        for q in 0..5u32 {
+        for q in 0..5i64 {
             assert_eq!(
-                cycle_ordinal(ms(q * 700 + 350), ms(700), 0),
+                cycle_ordinal(at_ms(q * 700 + 350), ms(700), 0),
                 None,
                 "0 行は常に None"
             );
@@ -345,7 +343,7 @@ mod tests {
     #[test]
     fn cycle_ordinal_zero_period_is_none() {
         assert_eq!(
-            cycle_ordinal(ms(2_000), TimeSpan::ZERO, 3),
+            cycle_ordinal(at_ms(2_000), TimeSpan::ZERO, 3),
             None,
             "period 0 は防御的に None"
         );
@@ -363,7 +361,7 @@ mod tests {
         ];
         run_hover_inject_with(
             &HoverInjectConfig::Disabled,
-            ms(1_500),
+            at_ms(1_500),
             &actors,
             &mut BTreeMap::new(),
             |_actor, _ord| {
@@ -390,7 +388,7 @@ mod tests {
         // period 1.0s・frame_time 1.5 → 商1 → スロット1 = ordinal0（両 active actor とも）。
         run_hover_inject_with(
             &HoverInjectConfig::Cycle { period: ms(1_000) },
-            ms(1_500),
+            at_ms(1_500),
             &actors,
             &mut BTreeMap::new(),
             |actor, ord| {
@@ -415,7 +413,7 @@ mod tests {
         // period 700ms・frame_time 0.35s（<0.7）→ 商0 → None。
         run_hover_inject_with(
             &HoverInjectConfig::Cycle { period: ms(700) },
-            ms(350),
+            at_ms(350),
             &actors,
             &mut BTreeMap::new(),
             |_actor, ord| recorded.borrow_mut().push(ord),
@@ -437,10 +435,10 @@ mod tests {
         let mut logged = BTreeMap::new();
         let ((), events) = log_capture_kit::capture(|| {
             for t in [1_100, 1_500, 1_900, 2_100] {
-                run_hover_inject_with(&config, ms(t), &actors, &mut logged, |_, _| {});
+                run_hover_inject_with(&config, at_ms(t), &actors, &mut logged, |_, _| {});
             }
-            run_hover_inject_with(&config, ms(2_200), &inactive, &mut logged, |_, _| {});
-            run_hover_inject_with(&config, ms(2_300), &actors, &mut logged, |_, _| {});
+            run_hover_inject_with(&config, at_ms(2_200), &inactive, &mut logged, |_, _| {});
+            run_hover_inject_with(&config, at_ms(2_300), &actors, &mut logged, |_, _| {});
         });
         let ordinals: Vec<_> = events
             .iter()

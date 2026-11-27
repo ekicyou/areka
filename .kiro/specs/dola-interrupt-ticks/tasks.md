@@ -680,7 +680,7 @@
   - _Dispatch: mechanical — 形の追従_
   - _Requirements: 7.7, 9.6_
 
-- [ ] 10.10 areka-runtime の結線: フレームの頭で文字の層を進め、`TalkClock` から起点を外す
+- [x] 10.10 areka-runtime の結線: フレームの頭で文字の層を進め、`TalkClock` から起点を外す
   - フレームの中で、結線を取り出した直後・どの相よりも前に、進める相を 1 回置く。フレームの時刻を求める 1 本の関数を、進める相・可視性の相・文字の相が呼ぶ
   - 進める相・文字の拡大率の相・文字の相は、文字の層を借りられなければ、そのフレームの仕事を見送り、`error!` を出し（同じ縮みの間は 1 回）、次の画面の更新を予約する。フレームの時刻が無ければ進めずに予約する
   - `TalkClock` は「今」を読む口だけにし、見積もりの口・台本の時刻の口・包む受け口・台本の時刻を求める所・起点がまだ無いフレームを見送る分かれ道を消す（記録に書く事として報告に挙げる）。`hover_inject` はフレームの時刻を受ける
@@ -831,3 +831,4 @@
 - 10.3: `actor_held.rs`・`actor_held_tests.rs`（10.2 で足した）が lib.rs の `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` のどちらにも無い。10.4 で載せる（`every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる）。
 - 10.4: 「全部が現れている時刻」に `TimePoint::MAX` を使うと、その後のフレームが時刻を逆へ戻す所がある。後にフレームが続く所は有限の遅い時刻にする（10.5 以降の追従でも同じ）。
 - 10.7: 遅れて処理した図形の合図で、(発火時刻, 直前の刻み] に止めの働きのコマが在ると、合図の時の絵に止める前のコマが 1 刻みだけ出うる（次の刻みで直る・檻は無い）。
+- 10.10: areka-runtime はまだ組めないので、10.10 のテスト（`frame_text_advance_tests` 7 本・`next_reveal` 5 本）と borrowck は 10.14 で初めて走る。areka-session `runtime_boot.rs:33,82` の `ClockedTextSink` は `Box::new(text)` へ、本体 `runtime_tests` の `observe_cue`/`ClockedTextSink` も 10.16。

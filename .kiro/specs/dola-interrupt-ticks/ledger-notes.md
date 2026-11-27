@@ -384,3 +384,11 @@
 ## 10.9（後半）
 
 - テストの形の追従の大半は 10.7 が済ませた（「10.7（後半）」）。ここでは時計の無くなった共有の足場 `ClockRig` を `ActorRig` へ改名しただけ。消したテスト・assert・期待の変化は無い。
+
+## 10.10（後半）
+
+- 消した口・分かれ道・ログ: `TalkClock` の `observe_cue`・`talk_time`・`now_talk_time` と起点の欄 `epoch`、錠が壊れた時の `error!` 2 行（"TalkClock epoch mutex poisoned in observe_cue…"・"…in talk_time…"）、`ClockedTextSink` とその `CueSink`、`scale_text::resolve_talk_time`、起点がまだ無いフレームで文字の相を見送る分かれ道、`reveal_pending` と字が残る間毎回 REARM を立てる所、`lib.rs` の `loop_ticker_config` と `SerikoClock` の使用（`spawn_seriko` と `LoopTickerConfig::default()`）。ログの欄の改名: `present_frame` の失敗の `talk_time` → `frame_now`。
+- 消したテスト: talk_clock の 9 本（`new_talk_rebases_epoch_forward`・`intra_talk_jitter_does_not_lower_epoch`・`fresh_clock_has_no_epoch`・`talk_time_clamps_negative_to_zero`・`clocked_sink_*` の 5 本）、`seriko_clock_tests::ticker_and_seriko_read_the_same_clock`（ファイルごと）。
+- 置き換え: `frame_drain_text_tests::resolve_talk_time_override_wins_else_clock_else_none` → `frame_text_advance_tests::resolve_frame_now_takes_the_override_then_the_frame_time`。`frame_text_scale_tests` の `reveal_pending` の 5 本 → `next_reveal` の 5 本（真偽から「次に現れる字の時刻か None」へ）。
+- 足したログ: `error!(phase, "[text-layer] 文字の層がほかの処理に借りられていて…")`（相ごとに縮み 1 回で 1 行）。足したテスト: `talk_clock::tests::now_reads_the_injected_clock_and_clones_share_it`、`frame_text_advance_tests` の 7 本。
+- 振る舞いの変化: 拡大率の相・文字の相は借りられないと見送って REARM、文字の相は合図が当たっていなくてもフレームの時刻が在れば `present_frame`、字が残る間の予約は次に現れる字の時刻への `arm_deadline`（最長 1 時間・全部の場所から求める）、`hover_inject` は毎フレームのフレームの時刻で呼ぶ。期待の変化: `run_text_phase_override_reaches_present_frame_without_panic` は `Some(ms(2_000))` → `Some(at_ms(2_000))`、`hover_inject` のテストは `ms` → `at_ms`（値は同じ）、`cycle_ordinal` は `div_euclid`/`rem_euclid`。

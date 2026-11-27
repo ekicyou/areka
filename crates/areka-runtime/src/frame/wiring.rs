@@ -28,7 +28,7 @@ use super::move_hold::HeldCue;
 use super::status_report::BalloonStatusLedger;
 use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
-use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
+use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock, TextLayerBusyLogged};
 use crate::scope_scale::SharedScopeScaleTable;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
@@ -38,7 +38,7 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
-/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`clock`／`talk_ends` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
+/// 大半のフィールドは `frame` 配下の相だけが触るため `pub(super)`。バルーン可視性の相は兄弟モジュール `balloon_visibility` に置かれ、複数の欄を同時に可変借用する（表示層へ発行しながら状態を更新する）ので読み口メソッドでは組めない。そのため、その相が消費する `presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／`talk_ends` と、届けの相の台帳 `balloon_status` などは `pub` にしてある。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub presenter: EmoPresenter,
@@ -102,8 +102,10 @@ pub struct RuntimeWiring {
     pub(super) text_scale_warned: BTreeSet<u32>,
     /// 装着で文字層を繋げなかった scope と、その面 0 の背景色（[`run_text_scale_phase`] が繋ぎ直す時に渡す）。
     pub(super) unconnected_text: BTreeMap<u32, (u8, u8, u8)>,
-    /// 台本の時刻の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
+    /// 現実の出来事に時刻を付ける時計（トークの受け口・利用者の中断の口と同じ時計）。
     pub clock: TalkClock,
+    /// 文字の層を借りられなかった事の、相ごとの記録の覚え（同じ縮みの間は 1 回）。
+    pub(super) text_busy_logged: TextLayerBusyLogged,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
@@ -168,6 +170,7 @@ impl RuntimeWiring {
             text_scale_warned: BTreeSet::new(),
             unconnected_text: BTreeMap::new(),
             clock,
+            text_busy_logged: TextLayerBusyLogged::default(),
             assets: Some(assets),
             attached: false,
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。

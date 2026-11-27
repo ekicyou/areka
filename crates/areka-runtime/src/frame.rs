@@ -1,30 +1,31 @@
 //! 毎フレーム結線の排他 system `frame_system` と、その状態 `RuntimeWiring`。
 //!
-//! `frame_system` は `RuntimeWiring`（NonSend）を取り出し、下の 20 の相をこの順に 1 フレームで
+//! `frame_system` は `RuntimeWiring`（NonSend）を取り出し、下の 21 の相をこの順に 1 フレームで
 //! 駆動して戻す。相の順の所有者は本ファイルで、順そのものが振る舞いの一部である（理由は
 //! `frame_system` の中の各相の前に書く）。
 //!
-//! 1. 作業領域の同期（`work_area_sync`）
-//! 2. 装着（`attach`・GPU 資源と `GhostWindows` が揃うまで何もしない。バルーンは不可視のまま確立し、
+//! 1. 文字の層を進める（`scale_text::run_text_advance_phase`・フレームの時刻までに時刻の来た物を届いた順に当てる）
+//! 2. 作業領域の同期（`work_area_sync`）
+//! 3. 装着（`attach`・GPU 資源と `GhostWindows` が揃うまで何もしない。バルーンは不可視のまま確立し、
 //!    シェルは最初の `\s` の台本まで非表示を保つ）
-//! 3. 装置の作り直し（presenter の `refresh_after_device_change`）
-//! 4. 拡大率の相（`dpi`・`Changed<DPI>` の窓の target を再スケールして窓寸を反映）
-//! 5. 作業領域の変化の再スナップ（`work_area_sync`・変化があったフレームだけ）
-//! 6. 取り出し（`drain_resnap`・表示の指令を FIFO で適用するだけ）
-//! 7. 差し替え（`switch`・シェルとバルーンの置き換えの後始末）
-//! 8. 可視性（`balloon_visibility`・指令適用後の実状態からバルーンの可視を決めて発行）
-//! 9. 窓寸の突き合わせ（`scale_text::reconcile_reported_sizes`・表示成立点の報告を窓へ反映）
-//! 10. 重なり（`zorder_drain`・台本の指令を台帳へ適用し、望む鎖 1 本を wintf の受け口へ置く）
-//! 11. 常に手前の状態（`window_state`）
-//! 12. 再スナップ（`drain_resnap`・表示寸が変わったキャラ窓のアンカー再適用）
-//! 13. 移動の取り出し（`drain_resnap`・`\![move]` ほか位置の指令）
-//! 14. 面の `move` のずれ（`move_shift`）
-//! 15. 連鎖の確定（`drain_resnap`・初期配置を実表示寸で 1 度だけ）
-//! 16. 連鎖の解き直し（`drain_resnap`・拡大率の遷移ごとに 1 度だけ）
-//! 17. 文字の拡大率（`scale_text`・文字層の binding を presenter の現適用 k へ合わせる）
-//! 18. 文字（`scale_text`・`TalkClock::talk_time` が `Some` のとき `present_frame`）
-//! 19. 状態の報告（`status_report`・見えているバルーンの組を変わったときだけ kanade へ）
-//! 20. 拡大率の知らせ（`scale_notice`）
+//! 4. 装置の作り直し（presenter の `refresh_after_device_change`）
+//! 5. 拡大率の相（`dpi`・`Changed<DPI>` の窓の target を再スケールして窓寸を反映）
+//! 6. 作業領域の変化の再スナップ（`work_area_sync`・変化があったフレームだけ）
+//! 7. 取り出し（`drain_resnap`・表示の指令を FIFO で適用するだけ）
+//! 8. 差し替え（`switch`・シェルとバルーンの置き換えの後始末）
+//! 9. 可視性（`balloon_visibility`・指令適用後の実状態からバルーンの可視を決めて発行）
+//! 10. 窓寸の突き合わせ（`scale_text::reconcile_reported_sizes`・表示成立点の報告を窓へ反映）
+//! 11. 重なり（`zorder_drain`・台本の指令を台帳へ適用し、望む鎖 1 本を wintf の受け口へ置く）
+//! 12. 常に手前の状態（`window_state`）
+//! 13. 再スナップ（`drain_resnap`・表示寸が変わったキャラ窓のアンカー再適用）
+//! 14. 移動の取り出し（`drain_resnap`・`\![move]` ほか位置の指令）
+//! 15. 面の `move` のずれ（`move_shift`）
+//! 16. 連鎖の確定（`drain_resnap`・初期配置を実表示寸で 1 度だけ）
+//! 17. 連鎖の解き直し（`drain_resnap`・拡大率の遷移ごとに 1 度だけ）
+//! 18. 文字の拡大率（`scale_text`・文字層の binding を presenter の現適用 k へ合わせる）
+//! 19. 文字（`scale_text`・フレームの時刻が在るとき `present_frame`）
+//! 20. 状態の報告（`status_report`・見えているバルーンの組を変わったときだけ kanade へ）
+//! 21. 拡大率の知らせ（`scale_notice`）
 //!
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数）は装着の計画で、`attach` にある。
 
@@ -110,7 +111,7 @@ pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
 // 表示の拡大率を読み口で受ける move drain（GPU 無しの檻が窓を「表示した」前提で流すためのシーム）。
 #[cfg(any(test, feature = "test-support"))]
 pub use self::drain_resnap::run_move_drain_with;
-pub use self::scale_text::{run_text_phase, run_text_scale_phase};
+pub use self::scale_text::{run_text_advance_phase, run_text_phase, run_text_scale_phase};
 // 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
 #[cfg(any(test, feature = "test-support"))]
 pub use self::test_support::all_shown;
@@ -137,10 +138,8 @@ use self::drain_resnap::{
     PhysicalSizeSource, finalize_chain_once_with, realign_chain_once_with_source, resnap_with,
 };
 use self::drain_resnap::{finalize_chain_once, realign_chain_once, resnap_shell_targets};
-use self::scale_text::reconcile_reported_sizes;
-// 時刻の解決の純判断を決定論の檻（`frame_drain_text_tests`）から引くための再輸出。
-#[cfg(test)]
-use self::scale_text::resolve_talk_time;
+pub(crate) use self::scale_text::resolve_frame_now;
+use self::scale_text::{TextLayerBusyLogged, reconcile_reported_sizes};
 // 窓を全部閉じるとき（`app_exit::close_windows_for_restart`）に外す、窓の一式に属する控え。
 pub use self::zorder_drain::ZOrderAbsentReports;
 
@@ -148,8 +147,7 @@ pub use self::zorder_drain::ZOrderAbsentReports;
 ///
 /// `RuntimeWiring`（NonSend）を [`World::remove_non_send`] で取り出し、モジュールの頭に並べた相を
 /// 順に駆動して [`World::insert_non_send`] で戻す。remove→insert は `&mut World` を各相へ排他に
-/// 渡すための借用衝突の回避である。本番の文字の相は override 無し（`FrameTime`＋`TalkClock` で
-/// `talk_time` を解決）。
+/// 渡すための借用衝突の回避である。本番の進める相と文字の相は override 無し（フレームの時刻は `FrameTime`）。
 ///
 /// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`RuntimeWiring` を
 /// 取り出すより前に判定し、作業領域の同期も含めて相を 1 つも回さずに戻る。記録は
@@ -176,6 +174,9 @@ pub fn frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<RuntimeWiring>() else {
         return;
     };
+    // どの相よりも前に置く。合図はフレームの外で届いて列で待つので、文字の層に触る相（装着・取り出し・
+    // 差し替え・可視性・文字の拡大率・文字）の全部が、このフレームの時刻まで進めた後の状態を見る。
+    run_text_advance_phase(&mut wiring, world, None);
     // 各相より前に置く。相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる。
     // 戻り値は、変化を契機とする再スナップ（拡大率の相の後）が受ける。
     let work_area_change = work_area_sync::sync_monitor_snapshot(world);
@@ -443,3 +444,7 @@ mod diag_route_tests;
 #[cfg(test)]
 #[path = "frame_text_scale_tests.rs"]
 mod text_scale_tests;
+
+#[cfg(test)]
+#[path = "frame_text_advance_tests.rs"]
+mod text_advance_tests;

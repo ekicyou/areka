@@ -57,7 +57,12 @@ pub fn manual_balloon_runtime(
         rt.apply_cue(&cue(i * 1_000, CueCommand::Text("あ".into())));
         rt.apply_cue(&cue(i * 1_000 + 500, CueCommand::NewLine { ratio: 1.0 }));
     }
-    present_frame(&mut rt, &mut world, TimeSpan::from_millis(100_000)).expect("提示フレーム");
+    present_frame(
+        &mut rt,
+        &mut world,
+        TimePoint::ZERO + TimeSpan::from_millis(100_000),
+    )
+    .expect("提示フレーム");
     assert_eq!(
         rt.scroll_manual_at(&PlaceKey::balloon(&key), ScrollDir::Older, 1),
         ScrollChange::Started,

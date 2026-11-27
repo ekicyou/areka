@@ -142,7 +142,7 @@ pub struct BootAssets {
     /// スコープごとの起動時オンの静的 bind 集合（シェルの `*.bindgroup{N}.default,1`）。
     pub static_binds: DefaultBinds,
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
-    /// `wire_runtime` が `spawn_seriko_clocked` の actor 構築へ手渡す（bind cue の着せ替え名の解決）。
+    /// `wire_runtime` が `spawn_seriko` の actor 構築へ手渡す（bind cue の着せ替え名の解決）。
     pub bind_resolver: BindResolver,
     /// SERIKO ループ表（シェル面 1 表＋バルーン面の scope 別表・面種非依存）。
     /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
