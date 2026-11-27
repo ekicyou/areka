@@ -102,7 +102,7 @@
   - _Dispatch: standard — 途中の切り替えと記録の数えを組むテスト_
   - _Requirements: 3.4, 5.7, 5.8, 5.9, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.1, 7.2, 7.3_
 
-- [ ] 4. 確かめ: 全体の通しと約束の確認
+- [x] 4. 確かめ: 全体の通しと約束の確認
   - 触った crate のテストと clippy と `cargo fmt --check` が通り、ワークスペース全体がコンパイルできる
   - 台本の開始を直に組む所が design.md に挙げた所だけであることを検索で確かめる
   - ゴーストの実行時の組み立て（`runtime.rs`・`runtime_tests.rs`）・Cargo の定義・dola の時刻の表・MCP の宛先の決め方（`mcp/resolve.rs`）・kanade の知らせの `SstpSend`／`SstpNotify` の欄に差分が無いことを差分で確かめる
