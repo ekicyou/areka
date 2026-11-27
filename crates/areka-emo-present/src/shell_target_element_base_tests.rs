@@ -194,7 +194,7 @@ fn base_pointing_at_own_surface_image_looks_the_same_as_the_image_alone() {
     );
 }
 
-/// ⑶: 描けない `element0,replace,x.png` を持つサーフェスの合成結果は、
+/// ⑶: 描けない `element0,zoom,x.png` を持つサーフェスの合成結果は、
 /// その行を除いた文面と等しく、`x.png` は焼かれていない（面の画像が土台に敷かれたまま）。
 ///
 /// 不変の檻なので、読み手の判定を `overlay` だけに戻しても緑のままである。`x.png` は復号器に
@@ -207,8 +207,8 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
         ("x.png", (12, 3), COLOR_X),
         ("face.png", FACE, COLOR_FACE),
     ];
-    let with_replace = bake(
-        "surface8\n{\nelement0,replace,x.png,0,0\nelement1,overlay,face.png,2,2\n}\n",
+    let with_undrawn = bake(
+        "surface8\n{\nelement0,zoom,x.png,0,0\nelement1,overlay,face.png,2,2\n}\n",
         &files,
         &images,
     );
@@ -219,16 +219,16 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
     );
 
     assert_eq!(
-        snapshot(&with_replace, 8),
+        snapshot(&with_undrawn, 8),
         snapshot(&without, 8),
         "描けない行を持つ面の見え方が、その行を除いた文面と違う"
     );
     assert!(
-        with_replace.atlas().resolve(SetId(0), "x.png").is_none(),
+        with_undrawn.atlas().resolve(SetId(0), "x.png").is_none(),
         "描けない行の絵が焼かれている"
     );
     assert!(
-        with_replace
+        with_undrawn
             .build_world()
             .base_images()
             .used
@@ -313,14 +313,14 @@ const DRAWABLE_ONLY: &str = concat!(
     "}\n",
 );
 
-/// [`DRAWABLE_ONLY`] に描けない行 `element2,replace,x.png` を 1 行足した文面。
+/// [`DRAWABLE_ONLY`] に描けない行 `element2,zoom,x.png` を 1 行足した文面。
 const WITH_UNDRAWN: &str = concat!(
     "charset,UTF-8\n",
     "balloon.ok\n{\nsize,10,10\n}\n",
     "surface0,1\n{\n",
     "element0,base,body.png,0,0\n",
     "element1,overlay,face.png,1,1\n",
-    "element2,replace,x.png,0,0\n",
+    "element2,zoom,x.png,0,0\n",
     "element3,balloon,ok,0,0\n",
     "}\n",
 );
@@ -357,7 +357,7 @@ fn undrawable_line_warns_once_with_heading_element_and_method() {
     assert_eq!(
         warn_lines(&events),
         vec![format!(
-            "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"replace\""
+            "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"zoom\""
         )]
     );
 }

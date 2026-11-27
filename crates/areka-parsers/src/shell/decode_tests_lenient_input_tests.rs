@@ -209,17 +209,17 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 }
 
-/// 単一 surface 内で吸収対象（element replace）と忠実転記対象（pattern method・interval・
+/// 単一 surface 内で吸収対象（element zoom）と忠実転記対象（pattern method・interval・
 /// collisionex）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する。
 /// overlay element・collisionex の円・純 collision は書いた順に残り、
-/// replace element は吸収される一方、replace/overlay 両 pattern と `always` interval は原文のまま転記される
+/// zoom element は吸収される一方、replace/overlay 両 pattern と `always` interval は原文のまま転記される
 /// （描けない語の行だけが吸収され隣の行は残る）。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
 surface3000
 {
-element0,replace,skip.png,1,1
+element0,zoom,skip.png,1,1
 element1,overlay,keep.png,2,3
 element2,base,also.png,4,5
 collisionex0,Eye,circle,5,5,10

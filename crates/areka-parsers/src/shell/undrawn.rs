@@ -1,12 +1,13 @@
 //! 描けない行の転記（parse_undrawn_elements）— surfaces.txt から、areka が描けない描画メソッドの
 //! element定義の行だけを原文のまま並べる。
 //!
-//! element定義の行は第 2 欄の語で 3 つの転記のちょうど 1 つに入る: `overlay`・`base` は画像の
-//! 読み手（`Element`）、`balloon` は箱の転記（`boxes.rs`）、それ以外（空の欄・大文字の綴り・
-//! `replace`・`add`・`bind`・ukadoc に無い語）は本転記。転記だけを行い、展開・検証・記録はしない
+//! element定義の行は第 2 欄の語で 3 つの転記のちょうど 1 つに入る: `is_image_element_method` が
+//! 真の語は画像の読み手（`Element`）、`balloon` は箱の転記（`boxes.rs`）、それ以外（空の欄・大文字の
+//! 綴り・`add`・`bind`・`auto`・ukadoc に無い語）は本転記。転記だけを行い、展開・検証・記録はしない
 //! （失敗しない）。記録は入口（`load_shell_target`）が出す。
 
-use super::decode::{is_box_element_method, is_image_element_method};
+use super::decode::is_box_element_method;
+use super::element_method_words::is_image_element_method;
 use super::lexer::heading_text;
 use super::parse::parse_all;
 
