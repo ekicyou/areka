@@ -24,41 +24,10 @@ use windows::Win32::Graphics::Dxgi::IDXGIDevice;
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 
-struct Warp {
-    factory: ID2D1Factory1,
-    device: ID2D1Device,
-}
-
-// SAFETY: 工場は MULTI_THREADED で、同じ工場の系列（装置・DC・資源）への呼び出しは D2D が内部で
-// 直列化する。D3D11 の装置は free-threaded。テストはスレッドごとに自分の DC を作って使う。
-unsafe impl Send for Warp {}
-unsafe impl Sync for Warp {}
-
-fn warp() -> &'static Warp {
-    static WARP: OnceLock<Warp> = OnceLock::new();
-    WARP.get_or_init(|| {
-        let d3d = d3d11_create_device(
-            None,
-            D3D_DRIVER_TYPE_WARP,
-            HMODULE::default(),
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-            None,
-            D3D11_SDK_VERSION,
-            None,
-            None,
-        )
-        .expect("WARP の D3D11 装置");
-        let dxgi: IDXGIDevice = d3d.cast().expect("IDXGIDevice");
-        let factory: ID2D1Factory1 =
-            unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, None) }.expect("工場");
-        let device = unsafe { factory.CreateDevice(&dxgi) }.expect("D2D の装置");
-        Warp { factory, device }
-    })
-}
-
 /// WARP の D2D の装置（プロセスで 1 つ）。入れ物や読み戻しのテストが自分で DC を作るときに使う。
 pub(crate) fn warp_device() -> &'static ID2D1Device {
-    &warp().device
+    static DEVICE: OnceLock<ID2D1Device> = OnceLock::new();
+    DEVICE.get_or_init(|| crate::ecs::warp_d2d_device().expect("WARP の D2D の装置"))
 }
 
 /// `warp_device` とは別の D2D の装置の DC（同じ工場・96 DPI）。装置をまたぐ資源の確かめに使う。
@@ -77,7 +46,8 @@ pub(crate) fn other_device_dc() -> ID2D1DeviceContext {
     let dxgi: IDXGIDevice = d3d.cast().expect("IDXGIDevice");
     // SAFETY: Windows API 境界。工場は MULTI_THREADED。
     unsafe {
-        let device = warp().factory.CreateDevice(&dxgi).expect("D2D の装置");
+        let factory: ID2D1Factory1 = warp_factory().cast().unwrap();
+        let device = factory.CreateDevice(&dxgi).expect("D2D の装置");
         let dc = device
             .CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .expect("DC");
@@ -96,7 +66,8 @@ pub(crate) fn warp_dc() -> ID2D1DeviceContext {
 
 /// 装置と同じ工場（切り抜きの図形はこれで作る・別の工場の図形は D2DERR_WRONG_FACTORY）。
 pub(crate) fn warp_factory() -> ID2D1Factory {
-    warp().factory.cast().unwrap()
+    // SAFETY: Windows API 境界。生きている装置から工場を取るだけ。
+    unsafe { warp_device().GetFactory() }.unwrap_or_else(|e| panic!("工場: {e:?}"))
 }
 
 /// BGRA（premultiplied）。
