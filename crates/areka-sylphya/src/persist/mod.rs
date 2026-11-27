@@ -81,7 +81,7 @@ pub struct ScopeRoots {
 
 impl ScopeRoots {
     /// 指定スコープのルート（未設定は `None` ＝不在縮退）。
-    fn root_of(&self, scope: PersistScope) -> Option<&PathBuf> {
+    pub(crate) fn root_of(&self, scope: PersistScope) -> Option<&PathBuf> {
         match scope {
             PersistScope::App => self.app.as_ref(),
             PersistScope::Ghost => self.ghost.as_ref(),

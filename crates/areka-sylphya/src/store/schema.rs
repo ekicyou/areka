@@ -216,7 +216,7 @@ fn classify(e: &rusqlite::Error) -> Opened {
     }
 }
 
-fn detach(conn: &Connection, alias: &str) {
+pub(crate) fn detach(conn: &Connection, alias: &str) {
     let attached = conn
         .query_row(
             "SELECT 1 FROM pragma_database_list WHERE name = ?1",
