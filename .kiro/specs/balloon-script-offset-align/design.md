@@ -121,9 +121,9 @@ crates/areka-placement/src/
 └── balloon_limit_monitor_tests.rs           # 新: 画面の選び方（台本の値あり・なし・またぐ・limit 0・3 か所が同じ・欄）
 crates/areka-runtime/src/
 ├── move_cue_balloon_script_tests.rs         # 新: MoveCueSink の 2 つの腕（送る・捨てる・余分な引数・実行者）と受け手の表の 2 行
-├── move_hold_balloon_script_tests.rs        # 新: 預かり（表示は待たない・同じ窓の順・初期化との順）
+├── frame_move_hold_balloon_script_tests.rs        # 新: 預かり（表示は待たない・同じ窓の順・初期化との順）
 ├── frame_balloon_script_drain_tests.rs      # 新: move drain の腕から当て口まで・着地した巡の解き直し・見えた巡に台本の位置（frame_system の段）
-└── dpi_balloon_script_tests.rs              # 新: バルーン窓だけの DPI の変化で「接する」が保たれ、選ぶ画面が 1 回で止まる
+└── frame_dpi_balloon_script_tests.rs              # 新: バルーン窓だけの DPI の変化で「接する」が保たれ、選ぶ画面が 1 回で止まる
 ```
 
 ### Modified Files
@@ -135,9 +135,10 @@ crates/areka-runtime/src/
 - `crates/areka-runtime/src/consumer_ledger.rs` — `CANONICAL_ROWS` に 2 行（担当 `MoveSink`）。
 - `crates/areka-runtime/src/consumer_ledger_test_support.rs` — 見本 `samples` に 2 行。
 - `crates/areka-runtime/src/move_cue.rs` — `PositionCue::SetBalloonOffset`・`SetBalloonAlign` と `MoveCueSink::emit` の 2 つの腕。新しいテストのファイルの `mod` の宣言。
-- `crates/areka-runtime/src/frame/move_hold.rs` — 2 つの変種の `touched_scopes`・表示を待つ判定・初期化との順。新しいテストのファイルの `mod` の宣言。
+- `crates/areka-runtime/src/frame/move_hold.rs` — 2 つの変種の `touched_scopes`・表示を待たない判定・初期化との順（テストの宣言は `frame.rs`）。
 - `crates/areka-runtime/src/frame/drain_resnap.rs` — move drain の 2 つの腕と、頭の `resettle_script_balloons` の呼び出し。
 - `crates/areka-runtime/src/frame/dpi.rs` — バルーン窓の寸が変わったときに `reanchor_after_balloon_resize` を呼ぶ 1 か所。
+- `crates/areka-runtime/src/frame.rs` — runtime の 3 つの新しいテストのファイルの `#[path = "frame_*.rs"]` の宣言だけ（今の型どおり、ファイル名は `frame_move_hold_balloon_script_tests.rs`・`frame_balloon_script_drain_tests.rs`・`frame_dpi_balloon_script_tests.rs`）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — 2 行（3043・3088 行目の項目）を実装済みに。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に別々の行を足し、451 行目の「【上書き】バルーンだけが作業領域からはみ出すとき」の行を画面の選び方に合わせて改める。
 
@@ -291,7 +292,7 @@ stateDiagram-v2
 
 #### MoveDrain の 2 つの腕
 
-- `PositionCue::SetBalloonOffset { scope, offset }` → `apply_script_balloon_offset(world, scope, offset)`、`SetBalloonAlign { scope, align }` → `apply_script_balloon_align(world, scope, align)`。戻り値は捨てる（記録は当て口の中・1 件の縮退が他の指令を巻き込まない＝今の腕と同じ）。
+- `PositionCue::SetBalloonOffset { scope, offset }` → `apply_script_balloon_offset(world, scope, offset, landed)`、`SetBalloonAlign { scope, align }` → `apply_script_balloon_align(world, scope, align, landed)`（`landed` は move drain の `Landed` の読み口がそのスコープに答える値）。戻り値は捨てる（記録は当て口の中・1 件の縮退が他の指令を巻き込まない＝今の腕と同じ）。
 
 ### placement（値と重ね）
 
@@ -403,7 +404,7 @@ pub(crate) fn resolve_standard_scopes(world: &World, windows: &GhostWindows,
 pub(crate) fn resolve_descript_scopes(world: &World, windows: &GhostWindows,
     src: &DescriptSource, balloon: &BalloonPlacementInputs) -> Vec<StandardScope>;
 ```
-- 本体は私有の 1 つの関数で、層の選び（台本あり／descript だけ）を受ける。台本ありのとき、1 周目のスコープごとの段で `world.get::<ScriptBalloonPlacement>(running.char_window)` を引き、`overlay_offset` → `scale_then_merge` → `overlay_align` の順に当てる。2 周目（解決）は今のまま。
+- 本体は私有の 1 つの関数で、層の選び（台本あり／descript だけ）を受ける。台本ありのとき、1 周目のスコープごとの段で `world.get::<ScriptBalloonPlacement>(running.char_window)` を引き、`overlay_offset` → `scale_then_merge` → `overlay_align` の順に当てる。2 周目（解決）は今のまま。私有の関数はもう 1 つ、あるスコープのバルーンの寸の差し替え（`Option<(usize, SizeI)>`）を受け、BalloonDpiReanchor が寸の前（`before`）の標準を解くときだけ使う（今のバルーンの寸は `WindowPos` から読むので、前の寸はこの口でしか渡せない）。
 - シェルの切り替え・面の `windowposition`（バルーンの切り替え）・バルーン位置初期化の 3 つの道は呼び手を変えずに台本の値を読む（5.3・5.4・5.5）。初期化は今のまま利用者のずらしと記憶の鍵を捨て、Component に触らない（5.5）。
 - `apply_shell_descript`: `apply_restored_placements` の後、記憶から戻したずらしを使うスコープ（`p.balloon_offset_base.dpi.is_none()`）に Component があるとき、そのスコープの台本の値の分（`placement`（重ねる前の標準＝台本あり）− `resolve_descript_scopes` の同じスコープ）を `balloon_offset_base.offset`・`balloon_offset`・`balloon_pos` に足す。記憶は「descript の標準＋利用者のずらし」なので、足した結果は「新しいシェルの台本の基準点＋利用者のずらし」になる（5.3・2.3）。`resolve_descript_scopes` は Component を持つスコープがあるときだけ呼ぶ。
 
@@ -419,8 +420,11 @@ pub(crate) fn resolve_descript_scopes(world: &World, windows: &GhostWindows,
 ##### Service Interface
 ```rust
 /// 当てたら真。
-pub fn apply_script_balloon_offset(world: &mut World, scope: u32, offset: ScriptOffset) -> bool;
-pub fn apply_script_balloon_align(world: &mut World, scope: u32, align: ScriptAlign) -> bool;
+/// `landed` はそのスコープのキャラ窓の表示が実表示寸へ着地したか（runtime の `Landed` の読み口が答える）。
+pub fn apply_script_balloon_offset(world: &mut World, scope: u32, offset: ScriptOffset, landed: bool) -> bool;
+pub fn apply_script_balloon_align(world: &mut World, scope: u32, align: ScriptAlign, landed: bool) -> bool;
+/// 着地前の印のあるスコープのうち `landed` が真と答えたものを解き直す。
+pub fn resettle_script_balloons(world: &mut World, landed: &dyn Fn(u32) -> bool);
 ```
 - 手順（2 つの当て口が共に通る私有の 1 本）:
   1. `GhostWindows`・`char_window(scope)` が無ければ当てず `warn!(event = "script_balloon_skipped", scope, command, reason)`（`no_ghost_windows`・`no_char_window`＝1.9・7.4）。値は持たない。
@@ -432,7 +436,7 @@ pub fn apply_script_balloon_align(world: &mut World, scope: u32, align: ScriptAl
   7. 新しい標準 `S_new` を解く。印が無ければ `reinstall_balloon(world, &running, &S_new)`。印があれば、`BalloonFollow.offset() + (S_new.balloon_offset − S_prev.balloon_offset)` を基準（係留済み・`running.dpi`）とキーワードの素材なしで据えた `ScopePlacement` の写しを `reinstall_balloon` へ渡し、その後 `mark_user_moved` で印を付け直す（2.3・3.9）。
   8. `info!(event = "script_balloon_offset_set" | "script_balloon_align_set", scope, command, …値…, user_moved)`（7.1・軸ごとに `absolute`／`relative` と値）。
 - `\![lock,balloonmove]` を読まない（4.6）。キャラ窓・`Anchored` に触れない。置き直しの経路は `reinstall_balloon` の `PlacementRoute::Restore`（`\![execute,resetballoonpos]` と同じ）。
-- 着地前の当て: キャラ窓の表示が `Landed` でないときは、手順 7 の後に印 `ScriptBalloonUnsettled`（キャラ窓の Component・欄なし）を付ける。move drain の頭の `resettle_script_balloons(world)` が、`Landed` になった窓の印を外し、そのスコープを着地した大きさで解き直す（利用者が動かした印が無ければ標準で据え直す。着地の前は利用者がバルーンをドラッグできないので、印のある間の利用者のずらしは命令の前から持ち越した分だけで、手順 7 と同じ差の式で残す）。
+- 着地前の当て: 着地は World の Component ではなく、runtime の move drain の中の `Landed` の読み口（表示の拡大率の読み口＋キャラ窓の `WindowPos.size`）が答えるので、move drain の腕が引数 `landed` で渡す。`landed` が偽のときは、手順 7 の後に印 `ScriptBalloonUnsettled`（キャラ窓の Component・欄なし）を付ける。move drain の頭の `resettle_script_balloons(world, landed)` が、`Landed` になった窓の印を外し、そのスコープを着地した大きさで解き直す（利用者が動かした印が無ければ標準で据え直す。着地の前は利用者がバルーンをドラッグできないので、印のある間の利用者のずらしは命令の前から持ち越した分だけで、手順 7 と同じ差の式で残す）。
 
 #### BalloonDpiReanchor（バルーン窓だけの DPI の変化）
 
@@ -542,9 +546,9 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 
 ### Integration Tests（runtime）
 - `move_cue_balloon_script_tests.rs`: 受け手の表で `consumer_of("set", Some("balloonoffset"))`・`("set", Some("balloonalign"))` が `MoveSink`（1.3）。`\0` で書けば `scope=0` の変種が 1 件、`\1` で `1`（1.1・1.2）。壊れた値は線に何も出ず警告 1 行に受け取った字（1.7・1.8・7.2）。余分な引数は無視（1.6）。実行者が数でなければ今の警告（1.9）。
-- `move_hold_balloon_script_tests.rs`: キャラ窓の表示が決まっていなくても預からずに出す。先に預かった同じスコープの `\![move]` を追い越さない。`\![execute,resetballoonpos]` が預かった台本の値の指令を追い越さない。
+- `frame_move_hold_balloon_script_tests.rs`: キャラ窓の表示が決まっていなくても預からずに出す。先に預かった同じスコープの `\![move]` を追い越さない。`\![execute,resetballoonpos]` が預かった台本の値の指令を追い越さない。
 - `frame_balloon_script_drain_tests.rs`: `run_move_drain_with` の 1 回で、届いた指令が当て口を通ってバルーンの `WindowPos` まで書かれる（同じ巡・2.6）。着地の前に届いた指令は印を付けて仮の大きさで置き、着地した巡に着地した大きさで解き直される（2.7）。`frame_system` の段で、起動の最初の台本の指令と台詞が同じ巡に届いたとき、バルーンが見えた巡にはもう台本の位置にある（窓寸の照合が次の巡へ回る形を含む）。
-- `dpi_balloon_script_tests.rs`: 2 つの画面で、`left` のスコープのバルーン窓の寸だけを DPI の相で書き換えると、バルーンの右端が本体の左端に接したまま（3.1）・`center` の中央が保たれる（3.3）・利用者のずらしが残る（2.3）・押し込んだ後の当て直しで選ぶ画面が変わらない（6.1）。台本の値の無いスコープは今と bit 同一（4.4）。
+- `frame_dpi_balloon_script_tests.rs`: 2 つの画面で、`left` のスコープのバルーン窓の寸だけを DPI の相で書き換えると、バルーンの右端が本体の左端に接したまま（3.1）・`center` の中央が保たれる（3.3）・利用者のずらしが残る（2.3）・押し込んだ後の当て直しで選ぶ画面が変わらない（6.1）。台本の値の無いスコープは今と bit 同一（4.4）。
 
 ### 台帳と文書（8.2・8.3）
 - 網羅台帳の検査（`ukadoc-survey` の既存の検査）が 2 行の実装済みを通す。§8 の行は文書の置き場の照合（`doc_tree_guard_test.rs`）を通す。
@@ -559,7 +563,7 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 - **roadmap ④ の触るファイル**: 足す＝`crates/areka-placement/src/{reseed,lib,script_balloon}.rs`・`follow/balloon_drag.rs`・`crates/areka-runtime/src/consumer_ledger_test_support.rs`・`crates/areka-runtime/src/frame/dpi.rs`。要らない＝`move_cue_args.rs`・`resolver.rs`。C28 の他の 5 本の列と重ならないことを確かめた（`sylphya-sqlite-kvs` の placement の分は `persist.rs`・`follow_test_support.rs`・`persist_finalize_save_tests.rs` だけ）。設計の討議で roadmap の C28 の行を書き換えた。
 
 ## Risks
-1. **DPI の境での揺れ**: 台本の値のあるスコープはバルーン自身の画面で見るので、窓の大きさが画面で変わると選ぶ画面が行き来しうる。押し込んだ結果は選んだ画面に収まり、収まった窓の DPI はその画面のもの（OS は交わりの大きい画面の DPI を当てる）なので、大きさの変化は 1 回で止まる見込み。止まらないのはバルーンが作業領域より大きい形だけ。決定論のテスト（`dpi_balloon_script_tests.rs`）が寸だけを書き換える形で 1 回で止まることを固定し、実機の段 4 で見る。揺れ止めは入れない。
+1. **DPI の境での揺れ**: 台本の値のあるスコープはバルーン自身の画面で見るので、窓の大きさが画面で変わると選ぶ画面が行き来しうる。押し込んだ結果は選んだ画面に収まり、収まった窓の DPI はその画面のもの（OS は交わりの大きい画面の DPI を当てる）なので、大きさの変化は 1 回で止まる見込み。止まらないのはバルーンが作業領域より大きい形だけ。決定論のテスト（`frame_dpi_balloon_script_tests.rs`）が寸だけを書き換える形で 1 回で止まることを固定し、実機の段 4 で見る。揺れ止めは入れない。
 2. **バルーンの窓だけが別の DPI の画面へ移ったときの相対の位置**: 左に出すバルーンの追従の値は `−バルーンの幅 + ずらし` で、バルーンの幅が移った先の DPI で変わると本体との隙間が変わる。BalloonDpiReanchor が寸の前後の標準の差を足して「接する」を保つ。`WM_DPICHANGED` の推奨の矩形が位置をずらさないかは段 4 で見る。
 3. **`resolve_standard_scopes` を 1 命令につき 1〜2 回・ドラッグの離しで 2 回解く**: 純粋な計算で窓の数は 2〜数個。台本の値のあるスコープだけが 2 回目を払う。
 
