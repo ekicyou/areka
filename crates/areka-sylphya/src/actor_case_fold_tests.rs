@@ -22,7 +22,6 @@ fn spawn_empty() -> SylphyaParts {
     spawn_sylphya(SylphyaInit {
         roots: ScopeRoots::default(),
         io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
     })
 }
 
@@ -35,7 +34,7 @@ fn value(v: &str) -> DottedResolution {
 }
 
 fn set(key: &str, value: &str) -> Vec<Effect> {
-    SylphyaCore::new().apply(&SylphyaMsg::Set {
+    apply(&SylphyaMsg::Set {
         asker: asker(),
         key: key.into(),
         value: value.into(),
@@ -244,7 +243,6 @@ fn persisted_values_read_in_any_case() {
     let parts = spawn_sylphya(SylphyaInit {
         roots,
         io: Box::new(io),
-        runtime_sink: None,
     });
     assert_eq!(read(&parts, "areka.boot.count"), value("7"));
     assert_eq!(read(&parts, "AREKA.BOOT.COUNT"), value("7"));

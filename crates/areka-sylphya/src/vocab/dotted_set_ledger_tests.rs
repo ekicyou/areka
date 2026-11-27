@@ -107,7 +107,7 @@ fn set_effective_entries_before_this_spec_are_unchanged_in_order() {
 /// 新規登記の 4 項: 書込分類が運行コマンドで、書込を適用した効果列が予約済みの受理ちょうど 1 件。
 #[test]
 fn newly_registered_set_keys_are_runtime_command_reserved() {
-    use crate::{AskerId, Effect, SetClass, SylphyaCore, SylphyaMsg, classify_set};
+    use crate::{AskerId, Effect, SetClass, SylphyaMsg, apply, classify_set};
 
     let expected: &[(&str, SetClass)] = &[
         ("seriko.sticky-window", SetClass::RuntimeCommand),
@@ -118,7 +118,7 @@ fn newly_registered_set_keys_are_runtime_command_reserved() {
     for (key, class) in expected {
         assert_eq!(classify_set(key), *class, "書込分類: {key}");
         let asker = AskerId::new("ghost/a");
-        let effects = SylphyaCore::new().apply(&SylphyaMsg::Set {
+        let effects = apply(&SylphyaMsg::Set {
             asker: asker.clone(),
             key: (*key).into(),
             value: "1".into(),

@@ -41,6 +41,7 @@ pub mod asker;
 pub mod fast;
 pub mod key;
 pub mod keytable;
+pub mod kvs;
 pub mod mirror;
 pub mod persist;
 pub mod pull;
@@ -56,11 +57,12 @@ mod test_log_capture;
 
 // --- 公開面 re-export ---
 pub use actor::{
-    Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit, SylphyaMsg, SylphyaParts,
-    SylphyaPublisher, classify_set, spawn_sylphya, spawn_sylphya_with_failures,
+    Effect, SetClass, SylphyaInit, SylphyaMsg, SylphyaParts, SylphyaPublisher, Writer, apply,
+    classify_set, spawn_sylphya, spawn_sylphya_with_failures,
 };
 pub use asker::{AskerContext, AskerId};
 pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
+pub use kvs::{WriteFailed, WriteOutcome};
 pub use mirror::{MirrorImage, SharedMirror};
 pub use persist::{
     Axis, PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope,

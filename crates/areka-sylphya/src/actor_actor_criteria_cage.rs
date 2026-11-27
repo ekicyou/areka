@@ -16,7 +16,6 @@ fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor:
     let init = SylphyaInit {
         roots: ScopeRoots::default(),
         io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
     };
     let (parts, shared) = spawn_parts(init, None);
     (shared, parts.publisher, parts.handle)
@@ -169,7 +168,6 @@ fn send_after_death_logs_warn_not_silent() {
     let parts = spawn_sylphya(SylphyaInit {
         roots: ScopeRoots::default(),
         io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
     });
     // 正典終了経路で確実に畳む（join 復帰 = body return = rx drop 済み = 以降 send は SendError）。
     parts.publisher.close();

@@ -17,7 +17,6 @@ fn init_ghost_root_only() -> SylphyaInit {
             ..ScopeRoots::default()
         },
         io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
     }
 }
 
@@ -70,9 +69,13 @@ fn successful_post_sends_nothing() {
 
 #[test]
 fn spawn_without_receiver_behaves_as_today() {
-    let parts = spawn_sylphya(init_ghost_root_only());
+    let io = std::sync::Arc::new(FakePersistIo::new());
+    let mut init = init_ghost_root_only();
+    init.io = Box::new(io.clone());
+    let roots = init.roots.clone();
+    let parts = spawn_sylphya(init);
 
-    // 失敗の投函の後もアクターは生きていて、続く保存の知らせは読み口へ反映される。
+    // 失敗の投函の後もアクターは生きていて、続く保存は記憶へ届く。
     parts
         .publisher
         .persist_put(PersistScope::App, failing_entries());
@@ -85,12 +88,9 @@ fn spawn_without_receiver_behaves_as_today() {
         vec![(PersistKey::BootCount, "2".into())],
     );
     parts.publisher.barrier().expect("barrier");
-    let ctx = crate::asker::AskerContext {
-        asker: crate::asker::AskerId::new("ghost/a"),
-    };
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx, "areka.boot.count"),
-        crate::value::DottedResolution::Value("2".into())
+        crate::persist::load_scope(PersistScope::Ghost, &roots, &io),
+        vec![(PersistKey::BootCount, "2".into())]
     );
 
     parts.publisher.close();

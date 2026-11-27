@@ -20,7 +20,6 @@ fn init_empty() -> SylphyaInit {
     SylphyaInit {
         roots: ScopeRoots::default(),
         io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
     }
 }
 
@@ -79,7 +78,6 @@ fn initial_load_projects_persist_into_dotted_without_publish() {
     let parts = spawn_sylphya(SylphyaInit {
         roots,
         io: Box::new(io),
-        runtime_sink: None,
     });
 
     // publish も barrier もせず即読み: 初期像は spawn 内で同期構築済みゆえレースなく見える
@@ -183,26 +181,6 @@ fn barrier_fences_all_prior_messages_last_write_wins() {
     );
 }
 
-// === write-through persist put が鏡像 areka.* へ投影（root None でも投影は成る・save は縮退）===
-
-#[test]
-fn persist_put_projects_to_mirror_areka_region() {
-    let parts = spawn_sylphya(init_empty()); // roots 空 → save は Degraded だが鏡像投影は成る。
-    parts.publisher.persist_put(
-        PersistScope::Ghost,
-        vec![(PersistKey::BootCount, "3".into())],
-    );
-    parts.publisher.barrier().expect("barrier");
-    // 保存先 root が None でも（save_scope は Degraded・warn）鏡像 dotted 投影は独立に成立し、
-    // アクターは panic せず継続する。
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("3".into())
-    );
-}
-
 // === write-through persist put が実 IO へ確定・独立ロードで復元（往復・root あり）===
 
 #[test]
@@ -215,7 +193,6 @@ fn persist_put_write_through_commits_to_real_io() {
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
         io: Box::new(shared.clone()),
-        runtime_sink: None,
     });
     parts.publisher.persist_put(
         PersistScope::Ghost,
@@ -236,13 +213,6 @@ fn persist_put_write_through_commits_to_real_io() {
     assert!(
         loaded.contains(&(PersistKey::VanishCount, "2".into())),
         "write-through が実 IO へ確定していない: {loaded:?}"
-    );
-    // 鏡像 areka.* 投影も成る（write-through の両面）。
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("5".into())
     );
 }
 
@@ -294,11 +264,14 @@ fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
     );
 }
 
-/// dispatch で必ず panic する運行 sink（アクター death by panic を決定論的に誘発する）。
-struct PanicSink;
-impl RuntimeCommandSink for PanicSink {
-    fn dispatch(&self, _asker: &AskerId, _key: &str, _value: &str) {
-        panic!("injected runtime-command dispatch panic");
+/// 確定で必ず panic する IO（アクター death by panic を決定論的に誘発する）。
+struct PanicIo;
+impl crate::persist::PersistIo for PanicIo {
+    fn read(&self, _path: &std::path::Path) -> std::io::Result<Option<String>> {
+        Ok(None)
+    }
+    fn commit(&self, _path: &std::path::Path, _content: &str) -> std::io::Result<()> {
+        panic!("injected persist commit panic");
     }
 }
 
@@ -311,9 +284,11 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         publisher,
         handle,
     } = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: Some(Box::new(PanicSink)),
+        roots: ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        },
+        io: Box::new(PanicIo),
     });
     // 先に既知値を確立（panic 前の最終鏡像）。
     publisher.publish_static(
@@ -323,8 +298,11 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
     );
     publisher.barrier().expect("barrier before panic");
 
-    // RuntimeCommand SET → apply が RuntimeCommandReserved → sink.dispatch で panic 誘発。
-    publisher.set(a("ghost/a"), "surface.num".into(), "5".into());
+    // 永続 put → 確定で panic 誘発。
+    publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "1".into())],
+    );
 
     // join がアクタースレッドの panic を握り潰さず観測（バグ観測・areka-actor 規約 4）。
     let err = handle
@@ -393,10 +371,10 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
     }
 }
 
-// === 鍵を消す投函: 鏡像と記憶の両方から消え、ほかの鍵は残る・無い鍵では像を出さない ===
+// === 鍵を消す投函: 記憶から消え、ほかの鍵は残る・像は出さない ===
 
 #[test]
-fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
+fn persist_remove_drops_the_key_from_file_and_keeps_others() {
     let shared = std::sync::Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
@@ -406,7 +384,6 @@ fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
         SylphyaInit {
             roots: roots.clone(),
             io: Box::new(shared.clone()),
-            runtime_sink: None,
         },
         None,
     );
@@ -430,30 +407,13 @@ fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
         .publisher
         .persist_remove(PersistScope::Ghost, vec![x, y]);
     parts.publisher.barrier().expect("barrier");
-    let epoch = mirror.load().epoch;
-    // 無い鍵を消しても後継の像は出さない（epoch は実変化に対応する）。
-    parts.publisher.persist_remove(PersistScope::Ghost, vec![x]);
-    parts.publisher.barrier().expect("barrier");
 
-    let read = |key| parts.reader.resolve_dotted_str(&ctx("ghost/a"), key);
-    assert_eq!(
-        read("areka.balloon.offset.scope(0).x"),
-        DottedResolution::NotFound
-    );
-    assert_eq!(
-        read("areka.balloon.offset.scope(0).y"),
-        DottedResolution::NotFound
-    );
-    assert_eq!(
-        read("areka.boot.count"),
-        DottedResolution::Value("3".into())
-    );
     assert_eq!(
         load_scope(PersistScope::Ghost, &roots, &shared),
         vec![(PersistKey::BootCount, "3".into())],
         "記憶からも消え、ほかの鍵は残る"
     );
-    assert_eq!(mirror.load().epoch, epoch, "無い鍵の消しは像を出さない");
+    assert_eq!(mirror.load().epoch, 0, "覚える値の書き・消しは像を出さない");
 
     parts.publisher.close();
     parts.handle.join().expect("join");

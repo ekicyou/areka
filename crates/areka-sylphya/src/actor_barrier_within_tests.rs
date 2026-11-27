@@ -43,7 +43,6 @@ fn init(io: GatedFirstCommit) -> SylphyaInit {
             ..ScopeRoots::default()
         },
         io: Box::new(io),
-        runtime_sink: None,
     }
 }
 
