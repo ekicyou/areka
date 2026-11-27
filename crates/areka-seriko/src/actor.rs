@@ -45,6 +45,7 @@ use std::sync::{Arc, PoisonError, RwLock};
 use areka_sakura::strict::DetectionPoint;
 use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
 use dola::TimePoint;
+use dola::cue::OriginNotice;
 
 use crate::bind::BindResolver;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
@@ -82,6 +83,10 @@ pub enum SerikoMsg {
     ///
     /// `at` は送り手がその事実を見た時刻で、出来事の時刻になる。[`SerikoSink::send_stage`] が橋渡しする。
     Stage { note: StageNote, at: TimePoint },
+    /// 置き直しの知らせ（[`dola::cue::CueSink::origin_set`] の、前の起点が在る物だけ）。
+    ///
+    /// 合図と同じ口を通るので、届いた順のまま、届いた時に文字の時刻の列へ当てる。
+    OriginSet(OriginNotice),
     /// 明示の停止の口（[`SerikoSink::close`]・今はテストが使う）。本番は送り手を全部 drop して止める。
     Close,
 }
@@ -250,6 +255,17 @@ impl dola::cue::CueSink for SerikoSink {
             probe.report(point.finding());
         }
         self.deliver(cue);
+    }
+
+    /// 置き直しの知らせだけを [`SerikoMsg::OriginSet`] として合図と同じ口へ積む。最初の起点の知らせは
+    /// 送らない（seriko は起点を持たない）。積めなかったときは `deliver` と同じく `error!` 1 行のみ。
+    fn origin_set(&mut self, notice: OriginNotice) {
+        if notice.previous.is_some() && self.tx.send(SerikoMsg::OriginSet(notice)).is_err() {
+            tracing::error!(
+                effective_at = %notice.effective_at,
+                "seriko inbox が消失: 置き直しの知らせを配送できず破棄した（受信端全消失）"
+            );
+        }
     }
 }
 
@@ -560,6 +576,10 @@ fn dispatch_message<O: SurfaceOutput>(
             on_stage(states, loop_runtime, out, note, at);
             return ControlFlow::Continue(());
         }
+        SerikoMsg::OriginSet(notice) => {
+            loop_runtime.apply_origin_notice(&notice);
+            return ControlFlow::Continue(());
+        }
         SerikoMsg::Cue(cue) => cue,
     };
 
@@ -773,6 +793,9 @@ mod dispatch_tests;
 #[cfg(test)]
 #[path = "actor_event_time_tests.rs"]
 mod event_time_tests;
+#[cfg(test)]
+#[path = "actor_origin_tests.rs"]
+mod origin_tests;
 #[cfg(test)]
 #[path = "actor_parts_tests.rs"]
 mod parts_tests;

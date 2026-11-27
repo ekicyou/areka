@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 
 use areka_sakura::cluster::cluster_count;
 use areka_sakura::reveal::chunk_reveal_offsets;
-use dola::{TimePoint, TimeSpan};
+use dola::{TimeDelta, TimePoint, TimeSpan};
 
 /// スコープ 1 つの文字の時刻の列（序数は塊をまたいで連続）。
 #[derive(Default)]
@@ -54,6 +54,23 @@ impl TalkFeed {
         self.last = None;
     }
 
+    /// 置き直しの知らせ: 効く時刻 `effective_at` より後の時刻（列の文字と「前の字の時刻」の欄）を
+    /// `delta` だけ動かし、効く時刻より前になる物は効く時刻にする。効く時刻以前の時刻は書き換えない
+    /// （列は単調のまま・刈り込んだ文字の序数はそのまま）。
+    pub(crate) fn shift_after(&mut self, effective_at: TimePoint, delta: TimeDelta) {
+        let shift = |t: TimePoint| {
+            if t > effective_at {
+                (t + delta).max(effective_at)
+            } else {
+                t
+            }
+        };
+        for t in &mut self.times {
+            *t = shift(*t);
+        }
+        self.last = self.last.map(shift);
+    }
+
     /// 時刻 `t` までに現れた文字の数（序数で数える・ちょうどの時刻の文字は現れている）。
     pub(crate) fn revealed_until(&self, t: TimePoint) -> u64 {
         self.base + self.times.partition_point(|&r| r <= t) as u64
@@ -74,6 +91,10 @@ impl TalkFeed {
         self.base += count as u64;
     }
 }
+
+#[cfg(test)]
+#[path = "talk_origin_tests.rs"]
+mod origin_tests;
 
 #[cfg(test)]
 #[path = "talk_tests.rs"]

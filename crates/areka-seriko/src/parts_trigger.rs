@@ -75,7 +75,10 @@ pub(super) fn fire_part_triggers<'a>(
     let mut due: Vec<(TimePoint, &LoopAnimation)> = anims
         .iter()
         .filter(|a| a.trigger.is_word())
-        .filter_map(|a| state.next_start(a, at, talk).map(|at| (at, a)))
+        .flat_map(|a| {
+            let starts = state.next_starts(a, at, talk);
+            starts.into_iter().map(move |at| (at, a))
+        })
         .collect();
     due.sort_by_key(|&(at, a)| (at, a.id));
     let (mut started, mut outcome, mut called) = (Vec::new(), CallOutcome::default(), Vec::new());

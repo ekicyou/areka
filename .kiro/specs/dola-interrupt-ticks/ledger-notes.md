@@ -374,3 +374,9 @@
 - 足したテスト: `actor_event_time_tests.rs` の 12 本（姿を変える指令の 7 本と、遅れた合図の絵・発火時刻の前の止めの 5 本）。元からあるテストで期待の値が変わったものは 0 本。
 - 振る舞いの変化: 同じ面の出し直し・変化の無い着せ替えでも、直前の刻みから発火時刻までに絵が進んでいれば合図の時に Show を 1 件出す。遅れて処理した合図は、始まりと構えは発火時刻、置くコマは「発火時刻と直前の刻みの遅い方」の時刻。
 - 後のタスクへ: areka-runtime の `lib.rs`（`SerikoClock`・`spawn_seriko_clocked`・`loop_ticker_config(&SerikoClock)`）、`frame/status_report.rs:151`（`send_stage` に時刻）、`film_playback_e2e_tests.rs`、`seriko_clock_tests.rs`、`assets.rs:145` の説明。
+
+## 10.8（後半）
+
+- 取り除いた分かれ道: `Armed::next_start` の「越えた区切りのうち最新の 1 つだけ」（口は `next_starts` で、越えた区切りを古い順に全部返す）。消したテスト・ログは無い。足したログ: `SerikoSink::origin_set` が送れない時の `error!` 1 行。
+- 変える前後の期待: `trigger_tests::talk_boundaries_crossed_in_one_window_fire_once_at_the_latest` → `..._fire_oldest_first_at_each_glyph_time`（7 字見えた刻みで、前は `Some(1250)` の 1 つ、後は `[1100, 1250]`。同じ時刻の字は前も後も 1 回）。ほかの元からあるテストの期待は変わらない。
+- 足したテスト: `talk::origin_tests` 5 本、`looper::mouth_tests` 3 本、`actor::origin_tests` 3 本。

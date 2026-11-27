@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use dola::cue::OriginNotice;
 use dola::{TimePoint, TimeSpan};
 
 use crate::calls::CallOutcome;
@@ -337,6 +338,16 @@ impl LoopRuntime {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// 置き直しの知らせを、全部のスコープの文字の列へ当てる（[`TalkFeed::shift_after`]）。数え済みの
+    /// 序数・始まった再生・見え始めの時刻は、もう起きた事なので動かさない。最初の起点の知らせ（前の
+    /// 起点が無い）では何もしない。
+    pub(crate) fn apply_origin_notice(&mut self, notice: &OriginNotice) {
+        let Some(delta) = notice.delta() else { return };
+        for feed in self.feeds.values_mut() {
+            feed.shift_after(notice.effective_at, delta);
         }
     }
 
@@ -809,6 +820,9 @@ mod calls_tests;
 #[cfg(test)]
 #[path = "looper_film_count_tests.rs"]
 mod film_count_tests;
+#[cfg(test)]
+#[path = "looper_mouth_tests.rs"]
+mod mouth_tests;
 #[cfg(test)]
 #[path = "looper_order_tests.rs"]
 mod order_tests;

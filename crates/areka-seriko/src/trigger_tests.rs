@@ -35,8 +35,23 @@ fn talk(id: u32, every: u32) -> LoopAnimation {
     }
 }
 
-/// 呼び手と同じ順の判定 1 回: 開始の時刻を求め、その時刻に再生中かを `playing_at` に尋ねて決める
-/// （[`Armed::next_start`] → [`Armed::commit`]）。
+/// 呼び手と同じ順の判定 1 回: 開始の時刻を古い順に求め、それぞれの時刻に再生中かを `playing_at` に
+/// 尋ねて決める（[`Armed::next_starts`] → [`Armed::commit`]）。始まった開始の時刻を返す。
+fn poll_all(
+    armed: &mut Armed,
+    anim: &LoopAnimation,
+    now: TimePoint,
+    playing_at: impl Fn(TimePoint) -> bool,
+    talk: Option<&TalkWindow<'_>>,
+) -> Vec<TimePoint> {
+    let starts = armed.next_starts(anim, now, talk);
+    starts
+        .into_iter()
+        .filter(|&at| armed.commit(anim, at, playing_at(at)))
+        .collect()
+}
+
+/// [`poll_all`] で、始まるのが多くて 1 つの判定。
 fn poll(
     armed: &mut Armed,
     anim: &LoopAnimation,
@@ -44,8 +59,12 @@ fn poll(
     playing_at: impl Fn(TimePoint) -> bool,
     talk: Option<&TalkWindow<'_>>,
 ) -> Option<TimePoint> {
-    let at = armed.next_start(anim, now, talk)?;
-    armed.commit(anim, at, playing_at(at)).then_some(at)
+    let started = poll_all(armed, anim, now, playing_at, talk);
+    assert!(
+        started.len() <= 1,
+        "1 つの判定で 2 つ以上始まった: {started:?}"
+    );
+    started.first().copied()
 }
 
 /// 開いた窓で `at` に見え始めた状態。
@@ -68,13 +87,14 @@ fn every_50ms(g: u64) -> TimePoint {
 }
 
 /// 刻み 1 回分: 数えから文字の窓を組んで判定し、判定の後に数えを進める（一番上の面の配線と同じ順）。
-fn talk_tick(
+/// 始まった開始の時刻を古い順に返す。
+fn talk_tick_all(
     armed: &mut Armed,
     anim: &LoopAnimation,
     now_seen: u64,
     playing: bool,
     wall: &dyn Fn(u64) -> TimePoint,
-) -> Option<TimePoint> {
+) -> Vec<TimePoint> {
     let (base, prev_seen) = armed.talk_window_bounds().expect("数えを持つ");
     let window = TalkWindow {
         base,
@@ -82,9 +102,25 @@ fn talk_tick(
         now_seen,
         wall,
     };
-    let started = poll(armed, anim, TICK, |_| playing, Some(&window));
+    let started = poll_all(armed, anim, TICK, |_| playing, Some(&window));
     armed.advance_talk(now_seen);
     started
+}
+
+/// [`talk_tick_all`] で、越える区切りが多くて 1 つの刻み。
+fn talk_tick(
+    armed: &mut Armed,
+    anim: &LoopAnimation,
+    now_seen: u64,
+    playing: bool,
+    wall: &dyn Fn(u64) -> TimePoint,
+) -> Option<TimePoint> {
+    let started = talk_tick_all(armed, anim, now_seen, playing, wall);
+    assert!(
+        started.len() <= 1,
+        "1 つの刻みで 2 つ以上始まった: {started:?}"
+    );
+    started.first().copied()
 }
 
 // ── runonce ──────────────────────────────────────────────────────────────
@@ -408,16 +444,16 @@ fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
     );
 }
 
-/// 1 回の刻みで区切りを 2 つ以上越えても 1 回だけ鳴る。開始の時刻は越えた区切りのうち最新のもの。
-/// 文字が一度に現れた（区切りが同じ時刻に重なった）ときも 1 回。
+/// 1 回の刻みで区切りを 2 つ以上越えたら、越えた区切りの全部が古い順に、それぞれの区切りの文字が
+/// 現れた時刻で始まる。文字が一度に現れた（区切りが同じ時刻に重なった）ときは 1 回。
 #[test]
-fn talk_boundaries_crossed_in_one_window_fire_once_at_the_latest() {
+fn talk_boundaries_crossed_in_one_window_fire_oldest_first_at_each_glyph_time() {
     let t = talk(1, 3);
 
     let mut late = armed_with_text(0);
     assert_eq!(
-        talk_tick(&mut late, &t, 7, false, &every_50ms),
-        Some(at_ms(1250)),
+        talk_tick_all(&mut late, &t, 7, false, &every_50ms),
+        [at_ms(1100), at_ms(1250)],
         "序数 2 と 5 を越えた"
     );
     assert_eq!(
@@ -433,8 +469,8 @@ fn talk_boundaries_crossed_in_one_window_fire_once_at_the_latest() {
     let at_once = |_g: u64| at_ms(2000);
     let mut burst = armed_with_text(0);
     assert_eq!(
-        talk_tick(&mut burst, &t, 9, false, &at_once),
-        Some(at_ms(2000))
+        talk_tick_all(&mut burst, &t, 9, false, &at_once),
+        [at_ms(2000)]
     );
     assert_eq!(talk_tick(&mut burst, &t, 9, false, &at_once), None);
 }

@@ -109,7 +109,10 @@ pub(super) fn fire_top_triggers<'a>(
     // 開始の時刻の順（同じ時刻は番号の順）に、その時刻までの働きのコマを当ててから決める（呼び出しが
     // 止めた・始めた再生を見て決める・時刻の順を崩さない）。
     let mut due: Vec<(TimePoint, &LoopAnimation)> = anims
-        .filter_map(|anim| state.next_start(anim, now, talk).map(|at| (at, anim)))
+        .flat_map(|anim| {
+            let starts = state.next_starts(anim, now, talk);
+            starts.into_iter().map(move |at| (at, anim))
+        })
         .collect();
     due.sort_by_key(|&(at, anim)| (at, anim.id));
     let mut fired = Vec::new();
