@@ -258,7 +258,7 @@ fn compute_unregistered_rest_is_process_minus_registered() {
         threads: 2,
     };
     let threads = vec![sample(1, 300_000, 200_000), sample(2, 50_000, 150_000)];
-    let rest = compute_unregistered_rest(&process, &threads);
+    let rest = compute_unregistered_rest(&process, &threads, &[]);
     assert_eq!(rest.kernel_us, 50_000);
     assert_eq!(rest.user_us, 250_000);
     assert_eq!(rest.kernel_us + rest.user_us, 300_000);
@@ -274,7 +274,7 @@ fn compute_unregistered_rest_saturates_at_zero() {
         threads: 1,
     };
     let threads = vec![sample(1, 999, 999)];
-    let rest = compute_unregistered_rest(&process, &threads);
+    let rest = compute_unregistered_rest(&process, &threads, &[]);
     assert_eq!((rest.kernel_us, rest.user_us), (0, 0));
 }
 
@@ -282,7 +282,7 @@ fn compute_unregistered_rest_saturates_at_zero() {
 #[test]
 fn compute_unregistered_rest_uses_the_fixed_role_and_placeholder_identity() {
     let process = sample_process();
-    let rest = compute_unregistered_rest(&process, &[]);
+    let rest = compute_unregistered_rest(&process, &[], &[]);
     assert_eq!(rest.role, ROLE_UNREGISTERED_REST);
     assert_eq!(rest.tid, 0);
     assert_eq!(rest.name, "-");
@@ -292,6 +292,71 @@ fn compute_unregistered_rest_uses_the_fixed_role_and_placeholder_identity() {
     let line = format_thread_line(1, 60, &rest);
     assert_eq!(field_value(&line, "role").unwrap(), "unregistered_rest");
     assert_eq!(field_value(&line, "tid").unwrap(), "0");
+}
+
+fn sample_folded() -> FoldedSample {
+    FoldedSample {
+        family: "talk thread-*".to_owned(),
+        kernel_us: 1_000,
+        user_us: 2_500,
+        exited: 7,
+    }
+}
+
+/// 畳んだ行は今の欄に `exited` を 1 つ足しただけで、欄名は重複しない。
+#[test]
+fn format_folded_line_has_no_duplicate_field_names_and_is_fixed_in_order() {
+    let line = format_folded_line(3, 180, &sample_folded());
+    let names = field_names(&line);
+    let mut seen = std::collections::BTreeSet::new();
+    for name in &names {
+        assert!(
+            seen.insert(*name),
+            "フィールド名 {name} が重複している: {line}"
+        );
+    }
+    assert_eq!(
+        names,
+        vec![
+            "snap",
+            "t_s",
+            "tid",
+            "name",
+            "role",
+            "cpu_us",
+            "kernel_us",
+            "user_us",
+            "exited",
+        ]
+    );
+    assert_eq!(
+        line,
+        "perf(thread): スレッド別 CPU snap=3 t_s=180 tid=0 name=- role=talk_thread-* \
+         cpu_us=3500 kernel_us=1000 user_us=2500 exited=7"
+    );
+}
+
+/// 畳んだ合計は残りの算出で、生きた行の合計と並べて両方が引かれ、0 で止まる。
+#[test]
+fn compute_unregistered_rest_subtracts_live_and_folded_and_saturates() {
+    let process = ProcessSample {
+        wall_ms: 1_000,
+        kernel_us: 10_000,
+        user_us: 10_000,
+        threads: 1,
+    };
+    let live = vec![sample(1, 3_000, 4_000)];
+    let folded = vec![sample_folded()];
+    let rest = compute_unregistered_rest(&process, &live, &folded);
+    assert_eq!((rest.kernel_us, rest.user_us), (6_000, 3_500));
+
+    let big = FoldedSample {
+        kernel_us: 99_000,
+        user_us: 1_000,
+        ..sample_folded()
+    };
+    let rest = compute_unregistered_rest(&process, &live, &[big]);
+    assert_eq!((rest.kernel_us, rest.user_us), (0, 5_000));
 }
 
 // ---------------------------------------------------------------------------

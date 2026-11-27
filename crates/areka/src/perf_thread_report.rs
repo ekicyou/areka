@@ -110,6 +110,26 @@ impl ThreadSample {
     }
 }
 
+/// 終わったスレッドを系統ごとに畳んだ合計 1 件ぶんの標本（累積の CPU 時間）。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FoldedSample {
+    /// 系統名（名簿が付ける。行へ出すときに空白を `_` へ潰す）。
+    pub family: String,
+    /// 畳んだスレッドのカーネルモード CPU 時間の合計（µs・累積）。
+    pub kernel_us: u64,
+    /// 畳んだスレッドのユーザーモード CPU 時間の合計（µs・累積）。
+    pub user_us: u64,
+    /// 畳んだスレッドの本数。
+    pub exited: u64,
+}
+
+impl FoldedSample {
+    /// カーネルとユーザーの合計（µs）。
+    pub const fn cpu_us(&self) -> u64 {
+        self.kernel_us + self.user_us
+    }
+}
+
 /// プロセス全体の標本。壁時計はここにだけ在る。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ProcessSample {
@@ -170,6 +190,21 @@ pub fn format_thread_line(snap: u32, t_s: u64, s: &ThreadSample) -> String {
     )
 }
 
+/// 畳んだ合計 1 件を 1 行へ組む（純関数）。
+///
+/// 欄は `perf(thread)` と同じで `tid=0 name=-`、役割名に系統名、末尾に `exited=` を足す。
+pub fn format_folded_line(snap: u32, t_s: u64, s: &FoldedSample) -> String {
+    format!(
+        "perf(thread): スレッド別 CPU snap={snap} t_s={t_s} tid=0 name={PLACEHOLDER} \
+         role={role} cpu_us={cpu_us} kernel_us={kernel_us} user_us={user_us} exited={exited}",
+        role = sanitize(&s.family),
+        cpu_us = s.cpu_us(),
+        kernel_us = s.kernel_us,
+        user_us = s.user_us,
+        exited = s.exited,
+    )
+}
+
 /// プロセス全体を 1 行へ組む（純関数）。
 ///
 /// `wall_ms` だけが壁時計で、残る 3 つは CPU 時間である。
@@ -185,20 +220,23 @@ pub fn format_process_line(snap: u32, t_s: u64, p: &ProcessSample) -> String {
     )
 }
 
-/// 名簿外の残りを 1 行ぶんの標本として算出する（プロセス CPU − 名簿の合計）。
+/// 名簿外の残りを 1 行ぶんの標本として算出する（プロセス CPU − 生きた行の合計 − 畳んだ合計）。
 ///
 /// 名簿に載らないスレッド（bevy のタスクプール等）は必ず残るので、その分を黙って
-/// 落とさずここで拾う。終了済みのスレッドも名簿に残り、その最終値は
-/// プロセス CPU に含まれているので、引く側からも外さない。
+/// 落とさずここで拾う。終了済みのスレッドの最終値はプロセス CPU に含まれているので、
+/// 畳んだ合計も引く側から外さない。
 ///
 /// 読み取り時刻がずれてプロセスより名簿の合計が大きく見えることがある（スナップ
 /// ショットは瞬間ではない）。そのときは 0 で止める——負へ回さない。
 pub fn compute_unregistered_rest(
     process: &ProcessSample,
     threads: &[ThreadSample],
+    folded: &[FoldedSample],
 ) -> ThreadSample {
-    let kernel_sum: u64 = threads.iter().map(|t| t.kernel_us).sum();
-    let user_sum: u64 = threads.iter().map(|t| t.user_us).sum();
+    let kernel_sum: u64 = threads.iter().map(|t| t.kernel_us).sum::<u64>()
+        + folded.iter().map(|f| f.kernel_us).sum::<u64>();
+    let user_sum: u64 = threads.iter().map(|t| t.user_us).sum::<u64>()
+        + folded.iter().map(|f| f.user_us).sum::<u64>();
     ThreadSample {
         role: ROLE_UNREGISTERED_REST.to_owned(),
         name: PLACEHOLDER.to_owned(),
@@ -455,7 +493,7 @@ fn take_and_emit(snap: u32, started: Instant) {
     emit_line(&format_thread_line(
         snap,
         t_s,
-        &compute_unregistered_rest(&process, &samples),
+        &compute_unregistered_rest(&process, &samples, &[]),
     ));
 }
 
