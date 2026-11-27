@@ -101,7 +101,14 @@ fn attach_as(
     let uri = match backend.locate(root, access) {
         Ok(Located::Uri(uri)) => uri,
         Ok(Located::Missing) => return Opened::Missing,
-        Err(e) => return report(root, reported, Opened::Io(e.to_string())),
+        Err(e) => {
+            let reason = if e.kind() == std::io::ErrorKind::InvalidFilename {
+                e.to_string()
+            } else {
+                cannot_open(&e)
+            };
+            return report(root, reported, Opened::Io(reason));
+        }
     };
     let opened = match conn.execute("ATTACH ?1 AS ?2", [uri.as_str(), alias]) {
         Ok(_) => check(conn, alias, readonly, steps),
@@ -130,13 +137,13 @@ fn check(conn: &Connection, alias: &str, readonly: bool, steps: &[Step]) -> Open
     }
     if id != APPLICATION_ID {
         return Opened::Unusable(format!(
-            "記憶のファイルの application_id が {id} で、areka の印 {APPLICATION_ID} と違います（areka のファイルでない）"
+            "記憶のファイル sylphya.sqlite の application_id が {id} で、areka の印 {APPLICATION_ID} と違います（areka のファイルでない）"
         ));
     }
     let current = current_version(steps);
     if !(1..=current).contains(&version) {
         return Opened::Unusable(format!(
-            "記憶のファイルの形の版が {version} で、この areka が読める 1〜{current} の外です（新しい areka で書いたファイルなど）"
+            "記憶のファイル sylphya.sqlite の形の版が {version} で、この areka が読める 1〜{current} の外です（新しい areka で書いたファイルなど）"
         ));
     }
     if version == current {
@@ -172,7 +179,7 @@ fn upgrade(conn: &Connection, alias: &str, steps: &[Step]) -> Opened {
     };
     match run() {
         Ok(from) if from > current => Opened::Unusable(format!(
-            "記憶のファイルの形の版が {from} で、この areka が読める 1〜{current} の外です（新しい areka で書いたファイルなど）"
+            "記憶のファイル sylphya.sqlite の形の版が {from} で、この areka が読める 1〜{current} の外です（新しい areka で書いたファイルなど）"
         )),
         Ok(from) => {
             if from < current {
@@ -198,15 +205,21 @@ fn upgrade(conn: &Connection, alias: &str, steps: &[Step]) -> Opened {
             }
             match classify(&e) {
                 Opened::Busy => Opened::Busy,
-                _ => Opened::Io(format!("記憶のファイルを今の形の版へ直せませんでした: {e}")),
+                _ => Opened::Io(format!(
+                    "記憶のファイル sylphya.sqlite を今の形の版へ直せませんでした: {e}"
+                )),
             }
         }
     }
 }
 
+fn cannot_open(e: &dyn std::fmt::Display) -> String {
+    format!("記憶のファイル sylphya.sqlite を開けません: {e}")
+}
+
 fn classify(e: &rusqlite::Error) -> Opened {
     let rusqlite::Error::SqliteFailure(failure, _) = e else {
-        return Opened::Io(e.to_string());
+        return Opened::Io(cannot_open(e));
     };
     match failure.code {
         ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked => Opened::Busy,
@@ -214,9 +227,9 @@ fn classify(e: &rusqlite::Error) -> Opened {
             Opened::NeedsRecovery
         }
         ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt => Opened::Unusable(format!(
-            "記憶のファイルが壊れているか、SQLite のファイルではありません: {e}"
+            "記憶のファイル sylphya.sqlite が壊れているか、SQLite のファイルではありません: {e}"
         )),
-        _ => Opened::Io(e.to_string()),
+        _ => Opened::Io(cannot_open(e)),
     }
 }
 

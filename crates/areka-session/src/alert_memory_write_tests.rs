@@ -166,7 +166,7 @@ fn remembered_text_uses_scope_word_when_keys_are_empty() {
 
 #[test]
 fn unusable_file_gets_the_file_fix_line_and_the_others_keep_the_write_fix() {
-    const FILE_FIX_LINE: &str = "直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
+    const FILE_FIX_LINE: &str = "直し方: 理由に出たファイルを直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
     let body_of = |cause| alert_text(&scene(failure(vec![], cause), WriteMoment::Boot)).1;
 
     let unusable = body_of(PersistFailureCause::Unusable("壊れている".to_owned()));

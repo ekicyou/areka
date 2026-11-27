@@ -453,3 +453,8 @@ fn re_rooting_a_layer_clears_the_fast_homes_registered_there() {
     assert_eq!(kvs.get(FAST_KEY), None);
     stop(parts);
 }
+
+#[test]
+fn wait_limit_names_the_sqlite_file() {
+    assert!(crate::guardian::WAIT_LIMIT.contains("sylphya.sqlite"));
+}

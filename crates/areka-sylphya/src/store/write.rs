@@ -154,9 +154,9 @@ impl Store {
             other => {
                 let reason = match other {
                     Opened::Io(reason) => reason,
-                    Opened::NeedsUpgrade => "読み取りだけの走りでは、古い形の版の記憶のファイルを直せないので書けません".to_owned(),
-                    Opened::NeedsRecovery => "読み取りだけの走りでは、落ちた後のジャーナルが残る記憶のファイルを巻き戻せないので書けません".to_owned(),
-                    _ => "記憶のファイルを作れませんでした".to_owned(),
+                    Opened::NeedsUpgrade => "読み取りだけの走りでは、古い形の版の記憶のファイル sylphya.sqlite を直せないので書けません".to_owned(),
+                    Opened::NeedsRecovery => "読み取りだけの走りでは、落ちた後のジャーナルが残る記憶のファイル sylphya.sqlite を巻き戻せないので書けません".to_owned(),
+                    _ => "記憶のファイル sylphya.sqlite を作れませんでした".to_owned(),
                 };
                 tracing::error!(
                     target: LOG_TARGET,

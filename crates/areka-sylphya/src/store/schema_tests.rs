@@ -232,7 +232,10 @@ fn unusable_files_are_left_byte_for_byte_unchanged_and_not_attached() {
         let mut reported = BTreeSet::new();
 
         let (conn, opened) = open(fs.as_ref(), root, &mut reported);
-        assert!(matches!(opened, Opened::Unusable(_)), "{label}: {opened:?}");
+        let Opened::Unusable(reason) = &opened else {
+            panic!("{label}: {opened:?}");
+        };
+        assert!(reason.contains("sylphya.sqlite"), "{label}: {reason}");
         assert!(!attached(&conn), "{label}");
         drop(conn);
 
