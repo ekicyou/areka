@@ -927,7 +927,7 @@ pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build release `
 - 点灯の判定（`areka::perf` が debug で通るか）は**起動時に 1 度だけ**行い、消えていれば
   報告スレッドを起こしません。有効にしなければ費用は 0 です。
 - 有効なときは 60 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` に秒で指定すると変えられます）と
-  終了直前に、`perf(thread)`（1 スレッド 1 行）と `perf(process)`（1 行）を出します。
+  終了直前に、`perf(thread)`（生きているスレッド 1 本につき 1 行と、終わったスレッドの系統ごとの畳んだ合計 1 行）と `perf(process)`（1 行）を出します。
 - 役割名は**スレッドを作る側が宣言した固定語彙**です：`vblank`・`cursor_monitor`・`ui`・
   `ticker_dispatcher_kanade`・`ticker_loop`・`actor:<名前>`・`perf_report`・`unregistered_rest`。
   推測の当てはめではありません。
