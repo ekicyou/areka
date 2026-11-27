@@ -70,12 +70,35 @@ pub(crate) fn open_layer_with(
     reported: &mut BTreeSet<PathBuf>,
     steps: &[Step],
 ) -> Opened {
-    let readonly = backend.withholds(root);
-    let access = if readonly {
+    let access = if backend.withholds(root) {
         Access::ReadOnly
     } else {
         Access::ReadWrite
     };
+    attach_as(conn, backend, root, alias, reported, steps, access)
+}
+
+/// 層の置き場 `root` の記憶のファイルを、無ければ作って `alias` として付ける（初めての書き）。
+pub(crate) fn create_layer(
+    conn: &Connection,
+    backend: &dyn StoreBackend,
+    root: &Path,
+    alias: &str,
+    reported: &mut BTreeSet<PathBuf>,
+) -> Opened {
+    attach_as(conn, backend, root, alias, reported, STEPS, Access::Create)
+}
+
+fn attach_as(
+    conn: &Connection,
+    backend: &dyn StoreBackend,
+    root: &Path,
+    alias: &str,
+    reported: &mut BTreeSet<PathBuf>,
+    steps: &[Step],
+    access: Access,
+) -> Opened {
+    let readonly = access == Access::ReadOnly;
     let uri = match backend.locate(root, access) {
         Ok(Located::Uri(uri)) => uri,
         Ok(Located::Missing) => return Opened::Missing,
@@ -126,7 +149,7 @@ fn check(conn: &Connection, alias: &str, readonly: bool, steps: &[Step]) -> Open
     upgrade(conn, alias, steps)
 }
 
-fn current_version(steps: &[Step]) -> i32 {
+pub(crate) fn current_version(steps: &[Step]) -> i32 {
     i32::try_from(steps.len()).map_or(i32::MAX, |n| n.saturating_add(1))
 }
 

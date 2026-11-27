@@ -27,7 +27,7 @@ pub(crate) fn layer_order(layer: PersistScope) -> i64 {
 }
 
 /// 層のファイルを付ける DB の名前。
-fn alias(layer: PersistScope) -> &'static str {
+pub(super) fn alias(layer: PersistScope) -> &'static str {
     match layer {
         PersistScope::Balloon => "balloon",
         PersistScope::Shell => "shell",

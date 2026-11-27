@@ -11,6 +11,7 @@ mod backend;
 mod locate;
 mod read;
 mod schema;
+mod write;
 
 pub use backend::{
     Access, FsBackend, Located, MemBackend, StoreBackend, UNUSABLE_APPLICATION_ID, WriterHold,
