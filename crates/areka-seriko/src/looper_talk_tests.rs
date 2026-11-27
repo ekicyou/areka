@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 
+use areka_sakura::CueCommand;
 use dola::time::testing::{at_ms, ms};
 
 use super::test_support::{cell, note_balloon, started, switch};
@@ -49,7 +50,8 @@ impl Stage {
             cue.command,
             cue.duration,
         );
-        self.rt.observe_cue(&fired);
+        self.rt
+            .observe_cue(&fired, &crate::SurfaceResolver::new(BTreeMap::new()));
     }
 
     /// 発火時刻 `now_ms` に `\0` のシェルの面が `sid` に切り替わる。

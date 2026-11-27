@@ -70,7 +70,7 @@
   - _Dispatch: mechanical — 既存の型へ欄を 1 つ足し、組む所へ同じ形で追従する_
   - _Requirements: 2.1, 2.3, 3.5_
 
-- [ ] 3.2 合図を種類ごとに字の列と行き先へ当て、消去で数えを揃える
+- [x] 3.2 合図を種類ごとに字の列と行き先へ当て、消去で数えを揃える
   - 合図を受ける口がサーフェスの解決を受け取るようにし、`talk` の門が閉じていれば最初の真偽 1 つで戻る
   - 門が開いていれば、合図の振り分けを文字の列の世話の側の自由関数で行う: `\s` は 2.2 の口の答えで行き先を動かす、名前の形の `\b` は箱を選ぶ（無い名前でも記録しない）、文字・選択肢は行き先の場所へ積む、印の指令は印として積む、`\c` はそのスコープの数えを捨てた序数で揃える、全消去は全部のスコープで揃える、ほかは何もしない
   - スコープの字の列は、字・`\s`・`\b` のどれかが初めて届いたときに作る。門が閉じたら字の列と行き先を捨てる
@@ -141,3 +141,4 @@
 - `areka-seriko` の talk.rs で合図の配線前の 6 つの口に `#[cfg_attr(not(test), expect(dead_code, …))]` を付けた。配線したら外す（外さないと expect が満たされず警告になる）。clippy `--no-deps` は触っていない output.rs・state.rs の `doc_nested_refdefs` で赤（既存）。
 - seriko の数えの境界の組は `(base, seen)` から `(counted, seen)` へ替わった。既存のテストの境界の assert は同じ値の言い替えで、`realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed` の早い場合だけ (0,0)→(2,0)（0 で止まって数えた字を失う不具合の直し）。
 - `cargo test -p areka` の `emo2_mcp_get_log_origin_and_strict_over_one_real_boot` は `--ignored` 無しでも走り、i686 の `shiori-host32-helper.exe` が無いと赤になる（実機の起動。この spec の変更とは無関係）。クレートのテストでは除いて判定し、全体テストで確かめる。
+- seriko は印の合図でもスコープの字の列を作る（空の場所に最初に届いた印も、文字の層と同じく前の字を進めるため）。talk.rs の dead_code の expect は `rebase_boxes` の 1 つだけ残り、シェルの差し替えの配線で外す。

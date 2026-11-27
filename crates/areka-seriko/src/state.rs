@@ -173,10 +173,6 @@ impl ScopeStates {
     }
 
     /// 文字の層向けの `\s` の答えを控える。`Unresolved` は控えを変えない。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "サーフェス指令の経路が呼ぶまで未使用")
-    )]
     pub(crate) fn note_text_surface(&mut self, scope: &ActorKey, outcome: SurfaceKeyOutcome) {
         if outcome != SurfaceKeyOutcome::Unresolved {
             self.text_surfaces.insert(scope.clone(), outcome);
@@ -184,10 +180,6 @@ impl ScopeStates {
     }
 
     /// 控えた文字の層向けの `\s` の答え。まだ届いていなければ `None`。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "門が開いたときの決め直しが呼ぶまで未使用")
-    )]
     pub(crate) fn text_surface(&self, scope: &ActorKey) -> Option<SurfaceKeyOutcome> {
         self.text_surfaces.get(scope).copied()
     }

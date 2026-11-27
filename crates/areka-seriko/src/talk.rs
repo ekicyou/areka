@@ -37,13 +37,6 @@ pub(crate) struct TalkFeed {
     route: TextRoute,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "合図の振り分けがまだ行き先・印・全消去・箱の切り直しを呼ばない"
-    )
-)]
 impl TalkFeed {
     /// `\s` の答えで字の行き先を動かす。
     pub(crate) fn follow_surface(&mut self, routing: &TextRouting, outcome: SurfaceKeyOutcome) {
@@ -82,6 +75,10 @@ impl TalkFeed {
     /// シェルの切替（効いた時刻 `at`）: 箱の場所のその時刻より後に現れる字を捨て、箱の場所を塊の頭から
     /// 始めさせ、新しい表で行き先を決め直す（今の番号が新しいシェルに無ければ `candidates` の最初に在る
     /// 番号へ）。捨てた字の序数を昇順で返す。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "シェルの切替がまだ箱の切り直しを呼ばない")
+    )]
     pub(crate) fn rebase_boxes(
         &mut self,
         at: TimePoint,

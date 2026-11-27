@@ -2,8 +2,8 @@
 //!
 //! [`LoopRuntime`](super::LoopRuntime) の刻みと面の切り替えが呼ぶ自由関数を置く: 引き金の状態を構えて
 //! 窓の開け閉めを写す（[`arm_slot`]）・一番上の `runonce`／`periodic`／`talk` を判定して再生を始める
-//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`revealed_at`]・[`glyph_wall`]・
-//! [`restart_talk`]・[`settle_talk`]）。「いつ始めるか」の判定は `trigger.rs`、文字が現れる時刻の式は
+//! （[`fire_top_triggers`]）・文字の列と文字の数えの世話（[`observe_talk_cue`]・[`seed_feeds`]・
+//! [`revealed_at`]・[`glyph_wall`]・[`settle_talk`]）。「いつ始めるか」の判定は `trigger.rs`、文字が現れる時刻の式は
 //! `talk.rs`、始まった再生のコマの進み方は親（抽選の再生と同じ経路）が持ち、ここは配線だけ。
 //!
 //! # 文字の数えと文字の列の間の決まり
@@ -15,7 +15,7 @@
 //! - 構える・現すときは、その時刻までに現れた文字の数から数え始める（[`revealed_at`]）。
 //! - 刻みの最後に数えを今現れている数まで進め、列はそこまでしか刈り込まない（[`settle_talk`]）。
 //! - 消去の知らせでは、列を切り詰めた直後に、捨てた序数のうち数え済みより前の数だけ数え済みを下げる
-//!   （[`restart_talk`]）。数えた字の数は保つ（消去の前に数えた字は、字の時刻が後ろへ動いた後に
+//!   （[`observe_talk_cue`]）。数えた字の数は保つ（消去の前に数えた字は、字の時刻が後ろへ動いた後に
 //!   捨てられた字も数えたまま）。
 //!
 //! だから文字の窓が尋ねる序数（前の判定までの数え済み以後・今現れている数より前）は必ず列に在り、
@@ -24,16 +24,18 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
-use areka_emo_compose::PatternState;
-use areka_sakura::ActorKey;
+use areka_emo_compose::{PatternState, SurfaceKeyOutcome, TextRoute};
+use areka_parsers::sakura::MARKER_COMMAND;
+use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use dola::TimePoint;
 
 use super::top_calls::{StoppedAlways, run_top_calls};
 use super::{Playback, SlotPlayback, put_top_play};
 use crate::calls::CallOutcome;
-use crate::state::Slot;
+use crate::resolve::SurfaceResolver;
+use crate::state::{ScopeStates, Slot};
 use crate::table::LoopAnimation;
-use crate::talk::TalkFeed;
+use crate::talk::{TalkFeed, TextRouting};
 use crate::timeline::{FrameStatus, LoopRng, elapsed_since, frame_at};
 use crate::trigger::{Armed, TalkWindow, log_fired};
 
@@ -181,17 +183,74 @@ pub(super) fn glyph_wall(feed: Option<&TalkFeed>, glyph: u64, now: TimePoint) ->
     })
 }
 
-/// 消去の合図（発火時刻 `at`）を `scope` の文字の列へ写す: 現れなかった文字を捨てて継ぎ目を
-/// 初期化し、捨てた序数の列でそのスコープの全部の数えを揃える（捨てた序数は次の塊の文字に振り直される）。
-pub(super) fn restart_talk(
-    feed: &mut TalkFeed,
+/// 合図 1 件を種類で振り分け、`cue.actor` の字の行き先と字の列へ当てる（文字の層と同じ順と見分け）。
+///
+/// `\s` は文字の層の規則の答えで行き先を動かし、名前の形の `\b` は今の面の箱を選び（無い名前でも
+/// 記録しない）、字・選択肢・印は行き先の場所へ積む。消去は現れなかった字を捨て（`\c` は行き先の場所、
+/// 全消去は全部のスコープの全部の場所）、捨てた序数でそのスコープの全部の数えを揃える。字の列は
+/// 行き先か字が初めて届いたときに作る。
+pub(super) fn observe_talk_cue(
+    feeds: &mut HashMap<ActorKey, TalkFeed>,
     armed: &mut HashMap<(ActorKey, Slot), Armed>,
-    scope: &ActorKey,
-    at: TimePoint,
+    routing: &TextRouting,
+    cue: &TalkCue,
+    resolver: &SurfaceResolver,
 ) {
-    let dropped = feed.restart_chain(at);
+    let (scope, at) = (&cue.actor, cue.fire_time);
+    match &cue.command {
+        CueCommand::Emote { key } => {
+            let outcome = resolver.resolve(key).for_text(&routing.surface_ids);
+            feed_of(feeds, scope).follow_surface(routing, outcome);
+        }
+        CueCommand::BalloonSurface { key } if TextRoute::is_box_key(key) => {
+            feed_of(feeds, scope).select_box(routing, key);
+        }
+        CueCommand::Text(text) | CueCommand::Choice { text, .. } => {
+            feed_of(feeds, scope).push_text(at, cue.duration, text);
+        }
+        CueCommand::Custom { .. } if matches!(cue.command.as_command_carrier(), Some((name, _)) if name == MARKER_COMMAND) =>
+        {
+            feed_of(feeds, scope).push_mark(at, cue.duration);
+        }
+        CueCommand::Clear => {
+            if let Some(feed) = feeds.get_mut(scope) {
+                realign_scope(armed, scope, &feed.restart_chain(at));
+            }
+        }
+        CueCommand::ClearAll => {
+            for (scope, feed) in feeds.iter_mut() {
+                realign_scope(armed, scope, &feed.restart_all(at, routing));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// 門が開いた直後に、控えた `\s` の答えの在るスコープの行き先を決め直す（控えの無いスコープは
+/// 普通のバルーンのまま＝字の列を作らない）。
+pub(super) fn seed_feeds(
+    feeds: &mut HashMap<ActorKey, TalkFeed>,
+    routing: &TextRouting,
+    states: &ScopeStates,
+) {
+    for (scope, _) in states.current_surfaces(Slot::Shell) {
+        let surface = match states.text_surface(&scope) {
+            Some(SurfaceKeyOutcome::Show(id)) => Some(id),
+            Some(SurfaceKeyOutcome::Hide) => None,
+            Some(SurfaceKeyOutcome::Unresolved) | None => continue,
+        };
+        feed_of(feeds, &scope).seed_surface(routing, surface);
+    }
+}
+
+fn feed_of<'a>(feeds: &'a mut HashMap<ActorKey, TalkFeed>, scope: &ActorKey) -> &'a mut TalkFeed {
+    feeds.entry(scope.clone()).or_default()
+}
+
+/// 捨てた序数の列 `dropped` で `scope` の全部の数えを揃える（捨てた序数は次の塊の字に振り直される）。
+fn realign_scope(armed: &mut HashMap<(ActorKey, Slot), Armed>, scope: &ActorKey, dropped: &[u64]) {
     for ((_, _), state) in armed.iter_mut().filter(|((s, _), _)| s == scope) {
-        state.realign_talk(&dropped);
+        state.realign_talk(dropped);
     }
 }
 

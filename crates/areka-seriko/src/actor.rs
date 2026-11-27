@@ -356,7 +356,9 @@ where
                         for outcome in states.fall_back_shell_surfaces(&fallback) {
                             log_shell_fallback(&outcome);
                         }
-                        loop_runtime.replace_shell_table(shell_table);
+                        if loop_runtime.replace_shell_table(shell_table) {
+                            loop_runtime.seed_talk_routes(&states);
+                        }
                         (epoch, RebaseKind::Shell, Vec::new())
                     }
                     SerikoReplace::Balloon {
@@ -365,7 +367,9 @@ where
                     } => {
                         let scopes: Vec<ActorKey> = balloon_tables.keys().cloned().collect();
                         states.rebase_balloon();
-                        loop_runtime.replace_balloon_tables(balloon_tables);
+                        if loop_runtime.replace_balloon_tables(balloon_tables) {
+                            loop_runtime.seed_talk_routes(&states);
+                        }
                         (epoch, RebaseKind::Balloon, scopes)
                     }
                 };
@@ -584,7 +588,7 @@ fn dispatch_message<O: SurfaceOutput>(
     };
 
     // 文字の時刻の列へ、種類で振り分ける前に 1 回だけ渡す（表に `talk` が無ければ真偽 1 つで戻る）。
-    loop_runtime.observe_cue(&cue);
+    loop_runtime.observe_cue(&cue, resolver);
 
     // Shell 系のみ本アクターが action する。broadcast で seriko は全 cue を受け取るため、
     // 担当外（非 Shell）・純粋 Wait の受信は「異常」でなく「正常な担当外受信」——action を無視
@@ -748,6 +752,10 @@ fn dispatch_message<O: SurfaceOutput>(
         );
         return ControlFlow::Continue(());
     }
+    states.note_text_surface(
+        &cue.actor,
+        target.for_text(&loop_runtime.text_routing().surface_ids),
+    );
 
     // 出来事の時刻は合図の発火時刻。そこまでの区切りを今の面で判定してから替える。
     let at = cue.fire_time;
