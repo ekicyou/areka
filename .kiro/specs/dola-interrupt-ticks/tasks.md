@@ -836,3 +836,4 @@
 - 10.12: 10.16 へ: 本体の `runtime_tests/frame/status_report_stage_tests.rs::phase_sends_the_stage_even_while_the_runtime_is_busy` と `runtime_tests/shell_carry_tests.rs::replay_shows_the_decided_surfaces_and_binds_through_seriko` は世界に FrameTime を置いていないので赤になる。FrameTime を置き、渡した時刻が合図と知らせに載る事も確かめる。
 - 10.15: 10.16 へ: areka-session `runtime_boot.rs` の `ClockedTextSink`（33・82 行）を外す。本体 `runtime_tests/frame_shell_box_arrow_tests.rs:306` の `vec![TalkLifecycleSignal::UserBreak]` を `UserBreak { at: TimePoint::ZERO }` へ。
 - 10.16: GPU の足場（Tick を 100 ms で進める `GpuRig`）ではフレームの時刻が Tick の速さで進むので、バルーンの 30 秒の時間切れが実時間でおよそ 0.3 秒で来る。今の読みは `speak` の後にフレームを回さないので影響しない。
+- 締めの検証（kiro-validate-impl）: 全体テスト 23 段緑・横断の検証は Critical/Important 0。Minor 3 件（facade.rs の消えた口への言及 2 行・seriko の assert の文の要件番号・design.md のファイルの道）を直した。境界の外で触った `.kiro/specs/talk-anchor-interrupt-ticks/brief.md`（要件の討議の申し送り）は次の `/kiro-next` で拾う。

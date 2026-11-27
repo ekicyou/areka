@@ -189,7 +189,7 @@ crates/dola/
     ├── cue/
     │   ├── command.rs               # Cue・TalkCue・PendingCue・BarrierKind の時刻の欄
     │   ├── schedule.rs              # TimedSchedule・Due・OriginNotice
-    │   ├── schedule_reanchor_tests.rs   # 置き直しの単体テスト（新しいファイル）
+    │   ├── schedule/reorigin_tests.rs   # 置き直しの単体テスト（新しいファイル）
     │   ├── sheet.rs                 # CueSheet の起点・占有の終わり
     │   ├── runtime.rs               # CuePlayer・CueError
     │   ├── sink.rs                  # CueSink::origin_set

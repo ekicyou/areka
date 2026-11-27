@@ -696,7 +696,7 @@ mod tests {
         assert_eq!(
             kero_waits,
             vec![ms(0), ms(40), ms(80)],
-            "wait は書かれたミリ秒のまま（要件 4.5）"
+            "wait は書かれたミリ秒のまま"
         );
 
         // sakura: 1 アニメ・BindRandom{4}・index 昇順 1/2/3。

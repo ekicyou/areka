@@ -281,8 +281,6 @@ impl DolaRuntime {
     // =========================================================================
 
     /// Phase 1: 内部状態を now まで進行し、結果を内部フィールドに格納。
-    ///
-    /// `TimedSchedule::tick()` と対称な設計。
     pub fn tick(&mut self, now: TimePoint) {
         self.last_update_result = self.update_internal(now);
     }
@@ -290,7 +288,6 @@ impl DolaRuntime {
     /// Phase 2: 直前の tick() 結果を読み取り専用で返す。
     ///
     /// tick() 未呼び出し時は空の `UpdateResult` を返す。
-    /// `TimedSchedule::ready()` と対称な設計。
     pub fn last_result(&self) -> &UpdateResult {
         &self.last_update_result
     }
