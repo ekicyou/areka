@@ -17,6 +17,7 @@
 //! 独立インスタンスを取得し、per-talk の `spawn_talk` へ `Vec<Box<dyn CueSink + Send>>` として手渡す
 //! （登録順＝broadcast 順＝決定論）。
 
+pub use areka_sakura::talk_path;
 pub use areka_talk::{GhostPlace, TalkMeta, TalkRunner, TalkSender};
 
 use areka_sakura::contract::{CueCommand, CueSink, ScriptOrigin, TalkCue, TalkId};
