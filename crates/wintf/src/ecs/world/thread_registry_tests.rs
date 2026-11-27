@@ -39,44 +39,87 @@ fn register_current_thread_puts_the_role_and_tid_into_the_snapshot() {
     );
 }
 
+fn folded_with_family(reading: &RegistryReading, family: &str) -> Vec<FoldedReading> {
+    reading
+        .folded
+        .iter()
+        .filter(|f| f.family == family)
+        .cloned()
+        .collect()
+}
+
 #[test]
-fn registration_from_another_thread_is_visible_from_this_thread() {
+fn a_joined_thread_leaves_the_live_entries_and_is_folded_into_its_family_total() {
     let role = unique_role("spawned");
     let role_for_thread = role.clone();
+    let (gate_tx, gate_rx) = std::sync::mpsc::channel::<()>();
+    let (seen_tx, seen_rx) = std::sync::mpsc::channel::<u32>();
 
     let joiner = std::thread::Builder::new()
         .name("wintf-registry-test-spawned".to_string())
         .spawn(move || {
             register_current_thread(role_for_thread.as_str()).expect("別スレッドの登録も成功する");
-            get_current_thread_id()
+            let own = crate::api::duplicate_current_thread_handle().expect("自分のハンドルの複製");
+            seen_tx.send(get_current_thread_id()).expect("TID を渡す");
+            gate_rx.recv().expect("終わる合図を待つ");
+            own
         })
         .expect("テスト用スレッドの生成は成功するはず");
-    let spawned_tid = joiner.join().expect("テスト用スレッドは正常終了するはず");
 
-    let found = entries_with_role(&role);
-    assert_eq!(
-        found.len(),
-        1,
-        "別スレッドの登録が 1 件見えるはず: {found:?}"
-    );
-    assert_eq!(
-        found[0].tid, spawned_tid,
-        "生成側が登録した TID が見えるはず"
-    );
+    let spawned_tid = seen_rx.recv().expect("生成側の TID");
+    let alive = entries_with_role(&role);
+    assert_eq!(alive.len(), 1, "生きている間は 1 件見えるはず: {alive:?}");
+    assert_eq!(alive[0].tid, spawned_tid);
     assert_ne!(
-        found[0].tid,
+        alive[0].tid,
         get_current_thread_id(),
-        "登録したのは自分ではなく別スレッド（対照）"
+        "登録したのは別スレッド（対照）"
     );
     assert_eq!(
-        found[0].name.as_deref(),
+        alive[0].name.as_deref(),
         Some("wintf-registry-test-spawned"),
         "生成側の付けたスレッド名が読めるはず"
     );
-    // 複製ハンドルは名簿が所有する——スレッドが終了した後でも CPU 時間は読めるはず。
-    found[0]
-        .cpu_times()
-        .expect("終了済みスレッドでも複製ハンドルから CPU 時間は読める");
+
+    gate_tx.send(()).expect("終わる合図");
+    let own = joiner.join().expect("テスト用スレッドは正常終了するはず");
+    let last = crate::api::get_thread_times(&own).expect("終わったスレッドの最後の CPU");
+
+    let reading = read_cpu();
+    assert!(
+        reading.live.iter().all(|live| live.role != role),
+        "join の後は生きた項目に無いはず"
+    );
+    assert!(
+        entries_with_role(&role).is_empty(),
+        "snapshot にも残らないはず"
+    );
+    let folded = folded_with_family(&reading, &role);
+    assert_eq!(
+        folded,
+        vec![FoldedReading {
+            family: role.clone(),
+            cpu: last,
+            exited: 1,
+        }],
+        "その系統の畳んだ合計に最後の CPU が 1 本分入るはず"
+    );
+}
+
+#[test]
+fn role_family_folds_a_trailing_ascii_number_only() {
+    for (role, family) in [
+        ("actor:sakura-talk-17", "actor:sakura-talk-*"),
+        ("actor:sakura-talk-0", "actor:sakura-talk-*"),
+        ("actor:kanade", "actor:kanade"),
+        ("vblank", "vblank"),
+        ("-5", "-5"),
+        ("actor:x-1a", "actor:x-1a"),
+        ("actor:x-", "actor:x-"),
+        ("actor:x-１", "actor:x-１"),
+    ] {
+        assert_eq!(role_family(role), family, "{role} の系統");
+    }
 }
 
 #[test]
@@ -149,6 +192,10 @@ fn re_registering_the_same_thread_replaces_the_previous_entry() {
     let found = entries_with_role(&second);
     assert_eq!(found.len(), 1, "後から宣言した役割名だけが残るはず");
     assert_eq!(found[0].tid, get_current_thread_id());
+    assert!(
+        folded_with_family(&read_cpu(), &first).is_empty(),
+        "生きている同じスレッドの登録し直しは畳まない"
+    );
 }
 
 #[test]

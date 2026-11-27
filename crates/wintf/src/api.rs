@@ -218,7 +218,8 @@ pub fn get_current_thread_id() -> u32 {
 /// 読み出せる。
 ///
 /// 権限は `THREAD_QUERY_LIMITED_INFORMATION`（`GetThreadTimes` にはこれで足りる）と
-/// `THREAD_SYNCHRONIZE`（[`thread_has_exited`] の `WaitForSingleObject` が要る）を与える。所有権は [`OwnedHandle`] が持ち、drop で `CloseHandle` される。
+/// `THREAD_SYNCHRONIZE`（[`thread_has_exited`] の `WaitForSingleObject` が要る）を与える。
+/// 所有権は [`OwnedHandle`] が持ち、drop で `CloseHandle` される。
 ///
 /// 失敗は握り潰さず `Err` で返す。
 pub fn duplicate_current_thread_handle() -> Result<OwnedHandle> {
