@@ -21,7 +21,7 @@
   - _Requirements: 2.6, 3.5_
 
 - [ ] 2. seriko の字の列と数えを作り直す
-- [ ] 2.1 (P) seriko の字の列を、場所ごとの前の字と時刻の順の序数を持つ形にする
+- [x] 2.1 (P) seriko の字の列を、場所ごとの前の字と時刻の順の序数を持つ形にする
   - seriko が受け取る箱の材料（箱の表と面の表に在るサーフェス番号・既定は箱の無いシェル）を定義し、クレートから公開する
   - スコープの字の列に字の行き先（共有の型）を持たせ、`\s` の答え・名前の形の `\b`・番号からの種まきで行き先を動かす口を持たせる
   - 字の時刻は塊ごとに、合図の発火時刻を塊の頭、**行き先の場所の前の字**を前の字として、今の 1 本の関数で求める。列はスコープで 1 本・時刻の順（同じ時刻は届いた順）にし、字ごとに場所を持つ
@@ -138,3 +138,4 @@
 - `cargo clippy -p <crate> --all-targets -- -D warnings` は依存の `areka-parsers`（`src/shell/decode.rs:251` の collapsible `else if`）で赤になる。この spec では触らない既存の問題なので、クレートの clippy は `--no-deps` で回す。
 - `TextRoute::reset` は既定へ直に戻す。`\f` の持ち運びは呼び手（文字の層）が普通のバルーンを起点に行う。
 - `areka-emo-text` は `--no-deps` でも clippy が赤（rustc 1.100 の新しい lint・触っていないファイルだけ）。この spec では変えたファイルに lint が無いことで判定する。
+- `areka-seriko` の talk.rs で合図の配線前の 6 つの口に `#[cfg_attr(not(test), expect(dead_code, …))]` を付けた。配線したら外す（外さないと expect が満たされず警告になる）。clippy `--no-deps` は触っていない output.rs・state.rs の `doc_nested_refdefs` で赤（既存）。
