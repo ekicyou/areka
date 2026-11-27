@@ -171,11 +171,17 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
         c if OVERLAY_WORDS.contains(&c) => ComposeMethod::Overlay,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay-fast:1
         "overlayfast" => ComposeMethod::OverlayFast,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#interpolate:1
         "interpolate" => ComposeMethod::Interpolate,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#replace:1
         "replace" => ComposeMethod::Replace,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#asis:1
         "asis" => ComposeMethod::Asis,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#base:1
         "base" => ComposeMethod::Base,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#reduce:1
         "reduce" => ComposeMethod::Reduce,
         "auto" => ComposeMethod::Auto,
         other => ComposeMethod::Blend(parse_blend(other)?),

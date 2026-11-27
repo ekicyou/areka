@@ -260,7 +260,7 @@
   - _Dispatch: standard — 実機の測りと判定_
   - _Requirements: 8.2, 9.3_
 
-- [ ] 8.4 網羅台帳と互換の文書を直す
+- [x] 8.4 網羅台帳と互換の文書を直す
   - 網羅台帳の element定義・`base`・`overlay-fast`・`overlayfast`・`interpolate`・`replace`・`asis`・`reduce`・`collisionex*` の α の書き方の行を、この仕様の後の働きに合わせて直す（`blend-*` と旧い別名 2 行には触らない）
   - 互換の文書の §8 に、入れ子の `asis` の黒・同時のアニメーションの ID の順・最初の element の答え（SSP と違う所）・`base` の仮定 A〜C を行として足し、pattern定義の `base` を「未対応」とする行と「色の絵の α と当たりの関係」の行を直す
   - 完了の状態: 台帳の検査の道具が通り、§8 に行が載っている
@@ -295,3 +295,4 @@
 - 6.3 → 7.4: `OffscreenRenderer::render_plan(gpu, plan)` は self を取らない関連関数（設計は `&mut self`）。7.4 は目標の `GpuAtlas` を渡して描く。`sync` の `Device` を `ComposeError::Render` へ読み替えるかは 7.4 で決める。
 - 5.6: `blend-*` の記録は設計の型（世界の面ごとの `UndrawnElement`）でなく、読み手の転記の側の見出しを展開しない行（`ShellText.image_elements`）から、今の element定義の記録と同じ文面・欄で出す（要件 6.2 の「1 行 1 件・どの語か」が設計の型と食い違ったため・設計は直した）。`UndrawnElementLine` は `ElementLine` に改めた。
 - 6.5 → 7.6: R2 の測りのテスト（offscreen_emo2_tests.rs の CPU と WARP の比べ）は `Composer::compose` を呼ぶので CPU の合成と一緒に取り下げる（研究の記録 §16.3）。
+- 8.4: 台帳と互換の文書の当たりの行は 7.2 の後の働き（入れ物の 1 画素の α）を書いた。8.5 と validate-impl で実物と照らす。
