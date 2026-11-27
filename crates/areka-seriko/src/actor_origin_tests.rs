@@ -116,3 +116,30 @@ fn same_cues_and_notice_give_the_same_commands_however_they_arrive() {
         .count();
     assert_eq!(starts, 2, "1100 と 1300 の 2 回");
 }
+
+/// 9 文字のうち 5 字（1000〜1200）を 1220 の表情の合図までに数え、1100 で口が動く。効く時刻 1160 より
+/// 遅れて届いた後ろへ 300 ms の置き直しで、数えた 5 字目（1200）は 1500 へ動き、今現れているのは 4 字。
+/// 1230 の全消去でそれを捨てても数えた 5 字は残るので、1250 からの新しい台詞の 1 字目が 6 字目の区切りで、
+/// 口は 1250 に始まる（数えを今現れている 4 字まで減らすと区切りは 2 字目の 1300 に遅れる）。
+#[test]
+fn clear_after_a_late_notice_keeps_the_counted_glyphs_for_the_next_mouth() {
+    let mut rig = rig();
+    rig.tick(at_ms(1000));
+    hear_nine(&mut rig);
+    rig.hear_fired(at_ms(1220), emote_cue(ms(0), "0", "0"));
+    assert!(
+        rig.send(SerikoMsg::OriginSet(moved(1160, 1000, 1300)))
+            .is_empty()
+    );
+    rig.hear_fired(at_ms(1230), clear_all());
+    assert!(rig.tick(at_ms(1240)).is_empty());
+
+    rig.hear_fired(at_ms(1250), text(ms(0), "0", "さしすせそた"));
+    assert_eq!(frames(&rig.tick(at_ms(1270)), MOUTH), [("0", Some(601))]);
+    assert_eq!(
+        frames(&rig.tick(at_ms(1290)), MOUTH),
+        [("0", Some(602))],
+        "1250 に始まった口の 2 コマ目"
+    );
+    assert_eq!(frames(&rig.tick(at_ms(1330)), MOUTH), [("0", None)]);
+}
