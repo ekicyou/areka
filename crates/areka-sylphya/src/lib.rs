@@ -45,6 +45,7 @@ pub mod mirror;
 pub mod persist;
 pub mod pull;
 pub mod reader;
+pub mod store;
 pub mod value;
 pub mod vocab;
 

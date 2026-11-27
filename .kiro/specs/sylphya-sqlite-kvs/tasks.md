@@ -31,7 +31,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 6.8_
 
 - [ ] 2. 住み場所の核（Store）
-- [ ] 2.1 置き場の口と、置き場から開く先への変換を作る
+- [x] 2.1 置き場の口と、置き場から開く先への変換を作る
   - 本番のファイルの口・試験の偽物（memdb の上の本物の sqlite）・プロセスに 1 つの本番の口を作り、ファイルシステムに触れるのは本番のファイルの口だけにする
   - 置き場 → `file:` の URI（絶対パス・`\\?\`／UNC・百分率の置き換え・`vfs=win32-longpath`・`mode`）を 1 か所で作る。`Create` のほかはファイルもフォルダも作らない
   - 古いファイルの名前替えは、行き先の名前を空のファイルとして先に取ってから替え、在る名前を上書きしない
@@ -229,3 +229,8 @@
   - 完了の状態: 1 回目に位置とゴーストが戻り `persist_imported` が 2 件・`sylphya.toml.imported` と `sylphya.sqlite` ができ、2 回目は `persist_imported` が 0 件で同じ位置とゴーストが戻ることを、記録の検索とフォルダの一覧で判定した
   - _Dispatch: standard — 実機の手順と記録の判定を組む_
   - _Requirements: 14.8_
+
+## Implementation Notes
+
+- 2.1: 試験の偽物 `MemBackend::mark_unusable` は `application_id = 1`（公開の `UNUSABLE_APPLICATION_ID`）で「使えないファイル」を作る。areka 自身の `application_id` に 1 を使わない（2.2）。
+- 2.1: 名前替えの失敗の注ぎ込みは偽物にまだ無い。取り込みの試験（2.5）の「名前を替えられない」で足す。
