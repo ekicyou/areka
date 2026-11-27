@@ -271,3 +271,54 @@
 | 22 | 0: `reduce` blue60 だけ | 255,0,0,153 | 255,0,0,77 | 0,0,0,0 |
 
 - SSP は、同時に動くアニメーションを ID の順に、それまでに描いた答えの上へ重ねる。後の `reduce` のベースレイヤには、先に描いたアニメーションのコマが入る（面 20 の x=25）。前のコマの答えは次のコマへ持ち越さない（`always` の 1 コマの繰り返しで、`reduce` が積もらない＝面 22 は 153 のまま）。
+
+## 11. 設計の段の調べ（2026-11-27・`/kiro-spec-design -y`）
+
+- **Discovery の種類**: full（複雑な統合）。コードベースを 3 つの調べ（wintf の口・compose・emo-present／atlas／parsers／offline）に分けて読んだ。D2D の振る舞いで読めない所は Web で決めず、実装の最初に WARP で測る研究の項目（design.md の R1〜R5）へ回した。SSP の MCP は使っていない（調整役の指示）。
+- **使った決まり**: `.claude/skills/kiro-spec-design/rules/` の design-principles・design-discovery-light/full・design-synthesis・design-review-gate。steering は `tech.md` の Testing（合成の画素は WARP で ±1・差分の描き直しは同じ装置でバイト一致・GPU の在りかは実 GPU）と `structure.md`（`offline_dump/` は wintf を直に使わない・ファイルは 1,000 行の手前）。
+
+### 11.1 調べた事実（ギャップ分析に足すもの）
+
+| 事実 | 根拠 |
+|---|---|
+| 不透明度の層は `Visual.opacity < 1.0` のときだけ積まれ、透明から始まり SourceOver で閉じる。1.0 では層が無い＝入れ子の面を 1 枚にまとめる口は wintf に無い | `crates/wintf/src/ecs/graphics/visual/draw/builder.rs:184-195`・`emit.rs:211` |
+| 節の中身は命令の列だけ（絵の型は無い）。命令の列は GraphicsCore の装置で作り閉じてから入れる | `draw_content.rs:32-104` |
+| 描画の木を画面の外で描く手順は、wintf の私有のテストの足場 `render_tree_to_pixels`（`fill_world_visuals` → `build` → `emit`）にもう在る。使い捨ての World で動く | `visual/draw/emit_test_support.rs:322-345` |
+| `GraphicsCore::new` は hardware だけ。WARP の装置は私有の足場（`warp_device`）にだけ在る | `core.rs:144,270-283`・`emit_test_support.rs:60` |
+| 入れ物の 1 画素は `pixel_in`（`pub(crate)`）で `&World` からも読める。同じ座標・同じ世代は控え | `readback.rs:99`・`composite.rs:412-440` |
+| 当たりの腕は `hit_test_entity_ex` の `match mode`（`AlphaMask` の腕 :357）。`WM_NCHITTEST` とクリックの透過の係の両方が UI スレッドで同期に呼ぶ | `hit_test/mod.rs:68,314-362`・`window_proc/mouse_move.rs:62`・`clickthrough/controller.rs:161` |
+| 自動で上げた部分木は親の入れ物の読み戻しに入らない＝入れ物の α で当たりを決めるなら、上げた子孫の入れ物も重ねて読む | `visual/draw/README.md:188` |
+| 名前の解決の呼び手 `resolve_hit_owned` はもう `&World` を持つ | `crates/areka-input/src/lib.rs:405-413` |
+| `last_shown` は `Option<(u32, Option<&ComposedSurface>)>` を返し、`dump_surface.rs` と `dump_balloon.rs` は `None` の枝で `compose_last_shown` を呼ぶ | `presenter/snapshot.rs:47`・`crates/areka/src/mcp/dump_surface.rs:300-323`・`dump_balloon.rs:55-58` |
+| `Composer::compose` の本番の呼び手は snapshot 2・`areka-placement/src/measure.rs:452`（寸法だけ）・offline 1。例 4 本とテストが続く | grep |
+| `ComposeError` は `#[non_exhaustive]`（足しても呼び手の `match` は壊れない） | `error.rs:26` |
+| `UseSelfAlpha::Off` は `32bppPBGRA` で読んだ乗算済みの色に α＝255 を当てる＝半透明の画素が暗く出る（ギャップ分析の疑いは本当） | `decode/wic_arm.rs:139-141`・`normalize.rs:76,135-145` |
+| 網羅台帳の `blend-*` は 27 種＋`blend-dither`（compose の `BlendKind` は 19 種） | `doc/ukadoc-coverage/ledger/assets.toml` |
+| 画素の上限 `cap_pixels`・`PIXEL_FACTOR` は `blit.rs` に在り `build_plan` が呼ぶ＝転写を捨てても上限は残す | `blit.rs:103-121`・`plan.rs:754` |
+
+### 11.2 形の比べ
+
+| 道 | 中身 | 良い所 | 危うい所 |
+|---|---|---|---|
+| **計画 → 節 → wintf の 1 つの描き方（採用）** | compose は純粋な計画、emo-present が節へ写し、画面は描く係、画面の外は使い捨ての World＋wintf の画面の外の口 | 描き方が 1 つ（7.8）・節ごとの規則と後続（blend・切り抜き）が同じ形・compose は純粋のまま | wintf の口が 4 つ要る（まとめの節が要件の境界の外） |
+| 1 本の命令の列（ギャップ分析の道 B） | 要素ごとの重ね方つき `DrawImage` を 1 本に記録 | wintf に触らない | 開発者の決め（element ごとに節）と外れる・中の重ね方の効き方が未測 |
+| 画面は節・書き出しは全体の読み戻し | 画面の入れ物を `read_all` | 口が少ない | 入れ物は k 倍で原寸でない（7.3）・隠した面と単体の面は描けない |
+
+### 11.3 決め（design.md に書いたものの訳）
+
+- **入れ子の面のまとめ**: 正典「element合成の結果が一枚の画像のように扱われる」と開発者の決め（透明から始まる 1 枚）から、wintf にまとめの節を足す。中に `SourceOver` でない項が無く、指す語も `SourceOver` なら平らに並べる（結合則で同じ答え）。
+- **最初の項の読み替え**: 透明の上の `SourceOver` は写しと同じなので、`asis` 以外を `SourceOver` へ読み替えるだけで「`base` と同義」（§10.1）になる。`asis` は `asis` 用の絵（α＝255・原寸）なので透過色が出る（正典どおり・SSP と違う所）。
+- **`replace` の範囲**: `SOURCE_COPY` は絵を今の切り抜きまで透明で広げるので、原寸の矩形の切り抜きの節の中に置く。
+- **当たり**: 入れ物の 1 画素を wintf の 1 関数（`surface_alpha_at`）で読み、当たりの腕と名前の解決が同じ関数を通る。上げた子孫の入れ物も重ねる。
+- **書き出しの型**: 合成メモの項に書き出しの控え（`OnceCell`）を持ち、`last_shown` の型を保つ（`dump_surface.rs` を触らない）。
+- **WARP**: `warp_d2d_device` を wintf で公開し、画面の外の口に任意の装置を渡す。`GraphicsCore` に WARP の作り方は足さない（範囲だけ＝全部のバイト一致は同じ装置の実 GPU で確かめる）。
+
+### 11.4 synthesis
+
+- **一般化**: 画面・`dump_surface`・`--offline-dump`・WARP のテストは「計画を節にして描く」の 1 つの問題。`DrawNodes` の 1 関数と wintf の 1 つの描き方にまとめた。クリックの透過と名前の解決も「画面に出ている α」の 1 問題として `surface_alpha_at` にまとめた。
+- **作るか使うか**: D2D の重ね方（`SOURCE_ATOP`・`DESTINATION_OVER`・`DESTINATION_IN`・`SOURCE_COPY`）は正典の式とそのまま一致するので使う。`asis` と `use_self_alpha,0` は既存の乗算しない読み（`decode_unmultiplied`）を使う。WARP の装置は既存の `d3d11_create_device` を使う。
+- **削ったもの**: CPU の転写と範囲の重ね直し・表示の絵の席・α マスクの回し・毎回の `CreateBitmap`。まとめの節は要るときだけ。「画素どおり」の申告は測りで重くなったときまで足さない。
+
+### 11.5 危うさ
+
+- まとめの節の `SourceOver` 以外の閉じ方（R1）・D2D と CPU の丸めの差（R2）・更新の所要（R3）・当たりの読みの待ち（R4）・k が整数でないときの継ぎ目（R5）。どれも実装の最初に測り、外れたら止めて報告する。
