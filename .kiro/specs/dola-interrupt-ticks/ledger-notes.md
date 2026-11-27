@@ -400,3 +400,9 @@
 - 変える前後の期待: `talk_ended_carries_the_injected_clock_once_when_dropped`（`TalkEnded { at: Some(ms(1_234)) }` の台本の時刻 → `TalkEnded { at: at_ms(101_234) }` の時計の読み）。ログの欄の改名: `MeasurementRestarted` の `talk_time` → `frame_now`。
 - 振る舞いの変化: 寿命の知らせは、フレームの時刻が知らせの時刻に届いた最初のフレームで効く（頭が待つ間は後ろも待つ）。トークの終わり・利用者の中断は時計の読みを運ぶ。`OriginMoved` を送る（表示の終わりだけを動かし、期限は動かさない）。
 - 足したテスト: `balloon_visibility::held::tests` 8 本、`talk_lifecycle::origin_tests` 10 本。
+
+## 10.12（後半）
+
+- 読み直しの後の面と着せ替えの出し直しの合図は、起点 `TimePoint::ZERO` からフレームの時刻へ（`TalkCue::scheduled(frame_now, 0, .., 0)`）。窓の知らせは `send_stage(note, frame_now)`。消したテスト・ログは無い。
+- 足したログ: `error!(event="reload_shell_replay_no_frame_time")`、`error!(event="balloon_stage_no_frame_time")`（フレームの時刻が無ければ送らず、台帳も進めない）。
+- 足したテスト: `shell_carry::tests::emitted_cues_fire_at_the_frame_time`・`replay_without_frame_time_logs_an_error_and_sends_no_cue`、`frame::status_report::stage_tests::report_stages_without_frame_time_logs_an_error_and_sends_nothing`・`report_stages_with_frame_time_sends_the_hidden_balloon`。共有の組み立て `session_hooks_test_support.rs`（`SerikoWorld`）。元からあるテストの期待は変わらない。
