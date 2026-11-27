@@ -209,6 +209,10 @@ mod hit_shape_tests;
 mod hit_region_tests;
 
 #[cfg(test)]
+#[path = "presenter_surface_alpha_hit_tests.rs"]
+mod surface_alpha_hit_tests;
+
+#[cfg(test)]
 #[path = "presenter_hit_scale_tests.rs"]
 mod hit_scale_tests;
 
