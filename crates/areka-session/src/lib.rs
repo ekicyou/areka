@@ -86,3 +86,5 @@ pub mod crate_source_test_support;
 
 #[cfg(test)]
 mod crash_report_tests;
+#[cfg(test)]
+mod sylphya_spelling_tests;

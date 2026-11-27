@@ -27,6 +27,8 @@ const LOG_TARGET: &str = "areka_sylphya::store";
 pub(crate) const OP_WAIT: Duration = Duration::from_secs(1);
 /// 錠に当たったときの取り直しの間。
 pub(crate) const RETRY_STEP: Duration = Duration::from_millis(10);
+/// 錠を待ちきれずに書くのをやめたときの告知の文。
+pub(crate) const WAIT_LIMIT: &str = "記憶のファイル sylphya.sqlite の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）";
 
 /// 接続を 1 本持ち、層のファイルを操作の間だけ付けて読み書きする同期の核。
 pub(crate) struct Store {

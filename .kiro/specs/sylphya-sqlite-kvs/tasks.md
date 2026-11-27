@@ -185,7 +185,7 @@
   - _Dispatch: mechanical — 書く項目を設計が与えている_
   - _Requirements: 8.8, 12.3, 13.1, 13.3, 13.4, 13.5_
 
-- [ ] 7.3 口を通さない所 0 を、ソースを読む試験で固定する
+- [x] 7.3 口を通さない所 0 を、ソースを読む試験で固定する
   - 本番のソースで `sylphya.toml`・`sylphya.sqlite` を綴るのは核・TOML の読み・告知の文だけ、`rusqlite` を綴るのは核だけ、であることをコメントの行を除いて読む試験を置く
   - 差し替えの口と判断の構造体の字面がワークスペースに無いことを同じ試験で固定する
   - 完了の状態: 試験が緑で、どれかの字面を別のファイルに足すと赤になる
@@ -267,3 +267,4 @@
 - 6.1: 倍率と DPI は `ScopeScaleCells`（速い表 4 つ）だけが持つ。`ScopeScaleSource::clear` は 4 つとも捨てるが、本番でゴーストの層を付け替える道は無い（付け替えると次の倍率の変わりまで値なしになる）。
 - 6.1（7.2 へ）: `doc/ukadoc-coverage/ledger/property.toml` の 430・676・773 行の「実装:」の文に古い型の名前 `ScopeScaleTable` が残っている。7.2 で一緒に直す。
 - 7.1: `import.rs` の `Stop::Failed(format!("{other:?}"))` は `Opened` の Debug の字を理由の文へ入れうる（読みにくいが記録には残る）。完了の棚卸で扱う。
+- 7.3: 綴りの試験は `crates/areka-session/src/sylphya_spelling_tests.rs`。`WAIT_LIMIT` は `store/mod.rs` へ移した（許す所を設計の 3 か所にするため）。`#[cfg(test)]` の項目だけを読み飛ばし、複数行の引数の試験の関数は残りを読む（読みすぎの向き）。

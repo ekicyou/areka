@@ -2,12 +2,12 @@
 
 use crate::actor::{Effect, SylphyaMsg, Writer, plan_write};
 use crate::asker::AskerId;
-use crate::guardian::{WAIT_LIMIT, lock_failed, store_not_open};
+use crate::guardian::{lock_failed, store_not_open};
 use crate::key::parse_dotted;
 use crate::keytable::{Home, KEY_TABLE, KeyRow, rule_of};
 use crate::persist::{PersistFailure, PersistKey, PersistOutcome, PersistScope, ScopeRoots};
 use crate::reader::SylphyaReader;
-use crate::store::{FileWrite, OP_WAIT, RETRY_STEP, Store, StoreBackend, WriteAttempt};
+use crate::store::{FileWrite, OP_WAIT, RETRY_STEP, Store, StoreBackend, WAIT_LIMIT, WriteAttempt};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 

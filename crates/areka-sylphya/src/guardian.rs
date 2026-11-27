@@ -13,7 +13,7 @@ use crate::persist::{
     PersistFailure, PersistFailureCause, PersistOutcome, PersistScope, ScopeRoots,
 };
 use crate::reader::SylphyaReader;
-use crate::store::{FileWrite, OP_WAIT, RETRY_STEP, Store, StoreBackend, WriteAttempt};
+use crate::store::{FileWrite, OP_WAIT, RETRY_STEP, Store, StoreBackend, WAIT_LIMIT, WriteAttempt};
 use areka_actor::ReplySender;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -23,7 +23,6 @@ use std::time::Duration;
 const LOG_TARGET: &str = "areka_sylphya::actor";
 const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
 
-pub(crate) const WAIT_LIMIT: &str = "記憶のファイル sylphya.sqlite の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）";
 const CLOSE_BUSY: &str = "終了のとき、ほかの書き手が記憶のファイルを使っていて書けませんでした";
 
 /// [`spawn_sylphya`] の起動の値（[`SylphyaInit::new`] で作る）。
