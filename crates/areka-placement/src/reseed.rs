@@ -229,12 +229,13 @@ pub(crate) fn resolve_descript_scopes(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Layer {
+pub(crate) enum Layer {
     Script,
     DescriptOnly,
 }
 
-fn resolve_scopes(
+/// 標準の位置を `layer` で解く。`balloon_size` はそのスコープのバルーンの寸を `WindowPos` の寸の代わりに使う。
+pub(crate) fn resolve_scopes(
     world: &World,
     windows: &GhostWindows,
     src: &DescriptSource,

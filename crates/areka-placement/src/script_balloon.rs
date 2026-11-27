@@ -4,13 +4,15 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use tracing::{debug, info, warn};
+use wintf::ecs::SizeI;
 use wintf::ecs::drag::WindowDragging;
 
 use crate::config::{BalloonSide, BalloonXMode, ScopeConfig};
 use crate::face_windowposition::{BalloonUserMoved, mark_user_moved};
 use crate::follow::BalloonFollow;
 use crate::reseed::{
-    StandardScope, reinstall_balloon, resolve_descript_scopes, resolve_standard_scopes,
+    Layer, StandardScope, reinstall_balloon, resolve_descript_scopes, resolve_scopes,
+    resolve_standard_scopes,
 };
 use crate::reset_pos::DefaultPlacementBasis;
 use crate::resolver::{OffsetBase, PointPx};
@@ -151,7 +153,10 @@ pub struct ScriptBalloonPlacement {
 
 /// 着地の前に台本の値を当てたキャラ窓の印（着地した巡に解き直す）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScriptBalloonUnsettled;
+pub struct ScriptBalloonUnsettled {
+    /// 仮の大きさで解いた標準のずらし（利用者のずらしを差の式で残すための前の標準）。
+    provisional: PointPx,
+}
 
 fn log_script_balloon_dropped(world: DeferredWorld, hook: HookContext) {
     let Some(value) = world.get::<ScriptBalloonPlacement>(hook.entity) else {
@@ -395,22 +400,59 @@ fn apply_script_balloon(world: &mut World, scope: u32, command: Command, landed:
     let Some(basis) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
         return deferred("no_default_basis");
     };
-    let Some(StandardScope {
-        running,
-        mut placement,
-    }) = resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
-        .into_iter()
-        .find(|s| s.placement.scope == index)
-    else {
+    let Some(solved) = solve_script_scope(world, &windows, &basis, index, None) else {
         return deferred("not_resolved");
     };
-    if !user_moved {
+    if user_moved && prev_standard.is_none() {
+        return deferred("not_resolved");
+    }
+    let provisional = solved.placement.balloon_offset;
+    if !reseat(world, solved, prev_standard) {
+        return deferred("not_resolved");
+    }
+    if landed {
+        world
+            .entity_mut(char_window)
+            .remove::<ScriptBalloonUnsettled>();
+    } else {
+        world
+            .entity_mut(char_window)
+            .insert(ScriptBalloonUnsettled { provisional });
+    }
+    true
+}
+
+fn solve_script_scope(
+    world: &World,
+    windows: &GhostWindows,
+    basis: &DefaultPlacementBasis,
+    scope: usize,
+    balloon_size: Option<SizeI>,
+) -> Option<StandardScope> {
+    resolve_scopes(
+        world,
+        windows,
+        &basis.source,
+        &basis.balloon,
+        Layer::Script,
+        balloon_size.map(|size| (scope, size)),
+    )
+    .into_iter()
+    .find(|s| s.placement.scope == scope)
+}
+
+/// `prev` があれば今の追従の値に「`solved` の標準 − `prev`」を足して利用者のずらしを保って据え、無ければ標準で据える。
+fn reseat(world: &mut World, solved: StandardScope, prev: Option<PointPx>) -> bool {
+    let StandardScope {
+        running,
+        mut placement,
+    } = solved;
+    let Some(prev) = prev else {
         reinstall_balloon(world, &running, &placement);
         return true;
-    }
-    let (Some(prev), Some(follow)) = (prev_standard, world.get::<BalloonFollow>(char_window))
-    else {
-        return deferred("not_resolved");
+    };
+    let Some(follow) = world.get::<BalloonFollow>(running.char_window) else {
+        return false;
     };
     let current = follow.offset();
     let offset = PointPx {
@@ -428,8 +470,115 @@ fn apply_script_balloon(world: &mut World, scope: u32, command: Command, landed:
     };
     placement.balloon_keyword_base = None;
     reinstall_balloon(world, &running, &placement);
-    mark_user_moved(world, char_window);
+    mark_user_moved(world, running.char_window);
     true
+}
+
+/// 着地前の印のあるスコープのうち `landed` が真と答えたものの印を外し、着地した大きさで解き直す。
+///
+/// 利用者が動かしていれば、仮の大きさの標準からの差を追従の値に足してそのずらしを残す。
+pub fn resettle_script_balloons(world: &mut World, landed: &dyn Fn(u32) -> bool) {
+    let Some(windows) = world.get_resource::<GhostWindows>().cloned() else {
+        return;
+    };
+    for scope in windows.scopes() {
+        let Some(char_window) = windows.char_window(scope) else {
+            continue;
+        };
+        let Some(marker) = world.get::<ScriptBalloonUnsettled>(char_window).copied() else {
+            continue;
+        };
+        if !landed(scope as u32) {
+            continue;
+        }
+        world
+            .entity_mut(char_window)
+            .remove::<ScriptBalloonUnsettled>();
+        let user_moved = world.entity(char_window).contains::<BalloonUserMoved>();
+        let skipped = |reason: &str| {
+            warn!(
+                event = "script_balloon_resettle_skipped",
+                scope, reason, "着地した大きさで台本のバルーン位置を解き直せない"
+            );
+        };
+        let Some(basis) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
+            skipped("no_default_basis");
+            continue;
+        };
+        let Some(solved) = solve_script_scope(world, &windows, &basis, scope, None) else {
+            skipped("not_resolved");
+            continue;
+        };
+        if !reseat(world, solved, user_moved.then_some(marker.provisional)) {
+            skipped("not_resolved");
+            continue;
+        }
+        info!(
+            event = "script_balloon_resettled",
+            scope, user_moved, "着地した大きさで台本のバルーン位置を解き直した"
+        );
+    }
+}
+
+/// バルーン窓の寸が `before` から `after` へ変わった直後に呼び、台本の値のあるスコープだけ寸の前後の標準の差を追従の値に足して据え直す。
+///
+/// 台本の値の無いスコープは何もしない。
+pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: SizeI, after: SizeI) {
+    let skipped = |reason: &str| {
+        warn!(
+            event = "script_balloon_reanchor_skipped",
+            scope, reason, "バルーン窓の寸の変化で台本のバルーン位置を据え直せない"
+        );
+    };
+    let Some(windows) = world.get_resource::<GhostWindows>().cloned() else {
+        return skipped("no_ghost_windows");
+    };
+    let index = scope as usize;
+    let Some(char_window) = windows.char_window(index) else {
+        return skipped("no_char_window");
+    };
+    if !is_script_placed(world, char_window) {
+        return;
+    }
+    if windows
+        .balloon_window(index)
+        .is_some_and(|b| world.entity(b).contains::<WindowDragging>())
+    {
+        info!(
+            event = "script_balloon_reanchor_skipped",
+            scope,
+            reason = "balloon_dragging",
+            "ドラッグ中のバルーンは寸の変化で置き直さない"
+        );
+        return;
+    }
+    let Some(basis) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
+        return skipped("no_default_basis");
+    };
+    let (Some(prev), Some(solved)) = (
+        solve_script_scope(world, &windows, &basis, index, Some(before)),
+        solve_script_scope(world, &windows, &basis, index, Some(after)),
+    ) else {
+        return skipped("not_resolved");
+    };
+    let user_moved = world.entity(char_window).contains::<BalloonUserMoved>();
+    if !reseat(
+        world,
+        solved,
+        user_moved.then_some(prev.placement.balloon_offset),
+    ) {
+        return skipped("not_resolved");
+    }
+    info!(
+        event = "script_balloon_reanchored",
+        scope,
+        before_w = before.width,
+        before_h = before.height,
+        after_w = after.width,
+        after_h = after.height,
+        user_moved,
+        "バルーン窓の寸の変化で台本のバルーン位置を据え直した"
+    );
 }
 
 #[cfg(test)]

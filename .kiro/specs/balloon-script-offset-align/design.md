@@ -436,7 +436,7 @@ pub fn resettle_script_balloons(world: &mut World, landed: &dyn Fn(u32) -> bool)
   7. 新しい標準 `S_new` を解く。印が無ければ `reinstall_balloon(world, &running, &S_new)`。印があれば、`BalloonFollow.offset() + (S_new.balloon_offset − S_prev.balloon_offset)` を基準（係留済み・`running.dpi`）とキーワードの素材なしで据えた `ScopePlacement` の写しを `reinstall_balloon` へ渡し、その後 `mark_user_moved` で印を付け直す（2.3・3.9）。
   8. `info!(event = "script_balloon_offset_set" | "script_balloon_align_set", scope, command, …値…, user_moved)`（7.1・軸ごとに `absolute`／`relative` と値）。
 - `\![lock,balloonmove]` を読まない（4.6）。キャラ窓・`Anchored` に触れない。置き直しの経路は `reinstall_balloon` の `PlacementRoute::Restore`（`\![execute,resetballoonpos]` と同じ）。
-- 着地前の当て: 着地は World の Component ではなく、runtime の move drain の中の `Landed` の読み口（表示の拡大率の読み口＋キャラ窓の `WindowPos.size`）が答えるので、move drain の腕が引数 `landed` で渡す。`landed` が偽のときは、手順 7 の後に印 `ScriptBalloonUnsettled`（キャラ窓の Component・欄なし）を付ける。move drain の頭の `resettle_script_balloons(world, landed)` が、`Landed` になった窓の印を外し、そのスコープを着地した大きさで解き直す（利用者が動かした印が無ければ標準で据え直す。着地の前は利用者がバルーンをドラッグできないので、印のある間の利用者のずらしは命令の前から持ち越した分だけで、手順 7 と同じ差の式で残す）。
+- 着地前の当て: 着地は World の Component ではなく、runtime の move drain の中の `Landed` の読み口（表示の拡大率の読み口＋キャラ窓の `WindowPos.size`）が答えるので、move drain の腕が引数 `landed` で渡す。`landed` が偽のときは、手順 7 の後に印 `ScriptBalloonUnsettled { provisional }`（キャラ窓の Component。欄は手順 7 で仮の大きさのまま解いた `S_new.balloon_offset`）を付ける（付け直すたびに欄を今の値へ取り替える）。move drain の頭の `resettle_script_balloons(world, landed)` が、`Landed` になった窓の印を外し、そのスコープを着地した大きさで解き直す（利用者が動かした印が無ければ標準で据え直す。着地の前は利用者がバルーンをドラッグできないので、印のある間の利用者のずらしは命令の前から持ち越した分だけで、`BalloonFollow.offset() + (着地した大きさの S_new − 印の provisional)` で残す。着地した後は仮の大きさの標準を解き直せないので、印が前の標準を持つ）。材料が無い・解けないときは印を外し、仮の位置のまま置き直さない。
 
 #### BalloonDpiReanchor（バルーン窓だけの DPI の変化）
 
@@ -447,6 +447,7 @@ pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: Size
 - 呼び手は `crates/areka-runtime/src/frame/dpi.rs` の DPI の相で、`GhostWindowKind::Balloon` の窓の寸が `reconcile_window_size` で変わったとき（`before != after`）だけ。変わった時点が分かるので押しで呼ぶ（毎フレーム比べない）。
 - そのスコープのキャラ窓に Component があるとき、バルーンの寸を `before` にして解いた標準 `S_prev` と `after` で解いた `S_new` の差を `BalloonFollow` の値に足して据え直す（命令の当ての手順 7 と同じ式・利用者のずらしは保つ）。これで `left` の「シェルの左上にバルーンの右上が接する」と `center`・`bottom` の中央が、バルーンだけが DPI の違う画面へ移っても崩れない。
 - 据え直した位置は書き込みの関門を通り、`limit_work_area` が新しい矩形で画面を選ぶ。押し込んだ結果は選んだ画面に収まり、その画面の DPI はもう変わらないので、寸の変化と選び直しは 1 回で止まる（揺れ止めは入れない）。
+- そのバルーン窓に `WindowDragging` があれば置き直さず `info!(event = "script_balloon_reanchor_skipped", scope, reason = "balloon_dragging")` で終える（離したときの補正が新しい寸の標準の上に利用者のずらしを据える）。
 - 寸の前後が取れない・標準が解けないときは置き直さず `warn!(event = "script_balloon_reanchor_skipped", scope, reason)`。
 
 #### ScriptShare（台本の値の分）
@@ -526,9 +527,10 @@ pub(crate) fn limit_work_area(snapshot: &MonitorSnapshot, char_rect: RectPx,
 | 窓の一式・キャラ窓が無い | 当てない・持たない | `warn!(event = "script_balloon_skipped", scope, command, reason)` |
 | 材料が無い・解けない | 値を持ち、置き直さない | `warn!(event = "script_balloon_place_deferred", scope, command, reason)` |
 | 記憶へ書く分を出せない | 記憶へ書かない | `warn!(event = "balloon_persist_skipped", scope, reason)` |
+| 着地した巡の解き直しで材料が無い・解けない | 印を外し、仮の位置のまま置き直さない | `warn!(event = "script_balloon_resettle_skipped", scope, reason)`（`no_default_basis`・`not_resolved`） |
 
 ### Monitoring
-- 受けた: `info!` `script_balloon_offset_set`・`script_balloon_align_set`。捨てた: `info!` `script_balloon_dropped`。押し戻した: `[balloon-limit] Clamp … monitor=… script=…`。実機の確かめはこの語で grep する。
+- 受けた: `info!` `script_balloon_offset_set`・`script_balloon_align_set`。捨てた: `info!` `script_balloon_dropped`。解き直した・据え直した: `info!` `script_balloon_resettled`・`script_balloon_reanchored`。押し戻した: `[balloon-limit] Clamp … monitor=… script=…`。実機の確かめはこの語で grep する。
 
 ## Testing Strategy
 

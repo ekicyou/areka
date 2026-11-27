@@ -1,6 +1,6 @@
 use log_capture_kit::capture;
 use wintf::ecs::drag::WindowDragging;
-use wintf::ecs::{Point, WindowPos};
+use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::test_support::{BALLOON_SIZE, CHAR_SIZES, ScriptWorld, script_world};
 use super::*;
@@ -8,6 +8,7 @@ use crate::balloon_lock::apply_script_balloon_lock;
 use crate::follow::{BalloonFollow, BalloonFollowTrigger, follow_balloon};
 use crate::reseed::test_support::position_of;
 use crate::resolver::ScopePlacement;
+use crate::resolver::SizePx;
 use crate::shared_test_support::{events_with, one_event_with};
 
 fn place(
@@ -378,4 +379,224 @@ fn missing_default_basis_keeps_the_value_and_warns() {
         w.world.get::<ScriptBalloonPlacement>(c).unwrap().align,
         Some(ScriptAlign::Right)
     );
+}
+
+const SHIFT: PointPx = PointPx { x: 30, y: 20 };
+const LANDED_W: i32 = 600;
+const BALLOON_BEFORE: SizeI = SizeI {
+    width: BALLOON_SIZE.w,
+    height: BALLOON_SIZE.h,
+};
+const BALLOON_AFTER: SizeI = SizeI {
+    width: 334,
+    height: 237,
+};
+
+fn set_size(w: &mut ScriptWorld, e: Entity, width: i32, height: i32) {
+    w.world.get_mut::<WindowPos>(e).unwrap().size = Some(SizeI { width, height });
+}
+
+fn land_sakura(w: &mut ScriptWorld) {
+    let c = w.windows.char_window(0).unwrap();
+    set_size(w, c, LANDED_W, CHAR_SIZES[0].h);
+}
+
+fn resize_sakura_balloon(w: &mut ScriptWorld) {
+    let b = w.windows.balloon_window(0).unwrap();
+    set_size(w, b, BALLOON_AFTER.width, BALLOON_AFTER.height);
+}
+
+fn follow_of(w: &ScriptWorld, scope: usize) -> PointPx {
+    let c = w.windows.char_window(scope).unwrap();
+    w.world.get::<BalloonFollow>(c).unwrap().offset()
+}
+
+/// sakura のバルーンを今の追従の値から `SHIFT` だけ動かした形にする。
+fn shift_by_user(w: &mut ScriptWorld) {
+    let c = w.windows.char_window(0).unwrap();
+    let b = w.windows.balloon_window(0).unwrap();
+    let base = follow_of(w, 0);
+    let offset = PointPx {
+        x: base.x + SHIFT.x,
+        y: base.y + SHIFT.y,
+    };
+    w.world
+        .entity_mut(c)
+        .insert(BalloonFollow::new(b, OffsetBase { offset, dpi: None }));
+    mark_user_moved(&mut w.world, c);
+}
+
+fn unsettled(w: &ScriptWorld) -> bool {
+    let c = w.windows.char_window(0).unwrap();
+    w.world.entity(c).contains::<ScriptBalloonUnsettled>()
+}
+
+#[test]
+fn applying_before_landing_resolves_again_at_the_landed_size() {
+    let mut w = script_world(&[]);
+    let c = char_at(&w, 0);
+
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Right, false);
+
+    assert_eq!(balloon_at(&w, 0), shifted(c, CHAR_SIZES[0].w, 0));
+    assert!(unsettled(&w));
+
+    land_sakura(&mut w);
+    resettle_script_balloons(&mut w.world, &|_| false);
+    assert_eq!(balloon_at(&w, 0), shifted(c, CHAR_SIZES[0].w, 0));
+    assert!(unsettled(&w), "着地していないスコープは印を残す");
+
+    let (_, events) = capture(|| resettle_script_balloons(&mut w.world, &|s| s == 0));
+
+    assert_eq!(balloon_at(&w, 0), shifted(c, LANDED_W, 0));
+    assert!(!unsettled(&w));
+    one_event_with(&events, "script_balloon_resettled");
+}
+
+#[test]
+fn applying_after_landing_clears_the_unsettled_mark() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Right, false);
+    assert!(unsettled(&w));
+
+    apply_script_balloon_offset(&mut w.world, 0, abs(0, 0), true);
+
+    assert!(!unsettled(&w));
+}
+
+#[test]
+fn resettle_keeps_the_user_shift() {
+    let mut w = script_world(&[]);
+    shift_by_user(&mut w);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Right, false);
+    assert_eq!(
+        follow_of(&w, 0),
+        PointPx {
+            x: CHAR_SIZES[0].w + SHIFT.x,
+            y: SHIFT.y,
+        }
+    );
+
+    land_sakura(&mut w);
+    resettle_script_balloons(&mut w.world, &|_| true);
+
+    assert_eq!(
+        follow_of(&w, 0),
+        PointPx {
+            x: LANDED_W + SHIFT.x,
+            y: SHIFT.y,
+        }
+    );
+    let c = w.windows.char_window(0).unwrap();
+    assert!(w.world.entity(c).contains::<BalloonUserMoved>());
+}
+
+#[test]
+fn balloon_size_replacement_resolves_that_scope_at_the_given_size() {
+    let w = script_world(&[]);
+    let basis = w.world.resource::<DefaultPlacementBasis>();
+
+    let got: Vec<ScopePlacement> = resolve_scopes(
+        &w.world,
+        &w.windows,
+        &basis.source,
+        &basis.balloon,
+        Layer::Script,
+        Some((0, BALLOON_AFTER)),
+    )
+    .into_iter()
+    .map(|s| s.placement)
+    .collect();
+
+    assert_eq!(
+        got[0].balloon_size,
+        SizePx {
+            w: BALLOON_AFTER.width,
+            h: BALLOON_AFTER.height,
+        }
+    );
+    assert_eq!(
+        got[0].balloon_offset,
+        PointPx {
+            x: -BALLOON_AFTER.width,
+            y: 0,
+        }
+    );
+    assert_eq!(got[1].balloon_size, BALLOON_SIZE);
+}
+
+#[test]
+fn balloon_resize_keeps_a_left_balloon_touching_the_body() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Left, true);
+    let c = char_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    let (_, events) =
+        capture(|| reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER));
+
+    let b = balloon_at(&w, 0);
+    assert_eq!(
+        b.x + BALLOON_AFTER.width,
+        c.x,
+        "バルーンの右端が本体の左端に接する"
+    );
+    assert_eq!(b.y, c.y);
+    one_event_with(&events, "script_balloon_reanchored");
+}
+
+#[test]
+fn balloon_resize_keeps_a_center_balloon_centered() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Center, true);
+    let c = char_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER);
+
+    assert_eq!(
+        balloon_at(&w, 0),
+        shifted(
+            c,
+            (CHAR_SIZES[0].w - BALLOON_AFTER.width) / 2,
+            -BALLOON_AFTER.height
+        )
+    );
+}
+
+#[test]
+fn balloon_resize_keeps_the_user_shift() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Left, true);
+    shift_by_user(&mut w);
+    let c = char_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER);
+
+    let expected = PointPx {
+        x: -BALLOON_AFTER.width + SHIFT.x,
+        y: SHIFT.y,
+    };
+    assert_eq!(follow_of(&w, 0), expected);
+    assert_eq!(balloon_at(&w, 0), shifted(c, expected.x, expected.y));
+    let char_window = w.windows.char_window(0).unwrap();
+    assert!(w.world.entity(char_window).contains::<BalloonUserMoved>());
+}
+
+#[test]
+fn balloon_resize_leaves_a_scope_without_script_value_untouched() {
+    let mut w = script_world(&[]);
+    let c = w.windows.char_window(0).unwrap();
+    let follow = *w.world.get::<BalloonFollow>(c).unwrap();
+    let pos = balloon_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    let (_, events) =
+        capture(|| reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER));
+
+    assert_eq!(*w.world.get::<BalloonFollow>(c).unwrap(), follow);
+    assert_eq!(balloon_at(&w, 0), pos);
+    assert!(!w.world.entity(c).contains::<BalloonUserMoved>());
+    assert!(events.is_empty(), "{events:?}");
 }
