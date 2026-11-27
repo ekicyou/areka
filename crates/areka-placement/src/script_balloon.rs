@@ -7,12 +7,13 @@ use tracing::{debug, info, warn};
 use wintf::ecs::drag::WindowDragging;
 
 use crate::config::{BalloonSide, BalloonXMode, ScopeConfig};
-use crate::face_windowposition::BalloonUserMoved;
+use crate::face_windowposition::{BalloonUserMoved, mark_user_moved};
+use crate::follow::BalloonFollow;
 use crate::reseed::{
     StandardScope, reinstall_balloon, resolve_descript_scopes, resolve_standard_scopes,
 };
 use crate::reset_pos::DefaultPlacementBasis;
-use crate::resolver::PointPx;
+use crate::resolver::{OffsetBase, PointPx};
 use crate::spawn::GhostWindows;
 
 /// 台本のずらしの 1 軸。
@@ -241,7 +242,7 @@ pub(crate) fn script_share(world: &World, scope: usize) -> ScriptShare {
     }
 }
 
-/// ずらしの命令を `scope` に当て、出ているバルーンを新しい標準の位置へ据え直す。値を持ったら真。
+/// ずらしの命令を `scope` に当て、出ているバルーンを新しい標準の位置（利用者が動かしていればそのずらしを保った位置）へ据え直す。値を持ったら真。
 ///
 /// `landed` はそのスコープのキャラ窓の表示が実表示寸へ着地したか（runtime の move drain が答える）。
 pub fn apply_script_balloon_offset(
@@ -253,7 +254,7 @@ pub fn apply_script_balloon_offset(
     apply_script_balloon(world, scope, Command::Offset(offset), landed)
 }
 
-/// 向きの命令を `scope` に当て、出ているバルーンを新しい標準の位置へ据え直す。値を持ったら真。
+/// 向きの命令を `scope` に当て、出ているバルーンを新しい標準の位置（利用者が動かしていればそのずらしを保った位置）へ据え直す。値を持ったら真。
 ///
 /// `landed` はそのスコープのキャラ窓の表示が実表示寸へ着地したか（runtime の move drain が答える）。
 pub fn apply_script_balloon_align(
@@ -315,6 +316,15 @@ fn apply_script_balloon(world: &mut World, scope: u32, command: Command, landed:
             align: None,
         });
     let user_moved = world.entity(char_window).contains::<BalloonUserMoved>();
+    let prev_standard = user_moved
+        .then(|| world.get_resource::<DefaultPlacementBasis>())
+        .flatten()
+        .and_then(|basis| {
+            resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
+                .into_iter()
+                .find(|s| s.placement.scope == index)
+        })
+        .map(|s| s.placement.balloon_offset);
     match command {
         Command::Offset(offset) => {
             value.offset = Some(offset);
@@ -385,14 +395,40 @@ fn apply_script_balloon(world: &mut World, scope: u32, command: Command, landed:
     let Some(basis) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
         return deferred("no_default_basis");
     };
-    let Some(StandardScope { running, placement }) =
-        resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
-            .into_iter()
-            .find(|s| s.placement.scope == index)
+    let Some(StandardScope {
+        running,
+        mut placement,
+    }) = resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
+        .into_iter()
+        .find(|s| s.placement.scope == index)
     else {
         return deferred("not_resolved");
     };
+    if !user_moved {
+        reinstall_balloon(world, &running, &placement);
+        return true;
+    }
+    let (Some(prev), Some(follow)) = (prev_standard, world.get::<BalloonFollow>(char_window))
+    else {
+        return deferred("not_resolved");
+    };
+    let current = follow.offset();
+    let offset = PointPx {
+        x: current
+            .x
+            .saturating_add(placement.balloon_offset.x.saturating_sub(prev.x)),
+        y: current
+            .y
+            .saturating_add(placement.balloon_offset.y.saturating_sub(prev.y)),
+    };
+    placement.balloon_offset = offset;
+    placement.balloon_offset_base = OffsetBase {
+        offset,
+        dpi: Some(running.dpi),
+    };
+    placement.balloon_keyword_base = None;
     reinstall_balloon(world, &running, &placement);
+    mark_user_moved(world, char_window);
     true
 }
 
@@ -411,6 +447,10 @@ mod lifetime_tests;
 #[cfg(test)]
 #[path = "script_balloon_overlay_tests.rs"]
 mod overlay_tests;
+
+#[cfg(test)]
+#[path = "script_balloon_user_shift_tests.rs"]
+mod user_shift_tests;
 
 #[cfg(test)]
 #[path = "script_balloon_test_support.rs"]

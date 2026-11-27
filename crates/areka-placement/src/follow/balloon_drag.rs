@@ -8,6 +8,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
+use super::super::script_balloon::{ScriptShare, is_script_placed, script_share};
 use super::drag_follow::known_position;
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT,
@@ -273,22 +274,47 @@ pub(crate) fn on_balloon_drag_end(
                 y: balloon_pos.y - char_pos.y,
             };
 
-            // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries の基準記述）。
-            let persist = offset_tl;
-            // 保存↔復元の座標突合に使う実機診断ログ。char_size は診断用の現寸。
-            tracing::info!(
-                target: "areka::persist::save",
-                scope,
-                balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
-                char_x = char_pos.x, char_y = char_pos.y,
-                offset_tl_x = offset_tl.x, offset_tl_y = offset_tl.y,
-                persist_x = persist.x, persist_y = persist.y,
-                char_w = char_size.w, char_h = char_size.h,
-                ?anchor,
-                "balloon DragEnd 保存"
-            );
-            let entries = balloon_offset_entries(scope as u32, persist);
-            persist_entries(world, entries);
+            let share = if is_script_placed(world, char_window) {
+                script_share(world, scope)
+            } else {
+                ScriptShare::NotPlaced
+            };
+            let share = match share {
+                ScriptShare::NotPlaced => Some(PointPx { x: 0, y: 0 }),
+                ScriptShare::Share(share) => Some(share),
+                ScriptShare::Unresolved(reason) => {
+                    // 台本の分が記憶に入ると次の起動で台本の位置に出るので、書かない方を取る。
+                    warn!(
+                        event = "balloon_persist_skipped",
+                        scope,
+                        reason,
+                        "台本の値の分が解けないのでバルーンの位置を記憶へ書かなかった"
+                    );
+                    None
+                }
+            };
+            if let Some(share) = share {
+                // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries の基準記述）。
+                let persist = PointPx {
+                    x: offset_tl.x.saturating_sub(share.x),
+                    y: offset_tl.y.saturating_sub(share.y),
+                };
+                // 保存↔復元の座標突合に使う実機診断ログ。char_size は診断用の現寸。
+                tracing::info!(
+                    target: "areka::persist::save",
+                    scope,
+                    balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
+                    char_x = char_pos.x, char_y = char_pos.y,
+                    offset_tl_x = offset_tl.x, offset_tl_y = offset_tl.y,
+                    script_share_x = share.x, script_share_y = share.y,
+                    persist_x = persist.x, persist_y = persist.y,
+                    char_w = char_size.w, char_h = char_size.h,
+                    ?anchor,
+                    "balloon DragEnd 保存"
+                );
+                let entries = balloon_offset_entries(scope as u32, persist);
+                persist_entries(world, entries);
+            }
 
             // 2′: 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
             reestablish_balloon_follow(world, entity, balloon_pos);
