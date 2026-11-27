@@ -3,7 +3,7 @@
 //! 増分は `take_delta` でリセットされ累積はされない。増分は perf サマリ行の `alloc_*` へ載り、
 //! 累積はテストが「定常状態で新規確保が起きていない」を主張する読み取り口になる。
 //!
-//! 発生点は合成先とマスクの 2 つ。席について次の 3 点を固定する:
+//! 発生点は合成先・マスク・計画の 3 つ。席について次の 3 点を固定する:
 //!
 //! - 定常状態は完全ゼロ
 //! - 寸法変化は席ごとに一度だけ計数され、以後また 0
@@ -20,7 +20,7 @@
 
 use super::*;
 
-use areka_emo_compose::{BindSet, PatternState};
+use areka_emo_compose::{BindSet, PatternState, PlanItem};
 
 use crate::cache::ComposeCache;
 
@@ -44,6 +44,7 @@ fn take_delta_resets_the_increment_while_the_cumulative_keeps_growing() {
         BudgetDelta {
             alloc_compose_dst: 1,
             alloc_mask: 2,
+            ..Default::default()
         },
         "同一発生点の複数回申告は足し合わされること"
     );
@@ -52,6 +53,7 @@ fn take_delta_resets_the_increment_while_the_cumulative_keeps_growing() {
         BudgetCounters {
             alloc_compose_dst: 1,
             alloc_mask: 2,
+            ..Default::default()
         },
         "累積は増分と同じ値から始まる"
     );
@@ -66,6 +68,7 @@ fn take_delta_resets_the_increment_while_the_cumulative_keeps_growing() {
         BudgetCounters {
             alloc_compose_dst: 1,
             alloc_mask: 2,
+            ..Default::default()
         },
         "累積は増分の取り出しでリセットされないこと"
     );
@@ -79,6 +82,7 @@ fn take_delta_resets_the_increment_while_the_cumulative_keeps_growing() {
         BudgetCounters {
             alloc_compose_dst: 2,
             alloc_mask: 2,
+            ..Default::default()
         },
         "累積は run 全体で積み上がること"
     );
@@ -98,7 +102,7 @@ fn the_sum_of_per_apply_deltas_equals_the_cumulative() {
         &[AllocSite::ComposeDst, AllocSite::ComposeDst],
     ];
 
-    let mut summed = [0_u64; 2];
+    let mut summed = [0_u64; 3];
     for apply in program {
         for site in apply {
             budget.note_alloc(*site);
@@ -190,13 +194,19 @@ impl Flow2 {
         self.budget.native_scratch(|dst| {
             dst.resize_and_clear(native_w, native_h);
         });
+        self.budget.plan_scratch(|plan| {
+            plan.items.clear();
+            plan.items
+                .extend(std::iter::repeat_n(PlanItem::GroupEnd, native_h as usize));
+        });
 
         // 容量回収は合成成功後にのみ。
         let recycled = self.cache.take_recycled();
 
-        let (mut display, retired) = FrameBudget::display_buffer(recycled);
+        let (mut display, retired, mut plan) = FrameBudget::display_buffer(recycled);
 
         self.budget.swap_native_scratch(&mut display);
+        self.budget.swap_plan_scratch(&mut plan);
         let display_ptr = display.bytes().as_ptr();
         let native_ptr = self.budget.native_scratch_ptr();
 
@@ -210,14 +220,13 @@ impl Flow2 {
         );
         let mask_ptr = Arc::as_ptr(&mask);
 
-        // 表示記録は GPU 不要の空リスト。
         self.cache.insert(
             surface_id,
             BindSet::default(),
             PatternState::default(),
+            plan,
             display,
             Arc::clone(&mask),
-            wintf::ecs::GraphicsCommandList::empty(),
         );
 
         // 旧マスクはここで手放され、輪番の空きが単独所有になる。
@@ -520,11 +529,19 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     ));
     let mask_ptr = Arc::as_ptr(&mask);
 
-    let (display, retired) = FrameBudget::display_buffer(Some(CacheEntry {
+    let mut recycled_plan = empty_plan();
+    recycled_plan.items.push(PlanItem::GroupEnd);
+    let plan_items = recycled_plan.items.as_ptr();
+    let (display, retired, plan) = FrameBudget::display_buffer(Some(CacheEntry {
+        plan: recycled_plan,
         composed,
         mask,
-        display: wintf::ecs::GraphicsCommandList::empty(),
     }));
+    assert_eq!(
+        plan.items.as_ptr(),
+        plan_items,
+        "エントリの計画が席の交代へ返されていない（別の実体にすり替わっている）"
+    );
 
     assert_eq!(
         display.width(),
@@ -548,7 +565,12 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
         "回収が成立した貸し出しで確保を数えている"
     );
 
-    let (fresh, none) = FrameBudget::display_buffer(None);
+    let (fresh, none, fresh_plan) = FrameBudget::display_buffer(None);
+    assert_eq!(
+        fresh_plan.items.capacity(),
+        0,
+        "回収不成立の計画は空から始まる"
+    );
     assert_eq!(fresh.width(), 0, "回収不成立の表示バッファは空から始まる");
     assert_eq!(
         fresh.bytes().len(),
@@ -587,4 +609,64 @@ fn the_compose_destination_seat_is_allocated_once_and_then_lent_again() {
         );
         assert_eq!(again, first, "常設席が {i} 回目に別の実体へ差し替わった");
     }
+}
+
+/// 計画の常設席は項の列が伸びた回だけ数え、同じ寸の貸し出しでは数えない。席を交代させて受け取った
+/// 新しい実体が伸びれば、また 1 件数える。
+#[test]
+fn the_plan_seat_counts_only_the_growth_of_its_item_list() {
+    let mut budget = FrameBudget::new();
+    let fill = |plan: &mut DrawPlan, n: usize| {
+        plan.items.clear();
+        plan.items
+            .extend(std::iter::repeat_n(PlanItem::GroupEnd, n));
+    };
+
+    budget.plan_scratch(|plan| fill(plan, 5));
+    assert_eq!(
+        budget.take_delta().alloc_plan,
+        1,
+        "初回の伸長を数えていない"
+    );
+    for i in 0..3 {
+        budget.plan_scratch(|plan| fill(plan, 5));
+        assert_eq!(
+            budget.take_delta(),
+            BudgetDelta::default(),
+            "同じ寸の {i} 回目の貸し出しで確保を数えた"
+        );
+    }
+    budget.plan_scratch(|plan| fill(plan, 2));
+    assert_eq!(
+        budget.take_delta().alloc_plan,
+        0,
+        "縮めた貸し出しで確保を数えた"
+    );
+
+    let mut fresh = empty_plan();
+    budget.swap_plan_scratch(&mut fresh);
+    assert_eq!(fresh.items.len(), 2, "交代で席の計画が外へ出ていない");
+    budget.plan_scratch(|plan| fill(plan, 5));
+    assert_eq!(
+        budget.take_delta().alloc_plan,
+        1,
+        "交代で受け取った空の実体の伸長を数えていない"
+    );
+    assert_eq!(budget.cumulative().alloc_plan, 2, "累積は 2 回の伸長");
+}
+
+/// 節の写しが作り直した項の数は増分と累積の両方に積まれ、増分は取り出しで 0 に戻る。
+#[test]
+fn node_rebuilds_are_counted_per_apply_and_in_total() {
+    let mut budget = FrameBudget::new();
+    budget.note_rebuilds(3);
+    budget.note_rebuilds(2);
+    assert_eq!(budget.take_delta().node_rebuilds, 5);
+    assert_eq!(
+        budget.take_delta().node_rebuilds,
+        0,
+        "取り出しで 0 に戻らない"
+    );
+    budget.note_rebuilds(1);
+    assert_eq!(budget.cumulative().node_rebuilds, 6);
 }

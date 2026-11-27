@@ -1,12 +1,10 @@
 //! 読むだけの口 3 本（`has_surface`／`last_shown`／`compose_alone`）と写しの口 2 本
-//! （`alias_snapshot`／`surface_ids`）の決定論テスト（GPU なし）。
+//! （`alias_snapshot`／`surface_ids`）の決定論テスト。
 //!
-//! # GPU なしで「表示」を成立させる方法
+//! # 合成メモの当たりで「表示」を成立させる方法
 //!
-//! `ShowSurface` が GPU を要するのは合成メモに外れたときの表示の記録（`GraphicsCore` の
-//! DeviceContext）だけで、当たったときは純 ECS の装着だけで表示が成立する。ゆえに本ファイルは
-//! 同じ入力の合成結果を先に target の合成メモへ入れ（表示の記録は `GraphicsCommandList::empty()`・
-//! `cache_tests.rs` と同じ扱い）、**本物の `ShowSurface` 指令**を当たりの経路で通す。
+//! 同じ入力の計画と合成結果を先に target の合成メモへ入れ、**本物の `ShowSurface` 指令**を当たりの
+//! 経路で通す（節の葉は実 GPU で記録する）。
 //! `last_show`・`current_surface_id`・`visible` を書くのは本番の表示成立点そのものである。
 
 use std::sync::Arc;
@@ -16,7 +14,6 @@ use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternSta
 use areka_parsers::shell::{AliasKey, DefRef, Shell, SurfaceAlias};
 use bevy_ecs::world::World;
 use tracing::Level;
-use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::super::test_support::{
@@ -74,7 +71,7 @@ fn build_assets() -> (EmoWorld, AtlasTable) {
 
 /// `SHOWN` と `NEVER_SHOWN` の 2 target を登録した presenter と World。
 fn setup() -> (EmoPresenter, World) {
-    let mut world = World::new();
+    let mut world = super::super::test_support::make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     for target in [SHOWN, NEVER_SHOWN] {
         let window = spawn_window_with_dpi(&mut world, 96);
@@ -97,6 +94,9 @@ fn show(
     let composed = Composer::new()
         .compose(&t.emo_world, &t.atlas, surface_id, &binds, &pattern)
         .expect("表示の入力の合成は Ok");
+    let plan = Composer::new()
+        .plan(&t.emo_world, &t.atlas, surface_id, &binds, &pattern)
+        .expect("表示の入力の計画は Ok");
     let mask = Arc::new(AlphaMask::from_pbgra32(
         composed.bytes(),
         composed.width(),
@@ -107,9 +107,9 @@ fn show(
         surface_id,
         binds.clone(),
         pattern.clone(),
+        plan,
         composed,
         mask,
-        GraphicsCommandList::empty(),
     );
 
     show_with_ok(presenter, world, target, surface_id, binds, pattern);

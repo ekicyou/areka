@@ -11,6 +11,8 @@ use wintf::ecs::widget::bitmap_source::AlphaMask;
 use super::budget::FrameBudget;
 use super::hit_picture::{HitNotes, HitPicture};
 use super::scale_change::AppliedScale;
+use crate::draw_nodes::DrawNodes;
+use crate::gpu_atlas::GpuAtlas;
 use crate::hit_shapes::HitMasks;
 
 use super::{
@@ -45,7 +47,7 @@ pub enum VisibilityOwnership {
 
 /// target ごとの表示コンテキスト（シェル・バルーンで同一機構）。
 ///
-/// `mount` は初回 `ShowSurface` で原寸が確定してから遅延生成する（表示記録と原寸の配置が要る・
+/// `mount` は初回 `ShowSurface` で原寸が確定してから遅延生成する（原寸の配置が要る・
 /// 全透明退化では生成しない）。`emo_world`／`atlas`（構築時 `bind_atlas` 済み）と `composer`／`cache` は
 /// 合成・引き当ての入力側、`window` は装着先の窓ハンドルである。
 pub(super) struct PresentTarget {
@@ -58,9 +60,9 @@ pub(super) struct PresentTarget {
     /// 毎フレーム経路の確保計数の器。累積カウンタの所有者はここ。target と同じ寿命で適用をまたいで
     /// 存続するので、「ウォームアップ後の N 反復で 1 件も確保が増えていない」を run 全体の累積として
     /// 主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、perf サマリ行の `alloc_*`
-    /// へ載る。再利用席（合成先の常設席・マスクの輪番）も本フィールドが持つ。
+    /// へ載る。再利用席（合成先と計画の常設席・マスクの輪番）も本フィールドが持つ。
     pub(super) budget: FrameBudget,
-    /// 合成入力（surface id＋bind 集合＋pattern）→ (composed 原寸, mask, display) 対の**容量 3・LRU** メモ化表。
+    /// 合成入力（surface id＋bind 集合＋pattern）→ (計画, composed 原寸, mask) の組の**容量 3・LRU** メモ化表。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（遅延装着の対象）。
     pub(super) window: Entity,
@@ -190,12 +192,10 @@ pub(super) struct PresentTarget {
     /// 同寸の再表示では何も置かない。`None` を書き戻して既存の未消費要求を消すこともしない（同寸でも
     /// 「まだ窓へ反映していない要求」は生きているため）。
     pub(super) pending_resize: Option<(u32, u32)>,
-    /// **前の絵を下敷きにしてよいか**。
-    ///
-    /// 真のとき、合成器の前の命令列は控えの中の `last_show` の鍵の絵を作った命令列である。対象を
-    /// 作るとき偽・控えに外れたら合成の前に偽・`InvalidateCache` で偽・表示の成立点で「控えに外れ、
-    /// 動きのある面だった」なら真。合成の後で失敗した適用のあとは偽のまま＝次はいちから合成する。
-    pub(super) partial_base: bool,
+    /// 装置ごとの頁の絵と葉の控え（最初の表示で作り、装置が替わったら作り直す）。
+    pub(super) gpu: Option<GpuAtlas>,
+    /// 計画を `mount` のまとめの節の下へ写す部品（`mount` と一緒に作る）。
+    pub(super) nodes: Option<DrawNodes>,
     /// **最後に記録した装置の失敗の原因**（`context`・`hresult`）。
     ///
     /// 成立をはさまずに同じ原因が続くあいだだけ値を持ち、その間の失敗の行は `debug!` になる。対象を

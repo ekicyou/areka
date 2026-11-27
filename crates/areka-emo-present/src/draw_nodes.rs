@@ -52,25 +52,20 @@ impl DrawNodes {
         }
     }
 
-    /// 計画を根の下の節へ写す。同じ位置の項が等しければ節を変えない（版を上げない）。
+    /// 計画を根の下の節へ写し、作り直した項の数を返す。同じ位置の項が等しければ節を変えない（版を上げない）。
     pub(crate) fn sync(
         &mut self,
         world: &mut World,
         gpu: &mut GpuAtlas,
         plan: &DrawPlan,
-    ) -> Result<(), PresentError> {
+    ) -> Result<usize, PresentError> {
         let keep = self
             .slots
             .iter()
             .zip(&plan.items)
             .take_while(|(slot, item)| shape(&slot.item) == shape(item))
             .count();
-        // 後ろから消すので、まとめの子は親より先に消える。
-        for slot in self.slots.drain(keep..).rev() {
-            for e in [slot.node, slot.clip].into_iter().flatten() {
-                let _ = world.try_despawn(e);
-            }
-        }
+        self.drop_from(world, keep);
         let mut parents = vec![self.root];
         for (i, item) in plan.items.iter().enumerate() {
             if i < keep {
@@ -91,7 +86,37 @@ impl DrawNodes {
                 _ => {}
             }
         }
-        Ok(())
+        Ok(plan.items.len() - keep)
+    }
+
+    /// 写してある計画の項（テストの観測口）。
+    #[cfg(test)]
+    pub(crate) fn items(&self) -> Vec<PlanItem> {
+        self.slots.iter().map(|s| s.item.clone()).collect()
+    }
+
+    /// 写した節の実体（切り抜きの節を含む・テストの観測口）。
+    #[cfg(test)]
+    pub(crate) fn entities(&self) -> Vec<Entity> {
+        self.slots
+            .iter()
+            .flat_map(|s| [s.clip, s.node])
+            .flatten()
+            .collect()
+    }
+
+    /// 節を全部消す（次の写しで全部作り直す）。
+    pub(crate) fn reset(&mut self, world: &mut World) {
+        self.drop_from(world, 0);
+    }
+
+    fn drop_from(&mut self, world: &mut World, keep: usize) {
+        // 後ろから消すので、まとめの子は親より先に消える。
+        for slot in self.slots.drain(keep..).rev() {
+            for e in [slot.node, slot.clip].into_iter().flatten() {
+                let _ = world.try_despawn(e);
+            }
+        }
     }
 }
 

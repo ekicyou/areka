@@ -144,8 +144,6 @@ fn frame_changes_right_after_the_real_hide_command_are_held() {
 /// 通し直しが失敗したら預かったコマは残り、次の `show_target` がそれで出す。
 #[test]
 fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
-    use crate::display::{DisplayFault, arm_display_fault};
-
     let mut world = make_world_with_gpu();
     let (w, _) = build_balloon();
 
@@ -171,7 +169,7 @@ fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
         "成立した後も預かったコマが残っている"
     );
 
-    // 失敗: 預けたコマの通し直しの表示の記録を 1 回だけ失敗させる。
+    // 失敗: 預けたコマの通し直しを 1 回だけ失敗させる（装置が無い）。
     let mut presenter = established(&mut world);
     let held = frames(&w, None, Some(1));
     send(
@@ -182,11 +180,14 @@ fn show_target_clears_the_held_frame_on_success_and_keeps_it_on_failure() {
         held.clone(),
     );
     {
-        let _armed = arm_display_fault(DisplayFault::CreateBitmap);
+        let gfx = world
+            .remove_resource::<wintf::ecs::GraphicsCore>()
+            .expect("前提: GraphicsCore が載っている");
         assert!(
             presenter.show_target(&mut world, T).is_err(),
             "前提: 通し直しが失敗する"
         );
+        world.insert_resource(gfx);
     }
     assert_eq!(presenter.target_visible(T), Some(false));
     presenter

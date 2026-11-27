@@ -181,9 +181,13 @@ fn invisible_construction_never_inserts_a_visible_visual() {
         records.iter().any(|(e, _)| *e == slot),
         "text-layer slot の Visual 挿入が観測されていない（観測器が機能していない）: {records:?}"
     );
-    // 本題: 可視の値で挿入された Visual が一度も無いこと。
+    // 本題: 可視の値で挿入された Visual が一度も無いこと（まとめの節は surface entity の子で、
+    // 持ち主と一緒に隠れるので数えない）。
     assert!(
-        records.iter().all(|(_, visible)| !*visible),
+        records
+            .iter()
+            .filter(|(e, _)| *e == surface || *e == slot)
+            .all(|(_, visible)| !*visible),
         "不可視構築では Visual が可視の値で挿入されてはならない（1.2）: {records:?}"
     );
 

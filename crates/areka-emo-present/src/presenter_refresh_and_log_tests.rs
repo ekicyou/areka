@@ -1,12 +1,12 @@
 use super::*;
 
 use areka_emo_compose::BindSet;
-use wintf::ecs::{GraphicsCommandList, GraphicsCore};
+use wintf::ecs::GraphicsCore;
 
 use super::test_support::{
     CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_and_show_hit_target,
     attach_hit_target, build_target_assets, build_two_face_assets, capture, force_applied, hide_ok,
-    make_world_with_gpu, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
+    make_world_with_gpu, mount_entities, on_screen, set_window_dpi, show_ok, spawn_window_with_dpi,
     tamper_face_1000_slot,
 };
 
@@ -58,7 +58,7 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
 /// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) メモの原寸バイトは k に依らず同一。
 ///
 /// (c) は観測点の 1 つである。エントリは原寸の面・原寸マスク・原寸の
-/// 表示記録だけを持ち **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
+/// 節だけを持ち **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
 /// ——「k 変化＝ミス＋再サンプル」だった旧正典と正反対であり、ヒットを主張しなければ静かに
 /// 再合成へ退化しても緑のままになる。
 ///
@@ -92,11 +92,8 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         (native_size, (1.0, 1.0)),
         "前提: 確立時の配置は原寸・係数 1.0"
     );
-    // 表示記録は k を含まない＝k 変化で作り直されないことを後段で突き合わせる。
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("表示確立後は surface entity に表示記録がある");
+    // 節は k を含まない＝k 変化で作り直されないことを後段で突き合わせる。
+    let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         Some(native_size),
@@ -139,16 +136,16 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         Some(scaled_size),
         "照会の物理寸が丸め権威の式と一致しない"
     );
-    // (e) メモの原寸バイトは k に依らず同一。ヒットゆえ表示記録も作り直されていない。
+    // (e) メモの原寸バイトは k に依らず同一。ヒットゆえ節も作り直されていない。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         native_golden,
         "k 変化でメモの原寸バイトが書き換わった（k を含む面を作っている）"
     );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "ヒットしたのに表示記録が作り直された（記録が k に依存している）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before.clone()),
+        "ヒットしたのに節が作り直された（記録が k に依存している）"
     );
 
     // (f) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（結線契約）。
@@ -163,14 +160,13 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
 /// `None` を返し、**再表示を一切行わない**。
 ///
 /// 「何もしない」は戻り値だけでは証明できない（同寸再表示でも `None` になる）ため、2 つの独立した
-/// 観測で固定する——(1) メモのスロットを同一キーのまま**別の絵・空の表示記録**で改竄しておき、
-/// surface entity に載っている表示記録が**改竄後のもの（空）にならない**こと（再表示していれば
-/// ヒットして改竄したエントリが entity へ書かれる）、(2) 表示成立点のログが**1 件も出ていない**こと。
+/// 観測で固定する——(1) メモのスロットを同一キーのまま**別の面の計画と絵**で改竄しておき、
+/// 画面の節が**改竄後のものにならない**こと（再表示していればヒットして改竄したエントリが節へ写る）、(2) 表示成立点のログが**1 件も出ていない**こと。
 ///
-/// 改竄の効き目を読む口が `read_back` から entity の表示記録へ移ったのは、`read_back` が
+/// 改竄の効き目を読む口が `read_back` から画面の節へ移ったのは、`read_back` が
 /// **メモそのもの**を返す形になったためである——改竄したメモを読み返しても「メモを改竄できた」
 /// ことしか分からない（恒真）。画面へ渡っている当のものは surface entity の
-/// `GraphicsCommandList` であり、そこへ書くのは表示成立点の `set_display` だけである。
+/// 節であり、そこへ写すのは表示成立点の `DrawNodes::sync` だけである。
 ///
 /// さらに (3) 未消費の窓寸 reconcile 要求を**握り潰さない**ことを確認する——ゲート不成立時に
 /// `pending_resize` を触る実装は、drain フェーズが拾うはずだった初回表示の要求を消してしまう。
@@ -192,25 +188,15 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     );
     // 初回表示の要求は**あえて取り出さない**（(3) の握り潰し検査のため）。
 
-    // 改竄前に、画面へ渡っている表示記録を控える（改竄で入れる空リストと弁別可能であること）。
-    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("表示確立後は surface entity に表示記録がある");
-    assert_ne!(
-        display_before,
-        GraphicsCommandList::empty(),
-        "前提: 確立した表示記録は空でない（改竄値と弁別できる）"
+    // 改竄前に、画面へ渡っている節を控える。
+    let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
+    assert!(
+        !display_before.items.is_empty(),
+        "前提: 確立した節は空でない（改竄値と弁別できる）"
     );
 
-    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の原寸合成）・空の表示記録で上書きする。
-    tamper_face_1000_slot(
-        &mut presenter,
-        TargetId(0),
-        (6, 5),
-        GraphicsCommandList::empty(),
-    );
+    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の原寸合成）・空の節で上書きする。
+    tamper_face_1000_slot(&mut presenter, TargetId(0), (6, 5));
 
     // DPI は据え置き（k 不変）。
     let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
@@ -218,9 +204,9 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     assert_eq!(got, None, "k 不変なのに新物理寸を返している");
     // (1) 改竄したエントリが画面へ載っていない＝再表示していない。
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "k 不変なのに再表示している（改竄した空の表示記録が画面へ載った＝無駄な表示更新）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before.clone()),
+        "k 不変なのに再表示している（改竄した計画が画面へ載った＝無駄な表示更新）"
     );
     // 改竄そのものは効いている（プローブの空振りで (1) が緑になっていない）。
     assert_eq!(
@@ -433,18 +419,14 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     );
 
     // 前表示の証跡を注入前に控える（`read_back` は使えない——下の註釈）。
-    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("表示確立後は surface entity に表示記録がある");
+    let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
 
     // 失敗注入: 再表示入力の surface id を解決不能値へ差し替える。
     //
     // これ以降 `read_back` は使えない——読み戻しはメモを `last_show` のキーで引く形になったため、
     // 注入そのものが「表示中エントリが引けない」状態を作ってしまう（前表示が失われたのではなく、
-    // 注入した偽のキーで引いているだけである）。前表示の維持は ⑴ 画面へ渡っている表示記録
-    // （`GraphicsCommandList`）と ⑵ メモに残る**本物のキー**のエントリのバイト、の 2 つで読む。
+    // 注入した偽のキーで引いているだけである）。前表示の維持は ⑴ 画面へ渡っている節
+    // （画面の節）と ⑵ メモに残る**本物のキー**のエントリのバイト、の 2 つで読む。
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -469,9 +451,9 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         "失敗したのに照会値が新 k へ動いている（前 k 維持の違反）"
     );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "失敗したのに画面へ渡している表示記録が差し替わった（前表示維持の違反）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before.clone()),
+        "失敗したのに画面へ渡している節が差し替わった（前表示維持の違反）"
     );
     assert_eq!(
         presenter
@@ -659,20 +641,15 @@ fn device_recreation_rerecords_display_list() {
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
-    let list_of = |world: &World| {
-        world
-            .get::<GraphicsCommandList>(surface_entity)
-            .cloned()
-            .expect("表示確立後は surface entity に表示記録がある")
-    };
-    let before = list_of(&world);
+    let list_of =
+        |presenter: &EmoPresenter| on_screen(presenter, TargetId(0)).expect("表示成立後は節が在る");
+    let before = list_of(&presenter);
 
     // 初回は印を控えるだけ・2 回目は印が立っていないので何もしない。
     presenter.refresh_after_device_change(&mut world);
     presenter.refresh_after_device_change(&mut world);
     assert_eq!(
-        list_of(&world),
+        list_of(&presenter),
         before,
         "装置が変わっていないのに出し直した"
     );
@@ -680,7 +657,7 @@ fn device_recreation_rerecords_display_list() {
     world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
     presenter.refresh_after_device_change(&mut world);
     assert_ne!(
-        list_of(&world),
+        list_of(&presenter),
         before,
         "装置を作り直した後も古い装置の命令の列のまま（控えを捨てて出し直していない）"
     );

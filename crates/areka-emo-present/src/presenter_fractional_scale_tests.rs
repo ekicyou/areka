@@ -2,14 +2,13 @@ use super::*;
 
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::test_support::{
     arrangement_of, bake_world, bind_overlay_surface, build_target_assets, elem, gradient,
     gradient_with_alpha, make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities,
-    native_golden, native_golden_with, pattern_overlay_at, set_window_dpi, shell_of, show_ok,
-    show_with_ok, solid, spawn_window_with_dpi, surface,
+    native_golden, native_golden_with, on_screen, pattern_overlay_at, set_window_dpi, shell_of,
+    show_ok, show_with_ok, solid, spawn_window_with_dpi, surface,
 };
 
 // ── task 6.3: 端数 k（5/4）の表示の作り方・αマスクの由来・縮小方向の自動追従 ───────────────
@@ -21,7 +20,7 @@ use super::test_support::{
 // native 原寸で、拡大は wintf の描画経路（`render_surface` の `SetTransform`）が `Arrangement.scale`
 // ＝k で掛ける。ゆえに (A) は「配置の寸＝原寸・係数＝k・照会値＝丸め権威」の形、(B) は
 // 「マスクは**原寸バイト**由来」（旧 canon の正反対）、(C) は「縮小では係数と照会値だけが変わり、
-// 絵・マスク・表示記録は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
+// 絵・マスク・節は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
 // 決定論 golden に取らない（見た目は実機 2 水準サインオフが担う）。
 
 /// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
@@ -221,11 +220,11 @@ fn alpha_mask_bits_come_from_native_bytes() {
 /// （**DPI 差替 → `refresh_scale` は
 /// 係数だけを変える**）: k=2/1 で表示を確立したのち窓 `DPI` を 192→120（k=2/1→5/4）へ差し替えて
 /// `refresh_scale` を呼ぶと、**変わるのは配置の係数と照会物理寸・報告値だけ**で、絵・αマスク・
-/// 表示記録は原寸のまま据え置かれる（k はキーに参加しないゆえ再合成もしない）。
+/// 節は原寸のまま据え置かれる（k はキーに参加しないゆえ再合成もしない）。
 ///
 /// # 既存 `refresh_scale_after_dpi_change_reapplies_new_k` との差
 ///
-/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** で、配置の係数の追従と表示記録の据え置きもそこで
+/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** で、配置の係数の追従と節の据え置きもそこで
 /// 見ている。本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) **αマスクの寸が原寸の
 /// まま**であること——を足す。
 ///
@@ -263,11 +262,8 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         Some(grown),
         "前提: 初回表示の要求を取り出しておく"
     );
-    // 遷移前の絵・マスク寸・表示記録（据え置きの照合基準）。
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("表示成立後は表示記録が載っている");
+    // 遷移前の絵・マスク寸・節（据え置きの照合基準）。
+    let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
     assert_eq!(
         mask_dims(&world, surface_entity),
         Some(native_size),
@@ -289,7 +285,7 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         "refresh_scale 後の配置の係数が旧 k のまま（余白が残る）"
     );
 
-    // 絵・マスク・表示記録は据え置き（k はキーに参加せず再合成も再記録も起きない）。
+    // 絵・マスク・節は据え置き（k はキーに参加せず再合成も再記録も起きない）。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         golden,
@@ -301,9 +297,9 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         "k 変化でマスクの寸が動いている（マスクは原寸で不変）"
     );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "k が変わっただけで表示記録を作り直している（記録は k を含まない）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before.clone()),
+        "k が変わっただけで節を作り直している（記録は k を含まない）"
     );
 
     assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.25));
@@ -369,7 +365,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
 /// bind part ＋ SERIKO アニメパターン相当の現在コマ part を**非対称・相互重なり**で載せた面を
 /// k≠1 で表示すると——(a) 配置の寸が native 原寸・**係数が 1 対**（x と y が同一の k）、
 /// (b) `read_back` が **同一 `(binds, pattern)` で合成した native** の独立再現と全バイト一致し、
-/// (c) 表示記録が**エントリの 1 枚**（原寸の面を丸ごと描く命令）だけ載る。
+/// (c) 節が**エントリの 1 枚**（原寸の面を丸ごと描く命令）だけ載る。
 ///
 /// (a)＋(c) が「単一の拡大率が 1 枚に掛かる」の新しい形である——層ごとに k を掛ける実装なら
 /// 係数も命令も層の数だけ要るのに対し、ここには係数 1 対と命令 1 枚しか存在しない。
@@ -486,20 +482,16 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
         "読み戻しが 3 層合成の独立再現と一致しない（層の一部が k 経路で落ちた）"
     );
 
-    // (c) 表示記録は**エントリの 1 枚**そのもの（層の数だけ命令を積む形になっていない）。
+    // (c) 節はエントリの計画そのもので、k を含まない（3 層とも原寸のまとめの下の節）。
     let t = presenter.targets.get(&TargetId(0)).unwrap();
     let entry = t
         .cache
         .get(1000, &binds, &pattern)
         .expect("表示成立後は同一入力でエントリが引ける");
-    assert!(
-        entry.display.command_list().is_some(),
-        "エントリの表示記録が空（原寸の面を描く命令が記録されていない）"
-    );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&entry.display),
-        "surface entity に載る表示記録がエントリの 1 枚と別物（記録が層ごとに作られている）"
+        on_screen(&presenter, TargetId(0)).map(|s| s.items),
+        Some(entry.plan.items.clone()),
+        "節に写る計画がエントリの計画と別物"
     );
 
     // 照会契約（native 原寸・実適用 k）も 3 層構成で成立する。

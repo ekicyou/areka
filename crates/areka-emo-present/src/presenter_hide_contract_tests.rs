@@ -269,9 +269,13 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
         records.iter().any(|(e, _)| *e == slot),
         "文字層スロット entity の Visual 挿入が観測されていない（観測器が機能していない）: {records:?}"
     );
-    // 本題: 可視の値で挿入された Visual が一度も無いこと。
+    // 本題: 可視の値で挿入された Visual が一度も無いこと（まとめの節と計画の節は枠の面 entity の
+    // 下に在り、持ち主と一緒に隠れるので数えない）。
     assert!(
-        records.iter().all(|(_, visible)| !*visible),
+        records
+            .iter()
+            .filter(|(e, _)| *e == surface || *e == slot)
+            .all(|(_, visible)| !*visible),
         "指令経由の不可視構築で Visual が可視の値で挿入された（Requirement 1.2）: {records:?}"
     );
 

@@ -1,19 +1,23 @@
 //! `VisualMount`（mount.rs）: 窓 Entity への最小 visual 構成の装着・text 層スロット予約・非表示切替。
 //!
 //! 提示段の**配置層**である。surface entity を wintf の `Visual::on_add` に乗る形で spawn し、以後は
-//! `Arrangement`（**論理寸＝原寸・`scale`＝拡大率 k**）と `GraphicsCommandList`（表示中エントリの
-//! 表示記録）を書く。合成そのものは上流、表示記録は `display.rs`、面の生成・寸合わせ・変換・描画は
-//! wintf（`deferred_surface_creation_system`／`render_surface`）、当たり判定マスクは hit-test が担い、
-//! 本型は「visual 構成・z 順・配置・表示記録の書き込み・非表示切替」を UI スレッド上で受け持つ。
-//! **COM 呼び出しは 0**（純 ECS・失敗経路なし）。
+//! `Arrangement`（**論理寸＝原寸・`scale`＝拡大率 k**）を書く。計画の節は `DrawNodes` が原寸の
+//! まとめの節の下へ写し、面の生成・寸合わせ・変換・描画は wintf（`deferred_surface_creation_system`／
+//! `render_surface`）、当たり判定マスクは hit-test が担い、本型は「visual 構成・z 順・配置・
+//! 非表示切替」を UI スレッド上で受け持つ。**COM 呼び出しは 0**（純 ECS・失敗経路なし）。
 //!
-//! # 構成（窓あたり・最小・入れ子合成なし）
+//! # 構成（窓あたり）
 //!
-//! 1. **surface entity**: `Visual` ＋ [`logical_arrangement`] ＋ `GraphicsCommandList` ＋
-//!    [`HitTest::alpha_mask`] ＋ [`AlphaMaskResource`]。`GlobalArrangement.bounds`（＝原寸 × k・物理寸）
-//!    が AlphaMask 座標の基準になり、wintf の `alpha_mask_hit` が境界に対する比例写像で ÷k を
-//!    1 回だけ掛けて原寸マスクを読む。
-//! 2. **text-layer slot**: surface entity の**兄弟・上位 z**（描画で上）に置く空 entity
+//! 1. **surface entity**: `Visual` ＋ [`logical_arrangement`] ＋ [`OwnSurface`] ＋
+//!    [`HitTest::alpha_mask`] ＋ [`AlphaMaskResource`]。根の命令の列を持たない描画面の持ち主で、
+//!    窓の client の原点に置く。`GlobalArrangement.bounds`（＝原寸 × k・物理寸）が AlphaMask 座標の
+//!    基準になり、wintf の `alpha_mask_hit` が境界に対する比例写像で ÷k を 1 回だけ掛けて原寸マスクを読む。
+//!    根の命令の列を持たないのは、根の命令の列と描画の木の両持ちが変化のたびに全部を描かせるため。
+//! 2. **原寸のまとめの節**（surface entity の唯一の子）: `VisualGroup { SOURCE_OVER }` ＋ 原寸の
+//!    `Arrangement`。描画面の描き直しが k 倍で再生するので、中は原寸で描かれ、閉じるとき k 倍で
+//!    重なる（原寸で合成してから拡大＝k が整数でないときも部品の境に継ぎ目を出さない）。まとめの中は
+//!    自動で上げられないので、画面の絵は surface entity の入れ物 1 枚にそろう。計画の節は全部この下。
+//! 3. **text-layer slot**: surface entity の**兄弟・上位 z**（描画で上）に置く空 entity
 //!    （`Name("emo-text-layer-slot")` ＋ `Visual` ＋ `HitTest`・内容（brush）なし）。独立レイヤ描画／
 //!    α 後の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
 //!    （emo-text-layer が消費）。`HitTest` を明示付与するのは非表示時にポインタ透過させるため
@@ -32,8 +36,8 @@
 //! `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` を、常に `BrushInherit` を連鎖挿入する。
 //! 本型は surface entity へ **`VisualGraphics` を入れない**——既定値が連鎖挿入され、
 //! `visual_resource_management_system` が SpriteVisual を、`deferred_surface_creation_system` が
-//! `GraphicsCommandList` と `GlobalArrangement` から面・brush・`SetSize` を、`render_surface` が
-//! `SetTransform(GlobalArrangement のスケール)` → `DrawImage(記録)` の描画を担う。
+//! `GlobalArrangement` から面・brush・`SetSize` を、`render_surface` が
+//! `SetTransform(GlobalArrangement のスケール)` → 描画の木（まとめの節とその下の節）の再生を担う。
 //!
 //! # z 順（描画順）の典拠
 //!
@@ -47,8 +51,11 @@ use bevy_ecs::prelude::*;
 
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::{
-    AlphaMaskResource, Arrangement, GraphicsCommandList, HitTest, LayoutScale, Offset, Size, Visual,
+    AlphaMaskResource, Arrangement, HitTest, LayoutScale, MixMode, Offset, OwnSurface, Size,
+    Visual, VisualGroup,
 };
+
+use crate::draw_nodes::place;
 
 /// 原寸 `native` と拡大率 `k` から surface entity 用 [`Arrangement`] を作る
 /// （**原点 0・寸＝原寸（論理 px）・スケール＝k の係数**）。
@@ -78,13 +85,15 @@ pub(crate) fn logical_arrangement(native: (u32, u32), k: ScaleRatio) -> Arrangem
     }
 }
 
-/// 窓 Entity へ装着した最小 visual 構成（surface entity ＋ text-layer slot）のハンドル。
+/// 窓 Entity へ装着した visual 構成（surface entity ＋ 原寸のまとめの節 ＋ text-layer slot）のハンドル。
 ///
 /// `pub(crate)`（公開 API ではない）。`EmoPresenter` が target ごとに保持する。
 pub(crate) struct VisualMount {
-    /// `Visual` ＋ `Arrangement` ＋ `GraphicsCommandList` ＋ `HitTest` ＋ `AlphaMaskResource` を持つ
+    /// `Visual` ＋ `Arrangement` ＋ `OwnSurface` ＋ `HitTest` ＋ `AlphaMaskResource` を持つ
     /// 表示 entity（窓の子）。
     surface_entity: Entity,
+    /// 原寸のまとめの節（surface entity の唯一の子・計画の節の根）。
+    group: Entity,
     /// 予約済み text 層スロット（surface の兄弟・上位 z・brush なし）。emo-text-layer が消費する。
     /// 可視性とポインタ判定は surface entity と一括で [`VisualMount::set_visible`] が切り替える。
     text_slot: Entity,
@@ -124,7 +133,7 @@ impl VisualMount {
 
     /// 1 つの entity へ可視性（`Visual`）とポインタ判定（`HitTest`）を同時に適用する。
     ///
-    /// **現値と同値なら書かない**（`set_layout`・`set_display` と同じ守り）——書けば `Changed<Visual>`／
+    /// **現値と同値なら書かない**（`set_layout` と同じ守り）——書けば `Changed<Visual>`／
     /// `Changed<HitTest>` が立ち、wintf が毎コマ COM を呼ぶ。
     /// 未装着（component 不在）は装着契約の破綻ゆえ warn で記録する（沈黙する失敗経路を作らない）。
     fn apply_visibility(
@@ -153,11 +162,11 @@ impl VisualMount {
         }
     }
 
-    /// 窓 `window` の子として surface entity と text-layer slot を装着する（純 ECS・失敗経路なし）。
+    /// 窓 `window` の子として surface entity・原寸のまとめの節・text-layer slot を装着する
+    /// （純 ECS・失敗経路なし）。
     ///
-    /// `native` は表示中エントリの原寸、`k` は実適用の拡大率（[`logical_arrangement`] へ渡す）、
-    /// `display` はエントリの表示記録（clone して同梱する）。`VisualGraphics` は入れない——
-    /// `Visual::on_add` の連鎖挿入に委ねる。
+    /// `native` は表示中エントリの原寸、`k` は実適用の拡大率（[`logical_arrangement`] へ渡す）。
+    /// `VisualGraphics` は入れない——`Visual::on_add` の連鎖挿入に委ねる。
     ///
     /// `initially_visible` が `false` なら surface entity・text-layer slot の**双方**を最初から不可視
     /// （`Visual{is_visible:false}` ＋ `HitTest::none()`）で spawn する。可視で spawn してから消す経路を
@@ -167,7 +176,6 @@ impl VisualMount {
         window: Entity,
         native: (u32, u32),
         k: ScaleRatio,
-        display: &GraphicsCommandList,
         initially_visible: bool,
     ) -> Self {
         // text-layer slot を先に追加する: Children 先頭 ＝ 最上（描画で前面）。
@@ -185,10 +193,22 @@ impl VisualMount {
                 Name::new("emo-surface"),
                 Self::visual_for(initially_visible),
                 logical_arrangement(native, k),
-                display.clone(),
+                OwnSurface,
                 Self::surface_hit_test(initially_visible),
                 AlphaMaskResource::new(),
                 ChildOf(window),
+            ))
+            .id();
+        let group = world
+            .spawn((
+                Name::new("emo-surface-group"),
+                Visual::default(),
+                VisualGroup {
+                    mix: MixMode::default(),
+                },
+                place(0, 0, native.0, native.1),
+                HitTest::none(),
+                ChildOf(surface_entity),
             ))
             .id();
 
@@ -196,46 +216,30 @@ impl VisualMount {
 
         Self {
             surface_entity,
+            group,
             text_slot,
         }
     }
 
-    /// surface entity の配置を原寸 `native`・拡大率 `k` へ合わせる（[`logical_arrangement`]）。
+    /// surface entity の配置を原寸 `native`・拡大率 `k` へ、まとめの節の寸を原寸へ合わせる
+    /// （[`logical_arrangement`]）。
     ///
     /// **現値と同値なら書かない**——変化のない適用で `Changed<Arrangement>` → `GlobalArrangement` →
     /// 面の寸合わせ・全面再描画の連鎖を毎コマ起こさないため。
     pub(crate) fn set_layout(&self, world: &mut World, native: (u32, u32), k: ScaleRatio) {
-        let next = logical_arrangement(native, k);
-        match world.get_mut::<Arrangement>(self.surface_entity) {
-            Some(mut arr) => {
-                if *arr != next {
-                    *arr = next;
+        for (entity, next) in [
+            (self.surface_entity, logical_arrangement(native, k)),
+            (self.group, place(0, 0, native.0, native.1)),
+        ] {
+            match world.get_mut::<Arrangement>(entity) {
+                Some(mut arr) => {
+                    arr.set_if_neq(next);
                 }
+                None => tracing::warn!(
+                    ?entity,
+                    "set_layout: 装着の実体に Arrangement が無い（装着が未完了）"
+                ),
             }
-            None => tracing::warn!(
-                entity = ?self.surface_entity,
-                "set_layout: surface entity に Arrangement が無い（装着が未完了）"
-            ),
-        }
-    }
-
-    /// surface entity の表示記録（`GraphicsCommandList`）を `display` へ合わせる。
-    ///
-    /// **現値と同値なら挿さない**（`draw_bitmap_sources` の守りと同形）——同一エントリの再適用で
-    /// 挿し直すと `Changed<GraphicsCommandList>` が立ち、面の全面再描画が毎コマ走る。同値判定は
-    /// `GraphicsCommandList` の `PartialEq`（COM 参照の同一性）に依る。
-    pub(crate) fn set_display(&self, world: &mut World, display: &GraphicsCommandList) {
-        if world.get::<GraphicsCommandList>(self.surface_entity) == Some(display) {
-            return;
-        }
-        match world.get_entity_mut(self.surface_entity) {
-            Ok(mut e) => {
-                e.insert(display.clone());
-            }
-            Err(_) => tracing::warn!(
-                entity = ?self.surface_entity,
-                "set_display: surface entity が無い（装着が未完了）"
-            ),
         }
     }
 
@@ -248,7 +252,7 @@ impl VisualMount {
     /// 枠の面だけを不可視にすると文字層が画面に残り、さらにスロットは既定 `Bounds` 判定のまま
     /// ポインタを受け続けるため、両 entity を同時に切り替える。
     ///
-    /// 表示記録・キャッシュは呼び手が保持するため再表示は再描画不要。窓自体の show/hide は所有しない
+    /// 節・キャッシュは呼び手が保持するため再表示は再描画不要。窓自体の show/hide は所有しない
     /// （placement/ghost 領分）。
     pub(crate) fn set_visible(&self, world: &mut World, visible: bool) {
         Self::apply_visibility(
@@ -283,9 +287,14 @@ impl VisualMount {
         }
     }
 
-    /// `Arrangement`＋`GraphicsCommandList`＋`HitTest`＋`AlphaMaskResource` を持つ表示 entity。
+    /// `Arrangement`＋`OwnSurface`＋`HitTest`＋`AlphaMaskResource` を持つ表示 entity。
     pub(crate) fn surface_entity(&self) -> Entity {
         self.surface_entity
+    }
+
+    /// 原寸のまとめの節（計画の節の根）。
+    pub(crate) fn group(&self) -> Entity {
+        self.group
     }
 
     /// 予約済み text 層スロット（emo-text-layer が消費）。
@@ -304,3 +313,7 @@ mod visibility_tests;
 #[cfg(test)]
 #[path = "mount_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mount_extent_tests.rs"]
+mod extent_tests;

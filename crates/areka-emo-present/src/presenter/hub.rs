@@ -93,7 +93,8 @@ impl EmoPresenter {
                 acked_generation: 0,
                 move_shift: (0, 0),
                 pending_resize: None,
-                partial_base: false,
+                gpu: None,
+                nodes: None,
                 failure_note: None,
                 hit_picture: None,
                 hit_masks: HitMasks::default(),
@@ -292,8 +293,6 @@ impl EmoPresenter {
         // 触らない: 表が空でも画面には前回の絵が残っており、照会契約はその絵の原寸を返し続けるのが
         // 正しい。以後は必ずミス＝再合成が走り、対が再構築される。
         target.cache.invalidate_all();
-        // 控えの前の絵が無くなったので、次の外れはいちから合成する。
-        target.partial_base = false;
         tracing::debug!(
             ?target_id,
             "apply(InvalidateCache): キャッシュ全破棄（表示は継続）"

@@ -26,7 +26,7 @@ use areka_parsers::shell::{
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{Arrangement, GraphicsCore, WucGraphicsResource};
 
 // ── GPU/WUC フィクスチャ（wintf の wuc_resource.rs のテストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
@@ -222,11 +222,28 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
     (mount.surface_entity(), mount.text_slot())
 }
 
+/// 画面に写っている計画の項と、それを写した節の実体（表示が一度も成立していなければ `None`）。
+///
+/// 画面へ渡っている描画そのものの観測口。項が同じでも節が作り直されれば実体が替わる。
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Screen {
+    pub(super) items: Vec<areka_emo_compose::PlanItem>,
+    pub(super) nodes: Vec<Entity>,
+}
+
+pub(super) fn on_screen(presenter: &EmoPresenter, target: TargetId) -> Option<Screen> {
+    let nodes = presenter.targets.get(&target)?.nodes.as_ref()?;
+    Some(Screen {
+        items: nodes.items(),
+        nodes: nodes.entities(),
+    })
+}
+
 /// 枠の面 entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
 ///
 /// 両方を 1 つの値で読むのは、片方だけを見ると「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と
 /// 区別できないためである。物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段
-/// （`PostLayout`）が導くので、丸めの一致は `display_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
+/// （`PostLayout`）が導くので、丸めの一致は `mount_extent_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
 pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
     let arr = world
         .get::<Arrangement>(surface_entity)
@@ -262,9 +279,6 @@ pub(super) fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
 
 /// 表示成立点の行の固定文言（`show.rs` の `info!`・実機サインオフ契約）。
 pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
-
-/// 重ね直しの範囲の行の固定文言（`show.rs`）。
-pub(super) const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
 
 // ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
@@ -439,18 +453,26 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
     (world, atlas, golden_1000, golden_3000)
 }
 
-/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの絵を、[`build_two_face_assets`]
-/// `(w, h)` の面 3000 の原寸合成へ差し替える（マスクは同じ bytes から作り、表示記録は `display`）。
+/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの計画と絵を、[`build_two_face_assets`]
+/// `(w, h)` の面 3000 の計画と原寸合成へ差し替える（マスクは同じ bytes から作る）。
 ///
-/// キーも原寸も変えず絵だけを差し替えるので、その後の表示が面 3000 の絵になれば presenter は
-/// スロットを引いている（合成し直していれば面 1000 の絵に戻る）。
+/// キーも原寸も変えず中身だけを差し替えるので、その後の表示が面 3000 になれば presenter は
+/// スロットを引いている（合成し直していれば面 1000 に戻る）。
 pub(super) fn tamper_face_1000_slot(
     presenter: &mut EmoPresenter,
     target: TargetId,
     (w, h): (u32, u32),
-    display: GraphicsCommandList,
 ) {
     let (world, atlas, _, _) = build_two_face_assets(w, h);
+    let plan = Composer::new()
+        .plan(
+            &world,
+            &atlas,
+            3000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
+        .expect("面 3000 の計画は Ok");
     let tampered = Composer::new()
         .compose(
             &world,
@@ -475,9 +497,9 @@ pub(super) fn tamper_face_1000_slot(
             1000,
             BindSet::default(),
             PatternState::default(),
+            plan,
             tampered,
             mask,
-            display,
         );
 }
 

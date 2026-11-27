@@ -181,7 +181,7 @@
   - _Requirements: 8.1, 9.2, 9.6_
 
 - [ ] 7. 画面と読み手を GPU の節へ付け替え、CPU の合成を外す
-- [ ] 7.1 表示の 1 回を計画と節で描く
+- [x] 7.1 表示の 1 回を計画と節で描く
   - 描画面を「根の命令の列を持たない持ち主＋原寸のまとめの節 1 つ（k 倍の変換）」にし、計画の節を全部その下に置く。描画面は窓の client の原点に置く
   - 表示の漏斗を「計画 → 合成メモ（計画と書き出しの控え）→ 頁の控え → 節の写し」にし、表示の絵の席と絵の上げ（毎回の上げ）を外す。予算は計画の席と節の数を数える
   - 当たり（CPU の α マスクと名前の解決）は 7.2 で一緒に付け替えるまで今の出どころのまま残す。両方が同じ CPU の答えを読むので、そのあいだも 2 つは食い違わない
@@ -296,3 +296,6 @@
 - 5.6: `blend-*` の記録は設計の型（世界の面ごとの `UndrawnElement`）でなく、読み手の転記の側の見出しを展開しない行（`ShellText.image_elements`）から、今の element定義の記録と同じ文面・欄で出す（要件 6.2 の「1 行 1 件・どの語か」が設計の型と食い違ったため・設計は直した）。`UndrawnElementLine` は `ElementLine` に改めた。
 - 6.5 → 7.6: R2 の測りのテスト（offscreen_emo2_tests.rs の CPU と WARP の比べ）は `Composer::compose` を呼ぶので CPU の合成と一緒に取り下げる（研究の記録 §16.3）。
 - 8.4: 台帳と互換の文書の当たりの行は 7.2 の後の働き（入れ物の 1 画素の α）を書いた。8.5 と validate-impl で実物と照らす。
+- 7.1: 絵の上げを外したので、故障の差し込みの点を `GpuAtlas` へ移した（頁の上げの `CreateBitmap`・葉の記録の `CreateCommandList`／`EndDraw`／`Close`）。装置が替わったら `prepare_gpu` が節を消して `GpuAtlas::new_with` で作り直す。控えに外れた回は計画と CPU の合成（`compose_into`・当たりのマスクと書き出しのため）の両方が走る（7.6 まで）。
+- 7.1 → 7.3: (a) `prepare_gpu` は装置が替わると `nodes.reset` が `GpuAtlas::new_with` より先に走り、作り直しが失敗すると画面が空になる（呼ぶ所のコメントと食い違う）。(b) 黒の塗りの葉は `sync` の中で記録するので、途中の失敗で節が半分替わる。黒の塗りの記録も `prepare` に寄せる。
+- 7.1 → 7.2/7.6: コメントの直し残し（presenter_dpi_scale_tests.rs 392 行目の要件番号・presenter/timing.rs 60 行目の `compose_into_reusing`・presenter_keycolor_clickthrough_tests.rs 38 行目の `record_display`）。7.6 の取り下げの理由に display_tests.rs・display_fault_tests.rs を含める。

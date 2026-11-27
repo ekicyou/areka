@@ -3,7 +3,7 @@
 use std::mem::ManuallyDrop;
 
 use areka_emo_atlas::{AtlasTable, ElementId};
-use areka_emo_compose::IRect;
+use areka_emo_compose::{DrawPlan, IRect, PlanItem};
 
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
@@ -19,6 +19,10 @@ use windows_numerics::Matrix3x2;
 use wintf::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt, D2D1DeviceExt};
 
 use crate::command::{PresentError, device_err};
+use crate::display::{DisplayFault, fault_point};
+
+/// 前に記録した同じ対象の装置の失敗の原因（`device_err` へそのまま渡す）。
+type Repeat = Option<(&'static str, i32)>;
 
 /// 装置ごとのアトラスの頁の GPU の絵と、絵ごとの葉の命令の列。
 ///
@@ -39,16 +43,25 @@ pub(crate) struct GpuAtlas {
 impl GpuAtlas {
     /// `device` の上に `atlas` の頁を全部上げる。失敗は `error!` を残して `Err`。
     pub(crate) fn new(device: &ID2D1Device, atlas: &AtlasTable) -> Result<Self, PresentError> {
+        Self::new_with(device, atlas, None)
+    }
+
+    /// [`Self::new`] の、同じ原因の続きなら失敗の行を `debug!` にする形。
+    pub(crate) fn new_with(
+        device: &ID2D1Device,
+        atlas: &AtlasTable,
+        repeat: Repeat,
+    ) -> Result<Self, PresentError> {
         let dc = device
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
-            .map_err(device_err("CreateDeviceContext(atlas)", None))?;
+            .map_err(device_err("CreateDeviceContext(atlas)", repeat))?;
         // 頁の絵と葉の座標を画素のまま扱うため、DC も頁も 96 にそろえる。
         // SAFETY: Windows API 境界。作ったばかりの専有の DC の設定。
         unsafe { dc.SetDpi(96.0, 96.0) };
         let pages = atlas
             .pages()
             .iter()
-            .map(|page| upload_page(&dc, page))
+            .map(|page| upload_page(&dc, page, repeat))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             device: device.clone(),
@@ -65,10 +78,28 @@ impl GpuAtlas {
 
     /// 絵 `element` を、頁の絵の区画から縁の位置・原寸へ描く閉じた命令の列。
     pub(crate) fn leaf(&mut self, element: ElementId) -> Result<&ID2D1CommandList, PresentError> {
+        self.leaf_with(element, None)
+    }
+
+    /// 計画の絵の葉を前もって全部記録する（節を触る前に、失敗し得る記録を済ませる）。
+    pub(crate) fn prepare(&mut self, plan: &DrawPlan, repeat: Repeat) -> Result<(), PresentError> {
+        for item in &plan.items {
+            if let PlanItem::Image { element, .. } = item {
+                self.leaf_with(*element, repeat)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn leaf_with(
+        &mut self,
+        element: ElementId,
+        repeat: Repeat,
+    ) -> Result<&ID2D1CommandList, PresentError> {
         let slot = element.0 as usize;
         if self.leaves[slot].is_none() {
             let placement = self.atlas.entry(element).placement.clone();
-            let list = self.record(|dc| {
+            let list = self.record(repeat, |dc| {
                 let Some(p) = placement else {
                     return Ok(());
                 };
@@ -107,7 +138,7 @@ impl GpuAtlas {
 
     /// `rect` を黒の不透明で塗る閉じた命令の列。
     pub(crate) fn black_fill(&mut self, rect: IRect) -> Result<ID2D1CommandList, PresentError> {
-        self.record(|dc| {
+        self.record(None, |dc| {
             let brush = dc
                 .create_solid_color_brush(
                     &D2D1_COLOR_F {
@@ -160,12 +191,14 @@ impl GpuAtlas {
 
     fn record(
         &self,
+        repeat: Repeat,
         draw: impl FnOnce(&ID2D1DeviceContext) -> Result<(), PresentError>,
     ) -> Result<ID2D1CommandList, PresentError> {
         let dc = &self.dc;
+        fault_point(DisplayFault::CreateCommandList, repeat)?;
         // SAFETY: Windows API 境界。専有の DC への COM 呼び出し。
         let list = unsafe { dc.CreateCommandList() }
-            .map_err(device_err("CreateCommandList(atlas)", None))?;
+            .map_err(device_err("CreateCommandList(atlas)", repeat))?;
         // SAFETY: Windows API 境界。的の差し替えと記録。`BeginDraw`／`EndDraw` は本関数の中で対になる。
         unsafe {
             dc.SetTarget(&list);
@@ -180,9 +213,12 @@ impl GpuAtlas {
             ended
         };
         drawn?;
-        ended.map_err(device_err("EndDraw(atlas)", None))?;
+        ended.map_err(device_err("EndDraw(atlas)", repeat))?;
+        // 注入点は実呼び出しの後（前に置くと DC が `BeginDraw` のまま残る）。
+        fault_point(DisplayFault::EndDraw, repeat)?;
         list.close()
-            .map_err(device_err("CommandList::Close(atlas)", None))?;
+            .map_err(device_err("CommandList::Close(atlas)", repeat))?;
+        fault_point(DisplayFault::Close, repeat)?;
         Ok(list)
     }
 }
@@ -190,6 +226,7 @@ impl GpuAtlas {
 fn upload_page(
     dc: &ID2D1DeviceContext,
     page: &areka_emo_atlas::AtlasPage,
+    repeat: Repeat,
 ) -> Result<ID2D1Bitmap1, PresentError> {
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
@@ -205,8 +242,11 @@ fn upload_page(
         || page.bytes.len() < page.stride as usize * page.height as usize;
     if short {
         let e = windows::core::Error::from(windows::Win32::Foundation::E_INVALIDARG);
-        return Err(device_err("CreateBitmap(atlas page: short bytes)", None)(e));
+        return Err(device_err("CreateBitmap(atlas page: short bytes)", repeat)(
+            e,
+        ));
     }
+    fault_point(DisplayFault::CreateBitmap, repeat)?;
     // SAFETY: Windows API 境界。`bytes` は本呼び出しの間だけ読まれ（D2D が中身を写す）、長さが
     // `stride * height` 以上で `stride` が 1 行に足りることを直前で確かめた。
     unsafe {
@@ -220,7 +260,7 @@ fn upload_page(
             &props,
         )
     }
-    .map_err(device_err("CreateBitmap(atlas page)", None))
+    .map_err(device_err("CreateBitmap(atlas page)", repeat))
 }
 
 #[cfg(test)]

@@ -1,12 +1,15 @@
 //! `FrameBudget`: 毎フレーム経路における新規確保・容量成長の**唯一の計数シーム**。
 //!
-//! 「定常状態で表示バッファの新規確保が起きていない」を数値で言い切るための計数器。確保の発生点は
-//! 2 つ（席の一覧と 1:1）:
+//! 「定常状態で計画と合成面の新規確保が起きていない」を数値で言い切るための計数器。確保の発生点は
+//! 3 つ（席の一覧と 1:1）:
 //!
 //! | 発生点 | 増えるフィールド | 何の確保か |
 //! |---|---|---|
-//! | [`AllocSite::ComposeDst`] | `alloc_compose_dst` | native 合成先（＝交代で表示バッファにもなる） |
+//! | [`AllocSite::ComposeDst`] | `alloc_compose_dst` | native 合成先（＝交代で書き出しの控えにもなる） |
 //! | [`AllocSite::Mask`] | `alloc_mask` | 当たり判定マスク |
+//! | [`AllocSite::Plan`] | `alloc_plan` | 描く計画の項の列（＝交代で合成メモの計画にもなる） |
+//!
+//! 確保とは別に、節の写しが作り直した項の数（`node_rebuilds`）も同じ器で数える。
 //!
 //! # なぜ 1 箇所で数えるのか
 //!
@@ -23,10 +26,11 @@
 //! | 席 | 貸し出し口 |
 //! |---|---|
 //! | 合成先の常設席（`ComposedSurface`） | [`FrameBudget::native_scratch`]・表示バッファとの交代は [`FrameBudget::swap_native_scratch`] |
+//! | 計画の常設席（`DrawPlan`） | [`FrameBudget::plan_scratch`]・合成メモの計画との交代は [`FrameBudget::swap_plan_scratch`] |
 //! | マスクの輪番（`Option<Arc<AlphaMask>>`・空き 1 枚） | [`FrameBudget::regenerate_mask`] |
 //!
-//! 表示バッファだけは本器が所有しない——所有はキャッシュ側にあり、追い出しエントリの容量を
-//! [`ComposeCache::take_recycled`] で回収して回す。本器は [`FrameBudget::display_buffer`] で
+//! 表示バッファと合成メモの計画は本器が所有しない——所有はキャッシュ側にあり、追い出しエントリの
+//! 容量を [`ComposeCache::take_recycled`] で回収して回す。本器は [`FrameBudget::display_buffer`] で
 //! その仲介と計数だけを担う。
 //!
 //! # 回る実体の本数（キャッシュ容量 3 での形）
@@ -34,6 +38,7 @@
 //! キャッシュが最大 3 エントリを保持するため、毎コマ経路を回る実体の本数は次のとおり:
 //!
 //! - **表示バッファ**: キャッシュの 3 本 ＋ 合成先席の 1 本 ＝ 最大 4 本
+//! - **計画**: キャッシュの 3 本 ＋ 計画の席の 1 本 ＝ 最大 4 本
 //! - **マスク**: キャッシュの 3 本 ＋ 輪番の空き 1 枚 ＝ 4 本
 //!
 //! 追い出し 1 件が次の適用の入力になる。**本器が実体ごとの状態を覚えないのはこのためである**——
@@ -49,6 +54,7 @@
 //! | 対象 | 読み口 |
 //! |---|---|
 //! | 合成先席・表示バッファ | [`ComposedSurface::bytes_capacity`] |
+//! | 計画の席・合成メモの計画 | `DrawPlan::items` の容量 |
 //! | 当たり判定マスクの詰めバイト列 | [`AlphaMask::packed_capacity`] |
 //!
 //! ## なぜ「到達済み寸法（高水位）を器が覚える」形をやめたのか
@@ -99,10 +105,22 @@
 
 use std::sync::Arc;
 
+use areka_emo_compose::DrawPlan;
+use areka_emo_compose::plan::Extent;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 use super::ComposedSurface;
 use crate::cache::CacheEntry;
+
+/// 項を持たない計画（席と回収の不成立の始まり）。
+fn empty_plan() -> DrawPlan {
+    DrawPlan {
+        surface_id: 0,
+        base_surface: 0,
+        extent: Extent { w: 0, h: 0 },
+        items: Vec::new(),
+    }
+}
 
 /// 確保の発生点（perf サマリ行の `alloc_*` と 1:1）。
 ///
@@ -116,6 +134,8 @@ enum AllocSite {
     ComposeDst,
     /// 当たり判定マスクの新規確保（輪番スロットの単独所有が不成立の場合を含む）。
     Mask,
+    /// 計画の項の列の新規確保／容量成長（交代で合成メモの計画へ出る側の確保もここで数える）。
+    Plan,
 }
 
 impl AllocSite {
@@ -124,7 +144,7 @@ impl AllocSite {
     /// 読み手は本モジュールのテスト（`budget_tests.rs`）のみ。presenter 経由の檻は [`BudgetCounters`]
     /// の名前つき 2 フィールドを直接読む。増減は perf サマリ行のフィールド集合の照合が捕まえる。
     #[cfg(test)]
-    const ALL: [AllocSite; 2] = [AllocSite::ComposeDst, AllocSite::Mask];
+    const ALL: [AllocSite; 3] = [AllocSite::ComposeDst, AllocSite::Mask, AllocSite::Plan];
 }
 
 /// 1 適用分の確保計数スナップショット（perf サマリ行の `alloc_*` フィールドの供給源）。
@@ -137,6 +157,10 @@ pub(super) struct BudgetDelta {
     pub(super) alloc_compose_dst: u32,
     /// 当たり判定マスクの新規確保。
     pub(super) alloc_mask: u32,
+    /// 計画の項の列の新規確保／容量成長。
+    pub(super) alloc_plan: u32,
+    /// 節の写しが作り直した項の数。
+    pub(super) node_rebuilds: u32,
 }
 
 impl BudgetDelta {
@@ -149,6 +173,7 @@ impl BudgetDelta {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
             AllocSite::Mask => self.alloc_mask,
+            AllocSite::Plan => self.alloc_plan,
         }
     }
 
@@ -157,6 +182,7 @@ impl BudgetDelta {
         let slot = match site {
             AllocSite::ComposeDst => &mut self.alloc_compose_dst,
             AllocSite::Mask => &mut self.alloc_mask,
+            AllocSite::Plan => &mut self.alloc_plan,
         };
         *slot = slot.saturating_add(1);
     }
@@ -172,6 +198,10 @@ pub(super) struct BudgetCounters {
     pub(super) alloc_compose_dst: u64,
     /// 当たり判定マスクの累積。
     pub(super) alloc_mask: u64,
+    /// 計画の項の列の累積。
+    pub(super) alloc_plan: u64,
+    /// 節の写しが作り直した項の数の累積。
+    pub(super) node_rebuilds: u64,
 }
 
 impl BudgetCounters {
@@ -183,6 +213,7 @@ impl BudgetCounters {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
             AllocSite::Mask => self.alloc_mask,
+            AllocSite::Plan => self.alloc_plan,
         }
     }
 
@@ -191,6 +222,7 @@ impl BudgetCounters {
         let slot = match site {
             AllocSite::ComposeDst => &mut self.alloc_compose_dst,
             AllocSite::Mask => &mut self.alloc_mask,
+            AllocSite::Plan => &mut self.alloc_plan,
         };
         *slot = slot.saturating_add(1);
     }
@@ -206,9 +238,42 @@ impl BudgetCounters {
 mod seat {
     use std::sync::Arc;
 
+    use areka_emo_compose::DrawPlan;
     use wintf::ecs::widget::bitmap_source::AlphaMask;
 
     use super::ComposedSurface;
+
+    /// 計画の常設席。観測は席の項の列の容量そのもので行う（合成先の席と同じ形）。
+    #[derive(Debug)]
+    pub(super) struct PlanSeat {
+        plan: DrawPlan,
+    }
+
+    impl Default for PlanSeat {
+        fn default() -> Self {
+            Self {
+                plan: super::empty_plan(),
+            }
+        }
+    }
+
+    impl PlanSeat {
+        /// 席を閉包へ貸す。閉包の中で**項の列の容量が増えたら** `true`（＝確保が起きた）。
+        pub(super) fn lend<R>(&mut self, borrow: impl FnOnce(&mut DrawPlan) -> R) -> (R, bool) {
+            let before = self.plan.items.capacity();
+            let produced = borrow(&mut self.plan);
+            (produced, self.plan.items.capacity() > before)
+        }
+
+        pub(super) fn get(&self) -> &DrawPlan {
+            &self.plan
+        }
+
+        /// 合成メモの計画との交代（複写も確保も起きない）。
+        pub(super) fn swap(&mut self, plan: &mut DrawPlan) {
+            std::mem::swap(&mut self.plan, plan);
+        }
+    }
 
     /// 合成先の常設席。**高水位を持たない**——観測は席の実体の容量そのもので行う。
     #[derive(Debug, Default)]
@@ -333,6 +398,8 @@ pub(super) struct FrameBudget {
     total: BudgetCounters,
     /// 合成先の常設席（`compose_into` の出力先）。
     native: seat::SurfaceSeat,
+    /// 計画の常設席（`plan_into` の出力先）。
+    plan: seat::PlanSeat,
     /// マスクの輪番（下流が手放した空き 1 枚）。
     mask: seat::MaskRotation,
 }
@@ -380,6 +447,33 @@ impl FrameBudget {
         produced
     }
 
+    /// 計画の常設席を貸し出す（`plan_into` の出力先）。項の列の容量が増えたときにだけ
+    /// [`AllocSite::Plan`] を計数する（貸し出しを閉包で囲む理由は [`FrameBudget::native_scratch`] と同じ）。
+    pub(super) fn plan_scratch<R>(&mut self, borrow: impl FnOnce(&mut DrawPlan) -> R) -> R {
+        let (produced, grew) = self.plan.lend(borrow);
+        if grew {
+            self.note_alloc(AllocSite::Plan);
+        }
+        produced
+    }
+
+    /// 計画の常設席がいま抱えている計画（読むだけ）。
+    pub(super) fn planned(&self) -> &DrawPlan {
+        self.plan.get()
+    }
+
+    /// 合成メモの計画との交代——計画の席と回収した計画を入れ替える（複写も確保も起きない）。
+    pub(super) fn swap_plan_scratch(&mut self, plan: &mut DrawPlan) {
+        self.plan.swap(plan);
+    }
+
+    /// 節の写しが作り直した項の数を足す（確保の席ではないが、同じ器で増分と累積を数える）。
+    pub(super) fn note_rebuilds(&mut self, n: usize) {
+        let n = u32::try_from(n).unwrap_or(u32::MAX);
+        self.pending.node_rebuilds = self.pending.node_rebuilds.saturating_add(n);
+        self.total.node_rebuilds = self.total.node_rebuilds.saturating_add(u64::from(n));
+    }
+
     /// 表示バッファとの交代——合成先席と表示バッファを入れ替える。
     ///
     /// **k の値に依らず常にこの経路**で、表示へ載せるのは原寸そのもの。コピーも確保も起きない
@@ -394,8 +488,9 @@ impl FrameBudget {
     ///
     /// `recycled` は [`ComposeCache::take_recycled`] が返す追い出しエントリで、**合成成功後にのみ**取る
     /// こと（呼び手の責務）。回収できていればその容量をそのまま表示バッファとして返し、エントリが
-    /// 束ねていたマスクを第 2 要素で返す——呼び手はそれを [`FrameBudget::regenerate_mask`] へ渡し、
-    /// 輪番の空きスロットとして戻す。
+    /// 束ねていたマスクを第 2 要素、計画を第 3 要素で返す——呼び手はマスクを
+    /// [`FrameBudget::regenerate_mask`] へ渡して輪番の空きスロットとして戻し、計画を
+    /// [`FrameBudget::swap_plan_scratch`] で計画の席と交代させる。
     ///
     /// 回収が成立しなかった場合（キャッシュにまだ空きがある暖機中・[`invalidate_all`] 直後）は空の
     /// バッファから始める。これは交代で合成先席へ入り、次の適用の合成で外形まで伸びる＝**そこで必ず
@@ -412,17 +507,15 @@ impl FrameBudget {
     /// [`swap_native_scratch`]: FrameBudget::swap_native_scratch
     pub(super) fn display_buffer(
         recycled: Option<CacheEntry>,
-    ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
+    ) -> (ComposedSurface, Option<Arc<AlphaMask>>, DrawPlan) {
         match recycled {
-            // 回収するのはバッファの確保だけ（新しいエントリの原寸は今回の合成が決める）。表示記録
-            // （`display`）は回収の対象外——原寸バイトと 1 対 1 ゆえ次の合成が作り直し、保持しているのは
-            // COM 参照だけで確保の使い回しには関与しない。
+            // 回収するのは確保だけ（新しいエントリの中身は今回の計画と合成が決める）。
             Some(CacheEntry {
+                plan,
                 composed,
                 mask,
-                display: _,
-            }) => (composed, Some(mask)),
-            None => (ComposedSurface::default(), None),
+            }) => (composed, Some(mask), plan),
+            None => (ComposedSurface::default(), None, empty_plan()),
         }
     }
 

@@ -1,5 +1,5 @@
-//! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 原寸の合成面・
-//! 当たり判定マスク・表示記録の三つ組の、容量 3・LRU 置換のメモ化スロット表。
+//! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 描く計画・
+//! 書き出しの控え（原寸の合成面）・当たり判定マスクの三つ組の、容量 3・LRU 置換のメモ化スロット表。
 //!
 //! 上流 `areka-emo-compose` の合成は `(surface_id, BindSet)` の純粋関数なので、キーが合成入力の全体を
 //! 捕捉しないとキャッシュは正しくない（surface id だけをキーにすると、同一 surface で bind 集合だけ
@@ -16,17 +16,15 @@
 //!
 //! # 表示スケール k はキーに参加しない
 //!
-//! [`CacheEntry::composed`] は native 原寸の合成結果、[`CacheEntry::mask`] はその原寸バイト由来で、
+//! [`CacheEntry::plan`] と [`CacheEntry::composed`] は native 原寸、[`CacheEntry::mask`] はその原寸バイト由来で、
 //! 拡大率 k は wintf の描画経路（`render_surface` の `SetTransform`）が変換行列で掛ける。
 //! よって DPI 変化で k だけが変わった適用は同じエントリにヒットし（再合成しない）、k は無効化の契機にもならない。
 //!
 //! # 責務
 //!
-//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。表示記録（原寸バイトを描く閉じた
-//! [`GraphicsCommandList`]・k を含まない）は生成せず、[`insert`] で与えられたものを持つだけなので、
-//! GPU の無い檻では [`GraphicsCommandList::empty`] を渡せばよい。マスク生成（[`AlphaMask::from_pbgra32`]）と
-//! ミス時の合成・記録は提示段（`presenter`）の責務で、[`insert`] は表示バッファと `Arc` マスクを同時に
-//! 受け取るので対は崩れない。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
+//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。GPU に触れない。マスク生成
+//! （[`AlphaMask::from_pbgra32`]）とミス時の計画・合成は提示段（`presenter`）の責務で、[`insert`] は計画・
+//! 合成面・`Arc` マスクを同時に受け取るので組は崩れない。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
 //! 無効化はアトラス再構築・ghost 再読込用の [`invalidate_all`] のみ。
 //!
 //! [`insert`]: ComposeCache::insert
@@ -34,26 +32,24 @@
 
 use std::sync::Arc;
 
-use areka_emo_compose::{BindSet, ComposedSurface, PatternState};
-use wintf::ecs::GraphicsCommandList;
+use areka_emo_compose::{BindSet, ComposedSurface, DrawPlan, PatternState};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
-/// キャッシュエントリ＝原寸の合成面・当たり判定マスク・表示記録の原子対。
+/// キャッシュエントリ＝描く計画・原寸の合成面・当たり判定マスクの原子の組。
 ///
-/// `composed` と `mask` は同一 `composed.bytes()` 由来（呼び手が対で作り [`ComposeCache::insert`] へ同時に渡す）。
-/// 1 エントリへ束ねてあるので、surface 切替に伴う対の入替は表の操作 1 回で原子的に起きる。
+/// 3 つは同じ合成入力から作る（`composed` と `mask` は同一 `composed.bytes()` 由来）。1 エントリへ束ねて
+/// あるので、surface 切替に伴う組の入替は表の操作 1 回で原子的に起きる。
 /// 原寸の外形は `composed.width()`／`composed.height()` で、別フィールドに持たない。
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
-    /// premultiplied BGRA・native 原寸の合成結果（表示の真実源）。
+    /// 画面の節へ写す描く計画（表示の真実源）。
+    pub plan: DrawPlan,
+    /// premultiplied BGRA・native 原寸の合成結果（書き出しと当たり判定マスクの出どころ）。
     pub composed: ComposedSurface,
     /// `composed.bytes()` から呼び手が 1 回だけ生成した当たり判定マスク（さわり判定の真実源）。
     /// ÷k の写像は wintf の `alpha_mask_hit`（物理寸の境界に対する比例写像）が担うので、k は入らない。
     /// [`Arc`] 共有なのは、下流（hit-test）への供給を複製でなく参照カウント増にするため。
     pub mask: Arc<AlphaMask>,
-    /// 原寸バイトを描く閉じた [`GraphicsCommandList`]（k を含まない。拡大は wintf の描画経路が変換行列で掛ける）。
-    /// GPU の無い檻では [`GraphicsCommandList::empty`] を渡す。
-    pub display: GraphicsCommandList,
 }
 
 /// キャッシュキー＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）。
@@ -76,7 +72,7 @@ pub(crate) const CAPACITY: usize = 3;
 
 /// 合成入力 → [`CacheEntry`] の容量 [`CAPACITY`]・LRU 置換メモ化表。
 ///
-/// 内部ロックを持たない。ミス時の合成・表示記録・挿入は提示段の責務。
+/// 内部ロックを持たない。ミス時の計画・合成・挿入は提示段の責務。
 ///
 /// `entries` は最近使用の昇順（先頭が次の追い出し対象）。順序を動かすのは [`touch`]（ヒット）と
 /// [`insert`] だけで、[`get`] は動かさない（読み取りだけの照会で置換順が変わると、観測が置換順を書き換えてしまう）。
@@ -116,7 +112,7 @@ impl ComposeCache {
         self.entries.len()
     }
 
-    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が表示バッファの `Vec<u8>` 確保を
+    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が計画と合成面の確保を
     /// 使い回すための口）。
     ///
     /// 空きがあるあいだは `None` を返し表に触れない（生きているエントリを剥がすと命中率が落ちる）。
@@ -134,15 +130,13 @@ impl ComposeCache {
         Some(self.entries.remove(0).1)
     }
 
-    /// 原寸の合成面・生成済みの当たり判定マスク・表示記録を、合成入力鍵の原子対として挿入し、最近使用の末尾へ置く。
+    /// 描く計画・原寸の合成面・生成済みの当たり判定マスクを、合成入力鍵の原子の組として挿入し、最近使用の末尾へ置く。
     ///
     /// 同一キーが在れば対ごと置き換える。満杯で新しいキーなら最も古い 1 件を捨てる（捨てるだけなので、
     /// 確保を回収したい呼び手は先に [`take_recycled`] を呼ぶ）。
     ///
     /// `mask` は必ず同じ `composed` の bytes 由来でなければならない（別出所だと絵とさわり判定が食い違う）。
-    /// `composed` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
-    /// `display` は呼び手が原寸バイトから記録した閉じたコマンドリストで、GPU の無い檻では
-    /// [`GraphicsCommandList::empty`] を渡す。
+    /// `plan` と `composed` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
     ///
     /// [`take_recycled`]: ComposeCache::take_recycled
     pub fn insert(
@@ -150,9 +144,9 @@ impl ComposeCache {
         surface_id: u32,
         binds: BindSet,
         pattern: PatternState,
+        plan: DrawPlan,
         composed: ComposedSurface,
         mask: Arc<AlphaMask>,
-        display: GraphicsCommandList,
     ) {
         // 同一キーの再挿入は席を外し、以下の push で末尾へ戻す。
         if let Some(at) = self.position(surface_id, &binds, &pattern) {
@@ -169,9 +163,9 @@ impl ComposeCache {
         self.entries.push((
             key,
             CacheEntry {
+                plan,
                 composed,
                 mask,
-                display,
             },
         ));
     }

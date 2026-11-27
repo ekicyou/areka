@@ -22,7 +22,7 @@
 //! ## 構成
 //!
 //! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
-//! 合成キャッシュ（`cache`）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+//! 合成キャッシュ（`cache`）・計画の節への写し（`draw_nodes`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
 //! 提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
@@ -37,8 +37,7 @@ pub mod balloon_definitions;
 pub mod balloon_marker;
 pub(crate) mod cache;
 pub mod command;
-/// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
-/// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
+/// 表示の段の装置の失敗の注入点（`DisplayFault`・テストビルドでだけ実体を持つ）。
 pub(crate) mod display;
 /// 計画を描画の木の節へ写す部品と、重ね方 → D2D の合成モードの写し（`mix_mode_of`）。
 pub(crate) mod draw_nodes;
@@ -52,7 +51,7 @@ pub(crate) mod load_records;
 pub(crate) mod mount;
 /// 画面の外の描き手（`OffscreenRenderer`）。使い捨ての描画の木に計画を写し、原寸の絵に描いて読む。
 pub mod offscreen;
-/// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
+/// 提示統括（`EmoPresenter`）。計画・キャッシュ・節の写し・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。

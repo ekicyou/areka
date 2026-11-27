@@ -15,8 +15,8 @@ use bevy_ecs::hierarchy::Children;
 use wintf::ecs::widget::BrushInherit;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{
-    GlobalArrangement, HitTestMode, Point, PointF, Rect, SurfaceGraphics, SurfaceGraphicsDirty,
-    VisualGraphics, WindowPos, hit_test_in_window,
+    GlobalArrangement, GraphicsCommandList, HitTestMode, Point, PointF, Rect, SurfaceGraphics,
+    SurfaceGraphicsDirty, VisualGraphics, WindowPos, hit_test_in_window,
 };
 
 // 注意: `wintf::ecs::PhysicalPoint` は pointer 側の別名（整数 `Point`）。
@@ -77,7 +77,7 @@ fn text_slot_is_higher_z_sibling_with_name() {
 /// 窓の子として装着したとき、surface entity が
 ///
 /// 1. 論理配置（`Arrangement` の寸＝原寸・係数＝k・**原点 0**）と表示側の一式
-///    （`GraphicsCommandList`・`HitTest::alpha_mask`・`AlphaMaskResource`）を持ち、
+///    （`OwnSurface`・`HitTest::alpha_mask`・`AlphaMaskResource`）を持ち、根の命令の列を持たず、
 /// 2. wintf の `Visual::on_add`（`graphics/visual.rs` `on_visual_add`）の**連鎖挿入**で
 ///    `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` が**既定値のまま**入る
 ///
@@ -118,8 +118,12 @@ fn arrangement_is_logical_native_with_scale_k_and_on_add_chain_runs() {
 
     // --- 2. 表示側の一式。
     assert!(
-        world.get::<GraphicsCommandList>(surface).is_some(),
-        "surface entity は表示記録（GraphicsCommandList）を持つ"
+        world.get::<OwnSurface>(surface).is_some(),
+        "surface entity は描画面の持ち主の目印を持つ"
+    );
+    assert!(
+        world.get::<GraphicsCommandList>(surface).is_none(),
+        "surface entity は根の命令の列を持たない"
     );
     assert_eq!(
         world.get::<HitTest>(surface).unwrap().mode,
@@ -340,21 +344,60 @@ fn hit_test_reduces_the_point_by_k_exactly_once() {
     }
 }
 
-/// `set_layout`／`set_display` は同値の書き込みで変更検知を立てない。
+/// surface entity の唯一の子は原寸のまとめの節（`SOURCE_OVER`・原点 0・倍率 1・寸＝原寸）で、
+/// 描画面の持ち主にならない節である。拡大は surface entity の係数 k だけが持つ。
+#[test]
+fn the_only_child_of_the_surface_is_a_native_size_source_over_group() {
+    let k = ScaleRatio::new(5, 4).expect("5/4");
+    let (world, _window, mount) = attach_fixture_under_window(382, 547, k);
+    let children = world
+        .get::<Children>(mount.surface_entity())
+        .expect("surface entity は子を持つ");
+    assert_eq!(&children[..], &[mount.group()], "唯一の子はまとめの節");
+
+    let group = mount.group();
+    assert_eq!(
+        world.get::<VisualGroup>(group),
+        Some(&VisualGroup {
+            mix: MixMode::default()
+        }),
+        "まとめの重ね方は SOURCE_OVER"
+    );
+    let arr = world.get::<Arrangement>(group).expect("まとめの配置");
+    assert_eq!(
+        (arr.offset.x, arr.offset.y, arr.scale.x, arr.scale.y),
+        (0.0, 0.0, 1.0, 1.0),
+        "まとめは原点 0・倍率 1（k は持ち主の係数だけ）"
+    );
+    assert_eq!(
+        (arr.size.width, arr.size.height),
+        (382.0, 547.0),
+        "まとめの寸は原寸"
+    );
+    assert!(
+        world.get::<VisualGraphics>(group).is_none(),
+        "まとめは描画面の持ち主にならない（節）"
+    );
+}
+
+/// `set_layout` は同値の書き込みで変更検知を立てない（surface entity とまとめの節の両方）。
 ///
 /// `Changed<Arrangement>` は `GlobalArrangement` → 面の寸合わせ → 全面再描画の連鎖を引くため、
 /// 変化のない適用で毎コマ立ててはならない。恒真にならないよう、同じテスト内で
 /// 「違う値なら立つ」側（陽性対照）も置く。
-///
-/// `GraphicsCommandList` の陽性対照は **component 不在 → 挿入** で取る。値の異なる 2 つ目の
-/// `GraphicsCommandList` は実 `ID2D1CommandList`（GPU）を要し、GPU 非依存の檻では作れないためで、
-/// 「無条件 return ではなく現値を見て分岐している」ことはこの対照で足りる。
 #[test]
 fn same_value_writes_do_not_trigger_change_detection() {
     let k = ScaleRatio::new(5, 4).expect("5/4");
     let (mut world, _window, mount) = attach_fixture_under_window(382, 547, k);
     let surface = mount.surface_entity();
-    let display = GraphicsCommandList::empty();
+    let group = mount.group();
+    let changed = |world: &World, e: Entity| {
+        world
+            .entity(e)
+            .get_ref::<Arrangement>()
+            .expect("Arrangement")
+            .is_changed()
+    };
 
     // 追跡を切り、以後の書き込みだけが検知されるようにする。
     world.clear_trackers();
@@ -362,49 +405,26 @@ fn same_value_writes_do_not_trigger_change_detection() {
 
     // --- 同値の書き込み。
     mount.set_layout(&mut world, (382, 547), k);
-    mount.set_display(&mut world, &display);
     assert!(
-        !world
-            .entity(surface)
-            .get_ref::<Arrangement>()
-            .expect("Arrangement")
-            .is_changed(),
+        !changed(&world, surface) && !changed(&world, group),
         "同値の set_layout で Changed<Arrangement> を立ててはならない"
     );
-    assert!(
-        !world
-            .entity(surface)
-            .get_ref::<GraphicsCommandList>()
-            .expect("GraphicsCommandList")
-            .is_changed(),
-        "同値の set_display で Changed<GraphicsCommandList> を立ててはならない"
-    );
 
-    // --- 陽性対照 1: 違う k なら立つ。
+    // --- 陽性対照 1: 違う k なら持ち主だけが立つ。
     let k2 = ScaleRatio::new(2, 1).expect("2/1");
     mount.set_layout(&mut world, (382, 547), k2);
     assert!(
-        world
-            .entity(surface)
-            .get_ref::<Arrangement>()
-            .expect("Arrangement")
-            .is_changed(),
-        "値が変われば Changed<Arrangement> は立つ（同値スキップが恒真でない証拠）"
+        changed(&world, surface) && !changed(&world, group),
+        "k だけが変われば持ち主の係数だけが動く"
     );
 
-    // --- 陽性対照 2: 表示記録が不在なら挿さる。
-    world.entity_mut(surface).remove::<GraphicsCommandList>();
+    // --- 陽性対照 2: 原寸が変わればまとめの寸も動く。
     world.clear_trackers();
     world.increment_change_tick();
-    mount.set_display(&mut world, &display);
-    assert!(
-        world
-            .entity(surface)
-            .get_ref::<GraphicsCommandList>()
-            .expect("不在なら set_display が挿す")
-            .is_changed(),
-        "現値と異なれば set_display は挿す（無条件 return ではない証拠）"
-    );
+    mount.set_layout(&mut world, (100, 50), k2);
+    assert!(changed(&world, group), "原寸が変わればまとめの寸も動く");
+    let arr = world.get::<Arrangement>(group).expect("まとめの配置");
+    assert_eq!((arr.size.width, arr.size.height), (100.0, 50.0));
 }
 
 /// 装着の子を消す口（`despawn`）の後、窓の子は 0 で、面と文字層スロットの entity は
@@ -415,7 +435,7 @@ fn same_value_writes_do_not_trigger_change_detection() {
 #[test]
 fn despawn_removes_both_children_from_the_window() {
     let (mut world, window, mount) = attach_fixture_under_window(3, 2, ScaleRatio::ONE);
-    let (surface, slot) = (mount.surface_entity(), mount.text_slot());
+    let (surface, group, slot) = (mount.surface_entity(), mount.group(), mount.text_slot());
     assert_eq!(
         world.get::<Children>(window).map_or(0, |c| c.len()),
         2,
@@ -433,6 +453,7 @@ fn despawn_removes_both_children_from_the_window() {
         world.get_entity(surface).is_err(),
         "面の entity が残っている"
     );
+    assert!(world.get_entity(group).is_err(), "まとめの節が残っている");
     assert!(
         world.get_entity(slot).is_err(),
         "文字層スロットが残っている"
@@ -440,8 +461,8 @@ fn despawn_removes_both_children_from_the_window() {
     assert!(world.get_entity(window).is_ok(), "窓そのものは消さない");
 }
 
-/// 面と文字層の entity が先に消えた装着へ 4 つの口（`set_visible`・`set_layout`・
-/// `set_display`・`despawn`）を呼ぶと、装着契約の破綻の記録 5 つがそれぞれ 1 件以上残る
+/// 面と文字層の entity が先に消えた装着へ 3 つの口（`set_visible`・`set_layout`・
+/// `despawn`）を呼ぶと、装着契約の破綻の記録 4 つがそれぞれ 1 件以上残る
 /// （沈黙する失敗経路を作らない）。
 #[test]
 fn operations_on_a_mount_whose_entities_are_gone_each_leave_a_warn() {
@@ -452,15 +473,13 @@ fn operations_on_a_mount_whose_entities_are_gone_each_leave_a_warn() {
     let ((), events) = log_capture_kit::capture(|| {
         mount.set_visible(&mut world, false);
         mount.set_layout(&mut world, (3, 2), ScaleRatio::ONE);
-        mount.set_display(&mut world, &GraphicsCommandList::empty());
         mount.despawn(&mut world);
     });
 
     for want in [
         "set_visible: Visual が無い（装着が未完了）",
         "set_visible: HitTest が無い（装着が未完了・ポインタ透過が成立しない）",
-        "set_layout: surface entity に Arrangement が無い（装着が未完了）",
-        "set_display: surface entity が無い（装着が未完了）",
+        "set_layout: 装着の実体に Arrangement が無い（装着が未完了）",
         "despawn: 装着の子が既に居ない",
     ] {
         assert!(

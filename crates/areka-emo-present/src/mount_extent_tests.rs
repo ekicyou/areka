@@ -1,49 +1,12 @@
-//! 記録レシピと丸めの一致を固定する GPU 非依存の檻。
-//!
-//! 固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の stride・
-//! 宛先矩形＝`(0, 0, w, h)`・補間＝`D2D1_INTERPOLATION_MODE_LINEAR`。`ComposedSurface` は常に
-//! stride＝w*4 なので、pitch を w*4 から算出しても区別できない（詰め物つきの面を作る口が無い）。
-//! 拡大率 k を引数に取らないことは `DisplayRecipe::for_surface` の署名そのものが保証する
-//! （コンパイル時の性質であり、実行時テストでは検証しない）。
+//! 描画面の配置と丸めの一致を固定する GPU 非依存の檻。
 //!
 //! 丸めの一致は「利用者から見える物理寸＝[`ScaleRatio::scaled_extent`]」と「wintf の描画面寸＝
 //! `GlobalArrangement.bounds` の `ceil`」の関係を表で固定する。
 
-use super::*;
-
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::{GlobalArrangement, Rect, calculate_surface_size_from_global_arrangement};
 
-use crate::mount::logical_arrangement;
-
-/// 複数寸で「bitmap 寸＝native・pitch＝stride・dest＝(0,0,w,h)・補間＝LINEAR」を固定する。
-#[test]
-fn recipe_uses_native_size_stride_full_dest_and_linear() {
-    for (w, h) in [(1u32, 1u32), (8, 6), (382, 547)] {
-        let surface = ComposedSurface::new(w, h);
-        let recipe = DisplayRecipe::for_surface(&surface);
-
-        assert_eq!(
-            recipe.bitmap_size,
-            (w, h),
-            "bitmap 寸は native 原寸と一致するべき"
-        );
-        assert_eq!(
-            recipe.pitch,
-            surface.stride(),
-            "pitch は合成結果の stride と一致するべき"
-        );
-        assert_eq!(
-            recipe.dest,
-            (0.0, 0.0, w as f32, h as f32),
-            "宛先矩形は (0, 0, w, h) の論理 px であるべき"
-        );
-        assert_eq!(
-            recipe.interpolation, D2D1_INTERPOLATION_MODE_LINEAR,
-            "補間は LINEAR 固定であるべき"
-        );
-    }
-}
+use super::logical_arrangement;
 
 /// 本番と同じ式で導いた境界幅が原寸×拡大率と一致し、上流（wintf）の面寸算出と
 /// 丸め権威（[`ScaleRatio::scaled_extent`]）の差が 0 か +1 に収まり、整数の拡大率では 0 になること。

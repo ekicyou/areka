@@ -1,6 +1,17 @@
 use super::*;
 use crate::presenter::test_support::{bake_world, elem, pattern_overlay_at, shell_of, surface};
+use areka_emo_compose::plan::Extent;
 use areka_emo_compose::{BindSet, Composer};
+
+/// 檻は計画の中身を見ない（表は与えられた計画を持つだけ）。
+fn no_plan() -> DrawPlan {
+    DrawPlan {
+        surface_id: 0,
+        base_surface: 0,
+        extent: Extent { w: 0, h: 0 },
+        items: Vec::new(),
+    }
+}
 
 // ── ComposedSurface 生成補助 ──────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) で画素を直接焼けないため、
@@ -29,8 +40,7 @@ fn insert_with_mask(
     composed: ComposedSurface,
 ) {
     let mask = mask_of(&composed);
-    let display = GraphicsCommandList::empty(); // 檻は GPU を持たない（記録は保持されるだけ）
-    cache.insert(surface_id, binds, pattern, composed, mask, display);
+    cache.insert(surface_id, binds, pattern, no_plan(), composed, mask);
 }
 
 /// 不透明画素と透明画素を**必ず両方**含む本物の合成を、**与えられた出力先へ書き戻す**。
@@ -510,14 +520,7 @@ fn take_recycled_carries_over_buffer_capacity() {
     );
 
     let mask = mask_of(&reused);
-    cache.insert(
-        id,
-        binds.clone(),
-        pattern.clone(),
-        reused,
-        mask,
-        GraphicsCommandList::empty(),
-    );
+    cache.insert(id, binds.clone(), pattern.clone(), no_plan(), reused, mask);
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("再挿入したキーはヒットする");
