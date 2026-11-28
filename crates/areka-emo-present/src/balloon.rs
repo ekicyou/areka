@@ -811,6 +811,9 @@ fn build_from_faces_core(
 #[path = "balloon_alpha_tests.rs"]
 mod alpha_tests;
 #[cfg(test)]
+#[path = "balloon_merge_quiet_tests.rs"]
+mod merge_quiet_tests;
+#[cfg(test)]
 #[path = "balloon_model_tests.rs"]
 mod model_tests;
 #[cfg(test)]
