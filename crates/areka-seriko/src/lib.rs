@@ -70,4 +70,5 @@ pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeStates, Slot, StageNote,
 };
 pub use table::{AnimationTable, FrameAct, LoopAnimation, LoopFrame, LoopTrigger};
+pub use talk::TextRouting;
 pub use timeline::{LoopRng, seeded_rng};

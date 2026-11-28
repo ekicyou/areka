@@ -39,7 +39,7 @@ ukadoc の基準（逐語・`list_sakura_script.html`）:
 
 **台本に付帯情報を持たせ、今の origin の通り道で受け手へ届ける**（2026-10-25 開発者と `/kiro-discovery` で決めた）。
 
-- 付帯情報を `StartTalk` に持たせ、`begin_talk` で受け手へ渡す（今の `origin` が既に通っている道）。付帯情報を `CueSheet`（dola）の側にも持たせるかは要件の段で決める（開発者「dola とかの基礎整備をするタイミング」・`talk-anchor-interrupt-ticks` が台本の起点を配る所と同じ継ぎ目）。
+- 付帯情報を `StartTalk` に持たせ、`begin_talk` で受け手へ渡す（今の `origin` が既に通っている道）。付帯情報を `CueSheet`（dola）の側にも持たせるかは要件の段で決める（開発者「dola とかの基礎整備をするタイミング」・✅ `dola-interrupt-ticks` が作り直した、台本の起点を配る所と同じ継ぎ目）。
 - 相対パスの解き方は共通の関数 1 つ。絶対パスはそのまま。相対パスは「ghost/master だけ」か「ghost/master → ゴーストの最上位」の探す順で引く（どのタグがどちらかは ukadoc の各項目に従う）。`..` で ghost/master の外へ出るパスは断らない（ukadoc の例が正典）。環境変数の展開は `\![open,file]` だけの決まりなので、opener の側に残す。
 - MCP の `sakurascript`・先々の SSTP も、喋るゴーストの置き場を基準にする（ukadoc の「実行した」）。送り手のゴーストや道具は「送り手」の欄に持つ。
 
@@ -68,13 +68,13 @@ ukadoc の基準（逐語・`list_sakura_script.html`）:
 
 ## Upstream / Downstream
 
-- **Upstream**: 働きの上の前提は無い。`talk-anchor-interrupt-ticks`（v0.2.0・台本の起点を配る所）と同じ継ぎ目を触るので、ウェーブはそれと分ける（どちらを先にするかは次の棚卸で）。
+- **Upstream**: 働きの上の前提は無い。
 - **Downstream**: `balloon-inline-image`（`\_b[…,inline]`）・`balloon-font-file`（`\f` のフォントファイル）・`tasktray-ghost-icon`（`\![set,tasktrayicon]`）・`multi-ghost-runtime`（送り手のゴーストと実行するゴーストの区別）・`sstp-receive`・`ghost-call`。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: なし。
-- **Adjacent**: `talk-anchor-interrupt-ticks`（`CueSheet` の起点）・`multi-ghost-runtime`（`GhostSlot` をゴーストごとの表へ・`KanadeNotice` が送り手のゴーストを持たない件）・`mcp-strict-errors`（C12・`areka-talk` の `lib.rs` と kanade の `msg.rs` を触る）・`parallel-visual-script`（台本の並走）。
+- **Adjacent**: `multi-ghost-runtime`（`GhostSlot` をゴーストごとの表へ・`KanadeNotice` が送り手のゴーストを持たない件）・`mcp-strict-errors`（C12・`areka-talk` の `lib.rs` と kanade の `msg.rs` を触る）・`parallel-visual-script`（台本の並走）。
 
 ## Constraints
 
@@ -93,4 +93,4 @@ ukadoc の基準（逐語・`list_sakura_script.html`）:
 - **優先度の区分**: A（開発者の起票・「台本ごとに…特定できる情報があればよい」）。
 - **要件定義のモデル**: Opus（今の送り手の情報の通り道に欄を足すだけ）。
 - **分割の案**: 無し。
-- **見つけた穴・古くなった記述**: Current State の道が古い＝`crates/areka/src/readme/opener.rs` は `crates/areka-session/src/readme/opener.rs`、`emo2_boot/shell_box_assets.rs` は `crates/areka-runtime/src/shell_box_assets.rs`、本体の受け手 `emo2_boot/{talk_lifecycle.rs, user_break_cue.rs}` は `crates/areka-runtime/src/` へ移った。Upstream と Adjacent の `talk-anchor-interrupt-ticks` は、もう相手ではない（仕事は `dola-interrupt-ticks` に入った）。Adjacent の `mcp-strict-errors` は着地済み。
+- **見つけた穴・古くなった記述**: Current State の道が古い＝`crates/areka/src/readme/opener.rs` は `crates/areka-session/src/readme/opener.rs`、`emo2_boot/shell_box_assets.rs` は `crates/areka-runtime/src/shell_box_assets.rs`、本体の受け手 `emo2_boot/{talk_lifecycle.rs, user_break_cue.rs}` は `crates/areka-runtime/src/` へ移った。Adjacent の `mcp-strict-errors` は着地済み。

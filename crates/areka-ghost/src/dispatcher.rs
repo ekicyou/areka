@@ -285,14 +285,14 @@ impl DispatcherState {
         let origin = start.origin;
 
         // sink を talk ごとに `clone_box` して独立インスタンスを組む（登録順＝broadcast 順）。
-        // 複製の直後、talk スレッドへ渡す前にこのトークの番号と出どころを渡す（begin_talk）。
+        // 複製の直後、talk スレッドへ渡す前にこのトークの番号・出どころ・付帯情報を渡す（begin_talk）。
         // 古いトークの複製は上の close_active_if_any の join で既に落ちている。
         let sinks: Vec<Box<dyn CueSink + Send>> = self
             .sinks
             .iter()
             .map(|sink| {
                 let mut sink = sink.clone_box();
-                sink.begin_talk(talk_id, origin);
+                sink.begin_talk(talk_id, origin, &start.meta);
                 sink as Box<dyn CueSink + Send>
             })
             .collect();

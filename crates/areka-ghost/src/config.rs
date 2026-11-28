@@ -7,6 +7,7 @@ use areka_kanade::KanadeConfig;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountModel;
 use areka_sakura::strict::{StrictHooks, StrictJudges};
+use areka_talk::GhostPlace;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -28,6 +29,7 @@ pub fn resolve_kanade_config(
     let shell_name = resolve_shell_name(mount, default_encoding);
     KanadeConfig {
         ghost_name: listed_ghost_name(mount),
+        ghost_place: resolve_ghost_place(mount),
         ..KanadeConfig::new(shell_name, env!("CARGO_PKG_VERSION"))
     }
 }
@@ -46,11 +48,35 @@ pub fn listed_name(name: Option<&str>, ghost_root: &Path) -> String {
         .to_string()
 }
 
-/// script 種別のログに出すゴーストの名前（根は `ghost/master` の 2 つ上）。
-fn listed_ghost_name(mount: &MountModel) -> String {
+/// ゴーストの最上位（`ghost/master` の 2 つ上）。
+fn ghost_root(mount: &MountModel) -> &Path {
     let master = &mount.shiori.dir;
-    let root = master.ancestors().nth(2).unwrap_or(master);
-    listed_name(mount.names.name.as_deref(), root)
+    master.ancestors().nth(2).unwrap_or(master)
+}
+
+/// script 種別のログに出すゴーストの名前（根は [`ghost_root`]）。
+fn listed_ghost_name(mount: &MountModel) -> String {
+    listed_name(mount.names.name.as_deref(), ghost_root(mount))
+}
+
+/// ゴーストの置き場（`ghost/master` と最上位）を絶対パスで作る。できなければ `warn!` の上で `None`。
+fn resolve_ghost_place(mount: &MountModel) -> Option<GhostPlace> {
+    let abs = |path: &Path| {
+        std::path::absolute(path)
+            .inspect_err(|err| {
+                tracing::warn!(
+                    event = "ghost_place_unresolved",
+                    path = %path.display(),
+                    error = %err,
+                    "ゴーストの置き場を絶対パスにできない——置き場なしで続ける"
+                );
+            })
+            .ok()
+    };
+    Some(GhostPlace {
+        master: abs(&mount.shiori.dir)?,
+        root: abs(ghost_root(mount))?,
+    })
 }
 
 /// strict の記録の束ね。名は `script` の記録と同じ
@@ -163,6 +189,29 @@ mod tests {
         shell_descript: Option<&[u8]>,
     ) -> MountModel {
         resolve_mount(root, None, shell_dir_name, shell_descript)
+    }
+
+    #[test]
+    fn resolve_kanade_config_puts_absolute_ghost_place_for_relative_root() {
+        let rel = std::path::PathBuf::from(format!(
+            "../../target/ghost-place-rel-{}",
+            std::process::id()
+        ));
+        let mount = resolve_mount_with_ghost_name(&rel, Some("name,えみり"));
+        assert!(mount.shiori.dir.is_relative());
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+        fs::remove_dir_all(&rel).expect("remove fixture");
+
+        let place = config.ghost_place.expect("ghost_place is resolved");
+        assert!(place.master.is_absolute());
+        assert!(place.root.is_absolute());
+        assert!(place.master.ends_with(Path::new("ghost").join("master")));
+        assert_eq!(
+            place.master.parent().and_then(Path::parent),
+            Some(place.root.as_path())
+        );
+        assert_eq!(config.ghost_name, "えみり");
     }
 
     #[test]

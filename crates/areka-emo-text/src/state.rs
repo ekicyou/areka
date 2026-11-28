@@ -597,7 +597,7 @@ impl TextLayerState {
             },
             // 名前の形の `\b[名前]`（鍵が整数として読めない）は行き先の切り替え。
             // 整数の `\b[ID番号]` は普通のバルーンへの指定（seriko の担当）で、下の腕で読み飛ばす。
-            CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
+            CueCommand::BalloonSurface { key } if areka_emo_compose::TextRoute::is_box_key(key) => {
                 box_missing = self.route_select(&cue.actor, key);
             }
             // 閉じは宛先に関わらず開いている範囲を閉じる（[`anchor`]）。

@@ -566,6 +566,8 @@ pub struct KanadeConfig {
     /// script 種別の記録の名（`get_active_ghost_list` と同じ値）。既定は空文字。結線は
     /// `areka-ghost` の `resolve_kanade_config` が入れる。
     pub ghost_name: String,
+    /// 実行するゴーストの置き場（既定 `None`。結線は `areka-ghost` の `resolve_kanade_config` が入れる）。
+    pub ghost_place: Option<areka_talk::GhostPlace>,
     /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（既定 `None`）。`Some` なら殻が期限の
     /// 時刻を送り、刻み役がその時刻に [`KanadeMsg::ChoiceTimeoutDue`] を返す。`None` なら毎秒の
     /// `Tick` が期限を拾う。結線は `areka-ghost` の runtime が刻み役の本物のときだけ入れる。
@@ -593,6 +595,7 @@ impl KanadeConfig {
             boot_origin: BootOrigin::Plain,
             online: &online::PROCESS,
             ghost_name: String::new(),
+            ghost_place: None,
             choice_wake: None,
         }
     }

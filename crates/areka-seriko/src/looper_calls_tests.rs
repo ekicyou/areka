@@ -49,6 +49,7 @@ fn config(text: &str, rng: LoopRng, pick_rng: LoopRng) -> SerikoLoopConfig {
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng,
+        text_routing: crate::TextRouting::default(),
     }
 }
 
@@ -252,6 +253,7 @@ fn balloon_surface_applies_calls_the_same_way() {
         balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{SAKURA}{SURFACES}")))]),
         rng: lottery,
         pick_rng: picker,
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
@@ -350,6 +352,7 @@ fn balloon_surface_emits_the_balloon_shift() {
         balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{MOVES}{SURFACES}")))]),
         rng: lottery,
         pick_rng: seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
@@ -645,6 +648,7 @@ fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
         balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{TEXT}{SURFACES}")))]),
         rng: lottery,
         pick_rng: seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));

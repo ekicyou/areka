@@ -40,6 +40,7 @@ pub mod reveal;
 pub mod strict;
 pub(crate) mod strict_tap;
 pub mod sysvar;
+pub mod talk_path;
 
 pub use anchor_pair::{AnchorFinding, AnchorIssue, pair_anchors};
 pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_timeout};

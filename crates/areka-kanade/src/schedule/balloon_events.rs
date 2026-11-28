@@ -14,7 +14,7 @@
 //! 高々 1 本（GET）を指示の列に足すだけで、応答の扱いは定常の応答の腕に任せる。
 
 use super::{Action, Phase, State, current_talk_id, events, phase_label};
-use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId};
+use crate::talk::{ScriptOrigin, TalkDone, TalkEndReason, TalkId, TalkSender};
 
 /// 再生を始めたトークの控え。3 つのイベントの Reference0 の源で、古い知らせを退ける照合の相手。
 ///
@@ -27,6 +27,8 @@ pub(crate) struct ShownTalk {
     pub script: String,
     /// 再生を始めた最終の出どころ（翻訳の後）。選択肢の `script:` が引き継ぐ。
     pub origin: ScriptOrigin,
+    /// 再生を始めたトークの送り手。選択肢の `script:` が引き継ぐ。
+    pub sender: TalkSender,
     /// このトークで `OnBalloonClose` を送ったか。
     pub close_sent: bool,
     /// このトークで `OnBalloonTimeout` を送ったか。
@@ -74,6 +76,7 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
             talk_id: start.talk_id,
             script: start.script.clone(),
             origin: start.origin,
+            sender: start.meta.sender.clone(),
             close_sent: false,
             timeout_sent: false,
             timeout_pending: false,

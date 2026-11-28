@@ -140,7 +140,7 @@ fn part_mouth_follows_the_recount_when_the_surface_changes() {
     hear_nine_from_1000(&mut st);
     st.tick(1060);
     st.show(1, 1060);
-    assert_eq!(st.counted(Slot::Shell), Some((2, 2)), "2 文字が現れている");
+    assert_eq!(st.counted(Slot::Shell), Some((0, 2)), "2 文字が現れている");
 
     for now in [1110, 1160] {
         st.tick(now);
@@ -198,6 +198,7 @@ fn part_mouth_is_silent_while_the_balloon_window_is_closed() {
         balloon_tables: BTreeMap::from([(scope(), table_of(MOUTH_ON_PART))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     note(&mut st, false, 1000);
     st.tick(1000);

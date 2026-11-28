@@ -9,7 +9,8 @@ use std::time::Duration;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_sakura::{
     ActorKey, ChoiceWaiting, CueCommand, CueSink, SakuraMsg, ScriptOrigin, StartTalk,
-    SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId, TimePoint, TimeSpan, spawn_talk,
+    SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId, TalkMeta, TimePoint, TimeSpan,
+    spawn_talk,
 };
 use areka_seriko::{
     BindResolver, DefaultBinds, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SerikoSink,
@@ -141,6 +142,7 @@ pub fn run_core(
             talk_id: TalkId(8),
             origin: ScriptOrigin::GHOST,
             strict: false,
+            meta: TalkMeta::default(),
         },
         done_tx,
         vec![Box::new(seriko_sink), text_sink],

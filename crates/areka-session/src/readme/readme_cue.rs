@@ -33,6 +33,8 @@ use std::sync::mpsc::Sender;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 
+use areka_ghost::sink::{BootCueSink, TalkMeta, TalkRunner};
+use areka_kanade::talk::{ScriptOrigin, TalkId};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 
 use crate::readme::ReadmeRequest;
@@ -45,18 +47,32 @@ const SELECTOR_README: &str = "readme";
 
 /// 開く系のタグ（`\![open,readme]` を含む）の受け口。
 ///
-/// 配送は台本ごとに受け口を複製するため [`Clone`] が要る。内側の送信端は常に複製でき、
-/// どの複製も単一の受信端（UI の `ReadmeWiring`）へ届くので、複製しても配送の意味は変わらない。
-#[derive(Clone)]
+/// 配送は台本ごとに受け口を複製する。どの複製も単一の受信端（UI の `ReadmeWiring`）へ届く。
 pub struct ReadmeCueSink {
     /// UI スレッド（説明書の取り出しの段）への送出端。
     tx: Sender<ReadmeRequest>,
+    /// このトークの実行するゴースト（begin_talk で控える・既定は置き場が無い）。
+    runner: TalkRunner,
 }
 
 impl ReadmeCueSink {
     /// 送信端（受信端は結線の task が `wire_readme` へ渡す）から受け口を組む。
     pub fn new(tx: Sender<ReadmeRequest>) -> Self {
-        Self { tx }
+        Self {
+            tx,
+            runner: TalkRunner::default(),
+        }
+    }
+}
+
+/// `Clone` を持たないのは、複製で控えを既定へ戻して前のトークの実行するゴーストを持ち越さないため。
+impl BootCueSink for ReadmeCueSink {
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(Self::new(self.tx.clone()))
+    }
+
+    fn begin_talk(&mut self, _talk_id: TalkId, _origin: ScriptOrigin, meta: &TalkMeta) {
+        self.runner = meta.runner.clone();
     }
 }
 
@@ -125,7 +141,10 @@ impl dola::cue::CueSink for ReadmeCueSink {
                     );
                     return;
                 }
-                Some(Ok(dest)) => ReadmeRequest::Open(dest),
+                Some(Ok(dest)) => ReadmeRequest::Open {
+                    dest,
+                    runner: self.runner.clone(),
+                },
             }
         };
 

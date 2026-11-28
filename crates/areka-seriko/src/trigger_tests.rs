@@ -95,9 +95,9 @@ fn talk_tick_all(
     playing: bool,
     wall: &dyn Fn(u64) -> TimePoint,
 ) -> Vec<TimePoint> {
-    let (base, prev_seen) = armed.talk_window_bounds().expect("数えを持つ");
+    let (counted, prev_seen) = armed.talk_window_bounds().expect("数えを持つ");
     let window = TalkWindow {
-        base,
+        counted,
         prev_seen,
         now_seen,
         wall,
@@ -377,7 +377,7 @@ fn armed_closed_stays_silent_until_shown() {
 fn hide_drops_the_talk_count() {
     let mut armed = armed_with_text(4);
     armed.advance_talk(6);
-    assert_eq!(armed.talk_window_bounds(), Some((4, 6)), "前提");
+    assert_eq!(armed.talk_window_bounds(), Some((2, 6)), "前提");
 
     armed.hide();
     assert_eq!(armed.talk_window_bounds(), None);
@@ -431,7 +431,7 @@ fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
     armed.hide();
     // 8 文字目（序数 7）が現れた 1350 に現し直す。
     armed.show(at_ms(1350), Some(8));
-    assert_eq!(armed.talk_window_bounds(), Some((8, 8)));
+    assert_eq!(armed.talk_window_bounds(), Some((0, 8)));
     assert_eq!(
         talk_tick(&mut armed, &t, 10, false, &every_50ms),
         None,
@@ -482,7 +482,7 @@ fn talk_boundary_reached_while_playing_is_skipped_for_good() {
     let t = talk(1, 3);
 
     assert_eq!(talk_tick(&mut armed, &t, 3, true, &every_50ms), None);
-    assert_eq!(armed.talk_window_bounds(), Some((0, 3)), "数えは進む");
+    assert_eq!(armed.talk_window_bounds(), Some((3, 3)), "数えは進む");
     assert_eq!(
         talk_tick(&mut armed, &t, 4, false, &every_50ms),
         None,
@@ -502,7 +502,7 @@ fn talk_asks_whether_it_is_playing_at_the_glyph_reveal_time() {
     let t = talk(1, 3);
     // 区切りの文字（序数 2）が現れるのは 1100。
     let window = TalkWindow {
-        base: 0,
+        counted: 0,
         prev_seen: 0,
         now_seen: 3,
         wall: &every_50ms,
@@ -538,7 +538,7 @@ fn talk_count_never_goes_back_when_fewer_glyphs_are_visible() {
         None,
         "数え始めより手前"
     );
-    assert_eq!(armed.talk_window_bounds(), Some((1, 6)), "進めない");
+    assert_eq!(armed.talk_window_bounds(), Some((5, 6)), "進めない");
 
     assert_eq!(
         talk_tick(&mut armed, &t, 6, false, &every_50ms),
@@ -558,7 +558,7 @@ fn talk_count_never_goes_back_when_fewer_glyphs_are_visible() {
 fn talk_without_a_window_or_while_hidden_stays_silent() {
     let t = talk(1, 3);
     let crossed = TalkWindow {
-        base: 0,
+        counted: 0,
         prev_seen: 0,
         now_seen: 3,
         wall: &every_50ms,
@@ -584,22 +584,22 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
     );
 }
 
-/// 消去で文字の列が数え済みより短くなったら、数えた文字の数を保ったまま列の総数に揃える。次に届く
-/// 文字（捨てられた序数を使い直す）は、数えた文字の続きとして数えられる。列が数え済み以上なら
-/// 触らない。数え始めは 0 より前へは行かない。
+/// 消去で数え済みより前の字が捨てられたら、数えた文字の数を保ったまま数え済みをその数だけ下げる。
+/// 次に届く文字（捨てられた序数を使い直す）は、数えた文字の続きとして数えられる。数え済みより前に
+/// 捨てた字が無ければ触らない。
 #[test]
 fn realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed() {
     let t = talk(1, 3);
     let mut armed = armed_with_text(10);
     assert_eq!(talk_tick(&mut armed, &t, 12, false, &every_50ms), None);
 
-    armed.realign_talk(12);
-    assert_eq!(armed.talk_window_bounds(), Some((10, 12)), "超えていない");
+    armed.realign_talk(&[12, 13]);
+    assert_eq!(armed.talk_window_bounds(), Some((2, 12)), "超えていない");
 
-    armed.realign_talk(7);
+    armed.realign_talk(&[7, 8, 9, 10, 11]);
     assert_eq!(
         armed.talk_window_bounds(),
-        Some((5, 7)),
+        Some((2, 7)),
         "数えた 2 文字を保って、列の総数 7 に揃える"
     );
     assert_eq!(
@@ -610,11 +610,11 @@ fn realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed() {
 
     let mut early = armed_with_text(1);
     early.advance_talk(3);
-    early.realign_talk(0);
-    assert_eq!(early.talk_window_bounds(), Some((0, 0)));
+    early.realign_talk(&[0, 1, 2]);
+    assert_eq!(early.talk_window_bounds(), Some((2, 0)));
 
     let mut part = armed_at(0);
-    part.realign_talk(0);
+    part.realign_talk(&[0]);
     assert_eq!(
         part.talk_window_bounds(),
         None,

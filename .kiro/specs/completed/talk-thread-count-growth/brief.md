@@ -56,7 +56,7 @@
 
 - **Extends**: なし（名簿と報告器を作った `draw-load-parity` も、見つけた `mcp-kanade-tools` も完了済み＝新しい spec）。
 - **Adjacent**:
-  - `talk-anchor-interrupt-ticks`（据え置き）・`talk-fast-forward`（版に縛らない）: `dispatcher.rs`・`drive.rs` に触る。トークの側を直すことになったら同じウェーブに置かない。
+  - `talk-fast-forward`（版に縛らない）: `dispatcher.rs`・`drive.rs` に触る。トークの側を直すことになったら同じウェーブに置かない。
   - `actor-thread-log-capture`（版に縛らない）: `spawn_actor` の走り始めの差し込み口と `thread_roles` を扱う。名簿の側だけなら重ならない見込み。
   - `instant-to-interrupt-ticks`（v0.2.0）: `perf_thread_report.rs` の時計を替える。同じウェーブに置かない。
 

@@ -47,9 +47,11 @@ pub(in crate::schedule) fn begin(
         );
         return None;
     }
-    // 元のトークの出どころを引き継ぐ。
-    let origin = of_shown(state, prev_talk_id);
-    let (talk_id, action) = start_talk(state, "choice_script", script.to_string(), origin);
+    let (origin, sender) = of_shown(state, prev_talk_id);
+    let (talk_id, mut action) = start_talk(state, "choice_script", script.to_string(), origin);
+    if let Action::StartTalk(start) = &mut action {
+        start.meta.sender = sender;
+    }
     tracing::info!(
         target: "kanade",
         event = "choice_script_started",

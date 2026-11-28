@@ -58,7 +58,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `talk-script-metadata`（v0.2.0・相対パスの基準）・v0.2.0 の dola の時刻の土台（`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`＝待ちを正確に刻む）。
+- **Upstream**: `talk-script-metadata`（v0.2.0・相対パスの基準）・v0.2.0 の dola の時刻の土台（✅ `dola-interrupt-ticks`＝待ちを正確に刻む）。
 - **Downstream**: `parallel-visual-script`（音を鳴らす所）・`sakura-time-directives`（`\![sound,wait]`）・ノベルの音の拡張（受け口の節）・`areka-usage-stats` には関係しない。
 
 ## Existing Spec Touchpoints
@@ -75,3 +75,8 @@
 - 失敗の経路は記録を残す（`warn!` を 1 行・黙って飛ばさない）。メッセージボックスは出さない。
 
 > **2026-11-20 開発者との議論の決め**（全文は `doc/ideas/novel-decisions-2026-11-20.md`）: ⑴ 早送りは中身を見ない（開発者）。早送りで飛び越えた単発の音も、命令は全部当たる（同時に鳴り始める）。「飛び越えた単発は鳴らさない」は作らない。⑵ 同じ命令（出し直しの印など）を、音の受け口も、ほかの受け口も、同時に拾ってよい（「1 つの命令を拾う係は 1 つまで」の縛りを外す）。⑶ `play` に関わる物は v0.3.0 より後。
+
+## 申し送り（talk-script-metadata より・2026-11-28 着地）
+
+- 台本の付帯情報は `areka_talk::TalkMeta`（`runner: TalkRunner { name, place: Option<GhostPlace { master, root }> }`・`sender: TalkSender`）。受け手は `BootCueSink::begin_talk(talk_id, origin, &TalkMeta)` でトークごとに受け取り、そのトークの最初の合図より前に届く。`GhostSlot` を引かずにこれを覚えて使う（作りの例は `crates/areka-session/src/readme/readme_cue.rs` の `ReadmeCueSink`）。
+- 相対パスは `areka_sakura::talk_path::resolve(place, written, SearchOrder)`（在る無しを差し替えてテストするなら `resolve_in`）（`areka_ghost::sink` からも再公開）で解く。`SearchOrder::MasterOnly` は ghost/master だけ、`MasterThenRoot` は ghost/master の次にゴーストの最上位を探す。解けないときは `Unresolved::{Empty, NoPlace, NotFound { last_tried }}`（`reason()` が `empty_path`・`no_place`・`not_found`）で、ログに残してから断る。どちらの探し方を使うかはこの spec の要件の段で決める。
