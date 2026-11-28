@@ -1,29 +1,32 @@
-//! 表示の記録（`display::record_display`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
-//! ことを、**4 注入点 × 3 場面**で固定する実行テスト。
+//! 頁の上げと葉の記録（`GpuAtlas`）が失敗したときに **presenter 側の状態が 1 つも書き換わらない**
+//! ことを、**注入点 × 4 場面**で固定する実行テスト。
 //!
 //! # 失敗点と前状態の集合
 //!
-//! 失敗点は「記録」の 4 点（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）で、その
-//! 位置は**容量回収（`take_recycled`）より手前**である。手前なので保たれる範囲は広い——
+//! 失敗点は頁の上げの `CreateBitmap` と葉の記録の 3 点（`CreateCommandList`／`EndDraw`／`Close`）で、
+//! その位置は**節にも容量回収（`take_recycled`）にも触れる前**である。頁は最初の表示で上がり、同じ
+//! 装置のあいだは上げ直さないので、`CreateBitmap` は初回と装置が替わった後の場面でだけ踏まれる。手前なので保たれる範囲は広い——
 //! 失敗した適用は合成メモを 1 件も増やさず、追い出しも起こさない。ゆえに前状態の集合に**メモの件数**と表示中エントリのバイトが入る。
 //!
 //! # 何を「前の状態」と呼ぶか（記録の失敗は回収より手前）
 //!
 //! [`PresenterState`] の 8 項目である——`visible`／`applied`／`native_size`／`current_surface`／
-//! `pending_resize`／メモの件数と表示中エントリのバイト／枠の面 entity の `GraphicsCommandList`
-//! （＝画面へ渡っている描画命令）／同 entity の `Arrangement`（配置）と `AlphaMaskResource`（さわり判定）
+//! `pending_resize`／メモの件数と表示中エントリのバイト／画面の節
+//! （＝画面へ渡っている描画）／同 entity の `Arrangement`（配置）と当たりの領域を引く土台の面
 //! ——に加えて、呼出元へ `reply` が `Err(PresentError::Device)` で返り、`error!` が**ちょうど 1 行**出ること。
 //! 判定は「注入前に採った値と厳密に等しい」の 1 本である。
 //!
-//! # 3 場面（それぞれ別の項目に判別力がある）
+//! # 4 場面（それぞれ別の項目に判別力がある）
 //!
-//! - **初回**: 表示が一度も成立していない。成功していれば装着・配置・マスク・メモが**無から生じる**。
+//! - **初回**: 表示が一度も成立していない。成功していれば装着・配置・土台の面・メモが**無から生じる**。
 //!   ここだけが「失敗した適用が装着を作らない」を見られる場面である。
 //! - **同形再表示**: 表示確立後に、**同じ外形の別の面**を別の窓 DPI で試す。成功していれば面 id・
-//!   表示記録・マスク・メモ件数・k・配置の係数・窓寸要求が同時に動く。外形が同じでも中身（α の穴）が
-//!   違う面を使うので、マスクの不変は恒真ではない。
+//!   節・土台の面・メモ件数・k・配置の係数・窓寸要求が同時に動く。外形が同じでも中身（α の穴）が
+//!   違う面を使うので、表示バイトの不変は恒真ではない。
 //! - **Hide 後**: 非表示にしてから試す。ここでだけ `visible`／`current_surface` に判別力がある
 //!   （成功していれば可視へ戻り面 id が入る）。
+//! - **装置が替わった後**: 確立後に `GraphicsCore` を入れ替えてから試す。ここでだけ確立後の頁の
+//!   上げに判別力がある（失敗しても前の装置の頁の控えと節が残る）。
 //!
 //! いずれの場面も**注入前の具体値を明示的に assert してから**注入し、末尾に**陽性対照**（同じ指令を
 //! 注入なしで流すと当該項目が実際に動く）を置く。これが無いと「もともと何も動かない場面を見ていた」
@@ -33,20 +36,18 @@
 //!
 //! 既存のグラフィクステストと同一——**窓なし・実 D3D デバイス**——であり、実機 GPU 障害の再現を
 //! 必要としない。注入点は `#[cfg(test)]` でのみ実体を持つ（`display.rs`）。`EndDraw`／`Close` の注入は
-//! 実呼び出しの**後**に置かれているため、ここで主張するのは呼び手から見える前状態の維持だけである
-//! （共有 DC 側に副作用が残らないことは `display_fault_tests.rs` が見る）。
+//! 実呼び出しの**後**に置かれているため、ここで主張するのは呼び手から見える前状態の維持だけである。
 
 use super::*;
 
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{AlphaMaskResource, Arrangement, GraphicsCommandList, Offset, Visual};
+use wintf::ecs::{Arrangement, GraphicsCore, Offset, Visual};
 
 use crate::display::DisplayFault;
 
 use super::test_support::{
-    CapturedEvent, bake_world, capture, elem, gradient, gradient_with_alpha, hide_ok,
-    make_world_with_gpu, mount_entities, set_window_dpi, shell_of, show_ok, show_with_armed_fault,
-    spawn_window_with_dpi, surface,
+    CapturedEvent, Screen, bake_world, capture, elem, gradient, gradient_with_alpha, hide_ok,
+    make_world_with_gpu, mount_entities, on_screen, set_window_dpi, shell_of, show_ok,
+    show_with_armed_fault, spawn_window_with_dpi, surface,
 };
 
 /// 検査対象の target（全テストで 1 つ）。
@@ -68,12 +69,19 @@ const MOVED_DPI: u16 = 192;
 /// いない——k が動かない変異（配置だけを書き直す形）でも呼出そのものを検出できる。
 const SENTINEL_OFFSET: (f32, f32) = (99.0, 77.0);
 
-/// `record_display` が失敗し得る 4 点（`DisplayFault` の全 variant）。
+/// 頁の上げと葉の記録が失敗し得る 4 点（`DisplayFault` の全 variant）。
 ///
 /// variant が増えたらここに足さなければ被覆が黙って減る。列挙の網羅は [`fault_marker`] の `match` が
 /// コンパイルで、本表の重複は [`the_matrix_covers_four_fault_points`] が実行時に見張る（件数は配列の型が決める）。
 const ALL_DISPLAY_FAULTS: [DisplayFault; 4] = [
     DisplayFault::CreateBitmap,
+    DisplayFault::CreateCommandList,
+    DisplayFault::EndDraw,
+    DisplayFault::Close,
+];
+
+/// 確立した後の場面で踏まれる 3 点（頁は上げ済みで、試す面の葉だけが新しく記録される）。
+const LEAF_FAULTS: [DisplayFault; 3] = [
     DisplayFault::CreateCommandList,
     DisplayFault::EndDraw,
     DisplayFault::Close,
@@ -100,9 +108,7 @@ fn fault_marker(at: DisplayFault) -> &'static str {
 /// 面 1000（全不透明）と面 3000（**内側に α=0 の穴**）の `(EmoWorld, AtlasTable)` を返す。
 ///
 /// 穴は内側の 2 画素だけで、外周は全て不透明である。α=0 除外トリムは外周を残すので**合成外形は
-/// 両面とも `FACE_SIZE`**——外形を変えずに、表示バイトとさわり判定マスクの双方を弁別可能にできる。
-/// 共有ヘルパ `build_two_face_assets` の 2 面は**どちらも全不透明**でマスクが同一になるため、
-/// 「マスクが前値のまま」の主張が恒真になってしまう。ここで専用の fixture が要る唯一の理由がそれで、
+/// 両面とも `FACE_SIZE`**——外形を変えずに、表示バイトを弁別可能にできる。
 /// 作り方（atlas bake → `EmoWorld` → `bind_atlas`）は共有ヘルパと同一である。
 fn build_two_face_assets_with_hole() -> (EmoWorld, AtlasTable) {
     let (w, h) = FACE_SIZE;
@@ -145,12 +151,12 @@ struct PresenterState {
     entries: usize,
     /// 表示中エントリの原寸バイト（`read_back`・未表示なら `None`）。
     memo_bytes: Option<Vec<u8>>,
-    /// 枠の面 entity の表示記録＝画面へ渡っている描画命令（未装着なら `None`）。
-    display: Option<GraphicsCommandList>,
+    /// 画面の節＝画面へ渡っている描画（未装着なら `None`）。
+    display: Option<Screen>,
     /// 枠の面 entity の配置（offset＋論理寸＋係数 k・未装着なら `None`）。
     arrangement: Option<Arrangement>,
-    /// 枠の面 entity へ供給済みのαマスク（未装着・未供給なら `None`）。
-    mask: Option<AlphaMask>,
+    /// 当たりの領域を引く土台の面（未表示なら `None`）。
+    base: Option<u32>,
 }
 
 /// 装着済みなら枠の面 entity（未装着なら `None`）。
@@ -200,11 +206,9 @@ fn snapshot(presenter: &EmoPresenter, world: &World, target: TargetId) -> Presen
         pending_resize: t.and_then(|t| t.pending_resize),
         entries: entry_count(presenter, target),
         memo_bytes: presenter.read_back(target).ok(),
-        display: entity.and_then(|e| world.get::<GraphicsCommandList>(e).cloned()),
+        display: on_screen(presenter, target),
         arrangement: entity.and_then(|e| world.get::<Arrangement>(e).copied()),
-        mask: entity
-            .and_then(|e| world.get::<AlphaMaskResource>(e))
-            .and_then(|r| r.mask().cloned()),
+        base: t.and_then(|t| t.shown_base),
     }
 }
 
@@ -328,11 +332,8 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
     );
     assert_eq!(before.entries, 1, "前提: メモは確立した 1 件だけ");
     assert!(
-        before
-            .display
-            .as_ref()
-            .is_some_and(|d| *d != GraphicsCommandList::empty()),
-        "前提: 確立で表示記録が枠の面 entity へ載っている"
+        before.display.as_ref().is_some_and(|d| !d.items.is_empty()),
+        "前提: 確立で画面に節が写っている"
     );
     let arr = before.arrangement.expect("前提: 装着済みなら配置がある");
     assert_eq!(
@@ -346,12 +347,12 @@ fn assert_established_baseline(before: &PresenterState, visible: bool, current: 
         "前提: 配置の論理寸は原寸"
     );
     assert_eq!(arr.scale.x, 1.0, "前提: 確立時の係数は等倍");
-    assert!(before.mask.is_some(), "前提: 確立でαマスクが供給済み");
+    assert!(before.base.is_some(), "前提: 確立で土台の面が決まっている");
 }
 
 // ── 場面 ⑴ 初回（装着・メモが無から生じる場面）──────────────────────────
 
-/// **初回の適用**が 4 注入点のどこで失敗しても、装着も配置もマスクもメモも生じない。
+/// **初回の適用**が 4 注入点のどこで失敗しても、装着も配置も土台の面もメモも生じない。
 ///
 /// この場面でだけ「失敗した適用が装着を作らない」が見られる（他の 2 場面は装着済みから始まる）。
 /// 失敗が回収（`take_recycled`）より手前にあることの直接の帰結として、メモの件数は 0 のままである。
@@ -373,7 +374,7 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
             memo_bytes: None,
             display: None,
             arrangement: None,
-            mask: None,
+            base: None,
         },
         "前提: attach しただけの target は何も確定していない"
     );
@@ -409,8 +410,8 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
     );
     assert_eq!(after.entries, 1, "陽性対照: メモが 1 件生じる");
     assert!(
-        after.display.is_some() && after.arrangement.is_some() && after.mask.is_some(),
-        "陽性対照: 成功した初回 ShowSurface は装着・表示記録・配置・マスクを作る"
+        after.display.is_some() && after.arrangement.is_some() && after.base.is_some(),
+        "陽性対照: 成功した初回 ShowSurface は装着・節・配置・土台の面を作る"
     );
 }
 
@@ -418,8 +419,8 @@ fn display_failure_on_the_first_apply_creates_no_mount_no_memo_and_no_state() {
 
 /// 表示確立後に**同形の別の面**を新しい k で試して失敗しても、前状態が 1 つも動かない。
 ///
-/// 成功していれば面 id・表示記録・マスク・メモ件数・k・配置の係数・窓寸要求が同時に動く場面である。
-/// 2 面は同じ外形で**α の穴だけが違う**ので、表示バイトとマスクの不変は恒真ではない。
+/// 成功していれば面 id・節・土台の面・メモ件数・k・配置の係数・窓寸要求が同時に動く場面である。
+/// 2 面は同じ外形で**α の穴だけが違う**ので、表示バイトの不変は恒真ではない。
 #[test]
 fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     let mut world = make_world_with_gpu();
@@ -428,7 +429,7 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     let before = snapshot(&presenter, &world, TARGET);
     assert_established_baseline(&before, true, Some(ESTABLISHED_ID));
 
-    for at in ALL_DISPLAY_FAULTS {
+    for at in LEAF_FAULTS {
         let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
@@ -456,11 +457,11 @@ fn display_failure_on_a_same_shape_reshow_keeps_every_previous_value() {
     );
     assert_ne!(
         after.display, before.display,
-        "陽性対照: 成功した再表示は表示記録を差し替える"
+        "陽性対照: 成功した再表示は節を差し替える"
     );
     assert_ne!(
-        after.mask, before.mask,
-        "陽性対照: 成功した再表示はαマスクを差し替える（同形でもα が違う）"
+        after.base, before.base,
+        "陽性対照: 成功した再表示は土台の面を差し替える"
     );
     assert_eq!(
         after.applied,
@@ -503,11 +504,11 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
     plant_sentinel_offset(&presenter, &mut world, TARGET);
 
     let before = snapshot(&presenter, &world, TARGET);
-    // `Hide` は可視性と現サーフェスだけを落とす（k・原寸・配置・マスク・メモは保持される）。
+    // `Hide` は可視性と現サーフェスだけを落とす（k・原寸・配置・土台の面・メモは保持される）。
     assert_established_baseline(&before, false, None);
 
     let (surface_entity, slot) = mount_entities(&presenter, TARGET);
-    for at in ALL_DISPLAY_FAULTS {
+    for at in LEAF_FAULTS {
         let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
         assert_injected_failure(&err, &events, at);
         assert_eq!(
@@ -552,10 +553,70 @@ fn display_failure_after_hide_leaves_the_target_hidden_and_every_previous_value_
     );
 }
 
+// ── 場面 ⑷ 装置が替わった後（頁を上げ直す場面）────────────────────────────
+
+/// 装置が替わった後の適用が頁の上げ・葉の記録のどこで失敗しても、前の装置の頁の控えも節も前状態も
+/// 動かない。
+///
+/// 確立後に `CreateBitmap` を踏むのはこの場面だけ（同じ装置のあいだは頁を上げ直さない）。成功すれば
+/// 節を消さずに葉だけが新しい装置の物へ替わる。
+#[test]
+fn display_failure_after_a_device_change_keeps_the_previous_atlas_and_nodes() {
+    let mut world = make_world_with_gpu();
+    let mut presenter = established_then_dpi_moved(&mut world);
+    let device_of = |presenter: &EmoPresenter| {
+        presenter.targets[&TARGET]
+            .gpu
+            .borrow()
+            .as_ref()
+            .expect("表示確立後は頁の控えが在る")
+            .device()
+            .clone()
+    };
+    let old_device = device_of(&presenter);
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+
+    let before = snapshot(&presenter, &world, TARGET);
+    assert_established_baseline(&before, true, Some(ESTABLISHED_ID));
+
+    for at in ALL_DISPLAY_FAULTS {
+        let (err, events) = failed_show(&mut presenter, &mut world, TARGET, ATTEMPTED_ID, at);
+        assert_injected_failure(&err, &events, at);
+        assert_eq!(
+            snapshot(&presenter, &world, TARGET),
+            before,
+            "{at:?} の失敗で装置が替わった後の前状態が書き換わった"
+        );
+        assert!(
+            device_of(&presenter) == old_device,
+            "{at:?} の失敗で頁の控えを捨てた"
+        );
+    }
+
+    // ── 陽性対照 ───────────────────────────────────────────────────────
+    show_ok(&mut presenter, &mut world, TARGET, ATTEMPTED_ID);
+    let after = snapshot(&presenter, &world, TARGET);
+    assert_eq!(after.current_surface, Some(ATTEMPTED_ID));
+    let new_device = world
+        .resource::<GraphicsCore>()
+        .d2d_device()
+        .expect("新しい装置")
+        .clone();
+    assert!(
+        device_of(&presenter) == new_device,
+        "陽性対照: 成功した適用は頁の控えを新しい装置で作り直す"
+    );
+    assert_eq!(
+        after.display.map(|d| d.nodes),
+        before.display.map(|d| d.nodes),
+        "陽性対照: 同じ形の計画は節を消さずに葉だけを差し替える"
+    );
+}
+
 // ── 被覆の番人 ─────────────────────────────────────────────────────────
 
-/// 4 注入点 × 3 場面の「4」が互いに異なる 4 点であることを実行時に固定する（「3」は上の `#[test]`
-/// 3 本そのもの・件数は配列の型 `[_; 4]` が決める）。
+/// 4 注入点 × 4 場面の注入点の「4」が互いに異なる 4 点であることを実行時に固定する（場面の「4」は上の `#[test]`
+/// 4 本そのもの・件数は配列の型 `[_; 4]` が決める）。
 ///
 /// variant の追加は [`fault_marker`] の `match` がコンパイルで捕まえるが、[`ALL_DISPLAY_FAULTS`] の
 /// 1 つを別の点の重複に替える改変はコンパイルを通ってしまい、被覆だけが静かに減る。

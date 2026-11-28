@@ -12,8 +12,7 @@ use crate::world::Records;
 
 /// 1 回の走査の範囲で数えてよい「入る面とその面の行の全部と積み荷」の数。
 /// 根拠（2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
-/// 今は積み荷・なめる行・面の行の全部（[`surface_rows`]）も数える単位なので、測り直しの候補
-/// （`examples/compose_timing.rs` の `diamond13` が 1 単位あたりの時間を出す）。
+/// 今は積み荷・なめる行・面の行の全部（[`surface_rows`]）も数える単位なので、測り直しの候補。
 pub(crate) const VISIT_BUDGET: usize = 1 << 16;
 
 /// 面 1 つの行の全部の数（element・collision と、animation ごとに interval の 1 行＋pattern の数・飽和）。

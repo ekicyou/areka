@@ -2,12 +2,10 @@ use super::*;
 
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::GraphicsCommandList;
-
 use super::test_support::{
     arrangement_of, bake_world, build_target_assets, build_two_face_assets, elem, gradient,
-    make_world_with_gpu, mount_entities, set_window_dpi, shell_of, show_ok, spawn_window_with_dpi,
-    surface, tamper_face_1000_slot,
+    make_world_with_gpu, mount_entities, on_screen, set_window_dpi, shell_of, show_ok,
+    spawn_window_with_dpi, surface, tamper_face_1000_slot,
 };
 
 // ── DPI 追従（k 適用の単一漏斗）: の檻 ────────────────────────────────────
@@ -86,7 +84,7 @@ fn attach_target_keeps_scale_policy_per_window() {
 /// author_dpi=96（k=2/1）でキャッシュミスの `ShowSurface` を適用すると——(a) 配置の寸が **native
 /// 原寸**・係数が **k**、(b) 照会物理寸が丸め権威 `scaled_extent(2/1, native)` と一致し native とは
 /// 弁別でき、(c) `read_back` が **native 合成**の独立再現と全バイト一致し画素数も原寸のまま、
-/// (d) 表示記録（描画命令）が 1 枚だけ載る。
+/// (d) 節（描画命令）が 1 枚だけ載る。
 ///
 /// k が表示へ届いていない実装（係数 1.0 のまま）なら (a) の係数と (b) の照会値が同時に落ちる。
 /// 逆に CPU で画素を拡大する実装が戻れば (c) の画素数で落ちる。
@@ -138,13 +136,10 @@ fn show_surface_scales_display_to_scaled_extent_at_k2() {
         "読み戻しが native 合成の独立再現と一致しない（k が画素へ混ざっている）"
     );
 
-    // (d) 表示記録は 1 枚（原寸 bitmap を丸ごと描く命令）。k は記録に入らない。
+    // (d) 節は 1 枚（原寸 bitmap を丸ごと描く命令）。k は記録に入らない。
     assert!(
-        world
-            .get::<GraphicsCommandList>(surface_entity)
-            .and_then(|l| l.command_list().cloned())
-            .is_some(),
-        "surface entity に表示記録（描画命令）が載っていない"
+        on_screen(&presenter, TargetId(0)).is_some_and(|s| !s.items.is_empty()),
+        "画面に節が載っていない"
     );
 
     // 実適用 k・native 原寸が表示成立点で記録される（照会契約の単一真実源）。
@@ -312,7 +307,7 @@ fn show_surface_without_dpi_component_degrades_to_identity() {
 
 /// **k はキーに参加しない**: 同一合成入力の再 show はキャッシュヒットで
 /// あり、**窓 DPI が変わって k だけが変わった適用もヒットする**（再合成しない）。k 変化で変わるのは
-/// 配置の係数と照会物理寸だけで、絵・表示記録は原寸のまま据え置かれる。
+/// 配置の係数と照会物理寸だけで、絵・節は原寸のまま据え置かれる。
 ///
 /// ヒットの判定は間接推測ではなく**改竄プローブ**で行う: 表示成立後のキャッシュスロットを同一キー
 /// のまま別の絵（面 3000 の native 合成）で上書きし、再 show の表示がその絵になるなら presenter は
@@ -348,11 +343,6 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         (native_size, (2.0, 2.0)),
         "初回の配置が「原寸・係数 2.0」になっていない"
     );
-    // 表示記録は k を含まない 1 枚。k 変化の前後で**同一の記録**が載り続けることを末尾で見る。
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("表示成立後は表示記録が載っている");
     {
         let t = presenter.targets.get(&TargetId(0)).unwrap();
         assert!(
@@ -363,15 +353,9 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         );
     }
 
-    // 改竄プローブ: 同一キーのスロットの**絵とマスクだけ**を別の絵（面 3000 の native 合成）へ
-    // 差し替える。表示記録は差し替えない——記録を据え置くことで、末尾の「記録が作り直されて
-    // いない」主張が同一 COM ポインタの比較として成立する。
-    tamper_face_1000_slot(
-        &mut presenter,
-        TargetId(0),
-        native_size,
-        display_before.clone(),
-    );
+    // 改竄プローブ: 同一キーのスロットの計画と絵を面 3000 のものへ差し替える（以後の表示が面 3000 なら
+    // メモを引いている）。
+    tamper_face_1000_slot(&mut presenter, TargetId(0), native_size);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
@@ -379,6 +363,8 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         golden_3000,
         "同一入力・同一 k の再 show でキャッシュを引いていない（無駄な再合成）"
     );
+    // 節は k を含まない。改竄した計画を写した今の節が、k の変化の後も作り直されずに残ることを末尾で見る。
+    let display_before = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
 
     // 窓 DPI 変化（192→96）: k=2/1→1/1。**k はキーに参加しない**ゆえここでもヒットし、改竄した絵の
     // ままである（再合成していれば面 1000 の golden へ戻る）。
@@ -401,9 +387,9 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         "k=1/1 の物理寸は原寸そのもの"
     );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "k が変わっただけで表示記録を作り直している（記録は k を含まない・要件 1.2/5.6）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before.clone()),
+        "k が変わっただけで節を作り直している（記録は k を含まない）"
     );
 
     let t = presenter.targets.get(&TargetId(0)).unwrap();
@@ -424,14 +410,13 @@ fn same_scale_hits_cache_and_window_dpi_change_still_hits() {
         .get(1000, &BindSet::default(), &PatternState::default())
         .expect("k が変わってもキーは同じ＝同じエントリが引ける");
     assert_eq!(
-        (entry.composed.width(), entry.composed.height()),
+        (entry.plan.extent.w, entry.plan.extent.h),
         native_size,
-        "エントリの外形は原寸（k 適用済みの面を持たない）"
+        "エントリの外形は原寸（k 適用済みの計画を持たない）"
     );
     assert_eq!(
-        entry.composed.bytes(),
-        golden_3000.as_slice(),
-        "k 変化でエントリの絵が差し替わっている（再合成が走った）"
+        entry.plan.surface_id, 3000,
+        "k 変化でエントリの計画が差し替わっている（計画を組み直した）"
     );
 }
 
@@ -461,9 +446,9 @@ fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld,
 /// 「合成した回だけ `native_size` を書く」実装ではここが RED になる——戻り先の面（4×3）と直前に
 /// 出していた面（6×5）は**原寸が違う**ため、書き忘れは古い 6×5 として観測される。同寸の面で
 /// 往復しても取り違えは観測できないので、寸法の異なる 2 面を使う。エントリと同じ入れ物に在る
-/// 原寸（[`CacheEntry::composed`] の外形）を表示成立点で**無条件に**写す実装だけが緑になる。
+/// 原寸（[`CacheEntry::plan`] の外形）を表示成立点で**無条件に**写す実装だけが緑になる。
 ///
-/// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
+/// [`CacheEntry::plan`]: crate::cache::CacheEntry::plan
 ///
 /// # 「`insert` 済みのまま失敗」の状態は作れない
 ///
@@ -498,9 +483,9 @@ fn native_size_is_supplied_on_a_cache_hit_established_show() {
             .get(1000, &BindSet::default(), &PatternState::default())
             .expect("容量 3 ゆえ 1 回目のエントリが残る＝次の同一入力は必ずヒットする（本テストの前提）");
         assert_eq!(
-            (entry.composed.width(), entry.composed.height()),
+            (entry.plan.extent.w, entry.plan.extent.h),
             (4, 3),
-            "native 原寸はエントリの面の外形そのもの（別フィールドで二重に持たない・要件 5.1）"
+            "native 原寸はエントリの計画の外形そのもの（別フィールドで二重に持たない）"
         );
     }
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);

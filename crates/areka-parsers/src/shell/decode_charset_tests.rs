@@ -31,7 +31,7 @@
 use crate::charset::{DefaultEncoding, decode};
 use crate::shell::{
     AliasKey, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    Element, ElementPath, Shell, Surface, SurfaceAlias, parse,
+    DrawMethod, Element, ElementOptions, ElementPath, Shell, Surface, SurfaceAlias, parse,
 };
 
 // ---- 固定物 4 種（符号化器から導かない逐語のバイト列）-------------------------
@@ -133,6 +133,8 @@ fn expected_shell() -> Shell {
                 path: ElementPath::new("たちえ.png".to_string()),
                 x: 10,
                 y: 20,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             }],
             collisions: vec![Collision {
                 index: 0,

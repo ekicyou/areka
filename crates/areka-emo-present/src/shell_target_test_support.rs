@@ -113,6 +113,23 @@ pub(crate) fn insert_solid(
     dec.insert(dir.join(name), w, h, w * 4, bgra, true);
 }
 
+/// 面 `id` を画面の外の描き手（WARP）で原寸に描く。合成の失敗はそのまま返し、装置や描画の失敗は panic。
+pub(super) fn render(
+    world: &EmoWorld,
+    atlas: &areka_emo_atlas::AtlasTable,
+    id: u32,
+    binds: &areka_emo_compose::BindSet,
+    pattern: &areka_emo_compose::PatternState,
+) -> Result<ComposedSurface, areka_emo_compose::ComposeError> {
+    crate::OffscreenRenderer::warp()
+        .expect("WARP の描き手")
+        .render(world, atlas, id, binds, pattern)
+        .map_err(|e| match e {
+            crate::PresentError::Compose(e) => e,
+            other => panic!("面 {id} を描けない: {other}"),
+        })
+}
+
 /// 合成結果の 1 画素（premultiplied BGRA）を引く。
 pub(super) fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
     let at = (y * surface.stride() + x * 4) as usize;

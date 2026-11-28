@@ -1,6 +1,8 @@
 //! 転記ギャップ4点の値レベル検証。
 
-use super::{AppendTarget, DefRef, Element, ElementPath, SortOrder, decode, lex};
+use super::{
+    AppendTarget, DefRef, DrawMethod, Element, ElementOptions, ElementPath, SortOrder, decode, lex,
+};
 
 /// (b) 多 id ヘッダ（列挙 `surface0,5` ＋範囲 `surface1-3`）の転記。
 /// 列挙は各 id を Single 記述子として保持し、範囲は展開せず Range 記述子で保持する。
@@ -68,6 +70,8 @@ element0,overlay,CityPop.png,3,4
             path: ElementPath::new("CityPop.png".to_string()),
             x: 3,
             y: 4,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }]
     );
 }

@@ -31,9 +31,10 @@
 //! ```
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use bevy_ecs::prelude::*;
-use tracing::debug;
+use tracing::{debug, error};
 
 use super::hit_region::HitRegionMap;
 use super::{Arrangement, D2DRect, D2DRectExt, GlobalArrangement};
@@ -75,6 +76,8 @@ pub enum HitTestMode {
     AlphaMask,
     /// 名前付きヒット領域（矩形・多角形・カラーマップ）による部位判定
     NamedRegions,
+    /// 描画面の入れ物の α（[`surface_alpha_at`](crate::ecs::surface_alpha_at)）。α < 128・外・読めないは当たらない
+    SurfaceAlpha,
 }
 
 // ============================================================================
@@ -127,6 +130,13 @@ impl HitTest {
     pub fn named_regions() -> Self {
         Self {
             mode: HitTestMode::NamedRegions,
+        }
+    }
+
+    /// 描画面の入れ物の α によるヒットテスト（実体は描画面の持ち主）
+    pub fn surface_alpha() -> Self {
+        Self {
+            mode: HitTestMode::SurfaceAlpha,
         }
     }
 }
@@ -246,6 +256,39 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
 }
 
 // ============================================================================
+// surface_alpha_hits - SurfaceAlpha の判定
+// ============================================================================
+
+/// 描画面の持ち主の物理ピクセル (x, y) が当たるか（[`surface_alpha_at`](crate::ecs::surface_alpha_at) の α が 128 以上）。
+///
+/// α < 128・面の外・読めないは当たらない。読めない間は持ち主ごとに最初の 1 回だけ `error!` を残し、
+/// 読めたら（外も含む）印を戻す。印は持ち主の `SurfaceGraphics` に置く（部品が無ければ毎回残す）。クリックの透過と当たりの名前の解決が同じ 1 画素を同じ規則で読むための口。
+pub fn surface_alpha_hits(world: &World, owner: Entity, x: u32, y: u32) -> bool {
+    use crate::ecs::graphics::{AlphaRead, SurfaceGraphics, surface_alpha_at};
+
+    let read = surface_alpha_at(world, owner, x, y);
+    let reported = world
+        .get::<SurfaceGraphics>(owner)
+        .map(|s| &s.alpha_unreadable_reported);
+    if read == AlphaRead::Unreadable {
+        if !reported.is_some_and(|r| r.swap(true, Ordering::Relaxed)) {
+            error!(
+                entity = %crate::ecs::graphics::format_entity_name(
+                    owner,
+                    world.get::<bevy_ecs::name::Name>(owner)
+                ),
+                "[hit_test] surface alpha unreadable, no hit"
+            );
+        }
+        return false;
+    }
+    if let Some(r) = reported {
+        r.store(false, Ordering::Relaxed);
+    }
+    matches!(read, AlphaRead::Alpha(a) if a >= 128)
+}
+
+// ============================================================================
 // hit_test_entity - 単一エンティティヒットテスト
 // ============================================================================
 
@@ -356,6 +399,15 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
         }
         HitTestMode::AlphaMask => {
             if alpha_mask_hit(world, entity, &global.bounds, point) {
+                RegionHit::Hit(None)
+            } else {
+                RegionHit::Miss
+            }
+        }
+        HitTestMode::SurfaceAlpha => {
+            let x = (point.x - global.bounds.left).floor() as u32;
+            let y = (point.y - global.bounds.top).floor() as u32;
+            if surface_alpha_hits(world, entity, x, y) {
                 RegionHit::Hit(None)
             } else {
                 RegionHit::Miss
@@ -519,3 +571,6 @@ mod tests_ex;
 #[cfg(test)]
 #[path = "hit_test_shared_mask_tests.rs"]
 mod shared_mask_tests;
+
+#[cfg(test)]
+mod surface_alpha_tests;

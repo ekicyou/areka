@@ -2,7 +2,7 @@ use super::*;
 
 use areka_emo_atlas::{DecodedImage, MemoryDecoder};
 
-use super::test_support::{CapturedEvent, gradient};
+use super::test_support::{CapturedEvent, gradient, paint_screen};
 
 /// 5 つの形（`region`・矩形・楕円・円・多角形）を 16 画素幅ずつ並べた、80×16 の面の `collisionex`。
 /// `region` の画像は [`FIVE_SHAPES_MASK`]。
@@ -77,9 +77,16 @@ pub(super) fn five_shapes_assets() -> (EmoWorld, AtlasTable) {
     )
 }
 
-/// 窓 client 物理 px の点で引いた当たり判定の名前。
-pub(super) fn name_at(presenter: &EmoPresenter, target: TargetId, x: i64, y: i64) -> Option<&str> {
-    presenter.hit_region_client(target, x, y).region
+/// 画面へ描いてから、窓 client 物理 px の点で引いた当たり判定の名前。
+pub(super) fn name_at<'a>(
+    world: &mut World,
+    presenter: &'a EmoPresenter,
+    target: TargetId,
+    x: i64,
+    y: i64,
+) -> Option<&'a str> {
+    paint_screen(world);
+    presenter.hit_region_client(world, target, x, y).region
 }
 
 /// ID の描き先の世代（描き先が無ければ `None`）。

@@ -4,11 +4,12 @@ use areka_emo_atlas::{AtlasTable, DecodedImage, WicDecoderArm};
 use areka_emo_compose::EmoWorld;
 use areka_parsers::shell::parse;
 use bevy_ecs::world::World;
+use wintf::ecs::{GraphicsCore, hit_test_entity};
 
 use super::test_support::{
     FIVE_SHAPES_MASK, attach_and_show, bake_world, capture, five_shapes_assets, gradient,
-    hit_generation, load_hit_shell, make_world_with_gpu, mask_pictures_created, name_at,
-    straight_image, warn_count,
+    hit_generation, load_hit_shell, make_world_with_gpu, mask_pictures_created, mount_entities,
+    name_at, paint_screen, screen_point, straight_image, warn_count,
 };
 use super::{EmoPresenter, TargetId};
 use crate::shell_target::test_support::claudia_shell_dir;
@@ -30,9 +31,9 @@ fn shown(assets: (EmoWorld, AtlasTable)) -> (World, EmoPresenter) {
     (world, presenter)
 }
 
-fn check(presenter: &EmoPresenter, cases: &[(i64, i64, Option<&str>)]) {
+fn check(world: &mut World, presenter: &EmoPresenter, cases: &[(i64, i64, Option<&str>)]) {
     for &(x, y, want) in cases {
-        assert_eq!(name_at(presenter, T, x, y), want, "({x},{y})");
+        assert_eq!(name_at(world, presenter, T, x, y), want, "({x},{y})");
     }
 }
 
@@ -68,7 +69,11 @@ fn claudia_face_0_resolves_ellipse_polygons_and_rect_names() {
         (150, 435, "Skirt"),
         (165, 70, "Head"),
     ] {
-        assert_eq!(name_at(&presenter, T, x, y), Some(want), "({x},{y})");
+        assert_eq!(
+            name_at(&mut world, &presenter, T, x, y),
+            Some(want),
+            "({x},{y})"
+        );
     }
 }
 
@@ -81,7 +86,7 @@ fn five_shapes_resolve_at_every_display_scale() {
 
         let (names, events) = capture(|| {
             [(4, 8), (24, 8), (40, 8), (56, 8), (76, 4), (70, 14)]
-                .map(|(x, y)| name_at(&presenter, T, x * k, y * k))
+                .map(|(x, y)| name_at(&mut world, &presenter, T, x * k, y * k))
         });
         assert_eq!(
             names,
@@ -96,8 +101,9 @@ fn five_shapes_resolve_at_every_display_scale() {
 
 #[test]
 fn rect_ellipse_polygon_edges_follow_the_pixel_centre_rule() {
-    let (_world, presenter) = shown(opaque(&EDGES, 300, 300));
+    let (mut world, presenter) = shown(opaque(&EDGES, 300, 300));
     check(
+        &mut world,
         &presenter,
         &[
             (100, 230, Some("Rc")),
@@ -141,8 +147,9 @@ fn rect_ellipse_polygon_edges_follow_the_pixel_centre_rule() {
 
 #[test]
 fn circle_edges_follow_the_pixel_centre_rule() {
-    let (_world, presenter) = shown(opaque(&["collisionex0,Cir,circle,150,150,40"], 300, 300));
+    let (mut world, presenter) = shown(opaque(&["collisionex0,Cir,circle,150,150,40"], 300, 300));
     check(
+        &mut world,
         &presenter,
         &[
             (150, 150, Some("Cir")),
@@ -165,7 +172,7 @@ fn circle_edges_follow_the_pixel_centre_rule() {
 
 #[test]
 fn reversed_rect_and_ellipse_and_negative_circle_are_normalised() {
-    let (_world, presenter) = shown(opaque(
+    let (mut world, presenter) = shown(opaque(
         &[
             "collisionex0,CirNeg,circle,50,250,-20",
             "collisionex1,EllInv,ellipse,280,160,240,100",
@@ -175,6 +182,7 @@ fn reversed_rect_and_ellipse_and_negative_circle_are_normalised() {
         300,
     ));
     check(
+        &mut world,
         &presenter,
         &[
             (50, 250, Some("CirNeg")),
@@ -208,7 +216,7 @@ fn reversed_rect_and_ellipse_and_negative_circle_are_normalised() {
 
 #[test]
 fn empty_shapes_never_hit_and_do_not_hide_the_rest() {
-    let (_world, presenter) = shown(opaque(
+    let (mut world, presenter) = shown(opaque(
         &[
             "collisionex0,Under,rect,0,0,300,300",
             "collisionex1,Cir0,circle,50,50,0",
@@ -222,6 +230,7 @@ fn empty_shapes_never_hit_and_do_not_hide_the_rest() {
         300,
     ));
     check(
+        &mut world,
         &presenter,
         &[
             (50, 50, Some("Under")),
@@ -244,12 +253,13 @@ fn empty_shapes_never_hit_and_do_not_hide_the_rest() {
 
 #[test]
 fn pentagram_centre_hits_and_gaps_inside_the_hull_do_not() {
-    let (_world, presenter) = shown(opaque(
+    let (mut world, presenter) = shown(opaque(
         &["collisionex0,Star,polygon,150,50,209,231,55,119,245,119,91,231"],
         300,
         300,
     ));
     check(
+        &mut world,
         &presenter,
         &[
             (150, 150, Some("Star")),
@@ -266,7 +276,7 @@ fn pentagram_centre_hits_and_gaps_inside_the_hull_do_not() {
 
 #[test]
 fn shapes_overflowing_the_face_hit_only_inside_it() {
-    let (_world, presenter) = shown(opaque(
+    let (mut world, presenter) = shown(opaque(
         &[
             "collisionex0,Neg,rect,-50,-50,40,40",
             "collisionex1,Far,ellipse,60,60,300,300",
@@ -276,6 +286,7 @@ fn shapes_overflowing_the_face_hit_only_inside_it() {
         100,
     ));
     check(
+        &mut world,
         &presenter,
         &[
             (0, 0, Some("Neg")),
@@ -319,7 +330,7 @@ fn extreme_coordinates_neither_fail_nor_panic() {
                 0,
                 96,
             );
-            [(0, 0), (50, 50), (99, 99)].map(|(x, y)| name_at(&presenter, target, x, y))
+            [(0, 0), (50, 50), (99, 99)].map(|(x, y)| name_at(&mut world, &presenter, target, x, y))
         });
         assert_eq!(names, [Some("Big"); 3], "{shape}");
         assert_eq!(warn_count(&events), 0, "{shape}: {events:?}");
@@ -342,8 +353,9 @@ fn five_shapes_and_collision_rects_overlap_in_written_order() {
         (100, 100, gradient(100, 100, 0x15)),
         vec![(FIVE_SHAPES_MASK, red_left_mask())],
     );
-    let (_world, presenter) = shown(assets);
+    let (mut world, presenter) = shown(assets);
     check(
+        &mut world,
         &presenter,
         &[
             (3, 3, Some("Rg")),
@@ -368,7 +380,7 @@ fn five_shapes_and_collision_rects_overlap_in_written_order() {
 
 #[test]
 fn missing_top_shape_lets_the_lower_name_through() {
-    let (_world, presenter) = shown(opaque(
+    let (mut world, presenter) = shown(opaque(
         &[
             "collisionex0,Low,rect,0,0,100,100",
             "collisionex1,Up,ellipse,0,0,100,100",
@@ -377,6 +389,7 @@ fn missing_top_shape_lets_the_lower_name_through() {
         100,
     ));
     check(
+        &mut world,
         &presenter,
         &[
             (50, 50, Some("Up")),
@@ -410,8 +423,9 @@ fn shapes_imported_from_a_child_hit_at_the_placed_position() {
             ("c.png", 20, 20, gradient(20, 20, 0x33)),
         ],
     );
-    let (_world, presenter) = shown(assets);
+    let (mut world, presenter) = shown(assets);
     check(
+        &mut world,
         &presenter,
         &[
             (5, 5, Some("Own")),
@@ -436,7 +450,7 @@ fn three_hundred_shapes_return_one_distinct_name_each() {
             format!("collisionex{i},N{i},{form},{x},{y},{},{}", x + 10, y + 10)
         })
         .collect();
-    let (_world, presenter) = shown(load_hit_shell(
+    let (mut world, presenter) = shown(load_hit_shell(
         &lines(&rows),
         (200, 150, gradient(200, 150, 0x15)),
         Vec::new(),
@@ -445,12 +459,16 @@ fn three_hundred_shapes_return_one_distinct_name_each() {
         let (x, y) = ((i % 20) * 10, (i / 20) * 10);
         let name = format!("N{i}");
         assert_eq!(
-            name_at(&presenter, T, x + 5, y + 5),
+            name_at(&mut world, &presenter, T, x + 5, y + 5),
             Some(name.as_str()),
             "{i}"
         );
         let corner = (i % 2 == 0).then_some(name.as_str());
-        assert_eq!(name_at(&presenter, T, x, y), corner, "corner {i}");
+        assert_eq!(
+            name_at(&mut world, &presenter, T, x, y),
+            corner,
+            "corner {i}"
+        );
     }
 }
 
@@ -477,9 +495,9 @@ fn collision_sort_does_not_change_the_answers() {
                 parse(&lines(&rows)),
                 vec![("p.png", 100, 100, gradient(100, 100, 0x15))],
             );
-            let (_world, presenter) = shown(assets);
+            let (mut world, presenter) = shown(assets);
             [(50, 50), (30, 30), (70, 70), (5, 5), (90, 10)]
-                .map(|(x, y)| name_at(&presenter, T, x, y).map(String::from))
+                .map(|(x, y)| name_at(&mut world, &presenter, T, x, y).map(String::from))
                 .to_vec()
         })
         .collect();
@@ -491,17 +509,56 @@ fn collision_sort_does_not_change_the_answers() {
 
 #[test]
 fn same_input_gives_the_same_answers_every_time() {
-    let sweep = |presenter: &EmoPresenter| -> Vec<Option<String>> {
+    let sweep = |world: &mut World, presenter: &EmoPresenter| -> Vec<Option<String>> {
         (0..15)
             .flat_map(|j| (0..15).map(move |i| (i * 20 + 1, j * 20 + 1)))
             .chain([(100, 230), (20, 230), (150, 130)])
-            .map(|(x, y)| name_at(presenter, T, x, y).map(String::from))
+            .map(|(x, y)| name_at(world, presenter, T, x, y).map(String::from))
             .collect()
     };
-    let (_w1, first) = shown(opaque(&EDGES, 300, 300));
-    let (_w2, second) = shown(opaque(&EDGES, 300, 300));
-    let a = sweep(&first);
+    let (mut w1, first) = shown(opaque(&EDGES, 300, 300));
+    let (mut w2, second) = shown(opaque(&EDGES, 300, 300));
+    let a = sweep(&mut w1, &first);
     assert!(a.iter().any(|n| n.is_some()) && a.iter().any(|n| n.is_none()));
-    assert_eq!(sweep(&first), a);
-    assert_eq!(sweep(&second), a);
+    assert_eq!(sweep(&mut w1, &first), a);
+    assert_eq!(sweep(&mut w2, &second), a);
+}
+
+/// 入れ物が読めない間は、クリックの透過も名前の解決も当たり無しで、`error!` は 2 つ合わせて 1 件。
+/// 読めた後にまた読めなくなれば、もう 1 件。
+#[test]
+fn unreadable_surface_misses_both_paths_with_one_error_while_unreadable() {
+    let (mut world, presenter) = shown(five_shapes_assets());
+    paint_screen(&mut world);
+    let surface = mount_entities(&presenter, T).0;
+    let point = screen_point(&world, surface, 24, 8);
+    let both = |world: &World| {
+        (
+            hit_test_entity(world, surface, point),
+            presenter.hit_region_client(world, T, 24, 8).region,
+        )
+    };
+    assert_eq!(both(&world), (true, Some("B")), "前提: 読めれば当たる");
+
+    let ((), events) = capture(|| {
+        for _ in 0..2 {
+            let core = world
+                .remove_resource::<GraphicsCore>()
+                .expect("前提: GraphicsCore が載っている");
+            for _ in 0..3 {
+                assert_eq!(both(&world), (false, None));
+            }
+            world.insert_resource(core);
+            assert_eq!(both(&world), (true, Some("B")));
+        }
+    });
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .map(|e| e.message())
+        .collect();
+    assert_eq!(
+        errors, ["[hit_test] surface alpha unreadable, no hit"; 2],
+        "{events:?}"
+    );
 }

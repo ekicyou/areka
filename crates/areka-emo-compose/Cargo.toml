@@ -1,7 +1,7 @@
 [package]
 name = "areka-emo-compose"
 workspace = "../.."
-description = "emo render engine 合成コア（三段直列チェーン 2/3）: fold→plan→execute で Shell 転記モデルと AtlasTable から ComposedSurface を生成する純粋層"
+description = "emo render engine 合成コア（三段直列チェーン 2/3）: fold→plan で Shell 転記モデルと AtlasTable から描く計画を組む純粋層"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -46,9 +46,9 @@ fn shown_with(
     (world, presenter)
 }
 
-fn check(presenter: &EmoPresenter, cases: &[(i64, i64, Option<&str>)]) {
+fn check(world: &mut World, presenter: &EmoPresenter, cases: &[(i64, i64, Option<&str>)]) {
     for &(x, y, want) in cases {
-        assert_eq!(name_at(presenter, T, x, y), want, "({x},{y})");
+        assert_eq!(name_at(world, presenter, T, x, y), want, "({x},{y})");
     }
 }
 
@@ -64,12 +64,13 @@ fn colour_matches_exactly_and_edges_follow_the_image_pixels() {
             (180, 20, 240, 80, GREEN),
         ],
     );
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegRed,region,map_full.png,255,0,0"],
         (300, 300),
         vec![("map_full.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (50, 50, Some("RegRed")),
@@ -90,7 +91,7 @@ fn colour_matches_exactly_and_edges_follow_the_image_pixels() {
 
 #[test]
 fn image_smaller_than_the_face_is_placed_at_the_origin_without_stretching() {
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegSmallTl,region,map_small_tl.png,0,0,255"],
         (300, 300),
         vec![(
@@ -99,6 +100,7 @@ fn image_smaller_than_the_face_is_placed_at_the_origin_without_stretching() {
         )],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (50, 50, Some("RegSmallTl")),
@@ -114,12 +116,13 @@ fn image_smaller_than_the_face_is_placed_at_the_origin_without_stretching() {
 
 #[test]
 fn image_of_one_colour_hits_all_of_its_own_area_only() {
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegSmall,region,map_small.png,0,0,255"],
         (300, 300),
         vec![("map_small.png", canvas(100, 100, BLUE, &[]))],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (0, 0, Some("RegSmall")),
@@ -139,12 +142,13 @@ fn image_of_one_colour_hits_all_of_its_own_area_only() {
 #[test]
 fn red_dot_at_the_top_left_is_a_plain_pixel() {
     let map = canvas(300, 300, WHITE, &[(20, 20, 80, 80, RED), (0, 0, 1, 1, RED)]);
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegRedTl,region,map_red_tl.png,255,0,0"],
         (300, 300),
         vec![("map_red_tl.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (0, 0, Some("RegRedTl")),
@@ -163,12 +167,13 @@ fn image_larger_than_the_face_hits_only_inside_the_face() {
         WHITE,
         &[(20, 20, 80, 80, YELLOW), (320, 20, 380, 80, YELLOW)],
     );
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegLarge,region,map_large.png,255,255,0"],
         (300, 300),
         vec![("map_large.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (17, 17, None),
@@ -193,12 +198,13 @@ fn image_larger_than_the_face_hits_only_inside_the_face() {
 #[test]
 fn part_of_the_image_sticking_out_of_the_face_is_not_a_hit_and_not_a_failure() {
     let map = canvas(200, 200, WHITE, &[(80, 0, 160, 200, RED)]);
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,Edge,region,wide.png,255,0,0"],
         (100, 100),
         vec![("wide.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (79, 50, None),
@@ -215,12 +221,13 @@ fn part_of_the_image_sticking_out_of_the_face_is_not_a_hit_and_not_a_failure() {
 #[test]
 fn inversion_hits_other_colours_inside_the_image_and_never_outside_it() {
     let map = canvas(100, 100, WHITE, &[(20, 20, 60, 60, RED)]);
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &["collisionex0,RegInv,region,map_small_red.png,255,0,0,true"],
         (300, 300),
         vec![("map_small_red.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (30, 30, None),
@@ -304,10 +311,14 @@ fn alpha_zero_counts_as_black_and_other_alphas_keep_their_colour() {
         ),
     ];
     for (row, want) in cases {
-        let (_world, presenter) =
+        let (mut world, presenter) =
             shown_with(&[row], (300, 300), vec![("map_alpha.png", map.clone())]);
         for ((x, y), want) in points.into_iter().zip(want) {
-            assert_eq!(name_at(&presenter, T, x, y), want, "{row} ({x},{y})");
+            assert_eq!(
+                name_at(&mut world, &presenter, T, x, y),
+                want,
+                "{row} ({x},{y})"
+            );
         }
     }
 }
@@ -332,13 +343,17 @@ fn unreadable_file_hits_nothing_and_does_not_block_the_rect_below() {
             "collisionex1,Under,rect,20,20,280,280",
         ],
     ] {
-        let (_world, presenter) = shown_with(&rows, (300, 300), Vec::new());
+        let (mut world, presenter) = shown_with(&rows, (300, 300), Vec::new());
         for (x, y, want) in [
             (150, 150, Some("Under")),
             (50, 50, Some("Under")),
             (10, 10, None),
         ] {
-            assert_eq!(name_at(&presenter, T, x, y), want, "{rows:?} ({x},{y})");
+            assert_eq!(
+                name_at(&mut world, &presenter, T, x, y),
+                want,
+                "{rows:?} ({x},{y})"
+            );
         }
     }
 }
@@ -346,7 +361,7 @@ fn unreadable_file_hits_nothing_and_does_not_block_the_rect_below() {
 #[test]
 fn region_written_after_a_rect_wins_where_it_hits_and_lets_the_rect_through_elsewhere() {
     let map = canvas(300, 300, WHITE, &[(20, 20, 80, 80, RED)]);
-    let (_world, presenter) = shown_with(
+    let (mut world, presenter) = shown_with(
         &[
             "collisionex0,Under,rect,20,20,280,280",
             "collisionex1,RegRed,region,map_full.png,255,0,0",
@@ -355,6 +370,7 @@ fn region_written_after_a_rect_wins_where_it_hits_and_lets_the_rect_through_else
         vec![("map_full.png", map)],
     );
     check(
+        &mut world,
         &presenter,
         &[
             (50, 50, Some("RegRed")),
@@ -416,6 +432,7 @@ fn region_imported_from_a_child_is_placed_at_the_shifted_position() {
         96,
     );
     check(
+        &mut world,
         &presenter,
         &[
             (2, 2, Some("Own")),

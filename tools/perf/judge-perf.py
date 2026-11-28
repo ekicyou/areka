@@ -1755,7 +1755,8 @@ def render_stage_times(report: Report, agg: Aggregation, section: str = "5") -> 
         report.line("")
         report.line("  補足: 段の帯は名前より広い（1.3→3.2 申し送り）。")
         report.line("    t_cache_us  はターゲット照会と k 導出を含む。")
-        report.line("    t_mask_us   は cache.insert 全体（マスク生成＋スロット置換＋旧エントリ解放）を含む。")
+        report.line("    t_compose_us は計画を組む時間（CPU の合成は無い）。")
+        report.line("    t_mask_us   は合成メモへの挿入（スロット置換＋計画の席の交代）を含む。")
         report.line("    t_upload_us は初回適用の chain/mount 遅延生成を含み、命中経路では照会以降の全部を含む。")
 
 

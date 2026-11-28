@@ -9,8 +9,8 @@
 //! 反映しつつ alias を収集する。参照 id が存在しない場合はパニックせず `warn` 以上で観測可能に扱う。
 
 use areka_parsers::shell::{
-    Animation, AppendTarget, Collision, DefRef, Element, Shell, Surface, SurfaceAlias,
-    SurfaceAppend,
+    Animation, AppendTarget, Collision, DefRef, DrawMethod, Element, Shell, Surface, SurfaceAlias,
+    SurfaceAppend, same_canonical,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -388,7 +388,7 @@ fn fold_append(
             id,
             elements: append_elements.clone(),
             collisions: append.collisions.clone(),
-            animations: append.animations.clone(),
+            animations: append.animations.iter().map(normalize_animation).collect(),
         };
         let numbers = added.entry(id).or_insert_with(|| Numbers::of(&master));
         add_lines(&mut master, later, Source::Append, records, numbers);
@@ -493,8 +493,8 @@ pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) ->
 /// 共有ボディから id 固有の正規化 [`SurfaceMaster`] を生成する。
 ///
 /// element は layer 昇順（同 layer は登場順）に安定ソートし、x,y を [`Transform::translate`] へ、
-/// method は M1 契約により常に [`ComposeMethod::Overlay`] とする。collision/animation は転記のまま
-/// 複製する。
+/// method は [`normalize_element`] が語から引く。animation は [`normalize_animation`] を通し、
+/// collision は転記のまま複製する。
 fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
     let mut elements: Vec<NormalizedElement> =
         surface.elements.iter().map(normalize_element).collect();
@@ -504,24 +504,49 @@ fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
         id,
         elements,
         collisions: surface.collisions.clone(),
-        animations: surface.animations.clone(),
+        animations: surface.animations.iter().map(normalize_animation).collect(),
     }
+}
+
+/// pattern定義の `base` を読み替える（合成・外形・seriko の表はこの結果だけを読む）。
+///
+/// 土台を置き換える `base`（通常のアニメーションのコマ・着せ替えの最初の pattern）は語を残し X,Y を 0 にする。
+/// 着せ替えのそれ以外の `base` は `overlay` に書き換え、X,Y は位置のまま。ほかの語は触らない。
+fn normalize_animation(animation: &Animation) -> Animation {
+    let pattern0 = crate::plan::is_bind_interval(&animation.interval)
+        .then(|| animation.patterns.iter().map(|p| p.index).min())
+        .flatten();
+    let mut animation = animation.clone();
+    for p in &mut animation.patterns {
+        if !same_canonical(p.method.as_str(), "base") {
+            continue;
+        }
+        if pattern0.is_none_or(|first| p.index == first) {
+            (p.x, p.y) = (0, 0);
+        } else {
+            p.method = DrawMethod::new("overlay".to_string());
+        }
+    }
+    animation
 }
 
 /// 転記 element を正規化 element へ写す（x,y→[`Transform`]・置くものは [`element_kind`] の読み分け
 /// ＝`surface*`・`surface.append*` の両方がここを通る）。
 ///
-/// 読み手が届ける element定義は描画メソッドが `overlay` と `base` の行だけで、どちらも
-/// [`Overlay`] で置き、X,Y は必ず位置として使う（`base` の「XY 無視」は pattern定義の話で、
-/// element定義には当てない）。
+/// 語は [`ComposeMethod::from_name`] で引き、`base` は [`Overlay`] にする。X,Y は必ず位置として使う
+/// （`base` の「XY 無視」は pattern定義の話で、element定義には当てない）。
 ///
 /// [`Overlay`]: ComposeMethod::Overlay
 fn normalize_element(element: &Element) -> NormalizedElement {
+    let method = match ComposeMethod::from_name(element.method.as_str()) {
+        ComposeMethod::Base => ComposeMethod::Overlay,
+        other => other,
+    };
     NormalizedElement {
         layer: element.layer,
         path: element.path.clone(),
         transform: Transform::translate(element.x, element.y),
-        method: ComposeMethod::Overlay,
+        method,
         kind: element_kind(&element.path),
     }
 }
@@ -559,3 +584,7 @@ mod tests;
 #[cfg(test)]
 #[path = "fold_merge_tests.rs"]
 mod merge_tests;
+
+#[cfg(test)]
+#[path = "fold_method_tests.rs"]
+mod method_tests;

@@ -3,7 +3,7 @@
 //! [`crate::log_capture::capture_logs`] で各失敗経路のログを捕捉し、(a) 決定論的入力で経路を起こし、
 //! (b) 捕捉テキストに **level（DEBUG/WARN/ERROR）＋ target（`areka_emo_compose`）＋ discriminating
 //! field**（surface_id/method/key/path/id）が現れることを assert し、(c) 観測可能な副作用
-//! （None/skip/Err/非パニック）も併せて固定する。組むたびに出る知らせ（循環・未実装メソッド・
+//! （None/skip/Err/非パニック）も併せて固定する。組むたびに出る知らせ（循環・描けない語・
 //! コマの無い `bind+random`）は DEBUG、読み込みと防御の知らせは WARN/ERROR。
 //!
 //! # 非空虚性
@@ -13,9 +13,7 @@
 
 use super::*;
 
-use areka_emo_atlas::{
-    AtlasEntry, AtlasKey, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
-};
+use areka_emo_atlas::{ElementId, Point, Rect, SetId};
 use areka_parsers::shell::{AppendTarget, DefRef, Interval};
 use std::path::Path;
 
@@ -24,8 +22,8 @@ use crate::method::{BlendKind, BlendMode, ComposeMethod};
 use crate::normalized::Transform;
 use crate::plan::BlitOp;
 use crate::plan_test_support::{
-    append_def, bake_atlas, bind_anim, bound_world, elem, page_1px, plan_of, shell_mixed, shell_of,
-    single_entry_table, single_pattern_anim, surface, surface_with_anims,
+    append_def, bake_atlas, bind_anim, bound_world, elem, ops_and_extent, page_1px, shell_mixed,
+    shell_of, single_entry_table, single_pattern_anim, surface, surface_with_anims,
 };
 
 /// `needles` を全部含む記録の行が在るか（level・target・欄を同じ 1 行で突く）。
@@ -56,7 +54,7 @@ fn cycle_detection_debug_fires_with_surface_id() {
     let logs = capture_logs(|| {
         // build_plan は外形を表から引き（extent 経路は束縛のときだけ）、derive_ops（ops 経路）を走らせる。
         // ops 経路（flatten_surface）の循環 DEBUG を狙って結果自体も固定する。
-        let (ops, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+        let (ops, result) = ops_and_extent(&world, &atlas, 1000, &binds, &PatternState::default());
         result.expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
         // 部分結果: 静的 self.png 1 本が積まれ、自己参照枝は打ち切られる。
         assert_eq!(ops.len(), 1, "静的層のみ（自己参照枝は打ち切り）");
@@ -103,7 +101,7 @@ fn extent_cycle_debug_fires_with_surface_id() {
 
     let binds = BindSet::default();
     let compose_logs = capture_logs(|| {
-        plan_of(&world, &atlas, 2000, &binds, &PatternState::default())
+        ops_and_extent(&world, &atlas, 2000, &binds, &PatternState::default())
             .1
             .expect("自己参照でも Ok（外形は非ゼロ）");
     });
@@ -151,7 +149,8 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
     let binds = BindSet::from_ids([1400]);
     let mut ops = Vec::new();
     let logs = capture_logs(|| {
-        let (planned, result) = plan_of(&world, &atlas, 1000, &binds, &PatternState::default());
+        let (planned, result) =
+            ops_and_extent(&world, &atlas, 1000, &binds, &PatternState::default());
         result.expect("コマの無い bind+random でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
         ops = planned;
     });
@@ -193,14 +192,14 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
     );
 }
 
-// ── 未実装メソッド debug（blit.rs execute）───────────────────────────────────────
+// ── 描けない語の debug（plan_mix.rs push_items）───────────────────────────────────
 
-/// 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
+/// 描けない語の命令（Auto/Unknown/Blend）は DEBUG（method＋element つき）を出して計画に入れない。
 ///
-/// blit::execute へ未実装メソッド命令を渡すと、method の Debug 値と element id を載せた DEBUG が
-/// 発火し、その命令は合成へ寄与しない（skip）。3 種の未実装メソッドで method フィールドの判別も突く。
+/// 計画の項を作る口へ描けない語の命令を渡すと、method の Debug 値と element id を載せた DEBUG が
+/// 発火し、その命令は計画に入らない。3 種の描けない語で method フィールドの判別も突く。
 #[test]
-fn unimplemented_method_debug_fires_with_method_and_element() {
+fn undrawable_method_debug_fires_with_method_and_element() {
     let page = page_1px(200, 150, 100, 255);
     let atlas = single_entry_table(
         page,
@@ -212,10 +211,11 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
         },
         Point { x: 0, y: 0 },
     );
+    let world = EmoWorld::build(&shell_of(Vec::new()));
 
     let cases = [
-        (ComposeMethod::Replace, "Replace"),
-        (ComposeMethod::Base, "Base"),
+        (ComposeMethod::Auto, "Auto"),
+        (ComposeMethod::Unknown("x".into()), "Unknown"),
         (
             ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
             "Blend",
@@ -227,17 +227,12 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
             transform: Transform::translate(0, 0),
             method,
         }];
-        let mut out = ComposedSurface::new(0, 0);
+        let mut items = Vec::new();
         let logs = capture_logs(|| {
-            crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
+            crate::plan_mix::push_items(&mut items, &ops, &[], &world, &atlas);
         });
 
-        // 副作用: 未実装ゆえ何も合成されず全透明のまま（skip・非パニック）。
-        assert!(
-            out.bytes().iter().all(|&b| b == 0),
-            "{marker}: 未実装は合成へ寄与しない（skip）",
-        );
-        // ログ: DEBUG・target・method（Debug 判別子）・element を同じ 1 行で突く。
+        assert!(items.is_empty(), "{marker}: 描けない語は計画に入らない");
         assert!(
             !logs.contains("level=WARN"),
             "{marker}: WARN は出さない: {logs}"
@@ -252,61 +247,9 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
                     &format!("method={marker}"),
                 ]
             ),
-            "{marker}: 未実装は DEBUG（組むたびの知らせ）で element と method を載せる: {logs}"
+            "{marker}: 描けない語は DEBUG（組むたびの知らせ）で element と method を載せる: {logs}"
         );
     }
-}
-
-/// 破損アトラス（placement.page が範囲外）は WARN（element＋page つき）で skip。
-///
-/// 頁欠落の warn を檻に入れる（cheap にトリガ可能ゆえ併せて固定）。
-#[test]
-fn missing_page_warn_fires_with_element_and_page() {
-    let keys = vec![AtlasKey {
-        set: SetId(0),
-        rel_path: "e.png".into(),
-    }];
-    let entries = vec![AtlasEntry {
-        original: Size { w: 1, h: 1 },
-        placement: Some(Placement {
-            page: 5, // 頁が無い（pages 空）。
-            uv_rect: Rect {
-                x: 0,
-                y: 0,
-                w: 1,
-                h: 1,
-            },
-            trim_offset: Point { x: 0, y: 0 },
-        }),
-    }];
-    let atlas = AtlasTable::new(keys, entries, Vec::new());
-    let ops = vec![BlitOp {
-        element: ElementId(0),
-        transform: Transform::translate(0, 0),
-        method: ComposeMethod::Overlay,
-    }];
-
-    let mut out = ComposedSurface::new(0, 0);
-    let logs = capture_logs(|| {
-        crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
-    });
-
-    assert!(
-        out.bytes().iter().all(|&b| b == 0),
-        "頁欠落は skip（非パニック）"
-    );
-    assert!(
-        one_line(
-            &logs,
-            &[
-                "level=WARN",
-                "target=areka_emo_compose",
-                "element=0",
-                "page=5"
-            ]
-        ),
-        "頁欠落は WARN で element と欠落頁番号を載せる: {logs}"
-    );
 }
 
 // ── 未解決 alias warn（world.rs resolve_alias）─────────────────────────────────
@@ -333,7 +276,7 @@ fn unresolved_alias_warn_fires_with_key() {
     );
 }
 
-// ── SurfaceNotFound / EmptyComposition / ExtentTooLarge error（Composer::compose）──
+// ── SurfaceNotFound / EmptyComposition / ExtentTooLarge error（Composer::plan）──
 
 /// 合成の失敗の `error!`: 表示の側は失敗をコマ替えのたびに呼び直すので、同じ合成器では
 /// 面ごとに初めの 1 度だけ ERROR・2 度目からは DEBUG（予算の `reported`・画素の `pixels_reported` と同じ形）。
@@ -366,7 +309,7 @@ fn compose_failure_errors_once_per_surface_per_composer() {
         let mut errs = Vec::new();
         let logs = capture_logs(|| {
             for _ in 0..3 {
-                errs.push(composer.compose(&world, &atlas, id, &binds, &pattern).err());
+                errs.push(composer.plan(&world, &atlas, id, &binds, &pattern).err());
             }
         });
         assert_eq!(errs.len(), 3);
@@ -386,7 +329,7 @@ fn compose_failure_errors_once_per_surface_per_composer() {
         let mut fresh = None;
         let logs = capture_logs(|| {
             fresh = Composer::new()
-                .compose(&world, &atlas, id, &binds, &pattern)
+                .plan(&world, &atlas, id, &binds, &pattern)
                 .err();
         });
         assert_eq!(fresh, Some(err), "{name}");

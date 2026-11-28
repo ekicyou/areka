@@ -22,7 +22,9 @@ use areka_emo_text::place::PlaceKey;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use areka_parsers::shell::{
+    AppendTarget, DefRef, DrawMethod, Element, ElementOptions, ElementPath, Shell, Surface,
+};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue, TimePoint, TimeSpan};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
@@ -70,6 +72,8 @@ fn elem(path: &str, x: i64, y: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 

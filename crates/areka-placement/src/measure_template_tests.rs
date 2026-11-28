@@ -4,7 +4,7 @@
 //!
 //! 1. 外形の一致: 里々の標準テンプレート `R_POST_and_KOMAINU` と YAYA の標準テンプレート
 //!    `konnoyayame` について、採寸経路（[`build_shell_assets`] → [`compose_size`]）と
-//!    表示経路（`load_shell_target` → `ShellTarget::take_world` → `Composer::compose`）の
+//!    表示経路（`load_shell_target` → `ShellTarget::take_world` → `Composer::plan`）の
 //!    外形が、面 0・面 10 のどちらでも同じ値になること。期待値は実測
 //!    （`R_POST_and_KOMAINU` は 236×462／140×160・`konnoyayame` は 260×390／200×200）。
 //! 2. 複製が戻っていないこと: `measure.rs` と `crates/areka-runtime/src/assets.rs` の本文が、シェルの
@@ -57,8 +57,8 @@ struct Template {
 
 /// 表示経路の外形を得る（`ShellTarget::take_world` が渡す面の表を素の `Composer` で合成する）。
 ///
-/// [`compose_size`] と同じ入力（bind なし・空 pattern）で合成し、外形だけを取り出す。
-/// 採寸側の関数を流用せず `Composer::compose` を直に呼ぶのは、一致の検査が「同じ関数を 2 度
+/// [`compose_size`] と同じ入力（bind なし・空 pattern）で計画し、外形だけを取り出す。
+/// 採寸側の関数を流用せず `Composer::plan` を直に呼ぶのは、一致の検査が「同じ関数を 2 度
 /// 呼んだだけ」に退化しないようにするため。
 fn present_extent(
     composer: &mut Composer,
@@ -67,8 +67,8 @@ fn present_extent(
     surface_id: u32,
     template: &str,
 ) -> (i32, i32) {
-    let composed = composer
-        .compose(
+    let plan = composer
+        .plan(
             world,
             atlas,
             surface_id,
@@ -76,7 +76,7 @@ fn present_extent(
             &PatternState::default(),
         )
         .unwrap_or_else(|e| panic!("{template}: 表示経路の面 {surface_id} の合成に失敗: {e}"));
-    (composed.width() as i32, composed.height() as i32)
+    (plan.extent.w as i32, plan.extent.h as i32)
 }
 
 /// 検体 1 体について、採寸経路と表示経路の外形が期待値どおりに一致することを判定する。

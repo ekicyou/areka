@@ -4,13 +4,13 @@
 //! 表示成立点で更新される状態（`applied`／`native_size`／`last_show`／`pending_resize` ほか）を 1 つの
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に閉じる。
 
-use std::sync::Arc;
-
-use wintf::ecs::widget::bitmap_source::AlphaMask;
+use std::cell::RefCell;
 
 use super::budget::FrameBudget;
 use super::hit_picture::{HitNotes, HitPicture};
 use super::scale_change::AppliedScale;
+use crate::draw_nodes::DrawNodes;
+use crate::gpu_atlas::GpuAtlas;
 use crate::hit_shapes::HitMasks;
 
 use super::{
@@ -45,7 +45,7 @@ pub enum VisibilityOwnership {
 
 /// target ごとの表示コンテキスト（シェル・バルーンで同一機構）。
 ///
-/// `mount` は初回 `ShowSurface` で原寸が確定してから遅延生成する（表示記録と原寸の配置が要る・
+/// `mount` は初回 `ShowSurface` で原寸が確定してから遅延生成する（原寸の配置が要る・
 /// 全透明退化では生成しない）。`emo_world`／`atlas`（構築時 `bind_atlas` 済み）と `composer`／`cache` は
 /// 合成・引き当ての入力側、`window` は装着先の窓ハンドルである。
 pub(super) struct PresentTarget {
@@ -58,9 +58,9 @@ pub(super) struct PresentTarget {
     /// 毎フレーム経路の確保計数の器。累積カウンタの所有者はここ。target と同じ寿命で適用をまたいで
     /// 存続するので、「ウォームアップ後の N 反復で 1 件も確保が増えていない」を run 全体の累積として
     /// 主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、perf サマリ行の `alloc_*`
-    /// へ載る。再利用席（合成先の常設席・マスクの輪番）も本フィールドが持つ。
+    /// へ載る。再利用席（合成先と計画の常設席）も本フィールドが持つ。
     pub(super) budget: FrameBudget,
-    /// 合成入力（surface id＋bind 集合＋pattern）→ (composed 原寸, mask, display) 対の**容量 3・LRU** メモ化表。
+    /// 合成入力（surface id＋bind 集合＋pattern）→ (計画, composed 原寸) の組の**容量 3・LRU** メモ化表。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（遅延装着の対象）。
     pub(super) window: Entity,
@@ -124,14 +124,14 @@ pub(super) struct PresentTarget {
     /// [`ScaleRatio::scaled_extent`] 1 本）。表示中エントリが追い出された後（`InvalidateCache`・LRU）も
     /// 照会契約が画面の絵の原寸を返し続けるため、エントリとは別にここへ写しを持つ。
     ///
-    /// 更新点は `applied` と同じ表示成立点 1 箇所で、書き込む値は「今回合成したか」に依らず常に、いま
-    /// 表示に使ったキャッシュエントリの `composed` の外形（[`CacheEntry::composed`]・原寸）。今回合成した
+    /// 更新点は `applied` と同じ表示成立点 1 箇所で、書き込む値は「今回計画を組んだか」に依らず常に、いま
+    /// 表示に使ったキャッシュエントリの計画の外形（[`CacheEntry::plan`]・原寸）。今回計画を組んだ
     /// 回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した場合に「画面の絵と
     /// 別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。原寸がエントリの中に在る（挿入時の
     /// 別フィールドではない）のは、容量が 3 で「保持しているエントリ＝直前に挿入したエントリ」が
     /// 成り立たないため。
     ///
-    /// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
+    /// [`CacheEntry::plan`]: crate::cache::CacheEntry::plan
     pub(super) native_size: Option<(u32, u32)>,
     /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
     ///
@@ -190,12 +190,12 @@ pub(super) struct PresentTarget {
     /// 同寸の再表示では何も置かない。`None` を書き戻して既存の未消費要求を消すこともしない（同寸でも
     /// 「まだ窓へ反映していない要求」は生きているため）。
     pub(super) pending_resize: Option<(u32, u32)>,
-    /// **前の絵を下敷きにしてよいか**。
+    /// 装置ごとの頁の絵と葉の控え（最初の表示か書き出しで作り、装置が替わったら捨てる）。
     ///
-    /// 真のとき、合成器の前の命令列は控えの中の `last_show` の鍵の絵を作った命令列である。対象を
-    /// 作るとき偽・控えに外れたら合成の前に偽・`InvalidateCache` で偽・表示の成立点で「控えに外れ、
-    /// 動きのある面だった」なら真。合成の後で失敗した適用のあとは偽のまま＝次はいちから合成する。
-    pub(super) partial_base: bool,
+    /// `&self` の書き出しの口も画面の外の描画で葉を記録するので `RefCell` に入れる。
+    pub(super) gpu: RefCell<Option<GpuAtlas>>,
+    /// 計画を `mount` のまとめの節の下へ写す部品（`mount` と一緒に作る）。
+    pub(super) nodes: Option<DrawNodes>,
     /// **最後に記録した装置の失敗の原因**（`context`・`hresult`）。
     ///
     /// 成立をはさまずに同じ原因が続くあいだだけ値を持ち、その間の失敗の行は `debug!` になる。対象を
@@ -205,7 +205,7 @@ pub(super) struct PresentTarget {
     pub(super) hit_picture: Option<HitPicture>,
     /// `region` のマスクの控え（対象の寿命で持つ）。
     pub(super) hit_masks: HitMasks,
-    /// 表示中の α マスク（クリックの透過へ渡したのと同じ実体）。
-    pub(super) shown_mask: Option<Arc<AlphaMask>>,
+    /// 最後に表示が確立した計画の土台の面（`DrawPlan::base_surface`・当たりの領域を引く面）。
+    pub(super) shown_base: Option<u32>,
     pub(super) hit_notes: HitNotes,
 }

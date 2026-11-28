@@ -2,7 +2,7 @@
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
 use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
-use super::visual::{DamageEntry, DrawCommand, PxRect, emit, emit_within, entries};
+use super::visual::{DamageEntry, DrawCommand, GroupWork, PxRect, emit, emit_within, entries};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -39,11 +39,13 @@ pub(crate) struct SurfaceComposite {
     prev_scale: (f32, f32),
     /// 前の合成の入れ物を描画面へ写し終えた。
     presented: bool,
+    /// まとめの作業用の絵と DC（入れ物と同じ寿命・装置の失いで入れ物ごと捨てる）。
+    group_work: GroupWork,
 }
 
-// SAFETY: 入れ物と写し先は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の
+// SAFETY: 入れ物と写し先とまとめの作業用の絵と DC は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の
 // 資源で、同じ工場の系列への COM 呼び出しは D2D が内部で直列化する。写し先と控えは `Mutex` の中に置き、
-// 世代と読んだ回数は `&mut self` か原子の値でだけ変わる。
+// 世代と読んだ回数とまとめの控えは `&mut self` か原子の値でだけ変わる。
 unsafe impl Send for SurfaceComposite {}
 unsafe impl Sync for SurfaceComposite {}
 
@@ -163,6 +165,7 @@ impl SurfaceComposite {
             prev_root: None,
             prev_scale: (0.0, 0.0),
             presented: false,
+            group_work: GroupWork::default(),
         })
     }
 
@@ -245,7 +248,7 @@ impl SurfaceComposite {
             }
             if !tree.is_empty() {
                 let dc6 = dc.cast::<ID2D1DeviceContext6>().ok();
-                emit(dc, dc6.as_ref(), scale, tree);
+                emit(dc, dc6.as_ref(), scale, tree, &mut self.group_work);
             }
             let result = dc.EndDraw(None, None);
             dc.SetTransform(&Matrix3x2::identity());
@@ -309,7 +312,15 @@ impl SurfaceComposite {
                     );
                 }
                 if !tree.is_empty() {
-                    emit_within(dc, dc6.as_ref(), scale, tree, entries, *r);
+                    emit_within(
+                        dc,
+                        dc6.as_ref(),
+                        scale,
+                        tree,
+                        entries,
+                        *r,
+                        &mut self.group_work,
+                    );
                 }
                 dc.PopAxisAlignedClip();
             }
@@ -464,6 +475,11 @@ impl SurfaceComposite {
             staging.Unmap()?;
         }
         Ok(bytes)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn group_work(&self) -> &GroupWork {
+        &self.group_work
     }
 
     /// GPU から読んだ回数。

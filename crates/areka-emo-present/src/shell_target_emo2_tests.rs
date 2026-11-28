@@ -22,7 +22,7 @@
 use super::*;
 
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
+use areka_emo_compose::{BindSet, ComposeError, PatternState};
 
 use super::test_support::{emo2_shell_dir, with_com_initialized};
 
@@ -42,15 +42,14 @@ type Snapshot = Result<(u32, u32, u32, Vec<u8>), ComposeError>;
 
 /// 面 1 枚を合成して [`Snapshot`] にする（有効 bind もコマも無い素の状態）。
 fn snapshot(world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Snapshot {
-    Composer::new()
-        .compose(
-            world,
-            atlas,
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .map(|s| (s.width(), s.height(), s.stride(), s.bytes().to_vec()))
+    super::test_support::render(
+        world,
+        atlas,
+        id,
+        &BindSet::default(),
+        &PatternState::default(),
+    )
+    .map(|s| (s.width(), s.height(), s.stride(), s.bytes().to_vec()))
 }
 
 /// 2 つの合成結果の食い違いを 1 行にして返す（同じなら `None`）。

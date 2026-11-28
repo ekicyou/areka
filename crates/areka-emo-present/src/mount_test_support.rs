@@ -2,7 +2,6 @@
 //!
 //! 装着（[`VisualMount::attach`]）は COM を呼ばない純 ECS の spawn なので、構造アサートを
 //! 共有する複数のテストモジュール（`tests`／`visibility_tests`）へ GPU 無しの World を配る。
-//! 表示記録には [`GraphicsCommandList::empty`] を渡す（値として扱えるため装着の構造は成立する）。
 
 use super::*;
 
@@ -32,7 +31,6 @@ pub(super) fn attach_fixture_with_visibility(
         window,
         (w, h),
         ScaleRatio::ONE,
-        &GraphicsCommandList::empty(),
         initially_visible,
     );
 
@@ -55,14 +53,7 @@ pub(super) fn attach_fixture_under_window(
     let mut world = World::new();
     let window = world.spawn(wintf::ecs::Window::default()).id();
     world.flush();
-    let mount = VisualMount::attach(
-        &mut world,
-        window,
-        (w, h),
-        k,
-        &GraphicsCommandList::empty(),
-        true,
-    );
+    let mount = VisualMount::attach(&mut world, window, (w, h), k, true);
 
     (world, window, mount)
 }

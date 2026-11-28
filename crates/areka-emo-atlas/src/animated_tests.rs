@@ -285,11 +285,15 @@ fn insert_anim(
         height: 2,
         frame_count,
     };
-    dec.insert_animated(Path::new(BASE).join(rel), info, first, frames);
+    let path = Path::new(BASE).join(rel);
+    // 乗算しない読みも同じ画素で答える（`0` の宣言の焼きが読む側）。
+    dec.insert_animated_unmultiplied(&path, first.clone(), frames.clone());
+    dec.insert_animated(path, info, first, frames);
 }
 
-/// 今までの 1 枚読み（段 2）の答えを登録する。
+/// 今までの 1 枚読み（段 2）の答えを登録する。乗算しない読みも同じ画素で答える。
 fn insert_still(dec: &mut MemoryDecoder, rel: &str, img: DecodedImage) {
+    dec.insert_unmultiplied(Path::new(BASE).join(rel), img.clone());
     let DecodedImage {
         width,
         height,

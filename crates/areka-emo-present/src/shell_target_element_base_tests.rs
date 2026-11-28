@@ -27,7 +27,7 @@ use super::*;
 use std::path::PathBuf;
 
 use areka_emo_atlas::{MemoryDecoder, WicDecoderArm};
-use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
+use areka_emo_compose::{BindSet, ComposeError, PatternState};
 use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
@@ -80,15 +80,14 @@ fn bake(text: &str, files: &[&str], images: &[Image]) -> ShellTarget {
 /// 面 1 枚を素の状態（有効 bind もコマも無い）で合成し、外形と画素列にする。
 fn snapshot(target: &ShellTarget, id: u32) -> Snapshot {
     let world = target.build_world();
-    Composer::new()
-        .compose(
-            &world,
-            target.atlas(),
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .map(|s| (s.width(), s.height(), s.bytes().to_vec()))
+    super::test_support::render(
+        &world,
+        target.atlas(),
+        id,
+        &BindSet::default(),
+        &PatternState::default(),
+    )
+    .map(|s| (s.width(), s.height(), s.bytes().to_vec()))
 }
 
 /// 合成結果の 1 画素を引く（`stride` は幅×4 の詰めた並び）。
@@ -194,7 +193,7 @@ fn base_pointing_at_own_surface_image_looks_the_same_as_the_image_alone() {
     );
 }
 
-/// ⑶: 描けない `element0,replace,x.png` を持つサーフェスの合成結果は、
+/// ⑶: 描けない `element0,zoom,x.png` を持つサーフェスの合成結果は、
 /// その行を除いた文面と等しく、`x.png` は焼かれていない（面の画像が土台に敷かれたまま）。
 ///
 /// 不変の檻なので、読み手の判定を `overlay` だけに戻しても緑のままである。`x.png` は復号器に
@@ -207,8 +206,8 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
         ("x.png", (12, 3), COLOR_X),
         ("face.png", FACE, COLOR_FACE),
     ];
-    let with_replace = bake(
-        "surface8\n{\nelement0,replace,x.png,0,0\nelement1,overlay,face.png,2,2\n}\n",
+    let with_undrawn = bake(
+        "surface8\n{\nelement0,zoom,x.png,0,0\nelement1,overlay,face.png,2,2\n}\n",
         &files,
         &images,
     );
@@ -219,16 +218,16 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
     );
 
     assert_eq!(
-        snapshot(&with_replace, 8),
+        snapshot(&with_undrawn, 8),
         snapshot(&without, 8),
         "描けない行を持つ面の見え方が、その行を除いた文面と違う"
     );
     assert!(
-        with_replace.atlas().resolve(SetId(0), "x.png").is_none(),
+        with_undrawn.atlas().resolve(SetId(0), "x.png").is_none(),
         "描けない行の絵が焼かれている"
     );
     assert!(
-        with_replace
+        with_undrawn
             .build_world()
             .base_images()
             .used
@@ -313,14 +312,14 @@ const DRAWABLE_ONLY: &str = concat!(
     "}\n",
 );
 
-/// [`DRAWABLE_ONLY`] に描けない行 `element2,replace,x.png` を 1 行足した文面。
+/// [`DRAWABLE_ONLY`] に描けない行 `element2,zoom,x.png` を 1 行足した文面。
 const WITH_UNDRAWN: &str = concat!(
     "charset,UTF-8\n",
     "balloon.ok\n{\nsize,10,10\n}\n",
     "surface0,1\n{\n",
     "element0,base,body.png,0,0\n",
     "element1,overlay,face.png,1,1\n",
-    "element2,replace,x.png,0,0\n",
+    "element2,zoom,x.png,0,0\n",
     "element3,balloon,ok,0,0\n",
     "}\n",
 );
@@ -357,7 +356,7 @@ fn undrawable_line_warns_once_with_heading_element_and_method() {
     assert_eq!(
         warn_lines(&events),
         vec![format!(
-            "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"replace\""
+            "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"zoom\""
         )]
     );
 }
@@ -378,6 +377,58 @@ fn undrawable_warning_repeats_once_per_load() {
     assert_eq!(twice, 2 * once, "読み込み 2 回でちょうど 2 倍");
 }
 
+/// `blend-*` と旧い別名の行は、見出しを展開せず 1 行 1 件の `warn!`（見出し・element番号・書かれた語）で、
+/// 読み込み 2 回でちょうど 2 倍。
+#[test]
+fn blend_line_warns_once_per_line_with_heading_element_and_written_word() {
+    let text = concat!(
+        "charset,UTF-8\n",
+        "surface0-3\n{\n",
+        "element0,base,body.png,0,0\n",
+        "element1,blend-multiply,face.png,1,1\n",
+        "}\n",
+        "surface.append0-9\n{\n",
+        "element2,overlaymultiply,face.png,1,1\n",
+        "}\n",
+    );
+    let undrawn_lines = |events: &[CapturedEvent]| -> Vec<String> {
+        warn_lines(events)
+            .into_iter()
+            .filter(|l| l.starts_with(UNDRAWN_WARN))
+            .collect()
+    };
+    assert_eq!(
+        undrawn_lines(&load_events(text, 1)),
+        vec![
+            format!(
+                "{UNDRAWN_WARN}|element=\"1\"|heading=\"surface0-3\"|method=\"blend-multiply\""
+            ),
+            format!(
+                "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface.append0-9\"|method=\"overlaymultiply\""
+            ),
+        ]
+    );
+    assert_eq!(undrawn_count(&load_events(text, 2)), 4);
+}
+
+/// 描ける重ね方の語の行は描けない行として記録しない。
+#[test]
+fn drawable_compose_words_warn_nothing() {
+    let text = concat!(
+        "charset,UTF-8\n",
+        "surface0\n{\n",
+        "element0,base,body.png,0,0\n",
+        "element1,overlay-fast,face.png,1,1\n",
+        "element2,overlayfast,face.png,1,1\n",
+        "element3,interpolate,face.png,1,1\n",
+        "element4,replace,face.png,1,1\n",
+        "element5,asis,face.png,1,1\n",
+        "element6,reduce,face.png,1,1\n",
+        "}\n",
+    );
+    assert_eq!(undrawn_count(&load_events(text, 1)), 0);
+}
+
 // ── 無改変のクローディア────────────────────────────────────
 
 /// クローディアの surface6・11・26 の外形（土台の絵 `surface0.png`／`surface10.png` の実寸）。
@@ -385,9 +436,8 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 
 /// 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
 /// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
-/// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行は、
-/// surface28 の pattern 3 行だけで、同じ collision番号の重なりの警告は無い。`base` の pattern を
-/// 描けるようにするときは、この期待を更新すること。
+/// 描けない部品の警告は 0 件（`overlay`・`base` だけで書かれている）。警告以上の行も 0 件で、
+/// 同じ collision番号の重なりの警告も無い。
 ///
 /// 較正: 読み手の判定を `overlay` だけに戻すと土台が値にならず、部品の大きさだけで描かれて
 /// surface26 は 100×56（surface11 は 71×42）になって赤になる。
@@ -417,17 +467,10 @@ fn claudia_base_surfaces_are_full_size_and_records_are_fixed() {
             "`element0,base` の面の外形が土台の絵の実寸でない"
         );
         assert_eq!(undrawn_count(&events), 0, "claudia に描けない行は無い");
-        // 警告以上は、surface28 の animation100 の `base` の pattern 3 行
-        // だけ。`base` の pattern を描けるようにするときは、この期待を更新すること。
-        // 同じ collision番号の重なりの警告は 0 行。
         assert_eq!(
             warn_lines(&events),
-            (0..3)
-                .map(|p| format!(
-                    "shell: areka が描けない描画メソッドの pattern を描かない|animation_id=100|method=\"base\"|pattern={p}|surface_id=28"
-                ))
-                .collect::<Vec<_>>(),
-            "ほかの警告以上は surface28 の pattern 3 行だけ（同じ番号の重なりの警告は無い）"
+            Vec::<String>::new(),
+            "警告以上の行は無い（同じ番号の重なりの警告も無い）"
         );
     });
 }

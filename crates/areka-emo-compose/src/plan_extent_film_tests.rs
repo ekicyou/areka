@@ -12,7 +12,7 @@ use crate::bind::BindSet;
 use crate::pattern::PatternState;
 use crate::plan::Extent;
 use crate::plan_test_support::{
-    bake_films_and_bind, frame, insert_film, insert_stills, plan_of, solid,
+    bake_films_and_bind, frame, insert_film, insert_stills, ops_and_extent, solid,
 };
 use crate::world::EmoWorld;
 
@@ -80,7 +80,7 @@ fn animated_base_image_only_surface_is_not_empty() {
     );
 
     assert_eq!(compute_extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
-    let got = plan_of(&world, &atlas, 1, &BindSet::default(), &Default::default()).1;
+    let got = ops_and_extent(&world, &atlas, 1, &BindSet::default(), &Default::default()).1;
     assert_eq!(got, Ok(Extent { w: 30, h: 20 }));
 }
 
@@ -138,7 +138,7 @@ fn cells_do_not_change_extent() {
     let (world, atlas) = build_with(ALWAYS, &[]);
     let mut pattern = PatternState::default();
     pattern.set(0, frame(31, 0, 4));
-    let got = plan_of(&world, &atlas, 0, &BindSet::default(), &pattern).1;
+    let got = ops_and_extent(&world, &atlas, 0, &BindSet::default(), &pattern).1;
     assert_eq!(got, Ok(compute_extent(&world, &atlas, 0)));
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }

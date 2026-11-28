@@ -1,5 +1,5 @@
-//! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 原寸の合成面・
-//! 当たり判定マスク・表示記録の三つ組の、容量 3・LRU 置換のメモ化スロット表。
+//! 合成メモ（`ComposeCache`）＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）→ 描く計画・
+//! 書き出しの控えの組の、容量 3・LRU 置換のメモ化スロット表。
 //!
 //! 上流 `areka-emo-compose` の合成は `(surface_id, BindSet)` の純粋関数なので、キーが合成入力の全体を
 //! 捕捉しないとキャッシュは正しくない（surface id だけをキーにすると、同一 surface で bind 集合だけ
@@ -11,49 +11,37 @@
 //! （25 分の長時間走行・命中率 0.0%）。実走行の適用列を LRU で再生した命中率は 1→0.0%／2→10.5%／
 //! 3→56.2%／4→56.5%／8→57.6%／64→68.5% で、膝は 3（emo2 のまばたきが 3 コマの繰り返しのため）。
 //! この数字は LRU 再生で得たので、置換方式を変えると根拠が成り立たない。全保持は、pattern 状態込みの
-//! キー空間が走行全体で 100 個規模（実測 103 個）になり堆積するので採らない。メモリは 1 対象あたり
-//! 原寸 3 件ぶん（例: 382×547×4＝835,816 バイト × 3 ＋ 原寸の詰めマスク 3 枚）。
+//! キー空間が走行全体で 100 個規模（実測 103 個）になり堆積するので採らない。書き出しの控えは読まれた
+//! 項だけが原寸の絵を持つ（例: 382×547×4＝835,816 バイト）。
 //!
 //! # 表示スケール k はキーに参加しない
 //!
-//! [`CacheEntry::composed`] は native 原寸の合成結果、[`CacheEntry::mask`] はその原寸バイト由来で、
-//! 拡大率 k は wintf の描画経路（`render_surface` の `SetTransform`）が変換行列で掛ける。
+//! [`CacheEntry::plan`] と [`CacheEntry::snapshot`] は native 原寸で、拡大率 k は wintf の描画経路
+//! （まとめの節の変換）が掛ける。
 //! よって DPI 変化で k だけが変わった適用は同じエントリにヒットし（再合成しない）、k は無効化の契機にもならない。
 //!
 //! # 責務
 //!
-//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。表示記録（原寸バイトを描く閉じた
-//! [`GraphicsCommandList`]・k を含まない）は生成せず、[`insert`] で与えられたものを持つだけなので、
-//! GPU の無い檻では [`GraphicsCommandList::empty`] を渡せばよい。マスク生成（[`AlphaMask::from_pbgra32`]）と
-//! ミス時の合成・記録は提示段（`presenter`）の責務で、[`insert`] は表示バッファと `Arc` マスクを同時に
-//! 受け取るので対は崩れない。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
+//! 保持・引き当て・追い出し・全無効化だけを担う純粋な状態層。GPU に触れない。ミス時の計画と書き出しの
+//! 描画は提示段（`presenter`）の責務。UI スレッド専有（`EmoPresenter` が NonSend）でロックを持たない。
 //! 無効化はアトラス再構築・ghost 再読込用の [`invalidate_all`] のみ。
 //!
 //! [`insert`]: ComposeCache::insert
 //! [`invalidate_all`]: ComposeCache::invalidate_all
 
-use std::sync::Arc;
+use std::cell::OnceCell;
 
-use areka_emo_compose::{BindSet, ComposedSurface, PatternState};
-use wintf::ecs::GraphicsCommandList;
-use wintf::ecs::widget::bitmap_source::AlphaMask;
+use areka_emo_compose::{BindSet, ComposedSurface, DrawPlan, PatternState};
 
-/// キャッシュエントリ＝原寸の合成面・当たり判定マスク・表示記録の原子対。
+/// キャッシュエントリ＝描く計画と書き出しの控えの組。
 ///
-/// `composed` と `mask` は同一 `composed.bytes()` 由来（呼び手が対で作り [`ComposeCache::insert`] へ同時に渡す）。
-/// 1 エントリへ束ねてあるので、surface 切替に伴う対の入替は表の操作 1 回で原子的に起きる。
-/// 原寸の外形は `composed.width()`／`composed.height()` で、別フィールドに持たない。
+/// 原寸の外形は `plan.extent` で、別フィールドに持たない。
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
-    /// premultiplied BGRA・native 原寸の合成結果（表示の真実源）。
-    pub composed: ComposedSurface,
-    /// `composed.bytes()` から呼び手が 1 回だけ生成した当たり判定マスク（さわり判定の真実源）。
-    /// ÷k の写像は wintf の `alpha_mask_hit`（物理寸の境界に対する比例写像）が担うので、k は入らない。
-    /// [`Arc`] 共有なのは、下流（hit-test）への供給を複製でなく参照カウント増にするため。
-    pub mask: Arc<AlphaMask>,
-    /// 原寸バイトを描く閉じた [`GraphicsCommandList`]（k を含まない。拡大は wintf の描画経路が変換行列で掛ける）。
-    /// GPU の無い檻では [`GraphicsCommandList::empty`] を渡す。
-    pub display: GraphicsCommandList,
+    /// 画面の節へ写す描く計画（表示の真実源）。
+    pub plan: DrawPlan,
+    /// 書き出しの控え＝`plan` を画面の外で原寸に描いた絵か、描けなかった理由（初めて読まれたときに満たす）。
+    pub snapshot: OnceCell<Result<ComposedSurface, String>>,
 }
 
 /// キャッシュキー＝合成入力（surface id ＋ bind 集合 ＋ pattern 状態）。
@@ -76,7 +64,7 @@ pub(crate) const CAPACITY: usize = 3;
 
 /// 合成入力 → [`CacheEntry`] の容量 [`CAPACITY`]・LRU 置換メモ化表。
 ///
-/// 内部ロックを持たない。ミス時の合成・表示記録・挿入は提示段の責務。
+/// 内部ロックを持たない。ミス時の計画・合成・挿入は提示段の責務。
 ///
 /// `entries` は最近使用の昇順（先頭が次の追い出し対象）。順序を動かすのは [`touch`]（ヒット）と
 /// [`insert`] だけで、[`get`] は動かさない（読み取りだけの照会で置換順が変わると、観測が置換順を書き換えてしまう）。
@@ -116,16 +104,16 @@ impl ComposeCache {
         self.entries.len()
     }
 
-    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が表示バッファの `Vec<u8>` 確保を
+    /// 表が満杯なら最も古い引き当ての 1 件だけを追い出して返す（呼び手が計画の確保を
     /// 使い回すための口）。
     ///
     /// 空きがあるあいだは `None` を返し表に触れない（生きているエントリを剥がすと命中率が落ちる）。
     /// 暖機中は回収が成立せず、呼び手が新しいバッファを起こす。
     ///
-    /// # 呼出は合成成功後に限る
+    /// # 呼出は計画と記録の成功後に限る
     ///
-    /// 合成が失敗し得る位置で呼ぶと、失敗時に生きているエントリが 1 件消えたまま残り、
-    /// 「合成失敗時の表示・キャッシュは適用前のまま」が壊れる。呼び手（`presenter/show.rs` のミス経路）が
+    /// 失敗し得る位置で呼ぶと、失敗時に生きているエントリが 1 件消えたまま残り、
+    /// 「失敗時の表示・キャッシュは適用前のまま」が壊れる。呼び手（`presenter/show.rs` のミス経路）が
     /// 守る契約で、本層は成否を知り得ないので強制しない。
     pub fn take_recycled(&mut self) -> Option<CacheEntry> {
         if self.entries.len() < CAPACITY {
@@ -134,15 +122,12 @@ impl ComposeCache {
         Some(self.entries.remove(0).1)
     }
 
-    /// 原寸の合成面・生成済みの当たり判定マスク・表示記録を、合成入力鍵の原子対として挿入し、最近使用の末尾へ置く。
+    /// 描く計画を合成入力鍵で挿入し（書き出しの控えは空）、最近使用の末尾へ置く。
     ///
     /// 同一キーが在れば対ごと置き換える。満杯で新しいキーなら最も古い 1 件を捨てる（捨てるだけなので、
     /// 確保を回収したい呼び手は先に [`take_recycled`] を呼ぶ）。
     ///
-    /// `mask` は必ず同じ `composed` の bytes 由来でなければならない（別出所だと絵とさわり判定が食い違う）。
-    /// `composed` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
-    /// `display` は呼び手が原寸バイトから記録した閉じたコマンドリストで、GPU の無い檻では
-    /// [`GraphicsCommandList::empty`] を渡す。
+    /// `plan` は native 原寸でなければならない（拡大は wintf の描画経路が掛ける）。
     ///
     /// [`take_recycled`]: ComposeCache::take_recycled
     pub fn insert(
@@ -150,9 +135,7 @@ impl ComposeCache {
         surface_id: u32,
         binds: BindSet,
         pattern: PatternState,
-        composed: ComposedSurface,
-        mask: Arc<AlphaMask>,
-        display: GraphicsCommandList,
+        plan: DrawPlan,
     ) {
         // 同一キーの再挿入は席を外し、以下の push で末尾へ戻す。
         if let Some(at) = self.position(surface_id, &binds, &pattern) {
@@ -169,9 +152,8 @@ impl ComposeCache {
         self.entries.push((
             key,
             CacheEntry {
-                composed,
-                mask,
-                display,
+                plan,
+                snapshot: OnceCell::new(),
             },
         ));
     }
@@ -200,7 +182,7 @@ impl ComposeCache {
     ///
     /// 同一適用内の再照会（`show.rs` の装着・反映の直前・`read.rs` の読み戻し）と観測（檻）がこの口を使うので、
     /// 読み取りが置換順を書き換えてはならない。surface id・bind 集合・pattern 状態のいずれかが 1 ビットでも
-    /// 違えばミス（呼び手は再合成する）。表示スケール k は判定に関与しない。
+    /// 違えばミス（呼び手は計画を組み直す）。表示スケール k は判定に関与しない。
     ///
     /// [`touch`]: ComposeCache::touch
     pub fn get(

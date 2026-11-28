@@ -48,7 +48,7 @@ fn show(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) -> Pre
     )
 }
 
-/// `CreateBitmap` へ失敗を注入して 1 本流す。
+/// 葉の記録の `CreateCommandList` へ失敗を注入して 1 本流す（頁は最初の表示で上がり、葉は面ごとに新しい）。
 fn show_with_fault(presenter: &mut EmoPresenter, world: &mut World, surface_id: u32) {
     let outcome = show_with_armed_fault(
         presenter,
@@ -57,13 +57,13 @@ fn show_with_fault(presenter: &mut EmoPresenter, world: &mut World, surface_id: 
         surface_id,
         BindSet::default(),
         PatternState::default(),
-        DisplayFault::CreateBitmap,
+        DisplayFault::CreateCommandList,
     );
     assert!(
         matches!(
             outcome,
             Err(PresentError::Device {
-                context: "<injected:CreateBitmap>",
+                context: "<injected:CreateCommandList>",
                 ..
             })
         ),
@@ -227,7 +227,7 @@ fn each_target_logs_its_own_first_error() {
             FACE_A,
             BindSet::default(),
             PatternState::default(),
-            DisplayFault::CreateBitmap,
+            DisplayFault::CreateCommandList,
         );
         assert!(
             matches!(outcome, Err(PresentError::Device { .. })),

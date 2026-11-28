@@ -7,7 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use areka_parsers::shell::{
-    Animation, AppendTarget, DrawMethod, Element, ElementPath, Interval, Pattern, Surface,
+    Animation, AppendTarget, DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern,
+    Surface,
 };
 use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
@@ -51,6 +52,8 @@ pub(crate) fn elem(layer: u32, path: &str) -> Element {
         path: ElementPath::new(path.to_string()),
         x: 0,
         y: 0,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 

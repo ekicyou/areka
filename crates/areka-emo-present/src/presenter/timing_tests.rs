@@ -47,7 +47,7 @@ fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
 
 /// perf サマリ行スキーマの全段フィールド名（`judge-perf.py` の契約面）。
 ///
-/// 段は 4（キャッシュ照会・合成・マスク生成・表示の記録）。リサンプル段は撤去済みで `t_resample_us` は
+/// 段は 5（キャッシュ照会・合成・合成メモへの挿入・頁と葉の用意・節の写し）。`t_nodes_us` は `frame` の後ろの欄。リサンプル段は撤去済みで `t_resample_us` は
 /// 行に現れない。
 const STAGE_FIELDS: [&str; 5] = [
     "t_cache_us",
@@ -62,13 +62,23 @@ const STAGE_FIELDS: [&str; 5] = [
 /// リサンプル関連の確保計数（`alloc_resample_dst`／`alloc_xmap`）は行に現れない。
 const ALLOC_FIELDS: [&str; 2] = ["alloc_compose_dst", "alloc_mask"];
 
-/// フィールド集合スキーマ（11 フィールド＋末尾 `frame`）: 段・確保計数の他に
+/// `frame` の後ろに足した節の写しの欄（所要・計画の項の数とまとめの数・作り直した項の数・計画の確保）。
+const NODE_FIELDS: [&str; 5] = [
+    "t_nodes_us",
+    "plan_items",
+    "plan_groups",
+    "node_rebuilds",
+    "alloc_plan",
+];
+
+/// フィールド集合スキーマ（11 フィールド＋`frame`＋節の写しの 5 欄）: 段・確保計数の他に
 /// 同定 4 種（`target_id`／`surface_id`／`cache_hit`／`key_hash`）と `frame` を持つ。
-/// `STAGE_FIELDS`（5）＋ `ALLOC_FIELDS`（2）＋ 同定 4 ＋ `frame` 1 ＝ 12（`message` を除く）。
+/// `STAGE_FIELDS`（5）＋ `ALLOC_FIELDS`（2）＋ 同定 4 ＋ `frame` 1 ＋ `NODE_FIELDS`（5）＝ 17（`message` を除く）。
 fn expected_field_names() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = STAGE_FIELDS
         .iter()
         .chain(ALLOC_FIELDS.iter())
+        .chain(NODE_FIELDS.iter())
         .copied()
         .chain(["target_id", "surface_id", "cache_hit", "key_hash", "frame"])
         .collect();
@@ -84,13 +94,15 @@ fn ctx() -> EmitContext {
         key_hash: 0xdead_beef,
         // 値は任意の固定値でよい（注入時刻シームで `FrameTiming` を単体検査するだけ）。
         frame: 909,
+        plan_items: 6,
+        plan_groups: 2,
     }
 }
 
 fn allocs() -> BudgetDelta {
     BudgetDelta {
-        alloc_compose_dst: 1,
-        alloc_mask: 4,
+        alloc_plan: 3,
+        node_rebuilds: 5,
     }
 }
 
@@ -99,7 +111,7 @@ fn allocs() -> BudgetDelta {
 /// 1 適用 = 1 行で、固定文言・debug 水準・全段フィールド常時出現・実行されなかった段は 0、が成立する。
 ///
 /// 注入した [`Instant`] は互いに弁別可能な区間（1ms / 7ms / 2ms・合計 12ms）で組むため、段の取り違え
-/// （cache と compose の入替・total と upload の混同）はすべて RED になる。MaskGen は `mark` を呼ばない
+/// （cache と compose の入替・total と upload の混同）はすべて RED になる。Insert は `mark` を呼ばない
 /// ——これが「実行されなかった段」で、フィールドが消えても 0 以外が出ても RED になる。フィールド名の集合は
 /// ちょうどで固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・その確保計数）が
 /// 行に現れないことも併せて固定する。
@@ -118,8 +130,9 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     let mut timing = FrameTiming::start_at(t0);
     timing.mark_at(Stage::CacheLookup, t0 + Duration::from_millis(1));
     timing.mark_at(Stage::Compose, t0 + Duration::from_millis(8));
-    // MaskGen は実行されなかった段（mark を呼ばない）。
+    // Insert は実行されなかった段（mark を呼ばない）。
     timing.mark_at(Stage::Upload, t0 + Duration::from_millis(10));
+    timing.mark_at(Stage::Nodes, t0 + Duration::from_millis(11));
 
     let ((), events) = capture(|| {
         timing.emit_at(&ctx(), allocs(), t0 + Duration::from_millis(12));
@@ -150,7 +163,8 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         "0",
         "実行されなかった段は 0 で出ること"
     );
-    assert_eq!(field(ev, "t_upload_us"), "2000", "表示の記録段の区間");
+    assert_eq!(field(ev, "t_upload_us"), "2000", "頁と葉の用意の段の区間");
+    assert_eq!(field(ev, "t_nodes_us"), "1000", "節の写しの段の区間");
     assert_eq!(
         field(ev, "t_total_us"),
         "12000",
@@ -164,8 +178,16 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     assert_eq!(field(ev, "key_hash"), format!("{}", 0xdead_beef_u64));
 
     // 確保計数（値は呼び手から素通し）。
-    assert_eq!(field(ev, "alloc_compose_dst"), "1");
-    assert_eq!(field(ev, "alloc_mask"), "4");
+    assert_eq!(
+        field(ev, "alloc_compose_dst"),
+        "0",
+        "CPU の合成先はもう無い"
+    );
+    assert_eq!(field(ev, "alloc_mask"), "0", "α マスクはもう作らない");
+    assert_eq!(field(ev, "alloc_plan"), "3");
+    assert_eq!(field(ev, "node_rebuilds"), "5");
+    assert_eq!(field(ev, "plan_items"), "6");
+    assert_eq!(field(ev, "plan_groups"), "2");
 
     // フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価）。`message` は tracing の
     // 既定フィールドなので比較対象から除く。
@@ -177,7 +199,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     assert_eq!(
         actual_names,
         expected_field_names(),
-        "perf サマリ行のフィールド集合が段 4・フィールド 11(+frame) と一致しない（{:?})",
+        "perf サマリ行のフィールド集合が段 5・フィールド 11(+frame+節の写しの 5 欄) と一致しない（{:?})",
         ev.fields
     );
 }
@@ -203,7 +225,13 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
     assert_eq!(lines.len(), 1, "全段スキップでも 1 行は出ること");
     let ev = &lines[0];
 
-    for name in ["t_cache_us", "t_compose_us", "t_mask_us", "t_upload_us"] {
+    for name in [
+        "t_cache_us",
+        "t_compose_us",
+        "t_mask_us",
+        "t_upload_us",
+        "t_nodes_us",
+    ] {
         assert_eq!(
             field(ev, name),
             "0",

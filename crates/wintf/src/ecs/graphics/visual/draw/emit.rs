@@ -3,12 +3,16 @@
 use super::super::MixMode;
 use super::command::*;
 use super::diff::{DamageEntry, PxRect};
+use crate::ecs::graphics::visual::placement::invert;
 use crate::numerics::Aabb;
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::error;
+use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
+use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 
 /// 描く 1 件の描き方（`draw_method` の答え）。
@@ -47,6 +51,95 @@ pub(crate) fn report_once(reported: &AtomicBool) -> bool {
 static BLEND_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
 static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 
+/// まとめの作業用の絵と DC の控え（描画面ごと）。
+///
+/// 節・装置・大きさが同じ間は前の回の絵と DC を使い回す（絵を毎回作るのが一番重いため）。
+/// 再生 1 回（`emit`・`emit_within`）で描かなかった節の分は、その再生の終わりに放す。
+#[derive(Default)]
+pub(crate) struct GroupWork {
+    slots: Vec<WorkSlot>,
+    /// 作った絵の数（使い回しの確かめ用）。
+    created: u64,
+}
+
+struct WorkSlot {
+    entity: bevy_ecs::entity::Entity,
+    device: ID2D1Device,
+    size: D2D_SIZE_U,
+    dc: ID2D1DeviceContext,
+    bitmap: ID2D1Bitmap1,
+    used: bool,
+}
+
+impl GroupWork {
+    fn begin(&mut self) {
+        for slot in &mut self.slots {
+            slot.used = false;
+        }
+    }
+
+    fn sweep(&mut self) {
+        self.slots.retain(|slot| slot.used);
+    }
+
+    /// 節 `entity` の控えを抜き出す。装置か大きさが違えば作り直す。
+    fn take(
+        &mut self,
+        dc: &ID2D1DeviceContext,
+        entity: bevy_ecs::entity::Entity,
+        size: D2D_SIZE_U,
+    ) -> windows::core::Result<WorkSlot> {
+        // SAFETY: Windows API 境界。生きている DC から装置を取るだけ。
+        let device = unsafe { dc.GetDevice()? };
+        if let Some(i) = self.slots.iter().position(|s| s.entity == entity) {
+            let slot = self.slots.swap_remove(i);
+            if slot.device == device && slot.size == size {
+                return Ok(slot);
+            }
+        }
+        let props = D2D1_BITMAP_PROPERTIES1 {
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+            },
+            dpiX: 96.0,
+            dpiY: 96.0,
+            bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET,
+            colorContext: ManuallyDrop::new(None),
+        };
+        // SAFETY: Windows API 境界。生きている装置から DC と絵を作るだけ。
+        let (work, bitmap) = unsafe {
+            let work = device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+            let bitmap = work.CreateBitmap(size, None, 0, &props)?;
+            (work, bitmap)
+        };
+        self.created += 1;
+        Ok(WorkSlot {
+            entity,
+            device,
+            size,
+            dc: work,
+            bitmap,
+            used: true,
+        })
+    }
+
+    fn put(&mut self, mut slot: WorkSlot) {
+        slot.used = true;
+        self.slots.push(slot);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn created(&self) -> u64 {
+        self.created
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.slots.len()
+    }
+}
+
 /// 列 `commands` を `dc` へ画家の順に再生する。
 ///
 /// - `root` は描画面の変換（`GlobalArrangement` の拡大＋`BeginDraw` の offset）。DIP→物理。
@@ -56,6 +149,8 @@ static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 ///   ブレンドの描き方が無いときと範囲の外の値は、種類ごとにプロセスで 1 度だけ `error!` を残して
 ///   `SOURCE_OVER` で描く。
 /// - 層はどれも変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。
+/// - まとめ（`PushGroup`〜`PopGroup`）は中身を透明から始まる 1 枚に描き、節の変換を当てて `mix` で重ねる
+///   （[`draw_group`]）。`emit_within` でも中身は全部描く。作業用の絵と DC は `work` の控えを使い回す。
 /// - 不透明度の層は透明から始まり、降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる。層の中の
 ///   重ね方とブレンドは、同じ層の中で先に描いた画素に効く。
 /// - 図形の切り抜きの層は背景の写しから始まり（`INITIALIZE_FROM_BACKGROUND`）、積む時点だけ基本の
@@ -71,8 +166,11 @@ pub(crate) fn emit(
     dc6: Option<&ID2D1DeviceContext6>,
     root: Matrix3x2,
     commands: &[DrawCommand],
+    work: &mut GroupWork,
 ) {
-    play(dc, dc6, root, commands, None);
+    work.begin();
+    play(dc, dc6, root, commands, None, work);
+    work.sweep();
 }
 
 /// `emit` と同じ再生で、項の `bounds` が描く矩形 `rect` と交わらない件（`Draw`）を飛ばす。
@@ -87,20 +185,17 @@ pub(crate) fn emit_within(
     commands: &[DrawCommand],
     entries: &[DamageEntry],
     rect: PxRect,
+    work: &mut GroupWork,
 ) {
     // 列のずれは静かに画素を誤らせる（別の件の bounds で飛ばす）。
     debug_assert_eq!(
         entries.len(),
-        commands
-            .iter()
-            .filter(|c| !matches!(
-                c,
-                DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity
-            ))
-            .count(),
+        commands.iter().filter(|c| !is_pop(c)).count(),
         "entries は同じ commands から作った列でない"
     );
-    play(dc, dc6, root, commands, Some((entries, rect)));
+    work.begin();
+    play(dc, dc6, root, commands, Some((entries, rect)), work);
+    work.sweep();
 }
 
 fn play(
@@ -109,16 +204,23 @@ fn play(
     root: Matrix3x2,
     commands: &[DrawCommand],
     within: Option<(&[DamageEntry], PxRect)>,
+    work: &mut GroupWork,
 ) {
     let identity = Matrix3x2::identity();
     let mut index = 0usize;
-    for command in commands {
+    let mut next = 0usize;
+    while let Some(command) = commands.get(next) {
+        next += 1;
         let entry = index;
-        if !matches!(
-            command,
-            DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity
-        ) {
+        if !is_pop(command) {
             index += 1;
+        }
+        if let DrawCommand::PushGroup(group) = command {
+            let inner = &commands[next..group_end(commands, next)];
+            next += inner.len() + 1;
+            index += inner.iter().filter(|c| !is_pop(c)).count();
+            draw_group(dc, dc6, root, group, inner, work);
+            continue;
         }
         // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。push と pop は `build` が対で出す。
         unsafe {
@@ -132,47 +234,13 @@ fn play(
                         continue;
                     }
                     dc.SetTransform(&(item.world_mat * root));
-                    let composite = match draw_method(item.mix_mode, dc6.is_some()) {
-                        DrawMethod::Image(c) => c,
-                        DrawMethod::Blend(b) => {
-                            if let Some(dc6) = dc6 {
-                                dc6.BlendImage(
-                                    &item.command_list,
-                                    b,
-                                    None,
-                                    None,
-                                    item.interpolation_mode,
-                                );
-                            }
-                            continue;
-                        }
-                        DrawMethod::BlendUnavailable => {
-                            if report_once(&BLEND_UNAVAILABLE) {
-                                error!(
-                                    entity = ?item.entity,
-                                    mix_mode = ?item.mix_mode,
-                                    "[emit] BlendImage is unavailable (Windows 10 before 1903); drawing with SOURCE_OVER"
-                                );
-                            }
-                            D2D1_COMPOSITE_MODE_SOURCE_OVER
-                        }
-                        DrawMethod::OutOfRange => {
-                            if report_once(&MIX_OUT_OF_RANGE) {
-                                error!(
-                                    entity = ?item.entity,
-                                    mix_mode = ?item.mix_mode,
-                                    "[emit] mix mode out of range; drawing with SOURCE_OVER"
-                                );
-                            }
-                            D2D1_COMPOSITE_MODE_SOURCE_OVER
-                        }
-                    };
-                    dc.DrawImage(
+                    draw_image(
+                        dc,
+                        dc6,
                         &item.command_list,
-                        None,
-                        None,
+                        item.entity,
+                        item.mix_mode,
                         item.interpolation_mode,
-                        composite,
                     );
                 }
                 DrawCommand::PushClipRect(clip) => {
@@ -213,11 +281,185 @@ fn play(
                     dc.PushLayer(&params, None::<&ID2D1Layer>);
                 }
                 DrawCommand::PopOpacity => dc.PopLayer(),
+                // `PushGroup` は上で対の `PopGroup` まで進めている。
+                DrawCommand::PushGroup(_) | DrawCommand::PopGroup => {}
             }
         }
     }
     // SAFETY: Windows API 境界。
     unsafe { dc.SetTransform(&root) };
+}
+
+fn is_pop(command: &DrawCommand) -> bool {
+    matches!(
+        command,
+        DrawCommand::PopClipRect
+            | DrawCommand::PopClipGeometry
+            | DrawCommand::PopOpacity
+            | DrawCommand::PopGroup
+    )
+}
+
+/// `start` から始まる中身を閉じる `PopGroup` の位置（対が無ければ列の終わり）。
+fn group_end(commands: &[DrawCommand], start: usize) -> usize {
+    let mut depth = 0usize;
+    for (i, command) in commands.iter().enumerate().skip(start) {
+        match command {
+            DrawCommand::PushGroup(_) => depth += 1,
+            DrawCommand::PopGroup if depth == 0 => return i,
+            DrawCommand::PopGroup => depth -= 1,
+            _ => {}
+        }
+    }
+    commands.len()
+}
+
+/// 絵 `image` を今の変換のまま混ぜ方 `mix` で描く。ブレンドの描き方が無いときと範囲の外の値は、
+/// 種類ごとにプロセスで 1 度だけ `error!` を残して `SOURCE_OVER` で描く。
+///
+/// # Safety
+/// 呼び手が `dc` の `BeginDraw` の中で呼ぶ。`dc6` は `dc` と同じ DC。
+unsafe fn draw_image(
+    dc: &ID2D1DeviceContext,
+    dc6: Option<&ID2D1DeviceContext6>,
+    image: &ID2D1Image,
+    entity: bevy_ecs::entity::Entity,
+    mix: MixMode,
+    interpolation: D2D1_INTERPOLATION_MODE,
+) {
+    let composite = match draw_method(mix, dc6.is_some()) {
+        DrawMethod::Image(c) => c,
+        DrawMethod::Blend(b) => {
+            if let Some(dc6) = dc6 {
+                // SAFETY: 呼び手の約束（`BeginDraw` の中）。
+                unsafe { dc6.BlendImage(image, b, None, None, interpolation) };
+            }
+            return;
+        }
+        DrawMethod::BlendUnavailable => {
+            if report_once(&BLEND_UNAVAILABLE) {
+                error!(
+                    entity = ?entity,
+                    mix_mode = ?mix,
+                    "[emit] BlendImage is unavailable (Windows 10 before 1903); drawing with SOURCE_OVER"
+                );
+            }
+            D2D1_COMPOSITE_MODE_SOURCE_OVER
+        }
+        DrawMethod::OutOfRange => {
+            if report_once(&MIX_OUT_OF_RANGE) {
+                error!(
+                    entity = ?entity,
+                    mix_mode = ?mix,
+                    "[emit] mix mode out of range; drawing with SOURCE_OVER"
+                );
+            }
+            D2D1_COMPOSITE_MODE_SOURCE_OVER
+        }
+    };
+    // SAFETY: 呼び手の約束（`BeginDraw` の中）。
+    unsafe { dc.DrawImage(image, None, None, interpolation, composite) };
+}
+
+/// まとめ 1 つを描く。`inner` は中身の命令（対の `PushGroup`・`PopGroup` を含まない）。
+///
+/// `SOURCE_OVER` で、節の局所→物理の変換が整数の平行移動なら、透明から始まる不透明度 1 の層で描く
+/// （局所の画素の格子が的の格子と重なるので、作業用の絵を通す答えと同じ）。ほかは作業用の絵
+/// （[`group_bitmap`]）を節の変換で `LINEAR`・`mix` で描く。作業用の絵を作れなければ `error!` を残して
+/// まとめごと描かない。
+fn draw_group(
+    dc: &ID2D1DeviceContext,
+    dc6: Option<&ID2D1DeviceContext6>,
+    root: Matrix3x2,
+    group: &GroupLayer,
+    inner: &[DrawCommand],
+    work: &mut GroupWork,
+) {
+    let to_px = group.world_mat * root;
+    let on_grid = (to_px.M11, to_px.M12, to_px.M21, to_px.M22) == (1.0, 0.0, 0.0, 1.0)
+        && to_px.M31.fract() == 0.0
+        && to_px.M32.fract() == 0.0;
+    if on_grid && group.mix == MixMode::default() {
+        let identity = Matrix3x2::identity();
+        let params = D2D1_LAYER_PARAMETERS1 {
+            contentBounds: outward_physical(group.world_aabb, root),
+            geometricMask: ManuallyDrop::new(None),
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskTransform: identity,
+            opacity: 1.0,
+            opacityBrush: ManuallyDrop::new(None),
+            layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+        };
+        // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。層は中身を再生した後に必ず降ろす。
+        unsafe {
+            dc.SetTransform(&identity);
+            dc.PushLayer(&params, None::<&ID2D1Layer>);
+            play(dc, dc6, root, inner, None, work);
+            dc.PopLayer();
+        }
+        return;
+    }
+    let bitmap = match group_bitmap(dc, dc6.is_some(), group, inner, work) {
+        Ok(bitmap) => bitmap,
+        Err(e) => {
+            error!(
+                entity = ?group.entity,
+                width = group.local_aabb.width(),
+                height = group.local_aabb.height(),
+                error = ?e,
+                hresult = format_args!("0x{:08X}", e.code().0),
+                "[emit] まとめの作業用の絵を作れないので、まとめごと描かない"
+            );
+            return;
+        }
+    };
+    let origin = Matrix3x2::translation(group.local_aabb.left(), group.local_aabb.top());
+    // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。絵は `EndDraw` を済ませた的。
+    unsafe {
+        dc.SetTransform(&(origin * to_px));
+        draw_image(
+            dc,
+            dc6,
+            &bitmap,
+            group.entity,
+            group.mix,
+            D2D1_INTERPOLATION_MODE_LINEAR,
+        );
+    }
+}
+
+/// まとめの中身を、同じ装置の別の DC で、透明に塗った `local_aabb` の大きさの絵（1 DIP＝1 画素）へ描く。
+/// 絵と DC は `work` の控え。描けなければ控えを捨てる（次の回に作り直す）。
+fn group_bitmap(
+    dc: &ID2D1DeviceContext,
+    blend: bool,
+    group: &GroupLayer,
+    inner: &[DrawCommand],
+    work: &mut GroupWork,
+) -> windows::core::Result<ID2D1Bitmap1> {
+    let b = group.local_aabb;
+    let size = D2D_SIZE_U {
+        width: b.width() as u32,
+        height: b.height() as u32,
+    };
+    let inverse =
+        invert(group.world_mat).ok_or_else(|| windows::core::Error::from(E_INVALIDARG))?;
+    let root = inverse * Matrix3x2::translation(-b.left(), -b.top());
+    let slot = work.take(dc, group.entity, size)?;
+    let work6 = if blend { slot.dc.cast().ok() } else { None };
+    // SAFETY: Windows API 境界。控えの DC と絵は同じ装置の生きている資源で、`BeginDraw` と `EndDraw` の対の中で描く。
+    unsafe {
+        slot.dc.SetTarget(&slot.bitmap);
+        slot.dc.BeginDraw();
+        slot.dc.Clear(None);
+        play(&slot.dc, work6.as_ref(), root, inner, None, work);
+        let ended = slot.dc.EndDraw(None, None);
+        slot.dc.SetTarget(None);
+        ended?;
+    }
+    let bitmap = slot.bitmap.clone();
+    work.put(slot);
+    Ok(bitmap)
 }
 
 /// DIP の矩形を `root` で物理へ写し、整数へ外向きに丸める（層の写しを画素の格子に揃える）。

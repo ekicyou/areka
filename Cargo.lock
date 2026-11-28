@@ -172,6 +172,7 @@ dependencies = [
  "areka-emo-compose",
  "areka-parsers",
  "bevy_ecs",
+ "dola",
  "log-capture-kit",
  "sample-ghost-kit",
  "temp-path-kit",

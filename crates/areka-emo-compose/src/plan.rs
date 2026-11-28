@@ -1,4 +1,4 @@
-//! `BlitOp` / `PlanBuilder`: 正規化定義からバックエンド非依存の合成命令列を導出する。
+//! `BlitOp`: 正規化定義から、描く計画（[`DrawPlan`](crate::DrawPlan)）の項の元になる命令の列を導出する。
 //!
 //! element レイヤ順・有効 bind 集合の `animation-sort`→animation ID 順の2段合成規則を確定し、
 //! 各命令へ `AtlasTable` 解決結果（`ElementId`・`Placement`）と変換行列を含める。入れ子 surface
@@ -33,6 +33,7 @@ use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
 
+use crate::atlas_bind::asis_picture;
 use crate::bind::BindSet;
 use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
 use crate::error::ComposeError;
@@ -41,6 +42,7 @@ use crate::nesting::{ElementKind, PartKey, is_always_interval};
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_always::{always_rest_target, film_op};
+use crate::plan_mix::{Mark, NestWord};
 use crate::world::{AtlasBinding, EmoWorld, Records, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
@@ -49,19 +51,17 @@ pub(crate) use extent::{MAX_AREA, MAX_EXTENT, build_extents};
 #[cfg(test)]
 pub(crate) use extent::{build_extents_limited, compute_extent, compute_extent_limited};
 
-/// バックエンド非依存の転写命令（これがバックエンド差替えシーム）。
+/// 計画の項の元になる 1 件の命令（[`crate::plan_mix::push_items`] が項へ写す）。
 ///
 /// `element` はアトラス参照（束縛時に `Some(ElementId)` へ解決済みのもののみ命令化される）、
-/// `transform` は flatten 済み最終配置（今は平行移動のみ）、`method` は常に
-/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時に `AtlasTable::entry`
-/// で O(1) で行うため、本命令は `ElementId` のみを保持する。
+/// `transform` は flatten 済み最終配置（今は平行移動のみ）、`method` は element定義か pattern定義の語。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlitOp {
-    /// アトラス参照（束縛済み `ElementId`・placement の実引きは blit 時）。
+pub(crate) struct BlitOp {
+    /// アトラス参照（束縛済み `ElementId`）。
     pub element: ElementId,
     /// flatten 済み最終配置（今は平行移動のみ）。
     pub transform: Transform,
-    /// 合成メソッド（常に [`ComposeMethod::Overlay`]）。
+    /// element定義か pattern定義の語。
     pub method: ComposeMethod,
 }
 
@@ -109,6 +109,8 @@ pub(crate) struct PlanScratch {
     /// 段の中の着せ替えの手順をたどる小さなスタック（(着せ替え, 手順の読み位置)）。差し込みの数えと
     /// 寄与の積みが順に使う（どちらも終わると空に戻る）。
     pub(crate) chain: Vec<(u32, usize)>,
+    /// 入れ子の段の開き・閉じが命令の列のどこに在るか（計画のまとめを組む印）。
+    pub(crate) marks: Vec<Mark>,
     /// 合成 1 回の広がりの予算（本番は [`VISIT_BUDGET`]）。
     limit: usize,
     /// 予算が尽きたことを記録済みの根の面。同じ根の合成はコマ替えのたびに同じ所で切れるので、
@@ -119,6 +121,8 @@ pub(crate) struct PlanScratch {
     /// 合成の失敗（`SurfaceNotFound`・`EmptyComposition`・`ExtentTooLarge`）を記録済みの面（`reported` と
     /// 同じ形）。表示の側は失敗をコマ替えのたびに呼び直すので、`error!` は合成器 1 つにつき面ごとに 1 度。
     failed_reported: HashSet<u32>,
+    /// 根の段の層 (i) を置き換えた `base` の面（計画の土台の面の欄）。
+    pub(crate) root_base: Option<u32>,
 }
 
 impl Default for PlanScratch {
@@ -134,10 +138,12 @@ impl Default for PlanScratch {
             done: HashSet::new(),
             expanded: HashSet::new(),
             chain: Vec::new(),
+            marks: Vec::new(),
             limit: VISIT_BUDGET,
             reported: HashSet::new(),
             pixels_reported: HashSet::new(),
             failed_reported: HashSet::new(),
+            root_base: None,
         }
     }
 }
@@ -154,7 +160,7 @@ impl PlanScratch {
 
     /// 作業場の全部の列と集合の容量（テスト用・繰り返しの合成で増えないことを見る）。
     #[cfg(test)]
-    pub(crate) fn capacities(&self) -> [(&'static str, usize); 13] {
+    pub(crate) fn capacities(&self) -> [(&'static str, usize); 14] {
         [
             ("visited", self.visited.capacity()),
             ("on_path", self.on_path.capacity()),
@@ -166,6 +172,7 @@ impl PlanScratch {
             ("done", self.done.capacity()),
             ("expanded", self.expanded.capacity()),
             ("chain", self.chain.capacity()),
+            ("marks", self.marks.capacity()),
             ("reported", self.reported.capacity()),
             ("pixels_reported", self.pixels_reported.capacity()),
             ("failed_reported", self.failed_reported.capacity()),
@@ -179,7 +186,12 @@ impl PlanScratch {
         let start = self.steps.len();
         self.frames.push(FrameMark { start, read: start });
         push_static_element_ops(self, level);
+        let mid = self.steps.len();
         push_bind_layer(self, level);
+        let base = crate::plan_base::replace_root(self, level, start, mid);
+        if level.is_top_level {
+            self.root_base = base;
+        }
     }
 }
 
@@ -188,8 +200,13 @@ impl PlanScratch {
 pub(crate) enum Step {
     /// 命令をそのまま積む。
     Op(BlitOp),
-    /// 部品の段（`is_top_level=false`）へ、面 `surface` を位置 (x, y) に置いて入る。
-    Enter { surface: u32, x: i64, y: i64 },
+    /// 部品の段（`is_top_level=false`）へ、面 `surface` を位置 (x, y) に置いて入る。`word` は入れ子を指す語。
+    Enter {
+        surface: u32,
+        x: i64,
+        y: i64,
+        word: NestWord,
+    },
 }
 
 /// 段の印: 積み荷の始まりと、次に読む位置。
@@ -233,7 +250,7 @@ impl<'a> Walk<'a> {
 /// 層 (i): 段の面の静的 element を、layer 昇順（同 layer は登場順）で積み荷にする。
 ///
 /// 束縛が `Some(ElementId)` の画像だけを命令にし、`None`（画像の解決に失敗・bind 時に debug 済み）と
-/// `placement` が None（全透明）は飛ばす。位置は段の位置＋ element の X,Y。
+/// `placement` が None（全透明）で `asis` 用の絵も無いものは飛ばす。位置は段の位置＋ element の X,Y。
 ///
 /// # element定義の子
 ///
@@ -273,6 +290,7 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
                     surface: child,
                     x,
                     y,
+                    word: NestWord::of(&element.method),
                 });
                 continue;
             }
@@ -301,7 +319,10 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
         };
         // placement None（全透明＝空エントリ）の element は命令化せずスキップ。原寸は
         // 既知ゆえ外形（外形の表）へは寄与するが、転写命令には現れない（通常系・warn しない）。
-        if level.atlas.entry(element_id).placement.is_none() {
+        // `asis` 用の絵が在る絵は `asis` なら描くので残す（CPU の転写は置き場の無い命令を描かない）。
+        if level.atlas.entry(element_id).placement.is_none()
+            && asis_picture(level.world.world(), element_id).is_none()
+        {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
@@ -385,6 +406,8 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
     s.on_path.clear();
     s.steps.clear();
     s.frames.clear();
+    s.marks.clear();
+    s.root_base = None;
     let records = if s.reported.contains(&root) {
         Records::Quiet
     } else {
@@ -396,9 +419,12 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
         s.open(&level);
     }
     while let Some(frame) = s.frames.last_mut() {
-        let (surface, x, y) = match s.steps.get(frame.read) {
+        let (surface, x, y, word) = match s.steps.get(frame.read) {
             None => {
                 s.steps.truncate(frame.start);
+                if s.frames.len() > 1 {
+                    s.marks.push(Mark::Close { at: out_ops.len() });
+                }
                 s.frames.pop();
                 let popped = s.visited.pop();
                 debug_assert!(popped.is_some(), "visited は祖先スタック（LIFO）");
@@ -412,7 +438,12 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
                 frame.read += 1;
                 continue;
             }
-            Some(&Step::Enter { surface, x, y }) => (surface, x, y),
+            Some(&Step::Enter {
+                surface,
+                x,
+                y,
+                word,
+            }) => (surface, x, y, word),
         };
         frame.read += 1;
         // 循環検出: 現在の祖先経路に既出なら打ち切り（非パニック）。定義だけで決まる
@@ -433,6 +464,13 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
             continue;
         }
         if let Some(level) = level {
+            s.marks.push(Mark::Open {
+                at: out_ops.len(),
+                surface,
+                x,
+                y,
+                word,
+            });
             let start = s.steps.len();
             s.open(&level);
             // 段の積み荷（命令と子へ入る印）も予算から引き、足りない分は積まない。
@@ -456,8 +494,8 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 /// bind+random でないもの、または bind+random でも現在の bind 集合に属するもの }`（bind 所属条件は下記）。整列は既存の animation-sort 2 段規則を**変更せず**適用する（画家のアルゴリズム）。
 /// 各 id で現在コマがあれば**コマが静的な寄与（着せ替えの手順・always の経過 0）を置換**する（各コマは
 /// 直前コマをリセットしてベースへ）。コマ・着せ替えの手順・always の経過 0 のいずれも method ゲート
-/// （[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
-/// 非 Overlay は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動）。一番上と部品の段は
+/// （[`ComposeMethod::is_implemented`]）を通し、
+/// 描けない語は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動）。一番上と部品の段は
 /// 読む欄だけが違い、規則は同じ 1 本の経路を通る。
 ///
 /// # bind 非所属コマの合流拒否（最後の砦）
@@ -470,7 +508,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 ///
 /// `binds` は全段で同じものを参照するが、参照先の bind animation は「その surface の `animations` に
 /// 定義され `binds` に含まれる」もののみが有効（emo2 の bind パーツ surface は bind を持たない）。
-fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
+pub(crate) fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
     let (master, surface_id) = (level.master, level.surface_id);
     // 番号 → 添字の表（同じ番号の animation は畳み込みで 1 つ・先勝ち＝最初の 1 つを指す）。
     s.anims.clear();
@@ -575,12 +613,13 @@ impl Level<'_> {
         }
     }
 
-    /// 面 `surface` をこの段の位置＋ (x, y) に置く部品の段へ入る積み荷。
-    pub(crate) fn enter(&self, surface: u32, x: i64, y: i64) -> Step {
+    /// 面 `surface` をこの段の位置＋ (x, y) に、語 `word` で置く部品の段へ入る積み荷。
+    pub(crate) fn enter(&self, surface: u32, x: i64, y: i64, word: NestWord) -> Step {
         Step::Enter {
             surface,
             x: self.offset_x.saturating_add(x),
             y: self.offset_y.saturating_add(y),
+            word,
         }
     }
 }
@@ -599,17 +638,18 @@ pub(crate) fn push_direct(
     let surface_id = level.surface_id;
     if let Some(frame) = level.frame(id) {
         if frame.method.is_implemented() {
-            // Overlay: frame.surface_id へ (x,y) 累積で入る（循環は取り出すときの visited 判定）。
-            steps.push(level.enter(frame.surface_id, frame.x, frame.y));
+            // 描ける語: frame.surface_id へ (x,y) 累積で入る（循環は取り出すときの visited 判定）。
+            let word = NestWord::of(&frame.method);
+            steps.push(level.enter(frame.surface_id, frame.x, frame.y, word));
         } else {
-            // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画。組むたびの
+            // 描けない語: 完全形は保持しつつ非駆動＝当該コマ不描画。組むたびの
             // 知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
             tracing::debug!(
                 target: "areka_emo_compose",
                 surface_id,
                 animation_id = id,
                 method = ?frame.method,
-                "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
+                "描けない語の現在コマ: 不描画 skip（完全形保持・非駆動）"
             );
         }
         return false;
@@ -621,7 +661,8 @@ pub(crate) fn push_direct(
     if is_always_interval(&anim.interval) {
         let key = (!level.is_top_level).then_some(PartKey::Surface(surface_id));
         if let Some(p) = always_rest_target(anim, level.pattern.cell(key, id), surface_id) {
-            steps.push(level.enter(p.surface_id as u32, p.x, p.y));
+            let word = NestWord::of(&ComposeMethod::from_name(p.method.as_str()));
+            steps.push(level.enter(p.surface_id as u32, p.x, p.y, word));
         }
         return false;
     }
@@ -694,6 +735,7 @@ pub(crate) fn build_plan(
     pattern: &PatternState,
 ) -> Result<Extent, ComposeError> {
     out_ops.clear();
+    scratch.marks.clear();
 
     if world.surface(surface_id).is_none() {
         let first = scratch.failed_reported.insert(surface_id);
@@ -751,13 +793,23 @@ pub(crate) fn build_plan(
     derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
     // 重ねる画素の数も抑える（命令の数は予算の内でも、大きな絵を何枚も重ねられる）。記録は合成器
     // 1 つにつき根ごとに 1 度（予算と同じ形）。
-    let dropped = crate::blit::cap_pixels(out_ops, extent, atlas);
+    let empty = std::collections::HashMap::new();
+    let asis = world
+        .world()
+        .get_resource::<crate::atlas_bind::AsisPictures>()
+        .map_or(&empty, |a| &a.0);
+    let dropped = crate::plan_cap::cap_pixels(out_ops, extent, atlas, asis);
+    if dropped > 0 {
+        // 切った所から始まる入れ子は中身を捨てたので開かない（閉じていない段は計画の終わりで閉じる）。
+        let kept = out_ops.len();
+        scratch.marks.retain(|m| m.at() < kept);
+    }
     if dropped > 0 && scratch.pixels_reported.insert(surface_id) {
         tracing::error!(
             target: "areka_emo_compose",
             surface_id,
             dropped,
-            factor = crate::blit::PIXEL_FACTOR,
+            factor = crate::plan_cap::PIXEL_FACTOR,
             "重ねる画素の数が外形の面積の上限を越えた: 残りの命令を捨てる"
         );
     }

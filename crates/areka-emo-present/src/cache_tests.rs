@@ -1,46 +1,34 @@
 use super::*;
 use crate::presenter::test_support::{bake_world, elem, pattern_overlay_at, shell_of, surface};
+use areka_emo_compose::plan::Extent;
 use areka_emo_compose::{BindSet, Composer};
 
-// ── ComposedSurface 生成補助 ──────────────────────────────────────────────
-// `ComposedSurface::bytes_mut` は emo-compose の pub(crate) で画素を直接焼けないため、
-// 「全透明」は公開 `new(w,h)`、「不透明画素を含む結果」は上流公開 API（atlas bake → EmoWorld →
-// Composer::compose_into）で本物を合成して得る。後者はマスクが composed の bytes 由来であることを
-// 実合成経路で保証する。
-
-/// 原寸の合成面の bytes からマスクを生成する（マスク生成は呼び手側の責務で、その手順を檻でも踏む）。
-fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
-    Arc::new(AlphaMask::from_pbgra32(
-        composed.bytes(),
-        composed.width(),
-        composed.height(),
-        composed.stride(),
-    ))
+/// 外形だけを持つ計画（表は与えられた計画を持つだけで中身を見ない。外形は「どのエントリか」の弁別に使う）。
+fn sized(w: u32, h: u32) -> DrawPlan {
+    DrawPlan {
+        surface_id: 0,
+        base_surface: 0,
+        extent: Extent { w, h },
+        items: Vec::new(),
+    }
 }
 
-/// 「原寸の合成面＋その bytes 由来マスク」の原子対を組んで挿入する。
-///
-/// マスクを別出所から作ると原子対の主張が空虚になるため、生成は必ず `composed` の bytes からのみ行う。
-fn insert_with_mask(
+/// 計画を挿入する。
+fn insert_plan(
     cache: &mut ComposeCache,
     surface_id: u32,
     binds: BindSet,
     pattern: PatternState,
-    composed: ComposedSurface,
+    plan: DrawPlan,
 ) {
-    let mask = mask_of(&composed);
-    let display = GraphicsCommandList::empty(); // 檻は GPU を持たない（記録は保持されるだけ）
-    cache.insert(surface_id, binds, pattern, composed, mask, display);
+    cache.insert(surface_id, binds, pattern, plan);
 }
 
-/// 不透明画素と透明画素を**必ず両方**含む本物の合成を、**与えられた出力先へ書き戻す**。
+/// 3×1 の単一画像（不透明赤 / 透明 / 不透明赤）を 1 element とする面の計画を、**与えられた出力先へ書き戻す**。
 ///
-/// 3×1 の単一画像（不透明赤 / 透明 / 不透明赤）を 1 element として合成する。両端が不透明の
-/// ため α=0 除外トリムでも中央の透明画素が矩形内に残る（＝合成結果に不透明・透明が共存）。
-///
-/// 出力先を受け取るのは、回収したバッファへの書き戻しをリサンプルに依らず測るため。
-/// `Composer::compose_into` は出力先の確保を再利用するので、回収した容量の引き継ぎがここで観測できる。
-fn compose_small_into(out: &mut ComposedSurface) {
+/// 出力先を受け取るのは、回収した計画への書き戻しで確保が引き継がれるかを測るため
+/// （`Composer::plan_into` は出力先の項の列の確保を再利用する）。
+fn plan_small_into(out: &mut DrawPlan) {
     // 3×1 premultiplied BGRA: (0,0)不透明赤・(1,0)透明・(2,0)不透明赤。
     let img: Vec<u8> = vec![
         0, 0, 200, 255, // (0,0) 不透明赤
@@ -52,9 +40,8 @@ fn compose_small_into(out: &mut ComposedSurface) {
         vec![("otr.png", 3, 1, img)],
     );
 
-    let mut composer = Composer::new();
-    composer
-        .compose_into(
+    Composer::new()
+        .plan_into(
             out,
             &world,
             &atlas,
@@ -62,37 +49,14 @@ fn compose_small_into(out: &mut ComposedSurface) {
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("静的 element 単体の合成は Ok");
+        .expect("静的 element 単体の計画は Ok");
 }
 
-/// 上の合成をまっさらな器へ書いて値で返す（出力先を持たない檻用の便宜）。
-fn composed_with_opaque_and_transparent() -> ComposedSurface {
-    let mut out = ComposedSurface::new(0, 0);
-    compose_small_into(&mut out);
+/// 上の計画をまっさらな器へ書いて値で返す（出力先を持たない檻用の便宜）。
+fn small_plan() -> DrawPlan {
+    let mut out = sized(0, 0);
+    plan_small_into(&mut out);
     out
-}
-
-/// 合成結果 bytes から最初の不透明（α≧128）・最初の透明（α<128）画素座標を探す。
-fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32)) {
-    let stride = cs.stride();
-    let bytes = cs.bytes();
-    let mut opaque = None;
-    let mut transparent = None;
-    for y in 0..cs.height() {
-        for x in 0..cs.width() {
-            let alpha = bytes[(y * stride + x * 4 + 3) as usize];
-            if alpha >= 128 && opaque.is_none() {
-                opaque = Some((x, y));
-            }
-            if alpha < 128 && transparent.is_none() {
-                transparent = Some((x, y));
-            }
-        }
-    }
-    (
-        opaque.expect("fixture は不透明画素を含む"),
-        transparent.expect("fixture は透明画素を含む"),
-    )
 }
 
 // ── 容量政策の檻用の最小補助 ─────────────────────────────────────────────
@@ -102,12 +66,12 @@ fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32))
 
 /// 既定キーの surface id `id` で挿入する。
 fn insert_id(cache: &mut ComposeCache, id: u32) {
-    insert_with_mask(
+    insert_plan(
         cache,
         id,
         BindSet::default(),
         PatternState::default(),
-        ComposedSurface::new(4, 4),
+        sized(4, 4),
     );
 }
 
@@ -137,12 +101,12 @@ fn different_binds_on_same_surface_must_miss() {
     let eyes_open = BindSet::from_ids([1101, 1302]);
     let eyes_closed = BindSet::from_ids([1101, 1302, 1400]);
 
-    insert_with_mask(
+    insert_plan(
         &mut cache,
         id,
         eyes_open.clone(),
         PatternState::default(),
-        ComposedSurface::new(4, 4),
+        sized(4, 4),
     );
     assert!(
         cache
@@ -159,12 +123,12 @@ fn different_binds_on_same_surface_must_miss() {
 
     // 異なる binds を挿入すると**別エントリ**として共存する（容量 3）。まばたきの
     // 開閉のように行き来する入力で再合成を省けることが、容量 3 の裁定の狙いそのものである。
-    insert_with_mask(
+    insert_plan(
         &mut cache,
         id,
         eyes_closed.clone(),
         PatternState::default(),
-        ComposedSurface::new(4, 4),
+        sized(4, 4),
     );
     assert!(
         cache
@@ -181,12 +145,12 @@ fn different_binds_on_same_surface_must_miss() {
 
     // **無限堆積はしない**: 異なるキーを入れ続ければ最も古い引き当てから落ちる。
     for extra in [1401_u32, 1402, 1403] {
-        insert_with_mask(
+        insert_plan(
             &mut cache,
             id,
             BindSet::from_ids([1101, 1302, extra]),
             PatternState::default(),
-            ComposedSurface::new(4, 4),
+            sized(4, 4),
         );
     }
     assert!(
@@ -209,12 +173,12 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
     let pattern_b = pattern_overlay_at(2000, 1002, 0, 0);
     assert_ne!(pattern_a, pattern_b, "前提: 2 つの pattern 状態は異なる");
 
-    insert_with_mask(
+    insert_plan(
         &mut cache,
         id,
         binds.clone(),
         pattern_a.clone(),
-        ComposedSurface::new(4, 4),
+        sized(4, 4),
     );
 
     assert!(
@@ -228,24 +192,24 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
 
     // 2 つの pattern は**別エントリ**として共存し、それぞれ**自分の絵**を返す（古い絵を返さない）。
     // 外形を変えてあるので、キーだけ通ってエントリが取り違わる形はここで赤になる。
-    insert_with_mask(
+    insert_plan(
         &mut cache,
         id,
         binds.clone(),
         pattern_b.clone(),
-        ComposedSurface::new(5, 5),
+        sized(5, 5),
     );
     assert_eq!(
         cache
             .get(id, &binds, &pattern_b)
-            .map(|e| (e.composed.width(), e.composed.height())),
+            .map(|e| (e.plan.extent.w, e.plan.extent.h)),
         Some((5, 5)),
         "pattern_b の引き当ては pattern_b の絵を返す"
     );
     assert_eq!(
         cache
             .get(id, &binds, &pattern_a)
-            .map(|e| (e.composed.width(), e.composed.height())),
+            .map(|e| (e.plan.extent.w, e.plan.extent.h)),
         Some((4, 4)),
         "容量 3: pattern_a のエントリは残り、しかも**自分の絵**を返す（取り違えない）"
     );
@@ -260,12 +224,12 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     let binds = BindSet::default();
     let pat = pattern_overlay_at(3000, 5000, 0, 0);
 
-    insert_with_mask(
+    insert_plan(
         &mut cache,
         id,
         binds.clone(),
         PatternState::default(),
-        ComposedSurface::new(4, 4),
+        sized(4, 4),
     );
     assert!(
         cache.get(id, &binds, &PatternState::default()).is_some(),
@@ -279,13 +243,7 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     // 逆向き: 非空 pattern **だけ**を入れた**新しい表**で測る。同じ表へ足すと容量 3 では両方が共存し、
     // 「空と非空が別キーである」という弁別が観測できなくなる（測っているのは弁別であって置換ではない）。
     let mut cache = ComposeCache::new();
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pat.clone(),
-        ComposedSurface::new(4, 4),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pat.clone(), sized(4, 4));
     assert!(
         cache.get(id, &binds, &pat).is_some(),
         "非空 pattern で挿入 → 同値 pattern の get はヒット"
@@ -293,38 +251,6 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
     assert!(
         cache.get(id, &binds, &PatternState::default()).is_none(),
         "非空 pattern で挿入 → 空 pattern の get はミス（空と非空は別キー）"
-    );
-}
-
-/// 呼び手が composed の bytes から作ったマスクが、表示バッファと対で保持され正しく引ける。
-#[test]
-fn mask_from_composed_bytes_is_kept_with_the_entry() {
-    let composed = composed_with_opaque_and_transparent();
-    let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
-    let (w, h) = (composed.width(), composed.height());
-    let binds = BindSet::default();
-
-    let mut cache = ComposeCache::new();
-    insert_with_mask(
-        &mut cache,
-        1000,
-        binds.clone(),
-        PatternState::default(),
-        composed,
-    );
-
-    let got = cache
-        .get(1000, &binds, &PatternState::default())
-        .expect("entry retained");
-    assert_eq!(got.composed.width(), w);
-    assert_eq!(got.composed.height(), h);
-    assert!(
-        got.mask.is_hit(ox, oy),
-        "opaque pixel ({ox},{oy}) must be a hit in the entry mask"
-    );
-    assert!(
-        !got.mask.is_hit(tx, ty),
-        "transparent pixel ({tx},{ty}) must not be a hit"
     );
 }
 
@@ -337,13 +263,7 @@ fn invalidate_all_clears_every_entry() {
     let binds = BindSet::from_ids([1100]);
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
-    insert_with_mask(
-        &mut cache,
-        7,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(5, 5),
-    );
+    insert_plan(&mut cache, 7, binds.clone(), pattern.clone(), sized(5, 5));
     insert_id(&mut cache, 8001);
     insert_id(&mut cache, 8002);
     assert!(
@@ -367,7 +287,7 @@ fn invalidate_all_clears_every_entry() {
 /// **容量回収を挟んでも承認済み意味論は不変**である。
 ///
 /// 承認済み意味論（容量は 2026-08-15 の裁定で 3）は ⑴上限 3 件のメモ化表 ⑵キー完全一致のみヒット
-/// ⑶表示バッファとマスクの原子対、の 3 点である。`take_recycled` はバッファの容量を回収するだけで
+/// ⑶挿した計画がそのまま返る、の 3 点である。`take_recycled` は計画の容量を回収するだけで
 /// 政策を変えないため、回収 → 挿入を経ても 3 点とも成立しなければならない。
 #[test]
 fn insert_after_take_recycled_preserves_approved_semantics() {
@@ -377,26 +297,15 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
     // 回収は満杯のときだけ成立する。追跡対象（このキー）が最も古い引き当てになるよう先に入れる。
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(4, 4),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(4, 4));
     insert_id(&mut cache, 8001);
     insert_id(&mut cache, 8002);
 
     let recycled = cache.take_recycled().expect("満杯なら 1 本追い出される");
     assert_eq!(
-        (recycled.composed.width(), recycled.composed.height()),
+        (recycled.plan.extent.w, recycled.plan.extent.h),
         (4, 4),
-        "回収したエントリは表示バッファを保持している"
-    );
-    assert_eq!(
-        (recycled.mask.width(), recycled.mask.height()),
-        (4, 4),
-        "回収したエントリはマスクも対で保持している（原子対のまま出る）"
+        "回収したエントリは計画を保持している"
     );
     assert!(
         cache.get(id, &binds, &pattern).is_none(),
@@ -407,24 +316,15 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "回収は 1 本だけ——残りのエントリは剥がれない"
     );
 
-    // 回収後の挿入。原子対の主張を空虚にしないため、不透明・透明を両方含む本物の合成結果を使う。
-    let composed = composed_with_opaque_and_transparent();
-    let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
-    let (w, h) = (composed.width(), composed.height());
-    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), composed);
+    // 回収後の挿入。
+    let plan = small_plan();
+    let (w, h) = (plan.extent.w, plan.extent.h);
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), plan);
 
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("回収後の挿入でも完全一致キーはヒットする");
-    assert_eq!((entry.composed.width(), entry.composed.height()), (w, h));
-    assert!(
-        entry.mask.is_hit(ox, oy),
-        "不透明画素 ({ox},{oy}) は同一エントリのマスクでヒットする（原子対）"
-    );
-    assert!(
-        !entry.mask.is_hit(tx, ty),
-        "透明画素 ({tx},{ty}) は同一エントリのマスクでヒットしない（原子対）"
-    );
+    assert_eq!((entry.plan.extent.w, entry.plan.extent.h), (w, h));
 
     assert!(
         cache.get(1001, &binds, &pattern).is_none(),
@@ -456,29 +356,28 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     );
 }
 
-/// **本題**: 回収したバッファの容量が次の表示バッファへ引き継がれる。
+/// **本題**: 回収した計画の容量が次の計画へ引き継がれる。
 ///
 /// 返るのが挿入したその確保でなければ「容量回収」にならない——複製や新規確保を返す実装は、キーの
-/// 意味論だけを見る檻ではすべて緑のまま素通りする。ゆえに ⑴挿入したバッファの先頭ポインタが回収
-/// エントリにそのまま現れること ⑵回収バッファを**より小さい出力**の書き戻し先に使っても再確保が
-/// 起きないこと（同寸反復だけを見る檻が見逃す新規確保形を捕まえる）⑶その確保のまま再挿入できること、
-/// の 3 点で固定する。
-///
-/// ⑵ の「より小さい出力」は小さな原寸合成（3×1）で作り、書き戻しは本番と同じ
-/// `Composer::compose_into` で測る。
+/// 意味論だけを見る檻ではすべて緑のまま素通りする。ゆえに ⑴挿入した計画の項の列の先頭ポインタが回収
+/// エントリにそのまま現れること ⑵回収した計画を**より小さい計画**の書き戻し先に使っても再確保が
+/// 起きないこと（同じ大きさの反復だけを見る檻が見逃す新規確保形を捕まえる）⑶その確保のまま再挿入できること、
+/// の 3 点で固定する。書き戻しは本番と同じ `Composer::plan_into` で測る。
 #[test]
-fn take_recycled_carries_over_buffer_capacity() {
+fn take_recycled_carries_over_plan_capacity() {
     let mut cache = ComposeCache::new();
     let id = 1000;
     let binds = BindSet::from_ids([1100]);
     let pattern = PatternState::default();
 
-    // 大きい合成面（64×64＝16,384 バイト）。以後この 1 本の確保だけを追う。
-    let big = ComposedSurface::new(64, 64);
-    let big_ptr = big.bytes().as_ptr();
-    let big_len = big.bytes().len();
-    assert_eq!(big_len, 64 * 4 * 64, "前提: 追跡対象は 16,384 バイトの確保");
-    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), big);
+    // 大きい計画（項 64 個）。以後この 1 本の確保だけを追う。
+    let mut big = sized(64, 64);
+    big.items.extend(std::iter::repeat_n(
+        areka_emo_compose::PlanItem::GroupEnd,
+        64,
+    ));
+    let big_ptr = big.items.as_ptr();
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), big);
     // 回収は満杯のときだけ成立する（容量 3）。追跡対象が最も古い引き当てのまま
     // 残るよう、別キーで表を埋める。
     insert_id(&mut cache, 9001);
@@ -486,43 +385,31 @@ fn take_recycled_carries_over_buffer_capacity() {
 
     let recycled = cache.take_recycled().expect("満杯なら 1 本追い出される");
     assert_eq!(
-        recycled.composed.bytes().as_ptr(),
+        recycled.plan.items.as_ptr(),
         big_ptr,
-        "回収したのは挿入したそのバッファでなければならない（複製・新規確保は容量回収ではない）"
+        "回収したのは挿入したその計画でなければならない（複製・新規確保は容量回収ではない）"
     );
-    assert_eq!(recycled.composed.bytes().len(), big_len);
+    assert_eq!(recycled.plan.items.len(), 64);
 
-    // 回収バッファへ**より小さい出力**（3×1）を書き戻しても再確保が起きない＝回収した容量
-    // （16,384）がそのまま引き継がれている。同寸の反復だけを見る檻は、毎回同じ大きさを確保し直す
-    // 実装を捕まえられない。
-    let mut reused = recycled.composed;
-    compose_small_into(&mut reused);
+    let mut reused = recycled.plan;
+    plan_small_into(&mut reused);
     assert!(
-        reused.bytes().len() < big_len,
-        "前提: 書き戻し先は回収時より小さい外形になる（{}×{}）",
-        reused.width(),
-        reused.height()
+        reused.items.len() < 64,
+        "前提: 書き戻し先は回収時より小さい計画になる（項 {}）",
+        reused.items.len()
     );
     assert_eq!(
-        reused.bytes().as_ptr(),
+        reused.items.as_ptr(),
         big_ptr,
-        "回収した容量が引き継がれていれば、より小さい出力への書き戻しで再確保は起きない"
+        "回収した容量が引き継がれていれば、より小さい計画への書き戻しで再確保は起きない"
     );
 
-    let mask = mask_of(&reused);
-    cache.insert(
-        id,
-        binds.clone(),
-        pattern.clone(),
-        reused,
-        mask,
-        GraphicsCommandList::empty(),
-    );
+    cache.insert(id, binds.clone(), pattern.clone(), reused);
     let entry = cache
         .get(id, &binds, &pattern)
         .expect("再挿入したキーはヒットする");
     assert_eq!(
-        entry.composed.bytes().as_ptr(),
+        entry.plan.items.as_ptr(),
         big_ptr,
         "回収 → 使い回し → 再挿入で確保は 1 本のまま（新規確保が挟まっていない）"
     );
@@ -544,13 +431,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "未挿入の表からは何も回収できない"
     );
 
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(4, 4),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(4, 4));
     assert!(
         cache.get(id, &binds, &pattern).is_some(),
         "陰性対照: 挿入直後は完全一致キーがヒットする"
@@ -577,13 +458,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "回収されたのは最も古い引き当て（このキー）である"
     );
 
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(4, 4),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(4, 4));
     assert!(
         cache.get(id, &binds, &pattern).is_some(),
         "回収後に挿入し直せば再びヒットする"
@@ -679,19 +554,19 @@ fn take_recycled_picks_the_least_recently_used_entry() {
     let mut cache = ComposeCache::new();
     // 外形を変えて「どのエントリが回収されたか」を回収物から直接読めるようにする。
     for (id, side) in [(1000_u32, 4_u32), (1001, 5), (1002, 6)] {
-        insert_with_mask(
+        insert_plan(
             &mut cache,
             id,
             BindSet::default(),
             PatternState::default(),
-            ComposedSurface::new(side, side),
+            sized(side, side),
         );
     }
     assert!(touch_id(&mut cache, 1000), "前提: 1000 は保持されている");
 
     let recycled = cache.take_recycled().expect("満杯なら 1 本追い出される");
     assert_eq!(
-        (recycled.composed.width(), recycled.composed.height()),
+        (recycled.plan.extent.w, recycled.plan.extent.h),
         (5, 5),
         "回収されたのは最も古い引き当て（1001・5×5）でなければならない（FIFO なら 1000 の 4×4）"
     );
@@ -740,13 +615,7 @@ fn touch_and_get_agree_on_every_key_component() {
     let binds = BindSet::from_ids([1101, 1302]);
     let pattern = pattern_overlay_at(2000, 1001, 0, 0);
 
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(5, 5),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(5, 5));
 
     let probes: [(&str, u32, BindSet, PatternState); 4] = [
         ("完全一致", id, binds.clone(), pattern.clone()),
@@ -786,20 +655,8 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     let pattern = PatternState::default();
 
     // 同一キーで 2 度挿入する。外形を変えて「どちらが返るか」を弁別できるようにする。
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(4, 4),
-    );
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ComposedSurface::new(5, 5),
-    );
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(4, 4));
+    insert_plan(&mut cache, id, binds.clone(), pattern.clone(), sized(5, 5));
 
     assert_eq!(
         cache.len(),
@@ -809,7 +666,7 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     assert_eq!(
         cache
             .get(id, &binds, &pattern)
-            .map(|e| (e.composed.width(), e.composed.height())),
+            .map(|e| (e.plan.extent.w, e.plan.extent.h)),
         Some((5, 5)),
         "再挿入は後から入れた対を返す（重複した古い側を返している）"
     );

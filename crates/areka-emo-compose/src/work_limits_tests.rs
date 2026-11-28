@@ -9,7 +9,6 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::query::With;
 
 use crate::bind::BindSet;
-use crate::composed::ComposedSurface;
 use crate::hit_import::{HitRegions, attach_hit_regions_limited};
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
@@ -42,10 +41,10 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
 }
 
 /// 外形 2×2（面積 4）の面 0 と面 1 に 2×2 の絵を 100 枚ずつ重ねる（400 画素）。重ねてよいのは面積×64＝256
-/// 画素なので、命令は頭の 64 枚で止まり、`error!` は合成器 1 つにつき根ごとに 1 行（面 0 はいちからと矩形の重ね直しの
-/// 両方で 1 行・面 1 も合成して 2 行）。
+/// 画素なので、計画の項は頭の 64 枚で止まり、`error!` は合成器 1 つにつき根ごとに 1 行（面 0 は 2 度計画して
+/// 1 行・面 1 も計画して 2 行）。
 #[test]
-fn compose_stops_at_the_pixel_limit_once_per_composer() {
+fn plan_stops_at_the_pixel_limit_once_per_composer() {
     let mut text = String::from("charset,UTF-8\n");
     for id in 0..2 {
         text.push_str(&format!("surface{id}\n{{\n"));
@@ -58,23 +57,17 @@ fn compose_stops_at_the_pixel_limit_once_per_composer() {
     let world = bound_world(&parse(&text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     let mut composer = Composer::new();
-    let (mut out, mut base) = (ComposedSurface::new(0, 0), ComposedSurface::new(0, 0));
     let logs = capture_logs(|| {
-        composer
-            .compose_into(&mut out, &world, &atlas, 0, &binds, &pattern)
-            .expect("合成できる");
-        assert_eq!(composer.ops.len(), 64, "いちから: 頭の 64 枚");
-        composer
-            .compose_into_reusing(&mut base, None, &world, &atlas, 0, &binds, &pattern)
-            .expect("合成できる");
-        composer
-            .compose_into_reusing(&mut out, Some(&base), &world, &atlas, 0, &binds, &pattern)
-            .expect("合成できる");
-        assert_eq!(composer.base_ops.len(), 64, "重ね直し: 頭の 64 枚");
-        composer
-            .compose_into(&mut out, &world, &atlas, 1, &binds, &pattern)
-            .expect("合成できる");
-        assert_eq!(composer.ops.len(), 64, "面 1: 頭の 64 枚");
+        for round in 0..2 {
+            let plan = composer
+                .plan(&world, &atlas, 0, &binds, &pattern)
+                .expect("計画できる");
+            assert_eq!(plan.items.len(), 64, "{round} 回目: 頭の 64 枚");
+        }
+        let plan = composer
+            .plan(&world, &atlas, 1, &binds, &pattern)
+            .expect("計画できる");
+        assert_eq!(plan.items.len(), 64, "面 1: 頭の 64 枚");
     });
     assert_eq!(errors(&logs, "重ねる画素"), 2, "{logs}");
 }
@@ -291,6 +284,6 @@ fn zero_width_extent_is_empty_composition() {
     let world = bound_world(&parse(text), &[], &atlas);
     assert_eq!((world.extent(0).w, world.extent(0).h), (0, 2), "検体の外形");
     let (binds, pattern) = (BindSet::default(), PatternState::default());
-    let result = Composer::new().compose(&world, &atlas, 0, &binds, &pattern);
+    let result = Composer::new().plan(&world, &atlas, 0, &binds, &pattern);
     assert_eq!(result.err(), Some(ComposeError::EmptyComposition(0)));
 }

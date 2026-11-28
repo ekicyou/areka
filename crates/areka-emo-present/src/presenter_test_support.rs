@@ -1,9 +1,7 @@
 //! presenter 系テストモジュールが共有する補助（フィクスチャ・期待値・ログ捕捉）。
 //!
-//! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（`Arrangement.scale`
-//! ＝D2D 変換行列）が持つので、presenter が抱えるバイト列は k に依らず `Composer::compose` の
-//! 出力そのものになった。ゆえに本 module の golden 生成は拡大率を引数に取らず、CPU リサンプラを
-//! 一切呼ばない。
+//! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（まとめの節の変換）が
+//! 持つので、本 module の golden は画面の外の描き手で原寸に描き、拡大率を引数に取らない。
 
 use super::*;
 
@@ -21,18 +19,20 @@ use areka_emo_compose::{
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface,
+    DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, Surface,
 };
 
+use bevy_ecs::schedule::ScheduleLabel;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{Arrangement, GlobalArrangement, GraphicsCore, WucGraphicsResource};
 
 // ── GPU/WUC フィクスチャ（wintf の wuc_resource.rs のテストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
 // DQTAT_COM_NONE（apartment 不変）でディスパッチャを組むため、COM を MTA 初期化してから呼ぶ。
 
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
+/// GraphicsCore ＋ WucGraphicsResource を実資源として載せ、画面の描き手の係（`PreRenderSurface`・
+/// `RenderSurface`）を持つ wintf World を組む。当たりは描画面の入れ物の画素を読むので、名前を引く
+/// テストは [`paint_screen`] で画面へ描いてから引く。
 ///
 /// `EmoPresenter` が本番で読むのは `GraphicsCore` だけになった（装着が純 ECS になり
 /// `Compositor` を要さない）。`WucGraphicsResource` は本番同様に載せたままにする——
@@ -46,10 +46,39 @@ pub(super) fn make_world_with_gpu() -> World {
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
 
-    let mut world = World::new();
+    // 画面の描き手の係と、係が読む資源（描画面の生成の数えほか）ごと借りる。
+    let mut world = std::mem::take(wintf::ecs::world::EcsWorld::new().world_mut());
     world.insert_resource(core);
     world.insert_resource(wuc);
     world
+}
+
+/// 画面へ 1 度描く（装置の追従・配置の伝播・描画面の用意・描画の係を本番と同じ順で回す）。
+pub(super) fn paint_screen(world: &mut World) {
+    use wintf::ecs::world::{
+        Composition, Draw, GraphicsSetup, PostLayout, PreRenderSurface, RenderSurface,
+    };
+    world.resource_mut::<wintf::ecs::FrameCount>().0 += 1;
+    world.resource_mut::<wintf::ecs::FrameTime>().0 = dola::now();
+    for schedule in [
+        PostLayout.intern(),
+        GraphicsSetup.intern(),
+        Draw.intern(),
+        PreRenderSurface.intern(),
+        RenderSurface.intern(),
+        Composition.intern(),
+    ] {
+        world.run_schedule(schedule);
+    }
+}
+
+/// 描画面の持ち主の物理ピクセル (x, y) の中心の、当たりが受ける画面の座標。
+pub(super) fn screen_point(world: &World, surface: Entity, x: u32, y: u32) -> wintf::ecs::PointF {
+    let bounds = world
+        .get::<GlobalArrangement>(surface)
+        .expect("描画面の持ち主に配置がある")
+        .bounds;
+    wintf::ecs::PointF::new(bounds.left + x as f32 + 0.5, bounds.top + y as f32 + 0.5)
 }
 
 /// 窓 entity を **`DPI` component 付き**で作る（テスト World 前提）。
@@ -58,8 +87,14 @@ pub(super) fn make_world_with_gpu() -> World {
 /// component を省くと縮退（error! ＋ k=1.0）が「正常系のふり」で緑になってしまうため、
 /// **明示挿入を規律とする**。96 挿入＝恒等 k、192 挿入＝k=2/1。縮退分岐そのものは
 /// `show_surface_without_dpi_component_degrades_to_identity`（DPI 不在専用テスト）で檻に入れる。
+///
+/// 窓は HWND を持たない `Window` の部品だけ（画面には出さない・[`paint_screen`] で描ける）。
 pub(super) fn spawn_window_with_dpi(world: &mut World, dpi: u16) -> Entity {
-    world.spawn(DPI::from_dpi(dpi, dpi)).id()
+    let window = world
+        .spawn((wintf::ecs::Window::default(), DPI::from_dpi(dpi, dpi)))
+        .id();
+    world.flush();
+    window
 }
 
 /// 窓 entity の `DPI` component を差し替える（モニタ跨ぎ移動・表示スケール変更の決定論的代替）。
@@ -67,7 +102,7 @@ pub(super) fn set_window_dpi(world: &mut World, window: Entity, dpi: u16) {
     world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
 }
 
-/// `build_target_assets` と同一入力の **native 合成**バイト列とその外形（表示の golden）。
+/// `build_target_assets` と同一入力を画面の外の描き手（WARP）で原寸に描いたバイト列とその外形（表示の golden）。
 ///
 /// presenter が抱えるのは原寸バイトそのもので、拡大は描画側の係数に移った。ゆえに golden は
 /// 窓 DPI がいくつであっても同一であり、拡大率を引数に取らない。「読み戻しが偶然それらしい
@@ -94,10 +129,10 @@ pub(super) fn native_golden_with(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<u8>, (u32, u32)) {
-    let mut composer = Composer::new();
-    let native = composer
-        .compose(emo_world, atlas, surface_id, binds, pattern)
-        .expect("golden 用の native 合成は Ok");
+    let native = crate::OffscreenRenderer::warp()
+        .expect("WARP の描き手")
+        .render(emo_world, atlas, surface_id, binds, pattern)
+        .expect("golden 用の native の描画は Ok");
     (native.bytes().to_vec(), (native.width(), native.height()))
 }
 
@@ -222,11 +257,28 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
     (mount.surface_entity(), mount.text_slot())
 }
 
+/// 画面に写っている計画の項と、それを写した節の実体（表示が一度も成立していなければ `None`）。
+///
+/// 画面へ渡っている描画そのものの観測口。項が同じでも節が作り直されれば実体が替わる。
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Screen {
+    pub(super) items: Vec<areka_emo_compose::PlanItem>,
+    pub(super) nodes: Vec<Entity>,
+}
+
+pub(super) fn on_screen(presenter: &EmoPresenter, target: TargetId) -> Option<Screen> {
+    let nodes = presenter.targets.get(&target)?.nodes.as_ref()?;
+    Some(Screen {
+        items: nodes.items(),
+        nodes: nodes.entities(),
+    })
+}
+
 /// 枠の面 entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
 ///
 /// 両方を 1 つの値で読むのは、片方だけを見ると「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と
 /// 区別できないためである。物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段
-/// （`PostLayout`）が導くので、丸めの一致は `display_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
+/// （`PostLayout`）が導くので、丸めの一致は `mount_extent_tests.rs` の `surface_size_matches_scaled_extent_within_one_pixel` が表で固定する。
 pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
     let arr = world
         .get::<Arrangement>(surface_entity)
@@ -237,38 +289,11 @@ pub(super) fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u3
     )
 }
 
-/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
-pub(super) fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
-
-/// マスクの立っているビット数・落ちているビット数。
-pub(super) fn mask_bit_counts(mask: &AlphaMask) -> (usize, usize) {
-    let mut hits = 0;
-    let mut misses = 0;
-    for y in 0..mask.height() {
-        for x in 0..mask.width() {
-            if mask.is_hit(x, y) {
-                hits += 1;
-            } else {
-                misses += 1;
-            }
-        }
-    }
-    (hits, misses)
-}
-
 /// 表示成立点の行の固定文言（`show.rs` の `info!`・実機サインオフ契約）。
 pub(super) const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
-/// 重ね直しの範囲の行の固定文言（`show.rs`）。
-pub(super) const RANGE_LINE_MESSAGE: &str = "apply(ShowSurface): 重ね直しの範囲";
-
 // ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
-// `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
-// 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
+// 画素は上流公開 API（atlas bake → EmoWorld）で本物を組み、画面の外の描き手で描いて得る。
 
 pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
     Element {
@@ -276,6 +301,8 @@ pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 
@@ -372,7 +399,7 @@ pub(crate) fn bake_world(
 }
 
 /// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の `(EmoWorld, AtlasTable)`
-/// と、同一入力を `Composer::compose` で直接合成した golden バイト列を返す。
+/// と、同一入力を画面の外の描き手で描いた golden バイト列を返す。
 ///
 /// α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は正確に `w×h`。golden は presenter が
 /// 内部で辿るのと同一の world/atlas から作るため、readback とのバイト一致が二重に決定論的になる。
@@ -389,7 +416,7 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
 /// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
 ///
 /// surface 7000 は plan_extent_tests.rs の `build_plan_no_layers_degenerate_is_empty_composition`
-/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::compose` が
+/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::plan` が
 /// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
 /// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
 /// ないため、退化は「定義層皆無 → 0×0」の経路で作る。
@@ -437,46 +464,32 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
     (world, atlas, golden_1000, golden_3000)
 }
 
-/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの絵を、[`build_two_face_assets`]
-/// `(w, h)` の面 3000 の原寸合成へ差し替える（マスクは同じ bytes から作り、表示記録は `display`）。
+/// 改竄プローブ: `target` の面 1000（既定の bind・コマ）のスロットの計画を、[`build_two_face_assets`]
+/// `(w, h)` の面 3000 の計画へ差し替える。
 ///
-/// キーも原寸も変えず絵だけを差し替えるので、その後の表示が面 3000 の絵になれば presenter は
-/// スロットを引いている（合成し直していれば面 1000 の絵に戻る）。
+/// キーも原寸も変えず中身だけを差し替えるので、その後の表示が面 3000 になれば presenter は
+/// スロットを引いている（合成し直していれば面 1000 に戻る）。
 pub(super) fn tamper_face_1000_slot(
     presenter: &mut EmoPresenter,
     target: TargetId,
     (w, h): (u32, u32),
-    display: GraphicsCommandList,
 ) {
     let (world, atlas, _, _) = build_two_face_assets(w, h);
-    let tampered = Composer::new()
-        .compose(
+    let plan = Composer::new()
+        .plan(
             &world,
             &atlas,
             3000,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("面 3000 の合成は Ok");
-    let mask = std::sync::Arc::new(AlphaMask::from_pbgra32(
-        tampered.bytes(),
-        tampered.width(),
-        tampered.height(),
-        tampered.stride(),
-    ));
+        .expect("面 3000 の計画は Ok");
     presenter
         .targets
         .get_mut(&target)
         .expect("装着済み target")
         .cache
-        .insert(
-            1000,
-            BindSet::default(),
-            PatternState::default(),
-            tampered,
-            mask,
-            display,
-        );
+        .insert(1000, BindSet::default(), PatternState::default(), plan);
 }
 
 /// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を重ね位置 `(x, y)` で持つ非空 `PatternState`。
@@ -618,6 +631,8 @@ fn balloon_element(layer: u32, path: &str, x: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y: 0,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
     }
 }
 

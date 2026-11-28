@@ -1,8 +1,8 @@
-//! emo2 fixture の画素の golden テストの親（in-source `#[cfg(test)]`・`MemoryDecoder`+bake 経路）。
+//! emo2 fixture の計画の golden テストの親（in-source `#[cfg(test)]`・`MemoryDecoder`+bake 経路）。
 //!
-//! 実上流（実行時エンジン）非依存に、fixture／正規化モデル直入力で合成結果を観測する。emo2 fixture の
+//! 実上流（実行時エンジン）非依存に、fixture／正規化モデル直入力で計画を観測する。emo2 fixture の
 //! surfaces.txt をパースし、COM/WIC/表示に一切依存しない `MemoryDecoder`＋`bake` 経路で `AtlasTable` を
-//! 構築し、`Composer::compose` でパイプライン全段（parse → fold → bake → bind → plan → blit）を駆動する。
+//! 構築し、`Composer::plan` でパイプライン全段（parse → fold → bake → bind → plan）を駆動する。
 //! テストは下のテーマ別の子モジュールに置き、共通の口は `test_support`（`golden_tests_test_support.rs`）。
 //!
 //! ## 決定性
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
 use areka_parsers::shell::Shell;
 
-use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
+use crate::{BindSet, Composer, DrawPlan, EmoWorld, PatternState};
 
 // テーマ別サブモジュール。
 #[cfg(test)]
@@ -28,14 +28,11 @@ mod determinism_budget_tests;
 #[path = "golden_tests_frame_extent_tests.rs"]
 mod frame_extent_tests;
 #[cfg(test)]
-#[path = "golden_tests_surface0_base_tests.rs"]
-mod surface0_base_tests;
+#[path = "golden_tests_plan_order_tests.rs"]
+mod plan_order_tests;
 #[cfg(test)]
 #[path = "golden_tests_surface1000_bind_tests.rs"]
 mod surface1000_bind_tests;
 #[cfg(test)]
 #[path = "golden_tests_test_support.rs"]
 mod test_support;
-#[cfg(test)]
-#[path = "golden_tests_trim_equivalence_tests.rs"]
-mod trim_equivalence_tests;

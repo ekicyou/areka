@@ -11,8 +11,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{Composer, EmoWorld, shell_bounds};
-use areka_emo_present::{ShellTarget, load_shell_target};
+use areka_emo_compose::{EmoWorld, shell_bounds};
+use areka_emo_present::{OffscreenRenderer, ShellTarget, load_shell_target};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{BindGroupDefaults, read_ghost_names, resolve_with_shell};
 use areka_sakura::ActorKey;
@@ -265,11 +265,21 @@ fn surface_stage(req: &OfflineDumpRequest, scope: u32, shell: LoadedShell) -> Du
         .as_deref()
         .unwrap_or(render::DEFAULT_PREFIX);
 
-    let mut composer = Composer::new();
+    // 装置を作れなければ hardware() が error を出しているので、ここは info だけ。
+    let Ok(mut renderer) = OffscreenRenderer::hardware() else {
+        tracing::info!(
+            event = "offline_dump_renderer_unavailable",
+            "[offline_dump] 描き手を作れないので面を書き出しません"
+        );
+        return DumpTally {
+            written: 0,
+            failed: surfaces.len(),
+        };
+    };
     let mut tally = DumpTally::default();
     for surface_id in surfaces {
         let written = render::write_surface(
-            &mut composer,
+            &mut renderer,
             &world,
             target.atlas(),
             &table,

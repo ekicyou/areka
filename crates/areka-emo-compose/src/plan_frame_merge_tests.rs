@@ -8,19 +8,19 @@ use std::path::Path;
 // ── PatternState 合流と method ゲート（層(ii) の transient コマ合流）─────
 //
 // 層 (ii) で「有効な着せ替えの集合 ∪ PatternState のコマ集合」を既存 animation-sort 整列へ合流し、
-// 同 id はコマが着せ替えの静的寄与を置換する。非 Overlay の今のコマは debug!（method 名込み）＋
-// 不描画。非 Overlay の pattern は読み込みのときに着せ替えの手順から外れる。記録の行は
+// 同 id はコマが着せ替えの静的寄与を置換する。描けない語の今のコマは debug!（method 名込み）＋
+// 不描画。描けない語の pattern は読み込みのときに着せ替えの手順から外れる。記録の行は
 // log_capture で檻に入れる。
 
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternFrame;
 
-/// 非 Overlay method の現在コマは debug!（method 名込み）＋
+/// 描けない method の現在コマは debug!（method 名込み）＋
 /// 不描画。かつコマは同 id の pattern0 静的寄与を置換するゆえ、その pattern0 も現れない。
 ///
 /// host=1000 は静的 base ＋ bind id=1 pattern0→part1(overlay)。id=1 の現在コマは surface 1500
-/// （koma）method=Replace（非 Overlay）。コマは非駆動で不描画・pattern0(part1) も置換で不描画ゆえ、
-/// 残るは base のみ。debug は method=Replace を載せる。
+/// （koma）method=Auto（描けない語）。コマは非駆動で不描画・pattern0(part1) も置換で不描画ゆえ、
+/// 残るは base のみ。debug は method=Auto を載せる。
 #[test]
 fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     let base = Path::new("shell/master");
@@ -42,10 +42,10 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     pattern.set(
         1,
         PatternFrame {
-            method: ComposeMethod::Replace,
+            method: ComposeMethod::Auto,
             ..frame(1500, 0, 0)
         },
-    ); // 非 Overlay コマ。
+    ); // 描けない語のコマ。
 
     let mut out = Vec::new();
     let logs = capture_logs(|| out = ops(&world, &atlas, 1000, &binds, &pattern));
@@ -53,15 +53,15 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     assert_eq!(
         ops_to_paths(&out, &map),
         vec!["base.png"],
-        "非 Overlay コマは不描画・pattern0 も置換で不描画（残るは base）"
+        "描けない語のコマは不描画・pattern0 も置換で不描画（残るは base）"
     );
     assert!(
         logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
-        "非 Overlay コマは DEBUG（組むたびの知らせ）: {logs}"
+        "描けない語のコマは DEBUG（組むたびの知らせ）: {logs}"
     );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(
-        logs.contains("method=Replace"),
+        logs.contains("method=Auto"),
         "method 名（判別子）を載せる: {logs}"
     );
     assert!(
@@ -70,10 +70,10 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     );
 }
 
-/// 非 Overlay の **bind pattern0**（静的経路）も不描画。parser は
-/// 非 overlay の pattern も渡すため。
+/// 描けない語の **bind pattern0**（静的経路）も不描画。parser は
+/// 描けない語の pattern も渡すため。
 ///
-/// host=1000 は静的 base ＋ bind id=1 の pattern0 method="replace"→part1。空 PatternState。
+/// host=1000 は静的 base ＋ bind id=1 の pattern0 method="auto"→part1。空 PatternState。
 /// pattern0 は着せ替えの手順に入らず不描画で、残るは base のみ（合成のたびの知らせは手順が無い旨の debug）。
 #[test]
 fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
@@ -82,11 +82,11 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     let map = id_to_path(&atlas, &["base.png", "part1.png"]);
 
     let mut replace_pattern0 = single_pattern_anim(1, Interval::Bind, 0, 1100);
-    replace_pattern0.patterns[0].method = DrawMethod::new("replace".to_string());
+    replace_pattern0.patterns[0].method = DrawMethod::new("auto".to_string());
     let host = surface_with_anims(
         1000,
         vec![elem(0, "base.png", 0, 0)],
-        vec![replace_pattern0], // 非 Overlay pattern0。
+        vec![replace_pattern0], // 描けない語の pattern0。
     );
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
     let shell = shell_of(vec![host, part1]);
@@ -99,12 +99,12 @@ fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     assert_eq!(
         ops_to_paths(&out, &map),
         vec!["base.png"],
-        "非 Overlay pattern0 は不描画（残るは base）"
+        "描けない語の pattern0 は不描画（残るは base）"
     );
     // 描かない語は読み込みのときに着せ替えの手順から外れ（記録は `shape_issues` が 1 度だけ）、
     // 合成のたびには語を引き直さない。
     assert!(
-        !logs.contains("level=WARN") && !logs.contains("method=Replace"),
+        !logs.contains("level=WARN") && !logs.contains("method=Auto"),
         "合成のたびに描かない語を知らせない: {logs}"
     );
     assert!(

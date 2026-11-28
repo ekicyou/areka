@@ -3,6 +3,7 @@ use super::clip_geometry;
 use super::command::*;
 use crate::ecs::graphics::clip::ClipShape;
 use crate::ecs::graphics::systems::format_entity_name;
+use crate::ecs::graphics::visual::placement::invert;
 use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use std::hash::{Hash, Hasher};
@@ -19,6 +20,7 @@ pub(crate) type NodeData = (
     Option<&'static VisualDrawContent>,
     Option<&'static VisualVersion>,
     Option<&'static Name>,
+    Option<&'static VisualGroup>,
 );
 
 /// 組む木の枠。今の呼び出しは `Root`。
@@ -80,6 +82,10 @@ enum ClipKind {
 /// 不透明度が 1.0 未満の節は、部分木の世界の外接矩形と外側の有効な矩形の交わりを範囲として
 /// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く。
 ///
+/// まとめの節（`VisualGroup`）は `PushGroup` を不透明度の層の内側・切り抜きの外側に積み、同じ深さで閉じる。
+/// 範囲（部分木の世界の外接矩形と切り抜きの後の有効な矩形の交わり）が空か、世界の行列が潰れていれば
+/// 部分木を間引く。
+///
 /// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす。
 ///
 /// 間引きは性能のため（D2D の切り抜きが既に正しく切る）。間引いた列は viewport に依る。
@@ -107,7 +113,7 @@ pub(crate) fn build(
         ),
     };
     if shift.is_none()
-        && let Ok((_, _, _, Some(c), version, _)) = nodes.get(root)
+        && let Ok((_, _, _, Some(c), version, _, _)) = nodes.get(root)
     {
         out.push(draw_item(
             root,
@@ -132,7 +138,8 @@ pub(crate) fn build(
             out.push(open.pop().unwrap().1);
         }
         let eff = open.last().map_or(viewport, |(.., e)| *e);
-        let Ok((visual, arrangement, world, content, version, name)) = nodes.get(entity) else {
+        let Ok((visual, arrangement, world, content, version, name, group)) = nodes.get(entity)
+        else {
             error!(
                 root = %format_entity_name(root, root_name),
                 entity = ?entity,
@@ -195,6 +202,28 @@ pub(crate) fn build(
                 world_aabb,
             }));
             open.push((depth, DrawCommand::PopOpacity, new_eff));
+        }
+        if let Some(group) = group {
+            let world_aabb = world.subtree_world_aabb.intersect(new_eff);
+            let Some(inverse) = invert(world.world_mat).filter(|_| !world_aabb.is_empty()) else {
+                culled_at = Some(depth);
+                continue;
+            };
+            let l = world_aabb.transform(inverse);
+            out.push(DrawCommand::PushGroup(GroupLayer {
+                entity,
+                version,
+                mix: group.mix,
+                world_mat: world.world_mat,
+                local_aabb: Aabb::new(
+                    l.left().floor(),
+                    l.top().floor(),
+                    l.right().ceil(),
+                    l.bottom().ceil(),
+                ),
+                world_aabb,
+            }));
+            open.push((depth, DrawCommand::PopGroup, new_eff));
         }
         if let Some((push, pop)) = clip {
             out.push(push);

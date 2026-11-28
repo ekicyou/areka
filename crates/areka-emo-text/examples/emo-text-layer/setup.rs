@@ -49,14 +49,14 @@ pub(super) fn balloon_assets(decoder: &WicDecoderArm) -> (EmoWorld, AtlasTable) 
 
 /// 窓寸 ≔ balloon surface0 の合成原寸（物理 px・DPI 表示契約＝等倍・失敗は打ち切り）。
 pub(super) fn balloon_size(assets: &(EmoWorld, AtlasTable)) -> (u32, u32) {
-    let (w, h) = match Composer::new().compose(
+    let (w, h) = match Composer::new().plan(
         &assets.0,
         &assets.1,
         0,
         &BindSet::default(),
         &areka_emo_compose::PatternState::default(),
     ) {
-        Ok(cs) => (cs.width(), cs.height()),
+        Ok(plan) => (plan.extent.w, plan.extent.h),
         Err(e) => setup_abort(&format!("balloon surface0 の採寸合成に失敗: {e}")),
     };
     if w == 0 || h == 0 {

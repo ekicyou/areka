@@ -160,6 +160,8 @@ pub(super) fn shape(cmds: &[DrawCommand]) -> Vec<String> {
             DrawCommand::PopClipGeometry => "pop_geom".into(),
             DrawCommand::PushOpacity(o) => format!("push_opacity {} {:?}", o.opacity, o.world_aabb),
             DrawCommand::PopOpacity => "pop_opacity".into(),
+            DrawCommand::PushGroup(g) => format!("push_group {:?} {:?}", g.mix, g.local_aabb),
+            DrawCommand::PopGroup => "pop_group".into(),
         })
         .collect()
 }

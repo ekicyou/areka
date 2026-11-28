@@ -217,7 +217,7 @@ pub(crate) fn merged_clip(
 }
 
 /// 行が点の 3x2 行列の逆。潰れた行列は無し。
-fn invert(m: Matrix3x2) -> Option<Matrix3x2> {
+pub(crate) fn invert(m: Matrix3x2) -> Option<Matrix3x2> {
     let det = m.M11 * m.M22 - m.M12 * m.M21;
     if !det.is_finite() || det.abs() < 1e-12 {
         return None;

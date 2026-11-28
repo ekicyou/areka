@@ -8,8 +8,8 @@ use super::decode::decode;
 use super::lexer::lex;
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
-    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell, SortOrder, Surface,
-    SurfaceAlias,
+    DefRef, DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, SortOrder,
+    Surface, SurfaceAlias,
 };
 
 #[cfg(test)]

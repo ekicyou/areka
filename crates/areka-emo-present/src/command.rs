@@ -35,7 +35,7 @@ pub type PresentOutcome = Result<(), PresentError>;
 /// `#[non_exhaustive]` ゆえ将来 variant を追加しても下流の `match` は網羅性エラーにならない。
 #[non_exhaustive]
 pub enum PresentCommand {
-    /// surface 切替（キャッシュ or 合成 → 表示＋マスク対入替）。
+    /// surface 切替（キャッシュ or 合成 → 計画を画面の節へ写す）。
     ///
     /// `surface_id` は解決済みの `u32`（alias/`-1` 解決は呼び手責務）。`binds` は解決済み有効集合。
     ShowSurface {

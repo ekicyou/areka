@@ -6,18 +6,17 @@
 //! `looper_tests.rs` の `blink_ending_in_minus_one_leaves_no_frame_in_the_command_after_stop`）。
 //! その指令で成立した絵が、まばたきの重ねの無い絵と同じことを判定する。
 //!
-//! - 動く絵の欄が残らない止まり方（指令の欄が空）は、いちからの合成（`compose_into`）の道。
-//! - 同じ面で動く絵（純 `random` の animation1500）がコマを替えながら残る止まり方は、半目の絵を
-//!   下敷きにした矩形の重ね直し（`compose_into_reusing`）の道。こちらは控えに外れる回と
-//!   控えに当たる回の両方を見る。
+//! - 動く絵の欄が残らない止まり方（指令の欄が空）。
+//! - 同じ面で動く絵（純 `random` の animation1500）がコマを替えながら残る止まり方。こちらは控えに
+//!   外れる回と控えに当たる回の両方を見て、画面の節に写った計画も止まった絵の計画と同じことを見る。
 
 use super::*;
 
 use areka_emo_compose::{ComposeMethod, PatternFrame};
 
 use super::test_support::{
-    RANGE_LINE_MESSAGE, bake_world, capture, make_world_with_gpu, native_golden_with,
-    pattern_overlay_at, show_with_ok, solid, spawn_window_with_dpi,
+    bake_world, make_world_with_gpu, native_golden_with, on_screen, pattern_overlay_at,
+    show_with_ok, solid, spawn_window_with_dpi,
 };
 
 const TARGET: TargetId = TargetId(0);
@@ -113,11 +112,10 @@ fn frames(cells: &[(u32, u32, i64, i64)]) -> PatternState {
 }
 
 /// 同じ面で動く絵（1500）がコマを替えながら残るあいだに、まばたきが 閉じる → 半目 → 外す と進む。
-/// 外した後の指令は 1500 の欄だけを運ぶので、その絵は半目の絵を下敷きにした矩形の重ね直しで組まれる。
-/// 1 周目（控えに外れる）も 2 周目（控えに当たる）も、その絵は「1500 のそのコマだけ・まばたきの重ね
-/// 無し」の絵と同じ。
+/// 外した後の指令は 1500 の欄だけを運ぶ。1 周目（控えに外れる）も 2 周目（控えに当たる）も、その絵と
+/// 画面の節に写った計画は「1500 のそのコマだけ・まばたきの重ね無し」と同じ。
 #[test]
-fn stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path() {
+fn stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_screen() {
     let mut world = make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
@@ -131,6 +129,10 @@ fn stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path()
         golden.chunks(4).any(|px| px == [0xF0, 0x00, 0x00, 0xFF]),
         "見本の前提: 止まった絵に 1500 のコマが載る"
     );
+    let want_items = Composer::new()
+        .plan(&emo_world, &atlas, BASE_ID, &BindSet::default(), &stopped)
+        .expect("止まった絵の計画")
+        .items;
 
     for lap in 0..2 {
         show(
@@ -143,28 +145,16 @@ fn stopped_blink_beside_a_moving_picture_leaves_no_closed_eye_on_the_rect_path()
             &mut world,
             frames(&[(MOVER, 1500, 6, 8), (BLINK, 1411, 4, 2)]),
         );
-        let ((), events) = capture(|| show(&mut presenter, &mut world, stopped.clone()));
+        show(&mut presenter, &mut world, stopped.clone());
         assert_eq!(
             presenter.read_back(TARGET).expect("read_back"),
             golden,
             "{lap} 周目: `-1` で外した後の絵に閉じた目が残る"
         );
-        // 空の道で緑にしない: 1 周目は矩形で重ね直し、2 周目は控えに当たる（範囲の行が出ない）。
-        let partial = events
-            .iter()
-            .filter(|e| {
-                e.message() == RANGE_LINE_MESSAGE && e.field_str("recompose") == Some("partial")
-            })
-            .count();
-        let ranges = events
-            .iter()
-            .filter(|e| e.message() == RANGE_LINE_MESSAGE)
-            .count();
-        let (want_partial, want_ranges) = if lap == 0 { (1, 1) } else { (0, 0) };
         assert_eq!(
-            (partial, ranges),
-            (want_partial, want_ranges),
-            "{lap} 周目の止まった絵の組み方"
+            on_screen(&presenter, TARGET).map(|s| s.items),
+            Some(want_items.clone()),
+            "{lap} 周目: `-1` で外した後の節に閉じた目が残る"
         );
     }
 }

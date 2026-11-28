@@ -11,14 +11,14 @@ use super::test_support::{decoder_with, warn_lines, write_descript};
 use log_capture_kit::capture;
 
 /// 知らない `animation-sort`・描かないメソッドの pattern（面 0 の animation0）・循環（面 10）・
-/// 両方に当たる pattern（面 0 の animation1 が自分を `replace` で指す）を 1 つずつ持つ。
+/// 両方に当たる pattern（面 0 の animation1 が自分を `auto` で指す）を 1 つずつ持つ。
 const TEXT: &str = concat!(
     "charset,UTF-8\r\n",
     "animation-sort,sideways\r\n",
     "surface0\r\n{\r\n",
     "element0,overlay,base.png,0,0\r\n",
-    "animation0.interval,bind\r\nanimation0.pattern0,replace,20,0,0,0\r\n",
-    "animation1.interval,bind\r\nanimation1.pattern0,replace,0,0,0,0\r\n",
+    "animation0.interval,bind\r\nanimation0.pattern0,auto,20,0,0,0\r\n",
+    "animation1.interval,bind\r\nanimation1.pattern0,auto,0,0,0,0\r\n",
     "}\r\n",
     "surface10\r\n{\r\n",
     "element0,overlay,part.png,0,0\r\n",
@@ -51,17 +51,18 @@ fn take_world_first_and_second_return_same_surfaces() {
     assert_eq!(ids, vec![0, 10, 20]);
     assert_eq!(ids, second.surface_ids().collect::<Vec<u32>>());
 
-    // 1 度目の表にも atlas が装着されている（合成すると外形が 0 でない）。
-    let composed = Composer::new()
-        .compose(
+    // 1 度目の表にも atlas が装着されている（計画の外形が 0 でない）。
+    let extent = Composer::new()
+        .plan(
             &first,
             target.atlas(),
             20,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("1 度目の表から面 20 を合成できる");
-    assert!(composed.width() > 0 && composed.height() > 0);
+        .expect("1 度目の表から面 20 を合成できる")
+        .extent;
+    assert!(extent.w > 0 && extent.h > 0);
 }
 
 /// 読み込みで形の誤りが 1 件 1 行の `warn!` で出て、他の `warn!`／`error!` は 0 行。
@@ -80,8 +81,8 @@ fn load_warns_each_shape_issue_once() {
     let cycle = "shell: pattern の参照が循環するので、先祖へ戻る参照を置かない";
     let mut want = vec![
         format!("{sort}|value=\"sideways\""),
-        format!("{undrawn}|animation_id=0|method=\"replace\"|pattern=0|surface_id=0"),
-        format!("{undrawn}|animation_id=1|method=\"replace\"|pattern=0|surface_id=0"),
+        format!("{undrawn}|animation_id=0|method=\"auto\"|pattern=0|surface_id=0"),
+        format!("{undrawn}|animation_id=1|method=\"auto\"|pattern=0|surface_id=0"),
         format!("{cycle}|animation_id=0|pattern=0|surface_id=10|target=10"),
     ];
     want.sort();

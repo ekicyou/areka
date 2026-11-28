@@ -21,6 +21,7 @@
 //! - 診断可能なエラー型 — [`BakeError`]・[`DecodeError`]
 
 mod animated;
+mod asis;
 mod bake;
 mod decode;
 mod error;
@@ -63,6 +64,9 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
 /// 動く絵（コマが 2 枚以上の APNG・WebP）は全コマを載せる: 0 番のコマは今までの鍵の
 /// エントリ、2 枚目以降は鍵のエントリが全部並んだ後ろへ（親の番号・コマの番号の昇順で）
 /// 足し、[`AtlasTable::animation`] で引ける。動く絵が無ければ結果は今までと同じ。
+///
+/// `asis` で参照される絵は、乗算せず・透過色を抜かず・縁を切らず・α＝255 の原寸の絵を通常の絵の
+/// 後ろに足し、[`AtlasTable::resolve_asis`] で引ける。[`AtlasTable::resolve`] の答えは変わらない。
 pub fn bake_with_limits(
     sets: &[SurfaceSet<'_>],
     decoder: &impl ElementDecoder,
@@ -136,9 +140,13 @@ fn bake_core(
 
         let path = set.base_dir.join(&key.rel_path);
 
+        let asis = key.kind == PictureKind::Asis;
+        // `use_self_alpha,0` は α を 255 にするので、乗算済みの色から作ると半透明の画素が暗くなる。
+        let premultiplied = !asis && set.alpha_params.use_self_alpha != UseSelfAlpha::Off;
+
         // 動く絵は 0 番のコマが静止画と同じ道を通り、残りのコマ・待ち時間・繰り返し回数は脇へ取っておく。
         let (decoded, animation, frames_pixels) =
-            match animated::load(decoder, &path, key, limits, cfg, used_pixels) {
+            match animated::load(decoder, &path, key, limits, cfg, used_pixels, premultiplied) {
                 animated::Loaded::Still(d) => (d, None, 0),
                 animated::Loaded::Frames(anim, pixels) => {
                     let mut frames = anim.frames.into_iter();
@@ -154,6 +162,28 @@ fn bake_core(
                     continue;
                 }
             };
+
+        if asis {
+            used_pixels += frames_pixels;
+            let picture = asis::picture(decoded);
+            let final_id = ElementId(survivor_keys.len() as u32);
+            survivor_keys.push(key.clone());
+            survivor_originals.push(picture.original);
+            if let Some(placed) = picture.placement {
+                placed_items.push((final_id, placed));
+            }
+            pending_frames.extend(animation.map(|(first_delay_ms, rest, loop_count)| {
+                animated::PendingFrames::new(
+                    final_id,
+                    key.clone(),
+                    first_delay_ms,
+                    rest,
+                    loop_count,
+                    asis::picture,
+                )
+            }));
+            continue;
+        }
 
         if decoder.probe_pna(&path) {
             ignored_pna += 1;
@@ -190,7 +220,7 @@ fn bake_core(
                 first_delay_ms,
                 rest,
                 loop_count,
-                rule,
+                |img| Trimmer.trim(&normalize::apply_to(img, rule)),
             )
         });
 
@@ -273,8 +303,8 @@ fn bake_core(
 
 // 成果物契約の正本型。下流 emo-compose はこれらを import する。
 pub use table::{
-    Animation, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, LoopCount, Placement, Point,
-    Rect, SetId, Size,
+    Animation, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, LoopCount, PictureKind,
+    Placement, Point, Rect, SetId, Size,
 };
 
 // デコードポート。既定手段（WIC）を露出せず、trait とデータ型のみ公開。
@@ -334,6 +364,9 @@ mod samples_e2e_tests;
 
 #[cfg(test)]
 mod bake_entry_tests;
+
+#[cfg(test)]
+mod unmultiplied_bake_tests;
 
 // 信用できない読み手の答えを焼きの段で断るテスト。
 #[cfg(test)]

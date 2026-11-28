@@ -113,7 +113,7 @@
 //!    位置に絵が描かれている」ことしか語らない描画証跡で、判定の証跡は ⑤ だけである。記録様式でも混ぜない。
 //!
 //! ⑤ **解決一致（目視が証拠力の中核）**: 点は実表示窓の client 座標経路からのみ取得する——`GetCursorPos`
-//!    （screen）→ `ScreenToClient` → 得た client 点を `resolve_hit_region(presenter, 0, x, y)` へ渡して
+//!    （screen）→ `ScreenToClient` → 得た client 点を `resolve_hit_region(world, presenter, 0, x, y)` へ渡して
 //!    live にログする。操作者は画面のゴーストの頭／胸／背景を目視で狙ってカーソルを動かし、視覚上の部位と
 //!    解決結果（`"Head"`／`"Bust"`／`None`）の一致を記録する。
 //!    - **反トートロジー**: 当たり判定値から合成した screen 座標への `SetCursorPos`/`SendInput` を証跡と

@@ -130,7 +130,7 @@ fn undrawn_ops_count_no_pixels() {
     );
     assert_eq!(drawn.len(), 1, "検体: 絵 1 枚の命令");
     let undrawn = crate::BlitOp {
-        method: ComposeMethod::Replace,
+        method: ComposeMethod::Auto,
         ..drawn[0].clone()
     };
     let outside = crate::BlitOp {
@@ -142,8 +142,92 @@ fn undrawn_ops_count_no_pixels() {
     ops.push(drawn[0].clone());
     let extent = world.extent(1);
     assert_eq!((extent.w, extent.h), (2, 2), "検体の外形");
-    assert_eq!(crate::blit::cap_pixels(&mut ops, extent, &atlas), 0);
+    let asis = std::collections::HashMap::new();
+    assert_eq!(
+        crate::plan_cap::cap_pixels(&mut ops, extent, &atlas, &asis),
+        0
+    );
     assert_eq!(ops.len(), 201);
+}
+
+/// `asis` の命令は描く `asis` 用の絵の置き場で数える: 通常の絵に置き場が無く（全部が透過色）`asis` 用の絵が
+/// 2×2 の命令 100 枚は、外形 2×2 の上限 256 画素で頭の 64 枚に切る（通常の絵で数えると 0 画素で 1 枚も切らない）。
+#[test]
+fn asis_ops_count_the_pixels_of_the_asis_picture() {
+    use areka_emo_atlas::{
+        AtlasEntry, AtlasKey, AtlasTable, ElementId, PictureKind, Placement, Point, Rect, SetId,
+        Size,
+    };
+
+    let entry = |placement| AtlasEntry {
+        original: Size { w: 2, h: 2 },
+        placement,
+    };
+    let page = areka_emo_atlas::AtlasPage {
+        width: 2,
+        height: 2,
+        stride: 8,
+        bytes: std::sync::Arc::from(vec![255u8; 16]),
+    };
+    let key = |rel: &str, kind| AtlasKey {
+        set: SetId(0),
+        rel_path: rel.into(),
+        kind,
+    };
+    let atlas = AtlasTable::new(
+        vec![
+            key("s.png", PictureKind::Normal),
+            key("s.png", PictureKind::Asis),
+        ],
+        vec![
+            entry(None),
+            entry(Some(Placement {
+                page: 0,
+                uv_rect: Rect {
+                    x: 0,
+                    y: 0,
+                    w: 2,
+                    h: 2,
+                },
+                trim_offset: Point { x: 0, y: 0 },
+            })),
+        ],
+        vec![page],
+    );
+    let op = crate::BlitOp {
+        element: ElementId(0),
+        transform: crate::normalized::Transform::translate(0, 0),
+        method: ComposeMethod::Asis,
+    };
+    let extent = Extent { w: 2, h: 2 };
+    let asis = std::collections::HashMap::from([(ElementId(0), ElementId(1))]);
+
+    let mut ops = vec![op.clone(); 100];
+    assert_eq!(
+        crate::plan_cap::cap_pixels(&mut ops, extent, &atlas, &asis),
+        36
+    );
+    assert_eq!(ops.len(), 64);
+
+    let mut ops = vec![op.clone(); 100];
+    assert_eq!(
+        crate::plan_cap::cap_pixels(&mut ops, extent, &atlas, &Default::default()),
+        0,
+        "対照: asis 用の絵が無ければ通常の絵の置き場（無い）で 0 画素"
+    );
+
+    // element定義を持たない面を `asis` で置く段の中の命令は、語が `asis` でなくても asis 用の絵で描く。
+    let overlay = crate::BlitOp {
+        method: ComposeMethod::Overlay,
+        ..op
+    };
+    let mut ops = vec![overlay; 100];
+    assert_eq!(
+        crate::plan_cap::cap_pixels(&mut ops, extent, &atlas, &asis),
+        36,
+        "asis 用の絵の在る命令は語を問わず asis 用の絵の置き場で数える"
+    );
+    assert_eq!(ops.len(), 64);
 }
 
 /// 波括弧・追記・波括弧・追記・波括弧の順に同じ collision番号を足しても、どの行も除かれず並びは書いた順

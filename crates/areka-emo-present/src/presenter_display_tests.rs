@@ -2,23 +2,22 @@ use super::*;
 
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
+use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
     INFO_LINE_MESSAGE, bake_world, bind_overlay_surface, build_assets_with_valid_and_empty,
-    build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu, mask_dims,
-    mount_entities, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
+    build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu, mount_entities,
+    on_screen, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
 };
 
-/// skip＋表示不変の回帰檻: 有効 id で表示・マスクを確立後、**解決不能 id** の
+/// skip＋表示不変の回帰檻: 有効 id で表示を確立後、**解決不能 id** の
 /// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
-/// surface entity の `GraphicsCommandList`（＝画面へ渡っている描画命令そのもの）、
-/// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
-/// いずれも**適用前と不変**（表示＋マスクを一切乱さない）。
+/// 画面の節（＝画面へ渡っている描画そのもの）、(b) surface entity の `HitTest`（`SurfaceAlpha`）の
+/// いずれも**適用前と不変**（表示も当たりも一切乱さない）。
 ///
-/// 「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
+/// 「skip＝表示器（visual/hit-test）を触らない」を独立・自己完結に固定する。
 #[test]
-fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
+fn invalid_surface_skips_and_leaves_display_and_hit_unchanged() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
 
@@ -34,16 +33,12 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let bytes_before = presenter
         .read_back(TargetId(0))
         .expect("read_back（前）失敗");
-    // 「表示」＝ surface entity に載っている描画命令（`GraphicsCommandList`）。`read_back` は
-    // 合成メモの原寸バイトを返す形になったので、画面へ渡っている当のものはこちらで読む。
-    let display_before = world
-        .get::<GraphicsCommandList>(surface_entity)
-        .cloned()
-        .expect("有効表示後は surface entity に表示記録がある");
-    assert_ne!(
-        display_before,
-        GraphicsCommandList::empty(),
-        "有効表示後の表示記録が空（前提が成立していない）"
+    // 「表示」＝ 画面の節。`read_back` は合成メモの原寸バイトを返すので、画面へ渡っている当のものは
+    // こちらで読む。
+    let display_before = on_screen(&presenter, TargetId(0)).expect("有効表示後は節が在る");
+    assert!(
+        !display_before.items.is_empty(),
+        "有効表示後の節が空（前提が成立していない）"
     );
     let hit_before = world
         .get::<HitTest>(surface_entity)
@@ -51,13 +46,8 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         .mode;
     assert_eq!(
         hit_before,
-        HitTestMode::AlphaMask,
-        "有効表示後は αマスク判定"
-    );
-    let mask_dims_before = mask_dims(&world, surface_entity);
-    assert!(
-        mask_dims_before.is_some(),
-        "有効表示後は AlphaMask が供給済み"
+        HitTestMode::SurfaceAlpha,
+        "有効表示後は入れ物の α の判定"
     );
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
@@ -87,23 +77,17 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         bytes_before, bytes_after,
         "無効 id の skip で表示中バイトが変化した（表示を乱さない不変条件違反）"
     );
-    // (a′) 画面へ渡っている描画命令そのものも不変（記録を差し替えていない）。
+    // (a′) 画面へ渡っている描画そのものも不変（節を差し替えていない）。
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity),
-        Some(&display_before),
-        "無効 id の skip で表示記録が差し替わった（表示を乱さない不変条件違反）"
+        on_screen(&presenter, TargetId(0)),
+        Some(display_before),
+        "無効 id の skip で節が差し替わった（表示を乱さない不変条件違反）"
     );
     // (b) HitTest 不変（None へ落ちていない＝当たり判定が生きたまま）。
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "無効 id の skip で HitTest が変化した（マスク/当たり判定を乱している）"
-    );
-    // (c) AlphaMaskResource 不変（供給済みマスクが消えていない）。
-    let mask_dims_after = mask_dims(&world, surface_entity);
-    assert_eq!(
-        mask_dims_before, mask_dims_after,
-        "無効 id の skip で AlphaMaskResource が変化した（マスクを乱している）"
+        HitTestMode::SurfaceAlpha,
+        "無効 id の skip で HitTest が変化した（当たり判定を乱している）"
     );
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
@@ -114,9 +98,9 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
 /// （EmptyComposition → Hide 縮退＋reply Ok）: 有効表示で mount を
 /// 確立後、**外形 0×0 に退化する既存 surface**（定義層皆無）を `ShowSurface` すると reply は
 /// **`Ok(())`**（`Err` ではない）で、target は Hidden へ縮退（`Visual` 不可視＋`HitTest::none()`）し、
-/// 0×0 の表示記録を作ろうとして panic しない（既存のメモと表示記録は破棄されず保持）。
+/// 0×0 の節を作ろうとして panic しない（既存のメモと節は破棄されず保持）。
 ///
-/// 前段で `Composer::compose(7000)` が `EmptyComposition(7000)` を返すことを直接確認し、退化経路が
+/// 前段で `Composer::plan(7000)` が `EmptyComposition(7000)` を返すことを直接確認し、退化経路が
 /// 「不在 surface（SurfaceNotFound）」ではなく「存在するが 0×0」であることを固定する。
 #[test]
 fn empty_composition_degrades_to_hidden_and_replies_ok() {
@@ -128,7 +112,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     // 前提固定: 7000 は「存在するが外形 0×0」＝EmptyComposition（SurfaceNotFound ではない）。
     {
         let mut composer = Composer::new();
-        let direct = composer.compose(
+        let direct = composer.plan(
             &emo_world,
             &atlas,
             7000,
@@ -155,7 +139,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         .read_back(TargetId(0))
         .expect("read_back（前）失敗")
         .len();
-    let display_before = world.get::<GraphicsCommandList>(surface_entity).cloned();
+    let display_before = on_screen(&presenter, TargetId(0));
 
     // EmptyComposition 退化: warn! ＋ Hide 縮退 ＋ reply Ok（skip でも Err でもない）。
     let outcome = show_with(
@@ -195,9 +179,9 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         "EmptyComposition で 0×0 のメモへ差し替わった（既存メモ保持の不変条件違反）"
     );
     assert_eq!(
-        world.get::<GraphicsCommandList>(surface_entity).cloned(),
+        on_screen(&presenter, TargetId(0)),
         display_before,
-        "EmptyComposition で表示記録が差し替わった（既存の表示記録保持の不変条件違反）"
+        "EmptyComposition で節が差し替わった（既存の節保持の不変条件違反）"
     );
     assert!(
         presenter
@@ -225,7 +209,7 @@ fn extent_too_large_degrades_to_hidden_and_replies_ok() {
         ]),
         vec![("p.png", 5, 4, gradient(5, 4, 0x22))],
     );
-    let direct = Composer::new().compose(
+    let direct = Composer::new().plan(
         &emo_world,
         &atlas,
         1000,
@@ -259,7 +243,7 @@ fn extent_too_large_degrades_to_hidden_and_replies_ok() {
 }
 
 /// Hide → 再 ShowSurface 復帰: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋
-/// 装着・表示記録・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::alpha_mask()`）。
+/// 装着・節・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::surface_alpha()`）。
 /// 再表示はキャッシュヒットで再合成せず、`read_back` が初回表示バイトと一致する（キャッシュからの復帰）。
 #[test]
 fn hide_then_reshow_recovers_display_from_cache() {
@@ -278,8 +262,8 @@ fn hide_then_reshow_recovers_display_from_cache() {
         .expect("read_back（初回）失敗");
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "初回表示後は αマスク判定"
+        HitTestMode::SurfaceAlpha,
+        "初回表示後は入れ物の α の判定"
     );
 
     hide_ok(&mut presenter, &mut world, TargetId(0));
@@ -294,14 +278,12 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     {
         let target = presenter.targets.get(&TargetId(0)).unwrap();
-        // 装着（surface entity・表示記録の載る先）は Hide で剥がさない。保持されるのは装着そのものである。
+        // 装着（surface entity・節の載る先）は Hide で剥がさない。保持されるのは装着そのものである。
         assert!(target.mount.is_some(), "Hide は装着を保持する（R3.3）");
-        // 表示記録も剥がさない（再表示は記録し直さずに復帰する）。
+        // 節も剥がさない（再表示は作り直さずに復帰する）。
         assert!(
-            world
-                .get::<GraphicsCommandList>(surface_entity)
-                .is_some_and(|l| *l != GraphicsCommandList::empty()),
-            "Hide は surface entity の表示記録を保持する（R3.3）"
+            on_screen(&presenter, TargetId(0)).is_some_and(|s| !s.items.is_empty()),
+            "Hide は画面の節を保持する（R3.3）"
         );
         assert!(
             target
@@ -331,8 +313,8 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
-        HitTestMode::AlphaMask,
-        "再表示後は αマスク判定へ復帰"
+        HitTestMode::SurfaceAlpha,
+        "再表示後は入れ物の α の判定へ復帰"
     );
     assert!(
         presenter.targets.get(&TargetId(0)).unwrap().visible,
@@ -441,8 +423,7 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 ///
 /// # なぜ既存の失敗経路の檻では足りないのか（5.1 → 5.3 の申し送り）
 ///
-/// [`invalid_surface_skips_and_leaves_display_and_mask_unchanged`] は表示バイト・`HitTest`・
-/// `AlphaMaskResource` の不変を見るが、これらはいずれも「失敗した適用は表示記録を差し替えない」ことの
+/// [`invalid_surface_skips_and_leaves_display_and_hit_unchanged`] は表示バイト・`HitTest` の不変を見るが、これらはいずれも「失敗した適用は節を差し替えない」ことの
 /// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても差し替えは起きないので
 /// バイトは 1 つも変わらない。したがって `ComposeCache::take_recycled`（追い出しエントリの容量回収）を
 /// 合成の成否判定より**手前**へ置く誤りは、既存の檻を丸ごとすり抜ける。本檻はスロットそのものを
@@ -465,7 +446,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
-    let (bytes_before, mask_dims_before) = {
+    let plan_before = {
         let entry = presenter
             .targets
             .get(&TargetId(0))
@@ -473,14 +454,11 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
             .cache
             .get(1000, &BindSet::default(), &PatternState::default())
             .expect("前提: 表示成立でスロットが埋まる");
-        (
-            entry.composed.bytes().to_vec(),
-            (entry.mask.width(), entry.mask.height()),
-        )
+        entry.plan.clone()
     };
     assert!(
-        bytes_before.iter().any(|&b| b != 0),
-        "前提: スロットの表示バッファは非退化（全 0 でない）"
+        !plan_before.items.is_empty(),
+        "前提: スロットの計画は非退化（項がある）"
     );
     let display_before = presenter
         .read_back(TargetId(0))
@@ -513,16 +491,10 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
          置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は\
          引き当てに失敗して毎回再合成へ落ちる",
     );
-    // 中身も適用前のまま（対の片側だけ差し替わっていない）。
+    // 中身も適用前のまま。
     assert_eq!(
-        entry.composed.bytes(),
-        bytes_before.as_slice(),
-        "合成失敗でスロットの表示バッファ内容が変化した（失敗した適用が中身を書き換えている）"
-    );
-    assert_eq!(
-        (entry.mask.width(), entry.mask.height()),
-        mask_dims_before,
-        "合成失敗でスロットのマスクが差し替わった（原子対の片側だけ動いている）"
+        entry.plan, plan_before,
+        "合成失敗でスロットの計画が差し替わった（失敗した適用が中身を書き換えている）"
     );
 
     // 直後の同一入力の適用は成立し、表示も適用前と全バイト一致する。
@@ -536,18 +508,14 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     );
 }
 
-/// 表示記録の保持: **外れのたびに表示記録が作られ、メモのエントリへ載る**。
-///
-/// 表示記録は原寸バイトを 1 度だけ GPU へ上げて描く閉じたコマンドリストで、エントリの絵・マスクと
-/// 同じ入れ物に束ねられる。ここで固定するのは「外れの回に記録が作られてエントリに載る」ことと、
-/// 「ヒットの回は載っている記録が作り直されない（同一のリストのまま）」ことの 2 点である。
+/// 外れの回に計画がエントリへ入って節へ写り、当たりの回は同じ計画のまま節を作り直さない。
 ///
 /// # 殺す誤実装
 ///
-/// - 記録経路を呼ばずに空のリストを挿入する → 1 つ目の主張が RED（`empty()` と等しい）
-/// - ヒットの回にも記録を作り直す（GPU 呼び出しがヒット経路へ漏れる）→ 2 つ目の主張が RED
+/// - 外れの回に計画を入れない（空の計画を挿入する）→ 1 つ目の主張が RED
+/// - 当たりの回にも節を作り直す → 2 つ目の主張が RED（節の実体が替わる）
 #[test]
-fn a_cache_miss_records_a_display_list_into_the_entry() {
+fn a_cache_miss_puts_the_plan_into_the_entry_and_a_hit_keeps_the_nodes() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x2A);
@@ -556,67 +524,28 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let recorded = {
-        let entry = presenter
+    let entry_items = |presenter: &EmoPresenter| {
+        presenter
             .targets
             .get(&TargetId(0))
             .unwrap()
             .cache
             .get(1000, &BindSet::default(), &PatternState::default())
-            .expect("外れの後は当該キーのエントリが在る");
-        assert_ne!(
-            entry.display,
-            GraphicsCommandList::empty(),
-            "外れの回に表示記録が作られてエントリへ載っていない（空のリストのまま）"
-        );
-        entry.display.clone()
+            .expect("外れの後は当該キーのエントリが在る")
+            .plan
+            .items
+            .clone()
     };
-
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let entry = presenter
-        .targets
-        .get(&TargetId(0))
-        .unwrap()
-        .cache
-        .get(1000, &BindSet::default(), &PatternState::default())
-        .expect("ヒットの後もエントリは在る");
-    assert_eq!(
-        entry.display, recorded,
-        "ヒットの回に表示記録が作り直されている（記録経路が外れ経路の外に居る）"
-    );
-}
-
-/// 面の entity から当たりのマスクの資源が外れていると、同じ面の再表示は黙らず `warn!` を 1 件だけ
-/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない）。
-#[test]
-fn reshow_without_alpha_mask_resource_leaves_one_warn() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x18);
-    let mut presenter = EmoPresenter::new();
-    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-
-    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
+    let first = on_screen(&presenter, TargetId(0)).expect("表示成立後は節が在る");
     assert!(
-        world
-            .entity_mut(surface_entity)
-            .take::<AlphaMaskResource>()
-            .is_some(),
-        "前提: 1 回目の表示の後は面の entity にマスクの資源が在る"
+        !first.items.is_empty() && first.items == entry_items(&presenter),
+        "外れの回の計画がエントリへ入って節へ写っていない: {first:?}"
     );
 
-    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
-    let warns = events
-        .iter()
-        .filter(|e| {
-            e.level == tracing::Level::WARN
-                && e.message()
-                    .contains("surface entity に AlphaMaskResource が無い")
-        })
-        .count();
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
-        warns, 1,
-        "マスクの資源が無い再表示の warn! の件数: {events:?}"
+        on_screen(&presenter, TargetId(0)),
+        Some(first),
+        "当たりの回に節が作り直されている"
     );
 }

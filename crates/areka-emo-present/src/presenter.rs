@@ -1,15 +1,15 @@
-//! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・マスクの一点結線）。
+//! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・当たりの一点結線）。
 //!
-//! 上流が組んだ部品（`ComposeCache`・`display::record_display`・`VisualMount`・emo-compose の
-//! `Composer`）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
-//! は emo-compose、表示の記録（原寸 D2D bitmap → 描画命令）は `display.rs`、面の生成・変換・描画は
-//! wintf のコマンドリスト経路、当たり判定マスクは wintf hit-test が担い、本型は「指令を受けて、
-//! キャッシュ引き当て or 合成＋記録 → 表示記録・配置の書き込み → AlphaMask 同期 → 可視制御」を
+//! 上流が組んだ部品（`ComposeCache`・`GpuAtlas`・`DrawNodes`・`VisualMount`・emo-compose の
+//! `Composer`）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。計画と合成
+//! そのものは emo-compose、計画 → 節の写しは `draw_nodes.rs`、面の生成・変換・描画は wintf の描画の木、
+//! クリックの透過は wintf hit-test が描画面の入れ物の α で担い、本型は「指令を受けて、キャッシュ引き当て or 計画＋合成 →
+//! 頁と葉の用意 → 節の写し・配置の書き込み → 可視制御 → 当たりの描き先の塗り」を
 //! **一続きの UI スレッド呼び出し**として結線する。
 //!
 //! # UI スレッドアフィニティ（型で強制）
 //!
-//! `EmoPresenter` は COM/GPU 資源（合成メモが保持する `GraphicsCommandList`＝D2D コマンドリスト）を
+//! `EmoPresenter` は COM/GPU 資源（`GpuAtlas` が保持する頁の絵と葉の D2D コマンドリスト）を
 //! 内包するため **`!Send`**（NonSend）である。`unsafe impl Send` は置かず、`PhantomData<*const ()>` を
 //! 併せ持つことで「他スレッドへ移動できない」ことを**構造（型）で**担保する。wintf World へ NonSend
 //! 資源として登録するか example が直接所有し、`apply`/`attach_target`/`read_back` は必ず UI スレッド
@@ -17,10 +17,9 @@
 //!
 //! # 原子入替
 //!
-//! 表示記録（`VisualMount::set_display`）・配置（`set_layout`）と当たり判定マスク
-//! （`AlphaMaskResource::set_shared`）の更新は**同一 `apply` 呼び出し内**で連続して起き、hit-test も
-//! 同一 UI スレッドで走るため中間状態は観測不能である。ゆえに surface 切替に伴う「表示とマスクの
-//! 対入替」は構造的に原子化される（別途ロック不要）。
+//! 節の写し（`DrawNodes::sync`）・配置（`set_layout`）と当たりの描き先の塗り（`paint_hit`）は
+//! **同一 `apply` 呼び出し内**で連続して起き、hit-test も同一 UI スレッドで走るため中間状態は観測不能である。
+//! クリックの透過と名前の解決はどちらも描画面の入れ物の同じ 1 画素を読むので、2 つは食い違わない。
 //!
 //! # 失敗経路のログ規律（silent failure 禁止）
 //!
@@ -35,8 +34,8 @@
 //! 決めない。これにより「照会値＝実適用 k」の不変条件を維持する点が経路上の 1 箇所（表示成立点）に閉じる。
 //!
 //! 経路は `world.get::<DPI>(target.window)` → [`derive_scale`]（政策＝[`ScalePolicy`]・縮退は log-first）
-//! → `cache.touch(surface, binds, pattern)`（**k はキーでない**）→ ミス時のみ `compose`（**native
-//! 原寸**）＋ `record_display`（原寸の表示記録）→ `cache.insert(..)` である。k は
+//! → `cache.touch(surface, binds, pattern)`（**k はキーでない**）→ ミス時のみ `plan_into`・`compose`
+//! （**native 原寸**）→ `cache.insert(..)` → `DrawNodes::sync` である。k は
 //! `VisualMount::set_layout` が surface entity の `Arrangement.scale` へ書く**変換の係数**としてだけ
 //! 現れ、拡大は wintf の `render_surface`（`SetTransform`）が行う。ゆえに k=1 と k≠1 で通る手順は同じで、
 //! k だけが変わった再適用は再合成なしのヒットになる。
@@ -73,9 +72,9 @@ use areka_actor::ReplySender;
 use areka_actor::reply_channel;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose, ScaleRatio,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio,
 };
-use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
+use wintf::ecs::{DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
 // `use super::*;` でここから拾うので、非 test ビルドでは `#[cfg(test)]` で畳む（抑止指示を足さない）。
 #[cfg(test)]
@@ -150,12 +149,6 @@ mod hit_test_support;
 #[path = "presenter_never_shown_tests.rs"]
 mod never_shown_tests;
 #[cfg(test)]
-#[path = "presenter_partial_recompose_gpu_tests.rs"]
-mod partial_recompose_gpu_tests;
-#[cfg(test)]
-#[path = "presenter_partial_recompose_tests.rs"]
-mod partial_recompose_tests;
-#[cfg(test)]
 #[path = "presenter_perf_log_tests.rs"]
 mod perf_log_tests;
 #[cfg(test)]
@@ -173,6 +166,9 @@ mod resize_report_tests;
 #[cfg(test)]
 #[path = "presenter_scale_change_tests.rs"]
 mod scale_change_tests;
+#[cfg(test)]
+#[path = "screen_offscreen_gpu_tests.rs"]
+mod screen_offscreen_gpu_tests;
 #[cfg(test)]
 #[path = "presenter_test_support.rs"]
 pub(crate) mod test_support;
@@ -211,6 +207,10 @@ mod hit_shape_tests;
 #[cfg(test)]
 #[path = "presenter_hit_region_tests.rs"]
 mod hit_region_tests;
+
+#[cfg(test)]
+#[path = "presenter_surface_alpha_hit_tests.rs"]
+mod surface_alpha_hit_tests;
 
 #[cfg(test)]
 #[path = "presenter_hit_scale_tests.rs"]

@@ -19,8 +19,8 @@
 
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
-    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias,
-    SurfaceAppend,
+    DefRef, DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, Surface,
+    SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -94,6 +94,8 @@ kero.surface.alias
                     path: ElementPath::new("parts/body.png".to_string()),
                     x: 0,
                     y: 0,
+                    method: DrawMethod::new("overlay".to_string()),
+                    options: ElementOptions::new(String::new()),
                 },
                 Element {
                     // バックスラッシュ区切りは無加工保持・負座標は i64 保持。
@@ -101,12 +103,16 @@ kero.surface.alias
                     path: ElementPath::new("parts\\face.png".to_string()),
                     x: -5,
                     y: 6,
+                    method: DrawMethod::new("overlay".to_string()),
+                    options: ElementOptions::new(String::new()),
                 },
                 Element {
                     layer: 2,
                     path: ElementPath::new("parts/hair.png".to_string()),
                     x: 3,
                     y: 4,
+                    method: DrawMethod::new("overlay".to_string()),
+                    options: ElementOptions::new(String::new()),
                 },
             ],
             // collision は 始点X/始点Y/終点X/終点Y = left/top/right/bottom（ukadoc 順序）。

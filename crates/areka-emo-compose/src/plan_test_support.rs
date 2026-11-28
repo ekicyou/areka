@@ -16,18 +16,18 @@ use areka_emo_atlas::{
 };
 use areka_parsers::shell::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
-    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAppend,
-    parse,
+    DrawMethod, Element, ElementOptions, ElementPath, Interval, Pattern, Shell, SortOrder, Surface,
+    SurfaceAppend, parse,
 };
 use bevy_ecs::component::Component;
 use bevy_ecs::world::World;
 
 use crate::bind::BindSet;
-use crate::composed::ComposedSurface;
+use crate::draw_plan::{DrawPlan, PlanItem};
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::nesting::NestTable;
-use crate::normalized::SurfaceMaster;
+use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::{BlitOp, Extent, PlanScratch, build_plan, derive_ops};
 use crate::world::{AliasMap, EmoWorld, SurfaceIndex};
@@ -41,6 +41,16 @@ pub(crate) fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
         path: ElementPath::new(path.to_string()),
         x,
         y,
+        method: DrawMethod::new("overlay".to_string()),
+        options: ElementOptions::new(String::new()),
+    }
+}
+
+/// element 1 本を描画メソッドの語 `method` で書く（ほかの欄は [`elem`] と同じ）。
+pub(crate) fn elem_with_method(layer: u32, path: &str, x: i64, y: i64, method: &str) -> Element {
+    Element {
+        method: DrawMethod::new(method.to_string()),
+        ..elem(layer, path, x, y)
     }
 }
 
@@ -339,9 +349,9 @@ pub(crate) fn visible_parts_of(
     out
 }
 
-/// 計画を引く口（[`ops`] と並ぶ）: `surface_id` の計画を新しい命令列と作業場で建て、命令列と結果
+/// 命令の列を引く口（[`ops`] と並ぶ）: `surface_id` の命令の列を新しい命令列と作業場で建て、命令列と結果
 /// （外形か失敗）を返す。
-pub(crate) fn plan_of(
+pub(crate) fn ops_and_extent(
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
@@ -364,6 +374,54 @@ pub(crate) fn plan_of(
         "先祖の積み上げは走査後に空へ戻る"
     );
     (out, result)
+}
+
+/// 描く計画を引く口（[`ops_and_extent`] と並ぶ）: 新しい合成器で `surface_id` の計画を組んで返す。
+pub(crate) fn plan_of(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> Result<DrawPlan, ComposeError> {
+    crate::Composer::new().plan(world, atlas, surface_id, binds, pattern)
+}
+
+/// 計画の絵の項を (絵, 位置) の列で返す（絵の項でない項があれば落とす）。
+pub(crate) fn plan_images(plan: &DrawPlan) -> Vec<(ElementId, Transform)> {
+    plan.items
+        .iter()
+        .map(|item| match item {
+            PlanItem::Image {
+                element, transform, ..
+            } => (*element, *transform),
+            other => panic!("絵の項だけのはず: {other:?}"),
+        })
+        .collect()
+}
+
+/// 計画の絵の項を (画像の名前, X, Y) の列で返す（[`named_ops`] の計画版）。
+pub(crate) fn named_plan<'a>(
+    plan: &DrawPlan,
+    map: &[(ElementId, &'a str)],
+) -> Vec<(&'a str, i64, i64)> {
+    plan_images(plan)
+        .into_iter()
+        .map(|(element, transform)| {
+            let name = map
+                .iter()
+                .find(|(id, _)| *id == element)
+                .map(|(_, p)| *p)
+                .expect("項の ElementId は既知");
+            let (x, y) = transform.offset();
+            (name, x, y)
+        })
+        .collect()
+}
+
+/// 命令の列を (絵, 位置) の列で返す（[`plan_images`] と比べる形）。
+pub(crate) fn op_images(ops: &[BlitOp]) -> Vec<(ElementId, Transform)> {
+    ops.iter().map(|op| (op.element, op.transform)).collect()
 }
 
 /// `surface_id` を (x,y) に置く Overlay のコマ（ほかの描き方は `PatternFrame { method, ..frame(..) }`）。
@@ -412,6 +470,7 @@ pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> Atla
     let keys = vec![AtlasKey {
         set: SetId(0),
         rel_path: "e.png".into(),
+        kind: areka_emo_atlas::PictureKind::Normal,
     }];
     let entries = vec![AtlasEntry {
         original: Size { w: uv.w, h: uv.h },
@@ -422,37 +481,6 @@ pub(crate) fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> Atla
         }),
     }];
     AtlasTable::new(keys, entries, vec![page])
-}
-
-/// 2 エントリ（`ElementId(0)` は頁 0 の `dst_page`・`ElementId(1)` は頁 1 の `src_page`・どちらも 1×1 を (0,0)）の
-/// AtlasTable を組む（下層 dst・上層 src の重ね合わせ）。
-pub(crate) fn two_entry_table(dst_page: AtlasPage, src_page: AtlasPage) -> AtlasTable {
-    let one = |page| AtlasEntry {
-        original: Size { w: 1, h: 1 },
-        placement: Some(Placement {
-            page,
-            uv_rect: Rect {
-                x: 0,
-                y: 0,
-                w: 1,
-                h: 1,
-            },
-            trim_offset: Point { x: 0, y: 0 },
-        }),
-    };
-    let keys = ["dst.png", "src.png"].map(|rel| AtlasKey {
-        set: SetId(0),
-        rel_path: rel.into(),
-    });
-    AtlasTable::new(keys.into(), vec![one(0), one(1)], vec![dst_page, src_page])
-}
-
-/// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提・外形の外は読まない）。
-pub(crate) fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    assert!(x < out.width() && y < out.height(), "({x},{y}) は外形の外");
-    let i = (y * out.stride() + x * 4) as usize;
-    let b = out.bytes();
-    [b[i], b[i + 1], b[i + 2], b[i + 3]]
 }
 
 /// 全面が 1 色・不透明の `w`×`h`（色 `c` でコマを見分ける）。

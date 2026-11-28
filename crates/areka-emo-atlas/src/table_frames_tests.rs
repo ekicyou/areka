@@ -9,6 +9,7 @@ fn key(rel_path: &str) -> AtlasKey {
     AtlasKey {
         set: SetId(0),
         rel_path: rel_path.into(),
+        kind: crate::table::PictureKind::Normal,
     }
 }
 

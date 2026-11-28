@@ -207,14 +207,15 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
         return ComposePlan::Full(FullReason::Undecidable);
     }
     // 絵を変形して描く件の答えは描く範囲（件の範囲 ∩ 切り抜き）で 1 段変わりうる（WARP で測った）ので、
-    // 描く矩形（写しの帯も）を交わる件の範囲で閉じる＝件を丸ごと描く。中身は見えないので全部の件で閉じる
+    // 描く矩形（写しの帯も）を交わる件とまとめの範囲で閉じる＝件とまとめを丸ごと描く。中身は見えないので
+    // 全部の件で閉じる
     // shortcut: 1 つの矩形につき最悪 O(n²)、件が多くて重ければ範囲で引ける表にする
     for r in rects.iter_mut() {
         loop {
             let mut grown = *r;
             for e in now
                 .iter()
-                .filter(|e| matches!(e.kind, EntryKind::Draw { .. }))
+                .filter(|e| matches!(e.kind, EntryKind::Draw { .. } | EntryKind::Group { .. }))
             {
                 if !e.bounds.intersect(grown).is_empty() {
                     grown = grown.union(e.bounds.intersect(surface));
@@ -388,17 +389,23 @@ fn scroll_check(
     c: &Candidate,
     surface: PxRect,
 ) -> Option<(i32, i32, PxRect)> {
-    // 親の鎖に図形の切り抜きが無い（E の id が親の鎖を含むので、前の鎖も同じ）
+    // まとめの 1 枚は局所の解像度で描いてから変換で重ねるので、物理の画素の写しと答えが揃わない
+    let group = |e: &DamageEntry| matches!(e.kind, EntryKind::Group { .. });
+    // 親の鎖に図形の切り抜きとまとめが無い（E の id が親の鎖を含むので、前の鎖も同じ）
     if c.now_chain
         .iter()
-        .any(|&k| now[k].kind == EntryKind::ClipGeometry)
+        .any(|&k| now[k].kind == EntryKind::ClipGeometry || group(&now[k]))
     {
         return None;
     }
     let (sub_prev, sub_now) = (&prev[c.prev.clone()], &now[c.now.clone()]);
-    // `SOURCE_OVER` でない重ね方の件が無い
+    // `SOURCE_OVER` でない重ね方の件とまとめが無い
     let unbounded = EntryKind::Draw { unbounded: true };
-    if sub_prev.iter().chain(sub_now).any(|e| e.kind == unbounded) {
+    if sub_prev
+        .iter()
+        .chain(sub_now)
+        .any(|e| e.kind == unbounded || group(e))
+    {
         return None;
     }
     // `shape` で k 番目どうしを対にし、対が在って前後の順が同じ

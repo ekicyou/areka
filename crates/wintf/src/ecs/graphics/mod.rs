@@ -1,10 +1,11 @@
 mod clip;
 mod command_list;
 mod components;
-mod composite;
+pub(crate) mod composite;
 mod core;
 mod damage;
 mod id_target;
+mod offscreen;
 mod readback;
 mod systems;
 pub mod visual;
@@ -16,6 +17,7 @@ pub use command_list::*;
 pub use components::*;
 pub use core::*;
 pub use id_target::*;
+pub use offscreen::*;
 pub use readback::*;
 pub use systems::*;
 pub use visual::*;
@@ -25,6 +27,8 @@ pub use wuc_resource::WucGraphicsResource;
 #[cfg(test)]
 mod composite_damage_tests;
 #[cfg(test)]
+mod composite_group_tests;
+#[cfg(test)]
 mod composite_scroll_tests;
 #[cfg(test)]
 mod composite_tests;
@@ -32,6 +36,8 @@ mod composite_tests;
 mod damage_tests;
 #[cfg(test)]
 mod id_target_tests;
+#[cfg(test)]
+mod offscreen_tests;
 #[cfg(test)]
 mod readback_tests;
 #[cfg(test)]

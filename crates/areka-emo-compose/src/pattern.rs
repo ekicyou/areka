@@ -78,8 +78,8 @@ pub enum Cell<'a> {
 /// pattern の現在コマ 1 枚。表示中 surface のアニメに属する transient な合成寄与。
 ///
 /// `surface_id` は常に 0 以上（負値センチネル `-1` 等は評価器が停止／非駆動として解決済みで、
-/// コマとしてはここへ載らない）。`method` は完全語彙を保持し、合成の実駆動は
-/// `Overlay` のみ（下流 plan の method ゲートが `is_implemented()` で選別する）。
+/// コマとしてはここへ載らない）。`method` は完全語彙を保持し、描くかは
+/// 下流 plan の method ゲートが `is_implemented()` で選別する。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PatternFrame {
     /// コマの surface_id（0 以上のみ・センチネルは評価器が解決済み）。

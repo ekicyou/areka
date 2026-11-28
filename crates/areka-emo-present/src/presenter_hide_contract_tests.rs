@@ -37,7 +37,7 @@ use super::test_support::{
 /// 枠の面と文字層スロットに期待する状態（可視／不可視の 2 値）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Layers {
-    /// 双方可視。surface は αマスク判定・slot は矩形判定（component 未付与時の既定と同値）。
+    /// 双方可視。surface は 入れ物の α の判定・slot は矩形判定（component 未付与時の既定と同値）。
     Visible,
     /// 双方不可視。surface・slot とも当たり判定停止（ポインタ透過）。
     Hidden,
@@ -56,7 +56,7 @@ fn assert_layers(
 ) {
     let (surface, slot) = mount_entities(presenter, target);
     let (want_visible, want_surface_hit, want_slot_hit) = match expected {
-        Layers::Visible => (true, HitTestMode::AlphaMask, HitTestMode::Bounds),
+        Layers::Visible => (true, HitTestMode::SurfaceAlpha, HitTestMode::Bounds),
         Layers::Hidden => (false, HitTestMode::None, HitTestMode::None),
     };
 
@@ -269,9 +269,13 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
         records.iter().any(|(e, _)| *e == slot),
         "文字層スロット entity の Visual 挿入が観測されていない（観測器が機能していない）: {records:?}"
     );
-    // 本題: 可視の値で挿入された Visual が一度も無いこと。
+    // 本題: 可視の値で挿入された Visual が一度も無いこと（まとめの節と計画の節は枠の面 entity の
+    // 下に在り、持ち主と一緒に隠れるので数えない）。
     assert!(
-        records.iter().all(|(_, visible)| !*visible),
+        records
+            .iter()
+            .filter(|(e, _)| *e == surface || *e == slot)
+            .all(|(_, visible)| !*visible),
         "指令経由の不可視構築で Visual が可視の値で挿入された（Requirement 1.2）: {records:?}"
     );
 

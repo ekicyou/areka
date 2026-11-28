@@ -1,4 +1,4 @@
-//! 本物の読み手から合成まで、動く絵をシェルとバルーンで通す。
+//! 本物の読み手から画面の外の描画まで、動く絵をシェルとバルーンで通す。
 //!
 //! 検体は `areka-emo-compose/tests/fixtures/animated-playback/`（中身は同じフォルダの README）。
 //! 決め手の画素は写し元 `areka-emo-atlas/src/testdata/animated/README.md` の表が正本:
@@ -9,16 +9,17 @@
 //! seriko は本物のアクター（時計つきの起動）。合図の時刻は注入の時計、刻みの時刻は注入の値で、
 //! 出た指令の列は FIFO なので決定論的に決まる（実時間は受け取りの待ちの上限にしか使わない）。
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use areka_emo_atlas::{AtlasTable, UseSelfAlpha, WicDecoderArm};
-use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, FilmSheet, PatternState};
+use areka_emo_compose::{BindSet, ComposedSurface, EmoWorld, FilmSheet, PatternState};
 use areka_emo_present::balloon::{build_balloon_target_from_faces, resolve_balloon_faces};
 use areka_emo_present::presenter::VisibilityOwnership;
-use areka_emo_present::{EmoPresenter, PresentCommand, load_shell_target};
+use areka_emo_present::{EmoPresenter, OffscreenRenderer, PresentCommand, load_shell_target};
 use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SerikoSink,
@@ -97,7 +98,7 @@ fn run(
     records.lock().unwrap().clone()
 }
 
-/// 合成した絵の (x, y) の乗算していない RGBA（不透明か全透明の画素だけを読む）。
+/// 描いた絵の (x, y) の乗算していない RGBA（不透明か全透明の画素だけを読む）。
 fn rgba(pic: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
     let at = ((y * pic.width() + x) * 4) as usize;
     let [b, g, r, a] = pic.bytes()[at..at + 4] else {
@@ -153,7 +154,7 @@ fn shell_films_play_from_the_real_reader_to_the_composer() {
     };
     let cmds = run(config, "0", CueCommand::Emote { key: "0".into() }, 49);
 
-    let mut composer = Composer::new();
+    let mut renderer = OffscreenRenderer::warp().expect("WARP の描き手");
     // 1 指令ごとの（rgb.apng 左, rgb.apng 右, alpha.webp, rgb.webp）のコマ。
     let frames: Vec<[u32; 4]> = cmds
         .iter()
@@ -167,9 +168,9 @@ fn shell_films_play_from_the_real_reader_to_the_composer() {
             else {
                 panic!("面 0 の Show だけが出るはず: {cmd:?}");
             };
-            let pic = composer
-                .compose(&world, atlas, 0, binds, pattern)
-                .expect("合成できる");
+            let pic = renderer
+                .render(&world, atlas, 0, binds, pattern)
+                .expect("描ける");
             assert_eq!((pic.width(), pic.height()), (16, 16), "外形は動かない");
             [
                 two_color_frame(rgba(&pic, 7, 7)),
@@ -218,7 +219,7 @@ fn load_balloon() -> (EmoWorld, AtlasTable) {
 fn balloon_films_play_from_the_real_reader_to_the_composer() {
     let (world, atlas) = load_balloon();
 
-    let mut composer = Composer::new();
+    let mut renderer = OffscreenRenderer::warp().expect("WARP の描き手");
     let mut play = |face: u32, ticks: u64| -> Vec<ComposedSurface> {
         let config = SerikoLoopConfig {
             shell_table: AnimationTable::empty(),
@@ -244,9 +245,9 @@ fn balloon_films_play_from_the_real_reader_to_the_composer() {
                     panic!("ShowBalloon だけが出るはず（知らせが無いので合図は 0 件）: {cmd:?}");
                 };
                 assert_eq!(*surface_id, face);
-                composer
-                    .compose(&world, &atlas, face, &BindSet::default(), pattern)
-                    .expect("合成できる")
+                renderer
+                    .render(&world, &atlas, face, &BindSet::default(), pattern)
+                    .expect("描ける")
             })
             .collect()
     };
@@ -300,6 +301,8 @@ struct Race {
     world: EmoWorld,
     atlas: AtlasTable,
     sheet: FilmSheet,
+    /// 表示層と同じ hardware の装置で描く（表示層の絵とバイトで比べるため）。
+    renderer: RefCell<OffscreenRenderer>,
     rest: Vec<u8>,
     last: Vec<u8>,
 }
@@ -318,6 +321,7 @@ impl Race {
             world,
             atlas,
             sheet,
+            renderer: RefCell::new(OffscreenRenderer::hardware().expect("hardware の描き手")),
             rest: Vec::new(),
             last: Vec::new(),
         };
@@ -328,9 +332,10 @@ impl Race {
     }
 
     fn compose(&self, pattern: &PatternState) -> Vec<u8> {
-        Composer::new()
-            .compose(&self.world, &self.atlas, 1, &BindSet::default(), pattern)
-            .expect("合成できる")
+        self.renderer
+            .borrow_mut()
+            .render(&self.world, &self.atlas, 1, &BindSet::default(), pattern)
+            .expect("描ける")
             .bytes()
             .to_vec()
     }
@@ -394,9 +399,9 @@ fn gpu_world() -> (crate::spine::GpuPermit, World) {
 /// だけで、`dump_balloon` の読む口は成立済みの絵を返す。
 #[test]
 fn close_then_show_race_keeps_order_through_the_bridge() {
+    let (_gpu, mut world) = gpu_world();
     let race = Race::new();
     let (emo_world, atlas) = load_balloon();
-    let (_gpu, mut world) = gpu_world();
     let t = balloon_target(0);
     let mut presenter = EmoPresenter::new();
     let window = world.spawn(DPI::from_dpi(96, 96)).id();

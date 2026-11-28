@@ -65,7 +65,8 @@ pub(crate) struct RoundPlan {
 /// - 帰属: 更新のあった見える節を、自分か祖先のいちばん近い自動の持ち主（用意中・上げた）へ、
 ///   無ければ自分へ数える。帰属先ごとにこの回 1 回の更新。
 /// - 判断するのは、この回に更新のあった帰属先とこの走査の列に居る自動の持ち主だけ（時刻が無い回はしない）。
-/// - 前順に判断し、上げると答えた候補の部分木の中の節は上げず、自動の持ち主は同じ回に吸い込みで戻す。
+/// - 前順に判断し、判断の後に用意中・上げたの持ち主の部分木の中の節は上げず、自動の持ち主は同じ回に吸い込みで戻す
+///   （入れ子の自動の持ち主を作らない・原点は手動の持ち主からの値）。
 /// - 置き場は節の下の手動の持ち主（`Embedded`）と自動の持ち主（`Auto`）に書く。
 /// - 記録: 相の移りの回だけ `debug!` を 1 行、見送りは理由が前の見送りと違うときだけ。節の下の手動の
 ///   持ち主の効かせられない形は `reported` で種類ごとに続く間 1 度 `warn!`。答えはログの水準で変えない。
@@ -221,7 +222,7 @@ fn decide(
             .unwrap_or(i);
         updated[to] = true;
     }
-    // 前順なので祖先が先。新しく上げた候補の部分木 [候補, promoted_end) の中は上げない。
+    // 前順なので祖先が先。用意中・上げた持ち主の部分木 [持ち主, promoted_end) の中は上げない。
     let mut promoted_end = 0;
     for (i, e) in entries.iter().enumerate() {
         let ScanKind::Node { phase } = e.kind else {
@@ -261,11 +262,11 @@ fn decide(
             };
             state.rule.step(now, updated[i], shape, readiness)
         };
-        if verdict == Verdict::Prepare {
-            promoted_end = e.end;
-        }
         record(e.entity, name, verdict, &mut state.skip_memo);
         let after = state.rule.phase();
+        if after != Phase::Node {
+            promoted_end = e.end;
+        }
         if after != before {
             state.built = false;
             auto.set_changed();

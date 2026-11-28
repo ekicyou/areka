@@ -1,6 +1,6 @@
 //! `FrameTiming`: 表示 1 コマ適用（`apply_show`）の段階別計時と perf サマリ行の emit。
 //!
-//! 表示 1 コマの適用を キャッシュ照会・合成・当たり判定マスク生成・表示の記録 の 4 段へ刻み、合計と併せて
+//! 表示 1 コマの適用を キャッシュ照会・計画・合成メモへの挿入・頁と葉の用意・節の写し の 5 段へ刻み、合計と併せて
 //! 1 適用 = 1 行の固定スキーマで出す。この行だけが `tools/perf/judge-perf.py`（判定スクリプト）と
 //! コードの間のデータ契約である。
 //!
@@ -16,17 +16,20 @@
 //!
 //! 固定文言 [`PERF_LINE_MESSAGE`]・`debug` 水準・target は本モジュールのモジュールパス
 //! （`areka_emo_present::presenter::timing`）＝既存の `RUST_LOG=areka_emo_present=debug` 流儀で
-//! そのまま拾える。フィールドは **11 個**（＋末尾の `frame`）:
+//! そのまま拾える。フィールドは **11 個**（＋その後ろの `frame` と節の写しの 5 欄）:
 //!
 //! - `target_id`（Debug）・`surface_id`（u32）・`cache_hit`（bool）: 適用対象と引き当ての可否
 //! - `t_cache_us` `t_compose_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
 //!   全段が常に出る。実行されなかった段は 0 で、判定スクリプトは「段フィールドの欠落」を行単位で検出でき、
 //!   部分集計を黙って出さずに済む
-//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた新規確保／容量成長の計数（供給元は `FrameBudget`）
+//! - `alloc_compose_dst` `alloc_mask`（u32）: CPU の合成先も α マスクも持たないので常に 0
+//!   （`judge-perf.py` の必須の欄なので欄は残す）。確保の計数は `alloc_plan`（供給元は `FrameBudget`）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
 //!   （キャッシュ容量の裁定材料）
-//! - `frame`（u32・末尾）: この適用が走った tick のフレーム番号。遷移観測チャネル（`wintf::transition`）の
+//! - `frame`（u32）: この適用が走った tick のフレーム番号。遷移観測チャネル（`wintf::transition`）の
 //!   全レコードと同じ番号系列で、段階別計時の行を遷移の時系列へ差し込むための唯一の鍵
+//! - `t_nodes_us`（u64・µs）・`plan_items` `plan_groups` `node_rebuilds` `alloc_plan`（u32）: 節の写しの所要・
+//!   表示した計画の項の数とまとめの数・節の写しが作り直した項の数・計画の項の列の確保（`frame` の後ろに足した欄）
 //!
 //! 既存の表示成立点の行（`"apply(ShowSurface): 表示・マスクを更新"`）とは別行で、同一適用の対として
 //! 隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は `judge-perf.py` と計時檻の再検証が要る。
@@ -55,25 +58,28 @@ pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 pub(super) enum Stage {
     /// キャッシュ照会（`ComposeCache::touch`）。
     CacheLookup,
-    /// 合成（`Composer::compose_into` / `compose_into_reusing`）。
+    /// 計画（`Composer::plan_into`・欄の名は `t_compose_us`）。
     Compose,
-    /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
-    MaskGen,
-    /// 表示の記録（**原寸** D2D bitmap 生成＋描画命令記録＋閉じる・外れのみ・ヒットは 0）。
+    /// 合成メモへの挿入（引き当て時は実行されない・欄の名は `t_mask_us`）。
+    Insert,
+    /// 頁の上げと計画の葉の記録（控えに在る分は引くだけ）。
     Upload,
+    /// 計画を描画面の節へ写す。
+    Nodes,
 }
 
 impl Stage {
     /// 段数（配列長の正本）。
-    const COUNT: usize = 4;
+    const COUNT: usize = 5;
 
     /// 記録配列上の位置。
     const fn index(self) -> usize {
         match self {
             Stage::CacheLookup => 0,
             Stage::Compose => 1,
-            Stage::MaskGen => 2,
+            Stage::Insert => 2,
             Stage::Upload => 3,
+            Stage::Nodes => 4,
         }
     }
 }
@@ -95,6 +101,10 @@ pub(super) struct EmitContext {
     /// この 1 フィールドで「段階別計時の行」と「遷移の時系列」が突合できる。供給元は
     /// 刻印と同じ `transition_record::stamp_of` の `frame` 1 箇所である。
     pub(super) frame: u32,
+    /// 表示した計画の項の数。
+    pub(super) plan_items: u32,
+    /// 表示した計画のまとめの数。
+    pub(super) plan_groups: u32,
 }
 
 /// 1 適用分の段階計時。適用の冒頭で開始し、各段の境界で区間を確定する。
@@ -166,8 +176,9 @@ impl FrameTiming {
         let stage_us = |stage: Stage| -> u64 { duration_us(self.stages[stage.index()]) };
         let t_cache_us = stage_us(Stage::CacheLookup);
         let t_compose_us = stage_us(Stage::Compose);
-        let t_mask_us = stage_us(Stage::MaskGen);
+        let t_mask_us = stage_us(Stage::Insert);
         let t_upload_us = stage_us(Stage::Upload);
+        let t_nodes_us = stage_us(Stage::Nodes);
         let t_total_us = as_micros_u64(now.saturating_duration_since(self.started));
 
         let EmitContext {
@@ -176,11 +187,14 @@ impl FrameTiming {
             cache_hit,
             key_hash,
             frame,
+            plan_items,
+            plan_groups,
         } = *ctx;
         let BudgetDelta {
-            alloc_compose_dst,
-            alloc_mask,
+            alloc_plan,
+            node_rebuilds,
         } = allocs;
+        let (alloc_compose_dst, alloc_mask) = (0u32, 0u32);
 
         // 文言は PERF_LINE_MESSAGE の写し（リテラル必須）。水準・target と共に judge-perf.py との
         // 契約面で、変更は判定スクリプトと計時檻の再検証が要る。
@@ -200,6 +214,11 @@ impl FrameTiming {
             // は `名前=値` を辞書化して必須フィールドの存在だけを見るので、末尾への追加は互換である。
             // 既存の perf 行に `frame` という名前は無いので、後勝ちの上書きも起きない。
             frame,
+            t_nodes_us,
+            plan_items,
+            plan_groups,
+            node_rebuilds,
+            alloc_plan,
             "perf(apply_show): 段階別計時"
         );
     }

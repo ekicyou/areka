@@ -303,12 +303,11 @@ fn the_show_path_builds_the_surface_records_behind_the_front_guard() {
     );
 }
 
-/// 前値（原寸）は**上書きより手前**で読み、記録の失敗分岐は容量回収より手前に在る。
+/// 前値（原寸）は**上書きより手前**で読み、頁と葉の用意の失敗分岐は容量回収より手前に在る。
 ///
 /// 上書きが読みより手前へ動くと `resized`／`size_changed` が常に偽になり、遷移観測も窓寸
 /// reconcile 要求も静かに止まる（`debug!` ゆえ濾過テストでは見えない）。失敗分岐は
-/// 観測点で、記録が回収より手前で落ちることが「失敗時は適用前の
-/// まま」の根拠である。
+/// 観測点で、用意が回収より手前で落ちることが「失敗時は適用前のまま」の根拠である。
 #[test]
 fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmoved() {
     let code = code_only(include_str!("show.rs"));
@@ -334,16 +333,16 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     );
     assert_eq!(code.matches(write).count(), 1, "原寸の更新点が 1 つでない");
 
-    let record_at = at(".native_scratch(|scratch| record_display(dc, scratch, repeat))");
-    // 失敗の原因を覚える 3 行（`failure_note`）をはさんで早期復帰する。
+    let prepare_at = at("prepare_gpu(");
+    // 引数 7 つの後で `?` の早期復帰になる。
     assert_eq!(
-        lines[record_at + 1..record_at + 8].join(" "),
-        "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } return Err(e);",
-        "記録の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
+        lines[prepare_at + 8],
+        ")?;",
+        "頁と葉の用意の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
     );
     assert!(
-        record_at < at(recycle),
-        "記録が回収より後ろ（空スロットが残る）"
+        prepare_at < at(recycle),
+        "頁と葉の用意が回収より後ろ（空スロットが残る）"
     );
 }
 
@@ -373,9 +372,10 @@ fn the_refresh_path_records_both_skips_behind_the_front_guard() {
     );
 }
 
-/// perf 行の `frame=` は**末尾**に足す（既存フィールドの順序・文言は不変）。
+/// perf 行の `frame=` は既存の末尾 `key_hash` の直後に足し、節の写しの欄はさらにその後ろに足す
+/// （既存フィールドの順序・文言は不変）。
 #[test]
-fn the_perf_line_appends_the_frame_field_at_the_very_end() {
+fn the_perf_line_appends_the_frame_field_after_the_existing_ones() {
     let code = code_only(include_str!("timing.rs"));
     let lines = code_lines(&code);
 
@@ -384,12 +384,19 @@ fn the_perf_line_appends_the_frame_field_at_the_very_end() {
         .position(|line| *line == "\"perf(apply_show): 段階別計時\"")
         .expect("perf 行の固定文言が本文に無い");
     assert_eq!(
-        lines[at - 1],
-        "frame,",
-        "`frame` が perf 行の末尾フィールドでない（既存フィールドの順序を崩している）"
+        lines[at - 6..at],
+        [
+            "frame,",
+            "t_nodes_us,",
+            "plan_items,",
+            "plan_groups,",
+            "node_rebuilds,",
+            "alloc_plan,",
+        ],
+        "`frame` と節の写しの欄が perf 行の末尾でない（既存フィールドの順序を崩している）"
     );
     assert_eq!(
-        lines[at - 2],
+        lines[at - 7],
         "key_hash,",
         "`frame` の直前が従来の末尾フィールド `key_hash` でない（既存順序が動いている）"
     );

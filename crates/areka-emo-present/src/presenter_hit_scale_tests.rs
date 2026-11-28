@@ -6,7 +6,7 @@ use bevy_ecs::world::World;
 
 use super::test_support::{
     attach_and_show_hit_target, five_shapes_assets, gradient, load_hit_shell, make_world_with_gpu,
-    name_at, show_ok, spawn_window_with_dpi,
+    name_at, paint_screen, show_ok, spawn_window_with_dpi,
 };
 use super::{EmoPresenter, ScaleRatio, TargetId};
 
@@ -22,6 +22,7 @@ fn shown_at(assets: (EmoWorld, AtlasTable), dpi: u16, author_dpi: u16) -> (World
     let (emo_world, atlas) = assets;
     presenter.attach_target(T, window, emo_world, atlas, author_dpi);
     show_ok(&mut presenter, &mut world, T, 0);
+    paint_screen(&mut world);
     (world, presenter)
 }
 
@@ -45,6 +46,7 @@ fn client_span(s: i64, num: u32, den: u32) -> std::ops::Range<i64> {
 }
 
 fn walk_names(
+    world: &World,
     presenter: &EmoPresenter,
     (w, h): (i64, i64),
     (num, den): (u32, u32),
@@ -54,11 +56,11 @@ fn walk_names(
         for sx in 0..w {
             let (xs, ys) = (client_span(sx, num, den), client_span(sy, num, den));
             assert!(!xs.is_empty() && !ys.is_empty(), "({sx},{sy})");
-            let first = presenter.hit_region_client(T, xs.start, ys.start);
+            let first = presenter.hit_region_client(world, T, xs.start, ys.start);
             let want = first.region.map(str::to_owned);
             for cy in ys.clone() {
                 for cx in xs.clone() {
-                    let hit = presenter.hit_region_client(T, cx, cy);
+                    let hit = presenter.hit_region_client(world, T, cx, cy);
                     assert_eq!(hit.surface_point, (sx, sy), "client ({cx},{cy})");
                     assert_eq!(
                         hit.region.map(str::to_owned),
@@ -74,11 +76,11 @@ fn walk_names(
 }
 
 fn identity_names(assets: (EmoWorld, AtlasTable), size: (i64, i64)) -> Vec<Option<String>> {
-    let (_world, presenter) = shown_at(assets, 96, 96);
+    let (mut world, presenter) = shown_at(assets, 96, 96);
     let mut names = Vec::new();
     for y in 0..size.1 {
         for x in 0..size.0 {
-            names.push(name_at(&presenter, T, x, y).map(str::to_owned));
+            names.push(name_at(&mut world, &presenter, T, x, y).map(str::to_owned));
         }
     }
     names
@@ -91,10 +93,10 @@ fn every_screen_pixel_of_a_surface_pixel_names_the_same_shape() {
         assert!(want.iter().any(|n| n.as_deref() == Some(name)), "{name}");
     }
     for (dpi, author, num, den) in SCALES {
-        let (_world, presenter) = shown_at(five_shapes_assets(), dpi, author);
+        let (world, presenter) = shown_at(five_shapes_assets(), dpi, author);
         assert_eq!(presenter.applied_ratio(T), ScaleRatio::new(num, den));
         assert_eq!(
-            walk_names(&presenter, (80, 16), (num, den)),
+            walk_names(&world, &presenter, (80, 16), (num, den)),
             want,
             "scale {num}/{den}"
         );
@@ -114,8 +116,8 @@ fn rect_edge_stays_left_top_inclusive_right_bottom_exclusive_at_every_scale() {
         ((15, 20), None),
     ];
     for (dpi, author, num, den) in [(96, 96, 1, 1)].into_iter().chain(SCALES) {
-        let (_world, presenter) = shown_at(rect_edges(), dpi, author);
-        let names = walk_names(&presenter, (40, 40), (num, den));
+        let (world, presenter) = shown_at(rect_edges(), dpi, author);
+        let names = walk_names(&world, &presenter, (40, 40), (num, den));
         for ((sx, sy), want) in edge_cases {
             assert_eq!(
                 names[(sy * 40 + sx) as usize].as_deref(),
@@ -133,13 +135,14 @@ fn visible_surface_hit_uses_applied_scale_at_k2() {
     attach_and_show_hit_target(&mut presenter, &mut world, T, 192);
     assert_eq!(presenter.current_surface_id(T), Some(1000));
     assert_eq!(presenter.applied_ratio(T), ScaleRatio::new(2, 1));
+    paint_screen(&mut world);
 
     for (client, want_region, want_point) in [
         ((360, 192), Some("Head"), (180, 96)),
         ((420, 620), Some("Arm"), (210, 310)),
         ((210, 310), None, (105, 155)),
     ] {
-        let hit = presenter.hit_region_client(T, client.0, client.1);
+        let hit = presenter.hit_region_client(&world, T, client.0, client.1);
         assert_eq!(hit.surface_point, want_point, "client {client:?}");
         assert_eq!(hit.region, want_region, "client {client:?}");
     }

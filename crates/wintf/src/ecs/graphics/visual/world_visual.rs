@@ -1,6 +1,7 @@
 use super::promotion::Phase;
 use super::{
-    AutoPromotion, MixMode, OwnSurface, Visual, VisualDrawContent, VisualTransform, VisualVersion,
+    AutoPromotion, MixMode, OwnSurface, Visual, VisualDrawContent, VisualGroup, VisualTransform,
+    VisualVersion,
 };
 use crate::ecs::Size;
 use crate::ecs::common::MAX_ANCESTOR_DEPTH;
@@ -71,6 +72,7 @@ impl Default for WorldVisual {
 /// 節の種類＝`WorldVisual` を持ち、`GraphicsCommandList` と `OwnSurface` を持たない（自動で上げた持ち主も
 /// 節の種類）。ほかは手動の描画面の持ち主。新しい欄は先頭に置く（後ろから数える `..` の形を崩さない）。
 pub(crate) type FillData = (
+    Option<Ref<'static, VisualGroup>>,
     Has<GraphicsCommandList>,
     Has<OwnSurface>,
     Option<&'static AutoPromotion>,
@@ -124,8 +126,7 @@ pub struct TreeScan {
 }
 
 impl TreeScan {
-    /// 見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く（本番は 1 回の判断の分け方を使う）。
-    #[cfg(test)]
+    /// 見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く（画面は 1 回の判断の分け方を使う）。
     pub(crate) fn visible_nodes(&self) -> impl Iterator<Item = (Entity, usize)> + '_ {
         self.entries
             .iter()
@@ -202,7 +203,7 @@ impl ClipClass {
 pub(crate) struct AncestorAcc {
     /// 祖先の節の `clamped_opacity` の積。
     pub opacity: f32,
-    /// 祖先に不透明度 1 未満か角丸・任意の図形の切り抜きが在る。
+    /// 祖先に不透明度 1 未満か角丸・任意の図形の切り抜きかまとめの節が在る。
     pub layer: bool,
     /// 祖先の矩形の切り抜きの交わり（親の持ち主の DIP・軸に沿うものだけ）。
     pub rect_clip: Option<Aabb>,
@@ -223,11 +224,19 @@ impl AncestorAcc {
     };
 
     /// 節 `visual`（配置の大きさ `size`・埋めた `world`）の子へ渡す積み重ね。
-    fn under(self, visual: &Visual, size: Size, world: &WorldVisual, source_over: bool) -> Self {
+    fn under(
+        self,
+        visual: &Visual,
+        size: Size,
+        world: &WorldVisual,
+        source_over: bool,
+        group: bool,
+    ) -> Self {
         let opacity = visual.clamped_opacity();
         let mut acc = Self {
             opacity: self.opacity * opacity,
             layer: self.layer
+                || group
                 || opacity < 1.0
                 || matches!(
                     ClipClass::of(visual.clip.as_ref()),
@@ -262,7 +271,7 @@ impl AncestorAcc {
 ///   節の種類なので通り抜ける。
 /// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
 ///   `reported` で、誤りが続く間は 1 回だけにする（止めるは毎回行う）。
-/// - `Visual` か描く中身が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
+/// - `Visual`・描く中身・まとめ（`VisualGroup`）が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
 ///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`
 ///   （描き直しになる）・`transform_origin`（版が余分に上がるだけ）も入る。
 /// - 値が変わった節だけ書く。戻り値「変化あり」は、版の上がり・行列などの変化・節の入り
@@ -292,6 +301,7 @@ pub(crate) fn fill_world_visuals(
         .collect();
     while let Some((e, depth, parent, hidden, acc)) = stack.pop() {
         let Ok((
+            group,
             has_list,
             has_own,
             auto,
@@ -316,9 +326,11 @@ pub(crate) fn fill_world_visuals(
                 .map_or(Matrix3x2::identity(), |a| a.offset.into());
         let size = arrangement.as_ref().map_or_else(Size::default, |a| a.size);
         let own_clip = ClipClass::of(visual.clip.as_ref());
+        // `SOURCE_OVER` でないまとめは 1 枚を切り抜きまで広げて重ねるので、そうした件と同じ扱い。
         let source_over = content
             .as_ref()
-            .is_none_or(|c| c.mix_mode == MixMode::default());
+            .is_none_or(|c| c.mix_mode == MixMode::default())
+            && group.as_ref().is_none_or(|g| g.mix == MixMode::default());
         let idx = entries.len();
         if wv.is_none() || has_list || has_own {
             let mut w = WorldVisual::from_world_mat(local * parent_world);
@@ -350,7 +362,9 @@ pub(crate) fn fill_world_visuals(
             }
             continue;
         }
-        let bump = visual.is_changed() || content.as_ref().is_some_and(|c| c.is_changed());
+        let bump = visual.is_changed()
+            || content.as_ref().is_some_and(|c| c.is_changed())
+            || group.as_ref().is_some_and(|g| g.is_changed());
         if bump {
             bumped.push(e);
         }
@@ -377,7 +391,7 @@ pub(crate) fn fill_world_visuals(
                 || transform.as_ref().is_some_and(|t| t.is_changed())
                 || arrangement.as_ref().is_some_and(|a| a.is_changed()));
         let phase = auto.map_or(Phase::Node, |a| a.rule.phase());
-        let child_acc = acc.under(&visual, size, &w, source_over);
+        let child_acc = acc.under(&visual, size, &w, source_over, group.is_some());
         entries.push(ScanEntry {
             entity: e,
             depth,

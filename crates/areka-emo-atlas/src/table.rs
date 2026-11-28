@@ -2,7 +2,7 @@
 //!
 //! 本層が emo-compose と共有する成果物契約を**正本として定義**する。識別子は二層で、
 //! ランタイムキー＝`ElementId(u32)`（密 index・決定的採番・毎フレーム O(1) 引き）／
-//! ソースキー＝`AtlasKey{ set, rel_path }`（無改変相対パス・重複排除／golden／
+//! ソースキー＝`AtlasKey{ set, rel_path, kind }`（無改変相対パス＋絵の種類・重複排除／golden／
 //! デバッグ逆引き用にテーブル保持）。空エントリは
 //! `AtlasEntry.placement: Option<Placement>`（`None`＝転写スキップ）で表現する。
 //! 頁バッファは `AtlasPage{ bytes: Arc<[u8]>, width, height, stride }`
@@ -21,13 +21,24 @@ pub struct ElementId(pub u32);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SetId(pub u32);
 
-/// ソースキー＝出所セット＋無改変相対パス（環境非依存・デバッグ逆引き用に保持）。
+/// ソースキー＝出所セット＋無改変相対パス＋絵の種類（環境非依存・デバッグ逆引き用に保持）。
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AtlasKey {
     /// shell / balloon 等の出所（同名ファイル誤同一視を防ぐ）。
     pub set: SetId,
     /// ElementPath 無改変（サブディレクトリ含む）。
     pub rel_path: String,
+    /// 同じ絵から作った通常の絵と `asis` 用の絵を分ける。
+    pub kind: PictureKind,
+}
+
+/// アトラスの絵の種類。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum PictureKind {
+    /// 乗算済み・透過の扱いを当て・透明な縁を切った絵。
+    Normal,
+    /// `asis` で描く絵。乗算せず・透過色を抜かず・縁を切らず・α＝255 の原寸。
+    Asis,
 }
 
 /// 幾何プリミティブ（wintf::types と別定義・純粋層自前）。
@@ -202,13 +213,23 @@ impl AtlasTable {
         &self.entries[id.0 as usize]
     }
 
-    /// 【構築時のみ】(set, 相対パス)→`ElementId`（emo-compose が自ツリー構築時に一度
+    /// 【構築時のみ】(set, 相対パス)→通常の絵の `ElementId`（emo-compose が自ツリー構築時に一度
     /// resolve し、以後 `ElementId` を保持）。既知は `Some`・未知は `None`。
     pub fn resolve(&self, set: SetId, rel_path: &str) -> Option<ElementId> {
+        self.lookup(set, rel_path, PictureKind::Normal)
+    }
+
+    /// 【構築時のみ】(set, 相対パス)→`asis` 用の絵の `ElementId`。`asis` で参照されない絵は `None`。
+    pub fn resolve_asis(&self, set: SetId, rel_path: &str) -> Option<ElementId> {
+        self.lookup(set, rel_path, PictureKind::Asis)
+    }
+
+    fn lookup(&self, set: SetId, rel_path: &str, kind: PictureKind) -> Option<ElementId> {
         // AtlasKey は借用キーで引けないため一時キーを組む（構築時の一度きりゆえ許容）。
         let key = AtlasKey {
             set,
             rel_path: rel_path.to_owned(),
+            kind,
         };
         self.resolve.get(&key).copied()
     }
@@ -269,10 +290,12 @@ mod tests {
             AtlasKey {
                 set: SetId(0),
                 rel_path: "surface0.png".into(),
+                kind: PictureKind::Normal,
             },
             AtlasKey {
                 set: SetId(0),
                 rel_path: "surface1.png".into(),
+                kind: PictureKind::Normal,
             },
         ];
         let entries = vec![
@@ -343,7 +366,8 @@ mod tests {
             t.key(id),
             &AtlasKey {
                 set: SetId(0),
-                rel_path: "surface1.png".into()
+                rel_path: "surface1.png".into(),
+                kind: PictureKind::Normal,
             }
         );
         assert_eq!(t.len(), 2);

@@ -8,8 +8,8 @@
 //! 固定する契約は 4 つである。
 //!
 //! 1. **perf サマリ行のスキーマ**:
-//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（時間 5（段 4＋合計）・
-//!    確保 2 ＋ 同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
+//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・18 フィールド **ちょうど**（時間 6（段 5＋合計）・
+//!    確保 3 ＋ 同定 3 ＋ `key_hash`・`frame`・`message`・計画の項とまとめの数・節の作り直しの数）。撤去した段（`t_resample_us`）・撤去した発生点
 //!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
 //! 2. **既存の表示成立点の行の不変性**（
 //!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・全フィールド
@@ -23,7 +23,7 @@
 //! # 実時間を合否条件に使わない
 //!
 //! `sleep`・スピン・経過ミリ秒の閾値は 1 つも使わない。非 0 を主張するのは
-//! **入力の大きさが決めている段**だけである——合成・マスク生成・表示の記録は
+//! **入力の大きさが決めている段**だけである——合成・表示の記録は
 //! いずれも本檻が選んだ 240×180（原寸 172,800 バイト・k に依らず同じ画素数）を舐める作業であり、
 //! キャッシュ照会段は本檻が渡す 10 万要素の bind 集合の等価比較（400KB の逐語比較）が支配する。
 //! いずれも µs 分解能の 1 目盛りに対して 1 桁以上の余裕があり、「速いマシンなら 0 になる」形の
@@ -104,17 +104,22 @@ const INFO_LINE_FIELDS: [&str; 13] = [
 /// （既存フィールドの順序を崩していないこと）は
 /// `presenter/transition_record_tests.rs::the_perf_line_appends_the_frame_field_at_the_very_end`
 /// が本文走査で固定している。
-const PERF_LINE_FIELDS: [&str; 13] = [
+const PERF_LINE_FIELDS: [&str; 18] = [
     "alloc_compose_dst",
     "alloc_mask",
+    "alloc_plan",
     "cache_hit",
     "frame",
     "key_hash",
     "message",
+    "node_rebuilds",
+    "plan_groups",
+    "plan_items",
     "surface_id",
     "t_cache_us",
     "t_compose_us",
     "t_mask_us",
+    "t_nodes_us",
     "t_total_us",
     "t_upload_us",
     "target_id",
@@ -217,7 +222,7 @@ fn assert_perf_line_contract(ev: &CapturedEvent) {
 
 /// 段の非 0 を入力の大きさで担保するための native 外形（240×180＝172,800 バイト）。
 ///
-/// 合成・マスク生成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
+/// 合成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
 /// 1 目盛りに対して 1 桁以上の余裕がある（閾値ではなく入力で決める）。
 /// 拡大は wintf の変換行列が掛けるので、舐める量は k に依らない。
 const NATIVE_W: u32 = 240;
@@ -277,13 +282,13 @@ fn attach(
 ///
 /// 引き当てミスの初回適用は **4 段すべてが実行される唯一の入力**である（k の値では段が
 /// 増減しない——拡大は wintf の変換行列が掛けるため経路が分岐しない）。ゆえに
-/// 合成・マスク・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
+/// 合成・表示の記録の段の `timing.mark(..)` を 1 つ削ると、その段が 0 になって RED になる
 /// （照会段の mark は [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が固定する）。同様に
 /// `note_alloc` を 1 つ削ると該当 `alloc_*` が 0 になって RED になる。
 ///
 /// # 殺す誤実装
 ///
-/// - 合成・マスク・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
+/// - 合成・表示の記録の段の `timing.mark(Stage::X)` の削除・分岐外への移動 → 該当段が 0 で RED
 /// - `presenter/budget.rs` の `self.note_alloc(AllocSite::X)` の削除 → 該当 `alloc_*` が 0 で RED
 /// - `timing.emit` を成立点から引き剥がす → 隣接判定で RED
 /// - 表示成立点の行の文言・水準・フィールドの変更 → [`assert_info_line_contract`] で RED
@@ -334,12 +339,12 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
 
     // (i) mark の設置位置: ミス経路は 4 段すべてが実行される唯一の入力である。
     //
-    // 照会段（`t_cache_us`）だけは本檻で非 0 を主張しない——ミス経路の照会は空スロットの
-    // 判定で終わり、舐める入力量が無いためである（照会段の mark は
+    // 照会段（`t_cache_us`）と挿入の段（`t_mask_us`）は本檻で非 0 を主張しない——ミス経路の照会は
+    // 空スロットの判定で終わり、挿入は所有の移し替えだけで、どちらも舐める入力量が無いためである（照会段の mark は
     // [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が
     // 10 万要素の bind 集合の逐語比較で固定する）。フィールドの存在自体は
     // [`assert_perf_line_contract`] が集合ちょうどで押さえている。
-    for name in ["t_compose_us", "t_mask_us", "t_upload_us", "t_total_us"] {
+    for name in ["t_compose_us", "t_upload_us", "t_nodes_us", "t_total_us"] {
         assert_ne!(
             stage_us(&perf, name),
             0,
@@ -349,26 +354,34 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_stages_and_alloc_wired() {
         );
     }
 
-    // (iv) alloc_* は実 FrameBudget 由来。ミスの初回適用は発生点 2 をどちらも 1 回ずつ踏む。
+    // (iv) alloc_* は実 FrameBudget 由来。ミスの初回適用は計画の席を 1 回踏む。CPU の合成先は無いので 0。
     assert_eq!(
         field(&perf, "alloc_compose_dst"),
-        "1",
-        "合成先の確保が計数されていない"
+        "0",
+        "CPU の合成先はもう無い"
     );
+    assert_eq!(field(&perf, "alloc_mask"), "0", "α マスクはもう作らない");
     assert_eq!(
-        field(&perf, "alloc_mask"),
+        field(&perf, "alloc_plan"),
         "1",
-        "当たり判定マスクの確保が計数されていない"
+        "計画の席の確保が計数されていない"
+    );
+    // 最初の表示は計画の項を全部節にする（まとめは無い・1 枚の面）。
+    assert_eq!(field(&perf, "plan_items"), "1", "表示した計画の項の数");
+    assert_eq!(field(&perf, "plan_groups"), "0", "表示した計画のまとめの数");
+    assert_eq!(
+        field(&perf, "node_rebuilds"),
+        "1",
+        "最初の表示で作った節の数"
     );
 }
 
 /// **配線の檻・ヒット経路**: 引き当てが成立した適用では
-/// 合成・マスク生成・表示の記録の 3 段が**厳密に 0**で出て、確保計数も全て 0 になる。
-/// ヒット経路は GPU 呼び出しを 1 つも持たない（記録はエントリが束ねている）ため、
-/// `t_upload_us` も 0 側である——実行される段は照会段だけである。
+/// 合成・挿入の 2 段が**厳密に 0**で出て、確保計数も節の作り直しも全て 0 になる。
+/// 頁と葉の用意と節の写しはヒットでも走る（控えの葉を引き、同じ計画なら節を変えない）。
 ///
 /// 「どの段が 0 になるか」は mark をどの分岐へ置いたかの構造的帰結であり、測定マシンの速度では
-/// 変わらない。`timing.mark(Stage::Compose)`／`timing.mark(Stage::Upload)` をミス分岐の外
+/// 変わらない。`timing.mark(Stage::Compose)`／`timing.mark(Stage::Insert)` をミス分岐の外
 /// （無条件）へ移す改変・`note_alloc` をヒット経路でも踏む位置へ移す改変は、いずれもここで
 /// RED になる。
 ///
@@ -449,9 +462,7 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     );
 
     // 実行されなかった段は**厳密に 0**（mark を無条件へ移すと非 0 になり RED）。
-    // `t_upload_us`＝表示の記録もヒットでは 0 である（記録はエントリが束ねており、
-    // ヒット経路には GPU 呼び出しが 1 つも無い）。
-    for name in ["t_compose_us", "t_mask_us", "t_upload_us"] {
+    for name in ["t_compose_us", "t_mask_us"] {
         assert_eq!(
             stage_us(hit, name),
             0,
@@ -468,8 +479,13 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
             hit.fields
         );
     }
-    // 確保計数も全 0（`note_alloc` をヒット経路でも踏む位置へ移すと RED）。
-    for name in ["alloc_compose_dst", "alloc_mask"] {
+    // 確保計数も全 0（`note_alloc` をヒット経路でも踏む位置へ移すと RED）。同じ計画なので節も作り直さない。
+    for name in [
+        "alloc_compose_dst",
+        "alloc_mask",
+        "alloc_plan",
+        "node_rebuilds",
+    ] {
         assert_eq!(
             field(hit, name),
             "0",
@@ -604,9 +620,9 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     );
 }
 
-/// **表示記録前の早期復帰でも 1 行も出ない**: 表示の記録に
+/// **頁と葉の用意の前後の早期復帰でも 1 行も出ない**: 頁の上げと葉の記録に
 /// 必要な資源が World に無い経路（`GraphicsCore` 不在）と、記録そのものが失敗した経路
-/// （`record_display` の失敗注入）でも 表示成立点の行・perf 行はいずれも出ない。
+/// （`GpuAtlas` の失敗注入）でも 表示成立点の行・perf 行はいずれも出ない。
 ///
 /// どちらも**合成を済ませた後**に落ちる（＝確保計数は増えているのに行が出ない）ため、
 /// 「emit を成立点より手前へ動かす」改変を単独で殺す。`FrameTiming` が `emit` で `self` を
@@ -650,7 +666,7 @@ fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
         );
         world.insert_resource(gfx);
 
-        // 陰性 2: 記録の失敗（`record_display` の 1 点目＝`CreateBitmap` へ注入）。
+        // 陰性 2: 頁の上げの失敗（`CreateBitmap` へ注入）。
         let b = show_with_armed_fault(
             &mut presenter,
             &mut world,

@@ -3,8 +3,8 @@
 //! 検体ファイルは読まず、テストの中に surfaces.txt の文面を持つ。
 
 use super::{
-    AppendTarget, BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, Element, ElementPath,
-    parse, parse_boxes,
+    AppendTarget, BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, DrawMethod, Element,
+    ElementOptions, ElementPath, parse, parse_boxes,
 };
 
 fn line(fields: &[&str]) -> Vec<String> {
@@ -185,12 +185,16 @@ fn image_reader_ignores_box_lines() {
                 path: ElementPath::new("surface0.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
             Element {
                 layer: 2,
                 path: ElementPath::new("face.png".to_string()),
                 x: 5,
                 y: 6,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
         ]
     );

@@ -27,13 +27,15 @@ use areka_emo_atlas::{
     AlphaParams, AnimationLimits, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId,
     SurfaceSet, UseSelfAlpha, bake_quiet, bake_with_limits,
 };
+use areka_emo_compose::method::is_implemented_name;
 use areka_emo_compose::{
     BaseImageReport, BoxIssue, BoxLayout, BoxReport, ElementKind, EmoWorld, NestIssue, NestReport,
     ShapeIssue, element_kind, fold_boxes, shape_issues,
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
-    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellText, Surface,
+    AppendTarget, BoxDefinition, CursorBrace, DrawMethod, Element, ElementOptions, ElementPath,
+    Shell, ShellText, Surface,
 };
 
 use crate::balloon::face_digits_of;
@@ -368,6 +370,7 @@ fn load_shell_target_with(
         shell,
         boxes,
         undrawn,
+        image_elements,
         cursor_braces,
         issues,
     } = areka_parsers::shell::parse_all(&content);
@@ -460,7 +463,10 @@ fn load_shell_target_with(
         for issue in &target.box_report.issues {
             log_box_issue(issue);
         }
-        for line in &undrawn {
+        let not_composed = image_elements
+            .iter()
+            .filter(|line| !is_implemented_name(&line.method));
+        for line in undrawn.iter().chain(not_composed) {
             tracing::warn!(
                 heading = line.heading.as_str(),
                 element = line.element.as_str(),
@@ -871,6 +877,8 @@ fn base_image_surface(id: u32, file: &str) -> Surface {
             path: ElementPath::new(file.to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }],
         collisions: Vec::new(),
         animations: Vec::new(),

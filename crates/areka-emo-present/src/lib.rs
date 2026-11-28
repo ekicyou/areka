@@ -3,9 +3,9 @@
 //! `areka-emo-atlas`（1/3・アトラス正本）→ `areka-emo-compose`（2/3・純粋合成）→
 //! 本クレート `areka-emo-present`（3/3・提示段）と連なる emo track の最終段である。
 //! 上流が生成した静的合成済みビットマップ `ComposedSurface` を、wintf の WUC
-//! （Windows.UI.Composition）表示面へアップロード・提示し、当たり判定用 AlphaMask を
-//! ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・
-//! 指令適用・マスク同期」を UI スレッド上で統括する。
+//! （Windows.UI.Composition）表示面へアップロード・提示する。当たりは描画面の入れ物の α を読む。
+//! 合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・指令適用・当たり」を
+//! UI スレッド上で統括する。
 //!
 //! ## 指令 API 契約正本（command-API contract source of truth）
 //!
@@ -22,7 +22,7 @@
 //! ## 構成
 //!
 //! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
-//! 合成キャッシュ（`cache`）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+//! 合成キャッシュ（`cache`）・計画の節への写し（`draw_nodes`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
 //! 提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
@@ -37,16 +37,21 @@ pub mod balloon_definitions;
 pub mod balloon_marker;
 pub(crate) mod cache;
 pub mod command;
-/// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
-/// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
+/// 表示の段の装置の失敗の注入点（`DisplayFault`・テストビルドでだけ実体を持つ）。
 pub(crate) mod display;
+/// 計画を描画の木の節へ写す部品と、重ね方 → D2D の合成モードの写し（`mix_mode_of`）。
+pub(crate) mod draw_nodes;
+/// 装置ごとのアトラスの頁の GPU の絵と葉の命令の列の控え（`GpuAtlas`）。
+pub(crate) mod gpu_atlas;
 /// 当たり判定の並び → ID の形の列（`hit_shapes`）と、`region` のマスクの控え（`HitMasks`）。
 pub(crate) mod hit_shapes;
 /// 読み込みの記録を出すかどうかの口（`LoadRecords`）。読み込みの権威の入口が記録の行を切り替える。
 pub(crate) mod load_records;
 /// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール（公開 API ではない）。
 pub(crate) mod mount;
-/// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する統括ハブ。
+/// 画面の外の描き手（`OffscreenRenderer`）。使い捨ての描画の木に計画を写し、原寸の絵に描いて読む。
+pub mod offscreen;
+/// 提示統括（`EmoPresenter`）。計画・キャッシュ・節の写し・窓装着・当たり判定を UI スレッド上で結線する統括ハブ。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
@@ -68,6 +73,7 @@ pub mod shell_target;
 pub use areka_emo_compose::ScaleRatio;
 pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
+pub use offscreen::OffscreenRenderer;
 pub use presenter::{AppliedScale, ClientHit, EmoPresenter, NeverShown, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 pub use shell_target::{ShellLoadError, ShellTarget, load_shell_target, load_shell_target_quiet};

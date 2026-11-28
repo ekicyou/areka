@@ -19,8 +19,8 @@ use crate::world::EmoWorld;
 const TEXT: &str = "charset,UTF-8\r\n\
     surface0\r\n{\r\nelement0,overlay,base.png,0,0\r\n\
     animation0.interval,bind\r\nanimation0.pattern0,overlay,10,0,0,0\r\n\
-    animation1.interval,bind\r\nanimation1.pattern0,replace,20,0,0,0\r\n\
-    animation2.interval,sometimes\r\nanimation2.pattern0,move,0,0,5,5\r\nanimation2.pattern1,start,0,0,0,0\r\nanimation2.pattern2,replace,-1,0,0,0\r\n}\r\n\
+    animation1.interval,bind\r\nanimation1.pattern0,auto,20,0,0,0\r\n\
+    animation2.interval,sometimes\r\nanimation2.pattern0,move,0,0,5,5\r\nanimation2.pattern1,start,0,0,0,0\r\nanimation2.pattern2,auto,-1,0,0,0\r\n}\r\n\
     surface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
     animation0.interval,bind\r\nanimation0.pattern0,overlay,10,0,1,1\r\n}\r\n\
     surface20\r\n{\r\nelement0,overlay,part.png,0,0\r\n}\r\n";
@@ -38,7 +38,7 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
                 surface: 0,
                 animation: 1,
                 pattern: 0,
-                method: "replace".to_string(),
+                method: "auto".to_string(),
             },
             ShapeIssue::Cycle {
                 surface: 10,
@@ -57,7 +57,7 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
 fn cycle_comes_before_undrawn_for_the_same_pattern() {
     let world = EmoWorld::build(&parse(
         "charset,UTF-8\r\nsurface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
-         animation0.interval,bind\r\nanimation0.pattern0,replace,10,0,0,0\r\n}\r\n",
+         animation0.interval,bind\r\nanimation0.pattern0,auto,10,0,0,0\r\n}\r\n",
     ));
     assert_eq!(
         shape_issues(&world),
@@ -72,7 +72,7 @@ fn cycle_comes_before_undrawn_for_the_same_pattern() {
                 surface: 10,
                 animation: 0,
                 pattern: 0,
-                method: "replace".to_string(),
+                method: "auto".to_string(),
             },
         ]
     );
@@ -109,7 +109,7 @@ fn composing_repeatedly_adds_no_warn() {
     pattern.set(
         2,
         PatternFrame {
-            method: ComposeMethod::Replace,
+            method: ComposeMethod::Auto,
             ..frame(20, 0, 0)
         },
     );
@@ -118,26 +118,27 @@ fn composing_repeatedly_adds_no_warn() {
     let logs = capture_logs(|| {
         for _ in 0..3 {
             for id in [0, 10] {
-                let out = composer
-                    .compose(&world, &atlas, id, &binds, &pattern)
-                    .expect("組める");
-                shots.push((out.width(), out.height(), out.bytes().to_vec()));
+                shots.push(
+                    composer
+                        .plan(&world, &atlas, id, &binds, &pattern)
+                        .expect("組める"),
+                );
             }
         }
     });
     assert!(
         !logs.contains("level=WARN"),
-        "合成は warn を出さない: {logs}"
+        "計画は warn を出さない: {logs}"
     );
-    for kind in ["循環", "非 Overlay method の現在コマ"] {
+    for kind in ["循環", "描けない語の現在コマ"] {
         assert!(
             logs.lines()
                 .any(|l| l.contains("level=DEBUG") && l.contains(kind)),
             "{kind} は debug に残る: {logs}"
         );
     }
-    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ絵（決定性）");
-    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ絵（決定性）");
+    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ計画（決定性）");
+    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ計画（決定性）");
 }
 
 /// 面 0 が面 1 を置き（element定義と pattern定義）、面 1 の `move` が面 0 を指しても循環でない。
@@ -182,23 +183,24 @@ fn composing_unknown_sort_repeatedly_adds_no_warn() {
     let mut shots = Vec::new();
     let logs = capture_logs(|| {
         for _ in 0..3 {
-            let out = composer
-                .compose(&world, &atlas, 0, &binds, &pattern)
-                .expect("組める");
-            shots.push(out.bytes().to_vec());
+            shots.push(
+                composer
+                    .plan(&world, &atlas, 0, &binds, &pattern)
+                    .expect("組める"),
+            );
         }
     });
     assert!(
         !logs.contains("level=WARN"),
-        "合成は warn を出さない: {logs}"
+        "計画は warn を出さない: {logs}"
     );
     assert!(
         logs.lines()
             .any(|l| l.contains("level=DEBUG") && l.contains("未知の animation-sort")),
         "知らない sort は debug に残る: {logs}"
     );
-    assert_eq!(shots[0], shots[1], "絵は毎回同じ");
-    assert_eq!(shots[0], shots[2], "絵は毎回同じ");
+    assert_eq!(shots[0], shots[1], "計画は毎回同じ");
+    assert_eq!(shots[0], shots[2], "計画は毎回同じ");
 }
 
 /// 先の無い（負の番号の）pattern は、未知の語なら描かない pattern に数え、知っている語なら数えない。
@@ -220,5 +222,54 @@ fn unknown_word_without_a_target_is_undrawn_but_known_word_is_not() {
             method: "foo".to_string(),
         }]
     );
-    assert_eq!(issues("replace"), vec![]);
+    assert_eq!(issues("auto"), vec![]);
+}
+
+/// 描けるようになった語（重ね方の語・`base`）の pattern定義は数えない。
+#[test]
+fn drawable_pattern_words_are_not_issues() {
+    for method in [
+        "overlay",
+        "overlay-fast",
+        "overlayfast",
+        "interpolate",
+        "replace",
+        "asis",
+        "reduce",
+        "base",
+    ] {
+        let world = EmoWorld::build(&parse(&format!(
+            "surface0\n{{\nelement0,overlay,base.png,0,0\n\
+             animation0.interval,sometimes\nanimation0.pattern0,{method},20,0,0,0\n}}\n\
+             surface20\n{{\nelement0,overlay,part.png,0,0\n}}\n"
+        )));
+        assert_eq!(shape_issues(&world), vec![], "{method}");
+    }
+}
+
+/// `blend-*` の部品を持つ面を何度組んでも warn は出ず、知らせは debug に留まる。
+#[test]
+fn composing_blend_element_repeatedly_adds_no_warn() {
+    let (world, atlas) = world_of(
+        "charset,UTF-8\r\nsurface0\r\n{\r\nelement0,overlay,base.png,0,0\r\n\
+         element1,blend-multiply,part.png,0,0\r\n}\r\n",
+    );
+    let binds = BindSet::from_ids([0]);
+    let pattern = PatternState::default();
+    let mut composer = Composer::new();
+    let logs = capture_logs(|| {
+        for _ in 0..3 {
+            composer
+                .plan(&world, &atlas, 0, &binds, &pattern)
+                .expect("組める");
+        }
+    });
+    assert!(
+        !logs.contains("level=WARN"),
+        "計画は warn を出さない: {logs}"
+    );
+    assert!(
+        logs.lines().any(|l| l.contains("level=DEBUG")),
+        "描かない部品は debug に残る: {logs}"
+    );
 }

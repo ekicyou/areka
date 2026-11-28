@@ -92,3 +92,28 @@ fn memory_header_and_contents_are_independent() {
     assert_eq!(d.probe_animation(&p).map(|i| i.frame_count), Some(2000));
     assert_eq!(d.decode_frames(&p, info(2000)).unwrap().frames.len(), 2);
 }
+
+/// 乗算しない動く絵の答えは別に登録したものを返し、未登録なら「乗算しない読みを持たない」の失敗。
+#[test]
+fn unmultiplied_animation_answers_only_what_was_registered() {
+    let path = PathBuf::from("shell/anim.png");
+    let mut dec = MemoryDecoder::new();
+    dec.insert_animated(&path, info(2), Ok(image(2, 10)), Ok(animated()));
+    for err in [
+        dec.decode_frames_unmultiplied(&path, info(2)).map(|_| ()),
+        dec.decode_first_frame_unmultiplied(&path, info(2))
+            .map(|_| ()),
+    ] {
+        match err {
+            Err(DecodeError::Decode { source, .. }) => {
+                assert_eq!(source, "this decoder has no non-premultiplied read")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    dec.insert_animated_unmultiplied(&path, Ok(image(2, 30)), Ok(animated()));
+    let first = dec.decode_first_frame_unmultiplied(&path, info(2)).unwrap();
+    assert_eq!(first.bgra, image(2, 30).bgra);
+    let frames = dec.decode_frames_unmultiplied(&path, info(2)).unwrap();
+    assert_eq!(frames.frames.len(), 2);
+}

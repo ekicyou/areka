@@ -12,7 +12,7 @@
 //! この退化は
 //!
 //! - 表示バイトを 1 バイトも変えない（引き当ての判定規則は同じ）
-//! - 当たり判定マスクを変えない
+//! - 当たり判定（入れ物の α）を変えない
 //! - 確保計数を変えない（追い出しは相変わらず 1 適用 1 件）
 //!
 //! ゆえに、既存のどの檻も赤にならない。**継ぎ目の両端は覆われているのに
@@ -142,7 +142,7 @@ fn the_real_apply_path_retains_exactly_the_approved_number_of_entries() {
 /// # この檻だけが捕まえる退化
 ///
 /// `show.rs` の手順 (1) を [`ComposeCache::touch`] から
-/// `cache.get(..).is_some()` へ替える変異は、**表示バイト・当たり判定マスク・確保計数のどれも
+/// `cache.get(..).is_some()` へ替える変異は、**表示バイト・当たり判定・確保計数のどれも
 /// 変えない**。クレートの他の檻はすべて緑のままである（実測）。
 ///
 /// [`ComposeCache::touch`]: crate::cache::ComposeCache::touch
@@ -182,37 +182,37 @@ fn a_cache_hit_through_apply_show_promotes_the_entry_to_most_recently_used() {
 /// 容量 3 の裁定はこの一点のためにある——まばたきのように数コマを行き来する列で、直前だけでなく
 /// **数コマ前の面**にも命中することが命中率 0.0% → 56.2% の中身である。
 ///
-/// ヒットが成立したことは**マスクの実体が動かないこと**で示す（ミスなら輪番が 1 つ進んで別の
-/// `Arc` へ移るため、番地の偶然一致が入り込む余地が無い）。
+/// ヒットが成立したことは**スロットの計画の実体が動かないこと**で示す（ミスなら交代で同時に生きている
+/// 別の実体へ移るため、番地の偶然一致が入り込む余地が無い）。
 #[test]
 fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
     let (mut world, mut presenter) = rig();
 
-    let mask_of = |presenter: &EmoPresenter, n: u32| {
-        std::sync::Arc::as_ptr(
-            &presenter
-                .targets
-                .get(&TargetId(0))
-                .expect("装着済み target")
-                .cache
-                .get(SURFACE, &key(n), &PatternState::default())
-                .expect("保持されているキー")
-                .mask,
-        )
+    let display_of = |presenter: &EmoPresenter, n: u32| {
+        presenter
+            .targets
+            .get(&TargetId(0))
+            .expect("装着済み target")
+            .cache
+            .get(SURFACE, &key(n), &PatternState::default())
+            .expect("保持されているキー")
+            .plan
+            .items
+            .as_ptr()
     };
 
     // 3 コマぶん表示する（キー 1 は 2 コマ前になる）。
     for n in 1..=CACHE_CAPACITY as u32 {
         show(&mut presenter, &mut world, n);
     }
-    let before = mask_of(&presenter, 1);
+    let before = display_of(&presenter, 1);
 
     // 2 コマ前の面へ戻る＝ヒット。容量 1 ではここが必ずミスだった。
     show(&mut presenter, &mut world, 1);
     assert_eq!(
-        mask_of(&presenter, 1),
+        display_of(&presenter, 1),
         before,
-        "2 コマ前の面の再表示でマスクの実体が動いた＝引き当てがミスしている\
+        "2 コマ前の面の再表示でスロットの計画の実体が動いた＝引き当てがミスしている\
          （容量 3 の裁定が期待した命中が成立していない）"
     );
 }

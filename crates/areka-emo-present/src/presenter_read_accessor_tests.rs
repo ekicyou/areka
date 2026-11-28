@@ -2,7 +2,8 @@ use super::*;
 
 use super::test_support::{
     attach_and_show_hit_target, attach_hit_target, build_target_assets, build_two_face_assets,
-    force_applied, hide_ok, invalidate_ok, make_world_with_gpu, show_ok, spawn_window_with_dpi,
+    force_applied, hide_ok, invalidate_ok, make_world_with_gpu, paint_screen, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定───────────
@@ -28,7 +29,9 @@ fn current_surface_id_is_none_before_first_show() {
         "attach_target 直後（未表示）は現サーフェス無し（3.2）"
     );
     assert_eq!(
-        presenter.hit_region_client(TargetId(0), 0, 0).region,
+        presenter
+            .hit_region_client(&world, TargetId(0), 0, 0)
+            .region,
         None,
         "未表示 target の hit_region_client は現サーフェス無しゆえ None"
     );
@@ -86,7 +89,9 @@ fn current_surface_id_is_none_after_hide() {
         "Hide 後は現サーフェス無し（3.2/4.4）"
     );
     assert_eq!(
-        presenter.hit_region_client(TargetId(0), 0, 0).region,
+        presenter
+            .hit_region_client(&world, TargetId(0), 0, 0)
+            .region,
         None,
         "Hide 後は hit_region_client も現サーフェス無しゆえ None"
     );
@@ -143,6 +148,7 @@ fn read_back_after_invalidate_cache_is_entry_evicted() {
 /// 両アクセサとも `HashMap` 引きのみで GPU/World を要さないため、`EmoPresenter::new()` 単体で固定する。
 #[test]
 fn unregistered_target_returns_none_for_both_accessors() {
+    let world = World::new();
     let presenter = EmoPresenter::new();
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
@@ -150,7 +156,9 @@ fn unregistered_target_returns_none_for_both_accessors() {
         "未登録 target の current_surface_id は None"
     );
     assert_eq!(
-        presenter.hit_region_client(TargetId(0), 10, 20).region,
+        presenter
+            .hit_region_client(&world, TargetId(0), 10, 20)
+            .region,
         None,
         "未登録 target の hit_region_client は None"
     );
@@ -171,7 +179,7 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
     attach_hit_target(&mut presenter, &mut world, TargetId(0));
 
     // attach のみ（未表示・applied なし）: 等倍縮約＝入力素通し。
-    let hit = presenter.hit_region_client(TargetId(0), 181, 97);
+    let hit = presenter.hit_region_client(&world, TargetId(0), 181, 97);
     assert_eq!(
         hit.region, None,
         "未表示 target に判定対象は無い（region なし）"
@@ -182,12 +190,12 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
         "applied 不在の縮退は等倍縮約（入力素通し）であること"
     );
     // 負値・窓外でも panic せず定義された結果を返す（配線層での保存）。
-    let neg = presenter.hit_region_client(TargetId(0), -7, -13);
+    let neg = presenter.hit_region_client(&world, TargetId(0), -7, -13);
     assert_eq!(neg.region, None);
     assert_eq!(neg.surface_point, (-7, -13), "負値も等倍縮約で素通し");
 
     // 未登録 target（attach すらしていない）も同一の正常縮退。
-    let unregistered = presenter.hit_region_client(TargetId(9), 181, 97);
+    let unregistered = presenter.hit_region_client(&world, TargetId(9), 181, 97);
     assert_eq!(unregistered.region, None, "未登録 target は region なし");
     assert_eq!(
         unregistered.surface_point,
@@ -202,7 +210,7 @@ fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() 
         TargetId(0),
         Some(ScaleRatio::new(192, 96).expect("192/96 は構築可能")),
     );
-    let scaled = presenter.hit_region_client(TargetId(0), 181, 97);
+    let scaled = presenter.hit_region_client(&world, TargetId(0), 181, 97);
     assert_eq!(
         scaled.region, None,
         "未表示なら k が在っても region は None"
@@ -223,6 +231,7 @@ fn client_entry_passes_point_through_and_resolves_by_pixel_at_identity_scale() {
     let mut presenter = EmoPresenter::new();
     attach_and_show_hit_target(&mut presenter, &mut world, TargetId(0), 96);
     assert_eq!(presenter.applied_ratio(TargetId(0)), Some(ScaleRatio::ONE));
+    paint_screen(&mut world);
 
     for (x, y, want, what) in [
         (180, 96, Some("Head"), "領域内（Head）"),
@@ -242,7 +251,7 @@ fn client_entry_passes_point_through_and_resolves_by_pixel_at_identity_scale() {
         (400, 400, None, "後定義矩形の右下隅（含まない）"),
         (-7, -13, None, "負値（panic なし）"),
     ] {
-        let hit = presenter.hit_region_client(TargetId(0), x, y);
+        let hit = presenter.hit_region_client(&world, TargetId(0), x, y);
         assert_eq!(
             hit.region, want,
             "k=1.0 の解決領域が期待と違う: {what} ({x},{y})"

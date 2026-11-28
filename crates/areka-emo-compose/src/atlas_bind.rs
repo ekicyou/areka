@@ -4,13 +4,25 @@
 //! `AtlasBinding` コンポーネントとして World へ挿入する。以後の毎フレーム参照は O(1) の `entry`
 //! 引きに帰着する。解決不能なパスはパニックせず `debug` で残す（脱落は bake の段の error が知らせる）。
 
+use std::collections::HashMap;
+
 use areka_emo_atlas::{AtlasTable, ElementId, SetId};
 use bevy_ecs::entity::Entity;
+use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
 use crate::nesting::ElementKind;
 use crate::normalized::SurfaceMaster;
 use crate::world::AtlasBinding;
+
+/// 通常の絵 → 同じ絵の `asis` 用の絵（`asis` で参照される絵だけ・動く絵はコマごと・束縛のときに 1 度だけ引く）。
+#[derive(Debug, Default, Resource)]
+pub(crate) struct AsisPictures(pub(crate) HashMap<ElementId, ElementId>);
+
+/// 絵 `id` の `asis` 用の絵。
+pub(crate) fn asis_picture(world: &World, id: ElementId) -> Option<ElementId> {
+    world.get_resource::<AsisPictures>()?.0.get(&id).copied()
+}
 
 /// 全 surface entity の `SurfaceMaster.elements` を `AtlasTable::resolve` で一度きり
 /// `ElementId` へ束縛し、平行な `AtlasBinding` を entity へ挿入する。
@@ -24,6 +36,7 @@ use crate::world::AtlasBinding;
 pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
     // 借用衝突回避のため、先に (entity, 束縛結果) を不変クエリで確定してから挿入する。
     let mut bindings: Vec<(Entity, AtlasBinding)> = Vec::new();
+    let mut asis = HashMap::new();
     let mut query = world.query::<(Entity, &SurfaceMaster)>();
     for (entity, master) in query.iter(world) {
         let ids: Vec<Option<ElementId>> = master
@@ -37,7 +50,23 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
                 }
                 let rel_path = element.path.as_str();
                 match atlas.resolve(set, rel_path) {
-                    Some(id) => Some(id),
+                    Some(id) => {
+                        if let Some(picture) = atlas.resolve_asis(set, rel_path) {
+                            asis.insert(id, picture);
+                            if let (Some(normal), Some(baked)) =
+                                (atlas.animation(id), atlas.animation(picture))
+                            {
+                                asis.extend(
+                                    normal
+                                        .frames
+                                        .iter()
+                                        .copied()
+                                        .zip(baked.frames.iter().copied()),
+                                );
+                            }
+                        }
+                        Some(id)
+                    }
                     None => {
                         // 未知のパスは bake で脱落した絵だけで、読み込みの入口が error で 1 度出している（1 誤り 1 行）。
                         tracing::debug!(
@@ -58,6 +87,7 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
     for (entity, binding) in bindings {
         world.entity_mut(entity).insert(binding);
     }
+    world.insert_resource(AsisPictures(asis));
 }
 
 #[cfg(test)]

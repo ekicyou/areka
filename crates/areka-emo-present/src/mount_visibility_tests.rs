@@ -46,7 +46,7 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
     let surface = mount.surface_entity();
     let slot = mount.text_slot();
 
-    // 装着直後（可視構築）: 双方可視・surface＝αマスク・slot＝Bounds（従来挙動と同値）。
+    // 装着直後（可視構築）: 双方可視・surface＝入れ物の α・slot＝Bounds。
     assert!(
         is_visible(&world, surface, "surface entity"),
         "装着直後は可視"
@@ -57,7 +57,7 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
     );
     assert_eq!(
         hit_mode(&world, surface, "surface entity"),
-        HitTestMode::AlphaMask
+        HitTestMode::SurfaceAlpha
     );
     assert_eq!(
         hit_mode(&world, slot, "text-layer slot"),
@@ -96,8 +96,8 @@ fn hide_and_show_cover_both_surface_and_text_slot() {
     );
     assert_eq!(
         hit_mode(&world, surface, "surface entity"),
-        HitTestMode::AlphaMask,
-        "再表示で枠は αマスク判定へ復帰"
+        HitTestMode::SurfaceAlpha,
+        "再表示で枠は入れ物の α の判定へ復帰"
     );
     assert_eq!(
         hit_mode(&world, slot, "text-layer slot"),
@@ -181,9 +181,13 @@ fn invisible_construction_never_inserts_a_visible_visual() {
         records.iter().any(|(e, _)| *e == slot),
         "text-layer slot の Visual 挿入が観測されていない（観測器が機能していない）: {records:?}"
     );
-    // 本題: 可視の値で挿入された Visual が一度も無いこと。
+    // 本題: 可視の値で挿入された Visual が一度も無いこと（まとめの節は surface entity の子で、
+    // 持ち主と一緒に隠れるので数えない）。
     assert!(
-        records.iter().all(|(_, visible)| !*visible),
+        records
+            .iter()
+            .filter(|(e, _)| *e == surface || *e == slot)
+            .all(|(_, visible)| !*visible),
         "不可視構築では Visual が可視の値で挿入されてはならない（1.2）: {records:?}"
     );
 

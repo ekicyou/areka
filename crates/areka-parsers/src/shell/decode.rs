@@ -26,11 +26,13 @@
 
 use std::collections::HashMap;
 
+use super::element_method_words::is_image_element_method;
 use super::lexer::{Token, heading_text};
 use super::model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
-    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
-    RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementOptions, ElementPath,
+    Interval, Pattern, RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 
 /// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計・今のブレスの見出し・積んだ崩れ。
@@ -170,10 +172,9 @@ fn dispatch_block(
     // 未知ブロック（未対応ヘッダ）は何も積まない。
 }
 
-/// 本体行群の `elementN,overlay,PATH,X,Y`・`elementN,base,PATH,X,Y` を `Element` へ decode する。
+/// 本体行群の `elementN,<描画メソッド>,PATH,X,Y` を `Element` へ decode する。
 ///
-/// - 第 2 欄が `is_image_element_method` で真の行（`overlay` と `base`）だけを扱い、どちらも同じ
-///   `Element` にする。ほかのメソッド（replace 等）は値化せず読み飛ばす。
+/// - 第 2 欄が [`is_image_element_method`] で真の行だけを扱う。偽の語の行は値化せず読み飛ばす。
 /// - 画像パス（field[2]）は無加工保持（区切り正規化なし）。
 /// - element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持）。
 fn decode_elements(body: &[Vec<String>], reading: &mut Reading) -> Vec<Element> {
@@ -194,6 +195,8 @@ fn decode_elements(body: &[Vec<String>], reading: &mut Reading) -> Vec<Element> 
                 path: ElementPath::new(field_string(fields, 2)),
                 x: field_i64(fields, 3),
                 y: field_i64(fields, 4),
+                method: DrawMethod::new(field_string(fields, 1)),
+                options: ElementOptions::new(fields.get(5..).unwrap_or_default().join(",")),
             });
         }
     }
@@ -203,17 +206,8 @@ fn decode_elements(body: &[Vec<String>], reading: &mut Reading) -> Vec<Element> 
     elements
 }
 
-/// 画像の element定義として値にする描画メソッドの語か（完全一致・`overlay` と `base`）。
-///
-/// element定義の `base` は、`element0` では置き換えられる側が空で、`element1` 以降は正典が
-/// `overlay` に読み替えるので、どの番号でも `overlay` と同じ値にする。
-/// 大文字の綴り・空の欄・`add`・`bind`・`balloon` などは偽（描けない語は値にしない）。
-pub(super) fn is_image_element_method(word: &str) -> bool {
-    matches!(word, "overlay" | "base")
-}
-
 /// 箱の転記（`boxes.rs`）が拾う element定義の描画メソッドの語か（完全一致・`balloon`）。
-/// 描けない行の転記（`undrawn.rs`）は、これと `is_image_element_method` のどちらも偽の行を拾う。
+/// 描けない行の転記（`undrawn.rs`）は、これと [`is_image_element_method`] のどちらも偽の行を拾う。
 pub(super) fn is_box_element_method(word: &str) -> bool {
     word == "balloon"
 }
@@ -724,3 +718,8 @@ mod pattern_target_tests;
 #[cfg(test)]
 #[path = "decode_collisionex_tests.rs"]
 mod collisionex_tests;
+
+/// element定義の語とオプションの並びの原文を固定する兄弟テスト。
+#[cfg(test)]
+#[path = "decode_element_method_tests.rs"]
+mod element_method_tests;

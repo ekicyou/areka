@@ -1,6 +1,6 @@
 //! method 忠実転記の完全マトリクス。
 
-use super::{decode, lex};
+use super::{DrawMethod, decode, lex};
 
 /// 未知メソッドトークン（`frobnicate`）は妥当性を判定されず method に原文のまま運ばれ、
 /// 行は落とされない（parser は語彙の可否を判定しない）。
@@ -67,7 +67,6 @@ animation0.pattern3
 
 // --- element定義の描画メソッドの語の集合 ---
 //
-// 画像の element定義として値にする語は `overlay` と `base` の 2 語だけ（完全一致）。
 // `base` の行は、どの番号でも、どのブレスでも、`overlay` と書いた同じ行と同じ値になる。
 
 /// element の件数（`surface*`ブレスと `surface.append*`ブレスの合計）。
@@ -126,7 +125,17 @@ element1,overlay,mouth.png,1,2
 ";
     let as_overlay = input.replace(",base,", ",overlay,");
     assert_ne!(input, as_overlay, "書き替えが空振りしている");
-    assert_eq!(decode(lex(input)), decode(lex(&as_overlay)));
+    let mut decoded = decode(lex(input));
+    for e in decoded
+        .surfaces
+        .iter_mut()
+        .map(|s| &mut s.elements)
+        .chain(decoded.appends.iter_mut().map(|a| &mut a.elements))
+        .flatten()
+    {
+        e.method = DrawMethod::new("overlay".to_string());
+    }
+    assert_eq!(decoded, decode(lex(&as_overlay)));
 
     // 較正: base の行を除いた文面より、element がちょうど base の行の数（5）だけ多い。
     let base_lines = input.matches(",base,").count();
@@ -137,12 +146,12 @@ element1,overlay,mouth.png,1,2
     );
 }
 
-/// ⑵ 描けない語の行は値にならず、隣の行は残る: `replace`・空の欄・
+/// ⑵ 描けない語の行は値にならず、隣の行は残る: `auto`・空の欄・
 /// ukadoc に無い語・`Overlay`（大文字）・`add`・`bind` の行は、その行を除いた文面と同じ。
 #[test]
 fn undrawable_element_lines_are_absorbed_and_neighbors_survive() {
     let undrawable = [
-        "element1,replace,r.png,1,1",
+        "element1,auto,r.png,1,1",
         "element2,,empty.png,2,2",
         "element3,frobnicate,f.png,3,3",
         "element4,Overlay,upper.png,4,4",

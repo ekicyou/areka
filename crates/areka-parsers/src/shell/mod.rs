@@ -18,6 +18,11 @@ mod lexer_tests;
 
 mod decode;
 
+mod element_method_words;
+
+#[cfg(test)]
+mod element_method_words_tests;
+
 #[cfg(test)]
 mod decode_tests;
 
@@ -67,12 +72,13 @@ mod pattern_word_tests;
 // 内部の model/lexer/decode/parse 分割に直接依存しない。
 pub use boxes::{BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, parse_boxes};
 pub use cursor::{CursorBrace, parse_cursor_braces};
+pub use element_method_words::BLEND_ELEMENT_WORDS;
 pub use model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
-    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
-    Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementOptions, ElementPath,
+    Interval, Pattern, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 pub use parse::{ShellText, parse, parse_all};
 pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};
 pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
-pub use undrawn::{UndrawnElementLine, parse_undrawn_elements};
+pub use undrawn::{ElementLine, parse_undrawn_elements};

@@ -2,12 +2,12 @@
 
 use super::{
     Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod,
-    Element, ElementPath, Interval, Pattern, decode, lex,
+    Element, ElementOptions, ElementPath, Interval, Pattern, decode, lex,
 };
 
 // 正しい書式の collisionex は値になる。読みの檻の本体は `decode_collisionex_tests.rs`。
 
-/// element定義の描画メソッド `base`（`element0,base,...`）は `overlay` と同じ値になり、
+/// element定義の描画メソッド `base`（`element0,base,...`）は語を `base` のまま運び、
 /// 同じ surface の overlay element と並ぶ。
 #[test]
 fn base_element_method_becomes_value_beside_overlay_sibling() {
@@ -28,12 +28,16 @@ element1,overlay,over.png,7,8
                 path: ElementPath::new("base.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("base".to_string()),
+                options: ElementOptions::new(String::new()),
             },
             Element {
                 layer: 1,
                 path: ElementPath::new("over.png".to_string()),
                 x: 7,
                 y: 8,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
         ]
     );
@@ -174,6 +178,8 @@ animation0.pattern0,overlay,2206,0,0,0
             path: ElementPath::new("CityPop.png".to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }]
     );
 
@@ -209,17 +215,17 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 }
 
-/// 単一 surface 内で吸収対象（element replace）と忠実転記対象（pattern method・interval・
+/// 単一 surface 内で吸収対象（element zoom）と忠実転記対象（pattern method・interval・
 /// collisionex）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する。
 /// overlay element・collisionex の円・純 collision は書いた順に残り、
-/// replace element は吸収される一方、replace/overlay 両 pattern と `always` interval は原文のまま転記される
+/// zoom element は吸収される一方、replace/overlay 両 pattern と `always` interval は原文のまま転記される
 /// （描けない語の行だけが吸収され隣の行は残る）。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
 surface3000
 {
-element0,replace,skip.png,1,1
+element0,zoom,skip.png,1,1
 element1,overlay,keep.png,2,3
 element2,base,also.png,4,5
 collisionex0,Eye,circle,5,5,10
@@ -240,12 +246,16 @@ animation0.pattern1,overlay,901,4,0,0
                 path: ElementPath::new("keep.png".to_string()),
                 x: 2,
                 y: 3,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
             Element {
                 layer: 2,
                 path: ElementPath::new("also.png".to_string()),
                 x: 4,
                 y: 5,
+                method: DrawMethod::new("base".to_string()),
+                options: ElementOptions::new(String::new()),
             },
         ]
     );
@@ -349,6 +359,8 @@ surface.alias
             path: ElementPath::new("b.png".to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }]
     );
     assert_eq!(

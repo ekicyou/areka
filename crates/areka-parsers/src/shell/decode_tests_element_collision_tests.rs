@@ -2,7 +2,7 @@
 
 use super::{
     Animation, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod, Element,
-    ElementPath, Interval, Pattern, decode, lex,
+    ElementOptions, ElementPath, Interval, Pattern, decode, lex,
 };
 
 // collisionex の読みの檻は `decode_collisionex_tests.rs` にある。
@@ -20,6 +20,8 @@ fn single_element_overlay_is_normalized() {
             path: ElementPath::new("surface0.png".to_string()),
             x: 0,
             y: 0,
+            method: DrawMethod::new("overlay".to_string()),
+            options: ElementOptions::new(String::new()),
         }]
     );
 }
@@ -39,12 +41,16 @@ fn multiple_elements_are_sorted_by_layer_ascending() {
                 path: ElementPath::new("a.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
             Element {
                 layer: 1,
                 path: ElementPath::new("b.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
         ]
     );
@@ -144,12 +150,16 @@ animation0.pattern0,overlay,100,0,0,0
                 path: ElementPath::new("a.png".to_string()),
                 x: 0,
                 y: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
             Element {
                 layer: 1,
                 path: ElementPath::new("b.png".to_string()),
                 x: 5,
                 y: 6,
+                method: DrawMethod::new("overlay".to_string()),
+                options: ElementOptions::new(String::new()),
             },
         ]
     );
