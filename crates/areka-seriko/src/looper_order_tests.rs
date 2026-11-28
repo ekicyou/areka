@@ -110,6 +110,7 @@ fn lottery_consumes_shell_before_balloon() {
         balloon_tables: BTreeMap::from([(scope.clone(), balloon_t)]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = crate::test_support::empty_states();
     states.apply(&scope, SurfaceTarget::Show(10));
@@ -140,6 +141,7 @@ fn balloon_tables_are_looked_up_per_scope() {
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0), (ActorKey::from("1"), t1)]),
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = crate::test_support::empty_states();
     let s0 = ActorKey::from("0");
@@ -189,6 +191,7 @@ fn absent_scope_balloon_table_is_inert() {
         balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0)]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = crate::test_support::empty_states();
     let s1 = ActorKey::from("1");

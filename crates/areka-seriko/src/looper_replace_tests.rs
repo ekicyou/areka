@@ -48,6 +48,7 @@ fn replace_balloon_tables_keeps_shell_loop() {
         balloon_tables: BTreeMap::from([(scope.clone(), balloon)]),
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = crate::test_support::empty_states();
     states.apply(&scope, SurfaceTarget::Show(10));

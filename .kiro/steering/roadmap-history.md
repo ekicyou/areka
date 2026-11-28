@@ -4489,3 +4489,17 @@ Opus
 6. **その先の C27〜C29 を組み直した**（「その先のウェーブ」）: C27＝`dola-interrupt-ticks`（Fable・1 本だけで・使い手は 6 から 9 crate に増えた）／C28＝前の見込みの 7 本（`Cargo.lock` の席は `sylphya-sqlite-kvs`）／C29＝前の見込みの文の 8 本を表にした。v0.2.0 の着地は移行の本体を数えずに約 4 ウェーブ（C26〜C29・前の見込みと同じ終わり・席と重なりで C30 に溢れうる）。C29 の後に `shiori4-api`・`tick-gate-adoption`・移行の本体が残るので、見込みの 3 ウェーブの中に `/release` は来ない。
 7. **モデル**: Fable は 0 本。次に Fable に近いのは `audit-areka-app`（`areka-session` の公開の面を絞るか）だが、`session-crate-split` が据えた口と `test-support` の前例の中で絞るだけなので Opus。`dola-interrupt-ticks`（C27）は Fable のまま（ワークスペースに共通の時刻の型が無い・近いのは wintf の `api.rs` の 100ns の CPU 時間の欄とテストだけの `Ticks`）。
 8. **開発者に決めてほしいこと**（どれも C26 の着手を止めない・棚卸㊷から持ち越し）: ⑴ 先進坑 `pilot-windows-rs-next` の判定と、git 版と v0.2.0 の公開＝案 A か案 B か（推す＝案 A）。決まれば windows-rs の移行の本体を `/kiro-discovery` で起票する。 ⑵ 版の外の spec を待つ v0.2.0 の 3 本（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`）の決め（推す＝`seriko-trigger-lottery-gaps`・`extent-element-offset`・`animated-image-import` を v0.2.0 へ入れる）。 ⑶ `crates-io.yml` に `timeout-minutes` を足すか（覚え書き）。 ⑷ 根の `scratch_expect.bak` を消すか（推す＝消す）。 ⑸ 本体の `menu/shortcut.rs` を見直しの範囲に入れるか（推す＝入れない）。
+
+## 2026-11-27 棚卸㊹の開発者の決めの退避（`roadmap.md` から逐語で移した）
+
+### 旧「覚え書き」の行（直した）
+
+- **`.github/workflows/crates-io.yml` に `timeout-minutes` が無い**（2026-11-17 棚卸㊴・XS・✅ `audit-tools-scripts` の research 13 節の範囲の外の気付き）。段にも仕事にも上限が無いので、止まった走りが既定の 6 時間まで残る。workflow の側に足すかは開発者の判断（動きを変える＝棚卸の直しにしない）。次に workflow を触る spec（`winget-release-automation` ほか）が一緒に決める。
+
+### 旧「spec 台帳」の行（フォルダを消した）
+
+| `talk-anchor-interrupt-ticks`（**10-15 起票**・`/kiro-discovery`・開発者「低優先度」・「時刻の土台」の 2 本目） | 据え置き・区分 D | **取り下げ予定・着手しない**。範囲の全部（ghost・kanade・seriko の時計の付け替え・台本の起点を絶対の時刻で押すこと・`OnSecondChange` の決め）が ✅ `dola-interrupt-ticks` に入って着地し、残る仕事は無い（brief の「この spec の範囲は `dola-interrupt-ticks` に入った」の節）。フォルダを消すかは開発者の決め | — | — | — | − |
+
+### 旧「棚卸㊹の裁定」の 9
+
+9. **開発者に決めてほしいこと**（どれも C28 の着手を止めない）: ⑴ 先進坑 `pilot-windows-rs-next` の判定と、git 版と v0.2.0 の公開＝案 A か案 B か（推す＝案 A）。決まれば windows-rs の移行の本体を `/kiro-discovery` で起票する。 ⑵ 版の外の spec を待つ v0.2.0 の 2 本（`element-clipping-option`・`shiori4-api`）の決め（推す＝`extent-element-offset`・`animated-image-import` を v0.2.0 へ入れる・`shiori4-api` の待ちは次の棚卸で測り直す）。 ⑶ `talk-anchor-interrupt-ticks` のフォルダを消すか（推す＝消す・網羅台帳の表 `roadmap-draft.md` には載っていない）。 ⑷ `crates-io.yml` に `timeout-minutes` を足すか（覚え書き）。 ⑸ 根の `scratch_expect.bak` を消すか（推す＝消す）。本体の `menu/shortcut.rs` を見直しの範囲に入れるかの件は、見直しが全部着地したので閉じた。

@@ -2,7 +2,7 @@
 //!
 //! 説明書を開く要求、開くファイルの決め方（ゴースト descript の `readme` キー）、
 //! World への結線と要求の取り出しを置く。開く系の要求も
-//! 同じ取り出しを通り、説明書も含めて開く処理の 1 か所（[`opener::submit`]）へ渡す。
+//! 同じ取り出しを通り、説明書も含めて開く処理の 1 か所（[`opener::submit_for_talk`]・[`opener::submit`]）へ渡す。
 //! メニューにも入力配線にも依存しない葉の module である。
 //!
 //! 開くファイルは決めて渡すだけで、中身も `readme.charset` も読まない。
@@ -23,8 +23,11 @@ pub enum ReadmeRequest {
     /// 中身を持たないのは、開くファイルが要求ごとではなく起動時に決まるからである
     /// （引数付きの `\![open,readme,種類,名前]` は送出側が警告して捨てる）。
     Readme,
-    /// 開く系の行き先（受け口が規則で分類済み）。
-    Open(destination::Destination),
+    /// 開く系の行き先と、そのトークの実行するゴースト。
+    Open {
+        dest: destination::Destination,
+        runner: areka_ghost::sink::TalkRunner,
+    },
 }
 
 /// 台本の説明書の要求の綴り（記録の `tag`）。
@@ -88,7 +91,7 @@ pub(crate) fn set_path(world: &mut World, path: PathBuf) {
 /// 要求の取り出しを入力の段へ登録し、開く専用のスレッドの持ち物（[`opener::Opener`]）が
 /// 無ければ 1 度だけ起こして入れる（説明書の持ち物は置かない）。
 ///
-/// 起こせなければ `error!` を残し、以後は入口（[`opener::submit`]）が要求ごとに `error!` を残す。
+/// 起こせなければ `error!` を残し、以後は入口（[`opener::submit_for_talk`]・[`opener::submit`]）が要求ごとに `error!` を残す。
 ///
 /// 並びは `dispatch_pointer_events` の後——同じ tick のうちに届いた要求をその tick で
 /// 処理する（`crates/areka-input/src/choice_drain.rs` の `register_choice_drain` と同型）。
@@ -199,12 +202,12 @@ fn take_pending(world: &World) -> Vec<ReadmeRequest> {
 
 /// 溜まった要求を届いた順に全件取り出し、開く処理へ渡す（Input スケジュールの system）。
 ///
-/// 説明書は台本の綴りで [`open_from_world`] へ、開く系は入口 [`opener::submit`] へ。
+/// 説明書は台本の綴りで [`open_from_world`] へ、開く系は入口 [`opener::submit_for_talk`] へ。
 pub(crate) fn drain_readme_requests(world: &mut World) {
     for request in take_pending(world) {
         match request {
             ReadmeRequest::Readme => open_from_world(world, SCRIPT_README_TAG),
-            ReadmeRequest::Open(dest) => opener::submit(world, dest),
+            ReadmeRequest::Open { dest, runner } => opener::submit_for_talk(world, dest, runner),
         }
     }
 }

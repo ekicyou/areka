@@ -84,3 +84,8 @@
 - ファイルの重なり: `tasktray-balloon`・`tasktray-minimize`（上の表）＝`tasktray-icon` の後の 3 本は 1 度に 1 本。順の案は、この spec → `tasktray-minimize`（働きの順）で、`tasktray-balloon` はその前か後。`\!` の受け口を足すほかの列の spec も同じ表を触る。
 - 優先度の区分: A。要件定義のモデル: Opus（正典の字が決まっている。動く絵は動かさない向きで議題に出す）。
 - 見つけた穴・古くなった記述: 本文に規模と要件定義のモデルが書かれていない（roadmap の行には規模が在る）。
+
+## 申し送り（talk-script-metadata より・2026-11-28 着地）
+
+- 台本の付帯情報は `areka_talk::TalkMeta`（`runner: TalkRunner { name, place: Option<GhostPlace { master, root }> }`・`sender: TalkSender`）。受け手は `BootCueSink::begin_talk(talk_id, origin, &TalkMeta)` でトークごとに受け取り、そのトークの最初の合図より前に届く。`GhostSlot` を引かずにこれを覚えて使う（作りの例は `crates/areka-session/src/readme/readme_cue.rs` の `ReadmeCueSink`）。
+- 相対パスは `areka_sakura::talk_path::resolve(place, written, SearchOrder)`（在る無しを差し替えてテストするなら `resolve_in`）（`areka_ghost::sink` からも再公開）で解く。`SearchOrder::MasterOnly` は ghost/master だけ、`MasterThenRoot` は ghost/master の次にゴーストの最上位を探す。解けないときは `Unresolved::{Empty, NoPlace, NotFound { last_tried }}`（`reason()` が `empty_path`・`no_place`・`not_found`）で、ログに残してから断る。どちらの探し方を使うかはこの spec の要件の段で決める。

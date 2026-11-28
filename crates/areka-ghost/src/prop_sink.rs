@@ -288,7 +288,7 @@ mod tests {
         use super::*;
         use areka_sakura::contract::{
             ChoiceWaiting, CueSink, SakuraMsg, ScriptOrigin, StartTalk, SystemVarSnapshot, TalkCue,
-            TalkDone, TalkEndReason, TalkId,
+            TalkDone, TalkEndReason, TalkId, TalkMeta,
         };
         use areka_sakura::spawn_talk;
         use areka_talk::EpilogueCommand;
@@ -362,6 +362,7 @@ mod tests {
                 }],
                 origin: ScriptOrigin::GHOST,
                 strict: false,
+                meta: TalkMeta::default(),
             }
         }
 

@@ -9,11 +9,12 @@ use tracing::{debug, error, info, warn};
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_sakura::ActorKey;
 use dola::{TimePoint, TimeSpan};
-use wintf::ecs::FrameTime;
 use wintf::ecs::world::tick_wake;
+use wintf::ecs::{FrameTime, WindowPos};
 
 use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use areka_placement::dpi_sync::{self, HoldSite};
+use areka_placement::script_balloon::reanchor_after_balloon_resize;
 use areka_placement::spawn::GhostWindows;
 
 use crate::target_map::window_scope;
@@ -259,6 +260,7 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 );
                 continue;
             }
+            let before = world.get::<WindowPos>(window).and_then(|wp| wp.size);
             // DPI 由来と名乗らせないため DpiReproject とは別語を貼る（初回表示の k₀ 補正もこの経路で landing する）。
             reconcile_window_size(
                 world,
@@ -267,6 +269,13 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 new_size,
                 PlacementRoute::ReportedSizeReconcile,
             );
+            let after = world.get::<WindowPos>(window).and_then(|wp| wp.size);
+            // 拡大率が変わったときバルーンが出ていなければ DPI の相は寸を書かず、変わった寸はここで着く。
+            if let (GhostWindowKind::Balloon, Some(before), Some(after)) = (kind, before, after)
+                && before != after
+            {
+                reanchor_after_balloon_resize(world, scope32, before, after);
+            }
         }
     }
 }

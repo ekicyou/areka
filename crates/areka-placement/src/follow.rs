@@ -49,6 +49,7 @@ mod work_area_clamp;
 use super::balloon_limit::{
     BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_PUSHED_HOW, BALLOON_LIMIT_RELEASE_CONTEXT,
     BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
+    limit_work_area_in,
 };
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{

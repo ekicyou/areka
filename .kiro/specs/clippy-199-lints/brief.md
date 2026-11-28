@@ -125,3 +125,13 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 ## 2026-11-22 `audit-areka-input-menu` の記録: areka-input は緑・areka-runtime に clippy 1.100 の指摘が残る
 - `cargo clippy -p areka-input --all-targets --no-deps -- -D warnings` は警告 0。
 - `cargo clippy -p areka-runtime --all-targets --no-deps -- -D warnings` は、`audit-areka-input-menu` が触らない 9 ファイル（`frame/wiring.rs`・`frame/zorder_drain.rs`・`frame_test_support.rs`・`hover_inject.rs`・`skin_switch.rs`・`switch_assets.rs`・`lib.rs`・`balloon_visibility_tests.rs`・`frame_dpi_reproject_tests.rs`）の clippy 1.100 の指摘 11〜12 件で止まる。`--no-deps` を外すと、依存の `areka-parsers`・`dola` の `collapsible_if` でも止まる（11-13 の dola の記録の後に clippy が 1.100 へ上がって出たもの）。
+
+## 申し送り（seriko-talk-clock-fidelity より・2026-11-28）: clippy 1.100 の残り
+
+- `seriko-talk-clock-fidelity` が触ったクレートを `--no-deps -D warnings` で回すと、この spec の枝で触っていない行の指摘だけで止まる（変えた行には 0 件）。
+  - `areka-seriko`: `output.rs:16`・`output.rs:17`・`state.rs:35` の `doc_nested_refdefs`（ここで lib のビルドが止まり、下流の crate の指摘まで届かない）。
+  - `areka-emo-text`: clippy 1.100 の指摘が多数（`canvas.rs`・`choice.rs`・`draw_metrics.rs`・`draw_line_store.rs`・`viewbox.rs`・`viewbox_diff.rs`・`sink.rs` と多くのテストファイル。`chunks_exact_to_as_chunks`・`type_complexity`・`collapsible_if`・`manual_is_multiple_of` など）。
+  - `areka-runtime`: 11-22 の記録と同じ 9 ファイル（`lib.rs` の `wire_runtime` の `too_many_arguments` は今 428 行目）。
+  - `areka`: テスト・`install`・`mcp`・`menu`・`roots`・`session`・`update` の各ファイルと例 2 本。
+  - 依存の `areka-parsers` の `shell/decode.rs:251` の `collapsible_if`（`--no-deps` を外すとここで止まる）。
+- 測り直しの最初のタスクで、上の範囲を列挙に入れる。

@@ -35,7 +35,10 @@ fn with_opener(world: &mut World, ghost_dir: PathBuf) -> Receiver<OpenJob> {
 
 /// 開く系の行き先（`\j` の URL）。
 fn url_request(url: &str) -> ReadmeRequest {
-    ReadmeRequest::Open(super::opener_test_support::dest_url(url))
+    ReadmeRequest::Open {
+        dest: super::opener_test_support::dest_url(url),
+        runner: areka_ghost::sink::TalkRunner::default(),
+    }
 }
 
 /// 指定した出来事の行だけを拾う。
@@ -82,7 +85,7 @@ fn register_readme_drain_keeps_an_existing_opener() {
     let jobs = with_opener(&mut world, PathBuf::from("C:\\ghosts\\sample"));
 
     register_readme_drain(&mut world);
-    let ReadmeRequest::Open(dest) = url_request("https://example.com/") else {
+    let ReadmeRequest::Open { dest, .. } = url_request("https://example.com/") else {
         unreachable!("url_request は Open を返す");
     };
     opener::submit(&world, dest);
@@ -411,4 +414,51 @@ fn set_path_warns_without_wiring() {
     let warned = lines_of(&lines, "readme_set_path_no_wiring");
     assert_eq!(warned.len(), 1, "不在を 1 行記録する: {lines:?}");
     assert!(warned[0].contains("level=WARN"), "不在は warn!: {warned:?}");
+}
+
+/// 表示中のゴーストが B でも、台本の開く要求は載せた実行するゴースト A の文脈で渡し、
+/// 説明書は表示中の B のまま。表示中のゴーストが居なくても台本の要求は捨てない。
+#[test]
+fn drain_builds_script_context_from_the_runner_and_readme_from_the_displayed_ghost() {
+    let dir = TempPath::new("readme-drain-runner");
+    let readme = dir.child("readme.txt");
+    std::fs::write(&readme, "説明書").expect("一時ディレクトリへ書けるはず");
+    let displayed = dir.path().join("b");
+    let a = dir.path().join("a");
+    let runner_a = areka_ghost::sink::TalkRunner {
+        name: "A".to_owned(),
+        place: Some(areka_ghost::sink::GhostPlace {
+            master: a.join("ghost").join("master"),
+            root: a,
+        }),
+    };
+    let script = |url: &str| ReadmeRequest::Open {
+        dest: super::opener_test_support::dest_url(url),
+        runner: runner_a.clone(),
+    };
+
+    let mut world = World::new();
+    let tx = wired(&mut world, readme);
+    let jobs = with_opener(&mut world, displayed.clone());
+    tx.send(script("https://example.com/a"))
+        .expect("受信口は生存している");
+    tx.send(ReadmeRequest::Readme)
+        .expect("受信口は生存している");
+    drain_readme_requests(&mut world);
+    let got: Vec<_> = jobs.try_iter().map(|j| j.context.runner).collect();
+    assert_eq!(got.len(), 2, "{got:?}");
+    assert_eq!(got[0], runner_a, "台本の要求は A");
+    let displayed = std::path::absolute(&displayed).expect("絶対パスにできる");
+    assert_eq!(
+        got[1].place.as_ref().map(|p| &p.root),
+        Some(&displayed),
+        "説明書は表示中の B"
+    );
+
+    world.insert_non_send(GhostSlot(None));
+    tx.send(script("https://example.com/b"))
+        .expect("受信口は生存している");
+    drain_readme_requests(&mut world);
+    let got: Vec<_> = jobs.try_iter().map(|j| j.context.runner).collect();
+    assert_eq!(got, vec![runner_a], "ゴーストが居なくても捨てない");
 }

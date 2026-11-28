@@ -62,7 +62,7 @@ SHIORI を通す形には、トークの最中に動かせないという穴が�
 
 ## Upstream / Downstream
 
-- **Upstream**: `mouse-click-wheel-events`（v0.1.0・窓ごとの今の当たり判定の追跡）・`seriko-interval-combinations`（v0.1.0・`+` のつなぎ方と seriko の `table.rs`・`looper.rs`）・`seriko-script-triggers`（v0.1.0・同じファイル）・v0.2.0 の時刻の土台（`dola-interrupt-ticks` → `talk-anchor-interrupt-ticks`＝seriko の時計を替える）・`collisionex-regions`（v0.2.0・「Head」を `collisionex` で書くシェルに効くため）。
+- **Upstream**: `mouse-click-wheel-events`（v0.1.0・窓ごとの今の当たり判定の追跡）・`seriko-interval-combinations`（v0.1.0・`+` のつなぎ方と seriko の `table.rs`・`looper.rs`）・`seriko-script-triggers`（v0.1.0・同じファイル）・v0.2.0 の時刻の土台（✅ `dola-interrupt-ticks`＝seriko の時計を替える）・`collisionex-regions`（v0.2.0・「Head」を `collisionex` で書くシェルに効くため）。
 - **Downstream**: ぱすた（× の赤をシェルだけで書ける）・`\![anim,…]` を持つ後の spec（ホバーで点いたアニメを台本から止めるときの順）。
 
 ## Existing Spec Touchpoints

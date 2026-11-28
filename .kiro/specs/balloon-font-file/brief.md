@@ -75,3 +75,8 @@
 - **要件定義のモデル**: Opus（正典の文言ははっきりしていて、分かれ目は作りの話だけ）。
 - **分割の案**: 切らない。
 - **見つけた穴・古くなった記述**: 本文 Constraints の「`draw.rs` 761 行」は 846 行。roadmap の文字とバルーンの列の説明「`actor.rs`・`viewbox_draw_render.rs` が `anchor-tag-canon` と重なる」は相手が着地して用済み（棚卸㉔のまま）。
+
+## 申し送り（talk-script-metadata より・2026-11-28 着地）
+
+- 台本の付帯情報は `areka_talk::TalkMeta`（`runner: TalkRunner { name, place: Option<GhostPlace { master, root }> }`・`sender: TalkSender`）。受け手は `BootCueSink::begin_talk(talk_id, origin, &TalkMeta)` でトークごとに受け取り、そのトークの最初の合図より前に届く。`GhostSlot` を引かずにこれを覚えて使う（作りの例は `crates/areka-session/src/readme/readme_cue.rs` の `ReadmeCueSink`）。
+- 相対パスは `areka_sakura::talk_path::resolve(place, written, SearchOrder)`（在る無しを差し替えてテストするなら `resolve_in`）（`areka_ghost::sink` からも再公開）で解く。`SearchOrder::MasterOnly` は ghost/master だけ、`MasterThenRoot` は ghost/master の次にゴーストの最上位を探す。解けないときは `Unresolved::{Empty, NoPlace, NotFound { last_tried }}`（`reason()` が `empty_path`・`no_place`・`not_found`）で、ログに残してから断る。どちらの探し方を使うかはこの spec の要件の段で決める。

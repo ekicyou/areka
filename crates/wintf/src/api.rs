@@ -1,7 +1,7 @@
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use windows::Win32::System::Threading::{
     GetCurrentProcess, GetCurrentThread, GetCurrentThreadId, GetProcessTimes, GetThreadTimes,
-    THREAD_QUERY_LIMITED_INFORMATION,
+    THREAD_QUERY_LIMITED_INFORMATION, THREAD_SYNCHRONIZE, WaitForSingleObject,
 };
 use windows::Win32::{Foundation::*, UI::WindowsAndMessaging::*};
 use windows::core::*;
@@ -217,8 +217,9 @@ pub fn get_current_thread_id() -> u32 {
 /// ある。複製したハンドルはスレッドが終了した後も有効で、終了時点までの CPU 時間を
 /// 読み出せる。
 ///
-/// 権限は `THREAD_QUERY_LIMITED_INFORMATION` だけを与える（`GetThreadTimes` にはこれで
-/// 足りる）。所有権は [`OwnedHandle`] が持ち、drop で `CloseHandle` される。
+/// 権限は `THREAD_QUERY_LIMITED_INFORMATION`（`GetThreadTimes` にはこれで足りる）と
+/// `THREAD_SYNCHRONIZE`（[`thread_has_exited`] の `WaitForSingleObject` が要る）を与える。
+/// 所有権は [`OwnedHandle`] が持ち、drop で `CloseHandle` される。
 ///
 /// 失敗は握り潰さず `Err` で返す。
 pub fn duplicate_current_thread_handle() -> Result<OwnedHandle> {
@@ -233,7 +234,7 @@ pub fn duplicate_current_thread_handle() -> Result<OwnedHandle> {
             GetCurrentThread(),
             process,
             &mut duplicated,
-            THREAD_QUERY_LIMITED_INFORMATION.0,
+            (THREAD_QUERY_LIMITED_INFORMATION | THREAD_SYNCHRONIZE).0,
             false,
             DUPLICATE_HANDLE_OPTIONS(0),
         )?;
@@ -262,6 +263,23 @@ pub fn get_thread_times(thread: &OwnedHandle) -> Result<CpuTimes> {
         kernel_100ns: filetime_to_100ns(kernel),
         user_100ns: filetime_to_100ns(user),
     })
+}
+
+/// スレッドが終わったかを待たずに返す（`WaitForSingleObject(h, 0)`）。
+///
+/// `Ok(true)` はスレッドのオブジェクトが signaled（終わった）、`Ok(false)` は生きている。
+/// 引数は [`duplicate_current_thread_handle`] が返す `THREAD_SYNCHRONIZE` つきのハンドル。
+///
+/// `WAIT_FAILED` は OS の失敗、それ以外の戻りは想定外の失敗として `Err` で返す。
+pub fn thread_has_exited(thread: &OwnedHandle) -> Result<bool> {
+    let handle = HANDLE(thread.as_raw_handle() as _);
+    // SAFETY: Win32 境界。待ち時間 0 で状態を読むだけ。ハンドルは `thread` が開いて持っている。
+    match unsafe { WaitForSingleObject(handle, 0) } {
+        WAIT_OBJECT_0 => Ok(true),
+        WAIT_TIMEOUT => Ok(false),
+        WAIT_FAILED => Err(Error::from_thread()),
+        _ => Err(E_UNEXPECTED.into()),
+    }
 }
 
 /// 自プロセス全体の CPU 時間を返す（`GetProcessTimes`）。

@@ -8,13 +8,14 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
+use super::super::script_balloon::{ScriptShare, is_script_placed, script_share};
 use super::drag_follow::known_position;
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonKeywordBase, BalloonLimit,
-    BalloonWindowMarker, MonitorSnapshot, OffsetBase, PlacementRoute, PointPx, SizePx,
-    balloon_offset_entries, enqueue_window_set_pos, limit_correction, persist_entries, rect_at,
-    reset_applied, work_area_for_window,
+    BalloonWindowMarker, OffsetBase, PlacementRoute, PointPx, SizePx, balloon_offset_entries,
+    enqueue_window_set_pos, limit_correction, limit_work_area_in, persist_entries, rect_at,
+    reset_applied,
 };
 
 /// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
@@ -273,22 +274,47 @@ pub(crate) fn on_balloon_drag_end(
                 y: balloon_pos.y - char_pos.y,
             };
 
-            // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries の基準記述）。
-            let persist = offset_tl;
-            // 保存↔復元の座標突合に使う実機診断ログ。char_size は診断用の現寸。
-            tracing::info!(
-                target: "areka::persist::save",
-                scope,
-                balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
-                char_x = char_pos.x, char_y = char_pos.y,
-                offset_tl_x = offset_tl.x, offset_tl_y = offset_tl.y,
-                persist_x = persist.x, persist_y = persist.y,
-                char_w = char_size.w, char_h = char_size.h,
-                ?anchor,
-                "balloon DragEnd 保存"
-            );
-            let entries = balloon_offset_entries(scope as u32, persist);
-            persist_entries(world, entries);
+            let share = if is_script_placed(world, char_window) {
+                script_share(world, scope)
+            } else {
+                ScriptShare::NotPlaced
+            };
+            let share = match share {
+                ScriptShare::NotPlaced => Some(PointPx { x: 0, y: 0 }),
+                ScriptShare::Share(share) => Some(share),
+                ScriptShare::Unresolved(reason) => {
+                    // 台本の分が記憶に入ると次の起動で台本の位置に出るので、書かない方を取る。
+                    warn!(
+                        event = "balloon_persist_skipped",
+                        scope,
+                        reason,
+                        "台本の値の分が解けないのでバルーンの位置を記憶へ書かなかった"
+                    );
+                    None
+                }
+            };
+            if let Some(share) = share {
+                // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries の基準記述）。
+                let persist = PointPx {
+                    x: offset_tl.x.saturating_sub(share.x),
+                    y: offset_tl.y.saturating_sub(share.y),
+                };
+                // 保存↔復元の座標突合に使う実機診断ログ。char_size は診断用の現寸。
+                tracing::info!(
+                    target: "areka::persist::save",
+                    scope,
+                    balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
+                    char_x = char_pos.x, char_y = char_pos.y,
+                    offset_tl_x = offset_tl.x, offset_tl_y = offset_tl.y,
+                    script_share_x = share.x, script_share_y = share.y,
+                    persist_x = persist.x, persist_y = persist.y,
+                    char_w = char_size.w, char_h = char_size.h,
+                    ?anchor,
+                    "balloon DragEnd 保存"
+                );
+                let entries = balloon_offset_entries(scope as u32, persist);
+                persist_entries(world, entries);
+            }
 
             // 2′: 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
             reestablish_balloon_follow(world, entity, balloon_pos);
@@ -299,7 +325,15 @@ pub(crate) fn on_balloon_drag_end(
 
             // 4: 解放時補正。2 の永続 write-through より後であることが順序の要点であり、
             // この 1 行が上へ動いた瞬間に補正値が保存値へ焼き付く（本関数 doc「順序の固定」）。
-            apply_release_limit_correction(world, entity, scope, balloon_pos, char_pos, char_size);
+            apply_release_limit_correction(
+                world,
+                entity,
+                scope,
+                balloon_pos,
+                char_window,
+                char_pos,
+                char_size,
+            );
             false
         }
     }
@@ -365,11 +399,11 @@ fn retire_keyword_base_on_save(
 /// 対象が [`BalloonLimit`]`(true)` を持つときだけ働く。持たない窓と `false` の窓は
 /// 1 bit も触らずに戻る——縮退ではないので警告も出さない。
 ///
-/// # 基準領域はキャラ窓の帰属モニタ
+/// # 基準領域は runtime 関門と同じ選び方
 ///
-/// 呼出元が保存値の導出で既に読み終えている追従元キャラ窓の位置・寸をそのまま受け取り、
-/// [`work_area_for_window`] の既存の帰属規則（窓中心 half-open ＋最近傍フォールバック）へ
-/// 渡すだけである。帰属規則そのものは 1 bit も変えない。runtime 関門のように
+/// 呼出元が保存値の導出で既に読み終えている追従元キャラ窓の位置・寸と、解放位置×バルーンの寸を
+/// [`limit_work_area_in`] へ渡す（台本の値の無いスコープはキャラ窓の帰属モニタ、あるスコープは
+/// 解放位置の矩形の帰属モニタ）。帰属規則そのものは 1 bit も変えない。runtime 関門のように
 /// `GhostWindows` を引き直さないのは、解放時点の追従元は保存値の導出で**既に**逆引き
 /// 済みであり、同じ World を二度引くと保存に使った char と補正の基準 char が乖離し得る
 /// からである（同一 DragEnd 内では同じ char を見る）。
@@ -398,6 +432,7 @@ fn apply_release_limit_correction(
     balloon: Entity,
     scope: usize,
     release_pos: Point,
+    char_window: Entity,
     char_pos: Point,
     char_size: SizePx,
 ) {
@@ -434,7 +469,7 @@ fn apply_release_limit_correction(
         return;
     };
 
-    // 基準はキャラ窓の帰属モニタ。位置のセンチネル・非正寸は矩形を組めない。
+    // 位置のセンチネル・非正寸は矩形を組めない。
     let char_rect = (char_pos.x != CW_USEDEFAULT
         && char_pos.y != CW_USEDEFAULT
         && char_size.w > 0
@@ -448,12 +483,9 @@ fn apply_release_limit_correction(
                 char_size,
             )
         });
-    let area = char_rect.and_then(|r| {
-        world
-            .get_resource::<MonitorSnapshot>()
-            .and_then(|snapshot| work_area_for_window(snapshot, r))
-    });
-    let Some(area) = area else {
+    let picked =
+        char_rect.and_then(|r| limit_work_area_in(world, char_window, r, pos, balloon_size));
+    let Some((area, monitor, script)) = picked else {
         warn!(
             entity = ?balloon,
             scope,
@@ -479,6 +511,8 @@ fn apply_release_limit_correction(
         to = ?corrected,
         balloon_size = ?balloon_size,
         work_area = ?area,
+        monitor = monitor.as_str(),
+        script,
         "{BALLOON_LIMIT_CLAMP_TAG} 解放時補正: バルーンの解放位置を作業領域内へ補正した（保存済みの相対位置は生値のまま）"
     );
     enqueue_window_set_pos(

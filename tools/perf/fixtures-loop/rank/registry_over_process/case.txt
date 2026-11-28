@@ -1,0 +1,7 @@
+title = 名簿の差がプロセスの差を越えても名簿外の残りは 0 で止まり、負にならない
+exit = 0
+argv = --stage thread --top 5
+
+note = thread_exited_in_window と同じ名簿で、snap=2 のプロセスの CPU だけを 5.0 秒に下げる。
+note = プロセスの差 5.0−3.5＝1.5 秒、名簿の差 2.0 秒（ui 0.8・actor:sakura-talk-* 0.7・actor:kanade 0.5）。
+note = 名簿外の残り＝max(1.5−2.0, 0)＝0 秒。割合の分母はプロセスの差 1.5 秒のままなので、役割の割合の和は 100 を越える。

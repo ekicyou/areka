@@ -121,6 +121,7 @@ pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     }
 }
 

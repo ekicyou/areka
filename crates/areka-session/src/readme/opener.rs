@@ -3,7 +3,8 @@
 //! 行き先（[`Destination`]）と文脈（[`OpenContext`]）から OS への 1 回分の呼び出し（[`OsCall`]）を
 //! 作る [`resolve`] を置く。fs は読むが OS は呼ばない（呼ぶのは開く専用のスレッドの実行だけ）。
 //! [`execute`] は 1 件を記録して OS へ渡し、[`serve`] は受信端が閉じるまでそれを繰り返す。
-//! [`Opener`] はそのスレッドへの送信端（World の持ち物）、[`submit`] は UI スレッドの唯一の入口。
+//! [`Opener`] はそのスレッドへの送信端（World の持ち物）。UI スレッドの入口は、台本の要求の
+//! [`submit_for_talk`] と説明書の [`submit`] の 2 つ。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -11,6 +12,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_ghost::config::listed_name;
 use areka_ghost::same_folder_name;
+use areka_ghost::sink::talk_path::{self, SearchOrder, Unresolved};
+use areka_ghost::sink::{GhostPlace, TalkRunner};
 use bevy_ecs::world::World;
 
 use super::destination::{Destination, Store, Target};
@@ -21,13 +24,11 @@ use crate::ghost_switch::{GhostSpec, resolve_switch_target};
 use crate::log_history::TARGET_ERROR;
 use areka_runtime::shell_balloon_resolve::{SkinCandidate, balloon_candidates, shell_candidates};
 
-/// 開く文脈（UI スレッドで World から写す）。
+/// 開く文脈（UI スレッドで組む）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OpenContext {
-    /// get_active_ghost_list と同じ名（記録の `ghost`）。
-    pub ghost: String,
-    /// ゴーストのフォルダ（`ghost/<フォルダ>`）の絶対パス。
-    pub ghost_dir: PathBuf,
+    /// 実行するゴースト（記録の `ghost` は `runner.name`）。
+    pub runner: TalkRunner,
     /// ベースウェアの根の並び（BootContext が無ければ None）。
     pub baseware: Option<areka_ghost::BasewareRoots>,
 }
@@ -41,6 +42,20 @@ pub(crate) enum OpenFailure {
     NoMatch { store: Store, name: String },
     /// 目録を引く根（ベースウェアの根）が無い。
     NoBasewareRoot,
+    /// 書かれたパス（展開の後）が空（`reason = "empty_path"`）。
+    EmptyPath,
+    /// 相対パスなのに置き場が無い（`reason = "no_place"`）。
+    NoPlace,
+}
+
+impl From<Unresolved> for OpenFailure {
+    fn from(u: Unresolved) -> Self {
+        match u {
+            Unresolved::Empty => OpenFailure::EmptyPath,
+            Unresolved::NoPlace => OpenFailure::NoPlace,
+            Unresolved::NotFound { last_tried } => OpenFailure::NotFound(last_tried),
+        }
+    }
 }
 
 impl OpenFailure {
@@ -50,6 +65,8 @@ impl OpenFailure {
             OpenFailure::NotFound(_) => "not_found",
             OpenFailure::NoMatch { .. } => "no_match",
             OpenFailure::NoBasewareRoot => "no_baseware_root",
+            OpenFailure::EmptyPath => "empty_path",
+            OpenFailure::NoPlace => "no_place",
         }
     }
 }
@@ -75,7 +92,7 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
         Err(failure) => {
             tracing::error!(
                 target: TARGET_ERROR,
-                ghost = %ctx.ghost,
+                ghost = %ctx.runner.name,
                 event = "open_external_failed",
                 kind,
                 destination = %dest.written,
@@ -102,7 +119,7 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
         event = "open_external",
         kind,
         destination = %resolved,
-        ghost = %ctx.ghost,
+        ghost = %ctx.runner.name,
         tag = %dest.tag,
         verb,
         "[readme] handing the destination to the OS"
@@ -110,7 +127,7 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
     if let Err(code) = port.shell_execute(&call) {
         tracing::error!(
             target: TARGET_ERROR,
-            ghost = %ctx.ghost,
+            ghost = %ctx.runner.name,
             event = "open_external_failed",
             kind,
             destination = %resolved,
@@ -165,7 +182,7 @@ impl Opener {
     }
 }
 
-/// 唯一の入口（UI スレッド）。World から文脈を写して送るだけで、fs も OS も待たない。
+/// 説明書の入口（UI スレッド・表示中のゴーストの文脈）。fs も OS も待たない。
 ///
 /// ゴーストが居ない・[`Opener`] が無い・送れない（スレッドが落ちた）は `error!` 1 行で捨てる。
 pub(crate) fn submit(world: &World, destination: Destination) {
@@ -179,21 +196,37 @@ pub(crate) fn submit(world: &World, destination: Destination) {
     let dir = session.ghost_dir();
     let ghost_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
     let name = session.names().and_then(|n| n.name.as_deref());
-    let ghost = listed_name(name, &ghost_dir);
+    let runner = TalkRunner {
+        name: listed_name(name, &ghost_dir),
+        place: Some(GhostPlace {
+            master: ghost_dir.join("ghost").join("master"),
+            root: ghost_dir,
+        }),
+    };
+    submit_for_talk(world, destination, runner);
+}
+
+/// 台本の開く要求の入口（UI スレッド）。`GhostSlot` を引かない。
+///
+/// [`Opener`] が無い・送れない（スレッドが落ちた）は `error!` 1 行で捨てる。
+pub(crate) fn submit_for_talk(world: &World, destination: Destination, runner: TalkRunner) {
     let Some(opener) = world.get_resource::<Opener>() else {
-        dropped(Some(&ghost), &destination, "no_opener");
+        dropped(Some(&runner.name), &destination, "no_opener");
         return;
     };
     let context = OpenContext {
-        ghost,
-        ghost_dir,
+        runner,
         baseware: world.get_resource::<BootContext>().map(|c| c.roots.clone()),
     };
     if let Err(mpsc::SendError(job)) = opener.tx.send(OpenJob {
         destination,
         context,
     }) {
-        dropped(Some(&job.context.ghost), &job.destination, "disconnected");
+        dropped(
+            Some(&job.context.runner.name),
+            &job.destination,
+            "disconnected",
+        );
     }
 }
 
@@ -241,8 +274,8 @@ pub(crate) fn resolve(
             let expanded = expand_env(s, port);
             match existing(ctx, &expanded) {
                 Ok(path) => Ok(open_file(path)),
-                // 名前だけ（区切りを含まない）なら OS のパス探索に任せる。
-                Err(_) if !expanded.contains(['\\', '/', ':']) => {
+                // 名前だけ（空でなく区切りを含まない）なら OS のパス探索に任せる。
+                Err(_) if !expanded.is_empty() && !expanded.contains(['\\', '/', ':']) => {
                     Ok(call(Verb::Open, expanded, None, None))
                 }
                 Err(e) => Err(e),
@@ -277,7 +310,7 @@ pub(crate) fn resolve(
 
 /// `\![open,explorer,種類,名前]` の名前を目録で引く。
 ///
-/// 並び（`ctx.baseware`）の和で引く（バルーンは今のゴーストの中が先）。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
+/// 並び（`ctx.baseware`）の和で引く（今のゴーストの中＝実行するゴーストの最上位・バルーンはそこが先）。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
 /// フォルダ名の順に引く（`name` は区別・フォルダ名は `same_folder_name`）。`random` などの特別な名前は解かない（名指しだけ）。
 fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, OpenFailure> {
     let root = ctx.baseware.as_ref().ok_or(OpenFailure::NoBasewareRoot)?;
@@ -287,8 +320,8 @@ fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, 
             &GhostSpec::Name(name.to_owned()),
         )
         .map(|t| t.dir),
-        Store::Balloon => skin_by_name(balloon_candidates(root, &ctx.ghost_dir), name),
-        Store::Shell => skin_by_name(shell_candidates(&ctx.ghost_dir), name),
+        Store::Balloon => skin_by_name(balloon_candidates(root, place_root(ctx)?), name),
+        Store::Shell => skin_by_name(shell_candidates(place_root(ctx)?), name),
     };
     hit.ok_or_else(|| OpenFailure::NoMatch {
         store,
@@ -330,19 +363,22 @@ fn open_file(path: PathBuf) -> OsCall {
     call(Verb::Open, path, None, dir)
 }
 
-/// 絶対ならそのまま、相対なら `ghost/master` に繋ぐ。無ければ [`OpenFailure::NotFound`]。
+/// 実行するゴーストの最上位。置き場が無ければ [`OpenFailure::NoPlace`]。
+fn place_root(ctx: &OpenContext) -> Result<&Path, OpenFailure> {
+    ctx.runner
+        .place
+        .as_ref()
+        .map(|p| p.root.as_path())
+        .ok_or(OpenFailure::NoPlace)
+}
+
+/// 共通の決まり（ghost/master だけ）で解く。
 fn existing(ctx: &OpenContext, written: &str) -> Result<PathBuf, OpenFailure> {
-    let p = Path::new(written);
-    let path = if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        ctx.ghost_dir.join("ghost").join("master").join(p)
-    };
-    if path.exists() {
-        Ok(path)
-    } else {
-        Err(OpenFailure::NotFound(path))
-    }
+    Ok(talk_path::resolve(
+        ctx.runner.place.as_ref(),
+        written,
+        SearchOrder::MasterOnly,
+    )?)
 }
 
 /// `%名前%` を境界の環境変数で置き換える。未定義はそのまま残す（OS の展開と同じ）。
