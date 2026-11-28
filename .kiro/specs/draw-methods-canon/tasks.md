@@ -305,3 +305,4 @@
 - 7.6: CPU の合成の口（`compose`・`compose_into`・`compose_into_reusing`・blit・blit_rect・合成の所要の例）を外した。取り下げの理由は研究の記録 §17。画素の上限は `asis` の表に載る絵を語を問わず `asis` 用の絵で数える。`GpuAtlas::page_holds`（頁の外の絵は `warn!` で空の葉）を足した。perf の行の `alloc_compose_dst`・`alloc_mask` は 0、`t_compose_us` は計画を組む時間。
 - 7.6 → 8.x: `doc/ukadoc-coverage/ledger/assets.toml` の本文に `blit::execute`（もう無い）を挙げる所が 61 か所残る。報告の作り直しを伴うので 8.5 か validate-impl か完了の文書の段で直す。
 - 8.1 → 8.3: emo の画面は変化のたびに `CoversSurface` で全部描く。理由は 2 つ（根の原寸のまとめの項の範囲が描画面全体を覆う・まばたきのコマが下地の絵の項と交わる）。移す前も毎回全部（`root_list`）。8.3 で重いと分かって「画素どおり」の申告を wintf に足すときは、根のまとめの項で広がる規則も直す要がある。
+- 8.3（開発者の決め待ち）: 移した後の測りは研究の記録 §18。6 行のうち k≈1.2468 のまばたきの当たりだけ 460→893µs と重い（当たりでも計画の 8 項を GPU で毎フレーム k 倍に描くため）。ほかの 5 行は軽い。当たりの 1 画素の GPU の待ちは中央値 1.0〜1.5ms（設計の見込みより長い）で、カーソルを動かし続けると UI スレッドの約 17%。`target\release\areka.exe` は計測用の写し（`trace!` 入り）で、素の HEAD の実行体は `target\dmc-perf\bin-head\areka.exe`。
