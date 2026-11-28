@@ -620,3 +620,61 @@ fn balloon_resize_leaves_a_scope_without_script_value_untouched() {
     assert!(!w.world.entity(c).contains::<BalloonUserMoved>());
     assert!(events.is_empty(), "{events:?}");
 }
+
+#[test]
+fn balloon_resize_while_dragging_does_not_move_the_balloon() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Left, true);
+    let b = w.windows.balloon_window(0).unwrap();
+    w.world.entity_mut(b).insert(WindowDragging);
+    let follow = follow_of(&w, 0);
+    let pos = balloon_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    let (_, events) =
+        capture(|| reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER));
+
+    assert_eq!(balloon_at(&w, 0), pos);
+    assert_eq!(follow_of(&w, 0), follow);
+    let skipped = one_event_with(&events, "script_balloon_reanchor_skipped");
+    assert_eq!(skipped.field_str("reason"), Some("balloon_dragging"));
+    assert_eq!(events_with(&events, "script_balloon_reanchored").len(), 0);
+}
+
+#[test]
+fn balloon_resize_without_default_basis_warns_and_does_not_move_the_balloon() {
+    let mut w = script_world(&[]);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Left, true);
+    w.world.remove_resource::<DefaultPlacementBasis>();
+    let follow = follow_of(&w, 0);
+    let pos = balloon_at(&w, 0);
+    resize_sakura_balloon(&mut w);
+
+    let (_, events) =
+        capture(|| reanchor_after_balloon_resize(&mut w.world, 0, BALLOON_BEFORE, BALLOON_AFTER));
+
+    assert_eq!(balloon_at(&w, 0), pos);
+    assert_eq!(follow_of(&w, 0), follow);
+    let warn = one_event_with(&events, "script_balloon_reanchor_skipped");
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.field_str("reason"), Some("no_default_basis"));
+}
+
+#[test]
+fn resettle_that_cannot_resolve_drops_the_mark_and_keeps_the_provisional_position() {
+    let mut w = script_world(&[]);
+    let c = char_at(&w, 0);
+    apply_script_balloon_align(&mut w.world, 0, ScriptAlign::Right, false);
+    assert!(unsettled(&w));
+    land_sakura(&mut w);
+    w.world.remove_resource::<DefaultPlacementBasis>();
+
+    let (_, events) = capture(|| resettle_script_balloons(&mut w.world, &|_| true));
+
+    assert!(!unsettled(&w));
+    assert_eq!(balloon_at(&w, 0), shifted(c, CHAR_SIZES[0].w, 0));
+    let warn = one_event_with(&events, "script_balloon_resettle_skipped");
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.field_str("reason"), Some("no_default_basis"));
+    assert_eq!(events_with(&events, "script_balloon_resettled").len(), 0);
+}
