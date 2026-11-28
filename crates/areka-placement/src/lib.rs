@@ -887,6 +887,9 @@ pub(crate) fn square_dpi(dpi: u32) -> DPI {
 }
 
 #[cfg(test)]
+#[path = "placement_balloon_merge_log_tests.rs"]
+mod balloon_merge_log_tests;
+#[cfg(test)]
 #[path = "balloon_offset_supply_tests.rs"]
 mod balloon_offset_supply_tests;
 #[cfg(test)]
