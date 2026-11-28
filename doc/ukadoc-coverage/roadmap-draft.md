@@ -596,6 +596,8 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 `descript_shell_surfaces` の状態の数を数え直した値に直した。行数は **68 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
 **44 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 68 に合わせ、`snapshot_on` は **2026-11-17** にした。
 
+`balloon-script-offset-align` の行は台帳 `ledger/sakura-script.toml` の `set,balloonoffset`・`set,balloonalign` の 2 項目の宛先で、束をまだ割り当てていないので `none = true` の行である。行数は **69 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **44 行**・`none = true` の行が **25 行**である。`[briefs].count` はこの 69 に合わせた。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -630,8 +632,8 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 
 ```toml
 [briefs]
-count = 68
-snapshot_on = "2026-11-17"
+count = 69
+snapshot_on = "2026-11-28"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -827,6 +829,13 @@ stage = "A"
 bundle = "会話"
 owner_count = 4
 wave = "C4-⑩"
+
+[[spec]]
+name = "balloon-script-offset-align"
+none = true
+reason = "束はまだ割り当てていない。台帳 `ledger/sakura-script.toml` の `set,balloonoffset` と `set,balloonalign` の 2 項目（2 件）"
+owner_count = 2
+wave = "C28-④"
 
 [[spec]]
 name = "areka-P0-sylphya-set-ledger"

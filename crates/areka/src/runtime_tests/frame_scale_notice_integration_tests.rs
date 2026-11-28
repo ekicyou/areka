@@ -98,7 +98,6 @@ impl Cage {
     /// 表の scope 0 のシェルの `scaling` の文字（行が無ければ `None`）。
     fn shell_scaling(&self) -> Option<String> {
         let table = self.wiring.as_ref().expect("結線").scope_scale_table();
-        let table = table.read().expect("表の錠");
         table
             .get(0, TargetWindow::Shell)
             .map(|v| scaling_text(v.ratio))

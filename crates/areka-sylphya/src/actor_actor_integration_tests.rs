@@ -1,9 +1,13 @@
 use super::*;
 use crate::asker::{AskerContext, AskerId};
-use crate::persist::{Axis, FakePersistIo, PersistKey, PersistScope, ScopeRoots};
+use crate::guardian::wait_tests::{Hooked, ask};
+use crate::keytable::Home;
+use crate::persist::{Axis, PersistKey, PersistScope, ScopeRoots};
+use crate::store::{FileWrite, MemBackend, Store, StoreBackend};
 use crate::value::{DottedResolution, FlatResolution};
 use crate::vocab::DegradePolicy;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 fn ctx(id: &str) -> AskerContext {
     AskerContext {
@@ -15,13 +19,26 @@ fn a(id: &str) -> AskerId {
     AskerId::new(id)
 }
 
-/// 空 roots＋fake IO で起動する（本番結線を模した最小 init）。
-fn init_empty() -> SylphyaInit {
-    SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
+/// 空 roots＋偽物の置き場の口で起動する（本番結線を模した最小 init）。
+fn ghost_roots() -> ScopeRoots {
+    ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
     }
+}
+
+/// 番人とは別の核で、ゴーストの層のファイルを読む。
+fn read_ghost_file(backend: Arc<dyn StoreBackend>, key: &str) -> Option<String> {
+    Store::open(ghost_roots(), backend).unwrap().read(
+        &a("ghost/a"),
+        key,
+        Some(PersistScope::Ghost),
+        Home::File,
+    )
+}
+
+fn init_empty() -> SylphyaInit {
+    SylphyaInit::new(ScopeRoots::default(), MemBackend::new())
 }
 
 // === 配線: spawn → publish → barrier → read（barrier がフェンス）===
@@ -34,7 +51,7 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
         vec![("selfname".into(), "さくら".into())],
         vec![("baseware.name".into(), "areka".into())],
     );
-    // barrier 復帰 = 上記 publish が鏡像へ反映済み（mpsc FIFO＋直列処理）。
+    // barrier 復帰 = 上記 publish が片づいている（mpsc FIFO＋直列処理）。
     parts
         .publisher
         .barrier()
@@ -52,50 +69,36 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
     );
 }
 
-// === 起動時ロード: publish なしで永続復元値が読める（init 投影・reader 無ブロックも兼ねる）===
+// === 起動の前にファイルに在る値が、番人への読みで読める ===
 
 #[test]
-fn initial_load_projects_persist_into_dotted_without_publish() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::X,
-                },
-                "100".into(),
-            ),
-            (PersistKey::BootCount, "7".into()),
+fn values_already_in_the_file_are_read_through_the_guardian() {
+    let mem = MemBackend::new();
+    let roots = ghost_roots();
+    let mut seed = Store::open(roots.clone(), mem.clone()).unwrap();
+    let _ = seed.try_write(&FileWrite {
+        layer: PersistScope::Ghost,
+        root: roots.ghost.clone(),
+        puts: vec![
+            ("areka.window.scope(0).x".into(), "100".into()),
+            ("areka.boot.count".into(), "7".into()),
         ],
-    );
-    let parts = spawn_sylphya(SylphyaInit {
-        roots,
-        io: Box::new(io),
-        runtime_sink: None,
+        removes: Vec::new(),
+        typed: Vec::new(),
     });
+    let parts = spawn_sylphya(SylphyaInit::new(roots, mem));
 
-    // publish も barrier もせず即読み: 初期像は spawn 内で同期構築済みゆえレースなく見える
-    // （＝読み経路はアクター処理を一切待たない）。
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(0).x"),
-        DottedResolution::Value("100".into())
-    );
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("7".into())
-    );
+    for (key, value) in [
+        ("areka.window.scope(0).x", "100"),
+        ("areka.boot.count", "7"),
+    ] {
+        assert_eq!(
+            ask(&parts.publisher, a("ghost/a"), None, key, Home::File).as_deref(),
+            Some(value)
+        );
+    }
+    parts.publisher.close();
+    parts.handle.join().expect("join");
 }
 
 // === SET StoreWrite が host 点付き区画へ反映（自由 key）===
@@ -122,7 +125,7 @@ fn set_free_key_store_writes_to_host_dotted_region() {
     );
 }
 
-// === SET RuntimeCommand は M1 未配線（鏡像へ書込まない・呼出は非 panic）===
+// === SET RuntimeCommand は M1 未配線（書込まない・呼出は非 panic）===
 
 #[test]
 fn set_runtime_command_vocab_writes_nothing_in_m1() {
@@ -139,7 +142,7 @@ fn set_runtime_command_vocab_writes_nothing_in_m1() {
     );
 }
 
-// === PublishShiori Some/None（None は不在＝既定値縮退・鏡像へ書かない）===
+// === PublishShiori Some/None（None は不在＝既定値縮退・書かない）===
 
 #[test]
 fn publish_shiori_some_sets_flat_none_records_absence() {
@@ -183,40 +186,12 @@ fn barrier_fences_all_prior_messages_last_write_wins() {
     );
 }
 
-// === write-through persist put が鏡像 areka.* へ投影（root None でも投影は成る・save は縮退）===
-
-#[test]
-fn persist_put_projects_to_mirror_areka_region() {
-    let parts = spawn_sylphya(init_empty()); // roots 空 → save は Degraded だが鏡像投影は成る。
-    parts.publisher.persist_put(
-        PersistScope::Ghost,
-        vec![(PersistKey::BootCount, "3".into())],
-    );
-    parts.publisher.barrier().expect("barrier");
-    // 保存先 root が None でも（save_scope は Degraded・warn）鏡像 dotted 投影は独立に成立し、
-    // アクターは panic せず継続する。
-    assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("3".into())
-    );
-}
-
 // === write-through persist put が実 IO へ確定・独立ロードで復元（往復・root あり）===
 
 #[test]
 fn persist_put_write_through_commits_to_real_io() {
-    let shared = std::sync::Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(shared.clone()),
-        runtime_sink: None,
-    });
+    let mem = MemBackend::new();
+    let parts = spawn_sylphya(SylphyaInit::new(ghost_roots(), mem.clone()));
     parts.publisher.persist_put(
         PersistScope::Ghost,
         vec![
@@ -224,38 +199,30 @@ fn persist_put_write_through_commits_to_real_io() {
             (PersistKey::VanishCount, "2".into()),
         ],
     );
-    // barrier 復帰 = put の write-through 保存（save_scope）まで完了。
+    // barrier 復帰 = put の書きが確定済み。
     parts.publisher.barrier().expect("barrier");
 
-    // アクターと同じ store を別ハンドルの load_scope で観測（実 IO 通過の証明）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
-    assert!(
-        loaded.contains(&(PersistKey::BootCount, "5".into())),
-        "write-through が実 IO へ確定していない: {loaded:?}"
-    );
-    assert!(
-        loaded.contains(&(PersistKey::VanishCount, "2".into())),
-        "write-through が実 IO へ確定していない: {loaded:?}"
-    );
-    // 鏡像 areka.* 投影も成る（write-through の両面）。
+    // 番人とは別の核で観測（ファイルへ確定した証明）。
     assert_eq!(
-        parts
-            .reader
-            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
-        DottedResolution::Value("5".into())
+        read_ghost_file(mem.clone(), "areka.boot.count").as_deref(),
+        Some("5")
+    );
+    assert_eq!(
+        read_ghost_file(mem, "areka.vanish.count").as_deref(),
+        Some("2")
     );
 }
 
-// === アクター死亡（Close→join）: 送信は SendError（非 panic）・barrier は Err・reader 継続 ===
+// === アクター死亡（Close→join）: 送信は SendError（非 panic）・barrier は Err・読みは縮退 ===
 
 #[test]
-fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
+fn actor_death_via_close_makes_sends_observable_and_reads_degrade() {
     let SylphyaParts {
         reader,
         publisher,
         handle,
     } = spawn_sylphya(init_empty());
-    // 既知値を確立（後で最終鏡像として読めることを確認するため）。
+    // 死後に生前の値が読めないことを確かめるため、先に値を入れておく。
     publisher.publish_static(
         a("ghost/a"),
         vec![("selfname".into(), "生前値".into())],
@@ -287,35 +254,31 @@ fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
         "dead actor barrier must surface ReplyError, not hang"
     );
 
-    // reader は最後に publish された鏡像を保持し続ける（死後投函は反映されない）。
+    // 止まった番人への読みは panic せず、値なし（縮退の決まり）を返す。
     assert_eq!(
         reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-        FlatResolution::Value("生前値".into())
+        FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
     );
 }
 
-/// dispatch で必ず panic する運行 sink（アクター death by panic を決定論的に誘発する）。
-struct PanicSink;
-impl RuntimeCommandSink for PanicSink {
-    fn dispatch(&self, _asker: &AskerId, _key: &str, _value: &str) {
-        panic!("injected runtime-command dispatch panic");
-    }
-}
-
-// === アクター死亡（panic→join 検出）: join が Panicked・reader は最終鏡像で継続 ===
+// === アクター死亡（panic→join 検出）: join が Panicked・読みは縮退 ===
 
 #[test]
-fn actor_panic_is_detected_by_join_and_reader_continues() {
+fn actor_panic_is_detected_by_join_and_reads_degrade() {
     let SylphyaParts {
         reader,
         publisher,
         handle,
-    } = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: Some(Box::new(PanicSink)),
-    });
-    // 先に既知値を確立（panic 前の最終鏡像）。
+    } = spawn_sylphya(SylphyaInit::new(
+        ghost_roots(),
+        Arc::new(Hooked {
+            inner: MemBackend::new(),
+            volatile_uri: None,
+            panic_on_write: true,
+            fail_ensure_dir: false,
+        }),
+    ));
+    // 死後に生前の値が読めないことを確かめるため、先に値を入れておく。
     publisher.publish_static(
         a("ghost/a"),
         vec![("selfname".into(), "生前値".into())],
@@ -323,8 +286,11 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
     );
     publisher.barrier().expect("barrier before panic");
 
-    // RuntimeCommand SET → apply が RuntimeCommandReserved → sink.dispatch で panic 誘発。
-    publisher.set(a("ghost/a"), "surface.num".into(), "5".into());
+    // 永続 put → 確定で panic 誘発。
+    publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "1".into())],
+    );
 
     // join がアクタースレッドの panic を握り潰さず観測（バグ観測・areka-actor 規約 4）。
     let err = handle
@@ -335,10 +301,10 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         "expected Panicked, got {err:?}"
     );
 
-    // reader は panic 前の最終鏡像を読み続けられる（表示系を殺さない）。
+    // 落ちた番人への読みは panic せず、値なし（縮退の決まり）を返す（表示系を殺さない）。
     assert_eq!(
         reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-        FlatResolution::Value("生前値".into())
+        FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
     );
     // 死亡後の barrier は Err（ハングしない）。
     assert!(
@@ -347,13 +313,12 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
     );
 }
 
-// === reader 無ブロック（構造＋挙動）: アクター処理前でも読みは即確定・大域ロック不在 ===
+// === barrier なしの読み: 値の無い名前は縮退の決まりで返り、複製した reader も同じ ===
 
 #[test]
-fn reader_does_not_block_on_actor_supply() {
+fn reads_without_a_barrier_return_by_the_degrade_rule() {
     let parts = spawn_sylphya(init_empty());
-    // 一切の barrier なしで即読み: 読み経路は鏡像 read lock 内 Arc clone のみで、アクターの
-    // メッセージ処理・チャネル送受信を一切待たない（大域ロック不在）。
+    // barrier なしで読んでも、値の無い名前は縮退の決まりで返る。
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/a"), "username"),
         FlatResolution::Degraded(DegradePolicy::ConsumerDefault)
@@ -364,7 +329,7 @@ fn reader_does_not_block_on_actor_supply() {
             .resolve_dotted_str(&ctx("ghost/a"), "system.none"),
         DottedResolution::NotFound
     );
-    // reader は clone 可（複数消費エンジンが同一鏡像を共有・供給と独立）。
+    // reader は clone 可（複数消費エンジンが同じ番人へ聞く）。
     let reader2 = parts.reader.clone();
     assert_eq!(
         reader2.resolve_flat(&ctx("ghost/a"), "username"),
@@ -393,23 +358,12 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
     }
 }
 
-// === 鍵を消す投函: 鏡像と記憶の両方から消え、ほかの鍵は残る・無い鍵では像を出さない ===
+// === 鍵を消す投函: 記憶から消え、ほかの鍵は残る ===
 
 #[test]
-fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
-    let shared = std::sync::Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let (parts, mirror) = spawn_parts(
-        SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(shared.clone()),
-            runtime_sink: None,
-        },
-        None,
-    );
+fn persist_remove_drops_the_key_from_file_and_keeps_others() {
+    let mem = MemBackend::new();
+    let parts = spawn_sylphya(SylphyaInit::new(ghost_roots(), mem.clone()));
     let x = PersistKey::BalloonOffset {
         scope: 0,
         axis: Axis::X,
@@ -430,30 +384,18 @@ fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
         .publisher
         .persist_remove(PersistScope::Ghost, vec![x, y]);
     parts.publisher.barrier().expect("barrier");
-    let epoch = mirror.load().epoch;
-    // 無い鍵を消しても後継の像は出さない（epoch は実変化に対応する）。
-    parts.publisher.persist_remove(PersistScope::Ghost, vec![x]);
-    parts.publisher.barrier().expect("barrier");
 
-    let read = |key| parts.reader.resolve_dotted_str(&ctx("ghost/a"), key);
+    for key in [
+        "areka.balloon.offset.scope(0).x",
+        "areka.balloon.offset.scope(0).y",
+    ] {
+        assert_eq!(read_ghost_file(mem.clone(), key), None, "記憶から消える");
+    }
     assert_eq!(
-        read("areka.balloon.offset.scope(0).x"),
-        DottedResolution::NotFound
+        read_ghost_file(mem, "areka.boot.count").as_deref(),
+        Some("3"),
+        "ほかの鍵は残る"
     );
-    assert_eq!(
-        read("areka.balloon.offset.scope(0).y"),
-        DottedResolution::NotFound
-    );
-    assert_eq!(
-        read("areka.boot.count"),
-        DottedResolution::Value("3".into())
-    );
-    assert_eq!(
-        load_scope(PersistScope::Ghost, &roots, &shared),
-        vec![(PersistKey::BootCount, "3".into())],
-        "記憶からも消え、ほかの鍵は残る"
-    );
-    assert_eq!(mirror.load().epoch, epoch, "無い鍵の消しは像を出さない");
 
     parts.publisher.close();
     parts.handle.join().expect("join");

@@ -22,7 +22,7 @@ fn talk_sink(origin: ScriptOrigin) -> (Box<dyn BootCueSink>, Receiver<NoUserBrea
     let (tx, rx) = channel::<NoUserBreakSignal>();
     let registered = NoUserBreakCueSink::new(tx);
     let mut talk = registered.clone_box();
-    talk.begin_talk(TALK, origin);
+    talk.begin_talk(TALK, origin, &Default::default());
     (talk, rx)
 }
 

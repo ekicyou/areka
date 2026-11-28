@@ -19,10 +19,10 @@ use crate::app_exit::ExitOrigin;
 use areka_ghost::catalog::{BalloonEntry, GhostEntry};
 use areka_ghost::same_folder_name;
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{
     PersistFailure, PersistKey, PersistOutcome, PersistScope, ScopeRoots, SylphyaPublisher,
-    load_scope, save_scope,
+    load_scope, remove_scope_keys, save_scope,
 };
 
 // 判断と記憶の直読みの消費者は起動前の解決（`install::startup::resolve_boot`）。記憶の書き込み
@@ -363,7 +363,7 @@ pub fn pick_index(n: usize) -> usize {
 /// `scope` の記憶ファイルを実 fs から直接読み、`key` の値を拾う（アクター不在の起動前用）。
 /// 読めなければ無し（`load_scope` が不在・読取失敗を空へ縮退し、失敗は warn を残す）。
 fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option<String> {
-    load_scope(scope, roots, &FsPersistIo)
+    load_scope(scope, roots, &fs_backend())
         .into_iter()
         .find_map(|(k, v)| (k == key).then_some(v))
 }
@@ -442,7 +442,7 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
     save_scope(
         PersistScope::App,
         &app_roots(app_profile_dir),
-        &FsPersistIo,
+        &fs_backend(),
         entries,
     )
 }
@@ -452,11 +452,6 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
 // 印（App スコープ `areka.last.running`）は「今動いているゴーストの名前」。起こす前に書き、
 // きれいな終わりでだけ消す（強制終了・クラッシュ・電源断では消えずに残る）。次の起動で残って
 // いれば前回はきれいに終わらなかった＝最後のゴーストの記憶を読まずに解き、`OnBoot` の Ref7 に載せる。
-//
-// 下の書き手（`write_session_mark`・`write_switch_drop`・`clear_session_mark`）を UI スレッドから
-// 呼ぶのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・切替の降ろした直後・
-// 後始末で降ろした後）。記憶の保存は「読んで重ねて書く」ので、動いている実行系の記憶の書き手と
-// 同時に同じファイルを書くと片方が消えうるため。
 
 /// 起動中の印（App スコープ `areka.last.running`）。空文字・無しは `None`。読むだけで消さない。
 pub fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
@@ -545,12 +540,14 @@ pub(crate) fn write_switch_drop(
     }
 }
 
-/// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
+/// きれいな終わり: 印を消す。呼び手は後始末で降ろした後。
 /// 消せなければ記憶の印を読み直し、残る印が在るときだけ次の起動を予告する。
 pub fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> {
-    match save_app(
-        app_profile_dir,
-        vec![(PersistKey::LastRunning, String::new())],
+    match remove_scope_keys(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        &fs_backend(),
+        vec![PersistKey::LastRunning],
     ) {
         PersistOutcome::Saved => {
             tracing::info!(

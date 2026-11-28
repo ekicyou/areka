@@ -43,7 +43,7 @@
 ## Scope
 
 - **In**: wintf・areka・`areka-emo-present`・`shiori-host32-host`・`areka-nar` の本番のコードの「今」の読み取りを割り込み時刻の時計へ。締め切りの型の付け替え。clippy の番人と許す所の一覧。`tech.md`（時計は 1 本の決まり）。
-- **Out**: dola の型と時計そのもの（`dola-interrupt-ticks`）。ghost の刻み・kanade・seriko の時計（`talk-anchor-interrupt-ticks`）。暦の時刻（`GetLocalTime`・tracing の日時・作業フォルダの名前）。刻みを起こす仕組みの変更（`tick-gate-adoption`）。アプリの外の道具。
+- **Out**: dola の型と時計そのもの（`dola-interrupt-ticks`）。ghost の刻み・kanade・seriko の時計（✅ `dola-interrupt-ticks` が替えた）。暦の時刻（`GetLocalTime`・tracing の日時・作業フォルダの名前）。刻みを起こす仕組みの変更（`tick-gate-adoption`）。アプリの外の道具。
 
 ## Boundary Candidates
 
@@ -58,7 +58,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `dola-interrupt-ticks`（型と時計）。`talk-anchor-interrupt-ticks` が先に着地していれば、番人で `GetTickCount64` も止められる（後なら、番人の禁止の一覧に `GetTickCount64` を載せるのはその spec の着地の時）。
+- **Upstream**: `dola-interrupt-ticks`（型と時計）。本番のコードの `GetTickCount64` は 0 になったので、番人で `GetTickCount64` も最初から止める。
 - **Downstream**: なし（以後、新しいコードは番人に従う）。
 
 ## Existing Spec Touchpoints
@@ -88,4 +88,9 @@
 - **優先度の区分**: D（開発者「低優先度」・据え置き）。
 - **要件定義のモデル**: Opus（付け替えが主・型と時計は前例どおり。依存の足し方の議題は前の spec が決めた置き場をそのまま使うか分けるかで、骨組みの分かれ目ではない）。
 - **分割の案**: 無し。
-- **見つけた穴・古くなった記述**: Current State の一覧の `emo2_boot/` の道は全部 `crates/areka-runtime/src/` と `crates/areka-session/src/` へ移った。`ecs/pointer/types/mod.rs`・`mouse_move.rs`・`shiori-host32-host` の `job.rs`・`lifecycle.rs`・`process_host.rs`（今はテストの中だけ）・`install/{overwrite.rs, fetch_url.rs}`（`fetch_url.rs` は暦の `SystemTime` だけ）は付け替えの相手から外れた。Upstream の「`talk-anchor-interrupt-ticks` が先なら」は済んだ（`GetTickCount64` は今止めてよい）。
+- **見つけた穴・古くなった記述**: Current State の一覧の `emo2_boot/` の道は全部 `crates/areka-runtime/src/` と `crates/areka-session/src/` へ移った。`ecs/pointer/types/mod.rs`・`mouse_move.rs`・`shiori-host32-host` の `job.rs`・`lifecycle.rs`・`process_host.rs`（今はテストの中だけ）・`install/{overwrite.rs, fetch_url.rs}`（`fetch_url.rs` は暦の `SystemTime` だけ）は付け替えの相手から外れた。
+
+## 申し送り（talk-thread-count-growth より）
+
+- `crates/areka/src/perf_thread_report.rs` の「今」の読み取りは、`run` へ渡す `started`（`Instant::now()`）と `take_and_emit` の `started.elapsed()` の 2 か所だけになった。1 枚の組み立ては純関数 `compose_snapshot(snap, elapsed, process, reading)` に移り、経過は `Duration` で受け取る（時計を替えるときは `take_and_emit` の 1 行を差し替えれば済み、`compose_snapshot` とそのテストは触らなくてよい）。
+- `take_and_emit` は名簿の読み出し（`wintf::ecs::world::thread_registry::read_cpu()`）をプロセスの CPU より先に読む順に変わった。経過を読む位置をこの 2 つの読み取りの前後のどこに置くかは、付け替えのときに決める論点として渡す（今は名簿の読み出しの後・プロセスの CPU の前）。

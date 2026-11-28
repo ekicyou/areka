@@ -6,7 +6,9 @@
 //! ログや状態変更などの副作用は一切持たず、失敗（[`SurfaceTarget::Unresolved`]）の
 //! error ログ＋skip は呼び手（actor）の責務。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+use areka_emo_compose::SurfaceKeyOutcome;
 
 /// 解決結果（非表示センチネル・未解決を型で区別する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,6 +19,17 @@ pub enum SurfaceTarget {
     Hide,
     /// 解決不能（未知 alias・範囲外数値など。呼び手が error ログ＋skip）。
     Unresolved,
+}
+
+impl SurfaceTarget {
+    /// 文字の層の規則での `\s` の答え。面の表（`surface_ids`）に無い番号は解決できない扱いにする。
+    pub fn for_text(&self, surface_ids: &BTreeSet<u32>) -> SurfaceKeyOutcome {
+        match self {
+            Self::Show(id) if surface_ids.contains(id) => SurfaceKeyOutcome::Show(*id),
+            Self::Hide => SurfaceKeyOutcome::Hide,
+            Self::Show(_) | Self::Unresolved => SurfaceKeyOutcome::Unresolved,
+        }
+    }
 }
 
 /// surface 引数の解釈（解決層）。
@@ -117,6 +130,10 @@ pub(crate) fn resolve_balloon_key(key: &str) -> BalloonResolve {
     // 非数値枝: alias 表は引かない。名前の形は文字の層が読む。seriko は数だけを読む。
     BalloonResolve::NameForm
 }
+
+#[cfg(test)]
+#[path = "resolve_text_tests.rs"]
+mod text_tests;
 
 #[cfg(test)]
 mod tests {

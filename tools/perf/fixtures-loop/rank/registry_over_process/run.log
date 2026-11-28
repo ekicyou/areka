@@ -1,0 +1,13 @@
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(process): プロセス CPU snap=1 t_s=5 wall_ms=5000 cpu_us=3500000 kernel_us=0 user_us=3500000 threads=4
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=1 name=main role=ui cpu_us=1000000 kernel_us=0 user_us=1000000
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=10 name=sakura-talk-1 role=actor:sakura-talk-1 cpu_us=1000000 kernel_us=0 user_us=1000000
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=12 name=kanade role=actor:kanade cpu_us=200000 kernel_us=0 user_us=200000
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=0 name=- role=actor:sakura-talk-* cpu_us=500000 kernel_us=0 user_us=500000 exited=1
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=0 name=- role=actor:kanade cpu_us=300000 kernel_us=0 user_us=300000 exited=1
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=0 name=- role=unregistered_rest cpu_us=500000 kernel_us=0 user_us=500000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(process): プロセス CPU snap=2 t_s=65 wall_ms=65000 cpu_us=5000000 kernel_us=0 user_us=5000000 threads=2
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=1 name=main role=ui cpu_us=1800000 kernel_us=0 user_us=1800000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=12 name=kanade role=actor:kanade cpu_us=600000 kernel_us=0 user_us=600000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=0 name=- role=actor:sakura-talk-* cpu_us=2200000 kernel_us=0 user_us=2200000 exited=3
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=0 name=- role=actor:kanade cpu_us=400000 kernel_us=0 user_us=400000 exited=2
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=0 name=- role=unregistered_rest cpu_us=1500000 kernel_us=0 user_us=1500000

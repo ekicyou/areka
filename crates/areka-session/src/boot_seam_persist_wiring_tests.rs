@@ -1,9 +1,8 @@
 use super::*;
 use areka_placement::persist::{PersistWiring, char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
-use areka_placement::test_support::SharedFakeIo;
 use areka_runtime::spine::join_bounded;
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
 };
@@ -15,16 +14,12 @@ use std::sync::Arc;
 /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる。
 #[test]
 fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
-    let shared = Arc::new(FakePersistIo::new());
+    let shared: Arc<dyn StoreBackend> = MemBackend::new();
     let roots = ScopeRoots {
         ghost: Some(std::path::PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo::new(shared.clone())),
-        runtime_sink: None,
-    });
+    let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), shared.clone()));
 
     let mut world = World::new();
     insert_persist_wiring(&mut world, parts.publisher.clone());
@@ -44,11 +39,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
         .expect("barrier should resolve while actor is alive");
 
     // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝投函の証明）。
-    let loaded = load_scope(
-        PersistScope::Ghost,
-        &roots,
-        &SharedFakeIo::new(shared.clone()),
-    );
+    let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
@@ -81,17 +72,13 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
 fn last_used_is_deferred_only_for_the_switch_route() {
     use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
     let run = |route: GhostRoute| {
-        let shared = Arc::new(FakePersistIo::new());
+        let shared: Arc<dyn StoreBackend> = MemBackend::new();
         let roots = ScopeRoots {
             app: Some(std::path::PathBuf::from("/a")),
             ghost: Some(std::path::PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(shared.clone())),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), shared.clone()));
         let ghost = GhostDecision {
             route,
             dir: std::path::PathBuf::from("ghost/B"),
@@ -111,16 +98,8 @@ fn last_used_is_deferred_only_for_the_switch_route() {
             )
         });
         parts.publisher.barrier().expect("barrier");
-        let app = load_scope(
-            PersistScope::App,
-            &roots,
-            &SharedFakeIo::new(shared.clone()),
-        );
-        let ghost_scope = load_scope(
-            PersistScope::Ghost,
-            &roots,
-            &SharedFakeIo::new(shared.clone()),
-        );
+        let app = load_scope(PersistScope::App, &roots, &shared);
+        let ghost_scope = load_scope(PersistScope::Ghost, &roots, &shared);
         parts.publisher.close();
         join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
         let deferred = crate::session_end::test_support::levels_of(&events, "last_used_deferred");

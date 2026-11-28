@@ -150,6 +150,7 @@ fn shell_films_play_from_the_real_reader_to_the_composer() {
         balloon_tables: BTreeMap::new(),
         rng: seeded_rng(0),
         pick_rng: seeded_rng(0),
+        text_routing: areka_seriko::TextRouting::default(),
     };
     let cmds = run(config, "0", CueCommand::Emote { key: "0".into() }, 49);
 
@@ -228,6 +229,7 @@ fn balloon_films_play_from_the_real_reader_to_the_composer() {
             )]),
             rng: seeded_rng(0),
             pick_rng: seeded_rng(0),
+            text_routing: areka_seriko::TextRouting::default(),
         };
         let key = face.to_string();
         let cmds = run(config, "0", CueCommand::BalloonSurface { key }, ticks);
@@ -416,6 +418,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
         )]),
         rng: seeded_rng(0),
         pick_rng: seeded_rng(0),
+        text_routing: areka_seriko::TextRouting::default(),
     };
     let (tx, rx) = mpsc::channel();
     let (mut sink, handle) = spawn(config, PresentBridge::new(tx));

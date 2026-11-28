@@ -680,9 +680,7 @@ pub fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     };
     log_stay_on_top_discard(world, reason);
     take_down(world);
-    // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
-    // 最後のゴースト＝既定・印＝切替先を 1 回で書く。UI スレッドが App スコープへ直接書くのは
-    // 実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す）。
+    // 降ろし終えた直後に、最後のゴースト＝既定・印＝切替先を 1 回で書く。
     // 既定への戻しと致命はこれに触れない（印は切替先のまま）。
     // 書けなければ切替の予約を下ろして致命へ渡し、切替先を起こさずに戻る。
     match world.get_resource::<BootContext>() {

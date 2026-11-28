@@ -22,6 +22,7 @@ use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko
 use bevy_ecs::world::World;
 
 use super::*;
+use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::ghost_switch::ChangeRx;
 use crate::ghost_switch_test_support::{TICK_EVERY, TICK_STEP_MS};
 use crate::readme::ReadmeWiring;
@@ -214,6 +215,75 @@ fn successful_boot_installs_receivers() {
 
     shut_down("runtime_boot ghost shutdown", runtime, handle);
     drop(sample);
+}
+
+/// 起動は渡したバルーンのフォルダの `profile/areka/` をバルーンの層の置き場にし、本体の口の
+/// バルーンの差し替えは層を付け替える: 前のバルーンの揮発の値は読めず、覚える値は戻すと読める。
+#[test]
+fn boot_and_balloon_switch_place_the_balloon_layer() {
+    const VOLATILE: &str = "myplugin.state";
+    const KEPT: &str = "areka.boot.count";
+    let rig = rig();
+    let sample = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let temp = temp_path_kit::TempPath::under_target("session-balloon-layer");
+    let root = areka_ghost::BasewareRoot::new(temp.path().to_path_buf());
+    let (first, second) = (root.balloon_dir("first"), root.balloon_dir("second"));
+    for dir in [&first, &second] {
+        std::fs::create_dir_all(dir).expect("バルーンのフォルダを作る");
+    }
+    let (backend, handle) = ScriptedShioriBackend::builder().build();
+    let mut world = World::new();
+    let inputs = RuntimeInputs {
+        balloon_root: first.clone(),
+        ..emo2_inputs(&sample, backend)
+    };
+    let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
+        .expect("偽の SHIORI と emo2 検体で実行系が起きる");
+    let kvs = runtime
+        .sylphya_reader()
+        .kvs(areka_sylphya::AskerId::new("test"));
+    let layer = areka_sylphya::PersistScope::Balloon;
+    assert_eq!(
+        kvs.set(layer, VOLATILE, "v"),
+        areka_sylphya::WriteOutcome::Written
+    );
+    assert_eq!(
+        kvs.put(layer, &[(KEPT, "1")]),
+        areka_sylphya::WriteOutcome::Written
+    );
+    let file = |dir: &std::path::Path| dir.join("profile").join("areka").join("sylphya.sqlite");
+    assert!(file(&first).is_file());
+
+    world.insert_resource(crate::ghost_switch_test_support::boot_context(
+        &root, "emo2",
+    ));
+    let mut session = GhostSession::for_test(None, sample.folder().to_path_buf());
+    session.attach_runtime(runtime);
+    world.insert_non_send(GhostSlot(Some(session)));
+    crate::hooks::install(&mut world);
+    let hooks = *world.resource::<areka_runtime::session_hooks::SessionHooks>();
+    let candidate = |dir: &PathBuf| areka_runtime::shell_balloon_resolve::SkinCandidate {
+        dir: dir.clone(),
+        folder: String::new(),
+        name: None,
+        hidden: false,
+    };
+
+    assert!((hooks.set_current_balloon)(&mut world, &candidate(&second)));
+    let after_switch = (kvs.get_in(layer, VOLATILE), kvs.get_in(layer, KEPT));
+    assert!((hooks.set_current_balloon)(&mut world, &candidate(&first)));
+    let after_return = (kvs.get_in(layer, VOLATILE), kvs.get_in(layer, KEPT));
+    drop(kvs);
+    let runtime = world
+        .get_non_send_mut::<GhostSlot>()
+        .and_then(|mut slot| slot.0.as_mut().and_then(GhostSession::split_runtime))
+        .expect("置き場の実行系");
+    shut_down("balloon layer ghost shutdown", runtime, handle);
+
+    assert_eq!(after_switch, (None, None));
+    assert_eq!(after_return, (None, Some("1".to_owned())));
+    drop(sample);
+    drop(temp);
 }
 
 /// 偽の SHIORI `backend` で emo2 検体（同梱バルーン `emo2-kakukaku`）を起こす入力（時計は止めたまま）。

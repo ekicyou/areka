@@ -23,7 +23,7 @@
 //!   [`every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が受け持つ
 //!   （名簿倒れ＝「名簿から漏れた表へ登録しても緑のまま」を機械で閉じる）。
 //! - 参照の応答（[`reading_the_deferred_property_is_not_found`]）には、
-//!   同じ鏡像・同じ読み口で提供済みの名前が値を返すことを添える。
+//!   同じ番人・同じ読み口で提供済みの名前が値を返すことを添える。
 //! - 書込の応答（[`writing_the_deferred_property_is_dropped`]）には、
 //!   同じ分類器が別の名前を別の分岐へ落とすことを添える。
 //! - ソース走査（[`the_property_system_sources_never_mention_the_name`]）には、
@@ -37,16 +37,16 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
+use areka_sylphya::store::MemBackend;
 use areka_sylphya::vocab::dotted::{
     DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE, SOUND_PROP_NAMES,
 };
 use areka_sylphya::vocab::flat::FLAT_VOCAB;
 use areka_sylphya::vocab::shiori_resource::SHIORI_RESOURCE_IDS;
 use areka_sylphya::{
-    AskerContext, AskerId, DottedResolution, Effect, MirrorImage, SetClass, SharedMirror,
-    SylphyaCore, SylphyaMsg, SylphyaReader, classify_set,
+    AskerContext, AskerId, DottedResolution, Effect, ScopeRoots, SetClass, SylphyaInit, SylphyaMsg,
+    SylphyaReader, apply, classify_set, spawn_sylphya,
 };
 
 // ---------------------------------------------------------------------------
@@ -223,24 +223,25 @@ fn collect_rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// 何も値の入っていない鏡像に、提供済みの点付きプロパティを 1 つだけ載せた読み口。
+/// 何も値の入っていない番人に、提供済みの点付きプロパティを 1 つだけ載せた読み口。
 ///
-/// 載せる名前（`currentghost.name`）は対照専用である——同じ鏡像・同じ読み口で
+/// 載せる名前（`currentghost.name`）は対照専用である——同じ番人・同じ読み口で
 /// 「引ける名前は引ける」ことを示し、先送りした名前の `NotFound` が
 /// 「読み口が壊れているから何も引けない」ではないことを保証する。
 fn reader_with_one_provided_property() -> SylphyaReader {
-    let mut image = MirrorImage::empty();
-    image
-        .dotted_per_asker
-        .entry(AskerId::new(ASKER))
-        .or_default()
-        .insert("currentghost.name".to_owned(), "Alice".to_owned());
-    SylphyaReader::new(SharedMirror::new(Arc::new(image)))
+    let parts = spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()));
+    parts.publisher.publish_static(
+        AskerId::new(ASKER),
+        Vec::new(),
+        vec![("currentghost.name".to_owned(), "Alice".to_owned())],
+    );
+    parts.publisher.barrier().expect("反映を待てる");
+    parts.reader
 }
 
 /// 名前 `key` へ値を 1 回書き込み、返る効果の列を得る。
 fn set_effects(key: &str, value: &str) -> Vec<Effect> {
-    SylphyaCore::new().apply(&SylphyaMsg::Set {
+    apply(&SylphyaMsg::Set {
         asker: AskerId::new(ASKER),
         key: key.to_owned(),
         value: value.to_owned(),
@@ -416,7 +417,7 @@ fn reading_the_deferred_property_is_not_found() {
     );
 }
 
-/// 対照: 同じ鏡像・同じ読み口で、提供済みのプロパティは値を返す。
+/// 対照: 同じ番人・同じ読み口で、提供済みのプロパティは値を返す。
 #[test]
 fn a_provided_property_still_resolves_to_its_value() {
     let reader = reader_with_one_provided_property();

@@ -28,6 +28,7 @@ fn same_surface_reshow_restarts_a_stopped_always_at_the_event_time() {
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     rig.hear(emote_cue(ms(0), "0", "0"));
     rig.tick(at_ms(10));
@@ -68,6 +69,7 @@ fn surface_cue_emits_the_shift_after_the_show_and_reshow_resets_it() {
         balloon_tables: BTreeMap::new(),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     rig.tick(at_ms(0));
     let cmds = rig.hear_fired(at_ms(10), emote_cue(ms(0), "0", "0"));
@@ -111,6 +113,7 @@ fn shell_replace_resets_the_shift_after_the_rebased() {
             bind_resolver: BindResolver::empty(),
             shell_table: table_of(MOVE),
             fallback: crate::ShellSurfaceFallback::default(),
+            text_routing: crate::TextRouting::default(),
         },
         no_facts()
     ));

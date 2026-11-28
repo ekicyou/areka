@@ -1,46 +1,35 @@
-//! sylphya アクター: `SylphyaMsg` / `SylphyaCore`（純関数中核）/ `spawn_sylphya` / `SylphyaPublisher`。
+//! sylphya アクター: 電文 `SylphyaMsg`・効果 `Effect`・判断の自由な関数 `apply`・`spawn_sylphya`・`SylphyaPublisher`。
 //!
-//! メッセージ封筒 [`SylphyaMsg`]・純関数中核 [`SylphyaCore`]（判断分岐の檻）・SET 分類器 [`classify_set`]・
-//! 運行コマンド配送先シーム [`RuntimeCommandSink`]（M1 は型予約のみ・未配線）と、その配線が実行する
-//! 効果列 [`Effect`] の型、薄い受信ループを置く。
+//! ## 判断分岐は自由な関数へ寄せる
 //!
-//! ## 判断分岐は純関数中核へ寄せる
-//!
-//! [`SylphyaCore::apply`] は受信した [`SylphyaMsg`] を検査して **効果列 `Vec<Effect>`** を返す。
-//! 鏡像の変異・永続保存・reply 送信・sink 配送といった副作用は一切行わず、返す効果列だけが
-//! 決定である。受信ループはこの効果列を実行する薄い配線に徹する。決定論檻は `apply` の返す
-//! `Vec<Effect>` を突くだけで全判断分岐（SET 3 分類・204 不在・publish 着地区画・永続投影）を網羅できる。
+//! [`apply`] は受信した [`SylphyaMsg`] を検査して **効果列 `Vec<Effect>`** を返す。
+//! 住み場所への書き・reply 送信といった副作用は一切行わず、返す効果列だけが決定である。
+//! 受信ループはこの効果列を実行する薄い配線に徹する。
 //!
 //! ## 純粋性とログの両立
 //!
-//! `apply` は判断点で `tracing` の warn!/debug! を発火する（RuntimeCommand 予約・NotSettable・
-//! 204 不在・parse 失敗の各縮退アーム）。`tracing` は subscriber 未登録なら no-op で、**返す効果列を
-//! 変えない**。判断の「理由」を最もよく知るのは判断点＝`apply` なので、縮退記録はここで出す
-//! （二重ログにしない）。
+//! `apply` は判断点で `tracing` の warn!/debug! を発火する（断る名前・204 不在・parse 失敗の
+//! 各縮退アーム）。`tracing` は subscriber 未登録なら no-op で、**返す効果列を変えない**。
+//! 判断の「理由」を最もよく知るのは判断点＝`apply` なので、縮退記録はここで出す（二重ログにしない）。
 
 use crate::asker::AskerId;
 use crate::key::parse_dotted;
-use crate::mirror::{MirrorImage, SharedMirror};
-use crate::persist::{
-    PersistFailure, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope,
-    remove_scope_keys, save_scope,
-};
-use crate::reader::SylphyaReader;
-use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
-use std::sync::Arc;
+use crate::keytable::{ByName, Home, KEY_TABLE, KeyRow, Refusal, rule_of};
+pub use crate::keytable::{SetClass, classify_set};
+use crate::kvs::WriteOutcome;
+use crate::persist::{PersistKey, PersistScope};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 /// ログ target（固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
 
-/// 永続の失敗まわりのログ target（`persist` と同じ名）。
-const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
-
 /// sylphya アクター宛メッセージ封筒（`areka-actor` envelope 規約）。
 ///
-/// 変異側（供給者）が投函する全 variant を 1 つの enum で網羅する。判断分岐は
-/// [`SylphyaCore::apply`] が担い、本 enum は搬送のみ。
+/// 変異側（供給者）と問い手が投函する全 variant を 1 つの enum で網羅する。判断分岐は
+/// [`apply`] が担い、本 enum は搬送のみ。
 pub enum SylphyaMsg {
     /// ①静的構成層の publish（ghost 結線が boot 時に投函・フラット/点付き両区画）。
     ///
@@ -71,7 +60,7 @@ pub enum SylphyaMsg {
         /// 照会値。`None` は 204/失敗（不在——既定値は書かない）。
         value: Option<String>,
     },
-    /// SET コマンド（分類・中継・host 区画書込。即応答不要＝投函して即返る）。
+    /// 層を名指ししない名前での書き（SHIORI の SetProperty・台本から。ゴーストの層の揮発へ・投函して即返る）。
     Set {
         /// 問い合わせ元（host 書込の per-asker 着地先）。
         asker: AskerId,
@@ -87,7 +76,7 @@ pub enum SylphyaMsg {
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
     },
-    /// 永続の鍵を消す（鏡像と記憶の両方から・fire-and-forget。失敗は受け口へ届く）。
+    /// 永続の鍵を消す（記憶から・fire-and-forget。失敗は受け口へ届く）。
     PersistRemove {
         /// 永続スコープ（層別）。
         scope: PersistScope,
@@ -102,85 +91,73 @@ pub enum SylphyaMsg {
     },
     /// 停止規約（即時停止・`areka-actor` 停止規約）。
     Close,
+    /// 名前での読み（`layer` が `None` なら重ね読み・`home` は鍵の表が決めた住み場所）。
+    Get {
+        /// 問い手。
+        asker: AskerId,
+        /// 鍵（正規名）。
+        key: String,
+        /// 名指しの層。
+        layer: Option<PersistScope>,
+        /// 住み場所。
+        home: Home,
+        /// 値の返信端。
+        reply: areka_actor::ReplySender<Option<String>>,
+    },
+    /// 平らな名前の読み。
+    GetFlat {
+        /// 問い手。
+        asker: AskerId,
+        /// 平らな名前（% 抜き）。
+        name: String,
+        /// 値の返信端。
+        reply: areka_actor::ReplySender<Option<String>>,
+    },
+    /// トークの写し（問い手の平らな名前の全部）。
+    TalkSnapshot {
+        /// 問い手。
+        asker: AskerId,
+        /// 写しの返信端。
+        reply: areka_actor::ReplySender<BTreeMap<String, String>>,
+    },
+    /// 層を名指しした書き・消し。
+    Write {
+        /// 書き手の種類。
+        writer: Writer,
+        /// 問い手。
+        asker: AskerId,
+        /// 書く層。
+        layer: PersistScope,
+        /// 書く（鍵, 値）。
+        puts: Vec<(String, String)>,
+        /// 消す鍵。
+        removes: Vec<String>,
+        /// 結果の返信端。
+        reply: areka_actor::ReplySender<WriteOutcome>,
+    },
+    /// 層の置き場の付け替え（列に入れず、届いた時点で当てる）。
+    SetLayerRoot {
+        /// 付け替える層（シェルかバルーン）。
+        layer: PersistScope,
+        /// 新しい置き場（`None` は置き場の無い層）。
+        root: Option<PathBuf>,
+    },
 }
 
-/// 運行コマンド書込（SET＝`\s[]` 等価系）の配送先シーム（M1 は型予約のみ・未登録）。
-///
-/// [`SetClass::RuntimeCommand`] に分類された SET を実際のランタイム（seriko 等）へ橋渡しする
-/// 差替シーム。M1 では sink 登録を行わず、[`SylphyaCore::apply`] は
-/// [`Effect::RuntimeCommandReserved`] を返して warn 記録するのみで実配送しない。
-pub trait RuntimeCommandSink: Send {
-    /// 運行コマンドを配送する（M1 未配線・α 後に seriko 等へ橋渡し）。
-    fn dispatch(&self, asker: &AskerId, key: &str, value: &str);
-}
-
-/// SET 分類の 3 分岐。
-///
-/// [`classify_set`] が key を検査して返す。各分岐は [`SylphyaCore::apply`] の Set アームで
-/// 対応する [`Effect`] へ写る。
+/// 書き手の種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SetClass {
-    /// SET 有効群の正準語彙（[`SET_EFFECTIVE`] 登録）→ 運行コマンド書込（M1 未配線・warn＋記録のみ）。
-    RuntimeCommand,
-    /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映。
-    StoreWrite,
-    /// SET 無効な正準語彙 → 書込なし・呼出は Ok（正典沈黙の areka 裁量・対応表記録）。
-    NotSettable,
+pub enum Writer {
+    /// 外から来た名前で書く（鍵の表が断りうる）。
+    ByName,
+    /// areka の中の決まった書き手（鍵の表の「名前で書く」を見ない）。
+    Fixed,
 }
 
-/// SET 対象 key を 3 分岐へ分類する純関数（no I/O・決定論）。
+/// [`apply`] が返す純粋な効果（判断の出力・変異意図）。
 ///
-/// ## 「正準語彙」の判定述語
-///
-/// key が次のいずれかを満たすとき **正準語彙** とみなす:
-///
-/// 1. [`SET_EFFECTIVE`] に半角の英字の大小を区別せず一致（SET 有効群・前後の空白は削らない）
-///    → [`SetClass::RuntimeCommand`]（最優先判定）。表は小文字だけなので `MENU` も `menu` と同じ。
-/// 2. （1 でなく）[`parse_dotted`] が成功し、**根セグメント名が [`DOTTED_ROOTS`] に属する**、
-///    または **葉セグメント名が [`GENERIC_PROP_NAMES`] に属する** → 正準語彙かつ SET 無効
-///    → [`SetClass::NotSettable`]。
-/// 3. 上記いずれでもない（自由/カスタム dotted key、または parse 不能 key）→ [`SetClass::StoreWrite`]。
-///
-/// parse 不能 key は正準語彙表に載り得ない（表は全て parse 可能）ため、決定論的に自由 key
-/// （StoreWrite）へ落とす（無音失敗なし——[`SylphyaCore::apply`] の StoreWrite アームが正準化失敗を
-/// warn 記録し、生 key を host 区画へ retain する）。SET 有効群を最優先で判定するため、
-/// `menu`/`sakura.bind.menu` 等（[`SET_EFFECTIVE`] と [`GENERIC_PROP_NAMES`] の双方に載る名）は
-/// RuntimeCommand に確定する（二重帰属の曖昧さを排除）。
-pub fn classify_set(key: &str) -> SetClass {
-    if SET_EFFECTIVE
-        .iter()
-        .any(|(k, _)| k.eq_ignore_ascii_case(key))
-    {
-        return SetClass::RuntimeCommand;
-    }
-    if is_canonical_vocab(key) {
-        return SetClass::NotSettable;
-    }
-    SetClass::StoreWrite
-}
-
-/// key が正準語彙か（根 ∈ [`DOTTED_ROOTS`] ∨ 葉 ∈ [`GENERIC_PROP_NAMES`]）。parse 不能は非正準。
-fn is_canonical_vocab(key: &str) -> bool {
-    match parse_dotted(key) {
-        Ok(path) => {
-            let root_canonical = path
-                .segs
-                .first()
-                .is_some_and(|s| DOTTED_ROOTS.contains(&s.name.as_str()));
-            let leaf_canonical = path
-                .segs
-                .last()
-                .is_some_and(|s| GENERIC_PROP_NAMES.contains(&s.name.as_str()));
-            root_canonical || leaf_canonical
-        }
-        Err(_) => false,
-    }
-}
-
-/// [`SylphyaCore::apply`] が返す純粋な効果（判断の出力・変異意図）。
-///
-/// 受信ループがこれを copy-on-write 後継鏡像へ適用し・永続保存を実行し・停止する。
 /// 効果は I/O を含まない純データで、`apply` の決定論檻はこの列の同値性を突く。
+/// 区画を名指す 5 つの効果の行き先: ゴースト別の平らな区画＝主の DB の `flat`、全体の点付きの
+/// 区画＝アプリの層の揮発、ゴースト別の点付きの区画＝ゴーストの層の揮発。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
     /// フラット per-asker 区画へ書く（`PublishStatic.flat`・`PublishShiori{Some}`）。
@@ -199,14 +176,14 @@ pub enum Effect {
         /// フラット名（% 抜き）。
         name: String,
     },
-    /// 大域点付き区画へ書く（`PublishStatic.dotted`＝`baseware.*`・永続投影の `areka.*`）。
+    /// 大域点付き区画へ書く（`PublishStatic.dotted`＝`baseware.*`）。
     SetDottedGlobal {
         /// 正準 key 文字列。
         key: String,
         /// 値。
         value: String,
     },
-    /// 大域点付き区画から消す（`PersistRemove` の鏡像の側・無い key は何もしない）。
+    /// 大域点付き区画から消す（無い key は何もしない）。
     RemoveDottedGlobal {
         /// 正準 key 文字列。
         key: String,
@@ -220,28 +197,28 @@ pub enum Effect {
         /// 値。
         value: String,
     },
-    /// 不在の観測記録（`PublishShiori{None}`＝204/失敗）。鏡像へは書かない（既定値は sakura 所有）。
+    /// 不在の観測記録（`PublishShiori{None}`＝204/失敗）。どこにも書かない（既定値は sakura 所有）。
     RecordAbsentFlat {
         /// 対象 asker。
         asker: AskerId,
         /// フラット名（% 抜き）。
         name: String,
     },
-    /// 永続 put（write-through の保存側）。受信ループが [`crate::persist::save_scope`] を実行する。
+    /// 永続 put（覚える値の書き）。番人が型つきの鍵を正規名にして列へ入れる。
     PersistSave {
         /// スコープ。
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
     },
-    /// 永続の鍵を消す（記憶の側）。実行は [`crate::persist::remove_scope_keys`] を呼ぶ。
+    /// 永続の鍵を消す（記憶の側）。番人が型つきの鍵を正規名にして列へ入れる。
     PersistRemove {
         /// スコープ。
         scope: PersistScope,
         /// 消す key。
         keys: Vec<PersistKey>,
     },
-    /// SET 運行コマンド（[`SetClass::RuntimeCommand`]・M1 sink 未登録→配送なし・warn 済み・書込なし）。
+    /// SET 運行コマンド（[`SetClass::RuntimeCommand`]・warn 済み・書込なし）。
     RuntimeCommandReserved {
         /// 対象 asker。
         asker: AskerId,
@@ -259,167 +236,230 @@ pub enum Effect {
         /// 反映されない値（観測用に保持・書込は行わない）。
         value: String,
     },
+    /// 層を名指しした書き・消し（鍵は正準形・住み場所は受信ループが鍵の表で決める）。
+    Write {
+        /// 問い手。
+        asker: AskerId,
+        /// 書く層。
+        layer: PersistScope,
+        /// 書く（鍵, 値）。
+        puts: Vec<(String, String)>,
+        /// 消す鍵。
+        removes: Vec<String>,
+    },
+    /// 名前では書けない鍵への名前での書き（warn 済み・書込なし・返事は断った）。
+    Refused {
+        /// 問い手。
+        asker: AskerId,
+        /// 断った鍵。
+        key: String,
+        /// 断る理由。
+        refusal: Refusal,
+    },
+    /// 層の置き場の付け替え。
+    SetLayerRoot {
+        /// 付け替える層。
+        layer: PersistScope,
+        /// 新しい置き場。
+        root: Option<PathBuf>,
+    },
     /// 反映フェンス（受信ループが処理完了後に reply を返す）。
     Barrier,
     /// 停止（受信ループを抜ける）。
     Stop,
 }
 
-/// 判断分岐の純関数中核。
+/// メッセージを検査して効果列を算出する（純関数・no I/O・決定論）。
 ///
-/// [`apply`](SylphyaCore::apply) が [`SylphyaMsg`] → `Vec<Effect>` を算出する。状態を持たない
-/// （分類は const 台帳のみ参照）ゼロサイズ型で、I/O・チャネル・ロック・時計を含まない。
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SylphyaCore;
-
-impl SylphyaCore {
-    /// 中核を構築する（ゼロサイズ・状態なし）。
-    pub fn new() -> Self {
-        SylphyaCore
+/// 返す `Vec<Effect>` だけが決定である。判断点の縮退（断る名前・204 不在・parse 失敗）は
+/// `tracing` で warn!/debug! を発火するが、返す効果列は同一入力で常に同一。読みの電文は効果を
+/// 出さない（受信ループが電文から答える）。
+pub fn apply(msg: &SylphyaMsg) -> Vec<Effect> {
+    match msg {
+        SylphyaMsg::PublishStatic {
+            asker,
+            flat,
+            dotted,
+        } => {
+            let mut effects = Vec::with_capacity(flat.len() + dotted.len());
+            for (name, value) in flat {
+                effects.push(Effect::SetFlatPerAsker {
+                    asker: asker.clone(),
+                    name: name.clone(),
+                    value: value.clone(),
+                });
+            }
+            for (key, value) in dotted {
+                effects.push(Effect::SetDottedGlobal {
+                    key: canonicalize_or_raw(key),
+                    value: value.clone(),
+                });
+            }
+            effects
+        }
+        SylphyaMsg::RemoveFlat { asker, names } => names
+            .iter()
+            .map(|name| Effect::RemoveFlatPerAsker {
+                asker: asker.clone(),
+                name: name.clone(),
+            })
+            .collect(),
+        SylphyaMsg::PublishShiori { asker, name, value } => match value {
+            Some(v) => vec![Effect::SetFlatPerAsker {
+                asker: asker.clone(),
+                name: name.clone(),
+                value: v.clone(),
+            }],
+            None => {
+                // 204/失敗 → 不在記録のみ（既定値は sakura の唯一定義点・書かない）。
+                tracing::debug!(
+                    target: LOG_TARGET,
+                    asker = asker.as_str(),
+                    name = %name,
+                    "shiori resource absent (204/failed); recording absence without default"
+                );
+                vec![Effect::RecordAbsentFlat {
+                    asker: asker.clone(),
+                    name: name.clone(),
+                }]
+            }
+        },
+        SylphyaMsg::Set { asker, key, value } => match rule_of(KEY_TABLE, key).by_name {
+            ByName::Refused(refusal) => {
+                warn_refused(asker, key, refusal);
+                let (asker, key, value) = (asker.clone(), key.clone(), value.clone());
+                vec![match refusal {
+                    Refusal::RuntimeCommand => Effect::RuntimeCommandReserved { asker, key, value },
+                    Refusal::NotSettable | Refusal::FixedWriterOnly => {
+                        Effect::NotSettable { asker, key, value }
+                    }
+                }]
+            }
+            ByName::Writable => {
+                let canon = canonical_for_write(asker, key);
+                tracing::debug!(
+                    target: LOG_TARGET,
+                    asker = asker.as_str(),
+                    key = %canon,
+                    "SET store-write to host dotted region"
+                );
+                vec![Effect::SetDottedPerAsker {
+                    asker: asker.clone(),
+                    key: canon,
+                    value: value.clone(),
+                }]
+            }
+        },
+        SylphyaMsg::Write {
+            writer,
+            asker,
+            layer,
+            puts,
+            removes,
+            ..
+        } => plan_write(KEY_TABLE, *writer, asker, *layer, puts, removes),
+        SylphyaMsg::PersistPut { scope, entries } => vec![Effect::PersistSave {
+            scope: *scope,
+            entries: entries.clone(),
+        }],
+        SylphyaMsg::PersistRemove { scope, keys } => vec![Effect::PersistRemove {
+            scope: *scope,
+            keys: keys.clone(),
+        }],
+        SylphyaMsg::SetLayerRoot { layer, root } => vec![Effect::SetLayerRoot {
+            layer: *layer,
+            root: root.clone(),
+        }],
+        SylphyaMsg::Get { .. } | SylphyaMsg::GetFlat { .. } | SylphyaMsg::TalkSnapshot { .. } => {
+            Vec::new()
+        }
+        SylphyaMsg::Barrier { .. } => vec![Effect::Barrier],
+        SylphyaMsg::Close => vec![Effect::Stop],
     }
+}
 
-    /// メッセージを検査して効果列を算出する（純関数・no I/O・決定論）。
-    ///
-    /// 返す `Vec<Effect>` だけが決定である。鏡像 swap・永続保存・reply 送信・sink 配送は配線が
-    /// 効果列を実行する形で行う。判断点の縮退（RuntimeCommand 予約・NotSettable・204 不在・parse
-    /// 失敗）は `tracing` で warn!/debug! を発火するが、返す効果列は同一入力で常に同一（ログは効果列を
-    /// 変えない）。
-    pub fn apply(&self, msg: &SylphyaMsg) -> Vec<Effect> {
-        match msg {
-            SylphyaMsg::PublishStatic {
-                asker,
-                flat,
-                dotted,
-            } => {
-                let mut effects = Vec::with_capacity(flat.len() + dotted.len());
-                for (name, value) in flat {
-                    effects.push(Effect::SetFlatPerAsker {
-                        asker: asker.clone(),
-                        name: name.clone(),
-                        value: value.clone(),
-                    });
-                }
-                for (key, value) in dotted {
-                    effects.push(Effect::SetDottedGlobal {
-                        key: canonicalize_or_raw(key),
-                        value: value.clone(),
-                    });
-                }
-                effects
-            }
-            SylphyaMsg::RemoveFlat { asker, names } => names
-                .iter()
-                .map(|name| Effect::RemoveFlatPerAsker {
-                    asker: asker.clone(),
-                    name: name.clone(),
-                })
-                .collect(),
-            SylphyaMsg::PublishShiori { asker, name, value } => match value {
-                Some(v) => vec![Effect::SetFlatPerAsker {
-                    asker: asker.clone(),
-                    name: name.clone(),
-                    value: v.clone(),
-                }],
-                None => {
-                    // 204/失敗 → 不在記録のみ（既定値は sakura の唯一定義点・鏡像へ書かない）。
-                    tracing::debug!(
-                        target: LOG_TARGET,
-                        asker = asker.as_str(),
-                        name = %name,
-                        "shiori resource absent (204/failed); recording absence without default"
-                    );
-                    vec![Effect::RecordAbsentFlat {
-                        asker: asker.clone(),
-                        name: name.clone(),
-                    }]
-                }
-            },
-            SylphyaMsg::Set { asker, key, value } => match classify_set(key) {
-                SetClass::RuntimeCommand => {
-                    // M1: sink 未登録 → 予約シームのみ・実書込なし。
-                    tracing::warn!(
-                        target: LOG_TARGET,
-                        asker = asker.as_str(),
-                        key = %key,
-                        "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"
-                    );
-                    vec![Effect::RuntimeCommandReserved {
+/// 層を名指しした書き・消しの判断（名前で書くなら断る鍵を warn で残し、鍵は正準形へ）。
+pub(crate) fn plan_write(
+    table: &'static [KeyRow],
+    writer: Writer,
+    asker: &AskerId,
+    layer: PersistScope,
+    puts: &[(String, String)],
+    removes: &[String],
+) -> Vec<Effect> {
+    if writer == Writer::ByName {
+        let refused: Vec<Effect> = puts
+            .iter()
+            .map(|(key, _)| key)
+            .chain(removes)
+            .filter_map(|key| match rule_of(table, key).by_name {
+                ByName::Writable => None,
+                ByName::Refused(refusal) => {
+                    warn_refused(asker, key, refusal);
+                    Some(Effect::Refused {
                         asker: asker.clone(),
                         key: key.clone(),
-                        value: value.clone(),
-                    }]
-                }
-                SetClass::StoreWrite => {
-                    let canon = match parse_dotted(key) {
-                        Ok(path) => path.to_canonical_string(),
-                        Err(e) => {
-                            // parse 不能 key の SET（sink 経由の不正 key）→ warn ＋ 生 key を retain
-                            // （無音失敗なし・reader 側は resolve 時 NotFound へ縮退）。
-                            tracing::warn!(
-                                target: LOG_TARGET,
-                                asker = asker.as_str(),
-                                key = %key,
-                                error = %e,
-                                "SET free key failed to parse; storing under raw key (tolerant)"
-                            );
-                            key.clone()
-                        }
-                    };
-                    tracing::debug!(
-                        target: LOG_TARGET,
-                        asker = asker.as_str(),
-                        key = %canon,
-                        "SET store-write to host dotted region"
-                    );
-                    vec![Effect::SetDottedPerAsker {
-                        asker: asker.clone(),
-                        key: canon,
-                        value: value.clone(),
-                    }]
-                }
-                SetClass::NotSettable => {
-                    tracing::warn!(
-                        target: LOG_TARGET,
-                        asker = asker.as_str(),
-                        key = %key,
-                        "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"
-                    );
-                    vec![Effect::NotSettable {
-                        asker: asker.clone(),
-                        key: key.clone(),
-                        value: value.clone(),
-                    }]
-                }
-            },
-            SylphyaMsg::PersistPut { scope, entries } => {
-                let mut effects = Vec::with_capacity(entries.len() + 1);
-                for (key, value) in entries {
-                    effects.push(Effect::SetDottedGlobal {
-                        key: key.to_canonical_key(),
-                        value: value.clone(),
-                    });
-                }
-                effects.push(Effect::PersistSave {
-                    scope: *scope,
-                    entries: entries.clone(),
-                });
-                effects
-            }
-            SylphyaMsg::PersistRemove { scope, keys } => {
-                let mut effects: Vec<Effect> = keys
-                    .iter()
-                    .map(|key| Effect::RemoveDottedGlobal {
-                        key: key.to_canonical_key(),
+                        refusal,
                     })
-                    .collect();
-                effects.push(Effect::PersistRemove {
-                    scope: *scope,
-                    keys: keys.clone(),
-                });
-                effects
-            }
-            SylphyaMsg::Barrier { .. } => vec![Effect::Barrier],
-            SylphyaMsg::Close => vec![Effect::Stop],
+                }
+            })
+            .collect();
+        if !refused.is_empty() {
+            return refused;
+        }
+    }
+    vec![Effect::Write {
+        asker: asker.clone(),
+        layer,
+        puts: puts
+            .iter()
+            .map(|(key, value)| (canonical_for_write(asker, key), value.clone()))
+            .collect(),
+        removes: removes
+            .iter()
+            .map(|key| canonical_for_write(asker, key))
+            .collect(),
+    }]
+}
+
+/// 名前では書けない鍵への名前での書きを warn で残す（書込なし・呼び出しは成功のまま）。
+fn warn_refused(asker: &AskerId, key: &str, refusal: Refusal) {
+    let asker = asker.as_str();
+    match refusal {
+        Refusal::RuntimeCommand => tracing::warn!(
+            target: LOG_TARGET,
+            asker,
+            key,
+            "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"
+        ),
+        Refusal::NotSettable => tracing::warn!(
+            target: LOG_TARGET,
+            asker,
+            key,
+            "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"
+        ),
+        Refusal::FixedWriterOnly => tracing::warn!(
+            target: LOG_TARGET,
+            asker,
+            key,
+            "SET on a name only fixed writers may write: warn and drop (call still Ok, no write)"
+        ),
+    }
+}
+
+/// 名前で書く鍵を正準形へ（parse 不能は渡された綴りのままの自由な鍵として warn 記録）。
+fn canonical_for_write(asker: &AskerId, key: &str) -> String {
+    match parse_dotted(key) {
+        Ok(path) => path.to_canonical_string(),
+        Err(e) => {
+            tracing::warn!(
+                target: LOG_TARGET,
+                asker = asker.as_str(),
+                key = %key,
+                error = %e,
+                "SET free key failed to parse; storing under raw key (tolerant)"
+            );
+            key.to_string()
         }
     }
 }
@@ -441,66 +481,18 @@ fn canonicalize_or_raw(key: &str) -> String {
 }
 
 // ============================================================================
-// アクター起動・Publisher・Barrier（薄い配線）
+// 送り口（受信の輪は `guardian.rs`）
 // ============================================================================
 //
-// 掲示板（マテリアライズド・ビュー）モデルの **供給側単独所有者**。`SylphyaCore::apply`
-// （判断分岐の純関数中核）が返す効果列 [`Effect`] を、単一のアクタースレッドが
-// 直列に実行する: copy-on-write で後継 [`MirrorImage`] を組み立て・[`SharedMirror::publish`]
-// で swap し（single-writer）・[`PersistSave`](Effect::PersistSave) を注入 [`PersistIo`] で
-// write-through 保存し・[`Barrier`](Effect::Barrier) の
-// reply を返し・[`Stop`](Effect::Stop) で受信ループを畳む。
-//
-// ## areka-actor 5 規約
-//
-// 1. **inbox = 単一 `Receiver<SylphyaMsg>`**: [`spawn_actor`](areka_actor::spawn_actor) が
-//    内部生成した `Receiver` を body が単独所有する（送信端は [`SylphyaPublisher`] が保持）。
-// 2. **停止 = `Close`（即時停止・drain せず破棄）**: [`Effect::Stop`] でループを即 `return`。
-//    積み残しは `Receiver` の drop で破棄される。
-// 3. **unbounded**: `std::sync::mpsc::channel`（[`spawn_actor`] 内）＝無限バッファ。
-// 4. **panic はバグ観測として join 検出**: body の panic は [`ActorHandle::join`] が
-//    [`ActorError::Panicked`](areka_actor::ActorError) へ写像する（本モジュールは握り潰さない）。
-// 5. **拡張機構を足さない**: レジストリ・監督・stop_flag を持たない素の thread spawn。
-//
-// ## barrier フェンス
-//
-// inbox は mpsc FIFO・アクターは直列処理ゆえ、[`SylphyaPublisher::barrier`] の reply が
-// 復帰した時点で、それ以前に **同一送信端** から投函した全メッセージの効果は鏡像へ反映済み
-// （publish は各メッセージ処理内で barrier reply 送信より前に行われる）。
-//
-// ## アクター死亡の観測
-//
-// アクター停止（`Close` 処理後の `return`／panic による unwind）で body が `Receiver` を drop
-// すると、以降の送信端 `send` は `SendError` を返す。[`SylphyaPublisher`] の fire-and-forget
-// メソッドはこれを **warn 記録して縮退**（panic しない）、[`barrier`](SylphyaPublisher::barrier)
-// は [`ReplyError::Dropped`](areka_actor::ReplyError) を返す（＝送信端で死亡を観測可能）。
-// 読み手（[`SylphyaReader`]）は最後に publish された鏡像を保持し続けるため、供給停止後も
-// 最終鏡像で読み続行できる（表示系を殺さない）。
+// 停止した番人への投函は panic せず、fire-and-forget は warn で捨て、反映待ちは
+// `ReplyError::Dropped` を返す（送信端で停止を観測できる）。
 
-/// [`spawn_sylphya`] の起動パラメータ。
-pub struct SylphyaInit {
-    /// 層別永続スコープの保存先ルート（不在スコープは寛容ロードで空扱い）。
-    pub roots: ScopeRoots,
-    /// 永続 IO シーム（起動時ロード＋write-through 保存に使用・アクターへ移送）。
-    pub io: Box<dyn PersistIo>,
-    /// 運行コマンド配送先（M1 は `None`＝未配線・[`Effect::RuntimeCommandReserved`] は warn のみ）。
-    pub runtime_sink: Option<Box<dyn RuntimeCommandSink>>,
-}
-
-/// [`spawn_sylphya`] の返却物（読み口・送信端・join ハンドルの三点セット）。
-pub struct SylphyaParts {
-    /// 同期・無待機の読み口（複数消費エンジンへ clone 可）。
-    pub reader: SylphyaReader,
-    /// 変異投函の送信端（clone 可・複数供給者が共有）。
-    pub publisher: SylphyaPublisher,
-    /// アクタースレッドの join ハンドル（shutdown 時に join して panic を観測）。
-    pub handle: areka_actor::ActorHandle,
-}
+pub use crate::guardian::{SylphyaInit, SylphyaParts, spawn_sylphya, spawn_sylphya_with_failures};
 
 /// 変異投函の送信端（`areka-actor` envelope 規約）。
 ///
 /// `Clone` は内部 `Sender` の clone のみ——複数供給者（ghost 結線・kanade・SET sink）が
-/// 同一 inbox を安価に共有する。全メソッドは投函のみで鏡像を直接触らない（single-writer は
+/// 同一 inbox を安価に共有する。全メソッドは投函のみで住み場所を直接触らない（single-writer は
 /// アクターが担保）。アクター死亡後の投函は **panic せず** 縮退する（fire-and-forget は warn＋
 /// 破棄・[`barrier`](SylphyaPublisher::barrier) は `Err`）。
 #[derive(Clone)]
@@ -509,6 +501,10 @@ pub struct SylphyaPublisher {
 }
 
 impl SylphyaPublisher {
+    pub(crate) fn new(tx: Sender<SylphyaMsg>) -> Self {
+        SylphyaPublisher { tx }
+    }
+
     /// ①静的構成層を publish する（フラットは per-asker・点付きは大域区画へ着地）。
     pub fn publish_static(
         &self,
@@ -543,14 +539,19 @@ impl SylphyaPublisher {
         self.send(SylphyaMsg::PersistPut { scope, entries });
     }
 
-    /// 永続の鍵を消す投函（鏡像と記憶の両方から・fire-and-forget）。
+    /// 永続の鍵を消す投函（記憶から・fire-and-forget）。
     pub fn persist_remove(&self, scope: PersistScope, keys: Vec<PersistKey>) {
         self.send(SylphyaMsg::PersistRemove { scope, keys });
     }
 
+    /// 層（シェルかバルーン）の置き場を付け替える（その層の揮発の値は捨てる）。
+    pub fn set_layer_root(&self, layer: PersistScope, root: Option<PathBuf>) {
+        self.send(SylphyaMsg::SetLayerRoot { layer, root });
+    }
+
     /// 反映フェンス: 投函→処理完了を待つ（期限なし。期限が要るなら [`barrier_within`](Self::barrier_within)）。
     ///
-    /// 復帰時、それ以前に同一送信端から投函した全メッセージは鏡像へ反映済み（mpsc FIFO＋
+    /// 復帰時、それ以前に同一送信端から投函した全メッセージは片づいている（mpsc FIFO＋
     /// 直列処理）。アクター死亡（`Close`／panic 後）で投函できない、または reply 端が応答せず
     /// drop された場合は [`ReplyError`](areka_actor::ReplyError) を返す（送信端で死亡観測可能）。
     pub fn barrier(&self) -> Result<(), areka_actor::ReplyError> {
@@ -571,7 +572,7 @@ impl SylphyaPublisher {
     fn post_barrier(&self) -> Result<areka_actor::ReplyReceiver<()>, areka_actor::ReplyError> {
         let (reply, rx) = areka_actor::reply_channel::<()>();
         if self.tx.send(SylphyaMsg::Barrier { reply }).is_err() {
-            // アクター死亡 → 投函不能。warn＋Dropped（reader は最終鏡像で継続・表示系を殺さない）。
+            // アクター死亡 → 投函不能。warn＋Dropped（表示系を殺さない）。
             tracing::warn!(
                 target: LOG_TARGET,
                 "sylphya actor stopped; barrier could not be posted (SendError → ReplyError::Dropped)"
@@ -583,239 +584,21 @@ impl SylphyaPublisher {
 
     /// 停止規約: `Close` を投函する（正典終了経路）。
     ///
-    /// アクターは [`Effect::Stop`] で受信ループを即畳む（積み残しは破棄）。停止済みへの
-    /// 再送は warn＋縮退（panic しない）。停止完了は [`SylphyaParts::handle`] の join で待つ。
+    /// 番人は列に残った書きを 1 回ずつ待たずに試みてから止まる（受信の箱の積み残しは破棄）。
+    /// 停止済みへの再送は warn＋縮退（panic しない）。停止完了は [`SylphyaParts::handle`] の join で待つ。
     pub fn close(&self) {
         self.send(SylphyaMsg::Close);
     }
 
     /// fire-and-forget 投函の共通経路。アクター死亡時は `SendError` を **warn 記録して縮退**
     /// （panic しない）。
-    fn send(&self, msg: SylphyaMsg) {
+    pub(crate) fn send(&self, msg: SylphyaMsg) {
         if self.tx.send(msg).is_err() {
             tracing::warn!(
                 target: LOG_TARGET,
                 "sylphya actor stopped; message dropped (SendError, degrading without panic)"
             );
         }
-    }
-}
-
-/// sylphya アクターを起動する。
-///
-/// 起動時に全永続スコープを寛容ロードして初期鏡像へ投影し（[`build_initial_image`]）、その像を
-/// [`SharedMirror`] へ封じてから供給アクターを spawn する。初期像の構築は本関数（＝アクター
-/// スレッド生成 **前**）で同期実行するため、返す [`SylphyaReader`] は結線直後から永続復元値を
-/// 無待機で読める（single-writer 不変を破らない——構築中は書き手が本スレッド 1 つのみで、
-/// 以降の書き手はアクタースレッド 1 つのみ・両者は時間的に重ならない）。
-///
-/// アクターは `areka-actor` の 5 規約（inbox 単一・`Close` 即時停止・unbounded・panic は
-/// join 検出・拡張機構なし）に載る素のスレッド 1 本で、[`SylphyaCore::apply`] の効果列を直列
-/// 実行する（single-writer）。結線（どの供給者が何を publish するか）は呼び出し側の領分。
-pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
-    spawn_sylphya_with_failures(init, None)
-}
-
-/// [`spawn_sylphya`] の派生（[`SylphyaInit`] に欄を足さない）。`failures` が `Some` なら、投函の保存が `Degraded` になるたびに中身を 1 件送る
-/// （成功では送らない）。アクターは直列なので、同じ書き手の失敗は投函の順に届く。
-pub fn spawn_sylphya_with_failures(
-    init: SylphyaInit,
-    failures: Option<Sender<PersistFailure>>,
-) -> SylphyaParts {
-    spawn_parts(init, failures).0
-}
-
-/// 起動の組み立ての本体（本番の [`spawn_sylphya_with_failures`] と epoch の檻が共に通る）。
-/// 檻が epoch を直接見られるよう、部品と共に鏡像の共有の写しも返す。
-pub(crate) fn spawn_parts(
-    init: SylphyaInit,
-    failures: Option<Sender<PersistFailure>>,
-) -> (SylphyaParts, SharedMirror) {
-    let SylphyaInit {
-        roots,
-        io,
-        runtime_sink,
-    } = init;
-
-    let initial = build_initial_image(&roots, io.as_ref());
-    let shared = SharedMirror::new(Arc::new(initial));
-
-    let actor_shared = shared.clone();
-    let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya", move |rx| {
-        run_actor(rx, actor_shared, roots, io, runtime_sink, failures);
-    });
-
-    let parts = SylphyaParts {
-        reader: SylphyaReader::new(shared.clone()),
-        publisher: SylphyaPublisher { tx },
-        handle,
-    };
-    (parts, shared)
-}
-
-/// 全永続スコープを寛容ロードし、初期鏡像（epoch 0）の大域点付き区画へ `areka.*` 正準 key で
-/// 投影する。
-///
-/// root 不在・読取障害・破損はすべて [`load_scope`] が空へ縮退する（panic なし）。
-/// 投影先は大域区画（[`MirrorImage::dotted_global`]）——永続は層スコープ別であって asker 別
-/// ではなく、reader の per-asker → global 解決順で global 側に載る（[`PersistKey::to_canonical_key`]
-/// と reader/persist の往復整合）。
-fn build_initial_image(roots: &ScopeRoots, io: &dyn PersistIo) -> MirrorImage {
-    let mut img = MirrorImage::empty();
-    for scope in [
-        PersistScope::App,
-        PersistScope::Ghost,
-        PersistScope::Shell,
-        PersistScope::Balloon,
-    ] {
-        for (key, value) in load_scope(scope, roots, io) {
-            img.dotted_global.insert(key.to_canonical_key(), value);
-        }
-    }
-    img
-}
-
-/// アクター受信ループ本体（薄い配線・単一スレッド直列処理）。
-///
-/// 各メッセージにつき: [`SylphyaCore::apply`] で効果列を算出 → copy-on-write 後継像へ変異効果を
-/// 適用 → 実変異があれば [`SharedMirror::publish`]（single-writer）→ [`Effect::PersistSave`] を
-/// write-through 保存 → barrier の reply を返す → [`Effect::Stop`] で `return`。
-/// 全 `Sender` drop（Disconnected）でも正常 `return`（areka-actor 停止規約）。
-fn run_actor(
-    rx: std::sync::mpsc::Receiver<SylphyaMsg>,
-    shared: SharedMirror,
-    roots: ScopeRoots,
-    io: Box<dyn PersistIo>,
-    runtime_sink: Option<Box<dyn RuntimeCommandSink>>,
-    failures: Option<Sender<PersistFailure>>,
-) {
-    let core = SylphyaCore::new();
-    loop {
-        let msg = match rx.recv() {
-            Ok(msg) => msg,
-            // 全 Sender drop（Disconnected）→ 正常終了（areka-actor 停止規約）。
-            Err(_) => return,
-        };
-
-        let effects = core.apply(&msg);
-
-        // copy-on-write 後継像は書き換える 5 つの枝が初めて要るときだけ作る（反映待ち・停止・
-        // 書けない名前・204 の記録・保存だけの知らせでは複製しない）。
-        // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
-        let mut next: Option<MirrorImage> = None;
-        let mut stop = false;
-
-        for effect in effects {
-            match effect {
-                Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .flat_per_asker
-                        .entry(asker)
-                        .or_default()
-                        .insert(name, value);
-                }
-                Effect::RemoveFlatPerAsker { asker, name } => {
-                    // 実際に消えるときだけ後継像を出す（epoch は実変化に対応する）。
-                    let has = |img: &MirrorImage| {
-                        img.flat_per_asker
-                            .get(&asker)
-                            .is_some_and(|flat| flat.contains_key(&name))
-                    };
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has)
-                        && let Some(flat) = next
-                            .get_or_insert_with(|| shared.load().successor())
-                            .flat_per_asker
-                            .get_mut(&asker)
-                    {
-                        flat.remove(&name);
-                    }
-                }
-                Effect::SetDottedGlobal { key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_global
-                        .insert(key, value);
-                }
-                Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.get_or_insert_with(|| shared.load().successor())
-                        .dotted_per_asker
-                        .entry(asker)
-                        .or_default()
-                        .insert(key, value);
-                }
-                Effect::RecordAbsentFlat { .. } => {
-                    // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有）。
-                    // apply 側で debug 記録済み（二重ログにしない）。
-                }
-                Effect::PersistSave { scope, entries } => {
-                    // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
-                    // error!＋Degraded で縮退（panic しない）——ここは失敗を受け口へ中継。
-                    let outcome = save_scope(scope, &roots, io.as_ref(), entries);
-                    forward_failure(scope, outcome, failures.as_ref());
-                }
-                Effect::RemoveDottedGlobal { key } => {
-                    // 実際に消えるときだけ後継像を出す（RemoveFlatPerAsker と同じ形）。
-                    let has = |img: &MirrorImage| img.dotted_global.contains_key(&key);
-                    if next.as_ref().map_or_else(|| has(&shared.load()), has) {
-                        next.get_or_insert_with(|| shared.load().successor())
-                            .dotted_global
-                            .remove(&key);
-                    }
-                }
-                Effect::PersistRemove { scope, keys } => {
-                    // 失敗は remove_scope_keys が error!＋Degraded で記録済み。受け口へ中継する。
-                    let outcome = remove_scope_keys(scope, &roots, io.as_ref(), keys);
-                    forward_failure(scope, outcome, failures.as_ref());
-                }
-                Effect::RuntimeCommandReserved { asker, key, value } => {
-                    // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
-                    // sink が登録されていれば橋渡し（α 後の seriko 等・M1 未配線経路の予約シーム）。
-                    if let Some(sink) = runtime_sink.as_ref() {
-                        sink.dispatch(&asker, &key, &value);
-                    }
-                }
-                Effect::NotSettable { .. } => {
-                    // SET 無効な正準語彙: 書込なし（apply 側 warn 済み・呼出は Ok）。
-                }
-                Effect::Barrier => {
-                    // reply は msg 側から後段で返す（全効果適用＝publish 後にフェンス到達）。
-                }
-                Effect::Stop => {
-                    stop = true;
-                }
-            }
-        }
-
-        // 実変異があった時のみ publish（epoch は実変化に対応・barrier reply より前に確定）。
-        if let Some(next) = next {
-            shared.publish(Arc::new(next));
-        }
-
-        // reply 送信（reply 端は msg が所有・効果適用＝反映完了の後に返す）。
-        if let SylphyaMsg::Barrier { reply } = msg {
-            let _ = reply.send(());
-        }
-
-        if stop {
-            return;
-        }
-    }
-}
-
-/// 保存・消しの `Degraded` を失敗の受け口へ中継する（成功・受け口なしは何もしない）。
-fn forward_failure(
-    scope: PersistScope,
-    outcome: PersistOutcome,
-    failures: Option<&Sender<PersistFailure>>,
-) {
-    if let (PersistOutcome::Degraded(failure), Some(failures)) = (outcome, failures)
-        && failures.send(failure).is_err()
-    {
-        // 失敗そのものは保存の側が記録済み。受け手が落ちていても続ける。
-        tracing::warn!(
-            target: PERSIST_LOG_TARGET,
-            scope = ?scope,
-            "persist failure receiver closed; failure not forwarded (continuing)"
-        );
     }
 }
 
@@ -838,54 +621,16 @@ mod failure_sink_tests;
 #[path = "actor_barrier_within_tests.rs"]
 mod barrier_within_tests;
 
-/// アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
-/// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
+/// アクター統合 決定論檻: spawn→publish→read の配線・barrier フェンス・
+/// アクター死亡観測（SendError／ReplyError／join panic）・write-through。
 ///
-/// 全て純 x64（[`FakePersistIo`]・実 FS なし・時計なし）。同期は **barrier／join** で取り、
-/// `thread::sleep` を一切使わない。barrier が「それ以前の投函が反映済み」を保証するので、
-/// read はレースなく確定する。
+/// 全て純 x64（偽物の置き場の口 `MemBackend`・実 FS なし・時計なし）。同期は返事と join で取り、
+/// `thread::sleep` を一切使わない。
 #[cfg(test)]
 #[path = "actor_actor_integration_tests.rs"]
 mod actor_integration_tests;
 
-/// アクター 決定論単体テスト群（criterion-mapped cage）。
-///
-/// `SylphyaCore` の SET 分類と publish 後の epoch 単調増加、アクター系・SET 系の判断分岐を決定論檻として
-/// 集約する。全て x64 純粋（[`FakePersistIo`]・実 FS/実時計/実 SHIORI なし）で、同期は **barrier／join** のみ
-/// （`thread::sleep` 皆無・スレッド配線が flake しない）。既存の強い檻は重複させず、監査で判明
-/// した 2 つの空隙を補う:
-///
-/// - **(A) 鏡像 epoch の「アクター publish 経路」単調増加**: 純核単調増加
-///   （`mirror::tests::epoch_monotonic_on_successors`）・`SharedMirror` 直 publish
-///   （`mirror::tests::predecessor_image_unchanged_after_publish`）は既存だが、**アクターが
-///   `apply` の効果列を実行して行う publish swap** で epoch が単調増加することを突く檻は無い。
-///   reader は epoch を露出しない（epoch はフェンス予約シームで読み API に非露出）ため、
-///   本檻は本番と同じ組み立て（[`spawn_parts`]）を通り [`SharedMirror`] の clone を保持し
-///   `SharedMirror::load().epoch` で直接観測する。
-/// - **(B) アクター死亡後 send の WARN 記録**（無音失敗禁止）: 死亡後投函が panic せず
-///   縮退することは既存檻（[`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]）
-///   が突くが、その縮退が **無音でない**（WARN を出す）ことは檻化されていない。本檻は
-///   [`crate::test_log_capture::capture`]（共有機構への委譲・決定論）で fire-and-forget send と
-///   barrier の死亡縮退 WARN を捕捉する。
-///
-/// ## 判断分岐 → 檻 の対応（criterion → test）
-///
-/// - **SET 分類 3 パターン**: `super::tests::{classify_set_effective_key_is_runtime_command,
-///   classify_set_free_dotted_key_is_store_write, classify_set_canonical_non_effective_is_not_settable,
-///   classify_set_unparseable_key_is_store_write}` ＋
-///   apply 面 `super::tests::{apply_set_effective_emits_runtime_command_reserved,
-///   apply_set_free_emits_host_store_write, apply_set_not_settable_emits_no_write}`。
-/// - **epoch 単調増加（アクター publish 経路）**: 本群
-///   [`epoch_increments_monotonically_through_actor_publishes`]（初出・観測は保持した
-///   `SharedMirror::load().epoch`）。
-/// - **Barrier フェンス決定論**: `super::actor_integration_tests::{barrier_fences_all_prior_messages_last_write_wins,
-///   spawn_publish_static_barrier_then_read_sees_value, spawn_publish_barrier_read_is_deterministic_over_iterations}`。
-/// - **アクター死亡縮退**: 非 panic 送信＋barrier Err＋reader 継続は
-///   `super::actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`、
-///   join panic 検出（[`areka_actor::ActorError::Panicked`]）は
-///   `super::actor_integration_tests::actor_panic_is_detected_by_join_and_reader_continues`。
-///   死亡後 send／barrier の **WARN 記録**（無音失敗禁止の檻）は本群
-///   [`send_after_death_logs_warn_not_silent`]（初出・`test_log_capture`）。
+/// 番人が止まった後の投函の縮退が warn を残す（無音でない）檻。
 #[cfg(test)]
 #[path = "actor_actor_criteria_cage.rs"]
 mod actor_criteria_cage;

@@ -1,16 +1,16 @@
-//! 控える範囲と重ね書きの控えのテスト。
+//! 控える範囲の旗と、範囲の中の型つきの包みのテスト。
 //!
-//! このモジュールはファイルシステムに触れないので、表だけの試験の根は実在しない架空のパスで
-//! 足りる（本物の置き場は読みも書きもしない）。`FsPersistIo` と `save_scope` を通す
-//! 試験は木が変わらないことを見るので、`TempPath` の根を使う。
-//! プロセスに 1 つの状態を並んだ試験と分け合うため、根は試験ごとに別の名前にし、
-//! `withhold_everything` は呼ばない。
+//! 旗だけの試験の根は実在しない架空のパスで足りる。型つきの包みを通す試験は木が変わらないことを
+//! 見るので、`TempPath` の根を使う。プロセスに 1 つの状態を並んだ試験と分け合うため、根は試験ごとに
+//! 別の名前にし、`withhold_everything` は呼ばない。
 
 use super::*;
 use crate::persist::{
-    FsPersistIo, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope,
+    PersistKey, PersistOutcome, PersistScope, ScopeRoots, ensure_root_dir, load_scope, save_scope,
 };
+use crate::store::{FsBackend, StoreBackend};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use temp_path_kit::TempPath;
 
 fn root(label: &str) -> PathBuf {
@@ -20,34 +20,20 @@ fn root(label: &str) -> PathBuf {
     ))
 }
 
-#[test]
-fn staged_content_reads_back_inside_the_root() {
-    let r = root("readback");
-    let file = r.join("sylphya.toml");
-    let _guard = WithholdGuard::under(&r);
-    assert!(withholds(&r), "根そのものは範囲の中");
-    assert!(withholds(&file), "根の下は範囲の中");
-    stage(&file, "a = 1");
-    assert_eq!(staged(&file).as_deref(), Some("a = 1"));
-    stage(&file, "a = 2");
-    assert_eq!(
-        staged(&file).as_deref(),
-        Some("a = 2"),
-        "最後に控えた中身を返す"
-    );
+fn backend() -> Arc<dyn StoreBackend> {
+    FsBackend::with_manual_clock()
 }
 
 #[test]
-fn dropping_the_guard_forgets_registration_and_staged_content() {
+fn dropping_the_guard_forgets_registration() {
     let r = root("drop");
     let file = r.join("ghost").join("sylphya.toml");
     {
         let _guard = WithholdGuard::under(&r);
-        stage(&file, "x");
-        assert_eq!(staged(&file).as_deref(), Some("x"));
+        assert!(withholds(&r), "根そのものは範囲の中");
+        assert!(withholds(&file), "根の下は範囲の中");
     }
     assert!(!withholds(&file), "落とした後は範囲の外");
-    assert_eq!(staged(&file), None, "落とすとその根の下の控えも消える");
 }
 
 #[test]
@@ -79,12 +65,6 @@ fn key_ignores_case_and_separator() {
         .join("sylphya.toml");
     assert!(withholds(&upper));
     assert!(withholds(&slashed));
-    stage(&upper, "c");
-    assert_eq!(
-        staged(&slashed).as_deref(),
-        Some("c"),
-        "大小と区切りを問わず同じ鍵"
-    );
 }
 
 /// 根の下に在るものの並び（木の前後比べ用）。
@@ -101,66 +81,35 @@ fn tree(dir: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-fn fs_commit_inside_creates_nothing_and_read_returns_staged() {
-    let tmp = TempPath::under_target("sylphya-withhold-commit");
-    let file = tmp.child("ghost").join("areka").join("sylphya.toml");
-    let _guard = WithholdGuard::under(tmp.path());
-    let io = FsPersistIo;
-    assert!(io.withholds(&file));
-    io.commit(&file, "a = 1").expect("控えへの入れは失敗しない");
-    assert!(
-        tree(tmp.path()).is_empty(),
-        "親のフォルダも一時ファイルも宛先も作らない"
-    );
-    assert_eq!(
-        io.read(&file).unwrap().as_deref(),
-        Some("a = 1"),
-        "控えを先に見る"
-    );
-}
-
-#[test]
-fn fs_read_falls_back_to_file_when_nothing_staged() {
-    let tmp = TempPath::under_target("sylphya-withhold-read");
-    let file = tmp.child("sylphya.toml");
-    std::fs::write(&file, "b = 2").unwrap();
-    let _guard = WithholdGuard::under(tmp.path());
-    assert_eq!(FsPersistIo.read(&file).unwrap().as_deref(), Some("b = 2"));
-}
-
-#[test]
-fn save_scope_inside_returns_withheld_and_logs_it() {
+fn save_scope_inside_returns_withheld_and_reads_back() {
     let tmp = TempPath::under_target("sylphya-withhold-save");
     let roots = ScopeRoots {
         app: Some(tmp.child("areka")),
         ..ScopeRoots::default()
     };
     let _guard = WithholdGuard::under(tmp.path());
+    let backend = backend();
     let entries = vec![(PersistKey::LastGhost, "emo2".to_owned())];
     let mut outcome = None;
     let events = crate::test_log_capture::capture(|| {
-        outcome = Some(save_scope(PersistScope::App, &roots, &FsPersistIo, entries))
+        outcome = Some(save_scope(PersistScope::App, &roots, &backend, entries))
     });
-    let outcome = outcome.unwrap();
-    assert_eq!(outcome, PersistOutcome::Withheld);
+    assert_eq!(outcome.unwrap(), PersistOutcome::Withheld);
     assert!(tree(tmp.path()).is_empty(), "木は変わらない");
     assert!(
         events.iter().any(|e| e.level == tracing::Level::DEBUG
             && e.field_str("event") == Some("persist_withheld")),
         "persist_withheld の debug が出る: {events:?}"
     );
-    assert!(
-        !events
-            .iter()
-            .any(|e| e.message().contains("persist commit failed")),
-        "保存の失敗の記録は出ない: {events:?}"
+    let loaded = load_scope(PersistScope::App, &roots, &backend);
+    assert_eq!(
+        loaded,
+        vec![(PersistKey::LastGhost, "emo2".to_owned())],
+        "同じ走りの中では書けたときと同じ値を読み返せる"
     );
-    // 同じ走りの中では書けたときと同じ値を読み返せる。
-    let loaded = crate::persist::load_scope(PersistScope::App, &roots, &FsPersistIo);
-    assert_eq!(loaded, vec![(PersistKey::LastGhost, "emo2".to_owned())]);
 }
 
-/// 読み取りだけの走りは使えない既存のファイル（新しい版）で止まらない＝何も書かないので守る物が無い。
+/// 読み取りだけの走りは使えない既存のファイルで止まらない（何も書かないので守る物が無い）。
 #[test]
 fn save_scope_inside_does_not_stop_on_an_unusable_existing_file() {
     let tmp = TempPath::under_target("sylphya-withhold-unusable");
@@ -177,7 +126,7 @@ fn save_scope_inside_does_not_stop_on_an_unusable_existing_file() {
     let outcome = save_scope(
         PersistScope::App,
         &roots,
-        &FsPersistIo,
+        &backend(),
         vec![(PersistKey::BootCount, "1".to_owned())],
     );
     assert_eq!(outcome, PersistOutcome::Withheld);
@@ -193,8 +142,9 @@ fn ensure_root_dir_skips_inside_and_creates_outside() {
     let inside = TempPath::under_target("sylphya-withhold-dir-in");
     let outside = TempPath::under_target("sylphya-withhold-dir-out");
     let _guard = WithholdGuard::under(inside.path());
-    FsPersistIo::ensure_root_dir(&inside.child("ghost")).unwrap();
+    let backend = backend();
+    ensure_root_dir(&inside.child("ghost"), &backend).unwrap();
     assert!(!inside.child("ghost").exists(), "範囲の中では作らない");
-    FsPersistIo::ensure_root_dir(&outside.child("ghost")).unwrap();
+    ensure_root_dir(&outside.child("ghost"), &backend).unwrap();
     assert!(outside.child("ghost").is_dir(), "範囲の外では作る");
 }

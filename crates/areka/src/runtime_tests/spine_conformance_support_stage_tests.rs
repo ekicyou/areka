@@ -13,6 +13,7 @@ use super::{Progress, ScriptedShioriBackend, SpineHarness};
 use areka_kanade::CloseReason;
 // 私有の欄は渡し口から読み書きする。
 use areka_runtime::spine::test_support::status_calls;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 
 /// 受信端の開閉の探りは交信の列を **1 件も**増やさず、終了段の自己終了はその探りだけで観測できる。
 ///
@@ -246,9 +247,14 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
     harness.shutdown_bounded();
 }
 
-/// 注入時刻を `at_ms` に据え置いた再生側 Tick を、`OnClose` の照会が記録されるまで有界に繰り返す
+/// 注入時刻を `at_ms` に据え置いた再生側 Tick を、`OnClose` の照会が記録され、その応答の終了挨拶の
+/// トークが始まる（起動記録トークの次の `TalkStarted` が届く）まで有界に繰り返す
 /// （駆動器を通さない理由は `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc）。
 /// 再生側 Tick は SHIORI 呼出を 1 件も起こさない。打ち切りは足場の進みの目印で決まる。
+///
+/// 照会の記録だけで抜けると、終了挨拶のトークが始まる前に終了段の注入時刻が上限へ届きうる。照会から
+/// トークの開始までに、kanade の訳しと dispatcher の写しが sylphya の番人へ聞き、番人はその前に届いた
+/// 覚える値の書き（起動記録の書き＝ファイルの I/O）を済ませてから答える。
 fn wait_close_query(
     harness: &mut SpineHarness,
     handle: &ScriptedShioriHandle,
@@ -257,14 +263,26 @@ fn wait_close_query(
 ) {
     let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
     let mut dispatcher_closed = false;
+    let mut boot_talk = None;
+    let mut close_talk_started = false;
     let began = wait_until(what, Progress::Count(&*mark), || {
         if harness.inject(&Injection::DispatcherTick, at_ms).is_err() {
             dispatcher_closed = true;
         }
-        handle
-            .non_status_calls()
-            .iter()
-            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+        for signal in harness.wiring.drain_lifecycle_signals() {
+            if let TalkLifecycleSignal::TalkStarted { talk_id, .. } = signal {
+                match boot_talk {
+                    None => boot_talk = Some(talk_id),
+                    Some(boot) if boot != talk_id => close_talk_started = true,
+                    Some(_) => {}
+                }
+            }
+        }
+        close_talk_started
+            && handle
+                .non_status_calls()
+                .iter()
+                .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
     })
     .inspect_err(|failure| eprintln!("{failure}"))
     .is_ok();

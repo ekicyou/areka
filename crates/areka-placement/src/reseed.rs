@@ -21,7 +21,7 @@ use areka_sylphya::PersistKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
-use wintf::ecs::{DPI, Point, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
@@ -34,6 +34,9 @@ use super::follow::{
 use super::persist::apply_restored_placements;
 use super::resolver::{
     Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+};
+use super::script_balloon::{
+    ScriptBalloonPlacement, is_script_placed, overlay_align, overlay_offset,
 };
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
@@ -55,6 +58,7 @@ pub struct BalloonPlacementInputs {
 /// 新しいシェルの見た目の値を走っている窓の部品へ入れ直し、バルーン窓を 1 度置き直す。
 ///
 /// - 標準の位置は [`resolve_standard_scopes`] で解き、利用者のドラッグの記憶を重ねてから入れる。
+/// - 記憶から戻したずらしを使うスコープに台本の値があれば、その分（台本ありの標準 − descript だけの標準）を足す。
 /// - 窓の部品が揃わないスコープは `warn!`（`event = "reseed_skipped"`）を残して読み飛ばし、
 ///   残りのスコープは続ける（差し替えは済んでいるので、配置の値だけが古いまま残る）。
 pub fn apply_shell_descript(
@@ -65,12 +69,20 @@ pub fn apply_shell_descript(
     restored: &[(PersistKey, String)],
 ) {
     let snapshot = monitor_snapshot(world);
-    for StandardScope { running, placement } in
-        resolve_standard_scopes(world, windows, src, balloon)
+    let standard = resolve_standard_scopes(world, windows, src, balloon);
+    let descript = if standard
+        .iter()
+        .any(|s| is_script_placed(world, s.running.char_window))
     {
+        resolve_descript_scopes(world, windows, src, balloon)
+    } else {
+        Vec::new()
+    };
+    for StandardScope { running, placement } in standard {
         let scope = running.input.scope;
         // 1 件を入れて 1 件を返す（`apply_restored_placements` の事後条件）。破れたら黙って進めない。
-        let Some(p) = apply_restored_placements(vec![placement], restored, &snapshot).pop() else {
+        let Some(mut p) = apply_restored_placements(vec![placement], restored, &snapshot).pop()
+        else {
             warn!(
                 event = "reseed_skipped",
                 scope,
@@ -79,6 +91,34 @@ pub fn apply_shell_descript(
             );
             continue;
         };
+        // 記憶は「descript の標準＋利用者のずらし」なので、台本の値の分を足して新しいシェルの台本の基準点に乗せる。
+        if p.balloon_offset_base.dpi.is_none() && is_script_placed(world, running.char_window) {
+            match descript.iter().find(|d| d.placement.scope == scope) {
+                Some(d) => {
+                    let share = PointPx {
+                        x: placement
+                            .balloon_offset
+                            .x
+                            .saturating_sub(d.placement.balloon_offset.x),
+                        y: placement
+                            .balloon_offset
+                            .y
+                            .saturating_sub(d.placement.balloon_offset.y),
+                    };
+                    let shift = |v: PointPx| PointPx {
+                        x: v.x.saturating_add(share.x),
+                        y: v.y.saturating_add(share.y),
+                    };
+                    p.balloon_offset_base.offset = shift(p.balloon_offset_base.offset);
+                    p.balloon_offset = shift(p.balloon_offset);
+                    p.balloon_pos = shift(p.balloon_pos);
+                }
+                None => warn!(
+                    event = "reseed_script_share_unresolved",
+                    scope, "reseed: 台本の値の分を解けないので記憶のずらしをそのまま使う"
+                ),
+            }
+        }
 
         replace_anchor(world, running.char_window, scope, p.anchor);
         reinstall_balloon(world, &running, &p);
@@ -161,6 +201,8 @@ pub(crate) struct StandardScope {
     pub placement: ScopePlacement,
 }
 
+/// 台本の値を重ねて標準の位置を解く。
+///
 /// 走っているスコープごとに、その窓の DPI で作者の空間のずらしを換算し、バルーンの
 /// `windowposition` を合流し、全スコープを昇順で 1 度に解いて自分の要素を取る（記憶は重ねない）。
 ///
@@ -172,6 +214,34 @@ pub(crate) fn resolve_standard_scopes(
     windows: &GhostWindows,
     src: &DescriptSource,
     balloon: &BalloonPlacementInputs,
+) -> Vec<StandardScope> {
+    resolve_scopes(world, windows, src, balloon, Layer::Script, None)
+}
+
+/// descript の値だけで標準の位置を解く（台本の値を重ねない）。
+pub(crate) fn resolve_descript_scopes(
+    world: &World,
+    windows: &GhostWindows,
+    src: &DescriptSource,
+    balloon: &BalloonPlacementInputs,
+) -> Vec<StandardScope> {
+    resolve_scopes(world, windows, src, balloon, Layer::DescriptOnly, None)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Layer {
+    Script,
+    DescriptOnly,
+}
+
+/// 標準の位置を `layer` で解く。`balloon_size` はそのスコープのバルーンの寸を `WindowPos` の寸の代わりに使う。
+pub(crate) fn resolve_scopes(
+    world: &World,
+    windows: &GhostWindows,
+    src: &DescriptSource,
+    balloon: &BalloonPlacementInputs,
+    layer: Layer,
+    balloon_size: Option<(usize, SizeI)>,
 ) -> Vec<StandardScope> {
     let mut cfg = build_placement_config(&src.ghost_kv, &src.shell_kv);
     for &scope in cfg.scopes.keys() {
@@ -189,7 +259,7 @@ pub(crate) fn resolve_standard_scopes(
     // （拡大率は窓ごと・軸ごと＝シェル／バルーン。他のスコープへ漏らさない）。
     let mut running_scopes = Vec::new();
     for scope in windows.scopes() {
-        let running = match running_scope(world, windows, scope) {
+        let mut running = match running_scope(world, windows, scope) {
             Ok(running) => running,
             Err(reason) => {
                 warn!(
@@ -201,9 +271,21 @@ pub(crate) fn resolve_standard_scopes(
                 continue;
             }
         };
+        if let Some((_, size)) = balloon_size.filter(|(s, _)| *s == scope) {
+            running.input.balloon_size = SizePx {
+                w: size.width,
+                h: size.height,
+            };
+        }
         // 新しい設定に無い走っているスコープは、解決が使うのと同じ既定の構成を置いて合流先にする
         // （起動では設定の全スコープに窓があるので、合流先が無いことは起きない）。
-        cfg.scopes.entry(scope).or_default();
+        let script = world
+            .get::<ScriptBalloonPlacement>(running.char_window)
+            .filter(|_| layer == Layer::Script);
+        let sc = cfg.scopes.entry(scope).or_default();
+        if let Some(offset) = script.and_then(|s| s.offset.as_ref()) {
+            overlay_offset(sc, offset);
+        }
         // 窓の DPI は 0 を弾いてあり、作者の DPI は縮退梯子が常に非 0 を返すので `ONE` へは
         // 落ちない。順序（シェル軸の換算 → 合流）は起動の準備と同じ関数が持つ。
         let k = |author: u16| {
@@ -217,6 +299,11 @@ pub(crate) fn resolve_standard_scopes(
             k(shell_author_dpi),
             k(balloon.author_dpi),
         );
+        if let Some(align) = script.and_then(|s| s.align.as_ref())
+            && let Some(sc) = cfg.scopes.get_mut(&scope)
+        {
+            overlay_align(sc, align);
+        }
         running_scopes.push(running);
     }
     // 解決は起動と同じく全スコープを昇順に並べて 1 度に通す——スコープ 1 以降の仮の X は前の

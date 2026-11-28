@@ -241,3 +241,7 @@ mod probe_tests;
 #[cfg(test)]
 #[path = "write_failure_late_tests.rs"]
 mod late_tests;
+
+#[cfg(test)]
+#[path = "write_failure_inject_tests.rs"]
+mod inject_tests;

@@ -11,7 +11,7 @@ pub use resolve::*;
 
 use std::path::Path;
 
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, load_scope};
 
 /// 起動前の記憶の直読み（App スコープの `[baseware] roots`）。鍵が無ければ `None`、空文字は空文字のまま。
@@ -20,7 +20,7 @@ pub fn read_memory(app_profile_dir: &Path) -> Option<String> {
         app: Some(app_profile_dir.to_path_buf()),
         ..ScopeRoots::default()
     };
-    load_scope(PersistScope::App, &roots, &FsPersistIo)
+    load_scope(PersistScope::App, &roots, &fs_backend())
         .into_iter()
         .find_map(|(k, v)| (k == PersistKey::BasewareRoots).then_some(v))
 }

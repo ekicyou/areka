@@ -38,7 +38,7 @@ use std::path::Path;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{read_ghost_names, shiori_dir};
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, load_scope};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -279,7 +279,7 @@ fn project_restore_parts(
 /// - ゴーストの descript の不在・読めない → `warn!` ＋ 空（本関数で処理）。
 /// - ファイル不在・破損・read 障害 → [`load_scope`] が寛容に空へ縮退する（sylphya 契約）。
 ///
-/// IO は本番実装 [`FsPersistIo`]（sylphya 内で FS に触れる唯一の型）。返り値は決定論的順序
+/// IO はプロセスに 1 つの本番の置き場の口（[`fs_backend`]）。返り値は決定論的順序
 /// （[`load_scope`] の契約）。
 pub fn load_restored_state(ghost_root: &Path) -> Vec<(PersistKey, String)> {
     // ゴーストの descript が在って読めるときだけ戻す（不在の根を永続の根にしない）。
@@ -299,7 +299,7 @@ pub fn load_restored_state(ghost_root: &Path) -> Vec<(PersistKey, String)> {
         ..ScopeRoots::default()
     };
 
-    load_scope(PersistScope::Ghost, &roots, &FsPersistIo)
+    load_scope(PersistScope::Ghost, &roots, &fs_backend())
 }
 
 /// entries から指定 key の値を線形探索する（純関数・決定論）。

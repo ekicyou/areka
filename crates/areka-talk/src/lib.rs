@@ -12,8 +12,10 @@
 
 use dola::{TimeDelta, TimePoint};
 
+mod meta;
 mod origin;
 
+pub use meta::{GhostPlace, TalkMeta, TalkRunner, TalkSender};
 pub use origin::{ScriptOrigin, SecurityLevel, SenderHead, SenderType, SenderWord, SstpKind};
 
 /// talk の一意識別子（kanade が単調増番で採番・再利用しない）。
@@ -47,6 +49,7 @@ pub struct StartTalk {
     pub epilogue: Vec<EpilogueCommand>,
     pub origin: ScriptOrigin,
     pub strict: bool,
+    pub meta: TalkMeta,
 }
 
 impl StartTalk {
@@ -58,6 +61,7 @@ impl StartTalk {
             epilogue: Vec::new(),
             origin: ScriptOrigin::GHOST,
             strict: false,
+            meta: TalkMeta::default(),
         }
     }
 }

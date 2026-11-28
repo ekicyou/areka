@@ -238,6 +238,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: loop_rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
 

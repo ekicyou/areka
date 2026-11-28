@@ -1,48 +1,21 @@
-//! # areka-sylphya — 統一プロパティシステム
+//! # areka-sylphya — 名前で引ける値の KVS（番人のアクター・鍵の表・3 つの住み場所・4 つの層）
 //!
-//! areka の「名前で引ける値」の解決機構をただ 1 つ確立する最下層クレート。
-//! %フラット環境変数・点付きプロパティ木・SHIORI Resource 系の全語彙を、
-//! 単一名前空間の第一級エントリとして保持する。
-//!
-//! ## 掲示板（マテリアライズド・ビュー）モデル
-//!
-//! アーキテクチャは **同期読み・非同期供給の掲示板（マテリアライズド・ビュー）**。
-//! 読みは共有読みハンドル（[`reader`]）による同期・無待機（epoch 交換の不変スナップショット
-//! の read lock 内 `Arc` clone のみ）。供給（publish・SET 中継・永続書込・prefetch 編成）は
-//! `areka-actor` 規約に載る **古典スレッド 1 本の同期アクター**（[`actor`]）が単独所有する。
-//! 同期読み経路でのクロスアクター pull 照会は禁止（push 鏡像・pull 棄却）。
-//!
-//! ## 5 つの backing 実体層
-//!
-//! 「名前で引ける値」の源は次の 5 実体層に分類される（[`vocab::BackingLayer`]）:
-//!
-//! 1. **StaticConfig** — descript 等の静的構成（selfname/keroname/baseware 系）
-//! 2. **RuntimeState** — 実行時状態（surface/scope 系）
-//! 3. **SystemEnv** — システム環境（時刻・画面系）
-//! 4. **ShioriQuery** — SHIORI 照会（username 等）
-//! 5. **Persistent** — 層別 TOML 永続（窓位置・オフセット・起動記録・vanish 回数）
-//!
-//! M1 実導出は StaticConfig の一部・ShioriQuery(username)・Persistent の器のみ。
-//! 残りは差替シーム（backing 登録だけで実導出化する）付きで決定論的に縮退する。
-//!
-//! ## 読み口 2 形
-//!
-//! 単一名前空間を 2 つの窓から読む:
-//!
-//! 1. **per-talk 凍結スナップショット** — talk 開始時に鏡像の実在値を写し取り、
-//!    その talk の生存期間中は凍結した像を参照する（同一 talk 内で値がブレない）。
-//! 2. **逐次同期解決** — GetProperty 等が呼ばれた時点の鏡像を都度・同期・無待機で解決する。
-//!
-//! いずれも問い合わせ元コンテキスト（[`asker`]）を第一級に取り、由来（どの backing から
-//! 来たか）は API 型に載せない（ログには記録する）。
+//! 鍵の表（[`keytable`]）が鍵ごとの住み場所（速い・メモリー・ファイル）と名前で書けるかを決める。
+//! 番人（[`spawn_sylphya`]）はゴーストごとに 1 本で住み場所の核を持ち、読み口（[`reader`]）と
+//! KVS の口（[`kvs`]）は番人へ聞く。速い住み場所（[`fast`]）だけは番人を通らずに読む。
+//! 番人が居ない時点は同期の口（[`KvsDirect`]）を使う。
 
 pub mod actor;
 pub mod asker;
+pub mod fast;
+mod guardian;
 pub mod key;
-pub mod mirror;
+pub mod keytable;
+pub mod kvs;
 pub mod persist;
 pub mod pull;
 pub mod reader;
+pub mod store;
 pub mod value;
 pub mod vocab;
 
@@ -53,12 +26,12 @@ mod test_log_capture;
 
 // --- 公開面 re-export ---
 pub use actor::{
-    Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit, SylphyaMsg, SylphyaParts,
-    SylphyaPublisher, classify_set, spawn_sylphya, spawn_sylphya_with_failures,
+    Effect, SetClass, SylphyaInit, SylphyaMsg, SylphyaParts, SylphyaPublisher, Writer, apply,
+    classify_set, spawn_sylphya, spawn_sylphya_with_failures,
 };
 pub use asker::{AskerContext, AskerId};
 pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
-pub use mirror::{MirrorImage, SharedMirror};
+pub use kvs::{Kvs, KvsDirect, WriteFailed, WriteOutcome};
 pub use persist::{
     Axis, PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope,
     ScopeRoots, load_scope, remove_scope_keys, save_scope,

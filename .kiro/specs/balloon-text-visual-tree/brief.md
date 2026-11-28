@@ -92,7 +92,7 @@
 - **席**: emo-text に新しいソースのファイルを足す 1 本だけの席を使う（`surface.rs` は上限の近く）。依存は足さない。
 - **規模**: L（16〜20 タスク）のまま。
 - **先に要るもの**: 無し。
-- **同じウェーブに置けない相手**: `draw-methods-canon`（`mount.rs`・`tests/support/mod.rs`）・`instant-to-interrupt-ticks`（`dump_balloon.rs` の所要時間 194 行目・`scale_text.rs` の締め切り 66 行目・供給面を消すなら `com/wuc.rs`）。後ろの `compose-f16-precision`（`surface.rs`・`draw.rs`・`dump_balloon.rs`・`com/`）・`talk-anchor-interrupt-ticks`（`examples/emo-text-layer/drive.rs`）は列のとおり後。`sylphya-sqlite-kvs`・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata` とは 0（talk の 2 本の `drive.rs`・`actor.rs`・`sink.rs` は別の crate のもの）。
+- **同じウェーブに置けない相手**: `draw-methods-canon`（`mount.rs`・`tests/support/mod.rs`）・`instant-to-interrupt-ticks`（`dump_balloon.rs` の所要時間 194 行目・`scale_text.rs` の締め切り 66 行目・供給面を消すなら `com/wuc.rs`）。後ろの `compose-f16-precision`（`surface.rs`・`draw.rs`・`dump_balloon.rs`・`com/`）は列のとおり後。`sylphya-sqlite-kvs`・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata` とは 0（talk の 2 本の `drive.rs`・`actor.rs`・`sink.rs` は別の crate のもの）。
 - **約束の案**: `scale_text.rs` は結線の入口（`connect_balloon_text`・`text_slot_view`）の形を保てば触らずに済み、`com/dxgi.rs`・`com/wuc.rs` は消すのを後へ回せば触らずに済む（どちらも設計を曲げない）。`dump_balloon.rs` は文字が描画の木へ入ると読み戻しの形が変わるので避けられない＝`instant-to-interrupt-ticks` とは約束で外せない。
 - **優先度の区分**: A（開発者が、バルーンも描画の木を使うべきと言った）。版は v0.2.0。
 - **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`、節の下の持ち主と自動の上げ下げの前例も wintf に入った。新しい境目や並行の保証は作らない）。

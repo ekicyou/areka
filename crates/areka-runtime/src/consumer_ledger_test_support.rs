@@ -101,6 +101,13 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
         // move_cue_balloon_lock_tests.rs
         ("lock", Some("balloonmove"), vec!["balloonmove"]),
         ("unlock", Some("balloonmove"), vec!["balloonmove"]),
+        // move_cue_balloon_script_tests.rs
+        (
+            "set",
+            Some("balloonoffset"),
+            vec!["balloonoffset", "@-10", "200"],
+        ),
+        ("set", Some("balloonalign"), vec!["balloonalign", "right"]),
         // window_state_cue_tests.rs の常に手前の指令と `\v`
         ("set", Some("windowstate"), vec!["windowstate", "stayontop"]),
         (RAISE_TAG_CARRIER, None, vec![]),

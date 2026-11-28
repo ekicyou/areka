@@ -2,7 +2,7 @@
 //!
 //! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→
 //! [`attach_char_pointer_handlers`] → 偽の `WindowHandle`。wintf のドラッグの資源・`MonitorSnapshot`・
-//! 偽の記憶の書き手（`FakePersistIo`）で動く sylphya へ投函する `PersistWiring`・当たり判定の偽物
+//! 偽の置き場の口（`MemBackend`）で動く sylphya へ投函する `PersistWiring`・当たり判定の偽物
 //! （`RegionSource::Mock`）と止めた時計を入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
 //! 付けない組み方（[`Rig::without_wrapper`]）も持つ。
 //!
@@ -14,7 +14,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use areka_kanade::{KanadeMsg, MouseInput};
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
@@ -109,7 +109,7 @@ pub(super) struct Rig {
     pub(super) rx: mpsc::Receiver<KanadeMsg>,
     parts: SylphyaParts,
     roots: ScopeRoots,
-    store: Arc<FakePersistIo>,
+    store: Arc<dyn StoreBackend>,
     /// 相方のキャラ窓。
     pub(super) char_w: Entity,
     /// 相方のバルーン窓。
@@ -132,16 +132,12 @@ impl Rig {
     }
 
     fn build(attach: bool) -> Self {
-        let store = Arc::new(FakePersistIo::new());
+        let store: Arc<dyn StoreBackend> = MemBackend::new();
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(store.clone()),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), store.clone()));
 
         let mut world = World::new();
         // `dispatch_drag_events` が引く資源。
@@ -251,7 +247,7 @@ impl Rig {
             .publisher
             .barrier_within(SPIN_WAIT)
             .expect("アクターが生きている間は期限内に barrier が返るはず");
-        load_scope(PersistScope::Ghost, &self.roots, &*self.store)
+        load_scope(PersistScope::Ghost, &self.roots, &self.store)
     }
 
     /// 受け口に溜まったマウスの知らせを全部取り出す（マウス以外が来たら落とす）。

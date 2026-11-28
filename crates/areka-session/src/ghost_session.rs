@@ -478,11 +478,12 @@ pub fn boot_ghost(
         ghost_boot_options(ghost_root.clone(), helper_exe, app_profile_dir, modules);
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く）。
     // 倒れ先も起動のシェルでマウントする。
-    let runtime = match areka_ghost::boot_with_origin(
+    let runtime = match areka_ghost::boot_with_balloon(
         ghost_options,
         Some(kanade_stop),
         BootOrigin::Plain,
         shell.as_deref(),
+        Some(&balloon.dir),
         crate::write_failure::sender(world),
     ) {
         Ok(runtime) => {

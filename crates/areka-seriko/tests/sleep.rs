@@ -44,6 +44,7 @@ fn run(ticks: &[i64]) -> Vec<DisplayCommand> {
         balloon_tables: BTreeMap::new(),
         rng: Box::new(|_| 0),
         pick_rng: areka_seriko::seeded_rng(0),
+        text_routing: areka_seriko::TextRouting::default(),
     };
     run_actor(
         SurfaceResolver::new(BTreeMap::new()),

@@ -3,6 +3,6 @@ exit = 0
 argv = --stage thread --top 5
 
 note = 前回 5 秒使った TID 100 を、今回 1 秒の別名のスレッド（sakura-talk-2）がもらう。
-note = TID の照らし方は Rust の delta と同じなので新しい方は 0 に止まり、その 1 秒は
+note = 系統の合計の差（actor:sakura-talk-* は前 5 秒・後 1 秒で 0 に止まる）なので、その 1 秒は
 note = 名簿外の残りに入る。残り＝max(プロセスの差 3 秒 − 名簿の差 1 秒, 0)＝2 秒で、
 note = 合計はプロセスの CPU を越えない。行どうしの差に戻すと残りが 6 秒（200.00）になる。

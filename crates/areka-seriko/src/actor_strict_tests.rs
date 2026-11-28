@@ -173,6 +173,7 @@ fn replace_swaps_facts_between_cues() {
             bind_resolver: BindResolver::empty(),
             shell_table: AnimationTable::empty(),
             fallback: crate::ShellSurfaceFallback::default(),
+            text_routing: crate::TextRouting::default(),
         },
         old.with_shells(BTreeMap::new(), shell_ids),
     ));

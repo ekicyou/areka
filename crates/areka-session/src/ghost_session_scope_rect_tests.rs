@@ -342,7 +342,10 @@ mod wiring {
     use areka_placement::source::GhostTitles;
     use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
     use areka_placement::test_support::fake_handle;
-    use areka_sylphya::{AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror};
+    use areka_sylphya::store::MemBackend;
+    use areka_sylphya::{
+        AskerContext, AskerId, DottedResolution, ScopeRoots, SylphyaInit, spawn_sylphya,
+    };
     use bevy_ecs::schedule::Schedule;
     use bevy_ecs::schedule::SingleThreadedExecutor;
     use log_capture_kit::{LineFormat, capture_lines};
@@ -402,7 +405,7 @@ mod wiring {
     }
 
     fn reader() -> SylphyaReader {
-        SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())))
+        spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new())).reader
     }
 
     fn resolve(reader: &SylphyaReader, name: &str) -> DottedResolution {

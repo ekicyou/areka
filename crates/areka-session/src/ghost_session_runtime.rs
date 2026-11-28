@@ -119,7 +119,7 @@ pub fn rebuild_runtime_in_place(world: &mut World, target_name: &str) -> Runtime
         }
         tracing::info!(event = "ghost_switch_down_ms", ms, "実行系を降ろした");
     }
-    // 実行系が 1 つも動いていない間に書く（`switch_to` の降ろした直後の記憶と同じ意味・同じ引数）。
+    // `switch_to` の降ろした直後の記憶と同じ意味・同じ引数で書く。
     if let Err(failure) = write_switch_drop(&app_profile_dir, mark) {
         return RuntimeRebuild::WriteFailed(failure);
     }

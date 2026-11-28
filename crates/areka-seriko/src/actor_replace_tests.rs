@@ -80,6 +80,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
             bind_resolver: BindResolver::empty(),
             shell_table: new,
             fallback: crate::ShellSurfaceFallback::default(),
+            text_routing: crate::TextRouting::default(),
         },
         no_facts()
     ));
@@ -323,6 +324,7 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
                     (ActorKey::from("1"), vec![10]),
                 ]),
             },
+            text_routing: crate::TextRouting::default(),
         },
         no_facts()
     ));
@@ -410,7 +412,69 @@ fn replace_after_actor_stopped_returns_false() {
             bind_resolver: BindResolver::empty(),
             shell_table: AnimationTable::empty(),
             fallback: crate::ShellSurfaceFallback::default(),
+            text_routing: crate::TextRouting::default(),
         },
         no_facts()
     ));
+}
+
+/// 箱の表が効いた知らせは、最後のシェルの差し替えの材料を当てる（知らせの届かなかった前の差し替えの
+/// 材料ではない）。前の差し替え（と起動の構成）は面 10 に箱 `fuda` を持ち、最後の差し替えは箱を持たない。
+/// 面 0 の「あい」（1000・1050）の後に面 10 へ替えて（1000 までの 1 字の次から数える）「うえお」を出すと、
+/// 箱が無ければ同じ普通のバルーンに 1100・1150・1200 と続き、3 字目の 1150 で口が鳴る（箱が在れば
+/// `fuda` の頭から 1000・1050・1100 で 1050 に鳴り、1160 には終わっている）。
+#[test]
+fn box_table_notice_applies_the_material_of_the_last_shell_replace() {
+    use crate::looper::talk_route_tests::{SURFACES, routing, shell_text};
+    let out = MockSurfaceOutput::new();
+    let records = out.records();
+    let mut config = cfg(
+        crate::test_support::table_of(&shell_text(SURFACES)),
+        always_fire(),
+    );
+    config.text_routing = routing();
+    let (mut sink, handle) = spawn_seriko(
+        SurfaceResolver::new(BTreeMap::new()),
+        crate::DefaultBinds::uniform(BindSet::from_ids([])),
+        BindResolver::empty(),
+        config,
+        out,
+    );
+    for (epoch, text_routing) in [(1, routing()), (2, crate::TextRouting::default())] {
+        assert!(sink.send_replace(
+            SerikoReplace::Shell {
+                epoch,
+                resolver: SurfaceResolver::new(BTreeMap::new()),
+                static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([])),
+                bind_resolver: BindResolver::empty(),
+                shell_table: crate::test_support::table_of(&shell_text(SURFACES)),
+                fallback: crate::ShellSurfaceFallback::default(),
+                text_routing,
+            },
+            no_facts()
+        ));
+    }
+    sink.send_text_routing_applied(at_ms(0));
+
+    sink.send_tick(at_ms(1000));
+    for cue in [
+        emote_cue(ms(0), "0", "0"),
+        clear_all(),
+        text(ms(0), "0", "あい"),
+        emote_cue(ms(0), "0", "10"),
+        text(ms(0), "0", "うえお"),
+    ] {
+        CueSink::emit(&mut sink, fired(at_ms(1000), cue));
+    }
+    sink.send_tick(at_ms(1060));
+    sink.send_tick(at_ms(1160));
+    sink.close().expect("Close を送れること");
+    handle.join().expect("Close で正常終了する");
+
+    let recorded = records.lock().expect("records mutex poisoned").clone();
+    let last = recorded.last().expect("指令が在る");
+    assert!(
+        matches!(last, DisplayCommand::Show { surface_id: 10, .. }) && carries_frame(last, 601),
+        "1160 の刻みで口が鳴り始める: {recorded:?}"
+    );
 }

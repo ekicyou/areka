@@ -45,6 +45,7 @@ impl Rig {
             balloon_tables: BTreeMap::from([(scope(), film_table())]),
             rng: always_fire(),
             pick_rng: crate::seeded_rng(0),
+            text_routing: crate::TextRouting::default(),
         })
     }
 }
@@ -160,6 +161,7 @@ fn flows_without_notes_emit_no_stage_ack() {
         balloon_tables: BTreeMap::from([(scope(), film_table())]),
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     rig.tick(at_ms(0));
     rig.hear(cue(
@@ -220,6 +222,7 @@ fn send_stage_carries_the_given_time_and_logs_debug_after_the_actor_is_gone() {
             balloon_tables: BTreeMap::from([(scope(), film_table())]),
             rng: always_fire(),
             pick_rng: crate::seeded_rng(0),
+            text_routing: crate::TextRouting::default(),
         },
         out,
     );

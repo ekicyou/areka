@@ -94,19 +94,16 @@ fn registry_survives_poison() {
 }
 
 #[test]
-fn reader_asks_registry_only_when_mirror_lacks_name() {
+fn reader_asks_registry_only_when_the_home_lacks_name() {
     use crate::asker::{AskerContext, AskerId};
-    use crate::mirror::{MirrorImage, SharedMirror};
-    use crate::reader::SylphyaReader;
     use crate::value::DottedResolution;
 
     let a = AskerId::new("ghost/a");
-    let mut img = MirrorImage::empty();
-    img.dotted_per_asker
-        .entry(a.clone())
-        .or_default()
-        .insert("x.s(0)".into(), "MIRROR".into());
-    let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
+    let parts = via_reader::spawn();
+    parts
+        .publisher
+        .set(a.clone(), "x.s(0)".into(), "MIRROR".into());
+    let reader = parts.reader;
     reader
         .clone()
         .register_pull(PullShape::parse("x.s(*)").unwrap(), Arc::new(Fixed("PULL")));
@@ -135,13 +132,27 @@ fn reader_asks_registry_only_when_mirror_lacks_name() {
 mod via_reader {
     use super::*;
     use crate::asker::{AskerContext, AskerId};
-    use crate::mirror::{MirrorImage, SharedMirror};
+    use crate::persist::{PersistScope, ScopeRoots};
     use crate::reader::SylphyaReader;
+    use crate::store::MemBackend;
     use crate::value::DottedResolution;
+    use crate::{SylphyaInit, SylphyaParts, spawn_sylphya};
     use std::sync::mpsc;
     use std::time::Duration;
 
     const RECT: &str = "currentghost.scope(*).rect";
+
+    pub(super) fn spawn() -> SylphyaParts {
+        spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()))
+    }
+
+    fn global(parts: &SylphyaParts, key: &str, value: &str) {
+        parts.publisher.publish_static(
+            AskerId::new("ghost/a"),
+            vec![],
+            vec![(key.into(), value.into())],
+        );
+    }
 
     fn ctx() -> AskerContext {
         AskerContext {
@@ -170,7 +181,7 @@ mod via_reader {
         }
     }
 
-    /// 読み手の中から同じ読み口で別の名前を 2 つ読む（写しに在る名前と、別の形の読み手の名前）。
+    /// 読み手の中から同じ読み口で別の名前を 2 つ読む（住み場所に在る名前と、別の形の読み手の名前）。
     struct Reentrant(SylphyaReader);
 
     impl PullSource for Reentrant {
@@ -183,7 +194,8 @@ mod via_reader {
 
     #[test]
     fn shape_variants_reach_the_same_reader_and_others_do_not() {
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())));
+        let parts = spawn();
+        let reader = parts.reader.clone();
         reader.register_pull(PullShape::parse(RECT).unwrap(), Arc::new(Echo));
         for name in [
             "currentghost.scope(0).rect",
@@ -208,17 +220,16 @@ mod via_reader {
     }
 
     #[test]
-    fn global_mirror_wins_and_registration_changes_nothing_else() {
-        let mut img = MirrorImage::empty();
-        img.dotted_global
-            .insert("currentghost.scope(0).rect".into(), "GLOBAL".into());
-        img.dotted_global
-            .insert("other.name".into(), "OTHER".into());
-        img.flat_per_asker
-            .entry(AskerId::new("ghost/a"))
-            .or_default()
-            .insert("username".into(), "U".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
+    fn global_value_wins_and_registration_changes_nothing_else() {
+        let parts = spawn();
+        global(&parts, "currentghost.scope(0).rect", "GLOBAL");
+        global(&parts, "other.name", "OTHER");
+        parts.publisher.publish_shiori(
+            AskerId::new("ghost/a"),
+            "username".into(),
+            Some("U".into()),
+        );
+        let reader = parts.reader.clone();
 
         let snap_before = reader.talk_snapshot(&ctx());
         let other_before = reader.resolve_dotted_str(&ctx(), "other.name");
@@ -247,7 +258,8 @@ mod via_reader {
 
     #[test]
     fn clone_made_before_registration_answers_and_reregister_replaces() {
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())));
+        let parts = spawn();
+        let reader = parts.reader.clone();
         let early = reader.clone();
         let name = "currentghost.scope(0).rect";
         assert_eq!(
@@ -265,7 +277,8 @@ mod via_reader {
 
     #[test]
     fn reader_returning_nothing_is_not_found() {
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())));
+        let parts = spawn();
+        let reader = parts.reader.clone();
         reader.register_pull(PullShape::parse(RECT).unwrap(), Arc::new(Nothing));
         assert_eq!(
             reader.resolve_dotted_str(&ctx(), "currentghost.scope(0).rect"),
@@ -275,10 +288,9 @@ mod via_reader {
 
     #[test]
     fn reentrant_read_does_not_stall_and_does_not_store() {
-        let mut img = MirrorImage::empty();
-        img.dotted_global.insert("inner.mirror".into(), "M".into());
-        let shared = SharedMirror::new(Arc::new(img));
-        let reader = SylphyaReader::new(shared.clone());
+        let parts = spawn();
+        global(&parts, "inner.mirror", "M");
+        let reader = parts.reader.clone();
         reader.register_pull(
             PullShape::parse("inner.pull(*)").unwrap(),
             Arc::new(Fixed("P")),
@@ -287,7 +299,6 @@ mod via_reader {
             PullShape::parse(RECT).unwrap(),
             Arc::new(Reentrant(reader.clone())),
         );
-        let before = shared.load();
 
         // 止まったらテストの走りごと固まらないよう、別のスレッドで読んで期限つきで待つ。
         let (tx, rx) = mpsc::channel();
@@ -300,13 +311,12 @@ mod via_reader {
             .expect("読み手の中からの読み直しで止まった");
         assert_eq!(got, val(r#"Value("M")/Value("P")"#));
 
-        let after = shared.load();
-        assert_eq!(after.epoch, before.epoch);
-        assert!(Arc::ptr_eq(&after, &before));
-        assert!(
-            !after
-                .dotted_global
-                .contains_key("currentghost.scope(0).rect")
+        assert_eq!(
+            reader
+                .kvs(AskerId::new("ghost/a"))
+                .get_in(PersistScope::App, "currentghost.scope(0).rect"),
+            None,
+            "読み手の答えはどこにも書かない"
         );
     }
 }

@@ -4,7 +4,7 @@
 //!
 //! 置くのは 3 つの口:
 //! - 毎フレームの処理の World に記憶の送り口（`PersistWiring`）を置く口 [`PersistStore`]
-//!   （偽の保存先 `FakePersistIo` と、ゴーストのフォルダの下の実物のファイルの両方）。
+//!   （偽の置き場の口 `MemBackend` と、ゴーストのフォルダの下の実物のファイルの両方）。
 //! - 任意の配置から窓を作り、準備の幅と違う幅の絵を出して置き直す（再スナップ）口 [`spawn_shown`]。
 //!   同じ幅のまま組むと、書くとき（出ている幅の半分を足す）・戻すとき（準備の幅の半分を引く）・
 //!   絵が出て中央を保って付け替えるとき、の 3 つの計算を通らずに緑になる。
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use areka_actor::ActorHandle;
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_sylphya::persist::{FakePersistIo, FsPersistIo, PersistIo};
+use areka_sylphya::store::{MemBackend, StoreBackend, fs_backend};
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaPublisher};
 use areka_sylphya::{load_scope, spawn_sylphya};
 
@@ -33,60 +33,44 @@ use bevy_ecs::world::World;
 
 // ── 記憶の送り口 ────────────────────────────────────────────────────────────
 
-/// アクターへ渡す分と、読み戻す分が同じ保存先を指すための包み。
-struct SharedIo(Arc<dyn PersistIo + Sync>);
-
-impl PersistIo for SharedIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 記憶の保存先と、それを書く sylphya のアクター（本番と同じ `spawn_sylphya`）。
 pub struct PersistStore {
-    io: Arc<dyn PersistIo + Sync>,
+    backend: Arc<dyn StoreBackend>,
     roots: ScopeRoots,
     publisher: SylphyaPublisher,
     /// 偽の保存先のとき、その本体（書き込みを失敗させる口 [`Self::fail_next_commit`] に使う）。
-    fake: Option<Arc<FakePersistIo>>,
+    fake: Option<Arc<MemBackend>>,
     /// 破棄で止めて待つ（テストが途中で panic しても、植えたゴーストを消す前に書き手が止まる）。
     handle: Option<ActorHandle>,
 }
 
 impl PersistStore {
-    /// 偽の保存先（`FakePersistIo`）。
+    /// 偽の置き場の口（`MemBackend`）。
     pub fn fake() -> Self {
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let fake = Arc::new(FakePersistIo::new());
+        let fake = MemBackend::new();
         let mut store = Self::spawn(fake.clone(), roots);
         store.fake = Some(fake);
         store
     }
 
     /// ゴーストの `ghost\master` の下の実物のファイル（本番と同じ置き場 `profile\areka\`・
-    /// 本番と同じ `FsPersistIo`）。起動の準備の関数がそのまま読み直せる。
+    /// 本番と同じ置き場の口）。起動の準備の関数がそのまま読み直せる。
     pub fn real(ghost_master: &Path) -> Self {
         let roots = ScopeRoots {
             ghost: Some(profile_areka_root(ghost_master)),
             ..ScopeRoots::default()
         };
-        Self::spawn(Arc::new(FsPersistIo), roots)
+        Self::spawn(fs_backend(), roots)
     }
 
-    fn spawn(io: Arc<dyn PersistIo + Sync>, roots: ScopeRoots) -> Self {
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedIo(io.clone())),
-            runtime_sink: None,
-        });
+    fn spawn(backend: Arc<dyn StoreBackend>, roots: ScopeRoots) -> Self {
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), backend.clone()));
         PersistStore {
-            io,
+            backend,
             roots,
             publisher: parts.publisher,
             fake: None,
@@ -106,30 +90,24 @@ impl PersistStore {
         self.publisher
             .barrier()
             .expect("barrier はアクターが生きている間は返る");
-        load_scope(PersistScope::Ghost, &self.roots, &SharedIo(self.io.clone()))
+        load_scope(PersistScope::Ghost, &self.roots, &self.backend)
             .into_iter()
             .collect()
     }
 
-    /// 送ったものの書き込みが済むのを待ってから、記憶のファイルの中身をそのまま読む。
+    /// 送ったものの書き込みが済むのを待ってから、Ghost の層の記憶の全部を名前の順に並べた文字を返す。
     pub fn file_text(&self) -> String {
         self.publisher
             .barrier()
             .expect("barrier はアクターが生きている間は返る");
-        let path = self
-            .roots
-            .ghost
-            .as_ref()
-            .expect("ゴーストの記憶の根がある")
-            .join("sylphya.toml");
-        self.io
-            .read(&path)
-            .expect("記憶のファイルを読める")
-            .expect("記憶のファイルがある")
+        format!(
+            "{:?}",
+            load_scope(PersistScope::Ghost, &self.roots, &self.backend)
+        )
     }
 
-    /// 次の書き込み（ファイルの確定）を 1 回だけ失敗させる（偽の保存先だけ・`FakePersistIo` の
-    /// 同名の口）。先に送ったものの書き込みが済むのを待ってから仕掛ける（仕掛けが前の書き込みに
+    /// 次の書き込み（ファイルの確定）を 1 回だけ失敗させる（偽の置き場の口だけ・
+    /// `MemBackend::fail_next_write`）。先に送ったものの書き込みが済むのを待ってから仕掛ける（仕掛けが前の書き込みに
     /// 当たらないように）。
     pub fn fail_next_commit(&self) {
         self.publisher
@@ -138,7 +116,7 @@ impl PersistStore {
         self.fake
             .as_ref()
             .expect("書き込みを失敗させる口は偽の保存先だけ（PersistStore::fake）")
-            .fail_next_commit();
+            .fail_next_write();
     }
 
     /// アクターを止めて待つ（World に残った送り口の写しは、止めた後は何も書かない）。

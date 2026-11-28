@@ -103,7 +103,7 @@ fn runtime_sinks(
     (sinks, lines)
 }
 
-/// 実行系の側の起動: 束の複製から sink（並びは [`runtime_sinks`]）を組んで `boot_with_origin` を
+/// 実行系の側の起動: 束の複製から sink（並びは [`runtime_sinks`]）を組んで `boot_with_balloon` を
 /// 呼び、成立したら受信端を World へ据える。`Err` のとき World は変わっていない。
 ///
 /// 停止通知の送出端は引数 `kanade_stop` をそのまま kanade へ渡す（ここでは channel を作らない）。
@@ -117,7 +117,7 @@ pub fn boot_runtime(
 ) -> Result<GhostRuntime, GhostBootError> {
     let RuntimeInputs {
         ghost_root,
-        balloon_root: _,
+        balloon_root,
         shiori,
         ticker,
         app_profile_dir,
@@ -126,11 +126,12 @@ pub fn boot_runtime(
     let (sinks, lines) = runtime_sinks(world, sources);
     let boot_options =
         runtime_boot_options(ghost_root.clone(), shiori, sinks, app_profile_dir, ticker);
-    let runtime = match areka_ghost::boot_with_origin(
+    let runtime = match areka_ghost::boot_with_balloon(
         boot_options,
         Some(kanade_stop),
         boot_origin,
         shell,
+        Some(&balloon_root),
         crate::write_failure::sender(world),
     ) {
         Ok(runtime) => runtime,

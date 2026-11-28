@@ -193,7 +193,7 @@ fn drive_until_first_cue(
 ///
 /// 反映の決定論化: 静的構成 publish（`publish_ghost_statics`）は boot 内で kanade spawn 前に投函
 /// されるため、into_parts 後に `sylphya.barrier()`（FIFO＋直列処理）を打てば、その時点で静的層は
-/// 鏡像へ反映済みである（sleep／retry 不要）。
+/// 番人へ反映済みである（sleep／retry 不要）。
 #[test]
 fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
     let temp = write_named_ghost_fixture("むらさき", Some("紫"), Some("エモ"));
@@ -219,7 +219,7 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
     let parts = runtime.into_parts();
 
-    // 静的層の反映フェンス（投函済み publish_static を鏡像へ反映してから読む・決定論）。
+    // 静的層の反映フェンス（投函済み publish_static を番人へ反映してから読む・決定論）。
     parts
         .sylphya
         .barrier()
@@ -363,7 +363,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 }
 
 /// companion: mock shiori が resource `username` へ 204（NoContent）を返す構成では、prefetch sink が
-/// 不在を記録するのみ（鏡像へ書かない・既定値は sakura の唯一定義点に残置）ゆえ、初回 talk
+/// 不在を記録するのみ（値を書かない・既定値は sakura の唯一定義点に残置）ゆえ、初回 talk
 /// スナップショットに `username` は**含まれない**（default 適用は下流 sakura の責務）。selfname は
 /// 静的層由来で依然実在することも併せて固定する（不在記録が他フラット値を巻き添えにしない）。
 #[test]
@@ -402,7 +402,7 @@ fn username_no_content_is_absent_from_boot_talk_snapshot() {
 
     assert!(
         !snapshot.contains_key("username"),
-        "204（NoContent）は不在記録のみで鏡像へ書かない——snapshot に username は含まれない \
+        "204（NoContent）は不在記録のみで値を書かない——snapshot に username は含まれない \
          （既定値縮退は下流 sakura の責務・R4.2）: {snapshot:?}"
     );
     // 巻き添え非発生の裏取り: 静的層由来の selfname は依然実在する。

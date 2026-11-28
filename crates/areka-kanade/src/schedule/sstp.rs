@@ -6,7 +6,7 @@
 use super::translate::{self, ScriptSource};
 use super::{Action, Phase, State, events};
 use crate::msg::{KanadeConfig, ShioriOutcome};
-use crate::talk::ScriptOrigin;
+use crate::talk::{ScriptOrigin, TalkSender};
 
 /// SSTP SEND のトークの `ActiveTalk::origin`（記録用）。
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
@@ -14,11 +14,22 @@ pub(crate) const SEND_ORIGIN: &str = "SstpSend";
 pub(crate) const NOTIFY_ORIGIN: &str = "SstpNotify";
 /// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` もこの定数を置く）。
 pub(super) const BOOT_GREETING_ORIGIN: &str = "boot";
+/// MCP の `sakurascript` が送る台本の送り手の名。
+pub(crate) const SAKURASCRIPT_TOOL: &str = "sakurascript";
+/// MCP の `raise_event` が頼むイベントの応答の送り手の名。
+pub(crate) const RAISE_EVENT_TOOL: &str = "raise_event";
 
 /// 受け付けた台本の再生の開始に strict の印を立てる（真のときだけ・翻訳は台本と出どころだけを替える）。
 fn mark_strict(start: &mut Action, strict: Option<bool>) {
     if let Action::StartTalk(start) = start {
         start.strict = strict == Some(true);
+    }
+}
+
+/// 受け付けた台本の再生の開始に送り手（道具）を書く。
+fn mark_sender(start: &mut Action, tool: &str) {
+    if let Action::StartTalk(start) = start {
+        start.meta.sender = TalkSender::Tool(tool.into());
     }
 }
 
@@ -66,6 +77,7 @@ pub(super) fn on_send(
         ScriptOrigin::MCP_SEND,
     );
     mark_strict(&mut start, strict);
+    mark_sender(&mut start, SAKURASCRIPT_TOOL);
     tracing::info!(target: "kanade", event = "sstp_send_started", talk_id = talk_id.0, strict = ?strict, "外からの台本を新しいトークとして始める");
     if script.is_empty() {
         return (state, vec![start]);
@@ -136,6 +148,7 @@ pub(super) fn on_notify_reply(
             let (talk_id, mut start) =
                 super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);
             mark_strict(&mut start, strict);
+            mark_sender(&mut start, RAISE_EVENT_TOOL);
             tracing::info!(target: "kanade", event = "sstp_notify_talk", talk_id = talk_id.0, strict = ?strict, "外から頼まれたイベントの台本を新しいトークとして始める");
             (state, vec![start])
         }

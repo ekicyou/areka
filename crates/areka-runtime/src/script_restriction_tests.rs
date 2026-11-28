@@ -188,7 +188,7 @@ fn signal_came_out(
     origin: ScriptOrigin,
 ) -> bool {
     let (mut talk, came_out) = probe_for(consumer);
-    talk.begin_talk(TalkId(7), origin);
+    talk.begin_talk(TalkId(7), origin, &Default::default());
     talk.emit(carrier_cue(name, &[selector]));
     drop(talk);
     came_out()

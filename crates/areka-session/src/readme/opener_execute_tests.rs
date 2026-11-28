@@ -9,7 +9,9 @@ use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use super::super::opener_test_support::{FakeOs, build_ghost_root, dest_of, open_context};
+use super::super::opener_test_support::{
+    FakeOs, build_ghost_root, dest_of, ghost_root, open_context,
+};
 use super::{OpenContext, OpenJob, execute, serve};
 use crate::log_history::{Draft, FieldText, Kind, TARGET_ERROR, draft};
 
@@ -24,7 +26,7 @@ impl Fixture {
         let tmp = TempPath::new("open-ext-execute");
         let root = build_ghost_root(&tmp, ("g", "G"), &[("s", "S")], &[]);
         let ctx = open_context(&root);
-        std::fs::write(ctx.ghost_dir.join("ghost/master/readme.txt"), b"x").unwrap();
+        std::fs::write(ghost_root(&ctx).join("ghost/master/readme.txt"), b"x").unwrap();
         Fixture { _tmp: tmp, ctx }
     }
 
@@ -161,9 +163,7 @@ fn success_logs_one_status_info_with_all_fields_and_no_error() {
     assert_eq!(ev.level, tracing::Level::INFO);
     assert_eq!(val(ev, "event"), Some("open_external"));
     assert_eq!(val(ev, "kind"), Some("editor"));
-    let path = f
-        .ctx
-        .ghost_dir
+    let path = ghost_root(&f.ctx)
         .join("ghost")
         .join("master")
         .join("readme.txt");
@@ -191,4 +191,27 @@ fn serve_handles_jobs_in_sent_order_until_the_sender_is_dropped() {
     serve(rx, &mut os);
     let files: Vec<_> = os.calls.iter().map(|c| c.file.clone()).collect();
     assert_eq!(files, urls.map(std::ffi::OsString::from));
+}
+
+/// 解けない 1 件は、実行するゴーストの名と理由の語を載せた行をちょうど 1 行だけ残す。
+#[test]
+fn unresolved_request_logs_one_line_with_the_runner_name() {
+    let f = Fixture::new();
+    let mut with_place = f.job("open", &["file", r"sub\none.txt"]);
+    with_place.context.runner.name = "A".to_owned();
+    let mut without_place = with_place.clone();
+    without_place.context.runner.place = None;
+    for (job, reason) in [(with_place, "not_found"), (without_place, "no_place")] {
+        let (events, os) = run(job, FakeOs::default());
+        assert_eq!(os.calls.len(), 0);
+        let opened = open_events(&events);
+        assert_eq!(opened.len(), 1, "{reason}: {events:?}");
+        let ev = opened[0];
+        assert_eq!(ev.level, tracing::Level::ERROR);
+        assert_eq!(val(ev, "event"), Some("open_external_failed"));
+        assert_eq!(val(ev, "reason"), Some(reason));
+        assert_eq!(val(ev, "ghost"), Some("A"));
+        let d = draft_of(ev);
+        assert_eq!((d.kind, d.name.as_str()), (Kind::Error, "A"));
+    }
 }

@@ -73,3 +73,5 @@ areka-sakura = { path = "../areka-sakura" }
 areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
 areka-placement = { path = "../areka-placement", features = ["test-support"] }
 areka-input = { path = "../areka-input", features = ["test-support"] }
+# 写しの試験で、別の接続として書きの途中を作る。
+rusqlite = { workspace = true }

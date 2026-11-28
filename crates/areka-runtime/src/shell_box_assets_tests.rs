@@ -6,12 +6,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use areka_emo_compose::{EmoWorld, fold_boxes};
+use areka_emo_compose::{EmoWorld, box_index, fold_boxes};
 use areka_emo_text::state::SurfaceKeyOutcome;
 use areka_parsers::shell::{parse, parse_boxes};
 use areka_seriko::SurfaceResolver;
 
-use super::{box_font_search_dirs, resolve_for_text};
+use super::{ShellBoxAssets, box_font_search_dirs, resolve_for_text};
 
 /// 箱のある `surface1000`。シェルに 9999 は無い。別名 `egao` は 1000 を、`nai` は 9999 を先頭に持つ。
 const SHELL: &str = "\
@@ -39,6 +39,23 @@ fn resolver_and_ids() -> (SurfaceResolver, BTreeSet<u32>) {
     let ids: BTreeSet<u32> = world.surface_ids().collect();
     assert_eq!(ids, BTreeSet::from([1000]), "シェルに在るのは 1000 だけ");
     (SurfaceResolver::new(world.alias_snapshot()), ids)
+}
+
+#[test]
+fn text_routing_carries_box_index_and_surface_ids() {
+    let world = EmoWorld::build(&parse(SHELL));
+    let (layout, _) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
+    let expected_boxes = box_index(&layout);
+    let assets = ShellBoxAssets {
+        layout,
+        surface_ids: world.surface_ids().collect(),
+        ..ShellBoxAssets::default()
+    };
+    let routing = assets.text_routing();
+    assert_eq!(routing.boxes, expected_boxes);
+    assert!(!routing.boxes.is_empty(), "surface1000 は箱を持つ");
+    assert_eq!(routing.surface_ids, BTreeSet::from([1000]));
+    assert_eq!(ShellBoxAssets::default().text_routing(), Default::default());
 }
 
 #[test]

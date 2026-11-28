@@ -10,9 +10,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
@@ -35,7 +33,7 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
 use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 use areka_placement::test_support::{
-    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, give_fake_handles, synth_declared_dpi_ghost,
+    CountingBackend, KEYWORD_BALLOON_DESCRIPT, WA, give_fake_handles, synth_declared_dpi_ghost,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -48,8 +46,8 @@ struct Rig {
     world: World,
     windows: GhostWindows,
     placements: Vec<ScopePlacement>,
-    /// 偽の保存先（アクターへ渡した口の clone・commit の回数を数える）。
-    io: SharedFakeIo,
+    /// 偽の置き場の口（アクターへ渡した口の clone・書きの回数を数える）。
+    io: CountingBackend,
     roots: ScopeRoots,
     parts: SylphyaParts,
 }
@@ -60,16 +58,12 @@ impl Rig {
     fn new(ghost: &Path, balloon: &Path, basis: Option<DefaultPlacementBasis>) -> Self {
         let prepared = prepare_ghost_windows_with_work_area(ghost, balloon, WA, Some(96))
             .expect("起動の配置の準備は成功する");
-        let io = SharedFakeIo::new(Arc::new(FakePersistIo::new()));
+        let io = CountingBackend::new();
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(io.clone()),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), io.backend()));
         let mut world = World::new();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![WA],
@@ -126,12 +120,12 @@ impl Rig {
 
     fn load(&self) -> HashMap<PersistKey, String> {
         self.parts.publisher.barrier().expect("barrier が返る");
-        load_scope(PersistScope::Ghost, &self.roots, &self.io)
+        load_scope(PersistScope::Ghost, &self.roots, &self.io.backend())
             .into_iter()
             .collect()
     }
 
-    /// アクターが処理し終えた時点の commit の回数。
+    /// アクターが処理し終えた時点の書きの回数。
     fn commit_count(&self) -> usize {
         self.parts.publisher.barrier().expect("barrier が返る");
         self.io.commit_count()

@@ -280,8 +280,7 @@ fn main() -> Result<()> {
         };
 
         // 起動中の印の始末: 降ろして記憶の書き出しが済んだ後に、きれいな終わりなら消し、そうでなければ
-        // 理由を残して残す。UI スレッドが App スコープへ直接書くのは実行系が 1 つも動いていない間だけ
-        // （ここは降ろした後なので書いてよい）。
+        // 理由を残して残す。
         let clear_failed = mark.as_ref().and_then(|mark| {
             settle_session_mark(
                 mark,
@@ -446,9 +445,7 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// 置き場（`GhostSlot`）へ入れる。作り口は [`install_boot_context`] が先に据えている。
 ///
 /// 起こす前（ゴーストの実行系がまだ 1 つも無い時点）に、argv で始まったプロセスでなければ
-/// 起動中の印＝起こすゴーストの名前を書く。UI スレッドが App スコープへ直接書くのは実行系が 1 つも
-/// 動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す＝保存は「読んで重ねて書く」
-/// ので、2 つの書き手が同時に書くと片方が消えうる）。
+/// 起動中の印＝起こすゴーストの名前を書く。
 fn boot_first_ghost(
     world: &mut World,
     cfg: &areka_session::boot_config::ConfigInputs,

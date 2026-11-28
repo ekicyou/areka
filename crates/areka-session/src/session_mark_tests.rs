@@ -252,7 +252,8 @@ fn settle_session_mark_applies_the_verdict() {
 fn clear_mark_unwritable_tells_running_once() {
     let tmp = TempPath::under_target("mark-write-clear");
     let app = tmp.child("app-profile");
-    std::fs::write(&app, "x").expect("置き場の位置に普通のファイルを置く");
+    write_session_mark(&app, "A").expect("印を書く");
+    let restore = crate::boot_resolve::boot_resolve_tests::make_memory_read_only(&app);
     let (verdict, failed) = settle_session_mark(
         &MarkInputs {
             app_profile_dir: app,
@@ -266,6 +267,7 @@ fn clear_mark_unwritable_tells_running_once() {
             shiori_cut: false,
         },
     );
+    restore();
     assert_eq!(verdict, MarkVerdict::Clear);
     let failed = failed.expect("印を消せない失敗が返る");
     let (told, events) = log_capture_kit::capture(|| {

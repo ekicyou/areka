@@ -139,3 +139,9 @@
 - `currentghost.balloon.scope(ID).rect` と動く値の口（持ち主・議題「変わるたびに出すか、読む時に問い合わせるか」）を v0.1.0 の新しい spec `mcp-scope-rect-property` へ移した（`verification.md` 5 節の 20）。`currentghost.balloon.scope(ID).scaling` は v0.1.0 の新しい spec `shell-scale-linkage` へ移した（ぱすたの `dic/tategaki.pasta:101`）。本 spec に残る 17 項目は、`mcp-scope-rect-property` が作る口に載せる（前提に同 spec を足す）。
 
 > **2026-11-19 `/kiro-discovery`**: `currentmonitor` の残り 4 葉（`rect`・`work`・`primary`・`bpp`）は新しい spec `scope-currentmonitor-property` が出す。網羅台帳の 4 行の持ち主（今は本 spec）は、同 spec の着手のときに付け替える。
+
+## 申し送り（sylphya-sqlite-kvs より）
+
+- sylphya の写し（`mirror.rs`・`SharedMirror`・`MirrorImage`）は無くなった。読み口（`SylphyaReader`）は番人のアクターへ問い合わせて答えを待つ。鍵の表（`crates/areka-sylphya/src/keytable.rs`）が鍵ごとに住み場所（速い値・メモリーの sqlite・ファイルの sqlite）を決める。
+- 毎フレーム変わる値には「速い住み場所」（`fast.rs` の `FastTable`・`FastHome`）がある。`register_fast(形, 層, 取っ手)` で登録すると番人を通らずに読める（倍率と DPI がこの形・`crates/areka-session/src/ghost_session_scope_scale.rs`）。「変わるたびに出し直す」か「読む時に問い合わせる」かの論点は、この口を前提に見直す。
+- 触るファイルの一覧の `mirror.rs` はもう無い。番人は `crates/areka-sylphya/src/guardian.rs`、読み口は `reader.rs`。参照: `.kiro/specs/completed/sylphya-sqlite-kvs/design.md` の「速い住み場所」と「KVS の口」の節。

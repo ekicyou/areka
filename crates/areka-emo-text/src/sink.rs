@@ -139,7 +139,7 @@ impl dola::cue::CueSink for EmoTextSink {
     /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる。ほかは `emit` と同じ。
     fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
         match &cue.command {
-            CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
+            CueCommand::BalloonSurface { key } if areka_emo_compose::TextRoute::is_box_key(key) => {
                 self.deliver(TextMsg::ProbedCue(cue, probe.clone()));
             }
             _ => self.emit(cue),

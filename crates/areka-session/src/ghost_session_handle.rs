@@ -60,6 +60,17 @@ impl GhostSession {
         }
     }
 
+    /// sylphya のバルーンの層を付け替える（実行系へ委ねる）。実行系が無ければ偽。
+    pub fn set_balloon_dir(&self, dir: &Path) -> bool {
+        match self.ghost.as_ref() {
+            Some(runtime) => {
+                runtime.set_balloon_dir(dir);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// 実行系だけを外す（窓の側＝seriko・ticker・送り手・束は残る）。
     /// kanade の送出端も外す。実行系が無ければ `None`。
     pub fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {

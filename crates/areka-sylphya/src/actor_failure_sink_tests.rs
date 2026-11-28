@@ -5,20 +5,22 @@
 //! アクターは止まらない。同期は barrier だけで取る（`thread::sleep` なし）。
 
 use super::*;
-use crate::persist::{FakePersistIo, PersistFailureCause, PersistKey, PersistScope, ScopeRoots};
+use crate::guardian::wait_tests::ask;
+use crate::keytable::Home;
+use crate::persist::{PersistFailure, PersistFailureCause, PersistKey, PersistScope, ScopeRoots};
+use crate::store::MemBackend;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
 /// Ghost スコープの root だけ持つ init（App スコープは root 不在＝投函すると書けない）。
 fn init_ghost_root_only() -> SylphyaInit {
-    SylphyaInit {
-        roots: ScopeRoots {
+    SylphyaInit::new(
+        ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         },
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
-    }
+        MemBackend::new(),
+    )
 }
 
 fn failing_entries() -> Vec<(PersistKey, String)> {
@@ -72,7 +74,7 @@ fn successful_post_sends_nothing() {
 fn spawn_without_receiver_behaves_as_today() {
     let parts = spawn_sylphya(init_ghost_root_only());
 
-    // 失敗の投函の後もアクターは生きていて、続く保存の知らせは読み口へ反映される。
+    // 失敗の投函の後もアクターは生きていて、続く保存は記憶へ届く。
     parts
         .publisher
         .persist_put(PersistScope::App, failing_entries());
@@ -85,12 +87,16 @@ fn spawn_without_receiver_behaves_as_today() {
         vec![(PersistKey::BootCount, "2".into())],
     );
     parts.publisher.barrier().expect("barrier");
-    let ctx = crate::asker::AskerContext {
-        asker: crate::asker::AskerId::new("ghost/a"),
-    };
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx, "areka.boot.count"),
-        crate::value::DottedResolution::Value("2".into())
+        ask(
+            &parts.publisher,
+            AskerId::new("ghost/a"),
+            Some(PersistScope::Ghost),
+            "areka.boot.count",
+            Home::File
+        )
+        .as_deref(),
+        Some("2")
     );
 
     parts.publisher.close();

@@ -264,8 +264,9 @@ fn prepare_never_reads_or_writes_the_saved_state() {
         let saved = profile.join("sylphya.toml");
         let junk = "format-version = 1\n[window.0]\nx = \"100\"\ny = \"100\"\n";
         fs::write(&saved, junk).expect("plant sylphya.toml");
+        let planted = persist::load_restored_state(&ghost_root);
         assert!(
-            !persist::load_restored_state(&ghost_root).is_empty(),
+            !planted.is_empty(),
             "前提: 置いた記憶は本番の読み手で読める"
         );
 
@@ -277,8 +278,8 @@ fn prepare_never_reads_or_writes_the_saved_state() {
         );
         assert_eq!(before.titles, after.titles);
         assert_eq!(
-            fs::read_to_string(&saved).expect("記憶が残る"),
-            junk,
+            persist::load_restored_state(&ghost_root),
+            planted,
             "準備が記憶を書き換えた"
         );
     });
