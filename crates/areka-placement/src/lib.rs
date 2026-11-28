@@ -715,7 +715,7 @@ fn resolve_windowposition_vocab(
 /// 同じ面・同じマージ結果に由来することを構造で保証するため（別々に読むと
 /// 面の選択がずれて「数値は面 0・生値は別の面」という食い違いを作り得る）。
 ///
-/// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces` と、呼び手が選んだ
+/// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces_quiet` と、呼び手が選んだ
 /// 2 層マージの入口 `merge`＝`load_scope_balloon_model` か記録を出さない `load_scope_balloon_model_quiet`）
 /// の消費のみで行う。採寸・起動時資産構築と同じ規則で同じ面を
 /// 見ることが、実機でしか現れない「採寸した枠と表示される枠が違う」欠陥を封じる唯一の手段。
