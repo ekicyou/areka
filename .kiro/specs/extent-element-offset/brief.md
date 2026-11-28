@@ -122,4 +122,4 @@
 
 - まだ直っていない。外形（`crates/areka-emo-compose/src/plan_extent.rs`）は element の X／Y を足さない。描く計画の `DrawPlan.extent` はこの答えをそのまま使う。
 - `crates/areka-emo-present/src/screen_offscreen_gpu_tests.rs` の `build_assets` は、この穴を避けるため、最初に全透明の原寸の絵を敷いている。この spec で直したら、その敷き物を外して確かめ直す。
-- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」の規則（外形は `plan_extent.rs` の答えのまま）。
+- 参照: `.kiro/specs/completed/draw-methods-canon/design.md` の「DrawPlan」の規則（外形は `plan_extent.rs` の答えのまま）。

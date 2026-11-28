@@ -132,4 +132,4 @@
 - 合成は全部 wintf の D2D（GPU）で描く。面ごとの描く計画（areka-emo-compose の `DrawPlan`）を areka-emo-present の `draw_nodes.rs` が wintf の節にする。入れ子の面のまとめは作業用の絵（`B8G8R8A8` 乗算済み）を通す（`SOURCE_OVER` で整数の平行移動のときだけ不透明度 1 の層）。
 - 画素の檻は WARP の装置で描いて見本と ±1 で比べる（`crates/areka-emo-present/src/draw_methods_warp_tests.rs`）。
 - 未決: 精度を上げる所（的・作業用の絵・頁の絵の形式）は、この spec の要件で決め直す。
-- 参照: `.kiro/specs/draw-methods-canon/design.md` の「VisualGroup（まとめの節）」「OffscreenRender」、`.kiro/specs/draw-methods-canon/research.md` §15・§16。
+- 参照: `.kiro/specs/completed/draw-methods-canon/design.md` の「VisualGroup（まとめの節）」「OffscreenRender」、`.kiro/specs/completed/draw-methods-canon/research.md` §15・§16。

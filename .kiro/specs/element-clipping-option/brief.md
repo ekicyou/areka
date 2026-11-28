@@ -91,4 +91,4 @@
 - 計画には矩形の範囲の口が在る。`PlanItem::Image.range`（`replace` の置き換える範囲）と `PlanItem::GroupBegin.range`（`replace` で入れ子にした面の外形）で、areka-emo-present の `draw_nodes.rs` が範囲を持つ項を矩形の切り抜きの節の中に置く。切り抜きのオプションはこの口に乗せられる。
 - wintf の節で同じ節に積む順は「不透明度 → まとめ（`VisualGroup`）→ 切り抜き」。
 - 未決: 切り抜きを計画の項の範囲で表すか、別の項にするかは、この spec の要件と設計で決める。
-- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」、`.kiro/specs/draw-methods-canon/research.md` §15.2。
+- 参照: `.kiro/specs/completed/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」、`.kiro/specs/completed/draw-methods-canon/research.md` §15.2。

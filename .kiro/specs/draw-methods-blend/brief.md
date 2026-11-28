@@ -120,4 +120,4 @@
 - `blend-*`（と旧い別名 `overlaymultiply`・`overlayscreen`）の行は、画像の element定義の行として読まれ `Element.method` に書かれた語のまま載る。描けない語なので、計画が合成のたびに `debug!` を残して飛ばし、読み込みの入口（`crates/areka-emo-present/src/shell_target.rs`）が読み手の転記 `ShellText.image_elements` から 1 行 1 件の `warn!`（読み込み 1 回）を出す。描けるようにしたら、その語はこの `warn!` から外れる（`is_implemented_name`）。
 - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `blend-*`・旧い別名の 57 行は、外れた `blit::execute` をまだ文中で挙げている。この spec で今の道（計画 → 節 → GPU）に合わせて書き直す。
 - 画素の檻の型: `crates/areka-emo-present/src/draw_methods_warp_tests.rs`（WARP の装置で描いて、乗算済みの見本と ±1 で比べる）。
-- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」「PlanIssues」、`.kiro/specs/draw-methods-canon/research.md` §15（まとめの節を閉じる仕組み）・§16（`overlay` だけの面の CPU と WARP の差）。
+- 参照: `.kiro/specs/completed/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」「PlanIssues」、`.kiro/specs/completed/draw-methods-canon/research.md` §15（まとめの節を閉じる仕組み）・§16（`overlay` だけの面の CPU と WARP の差）。

@@ -22,7 +22,7 @@
 - **影響**: 開発者が「α も GPU から読む」と決めた場合、`hit_region_client` が World を要り、`resolve_hit_region` の署名・`input-crate-split` との取り決め・presenter のテストの足場まで設計が変わる。
 - **提案**: 設計の討議で未決の議題 4 を最初に諮る。今の形で通すなら、退けた理由を書き直し、`draw-methods-canon` の brief へ「名前の解決の α（`shown_mask`）も付け替えの対象」を申し送る作業を設計とタスクに入れる。あわせて、将来 α と ID を 1 度の `Map` で読める余地（`research.md` 11.6 の「2 枚を 2×1 の写し先へ」は 1 回ぶんの待ち）を `IdTarget::read` の説明に残す。
 - **要件**: 4.1・決め 1・決め 8・Boundary Context の Out of scope（クリックの透過の付け替え）
-- **根拠**: `design.md`「色の絵の α の出どころ」「Revalidation Triggers」「未決の議題 4」／`research.md` 9 節・11.9／`brief.md` 22 行・75 行／`.kiro/specs/draw-methods-canon/brief.md` 124 行
+- **根拠**: `design.md`「色の絵の α の出どころ」「Revalidation Triggers」「未決の議題 4」／`research.md` 9 節・11.9／`brief.md` 22 行・75 行／`.kiro/specs/completed/draw-methods-canon/brief.md` 124 行
 
 ### 指摘 2: 要件の文との食い違いのうち 5 つは、言い回しの直しではなく決めの変更である
 
