@@ -525,7 +525,13 @@ fn replay(
 ) -> Pixels {
     draw_to_pixels(w, h, root_transform, |dc| {
         let dc6 = if with_blend { dc.cast().ok() } else { None };
-        emit(dc, dc6.as_ref(), root_transform, commands);
+        emit(
+            dc,
+            dc6.as_ref(),
+            root_transform,
+            commands,
+            &mut Default::default(),
+        );
         let mut after = Matrix3x2::default();
         // SAFETY: Windows API 境界。
         unsafe { dc.GetTransform(&mut after) };

@@ -51,6 +51,95 @@ pub(crate) fn report_once(reported: &AtomicBool) -> bool {
 static BLEND_UNAVAILABLE: AtomicBool = AtomicBool::new(false);
 static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 
+/// まとめの作業用の絵と DC の控え（描画面ごと）。
+///
+/// 節・装置・大きさが同じ間は前の回の絵と DC を使い回す（絵を毎回作るのが一番重いため）。
+/// 再生 1 回（`emit`・`emit_within`）で描かなかった節の分は、その再生の終わりに放す。
+#[derive(Default)]
+pub(crate) struct GroupWork {
+    slots: Vec<WorkSlot>,
+    /// 作った絵の数（使い回しの確かめ用）。
+    created: u64,
+}
+
+struct WorkSlot {
+    entity: bevy_ecs::entity::Entity,
+    device: ID2D1Device,
+    size: D2D_SIZE_U,
+    dc: ID2D1DeviceContext,
+    bitmap: ID2D1Bitmap1,
+    used: bool,
+}
+
+impl GroupWork {
+    fn begin(&mut self) {
+        for slot in &mut self.slots {
+            slot.used = false;
+        }
+    }
+
+    fn sweep(&mut self) {
+        self.slots.retain(|slot| slot.used);
+    }
+
+    /// 節 `entity` の控えを抜き出す。装置か大きさが違えば作り直す。
+    fn take(
+        &mut self,
+        dc: &ID2D1DeviceContext,
+        entity: bevy_ecs::entity::Entity,
+        size: D2D_SIZE_U,
+    ) -> windows::core::Result<WorkSlot> {
+        // SAFETY: Windows API 境界。生きている DC から装置を取るだけ。
+        let device = unsafe { dc.GetDevice()? };
+        if let Some(i) = self.slots.iter().position(|s| s.entity == entity) {
+            let slot = self.slots.swap_remove(i);
+            if slot.device == device && slot.size == size {
+                return Ok(slot);
+            }
+        }
+        let props = D2D1_BITMAP_PROPERTIES1 {
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+            },
+            dpiX: 96.0,
+            dpiY: 96.0,
+            bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET,
+            colorContext: ManuallyDrop::new(None),
+        };
+        // SAFETY: Windows API 境界。生きている装置から DC と絵を作るだけ。
+        let (work, bitmap) = unsafe {
+            let work = device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+            let bitmap = work.CreateBitmap(size, None, 0, &props)?;
+            (work, bitmap)
+        };
+        self.created += 1;
+        Ok(WorkSlot {
+            entity,
+            device,
+            size,
+            dc: work,
+            bitmap,
+            used: true,
+        })
+    }
+
+    fn put(&mut self, mut slot: WorkSlot) {
+        slot.used = true;
+        self.slots.push(slot);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn created(&self) -> u64 {
+        self.created
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.slots.len()
+    }
+}
+
 /// 列 `commands` を `dc` へ画家の順に再生する。
 ///
 /// - `root` は描画面の変換（`GlobalArrangement` の拡大＋`BeginDraw` の offset）。DIP→物理。
@@ -61,7 +150,7 @@ static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 ///   `SOURCE_OVER` で描く。
 /// - 層はどれも変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。
 /// - まとめ（`PushGroup`〜`PopGroup`）は中身を透明から始まる 1 枚に描き、節の変換を当てて `mix` で重ねる
-///   （[`draw_group`]）。`emit_within` でも中身は全部描く。
+///   （[`draw_group`]）。`emit_within` でも中身は全部描く。作業用の絵と DC は `work` の控えを使い回す。
 /// - 不透明度の層は透明から始まり、降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる。層の中の
 ///   重ね方とブレンドは、同じ層の中で先に描いた画素に効く。
 /// - 図形の切り抜きの層は背景の写しから始まり（`INITIALIZE_FROM_BACKGROUND`）、積む時点だけ基本の
@@ -77,8 +166,11 @@ pub(crate) fn emit(
     dc6: Option<&ID2D1DeviceContext6>,
     root: Matrix3x2,
     commands: &[DrawCommand],
+    work: &mut GroupWork,
 ) {
-    play(dc, dc6, root, commands, None);
+    work.begin();
+    play(dc, dc6, root, commands, None, work);
+    work.sweep();
 }
 
 /// `emit` と同じ再生で、項の `bounds` が描く矩形 `rect` と交わらない件（`Draw`）を飛ばす。
@@ -93,6 +185,7 @@ pub(crate) fn emit_within(
     commands: &[DrawCommand],
     entries: &[DamageEntry],
     rect: PxRect,
+    work: &mut GroupWork,
 ) {
     // 列のずれは静かに画素を誤らせる（別の件の bounds で飛ばす）。
     debug_assert_eq!(
@@ -100,7 +193,9 @@ pub(crate) fn emit_within(
         commands.iter().filter(|c| !is_pop(c)).count(),
         "entries は同じ commands から作った列でない"
     );
-    play(dc, dc6, root, commands, Some((entries, rect)));
+    work.begin();
+    play(dc, dc6, root, commands, Some((entries, rect)), work);
+    work.sweep();
 }
 
 fn play(
@@ -109,6 +204,7 @@ fn play(
     root: Matrix3x2,
     commands: &[DrawCommand],
     within: Option<(&[DamageEntry], PxRect)>,
+    work: &mut GroupWork,
 ) {
     let identity = Matrix3x2::identity();
     let mut index = 0usize;
@@ -123,7 +219,7 @@ fn play(
             let inner = &commands[next..group_end(commands, next)];
             next += inner.len() + 1;
             index += inner.iter().filter(|c| !is_pop(c)).count();
-            draw_group(dc, dc6, root, group, inner);
+            draw_group(dc, dc6, root, group, inner, work);
             continue;
         }
         // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。push と pop は `build` が対で出す。
@@ -277,6 +373,7 @@ fn draw_group(
     root: Matrix3x2,
     group: &GroupLayer,
     inner: &[DrawCommand],
+    work: &mut GroupWork,
 ) {
     let to_px = group.world_mat * root;
     let on_grid = (to_px.M11, to_px.M12, to_px.M21, to_px.M22) == (1.0, 0.0, 0.0, 1.0)
@@ -297,12 +394,12 @@ fn draw_group(
         unsafe {
             dc.SetTransform(&identity);
             dc.PushLayer(&params, None::<&ID2D1Layer>);
-            play(dc, dc6, root, inner, None);
+            play(dc, dc6, root, inner, None, work);
             dc.PopLayer();
         }
         return;
     }
-    let bitmap = match group_bitmap(dc, dc6.is_some(), group, inner) {
+    let bitmap = match group_bitmap(dc, dc6.is_some(), group, inner, work) {
         Ok(bitmap) => bitmap,
         Err(e) => {
             error!(
@@ -332,23 +429,15 @@ fn draw_group(
 }
 
 /// まとめの中身を、同じ装置の別の DC で、透明に塗った `local_aabb` の大きさの絵（1 DIP＝1 画素）へ描く。
+/// 絵と DC は `work` の控え。描けなければ控えを捨てる（次の回に作り直す）。
 fn group_bitmap(
     dc: &ID2D1DeviceContext,
     blend: bool,
     group: &GroupLayer,
     inner: &[DrawCommand],
+    work: &mut GroupWork,
 ) -> windows::core::Result<ID2D1Bitmap1> {
     let b = group.local_aabb;
-    let props = D2D1_BITMAP_PROPERTIES1 {
-        pixelFormat: D2D1_PIXEL_FORMAT {
-            format: DXGI_FORMAT_B8G8R8A8_UNORM,
-            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
-        },
-        dpiX: 96.0,
-        dpiY: 96.0,
-        bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET,
-        colorContext: ManuallyDrop::new(None),
-    };
     let size = D2D_SIZE_U {
         width: b.width() as u32,
         height: b.height() as u32,
@@ -356,21 +445,21 @@ fn group_bitmap(
     let inverse =
         invert(group.world_mat).ok_or_else(|| windows::core::Error::from(E_INVALIDARG))?;
     let root = inverse * Matrix3x2::translation(-b.left(), -b.top());
-    // SAFETY: Windows API 境界。生きている DC の装置から DC と絵を作り、`BeginDraw` と `EndDraw` の対の中で描く。
+    let slot = work.take(dc, group.entity, size)?;
+    let work6 = if blend { slot.dc.cast().ok() } else { None };
+    // SAFETY: Windows API 境界。控えの DC と絵は同じ装置の生きている資源で、`BeginDraw` と `EndDraw` の対の中で描く。
     unsafe {
-        let work = dc
-            .GetDevice()?
-            .CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-        let bitmap = work.CreateBitmap(size, None, 0, &props)?;
-        let work6 = if blend { work.cast().ok() } else { None };
-        work.SetTarget(&bitmap);
-        work.BeginDraw();
-        work.Clear(None);
-        play(&work, work6.as_ref(), root, inner, None);
-        work.EndDraw(None, None)?;
-        work.SetTarget(None);
-        Ok(bitmap)
+        slot.dc.SetTarget(&slot.bitmap);
+        slot.dc.BeginDraw();
+        slot.dc.Clear(None);
+        play(&slot.dc, work6.as_ref(), root, inner, None, work);
+        let ended = slot.dc.EndDraw(None, None);
+        slot.dc.SetTarget(None);
+        ended?;
     }
+    let bitmap = slot.bitmap.clone();
+    work.put(slot);
+    Ok(bitmap)
 }
 
 /// DIP の矩形を `root` で物理へ写し、整数へ外向きに丸める（層の写しを画素の格子に揃える）。

@@ -419,7 +419,13 @@ fn render_with_unbounded_clip(
 ) -> Pixels {
     draw_to_pixels(size, size, root, |dc| {
         let dc6: ID2D1DeviceContext6 = dc.cast().unwrap();
-        emit(dc, Some(&dc6), root, &colored_under());
+        emit(
+            dc,
+            Some(&dc6),
+            root,
+            &colored_under(),
+            &mut Default::default(),
+        );
         // SAFETY: Windows API 境界。足場の `BeginDraw` の中。
         unsafe {
             dc.SetTransform(&Matrix3x2::identity());
@@ -437,7 +443,7 @@ fn render_with_unbounded_clip(
             dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
             drop(ManuallyDrop::into_inner(params.geometricMask));
         }
-        emit(dc, Some(&dc6), root, &[item]);
+        emit(dc, Some(&dc6), root, &[item], &mut Default::default());
         // SAFETY: 同上。上で積んだ層を降ろす。
         unsafe { dc.PopLayer() };
     })
@@ -602,7 +608,15 @@ fn replay_within(
     let root = Matrix3x2::identity();
     draw_to_pixels(16, 16, root, |dc| {
         let dc6: Option<ID2D1DeviceContext6> = dc.cast().ok();
-        super::emit_within(dc, dc6.as_ref(), root, commands, entries, rect);
+        super::emit_within(
+            dc,
+            dc6.as_ref(),
+            root,
+            commands,
+            entries,
+            rect,
+            &mut Default::default(),
+        );
         let mut after = Matrix3x2::default();
         // SAFETY: Windows API 境界。
         unsafe { dc.GetTransform(&mut after) };

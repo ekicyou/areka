@@ -109,7 +109,13 @@ fn direct(s: f32, list: Option<&ID2D1CommandList>, commands: &[DrawCommand]) -> 
         }
         if !commands.is_empty() {
             let dc6 = dc.cast::<ID2D1DeviceContext6>().ok();
-            emit(dc, dc6.as_ref(), transform, commands);
+            emit(
+                dc,
+                dc6.as_ref(),
+                transform,
+                commands,
+                &mut GroupWork::default(),
+            );
         }
     })
 }
@@ -292,7 +298,13 @@ fn composed_with_answer(s: f32) -> (SurfaceComposite, Pixels) {
             D2D1_COMPOSITE_MODE_SOURCE_OVER,
         );
         let dc6 = dc.cast::<ID2D1DeviceContext6>().ok();
-        emit(dc, dc6.as_ref(), scale(s), &commands);
+        emit(
+            dc,
+            dc6.as_ref(),
+            scale(s),
+            &commands,
+            &mut GroupWork::default(),
+        );
     });
     assert_not_degenerate(&want);
     (comp, want)

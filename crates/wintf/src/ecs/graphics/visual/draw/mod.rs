@@ -16,12 +16,14 @@ mod emit_blend_tests;
 #[cfg(test)]
 mod emit_group_tests;
 #[cfg(test)]
+mod emit_group_work_tests;
+#[cfg(test)]
 mod emit_layer_tests;
 #[cfg(test)]
 mod emit_placement_tests;
 #[cfg(test)]
 mod emit_promotion_tests;
-pub(crate) use emit::{emit, emit_within};
+pub(crate) use emit::{GroupWork, emit, emit_within};
 #[cfg(test)]
 pub(crate) mod emit_test_support;
 #[cfg(test)]

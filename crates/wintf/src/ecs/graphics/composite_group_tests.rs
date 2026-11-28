@@ -2,6 +2,7 @@
 //! 入れ物がバイトで一致する。拡大 1 で整数の位置のまとめは不透明度 1 の層、拡大 1.25 と
 //! 小数の位置のまとめは作業用の絵の道を通る。
 
+use super::composite::SurfaceComposite;
 use super::composite_damage_tests::{
     BOTH, Change, GREEN, Want, YELLOW, check_frames, item, rotated, with_clip,
 };
@@ -12,6 +13,7 @@ use crate::ecs::ClipShape;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
+use windows_numerics::Matrix3x2;
 
 fn group(mix: D2D1_COMPOSITE_MODE) -> VisualGroup {
     VisualGroup {
@@ -175,4 +177,24 @@ fn unclipped_destination_over_group_redraws_the_whole_surface() {
             },
         )],
     );
+}
+
+#[test]
+fn surface_composite_keeps_one_group_work_bitmap_across_frames() {
+    let mut world = World::new();
+    let root = world
+        .spawn((Visual::default(), at(0.0, 0.0, 32.0, 32.0)))
+        .id();
+    source_over_group(&mut world, root, 4.0);
+    let commands = tree_commands(&mut world, root, None);
+    let dc = warp_dc();
+    let mut comp = SurfaceComposite::new(&dc, (40, 40)).unwrap();
+
+    for _ in 0..3 {
+        comp.compose(&dc, Matrix3x2::scale(1.25, 1.25), None, &commands)
+            .unwrap();
+    }
+
+    assert_eq!(comp.group_work().created(), 1);
+    assert_eq!(comp.group_work().len(), 1);
 }
