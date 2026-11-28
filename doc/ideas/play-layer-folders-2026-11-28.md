@@ -1,0 +1,105 @@
+# play 層とベースウェアの根のフォルダ階層 — 議論の記録（2026-11-28・下書き）
+
+- `/kiro-discovery` の議論の途中の記録。brief と roadmap はまだ書いていない。決まった事は、要件の段で覆してよい。
+- 11-19〜20 の設計メモ（`doc/ideas/novel-redesign-2026-11-20/`）と起票した spec には、play 層の概念が抜けていた。置き場の叩き台だけが `doc/ideas/novel-platform.md` の決め 4・7（2026-10-28）と `ghost-material-metadata` の brief に残っていた。
+
+## 1. play 層とは
+
+- play 層は ghost 層の上位。自分自身の ghost 層と、許諾を得た任意のゴーストを配下に持ち、配役や描画部品として任意のゴースト・シェルを呼んで、いわゆるノベルゲームを組む。
+- 原則としてウィンドウモード（または全画面）で動き、ノベルゲームで求められる演出機能を、さくらスクリプトを通じて提供する。
+- ノベルゲーム関係の議論は、すべて play 層の話である。ゴースト単独でこの演出をしたい、という話ではない。
+- play 層は areka の完全拡張で、ukadoc には存在しない概念である。
+- 並走・早送り・バックログなど、ゴースト単独で使えても便利な働きは、ghost 層に残せるなら残す。どれをどちらに置くかは、議論の終わりに働きごとに判断する（まだ決めていない）。
+
+## 2. 決まったこと（階層）
+
+### 2.1 根の最上位
+
+```
+<根>/
+  play/<名>/      劇（新）
+  ghost/<名>/     ゴースト
+  balloon/<名>/   バルーン
+  shell/<名>/     フリーシェル（新）。ゴーストに属さず、ghost と play から識別子で呼べる
+```
+
+- 根は今の決まり（`areka-P0-baseware-root-list`・2026-10-16 完了）のとおり、並びで何本でも登録できる。
+
+### 2.2 play は設計の上でゴーストと同じ入れ物
+
+- 違いは「既定がウィンドウモード」と「配下にゴーストを持てる」の 2 つだけ。
+- play の中:
+
+```
+play/<名>/
+  master/         自分の master（SHIORI・descript・辞書・profile）
+  ghost/<名>/     配下のゴースト（置くことはできる。多分あまり使わない）
+  shell/<名>/     劇の描画部品のシェル（原則はこれを引く）
+  balloon/<名>/
+```
+
+### 2.3 探す順（ghost にも play にも共通）
+
+1. 自分の入れ物の中の `<種別>/` で、識別子が一致するもの。
+2. 無ければ最上位の `<種別>/` で、識別子が一致するもの。根の登録順に探し、最初に見つかったものを採る。
+- 同じ根の中で同じ識別子が 2 つあれば、名前の順で先のものを採り、かぶりを記録に残す。OS が返す並びはファイルシステムによって決まっていないので、名前で並べ直してから採る。
+- 他のゴーストのシェルは、まずゴーストを識別子で解き（自分の配下 → 最上位の `ghost/`）、その中の `shell/` を引く。10-28 の叩き台の ③（シェルの識別子がゴーストの名前と一致したら、そのゴーストの `master` シェル）は入れない（種別をまたぐため）。
+- 前例: 完了 `ghost-inner-balloon` の「ゴーストの中の `balloon\<名>\` → 置き場の `balloon\<名>\`」。
+
+### 2.4 master フォルダ
+
+- master フォルダは `/master` → `/ghost/master` の順に引く。ghost にも play にも当てる。
+- 移るのは SHIORI だけでなく、master フォルダの中身全部（SHIORI の DLL・ゴーストの `descript.txt`・辞書・`profile/`）。
+- SSP のゴーストは `/master` を持たないので、今までどおり `ghost/master` が引かれる（既定の動作を変えない）。`/master` を使うゴーストは SSP では動かない、と作者向けに書く。
+- 両方あるときは `/master` を採り、記録に残す。
+- play の `ghost/` は配下のゴースト専用。`/master` の無い play だけは `ghost/master` を自分と読む（その play は配下のゴーストを `master` の名前で置けない）。
+- 事実: `ghost/master` の道筋は本番のコードの約 50 ファイルに散らばっていて（`areka-session` 12・`areka` 8・`areka-ghost` 6・`areka-runtime` 5 ほか）、master を解く関数は 1 つにまとまっていない。この規則を入れる時は、解く所を 1 つの関数に集める。記憶の根（`profile_areka_root`）も、その関数で解いた master の上に作る。
+- 確かめていない: 第三者のゴーストで、根に `master` という名前のフォルダを偶然持つもの。
+
+### 2.5 識別子
+
+識別子は次の 3 段で決め、どの段で取ったかを記録する。
+
+1. `descript.txt` の `id`（作者が名乗った ID）
+2. そのフォルダの `install.txt` の `directory`（作者が決めた入れ先の名前）
+3. フォルダ名
+
+- 理由: 劇の作者が引けるのは、シェルの作者が想定した ID だけである。作者の想定と違うフォルダに入る道がある（作者が `directory` と `id` を別の綴りで書く・利用者が手で置く／名前を変える・同梱する側が `*.directory` で名前を付け直す・`type,shell` はゴーストの中へ入る）。
+- 事実:
+  - `id` はゴースト・シェル・バルーンの `descript.txt` にあり、既定値は「値なし」（ukadoc。シェルとゴーストは「表示に出てくる以外の用途はない」）。
+  - フォルダ名は `install.txt` の `directory` で決まる。同じ `directory` は上書き（更新）で、連番は付かない（`crates/areka/src/install/judge.rs:79`・`overwrite.rs`）。
+  - areka はインストール先に最上位の `install.txt` を残す（`supplement` を除く・`crates/areka-nar/src/plan.rs:61`）。
+- 識別子 → 置き場の表は、起動のたびに根を読んで作り直し、インストールのときに足す。ファイルにはしまわない。
+
+### 2.6 書庫の種別
+
+| 種別 | 入る所 |
+|---|---|
+| `type,play`（新） | `play/<directory>/` |
+| `type,freeshell`（新） | `shell/<directory>/` |
+| `type,shell`（正典のまま） | `ghost/<g>/shell/<directory>/` |
+
+- `type,shell` は正典で「ゴーストへの追加シェル」なので、最上位の `shell/` 行きには使えない。
+- 種別の名前と管理のフォルダの名前は、そろえなくてよい（正典の前例: `type,supplement` → `ghost/<g>/`）。
+- SSP には断られてよい。SSP が受け入れる形（正典の種別に areka の印を足す）は、劇がゴーストとして、フリーシェルが今のゴーストのシェルとして入ってしまうので取らない。10-28 の申し送り「SSP に入った劇が『areka で遊んでね』と伝える」は取りやめる。
+- 事実: areka が今受ける種別は `ghost`・`shell`・`supplement`・`balloon` の 4 つで、ほかは断る（`crates/areka-nar/src/manifest.rs` の `parse_kind`）。
+
+### 2.7 記憶の置き場（ghost にも play にも共通）
+
+1. 自分の入れ物の中の素材: 今のまま、その素材のフォルダの `profile/areka/`（劇の自分の記憶は `play/<名>/master/profile/areka/`）。
+2. 入れ物の外から借りた素材（最上位のフリーシェル・他のゴーストのシェルなど）: 借りた側の `<master>/profile/areka/` に、素材の識別子を鍵にしてしまう。貸した側のフォルダには書かない。
+- 覚えるのは、劇がその素材について変えた状態（着せ替え・遊ぶ人の差し替えの選択など）だけ。置き場は覚えず、起動のたびに識別子で探し直して状態を当てる。見つからなければ当てずに記録に残す。
+- 事実: 今のゴーストの記憶は `<master>/profile/areka/`、シェルの記憶はシェルのフォルダの `profile/areka/`（`crates/areka-ghost/src/sylphya_wiring.rs:102`）。
+
+## 3. 既存の文書・spec とずれる所
+
+- `doc/ideas/novel-platform.md` の決め 4（演劇の形・SSP での知らせ方）と決め 7（`/free-shell/`・探す順の ③・素材 ID の元は descript の `id`、空ならフォルダ名）。
+- `ghost-material-metadata` の brief（探す順の叩き台・単体のフリーシェルの置き場）。
+- `install-package-type` の brief（`type,package` と単体のフリーシェルの置き場が近い）。
+- 11-19〜20 の設計メモと、ノベルの spec（`shell-multi-compose`・`parallel-visual-script`・`talk-fast-forward` ほか）。舞台を `areka-placement`・`areka-runtime`（ghost 層の中）に置く案になっている。
+
+## 4. まだ決めていないこと
+
+- (い) play の動き方: 配下のゴーストの SHIORI を起こすか（10-28 は「cameo は持たない」）・既定のウィンドウモードと全画面・劇をどこから始めるか・デスクトップのゴーストとの関係。
+- (ろ) 働きの置き場: 並走・早送り・バックログなどを ghost 層に残すか play 層へ上げるか（議論の終わりに働きごとに判断）。
+- (は) spec の切り方: この階層の作りをどの spec に置くか（`ghost-material-metadata`・`install-package-type` との重なり）。
