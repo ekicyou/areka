@@ -138,6 +138,7 @@ crates/areka-runtime/src/
 - `crates/areka-runtime/src/frame/move_hold.rs` — 2 つの変種の `touched_scopes`・表示を待たない判定・初期化との順（テストの宣言は `frame.rs`）。
 - `crates/areka-runtime/src/frame/drain_resnap.rs` — move drain の 2 つの腕と、頭の `resettle_script_balloons` の呼び出し。
 - `crates/areka-runtime/src/frame/dpi.rs` — バルーン窓の寸が変わったときに `reanchor_after_balloon_resize` を呼ぶ 1 か所。
+- `crates/areka-runtime/src/frame/scale_text.rs` — 報告の回収（`reconcile_reported_sizes`）でバルーン窓の寸が変わったときに `reanchor_after_balloon_resize` を呼ぶ 1 か所。
 - `crates/areka-runtime/src/frame.rs` — runtime の 3 つの新しいテストのファイルの `#[path = "frame_*.rs"]` の宣言だけ（今の型どおり、ファイル名は `frame_move_hold_balloon_script_tests.rs`・`frame_balloon_script_drain_tests.rs`・`frame_dpi_balloon_script_tests.rs`）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — 2 行（3043・3088 行目の項目）を実装済みに。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に別々の行を足し、451 行目の「【上書き】バルーンだけが作業領域からはみ出すとき」の行を画面の選び方に合わせて改める。
@@ -444,7 +445,7 @@ pub fn resettle_script_balloons(world: &mut World, landed: &dyn Fn(u32) -> bool)
 /// バルーン窓の DPI の相が窓の寸を書き換えた直後に呼ぶ（台本の値の無いスコープは素通し）。
 pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: SizeI, after: SizeI);
 ```
-- 呼び手は `crates/areka-runtime/src/frame/dpi.rs` の DPI の相で、`GhostWindowKind::Balloon` の窓の寸が `reconcile_window_size` で変わったとき（`before != after`）だけ。変わった時点が分かるので押しで呼ぶ（毎フレーム比べない）。
+- 呼び手は `crates/areka-runtime/src/frame/dpi.rs` の DPI の相と、drain の後段の報告の回収（`crates/areka-runtime/src/frame/scale_text.rs` の `reconcile_reported_sizes`）の 2 か所で、`GhostWindowKind::Balloon` の窓の寸が `reconcile_window_size` で変わったとき（`before != after`）だけ。拡大率が変わったときバルーンが出ていなければ DPI の相は寸を書かず、変わった寸は出したときに報告の回収で着く。変わった時点が分かるので押しで呼ぶ（毎フレーム比べない）。
 - そのスコープのキャラ窓に Component があるとき、バルーンの寸を `before` にして解いた標準 `S_prev` と `after` で解いた `S_new` の差を `BalloonFollow` の値に足して据え直す（命令の当ての手順 7 と同じ式・利用者のずらしは保つ）。これで `left` の「シェルの左上にバルーンの右上が接する」と `center`・`bottom` の中央が、バルーンだけが DPI の違う画面へ移っても崩れない。
 - 据え直したスコープのキャラ窓に印 `ScriptBalloonUnsettled` があれば、印の `provisional` を `after` で解いた `S_new.balloon_offset` へ取り替える（着地した巡の解き直しが寸の差を二重に足さない）。
 - 据え直した位置は書き込みの関門を通り、`limit_work_area` が新しい矩形で画面を選ぶ。押し込んだ結果は選んだ画面に収まり、その画面の DPI はもう変わらないので、寸の変化と選び直しは 1 回で止まる（揺れ止めは入れない）。

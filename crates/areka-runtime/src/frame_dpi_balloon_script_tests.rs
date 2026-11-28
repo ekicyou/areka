@@ -303,3 +303,44 @@ fn a_dpi_resize_on_the_other_monitor_writes_the_balloon_once() {
         "畳まれた 1 本が据え直しの位置と新しい寸を持つ"
     );
 }
+
+/// DPI の相がバルーンを書き直さなかった巡（拡大率が変わったときバルーンが出ていなかった）は、変わった寸が drain の後段の報告の回収で窓へ着く。
+#[test]
+fn a_left_balloon_keeps_touching_the_body_when_the_resize_lands_in_the_reported_size_reconcile() {
+    let mut harness = script_harness();
+    align(&mut harness, ScriptAlign::Left);
+    let c = char_at(&harness);
+    let balloon = harness.balloon_window(0);
+    harness
+        .world
+        .entity_mut(balloon)
+        .insert(DPI::from_dpi(BALLOON_DPI, BALLOON_DPI));
+    let mut source = FakeReports::default();
+    source.pending.insert(balloon_target(0).0, RESIZED);
+    harness.advance_frame();
+    harness.run_dpi_phase(&mut source);
+    assert_eq!(
+        source.pending.get(&balloon_target(0).0),
+        Some(&RESIZED),
+        "前提: DPI の相は報告を取らない"
+    );
+
+    let logs = capture_logs(|| harness.run_reconcile(&mut source));
+
+    assert_eq!(
+        size_of(&harness.world, balloon),
+        Some(SizeI::new(RESIZED.0 as i32, RESIZED.1 as i32)),
+        "前提: 報告の回収がバルーン窓の寸を書き換えた"
+    );
+    let b = balloon_at(&harness);
+    assert_eq!(
+        b.x + RESIZED.0 as i32,
+        c.x,
+        "バルーンの右端が本体の左端に接する"
+    );
+    assert_eq!(b.y, c.y);
+    assert!(
+        logs.iter().any(|l| l.contains("script_balloon_reanchored")),
+        "{logs:?}"
+    );
+}
