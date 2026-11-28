@@ -208,3 +208,45 @@
 6. **テストの文言の中の要件の番号の範囲**: 「R6.3:」の 3 か所だけを外すか、同じファイルのほかの番号（R2.2・R2.4・R2.5・D8・要件 3.10/10.9）まで外すか。後者は決まりの「開発者が範囲を名指したときだけ広げる」に当たるので、名指しが要る。
 7. **要件 3.5 の言い回し**: 2 層マージには起動を止める失敗の道が無い。設計で「該当する道は採寸で、変わらない」と書くだけにするか、要件の文を整えるか。
 8. **brief の見立ての読み替え**: 「`lib.rs` は行が増えない」は S0 のときだけ成り立つ。S1 なら +8〜12 行。決めは要らず、読み替えとして記録に残す。
+
+## 8. 設計の判断（2026-11-28・design 段）
+
+> 発見は light（既存の仕組みの拡張）。外の依存・新しい道具は無いので、外の調べはしていない。使ったのは `kiro-spec-design` の規則（design-principles・discovery-light・synthesis・review-gate）と、steering の `structure.md` のテストの兄弟の命名の規則だけ。要件討議の決め（案 1・シェルの着替えは今どおり・不在の `debug!` も 1 行・`boot_shell_tests.rs` を範囲に入れる・「R6.3:」の 3 か所だけ）を前提にした。
+
+### 8.1 選んだ形
+
+| 決め | 選んだもの | 理由 | 選ばなかったもの |
+|---|---|---|---|
+| 核の形（§3.1） | **e1**: `scope_balloon_model_with` の名前と形を保つ Emit のラッパにし、`records` を受ける private の核 `merge_scope_layers` を別に置く。出す入口と出さない入口は private の `load_scope_balloon_model_with(.., records)` を通す | `balloon_definitions.rs` は約束 ⑹ の触ってよいファイルに無い | e2（`balloon_definitions.rs:102` の 1 行を直す・関数が 1 つ減る）。設計の討議で確かめる |
+| 上書き層の読みの切り替え | `read_face_override_layer` に `records` を足し、`match` に守りの腕 `Err(_) if !records.emits() => None` を 1 本足す | 不在の `debug!` と不在以外の `warn!` の 2 腕を両方 `if` で囲むより行が少なく、2 腕の水準の分岐はそのまま残る | 2 腕をそれぞれ `if records.emits()` で囲む（+4 行） |
+| placement の形（§3.1 S1） | private `load_scope_windowpositions_with(balloon_root, scope_ids, merge: fn(&Path, u32, &ResolvedFace) -> BalloonModel)`。pub の `load_scope_windowpositions` はその `load_scope_balloon_model` 版のラッパ。411 だけが `load_scope_balloon_model_quiet` を渡す | 足す型が無い・選んだ入口の名前が呼び出しの場に出る・`switch_assets.rs` とテスト 2 本は変わらない | private の `enum`（型と `match` で行が増える）・`bool`（呼び出しの場で読めない）・S2（pub の形が変わり呼び手 3 か所を直す） |
+| 起動の準備 1 回の行の数（§3.4 の 6.1） | **t2 の 1 か所版**: `areka-placement` の新しい兄弟 `placement_balloon_merge_log_tests.rs` で、起動の準備の読み（private の中身に出さない入口を渡す）と、資産の組み立てが scope ごとに呼ぶ `load_scope_balloon_definitions` を 1 回の捕捉の中で通して数える | 新しい公開の口が要らない・約束 ⑹ の内（宣言は `lib.rs`）・「合わせて 1 行」を 1 か所で固定できる。411 の結線は `boot_shell_tests.rs`（emo2・本番の順）が支える | t1（`placement_tests/mod.rs` と `test-support` の口が要る・約束 ⑹ の外）・t3（実の WIC で読める絵が要る） |
+| 出さない道の失敗（6.2） | 同じ新しい兄弟で、出さない入口を渡した中身を、フォルダが無いバルーンと面 0 が無いバルーンで通す | private の中身は crate の中のテストからしか呼べない | — |
+| シェルの着替え（6.3） | **u1**: 同じ新しい兄弟で pub の `load_scope_windowpositions` を数える | `switch_assets.rs` を変えない | u2（`switch_assets.rs` に宣言が要る・約束 ⑹ の外） |
+| 一致（5.1〜5.3） | **v1**: `areka-emo-present` の新しい兄弟 `balloon_merge_quiet_tests.rs` で、出さない入口の模型と `load_scope_balloon_definitions(..).face0().model` を丸ごと比べる（上書き層あり・なしの scope）。同じファイルに出さない入口の無音と戻り値の一致の檻も置く | 要件 5.1 は `validrect` も名指す。`BalloonModel: PartialEq` で丸ごと比べられる | v2（窓の位置の読みは `validrect` を持たない） |
+| テストのファイル名 | `balloon_merge_quiet_tests.rs`（`mod merge_quiet_tests`）・`placement_balloon_merge_log_tests.rs`（`mod balloon_merge_log_tests`） | `balloon_merge.rs` は無いので逆向きに読み違えない。placement は crate の慣例の `placement_*` | `balloon_quiet_tests.rs` へ足す（約束 ⑹ の外） |
+
+### 8.2 行の数（rustfmt の折り返しの後の見込み）
+
+- `crates/areka-placement/src/lib.rs`: 896 → **915〜919**（+19〜23）。内訳: `use areka_emo_present::balloon::{…}` が 4 つの名前で 100 桁を越えて 4 行に折れる +3、411 の呼び出しの折り返しと説明 +2、pub の本体 −3、新しい中身 +13〜15（`filter_map` の行がちょうど 100 桁で、折れれば +2）、`scope_windowposition` の署名 +1、説明 0〜+1、テストの宣言 +3。`use areka_parsers::balloon::{BalloonModel, …}` は 78 桁で 1 行のまま。
+- `crates/areka-emo-present/src/balloon.rs`: 793 → **830〜845**（+37〜52）。内訳: 出さない入口 +11、`load_scope_balloon_model_with` +12、核の分け直し +14〜18、上書き層の読みの署名の折り返しと守りの腕 +6、出す入口の本体 −2、説明 +1、テストの宣言 +3。
+- brief の見立て「`lib.rs` は行が増えない」は S0 のときだけ成り立つ（§7 の 8）。要件討議の 2 の「数行」は実際には約 20 行になる。上限 1,000 の内。
+
+### 8.3 統合（synthesis）
+
+- **一般化**: 要件 1.1〜1.4 は「2 層マージの記録 4 種を同じ 1 つの口で切り替える」1 つの問題。核まで `LoadRecords` を通す 1 本の形で 4 種をまとめて扱い、種ごとの口は作らない。
+- **作るか採るか**: 前例の `LoadRecords` と「中身 1 本＋薄い入口」の形をそのまま採る。新しい型・依存は無い。
+- **簡素化**: `test-support` の口・runtime の新しいテスト・private の `enum` を足さない。pub の形（`load_scope_balloon_model`・`load_scope_windowpositions`）は変えない。
+
+### 8.4 調べで分かったこと（§6 の持ち越し）
+
+1. S1 の形と行の数は 8.1・8.2 のとおり。
+2. テストの置き場は 8.1 のとおり。`test-support` の口は開けない。
+3. 基層が読めない検体は採寸を通さない（t2 の 1 か所版なので採寸の通りを確かめる必要が無い）。
+4. 同じ文言「balloon: バルーン既定設定（descript.txt）の読取に失敗（空層で継続）」は、透過の宣言の読み（`load_balloon_use_self_alpha`・資産の組み立てでバルーン 1 つにつき 1 回）も出す。基層が読めないバルーンで scope を 2 つ読む起動では、文言で数えると今の 5 行が 3 行（2 層マージ 2・透過の宣言の読み 1）になる。透過の宣言の読みは範囲の外（要件の境界）なので変えない。行の数の檻は透過の宣言の読みを通さないので、2 層マージの 2 行だけを数える。
+5. `areka-placement` の通常の依存に `areka-emo-atlas` があるので、テストは `MemoryDecoder`・`AlphaParams`・`UseSelfAlpha` をそのまま使える（dev-dependency を足さない）。`load_scope_balloon_definitions` は `areka_emo_present::balloon_definitions` から pub で引ける。
+6. `log_capture_kit::capture` は `debug!` も捕まえる（`balloon_model_tests.rs` の不在の `debug!` の檻が前例）。
+
+### 8.5 設計の討議へ渡す前提
+
+design.md の「前提（設計の討議で確かめる）」の 5 件（e1・行の数の檻の置き場・u1・透過の宣言の読みの同じ文言・`lib.rs` の約 20 行）。
