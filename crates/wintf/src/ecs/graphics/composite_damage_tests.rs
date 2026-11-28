@@ -58,7 +58,7 @@ fn composed(
     (dc, comp, bytes)
 }
 
-fn partial(rects: Vec<PxRect>, shifts: Vec<RegionShift>) -> PartialPlan {
+pub(super) fn partial(rects: Vec<PxRect>, shifts: Vec<RegionShift>) -> PartialPlan {
     PartialPlan {
         area: rects.iter().map(|r| r.area()).sum(),
         shift_area: shifts.iter().map(|s| s.src.area()).sum(),
@@ -384,7 +384,7 @@ pub(super) fn rotated(rad: f32) -> VisualTransform {
 }
 
 /// `size`×`size` の入れ物へ全部で合成した答え。
-fn full_bytes(
+pub(super) fn full_bytes(
     size: u32,
     s: f32,
     list: Option<&ID2D1CommandList>,
@@ -397,7 +397,7 @@ fn full_bytes(
 }
 
 /// 2 つの絵がバイトで同じ（違えば最初の画素の座標と値を出す）。
-fn assert_same(got: &[u8], want: &[u8], width: u32, at: &str) {
+pub(super) fn assert_same(got: &[u8], want: &[u8], width: u32, at: &str) {
     if let Some(i) = got.chunks(4).zip(want.chunks(4)).position(|(g, w)| g != w) {
         let (x, y) = (i as u32 % width, i as u32 / width);
         panic!(
