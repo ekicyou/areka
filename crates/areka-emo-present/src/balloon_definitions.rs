@@ -99,7 +99,8 @@ pub fn load_scope_balloon_definitions(
         if face.surface_id != 0 && !balloon_dir.join(face.override_file_name()).exists() {
             continue;
         }
-        let model = scope_balloon_model_with(balloon_dir, scope, face, &descript);
+        let model =
+            scope_balloon_model_with(balloon_dir, scope, face, &descript, LoadRecords::Emit);
         let keys = model.arrow_keys();
         issues.extend(keys.issues.iter().map(|i| (i.key, i.value.clone())));
         issues.extend(model.key_issues().iter().map(|i| (i.key, i.value.clone())));

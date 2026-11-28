@@ -98,8 +98,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_emo_compose::ScaleRatio;
-use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces_quiet};
-use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
+use areka_emo_present::balloon::{
+    ResolvedFace, load_scope_balloon_model, load_scope_balloon_model_quiet,
+    resolve_balloon_faces_quiet,
+};
+use areka_parsers::balloon::{BalloonModel, WindowPosition, WindowPositionRaw};
 use tracing::{error, info, warn};
 use wintf::ecs::DPI;
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
@@ -408,7 +411,9 @@ fn prepare_stages_for_shell(
     // 後で `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる。
     // 配置解決の式 P1〜P5 と永続値優先の復元規約（`persist.rs`）には触れない。
     // 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
-    let windowpositions = load_scope_windowpositions(balloon_root, &scope_ids);
+    // 2 層マージの記録は、同じ定義を組む起動時資産構築が出すので、ここでは出さない。
+    let windowpositions =
+        load_scope_windowpositions_with(balloon_root, &scope_ids, load_scope_balloon_model_quiet);
     scale_then_merge(
         &mut cfg,
         &windowpositions,
@@ -544,7 +549,8 @@ pub(crate) fn scale_then_merge(
 /// 載らない（見送りの `warn!` は読んだ側が出している）。
 pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
 
-/// バルーンの `windowposition` を scope ごとに読む（ファイルを読む）。合流は [`scale_then_merge`]。
+/// バルーンの `windowposition` を scope ごとに読む（ファイルを読む）。2 層マージの記録も出す。
+/// 合流は [`scale_then_merge`]。
 ///
 /// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
 /// [`scale_then_merge`] だけを通す。
@@ -560,9 +566,17 @@ pub fn load_scope_windowpositions(
     balloon_root: &Path,
     scope_ids: &[usize],
 ) -> ScopeWindowPositions {
+    load_scope_windowpositions_with(balloon_root, scope_ids, load_scope_balloon_model)
+}
+
+fn load_scope_windowpositions_with(
+    balloon_root: &Path,
+    scope_ids: &[usize],
+    merge: fn(&Path, u32, &ResolvedFace) -> BalloonModel,
+) -> ScopeWindowPositions {
     scope_ids
         .iter()
-        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
+        .filter_map(|&scope| scope_windowposition(balloon_root, scope, merge).map(|wp| (scope, wp)))
         .collect()
 }
 
@@ -701,8 +715,9 @@ fn resolve_windowposition_vocab(
 /// 同じ面・同じマージ結果に由来することを構造で保証するため（別々に読むと
 /// 面の選択がずれて「数値は面 0・生値は別の面」という食い違いを作り得る）。
 ///
-/// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces` /
-/// `load_scope_balloon_model`）の消費のみで行う。採寸・起動時資産構築と同じ規則で同じ面を
+/// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces_quiet` と、呼び手が選んだ
+/// 2 層マージの入口 `merge`＝`load_scope_balloon_model` か記録を出さない `load_scope_balloon_model_quiet`）
+/// の消費のみで行う。採寸・起動時資産構築と同じ規則で同じ面を
 /// 見ることが、実機でしか現れない「採寸した枠と表示される枠が違う」欠陥を封じる唯一の手段。
 /// 接頭辞連鎖も上書きファイル名の導出も本層は持たない。
 ///
@@ -710,6 +725,7 @@ fn resolve_windowposition_vocab(
 fn scope_windowposition(
     balloon_root: &Path,
     scope: usize,
+    merge: fn(&Path, u32, &ResolvedFace) -> BalloonModel,
 ) -> Option<(WindowPosition, WindowPositionRaw)> {
     // 権威の scope 通貨は u32（placement の通貨は usize）。表現できない scope を無言で
     // 切り詰めると別 scope の系列を採ってしまうので、変換失敗は供給の見送りとして報告する。
@@ -745,7 +761,7 @@ fn scope_windowposition(
         );
         return None;
     };
-    let model = load_scope_balloon_model(balloon_root, scope_key, face0);
+    let model = merge(balloon_root, scope_key, face0);
     Some((model.windowposition(), model.windowposition_raw().clone()))
 }
 
@@ -870,6 +886,9 @@ pub(crate) fn square_dpi(dpi: u32) -> DPI {
     DPI::from_dpi(dpi, dpi)
 }
 
+#[cfg(test)]
+#[path = "placement_balloon_merge_log_tests.rs"]
+mod balloon_merge_log_tests;
 #[cfg(test)]
 #[path = "balloon_offset_supply_tests.rs"]
 mod balloon_offset_supply_tests;

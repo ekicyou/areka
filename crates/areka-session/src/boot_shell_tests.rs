@@ -154,7 +154,7 @@ impl LoadLines {
             shell_alpha: n,
             balloon_alpha: n,
             series: scopes(n),
-            merge: scopes(2 * n),
+            merge: scopes(n),
         }
     }
 }
@@ -314,10 +314,11 @@ fn boot_a_in_production_order(rig: &mut SwitchRig) -> (bool, Vec<CapturedEvent>)
 }
 
 /// emo2 の写しを本番の順で起こすと、シェルの一覧・シェルとバルーンの透過の宣言が 1 行ずつ、
-/// 系列の解決の完了が scope ごとに 1 行、2 層マージの確定が scope ごとに 2 行出る。
+/// 系列の解決の完了と 2 層マージの確定が scope ごとに 1 行出る。
 ///
 /// # 非空虚性
 /// 採寸か windowposition の読みを記録を出す入口へ戻すと、一覧か系列の解決が 2 行になって赤。
+/// windowposition の読みの 2 層マージを記録を出す入口へ戻すと、確定が scope ごとに 2 行になって赤。
 #[test]
 fn production_boot_emits_each_load_record_once() {
     let mut rig = rig_a();

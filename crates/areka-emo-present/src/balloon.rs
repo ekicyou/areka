@@ -471,9 +471,15 @@ pub(crate) fn read_descript_layer(path: &Path, records: LoadRecords) -> Option<S
 /// - 不在（[`std::io::ErrorKind::NotFound`]）→ `debug!`。上書き層を持たない面は正常で、既定設定のみで定義が確定する。
 ///   相方側のバルーンが上書き層を持たないだけで毎起動 `warn!` が鳴らないようにする。
 /// - その他の入出力エラー（権限・I/O 障害等）→ `warn!`。資産配置の異常で、既定設定のみで継続するが観測可能に残す。
-fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<String> {
+fn read_face_override_layer(
+    path: &Path,
+    scope: u32,
+    file_name: &str,
+    records: LoadRecords,
+) -> Option<String> {
     match read_decoded(path) {
         Ok(text) => Some(text),
+        Err(_) if !records.emits() => None,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             tracing::debug!(
                 scope = scope,
@@ -516,16 +522,37 @@ fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<
 /// # 観測
 ///
 /// 確定した `windowposition` / `validrect` の実値を scope・採用上書きファイル名とともに `info!` で記録する。
-/// placement からは scope あたり 1 行、boot は `load_scope_balloon_definitions` から面ごとに（面 0 と、自前の
-/// 設定ファイルを持つ面）1 行ずつ出し、面 0 の行は placement の行と値が一致する。
+/// 起動の準備では資産の組み立て（`load_scope_balloon_definitions`）が面ごとに（面 0 と、自前の設定ファイルを
+/// 持つ面）1 行ずつ出し、窓の位置の読みは [`load_scope_balloon_model_quiet`] を通して出さない。
+/// 2 つの読みが同じ面 0 の定義を見ることはテストで確かめる。
 pub fn load_scope_balloon_model(
     balloon_dir: &Path,
     scope: u32,
     face0: &ResolvedFace,
 ) -> BalloonModel {
+    load_scope_balloon_model_with(balloon_dir, scope, face0, LoadRecords::Emit)
+}
+
+/// [`load_scope_balloon_model`] と同じ中身で組み、読み込みの記録（確定の `info!`・基層の読取失敗の `warn!`・
+/// 上書き層の不在の `debug!` と読取失敗の `warn!`）を出さない（起動の準備の windowposition の読み）。戻り値は [`load_scope_balloon_model`] と等しい。
+pub fn load_scope_balloon_model_quiet(
+    balloon_dir: &Path,
+    scope: u32,
+    face0: &ResolvedFace,
+) -> BalloonModel {
+    load_scope_balloon_model_with(balloon_dir, scope, face0, LoadRecords::Quiet)
+}
+
+/// 2 層マージの中身（1 本）。読み込みの記録は `records` が出すときだけ出す。
+fn load_scope_balloon_model_with(
+    balloon_dir: &Path,
+    scope: u32,
+    face0: &ResolvedFace,
+    records: LoadRecords,
+) -> BalloonModel {
     let descript =
-        read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
-    scope_balloon_model_with(balloon_dir, scope, face0, &descript)
+        read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), records).unwrap_or_default();
+    scope_balloon_model_with(balloon_dir, scope, face0, &descript, records)
 }
 
 /// [`load_scope_balloon_model`] の核。基層の本文は呼び手が 1 回読んで渡す（面ごとに読み直さない）。
@@ -534,27 +561,34 @@ pub(crate) fn scope_balloon_model_with(
     scope: u32,
     face0: &ResolvedFace,
     descript: &str,
+    records: LoadRecords,
 ) -> BalloonModel {
     let override_name = face0.override_file_name();
-    let face_override =
-        read_face_override_layer(&balloon_dir.join(&override_name), scope, &override_name);
+    let face_override = read_face_override_layer(
+        &balloon_dir.join(&override_name),
+        scope,
+        &override_name,
+        records,
+    );
 
     let model = areka_parsers::balloon::parse_str(descript, face_override.as_deref());
 
-    let wp = model.windowposition();
-    let vr = model.validrect();
-    tracing::info!(
-        balloon_dir = %balloon_dir.display(),
-        scope = scope,
-        file = %override_name,
-        windowposition_x = ?wp.x(),
-        windowposition_y = ?wp.y(),
-        validrect_top = ?vr.top(),
-        validrect_bottom = ?vr.bottom(),
-        validrect_left = ?vr.left(),
-        validrect_right = ?vr.right(),
-        "balloon: scope 別バルーン定義の 2 層マージが確定"
-    );
+    if records.emits() {
+        let wp = model.windowposition();
+        let vr = model.validrect();
+        tracing::info!(
+            balloon_dir = %balloon_dir.display(),
+            scope = scope,
+            file = %override_name,
+            windowposition_x = ?wp.x(),
+            windowposition_y = ?wp.y(),
+            validrect_top = ?vr.top(),
+            validrect_bottom = ?vr.bottom(),
+            validrect_left = ?vr.left(),
+            validrect_right = ?vr.right(),
+            "balloon: scope 別バルーン定義の 2 層マージが確定"
+        );
+    }
 
     model
 }
@@ -776,6 +810,9 @@ fn build_from_faces_core(
 #[cfg(test)]
 #[path = "balloon_alpha_tests.rs"]
 mod alpha_tests;
+#[cfg(test)]
+#[path = "balloon_merge_quiet_tests.rs"]
+mod merge_quiet_tests;
 #[cfg(test)]
 #[path = "balloon_model_tests.rs"]
 mod model_tests;

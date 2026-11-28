@@ -135,3 +135,11 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   - `areka`: テスト・`install`・`mcp`・`menu`・`roots`・`session`・`update` の各ファイルと例 2 本。
   - 依存の `areka-parsers` の `shell/decode.rs:251` の `collapsible_if`（`--no-deps` を外すとここで止まる）。
 - 測り直しの最初のタスクで、上の範囲を列挙に入れる。
+
+## 申し送り（emo-balloon-merge-log-overlap より・2026-11-28）: clippy 1.100 の残り
+
+- この spec の枝で触ったクレートを `--all-targets --no-deps -D warnings` で回すと、触っていない行の指摘だけで止まる（変えた行と新しいテストのファイルには 0 件）。
+  - `areka-emo-present`: テスト 4 本の 5 件（`balloon_target_tests.rs:243`・`mount_extent_tests.rs:27`・`presenter_budget_equivalence_tests.rs:158`・`:162`・`shell_target_template_tests.rs:146`。`type_complexity` と `chunks_exact_to_as_chunks`）。件 1 の 7 件のうち残っているもの。
+  - `areka-placement`: 20 件。11-15 の記録と同じもの。
+  - `areka-session`: 16 件（`app_exit.rs`・`boot_config.rs`・`boot_resolve_*_tests.rs`・`ghost_session*.rs`・`log_history.rs`・`reload_skin_tests.rs`・`runtime_boot.rs`）。
+- 測り直しの最初のタスクで、上の範囲を列挙に入れる。
