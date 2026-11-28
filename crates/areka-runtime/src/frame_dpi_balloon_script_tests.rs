@@ -21,7 +21,9 @@ use super::test_support::{
     FakeReports, FrameHarness, capture_logs, placement_basis, pos_of, s2_neighbor_work_area,
     size_of,
 };
-use super::transition_test_support::writes_for;
+use super::transition_test_support::{
+    assert_writes_per_window_within_bound, neighbor_at, writes_for,
+};
 
 /// 隣の画面へ移ったバルーン窓の拡大率。
 const BALLOON_DPI: u16 = 144;
@@ -247,5 +249,57 @@ fn a_scope_without_script_value_only_resizes_in_place() {
     assert!(
         !logs.iter().any(|l| l.contains("script_balloon")),
         "{logs:?}"
+    );
+}
+
+#[test]
+fn a_dpi_resize_on_the_other_monitor_writes_the_balloon_once() {
+    let mut harness = script_harness();
+    harness.set_monitor_table(neighbor_at(BALLOON_DPI));
+    harness.advance_frame();
+    harness.run_placement_phases(&mut FakeReports::default());
+    align(&mut harness, ScriptAlign::Center);
+    assert!(apply_script_balloon_offset(
+        &mut harness.world,
+        0,
+        ScriptOffset {
+            x: OffsetAxis::Absolute(1500),
+            y: OffsetAxis::Absolute(0),
+        },
+        true
+    ));
+    let neighbor = s2_neighbor_work_area();
+    let before = balloon_at(&harness);
+    assert!(before.x >= neighbor.left, "前提: バルーンが隣の画面に居る");
+    let _ = harness.drain_writes();
+
+    let balloon = harness.balloon_window(0);
+    harness
+        .world
+        .entity_mut(balloon)
+        .insert(DPI::from_dpi(BALLOON_DPI, BALLOON_DPI));
+    let mut source = FakeReports::default();
+    source.refresh.insert(balloon_target(0).0, RESIZED);
+    let logs = capture_logs(|| {
+        harness.advance_frame();
+        harness.run_placement_phases(&mut source);
+        harness.run_reconcile(&mut source);
+    });
+    let writes = harness.drain_writes();
+
+    assert!(
+        logs.iter().any(|l| l.contains("script_balloon_reanchored")),
+        "前提: 寸の変化で据え直した: {logs:?}"
+    );
+    assert_ne!(balloon_at(&harness), before, "前提: 据え直しで位置が動いた");
+    assert_writes_per_window_within_bound(&writes, 0, WindowKind::Balloon, "隣の画面のバルーン");
+    let write = writes_for(&writes, 0, WindowKind::Balloon)
+        .pop()
+        .expect("バルーン窓の書き込みがある");
+    let at = balloon_at(&harness);
+    assert_eq!(
+        (write.x, write.y, write.width, write.height),
+        (at.x, at.y, RESIZED.0 as i32, RESIZED.1 as i32),
+        "畳まれた 1 本が据え直しの位置と新しい寸を持つ"
     );
 }
