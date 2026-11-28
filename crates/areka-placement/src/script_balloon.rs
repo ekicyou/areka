@@ -111,7 +111,7 @@ pub fn parse_balloon_align(args: &[&str]) -> Option<ScriptAlign> {
         debug!(
             event = "balloon_align_extra_args",
             extra = ?&args[1..],
-            "向きの命令の 3 つ目以降の引数は読まない"
+            "向きの命令の 2 つ目以降の引数は読まない"
         );
     }
     let raw = args.first()?.trim();
