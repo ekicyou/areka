@@ -164,3 +164,73 @@ fn startup_prepare_with_another_face_having_its_own_settings() {
         ])
     );
 }
+
+fn shell_switch_counts(dir: &Path) -> Counts {
+    let (_, events) = capture(|| load_scope_windowpositions(dir, &[0, 1]));
+    merge_record_counts(&events)
+}
+
+fn lines_with(events: &[CapturedEvent], needle: &str, scope: Option<&str>) -> usize {
+    events
+        .iter()
+        .filter(|e| {
+            e.message().contains(needle) && scope.is_none_or(|s| e.field("scope") == Some(s))
+        })
+        .count()
+}
+
+fn assert_failures_still_recorded(dir: &Path, resolution_failure: &str) {
+    let (positions, events) =
+        capture(|| load_scope_windowpositions_with(dir, &[0], load_scope_balloon_model_quiet));
+    assert!(positions.is_empty());
+    assert_eq!(
+        lines_with(&events, "バルーン系列の解決に失敗", Some("0")),
+        1
+    );
+    assert_eq!(lines_with(&events, resolution_failure, None), 1);
+    assert!(merge_record_counts(&events).is_empty());
+}
+
+#[test]
+fn quiet_path_still_records_a_missing_balloon_folder() {
+    let dir = TempDir::new();
+    assert_failures_still_recorded(&dir.path().join("absent"), "走査に失敗");
+}
+
+#[test]
+fn quiet_path_still_records_a_balloon_without_face0() {
+    let dir = TempDir::new();
+    touch(dir.path(), "balloons1.png");
+    assert_failures_still_recorded(dir.path(), "面 ID 0 が連鎖のどの接頭辞でも解決できない");
+}
+
+#[test]
+fn shell_switch_read_records_the_merge_once_per_scope() {
+    assert_eq!(
+        shell_switch_counts(base_unreadable().path()),
+        counts_of(&[
+            (BASE_UNREADABLE, "-", "-", 2),
+            (OVERRIDE_ABSENT, "0", "balloons0s.txt", 1),
+            (OVERRIDE_ABSENT, "1", "balloons0s.txt", 1),
+            (MERGED, "0", "balloons0s.txt", 1),
+            (MERGED, "1", "balloons0s.txt", 1),
+        ])
+    );
+    assert_eq!(
+        shell_switch_counts(override_unreadable().path()),
+        counts_of(&[
+            (OVERRIDE_UNREADABLE, "0", "balloons0s.txt", 1),
+            (OVERRIDE_UNREADABLE, "1", "balloons0s.txt", 1),
+            (MERGED, "0", "balloons0s.txt", 1),
+            (MERGED, "1", "balloons0s.txt", 1),
+        ])
+    );
+    assert_eq!(
+        shell_switch_counts(override_on_scope0_only().path()),
+        counts_of(&[
+            (OVERRIDE_ABSENT, "1", "balloonk0s.txt", 1),
+            (MERGED, "0", "balloons0s.txt", 1),
+            (MERGED, "1", "balloonk0s.txt", 1),
+        ])
+    );
+}
