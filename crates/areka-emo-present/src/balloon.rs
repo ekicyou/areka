@@ -534,7 +534,7 @@ pub fn load_scope_balloon_model(
 }
 
 /// [`load_scope_balloon_model`] と同じ中身で組み、読み込みの記録（確定の `info!`・基層の読取失敗の `warn!`・
-/// 上書き層の不在の `debug!` と読取失敗の `warn!`）を出さない（採寸の読み）。戻り値は [`load_scope_balloon_model`] と等しい。
+/// 上書き層の不在の `debug!` と読取失敗の `warn!`）を出さない（起動の準備の windowposition の読み）。戻り値は [`load_scope_balloon_model`] と等しい。
 pub fn load_scope_balloon_model_quiet(
     balloon_dir: &Path,
     scope: u32,
