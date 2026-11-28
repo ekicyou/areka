@@ -315,3 +315,5 @@
 - 8.3: 移した後の測りは研究の記録 §18。6 行のうち k≈1.2468 のまばたきの当たりだけ 460→893µs と重い（当たりでも計画の 8 項を GPU で毎フレーム k 倍に描くため）。ほかの 5 行は軽い。当たりの 1 画素の GPU の待ちは中央値 1.0〜1.5ms（設計の見込みより長い）で、カーソルを動かし続けると UI スレッドの約 17%。`target\release\areka.exe` は計測用の写し（`trace!` 入り）で、素の HEAD の実行体は `target\dmc-perf\bin-head\areka.exe`。
 - 8.6: まとめを描くたびに作業用の絵と DC を作り直していたのが原因（`CreateBitmap` だけで約 100µs）。`SurfaceComposite` が持つ `GroupWork` が節・装置・大きさを鍵に使い回す（研究の記録 §19）。描く矩形が 2 つ以上の範囲だけの回は理屈で安全と判断し、テストはまだ無い。
 - 8.3 の結論: element ごとの行列の変換がこの後に入るので、まとめの描き方を今の形に合わせて詰めない。k≈1.2468 のまばたきの当たりの行だけ約 3% 重い結果を受け入れ、所要の詰めは行列の変換の後に測り直して決める（研究の記録 §22・要件 8.2 を直した）。完了の棚卸で、その測り直しと当たりの 1 画素の読みの待ちを起票する。
+- 7.2: `crates/areka-emo-present/Cargo.toml` の `[dev-dependencies]` に `dola` を足した（テストの `FrameTime` を本番と同じ時刻の出どころから取るため・ワークスペースの crate で出荷物に入らない・`Cargo.lock` が 1 行増えた）。設計の「依存を足さない」から外れる唯一の所。
+- 最終検証（2026-11-28）: `tools/test-all.ps1` は全段緑（exit 0）。完了の前に main（6 コミット先）を取り込み、重なる 7 ファイル（`Cargo.lock`・compose `lib.rs`・`film_playback_e2e_tests.rs`・`frame/wiring.rs`・`COMPAT_ARCHITECTURE.md`・`assets.toml`・`report/summary.md`）を合わせる。台帳の `blit::execute` 61 か所のうち 57 行は `draw-methods-blend` の持ち分の行。
