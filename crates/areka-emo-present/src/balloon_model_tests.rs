@@ -282,11 +282,7 @@ fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
     assert_eq!(infos.len(), 1, "確定値の info! は 1 行: {events:?}");
     let info = infos[0];
 
-    assert_eq!(
-        info.field_unquoted("scope"),
-        Some("1"),
-        "R6.3: scope が乗る"
-    );
+    assert_eq!(info.field_unquoted("scope"), Some("1"), "scope が乗る");
     // 実値はモデルの確定値そのもの（ログと戻り値が乖離しないことを併せて固定する）。
     let wp = model.windowposition();
     let vr = model.validrect();
@@ -294,7 +290,7 @@ fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
     assert_eq!(
         info.field_unquoted("windowposition_x"),
         Some("Some(-190)"),
-        "R6.3: windowposition の実値が乗る"
+        "windowposition の実値が乗る"
     );
     assert_eq!(info.field_unquoted("windowposition_y"), Some("Some(-75)"));
     assert_eq!(
@@ -304,7 +300,7 @@ fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
     assert_eq!(
         info.field_unquoted("validrect_top"),
         Some("Some(40)"),
-        "R6.3: validrect の実値が乗る"
+        "validrect の実値が乗る"
     );
     assert_eq!(info.field_unquoted("validrect_bottom"), Some("Some(-70)"));
     assert_eq!(info.field_unquoted("validrect_left"), Some("Some(24)"));

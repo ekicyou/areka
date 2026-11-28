@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 2 層マージに記録を出さない入口を足す
-- [ ] 1.1 2 層マージの中身 1 本に記録の選びを通し、記録を出さない入口を足す
+- [x] 1.1 2 層マージの中身 1 本に記録の選びを通し、記録を出さない入口を足す
   - 基層の読み・面 0 の上書き層の読み・確定の記録の 4 種の記録の行だけを、記録を出すかどうかの選びで切り替える（読み・マージ・戻り値の分岐は選びに依らない）
   - 今の核に記録の選びを足し、資産の組み立ての呼び出し 1 か所は「出す」を渡す（資産の組み立ての記録の出方は今と同じ）
   - 記録を出す入口の名前・形・記録の水準・文言・欄は今と同じに保つ
@@ -65,3 +65,6 @@
   - 完了の状態: 上のテストが全部緑で、差分が約束の範囲に収まっている
   - _Dispatch: mechanical — 回すテストと確かめる範囲が決まっている_
   - _Requirements: 2.2, 3.5, 4.2, 4.3_
+
+## Implementation Notes
+- 今のツールチェーンでは `cargo clippy -p areka-emo-present --all-targets -- -D warnings` が、この spec の触らない検体のテスト（`balloon_target_tests.rs`・`mount_extent_tests.rs`・`presenter_budget_equivalence_tests.rs`・`shell_target_template_tests.rs`）と `areka-parsers` の新しい lint（`collapsible_if`・`chunks_exact`・`type_complexity`）で赤になる。触ったファイルは `--no-deps` で指摘 0 を確かめる。
