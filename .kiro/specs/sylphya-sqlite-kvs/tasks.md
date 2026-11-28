@@ -275,3 +275,4 @@
 - 8.5: 実 emo2 の 2 回の起動（根は `target\r85\`）で、1 回目 `persist_imported` 2 件（app 1・ghost 4）・`route=Memory`・位置は覚えた値から計算（下端中央の原点・下端へ吸着）、両方の置き場が `sylphya.sqlite` と `sylphya.toml.imported` になった。2 回目は 0 件で同じ位置とゴースト。
 - 最終の検証（GO・完了の棚卸へ）: M1 `store/import.rs` 134 行の `Stop::Failed(format!("{other:?}"))` が Debug の字を告知の理由へ入れうる（中の文を取り出す）。M2 `keytable.rs` が `crate::actor::SetClass` を引き、設計の依存の向き（keytable は actor を引かない）に反する（`SetClass` を keytable へ移し同じ名前で再輸出）。M3 `structure.md` の sylphya の節が「読みも書きも番人への問い合わせ」と「同期の読みの経路から別のアクターへ問い合わせる形は禁止」を並べて字面で矛盾する（「番人のほかのアクターへ」に直す）。
 - 最終の検証（FYI）: トークの開始と終了の挨拶は、番人が走らせている書きの I/O 1 回ぶん待ちうる（静かな機械で約 10ms）。設計の案 A（読みも書きも番人を通す）と D4 に沿っている。
+- 完了時にその場で解決: M1（取り込みの失敗の理由に Debug の字を入れない・試験つき）、M2（`SetClass` を `keytable.rs` へ移す）、M3（`structure.md` の矛盾した文）、初めての書きの期限を 1 つに分け合う試験、設計の文の食い違い 2 件（`persist_import_skipped` の欄・写しのジャーナルの扱い）。
