@@ -58,7 +58,7 @@
   - _Dispatch: mechanical — 期待の値と説明の書き換えを設計が与えている_
   - _Requirements: 1.1, 2.1, 5.4, 6.6_
 
-- [ ] 4. 既存の道が今どおり動くことと約束の範囲を確かめる
+- [x] 4. 既存の道が今どおり動くことと約束の範囲を確かめる
   - `areka-emo-present`・`areka-placement`・`areka-session`・`areka-runtime`（シェルの着替えの読みの一致・焼く段の記録の数・採寸の失敗で止まる檻を含む）・`areka-emo-text`（バルーンの検体のテスト）・本体の MCP の面の書き出しの支えのテストを回し、全部緑であることを確かめる
   - SHIORI だけの読み込み直しとバルーンの着替えの道に変更が無いことを差分で確かめる
   - 差分が `crates/areka-runtime/src/assets.rs`・`crates/areka-session/src/ghost_session.rs`・emo-text の `tests/support/mod.rs`・`switch_assets.rs`・`Cargo.toml` に入っていないことと、触ったファイルがどれも 1,000 行以下であることを確かめる
@@ -68,3 +68,4 @@
 
 ## Implementation Notes
 - 今のツールチェーンでは `cargo clippy -p areka-emo-present --all-targets -- -D warnings` が、この spec の触らない検体のテスト（`balloon_target_tests.rs`・`mount_extent_tests.rs`・`presenter_budget_equivalence_tests.rs`・`shell_target_template_tests.rs`）と `areka-parsers` の新しい lint（`collapsible_if`・`chunks_exact`・`type_complexity`）で赤になる。触ったファイルは `--no-deps` で指摘 0 を確かめる。
+- 手元の `main` は古いことがある。差分の範囲は `git merge-base HEAD origin/main` から取る（`main...HEAD` だと他の spec の文書が混ざって見える）。
