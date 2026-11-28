@@ -442,7 +442,7 @@ pub fn resettle_script_balloons(world: &mut World, landed: &dyn Fn(u32) -> bool)
 #### BalloonDpiReanchor（バルーン窓だけの DPI の変化）
 
 ```rust
-/// バルーン窓の DPI の相が窓の寸を書き換えた直後に呼ぶ（台本の値の無いスコープは素通し）。
+/// バルーン窓の寸が `before` から `after` へ変わった直後に呼ぶ（台本の値の無いスコープは素通し）。
 pub fn reanchor_after_balloon_resize(world: &mut World, scope: u32, before: SizeI, after: SizeI);
 ```
 - 呼び手は `crates/areka-runtime/src/frame/dpi.rs` の DPI の相と、drain の後段の報告の回収（`crates/areka-runtime/src/frame/scale_text.rs` の `reconcile_reported_sizes`）の 2 か所で、`GhostWindowKind::Balloon` の窓の寸が `reconcile_window_size` で変わったとき（`before != after`）だけ。拡大率が変わったときバルーンが出ていなければ DPI の相は寸を書かず、変わった寸は出したときに報告の回収で着く。変わった時点が分かるので押しで呼ぶ（毎フレーム比べない）。
