@@ -2,6 +2,7 @@
 
 use super::choice_tests::close_and_join;
 use super::*;
+use crate::sink::{TalkMeta, TalkSender};
 use crate::test_support::test_system_vars;
 use areka_sakura::contract::{ScriptOrigin, TalkCue};
 use dola::time::testing::at_ms;
@@ -41,7 +42,7 @@ impl BootCueSink for TalkIdSink {
         })
     }
 
-    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin) {
+    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin, _meta: &TalkMeta) {
         self.talk_id = Some(talk_id);
         self.log
             .lock()
@@ -172,7 +173,7 @@ impl BootCueSink for OriginSink {
         })
     }
 
-    fn begin_talk(&mut self, talk_id: TalkId, origin: ScriptOrigin) {
+    fn begin_talk(&mut self, talk_id: TalkId, origin: ScriptOrigin, _meta: &TalkMeta) {
         self.seen
             .lock()
             .expect("seen mutex poisoned")
@@ -211,5 +212,108 @@ fn each_talk_start_hands_its_origin_to_every_clone() {
             (TalkId(2), ScriptOrigin::GHOST),
         ],
         "起動ごとに全ての複製がそのトークの出どころを受ける"
+    );
+}
+
+/// 付帯情報と cue の到着を順に記録する受け口。複製は記録先を共有する。
+struct MetaSink {
+    talk_id: Option<TalkId>,
+    log: Arc<Mutex<Vec<MetaEvent>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MetaEvent {
+    Begin(TalkId, TalkMeta),
+    Emit(Option<TalkId>),
+}
+
+impl CueSink for MetaSink {
+    fn emit(&mut self, _cue: TalkCue) {
+        self.log
+            .lock()
+            .expect("log mutex poisoned")
+            .push(MetaEvent::Emit(self.talk_id));
+    }
+}
+
+impl BootCueSink for MetaSink {
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(MetaSink {
+            talk_id: None,
+            log: Arc::clone(&self.log),
+        })
+    }
+
+    fn begin_talk(&mut self, talk_id: TalkId, _origin: ScriptOrigin, meta: &TalkMeta) {
+        self.talk_id = Some(talk_id);
+        self.log
+            .lock()
+            .expect("log mutex poisoned")
+            .push(MetaEvent::Begin(talk_id, meta.clone()));
+    }
+}
+
+/// 付帯情報の違う 2 つのトークを続けて始めると、それぞれの複製が自分の付帯情報を最初の cue より前に 1 回受ける。
+#[test]
+fn each_talk_start_hands_its_meta_once_before_the_first_cue() {
+    let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let sink: Box<dyn BootCueSink> = Box::new(MetaSink {
+        talk_id: None,
+        log: Arc::clone(&log),
+    });
+    let (tx, handle) = spawn_dispatcher(kanade_tx, vec![sink], test_system_vars(), None);
+
+    let meta_of = |name: &str, sender: TalkSender| {
+        let mut meta = TalkMeta::default();
+        meta.runner.name = name.to_string();
+        meta.sender = sender;
+        meta
+    };
+    let meta_a = meta_of("A", TalkSender::Runner);
+    let meta_b = meta_of("B", TalkSender::Tool("mcp".to_string()));
+
+    for (id, meta) in [(1, &meta_a), (2, &meta_b)] {
+        tx.send(DispatcherMsg::Start(StartTalk {
+            meta: meta.clone(),
+            ..StartTalk::new(TalkId(id), r"\s[0]X\_w[2500]\e")
+        }))
+        .expect("send Start");
+        tx.send(DispatcherMsg::Tick { now: at_ms(1_000) })
+            .expect("send Tick");
+    }
+    close_and_join(&tx, handle);
+
+    let log = log.lock().expect("log mutex poisoned").clone();
+    assert!(
+        !log.contains(&MetaEvent::Emit(None)),
+        "付帯情報を受ける前の複製に cue が届いてはならない: {log:?}"
+    );
+    for id in [TalkId(1), TalkId(2)] {
+        let first_emit = log
+            .iter()
+            .position(|e| *e == MetaEvent::Emit(Some(id)))
+            .unwrap_or_else(|| panic!("{id:?} の複製が cue を受ける: {log:?}"));
+        let begin = log
+            .iter()
+            .position(|e| matches!(e, MetaEvent::Begin(b, _) if *b == id))
+            .unwrap_or_else(|| panic!("{id:?} の付帯情報が届く: {log:?}"));
+        assert!(
+            begin < first_emit,
+            "{id:?} の付帯情報はそのトークの最初の cue より前に届く: {log:?}"
+        );
+    }
+    let begins: Vec<_> = log
+        .iter()
+        .filter(|e| matches!(e, MetaEvent::Begin(..)))
+        .cloned()
+        .collect();
+    assert_eq!(
+        begins,
+        [
+            MetaEvent::Begin(TalkId(1), meta_a),
+            MetaEvent::Begin(TalkId(2), meta_b)
+        ],
+        "起動ごとに 1 回、そのトークの付帯情報が届く: {log:?}"
     );
 }

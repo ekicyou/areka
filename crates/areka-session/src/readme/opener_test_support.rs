@@ -6,6 +6,7 @@
 use std::collections::VecDeque;
 
 use areka_ghost::BasewareRoot;
+use areka_ghost::sink::{GhostPlace, TalkRunner};
 use temp_path_kit::TempPath;
 
 use super::destination::{Destination, classify};
@@ -127,9 +128,20 @@ pub(crate) fn dest_url(url: &str) -> Destination {
 
 /// `build_ghost_root(.., ("g", "G"), ..)` で組んだ根のゴーストの開く文脈。
 pub(crate) fn open_context(root: &BasewareRoot) -> OpenContext {
+    let ghost_dir = root.ghost_dir("g");
     OpenContext {
-        ghost: "G".to_owned(),
-        ghost_dir: root.ghost_dir("g"),
+        runner: TalkRunner {
+            name: "G".to_owned(),
+            place: Some(GhostPlace {
+                master: ghost_dir.join("ghost").join("master"),
+                root: ghost_dir,
+            }),
+        },
         baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
     }
+}
+
+/// 文脈の実行するゴーストの最上位（置き場の無い文脈では落ちる）。
+pub(crate) fn ghost_root(ctx: &OpenContext) -> &std::path::Path {
+    &ctx.runner.place.as_ref().expect("置き場").root
 }

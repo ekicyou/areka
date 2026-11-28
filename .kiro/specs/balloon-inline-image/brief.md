@@ -74,3 +74,8 @@
 - **優先度の区分**: C。
 - **要件定義のモデル**: Opus（再生の指示を 1 種類足して文字の層で描く形は先例が多い）。
 - **議題の候補**: ⑴ 座標の形も入れるか。⑵ 行の高さと縦の位置（SSP で測る）。⑶ 正典の既定「左上の色を透過」と areka の「宣言の無いときは α」の差をどう扱うか（決まりどおり α・差を §8 に書く、を推奨）。⑷ 画像をどのクレートで読むか（emo-text の中／emo-present から渡す）。⑸ base64 を入れるか。⑹ 動く画像（APNG・WebP）を文中で動かすか。
+
+## 申し送り（talk-script-metadata より・2026-11-28 着地）
+
+- 台本の付帯情報は `areka_talk::TalkMeta`（`runner: TalkRunner { name, place: Option<GhostPlace { master, root }> }`・`sender: TalkSender`）。受け手は `BootCueSink::begin_talk(talk_id, origin, &TalkMeta)` でトークごとに受け取り、そのトークの最初の合図より前に届く。`GhostSlot` を引かずにこれを覚えて使う（作りの例は `crates/areka-session/src/readme/readme_cue.rs` の `ReadmeCueSink`）。
+- 相対パスは `areka_sakura::talk_path::resolve(place, written, SearchOrder)`（在る無しを差し替えてテストするなら `resolve_in`）（`areka_ghost::sink` からも再公開）で解く。`SearchOrder::MasterOnly` は ghost/master だけ、`MasterThenRoot` は ghost/master の次にゴーストの最上位を探す。解けないときは `Unresolved::{Empty, NoPlace, NotFound { last_tried }}`（`reason()` が `empty_path`・`no_place`・`not_found`）で、ログに残してから断る。どちらの探し方を使うかはこの spec の要件の段で決める。

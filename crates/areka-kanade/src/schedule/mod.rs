@@ -57,6 +57,8 @@ pub mod script_log;
 pub(crate) mod sstp;
 pub(crate) mod steady;
 pub(crate) mod talk_gap;
+/// トークの付帯情報（実行するゴーストの出口の付与）。
+mod talk_meta;
 /// SHIORI の応答で始まるトークの出どころ（出口の付与と引き下げの記録）。
 mod talk_origin;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
@@ -166,7 +168,8 @@ pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (St
     let talk_source = script_log::source_of(&state, &input, &replied);
     let reply_origin = replied.reply_origin();
     let (mut state, actions) = route(state, input, config);
-    let actions = talk_origin::stamp(reply_origin, actions);
+    let mut actions = talk_origin::stamp(reply_origin, actions);
+    talk_meta::stamp_runner(config, &mut actions);
     let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
     balloon_events::settle(&mut state, &actions);

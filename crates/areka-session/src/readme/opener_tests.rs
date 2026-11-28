@@ -11,7 +11,7 @@ use temp_path_kit::TempPath;
 
 use super::super::destination::{Destination, Target};
 use super::super::opener_test_support::{
-    FakeOs, build_ghost_root, dest_of, open_context, write_descript,
+    FakeOs, build_ghost_root, dest_of, ghost_root, open_context, write_descript,
 };
 use super::super::os_port::{OsCall, Verb};
 use super::{OpenContext, OpenFailure, expand_env, resolve};
@@ -32,7 +32,7 @@ impl Fixture {
 
     /// `ghost/master`。
     fn master(&self) -> PathBuf {
-        self.ctx.ghost_dir.join("ghost").join("master")
+        ghost_root(&self.ctx).join("ghost").join("master")
     }
 
     /// `ghost/master` の下にファイルを置き、その絶対パスを返す。
@@ -188,6 +188,14 @@ fn missing_path_with_separator_is_not_found() {
 }
 
 #[test]
+fn open_file_expanding_to_empty_is_empty_path() {
+    let f = Fixture::new();
+    let os = FakeOs::default().with_env("AREKA_T_EMPTY", "");
+    let got = f.resolve(&dest_of("open", &["file", "%AREKA_T_EMPTY%"]), &os);
+    assert_eq!(got, Err(OpenFailure::EmptyPath));
+}
+
+#[test]
 fn open_browser_opens_url() {
     let f = Fixture::new();
     let got = f.resolve(
@@ -270,7 +278,7 @@ fn named(kind: &str, name: &str) -> Destination {
 fn named_ghost_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let dir = ctx.ghost_dir.clone();
+    let dir = ghost_root(&ctx).to_path_buf();
     assert_eq!(
         resolve(&named("ghost", "G"), &ctx, &os),
         Ok(want(Verb::Open, &dir, None, None))
@@ -285,7 +293,7 @@ fn named_ghost_by_name_then_folder() {
 fn named_shell_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let shell = |f: &str| ctx.ghost_dir.join("shell").join(f);
+    let shell = |f: &str| ghost_root(&ctx).join("shell").join(f);
     // name の `b` はフォルダ `b` より先にシェル `a` に当たる。
     assert_eq!(
         resolve(&named("shell", "b"), &ctx, &os),
@@ -387,7 +395,7 @@ fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
 #[test]
 fn named_balloon_finds_the_ghost_inner_first() {
     let (_tmp, ctx) = named_fixture();
-    let inner = ctx.ghost_dir.join("balloon").join("BA");
+    let inner = ghost_root(&ctx).join("balloon").join("BA");
     write_descript(&inner, "bb");
     let os = FakeOs::default();
     for want_name in ["bb", "ba", "BA"] {
@@ -397,4 +405,96 @@ fn named_balloon_finds_the_ghost_inner_first() {
             "{want_name}"
         );
     }
+}
+
+/// 置き場の無い文脈（実行するゴーストの名だけ）。
+fn placeless(ctx: &OpenContext) -> OpenContext {
+    let mut ctx = ctx.clone();
+    ctx.runner.place = None;
+    ctx
+}
+
+#[test]
+fn open_file_without_place_refuses_relative_and_opens_absolute() {
+    let f = Fixture::new();
+    let p = f.file("abs.txt");
+    let ctx = placeless(&f.ctx);
+    let os = FakeOs::default();
+    assert_eq!(
+        resolve(&dest_of("open", &["file", r"sub\rel.txt"]), &ctx, &os),
+        Err(OpenFailure::NoPlace)
+    );
+    assert_eq!(
+        resolve(&dest_of("open", &["file", p.to_str().unwrap()]), &ctx, &os),
+        Ok(want(Verb::Open, &p, None, Some(&f.master())))
+    );
+    let empty = FakeOs::default().with_env("AREKA_T_EMPTY", "");
+    assert_eq!(
+        resolve(&dest_of("open", &["file", "%AREKA_T_EMPTY%"]), &ctx, &empty),
+        Err(OpenFailure::EmptyPath)
+    );
+}
+
+/// browser と mailer は置き場が無くても、環境変数を書いていても綴りのまま渡す。
+#[test]
+fn browser_and_mailer_are_passed_as_written_without_place() {
+    let f = Fixture::new();
+    let ctx = placeless(&f.ctx);
+    let os = FakeOs::default().with_env("AREKA_T_X", "expanded");
+    assert_eq!(
+        resolve(
+            &dest_of("open", &["browser", "http://a/%AREKA_T_X%"]),
+            &ctx,
+            &os
+        ),
+        Ok(want(Verb::Open, "http://a/%AREKA_T_X%", None, None))
+    );
+    assert_eq!(
+        resolve(
+            &dest_of("open", &["mailer", "%AREKA_T_X%@example.com"]),
+            &ctx,
+            &os
+        ),
+        Ok(want(
+            Verb::Open,
+            "mailto:%AREKA_T_X%@example.com",
+            None,
+            None
+        ))
+    );
+}
+
+/// 名前で引く shell は、根の並びに他のゴーストが居ても実行するゴーストの中だけを引く。
+#[test]
+fn named_shell_looks_inside_the_runner_ghost() {
+    let (_tmp, ctx) = named_fixture();
+    let root = ctx.baseware.clone().unwrap().roots()[0].clone();
+    let h = root.ghost_dir("h");
+    write_descript(&h.join("ghost").join("master"), "H");
+    write_descript(&h.join("shell").join("x"), "X");
+    let mut ctx_h = ctx.clone();
+    ctx_h.runner = areka_ghost::sink::TalkRunner {
+        name: "H".to_owned(),
+        place: Some(areka_ghost::sink::GhostPlace {
+            master: h.join("ghost").join("master"),
+            root: h.clone(),
+        }),
+    };
+    let os = FakeOs::default();
+    assert_eq!(
+        resolve(&named("shell", "X"), &ctx_h, &os),
+        Ok(want(Verb::Open, h.join("shell").join("x"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("shell", "a"), &ctx_h, &os),
+        Err(OpenFailure::NoMatch {
+            store: super::super::destination::Store::Shell,
+            name: "a".to_owned()
+        }),
+        "表示中かどうかに関わらず、他のゴーストのシェルは引かない"
+    );
+    assert_eq!(
+        resolve(&named("shell", "x"), &placeless(&ctx_h), &os),
+        Err(OpenFailure::NoPlace)
+    );
 }

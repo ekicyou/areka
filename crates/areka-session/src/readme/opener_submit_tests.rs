@@ -14,9 +14,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::super::opener_test_support::{build_ghost_root, dest_url, refused_files};
-use super::{OpenJob, Opener, submit};
+use super::{OpenJob, Opener, submit, submit_for_talk};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::log_history::TARGET_ERROR;
+use areka_ghost::sink::{GhostPlace, TalkRunner};
 
 /// 置き場にゴースト `g`（実行系なし）を据えた World。
 fn world_with_ghost(root: &BasewareRoot) -> World {
@@ -65,9 +66,17 @@ fn submit_copies_the_context_and_sends_one_job() {
     assert!(rx.try_recv().is_err(), "1 件だけ");
     assert_eq!(job.destination, d);
     let ghost_dir = std::path::absolute(root.ghost_dir("g")).unwrap();
-    assert_eq!(job.context.ghost_dir, ghost_dir);
     // 実行系の無い置き場は descript の名を持たないので、フォルダの絶対パスが名になる。
-    assert_eq!(job.context.ghost, listed_name(None, &ghost_dir));
+    assert_eq!(
+        job.context.runner,
+        TalkRunner {
+            name: listed_name(None, &ghost_dir),
+            place: Some(GhostPlace {
+                master: ghost_dir.join("ghost").join("master"),
+                root: ghost_dir,
+            }),
+        }
+    );
     assert_eq!(
         job.context.baseware,
         Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf()))
@@ -155,4 +164,60 @@ fn spawned_thread_in_test_build_records_and_refuses() {
         || refused_files().iter().any(|f| f == url.as_str()),
     )
     .unwrap_or_else(|e| panic!("断る口の記録に {url} が無い: {e}"));
+}
+
+/// 台本の要求は表示中のゴーストでなく、要求の実行するゴーストで文脈を組む。
+#[test]
+fn submit_for_talk_uses_the_runner_of_the_request() {
+    let tmp = TempPath::new("open-ext-submit-talk");
+    let root = build_ghost_root(&tmp, ("g", "G"), &[], &[]);
+    let mut world = world_with_ghost(&root);
+    world.insert_resource(crate::reload::test_support::boot_context(tmp.path(), &root));
+    let (tx, rx) = mpsc::channel::<OpenJob>();
+    world.insert_resource(Opener::from_sender(tx));
+    let other = root.ghost_dir("other");
+    let runner = TalkRunner {
+        name: "Other".to_owned(),
+        place: Some(GhostPlace {
+            master: other.join("ghost").join("master"),
+            root: other,
+        }),
+    };
+
+    submit_for_talk(
+        &world,
+        dest_url("https://example.invalid/f"),
+        runner.clone(),
+    );
+
+    let job = rx.try_recv().expect("1 件届く");
+    assert_eq!(job.context.runner, runner);
+    assert_eq!(
+        job.context.baseware,
+        Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf()))
+    );
+}
+
+/// 台本の要求はゴーストが居なくても捨てない。
+#[test]
+fn submit_for_talk_without_ghost_still_sends_the_job() {
+    let mut world = World::new();
+    let (tx, rx) = mpsc::channel::<OpenJob>();
+    world.insert_resource(Opener::from_sender(tx));
+
+    let ((), events) = capture(|| {
+        submit_for_talk(
+            &world,
+            dest_url("https://example.invalid/g"),
+            TalkRunner::default(),
+        )
+    });
+    assert!(
+        events.iter().all(|e| e.level != tracing::Level::ERROR),
+        "{events:?}"
+    );
+    assert_eq!(
+        rx.try_recv().expect("1 件届く").context.runner,
+        TalkRunner::default()
+    );
 }

@@ -11,7 +11,7 @@ use crate::schedule::translate_test_support::config as cfg;
 use crate::schedule::translate_test_support::{change_request, pass_translate, steady};
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
-use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
+use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId, TalkMeta};
 use dola::time::testing::at_ms;
 use tracing::Level;
 
@@ -335,6 +335,7 @@ fn start_with_epilogue() -> StartTalk {
         }],
         origin: ScriptOrigin::GHOST,
         strict: false,
+        meta: TalkMeta::default(),
     }
 }
 
