@@ -100,16 +100,17 @@
 - **決定論のテスト**: 語ごとの画素は D2D を WARP で動かして固定する（開発者 2026-10-15「画像合成に関するテストは、CPUに切り替えるべき」）。上の Approach の「CPU の整数の道」の段は使わない。
 - **規模**: D2D の道で測り直す（着手のとき）。自前の効果 3 種の分が増え、画素の式を CPU の整数で書く分が減る。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-28 棚卸㊺の再測定（main 7a590832）
 
-- 前提の変化: D2D の道（10-15）。語の表 `crates/areka-emo-compose/src/method.rs`（415 → 421 行）の `BlendKind` は 19 種のまま。seriko の `crates/areka-seriko/src/table.rs`（929 行）の「`blend-multiply` は描けない」の期待（858〜862 行目）も起票のまま。
-- 触るファイル（D2D の道）: `method.rs`・`draw-methods-canon` が作る「節を組む所」の重ね方の対応の表・seriko の `table.rs` の期待 1 か所・台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 57 行・`doc/COMPAT_ARCHITECTURE.md` §8。`blit.rs`（782 行）は D2D の道では振り分けを足さない見込み。D2D に無い 3 種を自前の効果で描くなら wintf に新しい効果のファイル（D2D の自前の効果は repo にまだ 1 つも無い・画素の式を持つ shader とその作り方も要る）。
-- 規模: 9〜12 タスク（25 種を `D2D1_BLEND_MODE` へ・`-fast`・9 種の追加・WARP の見本・台帳）。3 種を自前の効果で描くなら 14〜17。
-- 先に要るもの: `draw-methods-canon`・`wintf-d2d-composite-rules`。見直しは `audit-emo-compose`・`audit-seriko`。台帳の `audit-parsers-sakura` は外す（この spec は読み手に触らない約束）。自前の効果を wintf に置くなら `audit-wintf-runtime` を足す。どれも `draw-methods-canon` より前に着地するので、並びは変わらない。同じウェーブに置けない相手＝`draw-methods-canon`・`element-clipping-option`（合成の節を組む所・設計で確かめる）。
-- 優先度の区分: A（切り出し元を引き継ぐ）。
-- 要件定義のモデル: Opus（語を D2D の値へ写すのは `wintf-d2d-composite-rules` の口に乗る）。議題で 3 種を自前の効果で描くと決めたら Fable（wintf に先例の無い公開の口＝自前の効果の登録と shader の作り方）。
-- 分割の案: 無し（17 まで）。
-- 見つけた穴・古くなった記述: `method.rs` の 14 行目と 82 行目の注記は「19 種」「全量列挙（SSP 2.8.35〜2.8.40）」と書くが、その版の範囲だけでも `soft-light`（2.8.39）・`linear-burn`・`linear-light`・`pin-light`・`subtract`・`vivid-light`（2.8.40）が抜けている（正典は 28 種）。
+- 前提の変化: `draw-methods-canon`・`wintf-d2d-composite-rules` は着地済み＝待つものは無い。CPU の転写 `blit.rs` は消えた。描く道は「計画（`draw_plan.rs` の `Mix`・`mix_of`）→ 節（emo-present の `draw_nodes.rs` の `mix_mode_of`）→ wintf」。wintf には `MixMode::Blend`（`BlendImage`・26 種）が既に在る。`Mix` は今は重ね方の 5 つだけで、ブレンドの腕が無い。`BlendKind` は 19 種のまま。
+- 触るファイル: emo-compose の `method.rs`（444 行）・`draw_plan.rs`（146）・`plan_mix.rs`（298）と兄弟のテスト（`draw_plan_tests.rs`・`plan_mix_tests.rs`・`plan_issues_tests.rs`・`log_firing_tests.rs` の `Blend(Multiply)` を描けない語として使う 197〜221 行目）・emo-present の `draw_nodes.rs`（343）と WARP の画素のテスト（新しいファイルにして `draw_nodes.rs` から宣言する）・`shell_target_element_base_tests.rs` の期待・seriko の `table.rs`（969 行）の期待 1 か所（853 行目）・台帳の 57 行・§8。`shell_target.rs` と読み手は触らない（`warn!` は `is_implemented_name` に従って自然に減る）。
+- 規模: 9〜13 タスク。D2D に無い 3 種を自前の効果で描くなら 14〜18。
+- 先に要るもの: 無し。同じウェーブに置けない相手＝`element-clipping-option`（計画と節の段）・`animated-image-import`（`method.rs`・seriko の `table.rs`）。`extent-element-offset` とは `log_firing_tests.rs` だけが重なりうる（あちらが記録のテストを新しいファイルに置けば 0）。
+- 優先度の区分: A（開発者の「残りの描画メソッドは起票」から切り出した）。
+- 要件定義のモデル: Opus（`MixMode::Blend` の口に語を写すだけ）。設計で 3 種を自前の効果で描くと決めたら、そこは Fable（wintf に先例の無い自前の効果の登録と shader の作り方）。
+- 分割の案: 無し（18 まで）。
+- 見つけた穴: `-fast` の 27 は「ベースの α を保ってブレンドする」形だが、wintf の `BlendImage` はふつうのブレンドだけで、ベースの α を保つ口は無い見込み＝wintf の `draw_content.rs`・`draw/emit.rs` に口を足すかを要件で確かめる。自前の効果も同じ所に入る。
+- 古くなった記述: Current State・Approach の `blit.rs`・CPU の整数の道（D2D の道に決まった）。`method.rs` の 3〜8 行目の説明は「描けるのは `overlay` だけ」「下流の `blit` 実行器」と書く（今は 7 語が描け、`blit` は無い）。`crates/areka-emo-compose/src/scale.rs` の 4 行目も消えた `blit.rs` を挙げる。
 
 ## 申し送り（draw-methods-canon より）
 
