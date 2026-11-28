@@ -317,3 +317,6 @@
 - 8.3 の結論: element ごとの行列の変換がこの後に入るので、まとめの描き方を今の形に合わせて詰めない。k≈1.2468 のまばたきの当たりの行だけ約 3% 重い結果を受け入れ、所要の詰めは行列の変換の後に測り直して決める（研究の記録 §22・要件 8.2 を直した）。完了の棚卸で、その測り直しと当たりの 1 画素の読みの待ちを起票する。
 - 7.2: `crates/areka-emo-present/Cargo.toml` の `[dev-dependencies]` に `dola` を足した（テストの `FrameTime` を本番と同じ時刻の出どころから取るため・ワークスペースの crate で出荷物に入らない・`Cargo.lock` が 1 行増えた）。設計の「依存を足さない」から外れる唯一の所。
 - 最終検証（2026-11-28）: `tools/test-all.ps1` は全段緑（exit 0）。完了の前に main（6 コミット先）を取り込み、重なる 7 ファイル（`Cargo.lock`・compose `lib.rs`・`film_playback_e2e_tests.rs`・`frame/wiring.rs`・`COMPAT_ARCHITECTURE.md`・`assets.toml`・`report/summary.md`）を合わせる。台帳の `blit::execute` 61 か所のうち 57 行は `draw-methods-blend` の持ち分の行。
+- 完了時にその場で解決（4 件）: 読めない間の印を `SurfaceGraphics` の欄へ移した（`cd570e2f3`）・整数でない位置のまとめに 2 つの矩形が掛かる範囲だけの回のテストを足した（`002cc5c42`）・入れ子の自動の持ち主が上の自動の持ち主の下へ動いたとき同じ回に吸い込む（`5e85b3deb`・本 spec の外の wintf の上げ下げのバグ）・合成の古い説明と `BlitOp` の公開を直した（`0b6fad88e`）。
+- 完了時の申し送り（5 件）: `draw-methods-blend`（台帳の 57 行・今の描く道）・`element-clipping-option`（`Element.options`・範囲の口）・`extent-element-offset`（8.1 のテストの回避）・`compose-f16-precision`（CPU の合成は無い）・`element-animation-easing`（行列の変換の後の所要の測り直し・`covers_surface`・当たりの読みの待ち）。起票 0 件。
+- 起票しないもの: 装置が替わると合成メモを全部捨てる（設計が許す上位集合・計画は作り直せる）・並走の負荷の下の WARP の画素のテストの 1 度の赤（再現せず）。
