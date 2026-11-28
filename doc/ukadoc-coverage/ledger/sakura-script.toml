@@ -3041,16 +3041,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonalign_2cID_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "balloon-script-offset-align"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンをキャラのどちら側へ付けるかを選べず、既定の側に出たままになる）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。再生時に `\\![set,balloonalign,ID]` を、命令を書いた所のスコープのバルーンの台本の向きとして受ける。left・right・center・top・bottom は側を固定し、none と上記以外の字は今の左右の決め方（none）で当てる。ID は大文字と小文字を区別しない。台本の向きは descript の balloon.alignment の代わりに効き、台本の基準点と利用者のずらしが新しい向きの基準へ足される。寿命は台本の基準点と同じ。
+ログ: 出る（当てたときは info!、ID の欠けは当てずに警告 1 行、6 語以外の字は none として当てて受け取った字を残す。他の受け口は今までどおり担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md §8 に、台本の値の寿命・シェルとバルーンの切り替え・`\\![execute,resetballoonpos]` との関係・押し戻しの画面・軸ごとの相対と絶対・壊れた値の扱い・`center`・`bottom` の縦の基準の SSP との違いの行がある。
+根拠の場所: 当て口 crates/areka-placement/src/script_balloon.rs の apply_script_balloon_offset・apply_script_balloon_align。\\![ の受け取り手の宣言表 crates/areka-runtime/src/consumer_ledger.rs の CANONICAL_ROWS（("set", Some("balloonoffset"), MoveSink)・("set", Some("balloonalign"), MoveSink)）。テストは crates/areka-placement/src/script_balloon_apply_tests.rs・script_balloon_lifetime_tests.rs・script_balloon_user_shift_tests.rs・script_balloon_args_tests.rs・script_balloon_overlay_tests.rs と、crates/areka-runtime/src/move_cue_balloon_script_tests.rs・frame_move_hold_balloon_script_tests.rs・frame_balloon_script_drain_tests.rs・frame_dpi_balloon_script_tests.rs。
 [群: バルーンの見た目と切り替え]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -3086,16 +3087,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonoffset_2cx_2cy_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "balloon-script-offset-align"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの取り付け位置をずらせず、既定の位置に出たままになる）。
-ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。再生時に `\\![set,balloonoffset,x,y]` を、命令を書いた所のスコープのバルーンの台本の基準点として受ける。x と y は軸ごとに独立で、符号つきの整数は絶対（descript のずらしの代わり）、頭に @ のついたものは descript のずらしからの相対。台本の基準点に利用者のずらしが足され、起動の配置・本体への追従・押し戻しの関門・倍率の変化のどれも同じ値を読む。ゴーストの終わり（切り替え・読み直しを含む）まで保ち、シェルとバルーンの切り替えでは保つ。記憶へは保存しない。
+ログ: 出る（当てたときは info!、壊れた値（軸の欠け・数として読めない・@ だけ）は当てずに警告 1 行を残す。他の受け口は今までどおり担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md §8 に、台本の値の寿命・シェルとバルーンの切り替え・`\\![execute,resetballoonpos]` との関係・押し戻しの画面・軸ごとの相対と絶対・壊れた値の扱い・`center`・`bottom` の縦の基準の SSP との違いの行がある。
+根拠の場所: 当て口 crates/areka-placement/src/script_balloon.rs の apply_script_balloon_offset・apply_script_balloon_align。\\![ の受け取り手の宣言表 crates/areka-runtime/src/consumer_ledger.rs の CANONICAL_ROWS（("set", Some("balloonoffset"), MoveSink)・("set", Some("balloonalign"), MoveSink)）。テストは crates/areka-placement/src/script_balloon_apply_tests.rs・script_balloon_lifetime_tests.rs・script_balloon_user_shift_tests.rs・script_balloon_args_tests.rs・script_balloon_overlay_tests.rs と、crates/areka-runtime/src/move_cue_balloon_script_tests.rs・frame_move_hold_balloon_script_tests.rs・frame_balloon_script_drain_tests.rs・frame_dpi_balloon_script_tests.rs。
 [群: バルーンの見た目と切り替え]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

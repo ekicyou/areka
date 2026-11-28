@@ -130,9 +130,10 @@ fn touched_scopes(
             }
             Some(scopes)
         }
-        PositionCue::SetAlignment { scope, .. } | PositionCue::BalloonMoveLock { scope, .. } => {
-            Some(vec![*scope])
-        }
+        PositionCue::SetAlignment { scope, .. }
+        | PositionCue::BalloonMoveLock { scope, .. }
+        | PositionCue::SetBalloonOffset { scope, .. }
+        | PositionCue::SetBalloonAlign { scope, .. } => Some(vec![*scope]),
         PositionCue::SetSticky { tokens } => Some(sticky_members(tokens)),
         PositionCue::ResetSticky => Some(
             groups
@@ -151,7 +152,9 @@ fn touched_scopes(
             held.iter()
                 .filter_map(|h| match h.cue {
                     PositionCue::BalloonMoveLock { scope, .. }
-                    | PositionCue::SetAlignment { scope, .. } => Some(scope),
+                    | PositionCue::SetAlignment { scope, .. }
+                    | PositionCue::SetBalloonOffset { scope, .. }
+                    | PositionCue::SetBalloonAlign { scope, .. } => Some(scope),
                     _ => None,
                 })
                 .collect(),

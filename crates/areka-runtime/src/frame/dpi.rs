@@ -17,6 +17,7 @@ use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use areka_placement::dpi_sync::{self, DpiSyncHold};
 use areka_placement::follow::{resize_window_keep_position, resize_window_to};
 use areka_placement::resolver::SizePx;
+use areka_placement::script_balloon::reanchor_after_balloon_resize;
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::balloon_offset_follow::{
@@ -416,6 +417,11 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                         world,
                         before_rects.clone().unwrap_or_default(),
                     );
+                }
+                if let (GhostWindowKind::Balloon, Some(before), Some(after)) = (kind, before, after)
+                    && before != after
+                {
+                    reanchor_after_balloon_resize(world, scope, before, after);
                 }
                 wrote
             }
