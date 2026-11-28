@@ -69,3 +69,5 @@
 ## Implementation Notes
 - 今のツールチェーンでは `cargo clippy -p areka-emo-present --all-targets -- -D warnings` が、この spec の触らない検体のテスト（`balloon_target_tests.rs`・`mount_extent_tests.rs`・`presenter_budget_equivalence_tests.rs`・`shell_target_template_tests.rs`）と `areka-parsers` の新しい lint（`collapsible_if`・`chunks_exact`・`type_complexity`）で赤になる。触ったファイルは `--no-deps` で指摘 0 を確かめる。
 - 手元の `main` は古いことがある。差分の範囲は `git merge-base HEAD origin/main` から取る（`main...HEAD` だと他の spec の文書が混ざって見える）。
+- 完了時にその場で解決: `crates/areka-placement/src/lib.rs` の `scope_windowposition` の説明が系列解決の権威を `resolve_balloon_faces` と書いていたのを、実際に呼ぶ `resolve_balloon_faces_quiet` に直した。
+- 完了時の棚卸: clippy 1.100 の残り（触っていないファイル）は `clippy-199-lints` の brief へ申し送った。
