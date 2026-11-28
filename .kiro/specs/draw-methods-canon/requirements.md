@@ -185,7 +185,7 @@
 1. The areka shall 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の element定義・`base`・`overlay-fast`・`overlayfast`・`interpolate`・`replace`・`asis`・`reduce` の行を、この仕様の後の働きに合わせて直す（`blend-*` の行と旧い別名 2 行には触らない）。
 2. The areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、正典が沈黙または未定義とする所の areka の決め（Requirement 2.7・3.3・3.4 と、仮定から決まったもの）を行として足し、pattern定義の `base` を「未対応」とする今の行を直す。
 3. When 「．さくら」のシェル `master` で面 12・22 を出したとき（`\s[12]`・`\s[22]`）, the areka shall `base` の土台の絵を描き、読み込みのときの「描けない描画メソッド」の `warn!` を 0 件にする（`move` の働きは `seriko-pattern-calls` と並べて見る）。
-4. When クローディアのシェルを読み込むとき, the areka shall surface28・animation100 の `base` の pattern についての「描けない描画メソッド」の記録 3 行を出さず、読み込みの記録の檻（`claudia_base_surfaces_are_full_size_and_records_are_fixed`）の期待値からその 3 行を外す（まだ働かない形の記録 1 行は残す）。
+4. When クローディアのシェルを読み込むとき, the areka shall surface28・animation100 の `base` の pattern についての「描けない描画メソッド」の記録 3 行を出さず、読み込みの記録の檻（`claudia_base_surfaces_are_full_size_and_records_are_fixed`）の期待値からその 3 行を外す（この檻の期待する描けない記録と警告以上の行は 0 行）。
 5. The areka shall seriko のテストの期待（pattern定義の `base` のコマを「描けない」と確かめている 1 か所）を、この仕様の答えに合わせて直す。
 
 ## 仮定と討議の決め（2026-11-27 の要件の討議・全議題を推奨案で承認）

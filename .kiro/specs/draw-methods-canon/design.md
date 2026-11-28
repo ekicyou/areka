@@ -442,9 +442,10 @@ pub struct DrawPlan {
 pub enum PlanItem {
     Image { element: ElementId, transform: Transform, mix: Mix, range: Option<IRect> },
     Fill { rect: IRect },                       // 黒の不透明（入れ子の asis の下地）
-    GroupBegin { transform: Transform, mix: Mix }, // 透明から始まる 1 枚
+    GroupBegin { transform: Transform, mix: Mix, range: Option<IRect> }, // 透明から始まる 1 枚
     GroupEnd,
 }
+// まとめの中の項の位置と範囲は、まとめの左上からの値。
 pub struct IRect { pub x: i64, pub y: i64, pub w: u32, pub h: u32 }
 impl Composer {
     pub fn plan_into(&mut self, out: &mut DrawPlan, world: &EmoWorld, atlas: &AtlasTable,
@@ -459,7 +460,7 @@ impl Composer {
 - **最初の項の読み替え**（3.4）: 層（面の根か、まとめの中）の最初の項は、`asis` 以外の語を `Mix::SourceOver` にする（透明の上の `SourceOver`＝写し）。`asis` は `asis` 用の絵のまま（透過色を表示する）。「最初」は描くものが在る最初の項で決める（無い絵の項は数えない・仮定 A・SSP の測り `research.md` §12）。
 - **`replace` の範囲**（2.4）: `range` は element の位置と `AtlasEntry.original`（縁を切る前の原寸）の矩形。emo-present は矩形の切り抜きの節の中に `SOURCE_COPY` の葉を置く。
 - **`asis`**（2.5・2.7）: 絵（element定義の画像・element定義を持たない面のコマ）は `asis` 用の絵の `ElementId` を `SourceOver` で置く。element定義を持つ面を `asis` で部品にするときは、その面の外形の `Fill`（黒）を置き、その上に面を `SourceOver` のまとめで置く。
-- **まとめ**（2.7・2.8・正典の「一枚の画像のように扱われる」）: 入れ子の面（`Enter`）は、中に `SourceOver` でない項が在るか、入れ子を指す語の `Mix` が `SourceOver` でないとき `GroupBegin`／`GroupEnd` で囲む。どちらでもなければ今と同じく平らに並べる（`SourceOver` の結合則で答えは同じ・±1）。
+- **まとめ**（2.7・2.8・正典の「一枚の画像のように扱われる」）: 入れ子の面（`Enter`）は、中に `SourceOver` でない項が在るか、入れ子を指す語の `Mix` が `SourceOver` でないとき `GroupBegin`／`GroupEnd` で囲む。どちらでもなければ今と同じく平らに並べる（`SourceOver` の結合則で答えは同じ・±1）。`GroupBegin.range` は入れ子を指す語が `Copy`（`replace`）のときだけ `Some`（入れ子の面の位置と外形の矩形）で、それ以外は `None`。範囲の無い `Copy` のまとめは透明を切り抜きまで広げてしまう（`research.md` §15.2）。まとめの中の項の位置と範囲は、まとめの左上からの値。
 - **`base` の置き換え**（4.1〜4.3・`plan_base.rs`）: 面の今のコマ（通常のアニメーション）か ON の着せ替えの pattern0 が `base` なら、層 (i)（面の静的な element）を、そのコマが指す面の `Enter`（位置 (0,0)・XY は無視）に置き換える。ほかのアニメーションと着せ替えはその上に ID の順で重なる。置き換えが複数あるときは描く順の後のものが勝つ（仮定 B）。指す面が無い・`-1` なら置き換えず、今の決まりのとおりそのコマは何も描かない（4.7・仮定 C）。B・C と XY の無視は SSP の測りと一致（`research.md` §12）。
 - **`base` の意味は 1 か所で決める**（4.1・4.2・6.1）: pattern定義の `base` の読み替え（XY を 0 にし、置き換えの印を付ける）は、pattern の正規化（`fold.rs`）で 1 度だけ行う。今のコマ・着せ替えの pattern0・`always` の休みのコマ（`plan.rs` の `always_rest_target`）・入れ子の面のコマ（`push_direct`・`nesting.rs` の 2 か所）・shell の外形（`plan_bounds.rs`）・外形（`plan_extent.rs`）は、どれもその結果を読むだけにする。こうすると `always` と入れ子の `base` も重ねでなく置き換えになり、外形と描いた絵が食い違わず、`plan_extent.rs` の本体にも触らずに済む。`always` と入れ子の `base` の計画の値のテストを足す。
 - 着せ替えの pattern0 以外の `base` は `Overlay`（4.4・`bind_steps.rs`）。element定義の `base` は `Overlay`（5.1・`fold.rs`）。`move` と呼ぶ語は今の読み方のまま（5.3）。
@@ -569,7 +570,7 @@ impl DrawNodes {
 }
 pub(crate) fn mix_mode_of(mix: Mix) -> D2D1_COMPOSITE_MODE; // Mix → D2D の 1 か所
 ```
-- 項 → 節: `Image` は `(VisualDrawContent::new_ex(局所の矩形, 葉, LINEAR, mix), Visual, Arrangement{位置, 1, 寸法}, HitTest::none(), ChildOf)`。`range` が在れば矩形の切り抜きの節（`Visual.clip`＋`VisualTransform`）を親にする。`Fill` は黒の葉。`GroupBegin` は `VisualGroup { mix }`＋`VisualTransform` の節（子は `GroupEnd` まで）。
+- 項 → 節: `Image` は `(VisualDrawContent::new_ex(局所の矩形, 葉, LINEAR, mix), Visual, Arrangement{位置, 1, 寸法}, HitTest::none(), ChildOf)`。`range` が在れば矩形の切り抜きの節（`Visual.clip`＋`VisualTransform`）を親にする。`Fill` は黒の葉。`GroupBegin` は `VisualGroup { mix }`＋`VisualTransform` の節（子は `GroupEnd` まで・子の位置はまとめの左上から）。`GroupBegin.range` が在れば、まとめの節も矩形の切り抜きの節の中に置く。
 - 写しの規則: 先頭から同じ位置の項を比べ、同じなら残す・同じ種類なら中身だけ差し替える・種類か入れ子の形が違えばそこから後ろを作り直す。余った節は消す。子の順は描く順（`Children` の順）。
 - 画面（生きた World の `emo-surface` の下）と画面の外（使い捨ての World の根の下）が同じ関数を使う（7.8）。
 
@@ -582,11 +583,12 @@ impl OffscreenRenderer {
     pub fn warp() -> Result<Self, PresentError>;          // wintf::ecs::warp_d2d_device
     pub fn render(&mut self, world: &EmoWorld, atlas: &AtlasTable, surface_id: u32,
         binds: &BindSet, pattern: &PatternState) -> Result<ComposedSurface, PresentError>;
-    pub(crate) fn render_plan(&mut self, gpu: &mut GpuAtlas, plan: &DrawPlan) -> Result<ComposedSurface, PresentError>;
+    /// 関連関数。描き手の控えでなく、渡した GpuAtlas の装置で描く。
+    pub(crate) fn render_plan(gpu: &mut GpuAtlas, plan: &DrawPlan) -> Result<ComposedSurface, PresentError>;
 }
 ```
 - 使い捨ての World に根（`Arrangement{0, 1, extent}`）を置き、`DrawNodes::sync` で節を組み、`render_tree_offscreen(.., (w, h), 恒等)` で原寸に描く。答えは `ComposedSurface`（乗算済み BGRA・原寸）。
-- `--offline-dump` と WARP のテストは `render`、presenter の書き出しは目標の `GpuAtlas`（画面と同じ装置）で `render_plan`。
+- `--offline-dump` と WARP のテストは `render`、presenter の書き出しは目標の `GpuAtlas`（画面と同じ装置）で `render_plan`。まだ一度も表示していない（目標の `GpuAtlas` が無い）目標の書き出しは、新しい hardware の装置で `GpuAtlas` を作って控え、それで描く。次の表示が画面の装置で作り直す。
 
 #### Presenter の変更
 
@@ -594,7 +596,7 @@ impl OffscreenRenderer {
 - **mount**: `emo-surface` は `OwnSurface`・`Visual`・`Arrangement{0, k, native}`・`HitTest::surface_alpha()`（または `none`）・`ChildOf(window)`。根の命令の列を持たない（根の命令の列と描画の木の両持ちは変化のたびに全部になるため）。`emo-surface` の唯一の子は**原寸のまとめの節**（`VisualGroup { mix: SOURCE_OVER }`・原寸の座標・k 倍の変換）で、計画の節は全部その下に置く。今と同じ「原寸で合成してから拡大」になり、k が整数でないときも重なった縁と隣り合う部品の境が今と同じ答えになる（8.1・継ぎ目を出さない）。まとめの中は自動で上げられないので、画面の絵は `emo-surface` の入れ物 1 枚に揃い、書き出し・当たりの読みと食い違わない。まとめの節は原寸の解像度で中を描き、閉じるときに k 倍で親へ重ねる（wintf の約束）。`emo-surface` は窓の client の原点に置く（名前の解決が client 物理ピクセルをそのまま持ち主の物理ピクセルとして読む前提・テストで固める）。
 - **hit**（4.5・7.2・7.6）: `hit_region_client(&self, world: &World, target, x, y)`。`surface_alpha_at(world, emo_surface, x, y)` が 128 未満・外・読めない → `None`（読めないは `error!` を読めない間に 1 回）。それ以上なら ÷k の点で ID の描き先を読み、`hit_regions(base_surface)` の名前を返す。`resolve_hit_region(world, presenter, scope, x, y)`（runtime）と `resolve_hit_owned`（input）が `world` を渡す。
 - **hit_picture**（4.5）: `HitPicture { surface_id, base_surface, first, target }`。鍵が `(surface_id, base_surface, native)` で同じなら塗り直さない。塗る領域は `hit_regions(base_surface)`。
-- **snapshot・read**（7.3）: 型は今のまま。`last_shown` は合成メモの項の `snapshot: OnceCell<ComposedSurface>` を、初めて読まれたとき `OffscreenRenderer::render_plan`（目標の `GpuAtlas`）で原寸に描いて満たし、その参照を返す。描けなければ `error!` を残して `Some((id, None))`（`dump_surface.rs` の今の分岐が `compose_last_shown` を呼び、その `Err(ComposeError::Render{..})` を返す）。`compose_alone`・`compose_last_shown` は新しい `Composer` の計画を `render_plan` で描く。`read_back` は `last_shown` と同じ絵のバイト。
+- **snapshot・read**（7.3）: 型は今のまま。`last_shown` は合成メモの項の `snapshot: OnceCell<ComposedSurface>` を、初めて読まれたとき `OffscreenRenderer::render_plan`（目標の `GpuAtlas`・まだ無ければ上の自前の hardware の装置）で原寸に描いて満たし、その参照を返す。描けなければ `error!` を残して `Some((id, None))`（`dump_surface.rs` の今の分岐が `compose_last_shown` を呼び、その `Err(ComposeError::Render{..})` を返す）。`compose_alone`・`compose_last_shown` は新しい `Composer` の計画を `render_plan` で描く。`read_back` は `last_shown` と同じ絵のバイト。
 - **refresh**: 装置が替わったら `GpuAtlas` を作り直し、節の葉を差し替え、合成メモの `snapshot` を空にする。
 - **バルーンの目標**: バルーンの絵も同じ `apply_show` を通るので、同じく節で描く（語は `overlay` だけ）。`dump_balloon` は `last_shown` の今の分岐のまま同じ絵を読む（OPEN QUESTION 11）。文字の層（`emo-text-layer-slot`）は別の描画面のままで、`surface_alpha_at` は `emo-surface` だけを読む（今の α マスクと同じ範囲）。
 - **cache・budget**: 合成メモの値は計画と書き出しの控え。予算は計画の席と節の数を数える（表示の絵 4 枚・α マスク 4 枚の回しは無くなる）。

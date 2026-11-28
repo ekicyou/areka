@@ -110,3 +110,14 @@
 - 要件定義のモデル: Opus（語を D2D の値へ写すのは `wintf-d2d-composite-rules` の口に乗る）。議題で 3 種を自前の効果で描くと決めたら Fable（wintf に先例の無い公開の口＝自前の効果の登録と shader の作り方）。
 - 分割の案: 無し（17 まで）。
 - 見つけた穴・古くなった記述: `method.rs` の 14 行目と 82 行目の注記は「19 種」「全量列挙（SSP 2.8.35〜2.8.40）」と書くが、その版の範囲だけでも `soft-light`（2.8.39）・`linear-burn`・`linear-light`・`pin-light`・`subtract`・`vivid-light`（2.8.40）が抜けている（正典は 28 種）。
+
+## 申し送り（draw-methods-canon より）
+
+- CPU の合成はもう無い。`crates/areka-emo-compose/src/blit.rs`・`blit_rect.rs` と CPU の転写は外れた。描く道は次の 3 段だけ。
+  1. areka-emo-compose が面ごとの描く計画（`draw_plan.rs` の `DrawPlan`・`PlanItem`・`Mix`）を作る。語 → 重ね方の写しは `draw_plan.rs` の `mix_of` の 1 か所、命令の段 → 計画の項は `plan_mix.rs`。
+  2. areka-emo-present の `draw_nodes.rs` が計画を wintf の節にする。`Mix` → D2D の写しは `mix_mode_of` の 1 か所。
+  3. wintf が GPU（D2D）で描く。絵 1 枚は `VisualDrawContent` の composite mode、入れ子の面のまとめは `VisualGroup`。
+- `blend-*`（と旧い別名 `overlaymultiply`・`overlayscreen`）の行は、画像の element定義の行として読まれ `Element.method` に書かれた語のまま載る。描けない語なので、計画が合成のたびに `debug!` を残して飛ばし、読み込みの入口（`crates/areka-emo-present/src/shell_target.rs`）が読み手の転記 `ShellText.image_elements` から 1 行 1 件の `warn!`（読み込み 1 回）を出す。描けるようにしたら、その語はこの `warn!` から外れる（`is_implemented_name`）。
+- 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `blend-*`・旧い別名の 57 行は、外れた `blit::execute` をまだ文中で挙げている。この spec で今の道（計画 → 節 → GPU）に合わせて書き直す。
+- 画素の檻の型: `crates/areka-emo-present/src/draw_methods_warp_tests.rs`（WARP の装置で描いて、乗算済みの見本と ±1 で比べる）。
+- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」「PlanIssues」、`.kiro/specs/draw-methods-canon/research.md` §15（まとめの節を閉じる仕組み）・§16（`overlay` だけの面の CPU と WARP の差）。

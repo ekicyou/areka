@@ -6041,7 +6041,7 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-正典が振る舞いを定めているのは着せ替えでの扱いだけで、処理の内容は `overlay` と同義だと書いている。areka はそれを正典どおりに導く——areka-emo-compose の method::from_name が `add` を `overlay` と同じ受け口へ解決し、着せ替えの静的な経路である areka-emo-compose の plan::flatten_surface がその受け口を通し、areka-emo-compose の blit::execute が実際に画素を重ねる。正典は着せ替えでないアニメーションと element での使用を未定義としているので、areka がその場面で element の行を areka-parsers の shell::decode_elements で落とすことも、コマを単に重ねることも、正典が定めた振る舞いから外れたことにはならない。正典の見出しに旧い書き方の印は無く、`bind` の説明が `add` を現在の側に置いているので、別名にはしない。
+正典が振る舞いを定めているのは着せ替えでの扱いだけで、処理の内容は `overlay` と同義だと書いている。areka はそれを正典どおりに導く——areka-emo-compose の method::from_name が `add` を `overlay` と同じ受け口へ解決し、着せ替えの静的な経路である areka-emo-compose の plan::flatten_surface がその受け口を通し、areka-emo-compose の draw_plan::mix_of が `overlay` と同じ重ね方（Mix::SourceOver）にして plan_mix::push_items が描く計画へ入れ、areka-emo-present の draw_nodes がその計画を wintf の節にして GPU が重ねる。正典は着せ替えでないアニメーションと element での使用を未定義としているので、areka がその場面で element の行を areka-parsers の shell::decode_elements で落とすこと（読み込みの入口 areka-emo-present の shell_target::load_shell_target が warn! を 1 行 1 件残す）も、コマを単に重ねることも、正典が定めた振る舞いから外れたことにはならない。正典の見出しに旧い書き方の印は無く、`bind` の説明が `add` を現在の側に置いているので、別名にはしない。
 束: 絵の重ね方の語・正典どおりに動く（先に要る仕組み: emo の合成器）。束の順位: 69——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -6253,7 +6253,7 @@ priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、重ね方を持つのは描ける語の 7 つの意味だけで（method::ComposeMethod::is_implemented・draw_plan::mix_of）、この種別は重ね方を持たない。コマ（`animation*.pattern*`）の側は、指す面を持つ pattern定義について読み込みの入口 areka-emo-present の shell_target::load_shell_target が 1 件 1 行の warn!（描けない描画メソッドの pattern を描かない）を出し、合成の側は areka-emo-compose の plan_mix::push_items がこの命令を描く計画に入れず、合成のたびに debug! を残して飛ばす（areka-emo-present の draw_nodes へは届かない）。element の行の側は areka-parsers の shell::decode_elements が画像の element定義にしない語として読み手から外し、描けない行の転記（shell::undrawn）から読み込みの入口が 1 行 1 件の warn! を出す。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
 束: 絵の重ね方の語・名前は解けるが描けず警告を残す（先に要る仕組み: emo の合成器）。束の順位: 71——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7104,7 +7104,7 @@ priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収する（ここでは debug! だけ）。コマ（`animation*.pattern*`）の側は、読み込みの入口 areka-emo-present の shell_target::load_shell_target が 1 件 1 行の warn!（描けない描画メソッドの pattern を描かない）を出し、合成の側は areka-emo-compose の plan_mix::push_items が draw_plan::mix_of で重ね方を引けないこの命令を描く計画に入れず、合成のたびに debug! を残して飛ばす（areka-emo-present の draw_nodes へは届かない）。element の行の側は areka-parsers の shell::decode_elements が画像の element定義にしない語として読み手から外し、描けない行の転記（shell::undrawn）から読み込みの入口が 1 行 1 件の warn! を出す。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
 束: 絵の重ね方の語・名前を知らず警告を残して描かない（先に要る仕組み: emo の合成器）。束の順位: 72——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7655,7 +7655,7 @@ priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収する（ここでは debug! だけ）。コマ（`animation*.pattern*`）の側は、読み込みの入口 areka-emo-present の shell_target::load_shell_target が 1 件 1 行の warn!（描けない描画メソッドの pattern を描かない）を出し、合成の側は areka-emo-compose の plan_mix::push_items が draw_plan::mix_of で重ね方を引けないこの命令を描く計画に入れず、合成のたびに debug! を残して飛ばす（areka-emo-present の draw_nodes へは届かない）。element の行の側は areka-parsers の shell::decode_elements が画像の element定義にしない語として読み手から外し、描けない行の転記（shell::undrawn）から読み込みの入口が 1 行 1 件の warn! を出す。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
 束: 絵の重ね方の語・名前を知らず警告を残して描かない（先に要る仕組み: emo の合成器）。束の順位: 72——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

@@ -114,3 +114,13 @@
 6. **回転**: 窓にも element にも回転の口が無い。イージングの対象に回転を入れるか。
 
 > **2026-11-20 開発者との議論の決め**（全文は `doc/ideas/novel-decisions-2026-11-20.md`）: 値を時間で変える仕組み（形も含めて）は、dola が持つ（開発者「イージングはdolaの仕事」）。窓の指令（`window-timed-directives`）と舞台（`shell-multi-compose`）は、dola の口を使うだけにする。2026-11-19 の検証は、dola の連続値の側に仕組みがもう在り、本番の結線が 0 件である事を確かめている。
+
+## 申し送り（draw-methods-canon より）
+
+element 単位の変換（位置・拡大・回転の行列）を入れるときの事実。
+
+- 更新の所要を測り直す。手順は `.kiro/specs/draw-methods-canon/research.md` §14（移す前）・§18〜§22（移した後）と同じ。k≈1.25（`seriko.dpi,154`＝k≈1.2468）のまばたきの当たり（cache_hit=true）の行は、移す前より約 3% 重い（§21.3・§22）。
+- emo の画面は毎フレーム全部描き直す（wintf の記録で `reason="covers_surface"`）。根に原寸のまとめの節（範囲＝原寸）と土台の絵が在り、描画面を覆うため（§18.2・§20.2）。
+- 当たりは入れ物の 1 画素の α を GPU から読む。待ちは中央値で約 1.0〜1.5ms、カーソルを動かし続けると UI スレッドの約 16% をこの待ちに使う（§18.3・§20.4）。
+- 未決: element の変換を計画の項（`PlanItem` の `transform`）に載せるか、節の変換に載せるかと、それで差分の範囲がどう変わるかは、この spec の設計で決める。
+- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」「SurfaceAlpha」。

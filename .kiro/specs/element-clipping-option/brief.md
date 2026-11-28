@@ -84,3 +84,11 @@
 
 - **層の命令に欄が増えた**（`crates/wintf/src/ecs/graphics/visual/draw/command.rs`）: `ClipRect`・`ClipGeometry`・`OpacityLayer` が `entity`（層を積んだ節）と `version`（その節の `VisualVersion`・無ければ 0）を持つ。差分の描き直しの比べの同一性の鍵は、親の層の鎖を含む。`--clipping` を節の切り抜きで描くとき、描く列を自分で組むならこの欄を埋める。欄の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers に載る。
 - **切り抜きの変化は差分の描き直しが扱う**: 矩形と図形の切り抜きを足す・形を変える・外す回は、範囲だけの描き直しでも毎回全部描いた答えとバイトで一致することを WARP のテストで固めてある（`crates/wintf/src/ecs/graphics/composite_damage_tests.rs` の `rect_clip_added_reshaped_removed_matches_full_bytes`・`geometry_clip_added_reshaped_removed_matches_full_bytes`）。この spec の側で描き直しの範囲を手当てする必要は無い見込み。ただし範囲だけの描き直しは交わる件を丸ごと描く（同 design の Risks の R1）ので、大きな 1 枚の絵から切り抜く部品が多いシェルでは、絵の件の範囲（切り抜きの前か後か）しだいで描き直しの量が変わる。どちらの範囲になるかは確かめていない。
+
+## 申し送り（draw-methods-canon より）
+
+- 読み手の `Element.options` は、座標の後ろの欄を `,` でつないだ原文の文字列を持つ（`crates/areka-parsers/src/shell/decode.rs` の `decode_elements`）。オプションの意味はまだ読んでいない。
+- 計画には矩形の範囲の口が在る。`PlanItem::Image.range`（`replace` の置き換える範囲）と `PlanItem::GroupBegin.range`（`replace` で入れ子にした面の外形）で、areka-emo-present の `draw_nodes.rs` が範囲を持つ項を矩形の切り抜きの節の中に置く。切り抜きのオプションはこの口に乗せられる。
+- wintf の節で同じ節に積む順は「不透明度 → まとめ（`VisualGroup`）→ 切り抜き」。
+- 未決: 切り抜きを計画の項の範囲で表すか、別の項にするかは、この spec の要件と設計で決める。
+- 参照: `.kiro/specs/draw-methods-canon/design.md` の「DrawPlan」「DrawNodes」「VisualGroup（まとめの節）」、`.kiro/specs/draw-methods-canon/research.md` §15.2。
