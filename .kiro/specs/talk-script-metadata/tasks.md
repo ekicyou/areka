@@ -111,3 +111,4 @@
 
 ## Implementation Notes
 - 既存のテストの多くは `..StartTalk::new(...)` で組むので、`StartTalk` に欄を足しても直に組む 6 か所しか直す所が出ない（コンパイルの誤りで全部見つかる）。clippy の `-D warnings` は `--no-deps` を付けないと areka-parsers の `collapsible_if`、areka-kanade の tests の `doc_nested_refdefs`（どちらも前からあるもの）で赤になる。
+- 完了時の棚卸: その場で解決 0 件・申し送り 4 件（`balloon-font-file`・`balloon-inline-image`・`sound-canon-tags`・`tasktray-ghost-icon` の brief へ、着地した `TalkMeta` と `talk_path::resolve` の形）・起票 0 件。
