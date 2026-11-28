@@ -91,6 +91,13 @@ fn relative_saturates() {
     let mut sc = scope(Some((i32::MAX, i32::MIN)));
     overlay_offset(&mut sc, &rel(1, -1));
     assert_eq!(sc.balloon_offset, Some((i32::MAX, i32::MIN)));
+
+    let mut sc = scope(Some((i32::MAX, 10)));
+    overlay_offset(&mut sc, &rel(1, -1));
+    assert_eq!(sc.balloon_offset, Some((i32::MAX, 9)));
+    let mut sc = scope(Some((10, i32::MIN)));
+    overlay_offset(&mut sc, &rel(1, -1));
+    assert_eq!(sc.balloon_offset, Some((11, i32::MIN)));
 }
 
 #[test]
