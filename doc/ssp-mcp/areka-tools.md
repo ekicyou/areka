@@ -109,7 +109,7 @@ OK:4 diagnostics
 
 <!-- diagnostic-rows:end -->
 
-- 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka-runtime/src/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
+- 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka-runtime/src/consumer_ledger.rs` の `ConsumerLedger::canonical` で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
 - 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
 - `unpaired_tag`（14〜16 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 15 行目・14 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。

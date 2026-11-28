@@ -1,11 +1,9 @@
 //! 合成メソッド写像表: `ComposeMethod` / `BlendMode` enum と式ステータス・dispatch シーム。
 //!
 //! ukadoc 由来の描画メソッド全量を `#[non_exhaustive]` enum として列挙し、各メソッドの
-//! 実装状態（実装済み＝`overlay`・型シームのみ＝それ以外）を保持する。emo2 実測で使用される
-//! `overlay`（および同義の `add`/`bind`）のみ実挙動を持ち、`overlay-fast`・`interpolate`・
-//! `replace`・`asis`・`reduce`・`blend-*` 群などは未実装シームとして口だけを保つ。未実装メソッド
-//! 参照時はパニックせずログで観測可能に扱う（未知の語は `from_name` が `debug!`・未実装メソッドの命令は
-//! 下流の `blit` 実行器が `debug!` を出して飛ばす。本モジュールは登録簿＝型シームのみを提供する）。
+//! 実装状態（描ける語＝[`ComposeMethod::is_implemented`] が真の 7 つ・それ以外は型シームのみ）を
+//! 保持する。`blend-*` 群と `auto` は口だけを保ち、参照時はパニックせずログで観測可能に扱う
+//! （未知の語は `from_name` が `debug!`。本モジュールは登録簿＝型シームのみを提供する）。
 //!
 //! # 表現の選択（BlendMode）
 //!
@@ -130,7 +128,7 @@ impl ComposeMethod {
     /// このメソッドが実挙動を持つ（実装済みである）か。
     ///
     /// `overlay`・`overlay-fast`・`interpolate`・`replace`・`asis`・`base`・`reduce` の 7 つの意味が真。
-    /// `blend-*`・`auto`・未知の語は偽。今の CPU の転写は真の語をどれも `overlay` として重ねる。
+    /// `blend-*`・`auto`・未知の語は偽。
     pub fn is_implemented(&self) -> bool {
         matches!(
             self,

@@ -76,13 +76,14 @@
 - **要件定義のモデル**: Opus（表をキャラクターごとに分けるのは、今の表の持ち方を広げるだけ）。
 - **議題の候補**: ⑴ 数字の別名と番号のどちらを先に引くか（SSP で測る）。⑵ `alias.txt` と `surfaces.txt` の両方にあるときの勝ち負け（SSP で測る）。⑶ `surfaces**.txt`（同じ「読むファイル」の所・持ち主なし）も入れるか。⑷ 3 人目からの綴り（`char2.surface.alias` など）を読むか（SSP で測る・`extra-character-windows` との分け方）。⑸ 番号を複数書いたときの「先頭」の決めをそのままにするか。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-28 棚卸㊺の再測定（main 7a590832）
 
-- **前提の変化**: どっとさくらの台詞を通す ✅ `shiori2-protocol` が 10-24 に着地した＝実機の確かめを待たせるものは無くなった。同じウェーブに置けない相手に挙げた v0.1.0 の 5 本（`seriko-pattern-calls`・`shell-mouse-cursor`・`animated-surface-log-flood`・`dpi-realign-remembered-chain`・`placement-measure-bake-once`）はどれも着地済み。別名の読みは今も相方の綴りだけ（面の設定を読む所 `crates/areka-parsers/src/shell/decode.rs` の 122 行目）で、`alias.txt` を開く所は今も無い。
-- **触るファイル**: 棚卸㉙のまま。行数は増えた＝シェルを読む所 `crates/areka-emo-present/src/shell_target.rs` 951（855 から・`alias.txt` を読む所は必ず新しい兄弟のファイルへ）・`shell/decode.rs` 623・`areka-emo-compose/src/world.rs` 449・`fold.rs` 411・`areka-seriko/src/resolve.rs` 315・`crates/areka/src/emo2_boot/assets.rs` 540。網羅台帳 `assets.toml` の注記は 6011 行目へずれた。
-- **規模**: S〜M（6〜9）のまま。
-- **先に要るもの（見直しと crate 分けを含む）**: 見直しの spec の後＝`audit-parsers-sakura`（`shell/{decode,model}.rs`）・`audit-emo-present`（`shell_target.rs`）・`audit-emo-compose`（`world.rs`・`fold.rs`）・`audit-seriko`（`resolve.rs`）・`audit-emo2-boot-spine`（`emo2_boot/assets.rs`）。crate 分けは `emo2_boot/assets.rs` を動かす `runtime-module-untangle`・`runtime-crate-split` の後（crates/areka に触るので、6 本のどれとも同じウェーブに置かない）。同じウェーブに置けない未完了の spec＝v0.2.0 の `draw-methods-canon`（`shell/decode.rs`・`shell_target.rs`・`fold.rs`）・`collisionex-regions` と `element-clipping-option`（`decode.rs`・`fold.rs`）・`hit-id-pass`（`decode.rs`）、ほかに `config-parse-diagnostics`・`seriko-script-triggers`（`decode.rs`）・`seriko-missing-surface-default`（面の切り替え）。
-- **優先度の区分**: B（正典の別名が黙って落ちる）。
-- **要件定義のモデル**: Opus。
+- **前提の変化**: 待っていた見直し 5 本・crate 分け・`draw-methods-canon`・`collisionex-regions`・`hit-id-pass` は着地済み。`draw-methods-canon` は element定義の欄を足しただけで、別名の読みには触れていない。別名は今も相方の綴りだけ（`crates/areka-parsers/src/shell/decode.rs` 141 行目・`surface.alias` は 145 行目で捨てる）、`alias.txt` を開く所も無い。ブレスの名を見分ける字句の段（`shell/lexer.rs` の `*.surface.alias`）は本体の綴りも既に通すので触らない。
+- **触るファイル**: 読み手の `shell/decode.rs`（725 行）・`model.rs`（440）と兄弟のテスト・`crates/areka-emo-present/src/shell_target.rs`（941＝上限の近く・`alias.txt` を読む所は兄弟の新しいファイルにし、`shell_target.rs` からの呼び出しと宣言だけを足す）・`crates/areka-emo-compose/src/{world.rs 460, fold.rs 590}`・`crates/areka-seriko/src/{resolve.rs 314, skin_facts.rs}`（`SkinLookup::resolve_surface` はキャラクターを受け取らない＝口を広げると `crates/areka-runtime/src/skin_facts_copy_tests.rs`・本体の `mcp/check_script_judge_tests.rs` にも及ぶ）・解く道具を作る所 `crates/areka-runtime/src/{assets.rs 562, shell_box_assets.rs 138}`（もとの `crates/areka/src/emo2_boot/assets.rs`）・台帳の 2 行（6011 行目の注記の項目・`name,定義名` の 7301 行目）・§8。
+- **約束の案**: `SurfaceResolver::new(aliases)` の形を保ち、キャラクターごとの表は別の作り方で足す＝`SurfaceResolver::new` を呼ぶテストの支え（`areka-runtime` の `frame_test_support.rs`・`same_script_test_support.rs`・`session_hooks_test_support.rs`・`lib.rs`、`areka-input` の `balloon_test_support.rs`、seriko の `actor_test_support.rs`）に触らない。
+- **規模**: 6〜10 タスク（SSP の測り 1・読み 2・キャラクターごとの表と解く口 3・数字の別名 1・`name` 1・実機 1）。
+- **先に要るもの**: 無し。同じウェーブに置けない相手＝`animated-image-import`（`shell/{model,decode}.rs`）・`element-clipping-option`（`decode.rs`・`fold.rs`）・`config-parse-diagnostics`・`seriko-script-triggers`（`decode.rs`）。
+- **優先度の区分**: B（正典の別名が黙って落ちる）。版は v0.2.0。
+- **要件定義のモデル**: Opus（今の別名の表をキャラクターごとに広げるだけ）。
 - **分割の案**: 無し。
-- **見つけた穴・古くなった記述**: 冒頭の「版の段は『いつか』」は roadmap の台帳の行（v0.2.0）と食い違う＝v0.2.0 に置くかは棚卸㉝からの開発者の答え待ち。
+- **古くなった記述**: 冒頭の「版の段は『いつか』」（今は v0.2.0）。Boundary Candidates の `crates/areka/src/emo2_boot/assets.rs`（今は `crates/areka-runtime/src/assets.rs`）。Current State の行番号（`decode.rs` の 115・122 行目は 126・141 行目、`shell_target.rs` の 61・327 行目は 45・353 行目）。

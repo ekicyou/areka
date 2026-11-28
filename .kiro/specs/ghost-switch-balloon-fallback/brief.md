@@ -68,15 +68,15 @@
   1. 代わりに使うバルーン（今使っているもの・既定のバルーン・起動の行で渡したもの）。ukadoc を読み、読めなければ SSP で測る。
   2. 起動の鎖も同じにするか。
 
-## 2026-11-27 棚卸㊹の再測定（main ccd790fc）
+## 2026-11-28 棚卸㊺の再測定（main 7a590832）
 
-- **前提の変化**: 本体の分け直しで、切り替えとバルーンの決め方は `crates/areka-session/` へ移った（切り替え `src/ghost_switch.rs`・決め方の順番 `src/boot_resolve.rs`・ゴーストごとの入口 `src/boot_config.rs`）。待っていた見直し（`audit-emo2-boot-switch`・`audit-areka-app`）と分け直しは全部済んだ。見直しはこの件に手を付けていない＝切替先にも置き場にもバルーンが無いと、今も `ghost_switch_boot_failed stage="balloon"` で落ちる。実機の試験 `crates/areka/tests/startup_install_real_run.rs` は今も根に `areka-balloon` を写して避けている。
-- **触るファイル**: `crates/areka-session/src/ghost_switch.rs`（970 行＝上限の近く。足す処理はここに置かず決め方の側へ）・`boot_config.rs`（621）・`boot_resolve.rs`（759）と兄弟のテスト（`ghost_switch_balloon_tests.rs`・`ghost_switch_fallback_tests.rs`・`boot_resolve_balloon_tests.rs`）・`crates/areka/tests/startup_install_real_run.rs`。新しいソースのファイルも依存も要らない見込み。
+- **前提の変化**: 同じファイルを持っていた `sylphya-sqlite-kvs` が着地した。`boot_resolve.rs` は記憶の直読みの口を sqlite の置き場（`fs_backend()`）へ替え、印を消す口（`remove_scope_keys`）を使うようになっただけで、バルーンの決め方の順番は変わっていない。切替先にも置き場にもバルーンが無いと、今も `ghost_switch_boot_failed stage="balloon"` で落ちる。実機の試験 `crates/areka/tests/startup_install_real_run.rs` は今も根に `areka-balloon` を写して避けている（32 行目）。
+- **触るファイル**: `crates/areka-session/src/ghost_switch.rs`（968 行＝上限の近く。足す処理はここに置かず決め方の側へ）・`boot_config.rs`（621）・`boot_resolve.rs`（756）と兄弟のテスト（`ghost_switch_balloon_tests.rs`・`ghost_switch_fallback_tests.rs`・`boot_resolve_balloon_tests.rs`）・`crates/areka/tests/startup_install_real_run.rs`。新しいソースのファイルも依存も要らない見込み。
 - **規模**: S（3〜6 タスク）のまま。
-- **先に要るもの**: 無し（働きの依存も、待つ見直しも無い）。
-- **同じウェーブに置けない相手**: `instant-to-interrupt-ticks`（`ghost_switch.rs` の降ろす所要時間の記録・801 行目）・`sylphya-sqlite-kvs`（`boot_resolve.rs` の記憶の直読み・365〜450 行目）。後のウェーブの `balloon-script-offset-align`（`ghost_switch.rs`）・`shiori4-api`（`boot_config.rs`）、版に縛らない `shell-companion-balloon`（`boot_config.rs`・`boot_resolve.rs`）・`dev-folder-alias`（`boot_resolve.rs`）も同じ。
-- **重なりを外す約束の案**: 今使っているバルーンを決め方の最後の段に足すなら、切り替えの呼び出し（`ghost_switch.rs` 852 行目）にそのバルーンを渡す直しは避けられない＝`instant-to-interrupt-ticks` とは約束で外せない。`boot_resolve.rs` は段を入口（`boot_config.rs` の `resolve_balloon_for_ghost`）に足せば触らずに済むが、決め方を 1 か所にまとめた今の作りを曲げるので推さない。
+- **先に要るもの**: 無し。
+- **同じウェーブに置けない相手**: 候補の 7 本の中には無い（表示の 4 本・`mcp-set-property`・`property-query-channels` は `crates/areka-session/` に触らない）。後のウェーブの `instant-to-interrupt-ticks`（`ghost_switch.rs` の降ろす所要時間の記録・799〜801 行目）・`shiori4-api`（`boot_config.rs`）、版に縛らない `shell-companion-balloon`（`boot_config.rs`・`boot_resolve.rs`）・`dev-folder-alias`（`boot_resolve.rs`）とは同じファイルを持つ。
+- **重なりを外す約束の案**: 今使っているバルーンを決め方の最後の段に足すなら、切り替えの呼び出し（`ghost_switch.rs` 850 行目）にそのバルーンを渡す直しは避けられない＝`instant-to-interrupt-ticks` とは約束で外せない。
 - **優先度の区分**: B（切り替えが落ち、既定のゴーストが無いと areka が終わるバグ）。
 - **要件定義のモデル**: Opus（今ある決め方の順番に段を 1 つ足すだけ）。
 - **分割の案**: なし。
-- **古くなった記述**: Current State の場所と行＝`switch_to` は `crates/areka-session/src/ghost_switch.rs` 638 行目・決め方の呼び出し 852・`failed("balloon", …)` 859・`switch_to_default` 745・`fatal` 916・`resolve_balloon_for_ghost` は `crates/areka-session/src/boot_config.rs` 422・`NoBalloon` を返す所は `crates/areka-session/src/boot_resolve.rs` 332（既定のバルーンの名前は同じファイルの 34 行目のまま）。Boundary Candidates の `emo2_boot/ghost_switch.rs` も同じく読み替える。Adjacent の `runtime-module-untangle`・`session-module-gather`・`audit-emo2-boot-switch` は済んだ。起動の側も同じ入口を通る（`boot_config.rs` 341 行目）＝議題 2 の答えで起動の動きも変わる。
+- **古くなった記述**: Current State の場所と行＝`switch_to` は `crates/areka-session/src/ghost_switch.rs` 638 行目・決め方の呼び出し 850・`failed("balloon", …)` 857・`switch_to_default` 743・`fatal` 914・`resolve_balloon_for_ghost` は `crates/areka-session/src/boot_config.rs` 422・`NoBalloon` を返す所は `crates/areka-session/src/boot_resolve.rs` 332（既定のバルーンの名前は同じファイルの 34 行目のまま）。Boundary Candidates の `emo2_boot/ghost_switch.rs` も同じく読み替える。Adjacent の `runtime-module-untangle`・`session-module-gather`・`audit-emo2-boot-switch` は済んだ。起動の側も同じ入口を通る（`boot_config.rs` 341 行目）＝議題 2 の答えで起動の動きも変わる。

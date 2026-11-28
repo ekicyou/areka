@@ -56,19 +56,6 @@
 - 決定論テストを必ず添える（X,Y が 0 でない element定義で、命令の位置と外形が食い違わないこと）。
 - 案 A を選ぶなら、窓の大きさが変わる検体を事前に列挙し、既存の golden の期待値を書き換える理由を記録する（黙って書き換えない）。
 
-## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
-
-- 規模: S（3〜6）のまま。案 A なら実装は `flatten_extent` の画像の枝の 1 か所（子の枝と同じく `element.transform.offset()` を足す）＋檻＋検体の測り直しで 3〜4、案 B なら記録と規則の文書で 3〜5。切らない。
-- 前提の状態: 上流（`surface-element-nesting`）は着地済み・今すぐ着手できる。起票（`fa12dba7`）の後に `crates/areka-emo-compose/`・`areka-parsers/src/shell/`・`areka-emo-atlas/` を触ったコミットは 0。
-- 崩れた前提／古くなった位置: 無し。`plan.rs` の `flatten_extent` の画像の枝は今も「累積の位置＋原寸」で element定義の X,Y を足さない。同じ関数の子の枝（`ElementKind::Surface`）は X,Y を足しており、命令の側 `push_static_element_ops` も足す＝食い違いは本文どおり。
-- ukadoc の引き直し（議題 1 の材料）: element定義の項は外形（窓の大きさ）を定めていない。「element0 があると surface*.png の内容は捨てられ element0 で置き換わる」「合成結果を一枚の画像として扱う」だけ。描画メソッド `base` の項は「ベースサーフェスを新規レイヤで完全に置き換える」「element では element0 にしか使えず、それ以外は overlay に読み替える」。`overlay` は「ベースレイヤに新規レイヤを単に重ねる」。＝「土台（element0）の大きさが外形」と読む余地があり、案 B の根拠になりうる。どちらに倒すかは開発者の裁定（SSP の見え方を測る手は記憶「SSP 実測主義は取らない」により使わない）。
-- 触るファイル: `crates/areka-emo-compose/src/plan.rs`（`flatten_extent`）・`plan_extent_tests.rs`・`plan_nesting_extent_tests.rs`・`golden_tests_frame_extent_tests.rs`（期待値が変わるなら）・案 B なら記録の文言の檻（`log_firing_tests.rs`）・`doc/COMPAT_ARCHITECTURE.md` §8・必要なら完了 `emo-compose` の要件 6.5 への注記。
-- 議題:
-  1. 案 A（和集合）か案 B（土台で切る・記録を出す）か（本文どおり・上の ukadoc の読みを添えて出す）。
-  2. `element-base-method` との順: 両方が `plan.rs` を触り、`base` の意味（土台を置き換える）が外形の規則と直に絡む。**`element-base-method` を先に着地させ、その上で本 spec の裁定をする**のが自然（同時に走らせない）。
-- 同時に走らせない: `element-base-method`・`animated-image-playback`（C4・`plan.rs`）・`element-clipping-option`。
-
-
 ## 2026-10-05 `animated-image-playback` からの申し送り（同 spec の設計・要件 10.6）
 
 > `animated-image-playback` が先に main へ入る（本 spec は未着手）。2026-10-06 に同 spec が実装した実物と照らして書き直した。着手時に引き直すこと。
@@ -80,43 +67,17 @@
 - 手書きの `always` の外形は全部の pattern の和集合にした（開発者 2026-10-05・理由: 自動で作る子と手書きは同じに振る舞う／ずっと見える絵が外形で切れてはいけない）。ほかのアニメーション（`random` ほか）のコマは今までどおり数えていない。はみ出す絵の一般の決まりは本 spec の裁定のまま。
 
 
-## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
-
-- 前提の変化: 先に要った `element-base-method`（10-05）と `animated-image-playback`（10-07）がどちらも着地し、待つものが無くなった。外形の計算は `crates/areka-emo-compose/src/plan_extent.rs`（`plan.rs` の子）に在り、動く絵の子と `always` の全部の pattern を数える（上の申し送りは今の main と一致）。画像の element定義の X,Y を足さない食い違いは今もそのまま。
-- 触るファイル: `crates/areka-emo-compose/src/plan_extent.rs`（外形を数える 1 行）と兄弟のテスト `plan_extent_tests.rs`・`plan_nesting_extent_tests.rs`・`plan_extent_film_tests.rs`、期待値が動くなら `golden_tests_frame_extent_tests.rs`。案 B（切って記録）なら記録を出す場所と `log_firing_tests.rs`。`doc/COMPAT_ARCHITECTURE.md` §8。`plan.rs` は触らない見込み。
-- 規模: 3〜6 タスクのまま。切らない。
-- 先に要るもの: 無し（今すぐ着手できる）。同じ `plan_extent.rs` を触る見込みの `animated-image-import`・`element-clipping-option` とは同時に走らせない。`seriko-trigger-intervals` は `always` を含む組み合わせを持つ間だけ重なる（同 brief の分割の案を採れば重ならない）。`collisionex-regions`・`placement-measure-bake-once`・`present-emit-tail-latency` とは重なり 0。
-- 優先度の区分: B（バグ＝描くと決めた絵が記録なしに切られる）。
-- 要件定義のモデル: Fable（正典が外形を定めていない・案 A か案 B かは開発者の裁定）。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述:
-  - 着せ替えの最初の pattern の取り方が、外形（番号が最小のもの）と命令（番号が 0 のもの）で違う件は同じ関数の中なので、本 spec で一緒に揃えるのが安い（議題に足す）。
-  - `crates/areka-emo-compose/src/log_firing_tests.rs` の `pattern0_less_bind_skip_fires_debug_and_no_warn_error` の説明に、移す前の `plan.rs` の行番号（`:529`）が残っている。→ 2026-11-06 `audit-emo-compose` が閉じた（テストは `frameless_bind_random_skip_fires_debug_and_no_warn_error` へ改名・説明の行番号も消えた）。
-  - Current State・Scope の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読む。
-  - 外形が変わると採寸の結果も変わる。`placement-measure-bake-once` より先に着地させると、あちらの「採寸の結果が同じ」の固定が書きやすい。
-
-## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
-
-- 前提の変化: 合成（`crates/areka-emo-compose`）は棚卸㉓から変更 0。外形を数える `flatten_extent`（`plan_extent.rs`・198 行）も、画像の element定義の X,Y を足さない食い違いも、そのまま。`seriko-trigger-intervals` は 10-10 に着地し、外形のファイルには触れなかった（`always` を含む組み合わせは `seriko-interval-combinations` へ切り出された）。
-- 触るファイル: 棚卸㉓のまま。
-- 規模: 3〜6 タスクのまま。
-- 先に要るもの: 無し（今すぐ着手できる）。同じ `plan_extent.rs` を触るので同時に走らせない相手は `animated-image-import`・`element-clipping-option`・`seriko-interval-combinations`（棚卸㉓の節の「`seriko-trigger-intervals`」はこの名前に読み替える）。`draw-methods-canon` は外形の本体には触らないが、兄弟のテスト `plan_extent_film_tests.rs` の直書きを欄 1 つぶん直すので、同じウェーブに置かない。
-- 重なり 0: `collisionex-regions`・`config-parse-diagnostics`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`seriko-script-triggers`・`balloon-canon-residue`・`balloon-webp-names`。
-- 後ろで待つもの: `element-clipping-option`（こちらの裁定の上に載る）と、その後ろの `draw-methods-canon`・`draw-methods-blend`。ファイルの順として `animated-image-import`・`seriko-interval-combinations`。
-- 優先度の区分: B のまま。
-- 要件定義のモデル: Fable のまま。
-- 見つけた穴・古くなった記述: 新しい件は無い。棚卸㉓の 2 件（`log_firing_tests.rs` の説明に残る移す前の行番号・本文の「`plan.rs` の `flatten_extent`」）は今もそのまま。
-
-## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
-- 前提の変化: 版の段で v0.1.0（バグ）。C6 の 1 本（走らなかった）。合成のクレートは棚卸㉔から変更 0。外形を数える `crates/areka-emo-compose/src/plan_extent.rs`（198 行）の 123〜124 行目は今も「累積の位置＋原寸」で、element定義の X,Y を足さない。
-- 触るファイル: 棚卸㉓のまま（`plan_extent.rs` と兄弟のテスト `plan_extent_tests.rs` 578・`plan_nesting_extent_tests.rs` 186・`plan_extent_film_tests.rs` 228、期待値が動けば `golden_tests_frame_extent_tests.rs` 242、案 B なら `log_firing_tests.rs` 767、`doc/COMPAT_ARCHITECTURE.md` §8）。
-- 規模: 3〜6 タスク（変わらず）。
-- 先に要るもの: 無し。後ろで `animated-image-import`（同じ `plan_extent.rs`）が待つ。
-- 同じウェーブに置けない相手: v0.0.3・v0.1.0 の中では `animated-image-import`（`plan_extent.rs`）だけ。`placement-measure-bake-once` とは 0（あちらは `crates/areka/src/placement/` と起動の資産組み立て）。版に縛らない列の `seriko-interval-combinations`、v0.2.0 の `element-clipping-option`・`draw-methods-canon` とも置けない（変わらず）。
+## 2026-11-28 棚卸㊺の再測定（main 7a590832）
+- 前提の変化: `draw-methods-canon` が着地し、描く計画の `DrawPlan.extent` は外形（`crates/areka-emo-compose/src/plan_extent.rs`・237 行）の答えをそのまま使う。外形が画像の element定義の X,Y を足さない食い違いは今もそのまま（143 行目の子の枝だけが足す）。CPU の転写は無くなったが、外形の外は D2D の描き先の大きさで切られるので症状は同じ。
+- 触るファイル: `plan_extent.rs` と兄弟のテスト `plan_extent_tests.rs`（450）・`plan_nesting_extent_tests.rs`（146）・`plan_extent_film_tests.rs`（144）、期待値が動けば `golden_tests_frame_extent_tests.rs`（221）・emo-present の `shell_target_emo2_tests.rs` と配置の採寸のテスト（`crates/areka-placement/src/measure_*_tests.rs`）。直したら emo-present の `screen_offscreen_gpu_tests.rs` の敷き物（41〜43 行目）を外す。§8。案 B（切って記録）なら記録のテストは `log_firing_tests.rs` に足さず、`plan_extent.rs` の兄弟の新しいテストのファイルに置く（`draw-methods-blend` と重ねない約束）。`plan.rs` は触らない見込み。
+- 規模: 3〜6 タスク。
+- 先に要るもの: 無し。後ろで `animated-image-import`（同じ `plan_extent.rs`）・`element-clipping-option`・`seriko-interval-combinations` が待つ。
 - 優先度の区分: B（描くと決めた絵が記録なしに切られる）。
-- 要件定義のモデル: Opus（C6 で 10-15 に付け直したとおり。案 A か B かは開発者の裁定で、前例で決まらない骨格の分かれ目ではない）。
+- 要件定義のモデル: Opus（案 A か案 B かは開発者の裁定で、前例で決まらない骨格の分かれ目ではない）。
 - 分割の案: 無し。
-- 見つけた穴・古くなった記述: `crates/areka-emo-compose/src/log_firing_tests.rs` 244 行目の説明に「`flatten_extent`・:529」（移す前の `plan.rs` の行番号）が残る（変わらず）。
+- 議題の材料（ukadoc の読み）: element定義の項は外形（窓の大きさ）を定めていない。「element0 があると surface*.png の内容は捨てられ element0 で置き換わる」「合成結果を一枚の画像として扱う」だけ。`base` は「ベースサーフェスを新規レイヤで完全に置き換える」＝土台の大きさが外形と読む余地があり、案 B の根拠になりうる。
+- 見つけた穴: 着せ替えの最初の pattern の取り方が、外形（`plan_extent.rs` 192 行目・番号が最小）と命令（番号が 0）で違う。同じ関数なので一緒に揃えるか議題にする。
+- 古くなった記述: Current State・Scope・Boundary Candidates の「`plan.rs` の `flatten_extent`」は `plan_extent.rs`、「`crates/areka/src/placement/`」は `crates/areka-placement/`。
 
 ## 申し送り（draw-methods-canon より）
 

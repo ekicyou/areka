@@ -58,12 +58,14 @@
 - SSP の道具の定義は逐語で写す決まりがある。areka 独自の道具は SSP の道具と名前が衝突しないこと（SSP が後で `set_property` を出したら、その定義に合わせ直す）。
 - 規模の見立て: XS〜S（4〜7 タスク）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-- **前提の変化**: コードは起票のときのまま。書く口 `SylphyaPublisher` は今 `crates/areka-sylphya/src/actor.rs:467`（本文の 463 はずれ）。
-- **触るファイル**: `crates/areka-mcp/src/tools/` の新しい道具のファイルと `mod.rs` と道具の一覧のテスト（`tools_own_tests.rs` ほか）、本体の `crates/areka/src/mcp/` の新しいファイルと振り分けの `mod.rs`（`get_property.rs` 55 行に倣う）。橋渡しのキャッシュ `crates/areka-mcp-bridge/src/cache.rs` は一覧が変わることの扱いしだい。依存は足さない。
+## 2026-11-28 棚卸㊺の再測定（main 7a590832）
+- **前提の変化**: 待っていた `sylphya-sqlite-kvs` と見直し 2 本（`audit-mcp-update-crates`・`audit-areka-install-update`）、crate 分け（`runtime-module-untangle`〜`session-crate-split`）は全部済んだ。名前で書く口は `SylphyaReader::kvs(問い手)`（`crates/areka-sylphya/src/reader.rs` 60 行）で得る `Kvs` の `set(層, 鍵, 値)`（`kvs.rs` 63 行）。層は `PersistScope` の 4 つ（アプリ・ゴースト・シェル・バルーン）、結果は `WriteOutcome` の 4 つ（書けた・断った・書けなかった・控えた）。書いてよいかは鍵の表 `keytable.rs` の `by_name` が決める＝MCP の側に鍵の判断を持たない形がそのまま取れる。本番でこの口を使う所はまだ無い（本 spec が最初の使い手）。`get_property` の読み（`resolve_dotted_str`）は層を重ねて読む＝書いた値をすぐ読み返せる。
+- **Current State の古い所**: 書く口 `SylphyaPublisher::set`（今 `actor.rs` 533 行）は返事も層も無い、ゴーストごとのメモリーへの書き＝本 spec が使う口ではない。`sylphya.toml` は無くなり、置き場は各層の `profile\areka\sylphya.sqlite` になった（古いファイルは一度だけ取り込まれる）。
+- **触るファイル**: `crates/areka-mcp/src/tools/` の新しい道具のファイルと `mod.rs`（232・`OWN_TABLE` と `ToolCall`）と道具の一覧のテスト（`tools_own_tests.rs` ほか）・接続の指示文 `crates/areka-mcp/src/handler.rs`（独自の道具を名指す）・本体の `crates/areka/src/mcp/` の新しいファイルと振り分けの `mod.rs`（155・`get_property.rs` 55 行に倣う）・`doc/ssp-mcp/areka-tools.md`（独自の道具の正本）・`.kiro/specs/shell-balloon-scale-setting/brief.md`。橋渡しのキャッシュ `crates/areka-mcp-bridge/src/cache.rs` は一覧が変わることの扱いしだい。依存は足さない。
 - **規模**: XS〜S（4〜7）のまま。
-- **先に要るもの（見直しと crate 分けを含む）**: 機能の先は `sylphya-sqlite-kvs`。見直しは台帳どおり `audit-mcp-update-crates`・`audit-areka-install-update`（本体の `mcp/`）。crate 分け: 本体の `mcp/mod.rs`・`get_property.rs` はゴーストの席（`ghost_session`）と emo2_boot を名指しする＝`runtime-module-untangle` から `session-crate-split` までが書き換える。どのみち `sylphya-sqlite-kvs` が 6 本の後。
+- **先に要るもの**: 無し。
+- **同じウェーブに置けない相手**: 候補の 7 本の中には無い。`property-query-channels` とは `doc/ssp-mcp/areka-tools.md` だけを分け合いうる（向こうは 112 行目の受け取り手の数）＝その行から数を外しておけば重ならない。`balloon-text-visual-tree` が触る本体の `mcp/dump_balloon.rs` には触らない。sylphya（`crates/areka-sylphya/`）は呼ぶだけで直さない。
 - **優先度の区分**: A（開発者「MCP の set で書く」）。
-- **要件定義のモデル**: Opus（areka 独自の道具 `check_script` の前例に乗る）。
+- **要件定義のモデル**: Opus（areka 独自の道具 `check_script` の前例と、sylphya の今の口に乗る）。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 上の行番号だけ。
+- **見つけた穴**: ⑴ `Kvs::set` は番人の返事を待つ（錠に当たると最大 1 秒）＝UI スレッドの上で呼ばず、`check_script` と同じく別のスレッドへ渡し、本体の `mcp/mod.rs` の `later` で答える形を要件に書く。⑵ 読み取りだけの走りでは結果が「控えた」になる＝Desired Outcome の「`readonly-mode` は誤りで返す」とどう答えるかを要件の段で決める。⑶ 層を重ねて読むので、下の層（アプリ）へ書いても上の層に値があれば読み返しはそちらになる＝答えに書いた層を添えるかを要件で決める。⑷ `\![set,property]` の受け口（`property-query-channels`）と同じ口・同じ断り方にそろえる。
