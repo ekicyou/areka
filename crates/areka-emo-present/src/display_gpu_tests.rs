@@ -17,7 +17,7 @@ use wintf::com::d2d::D2D1DeviceContextExt;
 use wintf::ecs::GraphicsCommandList;
 
 /// `w×h`・premultiplied BGRA の bitmap を作る（`options` で TARGET／staging を切り替える）。
-fn make_bitmap(
+pub(crate) fn make_bitmap(
     dc: &ID2D1DeviceContext,
     w: u32,
     h: u32,
@@ -81,7 +81,16 @@ pub(crate) fn replay_and_read_back(
         );
         dc.EndDraw(None, None).expect("EndDraw（再生）失敗");
     }
+    read_target(dc, &target, w, h)
+}
 
+/// `w×h` の TARGET の絵を行を詰めて読み戻し、DC の的を外す。
+pub(crate) fn read_target(
+    dc: &ID2D1DeviceContext,
+    target: &ID2D1Bitmap1,
+    w: u32,
+    h: u32,
+) -> Vec<u8> {
     let staging = make_bitmap(
         dc,
         w,
@@ -94,7 +103,7 @@ pub(crate) fn replay_and_read_back(
     // 読み取り可能領域を指す。行ごとに `pitch` を跨いで詰め直す。
     unsafe {
         staging
-            .CopyFromBitmap(None, &target, None)
+            .CopyFromBitmap(None, target, None)
             .expect("CopyFromBitmap（TARGET → staging）失敗");
         let mapped = staging.Map(D2D1_MAP_OPTIONS_READ).expect("Map(READ) 失敗");
         for y in 0..(h as usize) {
