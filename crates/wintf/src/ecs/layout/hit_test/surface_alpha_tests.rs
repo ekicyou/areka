@@ -215,3 +215,26 @@ fn unreadable_misses_and_logs_once_while_unreadable() {
     assert!(!hit);
     assert_eq!(levels.error, 1);
 }
+
+#[test]
+fn unreadable_mark_lives_with_the_owner() {
+    let (mut first, owner) = world_with_owner();
+    let (mut second, other) = world_with_owner();
+    first.remove_resource::<GraphicsCore>();
+    second.remove_resource::<GraphicsCore>();
+    let point = PointF::new(11.5, 21.5);
+    let ((), levels) = count_levels(|| {
+        hit_test_entity(&first, owner, point);
+        hit_test_entity(&second, other, point);
+    });
+    assert_eq!(levels.error, 2, "World ごとに 1 件");
+
+    // 読めない間に消えた持ち主の後の新しい持ち主は、また 1 件。
+    first.despawn(owner);
+    let sg = first.spawn(SurfaceGraphics::default()).id();
+    let ga = make_global_arrangement(10.0, 20.0, 18.0, 28.0);
+    first.entity_mut(sg).insert((HitTest::surface_alpha(), ga));
+    let (hit, levels) = count_levels(|| hit_test_entity(&first, sg, point));
+    assert!(!hit);
+    assert_eq!(levels.error, 1);
+}

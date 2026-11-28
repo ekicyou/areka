@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
@@ -195,6 +197,8 @@ pub struct SurfaceGraphics {
     /// 入れ物を持ったことがあるか（全部の理由の「初めて」と「作り直し」の見分け）。
     /// 入れ物を捨てても `set_surface`・`clear` でも戻さない。
     composed_before: bool,
+    /// 入れ物の α が読めないと `error!` を残したか（読めない間に 1 回だけ）。`&World` の当たり判定から書く。
+    pub(crate) alpha_unreadable_reported: AtomicBool,
 }
 
 // SAFETY 条件: WindowGraphics と同様。CompositionDrawingSurface / CompositionSurfaceBrush への
@@ -216,6 +220,7 @@ impl SurfaceGraphics {
             size,
             composite: None,
             composed_before: false,
+            alpha_unreadable_reported: AtomicBool::new(false),
         }
     }
 

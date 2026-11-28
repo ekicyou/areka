@@ -30,11 +30,10 @@
 //! }
 //! ```
 
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::world::WorldId;
 use tracing::{debug, error};
 
 use super::hit_region::HitRegionMap;
@@ -260,23 +259,19 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF
 // surface_alpha_hits - SurfaceAlpha の判定
 // ============================================================================
 
-/// 読めない間の持ち主。`&World` の当たり判定から印を書くため World の外に置く。
-// shortcut: 読めない間に消えた実体の印は残る（数は持ち主の数まで）。持ち主の外しの係で消す必要が出たら部品へ移す。
-static UNREADABLE: Mutex<Option<HashSet<(WorldId, Entity)>>> = Mutex::new(None);
-
 /// 描画面の持ち主の物理ピクセル (x, y) が当たるか（[`surface_alpha_at`](crate::ecs::surface_alpha_at) の α が 128 以上）。
 ///
 /// α < 128・面の外・読めないは当たらない。読めない間は持ち主ごとに最初の 1 回だけ `error!` を残し、
-/// 読めたら（外も含む）印を戻す。クリックの透過と当たりの名前の解決が同じ 1 画素を同じ規則で読むための口。
+/// 読めたら（外も含む）印を戻す。印は持ち主の `SurfaceGraphics` に置く（部品が無ければ毎回残す）。クリックの透過と当たりの名前の解決が同じ 1 画素を同じ規則で読むための口。
 pub fn surface_alpha_hits(world: &World, owner: Entity, x: u32, y: u32) -> bool {
-    use crate::ecs::graphics::{AlphaRead, surface_alpha_at};
+    use crate::ecs::graphics::{AlphaRead, SurfaceGraphics, surface_alpha_at};
 
     let read = surface_alpha_at(world, owner, x, y);
-    let key = (world.id(), owner);
-    let mut marks = UNREADABLE.lock().unwrap_or_else(|e| e.into_inner());
-    let marks = marks.get_or_insert_with(HashSet::new);
+    let reported = world
+        .get::<SurfaceGraphics>(owner)
+        .map(|s| &s.alpha_unreadable_reported);
     if read == AlphaRead::Unreadable {
-        if marks.insert(key) {
+        if !reported.is_some_and(|r| r.swap(true, Ordering::Relaxed)) {
             error!(
                 entity = %crate::ecs::graphics::format_entity_name(
                     owner,
@@ -287,7 +282,9 @@ pub fn surface_alpha_hits(world: &World, owner: Entity, x: u32, y: u32) -> bool 
         }
         return false;
     }
-    marks.remove(&key);
+    if let Some(r) = reported {
+        r.store(false, Ordering::Relaxed);
+    }
     matches!(read, AlphaRead::Alpha(a) if a >= 128)
 }
 
