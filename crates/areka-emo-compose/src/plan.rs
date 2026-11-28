@@ -1,4 +1,4 @@
-//! `BlitOp` / `PlanBuilder`: 正規化定義からバックエンド非依存の合成命令列を導出する。
+//! `BlitOp`: 正規化定義から、描く計画（[`DrawPlan`](crate::DrawPlan)）の項の元になる命令の列を導出する。
 //!
 //! element レイヤ順・有効 bind 集合の `animation-sort`→animation ID 順の2段合成規則を確定し、
 //! 各命令へ `AtlasTable` 解決結果（`ElementId`・`Placement`）と変換行列を含める。入れ子 surface
@@ -51,19 +51,17 @@ pub(crate) use extent::{MAX_AREA, MAX_EXTENT, build_extents};
 #[cfg(test)]
 pub(crate) use extent::{build_extents_limited, compute_extent, compute_extent_limited};
 
-/// バックエンド非依存の転写命令（これがバックエンド差替えシーム）。
+/// 計画の項の元になる 1 件の命令（[`crate::plan_mix::push_items`] が項へ写す）。
 ///
 /// `element` はアトラス参照（束縛時に `Some(ElementId)` へ解決済みのもののみ命令化される）、
-/// `transform` は flatten 済み最終配置（今は平行移動のみ）、`method` は常に
-/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時に `AtlasTable::entry`
-/// で O(1) で行うため、本命令は `ElementId` のみを保持する。
+/// `transform` は flatten 済み最終配置（今は平行移動のみ）、`method` は element定義か pattern定義の語。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlitOp {
-    /// アトラス参照（束縛済み `ElementId`・placement の実引きは blit 時）。
+pub(crate) struct BlitOp {
+    /// アトラス参照（束縛済み `ElementId`）。
     pub element: ElementId,
     /// flatten 済み最終配置（今は平行移動のみ）。
     pub transform: Transform,
-    /// 合成メソッド（常に [`ComposeMethod::Overlay`]）。
+    /// element定義か pattern定義の語。
     pub method: ComposeMethod,
 }
 

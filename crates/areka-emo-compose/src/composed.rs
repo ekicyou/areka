@@ -1,10 +1,10 @@
-//! `ComposedSurface`: 合成コアの出力契約（premultiplied BGRA・size・stride・`Send` 所有）。
+//! `ComposedSurface`: 描いた絵の受け渡しの型（premultiplied BGRA・size・stride・`Send` 所有）。
 //!
 //! 通信機構（channel・async）を介さず値・共有参照として直接返す出力型。surface id→合成結果の
 //! キャッシュ・無効化は持たない（それは `emo-present` の責務）。全透明の退化結果も外形どおりの
 //! `ComposedSurface` として正常表現する。
 
-/// 合成結果（premultiplied BGRA・`Send` 所有・無変換で WUC upload / AlphaMask 生成可能）。
+/// 描いた絵（premultiplied BGRA・`Send` 所有）。
 ///
 /// 内部フィールドは opaque。不変条件として `bytes.len() == width * 4 * height`・画素は常に premultiplied BGRA を保つ。
 /// 描いた絵は下流（画面の外の描き手）が [`from_bytes`] で包む。

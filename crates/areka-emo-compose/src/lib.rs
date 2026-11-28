@@ -68,7 +68,7 @@ mod plan_bounds;
 mod plan_cap;
 mod plan_issues;
 mod plan_mix;
-pub use plan::BlitOp;
+use plan::BlitOp;
 pub use plan_bounds::{ShellBounds, shell_bounds};
 pub use plan_issues::{ShapeIssue, shape_issues};
 pub mod hit_mask;
