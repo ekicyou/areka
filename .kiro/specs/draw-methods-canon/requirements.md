@@ -52,7 +52,7 @@
   - `auto`＝`element-clipping-option` の後の別件。element定義のオプション（クリップなど）の働き＝`element-clipping-option`（並びを運ぶ欄は本仕様で足す・Requirement 1.6）。
   - 外形の求め方（`extent-element-offset`）・動く画像の再生（`animated-image-playback`）・α の宣言（`self-alpha-declaration`）。
   - 描画メソッドの語の綴りの正規化（`canonical_method_name`）と登録簿（`known_method`）の作り直し。広げる語の分だけ触る。
-  - wintf の上に挙げた口のほかの変更。中身の側が「画素どおり」を申告して範囲だけを描き直す仕組みは、Requirement 8.2 の測りで今より重くなったときだけ足す。
+  - wintf の上に挙げた口のほかの変更。中身の側が「画素どおり」を申告して範囲だけを描き直す仕組みは、この仕様では足さない（更新の所要の詰めは element ごとの行列の変換が入った後に測り直して決める）。
   - 表示の段（窓・スワップチェーン）の作り。合成の精度（f16）＝`compose-f16-precision`。
 - **Adjacent expectations**:
   - 上流（どれも完了・決めはそのまま引き継ぐ）: `element-base-method`（語の集合の 1 関数・描けない行の警告・element定義の `base`）・`emo-compose`・`seriko-runtime`・`surface-element-nesting`・`wintf-d2d-composite-rules`（節ごとの重ね方・描画面ごとの入れ物・1 画素と全体の読み戻し・WARP のテスト）・`wintf-visual-tree`・`wintf-visual-damage-redraw`（範囲だけの描き直し）・`hit-id-pass`（当たりの ID の描き先・α 0.5 未満は当たり無し）。
@@ -160,7 +160,7 @@
 #### Acceptance Criteria
 
 1. The areka shall `overlay` だけで書いたシェルの合成の答えを、今の合成の答えと色の各成分の差 1 以内に保つ（仮定 2）。
-2. When まばたきなど、サーフェスの一部だけが変わったとき, the areka shall 1 回の更新の所要を今以下に保ち（今と移した後を同じ検体で測って記録する）、範囲だけを描き直す回の答えをサーフェス全体を描き直した答えとバイト単位で一致させる。測りで今より重くなったときは、中身の側が「画素どおり」を申告して範囲だけを描き直す仕組みを wintf に足す。
+2. When まばたきなど、サーフェスの一部だけが変わったとき, the areka shall 1 回の更新の所要を移す前と移した後で同じ検体で測って記録し、移す前より重い行はその理由と一緒に記録し、範囲だけを描き直す回の答えをサーフェス全体を描き直した答えとバイト単位で一致させる。所要の詰めは element ごとの行列の変換が入った後に測り直して決める。
 3. The areka shall 合成を移しても、フレームを 1 つ遅らせる形や時刻を丸める形を取らず、合成の答えを今と同じフレームで画面に出す。
 
 ### Requirement 9: 決定論のテスト
@@ -202,7 +202,7 @@
 8. **最初の element で語の答え**: 決め＝`asis` 以外は `base` と同じ（SSP の測り `research.md` §10.1 と正典が一致）。`asis` は正典の文に従い透過色を表示する。SSP 2.x は最初の `asis` で透過色を抜いたが、正典が明記する所なので写さず、§8 に「SSP と違う所」として記す（Requirement 3.4）。`interpolate` の半透明の所で SSP の赤が半分になる癖（§10.2）も写さない。
 9. **窓を出さない書き出し**: 決め＝emo-present の口を通し、画面と同じ wintf の描き方で描く（Requirement 7.4・7.8）。
 10. **バルーンの背景色**: 決め＝付け替えない（Requirement 7.5）。
-11. **範囲だけの描き直し**: 決め＝所要を今以下に保つことを測って確かめ、答えの一致を固める（Requirement 8.2）。今も GPU の側は毎回全面を描いており、範囲だけなのは CPU の重ね直しだけ。「画素どおり」の申告は、測りで重くなったときだけ wintf に足す。
+11. **範囲だけの描き直し**: 決め＝所要を移す前と移した後で測って記録し（移す前より重い行は理由と一緒に）、答えの一致を固める（Requirement 8.2）。今も GPU の側は毎回全面を描いており、範囲だけなのは CPU の重ね直しだけ。「画素どおり」の申告はこの仕様では足さない。所要の詰めは element ごとの行列の変換が入った後に測り直して決める。
 12. **語の比べ方**: 決め＝今のまま（element定義は完全一致・pattern定義は正規化）。揃えると大文字の `Overlay` の element定義の行の見え方が変わるため（Requirement 1.2）。
 13. **WARP のテストの置き場**: 決め＝wintf の「画面の外の絵へ描く口」と WARP の足場を本仕様で公開し、emo-present のテストがそれを通る（Requirement 7.8・9.2）。WARP の装置は公開済みの `wintf::com::d3d11::d3d11_create_device` で作れ、`Cargo.toml` に依存を足さない。
 14. **wintf の足りない口の置き場**（ギャップ分析で見つけた）: 決め＝本仕様の範囲を広げ、wintf の当たりの形（Requirement 7.7）・画面の外へ描く口・WARP の足場を本仕様で作る。C28 で wintf を触るのは `talk-thread-count-growth` の `ecs/world/thread_registry.rs` だけで、重ならない。
