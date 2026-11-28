@@ -27,7 +27,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
 use super::balloon_face::{FaceCause, select_balloon_face};
-use super::{RuntimeWiring, reconcile_reported_sizes};
+use super::{RuntimeWiring, reconcile_reported_sizes, resolve_frame_now};
 use crate::assets::actor_keyed_balloon_tables;
 use crate::session_hooks::SessionHooks;
 use crate::shell_balloon_resolve::SkinCandidate;
@@ -110,6 +110,7 @@ mod test_open {
                         surface_ids: assets.boxes.surface_ids.clone(),
                         candidates: assets.boxes.fallback_candidates.clone(),
                     },
+                    text_routing: assets.boxes.text_routing(),
                 },
                 SwapFinish::Shell {
                     source,
@@ -533,6 +534,18 @@ fn finish_shell(
     // 箱の文字を捨て、今のサーフェス番号を保ったまま行き先を新しい表で引き直す（`\s` を書かない
     // 次の台詞が新しいシェルの同じ番号のサーフェスの箱へ入る）。
     boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
+    // seriko は差し替えの依頼を `commit` で先に受けているので、箱の表が効いた時刻は文字の層が
+    // 受けたこのフレームの時刻で後から届ける（刻みの境目に寄せると箱の字の切り方が文字の層とずれる）。
+    match (resolve_frame_now(None, world), (hooks.seriko_sink)(world)) {
+        (Some(at), Some(sink)) => sink.send_text_routing_applied(at),
+        (None, _) => error!(
+            event = "shell_box_table_no_frame_time",
+            "フレームの時刻が無いので、箱の表が効いた知らせを seriko へ送らない"
+        ),
+        (Some(_), None) => {
+            debug!("finish_shell: seriko の送り手が無いので、箱の表が効いた知らせを送らない")
+        }
+    }
     // 新しいシェルのカーソルを入れ、今の状態のまま出し直してから前のを捨てる。
     cursors.hand_to(world);
     // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ

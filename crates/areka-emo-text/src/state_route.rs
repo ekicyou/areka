@@ -1,31 +1,17 @@
 //! スコープごとの文字の行き先（純粋層・`state.rs` の子モジュール）。
 //!
-//! スコープごとに「今のサーフェス番号（非表示なら無し）」と「今の行き先」を持ち、届いた指令の
-//! 順に遷移させる。時計も窓も `World` も見ない。
-//! 「箱の列」はサーフェス番号に対する element番号の昇順の箱の名前の列（[`TextLayerState::set_box_index`]
-//! で受け取る）で、「既定」は列が空なら普通のバルーン、空でなければ列の先頭の箱である。
-//!
-//! 不変条件: 行き先が `Box(n)` のとき、`n` は必ずそのスコープの今のサーフェスの箱の列にある。
-//! 箱の表が空なら、行き先は 1 度も普通のバルーンから動かない。
+//! 行き先の答えは [`areka_emo_compose::TextRoute`] が決める。ここは答えが替わった瞬間の
+//! `\f` の指定の持ち運びと記録だけを足す。時計も窓も `World` も見ない。
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_emo_compose::BoxName;
+use areka_emo_compose::{BoxName, BoxSelect, TextRoute};
 use areka_sakura::contract::ActorKey;
+
+pub use areka_emo_compose::SurfaceKeyOutcome;
 
 use super::TextLayerState;
 use crate::place::TextPlace;
-
-/// `\s` の鍵を今のシェルで解決した結果（解決そのものは結線の閉包が行う）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SurfaceKeyOutcome {
-    /// そのサーフェス番号を表示する。
-    Show(u32),
-    /// `\s[-1]`（非表示）。
-    Hide,
-    /// 解決できない（今のシェルにそのサーフェスが無い場合を含む）。何も変えない。
-    Unresolved,
-}
 
 /// シェルの切替の戻り先。seriko の戻り先と同じ材料。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -39,10 +25,7 @@ pub struct SurfaceFallback {
 /// スコープ 1 つの行き先の状態。記録の無いスコープは「非表示・普通のバルーン」と同じ。
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct ScopeRoute {
-    /// 今のサーフェス番号（`None` は非表示・まだ `\s` が届いていない）。
-    surface: Option<u32>,
-    /// 今の文字の行き先。
-    dest: TextPlace,
+    route: TextRoute,
     /// スコープの `\f` の指定を今持っている場所（スコープに従う場所だけ・始めは普通のバルーン）。
     /// 行き先が替わるときの写しと持ち主の移動は装飾の持ち運び（state_decoration.rs の
     /// `carry_script_decor`）が読み書きする。
@@ -52,8 +35,7 @@ pub(super) struct ScopeRoute {
 impl Default for ScopeRoute {
     fn default() -> Self {
         ScopeRoute {
-            surface: None,
-            dest: TextPlace::Balloon,
+            route: TextRoute::default(),
             shared: TextPlace::Balloon,
         }
     }
@@ -79,24 +61,18 @@ impl TextLayerState {
 
     /// `\s` の解決結果でスコープのサーフェス番号と行き先を決める。
     pub fn route_surface(&mut self, actor: &ActorKey, outcome: SurfaceKeyOutcome) {
+        if outcome == SurfaceKeyOutcome::Unresolved {
+            tracing::debug!(actor = %actor, "解決できない \\s——行き先もサーフェス番号も変えない");
+            return;
+        }
+        let route = &mut self.routes.entry(actor.clone()).or_default().route;
         let surface = match outcome {
             SurfaceKeyOutcome::Show(id) => Some(id),
-            SurfaceKeyOutcome::Hide => None,
-            SurfaceKeyOutcome::Unresolved => {
-                tracing::debug!(actor = %actor, "解決できない \\s——行き先もサーフェス番号も変えない");
-                return;
-            }
+            _ => None,
         };
-        let index = &self.box_index;
-        let route = self.routes.entry(actor.clone()).or_default();
-        route.surface = surface;
-        let keep = match &route.dest {
-            TextPlace::Box(name) => boxes_of(index, surface).contains(name),
-            TextPlace::Balloon => false,
-        };
-        if !keep {
-            let dest = default_dest(index, surface);
-            self.set_dest(actor, dest);
+        if route.follow_surface(&self.box_index, outcome) {
+            let dest = route.dest().clone();
+            self.carry_script_decor(actor, &dest);
         }
         tracing::debug!(actor = %actor, ?surface, dest = ?self.destination(actor), "\\s による行き先の決定");
     }
@@ -105,28 +81,29 @@ impl TextLayerState {
     /// 替える（行き先の引き直しは [`Self::route_surface`] に任せる）。非表示のスコープは替えない。
     /// 替えたスコープがあれば `true`。
     pub fn fall_back_surfaces(&mut self, fallback: &SurfaceFallback) -> bool {
-        // 面の番号の集合が空＝材料なし（seriko の fall_back_shell_surfaces と同じ）。
-        if fallback.surface_ids.is_empty() {
-            return false;
-        }
-        let missing: Vec<(ActorKey, u32)> = self
+        let moves: Vec<(ActorKey, u32, SurfaceKeyOutcome)> = self
             .routes
             .iter()
-            .filter_map(|(actor, route)| route.surface.map(|id| (actor.clone(), id)))
-            .filter(|(_, id)| !fallback.surface_ids.contains(id))
+            .filter_map(|(actor, scope)| {
+                let candidates = fallback
+                    .candidates
+                    .get(actor)
+                    .map_or(&[][..], Vec::as_slice);
+                let outcome = scope
+                    .route
+                    .fallback_outcome(&fallback.surface_ids, candidates)?;
+                Some((actor.clone(), scope.route.surface()?, outcome))
+            })
             .collect();
-        for (actor, missing) in &missing {
-            let to = fallback.candidates.get(actor).and_then(|candidates| {
-                candidates
-                    .iter()
-                    .copied()
-                    .find(|id| fallback.surface_ids.contains(id))
-            });
+        for (actor, missing, outcome) in &moves {
+            let to = match outcome {
+                SurfaceKeyOutcome::Show(id) => Some(*id),
+                _ => None,
+            };
             tracing::debug!(actor = %actor, missing, ?to, "シェルの切替で今の面が無い——戻り先へ引き直す");
-            let outcome = to.map_or(SurfaceKeyOutcome::Hide, SurfaceKeyOutcome::Show);
-            self.route_surface(actor, outcome);
+            self.route_surface(actor, *outcome);
         }
-        !missing.is_empty()
+        !moves.is_empty()
     }
 
     /// 名前の形の `\b[名前]` で行き先を切り替える。
@@ -137,20 +114,24 @@ impl TextLayerState {
     ///
     /// 箱が見つからず空回しの写しでもない（＝`warn!` を残した）ときだけ真を返す（strict の知らせ）。
     pub fn route_select(&mut self, actor: &ActorKey, name: &str) -> bool {
-        let surface = self.current_surface(actor);
-        let found = boxes_of(&self.box_index, surface)
-            .iter()
-            .find(|n| n.as_str() == name)
-            .cloned();
-        match found {
-            Some(name) => {
-                tracing::debug!(actor = %actor, name = name.as_str(), "\\b[名前] で行き先を箱へ切り替え");
-                self.set_dest(actor, TextPlace::Box(name));
+        let select = match self.routes.get_mut(actor) {
+            Some(scope) => scope.route.select_box(&self.box_index, name),
+            None => BoxSelect::Missing,
+        };
+        match select {
+            BoxSelect::Changed | BoxSelect::Same => {
+                tracing::debug!(actor = %actor, name, "\\b[名前] で行き先を箱へ切り替え");
+                if select == BoxSelect::Changed {
+                    let dest = self.destination(actor);
+                    self.carry_script_decor(actor, &dest);
+                }
                 false
             }
-            None if self.rehearsal => false,
-            None => {
-                let surface = surface.map_or_else(|| "非表示".to_owned(), |id| id.to_string());
+            BoxSelect::Missing if self.rehearsal => false,
+            BoxSelect::Missing => {
+                let surface = self
+                    .current_surface(actor)
+                    .map_or_else(|| "非表示".to_owned(), |id| id.to_string());
                 tracing::warn!(
                     name,
                     surface = %surface,
@@ -166,12 +147,14 @@ impl TextLayerState {
     pub fn destination(&self, actor: &ActorKey) -> TextPlace {
         self.routes
             .get(actor)
-            .map_or(TextPlace::Balloon, |route| route.dest.clone())
+            .map_or(TextPlace::Balloon, |scope| scope.route.dest().clone())
     }
 
     /// スコープの今のサーフェス番号（非表示・まだ `\s` が届いていなければ `None`）。
     pub fn current_surface(&self, actor: &ActorKey) -> Option<u32> {
-        self.routes.get(actor).and_then(|route| route.surface)
+        self.routes
+            .get(actor)
+            .and_then(|scope| scope.route.surface())
     }
 
     /// 台詞の頭・シェルの切替: 全スコープの行き先を既定へ戻す（サーフェス番号は変えない）。
@@ -183,12 +166,14 @@ impl TextLayerState {
         self.fold_shared_into_balloon();
         let actors: Vec<ActorKey> = self.routes.keys().cloned().collect();
         for actor in actors {
-            let Some(route) = self.routes.get_mut(&actor) else {
+            let Some(scope) = self.routes.get_mut(&actor) else {
                 continue;
             };
-            route.dest = TextPlace::Balloon;
-            let dest = default_dest(&self.box_index, route.surface);
-            self.set_dest(&actor, dest);
+            scope.route.reset(&self.box_index);
+            let dest = scope.route.dest().clone();
+            if dest != TextPlace::Balloon {
+                self.carry_script_decor(&actor, &dest);
+            }
         }
     }
 
@@ -196,36 +181,13 @@ impl TextLayerState {
     fn fold_shared_into_balloon(&mut self) {
         let actors: Vec<ActorKey> = self.routes.keys().cloned().collect();
         for actor in actors {
-            let Some(route) = self.routes.get_mut(&actor) else {
+            let Some(scope) = self.routes.get_mut(&actor) else {
                 continue;
             };
-            let shared = std::mem::replace(&mut route.shared, TextPlace::Balloon);
+            let shared = std::mem::replace(&mut scope.shared, TextPlace::Balloon);
             if shared != TextPlace::Balloon {
                 self.copy_script(&actor, &shared, &TextPlace::Balloon);
             }
         }
     }
-
-    /// 行き先を `dest` へ替える。替わる瞬間に `\f` の指定を持ち運ぶ（`carry_script_decor`）。
-    fn set_dest(&mut self, actor: &ActorKey, dest: TextPlace) {
-        if self.destination(actor) == dest {
-            return;
-        }
-        self.carry_script_decor(actor, &dest);
-        self.routes.entry(actor.clone()).or_default().dest = dest;
-    }
-}
-
-/// サーフェスの箱の列（非表示・箱の無い番号は空）。
-fn boxes_of(index: &BTreeMap<u32, Vec<BoxName>>, surface: Option<u32>) -> &[BoxName] {
-    surface
-        .and_then(|id| index.get(&id))
-        .map_or(&[], Vec::as_slice)
-}
-
-/// 既定の行き先: 箱の列が空なら普通のバルーン、空でなければ先頭の箱。
-fn default_dest(index: &BTreeMap<u32, Vec<BoxName>>, surface: Option<u32>) -> TextPlace {
-    boxes_of(index, surface)
-        .first()
-        .map_or(TextPlace::Balloon, |name| TextPlace::Box(name.clone()))
 }

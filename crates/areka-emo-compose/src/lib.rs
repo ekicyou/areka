@@ -76,6 +76,8 @@ mod hit_import;
 pub use hit_import::HitRegions;
 pub mod scale;
 pub use scale::ScaleRatio;
+pub mod text_route;
+pub use text_route::{BoxSelect, SurfaceKeyOutcome, TextPlace, TextRoute, box_index};
 
 use areka_emo_atlas::AtlasTable;
 

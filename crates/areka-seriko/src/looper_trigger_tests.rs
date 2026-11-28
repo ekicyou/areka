@@ -576,6 +576,7 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         balloon_tables: BTreeMap::from([(scope(), table_of(TRIGGERS))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
     let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
@@ -646,6 +647,7 @@ fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
         balloon_tables: BTreeMap::from([(scope(), table_of(PLAYING))]),
         rng,
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));

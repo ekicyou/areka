@@ -172,6 +172,8 @@ class ThreadRow:
     cpu_us: int
     kernel_us: int
     user_us: int
+    #: 畳んだ合計の行だけが持つ（畳んだ本数・累積）。古いログと生きた行は None。
+    exited: int | None = None
 
 
 @dataclass
@@ -247,6 +249,7 @@ def scan_run_log(path: Path) -> LogScan:
                 snap=need("snap"), t_s=need("t_s"), tid=need("tid"),
                 name=f.get("name", PLACEHOLDER), role=f.get("role", PLACEHOLDER),
                 cpu_us=need("cpu_us"), kernel_us=need("kernel_us"), user_us=need("user_us"),
+                exited=need("exited") if "exited" in f else None,
             ))
             continue
 
@@ -351,12 +354,11 @@ def stage_process(scan: LogScan, cpu: list[CpuSample], meta: dict[str, str] | No
 
 
 def thread_delta(prev: list[ThreadRow], cur: list[ThreadRow]) -> list[ThreadRow]:
-    """2 つのスナップショット（累積）の差を取る。
+    """スレッド別の表の照らし方: 2 つのスナップショット（累積）の行を TID で突き合わせて差を取る。
 
-    `crates/areka/src/perf_thread_report.rs` の `delta` と同じ意味論の写し——
-    突き合わせは TID で行い、前回に無い TID は値をそのまま持ち（その区間で生まれた
-    スレッド）、巻き戻って見えたら 0 で止める。あちらの決定論テストが規則の権威で、
-    ここが食い違えば順位表が静かに嘘をつく。
+    前回に無い TID は値をそのまま持ち（その区間で生まれたスレッド）、巻き戻って見えたら
+    0 で止める。畳んだ行は残りの行と同じ `tid=0` を持つので、渡す前に前後とも除くこと。
+    役割別の表と名簿の差の合計はこれを使わず、系統の合計の差で取る（`family_totals`）。
     """
     before = {row.tid: row for row in prev}
     out: list[ThreadRow] = []
@@ -369,6 +371,25 @@ def thread_delta(prev: list[ThreadRow], cur: list[ThreadRow]) -> list[ThreadRow]
             cpu_us=kernel + user, kernel_us=kernel, user_us=user,
         ))
     return out
+
+
+def family(role: str) -> str:
+    """系統の規則（名簿の `role_family` と同じ）: 末尾の `-<ASCII 数字>` を `-*` に畳む。"""
+    return re.sub(r"^(.+)-[0-9]+$", r"\1-*", role)
+
+
+def family_totals(rows: list[ThreadRow]) -> dict[str, int]:
+    """1 枚の中の系統ごとの合計（生きた行の和＋畳んだ行）。名簿外の残りの行は入れない。
+
+    1 本のスレッドはどの 1 枚でも生きた行か畳んだ行の一方にだけ入り、累積は減らないので、
+    この合計の後と前の差は区間より前の分を足さず、区間の中で終わった分も落とさない。
+    """
+    totals: dict[str, int] = {}
+    for row in rows:
+        if row.role != ROLE_UNREGISTERED_REST:
+            key = family(row.role)
+            totals[key] = totals.get(key, 0) + row.cpu_us
+    return totals
 
 
 def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
@@ -396,12 +417,21 @@ def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
     if prev_snap is None and len(snaps) >= 2:
         prev_snap = snaps[0]
 
+    def live_and_rest(snap_rows: list[ThreadRow]) -> list[ThreadRow]:
+        return [r for r in snap_rows if r.exited is None]
+
+    after_families = family_totals(last_rows)
     if prev_snap is None:
-        basis, rows, window_s = "cumulative", last_rows, float(last_t_s)
+        basis, rows, window_s = "cumulative", live_and_rest(last_rows), float(last_t_s)
+        by_family = after_families
     else:
         basis = "delta"
-        rows = thread_delta(by_snap[prev_snap], last_rows)
-        window_s = float(last_t_s - max(r.t_s for r in by_snap[prev_snap]))
+        prev_rows = by_snap[prev_snap]
+        rows = thread_delta(live_and_rest(prev_rows), live_and_rest(last_rows))
+        window_s = float(last_t_s - max(r.t_s for r in prev_rows))
+        before_families = family_totals(prev_rows)
+        by_family = {key: max(total - before_families.get(key, 0), 0)
+                     for key, total in after_families.items()}
 
     processes = {row.snap: row for row in scan.processes}
     process_cpu_us: int | None = None
@@ -413,18 +443,18 @@ def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
     whole = float(process_cpu_us) if process_cpu_us is not None else 0.0
 
     # 名簿外の残りは行どうしの差でなくプロセスの差から引く（D7・#4）。使い回された TID の
-    # 新しいスレッドは delta で 0 に止まり、行の差のままだと残りが幻の CPU で膨らむ。
+    # 新しいスレッドは TID の照らしで 0 に止まり、行の差のままだと残りが幻の CPU で膨らむ。
+    registry_us = sum(by_family.values())
     if basis == "delta" and process_cpu_us is not None:
-        named_us = sum(r.cpu_us for r in rows if r.role != ROLE_UNREGISTERED_REST)
-        rows = [replace(r, cpu_us=max(process_cpu_us - named_us, 0))
+        rows = [replace(r, cpu_us=max(process_cpu_us - registry_us, 0))
                 if r.role == ROLE_UNREGISTERED_REST else r for r in rows]
 
     # 名簿由来と名簿外の残りは分けて出す。`perf(thread)` 行には `unregistered_rest` も
     # 1 本混じっており、全部足すと必ずプロセス CPU に一致してしまう（C14: 残り＝
     # プロセス − 名簿）。1 つの数にすると「名簿がプロセス全部を説明できている」と
     # 読めてしまい、名簿の穴（bevy の TaskPool など）が見えなくなる。
-    rest_us = sum(r.cpu_us for r in rows if r.role == ROLE_UNREGISTERED_REST)
-    registry_us = sum(r.cpu_us for r in rows if r.role != ROLE_UNREGISTERED_REST)
+    rest_rows = [r for r in rows if r.role == ROLE_UNREGISTERED_REST]
+    rest_us = sum(r.cpu_us for r in rest_rows)
 
     lines = [
         f"[2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準={basis}",
@@ -443,11 +473,10 @@ def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
     if process_cpu_us is None:
         lines.append(note("perf(process) 行が無いので占有率を出せない（分母が無い）"))
 
-    by_role: dict[str, int] = {}
-    for row in rows:
-        # トークのスレッドは 1 本ずつ役割が違う（sakura-talk-{id}）ので役割別でだけ畳む（D8・#22）。
-        role = re.sub(r"^(actor:.+)-\d+$", r"\1-*", row.role)
-        by_role[role] = by_role.get(role, 0) + row.cpu_us
+    # 役割別は系統の規則（名簿と同じ）で畳む。トークのスレッドは 1 本ずつ役割が違う（sakura-talk-{id}）。
+    by_role = dict(by_family)
+    if rest_rows:
+        by_role[ROLE_UNREGISTERED_REST] = rest_us
     role_items = sorted(by_role.items(), key=lambda kv: (-kv[1], kv[0]))
     lines.append(f"  役割別（上位 {top}）")
     lines.extend(render_table(

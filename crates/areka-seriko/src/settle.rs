@@ -73,6 +73,7 @@ pub fn settle_surface(
         balloon_tables: BTreeMap::new(),
         rng: Box::new(|_| 1),
         pick_rng: crate::seeded_rng(0),
+        text_routing: crate::TextRouting::default(),
     });
     let actor = ActorKey::from(scope.to_string());
     let mut send = |msg: SerikoMsg| {

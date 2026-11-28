@@ -94,6 +94,10 @@ mod same_script_test_support;
 #[cfg(test)]
 mod receivers_follow_tests;
 
+// 字の場所をまたぐ台詞と印を含む台詞でも、文字の層と seriko は同じ字に同じ時刻を持つ。
+#[cfg(test)]
+mod receivers_follow_place_tests;
+
 // タグ入口の結線の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
@@ -535,6 +539,7 @@ pub fn wire_runtime(
         balloon_tables,
         rng: seeded_rng(seed),
         pick_rng: seeded_rng(pick_seed),
+        text_routing: boxes.text_routing(),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済みゆえ spawn_seriko の戻り値を直接 surface sink として束へ載せる。
@@ -564,7 +569,7 @@ pub fn wire_runtime(
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない）。
         shell_author_dpi,
         balloon_author_dpi,
-        // 箱の束は装着の相が文字の層へ渡す（seriko は読まない）。
+        // 箱の束は装着の相が文字の層へ渡す（seriko へ渡す箱の材料は上で組み済み）。
         boxes,
         // シェルのカーソルも装着の相が箱の束の隣で入れる。
         cursors,

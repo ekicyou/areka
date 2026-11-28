@@ -64,13 +64,13 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: v0.2.0 の時刻の土台（`dola-interrupt-ticks` → `talk-anchor-interrupt-ticks`＝`drive.rs`・`dispatcher.rs` のトークの時計と起点を作り替える＝その後の形に並走を足す）・`talk-thread-count-growth`（トークの糸の数＝並走で糸が増える前に片付けておく）・`mouse-click-wheel-events`（`OnMouseEnter`／`OnMouseLeave` を送る＝ホバーで使う入口）。`seriko-script-triggers`（`\i`）は無くても着手できる（着地していれば並走の中で効く）。
+- **Upstream**: v0.2.0 の時刻の土台（✅ `dola-interrupt-ticks`＝`drive.rs`・`dispatcher.rs` のトークの時計と起点を作り替える＝その後の形に並走を足す）・`talk-thread-count-growth`（トークの糸の数＝並走で糸が増える前に片付けておく）・`mouse-click-wheel-events`（`OnMouseEnter`／`OnMouseLeave` を送る＝ホバーで使う入口）。`seriko-script-triggers`（`\i`）は無くても着手できる（着地していれば並走の中で効く）。
 - **Downstream**: ホバーに見た目で応えるゴースト（ぱすたの × を SHIORI 側で書く形）・`\![anim,…]` と音の受け手を作る後の spec。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい spec）。
-- **Adjacent**: `shell-hover-animation`（同じ困りごとのシェルの側）・`sakura-time-critical`（マウス系の通知を止める側・`steady.rs` を触る）・`talk-fast-forward`（`drive.rs`・`dispatcher.rs`）・`talk-anchor-interrupt-ticks`（同）・`seriko-talk-clock-fidelity`（seriko の時間の起点の見積もり）・`seriko-script-triggers`（`\i`）・`script-security-level`・`script-impact-tiers`（台本の出どころ・`StartTalk` の約束）・`multi-ghost-runtime`（dispatcher はゴーストごと）・`audit-kanade`・`audit-seriko`（v0.1.0 の後の隙間の見直し・同じファイル）。
+- **Adjacent**: `shell-hover-animation`（同じ困りごとのシェルの側）・`sakura-time-critical`（マウス系の通知を止める側・`steady.rs` を触る）・`talk-fast-forward`（`drive.rs`・`dispatcher.rs`）・`seriko-talk-clock-fidelity`（seriko の時間の起点の見積もり）・`seriko-script-triggers`（`\i`）・`script-security-level`・`script-impact-tiers`（台本の出どころ・`StartTalk` の約束）・`multi-ghost-runtime`（dispatcher はゴーストごと）・`audit-kanade`・`audit-seriko`（v0.1.0 の後の隙間の見直し・同じファイル）。
 
 ## Constraints
 

@@ -363,6 +363,7 @@ impl SpineHarness {
                 balloon_tables,
                 rng,
                 pick_rng,
+                text_routing: boxes.text_routing(),
             },
         };
         // 実名前解決表（BootAssets.bind_resolver・emo2 fixture の MountModel から構築）＋

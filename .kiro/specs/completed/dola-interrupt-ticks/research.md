@@ -907,7 +907,7 @@ brief の見込み（18〜26）より多い。使い手の crate が 9 つ（と
 
 - `windows` 0.62.2 の `src/Windows/Win32/System/WindowsProgramming/mod.rs`（`QueryUnbiasedInterruptTimePrecise`）。
 - `doc/ideas/novel-redesign-2026-11-20/`（`00-architecture.md` 4.1〜4.3・`01-playback-control.md` 5.2〜5.9・`02-parallel.md` 6.3〜6.12・`04-sound.md` 5.4・`07-timed-values.md` 5.3〜5.9・`91-validation-seams.md`・`92-validation-code.md`）。
-- `.kiro/specs/instant-to-interrupt-ticks/brief.md`・`.kiro/specs/seriko-talk-clock-fidelity/brief.md`。
+- `.kiro/specs/instant-to-interrupt-ticks/brief.md`・`.kiro/specs/completed/seriko-talk-clock-fidelity/brief.md`。
 
 ## 15. 設計の検証の後に確かめた事
 

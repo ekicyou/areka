@@ -30,16 +30,17 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::{ActorKey, TalkCue};
 use dola::cue::OriginNotice;
 use dola::{TimePoint, TimeSpan};
 
 use crate::calls::CallOutcome;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
+use crate::resolve::SurfaceResolver;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-use crate::talk::TalkFeed;
+use crate::talk::{TalkFeed, TextRouting};
 use crate::timeline::{
     FrameStatus, LoopRng, LotteryBoundary, current_frame_index, elapsed_since, frame_at,
     seeded_rng, should_fire, stop_frame,
@@ -50,7 +51,8 @@ use crate::trigger::{Armed, TalkWindow};
 #[path = "looper_trigger.rs"]
 mod top_trigger;
 use top_trigger::{
-    arm_slot, fire_top_triggers, glyph_wall, restart_talk, revealed_at, settle_talk,
+    arm_slot, fire_top_triggers, glyph_wall, observe_talk_cue, rebase_talk_boxes, revealed_at,
+    seed_feeds, settle_talk,
 };
 
 // 一番上の面の働きのコマの配線と、描くコマの置き方。
@@ -89,6 +91,8 @@ pub struct SerikoLoopConfig {
     /// 呼び出しの選び（`alternative*`）の乱数注入シーム。抽選の `rng` とは別にし、選びが抽選の
     /// 乱数を引かないようにする。
     pub pick_rng: LoopRng,
+    /// 文字の層と同じ箱の材料（箱の無いシェルでは空）。
+    pub text_routing: TextRouting,
 }
 
 impl SerikoLoopConfig {
@@ -102,6 +106,7 @@ impl SerikoLoopConfig {
             balloon_tables: BTreeMap::new(),
             rng: seeded_rng(0),
             pick_rng: seeded_rng(0),
+            text_routing: TextRouting::default(),
         }
     }
 }
@@ -193,13 +198,13 @@ fn any_talk(config: &SerikoLoopConfig) -> bool {
     config.shell_table.has_talk() || config.balloon_tables.values().any(AnimationTable::has_talk)
 }
 
-/// 文字の窓の数え（(数え始め, 数え済み), 今現れている数）と序数 → 壁時刻の写しから窓を組む。
+/// 文字の窓の数え（(数えた字の数, 数え済み), 今現れている数）と序数 → 壁時刻の写しから窓を組む。
 fn talk_window<'a>(
     bounds: Option<((u64, u64), u64)>,
     wall: &'a dyn Fn(u64) -> TimePoint,
 ) -> Option<TalkWindow<'a>> {
-    bounds.map(|((base, prev_seen), now_seen)| TalkWindow {
-        base,
+    bounds.map(|((counted, prev_seen), now_seen)| TalkWindow {
+        counted,
         prev_seen,
         now_seen,
         wall,
@@ -311,34 +316,39 @@ impl LoopRuntime {
         }
     }
 
-    /// 届いた cue を 1 件、文字の時刻の列へ渡す。
+    /// 届いた cue を 1 件、字の行き先と文字の時刻の列へ渡す（[`observe_talk_cue`]）。
     ///
-    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、文字と選択肢の文字を合図の
-    /// 発火時刻からそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の発火時刻より後に
-    /// 現れる文字を捨てる。改行・待ち・`\!` のコマンドは数えない。記録は出さない（文字ごとの記録を
+    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。記録は出さない（文字ごとの記録を
     /// 増やさない）。
-    pub(crate) fn observe_cue(&mut self, cue: &TalkCue) {
+    pub(crate) fn observe_cue(&mut self, cue: &TalkCue, resolver: &SurfaceResolver) {
         if !self.has_talk {
             return;
         }
-        match &cue.command {
-            CueCommand::Text(text) | CueCommand::Choice { text, .. } => self
-                .feeds
-                .entry(cue.actor.clone())
-                .or_default()
-                .push_text(cue.fire_time, cue.duration, text),
-            CueCommand::Clear => {
-                if let Some(feed) = self.feeds.get_mut(&cue.actor) {
-                    restart_talk(feed, &mut self.armed, &cue.actor, cue.fire_time);
-                }
-            }
-            CueCommand::ClearAll => {
-                for (scope, feed) in &mut self.feeds {
-                    restart_talk(feed, &mut self.armed, scope, cue.fire_time);
-                }
-            }
-            _ => {}
-        }
+        let routing = &self.config.text_routing;
+        observe_talk_cue(&mut self.feeds, &mut self.armed, routing, cue, resolver);
+    }
+
+    /// 文字の層と同じ箱の材料。
+    pub(crate) fn text_routing(&self) -> &TextRouting {
+        &self.config.text_routing
+    }
+
+    /// 表の差し替えで門が開いた直後に呼ぶ: 控えた `\s` の答えから各スコープの字の行き先を決め直す。
+    pub(crate) fn seed_talk_routes(&mut self, states: &ScopeStates) {
+        seed_feeds(&mut self.feeds, &self.config.text_routing, states);
+    }
+
+    /// 文字の層が新しい箱の表を受けた時刻 `at` で箱の材料を入れ替え、各スコープの箱の場所の字を切り直す
+    /// （[`rebase_talk_boxes`]）。
+    pub(crate) fn replace_text_routing(
+        &mut self,
+        at: TimePoint,
+        routing: TextRouting,
+        fallback: &crate::ShellSurfaceFallback,
+    ) {
+        self.config.text_routing = routing;
+        let routing = &self.config.text_routing;
+        rebase_talk_boxes(&mut self.feeds, &mut self.armed, routing, at, fallback);
     }
 
     /// 置き直しの知らせを、全部のスコープの文字の列へ当てる（[`TalkFeed::shift_after`]）。数え済みの
@@ -429,6 +439,7 @@ impl LoopRuntime {
             balloon_tables,
             rng,
             pick_rng,
+            text_routing: _,
         } = config;
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性）。
         // `BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
@@ -763,10 +774,11 @@ impl LoopRuntime {
     /// シェルの表の差し替え。
     ///
     /// 全 scope のシェル slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
-    /// 残留コマ（PatternState）の消去は [`ScopeStates::rebase_shell`] の責務。
-    pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) {
+    /// 残留コマ（PatternState）の消去は [`ScopeStates::rebase_shell`] の責務。門が閉から開へ替わったら
+    /// 真を返す（呼び手が [`LoopRuntime::seed_talk_routes`] を呼ぶ）。
+    pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) -> bool {
         self.config.shell_table = table;
-        self.forget_slot_kind(Slot::Shell);
+        self.forget_slot_kind(Slot::Shell)
     }
 
     /// `scope` の `slot` の面の回数つきの時計を全部捨てる（窓が閉じた知らせ・新しい出番）。表が無ければ何もしない。
@@ -784,24 +796,29 @@ impl LoopRuntime {
     /// バルーンの表の差し替え。
     ///
     /// 全 scope のバルーン slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
-    /// シェル側の再生は触らない。
-    pub(crate) fn replace_balloon_tables(&mut self, tables: BTreeMap<ActorKey, AnimationTable>) {
+    /// シェル側の再生は触らない。門が閉から開へ替わったら真を返す。
+    pub(crate) fn replace_balloon_tables(
+        &mut self,
+        tables: BTreeMap<ActorKey, AnimationTable>,
+    ) -> bool {
         self.config.balloon_tables = tables;
-        self.forget_slot_kind(Slot::Balloon);
+        self.forget_slot_kind(Slot::Balloon)
     }
 
     /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・引き金の状態・部品の時計・warn! 記録を捨てる
     /// （表の差し替えの共通後段）。「どれかの表に `talk` が在るか」も組み直し、
-    /// 無くなったら文字の時刻の列を捨てる。
-    fn forget_slot_kind(&mut self, slot: Slot) {
+    /// 無くなったら文字の時刻の列（字の行き先ごと）を捨てる。門が閉から開へ替わったら真を返す。
+    fn forget_slot_kind(&mut self, slot: Slot) -> bool {
         self.playback.retain(|(_, s), _| *s != slot);
         self.armed.retain(|(_, s), _| *s != slot);
         self.warned_negative.retain(|(_, s, _)| *s != slot);
         self.parts.clear(slot);
+        let was_open = self.has_talk;
         self.has_talk = any_talk(&self.config);
         if !self.has_talk {
             self.feeds.clear();
         }
+        !was_open && self.has_talk
     }
 }
 
@@ -841,6 +858,9 @@ mod replace_tests;
 #[cfg(test)]
 #[path = "looper_talk_part_tests.rs"]
 mod talk_part_tests;
+#[cfg(test)]
+#[path = "looper_talk_route_tests.rs"]
+pub(crate) mod talk_route_tests;
 #[cfg(test)]
 #[path = "looper_talk_tests.rs"]
 mod talk_tests;
