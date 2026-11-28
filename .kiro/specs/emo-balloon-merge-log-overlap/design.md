@@ -35,7 +35,7 @@
 ### Out of Boundary
 - `load_scope_balloon_model`（出す入口）の名前・形・記録。MCP の面の書き出し（`crates/areka/src/mcp/dump_surface_gpu_test_support.rs`）・emo-text の検体の支え（`tests/support/fixture.rs`）・`balloon_model_tests.rs` は今どおりこの入口を呼ぶ。
 - `load_scope_windowpositions`（pub）の名前・形・記録。シェルの着替え（`crates/areka-runtime/src/switch_assets.rs:235`）とテスト 2 本は今どおりこれを呼ぶ。
-- 資産の組み立て（`load_scope_balloon_definitions`・`build_balloon_assets`）。`balloon_definitions.rs` は変えない。
+- 資産の組み立て（`load_scope_balloon_definitions`・`build_balloon_assets`）の記録の出方。`balloon_definitions.rs` は核の呼び出しに `LoadRecords::Emit` を渡す 1 行だけを直す。
 - `crates/areka-runtime/src/assets.rs`・`crates/areka-session/src/ghost_session.rs`・emo-text の `tests/support/mod.rs`（ウェーブ C29 の約束 ⑹）。
 - 透過の宣言の読み（`load_balloon_use_self_alpha`）が同じ文言で出す「descript.txt が読めない」`warn!`（バルーン 1 つにつき 1 行）と、作者の DPI の読み（`load_balloon_author_dpi`）の `warn!`。2 層マージの記録ではないので変えない。
 - 起動を止める失敗（採寸の失敗など）の記録。2 層マージは失敗で止まる道を持たないので、本設計はその道に触らない。
@@ -74,10 +74,9 @@ graph TB
         Emit[load_scope_balloon_model 出す]
         Quiet[load_scope_balloon_model_quiet 出さない 新規]
         ModelWith[load_scope_balloon_model_with records]
-        CoreEmit[scope_balloon_model_with 出す 形は今のまま]
-        Core[merge_scope_layers records 核]
+        Core[scope_balloon_model_with records 核]
     end
-    Defs[balloon_definitions.rs 資産の組み立て 変更なし]
+    Defs[balloon_definitions.rs 資産の組み立て 呼び出し 1 行]
     Shell[switch_assets.rs シェルの着替え 変更なし]
 
     Prep -->|merge = quiet| WithRead
@@ -89,8 +88,7 @@ graph TB
     Emit --> ModelWith
     Quiet --> ModelWith
     ModelWith --> Core
-    Defs --> CoreEmit
-    CoreEmit --> Core
+    Defs -->|Emit| Core
 ```
 
 **Architecture Integration**:
@@ -117,6 +115,7 @@ graph TB
 crates/
 ├── areka-emo-present/src/
 │   ├── balloon.rs                         # 変更: 出さない入口・中身 1 本・上書き層の読みの records・説明
+│   ├── balloon_definitions.rs             # 変更: 核の呼び出しに LoadRecords::Emit を渡す 1 行
 │   ├── balloon_merge_quiet_tests.rs       # 新規: 出さない入口の無音と戻り値の一致・2 つの道の面 0 の定義の一致
 │   └── balloon_model_tests.rs             # 変更: 「R6.3:」の前置き 3 か所を外すだけ
 ├── areka-placement/src/
@@ -127,10 +126,10 @@ crates/
 ```
 
 ### Modified Files
-- `crates/areka-emo-present/src/balloon.rs`（793 行 → 830〜845 行の見込み）
+- `crates/areka-emo-present/src/balloon.rs`（793 行 → 820〜835 行の見込み）
   - `pub fn load_scope_balloon_model_quiet(balloon_dir: &Path, scope: u32, face0: &ResolvedFace) -> BalloonModel` を足す。
   - private `load_scope_balloon_model_with(balloon_dir, scope, face0, records: LoadRecords) -> BalloonModel`（基層を `read_descript_layer(.., records)` で読み、核へ渡す）を足し、`load_scope_balloon_model` はその `Emit` のラッパにする。
-  - 核の中身を private `merge_scope_layers(balloon_dir, scope, face0, descript: &str, records: LoadRecords) -> BalloonModel` へ移し、確定の `info!` を `if records.emits() { … }` で囲む。`pub(crate) fn scope_balloon_model_with(balloon_dir, scope, face0, descript)` は形と名前を保ち、`merge_scope_layers(.., LoadRecords::Emit)` を呼ぶだけにする（`balloon_definitions.rs` を変えないため・e1）。
+  - 核 `pub(crate) fn scope_balloon_model_with` に引数 `records: LoadRecords` を足し、確定の `info!` を `if records.emits() { … }` で囲む（e2）。
   - `read_face_override_layer` に `records: LoadRecords` を足し、`match` に `Err(_) if !records.emits() => None,` の腕を 1 本足す（不在の `debug!` と不在以外の `warn!` の 2 腕はそのまま）。
   - `load_scope_balloon_model` の「観測」の節（516〜520）を書き直す（下の「説明の書き直し」）。
   - 末尾のテストの宣言に `#[cfg(test)] #[path = "balloon_merge_quiet_tests.rs"] mod merge_quiet_tests;` を足す（+3 行）。
@@ -141,6 +140,7 @@ crates/
   - `scope_windowposition` に引数 `merge: fn(&Path, u32, &ResolvedFace) -> BalloonModel` を足し、748 を `merge(balloon_root, scope_key, face0)` にする。系列の解決（`resolve_balloon_faces_quiet`）と 3 つの見送りの `warn!` は変えない。
   - 411 を `load_scope_windowpositions_with(balloon_root, &scope_ids, load_scope_balloon_model_quiet)` にし、直前の説明に「2 層マージの記録は同じ定義を組む資産の組み立てが出す」の 1 行を足す。
   - 末尾のテストの宣言に `#[cfg(test)] #[path = "placement_balloon_merge_log_tests.rs"] mod balloon_merge_log_tests;` を足す（+3 行・並びは名前の順で先頭）。
+- `crates/areka-emo-present/src/balloon_definitions.rs`（190 行・行は増えない）: 102 の核の呼び出しに `LoadRecords::Emit` を渡す。記録の出方は今と同じ。
 - `crates/areka-emo-present/src/balloon_model_tests.rs`: 288・297・307 の確かめの文言から「R6.3: 」を外す（「scope が乗る」「windowposition の実値が乗る」「validrect の実値が乗る」になる）。ほかの行は触らない。
 - `crates/areka-session/src/boot_shell_tests.rs`: `LoadLines::per_boot` の `merge: scopes(2 * n)` を `merge: scopes(n)` にする。`production_boot_emits_each_load_record_once` の説明（316〜320）を「2 層マージの確定が scope ごとに 1 行」に直し、「非空虚性」の節に「windowposition の読みの 2 層マージを記録を出す入口へ戻すと、2 層マージの確定が 2 行になって赤」を足す。
 
@@ -198,12 +198,12 @@ sequenceDiagram
 | 1.2 | 基層が読めない `warn!` を scope ごとに 1 行 | 同上 | `load_scope_balloon_model_with` の `read_descript_layer(.., records)` | 行の数の檻（検体 A） |
 | 1.3 | 上書き層が不在以外で読めない `warn!` を 1 行 | 同上 | `read_face_override_layer(.., records)` | 行の数の檻（検体 B） |
 | 1.4 | 上書き層が無い `debug!` を 1 行 | 同上 | 同上 | 行の数の檻（検体 C） |
-| 1.5 | ほかの面は面ごとに 1 行（増減なし） | 資産の組み立て（変更なし） | `scope_balloon_model_with`（形は今のまま） | 行の数の檻（検体 D） |
+| 1.5 | ほかの面は面ごとに 1 行（増減なし） | 資産の組み立て（変更なし） | `scope_balloon_model_with(.., Emit)` | 行の数の檻（検体 D） |
 | 1.6 | scope をまたいで畳まない | 資産の組み立て（scope ごとに基層を読む・変更なし） | — | 行の数の檻（全検体を scope 0・1 で数える） |
 | 2.1 | 切り替え・読み込み直しも同じ数 | 起動の準備の道（共有） | 411 の呼び出し | 本番の順の切り替えの檻 `each_switch_adds_one_more_set_of_load_records` |
 | 2.2 | SHIORI だけの読み込み直しは 0 行のまま | なし（道を通らない） | — | 変更なし（`research.md` 2.3） |
 | 3.1 | 水準・文言・欄を変えない | 2 層マージの権威 | 記録の行は `if records.emits()`／守りの腕で切り替えるだけ | `balloon_model_tests.rs`（出す入口の中身）が今どおり通る |
-| 3.2 | 警告を 0 行にしない | 資産の組み立て（出す側に残る） | — | 行の数の檻（検体 A・B で 1 行以上） |
+| 3.2 | 警告を 0 行にしない | 資産の組み立て（出す側に残る） | — | 行の数の檻（検体 A・B で 1 行以上）。起動が資産の組み立ての途中で止まる場合は Error Handling の節のとおり受け入れる |
 | 3.3 | 結果を変えない | 出さない入口・窓の位置の読み | 戻り値は出す入口と等しい | 出さない入口の一致の檻・既存の `default_basis_from_boot_equals_the_one_from_shell_switch` |
 | 3.4 | 出さない道でも系列の失敗と見送りの警告 | 窓の位置の読み | `scope_windowposition` の見送りの `warn!`（変更なし）・`resolve_balloon_faces_quiet` の `error!`（変更なし） | 出さない道の失敗の檻（placement） |
 | 3.5 | 起動を止める失敗の記録は必ず出す | 採寸（変更なし） | 2 層マージは `Err` を持たない | 既存の `unreadable_balloon_face0_stops_measure_with_one_error_each` が今どおり通る |
@@ -243,7 +243,7 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - 出す入口 `load_scope_balloon_model` の記録（4 種）の水準・文言・欄は今と同じ。
 - 出さない入口 `load_scope_balloon_model_quiet` は 4 種の記録をどれも出さない。戻り値は出す入口と等しい。
-- 資産の組み立てが呼ぶ `scope_balloon_model_with` の名前・形・記録は今と同じ（`balloon_definitions.rs` を変えない）。
+- 資産の組み立てが呼ぶ `scope_balloon_model_with` は名前を保ち、`records` を受ける。資産の組み立ては `Emit` を渡すので、記録は今と同じ。
 - 2 層マージは `Err` を返さず、いつも `BalloonModel` を返す（失敗で止まる道を作らない）。
 
 **Dependencies**
@@ -256,9 +256,6 @@ sequenceDiagram
 ```rust
 // 既存（形は変えない）
 pub fn load_scope_balloon_model(balloon_dir: &Path, scope: u32, face0: &ResolvedFace) -> BalloonModel;
-pub(crate) fn scope_balloon_model_with(
-    balloon_dir: &Path, scope: u32, face0: &ResolvedFace, descript: &str,
-) -> BalloonModel;
 
 // 新規
 pub fn load_scope_balloon_model_quiet(
@@ -267,11 +264,11 @@ pub fn load_scope_balloon_model_quiet(
 fn load_scope_balloon_model_with(
     balloon_dir: &Path, scope: u32, face0: &ResolvedFace, records: LoadRecords,
 ) -> BalloonModel;
-fn merge_scope_layers(
+
+// 引数を足す（核は pub(crate) のまま・資産の組み立ては Emit を渡す）
+pub(crate) fn scope_balloon_model_with(
     balloon_dir: &Path, scope: u32, face0: &ResolvedFace, descript: &str, records: LoadRecords,
 ) -> BalloonModel;
-
-// 引数を足す（private）
 fn read_face_override_layer(
     path: &Path, scope: u32, file_name: &str, records: LoadRecords,
 ) -> Option<String>;
@@ -332,7 +329,8 @@ fn scope_windowposition(
 ## Error Handling
 
 ### Error Strategy
-- 2 層マージは今どおり寛容（読めない層は空層で続ける）で、`Err` を返さない。出さない入口でもこの性質は同じなので、記録の無い失敗の道は構造上生まれない（要件 3.5 の 2 層マージの側）。
+- 2 層マージは今どおり寛容（読めない層は空層で続ける）で、`Err` を返さない。出さない入口でもこの性質は同じなので、2 層マージの中に記録の無い失敗の道は生まれない（要件 3.5 の 2 層マージの側）。
+- 起動が資産の組み立ての途中で止まる場合（シェルか scope 0 のバルーンの焼く段の失敗）、資産の組み立ては面 0 の 2 層マージまで届かず、その起動では 2 層マージの警告が 0 行になる。起動を止めた失敗は自分の `error!` を必ず出すので記録の無い失敗の道にはならず、その失敗を直して起こし直せば警告は 1 行出る。これは受け入れる（設計の討議の 2）。
 - 窓の位置の読みの見送り（系列の解決の失敗・面 0 が無い・scope が u32 に収まらない）は、出さない道の上でも `warn!` を出す。系列の解決の `error!`（走査の失敗・面 0 が解決できない）は `resolve_balloon_faces_quiet` が値に関わらず出す（要件 3.4）。
 - 起動を止める失敗（採寸の `error!`＋`Err`）は採寸の道のもので、本設計は触らない（要件 3.5）。
 
@@ -368,15 +366,13 @@ fn scope_windowposition(
 ### 今どおり通ることを確かめる既存のテスト
 - `balloon_model_tests.rs`（出す入口の記録の中身・要件 3.1・4.3）、`placement_windowposition_vocab_tests.rs`・`reseed_tests.rs`（pub の読み）、`switch_assets_tests.rs` の `default_basis_from_boot_equals_the_one_from_shell_switch`（要件 3.3）、`measure_bake_log_tests.rs`（要件 3.5）、emo-text の `tests/staysee_balloon_fixture/faces.rs`（要件 4.3）。
 
-## 前提（設計の討議で確かめる）
+## 設計の討議で決めたこと（2026-11-28・全議題を推奨案で確定）
 
-本設計は次を前提に書いた。どれも答えで作業が変わる。
-
-1. **核の形は e1（`balloon_definitions.rs` を変えない）**: e2（`scope_balloon_model_with` に `records` を足し、`balloon_definitions.rs:102` の 1 行を直す）なら Emit のラッパ `scope_balloon_model_with` が要らず、`balloon.rs` の関数が 1 つ減る（約 −9 行）。`balloon_definitions.rs` は約束 ⑹ の触ってよいファイルに無いので e1 を採った。
-2. **起動の準備 1 回の行の数は `areka-placement` の crate の中で数える（t2 の 1 か所版）**: 資産の組み立ての側は `build_balloon_assets`（`assets.rs`・約束 ⑹ で触らない）を通さず、それが scope ごとに呼ぶ `load_scope_balloon_definitions` を直に呼んで同じ数を出す。411 の結線は本番の順の檻（emo2）が支える。t1（`areka-runtime` の `placement_tests/` に新しい兄弟を置き、`areka-placement` に `test-support` の口を開ける）は `placement_tests/mod.rs` と口の追加（`lib.rs` +5 前後）が要り、約束 ⑹ の触ってよいファイルの外に出る。t3（本番の順に壊れた検体を足す）は実の WIC で読める絵が要る。
-3. **シェルの着替えの行の数は pub の `load_scope_windowpositions` を数える（u1）**: `switch_assets.rs` が出す入口を呼び続けることの檻にはならないが、`switch_assets.rs` は本設計で変えない。u2 は `switch_assets.rs` に新しい兄弟の宣言が要り、約束 ⑹ の外に出る。
-4. **同じ文言の透過の宣言の読みの `warn!` は範囲の外のまま**（Monitoring の節）: 基層が読めないバルーンで scope を 2 つ読む起動では、文言で数えると 3 行（2 層マージ 2・透過の宣言の読み 1）になる。要件の境界（透過の宣言の読みの記録は変えない）のとおり触らない。
-5. **`lib.rs` は +19〜23 行（915〜919 行）**: 要件討議の 2 は「数行増える（上限 1,000 行の内）」とした。中身 1 本の private の関数と `use` の折り返しで約 20 行になる。上限の内なので受け入れる前提で書いた。
+1. **核は e2**: 今の核 `scope_balloon_model_with` に `records` を足し、呼び手の `balloon_definitions.rs:102` は `LoadRecords::Emit` を渡す 1 行だけを直す。記録を出す核と出さない核を並べる e1 は採らない（並走の約束を理由に遠回りの形を取らない）。`balloon_definitions.rs` はウェーブ C29 のほかの 7 本の brief と roadmap の表に名前が無い（2026-11-28 に確かめた）ので、触ってよいファイルに足す。
+2. **起動が資産の組み立ての途中で止まる場合の 0 行は受け入れる**: シェルか scope 0 のバルーンの焼く段が失敗して起動が止まると、資産の組み立てが面 0 の 2 層マージまで届かず、その起動では 2 層マージの警告が 0 行になる。起動を止めた失敗は自分の `error!` を必ず出すので記録の無い失敗の道にはならず、その失敗を直して起こし直せば警告は 1 行出る（Error Handling の節）。窓の位置の読みに記録を残し資産の組み立ての面 0 を黙らせる形は、前例の向きと逆で、バルーンの着替えまで黙らせるので採らない。
+3. **起動の準備 1 回の行の数は `areka-placement` の中で数える**: `build_balloon_assets`（`assets.rs`）は通さず、それが scope ごとに呼ぶ `load_scope_balloon_definitions` を直に呼ぶ。411 の結線は本番の順の檻（`boot_shell_tests.rs`）が支える。
+4. **シェルの着替えの行の数は pub の `load_scope_windowpositions` を数える（u1）**: `switch_assets.rs` は変えない。
+5. **透過の宣言の読みが同じ文言で出す `warn!` は範囲の外のまま、`lib.rs` の約 20 行の増え（915〜919 行）は受け入れる**: 透過の宣言の読みは別の出来事で、要件の境界の外。増えは private の中身 1 本と `use` の折り返しから来て、上限 1,000 行の内。
 
 ## Supporting References
 - 検討した形（e1／e2・S0／S1／S2・テストの置き場 t1／t2／t3・u1／u2・v1／v2）と、選ばなかった理由は `research.md` の「設計の判断」に置く。

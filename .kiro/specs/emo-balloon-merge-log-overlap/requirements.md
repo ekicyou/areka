@@ -56,7 +56,7 @@
   - **起動の記録を数える自動の試験（下流）**: 本 spec の後、2 層マージの警告の数をそのまま問題の数として数えられる。
   - **記録の宛先を数える既存のテスト**（emo-text のバルーンの検体のテスト・MCP の面の書き出しのテストの支え）: 記録を出す入口を残すので、今どおり通る（要件 4.3）。
 - **並走の約束（ウェーブ C29・`roadmap.md`「ウェーブ編成」⑹）**:
-  - 触ってよいのは、`areka-emo-present` の `balloon.rs`・`balloon_model_tests.rs`（「R6.3:」の前置きだけ）・`crates/areka-placement/src/lib.rs`（窓の位置の読みの呼び出し）・`crates/areka-session/src/boot_shell_tests.rs`（行の数の檻と説明）と、新しい兄弟のテストのファイル。`boot_shell_tests.rs` はウェーブ C29 のほかの 7 本の brief・要件に名前が無い（2026-11-28 に確かめた）。
+  - 触ってよいのは、`areka-emo-present` の `balloon.rs`・`balloon_model_tests.rs`（「R6.3:」の前置きだけ）・`balloon_definitions.rs`（核の呼び出しの 1 行）・`crates/areka-placement/src/lib.rs`（窓の位置の読みの呼び出し）・`crates/areka-session/src/boot_shell_tests.rs`（行の数の檻と説明）と、新しい兄弟のテストのファイル。`boot_shell_tests.rs` はウェーブ C29 のほかの 7 本の brief・要件に名前が無い（2026-11-28 に確かめた）。
   - `crates/areka-runtime/src/assets.rs`（`ghost-alias-file` が触る）・`crates/areka-session/src/ghost_session.rs`・emo-text の `tests/support/mod.rs`（`balloon-text-visual-tree` が触る）に触らない。
   - 依存を足さない。1 ファイル 1,000 行以下（`crates/areka-placement/src/lib.rs` は 896 行・`balloon.rs` は 793 行）。
 
