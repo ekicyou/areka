@@ -1,9 +1,22 @@
 //! 鍵の表: 鍵ごとの住み場所・名前で書いてよいか・既定値を 1 つの表で決める。
 
-use crate::actor::SetClass;
 use crate::key::parse_dotted;
 use crate::pull::PullShape;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
+
+/// SET 分類の 3 分岐。
+///
+/// [`classify_set`] が key を検査して返す。各分岐は [`apply`](crate::actor::apply) の Set アームで
+/// 対応する [`Effect`](crate::actor::Effect) へ写る。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SetClass {
+    /// SET 有効群の正準語彙（[`crate::vocab::dotted::SET_EFFECTIVE`] 登録）→ 書込なし・warn＋記録のみ。
+    RuntimeCommand,
+    /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映。
+    StoreWrite,
+    /// SET 無効な正準語彙 → 書込なし・呼出は Ok（正典沈黙の areka 裁量・対応表記録）。
+    NotSettable,
+}
 
 /// 値の住み場所。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

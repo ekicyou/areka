@@ -14,8 +14,8 @@
 
 use crate::asker::AskerId;
 use crate::key::parse_dotted;
-pub use crate::keytable::classify_set;
 use crate::keytable::{ByName, Home, KEY_TABLE, KeyRow, Refusal, rule_of};
+pub use crate::keytable::{SetClass, classify_set};
 use crate::kvs::WriteOutcome;
 use crate::persist::{PersistKey, PersistScope};
 use std::collections::BTreeMap;
@@ -151,20 +151,6 @@ pub enum Writer {
     ByName,
     /// areka の中の決まった書き手（鍵の表の「名前で書く」を見ない）。
     Fixed,
-}
-
-/// SET 分類の 3 分岐。
-///
-/// [`classify_set`] が key を検査して返す。各分岐は [`apply`] の Set アームで
-/// 対応する [`Effect`] へ写る。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SetClass {
-    /// SET 有効群の正準語彙（[`crate::vocab::dotted::SET_EFFECTIVE`] 登録）→ 書込なし・warn＋記録のみ。
-    RuntimeCommand,
-    /// 正準語彙外の自由 dotted key → asker 別 host 区画への反映。
-    StoreWrite,
-    /// SET 無効な正準語彙 → 書込なし・呼出は Ok（正典沈黙の areka 裁量・対応表記録）。
-    NotSettable,
 }
 
 /// [`apply`] が返す純粋な効果（判断の出力・変異意図）。
