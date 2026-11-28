@@ -784,3 +784,82 @@ CPU の合成の口（`Composer::compose`・`compose_into`・`compose_into_reusi
   - ほかの行は移す前の約 1/2〜1/8。
 - 「画素どおり」の申告は足さない。範囲だけの描き直しの答えがサーフェス全体の描き直しとバイトで一致することは固めたまま保つ。
 - 更新の所要の詰めは、element ごとの行列の変換が入った後に測り直して決める。
+
+## 23. 「．さくら」の実機の確かめ（2026-11-28・タスク 8.5・要件 10.3・7.1・7.3）
+
+### 23.1 走らせ方
+
+- **実行体**: `target\release\areka.exe`（`cargo build -p areka --release` で最新と確かめた。走らせた時点の HEAD は `4320ac449`、建てた後のコミットは文書だけ）と、`target\release\shiori-host32-helper.exe`（PE の Machine が 0x14C の i686）。
+- **検体**: `cargo run -q -p sample-ghost-kit --bin nar-sample-path -- dot_sakura` が入れた根 `target\nar-samples\manual\dot_sakura`。ゴースト `ghost\dot_sakura`・シェル `master`・バルーン `bottle`。
+- **環境変数**:
+  - パス: `AREKA_ROOT`＝上の根、`AREKA_PROFILE_DIR`＝`target\dmc85\profile`（空）。
+  - その他: `AREKA_MCP_PORT=47391`、`AREKA_NO_ALERT=1`、`NO_COLOR=1`、`PASTA_DEBUG=0`、`AREKA_APP_SMOKE_EXIT_MS=240000`（自動の終わりの安全弁）。`AREKA_USER_ROOT` は外した。
+  - 走らせる前に 9276・47391 を待ち受ける者は無かった。
+- **`RUST_LOG`**: `info,areka_emo_present=debug,areka_emo_compose=debug,areka_seriko=debug,wintf::ecs::clickthrough=trace,wintf::ecs::layout::hit_test=trace,wintf::ecs::pointer::nchittest_cache=trace`。当たりの判定の分岐（窓の ex-style の切り替え・`WM_NCHITTEST` の答え・当たりの名前の解決）を trace と debug まで開けた。
+- **倍率**: 主の画面は 192 dpi で、k＝2（`k_ratio=ScaleRatio { num: 2, den: 1 }`）。本体の窓は題名 `さくら`、client は 456×676（228×338 の 2 倍）、左上は (2424, 1028)。
+- **手順**: MCP の `sakurascript`・`dump_surface` を使い、areka を 1 回起こして次を順に行った。
+  1. 本体の窓のすぐ下の z 順に、自分で起こしたマゼンタ一色の窓（押下を記録する）を同じ矩形で置いた。
+  2. `\s[0]` で、`dump_surface` と画面の撮りを比べた（23.3）。
+  3. 透明の点と不透明の点を SendInput で押した（23.4）。
+  4. `\s[12]` と `\s[22]` をそれぞれ 2 回出した（23.2）。
+  5. `\-` で閉じた（exit=0）。
+- **画面の撮り**: スレッドをモニターごとの DPI に合わせてから、`CopyFromScreen` で client の矩形を撮った。面を出す回は 1.5 秒の間に約 180 回撮り、前と違うコマだけを残した。
+- **最初の台本の断り**: 最初の `\0\s[0]\1\s[10]\e` は、初回起動の台詞の間「the ghost cannot accept a script now」で断られた。60 秒の呼び直しでも通らなかったが、その時点の面はすでに 0 だった。後の台本はどれも 1 回か 39 回目で通った。
+
+### 23.2 `base` の土台と読み込みの記録（要件 10.3）
+
+- **読み込みの記録**（全 3,089 行）:
+  - 「描けない描画メソッド」の `warn!` は **0 件**。
+  - 「未知の合成メソッド名」も 0 件。
+  - 描画メソッドに関わる WARN は、`surface12.png`・`surface22.png` が全部透明で切り詰めると 0 寸になる、という `areka_emo_atlas` の 2 行だけ。これは絵の中身の知らせで、描き方の知らせではない。
+- **確かめ方**: 撮ったコマと、出した直後に続けて取った `dump_surface`（12 回・約 16ms おき）を、シェルの絵と照らした。絵は左上の色をキー色として抜き、k 倍は最近傍で拡大した。
+
+| 面 | 回 | 画面のコマ | ダンプ（直後の 12 回） | 照らした答え |
+|---|---|---|---|---|
+| 12 | 1・2 | 出した後 1 コマ（約 170〜215ms）で替わり、その後は変わらない | 1 回目は 3 枚目から、2 回目は 1 枚目から全部 surface11 | 画面は surface11 に IoU 0.972、ダンプは surface11 に IoU 1.000 |
+| 22 | 1・2 | 替わった後の 9〜10 コマはどれも surface2 の形 | 3 枚目から全部 surface2 | 画面は surface2 に IoU 0.979、ダンプは surface2 に IoU 1.000 |
+
+- **読み方**:
+  - 全部透明な `surface12.png`・`surface22.png` の面に、`base` が差した面（12 は surface11、22 は最後の `base,2` の surface2）の絵が描かれた。
+  - 指定の `dump_surface`（`surface:12`・`surface:22`）は空の絵を返した。アニメーションを再生しない「その面の単体の合成」なので、全部透明な面の絵になる。
+  - 画面の IoU が 1 に届かないのは、k＝2 の拡大で縁の画素が補われるため（23.3 と同じ）。
+  - 22 の替わった後のコマの間で変わったのは、画面の x 139〜297・y 141〜289 の範囲だけ（2 回とも全部のコマで数えた）。これは描き方の食い違いではなく、`base,2` の後に surface2 自身のアニメーションが部品 2 として動いたもの。
+    - 記録の `part trigger runonce を鳴らした … part=2 animation_id=3` は、surfaces.txt の 90〜93 行の `animation3,runonce`（水滴 surface3999 を (120,68)→(120,78)→(120,88) に重ねる）にあたる。
+    - 記録の `part 抽選発火 … part=2 animation_id=1`・`animation_id=0` は、77〜85 行のまばたき（surface3106・3107 を (70,113) に重ねる）にあたる。
+    - `s22-r1-screen-008.png` では目が閉じている。
+- **`move`（`seriko-pattern-calls`）と並べて**:
+  - 記録の「seriko: ずれが変わった」は、12 の 1 回目で y＝6→24→96→144→240→288→9999、2 回目で y＝6→12→48→144→192→288→384→9999 と進み、面を出し直したときに 0 へ戻った。記録の行は間引かれていて、全部の `move` のコマが行になるわけではない。22 も同じ形。
+  - 画面の絵は上下に動かなかった。本体の窓は下の端に揃える置き方（窓の下の端 1704）なので、`seriko-pattern-calls` の要件 7.8 のとおり揃えが勝ち、下へのずれは見えない（SSP と同じ見え方）。`base` の土台は `move` のコマの後も消えていない。
+
+### 23.3 `dump_surface` と画面（要件 7.3）
+
+- **比べ方**: 画面の画素と、ダンプ（原寸・前もって乗算しない RGBA）の (floor(x/2), floor(y/2)) をマゼンタの上に重ねた値を比べた。ダンプの 3×3 が同じ値の所を「内側」と呼び、拡大の補間が入る縁の画素は内側から外して別に数える。
+- **結果**（`\s[0]`・前後 2 回のダンプはバイト一致）:
+  - 不透明の内側: **32,832 中 32,832 が一致**（差 0〜1）。
+  - 透明の内側: 154,068 中 152,952 が一致。
+  - 全画素の完全一致: 308,256 中 198,787。
+- **食い違いの所**（`s0-compare-sheet.png` の右の白）: 拡大の補間が入る縁と、本体の窓の左端に重なったバルーンの尾の小さな範囲だけ。合成の中身の食い違いは無い。
+- **面 12・22**: 撮ったコマと直後のダンプも、透明の内側は全部一致し（12・22 とも）、不透明の内側の差は 1 以内だった（12 は 244 中 230、22 は 46,384 中 46,346）。
+
+### 23.4 透けて見える所のクリック（要件 7.1）
+
+- **点**: ダンプから、9×9 の近傍が全部 α 0 の点と全部 α 255 の点を 1 つずつ選んだ。ダンプの (35, 199) と (105, 194)、画面の (2495, 1427) と (2635, 1417)。
+- **透明の点**:
+  - 動かした後の本体の窓の ex-style は `0x2800B0`（`WS_EX_TRANSPARENT` 付き）。
+  - 押すと、**下のマゼンタの窓が押下を受けた**（`mousedown client=71,399 screen=2495,1427`）。
+  - ex-style が付いたままなので、本体の窓に `WM_NCHITTEST` は来ない（OS が直に下の窓へ渡す）。
+- **不透明の点**:
+  - 動かすと `clickthrough: ex-style トグル適用 window=30v0 desired=Opaque` が出て、ex-style は `0x280090` になった。
+  - `NCHITTEST cache miss … x=2635 y=1417 lresult=1 hit_entity=Some(52v0)` が 7 行出た。
+  - 押しても、下の窓に押下は増えなかった（本体の窓が受けた）。
+  - 当たりの名前の解決は `[hit_region_client] … surface_x=105 surface_y=194 region=None`。この点は collision の矩形の外なので、名前は無い。
+- **透明の点へ戻したとき**: client の (1, 1) へ動かすと、`desired=Transparent` の切り替えと `NCHITTEST … lresult=-1 hit_entity=None` が出た。
+- 記録に `[hit_test] surface alpha unreadable, no hit` は 0 件。クリックの透過と当たりの名前は、どちらも入れ物の 1 画素を読めていた。
+
+### 23.5 残す記録
+
+- 記録と画像は作業木の `target\dmc85\` に置いた。
+  - 記録: `summary.txt`（手順と時刻）・`stdout.log`／`stderr.log`／`all.log`（areka の記録）・`windows.txt`・`behind.log`（下の窓の押下）。
+  - 画像: `s0-dump-{a,b,c}.png`・`s0-screen.png`・`s0-compare-sheet.png`（左＝ダンプの 2 倍・中＝画面・右＝食い違いの所）・`s{12,22}-r{1,2}-screen-*.png`（撮ったコマ）と `-frames.txt`（撮った時刻）・`s{12,22}-r{1,2}-dump-*.png` と `-dumps.txt`・`s{12,22}-explicit-dump.png`。
+- これらは消えることがあるので、上の数が正本になる。
+- 道具（照らしの python と撮りの C#）は会話の作業場に置いた一時のもので、リポジトリには入れていない。
