@@ -664,3 +664,27 @@ fn read_only_run_beside_an_imported_layer_reads_what_a_normal_run_reads() {
     assert_eq!(mem.legacy_names(&root), ["sylphya.toml"]);
     assert_eq!(mem.read_legacy(&root).unwrap().as_deref(), Some(toml));
 }
+
+#[test]
+fn a_layer_file_that_cannot_be_made_for_the_import_fails_with_the_os_reason() {
+    use crate::guardian::wait_tests::{Hooked, INJECTED_DIR_FAILURE};
+    let mem = MemBackend::new();
+    let root = ghost_root("cannot-make-dir");
+    mem.plant_legacy(&root, "format-version = 1\n[boot]\ncount = \"1\"\n");
+    let backend = Arc::new(Hooked {
+        inner: mem,
+        volatile_uri: None,
+        panic_on_write: false,
+        fail_ensure_dir: true,
+    });
+    let mut store = open_store(backend, &root);
+    let attempt = store.try_write(&write(&root, &[("areka.boot.count", "2")]));
+    assert!(
+        matches!(
+            &attempt,
+            WriteAttempt::Done(PersistOutcome::Degraded(f))
+                if f.cause == PersistFailureCause::Io(INJECTED_DIR_FAILURE.to_owned())
+        ),
+        "{attempt:?}"
+    );
+}

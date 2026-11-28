@@ -131,7 +131,10 @@ impl Store {
         let Opened::Attached { fresh } = opened else {
             let stop = match opened {
                 Opened::Busy => Stop::Busy,
-                other => Stop::Failed(format!("{other:?}")),
+                Opened::Io(reason)
+                | Opened::Unusable(reason)
+                | Opened::LegacyUnusable { reason, .. } => Stop::Failed(reason),
+                _ => Stop::Failed("記憶のファイル sylphya.sqlite を作れませんでした".to_owned()),
             };
             return self.postpone(root, &entries, stop, write, Opened::Missing);
         };

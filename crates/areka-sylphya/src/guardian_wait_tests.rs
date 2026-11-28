@@ -244,6 +244,60 @@ fn reads_while_the_import_cannot_lock_return_the_legacy_values() {
 }
 
 #[test]
+fn the_import_and_the_write_of_a_first_write_share_one_deadline() {
+    let dir = TempPath::under_target("sylphya-guardian-import-deadline");
+    let root = dir.child("ghost");
+    let backend = FsBackend::with_manual_clock();
+    seed(
+        &backend,
+        PersistScope::Ghost,
+        &root,
+        "areka.last.ghost",
+        "g",
+    );
+    std::fs::write(
+        root.join("sylphya.toml"),
+        "format-version = 1
+[boot]
+count = \"5\"
+",
+    )
+    .unwrap();
+    let hold = hold_writer(&root);
+    let (tx, failures) = mpsc::channel();
+    let parts = spawn_sylphya_with_failures(
+        SylphyaInit::new(layer_roots(PersistScope::Ghost, &root), backend.clone()),
+        Some(tx),
+    );
+    let p = &parts.publisher;
+
+    let pending = write(p, Writer::Fixed, PersistScope::Ghost, BOOT, "6");
+    let step = OP_WAIT * 3 / 5;
+    for _ in 0..2 {
+        assert_eq!(
+            get(p, PersistScope::Ghost, BOOT, Home::File).as_deref(),
+            Some("5")
+        );
+        assert!(still_waiting(&pending), "期限の内は返事がまだ無い");
+        backend.pause(step);
+    }
+    let outcome = pending.recv_timeout(BOUND).unwrap();
+    assert!(
+        matches!(&outcome, WriteOutcome::Failed(WriteFailed::Persist(f))
+            if f.cause == PersistFailureCause::Io(WAIT_LIMIT.to_owned())),
+        "{outcome:?}"
+    );
+    let got: Vec<PersistFailure> = failures.try_iter().collect();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].cause, PersistFailureCause::Io(WAIT_LIMIT.to_owned()));
+
+    drop(hold);
+    p.close();
+    parts.handle.join().expect("join");
+    assert!(root.join("sylphya.toml").exists());
+}
+
+#[test]
 fn a_re_root_while_waiting_moves_volatile_values_but_not_the_waiting_write() {
     let dir = TempPath::under_target("sylphya-guardian-re-root");
     let old = dir.child("shell-old");
@@ -346,11 +400,15 @@ fn close_tries_each_queued_write_once_and_reports_the_locked_one() {
     );
 }
 
+pub(crate) const INJECTED_DIR_FAILURE: &str =
+    "試験の偽物が注ぎ込んだ失敗（OS がフォルダーを作れなかった）";
+
 /// 置き場の口の 1 か所だけを差し替える試験の口（揮発の DB の在りか・書きの直前の panic）。
 pub(crate) struct Hooked {
     pub(crate) inner: Arc<dyn StoreBackend>,
     pub(crate) volatile_uri: Option<String>,
     pub(crate) panic_on_write: bool,
+    pub(crate) fail_ensure_dir: bool,
 }
 
 impl StoreBackend for Hooked {
@@ -358,6 +416,9 @@ impl StoreBackend for Hooked {
         self.inner.locate(root, access)
     }
     fn ensure_dir(&self, root: &Path) -> std::io::Result<()> {
+        if self.fail_ensure_dir {
+            return Err(std::io::Error::other(INJECTED_DIR_FAILURE));
+        }
         self.inner.ensure_dir(root)
     }
     fn read_legacy(&self, root: &Path) -> std::io::Result<Option<String>> {
@@ -397,6 +458,7 @@ fn a_guardian_whose_store_cannot_open_still_runs_and_degrades() {
         inner: FsBackend::with_manual_clock(),
         volatile_uri: Some("file:areka-missing?vfs=areka-no-such-vfs".to_owned()),
         panic_on_write: false,
+        fail_ensure_dir: false,
     });
     let (tx, failures) = mpsc::channel();
     let parts = spawn_sylphya_with_failures(

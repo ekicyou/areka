@@ -275,6 +275,7 @@ fn actor_panic_is_detected_by_join_and_reads_degrade() {
             inner: MemBackend::new(),
             volatile_uri: None,
             panic_on_write: true,
+            fail_ensure_dir: false,
         }),
     ));
     // 死後に生前の値が読めないことを確かめるため、先に値を入れておく。
