@@ -24,6 +24,8 @@
 
 ## 決めたこと（2026-10-28・議題 1〜12）
 
+> 決め 4（演劇の形・インストールの種別・SSP での知らせ方）と決め 7（探す順・`/free-shell/`・素材 ID の元）は、2026-11-28 の議論で改めた。正本は `doc/ideas/play-layer-folders-2026-11-28.md`（劇は `type,play` で `play/` に入る・フリーシェルは `type,freeshell` で `shell/` に入る・探す順は「自分の入れ物の中 → 最上位」・識別子は `id` → `install.txt` の `directory` → フォルダ名）。
+
 1. **段**: 新しい段「ノベルゲーム基盤」を v0.4.0 の後ろに作る。番号は pasta の依頼書が届いてから振る。利用統計は「ノベルゲーム基盤と並走してよい（dola の整備の後）」の段。
 2. **S1・P1 は起票しない**。S1 は `shiori4-api` と、P1 は pasta の 3 本と重なる。`shiori4-api` への書き足しも無し（演劇の種別を新しくする場合だけ戻る）。
 3. **今 brief を書くのは 3 本**（`sound-canon-tags`・`shell-multi-compose`・`ghost-material-metadata`）。残りは依頼書を待つ。`shell-multi-compose` には場面転換も入れ、重ければ要件の段で切る。
