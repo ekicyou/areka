@@ -24,6 +24,7 @@ bevy_utils = "0.19"
 thiserror = "2"
 tracing = "0.1"
 toml = "1"
+rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }
 wintf-winmsg-executor = { version = "0.1.0", path = "crates/wintf-winmsg-executor" }
 event-listener = "5"
 async-channel = "2"

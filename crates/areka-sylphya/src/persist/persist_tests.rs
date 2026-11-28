@@ -1,6 +1,9 @@
 use super::*;
 use crate::key::parse_dotted;
-use crate::test_log_capture::{assert_logged, capture};
+use crate::store::{MemBackend, StoreBackend};
+use crate::test_log_capture::capture;
+use std::sync::Arc;
+use temp_path_kit::TempPath;
 use tracing::Level;
 
 fn all_families() -> Vec<PersistKey> {
@@ -28,10 +31,27 @@ fn all_families() -> Vec<PersistKey> {
         PersistKey::LastShell,
         PersistKey::LastRunning,
         PersistKey::BasewareRoots,
+        PersistKey::WindowAdjacent { scope: 1 },
     ]
 }
 
-// --- 正準 key 往復（to_canonical_string と一致）---
+fn mem() -> (Arc<MemBackend>, Arc<dyn StoreBackend>) {
+    let mem = MemBackend::new();
+    let backend: Arc<dyn StoreBackend> = mem.clone();
+    (mem, backend)
+}
+
+fn ghost_roots(label: &str) -> ScopeRoots {
+    ScopeRoots {
+        ghost: Some(PathBuf::from(format!(r"C:\偽の置き場\persist-{label}"))),
+        ..ScopeRoots::default()
+    }
+}
+
+fn sorted(mut entries: Vec<(PersistKey, String)>) -> Vec<(PersistKey, String)> {
+    entries.sort_by_key(|(key, _)| key.to_canonical_key());
+    entries
+}
 
 #[test]
 fn canonical_key_round_trips_with_to_canonical_string() {
@@ -44,718 +64,342 @@ fn canonical_key_round_trips_with_to_canonical_string() {
 
 #[test]
 fn canonical_key_exact_strings() {
-    assert_eq!(
-        PersistKey::WindowPos {
-            scope: 0,
-            axis: Axis::X
-        }
-        .to_canonical_key(),
-        "areka.window.scope(0).x"
-    );
-    assert_eq!(
-        PersistKey::WindowPos {
-            scope: 3,
-            axis: Axis::Y
-        }
-        .to_canonical_key(),
-        "areka.window.scope(3).y"
-    );
-    assert_eq!(
-        PersistKey::BalloonOffset {
-            scope: 0,
-            axis: Axis::X
-        }
-        .to_canonical_key(),
-        "areka.balloon.offset.scope(0).x"
-    );
-    assert_eq!(PersistKey::BootCount.to_canonical_key(), "areka.boot.count");
-    assert_eq!(
-        PersistKey::VanishCount.to_canonical_key(),
-        "areka.vanish.count"
-    );
+    let expected = [
+        "areka.window.scope(0).x",
+        "areka.window.scope(2).y",
+        "areka.balloon.offset.scope(0).x",
+        "areka.balloon.offset.scope(1).y",
+        "areka.boot.count",
+        "areka.vanish.count",
+        "areka.last.ghost",
+        "areka.last.balloon",
+        "areka.last.shell",
+        "areka.last.running",
+        "areka.baseware.roots",
+        "areka.window.scope(1).adjacent",
+    ];
+    let names: Vec<String> = all_families()
+        .into_iter()
+        .map(PersistKey::to_canonical_key)
+        .collect();
+    assert_eq!(names, expected);
 }
 
-// --- 4 key 族 put→load 往復 ---
-
 #[test]
-fn four_family_put_load_value_round_trip() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/ghost")),
-        ..ScopeRoots::default()
-    };
-    let entries = vec![
-        (
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::X,
-            },
-            "1024".to_string(),
-        ),
-        (
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::Y,
-            },
-            "512".to_string(),
-        ),
-        (
-            PersistKey::BalloonOffset {
-                scope: 0,
-                axis: Axis::X,
-            },
-            "30".to_string(),
-        ),
-        (
-            PersistKey::BalloonOffset {
-                scope: 0,
-                axis: Axis::Y,
-            },
-            "-10".to_string(),
-        ),
-        (PersistKey::BootCount, "3".to_string()),
-        (PersistKey::VanishCount, "0".to_string()),
-    ];
-    assert_eq!(
-        save_scope(PersistScope::Ghost, &roots, &io, entries.clone()),
-        PersistOutcome::Saved
-    );
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    for (k, v) in &entries {
-        let found = loaded
-            .iter()
-            .find(|(lk, _)| lk == k)
-            .map(|(_, lv)| lv.clone());
+fn canonical_name_turns_back_into_the_typed_key() {
+    for key in all_families() {
         assert_eq!(
-            found.as_deref(),
-            Some(v.as_str()),
-            "family {k:?} did not round-trip"
+            PersistKey::from_canonical_key(&key.to_canonical_key()),
+            Some(key)
         );
     }
-}
-
-#[test]
-fn round_trip_preserves_negative_and_multi_scope() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let entries = vec![
-        (
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::X,
-            },
-            "-5".to_string(),
-        ),
-        (
-            PersistKey::WindowPos {
-                scope: 1,
-                axis: Axis::Y,
-            },
-            "200".to_string(),
-        ),
-    ];
-    save_scope(PersistScope::Ghost, &roots, &io, entries.clone());
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    for (k, v) in &entries {
-        assert!(loaded.contains(&(*k, v.clone())), "missing {k:?}={v}");
+    for name in [
+        "areka.window.scope(00).x",
+        "areka.window.scope(+1).x",
+        "areka.window.scope(1).z",
+        "areka.window.scope(x).x",
+        "areka.balloon.offset.scope(1).adjacent",
+        "areka.boot.count.x",
+        "areka.window.scope(4294967296).x",
+        "free.key",
+        "",
+    ] {
+        assert_eq!(PersistKey::from_canonical_key(name), None, "{name}");
     }
 }
 
-// --- TOML 写像の正しさ（保存 doc の配置）---
-
 #[test]
-fn toml_mapping_places_families_under_expected_tables() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/g/sylphya.toml");
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::X,
-                },
-                "1024".into(),
-            ),
-            (
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::Y,
-                },
-                "-10".into(),
-            ),
-            (PersistKey::BootCount, "3".into()),
-            (PersistKey::VanishCount, "0".into()),
-        ],
-    );
-    let serialized = io.read(&path).unwrap().unwrap();
-    // toml は数字のみの key を bare key として出力する（"0" → window.0）。
-    assert!(
-        serialized.contains("[window.0]"),
-        "serialized=\n{serialized}"
-    );
-    assert!(
-        serialized.contains("[balloon-offset.0]"),
-        "serialized=\n{serialized}"
-    );
-    assert!(serialized.contains("[boot]"), "serialized=\n{serialized}");
-    assert!(serialized.contains("[vanish]"), "serialized=\n{serialized}");
-    assert!(
-        serialized.contains("format-version = 1"),
-        "serialized=\n{serialized}"
-    );
-    assert!(
-        serialized.contains("x = \"1024\""),
-        "serialized=\n{serialized}"
-    );
-}
-
-// --- マージが無関係 key を温存 ---
-
-#[test]
-fn merge_preserves_unrelated_keys() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::X,
-            },
-            "7".into(),
-        )],
-    );
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(PersistKey::BootCount, "2".into())],
-    );
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    assert!(
-        loaded.contains(&(
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::X
-            },
-            "7".into()
-        )),
-        "window.* が boot.count 保存で消えた: {loaded:?}"
-    );
-    assert!(
-        loaded.contains(&(PersistKey::BootCount, "2".into())),
-        "boot.count 未反映: {loaded:?}"
-    );
-}
-
-#[test]
-fn overwrite_same_key_updates_value() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(PersistKey::BootCount, "1".into())],
-    );
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(PersistKey::BootCount, "5".into())],
-    );
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    assert!(loaded.contains(&(PersistKey::BootCount, "5".into())));
+fn every_family_saves_and_loads_through_the_store() {
+    let (_mem, backend) = mem();
+    let roots = ghost_roots("round-trip");
+    let entries: Vec<(PersistKey, String)> = all_families()
+        .into_iter()
+        .enumerate()
+        .map(|(i, key)| (key, format!("-{i}")))
+        .collect();
     assert_eq!(
-        loaded
-            .iter()
-            .filter(|(k, _)| *k == PersistKey::BootCount)
-            .count(),
-        1
+        save_scope(PersistScope::Ghost, &roots, &backend, entries.clone()),
+        PersistOutcome::Saved
     );
-}
-
-// --- スコープ分離（別 root は非混同）---
-
-#[test]
-fn scope_isolation_distinct_ghost_roots_do_not_cross() {
-    let io = FakePersistIo::new();
-    let roots_a = ScopeRoots {
-        ghost: Some(PathBuf::from("/a")),
-        ..ScopeRoots::default()
-    };
-    let roots_b = ScopeRoots {
-        ghost: Some(PathBuf::from("/b")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots_a,
-        &io,
-        vec![(PersistKey::BootCount, "9".into())],
-    );
-    assert!(
-        load_scope(PersistScope::Ghost, &roots_b, &io).is_empty(),
-        "root B が root A の値を見た（混同）"
-    );
-    assert!(
-        load_scope(PersistScope::Ghost, &roots_a, &io)
-            .contains(&(PersistKey::BootCount, "9".into())),
-        "root A 自身は自値を見られる"
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        sorted(entries)
     );
 }
 
 #[test]
-fn scope_isolation_different_scopes_use_different_files() {
-    let io = FakePersistIo::new();
+fn overwrite_keeps_other_keys() {
+    let (_mem, backend) = mem();
+    let roots = ghost_roots("overwrite");
+    let save = |entries| save_scope(PersistScope::Ghost, &roots, &backend, entries);
+    save(vec![
+        (PersistKey::BootCount, "1".into()),
+        (PersistKey::LastGhost, "emo2".into()),
+    ]);
+    save(vec![(PersistKey::BootCount, "2".into())]);
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        sorted(vec![
+            (PersistKey::BootCount, "2".into()),
+            (PersistKey::LastGhost, "emo2".into()),
+        ])
+    );
+}
+
+#[test]
+fn scopes_and_roots_do_not_cross() {
+    let (_mem, backend) = mem();
     let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
-        ghost: Some(PathBuf::from("/ghost")),
+        app: Some(PathBuf::from(r"C:\偽の置き場\persist-cross-app")),
+        ghost: Some(PathBuf::from(r"C:\偽の置き場\persist-cross-ghost")),
         ..ScopeRoots::default()
     };
+    let other_ghost = ghost_roots("cross-other");
     save_scope(
         PersistScope::App,
         &roots,
-        &io,
-        vec![(PersistKey::BootCount, "11".into())],
+        &backend,
+        vec![(PersistKey::LastGhost, "app".into())],
     );
-    assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
-    assert!(
-        load_scope(PersistScope::App, &roots, &io).contains(&(PersistKey::BootCount, "11".into()))
+    save_scope(
+        PersistScope::Ghost,
+        &other_ghost,
+        &backend,
+        vec![(PersistKey::LastGhost, "other".into())],
+    );
+    assert!(load_scope(PersistScope::Ghost, &roots, &backend).is_empty());
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &backend),
+        vec![(PersistKey::LastGhost, "app".into())]
     );
 }
 
-// --- root None → 寛容（panic なし）---
-
 #[test]
-fn none_root_load_is_empty() {
-    let io = FakePersistIo::new();
-    assert!(load_scope(PersistScope::Ghost, &ScopeRoots::default(), &io).is_empty());
+fn absent_root_loads_empty_and_saves_no_root() {
+    let (_mem, backend) = mem();
+    let roots = ScopeRoots::default();
+    assert!(load_scope(PersistScope::Shell, &roots, &backend).is_empty());
+    let entries = vec![
+        (PersistKey::LastGhost, "emo2".into()),
+        (PersistKey::BootCount, "3".into()),
+    ];
+    assert_eq!(
+        save_scope(PersistScope::Shell, &roots, &backend, entries),
+        PersistOutcome::Degraded(PersistFailure {
+            scope: PersistScope::Shell,
+            dir: None,
+            keys: vec![PersistKey::LastGhost, PersistKey::BootCount],
+            cause: PersistFailureCause::NoRoot,
+        })
+    );
 }
 
-// === ログ表明 ===
-//
-// format 層の縮退 warn は `format.rs` 側で確かめる。ここは load の read 障害段と save の
-// commit 失敗段のログを、共有ヘルパ [`crate::test_log_capture`]（`log-capture-kit` へ委譲して
-// 並列でも決定論）経由で確かめる（bare `with_default` は使わない）。
-
-// --- load_scope の read 障害段: warn ＋ 空縮退 ＋ 起動継続 ---
 #[test]
-fn load_read_failure_emits_warn_and_degrades() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
+fn an_os_refusal_degrades_with_dir_keys_and_reason() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("refusal");
     save_scope(
         PersistScope::Ghost,
         &roots,
-        &io,
+        &backend,
         vec![(PersistKey::BootCount, "1".into())],
     );
-    io.fail_next_read();
+    mem.fail_next_write();
+    let mut outcome = None;
     let events = capture(|| {
-        let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-        assert!(loaded.is_empty(), "read 障害は空縮退（起動継続）");
-    });
-    assert_logged(&events, Level::WARN, LOG_TARGET, "persist read failed");
-}
-
-// --- save_scope の commit 失敗段: 既存無傷 ＋ error ログ ---
-#[test]
-fn save_commit_failure_emits_error_log() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(PersistKey::BootCount, "1".into())],
-    );
-    io.fail_next_commit();
-    let events = capture(|| {
-        let outcome = save_scope(
+        outcome = Some(save_scope(
             PersistScope::Ghost,
             &roots,
-            &io,
+            &backend,
             vec![(PersistKey::BootCount, "2".into())],
-        );
-        assert!(
-            matches!(outcome, PersistOutcome::Degraded(_)),
-            "commit 失敗は Degraded 縮退（panic なし）"
-        );
+        ));
     });
-    assert_logged(&events, Level::ERROR, LOG_TARGET, "persist commit failed");
+    let Some(PersistOutcome::Degraded(failure)) = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(failure.dir, roots.ghost);
+    assert_eq!(failure.keys, vec![PersistKey::BootCount]);
+    assert!(matches!(failure.cause, PersistFailureCause::Io(_)));
     assert!(
-        load_scope(PersistScope::Ghost, &roots, &io).contains(&(PersistKey::BootCount, "1".into())),
-        "commit 中断後も既存内容が無傷であること"
+        events.iter().any(|e| e.level == Level::ERROR
+            && e.field("keys")
+                .is_some_and(|k| k.contains("areka.boot.count"))),
+        "書けなかった鍵の正規名が記録に載る: {events:?}"
     );
-}
-
-// --- 非数値スコープ ID の寛容 skip（format 層は不透明文字列を許す）---
-
-#[test]
-fn non_numeric_scope_id_in_file_is_skipped() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/g/sylphya.toml");
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    io.commit(
-        &path,
-        "format-version = 1\n[window.\"main\"]\nx = \"5\"\n[boot]\ncount = \"1\"\n",
-    )
-    .unwrap();
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    assert!(loaded.contains(&(PersistKey::BootCount, "1".into())));
-    assert!(
-        loaded
-            .iter()
-            .all(|(k, _)| !matches!(k, PersistKey::WindowPos { .. }))
-    );
-}
-
-#[test]
-fn absent_file_loads_empty() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/never-written")),
-        ..ScopeRoots::default()
-    };
-    assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
-}
-
-// === 族 [last] ===
-
-#[test]
-fn last_family_canonical_key_exact_strings() {
-    assert_eq!(PersistKey::LastGhost.to_canonical_key(), "areka.last.ghost");
     assert_eq!(
-        PersistKey::LastBalloon.to_canonical_key(),
-        "areka.last.balloon"
-    );
-    assert_eq!(PersistKey::LastShell.to_canonical_key(), "areka.last.shell");
-    assert_eq!(
-        PersistKey::LastRunning.to_canonical_key(),
-        "areka.last.running"
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        vec![(PersistKey::BootCount, "1".into())],
+        "書けなかった値は入らない"
     );
 }
 
-// --- 3 鍵を書いて読み戻す往復（表 [last] に載り、返り順は ghost → balloon → shell）---
 #[test]
-fn last_family_put_load_round_trip() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/g/sylphya.toml");
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
+fn a_writer_lock_held_past_the_wait_degrades_and_keeps_the_old_value() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("lock-limit");
+    let save = |value: &str| {
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &backend,
+            vec![(PersistKey::BootCount, value.into())],
+        )
     };
-    // 書く順を返り順と逆にしても、読み戻しは ghost → balloon → shell。
+    assert_eq!(save("1"), PersistOutcome::Saved);
+    let hold = mem.hold_writer(roots.ghost.as_ref().unwrap());
+    let start = mem.now();
+    let PersistOutcome::Degraded(failure) = save("2") else {
+        panic!("錠を取れない書きは縮退する");
+    };
+    assert!(mem.now() - start > crate::store::OP_WAIT);
+    assert_eq!(
+        (failure.dir, failure.keys),
+        (roots.ghost.clone(), vec![PersistKey::BootCount])
+    );
+    drop(hold);
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        vec![(PersistKey::BootCount, "1".into())]
+    );
+}
+
+#[test]
+fn a_refused_removal_degrades_and_keeps_the_key() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("remove-refusal");
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &backend,
+        vec![(PersistKey::LastRunning, "印".into())],
+    );
+    mem.fail_next_write();
+    let PersistOutcome::Degraded(failure) = remove_scope_keys(
+        PersistScope::Ghost,
+        &roots,
+        &backend,
+        vec![PersistKey::LastRunning],
+    ) else {
+        panic!("消せない消しは縮退する");
+    };
+    assert_eq!(failure.keys, vec![PersistKey::LastRunning]);
+    assert!(matches!(failure.cause, PersistFailureCause::Io(_)));
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        vec![(PersistKey::LastRunning, "印".into())]
+    );
+}
+
+#[test]
+fn an_unusable_memory_file_degrades_as_unusable() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("unusable");
+    mem.mark_unusable(roots.ghost.as_ref().unwrap());
     let outcome = save_scope(
         PersistScope::Ghost,
         &roots,
-        &io,
-        vec![
-            (PersistKey::LastShell, "master".into()),
-            (PersistKey::LastBalloon, "StayseeBalloon".into()),
-            (PersistKey::LastGhost, "emo2".into()),
-        ],
-    );
-    assert_eq!(outcome, PersistOutcome::Saved);
-    let serialized = io.read(&path).unwrap().unwrap();
-    assert!(serialized.contains("[last]"), "serialized=\n{serialized}");
-    assert!(
-        serialized.contains("ghost = \"emo2\""),
-        "serialized=\n{serialized}"
-    );
-    assert_eq!(
-        load_scope(PersistScope::Ghost, &roots, &io),
-        vec![
-            (PersistKey::LastGhost, "emo2".to_string()),
-            (PersistKey::LastBalloon, "StayseeBalloon".to_string()),
-            (PersistKey::LastShell, "master".to_string()),
-        ]
-    );
-}
-
-// --- 無い鍵は返らない（ghost だけ書けば balloon／shell は返らず、表にも現れない）---
-#[test]
-fn last_family_absent_keys_are_not_returned() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/app/sylphya.toml");
-    let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
-        vec![(PersistKey::LastGhost, "emo2".into())],
-    );
-    assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::LastGhost, "emo2".to_string())]
-    );
-    let serialized = io.read(&path).unwrap().unwrap();
-    assert!(!serialized.contains("balloon"), "serialized=\n{serialized}");
-    assert!(!serialized.contains("shell"), "serialized=\n{serialized}");
-}
-
-// --- 値が無ければ表 [last] を書かない ---
-#[test]
-fn last_table_is_not_written_without_values() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/g/sylphya.toml");
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
+        &backend,
         vec![(PersistKey::BootCount, "1".into())],
     );
-    let serialized = io.read(&path).unwrap().unwrap();
-    assert!(!serialized.contains("[last]"), "serialized=\n{serialized}");
+    assert!(
+        matches!(
+            &outcome,
+            PersistOutcome::Degraded(PersistFailure {
+                cause: PersistFailureCause::Unusable(_),
+                ..
+            })
+        ),
+        "{outcome:?}"
+    );
 }
 
-// --- [last] だけ保存しても [window]／[boot] が残る（read-modify-write）---
 #[test]
-fn saving_only_last_preserves_other_tables() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let window_x = PersistKey::WindowPos {
-        scope: 0,
-        axis: Axis::X,
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![(window_x, "7".into()), (PersistKey::BootCount, "2".into())],
-    );
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![
-            (PersistKey::LastBalloon, "StayseeBalloon".into()),
-            (PersistKey::LastShell, "master".into()),
-        ],
-    );
-    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
-    assert!(
-        loaded.contains(&(window_x, "7".into())),
-        "[last] の保存で [window] が消えた: {loaded:?}"
-    );
-    assert!(
-        loaded.contains(&(PersistKey::BootCount, "2".into())),
-        "[last] の保存で [boot] が消えた: {loaded:?}"
+fn a_legacy_file_is_read_through_the_import() {
+    let (mem, backend) = mem();
+    let roots = ghost_roots("legacy");
+    let root = roots.ghost.clone().unwrap();
+    mem.plant_legacy(
+        &root,
+        "format-version = 1\n[last]\nghost = \"emo2\"\nrunning = \"\"\n[window.\"0\"]\nx = \"5\"\n",
     );
     assert_eq!(
-        loaded,
-        vec![
-            (window_x, "7".to_string()),
-            (PersistKey::BootCount, "2".to_string()),
-            (PersistKey::LastBalloon, "StayseeBalloon".to_string()),
-            (PersistKey::LastShell, "master".to_string()),
-        ]
-    );
-}
-
-// --- 手書きの [last] を読む（型外れの値は当該鍵のみ不在）---
-#[test]
-fn last_table_hand_written_is_read_and_type_mismatch_is_absent() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/g/sylphya.toml");
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    io.commit(
-        &path,
-        "format-version = 1\n[last]\nballoon = \"b\"\nshell = 3\n",
-    )
-    .unwrap();
-    assert_eq!(
-        load_scope(PersistScope::Ghost, &roots, &io),
-        vec![(PersistKey::LastBalloon, "b".to_string())]
-    );
-}
-
-// === 起動中の印 ===
-
-// --- 書く → 読む（表 [last] の running・返り順は ghost のあと）→ 空文字を書くと消える ---
-#[test]
-fn last_running_round_trip_and_empty_string_clears() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/app/sylphya.toml");
-    let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
-        vec![
-            (PersistKey::LastRunning, "broken".into()),
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        sorted(vec![
             (PersistKey::LastGhost, "emo2".into()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X
+                },
+                "5".into()
+            ),
+        ])
+    );
+    assert_eq!(mem.legacy_names(&root), ["sylphya.toml.imported"]);
+}
+
+#[test]
+fn last_running_empty_string_reads_as_absent() {
+    let (_mem, backend) = mem();
+    let roots = ghost_roots("running");
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &backend,
+        vec![
+            (PersistKey::LastRunning, String::new()),
+            (PersistKey::BasewareRoots, String::new()),
         ],
     );
-    let serialized = io.read(&path).unwrap().unwrap();
-    assert!(
-        serialized.contains("running = \"broken\""),
-        "serialized=\n{serialized}"
-    );
     assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![
-            (PersistKey::LastGhost, "emo2".to_string()),
-            (PersistKey::LastRunning, "broken".to_string()),
-        ]
-    );
-
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
-        vec![(PersistKey::LastRunning, String::new())],
-    );
-    assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::LastGhost, "emo2".to_string())]
-    );
-}
-
-// --- 手書きの running = "" は「無し」と読む ---
-#[test]
-fn last_running_hand_written_empty_is_absent() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/app/sylphya.toml");
-    let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
-        ..ScopeRoots::default()
-    };
-    io.commit(&path, "format-version = 1\n[last]\nrunning = \"\"\n")
-        .unwrap();
-    assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
-}
-
-// === 根の並び ===
-
-#[test]
-fn baseware_roots_canonical_key_exact_string() {
-    assert_eq!(
-        PersistKey::BasewareRoots.to_canonical_key(),
-        "areka.baseware.roots"
-    );
-}
-
-// --- 書く → 読む（表 [baseware] の roots）→ 空文字は空文字のまま（「無し」に潰さない）---
-#[test]
-fn baseware_roots_round_trip_and_empty_string_stays_empty() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/app/sylphya.toml");
-    let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
-        vec![(PersistKey::BasewareRoots, r"<exe>|D:\ssp".into())],
-    );
-    let serialized = io.read(&path).unwrap().unwrap();
-    assert!(
-        serialized.contains("[baseware]"),
-        "serialized=
-{serialized}"
-    );
-    assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::BasewareRoots, r"<exe>|D:\ssp".to_string())]
-    );
-
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
-        vec![(PersistKey::BasewareRoots, "<exe>".into())],
-    );
-    assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::BasewareRoots, "<exe>".to_string())]
-    );
-
-    save_scope(
-        PersistScope::App,
-        &roots,
-        &io,
+        load_scope(PersistScope::Ghost, &roots, &backend),
         vec![(PersistKey::BasewareRoots, String::new())],
-    );
-    assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::BasewareRoots, String::new())]
+        "根の並びの空文字は空文字のまま"
     );
 }
 
-// --- 表が無い・型外れは「無し」---
 #[test]
-fn baseware_roots_absent_or_type_mismatch_is_none() {
-    let io = FakePersistIo::new();
-    let path = PathBuf::from("/app/sylphya.toml");
+fn removing_keys_keeps_the_others() {
+    let (_mem, backend) = mem();
+    let roots = ghost_roots("remove");
+    let entries: Vec<(PersistKey, String)> = all_families()
+        .into_iter()
+        .map(|key| (key, "v".to_owned()))
+        .collect();
+    save_scope(PersistScope::Ghost, &roots, &backend, entries);
+    let gone: Vec<PersistKey> = all_families().into_iter().step_by(2).collect();
+    let kept: Vec<PersistKey> = all_families().into_iter().skip(1).step_by(2).collect();
+    assert_eq!(
+        remove_scope_keys(PersistScope::Ghost, &roots, &backend, gone),
+        PersistOutcome::Saved
+    );
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &backend),
+        sorted(kept.iter().map(|key| (*key, "v".to_owned())).collect())
+    );
+    assert_eq!(
+        remove_scope_keys(PersistScope::Ghost, &roots, &backend, kept),
+        PersistOutcome::Saved
+    );
+    assert!(load_scope(PersistScope::Ghost, &roots, &backend).is_empty());
+}
+
+#[test]
+fn removing_from_a_layer_without_a_file_creates_nothing() {
+    let tmp = TempPath::under_target("sylphya-persist-remove-none");
     let roots = ScopeRoots {
-        app: Some(PathBuf::from("/app")),
+        ghost: Some(tmp.child("areka")),
         ..ScopeRoots::default()
     };
-    io.commit(
-        &path,
-        "format-version = 1
-[last]
-ghost = \"emo2\"
-",
-    )
-    .unwrap();
+    let backend: Arc<dyn StoreBackend> = crate::store::FsBackend::with_manual_clock();
     assert_eq!(
-        load_scope(PersistScope::App, &roots, &io),
-        vec![(PersistKey::LastGhost, "emo2".to_string())]
+        remove_scope_keys(
+            PersistScope::Ghost,
+            &roots,
+            &backend,
+            vec![PersistKey::LastRunning]
+        ),
+        PersistOutcome::Saved
     );
-    io.commit(
-        &path,
-        "format-version = 1
-[baseware]
-roots = 3
-",
-    )
-    .unwrap();
-    assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
+    assert!(!tmp.child("areka").exists());
 }

@@ -18,7 +18,7 @@ use crate::vocab::DegradePolicy;
 /// `Degraded` は縮退政策マーカーのみを運ぶ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FlatResolution {
-    /// 鏡像に値あり。
+    /// 値あり。
     Value(String),
     /// 不在→台帳の縮退政策を返す（適用は消費側契約に従う。`PassThroughRaw` は `%名前` 素通し、
     /// `ConsumerDefault` は消費側の唯一定義点の既定値、を意味する）。台帳外の名は
@@ -31,7 +31,7 @@ pub enum FlatResolution {
 /// 由来非露出: `Value` は生値のみを運び、backing 層情報を型に持たない。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DottedResolution {
-    /// 鏡像に値あり。
+    /// 値あり。
     Value(String),
     /// 不在（NOT_FOUND・決定論的）。
     NotFound,

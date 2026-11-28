@@ -87,7 +87,7 @@ const MEMORY_WRITE_TITLE: &str = "areka の記憶を書けません";
 /// 説明書の節の名前は `dist/README.txt` の見出しに合わせる。
 const MEMORY_WRITE_FIX: &str = "直し方: この置き場を書ける状態にしてください。置き場の変え方は、説明書（README.txt）の「■ 記憶の置き場」にあります。";
 /// 記憶のファイルが使えない場面の直し方。
-const MEMORY_FILE_FIX: &str = "直し方: 置き場の記憶のファイル sylphya.toml を直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
+const MEMORY_FILE_FIX: &str = "直し方: 理由に出たファイルを直すか、別の名前に変えてください（別の名前に変えると、覚えていたことは初めからになります）。";
 
 /// 置き場の場面の文面（利用者向けの語は「置き場」）。
 const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォルダを持つフォルダ";

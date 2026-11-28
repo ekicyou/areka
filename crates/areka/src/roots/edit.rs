@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, PoisonError};
 
 use areka_ghost::{BasewareRoot, BasewareRoots, RootMark, same_root};
-use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
 use bevy_ecs::world::World;
 
@@ -307,7 +307,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
             };
             // 書けなければ記録を残して致命へ渡す（書き換えた起動の文脈の並びは戻さない）。
             if let PersistOutcome::Degraded(failure) =
-                save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries)
+                save_scope(PersistScope::App, &scope_roots, &fs_backend(), entries)
             {
                 tracing::error!(
                     event = "roots_memory_write_failed",

@@ -1,50 +1,23 @@
-//! 永続層: `PersistScope` / `ScopeRoots` / `PersistKey`（4 key 族 typed）/ 載せ替え orchestration。
+//! 永続層の型（`PersistScope`・`ScopeRoots`・`PersistKey`・結果）と、型つきの鍵の包み 3 本。
 //!
-//! [`format`]（TOML スキーマ／寛容読取）と [`io`]（原子的 IO シーム）の
-//! 上に、**typed な 4 key 族モデル**と、その
-//! **層別スコープごとのロード／保存編成**（[`load_scope`]／[`save_scope`]）を載せる。
+//! [`load_scope`]・[`save_scope`]・[`remove_scope_keys`] は、番人が居ない時点（起動の前・降ろした
+//! 直後）に、型つきの鍵（[`PersistKey`]）で 1 つの層を読む・書く・消す。どれも呼んだスレッドの上で
+//! 住み場所の核を開き、型つきの鍵を正規名にして読み書きする（層を初めて使うときの
+//! `sylphya.toml` の取り込みも核の中で起きる）。錠に当たった書きは置き場の口の時計で 1 秒まで
+//! 取り直す。控える範囲（[`withhold`]）の中の書きは [`PersistOutcome::Withheld`]。
 //!
-//! ## 責務境界
-//!
-//! - スコープは 4 層固定 enum（[`PersistScope`]・App/Ghost/Shell/Balloon）。各スコープの保存先
-//!   ルートは呼び出し側供給（[`ScopeRoots`]・sylphya はパスを解釈しない）。本番の key の多くは
-//!   Ghost スコープに載るが、App/Shell/Balloon も器として実装しスコープ分離をテストで検証する。
-//! - key は 4 族の typed enum（[`PersistKey`]）。自由 key の汎用永続は将来シーム（2 例目が要求
-//!   してから）。各 key は 2 通りに写像される:
-//!   1. **正準 key 文字列**（[`PersistKey::to_canonical_key`]）——鏡像 dotted 区画へ投影する形
-//!      （`areka.window.scope(0).x` 等）。これは [`crate::key::parse_dotted`] →
-//!      [`crate::PropPath::to_canonical_string`] と往復整合する（読み口 1 本化の要石）。
-//!   2. **TOML 写像**（[`FormatDoc`]）——`[window."0"]` x/y 等。
-//!
-//! ## load / save 編成
-//!
-//! - [`load_scope`]: 起動時一括ロード。root 不在 → 空（不在縮退）。`<root>/sylphya.toml` を
-//!   [`PersistIo::read`] で読み、[`format::read_toml_str`] で寛容パースし、実在値のみ
-//!   `(PersistKey, String)` へ変換する。read 障害・非数値スコープ ID 等はすべて縮退（panic なし）。
-//! - [`save_scope`]: 当該スコープの原子的保存（write-through）。**read-modify-write マージ**で
-//!   既存の表に entries を重ね（無関係な key・知らない表を温存し）、直列化し、[`PersistIo::commit`]
-//!   で原子的確定する。成功 → [`PersistOutcome::Saved`]、root 不在・錠が取れない・既存が使えない・
-//!   commit 失敗 → error!/warn! ＋ [`PersistOutcome::Degraded`]、読み取りだけの
-//!   走り → [`PersistOutcome::Withheld`]。
-//! - [`remove_scope_keys`]: 名指しの鍵だけを消す（[`save_scope`] と同じ道・空になった表は書かない）。
-//!
-//! 鏡像／アクターへの結線は行わない。本モジュールは注入された [`PersistIo`]
-//! の上で typed モデル＋ load/save 編成のみを提供する。
+//! [`format`] は取り込みのための `sylphya.toml` の読みだけを持つ。
 
 pub mod format;
-pub mod io;
 pub mod withhold;
 
 pub use format::{FORMAT_VERSION, FormatDoc};
-pub use io::{FakePersistIo, FsPersistIo, PersistIo};
 
-use format::AxisPair;
+use crate::store::{FileWrite, Store, StoreBackend};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const LOG_TARGET: &str = "areka_sylphya::persist";
-
-/// 各スコープの永続ファイル名（`<scope root>/sylphya.toml`）。
-const PERSIST_FILE_NAME: &str = "sylphya.toml";
 
 /// 層別永続スコープ（伺か慣行の profile フォルダ準拠）。
 ///
@@ -64,7 +37,7 @@ pub enum PersistScope {
 
 /// 各スコープの保存先ルート（呼び出し側が供給。`None` ＝当該スコープ利用不可＝不在縮退）。
 ///
-/// 実ファイルは `<root>/sylphya.toml`（root 自体を `profile/areka/` に取る運用は結線側の契約）。
+/// 記憶のファイルは `<root>/sylphya.sqlite`（root 自体を `profile/areka/` に取る運用は結線側の契約）。
 /// sylphya はパスを解釈しない（最下層規律）——所属実体（ゴースト等）の分離は per-実体 profile
 /// ディレクトリの物理分離が担う。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -81,18 +54,13 @@ pub struct ScopeRoots {
 
 impl ScopeRoots {
     /// 指定スコープのルート（未設定は `None` ＝不在縮退）。
-    fn root_of(&self, scope: PersistScope) -> Option<&PathBuf> {
+    pub(crate) fn root_of(&self, scope: PersistScope) -> Option<&PathBuf> {
         match scope {
             PersistScope::App => self.app.as_ref(),
             PersistScope::Ghost => self.ghost.as_ref(),
             PersistScope::Shell => self.shell.as_ref(),
             PersistScope::Balloon => self.balloon.as_ref(),
         }
-    }
-
-    /// 指定スコープの永続ファイルパス（`<root>/sylphya.toml`）。root 不在なら `None`。
-    fn file_of(&self, scope: PersistScope) -> Option<PathBuf> {
-        self.root_of(scope).map(|root| root.join(PERSIST_FILE_NAME))
     }
 }
 
@@ -117,8 +85,8 @@ impl Axis {
 
 /// 4 key 族（typed。値ドメインは文字列）。
 ///
-/// 各 variant は正準 key 文字列（[`PersistKey::to_canonical_key`]）と TOML 写像
-/// （[`FormatDoc`]）の双方へ決定論的に対応する。
+/// 各 variant は正準 key 文字列（[`PersistKey::to_canonical_key`]）と 1 対 1 に対応する
+/// （戻すのは [`PersistKey::from_canonical_key`]）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PersistKey {
     /// 窓位置（キャラクタースコープ別）→ 正準 key `areka.window.scope(ID).x|y`・TOML `[window."ID"]`。
@@ -164,11 +132,10 @@ pub enum PersistKey {
 }
 
 impl PersistKey {
-    /// 鏡像 dotted 区画へ投影する正準 key 文字列。
+    /// 記憶の鍵の正規名。
     ///
     /// **不変条件**: `parse_dotted(k).unwrap().to_canonical_string() == k`（[`crate::key`] と往復
-    /// 整合——この投影で格納された値は [`crate::reader::SylphyaReader::resolve_dotted`] が同じ
-    /// 正準形で引ける）。この整合は檻（`canonical_key_round_trips_with_to_canonical_string`）で保証。
+    /// 整合——この名前で書いた値は名前での読みが同じ正規名で引ける）。
     pub fn to_canonical_key(self) -> String {
         match self {
             PersistKey::WindowPos { scope, axis } => {
@@ -186,6 +153,41 @@ impl PersistKey {
             PersistKey::BasewareRoots => "areka.baseware.roots".to_string(),
             PersistKey::WindowAdjacent { scope } => format!("areka.window.scope({scope}).adjacent"),
         }
+    }
+
+    /// 正規名から型つきの鍵へ戻す（正規名でない綴り・型つきの鍵の無い名前は `None`）。
+    pub fn from_canonical_key(key: &str) -> Option<PersistKey> {
+        let scoped = |prefix: &str| -> Option<(u32, &str)> {
+            let (id, field) = key.strip_prefix(prefix)?.split_once(").")?;
+            Some((id.parse().ok()?, field))
+        };
+        let axis = |field: &str| match field {
+            "x" => Some(Axis::X),
+            "y" => Some(Axis::Y),
+            _ => None,
+        };
+        let found = if let Some((scope, field)) = scoped("areka.window.scope(") {
+            match field {
+                "adjacent" => Some(PersistKey::WindowAdjacent { scope }),
+                _ => axis(field).map(|axis| PersistKey::WindowPos { scope, axis }),
+            }
+        } else if let Some((scope, field)) = scoped("areka.balloon.offset.scope(") {
+            axis(field).map(|axis| PersistKey::BalloonOffset { scope, axis })
+        } else {
+            [
+                PersistKey::BootCount,
+                PersistKey::VanishCount,
+                PersistKey::LastGhost,
+                PersistKey::LastBalloon,
+                PersistKey::LastShell,
+                PersistKey::LastRunning,
+                PersistKey::BasewareRoots,
+            ]
+            .into_iter()
+            .find(|k| k.to_canonical_key() == key)
+        };
+        // `01` や `+1` も数には読めるので、正規名に戻るかで綴りを確かめる。
+        found.filter(|k| k.to_canonical_key() == key)
     }
 }
 
@@ -209,7 +211,7 @@ pub enum PersistFailureCause {
     NoRoot,
     /// OS の理由（`std::io::Error` の表示。例「アクセスが拒否されました。 (os error 5)」）。
     Io(String),
-    /// 既にある記憶のファイルが使えない（TOML として壊れている・版が違う・読めない）ので上書きしなかった。
+    /// 既にある記憶のファイル（または取り込む前の `sylphya.toml`）が使えないので書かなかった。
     Unusable(String),
 }
 
@@ -218,470 +220,105 @@ pub enum PersistFailureCause {
 pub enum PersistOutcome {
     /// 原子的確定に成功（以後のロードで同値復元）。
     Saved,
-    /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分）。
+    /// 保存失敗（root 不在・書けない・使えない記憶のファイル）→ ログ済み・縮退。
     /// 書けなかった 1 回の中身を運ぶ。
     Degraded(PersistFailure),
     /// 読み取りだけの走りで書かずに控えた（中身は走る間だけ読み返せる）。
     Withheld,
 }
 
-/// 当該スコープの永続状態を一括ロードする（起動時）。
+/// 当該スコープの記憶の全部を型つきの鍵で読む（起動の前）。
 ///
-/// - root 不在（[`ScopeRoots`] の該当が `None`）→ 空（当該スコープ不在縮退・debug）。
-/// - `<root>/sylphya.toml` を [`PersistIo::read`] で読む。不在（`Ok(None)`）→ 空。read 障害
-///   （`Err`）→ warn! ＋ 空（縮退・panic なし）。
-/// - 読めた content は [`format::read_toml_str`] で寛容パースし、実在値のみ `(PersistKey, String)`
-///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
-///
-/// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware → window-adjacent、
-/// 各 pair は x → y）。
+/// root 不在・核を開けない → 空（縮退）。型つきの鍵に戻らない名前は返さない。空文字の起動中の印は
+/// 「無し」と読む。返り値は正規名の順。
 pub fn load_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
-    io: &dyn PersistIo,
+    backend: &Arc<dyn StoreBackend>,
 ) -> Vec<(PersistKey, String)> {
-    let Some(path) = roots.file_of(scope) else {
+    if roots.root_of(scope).is_none() {
         tracing::debug!(
             target: LOG_TARGET,
             ?scope,
             "persist scope root absent; loading as empty (tolerant)"
         );
         return Vec::new();
+    }
+    let Ok(mut store) = Store::open(roots.clone(), backend.clone()) else {
+        return Vec::new();
     };
-
-    let content = match io::retry_transient(io::LOCK_WAIT, || io.read(&path)) {
-        Ok(Some(content)) => content,
-        Ok(None) => {
-            tracing::debug!(target: LOG_TARGET, ?scope, path = %path.display(), "persist file absent; loading as empty");
-            return Vec::new();
-        }
-        Err(e) => {
-            tracing::warn!(
-                target: LOG_TARGET,
-                ?scope,
-                path = %path.display(),
-                error = %e,
-                "persist read failed; degrading to absent (tolerant)"
-            );
-            return Vec::new();
-        }
-    };
-
-    let doc = format::read_toml_str(&content);
-    doc_to_entries(scope, &doc)
+    store
+        .read_layer(scope)
+        .into_iter()
+        .filter_map(|(name, value)| Some((PersistKey::from_canonical_key(&name)?, value)))
+        .filter(|(key, value)| !(*key == PersistKey::LastRunning && value.is_empty()))
+        .collect()
 }
 
-/// プロセスに 1 つの保存の門（すべての [`PersistIo`]・控える走り・試験の偽の IO に効く）。
-static SAVE_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn save_gate() -> std::sync::MutexGuard<'static, ()> {
-    // 門は中身を持たない＝途中で落ちても壊れた中身は残らない。毒は越える。
-    SAVE_GATE.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-/// 当該スコープへ entries を原子的に保存する（write-through）。
+/// 当該スコープへ entries を 1 回のトランザクションで書く（ほかの鍵はそのまま）。
 ///
-/// **read-modify-write マージ**: 既存 `<root>/sylphya.toml` を読み、その表の上に entries を重ねて
-/// から直列化・確定する。これにより例えば `boot.count` だけを保存しても `window.*` 等の無関係な
-/// key も、この版の知らない表・値も消えない（マージ檻で保証）。
-///
-/// - root 不在 → warn! ＋ [`PersistOutcome::Degraded`]（保存先が無い・panic なし）。
-/// - 読む前にプロセスの中の門と [`PersistIo::lock_for_update`] の錠を取り、書いた後に放す。錠が
-///   取れない → 書かずに error! `persist_lock_failed` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
-/// - 既存が無い・空 → 空の土台に重ねる。既存が読めない・壊れている・版が違う → 書かずに
-///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Unusable(理由)`）。ただし控える
-///   範囲の中は何も書かないので、warn! を出して空の土台で続ける。
-/// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
-///   ゆえ無傷。鏡像更新はアクターの領分——ここは結果のみ報告）。
-/// - 控える範囲の中（[`PersistIo::withholds`]）→ 控えへ入れて debug `persist_withheld` ＋
-///   [`PersistOutcome::Withheld`]（読み取りだけの走り・「書けたか」の判定に入らない）。
-/// - 成功 → [`PersistOutcome::Saved`]。
+/// root 不在 → warn! ＋ `Degraded(NoRoot)`。書けない・使えない記憶のファイル・1 秒待っても錠が
+/// 取れない → error! ＋ [`PersistOutcome::Degraded`]。控える範囲の中 → [`PersistOutcome::Withheld`]。
 pub fn save_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
-    io: &dyn PersistIo,
+    backend: &Arc<dyn StoreBackend>,
     entries: Vec<(PersistKey, String)>,
 ) -> PersistOutcome {
-    let keys: Vec<PersistKey> = entries.iter().map(|(key, _)| *key).collect();
-    update_scope(scope, roots, io, keys, |doc, base| {
-        for (key, value) in entries {
-            // 手で書いた `"00"` などの綴りを残すと、正準の綴りと並んで古い値が読み戻される。
-            remove_other_spellings(doc, base, key);
-            apply_entry(doc, key, Some(value));
-        }
-    })
+    let typed = entries.iter().map(|(key, _)| *key).collect();
+    let puts = entries
+        .into_iter()
+        .map(|(key, value)| (key.to_canonical_key(), value))
+        .collect();
+    write_scope(scope, roots, backend, puts, Vec::new(), typed)
 }
 
-/// 当該スコープの記憶から `keys` を消す（[`save_scope`] と同じ錠・既存の読み・控え・commit の道）。
-///
-/// 名指しの鍵だけを消し、知らない表・知らない値・ほかの鍵は残す。鍵を消して空になった表
-/// （`[balloon-offset."N"]` とその親など）は書かない。失敗と控えの扱いは [`save_scope`] と同じ。
-/// スコープ別の鍵は、読みが同じスコープとして読む綴り（手で書いた `"00"` など）もすべて消す。
+/// 当該スコープの記憶から `keys` を消す（[`save_scope`] と同じ道・無い鍵は何も変えない）。
 pub fn remove_scope_keys(
     scope: PersistScope,
     roots: &ScopeRoots,
-    io: &dyn PersistIo,
+    backend: &Arc<dyn StoreBackend>,
     keys: Vec<PersistKey>,
 ) -> PersistOutcome {
-    let names = keys.clone();
-    update_scope(scope, roots, io, keys, |doc, base| {
-        for key in names {
-            apply_entry(doc, key, None);
-            remove_toml_path(base, &toml_path(key));
-            remove_other_spellings(doc, base, key);
-        }
-    })
+    let removes = keys.iter().map(|key| key.to_canonical_key()).collect();
+    write_scope(scope, roots, backend, Vec::new(), removes, keys)
 }
 
-/// スコープ別の鍵について、読み（[`doc_to_entries`] の `parse::<u32>()`）が同じスコープになる ID
-/// （正準の綴り `scope.to_string()` も、手で書いた `"00"` なども）を doc と土台の表から消す。
-fn remove_other_spellings(doc: &mut FormatDoc, base: &mut toml::Table, key: PersistKey) {
-    let same = |scope: u32, id: &str| id.parse::<u32>() == Ok(scope);
-    let scope = match key {
-        PersistKey::WindowPos { scope, axis } => {
-            for (_, pair) in doc.window.iter_mut().filter(|(id, _)| same(scope, id)) {
-                set_axis(pair, axis, None);
-            }
-            scope
-        }
-        PersistKey::BalloonOffset { scope, axis } => {
-            for (_, pair) in doc
-                .balloon_offset
-                .iter_mut()
-                .filter(|(id, _)| same(scope, id))
-            {
-                set_axis(pair, axis, None);
-            }
-            scope
-        }
-        PersistKey::WindowAdjacent { scope } => {
-            doc.window_adjacent.retain(|id, _| !same(scope, id));
-            scope
-        }
-        _ => return,
-    };
-    let mut path = toml_path(key);
-    let ids: Vec<String> = match base.get(&path[0]) {
-        Some(toml::Value::Table(table)) => {
-            table.keys().filter(|id| same(scope, id)).cloned().collect()
-        }
-        _ => Vec::new(),
-    };
-    for id in ids {
-        path[1] = id;
-        remove_toml_path(base, &path);
-    }
-}
-
-/// 保存と消しの 1 本の道（錠 → 既存の読み → `edit` で doc と土台の表に手を入れる → 控え／commit）。
-fn update_scope(
+fn write_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
-    io: &dyn PersistIo,
-    keys: Vec<PersistKey>,
-    edit: impl FnOnce(&mut FormatDoc, &mut toml::Table),
+    backend: &Arc<dyn StoreBackend>,
+    puts: Vec<(String, String)>,
+    removes: Vec<String>,
+    typed: Vec<PersistKey>,
 ) -> PersistOutcome {
-    let Some(path) = roots.file_of(scope) else {
-        tracing::warn!(
+    let write = FileWrite {
+        layer: scope,
+        root: roots.root_of(scope).cloned(),
+        puts,
+        removes,
+        typed,
+    };
+    match Store::open(roots.clone(), backend.clone()) {
+        Ok(mut store) => crate::kvs::write_within_wait(&mut store, backend.as_ref(), &write),
+        Err(reason) => crate::guardian::store_not_open(&write, &reason),
+    }
+}
+
+/// ゴーストの記憶のフォルダを先に作る（控える範囲の中なら作らずに `Ok`）。
+pub fn ensure_root_dir(dir: &Path, backend: &Arc<dyn StoreBackend>) -> std::io::Result<()> {
+    if backend.withholds(dir) {
+        tracing::debug!(
             target: LOG_TARGET,
-            ?scope,
-            "persist scope root absent; save degraded (no destination)"
+            event = "persist_root_dir_withheld",
+            dir = %dir.display(),
+            "persist root dir not created (read-only run)"
         );
-        return PersistOutcome::Degraded(PersistFailure {
-            scope,
-            dir: None,
-            keys,
-            cause: PersistFailureCause::NoRoot,
-        });
-    };
-
-    // 読む前に錠を取り、書いた後に放す（プロセスの中は門・ほかのプロセスとは錠のファイル）。
-    let _gate = save_gate();
-    let _lock = match io.lock_for_update(&path) {
-        Ok(lock) => lock,
-        Err(e) => {
-            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
-            tracing::error!(
-                target: LOG_TARGET,
-                event = "persist_lock_failed",
-                ?scope,
-                path = %path.display(),
-                error = %e,
-                keys = ?key_names,
-                "persist update lock not acquired; reporting Degraded"
-            );
-            return PersistOutcome::Degraded(PersistFailure {
-                scope,
-                dir: roots.root_of(scope).cloned(),
-                keys,
-                cause: PersistFailureCause::Io(e.to_string()),
-            });
-        }
-    };
-
-    // 使えない既存は上書きしない。
-    // 控える道（読み取りだけの走り）は何も書かない＝守る物が無いので、寛容な読みで続ける。
-    let withheld = io.withholds(&path);
-    let (mut doc, mut base) = match read_existing(io, &path) {
-        Ok(existing) => existing,
-        Err(reason) if withheld => {
-            tracing::warn!(
-                target: LOG_TARGET,
-                ?scope,
-                path = %path.display(),
-                reason = %reason,
-                "persist existing file unusable in read-only run; continuing on empty base (nothing is written)"
-            );
-            Default::default()
-        }
-        Err(reason) => {
-            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
-            tracing::error!(
-                target: LOG_TARGET,
-                event = "persist_existing_unusable",
-                ?scope,
-                path = %path.display(),
-                reason = %reason,
-                keys = ?key_names,
-                "persist existing file unusable; not overwriting, reporting Degraded"
-            );
-            return PersistOutcome::Degraded(PersistFailure {
-                scope,
-                dir: roots.root_of(scope).cloned(),
-                keys,
-                cause: PersistFailureCause::Unusable(reason),
-            });
-        }
-    };
-    edit(&mut doc, &mut base);
-
-    let content = format::to_toml_string_over(base, &doc);
-    match io.commit(&path, &content) {
-        Ok(()) if withheld => {
-            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
-            tracing::debug!(
-                target: LOG_TARGET,
-                event = "persist_withheld",
-                ?scope,
-                keys = ?key_names,
-                "persist withheld (read-only run); nothing written"
-            );
-            PersistOutcome::Withheld
-        }
-        Ok(()) => PersistOutcome::Saved,
-        Err(e) => {
-            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
-            tracing::error!(
-                target: LOG_TARGET,
-                ?scope,
-                path = %path.display(),
-                error = %e,
-                keys = ?key_names,
-                "persist commit failed; existing file intact (temp→rename), reporting Degraded"
-            );
-            PersistOutcome::Degraded(PersistFailure {
-                scope,
-                dir: roots.root_of(scope).cloned(),
-                keys,
-                cause: PersistFailureCause::Io(e.to_string()),
-            })
-        }
+        return Ok(());
     }
-}
-
-/// save のマージ土台を読む。`Ok((doc, 元の表))` なら重ねてよい・`Err(理由)` なら書かずに Degraded。
-///
-/// 無いファイルと空（空白だけ）のファイルは守る中身が無いので空の土台。中身があれば寛容でない
-/// 読み（[`format::parse_toml_str`]）を通す。一時の掴みは [`io::retry_transient`] で読み直す。
-fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Table), String> {
-    match io::retry_transient(io::LOCK_WAIT, || io.read(path)) {
-        Ok(Some(content)) if !content.trim().is_empty() => format::parse_toml_str(&content),
-        Ok(_) => Ok(Default::default()),
-        Err(e) => Err(format!(
-            "記憶のファイル sylphya.toml を読めないので、中身を消さないように書くのをやめました（{e}）"
-        )),
-    }
-}
-
-/// 1 entry を [`FormatDoc`] へ適用する（TOML 写像）。`None` は消す。
-fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: Option<String>) {
-    match key {
-        PersistKey::WindowPos { scope, axis } => {
-            set_axis(
-                doc.window.entry(scope.to_string()).or_default(),
-                axis,
-                value,
-            );
-        }
-        PersistKey::BalloonOffset { scope, axis } => {
-            set_axis(
-                doc.balloon_offset.entry(scope.to_string()).or_default(),
-                axis,
-                value,
-            );
-        }
-        PersistKey::BootCount => doc.boot_count = value,
-        PersistKey::VanishCount => doc.vanish_count = value,
-        PersistKey::LastGhost => doc.last_ghost = value,
-        PersistKey::LastBalloon => doc.last_balloon = value,
-        PersistKey::LastShell => doc.last_shell = value,
-        PersistKey::LastRunning => doc.last_running = value,
-        PersistKey::BasewareRoots => doc.baseware_roots = value,
-        PersistKey::WindowAdjacent { scope } => match value {
-            Some(value) => {
-                doc.window_adjacent.insert(scope.to_string(), value);
-            }
-            None => {
-                doc.window_adjacent.remove(&scope.to_string());
-            }
-        },
-    }
-}
-
-/// [`AxisPair`] の指定軸へ値を書く（`None` は消す）。
-fn set_axis(pair: &mut AxisPair, axis: Axis, value: Option<String>) {
-    match axis {
-        Axis::X => pair.x = value,
-        Axis::Y => pair.y = value,
-    }
-}
-
-/// key の TOML の置き場（表の名 → … → 欄の名・[`format::to_toml_string_over`] の写像と同じ）。
-fn toml_path(key: PersistKey) -> Vec<String> {
-    let p = |parts: &[&str]| -> Vec<String> { parts.iter().map(|s| s.to_string()).collect() };
-    match key {
-        PersistKey::WindowPos { scope, axis } => p(&["window", &scope.to_string(), axis.as_str()]),
-        PersistKey::BalloonOffset { scope, axis } => {
-            p(&["balloon-offset", &scope.to_string(), axis.as_str()])
-        }
-        PersistKey::WindowAdjacent { scope } => p(&["window-adjacent", &scope.to_string()]),
-        PersistKey::BootCount => p(&["boot", "count"]),
-        PersistKey::VanishCount => p(&["vanish", "count"]),
-        PersistKey::LastGhost => p(&["last", "ghost"]),
-        PersistKey::LastBalloon => p(&["last", "balloon"]),
-        PersistKey::LastShell => p(&["last", "shell"]),
-        PersistKey::LastRunning => p(&["last", "running"]),
-        PersistKey::BasewareRoots => p(&["baseware", "roots"]),
-    }
-}
-
-/// 表から `path` の欄を消し、それで空になった表を親から消す。消したら `true`。
-fn remove_toml_path(table: &mut toml::Table, path: &[String]) -> bool {
-    match path {
-        [] => false,
-        [leaf] => table.remove(leaf).is_some(),
-        [head, rest @ ..] => {
-            let Some(toml::Value::Table(child)) = table.get_mut(head) else {
-                return false;
-            };
-            let removed = remove_toml_path(child, rest);
-            if removed && child.is_empty() {
-                table.remove(head);
-            }
-            removed
-        }
-    }
-}
-
-/// [`FormatDoc`] を `(PersistKey, String)` エントリ列へ変換する（実在値のみ・決定論順）。
-fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, String)> {
-    let mut out = Vec::new();
-
-    push_axis_family(scope, &mut out, &doc.window, |scope_id, axis| {
-        PersistKey::WindowPos {
-            scope: scope_id,
-            axis,
-        }
-    });
-    push_axis_family(scope, &mut out, &doc.balloon_offset, |scope_id, axis| {
-        PersistKey::BalloonOffset {
-            scope: scope_id,
-            axis,
-        }
-    });
-
-    if let Some(v) = &doc.boot_count {
-        out.push((PersistKey::BootCount, v.clone()));
-    }
-    if let Some(v) = &doc.vanish_count {
-        out.push((PersistKey::VanishCount, v.clone()));
-    }
-    for (key, value) in [
-        (PersistKey::LastGhost, &doc.last_ghost),
-        (PersistKey::LastBalloon, &doc.last_balloon),
-        (PersistKey::LastShell, &doc.last_shell),
-        (PersistKey::LastRunning, &doc.last_running),
-        (PersistKey::BasewareRoots, &doc.baseware_roots),
-    ] {
-        if let Some(v) = value {
-            out.push((key, v.clone()));
-        }
-    }
-    for (id, v) in &doc.window_adjacent {
-        let Ok(scope_id) = id.parse::<u32>() else {
-            tracing::debug!(
-                target: LOG_TARGET,
-                ?scope,
-                raw_id = %id,
-                "persist scope id is not a u32; skipping entry (tolerant)"
-            );
-            continue;
-        };
-        out.push((PersistKey::WindowAdjacent { scope: scope_id }, v.clone()));
-    }
-
-    out
-}
-
-/// window / balloon-offset の軸族 1 つをエントリ列へ展開する（非数値 ID は寛容 skip）。
-fn push_axis_family(
-    scope: PersistScope,
-    out: &mut Vec<(PersistKey, String)>,
-    map: &std::collections::BTreeMap<String, AxisPair>,
-    make: impl Fn(u32, Axis) -> PersistKey,
-) {
-    for (id, pair) in map {
-        // typed スコープは u32。format 層は不透明文字列を許すので、非数値 ID は載せられない。
-        let Ok(scope_id) = id.parse::<u32>() else {
-            tracing::debug!(
-                target: LOG_TARGET,
-                ?scope,
-                raw_id = %id,
-                "persist scope id is not a u32; skipping entry (tolerant)"
-            );
-            continue;
-        };
-        if let Some(x) = &pair.x {
-            out.push((make(scope_id, Axis::X), x.clone()));
-        }
-        if let Some(y) = &pair.y {
-            out.push((make(scope_id, Axis::Y), y.clone()));
-        }
-    }
+    backend.ensure_dir(dir)
 }
 
 #[cfg(test)]
 #[path = "persist_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "persist_failure_tests.rs"]
-mod failure_tests;
-
-#[cfg(test)]
-#[path = "persist_window_adjacent_tests.rs"]
-mod window_adjacent_tests;
-
-#[cfg(test)]
-#[path = "persist_unreadable_tests.rs"]
-mod unreadable_tests;
-
-#[cfg(test)]
-#[path = "persist_lock_tests.rs"]
-mod lock_tests;
-
-/// 記憶の鍵を消す口のテスト。
-#[cfg(test)]
-#[path = "persist_remove_tests.rs"]
-mod remove_tests;

@@ -30,7 +30,7 @@ use super::status_report::BalloonStatusLedger;
 use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock, TextLayerBusyLogged};
-use crate::scope_scale::SharedScopeScaleTable;
+use crate::scope_scale::ScopeScaleCells;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 /// 毎フレーム結線の NonSend 状態。
@@ -137,7 +137,7 @@ pub struct RuntimeWiring {
     pub static_binds: areka_seriko::DefaultBinds,
     /// スコープの倍率と DPI の表（ゴーストの起動ごとに新しい）。
     /// 書き手は毎フレームの相、読み手は実行系の読み口（`rewire_runtime_consumers` が登録する）。
-    pub(super) scope_scale: SharedScopeScaleTable,
+    pub(super) scope_scale: ScopeScaleCells,
 }
 
 impl RuntimeWiring {
@@ -186,12 +186,12 @@ impl RuntimeWiring {
             // 控えは読み直しの起こし直しだけが渡す（ふつうの起動・切替は無し）。
             shell_carry: None,
             static_binds,
-            scope_scale: SharedScopeScaleTable::default(),
+            scope_scale: ScopeScaleCells::default(),
         }
     }
 
-    /// スコープの倍率と DPI の表（同じ表を共有する）。
-    pub fn scope_scale_table(&self) -> SharedScopeScaleTable {
+    /// スコープの倍率と DPI の取っ手（同じ表を指す複製）。
+    pub fn scope_scale_table(&self) -> ScopeScaleCells {
         self.scope_scale.clone()
     }
 

@@ -5,7 +5,10 @@
 
 use super::*;
 use crate::asker::{AskerContext, AskerId};
-use crate::persist::{FakePersistIo, PersistKey, PersistScope, ScopeRoots};
+use crate::guardian::wait_tests::ask;
+use crate::keytable::Home;
+use crate::persist::{PersistKey, PersistScope, ScopeRoots};
+use crate::store::MemBackend;
 use crate::test_log_capture::{assert_logged, capture};
 use crate::value::DottedResolution;
 use std::path::PathBuf;
@@ -19,11 +22,7 @@ fn ctx() -> AskerContext {
 }
 
 fn spawn_empty() -> SylphyaParts {
-    spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots::default(),
-        io: Box::new(FakePersistIo::new()),
-        runtime_sink: None,
-    })
+    spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()))
 }
 
 fn read(parts: &SylphyaParts, key: &str) -> DottedResolution {
@@ -35,7 +34,7 @@ fn value(v: &str) -> DottedResolution {
 }
 
 fn set(key: &str, value: &str) -> Vec<Effect> {
-    SylphyaCore::new().apply(&SylphyaMsg::Set {
+    apply(&SylphyaMsg::Set {
         asker: asker(),
         key: key.into(),
         value: value.into(),
@@ -230,22 +229,21 @@ fn upper_case_writes_do_not_hide_real_values() {
 #[test]
 fn persisted_values_read_in_any_case() {
     // 12. 保存された値を大小違いの名前で引く。
-    let io = FakePersistIo::new();
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    save_scope(
+    let parts = spawn_sylphya(SylphyaInit::new(roots, MemBackend::new()));
+    parts.publisher.persist_put(
         PersistScope::Ghost,
-        &roots,
-        &io,
         vec![(PersistKey::BootCount, "7".into())],
     );
-    let parts = spawn_sylphya(SylphyaInit {
-        roots,
-        io: Box::new(io),
-        runtime_sink: None,
-    });
-    assert_eq!(read(&parts, "areka.boot.count"), value("7"));
-    assert_eq!(read(&parts, "AREKA.BOOT.COUNT"), value("7"));
+    for name in ["areka.boot.count", "AREKA.BOOT.COUNT"] {
+        assert_eq!(
+            ask(&parts.publisher, asker(), None, name, Home::File).as_deref(),
+            Some("7")
+        );
+    }
+    parts.publisher.close();
+    parts.handle.join().expect("join");
 }

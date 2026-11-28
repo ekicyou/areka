@@ -6,13 +6,12 @@
 //! ワークツリーの `target\` の下の一時の置き場へ書く。
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use areka_ghost::BasewareRoot;
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_placement::test_support::SharedFakeIo;
+use areka_placement::test_support::CountingBackend;
 use areka_runtime::spine::join_bounded;
-use areka_sylphya::persist::{FakePersistIo, FsPersistIo};
+use areka_sylphya::store::fs_backend;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -44,12 +43,13 @@ type Loaded = (
 );
 
 /// fake の置き場へ `seed` を Ghost スコープに置いてから `write` を実 publisher へ投函し、
-/// barrier 後に App・Ghost の 2 スコープを読み戻す。2 つ目は書き手（アクター）が commit した回数。
+/// barrier 後に App・Ghost の 2 スコープを読み戻す。2 つ目は書き手（アクター）が書いた回数。
 fn write_and_load(
     seed: Vec<(PersistKey, String)>,
     write: impl FnOnce(&SylphyaPublisher),
 ) -> (Loaded, usize) {
-    let io = SharedFakeIo::new(Arc::new(FakePersistIo::new()));
+    let counter = CountingBackend::new();
+    let io = counter.backend();
     let roots = ScopeRoots {
         app: Some(PathBuf::from("/app")),
         ghost: Some(PathBuf::from("/g")),
@@ -62,12 +62,8 @@ fn write_and_load(
             "記憶の種を書けない"
         );
     }
-    let seeded = io.commit_count();
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(io.clone()),
-        runtime_sink: None,
-    });
+    let seeded = counter.commit_count();
+    let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), io.clone()));
     let ((), events) = capture(|| write(&parts.publisher));
     parts
         .publisher
@@ -77,7 +73,7 @@ fn write_and_load(
     let ghost_scope = load_scope(PersistScope::Ghost, &roots, &io);
     parts.publisher.close();
     join_bounded("sylphya", parts.handle).expect("記憶の書き手が panic せずに終わる");
-    ((app, ghost_scope, events), io.commit_count() - seeded)
+    ((app, ghost_scope, events), counter.commit_count() - seeded)
 }
 
 /// `record` を投函して読み戻す（前から在る記憶なし）。
@@ -209,15 +205,14 @@ fn read_last_sees_what_record_wrote_on_real_fs() {
     assert_eq!(read_last_ghost(&app_dir), None);
     assert_eq!(read_last_balloon(&ghost_dir), None);
 
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots {
+    let parts = spawn_sylphya(SylphyaInit::new(
+        ScopeRoots {
             app: Some(app_dir.clone()),
             ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
             ..ScopeRoots::default()
         },
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+        areka_sylphya::store::fs_backend(),
+    ));
     let root = root();
     LastUsed {
         ghost: &ghost_at(&root, GhostRoute::Only, "a"),
@@ -302,22 +297,22 @@ fn switch_drop_writes_default_and_mark_at_once() {
     assert_one_event(&events, "switch_drop_recorded", tracing::Level::INFO);
 }
 
-/// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手（切替の降ろした直後は印あり・argv の
+/// 書けないとき（App の置き場の記憶のファイルが使えない）: 3 つの書き手（切替の降ろした直後は印あり・argv の
 /// 印なしの 2 通り）はそれぞれ `warn!` 1 件で戻り、
 /// 成功の info は出ない。
 #[test]
 fn session_mark_writers_warn_once_when_they_cannot_write() {
     let tmp = TempPath::new("boot-resolve-session-mark-degraded");
     let app_dir = tmp.child("app-profile");
-    std::fs::create_dir_all(app_dir.parent().unwrap()).unwrap();
-    std::fs::write(&app_dir, "not a dir").unwrap();
+    std::fs::create_dir_all(&app_dir).unwrap();
+    std::fs::write(app_dir.join("sylphya.sqlite"), "not a database").unwrap();
     let roots = ScopeRoots {
         app: Some(app_dir.clone()),
         ..ScopeRoots::default()
     };
     // 前提の確認: この置き場への保存は本当に縮退する。
     assert!(matches!(
-        save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
+        save_scope(PersistScope::App, &roots, &fs_backend(), vec![]),
         PersistOutcome::Degraded(_)
     ));
     let cases: [(&str, &str, Box<dyn Fn()>); 4] = [
@@ -422,14 +417,13 @@ fn single_key_writers_touch_only_their_key() {
 
 /// 実 fs の、起動と同じ置き場へ `record_last_shell` で書く（`read_last_shell` が拾う場所）。
 fn remember_shell(ghost_dir: &Path, name: &str) {
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: ScopeRoots {
+    let parts = spawn_sylphya(SylphyaInit::new(
+        ScopeRoots {
             ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
             ..ScopeRoots::default()
         },
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+        areka_sylphya::store::fs_backend(),
+    ));
     record_last_shell(&parts.publisher, name);
     parts.publisher.barrier().expect("barrier");
     parts.publisher.close();

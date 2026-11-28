@@ -408,14 +408,6 @@ fn one_message(events: &[CapturedEvent], event: &str) -> String {
     hits[0].message().to_owned()
 }
 
-/// 置き場を普通のファイルに替える（書けない）。
-fn unwritable(dir: &Path) {
-    if dir.is_dir() {
-        std::fs::remove_dir_all(dir).expect("置き場のフォルダを外す");
-    }
-    std::fs::write(dir, "x").expect("置き場の位置に普通のファイルを置く");
-}
-
 /// 印の書き手が書いた記憶のファイル（置き場にただ 1 つ在るファイル）。
 fn mark_file(app_dir: &Path) -> std::path::PathBuf {
     let files: Vec<_> = std::fs::read_dir(app_dir)
@@ -427,27 +419,44 @@ fn mark_file(app_dir: &Path) -> std::path::PathBuf {
     files[0].clone()
 }
 
+/// 置き場の記憶のファイルを読み取り専用にする（読めるが書けない）。戻り値で属性を戻す。
+pub(crate) fn make_memory_read_only(app_dir: &Path) -> impl FnOnce() + use<> {
+    let file = mark_file(app_dir);
+    let mut permissions = std::fs::metadata(&file)
+        .expect("記憶のファイル")
+        .permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file, permissions.clone()).expect("読み取り専用にする");
+    move || {
+        #[expect(
+            clippy::permissions_set_readonly_false,
+            reason = "Windows のファイルの読み取り専用の属性を戻す"
+        )]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&file, permissions).expect("属性を戻す");
+    }
+}
+
 /// 印を消せない文は、記憶に印が残るときだけ「前回落ちたとして」を含む。
 #[test]
 fn clear_degraded_foretells_crash_only_when_mark_remains() {
     let tmp = TempPath::under_target("mark-text-clear");
 
-    // 印が残る: 印を書いた後、書き換えの一時ファイルの位置にフォルダを置いて置き換えを失敗させる
-    // （本体は読めるまま）。
+    // 印が残る: 印を書いた後、記憶のファイルを読み取り専用にする（本体は読めるまま）。
     let kept = tmp.child("kept");
     write_session_mark(&kept, "動いている子").expect("印を書く");
-    let file = mark_file(&kept);
-    let mut temp = file.clone().into_os_string();
-    temp.push(".tmp");
-    std::fs::create_dir_all(&temp).expect("一時ファイルの位置にフォルダを置く");
+    let restore = make_memory_read_only(&kept);
     let (cleared, kept_events) = capture(|| clear_session_mark(&kept));
+    let remains = read_session_mark(&kept);
+    restore();
     assert!(cleared.is_err(), "印を消せないはず");
-    assert_eq!(read_session_mark(&kept), Some("動いている子".to_owned()));
+    assert_eq!(remains, Some("動いている子".to_owned()));
     let kept_text = one_message(&kept_events, "session_mark_clear_degraded");
 
-    // 印が無い: 置き場が普通のファイル（読めず書けない）。
+    // 印が無い: 置き場の記憶のファイルが使えない（読めず書けない）。
     let gone = tmp.child("gone");
-    unwritable(&gone);
+    std::fs::create_dir_all(&gone).unwrap();
+    std::fs::write(gone.join("sylphya.sqlite"), "x").expect("使えない記憶のファイルを置く");
     let (cleared, gone_events) = capture(|| clear_session_mark(&gone));
     assert!(cleared.is_err(), "印を消せないはず");
     assert_eq!(read_session_mark(&gone), None);
@@ -461,6 +470,27 @@ fn clear_degraded_foretells_crash_only_when_mark_remains() {
         (true, false),
         "印が残る・無いの文: {kept_text} / {gone_text}"
     );
+}
+
+/// 古い `sylphya.toml` にだけ在る印も、消す口が取り込んでから消す（次の起動で読めない）。
+#[test]
+fn clear_removes_a_mark_that_only_the_legacy_file_holds() {
+    let tmp = TempPath::under_target("mark-clear-legacy");
+    let app = tmp.child("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(
+        app.join("sylphya.toml"),
+        "format-version = 1\n[last]\nrunning = \"古い印\"\nghost = \"g\"\n",
+    )
+    .unwrap();
+    let (cleared, events) = capture(|| clear_session_mark(&app));
+    assert!(cleared.is_ok(), "{cleared:?}");
+    assert_eq!(count_event(&events, "persist_imported"), 1, "{events:?}");
+    assert_eq!(
+        (read_session_mark(&app), read_last_ghost(&app)),
+        (None, Some("g".to_owned()))
+    );
+    assert!(!app.join("sylphya.toml").exists());
 }
 
 /// 印を残す文は、記憶に印が在るときだけ「Ref6/7 付き」を含む。

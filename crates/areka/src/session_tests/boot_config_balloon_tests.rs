@@ -116,7 +116,7 @@ fn boot_with_argv_balloon_reads_no_ghost_balloon_keys() {
     let _held = [
         hold_exclusive(&master.join("descript.txt")),
         hold_exclusive(&ghost.join("install.txt")),
-        hold_exclusive(&master.join("profile").join("areka").join("sylphya.toml")),
+        hold_exclusive(&master.join("profile").join("areka").join("sylphya.sqlite")),
     ];
     let argv_balloon = tmp.child("balloon").join("b1");
     let (route, dir, events) = boot(&tmp, &[&ghost, &argv_balloon]);

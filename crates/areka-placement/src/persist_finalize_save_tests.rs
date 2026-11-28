@@ -1,7 +1,7 @@
 //! 並べ終えた時点の保存（[`persist_unremembered_char_positions`]）の分かれ道のテスト。
 //!
 //! 窓の一式は本番と同じ `spawn_ghost_windows` で組む（既定の位置の台帳も本番の経路で用意する）。
-//! 記憶は実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo` に置き、`barrier` の後に
+//! 記憶は実物のアクター（`spawn_sylphya`）と偽の置き場の口 `MemBackend` に置き、`barrier` の後に
 //! `load_scope` で読み戻して確かめる。
 //!
 //! 「書かない」を確かめるときは、先に 1 回書いて中身を入れてから前後を比べる（空どうしの
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
@@ -34,7 +34,7 @@ use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{SharedFakeIo, fake_handle};
+use crate::test_support::fake_handle;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 記録の target（ドラッグの確定と同じ）。
@@ -51,29 +51,28 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
 const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
 
-/// 記憶の実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo`（Ghost の根は `/g`）。
+/// 記憶の実物のアクター（`spawn_sylphya`）と偽の置き場の口 `MemBackend`（Ghost の根は `/g`）。
 /// 並べ直し・送り口・止めたバルーンのドラッグの檻（`reset_pos_tests.rs`・`persist_io_wiring_tests.rs`・
 /// `balloon_lock_drag_tests.rs`）も使う。
 pub(crate) struct Store {
-    shared: Arc<FakePersistIo>,
+    shared: Arc<MemBackend>,
+    backend: Arc<dyn StoreBackend>,
     roots: ScopeRoots,
     parts: SylphyaParts,
 }
 
 impl Store {
     pub(crate) fn new() -> Self {
-        let shared = Arc::new(FakePersistIo::new());
+        let shared = MemBackend::new();
+        let backend: Arc<dyn StoreBackend> = shared.clone();
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(shared.clone())),
-            runtime_sink: None,
-        });
+        let parts = spawn_sylphya(SylphyaInit::new(roots.clone(), backend.clone()));
         Store {
             shared,
+            backend,
             roots,
             parts,
         }
@@ -92,13 +91,9 @@ impl Store {
             .publisher
             .barrier()
             .expect("barrier はアクターが生きている間は返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo::new(self.shared.clone()),
-        )
-        .into_iter()
-        .collect()
+        load_scope(PersistScope::Ghost, &self.roots, &self.backend)
+            .into_iter()
+            .collect()
     }
 
     pub(crate) fn finish(self) {
@@ -385,7 +380,7 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
     rig.seed(seed_entries());
     let before = rig.load();
 
-    rig.store.shared.fail_next_commit();
+    rig.store.shared.fail_next_write();
     persist_unremembered_char_positions(&rig.world);
     let after_fail = rig.load();
     assert_eq!(after_fail, before, "失敗した書き込みは記憶を変えない");

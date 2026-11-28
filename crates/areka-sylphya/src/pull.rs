@@ -56,7 +56,7 @@ pub(crate) struct PullRegistry {
 impl PullRegistry {
     /// 同じ形への 2 度目の登録は前の読み手を置き換える（実行系の作り直しで登録し直すため）。
     pub(crate) fn register(&self, shape: PullShape, source: Arc<dyn PullSource>) {
-        // poison でも表は常に整合な値なので中身で続ける（`SharedMirror::load` と同じ）。
+        // poison でも表は常に整合な値なので中身で続ける。
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         guard.insert(shape, source);
     }

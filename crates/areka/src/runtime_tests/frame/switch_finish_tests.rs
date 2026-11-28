@@ -1,7 +1,7 @@
 //! 差し替えの相の完了の段と後始末の決定論テスト。
 //!
 //! 置き換えの返信は、テストが持つ送り手から偽の値を流す（drain も GPU も回さない）。置き場の
-//! ゴーストは kanade の送出端の代わりに観測用の線と、偽の置き場（`FakePersistIo`）へ書く本物の
+//! ゴーストは kanade の送出端の代わりに観測用の線と、偽の置き場の口（`MemBackend`）へ書く本物の
 //! 記憶の書き手を持つ。実行系と窓は無いので、実行系の今のシェルの書き換えと配置の入れ直しは
 //! 縮退の記録（`skin_shell_dir_not_set`・`reseed_skipped`）になる（実物は統合テスト
 //! `shell_balloon_switch_session_tests.rs` が偽の SHIORI で突き合わせる）。
@@ -19,7 +19,7 @@ use areka_emo_text::place::TextPlace;
 use areka_ghost::BasewareRoot;
 use areka_kanade::{KanadeMsg, ShioriMethod};
 use areka_sakura::ActorKey;
-use areka_sylphya::persist::FakePersistIo;
+use areka_sylphya::store::{MemBackend, StoreBackend};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, save_scope,
     spawn_sylphya,
@@ -38,7 +38,6 @@ use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
 };
-use areka_placement::test_support::SharedFakeIo;
 use areka_placement::zorder_group_ledger::GroupSource;
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
@@ -64,7 +63,7 @@ struct Rig {
     kanade: Receiver<KanadeMsg>,
     /// scope ごとの置き換えの返信の送り手（drain の代わり）。
     replies: Vec<(u32, Option<ReplySender<PresentOutcome>>)>,
-    store: Arc<FakePersistIo>,
+    store: Arc<dyn StoreBackend>,
     roots: ScopeRoots,
     /// 記憶の書き手（`None`＝書き手が無いゴースト）。
     sylphya: Option<SylphyaParts>,
@@ -173,25 +172,15 @@ fn rig(kind: SkinKind, with_memory: bool) -> Rig {
 /// [`rig`] の土台を `world`（窓を組んだ World など）の上に、後始末の残り `finish` で組む。
 fn rig_on(mut world: World, kind: SkinKind, with_memory: bool, finish: SwapFinish) -> Rig {
     areka_session::hooks::install(&mut world);
-    let store = Arc::new(FakePersistIo::new());
+    let store: Arc<dyn StoreBackend> = MemBackend::new();
     let roots = ScopeRoots {
         app: Some(PathBuf::from("/app")),
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()
     };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &SharedFakeIo::new(store.clone()),
-        old_memory(),
-    );
-    let sylphya = with_memory.then(|| {
-        spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(store.clone())),
-            runtime_sink: None,
-        })
-    });
+    save_scope(PersistScope::Ghost, &roots, &store, old_memory());
+    let sylphya =
+        with_memory.then(|| spawn_sylphya(SylphyaInit::new(roots.clone(), store.clone())));
     let (kanade_tx, kanade) = mpsc::channel();
     let mut session = GhostSession::for_test(Some(kanade_tx), PathBuf::from("skins/ghost/A"));
     if let Some(parts) = &sylphya {
@@ -289,11 +278,7 @@ fn memory(rig: Rig) -> Vec<(PersistKey, String)> {
         parts.publisher.close();
         areka_runtime::spine::join_bounded("sylphya", parts.handle).expect("sylphya が終わる");
     }
-    load_scope(
-        PersistScope::Ghost,
-        &rig.roots,
-        &SharedFakeIo::new(rig.store.clone()),
-    )
+    load_scope(PersistScope::Ghost, &rig.roots, &rig.store)
 }
 
 /// `skin_*`・`last_*` の記録の (event, 水準, stage)。

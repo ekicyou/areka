@@ -3,7 +3,7 @@
 // 2 回目起動相当（BootCount plant）で OnFirstBoot が発火しないことを固定する。
 //
 // S1（`s1_boot_success`）は永続ファイル無しの初回起動（`first_boot=true`）で、OnFirstBoot GET が
-// 発火する（204 で OnBoot へフォールスルー）。本 S7 は **隔離した一時ゴースト**の永続鏡像へ
+// 発火する（204 で OnBoot へフォールスルー）。本 S7 は **隔離した一時ゴースト**の記憶へ
 // `areka.boot.count` を **boot 前に据え**（S1 との唯一の差＝2 回目起動相当）、boot()`apply_boot_record_gate`
 // が `first_boot=false` を解決 → kanade boot 系列が OnFirstBoot を **飛ばし** OnBoot（BootMain）から
 // 起動運行を始めることを、実 ghost スタックを通して固定する。共有 first-boot fixture（i1/i2/s1 が依存）は
@@ -20,12 +20,12 @@ use areka_parsers::charset::DefaultEncoding;
 
 use tracing::Level;
 
-/// 起動記録（`areka.boot.count`）を ghost スコープの永続鏡像へ **boot 前に**据える。
+/// 起動記録（`areka.boot.count`）を ghost スコープの記憶へ **boot 前に**据える。
 ///
-/// boot() の `apply_boot_record_gate` が読む先＝`<mount.shiori.dir>/profile/areka/sylphya.toml`
-/// （`shiori.dir == <root>/ghost/master`・resolve 規約 / `sylphya_wiring::profile_areka_root`）。
-/// TOML スキーマは persist 層（`areka-sylphya/src/persist`）の `[boot] count` 写像に一致させる
-/// （`PersistKey::BootCount` → 正準 key `areka.boot.count`・存在すれば `first_boot=false`）。
+/// 前の版の記憶のファイル `<mount.shiori.dir>/profile/areka/sylphya.toml` を置き、boot() が
+/// その層を初めて使うときに sylphya.sqlite へ取り込ませる（`shiori.dir == <root>/ghost/master`・
+/// resolve 規約 / `sylphya_wiring::profile_areka_root`）。TOML は前の版の `[boot] count` の形に
+/// 一致させる（`PersistKey::BootCount` → 正準 key `areka.boot.count`・存在すれば `first_boot=false`）。
 fn plant_boot_record(root: &std::path::Path) {
     let profile_areka = root
         .join("ghost")

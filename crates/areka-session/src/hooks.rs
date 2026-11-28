@@ -78,6 +78,7 @@ fn set_shell_dir(world: &mut World, dir: PathBuf) -> bool {
 }
 
 /// 記憶へは `record_last_skin` が書くので、経路は `Memory`（`BalloonRoute` に腕を足さない）。
+/// 実行系が在ればバルーンの層も付け替える。
 fn set_current_balloon(world: &mut World, target: &SkinCandidate) -> bool {
     let Some(mut ctx) = world.get_resource_mut::<BootContext>() else {
         return false;
@@ -87,6 +88,9 @@ fn set_current_balloon(world: &mut World, target: &SkinCandidate) -> bool {
         dir: target.dir.clone(),
         folder: Some(target.folder.clone()),
     };
+    if let Some(session) = session(world) {
+        session.set_balloon_dir(&target.dir);
+    }
     true
 }
 

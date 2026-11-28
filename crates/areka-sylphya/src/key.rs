@@ -37,7 +37,7 @@ pub struct PathSeg {
 }
 
 impl PropPath {
-    /// 正準文字列形（鏡像の点付き区画 key として使われる正規化表示）。
+    /// 正準文字列形（住み場所に格納する key として使われる正規化表示）。
     ///
     /// 各セグメントを `.` で連結し、セレクタは `(内容)` として付す（`ByName` は名文字列、
     /// `ByIndex` は 10 進数字）。この形は [`parse_dotted`] と往復整合する: 正準形の
@@ -365,7 +365,7 @@ mod tests {
         );
     }
 
-    // --- 正準文字列形（鏡像 dotted key 形）と往復整合 ---
+    // --- 正準文字列形（dotted key 形）と往復整合 ---
 
     #[test]
     fn canonical_string_plain_segments() {
@@ -392,7 +392,7 @@ mod tests {
         assert_eq!(p.to_canonical_string(), "activeghostlist(foo).index(3)");
     }
 
-    /// 冪等: 正準形入力 → parse → 正準形 が入力へ一致（鏡像格納 key との往復整合）。
+    /// 冪等: 正準形入力 → parse → 正準形 が入力へ一致（格納 key との往復整合）。
     #[test]
     fn canonical_string_is_idempotent_for_canonical_inputs() {
         for k in [

@@ -107,7 +107,7 @@ fn set_effective_entries_before_this_spec_are_unchanged_in_order() {
 /// 新規登記の 4 項: 書込分類が運行コマンドで、書込を適用した効果列が予約済みの受理ちょうど 1 件。
 #[test]
 fn newly_registered_set_keys_are_runtime_command_reserved() {
-    use crate::{AskerId, Effect, SetClass, SylphyaCore, SylphyaMsg, classify_set};
+    use crate::{AskerId, Effect, SetClass, SylphyaMsg, apply, classify_set};
 
     let expected: &[(&str, SetClass)] = &[
         ("seriko.sticky-window", SetClass::RuntimeCommand),
@@ -118,7 +118,7 @@ fn newly_registered_set_keys_are_runtime_command_reserved() {
     for (key, class) in expected {
         assert_eq!(classify_set(key), *class, "書込分類: {key}");
         let asker = AskerId::new("ghost/a");
-        let effects = SylphyaCore::new().apply(&SylphyaMsg::Set {
+        let effects = apply(&SylphyaMsg::Set {
             asker: asker.clone(),
             key: (*key).into(),
             value: "1".into(),
@@ -138,11 +138,11 @@ fn newly_registered_set_keys_are_runtime_command_reserved() {
 /// 記録用の 15 葉と実キー形 3 つの書込分類は変更前と同じで、18 葉と実キー形の参照はすべて見つからない。
 #[test]
 fn record_only_leaves_keep_their_previous_classification() {
+    use crate::store::MemBackend;
     use crate::{
-        AskerContext, AskerId, DottedResolution, MirrorImage, SetClass, SharedMirror,
-        SylphyaReader, classify_set,
+        AskerContext, AskerId, DottedResolution, ScopeRoots, SetClass, SylphyaInit, classify_set,
+        spawn_sylphya,
     };
-    use std::sync::Arc;
 
     let expected: &[(&str, SetClass)] = &[
         ("duration", SetClass::StoreWrite),
@@ -170,11 +170,13 @@ fn record_only_leaves_keep_their_previous_classification() {
         assert_eq!(classify_set(key), *class, "書込分類: {key}");
     }
 
-    let mut image = MirrorImage::empty();
-    image
-        .dotted_global
-        .insert("currentghost.name".into(), "さくら".into());
-    let reader = SylphyaReader::new(SharedMirror::new(Arc::new(image)));
+    let parts = spawn_sylphya(SylphyaInit::new(ScopeRoots::default(), MemBackend::new()));
+    parts.publisher.publish_static(
+        AskerId::new("ghost/a"),
+        vec![],
+        vec![("currentghost.name".into(), "さくら".into())],
+    );
+    let reader = parts.reader;
     let ctx = AskerContext {
         asker: AskerId::new("ghost/a"),
     };
@@ -202,6 +204,7 @@ fn record_only_leaves_keep_their_previous_classification() {
 #[test]
 fn classifier_source_does_not_reference_the_record_only_table() {
     let sources: &[(&str, &str)] = &[
+        ("keytable.rs", include_str!("../keytable.rs")),
         ("actor.rs", include_str!("../actor.rs")),
         ("actor_tests.rs", include_str!("../actor_tests.rs")),
         (
@@ -224,7 +227,7 @@ fn classifier_source_does_not_reference_the_record_only_table() {
     // 較正: 探し方が生きていることを、仕分けが実際に読む表の名前で示す。
     assert!(
         sources[0].1.matches("GENERIC_PROP_NAMES").count() >= 1,
-        "較正失敗: actor.rs に GENERIC_PROP_NAMES が見つからない（読み込み対象を取り違えている）"
+        "較正失敗: keytable.rs に GENERIC_PROP_NAMES が見つからない（読み込み対象を取り違えている）"
     );
 }
 

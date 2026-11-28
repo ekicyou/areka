@@ -54,9 +54,8 @@ fn write_scope0(rig: &SwitchRig, num: u32, dpi: u16) {
         .get_non_send::<RuntimeWiring>()
         .expect("毎フレームの配線がある")
         .scope_scale_table();
-    let mut t = table.write().unwrap();
-    t.set(0, TargetWindow::Shell, applied(num, 96, Some(dpi)));
-    t.set(0, TargetWindow::Balloon, applied(num, 96, Some(dpi)));
+    table.set(0, TargetWindow::Shell, applied(num, 96, Some(dpi)));
+    table.set(0, TargetWindow::Balloon, applied(num, 96, Some(dpi)));
 }
 
 fn ask_all(rig: &mut SwitchRig, tx: &Sender<ToolRequest>) -> Vec<Option<(String, ToolOutcome)>> {

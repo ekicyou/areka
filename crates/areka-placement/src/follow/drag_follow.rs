@@ -154,7 +154,7 @@ pub fn on_char_drag_end(
             // DragEnd 前に DraggingState を落とした場合（多窓時に observed・実 flow の穴）に、連続
             // on_char_drag が既に最終位置へ動かした char の位置保存が丸ごと落ちる——一方 balloon 側は
             // char の WindowPos.position を読んで offset を保存するため、balloon-offset だけが残り
-            // window が欠落する（実機 sylphya.toml の [window.0] 欠落／[balloon-offset.0] 残存）。
+            // window が欠落する（実機の記憶の window.0 欠落／balloon-offset.0 残存）。
             // 位置の単一真実源はキャラ窓なので「ドラッグした char は必ず保存する」が
             // 要る。よって DraggingState 不在時は再導出済みの最終位置＝現 WindowPos.position（非 Free は
             // on_char_drag が project_anchor 適用済み・Free は wndproc 確定位置）へ縮退して保存する。

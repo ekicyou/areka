@@ -1,10 +1,10 @@
 //! ghost 結線層の起動・終了統括（`GhostRuntime`／`boot`／`shutdown`）。
 //!
-//! 起動は `boot`／`boot_with_kanade_stop`／`boot_with_origin`、動作中の差し替えは
-//! `set_shell_dir`（シェルのフォルダ）と `set_names`（名前）、終了は `shutdown`／
+//! 起動は `boot`／`boot_with_kanade_stop`／`boot_with_origin`／`boot_with_balloon`、動作中の差し替えは
+//! `set_shell_dir`（シェルのフォルダ）・`set_balloon_dir`（バルーンの層）と `set_names`（名前）、終了は `shutdown`／
 //! `shutdown_within`／`into_parts`。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Sender};
 
@@ -18,7 +18,8 @@ use areka_parsers::package::{GhostNames, MountError, MountModel, resolve_with_sh
 use areka_sakura::contract::SystemVarSnapshot;
 use areka_sakura::strict::StrictJudges;
 use areka_sylphya::{
-    AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
+    AskerContext, AskerId, DottedResolution, PersistKey, PersistScope, SylphyaPublisher,
+    SylphyaReader,
 };
 use areka_talk::EpilogueCommand;
 
@@ -145,7 +146,7 @@ pub struct GhostRuntime {
     ticker_handle: Option<ActorHandle>,
     /// sylphya（統一プロパティシステム）供給端。shutdown の `Close` 送出に使う。
     sylphya_publisher: SylphyaPublisher,
-    /// sylphya 読み口（provider と同じ鏡像を共有する）。
+    /// sylphya 読み口（provider と同じ番人へ聞く）。
     sylphya_reader: SylphyaReader,
     /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
     sylphya_handle: ActorHandle,
@@ -184,7 +185,7 @@ pub struct GhostParts {
     pub ticker: Option<Sender<TickerMsg>>,
     /// sylphya 供給端（`Close` 送出）。
     pub sylphya: SylphyaPublisher,
-    /// sylphya 読み口（provider と同じ鏡像を共有する）。
+    /// sylphya 読み口（provider と同じ番人へ聞く）。
     pub sylphya_reader: SylphyaReader,
     /// 全 `ActorHandle`。
     pub handles: GhostHandles,
@@ -234,11 +235,12 @@ impl GhostRuntime {
         &self.shiori_probe
     }
 
-    /// 今のシェルのフォルダ（`mount.shell.dir`）だけを書き換える。
+    /// 今のシェルのフォルダ（`mount.shell.dir`）を書き換え、sylphya のシェルの層を付け替える。
     ///
     /// シェルの差し替えの後に呼び、`mount.shell.dir` の読み手を差し替え後のシェルへ向ける。
-    /// bindgroup の転記と sylphya の Shell スコープの根は起動時のシェルのまま（bindgroup は
-    /// 差し替えの資産づくりが新しいシェルから読み直す・Shell スコープへ書く本番の呼び手は無い）。
+    /// シェルの層の置き場は `<dir>/profile/areka/` になり、前のシェルの層の揮発の値は捨てる
+    /// （同じフォルダを渡したときは付け替えず、揮発の値も保つ）。
+    /// bindgroup の転記は起動時のシェルのまま（差し替えの資産づくりが新しいシェルから読み直す）。
     pub fn set_shell_dir(&mut self, dir: PathBuf) {
         tracing::info!(
             target: "ghost-runtime",
@@ -246,12 +248,32 @@ impl GhostRuntime {
             to = %dir.display(),
             "current shell dir replaced"
         );
+        // `\![reload,shell]` は今のシェルを同じフォルダで渡し直す。そのときは層の揮発の値を保つ。
+        if dir != self.mount.shell.dir {
+            self.sylphya_publisher.set_layer_root(
+                PersistScope::Shell,
+                Some(crate::sylphya_wiring::profile_areka_root(&dir)),
+            );
+        }
         self.mount.shell.dir = dir;
+    }
+
+    /// sylphya のバルーンの層を `<dir>/profile/areka/` へ付け替える（前のバルーンの層の揮発の値は捨てる）。
+    pub fn set_balloon_dir(&self, dir: &Path) {
+        tracing::info!(
+            target: "ghost-runtime",
+            to = %dir.display(),
+            "current balloon dir replaced"
+        );
+        self.sylphya_publisher.set_layer_root(
+            PersistScope::Balloon,
+            Some(crate::sylphya_wiring::profile_areka_root(dir)),
+        );
     }
 
     /// 動作中のゴーストの名前（`mount.names`）を替え、静的プロパティ（`selfname` ほか・
     /// `baseware.*`）を新しい名前で出し直す（descript の読み直し）。
-    /// 新しい名前が定義しない静的な名前は先に鏡像から消す（新しい descript で起動したのと同じ状態）。
+    /// 新しい名前が定義しない静的な名前は先に sylphya から消す（新しい descript で起動したのと同じ状態）。
     pub fn set_names(&mut self, names: GhostNames) {
         tracing::info!(
             target: "ghost-runtime",
@@ -464,10 +486,10 @@ impl GhostRuntime {
 
 /// 起動記録ゲート。
 ///
-/// sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、[`KanadeConfig`] の
+/// sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から記憶を引き、[`KanadeConfig`] の
 /// 初回起動系フィールドを解決して返す。読むだけで、panic しない。
 ///
-/// 1. `areka.boot.count`（正準文字列は [`PersistKey::BootCount`]）が鏡像に存在すれば
+/// 1. `areka.boot.count`（正準文字列は [`PersistKey::BootCount`]）が記憶に在れば
 ///    `first_boot=false`、なければ `true`。値は数値として読まず、存在だけを見る。
 /// 2. `areka.vanish.count` を u32 として読んで `config.vanish_count` へ。不在は 0、非数値は
 ///    warn して 0（起動は止めない）。
@@ -555,10 +577,26 @@ pub fn boot_with_kanade_stop(
 /// 保存に失敗するたびに書けなかった中身（[`areka_sylphya::PersistFailure`]）が 1 件届く。
 /// 書き手を起こすときに渡すので、起動のトークの最中の書き込みも取りこぼさない。`None` なら送らない。
 pub fn boot_with_origin(
+    options: GhostBootOptions,
+    kanade_stop: Option<Sender<KanadeNotice>>,
+    origin: BootOrigin,
+    shell: Option<&str>,
+    persist_failures: Option<Sender<areka_sylphya::PersistFailure>>,
+) -> Result<GhostRuntime, GhostBootError> {
+    boot_with_balloon(options, kanade_stop, origin, shell, None, persist_failures)
+}
+
+/// バルーンのフォルダつきで ghost を起動する。
+///
+/// [`boot_with_origin`] に `balloon_dir` が 1 つ増えるだけの派生（[`boot_with_origin`] は `None` を渡す）。
+/// `Some(フォルダ)` なら sylphya のバルーンの層の置き場を `<フォルダ>/profile/areka/` にする。
+/// `None` ならバルーンの層の置き場は無い。
+pub fn boot_with_balloon(
     mut options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
     origin: BootOrigin,
     shell: Option<&str>,
+    balloon_dir: Option<&Path>,
     persist_failures: Option<Sender<areka_sylphya::PersistFailure>>,
 ) -> Result<GhostRuntime, GhostBootError> {
     let mount = match resolve_with_shell(&options.ghost_root, options.default_encoding, shell) {
@@ -579,26 +617,26 @@ pub fn boot_with_origin(
     // strict の記録の束ね（名は kanade の `script` の記録と同じ作り）。
     let strict = crate::config::strict_hooks(&mount, options.strict_judges.take());
 
-    // 層別の profile root: ghost＝`<shiori.dir>/profile/areka/`・shell＝`<shell.dir>/profile/areka/`・
-    // app＝bin 供給（`options.app_profile_dir`）・balloon＝None。
+    // app の置き場だけは bin が与え、ほかは `<フォルダ>/profile/areka/`。
     let scope_roots = areka_sylphya::ScopeRoots {
         app: options.app_profile_dir.clone(),
         ghost: Some(crate::sylphya_wiring::profile_areka_root(&mount.shiori.dir)),
         shell: Some(crate::sylphya_wiring::profile_areka_root(&mount.shell.dir)),
-        balloon: None,
+        balloon: balloon_dir.map(crate::sylphya_wiring::profile_areka_root),
     };
 
-    // 新規ゴーストでは ghost profile root が無く、初回の Ghost スコープ commit が
+    // 新規ゴーストでは ghost profile root が無く、初回の Ghost スコープの書きが
     // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。先に作る
-    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する）。失敗しても boot は止めない。
+    // （書きの時にも作り直す）。失敗しても boot は止めない。
     if let Some(ghost_root) = scope_roots.ghost.as_ref()
-        && let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)
+        && let Err(err) =
+            areka_sylphya::persist::ensure_root_dir(ghost_root, &areka_sylphya::store::fs_backend())
     {
         tracing::warn!(
             target: "ghost-boot",
             path = %ghost_root.display(),
             error = %err,
-            "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+            "ghost profile root の作成に失敗——継続（書きの時に作り直す）"
         );
     }
 
@@ -775,6 +813,10 @@ mod within_tests;
 #[cfg(test)]
 #[path = "runtime_shell_tests.rs"]
 mod shell_tests;
+
+#[cfg(test)]
+#[path = "runtime_layer_root_tests.rs"]
+mod layer_root_tests;
 
 #[cfg(test)]
 #[path = "runtime_names_tests.rs"]

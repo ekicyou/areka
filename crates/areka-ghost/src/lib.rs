@@ -23,7 +23,7 @@
 //! - [`ticker`] — 差し替え可能な時刻供給コンポーネント。
 //! - `translate_wiring`（crate 内） — 翻訳（`OnTranslate`）のための写しの源の結線。
 //!
-//! 公開 facade: `boot`／`boot_with_kanade_stop`／`boot_with_origin`／`GhostRuntime`／
+//! 公開 facade: `boot`／`boot_with_kanade_stop`／`boot_with_origin`／`boot_with_balloon`／`GhostRuntime`／
 //! `GhostBootOptions`／`ShioriWiring`／`TickerMode`／`GhostBootError`／`GhostParts`／
 //! `GhostHandles`／`GhostShutdownError`／`SystemVarSource`／`SystemVarWiring` を re-export する。
 
@@ -52,8 +52,8 @@ mod test_support;
 
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
-    ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot, boot_with_kanade_stop,
-    boot_with_origin,
+    ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot, boot_with_balloon,
+    boot_with_kanade_stop, boot_with_origin,
 };
 // 根の目録（列挙と素性）。
 pub use catalog::{

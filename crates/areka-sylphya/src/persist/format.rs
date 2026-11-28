@@ -1,10 +1,6 @@
-//! TOML 直列化形式（`format-version = 1`）と寛容読取。
+//! 取り込む前の記憶のファイル `sylphya.toml`（`format-version = 1`）の厳しい読み。
 //!
-//! 1 スコープの永続状態（`<scope root>/sylphya.toml`）の **format 層**——スキーマ定義・
-//! 直列化・寛容パース——を担う。語彙台帳にも鏡像にも依存しない自己完結モジュールで、
-//! std ＋ `toml` ＋ `tracing` のみに依る。
-//!
-//! ## 物理スキーマ
+//! `sylphya.toml` を読むのは取り込み（`crate::store` の `import`）だけで、書く所は無い。
 //!
 //! ```toml
 //! format-version = 1
@@ -23,44 +19,25 @@
 //! [vanish]             # areka.vanish.count
 //! count = "0"
 //!
-//! [last]               # areka.last.ghost|balloon|shell|running（値のある欄だけ・無ければ表ごと省く）
+//! [last]               # areka.last.ghost|balloon|shell|running
 //! ghost = "emo2"
 //! balloon = "StayseeBalloon"
 //! shell = "master"
 //! running = "broken"   # 起動中の印（空文字は「無し」と読む）
 //!
-//! [baseware]           # areka.baseware.roots（並び全体を 1 本の文字列・空文字は空文字のまま）
+//! [baseware]           # areka.baseware.roots（空文字は空文字のまま）
 //! roots = "<exe>|D:\\ssp"
 //!
-//! [window-adjacent]    # areka.window.scope(ID).adjacent（隣り合いの印・値の意味は呼び手が持つ）
+//! [window-adjacent]    # areka.window.scope(ID).adjacent
 //! "1" = "left"
 //! ```
 //!
-//! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
-//! - `window` / `balloon-offset` の各エントリ key はスコープ ID（本 format 層では不透明文字列。
-//!   typed な [`u32`] スコープへの写像は `PersistKey` の領分）。
-//! - 値はすべて TOML 文字列（往復が自明になる）。
-//!
-//! ## 寛容読取 3 段
-//!
-//! [`read_toml_str`] は **content 段**（下記 2・3）を担う。ファイル不在段（debug＋全不在）は
-//! IO 層の領分ゆえここには無い。
-//!
-//! 1. （IO 層）ファイル不在 → debug ＋ 全不在。
-//! 2. **parse 失敗**（不正 TOML）／**未知・欠落 `format-version`**（≠ 1）→ `warn!` ＋ 全不在
-//!    （[`FormatDoc::default`]）。呼び出し側はファイルを削除しない（削除は IO 関心）。未知
-//!    バージョンの warn は旧形式を判別できる唯一の観測点。
-//! 3. **有効バージョン・key 欠落** → 当該 key のみ不在（`None`）。欠落 key に warn は出さない
-//!    （単なる不在）。型外れ（文字列でない値）も当該 key 不在として寛容に無視する。
-//!
-//! いかなる入力でも panic しない（縮退は必ず warn 記録）。
+//! 壊れている・`format-version` が 1 でない内容は、warn を残して理由の文の `Err` を返す。
+//! 欠けた鍵と文字列でない値は、その鍵だけ無しと読む。どの入力でも panic しない。
 
 use std::collections::BTreeMap;
 
-/// 本モジュールが読み書きする TOML 形式のバージョン。
-///
-/// `format-version` 増分時は新旧判別のうえ読取側でマイグレーションする（旧形式は warn ＋不在
-/// 縮退が最低保証）。[`read_toml_str`] はこの値に一致するファイルのみ本文を採用する。
+/// 取り込める `sylphya.toml` の形の版。
 pub const FORMAT_VERSION: i64 = 1;
 
 const LOG_TARGET: &str = "areka_sylphya::persist::format";
@@ -90,7 +67,7 @@ pub struct FormatDoc {
     /// 前回のシェルのフォルダ名。正準 key `areka.last.shell`・表 `[last]` shell。
     pub last_shell: Option<String>,
     /// 起動中の印（動いているゴーストの名前）。正準 key `areka.last.running`・表 `[last]` running。
-    /// 空文字は「無し」と読む（[`read_toml_str`] が `None` にする＝空文字を書けば消える）。
+    /// 空文字は「無し」と読む（[`parse_toml_str`] が `None` にする）。
     pub last_running: Option<String>,
     /// 根の並び（1 本の文字列・意味は呼び手が持つ）。正準 key `areka.baseware.roots`・表
     /// `[baseware]` roots。空文字は空文字のまま（`last_running` と違い「無し」に潰さない）。
@@ -115,125 +92,9 @@ impl AxisPair {
     }
 }
 
-/// `base`（既存のファイルの表）の上に [`FormatDoc`] の値だけを `format-version = 1` の TOML 文字列へ
-/// 重ねて直列化する。値はすべて TOML 文字列で出力し、空のマップ・`None` の key は
-/// テーブル自体を省略する。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。`doc` が持たない表・key・
-/// 型の違う値は `base` のまま残す（版が 1 のまま足された表を保存で消さない）。
-pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> String {
-    let mut root = toml::Table::new();
-    root.insert(
-        "format-version".into(),
-        toml::Value::Integer(FORMAT_VERSION),
-    );
-
-    if let Some(t) = axis_map_to_table(&doc.window) {
-        root.insert("window".into(), toml::Value::Table(t));
-    }
-    if let Some(t) = axis_map_to_table(&doc.balloon_offset) {
-        root.insert("balloon-offset".into(), toml::Value::Table(t));
-    }
-    if let Some(c) = &doc.boot_count {
-        root.insert("boot".into(), count_table(c));
-    }
-    if let Some(c) = &doc.vanish_count {
-        root.insert("vanish".into(), count_table(c));
-    }
-    let mut last = toml::Table::new();
-    for (field, value) in [
-        ("ghost", &doc.last_ghost),
-        ("balloon", &doc.last_balloon),
-        ("shell", &doc.last_shell),
-        ("running", &doc.last_running),
-    ] {
-        if let Some(v) = value {
-            last.insert(field.into(), toml::Value::String(v.clone()));
-        }
-    }
-    if !last.is_empty() {
-        root.insert("last".into(), toml::Value::Table(last));
-    }
-    if let Some(v) = &doc.baseware_roots {
-        let mut t = toml::Table::new();
-        t.insert("roots".into(), toml::Value::String(v.clone()));
-        root.insert("baseware".into(), toml::Value::Table(t));
-    }
-    if !doc.window_adjacent.is_empty() {
-        let t: toml::Table = doc
-            .window_adjacent
-            .iter()
-            .map(|(id, v)| (id.clone(), toml::Value::String(v.clone())))
-            .collect();
-        root.insert("window-adjacent".into(), toml::Value::Table(t));
-    }
-    merge_table(&mut base, root);
-
-    // toml の直列化は読んだ TOML の表とこの関数が足す値からは失敗しない。万一の
-    // 失敗も panic させず、空 doc の最小形へ縮退する。
-    toml::to_string(&base).unwrap_or_else(|e| {
-        tracing::error!(
-            target: LOG_TARGET,
-            error = %e,
-            "TOML serialize failed; emitting minimal format-version-only document"
-        );
-        format!("format-version = {FORMAT_VERSION}\n")
-    })
-}
-
-/// `over` の値を `base` へ重ねる（両方が表なら中へ降り、ほかは `over` で置き換える）。
-fn merge_table(base: &mut toml::Table, over: toml::Table) {
-    for (key, value) in over {
-        match (base.get_mut(&key), value) {
-            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge_table(b, o),
-            (_, value) => {
-                base.insert(key, value);
-            }
-        }
-    }
-}
-
-/// スコープ ID → [`AxisPair`] のマップを TOML テーブルへ（全空なら `None`＝テーブル省略）。
-fn axis_map_to_table(map: &BTreeMap<String, AxisPair>) -> Option<toml::Table> {
-    let mut table = toml::Table::new();
-    for (id, pair) in map {
-        if pair.is_empty() {
-            continue;
-        }
-        let mut axis = toml::Table::new();
-        if let Some(x) = &pair.x {
-            axis.insert("x".into(), toml::Value::String(x.clone()));
-        }
-        if let Some(y) = &pair.y {
-            axis.insert("y".into(), toml::Value::String(y.clone()));
-        }
-        table.insert(id.clone(), toml::Value::Table(axis));
-    }
-    if table.is_empty() { None } else { Some(table) }
-}
-
-/// `count = "<v>"` の 1 key テーブル（`[boot]` / `[vanish]` 用）。
-fn count_table(value: &str) -> toml::Value {
-    let mut t = toml::Table::new();
-    t.insert("count".into(), toml::Value::String(value.to_string()));
-    toml::Value::Table(t)
-}
-
-/// TOML 文字列を寛容にパースして [`FormatDoc`] を得る（寛容読取の content 段）。
-///
-/// - parse 失敗 → `warn!` ＋ 全不在（空 doc）。panic しない。
-/// - `format-version` 欠落・≠ [`FORMAT_VERSION`] → `warn!`（旧形式を判別できる）＋ 全不在。
-/// - 有効バージョン・key 欠落 → 当該 key のみ `None`（warn なし）。
-///
-/// 同一 content からは常に同一 doc を返す。
-pub fn read_toml_str(content: &str) -> FormatDoc {
-    parse_toml_str(content)
-        .map(|(doc, _)| doc)
-        .unwrap_or_default()
-}
-
 /// 寛容でない読み。使えれば `Ok((doc, 読んだ表))`、使えなければ `Err(利用者へ見せる理由の文)`。
 ///
-/// 縮退の `warn!`（[`read_toml_str`] の 2 つの文のまま）はこの関数が出す。保存の土台の読みは
-/// `Err` を受けたら書かない（使えないファイルを読めた分だけで上書きして消さない）。
+/// 使えない内容の `warn!` はこの関数が出す。
 pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), String> {
     let table: toml::Table = match content.parse::<toml::Table>() {
         Ok(t) => t,
@@ -340,111 +201,8 @@ mod tests {
     use crate::test_log_capture::{assert_logged, capture};
     use tracing::Level;
 
-    // --- 直列化・往復・寛容読取 ---
-
-    #[test]
-    fn round_trip_preserves_all_string_values() {
-        let doc = FormatDoc {
-            window: BTreeMap::from([(
-                "0".into(),
-                AxisPair {
-                    x: Some("1024".into()),
-                    y: Some("512".into()),
-                },
-            )]),
-            balloon_offset: BTreeMap::from([(
-                "0".into(),
-                AxisPair {
-                    x: Some("30".into()),
-                    y: Some("-10".into()),
-                },
-            )]),
-            boot_count: Some("3".into()),
-            vanish_count: Some("0".into()),
-            last_ghost: Some("emo2".into()),
-            last_balloon: Some("StayseeBalloon".into()),
-            last_shell: Some("master".into()),
-            last_running: Some("broken".into()),
-            baseware_roots: Some(r"<exe>|D:\ssp".into()),
-            window_adjacent: BTreeMap::from([("1".into(), "left".into())]),
-        };
-
-        let toml = to_toml_string_over(toml::Table::new(), &doc);
-        let back = read_toml_str(&toml);
-        assert_eq!(doc, back);
-    }
-
-    #[test]
-    fn round_trip_multiple_scopes_and_negative_values() {
-        let mut doc = FormatDoc::default();
-        doc.window.insert(
-            "0".into(),
-            AxisPair {
-                x: Some("-5".into()),
-                y: Some("0".into()),
-            },
-        );
-        doc.window.insert(
-            "1".into(),
-            AxisPair {
-                x: Some("100".into()),
-                y: Some("200".into()),
-            },
-        );
-        doc.balloon_offset.insert(
-            "1".into(),
-            AxisPair {
-                x: None,
-                y: Some("-10".into()),
-            },
-        );
-
-        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
-        assert_eq!(doc, back);
-    }
-
-    #[test]
-    fn baseware_roots_empty_string_round_trips_as_empty_string() {
-        // [baseware] roots = "" は 0 項目の並び——「無し」に潰さず空文字のまま往復する。
-        let doc = FormatDoc {
-            baseware_roots: Some(String::new()),
-            ..FormatDoc::default()
-        };
-        let toml = to_toml_string_over(toml::Table::new(), &doc);
-        assert!(
-            toml.contains("[baseware]"),
-            "output=
-{toml}"
-        );
-        assert_eq!(read_toml_str(&toml), doc);
-    }
-
-    #[test]
-    fn serialized_output_carries_format_version_1() {
-        let toml = to_toml_string_over(toml::Table::new(), &FormatDoc::default());
-        assert!(toml.contains("format-version = 1"), "output=\n{toml}");
-    }
-
-    #[test]
-    fn string_values_survive_as_strings() {
-        let doc = FormatDoc {
-            boot_count: Some("1024".into()),
-            ..FormatDoc::default()
-        };
-        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
-        assert_eq!(back.boot_count.as_deref(), Some("1024"));
-    }
-
-    #[test]
-    fn parse_failure_yields_all_absent_no_panic() {
-        let doc = read_toml_str("this is = = not valid toml [[[");
-        assert_eq!(doc, FormatDoc::default());
-    }
-
-    #[test]
-    fn unknown_version_yields_all_absent() {
-        let doc = read_toml_str("format-version = 2\n[boot]\ncount = \"7\"\n");
-        assert_eq!(doc, FormatDoc::default());
+    fn doc(content: &str) -> FormatDoc {
+        parse_toml_str(content).unwrap().0
     }
 
     #[test]
@@ -453,99 +211,110 @@ mod tests {
         assert!(reason("[[[ broken").contains("TOML として読めない"));
         assert!(reason("format-version = 2").contains("format-version が 2で"));
         assert!(reason("format-version = \"1\"").contains("書かれていない値で"));
+        assert!(reason("").contains("書かれていない値で"));
+        assert_eq!(doc("format-version = 1"), FormatDoc::default());
+    }
+
+    #[test]
+    fn every_table_is_read() {
+        let read = doc("format-version = 1
+[window.\"0\"]
+x = \"1024\"
+y = \"512\"
+[balloon-offset.\"1\"]
+y = \"-10\"
+[boot]
+count = \"3\"
+[vanish]
+count = \"0\"
+[last]
+ghost = \"emo2\"
+balloon = \"b\"
+shell = \"master\"
+running = \"broken\"
+[baseware]
+roots = \"\"
+[window-adjacent]
+\"1\" = \"left\"
+");
         assert_eq!(
-            parse_toml_str("format-version = 1").map(|(doc, _)| doc),
-            Ok(FormatDoc::default())
+            read,
+            FormatDoc {
+                window: BTreeMap::from([(
+                    "0".into(),
+                    AxisPair {
+                        x: Some("1024".into()),
+                        y: Some("512".into()),
+                    },
+                )]),
+                balloon_offset: BTreeMap::from([(
+                    "1".into(),
+                    AxisPair {
+                        x: None,
+                        y: Some("-10".into()),
+                    },
+                )]),
+                boot_count: Some("3".into()),
+                vanish_count: Some("0".into()),
+                last_ghost: Some("emo2".into()),
+                last_balloon: Some("b".into()),
+                last_shell: Some("master".into()),
+                last_running: Some("broken".into()),
+                baseware_roots: Some(String::new()),
+                window_adjacent: BTreeMap::from([("1".into(), "left".into())]),
+            }
         );
     }
 
     #[test]
-    fn missing_version_yields_all_absent() {
-        let doc = read_toml_str("[boot]\ncount = \"7\"\n");
-        assert_eq!(doc, FormatDoc::default());
+    fn missing_key_and_type_mismatch_are_per_key_absent() {
+        let read = doc("format-version = 1
+[window.\"0\"]
+x = \"5\"
+[boot]
+count = 7
+[last]
+running = \"\"
+");
+        assert_eq!(read.boot_count, None);
+        assert_eq!(read.last_running, None, "空文字の起動中の印は無し");
+        assert_eq!(read.window["0"].x.as_deref(), Some("5"));
+        assert_eq!(read.window["0"].y, None);
     }
 
     #[test]
-    fn empty_content_yields_all_absent() {
-        assert_eq!(read_toml_str(""), FormatDoc::default());
-    }
-
-    #[test]
-    fn missing_key_is_per_key_absent() {
-        let doc = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
-        assert_eq!(doc.boot_count, None);
-        assert_eq!(doc.vanish_count, None);
-        assert_eq!(
-            doc.window.get("0").and_then(|p| p.x.clone()),
-            Some("5".into())
-        );
-        assert_eq!(doc.window.get("0").and_then(|p| p.y.clone()), None);
-        assert!(doc.balloon_offset.is_empty());
-    }
-
-    #[test]
-    fn type_mismatch_value_is_absent_not_panic() {
-        let doc = read_toml_str("format-version = 1\n[boot]\ncount = 7\n");
-        assert_eq!(doc.boot_count, None);
-    }
-
-    // --- 未知バージョンの warn 発火 ---
-    //
-    // ログ捕捉は共有ヘルパ [`crate::test_log_capture`] を経由する。並列 `cargo test` 負荷下で
-    // tracing callsite の Interest が `Never` に焼き付いて warn が偽消失する欠陥は、当該
-    // ヘルパが委譲する共有 crate `log-capture-kit`（probe 常駐＋窓内の interest 再計算＋番兵）で
-    // 防いでいる。
-
-    #[test]
-    fn unknown_version_emits_warn() {
-        let events = capture(|| {
-            let _ = read_toml_str("format-version = 99\n[boot]\ncount = \"1\"\n");
-        });
-        assert_logged(
-            &events,
-            Level::WARN,
-            LOG_TARGET,
-            "unknown/absent format-version",
-        );
-    }
-
-    #[test]
-    fn missing_version_emits_warn() {
-        // 欠落バージョンは未知バージョンと同一の縮退アームを踏む。
-        let events = capture(|| {
-            let _ = read_toml_str("[boot]\ncount = \"1\"\n");
-        });
-        assert_logged(
-            &events,
-            Level::WARN,
-            LOG_TARGET,
-            "unknown/absent format-version",
-        );
-    }
-
-    #[test]
-    fn parse_failure_emits_warn() {
-        let events = capture(|| {
-            let _ = read_toml_str("[[[ broken");
-        });
-        assert_logged(&events, Level::WARN, LOG_TARGET, "parse failed");
+    fn unusable_content_emits_warn() {
+        for (content, needle) in [
+            (
+                "format-version = 99
+",
+                "unknown/absent format-version",
+            ),
+            (
+                "[boot]
+count = \"1\"
+",
+                "unknown/absent format-version",
+            ),
+            ("[[[ broken", "parse failed"),
+        ] {
+            let events = capture(|| {
+                let _ = parse_toml_str(content);
+            });
+            assert_logged(&events, Level::WARN, LOG_TARGET, needle);
+        }
     }
 
     #[test]
     fn valid_version_missing_key_emits_no_warn() {
-        // key 欠落は単なる不在で warn を出さない。
         let events = capture(|| {
-            let _ = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
+            let _ = parse_toml_str(
+                "format-version = 1
+[window.\"0\"]
+x = \"5\"
+",
+            );
         });
-        let warns = events.iter().filter(|e| e.level == Level::WARN).count();
-        assert_eq!(
-            warns,
-            0,
-            "key 欠落で warn が出た。捕捉={:?}",
-            events
-                .iter()
-                .map(|e| (e.level, e.message()))
-                .collect::<Vec<_>>()
-        );
+        assert_eq!(events.iter().filter(|e| e.level == Level::WARN).count(), 0);
     }
 }
