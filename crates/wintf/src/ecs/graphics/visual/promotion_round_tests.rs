@@ -330,6 +330,25 @@ fn auto_owners_inside_a_new_promotion_are_absorbed() {
     assert_eq!(plan.host_visited, ents(&s, &[0, 1]));
 }
 
+/// 上げた持ち主の下へ移ってきた自動の持ち主も戻す。原点は手動の持ち主からの値なので、
+/// 上げた持ち主の WUC の Visual の下に置くと画面の位置がずれる。
+#[test]
+fn auto_owner_moved_under_an_active_owner_is_absorbed() {
+    let mut world = World::new();
+    let mut s = world_scan(
+        &mut world,
+        vec![
+            phased(node(1, 10.0, 10.0, 30.0, 30.0), Phase::Active),
+            phased(node(2, 12.0, 12.0, 16.0, 16.0), Phase::Active),
+        ],
+    );
+    only_updated(&mut s, &[0, 1]);
+    let (plan, _) = round(&mut world, &mut s, &ctx(at_ms(1500)));
+    assert_eq!(ph(&world, ent(&s, 0)), Phase::Active);
+    assert_eq!(ph(&world, ent(&s, 1)), Phase::Node);
+    assert_eq!(segs(&plan), vec![(ent(&s, 0), ents(&s, &[0, 1]))]);
+}
+
 // ---- 用意中の描画面の様子 ----
 
 #[test]
